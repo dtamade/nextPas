@@ -26,7 +26,6 @@ uses
   nextpas.core.simd.runtime.testcase,
   nextpas.core.simd.dispatchslots.testcase,
   nextpas.core.simd.publicabi.testcase,
-  nextpas.core.simd.v2.testcase,
   nextpas.core.simd.edgecases.testcase,
   nextpas.core.simd.vec512types.testcase,
   nextpas.core.simd.imageproc.testcase,
@@ -39,7 +38,6 @@ uses
   nextpas.core.simd.intrinsics.avx2.testcase,
   nextpas.core.simd.concurrent.testcase,  // ✅ Phase 5.4: Concurrent SIMD tests (12 tests)
   nextpas.core.simd.algorithms.testcase,
-  nextpas.core.simd.bench,
   nextpas.core.simd.base,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.dispatch,

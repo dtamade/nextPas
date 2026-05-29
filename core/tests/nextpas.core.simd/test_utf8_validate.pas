@@ -4,8 +4,7 @@ program test_utf8_validate;
 
 uses
   SysUtils,
-  nextpas.core.simd,
-  nextpas.core.simd.api.v2;
+  nextpas.core.simd;
 
 var
   LPass, LFail: Integer;

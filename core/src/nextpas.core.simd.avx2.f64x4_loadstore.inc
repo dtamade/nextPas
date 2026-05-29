@@ -34,13 +34,11 @@ function AVX2SplatF64x4(value: Double): TVecF64x4; assembler; nostackframe;
 asm
   {$IFDEF UNIX}
   // rdi=@Result, xmm0=value
-  vmovsd       [rsp-8], xmm0
-  vbroadcastsd ymm0, [rsp-8]
+  vbroadcastsd ymm0, xmm0
   vmovupd      [rdi], ymm0
   {$ELSE}
   // rcx=@Result, xmm0=value
-  vmovsd       [rsp-8], xmm0
-  vbroadcastsd ymm0, [rsp-8]
+  vbroadcastsd ymm0, xmm0
   vmovupd      [rcx], ymm0
   {$ENDIF}
   vzeroupper

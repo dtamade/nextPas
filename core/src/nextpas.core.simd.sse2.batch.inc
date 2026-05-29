@@ -2638,7 +2638,7 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movsd xmm7, [LScalar]
+    movq xmm7, [LScalar]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -2676,7 +2676,7 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movsd xmm7, [LScalar]
+    movq xmm7, [LScalar]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -2714,9 +2714,9 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movsd xmm6, [LMin]
+    movq xmm6, [LMin]
     unpcklpd xmm6, xmm6
-    movsd xmm7, [LMax]
+    movq xmm7, [LMax]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
@@ -2756,9 +2756,9 @@ begin
     mov rax, pS
     mov rcx, pD
     mov r8, aCount
-    movsd xmm6, [LScale]
+    movq xmm6, [LScale]
     unpcklpd xmm6, xmm6
-    movsd xmm7, [LBias]
+    movq xmm7, [LBias]
     unpcklpd xmm7, xmm7
 
     cmp r8, 2
