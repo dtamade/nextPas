@@ -31,8 +31,10 @@ type
     function AsStr: TStringView;
     function ArrayLen: UInt32;
     function ArrayGet(AIndex: UInt32): TJsonValue;
-    function ObjectGet(const AKey: TStringView): TJsonValue;
-    function ObjectHas(const AKey: TStringView): Boolean;
+    function ObjectGet(const AKey: TStringView): TJsonValue; overload;
+    function ObjectGet(const AKey: string): TJsonValue; overload;
+    function ObjectHas(const AKey: TStringView): Boolean; overload;
+    function ObjectHas(const AKey: string): Boolean; overload;
   end;
 
 implementation
@@ -177,6 +179,16 @@ begin
 end;
 
 function TJsonValue.ObjectHas(const AKey: TStringView): Boolean;
+begin
+  Result := ObjectGet(AKey).IsValid;
+end;
+
+function TJsonValue.ObjectGet(const AKey: string): TJsonValue;
+begin
+  Result := ObjectGet(TStringView.FromStr(AKey));
+end;
+
+function TJsonValue.ObjectHas(const AKey: string): Boolean;
 begin
   Result := ObjectGet(AKey).IsValid;
 end;

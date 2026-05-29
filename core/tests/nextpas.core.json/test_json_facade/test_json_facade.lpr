@@ -3,7 +3,7 @@ program test_json_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.text.view,
+
   nextpas.core.json,
   nextpas.core.json.types,
   nextpas.core.json.value,
@@ -12,10 +12,6 @@ uses
 var
   T: TTestRunner;
 
-function SV(const S: string): TStringView; inline;
-begin
-  Result := TStringView.FromStr(S);
-end;
 
 procedure TestJsonParseInterface;
 var Doc: IJsonDocument; V: TJsonValue;
@@ -23,8 +19,8 @@ begin
   Doc := JsonParse('{"name":"Alice","age":30}');
   Check(not Doc.HasError, 'no error');
   V := Doc.Root;
-  CheckEqual('Alice', V.ObjectGet(SV('name')).AsStr.ToString, 'name');
-  CheckEqual(Int64(30), V.ObjectGet(SV('age')).AsInt, 'age');
+  CheckEqual('Alice', V.ObjectGet('name').AsStr.ToString, 'name');
+  CheckEqual(Int64(30), V.ObjectGet('age').AsInt, 'age');
 end;
 
 procedure TestJsonParseAutoRelease;
@@ -65,9 +61,9 @@ var Doc: IJsonDocument; V: TJsonValue;
 begin
   Doc := JsonParse('{"user":{"id":1,"name":"Bob"},"items":[10,20]}');
   V := Doc.Root;
-  CheckEqual(Int64(1), V.ObjectGet(SV('user')).ObjectGet(SV('id')).AsInt, 'user.id');
-  CheckEqual('Bob', V.ObjectGet(SV('user')).ObjectGet(SV('name')).AsStr.ToString, 'user.name');
-  CheckEqual(Int64(20), V.ObjectGet(SV('items')).ArrayGet(1).AsInt, 'items[1]');
+  CheckEqual(Int64(1), V.ObjectGet('user').ObjectGet('id').AsInt, 'user.id');
+  CheckEqual('Bob', V.ObjectGet('user').ObjectGet('name').AsStr.ToString, 'user.name');
+  CheckEqual(Int64(20), V.ObjectGet('items').ArrayGet(1).AsInt, 'items[1]');
 end;
 
 begin
