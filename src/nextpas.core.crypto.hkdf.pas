@@ -31,6 +31,12 @@ function HKDF_ExtractBytes(AAlgo: THashAlgorithm;
 function HKDF_ExpandBytes(AAlgo: THashAlgorithm;
   const APRK, AInfo: TBytes; ALength: SizeUInt): TBytes;
 
+{ 旧接口兼容 }
+function HKDF_Extract_SHA256(const ASalt, AIKM: TBytes): TBytes;
+function HKDF_Extract_SHA384(const ASalt, AIKM: TBytes): TBytes;
+function HKDF_Expand_SHA256(const APRK, AInfo: TBytes; ALength: Integer): TBytes;
+function HKDF_Expand_SHA384(const APRK, AInfo: TBytes; ALength: Integer): TBytes;
+
 implementation
 
 uses
@@ -137,6 +143,26 @@ begin
     HKDF_Expand(AAlgo, APRK[0], Length(APRK), AInfo[0], Length(AInfo), Result[0], ALength)
   else
     HKDF_Expand(AAlgo, APRK[0], Length(APRK), AInfo, 0, Result[0], ALength);
+end;
+
+function HKDF_Extract_SHA256(const ASalt, AIKM: TBytes): TBytes;
+begin
+  Result := HKDF_ExtractBytes(haSHA256, ASalt, AIKM);
+end;
+
+function HKDF_Extract_SHA384(const ASalt, AIKM: TBytes): TBytes;
+begin
+  Result := HKDF_ExtractBytes(haSHA384, ASalt, AIKM);
+end;
+
+function HKDF_Expand_SHA256(const APRK, AInfo: TBytes; ALength: Integer): TBytes;
+begin
+  Result := HKDF_ExpandBytes(haSHA256, APRK, AInfo, SizeUInt(ALength));
+end;
+
+function HKDF_Expand_SHA384(const APRK, AInfo: TBytes; ALength: Integer): TBytes;
+begin
+  Result := HKDF_ExpandBytes(haSHA384, APRK, AInfo, SizeUInt(ALength));
 end;
 
 end.

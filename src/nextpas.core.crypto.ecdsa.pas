@@ -51,7 +51,7 @@ implementation
 uses
   nextpas.core.tls.asn1,
   nextpas.core.crypto.bigint,
-  nextpas.core.crypto.primitives;
+  nextpas.core.crypto.hmac;
 
 const
   P256_FIELD_P: array[0..31] of Byte = (

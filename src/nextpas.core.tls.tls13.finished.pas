@@ -51,7 +51,7 @@ implementation
 uses
   nextpas.core.tls.errors,
   nextpas.core.crypto.constant_time,
-  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.hmac, nextpas.core.tls.keyschedule.label,
   nextpas.core.tls.tls13.keyschedule;
 
 const

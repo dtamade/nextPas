@@ -47,7 +47,7 @@ implementation
 
 uses
   nextpas.core.crypto.aescbc,
-  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.hmac,
   nextpas.core.tls.random;
 
 const

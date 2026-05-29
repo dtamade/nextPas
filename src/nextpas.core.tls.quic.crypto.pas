@@ -36,7 +36,7 @@ function QUICDeriveServerInitialKeys(const AInitialSecret: TBytes): TQUICKeys;
 implementation
 
 uses
-  nextpas.core.crypto.primitives, nextpas.core.crypto.hash;
+  nextpas.core.crypto.hkdf, nextpas.core.crypto.hash;
 
 function QUICDeriveInitialSecret(const AConnectionID: TBytes): TBytes;
 var

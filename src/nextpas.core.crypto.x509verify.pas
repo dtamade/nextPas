@@ -50,7 +50,7 @@ implementation
 
 uses
   nextpas.core.crypto.bigint,
-  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.hmac,
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.ecdsa,

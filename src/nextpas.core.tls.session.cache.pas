@@ -29,7 +29,7 @@ uses
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.tls.base,
   nextpas.core.tls.random,
-  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.hmac,
   nextpas.core.crypto.constant_time,
   nextpas.core.mem.secure;
 

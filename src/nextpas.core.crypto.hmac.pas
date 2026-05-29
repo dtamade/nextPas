@@ -22,6 +22,11 @@ function HmacSHA256(const AKey, AData: TBytes): TSHA256Digest;
 function HmacSHA384(const AKey, AData: TBytes): TSHA384Digest;
 function HmacSHA512(const AKey, AData: TBytes): TSHA512Digest;
 
+{ TBytes 返回版本（兼容旧消费者，后续逐步淘汰） }
+function HMAC_SHA256(const AKey, AData: TBytes): TBytes;
+function HMAC_SHA384(const AKey, AData: TBytes): TBytes;
+function HMAC_SHA1(const AKey, AData: TBytes): TBytes;
+
 implementation
 
 type
@@ -169,6 +174,35 @@ begin
   if Length(AData) > 0 then
     LH.Write(AData[0], Length(AData));
   LH.Sum(Result, SHA512_DIGEST_SIZE);
+end;
+
+function HMAC_SHA256(const AKey, AData: TBytes): TBytes;
+var LD: TSHA256Digest;
+begin
+  LD := HmacSHA256(AKey, AData);
+  SetLength(Result, SHA256_DIGEST_SIZE);
+  Move(LD[0], Result[0], SHA256_DIGEST_SIZE);
+end;
+
+function HMAC_SHA384(const AKey, AData: TBytes): TBytes;
+var LD: TSHA384Digest;
+begin
+  LD := HmacSHA384(AKey, AData);
+  SetLength(Result, SHA384_DIGEST_SIZE);
+  Move(LD[0], Result[0], SHA384_DIGEST_SIZE);
+end;
+
+function HMAC_SHA1(const AKey, AData: TBytes): TBytes;
+var LH: IHasher;
+begin
+  if Length(AKey) > 0 then
+    LH := NewHMAC(haSHA1, AKey[0], Length(AKey))
+  else
+    LH := NewHMAC(haSHA1, AKey, 0);
+  if Length(AData) > 0 then
+    LH.Write(AData[0], Length(AData));
+  SetLength(Result, SHA1_DIGEST_SIZE);
+  LH.Sum(Result[0], SHA1_DIGEST_SIZE);
 end;
 
 end.

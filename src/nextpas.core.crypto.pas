@@ -21,7 +21,7 @@ interface
 
 uses
   nextpas.core.crypto.hash,
-  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.hmac, nextpas.core.crypto.hkdf,
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.x25519,
   nextpas.core.crypto.ecdsa,

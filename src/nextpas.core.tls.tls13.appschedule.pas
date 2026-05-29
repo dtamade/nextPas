@@ -88,7 +88,7 @@ implementation
 
 uses
   nextpas.core.crypto.hash,
-  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.hkdf, nextpas.core.tls.keyschedule.label,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.mem.secure;
 
