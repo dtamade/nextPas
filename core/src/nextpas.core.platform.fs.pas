@@ -4,6 +4,34 @@ unit nextpas.core.platform.fs;
 
 interface
 
+uses
+  nextpas.core.platform.files.base;
+
+type
+  TPlatformWalkAction = (
+    pwaContinue,
+    pwaSkipSubtree,
+    pwaStop
+  );
+
+  TPlatformWalkEntry = record
+    Path: PAnsiChar;
+    PathLen: Int32;
+    Name: PAnsiChar;
+    NameLen: Int32;
+    FileType: TPlatformFileType;
+    Depth: Int32;
+    ErrorCode: Int32;
+  end;
+
+  TPlatformWalkCallback = function(const AEntry: TPlatformWalkEntry;
+    AUserData: Pointer): TPlatformWalkAction;
+
+const
+  PLATFORM_WALK_COMPLETED = 0;
+  PLATFORM_WALK_STOPPED   = 1;
+  PLATFORM_WALK_BADARGS   = -1;
+
 function platform_fs_exists(const APath: PAnsiChar): Boolean;
 function platform_fs_is_file(const APath: PAnsiChar): Boolean;
 function platform_fs_is_dir(const APath: PAnsiChar): Boolean;
@@ -18,11 +46,13 @@ function platform_fs_write_atomic(const APath: PAnsiChar;
 function platform_fs_read_file(const APath: PAnsiChar;
   out AData: Pointer; out ALen: PtrUInt): Int32;
 procedure platform_fs_free_buf(AData: Pointer);
+function platform_fs_walk(const ARoot: PAnsiChar;
+  ACallback: TPlatformWalkCallback; AUserData: Pointer;
+  AFollowSymlinks: Boolean): Int32;
 
 implementation
 
 uses
-  nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.platform.env,
   nextpas.core.platform.random;
@@ -343,6 +373,176 @@ procedure platform_fs_free_buf(AData: Pointer);
 begin
   if AData <> nil then
     FreeMem(AData);
+end;
+
+function WalkResolveType(APathBuf: PAnsiChar; ADirType: TPlatformFileType;
+  AFollowSymlinks: Boolean; out AErrCode: Int32): TPlatformFileType;
+var
+  LStat: TPlatformFileStat;
+begin
+  AErrCode := 0;
+  if ADirType <> ftUnknown then
+  begin
+    if AFollowSymlinks and (ADirType = ftSymlink) then
+    begin
+      if platform_file_stat(APathBuf, LStat) = 0 then
+        Exit(LStat.FileType);
+      AErrCode := platform_file_lstat(APathBuf, LStat);
+      if AErrCode <> 0 then
+        Exit(ftUnknown);
+      Exit(LStat.FileType);
+    end;
+    Exit(ADirType);
+  end;
+  if AFollowSymlinks then
+  begin
+    if platform_file_stat(APathBuf, LStat) = 0 then
+      Exit(LStat.FileType);
+  end;
+  AErrCode := platform_file_lstat(APathBuf, LStat);
+  if AErrCode <> 0 then
+    Exit(ftUnknown);
+  Result := LStat.FileType;
+end;
+
+function WalkRecurse(APathBuf: PAnsiChar; APathLen: Int32;
+  ACallback: TPlatformWalkCallback; AUserData: Pointer;
+  AFollowSymlinks: Boolean; ADepth: Int32): Int32;
+var
+  LHandle: TPlatformDirHandle;
+  LDirEntry: TPlatformDirEntry;
+  LEntry: TPlatformWalkEntry;
+  LAction: TPlatformWalkAction;
+  LChildLen, LNameLen: Int32;
+  LR, LErrCode: Int32;
+  LChildType: TPlatformFileType;
+begin
+  LR := platform_dir_open(APathBuf, LHandle);
+  if LR <> 0 then
+  begin
+    FillChar(LEntry, SizeOf(LEntry), 0);
+    LEntry.Path := APathBuf;
+    LEntry.PathLen := APathLen;
+    LEntry.Name := APathBuf;
+    LEntry.NameLen := APathLen;
+    LEntry.FileType := ftDirectory;
+    LEntry.Depth := ADepth;
+    LEntry.ErrorCode := LR;
+    LAction := ACallback(LEntry, AUserData);
+    if LAction = pwaStop then
+      Exit(PLATFORM_WALK_STOPPED);
+    Exit(PLATFORM_WALK_COMPLETED);
+  end;
+
+  while True do
+  begin
+    LR := platform_dir_read(LHandle, LDirEntry);
+    if LR <> 0 then
+      Break;
+
+    LNameLen := LDirEntry.NameLen;
+    LChildLen := APathLen + 1 + LNameLen;
+    if LChildLen >= 4095 then
+      Continue;
+
+    APathBuf[APathLen] := '/';
+    Move(LDirEntry.Name[0], APathBuf[APathLen + 1], LNameLen);
+    APathBuf[LChildLen] := #0;
+
+    LChildType := WalkResolveType(APathBuf, LDirEntry.FileType,
+      AFollowSymlinks, LErrCode);
+
+    FillChar(LEntry, SizeOf(LEntry), 0);
+    LEntry.Path := APathBuf;
+    LEntry.PathLen := LChildLen;
+    LEntry.Name := @APathBuf[APathLen + 1];
+    LEntry.NameLen := LNameLen;
+    LEntry.FileType := LChildType;
+    LEntry.Depth := ADepth + 1;
+    LEntry.ErrorCode := LErrCode;
+
+    LAction := ACallback(LEntry, AUserData);
+
+    if LAction = pwaStop then
+    begin
+      APathBuf[APathLen] := #0;
+      platform_dir_close(LHandle);
+      Exit(PLATFORM_WALK_STOPPED);
+    end;
+
+    if (LAction <> pwaSkipSubtree) and (LChildType = ftDirectory) and
+       (LErrCode = 0) then
+    begin
+      LR := WalkRecurse(APathBuf, LChildLen, ACallback, AUserData,
+        AFollowSymlinks, ADepth + 1);
+      if LR = PLATFORM_WALK_STOPPED then
+      begin
+        APathBuf[APathLen] := #0;
+        platform_dir_close(LHandle);
+        Exit(PLATFORM_WALK_STOPPED);
+      end;
+    end;
+
+    APathBuf[APathLen] := #0;
+  end;
+
+  platform_dir_close(LHandle);
+  Result := PLATFORM_WALK_COMPLETED;
+end;
+
+function platform_fs_walk(const ARoot: PAnsiChar;
+  ACallback: TPlatformWalkCallback; AUserData: Pointer;
+  AFollowSymlinks: Boolean): Int32;
+var
+  LPathBuf: array[0..4095] of AnsiChar;
+  LRootLen: Int32;
+  LEntry: TPlatformWalkEntry;
+  LAction: TPlatformWalkAction;
+  LStat: TPlatformFileStat;
+  LR: Int32;
+  LFileType: TPlatformFileType;
+begin
+  if (ARoot = nil) or (ARoot[0] = #0) or (ACallback = nil) then
+    Exit(PLATFORM_WALK_BADARGS);
+
+  LRootLen := 0;
+  while (LRootLen < 4095) and (ARoot[LRootLen] <> #0) do
+  begin
+    LPathBuf[LRootLen] := ARoot[LRootLen];
+    Inc(LRootLen);
+  end;
+  while (LRootLen > 1) and (LPathBuf[LRootLen - 1] = '/') do
+    Dec(LRootLen);
+  LPathBuf[LRootLen] := #0;
+
+  if AFollowSymlinks then
+    LR := platform_file_stat(@LPathBuf[0], LStat)
+  else
+    LR := platform_file_lstat(@LPathBuf[0], LStat);
+
+  if LR <> 0 then
+    LFileType := ftUnknown
+  else
+    LFileType := LStat.FileType;
+
+  FillChar(LEntry, SizeOf(LEntry), 0);
+  LEntry.Path := @LPathBuf[0];
+  LEntry.PathLen := LRootLen;
+  LEntry.Name := @LPathBuf[0];
+  LEntry.NameLen := LRootLen;
+  LEntry.FileType := LFileType;
+  LEntry.Depth := 0;
+  if LR <> 0 then
+    LEntry.ErrorCode := LR;
+
+  LAction := ACallback(LEntry, AUserData);
+  if LAction = pwaStop then
+    Exit(PLATFORM_WALK_STOPPED);
+  if (LAction = pwaSkipSubtree) or (LFileType <> ftDirectory) then
+    Exit(PLATFORM_WALK_COMPLETED);
+
+  Result := WalkRecurse(@LPathBuf[0], LRootLen, ACallback, AUserData,
+    AFollowSymlinks, 0);
 end;
 
 end.
