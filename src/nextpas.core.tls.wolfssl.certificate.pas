@@ -149,7 +149,7 @@ implementation
 uses
   Contnrs, DateUtils,
   nextpas.core.tls.utils,
-  nextpas.core.tls.crypto.hash,
+  nextpas.core.crypto.hash,
   nextpas.core.tls.tls13.wire,
   nextpas.core.tls.tls13.servercertverify;
 

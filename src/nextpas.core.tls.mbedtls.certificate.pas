@@ -156,7 +156,7 @@ implementation
 uses
   Contnrs, DateUtils,
   nextpas.core.tls.utils,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 const
   MBEDTLS_X509_CRT_SIZE = 16384;

@@ -22,7 +22,7 @@ unit nextpas.core.tls.cert.utils;
  * Dependencies:
  *   - OpenSSL 1.1.1+ or 3.0+
  *   - nextpas.core.tls.exceptions
- *   - nextpas.core.tls.crypto.utils (for fingerprint)
+ *   - nextpas.core.crypto.utils (for fingerprint)
  * 
  * @author fafafa.ssl team
  * @version 2.0.0

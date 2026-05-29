@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.aesgcm;
+unit nextpas.core.crypto.aesgcm;
 
 {$mode objfpc}{$H+}{$J-}
 
@@ -27,8 +27,8 @@ function PurePascalAESGCMDecrypt(
 implementation
 
 uses
-  nextpas.core.tls.crypto.constant_time,
-  nextpas.core.tls.crypto.aesni;
+  nextpas.core.crypto.constant_time,
+  nextpas.core.crypto.aesni;
 
 var
   GAESNIDetected: Boolean = False;

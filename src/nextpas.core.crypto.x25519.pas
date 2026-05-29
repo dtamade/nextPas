@@ -1,5 +1,5 @@
 {**
- * Unit: nextpas.core.tls.crypto.x25519
+ * Unit: nextpas.core.crypto.x25519
  * Purpose: 纯 Pascal X25519（Curve25519 Montgomery ladder）
  *
  * 说明：
@@ -8,7 +8,7 @@
  * - 用于 TLS 1.3 key_share / ECDHE 共享密钥计算
  *}
 
-unit nextpas.core.tls.crypto.x25519;
+unit nextpas.core.crypto.x25519;
 
 {$mode ObjFPC}{$H+}
 

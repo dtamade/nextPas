@@ -1,5 +1,5 @@
 {**
- * Unit: nextpas.core.tls.crypto.primitives
+ * Unit: nextpas.core.crypto.primitives
  * Purpose: TLS 1.3 所需基础密码学原语（纯 Pascal）
  *
  * 当前提供：
@@ -8,7 +8,7 @@
  * - TLS 1.3 HKDF-Expand-Label (SHA256/SHA384)
  *}
 
-unit nextpas.core.tls.crypto.primitives;
+unit nextpas.core.crypto.primitives;
 
 {$mode ObjFPC}{$H+}
 
@@ -44,7 +44,7 @@ function TLS13_HKDF_Expand_Label_SHA384(
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash,
+  nextpas.core.crypto.hash,
   nextpas.core.tls.tls13.wire;
 
 const

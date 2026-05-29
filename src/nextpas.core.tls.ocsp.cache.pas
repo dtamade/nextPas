@@ -114,7 +114,7 @@ type
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 // ========================================================================
 // TOCSPCacheEntry

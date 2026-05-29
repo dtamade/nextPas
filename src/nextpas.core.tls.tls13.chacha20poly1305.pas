@@ -41,7 +41,7 @@ function TryChaCha20Poly1305DecryptCombined(
 implementation
 
 uses
-  nextpas.core.tls.crypto.constant_time;
+  nextpas.core.crypto.constant_time;
 
 const
   CHACHA20_KEY_SIZE = 32;

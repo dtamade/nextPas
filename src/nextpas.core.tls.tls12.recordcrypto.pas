@@ -30,7 +30,7 @@ function TLS12GCMDecryptRecord(
 implementation
 
 uses
-  nextpas.core.tls.crypto.aesgcm;
+  nextpas.core.crypto.aesgcm;
 
 const
   TLS12_VERSION_MAJOR = 3;

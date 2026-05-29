@@ -15,7 +15,7 @@
 
   注意:
     - 编码工具已迁移至 nextpas.core.tls.encoding
-    - 加密工具已迁移至 nextpas.core.tls.crypto.utils
+    - 加密工具已迁移至 nextpas.core.crypto.utils
     - 调试工具已迁移至 nextpas.core.tls.debug.utils
 }
 

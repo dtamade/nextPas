@@ -40,7 +40,7 @@ function VerifySCTListWithLogs(const ASCTListData: TBytes;
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash, nextpas.core.tls.crypto.ecdsa, nextpas.core.tls.crypto.ed25519;
+  nextpas.core.crypto.hash, nextpas.core.crypto.ecdsa, nextpas.core.crypto.ed25519;
 
 function TryParseSingleSCT(const AData: TBytes; AOffset: Integer;
   out ASCT: TSignedCertificateTimestamp; out ABytesConsumed: Integer): Boolean;

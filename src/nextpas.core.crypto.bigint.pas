@@ -1,5 +1,5 @@
 {**
- * Unit: nextpas.core.tls.crypto.bigint
+ * Unit: nextpas.core.crypto.bigint
  * Purpose: TLS 1.3 证书签名使用的纯 Pascal 大整数（无外部依赖）
  *
  * 说明：
@@ -8,7 +8,7 @@
  * - 模幂采用 Montgomery 乘法 + 平方乘法
  *}
 
-unit nextpas.core.tls.crypto.bigint;
+unit nextpas.core.crypto.bigint;
 
 {$mode ObjFPC}{$H+}
 {$WARN 5093 off} // Suppress false-positive "Function result not initialized" for managed types

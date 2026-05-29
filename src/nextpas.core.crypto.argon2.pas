@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.argon2;
+unit nextpas.core.crypto.argon2;
 { WARNING: This module is EXPERIMENTAL. Not all APIs are fully implemented. }
 
 {$mode objfpc}{$H+}{$J-}
@@ -19,7 +19,7 @@ function Argon2Verify(const APassword: TBytes; const AEncodedHash: string): Bool
 implementation
 
 uses
-  Math, nextpas.core.tls.crypto.hash;
+  Math, nextpas.core.crypto.hash;
 
 function Blake2bLong(const AInput: TBytes; AOutLen: Integer): TBytes;
 var

@@ -29,8 +29,8 @@ uses
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.tls.base,
   nextpas.core.tls.random,
-  nextpas.core.tls.crypto.primitives,
-  nextpas.core.tls.crypto.constant_time,
+  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.constant_time,
   nextpas.core.tls.memutils;
 
 const

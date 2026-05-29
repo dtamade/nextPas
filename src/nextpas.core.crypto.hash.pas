@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.hash;
+unit nextpas.core.crypto.hash;
 
 {$mode objfpc}{$H+}
 {$NOTES OFF} // Suppress false-positive notes for vars passed to untyped params

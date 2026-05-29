@@ -24,7 +24,7 @@ function TLS12PRF_SHA384(
 implementation
 
 uses
-  nextpas.core.tls.crypto.primitives;
+  nextpas.core.crypto.primitives;
 
 function ConcatLabelAndSeed(const ALabel: string; const ASeed: TBytes): TBytes;
 var

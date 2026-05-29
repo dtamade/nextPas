@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.aesni;
+unit nextpas.core.crypto.aesni;
 
 {$mode objfpc}{$H+}{$J-}
 

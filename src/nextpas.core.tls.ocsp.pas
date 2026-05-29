@@ -20,7 +20,7 @@ interface
 
 uses
   SysUtils, Classes,
-  nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.tls.crypto.hash;
+  nextpas.core.tls.asn1, nextpas.core.tls.x509, nextpas.core.crypto.hash;
 
 type
   // ========================================================================

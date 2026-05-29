@@ -33,7 +33,7 @@ implementation
 
 uses
   nextpas.core.tls.base64,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 type
   TBuiltinCTLogDefinition = record

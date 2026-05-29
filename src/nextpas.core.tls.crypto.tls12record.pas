@@ -46,8 +46,8 @@ function TLS12CBCDecrypt_SHA384(
 implementation
 
 uses
-  nextpas.core.tls.crypto.aescbc,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.aescbc,
+  nextpas.core.crypto.primitives,
   nextpas.core.tls.random;
 
 const

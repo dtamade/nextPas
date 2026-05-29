@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.pkcs8;
+unit nextpas.core.crypto.pkcs8;
 
 {$mode objfpc}{$H+}
 
@@ -33,9 +33,9 @@ implementation
 uses
   Math,
   nextpas.core.tls.asn1,
-  nextpas.core.tls.crypto.primitives,
-  nextpas.core.tls.crypto.aescbc,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.primitives,
+  nextpas.core.crypto.aescbc,
+  nextpas.core.crypto.hash;
 
 const
   OID_PBES2 = '1.2.840.113549.1.5.13';

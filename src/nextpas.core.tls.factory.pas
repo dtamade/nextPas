@@ -338,7 +338,7 @@ uses
   {$IFDEF WINDOWS}
   Windows,
   {$ENDIF}
-  nextpas.core.tls.crypto.hash,
+  nextpas.core.crypto.hash,
   nextpas.core.tls.errors,
   nextpas.core.tls.random,
   nextpas.core.tls.freepascal.context.material,
@@ -1654,11 +1654,11 @@ var
 begin
   // Pure Pascal fast-paths
   case AHashType of
-    sslHashMD5:    LHashBytes := nextpas.core.tls.crypto.hash.MD5(AData);
-    sslHashSHA1:   LHashBytes := nextpas.core.tls.crypto.hash.SHA1(AData);
-    sslHashSHA256: LHashBytes := nextpas.core.tls.crypto.hash.SHA256(AData);
-    sslHashSHA384: LHashBytes := nextpas.core.tls.crypto.hash.SHA384(AData);
-    sslHashSHA512: LHashBytes := nextpas.core.tls.crypto.hash.SHA512(AData);
+    sslHashMD5:    LHashBytes := nextpas.core.crypto.hash.MD5(AData);
+    sslHashSHA1:   LHashBytes := nextpas.core.crypto.hash.SHA1(AData);
+    sslHashSHA256: LHashBytes := nextpas.core.crypto.hash.SHA256(AData);
+    sslHashSHA384: LHashBytes := nextpas.core.crypto.hash.SHA384(AData);
+    sslHashSHA512: LHashBytes := nextpas.core.crypto.hash.SHA512(AData);
 
     sslHashSHA224:
     begin
@@ -1720,7 +1720,7 @@ begin
     end;
   end;
 
-  Result := nextpas.core.tls.crypto.hash.HashToHex(LHashBytes);
+  Result := nextpas.core.crypto.hash.HashToHex(LHashBytes);
 end;
 
 class function TSSLHelper.SupportsEarlyDataContext(

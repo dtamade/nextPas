@@ -103,11 +103,11 @@ uses
   nextpas.core.tls.crypto.tls12record,
   nextpas.core.tls.tls12.chacha20record,
   nextpas.core.tls.tls12.handshakecrypto,
-  nextpas.core.tls.crypto.x25519,
+  nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.ecdsa,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.crypto.constant_time,
+  nextpas.core.crypto.ecdsa,
+  nextpas.core.crypto.hash,
+  nextpas.core.crypto.constant_time,
   nextpas.core.tls.random;
 
 function TLS12ClientFullHandshakeAfterServerHello(

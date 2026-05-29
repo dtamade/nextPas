@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.rsa;
+unit nextpas.core.crypto.rsa;
 
 {$mode objfpc}{$H+}{$J-}
 
@@ -26,7 +26,7 @@ implementation
 
 uses
   nextpas.core.tls.random,
-  nextpas.core.tls.crypto.bigint;
+  nextpas.core.crypto.bigint;
 
 function TryRSAES_PKCS1v15_Encode(
   const AMessage: TBytes;

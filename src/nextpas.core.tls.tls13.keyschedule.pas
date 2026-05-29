@@ -89,8 +89,8 @@ function TryDeriveTLS13HandshakeSecretsWithPSK(
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.hash,
+  nextpas.core.crypto.primitives,
   nextpas.core.tls.tls13.finished,
   nextpas.core.tls.memutils;
 

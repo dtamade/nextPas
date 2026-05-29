@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.aescbc;
+unit nextpas.core.crypto.aescbc;
 
 {$mode objfpc}{$H+}{$J-}
 
@@ -13,7 +13,7 @@ function AESCBCDecryptNoPadding(const AKey, AIV, ACiphertext: TBytes): TBytes;
 implementation
 
 uses
-  nextpas.core.tls.crypto.aesgcm;
+  nextpas.core.crypto.aesgcm;
 
 const
   InvSBox: array[0..255] of Byte = (

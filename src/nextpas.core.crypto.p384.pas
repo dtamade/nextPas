@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.p384;
+unit nextpas.core.crypto.p384;
 { WARNING: This module is EXPERIMENTAL. Not all APIs are fully implemented. }
 
 {$mode objfpc}{$H+}{$J-}
@@ -33,7 +33,7 @@ implementation
 
 uses
   nextpas.core.tls.asn1,
-  nextpas.core.tls.crypto.bigint,
+  nextpas.core.crypto.bigint,
   nextpas.core.tls.random;
 
 const

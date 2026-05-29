@@ -31,7 +31,7 @@ function BuildTLSARecord(AUsage, ASelector, AMatchingType: Byte;
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 function ExtractMatchData(const ACertDER: TBytes; ASelector: TDANESelector): TBytes;
 var

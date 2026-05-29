@@ -49,13 +49,13 @@ function MatchHostname(const AHostname: string; ACert: TX509Certificate): Boolea
 implementation
 
 uses
-  nextpas.core.tls.crypto.bigint,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.bigint,
+  nextpas.core.crypto.primitives,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.crypto.ecdsa,
-  nextpas.core.tls.crypto.ed25519,
-  nextpas.core.tls.crypto.p384;
+  nextpas.core.crypto.hash,
+  nextpas.core.crypto.ecdsa,
+  nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.p384;
 
 const
   X509_V_OK = 0;

@@ -14,7 +14,7 @@ interface
 
 uses
   SysUtils, Classes,
-  nextpas.core.tls.crypto.constant_time;
+  nextpas.core.crypto.constant_time;
 
 function SecureCompare(const A, B: TBytes): Boolean;
 function SecureCompareStrings(const A, B: string): Boolean;

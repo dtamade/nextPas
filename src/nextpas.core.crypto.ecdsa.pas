@@ -1,5 +1,5 @@
 {**
- * Unit: nextpas.core.tls.crypto.ecdsa
+ * Unit: nextpas.core.crypto.ecdsa
  * Purpose: TLS 1.3 CertificateVerify 用纯 Pascal ECDSA(P-256) 签名
  *
  * 说明：
@@ -9,7 +9,7 @@
  * - nonce 采用 RFC6979(HMAC-SHA256) 确定性生成
  *}
 
-unit nextpas.core.tls.crypto.ecdsa;
+unit nextpas.core.crypto.ecdsa;
 
 {$mode ObjFPC}{$H+}
 {$WARN 5093 off} // Suppress false-positive "Function result not initialized" for managed types
@@ -50,8 +50,8 @@ implementation
 
 uses
   nextpas.core.tls.asn1,
-  nextpas.core.tls.crypto.bigint,
-  nextpas.core.tls.crypto.primitives;
+  nextpas.core.crypto.bigint,
+  nextpas.core.crypto.primitives;
 
 const
   P256_FIELD_P: array[0..31] of Byte = (

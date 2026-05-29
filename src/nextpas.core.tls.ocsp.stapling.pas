@@ -28,7 +28,7 @@ uses
   nextpas.core.tls.ocsp,
   nextpas.core.tls.ocsp.cache,
   nextpas.core.tls.x509,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 type
   // ========================================================================

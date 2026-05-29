@@ -95,7 +95,7 @@ implementation
 
 uses
   nextpas.core.tls.utils,  // Phase 3.2 - StringsToArray 统一实现
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 const
   // X509_NAME print flags

@@ -87,8 +87,8 @@ function TryUpdateTLS13ClientApplicationReadKeys(
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.hash,
+  nextpas.core.crypto.primitives,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.memutils;
 

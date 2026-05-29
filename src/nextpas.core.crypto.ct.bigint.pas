@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.ct.bigint;
+unit nextpas.core.crypto.ct.bigint;
 
 {$mode objfpc}{$H+}{$J-}
 
@@ -17,7 +17,7 @@ function CTBigIntModExp(const ABase, AExp, AMod: TBytes): TBytes;
 implementation
 
 uses
-  nextpas.core.tls.crypto.bigint;
+  nextpas.core.crypto.bigint;
 
 function CTBigIntEqual(const A, B: TBytes): Boolean;
 var

@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.ed25519;
+unit nextpas.core.crypto.ed25519;
 
 {$mode objfpc}{$H+}{$J-}
 {$WARN 5093 off}
@@ -24,7 +24,7 @@ function Ed25519TestPointDouble(const APoint: TBytes): TBytes;
 implementation
 
 uses
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 type
   TFe25519 = array[0..9] of Int64;

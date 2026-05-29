@@ -110,7 +110,7 @@ implementation
 uses
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 // StringsToArray 已移至 nextpas.core.tls.utils（Phase 3.2）
 

@@ -50,8 +50,8 @@ implementation
 
 uses
   nextpas.core.tls.errors,
-  nextpas.core.tls.crypto.constant_time,
-  nextpas.core.tls.crypto.primitives,
+  nextpas.core.crypto.constant_time,
+  nextpas.core.crypto.primitives,
   nextpas.core.tls.tls13.keyschedule;
 
 const

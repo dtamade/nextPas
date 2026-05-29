@@ -1,10 +1,10 @@
-unit nextpas.core.tls.crypto.utils;
+unit nextpas.core.crypto.utils;
 
 {$mode objfpc}{$H+}
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
 
 {**
- * Unit: nextpas.core.tls.crypto.utils
+ * Unit: nextpas.core.crypto.utils
  * Purpose: 企业级加密工具类，提供完整的加密、哈希和随机数功能
  * 
  * Features:

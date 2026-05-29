@@ -23,7 +23,7 @@ implementation
 uses
   nextpas.core.tls.tls12.wire,
   nextpas.core.tls.tls13.servercertverify,
-  nextpas.core.tls.crypto.hash;
+  nextpas.core.crypto.hash;
 
 function TLS12BuildClientCertificate(const AConfig: TTLS12ClientCertConfig): TBytes;
 var

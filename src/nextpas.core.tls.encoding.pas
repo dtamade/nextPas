@@ -9,7 +9,7 @@ unit nextpas.core.tls.encoding;
  *
  * Phase 2.3.1: Utils模块重组
  *
- * 本模块合并了 nextpas.core.tls.utils 和 nextpas.core.tls.crypto.utils 中
+ * 本模块合并了 nextpas.core.tls.utils 和 nextpas.core.crypto.utils 中
  * 重复的编码转换功能，使用性能更优的 OpenSSL BIO 实现。
  *
  * Features:
