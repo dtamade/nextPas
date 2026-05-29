@@ -108,6 +108,14 @@ function StrToFloat(const S: string): Double;
 function TryStrToFloat(const S: string; out Value: Double): Boolean;
 function StrToFloatDef(const S: string; Default: Double): Double;
 
+{ --- Date/Time --- }
+
+type
+  TDateTime = Double;
+
+function Now: TDateTime;
+function FormatDateTime(const Fmt: string; ADateTime: TDateTime): string;
+
 { --- Exception Classes --- }
 
 type
@@ -158,6 +166,8 @@ uses
   nextpas.core.platform.files.base,
   nextpas.core.platform.env,
   nextpas.core.platform.posix.base,
+  nextpas.core.platform.time,
+  nextpas.core.platform.time.base,
   nextpas.core.platform.thread;
 
 { --- String Functions --- }
@@ -645,6 +655,147 @@ function StrToFloatDef(const S: string; Default: Double): Double;
 begin
   if not TryStrToFloat(S, Result) then
     Result := Default;
+end;
+
+{ --- Date/Time --- }
+
+function Now: TDateTime;
+var
+  LNs: TPlatformTimeNanoseconds;
+  LBrk: TPlatformTimeBreakdown;
+  LDays: Int64;
+  LTime: Double;
+begin
+  LNs := platform_realtime_ns;
+  platform_time_breakdown_utc(LNs, LBrk);
+  LDays := Trunc((Int64(LNs) div 1000000000) / 86400) + 25569;
+  LTime := (LBrk.Hour * 3600 + LBrk.Minute * 60 + LBrk.Second) / 86400.0
+    + LBrk.Millisecond / 86400000.0;
+  Result := LDays + LTime;
+end;
+
+function FormatDateTime(const Fmt: string; ADateTime: TDateTime): string;
+var
+  LNs: TPlatformTimeNanoseconds;
+  LBrk: TPlatformTimeBreakdown;
+  LSec: Int64;
+  I: Integer;
+  LBuf: array[0..3] of AnsiChar;
+begin
+  LSec := Trunc((ADateTime - 25569) * 86400);
+  LNs := UInt64(LSec) * 1000000000 +
+    UInt64(Round((ADateTime - Int(ADateTime)) * 86400000) mod 1000) * 1000000;
+  platform_time_breakdown_utc(LNs, LBrk);
+
+  Result := '';
+  I := 1;
+  while I <= Length(Fmt) do
+  begin
+    case Fmt[I] of
+      'y': begin
+        if (I + 3 <= Length(Fmt)) and (Fmt[I+1]='y') and (Fmt[I+2]='y') and (Fmt[I+3]='y') then
+        begin
+          platform_fmt_int(LBrk.Year, @LBuf[0], 4+1);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 4);
+        end
+        else begin
+          platform_fmt_int(LBrk.Year mod 100, @LBuf[0], 4);
+          if LBrk.Year mod 100 < 10 then Result := Result + '0';
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 2);
+        end;
+      end;
+      'm': begin
+        if (I + 1 <= Length(Fmt)) and (Fmt[I+1]='m') then
+        begin
+          if LBrk.Month < 10 then Result := Result + '0';
+          platform_fmt_int(LBrk.Month, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 2);
+        end
+        else begin
+          platform_fmt_int(LBrk.Month, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I);
+        end;
+      end;
+      'd': begin
+        if (I + 1 <= Length(Fmt)) and (Fmt[I+1]='d') then
+        begin
+          if LBrk.Day < 10 then Result := Result + '0';
+          platform_fmt_int(LBrk.Day, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 2);
+        end
+        else begin
+          platform_fmt_int(LBrk.Day, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I);
+        end;
+      end;
+      'h': begin
+        if (I + 1 <= Length(Fmt)) and (Fmt[I+1]='h') then
+        begin
+          if LBrk.Hour < 10 then Result := Result + '0';
+          platform_fmt_int(LBrk.Hour, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 2);
+        end
+        else begin
+          platform_fmt_int(LBrk.Hour, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I);
+        end;
+      end;
+      'n': begin
+        if (I + 1 <= Length(Fmt)) and (Fmt[I+1]='n') then
+        begin
+          if LBrk.Minute < 10 then Result := Result + '0';
+          platform_fmt_int(LBrk.Minute, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 2);
+        end
+        else begin
+          platform_fmt_int(LBrk.Minute, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I);
+        end;
+      end;
+      's': begin
+        if (I + 1 <= Length(Fmt)) and (Fmt[I+1]='s') then
+        begin
+          if LBrk.Second < 10 then Result := Result + '0';
+          platform_fmt_int(LBrk.Second, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 2);
+        end
+        else begin
+          platform_fmt_int(LBrk.Second, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I);
+        end;
+      end;
+      'z': begin
+        if (I + 2 <= Length(Fmt)) and (Fmt[I+1]='z') and (Fmt[I+2]='z') then
+        begin
+          if LBrk.Millisecond < 100 then Result := Result + '0';
+          if LBrk.Millisecond < 10 then Result := Result + '0';
+          platform_fmt_int(LBrk.Millisecond, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I, 3);
+        end
+        else begin
+          platform_fmt_int(LBrk.Millisecond, @LBuf[0], 4);
+          Result := Result + PAnsiChar(@LBuf[0]);
+          Inc(I);
+        end;
+      end;
+    else
+      Result := Result + Fmt[I];
+      Inc(I);
+    end;
+  end;
 end;
 
 { --- Exception Classes --- }

@@ -193,6 +193,19 @@ begin
   platform_file_rmdir('/tmp/nextpas_find_test');
 end;
 
+procedure TestDateTime;
+var
+  DT: TDateTime;
+  S: string;
+begin
+  DT := Now;
+  Check(DT > 45000, 'Now > 2023');
+  S := FormatDateTime('yyyymmddhhnnsszzz', DT);
+  Check(Length(S) = 17, 'format length = 17');
+  Check(S[1] = '2', 'starts with 2 (year 2xxx)');
+  Check(S[2] = '0', 'year 20xx');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.fpc.sysutils');
   T.Run('IntToStr', @TestIntToStr);
@@ -215,5 +228,6 @@ begin
   T.Run('IsValidIdent', @TestIsValidIdent);
   T.Run('QuotedStr', @TestQuotedStr);
   T.Run('FindFirst/Next/Close', @TestFindFirst);
+  T.Run('Now/FormatDateTime', @TestDateTime);
   T.Summary;
 end.
