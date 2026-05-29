@@ -543,6 +543,48 @@ examples/nextpas.core.time/    ← 模块示例目录
 
 ---
 
+## 12.5. 文档组织
+
+### 目录结构
+
+```
+docs/                              ← 框架级文档
+  design-conventions.md            ← 设计规范（本文件）
+  <module>/                        ← 模块专属文档目录
+    README.md                      ← 模块概述
+    *.md                           ← 模块设计文档、API 参考、迁移指南等
+```
+
+### 规则
+
+- 每个模块的文档放在 `docs/<module>/` 下（如 `docs/tls/`、`docs/crypto/`、`docs/http/`）
+- 模块名使用完整的 dotted namespace 去掉 `nextpas.core.` 前缀（如 `tls`、`collections`、`platform.sync`）
+- 框架级文档（设计规范、贡献指南、许可证）直接放在 `docs/` 根目录
+- 模块文档至少包含一个 `README.md` 概述模块职责、API 入口和使用示例
+- 安全相关文档（审查报告、已知限制、安全策略）放在对应模块的 `docs/<module>/` 下
+- 脚本放在 `scripts/<module>/`（构建、测试、CI 相关脚本）
+
+### 示例
+
+```
+docs/
+  design-conventions.md
+  tls/
+    README.md
+    BACKEND_CAPABILITY_MATRIX.md
+    KNOWN_LIMITS.md
+    SECURITY.md
+    CHANGELOG.md
+  crypto/
+    README.md
+    ALGORITHMS.md
+  http/
+    README.md
+    ROUTING.md
+```
+
+---
+
 ## 13. 代码风格
 
 ### 缩进
