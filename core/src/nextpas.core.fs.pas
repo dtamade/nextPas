@@ -46,6 +46,8 @@ function IsFile(const APath: string): Boolean; inline;
 function FileSize(const APath: string): Int64; inline;
 procedure Chmod(const APath: string; const APerm: TFilePermission); inline;
 procedure Truncate(const APath: string; const ASize: Int64); inline;
+procedure Symlink(const ATarget, ALinkPath: string); inline;
+function Readlink(const APath: string): string; inline;
 
 { Directory operations }
 function Mkdir(const APath: string;
@@ -145,6 +147,16 @@ end;
 procedure Truncate(const APath: string; const ASize: Int64);
 begin
   nextpas.core.fs.util.FsTruncate(APath, ASize);
+end;
+
+procedure Symlink(const ATarget, ALinkPath: string);
+begin
+  nextpas.core.fs.util.FsSymlink(ATarget, ALinkPath);
+end;
+
+function Readlink(const APath: string): string;
+begin
+  Result := nextpas.core.fs.util.FsReadlink(APath);
 end;
 
 function Mkdir(const APath: string; const APerm: TFilePermission): Boolean;

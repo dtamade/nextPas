@@ -24,6 +24,8 @@ function FsIsFile(const APath: string): Boolean;
 function FsFileSize(const APath: string): Int64;
 procedure FsChmod(const APath: string; const APerm: TFilePermission);
 procedure FsTruncate(const APath: string; const ASize: Int64);
+procedure FsSymlink(const ATarget, ALinkPath: string);
+function FsReadlink(const APath: string): string;
 
 implementation
 
@@ -246,6 +248,39 @@ begin
   LResult := platform_file_truncate_path(PAnsiChar(APath), ASize);
   if LResult <> 0 then
     RaiseFsError(LResult, 'truncate', APath);
+end;
+
+procedure FsSymlink(const ATarget, ALinkPath: string);
+var
+  LResult: Int32;
+begin
+  LResult := platform_file_symlink(PAnsiChar(ATarget), PAnsiChar(ALinkPath));
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'symlink', ALinkPath);
+end;
+
+function FsReadlink(const APath: string): string;
+const
+  BUF_SIZE = 1024;
+var
+  LStack: array[0..BUF_SIZE - 1] of AnsiChar;
+  LLen: Int32;
+  LResult: Int32;
+  LHeap: array of AnsiChar;
+begin
+  LResult := platform_file_readlink(PAnsiChar(APath), @LStack[0], BUF_SIZE, LLen);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'readlink', APath);
+  if LLen < BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LLen);
+    Exit;
+  end;
+  SetLength(LHeap, LLen + 1);
+  LResult := platform_file_readlink(PAnsiChar(APath), @LHeap[0], Length(LHeap), LLen);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'readlink', APath);
+  SetString(Result, PAnsiChar(@LHeap[0]), LLen);
 end;
 
 end.

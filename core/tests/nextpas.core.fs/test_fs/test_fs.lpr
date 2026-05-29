@@ -402,13 +402,11 @@ procedure TestRemoveAllSymlinkRoot;
 var
   LTarget, LLink: string;
 begin
-  { Build a real dir with a file, and a symlink pointing at it. RemoveAll on
-    the symlink must delete the link only, leaving the target intact. }
   LTarget := GTmpDir + '/rmtarget';
   LLink := GTmpDir + '/rmlink';
   FsMkdir(LTarget);
   FsWriteFile(LTarget + '/keep.txt', TBytes.Create(42));
-  if symlink(PAnsiChar(LTarget), PAnsiChar(LLink)) <> 0 then
+  if nextpas.core.platform.posix.ffi.symlink(PAnsiChar(LTarget), PAnsiChar(LLink)) <> 0 then
   begin
     Check(True, 'symlink unsupported, skip');
     Exit;
@@ -416,6 +414,21 @@ begin
   FsRemoveAll(LLink);
   Check(not FsExists(LLink), 'symlink removed');
   Check(FsExists(LTarget + '/keep.txt'), 'target tree intact');
+end;
+
+procedure TestSymlinkReadlink;
+var
+  LTarget, LLink, LRead: string;
+begin
+  LTarget := GTmpDir + '/symtarget.txt';
+  LLink := GTmpDir + '/symlink.txt';
+  FsWriteFile(LTarget, TBytes.Create(1, 2, 3));
+  FsSymlink(LTarget, LLink);
+  Check(FsExists(LLink), 'link exists');
+  LRead := FsReadlink(LLink);
+  CheckEqual(LTarget, LRead, 'readlink returns target');
+  Check(FsLstat(LLink).IsSymlink, 'lstat sees symlink');
+  Check(not FsStat(LLink).IsSymlink, 'stat follows link');
 end;
 {$ENDIF}
 
@@ -464,6 +477,7 @@ begin
     T.Run('Lstat', @TestLstat);
 {$IFDEF NEXTPAS_UNIX}
     T.Run('RemoveAll symlink root', @TestRemoveAllSymlinkRoot);
+    T.Run('Symlink + Readlink', @TestSymlinkReadlink);
 {$ENDIF}
 
     T.Summary;
