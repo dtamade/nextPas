@@ -2518,6 +2518,40 @@ begin
               Inc(ACursor);
             MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
           end;
+        tkPackedKeyword:
+          begin
+            Inc(ACursor);
+            SkipDirectives(ALexer, ACursor);
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkRecordKeyword) then
+            begin
+              TypeNode := TGreenNode.Create(gnkRecordType,
+                CurrentToken(ALexer, ACursor).ByteOffset, 0, 'packed');
+              Decl.AppendChild(TypeNode);
+              Inc(ATree.FNodeCount);
+              Inc(ACursor);
+              SkipDirectives(ALexer, ACursor);
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                Inc(ACursor);
+              MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+            end
+            else
+            begin
+              while (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+                (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                Inc(ACursor);
+            end;
+          end;
+        tkMinus, tkPlus, tkIntegerLiteral, tkCharLiteral:
+          begin
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              Inc(ACursor);
+          end;
       else
         TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
         if TypeNode <> nil then
@@ -2607,6 +2641,17 @@ begin
       ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
     end
+    else if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
+    begin
+      Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end
     else
     begin
       while (ACursor < ALexer.TokenCount) and
@@ -2652,7 +2697,10 @@ begin
     ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
      not (CurrentToken(ALexer, ACursor).Kind in
        [tkPlus, tkMinus, tkStar, tkSlash, tkEquals, tkNotEquals,
-        tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual])) then
+        tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual,
+        tkModKeyword, tkDivKeyword, tkShlKeyword, tkShrKeyword,
+        tkAndKeyword, tkOrKeyword, tkXorKeyword, tkNotKeyword,
+        tkInKeyword])) then
   begin
     Node.Free;
     Exit(False);
@@ -2720,6 +2768,17 @@ begin
       ParseBeginBlock(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
       MatchTokenSilent(ALexer, ACursor, tkSemicolon);
     end
+    else if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkAsmKeyword) then
+    begin
+      Inc(ACursor);
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkEndKeyword);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end
     else
     begin
       while (ACursor < ALexer.TokenCount) and
@@ -2769,7 +2828,13 @@ begin
       tkVarKeyword:
         Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
+      tkThreadVarKeyword:
+        Result := ParseVarSection(ALexer, ACursor, AParent, ATree,
+          ADiagnostics, ARootFileId) and Result;
       tkConstKeyword:
+        Result := ParseConstSection(ALexer, ACursor, AParent, ATree,
+          ADiagnostics, ARootFileId) and Result;
+      tkResourceStringKeyword:
         Result := ParseConstSection(ALexer, ACursor, AParent, ATree,
           ADiagnostics, ARootFileId) and Result;
       tkTypeKeyword:
