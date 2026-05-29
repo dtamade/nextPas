@@ -224,7 +224,7 @@ implementation
 
 uses
   nextpas.core.tls.http.client,
-  nextpas.core.tls.crypto.x509verify;
+  nextpas.core.crypto.x509verify;
 
 // ========================================================================
 // TOCSPStaplingConfig

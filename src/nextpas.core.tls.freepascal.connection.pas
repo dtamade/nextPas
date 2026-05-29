@@ -40,7 +40,7 @@ uses
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.wire,
   nextpas.core.tls.tls12.recordcrypto,
-  nextpas.core.tls.crypto.tls12record,
+  nextpas.core.crypto.tls12record,
   nextpas.core.tls.tls12.chacha20record,
   nextpas.core.tls.x509;
 

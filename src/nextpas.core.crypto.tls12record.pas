@@ -1,4 +1,4 @@
-unit nextpas.core.tls.crypto.tls12record;
+unit nextpas.core.crypto.tls12record;
 
 {$mode objfpc}{$H+}{$J-}
 

@@ -100,7 +100,7 @@ uses
   nextpas.core.tls.tls12.clienthello,
   nextpas.core.tls.tls12.parser,
   nextpas.core.tls.tls12.recordcrypto,
-  nextpas.core.tls.crypto.tls12record,
+  nextpas.core.crypto.tls12record,
   nextpas.core.tls.tls12.chacha20record,
   nextpas.core.tls.tls12.handshakecrypto,
   nextpas.core.crypto.x25519,

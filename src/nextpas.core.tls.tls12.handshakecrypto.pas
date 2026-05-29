@@ -76,7 +76,7 @@ function TLS12ComputeFinished_SHA384(
 implementation
 
 uses
-  nextpas.core.tls.crypto.tls12prf;
+  nextpas.core.crypto.tls12prf;
 
 function TLS12ComputeMasterSecret_SHA256(
   const APreMasterSecret: TBytes;
