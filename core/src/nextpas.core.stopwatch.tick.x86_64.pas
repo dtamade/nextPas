@@ -109,10 +109,16 @@ var
   LOld: Int32;
 
   function GetRefNs: UInt64;
+  {$IFDEF NEXTPAS_WINDOWS}
+  var
+    LQ, LR: Int64;
+  {$ENDIF}
   begin
   {$IFDEF NEXTPAS_WINDOWS}
     QueryPerformanceCounter(LCounter);
-    Result := UInt64((LCounter * 1000000000) div LFreq);
+    LQ := LCounter div LFreq;
+    LR := LCounter - LQ * LFreq;
+    Result := UInt64(LQ) * 1000000000 + UInt64((LR * 1000000000) div LFreq);
   {$ELSE}
     clock_gettime(1{CLOCK_MONOTONIC}, @LTs);
     Result := UInt64(LTs.tv_sec) * 1000000000 + UInt64(LTs.tv_nsec);
