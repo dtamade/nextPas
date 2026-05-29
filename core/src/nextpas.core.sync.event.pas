@@ -16,12 +16,11 @@ uses
   nextpas.core.platform.sync;
 
 type
-  TEvent = class(TInterfacedObject, IEvent)
+  TManualResetEvent = class(TInterfacedObject, IEvent)
   private
-    FState: Int32;
-    FManualReset: Boolean;
+    FGen: Int32;
   public
-    constructor Create(const AManualReset: Boolean);
+    constructor Create;
     procedure SetEvent;
     procedure Reset;
     procedure Wait;
@@ -29,86 +28,135 @@ type
     function IsSet: Boolean;
   end;
 
-constructor TEvent.Create(const AManualReset: Boolean);
+  TAutoResetEvent = class(TInterfacedObject, IEvent)
+  private
+    FState: Int32;
+  public
+    constructor Create;
+    procedure SetEvent;
+    procedure Reset;
+    procedure Wait;
+    function WaitTimeout(const ATimeoutNs: Int64): Boolean;
+    function IsSet: Boolean;
+  end;
+
+{ TManualResetEvent — generation-based.
+  Even generation = unset, odd generation = set.
+  SetEvent increments to odd; Reset increments to even.
+  Waiters snapshot generation and sleep until it changes to odd. }
+
+constructor TManualResetEvent.Create;
+begin
+  inherited Create;
+  FGen := 0;
+end;
+
+procedure TManualResetEvent.SetEvent;
+var
+  LCur: Int32;
+begin
+  LCur := AtomicLoad32(FGen, moAcquire);
+  if (LCur and 1) = 1 then
+    Exit;
+  AtomicFetchAdd32(FGen, 1, moRelease);
+  platform_wake_address_all(@FGen);
+end;
+
+procedure TManualResetEvent.Reset;
+var
+  LCur: Int32;
+begin
+  LCur := AtomicLoad32(FGen, moAcquire);
+  if (LCur and 1) = 0 then
+    Exit;
+  AtomicFetchAdd32(FGen, 1, moRelease);
+end;
+
+procedure TManualResetEvent.Wait;
+var
+  LSnap: Int32;
+begin
+  LSnap := AtomicLoad32(FGen, moAcquire);
+  if (LSnap and 1) = 1 then
+    Exit;
+  while True do
+  begin
+    platform_wait_address32(@FGen, LSnap, -1);
+    LSnap := AtomicLoad32(FGen, moAcquire);
+    if (LSnap and 1) = 1 then
+      Exit;
+  end;
+end;
+
+function TManualResetEvent.WaitTimeout(const ATimeoutNs: Int64): Boolean;
+var
+  LSnap: Int32;
+begin
+  LSnap := AtomicLoad32(FGen, moAcquire);
+  if (LSnap and 1) = 1 then
+    Exit(True);
+  platform_wait_address32(@FGen, LSnap, ATimeoutNs);
+  LSnap := AtomicLoad32(FGen, moAcquire);
+  Result := (LSnap and 1) = 1;
+end;
+
+function TManualResetEvent.IsSet: Boolean;
+begin
+  Result := (AtomicLoad32(FGen, moAcquire) and 1) = 1;
+end;
+
+{ TAutoResetEvent — binary permit via CAS.
+  FState: 0 = unset, 1 = set.
+  SetEvent: CAS 0->1 (idempotent, single permit).
+  Wait: CAS 1->0 to consume. }
+
+constructor TAutoResetEvent.Create;
 begin
   inherited Create;
   FState := 0;
-  FManualReset := AManualReset;
 end;
 
-procedure TEvent.SetEvent;
+procedure TAutoResetEvent.SetEvent;
+var
+  LOld: Int32;
 begin
-  AtomicFetchAdd32(FState, 1, moRelease);
-  if FManualReset then
-    platform_wake_address_all(@FState)
-  else
+  LOld := AtomicCompareExchange32(FState, 0, 1, moRelease);
+  if LOld = 0 then
     platform_wake_address_one(@FState);
 end;
 
-procedure TEvent.Reset;
+procedure TAutoResetEvent.Reset;
 begin
   AtomicStore32(FState, 0, moRelease);
 end;
 
-procedure TEvent.Wait;
-var
-  LSnap: Int32;
+procedure TAutoResetEvent.Wait;
 begin
-  if FManualReset then
-  begin
-    while AtomicLoad32(FState, moAcquire) = 0 do
-      platform_wait_address32(@FState, 0, -1);
-  end
-  else
-  begin
-    repeat
-      LSnap := AtomicLoad32(FState, moAcquire);
-      if LSnap = 0 then
-      begin
-        platform_wait_address32(@FState, 0, -1);
-        Continue;
-      end;
-    until AtomicCompareExchange32(FState, LSnap, LSnap - 1, moAcqRel) = LSnap;
-  end;
+  while AtomicCompareExchange32(FState, 1, 0, moAcquire) <> 1 do
+    platform_wait_address32(@FState, 0, -1);
 end;
 
-function TEvent.WaitTimeout(const ATimeoutNs: Int64): Boolean;
-var
-  LSnap: Int32;
+function TAutoResetEvent.WaitTimeout(const ATimeoutNs: Int64): Boolean;
 begin
-  if FManualReset then
-  begin
-    if AtomicLoad32(FState, moAcquire) > 0 then
-      Exit(True);
-    platform_wait_address32(@FState, 0, ATimeoutNs);
-    Result := AtomicLoad32(FState, moAcquire) > 0;
-  end
-  else
-  begin
-    LSnap := AtomicLoad32(FState, moAcquire);
-    if LSnap > 0 then
-    begin
-      if AtomicCompareExchange32(FState, LSnap, LSnap - 1, moAcqRel) = LSnap then
-        Exit(True);
-    end;
-    platform_wait_address32(@FState, 0, ATimeoutNs);
-    repeat
-      LSnap := AtomicLoad32(FState, moAcquire);
-      if LSnap = 0 then
-        Exit(False);
-    until AtomicCompareExchange32(FState, LSnap, LSnap - 1, moAcqRel) = LSnap;
-    Result := True;
-  end;
+  if AtomicCompareExchange32(FState, 1, 0, moAcquire) = 1 then
+    Exit(True);
+  platform_wait_address32(@FState, 0, ATimeoutNs);
+  Result := AtomicCompareExchange32(FState, 1, 0, moAcquire) = 1;
 end;
 
-function TEvent.IsSet: Boolean;
+function TAutoResetEvent.IsSet: Boolean;
 begin
-  Result := AtomicLoad32(FState, moAcquire) > 0;
+  Result := AtomicLoad32(FState, moAcquire) = 1;
 end;
+
+{ Factory }
 
 function CreateEvent(const AManualReset: Boolean): IEvent;
 begin
-  Result := TEvent.Create(AManualReset);
+  if AManualReset then
+    Result := TManualResetEvent.Create
+  else
+    Result := TAutoResetEvent.Create;
 end;
 
 end.

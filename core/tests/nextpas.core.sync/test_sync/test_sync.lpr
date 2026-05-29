@@ -407,6 +407,32 @@ begin
   Check(LE.WaitTimeout(1000000), 'immediate on set');
 end;
 
+procedure TestAutoResetIdempotent;
+var
+  LE: IEvent;
+begin
+  LE := Event(False);
+  LE.SetEvent;
+  LE.SetEvent;
+  LE.SetEvent;
+  LE.Wait;
+  Check(not LE.IsSet, 'consumed single permit');
+  Check(not LE.WaitTimeout(1000000), 'no second permit');
+end;
+
+procedure TestManualResetSetResetPulse;
+var
+  LE: IEvent;
+begin
+  LE := Event(True);
+  LE.SetEvent;
+  LE.Reset;
+  Check(not LE.IsSet, 'reset after set');
+  Check(not LE.WaitTimeout(1000000), 'waiter sees unset after pulse');
+  LE.SetEvent;
+  Check(LE.WaitTimeout(1000000), 'waiter sees second set');
+end;
+
 procedure TestFutexMutexGuard;
 var
   LM: IMutex;
@@ -482,6 +508,8 @@ begin
   T.Run('Event manual reset', @TestEventManualReset);
   T.Run('Event auto reset', @TestEventAutoReset);
   T.Run('Event timeout', @TestEventTimeout);
+  T.Run('AutoReset idempotent', @TestAutoResetIdempotent);
+  T.Run('ManualReset set+reset pulse', @TestManualResetSetResetPulse);
 
   T.Summary;
 end.
