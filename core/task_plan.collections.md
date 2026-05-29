@@ -58,7 +58,7 @@ G-COLLECTIONS: 打造 best-in-class 集合框架
 
 ## 当前状态
 
-- 23 套件，323+ 测试，0 失败，heaptrc 全部零泄漏
+- 28 套件，374 测试，0 失败，heaptrc 全部零泄漏
 - G-ARCH ✅ G-CORRECT ✅ G-TESTED ✅ G-PERF ✅ G-BENCH ✅
 - **接口已稳定，后续只做性能调优，不改公共 API**
 
