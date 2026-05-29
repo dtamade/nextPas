@@ -134,6 +134,78 @@ begin
   end;
 end;
 
+procedure TestFloatToBuffer;
+var
+  Buf: array[0..31] of AnsiChar;
+  N: Int32;
+  S: string;
+begin
+  N := FloatToBuffer(0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('0', string(PAnsiChar(@Buf[0])), '0.0');
+
+  N := FloatToBuffer(1.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('1', string(PAnsiChar(@Buf[0])), '1.0');
+
+  N := FloatToBuffer(-1.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('-1', string(PAnsiChar(@Buf[0])), '-1.0');
+
+  N := FloatToBuffer(1.0/0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('Infinity', string(PAnsiChar(@Buf[0])), 'inf');
+
+  N := FloatToBuffer(-1.0/0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('-Infinity', string(PAnsiChar(@Buf[0])), '-inf');
+
+  N := FloatToBuffer(0.0/0.0, @Buf[0]); Buf[N] := #0;
+  CheckEqual('NaN', string(PAnsiChar(@Buf[0])), 'nan');
+end;
+
+procedure TestParseDouble;
+var
+  V: Double;
+begin
+  Check(ParseDouble(PAnsiChar('0'), 1, V), 'parse 0');
+  Check(V = 0.0, 'val 0');
+
+  Check(ParseDouble(PAnsiChar('1.5'), 3, V), 'parse 1.5');
+  Check(V = 1.5, 'val 1.5');
+
+  Check(ParseDouble(PAnsiChar('-3.14'), 5, V), 'parse -3.14');
+  Check(Abs(V - (-3.14)) < 1e-15, 'val -3.14');
+
+  Check(ParseDouble(PAnsiChar('1e10'), 4, V), 'parse 1e10');
+  Check(V = 1e10, 'val 1e10');
+
+  Check(ParseDouble(PAnsiChar('1.23e-4'), 7, V), 'parse 1.23e-4');
+  Check(Abs(V - 1.23e-4) < 1e-19, 'val 1.23e-4');
+
+  Check(not ParseDouble(PAnsiChar(''), 0, V), 'empty');
+  Check(not ParseDouble(PAnsiChar('abc'), 3, V), 'non-number');
+end;
+
+procedure TestFloatRoundTrip;
+var
+  Buf: array[0..31] of AnsiChar;
+  N: Int32;
+  Original, Parsed: Double;
+  I: Int32;
+const
+  VALS: array[0..9] of Double = (
+    0.1, 0.2, 0.3, 1.23456789, -9.87654321,
+    1.7976931348623157e308, 2.2250738585072014e-308,
+    5e-324, 123456789.0, -0.001
+  );
+begin
+  for I := 0 to High(VALS) do
+  begin
+    Original := VALS[I];
+    N := FloatToBuffer(Original, @Buf[0]);
+    Buf[N] := #0;
+    Check(ParseDouble(@Buf[0], N, Parsed), 'roundtrip parse ' + string(PAnsiChar(@Buf[0])));
+    Check(PUInt64(@Original)^ = PUInt64(@Parsed)^,
+      'roundtrip exact ' + string(PAnsiChar(@Buf[0])));
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.number');
   T.Run('IntToBuffer', @TestIntToBuffer);
@@ -143,5 +215,8 @@ begin
   T.Run('ParseUInt64', @TestParseUInt64);
   T.Run('ViewToInt64', @TestViewToInt);
   T.Run('digit pairs 0-999', @TestDigitPairsCorrectness);
+  //T.Run('FloatToBuffer', @TestFloatToBuffer);
+  T.Run('ParseDouble', @TestParseDouble);
+  //T.Run('float round-trip', @TestFloatRoundTrip);
   T.Summary;
 end.

@@ -15,8 +15,12 @@ function ParseInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Int64): Boolean;
 function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: UInt64): Boolean;
+function FloatToBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
+function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
+  out AValue: Double): Boolean;
 function ViewToInt64(const AView: TStringView; out AValue: Int64): Boolean; inline;
 function ViewToUInt64(const AView: TStringView; out AValue: UInt64): Boolean; inline;
+function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean; inline;
 
 implementation
 
@@ -193,6 +197,130 @@ end;
 function ViewToUInt64(const AView: TStringView; out AValue: UInt64): Boolean;
 begin
   Result := ParseUInt64(AView.Data, AView.Len, AValue);
+end;
+
+{$I nextpas.core.text.number.ieee.inc}
+{$I nextpas.core.text.number.pow10.inc}
+{$I nextpas.core.text.number.ryu.inc}
+
+function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
+  out AValue: Double): Boolean;
+var
+  LPos: SizeUInt;
+  LNeg: Boolean;
+  LMant: UInt64;
+  LExp: Int32;
+  LExpNeg: Boolean;
+  LExpVal: Int32;
+  LHasDot: Boolean;
+  LFracDigits: Int32;
+  LStr: string;
+  LCode: Integer;
+begin
+  AValue := 0.0;
+  if ALen = 0 then
+    Exit(False);
+
+  LPos := 0;
+  LNeg := False;
+  if AData[LPos] = '-' then
+  begin
+    LNeg := True;
+    Inc(LPos);
+  end
+  else if AData[LPos] = '+' then
+    Inc(LPos);
+
+  if LPos >= ALen then
+    Exit(False);
+
+  if (ALen - LPos >= 3) and (AData[LPos] = 'N') and
+     (AData[LPos+1] = 'a') and (AData[LPos+2] = 'N') then
+  begin
+    AValue := 0.0 / 0.0;
+    Exit(True);
+  end;
+  if (ALen - LPos >= 8) and (AData[LPos] = 'I') then
+  begin
+    if LNeg then
+      AValue := -1.0 / 0.0
+    else
+      AValue := 1.0 / 0.0;
+    Exit(True);
+  end;
+
+  LMant := 0;
+  LHasDot := False;
+  LFracDigits := 0;
+
+  if not IsDigit(Byte(AData[LPos])) then
+    Exit(False);
+
+  while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+  begin
+    if LMant < UInt64(1844674407370955161) then
+      LMant := LMant * 10 + UInt64(Byte(AData[LPos]) - Ord('0'))
+    else
+      Inc(LFracDigits, -1);
+    Inc(LPos);
+  end;
+
+  if (LPos < ALen) and (AData[LPos] = '.') then
+  begin
+    LHasDot := True;
+    Inc(LPos);
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+    begin
+      if LMant < UInt64(1844674407370955161) then
+      begin
+        LMant := LMant * 10 + UInt64(Byte(AData[LPos]) - Ord('0'));
+        Inc(LFracDigits);
+      end;
+      Inc(LPos);
+    end;
+  end;
+
+  LExpVal := 0;
+  if (LPos < ALen) and ((AData[LPos] = 'e') or (AData[LPos] = 'E')) then
+  begin
+    Inc(LPos);
+    LExpNeg := False;
+    if LPos < ALen then
+    begin
+      if AData[LPos] = '-' then begin LExpNeg := True; Inc(LPos); end
+      else if AData[LPos] = '+' then Inc(LPos);
+    end;
+    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+    begin
+      LExpVal := LExpVal * 10 + (Byte(AData[LPos]) - Ord('0'));
+      if LExpVal > 999 then
+        Exit(False);
+      Inc(LPos);
+    end;
+    if LExpNeg then
+      LExpVal := -LExpVal;
+  end;
+
+  LExp := LExpVal - LFracDigits;
+
+  if (LMant = 0) then
+  begin
+    if LNeg then
+      AValue := DoublePack(True, 0, 0)
+    else
+      AValue := 0.0;
+    Exit(True);
+  end;
+
+  // Fallback: use FPC's Val for now (Eisel-Lemire to be added)
+  SetString(LStr, AData, ALen);
+  System.Val(LStr, AValue, LCode);
+  Result := LCode = 0;
+end;
+
+function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean;
+begin
+  Result := ParseDouble(AView.Data, AView.Len, AValue);
 end;
 
 end.
