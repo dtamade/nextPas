@@ -22,17 +22,19 @@ function HasHardwareTick: Boolean;
 implementation
 
 uses
-{$IFDEF NEXTPAS_UNIX}
-  nextpas.core.stopwatch.tick.unix
-{$ENDIF}
 {$IFDEF NEXTPAS_WINDOWS}
   nextpas.core.stopwatch.tick.windows
-{$ENDIF}
-{$IFDEF NEXTPAS_MACOS}
-  , nextpas.core.stopwatch.tick.darwin
+{$ELSEIF defined(NEXTPAS_MACOS)}
+  nextpas.core.stopwatch.tick.darwin,
+  nextpas.core.stopwatch.tick.unix
+{$ELSE}
+  nextpas.core.stopwatch.tick.unix
 {$ENDIF}
 {$IFDEF CPUX86_64}
   , nextpas.core.stopwatch.tick.x86_64
+{$ENDIF}
+{$IFDEF CPUAARCH64}
+  , nextpas.core.stopwatch.tick.aarch64
 {$ENDIF}
   ;
 
@@ -40,6 +42,8 @@ function HasHardwareTick: Boolean;
 begin
 {$IFDEF CPUX86_64}
   Result := nextpas.core.stopwatch.tick.x86_64.IsAvailable;
+{$ELSEIF defined(CPUAARCH64)}
+  Result := nextpas.core.stopwatch.tick.aarch64.IsAvailable;
 {$ELSE}
   Result := False;
 {$ENDIF}
@@ -61,6 +65,10 @@ begin
 {$IFDEF CPUX86_64}
   if nextpas.core.stopwatch.tick.x86_64.IsAvailable then
     Exit(nextpas.core.stopwatch.tick.x86_64.CreateHWTick);
+{$ENDIF}
+{$IFDEF CPUAARCH64}
+  if nextpas.core.stopwatch.tick.aarch64.IsAvailable then
+    Exit(nextpas.core.stopwatch.tick.aarch64.CreateHWTick);
 {$ENDIF}
   Result := MakeHDTick;
 end;
