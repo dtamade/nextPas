@@ -480,10 +480,13 @@ end;
 
 class function TDate.Today: TDate;
 var
-  LUtcSec, LLocalSec: Int64;
+  LUtcNs, LUtcSec, LLocalSec: Int64;
   LDays: Integer;
 begin
-  LUtcSec := Int64(platform_realtime_ns) div 1000000000;
+  LUtcNs := Int64(platform_realtime_ns);
+  LUtcSec := LUtcNs div 1000000000;
+  if (LUtcNs < 0) and (LUtcNs mod 1000000000 <> 0) then
+    Dec(LUtcSec);
   LLocalSec := LUtcSec + Int64(platform_utc_offset_seconds);
   LDays := Integer(LLocalSec div 86400);
   if (LLocalSec < 0) and (LLocalSec mod 86400 <> 0) then
