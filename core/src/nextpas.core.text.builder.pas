@@ -51,10 +51,15 @@ begin
   LNewCap := FCap;
   if LNewCap = 0 then
     LNewCap := 256;
-  while (LNewCap < LRequired) and (LNewCap <= LNewCap * 2) do
+  while LNewCap < LRequired do
+  begin
+    if LNewCap > (High(SizeUInt) shr 1) then
+    begin
+      LNewCap := LRequired;
+      Break;
+    end;
     LNewCap := LNewCap * 2;
-  if LNewCap < LRequired then
-    LNewCap := LRequired;
+  end;
   ReallocMem(FBuf, LNewCap);
   FCap := LNewCap;
 end;

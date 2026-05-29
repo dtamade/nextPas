@@ -16,6 +16,7 @@ function ParseInt64(const AData: PAnsiChar; const ALen: SizeUInt;
 function ParseUInt64(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: UInt64): Boolean;
 function FloatToBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
+function FloatToJsonBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
 function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Double): Boolean;
 function ViewToInt64(const AView: TStringView; out AValue: Int64): Boolean; inline;
@@ -203,6 +204,43 @@ end;
 {$I nextpas.core.text.number.pow10.inc}
 {$I nextpas.core.text.number.ryu.inc}
 
+function EiselLemire(const AMant: UInt64; const AExp10: Int32;
+  out AValue: Double): Boolean; forward;
+function ParseDoubleFallback(const AData: PAnsiChar; const ALen: SizeUInt;
+  out AValue: Double): Boolean; forward;
+
+function FloatToJsonBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
+begin
+  if DoubleIsNaN(AValue) or DoubleIsInf(AValue) then
+  begin
+    Move('null', ADst^, 4);
+    Exit(4);
+  end;
+  Result := FloatToBuffer(AValue, ADst);
+end;
+
+function EiselLemire(const AMant: UInt64; const AExp10: Int32;
+  out AValue: Double): Boolean;
+begin
+  AValue := 0.0;
+  Result := False;
+end;
+
+function ParseDoubleFallback(const AData: PAnsiChar; const ALen: SizeUInt;
+  out AValue: Double): Boolean;
+var
+  LBuf: array[0..63] of AnsiChar;
+  LCode: Integer;
+  LActualLen: SizeUInt;
+begin
+  LActualLen := ALen;
+  if LActualLen > 63 then LActualLen := 63;
+  Move(AData^, LBuf[0], LActualLen);
+  LBuf[LActualLen] := #0;
+  Val(PAnsiChar(@LBuf[0]), AValue, LCode);
+  Result := LCode = 0;
+end;
+
 function ParseDouble(const AData: PAnsiChar; const ALen: SizeUInt;
   out AValue: Double): Boolean;
 var
@@ -214,8 +252,6 @@ var
   LExpVal: Int32;
   LHasDot: Boolean;
   LFracDigits: Int32;
-  LStr: string;
-  LCode: Integer;
 begin
   AValue := 0.0;
   if ALen = 0 then
@@ -305,6 +341,9 @@ begin
 
   LExp := LExpVal - LFracDigits;
 
+  if LPos <> ALen then
+    Exit(False);
+
   if (LMant = 0) then
   begin
     if LNeg then
@@ -314,10 +353,14 @@ begin
     Exit(True);
   end;
 
-  // Fallback: use FPC's Val for now (Eisel-Lemire to be added)
-  SetString(LStr, AData, ALen);
-  System.Val(LStr, AValue, LCode);
-  Result := LCode = 0;
+  if EiselLemire(LMant, LExp, AValue) then
+  begin
+    if LNeg then
+      PUInt64(@AValue)^ := PUInt64(@AValue)^ or DOUBLE_SIGN_MASK;
+    Exit(True);
+  end;
+
+  Result := ParseDoubleFallback(AData, ALen, AValue);
 end;
 
 function ViewToDouble(const AView: TStringView; out AValue: Double): Boolean;

@@ -109,16 +109,30 @@ function ScanFindByte3(const AData: PAnsiChar; const ALen: SizeUInt;
   const A, B, C: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LCombined: TMask16;
+  LCombined16: TMask16;
+{$IFDEF HAS_AVX2}
+  LCombined32: TMask32;
+{$ENDIF}
 begin
   LPos := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LCombined32 := Vec32CmpEq(@AData[LPos], A) or
+                   Vec32CmpEq(@AData[LPos], B) or
+                   Vec32CmpEq(@AData[LPos], C);
+    if LCombined32 <> MASK32_NONE_SET then
+      Exit(PtrInt(LPos) + Vec32Ctz(LCombined32));
+    Inc(LPos, 32);
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
-    LCombined := Vec16CmpEq(@AData[LPos], A) or
-                 Vec16CmpEq(@AData[LPos], B) or
-                 Vec16CmpEq(@AData[LPos], C);
-    if LCombined <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LCombined));
+    LCombined16 := Vec16CmpEq(@AData[LPos], A) or
+                   Vec16CmpEq(@AData[LPos], B) or
+                   Vec16CmpEq(@AData[LPos], C);
+    if LCombined16 <> MASK16_NONE_SET then
+      Exit(PtrInt(LPos) + Vec16Ctz(LCombined16));
     Inc(LPos, 16);
   end;
   while LPos < ALen do

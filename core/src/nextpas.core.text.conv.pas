@@ -34,7 +34,12 @@ begin
     Exit('0');
   LNeg := AValue < 0;
   if LNeg then
-    LVal := UInt64(-AValue)
+  begin
+    if AValue = Low(Int64) then
+      LVal := UInt64(9223372036854775808)
+    else
+      LVal := UInt64(-AValue);
+  end
   else
     LVal := UInt64(AValue);
   LIdx := High(LBuf);
