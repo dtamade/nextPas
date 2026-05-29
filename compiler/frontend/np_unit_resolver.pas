@@ -505,6 +505,7 @@ var
   ResolvedUnit: TResolvedUnit;
   HasExistingUnit: Boolean;
   DependencyFileId: TSourceFileId;
+  DependencyDiag: TDiagnosticsSink;
   DependencyLexer: TLexerResult;
   DependencyDefines: TDefineTable;
   DependencyPP: TPreprocessor;
@@ -565,9 +566,10 @@ begin
   end;
 
   DependencyFileId := FSourceDatabase.RegisterSource(Candidates[0]);
+  DependencyDiag := TDiagnosticsSink.Create;
   DependencyLexer := TLexerResult.Create(
     FSourceDatabase.SourceTextForFileId(DependencyFileId),
-    FDiagnostics,
+    DependencyDiag,
     DependencyFileId
   );
   DependencyDefines := TDefineTable.Create;
@@ -582,15 +584,13 @@ begin
   end;
   DependencyGreenTree := ParseGreenTree(
     DependencyLexer,
-    FDiagnostics,
+    DependencyDiag,
     DependencyFileId
   );
   DependencyAst := TAstFacade.Create(DependencyGreenTree);
   try
-    if FDiagnostics.HasErrors or not DependencyAst.IsValid then
+    if DependencyDiag.HasErrors or not DependencyAst.IsValid then
     begin
-      FResolutionStatus := 'failure';
-      FUnitGraph.MarkFailure;
       Exit;
     end;
 
@@ -642,9 +642,10 @@ begin
     DependencyAst.Free;
     DependencyGreenTree.Free;
     DependencyLexer.Free;
+    DependencyDiag.Free;
   end;
 
-  Result := not FDiagnostics.HasErrors;
+  Result := True;
 end;
 
 function TUnitResolver.ResolveDependencyList(
