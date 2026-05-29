@@ -30,6 +30,8 @@ type
     function TryDequeue(out AValue: T): Boolean;
     procedure EnqueueWait(const AValue: T);
     function DequeueWait(out AValue: T): Boolean;
+    function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+    function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
     procedure Close;
     function IsClosed: Boolean;
     function ApproxCount: PtrUInt;
@@ -40,7 +42,8 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.lockfree.wait;
+  nextpas.core.lockfree.wait,
+  nextpas.core.time.base;
 
 constructor TMpmcQueue.Create(const ACapacity: PtrUInt);
 var
@@ -164,6 +167,64 @@ begin
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
     LockFreeWaitData(@FDataEpoch, LEpoch, -1);
+  end;
+end;
+
+function TMpmcQueue.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+var
+  LEpoch: Int32;
+  LStart: TInstant;
+  LRemaining: Int64;
+begin
+  if TryEnqueue(AValue) then
+  begin
+    LockFreeWakeData(@FDataEpoch);
+    Exit(True);
+  end;
+  LStart := TInstant.Now;
+  while True do
+  begin
+    LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
+    if LRemaining <= 0 then
+      Exit(TryEnqueue(AValue));
+    LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
+    if TryEnqueue(AValue) then
+    begin
+      LockFreeWakeData(@FDataEpoch);
+      Exit(True);
+    end;
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    LockFreeWaitSpace(@FSpaceEpoch, LEpoch, LRemaining);
+  end;
+end;
+
+function TMpmcQueue.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+var
+  LEpoch: Int32;
+  LStart: TInstant;
+  LRemaining: Int64;
+begin
+  if TryDequeue(AValue) then
+  begin
+    LockFreeWakeSpace(@FSpaceEpoch);
+    Exit(True);
+  end;
+  LStart := TInstant.Now;
+  while True do
+  begin
+    LRemaining := ATimeoutNs - LStart.Elapsed.AsNanoseconds;
+    if LRemaining <= 0 then
+      Exit(TryDequeue(AValue));
+    LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
+    if TryDequeue(AValue) then
+    begin
+      LockFreeWakeSpace(@FSpaceEpoch);
+      Exit(True);
+    end;
+    if AtomicLoad32(FClosed, moAcquire) <> 0 then
+      Exit(False);
+    LockFreeWaitData(@FDataEpoch, LEpoch, LRemaining);
   end;
 end;
 

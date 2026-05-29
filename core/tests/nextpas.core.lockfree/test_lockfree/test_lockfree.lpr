@@ -9,11 +9,17 @@ uses
   nextpas.core.errors,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
+  nextpas.core.lockfree.stack,
+  nextpas.core.lockfree.mpsc,
+  nextpas.core.lockfree.deque,
   nextpas.core.platform.thread;
 
 type
   TIntSpsc = specialize TSpscQueue<Integer>;
   TIntMpmc = specialize TMpmcQueue<Integer>;
+  TIntStack = specialize TLockFreeStack<Integer>;
+  TIntMpsc = specialize TMpscQueue<Integer>;
+  TIntDeque = specialize TWorkStealingDeque<Integer>;
 
 var
   T: TTestRunner;
@@ -231,6 +237,140 @@ begin
   Check(LGot, 'MPMC rejects 0');
 end;
 
+{ SPSC Batch }
+
+procedure TestSpscBatch;
+var
+  LQ: TIntSpsc;
+  LIn: array[0..3] of Integer;
+  LOut: array[0..3] of Integer;
+  LN: PtrUInt;
+begin
+  LQ := TIntSpsc.Create(8);
+  LIn[0] := 10; LIn[1] := 20; LIn[2] := 30; LIn[3] := 40;
+  LN := LQ.EnqueueBatch(LIn);
+  CheckEqual(Int64(4), Int64(LN), 'batch enq 4');
+  LN := LQ.DequeueBatch(LOut, 4);
+  CheckEqual(Int64(4), Int64(LN), 'batch deq 4');
+  CheckEqual(Int64(10), Int64(LOut[0]));
+  CheckEqual(Int64(40), Int64(LOut[3]));
+  LQ.Free;
+end;
+
+{ MPMC Timeout }
+
+procedure TestMpmcTimeout;
+var
+  LQ: TIntMpmc;
+  LV: Integer;
+begin
+  LQ := TIntMpmc.Create(2);
+  LQ.TryEnqueue(1);
+  LQ.TryEnqueue(2);
+  Check(not LQ.EnqueueTimeout(3, 1000000), 'enq timeout on full');
+  Check(LQ.DequeueTimeout(LV, 1000000), 'deq immediate');
+  CheckEqual(Int64(1), Int64(LV));
+  Check(LQ.EnqueueTimeout(3, 1000000), 'enq after space');
+  LQ.Free;
+end;
+
+{ Stack }
+
+procedure TestStackBasic;
+var
+  LSt: TIntStack;
+  LV: Integer;
+begin
+  LSt := TIntStack.Create;
+  Check(LSt.IsEmpty, 'empty');
+  LSt.Push(10);
+  LSt.Push(20);
+  LSt.Push(30);
+  Check(not LSt.IsEmpty, 'not empty');
+  Check(LSt.TryPop(LV), 'pop 1');
+  CheckEqual(Int64(30), Int64(LV), 'LIFO');
+  Check(LSt.TryPop(LV), 'pop 2');
+  CheckEqual(Int64(20), Int64(LV));
+  Check(LSt.TryPop(LV), 'pop 3');
+  CheckEqual(Int64(10), Int64(LV));
+  Check(not LSt.TryPop(LV), 'empty after pops');
+  LSt.Free;
+end;
+
+{ MPSC }
+
+var
+  GMpscQ: TIntMpsc;
+
+function MpscProducer(AArg: Pointer): Pointer; cdecl;
+var
+  LI, LStart: Integer;
+begin
+  Result := nil;
+  LStart := Integer(PtrInt(AArg));
+  for LI := LStart to LStart + 99 do
+    GMpscQ.Enqueue(LI);
+end;
+
+procedure TestMpscBasic;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  Check(not LQ.TryDequeue(LV), 'empty');
+  LQ.Enqueue(42);
+  LQ.Enqueue(77);
+  Check(LQ.TryDequeue(LV), 'deq 1');
+  CheckEqual(Int64(42), Int64(LV));
+  Check(LQ.TryDequeue(LV), 'deq 2');
+  CheckEqual(Int64(77), Int64(LV));
+  Check(not LQ.TryDequeue(LV), 'empty again');
+  LQ.Free;
+end;
+
+procedure TestMpscMultiProducer;
+var
+  LHandles: array[0..3] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI, LV: Integer;
+  LSum: Int64;
+begin
+  GMpscQ := TIntMpsc.Create;
+  for LI := 0 to 3 do
+    platform_thread_create(LHandles[LI], @MpscProducer, Pointer(PtrInt(LI * 100 + 1)));
+  for LI := 0 to 3 do
+    platform_thread_join(LHandles[LI], LRetVal);
+  LSum := 0;
+  while GMpscQ.TryDequeue(LV) do
+    Inc(LSum, Int64(LV));
+  CheckEqual(Int64(80200), LSum, '4 producers sum');
+  GMpscQ.Free;
+end;
+
+{ Work-stealing Deque }
+
+procedure TestDequeBasic;
+var
+  LD: TIntDeque;
+  LV: Integer;
+begin
+  LD := TIntDeque.Create(8);
+  Check(LD.IsEmpty, 'empty');
+  LD.Push(10);
+  LD.Push(20);
+  LD.Push(30);
+  CheckEqual(Int64(3), Int64(LD.ApproxCount), 'count 3');
+  Check(LD.TryPop(LV), 'pop');
+  CheckEqual(Int64(30), Int64(LV), 'LIFO pop');
+  Check(LD.TrySteal(LV), 'steal');
+  CheckEqual(Int64(10), Int64(LV), 'FIFO steal');
+  Check(LD.TryPop(LV), 'pop last');
+  CheckEqual(Int64(20), Int64(LV));
+  Check(LD.IsEmpty, 'empty after all');
+  LD.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.lockfree');
   T.Run('SPSC basic', @TestSpscBasic);
@@ -242,5 +382,11 @@ begin
   T.Run('MPMC close', @TestMpmcClose);
   T.Run('MPMC 4P+4C contention', @TestMpmcContention);
   T.Run('Capacity zero reject', @TestCapacityZero);
+  T.Run('SPSC batch', @TestSpscBatch);
+  T.Run('MPMC timeout', @TestMpmcTimeout);
+  T.Run('Stack basic', @TestStackBasic);
+  T.Run('MPSC basic', @TestMpscBasic);
+  T.Run('MPSC multi-producer', @TestMpscMultiProducer);
+  T.Run('Deque basic', @TestDequeBasic);
   T.Summary;
 end.

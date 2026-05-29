@@ -30,6 +30,8 @@ type
     function DequeueWait(out AValue: T): Boolean;
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+    function EnqueueBatch(const AValues: array of T): PtrUInt;
+    function DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
     procedure Close;
     function IsClosed: Boolean;
     function ApproxCount: PtrUInt;
@@ -201,6 +203,58 @@ begin
       Exit(False);
     LockFreeWaitData(@FDataEpoch, LEpoch, LRemaining);
   end;
+end;
+
+function TSpscQueue.EnqueueBatch(const AValues: array of T): PtrUInt;
+var
+  LTail, LAvail: Int64;
+  LI: PtrUInt;
+  LCount: PtrUInt;
+begin
+  LTail := FTail;
+  LAvail := Int64(FCapacity) - (LTail - FHeadCache);
+  if LAvail <= 0 then
+  begin
+    FHeadCache := AtomicLoad64(FHeadPublished, moAcquire);
+    LAvail := Int64(FCapacity) - (LTail - FHeadCache);
+    if LAvail <= 0 then
+      Exit(0);
+  end;
+  LCount := PtrUInt(Length(AValues));
+  if LCount > PtrUInt(LAvail) then
+    LCount := PtrUInt(LAvail);
+  for LI := 0 to LCount - 1 do
+    FSlots[(LTail + Int64(LI)) and Int64(FMask)] := AValues[LI];
+  FTail := LTail + Int64(LCount);
+  AtomicStore64(FTailPublished, FTail, moRelease);
+  Result := LCount;
+end;
+
+function TSpscQueue.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+var
+  LHead, LAvail: Int64;
+  LI: PtrUInt;
+  LCount: PtrUInt;
+begin
+  LHead := FHead;
+  LAvail := FTailCache - LHead;
+  if LAvail <= 0 then
+  begin
+    FTailCache := AtomicLoad64(FTailPublished, moAcquire);
+    LAvail := FTailCache - LHead;
+    if LAvail <= 0 then
+      Exit(0);
+  end;
+  LCount := AMaxCount;
+  if LCount > PtrUInt(LAvail) then
+    LCount := PtrUInt(LAvail);
+  if LCount > PtrUInt(Length(AValues)) then
+    LCount := PtrUInt(Length(AValues));
+  for LI := 0 to LCount - 1 do
+    AValues[LI] := FSlots[(LHead + Int64(LI)) and Int64(FMask)];
+  FHead := LHead + Int64(LCount);
+  AtomicStore64(FHeadPublished, FHead, moRelease);
+  Result := LCount;
 end;
 
 procedure TSpscQueue.Close;
