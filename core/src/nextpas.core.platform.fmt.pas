@@ -18,6 +18,8 @@ function platform_parse_float(const AStr: PAnsiChar; ALen: Int32; out AValue: Do
 
 function platform_str_lower(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
+function platform_str_upper(const ASrc: PAnsiChar; ALen: Int32;
+  ADst: PAnsiChar; ADstLen: Int32): Int32;
 function platform_str_trim(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
 function platform_str_equal_nocase(const A: PAnsiChar; ALen: Int32;
@@ -488,6 +490,38 @@ begin
     C := ASrc[I];
     if (C >= 'A') and (C <= 'Z') then
       C := AnsiChar(Ord(C) + 32);
+    ADst[I] := C;
+  end;
+  ADst[LLen] := #0;
+  Result := LLen;
+end;
+
+function platform_str_upper(const ASrc: PAnsiChar; ALen: Int32;
+  ADst: PAnsiChar; ADstLen: Int32): Int32;
+var
+  I, LLen: Int32;
+  C: AnsiChar;
+begin
+  if (ADst = nil) or (ADstLen <= 0) then
+    Exit(-1);
+  if ASrc = nil then
+  begin
+    ADst[0] := #0;
+    Exit(0);
+  end;
+  if ALen < 0 then
+  begin
+    ALen := 0;
+    while ASrc[ALen] <> #0 do Inc(ALen);
+  end;
+  LLen := ALen;
+  if LLen >= ADstLen then
+    LLen := ADstLen - 1;
+  for I := 0 to LLen - 1 do
+  begin
+    C := ASrc[I];
+    if (C >= 'a') and (C <= 'z') then
+      C := AnsiChar(Ord(C) - 32);
     ADst[I] := C;
   end;
   ADst[LLen] := #0;
