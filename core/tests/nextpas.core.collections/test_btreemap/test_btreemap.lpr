@@ -139,6 +139,67 @@ begin
   finally M.Free; end;
 end;
 
+var
+  GForEachSum: Int64;
+  GForEachCount: Integer;
+
+procedure ForEachCb(const AKey: Integer; const AValue: Integer; aData: Pointer);
+begin
+  Inc(GForEachSum, AKey);
+  Inc(GForEachCount);
+end;
+
+procedure TestLowerBound;
+var M: TIntBTree; k, v: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(10, 1); M.Put(20, 2); M.Put(30, 3); M.Put(40, 4); M.Put(50, 5);
+    Check(M.LowerBound(25, k, v), 'lb 25'); CheckEqual(Int64(30), Int64(k), 'lb 25 key');
+    Check(M.LowerBound(30, k, v), 'lb 30'); CheckEqual(Int64(30), Int64(k), 'lb 30 key');
+    Check(M.LowerBound(10, k, v), 'lb 10'); CheckEqual(Int64(10), Int64(k), 'lb 10 key');
+    Check(not M.LowerBound(51, k, v), 'lb 51 not found');
+  finally M.Free; end;
+end;
+
+procedure TestUpperBound;
+var M: TIntBTree; k, v: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    M.Put(10, 1); M.Put(20, 2); M.Put(30, 3); M.Put(40, 4); M.Put(50, 5);
+    Check(M.UpperBound(30, k, v), 'ub 30'); CheckEqual(Int64(40), Int64(k), 'ub 30 key');
+    Check(M.UpperBound(9, k, v), 'ub 9'); CheckEqual(Int64(10), Int64(k), 'ub 9 key');
+    Check(not M.UpperBound(50, k, v), 'ub 50 not found');
+  finally M.Free; end;
+end;
+
+procedure TestForEach;
+var M: TIntBTree; i: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for i := 0 to 99 do M.Put(i, i);
+    GForEachSum := 0; GForEachCount := 0;
+    M.ForEach(@ForEachCb);
+    CheckEqual(Int64(100), Int64(GForEachCount), 'count');
+    CheckEqual(Int64(4950), GForEachSum, 'sum');
+  finally M.Free; end;
+end;
+
+procedure TestRange;
+var M: TIntBTree; i: Integer;
+begin
+  M := TIntBTree.Create(@CmpInt);
+  try
+    for i := 0 to 99 do M.Put(i * 10, i);
+    GForEachSum := 0; GForEachCount := 0;
+    M.Range(200, 500, @ForEachCb);
+    CheckEqual(Int64(31), Int64(GForEachCount), 'range count');
+    CheckEqual(Int64(10850), GForEachSum, 'range sum');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.btreemap');
   T.Run('Put/Get', @TestPutGet);
@@ -149,5 +210,9 @@ begin
   T.Run('Remove stress (1000)', @TestRemoveStress);
   T.Run('String key', @TestStringKey);
   T.Run('Clear', @TestClear);
+  T.Run('LowerBound', @TestLowerBound);
+  T.Run('UpperBound', @TestUpperBound);
+  T.Run('ForEach', @TestForEach);
+  T.Run('Range', @TestRange);
   T.Summary;
 end.

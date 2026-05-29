@@ -18,6 +18,7 @@ type
   generic TBTreeMap<K, V> = class
   public type
     TCompareFunc = function(const A, B: K; aData: Pointer): SizeInt;
+    TForEachCallback = procedure(const AKey: K; const AValue: V; aData: Pointer);
     PNode = ^TNode;
     TNode = record
       Count: Int32;
@@ -47,6 +48,9 @@ type
     procedure BorrowFromPrev(ANode: PNode; AIndex: Int32);
     procedure BorrowFromNext(ANode: PNode; AIndex: Int32);
     procedure MergeChildren(ANode: PNode; AIndex: Int32);
+    procedure InorderTraverse(ANode: PNode; ACallback: TForEachCallback; AData: Pointer);
+    procedure RangeTraverse(ANode: PNode; const ALo, AHi: K;
+      ACallback: TForEachCallback; AData: Pointer);
 
   public
     constructor Create(ACompare: TCompareFunc; ACompareData: Pointer = nil);
@@ -61,6 +65,11 @@ type
 
     function Min(out AKey: K; out AValue: V): Boolean;
     function Max(out AKey: K; out AValue: V): Boolean;
+
+    function LowerBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+    function UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+    procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
+    procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
 
     property Count: SizeUInt read FCount;
   end;
@@ -550,6 +559,126 @@ begin
   FreeNodeRecursive(FRoot);
   FRoot := nil;
   FCount := 0;
+end;
+
+{ LowerBound — first key >= AKey }
+
+function TBTreeMap.LowerBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+var
+  LNode: PNode;
+  LIdx: Int32;
+  LFound: Boolean;
+begin
+  Result := False;
+  LNode := FRoot;
+  while LNode <> nil do
+  begin
+    if SearchNode(LNode, AKey, LIdx) then
+    begin
+      AFoundKey := LNode^.Keys[LIdx];
+      AValue := LNode^.Values[LIdx];
+      Exit(True);
+    end;
+    if LIdx < LNode^.Count then
+    begin
+      AFoundKey := LNode^.Keys[LIdx];
+      AValue := LNode^.Values[LIdx];
+      Result := True;
+    end;
+    if LNode^.IsLeaf then Exit;
+    LNode := LNode^.Children[LIdx];
+  end;
+end;
+
+{ UpperBound — first key > AKey }
+
+function TBTreeMap.UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
+var
+  LNode: PNode;
+  LIdx: Int32;
+begin
+  Result := False;
+  LNode := FRoot;
+  while LNode <> nil do
+  begin
+    SearchNode(LNode, AKey, LIdx);
+    if (LIdx < LNode^.Count) and (FCompare(AKey, LNode^.Keys[LIdx], FCompareData) = 0) then
+      Inc(LIdx);
+    if LIdx < LNode^.Count then
+    begin
+      AFoundKey := LNode^.Keys[LIdx];
+      AValue := LNode^.Values[LIdx];
+      Result := True;
+    end;
+    if LNode^.IsLeaf then Exit;
+    if LIdx <= LNode^.Count then
+      LNode := LNode^.Children[LIdx]
+    else
+      Exit;
+  end;
+end;
+
+{ ForEach — in-order traversal }
+
+procedure TBTreeMap.InorderTraverse(ANode: PNode; ACallback: TForEachCallback; AData: Pointer);
+var i: Int32;
+begin
+  if ANode = nil then Exit;
+  if ANode^.IsLeaf then
+  begin
+    for i := 0 to ANode^.Count - 1 do
+      ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
+  end
+  else
+  begin
+    for i := 0 to ANode^.Count - 1 do
+    begin
+      InorderTraverse(ANode^.Children[i], ACallback, AData);
+      ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
+    end;
+    InorderTraverse(ANode^.Children[ANode^.Count], ACallback, AData);
+  end;
+end;
+
+procedure TBTreeMap.ForEach(ACallback: TForEachCallback; AData: Pointer);
+begin
+  InorderTraverse(FRoot, ACallback, AData);
+end;
+
+{ Range — visit all keys in [ALo..AHi] }
+
+procedure TBTreeMap.RangeTraverse(ANode: PNode; const ALo, AHi: K;
+  ACallback: TForEachCallback; AData: Pointer);
+var i: Int32;
+begin
+  if ANode = nil then Exit;
+  if ANode^.IsLeaf then
+  begin
+    for i := 0 to ANode^.Count - 1 do
+    begin
+      if FCompare(ANode^.Keys[i], ALo, FCompareData) < 0 then Continue;
+      if FCompare(ANode^.Keys[i], AHi, FCompareData) > 0 then Exit;
+      ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
+    end;
+  end
+  else
+  begin
+    for i := 0 to ANode^.Count - 1 do
+    begin
+      if FCompare(ANode^.Keys[i], ALo, FCompareData) >= 0 then
+        RangeTraverse(ANode^.Children[i], ALo, AHi, ACallback, AData);
+      if FCompare(ANode^.Keys[i], ALo, FCompareData) < 0 then Continue;
+      if FCompare(ANode^.Keys[i], AHi, FCompareData) > 0 then Exit;
+      ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
+    end;
+    if FCompare(ANode^.Keys[ANode^.Count - 1], AHi, FCompareData) <= 0 then
+      RangeTraverse(ANode^.Children[ANode^.Count], ALo, AHi, ACallback, AData);
+  end;
+end;
+
+procedure TBTreeMap.Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer);
+begin
+  RangeTraverse(FRoot, ALo, AHi, ACallback, AData);
 end;
 
 { TBTreeSet }
