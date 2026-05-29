@@ -196,6 +196,8 @@ type
       const AScopeId: LongInt): LongInt;
     function LookupSymbol(const AName: string;
       const AStartScopeId: LongInt): LongInt;
+    function LookupSymbolWithImports(const AName: string;
+      const AStartScopeId: LongInt): LongInt;
     function ScopeCount: LongInt;
     function ScopeAt(const AIndex: LongInt): TSemanticScope;
     function AddTypedHirNode(
@@ -607,6 +609,23 @@ begin
       SameText(FSymbols[Idx].Name, AName) then
       Exit(FSymbols[Idx].SymbolId);
   Result := 0;
+end;
+
+function TSemanticModel.LookupSymbolWithImports(const AName: string;
+  const AStartScopeId: LongInt): LongInt;
+var
+  Idx: LongInt;
+begin
+  Result := LookupSymbol(AName, AStartScopeId);
+  if Result > 0 then
+    Exit;
+  for Idx := 0 to Length(FScopes) - 1 do
+    if (FScopes[Idx].Kind = skUnit) and (FScopes[Idx].ParentScopeId = 1) then
+    begin
+      Result := FindSymbolInScope(AName, FScopes[Idx].ScopeId);
+      if Result > 0 then
+        Exit;
+    end;
 end;
 
 function TSemanticModel.ScopeAt(const AIndex: LongInt): TSemanticScope;
