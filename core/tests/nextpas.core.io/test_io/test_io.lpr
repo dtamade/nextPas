@@ -10,6 +10,7 @@ uses
   nextpas.core.io.memory,
   nextpas.core.io.buffer,
   nextpas.core.io.util,
+  nextpas.core.io.pipe,
   nextpas.core.io;
 
 var
@@ -437,6 +438,40 @@ begin
   CheckEqual(Int64(20), LN, 'copied with custom buf');
 end;
 
+{ Pipe tests }
+
+procedure TestPipeBasic;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LData: array[0..4] of Byte;
+  LBuf: array[0..4] of Byte;
+  LI: Integer;
+begin
+  CreatePipe(LR, LW);
+  for LI := 0 to 4 do LData[LI] := Byte(LI + 10);
+  CheckEqual(SizeUInt(5), LW.Write(LData[0], 5), 'pipe write');
+  CheckEqual(SizeUInt(5), LR.Read(LBuf[0], 5), 'pipe read');
+  for LI := 0 to 4 do
+    CheckEqual(Byte(LI + 10), LBuf[LI], 'byte');
+  LW.Close;
+  LR.Close;
+end;
+
+procedure TestPipeCloseWriterEOF;
+var
+  LR: IPipeReader;
+  LW: IPipeWriter;
+  LBuf: Byte;
+begin
+  CreatePipe(LR, LW);
+  LW.Write(LBuf, 1);
+  LW.Close;
+  LR.Read(LBuf, 1);
+  CheckEqual(SizeUInt(0), LR.Read(LBuf, 1), 'EOF after writer close');
+  LR.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io');
 
@@ -468,6 +503,9 @@ begin
   T.Run('WriteString', @TestWriteString);
   T.Run('ReadAtLeast', @TestReadAtLeast);
   T.Run('CopyBuffer', @TestCopyBuffer);
+
+  T.Run('Pipe basic', @TestPipeBasic);
+  T.Run('Pipe close writer EOF', @TestPipeCloseWriterEOF);
 
   T.Summary;
 end.
