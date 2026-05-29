@@ -221,9 +221,66 @@ end;
 
 function EiselLemire(const AMant: UInt64; const AExp10: Int32;
   out AValue: Double): Boolean;
+const
+  EL_MIN = -307;
+  EL_MAX = 288;
+  TAIL = UInt64((UInt64(1) shl 9) - 1);
+var
+  S1, S2, S2E, Hi, Lo, H2, L2, Ad, Bt: UInt64;
+  E2: Int32;
+  Cz: UInt32;
+  Raw: UInt64;
 begin
-  AValue := 0.0;
   Result := False;
+  AValue := 0.0;
+  if (AExp10 < EL_MIN) or (AExp10 > EL_MAX) then Exit;
+  S2 := POW10_TABLE[AExp10 - POW10_MIN_EXP].Hi;
+  S2E := POW10_TABLE[AExp10 - POW10_MIN_EXP].Lo;
+  E2 := SarLongint(AExp10 * 217706 - 4128768, 16);
+  Cz := UInt32(63 - BsrQWord(AMant));
+  S1 := AMant shl Cz;
+  Dec(E2, Int32(Cz));
+  UMul128(S1, S2, Hi, Lo);
+  Bt := Hi and TAIL;
+  if (Bt - 1) >= (TAIL - 1) then
+  begin
+    UMul128(S1, S2E, H2, L2);
+    Ad := Lo + H2;
+    if (Ad + 1) <= UInt64(1) then Exit;
+    if (Ad < Lo) or (Ad < H2) then Inc(Hi);
+  end;
+  Hi := Hi + (Lo shr 63);
+  Inc(E2, 64);
+  Cz := UInt32(63 - BsrQWord(Hi));
+  Hi := Hi shl Cz;
+  Dec(E2, Int32(Cz));
+  if (Hi and ((UInt64(1) shl 11) - 1)) >= (UInt64(1) shl 10) then
+    Hi := Hi + (UInt64(1) shl 11);
+  Hi := Hi shr 11;
+  Inc(E2, 63);
+  if Hi >= (UInt64(1) shl 53) then
+  begin
+    Hi := Hi shr 1;
+    Inc(E2);
+  end;
+  if E2 >= 1024 then Exit;
+  if E2 >= -1022 then
+  begin
+    Inc(E2, 1023);
+    Raw := (UInt64(E2) shl 52) or (Hi and DOUBLE_MANTISSA_MASK);
+  end
+  else if E2 >= -1074 then
+  begin
+    Hi := Hi shr (-1022 - E2);
+    Raw := Hi and DOUBLE_MANTISSA_MASK;
+  end
+  else
+  begin
+    AValue := 0.0;
+    Exit(True);
+  end;
+  PUInt64(@AValue)^ := Raw;
+  Result := True;
 end;
 
 function ParseDoubleFallback(const AData: PAnsiChar; const ALen: SizeUInt;
