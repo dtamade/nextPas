@@ -220,6 +220,11 @@ begin
       ADst[LPos] := '-';
       Inc(LPos);
       LDecPt := -LDecPt;
+    end
+    else
+    begin
+      ADst[LPos] := '+';
+      Inc(LPos);
     end;
     if LDecPt >= 100 then
     begin
