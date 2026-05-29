@@ -73,6 +73,12 @@ uses
 // ATwIm points to 4 twiddle imag parts [TwIm0,TwIm1,TwIm2,TwIm3]
 procedure FftButterfly4_SSE2(AEven, AOdd, ATwRe, ATwIm: PSingle); assembler; nostackframe;
 asm
+  {$IFNDEF UNIX}
+  mov rdi, rcx
+  mov rsi, rdx
+  mov rdx, r8
+  mov rcx, r9
+  {$ENDIF}
   // RDI=AEven, RSI=AOdd, RDX=ATwRe, RCX=ATwIm
   // Process first 2 complex (xmm) then next 2
 
@@ -206,6 +212,12 @@ end;
 // ATwRe/ATwIm point to 8 twiddle values
 procedure FftButterfly8_AVX2(AEven, AOdd, ATwRe, ATwIm: PSingle); assembler; nostackframe;
 asm
+  {$IFNDEF UNIX}
+  mov rdi, rcx
+  mov rsi, rdx
+  mov rdx, r8
+  mov rcx, r9
+  {$ENDIF}
   // RDI=AEven, RSI=AOdd, RDX=ATwRe, RCX=ATwIm
   // Process 4 complex per ymm pair (pairs 0-3, then 4-7)
 

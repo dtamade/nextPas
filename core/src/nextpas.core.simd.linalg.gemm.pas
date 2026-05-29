@@ -799,8 +799,8 @@ end;
 procedure GemmMicro4x8F64_Acc(AA, AB, AC: PDouble;
   AK, AAStride, ACStride: SizeUInt); assembler; nostackframe;
 asm
-  mov rax, rdx
   {$I nextpas.core.simd.abi.win64remap6.inc}
+  mov rax, rdx
   vmovupd ymm0, [rdx]
   vmovupd ymm1, [rdx + 32]
   add rdx, r9
