@@ -57,6 +57,8 @@ var
   LI: Int32;
 begin
   inherited Create;
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TLockFreeStack: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TLockFreeStack: capacity must be > 0');
   FCapacity := Int32(ACapacity);

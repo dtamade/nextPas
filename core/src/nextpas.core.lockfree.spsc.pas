@@ -55,6 +55,8 @@ var
   LCap: PtrUInt;
 begin
   inherited Create;
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TSpscQueue: T must be unmanaged (no string/interface/dynarray)');
   if ACapacity = 0 then
     raise EArgumentError.Create('TSpscQueue: capacity must be > 0');
   LCap := LockFreeNextPow2(ACapacity);

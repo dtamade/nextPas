@@ -39,6 +39,8 @@ var
   LCap: PtrUInt;
 begin
   inherited Create;
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TWorkStealingDeque: T must be unmanaged');
   if ACapacity = 0 then
     raise EArgumentError.Create('TWorkStealingDeque: capacity must be > 0');
   LCap := LockFreeNextPow2(ACapacity);

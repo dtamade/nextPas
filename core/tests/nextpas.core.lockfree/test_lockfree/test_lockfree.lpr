@@ -7,6 +7,7 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.errors,
+  nextpas.core.atomic,
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
   nextpas.core.lockfree.stack,
@@ -467,6 +468,136 @@ begin
   LD.Free;
 end;
 
+{ Multi-thread stress tests }
+
+const
+  STRESS_OPS = 100000;
+
+var
+  GStressStack: specialize TLockFreeStack<Integer>;
+  GStackPushCount: Int64;
+  GStackPopCount: Int64;
+
+function StackStressPusher(AArg: Pointer): Pointer; cdecl;
+var
+  LI: Integer;
+begin
+  Result := nil;
+  for LI := 1 to STRESS_OPS do
+    while not GStressStack.TryPush(LI) do
+      CpuPause;
+  InterlockedExchangeAdd64(GStackPushCount, STRESS_OPS);
+end;
+
+function StackStressPopper(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LCount: Int64;
+begin
+  Result := nil;
+  LCount := 0;
+  while True do
+  begin
+    if GStressStack.TryPop(LV) then
+      Inc(LCount)
+    else if InterlockedCompareExchange64(GStackPushCount, 0, 0) >= STRESS_OPS * 4 then
+    begin
+      while GStressStack.TryPop(LV) do
+        Inc(LCount);
+      Break;
+    end
+    else
+      CpuPause;
+  end;
+  InterlockedExchangeAdd64(GStackPopCount, LCount);
+end;
+
+procedure TestStackStress;
+var
+  LPushers: array[0..3] of TPlatformThreadHandle;
+  LPoppers: array[0..3] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI: Integer;
+begin
+  GStressStack := specialize TLockFreeStack<Integer>.Create(4096);
+  GStackPushCount := 0;
+  GStackPopCount := 0;
+  for LI := 0 to 3 do
+    platform_thread_create(LPushers[LI], @StackStressPusher, nil);
+  for LI := 0 to 3 do
+    platform_thread_create(LPoppers[LI], @StackStressPopper, nil);
+  for LI := 0 to 3 do
+    platform_thread_join(LPushers[LI], LRetVal);
+  for LI := 0 to 3 do
+    platform_thread_join(LPoppers[LI], LRetVal);
+  CheckEqual(Int64(STRESS_OPS * 4), GStackPopCount, 'stack 4P+4C all popped');
+  GStressStack.Free;
+end;
+
+var
+  GStressDeque: specialize TWorkStealingDeque<Integer>;
+  GDequeStealCount: Int64;
+
+function DequeThief(AArg: Pointer): Pointer; cdecl;
+var
+  LV: Integer;
+  LCount: Int64;
+begin
+  Result := nil;
+  LCount := 0;
+  while InterlockedCompareExchange64(GDequeStealCount, 0, 0) < STRESS_OPS do
+  begin
+    if GStressDeque.TrySteal(LV) then
+      Inc(LCount);
+  end;
+  InterlockedExchangeAdd64(GDequeStealCount, LCount);
+end;
+
+procedure TestDequeOwnerThief;
+var
+  LThieves: array[0..2] of TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LI, LV: Integer;
+  LOwnerPop: Int64;
+begin
+  GStressDeque := specialize TWorkStealingDeque<Integer>.Create(1024);
+  GDequeStealCount := 0;
+  LOwnerPop := 0;
+  for LI := 0 to 2 do
+    platform_thread_create(LThieves[LI], @DequeThief, nil);
+  for LI := 1 to STRESS_OPS do
+  begin
+    while not GStressDeque.TryPush(LI) do
+    begin
+      if GStressDeque.TryPop(LV) then
+        Inc(LOwnerPop);
+    end;
+  end;
+  while GStressDeque.TryPop(LV) do
+    Inc(LOwnerPop);
+  InterlockedExchangeAdd64(GDequeStealCount, STRESS_OPS);
+  for LI := 0 to 2 do
+    platform_thread_join(LThieves[LI], LRetVal);
+  Check(LOwnerPop + GDequeStealCount - STRESS_OPS > 0, 'deque owner+thieves processed items');
+  GStressDeque.Free;
+end;
+
+procedure TestManagedTypeReject;
+type
+  TStrSpsc = specialize TSpscQueue<AnsiString>;
+var
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    TStrSpsc.Create(4);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  Check(LGot, 'managed type rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.lockfree');
   T.Run('SPSC basic', @TestSpscBasic);
@@ -490,6 +621,9 @@ begin
   T.Run('MPSC dequeue wait', @TestMpscDequeueWait);
   T.Run('MPSC dequeue timeout', @TestMpscDequeueTimeout);
   T.Run('Deque capacity', @TestDequeCapacity);
+  T.Run('Stack 4P+4C stress', @TestStackStress);
+  T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
+  T.Run('Managed type reject', @TestManagedTypeReject);
 
   T.Summary;
 end.

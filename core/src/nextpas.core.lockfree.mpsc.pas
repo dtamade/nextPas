@@ -35,6 +35,7 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
@@ -42,6 +43,8 @@ uses
 constructor TMpscQueue.Create;
 begin
   inherited Create;
+  if IsManagedType(T) then
+    raise EArgumentError.Create('TMpscQueue: T must be unmanaged');
   FStub.Next := nil;
   FHead := @FStub;
   FTail := @FStub;
