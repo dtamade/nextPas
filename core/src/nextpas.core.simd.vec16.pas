@@ -5,8 +5,10 @@ unit nextpas.core.simd.vec16;
 
 interface
 
-type
-  TMask16 = Word;
+uses
+  nextpas.core.simd.base;
+
+// TMask16 is defined in nextpas.core.simd.base
 
 // === Byte-lane compare (16 bytes → 16-bit mask) ===
 

@@ -6,10 +6,11 @@ unit nextpas.core.simd.group;
 interface
 
 uses
+  nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 
 type
-  TGroupMask = nextpas.core.simd.vec16.TMask16;
+  TGroupMask = TMask16;
 
 function GroupMatch(ACtrl: PByte; AValue: Byte): TGroupMask; inline;
 function GroupCtz(AMask: TGroupMask): Int32; inline;

@@ -5,6 +5,7 @@ program test_micro_ops;
 
 uses
   SysUtils, Unix, BaseUnix,
+  nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 
 function GetTimeNs: Int64;

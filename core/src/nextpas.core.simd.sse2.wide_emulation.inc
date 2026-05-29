@@ -2600,30 +2600,108 @@ end;
 procedure ToLowerAscii_SSE2(p: Pointer; len: SizeUInt);
 var
   pB: PByte;
-  i: SizeUInt;
-  c: Byte;
+  LI, LCount16: SizeUInt;
 begin
   pB := PByte(p);
-  for i := 0 to len - 1 do
+  LI := 0;
+  LCount16 := len and (not SizeUInt(15));
+  {$IFDEF CPUX86_64}
+  if LCount16 > 0 then
+  asm
+    mov rax, pB
+    xor ecx, ecx
+    // broadcast 'A' and 'Z' for range check
+    // unsigned range: byte - 'A' <= 'Z' - 'A' means byte in ['A'..'Z']
+    mov edx, 65           // 'A'
+    movd xmm3, edx
+    punpcklbw xmm3, xmm3
+    pshuflw xmm3, xmm3, 0
+    punpcklqdq xmm3, xmm3  // xmm3 = broadcast('A')
+    mov edx, 25           // 'Z' - 'A'
+    movd xmm4, edx
+    punpcklbw xmm4, xmm4
+    pshuflw xmm4, xmm4, 0
+    punpcklqdq xmm4, xmm4  // xmm4 = broadcast(25)
+    mov edx, 32
+    movd xmm5, edx
+    punpcklbw xmm5, xmm5
+    pshuflw xmm5, xmm5, 0
+    punpcklqdq xmm5, xmm5  // xmm5 = broadcast(32)
+  @loop16:
+    movdqu xmm0, [rax + rcx]
+    movdqa xmm1, xmm0
+    psubb xmm1, xmm3       // xmm1 = data - 'A' (unsigned)
+    // unsigned <= 25: use saturating sub then check zero
+    movdqa xmm2, xmm4
+    pmaxub xmm2, xmm1      // max(25, data-'A')
+    pcmpeqb xmm2, xmm1     // data-'A' == max(25, data-'A') means data-'A' <= 25
+    // xmm2 = mask where byte in ['A'..'Z']
+    pand xmm2, xmm5        // mask & 32
+    paddb xmm0, xmm2       // data + (32 where uppercase)
+    movdqu [rax + rcx], xmm0
+    add ecx, 16
+    cmp ecx, dword [LCount16]
+    jb @loop16
+    mov LI, rcx
+  end;
+  {$ENDIF}
+  while LI < len do
   begin
-    c := pB[i];
-    if (c >= Ord('A')) and (c <= Ord('Z')) then
-      pB[i] := c + 32;
+    if (pB[LI] >= Ord('A')) and (pB[LI] <= Ord('Z')) then
+      pB[LI] := pB[LI] + 32;
+    Inc(LI);
   end;
 end;
 
 procedure ToUpperAscii_SSE2(p: Pointer; len: SizeUInt);
 var
   pB: PByte;
-  i: SizeUInt;
-  c: Byte;
+  LI, LCount16: SizeUInt;
 begin
   pB := PByte(p);
-  for i := 0 to len - 1 do
+  LI := 0;
+  LCount16 := len and (not SizeUInt(15));
+  {$IFDEF CPUX86_64}
+  if LCount16 > 0 then
+  asm
+    mov rax, pB
+    xor ecx, ecx
+    mov edx, 97           // 'a'
+    movd xmm3, edx
+    punpcklbw xmm3, xmm3
+    pshuflw xmm3, xmm3, 0
+    punpcklqdq xmm3, xmm3  // xmm3 = broadcast('a')
+    mov edx, 25           // 'z' - 'a'
+    movd xmm4, edx
+    punpcklbw xmm4, xmm4
+    pshuflw xmm4, xmm4, 0
+    punpcklqdq xmm4, xmm4  // xmm4 = broadcast(25)
+    mov edx, 32
+    movd xmm5, edx
+    punpcklbw xmm5, xmm5
+    pshuflw xmm5, xmm5, 0
+    punpcklqdq xmm5, xmm5  // xmm5 = broadcast(32)
+  @loop16:
+    movdqu xmm0, [rax + rcx]
+    movdqa xmm1, xmm0
+    psubb xmm1, xmm3       // xmm1 = data - 'a'
+    movdqa xmm2, xmm4
+    pmaxub xmm2, xmm1
+    pcmpeqb xmm2, xmm1     // mask where byte in ['a'..'z']
+    pand xmm2, xmm5        // mask & 32
+    psubb xmm0, xmm2       // data - (32 where lowercase)
+    movdqu [rax + rcx], xmm0
+    add ecx, 16
+    cmp ecx, dword [LCount16]
+    jb @loop16
+    mov LI, rcx
+  end;
+  {$ENDIF}
+  while LI < len do
   begin
-    c := pB[i];
-    if (c >= Ord('a')) and (c <= Ord('z')) then
-      pB[i] := c - 32;
+    if (pB[LI] >= Ord('a')) and (pB[LI] <= Ord('z')) then
+      pB[LI] := pB[LI] - 32;
+    Inc(LI);
   end;
 end;
 

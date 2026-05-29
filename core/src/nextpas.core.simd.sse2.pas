@@ -11,6 +11,7 @@ uses
   nextpas.core.simd.base,
   nextpas.core.simd.dispatch,
   nextpas.core.simd.mask,
+  nextpas.core.simd.vec16,
   nextpas.core.simd.backend.priority;
 
 // === SSE2 Backend Adapter ===
