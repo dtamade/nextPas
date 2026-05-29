@@ -15,6 +15,9 @@ function platform_fs_mkdir_p(const APath: PAnsiChar; AMode: UInt32): Int32;
 function platform_fs_copy_file(const ASrc: PAnsiChar; const ADst: PAnsiChar): Int32;
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
+function platform_fs_read_file(const APath: PAnsiChar;
+  out AData: Pointer; out ALen: PtrUInt): Int32;
+procedure platform_fs_free_buf(AData: Pointer);
 
 implementation
 
@@ -299,6 +302,47 @@ begin
     end;
   end;
   Result := -1;
+end;
+
+function platform_fs_read_file(const APath: PAnsiChar;
+  out AData: Pointer; out ALen: PtrUInt): Int32;
+var
+  LH: TPlatformFileHandle;
+  LSize: Int64;
+  LRead: PtrUInt;
+  LR: Int32;
+begin
+  AData := nil;
+  ALen := 0;
+  LR := platform_fs_file_size(APath, LSize);
+  if LR <> 0 then Exit(LR);
+  if LSize = 0 then
+  begin
+    GetMem(AData, 1);
+    PAnsiChar(AData)[0] := #0;
+    ALen := 0;
+    Exit(0);
+  end;
+  LR := platform_file_open(APath, fomReadOnly, fcmOpenExisting, LH);
+  if LR <> 0 then Exit(LR);
+  GetMem(AData, PtrUInt(LSize) + 1);
+  LR := platform_file_read(LH, AData, PtrUInt(LSize), LRead);
+  platform_file_close(LH);
+  if LR <> 0 then
+  begin
+    FreeMem(AData);
+    AData := nil;
+    Exit(LR);
+  end;
+  PAnsiChar(AData)[LRead] := #0;
+  ALen := LRead;
+  Result := 0;
+end;
+
+procedure platform_fs_free_buf(AData: Pointer);
+begin
+  if AData <> nil then
+    FreeMem(AData);
 end;
 
 end.

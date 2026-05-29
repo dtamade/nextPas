@@ -29,6 +29,36 @@ type
     property Text: string read GetText write SetText;
   end;
 
+  TStream = class
+  public
+    function Read(var Buffer; Count: Longint): Longint; virtual; abstract;
+    function Write(const Buffer; Count: Longint): Longint; virtual; abstract;
+    function Seek(Offset: Int64; Origin: Integer): Int64; virtual; abstract;
+    procedure ReadBuffer(var Buffer; Count: Longint);
+    procedure WriteBuffer(const Buffer; Count: Longint);
+    function GetSize: Int64; virtual;
+    function GetPosition: Int64; virtual;
+    procedure SetPosition(Value: Int64); virtual;
+    property Size: Int64 read GetSize;
+    property Position: Int64 read GetPosition write SetPosition;
+  end;
+
+  TFileStream = class(TStream)
+  private
+    FHandle: Int32;
+    FFileName: string;
+  public
+    constructor Create(const AFileName: string; Mode: Word);
+    destructor Destroy; override;
+    function Read(var Buffer; Count: Longint): Longint; override;
+    function Write(const Buffer; Count: Longint): Longint; override;
+    function Seek(Offset: Int64; Origin: Integer): Int64; override;
+    property FileName: string read FFileName;
+  end;
+
+const
+  fmCreate = $FF00;
+
 implementation
 
 uses
@@ -185,6 +215,123 @@ begin
   end;
   if FCount > 0 then
     Result := Result + LineEnding;
+end;
+
+{ --- TStream --- }
+
+procedure TStream.ReadBuffer(var Buffer; Count: Longint);
+begin
+  if Read(Buffer, Count) <> Count then
+    RunError(100);
+end;
+
+procedure TStream.WriteBuffer(const Buffer; Count: Longint);
+begin
+  if Write(Buffer, Count) <> Count then
+    RunError(101);
+end;
+
+function TStream.GetSize: Int64;
+var LPos: Int64;
+begin
+  LPos := Seek(0, 1);
+  Result := Seek(0, 2);
+  Seek(LPos, 0);
+end;
+
+function TStream.GetPosition: Int64;
+begin
+  Result := Seek(0, 1);
+end;
+
+procedure TStream.SetPosition(Value: Int64);
+begin
+  Seek(Value, 0);
+end;
+
+{ --- TFileStream --- }
+
+constructor TFileStream.Create(const AFileName: string; Mode: Word);
+var
+  LH: TPlatformFileHandle;
+  LMode: TPlatformFileOpenMode;
+  LCreate: TPlatformFileCreateMode;
+begin
+  inherited Create;
+  FFileName := AFileName;
+  if Mode = fmCreate then
+  begin
+    LMode := fomReadWrite;
+    LCreate := fcmCreateAlways;
+  end
+  else
+  begin
+    case Mode and $03 of
+      0: LMode := fomReadOnly;
+      1: LMode := fomWriteOnly;
+    else
+      LMode := fomReadWrite;
+    end;
+    LCreate := fcmOpenExisting;
+  end;
+  if platform_file_open(PAnsiChar(AFileName), LMode, LCreate, LH) <> 0 then
+    RunError(2);
+{$IFDEF NEXTPAS_WINDOWS}
+  FHandle := Int32(PtrUInt(LH.Value));
+{$ELSE}
+  FHandle := LH.Value;
+{$ENDIF}
+end;
+
+destructor TFileStream.Destroy;
+var LH: TPlatformFileHandle;
+begin
+  if FHandle >= 0 then
+  begin
+    LH.Value := {$IFDEF NEXTPAS_WINDOWS}HANDLE(PtrUInt(FHandle)){$ELSE}FHandle{$ENDIF};
+    platform_file_close(LH);
+  end;
+  inherited Destroy;
+end;
+
+function TFileStream.Read(var Buffer; Count: Longint): Longint;
+var
+  LH: TPlatformFileHandle;
+  LRead: PtrUInt;
+begin
+  LH.Value := {$IFDEF NEXTPAS_WINDOWS}HANDLE(PtrUInt(FHandle)){$ELSE}FHandle{$ENDIF};
+  if platform_file_read(LH, @Buffer, PtrUInt(Count), LRead) = 0 then
+    Result := Longint(LRead)
+  else
+    Result := 0;
+end;
+
+function TFileStream.Write(const Buffer; Count: Longint): Longint;
+var
+  LH: TPlatformFileHandle;
+  LWritten: PtrUInt;
+begin
+  LH.Value := {$IFDEF NEXTPAS_WINDOWS}HANDLE(PtrUInt(FHandle)){$ELSE}FHandle{$ENDIF};
+  if platform_file_write(LH, @Buffer, PtrUInt(Count), LWritten) = 0 then
+    Result := Longint(LWritten)
+  else
+    Result := 0;
+end;
+
+function TFileStream.Seek(Offset: Int64; Origin: Integer): Int64;
+var
+  LH: TPlatformFileHandle;
+  LOrigin: TPlatformFileSeekOrigin;
+begin
+  LH.Value := {$IFDEF NEXTPAS_WINDOWS}HANDLE(PtrUInt(FHandle)){$ELSE}FHandle{$ENDIF};
+  case Origin of
+    0: LOrigin := fsoBegin;
+    1: LOrigin := fsoCurrent;
+  else
+    LOrigin := fsoEnd;
+  end;
+  if platform_file_seek(LH, Offset, LOrigin, Result) <> 0 then
+    Result := -1;
 end;
 
 end.

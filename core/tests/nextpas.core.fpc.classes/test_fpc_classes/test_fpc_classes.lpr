@@ -130,6 +130,34 @@ begin
   SL.Free;
 end;
 
+procedure TestFileStream;
+var
+  FS: TFileStream;
+  Buf: array[0..31] of AnsiChar;
+  N: Longint;
+const
+  PATH = '/tmp/nextpas_fstream_test.dat';
+  DATA = 'stream test data';
+begin
+  FS := TFileStream.Create(PATH, fmCreate);
+  FS.WriteBuffer(DATA[1], Length(DATA));
+  Check(FS.Position = Length(DATA), 'position after write');
+  Check(FS.Size = Length(DATA), 'size');
+  FS.Free;
+
+  FS := TFileStream.Create(PATH, 0);
+  FillChar(Buf, SizeOf(Buf), 0);
+  N := FS.Read(Buf, 16);
+  Check(N = 16, 'read 16');
+  Check(Buf[0] = 's', 'content[0]');
+  Check(FS.Position = 16, 'position after read');
+  FS.Seek(0, 0);
+  Check(FS.Position = 0, 'seek to 0');
+  FS.Free;
+
+  platform_file_unlink(PATH);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.fpc.classes');
   T.Run('Create/Free', @TestCreateFree);
@@ -140,5 +168,6 @@ begin
   T.Run('CRLF handling', @TestCRLF);
   T.Run('LoadFromFile/SaveToFile', @TestLoadSaveFile);
   T.Run('Clear', @TestClear);
+  T.Run('TFileStream', @TestFileStream);
   T.Summary;
 end.
