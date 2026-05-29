@@ -109,6 +109,29 @@ implementation
 uses
   SysUtils;
 
+function IsConsumedDirective(const ADir: string): Boolean;
+begin
+  Result := (ADir = 'macro') or (ADir = 'mode') or (ADir = 'modeswitch') or
+    (ADir = 'h') or (ADir = 'r') or (ADir = 'j') or (ADir = 'z') or
+    (ADir = 'rangechecks') or (ADir = 'overflowchecks') or
+    (ADir = 'iochecks') or (ADir = 'objectchecks') or
+    (ADir = 'assertions') or (ADir = 'hints') or (ADir = 'warnings') or
+    (ADir = 'notes') or (ADir = 'align') or (ADir = 'packrecords') or
+    (ADir = 'optimization') or (ADir = 'inline') or (ADir = 'interfaces') or
+    (ADir = 'codepage') or (ADir = 'push') or (ADir = 'pop') or
+    (ADir = 'warn') or (ADir = 'scopedenums') or (ADir = 'writeableconst') or
+    (ADir = 'typedaddress') or (ADir = 'implicitexceptions') or
+    (ADir = 'pointermath') or (ADir = 'goto') or (ADir = 'extendedcompat') or
+    (ADir = 'bitpacking') or (ADir = 'calling') or (ADir = 'varpropsetter') or
+    (ADir = 'coperators') or (ADir = 'fputype') or (ADir = 'safefpuexceptions') or
+    (ADir = 'excessprecision') or (ADir = 'longstrings') or
+    (ADir = 'openstrings') or (ADir = 'varstringchecks') or
+    (ADir = 'typeinfo') or (ADir = 'minenumsize') or (ADir = 'packenum') or
+    (ADir = 'packset') or (ADir = 'codealign') or (ADir = 'maxfpuregisters') or
+    (ADir = 'memory') or (ADir = 'setc') or (ADir = 'apptype') or
+    (ADir = 'pic') or (ADir = 'asmmode');
+end;
+
 constructor TDefineTable.Create;
 begin
   inherited Create;
@@ -706,7 +729,8 @@ begin
       else if Dir = 'define' then begin if IsActive then FDefines.Define(DirArg); end
       else if Dir = 'undef' then begin if IsActive then FDefines.Undef(DirArg); end
       else if (Dir = 'i') or (Dir = 'include') then begin if IsActive then ProcessInclude(DirArg); end
-      else begin if IsActive then EmitToken(Tok); end;
+      else if not IsConsumedDirective(Dir) then
+      begin if IsActive then EmitToken(Tok); end;
     end
     else
     begin
@@ -764,6 +788,9 @@ begin
       begin
         if IsActive then
           ProcessInclude(Arg);
+      end
+      else if IsConsumedDirective(Dir) then
+      begin
       end
       else
       begin
