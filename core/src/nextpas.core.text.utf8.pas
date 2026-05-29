@@ -32,7 +32,7 @@ function UTF8ByteLength(const ALeadByte: Byte): Byte; inline;
 implementation
 
 uses
-  nextpas.core.simd.api.v2;
+  nextpas.core.simd;
 
 function UTF8ByteLength(const ALeadByte: Byte): Byte;
 begin
@@ -136,7 +136,7 @@ function UTF8IsValid(const AData: PByte; const ALen: SizeUInt): Boolean;
 begin
   if ALen = 0 then
     Exit(True);
-  Result := nextpas.core.simd.api.v2.Utf8Validate(AData, ALen);
+  Result := Utf8Validate(AData, ALen);
 end;
 
 function UTF8CodePointCount(const AData: PByte; const ALen: SizeUInt): SizeUInt;

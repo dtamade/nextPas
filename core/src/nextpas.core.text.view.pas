@@ -51,7 +51,7 @@ implementation
 
 uses
   nextpas.core.text.char,
-  nextpas.core.simd.api.v2;
+  nextpas.core.simd;
 
 class function TStringView.Create(const AData: PAnsiChar; const ALen: SizeUInt): TStringView;
 begin
