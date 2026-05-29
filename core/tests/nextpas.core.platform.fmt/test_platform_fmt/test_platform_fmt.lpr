@@ -223,6 +223,23 @@ begin
   Check(BufEq(@Buf[0], 'time: 1.500000 sec'), 'fmt_buf %f');
 end;
 
+procedure TestParseFloat;
+var V: Double;
+begin
+  Check(platform_parse_float('3.14', 4, V) = 0, 'parse 3.14');
+  Check((V > 3.139) and (V < 3.141), '3.14 value');
+  Check(platform_parse_float('-0.5', 4, V) = 0, 'parse -0.5');
+  Check((V > -0.501) and (V < -0.499), '-0.5 value');
+  Check(platform_parse_float('1e3', 3, V) = 0, 'parse 1e3');
+  Check((V > 999.9) and (V < 1000.1), '1e3 = 1000');
+  Check(platform_parse_float('2.5E-1', 6, V) = 0, 'parse 2.5E-1');
+  Check((V > 0.249) and (V < 0.251), '2.5E-1 = 0.25');
+  Check(platform_parse_float('42', 2, V) = 0, 'parse int as float');
+  Check((V > 41.9) and (V < 42.1), '42 value');
+  Check(platform_parse_float('abc', 3, V) <> 0, 'invalid');
+  Check(platform_parse_float('', 0, V) <> 0, 'empty');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.fmt');
   T.Run('int positive', @TestIntPositive);
@@ -246,5 +263,6 @@ begin
   T.Run('str_starts_ends', @TestStrStartsEnds);
   T.Run('fmt_float', @TestFmtFloat);
   T.Run('fmt_buf %f', @TestFmtBufFloat);
+  T.Run('parse_float', @TestParseFloat);
   T.Summary;
 end.

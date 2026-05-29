@@ -631,11 +631,8 @@ begin
 end;
 
 function TryStrToFloat(const S: string; out Value: Double): Boolean;
-var
-  LCode: Integer;
 begin
-  System.Val(S, Value, LCode);
-  Result := LCode = 0;
+  Result := platform_parse_float(PAnsiChar(S), Length(S), Value) = 0;
 end;
 
 function StrToFloat(const S: string): Double;

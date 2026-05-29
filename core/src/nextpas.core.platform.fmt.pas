@@ -14,6 +14,7 @@ function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
 function platform_parse_int(const AStr: PAnsiChar; ALen: Int32; out AValue: Int64): Int32;
 function platform_parse_uint(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
 function platform_parse_hex(const AStr: PAnsiChar; ALen: Int32; out AValue: UInt64): Int32;
+function platform_parse_float(const AStr: PAnsiChar; ALen: Int32; out AValue: Double): Int32;
 
 function platform_str_lower(const ASrc: PAnsiChar; ALen: Int32;
   ADst: PAnsiChar; ADstLen: Int32): Int32;
@@ -571,6 +572,75 @@ begin
   for I := 0 to ASLen - 1 do
     if AStr[LOffset + I] <> ASuffix[I] then Exit(False);
   Result := True;
+end;
+
+function platform_parse_float(const AStr: PAnsiChar; ALen: Int32; out AValue: Double): Int32;
+var
+  I: Int32;
+  LNeg: Boolean;
+  LIntPart: UInt64;
+  LFracPart: UInt64;
+  LFracDiv: Double;
+  LExpPart: Int32;
+  LExpNeg: Boolean;
+  LHasDot: Boolean;
+begin
+  AValue := 0.0;
+  if (AStr = nil) or (ALen <= 0) then Exit(-1);
+
+  I := 0;
+  LNeg := False;
+  if AStr[I] = '-' then begin LNeg := True; Inc(I); end
+  else if AStr[I] = '+' then Inc(I);
+  if I >= ALen then Exit(-1);
+
+  LIntPart := 0;
+  LHasDot := False;
+  while (I < ALen) and (AStr[I] >= '0') and (AStr[I] <= '9') do
+  begin
+    LIntPart := LIntPart * 10 + UInt64(Ord(AStr[I]) - Ord('0'));
+    Inc(I);
+  end;
+
+  LFracPart := 0;
+  LFracDiv := 1.0;
+  if (I < ALen) and (AStr[I] = '.') then
+  begin
+    LHasDot := True;
+    Inc(I);
+    while (I < ALen) and (AStr[I] >= '0') and (AStr[I] <= '9') do
+    begin
+      LFracPart := LFracPart * 10 + UInt64(Ord(AStr[I]) - Ord('0'));
+      LFracDiv := LFracDiv * 10.0;
+      Inc(I);
+    end;
+  end;
+
+  if (I = 0) or ((not LHasDot) and (I = Ord(LNeg))) then Exit(-1);
+
+  AValue := Double(LIntPart) + Double(LFracPart) / LFracDiv;
+
+  if (I < ALen) and ((AStr[I] = 'e') or (AStr[I] = 'E')) then
+  begin
+    Inc(I);
+    LExpNeg := False;
+    if (I < ALen) and (AStr[I] = '-') then begin LExpNeg := True; Inc(I); end
+    else if (I < ALen) and (AStr[I] = '+') then Inc(I);
+    LExpPart := 0;
+    while (I < ALen) and (AStr[I] >= '0') and (AStr[I] <= '9') do
+    begin
+      LExpPart := LExpPart * 10 + (Ord(AStr[I]) - Ord('0'));
+      Inc(I);
+    end;
+    if LExpNeg then
+      while LExpPart > 0 do begin AValue := AValue / 10.0; Dec(LExpPart); end
+    else
+      while LExpPart > 0 do begin AValue := AValue * 10.0; Dec(LExpPart); end;
+  end;
+
+  if LNeg then AValue := -AValue;
+  if I <> ALen then Exit(-1);
+  Result := 0;
 end;
 
 end.
