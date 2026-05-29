@@ -17,74 +17,125 @@ implementation
 uses
   nextpas.core.platform.path;
 
+const
+  PATH_BUF_SIZE = 1024;
+
 function FsPathJoin(const AParts: array of string): string;
 var
-  LBuf: array[0..4095] of AnsiChar;
-  LI: Integer;
-  LCurrent: string;
+  LI, LNeed: Integer;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LHeap: array of AnsiChar;
+  LBase: string;
 begin
   if Length(AParts) = 0 then
     Exit('');
-  LCurrent := AParts[0];
+  Result := AParts[0];
   for LI := 1 to High(AParts) do
   begin
-    if platform_path_join(PAnsiChar(LCurrent), PAnsiChar(AParts[LI]),
-      @LBuf[0], SizeOf(LBuf)) > 0 then
-      LCurrent := StrPas(@LBuf[0])
+    LBase := Result;
+    LNeed := platform_path_join(PAnsiChar(LBase), PAnsiChar(AParts[LI]),
+      @LStack[0], PATH_BUF_SIZE);
+    if LNeed < 0 then
+      Continue;
+    if LNeed < PATH_BUF_SIZE then
+      SetString(Result, PAnsiChar(@LStack[0]), LNeed)
     else
-      LCurrent := LCurrent + '/' + AParts[LI];
+    begin
+      SetLength(LHeap, LNeed + 1);
+      platform_path_join(PAnsiChar(LBase), PAnsiChar(AParts[LI]),
+        @LHeap[0], Length(LHeap));
+      SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+    end;
   end;
-  Result := LCurrent;
 end;
 
 function FsPathDir(const APath: string): string;
 var
-  LBuf: array[0..4095] of AnsiChar;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  if platform_path_dirname(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf)) > 0 then
-    Result := StrPas(@LBuf[0])
-  else
-    Result := '.';
+  LNeed := platform_path_dirname(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed <= 0 then
+    Exit('.');
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_dirname(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathBase(const APath: string): string;
 var
-  LBuf: array[0..4095] of AnsiChar;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  if platform_path_basename(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf)) > 0 then
-    Result := StrPas(@LBuf[0])
-  else
-    Result := APath;
+  LNeed := platform_path_basename(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed <= 0 then
+    Exit(APath);
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_basename(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathExt(const APath: string): string;
 var
-  LBuf: array[0..255] of AnsiChar;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
 begin
-  if platform_path_extension(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf)) > 0 then
-    Result := StrPas(@LBuf[0])
-  else
-    Result := '';
+  LNeed := platform_path_extension(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed <= 0 then
+    Exit('');
+  SetString(Result, PAnsiChar(@LStack[0]), LNeed);
 end;
 
 function FsPathClean(const APath: string): string;
 var
-  LBuf: array[0..4095] of AnsiChar;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  if platform_path_normalize(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf)) > 0 then
-    Result := StrPas(@LBuf[0])
-  else
-    Result := APath;
+  if APath = '' then
+    Exit('.');
+  LNeed := platform_path_normalize(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed <= 0 then
+    Exit(APath);
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_normalize(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathAbs(const APath: string): string;
 var
-  LBuf: array[0..4095] of AnsiChar;
+  LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
+  LNeed: Int32;
+  LHeap: array of AnsiChar;
 begin
-  if platform_path_resolve(PAnsiChar(APath), @LBuf[0], SizeOf(LBuf)) > 0 then
-    Result := StrPas(@LBuf[0])
-  else
-    Result := APath;
+  LNeed := platform_path_resolve(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
+  if LNeed <= 0 then
+    Exit(APath);
+  if LNeed < PATH_BUF_SIZE then
+  begin
+    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    Exit;
+  end;
+  SetLength(LHeap, LNeed + 1);
+  platform_path_resolve(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
 end;
 
 function FsPathIsAbs(const APath: string): Boolean;

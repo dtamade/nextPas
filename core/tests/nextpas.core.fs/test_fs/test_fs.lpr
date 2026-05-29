@@ -272,6 +272,25 @@ begin
   Check(not FsPathIsAbs('relative/path'), 'not abs');
 end;
 
+procedure TestPathCleanEmpty;
+begin
+  CheckEqual('.', FsPathClean(''), 'Clean("") = "."');
+end;
+
+procedure TestPathLong;
+var
+  LLong, LJoined: string;
+  LI: Integer;
+begin
+  { Build a path longer than the 1024 stack buffer to exercise heap retry. }
+  LLong := '';
+  for LI := 1 to 200 do
+    LLong := LLong + 'segment_';
+  LJoined := FsPathJoin(['/base', LLong, 'file.txt']);
+  Check(Pos('file.txt', LJoined) > 0, 'long join keeps tail');
+  Check(Length(LJoined) > 1024, 'long path not truncated');
+end;
+
 { Error tests }
 
 procedure TestOpenNotFound;
@@ -431,6 +450,8 @@ begin
     T.Run('PathBase', @TestPathBase);
     T.Run('PathExt', @TestPathExt);
     T.Run('PathIsAbs', @TestPathIsAbs);
+    T.Run('PathClean empty', @TestPathCleanEmpty);
+    T.Run('PathJoin long', @TestPathLong);
 
     T.Run('Open not found', @TestOpenNotFound);
 
