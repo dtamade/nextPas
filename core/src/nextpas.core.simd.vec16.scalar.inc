@@ -94,3 +94,15 @@ begin
       AData[i] := AData[i] - ADelta;
   {$POP}
 end;
+
+procedure Vec16ProbeGroup(AData: PByte; AH2: Byte; out AMatchMask, AEmptyMask: TMask16); inline;
+var i: Integer;
+begin
+  AMatchMask := 0;
+  AEmptyMask := 0;
+  for i := 0 to 15 do
+  begin
+    if AData[i] = AH2 then AMatchMask := AMatchMask or TMask16(1 shl i);
+    if AData[i] = $FF then AEmptyMask := AEmptyMask or TMask16(1 shl i);
+  end;
+end;

@@ -18,6 +18,10 @@ function Vec16CmpLtU(AData: PByte; AThreshold: Byte): TMask16; inline;
 function Vec16CmpGtU(AData: PByte; AThreshold: Byte): TMask16; inline;
 function Vec16CmpRange(AData: PByte; ALo, AHi: Byte): TMask16; inline;
 
+// === SwissTable probe (single load, dual mask output) ===
+
+procedure Vec16ProbeGroup(AData: PByte; AH2: Byte; out AMatchMask, AEmptyMask: TMask16); inline;
+
 // === Mask manipulation ===
 
 function Vec16Ctz(AMask: TMask16): Int32; inline;
