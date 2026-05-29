@@ -1884,8 +1884,12 @@ begin
       ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
        (CurrentToken(ALexer, ACursor).Kind <> tkGenericKeyword)) then
       Break;
-    if CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword then
-      Inc(ACursor);
+    if (CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword) and
+      (ACursor + 1 < ALexer.TokenCount) and
+      (ALexer.TokenAt(ACursor + 1).Kind = tkIdentifier) then
+      Inc(ACursor)
+    else if CurrentToken(ALexer, ACursor).Kind = tkGenericKeyword then
+      Break;
     if (ACursor >= ALexer.TokenCount) or
       (CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) then
       Break;
