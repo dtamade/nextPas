@@ -5,22 +5,28 @@ unit nextpas.core.stopwatch;
 interface
 
 uses
-  nextpas.core.time.base;
+  nextpas.core.time.base,
+  nextpas.core.stopwatch.tick;
 
 type
   TLapArray = array of TDuration;
 
   TStopwatch = record
   private
-    FStart: TInstant;
-    FAccumulated: Int64;
+    FTick: ITick;
+    FStartTick: UInt64;
+    FAccumulated: UInt64;
     FRunning: Boolean;
-    FLastLap: TInstant;
-    FLaps: array of Int64;
-    function CurrentNs: Int64;
+    FLastLapTick: UInt64;
+    FLaps: array of UInt64;
+    procedure EnsureTick;
+    function CurrentTicks: UInt64;
+    function TicksToNs(ATicks: UInt64): Int64;
   public
     class function Create: TStopwatch; static;
+    class function CreateWithTick(const ATick: ITick): TStopwatch; static;
     class function StartNew: TStopwatch; static;
+    class function StartNewWithTick(const ATick: ITick): TStopwatch; static;
 
     procedure Start;
     procedure Stop;
@@ -68,19 +74,46 @@ uses
 
 { TStopwatch }
 
-function TStopwatch.CurrentNs: Int64;
+procedure TStopwatch.EnsureTick;
+begin
+  if FTick = nil then
+    FTick := MakeBestTick;
+end;
+
+function TStopwatch.CurrentTicks: UInt64;
 begin
   if FRunning then
-    Result := FAccumulated + (TInstant.Now - FStart).AsNanoseconds
+    Result := FAccumulated + (FTick.Tick - FStartTick)
   else
     Result := FAccumulated;
 end;
 
+function TStopwatch.TicksToNs(ATicks: UInt64): Int64;
+var
+  LRes, LQ, LR: UInt64;
+begin
+  LRes := FTick.GetResolution;
+  if LRes = 0 then Exit(0);
+  if LRes = 1000000000 then Exit(Int64(ATicks));
+  LQ := ATicks div LRes;
+  LR := ATicks - LQ * LRes;
+  Result := Int64(LQ * 1000000000 + (LR * 1000000000) div LRes);
+end;
+
 class function TStopwatch.Create: TStopwatch;
 begin
+  Result.FTick := nil;
+  Result.FStartTick := 0;
   Result.FAccumulated := 0;
   Result.FRunning := False;
+  Result.FLastLapTick := 0;
   SetLength(Result.FLaps, 0);
+end;
+
+class function TStopwatch.CreateWithTick(const ATick: ITick): TStopwatch;
+begin
+  Result := TStopwatch.Create;
+  Result.FTick := ATick;
 end;
 
 class function TStopwatch.StartNew: TStopwatch;
@@ -89,12 +122,19 @@ begin
   Result.Start;
 end;
 
+class function TStopwatch.StartNewWithTick(const ATick: ITick): TStopwatch;
+begin
+  Result := TStopwatch.CreateWithTick(ATick);
+  Result.Start;
+end;
+
 procedure TStopwatch.Start;
 begin
   if not FRunning then
   begin
-    FStart := TInstant.Now;
-    FLastLap := FStart;
+    EnsureTick;
+    FStartTick := FTick.Tick;
+    FLastLapTick := FStartTick;
     FRunning := True;
   end;
 end;
@@ -103,7 +143,7 @@ procedure TStopwatch.Stop;
 begin
   if FRunning then
   begin
-    FAccumulated := FAccumulated + (TInstant.Now - FStart).AsNanoseconds;
+    FAccumulated := FAccumulated + (FTick.Tick - FStartTick);
     FRunning := False;
   end;
 end;
@@ -112,6 +152,7 @@ procedure TStopwatch.Reset;
 begin
   FAccumulated := 0;
   FRunning := False;
+  FLastLapTick := 0;
   SetLength(FLaps, 0);
 end;
 
@@ -128,42 +169,42 @@ end;
 
 function TStopwatch.Elapsed: TDuration;
 begin
-  Result := TDuration.FromNanoseconds(CurrentNs);
+  Result := TDuration.FromNanoseconds(ElapsedNs);
 end;
 
 function TStopwatch.ElapsedNs: Int64;
 begin
-  Result := CurrentNs;
+  EnsureTick;
+  Result := TicksToNs(CurrentTicks);
 end;
 
 function TStopwatch.ElapsedUs: Int64;
 begin
-  Result := CurrentNs div 1000;
+  Result := ElapsedNs div 1000;
 end;
 
 function TStopwatch.ElapsedMs: Int64;
 begin
-  Result := CurrentNs div 1000000;
+  Result := ElapsedNs div 1000000;
 end;
 
 function TStopwatch.ElapsedSec: Double;
 begin
-  Result := CurrentNs / 1000000000.0;
+  Result := ElapsedNs / 1000000000.0;
 end;
 
 function TStopwatch.Lap: TDuration;
 var
-  LNow: TInstant;
-  LNs: Int64;
+  LNow, LDelta: UInt64;
 begin
   if not FRunning then
     Exit(TDuration.Zero);
-  LNow := TInstant.Now;
-  LNs := (LNow - FLastLap).AsNanoseconds;
-  FLastLap := LNow;
+  LNow := FTick.Tick;
+  LDelta := LNow - FLastLapTick;
+  FLastLapTick := LNow;
   SetLength(FLaps, Length(FLaps) + 1);
-  FLaps[High(FLaps)] := LNs;
-  Result := TDuration.FromNanoseconds(LNs);
+  FLaps[High(FLaps)] := LDelta;
+  Result := TDuration.FromNanoseconds(TicksToNs(LDelta));
 end;
 
 function TStopwatch.GetLaps: TLapArray;
@@ -172,7 +213,7 @@ var
 begin
   SetLength(Result, Length(FLaps));
   for LI := 0 to High(FLaps) do
-    Result[LI] := TDuration.FromNanoseconds(FLaps[LI]);
+    Result[LI] := TDuration.FromNanoseconds(TicksToNs(FLaps[LI]));
 end;
 
 function TStopwatch.GetLapCount: Integer;
@@ -183,6 +224,7 @@ end;
 procedure TStopwatch.ClearLaps;
 begin
   SetLength(FLaps, 0);
+  FLastLapTick := 0;
 end;
 
 function TStopwatch.ToString: string;
