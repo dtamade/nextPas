@@ -117,9 +117,17 @@ begin
   FTotalLen := 0;
 end;
 
+{$IFDEF CPUX86_64}
+{$I nextpas.core.hash.sha256.x64.inc}
+{$ENDIF}
+
 procedure TSHA256Hasher.ProcessBlock(ABlock: PByte);
 begin
+  {$IFDEF CPUX86_64}
+  ProcessBlockX64(ABlock, @FH[0]);
+  {$ELSE}
   ProcessBlockLocal(ABlock, FH);
+  {$ENDIF}
 end;
 
 function TSHA256Hasher.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -189,7 +197,7 @@ begin
     end;
     // Process this block with local state
     // Inline ProcessBlock logic on local LH
-    ProcessBlockLocal(@LBuf[0], LH);
+    {$IFDEF CPUX86_64}ProcessBlockX64(@LBuf[0], @LH[0]){$ELSE}ProcessBlockLocal(@LBuf[0], LH){$ENDIF};
     LBufLen := 0;
   end;
 
@@ -208,7 +216,7 @@ begin
   LBuf[62] := Byte(LTotalBits shr 8);
   LBuf[63] := Byte(LTotalBits);
 
-  ProcessBlockLocal(@LBuf[0], LH);
+  {$IFDEF CPUX86_64}ProcessBlockX64(@LBuf[0], @LH[0]){$ELSE}ProcessBlockLocal(@LBuf[0], LH){$ENDIF};
 
   LDst := @ADst;
   for I := 0 to 7 do
