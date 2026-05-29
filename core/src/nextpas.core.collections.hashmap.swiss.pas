@@ -8,7 +8,8 @@ uses
   SysUtils, TypInfo,
   nextpas.core.base,
   nextpas.core.mem.allocator,
-  nextpas.core.collections.hashmap.base;
+  nextpas.core.collections.hashmap.base,
+  nextpas.core.simd.micro;
 
 const
   CTRL_EMPTY   = Byte($FF);
@@ -82,25 +83,17 @@ uses
 function GroupMaskFirstSet(mask: TGroupMask): Integer;
 begin
   if mask = 0 then Exit(-1);
-  Result := BsfWord(mask);
+  Result := MicroCtz16(TMask16(mask));
 end;
 
 function SwissMatchH2(ACtrl: PByte; AH2: Byte): TGroupMask;
-var
-  i: Integer;
 begin
-  Result := 0;
-  for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] = AH2 then Result := Result or TGroupMask(1 shl i);
+  Result := TGroupMask(MicroCmpEqU8x16_Asm(ACtrl, AH2));
 end;
 
 function SwissMatchEmpty(ACtrl: PByte): TGroupMask;
-var
-  i: Integer;
 begin
-  Result := 0;
-  for i := 0 to GROUP_SIZE - 1 do
-    if ACtrl[i] = CTRL_EMPTY then Result := Result or TGroupMask(1 shl i);
+  Result := TGroupMask(MicroCmpEqU8x16_Asm(ACtrl, CTRL_EMPTY));
 end;
 
 function SwissMatchEmptyOrDeleted(ACtrl: PByte): TGroupMask;
