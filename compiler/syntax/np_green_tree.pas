@@ -2011,7 +2011,7 @@ begin
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
                  tkConstructorKeyword, tkDestructorKeyword, tkOperatorKeyword,
-                 tkPropertyKeyword, tkStaticKeyword] then
+                 tkPropertyKeyword, tkStaticKeyword, tkGenericKeyword] then
               begin
                 I := 0;
                 while (ACursor < ALexer.TokenCount) and
@@ -2671,6 +2671,15 @@ begin
       end;
     end;
 
+    if (ACursor < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind in
+        [tkDeprecatedKeyword, tkPlatformKeyword, tkExperimentalKeyword]) then
+    begin
+      Inc(ACursor);
+      if (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
+        Inc(ACursor);
+    end;
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
 
