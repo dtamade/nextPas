@@ -8559,6 +8559,7 @@ var
   PP: TPreprocessor;
   PPDefines: TDefineTable;
   IncResolver: TFileIncludeResolver;
+  I: LongInt;
 begin
   if FUnitGraph = nil then
     Exit;

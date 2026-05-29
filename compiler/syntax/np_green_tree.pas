@@ -2728,6 +2728,7 @@ var
   Node: TGreenNode;
   NameToken: TToken;
   I: LongInt;
+  J: LongInt;
 begin
   Node := TGreenNode.Create(gnkProcedureDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2803,10 +2804,20 @@ begin
         [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword,
          tkFunctionKeyword, tkProcedureKeyword]) do
     begin
-      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) and
-        (ACursor + 2 < ALexer.TokenCount) and
-        (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
-        Break;
+      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) then
+      begin
+        if (ACursor + 2 < ALexer.TokenCount) and
+          (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
+          Break;
+        J := ACursor + 1;
+        while (J < ALexer.TokenCount) and
+          not (ALexer.TokenAt(J).Kind in [tkBeginKeyword, tkAsmKeyword,
+            tkImplementationKeyword, tkInitializationKeyword, tkEOF]) do
+          Inc(J);
+        if (J >= ALexer.TokenCount) or
+          not (ALexer.TokenAt(J).Kind in [tkBeginKeyword, tkAsmKeyword]) then
+          Break;
+      end;
       I := ACursor;
       if CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword then
         ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
@@ -2882,6 +2893,7 @@ var
   NameToken: TToken;
   TypeNode: TGreenNode;
   I: LongInt;
+  J: LongInt;
 begin
   Node := TGreenNode.Create(gnkFunctionDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2982,10 +2994,20 @@ begin
         [tkVarKeyword, tkConstKeyword, tkTypeKeyword, tkLabelKeyword,
          tkFunctionKeyword, tkProcedureKeyword]) do
     begin
-      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) and
-        (ACursor + 2 < ALexer.TokenCount) and
-        (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
-        Break;
+      if (CurrentToken(ALexer, ACursor).Kind in [tkFunctionKeyword, tkProcedureKeyword]) then
+      begin
+        if (ACursor + 2 < ALexer.TokenCount) and
+          (ALexer.TokenAt(ACursor + 2).Kind = tkDot) then
+          Break;
+        J := ACursor + 1;
+        while (J < ALexer.TokenCount) and
+          not (ALexer.TokenAt(J).Kind in [tkBeginKeyword, tkAsmKeyword,
+            tkImplementationKeyword, tkInitializationKeyword, tkEOF]) do
+          Inc(J);
+        if (J >= ALexer.TokenCount) or
+          not (ALexer.TokenAt(J).Kind in [tkBeginKeyword, tkAsmKeyword]) then
+          Break;
+      end;
       I := ACursor;
       if CurrentToken(ALexer, ACursor).Kind = tkFunctionKeyword then
         ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
