@@ -7,11 +7,6 @@ interface
 uses
   nextpas.core.sync.intf;
 
-type
-  ISpinLock = interface(ILock)
-    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560011}']
-  end;
-
 function CreateSpinLock: ISpinLock;
 
 implementation

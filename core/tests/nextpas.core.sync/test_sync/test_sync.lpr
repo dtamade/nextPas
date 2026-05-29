@@ -354,6 +354,59 @@ begin
   Check(not LSem.TryAcquire, 'all consumed');
 end;
 
+{ Barrier tests }
+
+procedure TestBarrierSingleThread;
+var
+  LB: IBarrier;
+  LR: TBarrierWaitResult;
+begin
+  LB := Barrier(1);
+  LR := LB.Wait;
+  Check(LR.IsLeader, 'single thread is leader');
+  CheckEqual(Int64(0), LR.Generation, 'gen 0');
+  LR := LB.Wait;
+  Check(LR.IsLeader, 'leader again (cyclic)');
+  CheckEqual(Int64(1), LR.Generation, 'gen 1');
+end;
+
+{ Event tests }
+
+procedure TestEventManualReset;
+var
+  LE: IEvent;
+begin
+  LE := Event(True);
+  Check(not LE.IsSet, 'initially unset');
+  LE.SetEvent;
+  Check(LE.IsSet, 'set after SetEvent');
+  LE.Wait;
+  Check(LE.IsSet, 'still set after Wait (manual reset)');
+  LE.Reset;
+  Check(not LE.IsSet, 'unset after Reset');
+end;
+
+procedure TestEventAutoReset;
+var
+  LE: IEvent;
+begin
+  LE := Event(False);
+  LE.SetEvent;
+  Check(LE.IsSet, 'set');
+  LE.Wait;
+  Check(not LE.IsSet, 'auto-reset after Wait');
+end;
+
+procedure TestEventTimeout;
+var
+  LE: IEvent;
+begin
+  LE := Event(True);
+  Check(not LE.WaitTimeout(1000000), 'timeout 1ms on unset');
+  LE.SetEvent;
+  Check(LE.WaitTimeout(1000000), 'immediate on set');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.sync');
   T.Run('Mutex basic', @TestMutexBasic);
@@ -376,6 +429,11 @@ begin
   T.Run('Semaphore basic', @TestSemaphoreBasic);
   T.Run('Semaphore timeout', @TestSemaphoreTimeout);
   T.Run('Semaphore release multiple', @TestSemaphoreReleaseMultiple);
+
+  T.Run('Barrier single thread', @TestBarrierSingleThread);
+  T.Run('Event manual reset', @TestEventManualReset);
+  T.Run('Event auto reset', @TestEventAutoReset);
+  T.Run('Event timeout', @TestEventTimeout);
 
   T.Summary;
 end.

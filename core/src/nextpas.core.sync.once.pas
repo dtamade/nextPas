@@ -5,16 +5,8 @@ unit nextpas.core.sync.once;
 interface
 
 uses
+  nextpas.core.sync.base,
   nextpas.core.sync.intf;
-
-type
-  TOnceProc = procedure;
-
-  IOnce = interface
-    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560010}']
-    procedure Do_(const AProc: TOnceProc);
-    function Done: Boolean;
-  end;
 
 function CreateOnce: IOnce;
 

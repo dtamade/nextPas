@@ -4,16 +4,8 @@ unit nextpas.core.sync.semaphore;
 
 interface
 
-type
-  ISemaphore = interface
-    ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560012}']
-    procedure Acquire;
-    function TryAcquire: Boolean;
-    function TryAcquireTimeout(const ATimeoutNs: Int64): Boolean;
-    procedure Release;
-    procedure Release(const ACount: Int32);
-    function Available: Int32;
-  end;
+uses
+  nextpas.core.sync.intf;
 
 function CreateSemaphore(const AInitial: Int32): ISemaphore;
 
