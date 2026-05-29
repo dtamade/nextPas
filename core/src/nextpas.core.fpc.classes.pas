@@ -143,25 +143,19 @@ end;
 
 procedure TStringList.LoadFromFile(const FileName: string);
 var
-  H: TPlatformFileHandle;
-  LSize: Int64;
-  LBuf: PAnsiChar;
-  LRead: PtrUInt;
+  LBuf: Pointer;
+  LLen: PtrUInt;
   LContent: string;
 begin
   Clear;
-  if platform_fs_file_size(PAnsiChar(FileName), LSize) <> 0 then Exit;
-  if LSize = 0 then Exit;
-  if platform_file_open(PAnsiChar(FileName), fomReadOnly, fcmOpenExisting, H) <> 0 then Exit;
-  GetMem(LBuf, LSize + 1);
-  try
-    platform_file_read(H, LBuf, PtrUInt(LSize), LRead);
-    platform_file_close(H);
-    LBuf[LRead] := #0;
-    SetString(LContent, LBuf, LRead);
-  finally
-    FreeMem(LBuf);
+  if platform_fs_read_file(PAnsiChar(FileName), LBuf, LLen) <> 0 then Exit;
+  if LLen = 0 then
+  begin
+    platform_fs_free_buf(LBuf);
+    Exit;
   end;
+  SetString(LContent, PAnsiChar(LBuf), LLen);
+  platform_fs_free_buf(LBuf);
   SetText(LContent);
 end;
 
