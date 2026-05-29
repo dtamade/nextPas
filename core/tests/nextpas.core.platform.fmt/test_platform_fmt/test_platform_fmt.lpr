@@ -223,6 +223,21 @@ begin
   Check(BufEq(@Buf[0], 'time: 1.500000 sec'), 'fmt_buf %f');
 end;
 
+procedure TestFmtBufWidth;
+var Buf: array[0..63] of AnsiChar;
+begin
+  platform_fmt_buf('%10d', [42], @Buf[0], 64);
+  Check(BufEq(@Buf[0], '        42'), 'right-align int');
+  platform_fmt_buf('%-10s|', ['hi'], @Buf[0], 64);
+  Check(BufEq(@Buf[0], 'hi        |'), 'left-align str');
+  platform_fmt_buf('%08x', [255], @Buf[0], 64);
+  Check(BufEq(@Buf[0], '000000FF'), 'zero-pad hex');
+  platform_fmt_buf('%5d', [12345], @Buf[0], 64);
+  Check(BufEq(@Buf[0], '12345'), 'exact width');
+  platform_fmt_buf('%3d', [12345], @Buf[0], 64);
+  Check(BufEq(@Buf[0], '12345'), 'overflow no truncate');
+end;
+
 procedure TestParseFloat;
 var V: Double;
 begin
@@ -263,6 +278,7 @@ begin
   T.Run('str_starts_ends', @TestStrStartsEnds);
   T.Run('fmt_float', @TestFmtFloat);
   T.Run('fmt_buf %f', @TestFmtBufFloat);
+  T.Run('fmt_buf width/align', @TestFmtBufWidth);
   T.Run('parse_float', @TestParseFloat);
   T.Summary;
 end.

@@ -212,9 +212,34 @@ end;
 function platform_fmt_buf(const AFmt: PAnsiChar; const AArgs: array of const;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
-  LFmtLen, LOut, LArgIdx, I, LTmpLen: Int32;
-  LTmp: array[0..31] of AnsiChar;
+  LFmtLen, LOut, LArgIdx, I, LTmpLen, LWidth, LPad, J: Int32;
+  LTmp: array[0..63] of AnsiChar;
   LSrc: PAnsiChar;
+  LLeftAlign, LZeroPad: Boolean;
+
+  procedure EmitPadded;
+  var K: Int32;
+  begin
+    LTmpLen := 0;
+    while LTmp[LTmpLen] <> #0 do Inc(LTmpLen);
+    LPad := LWidth - LTmpLen;
+    if LPad < 0 then LPad := 0;
+    if (not LLeftAlign) and (LPad > 0) then
+      for K := 1 to LPad do
+        if LOut < ABufLen - 1 then
+        begin
+          if LZeroPad then ABuf[LOut] := '0' else ABuf[LOut] := ' ';
+          Inc(LOut);
+        end;
+    for K := 0 to LTmpLen - 1 do
+      if LOut < ABufLen - 1 then
+      begin ABuf[LOut] := LTmp[K]; Inc(LOut); end;
+    if LLeftAlign and (LPad > 0) then
+      for K := 1 to LPad do
+        if LOut < ABufLen - 1 then
+        begin ABuf[LOut] := ' '; Inc(LOut); end;
+  end;
+
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
@@ -229,26 +254,32 @@ begin
     if (AFmt[I] = '%') and (I + 1 < LFmtLen) then
     begin
       Inc(I);
+      LLeftAlign := False;
+      LZeroPad := False;
+      LWidth := 0;
+
+      if (I < LFmtLen) and (AFmt[I] = '-') then
+      begin LLeftAlign := True; Inc(I); end;
+      if (I < LFmtLen) and (AFmt[I] = '0') and (not LLeftAlign) then
+      begin LZeroPad := True; Inc(I); end;
+      while (I < LFmtLen) and (AFmt[I] >= '0') and (AFmt[I] <= '9') do
+      begin
+        LWidth := LWidth * 10 + (Ord(AFmt[I]) - Ord('0'));
+        Inc(I);
+      end;
+
+      if I >= LFmtLen then Break;
       case AFmt[I] of
         'd': begin
           if LArgIdx <= High(AArgs) then
           begin
             case AArgs[LArgIdx].VType of
-              vtInteger: platform_fmt_int(AArgs[LArgIdx].VInteger, @LTmp[0], 32);
-              vtInt64:   platform_fmt_int(AArgs[LArgIdx].VInt64^, @LTmp[0], 32);
+              vtInteger: platform_fmt_int(AArgs[LArgIdx].VInteger, @LTmp[0], 64);
+              vtInt64:   platform_fmt_int(AArgs[LArgIdx].VInt64^, @LTmp[0], 64);
             else
               LTmp[0] := '?'; LTmp[1] := #0;
             end;
-            LTmpLen := 0;
-            while LTmp[LTmpLen] <> #0 do Inc(LTmpLen);
-            // copy LTmp to output
-            LTmpLen := 0;
-            while (LTmp[LTmpLen] <> #0) and (LOut < ABufLen - 1) do
-            begin
-              ABuf[LOut] := LTmp[LTmpLen];
-              Inc(LOut);
-              Inc(LTmpLen);
-            end;
+            EmitPadded;
             Inc(LArgIdx);
           end;
           Inc(I);
@@ -257,19 +288,13 @@ begin
           if LArgIdx <= High(AArgs) then
           begin
             case AArgs[LArgIdx].VType of
-              vtInteger: platform_fmt_uint(UInt64(AArgs[LArgIdx].VInteger), @LTmp[0], 32);
-              vtInt64:   platform_fmt_uint(UInt64(AArgs[LArgIdx].VInt64^), @LTmp[0], 32);
-              vtQWord:   platform_fmt_uint(AArgs[LArgIdx].VQWord^, @LTmp[0], 32);
+              vtInteger: platform_fmt_uint(UInt64(AArgs[LArgIdx].VInteger), @LTmp[0], 64);
+              vtInt64:   platform_fmt_uint(UInt64(AArgs[LArgIdx].VInt64^), @LTmp[0], 64);
+              vtQWord:   platform_fmt_uint(AArgs[LArgIdx].VQWord^, @LTmp[0], 64);
             else
               LTmp[0] := '?'; LTmp[1] := #0;
             end;
-            LTmpLen := 0;
-            while (LTmp[LTmpLen] <> #0) and (LOut < ABufLen - 1) do
-            begin
-              ABuf[LOut] := LTmp[LTmpLen];
-              Inc(LOut);
-              Inc(LTmpLen);
-            end;
+            EmitPadded;
             Inc(LArgIdx);
           end;
           Inc(I);
@@ -278,19 +303,13 @@ begin
           if LArgIdx <= High(AArgs) then
           begin
             case AArgs[LArgIdx].VType of
-              vtInteger: platform_fmt_hex(UInt64(UInt32(AArgs[LArgIdx].VInteger)), @LTmp[0], 32);
-              vtInt64:   platform_fmt_hex(UInt64(AArgs[LArgIdx].VInt64^), @LTmp[0], 32);
-              vtQWord:   platform_fmt_hex(AArgs[LArgIdx].VQWord^, @LTmp[0], 32);
+              vtInteger: platform_fmt_hex(UInt64(UInt32(AArgs[LArgIdx].VInteger)), @LTmp[0], 64);
+              vtInt64:   platform_fmt_hex(UInt64(AArgs[LArgIdx].VInt64^), @LTmp[0], 64);
+              vtQWord:   platform_fmt_hex(AArgs[LArgIdx].VQWord^, @LTmp[0], 64);
             else
               LTmp[0] := '?'; LTmp[1] := #0;
             end;
-            LTmpLen := 0;
-            while (LTmp[LTmpLen] <> #0) and (LOut < ABufLen - 1) do
-            begin
-              ABuf[LOut] := LTmp[LTmpLen];
-              Inc(LOut);
-              Inc(LTmpLen);
-            end;
+            EmitPadded;
             Inc(LArgIdx);
           end;
           Inc(I);
@@ -300,17 +319,23 @@ begin
           begin
             LSrc := nil;
             case AArgs[LArgIdx].VType of
-              vtPChar:     LSrc := AArgs[LArgIdx].VPChar;
+              vtPChar:      LSrc := AArgs[LArgIdx].VPChar;
               vtAnsiString: LSrc := PAnsiChar(AArgs[LArgIdx].VAnsiString);
-              vtString:    LSrc := @AArgs[LArgIdx].VString^[1];
+              vtString:     LSrc := @AArgs[LArgIdx].VString^[1];
             end;
-            if LSrc <> nil then
-              while (LSrc^ <> #0) and (LOut < ABufLen - 1) do
-              begin
-                ABuf[LOut] := LSrc^;
-                Inc(LOut);
-                Inc(LSrc);
-              end;
+            if LSrc = nil then LSrc := '';
+            LTmpLen := 0;
+            while LSrc[LTmpLen] <> #0 do Inc(LTmpLen);
+            LPad := LWidth - LTmpLen;
+            if LPad < 0 then LPad := 0;
+            if (not LLeftAlign) and (LPad > 0) then
+              for J := 1 to LPad do
+                if LOut < ABufLen - 1 then begin ABuf[LOut] := ' '; Inc(LOut); end;
+            for J := 0 to LTmpLen - 1 do
+              if LOut < ABufLen - 1 then begin ABuf[LOut] := LSrc[J]; Inc(LOut); end;
+            if LLeftAlign and (LPad > 0) then
+              for J := 1 to LPad do
+                if LOut < ABufLen - 1 then begin ABuf[LOut] := ' '; Inc(LOut); end;
             Inc(LArgIdx);
           end;
           Inc(I);
@@ -319,17 +344,11 @@ begin
           if LArgIdx <= High(AArgs) then
           begin
             case AArgs[LArgIdx].VType of
-              vtExtended: platform_fmt_float(AArgs[LArgIdx].VExtended^, 6, @LTmp[0], 32);
+              vtExtended: platform_fmt_float(AArgs[LArgIdx].VExtended^, 6, @LTmp[0], 64);
             else
               LTmp[0] := '?'; LTmp[1] := #0;
             end;
-            LTmpLen := 0;
-            while (LTmp[LTmpLen] <> #0) and (LOut < ABufLen - 1) do
-            begin
-              ABuf[LOut] := LTmp[LTmpLen];
-              Inc(LOut);
-              Inc(LTmpLen);
-            end;
+            EmitPadded;
             Inc(LArgIdx);
           end;
           Inc(I);
