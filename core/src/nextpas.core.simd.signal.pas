@@ -844,16 +844,76 @@ begin
 end;
 
 
+// Real FFT using half-size complex FFT trick:
+// Pack N real samples as N/2 complex: z[k] = x[2k] + j*x[2k+1]
+// Do N/2 complex FFT, then unpack using symmetry
 procedure RealFftF32(aInput: PSingle; aOutput: PSimdComplexF32; aCount: SizeUInt);
-var i: SizeUInt;
+var
+  LHalf, k: SizeUInt;
+  LPacked: PSimdComplexF32;
+  LTwR, LTwI, LER, LEI, LOR, LOI: Single;
+  LAngle: Single;
 begin
   if aCount = 0 then Exit;
-  for i := 0 to aCount - 1 do
+  if aCount = 1 then begin aOutput[0].Re := aInput[0]; aOutput[0].Im := 0; Exit; end;
+
+  // Odd count: fall back to naive
+  if (aCount and 1) <> 0 then
   begin
-    aOutput[i].Re := aInput[i];
-    aOutput[i].Im := 0;
+    for k := 0 to aCount - 1 do
+    begin
+      aOutput[k].Re := aInput[k];
+      aOutput[k].Im := 0;
+    end;
+    FftRadix2F32(aOutput, aCount, sfdForward);
+    Exit;
   end;
-  FftRadix2F32(aOutput, aCount, sfdForward);
+
+  LHalf := aCount shr 1;
+
+  // Pack: z[k] = x[2k] + j*x[2k+1]
+  LPacked := PSimdComplexF32(SimdAlloc(LHalf * SizeOf(TSimdComplexF32)));
+  for k := 0 to LHalf - 1 do
+  begin
+    LPacked[k].Re := aInput[k * 2];
+    LPacked[k].Im := aInput[k * 2 + 1];
+  end;
+
+  // N/2 complex FFT
+  FftRadix2F32(LPacked, LHalf, sfdForward);
+
+  // Unpack: X[k] = 0.5*(Z[k] + Z*[N/2-k]) - 0.5j*W^k*(Z[k] - Z*[N/2-k])
+  aOutput[0].Re := LPacked[0].Re + LPacked[0].Im;
+  aOutput[0].Im := 0;
+  aOutput[LHalf].Re := LPacked[0].Re - LPacked[0].Im;
+  aOutput[LHalf].Im := 0;
+
+  for k := 1 to LHalf - 1 do
+  begin
+    LAngle := -SIMD_PI * k / LHalf;
+    LTwR := SimdCosF32(LAngle);
+    LTwI := SimdSinF32(LAngle);
+
+    // Even part: 0.5*(Z[k] + Z*[N/2-k])
+    LER := 0.5 * (LPacked[k].Re + LPacked[LHalf - k].Re);
+    LEI := 0.5 * (LPacked[k].Im - LPacked[LHalf - k].Im);
+    // Odd part: 0.5*(Z[k] - Z*[N/2-k])
+    LOR := 0.5 * (LPacked[k].Re - LPacked[LHalf - k].Re);
+    LOI := 0.5 * (LPacked[k].Im + LPacked[LHalf - k].Im);
+
+    // X[k] = Even - j*W^k * Odd
+    // -j*W^k * (LOR + j*LOI) = -j*(LTwR+j*LTwI)*(LOR+j*LOI)
+    //   = -j*(LTwR*LOR - LTwI*LOI + j*(LTwR*LOI + LTwI*LOR))
+    //   = (LTwR*LOI + LTwI*LOR) - j*(LTwR*LOR - LTwI*LOI)
+    aOutput[k].Re := LER + LTwR * LOI + LTwI * LOR;
+    aOutput[k].Im := LEI - LTwR * LOR + LTwI * LOI;
+
+    // X[N-k] = conj(X[k]) for real input (but we store N/2+1 points)
+    aOutput[aCount - k].Re := LER - LTwR * LOI - LTwI * LOR;
+    aOutput[aCount - k].Im := -(LEI - LTwR * LOR + LTwI * LOI);
+  end;
+
+  SimdFree(LPacked);
 end;
 
 procedure FirFilterF32(aSignal: PSingle; aSignalCount: SizeUInt;
