@@ -1853,6 +1853,7 @@ var
   IndexNode: TGreenNode;
   ElementNode: TGreenNode;
   SpecArgs: string;
+  I: LongInt;
 begin
   Section := TGreenNode.Create(gnkTypeSection,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -1997,12 +1998,26 @@ begin
                  tkConstructorKeyword, tkDestructorKeyword, tkOperatorKeyword,
                  tkPropertyKeyword, tkStaticKeyword] then
               begin
+                I := 0;
                 while (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
                   (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
                   (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                begin
+                  if CurrentToken(ALexer, ACursor).Kind = tkLParen then Inc(I)
+                  else if CurrentToken(ALexer, ACursor).Kind = tkRParen then Dec(I)
+                  else if (CurrentToken(ALexer, ACursor).Kind = tkSemicolon) and (I <= 0) then
+                    Break;
                   Inc(ACursor);
+                end;
                 MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                while (ACursor < ALexer.TokenCount) and
+                  (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+                   ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+                    IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+                begin
+                  Inc(ACursor);
+                  MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                end;
               end
               else
                 Inc(ACursor);
