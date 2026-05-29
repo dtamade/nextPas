@@ -288,20 +288,211 @@ end;
 { Remove — simplified: mark as not implemented for now }
 
 function TBTreeMap.Remove(const AKey: K): Boolean;
+var LOld: PNode;
 begin
-  // TODO: full B-tree deletion (complex: borrow/merge)
-  Result := False;
+  if FRoot = nil then Exit(False);
+  RemoveFromNode(FRoot, AKey);
+  if FRoot^.Count = 0 then
+  begin
+    if FRoot^.IsLeaf then
+    begin
+      FreeNode(FRoot);
+      FRoot := nil;
+    end
+    else
+    begin
+      LOld := FRoot;
+      FRoot := FRoot^.Children[0];
+      LOld^.Count := 0;
+      FreeNode(LOld);
+    end;
+  end;
+  Result := True;
 end;
 
-procedure TBTreeMap.RemoveFromNode(ANode: PNode; const AKey: K); begin end;
-procedure TBTreeMap.RemoveFromLeaf(ANode: PNode; AIndex: Int32); begin end;
-procedure TBTreeMap.RemoveFromInternal(ANode: PNode; AIndex: Int32); begin end;
-procedure TBTreeMap.Fill(ANode: PNode; AIndex: Int32); begin end;
-procedure TBTreeMap.BorrowFromPrev(ANode: PNode; AIndex: Int32); begin end;
-procedure TBTreeMap.BorrowFromNext(ANode: PNode; AIndex: Int32); begin end;
-procedure TBTreeMap.MergeChildren(ANode: PNode; AIndex: Int32); begin end;
-function TBTreeMap.FindPredecessor(ANode: PNode): PNode; begin Result := nil; end;
-function TBTreeMap.FindSuccessor(ANode: PNode): PNode; begin Result := nil; end;
+procedure TBTreeMap.RemoveFromNode(ANode: PNode; const AKey: K);
+var LIdx: Int32; LLastChild: Boolean;
+begin
+  if SearchNode(ANode, AKey, LIdx) then
+  begin
+    if ANode^.IsLeaf then
+      RemoveFromLeaf(ANode, LIdx)
+    else
+      RemoveFromInternal(ANode, LIdx);
+  end
+  else
+  begin
+    if ANode^.IsLeaf then Exit;
+    LLastChild := (LIdx = ANode^.Count);
+    if ANode^.Children[LIdx]^.Count < BTREE_ORDER then
+      Fill(ANode, LIdx);
+    if LLastChild and (LIdx > ANode^.Count) then
+      RemoveFromNode(ANode^.Children[LIdx - 1], AKey)
+    else
+      RemoveFromNode(ANode^.Children[LIdx], AKey);
+  end;
+end;
+
+procedure TBTreeMap.RemoveFromLeaf(ANode: PNode; AIndex: Int32);
+var i: Int32;
+begin
+  if System.IsManagedType(K) then Finalize(ANode^.Keys[AIndex]);
+  if System.IsManagedType(V) then Finalize(ANode^.Values[AIndex]);
+  for i := AIndex to ANode^.Count - 2 do
+  begin
+    ANode^.Keys[i] := ANode^.Keys[i + 1];
+    ANode^.Values[i] := ANode^.Values[i + 1];
+  end;
+  Dec(ANode^.Count);
+  Dec(FCount);
+end;
+
+procedure TBTreeMap.RemoveFromInternal(ANode: PNode; AIndex: Int32);
+var
+  LPred, LSucc: PNode;
+begin
+  if ANode^.Children[AIndex]^.Count >= BTREE_ORDER then
+  begin
+    LPred := FindPredecessor(ANode^.Children[AIndex]);
+    ANode^.Keys[AIndex] := LPred^.Keys[LPred^.Count - 1];
+    ANode^.Values[AIndex] := LPred^.Values[LPred^.Count - 1];
+    RemoveFromNode(ANode^.Children[AIndex], LPred^.Keys[LPred^.Count - 1]);
+  end
+  else if ANode^.Children[AIndex + 1]^.Count >= BTREE_ORDER then
+  begin
+    LSucc := FindSuccessor(ANode^.Children[AIndex + 1]);
+    ANode^.Keys[AIndex] := LSucc^.Keys[0];
+    ANode^.Values[AIndex] := LSucc^.Values[0];
+    RemoveFromNode(ANode^.Children[AIndex + 1], LSucc^.Keys[0]);
+  end
+  else
+  begin
+    MergeChildren(ANode, AIndex);
+    RemoveFromNode(ANode^.Children[AIndex], ANode^.Keys[AIndex]);
+  end;
+end;
+
+procedure TBTreeMap.Fill(ANode: PNode; AIndex: Int32);
+begin
+  if (AIndex > 0) and (ANode^.Children[AIndex - 1]^.Count >= BTREE_ORDER) then
+    BorrowFromPrev(ANode, AIndex)
+  else if (AIndex < ANode^.Count) and (ANode^.Children[AIndex + 1]^.Count >= BTREE_ORDER) then
+    BorrowFromNext(ANode, AIndex)
+  else
+  begin
+    if AIndex < ANode^.Count then
+      MergeChildren(ANode, AIndex)
+    else
+      MergeChildren(ANode, AIndex - 1);
+  end;
+end;
+
+procedure TBTreeMap.BorrowFromPrev(ANode: PNode; AIndex: Int32);
+var
+  LChild, LSibling: PNode;
+  i: Int32;
+begin
+  LChild := ANode^.Children[AIndex];
+  LSibling := ANode^.Children[AIndex - 1];
+
+  for i := LChild^.Count - 1 downto 0 do
+  begin
+    LChild^.Keys[i + 1] := LChild^.Keys[i];
+    LChild^.Values[i + 1] := LChild^.Values[i];
+  end;
+  if not LChild^.IsLeaf then
+    for i := LChild^.Count downto 0 do
+      LChild^.Children[i + 1] := LChild^.Children[i];
+
+  LChild^.Keys[0] := ANode^.Keys[AIndex - 1];
+  LChild^.Values[0] := ANode^.Values[AIndex - 1];
+  if not LChild^.IsLeaf then
+    LChild^.Children[0] := LSibling^.Children[LSibling^.Count];
+
+  ANode^.Keys[AIndex - 1] := LSibling^.Keys[LSibling^.Count - 1];
+  ANode^.Values[AIndex - 1] := LSibling^.Values[LSibling^.Count - 1];
+
+  Inc(LChild^.Count);
+  Dec(LSibling^.Count);
+end;
+
+procedure TBTreeMap.BorrowFromNext(ANode: PNode; AIndex: Int32);
+var
+  LChild, LSibling: PNode;
+  i: Int32;
+begin
+  LChild := ANode^.Children[AIndex];
+  LSibling := ANode^.Children[AIndex + 1];
+
+  LChild^.Keys[LChild^.Count] := ANode^.Keys[AIndex];
+  LChild^.Values[LChild^.Count] := ANode^.Values[AIndex];
+  if not LChild^.IsLeaf then
+    LChild^.Children[LChild^.Count + 1] := LSibling^.Children[0];
+
+  ANode^.Keys[AIndex] := LSibling^.Keys[0];
+  ANode^.Values[AIndex] := LSibling^.Values[0];
+
+  for i := 0 to LSibling^.Count - 2 do
+  begin
+    LSibling^.Keys[i] := LSibling^.Keys[i + 1];
+    LSibling^.Values[i] := LSibling^.Values[i + 1];
+  end;
+  if not LSibling^.IsLeaf then
+    for i := 0 to LSibling^.Count - 1 do
+      LSibling^.Children[i] := LSibling^.Children[i + 1];
+
+  Inc(LChild^.Count);
+  Dec(LSibling^.Count);
+end;
+
+procedure TBTreeMap.MergeChildren(ANode: PNode; AIndex: Int32);
+var
+  LLeft, LRight: PNode;
+  i: Int32;
+begin
+  LLeft := ANode^.Children[AIndex];
+  LRight := ANode^.Children[AIndex + 1];
+
+  LLeft^.Keys[LLeft^.Count] := ANode^.Keys[AIndex];
+  LLeft^.Values[LLeft^.Count] := ANode^.Values[AIndex];
+
+  for i := 0 to LRight^.Count - 1 do
+  begin
+    LLeft^.Keys[LLeft^.Count + 1 + i] := LRight^.Keys[i];
+    LLeft^.Values[LLeft^.Count + 1 + i] := LRight^.Values[i];
+  end;
+  if not LLeft^.IsLeaf then
+    for i := 0 to LRight^.Count do
+      LLeft^.Children[LLeft^.Count + 1 + i] := LRight^.Children[i];
+
+  LLeft^.Count := LLeft^.Count + 1 + LRight^.Count;
+
+  for i := AIndex to ANode^.Count - 2 do
+  begin
+    ANode^.Keys[i] := ANode^.Keys[i + 1];
+    ANode^.Values[i] := ANode^.Values[i + 1];
+  end;
+  for i := AIndex + 1 to ANode^.Count - 1 do
+    ANode^.Children[i] := ANode^.Children[i + 1];
+  Dec(ANode^.Count);
+
+  LRight^.Count := 0;
+  FreeNode(LRight);
+end;
+
+function TBTreeMap.FindPredecessor(ANode: PNode): PNode;
+begin
+  while not ANode^.IsLeaf do
+    ANode := ANode^.Children[ANode^.Count];
+  Result := ANode;
+end;
+
+function TBTreeMap.FindSuccessor(ANode: PNode): PNode;
+begin
+  while not ANode^.IsLeaf do
+    ANode := ANode^.Children[0];
+  Result := ANode;
+end;
 
 { Min/Max }
 
