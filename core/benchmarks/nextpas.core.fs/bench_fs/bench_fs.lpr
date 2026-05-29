@@ -10,7 +10,10 @@ uses
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,
-  nextpas.core.fs.util;
+  nextpas.core.fs.util,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
+  nextpas.core.platform.fs;
 
 var
   GTmpDir: string;
@@ -116,6 +119,107 @@ begin
   Bench('CopyFile 10240KB', LCopied, LStart.Elapsed);
 end;
 
+procedure CreateWalkTree(const ABase: string; ADepth, AFilesPerDir: Int32);
+var
+  I: Int32;
+  H: TPlatformFileHandle;
+  W: PtrUInt;
+  LChild: string;
+begin
+  platform_file_mkdir(PAnsiChar(ABase), 493);
+  for I := 0 to AFilesPerDir - 1 do
+  begin
+    platform_file_open(PAnsiChar(ABase + '/f' + IntToStr(I) + '.txt'),
+      fomWriteOnly, fcmCreateAlways, H);
+    platform_file_write(H, PAnsiChar('x'), 1, W);
+    platform_file_close(H);
+  end;
+  if ADepth > 0 then
+    for I := 0 to 2 do
+    begin
+      LChild := ABase + '/d' + IntToStr(I);
+      CreateWalkTree(LChild, ADepth - 1, AFilesPerDir);
+    end;
+end;
+
+procedure RemoveWalkTree(const ABase: string);
+var
+  LHandle: TPlatformDirHandle;
+  LEntry: TPlatformDirEntry;
+  LChild: string;
+begin
+  if platform_dir_open(PAnsiChar(ABase), LHandle) <> 0 then
+  begin
+    platform_file_unlink(PAnsiChar(ABase));
+    Exit;
+  end;
+  while platform_dir_read(LHandle, LEntry) = 0 do
+  begin
+    LChild := ABase + '/' + StrPas(@LEntry.Name[0]);
+    if LEntry.FileType = ftDirectory then
+      RemoveWalkTree(LChild)
+    else
+      platform_file_unlink(PAnsiChar(LChild));
+  end;
+  platform_dir_close(LHandle);
+  platform_file_rmdir(PAnsiChar(ABase));
+end;
+
+var
+  GWalkCount: Int32;
+
+function WalkCounter(const AEntry: TPlatformWalkEntry;
+  AUserData: Pointer): TPlatformWalkAction;
+begin
+  Inc(GWalkCount);
+  Result := pwaContinue;
+end;
+
+procedure FpcWalkRecurse(const APath: string; var ACount: Int32);
+var
+  SR: TSearchRec;
+begin
+  Inc(ACount);
+  if FindFirst(APath + '/*', faAnyFile, SR) = 0 then
+  begin
+    repeat
+      if (SR.Name = '.') or (SR.Name = '..') then Continue;
+      if (SR.Attr and faDirectory) <> 0 then
+        FpcWalkRecurse(APath + '/' + SR.Name, ACount)
+      else
+        Inc(ACount);
+    until FindNext(SR) <> 0;
+    FindClose(SR);
+  end;
+end;
+
+procedure BenchWalk;
+var
+  LWalkDir: string;
+  LStart: TInstant;
+  LElapsed: TDuration;
+  LFpcCount: Int32;
+begin
+  LWalkDir := GTmpDir + '/walk_tree';
+  CreateWalkTree(LWalkDir, 3, 5);
+
+  GWalkCount := 0;
+  LStart := TInstant.Now;
+  platform_fs_walk(PAnsiChar(LWalkDir), @WalkCounter, nil, False);
+  LElapsed := LStart.Elapsed;
+  WriteLn(Format('  %-35s %6d entries  %8.2f ms',
+    ['platform_fs_walk (depth=3,5f/dir)', GWalkCount, LElapsed.AsNanoseconds / 1000000.0]));
+
+  LFpcCount := 0;
+  LStart := TInstant.Now;
+  FpcWalkRecurse(LWalkDir, LFpcCount);
+  LElapsed := LStart.Elapsed;
+  WriteLn(Format('  %-35s %6d entries  %8.2f ms',
+    ['FPC FindFirst/Next recursive', LFpcCount, LElapsed.AsNanoseconds / 1000000.0]));
+
+  RemoveWalkTree(LWalkDir);
+end;
+
 begin
   GTmpDir := '/tmp/nextpas_fs_bench_' + IntToStr(GetProcessID);
   ForceDirectories(GTmpDir);
@@ -136,11 +240,15 @@ begin
     BenchCopyFile;
 
     WriteLn;
+    BenchWalk;
+
+    WriteLn;
     WriteLn('Done.');
   finally
     // cleanup
     DeleteFile(GTmpDir + '/bench_write.bin');
     DeleteFile(GTmpDir + '/bench_copy.bin');
+    RemoveWalkTree(GTmpDir + '/walk_tree');
     RmDir(PAnsiChar(GTmpDir));
   end;
 end.
