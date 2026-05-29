@@ -10,7 +10,7 @@ uses
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.consts,
   nextpas.core.tls.openssl.base,
-  nextpas.core.tls.memutils;
+  nextpas.core.mem.secure;
 
 type
   { AEAD 加密结果 }

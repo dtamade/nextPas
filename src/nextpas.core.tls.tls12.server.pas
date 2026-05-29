@@ -72,7 +72,7 @@ uses
   nextpas.core.tls.tls13.servercertverify,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.constant_time,
-  nextpas.core.tls.memutils,
+  nextpas.core.mem.secure,
   nextpas.core.tls.random;
 
 function ParseALPNFromExtension(const AData: TBytes; AOffset, ALen: Integer;

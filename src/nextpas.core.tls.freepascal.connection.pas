@@ -263,7 +263,7 @@ uses
   nextpas.core.tls.tls12.io,
   nextpas.core.tls.certchain,
   nextpas.core.tls.random,
-  nextpas.core.tls.memutils,
+  nextpas.core.mem.secure,
   nextpas.core.crypto.constant_time,
   nextpas.core.tls.ct.sct,
   nextpas.core.tls.ct.logs,

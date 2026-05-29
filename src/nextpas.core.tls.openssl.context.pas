@@ -229,7 +229,7 @@ uses
   nextpas.core.tls.openssl.api.pkcs12,
   nextpas.core.tls.openssl.api.rsa,
   nextpas.core.tls.openssl.api.err,
-  nextpas.core.tls.memutils;
+  nextpas.core.mem.secure;
 
 var
   GContextRegistry: TList = nil;

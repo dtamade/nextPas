@@ -22,7 +22,7 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.logging,
-  nextpas.core.tls.memutils;  // P0 安全修复：使用安全内存清零
+  nextpas.core.mem.secure;  // P0 安全修复：使用安全内存清零
 
 type
   { Secure string - automatically zeroes memory on destruction }

@@ -31,7 +31,7 @@ uses
   nextpas.core.tls.random,
   nextpas.core.crypto.primitives,
   nextpas.core.crypto.constant_time,
-  nextpas.core.tls.memutils;
+  nextpas.core.mem.secure;
 
 const
   DEFAULT_SESSION_TIMEOUT = 300;  // 5 分钟

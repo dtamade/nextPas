@@ -92,7 +92,7 @@ uses
   nextpas.core.crypto.hash,
   nextpas.core.crypto.primitives,
   nextpas.core.tls.tls13.finished,
-  nextpas.core.tls.memutils;
+  nextpas.core.mem.secure;
 
 const
   TLS13_SHA256_HASH_SIZE = 32;

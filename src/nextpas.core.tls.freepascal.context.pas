@@ -220,7 +220,7 @@ implementation
 
 uses
   nextpas.core.tls.exceptions,
-  nextpas.core.tls.memutils,
+  nextpas.core.mem.secure,
   nextpas.core.tls.utils,
   nextpas.core.crypto.constant_time,
   nextpas.core.crypto.pkcs8,

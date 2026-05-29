@@ -1,4 +1,4 @@
-unit nextpas.core.tls.memutils;
+unit nextpas.core.mem.secure;
 
 {$mode ObjFPC}{$H+}
 
