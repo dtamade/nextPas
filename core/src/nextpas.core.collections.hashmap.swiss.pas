@@ -38,6 +38,8 @@ function SwissMatchH2(ACtrl: PByte; AH2: Byte): TSwissMask; {$IFDEF NEXTPAS_CORE
 function SwissMatchEmpty(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 function SwissMatchEmptyOrDeleted(ACtrl: PByte): TSwissMask; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
 
+function InlineHashMix32(x: UInt32): UInt32; {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+
 type
   generic TSwissTable<K, V> = class
   public type
@@ -93,6 +95,13 @@ implementation
 uses
   nextpas.core.collections.hashmap;
 
+function InlineHashMix32(x: UInt32): UInt32; inline;
+begin
+  x := (x xor (x shr 16)) * UInt32($7feb352d);
+  x := (x xor (x shr 15)) * UInt32($846ca68b);
+  Result := x xor (x shr 16);
+end;
+
 function SwissCtz(AMask: TSwissMask): Int32;
 begin
   {$IFDEF HAS_AVX2}
@@ -142,9 +151,9 @@ begin
      (GetTypeKind(K) = tkEnumeration) then
   begin
     case SizeOf(K) of
-      1: Exit(HashOfUInt32(PByte(p)^));
-      2: Exit(HashOfUInt32(PWord(p)^));
-      4: Exit(HashOfUInt32(PUInt32(p)^));
+      1: Exit(InlineHashMix32(PByte(p)^));
+      2: Exit(InlineHashMix32(PWord(p)^));
+      4: Exit(InlineHashMix32(PUInt32(p)^));
       8: Exit(HashOfUInt64(PQWord(p)^));
     end;
   end;
@@ -158,12 +167,12 @@ begin
 
   if Assigned(FHash) then Exit(FHash(AKey));
   case SizeOf(K) of
-    1: Result := HashOfUInt32(PByte(p)^);
-    2: Result := HashOfUInt32(PWord(p)^);
-    4: Result := HashOfUInt32(PUInt32(p)^);
+    1: Result := InlineHashMix32(PByte(p)^);
+    2: Result := InlineHashMix32(PWord(p)^);
+    4: Result := InlineHashMix32(PUInt32(p)^);
     8: Result := HashOfUInt64(PQWord(p)^);
   else
-    Result := HashOfUInt32(PUInt32(p)^);
+    Result := InlineHashMix32(PUInt32(p)^);
   end;
 end;
 
@@ -429,7 +438,7 @@ var
 begin
   if FCapacity = 0 then Exit(False);
   if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := HashOfUInt32(PUInt32(@AKey)^)
+    Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
@@ -468,7 +477,7 @@ var
 begin
   if FCapacity = 0 then Exit(False);
   if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := HashOfUInt32(PUInt32(@AKey)^)
+    Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
@@ -505,7 +514,7 @@ begin
     GrowAndRehash;
 
   if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := HashOfUInt32(PUInt32(@AKey)^)
+    Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
   Lh2 := Lh and $7F;
@@ -571,7 +580,7 @@ var
 begin
   if FCapacity = 0 then Exit(False);
   if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
-    Lh := HashOfUInt32(PUInt32(@AKey)^)
+    Lh := InlineHashMix32(PUInt32(@AKey)^)
   else
     Lh := KeyHash(AKey);
   if not FindIndex(AKey, Lh, LIdx) then Exit(False);
