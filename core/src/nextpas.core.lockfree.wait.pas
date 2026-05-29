@@ -4,76 +4,79 @@ unit nextpas.core.lockfree.wait;
 
 interface
 
-procedure LockFreeWaitData(AEpoch: PInt32; const AExpected: Int32;
+procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
   const ATimeoutNs: Int64);
-procedure LockFreeWakeData(AEpoch: PInt32);
-procedure LockFreeNotifyData(AEpoch: PInt32);
-procedure LockFreeWaitSpace(AEpoch: PInt32; const AExpected: Int32;
+procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
   const ATimeoutNs: Int64);
-procedure LockFreeWakeSpace(AEpoch: PInt32);
-procedure LockFreeNotifySpace(AEpoch: PInt32);
+procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
+procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
+procedure LockFreeWakeAll(AEpoch: PInt32);
 
 implementation
 
 uses
   nextpas.core.atomic,
-  nextpas.core.lockfree.base,
-  nextpas.core.platform.sync,
-  nextpas.core.platform.thread;
+  nextpas.core.platform.sync;
 
-procedure SpinThenWait(AAddr: PInt32; const AExpected: Int32;
+const
+  SPIN_LIMIT = 4;
+
+procedure LockFreeNotifyData(AEpoch: PInt32; AWaiters: PInt32);
+begin
+  AtomicFetchAdd32(AEpoch^, 1, moRelease);
+  if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
+    platform_wake_address_one(AEpoch);
+end;
+
+procedure LockFreeNotifySpace(AEpoch: PInt32; AWaiters: PInt32);
+begin
+  AtomicFetchAdd32(AEpoch^, 1, moRelease);
+  if AtomicLoad32(AWaiters^, moRelaxed) > 0 then
+    platform_wake_address_one(AEpoch);
+end;
+
+procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;
   const ATimeoutNs: Int64);
 var
+  LEpoch: Int32;
   LI: Int32;
 begin
-  for LI := 0 to LOCKFREE_SPIN_COUNT - 1 do
+  for LI := 0 to SPIN_LIMIT - 1 do
   begin
-    if AtomicLoad32(AAddr^, moAcquire) <> AExpected then
+    LEpoch := AtomicLoad32(AEpoch^, moAcquire);
+    if LEpoch <> AtomicLoad32(AEpoch^, moAcquire) then
       Exit;
     CpuPause;
   end;
-  for LI := 0 to LOCKFREE_YIELD_COUNT - 1 do
+  AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
+  LEpoch := AtomicLoad32(AEpoch^, moAcquire);
+  platform_wait_address32(AEpoch, LEpoch, ATimeoutNs);
+  AtomicFetchSub32(AWaiters^, 1, moAcqRel);
+end;
+
+procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;
+  const ATimeoutNs: Int64);
+var
+  LEpoch: Int32;
+  LI: Int32;
+begin
+  for LI := 0 to SPIN_LIMIT - 1 do
   begin
-    if AtomicLoad32(AAddr^, moAcquire) <> AExpected then
+    LEpoch := AtomicLoad32(AEpoch^, moAcquire);
+    if LEpoch <> AtomicLoad32(AEpoch^, moAcquire) then
       Exit;
-    platform_thread_yield;
+    CpuPause;
   end;
-  if AtomicLoad32(AAddr^, moAcquire) = AExpected then
-    platform_wait_address32(AAddr, AExpected, ATimeoutNs);
+  AtomicFetchAdd32(AWaiters^, 1, moAcqRel);
+  LEpoch := AtomicLoad32(AEpoch^, moAcquire);
+  platform_wait_address32(AEpoch, LEpoch, ATimeoutNs);
+  AtomicFetchSub32(AWaiters^, 1, moAcqRel);
 end;
 
-procedure LockFreeWaitData(AEpoch: PInt32; const AExpected: Int32;
-  const ATimeoutNs: Int64);
-begin
-  SpinThenWait(AEpoch, AExpected, ATimeoutNs);
-end;
-
-procedure LockFreeWakeData(AEpoch: PInt32);
+procedure LockFreeWakeAll(AEpoch: PInt32);
 begin
   AtomicFetchAdd32(AEpoch^, 1, moRelease);
   platform_wake_address_all(AEpoch);
-end;
-
-procedure LockFreeNotifyData(AEpoch: PInt32);
-begin
-  AtomicFetchAdd32(AEpoch^, 1, moRelease);
-end;
-
-procedure LockFreeWaitSpace(AEpoch: PInt32; const AExpected: Int32;
-  const ATimeoutNs: Int64);
-begin
-  SpinThenWait(AEpoch, AExpected, ATimeoutNs);
-end;
-
-procedure LockFreeWakeSpace(AEpoch: PInt32);
-begin
-  AtomicFetchAdd32(AEpoch^, 1, moRelease);
-  platform_wake_address_all(AEpoch);
-end;
-
-procedure LockFreeNotifySpace(AEpoch: PInt32);
-begin
-  AtomicFetchAdd32(AEpoch^, 1, moRelease);
 end;
 
 end.

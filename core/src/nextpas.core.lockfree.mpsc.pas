@@ -19,6 +19,7 @@ type
     FStub: TNode;
     FClosed: Int32;
     FDataEpoch: Int32;
+    FDataWaiters: Int32;
   public
     constructor Create;
     destructor Destroy; override;
@@ -46,6 +47,7 @@ begin
   FTail := @FStub;
   FClosed := 0;
   FDataEpoch := 0;
+  FDataWaiters := 0;
 end;
 
 destructor TMpscQueue.Destroy;
@@ -65,7 +67,7 @@ begin
   LNode^.Next := nil;
   LPrev := PNode(PtrUInt(AtomicExchange64(Int64(PtrUInt(FHead)), Int64(PtrUInt(LNode)), moAcqRel)));
   AtomicStore64(Int64(PtrUInt(LPrev^.Next)), Int64(PtrUInt(LNode)), moRelease);
-  LockFreeWakeData(@FDataEpoch);
+  LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
 function TMpscQueue.TryDequeue(out AValue: T): Boolean;
@@ -121,7 +123,7 @@ begin
       Exit(True);
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(TryDequeue(AValue));
-    LockFreeWaitData(@FDataEpoch, LEpoch, -1);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, -1);
   end;
 end;
 
@@ -144,14 +146,14 @@ begin
       Exit(True);
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(TryDequeue(AValue));
-    LockFreeWaitData(@FDataEpoch, LEpoch, LRemaining);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LRemaining);
   end;
 end;
 
 procedure TMpscQueue.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
-  LockFreeWakeData(@FDataEpoch);
+  LockFreeWakeAll(@FDataEpoch);
 end;
 
 function TMpscQueue.IsClosed: Boolean;

@@ -24,6 +24,8 @@ type
     FClosed: Int32;
     FDataEpoch: Int32;
     FSpaceEpoch: Int32;
+    FDataWaiters: Int32;
+    FSpaceWaiters: Int32;
   public
     constructor Create(const ACapacity: PtrUInt);
     function TryEnqueue(const AValue: T): Boolean;
@@ -69,6 +71,8 @@ begin
   FClosed := 0;
   FDataEpoch := 0;
   FSpaceEpoch := 0;
+  FDataWaiters := 0;
+  FSpaceWaiters := 0;
 end;
 
 function TMpmcQueue.TryEnqueue(const AValue: T): Boolean;
@@ -91,7 +95,7 @@ begin
       begin
         FSlots[LIdx].Value := AValue;
         AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease);
-        LockFreeNotifyData(@FDataEpoch);
+        LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
         Result := True;
         Exit;
       end;
@@ -122,7 +126,7 @@ begin
         AValue := FSlots[LIdx].Value;
         FSlots[LIdx].Value := Default(T);
         AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease);
-        LockFreeNotifySpace(@FSpaceEpoch);
+        LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters);
         Result := True;
         Exit;
       end;
@@ -140,7 +144,7 @@ var
 begin
   if TryEnqueue(AValue) then
   begin
-    LockFreeWakeData(@FDataEpoch);
+    
     Exit;
   end;
   while True do
@@ -148,12 +152,12 @@ begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
     begin
-      LockFreeWakeData(@FDataEpoch);
+      
       Exit;
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit;
-    LockFreeWaitSpace(@FSpaceEpoch, LEpoch, -1);
+    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, -1);
   end;
 end;
 
@@ -163,7 +167,7 @@ var
 begin
   if TryDequeue(AValue) then
   begin
-    LockFreeWakeSpace(@FSpaceEpoch);
+    
     Exit(True);
   end;
   while True do
@@ -171,12 +175,12 @@ begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
     begin
-      LockFreeWakeSpace(@FSpaceEpoch);
+      
       Exit(True);
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitData(@FDataEpoch, LEpoch, -1);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, -1);
   end;
 end;
 
@@ -188,7 +192,7 @@ var
 begin
   if TryEnqueue(AValue) then
   begin
-    LockFreeWakeData(@FDataEpoch);
+    
     Exit(True);
   end;
   LStart := TInstant.Now;
@@ -200,12 +204,12 @@ begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
     begin
-      LockFreeWakeData(@FDataEpoch);
+      
       Exit(True);
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitSpace(@FSpaceEpoch, LEpoch, LRemaining);
+    LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LRemaining);
   end;
 end;
 
@@ -217,7 +221,7 @@ var
 begin
   if TryDequeue(AValue) then
   begin
-    LockFreeWakeSpace(@FSpaceEpoch);
+    
     Exit(True);
   end;
   LStart := TInstant.Now;
@@ -229,20 +233,22 @@ begin
     LEpoch := AtomicLoad32(FDataEpoch, moAcquire);
     if TryDequeue(AValue) then
     begin
-      LockFreeWakeSpace(@FSpaceEpoch);
+      
       Exit(True);
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
       Exit(False);
-    LockFreeWaitData(@FDataEpoch, LEpoch, LRemaining);
+    LockFreeWaitData(@FDataEpoch, @FDataWaiters, LRemaining);
   end;
 end;
 
 procedure TMpmcQueue.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
-  LockFreeWakeData(@FDataEpoch);
-  LockFreeWakeSpace(@FSpaceEpoch);
+  LockFreeWakeAll(@FDataEpoch);
+  LockFreeWakeAll(@FSpaceEpoch);
+  
+  
 end;
 
 function TMpmcQueue.IsClosed: Boolean;
@@ -294,7 +300,7 @@ begin
     Inc(Result);
   end;
   if Result > 0 then
-    LockFreeWakeSpace(@FSpaceEpoch);
+    
 end;
 
 function TMpmcQueue.IsEmpty: Boolean;
