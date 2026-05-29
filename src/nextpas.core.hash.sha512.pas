@@ -203,9 +203,9 @@ begin
 
   while LBufLen < 120 do begin LBuf[LBufLen] := 0; Inc(LBufLen); end;
 
-  // 128-bit length field (we only use lower 64 bits)
-  LBuf[120] := 0; LBuf[121] := 0; LBuf[122] := 0; LBuf[123] := 0;
-  LBuf[124] := 0; LBuf[125] := 0; LBuf[126] := 0; LBuf[127] := 0;
+  // 128-bit length field: bytes 112-119 are zero (from padding above),
+  // bytes 120-127 hold the total bit count in big-endian.
+  // This works because messages < 2^64 bits have zero high 64 bits.
   LBuf[120] := Byte(LTotalBits shr 56);
   LBuf[121] := Byte(LTotalBits shr 48);
   LBuf[122] := Byte(LTotalBits shr 40);
