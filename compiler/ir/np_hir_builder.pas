@@ -9,6 +9,18 @@ uses
   np_semantic_model, np_hir_types, np_hir_model;
 
 type
+  TExprStack = record
+    Values: array of THIRValueId;
+    Types: array of THIRTypeId;
+    Count: LongInt;
+    procedure Init;
+    procedure Push(AVal: THIRValueId);
+    procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
+    function Pop: THIRValueId;
+    function PopTyped(out AType: THIRTypeId): THIRValueId;
+    function PeekType: THIRTypeId;
+  end;
+
   TAllocaEntry = record
     Name: string;
     Value: THIRValueId;
@@ -130,19 +142,6 @@ implementation
 
 uses
   SysUtils;
-
-type
-  TExprStack = record
-    Values: array of THIRValueId;
-    Types: array of THIRTypeId;
-    Count: LongInt;
-    procedure Init;
-    procedure Push(AVal: THIRValueId);
-    procedure PushTyped(AVal: THIRValueId; AType: THIRTypeId);
-    function Pop: THIRValueId;
-    function PopTyped(out AType: THIRTypeId): THIRValueId;
-    function PeekType: THIRTypeId;
-  end;
 
 procedure TExprStack.Init;
 begin
