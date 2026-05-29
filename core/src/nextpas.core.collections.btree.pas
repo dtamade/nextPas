@@ -19,6 +19,10 @@ type
   public type
     TCompareFunc = function(const A, B: K; aData: Pointer): SizeInt;
     TForEachCallback = procedure(const AKey: K; const AValue: V; aData: Pointer);
+    TEntry = record
+      Key: K;
+      Value: V;
+    end;
     PNode = ^TNode;
     TNode = record
       Count: Int32;
@@ -26,6 +30,20 @@ type
       Keys: array[0..BTREE_MAX_KEYS - 1] of K;
       Values: array[0..BTREE_MAX_KEYS - 1] of V;
       Children: array[0..BTREE_MAX_KEYS] of PNode;
+    end;
+
+  public type
+    TEnumerator = record
+    private
+      FStack: array[0..31] of PNode;
+      FIndices: array[0..31] of Int32;
+      FDepth: Int32;
+      FCurrent: TEntry;
+      FStarted: Boolean;
+      function DoMoveNext: Boolean;
+    public
+      function MoveNext: Boolean;
+      property Current: TEntry read FCurrent;
     end;
   private
     FRoot: PNode;
@@ -70,6 +88,7 @@ type
     function UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
+    function GetEnumerator: TEnumerator;
 
     property Count: SizeUInt read FCount;
   end;
@@ -727,6 +746,76 @@ end;
 procedure TBTreeMap.Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer);
 begin
   RangeTraverse(FRoot, ALo, AHi, ACallback, AData);
+end;
+
+{ TEnumerator }
+
+function TBTreeMap.TEnumerator.DoMoveNext: Boolean;
+var
+  LNode: PNode;
+  LIdx: Int32;
+begin
+  while FDepth >= 0 do
+  begin
+    LNode := FStack[FDepth];
+    LIdx := FIndices[FDepth];
+
+    if LNode^.IsLeaf then
+    begin
+      if LIdx < LNode^.Count then
+      begin
+        FCurrent.Key := LNode^.Keys[LIdx];
+        FCurrent.Value := LNode^.Values[LIdx];
+        Inc(FIndices[FDepth]);
+        Exit(True);
+      end;
+      Dec(FDepth);
+    end
+    else
+    begin
+      if LIdx <= LNode^.Count then
+      begin
+        if LIdx > 0 then
+        begin
+          FCurrent.Key := LNode^.Keys[LIdx - 1];
+          FCurrent.Value := LNode^.Values[LIdx - 1];
+          Inc(FIndices[FDepth]);
+          Inc(FDepth);
+          FStack[FDepth] := LNode^.Children[LIdx];
+          FIndices[FDepth] := 0;
+          Exit(True);
+        end
+        else
+        begin
+          Inc(FIndices[FDepth]);
+          Inc(FDepth);
+          FStack[FDepth] := LNode^.Children[0];
+          FIndices[FDepth] := 0;
+        end;
+      end
+      else
+        Dec(FDepth);
+    end;
+  end;
+  Result := False;
+end;
+
+function TBTreeMap.TEnumerator.MoveNext: Boolean;
+begin
+  Result := DoMoveNext;
+end;
+
+function TBTreeMap.GetEnumerator: TEnumerator;
+begin
+  Result.FDepth := -1;
+  Result.FStarted := False;
+  FillChar(Result.FCurrent, SizeOf(TEntry), 0);
+  if FRoot <> nil then
+  begin
+    Result.FDepth := 0;
+    Result.FStack[0] := FRoot;
+    Result.FIndices[0] := 0;
+  end;
 end;
 
 { TBTreeSet }

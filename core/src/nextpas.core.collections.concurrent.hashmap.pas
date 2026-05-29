@@ -20,6 +20,7 @@ type
   public type
     THashFunc = function(const AKey: K): UInt32;
     TEqualsFunc = function(const A, B: K): Boolean;
+    TComputeFunc = function(const AKey: K; var AValue: V; AExists: Boolean): Boolean;
   private type
     TSegmentTable = specialize TSwissTable<K, V>;
   private
@@ -37,8 +38,10 @@ type
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
     function ContainsKey(const AKey: K): Boolean;
     procedure Put(const AKey: K; const AValue: V);
+    function PutIfAbsent(const AKey: K; const AValue: V): Boolean;
     function Remove(const AKey: K): Boolean;
     function GetOrInsert(const AKey: K; const ADefault: V): V;
+    procedure Compute(const AKey: K; AFunc: TComputeFunc);
     procedure Clear;
 
     function GetCount: SizeUInt;
@@ -117,6 +120,24 @@ begin
   end;
 end;
 
+function TConcurrentHashMap.PutIfAbsent(const AKey: K; const AValue: V): Boolean;
+var LSeg: SizeUInt;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    if FSegments[LSeg].ContainsKey(AKey) then
+      Result := False
+    else
+    begin
+      FSegments[LSeg].Put(AKey, AValue);
+      Result := True;
+    end;
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
 function TConcurrentHashMap.Remove(const AKey: K): Boolean;
 var LSeg: SizeUInt;
 begin
@@ -156,6 +177,28 @@ begin
     finally
       FSegmentLocks[i].ReleaseWrite;
     end;
+  end;
+end;
+
+procedure TConcurrentHashMap.Compute(const AKey: K; AFunc: TComputeFunc);
+var
+  LSeg: SizeUInt;
+  LValue: V;
+  LExists, LKeep: Boolean;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    LExists := FSegments[LSeg].TryGetValue(AKey, LValue);
+    if not LExists then
+      FillChar(LValue, SizeOf(V), 0);
+    LKeep := AFunc(AKey, LValue, LExists);
+    if LKeep then
+      FSegments[LSeg].Put(AKey, LValue)
+    else if LExists then
+      FSegments[LSeg].Remove(AKey);
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
   end;
 end;
 

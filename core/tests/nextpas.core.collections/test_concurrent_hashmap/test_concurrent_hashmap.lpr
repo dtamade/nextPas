@@ -194,12 +194,68 @@ begin
   finally GMap.Free; end;
 end;
 
+procedure TestPutIfAbsent;
+var M: TIntConcMap; v: Integer;
+begin
+  M := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    Check(M.PutIfAbsent(1, 10), 'first insert');
+    Check(not M.PutIfAbsent(1, 99), 'duplicate rejected');
+    CheckEqual(Int64(1), Int64(M.Count), 'count');
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(10), Int64(v), 'original value kept');
+  finally M.Free; end;
+end;
+
+function ComputeIncrement(const AKey: Integer; var AValue: Integer; AExists: Boolean): Boolean;
+begin
+  if AExists then
+    Inc(AValue)
+  else
+    AValue := 1;
+  Result := True;
+end;
+
+function ComputeRemoveIfZero(const AKey: Integer; var AValue: Integer; AExists: Boolean): Boolean;
+begin
+  if AExists then
+  begin
+    Dec(AValue);
+    Result := AValue > 0;
+  end
+  else
+    Result := False;
+end;
+
+procedure TestCompute;
+var M: TIntConcMap; v: Integer;
+begin
+  M := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    M.Compute(1, @ComputeIncrement);
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(1), Int64(v), 'compute new');
+    M.Compute(1, @ComputeIncrement);
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(2), Int64(v), 'compute existing');
+    M.Compute(1, @ComputeIncrement);
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(3), Int64(v), 'compute again');
+
+    M.Put(5, 1);
+    M.Compute(5, @ComputeRemoveIfZero);
+    Check(not M.ContainsKey(5), 'compute removed');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.concurrent.hashmap');
   T.Run('Put/Get', @TestPutGet);
   T.Run('Update', @TestUpdate);
   T.Run('Remove', @TestRemove);
   T.Run('GetOrInsert', @TestGetOrInsert);
+  T.Run('PutIfAbsent', @TestPutIfAbsent);
+  T.Run('Compute', @TestCompute);
   T.Run('Clear', @TestClear);
   T.Run('String key', @TestStringKey);
   T.Run('Multi-thread stress (4W+4R)', @TestMultiThreadStress);
