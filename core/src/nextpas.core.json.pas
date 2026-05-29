@@ -1,0 +1,187 @@
+unit nextpas.core.json;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  nextpas.core.text.view,
+  nextpas.core.text.builder,
+  nextpas.core.mem.intf,
+  nextpas.core.json.types,
+  nextpas.core.json.parser,
+  nextpas.core.json.value,
+  nextpas.core.json.writer;
+
+type
+  IJsonDocument = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+    function Root: TJsonValue;
+    function HasError: Boolean;
+    function Error: TJsonError;
+    function Stringify: string;
+    function StringifyPretty(const AIndent: Int32 = 2): string;
+  end;
+
+function JsonParse(const AInput: string): IJsonDocument; overload;
+function JsonParse(const AInput: TStringView): IJsonDocument; overload;
+function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument; overload;
+function JsonParseWith(const AInput: TStringView; const AAllocator: IAllocator): IJsonDocument; overload;
+function JsonStringify(const AValue: TJsonValue): string;
+
+implementation
+
+uses
+  nextpas.core.mem.default;
+
+type
+  TJsonDocumentImpl = class(TInterfacedObject, IJsonDocument)
+  private
+    FDoc: TJsonDocument;
+    FInputCopy: string;
+  public
+    constructor Create(const AInput: string; const AAllocator: IAllocator);
+    constructor CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
+    destructor Destroy; override;
+    function Root: TJsonValue;
+    function HasError: Boolean;
+    function Error: TJsonError;
+    function Stringify: string;
+    function StringifyPretty(const AIndent: Int32 = 2): string;
+  end;
+
+constructor TJsonDocumentImpl.Create(const AInput: string; const AAllocator: IAllocator);
+begin
+  inherited Create;
+  FInputCopy := AInput;
+  FDoc.Init(AAllocator);
+  FDoc.Parse(TStringView.FromStr(FInputCopy));
+end;
+
+constructor TJsonDocumentImpl.CreateFromView(const AInput: TStringView; const AAllocator: IAllocator);
+begin
+  inherited Create;
+  SetString(FInputCopy, AInput.Data, AInput.Len);
+  FDoc.Init(AAllocator);
+  FDoc.Parse(TStringView.FromStr(FInputCopy));
+end;
+
+destructor TJsonDocumentImpl.Destroy;
+begin
+  FDoc.Done;
+  inherited;
+end;
+
+function TJsonDocumentImpl.Root: TJsonValue;
+begin
+  Result := TJsonValue.Create(FDoc, FDoc.Root);
+end;
+
+function TJsonDocumentImpl.HasError: Boolean;
+begin
+  Result := FDoc.HasError;
+end;
+
+function TJsonDocumentImpl.Error: TJsonError;
+begin
+  Result := FDoc.Error;
+end;
+
+procedure StringifyNode(var ADoc: TJsonDocument; AIdx: UInt32; var AW: TJsonWriter); forward;
+
+procedure StringifyNode(var ADoc: TJsonDocument; AIdx: UInt32; var AW: TJsonWriter);
+var
+  LNode: PJsonNode;
+  LChild: UInt32;
+  I: UInt32;
+begin
+  if AIdx = JSON_NODE_NONE then
+  begin
+    AW.Null;
+    Exit;
+  end;
+  LNode := ADoc.Node(AIdx);
+  case LNode^.Kind of
+    jnkNull: AW.Null;
+    jnkBool: AW.Bool(LNode^.BoolVal);
+    jnkInt: AW.Int(LNode^.IntVal);
+    jnkReal: AW.Float(LNode^.RealVal);
+    jnkString: AW.Str(LNode^.Str);
+    jnkArray:
+    begin
+      AW.BeginArray;
+      LChild := LNode^.Container.FirstChild;
+      for I := 0 to LNode^.Container.Count - 1 do
+      begin
+        if LChild = JSON_NODE_NONE then Break;
+        StringifyNode(ADoc, LChild, AW);
+        LChild := ADoc.Node(LChild)^.Next;
+      end;
+      AW.EndArray;
+    end;
+    jnkObject:
+    begin
+      AW.BeginObject;
+      LChild := LNode^.Container.FirstChild;
+      for I := 0 to LNode^.Container.Count - 1 do
+      begin
+        if LChild = JSON_NODE_NONE then Break;
+        AW.Key(ADoc.Node(LChild)^.Str);
+        StringifyNode(ADoc, ADoc.Node(LChild)^.Next, AW);
+        LChild := ADoc.Node(ADoc.Node(LChild)^.Next)^.Next;
+      end;
+      AW.EndObject;
+    end;
+  end;
+end;
+
+function TJsonDocumentImpl.Stringify: string;
+var
+  LBuilder: TStringBuilder;
+  LWriter: TJsonWriter;
+begin
+  LBuilder.Init(256);
+  LWriter.Init(LBuilder);
+  StringifyNode(FDoc, FDoc.Root, LWriter);
+  Result := LBuilder.ToString;
+  LBuilder.Done;
+end;
+
+function TJsonDocumentImpl.StringifyPretty(const AIndent: Int32): string;
+begin
+  Result := Stringify;
+end;
+
+function JsonParse(const AInput: string): IJsonDocument;
+begin
+  Result := TJsonDocumentImpl.Create(AInput, DefaultAllocator);
+end;
+
+function JsonParse(const AInput: TStringView): IJsonDocument;
+begin
+  Result := TJsonDocumentImpl.CreateFromView(AInput, DefaultAllocator);
+end;
+
+function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument;
+begin
+  Result := TJsonDocumentImpl.Create(AInput, AAllocator);
+end;
+
+function JsonParseWith(const AInput: TStringView; const AAllocator: IAllocator): IJsonDocument;
+begin
+  Result := TJsonDocumentImpl.CreateFromView(AInput, AAllocator);
+end;
+
+function JsonStringify(const AValue: TJsonValue): string;
+var
+  LBuilder: TStringBuilder;
+  LWriter: TJsonWriter;
+begin
+  LBuilder.Init(256);
+  LWriter.Init(LBuilder);
+  StringifyNode(AValue.FDoc^, AValue.FIdx, LWriter);
+  Result := LBuilder.ToString;
+  LBuilder.Done;
+end;
+
+end.

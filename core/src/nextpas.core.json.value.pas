@@ -11,7 +11,7 @@ uses
 
 type
   TJsonValue = record
-  private
+  public
     FDoc: ^TJsonDocument;
     FIdx: UInt32;
   public
