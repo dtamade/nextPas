@@ -5,12 +5,14 @@ program test_hashmap;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.collections.base,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.hashmap;
 
 type
   IIntIntMap = specialize IHashMap<Integer, Integer>;
   TIntIntMap = specialize THashMap<Integer, Integer>;
+  TIntIntEntry = specialize TMapEntry<Integer, Integer>;
   IStrIntMap = specialize IHashMap<string, Integer>;
   TStrIntMap = specialize THashMap<string, Integer>;
 
@@ -278,6 +280,34 @@ begin
   end;
 end;
 
+function RetainEvenValues(const aEntry: TIntIntEntry; aData: Pointer): Boolean;
+begin
+  Result := (aEntry.Value mod 2) = 0;
+end;
+
+procedure TestRetain;
+var
+  LMap: TIntIntMap;
+begin
+  LMap := TIntIntMap.Create;
+  try
+    LMap.Put(1, 10);
+    LMap.Put(2, 21);
+    LMap.Put(3, 30);
+    LMap.Put(4, 41);
+    LMap.Put(5, 50);
+    LMap.Retain(@RetainEvenValues, nil);
+    CheckEqual(Int64(3), Int64(LMap.GetCount), 'retained count');
+    Check(LMap.ContainsKey(1), 'key 1 kept (val 10 even)');
+    Check(LMap.ContainsKey(3), 'key 3 kept (val 30 even)');
+    Check(LMap.ContainsKey(5), 'key 5 kept (val 50 even)');
+    Check(not LMap.ContainsKey(2), 'key 2 removed (val 21 odd)');
+    Check(not LMap.ContainsKey(4), 'key 4 removed (val 41 odd)');
+  finally
+    LMap.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.hashmap');
   T.Run('Put/Get', @TestPutGet);
@@ -298,5 +328,6 @@ begin
   T.Run('Reserve', @TestReserve);
   T.Run('GetOrInsertWith', @TestGetOrInsertWith);
   T.Run('ModifyOrInsert', @TestModifyOrInsert);
+  T.Run('Retain', @TestRetain);
   T.Summary;
 end.
