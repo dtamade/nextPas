@@ -75,6 +75,9 @@ var
   LDst: PByte;
   LRemaining, LFromBuf, LDirect: SizeUInt;
 begin
+  if ACount = 0 then
+    Exit(0);
+
   LDst := @ABuf;
   LRemaining := ACount;
   Result := 0;

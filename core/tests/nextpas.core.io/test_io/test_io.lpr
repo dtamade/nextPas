@@ -591,6 +591,22 @@ begin
   CheckEqual(Byte(40), LBuf[3]);
 end;
 
+procedure TestReadZeroAfterUnread;
+var
+  LS: IStream;
+  LR: IReader;
+  LBS: IByteScanner;
+  LBuf: Byte;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10, 20));
+  LR := CreateBufferedReader(LS, 16);
+  LBS := LR as IByteScanner;
+  LBS.ReadByte;
+  LBS.UnreadByte;
+  CheckEqual(SizeUInt(0), LR.Read(LBuf, 0), 'zero read returns 0');
+  CheckEqual(Byte(10), LBS.ReadByte, 'unread byte preserved');
+end;
+
 procedure TestBufReaderZeroSize;
 var
   LS: IStream;
@@ -723,6 +739,22 @@ begin
   Check(not LScan.Scan, 'empty input');
 end;
 
+procedure TestScannerEmptyLines;
+var
+  LS: IStream;
+  LScan: IScanner;
+begin
+  LS := BytesStreamFrom(TBytes.Create(10, 10, Ord('x'), 10));
+  LScan := CreateScanner(LS as IReader, nil);
+  Check(LScan.Scan, 'scan empty line 1');
+  CheckEqual('', LScan.Text, 'empty line');
+  Check(LScan.Scan, 'scan empty line 2');
+  CheckEqual('', LScan.Text, 'empty line 2');
+  Check(LScan.Scan, 'scan x');
+  CheckEqual('x', LScan.Text, 'x');
+  Check(not LScan.Scan, 'done');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io');
 
@@ -756,6 +788,7 @@ begin
   T.Run('CopyBuffer', @TestCopyBuffer);
 
   T.Run('UnreadByte then Read', @TestUnreadByteThenRead);
+  T.Run('Read zero after UnreadByte', @TestReadZeroAfterUnread);
   T.Run('BufReader zero size', @TestBufReaderZeroSize);
   T.Run('BufWriter zero size', @TestBufWriterZeroSize);
   T.Run('ReadAtLeast min>count', @TestReadAtLeastMinGtCount);
@@ -775,6 +808,7 @@ begin
   T.Run('Scanner CRLF', @TestScannerCRLF);
   T.Run('Scanner no trailing newline', @TestScannerNoTrailingNewline);
   T.Run('Scanner empty', @TestScannerEmpty);
+  T.Run('Scanner empty lines', @TestScannerEmptyLines);
 
   T.Summary;
 end.

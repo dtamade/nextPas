@@ -135,6 +135,8 @@ begin
       LData := System.Copy(FBuf, FStart, FEnd - FStart);
       if FSplit(LData, FEOF, LAdvance, FToken) then
       begin
+        if LAdvance = 0 then
+          LAdvance := SizeUInt(Length(LData));
         Inc(FStart, LAdvance);
         Result := True;
         Exit;
@@ -169,6 +171,8 @@ begin
         LData := System.Copy(FBuf, FStart, FEnd - FStart);
         if FSplit(LData, True, LAdvance, FToken) then
         begin
+          if LAdvance = 0 then
+            LAdvance := SizeUInt(Length(LData));
           Inc(FStart, LAdvance);
           Result := True;
           Exit;

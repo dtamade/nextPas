@@ -42,10 +42,10 @@ var
   LReaderFrom: IReaderFrom;
   LWriterTo: IWriterTo;
 begin
-  if Supports(ADst, IReaderFrom, LReaderFrom) then
-    Exit(LReaderFrom.ReadFrom(ASrc));
   if Supports(ASrc, IWriterTo, LWriterTo) then
     Exit(LWriterTo.WriteTo(ADst));
+  if Supports(ADst, IReaderFrom, LReaderFrom) then
+    Exit(LReaderFrom.ReadFrom(ASrc));
   Result := 0;
   repeat
     LRead := ASrc.Read(LBuf[0], COPY_BUF_SIZE);
