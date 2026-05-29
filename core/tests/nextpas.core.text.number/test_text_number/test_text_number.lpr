@@ -215,8 +215,8 @@ begin
   T.Run('ParseUInt64', @TestParseUInt64);
   T.Run('ViewToInt64', @TestViewToInt);
   T.Run('digit pairs 0-999', @TestDigitPairsCorrectness);
-  //T.Run('FloatToBuffer', @TestFloatToBuffer);
+  T.Run('FloatToBuffer', @TestFloatToBuffer);
   T.Run('ParseDouble', @TestParseDouble);
-  //T.Run('float round-trip', @TestFloatRoundTrip);
+  T.Run('float round-trip', @TestFloatRoundTrip);
   T.Summary;
 end.

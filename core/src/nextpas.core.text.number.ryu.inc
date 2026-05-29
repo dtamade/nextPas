@@ -1,6 +1,5 @@
-{ Ryu algorithm: double to shortest decimal string }
-{ Strict port of Ulf Adams' reference implementation (ryu/d2s.c) }
-{ https://github.com/ulfjack/ryu }
+{ Schubfach algorithm: double to shortest decimal string }
+{ Port of yyjson's f64_bin_to_dec (Raffaello Giulietti, 2022) }
 
 type
   TRyuDecimal = record
@@ -8,194 +7,88 @@ type
     Exponent: Int32;
   end;
 
-function RyuLog10Pow2(const AE: Int32): Int32; inline;
-begin
-  Result := (AE * 78913) shr 18;
-end;
-
-function RyuLog10Pow5(const AE: Int32): Int32; inline;
-begin
-  Result := (AE * 732923) shr 20;
-end;
-
-function RyuLog2Pow5(const AE: Int32): Int32; inline;
-begin
-  Result := (AE * 1217359) shr 19;
-end;
-
-function RyuPow5Factor(AValue: UInt64): Int32;
-begin
-  Result := 0;
-  while True do
-  begin
-    if AValue = 0 then Exit(0);
-    if (AValue mod 5) <> 0 then Exit;
-    AValue := AValue div 5;
-    Inc(Result);
-  end;
-end;
-
-function RyuMultipleOfPow5(const AValue: UInt64; const AP: Int32): Boolean; inline;
-begin
-  Result := RyuPow5Factor(AValue) >= AP;
-end;
-
-function RyuMultipleOfPow2(const AValue: UInt64; const AP: Int32): Boolean; inline;
-begin
-  Result := (AValue and ((UInt64(1) shl AP) - 1)) = 0;
-end;
-
-function RyuMulShiftAll64(const AM: UInt64; const AMul: TPow10Entry;
-  const AShift: Int32; out AVp, AVm: UInt64; const AMmShift: Int32): UInt64;
+function RoundToOdd(const AHi, ALo, ACp: UInt64): UInt64;
 var
-  LHi0, LLo0, LHi1, LLo1: UInt64;
-  LMid, LHi: UInt64;
+  LXHi, LXLo, LYHi, LYLo: UInt64;
 begin
-  UMul128(AM * 4, AMul.Hi, LHi1, LLo1);
-  UMul128(AM * 4, AMul.Lo, LHi0, LLo0);
-  LMid := LHi0 + LLo1;
-  LHi := LHi1 + Ord(LMid < LHi0);
-
-  Result := (LHi shl (64 - (AShift - 64))) or (LMid shr (AShift - 64));
-
-  UMul128((AM * 4 + 2), AMul.Hi, LHi1, LLo1);
-  UMul128((AM * 4 + 2), AMul.Lo, LHi0, LLo0);
-  LMid := LHi0 + LLo1;
-  LHi := LHi1 + Ord(LMid < LHi0);
-  AVp := (LHi shl (64 - (AShift - 64))) or (LMid shr (AShift - 64));
-
-  UMul128((AM * 4 - 1 - AMmShift), AMul.Hi, LHi1, LLo1);
-  UMul128((AM * 4 - 1 - AMmShift), AMul.Lo, LHi0, LLo0);
-  LMid := LHi0 + LLo1;
-  LHi := LHi1 + Ord(LMid < LHi0);
-  AVm := (LHi shl (64 - (AShift - 64))) or (LMid shr (AShift - 64));
+  UMul128(ACp, ALo, LXHi, LXLo);
+  UMul128(ACp, AHi, LYHi, LYLo);
+  Inc(LYLo, LXHi);
+  if LYLo < LXHi then
+    Inc(LYHi);
+  Result := LYHi or Ord(LYLo > 1);
 end;
 
-function RyuD2D(const AIeeeM2: UInt64; const AIeeeE2: Int32): TRyuDecimal;
+function SchubfachD2D(const ASigRaw: UInt64; const AExpRaw: UInt32;
+  const ASigBin: UInt64; const AExpBin: Int32): TRyuDecimal;
 var
-  LM2: UInt64;
-  LE2: Int32;
-  LMmShift: Int32;
-  LVr, LVp, LVm: UInt64;
-  LE10: Int32;
-  LQ: Int32;
-  LK, LI, LJ: Int32;
-  LVmIsTrailingZeros, LVrIsTrailingZeros: Boolean;
-  LLastRemovedDigit: Byte;
-  LRemoved: Int32;
-  LOutput: UInt64;
+  LIsEven, LRegularSpacing, LUInside, LWInside, LRoundUp: Boolean;
+  LCbl, LCb, LCbr: UInt64;
+  LK, LH, LExp10: Int32;
+  LPow10Hi, LPow10Lo: UInt64;
+  LVbl, LVb, LVbr: UInt64;
+  LLower, LUpper, LMid: UInt64;
+  LS, LSp: UInt64;
+  LIdx: Int32;
 begin
-  if AIeeeE2 = 0 then
+  LIsEven := (ASigBin and 1) = 0;
+  LRegularSpacing := (ASigRaw = 0) and (AExpRaw > 1);
+
+  LCbl := 4 * ASigBin - 2 + Ord(LRegularSpacing);
+  LCb := 4 * ASigBin;
+  LCbr := 4 * ASigBin + 2;
+
+  LK := Int32((Int64(AExpBin) * 315653 - Ord(LRegularSpacing) * 131237) shr 20);
+  LExp10 := -LK;
+  LH := AExpBin + ((LExp10 * 217707) shr 16) + 1;
+
+  LIdx := LExp10 - POW10_MIN_EXP;
+  LPow10Hi := POW10_TABLE[LIdx].Hi;
+  LPow10Lo := POW10_TABLE[LIdx].Lo;
+  if (LExp10 < -55) or (LExp10 > 55) then
+    Inc(LPow10Lo);
+
+  LVbl := RoundToOdd(LPow10Hi, LPow10Lo, LCbl shl LH);
+  LVb := RoundToOdd(LPow10Hi, LPow10Lo, LCb shl LH);
+  LVbr := RoundToOdd(LPow10Hi, LPow10Lo, LCbr shl LH);
+
+  LLower := LVbl + Ord(not LIsEven);
+  LUpper := LVbr - Ord(not LIsEven);
+
+  LS := LVb div 4;
+  if LS >= 10 then
   begin
-    LE2 := 1 - DOUBLE_BIAS - DOUBLE_MANTISSA_BITS - 2;
-    LM2 := AIeeeM2;
-  end
-  else
-  begin
-    LE2 := AIeeeE2 - DOUBLE_BIAS - DOUBLE_MANTISSA_BITS - 2;
-    LM2 := AIeeeM2 or DOUBLE_HIDDEN_BIT;
+    LSp := LS div 10;
+    LUInside := LLower <= 40 * LSp;
+    LWInside := LUpper >= 40 * LSp + 40;
+    if LUInside <> LWInside then
+    begin
+      Result.Mantissa := LSp + Ord(LWInside);
+      Result.Exponent := LK + 1;
+      Exit;
+    end;
   end;
 
-  LMmShift := Ord((AIeeeM2 <> 0) or (AIeeeE2 <= 1));
+  LUInside := LLower <= 4 * LS;
+  LWInside := LUpper >= 4 * LS + 4;
 
-  LVmIsTrailingZeros := False;
-  LVrIsTrailingZeros := False;
+  LMid := 4 * LS + 2;
+  LRoundUp := (LVb > LMid) or ((LVb = LMid) and ((LS and 1) <> 0));
 
-  if LE2 >= 0 then
-  begin
-    LQ := RyuLog10Pow2(LE2);
-    if LQ > 21 then LQ := 21;
-    LE10 := LQ;
-    LK := 122 + RyuLog2Pow5(LQ) - 1;
-    LI := -LE2 + LQ + LK;
-    LVr := RyuMulShiftAll64(LM2, POW10_TABLE[LQ - POW10_MIN_EXP], LI, LVp, LVm, LMmShift);
-
-    if LQ <= 21 then
-    begin
-      if (LM2 mod 5) = 0 then
-        LVrIsTrailingZeros := RyuMultipleOfPow5(LM2, LQ)
-      else
-        LVmIsTrailingZeros := RyuMultipleOfPow5(LM2 - 1 - LMmShift, LQ);
-    end;
-  end
+  if LUInside <> LWInside then
+    Result.Mantissa := LS + Ord(LWInside)
   else
-  begin
-    LQ := RyuLog10Pow5(-LE2);
-    if LQ > 1 then Dec(LQ);
-    if LQ < 0 then LQ := 0;
-    LE10 := LQ + LE2;
-    LI := -LE2 - LQ;
-    LK := RyuLog2Pow5(LI) - 122;
-    LJ := LQ - LK;
-    LVr := RyuMulShiftAll64(LM2, POW10_TABLE[LI - POW10_MIN_EXP], LJ + 122, LVp, LVm, LMmShift);
-
-    if LQ <= 1 then
-    begin
-      LVrIsTrailingZeros := True;
-      if LMmShift = 1 then
-        LVmIsTrailingZeros := True
-      else
-        Dec(LVp);
-    end
-    else if LQ < 63 then
-      LVrIsTrailingZeros := RyuMultipleOfPow2(LM2, LQ);
-  end;
-
-  LLastRemovedDigit := 0;
-  LRemoved := 0;
-
-  if LVmIsTrailingZeros or LVrIsTrailingZeros then
-  begin
-    while True do
-    begin
-      if LVp div 10 <= LVm div 10 then Break;
-      LVmIsTrailingZeros := LVmIsTrailingZeros and ((LVm mod 10) = 0);
-      LVrIsTrailingZeros := LVrIsTrailingZeros and (LLastRemovedDigit = 0);
-      LLastRemovedDigit := Byte(LVr mod 10);
-      LVr := LVr div 10;
-      LVp := LVp div 10;
-      LVm := LVm div 10;
-      Inc(LRemoved);
-    end;
-    if LVmIsTrailingZeros then
-      while (LVm mod 10) = 0 do
-      begin
-        LVrIsTrailingZeros := LVrIsTrailingZeros and (LLastRemovedDigit = 0);
-        LLastRemovedDigit := Byte(LVr mod 10);
-        LVr := LVr div 10;
-        LVp := LVp div 10;
-        LVm := LVm div 10;
-        Inc(LRemoved);
-      end;
-    if LVrIsTrailingZeros and (LLastRemovedDigit = 5) and ((LVr mod 2) = 0) then
-      LLastRemovedDigit := 4;
-    LOutput := LVr + Ord((LVr = LVm) and ((not LVmIsTrailingZeros) or ((LVr mod 2) <> 0)));
-    if LLastRemovedDigit >= 5 then
-      Inc(LOutput);
-  end
-  else
-  begin
-    while LVp div 10 > LVm div 10 do
-    begin
-      LLastRemovedDigit := Byte(LVr mod 10);
-      LVr := LVr div 10;
-      LVp := LVp div 10;
-      LVm := LVm div 10;
-      Inc(LRemoved);
-    end;
-    LOutput := LVr + Ord(LLastRemovedDigit >= 5);
-  end;
-
-  Result.Mantissa := LOutput;
-  Result.Exponent := LE10 + LRemoved;
+    Result.Mantissa := LS + Ord(LRoundUp);
+  Result.Exponent := LK;
 end;
 
 function FloatToBuffer(const AValue: Double; const ADst: PAnsiChar): Int32;
 var
   LBits: UInt64 absolute AValue;
   LSign: Boolean;
-  LIeeeE2: Int32;
-  LIeeeM2: UInt64;
+  LExpRaw: UInt32;
+  LSigRaw, LSigBin: UInt64;
+  LExpBin: Int32;
   LDec: TRyuDecimal;
   LPos: Int32;
   LMant: UInt64;
@@ -224,11 +117,29 @@ begin
     Exit(1);
   end;
 
-  LIeeeE2 := Int32((LBits shr 52) and $7FF);
-  LIeeeM2 := LBits and DOUBLE_MANTISSA_MASK;
-  LDec := RyuD2D(LIeeeM2, LIeeeE2);
+  LSigRaw := LBits and DOUBLE_MANTISSA_MASK;
+  LExpRaw := UInt32((LBits shr 52) and $7FF);
+
+  if LExpRaw = 0 then
+  begin
+    LSigBin := LSigRaw;
+    LExpBin := 1 - 1023 - 52;
+  end
+  else
+  begin
+    LSigBin := LSigRaw or DOUBLE_HIDDEN_BIT;
+    LExpBin := Int32(LExpRaw) - 1023 - 52;
+  end;
+
+  LDec := SchubfachD2D(LSigRaw, LExpRaw, LSigBin, LExpBin);
 
   LMant := LDec.Mantissa;
+  while (LMant > 0) and ((LMant mod 10) = 0) do
+  begin
+    LMant := LMant div 10;
+    Inc(LDec.Exponent);
+  end;
+
   LDigitCount := 0;
   while LMant > 0 do
   begin
@@ -259,15 +170,30 @@ begin
       Inc(LPos);
     end;
   end
-  else if (LDecPt >= 1) and (LDecPt <= LDigitCount) then
+  else if (LDecPt >= 1) and (LDecPt < LDigitCount) then
   begin
     for I := LDigitCount - 1 downto 0 do
     begin
-      if I = LDigitCount - 1 - LDecPt then
+      if (LDigitCount - 1 - I) = LDecPt then
       begin
         ADst[LPos] := '.';
         Inc(LPos);
       end;
+      ADst[LPos] := LDigits[I];
+      Inc(LPos);
+    end;
+  end
+  else if (LDecPt >= -3) and (LDecPt <= 0) then
+  begin
+    ADst[LPos] := '0'; Inc(LPos);
+    ADst[LPos] := '.'; Inc(LPos);
+    for I := 1 to -LDecPt do
+    begin
+      ADst[LPos] := '0';
+      Inc(LPos);
+    end;
+    for I := LDigitCount - 1 downto 0 do
+    begin
       ADst[LPos] := LDigits[I];
       Inc(LPos);
     end;
@@ -294,11 +220,6 @@ begin
       ADst[LPos] := '-';
       Inc(LPos);
       LDecPt := -LDecPt;
-    end
-    else
-    begin
-      ADst[LPos] := '+';
-      Inc(LPos);
     end;
     if LDecPt >= 100 then
     begin
