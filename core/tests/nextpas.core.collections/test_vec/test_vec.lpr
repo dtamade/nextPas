@@ -718,6 +718,62 @@ begin
   end;
 end;
 
+procedure TestPushPointerBulk;
+var
+  LV: TIntVec;
+  LSrc: array[0..4] of Integer;
+begin
+  LSrc[0] := 10; LSrc[1] := 20; LSrc[2] := 30; LSrc[3] := 40; LSrc[4] := 50;
+  LV := TIntVec.Create;
+  try
+    LV.Push(@LSrc[0], 5);
+    CheckEqual(Int64(5), Int64(LV.Count), 'count');
+    CheckEqual(Int64(10), Int64(LV.Get(0)), '[0]');
+    CheckEqual(Int64(30), Int64(LV.Get(2)), '[2]');
+    CheckEqual(Int64(50), Int64(LV.Get(4)), '[4]');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestInsertPointerBulk;
+var
+  LV: TIntVec;
+  LSrc: array[0..1] of Integer;
+begin
+  LSrc[0] := 77; LSrc[1] := 88;
+  LV := TIntVec.Create;
+  try
+    LV.Push([1, 2, 3]);
+    LV.Insert(1, @LSrc[0], 2);
+    CheckEqual(Int64(5), Int64(LV.Count), 'count');
+    CheckEqual(Int64(1), Int64(LV.Get(0)), '[0]');
+    CheckEqual(Int64(77), Int64(LV.Get(1)), 'inserted[0]');
+    CheckEqual(Int64(88), Int64(LV.Get(2)), 'inserted[1]');
+    CheckEqual(Int64(2), Int64(LV.Get(3)), 'shifted[0]');
+    CheckEqual(Int64(3), Int64(LV.Get(4)), 'shifted[1]');
+  finally
+    LV.Free;
+  end;
+end;
+
+procedure TestDeleteMulti;
+var
+  LV: TIntVec;
+begin
+  LV := TIntVec.Create;
+  try
+    LV.Push([10, 20, 30, 40, 50]);
+    LV.Delete(1, 2);
+    CheckEqual(Int64(3), Int64(LV.Count), 'count');
+    CheckEqual(Int64(10), Int64(LV.Get(0)), '[0]');
+    CheckEqual(Int64(40), Int64(LV.Get(1)), '[1]');
+    CheckEqual(Int64(50), Int64(LV.Get(2)), '[2]');
+  finally
+    LV.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.vec');
   T.Run('Create', @TestCreate);
@@ -764,5 +820,8 @@ begin
   T.Run('RemoveCopyAt', @TestRemoveCopyAt);
   T.Run('SwapRemoveCopyAt', @TestSwapRemoveCopyAt);
   T.Run('Sort adversarial inputs', @TestSortAdversarial);
+  T.Run('Push(Pointer, Count) bulk', @TestPushPointerBulk);
+  T.Run('Insert(Index, Pointer, Count) bulk', @TestInsertPointerBulk);
+  T.Run('Delete(Index, Count) multi', @TestDeleteMulti);
   T.Summary;
 end.
