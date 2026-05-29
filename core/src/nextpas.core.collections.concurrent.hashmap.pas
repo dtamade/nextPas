@@ -1,0 +1,177 @@
+unit nextpas.core.collections.concurrent.hashmap;
+
+{$I nextpas.core.settings.inc}
+
+interface
+
+uses
+  SysUtils,
+  nextpas.core.base,
+  nextpas.core.sync.rwlock,
+  nextpas.core.sync.intf,
+  nextpas.core.collections.hashmap.swiss;
+
+const
+  CONCURRENT_SEGMENT_COUNT = 16;
+  CONCURRENT_SEGMENT_MASK = CONCURRENT_SEGMENT_COUNT - 1;
+
+type
+  generic TConcurrentHashMap<K, V> = class
+  public type
+    THashFunc = function(const AKey: K): UInt32;
+    TEqualsFunc = function(const A, B: K): Boolean;
+  private type
+    TSegmentTable = specialize TSwissTable<K, V>;
+  private
+    FSegmentLocks: array[0..CONCURRENT_SEGMENT_COUNT - 1] of IRWLock;
+    FSegments: array[0..CONCURRENT_SEGMENT_COUNT - 1] of TSegmentTable;
+    FHash: THashFunc;
+    FEquals: TEqualsFunc;
+
+    function SegmentIndex(const AKey: K): SizeUInt;
+  public
+    constructor Create(AHash: THashFunc = nil; AEquals: TEqualsFunc = nil;
+      AInitialCapacityPerSegment: SizeUInt = 0);
+    destructor Destroy; override;
+
+    function TryGetValue(const AKey: K; out AValue: V): Boolean;
+    function ContainsKey(const AKey: K): Boolean;
+    procedure Put(const AKey: K; const AValue: V);
+    function Remove(const AKey: K): Boolean;
+    function GetOrInsert(const AKey: K; const ADefault: V): V;
+    procedure Clear;
+
+    function GetCount: SizeUInt;
+    property Count: SizeUInt read GetCount;
+  end;
+
+implementation
+
+{ TConcurrentHashMap }
+
+function TConcurrentHashMap.SegmentIndex(const AKey: K): SizeUInt;
+var LHash: UInt32;
+begin
+  LHash := FHash(AKey);
+  Result := (LHash shr 28) and CONCURRENT_SEGMENT_MASK;
+end;
+
+constructor TConcurrentHashMap.Create(AHash: THashFunc; AEquals: TEqualsFunc;
+  AInitialCapacityPerSegment: SizeUInt);
+var i: Integer;
+begin
+  inherited Create;
+  FHash := AHash;
+  FEquals := AEquals;
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i] := TRWLock.Create;
+    FSegments[i] := TSegmentTable.Create(AInitialCapacityPerSegment);
+  end;
+end;
+
+destructor TConcurrentHashMap.Destroy;
+var i: Integer;
+begin
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegments[i].Free;
+    FSegmentLocks[i] := nil;
+  end;
+  inherited Destroy;
+end;
+
+function TConcurrentHashMap.TryGetValue(const AKey: K; out AValue: V): Boolean;
+var LSeg: SizeUInt;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireRead;
+  try
+    Result := FSegments[LSeg].TryGetValue(AKey, AValue);
+  finally
+    FSegmentLocks[LSeg].ReleaseRead;
+  end;
+end;
+
+function TConcurrentHashMap.ContainsKey(const AKey: K): Boolean;
+var LSeg: SizeUInt;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireRead;
+  try
+    Result := FSegments[LSeg].ContainsKey(AKey);
+  finally
+    FSegmentLocks[LSeg].ReleaseRead;
+  end;
+end;
+
+procedure TConcurrentHashMap.Put(const AKey: K; const AValue: V);
+var LSeg: SizeUInt;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    FSegments[LSeg].Put(AKey, AValue);
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
+function TConcurrentHashMap.Remove(const AKey: K): Boolean;
+var LSeg: SizeUInt;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    Result := FSegments[LSeg].Remove(AKey);
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
+function TConcurrentHashMap.GetOrInsert(const AKey: K; const ADefault: V): V;
+var LSeg: SizeUInt;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    if not FSegments[LSeg].TryGetValue(AKey, Result) then
+    begin
+      FSegments[LSeg].Put(AKey, ADefault);
+      Result := ADefault;
+    end;
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
+procedure TConcurrentHashMap.Clear;
+var i: Integer;
+begin
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i].AcquireWrite;
+    try
+      FSegments[i].Clear;
+    finally
+      FSegmentLocks[i].ReleaseWrite;
+    end;
+  end;
+end;
+
+function TConcurrentHashMap.GetCount: SizeUInt;
+var i: Integer;
+begin
+  Result := 0;
+  for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
+  begin
+    FSegmentLocks[i].AcquireRead;
+    try
+      Result := Result + FSegments[i].GetCount;
+    finally
+      FSegmentLocks[i].ReleaseRead;
+    end;
+  end;
+end;
+
+end.
