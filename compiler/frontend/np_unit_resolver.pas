@@ -506,6 +506,7 @@ var
   HasExistingUnit: Boolean;
   DependencyFileId: TSourceFileId;
   DependencyLexer: TLexerResult;
+  DependencyDefines: TDefineTable;
   DependencyPP: TPreprocessor;
   DependencyGreenTree: TGreenTree;
   DependencyAst: TAstFacade;
@@ -569,7 +570,9 @@ begin
     FDiagnostics,
     DependencyFileId
   );
-  DependencyPP := TPreprocessor.Create(TDefineTable.Create, True, nil);
+  DependencyDefines := TDefineTable.Create;
+  DependencyDefines.SeedFPCDefines;
+  DependencyPP := TPreprocessor.Create(DependencyDefines, True, nil);
   try
     DependencyPP.Process(DependencyLexer);
     DependencyLexer.Free;
