@@ -41,7 +41,8 @@ type
     jtkEndArray,
     jtkKey,
     jtkString,
-    jtkNumber,
+    jtkInt,
+    jtkFloat,
     jtkBool,
     jtkNull,
     jtkError

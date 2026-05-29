@@ -103,7 +103,7 @@ begin
       FError.Message := TStringView.Create(PAnsiChar('invalid float'), 13);
       Exit(False);
     end;
-    FTokenKind := jtkNumber;
+    FTokenKind := jtkFloat;
   end
   else
   begin
@@ -114,10 +114,10 @@ begin
         FError.Message := TStringView.Create(PAnsiChar('number overflow'), 15);
         Exit(False);
       end;
-      FTokenKind := jtkNumber;
+      FTokenKind := jtkFloat;
     end
     else
-      FTokenKind := jtkNumber;
+      FTokenKind := jtkInt;
   end;
   FTokenStr := LNumView;
   FInput.Advance(LNumLen);
@@ -142,6 +142,12 @@ LAgain:
   case LCh of
     Ord('{'):
     begin
+      if FDepth >= 512 then
+      begin
+        FTokenKind := jtkError;
+        FError.Message := TStringView.Create(PAnsiChar('max depth exceeded'), 18);
+        Exit(False);
+      end;
       FTokenKind := jtkBeginObject;
       FInput.Advance(1);
       Inc(FDepth);
@@ -154,6 +160,12 @@ LAgain:
     end;
     Ord('['):
     begin
+      if FDepth >= 512 then
+      begin
+        FTokenKind := jtkError;
+        FError.Message := TStringView.Create(PAnsiChar('max depth exceeded'), 18);
+        Exit(False);
+      end;
       FTokenKind := jtkBeginArray;
       FInput.Advance(1);
       Inc(FDepth);

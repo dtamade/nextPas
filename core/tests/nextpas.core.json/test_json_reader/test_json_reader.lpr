@@ -18,7 +18,7 @@ begin
   Check(R.Next, 'begin obj'); Check(R.TokenKind = jtkBeginObject, 'is {');
   Check(R.Next, 'key a'); Check(R.TokenKind = jtkString, 'key is str');
   CheckEqual('a', R.TokenStr.ToString, 'key=a');
-  Check(R.Next, 'val 1'); Check(R.TokenKind = jtkNumber, 'is num');
+  Check(R.Next, 'val 1'); Check(R.TokenKind = jtkInt, 'is num');
   CheckEqual(Int64(1), R.TokenInt, 'val=1');
   Check(R.Next, 'key b'); CheckEqual('b', R.TokenStr.ToString, 'key=b');
   Check(R.Next, 'val hi'); CheckEqual('hi', R.TokenStr.ToString, 'val=hi');

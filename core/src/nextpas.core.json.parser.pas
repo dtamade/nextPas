@@ -157,6 +157,12 @@ function TParserState.ParseString: UInt32;
 var
   LEnd: PtrInt;
   LIdx: UInt32;
+  LRaw: TStringView;
+  LHasEscape: Boolean;
+  LBuf: PAnsiChar;
+  LDecLen: SizeUInt;
+  LErr: TUnescapeError;
+  I: SizeUInt;
 begin
   LEnd := JsonFindStringEnd(Cur.Data + 1, Cur.Len - 1);
   if LEnd < 0 then
@@ -164,9 +170,24 @@ begin
     SetError('unterminated string', 19);
     Exit(JSON_NODE_NONE);
   end;
+  LRaw := TStringView.Create(Cur.Data + 1, SizeUInt(LEnd));
+  LHasEscape := False;
+  for I := 0 to LRaw.Len - 1 do
+    if LRaw.Data[I] = '\' then
+    begin
+      LHasEscape := True;
+      Break;
+    end;
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkString;
-  Doc^.FNodes[LIdx].Str := TStringView.Create(Cur.Data + 1, SizeUInt(LEnd));
+  if LHasEscape then
+  begin
+    LBuf := Doc^.FAllocator.Allocate(LRaw.Len);
+    LDecLen := JsonUnescapeToBuffer(LRaw.Data, LRaw.Len, LBuf, LErr);
+    Doc^.FNodes[LIdx].Str := TStringView.Create(LBuf, LDecLen);
+  end
+  else
+    Doc^.FNodes[LIdx].Str := LRaw;
   Advance(SizeUInt(LEnd) + 2);
   Result := LIdx;
 end;
