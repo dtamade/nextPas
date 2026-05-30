@@ -290,7 +290,8 @@ begin
   Result.NumCaptures := ANumCaptures;
   SetLength(Result.GroupNames, C.NumGroupNames);
   if C.NumGroupNames > 0 then
-    Move(C.GroupNames[0], Result.GroupNames[0], C.NumGroupNames * SizeOf(TGroupName));
+    for i := 0 to C.NumGroupNames - 1 do
+      Result.GroupNames[i] := C.GroupNames[i];
   Result.LiteralPrefix := '';
   Result.LiteralPrefixLen := 0;
 

@@ -266,6 +266,59 @@ begin
   Check(R.IsMatch('f(x)'), 'escaped paren');
 end;
 
+procedure TestStartClassPrefilter;
+var R: TRegex; M: TMatch; MA: TMatchArray; longInput: string; i: Integer;
+begin
+  // Build a long input with target near the end
+  SetLength(longInput, 5000);
+  for i := 1 to 5000 do longInput[i] := Chr(Ord('a') + (i mod 26));
+  Move('99bottles'[1], longInput[4990], 9);
+
+  // \d+ with start class {0-9} should skip all alpha chars
+  R := TRegex.Compile('\d+');
+  M := R.Find(longInput);
+  Check(M.Found, 'digit find in long input');
+  CheckEqual('99', M.Value(longInput), 'digit value');
+
+  // Alternation with start class {c,d,b,f}
+  R := TRegex.Compile('cat|dog|bird|fish');
+  Check(not R.IsMatch('aaaa eeee gggg'), 'alt miss');
+  Check(R.IsMatch('I have a cat'), 'alt cat');
+  Check(R.IsMatch('I have a dog'), 'alt dog');
+  Check(R.IsMatch('I have a bird'), 'alt bird');
+  Check(R.IsMatch('I have a fish'), 'alt fish');
+
+  // \w+ start class should match word chars
+  R := TRegex.Compile('\w+');
+  MA := R.FindAll('  hello  world  ');
+  CheckEqual(Int64(2), Int64(Length(MA)), 'word findall count');
+  CheckEqual('hello', MA[0].Value('  hello  world  '), 'word first');
+  CheckEqual('world', MA[1].Value('  hello  world  '), 'word second');
+
+  // Pattern starting with char class range
+  R := TRegex.Compile('[A-Z][a-z]+');
+  M := R.Find('hello World');
+  Check(M.Found, 'upper+lower find');
+  CheckEqual('World', M.Value('hello World'), 'upper+lower value');
+end;
+
+procedure TestNamedGroups;
+var R: TRegex; M: TMatch; G: TGroup;
+begin
+  R := TRegex.Compile('(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})');
+  M := R.Find('date: 2026-05-31');
+  Check(M.Found, 'named found');
+  G := R.GroupByName(M, 'year');
+  Check(G.Found, 'year found');
+  CheckEqual('2026', G.Value('date: 2026-05-31'), 'year value');
+  G := R.GroupByName(M, 'month');
+  CheckEqual('05', G.Value('date: 2026-05-31'), 'month value');
+  G := R.GroupByName(M, 'day');
+  CheckEqual('31', G.Value('date: 2026-05-31'), 'day value');
+  CheckEqual(Int64(3), Int64(R.NumCaptures), 'num captures');
+  CheckEqual(Int64(-1), Int64(R.GroupIndexByName('nonexist')), 'bad name');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -290,5 +343,7 @@ begin
   T.Run('Non-capturing group', @TestNonCapturingGroup);
   T.Run('Edge cases', @TestEdgeCases);
   T.Run('Escapes', @TestEscapes);
+  T.Run('StartClass prefilter', @TestStartClassPrefilter);
+  T.Run('Named groups', @TestNamedGroups);
   T.Summary;
 end.
