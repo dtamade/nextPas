@@ -204,28 +204,20 @@ begin
 {$IFDEF HAS_AVX2}
   while LPos + 32 <= ALen do
   begin
-    LWsMask32 := Vec32CmpEq(@AData[LPos], $20) or Vec32CmpEq(@AData[LPos], $09) or
-                 Vec32CmpEq(@AData[LPos], $0A) or Vec32CmpEq(@AData[LPos], $0D);
-    if LWsMask32 = MASK32_ALL_SET then
+    LWsMask32 := Vec32CmpGtU(@AData[LPos], $20);
+    if LWsMask32 = MASK32_NONE_SET then
       Inc(LPos, 32)
     else
-    begin
-      LWsMask32 := (not LWsMask32) and MASK32_ALL_SET;
       Exit(LPos + SizeUInt(Vec32Ctz(LWsMask32)));
-    end;
   end;
 {$ENDIF}
   while LPos + 16 <= ALen do
   begin
-    LWsMask16 := Vec16CmpEq(@AData[LPos], $20) or Vec16CmpEq(@AData[LPos], $09) or
-                 Vec16CmpEq(@AData[LPos], $0A) or Vec16CmpEq(@AData[LPos], $0D);
-    if LWsMask16 = MASK16_ALL_SET then
+    LWsMask16 := Vec16CmpGtU(@AData[LPos], $20);
+    if LWsMask16 = MASK16_NONE_SET then
       Inc(LPos, 16)
     else
-    begin
-      LWsMask16 := (not LWsMask16) and MASK16_ALL_SET;
       Exit(LPos + SizeUInt(Vec16Ctz(LWsMask16)));
-    end;
   end;
   while LPos < ALen do
   begin
@@ -264,8 +256,20 @@ begin
   if (LPos < ALen) and (AData[LPos] = '.') then
   begin
     Inc(LPos);
-    while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-      Inc(LPos);
+    while LPos + 16 <= ALen do
+    begin
+      LMask := Vec16CmpRange(@AData[LPos], Ord('0'), Ord('9'));
+      if LMask = MASK16_ALL_SET then
+        Inc(LPos, 16)
+      else
+      begin
+        Inc(LPos, SizeUInt(Vec16Ctz(not LMask and MASK16_ALL_SET)));
+        Break;
+      end;
+    end;
+    if LPos + 16 > ALen then
+      while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+        Inc(LPos);
   end;
   if LPos < ALen then
   begin
@@ -279,8 +283,20 @@ begin
         if (LCh = Ord('+')) or (LCh = Ord('-')) then
           Inc(LPos);
       end;
-      while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
-        Inc(LPos);
+      while LPos + 16 <= ALen do
+      begin
+        LMask := Vec16CmpRange(@AData[LPos], Ord('0'), Ord('9'));
+        if LMask = MASK16_ALL_SET then
+          Inc(LPos, 16)
+        else
+        begin
+          Inc(LPos, SizeUInt(Vec16Ctz(not LMask and MASK16_ALL_SET)));
+          Break;
+        end;
+      end;
+      if LPos + 16 > ALen then
+        while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
+          Inc(LPos);
     end;
   end;
   Result := LPos;

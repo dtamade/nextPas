@@ -143,6 +143,21 @@ begin
   B.Done;
 end;
 
+procedure TestLongKeyEscape;
+var B: TStringBuilder; W: TJsonWriter;
+const
+  LONG_KEY = 'abcdefghijklmnop"qrstuvwxyz012345';
+  EXPECTED = '{"abcdefghijklmnop\"qrstuvwxyz012345":1}';
+begin
+  B.Init(128); W.Init(B);
+  W.BeginObject;
+  W.Key(PAnsiChar(LONG_KEY), Length(LONG_KEY));
+  W.Int(1);
+  W.EndObject;
+  CheckEqual(EXPECTED, B.ToString, 'long key quote escaped');
+  B.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.writer');
   T.Run('empty object', @TestEmptyObject);
@@ -156,5 +171,6 @@ begin
   T.Run('int64 min', @TestNegativeInt);
   T.Run('raw value', @TestRawValue);
   T.Run('complex nesting', @TestComplexNesting);
+  T.Run('long key escape', @TestLongKeyEscape);
   T.Summary;
 end.

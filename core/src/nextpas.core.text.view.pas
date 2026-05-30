@@ -177,15 +177,33 @@ end;
 
 function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean;
 var
-  I: SizeUInt;
+  LPos: SizeUInt;
+  LBufA, LBufB: array[0..15] of Byte;
+  LMaskA, LMaskB: TMask16;
 begin
   if FLen <> AOther.FLen then
     Exit(False);
   if FLen = 0 then
     Exit(True);
-  for I := 0 to FLen - 1 do
-    if ToLower(Byte(FData[I])) <> ToLower(Byte(AOther.FData[I])) then
+  LPos := 0;
+  while LPos + 16 <= FLen do
+  begin
+    Move(FData[LPos], LBufA[0], 16);
+    Move(AOther.FData[LPos], LBufB[0], 16);
+    LMaskA := Vec16CmpRange(@LBufA[0], Ord('A'), Ord('Z'));
+    Vec16AddWhere(@LBufA[0], LMaskA, 32);
+    LMaskB := Vec16CmpRange(@LBufB[0], Ord('A'), Ord('Z'));
+    Vec16AddWhere(@LBufB[0], LMaskB, 32);
+    if Vec16CmpEq2(@LBufA[0], @LBufB[0]) <> MASK16_ALL_SET then
       Exit(False);
+    Inc(LPos, 16);
+  end;
+  while LPos < FLen do
+  begin
+    if ToLower(Byte(FData[LPos])) <> ToLower(Byte(AOther.FData[LPos])) then
+      Exit(False);
+    Inc(LPos);
+  end;
   Result := True;
 end;
 

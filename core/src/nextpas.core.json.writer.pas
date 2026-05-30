@@ -94,31 +94,39 @@ end;
 
 procedure TJsonWriter.Key(const AKey: PAnsiChar; const ALen: SizeUInt);
 var
-  LClean: Boolean;
-  I: SizeUInt;
+  LNeedsEscape: Boolean;
+  LPos: SizeUInt;
+  LMask: TMask16;
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
   FBuilder^.AppendChar('"');
-  LClean := True;
-  if ALen >= 16 then
+  LNeedsEscape := False;
+  LPos := 0;
+  while LPos + 16 <= ALen do
   begin
-    if (Vec16CmpEq(@AKey[0], Ord('"')) or Vec16CmpEq(@AKey[0], Ord('\')) or
-        Vec16CmpLtU(@AKey[0], $20)) <> MASK16_NONE_SET then
-      LClean := False;
-  end
-  else
-  begin
-    for I := 0 to ALen - 1 do
-      if (Byte(AKey[I]) < $20) or (AKey[I] = '"') or (AKey[I] = '\') then
+    LMask := Vec16CmpEq(@AKey[LPos], Ord('"')) or Vec16CmpEq(@AKey[LPos], Ord('\')) or
+             Vec16CmpLtU(@AKey[LPos], $20);
+    if LMask <> MASK16_NONE_SET then
+    begin
+      LNeedsEscape := True;
+      Break;
+    end;
+    Inc(LPos, 16);
+  end;
+  if not LNeedsEscape then
+    while LPos < ALen do
+    begin
+      if (Byte(AKey[LPos]) < $20) or (AKey[LPos] = '"') or (AKey[LPos] = '\') then
       begin
-        LClean := False;
+        LNeedsEscape := True;
         Break;
       end;
-  end;
-  if LClean then
-    FBuilder^.AppendBytes(AKey, ALen)
+      Inc(LPos);
+    end;
+  if LNeedsEscape then
+    JsonEscapeToBuilder(TStringView.Create(AKey, ALen), FBuilder^)
   else
-    JsonEscapeToBuilder(TStringView.Create(AKey, ALen), FBuilder^);
+    FBuilder^.AppendBytes(AKey, ALen);
   FBuilder^.AppendBytes('":', 2);
   FNeedComma := False;
 end;
