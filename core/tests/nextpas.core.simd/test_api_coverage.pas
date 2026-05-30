@@ -301,6 +301,139 @@ begin
   ArrayMaxF64(@src[0],@src2[0],@dst[0],4); Check(dst[0]=10.0,'Max');
 end;
 
+procedure TestF32x8ExtMath;
+var a,b,c,r: TVecF32x8; i: Integer;
+begin
+  a := VecF32x8Make(1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5);
+  r := VecF32x8Floor(a);
+  Check(r.f[0]=1.0,'F32x8Floor[0]'); Check(r.f[7]=8.0,'F32x8Floor[7]');
+  r := VecF32x8Ceil(a);
+  Check(r.f[0]=2.0,'F32x8Ceil[0]'); Check(r.f[7]=9.0,'F32x8Ceil[7]');
+  r := VecF32x8Round(a);
+  Check(r.f[0]=2.0,'F32x8Round[0]');
+  r := VecF32x8Trunc(a);
+  Check(r.f[0]=1.0,'F32x8Trunc[0]'); Check(r.f[7]=8.0,'F32x8Trunc[7]');
+  a := VecF32x8Make(-5,0,5,10,15,20,25,30);
+  b := VecF32x8Splat(0); c := VecF32x8Splat(20);
+  r := VecF32x8Clamp(a, b, c);
+  Check(r.f[0]=0,'F32x8Clamp[-5]'); Check(r.f[2]=5,'F32x8Clamp[5]'); Check(r.f[7]=20,'F32x8Clamp[30]');
+  a := VecF32x8Make(1,2,3,4,5,6,7,8); b := VecF32x8Make(10,20,30,40,50,60,70,80); c := VecF32x8Make(100,200,300,400,500,600,700,800);
+  r := VecF32x8Fma(a, b, c);
+  Check(Abs(r.f[0]-110)<1e-4,'F32x8Fma[0]'); Check(Abs(r.f[7]-1440)<1e-1,'F32x8Fma[7]');
+  r := VecF32x8Load(PSingle(@a.f[0]));
+  Check(r.f[0]=1.0,'F32x8Load'); Check(r.f[7]=8.0,'F32x8Load[7]');
+  r := VecF32x8Zero;
+  for i:=0 to 7 do Check(r.f[i]=0,'F32x8Zero['+IntToStr(i)+']');
+  r := VecF32x8Splat(3.14);
+  for i:=0 to 7 do Check(Abs(r.f[i]-3.14)<1e-5,'F32x8Splat['+IntToStr(i)+']');
+  a := VecF32x8Make(1,2,3,4,5,6,7,8);
+  VecF32x8Store(PSingle(@b.f[0]), a);
+  Check(b.f[0]=1.0,'F32x8Store[0]'); Check(b.f[7]=8.0,'F32x8Store[7]');
+end;
+
+procedure TestF64x4ExtMath;
+var a,b,c,r: TVecF64x4; i: Integer;
+begin
+  a := VecF64x4Make(1.5, 2.5, 3.5, 4.5);
+  r := VecF64x4Floor(a);
+  Check(r.d[0]=1.0,'F64x4Floor[0]'); Check(r.d[3]=4.0,'F64x4Floor[3]');
+  r := VecF64x4Ceil(a);
+  Check(r.d[0]=2.0,'F64x4Ceil[0]'); Check(r.d[3]=5.0,'F64x4Ceil[3]');
+  r := VecF64x4Round(a);
+  Check(r.d[0]=2.0,'F64x4Round[0]');
+  r := VecF64x4Trunc(a);
+  Check(r.d[0]=1.0,'F64x4Trunc[0]'); Check(r.d[3]=4.0,'F64x4Trunc[3]');
+  a := VecF64x4Make(-5,5,25,50); b := VecF64x4Make(0,0,0,0); c := VecF64x4Make(20,20,20,20);
+  r := VecF64x4Clamp(a, b, c);
+  Check(r.d[0]=0,'F64x4Clamp[-5]'); Check(r.d[1]=5,'F64x4Clamp[5]'); Check(r.d[3]=20,'F64x4Clamp[50]');
+  a := VecF64x4Make(1,2,3,4); b := VecF64x4Make(10,20,30,40); c := VecF64x4Make(100,200,300,400);
+  r := VecF64x4Fma(a, b, c);
+  Check(Abs(r.d[0]-110)<1e-10,'F64x4Fma[0]'); Check(Abs(r.d[3]-560)<1e-10,'F64x4Fma[3]');
+  r := VecF64x4Load(PDouble(@a.d[0]));
+  Check(r.d[0]=1.0,'F64x4Load'); Check(r.d[3]=4.0,'F64x4Load[3]');
+  r := VecF64x4Zero;
+  for i:=0 to 3 do Check(r.d[i]=0,'F64x4Zero['+IntToStr(i)+']');
+  r := VecF64x4Splat(2.718);
+  for i:=0 to 3 do Check(Abs(r.d[i]-2.718)<1e-10,'F64x4Splat['+IntToStr(i)+']');
+  a := VecF64x4Make(10,20,30,40);
+  VecF64x4Store(PDouble(@b.d[0]), a);
+  Check(b.d[0]=10,'F64x4Store[0]'); Check(b.d[3]=40,'F64x4Store[3]');
+end;
+
+procedure TestF64x2Clamp;
+var a,lo,hi,r: TVecF64x2;
+begin
+  a := VecF64x2Make(-10, 50); lo := VecF64x2Make(0, 0); hi := VecF64x2Make(20, 20);
+  r := VecF64x2Clamp(a, lo, hi);
+  Check(r.d[0]=0,'F64x2Clamp[-10]'); Check(r.d[1]=20,'F64x2Clamp[50]');
+end;
+
+procedure TestNarrowCmpLeGeNe;
+var a16,b16: TVecI16x8; au8,bu8: TVecU8x16; ai8,bi8: TVecI8x16; au16,bu16: TVecU16x8;
+    m8: TMask8; m16: TMask16; i: Integer;
+begin
+  for i:=0 to 7 do begin a16.i[i]:=Int16(i); b16.i[i]:=Int16(4); end;
+  m8 := VecI16x8CmpLe(a16, b16);
+  Check((m8 and $1F)=$1F,'I16x8CmpLe 0..4<=4');
+  Check((m8 and $20)=0,'I16x8CmpLe 5>4');
+  m8 := VecI16x8CmpGe(a16, b16);
+  Check((m8 and $10)<>0,'I16x8CmpGe 4>=4');
+  Check((m8 and $01)=0,'I16x8CmpGe 0<4');
+  m8 := VecI16x8CmpNe(a16, b16);
+  Check((m8 and $10)=0,'I16x8CmpNe 4=4 → 0');
+  Check((m8 and $01)<>0,'I16x8CmpNe 0<>4 → 1');
+
+  for i:=0 to 15 do begin ai8.i[i]:=Int8(i); bi8.i[i]:=Int8(8); end;
+  m16 := VecI8x16CmpLe(ai8, bi8);
+  Check((m16 and $1FF)=$1FF,'I8x16CmpLe 0..8<=8');
+  m16 := VecI8x16CmpGe(ai8, bi8);
+  Check((m16 and $100)<>0,'I8x16CmpGe 8>=8');
+  m16 := VecI8x16CmpNe(ai8, bi8);
+  Check((m16 and $100)=0,'I8x16CmpNe 8=8');
+
+  for i:=0 to 15 do begin au8.u[i]:=Byte(i); bu8.u[i]:=Byte(8); end;
+  m16 := VecU8x16CmpLe(au8, bu8);
+  Check((m16 and $1FF)=$1FF,'U8x16CmpLe 0..8<=8');
+  m16 := VecU8x16CmpGe(au8, bu8);
+  Check((m16 and $100)<>0,'U8x16CmpGe 8>=8');
+  m16 := VecU8x16CmpNe(au8, bu8);
+  Check((m16 and $100)=0,'U8x16CmpNe 8=8');
+
+  for i:=0 to 7 do begin au16.u[i]:=Word(i); bu16.u[i]:=Word(4); end;
+  m8 := VecU16x8CmpLe(au16, bu16);
+  Check((m8 and $1F)=$1F,'U16x8CmpLe 0..4<=4');
+  m8 := VecU16x8CmpGe(au16, bu16);
+  Check((m8 and $10)<>0,'U16x8CmpGe 4>=4');
+  m8 := VecU16x8CmpNe(au16, bu16);
+  Check((m8 and $10)=0,'U16x8CmpNe 4=4');
+end;
+
+procedure TestBatchF64Extra;
+var src,src2,dst: array[0..3] of Double;
+    sf,sf2,sfd: array[0..3] of Single;
+    dotResult: Double;
+begin
+  src[0]:=10; src[1]:=20; src[2]:=30; src[3]:=40;
+  ArrayAddScalarF64(@src[0], @dst[0], 4, 5.0);
+  Check(Abs(dst[0]-15)<1e-10,'AddScalarF64[0]'); Check(Abs(dst[3]-45)<1e-10,'AddScalarF64[3]');
+  ArrayMulScalarF64(@src[0], @dst[0], 4, 2.0);
+  Check(Abs(dst[0]-20)<1e-10,'MulScalarF64[0]'); Check(Abs(dst[3]-80)<1e-10,'MulScalarF64[3]');
+  src[0]:=-5; src[1]:=5; src[2]:=15; src[3]:=25;
+  ArrayClampF64(@src[0], @dst[0], 4, 0, 20);
+  Check(Abs(dst[0])<1e-10,'ClampF64[-5→0]'); Check(Abs(dst[1]-5)<1e-10,'ClampF64[5]'); Check(Abs(dst[3]-20)<1e-10,'ClampF64[25→20]');
+  src[0]:=1; src[1]:=2; src[2]:=3; src[3]:=4;
+  src2[0]:=10; src2[1]:=20; src2[2]:=30; src2[3]:=40;
+  dotResult := ReduceDotF64(@src[0], @src2[0], 4);
+  Check(Abs(dotResult - 300)<1e-10,'ReduceDotF64=300');
+  sf[0]:=10; sf[1]:=5; sf[2]:=3; sf[3]:=8;
+  sf2[0]:=7; sf2[1]:=2; sf2[2]:=9; sf2[3]:=1;
+  ArrayAbsDiffF32(@sf[0], @sf2[0], @sfd[0], 4);
+  Check(Abs(sfd[0]-3)<1e-5,'AbsDiffF32[0]'); Check(Abs(sfd[2]-6)<1e-5,'AbsDiffF32[2]');
+  sf[0]:=10; sf[1]:=20; sf[2]:=30; sf[3]:=40;
+  ArrayNormF32(@sf[0], @sfd[0], 4, 25.0, 0.1);
+  Check(Abs(sfd[0]-(-1.5))<1e-4,'NormF32[0]');
+end;
+
 begin
   GPass:=0; GFail:=0;
   WriteLn('=== API Coverage Test ===');
@@ -309,6 +442,8 @@ begin
   TestVecI32x4Splat; TestVecI32x4Zero; TestVecI32x4LoadStore;
   TestVecI32x8Splat; TestVecI32x8Zero; TestVecI32x8LoadStore;
   TestClampReduce; TestLerp; TestCmpNe; TestArrayF64;
+  TestF32x8ExtMath; TestF64x4ExtMath; TestF64x2Clamp;
+  TestNarrowCmpLeGeNe; TestBatchF64Extra;
   WriteLn(Format('--- %d tests passed, %d failed ---',[GPass,GFail]));
   if GFail=0 then WriteLn('ALL PASS');
 end.
