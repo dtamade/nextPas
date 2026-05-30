@@ -23,9 +23,9 @@
 | G4 | TLS 1.3 record layer verified | **DONE** ✅ | 39 tests (23 unit + 16 E2E) |
 | G5 | TLS 1.3 handshake state machine | **DONE** ✅ | 34 tests (15 CH + 19 sim) |
 | G6 | TLS 1.3 pure Pascal engine E2E | **DONE** ✅ | Real handshake with OpenSSL 3.6 |
-| G7 | OpenSSL backend integration | **STARTED** | Dynamic load verified (18 tests) |
-| G8 | Performance parity with Go net/tls | TODO | Handshake latency + bulk throughput |
-| G9 | Production readiness | TODO | Fuzz, audit, docs, examples |
+| G7 | OpenSSL backend integration | **DONE** ✅ | Real HTTPS to Cloudflare (TLS 1.3) |
+| G8 | Performance parity with Go net/tls | **BASELINED** | Pascal 3ms vs Go 0.18ms (16x, pure Pascal) |
+| G9 | Production readiness | TODO | X25519 ASM, fuzz, audit, docs |
 
 ---
 
