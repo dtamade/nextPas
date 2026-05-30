@@ -43,6 +43,14 @@ var
   LRandA: UInt16;
 begin
   LMs := platform_realtime_ns div 1000000;
+  if LMs < FLastMs then
+  begin
+    while LMs < FLastMs do
+    begin
+      platform_thread_yield;
+      LMs := platform_realtime_ns div 1000000;
+    end;
+  end;
   if LMs = FLastMs then
   begin
     Inc(FRandA);
