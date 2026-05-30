@@ -22,6 +22,7 @@ type
     FOwnedBufs: PPointer;
     FOwnedCount: UInt32;
     FOwnedCap: UInt32;
+    FCurrentTable: UInt32;
     function AddNode: UInt32;
     procedure AddOwnedBuf(ABuf: Pointer);
   public
@@ -64,6 +65,7 @@ begin
   FOwnedBufs := nil;
   FOwnedCount := 0;
   FOwnedCap := 0;
+  FCurrentTable := TOML_NODE_NONE;
 end;
 
 procedure TTomlDocument.Done;
@@ -736,7 +738,7 @@ end;
 
 function TTomlParser.ParseBool(out ANodeIdx: UInt32): Boolean;
 begin
-  if (Pos + 3 < SrcLen) and (Src[Pos] = 't') and (Src[Pos+1] = 'r')
+  if (Pos + 4 <= SrcLen) and (Src[Pos] = 't') and (Src[Pos+1] = 'r')
     and (Src[Pos+2] = 'u') and (Src[Pos+3] = 'e') then
   begin
     Inc(Pos, 4); Col := Col + 4;
@@ -745,7 +747,7 @@ begin
     Doc^.FNodes[ANodeIdx].BoolVal := True;
     Exit(True);
   end;
-  if (Pos + 4 < SrcLen) and (Src[Pos] = 'f') and (Src[Pos+1] = 'a')
+  if (Pos + 5 <= SrcLen) and (Src[Pos] = 'f') and (Src[Pos+1] = 'a')
     and (Src[Pos+2] = 'l') and (Src[Pos+3] = 's') and (Src[Pos+4] = 'e') then
   begin
     Inc(Pos, 5); Col := Col + 5;
@@ -1199,15 +1201,14 @@ begin
     AddChild(LArrayIdx, LNewIdx);
     Inc(Doc^.FNodes[LArrayIdx].Container.Count);
     // ParseKeyValue will target this new table — store in a way the main loop can find it
-    // We use a trick: store the new table index in FError.Offset temporarily
-    Doc^.FError.Offset := LNewIdx;
+    Doc^.FCurrentTable := LNewIdx;
   end
   else
   begin
     LCurrent := FindOrCreateTable(LCurrent, LKeys[LKeyCount - 1], False);
     if LCurrent = TOML_NODE_NONE then
       Exit(SetError('table redefinition', 18));
-    Doc^.FError.Offset := LCurrent;
+    Doc^.FCurrentTable := LCurrent;
   end;
   Result := True;
 end;
@@ -1248,8 +1249,7 @@ begin
     begin
       if not LP.ParseTableHeader(LIsArray) then
         Exit(False);
-      LCurrentTable := UInt32(FError.Offset);
-      FillChar(FError, SizeOf(FError), 0);
+      LCurrentTable := FCurrentTable;
     end
     else if IsBareKeyChar(LP.Peek) or (LP.Peek = Ord('"')) or (LP.Peek = Ord('''')) then
     begin

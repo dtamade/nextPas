@@ -220,8 +220,6 @@ begin
 end;
 
 procedure TTomlWriter.DateTime(const AValue: TTomlDateTime);
-var
-  LBuf: array[0..3] of AnsiChar;
 begin
   PrepareValue;
   if AValue.HasDate then
