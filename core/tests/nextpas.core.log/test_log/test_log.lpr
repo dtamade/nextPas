@@ -349,6 +349,45 @@ begin
   Check(True, 'broken file handler no crash');
 end;
 
+procedure TestWithAttrsBatch;
+var
+  LL, LChild: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LChild := LL.WithAttrs([AttrStr('svc', 'web'), AttrInt('port', 8080)]);
+  LChild.Info^.Msg('started');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'batch withattrs');
+end;
+
+procedure TestWithLevel;
+var
+  LL, LChild: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llInfo);
+  LL.Debug^.Msg('skip');
+  CheckEqual(Int64(0), Int64(GCaptureCount), 'info level filters debug');
+  LChild := LL.WithLevel(llDebug);
+  LChild.Debug^.Msg('now visible');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'withlevel debug passes');
+end;
+
+procedure TestAsILogger;
+var
+  LL: TLogger;
+  LI: ILogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llInfo), llInfo);
+  LI := LL.AsILogger;
+  LI.Info('via ilogger');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'ilogger bridge works');
+  Check(GCaptured[0].Message = 'via ilogger', 'ilogger msg');
+  LI.Debug('should skip');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'ilogger respects level');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.log');
   T.Run('Event builder', @TestEventBuilder);
@@ -374,5 +413,8 @@ begin
   T.Run('Fatal level', @TestFatalLevel);
   T.Run('Re-entrancy', @TestReentrancy);
   T.Run('Broken file handler', @TestBrokenFileHandler);
+  T.Run('WithAttrs batch', @TestWithAttrsBatch);
+  T.Run('WithLevel', @TestWithLevel);
+  T.Run('AsILogger bridge', @TestAsILogger);
   T.Summary;
 end.

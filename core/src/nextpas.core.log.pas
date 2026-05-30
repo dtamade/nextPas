@@ -67,7 +67,10 @@ type
     class function New(const AHandler: ILogHandler; ALevel: TLogLevel = llInfo): TLogger; static;
     function With_(const AKey, AVal: string): TLogger;
     function WithInt(const AKey: string; AVal: Int64): TLogger;
+    function WithAttrs(const AAttrs: array of TAttr): TLogger;
     function WithGroup(const AName: string): TLogger;
+    function WithLevel(ALevel: TLogLevel): TLogger;
+    function AsILogger: ILogger;
     function Enabled(const ALevel: TLogLevel): Boolean; inline;
     function Trace: PLogEvent;
     function Debug: PLogEvent;
@@ -236,10 +239,22 @@ begin
   Result.FLevel := FLevel;
 end;
 
+function TLogger.WithAttrs(const AAttrs: array of TAttr): TLogger;
+begin
+  Result.FHandler := FHandler.WithAttrs(AAttrs);
+  Result.FLevel := FLevel;
+end;
+
 function TLogger.WithGroup(const AName: string): TLogger;
 begin
   Result.FHandler := FHandler.WithGroup(AName);
   Result.FLevel := FLevel;
+end;
+
+function TLogger.WithLevel(ALevel: TLogLevel): TLogger;
+begin
+  Result.FHandler := FHandler;
+  Result.FLevel := ALevel;
 end;
 
 function TLogger.Enabled(const ALevel: TLogLevel): Boolean;
@@ -794,6 +809,64 @@ end;
 function NewMultiHandler(const AHandlers: array of ILogHandler): ILogHandler;
 begin
   Result := TMultiHandler.Create(AHandlers);
+end;
+
+{ TLoggerAdapter — bridges TLogger to ILogger interface }
+
+type
+  TLoggerAdapter = class(TInterfacedObject, ILogger)
+  private
+    FLogger: TLogger;
+  public
+    constructor Create(const ALogger: TLogger);
+    procedure Log(const ALevel: TLogLevel; const AMessage: string);
+    procedure Trace(const AMessage: string);
+    procedure Debug(const AMessage: string);
+    procedure Info(const AMessage: string);
+    procedure Warn(const AMessage: string);
+    procedure Error(const AMessage: string);
+    procedure Fatal(const AMessage: string);
+  end;
+
+constructor TLoggerAdapter.Create(const ALogger: TLogger);
+begin
+  inherited Create;
+  FLogger := ALogger;
+end;
+
+procedure TLoggerAdapter.Log(const ALevel: TLogLevel; const AMessage: string);
+begin
+  case ALevel of
+    llTrace: FLogger.Trace^.Msg(AMessage);
+    llDebug: FLogger.Debug^.Msg(AMessage);
+    llInfo: FLogger.Info^.Msg(AMessage);
+    llWarn: FLogger.Warn^.Msg(AMessage);
+    llError: FLogger.Error^.Msg(AMessage);
+    llFatal: FLogger.Fatal^.Msg(AMessage);
+  end;
+end;
+
+procedure TLoggerAdapter.Trace(const AMessage: string);
+begin FLogger.Trace^.Msg(AMessage); end;
+
+procedure TLoggerAdapter.Debug(const AMessage: string);
+begin FLogger.Debug^.Msg(AMessage); end;
+
+procedure TLoggerAdapter.Info(const AMessage: string);
+begin FLogger.Info^.Msg(AMessage); end;
+
+procedure TLoggerAdapter.Warn(const AMessage: string);
+begin FLogger.Warn^.Msg(AMessage); end;
+
+procedure TLoggerAdapter.Error(const AMessage: string);
+begin FLogger.Error^.Msg(AMessage); end;
+
+procedure TLoggerAdapter.Fatal(const AMessage: string);
+begin FLogger.Fatal^.Msg(AMessage); end;
+
+function TLogger.AsILogger: ILogger;
+begin
+  Result := TLoggerAdapter.Create(Self);
 end;
 
 end.
