@@ -82,11 +82,14 @@ end;
 procedure TDeflateWriter.FlushOutput(AFlush: Int32);
 var
   LHave, LWritten: SizeUInt;
+  LRet: Int32;
 begin
   repeat
     FStream.next_out := @FBuf[0];
     FStream.avail_out := COMPRESS_BUF_SIZE;
-    deflate(FStream, AFlush);
+    LRet := deflate(FStream, AFlush);
+    if (LRet <> Z_OK) and (LRet <> Z_STREAM_END) and (LRet <> Z_BUF_ERROR) then
+      raise EIOError.Create('deflate failed (' + IntToStr(LRet) + ')');
     LHave := COMPRESS_BUF_SIZE - FStream.avail_out;
     if LHave > 0 then
     begin

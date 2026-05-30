@@ -104,11 +104,14 @@ end;
 procedure TGzipWriter.FlushOutput(AFlush: Int32);
 var
   LHave, LWritten: SizeUInt;
+  LRet: Int32;
 begin
   repeat
     FStream.next_out := @FBuf[0];
     FStream.avail_out := COMPRESS_BUF_SIZE;
-    deflate(FStream, AFlush);
+    LRet := deflate(FStream, AFlush);
+    if (LRet <> Z_OK) and (LRet <> Z_STREAM_END) and (LRet <> Z_BUF_ERROR) then
+      raise EIOError.Create('gzip: deflate failed (' + IntToStr(LRet) + ')');
     LHave := COMPRESS_BUF_SIZE - FStream.avail_out;
     if LHave > 0 then
     begin
@@ -193,18 +196,29 @@ begin
   LFlags := LHdr[3];
   if (LFlags and $04) <> 0 then // FEXTRA
   begin
-    FSrc.Read(LByte, 1);
+    if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
     LSkip := LByte;
-    FSrc.Read(LByte, 1);
+    if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
     LSkip := LSkip or (UInt16(LByte) shl 8);
-    while LSkip > 0 do begin FSrc.Read(LByte, 1); Dec(LSkip); end;
+    while LSkip > 0 do
+    begin
+      if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+      Dec(LSkip);
+    end;
   end;
   if (LFlags and $08) <> 0 then // FNAME
-    repeat FSrc.Read(LByte, 1); until LByte = 0;
+    repeat
+      if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated FNAME');
+    until LByte = 0;
   if (LFlags and $10) <> 0 then // FCOMMENT
-    repeat FSrc.Read(LByte, 1); until LByte = 0;
+    repeat
+      if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated FCOMMENT');
+    until LByte = 0;
   if (LFlags and $02) <> 0 then // FHCRC
-  begin FSrc.Read(LByte, 1); FSrc.Read(LByte, 1); end;
+  begin
+    if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+    if FSrc.Read(LByte, 1) <> 1 then raise EIOError.Create('gzip: truncated header');
+  end;
 
   FillChar(FStream, SizeOf(FStream), 0);
   if inflateInit2(FStream, -15) <> Z_OK then

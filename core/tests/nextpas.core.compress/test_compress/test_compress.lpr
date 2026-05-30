@@ -392,6 +392,113 @@ begin
   Check(LGotException, 'gzip stream CRC corrupt raises on Close');
 end;
 
+procedure TestGzipTruncatedStream;
+var
+  LBuf: IStream;
+  LReader: IDecompressReader;
+  LGotException: Boolean;
+  LRaw: TBytes;
+begin
+  LRaw := GzipCompress(TBytes.Create(1,2,3,4,5,6,7,8));
+  // Truncate: remove last 4 bytes (partial trailer)
+  SetLength(LRaw, Length(LRaw) - 4);
+  LBuf := CreateBytesStreamFrom(LRaw);
+  LGotException := False;
+  try
+    LReader := GzipReader(LBuf as IReader);
+    IoReadAll(LReader as IReader);
+    LReader.Close;
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'truncated gzip stream raises');
+end;
+
+procedure TestLz4Incompressible;
+var
+  LSrc, LC, LD: TBytes;
+  LI: Integer;
+  LBound: SizeUInt;
+begin
+  // Random-like data that won't compress well
+  SetLength(LSrc, 4096);
+  for LI := 0 to High(LSrc) do
+    LSrc[LI] := Byte((LI * 131 + 17) mod 256);
+  LC := Lz4Compress(LSrc);
+  Check(Length(LC) > 0, 'lz4 incompressible produces output');
+  LBound := Lz4CompressBound(4096);
+  Check(SizeUInt(Length(LC)) <= LBound, 'lz4 output within bound');
+  LD := Lz4Decompress(LC, 4096);
+  CheckEqual(Int64(4096), Int64(Length(LD)), 'lz4 incompressible round-trip length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LD[LI] then
+    begin
+      Check(False, 'lz4 incompressible mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'lz4 incompressible data matches');
+end;
+
+procedure TestDeflateStreamCorrupted;
+var
+  LBuf: IStream;
+  LReader: IDecompressReader;
+  LGotException: Boolean;
+  LGarbage: TBytes;
+begin
+  LGarbage := TBytes.Create($78, $9C, $FF, $FF, $FF, $FF, $FF, $FF, $00, $00);
+  LBuf := CreateBytesStreamFrom(LGarbage);
+  LReader := DeflateReader(LBuf as IReader);
+  LGotException := False;
+  try
+    IoReadAll(LReader as IReader);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'deflate stream corrupt raises');
+  LReader.Close;
+end;
+
+procedure TestGzipEmptyStream;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LOut: TBytes;
+begin
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := GzipReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+  CheckEqual(Int64(0), Int64(Length(LOut)), 'gzip empty stream length');
+end;
+
+procedure TestSingleByte;
+var
+  LSrc, LC, LD: TBytes;
+begin
+  LSrc := TBytes.Create(42);
+
+  LC := DeflateCompress(LSrc);
+  LD := DeflateDecompress(LC);
+  CheckEqual(Int64(1), Int64(Length(LD)), 'deflate 1-byte length');
+  Check(LD[0] = 42, 'deflate 1-byte value');
+
+  LC := GzipCompress(LSrc);
+  LD := GzipDecompress(LC);
+  CheckEqual(Int64(1), Int64(Length(LD)), 'gzip 1-byte length');
+  Check(LD[0] = 42, 'gzip 1-byte value');
+
+  LC := Lz4Compress(LSrc);
+  LD := Lz4Decompress(LC, 1);
+  CheckEqual(Int64(1), Int64(Length(LD)), 'lz4 1-byte length');
+  Check(LD[0] = 42, 'lz4 1-byte value');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.compress');
   T.Run('Deflate round-trip', @TestDeflateRoundTrip);
@@ -412,5 +519,10 @@ begin
   T.Run('Gzip stream small', @TestGzipStreamSmall);
   T.Run('Gzip cross-API', @TestGzipCrossAPI);
   T.Run('Gzip stream CRC corrupt', @TestGzipStreamCRCCorrupt);
+  T.Run('Gzip truncated stream', @TestGzipTruncatedStream);
+  T.Run('LZ4 incompressible', @TestLz4Incompressible);
+  T.Run('Deflate stream corrupt', @TestDeflateStreamCorrupted);
+  T.Run('Gzip empty stream', @TestGzipEmptyStream);
+  T.Run('Single byte all algos', @TestSingleByte);
   T.Summary;
 end.
