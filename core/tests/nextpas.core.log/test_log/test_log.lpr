@@ -15,85 +15,184 @@ var
 
 type
   TCaptureHandler = class(TInterfacedObject, ILogHandler)
+  private
+    FMinLevel: TLogLevel;
+    FPrefix: array of TAttr;
+    FPrefixCount: Int32;
   public
-    procedure Handle(const ARecord: TLogRecord);
-    procedure Flush;
-    procedure Close;
+    constructor Create(AMinLevel: TLogLevel);
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Handle(var ARecord: TLogRecord);
+    function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    function WithGroup(const AName: string): ILogHandler;
   end;
 
-procedure TCaptureHandler.Handle(const ARecord: TLogRecord);
+constructor TCaptureHandler.Create(AMinLevel: TLogLevel);
+begin
+  inherited Create;
+  FMinLevel := AMinLevel;
+  FPrefixCount := 0;
+end;
+
+function TCaptureHandler.Enabled(const ALevel: TLogLevel): Boolean;
+begin
+  Result := ALevel >= FMinLevel;
+end;
+
+procedure TCaptureHandler.Handle(var ARecord: TLogRecord);
 begin
   if GCaptureCount >= Length(GCaptured) then
-    SetLength(GCaptured, Length(GCaptured) * 2 + 8);
+    SetLength(GCaptured, Length(GCaptured) + 16);
   GCaptured[GCaptureCount] := ARecord;
   Inc(GCaptureCount);
 end;
 
-procedure TCaptureHandler.Flush;
+function TCaptureHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+var
+  LNew: TCaptureHandler;
+  LI: Int32;
 begin
+  LNew := TCaptureHandler.Create(FMinLevel);
+  SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
+  for LI := 0 to FPrefixCount - 1 do
+    LNew.FPrefix[LI] := FPrefix[LI];
+  for LI := 0 to High(AAttrs) do
+    LNew.FPrefix[FPrefixCount + LI] := AAttrs[LI];
+  LNew.FPrefixCount := FPrefixCount + Length(AAttrs);
+  Result := LNew;
 end;
 
-procedure TCaptureHandler.Close;
+function TCaptureHandler.WithGroup(const AName: string): ILogHandler;
 begin
+  Result := Self;
 end;
 
 procedure ResetCapture;
 begin
   GCaptureCount := 0;
-  SetLength(GCaptured, 16);
+  SetLength(GCaptured, 32);
 end;
 
-procedure TestLogLevels;
+procedure TestEventBuilder;
 var
-  LL: ILogger;
+  LL: TLogger;
 begin
   ResetCapture;
-  LL := LogWith(TCaptureHandler.Create, llTrace);
-  LL.Trace('t');
-  LL.Debug('d');
-  LL.Info('i');
-  LL.Warn('w');
-  LL.Error('e');
-  LL.Fatal('f');
-  CheckEqual(Int64(6), Int64(GCaptureCount), 'all 6 levels captured');
-  Check(GCaptured[0].Level = llTrace, 'level 0 = trace');
-  Check(GCaptured[5].Level = llFatal, 'level 5 = fatal');
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Str('user', 'alice')^.Int('age', 30)^.Msg('login');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'one record');
+  Check(GCaptured[0].Message = 'login', 'msg=login');
+  Check(GCaptured[0].Level = llInfo, 'level=info');
+  CheckEqual(Int64(2), Int64(GCaptured[0].AttrCount), '2 attrs');
+  Check(GCaptured[0].Attrs[0].Key = 'user', 'key0=user');
+  Check(GCaptured[0].Attrs[0].SVal = 'alice', 'val0=alice');
+  Check(GCaptured[0].Attrs[1].Key = 'age', 'key1=age');
+  CheckEqual(Int64(30), GCaptured[0].Attrs[1].IVal, 'val1=30');
 end;
 
 procedure TestLevelFiltering;
 var
-  LL: ILogger;
+  LL: TLogger;
 begin
   ResetCapture;
-  LL := LogWith(TCaptureHandler.Create, llWarn);
-  LL.Trace('t');
-  LL.Debug('d');
-  LL.Info('i');
-  LL.Warn('w');
-  LL.Error('e');
-  CheckEqual(Int64(2), Int64(GCaptureCount), 'only warn+error pass');
-  Check(GCaptured[0].Level = llWarn, 'first = warn');
-  Check(GCaptured[1].Level = llError, 'second = error');
+  LL := TLogger.New(TCaptureHandler.Create(llWarn), llWarn);
+  LL.Debug^.Msg('skip');
+  LL.Info^.Msg('skip');
+  LL.Warn^.Msg('keep');
+  LL.Error^.Msg('keep');
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'only warn+error');
 end;
 
-procedure TestMessageContent;
+procedure TestChildLogger;
 var
-  LL: ILogger;
+  LL, LChild: TLogger;
 begin
   ResetCapture;
-  LL := LogWith(TCaptureHandler.Create, llInfo);
-  LL.Info('hello world');
-  Check(GCaptured[0].Message = 'hello world', 'message preserved');
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LChild := LL.With_('service', 'auth');
+  LChild.Info^.Str('action', 'login')^.Msg('ok');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'one record');
 end;
 
 procedure TestTimestamp;
 var
-  LL: ILogger;
+  LL: TLogger;
 begin
   ResetCapture;
-  LL := LogWith(TCaptureHandler.Create, llInfo);
-  LL.Info('ts test');
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Msg('ts');
   Check(GCaptured[0].TimestampNs > 0, 'timestamp > 0');
+end;
+
+procedure TestBoolFloat;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Bool('ok', True)^.Float('lat', 3.14)^.Msg('test');
+  CheckEqual(Int64(2), Int64(GCaptured[0].AttrCount), '2 attrs');
+  Check(GCaptured[0].Attrs[0].BVal = True, 'bool=true');
+  Check(Abs(GCaptured[0].Attrs[1].FVal - 3.14) < 0.01, 'float=3.14');
+end;
+
+procedure TestErrHelper;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Error^.Err('connection refused')^.Msg('failed');
+  Check(GCaptured[0].Attrs[0].Key = 'error', 'err key');
+  Check(GCaptured[0].Attrs[0].SVal = 'connection refused', 'err val');
+end;
+
+procedure TestSend;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Str('k', 'v')^.Send;
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'send works');
+  Check(GCaptured[0].Message = '', 'empty msg');
+end;
+
+procedure TestConsoleHandler;
+var
+  LL: TLogger;
+begin
+  LL := TLogger.New(NewConsoleHandler(llError), llError);
+  LL.Error^.Str('test', 'console')^.Msg('error output');
+  Check(True, 'console no crash');
+end;
+
+procedure TestJsonHandler;
+var
+  LL: TLogger;
+begin
+  LL := TLogger.New(NewJsonHandler(llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Int('n', 42)^.Msg('json test');
+  Check(True, 'json no crash');
+end;
+
+procedure TestGlobalLogger;
+begin
+  ResetCapture;
+  SetDefaultLogger(TLogger.New(TCaptureHandler.Create(llInfo), llInfo));
+  LogInfo('global test');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'global works');
+  Check(GCaptured[0].Message = 'global test', 'global msg');
+end;
+
+procedure TestDisabledNoAlloc;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llError), llError);
+  LL.Debug^.Str('expensive', 'computation')^.Msg('skip');
+  CheckEqual(Int64(0), Int64(GCaptureCount), 'disabled = no handle');
 end;
 
 procedure TestNullLogger;
@@ -101,64 +200,24 @@ var
   LL: ILogger;
 begin
   LL := NullLogger;
-  LL.Info('should not crash');
-  LL.Error('also fine');
-  Check(True, 'null logger no crash');
-end;
-
-procedure TestDefaultLogger;
-begin
-  ResetCapture;
-  LogSetDefault(LogWith(TCaptureHandler.Create, llInfo));
-  LogInfo('default test');
-  CheckEqual(Int64(1), Int64(GCaptureCount), 'default logger works');
-  Check(GCaptured[0].Message = 'default test', 'default msg');
-  LogSetDefault(nil);
-end;
-
-procedure TestConsoleLogger;
-var
-  LL: ILogger;
-begin
-  LL := LogConsole(llError);
-  LL.Error('console error test');
-  Check(True, 'console logger no crash');
-end;
-
-procedure TestMultipleHandlers;
-var
-  LL1, LL2: ILogger;
-begin
-  ResetCapture;
-  LL1 := LogWith(TCaptureHandler.Create, llInfo);
-  LL1.Info('first');
-  LL2 := LogWith(TCaptureHandler.Create, llInfo);
-  LL2.Info('second');
-  CheckEqual(Int64(2), Int64(GCaptureCount), 'both loggers work');
-end;
-
-procedure TestLogGeneric;
-var
-  LL: ILogger;
-begin
-  ResetCapture;
-  LL := LogWith(TCaptureHandler.Create, llTrace);
-  LL.Log(llDebug, 'generic log');
-  CheckEqual(Int64(1), Int64(GCaptureCount), 'generic log works');
-  Check(GCaptured[0].Level = llDebug, 'level = debug');
-  Check(GCaptured[0].Message = 'generic log', 'msg');
+  LL.Info('no crash');
+  LL.Error('still fine');
+  Check(True, 'null logger safe');
 end;
 
 begin
   T := TTestRunner.Create('nextpas.core.log');
-  T.Run('Log levels', @TestLogLevels);
+  T.Run('Event builder', @TestEventBuilder);
   T.Run('Level filtering', @TestLevelFiltering);
-  T.Run('Message content', @TestMessageContent);
+  T.Run('Child logger', @TestChildLogger);
   T.Run('Timestamp', @TestTimestamp);
+  T.Run('Bool/Float attrs', @TestBoolFloat);
+  T.Run('Err helper', @TestErrHelper);
+  T.Run('Send (no msg)', @TestSend);
+  T.Run('Console handler', @TestConsoleHandler);
+  T.Run('JSON handler', @TestJsonHandler);
+  T.Run('Global logger', @TestGlobalLogger);
+  T.Run('Disabled no alloc', @TestDisabledNoAlloc);
   T.Run('Null logger', @TestNullLogger);
-  T.Run('Default logger', @TestDefaultLogger);
-  T.Run('Console logger', @TestConsoleLogger);
-  T.Run('Multiple handlers', @TestMultipleHandlers);
-  T.Run('Log generic', @TestLogGeneric);
   T.Summary;
 end.
