@@ -3,7 +3,7 @@ CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.collections/test_multiset
 PROGRAM := test_multiset
 SOURCE := $(PROGRAM).lpr
-FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
 .PHONY: build run test clean

@@ -1,77 +1,77 @@
 unit leak_tracker;
 
 {$mode objfpc}{$H+}
-{$modeswitch advancedrecords}
 
 interface
 
 type
-  TTracked = record
-  private
-    FId: Int32;
-  public
-    class var Alive: Int32;
-    class var TotalInits: Int32;
-    class var TotalFinals: Int32;
-
-    class operator Initialize(var Self: TTracked);
-    class operator Finalize(var Self: TTracked);
-    class operator Copy(constref Src: TTracked; var Dst: TTracked);
+  ITracked = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+    function GetId: Int32;
   end;
 
-  TLeakSnapshot = record
-    Saved: Int32;
-    procedure Take;
-    procedure AssertZero(const AContext: string);
-  end;
+  TLeakSnapshot = Int32;
 
-function MakeTracked(AId: Int32): TTracked;
+var
+  GTrackedAlive: Int32;
+
+function MakeTracked(AId: Int32): ITracked;
+function SnapTake: TLeakSnapshot; inline;
+procedure SnapAssert(const ASnap: TLeakSnapshot; const AContext: string);
 
 implementation
 
 uses
   SysUtils;
 
-class operator TTracked.Initialize(var Self: TTracked);
+type
+  TTrackedImpl = class(TInterfacedObject, ITracked)
+  private
+    FId: Int32;
+  public
+    constructor Create(AId: Int32);
+    destructor Destroy; override;
+    function GetId: Int32;
+  end;
+
+constructor TTrackedImpl.Create(AId: Int32);
 begin
-  Self.FId := 0;
-  Inc(Alive);
-  Inc(TotalInits);
+  inherited Create;
+  FId := AId;
+  InterlockedIncrement(GTrackedAlive);
 end;
 
-class operator TTracked.Finalize(var Self: TTracked);
+destructor TTrackedImpl.Destroy;
 begin
-  Dec(Alive);
-  Inc(TotalFinals);
+  InterlockedDecrement(GTrackedAlive);
+  inherited Destroy;
 end;
 
-class operator TTracked.Copy(constref Src: TTracked; var Dst: TTracked);
+function TTrackedImpl.GetId: Int32;
 begin
-  Dst.FId := Src.FId;
-  Inc(Alive);
-  Inc(TotalInits);
+  Result := FId;
 end;
 
-procedure TLeakSnapshot.Take;
+function MakeTracked(AId: Int32): ITracked;
 begin
-  Saved := TTracked.Alive;
+  Result := TTrackedImpl.Create(AId);
 end;
 
-procedure TLeakSnapshot.AssertZero(const AContext: string);
+function SnapTake: TLeakSnapshot;
+begin
+  Result := GTrackedAlive;
+end;
+
+procedure SnapAssert(const ASnap: TLeakSnapshot; const AContext: string);
 var LDelta: Int32;
 begin
-  LDelta := TTracked.Alive - Saved;
+  LDelta := GTrackedAlive - ASnap;
   if LDelta <> 0 then
   begin
     WriteLn('LEAK in ', AContext, ': delta=', LDelta,
-      ' (alive=', TTracked.Alive, ')');
+      ' (alive=', GTrackedAlive, ')');
     Halt(1);
   end;
-end;
-
-function MakeTracked(AId: Int32): TTracked;
-begin
-  Result.FId := AId;
 end;
 
 end.
