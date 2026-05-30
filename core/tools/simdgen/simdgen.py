@@ -1637,6 +1637,7 @@ def canonical_sort_key(slot: SlotEntry) -> tuple[int, str, str]:
 def main() -> int:
     verify_mode = "--verify" in sys.argv
     dry_run = "--dry-run" in sys.argv
+    full_mode = "--full" in sys.argv
     # Current checked-in generated files use type-order. Keep --sort-by-type as
     # a compatibility spelling, but make the canonical default non-surprising.
     sort_by_type = True
@@ -1664,13 +1665,15 @@ def main() -> int:
         return 0
 
     generators = {
-        "nextpas.core.simd.dispatch.slots.inc": generate_dispatch_slots,
         "nextpas.core.simd.scalar.decl.inc": generate_scalar_decl,
         "nextpas.core.simd.scalar.impl.inc": generate_scalar_impl,
-        "nextpas.core.simd.fillbase.inc": generate_fillbase,
-        "nextpas.core.simd.facade.decl.inc": generate_facade_decl,
-        "nextpas.core.simd.facade.impl.inc": generate_facade_impl,
     }
+
+    if full_mode:
+        generators["nextpas.core.simd.dispatch.slots.inc"] = generate_dispatch_slots
+        generators["nextpas.core.simd.fillbase.inc"] = generate_fillbase
+        generators["nextpas.core.simd.facade.decl.inc"] = generate_facade_decl
+        generators["nextpas.core.simd.facade.impl.inc"] = generate_facade_impl
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
