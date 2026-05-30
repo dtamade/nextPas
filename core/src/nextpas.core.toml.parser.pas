@@ -1423,7 +1423,7 @@ begin
   end;
   if (Doc^.FHashBuckets <> nil) and (Doc^.FHashOwner = ATableIdx) then
   begin
-    if Doc^.FNodes[ATableIdx].Container.Count >= Doc^.FHashCap div 2 then
+    if Doc^.FNodes[ATableIdx].Container.Count >= (Doc^.FHashCap * 3) div 4 then
       Doc^.BuildHashIndex(ATableIdx)
     else
     begin
