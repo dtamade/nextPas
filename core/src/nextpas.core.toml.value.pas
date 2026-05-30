@@ -127,14 +127,14 @@ end;
 
 function TTomlValue.AsStr: TStringView;
 begin
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
     Exit(TStringView.Empty);
   Result := FDoc^.Node(FIdx)^.Str;
 end;
 
 function TTomlValue.AsInt: Int64;
 begin
-  if FIdx = TOML_NODE_NONE then Exit(0);
+  if not IsValid then Exit(0);
   if FDoc^.Node(FIdx)^.Kind = tnkFloat then
     Exit(Int64(Trunc(FDoc^.Node(FIdx)^.FloatVal)));
   if FDoc^.Node(FIdx)^.Kind <> tnkInt then Exit(0);
@@ -143,7 +143,7 @@ end;
 
 function TTomlValue.AsFloat: Double;
 begin
-  if FIdx = TOML_NODE_NONE then Exit(0.0);
+  if not IsValid then Exit(0.0);
   if FDoc^.Node(FIdx)^.Kind = tnkInt then
     Exit(Double(FDoc^.Node(FIdx)^.IntVal));
   if FDoc^.Node(FIdx)^.Kind <> tnkFloat then Exit(0.0);
@@ -152,14 +152,14 @@ end;
 
 function TTomlValue.AsBool: Boolean;
 begin
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkBool) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkBool) then
     Exit(False);
   Result := FDoc^.Node(FIdx)^.BoolVal;
 end;
 
 function TTomlValue.AsDateTime: TTomlDateTime;
 begin
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkDateTime) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkDateTime) then
   begin
     FillChar(Result, SizeOf(Result), 0);
     Exit;
@@ -175,7 +175,7 @@ var
 begin
   Result.FDoc := FDoc;
   Result.FIdx := TOML_NODE_NONE;
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
     Exit;
   LHash := TomlKeyHash(AKey.Data, AKey.Len);
   LNode := FDoc^.Node(FIdx);
@@ -208,7 +208,7 @@ end;
 
 function TTomlValue.TableLen: UInt32;
 begin
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
     Exit(0);
   Result := FDoc^.Node(FIdx)^.Container.Count;
 end;
@@ -219,7 +219,7 @@ var
   LI: UInt32;
 begin
   Result := TStringView.Empty;
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
     Exit;
   if AIndex >= FDoc^.Node(FIdx)^.Container.Count then Exit;
   LCur := FDoc^.Node(FIdx)^.Container.FirstChild;
@@ -241,7 +241,7 @@ var
 begin
   Result.FDoc := FDoc;
   Result.FIdx := TOML_NODE_NONE;
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
     Exit;
   if AIndex >= FDoc^.Node(FIdx)^.Container.Count then Exit;
   LCur := FDoc^.Node(FIdx)^.Container.FirstChild;
@@ -257,7 +257,7 @@ end;
 
 function TTomlValue.ArrayLen: UInt32;
 begin
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkArray) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkArray) then
     Exit(0);
   Result := FDoc^.Node(FIdx)^.Container.Count;
 end;
@@ -269,7 +269,7 @@ var
 begin
   Result.FDoc := FDoc;
   Result.FIdx := TOML_NODE_NONE;
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkArray) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkArray) then
     Exit;
   if AIndex >= FDoc^.Node(FIdx)^.Container.Count then Exit;
   LCur := FDoc^.Node(FIdx)^.Container.FirstChild;
@@ -292,7 +292,7 @@ end;
 
 function TTomlValue.AsString: string;
 begin
-  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
+  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
     Exit('');
   Result := FDoc^.Node(FIdx)^.Str.ToString;
 end;

@@ -151,8 +151,23 @@ begin
         case LCh of
           Ord('"'): LBuilder.AppendBytes('\"', 2);
           Ord('\'): LBuilder.AppendBytes('\\', 2);
+          8: LBuilder.AppendBytes('\b', 2);
+          9: LBuilder.AppendBytes('\t', 2);
+          10: LBuilder.AppendBytes('\n', 2);
+          12: LBuilder.AppendBytes('\f', 2);
+          13: LBuilder.AppendBytes('\r', 2);
         else
-          LBuilder.AppendChar(AnsiChar(LCh));
+          if LCh < 32 then
+          begin
+            LBuilder.AppendBytes('\u00', 4);
+            LBuilder.AppendChar(AnsiChar(Ord('0') + (LCh shr 4)));
+            if (LCh and $F) < 10 then
+              LBuilder.AppendChar(AnsiChar(Ord('0') + (LCh and $F)))
+            else
+              LBuilder.AppendChar(AnsiChar(Ord('a') + (LCh and $F) - 10));
+          end
+          else
+            LBuilder.AppendChar(AnsiChar(LCh));
         end;
       end;
       LBuilder.AppendChar('"');
