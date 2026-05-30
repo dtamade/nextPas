@@ -74,6 +74,7 @@ uses
   nextpas.core.collections.element_manager,
   // HashMap / HashSet (OA default)
   nextpas.core.collections.hashmap,
+  nextpas.core.collections.hashmap.swiss.adapter,
   nextpas.core.collections.hashset,
   nextpas.core.collections.linkedhashmap,
   nextpas.core.collections.linkedhashset,
@@ -216,6 +217,7 @@ generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: 
 // ==== HashMap / HashSet (OA default) ====
 {$IFNDEF NEXTPAS_COLLECTIONS_DISABLE_HASH}
   generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+  generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
   generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
 {$ENDIF}
 
@@ -787,8 +789,12 @@ end;
 
 generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
 begin
-  // Construct real HashMap instance - 使用nil使用默认hash/equals
   Result := specialize THashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
+end;
+
+generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
+begin
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
 generic function MakeHashSet<K>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashSet<K>;
