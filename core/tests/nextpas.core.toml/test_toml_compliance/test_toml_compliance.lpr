@@ -269,6 +269,55 @@ begin
     TStringView.Create(PAnsiChar('red'), 3)), 'fruit.color = red');
 end;
 
+procedure TestRejectLeadingZero;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 01');
+  Check(LDoc.HasError, 'leading zero rejected');
+end;
+
+procedure TestRejectTrailingDot;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 7.');
+  Check(LDoc.HasError, 'trailing dot rejected');
+end;
+
+procedure TestRejectLeadingDot;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = .5');
+  Check(LDoc.HasError, 'leading dot rejected');
+end;
+
+procedure TestRejectTrailingExponent;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1e+');
+  Check(LDoc.HasError, 'trailing exponent rejected');
+end;
+
+procedure TestRejectDoubleUnderscore;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1__2');
+  Check(LDoc.HasError, 'double underscore rejected');
+end;
+
+procedure TestRejectLeadingUnderscore;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = _1');
+  Check(LDoc.HasError, 'leading underscore rejected');
+end;
+
+procedure TestRejectTrailingUnderscore;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1_');
+  Check(LDoc.HasError, 'trailing underscore rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -301,6 +350,13 @@ begin
   T.Run('reject invalid hour', @TestRejectInvalidHour);
   T.Run('reject datetime trailing', @TestRejectDateTimeTrailing);
   T.Run('dotted key with spaces', @TestDottedKeyWithSpaces);
+  T.Run('reject leading zero', @TestRejectLeadingZero);
+  T.Run('reject trailing dot', @TestRejectTrailingDot);
+  T.Run('reject leading dot', @TestRejectLeadingDot);
+  T.Run('reject trailing exponent', @TestRejectTrailingExponent);
+  T.Run('reject double underscore', @TestRejectDoubleUnderscore);
+  T.Run('reject leading underscore', @TestRejectLeadingUnderscore);
+  T.Run('reject trailing underscore', @TestRejectTrailingUnderscore);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

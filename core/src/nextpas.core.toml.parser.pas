@@ -578,6 +578,8 @@ var
   LUIntVal: UInt64;
   LFloatVal: Double;
   LCh: Byte;
+  LPrevUnderscore: Boolean;
+  LDigitCount: Int32;
 begin
   LStart := Pos;
   LNeg := False;
@@ -592,7 +594,7 @@ begin
   end;
 
   // inf / nan
-  if (Pos + 2 < SrcLen) and (Src[Pos] = 'i') and (Src[Pos+1] = 'n') and (Src[Pos+2] = 'f') then
+  if (Pos + 3 <= SrcLen) and (Src[Pos] = 'i') and (Src[Pos+1] = 'n') and (Src[Pos+2] = 'f') then
   begin
     Inc(Pos, 3); Col := Col + 3;
     ANodeIdx := Doc^.AddNode;
@@ -603,7 +605,7 @@ begin
       Doc^.FNodes[ANodeIdx].FloatVal := 1.0/0.0;
     Exit(True);
   end;
-  if (Pos + 2 < SrcLen) and (Src[Pos] = 'n') and (Src[Pos+1] = 'a') and (Src[Pos+2] = 'n') then
+  if (Pos + 3 <= SrcLen) and (Src[Pos] = 'n') and (Src[Pos+1] = 'a') and (Src[Pos+2] = 'n') then
   begin
     Inc(Pos, 3); Col := Col + 3;
     ANodeIdx := Doc^.AddNode;
@@ -612,7 +614,7 @@ begin
     Exit(True);
   end;
 
-  // Check base prefix
+  // Check base prefix (only allowed without sign)
   if (not LNeg) and (Pos + 1 < SrcLen) and (Src[Pos] = '0') then
   begin
     case Src[Pos+1] of
@@ -620,9 +622,12 @@ begin
       'o': begin LBase := 8; Inc(Pos, 2); Col := Col + 2; end;
       'b': begin LBase := 2; Inc(Pos, 2); Col := Col + 2; end;
     end;
-  end;
+  end
+  else if LNeg and (Pos + 1 < SrcLen) and (Src[Pos] = '0') and
+    ((Src[Pos+1] = 'x') or (Src[Pos+1] = 'o') or (Src[Pos+1] = 'b')) then
+    Exit(SetError('sign not allowed with base prefix', 34));
 
-  // Collect digits into buffer (strip underscores)
+  // Collect digits into buffer (strip underscores with validation)
   LBufLen := 0;
   if LNeg then
   begin
@@ -632,12 +637,16 @@ begin
 
   if LBase <> 10 then
   begin
-    // Non-decimal: collect hex/oct/bin digits
+    LPrevUnderscore := True; // treat start as "underscore" to reject leading _
+    LDigitCount := 0;
     while Pos < SrcLen do
     begin
       LCh := Byte(Src[Pos]);
       if LCh = Ord('_') then
       begin
+        if LPrevUnderscore then
+          Exit(SetError('invalid underscore in number', 28));
+        LPrevUnderscore := True;
         Inc(Pos); Inc(Col);
         Continue;
       end;
@@ -648,15 +657,19 @@ begin
         8: if not ((LCh >= Ord('0')) and (LCh <= Ord('7'))) then Break;
         2: if not ((LCh = Ord('0')) or (LCh = Ord('1'))) then Break;
       end;
+      LPrevUnderscore := False;
       if LBufLen >= 126 then
         Exit(SetError('number too long', 15));
       LBuf[LBufLen] := Src[Pos];
       Inc(LBufLen);
+      Inc(LDigitCount);
       Inc(Pos); Inc(Col);
     end;
-    if (LNeg and (LBufLen <= 1)) or ((not LNeg) and (LBufLen = 0)) then
+    if LPrevUnderscore and (LDigitCount > 0) then
+      Exit(SetError('trailing underscore in number', 29));
+    if LDigitCount = 0 then
       Exit(SetError('invalid number', 14));
-    // Parse as UInt64 then apply sign
+    // Parse as UInt64
     LUIntVal := 0;
     LI := 0;
     if LBuf[0] = '-' then LI := 1;
@@ -666,6 +679,8 @@ begin
       case LBase of
         16:
         begin
+          if LUIntVal > (High(UInt64) shr 4) then
+            Exit(SetError('integer overflow', 16));
           LUIntVal := LUIntVal * 16;
           if (LCh >= Ord('0')) and (LCh <= Ord('9')) then
             LUIntVal := LUIntVal + (LCh - Ord('0'))
@@ -674,8 +689,18 @@ begin
           else
             LUIntVal := LUIntVal + (LCh - Ord('A') + 10);
         end;
-        8: LUIntVal := LUIntVal * 8 + (LCh - Ord('0'));
-        2: LUIntVal := LUIntVal * 2 + (LCh - Ord('0'));
+        8:
+        begin
+          if LUIntVal > (High(UInt64) shr 3) then
+            Exit(SetError('integer overflow', 16));
+          LUIntVal := LUIntVal * 8 + (LCh - Ord('0'));
+        end;
+        2:
+        begin
+          if LUIntVal > (High(UInt64) shr 1) then
+            Exit(SetError('integer overflow', 16));
+          LUIntVal := LUIntVal * 2 + (LCh - Ord('0'));
+        end;
       end;
       Inc(LI);
     end;
@@ -685,24 +710,36 @@ begin
     Exit(True);
   end;
 
-  // Decimal number
+  // Decimal number — strict TOML lexical rules
+  LPrevUnderscore := True; // reject leading underscore
+  LDigitCount := 0;
   while Pos < SrcLen do
   begin
     LCh := Byte(Src[Pos]);
     if LCh = Ord('_') then
     begin
+      if LPrevUnderscore then
+        Exit(SetError('invalid underscore in number', 28));
+      LPrevUnderscore := True;
       Inc(Pos); Inc(Col);
       Continue;
     end;
+    LPrevUnderscore := False;
     if LCh = Ord('.') then
     begin
       if LHasDot or LHasExp then Break;
+      if LDigitCount = 0 then
+        Exit(SetError('no digits before dot', 20));
       LHasDot := True;
+      LDigitCount := 0; // reset for post-dot digits
     end
     else if (LCh = Ord('e')) or (LCh = Ord('E')) then
     begin
       if LHasExp then Break;
+      if LDigitCount = 0 then
+        Exit(SetError('no digits before exponent', 25));
       LHasExp := True;
+      LDigitCount := 0; // reset for exponent digits
     end
     else if (LCh = Ord('+')) or (LCh = Ord('-')) then
     begin
@@ -710,7 +747,9 @@ begin
         Break;
     end
     else if not IsDigitChar(LCh) then
-      Break;
+      Break
+    else
+      Inc(LDigitCount);
     if LBufLen >= 126 then
       Exit(SetError('number too long', 15));
     LBuf[LBufLen] := Src[Pos];
@@ -718,8 +757,27 @@ begin
     Inc(Pos); Inc(Col);
   end;
 
+  // Trailing underscore check
+  if LPrevUnderscore and (LBufLen > (Ord(LNeg) and 1)) then
+    Exit(SetError('trailing underscore in number', 29));
+
   if (LNeg and (LBufLen <= 1)) or ((not LNeg) and (LBufLen = 0)) then
     Exit(SetError('invalid number', 14));
+
+  // Validate: no trailing dot, no trailing exponent sign, no leading zeros
+  if LHasDot and (LDigitCount = 0) then
+    Exit(SetError('no digits after dot', 19));
+  if LHasExp and (LDigitCount = 0) then
+    Exit(SetError('no digits after exponent', 24));
+
+  // Leading zero check for integers (0 alone is fine, 01 is not)
+  if (not LHasDot) and (not LHasExp) then
+  begin
+    LI := 0;
+    if LBuf[0] = '-' then LI := 1;
+    if (LI < SizeUInt(LBufLen)) and (LBuf[LI] = '0') and (SizeUInt(LBufLen) - LI > 1) then
+      Exit(SetError('leading zeros not allowed', 25));
+  end;
 
   ANodeIdx := Doc^.AddNode;
   if LHasDot or LHasExp then
