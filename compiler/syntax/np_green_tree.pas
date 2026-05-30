@@ -2009,10 +2009,19 @@ begin
               end
               else if CurrentToken(ALexer, ACursor).Kind = tkCaseKeyword then
               begin
-                while (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+                I := 1;
+                Inc(ACursor);
+                while (ACursor < ALexer.TokenCount) and (I > 0) and
                   (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
-                  Inc(ACursor);
+                begin
+                  if CurrentToken(ALexer, ACursor).Kind in
+                    [tkRecordKeyword, tkCaseKeyword] then
+                    Inc(I)
+                  else if CurrentToken(ALexer, ACursor).Kind = tkEndKeyword then
+                    Dec(I);
+                  if I > 0 then
+                    Inc(ACursor);
+                end;
               end
               else if CurrentToken(ALexer, ACursor).Kind in
                 [tkClassKeyword, tkProcedureKeyword, tkFunctionKeyword,
@@ -3092,7 +3101,7 @@ function ParseBlockDeclarations(
 var
   DeclTerminatorSet: TTokenKindSet;
 begin
-  DeclTerminatorSet := [tkBeginKeyword,
+  DeclTerminatorSet := [tkBeginKeyword, tkEndKeyword,
     tkImplementationKeyword, tkInitializationKeyword,
     tkFinalizationKeyword, tkEOF];
 
