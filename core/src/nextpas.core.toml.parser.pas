@@ -3,6 +3,11 @@ unit nextpas.core.toml.parser;
   TTomlDocument is a record with Init/Done lifecycle — caller manages memory.
   Uses IAllocator for all heap operations (arena-friendly).
 
+  OWNERSHIP: TTomlDocument is NOT copyable. It owns heap resources (FNodes,
+  FOwnedBufs, FHashBuckets). Assigning one TTomlDocument to another will cause
+  double-free on Done. Always pass by pointer or use ITomlDocument (interface)
+  for safe reference-counted access.
+
   Features: bare/quoted/dotted keys, all string types, all number bases,
   datetime, arrays, inline tables, standard tables, array tables.
   SIMD-accelerated string scanning and comment skipping.

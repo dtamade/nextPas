@@ -104,11 +104,61 @@ begin
     ((ADoc.Node(AIdx)^.Flags and TOML_NODE_FLAG_ARRAY_TABLE) <> 0);
 end;
 
-procedure StringifyTable(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; const APath: string);
+type
+  TPathSegments = record
+    Segs: array[0..127] of TStringView;
+    Count: Int32;
+  end;
+
+function IsBareKeyView(const AView: TStringView): Boolean;
+var
+  LI: SizeUInt;
+  LCh: Byte;
+begin
+  if AView.Len = 0 then Exit(False);
+  for LI := 0 to AView.Len - 1 do
+  begin
+    LCh := Byte(AView.Data[LI]);
+    if not (((LCh >= Ord('A')) and (LCh <= Ord('Z')))
+      or ((LCh >= Ord('a')) and (LCh <= Ord('z')))
+      or ((LCh >= Ord('0')) and (LCh <= Ord('9')))
+      or (LCh = Ord('-')) or (LCh = Ord('_'))) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+procedure WriteTableHeader(var AW: TTomlWriter; var APath: TPathSegments; AIsArray: Boolean);
+var
+  LI: Int32;
+  LBuilder: TStringBuilder;
+begin
+  LBuilder.Init(64);
+  for LI := 0 to APath.Count - 1 do
+  begin
+    if LI > 0 then LBuilder.AppendChar('.');
+    if IsBareKeyView(APath.Segs[LI]) then
+      LBuilder.AppendBytes(APath.Segs[LI].Data, APath.Segs[LI].Len)
+    else
+    begin
+      LBuilder.AppendChar('"');
+      LBuilder.AppendBytes(APath.Segs[LI].Data, APath.Segs[LI].Len);
+      LBuilder.AppendChar('"');
+    end;
+  end;
+  if AIsArray then
+    AW.BeginArrayTable(LBuilder.ToString)
+  else
+    AW.BeginTable(LBuilder.ToString);
+  LBuilder.Done;
+end;
+
+procedure StringifyTable(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; var APath: TPathSegments); forward;
+
+procedure StringifyTable(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; var APath: TPathSegments);
 var
   LCur: UInt32;
   LNode: PTomlNode;
-  LChildPath: string;
   LArrayChild: UInt32;
 begin
   LCur := ADoc.Node(AIdx)^.Container.FirstChild;
@@ -128,26 +178,24 @@ begin
     LNode := ADoc.Node(LCur);
     if LNode^.Kind = tnkTable then
     begin
-      if APath = '' then
-        LChildPath := LNode^.Key.ToString
-      else
-        LChildPath := APath + '.' + LNode^.Key.ToString;
-      AW.BeginTable(LChildPath);
-      StringifyTable(ADoc, LCur, AW, LChildPath);
+      APath.Segs[APath.Count] := LNode^.Key;
+      Inc(APath.Count);
+      WriteTableHeader(AW, APath, False);
+      StringifyTable(ADoc, LCur, AW, APath);
+      Dec(APath.Count);
     end
     else if IsArrayTable(ADoc, LCur) then
     begin
-      if APath = '' then
-        LChildPath := LNode^.Key.ToString
-      else
-        LChildPath := APath + '.' + LNode^.Key.ToString;
+      APath.Segs[APath.Count] := LNode^.Key;
+      Inc(APath.Count);
       LArrayChild := LNode^.Container.FirstChild;
       while LArrayChild <> TOML_NODE_NONE do
       begin
-        AW.BeginArrayTable(LChildPath);
-        StringifyTable(ADoc, LArrayChild, AW, LChildPath);
+        WriteTableHeader(AW, APath, True);
+        StringifyTable(ADoc, LArrayChild, AW, APath);
         LArrayChild := ADoc.Node(LArrayChild)^.Next;
       end;
+      Dec(APath.Count);
     end;
     LCur := LNode^.Next;
   end;
@@ -198,10 +246,12 @@ function TTomlDocumentImpl.Stringify: string;
 var
   LBuilder: TStringBuilder;
   LWriter: TTomlWriter;
+  LPath: TPathSegments;
 begin
   LBuilder.Init(256);
   LWriter.Init(LBuilder);
-  StringifyTable(FDoc, FDoc.Root, LWriter, '');
+  LPath.Count := 0;
+  StringifyTable(FDoc, FDoc.Root, LWriter, LPath);
   Result := LBuilder.ToString;
   LBuilder.Done;
 end;
@@ -210,10 +260,12 @@ function TTomlDocumentImpl.StringifyPretty(const AIndent: Int32): string;
 var
   LBuilder: TStringBuilder;
   LWriter: TTomlWriter;
+  LPath: TPathSegments;
 begin
   LBuilder.Init(256);
   LWriter.InitPretty(LBuilder, AIndent);
-  StringifyTable(FDoc, FDoc.Root, LWriter, '');
+  LPath.Count := 0;
+  StringifyTable(FDoc, FDoc.Root, LWriter, LPath);
   Result := LBuilder.ToString;
   LBuilder.Done;
 end;
