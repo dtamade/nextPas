@@ -8207,7 +8207,7 @@ begin
             RegisterRecordVar(Decl.Text, Decl.ChildAt(0).Text);
             FModel.AddTypedHirNode(
               'var-decl-record-runtime', Decl.Text, 0, 0,
-              Decl.Text + #9 + IntToStr(Folded div 8)
+              Decl.Text + #9 + IntToStr(TypeMetaSize(Decl.ChildAt(0).Text) div 8)
             );
           end
           else
