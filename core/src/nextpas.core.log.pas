@@ -91,6 +91,9 @@ function NewMultiHandler(const AHandlers: array of ILogHandler): ILogHandler;
 procedure SetDefaultLogger(const ALogger: TLogger);
 function DefaultLogger: TLogger;
 
+procedure SetLogContext(ACtx: Pointer);
+function GetLogContext: Pointer;
+
 procedure LogTrace(const AMsg: string);
 procedure LogDebug(const AMsg: string);
 procedure LogInfo(const AMsg: string);
@@ -184,13 +187,24 @@ begin
   Result := @Self;
 end;
 
+var
+  GLogDepth: Int32 = 0;
+
 procedure TLogEvent.Msg(const AText: string);
 begin
   if not FEnabled then Exit;
   FEnabled := False;
   FRec.Message := AText;
   FRec.TimestampNs := TInstant.Now.Elapsed.AsNanoseconds;
-  FHandler.Handle(FRec);
+  Inc(GLogDepth);
+  try
+    if GLogDepth > 1 then
+      WriteLn(StdErr, '[REENTRANT] ', LEVEL_NAMES[FRec.Level], ' ', AText)
+    else
+      FHandler.Handle(FRec);
+  finally
+    Dec(GLogDepth);
+  end;
 end;
 
 procedure TLogEvent.Send;
@@ -332,15 +346,16 @@ procedure TConsoleHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
   LA: TAttr;
+  LKeyPrefix: string;
 begin
+  if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
   Write(StdErr, LEVEL_COLORS[ARecord.Level], LEVEL_NAMES[ARecord.Level], RESET, ' ');
   if ARecord.Message <> '' then
     Write(StdErr, ARecord.Message);
-  // Prefix attrs (from WithAttrs)
   for LI := 0 to FPrefixCount - 1 do
   begin
     LA := FPrefix[LI];
-    Write(StdErr, ' ', DIM, LA.Key, '=', RESET);
+    Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
     case LA.Kind of
       akString: Write(StdErr, LA.SVal);
       akInt: Write(StdErr, LA.IVal);
@@ -348,11 +363,10 @@ begin
       akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
     end;
   end;
-  // Event attrs
   for LI := 0 to ARecord.AttrCount - 1 do
   begin
     LA := ARecord.Attrs[LI];
-    Write(StdErr, ' ', DIM, LA.Key, '=', RESET);
+    Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
     case LA.Kind of
       akString: Write(StdErr, LA.SVal);
       akInt: Write(StdErr, LA.IVal);
@@ -428,27 +442,29 @@ procedure WriteJsonStr(const AStr: string);
 var
   LI: Int32;
   LCh: Char;
+  LBuf: string;
 begin
-  Write(StdErr, '"');
+  LBuf := '"';
   for LI := 1 to Length(AStr) do
   begin
     LCh := AStr[LI];
     case LCh of
-      '"': Write(StdErr, '\"');
-      '\': Write(StdErr, '\\');
-      #8: Write(StdErr, '\b');
-      #9: Write(StdErr, '\t');
-      #10: Write(StdErr, '\n');
-      #12: Write(StdErr, '\f');
-      #13: Write(StdErr, '\r');
+      '"': LBuf := LBuf + '\"';
+      '\': LBuf := LBuf + '\\';
+      #8: LBuf := LBuf + '\b';
+      #9: LBuf := LBuf + '\t';
+      #10: LBuf := LBuf + '\n';
+      #12: LBuf := LBuf + '\f';
+      #13: LBuf := LBuf + '\r';
     else
       if LCh < #32 then
-        Write(StdErr, '\u00', HexStr(Ord(LCh), 2))
+        LBuf := LBuf + '\u00' + HexStr(Ord(LCh), 2)
       else
-        Write(StdErr, LCh);
+        LBuf := LBuf + LCh;
     end;
   end;
-  Write(StdErr, '"');
+  LBuf := LBuf + '"';
+  Write(StdErr, LBuf);
 end;
 
 procedure WriteJsonAttr(var AFirst: Boolean; const LA: TAttr);
@@ -522,6 +538,17 @@ end;
 var
   GDefault: TLogger;
   GDefaultInit: Boolean = False;
+  GLogContext: Pointer = nil;
+
+procedure SetLogContext(ACtx: Pointer);
+begin
+  GLogContext := ACtx;
+end;
+
+function GetLogContext: Pointer;
+begin
+  Result := GLogContext;
+end;
 
 procedure SetDefaultLogger(const ALogger: TLogger);
 begin
@@ -566,6 +593,7 @@ type
     FFile: TextFile;
     FCurrentSize: Int64;
     FOpened: Boolean;
+    FBroken: Boolean;
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
     procedure EnsureOpen;
@@ -602,13 +630,21 @@ end;
 
 procedure TFileHandler.EnsureOpen;
 begin
-  if FOpened then Exit;
-  AssignFile(FFile, FPath);
-  if FileExists(FPath) then
-    Append(FFile)
-  else
-    Rewrite(FFile);
-  FOpened := True;
+  if FBroken or FOpened then Exit;
+  try
+    AssignFile(FFile, FPath);
+    if FileExists(FPath) then
+      Append(FFile)
+    else
+      Rewrite(FFile);
+    FOpened := True;
+  except
+    on E: Exception do
+    begin
+      FBroken := True;
+      WriteLn(StdErr, '[LOG] FileHandler broken: ', E.Message);
+    end;
+  end;
 end;
 
 procedure TFileHandler.Rotate;
@@ -642,6 +678,7 @@ procedure TFileHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
 begin
+  if FBroken then Exit;
   if FCurrentSize >= FMaxBytes then Rotate;
   EnsureOpen;
   Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
