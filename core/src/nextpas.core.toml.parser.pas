@@ -1158,6 +1158,7 @@ begin
     SkipWhitespaceInline;
     if not ParseValue(LChildIdx) then Exit(False);
     Doc^.FNodes[LChildIdx].Key := LKey;
+    Doc^.FNodes[LChildIdx].KeyHash := TomlKeyHash(LKey.Data, LKey.Len);
     AddChild(LTableIdx, LChildIdx);
     Inc(LCount);
     SkipWhitespaceInline;
@@ -1234,11 +1235,13 @@ end;
 function TTomlParser.FindChild(ATableIdx: UInt32; const AKey: TStringView): UInt32;
 var
   LCur: UInt32;
+  LHash: UInt32;
 begin
+  LHash := TomlKeyHash(AKey.Data, AKey.Len);
   LCur := Doc^.FNodes[ATableIdx].Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
   begin
-    if Doc^.FNodes[LCur].Key.Equals(AKey) then
+    if (Doc^.FNodes[LCur].KeyHash = LHash) and Doc^.FNodes[LCur].Key.Equals(AKey) then
       Exit(LCur);
     LCur := Doc^.FNodes[LCur].Next;
   end;
@@ -1289,6 +1292,7 @@ begin
   if not AImplicit then
     Doc^.FNodes[LNewIdx].Flags := TOML_NODE_FLAG_EXPLICIT;
   Doc^.FNodes[LNewIdx].Key := AKey;
+  Doc^.FNodes[LNewIdx].KeyHash := TomlKeyHash(AKey.Data, AKey.Len);
   Doc^.FNodes[LNewIdx].Container.FirstChild := TOML_NODE_NONE;
   Doc^.FNodes[LNewIdx].Container.LastChild := TOML_NODE_NONE;
   Doc^.FNodes[LNewIdx].Container.Count := 0;
@@ -1328,6 +1332,7 @@ begin
     Exit(SetError('duplicate key', 13));
 
   Doc^.FNodes[LValueIdx].Key := LKeys[LKeyCount - 1];
+  Doc^.FNodes[LValueIdx].KeyHash := TomlKeyHash(LKeys[LKeyCount - 1].Data, LKeys[LKeyCount - 1].Len);
   AddChild(LTargetTable, LValueIdx);
   Inc(Doc^.FNodes[LTargetTable].Container.Count);
   Result := True;
@@ -1380,6 +1385,7 @@ begin
       LArrayIdx := Doc^.AddNode;
       Doc^.FNodes[LArrayIdx].Kind := tnkArray;
       Doc^.FNodes[LArrayIdx].Key := LKeys[LKeyCount - 1];
+      Doc^.FNodes[LArrayIdx].KeyHash := TomlKeyHash(LKeys[LKeyCount - 1].Data, LKeys[LKeyCount - 1].Len);
       Doc^.FNodes[LArrayIdx].Container.FirstChild := TOML_NODE_NONE;
       Doc^.FNodes[LArrayIdx].Container.LastChild := TOML_NODE_NONE;
       Doc^.FNodes[LArrayIdx].Container.Count := 0;

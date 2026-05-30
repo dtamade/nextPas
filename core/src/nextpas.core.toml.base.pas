@@ -45,6 +45,7 @@ type
   TTomlNode = record
     Kind: TTomlNodeKind;
     Flags: Byte;
+    KeyHash: UInt32;
     Next: UInt32;
     Key: TStringView;
     case Byte of
@@ -85,8 +86,20 @@ function TomlDateTimeWithOffset(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASe
   ANanosecond: UInt32; AOffsetMinutes: Int16): TTomlDateTime;
 function TomlDate(AYear: UInt16; AMonth, ADay: Byte): TTomlDateTime;
 function TomlTime(AHour, AMinute, ASecond: Byte; ANanosecond: UInt32): TTomlDateTime;
+function TomlKeyHash(const AData: PAnsiChar; ALen: SizeUInt): UInt32; inline;
 
 implementation
+
+function TomlKeyHash(const AData: PAnsiChar; ALen: SizeUInt): UInt32;
+var
+  LH: UInt32;
+  LI: SizeUInt;
+begin
+  LH := UInt32(2166136261);
+  for LI := 0 to ALen - 1 do
+    LH := (LH xor Byte(AData[LI])) * UInt32(16777619);
+  Result := LH;
+end;
 
 function TTomlDateTime.HasDate: Boolean;
 begin
