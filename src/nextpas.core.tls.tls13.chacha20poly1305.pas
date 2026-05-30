@@ -51,6 +51,45 @@ const
   POLY1305_TAG_SIZE = 16;
   POLY1305_MASK_26 = $3FFFFFF;
 
+{$IFDEF CPUX86_64}
+var
+  GChaCha20AVX2Checked: Boolean = False;
+  GChaCha20HasAVX2: Boolean = False;
+
+function ChaCha20DetectAVX2: Boolean;
+var
+  LEcx, LEbx: DWord;
+begin
+  if GChaCha20AVX2Checked then
+    Exit(GChaCha20HasAVX2);
+  LEcx := 0; LEbx := 0;
+  asm
+    push %rbx
+    movl $1, %eax
+    cpuid
+    movl %ecx, LEcx
+    pop %rbx
+  end ['eax', 'ecx', 'edx'];
+  if (LEcx and (1 shl 28)) = 0 then
+  begin
+    GChaCha20HasAVX2 := False;
+    GChaCha20AVX2Checked := True;
+    Exit(False);
+  end;
+  asm
+    push %rbx
+    movl $7, %eax
+    xorl %ecx, %ecx
+    cpuid
+    movl %ebx, LEbx
+    pop %rbx
+  end ['eax', 'ecx', 'edx'];
+  GChaCha20HasAVX2 := (LEbx and (1 shl 5)) <> 0;
+  GChaCha20AVX2Checked := True;
+  Result := GChaCha20HasAVX2;
+end;
+{$ENDIF}
+
 function RotateLeft32(AValue: UInt32; ACount: Integer): UInt32; inline;
 begin
   Result := (AValue shl ACount) or (AValue shr (32 - ACount));
@@ -166,11 +205,14 @@ begin
   LState[14] := Load32LE(ANonce, 4);
   LState[15] := Load32LE(ANonce, 8);
 
-  // AVX2 4-block path (256 bytes at a time)
-  {$I nextpas.core.crypto.chacha20.4block.x86_64.inc}
+  // AVX2 4-block path (256 bytes at a time) — guarded by CPUID
+  if ChaCha20DetectAVX2 then
+  begin
+    {$I nextpas.core.crypto.chacha20.4block.x86_64.inc}
+  end;
 
   // AVX2 dual-block path: process 2 blocks (128 bytes) at a time
-  while LOffset + 128 <= Length(AInput) do
+  while ChaCha20DetectAVX2 and (LOffset + 128 <= Length(AInput)) do
   begin
     LState[12] := ACounter;
     asm
@@ -884,12 +926,33 @@ begin
     movq 16(%rcx), %rax; mulq 24(%rcx); addq %rax, D2Lo; adcq %rdx, D2Hi
   end ['rax', 'rcx', 'rdx'];
   {$ELSE}
-  // Pure Pascal fallback (uses 5×26-bit limbs internally for correctness)
-  // For non-x86_64: fall back to simple multiply (may overflow for large h)
-  // TODO: implement proper 5-limb fallback for non-x86_64
-  D0Lo := Ctx.H0 * Ctx.R0; D0Hi := 0;
-  D1Lo := Ctx.H0 * Ctx.R1; D1Hi := 0;
-  D2Lo := Ctx.H0 * Ctx.R2; D2Hi := 0;
+  // Full 3×44-bit Poly1305 multiply for non-x86_64 platforms.
+  // Each limb ≤ 2^44, so h[i]*r[j] ≤ 2^88 which fits in two UInt64 words
+  // when accumulated with proper carry tracking.
+  D0Lo := 0; D0Hi := 0;
+  D1Lo := 0; D1Hi := 0;
+  D2Lo := 0; D2Hi := 0;
+
+  // D0 = H0*R0 + H1*S2 + H2*S1
+  D0Lo := Ctx.H0 * Ctx.R0;
+  D0Lo := D0Lo + Ctx.H1 * Ctx.S2;
+  if D0Lo < Ctx.H1 * Ctx.S2 then Inc(D0Hi);
+  D0Lo := D0Lo + Ctx.H2 * Ctx.S1;
+  if D0Lo < Ctx.H2 * Ctx.S1 then Inc(D0Hi);
+
+  // D1 = H0*R1 + H1*R0 + H2*S2
+  D1Lo := Ctx.H0 * Ctx.R1;
+  D1Lo := D1Lo + Ctx.H1 * Ctx.R0;
+  if D1Lo < Ctx.H1 * Ctx.R0 then Inc(D1Hi);
+  D1Lo := D1Lo + Ctx.H2 * Ctx.S2;
+  if D1Lo < Ctx.H2 * Ctx.S2 then Inc(D1Hi);
+
+  // D2 = H0*R2 + H1*R1 + H2*R0
+  D2Lo := Ctx.H0 * Ctx.R2;
+  D2Lo := D2Lo + Ctx.H1 * Ctx.R1;
+  if D2Lo < Ctx.H1 * Ctx.R1 then Inc(D2Hi);
+  D2Lo := D2Lo + Ctx.H2 * Ctx.R0;
+  if D2Lo < Ctx.H2 * Ctx.R0 then Inc(D2Hi);
   {$ENDIF}
   Ctx.H0 := D0Lo and $0FFFFFFFFFFF;
   C := (D0Lo shr 44) or (D0Hi shl 20);

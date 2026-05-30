@@ -147,6 +147,7 @@ begin
 end;
 
 procedure ScReduce(var S: array of Byte);
+
 { Reduces a 64-byte (512-bit) little-endian integer modulo the Ed25519 group
   order L = 2^252 + 27742317777372353535851937790883648493.
   Binary long division: for each bit from 511 down to 252, if the
@@ -237,6 +238,25 @@ begin
   { Zero out remaining bytes }
   for I := 32 to 63 do
     S[I] := 0;
+end;
+
+function ScIsLessThanL(const S: array of Byte): Boolean;
+const
+  L_LE: array[0..31] of Byte = (
+    $ED, $D3, $F5, $5C, $1A, $63, $12, $58,
+    $D6, $9C, $F7, $A2, $DE, $F9, $DE, $14,
+    $00, $00, $00, $00, $00, $00, $00, $00,
+    $00, $00, $00, $00, $00, $00, $00, $10
+  );
+var
+  I: Integer;
+begin
+  for I := 31 downto 0 do
+  begin
+    if S[I] < L_LE[I] then Exit(True);
+    if S[I] > L_LE[I] then Exit(False);
+  end;
+  Result := False;
 end;
 
 procedure EdPointToBytes(out S: TBytes; const P: TEdPoint);
@@ -403,6 +423,9 @@ begin
 
   for I := 0 to 31 do
     LS[I] := ASignature[32 + I];
+
+  if not ScIsLessThanL(LS) then
+    Exit;
 
   SB := EdBasePointMul(LS);
   KA := EdScalarMulPoint(LK, A);
