@@ -210,12 +210,8 @@ end;
 procedure TestRejectDuplicateTable;
 var LDoc: ITomlDocument;
 begin
-  // NOTE: TOML v1.0 requires rejecting [a] defined twice.
-  // Current parser allows re-entering implicit tables (needed for [a.b] then [a]).
-  // Full duplicate-table detection requires tracking explicit vs implicit — deferred.
   LDoc := TomlParse('[a]' + #10 + 'x = 1' + #10 + '[a]' + #10 + 'y = 2');
-  // For now, accept this (known limitation)
-  Check(True, 'duplicate table detection deferred');
+  Check(LDoc.HasError, 'duplicate explicit table rejected');
 end;
 
 procedure TestRejectBareKeyInvalid;
@@ -342,6 +338,20 @@ begin
   Check(LDoc.Root.Get('x').AsStr.Len = 4, '\U0001F600 is 4 UTF-8 bytes');
 end;
 
+procedure TestRejectInlineTableExtension;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('point = {x = 1}' + #10 + 'point.y = 2');
+  Check(LDoc.HasError, 'inline table extension rejected');
+end;
+
+procedure TestRejectInlineTableReopen;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('t = {a = 1}' + #10 + '[t]' + #10 + 'b = 2');
+  Check(LDoc.HasError, 'inline table reopen rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -384,6 +394,8 @@ begin
   T.Run('reject escape slash', @TestRejectEscapeSlash);
   T.Run('unicode escape \\u', @TestUnicodeEscape4);
   T.Run('unicode escape \\U', @TestUnicodeEscape8);
+  T.Run('reject inline table extension', @TestRejectInlineTableExtension);
+  T.Run('reject inline table reopen', @TestRejectInlineTableReopen);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

@@ -44,6 +44,7 @@ type
 
   TTomlNode = record
     Kind: TTomlNodeKind;
+    Flags: Byte;
     Next: UInt32;
     Key: TStringView;
     case Byte of
@@ -74,6 +75,9 @@ const
   TOML_DT_FLAG_HAS_TIME   = Byte(2);
   TOML_DT_FLAG_HAS_OFFSET = Byte(4);
   TOML_DT_KIND_SHIFT      = 4;
+
+  TOML_NODE_FLAG_INLINE   = Byte(1);
+  TOML_NODE_FLAG_EXPLICIT = Byte(2);
 
 function TomlDateTime(AYear: UInt16; AMonth, ADay, AHour, AMinute, ASecond: Byte;
   ANanosecond: UInt32): TTomlDateTime;

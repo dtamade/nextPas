@@ -1116,6 +1116,7 @@ begin
   Advance; // skip {
   ANodeIdx := Doc^.AddNode;
   Doc^.FNodes[ANodeIdx].Kind := tnkTable;
+  Doc^.FNodes[ANodeIdx].Flags := TOML_NODE_FLAG_INLINE;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.LastChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.Count := 0;
@@ -1257,19 +1258,26 @@ begin
   if LExisting <> TOML_NODE_NONE then
   begin
     if Doc^.FNodes[LExisting].Kind = tnkTable then
-      Exit(LExisting);
-    if Doc^.FNodes[LExisting].Kind = tnkArray then
     begin
-      // Return last element of array table
-      LExisting := Doc^.FNodes[LExisting].Container.FirstChild;
-      while (LExisting <> TOML_NODE_NONE) and (Doc^.FNodes[LExisting].Next <> TOML_NODE_NONE) do
-        LExisting := Doc^.FNodes[LExisting].Next;
+      if (Doc^.FNodes[LExisting].Flags and TOML_NODE_FLAG_INLINE) <> 0 then
+        Exit(TOML_NODE_NONE); // cannot extend inline table
+      if (not AImplicit) and ((Doc^.FNodes[LExisting].Flags and TOML_NODE_FLAG_EXPLICIT) <> 0) then
+        Exit(TOML_NODE_NONE); // duplicate explicit table
+      if not AImplicit then
+        Doc^.FNodes[LExisting].Flags := Doc^.FNodes[LExisting].Flags or TOML_NODE_FLAG_EXPLICIT;
       Exit(LExisting);
     end;
-    Exit(TOML_NODE_NONE); // key exists but not a table
+    if Doc^.FNodes[LExisting].Kind = tnkArray then
+    begin
+      LExisting := Doc^.FNodes[LExisting].Container.LastChild;
+      Exit(LExisting);
+    end;
+    Exit(TOML_NODE_NONE);
   end;
   LNewIdx := Doc^.AddNode;
   Doc^.FNodes[LNewIdx].Kind := tnkTable;
+  if not AImplicit then
+    Doc^.FNodes[LNewIdx].Flags := TOML_NODE_FLAG_EXPLICIT;
   Doc^.FNodes[LNewIdx].Key := AKey;
   Doc^.FNodes[LNewIdx].Container.FirstChild := TOML_NODE_NONE;
   Doc^.FNodes[LNewIdx].Container.LastChild := TOML_NODE_NONE;
