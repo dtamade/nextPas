@@ -406,6 +406,8 @@ procedure IoUringPrepPollAdd(ASqe: PIoUringSqe; AFd: Int32; APollMask: UInt32);
 begin
   ASqe^.opcode := IORING_OP_POLL_ADD;
   ASqe^.fd := AFd;
+  // Note: truncates to UInt16 — POLLIN/POLLOUT/POLLERR/POLLHUP fit in low 16 bits.
+  // For IORING_POLL_ADD_MULTI (kernel 5.13+), need poll32_events in SQE.len field.
   ASqe^.op_flags.poll_events := UInt16(APollMask);
 end;
 
