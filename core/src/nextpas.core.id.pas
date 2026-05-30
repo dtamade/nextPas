@@ -9,6 +9,8 @@ uses
   nextpas.core.id.uuid,
   nextpas.core.id.v7.monotonic,
   nextpas.core.id.snowflake,
+  nextpas.core.id.ksuid,
+  nextpas.core.id.xid,
   nextpas.core.id.ulid,
   nextpas.core.id.nanoid;
 
@@ -20,6 +22,8 @@ type
   TSnowflakeId = nextpas.core.id.snowflake.TSnowflakeId;
   TSnowflakeGenerator = nextpas.core.id.snowflake.TSnowflakeGenerator;
   TUuidV7Generator = nextpas.core.id.v7.monotonic.TUuidV7Generator;
+  TKsuid = nextpas.core.id.ksuid.TKsuid;
+  TXid = nextpas.core.id.xid.TXid;
 
 const
   UUID_LENGTH = nextpas.core.id.base.UUID_LENGTH;
@@ -39,6 +43,8 @@ function Ulid: TUlidString; inline;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString; inline;
 function NanoId: TNanoIdString; inline;
 function NanoIdCustom(const AAlphabet: string; const ASize: Integer): TNanoIdString; inline;
+function KsuidNew: string; inline;
+function XidNew: string; inline;
 
 implementation
 
@@ -90,6 +96,16 @@ end;
 function NanoIdCustom(const AAlphabet: string; const ASize: Integer): TNanoIdString;
 begin
   Result := nextpas.core.id.nanoid.NanoIdCustom(AAlphabet, ASize);
+end;
+
+function KsuidNew: string;
+begin
+  Result := nextpas.core.id.ksuid.KsuidNew;
+end;
+
+function XidNew: string;
+begin
+  Result := nextpas.core.id.xid.XidNew;
 end;
 
 end.
