@@ -187,6 +187,7 @@ end;
 procedure TLogEvent.Msg(const AText: string);
 begin
   if not FEnabled then Exit;
+  FEnabled := False;
   FRec.Message := AText;
   FRec.TimestampNs := TInstant.Now.Elapsed.AsNanoseconds;
   FHandler.Handle(FRec);
@@ -229,7 +230,7 @@ end;
 
 function TLogger.Enabled(const ALevel: TLogLevel): Boolean;
 begin
-  Result := (ALevel >= FLevel) and ((FHandler = nil) or FHandler.Enabled(ALevel));
+  Result := (FHandler <> nil) and (ALevel >= FLevel) and FHandler.Enabled(ALevel);
 end;
 
 function TLogger.Trace: PLogEvent;
@@ -478,17 +479,9 @@ begin
   Write(StdErr, ',"ts":', ARecord.TimestampNs);
   LFirst := False;
   for LI := 0 to FPrefixCount - 1 do
-  begin
-    Write(StdErr, ',');
     WriteJsonAttr(LFirst, FPrefix[LI]);
-    LFirst := False;
-  end;
   for LI := 0 to ARecord.AttrCount - 1 do
-  begin
-    Write(StdErr, ',');
     WriteJsonAttr(LFirst, ARecord.Attrs[LI]);
-    LFirst := False;
-  end;
   WriteLn(StdErr, '}');
 end;
 
@@ -674,7 +667,7 @@ begin
   end;
   WriteLn(FFile);
   System.Flush(FFile);
-  Inc(FCurrentSize, Int64(Length(ARecord.Message)) + Int64(ARecord.AttrCount) * 20 + 10);
+  Inc(FCurrentSize, Int64(Length(ARecord.Message)) + Int64(ARecord.AttrCount + FPrefixCount) * 20 + 10);
 end;
 
 function TFileHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
