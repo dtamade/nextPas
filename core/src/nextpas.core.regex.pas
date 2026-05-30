@@ -247,10 +247,15 @@ var
             LName := LName + ATemplate[j];
             Inc(j);
           end;
-          if (j <= LTplLen) and (ATemplate[j] = '}') then Inc(j);
-          LIdx := GroupIndexByName(LName);
-          if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
-            Result := Result + AMatch.Groups[LIdx].Value(AInput);
+          if (j <= LTplLen) and (ATemplate[j] = '}') then
+          begin
+            Inc(j);
+            LIdx := GroupIndexByName(LName);
+            if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) and AMatch.Groups[LIdx].Found then
+              Result := Result + AMatch.Groups[LIdx].Value(AInput);
+          end
+          else
+            Result := Result + '${' + LName;
         end
         else
         begin
@@ -290,7 +295,7 @@ var
   LLimit: SizeInt;
 begin
   LMatches := FindAll(AInput);
-  if Length(LMatches) = 0 then
+  if (Length(LMatches) = 0) or (AMaxSplits = 0) then
   begin
     SetLength(Result, 1);
     Result[0] := AInput;

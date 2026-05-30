@@ -105,8 +105,8 @@ var
       case LInst.Op of
         opSplit:
         begin
-          Stack[StackTop] := LInst.X; Inc(StackTop);
           Stack[StackTop] := LInst.Y; Inc(StackTop);
+          Stack[StackTop] := LInst.X; Inc(StackTop);
         end;
         opJump:
         begin
@@ -371,10 +371,10 @@ var
       case LInst.Op of
         opSplit:
         begin
-          Stack[StackTop] := LInst.X;
+          Stack[StackTop] := LInst.Y;
           StackSlot[StackTop] := LSIdx;
           Inc(StackTop);
-          Stack[StackTop] := LInst.Y;
+          Stack[StackTop] := LInst.X;
           StackSlot[StackTop] := LSIdx;
           Inc(StackTop);
         end;
