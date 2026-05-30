@@ -93,7 +93,10 @@ uses
   nextpas.core.collections.priorityqueue,
   nextpas.core.collections.lrucache,
   // BitSet (高效位集合)
-  nextpas.core.collections.bitset;
+  nextpas.core.collections.bitset,
+  // ConcurrentHashMap (thread-safe map)
+  nextpas.core.collections.concurrent.map.intf,
+  nextpas.core.collections.concurrent.hashmap;
 
 type
   // 统一对外导出的关键接口类型
@@ -255,6 +258,9 @@ generic function MakeMultiSet<T>: specialize IMultiSet<T>;
 // ==== BitSet (Efficient bit set) ====
 function MakeBitSet(aInitialCapacity: SizeUInt = BITSET_DEFAULT_CAPACITY; aAllocator: IAllocator = nil): IBitSet;
 //
+
+// ==== ConcurrentHashMap (Thread-safe map) ====
+generic function MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment: SizeUInt = 0): specialize IConcurrentMap<K,V>;
 
 
 // generic function MakeArr<T>(aSrc: Pointer; aElementCount: SizeUInt; aAllocator: TAllocator; aData: Pointer): specialize IArray<T>; overload;
@@ -914,6 +920,13 @@ begin
     Result := TBitSet.Create(aInitialCapacity);
 end;
 
+
+// ==== ConcurrentHashMap factories ====
+
+generic function MakeConcurrentHashMap<K,V>(aInitialCapacityPerSegment: SizeUInt = 0): specialize IConcurrentMap<K,V>;
+begin
+  Result := specialize TConcurrentHashMap<K,V>.Create(nil, nil, aInitialCapacityPerSegment);
+end;
 // end of factories
 
 end.

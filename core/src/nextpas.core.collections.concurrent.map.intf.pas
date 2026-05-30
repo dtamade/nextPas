@@ -16,6 +16,7 @@ type
     procedure Put(const AKey: K; const AValue: V);
     function PutIfAbsent(const AKey: K; const AValue: V): Boolean;
     function Remove(const AKey: K): Boolean;
+    function Replace(const AKey: K; const ANewValue: V): Boolean;
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     function IsEmpty: Boolean;
     procedure Clear;

@@ -634,6 +634,8 @@ begin
   LCurrent := FHead;
   while LCurrent <> nil do
   begin
+    if System.IsManagedType(T) then
+      Finalize(LCurrent^.Data);
     FillChar(LCurrent^.Data, SizeOf(T), 0);
     LCurrent := PDoubleNode(LCurrent^.GetNext);
   end;

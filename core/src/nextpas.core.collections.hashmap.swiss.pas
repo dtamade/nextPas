@@ -64,6 +64,17 @@ type
       function MoveNext: Boolean;
       property Current: TSlot read FCurrent;
     end;
+    TPtrEnumerator = record
+    private
+      FCtrl: PByte;
+      FSlots: PSlot;
+      FCapacity: SizeUInt;
+      FIdx: SizeUInt;
+    public
+      function MoveNext: Boolean;
+      function GetCurrent: PSlot; inline;
+      property Current: PSlot read GetCurrent;
+    end;
   private
     FCtrl: PByte;
     FSlots: PSlot;
@@ -108,6 +119,8 @@ type
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
     function GetSlotKey(AIndex: SizeUInt): K; inline;
     function GetEnumerator: TEnumerator;
+    function GetPtrEnumerator: TPtrEnumerator;
+    function Slots: PSlot; inline;
     function IsEmpty: Boolean; inline;
     function GetCount: SizeUInt;
 
@@ -614,6 +627,9 @@ begin
   if System.IsManagedType(K) then Finalize(FSlots[LIdx].Key);
   if System.IsManagedType(V) then Finalize(FSlots[LIdx].Value);
   FillChar(FSlots[LIdx], SizeOf(TSlot), 0);
+  // Note: DELETED slots do not restore FGrowthLeft. This is intentional
+  // (matches Abseil/hashbrown): DELETED preserves probe chains.
+  // Growth budget is fully reclaimed on GrowAndRehash.
   SetCtrl(LIdx, CTRL_DELETED);
   Dec(FCount);
   Result := True;
@@ -739,6 +755,7 @@ begin
       begin
         if System.IsManagedType(K) then Finalize(FSlots[i].Key);
         if System.IsManagedType(V) then Finalize(FSlots[i].Value);
+        FillChar(FSlots[i], SizeOf(TSlot), 0);
         SetCtrl(i, CTRL_DELETED);
         Dec(FCount);
       end;
@@ -829,4 +846,38 @@ begin
   Result := FCount;
 end;
 
+
+{ TPtrEnumerator }
+
+function TSwissTable.TPtrEnumerator.MoveNext: Boolean;
+begin
+  while FIdx < FCapacity do
+  begin
+    if FCtrl[FIdx] < $80 then
+    begin
+      Inc(FIdx);
+      Exit(True);
+    end;
+    Inc(FIdx);
+  end;
+  Result := False;
+end;
+
+function TSwissTable.TPtrEnumerator.GetCurrent: PSlot;
+begin
+  Result := @FSlots[FIdx - 1];
+end;
+
+function TSwissTable.GetPtrEnumerator: TPtrEnumerator;
+begin
+  Result.FCtrl := FCtrl;
+  Result.FSlots := FSlots;
+  Result.FCapacity := FCapacity;
+  Result.FIdx := 0;
+end;
+
+function TSwissTable.Slots: PSlot;
+begin
+  Result := FSlots;
+end;
 end.

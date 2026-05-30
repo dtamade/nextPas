@@ -47,6 +47,8 @@ type
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
     procedure ForEach(AFunc: TForEachFunc);
+    // Deprecated: Keys() does not provide a consistent snapshot under concurrent
+    // modification. Use ForEach() instead for safe iteration.
     function Keys: TKeyArray;
     function IsEmpty: Boolean;
     procedure Clear;
@@ -71,7 +73,14 @@ begin
     else if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 8) then
       LHash := InlineHashMix32(UInt32(PQWord(@AKey)^ xor (PQWord(@AKey)^ shr 32)))
     else if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
-      LHash := InlineHashMix32(UInt32(Length(PAnsiString(@AKey)^)) * 2654435761)
+    begin
+      LHash := UInt32(Length(PAnsiString(@AKey)^));
+      if Length(PAnsiString(@AKey)^) >= 4 then
+        LHash := LHash xor PUInt32(Pointer(PAnsiString(@AKey)^))^;
+      if Length(PAnsiString(@AKey)^) >= 8 then
+        LHash := LHash xor PUInt32(Pointer(PAnsiString(@AKey)^) + 4)^;
+      LHash := InlineHashMix32(LHash);
+    end
     else
       LHash := InlineHashMix32(PUInt32(@AKey)^);
   end;
