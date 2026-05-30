@@ -6537,6 +6537,21 @@ begin
       'int 0' + #10 + 'cmp ne' + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeVar(ANode.Text) then
+  begin
+    ABlob := 'var ' + ANode.Text + #10 + 'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
+  begin
+    ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
+  begin
+    ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
+    Exit(True);
+  end;
   if ANode.NodeKind <> gnkBinaryExpression then
     Exit(False);
   if ANode.ChildCount < 2 then
