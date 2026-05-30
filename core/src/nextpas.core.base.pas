@@ -32,6 +32,7 @@ const
 { ============================================================ }
 
 type
+  TBytes = array of Byte;
   ECore = class(Exception);
   EWow = class(ECore);
   EArgumentNil = class(ECore);

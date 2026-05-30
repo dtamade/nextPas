@@ -8,6 +8,9 @@ uses
   SysUtils;
 
 type
+  { Re-export base Exception from RTL so consumers dont need SysUtils }
+  Exception = SysUtils.Exception;
+  EConvertError = SysUtils.EConvertError;
   { 错误分类码 }
   TErrorCategory = (
     ecNone,
