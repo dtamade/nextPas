@@ -102,9 +102,16 @@ end;
 procedure TestRejectBadStrings;
 const
   S1 = '"unterminated';
-  S2: array[0..3] of AnsiChar = ('"', #9, '"', #0);
+  S_TAB: array[0..3] of AnsiChar = ('"', #9, '"', #0);
+  S_NL: array[0..3] of AnsiChar = ('"', #10, '"', #0);
+  S_NULL: array[0..3] of AnsiChar = ('"', #0, '"', #0);
+  S_CR: array[0..3] of AnsiChar = ('"', #13, '"', #0);
 begin
   Check(MustReject(PAnsiChar(S1), Length(S1)), 'unterminated string');
+  Check(MustReject(@S_TAB[0], 3), 'bare tab in string');
+  Check(MustReject(@S_NL[0], 3), 'bare newline in string');
+  Check(MustReject(@S_NULL[0], 3), 'bare null in string');
+  Check(MustReject(@S_CR[0], 3), 'bare CR in string');
 end;
 
 procedure TestWhitespace;
@@ -135,6 +142,59 @@ begin
   Check(MustReject(@Buf[0], 1100), 'depth 550 rejected (limit 512)');
 end;
 
+procedure TestEdgeNumbers;
+begin
+  Check(MustParse('0', 1), '0');
+  Check(MustParse('-0', 2), '-0');
+  Check(MustParse('0.0', 3), '0.0');
+  Check(MustParse('-0.0', 4), '-0.0');
+  Check(MustParse('0e1', 3), '0e1');
+  Check(MustParse('1e+10', 5), '1e+10');
+  Check(MustParse('1e-10', 5), '1e-10');
+  Check(MustParse('1.5e2', 5), '1.5e2');
+end;
+
+procedure TestAccessorTypeSafety;
+var
+  Doc: TJsonDocument;
+  V: TJsonValue;
+begin
+  Doc.Init(DefaultAllocator);
+  Doc.Parse(TStringView.FromStr('{"n":42,"s":"hi","b":true,"a":[1]}'));
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.ObjectGet('n').AsBool = False, 'int as bool = false');
+  Check(V.ObjectGet('s').AsInt = 0, 'str as int = 0');
+  Check(V.ObjectGet('b').AsFloat = 0.0, 'bool as float = 0.0');
+  Check(V.ObjectGet('n').AsStr.IsEmpty, 'int as str = empty');
+  Check(V.ObjectGet('a').AsInt = 0, 'array as int = 0');
+  Check(V.ObjectGet('missing').AsInt = 0, 'missing as int = 0');
+  Doc.Done;
+end;
+
+procedure TestSurrogatePair;
+var
+  Doc: TJsonDocument;
+  V: TJsonValue;
+  S: TStringView;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.FromStr('"😀"')), 'surrogate pair parse');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  S := V.AsStr;
+  Check(S.Len = 4, 'emoji is 4 bytes UTF-8');
+  Check(Byte(S.Data[0]) = $F0, 'emoji byte 0');
+  Check(Byte(S.Data[1]) = $9F, 'emoji byte 1');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(TStringView.FromStr('"\uD800"')), 'lone high surrogate rejected');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(TStringView.FromStr('"\uDC00"')), 'lone low surrogate rejected');
+  Doc.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.rfc8259');
   T.Run('valid structures', @TestValidStructures);
@@ -147,5 +207,8 @@ begin
   T.Run('whitespace', @TestWhitespace);
   T.Run('trailing content', @TestTrailingContent);
   T.Run('deep nesting', @TestDeepNesting);
+  T.Run('edge numbers', @TestEdgeNumbers);
+  T.Run('accessor type safety', @TestAccessorTypeSafety);
+  T.Run('surrogate pair', @TestSurrogatePair);
   T.Summary;
 end.

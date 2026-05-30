@@ -241,6 +241,11 @@ begin
   I := 0;
   while I + VecWidth <= LRaw.Len do
   begin
+    if VecCmpLtU(@LRaw.Data[I], $20) <> TVecMask(0) then
+    begin
+      SetError('control char in string', 22);
+      Exit(JSON_NODE_NONE);
+    end;
     if VecCmpEq(@LRaw.Data[I], Ord('\')) <> TVecMask(0) then
     begin
       LHasEscape := True;
@@ -251,6 +256,11 @@ begin
   if not LHasEscape then
     while I < LRaw.Len do
     begin
+      if Byte(LRaw.Data[I]) < $20 then
+      begin
+        SetError('control char in string', 22);
+        Exit(JSON_NODE_NONE);
+      end;
       if LRaw.Data[I] = '\' then
       begin
         LHasEscape := True;
@@ -264,6 +274,11 @@ begin
   begin
     LBuf := Doc^.AllocStrBuf(LRaw.Len);
     LDecLen := JsonUnescapeToBuffer(LRaw.Data, LRaw.Len, LBuf, LErr);
+    if LErr <> ueNone then
+    begin
+      SetError('invalid escape sequence', 23);
+      Exit(JSON_NODE_NONE);
+    end;
     Doc^.FNodes[LIdx].Str := TStringView.Create(LBuf, LDecLen);
   end
   else

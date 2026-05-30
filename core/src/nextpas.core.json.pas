@@ -205,11 +205,10 @@ var
   LBuilder: TStringBuilder;
 
   procedure WriteIndent(ADepth: Int32);
-  var J: Int32;
   begin
     LBuilder.AppendChar(#10);
-    for J := 1 to ADepth * AIndent do
-      LBuilder.AppendChar(' ');
+    if ADepth * AIndent > 0 then
+      LBuilder.AppendChars(' ', ADepth * AIndent);
   end;
 
   procedure WritePrettyNode(AIdx: UInt32; ADepth: Int32);
@@ -217,8 +216,6 @@ var
     LNode: PJsonNode;
     LChild: UInt32;
     I: UInt32;
-    LBuf: array[0..31] of AnsiChar;
-    LN: Int32;
   begin
     if AIdx = JSON_NODE_NONE then
     begin

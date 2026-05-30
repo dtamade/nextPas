@@ -12,6 +12,7 @@ type
   TJsonReader = record
   private
     FInput: TStringView;
+    FOrigLen: SizeUInt;
     FTokenKind: TJsonTokenKind;
     FTokenStr: TStringView;
     FTokenInt: Int64;
@@ -45,6 +46,7 @@ uses
 procedure TJsonReader.Init(const AInput: TStringView);
 begin
   FInput := AInput;
+  FOrigLen := AInput.Len;
   FTokenKind := jtkNone;
   FDepth := 0;
   FError.Offset := 0;
@@ -282,7 +284,7 @@ end;
 
 function TJsonReader.Offset: SizeUInt;
 begin
-  Result := FInput.Len;
+  Result := FOrigLen - FInput.Len;
 end;
 
 end.
