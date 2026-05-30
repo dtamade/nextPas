@@ -54,6 +54,7 @@ type
     function HasError: Boolean;
     function Error: TTomlError;
     function Stringify: string;
+    function StringifyPretty(const AIndent: Int32 = 2): string;
   end;
 
 constructor TTomlDocumentImpl.Create(const AInput: string; const AAllocator: IAllocator);
@@ -208,6 +209,18 @@ begin
   LBuilder.Done;
 end;
 
+function TTomlDocumentImpl.StringifyPretty(const AIndent: Int32 = 2): string;
+var
+  LBuilder: TStringBuilder;
+  LWriter: TTomlWriter;
+begin
+  LBuilder.Init(256);
+  LWriter.InitPretty(LBuilder, AIndent);
+  StringifyTable(FDoc, FDoc.Root, LWriter, '');
+  Result := LBuilder.ToString;
+  LBuilder.Done;
+end;
+
 function TomlParse(const AInput: string): ITomlDocument;
 begin
   Result := TTomlDocumentImpl.Create(AInput, DefaultAllocator);
@@ -221,6 +234,11 @@ end;
 function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument;
 begin
   Result := TTomlDocumentImpl.Create(AInput, AAllocator);
+end;
+
+function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument;
+begin
+  Result := TTomlDocumentImpl.CreateFromView(AInput, AAllocator);
 end;
 
 end.
