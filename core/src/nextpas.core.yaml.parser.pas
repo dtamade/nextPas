@@ -11,10 +11,17 @@ uses
   nextpas.core.yaml.scanner;
 
 type
+  TYamlAnchorEntry = record
+    Name: TStringView;
+    NodeIdx: UInt32;
+  end;
+
   TYamlDocument = record
     Nodes: array of TYamlNode;
     NodeCount: UInt32;
     RootIdx: UInt32;
+    Anchors: array of TYamlAnchorEntry;
+    AnchorCount: UInt32;
     Error: TYamlError;
     HasError: Boolean;
   end;
@@ -33,6 +40,8 @@ begin
   SetLength(ADoc.Nodes, INITIAL_CAPACITY);
   ADoc.NodeCount := 0;
   ADoc.RootIdx := 0;
+  SetLength(ADoc.Anchors, 16);
+  ADoc.AnchorCount := 0;
   ADoc.HasError := False;
 end;
 
@@ -44,6 +53,28 @@ begin
   FillChar(ADoc.Nodes[Result], SizeOf(TYamlNode), 0);
   ADoc.Nodes[Result].Next := YAML_NODE_NONE;
   Inc(ADoc.NodeCount);
+end;
+
+procedure RegisterAnchor(var ADoc: TYamlDocument; const AName: TStringView; ANodeIdx: UInt32);
+begin
+  if ADoc.AnchorCount >= UInt32(Length(ADoc.Anchors)) then
+    SetLength(ADoc.Anchors, Length(ADoc.Anchors) * 2);
+  ADoc.Anchors[ADoc.AnchorCount].Name := AName;
+  ADoc.Anchors[ADoc.AnchorCount].NodeIdx := ANodeIdx;
+  Inc(ADoc.AnchorCount);
+end;
+
+function ResolveAlias(var ADoc: TYamlDocument; const AName: TStringView): UInt32;
+var
+  LI: UInt32;
+begin
+  for LI := 1 to ADoc.AnchorCount do
+    if ADoc.Anchors[LI - 1].Name.Equals(AName) then
+    begin
+      Result := ADoc.Anchors[LI - 1].NodeIdx;
+      Exit;
+    end;
+  Result := YAML_NODE_NONE;
 end;
 
 procedure SetError(var ADoc: TYamlDocument; const AMsg: string;
@@ -524,9 +555,13 @@ begin
     end;
     ytkAlias:
     begin
-      Result := AddNode(ADoc);
-      ADoc.Nodes[Result].Kind := ynkAlias;
-      ADoc.Nodes[Result].Str := ACurToken.Value;
+      Result := ResolveAlias(ADoc, ACurToken.Value);
+      if Result = YAML_NODE_NONE then
+      begin
+        SetError(ADoc, 'undefined alias', ACurToken.Line, ACurToken.Col, 0);
+        Result := AddNode(ADoc);
+        ADoc.Nodes[Result].Kind := ynkNull;
+      end;
       ACurToken := AScanner.NextToken;
     end;
     ytkAnchor:
@@ -535,7 +570,10 @@ begin
       ACurToken := AScanner.NextToken;
       Result := ParseNode(ADoc, AScanner, ACurToken);
       if not ADoc.HasError then
+      begin
         ADoc.Nodes[Result].Anchor := LAnchorName;
+        RegisterAnchor(ADoc, LAnchorName, Result);
+      end;
     end;
   else
     Result := AddNode(ADoc);
