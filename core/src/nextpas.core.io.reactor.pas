@@ -244,13 +244,20 @@ var
   LRet: Int32;
   LCqe: PIoUringCqe;
   LId: UInt64;
+const
+  EINTR = 4;
+  EAGAIN = 11;
 begin
   FRunning := True;
   while FRunning do
   begin
     LRet := FRing.SubmitAndWait(1);
-    if LRet < 0 then Break;
-    while FRing.PeekCqe(LCqe) do
+    if LRet < 0 then
+    begin
+      if (LRet = -EINTR) or (LRet = -EAGAIN) then Continue;
+      Break;
+    end;
+    while FRunning and FRing.PeekCqe(LCqe) do
     begin
       LId := IoUringCqeGetData(LCqe);
       if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then

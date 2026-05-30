@@ -112,10 +112,8 @@ const
 procedure ReadBarrier; inline;
 begin
   {$IFDEF CPUX86_64}
-  // x86_64: loads are not reordered with other loads
-  asm
-    lfence
-  end;
+  // x86_64 TSO: loads not reordered. Compiler barrier suffices.
+  ReadWriteBarrier;
   {$ELSE}
   ReadWriteBarrier;
   {$ENDIF}
@@ -124,10 +122,8 @@ end;
 procedure WriteBarrier; inline;
 begin
   {$IFDEF CPUX86_64}
-  // x86_64: stores are not reordered with other stores
-  asm
-    sfence
-  end;
+  // x86_64 TSO: stores not reordered. Compiler barrier suffices.
+  ReadWriteBarrier;
   {$ELSE}
   ReadWriteBarrier;
   {$ENDIF}
@@ -251,11 +247,10 @@ begin
   LToSubmit := FSqTail - FSqRing.Tail^;
   if LToSubmit = 0 then begin Result := 0; Exit; end;
 
-  // Fill SQ array with SQE indices
-  for LI := 0 to LToSubmit - 1 do
+  for LI := 1 to LToSubmit do
   begin
-    LIdx := (FSqRing.Tail^ + LI) and FSqRing.RingMask^;
-    FSqRing.ArrayPtr[LIdx] := (FSqRing.Tail^ + LI) and FSqRing.RingMask^;
+    LIdx := (FSqRing.Tail^ + LI - 1) and FSqRing.RingMask^;
+    FSqRing.ArrayPtr[LIdx] := LIdx;
   end;
 
   WriteBarrier;
@@ -272,15 +267,17 @@ var
 begin
   LToSubmit := FSqTail - FSqRing.Tail^;
 
-  for LI := 0 to LToSubmit - 1 do
+  if LToSubmit > 0 then
   begin
-    LIdx := (FSqRing.Tail^ + LI) and FSqRing.RingMask^;
-    FSqRing.ArrayPtr[LIdx] := (FSqRing.Tail^ + LI) and FSqRing.RingMask^;
+    for LI := 1 to LToSubmit do
+    begin
+      LIdx := (FSqRing.Tail^ + LI - 1) and FSqRing.RingMask^;
+      FSqRing.ArrayPtr[LIdx] := LIdx;
+    end;
+    WriteBarrier;
+    FSqRing.Tail^ := FSqTail;
+    WriteBarrier;
   end;
-
-  WriteBarrier;
-  FSqRing.Tail^ := FSqTail;
-  WriteBarrier;
 
   Result := io_uring_enter(FFd, LToSubmit, AWaitNr, IORING_ENTER_GETEVENTS, nil);
 end;
