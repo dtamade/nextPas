@@ -3265,16 +3265,22 @@ procedure TSemanticAnalyzer.CheckDuplicateDeclarations;
 var
   I, J: LongInt;
   SymI, SymJ: TSemanticSymbol;
+  RootUnitId: string;
 begin
+  RootUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
   for I := 0 to FModel.SymbolCount - 2 do
   begin
     SymI := FModel.SymbolAt(I);
     if SymI.Kind = 'unit' then
       Continue;
+    if not SameText(SymI.OwnerUnitId, RootUnitId) then
+      Continue;
     for J := I + 1 to FModel.SymbolCount - 1 do
     begin
       SymJ := FModel.SymbolAt(J);
       if SymJ.Kind = 'unit' then
+        Continue;
+      if not SameText(SymJ.OwnerUnitId, RootUnitId) then
         Continue;
       if (SymI.ScopeId = SymJ.ScopeId) and SameText(SymI.Name, SymJ.Name) and
         (SymI.Kind <> 'parameter') and (SymJ.Kind <> 'parameter') and

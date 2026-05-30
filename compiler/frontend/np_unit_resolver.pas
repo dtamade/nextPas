@@ -521,11 +521,12 @@ begin
 
   if StackContains(RequestedUnitId) then
   begin
-    EmitResolutionError(
-      'resolver.unit-cycle-detected',
-      ARequestFileId,
-      'unit cycle detected: ' + BuildCyclePath(RequestedUnitId)
-    );
+    if AEdgeKind <> ugeImplementationUse then
+      EmitResolutionError(
+        'resolver.unit-cycle-detected',
+        ARequestFileId,
+        'unit cycle detected: ' + BuildCyclePath(RequestedUnitId)
+      );
     Exit;
   end;
 
