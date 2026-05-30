@@ -144,15 +144,154 @@ begin
 end;
 
 function ChaCha20Xor(const AKey, ANonce: TBytes; ACounter: UInt32; const AInput: TBytes): TBytes;
+{$IFDEF CPUX86_64}
+{$ASMMODE ATT}
+const
+  ROT16_MASK: array[0..15] of Byte = (2,3,0,1, 6,7,4,5, 10,11,8,9, 14,15,12,13);
+  ROT8_MASK: array[0..15] of Byte = (3,0,1,2, 7,4,5,6, 11,8,9,10, 15,12,13,14);
 var
   LState: array[0..15] of UInt32;
-  LWork: array[0..15] of UInt32;
   LBlock: array[0..15] of UInt32;
   LOffset, LBlockLen, I: Integer;
-  LSrc, LDst: PUInt32;
 begin
   SetLength(Result, Length(AInput));
   LOffset := 0;
+
+  while LOffset < Length(AInput) do
+  begin
+    // Setup state
+    LState[0] := $61707865; LState[1] := $3320646E;
+    LState[2] := $79622D32; LState[3] := $6B206574;
+    for I := 0 to 7 do
+      LState[4 + I] := Load32LE(AKey, I * 4);
+    LState[12] := ACounter;
+    LState[13] := Load32LE(ANonce, 0);
+    LState[14] := Load32LE(ANonce, 4);
+    LState[15] := Load32LE(ANonce, 8);
+
+    // SSE2 ChaCha20 double-round (20 rounds = 10 double-rounds)
+    asm
+      // Load state rows into xmm0-xmm3
+      movdqu LState+0, %xmm0      // row0: s[0..3]
+      movdqu LState+16, %xmm1     // row1: s[4..7]
+      movdqu LState+32, %xmm2     // row2: s[8..11]
+      movdqu LState+48, %xmm3     // row3: s[12..15]
+
+      // Save original state for final add
+      movdqa %xmm0, %xmm8
+      movdqa %xmm1, %xmm9
+      movdqa %xmm2, %xmm10
+      movdqa %xmm3, %xmm11
+
+      // Load rotation masks
+      movdqu ROT16_MASK, %xmm12
+      movdqu ROT8_MASK, %xmm13
+
+      // 10 double-rounds
+      movq $10, %rcx
+    .Lround_loop:
+      // Column round: QR(0,4,8,12), QR(1,5,9,13), QR(2,6,10,14), QR(3,7,11,15)
+      // a += b
+      paddd %xmm1, %xmm0
+      // d ^= a; d <<<= 16
+      pxor %xmm0, %xmm3
+      pshufb %xmm12, %xmm3
+      // c += d
+      paddd %xmm3, %xmm2
+      // b ^= c; b <<<= 12
+      movdqa %xmm2, %xmm7
+      pxor %xmm7, %xmm1
+      movdqa %xmm1, %xmm7
+      pslld $12, %xmm1
+      psrld $20, %xmm7
+      por %xmm7, %xmm1
+      // a += b
+      paddd %xmm1, %xmm0
+      // d ^= a; d <<<= 8
+      pxor %xmm0, %xmm3
+      pshufb %xmm13, %xmm3
+      // c += d
+      paddd %xmm3, %xmm2
+      // b ^= c; b <<<= 7
+      movdqa %xmm2, %xmm7
+      pxor %xmm7, %xmm1
+      movdqa %xmm1, %xmm7
+      pslld $7, %xmm1
+      psrld $25, %xmm7
+      por %xmm7, %xmm1
+
+      // Diagonal round: rotate rows for diagonal access
+      // b = row1 rotated left by 1 word
+      pshufd $0x39, %xmm1, %xmm1  // 0,1,2,3 → 1,2,3,0
+      // c = row2 rotated left by 2 words
+      pshufd $0x4E, %xmm2, %xmm2  // 0,1,2,3 → 2,3,0,1
+      // d = row3 rotated left by 3 words
+      pshufd $0x93, %xmm3, %xmm3  // 0,1,2,3 → 3,0,1,2
+
+      // QR on diagonals (same ops as column round)
+      paddd %xmm1, %xmm0
+      pxor %xmm0, %xmm3
+      pshufb %xmm12, %xmm3
+      paddd %xmm3, %xmm2
+      movdqa %xmm2, %xmm7
+      pxor %xmm7, %xmm1
+      movdqa %xmm1, %xmm7
+      pslld $12, %xmm1
+      psrld $20, %xmm7
+      por %xmm7, %xmm1
+      paddd %xmm1, %xmm0
+      pxor %xmm0, %xmm3
+      pshufb %xmm13, %xmm3
+      paddd %xmm3, %xmm2
+      movdqa %xmm2, %xmm7
+      pxor %xmm7, %xmm1
+      movdqa %xmm1, %xmm7
+      pslld $7, %xmm1
+      psrld $25, %xmm7
+      por %xmm7, %xmm1
+
+      // Un-rotate rows
+      pshufd $0x93, %xmm1, %xmm1  // 1,2,3,0 → 0,1,2,3
+      pshufd $0x4E, %xmm2, %xmm2  // 2,3,0,1 → 0,1,2,3
+      pshufd $0x39, %xmm3, %xmm3  // 3,0,1,2 → 0,1,2,3
+
+      decq %rcx
+      jnz .Lround_loop
+
+      // Add original state
+      paddd %xmm8, %xmm0
+      paddd %xmm9, %xmm1
+      paddd %xmm10, %xmm2
+      paddd %xmm11, %xmm3
+
+      // Store result
+      movdqu %xmm0, LBlock+0
+      movdqu %xmm1, LBlock+16
+      movdqu %xmm2, LBlock+32
+      movdqu %xmm3, LBlock+48
+    end ['rcx', 'xmm0','xmm1','xmm2','xmm3','xmm7','xmm8','xmm9','xmm10','xmm11','xmm12','xmm13'];
+
+    LBlockLen := CHACHA20_BLOCK_SIZE;
+    if LOffset + LBlockLen > Length(AInput) then
+      LBlockLen := Length(AInput) - LOffset;
+
+    I := 0;
+    while I + 3 < LBlockLen do
+    begin
+      PUInt32(@Result[LOffset + I])^ := PUInt32(@AInput[LOffset + I])^ xor LBlock[I div 4];
+      Inc(I, 4);
+    end;
+    while I < LBlockLen do
+    begin
+      Result[LOffset + I] := AInput[LOffset + I] xor PByte(PByte(@LBlock[0]) + I)^;
+      Inc(I);
+    end;
+
+    Inc(ACounter);
+    Inc(LOffset, LBlockLen);
+  end;
+end;
+{$ELSE}
 
   while LOffset < Length(AInput) do
   begin
@@ -207,6 +346,7 @@ begin
     Inc(LOffset, LBlockLen);
   end;
 end;
+{$ENDIF}
 
 function Poly1305MAC(const AKey, AMessage: TBytes): TBytes;
 {$IFDEF CPUX86_64}
