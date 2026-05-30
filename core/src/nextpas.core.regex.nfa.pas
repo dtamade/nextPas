@@ -10,6 +10,7 @@ uses
 
 function NfaSearch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt; AAnchored: Boolean;
+  AStartPos: SizeUInt;
   out AMatch: TMatch): Boolean;
 
 function NfaFindAll(const AProgram: TRegexProgram;
@@ -108,6 +109,7 @@ end;
 
 function NfaSearch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt; AAnchored: Boolean;
+  AStartPos: SizeUInt;
   out AMatch: TMatch): Boolean;
 var
   CList, NList, Tmp: TThreadList;
@@ -135,7 +137,7 @@ begin
   SetLength(matchSlots, AProgram.NumSlots);
   matched := False;
 
-  startPos := 0;
+  startPos := AStartPos;
 
   // SIMD prefilter: skip to first candidate position
   if (not AAnchored) and (AProgram.LiteralPrefixLen > 0) then
@@ -192,13 +194,7 @@ begin
           begin
             matched := True;
             Move(CList.Items[i].Slots[0], matchSlots[0], Length(matchSlots) * SizeOf(SizeInt));
-            if Length(matchSlots) >= 2 then
-              matchSlots[1] := SizeInt(pos)
-            else
-            begin
-              AMatch.Start := CList.Items[i].Slots[0];
-              AMatch.Len := SizeInt(pos) - AMatch.Start;
-            end;
+            matchSlots[1] := SizeInt(pos);
           end;
         end;
       end;
@@ -245,8 +241,6 @@ var
   LMatch: TMatch;
   LPos: SizeUInt;
   LCount: SizeUInt;
-  LSubInput: PAnsiChar;
-  LSubLen: SizeUInt;
 begin
   SetLength(Result, 0);
   LCount := 0;
@@ -254,28 +248,18 @@ begin
 
   while LPos <= ALen do
   begin
-    LSubInput := AInput + LPos;
-    LSubLen := ALen - LPos;
-    if not NfaSearch(AProgram, LSubInput, LSubLen, True, LMatch) then
-    begin
-      // Try unanchored from next position
-      Inc(LPos);
-      Continue;
-    end;
-
-    // Adjust offsets
-    LMatch.Start := LMatch.Start + SizeInt(LPos);
+    if not NfaSearch(AProgram, AInput, ALen, False, LPos, LMatch) then
+      Break;
 
     if LCount >= SizeUInt(Length(Result)) then
       SetLength(Result, LCount + 32);
     Result[LCount] := LMatch;
     Inc(LCount);
 
-    // Advance past match (handle empty match)
     if LMatch.Len > 0 then
       LPos := SizeUInt(LMatch.Start) + SizeUInt(LMatch.Len)
     else
-      Inc(LPos);
+      LPos := SizeUInt(LMatch.Start) + 1;
   end;
   SetLength(Result, LCount);
 end;

@@ -89,7 +89,7 @@ function TRegex.IsMatch(const AInput: string): Boolean;
 var LMatch: TMatch;
 begin
   if not FValid then Exit(False);
-  Result := NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, LMatch);
+  Result := NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, 0, LMatch);
 end;
 
 function TRegex.Find(const AInput: string): TMatch;
@@ -99,7 +99,7 @@ begin
     Result.Start := -1; Result.Len := 0; Result.Groups := nil;
     Exit;
   end;
-  if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, Result) then
+  if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, 0, Result) then
   begin
     Result.Start := -1; Result.Len := 0; Result.Groups := nil;
   end;
