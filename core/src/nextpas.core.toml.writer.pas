@@ -348,6 +348,7 @@ begin
   PrepareValue;
   FBuilder^.AppendBytes('{ ', 2);
   Inc(FInlineDepth);
+  if FInlineDepth > 31 then FInlineDepth := 31;
   FIsArrayStack[FInlineDepth] := False;
   FFirstStack[FInlineDepth] := True;
 end;
@@ -364,6 +365,7 @@ begin
   PrepareValue;
   FBuilder^.AppendChar('[');
   Inc(FInlineDepth);
+  if FInlineDepth > 31 then FInlineDepth := 31;
   FIsArrayStack[FInlineDepth] := True;
   FFirstStack[FInlineDepth] := True;
 end;

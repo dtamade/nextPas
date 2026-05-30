@@ -296,7 +296,7 @@ end;
 
 function TTomlDocument.HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
 var
-  LSlot, LIdx: UInt32;
+  LSlot, LIdx, LI: UInt32;
 begin
   if (FHashBuckets = nil) or (FHashOwner <> ATableIdx) then
   begin
@@ -308,14 +308,17 @@ begin
   if (FHashBuckets = nil) or (FHashOwner <> ATableIdx) then
     Exit(TOML_NODE_NONE);
   LSlot := AHash mod FHashCap;
-  while True do
+  LI := 0;
+  while LI < FHashCap do
   begin
     LIdx := FHashBuckets[LSlot];
     if LIdx = TOML_NODE_NONE then Exit(TOML_NODE_NONE);
     if (FNodes[LIdx].KeyHash = AHash) and FNodes[LIdx].Key.Equals(AKey) then
       Exit(LIdx);
     LSlot := (LSlot + 1) mod FHashCap;
+    Inc(LI);
   end;
+  Result := TOML_NODE_NONE;
 end;
 
 function TTomlDocument.Root: UInt32;
