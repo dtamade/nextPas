@@ -2138,10 +2138,21 @@ begin
             end
             else
             begin
+            I := 0;
             while (ACursor < ALexer.TokenCount) and
-              (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
-              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) and
+              not ((I = 0) and (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword)) do
             begin
+              if CurrentToken(ALexer, ACursor).Kind in
+                [tkRecordKeyword, tkObjectKeyword] then
+                Inc(I)
+              else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and (I > 0) then
+              begin
+                Dec(I);
+                Inc(ACursor);
+                MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+                Continue;
+              end;
               if CurrentToken(ALexer, ACursor).Kind in
                 [tkPublicKeyword, tkPrivateKeyword, tkProtectedKeyword,
                  tkPublishedKeyword] then
@@ -3145,6 +3156,11 @@ begin
             (CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword) then
             Result := ParseProcedureDecl(ALexer, ACursor, AParent, ATree,
               ADiagnostics, ARootFileId) and Result;
+        end;
+      tkEndKeyword:
+        begin
+          Inc(ACursor);
+          MatchTokenSilent(ALexer, ACursor, tkSemicolon);
         end;
     else
       AdvanceCursor(ACursor);
