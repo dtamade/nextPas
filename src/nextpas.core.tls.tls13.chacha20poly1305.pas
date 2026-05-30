@@ -151,23 +151,140 @@ const
   ROT8_MASK: array[0..15] of Byte = (3,0,1,2, 7,4,5,6, 11,8,9,10, 15,12,13,14);
 var
   LState: array[0..15] of UInt32;
-  LBlock: array[0..15] of UInt32;
+  LBlock: array[0..31] of UInt32;
   LOffset, LBlockLen, I: Integer;
 begin
   SetLength(Result, Length(AInput));
   LOffset := 0;
 
+  // Setup base state once
+  LState[0] := $61707865; LState[1] := $3320646E;
+  LState[2] := $79622D32; LState[3] := $6B206574;
+  for I := 0 to 7 do
+    LState[4 + I] := Load32LE(AKey, I * 4);
+  LState[13] := Load32LE(ANonce, 0);
+  LState[14] := Load32LE(ANonce, 4);
+  LState[15] := Load32LE(ANonce, 8);
+
+  // AVX2 dual-block path: process 2 blocks (128 bytes) at a time
+  while LOffset + 128 <= Length(AInput) do
+  begin
+    LState[12] := ACounter;
+    asm
+      // Load state into XMM, then broadcast to YMM with counter adjustment
+      movdqu LState+0, %xmm0
+      movdqu LState+16, %xmm1
+      movdqu LState+32, %xmm2
+      movdqu LState+48, %xmm3
+
+      // Create block1 row3 with counter+1
+      movdqa %xmm3, %xmm4
+      movq $1, %rax
+      movd %eax, %xmm5
+      paddd %xmm5, %xmm4    // xmm4 = row3 with counter+1
+
+      // Broadcast to YMM: [block0 | block1]
+      vinserti128 $1, %xmm0, %ymm0, %ymm0   // row0: same for both
+      vinserti128 $1, %xmm1, %ymm1, %ymm1   // row1: same
+      vinserti128 $1, %xmm2, %ymm2, %ymm2   // row2: same
+      vinserti128 $1, %xmm4, %ymm3, %ymm3   // row3: [ctr | ctr+1]
+
+      // Save original for final add
+      vmovdqa %ymm0, %ymm8
+      vmovdqa %ymm1, %ymm9
+      vmovdqa %ymm2, %ymm10
+      vmovdqa %ymm3, %ymm11
+
+      // Load rotation masks (broadcast 128→256)
+      vbroadcasti128 ROT16_MASK, %ymm12
+      vbroadcasti128 ROT8_MASK, %ymm13
+
+      // 10 double-rounds
+      movq $10, %rcx
+    .Lavx2_round:
+      // Column round
+      vpaddd %ymm1, %ymm0, %ymm0
+      vpxor %ymm0, %ymm3, %ymm3
+      vpshufb %ymm12, %ymm3, %ymm3
+      vpaddd %ymm3, %ymm2, %ymm2
+      vpxor %ymm2, %ymm1, %ymm1
+      vpslld $12, %ymm1, %ymm7
+      vpsrld $20, %ymm1, %ymm1
+      vpor %ymm7, %ymm1, %ymm1
+      vpaddd %ymm1, %ymm0, %ymm0
+      vpxor %ymm0, %ymm3, %ymm3
+      vpshufb %ymm13, %ymm3, %ymm3
+      vpaddd %ymm3, %ymm2, %ymm2
+      vpxor %ymm2, %ymm1, %ymm1
+      vpslld $7, %ymm1, %ymm7
+      vpsrld $25, %ymm1, %ymm1
+      vpor %ymm7, %ymm1, %ymm1
+
+      // Diagonal setup
+      vpshufd $0x39, %ymm1, %ymm1
+      vpshufd $0x4E, %ymm2, %ymm2
+      vpshufd $0x93, %ymm3, %ymm3
+
+      // Diagonal round
+      vpaddd %ymm1, %ymm0, %ymm0
+      vpxor %ymm0, %ymm3, %ymm3
+      vpshufb %ymm12, %ymm3, %ymm3
+      vpaddd %ymm3, %ymm2, %ymm2
+      vpxor %ymm2, %ymm1, %ymm1
+      vpslld $12, %ymm1, %ymm7
+      vpsrld $20, %ymm1, %ymm1
+      vpor %ymm7, %ymm1, %ymm1
+      vpaddd %ymm1, %ymm0, %ymm0
+      vpxor %ymm0, %ymm3, %ymm3
+      vpshufb %ymm13, %ymm3, %ymm3
+      vpaddd %ymm3, %ymm2, %ymm2
+      vpxor %ymm2, %ymm1, %ymm1
+      vpslld $7, %ymm1, %ymm7
+      vpsrld $25, %ymm1, %ymm1
+      vpor %ymm7, %ymm1, %ymm1
+
+      // Un-rotate
+      vpshufd $0x93, %ymm1, %ymm1
+      vpshufd $0x4E, %ymm2, %ymm2
+      vpshufd $0x39, %ymm3, %ymm3
+
+      decq %rcx
+      jnz .Lavx2_round
+
+      // Add original state
+      vpaddd %ymm8, %ymm0, %ymm0
+      vpaddd %ymm9, %ymm1, %ymm1
+      vpaddd %ymm10, %ymm2, %ymm2
+      vpaddd %ymm11, %ymm3, %ymm3
+
+      // Store 2 blocks (128 bytes) interleaved: block0 then block1
+      // Extract low 128 (block0)
+      vmovdqu %xmm0, LBlock+0
+      vmovdqu %xmm1, LBlock+16
+      vmovdqu %xmm2, LBlock+32
+      vmovdqu %xmm3, LBlock+48
+      // Extract high 128 (block1)
+      vextracti128 $1, %ymm0, LBlock+64
+      vextracti128 $1, %ymm1, LBlock+80
+      vextracti128 $1, %ymm2, LBlock+96
+      vextracti128 $1, %ymm3, LBlock+112
+
+      vzeroupper
+    end ['rax', 'rcx',
+      'ymm0','ymm1','ymm2','ymm3','ymm7','ymm8','ymm9','ymm10','ymm11','ymm12','ymm13'];
+
+    // XOR 128 bytes
+    for I := 0 to 31 do
+      PUInt32(@Result[LOffset + I*4])^ := PUInt32(@AInput[LOffset + I*4])^ xor LBlock[I];
+
+    Inc(ACounter, 2);
+    Inc(LOffset, 128);
+  end;
+
+  // SSE2 single-block path for remaining
   while LOffset < Length(AInput) do
   begin
-    // Setup state
-    LState[0] := $61707865; LState[1] := $3320646E;
-    LState[2] := $79622D32; LState[3] := $6B206574;
-    for I := 0 to 7 do
-      LState[4 + I] := Load32LE(AKey, I * 4);
     LState[12] := ACounter;
-    LState[13] := Load32LE(ANonce, 0);
-    LState[14] := Load32LE(ANonce, 4);
-    LState[15] := Load32LE(ANonce, 8);
 
     // SSE2 ChaCha20 double-round (20 rounds = 10 double-rounds)
     asm
