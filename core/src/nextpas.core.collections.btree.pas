@@ -547,7 +547,7 @@ end;
 procedure TBTreeMap.BorrowFromNext(ANode: PNode; AIndex: Int32);
 var
   LChild, LSibling: PNode;
-  i: Int32;
+  i, LShift: Int32;
 begin
   LChild := ANode^.Children[AIndex];
   LSibling := ANode^.Children[AIndex + 1];
@@ -560,14 +560,20 @@ begin
   ANode^.Keys[AIndex] := LSibling^.Keys[0];
   ANode^.Values[AIndex] := LSibling^.Values[0];
 
-  for i := 0 to LSibling^.Count - 2 do
+  LShift := LSibling^.Count - 1;
+  if LShift > 0 then
   begin
-    LSibling^.Keys[i] := LSibling^.Keys[i + 1];
-    LSibling^.Values[i] := LSibling^.Values[i + 1];
+    if not System.IsManagedType(K) then
+      Move(LSibling^.Keys[1], LSibling^.Keys[0], LShift * SizeOf(K))
+    else
+      for i := 0 to LShift - 1 do LSibling^.Keys[i] := LSibling^.Keys[i + 1];
+    if not System.IsManagedType(V) then
+      Move(LSibling^.Values[1], LSibling^.Values[0], LShift * SizeOf(V))
+    else
+      for i := 0 to LShift - 1 do LSibling^.Values[i] := LSibling^.Values[i + 1];
   end;
   if not LSibling^.IsLeaf then
-    for i := 0 to LSibling^.Count - 1 do
-      LSibling^.Children[i] := LSibling^.Children[i + 1];
+    Move(LSibling^.Children[1], LSibling^.Children[0], LSibling^.Count * SizeOf(PNode));
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
