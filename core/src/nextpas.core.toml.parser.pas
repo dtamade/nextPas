@@ -1014,7 +1014,18 @@ begin
     LLen := LI - Pos;
     // Heuristic: contains '-' at position 4 (date) or ':' at position 2 (time)
     if (LLen >= 10) and (Src[Pos+4] = '-') then
-      LIsDateTime := True
+    begin
+      LIsDateTime := True;
+      // Check for space-separated time (e.g. "1979-05-27 07:32:00Z")
+      if (LI < SrcLen) and (Src[LI] = ' ') and (LI + 1 < SrcLen) and IsDigitChar(Byte(Src[LI+1])) then
+      begin
+        Inc(LI); // skip space
+        while (LI < SrcLen) and (Byte(Src[LI]) > 32) and (Src[LI] <> ',')
+          and (Src[LI] <> ']') and (Src[LI] <> '}') and (Src[LI] <> '#') do
+          Inc(LI);
+        LLen := LI - Pos;
+      end;
+    end
     else if (LLen >= 8) and (Src[Pos+2] = ':') then
       LIsDateTime := True;
     if LIsDateTime then
