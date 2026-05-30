@@ -9,7 +9,9 @@ uses
   nextpas.core.id.base,
   nextpas.core.id.uuid,
   nextpas.core.id.v7.monotonic,
-  nextpas.core.id.snowflake;
+  nextpas.core.id.snowflake,
+  nextpas.core.id.ksuid,
+  nextpas.core.id.xid;
 
 var
   T: TTestRunner;
@@ -376,6 +378,74 @@ begin
   end;
 end;
 
+{ KSUID tests }
+
+procedure TestKsuidLength;
+begin
+  CheckEqual(Int64(KSUID_STRING_LENGTH), Int64(Length(KsuidNew)));
+end;
+
+procedure TestKsuidTimestamp;
+var LK: TKsuid;
+begin
+  LK := TKsuid.New;
+  Check(LK.TimestampUnix > 1700000000, 'after 2023');
+end;
+
+procedure TestKsuidOrdering;
+var LA, LB: TKsuid;
+begin
+  LA := TKsuid.NewAt(100);
+  LB := TKsuid.NewAt(200);
+  Check(LA < LB, 'earlier must sort before later');
+end;
+
+procedure TestKsuidRoundTrip;
+var LK: TKsuid; LS: string;
+begin
+  LK := TKsuid.New;
+  LS := LK.ToString;
+  Check(TKsuid.Parse(LS) = LK, 'roundtrip');
+end;
+
+procedure TestKsuidUniqueness;
+var LA, LB: string;
+begin
+  LA := KsuidNew;
+  LB := KsuidNew;
+  Check(LA <> LB, 'must differ');
+end;
+
+{ XID tests }
+
+procedure TestXidLength;
+begin
+  CheckEqual(Int64(XID_STRING_LENGTH), Int64(Length(XidNew)));
+end;
+
+procedure TestXidTimestamp;
+var LX: TXid;
+begin
+  LX := TXid.New;
+  Check(LX.Timestamp > 1700000000, 'after 2023');
+end;
+
+procedure TestXidOrdering;
+var LA, LB: TXid;
+begin
+  LA := TXid.New;
+  LB := TXid.New;
+  Check(LA < LB, 'sequential must be ordered');
+end;
+
+procedure TestXidUniqueness;
+var LA, LB: string;
+begin
+  LA := XidNew;
+  LB := XidNew;
+  Check(LA <> LB, 'must differ');
+end;
+
 begin
   Randomize;
   T := TTestRunner.Create('nextpas.core.id');
@@ -421,6 +491,17 @@ begin
   T.Run('Snowflake ordering', @TestSnowflakeOrdering);
   T.Run('Snowflake extract', @TestSnowflakeExtract);
   T.Run('Snowflake burst', @TestSnowflakeBurst);
+
+  T.Run('KSUID length', @TestKsuidLength);
+  T.Run('KSUID timestamp', @TestKsuidTimestamp);
+  T.Run('KSUID ordering', @TestKsuidOrdering);
+  T.Run('KSUID roundtrip', @TestKsuidRoundTrip);
+  T.Run('KSUID uniqueness', @TestKsuidUniqueness);
+
+  T.Run('XID length', @TestXidLength);
+  T.Run('XID timestamp', @TestXidTimestamp);
+  T.Run('XID ordering', @TestXidOrdering);
+  T.Run('XID uniqueness', @TestXidUniqueness);
 
   T.Summary;
 end.
