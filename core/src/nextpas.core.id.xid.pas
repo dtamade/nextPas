@@ -99,6 +99,7 @@ begin
   AXid.FBytes[9]  := Byte((LBuf[14] shl 5) or LBuf[15]);
   AXid.FBytes[10] := Byte((LBuf[16] shl 3) or (LBuf[17] shr 2));
   AXid.FBytes[11] := Byte((LBuf[17] shl 6) or (LBuf[18] shl 1) or (LBuf[19] shr 4));
+  if (LBuf[19] and $0F) <> 0 then Exit(False);
   Result := True;
 end;
 

@@ -30,6 +30,7 @@ var
 begin
   LAlphaLen := Length(AAlphabet);
   if LAlphaLen = 0 then Exit('');
+  if LAlphaLen > 256 then Exit('');
   if ASize <= 0 then Exit('');
 
   LMask := 1;

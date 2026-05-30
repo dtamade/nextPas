@@ -4,6 +4,7 @@ unit nextpas.core.id.rng;
 interface
 
 procedure IdRngFillBytes(ABuf: Pointer; ALen: SizeUInt);
+procedure IdRngReseed;
 
 implementation
 
@@ -48,6 +49,14 @@ begin
     Inc(PByte(ABuf), LCopy);
     Dec(ALen, LCopy);
   end;
+  AtomicStore32(GLock, 0, moRelease);
+end;
+
+procedure IdRngReseed;
+begin
+  while AtomicCompareExchange32(GLock, 0, 1) <> 0 do
+    CpuPause;
+  GPos := BUF_SIZE;
   AtomicStore32(GLock, 0, moRelease);
 end;
 
