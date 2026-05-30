@@ -141,6 +141,72 @@ begin
   CheckEqual('', StringsJoin(A, ','), 'empty join');
 end;
 
+procedure TestParseLines;
+var A: TStringArray;
+begin
+  A := StringsParseLines('hello' + #10 + 'world' + #10 + 'foo');
+  CheckEqual(Int64(3), Int64(Length(A)), 'line count');
+  CheckEqual('hello', A[0], 'line[0]');
+  CheckEqual('world', A[1], 'line[1]');
+  CheckEqual('foo', A[2], 'line[2]');
+end;
+
+procedure TestParseLinesWindows;
+var A: TStringArray;
+begin
+  A := StringsParseLines('a' + #13#10 + 'b' + #13#10 + 'c');
+  CheckEqual(Int64(3), Int64(Length(A)), 'crlf count');
+  CheckEqual('a', A[0], 'crlf[0]');
+  CheckEqual('b', A[1], 'crlf[1]');
+end;
+
+procedure TestParseKeyValues;
+var P: TStringPairArray;
+begin
+  P := StringsParseKeyValues('name=Alice' + #10 + 'age=30' + #10 + 'city=Beijing');
+  CheckEqual(Int64(3), Int64(Length(P)), 'pair count');
+  CheckEqual('name', P[0].Key, 'key[0]');
+  CheckEqual('Alice', P[0].Value, 'val[0]');
+  CheckEqual('age', P[1].Key, 'key[1]');
+  CheckEqual('30', P[1].Value, 'val[1]');
+end;
+
+procedure TestParseKeyValuesColon;
+var P: TStringPairArray;
+begin
+  P := StringsParseKeyValues('vendor_id : GenuineIntel' + #10 + 'model name : Intel Core', ':');
+  CheckEqual(Int64(2), Int64(Length(P)), 'colon count');
+  CheckEqual('vendor_id', P[0].Key, 'key trimmed');
+  CheckEqual('GenuineIntel', P[0].Value, 'val trimmed');
+end;
+
+procedure TestStringPairsGet;
+var P: TStringPairArray;
+begin
+  P := StringsParseKeyValues('host=localhost' + #10 + 'port=8080');
+  CheckEqual('localhost', StringPairsGet(P, 'host'), 'get host');
+  CheckEqual('8080', StringPairsGet(P, 'port'), 'get port');
+  CheckEqual('default', StringPairsGet(P, 'missing', 'default'), 'get default');
+end;
+
+procedure TestStringPairsContains;
+var P: TStringPairArray;
+begin
+  P := StringsParseKeyValues('a=1' + #10 + 'b=2');
+  Check(StringPairsContains(P, 'a'), 'contains a');
+  Check(not StringPairsContains(P, 'c'), 'not contains c');
+end;
+
+procedure TestStringPairsKeys;
+var P: TStringPairArray; K: TStringArray;
+begin
+  P := StringsParseKeyValues('x=1' + #10 + 'y=2' + #10 + 'z=3');
+  K := StringPairsKeys(P);
+  CheckEqual(Int64(3), Int64(Length(K)), 'keys count');
+  CheckEqual('x', K[0], 'keys[0]');
+  CheckEqual('z', K[2], 'keys[2]');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.strings');
   T.Run('Contains', @TestContains);
@@ -156,5 +222,12 @@ begin
   T.Run('Insert', @TestInsert);
   T.Run('Slice', @TestSlice);
   T.Run('Empty array', @TestEmpty);
+  T.Run('ParseLines', @TestParseLines);
+  T.Run('ParseLines (CRLF)', @TestParseLinesWindows);
+  T.Run('ParseKeyValues', @TestParseKeyValues);
+  T.Run('ParseKeyValues (colon)', @TestParseKeyValuesColon);
+  T.Run('StringPairsGet', @TestStringPairsGet);
+  T.Run('StringPairsContains', @TestStringPairsContains);
+  T.Run('StringPairsKeys', @TestStringPairsKeys);
   T.Summary;
 end.

@@ -12,6 +12,12 @@ type
   TStringPredicate = function(const S: string): Boolean;
   TStringMapper = function(const S: string): string;
 
+  TStringPair = record
+    Key: string;
+    Value: string;
+  end;
+  TStringPairArray = array of TStringPair;
+
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
 function StringsIndexOf(const AArr: TStringArray; const AValue: string): SizeInt;
 function StringsLastIndexOf(const AArr: TStringArray; const AValue: string): SizeInt;
@@ -26,6 +32,13 @@ procedure StringsAppend(var AArr: TStringArray; const AValue: string);
 procedure StringsInsert(var AArr: TStringArray; AIndex: SizeUInt; const AValue: string);
 procedure StringsDelete(var AArr: TStringArray; AIndex: SizeUInt);
 function StringsSlice(const AArr: TStringArray; AStart, AEnd: SizeUInt): TStringArray;
+
+{ Key-Value parsing utilities }
+function StringsParseLines(const AText: string): TStringArray;
+function StringsParseKeyValues(const AText: string; ASeparator: Char = '='): TStringPairArray;
+function StringPairsGet(const APairs: TStringPairArray; const AKey: string; const ADefault: string = ''): string;
+function StringPairsContains(const APairs: TStringPairArray; const AKey: string): Boolean;
+function StringPairsKeys(const APairs: TStringPairArray): TStringArray;
 
 implementation
 
@@ -188,6 +201,91 @@ begin
   SetLength(Result, LLen);
   for i := 0 to LLen - 1 do
     Result[i] := AArr[AStart + i];
+end;
+
+{ Key-Value parsing }
+
+function StringsParseLines(const AText: string): TStringArray;
+var
+  i, LStart, LCount, LLen: SizeInt;
+begin
+  LLen := Length(AText);
+  if LLen = 0 then Exit(nil);
+
+  LCount := 0;
+  for i := 1 to LLen do
+    if AText[i] = #10 then Inc(LCount);
+  Inc(LCount);
+
+  SetLength(Result, LCount);
+  LCount := 0;
+  LStart := 1;
+  for i := 1 to LLen do
+  begin
+    if AText[i] = #10 then
+    begin
+      if (i > LStart) and (AText[i - 1] = #13) then
+        Result[LCount] := Copy(AText, LStart, i - LStart - 1)
+      else
+        Result[LCount] := Copy(AText, LStart, i - LStart);
+      Inc(LCount);
+      LStart := i + 1;
+    end;
+  end;
+  if LStart <= LLen then
+  begin
+    Result[LCount] := Copy(AText, LStart, LLen - LStart + 1);
+    Inc(LCount);
+  end;
+  SetLength(Result, LCount);
+end;
+
+function StringsParseKeyValues(const AText: string; ASeparator: Char): TStringPairArray;
+var
+  LLines: TStringArray;
+  i, LSepPos: SizeInt;
+  LCount: SizeInt;
+  LLine: string;
+begin
+  LLines := StringsParseLines(AText);
+  SetLength(Result, Length(LLines));
+  LCount := 0;
+  for i := 0 to High(LLines) do
+  begin
+    LLine := LLines[i];
+    LSepPos := Pos(ASeparator, LLine);
+    if LSepPos > 0 then
+    begin
+      Result[LCount].Key := Trim(Copy(LLine, 1, LSepPos - 1));
+      Result[LCount].Value := Trim(Copy(LLine, LSepPos + 1, Length(LLine) - LSepPos));
+      Inc(LCount);
+    end;
+  end;
+  SetLength(Result, LCount);
+end;
+
+function StringPairsGet(const APairs: TStringPairArray; const AKey: string; const ADefault: string): string;
+var i: SizeInt;
+begin
+  for i := 0 to High(APairs) do
+    if APairs[i].Key = AKey then Exit(APairs[i].Value);
+  Result := ADefault;
+end;
+
+function StringPairsContains(const APairs: TStringPairArray; const AKey: string): Boolean;
+var i: SizeInt;
+begin
+  for i := 0 to High(APairs) do
+    if APairs[i].Key = AKey then Exit(True);
+  Result := False;
+end;
+
+function StringPairsKeys(const APairs: TStringPairArray): TStringArray;
+var i: SizeInt;
+begin
+  SetLength(Result, Length(APairs));
+  for i := 0 to High(APairs) do
+    Result[i] := APairs[i].Key;
 end;
 
 end.
