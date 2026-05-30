@@ -26,6 +26,8 @@ type
     FObjectFreeCounter: LongInt;
     FPendingObjectFreeActive: Boolean;
     FPendingObjectFreeEndLabel: string;
+    FNeedsExceptionRuntime: Boolean;
+    FTryCounter: LongInt;
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
@@ -47,6 +49,7 @@ type
     procedure EmitObjectFreeReleaseHelper;
     procedure EmitObjectReleaseValidHelper;
     procedure EmitObjectReleaseInvalidHelper;
+    procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
   public
     constructor Create(AModule: THIRModule);
@@ -75,6 +78,8 @@ begin
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
   FPendingObjectFreeEndLabel := '';
+  FNeedsExceptionRuntime := False;
+  FTryCounter := 0;
   SetLength(FLines, 0);
 end;
 
@@ -605,6 +610,52 @@ begin
         end;
       end;
     end;
+    hikTryBegin:
+    begin
+      FNeedsExceptionRuntime := True;
+      Inc(FTryCounter);
+      Emit('  ; --- try begin ---');
+      Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [5 x ptr]');
+      Emit('  call void @np_try_push(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %setjmp.' + IntToStr(FTryCounter) + ' = call i32 @np_setjmp(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %is_exc.' + IntToStr(FTryCounter) + ' = icmp ne i32 %setjmp.' + IntToStr(FTryCounter) + ', 0');
+      if AInstr.IntrinsicName <> '' then
+        Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) + ', label %' +
+          Trim(AInstr.IntrinsicName) + ', label %try.body.' + IntToStr(FTryCounter))
+      else
+        Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) + ', label %try.exc.' +
+          IntToStr(FTryCounter) + ', label %try.body.' + IntToStr(FTryCounter));
+      Emit('try.body.' + IntToStr(FTryCounter) + ':');
+    end;
+    hikTryEnd:
+    begin
+      Emit('  ; --- try end ---');
+      Emit('  call void @np_try_pop()');
+    end;
+    hikFinallyBegin:
+    begin
+      Emit('  ; --- finally begin ---');
+    end;
+    hikFinallyEnd:
+    begin
+      Emit('  ; --- finally end ---');
+      Emit('  call void @np_finally_end()');
+    end;
+    hikExceptBegin:
+    begin
+      Emit('  ; --- except begin ---');
+    end;
+    hikExceptEnd:
+    begin
+      Emit('  ; --- except end ---');
+      Emit('  call void @np_except_end()');
+    end;
+    hikRaise:
+    begin
+      FNeedsExceptionRuntime := True;
+      Emit('  call void @np_raise()');
+      Emit('  unreachable');
+    end;
   end;
 end;
 
@@ -716,6 +767,8 @@ begin
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
+  FNeedsExceptionRuntime := False;
+  FTryCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
   FPendingObjectFreeEndLabel := '';
@@ -755,6 +808,9 @@ begin
 
   if FNeedsObjectFreeRelease then
     EmitObjectFreeReleaseHelper;
+
+  if FNeedsExceptionRuntime then
+    EmitExceptionRuntimeHelpers;
 
   if FNeedsStrCmp then
   begin
@@ -1055,6 +1111,66 @@ begin
   Emit('}');
   Emit('');
   Emit('declare void @llvm.trap()');
+end;
+
+procedure THIRLlvmEmitter.EmitExceptionRuntimeHelpers;
+begin
+  Emit('');
+  Emit('; --- Exception runtime (setjmp/longjmp) ---');
+  Emit('@__np_exc_stack = internal global ptr null');
+  Emit('@__np_exc_pending = internal global i1 false');
+  Emit('');
+  Emit('define internal void @np_try_push(ptr %buf) {');
+  Emit('entry:');
+  Emit('  %old = load ptr, ptr @__np_exc_stack');
+  Emit('  %slot = getelementptr [5 x ptr], ptr %buf, i64 0, i64 4');
+  Emit('  store ptr %old, ptr %slot');
+  Emit('  store ptr %buf, ptr @__np_exc_stack');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_try_pop() {');
+  Emit('entry:');
+  Emit('  %buf = load ptr, ptr @__np_exc_stack');
+  Emit('  %slot = getelementptr [5 x ptr], ptr %buf, i64 0, i64 4');
+  Emit('  %prev = load ptr, ptr %slot');
+  Emit('  store ptr %prev, ptr @__np_exc_stack');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal i32 @np_setjmp(ptr %buf) {');
+  Emit('entry:');
+  Emit('  %r = call i32 @setjmp(ptr %buf)');
+  Emit('  ret i32 %r');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_raise() {');
+  Emit('entry:');
+  Emit('  store i1 true, ptr @__np_exc_pending');
+  Emit('  %buf = load ptr, ptr @__np_exc_stack');
+  Emit('  call void @longjmp(ptr %buf, i32 1)');
+  Emit('  unreachable');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_finally_end() {');
+  Emit('entry:');
+  Emit('  %pending = load i1, ptr @__np_exc_pending');
+  Emit('  br i1 %pending, label %reraise, label %done');
+  Emit('reraise:');
+  Emit('  call void @np_raise()');
+  Emit('  unreachable');
+  Emit('done:');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_except_end() {');
+  Emit('entry:');
+  Emit('  store i1 false, ptr @__np_exc_pending');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('declare i32 @setjmp(ptr) nounwind');
+  Emit('declare void @longjmp(ptr, i32) noreturn nounwind');
 end;
 
 procedure THIRLlvmEmitter.EmitVmtGlobals;
