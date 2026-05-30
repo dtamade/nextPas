@@ -585,9 +585,9 @@ begin
     begin
       if Src[Pos + SizeUInt(LCtrl)] = #9 then
       begin
-        if LFound < 0 then begin Pos := SrcLen; Break; end;
-        Inc(Pos, SizeUInt(LFound));
-        Col := Col + UInt32(LFound);
+        Inc(Pos, SizeUInt(LCtrl) + 1);
+        Col := Col + UInt32(LCtrl) + 1;
+        Continue;
       end
       else
       begin
