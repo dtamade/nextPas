@@ -46,6 +46,7 @@ type
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
     procedure ForEach(AFunc: TForEachFunc);
     function Keys: TKeyArray;
+    function IsEmpty: Boolean;
     procedure Clear;
 
     function GetCount: SizeUInt;
@@ -168,6 +169,11 @@ begin
   finally
     FSegmentLocks[LSeg].ReleaseWrite;
   end;
+end;
+
+function TConcurrentHashMap.IsEmpty: Boolean;
+begin
+  Result := GetCount = 0;
 end;
 
 procedure TConcurrentHashMap.Clear;

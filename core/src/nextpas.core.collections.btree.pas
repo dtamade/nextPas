@@ -97,6 +97,7 @@ type
     procedure PutAll(AOther: TBTreeMap);
     function GetEnumerator: TEnumerator;
 
+    function IsEmpty: Boolean; inline;
     property Count: SizeUInt read FCount;
   end;
 
@@ -969,6 +970,11 @@ end;
 function TBTreeMap.TEnumerator.MoveNext: Boolean;
 begin
   Result := DoMoveNext;
+end;
+
+function TBTreeMap.IsEmpty: Boolean;
+begin
+  Result := FCount = 0;
 end;
 
 function TBTreeMap.GetEnumerator: TEnumerator;
