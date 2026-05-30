@@ -1351,7 +1351,6 @@ end;
 function TTomlParser.ParseInlineTable(out ANodeIdx: UInt32): Boolean;
 var
   LTableIdx, LChildIdx, LTarget: UInt32;
-  LCount: UInt32;
   LKeys: array[0..31] of TStringView;
   LKeyCount: Int32;
   LI: Int32;
@@ -1368,7 +1367,6 @@ begin
   Doc^.FNodes[ANodeIdx].Container.LastChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.Count := 0;
   LTableIdx := ANodeIdx;
-  LCount := 0;
   LFirst := True;
 
   SkipWhitespaceInline;
@@ -1409,8 +1407,7 @@ begin
     if FindChild(LTarget, LKeys[LKeyCount - 1]) <> TOML_NODE_NONE then
       Exit(SetError('duplicate key in inline table', 29));
     AddChild(LTarget, LChildIdx);
-    if LTarget = LTableIdx then
-      Inc(LCount);
+    Inc(Doc^.FNodes[LTarget].Container.Count);
     SkipWhitespaceInline;
     if (Pos < SrcLen) and (Src[Pos] = '}') then
     begin
@@ -1418,7 +1415,6 @@ begin
       Break;
     end;
   end;
-  Doc^.FNodes[LTableIdx].Container.Count := LCount;
   Dec(Depth);
   Result := True;
 end;
@@ -1555,6 +1551,8 @@ begin
     begin
       if not AImplicit then
         Exit(TOML_NODE_NONE); // cannot define [table] over existing array
+      if (Doc^.FNodes[LExisting].Flags and TOML_NODE_FLAG_ARRAY_TABLE) = 0 then
+        Exit(TOML_NODE_NONE); // cannot traverse through value array
       LExisting := Doc^.FNodes[LExisting].Container.LastChild;
       Exit(LExisting);
     end;
