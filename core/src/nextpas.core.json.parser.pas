@@ -52,7 +52,7 @@ procedure TJsonDocument.Init(const AAllocator: IAllocator);
 begin
   FAllocator := AAllocator;
   FNodeCap := INITIAL_NODE_CAP;
-  FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TJsonNode));
+  GetMem(FNodes, FNodeCap * SizeOf(TJsonNode));
   FNodeCount := 0;
   FHasError := False;
 end;
@@ -61,7 +61,7 @@ procedure TJsonDocument.Done;
 begin
   if FNodes <> nil then
   begin
-    FAllocator.Deallocate(FNodes);
+    FreeMem(FNodes);
     FNodes := nil;
   end;
   FNodeCount := 0;
@@ -75,11 +75,10 @@ begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
+    ReallocMem(FNodes, LNewCap * SizeOf(TJsonNode));
     FNodeCap := LNewCap;
   end;
   Result := FNodeCount;
-  FillChar(FNodes[FNodeCount], SizeOf(TJsonNode), 0);
   FNodes[FNodeCount].Next := JSON_NODE_NONE;
   Inc(FNodeCount);
 end;

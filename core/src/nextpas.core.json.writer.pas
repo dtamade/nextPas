@@ -50,6 +50,8 @@ type
 implementation
 
 uses
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec16,
   nextpas.core.text.escape,
   nextpas.core.text.number;
 
@@ -91,10 +93,32 @@ begin
 end;
 
 procedure TJsonWriter.Key(const AKey: PAnsiChar; const ALen: SizeUInt);
+var
+  LClean: Boolean;
+  I: SizeUInt;
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
   FBuilder^.AppendChar('"');
-  JsonEscapeToBuilder(TStringView.Create(AKey, ALen), FBuilder^);
+  LClean := True;
+  if ALen >= 16 then
+  begin
+    if (Vec16CmpEq(@AKey[0], Ord('"')) or Vec16CmpEq(@AKey[0], Ord('\')) or
+        Vec16CmpLtU(@AKey[0], $20)) <> MASK16_NONE_SET then
+      LClean := False;
+  end
+  else
+  begin
+    for I := 0 to ALen - 1 do
+      if (Byte(AKey[I]) < $20) or (AKey[I] = '"') or (AKey[I] = '\') then
+      begin
+        LClean := False;
+        Break;
+      end;
+  end;
+  if LClean then
+    FBuilder^.AppendBytes(AKey, ALen)
+  else
+    JsonEscapeToBuilder(TStringView.Create(AKey, ALen), FBuilder^);
   FBuilder^.AppendBytes('":', 2);
   FNeedComma := False;
 end;
@@ -143,10 +167,41 @@ begin
 end;
 
 procedure TJsonWriter.Str(const AValue: PAnsiChar; const ALen: SizeUInt);
+var
+  LNeedsEscape: Boolean;
+  LPos: SizeUInt;
+  LMask: TMask16;
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
   FBuilder^.AppendChar('"');
-  JsonEscapeToBuilder(TStringView.Create(AValue, ALen), FBuilder^);
+  LNeedsEscape := False;
+  LPos := 0;
+  while LPos + 16 <= ALen do
+  begin
+    LMask := Vec16CmpEq(@AValue[LPos], Ord('"')) or
+             Vec16CmpEq(@AValue[LPos], Ord('\')) or
+             Vec16CmpLtU(@AValue[LPos], $20);
+    if LMask <> MASK16_NONE_SET then
+    begin
+      LNeedsEscape := True;
+      Break;
+    end;
+    Inc(LPos, 16);
+  end;
+  if not LNeedsEscape then
+    while LPos < ALen do
+    begin
+      if (Byte(AValue[LPos]) < $20) or (AValue[LPos] = '"') or (AValue[LPos] = '\') then
+      begin
+        LNeedsEscape := True;
+        Break;
+      end;
+      Inc(LPos);
+    end;
+  if LNeedsEscape then
+    JsonEscapeToBuilder(TStringView.Create(AValue, ALen), FBuilder^)
+  else
+    FBuilder^.AppendBytes(AValue, ALen);
   FBuilder^.AppendChar('"');
   FNeedComma := True;
 end;
