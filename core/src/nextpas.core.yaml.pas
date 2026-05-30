@@ -61,7 +61,7 @@ end;
 
 function TYamlDocumentImpl.Root: TYamlValue;
 begin
-  Result := TYamlValue.Create(FDoc, 0);
+  Result := TYamlValue.Create(FDoc, FDoc.RootIdx);
 end;
 
 function TYamlDocumentImpl.HasError: Boolean;

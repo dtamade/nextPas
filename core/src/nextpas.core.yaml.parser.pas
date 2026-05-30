@@ -14,6 +14,7 @@ type
   TYamlDocument = record
     Nodes: array of TYamlNode;
     NodeCount: UInt32;
+    RootIdx: UInt32;
     Error: TYamlError;
     HasError: Boolean;
   end;
@@ -31,6 +32,7 @@ procedure YamlDocInit(var ADoc: TYamlDocument);
 begin
   SetLength(ADoc.Nodes, INITIAL_CAPACITY);
   ADoc.NodeCount := 0;
+  ADoc.RootIdx := 0;
   ADoc.HasError := False;
 end;
 
@@ -232,6 +234,101 @@ end;
 function ParseNode(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
   var ACurToken: TYamlToken): UInt32; forward;
 
+function ParseBlockSequence(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
+  var ACurToken: TYamlToken): UInt32;
+var
+  LIdx, LFirst, LPrev, LChild: UInt32;
+  LCount: UInt32;
+begin
+  LIdx := AddNode(ADoc);
+  ADoc.Nodes[LIdx].Kind := ynkSequence;
+
+  LFirst := YAML_NODE_NONE;
+  LPrev := YAML_NODE_NONE;
+  LCount := 0;
+
+  while ACurToken.Kind = ytkBlockSeqStart do
+  begin
+    ACurToken := AScanner.NextToken; // consume - indicator
+    LChild := ParseNode(ADoc, AScanner, ACurToken);
+    if ADoc.HasError then begin Result := LIdx; Exit; end;
+
+    if LFirst = YAML_NODE_NONE then
+      LFirst := LChild
+    else
+      ADoc.Nodes[LPrev].Next := LChild;
+    LPrev := LChild;
+    Inc(LCount);
+  end;
+
+  if ACurToken.Kind = ytkBlockEnd then
+    ACurToken := AScanner.NextToken;
+
+  ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
+  ADoc.Nodes[LIdx].Container.Count := LCount;
+  Result := LIdx;
+end;
+
+function ParseBlockMapping(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
+  var ACurToken: TYamlToken): UInt32;
+var
+  LIdx, LFirst, LPrev, LKeyNode, LValNode: UInt32;
+  LCount: UInt32;
+begin
+  LIdx := AddNode(ADoc);
+  ADoc.Nodes[LIdx].Kind := ynkMapping;
+  ACurToken := AScanner.NextToken; // consume BlockMapStart
+
+  LFirst := YAML_NODE_NONE;
+  LPrev := YAML_NODE_NONE;
+  LCount := 0;
+
+  while (ACurToken.Kind <> ytkBlockEnd) and (ACurToken.Kind <> ytkStreamEnd) and
+        (ACurToken.Kind <> ytkDocEnd) and (ACurToken.Kind <> ytkError) do
+  begin
+    // Key
+    if ACurToken.Kind = ytkKey then
+      ACurToken := AScanner.NextToken;
+
+    if ACurToken.Kind = ytkScalar then
+    begin
+      LKeyNode := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
+      ACurToken := AScanner.NextToken;
+    end
+    else
+      Break;
+
+    // Value
+    if ACurToken.Kind = ytkValue then
+    begin
+      ACurToken := AScanner.NextToken;
+      LValNode := ParseNode(ADoc, AScanner, ACurToken);
+      if ADoc.HasError then begin Result := LIdx; Exit; end;
+    end
+    else
+    begin
+      LValNode := AddNode(ADoc);
+      ADoc.Nodes[LValNode].Kind := ynkNull;
+    end;
+
+    ADoc.Nodes[LKeyNode].Next := LValNode;
+
+    if LFirst = YAML_NODE_NONE then
+      LFirst := LKeyNode
+    else
+      ADoc.Nodes[LPrev].Next := LKeyNode;
+    LPrev := LValNode;
+    Inc(LCount);
+  end;
+
+  if ACurToken.Kind = ytkBlockEnd then
+    ACurToken := AScanner.NextToken;
+
+  ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
+  ADoc.Nodes[LIdx].Container.Count := LCount;
+  Result := LIdx;
+end;
+
 function ParseFlowSequence(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
   var ACurToken: TYamlToken): UInt32;
 var
@@ -363,16 +460,67 @@ function ParseNode(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
   var ACurToken: TYamlToken): UInt32;
 var
   LAnchorName: TStringView;
+  LKeyNode, LValNode, LFirst, LPrev, LIdx: UInt32;
+  LCount: UInt32;
 begin
   case ACurToken.Kind of
     ytkFlowSeqStart:
       Result := ParseFlowSequence(ADoc, AScanner, ACurToken);
     ytkFlowMapStart:
       Result := ParseFlowMapping(ADoc, AScanner, ACurToken);
+    ytkBlockMapStart:
+      Result := ParseBlockMapping(ADoc, AScanner, ACurToken);
+    ytkBlockSeqStart:
+      Result := ParseBlockSequence(ADoc, AScanner, ACurToken);
     ytkScalar:
     begin
       Result := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
       ACurToken := AScanner.NextToken;
+      // Check if this scalar is actually a mapping key (followed by :)
+      if ACurToken.Kind = ytkValue then
+      begin
+        // This is an implicit block mapping
+        LKeyNode := Result;
+        // Force key to string kind for mapping lookup
+        if ADoc.Nodes[LKeyNode].Kind <> ynkString then
+        begin
+          ADoc.Nodes[LKeyNode].Kind := ynkString;
+          // Keep the original Str view (already set by ResolveScalar for strings)
+        end;
+        LIdx := AddNode(ADoc);
+        ADoc.Nodes[LIdx].Kind := ynkMapping;
+        LFirst := LKeyNode;
+        LPrev := YAML_NODE_NONE;
+        LCount := 0;
+        while ACurToken.Kind = ytkValue do
+        begin
+          ACurToken := AScanner.NextToken; // consume :
+          LValNode := ParseNode(ADoc, AScanner, ACurToken);
+          if ADoc.HasError then begin Result := LIdx; Exit; end;
+          ADoc.Nodes[LKeyNode].Next := LValNode;
+          if LCount = 0 then
+            LFirst := LKeyNode
+          else
+            ADoc.Nodes[LPrev].Next := LKeyNode;
+          LPrev := LValNode;
+          Inc(LCount);
+          // Check for next key
+          if ACurToken.Kind = ytkScalar then
+          begin
+            LKeyNode := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
+            if ADoc.Nodes[LKeyNode].Kind <> ynkString then
+              ADoc.Nodes[LKeyNode].Kind := ynkString;
+            ACurToken := AScanner.NextToken;
+          end
+          else
+            Break;
+        end;
+        if ACurToken.Kind = ytkBlockEnd then
+          ACurToken := AScanner.NextToken;
+        ADoc.Nodes[LIdx].Container.FirstChild := LFirst;
+        ADoc.Nodes[LIdx].Container.Count := LCount;
+        Result := LIdx;
+      end;
     end;
     ytkAlias:
     begin
@@ -423,7 +571,7 @@ begin
     Exit;
   end;
 
-  ParseNode(ADoc, LScanner, LTok);
+  ADoc.RootIdx := ParseNode(ADoc, LScanner, LTok);
 
   if LScanner.HasError then
   begin
