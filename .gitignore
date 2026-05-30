@@ -26,3 +26,6 @@ core.*
 crash_*.txt
 ppas.sh
 tools/stage0/*.s
+# Compiled test/benchmark binaries
+tests/*/test_*/test_*[!.lpr]
+benchmarks/*/bench_*[!.lpr]
