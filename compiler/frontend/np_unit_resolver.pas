@@ -600,7 +600,7 @@ begin
   );
   DependencyAst := TAstFacade.Create(DependencyGreenTree);
   try
-    if not DependencyAst.IsValid then
+    if (DependencyGreenTree = nil) or (DependencyGreenTree.RootNode = nil) then
     begin
       Exit;
     end;
