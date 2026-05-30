@@ -100,6 +100,45 @@ begin
   Check(R.Next, '{');
   Check(not R.Next, 'error on invalid');
   Check(R.TokenKind = jtkError, 'is error');
+  Check(R.Error.Message.Len > 0, 'error message');
+end;
+
+procedure TestIntVsFloat;
+var R: TJsonReader;
+begin
+  R.Init(TStringView.Create(PAnsiChar('[42,3.14,-1e5]'), 14));
+  Check(R.Next, '[');
+  Check(R.Next, '42'); Check(R.TokenKind = jtkInt, 'int token');
+  CheckEqual(Int64(42), R.TokenInt, 'int val');
+  Check(R.Next, '3.14'); Check(R.TokenKind = jtkFloat, 'float token');
+  Check(Abs(R.TokenFloat - 3.14) < 1e-15, 'float val');
+  Check(R.Next, '-1e5'); Check(R.TokenKind = jtkFloat, 'exp float');
+  Check(Abs(R.TokenFloat - (-100000.0)) < 0.1, 'exp float val');
+  Check(R.Next, ']');
+end;
+
+procedure TestLongString;
+var R: TJsonReader;
+const
+  INPUT = '["abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOP"]';
+begin
+  R.Init(TStringView.Create(PAnsiChar(INPUT), Length(INPUT)));
+  Check(R.Next, '[');
+  Check(R.Next, 'str'); Check(R.TokenKind = jtkString, 'is str');
+  CheckEqual(Int64(52), Int64(R.TokenStr.Len), 'len=52');
+  Check(R.Next, ']');
+end;
+
+procedure TestMixedWhitespace;
+var R: TJsonReader;
+const
+  INPUT = #9'{'#13#10' "x"'#9':'#10'1'#13'}';
+begin
+  R.Init(TStringView.Create(PAnsiChar(INPUT), Length(INPUT)));
+  Check(R.Next, '{'); Check(R.TokenKind = jtkBeginObject, '{');
+  Check(R.Next, 'key'); CheckEqual('x', R.TokenStr.ToString, 'key');
+  Check(R.Next, 'val'); CheckEqual(Int64(1), R.TokenInt, 'val');
+  Check(R.Next, '}'); Check(R.TokenKind = jtkEndObject, '}');
 end;
 
 begin
@@ -112,5 +151,8 @@ begin
   T.Run('whitespace', @TestWhitespace);
   T.Run('empty', @TestEmpty);
   T.Run('error', @TestError);
+  T.Run('int vs float', @TestIntVsFloat);
+  T.Run('long string', @TestLongString);
+  T.Run('mixed whitespace', @TestMixedWhitespace);
   T.Summary;
 end.
