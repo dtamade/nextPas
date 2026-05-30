@@ -102,6 +102,7 @@ type
     procedure BlobRecVar(var S: TExprStack; const AArg: string);
     procedure BlobIs(var S: TExprStack; const AArg: string);
     procedure BlobArrLoad(var S: TExprStack);
+    procedure BlobArrLoadPtr(var S: TExprStack);
     procedure BlobStrCharLoad(var S: TExprStack; const AArg: string);
     procedure BlobRLoad(var S: TExprStack; const AArg: string);
     procedure BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
@@ -657,6 +658,25 @@ begin
   Instr.Operands[1] := MakeOperand(Rhs);
   EmitInstr(Instr);
   S.Push(EmitLoad(GetIntType, Instr.ResultId));
+end;
+
+procedure THIRBuilder.BlobArrLoadPtr(var S: TExprStack);
+var
+  Instr: THIRInstr;
+  V, Rhs: THIRValueId;
+begin
+  Rhs := S.Pop;
+  V := S.Pop;
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(V);
+  Instr.Operands[1] := MakeOperand(Rhs);
+  EmitInstr(Instr);
+  S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType);
 end;
 
 procedure THIRBuilder.BlobStrCharLoad(var S: TExprStack; const AArg: string);
@@ -1234,6 +1254,7 @@ begin
     else if Token = 'recvar' then BlobRecVar(S, Arg)
     else if Token = 'is' then BlobIs(S, Arg)
     else if Token = 'arr_load' then BlobArrLoad(S)
+    else if Token = 'arr_load_ptr' then BlobArrLoadPtr(S)
     else if Token = 'strcharload' then BlobStrCharLoad(S, Arg)
     else if Token = 'rload' then BlobRLoad(S, Arg)
     else if Token = 'add' then BlobBinOp(S, hikAdd)

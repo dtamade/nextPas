@@ -6339,8 +6339,12 @@ begin
       (TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text) >= 0) then
     begin
       StrCallIdx := LongInt(TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text));
-      ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
-        'int ' + IntToStr(StrCallIdx) + #10 + 'arr_load' + #10;
+      if TypeMetaFieldIsPtr(FuncName, ANode.ChildAt(1).Text) then
+        ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
+          'int ' + IntToStr(StrCallIdx) + #10 + 'arr_load_ptr' + #10
+      else
+        ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
+          'int ' + IntToStr(StrCallIdx) + #10 + 'arr_load' + #10;
       Exit(True);
     end;
   end;
@@ -7354,19 +7358,46 @@ begin
             end
             else if FCurrentMethodClass <> '' then
             begin
-              Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
-              if Value >= 0 then
-                FModel.AddTypedHirNode(
-                  'field-store-runtime', Decoded, 0, 0,
-                  'self' + #9 + IntToStr(Value) + #9 + Operand
-                )
+              DotPos := Pos('.', Decoded);
+              if (DotPos > 0) then
+              begin
+                ArgName := Copy(Decoded, 1, DotPos - 1);
+                FuncName := Copy(Decoded, DotPos + 1, Length(Decoded));
+                StringValue := LookupClassVar(ArgName);
+                if (StringValue <> '') and
+                  (TypeMetaFieldIndex(StringValue, FuncName) >= 0) then
+                begin
+                  Value := TypeMetaFieldIndex(StringValue, FuncName);
+                  FModel.AddTypedHirNode(
+                    'field-store-runtime', Decoded, 0, 0,
+                    ArgName + #9 + IntToStr(Value) + #9 + Operand
+                  );
+                end
+                else
+                begin
+                  RegisterRuntimeVar(Decoded);
+                  FModel.AddTypedHirNode(
+                    'assign-runtime', Decoded, 0, 0,
+                    Decoded + #9 + Operand
+                  );
+                end;
+              end
               else
               begin
-                RegisterRuntimeVar(Decoded);
-                FModel.AddTypedHirNode(
-                  'assign-runtime', Decoded, 0, 0,
-                  Decoded + #9 + Operand
-                );
+                Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
+                if Value >= 0 then
+                  FModel.AddTypedHirNode(
+                    'field-store-runtime', Decoded, 0, 0,
+                    'self' + #9 + IntToStr(Value) + #9 + Operand
+                  )
+                else
+                begin
+                  RegisterRuntimeVar(Decoded);
+                  FModel.AddTypedHirNode(
+                    'assign-runtime', Decoded, 0, 0,
+                    Decoded + #9 + Operand
+                  );
+                end;
               end;
             end
             else
