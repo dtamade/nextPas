@@ -418,6 +418,7 @@ function VecF64x2Ceil(const a: TVecF64x2): TVecF64x2; inline;
 function VecF64x2Round(const a: TVecF64x2): TVecF64x2; inline;
 {** Trunc: round towards zero *}
 function VecF64x2Trunc(const a: TVecF64x2): TVecF64x2; inline;
+function VecF64x2Clamp(const a, minVal, maxVal: TVecF64x2): TVecF64x2; inline;
 
 // F64x2 reduction
 function VecF64x2ReduceAdd(const a: TVecF64x2): Double; inline;
@@ -615,6 +616,14 @@ function VecF32x8ReduceAdd(const a: TVecF32x8): Single; inline;
 function VecF32x8ReduceMin(const a: TVecF32x8): Single; inline;
 function VecF32x8ReduceMax(const a: TVecF32x8): Single; inline;
 function VecF32x8ReduceMul(const a: TVecF32x8): Single; inline;
+
+// F32x8 extended math
+function VecF32x8Fma(const a, b, c: TVecF32x8): TVecF32x8; inline;
+function VecF32x8Floor(const a: TVecF32x8): TVecF32x8; inline;
+function VecF32x8Ceil(const a: TVecF32x8): TVecF32x8; inline;
+function VecF32x8Round(const a: TVecF32x8): TVecF32x8; inline;
+function VecF32x8Trunc(const a: TVecF32x8): TVecF32x8; inline;
+function VecF32x8Clamp(const a, minVal, maxVal: TVecF32x8): TVecF32x8; inline;
 function VecF32x8Load(p: PSingle): TVecF32x8; inline;
 procedure VecF32x8Store(p: PSingle; const a: TVecF32x8); inline;
 function VecF32x8Splat(value: Single): TVecF32x8; inline;
@@ -889,6 +898,20 @@ function VecF64x4ReduceAdd(const a: TVecF64x4): Double; inline;
 function VecF64x4ReduceMin(const a: TVecF64x4): Double; inline;
 function VecF64x4ReduceMax(const a: TVecF64x4): Double; inline;
 function VecF64x4ReduceMul(const a: TVecF64x4): Double; inline;
+
+// F64x4 extended math
+function VecF64x4Fma(const a, b, c: TVecF64x4): TVecF64x4; inline;
+function VecF64x4Floor(const a: TVecF64x4): TVecF64x4; inline;
+function VecF64x4Ceil(const a: TVecF64x4): TVecF64x4; inline;
+function VecF64x4Round(const a: TVecF64x4): TVecF64x4; inline;
+function VecF64x4Trunc(const a: TVecF64x4): TVecF64x4; inline;
+function VecF64x4Clamp(const a, minVal, maxVal: TVecF64x4): TVecF64x4; inline;
+
+// F64x4 memory/utility
+function VecF64x4Load(p: PDouble): TVecF64x4; inline;
+procedure VecF64x4Store(p: PDouble; const a: TVecF64x4); inline;
+function VecF64x4Splat(value: Double): TVecF64x4; inline;
+function VecF64x4Zero: TVecF64x4; inline;
 
 // === F64x8 Operations (512-bit Double, AVX-512) ===
 // 添加 F64x8 高级 API

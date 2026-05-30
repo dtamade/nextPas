@@ -957,6 +957,13 @@ begin
   Result := dispatch^.TruncF64x2(a);
 end;
 
+function VecF64x2Clamp(const a, minVal, maxVal: TVecF64x2): TVecF64x2;
+var dispatch: PSimdDispatchTable;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  Result := dispatch^.ClampF64x2(a, minVal, maxVal);
+end;
+
 function VecF64x2ReduceAdd(const a: TVecF64x2): Double;
 var
   LDispatch: PSimdDispatchTable;

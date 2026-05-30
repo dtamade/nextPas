@@ -312,6 +312,96 @@ begin
     FillChar(Result, SizeOf(Result), 0);
 end;
 
+// F32x8 extended math
+
+function VecF32x8Fma(const a, b, c: TVecF32x8): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.FmaF32x8) then
+    Result := dispatch^.FmaF32x8(a, b, c)
+  else
+    for i := 0 to 7 do
+      Result.f[i] := a.f[i] * b.f[i] + c.f[i];
+end;
+
+function VecF32x8Floor(const a: TVecF32x8): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+    v: Single;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.FloorF32x8) then
+    Result := dispatch^.FloorF32x8(a)
+  else
+    for i := 0 to 7 do
+    begin
+      v := Int(a.f[i]);
+      if (a.f[i] < v) then v := v - 1.0;
+      Result.f[i] := v;
+    end;
+end;
+
+function VecF32x8Ceil(const a: TVecF32x8): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+    v: Single;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.CeilF32x8) then
+    Result := dispatch^.CeilF32x8(a)
+  else
+    for i := 0 to 7 do
+    begin
+      v := Int(a.f[i]);
+      if (a.f[i] > v) then v := v + 1.0;
+      Result.f[i] := v;
+    end;
+end;
+
+function VecF32x8Round(const a: TVecF32x8): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.RoundF32x8) then
+    Result := dispatch^.RoundF32x8(a)
+  else
+    for i := 0 to 7 do
+      Result.f[i] := Round(a.f[i]);
+end;
+
+function VecF32x8Trunc(const a: TVecF32x8): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.TruncF32x8) then
+    Result := dispatch^.TruncF32x8(a)
+  else
+    for i := 0 to 7 do
+      Result.f[i] := Int(a.f[i]);
+end;
+
+function VecF32x8Clamp(const a, minVal, maxVal: TVecF32x8): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+    v: Single;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.ClampF32x8) then
+    Result := dispatch^.ClampF32x8(a, minVal, maxVal)
+  else
+    for i := 0 to 7 do
+    begin
+      v := a.f[i];
+      if v < minVal.f[i] then v := minVal.f[i];
+      if v > maxVal.f[i] then v := maxVal.f[i];
+      Result.f[i] := v;
+    end;
+end;
+
 // === I32x8 Operations Implementation ===
 // I32x8 高级 API 实现
 
@@ -2672,6 +2762,149 @@ begin
     Result := LDispatch^.ReduceMulF64x4(a)
   else
     Result := a.d[0] * a.d[1] * a.d[2] * a.d[3];
+end;
+
+// F64x4 extended math
+
+function VecF64x4Fma(const a, b, c: TVecF64x4): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.FmaF64x4) then
+    Result := LDispatch^.FmaF64x4(a, b, c)
+  else
+    for LIndex := 0 to 3 do
+      Result.d[LIndex] := a.d[LIndex] * b.d[LIndex] + c.d[LIndex];
+end;
+
+function VecF64x4Floor(const a: TVecF64x4): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+  v: Double;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.FloorF64x4) then
+    Result := LDispatch^.FloorF64x4(a)
+  else
+    for LIndex := 0 to 3 do
+    begin
+      v := Int(a.d[LIndex]);
+      if (a.d[LIndex] < v) then v := v - 1.0;
+      Result.d[LIndex] := v;
+    end;
+end;
+
+function VecF64x4Ceil(const a: TVecF64x4): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+  v: Double;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.CeilF64x4) then
+    Result := LDispatch^.CeilF64x4(a)
+  else
+    for LIndex := 0 to 3 do
+    begin
+      v := Int(a.d[LIndex]);
+      if (a.d[LIndex] > v) then v := v + 1.0;
+      Result.d[LIndex] := v;
+    end;
+end;
+
+function VecF64x4Round(const a: TVecF64x4): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.RoundF64x4) then
+    Result := LDispatch^.RoundF64x4(a)
+  else
+    for LIndex := 0 to 3 do
+      Result.d[LIndex] := Round(a.d[LIndex]);
+end;
+
+function VecF64x4Trunc(const a: TVecF64x4): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.TruncF64x4) then
+    Result := LDispatch^.TruncF64x4(a)
+  else
+    for LIndex := 0 to 3 do
+      Result.d[LIndex] := Int(a.d[LIndex]);
+end;
+
+function VecF64x4Clamp(const a, minVal, maxVal: TVecF64x4): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+  v: Double;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.ClampF64x4) then
+    Result := LDispatch^.ClampF64x4(a, minVal, maxVal)
+  else
+    for LIndex := 0 to 3 do
+    begin
+      v := a.d[LIndex];
+      if v < minVal.d[LIndex] then v := minVal.d[LIndex];
+      if v > maxVal.d[LIndex] then v := maxVal.d[LIndex];
+      Result.d[LIndex] := v;
+    end;
+end;
+
+// F64x4 memory/utility
+
+function VecF64x4Load(p: PDouble): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.LoadF64x4) then
+    Result := LDispatch^.LoadF64x4(p)
+  else
+    Move(p^, Result, SizeOf(TVecF64x4));
+end;
+
+procedure VecF64x4Store(p: PDouble; const a: TVecF64x4);
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.StoreF64x4) then
+    LDispatch^.StoreF64x4(p, a)
+  else
+    Move(a, p^, SizeOf(TVecF64x4));
+end;
+
+function VecF64x4Splat(value: Double): TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+  LIndex: Integer;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.SplatF64x4) then
+    Result := LDispatch^.SplatF64x4(value)
+  else
+    for LIndex := 0 to 3 do Result.d[LIndex] := value;
+end;
+
+function VecF64x4Zero: TVecF64x4;
+var
+  LDispatch: PSimdDispatchTable;
+begin
+  LDispatch := GetSimdFacadeDispatchFastPath;
+  if (LDispatch <> nil) and Assigned(LDispatch^.ZeroF64x4) then
+    Result := LDispatch^.ZeroF64x4()
+  else
+    FillChar(Result, SizeOf(Result), 0);
 end;
 
 // === F64x8 Operations Implementation ===
