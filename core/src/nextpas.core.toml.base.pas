@@ -54,6 +54,7 @@ type
       4: (DT: TTomlDateTime);
       5: (Container: record
             FirstChild: UInt32;
+            LastChild: UInt32;
             Count: UInt32;
           end);
   end;

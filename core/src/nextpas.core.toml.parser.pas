@@ -1060,6 +1060,7 @@ begin
   ANodeIdx := Doc^.AddNode;
   Doc^.FNodes[ANodeIdx].Kind := tnkArray;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
+  Doc^.FNodes[ANodeIdx].Container.LastChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.Count := 0;
   LArrayIdx := ANodeIdx;
   LCount := 0;
@@ -1116,6 +1117,7 @@ begin
   ANodeIdx := Doc^.AddNode;
   Doc^.FNodes[ANodeIdx].Kind := tnkTable;
   Doc^.FNodes[ANodeIdx].Container.FirstChild := TOML_NODE_NONE;
+  Doc^.FNodes[ANodeIdx].Container.LastChild := TOML_NODE_NONE;
   Doc^.FNodes[ANodeIdx].Container.Count := 0;
   LTableIdx := ANodeIdx;
   LCount := 0;
@@ -1233,17 +1235,16 @@ begin
 end;
 
 procedure TTomlParser.AddChild(ATableIdx: UInt32; AChildIdx: UInt32);
-var
-  LCur: UInt32;
 begin
   if Doc^.FNodes[ATableIdx].Container.FirstChild = TOML_NODE_NONE then
-    Doc^.FNodes[ATableIdx].Container.FirstChild := AChildIdx
+  begin
+    Doc^.FNodes[ATableIdx].Container.FirstChild := AChildIdx;
+    Doc^.FNodes[ATableIdx].Container.LastChild := AChildIdx;
+  end
   else
   begin
-    LCur := Doc^.FNodes[ATableIdx].Container.FirstChild;
-    while Doc^.FNodes[LCur].Next <> TOML_NODE_NONE do
-      LCur := Doc^.FNodes[LCur].Next;
-    Doc^.FNodes[LCur].Next := AChildIdx;
+    Doc^.FNodes[Doc^.FNodes[ATableIdx].Container.LastChild].Next := AChildIdx;
+    Doc^.FNodes[ATableIdx].Container.LastChild := AChildIdx;
   end;
 end;
 
@@ -1271,6 +1272,7 @@ begin
   Doc^.FNodes[LNewIdx].Kind := tnkTable;
   Doc^.FNodes[LNewIdx].Key := AKey;
   Doc^.FNodes[LNewIdx].Container.FirstChild := TOML_NODE_NONE;
+  Doc^.FNodes[LNewIdx].Container.LastChild := TOML_NODE_NONE;
   Doc^.FNodes[LNewIdx].Container.Count := 0;
   AddChild(AParent, LNewIdx);
   Inc(Doc^.FNodes[AParent].Container.Count);
@@ -1361,6 +1363,7 @@ begin
       Doc^.FNodes[LArrayIdx].Kind := tnkArray;
       Doc^.FNodes[LArrayIdx].Key := LKeys[LKeyCount - 1];
       Doc^.FNodes[LArrayIdx].Container.FirstChild := TOML_NODE_NONE;
+      Doc^.FNodes[LArrayIdx].Container.LastChild := TOML_NODE_NONE;
       Doc^.FNodes[LArrayIdx].Container.Count := 0;
       AddChild(LCurrent, LArrayIdx);
       Inc(Doc^.FNodes[LCurrent].Container.Count);
@@ -1371,6 +1374,7 @@ begin
     LNewIdx := Doc^.AddNode;
     Doc^.FNodes[LNewIdx].Kind := tnkTable;
     Doc^.FNodes[LNewIdx].Container.FirstChild := TOML_NODE_NONE;
+    Doc^.FNodes[LNewIdx].Container.LastChild := TOML_NODE_NONE;
     Doc^.FNodes[LNewIdx].Container.Count := 0;
     AddChild(LArrayIdx, LNewIdx);
     Inc(Doc^.FNodes[LArrayIdx].Container.Count);
@@ -1413,6 +1417,7 @@ begin
   FNodes[LRootIdx].Kind := tnkTable;
   FNodes[LRootIdx].Key := TStringView.Empty;
   FNodes[LRootIdx].Container.FirstChild := TOML_NODE_NONE;
+  FNodes[LRootIdx].Container.LastChild := TOML_NODE_NONE;
   FNodes[LRootIdx].Container.Count := 0;
   LCurrentTable := LRootIdx;
 
