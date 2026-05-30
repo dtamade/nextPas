@@ -324,6 +324,8 @@ var
   LIdx, LChild, LPrev: UInt32;
   LCount: UInt32;
   LCh: Byte;
+  LGapData: PAnsiChar;
+  LGapLen: SizeUInt;
 begin
   Inc(Depth);
   if Depth > 512 then
@@ -339,11 +341,14 @@ begin
   LCh := PeekCh;
   if LCh = Ord(']') then
   begin
-    ConsumeStruct;
-    Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
-    Doc^.FNodes[LIdx].Container.Count := 0;
-    Dec(Depth);
-    Exit(LIdx);
+    if not GetValueSlice(LGapData, LGapLen) then
+    begin
+      ConsumeStruct;
+      Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
+      Doc^.FNodes[LIdx].Container.Count := 0;
+      Dec(Depth);
+      Exit(LIdx);
+    end;
   end;
   while True do
   begin
