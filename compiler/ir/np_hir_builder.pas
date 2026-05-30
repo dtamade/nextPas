@@ -3056,7 +3056,12 @@ begin
       if ArgValue <> 0 then
       begin
         SetLength(ArgOps, ArgCount + 1);
-        ArgOps[ArgCount] := MakeOperand(ArgValue);
+        if (Pos(' p' + #10, ArgBlob) > 0) or
+          ((Length(ArgBlob) > 4) and (Copy(ArgBlob, 1, 4) = 'var ') and
+           (FindAllocaType(Copy(ArgBlob, 5, Pos(#10, ArgBlob) - 5)) = GetPtrType)) then
+          ArgOps[ArgCount] := MakeTypedOperand(ArgValue, GetPtrType)
+        else
+          ArgOps[ArgCount] := MakeOperand(ArgValue);
         Inc(ArgCount);
       end;
     end;
