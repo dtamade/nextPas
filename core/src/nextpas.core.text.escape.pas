@@ -298,10 +298,37 @@ var
   LEncLen: Byte;
   LMask: TMask16;
   LFirst: Int32;
+{$IFDEF HAS_AVX2}
+  LMask32: TMask32;
+  LFirst32: Int32;
+{$ENDIF}
 begin
   AError := ueNone;
   LPos := 0;
   LOut := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LMask32 := Vec32CmpEq(@ASrc[LPos], Ord('\'));
+    if LMask32 = MASK32_NONE_SET then
+    begin
+      Move(ASrc[LPos], ADst[LOut], 32);
+      Inc(LPos, 32);
+      Inc(LOut, 32);
+    end
+    else
+    begin
+      LFirst32 := Vec32Ctz(LMask32);
+      if LFirst32 > 0 then
+      begin
+        Move(ASrc[LPos], ADst[LOut], LFirst32);
+        Inc(LPos, SizeUInt(LFirst32));
+        Inc(LOut, SizeUInt(LFirst32));
+      end;
+      Break;
+    end;
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
     LMask := Vec16CmpEq(@ASrc[LPos], Ord('\'));
