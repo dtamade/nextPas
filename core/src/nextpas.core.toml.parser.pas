@@ -763,6 +763,8 @@ begin
       Doc^.AddOwnedBuf(LBuf);
       Exit(True);
     end;
+    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) and (Src[Pos] <> #10) and (Src[Pos] <> #13) then
+      Exit(SetError('control char in multi-line string', 33));
     Inc(Pos);
     if Src[Pos-1] = #10 then begin Inc(Line); Col := 1; end else Inc(Col);
   end;
@@ -824,6 +826,8 @@ begin
       Doc^.AddOwnedBuf(LBuf);
       Exit(True);
     end;
+    if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) and (Src[Pos] <> #10) and (Src[Pos] <> #13) then
+      Exit(SetError('control char in multi-line literal string', 41));
     Inc(Pos);
     if Src[Pos-1] = #10 then begin Inc(Line); Col := 1; end else Inc(Col);
   end;

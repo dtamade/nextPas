@@ -930,6 +930,28 @@ begin
     TStringView.Create(PAnsiChar('line' + #39), 5)), 'literal 4q = line' + #39);
 end;
 
+{ Multi-line control char rejection }
+
+procedure TestRejectCtrlMultiLineBasic;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('s = """abc' + #8 + 'def"""');
+  Check(LDoc.HasError, 'backspace in multi-line basic rejected');
+  LDoc := TomlParse('s = """abc' + #0 + 'def"""');
+  Check(LDoc.HasError, 'null in multi-line basic rejected');
+  LDoc := TomlParse('s = """abc' + #9 + 'def"""');
+  Check(not LDoc.HasError, 'tab in multi-line basic accepted');
+end;
+
+procedure TestRejectCtrlMultiLineLiteral;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('s = ' + #39#39#39 + 'abc' + #8 + 'def' + #39#39#39);
+  Check(LDoc.HasError, 'backspace in multi-line literal rejected');
+  LDoc := TomlParse('s = ' + #39#39#39 + 'abc' + #9 + 'def' + #39#39#39);
+  Check(not LDoc.HasError, 'tab in multi-line literal accepted');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -1045,6 +1067,9 @@ begin
   T.Run('reject time-only offset', @TestRejectTimeOnlyOffset);
   T.Run('reject Feb 30', @TestRejectFeb30);
   T.Run('literal multi-line 4 quotes', @TestLiteralMultiLine4Quotes);
+  { Multi-line control char rejection }
+  T.Run('reject ctrl in multi-line basic', @TestRejectCtrlMultiLineBasic);
+  T.Run('reject ctrl in multi-line literal', @TestRejectCtrlMultiLineLiteral);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
