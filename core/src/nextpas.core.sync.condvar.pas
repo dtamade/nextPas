@@ -12,12 +12,14 @@ type
   {**
    * @desc 条件变量，配合 IMutex 使用
    * @note Wait 会原子释放 mutex 并阻塞，被唤醒后重新获取 mutex
+   *       基于 platform_condvar（pthread_cond / Windows CONDITION_VARIABLE）
    *}
   TCondVar = class(TInterfacedObject, ICondVar)
   private
-    FSequence: Int32;
+    FHandle: TPlatformCondVar;
   public
     constructor Create;
+    destructor Destroy; override;
     procedure Wait(const AMutex: IMutex);
     function WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
     procedure Signal;
@@ -26,52 +28,58 @@ type
 
 implementation
 
+uses
+  SysUtils,
+  nextpas.core.errors,
+  nextpas.core.sync.mutex;
+
 { TCondVar }
 
 constructor TCondVar.Create;
+var
+  LRet: Int32;
 begin
   inherited Create;
-  FSequence := 0;
+  LRet := platform_condvar_init(FHandle);
+  if LRet <> 0 then
+    raise ENextPasError.CreateFmt('TCondVar.Create failed: %d', [LRet]);
+end;
+
+destructor TCondVar.Destroy;
+begin
+  platform_condvar_destroy(FHandle);
+  inherited;
 end;
 
 procedure TCondVar.Wait(const AMutex: IMutex);
 var
-  LSequence: Int32;
+  LMutex: TMutex;
+  LRet: Int32;
 begin
-  LSequence := InterlockedCompareExchange(FSequence, 0, 0);
-  AMutex.Release;
-  try
-    platform_wait_address32(@FSequence, LSequence, -1);
-  finally
-    AMutex.Acquire;
-  end;
+  LMutex := AMutex as TMutex;
+  LRet := platform_condvar_wait(FHandle, LMutex.FHandle);
+  if LRet <> 0 then
+    raise ENextPasError.CreateFmt('TCondVar.Wait failed: %d', [LRet]);
 end;
 
 function TCondVar.WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
 var
-  LSequence: Int32;
+  LMutex: TMutex;
   LRet: Int32;
 begin
-  LSequence := InterlockedCompareExchange(FSequence, 0, 0);
-  AMutex.Release;
-  try
-    LRet := platform_wait_address32(@FSequence, LSequence, ATimeoutNs);
-  finally
-    AMutex.Acquire;
-  end;
-  Result := (LRet = 0) or (LRet = PLATFORM_ERR_AGAIN);
+  LMutex := AMutex as TMutex;
+  LRet := platform_condvar_timedwait(FHandle, LMutex.FHandle, ATimeoutNs);
+  Result := (LRet = 0);
 end;
 
 procedure TCondVar.Signal;
 begin
-  InterlockedIncrement(FSequence);
-  platform_wake_address_one(@FSequence);
+  platform_condvar_signal(FHandle);
 end;
 
 procedure TCondVar.Broadcast;
 begin
-  InterlockedIncrement(FSequence);
-  platform_wake_address_all(@FSequence);
+  platform_condvar_broadcast(FHandle);
 end;
 
 end.

@@ -14,7 +14,7 @@ type
    * @note 非递归，同一线程重入会返回错误
    *}
   TMutex = class(TInterfacedObject, ILock, IMutex)
-  private
+  public
     FHandle: TPlatformMutex;
   public
     constructor Create;
