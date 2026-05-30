@@ -143,21 +143,78 @@ begin
 end;
 
 var
+  GStringHeavyToml: string;
+  GLongStringToml: string;
+
+procedure BuildStringInputs;
+var
+  LI: Integer;
+  LLongVal: string;
+begin
+  GStringHeavyToml := '';
+  for LI := 1 to 100 do
+    GStringHeavyToml := GStringHeavyToml +
+      'key_' + IntToStr(LI) + ' = "This is a medium-length string value number ' + IntToStr(LI) + ' with some content"' + #10;
+
+  LLongVal := '';
+  for LI := 1 to 1000 do
+    LLongVal := LLongVal + 'abcdefghij';
+  GLongStringToml := 'data = "' + LLongVal + '"' + #10 +
+    'path = "C:\\Users\\admin\\Documents\\projects\\nextpas\\core\\src\\nextpas.core.toml.parser.pas"' + #10 +
+    'url = "https://example.com/api/v2/users?page=1&limit=100&sort=name&order=asc"' + #10;
+end;
+
+procedure BenchStringHeavy(AIters: Int64);
+var
+  LDoc: TTomlDocument;
+  LView: TStringView;
+  LI: Int64;
+begin
+  LView := TStringView.FromStr(GStringHeavyToml);
+  for LI := 1 to AIters do
+  begin
+    LDoc.Init(DefaultAllocator);
+    LDoc.Parse(LView);
+    LDoc.Done;
+  end;
+end;
+
+procedure BenchLongString(AIters: Int64);
+var
+  LDoc: TTomlDocument;
+  LView: TStringView;
+  LI: Int64;
+begin
+  LView := TStringView.FromStr(GLongStringToml);
+  for LI := 1 to AIters do
+  begin
+    LDoc.Init(DefaultAllocator);
+    LDoc.Parse(LView);
+    LDoc.Done;
+  end;
+end;
+
+var
   LBench: TBenchRunner;
 
 begin
   BuildInputs;
+  BuildStringInputs;
 
   WriteLn('=== nextpas.core.toml benchmark ===');
   WriteLn('Small TOML:  ', Length(GSmallToml):5, ' bytes (10 keys)');
   WriteLn('Medium TOML: ', Length(GMediumToml):5, ' bytes (~50 keys)');
   WriteLn('Large TOML:  ', Length(GLargeToml):5, ' bytes (~700 keys)');
+  WriteLn('StringHeavy: ', Length(GStringHeavyToml):5, ' bytes (100 medium strings)');
+  WriteLn('LongString:  ', Length(GLongStringToml):5, ' bytes (10KB string + escaped)');
   WriteLn;
 
   LBench := TBenchRunner.Create;
   LBench.Run('parse/small (10 keys)', @BenchSmallParse);
   LBench.Run('parse/medium (~50 keys)', @BenchMediumParse);
   LBench.Run('parse/large (~700 keys)', @BenchLargeParse);
+  LBench.Run('parse/string-heavy (100 strings)', @BenchStringHeavy);
+  LBench.Run('parse/long-string (10KB value)', @BenchLongString);
   LBench.Run('facade/small (parse+interface)', @BenchSmallFacade);
   LBench.Run('access/medium (3 lookups)', @BenchMediumAccess);
   LBench.Summary;
