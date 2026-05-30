@@ -22,7 +22,7 @@ type
   public
     constructor Create(AMinLevel: TLogLevel);
     function Enabled(const ALevel: TLogLevel): Boolean;
-    procedure Handle(var ARecord: TLogRecord);
+    procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -39,7 +39,7 @@ begin
   Result := ALevel >= FMinLevel;
 end;
 
-procedure TCaptureHandler.Handle(var ARecord: TLogRecord);
+procedure TCaptureHandler.Handle(const ARecord: TLogRecord);
 begin
   if GCaptureCount >= Length(GCaptured) then
     SetLength(GCaptured, Length(GCaptured) + 16);

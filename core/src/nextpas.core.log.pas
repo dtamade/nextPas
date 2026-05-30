@@ -33,11 +33,14 @@ type
   ILogHandler = interface
     ['{B2C3D4E5-F6A7-8901-BCDE-FA2345678901}']
     function Enabled(const ALevel: TLogLevel): Boolean;
-    procedure Handle(var ARecord: TLogRecord);
+    procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
 
+  {** PLogEvent points into a global ring buffer (16 slots).
+   *  MUST be used immediately in a single chain: Logger.Info^.Str(...)^.Msg(...)
+   *  Do NOT store PLogEvent across multiple statements or log calls. *}
   PLogEvent = ^TLogEvent;
   TLogEvent = record
   private
@@ -307,7 +310,7 @@ type
   public
     constructor Create(AMinLevel: TLogLevel);
     function Enabled(const ALevel: TLogLevel): Boolean;
-    procedure Handle(var ARecord: TLogRecord);
+    procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -324,7 +327,7 @@ begin
   Result := ALevel >= FMinLevel;
 end;
 
-procedure TConsoleHandler.Handle(var ARecord: TLogRecord);
+procedure TConsoleHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
   LA: TAttr;
@@ -403,7 +406,7 @@ type
   public
     constructor Create(AMinLevel: TLogLevel);
     function Enabled(const ALevel: TLogLevel): Boolean;
-    procedure Handle(var ARecord: TLogRecord);
+    procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -420,27 +423,58 @@ begin
   Result := ALevel >= FMinLevel;
 end;
 
+procedure WriteJsonStr(const AStr: string);
+var
+  LI: Int32;
+  LCh: Char;
+begin
+  Write(StdErr, '"');
+  for LI := 1 to Length(AStr) do
+  begin
+    LCh := AStr[LI];
+    case LCh of
+      '"': Write(StdErr, '\"');
+      '\': Write(StdErr, '\\');
+      #8: Write(StdErr, '\b');
+      #9: Write(StdErr, '\t');
+      #10: Write(StdErr, '\n');
+      #12: Write(StdErr, '\f');
+      #13: Write(StdErr, '\r');
+    else
+      if LCh < #32 then
+        Write(StdErr, '\u00', HexStr(Ord(LCh), 2))
+      else
+        Write(StdErr, LCh);
+    end;
+  end;
+  Write(StdErr, '"');
+end;
+
 procedure WriteJsonAttr(var AFirst: Boolean; const LA: TAttr);
 begin
   if not AFirst then Write(StdErr, ',');
   AFirst := False;
-  Write(StdErr, '"', LA.Key, '":');
+  WriteJsonStr(LA.Key);
+  Write(StdErr, ':');
   case LA.Kind of
-    akString: Write(StdErr, '"', LA.SVal, '"');
+    akString: WriteJsonStr(LA.SVal);
     akInt: Write(StdErr, LA.IVal);
     akFloat: Write(StdErr, LA.FVal:0:6);
     akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
   end;
 end;
 
-procedure TJsonLogHandler.Handle(var ARecord: TLogRecord);
+procedure TJsonLogHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
   LFirst: Boolean;
 begin
   Write(StdErr, '{"level":"', LEVEL_NAMES[ARecord.Level], '"');
   if ARecord.Message <> '' then
-    Write(StdErr, ',"msg":"', ARecord.Message, '"');
+  begin
+    Write(StdErr, ',"msg":');
+    WriteJsonStr(ARecord.Message);
+  end;
   Write(StdErr, ',"ts":', ARecord.TimestampNs);
   LFirst := False;
   for LI := 0 to FPrefixCount - 1 do
@@ -548,7 +582,7 @@ type
       AMaxBytes: Int64; AMaxFiles: Int32);
     destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
-    procedure Handle(var ARecord: TLogRecord);
+    procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -611,7 +645,7 @@ begin
   Result := ALevel >= FMinLevel;
 end;
 
-procedure TFileHandler.Handle(var ARecord: TLogRecord);
+procedure TFileHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
 begin
@@ -648,6 +682,9 @@ var
   LNew: TFileHandler;
   LI: Int32;
 begin
+  // Note: child shares same path but opens independently (append mode).
+  // Rotation tracking is per-instance. For production use with child loggers,
+  // prefer MultiHandler with a single FileHandler + ConsoleHandler for children.
   LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles);
   SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
   for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
@@ -677,7 +714,7 @@ type
   public
     constructor Create(const AHandlers: array of ILogHandler);
     function Enabled(const ALevel: TLogLevel): Boolean;
-    procedure Handle(var ARecord: TLogRecord);
+    procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -699,7 +736,7 @@ begin
   Result := False;
 end;
 
-procedure TMultiHandler.Handle(var ARecord: TLogRecord);
+procedure TMultiHandler.Handle(const ARecord: TLogRecord);
 var LI: Int32;
 begin
   for LI := 0 to FCount - 1 do
