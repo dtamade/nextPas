@@ -98,6 +98,7 @@ type
     procedure Put(const AKey: K; const AValue: V); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function Get(const AKey: K): V;
     procedure Clear;
+    procedure Reserve(AMinCapacity: SizeUInt);
     procedure Retain(AFunc: TRetainFunc);
     procedure ForEach(AFunc: TVisitFunc);
     procedure Drain(AFunc: TVisitFunc);
@@ -634,6 +635,31 @@ begin
   FCapacity := 0;
   FGroupCount := 0;
   FGrowthLeft := 0;
+end;
+
+procedure TSwissTable.Reserve(AMinCapacity: SizeUInt);
+var LTarget: SizeUInt;
+begin
+  if AMinCapacity <= FCount then Exit;
+  LTarget := AMinCapacity + AMinCapacity div 7 + 1;
+  LTarget := LTarget or (LTarget shr 1);
+  LTarget := LTarget or (LTarget shr 2);
+  LTarget := LTarget or (LTarget shr 4);
+  LTarget := LTarget or (LTarget shr 8);
+  LTarget := LTarget or (LTarget shr 16);
+  {$IF SizeOf(SizeUInt) = 8}
+  LTarget := LTarget or (LTarget shr 32);
+  {$ENDIF}
+  Inc(LTarget);
+  if LTarget < MIN_CAPACITY then LTarget := MIN_CAPACITY;
+  if LTarget <= FCapacity then Exit;
+  if FCapacity = 0 then
+    AllocTable(LTarget)
+  else
+  begin
+    while FCapacity < LTarget do
+      GrowAndRehash;
+  end;
 end;
 
 procedure TSwissTable.Retain(AFunc: TRetainFunc);

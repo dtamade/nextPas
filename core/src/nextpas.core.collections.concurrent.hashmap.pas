@@ -43,6 +43,7 @@ type
     procedure Put(const AKey: K; const AValue: V);
     function PutIfAbsent(const AKey: K; const AValue: V): Boolean;
     function Remove(const AKey: K): Boolean;
+    function Replace(const AKey: K; const ANewValue: V): Boolean;
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Compute(const AKey: K; AFunc: TComputeFunc);
     procedure ForEach(AFunc: TForEachFunc);
@@ -163,6 +164,24 @@ begin
   FSegmentLocks[LSeg].AcquireWrite;
   try
     Result := FSegments[LSeg].Remove(AKey);
+  finally
+    FSegmentLocks[LSeg].ReleaseWrite;
+  end;
+end;
+
+function TConcurrentHashMap.Replace(const AKey: K; const ANewValue: V): Boolean;
+var LSeg: SizeUInt; LDummy: V;
+begin
+  LSeg := SegmentIndex(AKey);
+  FSegmentLocks[LSeg].AcquireWrite;
+  try
+    if FSegments[LSeg].TryGetValue(AKey, LDummy) then
+    begin
+      FSegments[LSeg].Put(AKey, ANewValue);
+      Result := True;
+    end
+    else
+      Result := False;
   finally
     FSegmentLocks[LSeg].ReleaseWrite;
   end;

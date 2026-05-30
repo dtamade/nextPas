@@ -159,7 +159,7 @@ end;
 
 procedure TSwissHashMap.Reserve(aCapacity: SizeUInt);
 begin
-  // SwissTable auto-grows; explicit reserve not needed
+  FInner.Reserve(aCapacity);
 end;
 
 procedure TSwissHashMap.Put(const AKey: K; const AValue: V);

@@ -119,6 +119,73 @@ begin
   M.Free;
 end;
 
+function KeepOdd(const AKey: Integer; const AValue: Integer): Boolean;
+begin
+  Result := (AKey mod 2) = 1;
+end;
+
+procedure TestRetain;
+var M: TIntSwiss; i: Integer;
+begin
+  M := TIntSwiss.Create;
+  for i := 0 to 99 do M.Put(i, i);
+  M.Retain(@KeepOdd);
+  CheckEqual(Int64(50), Int64(M.Count), 'retain count');
+  Check(M.ContainsKey(1), 'has odd');
+  Check(not M.ContainsKey(0), 'no even');
+  M.Free;
+end;
+
+var GDrainSum: Int64;
+
+procedure DrainVisit(const AKey: Integer; const AValue: Integer);
+begin
+  Inc(GDrainSum, AKey);
+end;
+
+procedure TestDrain;
+var M: TIntSwiss;
+begin
+  M := TIntSwiss.Create;
+  M.Put(1, 10); M.Put(2, 20); M.Put(3, 30);
+  GDrainSum := 0;
+  M.Drain(@DrainVisit);
+  CheckEqual(Int64(6), GDrainSum, 'drain sum');
+  CheckEqual(Int64(0), Int64(M.Count), 'empty after drain');
+  M.Free;
+end;
+
+procedure TestReserve;
+var M: TIntSwiss; i, v: Integer; ok: Boolean;
+begin
+  M := TIntSwiss.Create;
+  M.Reserve(500);
+  Check(M.Capacity >= 500, 'capacity after reserve');
+  for i := 0 to 499 do M.Put(i, i);
+  CheckEqual(Int64(500), Int64(M.Count), 'count');
+  ok := True;
+  for i := 0 to 499 do
+    if not M.TryGetValue(i, v) or (v <> i) then ok := False;
+  Check(ok, 'all values');
+  M.Free;
+end;
+
+procedure TestForEachAndEnumerator;
+var M: TIntSwiss; E: TIntSwiss.TSlot; sum: Int64; count: Integer;
+begin
+  M := TIntSwiss.Create;
+  M.Put(1, 10); M.Put(2, 20); M.Put(3, 30);
+  sum := 0; count := 0;
+  for E in M do
+  begin
+    Inc(sum, E.Key);
+    Inc(count);
+  end;
+  CheckEqual(Int64(3), Int64(count), 'enum count');
+  CheckEqual(Int64(6), sum, 'enum sum');
+  M.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.swisstable');
   T.Run('Put/Get', @TestPutGet);
@@ -129,5 +196,9 @@ begin
   T.Run('String key', @TestStringKey);
   T.Run('Clear', @TestClear);
   T.Run('Prealloc', @TestPrealloc);
+  T.Run('Retain', @TestRetain);
+  T.Run('Drain', @TestDrain);
+  T.Run('Reserve', @TestReserve);
+  T.Run('ForEach/Enumerator', @TestForEachAndEnumerator);
   T.Summary;
 end.

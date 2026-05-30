@@ -286,6 +286,20 @@ begin
   finally M.Free; end;
 end;
 
+procedure TestReplace;
+var M: TIntConcMap; v: Integer;
+begin
+  M := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    M.Put(1, 10);
+    Check(M.Replace(1, 99), 'replace existing');
+    M.TryGetValue(1, v);
+    CheckEqual(Int64(99), Int64(v), 'replaced value');
+    Check(not M.Replace(999, 42), 'replace missing');
+    CheckEqual(Int64(1), Int64(M.Count), 'count unchanged');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.concurrent.hashmap');
   T.Run('Put/Get', @TestPutGet);
@@ -294,6 +308,7 @@ begin
   T.Run('GetOrInsert', @TestGetOrInsert);
   T.Run('PutIfAbsent', @TestPutIfAbsent);
   T.Run('Compute', @TestCompute);
+  T.Run('Replace', @TestReplace);
   T.Run('IsEmpty', @TestIsEmpty);
   T.Run('Keys', @TestKeys);
   T.Run('Default hash (nil)', @TestDefaultHash);
