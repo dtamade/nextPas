@@ -54,6 +54,7 @@ type
     procedure EmitObjectReleaseInvalidHelper;
     procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
+    procedure EmitImtGlobals;
   public
     constructor Create(AModule: THIRModule);
     procedure EmitModule;
@@ -812,6 +813,7 @@ begin
   end;
 
   EmitVmtGlobals;
+  EmitImtGlobals;
 
   if FNeedsWriteInt then
     EmitWriteIntHelper;
@@ -1243,6 +1245,32 @@ begin
         Line := Line + 'ptr null'
       else
         Line := Line + 'ptr @' + Vmt.Funcs[J];
+    end;
+    Line := Line + ']';
+    Emit('');
+    Emit(Line);
+  end;
+end;
+
+procedure THIRLlvmEmitter.EmitImtGlobals;
+var
+  I, J: LongInt;
+  Imt: THIRImtGlobal;
+  Line: string;
+begin
+  for I := 0 to FModule.ImtGlobalCount - 1 do
+  begin
+    Imt := FModule.ImtGlobalAt(I);
+    if Length(Imt.ThunkNames) = 0 then Continue;
+    Line := '@' + Imt.ClassName + '.imt.' + Imt.InterfaceName +
+      ' = internal constant [' + IntToStr(Length(Imt.ThunkNames)) + ' x ptr] [';
+    for J := 0 to High(Imt.ThunkNames) do
+    begin
+      if J > 0 then Line := Line + ', ';
+      if Imt.ThunkNames[J] = '' then
+        Line := Line + 'ptr null'
+      else
+        Line := Line + 'ptr @' + Imt.ThunkNames[J];
     end;
     Line := Line + ']';
     Emit('');

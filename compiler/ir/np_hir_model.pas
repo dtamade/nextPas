@@ -135,6 +135,13 @@ type
     Funcs: array of string;
   end;
 
+  THIRImtGlobal = record
+    ClassName: string;
+    InterfaceName: string;
+    ThunkNames: array of string;
+    SlotOffset: LongInt;
+  end;
+
   THIRGlobal = record
     Name: string;
     TypeId: THIRTypeId;
@@ -150,6 +157,7 @@ type
     FFunctions: array of THIRFunction;
     FGlobals: array of THIRGlobal;
     FVmtGlobals: array of THIRVmtGlobal;
+    FImtGlobals: array of THIRImtGlobal;
     FNextValueId: THIRValueId;
     FNextBlockId: THIRBlockId;
     FNextFuncId: THIRFuncId;
@@ -188,6 +196,10 @@ type
     procedure AddVmtGlobal(const AClassName: string; const AFuncs: array of string);
     function VmtGlobalCount: LongInt;
     function VmtGlobalAt(AIndex: LongInt): THIRVmtGlobal;
+    procedure AddImtGlobal(const AClassName, AInterfaceName: string;
+      const AThunkNames: array of string; ASlotOffset: LongInt);
+    function ImtGlobalCount: LongInt;
+    function ImtGlobalAt(AIndex: LongInt): THIRImtGlobal;
   end;
 
 function MakeOperand(AValueId: THIRValueId): THIROperand;
@@ -218,6 +230,7 @@ begin
   SetLength(FFunctions, 0);
   SetLength(FGlobals, 0);
   SetLength(FVmtGlobals, 0);
+  SetLength(FImtGlobals, 0);
   FNextValueId := 1;
   FNextBlockId := 1;
   FNextFuncId := 1;
@@ -425,6 +438,31 @@ end;
 function THIRModule.VmtGlobalAt(AIndex: LongInt): THIRVmtGlobal;
 begin
   Result := FVmtGlobals[AIndex];
+end;
+
+procedure THIRModule.AddImtGlobal(const AClassName, AInterfaceName: string;
+  const AThunkNames: array of string; ASlotOffset: LongInt);
+var
+  Idx, I: LongInt;
+begin
+  Idx := Length(FImtGlobals);
+  SetLength(FImtGlobals, Idx + 1);
+  FImtGlobals[Idx].ClassName := AClassName;
+  FImtGlobals[Idx].InterfaceName := AInterfaceName;
+  FImtGlobals[Idx].SlotOffset := ASlotOffset;
+  SetLength(FImtGlobals[Idx].ThunkNames, Length(AThunkNames));
+  for I := 0 to High(AThunkNames) do
+    FImtGlobals[Idx].ThunkNames[I] := AThunkNames[I];
+end;
+
+function THIRModule.ImtGlobalCount: LongInt;
+begin
+  Result := Length(FImtGlobals);
+end;
+
+function THIRModule.ImtGlobalAt(AIndex: LongInt): THIRImtGlobal;
+begin
+  Result := FImtGlobals[AIndex];
 end;
 
 end.
