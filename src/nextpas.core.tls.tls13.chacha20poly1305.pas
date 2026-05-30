@@ -209,6 +209,142 @@ begin
 end;
 
 function Poly1305MAC(const AKey, AMessage: TBytes): TBytes;
+{$IFDEF CPUX86_64}
+{$ASMMODE ATT}
+type
+  TPoly1305State = record
+    H0, H1, H2: UInt64;
+    R0, R1, R2: UInt64;
+    S1, S2: UInt64;
+  end;
+var
+  LState: TPoly1305State;
+  LR128Lo, LR128Hi: UInt64;
+  LOffset: Integer;
+  LBlock: array[0..15] of Byte;
+  D0Lo, D0Hi, D1Lo, D1Hi, D2Lo, D2Hi: UInt64;
+  C: UInt64;
+  G0, G1: UInt64;
+  G2: Int64;
+  FLo, FHi: UInt64;
+begin
+  SetLength(Result, POLY1305_TAG_SIZE);
+
+  LR128Lo := PUInt64(@AKey[0])^ and $0FFFFFFC0FFFFFFF;
+  LR128Hi := PUInt64(@AKey[8])^ and $0FFFFFFC0FFFFFFC;
+  LState.R0 := LR128Lo and $0FFFFFFFFFFF;
+  LState.R1 := ((LR128Lo shr 44) or (LR128Hi shl 20)) and $0FFFFFFFFFFF;
+  LState.R2 := (LR128Hi shr 24) and $3FFFFFFFFFF;
+  LState.S1 := LState.R1 * 20;
+  LState.S2 := LState.R2 * 20;
+  LState.H0 := 0; LState.H1 := 0; LState.H2 := 0;
+
+  LOffset := 0;
+  while LOffset + 16 <= Length(AMessage) do
+  begin
+    // Add message block
+    LState.H0 := LState.H0 + (PUInt64(@AMessage[LOffset])^ and $0FFFFFFFFFFF);
+    LState.H1 := LState.H1 + (((PUInt64(@AMessage[LOffset])^ shr 44) or (PUInt64(@AMessage[LOffset+8])^ shl 20)) and $0FFFFFFFFFFF);
+    LState.H2 := LState.H2 + (((PUInt64(@AMessage[LOffset+8])^ shr 24) and $3FFFFFFFFFF) or (UInt64(1) shl 40));
+
+    // 9 multiplies via mulq
+    asm
+      leaq LState, %rcx
+      movq 0(%rcx), %rax; mulq 24(%rcx); movq %rax, D0Lo; movq %rdx, D0Hi
+      movq 8(%rcx), %rax; mulq 56(%rcx); addq %rax, D0Lo; adcq %rdx, D0Hi
+      movq 16(%rcx), %rax; mulq 48(%rcx); addq %rax, D0Lo; adcq %rdx, D0Hi
+      movq 0(%rcx), %rax; mulq 32(%rcx); movq %rax, D1Lo; movq %rdx, D1Hi
+      movq 8(%rcx), %rax; mulq 24(%rcx); addq %rax, D1Lo; adcq %rdx, D1Hi
+      movq 16(%rcx), %rax; mulq 56(%rcx); addq %rax, D1Lo; adcq %rdx, D1Hi
+      movq 0(%rcx), %rax; mulq 40(%rcx); movq %rax, D2Lo; movq %rdx, D2Hi
+      movq 8(%rcx), %rax; mulq 32(%rcx); addq %rax, D2Lo; adcq %rdx, D2Hi
+      movq 16(%rcx), %rax; mulq 24(%rcx); addq %rax, D2Lo; adcq %rdx, D2Hi
+    end ['rax', 'rcx', 'rdx'];
+
+    // Carry
+    LState.H0 := D0Lo and $0FFFFFFFFFFF;
+    C := (D0Lo shr 44) or (D0Hi shl 20);
+    D1Lo := D1Lo + C; if D1Lo < C then Inc(D1Hi);
+    LState.H1 := D1Lo and $0FFFFFFFFFFF;
+    C := (D1Lo shr 44) or (D1Hi shl 20);
+    D2Lo := D2Lo + C; if D2Lo < C then Inc(D2Hi);
+    LState.H2 := D2Lo and $3FFFFFFFFFF;
+    C := (D2Lo shr 42) or (D2Hi shl 22);
+    LState.H0 := LState.H0 + C * 5;
+    C := LState.H0 shr 44;
+    LState.H0 := LState.H0 and $0FFFFFFFFFFF;
+    LState.H1 := LState.H1 + C;
+
+    Inc(LOffset, 16);
+  end;
+
+  // Final partial block
+  if LOffset < Length(AMessage) then
+  begin
+    FillChar(LBlock, 16, 0);
+    Move(AMessage[LOffset], LBlock[0], Length(AMessage) - LOffset);
+    LBlock[Length(AMessage) - LOffset] := 1;
+
+    LState.H0 := LState.H0 + (PUInt64(@LBlock[0])^ and $0FFFFFFFFFFF);
+    LState.H1 := LState.H1 + (((PUInt64(@LBlock[0])^ shr 44) or (PUInt64(@LBlock[8])^ shl 20)) and $0FFFFFFFFFFF);
+    LState.H2 := LState.H2 + ((PUInt64(@LBlock[8])^ shr 24) and $3FFFFFFFFFF);
+
+    asm
+      leaq LState, %rcx
+      movq 0(%rcx), %rax; mulq 24(%rcx); movq %rax, D0Lo; movq %rdx, D0Hi
+      movq 8(%rcx), %rax; mulq 56(%rcx); addq %rax, D0Lo; adcq %rdx, D0Hi
+      movq 16(%rcx), %rax; mulq 48(%rcx); addq %rax, D0Lo; adcq %rdx, D0Hi
+      movq 0(%rcx), %rax; mulq 32(%rcx); movq %rax, D1Lo; movq %rdx, D1Hi
+      movq 8(%rcx), %rax; mulq 24(%rcx); addq %rax, D1Lo; adcq %rdx, D1Hi
+      movq 16(%rcx), %rax; mulq 56(%rcx); addq %rax, D1Lo; adcq %rdx, D1Hi
+      movq 0(%rcx), %rax; mulq 40(%rcx); movq %rax, D2Lo; movq %rdx, D2Hi
+      movq 8(%rcx), %rax; mulq 32(%rcx); addq %rax, D2Lo; adcq %rdx, D2Hi
+      movq 16(%rcx), %rax; mulq 24(%rcx); addq %rax, D2Lo; adcq %rdx, D2Hi
+    end ['rax', 'rcx', 'rdx'];
+
+    LState.H0 := D0Lo and $0FFFFFFFFFFF;
+    C := (D0Lo shr 44) or (D0Hi shl 20);
+    D1Lo := D1Lo + C; if D1Lo < C then Inc(D1Hi);
+    LState.H1 := D1Lo and $0FFFFFFFFFFF;
+    C := (D1Lo shr 44) or (D1Hi shl 20);
+    D2Lo := D2Lo + C; if D2Lo < C then Inc(D2Hi);
+    LState.H2 := D2Lo and $3FFFFFFFFFF;
+    C := (D2Lo shr 42) or (D2Hi shl 22);
+    LState.H0 := LState.H0 + C * 5;
+    C := LState.H0 shr 44;
+    LState.H0 := LState.H0 and $0FFFFFFFFFFF;
+    LState.H1 := LState.H1 + C;
+  end;
+
+  // Final reduction
+  C := LState.H1 shr 44; LState.H1 := LState.H1 and $0FFFFFFFFFFF;
+  LState.H2 := LState.H2 + C;
+  C := LState.H2 shr 42; LState.H2 := LState.H2 and $3FFFFFFFFFF;
+  LState.H0 := LState.H0 + C * 5;
+  C := LState.H0 shr 44; LState.H0 := LState.H0 and $0FFFFFFFFFFF;
+  LState.H1 := LState.H1 + C;
+
+  // Conditional subtraction of p
+  G0 := LState.H0 + 5;
+  C := G0 shr 44; G0 := G0 and $0FFFFFFFFFFF;
+  G1 := LState.H1 + C;
+  C := G1 shr 44; G1 := G1 and $0FFFFFFFFFFF;
+  G2 := Int64(LState.H2) + Int64(C) - (Int64(1) shl 42);
+  if G2 >= 0 then
+  begin
+    LState.H0 := G0; LState.H1 := G1; LState.H2 := UInt64(G2);
+  end;
+
+  // Add pad (128-bit)
+  FLo := (LState.H0 or (LState.H1 shl 44)) + PUInt64(@AKey[16])^;
+  FHi := (LState.H1 shr 20) or (LState.H2 shl 24);
+  if FLo < PUInt64(@AKey[16])^ then Inc(FHi);
+  FHi := FHi + PUInt64(@AKey[24])^;
+
+  PUInt64(@Result[0])^ := FLo;
+  PUInt64(@Result[8])^ := FHi;
+end;
+{$ELSE}
 var
   R0, R1, R2, R3, R4: UInt64;
   S1, S2, S3, S4: UInt64;
@@ -401,6 +537,7 @@ begin
   for I := 0 to High(LBlock) do
     LBlock[I] := 0;
 end;
+{$ENDIF}
 
 function BuildPoly1305Input(const AAAD, ACiphertext: TBytes): TBytes;
 var
