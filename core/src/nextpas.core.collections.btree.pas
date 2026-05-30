@@ -86,6 +86,8 @@ type
 
     function Min(out AKey: K; out AValue: V): Boolean;
     function Max(out AKey: K; out AValue: V): Boolean;
+    function PopMin(out AKey: K; out AValue: V): Boolean;
+    function PopMax(out AKey: K; out AValue: V): Boolean;
 
     function LowerBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
     function UpperBound(const AKey: K; out AFoundKey: K; out AValue: V): Boolean;
@@ -120,9 +122,14 @@ type
 
     function Min(out AItem: T): Boolean;
     function Max(out AItem: T): Boolean;
+    function PopMin(out AItem: T): Boolean;
+    function PopMax(out AItem: T): Boolean;
     function LowerBound(const AItem: T; out AFound: T): Boolean;
     function UpperBound(const AItem: T; out AFound: T): Boolean;
     function Floor(const AItem: T; out AFound: T): Boolean;
+    procedure Union(AOther: TBTreeSet);
+    procedure Intersection(AOther: TBTreeSet);
+    procedure Difference(AOther: TBTreeSet);
 
     function GetCount: SizeUInt;
     property Count: SizeUInt read GetCount;
@@ -656,6 +663,18 @@ begin
   Result := True;
 end;
 
+function TBTreeMap.PopMin(out AKey: K; out AValue: V): Boolean;
+begin
+  Result := Min(AKey, AValue);
+  if Result then Remove(AKey);
+end;
+
+function TBTreeMap.PopMax(out AKey: K; out AValue: V): Boolean;
+begin
+  Result := Max(AKey, AValue);
+  if Result then Remove(AKey);
+end;
+
 { Clear }
 
 procedure TBTreeMap.Clear;
@@ -1057,6 +1076,50 @@ function TBTreeSet.Floor(const AItem: T; out AFound: T): Boolean;
 var LDummy: Byte;
 begin
   Result := FInner.Floor(AItem, AFound, LDummy);
+end;
+
+function TBTreeSet.PopMin(out AItem: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.PopMin(AItem, LDummy);
+end;
+
+function TBTreeSet.PopMax(out AItem: T): Boolean;
+var LDummy: Byte;
+begin
+  Result := FInner.PopMax(AItem, LDummy);
+end;
+
+procedure TBTreeSet.Union(AOther: TBTreeSet);
+var E: TInner.TEntry;
+begin
+  for E in AOther.FInner do
+    FInner.Put(E.Key, 0);
+end;
+
+procedure TBTreeSet.Intersection(AOther: TBTreeSet);
+var
+  E: TInner.TEntry;
+  LToRemove: array of T;
+  i, LCount: Integer;
+begin
+  LCount := 0;
+  SetLength(LToRemove, FInner.Count);
+  for E in FInner do
+    if not AOther.Contains(E.Key) then
+    begin
+      LToRemove[LCount] := E.Key;
+      Inc(LCount);
+    end;
+  for i := 0 to LCount - 1 do
+    FInner.Remove(LToRemove[i]);
+end;
+
+procedure TBTreeSet.Difference(AOther: TBTreeSet);
+var E: TInner.TEntry;
+begin
+  for E in AOther.FInner do
+    FInner.Remove(E.Key);
 end;
 
 end.
