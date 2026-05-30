@@ -4346,6 +4346,21 @@ begin
     SetLength(RetPtrMethods, 0);
     SetLength(Properties, 0);
   end;
+  for I := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(I);
+    if SameText(Symbol.Kind, 'method') and
+      (Pos(IntfName + '.', Symbol.Name) = 1) then
+    begin
+      MethShort := Copy(Symbol.Name, Length(IntfName) + 2, MaxInt);
+      SetLength(Meta.VmtSlots, Meta.VmtCount + 1);
+      Meta.VmtSlots[Meta.VmtCount].MethodName := MethShort;
+      Meta.VmtSlots[Meta.VmtCount].SlotIndex := Meta.VmtCount;
+      Meta.VmtSlots[Meta.VmtCount].FuncQualName := IntfName + '.' + MethShort;
+      Inc(Meta.VmtCount);
+    end;
+  end;
+  FModel.AddConstValue(IntfName + '$vmt_count', Meta.VmtCount);
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
