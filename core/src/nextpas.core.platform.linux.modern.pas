@@ -221,19 +221,19 @@ function openat2(dirfd: cint; pathname: PAnsiChar; how: POpenHow;
 
 implementation
 
-function syscall_raw(nr: PtrInt; a1, a2, a3, a4, a5, a6: PtrUInt): PtrInt;
-  cdecl; external 'c' name 'syscall';
+uses
+  nextpas.core.platform.linux.ffi;
 
 function io_uring_setup(entries: cuint; params: PIoUringParams): cint;
 begin
-  Result := cint(syscall_raw(SYS_io_uring_setup, PtrUInt(entries),
+  Result := cint(syscall(SYS_io_uring_setup, PtrUInt(entries),
     PtrUInt(params), 0, 0, 0, 0));
 end;
 
 function io_uring_enter(fd: cint; to_submit: cuint; min_complete: cuint;
   flags: cuint; sig: Pointer): cint;
 begin
-  Result := cint(syscall_raw(SYS_io_uring_enter, PtrUInt(fd),
+  Result := cint(syscall(SYS_io_uring_enter, PtrUInt(fd),
     PtrUInt(to_submit), PtrUInt(min_complete), PtrUInt(flags),
     PtrUInt(sig), 0));
 end;
@@ -241,32 +241,32 @@ end;
 function io_uring_register(fd: cint; opcode: cuint; arg: Pointer;
   nr_args: cuint): cint;
 begin
-  Result := cint(syscall_raw(SYS_io_uring_register, PtrUInt(fd),
+  Result := cint(syscall(SYS_io_uring_register, PtrUInt(fd),
     PtrUInt(opcode), PtrUInt(arg), PtrUInt(nr_args), 0, 0));
 end;
 
 function memfd_create(name: PAnsiChar; flags: cuint): cint;
 begin
-  Result := cint(syscall_raw(SYS_memfd_create, PtrUInt(name),
+  Result := cint(syscall(SYS_memfd_create, PtrUInt(name),
     PtrUInt(flags), 0, 0, 0, 0));
 end;
 
 function pidfd_open(pid: pid_t; flags: cuint): cint;
 begin
-  Result := cint(syscall_raw(SYS_pidfd_open, PtrUInt(pid),
+  Result := cint(syscall(SYS_pidfd_open, PtrUInt(pid),
     PtrUInt(flags), 0, 0, 0, 0));
 end;
 
 function close_range(first: cuint; last: cuint; flags: cuint): cint;
 begin
-  Result := cint(syscall_raw(SYS_close_range, PtrUInt(first),
+  Result := cint(syscall(SYS_close_range, PtrUInt(first),
     PtrUInt(last), PtrUInt(flags), 0, 0, 0));
 end;
 
 function openat2(dirfd: cint; pathname: PAnsiChar; how: POpenHow;
   size: size_t): cint;
 begin
-  Result := cint(syscall_raw(SYS_openat2, PtrUInt(dirfd),
+  Result := cint(syscall(SYS_openat2, PtrUInt(dirfd),
     PtrUInt(pathname), PtrUInt(how), PtrUInt(size), 0, 0));
 end;
 
