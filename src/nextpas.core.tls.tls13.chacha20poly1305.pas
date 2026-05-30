@@ -145,26 +145,65 @@ end;
 
 function ChaCha20Xor(const AKey, ANonce: TBytes; ACounter: UInt32; const AInput: TBytes): TBytes;
 var
-  LOffset: Integer;
-  LBlock: TBytes;
-  LBlockLen: Integer;
-  I: Integer;
+  LState: array[0..15] of UInt32;
+  LWork: array[0..15] of UInt32;
+  LBlock: array[0..15] of UInt32;
+  LOffset, LBlockLen, I: Integer;
+  LSrc, LDst: PUInt32;
 begin
   SetLength(Result, Length(AInput));
   LOffset := 0;
 
   while LOffset < Length(AInput) do
   begin
-    LBlock := ChaCha20Block(AKey, ANonce, ACounter);
-    Inc(ACounter);
+    LState[0] := $61707865;
+    LState[1] := $3320646E;
+    LState[2] := $79622D32;
+    LState[3] := $6B206574;
+    for I := 0 to 7 do
+      LState[4 + I] := Load32LE(AKey, I * 4);
+    LState[12] := ACounter;
+    LState[13] := Load32LE(ANonce, 0);
+    LState[14] := Load32LE(ANonce, 4);
+    LState[15] := Load32LE(ANonce, 8);
+
+    for I := 0 to 15 do
+      LWork[I] := LState[I];
+
+    for I := 0 to 9 do
+    begin
+      QuarterRound(LWork[0], LWork[4], LWork[8], LWork[12]);
+      QuarterRound(LWork[1], LWork[5], LWork[9], LWork[13]);
+      QuarterRound(LWork[2], LWork[6], LWork[10], LWork[14]);
+      QuarterRound(LWork[3], LWork[7], LWork[11], LWork[15]);
+      QuarterRound(LWork[0], LWork[5], LWork[10], LWork[15]);
+      QuarterRound(LWork[1], LWork[6], LWork[11], LWork[12]);
+      QuarterRound(LWork[2], LWork[7], LWork[8], LWork[13]);
+      QuarterRound(LWork[3], LWork[4], LWork[9], LWork[14]);
+    end;
+
+    for I := 0 to 15 do
+      LBlock[I] := LWork[I] + LState[I];
 
     LBlockLen := CHACHA20_BLOCK_SIZE;
     if LOffset + LBlockLen > Length(AInput) then
       LBlockLen := Length(AInput) - LOffset;
 
-    for I := 0 to LBlockLen - 1 do
-      Result[LOffset + I] := AInput[LOffset + I] xor LBlock[I];
+    // XOR in 4-byte chunks
+    I := 0;
+    while I + 3 < LBlockLen do
+    begin
+      PUInt32(@Result[LOffset + I])^ := PUInt32(@AInput[LOffset + I])^ xor PUInt32(@LBlock[I div 4])^;
+      Inc(I, 4);
+    end;
+    // Remaining bytes
+    while I < LBlockLen do
+    begin
+      Result[LOffset + I] := AInput[LOffset + I] xor PByte(PByte(@LBlock[0]) + I)^;
+      Inc(I);
+    end;
 
+    Inc(ACounter);
     Inc(LOffset, LBlockLen);
   end;
 end;
