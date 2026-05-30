@@ -40,6 +40,15 @@ function AnsiCompareStr(const A, B: string): Integer; inline;
 function FloatToStrF(AValue: Extended; AFormat: TFloatFormat;
   APrecision, ADigits: Integer): string; inline;
 
+{ 文件系统 }
+function FileExists(const APath: string): Boolean; inline;
+function ExtractFilePath(const APath: string): string; inline;
+function ExtractFileExt(const APath: string): string; inline;
+function ExtractFileName(const APath: string): string; inline;
+function ExpandFileName(const APath: string): string; inline;
+function IncludeTrailingPathDelimiter(const APath: string): string; inline;
+function DeleteFile(const APath: string): Boolean; inline;
+
 { 日期时间 }
 function Now: TDateTime; inline;
 function DateTimeToStr(const ADateTime: TDateTime): string; inline;
@@ -101,6 +110,41 @@ end;
 function FormatDateTime(const AFmt: string; const ADateTime: TDateTime): string;
 begin
   Result := SysUtils.FormatDateTime(AFmt, ADateTime);
+end;
+
+function FileExists(const APath: string): Boolean;
+begin
+  Result := SysUtils.FileExists(APath);
+end;
+
+function ExtractFilePath(const APath: string): string;
+begin
+  Result := SysUtils.ExtractFilePath(APath);
+end;
+
+function ExtractFileExt(const APath: string): string;
+begin
+  Result := SysUtils.ExtractFileExt(APath);
+end;
+
+function ExtractFileName(const APath: string): string;
+begin
+  Result := SysUtils.ExtractFileName(APath);
+end;
+
+function ExpandFileName(const APath: string): string;
+begin
+  Result := SysUtils.ExpandFileName(APath);
+end;
+
+function IncludeTrailingPathDelimiter(const APath: string): string;
+begin
+  Result := SysUtils.IncludeTrailingPathDelimiter(APath);
+end;
+
+function DeleteFile(const APath: string): Boolean;
+begin
+  Result := SysUtils.DeleteFile(APath);
 end;
 
 end.
