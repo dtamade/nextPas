@@ -6582,6 +6582,19 @@ begin
     end;
     Exit(False);
   end
+  else if SameText(Op, 'as') then
+  begin
+    if (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+      (ANode.ChildAt(1) <> nil) and
+      (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+      (TypeMetaSize(ANode.ChildAt(1).Text) = 8) then
+    begin
+      ABlob := 'var ' + ANode.ChildAt(0).Text + #10;
+      Exit(True);
+    end;
+    Exit(False);
+  end
   else
     Exit(False);
   if ((ANode.ChildAt(0).NodeKind = gnkIdentifier) and
