@@ -34,6 +34,7 @@ type
     ['{B2C3D4E5-F6A7-8901-BCDE-FA2345678901}']
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
+    procedure Flush;
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -71,6 +72,7 @@ type
     function WithGroup(const AName: string): TLogger;
     function WithLevel(ALevel: TLogLevel): TLogger;
     function AsILogger: ILogger;
+    procedure Flush;
     function Enabled(const ALevel: TLogLevel): Boolean; inline;
     function Trace: PLogEvent;
     function Debug: PLogEvent;
@@ -257,6 +259,12 @@ begin
   Result.FLevel := ALevel;
 end;
 
+procedure TLogger.Flush;
+begin
+  if FHandler <> nil then
+    FHandler.Flush;
+end;
+
 function TLogger.Enabled(const ALevel: TLogLevel): Boolean;
 begin
   Result := (FHandler <> nil) and (ALevel >= FLevel) and FHandler.Enabled(ALevel);
@@ -341,6 +349,7 @@ type
     constructor Create(AMinLevel: TLogLevel);
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
+    procedure Flush;
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -392,6 +401,11 @@ begin
   WriteLn(StdErr);
 end;
 
+procedure TConsoleHandler.Flush;
+begin
+  System.Flush(StdErr);
+end;
+
 function TConsoleHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
 var
   LNew: TConsoleHandler;
@@ -438,6 +452,7 @@ type
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    procedure Flush;
     function WithGroup(const AName: string): ILogHandler;
   end;
 
@@ -514,6 +529,11 @@ begin
   for LI := 0 to ARecord.AttrCount - 1 do
     WriteJsonAttr(LFirst, ARecord.Attrs[LI]);
   WriteLn(StdErr, '}');
+end;
+
+procedure TJsonLogHandler.Flush;
+begin
+  System.Flush(StdErr);
 end;
 
 function TJsonLogHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
@@ -619,6 +639,7 @@ type
     destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
+    procedure Flush;
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -692,35 +713,46 @@ end;
 procedure TFileHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
+  LSize: Int64;
 begin
   if FBroken then Exit;
   if FCurrentSize >= FMaxBytes then Rotate;
   EnsureOpen;
   if not FOpened then Exit;
+  LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
   Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
   for LI := 0 to FPrefixCount - 1 do
   begin
     Write(FFile, ' ', FPrefix[LI].Key, '=');
+    LSize += 2 + Int64(Length(FPrefix[LI].Key));
     case FPrefix[LI].Kind of
-      akString: Write(FFile, FPrefix[LI].SVal);
-      akInt: Write(FFile, FPrefix[LI].IVal);
-      akFloat: Write(FFile, FPrefix[LI].FVal:0:2);
-      akBool: if FPrefix[LI].BVal then Write(FFile, 'true') else Write(FFile, 'false');
+      akString: begin Write(FFile, FPrefix[LI].SVal); LSize += Int64(Length(FPrefix[LI].SVal)); end;
+      akInt: begin Write(FFile, FPrefix[LI].IVal); LSize += 12; end;
+      akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize += 10; end;
+      akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
+              else begin Write(FFile, 'false'); LSize += 5; end;
     end;
   end;
   for LI := 0 to ARecord.AttrCount - 1 do
   begin
     Write(FFile, ' ', ARecord.Attrs[LI].Key, '=');
+    LSize += 2 + Int64(Length(ARecord.Attrs[LI].Key));
     case ARecord.Attrs[LI].Kind of
-      akString: Write(FFile, ARecord.Attrs[LI].SVal);
-      akInt: Write(FFile, ARecord.Attrs[LI].IVal);
-      akFloat: Write(FFile, ARecord.Attrs[LI].FVal:0:2);
-      akBool: if ARecord.Attrs[LI].BVal then Write(FFile, 'true') else Write(FFile, 'false');
+      akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize += Int64(Length(ARecord.Attrs[LI].SVal)); end;
+      akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize += 12; end;
+      akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize += 10; end;
+      akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
+              else begin Write(FFile, 'false'); LSize += 5; end;
     end;
   end;
   WriteLn(FFile);
   System.Flush(FFile);
-  Inc(FCurrentSize, Int64(Length(ARecord.Message)) + Int64(ARecord.AttrCount + FPrefixCount) * 20 + 10);
+  Inc(FCurrentSize, LSize + 1);
+end;
+
+procedure TFileHandler.Flush;
+begin
+  if FOpened then System.Flush(FFile);
 end;
 
 function TFileHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
@@ -761,6 +793,7 @@ type
     constructor Create(const AHandlers: array of ILogHandler);
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
+    procedure Flush;
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
     function WithGroup(const AName: string): ILogHandler;
   end;
@@ -788,6 +821,12 @@ begin
   for LI := 0 to FCount - 1 do
     if FHandlers[LI].Enabled(ARecord.Level) then
       FHandlers[LI].Handle(ARecord);
+end;
+
+procedure TMultiHandler.Flush;
+var LI: Int32;
+begin
+  for LI := 0 to FCount - 1 do FHandlers[LI].Flush;
 end;
 
 function TMultiHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
