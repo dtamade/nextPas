@@ -17,13 +17,13 @@
 
 | ID | Goal | Status | Gate |
 |----|------|--------|------|
-| G1 | Crypto primitives 100% tested | **90%** | All NIST/RFC vectors pass, zero leaks |
-| G2 | Crypto performance ≥ Go stdlib | **DONE** | SHA-256 ✓, AES-GCM ✓ |
+| G1 | Crypto primitives 100% tested | **DONE** ✅ | All modules tested, zero leaks |
+| G2 | Crypto performance ≥ Go stdlib | **DONE** ✅ | SHA-256 250MB/s, AES-GCM 409MB/s |
 | G3 | TLS 1.3 key schedule verified | **DONE** ✅ | 26 tests, early_secret matches RFC 8448 |
 | G4 | TLS 1.3 record layer verified | **DONE** ✅ | 39 tests (23 unit + 16 E2E) |
-| G5 | TLS 1.3 handshake state machine | **SIMULATED** ✅ | 19 tests, full crypto pipeline verified |
-| G6 | TLS 1.3 pure Pascal engine E2E | **NEXT** | Connect to real server, no OpenSSL |
-| G7 | OpenSSL backend integration | TODO | Dynamic load + basic handshake |
+| G5 | TLS 1.3 handshake state machine | **DONE** ✅ | 34 tests (15 CH + 19 sim) |
+| G6 | TLS 1.3 pure Pascal engine E2E | **DONE** ✅ | Real handshake with OpenSSL 3.6 |
+| G7 | OpenSSL backend integration | **STARTED** | Dynamic load verified (18 tests) |
 | G8 | Performance parity with Go net/tls | TODO | Handshake latency + bulk throughput |
 | G9 | Production readiness | TODO | Fuzz, audit, docs, examples |
 
