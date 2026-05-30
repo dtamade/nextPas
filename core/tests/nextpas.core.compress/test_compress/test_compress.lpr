@@ -293,6 +293,29 @@ begin
   Check(LGotException, 'lz4 corrupt raises');
 end;
 
+procedure TestGzipStreamSmall;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc: TBytes;
+  LOut: TBytes;
+begin
+  LSrc := TBytes.Create(1, 2, 3, 4, 5);
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], 5);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := GzipReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(5), Int64(Length(LOut)), 'gzip small stream length');
+  Check((LOut[0]=1) and (LOut[4]=5), 'gzip small stream data');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.compress');
   T.Run('Deflate round-trip', @TestDeflateRoundTrip);
@@ -310,5 +333,6 @@ begin
   T.Run('Corrupted deflate', @TestCorruptedData);
   T.Run('Corrupted gzip', @TestGzipCorrupted);
   T.Run('Corrupted lz4', @TestLz4Corrupted);
+  T.Run('Gzip stream small', @TestGzipStreamSmall);
   T.Summary;
 end.

@@ -145,6 +145,7 @@ begin
     FreeMem(LHashTable);
   end;
 end;
+
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 var
   LSrc, LDst, LEnd: Int32;
@@ -217,12 +218,20 @@ begin
 
     if LDst + LMatchLen > AOriginalSize then
       raise EIOError.Create('lz4: output overflow');
-    while LMatchLen > 0 do
+    if Int32(LOffset) >= LMatchLen then
     begin
-      Result[LDst] := Result[LMatchPos];
-      Inc(LDst);
-      Inc(LMatchPos);
-      Dec(LMatchLen);
+      Move(Result[LMatchPos], Result[LDst], LMatchLen);
+      Inc(LDst, LMatchLen);
+    end
+    else
+    begin
+      while LMatchLen > 0 do
+      begin
+        Result[LDst] := Result[LMatchPos];
+        Inc(LDst);
+        Inc(LMatchPos);
+        Dec(LMatchLen);
+      end;
     end;
   end;
 

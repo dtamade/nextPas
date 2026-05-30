@@ -23,12 +23,14 @@ implementation
 uses
   zlib, nextpas.core.errors;
 
+{$PUSH}{$WARN 5024 OFF}
 const
   GZIP_HDR: array[0..9] of Byte = (
     $1F, $8B, $08, $00,
     $00, $00, $00, $00,
     $00, $FF
   );
+{$POP}
 
 type
   TGzipWriter = class(TInterfacedObject, IWriter, ICompressWriter)
@@ -216,6 +218,7 @@ begin
     inflateEnd(FStream);
   inherited;
 end;
+
 function TGzipReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LRet: Int32;
@@ -260,22 +263,38 @@ procedure TGzipReader.Close;
 var
   LTrailer: array[0..7] of Byte;
   LExpectedCRC, LExpectedSize: UInt32;
+  LAvail, LNeed: SizeUInt;
+  LNextIn: PByte;
 begin
   if FInitialized then
   begin
+    LAvail := FStream.avail_in;
+    LNextIn := PByte(FStream.next_in);
     inflateEnd(FStream);
     FInitialized := False;
-    if FSrc.Read(LTrailer[0], 8) = 8 then
+
+    LNeed := 8;
+    if LAvail >= LNeed then
     begin
-      LExpectedCRC := UInt32(LTrailer[0]) or (UInt32(LTrailer[1]) shl 8) or
-        (UInt32(LTrailer[2]) shl 16) or (UInt32(LTrailer[3]) shl 24);
-      LExpectedSize := UInt32(LTrailer[4]) or (UInt32(LTrailer[5]) shl 8) or
-        (UInt32(LTrailer[6]) shl 16) or (UInt32(LTrailer[7]) shl 24);
-      if LExpectedCRC <> FCRC then
-        raise EIOError.Create('gzip: CRC32 mismatch');
-      if LExpectedSize <> FSize then
-        raise EIOError.Create('gzip: size mismatch');
+      Move(LNextIn^, LTrailer[0], 8);
+    end
+    else
+    begin
+      if LAvail > 0 then
+        Move(LNextIn^, LTrailer[0], LAvail);
+      LNeed := 8 - LAvail;
+      if FSrc.Read(LTrailer[LAvail], LNeed) <> LNeed then
+        raise EIOError.Create('gzip: truncated trailer');
     end;
+
+    LExpectedCRC := UInt32(LTrailer[0]) or (UInt32(LTrailer[1]) shl 8) or
+      (UInt32(LTrailer[2]) shl 16) or (UInt32(LTrailer[3]) shl 24);
+    LExpectedSize := UInt32(LTrailer[4]) or (UInt32(LTrailer[5]) shl 8) or
+      (UInt32(LTrailer[6]) shl 16) or (UInt32(LTrailer[7]) shl 24);
+    if LExpectedCRC <> FCRC then
+      raise EIOError.Create('gzip: CRC32 mismatch');
+    if LExpectedSize <> FSize then
+      raise EIOError.Create('gzip: size mismatch');
   end;
 end;
 
