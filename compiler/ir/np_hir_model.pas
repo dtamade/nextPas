@@ -46,7 +46,14 @@ type
     hikIntrinsic,
     hikInsertField,
     hikExtractField,
-    hikPhi
+    hikPhi,
+    hikTryBegin,
+    hikTryEnd,
+    hikFinallyBegin,
+    hikFinallyEnd,
+    hikExceptBegin,
+    hikExceptEnd,
+    hikRaise
   );
 
   THIRTermKind = (

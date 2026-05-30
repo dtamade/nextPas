@@ -151,6 +151,7 @@ type
     procedure ProcessRecordCopy(const ANode: TTypedHirNode);
     procedure ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
     procedure ProcessVmtStore(const ANode: TTypedHirNode);
+    procedure ProcessExceptionNode(const ANode: TTypedHirNode);
     procedure EnsureVmtForClass(const AClassName: string);
   public
     constructor Create(ASemaModel: TSemanticModel);
@@ -2971,6 +2972,26 @@ begin
   EmitInstr(Instr);
 end;
 
+procedure THIRBuilder.ProcessExceptionNode(const ANode: TTypedHirNode);
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  case ANode.NodeKind of
+    hnkTryBeginRuntime:     Instr.Kind := hikTryBegin;
+    hnkTryEndRuntime:       Instr.Kind := hikTryEnd;
+    hnkFinallyBeginRuntime: Instr.Kind := hikFinallyBegin;
+    hnkFinallyEndRuntime:   Instr.Kind := hikFinallyEnd;
+    hnkExceptBeginRuntime:  Instr.Kind := hikExceptBegin;
+    hnkExceptEndRuntime:    Instr.Kind := hikExceptEnd;
+    hnkRaiseRuntime:        Instr.Kind := hikRaise;
+  else
+    Exit;
+  end;
+  Instr.IntrinsicName := ANode.Operand;
+  EmitInstr(Instr);
+end;
+
 procedure THIRBuilder.ProcessFieldStore(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
@@ -3386,6 +3407,11 @@ begin
       ProcessAssignStrFieldLoad(ANode);
     hnkVmtStoreRuntime:
       ProcessVmtStore(ANode);
+    hnkTryBeginRuntime, hnkTryEndRuntime,
+    hnkFinallyBeginRuntime, hnkFinallyEndRuntime,
+    hnkExceptBeginRuntime, hnkExceptEndRuntime,
+    hnkRaiseRuntime:
+      ProcessExceptionNode(ANode);
     hnkUnknown:
       ;
   end;
