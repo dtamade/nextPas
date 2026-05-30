@@ -1260,7 +1260,7 @@ begin
 
   if (RootNameCount = 0) and (ImportedNameCount = 0) then
   begin
-    KnownSymbolId := FModel.LookupSymbol(AName, FCurrentScopeId);
+    KnownSymbolId := FModel.LookupSymbolWithImports(AName, FCurrentScopeId);
     if IsSimpleIdentifierName(AName) and (KnownSymbolId = 0) and
       (FModel.FindTypeByName(AName) = 0) and
       (not IsBuiltinProcedure(AName)) and
