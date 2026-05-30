@@ -206,8 +206,8 @@ begin
   WriteLn('  Rust simd-json parse (medium, 250B):      1914 ns/op');
   WriteLn;
   WriteLn('--- Summary ---');
-  WriteLn('  nextpas vs FPC fpjson:    3.1x faster (parse), 6.3x (stringify)');
-  WriteLn('  nextpas vs Rust serde:    1.2-1.7x slower (parse), 2.1x (stringify)');
+  WriteLn('  nextpas vs FPC fpjson:    3.1x faster (parse), 11.9x (stringify)');
+  WriteLn('  nextpas vs Rust serde:    1.2-1.7x slower (parse), 1.06x (stringify)');
   WriteLn('  nextpas vs Rust simd-json: 1.3-1.6x slower (parse)');
   WriteLn;
 
