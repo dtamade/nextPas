@@ -330,6 +330,8 @@ type
     procedure LowerRuntimeForStatement(const ANode: TGreenNode);
     procedure LowerRuntimeRepeatStatement(const ANode: TGreenNode);
     procedure LowerRuntimeCaseStatement(const ANode: TGreenNode);
+    procedure LowerRuntimeTryFinallyStatement(const ANode: TGreenNode);
+    procedure LowerRuntimeTryExceptStatement(const ANode: TGreenNode);
     procedure UnrollHaltForLoop(const ANode: TGreenNode);
     procedure UnrollHaltWhileLoop(const ANode: TGreenNode);
     procedure UnrollHaltRepeatLoop(const ANode: TGreenNode);
@@ -6609,6 +6611,16 @@ begin
         WalkHaltCalls(Child);
       Continue;
     end;
+    if (Child.NodeKind = gnkTryFinallyStatement) and FNoFold then
+    begin
+      LowerRuntimeTryFinallyStatement(Child);
+      Continue;
+    end;
+    if (Child.NodeKind = gnkTryExceptStatement) and FNoFold then
+    begin
+      LowerRuntimeTryExceptStatement(Child);
+      Continue;
+    end;
     if (Child.NodeKind = gnkBreakStatement) and FNoFold then
     begin
       if Length(FBreakLabels) > 0 then
@@ -7950,6 +7962,63 @@ begin
   EmitBlockLabel(ExitLabel);
   SetLength(FBreakLabels, Length(FBreakLabels) - 1);
   SetLength(FContinueLabels, Length(FContinueLabels) - 1);
+end;
+
+procedure TSemanticAnalyzer.LowerRuntimeTryFinallyStatement(const ANode: TGreenNode);
+var
+  TryBody, FinallyBody: TGreenNode;
+  FinallyLabel, EndLabel: string;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then Exit;
+  TryBody := ANode.ChildAt(0);
+  FinallyBody := ANode.ChildAt(1);
+  FinallyLabel := NewBlockLabel('finally');
+  EndLabel := NewBlockLabel('endtry');
+
+  FModel.AddTypedHirNode('try-begin-runtime', 'finally', 0, 0,
+    FinallyLabel + #10);
+  WalkHaltCalls(TryBody);
+  FModel.AddTypedHirNode('try-end-runtime', 'finally', 0, 0, '');
+  EmitGotoLabel(FinallyLabel);
+
+  EmitBlockLabel(FinallyLabel);
+  FModel.AddTypedHirNode('finally-begin-runtime', '', 0, 0, '');
+  WalkHaltCalls(FinallyBody);
+  FModel.AddTypedHirNode('finally-end-runtime', '', 0, 0, '');
+  EmitGotoLabel(EndLabel);
+
+  EmitBlockLabel(EndLabel);
+end;
+
+procedure TSemanticAnalyzer.LowerRuntimeTryExceptStatement(const ANode: TGreenNode);
+var
+  TryBody, HandlerBody: TGreenNode;
+  ExceptLabel, EndLabel: string;
+  I: LongInt;
+begin
+  if (ANode = nil) or (ANode.ChildCount < 2) then Exit;
+  TryBody := ANode.ChildAt(0);
+  ExceptLabel := NewBlockLabel('except');
+  EndLabel := NewBlockLabel('endtry');
+
+  FModel.AddTypedHirNode('try-begin-runtime', 'except', 0, 0,
+    ExceptLabel + #10);
+  WalkHaltCalls(TryBody);
+  FModel.AddTypedHirNode('try-end-runtime', 'except', 0, 0, '');
+  EmitGotoLabel(EndLabel);
+
+  EmitBlockLabel(ExceptLabel);
+  FModel.AddTypedHirNode('except-begin-runtime', '', 0, 0, '');
+  for I := 1 to ANode.ChildCount - 1 do
+  begin
+    HandlerBody := ANode.ChildAt(I);
+    if HandlerBody <> nil then
+      WalkHaltCalls(HandlerBody);
+  end;
+  FModel.AddTypedHirNode('except-end-runtime', '', 0, 0, '');
+  EmitGotoLabel(EndLabel);
+
+  EmitBlockLabel(EndLabel);
 end;
 
 procedure TSemanticAnalyzer.UnrollHaltForLoop(const ANode: TGreenNode);
