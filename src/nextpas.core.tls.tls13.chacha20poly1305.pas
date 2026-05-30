@@ -243,6 +243,43 @@ begin
   H4 := 0;
 
   LOffset := 0;
+  // Fast path: process full 16-byte blocks directly from input
+  while LOffset + 16 <= Length(AMessage) do
+  begin
+    T0 := UInt32(AMessage[LOffset]) or (UInt32(AMessage[LOffset+1]) shl 8) or
+           (UInt32(AMessage[LOffset+2]) shl 16) or (UInt32(AMessage[LOffset+3]) shl 24);
+    T1 := UInt32(AMessage[LOffset+3]) or (UInt32(AMessage[LOffset+4]) shl 8) or
+           (UInt32(AMessage[LOffset+5]) shl 16) or (UInt32(AMessage[LOffset+6]) shl 24);
+    T2 := UInt32(AMessage[LOffset+6]) or (UInt32(AMessage[LOffset+7]) shl 8) or
+           (UInt32(AMessage[LOffset+8]) shl 16) or (UInt32(AMessage[LOffset+9]) shl 24);
+    T3 := UInt32(AMessage[LOffset+9]) or (UInt32(AMessage[LOffset+10]) shl 8) or
+           (UInt32(AMessage[LOffset+11]) shl 16) or (UInt32(AMessage[LOffset+12]) shl 24);
+    T4 := UInt32(AMessage[LOffset+12]) or (UInt32(AMessage[LOffset+13]) shl 8) or
+           (UInt32(AMessage[LOffset+14]) shl 16) or (UInt32(AMessage[LOffset+15]) shl 24);
+
+    H0 := H0 + UInt64(T0 and $3FFFFFF);
+    H1 := H1 + UInt64((T1 shr 2) and $3FFFFFF);
+    H2 := H2 + UInt64((T2 shr 4) and $3FFFFFF);
+    H3 := H3 + UInt64((T3 shr 6) and $3FFFFFF);
+    H4 := H4 + UInt64(T4 shr 8) + (UInt64(1) shl 24);
+
+    D0 := (H0 * R0) + (H1 * S4) + (H2 * S3) + (H3 * S2) + (H4 * S1);
+    D1 := (H0 * R1) + (H1 * R0) + (H2 * S4) + (H3 * S3) + (H4 * S2);
+    D2 := (H0 * R2) + (H1 * R1) + (H2 * R0) + (H3 * S4) + (H4 * S3);
+    D3 := (H0 * R3) + (H1 * R2) + (H2 * R1) + (H3 * R0) + (H4 * S4);
+    D4 := (H0 * R4) + (H1 * R3) + (H2 * R2) + (H3 * R1) + (H4 * R0);
+
+    C := D0 shr 26; H0 := D0 and POLY1305_MASK_26; D1 := D1 + C;
+    C := D1 shr 26; H1 := D1 and POLY1305_MASK_26; D2 := D2 + C;
+    C := D2 shr 26; H2 := D2 and POLY1305_MASK_26; D3 := D3 + C;
+    C := D3 shr 26; H3 := D3 and POLY1305_MASK_26; D4 := D4 + C;
+    C := D4 shr 26; H4 := D4 and POLY1305_MASK_26; H0 := H0 + (C * 5);
+    C := H0 shr 26; H0 := H0 and POLY1305_MASK_26; H1 := H1 + C;
+
+    Inc(LOffset, 16);
+  end;
+
+  // Slow path: final partial block
   while LOffset < Length(AMessage) do
   begin
     FillChar(LBlock[0], SizeOf(LBlock), 0);
