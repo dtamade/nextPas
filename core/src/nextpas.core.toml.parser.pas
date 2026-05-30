@@ -780,8 +780,23 @@ begin
   begin
     if (Pos + 2 < SrcLen) and (Src[Pos] = '''') and (Src[Pos+1] = '''') and (Src[Pos+2] = '''') then
     begin
-      LEnd := Pos;
-      AdvanceN(3);
+      // Check for 4 or 5 quote sequence
+      if (Pos + 3 < SrcLen) and (Src[Pos+3] = '''') and
+         (Pos + 4 < SrcLen) and (Src[Pos+4] = '''') then
+      begin
+        LEnd := Pos + 2;
+        AdvanceN(5);
+      end
+      else if (Pos + 3 < SrcLen) and (Src[Pos+3] = '''') then
+      begin
+        LEnd := Pos + 1;
+        AdvanceN(4);
+      end
+      else
+      begin
+        LEnd := Pos;
+        AdvanceN(3);
+      end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
       LDst := LBuf;
@@ -1224,8 +1239,28 @@ begin
     if LDT.Second > 60 then
       Exit(SetError('second out of range', 19));
   end;
+  if LHasOffset and (not LHasDate) then
+    Exit(SetError('time-only cannot have offset', 28));
   if LHasOffset and (Abs(LOffMin) > 1439) then
     Exit(SetError('offset out of range', 19));
+
+  // Calendar validation
+  if LHasDate then
+  begin
+    case LDT.Month of
+      1,3,5,7,8,10,12: if LDT.Day > 31 then Exit(SetError('day out of range', 16));
+      4,6,9,11: if LDT.Day > 30 then Exit(SetError('day out of range', 16));
+      2:
+      begin
+        if ((LDT.Year mod 4 = 0) and (LDT.Year mod 100 <> 0)) or (LDT.Year mod 400 = 0) then
+        begin
+          if LDT.Day > 29 then Exit(SetError('day out of range for leap year', 30));
+        end
+        else
+          if LDT.Day > 28 then Exit(SetError('day out of range for February', 29));
+      end;
+    end;
+  end;
 
   LDT.Flags := 0;
   if LHasDate then LDT.Flags := LDT.Flags or TOML_DT_FLAG_HAS_DATE;
@@ -1498,6 +1533,8 @@ begin
     end;
     if Doc^.FNodes[LExisting].Kind = tnkArray then
     begin
+      if not AImplicit then
+        Exit(TOML_NODE_NONE); // cannot define [table] over existing array
       LExisting := Doc^.FNodes[LExisting].Container.LastChild;
       Exit(LExisting);
     end;

@@ -892,6 +892,44 @@ begin
     TStringView.Create(PAnsiChar('Glory Days'), 10)), 'song name');
 end;
 
+{ Codex R2 regression tests }
+
+procedure TestRejectArrayTableThenTable;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[[a]]' + #10 + 'x = 1' + #10 + '[a]' + #10 + 'y = 2');
+  Check(LDoc.HasError, '[[a]] then [a] rejected');
+end;
+
+procedure TestRejectTimeOnlyOffset;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('t = 07:32:00Z');
+  Check(LDoc.HasError, 'time-only with offset rejected');
+  LDoc := TomlParse('t = 07:32:00+09:00');
+  Check(LDoc.HasError, 'time-only with +offset rejected');
+end;
+
+procedure TestRejectFeb30;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('dt = 1979-02-30T00:00:00Z');
+  Check(LDoc.HasError, 'Feb 30 rejected');
+  LDoc := TomlParse('dt = 2024-02-30T00:00:00Z');
+  Check(LDoc.HasError, 'Feb 30 leap year rejected');
+  LDoc := TomlParse('dt = 2024-02-29T00:00:00Z');
+  Check(not LDoc.HasError, 'Feb 29 leap year accepted');
+end;
+
+procedure TestLiteralMultiLine4Quotes;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('s = ' + #39#39#39 + 'line' + #39#39#39#39);
+  Check(not LDoc.HasError, 'literal 4 quotes accepted');
+  Check(LDoc.Root.Get('s').AsStr.Equals(
+    TStringView.Create(PAnsiChar('line' + #39), 5)), 'literal 4q = line' + #39);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -1002,6 +1040,11 @@ begin
   T.Run('valid integer zero forms', @TestValidIntegerZero);
   T.Run('valid table sub-empty', @TestValidTableSubEmpty);
   T.Run('valid table array-implicit', @TestValidTableArrayImplicit);
+  { Codex R2 regression tests }
+  T.Run('reject [[a]] then [a]', @TestRejectArrayTableThenTable);
+  T.Run('reject time-only offset', @TestRejectTimeOnlyOffset);
+  T.Run('reject Feb 30', @TestRejectFeb30);
+  T.Run('literal multi-line 4 quotes', @TestLiteralMultiLine4Quotes);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
