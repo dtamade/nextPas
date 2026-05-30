@@ -76,6 +76,8 @@ function PathEnsureSep(const APath: string): string; inline;
 function PathTrimSep(const APath: string): string; inline;
 function PathChangeExt(const APath, ANewExt: string): string; inline;
 function PathWithoutExt(const APath: string): string; inline;
+function GetCwd: string; inline;
+procedure SetCwd(const APath: string); inline;
 
 implementation
 
@@ -269,6 +271,16 @@ end;
 function PathWithoutExt(const APath: string): string;
 begin
   Result := nextpas.core.fs.path.FsPathWithoutExt(APath);
+end;
+
+function GetCwd: string;
+begin
+  Result := nextpas.core.fs.util.FsGetCwd;
+end;
+
+procedure SetCwd(const APath: string);
+begin
+  nextpas.core.fs.util.FsSetCwd(APath);
 end;
 
 end.

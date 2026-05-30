@@ -29,6 +29,8 @@ procedure FsChmod(const APath: string; const APerm: TFilePermission);
 procedure FsTruncate(const APath: string; const ASize: Int64);
 procedure FsSymlink(const ATarget, ALinkPath: string);
 function FsReadlink(const APath: string): string;
+function FsGetCwd: string;
+procedure FsSetCwd(const APath: string);
 
 implementation
 
@@ -334,6 +336,16 @@ begin
     Inc(LCount);
   end;
   SetLength(Result, LCount);
+end;
+
+function FsGetCwd: string;
+begin
+  GetDir(0, Result);
+end;
+
+procedure FsSetCwd(const APath: string);
+begin
+  ChDir(APath);
 end;
 
 end.
