@@ -24,7 +24,10 @@ var LRet: Int32;
 begin
   LRet := platform_random_bytes(@GBuf[0], BUF_SIZE);
   if LRet <> 0 then
+  begin
+    AtomicStore32(GLock, 0, moRelease);
     RunError(217);
+  end;
   GPos := 0;
 end;
 
