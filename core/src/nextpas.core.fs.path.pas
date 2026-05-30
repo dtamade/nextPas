@@ -11,6 +11,10 @@ function FsPathExt(const APath: string): string;
 function FsPathClean(const APath: string): string;
 function FsPathAbs(const APath: string): string;
 function FsPathIsAbs(const APath: string): Boolean;
+function FsPathEnsureSep(const APath: string): string;
+function FsPathTrimSep(const APath: string): string;
+function FsPathChangeExt(const APath, ANewExt: string): string;
+function FsPathWithoutExt(const APath: string): string;
 
 implementation
 
@@ -141,6 +145,57 @@ end;
 function FsPathIsAbs(const APath: string): Boolean;
 begin
   Result := platform_path_is_absolute(PAnsiChar(APath));
+end;
+
+function FsPathEnsureSep(const APath: string): string;
+begin
+  if (Length(APath) > 0) and (APath[Length(APath)] = PLATFORM_PATH_SEP) then
+    Result := APath
+  else
+    Result := APath + PLATFORM_PATH_SEP;
+end;
+
+function FsPathTrimSep(const APath: string): string;
+var L: SizeInt;
+begin
+  L := Length(APath);
+  while (L > 1) and (APath[L] = PLATFORM_PATH_SEP) do
+    Dec(L);
+  Result := Copy(APath, 1, L);
+end;
+
+function FsPathChangeExt(const APath, ANewExt: string): string;
+var
+  I: SizeInt;
+begin
+  for I := Length(APath) downto 1 do
+  begin
+    if APath[I] = '.' then
+    begin
+      Result := Copy(APath, 1, I - 1) + ANewExt;
+      Exit;
+    end;
+    if APath[I] = PLATFORM_PATH_SEP then
+      Break;
+  end;
+  Result := APath + ANewExt;
+end;
+
+function FsPathWithoutExt(const APath: string): string;
+var
+  I: SizeInt;
+begin
+  for I := Length(APath) downto 1 do
+  begin
+    if APath[I] = '.' then
+    begin
+      Result := Copy(APath, 1, I - 1);
+      Exit;
+    end;
+    if APath[I] = PLATFORM_PATH_SEP then
+      Break;
+  end;
+  Result := APath;
 end;
 
 end.
