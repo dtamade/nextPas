@@ -474,11 +474,6 @@ begin
     end;
     LKeyIdx := ParseString;
     if LKeyIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
-    if PeekCh <> Ord(':') then
-    begin
-      SetError('expected :', 10);
-      Exit(JSON_NODE_NONE);
-    end;
     ConsumeStruct;
     LValIdx := ParseValue;
     if LValIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
