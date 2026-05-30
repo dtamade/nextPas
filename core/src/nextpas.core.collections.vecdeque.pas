@@ -1860,6 +1860,7 @@ begin
   if aNewSize > FBuffer.GetCount then
     EnsureCapacity(aNewSize);
   FCount := aNewSize;
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 procedure TVecDeque.Ensure(aIndex: SizeUInt);
@@ -3455,6 +3456,7 @@ begin
     Exit;
 
   FHead := WrapAdd(FHead, LActualPositions);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 procedure TVecDeque.RotateRight(aPositions: SizeUInt);
@@ -3469,6 +3471,7 @@ begin
     Exit;
 
   FHead := WrapSub(FHead, LActualPositions);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 function TVecDeque.Split(aIndex: SizeUInt): TVecDeque;
@@ -6359,6 +6362,7 @@ begin
   end;
 
   FCount := aNewCount;
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 // Insert 系列方法实现
