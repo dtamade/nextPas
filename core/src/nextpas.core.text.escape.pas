@@ -142,10 +142,41 @@ var
   LMaskQuote, LMaskBs, LMaskCtrl, LCombined: TMask16;
   LFirst: Int32;
   LEscLen: SizeUInt;
+{$IFDEF HAS_AVX2}
+  LMQ32, LMB32, LMC32, LC32: TMask32;
+  LF32: Int32;
+{$ENDIF}
 begin
   if ASrc.Len = 0 then Exit;
   ADst.Reserve(ASrc.Len);
   LPos := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ASrc.Len do
+  begin
+    LMQ32 := Vec32CmpEq(@ASrc.Data[LPos], Ord('"'));
+    LMB32 := Vec32CmpEq(@ASrc.Data[LPos], Ord('\'));
+    LMC32 := Vec32CmpLtU(@ASrc.Data[LPos], $20);
+    LC32 := LMQ32 or LMB32 or LMC32;
+    if LC32 = MASK32_NONE_SET then
+    begin
+      ADst.AppendBytes(@ASrc.Data[LPos], 32);
+      Inc(LPos, 32);
+    end
+    else
+    begin
+      LF32 := Vec32Ctz(LC32);
+      if LF32 > 0 then
+      begin
+        ADst.AppendBytes(@ASrc.Data[LPos], SizeUInt(LF32));
+        Inc(LPos, SizeUInt(LF32));
+      end;
+      LEscLen := 0;
+      EmitEscapeSeq(Byte(ASrc.Data[LPos]), @LBuf[0], LEscLen);
+      ADst.AppendBytes(@LBuf[0], LEscLen);
+      Inc(LPos);
+    end;
+  end;
+{$ENDIF}
   while LPos + 16 <= ASrc.Len do
   begin
     LMaskQuote := Vec16CmpEq(@ASrc.Data[LPos], Ord('"'));
@@ -190,8 +221,29 @@ var
   LPos: SizeUInt;
   LMaskQuote, LMaskBs, LCombined: TMask16;
   LFirst: Int32;
+{$IFDEF HAS_AVX2}
+  LMQ32, LMB32, LC32: TMask32;
+  LF32: Int32;
+{$ENDIF}
 begin
   LPos := 0;
+{$IFDEF HAS_AVX2}
+  while LPos + 32 <= ALen do
+  begin
+    LMQ32 := Vec32CmpEq(@ASrc[LPos], Ord('"'));
+    LMB32 := Vec32CmpEq(@ASrc[LPos], Ord('\'));
+    LC32 := LMQ32 or LMB32;
+    if LC32 = MASK32_NONE_SET then
+      Inc(LPos, 32)
+    else
+    begin
+      LF32 := Vec32Ctz(LC32);
+      if ASrc[LPos + SizeUInt(LF32)] = '"' then
+        Exit(PtrInt(LPos) + LF32);
+      Inc(LPos, SizeUInt(LF32) + 2);
+    end;
+  end;
+{$ENDIF}
   while LPos + 16 <= ALen do
   begin
     LMaskQuote := Vec16CmpEq(@ASrc[LPos], Ord('"'));
@@ -244,10 +296,102 @@ var
   LHi, LLo: UInt32;
   LCP: UInt32;
   LEncLen: Byte;
+  LMask: TMask16;
+  LFirst: Int32;
 begin
   AError := ueNone;
   LPos := 0;
   LOut := 0;
+  while LPos + 16 <= ALen do
+  begin
+    LMask := Vec16CmpEq(@ASrc[LPos], Ord('\'));
+    if LMask = MASK16_NONE_SET then
+    begin
+      Move(ASrc[LPos], ADst[LOut], 16);
+      Inc(LPos, 16);
+      Inc(LOut, 16);
+    end
+    else
+    begin
+      LFirst := Vec16Ctz(LMask);
+      if LFirst > 0 then
+      begin
+        Move(ASrc[LPos], ADst[LOut], LFirst);
+        Inc(LPos, SizeUInt(LFirst));
+        Inc(LOut, SizeUInt(LFirst));
+      end;
+      Inc(LPos);
+      if LPos >= ALen then
+      begin
+        AError := ueTruncated;
+        Exit(LOut);
+      end;
+      LCh := Byte(ASrc[LPos]);
+      Inc(LPos);
+      case LCh of
+        Ord('"'):  begin ADst[LOut] := '"'; Inc(LOut); end;
+        Ord('\'): begin ADst[LOut] := '\'; Inc(LOut); end;
+        Ord('/'):  begin ADst[LOut] := '/'; Inc(LOut); end;
+        Ord('b'):  begin ADst[LOut] := #8; Inc(LOut); end;
+        Ord('f'):  begin ADst[LOut] := #12; Inc(LOut); end;
+        Ord('n'):  begin ADst[LOut] := #10; Inc(LOut); end;
+        Ord('r'):  begin ADst[LOut] := #13; Inc(LOut); end;
+        Ord('t'):  begin ADst[LOut] := #9; Inc(LOut); end;
+        Ord('u'):
+        begin
+          if LPos + 4 > ALen then
+          begin
+            AError := ueTruncated;
+            Exit(LOut);
+          end;
+          LHi := UInt32(EscapeParseHex4(ASrc, ALen, LPos));
+          if Int32(LHi) < 0 then
+          begin
+            AError := ueInvalidUnicode;
+            Exit(LOut);
+          end;
+          Inc(LPos, 4);
+          if (LHi >= $D800) and (LHi <= $DBFF) then
+          begin
+            if (LPos + 6 <= ALen) and (ASrc[LPos] = '\') and (ASrc[LPos + 1] = 'u') then
+            begin
+              Inc(LPos, 2);
+              LLo := UInt32(EscapeParseHex4(ASrc, ALen, LPos));
+              if (Int32(LLo) < 0) or (LLo < $DC00) or (LLo > $DFFF) then
+              begin
+                AError := ueInvalidUnicode;
+                Exit(LOut);
+              end;
+              Inc(LPos, 4);
+              LCP := ((LHi - $D800) shl 10) or (LLo - $DC00) + $10000;
+            end
+            else
+            begin
+              AError := ueInvalidUnicode;
+              Exit(LOut);
+            end;
+          end
+          else if (LHi >= $DC00) and (LHi <= $DFFF) then
+          begin
+            AError := ueInvalidUnicode;
+            Exit(LOut);
+          end
+          else
+            LCP := LHi;
+          LEncLen := UTF8Encode(LCP, @ADst[LOut]);
+          if LEncLen = 0 then
+          begin
+            AError := ueInvalidUnicode;
+            Exit(LOut);
+          end;
+          Inc(LOut, LEncLen);
+        end;
+      else
+        AError := ueInvalidEscape;
+        Exit(LOut);
+      end;
+    end;
+  end;
   while LPos < ALen do
   begin
     LCh := Byte(ASrc[LPos]);

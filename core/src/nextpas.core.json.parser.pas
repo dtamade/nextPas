@@ -42,6 +42,8 @@ function JsonParseDoc(const AInput: TStringView;
 implementation
 
 uses
+  nextpas.core.simd.base,
+  nextpas.core.simd.vec16,
   nextpas.core.text.scan,
   nextpas.core.text.escape,
   nextpas.core.text.number,
@@ -235,11 +237,25 @@ begin
   end;
   LRaw := TStringView.Create(Input + LStartPos + 1, LEndPos - LStartPos - 1);
   LHasEscape := False;
-  for I := 0 to LRaw.Len - 1 do
-    if LRaw.Data[I] = '\' then
+  I := 0;
+  while I + 16 <= LRaw.Len do
+  begin
+    if Vec16CmpEq(@LRaw.Data[I], Ord('\')) <> MASK16_NONE_SET then
     begin
       LHasEscape := True;
       Break;
+    end;
+    Inc(I, 16);
+  end;
+  if not LHasEscape then
+    while I < LRaw.Len do
+    begin
+      if LRaw.Data[I] = '\' then
+      begin
+        LHasEscape := True;
+        Break;
+      end;
+      Inc(I);
     end;
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkString;
@@ -295,11 +311,22 @@ begin
   end;
   LHasDot := False;
   LHasExp := False;
-  for I := 0 to LNumLen - 1 do
+  if LNumLen >= 16 then
   begin
-    if LData[I] = '.' then LHasDot := True;
-    if (LData[I] = 'e') or (LData[I] = 'E') then LHasExp := True;
-  end;
+    if Vec16CmpEq(@LData[0], Ord('.')) <> MASK16_NONE_SET then LHasDot := True;
+    if (Vec16CmpEq(@LData[0], Ord('e')) or Vec16CmpEq(@LData[0], Ord('E'))) <> MASK16_NONE_SET then LHasExp := True;
+    for I := 16 to LNumLen - 1 do
+    begin
+      if LData[I] = '.' then LHasDot := True;
+      if (LData[I] = 'e') or (LData[I] = 'E') then LHasExp := True;
+    end;
+  end
+  else
+    for I := 0 to LNumLen - 1 do
+    begin
+      if LData[I] = '.' then LHasDot := True;
+      if (LData[I] = 'e') or (LData[I] = 'E') then LHasExp := True;
+    end;
   LIdx := Doc^.AddNode;
   if LHasDot or LHasExp then
   begin
