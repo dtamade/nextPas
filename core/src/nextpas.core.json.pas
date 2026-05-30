@@ -136,8 +136,21 @@ begin
       for I := 0 to LNode^.Container.Count - 1 do
       begin
         if LChild = JSON_NODE_NONE then Break;
-        StringifyNode(ADoc, LChild, AW);
-        LChild := ADoc.Node(LChild)^.Next;
+        LValNode := ADoc.Node(LChild);
+        case LValNode^.Kind of
+          jnkNull: AW.Null;
+          jnkBool: AW.Bool(LValNode^.BoolVal);
+          jnkInt: AW.Int(LValNode^.IntVal);
+          jnkReal: AW.Float(LValNode^.RealVal);
+          jnkString:
+            if (LValNode^.Flags and JNF_CLEAN_STR) <> 0 then
+              AW.StrClean(LValNode^.Str.Data, LValNode^.Str.Len)
+            else
+              AW.Str(LValNode^.Str);
+        else
+          StringifyNode(ADoc, LChild, AW);
+        end;
+        LChild := LValNode^.Next;
       end;
       AW.EndArray;
     end;
@@ -180,7 +193,7 @@ var
   LBuilder: TStringBuilder;
   LWriter: TJsonWriter;
 begin
-  LBuilder.Init(256);
+  LBuilder.Init(FDoc.Input.Len + 32);
   LWriter.Init(LBuilder);
   StringifyNode(FDoc, FDoc.Root, LWriter);
   Result := LBuilder.ToString;
