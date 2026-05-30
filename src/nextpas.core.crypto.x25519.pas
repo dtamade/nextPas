@@ -19,6 +19,13 @@ function X25519ScalarMult(const AScalar, AInputU: TBytes): TBytes;
 function X25519PublicKeyFromPrivate(const APrivateKey: TBytes): TBytes;
 function X25519ComputeSharedSecret(const APrivateKey, APeerPublicKey: TBytes): TBytes;
 
+function TryX25519ScalarMult(const AScalar, AInputU: TBytes;
+  out AResult: TBytes; out AError: string): Boolean;
+function TryX25519ComputeSharedSecret(const APrivateKey, APeerPublicKey: TBytes;
+  out ASharedSecret: TBytes; out AError: string): Boolean;
+function TryGenerateX25519KeyPair(out APrivateKey, APublicKey: TBytes;
+  out AError: string): Boolean;
+
 implementation
 
 uses
@@ -153,6 +160,74 @@ begin
   Result := X25519ScalarMult(APrivateKey, APeerPublicKey);
   if IsAllZero(Result) then
     RaiseKeyDerivationError('X25519 shared secret is all-zero');
+end;
+
+function TryX25519ScalarMult(const AScalar, AInputU: TBytes;
+  out AResult: TBytes; out AError: string): Boolean;
+begin
+  AError := '';
+  SetLength(AResult, 0);
+  if (Length(AScalar) <> X25519_KEY_SIZE) or (Length(AInputU) <> X25519_KEY_SIZE) then
+  begin
+    AError := 'X25519: scalar and input must be 32 bytes';
+    Exit(False);
+  end;
+  try
+    AResult := X25519ScalarMult(AScalar, AInputU);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function TryX25519ComputeSharedSecret(const APrivateKey, APeerPublicKey: TBytes;
+  out ASharedSecret: TBytes; out AError: string): Boolean;
+begin
+  AError := '';
+  SetLength(ASharedSecret, 0);
+  if (Length(APrivateKey) <> X25519_KEY_SIZE) or (Length(APeerPublicKey) <> X25519_KEY_SIZE) then
+  begin
+    AError := 'X25519: keys must be 32 bytes';
+    Exit(False);
+  end;
+  try
+    ASharedSecret := X25519ScalarMult(APrivateKey, APeerPublicKey);
+    if IsAllZero(ASharedSecret) then
+    begin
+      AError := 'X25519: shared secret is all-zero (invalid peer key)';
+      SetLength(ASharedSecret, 0);
+      Exit(False);
+    end;
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function TryGenerateX25519KeyPair(out APrivateKey, APublicKey: TBytes;
+  out AError: string): Boolean;
+begin
+  AError := '';
+  SetLength(APrivateKey, 0);
+  SetLength(APublicKey, 0);
+  try
+    GenerateX25519KeyPair(APrivateKey, APublicKey);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
 end;
 
 end.

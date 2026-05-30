@@ -124,6 +124,27 @@ begin
     BytesToHex(LK) = '684cf59ba83309552800ef566f2f4d3c1c3887c49360e3875f2eb94d99532c51');
 end;
 
+procedure TestTryAPI;
+var
+  LPriv, LPub, LResult: TBytes;
+  LError: string;
+  LOk: Boolean;
+begin
+  LOk := TryGenerateX25519KeyPair(LPriv, LPub, LError);
+  Check('TryGenerateKeyPair ok', LOk);
+  Check('TryGenerateKeyPair priv=32', Length(LPriv) = 32);
+  Check('TryGenerateKeyPair pub=32', Length(LPub) = 32);
+
+  LOk := TryX25519ComputeSharedSecret(LPriv, LPub, LResult, LError);
+  Check('TryComputeSharedSecret ok', LOk);
+  Check('TryComputeSharedSecret result=32', Length(LResult) = 32);
+
+  // Invalid input
+  LOk := TryX25519ScalarMult(HexToBytes('0102'), LPub, LResult, LError);
+  Check('TryScalarMult short input rejected', not LOk);
+  Check('TryScalarMult error message', Length(LError) > 0);
+end;
+
 begin
   GPass := 0;
   GFail := 0;
@@ -135,6 +156,7 @@ begin
   TestBasePointMult;
   TestKeyPairRoundtrip;
   TestIterative1000;
+  TestTryAPI;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
