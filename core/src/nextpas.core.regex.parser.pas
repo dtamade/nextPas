@@ -35,6 +35,7 @@ type
     RepeatGreedy: Boolean;
     RepeatKind: TRepeatKind;
     CaptureIndex: UInt32;
+    CaptureName: string;
     AssertKind: TAssertKind;
   end;
 
@@ -166,7 +167,7 @@ function ParseConcat(var P: TParser): PAstNode; forward;
 function ParseAlternate(var P: TParser): PAstNode; forward;
 
 function ParseAtom(var P: TParser): PAstNode;
-var ch: Char;
+var ch: Char; LName: string;
 begin
   ch := Peek(P);
   case ch of
@@ -186,6 +187,21 @@ begin
         begin
           Next(P);
           Result := NewNode(akGroup);
+          Result^.Left := ParseAlternate(P);
+        end
+        else if (Peek(P) = 'P') or (Peek(P) = '<') then
+        begin
+          // Named group: (?P<name>...) or (?<name>...)
+          if Peek(P) = 'P' then begin Next(P); Next(P); end  // skip P<
+          else Next(P);  // skip <
+          LName := '';
+          while (Peek(P) <> '>') and (Peek(P) <> #0) do
+            LName := LName + Next(P);
+          if Peek(P) = '>' then Next(P);
+          Result := NewNode(akCapture);
+          Result^.CaptureIndex := P.NumCaptures;
+          Result^.CaptureName := LName;
+          Inc(P.NumCaptures);
           Result^.Left := ParseAlternate(P);
         end
         else

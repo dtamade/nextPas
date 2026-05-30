@@ -22,6 +22,8 @@ type
     Cap: UInt32;
     Classes: array of TCharBitmap;
     NumClasses: UInt32;
+    GroupNames: TGroupNameArray;
+    NumGroupNames: UInt32;
   end;
 
 procedure Emit(var C: TCompiler; const AInst: TInstruction);
@@ -205,6 +207,14 @@ begin
       CompileRepeat(C, ANode);
     akCapture:
     begin
+      if ANode^.CaptureName <> '' then
+      begin
+        if C.NumGroupNames >= UInt32(Length(C.GroupNames)) then
+          SetLength(C.GroupNames, C.NumGroupNames + 8);
+        C.GroupNames[C.NumGroupNames].Name := ANode^.CaptureName;
+        C.GroupNames[C.NumGroupNames].Index := ANode^.CaptureIndex;
+        Inc(C.NumGroupNames);
+      end;
       inst.Op := opSave;
       inst.Slot := (ANode^.CaptureIndex + 1) * 2;
       Emit(C, inst);
@@ -248,14 +258,19 @@ begin
   if C.NumClasses > 0 then
     Move(C.Classes[0], Result.Classes[0], C.NumClasses * SizeOf(TCharBitmap));
   Result.NumSlots := (ANumCaptures + 1) * 2;
+  Result.NumCaptures := ANumCaptures;
+  SetLength(Result.GroupNames, C.NumGroupNames);
+  if C.NumGroupNames > 0 then
+    Move(C.GroupNames[0], Result.GroupNames[0], C.NumGroupNames * SizeOf(TGroupName));
   Result.LiteralPrefix := '';
   Result.LiteralPrefixLen := 0;
 
-  // Extract literal prefix
-  if (Length(Result.Code) > 0) and (Result.Code[0].Op = opLiteral) then
+  // Extract literal prefix (skip leading Save instructions)
+  i := 0;
+  while (i < C.Count) and (Result.Code[i].Op = opSave) do Inc(i);
+  if (i < C.Count) and (Result.Code[i].Op = opLiteral) then
   begin
-    i := 0;
-    while (i < UInt32(Length(Result.Code))) and (Result.Code[i].Op = opLiteral) do
+    while (i < C.Count) and (Result.Code[i].Op = opLiteral) do
     begin
       Result.LiteralPrefix := Result.LiteralPrefix + Chr(Result.Code[i].Ch);
       Inc(i);

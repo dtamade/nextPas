@@ -20,9 +20,6 @@ implementation
 
 uses SysUtils, nextpas.core.text.scan;
 
-const
-  MAX_THREADS = 4096;
-
 type
   TThread = record
     PC: UInt32;
@@ -31,13 +28,15 @@ type
   TThreadList = record
     Items: array of TThread;
     Count: UInt32;
+    MaxCount: UInt32;
     Gen: array of UInt32;
     CurGen: UInt32;
   end;
 
 procedure InitThreadList(var TL: TThreadList; AMaxPC: UInt32);
 begin
-  SetLength(TL.Items, MAX_THREADS);
+  TL.MaxCount := AMaxPC + 1;
+  SetLength(TL.Items, TL.MaxCount);
   TL.Count := 0;
   SetLength(TL.Gen, AMaxPC + 1);
   FillChar(TL.Gen[0], (AMaxPC + 1) * SizeOf(UInt32), 0);
@@ -96,7 +95,7 @@ begin
       end;
     end;
   else
-    if TL.Count < MAX_THREADS then
+    if TL.Count < TL.MaxCount then
     begin
       TL.Items[TL.Count].PC := APC;
       SetLength(TL.Items[TL.Count].Slots, Length(ASlots));
@@ -140,11 +139,11 @@ begin
   startPos := AStartPos;
 
   // SIMD prefilter: skip to first candidate position
-  if (not AAnchored) and (AProgram.LiteralPrefixLen > 0) then
+  if (not AAnchored) and (AProgram.LiteralPrefixLen > 0) and (AStartPos < ALen) then
   begin
-    prefixPos := SizeInt(ScanFindByte(AInput, ALen, Byte(AProgram.LiteralPrefix[1])));
+    prefixPos := SizeInt(ScanFindByte(AInput + AStartPos, ALen - AStartPos, Byte(AProgram.LiteralPrefix[1])));
     if prefixPos < 0 then Exit;
-    startPos := SizeUInt(prefixPos);
+    startPos := AStartPos + SizeUInt(prefixPos);
   end;
 
   pos := startPos;

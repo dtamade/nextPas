@@ -44,10 +44,18 @@ type
       5: (Assert: TAssertKind);
   end;
 
+  TGroupName = record
+    Name: string;
+    Index: UInt32;
+  end;
+  TGroupNameArray = array of TGroupName;
+
   TRegexProgram = record
     Code: array of TInstruction;
     Classes: array of TCharBitmap;
+    GroupNames: TGroupNameArray;
     NumSlots: UInt32;
+    NumCaptures: UInt32;
     LiteralPrefix: string;
     LiteralPrefixLen: SizeUInt;
   end;
