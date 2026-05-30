@@ -31,10 +31,12 @@ procedure FsSymlink(const ATarget, ALinkPath: string);
 function FsReadlink(const APath: string): string;
 function FsGetCwd: string;
 procedure FsSetCwd(const APath: string);
+function FsGetEnv(const AName: string): string;
 
 implementation
 
 uses
+  {$IFDEF UNIX}BaseUnix,{$ENDIF}
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
@@ -346,6 +348,17 @@ end;
 procedure FsSetCwd(const APath: string);
 begin
   ChDir(APath);
+end;
+
+function FsGetEnv(const AName: string): string;
+var P: PChar;
+begin
+  {$IFDEF UNIX}
+  P := BaseUnix.fpGetEnv(PChar(AName));
+  if P <> nil then Result := P else Result := '';
+  {$ELSE}
+  Result := SysUtils.GetEnvironmentVariable(AName);
+  {$ENDIF}
 end;
 
 end.

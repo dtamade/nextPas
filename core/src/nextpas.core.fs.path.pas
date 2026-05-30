@@ -4,6 +4,13 @@ unit nextpas.core.fs.path;
 
 interface
 
+uses
+  nextpas.core.platform.path;
+
+const
+  PathDelim = PLATFORM_PATH_SEP;
+  PathSep = PathDelim;
+
 function FsPathJoin(const AParts: array of string): string;
 function FsPathDir(const APath: string): string;
 function FsPathBase(const APath: string): string;
@@ -18,8 +25,6 @@ function FsPathWithoutExt(const APath: string): string;
 
 implementation
 
-uses
-  nextpas.core.platform.path;
 
 const
   PATH_BUF_SIZE = 1024;
