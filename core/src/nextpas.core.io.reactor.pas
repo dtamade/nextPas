@@ -251,6 +251,8 @@ begin
   if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then
     FEntries[LId].Callback(LId, LCqe^.res, FEntries[LId].Context);
   FRing.CqeSeen(LCqe);
+  if LId < FEntryCount then
+    FreeEntry(LId);
   Result := True;
 end;
 
@@ -288,6 +290,8 @@ begin
       if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then
         FEntries[LId].Callback(LId, LCqe^.res, FEntries[LId].Context);
       FRing.CqeSeen(LCqe);
+      if LId < FEntryCount then
+        FreeEntry(LId);
     end;
   end;
 end;
