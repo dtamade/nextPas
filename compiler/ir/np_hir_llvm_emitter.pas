@@ -615,9 +615,9 @@ begin
       FNeedsExceptionRuntime := True;
       Inc(FTryCounter);
       Emit('  ; --- try begin ---');
-      Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [5 x ptr]');
+      Emit('  %jmpbuf.' + IntToStr(FTryCounter) + ' = alloca [9 x ptr]');
       Emit('  call void @np_try_push(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
-      Emit('  %setjmp.' + IntToStr(FTryCounter) + ' = call i32 @np_setjmp(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
+      Emit('  %setjmp.' + IntToStr(FTryCounter) + ' = call i32 @setjmp(ptr %jmpbuf.' + IntToStr(FTryCounter) + ')');
       Emit('  %is_exc.' + IntToStr(FTryCounter) + ' = icmp ne i32 %setjmp.' + IntToStr(FTryCounter) + ', 0');
       if AInstr.IntrinsicName <> '' then
         Emit('  br i1 %is_exc.' + IntToStr(FTryCounter) + ', label %' +
@@ -1123,7 +1123,7 @@ begin
   Emit('define internal void @np_try_push(ptr %buf) {');
   Emit('entry:');
   Emit('  %old = load ptr, ptr @__np_exc_stack');
-  Emit('  %slot = getelementptr [5 x ptr], ptr %buf, i64 0, i64 4');
+  Emit('  %slot = getelementptr [9 x ptr], ptr %buf, i64 0, i64 8');
   Emit('  store ptr %old, ptr %slot');
   Emit('  store ptr %buf, ptr @__np_exc_stack');
   Emit('  ret void');
@@ -1132,25 +1132,13 @@ begin
   Emit('define internal void @np_try_pop() {');
   Emit('entry:');
   Emit('  %buf = load ptr, ptr @__np_exc_stack');
-  Emit('  %slot = getelementptr [5 x ptr], ptr %buf, i64 0, i64 4');
+  Emit('  %slot = getelementptr [9 x ptr], ptr %buf, i64 0, i64 8');
   Emit('  %prev = load ptr, ptr %slot');
   Emit('  store ptr %prev, ptr @__np_exc_stack');
   Emit('  ret void');
   Emit('}');
   Emit('');
-  Emit('define internal i32 @np_setjmp(ptr %buf) nounwind {');
-  Emit('entry:');
-  Emit('  %r = call i32 @setjmp(ptr %buf)');
-  Emit('  ret i32 %r');
-  Emit('}');
-  Emit('');
-  Emit('define internal void @np_longjmp(ptr %buf, i32 %val) noreturn nounwind {');
-  Emit('entry:');
-  Emit('  call void @longjmp(ptr %buf, i32 %val)');
-  Emit('  unreachable');
-  Emit('}');
-  Emit('');
-  Emit('declare i32 @setjmp(ptr) nounwind');
+  Emit('declare i32 @setjmp(ptr) returns_twice nounwind');
   Emit('declare void @longjmp(ptr, i32) noreturn nounwind');
   Emit('');
   Emit('define internal void @np_raise() {');
@@ -1163,7 +1151,7 @@ begin
   Emit('  call void asm sideeffect "movq $$60, %rax; movq $$217, %rdi; syscall", "~{rax},~{rdi},~{rcx},~{r11}"()');
   Emit('  unreachable');
   Emit('do_longjmp:');
-  Emit('  call void @np_longjmp(ptr %buf, i32 1)');
+  Emit('  call void @longjmp(ptr %buf, i32 1)');
   Emit('  unreachable');
   Emit('}');
   Emit('');
