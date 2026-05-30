@@ -37,7 +37,7 @@ var
         LPadCh := '0'
       else
         LPadCh := ' ';
-      AppendStr(TextOfChar(LPadCh, LPad) + AStr);
+      AppendStr(StringOfChar(LPadCh, LPad) + AStr);
     end;
   end;
 
