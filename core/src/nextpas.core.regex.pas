@@ -34,6 +34,9 @@ type
     function ReplaceFirst(const AInput, AReplacement: string): string;
     function ReplaceAll(const AInput, AReplacement: string): string;
     function Split(const AInput: string): TStringArray;
+    function GroupByName(const AMatch: TMatch; const AName: string): TGroup;
+    function GroupIndexByName(const AName: string): SizeInt;
+    function NumCaptures: UInt32;
   end;
 
 function RegexIsMatch(const APattern, AInput: string): Boolean;
@@ -162,6 +165,33 @@ begin
     LPos := SizeUInt(LMatches[i].Start + LMatches[i].Len + 1);
   end;
   Result[Length(LMatches)] := Copy(AInput, LPos, Length(AInput) - LPos + 1);
+end;
+
+function TRegex.GroupIndexByName(const AName: string): SizeInt;
+var i: SizeInt;
+begin
+  for i := 0 to High(FProgram.GroupNames) do
+    if FProgram.GroupNames[i].Name = AName then
+      Exit(SizeInt(FProgram.GroupNames[i].Index));
+  Result := -1;
+end;
+
+function TRegex.GroupByName(const AMatch: TMatch; const AName: string): TGroup;
+var LIdx: SizeInt;
+begin
+  LIdx := GroupIndexByName(AName);
+  if (LIdx >= 0) and (LIdx < Length(AMatch.Groups)) then
+    Result := AMatch.Groups[LIdx]
+  else
+  begin
+    Result.Start := -1;
+    Result.Len := 0;
+  end;
+end;
+
+function TRegex.NumCaptures: UInt32;
+begin
+  Result := FProgram.NumCaptures;
 end;
 
 { Convenience functions }

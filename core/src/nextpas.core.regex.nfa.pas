@@ -8,6 +8,9 @@ uses
   nextpas.core.regex.base,
   nextpas.core.regex.charclass;
 
+function NfaIsMatch(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
+
 function NfaSearch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt; AAnchored: Boolean;
   AStartPos: SizeUInt;
@@ -104,6 +107,119 @@ begin
       Inc(TL.Count);
     end;
   end;
+end;
+
+{ NfaIsMatch — zero-allocation PC-only Thompson VM for IsMatch }
+
+function NfaIsMatch(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
+var
+  CSet, NSet: array of Boolean;
+  LCodeLen: UInt32;
+  pos, pc: SizeUInt;
+  inst: TInstruction;
+  ch: Byte;
+  matched: Boolean;
+  prefixPos: SizeInt;
+  startPos: SizeUInt;
+
+  procedure AddState(var ASet: array of Boolean; APC: UInt32);
+  begin
+    if APC >= LCodeLen then Exit;
+    if ASet[APC] then Exit;
+    ASet[APC] := True;
+    inst := AProgram.Code[APC];
+    case inst.Op of
+      opSplit: begin AddState(ASet, inst.X); AddState(ASet, inst.Y); end;
+      opJump: AddState(ASet, inst.Target);
+      opSave: AddState(ASet, APC + 1);
+      opAssert:
+      begin
+        case inst.Assert of
+          akStart: if pos = 0 then AddState(ASet, APC + 1);
+          akEnd: if pos = ALen then AddState(ASet, APC + 1);
+          akWordBoundary:
+            if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+               ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
+              AddState(ASet, APC + 1);
+          akNotWordBoundary:
+            if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                    ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
+              AddState(ASet, APC + 1);
+        end;
+      end;
+    end;
+  end;
+
+begin
+  Result := False;
+  LCodeLen := Length(AProgram.Code);
+  if LCodeLen = 0 then Exit;
+
+  SetLength(CSet, LCodeLen);
+  SetLength(NSet, LCodeLen);
+  FillChar(CSet[0], LCodeLen, 0);
+  FillChar(NSet[0], LCodeLen, 0);
+
+  startPos := 0;
+  if AProgram.LiteralPrefixLen > 0 then
+  begin
+    prefixPos := SizeInt(ScanFindByte(AInput, ALen, Byte(AProgram.LiteralPrefix[1])));
+    if prefixPos < 0 then Exit;
+    startPos := SizeUInt(prefixPos);
+  end;
+
+  pos := startPos;
+  AddState(CSet, 0);
+
+  while pos <= ALen do
+  begin
+    AddState(CSet, 0);
+
+    FillChar(NSet[0], LCodeLen, 0);
+
+    for pc := 0 to LCodeLen - 1 do
+    begin
+      if not CSet[pc] then Continue;
+      inst := AProgram.Code[pc];
+      case inst.Op of
+        opLiteral:
+          if (pos < ALen) and (Ord(AInput[pos]) = inst.Ch) then
+            AddState(NSet, pc + 1);
+        opAnyChar:
+          if (pos < ALen) and (AInput[pos] <> #10) then
+            AddState(NSet, pc + 1);
+        opCharClass:
+          if (pos < ALen) then
+          begin
+            ch := Ord(AInput[pos]);
+            if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
+              AddState(NSet, pc + 1);
+          end;
+        opMatch:
+        begin
+          Result := True;
+          Exit;
+        end;
+      end;
+    end;
+
+    // Swap
+    Move(NSet[0], CSet[0], LCodeLen);
+    FillChar(NSet[0], LCodeLen, 0);
+    Inc(pos);
+
+    // Check if any state active
+    matched := False;
+    for pc := 0 to LCodeLen - 1 do
+      if CSet[pc] then begin matched := True; Break; end;
+    if not matched then Exit;
+  end;
+
+  // Check final state
+  for pc := 0 to LCodeLen - 1 do
+    if CSet[pc] and (AProgram.Code[pc].Op = opMatch) then
+      Exit(True);
 end;
 
 function NfaSearch(const AProgram: TRegexProgram;
