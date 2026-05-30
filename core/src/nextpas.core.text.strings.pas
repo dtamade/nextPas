@@ -18,6 +18,7 @@ type
     Value: string;
   end;
   TStringPairArray = array of TStringPair;
+  TStringChunks = array of TStringArray;
 
   TStringArrayHelper = type helper for TStringArray
     procedure Add(const AValue: string);
@@ -72,6 +73,10 @@ function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 { Pattern matching }
 function GlobMatch(const APattern, AStr: string): Boolean;
 function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
+
+{ Additional utilities }
+function StringsRepeat(const AValue: string; ACount: SizeUInt): TStringArray;
+function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
 
 implementation
 
@@ -506,6 +511,38 @@ end;
 function TStringArrayHelper.RemoveEmpty: TStringArray;
 begin
   Result := StringsRemoveEmpty(Self);
+end;
+
+function StringsRepeat(const AValue: string; ACount: SizeUInt): TStringArray;
+var I: SizeUInt;
+begin
+  SetLength(Result, ACount);
+  for I := 0 to ACount - 1 do
+    Result[I] := AValue;
+end;
+
+function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
+var
+  I, LChunkCount, LRemain: SizeUInt;
+  J, LStart: SizeUInt;
+begin
+  if (Length(AArr) = 0) or (ASize = 0) then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  LChunkCount := (SizeUInt(Length(AArr)) + ASize - 1) div ASize;
+  SetLength(Result, LChunkCount);
+  LStart := 0;
+  for I := 0 to LChunkCount - 1 do
+  begin
+    LRemain := SizeUInt(Length(AArr)) - LStart;
+    if LRemain > ASize then LRemain := ASize;
+    SetLength(Result[I], LRemain);
+    for J := 0 to LRemain - 1 do
+      Result[I][J] := AArr[LStart + J];
+    Inc(LStart, LRemain);
+  end;
 end;
 
 end.
