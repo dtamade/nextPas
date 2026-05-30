@@ -828,6 +828,70 @@ begin
     TStringView.Create(PAnsiChar('a\' + #10 + 'b'), 4)), 'a\ + newline + b');
 end;
 
+{ toml-test/valid — remaining categories }
+
+procedure TestValidFloatExponent;
+var LDoc: ITomlDocument;
+const
+  INPUT = 'exp = 3e2' + #10 + 'pos-exp = 3e+2' + #10 + 'neg-exp = 3e-2' + #10 +
+    'frac = 3.1e2' + #10 + 'neg = -1e-1' + #10 + 'zero = 0e2' + #10;
+begin
+  LDoc := TomlParse(INPUT);
+  Check(not LDoc.HasError, 'float exponent forms ok');
+  Check(Abs(LDoc.Root.Get('exp').AsFloat - 300.0) < 0.01, 'exp = 300');
+  Check(Abs(LDoc.Root.Get('neg-exp').AsFloat - 0.03) < 0.001, 'neg-exp = 0.03');
+  Check(Abs(LDoc.Root.Get('frac').AsFloat - 310.0) < 0.01, 'frac = 310');
+  Check(Abs(LDoc.Root.Get('neg').AsFloat - (-0.1)) < 0.001, 'neg = -0.1');
+end;
+
+procedure TestValidFloatZero;
+var LDoc: ITomlDocument;
+const
+  INPUT = 'zero = 0.0' + #10 + 'signed-pos = +0.0' + #10 + 'signed-neg = -0.0' + #10 +
+    'exponent = 0e0' + #10;
+begin
+  LDoc := TomlParse(INPUT);
+  Check(not LDoc.HasError, 'float zero forms ok');
+  Check(Abs(LDoc.Root.Get('zero').AsFloat) < 0.001, 'zero = 0.0');
+  Check(LDoc.Root.Get('exponent').IsFloat, 'exponent is float');
+end;
+
+procedure TestValidIntegerZero;
+var LDoc: ITomlDocument;
+const
+  INPUT = 'd1 = 0' + #10 + 'd2 = +0' + #10 + 'd3 = -0' + #10 +
+    'h1 = 0x0' + #10 + 'h2 = 0x00' + #10 + 'o1 = 0o0' + #10;
+begin
+  LDoc := TomlParse(INPUT);
+  Check(not LDoc.HasError, 'integer zero forms ok');
+  CheckEqual(Int64(0), LDoc.Root.Get('d1').AsInt, 'd1 = 0');
+  CheckEqual(Int64(0), LDoc.Root.Get('d2').AsInt, 'd2 = +0');
+  CheckEqual(Int64(0), LDoc.Root.Get('d3').AsInt, 'd3 = -0');
+  CheckEqual(Int64(0), LDoc.Root.Get('h1').AsInt, 'h1 = 0x0');
+  CheckEqual(Int64(0), LDoc.Root.Get('o1').AsInt, 'o1 = 0o0');
+end;
+
+procedure TestValidTableSubEmpty;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[a]' + #10 + '[a.b]');
+  Check(not LDoc.HasError, 'sub-empty table ok');
+  Check(LDoc.Root.Get('a').IsTable, 'a is table');
+  Check(LDoc.Root.Get('a').Get('b').IsTable, 'a.b is table');
+  CheckEqual(Int64(0), Int64(LDoc.Root.Get('a').Get('b').TableLen), 'a.b empty');
+end;
+
+procedure TestValidTableArrayImplicit;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[[albums.songs]]' + #10 + 'name = "Glory Days"');
+  Check(not LDoc.HasError, 'array-implicit ok');
+  Check(LDoc.Root.Get('albums').IsTable, 'albums is table');
+  Check(LDoc.Root.Get('albums').Get('songs').IsArray, 'songs is array');
+  Check(LDoc.Root.Get('albums').Get('songs').ArrayGet(0).Get('name').AsStr.Equals(
+    TStringView.Create(PAnsiChar('Glory Days'), 10)), 'song name');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -932,6 +996,12 @@ begin
   T.Run('reject dotted key reopen', @TestRejectDottedKeyReopen);
   T.Run('multi-line 4 quotes', @TestMultiLine4Quotes);
   T.Run('multi-line escaped-bs newline', @TestMultiLineEscapedBsNewline);
+  { toml-test/valid — remaining categories }
+  T.Run('valid float exponent forms', @TestValidFloatExponent);
+  T.Run('valid float zero forms', @TestValidFloatZero);
+  T.Run('valid integer zero forms', @TestValidIntegerZero);
+  T.Run('valid table sub-empty', @TestValidTableSubEmpty);
+  T.Run('valid table array-implicit', @TestValidTableArrayImplicit);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
