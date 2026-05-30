@@ -3,7 +3,12 @@ program test_compress;
 uses
   SysUtils,
   nextpas.core.testing,
+  nextpas.core.io.base,
+  nextpas.core.io.intf,
+  nextpas.core.io.memory,
+  nextpas.core.io.util,
   nextpas.core.compress.base,
+  nextpas.core.compress.intf,
   nextpas.core.compress;
 
 var
@@ -167,6 +172,71 @@ begin
   Check(LGotException, 'deflate corrupt raises');
 end;
 
+procedure TestDeflateStreaming;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc: TBytes;
+  LOut: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 4096);
+  for LI := 0 to High(LSrc) do LSrc[LI] := Byte(LI mod 200);
+
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], 1024);
+  LWriter.Write(LSrc[1024], 1024);
+  LWriter.Write(LSrc[2048], 2048);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := DeflateReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(4096), Int64(Length(LOut)), 'streaming length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LOut[LI] then
+    begin
+      Check(False, 'streaming mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'streaming data matches');
+end;
+
+procedure TestGzipCorrupted;
+var
+  LC: TBytes;
+  LGotException: Boolean;
+begin
+  LC := GzipCompress(TBytes.Create(1, 2, 3, 4, 5));
+  LC[Length(LC) - 1] := LC[Length(LC) - 1] xor $FF;
+  LGotException := False;
+  try
+    GzipDecompress(LC);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'gzip corrupt CRC raises');
+end;
+
+procedure TestLz4Corrupted;
+var
+  LC: TBytes;
+  LGotException: Boolean;
+begin
+  LC := TBytes.Create($F0, $FF, $FF, $FF, $FF, $FF);
+  LGotException := False;
+  try
+    Lz4Decompress(LC, 100);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'lz4 corrupt raises');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.compress');
   T.Run('Deflate round-trip', @TestDeflateRoundTrip);
@@ -178,6 +248,9 @@ begin
   T.Run('LZ4 round-trip', @TestLz4RoundTrip);
   T.Run('LZ4 empty', @TestLz4Empty);
   T.Run('LZ4 1MB', @TestLz4Large);
-  T.Run('Corrupted data', @TestCorruptedData);
+  T.Run('Deflate streaming', @TestDeflateStreaming);
+  T.Run('Corrupted deflate', @TestCorruptedData);
+  T.Run('Corrupted gzip', @TestGzipCorrupted);
+  T.Run('Corrupted lz4', @TestLz4Corrupted);
   T.Summary;
 end.

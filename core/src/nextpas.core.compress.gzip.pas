@@ -32,17 +32,6 @@ begin
   Result := UInt32(crc32(ULong(ACRC), @ABuf, ALen));
 end;
 
-function LevelToZlib(const ALevel: TCompressionLevel): Int32;
-begin
-  case ALevel of
-    clNone: Result := Z_NO_COMPRESSION;
-    clFastest: Result := Z_BEST_SPEED;
-    clBest: Result := Z_BEST_COMPRESSION;
-  otherwise
-    Result := Z_DEFAULT_COMPRESSION;
-  end;
-end;
-
 function GzipCompress(const AData: TBytes;
   const ALevel: TCompressionLevel): TBytes;
 var

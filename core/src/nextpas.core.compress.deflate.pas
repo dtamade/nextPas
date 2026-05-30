@@ -23,17 +23,6 @@ implementation
 uses
   zlib, nextpas.core.errors;
 
-function LevelToZlib(const ALevel: TCompressionLevel): Int32;
-begin
-  case ALevel of
-    clNone: Result := Z_NO_COMPRESSION;
-    clFastest: Result := Z_BEST_SPEED;
-    clBest: Result := Z_BEST_COMPRESSION;
-  otherwise
-    Result := Z_DEFAULT_COMPRESSION;
-  end;
-end;
-
 type
   TDeflateWriter = class(TInterfacedObject, IWriter, ICompressWriter)
   private

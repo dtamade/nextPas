@@ -55,7 +55,7 @@ begin
 
   GetMem(LHashTable, SizeOf(THashArray));
   try
-    FillChar(LHashTable^[0], SizeOf(THashArray), $FF); // -1
+    FillChar(LHashTable^[0], SizeOf(THashArray), $FF);
 
     SetLength(Result, LLen + (LLen div 255) + 16 + 4);
     LSrc := 0;
@@ -69,90 +69,82 @@ begin
       LRef := LHashTable^[LH];
       LHashTable^[LH] := LSrc;
 
-    if (LRef >= 0) and (LRef + 4 <= LEnd) and (LSrc - LRef < 65536) and
-       (PUInt32(@AData[LRef])^ = PUInt32(@AData[LSrc])^) then
+      if (LRef >= 0) and (LRef + 4 <= LEnd) and (LSrc - LRef < 65536) and
+         (PUInt32(@AData[LRef])^ = PUInt32(@AData[LSrc])^) then
+      begin
+        LMatchLen := 4;
+        while (LSrc + LMatchLen < LEnd) and (LRef + LMatchLen < LEnd) and
+              (AData[LRef + LMatchLen] = AData[LSrc + LMatchLen]) do
+          Inc(LMatchLen);
+
+        LLitLen := LSrc - LAnchor;
+
+        if LDst + LLitLen + LMatchLen + 16 > Length(Result) then
+          SetLength(Result, (LDst + LLitLen + LMatchLen + 16) * 2);
+
+        LTokenPos := LDst; Inc(LDst);
+        if LLitLen >= 15 then
+        begin
+          Result[LTokenPos] := (15 shl 4);
+          LML := LLitLen - 15;
+          while LML >= 255 do begin Result[LDst] := 255; Inc(LDst); Dec(LML, 255); end;
+          Result[LDst] := Byte(LML); Inc(LDst);
+        end
+        else
+          Result[LTokenPos] := Byte(LLitLen shl 4);
+
+        if LLitLen > 0 then
+        begin
+          Move(AData[LAnchor], Result[LDst], LLitLen);
+          Inc(LDst, LLitLen);
+        end;
+
+        LOffset := UInt16(LSrc - LRef);
+        Result[LDst] := Byte(LOffset); Inc(LDst);
+        Result[LDst] := Byte(LOffset shr 8); Inc(LDst);
+
+        LML := LMatchLen - LZ4_MIN_MATCH;
+        if LML >= 15 then
+        begin
+          Result[LTokenPos] := Result[LTokenPos] or 15;
+          Dec(LML, 15);
+          while LML >= 255 do begin Result[LDst] := 255; Inc(LDst); Dec(LML, 255); end;
+          Result[LDst] := Byte(LML); Inc(LDst);
+        end
+        else
+          Result[LTokenPos] := Result[LTokenPos] or Byte(LML);
+
+        Inc(LSrc, LMatchLen);
+        LAnchor := LSrc;
+      end
+      else
+        Inc(LSrc);
+    end;
+
+    LLitLen := LEnd - LAnchor;
+    if LDst + LLitLen + 16 > Length(Result) then
+      SetLength(Result, LDst + LLitLen + 16);
+    LTokenPos := LDst; Inc(LDst);
+    if LLitLen >= 15 then
     begin
-      // Extend match
-      LMatchLen := 4;
-      while (LSrc + LMatchLen < LEnd) and (LRef + LMatchLen < LEnd) and
-            (AData[LRef + LMatchLen] = AData[LSrc + LMatchLen]) do
-        Inc(LMatchLen);
-
-      LLitLen := LSrc - LAnchor;
-
-      // Ensure output buffer
-      if LDst + LLitLen + LMatchLen + 16 > Length(Result) then
-        SetLength(Result, (LDst + LLitLen + LMatchLen + 16) * 2);
-
-      // Token
-      LTokenPos := LDst; Inc(LDst);
-      if LLitLen >= 15 then
-      begin
-        Result[LTokenPos] := (15 shl 4);
-        LML := LLitLen - 15;
-        while LML >= 255 do begin Result[LDst] := 255; Inc(LDst); Dec(LML, 255); end;
-        Result[LDst] := Byte(LML); Inc(LDst);
-      end
-      else
-        Result[LTokenPos] := Byte(LLitLen shl 4);
-
-      // Literals
-      if LLitLen > 0 then
-      begin
-        Move(AData[LAnchor], Result[LDst], LLitLen);
-        Inc(LDst, LLitLen);
-      end;
-
-      // Offset
-      LOffset := UInt16(LSrc - LRef);
-      Result[LDst] := Byte(LOffset); Inc(LDst);
-      Result[LDst] := Byte(LOffset shr 8); Inc(LDst);
-
-      // Match length (minus minmatch)
-      LML := LMatchLen - LZ4_MIN_MATCH;
-      if LML >= 15 then
-      begin
-        Result[LTokenPos] := Result[LTokenPos] or 15;
-        Dec(LML, 15);
-        while LML >= 255 do begin Result[LDst] := 255; Inc(LDst); Dec(LML, 255); end;
-        Result[LDst] := Byte(LML); Inc(LDst);
-      end
-      else
-        Result[LTokenPos] := Result[LTokenPos] or Byte(LML);
-
-      Inc(LSrc, LMatchLen);
-      LAnchor := LSrc;
+      Result[LTokenPos] := (15 shl 4);
+      LML := LLitLen - 15;
+      while LML >= 255 do begin Result[LDst] := 255; Inc(LDst); Dec(LML, 255); end;
+      Result[LDst] := Byte(LML); Inc(LDst);
     end
     else
-      Inc(LSrc);
-  end;
+      Result[LTokenPos] := Byte(LLitLen shl 4);
+    if LLitLen > 0 then
+    begin
+      Move(AData[LAnchor], Result[LDst], LLitLen);
+      Inc(LDst, LLitLen);
+    end;
 
-  // Last literals
-  LLitLen := LEnd - LAnchor;
-  if LDst + LLitLen + 16 > Length(Result) then
-    SetLength(Result, LDst + LLitLen + 16);
-  LTokenPos := LDst; Inc(LDst);
-  if LLitLen >= 15 then
-  begin
-    Result[LTokenPos] := (15 shl 4);
-    LML := LLitLen - 15;
-    while LML >= 255 do begin Result[LDst] := 255; Inc(LDst); Dec(LML, 255); end;
-    Result[LDst] := Byte(LML); Inc(LDst);
-  end
-  else
-    Result[LTokenPos] := Byte(LLitLen shl 4);
-  if LLitLen > 0 then
-  begin
-    Move(AData[LAnchor], Result[LDst], LLitLen);
-    Inc(LDst, LLitLen);
-  end;
-
-  SetLength(Result, LDst);
+    SetLength(Result, LDst);
   finally
     FreeMem(LHashTable);
   end;
 end;
-
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 var
   LSrc, LDst, LEnd: Int32;
@@ -186,7 +178,6 @@ begin
       until AData[LSrc - 1] <> 255;
     end;
 
-    // Copy literals
     if LLitLen > 0 then
     begin
       if LSrc + LLitLen > LEnd then
@@ -198,11 +189,9 @@ begin
       Inc(LDst, LLitLen);
     end;
 
-    // Check if this is the last sequence (no match)
     if LSrc >= LEnd then
       Break;
 
-    // Offset
     if LSrc + 2 > LEnd then
       raise EIOError.Create('lz4: truncated offset');
     LOffset := UInt16(AData[LSrc]) or (UInt16(AData[LSrc + 1]) shl 8);
@@ -214,7 +203,6 @@ begin
     if LMatchPos < 0 then
       raise EIOError.Create('lz4: offset before start');
 
-    // Match length
     LMatchLen := (LToken and $0F) + LZ4_MIN_MATCH;
     if (LToken and $0F) = 15 then
     begin
@@ -227,7 +215,6 @@ begin
       until AData[LSrc - 1] <> 255;
     end;
 
-    // Copy match (byte-by-byte for overlapping)
     if LDst + LMatchLen > AOriginalSize then
       raise EIOError.Create('lz4: output overflow');
     while LMatchLen > 0 do
