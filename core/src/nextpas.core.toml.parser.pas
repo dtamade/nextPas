@@ -259,7 +259,7 @@ begin
 end;
 
 const
-  HASH_INDEX_THRESHOLD = 32;
+  HASH_INDEX_THRESHOLD = 256;
 
 procedure TTomlDocument.BuildHashIndex(ATableIdx: UInt32);
 var
