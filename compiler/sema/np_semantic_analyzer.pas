@@ -7069,7 +7069,13 @@ begin
           begin
             FuncName := LookupClassVar(Arg.ChildAt(0).Text);
             Value := TypeMetaVmtSlot(FuncName, Arg.ChildAt(1).Text);
-            if Value >= 0 then
+            if (Value >= 0) and (TypeMetaSize(FuncName) = 8) then
+              FModel.AddTypedHirNode(
+                'assign-str-ivcall-runtime', Arg.ChildAt(1).Text, 0, 0,
+                Decoded + #9 + Arg.ChildAt(0).Text + #9 +
+                IntToStr(Value)
+              )
+            else if Value >= 0 then
               FModel.AddTypedHirNode(
                 'assign-str-vcall-runtime', Arg.ChildAt(1).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).Text + #9 +

@@ -43,6 +43,7 @@ type
     hnkAssignStrCopyRuntime,
     hnkAssignStrCallRuntime,
     hnkAssignStrVcallRuntime,
+    hnkAssignStrIvcallRuntime,
     hnkAssignStrConcatRuntime,
     hnkHaltCallRuntime,
     hnkHaltCall,
@@ -166,6 +167,7 @@ begin
     'assign-str-copy-runtime': Result := hnkAssignStrCopyRuntime;
     'assign-str-call-runtime': Result := hnkAssignStrCallRuntime;
     'assign-str-vcall-runtime': Result := hnkAssignStrVcallRuntime;
+    'assign-str-ivcall-runtime': Result := hnkAssignStrIvcallRuntime;
     'assign-str-concat-runtime': Result := hnkAssignStrConcatRuntime;
     'halt-call-runtime': Result := hnkHaltCallRuntime;
     'halt-call': Result := hnkHaltCall;
