@@ -109,45 +109,50 @@ begin
   end;
 end;
 
-{ NfaIsMatch — zero-allocation PC-only Thompson VM for IsMatch }
+{ NfaIsMatch — PC-only Thompson VM, no Slots allocation }
 
 function NfaIsMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 var
-  CSet, NSet: array of Boolean;
+  CList, NList: array of UInt32;
+  CCount, NCount: UInt32;
+  Gen: array of UInt32;
+  CurGen: UInt32;
   LCodeLen: UInt32;
-  pos, pc: SizeUInt;
+  pos: SizeUInt;
+  i: UInt32;
   inst: TInstruction;
   ch: Byte;
-  matched: Boolean;
   prefixPos: SizeInt;
   startPos: SizeUInt;
 
-  procedure AddState(var ASet: array of Boolean; APC: UInt32);
+  procedure AddPC(APC: UInt32);
+  var LInst: TInstruction;
   begin
     if APC >= LCodeLen then Exit;
-    if ASet[APC] then Exit;
-    ASet[APC] := True;
-    inst := AProgram.Code[APC];
-    case inst.Op of
-      opSplit: begin AddState(ASet, inst.X); AddState(ASet, inst.Y); end;
-      opJump: AddState(ASet, inst.Target);
-      opSave: AddState(ASet, APC + 1);
+    if Gen[APC] = CurGen then Exit;
+    Gen[APC] := CurGen;
+    LInst := AProgram.Code[APC];
+    case LInst.Op of
+      opSplit: begin AddPC(LInst.X); AddPC(LInst.Y); end;
+      opJump: AddPC(LInst.Target);
+      opSave: AddPC(APC + 1);
       opAssert:
-      begin
-        case inst.Assert of
-          akStart: if pos = 0 then AddState(ASet, APC + 1);
-          akEnd: if pos = ALen then AddState(ASet, APC + 1);
+        case LInst.Assert of
+          akStart: if pos = 0 then AddPC(APC + 1);
+          akEnd: if pos = ALen then AddPC(APC + 1);
           akWordBoundary:
             if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
                ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
-              AddState(ASet, APC + 1);
+              AddPC(APC + 1);
           akNotWordBoundary:
             if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
                     ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
-              AddState(ASet, APC + 1);
+              AddPC(APC + 1);
         end;
-      end;
+    else
+      CList[CCount] := APC;
+      Inc(CCount);
     end;
   end;
 
@@ -156,10 +161,13 @@ begin
   LCodeLen := Length(AProgram.Code);
   if LCodeLen = 0 then Exit;
 
-  SetLength(CSet, LCodeLen);
-  SetLength(NSet, LCodeLen);
-  FillChar(CSet[0], LCodeLen, 0);
-  FillChar(NSet[0], LCodeLen, 0);
+  SetLength(CList, LCodeLen);
+  SetLength(NList, LCodeLen);
+  SetLength(Gen, LCodeLen);
+  FillChar(Gen[0], LCodeLen * SizeOf(UInt32), 0);
+  CurGen := 1;
+  CCount := 0;
+  NCount := 0;
 
   startPos := 0;
   if AProgram.LiteralPrefixLen > 0 then
@@ -170,56 +178,59 @@ begin
   end;
 
   pos := startPos;
-  AddState(CSet, 0);
+  AddPC(0);
 
   while pos <= ALen do
   begin
-    AddState(CSet, 0);
+    // Re-inject start state
+    AddPC(0);
 
-    FillChar(NSet[0], LCodeLen, 0);
+    // Check for match in current list
+    for i := 0 to CCount - 1 do
+      if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
 
-    for pc := 0 to LCodeLen - 1 do
+    if pos = ALen then Break;
+
+    // Step: advance one byte, collect next PCs (raw, no epsilon closure yet)
+    NCount := 0;
+    for i := 0 to CCount - 1 do
     begin
-      if not CSet[pc] then Continue;
-      inst := AProgram.Code[pc];
+      inst := AProgram.Code[CList[i]];
       case inst.Op of
         opLiteral:
-          if (pos < ALen) and (Ord(AInput[pos]) = inst.Ch) then
-            AddState(NSet, pc + 1);
-        opAnyChar:
-          if (pos < ALen) and (AInput[pos] <> #10) then
-            AddState(NSet, pc + 1);
-        opCharClass:
-          if (pos < ALen) then
+          if Ord(AInput[pos]) = inst.Ch then
           begin
-            ch := Ord(AInput[pos]);
-            if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
-              AddState(NSet, pc + 1);
+            if NCount < LCodeLen then begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
           end;
-        opMatch:
+        opAnyChar:
+          if AInput[pos] <> #10 then
+          begin
+            if NCount < LCodeLen then begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
+          end;
+        opCharClass:
         begin
-          Result := True;
-          Exit;
+          ch := Ord(AInput[pos]);
+          if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
+          begin
+            if NCount < LCodeLen then begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
+          end;
         end;
       end;
     end;
 
-    // Swap
-    Move(NSet[0], CSet[0], LCodeLen);
-    FillChar(NSet[0], LCodeLen, 0);
+    // Advance position, then do epsilon closure on collected PCs
     Inc(pos);
+    Inc(CurGen);
+    CCount := 0;
+    for i := 0 to NCount - 1 do
+      AddPC(NList[i]);
 
-    // Check if any state active
-    matched := False;
-    for pc := 0 to LCodeLen - 1 do
-      if CSet[pc] then begin matched := True; Break; end;
-    if not matched then Exit;
+    if CCount = 0 then Exit;
   end;
 
-  // Check final state
-  for pc := 0 to LCodeLen - 1 do
-    if CSet[pc] and (AProgram.Code[pc].Op = opMatch) then
-      Exit(True);
+  // Final check
+  for i := 0 to CCount - 1 do
+    if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
 end;
 
 function NfaSearch(const AProgram: TRegexProgram;
