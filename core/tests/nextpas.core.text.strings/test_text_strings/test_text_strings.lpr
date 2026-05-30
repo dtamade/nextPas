@@ -207,6 +207,31 @@ begin
   CheckEqual('z', K[2], 'keys[2]');
 end;
 
+procedure TestGlobMatch;
+begin
+  Check(GlobMatch('*.txt', 'hello.txt'), '*.txt match');
+  Check(not GlobMatch('*.txt', 'hello.md'), '*.txt no match');
+  Check(GlobMatch('test_?', 'test_1'), '? single char');
+  Check(not GlobMatch('test_?', 'test_12'), '? too many');
+  Check(GlobMatch('src/*.pas', 'src/main.pas'), 'path glob');
+  Check(GlobMatch('*', 'anything'), '* matches all');
+  Check(GlobMatch('a*b', 'aXYZb'), 'a*b middle');
+  Check(GlobMatch('a*b', 'ab'), 'a*b empty middle');
+  Check(not GlobMatch('a*b', 'aXYZc'), 'a*b no match');
+  Check(GlobMatch('', ''), 'empty matches empty');
+  Check(not GlobMatch('', 'x'), 'empty no match non-empty');
+end;
+
+procedure TestStringsGlob;
+var A, B: TStringArray;
+begin
+  A := TStringArray.Create('main.pas', 'utils.pas', 'readme.md', 'test.lpr');
+  B := StringsGlob(A, '*.pas');
+  CheckEqual(Int64(2), Int64(Length(B)), 'glob count');
+  CheckEqual('main.pas', B[0], 'glob[0]');
+  CheckEqual('utils.pas', B[1], 'glob[1]');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.strings');
   T.Run('Contains', @TestContains);
@@ -229,5 +254,7 @@ begin
   T.Run('StringPairsGet', @TestStringPairsGet);
   T.Run('StringPairsContains', @TestStringPairsContains);
   T.Run('StringPairsKeys', @TestStringPairsKeys);
+  T.Run('GlobMatch', @TestGlobMatch);
+  T.Run('StringsGlob', @TestStringsGlob);
   T.Summary;
 end.
