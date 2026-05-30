@@ -300,6 +300,22 @@ begin
   LDoc.Done;
 end;
 
+procedure TestKeyProperty;
+var
+  LDoc: TTomlDocument;
+  LRoot, LItem: TTomlValue;
+  LKeys: string;
+begin
+  LDoc := ParseDoc('alpha = 1' + #10 + 'beta = 2' + #10 + 'gamma = 3');
+  LRoot := TTomlValue.Create(LDoc, LDoc.Root);
+  LKeys := '';
+  for LItem in TomlEnumerate(LRoot) do
+    LKeys := LKeys + LItem.Key.ToString + ',';
+  CheckEqual('alpha,beta,gamma,', LKeys, 'key property iteration');
+  Check(LRoot.Get('beta').Key.Equals(TStringView.Create(PAnsiChar('beta'), 4)), 'key of get');
+  LDoc.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.value');
   T.Run('invalid value', @TestInvalidValue);
@@ -322,6 +338,7 @@ begin
   T.Run('enumerate array', @TestEnumerateArray);
   T.Run('enumerate table', @TestEnumerateTable);
   T.Run('enumerate empty', @TestEnumerateEmpty);
+  T.Run('key property', @TestKeyProperty);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

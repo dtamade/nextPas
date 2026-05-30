@@ -47,6 +47,7 @@ type
     function TableValueAt(AIndex: UInt32): TTomlValue;
     function ArrayLen: UInt32;
     function ArrayGet(AIndex: UInt32): TTomlValue;
+    function Key: TStringView;
   end;
 
   { Enumerator for for..in over TTomlValue (iterates table children or array elements).
@@ -278,6 +279,13 @@ begin
     Inc(LI);
   end;
   Result.FIdx := LCur;
+end;
+
+function TTomlValue.Key: TStringView;
+begin
+  if FIdx = TOML_NODE_NONE then
+    Exit(TStringView.Empty);
+  Result := FDoc^.Node(FIdx)^.Key;
 end;
 
 { TTomlValueEnumerator }

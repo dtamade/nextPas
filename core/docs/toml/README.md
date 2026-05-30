@@ -16,12 +16,26 @@ Values are accessed via `TTomlValue` — a 12-byte borrowing view (doc pointer +
 ## Quick Start
 
 ```pascal
-uses nextpas.core.toml;
+uses nextpas.core.toml, nextpas.core.toml.value, nextpas.core.toml.base;
 
 // Parse
 var Doc: ITomlDocument;
 Doc := TomlParse('[server]' + #10 + 'host = "localhost"' + #10 + 'port = 8080');
 WriteLn(Doc.Root.Get('server').Get('port').AsInt); // 8080
+
+// Parse with custom allocator
+Doc := TomlParseWith(MyToml, MyArenaAllocator);
+
+// Pretty-print
+WriteLn(Doc.StringifyPretty(2));
+
+// Iterate
+for LItem in TomlEnumerate(Doc.Root.Get('items')) do
+  WriteLn(LItem.AsStr.ToString);
+
+// Access node key during iteration
+for LItem in TomlEnumerate(Doc.Root) do
+  WriteLn(LItem.Key.ToString, ' = ', LItem.AsInt);
 
 // Build
 var B: ITomlBuilder;
@@ -77,16 +91,16 @@ Key optimizations:
 
 ## Testing
 
-171 tests across 9 suites:
+199 tests across 9 suites:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | test_toml_base | 17 | Type layout, datetime constructors, flags encoding |
 | test_toml_parser | 32 | All value types, tables, arrays, error detection |
-| test_toml_value | 17 | All accessor methods, chained access, safe defaults |
-| test_toml_writer | 15 | All serialization methods, escaping, formatting |
-| test_toml_facade | 8 | High-level API, auto-release, round-trip |
-| test_toml_compliance | 40 | TOML v1.0 edge cases, rejection of invalid input |
+| test_toml_value | 20 | All accessor methods, chained access, for..in enumerator |
+| test_toml_writer | 21 | All serialization methods, escaping, pretty-print |
+| test_toml_facade | 12 | High-level API, auto-release, builder all types, allocator |
+| test_toml_compliance | 55 | TOML v1.0 + toml-test official invalid cases |
 | test_toml_robustness | 21 | Deep nesting, long strings, malicious input |
 | test_toml_fuzz | 5 | 1700 random/binary/semi-valid inputs |
 | test_toml_roundtrip | 16 | Parse → Stringify → Parse → deep compare |

@@ -517,6 +517,65 @@ begin
   Check(Pos(#10 + '  ', LDoc.StringifyPretty(2)) > 0, 'pretty has indentation');
 end;
 
+{ toml-test/invalid/float }
+
+procedure TestRejectFloatDoubleE;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1ee2');
+  Check(LDoc.HasError, '1ee2 rejected');
+  LDoc := TomlParse('x = 1e2e3');
+  Check(LDoc.HasError, '1e2e3 rejected');
+end;
+
+procedure TestRejectFloatCapital;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = Inf');
+  Check(LDoc.HasError, 'Inf capital rejected');
+  LDoc := TomlParse('x = NaN');
+  Check(LDoc.HasError, 'NaN capital rejected');
+end;
+
+procedure TestRejectFloatLeadingZero;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 03.14');
+  Check(LDoc.HasError, '03.14 rejected');
+end;
+
+{ toml-test/invalid/table }
+
+procedure TestRejectTableRedefineKey;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[fruit]' + #10 + 'type = "apple"' + #10 + '[fruit.type]' + #10 + 'apple = "yes"');
+  Check(LDoc.HasError, 'redefine scalar as table rejected');
+end;
+
+procedure TestRejectDottedThenArrayTable;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[fruit]' + #10 + 'apple.color = "red"' + #10 + '[[fruit.apple]]');
+  Check(LDoc.HasError, 'dotted key then array-table rejected');
+end;
+
+{ toml-test/invalid/inline-table }
+
+procedure TestRejectInlineDupKey;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('a = {b = 1, b = 2}');
+  Check(LDoc.HasError, 'inline table duplicate key rejected');
+end;
+
+procedure TestRejectInlineOverwrite;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('a = { b = 1 }' + #10 + 'a.b = 2');
+  Check(LDoc.HasError, 'inline table overwrite rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -580,6 +639,16 @@ begin
   T.Run('reject text after string', @TestRejectTextAfterString);
   { StringifyPretty }
   T.Run('stringify pretty', @TestStringifyPretty);
+  { toml-test/invalid/float }
+  T.Run('reject float double-e', @TestRejectFloatDoubleE);
+  T.Run('reject float Inf/NaN capital', @TestRejectFloatCapital);
+  T.Run('reject float leading-zero', @TestRejectFloatLeadingZero);
+  { toml-test/invalid/table }
+  T.Run('reject table redefine key', @TestRejectTableRedefineKey);
+  T.Run('reject dotted key then array-table', @TestRejectDottedThenArrayTable);
+  { toml-test/invalid/inline-table }
+  T.Run('reject inline-table duplicate key', @TestRejectInlineDupKey);
+  T.Run('reject inline-table overwrite', @TestRejectInlineOverwrite);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

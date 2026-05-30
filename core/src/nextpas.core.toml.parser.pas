@@ -918,14 +918,13 @@ begin
   if LHasExp and (LDigitCount = 0) then
     Exit(SetError('no digits after exponent', 24));
 
-  // Leading zero check for integers (0 alone is fine, 01 is not)
-  if (not LHasDot) and (not LHasExp) then
-  begin
-    LI := 0;
-    if LBuf[0] = '-' then LI := 1;
-    if (LI < SizeUInt(LBufLen)) and (LBuf[LI] = '0') and (SizeUInt(LBufLen) - LI > 1) then
-      Exit(SetError('leading zeros not allowed', 25));
-  end;
+  // Leading zero check (0 alone is fine, 01/03.14 are not)
+  LI := 0;
+  if LBuf[0] = '-' then LI := 1
+  else if LBuf[0] = '+' then LI := 1;
+  if (LI < SizeUInt(LBufLen)) and (LBuf[LI] = '0') and (LI + 1 < SizeUInt(LBufLen))
+    and (LBuf[LI + 1] >= '0') and (LBuf[LI + 1] <= '9') then
+    Exit(SetError('leading zeros not allowed', 25));
 
   ANodeIdx := Doc^.AddNode;
   if LHasDot or LHasExp then
@@ -1217,6 +1216,8 @@ begin
     if not ParseValue(LChildIdx) then Exit(False);
     Doc^.FNodes[LChildIdx].Key := LKey;
     Doc^.FNodes[LChildIdx].KeyHash := TomlKeyHash(LKey.Data, LKey.Len);
+    if FindChild(LTableIdx, LKey) <> TOML_NODE_NONE then
+      Exit(SetError('duplicate key in inline table', 29));
     AddChild(LTableIdx, LChildIdx);
     Inc(LCount);
     SkipWhitespaceInline;
