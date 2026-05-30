@@ -13,6 +13,7 @@ function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString;
 implementation
 
 uses
+  nextpas.core.id.rng,
   nextpas.core.platform.time;
 
 const
@@ -33,8 +34,7 @@ begin
     LTs := LTs shr 5;
   end;
 
-  for LI := 0 to 9 do
-    LRandom[LI] := Byte(Random(256));
+  IdRngFillBytes(@LRandom[0], 10);
 
   Result[11] := CROCKFORD_ALPHABET[(LRandom[0] and $F8) shr 3];
   Result[12] := CROCKFORD_ALPHABET[((LRandom[0] and $07) shl 2) or ((LRandom[1] and $C0) shr 6)];
