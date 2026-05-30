@@ -605,6 +605,28 @@ begin
   Check(Length(MA) > 0, 'capture stress');
 end;
 
+procedure TestCompileLimits;
+var R: TRegex; err: string; pat: string; i: Integer;
+begin
+  Check(not TRegex.TryCompile('a{1001}', R, err), 'repeat too large');
+  Check(Pos('limit', err) > 0, 'repeat error msg');
+
+  Check(TRegex.TryCompile('a{1000}', R, err), 'repeat at limit');
+
+  pat := '';
+  for i := 1 to 201 do pat := pat + '(';
+  pat := pat + 'a';
+  for i := 1 to 201 do pat := pat + ')';
+  Check(not TRegex.TryCompile(pat, R, err), 'nesting too deep');
+  Check(Pos('limit', err) > 0, 'nesting error msg');
+
+  pat := '';
+  for i := 1 to 200 do pat := pat + '(';
+  pat := pat + 'a';
+  for i := 1 to 200 do pat := pat + ')';
+  Check(TRegex.TryCompile(pat, R, err), 'nesting at limit');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -645,5 +667,6 @@ begin
   T.Run('FindAt boundary', @TestFindAtBoundary);
   T.Run('Large repeat {100}', @TestLargeRepeat);
   T.Run('Memory stress', @TestMemoryStress);
+  T.Run('Compile limits', @TestCompileLimits);
   T.Summary;
 end.
