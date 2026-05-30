@@ -26,6 +26,7 @@ function UuidV7MonotonicRaw: TUuid;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.id.rng,
   nextpas.core.platform.time;
 
@@ -77,14 +78,23 @@ begin
   Result := Next.ToString;
 end;
 
+var
+  GV7Lock: Int32 = 0;
+
 function UuidV7Monotonic: string;
 begin
+  while AtomicCompareExchange32(GV7Lock, 0, 1) <> 0 do
+    CpuPause;
   Result := GlobalV7Gen.NextString;
+  AtomicStore32(GV7Lock, 0, moRelease);
 end;
 
 function UuidV7MonotonicRaw: TUuid;
 begin
+  while AtomicCompareExchange32(GV7Lock, 0, 1) <> 0 do
+    CpuPause;
   Result := GlobalV7Gen.Next;
+  AtomicStore32(GV7Lock, 0, moRelease);
 end;
 
 initialization

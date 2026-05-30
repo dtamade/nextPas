@@ -44,6 +44,11 @@ var
   LMs: Int64;
 begin
   LMs := Int64(platform_realtime_ns div 1000000) - FEpochMs;
+  if LMs < FLastMs then
+  begin
+    while LMs < FLastMs do
+      LMs := Int64(platform_realtime_ns div 1000000) - FEpochMs;
+  end;
   if LMs = FLastMs then
   begin
     Inc(FSequence);

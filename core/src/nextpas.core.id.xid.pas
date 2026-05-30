@@ -28,6 +28,7 @@ function XidNew: string;
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.id.rng,
   nextpas.core.platform.time;
 
@@ -36,17 +37,7 @@ const
 
 var
   GMachineId: array[0..2] of Byte;
-  GCounter: UInt32 = 0;
-  GMachineIdInit: Boolean = False;
-
-procedure EnsureMachineId;
-begin
-  if not GMachineIdInit then
-  begin
-    IdRngFillBytes(@GMachineId[0], 3);
-    GMachineIdInit := True;
-  end;
-end;
+  GCounter: Int32 = 0;
 
 function GetPid16: UInt16;
 begin
@@ -63,10 +54,9 @@ var
   LPid: UInt16;
   LCnt: UInt32;
 begin
-  EnsureMachineId;
   LTs := UInt32(platform_realtime_ns div 1000000000);
   LPid := GetPid16;
-  LCnt := InterlockedIncrement(GCounter);
+  LCnt := UInt32(AtomicFetchAdd32(GCounter, 1)) and $FFFFFF;
 
   Result.FBytes[0] := Byte(LTs shr 24);
   Result.FBytes[1] := Byte(LTs shr 16);
@@ -84,7 +74,7 @@ end;
 
 class function TXid.TryParse(const AStr: string; out AXid: TXid): Boolean;
 var
-  LI, LJ, LBit: Integer;
+  LI: Integer;
   LVal: Int32;
   LBuf: array[0..19] of Byte;
 begin
@@ -195,7 +185,7 @@ begin
 end;
 
 initialization
-  GCounter := 0;
+  IdRngFillBytes(@GMachineId[0], 3);
   IdRngFillBytes(@GCounter, 3);
 
 end.

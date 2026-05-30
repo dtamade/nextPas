@@ -8,6 +8,7 @@ procedure IdRngFillBytes(ABuf: Pointer; ALen: SizeUInt);
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.platform.random;
 
 const
@@ -16,10 +17,14 @@ const
 var
   GBuf: array[0..BUF_SIZE - 1] of Byte;
   GPos: SizeUInt = BUF_SIZE;
+  GLock: Int32 = 0;
 
 procedure Refill;
+var LRet: Int32;
 begin
-  platform_random_bytes(@GBuf[0], BUF_SIZE);
+  LRet := platform_random_bytes(@GBuf[0], BUF_SIZE);
+  if LRet <> 0 then
+    RunError(217);
   GPos := 0;
 end;
 
@@ -27,6 +32,8 @@ procedure IdRngFillBytes(ABuf: Pointer; ALen: SizeUInt);
 var
   LAvail, LCopy: SizeUInt;
 begin
+  while AtomicCompareExchange32(GLock, 0, 1) <> 0 do
+    CpuPause;
   while ALen > 0 do
   begin
     if GPos >= BUF_SIZE then
@@ -38,6 +45,7 @@ begin
     Inc(PByte(ABuf), LCopy);
     Dec(ALen, LCopy);
   end;
+  AtomicStore32(GLock, 0, moRelease);
 end;
 
 end.
