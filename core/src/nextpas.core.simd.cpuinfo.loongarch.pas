@@ -23,7 +23,7 @@ implementation
 uses
   SysUtils
   {$IFDEF LINUX}
-  , Classes
+  , nextpas.core.text.strings
   {$ENDIF}
   ;
 
@@ -215,7 +215,7 @@ const
   );
 var
   LCPUInfoText: string;
-  LLines: TStringList;
+  LLines: TStringArray;
   LLineIndex: Integer;
   LKey: string;
   LValue: string;
@@ -239,27 +239,22 @@ begin
   if LCPUInfoText = '' then
     Exit;
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := LCPUInfoText;
-    for LLineIndex := 0 to LLines.Count - 1 do
-    begin
-      if not TryParseKeyValueLine(LLines[LLineIndex], LKey, LValue) then
-        Continue;
-      if LValue = '' then
-        Continue;
+  LLines := StringsParseLines(LCPUInfoText);
+  for LLineIndex := 0 to High(LLines) do
+  begin
+    if not TryParseKeyValueLine(LLines[LLineIndex], LKey, LValue) then
+      Continue;
+    if LValue = '' then
+      Continue;
 
-      if KeyMatches(LKey, VENDOR_KEYS) and (aCPUInfo.Vendor = 'LoongArch') then
-        aCPUInfo.Vendor := LValue;
+    if KeyMatches(LKey, VENDOR_KEYS) and (aCPUInfo.Vendor = 'LoongArch') then
+      aCPUInfo.Vendor := LValue;
 
-      if KeyMatches(LKey, MODEL_KEYS) and (aCPUInfo.Model = 'Unknown LoongArch Processor') then
-        aCPUInfo.Model := LValue;
+    if KeyMatches(LKey, MODEL_KEYS) and (aCPUInfo.Model = 'Unknown LoongArch Processor') then
+      aCPUInfo.Model := LValue;
 
-      if (aCPUInfo.Vendor <> 'LoongArch') and (aCPUInfo.Model <> 'Unknown LoongArch Processor') then
-        Break;
-    end;
-  finally
-    LLines.Free;
+    if (aCPUInfo.Vendor <> 'LoongArch') and (aCPUInfo.Model <> 'Unknown LoongArch Processor') then
+      Break;
   end;
   {$ENDIF}
 end;

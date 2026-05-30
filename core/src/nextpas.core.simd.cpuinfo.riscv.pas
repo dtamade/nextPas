@@ -51,7 +51,7 @@ implementation
 {$IFDEF SIMD_RISCV_AVAILABLE}
 
 uses
-  SysUtils, Classes;
+  SysUtils, nextpas.core.text.strings;
 
 {$IFDEF LINUX}
 const
@@ -475,7 +475,7 @@ end;
 
 function ParseRISCVVendorModelFromCpuInfo(const aCpuInfo: string; out aVendor, aModel: string): Boolean;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LLine: string;
   LKey: string;
   LValue: string;
@@ -488,14 +488,12 @@ begin
   LVendorPriority := 0;
   LModelPriority := 0;
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ReplaceChar(aCpuInfo, #13, #10);
-    for LLineIndex := 0 to LLines.Count - 1 do
-    begin
-      LLine := Trim(LLines[LLineIndex]);
-      if not TryParseKeyValueLine(LLine, LKey, LValue) then
-        Continue;
+  LLines := StringsParseLines(aCpuInfo);
+  for LLineIndex := 0 to High(LLines) do
+  begin
+    LLine := Trim(LLines[LLineIndex]);
+    if not TryParseKeyValueLine(LLine, LKey, LValue) then
+      Continue;
 
       LValue := NormalizeFieldValue(LValue);
       if LValue = '' then
@@ -532,9 +530,6 @@ begin
         PromoteIdentityCandidate(aModel, LModelPriority, LValue, 10);
         Continue;
       end;
-    end;
-  finally
-    LLines.Free;
   end;
 
   Result := (aVendor <> '') or (aModel <> '');
@@ -1151,7 +1146,7 @@ end;
 function ExtractBestRISCVISAFromCpuInfo(const aCpuInfo: string; out aISA: string;
   out aFeatures: TRISCVFeatures): Boolean;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LLine: string;
   LKey: string;
   LValue: string;
@@ -1181,14 +1176,12 @@ begin
   LFoundCandidate := False;
   LFoundMISA := False;
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ReplaceChar(aCpuInfo, #13, #10);
-    for LLineIndex := 0 to LLines.Count - 1 do
-    begin
-      LLine := Trim(LLines[LLineIndex]);
-      if not TryParseKeyValueLine(LLine, LKey, LValue) then
-        Continue;
+  LLines := StringsParseLines(aCpuInfo);
+  for LLineIndex := 0 to High(LLines) do
+  begin
+    LLine := Trim(LLines[LLineIndex]);
+    if not TryParseKeyValueLine(LLine, LKey, LValue) then
+      Continue;
 
       if IsMISAKey(LKey) then
       begin
@@ -1234,9 +1227,6 @@ begin
         LBestTextLength := LCandidateTextLength;
         LFoundCandidate := True;
       end;
-    end;
-  finally
-    LLines.Free;
   end;
 
   if LFoundCandidate then
@@ -1454,7 +1444,7 @@ end;
 
 function ParseRISCVFeaturesFromCpuInfo(const cpuInfo: string): TRISCVFeatures;
 var
-  LLines: TStringList;
+  LLines: TStringArray;
   LLine: string;
   LKey: string;
   LValue: string;
@@ -1463,19 +1453,17 @@ var
 begin
   FillChar(Result, SizeOf(TRISCVFeatures), 0);
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ReplaceChar(cpuInfo, #13, #10);
-    for LLineIndex := 0 to LLines.Count - 1 do
-    begin
-      LLine := Trim(LLines[LLineIndex]);
-      if not TryParseKeyValueLine(LLine, LKey, LValue) then
-        Continue;
+  LLines := StringsParseLines(cpuInfo);
+  for LLineIndex := 0 to High(LLines) do
+  begin
+    LLine := Trim(LLines[LLineIndex]);
+    if not TryParseKeyValueLine(LLine, LKey, LValue) then
+      Continue;
 
-      if not IsISAKey(LKey) then
+    if not IsISAKey(LKey) then
+    begin
+      if IsMISAKey(LKey) then
       begin
-        if IsMISAKey(LKey) then
-        begin
           LValue := NormalizeFieldValue(LValue);
           if TryParseRISCVMISAValue(LValue, LMISA) then
             MergeRISCVFeaturesFromMISA(Result, LMISA);
@@ -1487,9 +1475,6 @@ begin
       if IsWeakRISCVISAKey(LKey) and not IsLikelyRISCVISAValue(LValue) then
         Continue;
       ParseISAString(LValue, Result);
-    end;
-  finally
-    LLines.Free;
   end;
 
   // Keep parser deterministic when mixed ISA lines report conflicting RV base.

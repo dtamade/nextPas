@@ -131,7 +131,7 @@ function HasFeatureLazy(f: TGenericFeature): Boolean;
 implementation
 
 uses
-  Classes, SysUtils
+  SysUtils, nextpas.core.text.strings
   {$IFDEF DARWIN}
   , nextpas.core.simd.cpuinfo.darwin
   {$ELSE}
@@ -909,23 +909,19 @@ end;
 
 function TLazyCPUInfo.GetLoadStatistics: string;
 var
-  Stats: TStringList;
+  Stats: TStringArray;
 begin
-  Stats := TStringList.Create;
-  try
-    Stats.Add('=== Lazy Load Statistics ===');
-    Stats.Add('Basic Info: ' + BoolToStr(FBasicInitialized, 'Loaded', 'Not Loaded'));
-    Stats.Add('Cache Info: ' + BoolToStr(FCacheInitialized, 'Loaded', 'Not Loaded'));
-    {$IFDEF SIMD_X86_AVAILABLE}
-    Stats.Add('X86 Basic: ' + BoolToStr(FX86BasicInitialized, 'Loaded', 'Not Loaded'));
-    Stats.Add('X86 AVX: ' + BoolToStr(FAVXInitialized, 'Loaded', 'Not Loaded'));
-    Stats.Add('X86 AVX-512: ' + BoolToStr(FAVX512Initialized, 'Loaded', 'Not Loaded'));
-    Stats.Add('X86 Extended: ' + BoolToStr(FExtendedInitialized, 'Loaded', 'Not Loaded'));
-    {$ENDIF}
-    Result := Stats.Text;
-  finally
-    Stats.Free;
-  end;
+  Stats := nil;
+  StringsAppend(Stats, '=== Lazy Load Statistics ===');
+  StringsAppend(Stats, 'Basic Info: ' + BoolToStr(FBasicInitialized, 'Loaded', 'Not Loaded'));
+  StringsAppend(Stats, 'Cache Info: ' + BoolToStr(FCacheInitialized, 'Loaded', 'Not Loaded'));
+  {$IFDEF SIMD_X86_AVAILABLE}
+  StringsAppend(Stats, 'X86 Basic: ' + BoolToStr(FX86BasicInitialized, 'Loaded', 'Not Loaded'));
+  StringsAppend(Stats, 'X86 AVX: ' + BoolToStr(FAVXInitialized, 'Loaded', 'Not Loaded'));
+  StringsAppend(Stats, 'X86 AVX-512: ' + BoolToStr(FAVX512Initialized, 'Loaded', 'Not Loaded'));
+  StringsAppend(Stats, 'X86 Extended: ' + BoolToStr(FExtendedInitialized, 'Loaded', 'Not Loaded'));
+  {$ENDIF}
+  Result := StringsJoin(Stats, LineEnding);
 end;
 
 // Compatibility entrypoint implementations
