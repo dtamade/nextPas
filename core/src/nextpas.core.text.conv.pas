@@ -4,19 +4,32 @@ unit nextpas.core.text.conv;
 
 interface
 
-function IntToStr(const AValue: Int64): string;
-function UIntToStr(const AValue: UInt64): string;
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+{**
+ * 字符串/数值转换便利函数
+ * 内部当前委托 FPC RTL，未来替换为 nextPas 原生实现
+ *}
 
-function StrToInt(const AStr: string): Int64;
+function IntToStr(const AValue: Int64): string; inline;
+function UIntToStr(const AValue: UInt64): string; inline;
+function FloatToStr(const AValue: Double): string; inline;
+function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
+function BoolToStr(const AValue: Boolean): string; inline;
+
+function StrToInt(const AStr: string): Int64; inline;
+function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
-function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
-
-function FloatToStr(const AValue: Double): string;
+function StrToFloat(const AStr: string): Double; inline;
+function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
 
-function TextOfChar(const ACh: Char; const ACount: Integer): string;
+function Format(const AFmt: string; const AArgs: array of const): string; inline;
+
+function LowerCase(const AStr: string): string; inline;
+function UpperCase(const AStr: string): string; inline;
+function Trim(const AStr: string): string; inline;
+function TrimLeft(const AStr: string): string; inline;
+function TrimRight(const AStr: string): string; inline;
+function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): string;
 
 implementation
 
@@ -24,313 +37,99 @@ uses
   SysUtils;
 
 function IntToStr(const AValue: Int64): string;
-var
-  LBuf: array[0..20] of Char;
-  LIdx: Integer;
-  LNeg: Boolean;
-  LVal: UInt64;
 begin
-  if AValue = 0 then
-    Exit('0');
-  LNeg := AValue < 0;
-  if LNeg then
-  begin
-    if AValue = Low(Int64) then
-      LVal := UInt64(9223372036854775808)
-    else
-      LVal := UInt64(-AValue);
-  end
-  else
-    LVal := UInt64(AValue);
-  LIdx := High(LBuf);
-  while LVal > 0 do
-  begin
-    LBuf[LIdx] := Char(Ord('0') + LVal mod 10);
-    LVal := LVal div 10;
-    Dec(LIdx);
-  end;
-  if LNeg then
-  begin
-    LBuf[LIdx] := '-';
-    Dec(LIdx);
-  end;
-  SetLength(Result, High(LBuf) - LIdx);
-  Move(LBuf[LIdx + 1], Result[1], High(LBuf) - LIdx);
+  Result := SysUtils.IntToStr(AValue);
 end;
 
 function UIntToStr(const AValue: UInt64): string;
-var
-  LBuf: array[0..20] of Char;
-  LIdx: Integer;
-  LVal: UInt64;
 begin
-  if AValue = 0 then
-    Exit('0');
-  LVal := AValue;
-  LIdx := High(LBuf);
-  while LVal > 0 do
-  begin
-    LBuf[LIdx] := Char(Ord('0') + LVal mod 10);
-    LVal := LVal div 10;
-    Dec(LIdx);
-  end;
-  SetLength(Result, High(LBuf) - LIdx);
-  Move(LBuf[LIdx + 1], Result[1], High(LBuf) - LIdx);
+  Result := SysUtils.IntToStr(Int64(AValue));
 end;
 
-function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
-const
-  HEX_CHARS: array[0..15] of Char = '0123456789ABCDEF';
-var
-  LBuf: array[0..15] of Char;
-  LIdx, LLen: Integer;
-  LVal: UInt64;
+function FloatToStr(const AValue: Double): string;
 begin
-  LVal := AValue;
-  LIdx := 15;
-  if LVal = 0 then
-  begin
-    LBuf[LIdx] := '0';
-    Dec(LIdx);
-  end
-  else
-    while LVal > 0 do
-    begin
-      LBuf[LIdx] := HEX_CHARS[LVal and $F];
-      LVal := LVal shr 4;
-      Dec(LIdx);
-    end;
-  LLen := 15 - LIdx;
-  while LLen < ADigits do
-  begin
-    LBuf[LIdx] := '0';
-    Dec(LIdx);
-    Inc(LLen);
-  end;
-  SetLength(Result, LLen);
-  Move(LBuf[LIdx + 1], Result[1], LLen);
+  Result := SysUtils.FloatToStr(AValue);
 end;
 
-function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-var
-  LIdx, LLen: Integer;
-  LNeg: Boolean;
-  LResult: UInt64;
-  LDigit: Integer;
+function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
 begin
-  Result := False;
-  LLen := Length(AStr);
-  LIdx := 1;
-  while (LIdx <= LLen) and (AStr[LIdx] = ' ') do
-    Inc(LIdx);
-  if LIdx > LLen then
-    Exit;
-  LNeg := False;
-  if AStr[LIdx] = '-' then
-  begin
-    LNeg := True;
-    Inc(LIdx);
-  end
-  else if AStr[LIdx] = '+' then
-    Inc(LIdx);
-  if LIdx > LLen then
-    Exit;
-  LResult := 0;
-  while LIdx <= LLen do
-  begin
-    if (AStr[LIdx] < '0') or (AStr[LIdx] > '9') then
-    begin
-      if AStr[LIdx] = ' ' then
-      begin
-        Inc(LIdx);
-        while (LIdx <= LLen) and (AStr[LIdx] = ' ') do
-          Inc(LIdx);
-        if LIdx <= LLen then
-          Exit;
-        Break;
-      end;
-      Exit;
-    end;
-    LDigit := Ord(AStr[LIdx]) - Ord('0');
-    if LResult > (High(UInt64) - UInt64(LDigit)) div 10 then
-      Exit;
-    LResult := LResult * 10 + UInt64(LDigit);
-    Inc(LIdx);
-  end;
-  if LNeg then
-  begin
-    if LResult > UInt64(High(Int64)) + 1 then
-      Exit;
-    AValue := -Int64(LResult);
-  end
-  else
-  begin
-    if LResult > UInt64(High(Int64)) then
-      Exit;
-    AValue := Int64(LResult);
-  end;
-  Result := True;
+  Str(AValue:0:ADecimals, Result);
+end;
+
+function BoolToStr(const AValue: Boolean): string;
+begin
+  if AValue then Result := 'true' else Result := 'false';
 end;
 
 function StrToInt(const AStr: string): Int64;
 begin
-  if not TryStrToInt(AStr, Result) then
-    raise Exception.CreateFmt('StrToInt: invalid integer "%s"', [AStr]);
+  Result := SysUtils.StrToInt64(AStr);
 end;
 
-function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
-var
-  LVal: Int64;
+function StrToIntDef(const AStr: string; const ADefault: Int64): Int64;
 begin
-  Result := TryStrToInt(AStr, LVal);
-  if Result then
-  begin
-    if (LVal < Low(Integer)) or (LVal > High(Integer)) then
-      Exit(False);
-    AValue := Integer(LVal);
-  end;
+  Result := SysUtils.StrToInt64Def(AStr, ADefault);
 end;
 
-function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
-var
-  LIdx, LLen: Integer;
-  LDigit: Integer;
+function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
+var LCode: Integer;
 begin
-  Result := False;
-  LLen := Length(AStr);
-  LIdx := 1;
-  while (LIdx <= LLen) and (AStr[LIdx] = ' ') do
-    Inc(LIdx);
-  if LIdx > LLen then
-    Exit;
-  if AStr[LIdx] = '+' then
-    Inc(LIdx);
-  if (LIdx > LLen) or (AStr[LIdx] < '0') or (AStr[LIdx] > '9') then
-    Exit;
-  AValue := 0;
-  while LIdx <= LLen do
-  begin
-    if (AStr[LIdx] < '0') or (AStr[LIdx] > '9') then
-    begin
-      if AStr[LIdx] = ' ' then
-      begin
-        Inc(LIdx);
-        while (LIdx <= LLen) and (AStr[LIdx] = ' ') do
-          Inc(LIdx);
-        if LIdx <= LLen then
-          Exit;
-        Break;
-      end;
-      Exit;
-    end;
-    LDigit := Ord(AStr[LIdx]) - Ord('0');
-    if AValue > (High(UInt64) - UInt64(LDigit)) div 10 then
-      Exit;
-    AValue := AValue * 10 + UInt64(LDigit);
-    Inc(LIdx);
-  end;
-  Result := True;
+  Val(AStr, AValue, LCode);
+  Result := (LCode = 0);
 end;
 
-function FloatToStr(const AValue: Double): string;
-var
-  LInt: Int64;
-  LFrac: Double;
-  LFracStr: string;
-  LDigit: Integer;
-  LI: Integer;
-  LNeg: Boolean;
+function StrToFloat(const AStr: string): Double;
 begin
-  if AValue = 0.0 then
-    Exit('0');
-  LNeg := AValue < 0;
-  if LNeg then
-    LFrac := -AValue
-  else
-    LFrac := AValue;
-  LInt := Trunc(LFrac);
-  LFrac := LFrac - LInt;
-  Result := nextpas.core.text.conv.IntToStr(LInt);
-  if LNeg then
-    Result := '-' + Result;
-  LFracStr := '.';
-  for LI := 1 to 6 do
-  begin
-    LFrac := LFrac * 10;
-    LDigit := Trunc(LFrac);
-    LFracStr := LFracStr + Char(Ord('0') + LDigit);
-    LFrac := LFrac - LDigit;
-  end;
-  LI := Length(LFracStr);
-  while (LI > 2) and (LFracStr[LI] = '0') do
-    Dec(LI);
-  if LI = 1 then
-    Exit;
-  Result := Result + Copy(LFracStr, 1, LI);
+  Result := SysUtils.StrToFloat(AStr);
+end;
+
+function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
+begin
+  if not SysUtils.TryStrToFloat(AStr, Result) then
+    Result := ADefault;
 end;
 
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
-var
-  LIdx, LLen: Integer;
-  LNeg: Boolean;
-  LIntPart: UInt64;
-  LFracPart: UInt64;
-  LFracDiv: Double;
 begin
-  Result := False;
-  LLen := Length(AStr);
-  LIdx := 1;
-  while (LIdx <= LLen) and (AStr[LIdx] = ' ') do
-    Inc(LIdx);
-  if LIdx > LLen then
-    Exit;
-  LNeg := False;
-  if AStr[LIdx] = '-' then
-  begin
-    LNeg := True;
-    Inc(LIdx);
-  end
-  else if AStr[LIdx] = '+' then
-    Inc(LIdx);
-  if (LIdx > LLen) or (((AStr[LIdx] < '0') or (AStr[LIdx] > '9')) and (AStr[LIdx] <> '.')) then
-    Exit;
-  LIntPart := 0;
-  while (LIdx <= LLen) and (AStr[LIdx] >= '0') and (AStr[LIdx] <= '9') do
-  begin
-    LIntPart := LIntPart * 10 + UInt64(Ord(AStr[LIdx]) - Ord('0'));
-    Inc(LIdx);
-  end;
-  LFracPart := 0;
-  LFracDiv := 1.0;
-  if (LIdx <= LLen) and (AStr[LIdx] = '.') then
-  begin
-    Inc(LIdx);
-    while (LIdx <= LLen) and (AStr[LIdx] >= '0') and (AStr[LIdx] <= '9') do
-    begin
-      LFracPart := LFracPart * 10 + UInt64(Ord(AStr[LIdx]) - Ord('0'));
-      LFracDiv := LFracDiv * 10.0;
-      Inc(LIdx);
-    end;
-  end;
-  while (LIdx <= LLen) and (AStr[LIdx] = ' ') do
-    Inc(LIdx);
-  if LIdx <= LLen then
-    Exit;
-  AValue := Double(LIntPart) + Double(LFracPart) / LFracDiv;
-  if LNeg then
-    AValue := -AValue;
-  Result := True;
+  Result := SysUtils.TryStrToFloat(AStr, AValue);
 end;
 
-function TextOfChar(const ACh: Char; const ACount: Integer): string;
-var
-  LI: Integer;
+function Format(const AFmt: string; const AArgs: array of const): string;
 begin
-  if ACount <= 0 then
-    Exit('');
-  SetLength(Result, ACount);
-  for LI := 1 to ACount do
-    Result[LI] := ACh;
+  Result := SysUtils.Format(AFmt, AArgs);
+end;
+
+function LowerCase(const AStr: string): string;
+begin
+  Result := SysUtils.LowerCase(AStr);
+end;
+
+function UpperCase(const AStr: string): string;
+begin
+  Result := SysUtils.UpperCase(AStr);
+end;
+
+function Trim(const AStr: string): string;
+begin
+  Result := SysUtils.Trim(AStr);
+end;
+
+function TrimLeft(const AStr: string): string;
+begin
+  Result := SysUtils.TrimLeft(AStr);
+end;
+
+function TrimRight(const AStr: string): string;
+begin
+  Result := SysUtils.TrimRight(AStr);
+end;
+
+function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean): string;
+var LFlags: TReplaceFlags;
+begin
+  LFlags := [];
+  if AAll then LFlags := [rfReplaceAll];
+  Result := SysUtils.StringReplace(AStr, AOld, ANew, LFlags);
 end;
 
 end.
