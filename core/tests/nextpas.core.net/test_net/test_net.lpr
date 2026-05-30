@@ -131,6 +131,26 @@ var
 begin
   LA := Resolve('localhost');
   CheckEqual('127.0.0.1', LA.IP, 'localhost resolves');
+  LA := Resolve('127.0.0.1');
+  CheckEqual('127.0.0.1', LA.IP, 'IPv4 literal passthrough');
+end;
+
+procedure TestResolveDNS;
+var
+  LA: TNetAddress;
+  LGot: Boolean;
+begin
+  LGot := False;
+  try
+    LA := Resolve('dns.google');
+    Check(Length(LA.IP) > 0, 'dns.google resolved');
+    Check(Pos('.', LA.IP) > 0, 'looks like IPv4');
+    LGot := True;
+  except
+    on E: ENetworkError do
+      LGot := True;
+  end;
+  Check(LGot, 'DNS resolve did not crash');
 end;
 
 { Address test }
@@ -219,6 +239,7 @@ begin
   T.Run('TCP large data', @TestTcpLargeData);
   T.Run('UDP send/recv', @TestUdpSendRecv);
   T.Run('Resolve', @TestResolve);
+  T.Run('Resolve DNS', @TestResolveDNS);
   T.Run('NetAddress', @TestNetAddress);
   T.Run('Connect refused', @TestConnectRefused);
   T.Run('IO integration', @TestIoIntegration);

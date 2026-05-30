@@ -304,9 +304,10 @@ var
   LSa: sockaddr_in;
   LSaLen: Int32;
   LResult: Int32;
-  LRemote: TNetAddress;
+  LRemote, LResolved: TNetAddress;
 begin
-  LRemote := TNetAddress.Create(AAddr, APort);
+  LResolved := NetResolve(AAddr);
+  LRemote := TNetAddress.Create(LResolved.IP, APort);
   LResult := platform_socket_create(PLATFORM_AF_INET, PLATFORM_SOCK_STREAM, 0, LSock);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp connect: socket create failed (' + IntToStr(LResult) + ')');
