@@ -252,36 +252,42 @@ end;
 
 function EdBasePointMul(const AScalar: array of Byte): TEdPoint;
 const
-  ED25519_BASE_X: TFe25519 = (
-    52811034, 25909283, 16144682, 17082669, 27570973,
-    30858332, 40966398, 8378388, 20764389, 8758491
-  );
-  ED25519_BASE_Y: TFe25519 = (
-    40265304, 26843545, 13421772, 20132659, 26843545,
-    6710886, 53687091, 13421772, 40265318, 26843545
-  );
-  ED25519_BASE_T: TFe25519 = (
-    28827043, 27438313, 39759291, 244362, 8635006,
-    11264893, 19351346, 13413597, 16611511, 27139452
-  );
+{$I nextpas.core.crypto.ed25519.table.inc}
 var
-  Q, T, B: TEdPoint;
-  I: Integer;
+  Q, T: TEdPoint;
+  LTable: TEdPoint;
+  I, W: Integer;
 begin
-  B.X := ED25519_BASE_X;
-  B.Y := ED25519_BASE_Y;
-  B.Z := FE_ONE;
-  B.T := ED25519_BASE_T;
-
+  // 4-bit windowed scalar multiplication with STATIC precomputed table
+  // Table[0..14] = [1*B, 2*B, ..., 15*B] (compile-time constants)
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
 
-  for I := 255 downto 0 do
+  for I := 63 downto 0 do
   begin
-    EdPointDouble(T, Q);
-    Q := T;
-    if ((AScalar[I shr 3] shr (I and 7)) and 1) = 1 then
+    // Double 4 times
+    EdPointDouble(T, Q); Q := T;
+    EdPointDouble(T, Q); Q := T;
+    EdPointDouble(T, Q); Q := T;
+    EdPointDouble(T, Q); Q := T;
+
+    // Extract 4-bit window (little-endian bit order)
+    W := (AScalar[(I * 4) shr 3] shr ((I * 4) and 7)) and $F;
+    if I < 63 then
+      W := W or (((AScalar[(I * 4 + 3) shr 3] shr ((I * 4 + 3) and 7)) and 1) shl 3);
+    // Simpler: extract 4 consecutive bits
+    W := 0;
+    if ((AScalar[(I*4+0) shr 3] shr ((I*4+0) and 7)) and 1) = 1 then W := W or 1;
+    if ((AScalar[(I*4+1) shr 3] shr ((I*4+1) and 7)) and 1) = 1 then W := W or 2;
+    if ((AScalar[(I*4+2) shr 3] shr ((I*4+2) and 7)) and 1) = 1 then W := W or 4;
+    if ((AScalar[(I*4+3) shr 3] shr ((I*4+3) and 7)) and 1) = 1 then W := W or 8;
+
+    if W <> 0 then
     begin
-      EdPointAdd(T, Q, B);
+      LTable.X := ED25519_BASEPOINT_TABLE[W-1].X;
+      LTable.Y := ED25519_BASEPOINT_TABLE[W-1].Y;
+      LTable.Z := ED25519_BASEPOINT_TABLE[W-1].Z;
+      LTable.T := ED25519_BASEPOINT_TABLE[W-1].T;
+      EdPointAdd(T, Q, LTable);
       Q := T;
     end;
   end;
