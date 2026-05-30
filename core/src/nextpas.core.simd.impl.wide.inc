@@ -271,6 +271,47 @@ begin
   end;
 end;
 
+function VecF32x8Load(p: PSingle): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.LoadF32x8) then
+    Result := dispatch^.LoadF32x8(p)
+  else
+    Move(p^, Result, SizeOf(TVecF32x8));
+end;
+
+procedure VecF32x8Store(p: PSingle; const a: TVecF32x8);
+var dispatch: PSimdDispatchTable;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.StoreF32x8) then
+    dispatch^.StoreF32x8(p, a)
+  else
+    Move(a, p^, SizeOf(TVecF32x8));
+end;
+
+function VecF32x8Splat(value: Single): TVecF32x8;
+var dispatch: PSimdDispatchTable;
+    i: Integer;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.SplatF32x8) then
+    Result := dispatch^.SplatF32x8(value)
+  else
+    for i := 0 to 7 do Result.f[i] := value;
+end;
+
+function VecF32x8Zero: TVecF32x8;
+var dispatch: PSimdDispatchTable;
+begin
+  dispatch := GetSimdFacadeDispatchFastPath;
+  if (dispatch <> nil) and Assigned(dispatch^.ZeroF32x8) then
+    Result := dispatch^.ZeroF32x8()
+  else
+    FillChar(Result, SizeOf(Result), 0);
+end;
+
 // === I32x8 Operations Implementation ===
 // I32x8 高级 API 实现
 

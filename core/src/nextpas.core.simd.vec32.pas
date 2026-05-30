@@ -19,6 +19,7 @@ function Vec32CmpRange(AData: PByte; ALo, AHi: Byte): TMask32; inline;
 // === Mask manipulation ===
 
 function Vec32Ctz(AMask: TMask32): Int32; inline;
+function Vec32FirstSet(AMask: TMask32): Int32; inline;
 function Vec32Popcnt(AMask: TMask32): Int32; inline;
 
 // === Byte-lane transform (in-place, 32 bytes) ===

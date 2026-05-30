@@ -304,6 +304,9 @@ procedure VecF32x4StoreAligned(p: PSingle; const a: TVecF32x4); inline;
 {** Broadcast scalar to all lanes. @returns([value, value, value, value]) *}
 function VecF32x4Splat(value: Single): TVecF32x4; inline;
 
+{** Create vector from 4 individual values. @returns([x, y, z, w]) *}
+function VecF32x4Make(x, y, z, w: Single): TVecF32x4; inline;
+
 {** Create zero vector. @returns([0, 0, 0, 0]) *}
 function VecF32x4Zero: TVecF32x4; inline;
 
@@ -612,6 +615,10 @@ function VecF32x8ReduceAdd(const a: TVecF32x8): Single; inline;
 function VecF32x8ReduceMin(const a: TVecF32x8): Single; inline;
 function VecF32x8ReduceMax(const a: TVecF32x8): Single; inline;
 function VecF32x8ReduceMul(const a: TVecF32x8): Single; inline;
+function VecF32x8Load(p: PSingle): TVecF32x8; inline;
+procedure VecF32x8Store(p: PSingle; const a: TVecF32x8); inline;
+function VecF32x8Splat(value: Single): TVecF32x8; inline;
+function VecF32x8Zero: TVecF32x8; inline;
 
 // === I32x8 Operations (256-bit Integer, AVX2) ===
 // 添加缺失的 I32x8 高级 API

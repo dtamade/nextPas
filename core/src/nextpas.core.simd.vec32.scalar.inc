@@ -61,6 +61,11 @@ begin
   Result := -1;
 end;
 
+function Vec32FirstSet(AMask: TMask32): Int32; inline;
+begin
+  Result := Vec32Ctz(AMask);
+end;
+
 function Vec32Popcnt(AMask: TMask32): Int32; inline;
 var
   m: DWord;

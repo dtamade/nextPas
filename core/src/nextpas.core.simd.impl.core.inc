@@ -300,6 +300,14 @@ begin
   Result := dispatch^.SplatF32x4(value);
 end;
 
+function VecF32x4Make(x, y, z, w: Single): TVecF32x4;
+begin
+  Result.f[0] := x;
+  Result.f[1] := y;
+  Result.f[2] := z;
+  Result.f[3] := w;
+end;
+
 function VecF32x4Zero: TVecF32x4;
 var dispatch: PSimdDispatchTable;
 begin
