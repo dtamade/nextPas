@@ -338,10 +338,9 @@ begin
   while Pos < SrcLen do
   begin
     case Src[Pos] of
-      ' ', #9, #13: Advance;
-      #10: Advance;
-      '#':
-        if not SkipComment then Exit;
+      ' ', #9, #13: begin Inc(Pos); Inc(Col); end;
+      #10: begin Inc(Pos); Inc(Line); Col := 1; end;
+      '#': SkipComment;
     else
       Exit;
     end;

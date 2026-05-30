@@ -13,10 +13,10 @@ type
   TTomlWriter = record
   private
     FBuilder: ^TStringBuilder;
-    FInInline: Boolean;
-    FInArray: Boolean;
+    FInlineDepth: Int32;
     FNeedNewline: Boolean;
-    FFirstInline: Boolean;
+    FFirstStack: array[0..31] of Boolean;
+    FIsArrayStack: array[0..31] of Boolean;
     procedure WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
     procedure WriteBareOrQuotedKey(const AKey: PAnsiChar; ALen: SizeUInt);
     procedure PrepareValue;
@@ -66,10 +66,8 @@ end;
 procedure TTomlWriter.Init(var ABuilder: TStringBuilder);
 begin
   FBuilder := @ABuilder;
-  FInInline := False;
-  FInArray := False;
+  FInlineDepth := 0;
   FNeedNewline := False;
-  FFirstInline := False;
 end;
 
 procedure TTomlWriter.WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
@@ -78,6 +76,7 @@ var
   LCh: Byte;
 begin
   FBuilder^.AppendChar('"');
+  if ALen > 0 then
   for LI := 0 to ALen - 1 do
   begin
     LCh := Byte(AValue[LI]);
@@ -116,11 +115,11 @@ end;
 
 procedure TTomlWriter.PrepareValue;
 begin
-  if FInArray then
+  if (FInlineDepth > 0) and FIsArrayStack[FInlineDepth] then
   begin
-    if not FFirstInline then
+    if not FFirstStack[FInlineDepth] then
       FBuilder^.AppendBytes(', ', 2);
-    FFirstInline := False;
+    FFirstStack[FInlineDepth] := False;
   end;
 end;
 
@@ -146,11 +145,11 @@ end;
 
 procedure TTomlWriter.Key(const AKey: string);
 begin
-  if FInInline then
+  if FInlineDepth > 0 then
   begin
-    if not FFirstInline then
+    if not FFirstStack[FInlineDepth] then
       FBuilder^.AppendBytes(', ', 2);
-    FFirstInline := False;
+    FFirstStack[FInlineDepth] := False;
   end;
   WriteBareOrQuotedKey(PAnsiChar(AKey), SizeUInt(Length(AKey)));
   FBuilder^.AppendBytes(' = ', 3);
@@ -158,11 +157,11 @@ end;
 
 procedure TTomlWriter.Key(const AKey: TStringView);
 begin
-  if FInInline then
+  if FInlineDepth > 0 then
   begin
-    if not FFirstInline then
+    if not FFirstStack[FInlineDepth] then
       FBuilder^.AppendBytes(', ', 2);
-    FFirstInline := False;
+    FFirstStack[FInlineDepth] := False;
   end;
   WriteBareOrQuotedKey(AKey.Data, AKey.Len);
   FBuilder^.AppendBytes(' = ', 3);
@@ -172,21 +171,21 @@ procedure TTomlWriter.Str(const AValue: string);
 begin
   PrepareValue;
   WriteEscapedStr(PAnsiChar(AValue), SizeUInt(Length(AValue)));
-  if not FInInline then FBuilder^.AppendChar(#10);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.Str(const AValue: TStringView);
 begin
   PrepareValue;
   WriteEscapedStr(AValue.Data, AValue.Len);
-  if not FInInline then FBuilder^.AppendChar(#10);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.Int(const AValue: Int64);
 begin
   PrepareValue;
   FBuilder^.AppendInt(AValue);
-  if not FInInline then FBuilder^.AppendChar(#10);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.Float(const AValue: Double);
@@ -223,7 +222,7 @@ begin
     if not LHasDotOrE then
       FBuilder^.AppendBytes('.0', 2);
   end;
-  if not FInInline then FBuilder^.AppendChar(#10);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.Bool(const AValue: Boolean);
@@ -233,7 +232,7 @@ begin
     FBuilder^.AppendBytes('true', 4)
   else
     FBuilder^.AppendBytes('false', 5);
-  if not FInInline then FBuilder^.AppendChar(#10);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.DateTime(const AValue: TTomlDateTime);
@@ -293,40 +292,39 @@ begin
       end;
     end;
   end;
-  if not FInInline then FBuilder^.AppendChar(#10);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.BeginInlineTable;
 begin
   PrepareValue;
   FBuilder^.AppendBytes('{ ', 2);
-  FInInline := True;
-  FInArray := False;
-  FFirstInline := True;
+  Inc(FInlineDepth);
+  FIsArrayStack[FInlineDepth] := False;
+  FFirstStack[FInlineDepth] := True;
 end;
 
 procedure TTomlWriter.EndInlineTable;
 begin
   FBuilder^.AppendBytes(' }', 2);
-  FInInline := False;
-  FBuilder^.AppendChar(#10);
+  Dec(FInlineDepth);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.BeginArray;
 begin
   PrepareValue;
   FBuilder^.AppendChar('[');
-  FInInline := True;
-  FInArray := True;
-  FFirstInline := True;
+  Inc(FInlineDepth);
+  FIsArrayStack[FInlineDepth] := True;
+  FFirstStack[FInlineDepth] := True;
 end;
 
 procedure TTomlWriter.EndArray;
 begin
   FBuilder^.AppendChar(']');
-  FInInline := False;
-  FInArray := False;
-  FBuilder^.AppendChar(#10);
+  Dec(FInlineDepth);
+  if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 
 procedure TTomlWriter.Comment(const AText: string);

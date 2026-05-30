@@ -39,6 +39,7 @@ var
   LChild1, LChild2: TTomlValue;
 begin
   CheckEqual(Int64(AV1.TableLen), Int64(AV2.TableLen), APath + ' table len');
+  if AV1.TableLen > 0 then
   for LI := 0 to AV1.TableLen - 1 do
   begin
     LKey := AV1.TableKeyAt(LI);
@@ -81,6 +82,7 @@ begin
     tnkArray:
     begin
       CheckEqual(Int64(AV1.ArrayLen), Int64(AV2.ArrayLen), APath + ' array len');
+      if AV1.ArrayLen > 0 then
       for LI := 0 to AV1.ArrayLen - 1 do
         CompareValues(AV1.ArrayGet(LI), AV2.ArrayGet(LI), APath + '[' + IntToStr(LI) + ']');
     end;
@@ -184,6 +186,60 @@ begin
   VerifyDeepRoundTrip(CONFIG, 'complex config');
 end;
 
+procedure TestSpecialCharsInStrings;
+begin
+  VerifyDeepRoundTrip(
+    'tab = "a\tb"' + #10 +
+    'newline = "line1\nline2"' + #10 +
+    'quote = "she said \"hi\""' + #10 +
+    'backslash = "C:\\path"',
+    'special chars');
+end;
+
+procedure TestEmptyValues;
+begin
+  VerifyDeepRoundTrip(
+    'empty_str = ""' + #10 +
+    'empty_arr = []' + #10 +
+    'empty_tbl = {}',
+    'empty values');
+end;
+
+procedure TestNegativeNumbers;
+begin
+  VerifyDeepRoundTrip(
+    'neg_int = -42' + #10 +
+    'neg_float = -3.14' + #10 +
+    'zero = 0',
+    'negative numbers');
+end;
+
+procedure TestLargeIntegers;
+begin
+  VerifyDeepRoundTrip(
+    'big = 9223372036854775807' + #10 +
+    'small = -9223372036854775808',
+    'large integers');
+end;
+
+procedure TestNestedArrays;
+begin
+  VerifyDeepRoundTrip(
+    'matrix = [[1, 2], [3, 4], [5, 6]]',
+    'nested arrays');
+end;
+
+procedure TestMixedTable;
+begin
+  VerifyDeepRoundTrip(
+    'name = "root"' + #10 +
+    'count = 5' + #10 +
+    '[sub]' + #10 +
+    'x = 1' + #10 +
+    'y = 2',
+    'mixed table');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml roundtrip');
   T.Run('simple key-value', @TestSimpleKV);
@@ -196,6 +252,12 @@ begin
   T.Run('dotted keys', @TestDottedKeys);
   T.Run('array table', @TestArrayTable);
   T.Run('complex config', @TestComplexConfig);
+  T.Run('special chars in strings', @TestSpecialCharsInStrings);
+  T.Run('empty values', @TestEmptyValues);
+  T.Run('negative numbers', @TestNegativeNumbers);
+  T.Run('large integers', @TestLargeIntegers);
+  T.Run('nested arrays', @TestNestedArrays);
+  T.Run('mixed table', @TestMixedTable);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
