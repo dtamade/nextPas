@@ -18,6 +18,7 @@ Thumbs.db
 
 # Tools
 .ace-tool/
+__pycache__/
 GPATH
 GRTAGS
 GTAGS
