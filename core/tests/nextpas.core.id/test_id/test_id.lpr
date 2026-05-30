@@ -9,6 +9,7 @@ uses
   nextpas.core.id.base,
   nextpas.core.id.uuid,
   nextpas.core.id.ulid,
+  nextpas.core.id.rng,
   nextpas.core.id.v7.monotonic,
   nextpas.core.id.snowflake,
   nextpas.core.id.ksuid,
@@ -607,6 +608,102 @@ begin
   CheckEqual(Int64(15), Int64(LU.Version));
 end;
 
+{ === Defect-hunting tests === }
+
+procedure TestUuidUniqueness1000;
+var
+  LArr: array[0..999] of string;
+  LI, LJ: Integer;
+begin
+  for LI := 0 to 999 do
+    LArr[LI] := UuidV4;
+  for LI := 0 to 998 do
+    for LJ := LI + 1 to 999 do
+      if LArr[LI] = LArr[LJ] then
+      begin
+        Check(False, 'collision at ' + IntToStr(LI) + ',' + IntToStr(LJ));
+        Exit;
+      end;
+  Check(True, '1000 UUIDs unique');
+end;
+
+procedure TestKsuidBoundaryAllZero;
+var LK: TKsuid; LS: string;
+begin
+  FillChar(LK.FBytes, 20, 0);
+  LS := LK.ToString;
+  CheckEqual(Int64(27), Int64(Length(LS)));
+  Check(TKsuid.Parse(LS) = LK, 'all-zero roundtrip');
+end;
+
+procedure TestKsuidBoundaryAllFF;
+var LK: TKsuid; LS: string;
+begin
+  FillChar(LK.FBytes, 20, $FF);
+  LS := LK.ToString;
+  CheckEqual(Int64(27), Int64(Length(LS)));
+  Check(TKsuid.Parse(LS) = LK, 'all-FF roundtrip');
+end;
+
+procedure TestUlidMaxTimestamp;
+var LS: string; LMs: UInt64;
+begin
+  LS := UlidFromTimestamp(UInt64($FFFFFFFFFFFF));
+  Check(Length(LS) = ULID_LENGTH, 'max ts produces valid ULID');
+  LMs := UlidTimestampMs(LS);
+  CheckEqual(Int64($FFFFFFFFFFFF), Int64(LMs));
+end;
+
+procedure TestUlidLowercaseRoundTrip;
+var LS, LLower: string; LI: Integer; LMs1, LMs2: UInt64;
+begin
+  LS := Ulid;
+  SetLength(LLower, Length(LS));
+  for LI := 1 to Length(LS) do
+    if (LS[LI] >= 'A') and (LS[LI] <= 'Z') then
+      LLower[LI] := Chr(Ord(LS[LI]) + 32)
+    else
+      LLower[LI] := LS[LI];
+  Check(UlidIsValid(LLower), 'lowercase valid');
+  LMs1 := UlidTimestampMs(LS);
+  LMs2 := UlidTimestampMs(LLower);
+  CheckEqual(Int64(LMs1), Int64(LMs2));
+end;
+
+procedure TestXidHighCharParse;
+var LX: TXid;
+begin
+  Check(not TXid.TryParse(StringOfChar(#128, 20), LX), 'high-byte chars rejected');
+  Check(not TXid.TryParse(StringOfChar(#255, 20), LX), 'FF chars rejected');
+end;
+
+procedure TestSnowflakeExtractRoundTrip;
+var
+  LGen: TSnowflakeGenerator;
+  LId: TSnowflakeId;
+  LTs: Int64;
+  LW, LS: UInt16;
+  LI: Integer;
+begin
+  LGen.Init(999, SNOWFLAKE_EPOCH_DISCORD);
+  for LI := 1 to 100 do
+  begin
+    LId := LGen.Next;
+    TSnowflakeGenerator.Extract(LId, SNOWFLAKE_EPOCH_DISCORD, LTs, LW, LS);
+    if LW <> 999 then begin Check(False, 'worker mismatch at ' + IntToStr(LI)); Exit; end;
+    if LTs <= SNOWFLAKE_EPOCH_DISCORD then begin Check(False, 'ts too low at ' + IntToStr(LI)); Exit; end;
+  end;
+  Check(True, '100 extract roundtrips');
+end;
+
+procedure TestRngReseedSafety;
+begin
+  IdRngReseed;
+  Check(Length(UuidV4) = UUID_LENGTH, 'generation works after reseed');
+  Check(Length(KsuidNew) = KSUID_STRING_LENGTH, 'ksuid works after reseed');
+  Check(Length(XidNew) = XID_STRING_LENGTH, 'xid works after reseed');
+end;
+
 begin
   Randomize;
   T := TTestRunner.Create('nextpas.core.id');
@@ -682,6 +779,15 @@ begin
   T.Run('KSUID roundtrip stress 1k', @TestKsuidRoundTripStress);
   T.Run('UUID parse all-zeros', @TestUuidParseAllZeros);
   T.Run('UUID parse all-F', @TestUuidParseAllF);
+
+  T.Run('UUID uniqueness 1000', @TestUuidUniqueness1000);
+  T.Run('KSUID boundary all-zero', @TestKsuidBoundaryAllZero);
+  T.Run('KSUID boundary all-FF', @TestKsuidBoundaryAllFF);
+  T.Run('ULID max timestamp', @TestUlidMaxTimestamp);
+  T.Run('ULID lowercase roundtrip', @TestUlidLowercaseRoundTrip);
+  T.Run('XID high-char parse', @TestXidHighCharParse);
+  T.Run('Snowflake extract roundtrip', @TestSnowflakeExtractRoundTrip);
+  T.Run('RNG reseed safety', @TestRngReseedSafety);
 
   T.Summary;
 end.
