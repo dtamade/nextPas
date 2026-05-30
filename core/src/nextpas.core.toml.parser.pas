@@ -463,29 +463,54 @@ var
   LBuf: PAnsiChar;
   LBufLen: SizeUInt;
   LErr: TUnescapeError;
+  LFound, LCtrl: PtrInt;
+  LRemaining: SizeUInt;
 begin
   AOwned := False;
   Advance; // skip opening "
   LStart := Pos;
   LHasEscape := False;
-  while (Pos < SrcLen) and (Src[Pos] <> '"') do
+  while Pos < SrcLen do
   begin
-    if Src[Pos] = '\' then
+    LRemaining := SrcLen - Pos;
+    LFound := ScanFindByte2(Src + Pos, LRemaining, Ord('"'), Ord('\'));
+    LCtrl := ScanFindInRange(Src + Pos, LRemaining, 0, 31);
+    if (LCtrl >= 0) and ((LFound < 0) or (LCtrl < LFound)) then
+    begin
+      if Src[Pos + SizeUInt(LCtrl)] = #9 then
+      begin
+        if LFound < 0 then begin Pos := SrcLen; Break; end;
+        Inc(Pos, SizeUInt(LFound));
+        Col := Col + UInt32(LFound);
+      end
+      else
+      begin
+        Inc(Pos, SizeUInt(LCtrl));
+        Col := Col + UInt32(LCtrl);
+        Exit(SetError('control char in string', 22));
+      end;
+    end
+    else if LFound < 0 then
+    begin
+      Pos := SrcLen;
+      Break;
+    end
+    else
+    begin
+      Inc(Pos, SizeUInt(LFound));
+      Col := Col + UInt32(LFound);
+    end;
+    if (Pos < SrcLen) and (Src[Pos] = '"') then
+      Break
+    else if (Pos < SrcLen) and (Src[Pos] = '\') then
     begin
       LHasEscape := True;
       Inc(Pos);
       if Pos < SrcLen then Inc(Pos);
       Col := Col + 2;
-    end
-    else if (Byte(Src[Pos]) < 32) and (Src[Pos] <> #9) then
-      Exit(SetError('control char in string', 22))
-    else
-    begin
-      Inc(Pos);
-      Inc(Col);
     end;
   end;
-  if Pos >= SrcLen then
+  if (Pos >= SrcLen) or (Src[Pos] <> '"') then
     Exit(SetError('unterminated string', 19));
   LEnd := Pos;
   Advance; // skip closing "
