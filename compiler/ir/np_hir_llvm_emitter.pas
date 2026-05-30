@@ -1259,10 +1259,10 @@ end;
 
 procedure THIRLlvmEmitter.EmitImtGlobals;
 var
-  I, J: LongInt;
+  I, J, K: LongInt;
   Imt: THIRImtGlobal;
-  Line, RealFunc, ThunkName: string;
-  OffsetBytes: LongInt;
+  Line, RealFunc, ThunkName, ParamStr, CallArgs: string;
+  OffsetBytes, ParamCount: LongInt;
   UnderscorePos: LongInt;
 begin
   for I := 0 to FModule.ImtGlobalCount - 1 do
@@ -1296,11 +1296,21 @@ begin
             Length(Imt.InterfaceName) + 2, MaxInt)
       else
         RealFunc := ThunkName;
+      ParamCount := 0;
+      if J < Length(Imt.ThunkParamCounts) then
+        ParamCount := Imt.ThunkParamCounts[J];
+      ParamStr := 'ptr %intf_self';
+      CallArgs := 'ptr %obj';
+      for K := 0 to ParamCount - 1 do
+      begin
+        ParamStr := ParamStr + ', i64 %a' + IntToStr(K);
+        CallArgs := CallArgs + ', i64 %a' + IntToStr(K);
+      end;
       Emit('');
-      Emit('define internal i64 @' + ThunkName + '(ptr %intf_self) {');
+      Emit('define internal i64 @' + ThunkName + '(' + ParamStr + ') {');
       Emit('entry:');
       Emit('  %obj = getelementptr i8, ptr %intf_self, i64 -' + IntToStr(OffsetBytes));
-      Emit('  %r = tail call i64 @' + RealFunc + '(ptr %obj)');
+      Emit('  %r = tail call i64 @' + RealFunc + '(' + CallArgs + ')');
       Emit('  ret i64 %r');
       Emit('}');
     end;

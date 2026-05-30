@@ -3163,22 +3163,36 @@ var
   OffsetVal, SlotPtr: THIRValueId;
   IntfMeta: TTypeMetadata;
   ThunkNames: array of string;
+  ParamCounts: array of LongInt;
   I: LongInt;
+  SymId: LongInt;
   IntfName: string;
 begin
   IntfName := ASlot.InterfaceName;
   if not FSemaModel.GetTypeMetaByName(IntfName, IntfMeta) then
     Exit;
   SetLength(ThunkNames, IntfMeta.VmtCount);
+  SetLength(ParamCounts, IntfMeta.VmtCount);
   for I := 0 to IntfMeta.VmtCount - 1 do
   begin
     if I < Length(IntfMeta.VmtSlots) then
+    begin
       ThunkNames[I] := AClassName + '._intf_thunk_' + IntfName + '_' +
-        IntfMeta.VmtSlots[I].MethodName
+        IntfMeta.VmtSlots[I].MethodName;
+      SymId := FSemaModel.FindSymbolByName(
+        IntfName + '.' + IntfMeta.VmtSlots[I].MethodName);
+      if SymId > 0 then
+        ParamCounts[I] := FSemaModel.SymbolAt(SymId - 1).ParamCount
+      else
+        ParamCounts[I] := 0;
+    end
     else
+    begin
       ThunkNames[I] := '';
+      ParamCounts[I] := 0;
+    end;
   end;
-  FModule.AddImtGlobal(AClassName, IntfName, ThunkNames, ASlot.SlotOffset);
+  FModule.AddImtGlobal(AClassName, IntfName, ThunkNames, ParamCounts, ASlot.SlotOffset);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;

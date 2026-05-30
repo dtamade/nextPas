@@ -139,6 +139,7 @@ type
     ClassName: string;
     InterfaceName: string;
     ThunkNames: array of string;
+    ThunkParamCounts: array of LongInt;
     SlotOffset: LongInt;
   end;
 
@@ -197,7 +198,8 @@ type
     function VmtGlobalCount: LongInt;
     function VmtGlobalAt(AIndex: LongInt): THIRVmtGlobal;
     procedure AddImtGlobal(const AClassName, AInterfaceName: string;
-      const AThunkNames: array of string; ASlotOffset: LongInt);
+      const AThunkNames: array of string;
+      const AParamCounts: array of LongInt; ASlotOffset: LongInt);
     function ImtGlobalCount: LongInt;
     function ImtGlobalAt(AIndex: LongInt): THIRImtGlobal;
   end;
@@ -441,7 +443,8 @@ begin
 end;
 
 procedure THIRModule.AddImtGlobal(const AClassName, AInterfaceName: string;
-  const AThunkNames: array of string; ASlotOffset: LongInt);
+  const AThunkNames: array of string;
+  const AParamCounts: array of LongInt; ASlotOffset: LongInt);
 var
   Idx, I: LongInt;
 begin
@@ -451,8 +454,11 @@ begin
   FImtGlobals[Idx].InterfaceName := AInterfaceName;
   FImtGlobals[Idx].SlotOffset := ASlotOffset;
   SetLength(FImtGlobals[Idx].ThunkNames, Length(AThunkNames));
+  SetLength(FImtGlobals[Idx].ThunkParamCounts, Length(AParamCounts));
   for I := 0 to High(AThunkNames) do
     FImtGlobals[Idx].ThunkNames[I] := AThunkNames[I];
+  for I := 0 to High(AParamCounts) do
+    FImtGlobals[Idx].ThunkParamCounts[I] := AParamCounts[I];
 end;
 
 function THIRModule.ImtGlobalCount: LongInt;
