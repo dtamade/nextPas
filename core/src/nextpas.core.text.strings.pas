@@ -69,6 +69,10 @@ function StringsToUpper(const AArr: TStringArray): TStringArray;
 function StringsToLower(const AArr: TStringArray): TStringArray;
 function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 
+{ Pattern matching }
+function GlobMatch(const APattern, AStr: string): Boolean;
+function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
+
 implementation
 
 uses
@@ -350,6 +354,56 @@ begin
   LCount := 0;
   for i := 0 to High(AArr) do
     if AArr[i] <> '' then
+    begin
+      Result[LCount] := AArr[i];
+      Inc(LCount);
+    end;
+  SetLength(Result, LCount);
+end;
+
+{ Pattern matching — glob style: * matches any, ? matches one char }
+
+function GlobMatch(const APattern, AStr: string): Boolean;
+var
+  LP, LS, LStarP, LStarS: SizeInt;
+begin
+  LP := 1; LS := 1;
+  LStarP := 0; LStarS := 0;
+
+  while LS <= Length(AStr) do
+  begin
+    if (LP <= Length(APattern)) and ((APattern[LP] = '?') or (APattern[LP] = AStr[LS])) then
+    begin
+      Inc(LP); Inc(LS);
+    end
+    else if (LP <= Length(APattern)) and (APattern[LP] = '*') then
+    begin
+      LStarP := LP;
+      LStarS := LS;
+      Inc(LP);
+    end
+    else if LStarP > 0 then
+    begin
+      LP := LStarP + 1;
+      Inc(LStarS);
+      LS := LStarS;
+    end
+    else
+      Exit(False);
+  end;
+
+  while (LP <= Length(APattern)) and (APattern[LP] = '*') do
+    Inc(LP);
+  Result := LP > Length(APattern);
+end;
+
+function StringsGlob(const AArr: TStringArray; const APattern: string): TStringArray;
+var i, LCount: SizeInt;
+begin
+  SetLength(Result, Length(AArr));
+  LCount := 0;
+  for i := 0 to High(AArr) do
+    if GlobMatch(APattern, AArr[i]) then
     begin
       Result[LCount] := AArr[i];
       Inc(LCount);
