@@ -304,6 +304,8 @@ type
       const AOwnerUnitId: string; const ATypeId: LongInt);
     procedure VerifyInterfaceImplementation(const AClassTypeId: LongInt;
       const AInterfaceList: string; const AOwnerUnitId: string);
+    procedure RegisterInterfaceSlots(const AClassTypeId: LongInt;
+      const AInterfaceList: string);
     function CheckSingleConstraint(const AArgType: string;
       const AConstraint: string): Boolean;
     procedure RegisterStructuredGenericParent(const ATypeId: LongInt;
@@ -4423,6 +4425,49 @@ begin
   end;
 end;
 
+procedure TSemanticAnalyzer.RegisterInterfaceSlots(const AClassTypeId: LongInt;
+  const AInterfaceList: string);
+var
+  I, J, SlotOffset: LongInt;
+  IntfName, ClsName: string;
+  Meta: TTypeMetadata;
+  IntfNames: array of string;
+  IntfCount: LongInt;
+begin
+  if not FModel.GetTypeMeta(AClassTypeId, Meta) then
+    Exit;
+  ClsName := FModel.TypeAt(AClassTypeId - 1).Name;
+  IntfCount := 0;
+  I := 1;
+  while I <= Length(AInterfaceList) do
+  begin
+    J := I;
+    while (J <= Length(AInterfaceList)) and (AInterfaceList[J] <> ',') do
+      Inc(J);
+    IntfName := Trim(Copy(AInterfaceList, I, J - I));
+    I := J + 1;
+    if SameText(IntfName, 'TObject') or SameText(IntfName, 'TInterfacedObject') then
+      Continue;
+    Inc(IntfCount);
+    SetLength(IntfNames, IntfCount);
+    IntfNames[IntfCount - 1] := IntfName;
+  end;
+  if IntfCount = 0 then
+    Exit;
+  SlotOffset := Length(Meta.Fields) + 1;
+  SetLength(Meta.InterfaceSlots, IntfCount);
+  for I := 0 to IntfCount - 1 do
+  begin
+    Meta.InterfaceSlots[I].InterfaceName := IntfNames[I];
+    Meta.InterfaceSlots[I].SlotOffset := SlotOffset + I;
+    FModel.AddConstValue(ClsName + '$intf_offset_' + IntfNames[I],
+      (SlotOffset + I) * 8);
+  end;
+  Meta.Size := (SlotOffset + IntfCount) * 8;
+  FModel.AddConstValue(ClsName + '$size', Meta.Size);
+  FModel.SetTypeMeta(AClassTypeId, Meta);
+end;
+
 function TSemanticAnalyzer.CheckSingleConstraint(const AArgType: string;
   const AConstraint: string): Boolean;
 var
@@ -5038,7 +5083,10 @@ begin
         begin
           ProcessClassFields(TypeChild, AOwnerUnitId, TypeId);
           if InterfaceList <> '' then
+          begin
             VerifyInterfaceImplementation(TypeId, InterfaceList, AOwnerUnitId);
+            RegisterInterfaceSlots(TypeId, InterfaceList);
+          end;
         end
         else
           ProcessInterfaceMethods(TypeChild, AOwnerUnitId, TypeId);

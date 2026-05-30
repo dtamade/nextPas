@@ -99,6 +99,11 @@ type
     WriteAccessor: string;
   end;
 
+  TInterfaceSlotMeta = record
+    InterfaceName: string;
+    SlotOffset: LongInt;
+  end;
+
   TTypeMetadata = record
     TypeId: LongInt;
     Size: Int64;
@@ -111,6 +116,7 @@ type
     VmtSlots: array of TVmtSlot;
     RetPtrMethods: array of string;
     Properties: array of TPropertyMeta;
+    InterfaceSlots: array of TInterfaceSlotMeta;
     ArrElemSize: Int64;
     ArrElemType: string;
   end;
