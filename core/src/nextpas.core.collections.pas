@@ -794,7 +794,7 @@ end;
 
 generic function MakeHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;
 begin
-  Result := specialize THashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
+  Result := specialize TSwissHashMap<K,V>.Create(aCapacity, nil, nil, aAllocator);
 end;
 
 generic function MakeSwissHashMap<K,V>(aCapacity: SizeUInt = 0; aAllocator: IAllocator = nil): specialize IHashMap<K,V>;

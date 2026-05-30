@@ -99,6 +99,7 @@ type
     function Get(const AKey: K): V;
     procedure Clear;
     procedure Reserve(AMinCapacity: SizeUInt);
+    procedure ShrinkToFit;
     procedure Retain(AFunc: TRetainFunc);
     procedure ForEach(AFunc: TVisitFunc);
     procedure Drain(AFunc: TVisitFunc);
@@ -659,6 +660,60 @@ begin
   begin
     while FCapacity < LTarget do
       GrowAndRehash;
+  end;
+end;
+
+procedure TSwissTable.ShrinkToFit;
+var
+  LOldCtrl: PByte;
+  LOldSlots: PSlot;
+  LOldCap, i: SizeUInt;
+  LNewCap, Lh: UInt32;
+  LIdx: SizeUInt;
+begin
+  if FCount = 0 then begin Clear; Exit; end;
+  LNewCap := FCount + FCount div 7 + 1;
+  LNewCap := LNewCap or (LNewCap shr 1);
+  LNewCap := LNewCap or (LNewCap shr 2);
+  LNewCap := LNewCap or (LNewCap shr 4);
+  LNewCap := LNewCap or (LNewCap shr 8);
+  LNewCap := LNewCap or (LNewCap shr 16);
+  {$IF SizeOf(SizeUInt) = 8}
+  LNewCap := LNewCap or (LNewCap shr 32);
+  {$ENDIF}
+  Inc(LNewCap);
+  if LNewCap < MIN_CAPACITY then LNewCap := MIN_CAPACITY;
+  if LNewCap >= FCapacity then Exit;
+
+  LOldCtrl := FCtrl;
+  LOldSlots := FSlots;
+  LOldCap := FCapacity;
+
+  AllocTable(LNewCap);
+  FCount := 0;
+
+  for i := 0 to LOldCap - 1 do
+  begin
+    if LOldCtrl[i] < $80 then
+    begin
+      Lh := KeyHash(LOldSlots[i].Key);
+      LIdx := FindInsertSlot(Lh);
+      SetCtrl(LIdx, Lh and $7F);
+      Move(LOldSlots[i], FSlots[LIdx], SizeOf(TSlot));
+      Inc(FCount);
+      Dec(FGrowthLeft);
+    end;
+  end;
+
+  if FAllocator <> nil then
+  begin
+    FAllocator.FreeMem(LOldSlots);
+    FAllocator.FreeMem(LOldCtrl);
+  end
+  else
+  begin
+    FreeMem(LOldSlots);
+    FreeMem(LOldCtrl);
   end;
 end;
 

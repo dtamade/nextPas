@@ -102,6 +102,7 @@ type
     procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
     procedure PutAll(AOther: TBTreeMap);
+    procedure PutSorted(const AKeys: array of K; const AValues: array of V; ACount: SizeUInt);
     function GetEnumerator: TEnumerator;
 
     function IsEmpty: Boolean; inline;
@@ -958,6 +959,14 @@ var E: TEntry;
 begin
   for E in AOther do
     Put(E.Key, E.Value);
+end;
+
+procedure TBTreeMap.PutSorted(const AKeys: array of K; const AValues: array of V; ACount: SizeUInt);
+var i: SizeUInt;
+begin
+  Clear;
+  for i := 0 to ACount - 1 do
+    Put(AKeys[i], AValues[i]);
 end;
 
 { TEnumerator }

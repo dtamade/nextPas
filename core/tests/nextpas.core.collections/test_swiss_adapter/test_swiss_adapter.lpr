@@ -171,6 +171,58 @@ begin
   finally M.Free; end;
 end;
 
+function SupplyFortyTwo: Integer;
+begin
+  Result := 42;
+end;
+
+procedure TestGetOrInsertWith;
+var M: TIntMap; v: Integer;
+begin
+  M := TIntMap.Create;
+  try
+    v := M.GetOrInsertWith(1, @SupplyFortyTwo);
+    CheckEqual(Int64(42), Int64(v), 'new from supplier');
+    M.Put(1, 100);
+    v := M.GetOrInsertWith(1, @SupplyFortyTwo);
+    CheckEqual(Int64(100), Int64(v), 'existing not replaced');
+  finally M.Free; end;
+end;
+
+function KeepGt50(const AEntry: TIntMap.TEntry; aData: Pointer): Boolean;
+begin
+  Result := AEntry.Value > 50;
+end;
+
+procedure TestRetain;
+var M: TIntMap; i: Integer;
+begin
+  M := TIntMap.Create;
+  try
+    for i := 0 to 99 do M.Put(i, i);
+    M.Retain(@KeepGt50, nil);
+    CheckEqual(Int64(49), Int64(M.GetCount), 'retain count');
+    Check(not M.ContainsKey(50), 'removed 50');
+    Check(M.ContainsKey(51), 'kept 51');
+  finally M.Free; end;
+end;
+
+procedure TestReserve;
+var M: TIntMap; i, v: Integer; ok: Boolean;
+begin
+  M := TIntMap.Create;
+  try
+    M.Reserve(1000);
+    Check(M.GetCapacity >= 1000, 'reserved capacity');
+    for i := 0 to 999 do M.Put(i, i);
+    CheckEqual(Int64(1000), Int64(M.GetCount), 'count after fill');
+    ok := True;
+    for i := 0 to 999 do
+      if not M.TryGetValue(i, v) or (v <> i) then ok := False;
+    Check(ok, 'all correct');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.swiss_adapter');
   T.Run('Put/Get', @TestPutGet);
@@ -179,7 +231,10 @@ begin
   T.Run('Remove', @TestRemove);
   T.Run('Get (+ exception)', @TestGet);
   T.Run('GetOrInsert', @TestGetOrInsert);
+  T.Run('GetOrInsertWith', @TestGetOrInsertWith);
   T.Run('ModifyOrInsert', @TestModifyOrInsert);
+  T.Run('Retain', @TestRetain);
+  T.Run('Reserve', @TestReserve);
   T.Run('Capacity/LoadFactor', @TestCapacityLoadFactor);
   T.Run('Clear', @TestClear);
   T.Run('String key', @TestStringKey);
