@@ -6552,6 +6552,15 @@ begin
     ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkFunctionCall) or
+    ((ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2)) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode, LeftBlob) then
+    begin
+      ABlob := LeftBlob + 'int 0' + #10 + 'cmp ne' + #10;
+      Exit(True);
+    end;
+  end;
   if ANode.NodeKind <> gnkBinaryExpression then
     Exit(False);
   if ANode.ChildCount < 2 then
