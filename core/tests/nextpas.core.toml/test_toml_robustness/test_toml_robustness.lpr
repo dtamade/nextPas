@@ -214,6 +214,37 @@ begin
   Check(not LDoc.HasError, '50-deep nesting ok');
 end;
 
+procedure TestHashIndex500;
+var
+  LDoc: ITomlDocument;
+  LInput: string;
+  LI: Integer;
+begin
+  LInput := '';
+  for LI := 1 to 500 do
+    LInput := LInput + 'item_' + IntToStr(LI) + ' = ' + IntToStr(LI * 10) + #10;
+  LDoc := TomlParse(LInput);
+  Check(not LDoc.HasError, '500 keys ok');
+  CheckEqual(Int64(500), Int64(LDoc.Root.TableLen), '500 keys count');
+  CheckEqual(Int64(10), LDoc.Root.Get('item_1').AsInt, 'first key');
+  CheckEqual(Int64(2500), LDoc.Root.Get('item_250').AsInt, 'middle key');
+  CheckEqual(Int64(5000), LDoc.Root.Get('item_500').AsInt, 'last key');
+end;
+
+procedure TestHashIndexDupDetect;
+var
+  LDoc: ITomlDocument;
+  LInput: string;
+  LI: Integer;
+begin
+  LInput := '';
+  for LI := 1 to 300 do
+    LInput := LInput + 'k_' + IntToStr(LI) + ' = ' + IntToStr(LI) + #10;
+  LInput := LInput + 'k_150 = 999' + #10;
+  LDoc := TomlParse(LInput);
+  Check(LDoc.HasError, 'duplicate key detected with hash index');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml robustness');
   T.Run('deep nested arrays', @TestDeepNestedArrays);
@@ -237,6 +268,8 @@ begin
   T.Run('min int64', @TestMinInt64);
   T.Run('CRLF line endings', @TestCRLFLineEndings);
   T.Run('moderate nesting (50)', @TestModerateNesting);
+  T.Run('hash index (500 keys)', @TestHashIndex500);
+  T.Run('hash index dup detect', @TestHashIndexDupDetect);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
