@@ -22,10 +22,7 @@ implementation
 
 uses
   nextpas.core.simd.base,
-  nextpas.core.simd.vec16,
-{$IFDEF HAS_AVX2}
-  nextpas.core.simd.vec32,
-{$ENDIF}
+  nextpas.core.simd.vec,
   nextpas.core.text.char,
   nextpas.core.text.utf8;
 
@@ -60,57 +57,25 @@ function JsonEscapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
   const ADst: PAnsiChar): SizeUInt;
 var
   LPos, LOut: SizeUInt;
-  LMaskQuote, LMaskBs, LMaskCtrl, LCombined: TMask16;
+  LCombined: TVecMask;
   LFirst: Int32;
-{$IFDEF HAS_AVX2}
-  LMQ32, LMB32, LMC32, LC32: TMask32;
-  LF32: Int32;
-{$ENDIF}
 begin
   LPos := 0;
   LOut := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMQ32 := Vec32CmpEq(@ASrc[LPos], Ord('"'));
-    LMB32 := Vec32CmpEq(@ASrc[LPos], Ord('\'));
-    LMC32 := Vec32CmpLtU(@ASrc[LPos], $20);
-    LC32 := LMQ32 or LMB32 or LMC32;
-    if LC32 = MASK32_NONE_SET then
+    LCombined := VecCmpEq(@ASrc[LPos], Ord('"')) or
+                 VecCmpEq(@ASrc[LPos], Ord('\')) or
+                 VecCmpLtU(@ASrc[LPos], $20);
+    if LCombined = TVecMask(0) then
     begin
-      Move(ASrc[LPos], ADst[LOut], 32);
-      Inc(LPos, 32);
-      Inc(LOut, 32);
+      Move(ASrc[LPos], ADst[LOut], VecWidth);
+      Inc(LPos, VecWidth);
+      Inc(LOut, VecWidth);
     end
     else
     begin
-      LF32 := Vec32Ctz(LC32);
-      if LF32 > 0 then
-      begin
-        Move(ASrc[LPos], ADst[LOut], LF32);
-        Inc(LPos, SizeUInt(LF32));
-        Inc(LOut, SizeUInt(LF32));
-      end;
-      EmitEscapeSeq(Byte(ASrc[LPos]), ADst, LOut);
-      Inc(LPos);
-    end;
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LMaskQuote := Vec16CmpEq(@ASrc[LPos], Ord('"'));
-    LMaskBs := Vec16CmpEq(@ASrc[LPos], Ord('\'));
-    LMaskCtrl := Vec16CmpLtU(@ASrc[LPos], $20);
-    LCombined := LMaskQuote or LMaskBs or LMaskCtrl;
-    if LCombined = MASK16_NONE_SET then
-    begin
-      Move(ASrc[LPos], ADst[LOut], 16);
-      Inc(LPos, 16);
-      Inc(LOut, 16);
-    end
-    else
-    begin
-      LFirst := Vec16Ctz(LCombined);
+      LFirst := VecCtz(LCombined);
       if LFirst > 0 then
       begin
         Move(ASrc[LPos], ADst[LOut], LFirst);
@@ -139,58 +104,26 @@ procedure JsonEscapeToBuilder(const ASrc: TStringView; var ADst: TStringBuilder)
 var
   LBuf: array[0..5] of AnsiChar;
   LPos: SizeUInt;
-  LMaskQuote, LMaskBs, LMaskCtrl, LCombined: TMask16;
+  LCombined: TVecMask;
   LFirst: Int32;
   LEscLen: SizeUInt;
-{$IFDEF HAS_AVX2}
-  LMQ32, LMB32, LMC32, LC32: TMask32;
-  LF32: Int32;
-{$ENDIF}
 begin
   if ASrc.Len = 0 then Exit;
   ADst.Reserve(ASrc.Len);
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ASrc.Len do
+  while LPos + VecWidth <= ASrc.Len do
   begin
-    LMQ32 := Vec32CmpEq(@ASrc.Data[LPos], Ord('"'));
-    LMB32 := Vec32CmpEq(@ASrc.Data[LPos], Ord('\'));
-    LMC32 := Vec32CmpLtU(@ASrc.Data[LPos], $20);
-    LC32 := LMQ32 or LMB32 or LMC32;
-    if LC32 = MASK32_NONE_SET then
+    LCombined := VecCmpEq(@ASrc.Data[LPos], Ord('"')) or
+                 VecCmpEq(@ASrc.Data[LPos], Ord('\')) or
+                 VecCmpLtU(@ASrc.Data[LPos], $20);
+    if LCombined = TVecMask(0) then
     begin
-      ADst.AppendBytes(@ASrc.Data[LPos], 32);
-      Inc(LPos, 32);
+      ADst.AppendBytes(@ASrc.Data[LPos], VecWidth);
+      Inc(LPos, VecWidth);
     end
     else
     begin
-      LF32 := Vec32Ctz(LC32);
-      if LF32 > 0 then
-      begin
-        ADst.AppendBytes(@ASrc.Data[LPos], SizeUInt(LF32));
-        Inc(LPos, SizeUInt(LF32));
-      end;
-      LEscLen := 0;
-      EmitEscapeSeq(Byte(ASrc.Data[LPos]), @LBuf[0], LEscLen);
-      ADst.AppendBytes(@LBuf[0], LEscLen);
-      Inc(LPos);
-    end;
-  end;
-{$ENDIF}
-  while LPos + 16 <= ASrc.Len do
-  begin
-    LMaskQuote := Vec16CmpEq(@ASrc.Data[LPos], Ord('"'));
-    LMaskBs := Vec16CmpEq(@ASrc.Data[LPos], Ord('\'));
-    LMaskCtrl := Vec16CmpLtU(@ASrc.Data[LPos], $20);
-    LCombined := LMaskQuote or LMaskBs or LMaskCtrl;
-    if LCombined = MASK16_NONE_SET then
-    begin
-      ADst.AppendBytes(@ASrc.Data[LPos], 16);
-      Inc(LPos, 16);
-    end
-    else
-    begin
-      LFirst := Vec16Ctz(LCombined);
+      LFirst := VecCtz(LCombined);
       if LFirst > 0 then
       begin
         ADst.AppendBytes(@ASrc.Data[LPos], SizeUInt(LFirst));
@@ -219,41 +152,19 @@ end;
 function JsonFindStringEnd(const ASrc: PAnsiChar; const ALen: SizeUInt): PtrInt;
 var
   LPos: SizeUInt;
-  LMaskQuote, LMaskBs, LCombined: TMask16;
+  LCombined: TVecMask;
   LFirst: Int32;
-{$IFDEF HAS_AVX2}
-  LMQ32, LMB32, LC32: TMask32;
-  LF32: Int32;
-{$ENDIF}
 begin
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMQ32 := Vec32CmpEq(@ASrc[LPos], Ord('"'));
-    LMB32 := Vec32CmpEq(@ASrc[LPos], Ord('\'));
-    LC32 := LMQ32 or LMB32;
-    if LC32 = MASK32_NONE_SET then
-      Inc(LPos, 32)
+    LCombined := VecCmpEq(@ASrc[LPos], Ord('"')) or
+                 VecCmpEq(@ASrc[LPos], Ord('\'));
+    if LCombined = TVecMask(0) then
+      Inc(LPos, VecWidth)
     else
     begin
-      LF32 := Vec32Ctz(LC32);
-      if ASrc[LPos + SizeUInt(LF32)] = '"' then
-        Exit(PtrInt(LPos) + LF32);
-      Inc(LPos, SizeUInt(LF32) + 2);
-    end;
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LMaskQuote := Vec16CmpEq(@ASrc[LPos], Ord('"'));
-    LMaskBs := Vec16CmpEq(@ASrc[LPos], Ord('\'));
-    LCombined := LMaskQuote or LMaskBs;
-    if LCombined = MASK16_NONE_SET then
-      Inc(LPos, 16)
-    else
-    begin
-      LFirst := Vec16Ctz(LCombined);
+      LFirst := VecCtz(LCombined);
       if ASrc[LPos + SizeUInt(LFirst)] = '"' then
         Exit(PtrInt(LPos) + LFirst);
       Inc(LPos, SizeUInt(LFirst) + 2);
@@ -296,51 +207,24 @@ var
   LHi, LLo: UInt32;
   LCP: UInt32;
   LEncLen: Byte;
-  LMask: TMask16;
+  LMask: TVecMask;
   LFirst: Int32;
-{$IFDEF HAS_AVX2}
-  LMask32: TMask32;
-  LFirst32: Int32;
-{$ENDIF}
 begin
   AError := ueNone;
   LPos := 0;
   LOut := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask32 := Vec32CmpEq(@ASrc[LPos], Ord('\'));
-    if LMask32 = MASK32_NONE_SET then
+    LMask := VecCmpEq(@ASrc[LPos], Ord('\'));
+    if LMask = TVecMask(0) then
     begin
-      Move(ASrc[LPos], ADst[LOut], 32);
-      Inc(LPos, 32);
-      Inc(LOut, 32);
+      Move(ASrc[LPos], ADst[LOut], VecWidth);
+      Inc(LPos, VecWidth);
+      Inc(LOut, VecWidth);
     end
     else
     begin
-      LFirst32 := Vec32Ctz(LMask32);
-      if LFirst32 > 0 then
-      begin
-        Move(ASrc[LPos], ADst[LOut], LFirst32);
-        Inc(LPos, SizeUInt(LFirst32));
-        Inc(LOut, SizeUInt(LFirst32));
-      end;
-      Break;
-    end;
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LMask := Vec16CmpEq(@ASrc[LPos], Ord('\'));
-    if LMask = MASK16_NONE_SET then
-    begin
-      Move(ASrc[LPos], ADst[LOut], 16);
-      Inc(LPos, 16);
-      Inc(LOut, 16);
-    end
-    else
-    begin
-      LFirst := Vec16Ctz(LMask);
+      LFirst := VecCtz(LMask);
       if LFirst > 0 then
       begin
         Move(ASrc[LPos], ADst[LOut], LFirst);

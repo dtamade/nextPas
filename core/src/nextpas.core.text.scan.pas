@@ -29,37 +29,22 @@ implementation
 
 uses
   nextpas.core.simd.base,
-  nextpas.core.simd.vec16,
-{$IFDEF HAS_AVX2}
-  nextpas.core.simd.vec32,
-{$ENDIF}
+  nextpas.core.simd.vec,
   nextpas.core.text.char;
 
 function ScanFindByte(const AData: PAnsiChar; const ALen: SizeUInt;
   const A: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LMask16: TMask16;
-{$IFDEF HAS_AVX2}
-  LMask32: TMask32;
-{$ENDIF}
+  LMask: TVecMask;
 begin
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask32 := Vec32CmpEq(@AData[LPos], A);
-    if LMask32 <> MASK32_NONE_SET then
-      Exit(PtrInt(LPos) + Vec32Ctz(LMask32));
-    Inc(LPos, 32);
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LMask16 := Vec16CmpEq(@AData[LPos], A);
-    if LMask16 <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LMask16));
-    Inc(LPos, 16);
+    LMask := VecCmpEq(@AData[LPos], A);
+    if LMask <> TVecMask(0) then
+      Exit(PtrInt(LPos) + VecCtz(LMask));
+    Inc(LPos, VecWidth);
   end;
   while LPos < ALen do
   begin
@@ -74,27 +59,15 @@ function ScanFindByte2(const AData: PAnsiChar; const ALen: SizeUInt;
   const A, B: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LCombined16: TMask16;
-{$IFDEF HAS_AVX2}
-  LCombined32: TMask32;
-{$ENDIF}
+  LCombined: TVecMask;
 begin
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LCombined32 := Vec32CmpEq(@AData[LPos], A) or Vec32CmpEq(@AData[LPos], B);
-    if LCombined32 <> MASK32_NONE_SET then
-      Exit(PtrInt(LPos) + Vec32Ctz(LCombined32));
-    Inc(LPos, 32);
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LCombined16 := Vec16CmpEq(@AData[LPos], A) or Vec16CmpEq(@AData[LPos], B);
-    if LCombined16 <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LCombined16));
-    Inc(LPos, 16);
+    LCombined := VecCmpEq(@AData[LPos], A) or VecCmpEq(@AData[LPos], B);
+    if LCombined <> TVecMask(0) then
+      Exit(PtrInt(LPos) + VecCtz(LCombined));
+    Inc(LPos, VecWidth);
   end;
   while LPos < ALen do
   begin
@@ -109,31 +82,17 @@ function ScanFindByte3(const AData: PAnsiChar; const ALen: SizeUInt;
   const A, B, C: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LCombined16: TMask16;
-{$IFDEF HAS_AVX2}
-  LCombined32: TMask32;
-{$ENDIF}
+  LCombined: TVecMask;
 begin
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LCombined32 := Vec32CmpEq(@AData[LPos], A) or
-                   Vec32CmpEq(@AData[LPos], B) or
-                   Vec32CmpEq(@AData[LPos], C);
-    if LCombined32 <> MASK32_NONE_SET then
-      Exit(PtrInt(LPos) + Vec32Ctz(LCombined32));
-    Inc(LPos, 32);
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LCombined16 := Vec16CmpEq(@AData[LPos], A) or
-                   Vec16CmpEq(@AData[LPos], B) or
-                   Vec16CmpEq(@AData[LPos], C);
-    if LCombined16 <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LCombined16));
-    Inc(LPos, 16);
+    LCombined := VecCmpEq(@AData[LPos], A) or
+                 VecCmpEq(@AData[LPos], B) or
+                 VecCmpEq(@AData[LPos], C);
+    if LCombined <> TVecMask(0) then
+      Exit(PtrInt(LPos) + VecCtz(LCombined));
+    Inc(LPos, VecWidth);
   end;
   while LPos < ALen do
   begin
@@ -149,15 +108,15 @@ function ScanFindInRange(const AData: PAnsiChar; const ALen: SizeUInt;
   const ALo, AHi: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LMask: TMask16;
+  LMask: TVecMask;
 begin
   LPos := 0;
-  while LPos + 16 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask := Vec16CmpRange(@AData[LPos], ALo, AHi);
-    if LMask <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LMask));
-    Inc(LPos, 16);
+    LMask := VecCmpRange(@AData[LPos], ALo, AHi);
+    if LMask <> TVecMask(0) then
+      Exit(PtrInt(LPos) + VecCtz(LMask));
+    Inc(LPos, VecWidth);
   end;
   while LPos < ALen do
   begin
@@ -172,16 +131,16 @@ function ScanFindNotInRange(const AData: PAnsiChar; const ALen: SizeUInt;
   const ALo, AHi: Byte): PtrInt;
 var
   LPos: SizeUInt;
-  LMask: TMask16;
+  LMask: TVecMask;
 begin
   LPos := 0;
-  while LPos + 16 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask := not Vec16CmpRange(@AData[LPos], ALo, AHi);
-    LMask := LMask and MASK16_ALL_SET;
-    if LMask <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LMask));
-    Inc(LPos, 16);
+    LMask := not VecCmpRange(@AData[LPos], ALo, AHi);
+    LMask := LMask and TVecMask(not TVecMask(0));
+    if LMask <> TVecMask(0) then
+      Exit(PtrInt(LPos) + VecCtz(LMask));
+    Inc(LPos, VecWidth);
   end;
   while LPos < ALen do
   begin
@@ -195,29 +154,16 @@ end;
 function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LWsMask16: TMask16;
-{$IFDEF HAS_AVX2}
-  LWsMask32: TMask32;
-{$ENDIF}
+  LWsMask: TVecMask;
 begin
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LWsMask32 := Vec32CmpGtU(@AData[LPos], $20);
-    if LWsMask32 = MASK32_NONE_SET then
-      Inc(LPos, 32)
+    LWsMask := VecCmpGtU(@AData[LPos], $20);
+    if LWsMask = TVecMask(0) then
+      Inc(LPos, VecWidth)
     else
-      Exit(LPos + SizeUInt(Vec32Ctz(LWsMask32)));
-  end;
-{$ENDIF}
-  while LPos + 16 <= ALen do
-  begin
-    LWsMask16 := Vec16CmpGtU(@AData[LPos], $20);
-    if LWsMask16 = MASK16_NONE_SET then
-      Inc(LPos, 16)
-    else
-      Exit(LPos + SizeUInt(Vec16Ctz(LWsMask16)));
+      Exit(LPos + SizeUInt(VecCtz(LWsMask)));
   end;
   while LPos < ALen do
   begin
@@ -231,43 +177,43 @@ end;
 function ScanJsonNumber(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LMask: TMask16;
+  LMask: TVecMask;
   LCh: Byte;
 begin
   LPos := 0;
   if (LPos < ALen) and (AData[LPos] = '-') then
     Inc(LPos);
-  while LPos + 16 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask := Vec16CmpRange(@AData[LPos], Ord('0'), Ord('9'));
-    if LMask = MASK16_ALL_SET then
-      Inc(LPos, 16)
+    LMask := VecCmpRange(@AData[LPos], Ord('0'), Ord('9'));
+    if LMask = TVecMask(not TVecMask(0)) then
+      Inc(LPos, VecWidth)
     else
     begin
       LMask := not LMask;
-      LMask := LMask and MASK16_ALL_SET;
-      Inc(LPos, SizeUInt(Vec16Ctz(LMask)));
+      LMask := LMask and TVecMask(not TVecMask(0));
+      Inc(LPos, SizeUInt(VecCtz(LMask)));
       Break;
     end;
   end;
-  if LPos + 16 > ALen then
+  if LPos + VecWidth > ALen then
     while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
       Inc(LPos);
   if (LPos < ALen) and (AData[LPos] = '.') then
   begin
     Inc(LPos);
-    while LPos + 16 <= ALen do
+    while LPos + VecWidth <= ALen do
     begin
-      LMask := Vec16CmpRange(@AData[LPos], Ord('0'), Ord('9'));
-      if LMask = MASK16_ALL_SET then
-        Inc(LPos, 16)
+      LMask := VecCmpRange(@AData[LPos], Ord('0'), Ord('9'));
+      if LMask = TVecMask(not TVecMask(0)) then
+        Inc(LPos, VecWidth)
       else
       begin
-        Inc(LPos, SizeUInt(Vec16Ctz(not LMask and MASK16_ALL_SET)));
+        Inc(LPos, SizeUInt(VecCtz(not LMask and TVecMask(not TVecMask(0)))));
         Break;
       end;
     end;
-    if LPos + 16 > ALen then
+    if LPos + VecWidth > ALen then
       while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
         Inc(LPos);
   end;
@@ -283,18 +229,18 @@ begin
         if (LCh = Ord('+')) or (LCh = Ord('-')) then
           Inc(LPos);
       end;
-      while LPos + 16 <= ALen do
+      while LPos + VecWidth <= ALen do
       begin
-        LMask := Vec16CmpRange(@AData[LPos], Ord('0'), Ord('9'));
-        if LMask = MASK16_ALL_SET then
-          Inc(LPos, 16)
+        LMask := VecCmpRange(@AData[LPos], Ord('0'), Ord('9'));
+        if LMask = TVecMask(not TVecMask(0)) then
+          Inc(LPos, VecWidth)
         else
         begin
-          Inc(LPos, SizeUInt(Vec16Ctz(not LMask and MASK16_ALL_SET)));
+          Inc(LPos, SizeUInt(VecCtz(not LMask and TVecMask(not TVecMask(0)))));
           Break;
         end;
       end;
-      if LPos + 16 > ALen then
+      if LPos + VecWidth > ALen then
         while (LPos < ALen) and IsDigit(Byte(AData[LPos])) do
           Inc(LPos);
     end;

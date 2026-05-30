@@ -1,11 +1,11 @@
 unit nextpas.core.json.scanner;
 { SIMD structural character scanner for JSON parsing.
-  Identifies positions of { } [ ] : , " using vec16/vec32 SIMD comparison.
+  Identifies positions of { } [ ] : , " using unified vec SIMD comparison.
   Correctly handles escaped quotes via full odd-backslash algorithm.
   Ring buffer (256 entries) filled lazily on demand.
 
-  Algorithm per 16/32-byte chunk:
-  1. CmpEq for each structural char → OR into structural mask
+  Algorithm per VecWidth-byte chunk:
+  1. CmpEq for each structural char -> OR into structural mask
   2. Odd-backslash: find escaped positions via even/odd carry propagation
   3. PrefixXor for in-string tracking
   4. Filter structural chars outside strings + real quotes
@@ -40,32 +40,19 @@ implementation
 
 uses
   nextpas.core.simd.base,
-  nextpas.core.simd.vec16
-{$IFDEF HAS_AVX2}
-  , nextpas.core.simd.vec32
-{$ENDIF}
-  ;
+  nextpas.core.simd.vec;
 
-function PrefixXor16(M: TMask16): TMask16; inline;
+function PrefixXorMask(M: TVecMask): TVecMask; inline;
 begin
   M := M xor (M shl 1);
   M := M xor (M shl 2);
   M := M xor (M shl 4);
   M := M xor (M shl 8);
-  Result := M;
-end;
-
-{$IFDEF HAS_AVX2}
-function PrefixXor32(M: TMask32): TMask32; inline;
-begin
-  M := M xor (M shl 1);
-  M := M xor (M shl 2);
-  M := M xor (M shl 4);
-  M := M xor (M shl 8);
+  {$IF VecWidth = 32}
   M := M xor (M shl 16);
+  {$ENDIF}
   Result := M;
 end;
-{$ENDIF}
 
 procedure TJsonStructScanner.Init(const AData: PAnsiChar; const ALen: SizeUInt);
 begin
@@ -78,23 +65,23 @@ begin
   FPrevEscaped := False;
 end;
 
-function OddBackslashEscaped16(ABs: TMask16; APrevEscaped: Boolean): TMask16; inline;
+function OddBackslashEscaped(ABs: TVecMask; APrevEscaped: Boolean): TVecMask; inline;
 const
-  EVEN_BITS: TMask16 = TMask16($5555);
-  ODD_BITS: TMask16 = TMask16($AAAA);
+  EVEN_BITS: TVecMask = TVecMask({$IF VecWidth = 32}$55555555{$ELSE}$5555{$ENDIF});
+  ODD_BITS: TVecMask = TVecMask({$IF VecWidth = 32}$AAAAAAAA{$ELSE}$AAAA{$ENDIF});
 var
-  LStarts, LEvenStarts, LOddStarts: TMask16;
-  LEvenCarries, LOddCarries: TMask16;
-  LEvenEsc, LOddEsc, LEscaped: TMask16;
+  LStarts, LEvenStarts, LOddStarts: TVecMask;
+  LEvenCarries, LOddCarries: TVecMask;
+  LEvenEsc, LOddEsc, LEscaped: TVecMask;
 begin
-  if (ABs = MASK16_NONE_SET) and (not APrevEscaped) then
-    Exit(MASK16_NONE_SET);
-  if (ABs = MASK16_NONE_SET) and APrevEscaped then
-    Exit(TMask16(1));
+  if (ABs = TVecMask(0)) and (not APrevEscaped) then
+    Exit(TVecMask(0));
+  if (ABs = TVecMask(0)) and APrevEscaped then
+    Exit(TVecMask(1));
 
   LStarts := ABs and (not (ABs shl 1));
   if APrevEscaped then
-    LStarts := LStarts and not TMask16(1);
+    LStarts := LStarts and not TVecMask(1);
 
   LEvenStarts := LStarts and EVEN_BITS;
   LOddStarts := LStarts and ODD_BITS;
@@ -107,109 +94,41 @@ begin
 
   LEscaped := LEvenEsc or LOddEsc;
   if APrevEscaped then
-    LEscaped := LEscaped or TMask16(1);
+    LEscaped := LEscaped or TVecMask(1);
   Result := LEscaped;
 end;
-
-{$IFDEF HAS_AVX2}
-function OddBackslashEscaped32(ABs: TMask32; APrevEscaped: Boolean): TMask32; inline;
-const
-  EVEN_BITS: TMask32 = TMask32($55555555);
-  ODD_BITS: TMask32 = TMask32($AAAAAAAA);
-var
-  LStarts, LEvenStarts, LOddStarts: TMask32;
-  LEvenCarries, LOddCarries: TMask32;
-  LEvenEsc, LOddEsc, LEscaped: TMask32;
-begin
-  if (ABs = MASK32_NONE_SET) and (not APrevEscaped) then
-    Exit(MASK32_NONE_SET);
-  if (ABs = MASK32_NONE_SET) and APrevEscaped then
-    Exit(TMask32(1));
-
-  LStarts := ABs and (not (ABs shl 1));
-  if APrevEscaped then
-    LStarts := LStarts and not TMask32(1);
-
-  LEvenStarts := LStarts and EVEN_BITS;
-  LOddStarts := LStarts and ODD_BITS;
-
-  LEvenCarries := (ABs + LEvenStarts) xor ABs;
-  LOddCarries := (ABs + LOddStarts) xor ABs;
-
-  LEvenEsc := LEvenCarries and ODD_BITS and (not ABs);
-  LOddEsc := LOddCarries and EVEN_BITS and (not ABs);
-
-  LEscaped := LEvenEsc or LOddEsc;
-  if APrevEscaped then
-    LEscaped := LEscaped or TMask32(1);
-  Result := LEscaped;
-end;
-{$ENDIF}
 
 procedure TJsonStructScanner.FillBuffer;
 var
-  LQuote, LBs, LEscaped, LRealQuotes, LInStr, LStruct, LResult: TMask16;
+  LQuote, LBs, LEscaped, LRealQuotes, LInStr, LStruct, LResult: TVecMask;
   LBit: Int32;
-  LCarry: TMask16;
-{$IFDEF HAS_AVX2}
-  LQ32, LB32, LE32, LRQ32, LIS32, LS32, LR32: TMask32;
-  LCarry32: TMask32;
-  LBit32: Int32;
-{$ENDIF}
+  LCarry: TVecMask;
 begin
-{$IFDEF HAS_AVX2}
-  while (Byte(FTail - FHead) < 128) and (FScanPos + 32 <= FLen) do
+  while (Byte(FTail - FHead) < 128) and (FScanPos + VecWidth <= FLen) do
   begin
-    LQ32 := Vec32CmpEq(@FInput[FScanPos], Ord('"'));
-    LB32 := Vec32CmpEq(@FInput[FScanPos], Ord('\'));
-    LE32 := OddBackslashEscaped32(LB32, FPrevEscaped);
-    FPrevEscaped := (LE32 shr 31) <> 0;
-    LRQ32 := LQ32 and (not LE32);
-    if FInString then LCarry32 := MASK32_ALL_SET else LCarry32 := MASK32_NONE_SET;
-    LIS32 := PrefixXor32(LRQ32) xor LCarry32;
-    FInString := (LIS32 shr 31) <> 0;
-    LS32 := Vec32CmpEq(@FInput[FScanPos], Ord('{')) or
-            Vec32CmpEq(@FInput[FScanPos], Ord('}')) or
-            Vec32CmpEq(@FInput[FScanPos], Ord('[')) or
-            Vec32CmpEq(@FInput[FScanPos], Ord(']')) or
-            Vec32CmpEq(@FInput[FScanPos], Ord(':')) or
-            Vec32CmpEq(@FInput[FScanPos], Ord(','));
-    LR32 := (LS32 and (not LIS32)) or (LQ32 and (not LE32));
-    while LR32 <> MASK32_NONE_SET do
-    begin
-      LBit32 := Vec32Ctz(LR32);
-      FBuf[FTail] := UInt32(FScanPos) + UInt32(LBit32);
-      Inc(FTail);
-      LR32 := LR32 and (LR32 - 1);
-    end;
-    Inc(FScanPos, 32);
-  end;
-{$ENDIF}
-  while (Byte(FTail - FHead) < 128) and (FScanPos + 16 <= FLen) do
-  begin
-    LQuote := Vec16CmpEq(@FInput[FScanPos], Ord('"'));
-    LBs := Vec16CmpEq(@FInput[FScanPos], Ord('\'));
-    LEscaped := OddBackslashEscaped16(LBs, FPrevEscaped);
-    FPrevEscaped := (LEscaped shr 15) <> 0;
+    LQuote := VecCmpEq(@FInput[FScanPos], Ord('"'));
+    LBs := VecCmpEq(@FInput[FScanPos], Ord('\'));
+    LEscaped := OddBackslashEscaped(LBs, FPrevEscaped);
+    FPrevEscaped := (LEscaped shr (VecWidth - 1)) <> 0;
     LRealQuotes := LQuote and (not LEscaped);
-    if FInString then LCarry := MASK16_ALL_SET else LCarry := MASK16_NONE_SET;
-    LInStr := PrefixXor16(LRealQuotes) xor LCarry;
-    FInString := (LInStr shr 15) <> 0;
-    LStruct := Vec16CmpEq(@FInput[FScanPos], Ord('{')) or
-               Vec16CmpEq(@FInput[FScanPos], Ord('}')) or
-               Vec16CmpEq(@FInput[FScanPos], Ord('[')) or
-               Vec16CmpEq(@FInput[FScanPos], Ord(']')) or
-               Vec16CmpEq(@FInput[FScanPos], Ord(':')) or
-               Vec16CmpEq(@FInput[FScanPos], Ord(','));
+    if FInString then LCarry := TVecMask(not TVecMask(0)) else LCarry := TVecMask(0);
+    LInStr := PrefixXorMask(LRealQuotes) xor LCarry;
+    FInString := (LInStr shr (VecWidth - 1)) <> 0;
+    LStruct := VecCmpEq(@FInput[FScanPos], Ord('{')) or
+               VecCmpEq(@FInput[FScanPos], Ord('}')) or
+               VecCmpEq(@FInput[FScanPos], Ord('[')) or
+               VecCmpEq(@FInput[FScanPos], Ord(']')) or
+               VecCmpEq(@FInput[FScanPos], Ord(':')) or
+               VecCmpEq(@FInput[FScanPos], Ord(','));
     LResult := (LStruct and (not LInStr)) or (LQuote and (not LEscaped));
-    while LResult <> MASK16_NONE_SET do
+    while LResult <> TVecMask(0) do
     begin
-      LBit := Vec16Ctz(LResult);
+      LBit := VecCtz(LResult);
       FBuf[FTail] := UInt32(FScanPos) + UInt32(LBit);
       Inc(FTail);
       LResult := LResult and (LResult - 1);
     end;
-    Inc(FScanPos, 16);
+    Inc(FScanPos, VecWidth);
   end;
   while (Byte(FTail - FHead) < 128) and (FScanPos < FLen) do
   begin

@@ -43,7 +43,7 @@ implementation
 
 uses
   nextpas.core.simd.base,
-  nextpas.core.simd.vec16,
+  nextpas.core.simd.vec,
   nextpas.core.text.scan,
   nextpas.core.text.escape,
   nextpas.core.text.number,
@@ -239,14 +239,14 @@ begin
   LRaw := TStringView.Create(Input + LStartPos + 1, LEndPos - LStartPos - 1);
   LHasEscape := False;
   I := 0;
-  while I + 16 <= LRaw.Len do
+  while I + VecWidth <= LRaw.Len do
   begin
-    if Vec16CmpEq(@LRaw.Data[I], Ord('\')) <> MASK16_NONE_SET then
+    if VecCmpEq(@LRaw.Data[I], Ord('\')) <> TVecMask(0) then
     begin
       LHasEscape := True;
       Break;
     end;
-    Inc(I, 16);
+    Inc(I, VecWidth);
   end;
   if not LHasEscape then
     while I < LRaw.Len do
