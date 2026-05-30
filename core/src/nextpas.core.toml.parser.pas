@@ -1,4 +1,13 @@
 unit nextpas.core.toml.parser;
+{ Low-level TOML v1.0 parser. Builds a flat node array from input text.
+  TTomlDocument is a record with Init/Done lifecycle — caller manages memory.
+  Uses IAllocator for all heap operations (arena-friendly).
+
+  Features: bare/quoted/dotted keys, all string types, all number bases,
+  datetime, arrays, inline tables, standard tables, array tables.
+  SIMD-accelerated string scanning and comment skipping.
+  Strict TOML v1.0 validation: number lexing, datetime ranges, escape sequences,
+  inline table sealing, duplicate table detection, nesting depth limit (128). }
 
 {$I nextpas.core.settings.inc}
 

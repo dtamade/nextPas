@@ -1,4 +1,7 @@
 unit nextpas.core.toml.base;
+{ Base types for the TOML v1.0 parser/serializer.
+  Defines node kinds, datetime record, node layout, and error structure.
+  All types are value-semantic records — no heap allocation, no lifetime management. }
 
 {$I nextpas.core.settings.inc}
 
@@ -8,6 +11,7 @@ uses
   nextpas.core.text.view;
 
 type
+  { TOML value type discriminator. }
   TTomlNodeKind = (
     tnkString,
     tnkInt,

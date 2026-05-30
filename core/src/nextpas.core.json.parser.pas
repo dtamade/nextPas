@@ -58,10 +58,10 @@ procedure TJsonDocument.Init(const AAllocator: IAllocator);
 begin
   FAllocator := AAllocator;
   FNodeCap := INITIAL_NODE_CAP;
-  GetMem(FNodes, FNodeCap * SizeOf(TJsonNode));
+  FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TJsonNode));
   FNodeCount := 0;
   FStrBufCap := 16;
-  GetMem(FStrBufs, FStrBufCap * SizeOf(PAnsiChar));
+  FStrBufs := FAllocator.Allocate(FStrBufCap * SizeOf(PAnsiChar));
   FStrBufCount := 0;
   FHasError := False;
 end;
@@ -73,16 +73,16 @@ begin
   if (FStrBufs <> nil) and (FStrBufCount > 0) then
   begin
     for I := 0 to FStrBufCount - 1 do
-      FreeMem(PPointer(PByte(FStrBufs) + I * SizeOf(Pointer))^);
+      FAllocator.Deallocate(PPointer(PByte(FStrBufs) + I * SizeOf(Pointer))^);
   end;
   if FStrBufs <> nil then
   begin
-    FreeMem(FStrBufs);
+    FAllocator.Deallocate(FStrBufs);
     FStrBufs := nil;
   end;
   if FNodes <> nil then
   begin
-    FreeMem(FNodes);
+    FAllocator.Deallocate(FNodes);
     FNodes := nil;
   end;
   FNodeCount := 0;
@@ -97,7 +97,7 @@ begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    ReallocMem(FNodes, LNewCap * SizeOf(TJsonNode));
+    FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
     FNodeCap := LNewCap;
   end;
   Result := FNodeCount;
@@ -110,11 +110,11 @@ function TJsonDocument.AllocStrBuf(ASize: SizeUInt): PAnsiChar;
 var
   LNewCap: UInt32;
 begin
-  GetMem(Result, ASize);
+  Result := FAllocator.Allocate(ASize);
   if FStrBufCount >= FStrBufCap then
   begin
     LNewCap := FStrBufCap * 2;
-    ReallocMem(FStrBufs, LNewCap * SizeOf(Pointer));
+    FStrBufs := FAllocator.Reallocate(FStrBufs, LNewCap * SizeOf(Pointer));
     FStrBufCap := LNewCap;
   end;
   PPointer(PByte(FStrBufs) + FStrBufCount * SizeOf(Pointer))^ := Result;

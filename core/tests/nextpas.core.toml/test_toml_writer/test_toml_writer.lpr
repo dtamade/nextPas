@@ -158,6 +158,50 @@ begin
   B.Done;
 end;
 
+procedure TestNewline;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(64); W.Init(B);
+  W.Key('a'); W.Int(1);
+  W.Newline;
+  W.Key('b'); W.Int(2);
+  CheckEqual('a = 1' + #10 + #10 + 'b = 2' + #10, B.ToString, 'newline');
+  B.Done;
+end;
+
+procedure TestKeyStringView;
+var B: TStringBuilder; W: TTomlWriter; LView: TStringView;
+begin
+  B.Init(64); W.Init(B);
+  LView := TStringView.Create(PAnsiChar('mykey'), 5);
+  W.Key(LView); W.Int(99);
+  CheckEqual('mykey = 99' + #10, B.ToString, 'key TStringView');
+  B.Done;
+end;
+
+procedure TestStrStringView;
+var B: TStringBuilder; W: TTomlWriter; LView: TStringView;
+begin
+  B.Init(64); W.Init(B);
+  LView := TStringView.Create(PAnsiChar('hello'), 5);
+  W.Key('msg'); W.Str(LView);
+  CheckEqual('msg = "hello"' + #10, B.ToString, 'str TStringView');
+  B.Done;
+end;
+
+procedure TestNestedArray;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(64); W.Init(B);
+  W.Key('m');
+  W.BeginArray;
+    W.BeginArray; W.Int(1); W.Int(2); W.EndArray;
+    W.BeginArray; W.Int(3); W.Int(4); W.EndArray;
+  W.EndArray;
+  CheckEqual('m = [[1, 2], [3, 4]]' + #10, B.ToString, 'nested array');
+  B.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.writer');
   T.Run('simple key-value', @TestSimpleKeyValue);
@@ -175,6 +219,10 @@ begin
   T.Run('datetime +09:00', @TestDateTimePositiveOffset);
   T.Run('local date', @TestLocalDate);
   T.Run('local time', @TestLocalTime);
+  T.Run('newline', @TestNewline);
+  T.Run('key TStringView', @TestKeyStringView);
+  T.Run('str TStringView', @TestStrStringView);
+  T.Run('nested array', @TestNestedArray);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

@@ -1,4 +1,12 @@
 unit nextpas.core.toml.value;
+{ Zero-cost TOML value accessor. TTomlValue is a 12-byte record (pointer + index)
+  that borrows into a TTomlDocument's node array. No heap allocation per access.
+
+  Lifetime: valid as long as the owning TTomlDocument/ITomlDocument is alive.
+  Invalid values (missing keys, out-of-bounds) return safe defaults (0, empty, false).
+
+  Usage:
+    Doc.Root.Get('server').Get('port').AsInt  // chained access }
 
 {$I nextpas.core.settings.inc}
 

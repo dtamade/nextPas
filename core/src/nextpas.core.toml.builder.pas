@@ -1,4 +1,15 @@
 unit nextpas.core.toml.builder;
+{ High-level TOML builder with automatic lifetime management.
+  ITomlBuilder wraps TTomlWriter + TStringBuilder behind a COM interface.
+  Released automatically when the last reference goes out of scope.
+
+  Usage:
+    var B: ITomlBuilder;
+    B := TomlBuilder;
+    B.Key('name'); B.Str('Alice');
+    B.BeginTable('server');
+    B.Key('port'); B.Int(8080);
+    WriteLn(B.ToString); }
 
 {$I nextpas.core.settings.inc}
 

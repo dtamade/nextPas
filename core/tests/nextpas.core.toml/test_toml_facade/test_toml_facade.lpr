@@ -4,6 +4,8 @@ program test_toml_facade;
 
 uses
   nextpas.core.text.view,
+  nextpas.core.mem.default,
+  nextpas.core.mem.intf,
   nextpas.core.toml.base,
   nextpas.core.toml.value,
   nextpas.core.toml.builder,
@@ -117,6 +119,67 @@ begin
   Check(LDoc.Root.Get('dependencies').Has('http'), 'has http dep');
 end;
 
+procedure TestBuilderAllTypes;
+var
+  LB: ITomlBuilder;
+  LDoc: ITomlDocument;
+begin
+  LB := TomlBuilder;
+  LB.Key('s'); LB.Str('hello');
+  LB.Key('i'); LB.Int(42);
+  LB.Key('f'); LB.Float(3.14);
+  LB.Key('b'); LB.Bool(True);
+  LB.Key('dt'); LB.DateTime(TomlDateTimeWithOffset(2024, 1, 15, 10, 30, 0, 0, 0));
+  LB.Key('arr');
+  LB.BeginArray; LB.Int(1); LB.Int(2); LB.Int(3); LB.EndArray;
+  LB.Key('tbl');
+  LB.BeginInlineTable; LB.Key('x'); LB.Int(1); LB.EndInlineTable;
+  LB.Comment('a comment');
+  LB.Newline;
+  LDoc := TomlParse(LB.ToString);
+  Check(not LDoc.HasError, 'all types parse ok');
+  CheckEqual(Int64(42), LDoc.Root.Get('i').AsInt, 'int');
+  Check(LDoc.Root.Get('b').AsBool, 'bool');
+  CheckEqual(Int64(3), LDoc.Root.Get('arr').ArrayLen, 'array len');
+  Check(LDoc.Root.Get('tbl').IsTable, 'inline table');
+end;
+
+procedure TestBuilderArrayTable;
+var
+  LB: ITomlBuilder;
+  LDoc: ITomlDocument;
+begin
+  LB := TomlBuilder;
+  LB.BeginArrayTable('items');
+  LB.Key('name'); LB.Str('first');
+  LB.BeginArrayTable('items');
+  LB.Key('name'); LB.Str('second');
+  LDoc := TomlParse(LB.ToString);
+  Check(not LDoc.HasError, 'array table parse ok');
+  CheckEqual(Int64(2), LDoc.Root.Get('items').ArrayLen, '2 items');
+end;
+
+procedure TestBuilderAsViewLen;
+var
+  LB: ITomlBuilder;
+begin
+  LB := TomlBuilder(128);
+  LB.Key('x'); LB.Int(1);
+  Check(LB.Len > 0, 'Len > 0');
+  Check(LB.AsView.Len = LB.Len, 'AsView.Len = Len');
+  Check(Length(LB.ToString) > 0, 'ToString not empty');
+end;
+
+procedure TestParseWith;
+var
+  LDoc: ITomlDocument;
+begin
+  LDoc := TomlParseWith('key = "value"', DefaultAllocator);
+  Check(not LDoc.HasError, 'no error');
+  Check(LDoc.Root.Get('key').AsStr.Equals(
+    TStringView.Create(PAnsiChar('value'), 5)), 'key = value');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml (facade)');
   T.Run('parse simple', @TestParseSimple);
@@ -127,6 +190,10 @@ begin
   T.Run('builder table', @TestBuilderTable);
   T.Run('stringify', @TestStringify);
   T.Run('real-world config', @TestRealWorldConfig);
+  T.Run('builder all types', @TestBuilderAllTypes);
+  T.Run('builder array table', @TestBuilderArrayTable);
+  T.Run('builder AsView/Len', @TestBuilderAsViewLen);
+  T.Run('TomlParseWith', @TestParseWith);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

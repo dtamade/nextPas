@@ -1,4 +1,15 @@
 unit nextpas.core.toml.writer;
+{ Streaming TOML serializer. Zero allocation — writes directly to a TStringBuilder.
+  Supports nested arrays/inline tables via depth-indexed state stack.
+
+  Usage:
+    var B: TStringBuilder; W: TTomlWriter;
+    B.Init(256); W.Init(B);
+    W.Key('name'); W.Str('Alice');
+    W.BeginTable('server');
+    W.Key('port'); W.Int(8080);
+    WriteLn(B.ToString);
+    B.Done; }
 
 {$I nextpas.core.settings.inc}
 
