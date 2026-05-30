@@ -537,6 +537,76 @@ begin
   Check(not TKsuid.TryParse('!!!!!!!!!!!!!!!!!!!!!!!!!!!', LK), 'invalid base62');
 end;
 
+{ Stress + boundary tests }
+
+procedure TestUuidV4Stress;
+var LI: Integer; LU: TUuid;
+begin
+  for LI := 1 to 10000 do
+  begin
+    LU := TUuid.NewV4;
+    if LU.Version <> 4 then begin Check(False, 'v4 version at ' + IntToStr(LI)); Exit; end;
+    if LU.Variant <> 2 then begin Check(False, 'v4 variant at ' + IntToStr(LI)); Exit; end;
+  end;
+  Check(True, '10000 v4 all valid');
+end;
+
+procedure TestSnowflakeStress;
+var LGen: TSnowflakeGenerator; LPrev, LCur: TSnowflakeId; LI: Integer;
+begin
+  LGen.Init(1);
+  LPrev := LGen.Next;
+  for LI := 1 to 10000 do
+  begin
+    LCur := LGen.Next;
+    if LCur <= LPrev then begin Check(False, 'ordering at ' + IntToStr(LI)); Exit; end;
+    LPrev := LCur;
+  end;
+  Check(True, '10000 snowflakes ordered');
+end;
+
+procedure TestXidStress;
+var LPrev, LCur: TXid; LI: Integer;
+begin
+  LPrev := TXid.New;
+  for LI := 1 to 10000 do
+  begin
+    LCur := TXid.New;
+    if not (LPrev < LCur) then begin Check(False, 'xid order at ' + IntToStr(LI)); Exit; end;
+    LPrev := LCur;
+  end;
+  Check(True, '10000 XIDs ordered');
+end;
+
+procedure TestKsuidRoundTripStress;
+var LI: Integer; LK: TKsuid; LS: string;
+begin
+  for LI := 1 to 1000 do
+  begin
+    LK := TKsuid.New;
+    LS := LK.ToString;
+    if not (TKsuid.Parse(LS) = LK) then begin Check(False, 'ksuid rt at ' + IntToStr(LI)); Exit; end;
+  end;
+  Check(True, '1000 KSUID roundtrips');
+end;
+
+procedure TestUuidParseAllZeros;
+var LU: TUuid;
+begin
+  LU := TUuid.Parse('00000000-0000-0000-0000-000000000000');
+  Check(LU.IsNil, 'all zeros is nil');
+  CheckEqual(Int64(0), Int64(LU.Version));
+  CheckEqual(Int64(0), Int64(LU.TimestampMs));
+end;
+
+procedure TestUuidParseAllF;
+var LU: TUuid;
+begin
+  LU := TUuid.Parse('ffffffff-ffff-ffff-ffff-ffffffffffff');
+  Check(not LU.IsNil, 'all-F not nil');
+  CheckEqual(Int64(15), Int64(LU.Version));
+end;
+
 begin
   Randomize;
   T := TTestRunner.Create('nextpas.core.id');
@@ -605,6 +675,13 @@ begin
   T.Run('XID Nil', @TestXidNil);
   T.Run('XID parse invalid', @TestXidParseInvalid);
   T.Run('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
+
+  T.Run('UUID v4 stress 10k', @TestUuidV4Stress);
+  T.Run('Snowflake stress 10k', @TestSnowflakeStress);
+  T.Run('XID stress 10k', @TestXidStress);
+  T.Run('KSUID roundtrip stress 1k', @TestKsuidRoundTripStress);
+  T.Run('UUID parse all-zeros', @TestUuidParseAllZeros);
+  T.Run('UUID parse all-F', @TestUuidParseAllF);
 
   T.Summary;
 end.
