@@ -6,7 +6,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.regex.types,
+  nextpas.core.regex.base,
   nextpas.core.regex.charclass;
 
 type

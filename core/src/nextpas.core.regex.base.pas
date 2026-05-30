@@ -1,4 +1,4 @@
-unit nextpas.core.regex.types;
+unit nextpas.core.regex.base;
 
 {$I nextpas.core.settings.inc}
 

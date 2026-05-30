@@ -6,7 +6,7 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.regex.types,
+  nextpas.core.regex.base,
   nextpas.core.regex.charclass,
   nextpas.core.regex.parser,
   nextpas.core.regex.compiler,
@@ -14,11 +14,11 @@ uses
   nextpas.core.text.base;
 
 type
-  TMatch = nextpas.core.regex.types.TMatch;
-  TMatchArray = nextpas.core.regex.types.TMatchArray;
-  TGroup = nextpas.core.regex.types.TGroup;
-  ERegexError = nextpas.core.regex.types.ERegexError;
-  ERegexCompileError = nextpas.core.regex.types.ERegexCompileError;
+  TMatch = nextpas.core.regex.base.TMatch;
+  TMatchArray = nextpas.core.regex.base.TMatchArray;
+  TGroup = nextpas.core.regex.base.TGroup;
+  ERegexError = nextpas.core.regex.base.ERegexError;
+  ERegexCompileError = nextpas.core.regex.base.ERegexCompileError;
 
   TRegex = record
   private

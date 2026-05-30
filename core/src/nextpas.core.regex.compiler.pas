@@ -5,7 +5,7 @@ unit nextpas.core.regex.compiler;
 interface
 
 uses
-  nextpas.core.regex.types,
+  nextpas.core.regex.base,
   nextpas.core.regex.charclass,
   nextpas.core.regex.parser;
 

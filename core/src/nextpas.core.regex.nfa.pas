@@ -5,7 +5,7 @@ unit nextpas.core.regex.nfa;
 interface
 
 uses
-  nextpas.core.regex.types,
+  nextpas.core.regex.base,
   nextpas.core.regex.charclass;
 
 function NfaSearch(const AProgram: TRegexProgram;
