@@ -166,6 +166,9 @@ begin
   LState[14] := Load32LE(ANonce, 4);
   LState[15] := Load32LE(ANonce, 8);
 
+  // AVX2 4-block path (256 bytes at a time)
+  {$I nextpas.core.crypto.chacha20.4block.x86_64.inc}
+
   // AVX2 dual-block path: process 2 blocks (128 bytes) at a time
   while LOffset + 128 <= Length(AInput) do
   begin
