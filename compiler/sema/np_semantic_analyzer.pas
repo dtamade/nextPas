@@ -6243,9 +6243,14 @@ begin
       Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(0).ChildAt(1).Text);
       if Folded >= 0 then
       begin
-        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
-          ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
-          IntToStr(StrCallArgCount);
+        if TypeMetaSize(FuncName) = 8 then
+          ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+            ABlob + 'ivcall ' + IntToStr(Folded) + ' ' +
+            IntToStr(StrCallArgCount)
+        else
+          ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+            ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
+            IntToStr(StrCallArgCount);
         if TypeMetaRetPtr(FuncName, ANode.ChildAt(0).ChildAt(1).Text) then
           ABlob := ABlob + ' p' + #10
         else

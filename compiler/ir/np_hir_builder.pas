@@ -1112,13 +1112,26 @@ procedure THIRBuilder.BlobIvcall(var S: TExprStack; AArg: string);
 var
   Instr: THIRInstr;
   IntfPtr, ImtPtr, FnPtr: THIRValueId;
-  SlotIdx, SpacePos: LongInt;
+  VcallArgs: array of THIRValueId;
+  VcallArgTypes: array of THIRTypeId;
+  SlotIdx, SpacePos, ExtraArgCount, VcallI: LongInt;
 begin
   SpacePos := Pos(' ', AArg);
   if SpacePos > 0 then
-    SlotIdx := StrToIntDef(Copy(AArg, 1, SpacePos - 1), 0)
+  begin
+    SlotIdx := StrToIntDef(Copy(AArg, 1, SpacePos - 1), 0);
+    ExtraArgCount := StrToIntDef(Copy(AArg, SpacePos + 1, Length(AArg)), 0);
+  end
   else
+  begin
     SlotIdx := StrToIntDef(AArg, 0);
+    ExtraArgCount := 0;
+  end;
+
+  SetLength(VcallArgs, ExtraArgCount);
+  SetLength(VcallArgTypes, ExtraArgCount);
+  for VcallI := ExtraArgCount - 1 downto 0 do
+    VcallArgs[VcallI] := S.PopTyped(VcallArgTypes[VcallI]);
 
   IntfPtr := S.Pop;
 
@@ -1148,9 +1161,16 @@ begin
   Instr.Kind := hikIntrinsic;
   Instr.TypeId := GetIntType;
   Instr.IntrinsicName := 'vcall';
-  SetLength(Instr.Operands, 2);
+  SetLength(Instr.Operands, 2 + ExtraArgCount);
   Instr.Operands[0] := MakeOperand(FnPtr);
   Instr.Operands[1] := MakeTypedOperand(IntfPtr, GetPtrType);
+  for VcallI := 0 to ExtraArgCount - 1 do
+  begin
+    if VcallArgTypes[VcallI] <> 0 then
+      Instr.Operands[2 + VcallI] := MakeTypedOperand(VcallArgs[VcallI], VcallArgTypes[VcallI])
+    else
+      Instr.Operands[2 + VcallI] := MakeOperand(VcallArgs[VcallI]);
+  end;
   EmitInstr(Instr);
   S.Push(Instr.ResultId);
 end;
