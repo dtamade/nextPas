@@ -140,6 +140,8 @@ end;
 function TGzipWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   if ACount = 0 then Exit(0);
+  if not FInitialized then
+    raise EIOError.Create('gzip: write after close');
   {$PUSH}{$Q-}{$R-}
   FCRC := UInt32(crc32(ULong(FCRC), @ABuf, ACount));
   Inc(FSize, UInt32(ACount));
@@ -152,6 +154,7 @@ end;
 
 procedure TGzipWriter.Flush;
 begin
+  if not FInitialized then Exit;
   FlushOutput(Z_SYNC_FLUSH);
 end;
 
@@ -286,6 +289,7 @@ begin
     LNextIn := PByte(FStream.next_in);
     inflateEnd(FStream);
     FInitialized := False;
+    FDone := True;
 
     LNeed := 8;
     if LAvail >= LNeed then

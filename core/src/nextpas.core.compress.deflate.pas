@@ -103,6 +103,8 @@ end;
 function TDeflateWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   if ACount = 0 then Exit(0);
+  if not FInitialized then
+    raise EIOError.Create('deflate: write after close');
   FStream.next_in := @ABuf;
   FStream.avail_in := ACount;
   FlushOutput(Z_NO_FLUSH);
@@ -111,6 +113,7 @@ end;
 
 procedure TDeflateWriter.Flush;
 begin
+  if not FInitialized then Exit;
   FlushOutput(Z_SYNC_FLUSH);
 end;
 
@@ -186,6 +189,7 @@ begin
   begin
     inflateEnd(FStream);
     FInitialized := False;
+    FDone := True;
   end;
 end;
 

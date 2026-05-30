@@ -499,6 +499,77 @@ begin
   Check(LD[0] = 42, 'lz4 1-byte value');
 end;
 
+procedure TestWriteAfterClose;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LGotException: Boolean;
+  LB: Byte;
+begin
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter);
+  LWriter.Close;
+  LB := 1;
+  LGotException := False;
+  try
+    LWriter.Write(LB, 1);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'deflate write-after-close raises');
+
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Close;
+  LGotException := False;
+  try
+    LWriter.Write(LB, 1);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'gzip write-after-close raises');
+end;
+
+procedure TestReadAfterClose;
+var
+  LBuf: IStream;
+  LReader: IDecompressReader;
+  LData, LCompressed: TBytes;
+  LOut: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LData := TBytes.Create(1, 2, 3);
+  LCompressed := DeflateCompress(LData);
+  LBuf := CreateBytesStreamFrom(LCompressed);
+  LReader := DeflateReader(LBuf as IReader);
+  LReader.Close;
+  LN := (LReader as IReader).Read(LOut[0], 32);
+  CheckEqual(Int64(0), Int64(LN), 'deflate read-after-close returns 0');
+end;
+
+procedure TestDoubleClose;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LData, LCompressed: TBytes;
+begin
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter);
+  LWriter.Close;
+  LWriter.Close;
+  Check(True, 'deflate writer double-close safe');
+
+  LData := TBytes.Create(1, 2, 3);
+  LCompressed := GzipCompress(LData);
+  LBuf := CreateBytesStreamFrom(LCompressed);
+  LReader := GzipReader(LBuf as IReader);
+  IoReadAll(LReader as IReader);
+  LReader.Close;
+  LReader.Close;
+  Check(True, 'gzip reader double-close safe');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.compress');
   T.Run('Deflate round-trip', @TestDeflateRoundTrip);
@@ -524,5 +595,8 @@ begin
   T.Run('Deflate stream corrupt', @TestDeflateStreamCorrupted);
   T.Run('Gzip empty stream', @TestGzipEmptyStream);
   T.Run('Single byte all algos', @TestSingleByte);
+  T.Run('Write after close', @TestWriteAfterClose);
+  T.Run('Read after close', @TestReadAfterClose);
+  T.Run('Double close', @TestDoubleClose);
   T.Summary;
 end.
