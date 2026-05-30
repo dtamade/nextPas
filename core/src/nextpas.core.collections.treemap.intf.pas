@@ -30,7 +30,7 @@ type
     {**
      * GetLowerBound
      *
-     * @desc 获取严格大于指定键的最小键值对
+     * @desc 获取大于等于指定键的最小键值对（first key >= aKey）
      *
      * @params
      *   aKey    参考键
@@ -46,7 +46,7 @@ type
     {**
      * GetUpperBound
      *
-     * @desc 获取大于等于指定键的最小键值对
+     * @desc 获取严格大于指定键的最小键值对（first key > aKey）
      *
      * @params
      *   aKey    参考键
