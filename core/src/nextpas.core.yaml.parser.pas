@@ -490,9 +490,9 @@ end;
 function ParseNode(var ADoc: TYamlDocument; var AScanner: TYamlScanner;
   var ACurToken: TYamlToken): UInt32;
 var
-  LAnchorName: TStringView;
+  LAnchorName, LKeyView: TStringView;
   LKeyNode, LValNode, LFirst, LPrev, LIdx: UInt32;
-  LCount: UInt32;
+  LCount, LMapCol: UInt32;
 begin
   case ACurToken.Kind of
     ytkFlowSeqStart:
@@ -505,19 +505,15 @@ begin
       Result := ParseBlockSequence(ADoc, AScanner, ACurToken);
     ytkScalar:
     begin
+      LKeyView := ACurToken.Value;
+      LMapCol := ACurToken.Col;
       Result := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
       ACurToken := AScanner.NextToken;
-      // Check if this scalar is actually a mapping key (followed by :)
       if ACurToken.Kind = ytkValue then
       begin
-        // This is an implicit block mapping
         LKeyNode := Result;
-        // Force key to string kind for mapping lookup
-        if ADoc.Nodes[LKeyNode].Kind <> ynkString then
-        begin
-          ADoc.Nodes[LKeyNode].Kind := ynkString;
-          // Keep the original Str view (already set by ResolveScalar for strings)
-        end;
+        ADoc.Nodes[LKeyNode].Kind := ynkString;
+        ADoc.Nodes[LKeyNode].Str := LKeyView;
         LIdx := AddNode(ADoc);
         ADoc.Nodes[LIdx].Kind := ynkMapping;
         LFirst := LKeyNode;
@@ -525,7 +521,7 @@ begin
         LCount := 0;
         while ACurToken.Kind = ytkValue do
         begin
-          ACurToken := AScanner.NextToken; // consume :
+          ACurToken := AScanner.NextToken;
           LValNode := ParseNode(ADoc, AScanner, ACurToken);
           if ADoc.HasError then begin Result := LIdx; Exit; end;
           ADoc.Nodes[LKeyNode].Next := LValNode;
@@ -535,12 +531,13 @@ begin
             ADoc.Nodes[LPrev].Next := LKeyNode;
           LPrev := LValNode;
           Inc(LCount);
-          // Check for next key
-          if ACurToken.Kind = ytkScalar then
+          if (ACurToken.Kind = ytkScalar) and (ACurToken.Col = LMapCol) then
           begin
-            LKeyNode := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
-            if ADoc.Nodes[LKeyNode].Kind <> ynkString then
-              ADoc.Nodes[LKeyNode].Kind := ynkString;
+            LKeyView := ACurToken.Value;
+            LKeyNode := AddNode(ADoc);
+            ADoc.Nodes[LKeyNode].Kind := ynkString;
+            ADoc.Nodes[LKeyNode].Str := LKeyView;
+            ADoc.Nodes[LKeyNode].Next := YAML_NODE_NONE;
             ACurToken := AScanner.NextToken;
           end
           else
