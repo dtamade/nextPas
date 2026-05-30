@@ -99,14 +99,9 @@ end;
 procedure StringifyValue(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; ATopLevel: Boolean); forward;
 
 function IsArrayTable(var ADoc: TTomlDocument; AIdx: UInt32): Boolean;
-var
-  LFirst: UInt32;
 begin
-  Result := False;
-  if ADoc.Node(AIdx)^.Kind <> tnkArray then Exit;
-  LFirst := ADoc.Node(AIdx)^.Container.FirstChild;
-  if LFirst = TOML_NODE_NONE then Exit;
-  Result := ADoc.Node(LFirst)^.Kind = tnkTable;
+  Result := (ADoc.Node(AIdx)^.Kind = tnkArray) and
+    ((ADoc.Node(AIdx)^.Flags and TOML_NODE_FLAG_ARRAY_TABLE) <> 0);
 end;
 
 procedure StringifyTable(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; const APath: string);

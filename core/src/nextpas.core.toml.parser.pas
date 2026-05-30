@@ -675,8 +675,26 @@ begin
   begin
     if (Pos + 2 < SrcLen) and (Src[Pos] = '"') and (Src[Pos+1] = '"') and (Src[Pos+2] = '"') then
     begin
-      LEnd := Pos;
-      AdvanceN(3);
+      // Check for 4 or 5 quote sequence (1-2 quotes are content)
+      if (Pos + 3 < SrcLen) and (Src[Pos+3] = '"') and
+         (Pos + 4 < SrcLen) and (Src[Pos+4] = '"') then
+      begin
+        // 5 quotes: "" is content, """ is closing
+        LEnd := Pos + 2;
+        AdvanceN(5);
+      end
+      else if (Pos + 3 < SrcLen) and (Src[Pos+3] = '"') then
+      begin
+        // 4 quotes: " is content, """ is closing
+        LEnd := Pos + 1;
+        AdvanceN(4);
+      end
+      else
+      begin
+        // 3 quotes: closing delimiter
+        LEnd := Pos;
+        AdvanceN(3);
+      end;
       LBufLen := LEnd - LStart;
       LBuf := Doc^.FAllocator.Allocate(LBufLen + 1);
       LDst := LBuf;
@@ -1456,6 +1474,8 @@ begin
         Exit(TOML_NODE_NONE); // cannot extend inline table
       if (not AImplicit) and ((Doc^.FNodes[LExisting].Flags and TOML_NODE_FLAG_EXPLICIT) <> 0) then
         Exit(TOML_NODE_NONE); // duplicate explicit table
+      if (not AImplicit) and ((Doc^.FNodes[LExisting].Flags and TOML_NODE_FLAG_DOTTED) <> 0) then
+        Exit(TOML_NODE_NONE); // cannot reopen dotted-key defined table
       if not AImplicit then
         Doc^.FNodes[LExisting].Flags := Doc^.FNodes[LExisting].Flags or TOML_NODE_FLAG_EXPLICIT;
       Exit(LExisting);
@@ -1504,6 +1524,7 @@ begin
     LTargetTable := FindOrCreateTable(LTargetTable, LKeys[LI], True);
     if LTargetTable = TOML_NODE_NONE then
       Exit(SetError('key conflict', 12));
+    Doc^.FNodes[LTargetTable].Flags := Doc^.FNodes[LTargetTable].Flags or TOML_NODE_FLAG_DOTTED;
   end;
 
   // Check for duplicate key
@@ -1561,9 +1582,9 @@ begin
     LArrayIdx := FindChild(LCurrent, LKeys[LKeyCount - 1]);
     if LArrayIdx = TOML_NODE_NONE then
     begin
-      // Create array node
       LArrayIdx := Doc^.AddNode;
       Doc^.FNodes[LArrayIdx].Kind := tnkArray;
+      Doc^.FNodes[LArrayIdx].Flags := TOML_NODE_FLAG_ARRAY_TABLE;
       Doc^.FNodes[LArrayIdx].Key := LKeys[LKeyCount - 1];
       Doc^.FNodes[LArrayIdx].KeyHash := TomlKeyHash(LKeys[LKeyCount - 1].Data, LKeys[LKeyCount - 1].Len);
       Doc^.FNodes[LArrayIdx].Container.FirstChild := TOML_NODE_NONE;
@@ -1573,7 +1594,9 @@ begin
       Inc(Doc^.FNodes[LCurrent].Container.Count);
     end
     else if Doc^.FNodes[LArrayIdx].Kind <> tnkArray then
-      Exit(SetError('not an array table', 18));
+      Exit(SetError('not an array table', 18))
+    else if (Doc^.FNodes[LArrayIdx].Flags and TOML_NODE_FLAG_ARRAY_TABLE) = 0 then
+      Exit(SetError('cannot extend value array as array-table', 40));
     // Add new table element to array
     LNewIdx := Doc^.AddNode;
     Doc^.FNodes[LNewIdx].Kind := tnkTable;
@@ -1603,7 +1626,26 @@ var
   LCurrentTable: UInt32;
   LRootIdx: UInt32;
   LIsArray: Boolean;
+  LI: UInt32;
 begin
+  // Clean up state from any previous parse
+  if FOwnedBufs <> nil then
+  begin
+    for LI := 0 to FOwnedCount - 1 do
+      FAllocator.Deallocate((FOwnedBufs + LI)^);
+    FAllocator.Deallocate(Pointer(FOwnedBufs));
+    FOwnedBufs := nil;
+    FOwnedCount := 0;
+    FOwnedCap := 0;
+  end;
+  if FHashBuckets <> nil then
+  begin
+    FAllocator.Deallocate(FHashBuckets);
+    FHashBuckets := nil;
+    FHashCap := 0;
+    FHashOwner := TOML_NODE_NONE;
+  end;
+
   FInput := AInput;
   FNodeCount := 0;
   FHasError := False;
