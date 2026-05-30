@@ -97,6 +97,7 @@ type
     function Remove(const AKey: K): Boolean;
     procedure Put(const AKey: K; const AValue: V); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function Get(const AKey: K): V;
+    function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Clear;
     procedure Reserve(AMinCapacity: SizeUInt);
     procedure ShrinkToFit;
@@ -627,6 +628,15 @@ function TSwissTable.Get(const AKey: K): V;
 begin
   if not TryGetValue(AKey, Result) then
     raise EInvalidOperation.Create('TSwissTable.Get: key not found');
+end;
+
+function TSwissTable.GetOrInsert(const AKey: K; const ADefault: V): V;
+begin
+  if not TryGetValue(AKey, Result) then
+  begin
+    Put(AKey, ADefault);
+    Result := ADefault;
+  end;
 end;
 
 procedure TSwissTable.Clear;
