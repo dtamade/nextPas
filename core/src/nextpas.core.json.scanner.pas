@@ -14,6 +14,7 @@ type
     FHead: Byte;
     FTail: Byte;
     FInString: Boolean;
+    FPrevEscaped: Boolean;
     procedure FillBuffer;
   public
     procedure Init(const AData: PAnsiChar; const ALen: SizeUInt);
@@ -63,7 +64,76 @@ begin
   FHead := 0;
   FTail := 0;
   FInString := False;
+  FPrevEscaped := False;
 end;
+
+function OddBackslashEscaped16(ABs: TMask16; APrevEscaped: Boolean): TMask16; inline;
+const
+  EVEN_BITS: TMask16 = TMask16($5555);
+  ODD_BITS: TMask16 = TMask16($AAAA);
+var
+  LStarts, LEvenStarts, LOddStarts: TMask16;
+  LEvenCarries, LOddCarries: TMask16;
+  LEvenEsc, LOddEsc, LEscaped: TMask16;
+begin
+  if (ABs = MASK16_NONE_SET) and (not APrevEscaped) then
+    Exit(MASK16_NONE_SET);
+  if (ABs = MASK16_NONE_SET) and APrevEscaped then
+    Exit(TMask16(1));
+
+  LStarts := ABs and (not (ABs shr 1));
+  if APrevEscaped then
+    LStarts := LStarts and not TMask16(1);
+
+  LEvenStarts := LStarts and EVEN_BITS;
+  LOddStarts := LStarts and ODD_BITS;
+
+  LEvenCarries := (ABs + LEvenStarts) xor ABs;
+  LOddCarries := (ABs + LOddStarts) xor ABs;
+
+  LEvenEsc := LEvenCarries and ODD_BITS and (not ABs);
+  LOddEsc := LOddCarries and EVEN_BITS and (not ABs);
+
+  LEscaped := LEvenEsc or LOddEsc;
+  if APrevEscaped then
+    LEscaped := LEscaped or TMask16(1);
+  Result := LEscaped;
+end;
+
+{$IFDEF HAS_AVX2}
+function OddBackslashEscaped32(ABs: TMask32; APrevEscaped: Boolean): TMask32; inline;
+const
+  EVEN_BITS: TMask32 = TMask32($55555555);
+  ODD_BITS: TMask32 = TMask32($AAAAAAAA);
+var
+  LStarts, LEvenStarts, LOddStarts: TMask32;
+  LEvenCarries, LOddCarries: TMask32;
+  LEvenEsc, LOddEsc, LEscaped: TMask32;
+begin
+  if (ABs = MASK32_NONE_SET) and (not APrevEscaped) then
+    Exit(MASK32_NONE_SET);
+  if (ABs = MASK32_NONE_SET) and APrevEscaped then
+    Exit(TMask32(1));
+
+  LStarts := ABs and (not (ABs shr 1));
+  if APrevEscaped then
+    LStarts := LStarts and not TMask32(1);
+
+  LEvenStarts := LStarts and EVEN_BITS;
+  LOddStarts := LStarts and ODD_BITS;
+
+  LEvenCarries := (ABs + LEvenStarts) xor ABs;
+  LOddCarries := (ABs + LOddStarts) xor ABs;
+
+  LEvenEsc := LEvenCarries and ODD_BITS and (not ABs);
+  LOddEsc := LOddCarries and EVEN_BITS and (not ABs);
+
+  LEscaped := LEvenEsc or LOddEsc;
+  if APrevEscaped then
+    LEscaped := LEscaped or TMask32(1);
+  Result := LEscaped;
+end;
+{$ENDIF}
 
 procedure TJsonStructScanner.FillBuffer;
 var
@@ -81,9 +151,8 @@ begin
   begin
     LQ32 := Vec32CmpEq(@FInput[FScanPos], Ord('"'));
     LB32 := Vec32CmpEq(@FInput[FScanPos], Ord('\'));
-    if (LB32 and (LB32 shl 1)) <> MASK32_NONE_SET then
-      Break;
-    LE32 := LB32 shl 1;
+    LE32 := OddBackslashEscaped32(LB32, FPrevEscaped);
+    FPrevEscaped := (LE32 shr 31) <> 0;
     LRQ32 := LQ32 and (not LE32);
     if FInString then LCarry32 := MASK32_ALL_SET else LCarry32 := MASK32_NONE_SET;
     LIS32 := PrefixXor32(LRQ32) xor LCarry32;
@@ -109,9 +178,8 @@ begin
   begin
     LQuote := Vec16CmpEq(@FInput[FScanPos], Ord('"'));
     LBs := Vec16CmpEq(@FInput[FScanPos], Ord('\'));
-    if (LBs and (LBs shl 1)) <> MASK16_NONE_SET then
-      Break;
-    LEscaped := LBs shl 1;
+    LEscaped := OddBackslashEscaped16(LBs, FPrevEscaped);
+    FPrevEscaped := (LEscaped shr 15) <> 0;
     LRealQuotes := LQuote and (not LEscaped);
     if FInString then LCarry := MASK16_ALL_SET else LCarry := MASK16_NONE_SET;
     LInStr := PrefixXor16(LRealQuotes) xor LCarry;
