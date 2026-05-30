@@ -252,43 +252,43 @@ end;
 
 function EdBasePointMul(const AScalar: array of Byte): TEdPoint;
 const
-{$I nextpas.core.crypto.ed25519.table.inc}
+{$I nextpas.core.crypto.ed25519.comb.inc}
 var
-  Q, T: TEdPoint;
-  LTable: TEdPoint;
-  I, W: Integer;
+  Q, T, LPt: TEdPoint;
+  I, K, W: Integer;
 begin
-  // 4-bit windowed scalar multiplication with STATIC precomputed table
-  // Table[0..14] = [1*B, 2*B, ..., 15*B] (compile-time constants)
+  // Comb method: split 256-bit scalar into 4×64-bit parts
+  // Process 4 bits per iteration (one from each 64-bit part)
+  // Only 64 doublings + up to 64×4 additions
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
 
   for I := 63 downto 0 do
   begin
-    // Double 4 times
-    EdPointDouble(T, Q); Q := T;
-    EdPointDouble(T, Q); Q := T;
-    EdPointDouble(T, Q); Q := T;
-    EdPointDouble(T, Q); Q := T;
-
-    // Extract 4-bit window (little-endian bit order)
-    W := (AScalar[(I * 4) shr 3] shr ((I * 4) and 7)) and $F;
+    // Double once per bit position
     if I < 63 then
-      W := W or (((AScalar[(I * 4 + 3) shr 3] shr ((I * 4 + 3) and 7)) and 1) shl 3);
-    // Simpler: extract 4 consecutive bits
-    W := 0;
-    if ((AScalar[(I*4+0) shr 3] shr ((I*4+0) and 7)) and 1) = 1 then W := W or 1;
-    if ((AScalar[(I*4+1) shr 3] shr ((I*4+1) and 7)) and 1) = 1 then W := W or 2;
-    if ((AScalar[(I*4+2) shr 3] shr ((I*4+2) and 7)) and 1) = 1 then W := W or 4;
-    if ((AScalar[(I*4+3) shr 3] shr ((I*4+3) and 7)) and 1) = 1 then W := W or 8;
-
-    if W <> 0 then
     begin
-      LTable.X := ED25519_BASEPOINT_TABLE[W-1].X;
-      LTable.Y := ED25519_BASEPOINT_TABLE[W-1].Y;
-      LTable.Z := ED25519_BASEPOINT_TABLE[W-1].Z;
-      LTable.T := ED25519_BASEPOINT_TABLE[W-1].T;
-      EdPointAdd(T, Q, LTable);
-      Q := T;
+      EdPointDouble(T, Q); Q := T;
+    end;
+
+    // For each of the 4 tables, extract 4-bit window at position I
+    for K := 0 to 3 do
+    begin
+      // Extract 4 bits: scalar bits at positions K*64+I*1 ... but we need 4 bits
+      // Actually for comb: extract single bit from each of 4 positions
+      // Wait — comb processes 1 bit per table per iteration, not 4 bits.
+      // Let me use the simpler approach: 4-bit window from each 64-bit chunk
+
+      // Single bit from chunk K at position I
+      W := (AScalar[(K * 64 + I) shr 3] shr ((K * 64 + I) and 7)) and 1;
+      if W = 1 then
+      begin
+        LPt.X := ED25519_COMB_TABLE[K, 0].X;
+        LPt.Y := ED25519_COMB_TABLE[K, 0].Y;
+        LPt.Z := ED25519_COMB_TABLE[K, 0].Z;
+        LPt.T := ED25519_COMB_TABLE[K, 0].T;
+        EdPointAdd(T, Q, LPt);
+        Q := T;
+      end;
     end;
   end;
   Result := Q;
