@@ -1310,6 +1310,7 @@ begin
   if (Pos < SrcLen) and (Src[Pos] = ']') then
   begin
     Advance;
+    Dec(Depth);
     Exit(True);
   end;
 
@@ -1374,6 +1375,7 @@ begin
   if (Pos < SrcLen) and (Src[Pos] = '}') then
   begin
     Advance;
+    Dec(Depth);
     Exit(True);
   end;
 
@@ -1401,7 +1403,6 @@ begin
       LTarget := FindOrCreateTable(LTarget, LKeys[LI], True);
       if LTarget = TOML_NODE_NONE then
         Exit(SetError('key conflict in inline table', 28));
-      Inc(Doc^.FNodes[LTarget].Container.Count);
     end;
     Doc^.FNodes[LChildIdx].Key := LKeys[LKeyCount - 1];
     Doc^.FNodes[LChildIdx].KeyHash := TomlKeyHash(LKeys[LKeyCount - 1].Data, LKeys[LKeyCount - 1].Len);
