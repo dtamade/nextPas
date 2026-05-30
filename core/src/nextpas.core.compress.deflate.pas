@@ -81,7 +81,7 @@ end;
 
 procedure TDeflateWriter.FlushOutput(AFlush: Int32);
 var
-  LHave: SizeUInt;
+  LHave, LWritten: SizeUInt;
 begin
   repeat
     FStream.next_out := @FBuf[0];
@@ -89,7 +89,11 @@ begin
     deflate(FStream, AFlush);
     LHave := COMPRESS_BUF_SIZE - FStream.avail_out;
     if LHave > 0 then
-      FDst.Write(FBuf[0], LHave);
+    begin
+      LWritten := FDst.Write(FBuf[0], LHave);
+      if LWritten <> LHave then
+        raise EIOError.Create('deflate: short write');
+    end;
   until FStream.avail_out <> 0;
 end;
 

@@ -222,6 +222,62 @@ begin
   Check(LGotException, 'gzip corrupt CRC raises');
 end;
 
+procedure TestGzipStreaming;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc: TBytes;
+  LOut: TBytes;
+  LI: Integer;
+begin
+  SetLength(LSrc, 8192);
+  for LI := 0 to High(LSrc) do LSrc[LI] := Byte((LI * 3) mod 200);
+
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], 2048);
+  LWriter.Write(LSrc[2048], 2048);
+  LWriter.Write(LSrc[4096], 4096);
+  LWriter.Close;
+
+  LBuf.Seek(0, soBeginning);
+  LReader := GzipReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+
+  CheckEqual(Int64(8192), Int64(Length(LOut)), 'gzip streaming length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LOut[LI] then
+    begin
+      Check(False, 'gzip streaming mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'gzip streaming data matches');
+end;
+
+procedure TestDeflateFlush;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LSize1, LSize2: Int64;
+  LB: Byte;
+begin
+  LBuf := CreateBytesStream;
+  LWriter := DeflateWriter(LBuf as IWriter);
+  LB := 42;
+  LWriter.Write(LB, 1);
+  LWriter.Flush;
+  LSize1 := LBuf.Size;
+  Check(LSize1 > 0, 'flush produces output');
+  LB := 43;
+  LWriter.Write(LB, 1);
+  LWriter.Flush;
+  LSize2 := LBuf.Size;
+  Check(LSize2 > LSize1, 'second flush produces more');
+  LWriter.Close;
+end;
+
 procedure TestLz4Corrupted;
 var
   LC: TBytes;
@@ -249,6 +305,8 @@ begin
   T.Run('LZ4 empty', @TestLz4Empty);
   T.Run('LZ4 1MB', @TestLz4Large);
   T.Run('Deflate streaming', @TestDeflateStreaming);
+  T.Run('Gzip streaming', @TestGzipStreaming);
+  T.Run('Deflate flush', @TestDeflateFlush);
   T.Run('Corrupted deflate', @TestCorruptedData);
   T.Run('Corrupted gzip', @TestGzipCorrupted);
   T.Run('Corrupted lz4', @TestLz4Corrupted);

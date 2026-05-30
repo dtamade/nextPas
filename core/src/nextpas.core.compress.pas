@@ -21,6 +21,9 @@ type
 function DeflateWriter(const ADst: IWriter;
   const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
 function DeflateReader(const ASrc: IReader): IDecompressReader; inline;
+function GzipWriter(const ADst: IWriter;
+  const ALevel: TCompressionLevel = clDefault): ICompressWriter; inline;
+function GzipReader(const ASrc: IReader): IDecompressReader; inline;
 function DeflateCompress(const AData: TBytes;
   const ALevel: TCompressionLevel = clDefault): TBytes; inline;
 function DeflateDecompress(const AData: TBytes): TBytes; inline;
@@ -41,6 +44,17 @@ end;
 function DeflateReader(const ASrc: IReader): IDecompressReader;
 begin
   Result := nextpas.core.compress.deflate.CreateDeflateReader(ASrc);
+end;
+
+function GzipWriter(const ADst: IWriter;
+  const ALevel: TCompressionLevel): ICompressWriter;
+begin
+  Result := nextpas.core.compress.gzip.CreateGzipWriter(ADst, ALevel);
+end;
+
+function GzipReader(const ASrc: IReader): IDecompressReader;
+begin
+  Result := nextpas.core.compress.gzip.CreateGzipReader(ASrc);
 end;
 
 function DeflateCompress(const AData: TBytes;
