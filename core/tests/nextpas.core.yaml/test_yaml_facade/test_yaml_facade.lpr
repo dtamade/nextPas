@@ -169,6 +169,42 @@ begin
   Check(LDoc.HasError, 'error on missing :');
 end;
 
+procedure TestStringify;
+var
+  LDoc: IYamlDocument;
+  LOut: string;
+begin
+  LDoc := YamlParse('{name: Alice, age: 30}');
+  LOut := LDoc.Stringify;
+  Check(Pos('name', LOut) > 0, 'contains name');
+  Check(Pos('Alice', LOut) > 0, 'contains Alice');
+  Check(Pos('30', LOut) > 0, 'contains 30');
+end;
+
+procedure TestStringifyPretty;
+var
+  LDoc: IYamlDocument;
+  LOut: string;
+begin
+  LDoc := YamlParse('{a: 1, b: [2, 3]}');
+  LOut := LDoc.StringifyPretty;
+  Check(Pos(#10, LOut) > 0, 'has newlines');
+  Check(Pos('a:', LOut) > 0, 'has key a');
+end;
+
+procedure TestRoundTrip;
+var
+  LDoc1, LDoc2: IYamlDocument;
+begin
+  LDoc1 := YamlParse('{x: 1, y: [true, null, hello]}');
+  LDoc2 := YamlParse(LDoc1.Stringify);
+  Check(not LDoc2.HasError, 'round-trip no error');
+  CheckEqual(Int64(1), LDoc2.Root.MapGet('x').AsInt, 'x=1');
+  Check(LDoc2.Root.MapGet('y').SeqGet(0).AsBool = True, 'y[0]=true');
+  Check(LDoc2.Root.MapGet('y').SeqGet(1).IsNull, 'y[1]=null');
+  Check(LDoc2.Root.MapGet('y').SeqGet(2).AsStr.ToString = 'hello', 'y[2]=hello');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.yaml');
   T.Run('Parse null', @TestParseNull);
@@ -182,5 +218,8 @@ begin
   T.Run('Map key/value at', @TestMapKeyAt);
   T.Run('Doc start marker', @TestDocStartMarker);
   T.Run('Error handling', @TestErrorHandling);
+  T.Run('Stringify', @TestStringify);
+  T.Run('Stringify pretty', @TestStringifyPretty);
+  T.Run('Round-trip', @TestRoundTrip);
   T.Summary;
 end.
