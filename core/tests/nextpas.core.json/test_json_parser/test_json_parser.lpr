@@ -4,11 +4,13 @@ program test_json_parser;
 
 uses
   nextpas.core.text.view,
+  nextpas.core.text.builder,
   nextpas.core.mem.intf,
   nextpas.core.mem.default,
   nextpas.core.json.types,
   nextpas.core.json.parser,
   nextpas.core.json.value,
+  nextpas.core.json.writer,
   nextpas.core.testing;
 
 var
@@ -190,6 +192,91 @@ begin
   Doc.Done;
 end;
 
+procedure TestValueKindAndValid;
+var Doc: TJsonDocument; V, Missing: TJsonValue;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('{"x":1}')), 'parse');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsValid, 'root valid');
+  Check(V.Kind = jnkObject, 'root kind');
+  Missing := V.ObjectGet(SV('missing'));
+  Check(not Missing.IsValid, 'missing not valid');
+  Check(Missing.Kind = jnkNull, 'missing kind = null');
+  CheckEqual(Int64(0), Missing.AsInt, 'missing asint = 0');
+  CheckEqual('', Missing.AsStr.ToString, 'missing asstr = empty');
+  Doc.Done;
+end;
+
+procedure TestNodeCountAndInput;
+var Doc: TJsonDocument;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('[1,2,3]')), 'parse');
+  Check(Doc.NodeCount > 0, 'nodecount > 0');
+  CheckEqual(Int64(4), Int64(Doc.NodeCount), 'nodecount = 4');
+  CheckEqual('[1,2,3]', Doc.Input.ToString, 'input preserved');
+  Doc.Done;
+end;
+
+procedure TestJsonParseDocFunc;
+var Doc: TJsonDocument; V: TJsonValue;
+begin
+  Doc := JsonParseDoc(SV('42'), DefaultAllocator);
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsInt, 'is int');
+  CheckEqual(Int64(42), V.AsInt, 'val 42');
+  Doc.Done;
+end;
+
+procedure TestRoundTrip;
+var Doc: TJsonDocument; V: TJsonValue;
+    B: TStringBuilder; W: TJsonWriter;
+    S1, S2: string;
+const
+  INPUT = '{"name":"Alice","scores":[1.5,2.7,3.14],"active":true,"data":null}';
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV(INPUT)), 'parse');
+  B.Init(256);
+  W.Init(B);
+  W.BeginObject;
+    W.Key('name'); W.Str(TJsonValue.Create(Doc, Doc.Root).ObjectGet(SV('name')).AsStr);
+    W.Key('scores'); W.BeginArray;
+      W.Float(TJsonValue.Create(Doc, Doc.Root).ObjectGet(SV('scores')).ArrayGet(0).AsFloat);
+      W.Float(TJsonValue.Create(Doc, Doc.Root).ObjectGet(SV('scores')).ArrayGet(1).AsFloat);
+      W.Float(TJsonValue.Create(Doc, Doc.Root).ObjectGet(SV('scores')).ArrayGet(2).AsFloat);
+    W.EndArray;
+    W.Key('active'); W.Bool(TJsonValue.Create(Doc, Doc.Root).ObjectGet(SV('active')).AsBool);
+    W.Key('data'); W.Null;
+  W.EndObject;
+  S1 := B.ToString;
+  CheckEqual(INPUT, S1, 'round trip');
+  B.Done;
+  Doc.Done;
+end;
+
+procedure TestLargeArray;
+var Doc: TJsonDocument; V: TJsonValue;
+    B: TStringBuilder; W: TJsonWriter;
+    I: Int32;
+begin
+  B.Init(4096);
+  W.Init(B);
+  W.BeginArray;
+  for I := 0 to 99 do
+    W.Int(I);
+  W.EndArray;
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.FromStr(B.ToString)), 'parse large');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual(Int64(100), Int64(V.ArrayLen), 'len=100');
+  CheckEqual(Int64(0), V.ArrayGet(0).AsInt, '[0]=0');
+  CheckEqual(Int64(99), V.ArrayGet(99).AsInt, '[99]=99');
+  Doc.Done;
+  B.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.parser');
   T.Run('parse null', @TestParseNull);
@@ -205,5 +292,10 @@ begin
   T.Run('object iteration', @TestObjectIteration);
   T.Run('string escape', @TestStringEscape);
   T.Run('unicode escape', @TestUnicodeEscape);
+  T.Run('value kind and valid', @TestValueKindAndValid);
+  T.Run('nodecount and input', @TestNodeCountAndInput);
+  T.Run('JsonParseDoc func', @TestJsonParseDocFunc);
+  T.Run('round trip', @TestRoundTrip);
+  T.Run('large array', @TestLargeArray);
   T.Summary;
 end.
