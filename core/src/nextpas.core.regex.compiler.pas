@@ -157,7 +157,7 @@ begin
 end;
 
 procedure CompileNode(var C: TCompiler; ANode: PAstNode);
-var inst: TInstruction; splitPC: UInt32;
+var inst: TInstruction; splitPC, jumpPC: UInt32;
 begin
   if ANode = nil then Exit;
   FillChar(inst, SizeOf(inst), 0);
@@ -193,14 +193,13 @@ begin
       Emit(C, inst);
       C.Code[splitPC].X := C.Count;
       CompileNode(C, ANode^.Left);
+      jumpPC := C.Count;
       inst.Op := opJump;
       inst.Target := 0;
       Emit(C, inst);
       C.Code[splitPC].Y := C.Count;
       CompileNode(C, ANode^.Right);
-      C.Code[splitPC + (C.Code[splitPC].X - splitPC) + UInt32(ANode^.Left <> nil)].Target := C.Count;
-      // Fix: jump target is the instruction after right branch
-      // Actually simpler: record jump position
+      C.Code[jumpPC].Target := C.Count;
     end;
     akRepeat:
       CompileRepeat(C, ANode);

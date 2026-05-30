@@ -83,13 +83,13 @@ begin
         akWordBoundary:
         begin
           if ((APos = 0) or not IsWordChar(Ord(AInput[APos - 1]))) <>
-             ((APos = ALen) or not IsWordChar(Ord(AInput[APos]))) then
+             ((APos >= ALen) or not IsWordChar(Ord(AInput[APos]))) then
             AddThread(TL, AProgram, APC + 1, ASlots, APos, AInput, ALen);
         end;
         akNotWordBoundary:
         begin
           if not (((APos = 0) or not IsWordChar(Ord(AInput[APos - 1]))) <>
-                  ((APos = ALen) or not IsWordChar(Ord(AInput[APos])))) then
+                  ((APos >= ALen) or not IsWordChar(Ord(AInput[APos])))) then
             AddThread(TL, AProgram, APC + 1, ASlots, APos, AInput, ALen);
         end;
       end;
@@ -156,6 +156,7 @@ begin
 
     ClearThreadList(NList);
 
+    if CList.Count > 0 then
     for i := 0 to CList.Count - 1 do
     begin
       inst := AProgram.Code[CList.Items[i].PC];
@@ -184,9 +185,10 @@ begin
         end;
         opMatch:
         begin
-          if (not matched) or (CList.Items[i].Slots[0] < matchSlots[0]) or
+          if (Length(CList.Items[i].Slots) >= 2) and
+             ((not matched) or (CList.Items[i].Slots[0] < matchSlots[0]) or
              ((CList.Items[i].Slots[0] = matchSlots[0]) and
-              (SizeInt(pos) - CList.Items[i].Slots[0] > matchSlots[1] - matchSlots[0])) then
+              (SizeInt(pos) - CList.Items[i].Slots[0] > matchSlots[1] - matchSlots[0]))) then
           begin
             matched := True;
             Move(CList.Items[i].Slots[0], matchSlots[0], Length(matchSlots) * SizeOf(SizeInt));
