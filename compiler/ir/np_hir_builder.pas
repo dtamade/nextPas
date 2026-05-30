@@ -151,6 +151,8 @@ type
     procedure ProcessRecordCopy(const ANode: TTypedHirNode);
     procedure ProcessAssignStrFieldLoad(const ANode: TTypedHirNode);
     procedure ProcessVmtStore(const ANode: TTypedHirNode);
+    procedure EmitInterfaceSlotStore(AObjPtr: THIRValueId;
+      const AClassName: string; const ASlot: TInterfaceSlotMeta);
     procedure ProcessExceptionNode(const ANode: TTypedHirNode);
     procedure EnsureVmtForClass(const AClassName: string);
   public
@@ -2969,6 +2971,69 @@ begin
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(SlotPtr, GetPtrType);
   Instr.CallTarget := ClsName;
+  EmitInstr(Instr);
+
+  if FSemaModel.GetTypeMetaByName(ClsName, Meta) and
+    (Length(Meta.InterfaceSlots) > 0) then
+  begin
+    for I := 0 to High(Meta.InterfaceSlots) do
+    begin
+      EmitInterfaceSlotStore(ObjPtr, ClsName, Meta.InterfaceSlots[I]);
+    end;
+  end;
+end;
+
+procedure THIRBuilder.EmitInterfaceSlotStore(AObjPtr: THIRValueId;
+  const AClassName: string; const ASlot: TInterfaceSlotMeta);
+var
+  Instr: THIRInstr;
+  OffsetVal, SlotPtr: THIRValueId;
+  IntfMeta: TTypeMetadata;
+  ThunkNames: array of string;
+  I: LongInt;
+  IntfName: string;
+begin
+  IntfName := ASlot.InterfaceName;
+  if not FSemaModel.GetTypeMetaByName(IntfName, IntfMeta) then
+    Exit;
+  SetLength(ThunkNames, IntfMeta.VmtCount);
+  for I := 0 to IntfMeta.VmtCount - 1 do
+  begin
+    if I < Length(IntfMeta.VmtSlots) then
+      ThunkNames[I] := AClassName + '._intf_thunk_' + IntfName + '_' +
+        IntfMeta.VmtSlots[I].MethodName
+    else
+      ThunkNames[I] := '';
+  end;
+  FModule.AddImtGlobal(AClassName, IntfName, ThunkNames, ASlot.SlotOffset);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(ASlot.SlotOffset);
+  EmitInstr(Instr);
+  OffsetVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(AObjPtr);
+  Instr.Operands[1] := MakeOperand(OffsetVal);
+  EmitInstr(Instr);
+  SlotPtr := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'imt_store';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(SlotPtr, GetPtrType);
+  Instr.CallTarget := AClassName + '.imt.' + IntfName;
   EmitInstr(Instr);
 end;
 

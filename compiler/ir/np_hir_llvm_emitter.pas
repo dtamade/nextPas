@@ -548,6 +548,11 @@ begin
         if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
           Emit('  store ptr @' + AInstr.CallTarget + '.vmt, ptr ' + ValueRef(AInstr.Operands[0].ValueId));
       end
+      else if AInstr.IntrinsicName = 'imt_store' then
+      begin
+        if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
+          Emit('  store ptr @' + AInstr.CallTarget + ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
+      end
       else if AInstr.IntrinsicName = 'vcall' then
       begin
         if Length(AInstr.Operands) >= 2 then
@@ -1256,12 +1261,15 @@ procedure THIRLlvmEmitter.EmitImtGlobals;
 var
   I, J: LongInt;
   Imt: THIRImtGlobal;
-  Line: string;
+  Line, RealFunc, ThunkName: string;
+  OffsetBytes: LongInt;
+  UnderscorePos: LongInt;
 begin
   for I := 0 to FModule.ImtGlobalCount - 1 do
   begin
     Imt := FModule.ImtGlobalAt(I);
     if Length(Imt.ThunkNames) = 0 then Continue;
+
     Line := '@' + Imt.ClassName + '.imt.' + Imt.InterfaceName +
       ' = internal constant [' + IntToStr(Length(Imt.ThunkNames)) + ' x ptr] [';
     for J := 0 to High(Imt.ThunkNames) do
@@ -1275,6 +1283,27 @@ begin
     Line := Line + ']';
     Emit('');
     Emit(Line);
+
+    OffsetBytes := Imt.SlotOffset * 8;
+    for J := 0 to High(Imt.ThunkNames) do
+    begin
+      ThunkName := Imt.ThunkNames[J];
+      if ThunkName = '' then Continue;
+      UnderscorePos := Pos('._intf_thunk_', ThunkName);
+      if UnderscorePos > 0 then
+        RealFunc := Copy(ThunkName, 1, UnderscorePos - 1) + '.' +
+          Copy(ThunkName, Pos('_' + Imt.InterfaceName + '_', ThunkName) +
+            Length(Imt.InterfaceName) + 2, MaxInt)
+      else
+        RealFunc := ThunkName;
+      Emit('');
+      Emit('define internal i64 @' + ThunkName + '(ptr %intf_self) {');
+      Emit('entry:');
+      Emit('  %obj = getelementptr i8, ptr %intf_self, i64 -' + IntToStr(OffsetBytes));
+      Emit('  %r = tail call i64 @' + RealFunc + '(ptr %obj)');
+      Emit('  ret i64 %r');
+      Emit('}');
+    end;
   end;
 end;
 
