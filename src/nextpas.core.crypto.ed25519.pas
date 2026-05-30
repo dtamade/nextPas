@@ -252,23 +252,26 @@ end;
 
 function EdBasePointMul(const AScalar: array of Byte): TEdPoint;
 const
-  ED25519_BASEPOINT: array[0..31] of Byte = (
-    $58, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66,
-    $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66, $66
+  ED25519_BASE_X: TFe25519 = (
+    52811034, 25909283, 16144682, 17082669, 27570973,
+    30858332, 40966398, 8378388, 20764389, 8758491
+  );
+  ED25519_BASE_Y: TFe25519 = (
+    40265304, 26843545, 13421772, 20132659, 26843545,
+    6710886, 53687091, 13421772, 40265318, 26843545
+  );
+  ED25519_BASE_T: TFe25519 = (
+    28827043, 27438313, 39759291, 244362, 8635006,
+    11264893, 19351346, 13413597, 16611511, 27139452
   );
 var
   Q, T, B: TEdPoint;
   I: Integer;
-  LBP: TBytes;
 begin
-  SetLength(LBP, 32);
-  Move(ED25519_BASEPOINT[0], LBP[0], 32);
-  if not EdPointDecode(B, LBP, 0) then
-  begin
-    Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
-    Result := Q;
-    Exit;
-  end;
+  B.X := ED25519_BASE_X;
+  B.Y := ED25519_BASE_Y;
+  B.Z := FE_ONE;
+  B.T := ED25519_BASE_T;
 
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
 
