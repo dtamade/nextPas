@@ -239,6 +239,36 @@ begin
   Check(LDoc.HasError, 'trailing garbage rejected');
 end;
 
+procedure TestRejectInvalidMonth;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('dt = 1979-13-01T00:00:00Z');
+  Check(LDoc.HasError, 'month 13 rejected');
+end;
+
+procedure TestRejectInvalidHour;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('dt = 1979-05-27T25:00:00Z');
+  Check(LDoc.HasError, 'hour 25 rejected');
+end;
+
+procedure TestRejectDateTimeTrailing;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('dt = 1979-05-27oops');
+  Check(LDoc.HasError, 'datetime trailing content rejected');
+end;
+
+procedure TestDottedKeyWithSpaces;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('fruit . color = "red"');
+  Check(not LDoc.HasError, 'dotted key with spaces accepted');
+  Check(LDoc.Root.Get('fruit').Get('color').AsStr.Equals(
+    TStringView.Create(PAnsiChar('red'), 3)), 'fruit.color = red');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -267,6 +297,10 @@ begin
   T.Run('reject bare key invalid', @TestRejectBareKeyInvalid);
   T.Run('reject missing value', @TestRejectMissingValue);
   T.Run('reject trailing garbage', @TestRejectTrailingGarbage);
+  T.Run('reject invalid month', @TestRejectInvalidMonth);
+  T.Run('reject invalid hour', @TestRejectInvalidHour);
+  T.Run('reject datetime trailing', @TestRejectDateTimeTrailing);
+  T.Run('dotted key with spaces', @TestDottedKeyWithSpaces);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

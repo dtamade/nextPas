@@ -327,13 +327,16 @@ begin
   ACount := 0;
   if not ParseKey(AKeys[ACount]) then Exit(False);
   Inc(ACount);
+  SkipWhitespaceInline;
   while (Pos < SrcLen) and (Src[Pos] = '.') do
   begin
     Advance;
+    SkipWhitespaceInline;
     if ACount >= Length(AKeys) then
       Exit(SetError('key too deeply nested', 21));
     if not ParseKey(AKeys[ACount]) then Exit(False);
     Inc(ACount);
+    SkipWhitespaceInline;
   end;
   Result := True;
 end;
@@ -858,6 +861,31 @@ begin
   end;
 
   LDT.OffsetMinutes := LOffMin;
+
+  // Verify complete consumption
+  if LP <> ALen then
+    Exit(SetError('trailing content in datetime', 28));
+
+  // Range validation
+  if LHasDate then
+  begin
+    if (LDT.Month < 1) or (LDT.Month > 12) then
+      Exit(SetError('month out of range', 18));
+    if (LDT.Day < 1) or (LDT.Day > 31) then
+      Exit(SetError('day out of range', 16));
+  end;
+  if LHasTime then
+  begin
+    if LDT.Hour > 23 then
+      Exit(SetError('hour out of range', 17));
+    if LDT.Minute > 59 then
+      Exit(SetError('minute out of range', 19));
+    if LDT.Second > 60 then
+      Exit(SetError('second out of range', 19));
+  end;
+  if LHasOffset and (Abs(LOffMin) > 1439) then
+    Exit(SetError('offset out of range', 19));
+
   LDT.Flags := 0;
   if LHasDate then LDT.Flags := LDT.Flags or TOML_DT_FLAG_HAS_DATE;
   if LHasTime then LDT.Flags := LDT.Flags or TOML_DT_FLAG_HAS_TIME;
