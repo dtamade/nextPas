@@ -6012,6 +6012,16 @@ begin
     ABlob := 'null' + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
+  begin
+    ABlob := 'int 1' + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
+  begin
+    ABlob := 'int 0' + #10;
+    Exit(True);
+  end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
     SameText(ANode.ChildAt(0).Text, 'Length') and
