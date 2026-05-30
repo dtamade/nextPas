@@ -72,6 +72,24 @@ procedure IoUringPrepRecv(ASqe: PIoUringSqe; AFd: Int32;
   ABuf: Pointer; ALen: UInt32; AFlags: Int32);
 procedure IoUringPrepPollAdd(ASqe: PIoUringSqe; AFd: Int32; APollMask: UInt32);
 procedure IoUringPrepCancel(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: Int32);
+procedure IoUringPrepReadv(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+procedure IoUringPrepWritev(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+procedure IoUringPrepTimeout(ASqe: PIoUringSqe; ATs: Pointer;
+  ACount: UInt32; AFlags: UInt32);
+procedure IoUringPrepTimeoutRemove(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: UInt32);
+procedure IoUringPrepOpenAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32; AMode: UInt32);
+procedure IoUringPrepSplice(ASqe: PIoUringSqe; AFdIn: Int32; AOffIn: Int64;
+  AFdOut: Int32; AOffOut: Int64; ALen: UInt32; AFlags: UInt32);
+procedure IoUringPrepShutdown(ASqe: PIoUringSqe; AFd: Int32; AHow: Int32);
+procedure IoUringPrepUnlinkAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32);
+procedure IoUringPrepMkdirAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AMode: UInt32);
+procedure IoUringPrepRenameAt(ASqe: PIoUringSqe; AOldDirFd: Int32;
+  AOldPath: PAnsiChar; ANewDirFd: Int32; ANewPath: PAnsiChar; AFlags: UInt32);
 
 procedure IoUringSqeSetData(ASqe: PIoUringSqe; AData: UInt64); inline;
 function IoUringCqeGetData(ACqe: PIoUringCqe): UInt64; inline;
@@ -400,6 +418,102 @@ begin
   ASqe^.fd := -1;
   ASqe^.addr := AUserData;
   ASqe^.op_flags.cancel_flags := UInt32(AFlags);
+end;
+
+procedure IoUringPrepReadv(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+begin
+  ASqe^.opcode := IORING_OP_READV;
+  ASqe^.fd := AFd;
+  ASqe^.addr := UInt64(PtrUInt(AIovecs));
+  ASqe^.len := ANrVecs;
+  ASqe^.off := UInt64(AOffset);
+end;
+
+procedure IoUringPrepWritev(ASqe: PIoUringSqe; AFd: Int32;
+  AIovecs: Pointer; ANrVecs: UInt32; AOffset: Int64);
+begin
+  ASqe^.opcode := IORING_OP_WRITEV;
+  ASqe^.fd := AFd;
+  ASqe^.addr := UInt64(PtrUInt(AIovecs));
+  ASqe^.len := ANrVecs;
+  ASqe^.off := UInt64(AOffset);
+end;
+
+procedure IoUringPrepTimeout(ASqe: PIoUringSqe; ATs: Pointer;
+  ACount: UInt32; AFlags: UInt32);
+begin
+  ASqe^.opcode := IORING_OP_TIMEOUT;
+  ASqe^.fd := -1;
+  ASqe^.addr := UInt64(PtrUInt(ATs));
+  ASqe^.len := ACount;
+  ASqe^.op_flags.timeout_flags := AFlags;
+end;
+
+procedure IoUringPrepTimeoutRemove(ASqe: PIoUringSqe; AUserData: UInt64; AFlags: UInt32);
+begin
+  ASqe^.opcode := IORING_OP_TIMEOUT_REMOVE;
+  ASqe^.fd := -1;
+  ASqe^.addr := AUserData;
+  ASqe^.op_flags.timeout_flags := AFlags;
+end;
+
+procedure IoUringPrepOpenAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32; AMode: UInt32);
+begin
+  ASqe^.opcode := IORING_OP_OPENAT;
+  ASqe^.fd := ADirFd;
+  ASqe^.addr := UInt64(PtrUInt(APath));
+  ASqe^.len := AMode;
+  ASqe^.op_flags.open_flags := UInt32(AFlags);
+end;
+
+procedure IoUringPrepSplice(ASqe: PIoUringSqe; AFdIn: Int32; AOffIn: Int64;
+  AFdOut: Int32; AOffOut: Int64; ALen: UInt32; AFlags: UInt32);
+begin
+  ASqe^.opcode := IORING_OP_SPLICE;
+  ASqe^.fd := AFdOut;
+  ASqe^.off := UInt64(AOffOut);
+  ASqe^.splice_fd_in := AFdIn;
+  ASqe^.addr := UInt64(AOffIn);
+  ASqe^.len := ALen;
+  ASqe^.op_flags.splice_flags := AFlags;
+end;
+
+procedure IoUringPrepShutdown(ASqe: PIoUringSqe; AFd: Int32; AHow: Int32);
+begin
+  ASqe^.opcode := IORING_OP_SHUTDOWN;
+  ASqe^.fd := AFd;
+  ASqe^.len := UInt32(AHow);
+end;
+
+procedure IoUringPrepUnlinkAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AFlags: Int32);
+begin
+  ASqe^.opcode := IORING_OP_UNLINKAT;
+  ASqe^.fd := ADirFd;
+  ASqe^.addr := UInt64(PtrUInt(APath));
+  ASqe^.op_flags.open_flags := UInt32(AFlags);
+end;
+
+procedure IoUringPrepMkdirAt(ASqe: PIoUringSqe; ADirFd: Int32;
+  APath: PAnsiChar; AMode: UInt32);
+begin
+  ASqe^.opcode := IORING_OP_MKDIRAT;
+  ASqe^.fd := ADirFd;
+  ASqe^.addr := UInt64(PtrUInt(APath));
+  ASqe^.len := AMode;
+end;
+
+procedure IoUringPrepRenameAt(ASqe: PIoUringSqe; AOldDirFd: Int32;
+  AOldPath: PAnsiChar; ANewDirFd: Int32; ANewPath: PAnsiChar; AFlags: UInt32);
+begin
+  ASqe^.opcode := IORING_OP_RENAMEAT;
+  ASqe^.fd := AOldDirFd;
+  ASqe^.addr := UInt64(PtrUInt(AOldPath));
+  ASqe^.len := ANewDirFd;
+  ASqe^.off := UInt64(PtrUInt(ANewPath));
+  ASqe^.op_flags.open_flags := AFlags;
 end;
 
 procedure IoUringSqeSetData(ASqe: PIoUringSqe; AData: UInt64);
