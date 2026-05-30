@@ -13,6 +13,9 @@ type
     FModule: THIRModule;
     FLines: array of string;
     FLineCount: LongInt;
+    FGlobalRefNames: array of string;
+    FGlobalRefIds: array of THIRValueId;
+    FGlobalRefCount: LongInt;
     FNeedsWriteInt: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStrCmp: Boolean;
@@ -68,6 +71,7 @@ begin
   inherited Create;
   FModule := AModule;
   FLineCount := 0;
+  FGlobalRefCount := 0;
   FNeedsWriteInt := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
@@ -92,7 +96,12 @@ begin
 end;
 
 function THIRLlvmEmitter.ValueRef(AValueId: THIRValueId): string;
+var
+  I: LongInt;
 begin
+  for I := 0 to FGlobalRefCount - 1 do
+    if FGlobalRefIds[I] = AValueId then
+      Exit('@g_' + FGlobalRefNames[I]);
   Result := '%v' + IntToStr(AValueId);
 end;
 
@@ -402,8 +411,14 @@ begin
       end
       else if AInstr.IntrinsicName = 'global_ref' then
       begin
-        Emit('  ' + ValueRef(AInstr.ResultId) +
-          ' = getelementptr i64, ptr @g_' + AInstr.CallTarget + ', i64 0');
+        if FGlobalRefCount >= Length(FGlobalRefNames) then
+        begin
+          SetLength(FGlobalRefNames, FGlobalRefCount + 16);
+          SetLength(FGlobalRefIds, FGlobalRefCount + 16);
+        end;
+        FGlobalRefNames[FGlobalRefCount] := AInstr.CallTarget;
+        FGlobalRefIds[FGlobalRefCount] := AInstr.ResultId;
+        Inc(FGlobalRefCount);
       end
       else if AInstr.IntrinsicName = 'gep_i64' then
       begin
@@ -720,6 +735,7 @@ var
   T: THIRTypeRec;
 begin
   if AFunc.IsExternal then Exit;
+  FGlobalRefCount := 0;
 
   ParamStr := '';
   for I := 0 to High(AFunc.Params) do
