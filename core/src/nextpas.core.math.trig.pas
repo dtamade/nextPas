@@ -48,6 +48,11 @@ function RadToDeg(const ARad: Double): Double; inline;
 function Clamp(const AValue, AMin, AMax: Double): Double; inline;
 function Clamp(const AValue, AMin, AMax: Int32): Int32; inline;
 
+{** 符号函数 *}
+function Sign(const AX: Double): Double; overload; inline;
+function Sign(const AX: Int32): Int32; overload; inline;
+function Sign(const AX: Int64): Int64; overload; inline;
+
 {** 插值 *}
 function Lerp(const AA, AB, AT: Double): Double; inline;
 
@@ -190,4 +195,25 @@ begin
   Result := AA + (AB - AA) * AT;
 end;
 
+
+function Sign(const AX: Double): Double;
+begin
+  if AX > 0 then Result := 1.0
+  else if AX < 0 then Result := -1.0
+  else Result := 0.0;
+end;
+
+function Sign(const AX: Int32): Int32;
+begin
+  if AX > 0 then Result := 1
+  else if AX < 0 then Result := -1
+  else Result := 0;
+end;
+
+function Sign(const AX: Int64): Int64;
+begin
+  if AX > 0 then Result := 1
+  else if AX < 0 then Result := -1
+  else Result := 0;
+end;
 end.
