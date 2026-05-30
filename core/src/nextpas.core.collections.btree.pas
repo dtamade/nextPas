@@ -134,6 +134,7 @@ type
     procedure Difference(AOther: TBTreeSet);
 
     function GetCount: SizeUInt;
+    function IsEmpty: Boolean; inline;
     property Count: SizeUInt read GetCount;
   end;
 
@@ -1078,6 +1079,11 @@ end;
 function TBTreeSet.GetCount: SizeUInt;
 begin
   Result := FInner.Count;
+end;
+
+function TBTreeSet.IsEmpty: Boolean;
+begin
+  Result := FInner.Count = 0;
 end;
 
 function TBTreeSet.LowerBound(const AItem: T; out AFound: T): Boolean;

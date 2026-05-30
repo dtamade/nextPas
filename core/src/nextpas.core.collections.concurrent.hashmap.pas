@@ -9,14 +9,15 @@ uses
   nextpas.core.base,
   nextpas.core.sync.rwlock,
   nextpas.core.sync.intf,
-  nextpas.core.collections.hashmap.swiss;
+  nextpas.core.collections.hashmap.swiss,
+  nextpas.core.collections.concurrent.map.intf;
 
 const
   CONCURRENT_SEGMENT_COUNT = 16;
   CONCURRENT_SEGMENT_MASK = CONCURRENT_SEGMENT_COUNT - 1;
 
 type
-  generic TConcurrentHashMap<K, V> = class
+  generic TConcurrentHashMap<K, V> = class(TInterfacedObject, specialize IConcurrentMap<K, V>)
   public type
     THashFunc = function(const AKey: K): UInt32;
     TEqualsFunc = function(const A, B: K): Boolean;
