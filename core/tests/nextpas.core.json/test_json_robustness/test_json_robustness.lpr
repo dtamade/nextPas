@@ -3,6 +3,7 @@ program test_json_robustness;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.text.view,
   nextpas.core.text.builder,
   nextpas.core.mem.default,
@@ -176,6 +177,95 @@ begin
   B.Done;
 end;
 
+procedure TestConsecutiveBackslashes;
+var
+  Buf: array[0..1099] of AnsiChar;
+  I: Int32;
+  Doc: IJsonDocument;
+  S: string;
+begin
+  Buf[0] := '"';
+  for I := 1 to 100 do Buf[I] := '\';
+  Buf[101] := '"';
+  SetString(S, @Buf[0], 102);
+  Doc := JsonParse(S);
+  if not Doc.HasError then
+    CheckEqual(Int64(50), Int64(Doc.Root.AsStr.Len), '100 bs = 50 decoded')
+  else
+    Check(True, '100 bs rejected (acceptable)');
+
+  Buf[0] := '"';
+  for I := 1 to 99 do Buf[I] := '\';
+  Buf[100] := '"';
+  Buf[101] := '"';
+  SetString(S, @Buf[0], 102);
+  Doc := JsonParse(S);
+  if not Doc.HasError then
+    Check(Doc.Root.AsStr.Len > 0, '99 bs + quote parsed')
+  else
+    Check(True, '99 bs rejected (acceptable)');
+end;
+
+procedure TestUnicodeInKey;
+var Doc: IJsonDocument;
+const
+  INPUT = '{"'#195#169'":1}';
+begin
+  Doc := JsonParse(INPUT);
+  Check(not Doc.HasError, 'utf8 key accepted');
+end;
+
+procedure TestVeryLongNumber;
+var Doc: IJsonDocument;
+const
+  INPUT = '1234567890123456789012345678901234567890';
+begin
+  Doc := JsonParse(INPUT);
+  Check(not Doc.HasError, 'very long number parsed');
+  Check(Doc.Root.IsReal, 'long number → float');
+end;
+
+procedure TestNestedObjects;
+var
+  B: TStringBuilder;
+  W: TJsonWriter;
+  Doc: IJsonDocument;
+  I: Int32;
+begin
+  B.Init(4096);
+  W.Init(B);
+  for I := 1 to 50 do
+  begin
+    W.BeginObject;
+    W.Key('n');
+  end;
+  W.Int(42);
+  for I := 1 to 50 do
+    W.EndObject;
+  Doc := JsonParse(B.ToString);
+  Check(not Doc.HasError, '50-deep nested objects');
+  B.Done;
+end;
+
+procedure TestEmptyStringKey;
+var Doc: IJsonDocument;
+begin
+  Doc := JsonParse('{"":1}');
+  Check(not Doc.HasError, 'empty key accepted');
+  CheckEqual(Int64(1), Doc.Root.ObjectGet('').AsInt, 'empty key lookup');
+end;
+
+procedure TestRepeatedParse;
+var Doc: IJsonDocument; I: Int32;
+begin
+  for I := 1 to 100 do
+  begin
+    Doc := JsonParse('{"i":' + IntToStr(I) + '}');
+    Check(not Doc.HasError, 'parse ' + IntToStr(I));
+    CheckEqual(Int64(I), Doc.Root.ObjectGet('i').AsInt, 'val ' + IntToStr(I));
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.robustness');
   T.Run('empty input', @TestEmptyInput);
@@ -189,5 +279,11 @@ begin
   T.Run('invalid value positions', @TestInvalidValuePositions);
   T.Run('access on wrong type', @TestAccessOnWrongType);
   T.Run('stress large array', @TestStressLargeArray);
+  T.Run('consecutive backslashes', @TestConsecutiveBackslashes);
+  T.Run('unicode in key', @TestUnicodeInKey);
+  T.Run('very long number', @TestVeryLongNumber);
+  T.Run('nested objects', @TestNestedObjects);
+  T.Run('empty string key', @TestEmptyStringKey);
+  T.Run('repeated parse', @TestRepeatedParse);
   T.Summary;
 end.

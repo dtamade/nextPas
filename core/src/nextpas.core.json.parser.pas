@@ -16,10 +16,14 @@ type
     FNodeCount: UInt32;
     FNodeCap: UInt32;
     FAllocator: IAllocator;
+    FStrBufs: PPointer;
+    FStrBufCount: UInt32;
+    FStrBufCap: UInt32;
     FInput: TStringView;
     FError: TJsonError;
     FHasError: Boolean;
     function AddNode: UInt32;
+    function AllocStrBuf(ASize: SizeUInt): PAnsiChar;
   public
     procedure Init(const AAllocator: IAllocator);
     procedure Done;
@@ -54,11 +58,26 @@ begin
   FNodeCap := INITIAL_NODE_CAP;
   GetMem(FNodes, FNodeCap * SizeOf(TJsonNode));
   FNodeCount := 0;
+  FStrBufCap := 16;
+  GetMem(FStrBufs, FStrBufCap * SizeOf(PAnsiChar));
+  FStrBufCount := 0;
   FHasError := False;
 end;
 
 procedure TJsonDocument.Done;
+var
+  I: UInt32;
 begin
+  if (FStrBufs <> nil) and (FStrBufCount > 0) then
+  begin
+    for I := 0 to FStrBufCount - 1 do
+      FreeMem(PPointer(PByte(FStrBufs) + I * SizeOf(Pointer))^);
+  end;
+  if FStrBufs <> nil then
+  begin
+    FreeMem(FStrBufs);
+    FStrBufs := nil;
+  end;
   if FNodes <> nil then
   begin
     FreeMem(FNodes);
@@ -66,6 +85,7 @@ begin
   end;
   FNodeCount := 0;
   FNodeCap := 0;
+  FStrBufCount := 0;
 end;
 
 function TJsonDocument.AddNode: UInt32;
@@ -81,6 +101,21 @@ begin
   Result := FNodeCount;
   FNodes[FNodeCount].Next := JSON_NODE_NONE;
   Inc(FNodeCount);
+end;
+
+function TJsonDocument.AllocStrBuf(ASize: SizeUInt): PAnsiChar;
+var
+  LNewCap: UInt32;
+begin
+  GetMem(Result, ASize);
+  if FStrBufCount >= FStrBufCap then
+  begin
+    LNewCap := FStrBufCap * 2;
+    ReallocMem(FStrBufs, LNewCap * SizeOf(Pointer));
+    FStrBufCap := LNewCap;
+  end;
+  PPointer(PByte(FStrBufs) + FStrBufCount * SizeOf(Pointer))^ := Result;
+  Inc(FStrBufCount);
 end;
 
 function TJsonDocument.Root: UInt32;
@@ -210,7 +245,7 @@ begin
   Doc^.FNodes[LIdx].Kind := jnkString;
   if LHasEscape then
   begin
-    LBuf := Doc^.FAllocator.Allocate(LRaw.Len);
+    LBuf := Doc^.AllocStrBuf(LRaw.Len);
     LDecLen := JsonUnescapeToBuffer(LRaw.Data, LRaw.Len, LBuf, LErr);
     Doc^.FNodes[LIdx].Str := TStringView.Create(LBuf, LDecLen);
   end
