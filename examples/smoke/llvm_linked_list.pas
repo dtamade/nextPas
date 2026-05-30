@@ -1,38 +1,54 @@
-program TestLinked;
+program llvm_linked_list;
 type
   TNode = class
     FValue: Integer;
     FNext: TNode;
-    constructor Create(AValue: Integer);
-    procedure SetNext(ANext: TNode); virtual;
-    function Total: Integer; virtual;
+    constructor Create(V: Integer);
   end;
 
-constructor TNode.Create(AValue: Integer);
+  TList = class
+    FHead: TNode;
+    FCount: Integer;
+    constructor Create;
+    procedure Push(V: Integer); virtual;
+    function Top: Integer; virtual;
+    function Count: Integer; virtual;
+  end;
+
+constructor TNode.Create(V: Integer);
 begin
-  FValue := AValue;
+  FValue := V;
 end;
 
-procedure TNode.SetNext(ANext: TNode);
+constructor TList.Create;
 begin
-  FNext := ANext;
+  FCount := 0;
 end;
 
-function TNode.Total: Integer;
+procedure TList.Push(V: Integer);
+var
+  N: TNode;
 begin
-  if FNext = nil then
-    Result := FValue
-  else
-    Result := FValue + FNext.Total;
+  N := TNode.Create(V);
+  FHead := N;
+  FCount := FCount + 1;
+end;
+
+function TList.Top: Integer;
+begin
+  Result := FHead.FValue;
+end;
+
+function TList.Count: Integer;
+begin
+  Result := FCount;
 end;
 
 var
-  A, B, C: TNode;
+  L: TList;
 begin
-  A := TNode.Create(10);
-  B := TNode.Create(20);
-  C := TNode.Create(12);
-  A.SetNext(B);
-  B.SetNext(C);
-  Halt(A.Total);
+  L := TList.Create;
+  L.Push(10);
+  L.Push(42);
+  Halt(L.Top + L.Count);
 end.

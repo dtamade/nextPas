@@ -6321,6 +6321,34 @@ begin
     (ANode.ChildAt(1) <> nil) and
     (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    TypeMetaFieldIsPtr(FCurrentMethodClass, ANode.ChildAt(0).Text) and
+    (TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text) >= 0) then
+  begin
+    Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text);
+    FuncName := '';
+    for StrCallIdx := 1 to FModel.SymbolCount do
+      if SameText(FModel.SymbolAt(StrCallIdx).Name, ANode.ChildAt(0).Text) and
+        SameText(FModel.SymbolAt(StrCallIdx).Kind, 'field') then
+      begin
+        if FModel.SymbolAt(StrCallIdx).TypeId > 0 then
+          FuncName := FModel.TypeAt(
+            FModel.SymbolAt(StrCallIdx).TypeId - 1).Name;
+        Break;
+      end;
+    if (FuncName <> '') and
+      (TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text) >= 0) then
+    begin
+      StrCallIdx := LongInt(TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text));
+      ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
+        'int ' + IntToStr(StrCallIdx) + #10 + 'arr_load' + #10;
+      Exit(True);
+    end;
+  end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkDotAccess) and
+    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
     (TypeMetaFieldIndex(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text,
       ANode.ChildAt(1).Text) >= 0) then
   begin
