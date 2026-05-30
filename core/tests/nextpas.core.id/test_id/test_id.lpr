@@ -6,7 +6,8 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.id,
-  nextpas.core.id.base;
+  nextpas.core.id.base,
+  nextpas.core.id.uuid;
 
 var
   T: TTestRunner;
@@ -177,6 +178,121 @@ begin
   Check(LId1 <> LId2, 'two NanoIDs must differ');
 end;
 
+{ UUID v7 tests }
+
+procedure TestUuidV7Length;
+var LId: string;
+begin
+  LId := UuidV7;
+  CheckEqual(Int64(UUID_LENGTH), Int64(Length(LId)));
+end;
+
+procedure TestUuidV7Version;
+var LId: string;
+begin
+  LId := UuidV7;
+  Check(LId[15] = '7', 'version nibble must be 7');
+end;
+
+procedure TestUuidV7Variant;
+var LId: string; LCh: Char;
+begin
+  LId := UuidV7;
+  LCh := LId[20];
+  Check((LCh = '8') or (LCh = '9') or (LCh = 'a') or (LCh = 'b'), 'variant');
+end;
+
+procedure TestUuidV7Ordering;
+var LId1, LId2: string;
+begin
+  LId1 := UuidV7;
+  LId2 := UuidV7;
+  Check(LId1 <= LId2, 'v7 must be time-ordered');
+end;
+
+procedure TestUuidV7Timestamp;
+var LU: TUuid; LMs: UInt64;
+begin
+  LU := TUuid.NewV7;
+  LMs := LU.TimestampMs;
+  Check(LMs > 1700000000000, 'after 2023');
+  Check(LMs < 2100000000000, 'before 2036');
+end;
+
+{ TUuid record tests }
+
+procedure TestUuidRecordV4;
+var LU: TUuid;
+begin
+  LU := TUuid.NewV4;
+  CheckEqual(Int64(4), Int64(LU.Version));
+  CheckEqual(Int64(2), Int64(LU.Variant));
+end;
+
+procedure TestUuidRecordNil;
+var LU: TUuid;
+begin
+  LU := TUuid.Nil_;
+  Check(LU.IsNil, 'Nil_ must be nil');
+end;
+
+procedure TestUuidRecordEquals;
+var LA, LB: TUuid;
+begin
+  LA := TUuid.NewV4;
+  LB := LA;
+  Check(LA.Equals(LB), 'copy must equal');
+  LB := TUuid.NewV4;
+  Check(not LA.Equals(LB), 'different must not equal');
+end;
+
+procedure TestUuidRecordCompare;
+var LA, LB: TUuid;
+begin
+  LA := TUuid.Nil_;
+  LB := TUuid.NewV4;
+  Check(LA.CompareTo(LB) < 0, 'nil < random');
+  Check(LA.CompareTo(LA) = 0, 'self = self');
+end;
+
+procedure TestUuidParseValid;
+var LU: TUuid;
+begin
+  LU := TUuid.Parse('550e8400-e29b-41d4-a716-446655440000');
+  Check(not LU.IsNil, 'parsed not nil');
+  CheckEqual('550e8400-e29b-41d4-a716-446655440000', LU.ToString);
+end;
+
+procedure TestUuidParseNilStr;
+var LU: TUuid;
+begin
+  LU := TUuid.Parse('00000000-0000-0000-0000-000000000000');
+  Check(LU.IsNil, 'parsed nil');
+end;
+
+procedure TestUuidParseCaseInsensitive;
+var LU1, LU2: TUuid;
+begin
+  LU1 := TUuid.Parse('550E8400-E29B-41D4-A716-446655440000');
+  LU2 := TUuid.Parse('550e8400-e29b-41d4-a716-446655440000');
+  Check(LU1.Equals(LU2), 'case insensitive');
+end;
+
+procedure TestUuidParseInvalid;
+begin
+  Check(not UuidIsValid('not-a-uuid'), 'invalid');
+  Check(not UuidIsValid('550e8400-e29b-41d4-a716'), 'too short');
+  Check(not UuidIsValid(''), 'empty');
+end;
+
+procedure TestUuidRoundTrip;
+var LU1, LU2: TUuid;
+begin
+  LU1 := TUuid.NewV4;
+  LU2 := TUuid.Parse(LU1.ToString);
+  Check(LU1.Equals(LU2), 'roundtrip');
+end;
+
 begin
   Randomize;
   T := TTestRunner.Create('nextpas.core.id');
@@ -186,6 +302,21 @@ begin
   T.Run('UUID version 4', @TestUuidVersion);
   T.Run('UUID variant', @TestUuidVariant);
   T.Run('UUID uniqueness', @TestUuidUniqueness);
+
+  T.Run('UUID v7 length', @TestUuidV7Length);
+  T.Run('UUID v7 version', @TestUuidV7Version);
+  T.Run('UUID v7 variant', @TestUuidV7Variant);
+  T.Run('UUID v7 ordering', @TestUuidV7Ordering);
+  T.Run('UUID v7 timestamp', @TestUuidV7Timestamp);
+  T.Run('TUuid record v4', @TestUuidRecordV4);
+  T.Run('TUuid Nil', @TestUuidRecordNil);
+  T.Run('TUuid Equals', @TestUuidRecordEquals);
+  T.Run('TUuid CompareTo', @TestUuidRecordCompare);
+  T.Run('UUID parse valid', @TestUuidParseValid);
+  T.Run('UUID parse nil', @TestUuidParseNilStr);
+  T.Run('UUID parse case', @TestUuidParseCaseInsensitive);
+  T.Run('UUID parse invalid', @TestUuidParseInvalid);
+  T.Run('UUID roundtrip', @TestUuidRoundTrip);
 
   T.Run('ULID length', @TestUlidLength);
   T.Run('ULID Crockford chars', @TestUlidCrockfordChars);
