@@ -23,8 +23,11 @@ function Vec16CmpRange(AData: PByte; ALo, AHi: Byte): TMask16; inline;
 procedure Vec16ProbeGroup(AData: PByte; AH2: Byte; out AMatchMask, AEmptyMask: TMask16); inline;
 
 // === Mask manipulation ===
+// Note: all vec16 functions assume AData is non-nil. No nil/bounds checks
+// are performed — callers are responsible for pointer validity.
 
 function Vec16Ctz(AMask: TMask16): Int32; inline;
+function Vec16FirstSet(AMask: TMask16): Int32; inline;
 function Vec16Popcnt(AMask: TMask16): Int32; inline;
 
 // === Byte-lane transform (in-place, 16 bytes) ===

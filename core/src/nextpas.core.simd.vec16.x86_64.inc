@@ -122,6 +122,11 @@ begin
   end;
 end;
 
+function Vec16FirstSet(AMask: TMask16): Int32; inline;
+begin
+  Result := Vec16Ctz(AMask);
+end;
+
 function Vec16Popcnt(AMask: TMask16): Int32; inline;
 var
   m: UInt32;
