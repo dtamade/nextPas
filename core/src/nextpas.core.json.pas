@@ -109,8 +109,8 @@ procedure StringifyNode(var ADoc: TJsonDocument; AIdx: UInt32; var AW: TJsonWrit
 
 procedure StringifyNode(var ADoc: TJsonDocument; AIdx: UInt32; var AW: TJsonWriter);
 var
-  LNode: PJsonNode;
-  LChild: UInt32;
+  LNode, LKeyNode, LValNode: PJsonNode;
+  LChild, LValIdx: UInt32;
   I: UInt32;
 begin
   if AIdx = JSON_NODE_NONE then
@@ -148,12 +148,27 @@ begin
       for I := 0 to LNode^.Container.Count - 1 do
       begin
         if LChild = JSON_NODE_NONE then Break;
-        if (ADoc.Node(LChild)^.Flags and JNF_CLEAN_STR) <> 0 then
-          AW.KeyClean(ADoc.Node(LChild)^.Str.Data, ADoc.Node(LChild)^.Str.Len)
+        LKeyNode := ADoc.Node(LChild);
+        if (LKeyNode^.Flags and JNF_CLEAN_STR) <> 0 then
+          AW.KeyClean(LKeyNode^.Str.Data, LKeyNode^.Str.Len)
         else
-          AW.Key(ADoc.Node(LChild)^.Str);
-        StringifyNode(ADoc, ADoc.Node(LChild)^.Next, AW);
-        LChild := ADoc.Node(ADoc.Node(LChild)^.Next)^.Next;
+          AW.Key(LKeyNode^.Str);
+        LValIdx := LKeyNode^.Next;
+        LValNode := ADoc.Node(LValIdx);
+        case LValNode^.Kind of
+          jnkNull: AW.Null;
+          jnkBool: AW.Bool(LValNode^.BoolVal);
+          jnkInt: AW.Int(LValNode^.IntVal);
+          jnkReal: AW.Float(LValNode^.RealVal);
+          jnkString:
+            if (LValNode^.Flags and JNF_CLEAN_STR) <> 0 then
+              AW.StrClean(LValNode^.Str.Data, LValNode^.Str.Len)
+            else
+              AW.Str(LValNode^.Str);
+        else
+          StringifyNode(ADoc, LValIdx, AW);
+        end;
+        LChild := LValNode^.Next;
       end;
       AW.EndObject;
     end;

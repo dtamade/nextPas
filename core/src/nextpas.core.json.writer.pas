@@ -53,10 +53,7 @@ implementation
 
 uses
   nextpas.core.simd.base,
-  nextpas.core.simd.vec16,
-{$IFDEF HAS_AVX2}
-  nextpas.core.simd.vec32,
-{$ENDIF}
+  nextpas.core.simd.vec,
   nextpas.core.text.escape,
   nextpas.core.text.number;
 
@@ -101,40 +98,23 @@ procedure TJsonWriter.Key(const AKey: PAnsiChar; const ALen: SizeUInt);
 var
   LNeedsEscape: Boolean;
   LPos: SizeUInt;
-  LMask: TMask16;
-{$IFDEF HAS_AVX2}
-  LMask32: TMask32;
-{$ENDIF}
+  LMask: TVecMask;
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
   FBuilder^.AppendChar('"');
   LNeedsEscape := False;
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask32 := Vec32CmpEq(@AKey[LPos], Ord('"')) or Vec32CmpEq(@AKey[LPos], Ord('\')) or
-               Vec32CmpLtU(@AKey[LPos], $20);
-    if LMask32 <> MASK32_NONE_SET then
+    LMask := VecCmpEq(@AKey[LPos], Ord('"')) or VecCmpEq(@AKey[LPos], Ord('\')) or
+             VecCmpLtU(@AKey[LPos], $20);
+    if LMask <> TVecMask(0) then
     begin
       LNeedsEscape := True;
       Break;
     end;
-    Inc(LPos, 32);
+    Inc(LPos, VecWidth);
   end;
-{$ENDIF}
-  if not LNeedsEscape then
-    while LPos + 16 <= ALen do
-    begin
-      LMask := Vec16CmpEq(@AKey[LPos], Ord('"')) or Vec16CmpEq(@AKey[LPos], Ord('\')) or
-               Vec16CmpLtU(@AKey[LPos], $20);
-      if LMask <> MASK16_NONE_SET then
-      begin
-        LNeedsEscape := True;
-        Break;
-      end;
-      Inc(LPos, 16);
-    end;
   if not LNeedsEscape then
     while LPos < ALen do
     begin
@@ -200,42 +180,24 @@ procedure TJsonWriter.Str(const AValue: PAnsiChar; const ALen: SizeUInt);
 var
   LNeedsEscape: Boolean;
   LPos: SizeUInt;
-  LMask: TMask16;
-{$IFDEF HAS_AVX2}
-  LMask32: TMask32;
-{$ENDIF}
+  LMask: TVecMask;
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
   FBuilder^.AppendChar('"');
   LNeedsEscape := False;
   LPos := 0;
-{$IFDEF HAS_AVX2}
-  while LPos + 32 <= ALen do
+  while LPos + VecWidth <= ALen do
   begin
-    LMask32 := Vec32CmpEq(@AValue[LPos], Ord('"')) or
-               Vec32CmpEq(@AValue[LPos], Ord('\')) or
-               Vec32CmpLtU(@AValue[LPos], $20);
-    if LMask32 <> MASK32_NONE_SET then
+    LMask := VecCmpEq(@AValue[LPos], Ord('"')) or
+             VecCmpEq(@AValue[LPos], Ord('\')) or
+             VecCmpLtU(@AValue[LPos], $20);
+    if LMask <> TVecMask(0) then
     begin
       LNeedsEscape := True;
       Break;
     end;
-    Inc(LPos, 32);
+    Inc(LPos, VecWidth);
   end;
-{$ENDIF}
-  if not LNeedsEscape then
-    while LPos + 16 <= ALen do
-    begin
-      LMask := Vec16CmpEq(@AValue[LPos], Ord('"')) or
-               Vec16CmpEq(@AValue[LPos], Ord('\')) or
-               Vec16CmpLtU(@AValue[LPos], $20);
-      if LMask <> MASK16_NONE_SET then
-      begin
-        LNeedsEscape := True;
-        Break;
-      end;
-      Inc(LPos, 16);
-    end;
   if not LNeedsEscape then
     while LPos < ALen do
     begin
