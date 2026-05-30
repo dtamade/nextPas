@@ -20,6 +20,8 @@ type
   public type
     TKeyCompareFunc = function(const A, B: K; aData: Pointer): SizeInt;
     TForEachCallback = procedure(const AKey: K; const AValue: V; aData: Pointer);
+    TKeyArray = array of K;
+    TValueArray = array of V;
     TEntry = record
       Key: K;
       Value: V;
@@ -103,6 +105,8 @@ type
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
     procedure PutAll(AOther: TBTreeMap);
     procedure PutSorted(const AKeys: array of K; const AValues: array of V; ACount: SizeUInt);
+    function GetKeys: TKeyArray;
+    function GetValues: TValueArray;
     function GetEnumerator: TEnumerator;
 
     function IsEmpty: Boolean; inline;
@@ -981,6 +985,30 @@ begin
   Clear;
   for i := 0 to ACount - 1 do
     Put(AKeys[i], AValues[i]);
+end;
+
+function TBTreeMap.GetKeys: TKeyArray;
+var E: TEntry; i: SizeUInt;
+begin
+  SetLength(Result, FCount);
+  i := 0;
+  for E in Self do
+  begin
+    Result[i] := E.Key;
+    Inc(i);
+  end;
+end;
+
+function TBTreeMap.GetValues: TValueArray;
+var E: TEntry; i: SizeUInt;
+begin
+  SetLength(Result, FCount);
+  i := 0;
+  for E in Self do
+  begin
+    Result[i] := E.Value;
+    Inc(i);
+  end;
 end;
 
 { TEnumerator }
