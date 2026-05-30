@@ -7,9 +7,12 @@ interface
 uses
   SysUtils,
   nextpas.core.fs.base,
-  nextpas.core.fs.intf;
+  nextpas.core.fs.intf,
+  nextpas.core.text.base;
 
 function FsReadFile(const APath: string): TBytes;
+function FsReadFileText(const APath: string): string;
+function FsReadFileLines(const APath: string): TStringArray;
 procedure FsWriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault);
 procedure FsWriteAtomic(const APath: string; const AData: TBytes;
@@ -281,6 +284,56 @@ begin
   if LResult <> 0 then
     RaiseFsError(LResult, 'readlink', APath);
   SetString(Result, PAnsiChar(@LHeap[0]), LLen);
+end;
+
+function FsReadFileText(const APath: string): string;
+var
+  Bytes: TBytes;
+begin
+  Bytes := FsReadFile(APath);
+  if Length(Bytes) > 0 then
+    SetString(Result, PAnsiChar(@Bytes[0]), Length(Bytes))
+  else
+    Result := '';
+end;
+
+function FsReadFileLines(const APath: string): TStringArray;
+var
+  Text: string;
+  I, LStart, LCount, LLen: SizeInt;
+begin
+  Text := FsReadFileText(APath);
+  LLen := Length(Text);
+  if LLen = 0 then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  LCount := 0;
+  for I := 1 to LLen do
+    if Text[I] = #10 then Inc(LCount);
+  Inc(LCount);
+  SetLength(Result, LCount);
+  LCount := 0;
+  LStart := 1;
+  for I := 1 to LLen do
+  begin
+    if Text[I] = #10 then
+    begin
+      if (I > LStart) and (Text[I - 1] = #13) then
+        Result[LCount] := Copy(Text, LStart, I - LStart - 1)
+      else
+        Result[LCount] := Copy(Text, LStart, I - LStart);
+      Inc(LCount);
+      LStart := I + 1;
+    end;
+  end;
+  if LStart <= LLen then
+  begin
+    Result[LCount] := Copy(Text, LStart, LLen - LStart + 1);
+    Inc(LCount);
+  end;
+  SetLength(Result, LCount);
 end;
 
 end.

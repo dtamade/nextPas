@@ -7,6 +7,7 @@ interface
 uses
   SysUtils,
   nextpas.core.io.intf,
+  nextpas.core.text.base,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.fs.stream,
@@ -32,6 +33,8 @@ function Create(const APath: string;
 
 { Convenience }
 function ReadFile(const APath: string): TBytes; inline;
+function ReadFileText(const APath: string): string; inline;
+function ReadFileLines(const APath: string): TStringArray; inline;
 procedure WriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
 procedure WriteAtomic(const APath: string; const AData: TBytes;
@@ -69,6 +72,10 @@ function PathExt(const APath: string): string; inline;
 function PathClean(const APath: string): string; inline;
 function PathAbs(const APath: string): string; inline;
 function PathIsAbs(const APath: string): Boolean; inline;
+function PathEnsureSep(const APath: string): string; inline;
+function PathTrimSep(const APath: string): string; inline;
+function PathChangeExt(const APath, ANewExt: string): string; inline;
+function PathWithoutExt(const APath: string): string; inline;
 
 implementation
 
@@ -85,6 +92,16 @@ end;
 function ReadFile(const APath: string): TBytes;
 begin
   Result := nextpas.core.fs.util.FsReadFile(APath);
+end;
+
+function ReadFileText(const APath: string): string;
+begin
+  Result := nextpas.core.fs.util.FsReadFileText(APath);
+end;
+
+function ReadFileLines(const APath: string): TStringArray;
+begin
+  Result := nextpas.core.fs.util.FsReadFileLines(APath);
 end;
 
 procedure WriteFile(const APath: string; const AData: TBytes;
@@ -232,6 +249,26 @@ end;
 function PathIsAbs(const APath: string): Boolean;
 begin
   Result := nextpas.core.fs.path.FsPathIsAbs(APath);
+end;
+
+function PathEnsureSep(const APath: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathEnsureSep(APath);
+end;
+
+function PathTrimSep(const APath: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathTrimSep(APath);
+end;
+
+function PathChangeExt(const APath, ANewExt: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathChangeExt(APath, ANewExt);
+end;
+
+function PathWithoutExt(const APath: string): string;
+begin
+  Result := nextpas.core.fs.path.FsPathWithoutExt(APath);
 end;
 
 end.
