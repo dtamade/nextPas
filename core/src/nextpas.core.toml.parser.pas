@@ -280,11 +280,9 @@ begin
     FHashBuckets := nil;
   end;
   if FHashBuckets = nil then
-  begin
     FHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
-    FHashCap := LCap;
-  end;
-  FillChar(FHashBuckets^, LCap * SizeOf(UInt32), $FF);
+  FHashCap := LCap;
+  FillChar(FHashBuckets^, FHashCap * SizeOf(UInt32), $FF);
   FHashOwner := ATableIdx;
   LCur := FNodes[ATableIdx].Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
@@ -1347,9 +1345,11 @@ end;
 
 function TTomlParser.ParseInlineTable(out ANodeIdx: UInt32): Boolean;
 var
-  LTableIdx, LChildIdx: UInt32;
+  LTableIdx, LChildIdx, LTarget: UInt32;
   LCount: UInt32;
-  LKey: TStringView;
+  LKeys: array[0..31] of TStringView;
+  LKeyCount: Int32;
+  LI: Int32;
   LFirst: Boolean;
 begin
   Inc(Depth);
@@ -1383,19 +1383,29 @@ begin
     end;
     LFirst := False;
     SkipWhitespaceInline;
-    if not ParseKey(LKey) then Exit(False);
+    if not ParseDottedKey(LKeys, LKeyCount) then Exit(False);
     SkipWhitespaceInline;
     if (Pos >= SrcLen) or (Src[Pos] <> '=') then
       Exit(SetError('expected =', 10));
     Advance;
     SkipWhitespaceInline;
     if not ParseValue(LChildIdx) then Exit(False);
-    Doc^.FNodes[LChildIdx].Key := LKey;
-    Doc^.FNodes[LChildIdx].KeyHash := TomlKeyHash(LKey.Data, LKey.Len);
-    if FindChild(LTableIdx, LKey) <> TOML_NODE_NONE then
+    // Navigate/create intermediate tables for dotted keys within inline table
+    LTarget := LTableIdx;
+    for LI := 0 to LKeyCount - 2 do
+    begin
+      LTarget := FindOrCreateTable(LTarget, LKeys[LI], True);
+      if LTarget = TOML_NODE_NONE then
+        Exit(SetError('key conflict in inline table', 28));
+      Inc(Doc^.FNodes[LTarget].Container.Count);
+    end;
+    Doc^.FNodes[LChildIdx].Key := LKeys[LKeyCount - 1];
+    Doc^.FNodes[LChildIdx].KeyHash := TomlKeyHash(LKeys[LKeyCount - 1].Data, LKeys[LKeyCount - 1].Len);
+    if FindChild(LTarget, LKeys[LKeyCount - 1]) <> TOML_NODE_NONE then
       Exit(SetError('duplicate key in inline table', 29));
-    AddChild(LTableIdx, LChildIdx);
-    Inc(LCount);
+    AddChild(LTarget, LChildIdx);
+    if LTarget = LTableIdx then
+      Inc(LCount);
     SkipWhitespaceInline;
     if (Pos < SrcLen) and (Src[Pos] = '}') then
     begin

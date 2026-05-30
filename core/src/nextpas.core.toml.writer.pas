@@ -39,7 +39,9 @@ type
     procedure Init(var ABuilder: TStringBuilder);
     procedure InitPretty(var ABuilder: TStringBuilder; AIndent: Int32 = 2);
     procedure BeginTable(const AKey: string);
+    procedure BeginTableRaw(const AFormattedPath: string);
     procedure BeginArrayTable(const AKey: string);
+    procedure BeginArrayTableRaw(const AFormattedPath: string);
     procedure Key(const AKey: string); overload;
     procedure Key(const AKey: TStringView); overload;
     procedure Str(const AValue: string); overload;
@@ -210,6 +212,26 @@ begin
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendBytes('[[', 2);
   WriteDottedPath(PAnsiChar(AKey), SizeUInt(Length(AKey)));
+  FBuilder^.AppendBytes(']]', 2);
+  FBuilder^.AppendChar(#10);
+  FNeedNewline := True;
+end;
+
+procedure TTomlWriter.BeginTableRaw(const AFormattedPath: string);
+begin
+  if FNeedNewline then FBuilder^.AppendChar(#10);
+  FBuilder^.AppendChar('[');
+  FBuilder^.AppendStr(AFormattedPath);
+  FBuilder^.AppendChar(']');
+  FBuilder^.AppendChar(#10);
+  FNeedNewline := True;
+end;
+
+procedure TTomlWriter.BeginArrayTableRaw(const AFormattedPath: string);
+begin
+  if FNeedNewline then FBuilder^.AppendChar(#10);
+  FBuilder^.AppendBytes('[[', 2);
+  FBuilder^.AppendStr(AFormattedPath);
   FBuilder^.AppendBytes(']]', 2);
   FBuilder^.AppendChar(#10);
   FNeedNewline := True;

@@ -131,7 +131,9 @@ end;
 procedure WriteTableHeader(var AW: TTomlWriter; var APath: TPathSegments; AIsArray: Boolean);
 var
   LI: Int32;
+  LJ: SizeUInt;
   LBuilder: TStringBuilder;
+  LCh: Byte;
 begin
   LBuilder.Init(64);
   for LI := 0 to APath.Count - 1 do
@@ -142,14 +144,24 @@ begin
     else
     begin
       LBuilder.AppendChar('"');
-      LBuilder.AppendBytes(APath.Segs[LI].Data, APath.Segs[LI].Len);
+      if APath.Segs[LI].Len > 0 then
+      for LJ := 0 to APath.Segs[LI].Len - 1 do
+      begin
+        LCh := Byte(APath.Segs[LI].Data[LJ]);
+        case LCh of
+          Ord('"'): LBuilder.AppendBytes('\"', 2);
+          Ord('\'): LBuilder.AppendBytes('\\', 2);
+        else
+          LBuilder.AppendChar(AnsiChar(LCh));
+        end;
+      end;
       LBuilder.AppendChar('"');
     end;
   end;
   if AIsArray then
-    AW.BeginArrayTable(LBuilder.ToString)
+    AW.BeginArrayTableRaw(LBuilder.ToString)
   else
-    AW.BeginTable(LBuilder.ToString);
+    AW.BeginTableRaw(LBuilder.ToString);
   LBuilder.Done;
 end;
 
