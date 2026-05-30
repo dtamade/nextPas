@@ -728,6 +728,55 @@ begin
   Check(not LDoc.Root.FindByPath('x.y.z').IsValid, 'nonexistent path');
 end;
 
+{ toml-test/valid/array + inline-table + string }
+
+procedure TestValidNestedDoubleArray;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('nest = [[["a"], [1, 2, [3]]]]');
+  Check(not LDoc.HasError, 'nested double array ok');
+  CheckEqual(Int64(1), LDoc.Root.Get('nest').ArrayLen, 'outer len');
+  CheckEqual(Int64(2), LDoc.Root.Get('nest').ArrayGet(0).ArrayLen, 'inner len');
+end;
+
+procedure TestValidInlineTableNest;
+var LDoc: ITomlDocument;
+const
+  INPUT =
+    'tbl_tbl_empty = { tbl_0 = {} }' + #10 +
+    'tbl_tbl_val = { tbl_1 = { one = 1 } }' + #10 +
+    'arr_arr_tbl_empty = [ [ {} ] ]' + #10;
+begin
+  LDoc := TomlParse(INPUT);
+  Check(not LDoc.HasError, 'inline table nest ok');
+  Check(LDoc.Root.Get('tbl_tbl_empty').Get('tbl_0').IsTable, 'nested empty table');
+  CheckEqual(Int64(1), LDoc.Root.Get('tbl_tbl_val').Get('tbl_1').Get('one').AsInt, 'nested val');
+end;
+
+procedure TestValidMultilineContinuation;
+var LDoc: ITomlDocument;
+const
+  INPUT = 'equivalent_two = """' + #10 +
+    'The quick brown \' + #10 + #10 + #10 +
+    '  fox jumps over \' + #10 +
+    '    the lazy dog."""' + #10;
+begin
+  LDoc := TomlParse(INPUT);
+  Check(not LDoc.HasError, 'multiline continuation ok');
+  Check(LDoc.Root.Get('equivalent_two').AsStr.Equals(
+    TStringView.Create(PAnsiChar('The quick brown fox jumps over the lazy dog.'), 44)),
+    'continuation result');
+end;
+
+procedure TestValidEscapedBackslash;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('answer = "\\x64"');
+  Check(not LDoc.HasError, 'escaped backslash ok');
+  Check(LDoc.Root.Get('answer').AsStr.Equals(
+    TStringView.Create(PAnsiChar('\x64'), 4)), 'value = \x64');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -820,6 +869,11 @@ begin
   T.Run('valid tricky comments', @TestValidTrickyComments);
   { FindByPath }
   T.Run('FindByPath', @TestFindByPath);
+  { toml-test/valid/array + inline-table + string }
+  T.Run('valid nested double array', @TestValidNestedDoubleArray);
+  T.Run('valid inline-table nested', @TestValidInlineTableNest);
+  T.Run('valid multiline line continuation', @TestValidMultilineContinuation);
+  T.Run('valid escaped backslash', @TestValidEscapedBackslash);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
