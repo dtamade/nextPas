@@ -704,6 +704,7 @@ begin
 
   FInitialized := False;
   FLoadedModules := [];
+  FVersionInfo.VersionString := '';
   FillChar(FVersionInfo, SizeOf(FVersionInfo), 0);
 end;
 
