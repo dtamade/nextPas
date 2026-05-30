@@ -528,7 +528,7 @@ var
   LScalar: array[0..31] of Byte;
   LNonceHash: TBytes;
   LNonce: array[0..63] of Byte;
-  LR: TEdPoint;
+  LR, LPub: TEdPoint;
   LRBytes: TBytes;
   LKHash: TBytes;
   LK: array[0..63] of Byte;
@@ -550,8 +550,9 @@ begin
   LScalar[0] := LScalar[0] and 248;
   LScalar[31] := (LScalar[31] and 127) or 64;
 
-  // Derive public key
-  LPublicKey := Ed25519PublicKeyFromPrivate(APrivateKey);
+  // Derive public key (inline, avoid redundant SHA-512)
+  LPub := EdBasePointMul(LScalar);
+  EdPointToBytes(LPublicKey, LPub);
   if Length(LPublicKey) <> 32 then Exit;
 
   // Step 2: r = SHA-512(prefix || message) mod L
