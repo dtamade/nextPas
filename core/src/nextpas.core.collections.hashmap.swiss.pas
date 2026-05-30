@@ -53,6 +53,17 @@ type
       Key: K;
       Value: V;
     end;
+    TEnumerator = record
+    private
+      FCtrl: PByte;
+      FSlots: PSlot;
+      FCapacity: SizeUInt;
+      FIdx: SizeUInt;
+      FCurrent: TSlot;
+    public
+      function MoveNext: Boolean;
+      property Current: TSlot read FCurrent;
+    end;
   private
     FCtrl: PByte;
     FSlots: PSlot;
@@ -93,6 +104,7 @@ type
     function GetKeys: TKeyArray;
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
     function GetSlotKey(AIndex: SizeUInt): K; inline;
+    function GetEnumerator: TEnumerator;
     function GetCount: SizeUInt;
 
     property Count: SizeUInt read FCount;
@@ -689,6 +701,30 @@ end;
 function TSwissTable.GetSlotKey(AIndex: SizeUInt): K;
 begin
   Result := FSlots[AIndex].Key;
+end;
+
+function TSwissTable.TEnumerator.MoveNext: Boolean;
+begin
+  while FIdx < FCapacity do
+  begin
+    if FCtrl[FIdx] < $80 then
+    begin
+      FCurrent := FSlots[FIdx];
+      Inc(FIdx);
+      Exit(True);
+    end;
+    Inc(FIdx);
+  end;
+  Result := False;
+end;
+
+function TSwissTable.GetEnumerator: TEnumerator;
+begin
+  Result.FCtrl := FCtrl;
+  Result.FSlots := FSlots;
+  Result.FCapacity := FCapacity;
+  Result.FIdx := 0;
+  FillChar(Result.FCurrent, SizeOf(TSlot), 0);
 end;
 
 function TSwissTable.GetCount: SizeUInt;
