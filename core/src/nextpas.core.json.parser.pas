@@ -41,10 +41,12 @@ uses
   nextpas.core.text.scan,
   nextpas.core.text.escape,
   nextpas.core.text.number,
-  nextpas.core.text.char;
+  nextpas.core.text.char,
+  nextpas.core.json.scanner;
 
 const
   INITIAL_NODE_CAP = 64;
+  POS_NONE = UInt32($FFFFFFFF);
 
 procedure TJsonDocument.Init(const AAllocator: IAllocator);
 begin
@@ -117,34 +119,54 @@ end;
 type
   TParserState = record
     Doc: ^TJsonDocument;
-    Cur: TStringView;
+    Input: PAnsiChar;
+    InputLen: SizeUInt;
+    Scanner: TJsonStructScanner;
+    LastPos: UInt32;
     Depth: Int32;
-    procedure SkipWS; inline;
-    function Peek: Byte; inline;
-    procedure Advance(N: SizeUInt); inline;
+    function PeekCh: Byte; inline;
+    function ConsumeStruct: UInt32; inline;
+    function GetValueSlice(out AStart: PAnsiChar; out ALen: SizeUInt): Boolean;
     function SetError(const AMsg: PAnsiChar; ALen: Int32): Boolean;
     function ParseValue: UInt32;
     function ParseObject: UInt32;
     function ParseArray: UInt32;
     function ParseString: UInt32;
     function ParseNumber: UInt32;
+    function ParseLiteral: UInt32;
   end;
 
-procedure TParserState.SkipWS;
-var L: SizeUInt;
+function TParserState.PeekCh: Byte;
 begin
-  L := ScanSkipWhitespace(Cur.Data, Cur.Len);
-  if L > 0 then Cur.Advance(L);
+  Result := Scanner.PeekChar;
 end;
 
-function TParserState.Peek: Byte;
+function TParserState.ConsumeStruct: UInt32;
 begin
-  if Cur.IsEmpty then Result := 0 else Result := Cur.PeekByte;
+  Result := Scanner.Next;
+  if Result <> POS_NONE then
+    LastPos := Result;
 end;
 
-procedure TParserState.Advance(N: SizeUInt);
+function TParserState.GetValueSlice(out AStart: PAnsiChar; out ALen: SizeUInt): Boolean;
+var
+  LNextPos: UInt32;
+  LBegin: SizeUInt;
 begin
-  Cur.Advance(N);
+  LNextPos := Scanner.Peek;
+  if LNextPos = POS_NONE then
+    LNextPos := UInt32(InputLen);
+  if LastPos = POS_NONE then
+    LBegin := 0
+  else
+    LBegin := SizeUInt(LastPos + 1);
+  while (LBegin < LNextPos) and (Byte(Input[LBegin]) <= 32) do
+    Inc(LBegin);
+  AStart := Input + LBegin;
+  ALen := SizeUInt(LNextPos) - LBegin;
+  while (ALen > 0) and (Byte(AStart[ALen - 1]) <= 32) do
+    Dec(ALen);
+  Result := ALen > 0;
 end;
 
 function TParserState.SetError(const AMsg: PAnsiChar; ALen: Int32): Boolean;
@@ -156,7 +178,7 @@ end;
 
 function TParserState.ParseString: UInt32;
 var
-  LEnd: PtrInt;
+  LStartPos, LEndPos: UInt32;
   LIdx: UInt32;
   LRaw: TStringView;
   LHasEscape: Boolean;
@@ -165,13 +187,14 @@ var
   LErr: TUnescapeError;
   I: SizeUInt;
 begin
-  LEnd := JsonFindStringEnd(Cur.Data + 1, Cur.Len - 1);
-  if LEnd < 0 then
+  LStartPos := ConsumeStruct;
+  LEndPos := ConsumeStruct;
+  if (LEndPos = POS_NONE) or (Input[LEndPos] <> '"') then
   begin
     SetError('unterminated string', 19);
     Exit(JSON_NODE_NONE);
   end;
-  LRaw := TStringView.Create(Cur.Data + 1, SizeUInt(LEnd));
+  LRaw := TStringView.Create(Input + LStartPos + 1, LEndPos - LStartPos - 1);
   LHasEscape := False;
   for I := 0 to LRaw.Len - 1 do
     if LRaw.Data[I] = '\' then
@@ -189,12 +212,12 @@ begin
   end
   else
     Doc^.FNodes[LIdx].Str := LRaw;
-  Advance(SizeUInt(LEnd) + 2);
   Result := LIdx;
 end;
 
 function TParserState.ParseNumber: UInt32;
 var
+  LData: PAnsiChar;
   LNumLen: SizeUInt;
   LIdx: UInt32;
   LHasDot, LHasExp: Boolean;
@@ -202,27 +225,25 @@ var
   LInt: Int64;
   LFloat: Double;
 begin
-  LNumLen := ScanJsonNumber(Cur.Data, Cur.Len);
-  if LNumLen = 0 then
+  if not GetValueSlice(LData, LNumLen) then
   begin
     SetError('invalid number', 14);
     Exit(JSON_NODE_NONE);
   end;
-  { RFC 8259 validation: no leading zeros, no trailing dot }
   I := 0;
-  if Cur.Data[0] = '-' then I := 1;
-  if (I < LNumLen - 1) and (Cur.Data[I] = '0') and (Cur.Data[I+1] >= '0') and (Cur.Data[I+1] <= '9') then
+  if LData[0] = '-' then I := 1;
+  if (I < LNumLen - 1) and (LData[I] = '0') and (LData[I+1] >= '0') and (LData[I+1] <= '9') then
   begin
     SetError('leading zero', 12);
     Exit(JSON_NODE_NONE);
   end;
-  if Cur.Data[LNumLen - 1] = '.' then
+  if LData[LNumLen - 1] = '.' then
   begin
     SetError('trailing dot', 12);
     Exit(JSON_NODE_NONE);
   end;
-  if (Cur.Data[LNumLen - 1] = 'e') or (Cur.Data[LNumLen - 1] = 'E') or
-     (Cur.Data[LNumLen - 1] = '+') or (Cur.Data[LNumLen - 1] = '-') then
+  if (LData[LNumLen - 1] = 'e') or (LData[LNumLen - 1] = 'E') or
+     (LData[LNumLen - 1] = '+') or (LData[LNumLen - 1] = '-') then
   begin
     SetError('truncated exponent', 18);
     Exit(JSON_NODE_NONE);
@@ -231,38 +252,73 @@ begin
   LHasExp := False;
   for I := 0 to LNumLen - 1 do
   begin
-    if Cur.Data[I] = '.' then LHasDot := True;
-    if (Cur.Data[I] = 'e') or (Cur.Data[I] = 'E') then LHasExp := True;
+    if LData[I] = '.' then LHasDot := True;
+    if (LData[I] = 'e') or (LData[I] = 'E') then LHasExp := True;
   end;
   LIdx := Doc^.AddNode;
   if LHasDot or LHasExp then
   begin
-    ParseDouble(Cur.Data, LNumLen, LFloat);
+    ParseDouble(LData, LNumLen, LFloat);
     Doc^.FNodes[LIdx].Kind := jnkReal;
     Doc^.FNodes[LIdx].RealVal := LFloat;
   end
   else
   begin
-    if ParseInt64(Cur.Data, LNumLen, LInt) then
+    if ParseInt64(LData, LNumLen, LInt) then
     begin
       Doc^.FNodes[LIdx].Kind := jnkInt;
       Doc^.FNodes[LIdx].IntVal := LInt;
     end
     else
     begin
-      ParseDouble(Cur.Data, LNumLen, LFloat);
+      ParseDouble(LData, LNumLen, LFloat);
       Doc^.FNodes[LIdx].Kind := jnkReal;
       Doc^.FNodes[LIdx].RealVal := LFloat;
     end;
   end;
-  Advance(LNumLen);
   Result := LIdx;
+end;
+
+function TParserState.ParseLiteral: UInt32;
+var
+  LData: PAnsiChar;
+  LLen: SizeUInt;
+  LIdx: UInt32;
+begin
+  if not GetValueSlice(LData, LLen) then
+  begin
+    SetError('invalid literal', 15);
+    Exit(JSON_NODE_NONE);
+  end;
+  if (LLen >= 4) and (LData[0] = 't') and (LData[1] = 'r') and (LData[2] = 'u') and (LData[3] = 'e') then
+  begin
+    LIdx := Doc^.AddNode;
+    Doc^.FNodes[LIdx].Kind := jnkBool;
+    Doc^.FNodes[LIdx].BoolVal := True;
+    Exit(LIdx);
+  end;
+  if (LLen >= 5) and (LData[0] = 'f') and (LData[1] = 'a') and (LData[2] = 'l') and (LData[3] = 's') and (LData[4] = 'e') then
+  begin
+    LIdx := Doc^.AddNode;
+    Doc^.FNodes[LIdx].Kind := jnkBool;
+    Doc^.FNodes[LIdx].BoolVal := False;
+    Exit(LIdx);
+  end;
+  if (LLen >= 4) and (LData[0] = 'n') and (LData[1] = 'u') and (LData[2] = 'l') and (LData[3] = 'l') then
+  begin
+    LIdx := Doc^.AddNode;
+    Doc^.FNodes[LIdx].Kind := jnkNull;
+    Exit(LIdx);
+  end;
+  SetError('invalid literal', 15);
+  Result := JSON_NODE_NONE;
 end;
 
 function TParserState.ParseArray: UInt32;
 var
   LIdx, LChild, LPrev: UInt32;
   LCount: UInt32;
+  LCh: Byte;
 begin
   Inc(Depth);
   if Depth > 512 then
@@ -272,15 +328,16 @@ begin
   end;
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkArray;
-  Advance(1);
-  SkipWS;
+  ConsumeStruct;
   LCount := 0;
   LPrev := JSON_NODE_NONE;
-  if Peek = Ord(']') then
+  LCh := PeekCh;
+  if LCh = Ord(']') then
   begin
-    Advance(1);
+    ConsumeStruct;
     Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
     Doc^.FNodes[LIdx].Container.Count := 0;
+    Dec(Depth);
     Exit(LIdx);
   end;
   while True do
@@ -293,15 +350,12 @@ begin
       Doc^.FNodes[LPrev].Next := LChild;
     LPrev := LChild;
     Inc(LCount);
-    SkipWS;
-    if Peek = Ord(',') then
+    LCh := PeekCh;
+    if LCh = Ord(',') then
+      ConsumeStruct
+    else if LCh = Ord(']') then
     begin
-      Advance(1);
-      SkipWS;
-    end
-    else if Peek = Ord(']') then
-    begin
-      Advance(1);
+      ConsumeStruct;
       Break;
     end
     else
@@ -311,6 +365,7 @@ begin
     end;
   end;
   Doc^.FNodes[LIdx].Container.Count := LCount;
+  Dec(Depth);
   Result := LIdx;
 end;
 
@@ -318,6 +373,9 @@ function TParserState.ParseObject: UInt32;
 var
   LIdx, LKeyIdx, LValIdx, LPrev: UInt32;
   LCount: UInt32;
+  LCh: Byte;
+  LGapData: PAnsiChar;
+  LGapLen: SizeUInt;
 begin
   Inc(Depth);
   if Depth > 512 then
@@ -327,34 +385,38 @@ begin
   end;
   LIdx := Doc^.AddNode;
   Doc^.FNodes[LIdx].Kind := jnkObject;
-  Advance(1);
-  SkipWS;
+  ConsumeStruct;
   LCount := 0;
   LPrev := JSON_NODE_NONE;
-  if Peek = Ord('}') then
+  LCh := PeekCh;
+  if LCh = Ord('}') then
   begin
-    Advance(1);
+    if GetValueSlice(LGapData, LGapLen) then
+    begin
+      SetError('unexpected content in object', 28);
+      Exit(JSON_NODE_NONE);
+    end;
+    ConsumeStruct;
     Doc^.FNodes[LIdx].Container.FirstChild := JSON_NODE_NONE;
     Doc^.FNodes[LIdx].Container.Count := 0;
+    Dec(Depth);
     Exit(LIdx);
   end;
   while True do
   begin
-    if Peek <> Ord('"') then
+    if PeekCh <> Ord('"') then
     begin
       SetError('expected string key', 19);
       Exit(JSON_NODE_NONE);
     end;
     LKeyIdx := ParseString;
     if LKeyIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
-    SkipWS;
-    if Peek <> Ord(':') then
+    if PeekCh <> Ord(':') then
     begin
       SetError('expected :', 10);
       Exit(JSON_NODE_NONE);
     end;
-    Advance(1);
-    SkipWS;
+    ConsumeStruct;
     LValIdx := ParseValue;
     if LValIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
     Doc^.FNodes[LKeyIdx].Next := LValIdx;
@@ -364,15 +426,12 @@ begin
       Doc^.FNodes[LPrev].Next := LKeyIdx;
     LPrev := LValIdx;
     Inc(LCount);
-    SkipWS;
-    if Peek = Ord(',') then
+    LCh := PeekCh;
+    if LCh = Ord(',') then
+      ConsumeStruct
+    else if LCh = Ord('}') then
     begin
-      Advance(1);
-      SkipWS;
-    end
-    else if Peek = Ord('}') then
-    begin
-      Advance(1);
+      ConsumeStruct;
       Break;
     end
     else
@@ -382,73 +441,58 @@ begin
     end;
   end;
   Doc^.FNodes[LIdx].Container.Count := LCount;
+  Dec(Depth);
   Result := LIdx;
 end;
 
 function TParserState.ParseValue: UInt32;
 var
-  LIdx: UInt32;
+  LCh: Byte;
+  LData: PAnsiChar;
+  LLen: SizeUInt;
 begin
-  SkipWS;
-  case Peek of
-    Ord('{'):
-      Result := ParseObject;
-    Ord('['):
-      Result := ParseArray;
-    Ord('"'):
-      Result := ParseString;
-    Ord('-'), Ord('0')..Ord('9'):
-      Result := ParseNumber;
-    Ord('t'):
+  LCh := PeekCh;
+  case LCh of
+    Ord('{'): Result := ParseObject;
+    Ord('['): Result := ParseArray;
+    Ord('"'): Result := ParseString;
+    Ord(','), Ord(']'), Ord('}'), Ord(':'), 0:
     begin
-      if ScanMatchLiteral(Cur.Data, Cur.Len, PAnsiChar('true'), 4) then
+      if GetValueSlice(LData, LLen) then
       begin
-        LIdx := Doc^.AddNode;
-        Doc^.FNodes[LIdx].Kind := jnkBool;
-        Doc^.FNodes[LIdx].BoolVal := True;
-        Advance(4);
-        Result := LIdx;
+        case LData[0] of
+          '-', '0'..'9': Result := ParseNumber;
+          't', 'f', 'n': Result := ParseLiteral;
+        else
+          SetError('unexpected character', 20);
+          Result := JSON_NODE_NONE;
+        end;
       end
       else
       begin
-        SetError('invalid literal', 15);
-        Result := JSON_NODE_NONE;
-      end;
-    end;
-    Ord('f'):
-    begin
-      if ScanMatchLiteral(Cur.Data, Cur.Len, PAnsiChar('false'), 5) then
-      begin
-        LIdx := Doc^.AddNode;
-        Doc^.FNodes[LIdx].Kind := jnkBool;
-        Doc^.FNodes[LIdx].BoolVal := False;
-        Advance(5);
-        Result := LIdx;
-      end
-      else
-      begin
-        SetError('invalid literal', 15);
-        Result := JSON_NODE_NONE;
-      end;
-    end;
-    Ord('n'):
-    begin
-      if ScanMatchLiteral(Cur.Data, Cur.Len, PAnsiChar('null'), 4) then
-      begin
-        LIdx := Doc^.AddNode;
-        Doc^.FNodes[LIdx].Kind := jnkNull;
-        Advance(4);
-        Result := LIdx;
-      end
-      else
-      begin
-        SetError('invalid literal', 15);
+        if LCh = 0 then
+          SetError('unexpected end of input', 22)
+        else
+          SetError('unexpected character', 20);
         Result := JSON_NODE_NONE;
       end;
     end;
   else
-    SetError('unexpected character', 20);
-    Result := JSON_NODE_NONE;
+    if GetValueSlice(LData, LLen) then
+    begin
+      case LData[0] of
+        '-', '0'..'9': Result := ParseNumber;
+        't', 'f', 'n': Result := ParseLiteral;
+      else
+        SetError('unexpected character', 20);
+        Result := JSON_NODE_NONE;
+      end;
+    end
+    else
+    begin
+      SetError('unexpected character', 20);
+      Result := JSON_NODE_NONE;
+    end;
   end;
 end;
 
@@ -460,12 +504,14 @@ begin
   FNodeCount := 0;
   FHasError := False;
   LState.Doc := @Self;
-  LState.Cur := AInput;
+  LState.Input := AInput.Data;
+  LState.InputLen := AInput.Len;
+  LState.Scanner.Init(AInput.Data, AInput.Len);
+  LState.LastPos := POS_NONE;
   LState.Depth := 0;
   if LState.ParseValue = JSON_NODE_NONE then
     Exit(False);
-  LState.SkipWS;
-  if not LState.Cur.IsEmpty then
+  if not LState.Scanner.IsEmpty then
   begin
     FError.Message := TStringView.Create(PAnsiChar('trailing content'), 16);
     FHasError := True;
