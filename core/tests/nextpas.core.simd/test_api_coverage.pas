@@ -432,6 +432,10 @@ begin
   sf[0]:=10; sf[1]:=20; sf[2]:=30; sf[3]:=40;
   ArrayNormF32(@sf[0], @sfd[0], 4, 25.0, 0.1);
   Check(Abs(sfd[0]-(-1.5))<1e-4,'NormF32[0]');
+  // ArrayLinearF64: dst = src * scale + bias
+  src[0]:=1; src[1]:=2; src[2]:=3; src[3]:=4;
+  ArrayLinearF64(@src[0], @dst[0], 4, 2.0, 10.0);
+  Check(Abs(dst[0]-12)<1e-10,'LinearF64[0]=1*2+10'); Check(Abs(dst[3]-18)<1e-10,'LinearF64[3]=4*2+10');
 end;
 
 begin
