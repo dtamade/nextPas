@@ -26,8 +26,13 @@ type
     NumGroupNames: UInt32;
   end;
 
+const
+  MAX_PROGRAM_LEN = 10000;
+
 procedure Emit(var C: TCompiler; const AInst: TInstruction);
 begin
+  if C.Count >= MAX_PROGRAM_LEN then
+    raise ERegexCompileError.Create('compiled program too large', 0);
   if C.Count >= C.Cap then
   begin
     if C.Cap = 0 then C.Cap := 64 else C.Cap := C.Cap * 2;

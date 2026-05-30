@@ -51,13 +51,24 @@ type
     Pattern: string;
     Pos: SizeUInt;
     NumCaptures: UInt32;
+    Depth: UInt32;
+    Nodes: array of PAstNode;
+    NodeCount: UInt32;
   end;
 
-function NewNode(AKind: TAstKind): PAstNode;
+const
+  MAX_REPEAT_COUNT = 1000;
+  MAX_NEST_DEPTH = 200;
+
+function NewNode(var P: TParser; AKind: TAstKind): PAstNode;
 begin
   New(Result);
   FillChar(Result^, SizeOf(TAstNode), 0);
   Result^.Kind := AKind;
+  if P.NodeCount >= UInt32(Length(P.Nodes)) then
+    SetLength(P.Nodes, P.NodeCount + 64);
+  P.Nodes[P.NodeCount] := Result;
+  Inc(P.NodeCount);
 end;
 
 procedure RegexFreeAst(ANode: PAstNode);
@@ -88,19 +99,19 @@ var ch: Char;
 begin
   ch := Next(P);
   case ch of
-    'd': begin Result := NewNode(akCharClass); CharBitmapInitDigit(Result^.ClassBitmap); end;
-    'D': begin Result := NewNode(akCharClass); CharBitmapInitDigit(Result^.ClassBitmap); Result^.ClassNegated := True; end;
-    'w': begin Result := NewNode(akCharClass); CharBitmapInitWord(Result^.ClassBitmap); end;
-    'W': begin Result := NewNode(akCharClass); CharBitmapInitWord(Result^.ClassBitmap); Result^.ClassNegated := True; end;
-    's': begin Result := NewNode(akCharClass); CharBitmapInitSpace(Result^.ClassBitmap); end;
-    'S': begin Result := NewNode(akCharClass); CharBitmapInitSpace(Result^.ClassBitmap); Result^.ClassNegated := True; end;
-    'b': begin Result := NewNode(akAssert); Result^.AssertKind := akWordBoundary; end;
-    'B': begin Result := NewNode(akAssert); Result^.AssertKind := akNotWordBoundary; end;
-    'n': begin Result := NewNode(akLiteral); Result^.Ch := 10; end;
-    'r': begin Result := NewNode(akLiteral); Result^.Ch := 13; end;
-    't': begin Result := NewNode(akLiteral); Result^.Ch := 9; end;
+    'd': begin Result := NewNode(P, akCharClass); CharBitmapInitDigit(Result^.ClassBitmap); end;
+    'D': begin Result := NewNode(P, akCharClass); CharBitmapInitDigit(Result^.ClassBitmap); Result^.ClassNegated := True; end;
+    'w': begin Result := NewNode(P, akCharClass); CharBitmapInitWord(Result^.ClassBitmap); end;
+    'W': begin Result := NewNode(P, akCharClass); CharBitmapInitWord(Result^.ClassBitmap); Result^.ClassNegated := True; end;
+    's': begin Result := NewNode(P, akCharClass); CharBitmapInitSpace(Result^.ClassBitmap); end;
+    'S': begin Result := NewNode(P, akCharClass); CharBitmapInitSpace(Result^.ClassBitmap); Result^.ClassNegated := True; end;
+    'b': begin Result := NewNode(P, akAssert); Result^.AssertKind := akWordBoundary; end;
+    'B': begin Result := NewNode(P, akAssert); Result^.AssertKind := akNotWordBoundary; end;
+    'n': begin Result := NewNode(P, akLiteral); Result^.Ch := 10; end;
+    'r': begin Result := NewNode(P, akLiteral); Result^.Ch := 13; end;
+    't': begin Result := NewNode(P, akLiteral); Result^.Ch := 9; end;
   else
-    Result := NewNode(akLiteral);
+    Result := NewNode(P, akLiteral);
     Result^.Ch := Ord(ch);
   end;
 end;
@@ -108,7 +119,7 @@ end;
 function ParseCharClass(var P: TParser): PAstNode;
 var negated: Boolean; lo, hi: Byte; ch: Char;
 begin
-  Result := NewNode(akCharClass);
+  Result := NewNode(P, akCharClass);
   CharBitmapClear(Result^.ClassBitmap);
   negated := False;
   if Peek(P) = '^' then begin negated := True; Next(P); end;
@@ -172,21 +183,24 @@ begin
   ch := Peek(P);
   case ch of
     #0, ')', '|': Result := nil;
-    '.': begin Next(P); Result := NewNode(akAnyChar); end;
-    '^': begin Next(P); Result := NewNode(akAssert); Result^.AssertKind := akStart; end;
-    '$': begin Next(P); Result := NewNode(akAssert); Result^.AssertKind := akEnd; end;
+    '.': begin Next(P); Result := NewNode(P, akAnyChar); end;
+    '^': begin Next(P); Result := NewNode(P, akAssert); Result^.AssertKind := akStart; end;
+    '$': begin Next(P); Result := NewNode(P, akAssert); Result^.AssertKind := akEnd; end;
     '\': begin Next(P); Result := ParseEscape(P); end;
     '[': begin Next(P); Result := ParseCharClass(P); end;
     '(':
     begin
       Next(P);
+      Inc(P.Depth);
+      if P.Depth > MAX_NEST_DEPTH then
+        raise ERegexCompileError.Create('nesting depth exceeds limit', P.Pos);
       if (Peek(P) = '?') then
       begin
         Next(P);
         if Peek(P) = ':' then
         begin
           Next(P);
-          Result := NewNode(akGroup);
+          Result := NewNode(P, akGroup);
           Result^.Left := ParseAlternate(P);
         end
         else if (Peek(P) = 'P') or (Peek(P) = '<') then
@@ -198,7 +212,7 @@ begin
           while (Peek(P) <> '>') and (Peek(P) <> #0) do
             LName := LName + Next(P);
           if Peek(P) = '>' then Next(P);
-          Result := NewNode(akCapture);
+          Result := NewNode(P, akCapture);
           Result^.CaptureIndex := P.NumCaptures;
           Result^.CaptureName := LName;
           Inc(P.NumCaptures);
@@ -209,22 +223,18 @@ begin
       end
       else
       begin
-        Result := NewNode(akCapture);
+        Result := NewNode(P, akCapture);
         Result^.CaptureIndex := P.NumCaptures;
         Inc(P.NumCaptures);
         Result^.Left := ParseAlternate(P);
       end;
-      if Peek(P) = ')' then Next(P)
+      if Peek(P) = ')' then begin Next(P); Dec(P.Depth); end
       else
-      begin
-        RegexFreeAst(Result);
-        Result := nil;
         raise ERegexCompileError.Create('unclosed group', P.Pos);
-      end;
     end;
   else
     Next(P);
-    Result := NewNode(akLiteral);
+    Result := NewNode(P, akLiteral);
     Result^.Ch := Ord(ch);
   end;
 end;
@@ -241,7 +251,7 @@ begin
     '*', '+', '?':
     begin
       Next(P);
-      rep := NewNode(akRepeat);
+      rep := NewNode(P, akRepeat);
       rep^.Left := atom;
       rep^.RepeatGreedy := True;
       case ch of
@@ -268,7 +278,11 @@ begin
         else maxV := StrToIntDef(s, minV);
       end;
       if Peek(P) = '}' then Next(P);
-      rep := NewNode(akRepeat);
+      if minV > MAX_REPEAT_COUNT then
+        raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
+      if (maxV <> $FFFFFFFF) and (maxV > MAX_REPEAT_COUNT) then
+        raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
+      rep := NewNode(P, akRepeat);
       rep^.Left := atom;
       rep^.RepeatKind := rkRange;
       rep^.RepeatMin := minV;
@@ -291,7 +305,7 @@ begin
   right := ParseRepeat(P);
   if right = nil then Exit(left);
 
-  concat := NewNode(akConcat);
+  concat := NewNode(P, akConcat);
   concat^.Left := left;
   concat^.Right := right;
 
@@ -300,7 +314,7 @@ begin
     right := ParseRepeat(P);
     if right = nil then Break;
     left := concat;
-    concat := NewNode(akConcat);
+    concat := NewNode(P, akConcat);
     concat^.Left := left;
     concat^.Right := right;
   end;
@@ -315,19 +329,32 @@ begin
 
   Next(P);
   right := ParseAlternate(P);
-  alt := NewNode(akAlternate);
+  alt := NewNode(P, akAlternate);
   alt^.Left := left;
   alt^.Right := right;
   Result := alt;
 end;
 
 function RegexParse(const APattern: string; out ANumCaptures: UInt32): PAstNode;
-var P: TParser;
+var P: TParser; i: UInt32;
 begin
   P.Pattern := APattern;
   P.Pos := 1;
   P.NumCaptures := 0;
-  Result := ParseAlternate(P);
+  P.Depth := 0;
+  P.NodeCount := 0;
+  P.Nodes := nil;
+  try
+    Result := ParseAlternate(P);
+  except
+    if P.NodeCount > 0 then
+      for i := 0 to P.NodeCount - 1 do
+      begin
+        P.Nodes[i]^.CaptureName := '';
+        Dispose(P.Nodes[i]);
+      end;
+    raise;
+  end;
   ANumCaptures := P.NumCaptures;
 end;
 
