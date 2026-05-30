@@ -43,6 +43,11 @@ implementation
 uses
   nextpas.core.crypto.constant_time;
 
+{$IFDEF CPUX86_64}
+{$L chacha20_4block_amd64.o}
+procedure chacha20_4block_xor(state: PUInt32; input, output: PByte); cdecl; external name 'chacha20_4block_xor';
+{$ENDIF}
+
 const
   CHACHA20_KEY_SIZE = 32;
   CHACHA20_NONCE_SIZE = 12;
@@ -146,6 +151,7 @@ end;
 function ChaCha20Xor(const AKey, ANonce: TBytes; ACounter: UInt32; const AInput: TBytes): TBytes;
 {$IFDEF CPUX86_64}
 {$ASMMODE ATT}
+
 const
   ROT16_MASK: array[0..15] of Byte = (2,3,0,1, 6,7,4,5, 10,11,8,9, 14,15,12,13);
   ROT8_MASK: array[0..15] of Byte = (3,0,1,2, 7,4,5,6, 11,8,9,10, 15,12,13,14);
@@ -165,6 +171,17 @@ begin
   LState[13] := Load32LE(ANonce, 0);
   LState[14] := Load32LE(ANonce, 4);
   LState[15] := Load32LE(ANonce, 8);
+
+  {$IFDEF CPUX86_64}
+  // AVX2 4-block path (external ASM): process 4 blocks (256 bytes) at a time
+  while LOffset + 256 <= Length(AInput) do
+  begin
+    LState[12] := ACounter;
+    chacha20_4block_xor(@LState[0], @AInput[LOffset], @Result[LOffset]);
+    Inc(ACounter, 4);
+    Inc(LOffset, 256);
+  end;
+  {$ENDIF}
 
   // AVX2 dual-block path: process 2 blocks (128 bytes) at a time
   while LOffset + 128 <= Length(AInput) do
