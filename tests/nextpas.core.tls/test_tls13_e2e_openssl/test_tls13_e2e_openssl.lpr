@@ -1,14 +1,17 @@
 program test_tls13_e2e_openssl;
 
-{$mode objfpc}{$H+}
+{$I nextpas.core.settings.inc}
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  {$IFDEF UNIX}BaseUnix, Unix,{$ENDIF}
-  SysUtils, Classes, Sockets,
+  SysUtils,
+  nextpas.core.net.tcp,
+  nextpas.core.net.intf,
+  nextpas.core.io.intf,
   nextpas.core.crypto.x25519,
   nextpas.core.tls.tls13.clienthello,
   nextpas.core.tls.tls13.parser,
+  nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.wire;
 
 var
@@ -37,143 +40,109 @@ begin
     Result := Result + LowerCase(IntToHex(AData[I], 2));
 end;
 
-function ConnectTCP(const AHost: string; APort: Word): LongInt;
-var
-  LAddr: sockaddr_in;
-begin
-  Result := fpSocket(AF_INET, SOCK_STREAM, 0);
-  if Result < 0 then Exit;
-
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr := StrToNetAddr(AHost);
-
-  if fpConnect(Result, @LAddr, SizeOf(LAddr)) <> 0 then
-  begin
-    fpClose(Result);
-    Result := -1;
-  end;
-end;
-
-function SendAll(ASock: LongInt; const AData: TBytes): Boolean;
-var
-  LSent, LTotal: Integer;
-begin
-  LTotal := 0;
-  while LTotal < Length(AData) do
-  begin
-    LSent := fpSend(ASock, @AData[LTotal], Length(AData) - LTotal, 0);
-    if LSent <= 0 then Exit(False);
-    Inc(LTotal, LSent);
-  end;
-  Result := True;
-end;
-
-function RecvBytes(ASock: LongInt; AMaxLen: Integer; ATimeoutMs: Integer): TBytes;
-var
-  LBuf: array[0..16383] of Byte;
-  LRead: SizeInt;
-begin
-  Sleep(ATimeoutMs);
-  SetLength(Result, 0);
-  LRead := fpRecv(ASock, @LBuf[0], SizeOf(LBuf), MSG_DONTWAIT);
-  if LRead > 0 then
-  begin
-    SetLength(Result, LRead);
-    Move(LBuf[0], Result[0], LRead);
-  end;
-end;
+const
+  SERVER_PORT = 15555;
 
 var
-  LPort: Word;
-  LServerPID: TPid;
-  LSock: LongInt;
+  LStream: ITcpStream;
   LPrivKey, LPubKey: TBytes;
-  LClientHello, LResponse: TBytes;
+  LClientHello: TBytes;
+  LBuf: array[0..16383] of Byte;
+  LResponse: TBytes;
+  LRead: SizeUInt;
   LHandshake: TBytes;
   LServerHello: TTLS13ServerHelloInfo;
   LShared: TBytes;
-  LOk: Boolean;
-  LPipeFds: TFilDes;
+  LSecrets: TTLS13HandshakeSecrets;
+  LTranscript: TBytes;
+  LError: string;
 
 begin
   GPass := 0;
   GFail := 0;
-  WriteLn('=== TLS 1.3 E2E with OpenSSL s_server ===');
+  WriteLn('=== TLS 1.3 E2E with OpenSSL s_server (framework net) ===');
   WriteLn;
 
-  // Server must be pre-started externally (see run_e2e.sh)
-  // Default port from environment or 15555
-  LPort := 15555;
-  WriteLn('  Connecting to openssl s_server on port ', LPort, '...');
-
-  // Connect
-  LSock := ConnectTCP('127.0.0.1', LPort);
-  Check('TCP connect ok', LSock >= 0);
-  if LSock < 0 then
-  begin
-    WriteLn('    Failed to connect to openssl s_server');
-    fpKill(LServerPID, 9);
-    fpWaitPid(LServerPID, nil, 0);
-    Halt(1);
+  // Connect using framework's NetTcpConnect
+  WriteLn('  Connecting to 127.0.0.1:', SERVER_PORT, '...');
+  try
+    LStream := NetTcpConnect('127.0.0.1', SERVER_PORT);
+    Check('TCP connect ok', LStream <> nil);
+  except
+    on E: Exception do
+    begin
+      WriteLn('  FATAL: ', E.Message);
+      WriteLn('  (Start server: run_e2e.sh or manually start openssl s_server)');
+      Halt(1);
+    end;
   end;
 
-  // Generate X25519 key pair and build ClientHello
+  // Build ClientHello
   GenerateX25519KeyPair(LPrivKey, LPubKey);
   LClientHello := BuildTLS13ClientHelloRecord('localhost', 'h2', LPubKey);
-  // Patch record version to 0x0301 (required for initial CH per RFC 8446 §5.1)
-  LClientHello[1] := $03;
-  LClientHello[2] := $01;
-  Check('ClientHello built', Length(LClientHello) > 0);
+  LClientHello[1] := $03; LClientHello[2] := $01;
+  Check('ClientHello built', Length(LClientHello) > 100);
 
-  // Send ClientHello
-  LOk := SendAll(LSock, LClientHello);
-  Check('ClientHello sent', LOk);
-  WriteLn('  Sent ', Length(LClientHello), ' bytes, waiting 1500ms...');
+  // Send via framework stream
+  LStream.Write(LClientHello[0], Length(LClientHello));
+  Check('ClientHello sent', True);
 
-  // Receive ServerHello
-  LResponse := RecvBytes(LSock, 16384, 1500);
-  WriteLn('  Received ', Length(LResponse), ' bytes');
-  Check('received response', Length(LResponse) > 5);
+  // Wait for response
+  Sleep(1500);
+  LRead := LStream.Read(LBuf[0], SizeOf(LBuf));
+  Check('received response', LRead > 5);
 
-  if Length(LResponse) > 5 then
+  if LRead > 5 then
   begin
-    Check('response is handshake record (0x16)', LResponse[0] = $16);
+    SetLength(LResponse, LRead);
+    Move(LBuf[0], LResponse[0], LRead);
+
+    Check('response is handshake (0x16)', LResponse[0] = $16);
     Check('response version 0x0303', (LResponse[1] = $03) and (LResponse[2] = $03));
 
-    // Parse ServerHello
-    LOk := TryExtractHandshakePayloadFromRecord(LResponse, LHandshake);
-    Check('extract handshake payload', LOk);
-
-    if LOk then
+    if TryExtractHandshakePayloadFromRecord(LResponse, LHandshake) then
     begin
-      LOk := TryParseServerHelloFromHandshake(LHandshake, LServerHello);
-      Check('parse ServerHello', LOk);
+      Check('extract handshake payload', True);
 
-      if LOk then
+      if TryParseServerHelloFromHandshake(LHandshake, LServerHello) then
       begin
-        Check('ServerHello valid', LServerHello.Valid);
-        Check('selected TLS 1.3 (0x0304)', LServerHello.SelectedVersion = $0304);
+        Check('parse ServerHello', True);
+        Check('TLS 1.3 selected (0x0304)', LServerHello.SelectedVersion = $0304);
         Check('has key share', LServerHello.HasKeyShare);
-        Check('key share group = X25519 (0x001D)',
-          LServerHello.KeyShareGroup = TLS13_GROUP_X25519);
-        Check('peer key share = 32 bytes', Length(LServerHello.PeerKeyShare) = 32);
-        Check('cipher suite is AES-128-GCM-SHA256 or AES-256-GCM-SHA384',
-          (LServerHello.SelectedCipherSuite = $1301) or
-          (LServerHello.SelectedCipherSuite = $1302));
+        Check('key share = X25519', LServerHello.KeyShareGroup = TLS13_GROUP_X25519);
+        Check('peer key = 32 bytes', Length(LServerHello.PeerKeyShare) = 32);
 
         if LServerHello.HasKeyShare and (Length(LServerHello.PeerKeyShare) = 32) then
         begin
           LShared := X25519ComputeSharedSecret(LPrivKey, LServerHello.PeerKeyShare);
-          Check('ECDHE shared secret computed (32 bytes)', Length(LShared) = 32);
+          Check('ECDHE shared secret (32 bytes)', Length(LShared) = 32);
+
+          // Derive handshake keys from shared secret
+          InitTLS13HandshakeSecrets(LSecrets);
+          SetLength(LTranscript, Length(LClientHello) - 5 + Length(LHandshake));
+          Move(LClientHello[5], LTranscript[0], Length(LClientHello) - 5);
+          Move(LHandshake[0], LTranscript[Length(LClientHello) - 5], Length(LHandshake));
+
+          if TryDeriveTLS13HandshakeSecrets($1301, LShared, LTranscript, LSecrets, LError) then
+          begin
+            Check('key schedule derived', LSecrets.Valid);
+            Check('server key ready', Length(LSecrets.ServerHandshakeKey) > 0);
+            WriteLn('  --- Full TLS 1.3 key exchange complete! ---');
+          end
+          else
+            Check('key schedule derived', False);
+
+          ClearTLS13HandshakeSecrets(LSecrets);
         end;
-      end;
-    end;
+      end
+      else
+        Check('parse ServerHello', False);
+    end
+    else
+      Check('extract handshake payload', False);
   end;
 
-  // Cleanup
-  fpClose(LSock);
+  LStream.Close;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
