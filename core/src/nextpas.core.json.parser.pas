@@ -544,10 +544,17 @@ end;
 function TJsonDocument.Parse(const AInput: TStringView): Boolean;
 var
   LState: TParserState;
+  LEstimate: UInt32;
 begin
   FInput := AInput;
   FNodeCount := 0;
   FHasError := False;
+  LEstimate := UInt32(AInput.Len div 4);
+  if LEstimate > FNodeCap then
+  begin
+    ReallocMem(FNodes, LEstimate * SizeOf(TJsonNode));
+    FNodeCap := LEstimate;
+  end;
   LState.Doc := @Self;
   LState.Input := AInput.Data;
   LState.InputLen := AInput.Len;

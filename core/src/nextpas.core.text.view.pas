@@ -328,7 +328,7 @@ begin
   LPos := 0;
   while LPos + VecWidth <= FLen do
   begin
-    Inc(Result, Vec16Popcnt(VecCmpEq(@FData[LPos], Byte(ACh))));
+    Inc(Result, VecPopcnt(VecCmpEq(@FData[LPos], Byte(ACh))));
     Inc(LPos, VecWidth);
   end;
   while LPos < FLen do
