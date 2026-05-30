@@ -87,6 +87,7 @@ function platform_socket_getsockname(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
 function platform_socket_getpeername(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
+function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 
 implementation
 
@@ -260,6 +261,29 @@ begin
     Result := 0
   else
     Result := platform_get_errno;
+end;
+
+function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
+var
+  LHints: addrinfo;
+  LRes: PAddrInfo;
+  LSa: ^sockaddr_in;
+begin
+  AAddr := 0;
+  FillChar(LHints, SizeOf(LHints), 0);
+  LHints.ai_family := AF_INET;
+  LHints.ai_socktype := SOCK_STREAM;
+  LRes := nil;
+  Result := getaddrinfo(AHost, nil, @LHints, @LRes);
+  if (Result <> 0) or (LRes = nil) then
+  begin
+    if Result = 0 then Result := -1;
+    Exit;
+  end;
+  LSa := Pointer(LRes^.ai_addr);
+  AAddr := LSa^.sin_addr.s_addr;
+  freeaddrinfo(LRes);
+  Result := 0;
 end;
 
 {$ENDIF}
@@ -443,6 +467,33 @@ begin
   end;
 end;
 
+function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
+type
+  PWinSockAddrIn = ^TWinSockAddrIn;
+  TWinSockAddrIn = packed record
+    sin_family: Word;
+    sin_port: Word;
+    sin_addr: UInt32;
+    sin_zero: array[0..7] of Byte;
+  end;
+var
+  LRes: Pointer;
+  LSa: PWinSockAddrIn;
+begin
+  AAddr := 0;
+  LRes := nil;
+  Result := winsock_getaddrinfo(AHost, nil, nil, @LRes);
+  if (Result <> 0) or (LRes = nil) then
+  begin
+    if Result = 0 then Result := -1;
+    Exit;
+  end;
+  LSa := PWinSockAddrIn((PByte(LRes) + 32)^);
+  AAddr := LSa^.sin_addr;
+  winsock_freeaddrinfo(LRes);
+  Result := 0;
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -467,6 +518,7 @@ function platform_socket_shutdown(const ASocket: TPlatformSocket; AHow: Int32): 
 function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOptName: Int32; AOptVal: Pointer; AOptLen: Int32): Int32; begin Result := -1; end;
 function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
 function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
+function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := -1; end;
 {$ENDIF}
 
 end.

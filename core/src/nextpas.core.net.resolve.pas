@@ -15,8 +15,6 @@ implementation
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi,
   nextpas.core.platform.socket;
 
 function NetResolveIPv4(const AIP: string): UInt32;
@@ -58,11 +56,8 @@ end;
 
 function NetResolve(const AHost: string): TNetAddress;
 var
-  LHints: addrinfo;
-  LRes: PAddrInfo;
-  LResult: cint;
-  LSa: ^sockaddr_in;
-  LA: UInt32;
+  LAddr: UInt32;
+  LResult: Int32;
 begin
   if (AHost = '') or (AHost = 'localhost') then
     Exit(TNetAddress.IPv4('127.0.0.1', 0));
@@ -70,25 +65,14 @@ begin
   if IsIPv4Literal(AHost) then
     Exit(TNetAddress.IPv4(AHost, 0));
 
-  FillChar(LHints, SizeOf(LHints), 0);
-  LHints.ai_family := PLATFORM_AF_INET;
-  LHints.ai_socktype := PLATFORM_SOCK_STREAM;
-  LRes := nil;
-
-  LResult := getaddrinfo(PAnsiChar(AHost), nil, @LHints, @LRes);
-  if (LResult <> 0) or (LRes = nil) then
+  LResult := platform_socket_resolve_ipv4(PAnsiChar(AHost), LAddr);
+  if LResult <> 0 then
     raise ENetworkError.Create('DNS resolve failed for: ' + AHost);
 
-  try
-    LSa := Pointer(LRes^.ai_addr);
-    LA := LSa^.sin_addr.s_addr;
-    Result.IP := IntToStr(LA and $FF) + '.' + IntToStr((LA shr 8) and $FF) + '.' +
-      IntToStr((LA shr 16) and $FF) + '.' + IntToStr((LA shr 24) and $FF);
-    Result.Port := 0;
-    Result.IsIPv6 := False;
-  finally
-    freeaddrinfo(LRes);
-  end;
+  Result.IP := IntToStr(LAddr and $FF) + '.' + IntToStr((LAddr shr 8) and $FF) + '.' +
+    IntToStr((LAddr shr 16) and $FF) + '.' + IntToStr((LAddr shr 24) and $FF);
+  Result.Port := 0;
+  Result.IsIPv6 := False;
 end;
 
 end.
