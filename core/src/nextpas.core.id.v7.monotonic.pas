@@ -53,6 +53,7 @@ begin
         platform_thread_yield;
         LMs := platform_realtime_ns div 1000000;
       end;
+      FLastMs := LMs;
       IdRngFillBytes(@FRandA, 2);
       FRandA := FRandA and $0FFF;
     end;

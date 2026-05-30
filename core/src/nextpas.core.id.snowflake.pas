@@ -65,6 +65,7 @@ begin
         platform_thread_yield;
         LMs := Int64(platform_realtime_ns div 1000000) - FEpochMs;
       end;
+      FLastMs := LMs;
       FSequence := 0;
     end;
   end

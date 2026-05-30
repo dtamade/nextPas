@@ -79,10 +79,15 @@ begin
   case ACh of
     '0'..'9': Result := Ord(ACh) - Ord('0');
     'A'..'H': Result := Ord(ACh) - Ord('A') + 10;
+    'a'..'h': Result := Ord(ACh) - Ord('a') + 10;
     'J', 'K': Result := Ord(ACh) - Ord('J') + 18;
+    'j', 'k': Result := Ord(ACh) - Ord('j') + 18;
     'M', 'N': Result := Ord(ACh) - Ord('M') + 20;
+    'm', 'n': Result := Ord(ACh) - Ord('m') + 20;
     'P'..'T': Result := Ord(ACh) - Ord('P') + 22;
+    'p'..'t': Result := Ord(ACh) - Ord('p') + 22;
     'V'..'Z': Result := Ord(ACh) - Ord('V') + 27;
+    'v'..'z': Result := Ord(ACh) - Ord('v') + 27;
   else
     Result := -1;
   end;
@@ -92,6 +97,7 @@ function UlidIsValid(const AStr: string): Boolean;
 var LI: Integer;
 begin
   if Length(AStr) <> ULID_LENGTH then Exit(False);
+  if CrockfordVal(AStr[1]) > 7 then Exit(False);
   for LI := 1 to ULID_LENGTH do
     if CrockfordVal(AStr[LI]) < 0 then Exit(False);
   Result := True;
