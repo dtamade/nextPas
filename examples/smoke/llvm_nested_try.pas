@@ -1,0 +1,17 @@
+program llvm_nested_try;
+begin
+  try
+    WriteLn('outer-try');
+    try
+      WriteLn('inner-try');
+      raise;
+      WriteLn('unreachable');
+    except
+      WriteLn('inner-caught');
+    end;
+    WriteLn('after-inner');
+  finally
+    WriteLn('outer-finally');
+  end;
+  WriteLn('done');
+end.
