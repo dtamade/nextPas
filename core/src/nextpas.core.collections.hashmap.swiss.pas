@@ -105,6 +105,7 @@ type
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
     function GetSlotKey(AIndex: SizeUInt): K; inline;
     function GetEnumerator: TEnumerator;
+    function IsEmpty: Boolean; inline;
     function GetCount: SizeUInt;
 
     property Count: SizeUInt read FCount;
@@ -725,6 +726,11 @@ begin
   Result.FCapacity := FCapacity;
   Result.FIdx := 0;
   FillChar(Result.FCurrent, SizeOf(TSlot), 0);
+end;
+
+function TSwissTable.IsEmpty: Boolean;
+begin
+  Result := FCount = 0;
 end;
 
 function TSwissTable.GetCount: SizeUInt;
