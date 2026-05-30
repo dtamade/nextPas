@@ -406,7 +406,6 @@ end;
 
 procedure TCRC32State.Init;
 begin
-  if not GCRC32TableInit then InitCRC32Table;
   FValue := $FFFFFFFF;
 end;
 
@@ -445,5 +444,8 @@ begin
 end;
 
 {$POP}
+
+initialization
+  InitCRC32Table;
 
 end.
