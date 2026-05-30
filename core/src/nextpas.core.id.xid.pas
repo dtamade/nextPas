@@ -38,6 +38,15 @@ const
 var
   GMachineId: array[0..2] of Byte;
   GCounter: Int32 = 0;
+  GXidDecodeTable: array[0..127] of ShortInt;
+
+procedure InitXidDecodeTable;
+var LI: Integer;
+begin
+  FillChar(GXidDecodeTable, SizeOf(GXidDecodeTable), -1);
+  for LI := 0 to 31 do
+    GXidDecodeTable[Ord(XID_ENCODING[LI + 1])] := ShortInt(LI);
+end;
 
 function GetPid16: UInt16;
 begin
@@ -82,7 +91,8 @@ begin
   if Length(AStr) <> XID_STRING_LENGTH then Exit;
   for LI := 0 to 19 do
   begin
-    LVal := Pos(AStr[LI + 1], XID_ENCODING) - 1;
+    if (Ord(AStr[LI + 1]) > 127) then Exit;
+    LVal := GXidDecodeTable[Ord(AStr[LI + 1])];
     if LVal < 0 then Exit;
     LBuf[LI] := Byte(LVal);
   end;
@@ -186,6 +196,7 @@ begin
 end;
 
 initialization
+  InitXidDecodeTable;
   IdRngFillBytes(@GMachineId[0], 3);
   IdRngFillBytes(@GCounter, 3);
 

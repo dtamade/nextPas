@@ -33,6 +33,8 @@ procedure TSnowflakeGenerator.Init(AWorkerId: UInt16; AEpochMs: Int64);
 begin
   if AWorkerId > 1023 then
     RunError(201);
+  if AEpochMs < 0 then
+    RunError(201);
   if AEpochMs = 0 then
     FEpochMs := SNOWFLAKE_EPOCH_TWITTER
   else
