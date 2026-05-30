@@ -6627,6 +6627,12 @@ begin
       LowerRuntimeTryExceptStatement(Child);
       Continue;
     end;
+    if (Child.NodeKind = gnkRaiseStatement) and FNoFold then
+    begin
+      FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
+      FCurrentBlockTerminated := True;
+      Continue;
+    end;
     if (Child.NodeKind = gnkBreakStatement) and FNoFold then
     begin
       if Length(FBreakLabels) > 0 then
