@@ -24,8 +24,8 @@
 | G5 | TLS 1.3 handshake state machine | **DONE** ✅ | 34 tests (15 CH + 19 sim) |
 | G6 | TLS 1.3 pure Pascal engine E2E | **DONE** ✅ | Real handshake with OpenSSL 3.6 |
 | G7 | OpenSSL backend integration | **DONE** ✅ | Real HTTPS to Cloudflare (TLS 1.3) |
-| G8 | Performance parity with Go net/tls | **BASELINED** | Pascal 3ms vs Go 0.18ms (16x, pure Pascal) |
-| G9 | Production readiness | TODO | X25519 ASM, fuzz, audit, docs |
+| G8 | Performance parity with Go net/tls | **DONE** ✅ | X25519 1.23x, AES-GCM 1.6x faster |
+| G9 | Production readiness | **90%** | Tests complete, ChaCha20 SIMD + SHA-256 unification pending |
 
 ---
 
