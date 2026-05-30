@@ -469,27 +469,41 @@ end;
 
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
 type
-  PWinSockAddrIn = ^TWinSockAddrIn;
+  TWinAddrInfo = record
+    ai_flags: Int32;
+    ai_family: Int32;
+    ai_socktype: Int32;
+    ai_protocol: Int32;
+    ai_addrlen: PtrUInt;
+    ai_canonname: PAnsiChar;
+    ai_addr: Pointer;
+    ai_next: Pointer;
+  end;
+  PWinAddrInfo = ^TWinAddrInfo;
   TWinSockAddrIn = packed record
     sin_family: Word;
     sin_port: Word;
     sin_addr: UInt32;
     sin_zero: array[0..7] of Byte;
   end;
+  PWinSockAddrIn = ^TWinSockAddrIn;
 var
-  LRes: Pointer;
-  LSa: PWinSockAddrIn;
+  LHints: TWinAddrInfo;
+  LRes: PWinAddrInfo;
 begin
   AAddr := 0;
+  FillChar(LHints, SizeOf(LHints), 0);
+  LHints.ai_family := 2; { AF_INET }
+  LHints.ai_socktype := 1; { SOCK_STREAM }
   LRes := nil;
-  Result := winsock_getaddrinfo(AHost, nil, nil, @LRes);
+  Result := winsock_getaddrinfo(AHost, nil, @LHints, @LRes);
   if (Result <> 0) or (LRes = nil) then
   begin
     if Result = 0 then Result := -1;
     Exit;
   end;
-  LSa := PWinSockAddrIn((PByte(LRes) + 32)^);
-  AAddr := LSa^.sin_addr;
+  if LRes^.ai_addr <> nil then
+    AAddr := PWinSockAddrIn(LRes^.ai_addr)^.sin_addr;
   winsock_freeaddrinfo(LRes);
   Result := 0;
 end;
