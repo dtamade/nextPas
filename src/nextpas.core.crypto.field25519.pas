@@ -221,8 +221,46 @@ begin
 end;
 
 procedure FeSq(out H: TFe25519; const F: TFe25519);
+var
+  F0, F1, F2, F3, F4, F5, F6, F7, F8, F9: Int64;
+  F0_2, F1_2, F2_2, F3_2, F4_2, F5_2, F6_2, F7_2: Int64;
+  F5_38, F6_19, F7_38, F8_19, F9_38: Int64;
+  H0, H1, H2, H3, H4, H5, H6, H7, H8, H9: Int64;
+  C: Int64;
 begin
-  FeMul(H, F, F);
+  F0 := F[0]; F1 := F[1]; F2 := F[2]; F3 := F[3]; F4 := F[4];
+  F5 := F[5]; F6 := F[6]; F7 := F[7]; F8 := F[8]; F9 := F[9];
+  F0_2 := 2*F0; F1_2 := 2*F1; F2_2 := 2*F2; F3_2 := 2*F3;
+  F4_2 := 2*F4; F5_2 := 2*F5; F6_2 := 2*F6; F7_2 := 2*F7;
+  F5_38 := 38*F5; F6_19 := 19*F6; F7_38 := 38*F7;
+  F8_19 := 19*F8; F9_38 := 38*F9;
+
+  H0 := F0*F0 + F1_2*F9_38 + F2_2*F8_19 + F3_2*F7_38 + F4_2*F6_19 + F5*F5_38;
+  H1 := F0_2*F1 + F2*F9_38 + F3_2*F8_19 + F4*F7_38 + F5_2*F6_19;
+  H2 := F0_2*F2 + F1_2*F1 + F3_2*F9_38 + F4_2*F8_19 + F5_2*F7_38 + F6*F6_19;
+  H3 := F0_2*F3 + F1_2*F2 + F4*F9_38 + F5_2*F8_19 + F6*F7_38;
+  H4 := F0_2*F4 + F1_2*F3_2 + F2*F2 + F5_2*F9_38 + F6_2*F8_19 + F7*F7_38;
+  H5 := F0_2*F5 + F1_2*F4 + F2_2*F3 + F6*F9_38 + F7_2*F8_19;
+  H6 := F0_2*F6 + F1_2*F5_2 + F2_2*F4 + F3_2*F3 + F7_2*F9_38 + F8*F8_19;
+  H7 := F0_2*F7 + F1_2*F6 + F2_2*F5 + F3_2*F4 + F8*F9_38;
+  H8 := F0_2*F8 + F1_2*F7_2 + F2_2*F6 + F3_2*F5_2 + F4*F4 + F9*F9_38;
+  H9 := F0_2*F9 + F1_2*F8 + F2_2*F7 + F3_2*F6 + F4_2*F5;
+
+  C := Sar(H0 + (Int64(1) shl 25), 26); H1 := H1 + C; H0 := H0 - (C shl 26);
+  C := Sar(H4 + (Int64(1) shl 25), 26); H5 := H5 + C; H4 := H4 - (C shl 26);
+  C := Sar(H1 + (Int64(1) shl 24), 25); H2 := H2 + C; H1 := H1 - (C shl 25);
+  C := Sar(H5 + (Int64(1) shl 24), 25); H6 := H6 + C; H5 := H5 - (C shl 25);
+  C := Sar(H2 + (Int64(1) shl 25), 26); H3 := H3 + C; H2 := H2 - (C shl 26);
+  C := Sar(H6 + (Int64(1) shl 25), 26); H7 := H7 + C; H6 := H6 - (C shl 26);
+  C := Sar(H3 + (Int64(1) shl 24), 25); H4 := H4 + C; H3 := H3 - (C shl 25);
+  C := Sar(H7 + (Int64(1) shl 24), 25); H8 := H8 + C; H7 := H7 - (C shl 25);
+  C := Sar(H4 + (Int64(1) shl 25), 26); H5 := H5 + C; H4 := H4 - (C shl 26);
+  C := Sar(H8 + (Int64(1) shl 25), 26); H9 := H9 + C; H8 := H8 - (C shl 26);
+  C := Sar(H9 + (Int64(1) shl 24), 25); H0 := H0 + C * 19; H9 := H9 - (C shl 25);
+  C := Sar(H0 + (Int64(1) shl 25), 26); H1 := H1 + C; H0 := H0 - (C shl 26);
+
+  H[0] := H0; H[1] := H1; H[2] := H2; H[3] := H3; H[4] := H4;
+  H[5] := H5; H[6] := H6; H[7] := H7; H[8] := H8; H[9] := H9;
 end;
 
 procedure FeInvert(out O: TFe25519; const Z: TFe25519);
