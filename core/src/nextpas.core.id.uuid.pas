@@ -34,7 +34,7 @@ function UuidIsValid(const AStr: string): Boolean;
 implementation
 
 uses
-  nextpas.core.platform.random,
+  nextpas.core.id.rng,
   nextpas.core.platform.time;
 
 const
@@ -72,7 +72,7 @@ end;
 
 class function TUuid.NewV4: TUuid;
 begin
-  platform_random_bytes(@Result.FBytes[0], 16);
+  IdRngFillBytes(@Result.FBytes[0], 16);
   Result.FBytes[6] := (Result.FBytes[6] and $0F) or $40;
   Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80;
 end;
@@ -88,7 +88,7 @@ begin
   Result.FBytes[3] := Byte(LMs shr 16);
   Result.FBytes[4] := Byte(LMs shr 8);
   Result.FBytes[5] := Byte(LMs);
-  platform_random_bytes(@Result.FBytes[6], 10);
+  IdRngFillBytes(@Result.FBytes[6], 10);
   Result.FBytes[6] := (Result.FBytes[6] and $0F) or $70;
   Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80;
 end;
