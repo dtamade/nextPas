@@ -352,6 +352,69 @@ begin
   Check(LDoc.HasError, 'inline table reopen rejected');
 end;
 
+procedure TestSpecExample1;
+var LDoc: ITomlDocument;
+const
+  SPEC1 =
+    '# This is a TOML document.' + #10 +
+    'title = "TOML Example"' + #10 + #10 +
+    '[owner]' + #10 +
+    'name = "Lance Uppercut"' + #10 +
+    'dob = 1979-05-27T07:32:00-08:00' + #10 + #10 +
+    '[database]' + #10 +
+    'server = "192.168.1.1"' + #10 +
+    'ports = [ 8001, 8001, 8002 ]' + #10 +
+    'connection_max = 5000' + #10 +
+    'enabled = true' + #10 + #10 +
+    '[servers]' + #10 + #10 +
+    '[servers.alpha]' + #10 +
+    'ip = "10.0.0.1"' + #10 +
+    'dc = "eqdc10"' + #10 + #10 +
+    '[servers.beta]' + #10 +
+    'ip = "10.0.0.2"' + #10 +
+    'dc = "eqdc10"' + #10 + #10 +
+    '[clients]' + #10 +
+    'data = [ ["gamma", "delta"], [1, 2] ]' + #10 +
+    'hosts = [' + #10 + '  "alpha",' + #10 + '  "omega"' + #10 + ']' + #10;
+begin
+  LDoc := TomlParse(SPEC1);
+  Check(not LDoc.HasError, 'spec example 1 parses');
+  Check(LDoc.Root.Get('title').AsStr.Equals(
+    TStringView.Create(PAnsiChar('TOML Example'), 12)), 'title');
+  Check(LDoc.Root.Get('owner').Get('name').AsStr.Equals(
+    TStringView.Create(PAnsiChar('Lance Uppercut'), 14)), 'owner.name');
+  CheckEqual(Int64(5000), LDoc.Root.Get('database').Get('connection_max').AsInt, 'connection_max');
+  CheckEqual(Int64(3), LDoc.Root.Get('database').Get('ports').ArrayLen, 'ports len');
+  Check(LDoc.Root.Get('database').Get('enabled').AsBool, 'enabled');
+  Check(LDoc.Root.Get('servers').Get('alpha').Get('ip').AsStr.Equals(
+    TStringView.Create(PAnsiChar('10.0.0.1'), 8)), 'servers.alpha.ip');
+  CheckEqual(Int64(2), LDoc.Root.Get('clients').Get('hosts').ArrayLen, 'hosts len');
+end;
+
+procedure TestImplicitExplicitAfter;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[a.b.c]' + #10 + 'answer = 42' + #10 + '[a]' + #10 + 'better = 43');
+  Check(not LDoc.HasError, 'implicit then explicit ok');
+  CheckEqual(Int64(42), LDoc.Root.Get('a').Get('b').Get('c').Get('answer').AsInt, 'a.b.c.answer');
+  CheckEqual(Int64(43), LDoc.Root.Get('a').Get('better').AsInt, 'a.better');
+end;
+
+procedure TestRejectHexEscape;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "\x33"');
+  Check(LDoc.HasError, 'hex escape \x rejected in TOML v1.0');
+end;
+
+procedure TestMultilineArray;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('hosts = [' + #10 + '  "alpha",' + #10 + '  "omega",' + #10 + ']');
+  Check(not LDoc.HasError, 'multiline array ok');
+  CheckEqual(Int64(2), LDoc.Root.Get('hosts').ArrayLen, 'hosts len');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -396,6 +459,11 @@ begin
   T.Run('unicode escape \\U', @TestUnicodeEscape8);
   T.Run('reject inline table extension', @TestRejectInlineTableExtension);
   T.Run('reject inline table reopen', @TestRejectInlineTableReopen);
+  { Official toml-test suite cases }
+  T.Run('spec-example-1', @TestSpecExample1);
+  T.Run('implicit-explicit-after', @TestImplicitExplicitAfter);
+  T.Run('reject hex escape', @TestRejectHexEscape);
+  T.Run('multiline array', @TestMultilineArray);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

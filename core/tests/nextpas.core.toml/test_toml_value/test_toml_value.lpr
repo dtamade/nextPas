@@ -252,6 +252,54 @@ begin
   LDoc.Done;
 end;
 
+procedure TestEnumerateArray;
+var
+  LDoc: TTomlDocument;
+  LRoot: TTomlValue;
+  LItem: TTomlValue;
+  LSum: Int64;
+begin
+  LDoc := ParseDoc('nums = [10, 20, 30]');
+  LRoot := TTomlValue.Create(LDoc, LDoc.Root);
+  LSum := 0;
+  for LItem in TomlEnumerate(LRoot.Get('nums')) do
+    LSum := LSum + LItem.AsInt;
+  CheckEqual(Int64(60), LSum, 'enumerate array sum');
+  LDoc.Done;
+end;
+
+procedure TestEnumerateTable;
+var
+  LDoc: TTomlDocument;
+  LRoot: TTomlValue;
+  LItem: TTomlValue;
+  LCount: Int32;
+begin
+  LDoc := ParseDoc('a = 1' + #10 + 'b = 2' + #10 + 'c = 3');
+  LRoot := TTomlValue.Create(LDoc, LDoc.Root);
+  LCount := 0;
+  for LItem in TomlEnumerate(LRoot) do
+    Inc(LCount);
+  CheckEqual(Int64(3), Int64(LCount), 'enumerate table count');
+  LDoc.Done;
+end;
+
+procedure TestEnumerateEmpty;
+var
+  LDoc: TTomlDocument;
+  LRoot: TTomlValue;
+  LItem: TTomlValue;
+  LCount: Int32;
+begin
+  LDoc := ParseDoc('arr = []');
+  LRoot := TTomlValue.Create(LDoc, LDoc.Root);
+  LCount := 0;
+  for LItem in TomlEnumerate(LRoot.Get('arr')) do
+    Inc(LCount);
+  CheckEqual(Int64(0), Int64(LCount), 'enumerate empty');
+  LDoc.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.value');
   T.Run('invalid value', @TestInvalidValue);
@@ -271,6 +319,9 @@ begin
   T.Run('array table', @TestArrayTable);
   T.Run('datetime', @TestDateTime);
   T.Run('int promotes to float', @TestIntPromotesToFloat);
+  T.Run('enumerate array', @TestEnumerateArray);
+  T.Run('enumerate table', @TestEnumerateTable);
+  T.Run('enumerate empty', @TestEnumerateEmpty);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

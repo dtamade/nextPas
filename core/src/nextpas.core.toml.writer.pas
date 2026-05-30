@@ -26,13 +26,17 @@ type
     FBuilder: ^TStringBuilder;
     FInlineDepth: Int32;
     FNeedNewline: Boolean;
+    FIndent: Int32;
+    FPretty: Boolean;
     FFirstStack: array[0..31] of Boolean;
     FIsArrayStack: array[0..31] of Boolean;
     procedure WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
     procedure WriteBareOrQuotedKey(const AKey: PAnsiChar; ALen: SizeUInt);
     procedure PrepareValue;
+    procedure WriteIndent;
   public
     procedure Init(var ABuilder: TStringBuilder);
+    procedure InitPretty(var ABuilder: TStringBuilder; AIndent: Int32 = 2);
     procedure BeginTable(const AKey: string);
     procedure BeginArrayTable(const AKey: string);
     procedure Key(const AKey: string); overload;
@@ -79,6 +83,25 @@ begin
   FBuilder := @ABuilder;
   FInlineDepth := 0;
   FNeedNewline := False;
+  FPretty := False;
+  FIndent := 0;
+end;
+
+procedure TTomlWriter.InitPretty(var ABuilder: TStringBuilder; AIndent: Int32 = 2);
+begin
+  FBuilder := @ABuilder;
+  FInlineDepth := 0;
+  FNeedNewline := False;
+  FPretty := True;
+  FIndent := AIndent;
+end;
+
+procedure TTomlWriter.WriteIndent;
+var
+  LI: Int32;
+begin
+  for LI := 1 to FInlineDepth * FIndent do
+    FBuilder^.AppendChar(' ');
 end;
 
 procedure TTomlWriter.WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
@@ -129,7 +152,21 @@ begin
   if (FInlineDepth > 0) and FIsArrayStack[FInlineDepth] then
   begin
     if not FFirstStack[FInlineDepth] then
-      FBuilder^.AppendBytes(', ', 2);
+    begin
+      FBuilder^.AppendChar(',');
+      if FPretty then
+      begin
+        FBuilder^.AppendChar(#10);
+        WriteIndent;
+      end
+      else
+        FBuilder^.AppendChar(' ');
+    end
+    else if FPretty then
+    begin
+      FBuilder^.AppendChar(#10);
+      WriteIndent;
+    end;
     FFirstStack[FInlineDepth] := False;
   end;
 end;
@@ -333,8 +370,13 @@ end;
 
 procedure TTomlWriter.EndArray;
 begin
-  FBuilder^.AppendChar(']');
   Dec(FInlineDepth);
+  if FPretty then
+  begin
+    FBuilder^.AppendChar(#10);
+    WriteIndent;
+  end;
+  FBuilder^.AppendChar(']');
   if FInlineDepth = 0 then FBuilder^.AppendChar(#10);
 end;
 

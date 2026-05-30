@@ -202,6 +202,36 @@ begin
   B.Done;
 end;
 
+procedure TestPrettyArray;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(64); W.InitPretty(B, 2);
+  W.Key('nums');
+  W.BeginArray;
+  W.Int(1); W.Int(2); W.Int(3);
+  W.EndArray;
+  CheckEqual('nums = [' + #10 + '  1,' + #10 + '  2,' + #10 + '  3' + #10 + ']' + #10,
+    B.ToString, 'pretty array');
+  B.Done;
+end;
+
+procedure TestPrettyNestedArray;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(128); W.InitPretty(B, 2);
+  W.Key('m');
+  W.BeginArray;
+    W.BeginArray; W.Int(1); W.Int(2); W.EndArray;
+    W.BeginArray; W.Int(3); W.Int(4); W.EndArray;
+  W.EndArray;
+  CheckEqual('m = [' + #10 +
+    '  [' + #10 + '    1,' + #10 + '    2' + #10 + '  ],' + #10 +
+    '  [' + #10 + '    3,' + #10 + '    4' + #10 + '  ]' + #10 +
+    ']' + #10,
+    B.ToString, 'pretty nested');
+  B.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.writer');
   T.Run('simple key-value', @TestSimpleKeyValue);
@@ -223,6 +253,8 @@ begin
   T.Run('key TStringView', @TestKeyStringView);
   T.Run('str TStringView', @TestStrStringView);
   T.Run('nested array', @TestNestedArray);
+  T.Run('pretty array', @TestPrettyArray);
+  T.Run('pretty nested array', @TestPrettyNestedArray);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

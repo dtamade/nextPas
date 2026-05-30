@@ -49,6 +49,23 @@ type
     function ArrayGet(AIndex: UInt32): TTomlValue;
   end;
 
+  { Enumerator for for..in over TTomlValue (iterates table children or array elements).
+    Usage: for LItem in Doc.Root.Get('items') do WriteLn(LItem.AsStr.ToString); }
+  TTomlValueEnumerator = record
+  private
+    FDoc: ^TTomlDocument;
+    FFirst: UInt32;
+    FCur: UInt32;
+    FStarted: Boolean;
+    function GetCurrent: TTomlValue;
+  public
+    function GetEnumerator: TTomlValueEnumerator;
+    function MoveNext: Boolean;
+    property Current: TTomlValue read GetCurrent;
+  end;
+
+function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator;
+
 implementation
 
 class function TTomlValue.Create(var ADoc: TTomlDocument; AIdx: UInt32): TTomlValue;
@@ -261,6 +278,42 @@ begin
     Inc(LI);
   end;
   Result.FIdx := LCur;
+end;
+
+{ TTomlValueEnumerator }
+
+function TTomlValueEnumerator.GetEnumerator: TTomlValueEnumerator;
+begin
+  Result := Self;
+end;
+
+function TTomlValueEnumerator.MoveNext: Boolean;
+begin
+  if not FStarted then
+  begin
+    FStarted := True;
+    FCur := FFirst;
+  end
+  else if FCur <> TOML_NODE_NONE then
+    FCur := FDoc^.Node(FCur)^.Next;
+  Result := FCur <> TOML_NODE_NONE;
+end;
+
+function TTomlValueEnumerator.GetCurrent: TTomlValue;
+begin
+  Result.FDoc := FDoc;
+  Result.FIdx := FCur;
+end;
+
+function TomlEnumerate(const AValue: TTomlValue): TTomlValueEnumerator;
+begin
+  Result.FDoc := AValue.FDoc;
+  Result.FStarted := False;
+  Result.FCur := TOML_NODE_NONE;
+  if AValue.IsValid and ((AValue.Kind = tnkTable) or (AValue.Kind = tnkArray)) then
+    Result.FFirst := AValue.FDoc^.Node(AValue.FIdx)^.Container.FirstChild
+  else
+    Result.FFirst := TOML_NODE_NONE;
 end;
 
 end.
