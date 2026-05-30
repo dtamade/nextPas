@@ -96,8 +96,11 @@ end;
 
 function DoDecode(const AEncoded: string; const ATable: array of ShortInt): TBytes;
 var
-  LLen, LI, LJ, LPad, LOutLen: Integer;
-  LVal: ShortInt;
+  LLen, LPad, LOutLen, LJ: Integer;
+  LP: PByte;
+  LD: PByte;
+  LA, LB, LC, LE: ShortInt;
+  LI: Integer;
   LAccum: UInt32;
   LBits: Integer;
 begin
@@ -116,30 +119,49 @@ begin
   LOutLen := (LLen * 3) div 4 - LPad;
   SetLength(Result, LOutLen);
 
+  LP := PByte(@AEncoded[1]);
+  LD := @Result[0];
+  LJ := 0;
+  LI := 0;
+
+  while LI + 4 <= LLen - LPad do
+  begin
+    LA := ATable[LP[LI]];
+    LB := ATable[LP[LI+1]];
+    LC := ATable[LP[LI+2]];
+    LE := ATable[LP[LI+3]];
+    if (LA or LB or LC or LE) < 0 then
+      raise EConvertError.Create('Invalid base64 character');
+    LD[LJ]   := Byte((LA shl 2) or (LB shr 4));
+    LD[LJ+1] := Byte(((LB and $0F) shl 4) or (LC shr 2));
+    LD[LJ+2] := Byte(((LC and $03) shl 6) or LE);
+    Inc(LJ, 3);
+    Inc(LI, 4);
+  end;
+
+  // Handle remaining (with padding)
   LAccum := 0;
   LBits := 0;
-  LJ := 0;
-
-  for LI := 1 to LLen do
+  while LI < LLen do
   begin
-    if AEncoded[LI] = '=' then
-      Break;
-    if Ord(AEncoded[LI]) > 127 then
-      raise EConvertError.CreateFmt('Invalid base64 character: %s', [AEncoded[LI]]);
-    LVal := ATable[Ord(AEncoded[LI])];
-    if LVal < 0 then
-      raise EConvertError.CreateFmt('Invalid base64 character: %s', [AEncoded[LI]]);
-    LAccum := (LAccum shl 6) or UInt32(LVal);
+    if AEncoded[LI + 1] = '=' then Break;
+    if LP[LI] > 127 then
+      raise EConvertError.Create('Invalid base64 character');
+    LA := ATable[LP[LI]];
+    if LA < 0 then
+      raise EConvertError.Create('Invalid base64 character');
+    LAccum := (LAccum shl 6) or UInt32(LA);
     Inc(LBits, 6);
     if LBits >= 8 then
     begin
       Dec(LBits, 8);
       if LJ < LOutLen then
       begin
-        Result[LJ] := Byte((LAccum shr LBits) and $FF);
+        LD[LJ] := Byte((LAccum shr LBits) and $FF);
         Inc(LJ);
       end;
     end;
+    Inc(LI);
   end;
 end;
 
