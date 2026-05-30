@@ -94,6 +94,7 @@ type
     function Select(ARank: SizeUInt; out AKey: K; out AValue: V): Boolean;
     procedure ForEach(ACallback: TForEachCallback; AData: Pointer = nil);
     procedure Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer = nil);
+    procedure PutAll(AOther: TBTreeMap);
     function GetEnumerator: TEnumerator;
 
     property Count: SizeUInt read FCount;
@@ -902,6 +903,15 @@ end;
 procedure TBTreeMap.Range(const ALo, AHi: K; ACallback: TForEachCallback; AData: Pointer);
 begin
   RangeTraverse(FRoot, ALo, AHi, ACallback, AData);
+end;
+
+{ PutAll — merge all entries from another BTreeMap }
+
+procedure TBTreeMap.PutAll(AOther: TBTreeMap);
+var E: TEntry;
+begin
+  for E in AOther do
+    Put(E.Key, E.Value);
 end;
 
 { TEnumerator }

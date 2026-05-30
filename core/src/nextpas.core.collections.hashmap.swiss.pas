@@ -89,6 +89,7 @@ type
     procedure Clear;
     procedure Retain(AFunc: TRetainFunc);
     procedure ForEach(AFunc: TVisitFunc);
+    procedure Drain(AFunc: TVisitFunc);
     function GetKeys: TKeyArray;
     function GetCtrlByte(AIndex: SizeUInt): Byte; inline;
     function GetSlotKey(AIndex: SizeUInt): K; inline;
@@ -648,6 +649,22 @@ begin
   for i := 0 to FCapacity - 1 do
     if FCtrl[i] < $80 then
       AFunc(FSlots[i].Key, FSlots[i].Value);
+end;
+
+procedure TSwissTable.Drain(AFunc: TVisitFunc);
+var i: SizeUInt;
+begin
+  if FCapacity = 0 then Exit;
+  for i := 0 to FCapacity - 1 do
+    if FCtrl[i] < $80 then
+    begin
+      AFunc(FSlots[i].Key, FSlots[i].Value);
+      if System.IsManagedType(K) then Finalize(FSlots[i].Key);
+      if System.IsManagedType(V) then Finalize(FSlots[i].Value);
+      SetCtrl(i, CTRL_EMPTY);
+    end;
+  FCount := 0;
+  FGrowthLeft := FCapacity - FCapacity div 8;
 end;
 
 function TSwissTable.GetKeys: TKeyArray;
