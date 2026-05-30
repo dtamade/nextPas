@@ -15,6 +15,7 @@ type
   TIoReactorEntry = record
     Callback: TIoCompletion;
     Context: Pointer;
+    NextFree: Int32;
   end;
 
   TIoReactor = record
@@ -23,8 +24,10 @@ type
     FEntries: array of TIoReactorEntry;
     FEntryCount: UInt32;
     FEntryCap: UInt32;
+    FFreeHead: Int32;
     FRunning: Boolean;
     function AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
+    procedure FreeEntry(AId: UInt64);
   public
     class function Create(AQueueDepth: UInt32 = 64): TIoReactor; static;
     procedure Close;
@@ -68,6 +71,7 @@ begin
   Result.FEntryCap := INITIAL_ENTRIES;
   SetLength(Result.FEntries, INITIAL_ENTRIES);
   Result.FEntryCount := 0;
+  Result.FFreeHead := -1;
   Result.FRunning := False;
 end;
 
@@ -84,16 +88,37 @@ begin
 end;
 
 function TIoReactor.AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
+var
+  LIdx: UInt32;
 begin
-  if FEntryCount >= FEntryCap then
+  if FFreeHead >= 0 then
   begin
-    FEntryCap := FEntryCap * 2;
-    SetLength(FEntries, FEntryCap);
+    LIdx := UInt32(FFreeHead);
+    FFreeHead := FEntries[LIdx].NextFree;
+  end
+  else
+  begin
+    if FEntryCount >= FEntryCap then
+    begin
+      FEntryCap := FEntryCap * 2;
+      SetLength(FEntries, FEntryCap);
+    end;
+    LIdx := FEntryCount;
+    Inc(FEntryCount);
   end;
-  Result := FEntryCount;
-  FEntries[FEntryCount].Callback := ACallback;
-  FEntries[FEntryCount].Context := AContext;
-  Inc(FEntryCount);
+  FEntries[LIdx].Callback := ACallback;
+  FEntries[LIdx].Context := AContext;
+  FEntries[LIdx].NextFree := -1;
+  Result := LIdx;
+end;
+
+procedure TIoReactor.FreeEntry(AId: UInt64);
+begin
+  if AId >= FEntryCount then Exit;
+  FEntries[AId].Callback := nil;
+  FEntries[AId].Context := nil;
+  FEntries[AId].NextFree := FFreeHead;
+  FFreeHead := Int32(AId);
 end;
 
 function TIoReactor.AsyncRead(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
