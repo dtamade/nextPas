@@ -142,8 +142,9 @@ type
         Key: K;
         Value: V;
       end;
+      PBucket = ^TBucket;
   private
-    FBuckets: array of TBucket;
+    FBuckets: PBucket;
     FMask: SizeUInt;
     FCapacity: SizeUInt;
     FCount: SizeUInt;    // occupied count
@@ -331,7 +332,7 @@ begin
   FMask := 0;
   FCount := 0;
   FUsed := 0;
-  SetLength(FBuckets, 0);
+  FBuckets := nil;
   if aCapacity > 0 then
     InitCapacity(SizeUInt(Trunc(aCapacity / DEFAULT_MAX_LOAD_FACTOR)) + 1);
 end;
@@ -364,36 +365,36 @@ var i: SizeUInt;
 begin
   if aCapacity < 4 then aCapacity := 4;
   aCapacity := NextPow2(aCapacity);
-  SetLength(FBuckets, aCapacity);
+  FBuckets := FAllocator.Allocate(aCapacity * SizeOf(TBucket));
+  FillChar(FBuckets^, aCapacity * SizeOf(TBucket), 0);
   FCapacity := aCapacity;
   FMask := aCapacity - 1;
   FCount := 0; FUsed := 0;
-  for i := 0 to aCapacity-1 do FBuckets[i].State := Ord(bsEmpty);
+  for i := 0 to aCapacity-1 do (FBuckets + i)^.State := Ord(bsEmpty);
   RecalcMaxLoad;
 end;
 
 procedure THashMap.Rehash(aNewCapacity: SizeUInt);
-var oldBuckets: array of TBucket; oldCap, i: SizeUInt; b: TBucket; idx: SizeUInt;
+var oldBuckets: PBucket; oldCap, i: SizeUInt; idx: SizeUInt;
 begin
   oldBuckets := FBuckets; oldCap := FCapacity;
+  FBuckets := nil; FCapacity := 0;
   InitCapacity(aNewCapacity);
-  // 重新插入占用项
   for i := 0 to oldCap-1 do
   begin
-    b := oldBuckets[i];
-    if b.State = Ord(bsOccupied) then
+    if (oldBuckets + i)^.State = Ord(bsOccupied) then
     begin
-      idx := b.Hash and FMask;
-      while (FBuckets[idx].State = Ord(bsOccupied)) do
+      idx := (oldBuckets + i)^.Hash and FMask;
+      while ((FBuckets + idx)^.State = Ord(bsOccupied)) do
         idx := (idx + 1) and FMask;
-      FBuckets[idx].State := Ord(bsOccupied);
-
-      FBuckets[idx].Hash := b.Hash;
-      FBuckets[idx].Key := b.Key;
-      FBuckets[idx].Value := b.Value;
+      (FBuckets + idx)^.State := Ord(bsOccupied);
+      (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
+      (FBuckets + idx)^.Key := (oldBuckets + i)^.Key;
+      (FBuckets + idx)^.Value := (oldBuckets + i)^.Value;
       Inc(FCount); Inc(FUsed);
     end;
   end;
+  FAllocator.Deallocate(oldBuckets);
 end;
 
 function THashMap.KeyHash(const AKey: K): UInt32;
@@ -434,10 +435,10 @@ begin
   idx := AHash and FMask; start := idx;
   while True do
   begin
-    case FBuckets[idx].State of
+    case (FBuckets + idx)^.State of
       Ord(bsEmpty): begin AIndex := idx; Exit(False); end;
       Ord(bsOccupied):
-        if (FBuckets[idx].Hash = AHash) and KeysEqual(FBuckets[idx].Key, AKey) then
+        if ((FBuckets + idx)^.Hash = AHash) and KeysEqual((FBuckets + idx)^.Key, AKey) then
         begin AIndex := idx; Exit(True); end;
       Ord(bsTombstone): ;
     end;
@@ -452,13 +453,13 @@ begin
   if FCapacity = 0 then Exit;
   for i := 0 to FCapacity-1 do
   begin
-    if FBuckets[i].State = Ord(bsOccupied) then
+    if (FBuckets + i)^.State = Ord(bsOccupied) then
     begin
-      Finalize(FBuckets[i].Key);
-      Finalize(FBuckets[i].Value);
+      Finalize((FBuckets + i)^.Key);
+      Finalize((FBuckets + i)^.Value);
     end;
-    FBuckets[i].State := Ord(bsEmpty);
-    FBuckets[i].Hash := 0;
+    (FBuckets + i)^.State := Ord(bsEmpty);
+    (FBuckets + i)^.Hash := 0;
     // Key/Value 已经 Finalize；保持为已清空状态
   end;
   FCount := 0;
@@ -495,12 +496,12 @@ begin
 
   for i := 0 to FCapacity-1 do
   begin
-    if FBuckets[i].State = Ord(bsOccupied) then
+    if (FBuckets + i)^.State = Ord(bsOccupied) then
     begin
       // Finalize old value to release resources
-      Finalize(FBuckets[i].Value);
+      Finalize((FBuckets + i)^.Value);
       // Assign fresh zero value
-      FBuckets[i].Value := defaultValue;
+      (FBuckets + i)^.Value := defaultValue;
     end;
   end;
 end;
@@ -525,7 +526,7 @@ begin
   idx := SizeUInt(aIter^.Data);
   {$POP}
   // 返回当前桶的 TEntry 指针（Key 和 Value 在内存中连续）
-  Result := @FBuckets[idx].Key;
+  Result := @(FBuckets + idx)^.Key;
 end;
 
 function THashMap.DoIterMoveNext(aIter: PPtrIter): Boolean;
@@ -547,7 +548,7 @@ begin
   // 找到下一个 bsOccupied 桶
   while idx < FCapacity do
   begin
-    if FBuckets[idx].State = Ord(bsOccupied) then
+    if (FBuckets + idx)^.State = Ord(bsOccupied) then
     begin
       {$PUSH}{$WARN 4055 OFF}
       aIter^.Data := Pointer(idx);
@@ -577,11 +578,11 @@ begin
   cnt := 0;
   for i := 0 to FCapacity - 1 do
   begin
-    if FBuckets[i].State = Ord(bsOccupied) then
+    if (FBuckets + i)^.State = Ord(bsOccupied) then
     begin
       if cnt >= aCount then Break;
-      pEntry^.Key := FBuckets[i].Key;
-      pEntry^.Value := FBuckets[i].Value;
+      pEntry^.Key := (FBuckets + i)^.Key;
+      pEntry^.Value := (FBuckets + i)^.Value;
       Inc(pEntry);
       Inc(cnt);
     end;
@@ -618,8 +619,8 @@ begin
     dstMap := specialize THashMap<K, V>(aDst);
     for i := 0 to FCapacity - 1 do
     begin
-      if FBuckets[i].State = Ord(bsOccupied) then
-        dstMap.AddOrAssign(FBuckets[i].Key, FBuckets[i].Value);
+      if (FBuckets + i)^.State = Ord(bsOccupied) then
+        dstMap.AddOrAssign((FBuckets + i)^.Key, (FBuckets + i)^.Value);
     end;
   end
   else
@@ -640,7 +641,11 @@ end;
 destructor THashMap.Destroy;
 begin
   Clear;
-  SetLength(FBuckets, 0);
+  if FBuckets <> nil then
+  begin
+    FAllocator.Deallocate(FBuckets);
+    FBuckets := nil;
+  end;
   inherited;
 end;
 
@@ -666,7 +671,7 @@ begin
   h := KeyHash(AKey);
   if FindIndex(AKey, h, idx) then
   begin
-    AValue := FBuckets[idx].Value;
+    AValue := (FBuckets + idx)^.Value;
     Exit(True);
   end;
   Result := False;
@@ -687,7 +692,7 @@ begin
   idx := h and FMask; start := idx; firstTomb := SizeUInt(-1);
   while True do
   begin
-    st := FBuckets[idx].State;
+    st := (FBuckets + idx)^.State;
     if st = Ord(bsEmpty) then
     begin
       if firstTomb <> SizeUInt(-1) then
@@ -695,10 +700,10 @@ begin
         idx := firstTomb;
         st := Ord(bsTombstone); // 复用墓碑：不增加 FUsed
       end;
-      FBuckets[idx].State := Ord(bsOccupied);
-      FBuckets[idx].Hash := h;
-      FBuckets[idx].Key := AKey;
-      FBuckets[idx].Value := AValue;
+      (FBuckets + idx)^.State := Ord(bsOccupied);
+      (FBuckets + idx)^.Hash := h;
+      (FBuckets + idx)^.Key := AKey;
+      (FBuckets + idx)^.Value := AValue;
       Inc(FCount);
       if st = Ord(bsEmpty) then
         Inc(FUsed);
@@ -710,7 +715,7 @@ begin
     end
     else // occupied
     begin
-      if (FBuckets[idx].Hash = h) and KeysEqual(FBuckets[idx].Key, AKey) then
+      if ((FBuckets + idx)^.Hash = h) and KeysEqual((FBuckets + idx)^.Key, AKey) then
         Exit(False);
     end;
     idx := (idx + 1) and FMask;
@@ -728,7 +733,7 @@ begin
   idx := h and FMask; start := idx; firstTomb := SizeUInt(-1);
   while True do
   begin
-    st := FBuckets[idx].State;
+    st := (FBuckets + idx)^.State;
     if st = Ord(bsEmpty) then
     begin
       if firstTomb <> SizeUInt(-1) then
@@ -736,10 +741,10 @@ begin
         idx := firstTomb;
         st := Ord(bsTombstone);
       end;
-      FBuckets[idx].State := Ord(bsOccupied);
-      FBuckets[idx].Hash := h;
-      FBuckets[idx].Key := AKey;
-      FBuckets[idx].Value := AValue;
+      (FBuckets + idx)^.State := Ord(bsOccupied);
+      (FBuckets + idx)^.Hash := h;
+      (FBuckets + idx)^.Key := AKey;
+      (FBuckets + idx)^.Value := AValue;
       Inc(FCount);
       if st = Ord(bsEmpty) then
         Inc(FUsed);
@@ -751,11 +756,11 @@ begin
     end
     else // occupied
     begin
-      if (FBuckets[idx].Hash = h) and KeysEqual(FBuckets[idx].Key, AKey) then
+      if ((FBuckets + idx)^.Hash = h) and KeysEqual((FBuckets + idx)^.Key, AKey) then
       begin
         // 覆盖旧值（先 Finalize 再赋值，避免泄漏）
-        Finalize(FBuckets[idx].Value);
-        FBuckets[idx].Value := AValue;
+        Finalize((FBuckets + idx)^.Value);
+        (FBuckets + idx)^.Value := AValue;
         Exit(False);
       end;
     end;
@@ -773,12 +778,12 @@ begin
   if not FindIndex(AKey, h, idx) then Exit(False);
   // CRITICAL FIX: Finalize then re-initialize to ensure clean state
   // Prevents dangling references and undefined behavior
-  Finalize(FBuckets[idx].Key);
-  Finalize(FBuckets[idx].Value);
-  Initialize(FBuckets[idx].Key);
-  Initialize(FBuckets[idx].Value);
-  FBuckets[idx].State := Ord(bsTombstone);
-  FBuckets[idx].Hash := 0;
+  Finalize((FBuckets + idx)^.Key);
+  Finalize((FBuckets + idx)^.Value);
+  Initialize((FBuckets + idx)^.Key);
+  Initialize((FBuckets + idx)^.Value);
+  (FBuckets + idx)^.State := Ord(bsTombstone);
+  (FBuckets + idx)^.Hash := 0;
   Dec(FCount);
   Result := True;
 end;
@@ -809,9 +814,9 @@ begin
 
   for i := 0 to FCapacity - 1 do
   begin
-    if FBuckets[i].State = Ord(bsOccupied) then
+    if (FBuckets + i)^.State = Ord(bsOccupied) then
     begin
-      Result[idx] := FBuckets[i].Key;
+      Result[idx] := (FBuckets + i)^.Key;
       Inc(idx);
     end;
   end;
@@ -827,7 +832,7 @@ begin
   if FCapacity = 0 then InitCapacity(4);
   h := KeyHash(AKey);
   if FindIndex(AKey, h, idx) then
-    Result := FBuckets[idx].Value
+    Result := (FBuckets + idx)^.Value
   else
   begin
     AddOrAssign(AKey, ADefault);
@@ -843,7 +848,7 @@ begin
   if FCapacity = 0 then InitCapacity(4);
   h := KeyHash(AKey);
   if FindIndex(AKey, h, idx) then
-    Result := FBuckets[idx].Value
+    Result := (FBuckets + idx)^.Value
   else
   begin
     Result := ASupplier();
@@ -860,7 +865,7 @@ begin
   h := KeyHash(AKey);
   if FindIndex(AKey, h, idx) then
     // Key exists - modify in place
-    AModifier(FBuckets[idx].Value)
+    AModifier((FBuckets + idx)^.Value)
   else
     // Key not exists - insert default
     AddOrAssign(AKey, ADefault);
@@ -875,20 +880,20 @@ begin
 
   for i := 0 to FCapacity - 1 do
   begin
-    if FBuckets[i].State = Ord(bsOccupied) then
+    if (FBuckets + i)^.State = Ord(bsOccupied) then
     begin
-      entry.Key := FBuckets[i].Key;
-      entry.Value := FBuckets[i].Value;
+      entry.Key := (FBuckets + i)^.Key;
+      entry.Value := (FBuckets + i)^.Value;
 
       // 如果谓词返回 False，删除这个元素
       if not aPredicate(entry, aData) then
       begin
-        Finalize(FBuckets[i].Key);
-        Finalize(FBuckets[i].Value);
-        Initialize(FBuckets[i].Key);
-        Initialize(FBuckets[i].Value);
-        FBuckets[i].State := Ord(bsTombstone);
-        FBuckets[i].Hash := 0;
+        Finalize((FBuckets + i)^.Key);
+        Finalize((FBuckets + i)^.Value);
+        Initialize((FBuckets + i)^.Key);
+        Initialize((FBuckets + i)^.Value);
+        (FBuckets + i)^.State := Ord(bsTombstone);
+        (FBuckets + i)^.Hash := 0;
         Dec(FCount);
       end;
     end;
