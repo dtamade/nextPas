@@ -5,7 +5,7 @@ unit nextpas.core.collections.concurrent.hashmap;
 interface
 
 uses
-  SysUtils,
+  SysUtils, TypInfo,
   nextpas.core.base,
   nextpas.core.sync.rwlock,
   nextpas.core.sync.intf,
@@ -60,7 +60,19 @@ implementation
 function TConcurrentHashMap.SegmentIndex(const AKey: K): SizeUInt;
 var LHash: UInt32;
 begin
-  LHash := FHash(AKey);
+  if Assigned(FHash) then
+    LHash := FHash(AKey)
+  else
+  begin
+    if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+      LHash := InlineHashMix32(PUInt32(@AKey)^)
+    else if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 8) then
+      LHash := InlineHashMix32(UInt32(PQWord(@AKey)^ xor (PQWord(@AKey)^ shr 32)))
+    else if (GetTypeKind(K) = tkAString) or (GetTypeKind(K) = tkLString) then
+      LHash := InlineHashMix32(UInt32(Length(PAnsiString(@AKey)^)) * 2654435761)
+    else
+      LHash := InlineHashMix32(PUInt32(@AKey)^);
+  end;
   Result := (LHash shr 28) and CONCURRENT_SEGMENT_MASK;
 end;
 

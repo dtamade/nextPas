@@ -79,6 +79,8 @@ type
 
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
     function ContainsKey(const AKey: K): Boolean;
+    function Add(const AKey: K; const AValue: V): Boolean;
+    function AddOrAssign(const AKey: K; const AValue: V): Boolean;
     procedure Put(const AKey: K; const AValue: V);
     function Get(const AKey: K): V;
     function Remove(const AKey: K): Boolean;
@@ -115,7 +117,7 @@ type
     constructor Create(ACompare: TCompareFunc; ACompareData: Pointer = nil);
     destructor Destroy; override;
 
-    procedure Add(const AItem: T);
+    function Add(const AItem: T): Boolean;
     function Contains(const AItem: T): Boolean;
     function Remove(const AItem: T): Boolean;
     procedure Clear;
@@ -243,6 +245,21 @@ function TBTreeMap.ContainsKey(const AKey: K): Boolean;
 var LDummy: V;
 begin
   Result := TryGetValue(AKey, LDummy);
+end;
+
+function TBTreeMap.Add(const AKey: K; const AValue: V): Boolean;
+begin
+  if ContainsKey(AKey) then Exit(False);
+  Put(AKey, AValue);
+  Result := True;
+end;
+
+function TBTreeMap.AddOrAssign(const AKey: K; const AValue: V): Boolean;
+var LOldCount: SizeUInt;
+begin
+  LOldCount := FCount;
+  Put(AKey, AValue);
+  Result := FCount > LOldCount;
 end;
 
 function TBTreeMap.Get(const AKey: K): V;
@@ -1023,9 +1040,12 @@ begin
   inherited Destroy;
 end;
 
-procedure TBTreeSet.Add(const AItem: T);
+function TBTreeSet.Add(const AItem: T): Boolean;
+var LOldCount: SizeUInt;
 begin
+  LOldCount := FInner.Count;
   FInner.Put(AItem, 0);
+  Result := FInner.Count > LOldCount;
 end;
 
 function TBTreeSet.Contains(const AItem: T): Boolean;
