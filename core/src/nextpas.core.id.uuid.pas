@@ -9,7 +9,7 @@ uses
 
 type
   TUuid = record
-  private
+  public
     FBytes: array[0..15] of Byte;
   public
     class function NewV4: TUuid; static;

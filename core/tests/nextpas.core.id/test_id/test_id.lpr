@@ -7,7 +7,9 @@ uses
   nextpas.core.testing,
   nextpas.core.id,
   nextpas.core.id.base,
-  nextpas.core.id.uuid;
+  nextpas.core.id.uuid,
+  nextpas.core.id.v7.monotonic,
+  nextpas.core.id.snowflake;
 
 var
   T: TTestRunner;
@@ -293,6 +295,87 @@ begin
   Check(LU1.Equals(LU2), 'roundtrip');
 end;
 
+{ V7 Monotonic tests }
+
+procedure TestV7MonotonicOrdering;
+var LA, LB: TUuid;
+begin
+  LA := GlobalV7Gen.Next;
+  LB := GlobalV7Gen.Next;
+  Check(LA < LB, 'monotonic must be strictly ordered');
+end;
+
+procedure TestV7MonotonicVersion;
+var LU: TUuid;
+begin
+  LU := UuidV7MonotonicRaw;
+  CheckEqual(Int64(7), Int64(LU.Version));
+  CheckEqual(Int64(2), Int64(LU.Variant));
+end;
+
+procedure TestV7MonotonicBurst;
+var
+  LPrev, LCur: TUuid;
+  LI: Integer;
+begin
+  LPrev := GlobalV7Gen.Next;
+  for LI := 1 to 100 do
+  begin
+    LCur := GlobalV7Gen.Next;
+    Check(LPrev < LCur, 'burst must be monotonic at ' + IntToStr(LI));
+    LPrev := LCur;
+  end;
+end;
+
+{ Snowflake tests }
+
+procedure TestSnowflakePositive;
+var LGen: TSnowflakeGenerator; LId: TSnowflakeId;
+begin
+  LGen.Init(1);
+  LId := LGen.Next;
+  Check(LId > 0, 'snowflake must be positive');
+end;
+
+procedure TestSnowflakeOrdering;
+var LGen: TSnowflakeGenerator; LA, LB: TSnowflakeId;
+begin
+  LGen.Init(1);
+  LA := LGen.Next;
+  LB := LGen.Next;
+  Check(LA < LB, 'snowflake must be ordered');
+end;
+
+procedure TestSnowflakeExtract;
+var
+  LGen: TSnowflakeGenerator;
+  LId: TSnowflakeId;
+  LTs: Int64;
+  LWorker, LSeq: UInt16;
+begin
+  LGen.Init(42, SNOWFLAKE_EPOCH_TWITTER);
+  LId := LGen.Next;
+  Check(TSnowflakeGenerator.Extract(LId, SNOWFLAKE_EPOCH_TWITTER, LTs, LWorker, LSeq), 'extract ok');
+  CheckEqual(Int64(42), Int64(LWorker));
+  Check(LTs > SNOWFLAKE_EPOCH_TWITTER, 'timestamp after epoch');
+end;
+
+procedure TestSnowflakeBurst;
+var
+  LGen: TSnowflakeGenerator;
+  LPrev, LCur: TSnowflakeId;
+  LI: Integer;
+begin
+  LGen.Init(7);
+  LPrev := LGen.Next;
+  for LI := 1 to 1000 do
+  begin
+    LCur := LGen.Next;
+    Check(LCur > LPrev, 'burst must be ordered at ' + IntToStr(LI));
+    LPrev := LCur;
+  end;
+end;
+
 begin
   Randomize;
   T := TTestRunner.Create('nextpas.core.id');
@@ -329,6 +412,15 @@ begin
   T.Run('NanoID custom alphabet', @TestNanoIdCustomAlphabet);
   T.Run('NanoID URL-safe chars', @TestNanoIdUrlSafe);
   T.Run('NanoID uniqueness', @TestNanoIdUniqueness);
+
+  T.Run('V7 monotonic ordering', @TestV7MonotonicOrdering);
+  T.Run('V7 monotonic version', @TestV7MonotonicVersion);
+  T.Run('V7 monotonic burst', @TestV7MonotonicBurst);
+
+  T.Run('Snowflake positive', @TestSnowflakePositive);
+  T.Run('Snowflake ordering', @TestSnowflakeOrdering);
+  T.Run('Snowflake extract', @TestSnowflakeExtract);
+  T.Run('Snowflake burst', @TestSnowflakeBurst);
 
   T.Summary;
 end.
