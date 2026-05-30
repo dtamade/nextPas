@@ -33,18 +33,16 @@ function BytesEndsWith(const AData, ASuffix: TBytes): Boolean; inline;
 
 implementation
 
+uses
+  nextpas.core.simd;
+
 function SpanEqual(const A, B: TByteSpan): Boolean;
-var
-  LI: SizeUInt;
 begin
   if A.Len <> B.Len then
     Exit(False);
   if (A.Len = 0) or (A.Data = B.Data) then
     Exit(True);
-  for LI := 0 to A.Len - 1 do
-    if A.Data[LI] <> B.Data[LI] then
-      Exit(False);
-  Result := True;
+  Result := MemEqual(A.Data, B.Data, A.Len);
 end;
 
 function SpanCompare(const A, B: TByteSpan): Integer;
@@ -73,37 +71,24 @@ end;
 
 function SpanIndexOf(const AHaystack: TByteSpan; const ANeedle: Byte): SizeInt;
 var
-  LI: SizeUInt;
+  LResult: PtrInt;
 begin
-  if AHaystack.Len > 0 then
-    for LI := 0 to AHaystack.Len - 1 do
-      if AHaystack.Data[LI] = ANeedle then
-        Exit(SizeInt(LI));
-  Result := -1;
+  if AHaystack.Len = 0 then
+    Exit(-1);
+  LResult := MemFindByte(AHaystack.Data, AHaystack.Len, ANeedle);
+  Result := SizeInt(LResult);
 end;
 
 function SpanIndexOfSpan(const AHaystack, ANeedle: TByteSpan): SizeInt;
 var
-  LI, LJ: SizeUInt;
-  LMatch: Boolean;
+  LResult: PtrInt;
 begin
   if ANeedle.Len = 0 then
     Exit(0);
   if ANeedle.Len > AHaystack.Len then
     Exit(-1);
-  for LI := 0 to AHaystack.Len - ANeedle.Len do
-  begin
-    LMatch := True;
-    for LJ := 0 to ANeedle.Len - 1 do
-      if AHaystack.Data[LI + LJ] <> ANeedle.Data[LJ] then
-      begin
-        LMatch := False;
-        Break;
-      end;
-    if LMatch then
-      Exit(SizeInt(LI));
-  end;
-  Result := -1;
+  LResult := nextpas.core.simd.BytesIndexOf(AHaystack.Data, AHaystack.Len, ANeedle.Data, ANeedle.Len);
+  Result := SizeInt(LResult);
 end;
 
 function SpanContains(const AHaystack: TByteSpan; const ANeedle: Byte): Boolean;
@@ -112,57 +97,33 @@ begin
 end;
 
 function SpanStartsWith(const AData, APrefix: TByteSpan): Boolean;
-var
-  LI: SizeUInt;
 begin
   if APrefix.Len = 0 then
     Exit(True);
   if APrefix.Len > AData.Len then
     Exit(False);
-  for LI := 0 to APrefix.Len - 1 do
-    if AData.Data[LI] <> APrefix.Data[LI] then
-      Exit(False);
-  Result := True;
+  Result := MemEqual(AData.Data, APrefix.Data, APrefix.Len);
 end;
 
 function SpanEndsWith(const AData, ASuffix: TByteSpan): Boolean;
-var
-  LI, LOffset: SizeUInt;
 begin
   if ASuffix.Len = 0 then
     Exit(True);
   if ASuffix.Len > AData.Len then
     Exit(False);
-  LOffset := AData.Len - ASuffix.Len;
-  for LI := 0 to ASuffix.Len - 1 do
-    if AData.Data[LOffset + LI] <> ASuffix.Data[LI] then
-      Exit(False);
-  Result := True;
+  Result := MemEqual(AData.Data + (AData.Len - ASuffix.Len), ASuffix.Data, ASuffix.Len);
 end;
 
 procedure SpanFill(const ASpan: TByteSpan; const AValue: Byte);
 begin
   if ASpan.Len > 0 then
-    FillChar(ASpan.Data^, ASpan.Len, AValue);
+    MemSet(ASpan.Data, ASpan.Len, AValue);
 end;
 
 procedure SpanReverse(const ASpan: TByteSpan);
-var
-  LI, LJ: SizeUInt;
-  LTmp: Byte;
 begin
-  if ASpan.Len <= 1 then
-    Exit;
-  LI := 0;
-  LJ := ASpan.Len - 1;
-  while LI < LJ do
-  begin
-    LTmp := ASpan.Data[LI];
-    ASpan.Data[LI] := ASpan.Data[LJ];
-    ASpan.Data[LJ] := LTmp;
-    Inc(LI);
-    Dec(LJ);
-  end;
+  if ASpan.Len > 1 then
+    MemReverse(ASpan.Data, ASpan.Len);
 end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
