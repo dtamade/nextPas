@@ -5,13 +5,10 @@ unit nextpas.core.collections.btree.intf;
 interface
 
 uses
-  nextpas.core.base,
-  nextpas.core.collections.base,
-  nextpas.core.collections.intf,
-  nextpas.core.collections.treemap.base;
+  nextpas.core.base;
 
 type
-  generic IBTreeMap<K, V> = interface(specialize IGenericCollection<specialize TMapEntry<K, V>>)
+  generic IBTreeMap<K, V> = interface
   ['{B7E3A1D2-4F8C-4A9B-8D1E-6C2F5A3B7E9D}']
 
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
@@ -39,7 +36,7 @@ type
     property Count: SizeUInt read GetCount;
   end;
 
-  generic IBTreeSet<T> = interface(specialize IGenericCollection<T>)
+  generic IBTreeSet<T> = interface
   ['{C8F4B2E3-5A9D-4B0C-9E2F-7D3A6B4C8F1E}']
 
     function Add(const AItem: T): Boolean;

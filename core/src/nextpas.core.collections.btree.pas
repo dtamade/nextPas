@@ -5,9 +5,10 @@ unit nextpas.core.collections.btree;
 interface
 
 uses
-  SysUtils,
+  SysUtils, TypInfo,
   nextpas.core.base,
-  nextpas.core.collections.base;
+  nextpas.core.collections.base,
+  nextpas.core.collections.btree.intf;
 
 const
   BTREE_ORDER = 16;
@@ -15,9 +16,9 @@ const
   BTREE_MIN_KEYS = BTREE_ORDER - 1;
 
 type
-  generic TBTreeMap<K, V> = class
+  generic TBTreeMap<K, V> = class(TInterfacedObject, specialize IBTreeMap<K, V>)
   public type
-    TCompareFunc = function(const A, B: K; aData: Pointer): SizeInt;
+    TKeyCompareFunc = function(const A, B: K; aData: Pointer): SizeInt;
     TForEachCallback = procedure(const AKey: K; const AValue: V; aData: Pointer);
     TEntry = record
       Key: K;
@@ -49,7 +50,7 @@ type
   private
     FRoot: PNode;
     FCount: SizeUInt;
-    FCompare: TCompareFunc;
+    FCompare: TKeyCompareFunc;
     FCompareData: Pointer;
     FSizeDirty: Boolean;
 
@@ -74,8 +75,10 @@ type
     function SubtreeSize(ANode: PNode): SizeUInt;
 
   public
-    constructor Create(ACompare: TCompareFunc; ACompareData: Pointer = nil);
+    constructor Create(ACompare: TKeyCompareFunc; ACompareData: Pointer = nil);
     destructor Destroy; override;
+
+    function GetCount: SizeUInt;
 
     function TryGetValue(const AKey: K; out AValue: V): Boolean;
     function ContainsKey(const AKey: K): Boolean;
@@ -207,7 +210,12 @@ end;
 
 { Public API }
 
-constructor TBTreeMap.Create(ACompare: TCompareFunc; ACompareData: Pointer);
+function TBTreeMap.GetCount: SizeUInt;
+begin
+  Result := FCount;
+end;
+
+constructor TBTreeMap.Create(ACompare: TKeyCompareFunc; ACompareData: Pointer);
 begin
   inherited Create;
   FCompare := ACompare;
@@ -1032,7 +1040,7 @@ end;
 constructor TBTreeSet.Create(ACompare: TCompareFunc; ACompareData: Pointer);
 begin
   inherited Create;
-  FInner := TInner.Create(TInner.TCompareFunc(ACompare), ACompareData);
+  FInner := TInner.Create(TInner.TKeyCompareFunc(ACompare), ACompareData);
 end;
 
 destructor TBTreeSet.Destroy;
