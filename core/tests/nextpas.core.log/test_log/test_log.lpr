@@ -205,6 +205,74 @@ begin
   Check(True, 'null logger safe');
 end;
 
+procedure TestFileHandler;
+var
+  LL: TLogger;
+  LPath: string;
+  LF: TextFile;
+  LLine: string;
+begin
+  LPath := '/tmp/test_log_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('key', 'val')^.Msg('file test');
+  LL.Warn^.Int('code', 42)^.Msg('warning');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal); // release file handler
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  Check(Pos('INF', LLine) > 0, 'file has INF');
+  Check(Pos('file test', LLine) > 0, 'file has msg');
+  ReadLn(LF, LLine);
+  Check(Pos('WRN', LLine) > 0, 'file has WRN');
+  CloseFile(LF);
+  DeleteFile(LPath);
+end;
+
+procedure TestMultiHandler;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(NewMultiHandler([
+    TCaptureHandler.Create(llInfo) as ILogHandler,
+    TCaptureHandler.Create(llWarn) as ILogHandler
+  ]), llInfo);
+  LL.Info^.Msg('info msg');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'only info handler fires');
+  LL.Warn^.Msg('warn msg');
+  CheckEqual(Int64(3), Int64(GCaptureCount), 'both fire for warn');
+end;
+
+procedure TestFileRotation;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  LPath := '/tmp/test_log_rot_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewFileHandler(LPath, llInfo, 100, 3), llInfo);
+  for LI := 1 to 10 do
+    LL.Info^.Int('i', LI)^.Msg('rotation test line that is long enough');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  Check(FileExists(LPath) or FileExists(LPath + '.1'), 'rotation created files');
+  DeleteFile(LPath);
+  DeleteFile(LPath + '.1');
+  DeleteFile(LPath + '.2');
+  DeleteFile(LPath + '.3');
+end;
+
+procedure TestManyAttrs;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Str('a','1')^.Str('b','2')^.Str('c','3')^.Str('d','4')^
+    .Str('e','5')^.Str('f','6')^.Str('g','7')^.Str('h','8')^
+    .Str('i','9')^.Str('j','10')^.Msg('many');
+  CheckEqual(Int64(10), Int64(GCaptured[0].AttrCount), '10 attrs');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.log');
   T.Run('Event builder', @TestEventBuilder);
@@ -219,5 +287,9 @@ begin
   T.Run('Global logger', @TestGlobalLogger);
   T.Run('Disabled no alloc', @TestDisabledNoAlloc);
   T.Run('Null logger', @TestNullLogger);
+  T.Run('File handler', @TestFileHandler);
+  T.Run('Multi handler', @TestMultiHandler);
+  T.Run('File rotation', @TestFileRotation);
+  T.Run('Many attrs', @TestManyAttrs);
   T.Summary;
 end.

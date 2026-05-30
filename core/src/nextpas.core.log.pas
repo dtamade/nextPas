@@ -81,6 +81,9 @@ function AttrBool(const AKey: string; AVal: Boolean): TAttr; inline;
 
 function NewConsoleHandler(AMinLevel: TLogLevel = llDebug): ILogHandler;
 function NewJsonHandler(AMinLevel: TLogLevel = llDebug): ILogHandler;
+function NewFileHandler(const APath: string; AMinLevel: TLogLevel = llDebug;
+  AMaxBytes: Int64 = 10 * 1024 * 1024; AMaxFiles: Int32 = 5): ILogHandler;
+function NewMultiHandler(const AHandlers: array of ILogHandler): ILogHandler;
 
 procedure SetDefaultLogger(const ALogger: TLogger);
 function DefaultLogger: TLogger;
@@ -230,6 +233,7 @@ function TLogger.Trace: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
   Inc(GEventIdx);
+  Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llTrace);
@@ -241,6 +245,7 @@ function TLogger.Debug: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
   Inc(GEventIdx);
+  Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llDebug);
@@ -252,6 +257,7 @@ function TLogger.Info: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
   Inc(GEventIdx);
+  Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llInfo);
@@ -263,6 +269,7 @@ function TLogger.Warn: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
   Inc(GEventIdx);
+  Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llWarn);
@@ -274,6 +281,7 @@ function TLogger.Error: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
   Inc(GEventIdx);
+  Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llError);
@@ -285,6 +293,7 @@ function TLogger.Fatal: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
   Inc(GEventIdx);
+  Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llFatal);
@@ -523,5 +532,206 @@ begin DefaultLogger.Warn^.Msg(AMsg); end;
 
 procedure LogError(const AMsg: string);
 begin DefaultLogger.Error^.Msg(AMsg); end;
+
+{ TFileHandler }
+
+type
+  TFileHandler = class(TInterfacedObject, ILogHandler)
+  private
+    FPath: string;
+    FMinLevel: TLogLevel;
+    FMaxBytes: Int64;
+    FMaxFiles: Int32;
+    FFile: TextFile;
+    FCurrentSize: Int64;
+    FOpened: Boolean;
+    FPrefix: array of TAttr;
+    FPrefixCount: Int32;
+    procedure EnsureOpen;
+    procedure Rotate;
+  public
+    constructor Create(const APath: string; AMinLevel: TLogLevel;
+      AMaxBytes: Int64; AMaxFiles: Int32);
+    destructor Destroy; override;
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Handle(var ARecord: TLogRecord);
+    function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    function WithGroup(const AName: string): ILogHandler;
+  end;
+
+constructor TFileHandler.Create(const APath: string; AMinLevel: TLogLevel;
+  AMaxBytes: Int64; AMaxFiles: Int32);
+begin
+  inherited Create;
+  FPath := APath;
+  FMinLevel := AMinLevel;
+  FMaxBytes := AMaxBytes;
+  FMaxFiles := AMaxFiles;
+  FOpened := False;
+  FCurrentSize := 0;
+  FPrefixCount := 0;
+end;
+
+destructor TFileHandler.Destroy;
+begin
+  if FOpened then
+    System.Close(FFile);
+  inherited;
+end;
+
+procedure TFileHandler.EnsureOpen;
+begin
+  if FOpened then Exit;
+  AssignFile(FFile, FPath);
+  if FileExists(FPath) then
+    Append(FFile)
+  else
+    Rewrite(FFile);
+  FOpened := True;
+end;
+
+procedure TFileHandler.Rotate;
+var
+  LI: Int32;
+  LSrc, LDst: string;
+begin
+  if FOpened then
+  begin
+    System.Close(FFile);
+    FOpened := False;
+  end;
+  LDst := FPath + '.' + IntToStr(FMaxFiles);
+  if FileExists(LDst) then DeleteFile(LDst);
+  for LI := FMaxFiles - 1 downto 1 do
+  begin
+    LSrc := FPath + '.' + IntToStr(LI);
+    LDst := FPath + '.' + IntToStr(LI + 1);
+    if FileExists(LSrc) then RenameFile(LSrc, LDst);
+  end;
+  if FileExists(FPath) then RenameFile(FPath, FPath + '.1');
+  FCurrentSize := 0;
+end;
+
+function TFileHandler.Enabled(const ALevel: TLogLevel): Boolean;
+begin
+  Result := ALevel >= FMinLevel;
+end;
+
+procedure TFileHandler.Handle(var ARecord: TLogRecord);
+var
+  LI: Int32;
+begin
+  if FCurrentSize >= FMaxBytes then Rotate;
+  EnsureOpen;
+  Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
+  for LI := 0 to FPrefixCount - 1 do
+  begin
+    Write(FFile, ' ', FPrefix[LI].Key, '=');
+    case FPrefix[LI].Kind of
+      akString: Write(FFile, FPrefix[LI].SVal);
+      akInt: Write(FFile, FPrefix[LI].IVal);
+      akFloat: Write(FFile, FPrefix[LI].FVal:0:2);
+      akBool: if FPrefix[LI].BVal then Write(FFile, 'true') else Write(FFile, 'false');
+    end;
+  end;
+  for LI := 0 to ARecord.AttrCount - 1 do
+  begin
+    Write(FFile, ' ', ARecord.Attrs[LI].Key, '=');
+    case ARecord.Attrs[LI].Kind of
+      akString: Write(FFile, ARecord.Attrs[LI].SVal);
+      akInt: Write(FFile, ARecord.Attrs[LI].IVal);
+      akFloat: Write(FFile, ARecord.Attrs[LI].FVal:0:2);
+      akBool: if ARecord.Attrs[LI].BVal then Write(FFile, 'true') else Write(FFile, 'false');
+    end;
+  end;
+  WriteLn(FFile);
+  System.Flush(FFile);
+  Inc(FCurrentSize, 80);
+end;
+
+function TFileHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+var
+  LNew: TFileHandler;
+  LI: Int32;
+begin
+  LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles);
+  SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
+  for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
+  for LI := 0 to High(AAttrs) do LNew.FPrefix[FPrefixCount + LI] := AAttrs[LI];
+  LNew.FPrefixCount := FPrefixCount + Length(AAttrs);
+  Result := LNew;
+end;
+
+function TFileHandler.WithGroup(const AName: string): ILogHandler;
+begin
+  Result := Self;
+end;
+
+function NewFileHandler(const APath: string; AMinLevel: TLogLevel;
+  AMaxBytes: Int64; AMaxFiles: Int32): ILogHandler;
+begin
+  Result := TFileHandler.Create(APath, AMinLevel, AMaxBytes, AMaxFiles);
+end;
+
+{ TMultiHandler }
+
+type
+  TMultiHandler = class(TInterfacedObject, ILogHandler)
+  private
+    FHandlers: array of ILogHandler;
+    FCount: Int32;
+  public
+    constructor Create(const AHandlers: array of ILogHandler);
+    function Enabled(const ALevel: TLogLevel): Boolean;
+    procedure Handle(var ARecord: TLogRecord);
+    function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    function WithGroup(const AName: string): ILogHandler;
+  end;
+
+constructor TMultiHandler.Create(const AHandlers: array of ILogHandler);
+var LI: Int32;
+begin
+  inherited Create;
+  FCount := Length(AHandlers);
+  SetLength(FHandlers, FCount);
+  for LI := 0 to FCount - 1 do FHandlers[LI] := AHandlers[LI];
+end;
+
+function TMultiHandler.Enabled(const ALevel: TLogLevel): Boolean;
+var LI: Int32;
+begin
+  for LI := 0 to FCount - 1 do
+    if FHandlers[LI].Enabled(ALevel) then begin Result := True; Exit; end;
+  Result := False;
+end;
+
+procedure TMultiHandler.Handle(var ARecord: TLogRecord);
+var LI: Int32;
+begin
+  for LI := 0 to FCount - 1 do
+    if FHandlers[LI].Enabled(ARecord.Level) then
+      FHandlers[LI].Handle(ARecord);
+end;
+
+function TMultiHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+var LNew: array of ILogHandler; LI: Int32;
+begin
+  SetLength(LNew, FCount);
+  for LI := 0 to FCount - 1 do LNew[LI] := FHandlers[LI].WithAttrs(AAttrs);
+  Result := TMultiHandler.Create(LNew);
+end;
+
+function TMultiHandler.WithGroup(const AName: string): ILogHandler;
+var LNew: array of ILogHandler; LI: Int32;
+begin
+  SetLength(LNew, FCount);
+  for LI := 0 to FCount - 1 do LNew[LI] := FHandlers[LI].WithGroup(AName);
+  Result := TMultiHandler.Create(LNew);
+end;
+
+function NewMultiHandler(const AHandlers: array of ILogHandler): ILogHandler;
+begin
+  Result := TMultiHandler.Create(AHandlers);
+end;
 
 end.
