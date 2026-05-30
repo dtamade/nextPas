@@ -27,6 +27,7 @@ type
   generic TTrie<V> = class(TInterfacedObject, specialize ITrie<V>)
   public type
     TKeyArray = array of string;
+    TForEachProc = procedure(const AKey: string; const AValue: V);
   private type
     PNode = ^TNode;
     TNode = record
@@ -45,6 +46,7 @@ type
     procedure CollectKeys(aNode: PNode; const aPrefix: string; var aKeys: TKeyArray; var aIndex: SizeUInt);
     function CountKeysInSubtree(aNode: PNode): SizeUInt;
     function HasChildren(aNode: PNode): Boolean;
+    procedure ForEachDFS(aNode: PNode; const aPrefix: string; AProc: TForEachProc);
   public
     constructor Create;
     destructor Destroy; override;
@@ -139,6 +141,14 @@ type
      * @return TKeyArray 匹配的键数组
      *}
     function KeysWithPrefix(const aPrefix: string): TKeyArray;
+
+    {**
+     * ForEach
+     *
+     * @desc DFS 遍历所有有值的节点
+     * @param AProc 对每个键值对调用的回调
+     *}
+    procedure ForEach(AProc: TForEachProc);
 
     function GetCount: SizeUInt;
     function IsEmpty: Boolean;
@@ -397,6 +407,25 @@ end;
 function TTrie.IsEmpty: Boolean;
 begin
   Result := FCount = 0;
+end;
+
+procedure TTrie.ForEachDFS(aNode: PNode; const aPrefix: string; AProc: TForEachProc);
+var
+  i: Integer;
+begin
+  if aNode = nil then Exit;
+
+  if aNode^.HasValue then
+    AProc(aPrefix, aNode^.Value);
+
+  for i := 0 to TRIE_ALPHABET_LAST_INDEX do
+    if aNode^.Children[i] <> nil then
+      ForEachDFS(aNode^.Children[i], aPrefix + Chr(i), AProc);
+end;
+
+procedure TTrie.ForEach(AProc: TForEachProc);
+begin
+  ForEachDFS(FRoot, '', AProc);
 end;
 
 end.

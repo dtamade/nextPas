@@ -417,7 +417,8 @@ end;
 
 function TCircularBuffer.PtrIter: TPtrIter;
 begin
-  // 环形缓冲区不适合用指针迭代器（不连续）
+  // PtrIter 不可用：环形缓冲区的存储不连续（Head 可能在 Tail 之后），
+  // 无法提供单一连续指针范围。使用 ToArray 或 PeekAt 逐元素访问。
   // Keep behavior (raise), but initialize Result to satisfy compiler analysis.
   Result := Default(TPtrIter);
   raise ENotSupported.Create('TCircularBuffer.PtrIter: Not supported for circular buffer');

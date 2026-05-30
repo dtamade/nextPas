@@ -41,6 +41,8 @@ type
       TInternalMap = specialize THashMap<K, TValueVec>;
       TKeyArray = array of K;
       TValueArray = array of V;
+  public type
+    TForEachProc = procedure(const AKey: K; const AValue: V);
   private
     FMap: TInternalMap;
     FTotalValueCount: SizeUInt;  // 所有值的总数
@@ -173,6 +175,14 @@ type
      * @Complexity O(1)
      *}
     function TotalCount: SizeUInt;
+
+    {**
+     * ForEach
+     * @desc 遍历所有键的所有值
+     * @param AProc 对每个键值对调用的回调
+     * @Complexity O(n) where n = total values
+     *}
+    procedure ForEach(AProc: TForEachProc);
   end;
 
 implementation
@@ -382,6 +392,21 @@ end;
 function TMultiMap.TotalCount: SizeUInt;
 begin
   Result := FTotalValueCount;
+end;
+
+procedure TMultiMap.ForEach(AProc: TForEachProc);
+var
+  Keys: TKeyArray;
+  Vec: TValueVec;
+  i, j: SizeUInt;
+begin
+  Keys := GetKeys;
+  for i := 0 to High(Keys) do
+  begin
+    if FMap.TryGetValue(Keys[i], Vec) then
+      for j := 0 to Vec.Count - 1 do
+        AProc(Keys[i], Vec[j]);
+  end;
 end;
 
 end.

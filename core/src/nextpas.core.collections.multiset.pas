@@ -30,6 +30,7 @@ type
   public type
     TInternalMap = specialize THashMap<T, SizeUInt>;
     TSelf = specialize TMultiSet<T>;
+    TForEachProc = procedure(const AElement: T; ACount: SizeUInt);
   private
     FMap: TInternalMap;
     FTotalCount: SizeUInt;
@@ -51,6 +52,13 @@ type
     function GetTotalCount: SizeUInt;
     function IsEmpty: Boolean;
 
+
+    {**
+     * ForEach
+     * @desc 遍历所有元素及其计数
+     * @param AProc 对每个元素和计数调用的回调
+     *}
+    procedure ForEach(AProc: TForEachProc);
     // 集合运算
     function Union(const aOther: TSelf): TSelf;
     function Intersection(const aOther: TSelf): TSelf;
@@ -265,6 +273,16 @@ begin
     if Entries[i].Value > OtherCount then
       Result.SetCount(Entries[i].Key, Entries[i].Value - OtherCount);
   end;
+end;
+
+procedure TMultiSet.ForEach(AProc: TForEachProc);
+var
+  Entries: specialize TGenericArray<TInternalMap.TEntry>;
+  i: SizeInt;
+begin
+  Entries := FMap.ToArray;
+  for i := 0 to High(Entries) do
+    AProc(Entries[i].Key, Entries[i].Value);
 end;
 
 end.

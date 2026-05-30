@@ -30,6 +30,7 @@ type
     TEntry = specialize TSkipListEntry<K, V>;
     TEntryArray = array of TEntry;
     TKeyCompareFunc = specialize TSkipListCompareFunc<K>;
+    TForEachProc = procedure(const AKey: K; const AValue: V);
   private type
     PNode = ^TNode;
     TNode = record
@@ -164,6 +165,14 @@ type
      * @return TEntryArray 所有条目的有序数组
      *}
     function ToArray: TEntryArray;
+
+    {**
+     * ForEach
+     *
+     * @desc 遍历所有键值对
+     * @param AProc 对每个键值对调用的回调
+     *}
+    procedure ForEach(AProc: TForEachProc);
 
     function GetCount: SizeUInt;
     function IsEmpty: Boolean;
@@ -510,6 +519,18 @@ end;
 function TSkipList.IsEmpty: Boolean;
 begin
   Result := FCount = 0;
+end;
+
+procedure TSkipList.ForEach(AProc: TForEachProc);
+var
+  x: PNode;
+begin
+  x := FHead^.Forward[0];
+  while x <> nil do
+  begin
+    AProc(x^.Key, x^.Value);
+    x := x^.Forward[0];
+  end;
 end;
 
 end.

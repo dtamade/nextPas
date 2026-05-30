@@ -3846,6 +3846,7 @@ begin
 end;
 {$ENDIF}
 
+{$PUSH}{$WARN 6018 OFF}
 procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt);
 begin
   if (aStartIndex = 0) and (not GetIsManagedType) then
@@ -3857,6 +3858,7 @@ begin
   end;
   DoSort(@DoCompareDefaultProxy, aStartIndex, aCount, nil, nil);
 end;
+{$POP}
 
 procedure TArray.SortUnchecked(aStartIndex, aCount: SizeUInt; aComparer: specialize TCompareFunc<T>; aData: Pointer);
 begin

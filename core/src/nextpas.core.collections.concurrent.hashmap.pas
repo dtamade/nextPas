@@ -83,6 +83,18 @@ constructor TConcurrentHashMap.Create(AHash: THashFunc; AEquals: TEqualsFunc;
 var i: Integer;
 begin
   inherited Create;
+
+  // Non-ordinal/non-string key types require a custom hash function
+  if not Assigned(AHash) then
+    if not ((GetTypeKind(K) = tkInteger) or (GetTypeKind(K) = tkChar) or
+            (GetTypeKind(K) = tkWChar) or (GetTypeKind(K) = tkBool) or
+            (GetTypeKind(K) = tkEnumeration) or (GetTypeKind(K) = tkInt64) or
+            (GetTypeKind(K) = tkQWord) or (GetTypeKind(K) = tkAString) or
+            (GetTypeKind(K) = tkLString) or (GetTypeKind(K) = tkUString) or
+            (GetTypeKind(K) = tkWString)) then
+      raise EInvalidArgument.Create(
+        'TConcurrentHashMap.Create: AHash must not be nil for non-ordinal/non-string key types');
+
   FHash := AHash;
   FEquals := AEquals;
   for i := 0 to CONCURRENT_SEGMENT_COUNT - 1 do
