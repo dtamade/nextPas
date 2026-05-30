@@ -29,3 +29,5 @@ GTAGS
 **/compare_fpcrtl/bench_sort_fpcrtl
 benchmarks/**/bench_sort
 .worktrees/
+benchmarks/nextpas.core.toml/bench_toml_parse/compare_rust/Cargo.lock
+benchmarks/nextpas.core.toml/bench_toml_parse/gmon.out
