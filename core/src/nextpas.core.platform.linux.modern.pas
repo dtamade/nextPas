@@ -117,14 +117,7 @@ const
   {$ENDIF}
 
 type
-  TIoUringSqe = record
-    opcode: Byte;
-    flags: Byte;
-    ioprio: UInt16;
-    fd: Int32;
-    off: UInt64;
-    addr: UInt64;
-    len: UInt32;
+  TIoUringSqeFlags = record
     case Byte of
       0: (rw_flags: Int32);
       1: (fsync_flags: UInt32);
@@ -137,6 +130,22 @@ type
       8: (open_flags: UInt32);
       9: (statx_flags: UInt32);
       10: (splice_flags: UInt32);
+  end;
+
+  TIoUringSqe = record
+    opcode: Byte;
+    flags: Byte;
+    ioprio: UInt16;
+    fd: Int32;
+    off: UInt64;
+    addr: UInt64;
+    len: UInt32;
+    op_flags: TIoUringSqeFlags;
+    user_data: UInt64;
+    buf_index: UInt16;
+    personality: UInt16;
+    splice_fd_in: Int32;
+    pad2: array[0..1] of UInt64;
   end;
   PIoUringSqe = ^TIoUringSqe;
 
