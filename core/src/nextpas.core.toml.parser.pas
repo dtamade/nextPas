@@ -49,6 +49,7 @@ uses
 const
   INITIAL_NODE_CAP = 64;
   INITIAL_OWNED_CAP = 16;
+  MAX_NESTING_DEPTH = 128;
   NAN_BITS: QWord = QWord($7FF8000000000000);
 
 var
@@ -253,6 +254,7 @@ type
     Pos: SizeUInt;
     Line: UInt32;
     Col: UInt32;
+    Depth: Int32;
     function Peek: Byte; inline;
     function IsEOF: Boolean; inline;
     procedure Advance; inline;
@@ -1056,6 +1058,9 @@ var
   LArrayIdx, LChildIdx, LPrevIdx: UInt32;
   LCount: UInt32;
 begin
+  Inc(Depth);
+  if Depth > MAX_NESTING_DEPTH then
+    Exit(SetError('max nesting depth exceeded', 26));
   Advance; // skip [
   ANodeIdx := Doc^.AddNode;
   Doc^.FNodes[ANodeIdx].Kind := tnkArray;
@@ -1103,6 +1108,7 @@ begin
       Exit(SetError('expected , or ]', 15));
   end;
   Doc^.FNodes[LArrayIdx].Container.Count := LCount;
+  Dec(Depth);
   Result := True;
 end;
 
@@ -1113,6 +1119,9 @@ var
   LKey: TStringView;
   LFirst: Boolean;
 begin
+  Inc(Depth);
+  if Depth > MAX_NESTING_DEPTH then
+    Exit(SetError('max nesting depth exceeded', 26));
   Advance; // skip {
   ANodeIdx := Doc^.AddNode;
   Doc^.FNodes[ANodeIdx].Kind := tnkTable;
@@ -1159,6 +1168,7 @@ begin
     end;
   end;
   Doc^.FNodes[LTableIdx].Container.Count := LCount;
+  Dec(Depth);
   Result := True;
 end;
 
@@ -1419,6 +1429,7 @@ begin
   LP.Pos := 0;
   LP.Line := 1;
   LP.Col := 1;
+  LP.Depth := 0;
 
   // Create root table
   LRootIdx := AddNode;

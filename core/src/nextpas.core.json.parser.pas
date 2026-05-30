@@ -283,6 +283,7 @@ var
   I: SizeUInt;
   LInt: Int64;
   LFloat: Double;
+  LStart: SizeUInt;
 begin
   if not GetValueSlice(LData, LNumLen) then
   begin
@@ -295,9 +296,9 @@ begin
     SetError('invalid number', 14);
     Exit(JSON_NODE_NONE);
   end;
-  I := 0;
-  if LData[0] = '-' then I := 1;
-  if (I < LNumLen - 1) and (LData[I] = '0') and (LData[I+1] >= '0') and (LData[I+1] <= '9') then
+  LStart := 0;
+  if LData[0] = '-' then LStart := 1;
+  if (LStart < LNumLen - 1) and (LData[LStart] = '0') and (LData[LStart+1] >= '0') and (LData[LStart+1] <= '9') then
   begin
     SetError('leading zero', 12);
     Exit(JSON_NODE_NONE);
@@ -315,22 +316,11 @@ begin
   end;
   LHasDot := False;
   LHasExp := False;
-  if LNumLen >= 16 then
+  for I := LStart to LNumLen - 1 do
   begin
-    if Vec16CmpEq(@LData[0], Ord('.')) <> MASK16_NONE_SET then LHasDot := True;
-    if (Vec16CmpEq(@LData[0], Ord('e')) or Vec16CmpEq(@LData[0], Ord('E'))) <> MASK16_NONE_SET then LHasExp := True;
-    for I := 16 to LNumLen - 1 do
-    begin
-      if LData[I] = '.' then LHasDot := True;
-      if (LData[I] = 'e') or (LData[I] = 'E') then LHasExp := True;
-    end;
-  end
-  else
-    for I := 0 to LNumLen - 1 do
-    begin
-      if LData[I] = '.' then LHasDot := True;
-      if (LData[I] = 'e') or (LData[I] = 'E') then LHasExp := True;
-    end;
+    if LData[I] = '.' then begin LHasDot := True; Break; end;
+    if (LData[I] = 'e') or (LData[I] = 'E') then begin LHasExp := True; Break; end;
+  end;
   LIdx := Doc^.AddNode;
   if LHasDot or LHasExp then
   begin

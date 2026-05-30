@@ -272,6 +272,7 @@ end;
 procedure TJsonWriter.StrClean(const AValue: PAnsiChar; const ALen: SizeUInt);
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
+  FBuilder^.Reserve(ALen + 2);
   FBuilder^.AppendChar('"');
   FBuilder^.AppendBytes(AValue, ALen);
   FBuilder^.AppendChar('"');
@@ -281,6 +282,7 @@ end;
 procedure TJsonWriter.KeyClean(const AKey: PAnsiChar; const ALen: SizeUInt);
 begin
   if FNeedComma then FBuilder^.AppendChar(',');
+  FBuilder^.Reserve(ALen + 3);
   FBuilder^.AppendChar('"');
   FBuilder^.AppendBytes(AKey, ALen);
   FBuilder^.AppendBytes('":', 2);
