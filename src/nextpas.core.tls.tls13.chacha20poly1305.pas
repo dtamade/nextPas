@@ -839,27 +839,189 @@ function TryChaCha20Poly1305Encrypt(
   out ACiphertext, ATag: TBytes
 ): Boolean;
 var
-  LBlock0: TBytes;
-  LPolyKey: TBytes;
-  LMacInput: TBytes;
+  LState: array[0..15] of UInt32;
+  LWork: array[0..15] of UInt32;
+  LKS: array[0..15] of UInt32;
+  LPolyKey: array[0..31] of Byte;
+  // Poly1305 state
+  PH0, PH1, PH2, PR0, PR1, PR2, PS1, PS2: UInt64;
+  D0Lo, D0Hi, D1Lo, D1Hi, D2Lo, D2Hi, C: UInt64;
+  LCounter: UInt32;
+  LOffset, LBlockLen, I, J: Integer;
+  LPadBlock: array[0..15] of Byte;
+  G0, G1, FLo, FHi: UInt64;
+  G2: Int64;
+
+  procedure Poly1305Block(AData: PByte; AHiBit: UInt64);
+  begin
+    PH0 := PH0 + (PUInt64(AData)^ and $0FFFFFFFFFFF);
+    PH1 := PH1 + (((PUInt64(AData)^ shr 44) or (PUInt64(AData + 8)^ shl 20)) and $0FFFFFFFFFFF);
+    PH2 := PH2 + (((PUInt64(AData + 8)^ shr 24) and $3FFFFFFFFFF) or AHiBit);
+    {$IFDEF CPUX86_64}
+    asm
+      leaq PH0, %rcx
+      movq 0(%rcx), %rax; mulq PR0; movq %rax, D0Lo; movq %rdx, D0Hi
+      movq 8(%rcx), %rax; mulq PS2; addq %rax, D0Lo; adcq %rdx, D0Hi
+      movq 16(%rcx), %rax; mulq PS1; addq %rax, D0Lo; adcq %rdx, D0Hi
+      movq 0(%rcx), %rax; mulq PR1; movq %rax, D1Lo; movq %rdx, D1Hi
+      movq 8(%rcx), %rax; mulq PR0; addq %rax, D1Lo; adcq %rdx, D1Hi
+      movq 16(%rcx), %rax; mulq PS2; addq %rax, D1Lo; adcq %rdx, D1Hi
+      movq 0(%rcx), %rax; mulq PR2; movq %rax, D2Lo; movq %rdx, D2Hi
+      movq 8(%rcx), %rax; mulq PR1; addq %rax, D2Lo; adcq %rdx, D2Hi
+      movq 16(%rcx), %rax; mulq PR0; addq %rax, D2Lo; adcq %rdx, D2Hi
+    end ['rax', 'rcx', 'rdx'];
+    {$ELSE}
+    D0Lo := PH0*PR0 + PH1*PS2 + PH2*PS1; D0Hi := 0;
+    D1Lo := PH0*PR1 + PH1*PR0 + PH2*PS2; D1Hi := 0;
+    D2Lo := PH0*PR2 + PH1*PR1 + PH2*PR0; D2Hi := 0;
+    {$ENDIF}
+    PH0 := D0Lo and $0FFFFFFFFFFF;
+    C := (D0Lo shr 44) or (D0Hi shl 20);
+    D1Lo := D1Lo + C; if D1Lo < C then Inc(D1Hi);
+    PH1 := D1Lo and $0FFFFFFFFFFF;
+    C := (D1Lo shr 44) or (D1Hi shl 20);
+    D2Lo := D2Lo + C; if D2Lo < C then Inc(D2Hi);
+    PH2 := D2Lo and $3FFFFFFFFFF;
+    C := (D2Lo shr 42) or (D2Hi shl 22);
+    PH0 := PH0 + C * 5;
+    C := PH0 shr 44; PH0 := PH0 and $0FFFFFFFFFFF; PH1 := PH1 + C;
+  end;
+
 begin
   SetLength(ACiphertext, 0);
   SetLength(ATag, 0);
+  if Length(AKey) <> CHACHA20_KEY_SIZE then Exit(False);
+  if Length(ANonce) <> CHACHA20_NONCE_SIZE then Exit(False);
 
-  if Length(AKey) <> CHACHA20_KEY_SIZE then
-    Exit(False);
-  if Length(ANonce) <> CHACHA20_NONCE_SIZE then
-    Exit(False);
+  // Setup base state
+  LState[0] := $61707865; LState[1] := $3320646E;
+  LState[2] := $79622D32; LState[3] := $6B206574;
+  for I := 0 to 7 do LState[4+I] := PUInt32(@AKey[I*4])^;
+  LState[13] := PUInt32(@ANonce[0])^;
+  LState[14] := PUInt32(@ANonce[4])^;
+  LState[15] := PUInt32(@ANonce[8])^;
 
-  ACiphertext := ChaCha20Xor(AKey, ANonce, 1, APlaintext);
+  // Generate Poly1305 key (counter=0)
+  LState[12] := 0;
+  for I := 0 to 15 do LWork[I] := LState[I];
+  for I := 0 to 9 do
+  begin
+    QuarterRound(LWork[0],LWork[4],LWork[8],LWork[12]);
+    QuarterRound(LWork[1],LWork[5],LWork[9],LWork[13]);
+    QuarterRound(LWork[2],LWork[6],LWork[10],LWork[14]);
+    QuarterRound(LWork[3],LWork[7],LWork[11],LWork[15]);
+    QuarterRound(LWork[0],LWork[5],LWork[10],LWork[15]);
+    QuarterRound(LWork[1],LWork[6],LWork[11],LWork[12]);
+    QuarterRound(LWork[2],LWork[7],LWork[8],LWork[13]);
+    QuarterRound(LWork[3],LWork[4],LWork[9],LWork[14]);
+  end;
+  for I := 0 to 7 do PUInt32(@LPolyKey[I*4])^ := LWork[I] + LState[I];
 
-  LBlock0 := ChaCha20Block(AKey, ANonce, 0);
-  SetLength(LPolyKey, POLY1305_KEY_SIZE);
-  Move(LBlock0[0], LPolyKey[0], POLY1305_KEY_SIZE);
+  // Init Poly1305
+  C := PUInt64(@LPolyKey[0])^ and $0FFFFFFC0FFFFFFF;
+  PR0 := C and $0FFFFFFFFFFF;
+  PR1 := ((C shr 44) or ((PUInt64(@LPolyKey[8])^ and $0FFFFFFC0FFFFFFC) shl 20)) and $0FFFFFFFFFFF;
+  PR2 := ((PUInt64(@LPolyKey[8])^ and $0FFFFFFC0FFFFFFC) shr 24) and $3FFFFFFFFFF;
+  PS1 := PR1 * 20; PS2 := PR2 * 20;
+  PH0 := 0; PH1 := 0; PH2 := 0;
 
-  LMacInput := BuildPoly1305Input(AAAD, ACiphertext);
-  ATag := Poly1305MAC(LPolyKey, LMacInput);
+  // Process AAD
+  LOffset := 0;
+  while LOffset + 16 <= Length(AAAD) do
+  begin
+    Poly1305Block(@AAAD[LOffset], UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < Length(AAAD) then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move(AAAD[LOffset], LPadBlock[0], Length(AAAD) - LOffset);
+    Poly1305Block(@LPadBlock[0], UInt64(1) shl 40);
+  end;
 
+  // FUSED: ChaCha20 encrypt + Poly1305 MAC in single pass
+  SetLength(ACiphertext, Length(APlaintext));
+  LCounter := 1;
+  LOffset := 0;
+  while LOffset < Length(APlaintext) do
+  begin
+    // Generate keystream block
+    LState[12] := LCounter;
+    for I := 0 to 15 do LWork[I] := LState[I];
+    for I := 0 to 9 do
+    begin
+      QuarterRound(LWork[0],LWork[4],LWork[8],LWork[12]);
+      QuarterRound(LWork[1],LWork[5],LWork[9],LWork[13]);
+      QuarterRound(LWork[2],LWork[6],LWork[10],LWork[14]);
+      QuarterRound(LWork[3],LWork[7],LWork[11],LWork[15]);
+      QuarterRound(LWork[0],LWork[5],LWork[10],LWork[15]);
+      QuarterRound(LWork[1],LWork[6],LWork[11],LWork[12]);
+      QuarterRound(LWork[2],LWork[7],LWork[8],LWork[13]);
+      QuarterRound(LWork[3],LWork[4],LWork[9],LWork[14]);
+    end;
+    for I := 0 to 15 do LKS[I] := LWork[I] + LState[I];
+
+    LBlockLen := 64;
+    if LOffset + LBlockLen > Length(APlaintext) then
+      LBlockLen := Length(APlaintext) - LOffset;
+
+    // XOR plaintext → ciphertext
+    I := 0;
+    while I + 3 < LBlockLen do
+    begin
+      PUInt32(@ACiphertext[LOffset+I])^ := PUInt32(@APlaintext[LOffset+I])^ xor LKS[I div 4];
+      Inc(I, 4);
+    end;
+    while I < LBlockLen do
+    begin
+      ACiphertext[LOffset+I] := APlaintext[LOffset+I] xor PByte(PByte(@LKS[0]) + I)^;
+      Inc(I);
+    end;
+
+    // Immediately feed ciphertext to Poly1305 (data still in L1 cache!)
+    J := 0;
+    while J + 16 <= LBlockLen do
+    begin
+      Poly1305Block(@ACiphertext[LOffset+J], UInt64(1) shl 40);
+      Inc(J, 16);
+    end;
+    if J < LBlockLen then
+    begin
+      FillChar(LPadBlock, 16, 0);
+      Move(ACiphertext[LOffset+J], LPadBlock[0], LBlockLen - J);
+      Poly1305Block(@LPadBlock[0], UInt64(1) shl 40);
+    end;
+
+    Inc(LCounter);
+    Inc(LOffset, LBlockLen);
+  end;
+
+  // Length block
+  FillChar(LPadBlock, 16, 0);
+  PUInt64(@LPadBlock[0])^ := UInt64(Length(AAAD));
+  PUInt64(@LPadBlock[8])^ := UInt64(Length(APlaintext));
+  Poly1305Block(@LPadBlock[0], UInt64(1) shl 40);
+
+  // Finalize Poly1305
+  C := PH1 shr 44; PH1 := PH1 and $0FFFFFFFFFFF; PH2 := PH2 + C;
+  C := PH2 shr 42; PH2 := PH2 and $3FFFFFFFFFF; PH0 := PH0 + C * 5;
+  C := PH0 shr 44; PH0 := PH0 and $0FFFFFFFFFFF; PH1 := PH1 + C;
+  // Conditional subtract p
+
+  G0 := PH0 + 5; C := G0 shr 44; G0 := G0 and $0FFFFFFFFFFF;
+  G1 := PH1 + C; C := G1 shr 44; G1 := G1 and $0FFFFFFFFFFF;
+  G2 := Int64(PH2) + Int64(C) - (Int64(1) shl 42);
+  if G2 >= 0 then begin PH0 := G0; PH1 := G1; PH2 := UInt64(G2); end;
+  // Add pad
+
+  FLo := (PH0 or (PH1 shl 44)) + PUInt64(@LPolyKey[16])^;
+  FHi := (PH1 shr 20) or (PH2 shl 24);
+  if FLo < PUInt64(@LPolyKey[16])^ then Inc(FHi);
+  FHi := FHi + PUInt64(@LPolyKey[24])^;
+
+  SetLength(ATag, 16);
+  PUInt64(@ATag[0])^ := FLo;
+  PUInt64(@ATag[8])^ := FHi;
   Result := True;
 end;
 
