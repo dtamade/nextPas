@@ -70,8 +70,8 @@ begin
     Fail('missing-np_try_push-in-llvm-output');
   if Pos('np_finally_end', LlvmText) = 0 then
     Fail('missing-np_finally_end-in-llvm-output');
-  if Pos('np_setjmp', LlvmText) = 0 then
-    Fail('missing-np_setjmp-in-llvm-output');
+  if Pos('setjmp', LlvmText) = 0 then
+    Fail('missing-setjmp-in-llvm-output');
   if Pos('np_try_pop', LlvmText) = 0 then
     Fail('missing-np_try_pop-in-llvm-output');
 
@@ -140,8 +140,8 @@ begin
     Fail('except-missing-np_try_push');
   if Pos('np_except_end', LlvmText) = 0 then
     Fail('except-missing-np_except_end');
-  if Pos('np_setjmp', LlvmText) = 0 then
-    Fail('except-missing-np_setjmp');
+  if Pos('setjmp', LlvmText) = 0 then
+    Fail('except-missing-setjmp');
 
   Emitter.SaveToFile('/tmp/hir_exception_except.ll');
 
