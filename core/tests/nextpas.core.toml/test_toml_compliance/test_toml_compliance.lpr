@@ -576,6 +576,66 @@ begin
   Check(LDoc.HasError, 'inline table overwrite rejected');
 end;
 
+{ toml-test/valid cases }
+
+procedure TestSpecExampleCompact;
+var LDoc: ITomlDocument;
+const
+  COMPACT =
+    'title="TOML Example"' + #10 +
+    '[owner]' + #10 +
+    'name="Lance Uppercut"' + #10 +
+    'dob=1979-05-27T07:32:00-08:00' + #10 +
+    '[database]' + #10 +
+    'server="192.168.1.1"' + #10 +
+    'ports=[8001,8001,8002]' + #10 +
+    'connection_max=5000' + #10 +
+    'enabled=true' + #10 +
+    '[servers]' + #10 +
+    '[servers.alpha]' + #10 +
+    'ip="10.0.0.1"' + #10 +
+    'dc="eqdc10"' + #10 +
+    '[servers.beta]' + #10 +
+    'ip="10.0.0.2"' + #10 +
+    'dc="eqdc10"' + #10 +
+    '[clients]' + #10 +
+    'data=[["gamma","delta"],[1,2]]' + #10 +
+    'hosts=["alpha","omega"]' + #10;
+begin
+  LDoc := TomlParse(COMPACT);
+  Check(not LDoc.HasError, 'compact spec example parses');
+  CheckEqual(Int64(5000), LDoc.Root.Get('database').Get('connection_max').AsInt, 'connection_max');
+end;
+
+procedure TestImplicitExplicitBefore;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[a]' + #10 + 'better = 43' + #10 + '[a.b.c]' + #10 + 'answer = 42');
+  Check(not LDoc.HasError, 'explicit then implicit ok');
+  CheckEqual(Int64(43), LDoc.Root.Get('a').Get('better').AsInt, 'a.better');
+  CheckEqual(Int64(42), LDoc.Root.Get('a').Get('b').Get('c').Get('answer').AsInt, 'a.b.c.answer');
+end;
+
+procedure TestImplicitGroups;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[a.b.c]' + #10 + 'answer = 42');
+  Check(not LDoc.HasError, 'implicit groups ok');
+  Check(LDoc.Root.Get('a').IsTable, 'a is table');
+  Check(LDoc.Root.Get('a').Get('b').IsTable, 'a.b is table');
+  CheckEqual(Int64(42), LDoc.Root.Get('a').Get('b').Get('c').Get('answer').AsInt, 'answer');
+end;
+
+procedure TestAsStringMethod;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('name = "Alice"' + #10 + 'num = 42');
+  Check(not LDoc.HasError, 'parse ok');
+  CheckEqual('Alice', LDoc.Root.Get('name').AsString, 'AsString');
+  CheckEqual('', LDoc.Root.Get('num').AsString, 'AsString on non-string');
+  CheckEqual('', LDoc.Root.Get('missing').AsString, 'AsString on missing');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -649,6 +709,12 @@ begin
   { toml-test/invalid/inline-table }
   T.Run('reject inline-table duplicate key', @TestRejectInlineDupKey);
   T.Run('reject inline-table overwrite', @TestRejectInlineOverwrite);
+  { toml-test/valid cases }
+  T.Run('spec-example-1-compact', @TestSpecExampleCompact);
+  T.Run('implicit-explicit-before', @TestImplicitExplicitBefore);
+  T.Run('implicit-groups', @TestImplicitGroups);
+  { AsString convenience }
+  T.Run('AsString method', @TestAsStringMethod);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

@@ -48,6 +48,7 @@ type
     function ArrayLen: UInt32;
     function ArrayGet(AIndex: UInt32): TTomlValue;
     function Key: TStringView;
+    function AsString: string;
   end;
 
   { Enumerator for for..in over TTomlValue (iterates table children or array elements).
@@ -286,6 +287,13 @@ begin
   if FIdx = TOML_NODE_NONE then
     Exit(TStringView.Empty);
   Result := FDoc^.Node(FIdx)^.Key;
+end;
+
+function TTomlValue.AsString: string;
+begin
+  if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
+    Exit('');
+  Result := FDoc^.Node(FIdx)^.Str.ToString;
 end;
 
 { TTomlValueEnumerator }
