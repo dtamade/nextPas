@@ -2860,6 +2860,8 @@ begin
         ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else if CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword then
         ParseProcedureDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
+        ParseVarSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else
       begin
         Inc(ACursor);
@@ -3050,6 +3052,8 @@ begin
         ParseFunctionDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else if CurrentToken(ALexer, ACursor).Kind = tkProcedureKeyword then
         ParseProcedureDecl(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
+      else if CurrentToken(ALexer, ACursor).Kind = tkVarKeyword then
+        ParseVarSection(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId)
       else
       begin
         Inc(ACursor);

@@ -8623,7 +8623,7 @@ var
   I, J, K: LongInt;
   Entry: TProcedureBodyEntry;
   ParamCount: LongInt;
-  Child, ParamChild, TypeChild: TGreenNode;
+  Child, ParamChild, TypeChild, Decl: TGreenNode;
   SavedTerminated: Boolean;
   ParamTypes, RetVarName, EffName: string;
   IsStrParam, IsStrReturn, IsPtrReturn, IsVarP, IsRecReturn: Boolean;
@@ -8823,6 +8823,41 @@ begin
       FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName, 0, 0, RetVarName)
     else
       FModel.AddTypedHirNode('var-decl-runtime', RetVarName, 0, 0, RetVarName);
+    if Entry.Decl <> nil then
+      for J := 0 to Entry.Decl.ChildCount - 1 do
+      begin
+        Child := Entry.Decl.ChildAt(J);
+        if (Child <> nil) and (Child.NodeKind = gnkVarSection) then
+        begin
+          for K := 0 to Child.ChildCount - 1 do
+          begin
+            Decl := Child.ChildAt(K);
+            if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) or
+              (Decl.Text = '') then
+              Continue;
+            RegisterRuntimeVar(Decl.Text);
+            if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+              (TypeMetaSize(Decl.ChildAt(0).Text) > 0) and
+              (not TypeMetaIsRecord(Decl.ChildAt(0).Text)) then
+            begin
+              RegisterClassVar(Decl.Text, Decl.ChildAt(0).Text);
+              FModel.AddTypedHirNode(
+                'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text);
+            end
+            else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+              (SameText(Decl.ChildAt(0).Text, 'String') or
+               SameText(Decl.ChildAt(0).Text, 'AnsiString')) then
+            begin
+              RegisterRuntimeStrVar(Decl.Text);
+              FModel.AddTypedHirNode(
+                'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text);
+            end
+            else
+              FModel.AddTypedHirNode(
+                'var-decl-runtime', Decl.Text, 0, 0, Decl.Text);
+          end;
+        end;
+      end;
     SavedTerminated := FCurrentBlockTerminated;
     FCurrentBlockTerminated := False;
     WalkHaltCalls(Entry.Body);
