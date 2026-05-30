@@ -88,7 +88,10 @@ end;
 function Vec16CmpRange(AData: PByte; ALo, AHi: Byte): TMask16;
 begin
   if ALo > AHi then begin Result := 0; Exit; end;
-  Result := Vec16CmpGtU(AData, ALo - 1) and (not Vec16CmpGtU(AData, AHi));
+  if ALo = 0 then
+    Result := not Vec16CmpGtU(AData, AHi)
+  else
+    Result := Vec16CmpGtU(AData, ALo - 1) and (not Vec16CmpGtU(AData, AHi));
 end;
 
 function Vec16Ctz(AMask: TMask16): Int32; assembler; nostackframe;
