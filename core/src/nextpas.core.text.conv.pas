@@ -43,7 +43,7 @@ end;
 
 function UIntToStr(const AValue: UInt64): string;
 begin
-  Result := SysUtils.IntToStr(Int64(AValue));
+  Str(AValue, Result);
 end;
 
 function FloatToStr(const AValue: Double): string;

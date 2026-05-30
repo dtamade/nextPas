@@ -81,7 +81,8 @@ function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
 implementation
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.mem.utils;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
 var i: SizeInt;
@@ -146,12 +147,37 @@ begin
 end;
 
 function StringsJoin(const AArr: TStringArray; const ASep: string): string;
-var i: SizeInt;
+var
+  i: SizeInt;
+  LTotal, LSepLen, LPos: SizeInt;
 begin
   if Length(AArr) = 0 then Exit('');
-  Result := AArr[0];
+  if Length(AArr) = 1 then Exit(AArr[0]);
+  LSepLen := Length(ASep);
+  LTotal := 0;
+  for i := 0 to High(AArr) do
+    Inc(LTotal, Length(AArr[i]));
+  Inc(LTotal, LSepLen * (Length(AArr) - 1));
+  SetLength(Result, LTotal);
+  LPos := 1;
+  if Length(AArr[0]) > 0 then
+  begin
+    CopyNonOverlap(@AArr[0][1], @Result[LPos], Length(AArr[0]));
+    Inc(LPos, Length(AArr[0]));
+  end;
   for i := 1 to High(AArr) do
-    Result := Result + ASep + AArr[i];
+  begin
+    if LSepLen > 0 then
+    begin
+      CopyNonOverlap(@ASep[1], @Result[LPos], LSepLen);
+      Inc(LPos, LSepLen);
+    end;
+    if Length(AArr[i]) > 0 then
+    begin
+      CopyNonOverlap(@AArr[i][1], @Result[LPos], Length(AArr[i]));
+      Inc(LPos, Length(AArr[i]));
+    end;
+  end;
 end;
 
 function StringsFilter(const AArr: TStringArray; APredicate: TStringPredicate): TStringArray;
@@ -180,7 +206,7 @@ function StringsUnique(const AArr: TStringArray): TStringArray;
 var i, LCount: SizeInt; LSorted: TStringArray;
 begin
   if Length(AArr) = 0 then Exit(nil);
-  LSorted := Copy(AArr);
+  LSorted := System.Copy(AArr);
   StringsSort(LSorted);
   SetLength(Result, Length(LSorted));
   Result[0] := LSorted[0];
@@ -263,16 +289,16 @@ begin
     if AText[i] = #10 then
     begin
       if (i > LStart) and (AText[i - 1] = #13) then
-        Result[LCount] := Copy(AText, LStart, i - LStart - 1)
+        Result[LCount] := System.Copy(AText, LStart, i - LStart - 1)
       else
-        Result[LCount] := Copy(AText, LStart, i - LStart);
+        Result[LCount] := System.Copy(AText, LStart, i - LStart);
       Inc(LCount);
       LStart := i + 1;
     end;
   end;
   if LStart <= LLen then
   begin
-    Result[LCount] := Copy(AText, LStart, LLen - LStart + 1);
+    Result[LCount] := System.Copy(AText, LStart, LLen - LStart + 1);
     Inc(LCount);
   end;
   SetLength(Result, LCount);
@@ -294,8 +320,8 @@ begin
     LSepPos := Pos(ASeparator, LLine);
     if LSepPos > 0 then
     begin
-      Result[LCount].Key := Trim(Copy(LLine, 1, LSepPos - 1));
-      Result[LCount].Value := Trim(Copy(LLine, LSepPos + 1, Length(LLine) - LSepPos));
+      Result[LCount].Key := Trim(System.Copy(LLine, 1, LSepPos - 1));
+      Result[LCount].Value := Trim(System.Copy(LLine, LSepPos + 1, Length(LLine) - LSepPos));
       Inc(LCount);
     end;
   end;
