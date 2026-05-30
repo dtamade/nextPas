@@ -19,7 +19,7 @@ procedure FeToBytes(out S: TBytes; const H: TFe25519);
 procedure FeAdd(out H: TFe25519; const F, G: TFe25519);
 procedure FeSub(out H: TFe25519; const F, G: TFe25519);
 procedure FeNeg(out H: TFe25519; const F: TFe25519);
-procedure FeMul(out H: TFe25519; const F, G: TFe25519);
+procedure FeMul(out H: TFe25519; constref F, G: TFe25519);
 procedure FeSq(out H: TFe25519; const F: TFe25519);
 procedure FeMul121666(out H: TFe25519; const F: TFe25519);
 procedure FeCopy(out H: TFe25519; const F: TFe25519);
@@ -164,9 +164,170 @@ begin
   for I := 0 to 9 do H[I] := -F[I];
 end;
 
-procedure FeMul(out H: TFe25519; const F, G: TFe25519);
-var
-  F0, F1, F2, F3, F4, F5, F6, F7, F8, F9: Int64;
+{$IFDEF CPUX86_64}
+{$ASMMODE ATT}
+procedure FeMul(out H: TFe25519; constref F, G: TFe25519); assembler; nostackframe;
+// rdi=@H, rsi=@F, rdx=@G — handles aliasing (H may equal F or G)
+// Stack layout: [rsp+0..79]=g_19[0..8], [rsp+80..159]=H_temp[0..9]
+asm
+  push %rbx; push %r12; push %r13; push %r14; push %r15; push %rbp
+  movq %rdi, %r15; movq %rdx, %rbp
+  sub $160, %rsp
+  // Precompute g[i]*19
+  movq 8(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,0(%rsp)
+  movq 16(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,8(%rsp)
+  movq 24(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,16(%rsp)
+  movq 32(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,24(%rsp)
+  movq 40(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,32(%rsp)
+  movq 48(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,40(%rsp)
+  movq 56(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,48(%rsp)
+  movq 64(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,56(%rsp)
+  movq 72(%rbp),%rax; imulq $19,%rax,%rax; movq %rax,64(%rsp)
+  // H[0]
+  movq 0(%rsi),%rax; imulq 0(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; addq %rax,%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; addq %rax,%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 40(%rsp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; addq %rax,%rax; imulq 32(%rsp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 24(%rsp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; addq %rax,%rax; imulq 16(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 8(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; addq %rax,%rax; imulq 0(%rsp),%rax; addq %rax,%r8
+  movq %r8, 80(%rsp)
+  // H[1]
+  movq 0(%rsi),%rax; imulq 8(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; imulq 40(%rsp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 32(%rsp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; imulq 24(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 16(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; imulq 8(%rsp),%rax; addq %rax,%r8
+  movq %r8, 88(%rsp)
+  // H[2]
+  movq 0(%rsi),%rax; imulq 16(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; addq %rax,%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; addq %rax,%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; addq %rax,%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 40(%rsp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; addq %rax,%rax; imulq 32(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 24(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; addq %rax,%rax; imulq 16(%rsp),%rax; addq %rax,%r8
+  movq %r8, 96(%rsp)
+  // H[3]
+  movq 0(%rsi),%rax; imulq 24(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; imulq 40(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 32(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; imulq 24(%rsp),%rax; addq %rax,%r8
+  movq %r8, 104(%rsp)
+  // H[4]
+  movq 0(%rsi),%rax; imulq 32(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; addq %rax,%rax; imulq 24(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; addq %rax,%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; addq %rax,%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; addq %rax,%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 40(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; addq %rax,%rax; imulq 32(%rsp),%rax; addq %rax,%r8
+  movq %r8, 112(%rsp)
+  // H[5]
+  movq 0(%rsi),%rax; imulq 40(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; imulq 32(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 24(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; imulq 40(%rsp),%rax; addq %rax,%r8
+  movq %r8, 120(%rsp)
+  // H[6]
+  movq 0(%rsi),%rax; imulq 48(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; addq %rax,%rax; imulq 40(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 32(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; addq %rax,%rax; imulq 24(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; addq %rax,%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; addq %rax,%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; addq %rax,%rax; imulq 48(%rsp),%rax; addq %rax,%r8
+  movq %r8, 128(%rsp)
+  // H[7]
+  movq 0(%rsi),%rax; imulq 56(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; imulq 48(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 40(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; imulq 32(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 24(%rbp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; imulq 56(%rsp),%rax; addq %rax,%r8
+  movq %r8, 136(%rsp)
+  // H[8]
+  movq 0(%rsi),%rax; imulq 64(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; addq %rax,%rax; imulq 56(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 48(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; addq %rax,%rax; imulq 40(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 32(%rbp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; addq %rax,%rax; imulq 24(%rbp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; addq %rax,%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; addq %rax,%rax; imulq 64(%rsp),%rax; addq %rax,%r8
+  movq %r8, 144(%rsp)
+  // H[9]
+  movq 0(%rsi),%rax; imulq 72(%rbp),%rax; movq %rax,%r8
+  movq 8(%rsi),%rax; imulq 64(%rbp),%rax; addq %rax,%r8
+  movq 16(%rsi),%rax; imulq 56(%rbp),%rax; addq %rax,%r8
+  movq 24(%rsi),%rax; imulq 48(%rbp),%rax; addq %rax,%r8
+  movq 32(%rsi),%rax; imulq 40(%rbp),%rax; addq %rax,%r8
+  movq 40(%rsi),%rax; imulq 32(%rbp),%rax; addq %rax,%r8
+  movq 48(%rsi),%rax; imulq 24(%rbp),%rax; addq %rax,%r8
+  movq 56(%rsi),%rax; imulq 16(%rbp),%rax; addq %rax,%r8
+  movq 64(%rsi),%rax; imulq 8(%rbp),%rax; addq %rax,%r8
+  movq 72(%rsi),%rax; imulq 0(%rbp),%rax; addq %rax,%r8
+  movq %r8, 152(%rsp)
+  // Carry chain (from H_temp on stack)
+  movq 80(%rsp),%r8; movq 88(%rsp),%r9; movq 96(%rsp),%r10; movq 104(%rsp),%r11
+  movq 112(%rsp),%r12; movq 120(%rsp),%r13; movq 128(%rsp),%r14
+  movq 136(%rsp),%rbx; movq 144(%rsp),%rcx; movq 152(%rsp),%rdi
+  movq %r8,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%r9; shlq $26,%rax; subq %rax,%r8
+  movq %r12,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%r13; shlq $26,%rax; subq %rax,%r12
+  movq %r9,%rax; addq $16777216,%rax; sarq $25,%rax; addq %rax,%r10; shlq $25,%rax; subq %rax,%r9
+  movq %r13,%rax; addq $16777216,%rax; sarq $25,%rax; addq %rax,%r14; shlq $25,%rax; subq %rax,%r13
+  movq %r10,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%r11; shlq $26,%rax; subq %rax,%r10
+  movq %r14,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%rbx; shlq $26,%rax; subq %rax,%r14
+  movq %r11,%rax; addq $16777216,%rax; sarq $25,%rax; addq %rax,%r12; shlq $25,%rax; subq %rax,%r11
+  movq %rbx,%rax; addq $16777216,%rax; sarq $25,%rax; addq %rax,%rcx; shlq $25,%rax; subq %rax,%rbx
+  movq %r12,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%r13; shlq $26,%rax; subq %rax,%r12
+  movq %rcx,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%rdi; shlq $26,%rax; subq %rax,%rcx
+  movq %rdi,%rax; addq $16777216,%rax; sarq $25,%rax; imulq $19,%rax,%rdx; addq %rdx,%r8; shlq $25,%rax; subq %rax,%rdi
+  movq %r8,%rax; addq $33554432,%rax; sarq $26,%rax; addq %rax,%r9; shlq $26,%rax; subq %rax,%r8
+  // Store to output (safe now — all inputs consumed)
+  movq %r8,0(%r15); movq %r9,8(%r15); movq %r10,16(%r15); movq %r11,24(%r15)
+  movq %r12,32(%r15); movq %r13,40(%r15); movq %r14,48(%r15)
+  movq %rbx,56(%r15); movq %rcx,64(%r15); movq %rdi,72(%r15)
+  add $160,%rsp
+  pop %rbp; pop %r15; pop %r14; pop %r13; pop %r12; pop %rbx
+end;
+{$ELSE}
+procedure FeMul(out H: TFe25519; constref F, G: TFe25519);
   F1_2, F3_2, F5_2, F7_2, F9_2: Int64;
   G0, G1, G2, G3, G4, G5, G6, G7, G8, G9: Int64;
   G1_19, G2_19, G3_19, G4_19, G5_19, G6_19, G7_19, G8_19, G9_19: Int64;
@@ -219,6 +380,7 @@ begin
   H[0] := H0; H[1] := H1; H[2] := H2; H[3] := H3; H[4] := H4;
   H[5] := H5; H[6] := H6; H[7] := H7; H[8] := H8; H[9] := H9;
 end;
+{$ENDIF}
 
 procedure FeSq(out H: TFe25519; const F: TFe25519);
 var
