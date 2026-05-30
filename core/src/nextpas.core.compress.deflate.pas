@@ -115,9 +115,12 @@ procedure TDeflateWriter.Close;
 begin
   if FInitialized then
   begin
-    FlushOutput(Z_FINISH);
-    deflateEnd(FStream);
     FInitialized := False;
+    try
+      FlushOutput(Z_FINISH);
+    finally
+      deflateEnd(FStream);
+    end;
   end;
 end;
 
