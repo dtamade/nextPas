@@ -233,6 +233,10 @@ begin
     end;
     Result := True;
   end;
+
+  // Cleanup thread lists to avoid leaking Slots arrays
+  for i := 0 to High(CList.Items) do CList.Items[i].Slots := nil;
+  for i := 0 to High(NList.Items) do NList.Items[i].Slots := nil;
 end;
 
 function NfaFindAll(const AProgram: TRegexProgram;

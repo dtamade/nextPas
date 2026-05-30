@@ -51,7 +51,12 @@ var
   LAst: PAstNode;
   LNumCaptures: UInt32;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  Result.FProgram.Code := nil;
+  Result.FProgram.Classes := nil;
+  Result.FProgram.LiteralPrefix := '';
+  Result.FProgram.LiteralPrefixLen := 0;
+  Result.FProgram.NumSlots := 0;
+  Result.FValid := False;
   LAst := RegexParse(APattern, LNumCaptures);
   try
     Result.FProgram := RegexCompile(LAst, LNumCaptures);
@@ -70,7 +75,9 @@ begin
   except
     on E: ERegexCompileError do
     begin
-      FillChar(ARegex, SizeOf(ARegex), 0);
+      ARegex.FProgram.Code := nil;
+      ARegex.FProgram.Classes := nil;
+      ARegex.FValid := False;
       AError := E.Message;
       Result := False;
     end;
