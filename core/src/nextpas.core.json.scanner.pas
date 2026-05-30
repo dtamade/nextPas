@@ -81,7 +81,7 @@ begin
   if (ABs = MASK16_NONE_SET) and APrevEscaped then
     Exit(TMask16(1));
 
-  LStarts := ABs and (not (ABs shr 1));
+  LStarts := ABs and (not (ABs shl 1));
   if APrevEscaped then
     LStarts := LStarts and not TMask16(1);
 
@@ -115,7 +115,7 @@ begin
   if (ABs = MASK32_NONE_SET) and APrevEscaped then
     Exit(TMask32(1));
 
-  LStarts := ABs and (not (ABs shr 1));
+  LStarts := ABs and (not (ABs shl 1));
   if APrevEscaped then
     LStarts := LStarts and not TMask32(1);
 
