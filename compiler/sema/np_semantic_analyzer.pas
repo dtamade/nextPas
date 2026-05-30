@@ -6854,6 +6854,7 @@ begin
           Arg.ChildAt(0).ChildAt(1).Text;
         if TypeMetaSize(InhParentName) > 0 then
         begin
+          Value := TypeMetaSize(InhParentName);
           if FModel.FindSymbolByName(StringValue) = 0 then
           begin
             InhTypeId := FModel.FindTypeByName(InhParentName);
@@ -6929,6 +6930,13 @@ begin
               FModel.AddTypedHirNode('vmt-store-runtime',
                 Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
+            if (LookupClassVar(Decoded) <> '') and
+              (TypeMetaSize(LookupClassVar(Decoded)) = 8) and
+              FModel.LookupConstValue(
+                Arg.ChildAt(0).ChildAt(0).Text + '$intf_offset_' + LookupClassVar(Decoded),
+                Value) then
+              FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
+                Decoded + #9 + IntToStr(Value div 8));
           end;
           Continue;
         end;
