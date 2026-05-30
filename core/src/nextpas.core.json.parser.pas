@@ -218,7 +218,7 @@ end;
 function TParserState.ParseNumber: UInt32;
 var
   LData: PAnsiChar;
-  LNumLen: SizeUInt;
+  LNumLen, LActual: SizeUInt;
   LIdx: UInt32;
   LHasDot, LHasExp: Boolean;
   I: SizeUInt;
@@ -226,6 +226,12 @@ var
   LFloat: Double;
 begin
   if not GetValueSlice(LData, LNumLen) then
+  begin
+    SetError('invalid number', 14);
+    Exit(JSON_NODE_NONE);
+  end;
+  LActual := ScanJsonNumber(LData, LNumLen);
+  if (LActual = 0) or (LActual <> LNumLen) then
   begin
     SetError('invalid number', 14);
     Exit(JSON_NODE_NONE);
@@ -290,21 +296,21 @@ begin
     SetError('invalid literal', 15);
     Exit(JSON_NODE_NONE);
   end;
-  if (LLen >= 4) and (LData[0] = 't') and (LData[1] = 'r') and (LData[2] = 'u') and (LData[3] = 'e') then
+  if (LLen = 4) and (LData[0] = 't') and (LData[1] = 'r') and (LData[2] = 'u') and (LData[3] = 'e') then
   begin
     LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkBool;
     Doc^.FNodes[LIdx].BoolVal := True;
     Exit(LIdx);
   end;
-  if (LLen >= 5) and (LData[0] = 'f') and (LData[1] = 'a') and (LData[2] = 'l') and (LData[3] = 's') and (LData[4] = 'e') then
+  if (LLen = 5) and (LData[0] = 'f') and (LData[1] = 'a') and (LData[2] = 'l') and (LData[3] = 's') and (LData[4] = 'e') then
   begin
     LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkBool;
     Doc^.FNodes[LIdx].BoolVal := False;
     Exit(LIdx);
   end;
-  if (LLen >= 4) and (LData[0] = 'n') and (LData[1] = 'u') and (LData[2] = 'l') and (LData[3] = 'l') then
+  if (LLen = 4) and (LData[0] = 'n') and (LData[1] = 'u') and (LData[2] = 'l') and (LData[3] = 'l') then
   begin
     LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkNull;

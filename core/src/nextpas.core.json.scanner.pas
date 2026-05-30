@@ -81,6 +81,8 @@ begin
   begin
     LQ32 := Vec32CmpEq(@FInput[FScanPos], Ord('"'));
     LB32 := Vec32CmpEq(@FInput[FScanPos], Ord('\'));
+    if (LB32 and (LB32 shl 1)) <> MASK32_NONE_SET then
+      Break;
     LE32 := LB32 shl 1;
     LRQ32 := LQ32 and (not LE32);
     if FInString then LCarry32 := MASK32_ALL_SET else LCarry32 := MASK32_NONE_SET;
@@ -107,6 +109,8 @@ begin
   begin
     LQuote := Vec16CmpEq(@FInput[FScanPos], Ord('"'));
     LBs := Vec16CmpEq(@FInput[FScanPos], Ord('\'));
+    if (LBs and (LBs shl 1)) <> MASK16_NONE_SET then
+      Break;
     LEscaped := LBs shl 1;
     LRealQuotes := LQuote and (not LEscaped);
     if FInString then LCarry := MASK16_ALL_SET else LCarry := MASK16_NONE_SET;
