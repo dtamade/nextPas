@@ -316,6 +316,22 @@ begin
   LDoc.Done;
 end;
 
+procedure TestFindByPath;
+var
+  LDoc: TTomlDocument;
+  LRoot: TTomlValue;
+begin
+  LDoc := ParseDoc('[a.b]' + #10 + 'c = 42' + #10 + '[server]' + #10 + 'host = "localhost"');
+  LRoot := TTomlValue.Create(LDoc, LDoc.Root);
+  CheckEqual(Int64(42), LRoot.FindByPath('a.b.c').AsInt, 'a.b.c = 42');
+  Check(LRoot.FindByPath('server.host').AsStr.Equals(
+    TStringView.Create(PAnsiChar('localhost'), 9)), 'server.host');
+  Check(not LRoot.FindByPath('a.b.missing').IsValid, 'missing path');
+  Check(not LRoot.FindByPath('x.y.z').IsValid, 'nonexistent path');
+  CheckEqual(Int64(42), LRoot.FindByPath('a').FindByPath('b.c').AsInt, 'chained FindByPath');
+  LDoc.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml.value');
   T.Run('invalid value', @TestInvalidValue);
@@ -339,6 +355,7 @@ begin
   T.Run('enumerate table', @TestEnumerateTable);
   T.Run('enumerate empty', @TestEnumerateEmpty);
   T.Run('key property', @TestKeyProperty);
+  T.Run('find by path', @TestFindByPath);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

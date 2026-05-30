@@ -49,6 +49,7 @@ type
     function ArrayGet(AIndex: UInt32): TTomlValue;
     function Key: TStringView;
     function AsString: string;
+    function FindByPath(const APath: string): TTomlValue;
   end;
 
   { Enumerator for for..in over TTomlValue (iterates table children or array elements).
@@ -294,6 +295,37 @@ begin
   if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
     Exit('');
   Result := FDoc^.Node(FIdx)^.Str.ToString;
+end;
+
+function TTomlValue.FindByPath(const APath: string): TTomlValue;
+var
+  LCur: TTomlValue;
+  LStart, LPos: SizeInt;
+  LKey: TStringView;
+begin
+  LCur := Self;
+  LStart := 1;
+  LPos := 1;
+  while LPos <= Length(APath) do
+  begin
+    if APath[LPos] = '.' then
+    begin
+      if LPos > LStart then
+      begin
+        LKey := TStringView.Create(PAnsiChar(@APath[LStart]), SizeUInt(LPos - LStart));
+        LCur := LCur.Get(LKey);
+        if not LCur.IsValid then Exit(LCur);
+      end;
+      LStart := LPos + 1;
+    end;
+    Inc(LPos);
+  end;
+  if LPos > LStart then
+  begin
+    LKey := TStringView.Create(PAnsiChar(@APath[LStart]), SizeUInt(LPos - LStart));
+    LCur := LCur.Get(LKey);
+  end;
+  Result := LCur;
 end;
 
 { TTomlValueEnumerator }

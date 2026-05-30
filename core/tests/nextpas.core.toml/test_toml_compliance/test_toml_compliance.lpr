@@ -692,6 +692,42 @@ begin
   Check(LDoc.HasError, 'no seconds rejected');
 end;
 
+{ toml-test/valid/comment }
+
+procedure TestValidTrickyComments;
+var LDoc: ITomlDocument;
+const
+  TRICKY =
+    '[section]#attached comment' + #10 +
+    '#[notsection]' + #10 +
+    'one = "11"#cmt' + #10 +
+    'two = "22#"' + #10 +
+    'three = ''#''' + #10;
+begin
+  LDoc := TomlParse(TRICKY);
+  Check(not LDoc.HasError, 'tricky comments parse ok');
+  Check(LDoc.Root.Get('section').Get('one').AsStr.Equals(
+    TStringView.Create(PAnsiChar('11'), 2)), 'one = 11');
+  Check(LDoc.Root.Get('section').Get('two').AsStr.Equals(
+    TStringView.Create(PAnsiChar('22#'), 3)), 'two = 22#');
+  Check(LDoc.Root.Get('section').Get('three').AsStr.Equals(
+    TStringView.Create(PAnsiChar('#'), 1)), 'three = #');
+end;
+
+{ FindByPath }
+
+procedure TestFindByPath;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('[a.b]' + #10 + 'c = 42' + #10 + '[server]' + #10 + 'host = "localhost"');
+  Check(not LDoc.HasError, 'parse ok');
+  CheckEqual(Int64(42), LDoc.Root.FindByPath('a.b.c').AsInt, 'a.b.c = 42');
+  Check(LDoc.Root.FindByPath('server.host').AsStr.Equals(
+    TStringView.Create(PAnsiChar('localhost'), 9)), 'server.host');
+  Check(not LDoc.Root.FindByPath('a.b.missing').IsValid, 'missing path');
+  Check(not LDoc.Root.FindByPath('x.y.z').IsValid, 'nonexistent path');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -780,6 +816,10 @@ begin
   T.Run('reject datetime no-t', @TestRejectDateTimeNoT);
   T.Run('reject datetime no-leads', @TestRejectDateTimeNoLeads);
   T.Run('reject datetime no-secs', @TestRejectDateTimeNoSecs);
+  { toml-test/valid/comment }
+  T.Run('valid tricky comments', @TestValidTrickyComments);
+  { FindByPath }
+  T.Run('FindByPath', @TestFindByPath);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
