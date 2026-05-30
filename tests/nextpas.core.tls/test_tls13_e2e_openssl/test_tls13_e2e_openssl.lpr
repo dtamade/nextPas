@@ -39,17 +39,17 @@ end;
 
 function ConnectTCP(const AHost: string; APort: Word): LongInt;
 var
-  LSockAddr: TInetSockAddr;
+  LAddr: sockaddr_in;
 begin
   Result := fpSocket(AF_INET, SOCK_STREAM, 0);
   if Result < 0 then Exit;
 
-  FillChar(LSockAddr, SizeOf(LSockAddr), 0);
-  LSockAddr.sin_family := AF_INET;
-  LSockAddr.sin_port := htons(APort);
-  LSockAddr.sin_addr.s_addr := StrToHostAddr('127.0.0.1').s_addr;
+  FillChar(LAddr, SizeOf(LAddr), 0);
+  LAddr.sin_family := AF_INET;
+  LAddr.sin_port := htons(APort);
+  LAddr.sin_addr := StrToNetAddr(AHost);
 
-  if fpConnect(Result, @LSockAddr, SizeOf(LSockAddr)) <> 0 then
+  if fpConnect(Result, @LAddr, SizeOf(LAddr)) <> 0 then
   begin
     fpClose(Result);
     Result := -1;
@@ -63,7 +63,7 @@ begin
   LTotal := 0;
   while LTotal < Length(AData) do
   begin
-    LSent := fpWrite(ASock, AData[LTotal], Length(AData) - LTotal);
+    LSent := fpSend(ASock, @AData[LTotal], Length(AData) - LTotal, 0);
     if LSent <= 0 then Exit(False);
     Inc(LTotal, LSent);
   end;
@@ -73,20 +73,16 @@ end;
 function RecvBytes(ASock: LongInt; AMaxLen: Integer; ATimeoutMs: Integer): TBytes;
 var
   LBuf: array[0..16383] of Byte;
-  LRead, LTotal: Integer;
+  LRead: SizeInt;
 begin
-  SetLength(Result, 0);
   Sleep(ATimeoutMs);
-  LTotal := 0;
-  repeat
-    LRead := fpRead(ASock, LBuf[0], SizeOf(LBuf));
-    if LRead > 0 then
-    begin
-      SetLength(Result, LTotal + LRead);
-      Move(LBuf[0], Result[LTotal], LRead);
-      Inc(LTotal, LRead);
-    end;
-  until LRead <= 0;
+  SetLength(Result, 0);
+  LRead := fpRecv(ASock, @LBuf[0], SizeOf(LBuf), MSG_DONTWAIT);
+  if LRead > 0 then
+  begin
+    SetLength(Result, LRead);
+    Move(LBuf[0], Result[0], LRead);
+  end;
 end;
 
 var
