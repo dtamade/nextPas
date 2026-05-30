@@ -273,6 +273,82 @@ begin
   CheckEqual(Int64(10), Int64(GCaptured[0].AttrCount), '10 attrs');
 end;
 
+procedure TestWithInt;
+var
+  LL, LChild: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LChild := LL.WithInt('port', 8080);
+  LChild.Info^.Msg('started');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'withint works');
+end;
+
+procedure TestWithGroup;
+var
+  LL, LChild: TLogger;
+begin
+  LL := TLogger.New(NewConsoleHandler(llDebug), llDebug);
+  LChild := LL.WithGroup('http');
+  LChild.Debug^.Str('method', 'GET')^.Msg('request');
+  Check(True, 'withgroup no crash');
+end;
+
+procedure TestLogContext;
+var
+  LCtx: Int32;
+begin
+  LCtx := 42;
+  SetLogContext(@LCtx);
+  Check(GetLogContext = @LCtx, 'context set');
+  SetLogContext(nil);
+  Check(GetLogContext = nil, 'context cleared');
+end;
+
+procedure TestAllLevels;
+begin
+  ResetCapture;
+  SetDefaultLogger(TLogger.New(TCaptureHandler.Create(llTrace), llTrace));
+  LogTrace('t');
+  LogDebug('d');
+  LogInfo('i');
+  LogWarn('w');
+  LogError('e');
+  CheckEqual(Int64(5), Int64(GCaptureCount), 'all global levels');
+end;
+
+procedure TestFatalLevel;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llFatal), llFatal);
+  LL.Info^.Msg('skip');
+  LL.Fatal^.Msg('crash');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'only fatal');
+  Check(GCaptured[0].Level = llFatal, 'level=fatal');
+end;
+
+procedure TestReentrancy;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Msg('normal');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'normal log works');
+end;
+
+procedure TestBrokenFileHandler;
+var
+  LL: TLogger;
+begin
+  LL := TLogger.New(NewFileHandler('/nonexistent/path/impossible.log', llInfo), llInfo);
+  LL.Info^.Msg('should not crash');
+  LL.Error^.Msg('still safe');
+  Check(True, 'broken file handler no crash');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.log');
   T.Run('Event builder', @TestEventBuilder);
@@ -291,5 +367,12 @@ begin
   T.Run('Multi handler', @TestMultiHandler);
   T.Run('File rotation', @TestFileRotation);
   T.Run('Many attrs', @TestManyAttrs);
+  T.Run('WithInt', @TestWithInt);
+  T.Run('WithGroup', @TestWithGroup);
+  T.Run('Log context', @TestLogContext);
+  T.Run('All levels', @TestAllLevels);
+  T.Run('Fatal level', @TestFatalLevel);
+  T.Run('Re-entrancy', @TestReentrancy);
+  T.Run('Broken file handler', @TestBrokenFileHandler);
   T.Summary;
 end.

@@ -250,7 +250,7 @@ end;
 function TLogger.Trace: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
-  Inc(GEventIdx);
+  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -261,7 +261,7 @@ end;
 function TLogger.Debug: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
-  Inc(GEventIdx);
+  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -272,7 +272,7 @@ end;
 function TLogger.Info: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
-  Inc(GEventIdx);
+  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -283,7 +283,7 @@ end;
 function TLogger.Warn: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
-  Inc(GEventIdx);
+  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -294,7 +294,7 @@ end;
 function TLogger.Error: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
-  Inc(GEventIdx);
+  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -305,7 +305,7 @@ end;
 function TLogger.Fatal: PLogEvent;
 begin
   Result := @GEventPool[GEventIdx and 15];
-  Inc(GEventIdx);
+  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -681,6 +681,7 @@ begin
   if FBroken then Exit;
   if FCurrentSize >= FMaxBytes then Rotate;
   EnsureOpen;
+  if not FOpened then Exit;
   Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
   for LI := 0 to FPrefixCount - 1 do
   begin
