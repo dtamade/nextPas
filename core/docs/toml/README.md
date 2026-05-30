@@ -59,7 +59,7 @@ src/nextpas.core.toml.pas           — ITomlDocument facade + TomlParse/Stringi
 
 ## TOML v1.0 Feature Coverage
 
-- Basic/literal/multi-line strings with TOML-specific escape (`\uXXXX`, `\UXXXXXXXX`)
+- Basic/literal/multi-line strings with TOML-specific escape (`\uXXXX`, `\UXXXXXXXX`, `\xNN`, `\e`)
 - Integers: decimal, hex (`0x`), octal (`0o`), binary (`0b`), underscore separators
 - Floats: decimal, exponent, `inf`, `nan`
 - Booleans: `true`, `false`
