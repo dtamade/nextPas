@@ -159,6 +159,7 @@ type
     function TypeMetaSize(const ATypeName: string): Int64;
     function TypeMetaIsRecord(const ATypeName: string): Boolean;
     function TypeMetaIsClass(const ATypeName: string): Boolean;
+    function TypeMetaIsInterface(const ATypeName: string): Boolean;
     function TypeMetaFieldIndex(const ATypeName, AFieldName: string): Int64;
     function TypeMetaFieldIsStr(const ATypeName, AFieldName: string): Boolean;
     function TypeMetaFieldIsPtr(const ATypeName, AFieldName: string): Boolean;
@@ -526,7 +527,7 @@ begin
     if SameText(FClassVarNames[Idx], AName) then
     begin
       if FModel.LookupConstValue(FClassVarTypes[Idx] + '$vmt_count', V) and
-        (TypeMetaSize(FClassVarTypes[Idx]) = 8) then
+        TypeMetaIsInterface(FClassVarTypes[Idx]) then
         Exit;
       FClassVarTypes[Idx] := AClassName;
       Exit;
@@ -1783,6 +1784,12 @@ begin
     Exit((not Meta.IsRecord) and (Meta.Size > 0));
   Result := (not FModel.LookupConstValue(ATypeName + '$record', V)) and
     FModel.LookupConstValue(ATypeName + '$size', V);
+end;
+
+function TSemanticAnalyzer.TypeMetaIsInterface(const ATypeName: string): Boolean;
+var V: Int64;
+begin
+  Result := FModel.LookupConstValue(ATypeName + '$interface', V);
 end;
 
 function TSemanticAnalyzer.TypeMetaFieldIndex(
@@ -4367,6 +4374,7 @@ begin
     end;
   end;
   FModel.AddConstValue(IntfName + '$vmt_count', Meta.VmtCount);
+  FModel.AddConstValue(IntfName + '$interface', 1);
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
@@ -6243,7 +6251,7 @@ begin
       Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(0).ChildAt(1).Text);
       if Folded >= 0 then
       begin
-        if TypeMetaSize(FuncName) = 8 then
+        if TypeMetaIsInterface(FuncName) then
           ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
             ABlob + 'ivcall ' + IntToStr(Folded) + ' ' +
             IntToStr(StrCallArgCount)
@@ -6394,7 +6402,7 @@ begin
           Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text);
           if Folded >= 0 then
           begin
-            if TypeMetaSize(FuncName) = 8 then
+            if TypeMetaIsInterface(FuncName) then
               ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
                 'ivcall ' + IntToStr(Folded) + ' 0'
             else
@@ -6629,7 +6637,7 @@ begin
       (ANode.ChildAt(1) <> nil) and
       (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
     begin
-      if TypeMetaSize(ANode.ChildAt(1).Text) = 8 then
+      if TypeMetaIsInterface(ANode.ChildAt(1).Text) then
       begin
         if (LookupClassVar(ANode.ChildAt(0).Text) <> '') and
           (Pos(ANode.ChildAt(1).Text,
@@ -6652,7 +6660,7 @@ begin
       (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
       (ANode.ChildAt(1) <> nil) and
       (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-      (TypeMetaSize(ANode.ChildAt(1).Text) = 8) then
+      (TypeMetaIsInterface(ANode.ChildAt(1).Text)) then
     begin
       ABlob := 'var ' + ANode.ChildAt(0).Text + #10;
       Exit(True);
@@ -7018,7 +7026,7 @@ begin
                 Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
             if (LookupClassVar(Decoded) <> '') and
-              (TypeMetaSize(LookupClassVar(Decoded)) = 8) and
+              (TypeMetaIsInterface(LookupClassVar(Decoded))) and
               FModel.LookupConstValue(
                 Arg.ChildAt(0).ChildAt(0).Text + '$intf_offset_' + LookupClassVar(Decoded),
                 Value) then
@@ -7066,7 +7074,7 @@ begin
               Arg.ChildAt(0).Text, 0, 0,
               Decoded + #9 + Arg.ChildAt(0).Text);
           if (LookupClassVar(Decoded) <> '') and
-            (TypeMetaSize(LookupClassVar(Decoded)) = 8) and
+            TypeMetaIsInterface(LookupClassVar(Decoded)) and
             FModel.LookupConstValue(
               Arg.ChildAt(0).Text + '$intf_offset_' + LookupClassVar(Decoded),
               Value) then
@@ -7156,7 +7164,7 @@ begin
           begin
             FuncName := LookupClassVar(Arg.ChildAt(0).Text);
             Value := TypeMetaVmtSlot(FuncName, Arg.ChildAt(1).Text);
-            if (Value >= 0) and (TypeMetaSize(FuncName) = 8) then
+            if (Value >= 0) and TypeMetaIsInterface(FuncName) then
               FModel.AddTypedHirNode(
                 'assign-str-ivcall-runtime', Arg.ChildAt(1).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).Text + #9 +
@@ -7663,7 +7671,7 @@ begin
               InhParentName := '';
           end;
           if InhParentName = '' then InhParentName := StringValue;
-          if TypeMetaSize(StringValue) = 8 then
+          if TypeMetaIsInterface(StringValue) then
           begin
             Value := TypeMetaVmtSlot(StringValue,
               Child.ChildAt(0).ChildAt(0).ChildAt(1).Text);
