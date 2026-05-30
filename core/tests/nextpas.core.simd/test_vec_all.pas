@@ -1,6 +1,5 @@
 program test_vec_all;
 {$mode objfpc}{$H+}
-{$Q-}{$R-}
 uses
   SysUtils,
   nextpas.core.simd.base,
@@ -163,7 +162,7 @@ end;
 
 procedure TestVec16AddWhere;
 var
-  data: array[0..15] of Byte;
+  data, backup: array[0..15] of Byte;
   i: Integer;
   m: TMask16;
 begin
@@ -358,7 +357,7 @@ end;
 
 procedure TestVec32AddWhere;
 var
-  data: array[0..31] of Byte;
+  data, backup: array[0..31] of Byte;
   i: Integer;
   m: TMask32;
 begin
@@ -538,24 +537,22 @@ end;
 procedure TestVec64Popcnt;
 var
   r: Int32;
-  allOnes: TMask64;
 begin
   r := Vec64Popcnt(TMask64(0));
   Check(r = 0, 'Vec64Popcnt(0)=0: got ' + IntToStr(r));
-  allOnes := TMask64(0); allOnes := not allOnes;
-  r := Vec64Popcnt(allOnes);
+  r := Vec64Popcnt(TMask64(QWord($FFFFFFFFFFFFFFFF)));
   Check(r = 64, 'Vec64Popcnt(all1)=64: got ' + IntToStr(r));
-  r := Vec64Popcnt(TMask64($FF));
-  Check(r = 8, 'Vec64Popcnt($FF)=8: got ' + IntToStr(r));
-  r := Vec64Popcnt(TMask64($FFFF));
-  Check(r = 16, 'Vec64Popcnt($FFFF)=16: got ' + IntToStr(r));
+  r := Vec64Popcnt(TMask64(QWord($5555555555555555)));
+  Check(r = 32, 'Vec64Popcnt($5555...)=32: got ' + IntToStr(r));
+  r := Vec64Popcnt(TMask64(QWord($AAAAAAAAAAAAAAAA)));
+  Check(r = 32, 'Vec64Popcnt($AAAA...)=32: got ' + IntToStr(r));
   r := Vec64Popcnt(TMask64($0080));
   Check(r = 1, 'Vec64Popcnt($0080)=1: got ' + IntToStr(r));
 end;
 
 procedure TestVec64AddWhere;
 var
-  data: array[0..63] of Byte;
+  data, backup: array[0..63] of Byte;
   i: Integer;
   m: TMask64;
 begin
