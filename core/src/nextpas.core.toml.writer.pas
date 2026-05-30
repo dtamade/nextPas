@@ -192,6 +192,10 @@ end;
 procedure TTomlWriter.Float(const AValue: Double);
 var
   LBits: QWord;
+  LStart: SizeUInt;
+  LView: TStringView;
+  LI: SizeUInt;
+  LHasDotOrE: Boolean;
 begin
   PrepareValue;
   Move(AValue, LBits, 8);
@@ -205,7 +209,20 @@ begin
       FBuilder^.AppendBytes('inf', 3);
   end
   else
+  begin
+    LStart := FBuilder^.Len;
     FBuilder^.AppendFloat(AValue);
+    LView := FBuilder^.AsView;
+    LHasDotOrE := False;
+    for LI := LStart to LView.Len - 1 do
+      if (LView.Data[LI] = '.') or (LView.Data[LI] = 'e') or (LView.Data[LI] = 'E') then
+      begin
+        LHasDotOrE := True;
+        Break;
+      end;
+    if not LHasDotOrE then
+      FBuilder^.AppendBytes('.0', 2);
+  end;
   if not FInInline then FBuilder^.AppendChar(#10);
 end;
 

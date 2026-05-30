@@ -86,17 +86,29 @@ end;
 
 procedure StringifyValue(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; ATopLevel: Boolean); forward;
 
+function IsArrayTable(var ADoc: TTomlDocument; AIdx: UInt32): Boolean;
+var
+  LFirst: UInt32;
+begin
+  Result := False;
+  if ADoc.Node(AIdx)^.Kind <> tnkArray then Exit;
+  LFirst := ADoc.Node(AIdx)^.Container.FirstChild;
+  if LFirst = TOML_NODE_NONE then Exit;
+  Result := ADoc.Node(LFirst)^.Kind = tnkTable;
+end;
+
 procedure StringifyTable(var ADoc: TTomlDocument; AIdx: UInt32; var AW: TTomlWriter; const APath: string);
 var
   LCur: UInt32;
   LNode: PTomlNode;
   LChildPath: string;
+  LArrayChild: UInt32;
 begin
   LCur := ADoc.Node(AIdx)^.Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
   begin
     LNode := ADoc.Node(LCur);
-    if (LNode^.Kind <> tnkTable) and (LNode^.Kind <> tnkArray) then
+    if (LNode^.Kind <> tnkTable) and not IsArrayTable(ADoc, LCur) then
     begin
       AW.Key(LNode^.Key);
       StringifyValue(ADoc, LCur, AW, False);
@@ -116,13 +128,19 @@ begin
       AW.BeginTable(LChildPath);
       StringifyTable(ADoc, LCur, AW, LChildPath);
     end
-    else if LNode^.Kind = tnkArray then
+    else if IsArrayTable(ADoc, LCur) then
     begin
       if APath = '' then
         LChildPath := LNode^.Key.ToString
       else
         LChildPath := APath + '.' + LNode^.Key.ToString;
-      StringifyValue(ADoc, LCur, AW, True);
+      LArrayChild := LNode^.Container.FirstChild;
+      while LArrayChild <> TOML_NODE_NONE do
+      begin
+        AW.BeginArrayTable(LChildPath);
+        StringifyTable(ADoc, LArrayChild, AW, LChildPath);
+        LArrayChild := ADoc.Node(LArrayChild)^.Next;
+      end;
     end;
     LCur := LNode^.Next;
   end;
