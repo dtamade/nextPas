@@ -6514,11 +6514,36 @@ begin
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (FCurrentMethodClass <> '') and
+    (not IsRuntimeArrVar(ANode.ChildAt(0).Text)) and
+    (not IsRuntimeStrVar(ANode.ChildAt(0).Text)) and
+    (TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text) >= 0) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
+    begin
+      Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text);
+      ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
+        FuncName + 'arr_load' + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     IsRuntimeStrVar(ANode.ChildAt(0).Text) then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
     begin
       ABlob := FuncName + 'strcharload ' + ANode.ChildAt(0).Text + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+    IsRuntimeArrVar(ANode.ChildAt(0).Text) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
+    begin
+      ABlob := FuncName + 'arrload ' + ANode.ChildAt(0).Text + #10;
       Exit(True);
     end;
   end;
@@ -6871,6 +6896,29 @@ begin
           FModel.AddTypedHirNode(
             'assign-arr-elem-runtime', Decoded, 0, 0,
             Decoded + #9 + Operand + #9 + StringValue
+          );
+        Continue;
+      end;
+      if FNoFold and (FCurrentMethodClass <> '') and
+        (Child.ChildCount >= 1) and
+        (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
+        (Child.ChildAt(0).ChildCount >= 2) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) and
+        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+        (not IsRuntimeArrVar(Child.ChildAt(0).ChildAt(0).Text)) and
+        (TypeMetaFieldIndex(FCurrentMethodClass, Child.ChildAt(0).ChildAt(0).Text) >= 0) then
+      begin
+        Value := TypeMetaFieldIndex(FCurrentMethodClass,
+          Child.ChildAt(0).ChildAt(0).Text);
+        RhsNode := nil;
+        if Child.ChildCount >= 2 then
+          RhsNode := Child.ChildAt(1);
+        if (RhsNode <> nil) and
+          EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) and
+          EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+          FModel.AddTypedHirNode(
+            'assign-arr-elem-runtime', '__field_arr__', 0, 0,
+            'self' + #9 + IntToStr(Value) + #9 + Operand + #9 + StringValue
           );
         Continue;
       end;

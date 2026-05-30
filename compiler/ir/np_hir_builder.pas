@@ -2729,15 +2729,69 @@ end;
 
 procedure THIRBuilder.ProcessAssignArrElem(const ANode: TTypedHirNode);
 var
-  TabPos, TabPos2: LongInt;
-  ArrName, Rest, IdxBlob, ValBlob: string;
-  IdxVal, ValVal, BasePtr, ElemPtr: THIRValueId;
+  TabPos, TabPos2, TabPos3: LongInt;
+  ArrName, Rest, IdxBlob, ValBlob, FieldIdxStr: string;
+  IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx: THIRValueId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos = 0 then Exit;
   ArrName := Copy(ANode.Operand, 1, TabPos - 1);
   Rest := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+
+  if ArrName = 'self' then
+  begin
+    TabPos2 := Pos(#9, Rest);
+    if TabPos2 = 0 then Exit;
+    FieldIdxStr := Copy(Rest, 1, TabPos2 - 1);
+    Rest := Copy(Rest, TabPos2 + 1, Length(Rest));
+    TabPos3 := Pos(#9, Rest);
+    if TabPos3 = 0 then Exit;
+    IdxBlob := Copy(Rest, 1, TabPos3 - 1);
+    ValBlob := Copy(Rest, TabPos3 + 1, Length(Rest));
+
+    IdxVal := ParseIntBlob(IdxBlob);
+    ValVal := ParseIntBlob(ValBlob);
+    if (IdxVal = 0) or (ValVal = 0) then Exit;
+
+    ObjPtr := FindAlloca('self');
+    if ObjPtr = 0 then Exit;
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + FieldIdxStr;
+    EmitInstr(Instr);
+    FieldIdx := Instr.ResultId;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(ObjPtr);
+    Instr.Operands[1] := MakeOperand(FieldIdx);
+    EmitInstr(Instr);
+    BasePtr := EmitLoad(GetPtrType, Instr.ResultId);
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(BasePtr);
+    Instr.Operands[1] := MakeOperand(IdxVal);
+    EmitInstr(Instr);
+    ElemPtr := Instr.ResultId;
+
+    EmitStore(GetIntType, ValVal, ElemPtr);
+    Exit;
+  end;
+
   TabPos2 := Pos(#9, Rest);
   if TabPos2 = 0 then Exit;
   IdxBlob := Copy(Rest, 1, TabPos2 - 1);

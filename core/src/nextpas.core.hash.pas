@@ -278,6 +278,9 @@ begin
 end;
 
 { TMD5State — RFC 1321 }
+{$IFDEF ENDIAN_BIG}
+{$ERROR MD5 implementation assumes little-endian byte order}
+{$ENDIF}
 
 procedure TMD5State.Init;
 begin
