@@ -3120,18 +3120,22 @@ end;
 procedure TForwardList.Swap(var aOther: TForwardList);
 var
   LTempHead: PNode;
+  LTempLast: PNode;
   LTempCount: SizeUInt;
 begin
   if @aOther = @Self then
     Exit;
 
   LTempHead := FHead;
+  LTempLast := FLast;
   LTempCount := FCount;
 
   FHead := aOther.FHead;
+  FLast := aOther.FLast;
   FCount := aOther.FCount;
 
   aOther.FHead := LTempHead;
+  aOther.FLast := LTempLast;
   aOther.FCount := LTempCount;
 end;
 

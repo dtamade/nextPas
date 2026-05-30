@@ -6928,9 +6928,19 @@ begin
 
   // 移动后面的元素向前填补空隙
   if aIndex + aCount < FCount then
+  begin
     MoveElementsLeft(aIndex + aCount, aCount);
+    // P1.4: 清理尾部 stale slots（MoveElementsLeft 后残留的副本）
+    if GetIsManagedType then
+    begin
+      LElement := Default(T);
+      for i := FCount - aCount to FCount - 1 do
+        FBuffer.Put(GetPhysicalIndex(i), LElement);
+    end;
+  end;
 
   Dec(FCount, aCount);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 procedure TVecDeque.Delete(aIndex: SizeUInt);
@@ -6978,6 +6988,7 @@ begin
   end;
 
   Dec(FCount, aCount);
+  FTail := WrapAdd(FHead, FCount);
 end;
 
 procedure TVecDeque.DeleteSwap(aIndex: SizeUInt);

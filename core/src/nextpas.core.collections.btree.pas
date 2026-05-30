@@ -526,12 +526,15 @@ begin
     ANode^.Values[i] := ANode^.Values[i + 1];
   end;
   Dec(ANode^.Count);
+  if System.IsManagedType(K) then begin Finalize(ANode^.Keys[ANode^.Count]); FillChar(ANode^.Keys[ANode^.Count], SizeOf(K), 0); end;
+  if System.IsManagedType(V) then begin Finalize(ANode^.Values[ANode^.Count]); FillChar(ANode^.Values[ANode^.Count], SizeOf(V), 0); end;
   Dec(FCount);
 end;
 
 procedure TBTreeMap.RemoveFromInternal(ANode: PNode; AIndex: Int32);
 var
   LPred, LSucc: PNode;
+  LSaveKey: K;
 begin
   if ANode^.Children[AIndex]^.Count >= BTREE_ORDER then
   begin
@@ -549,8 +552,9 @@ begin
   end
   else
   begin
+    LSaveKey := ANode^.Keys[AIndex];
     MergeChildren(ANode, AIndex);
-    RemoveFromNode(ANode^.Children[AIndex], ANode^.Keys[AIndex]);
+    RemoveFromNode(ANode^.Children[AIndex], LSaveKey);
   end;
 end;
 
@@ -596,6 +600,8 @@ begin
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
+  if System.IsManagedType(K) then begin Finalize(LSibling^.Keys[LSibling^.Count]); FillChar(LSibling^.Keys[LSibling^.Count], SizeOf(K), 0); end;
+  if System.IsManagedType(V) then begin Finalize(LSibling^.Values[LSibling^.Count]); FillChar(LSibling^.Values[LSibling^.Count], SizeOf(V), 0); end;
 end;
 
 procedure TBTreeMap.BorrowFromNext(ANode: PNode; AIndex: Int32);
@@ -631,6 +637,8 @@ begin
 
   Inc(LChild^.Count);
   Dec(LSibling^.Count);
+  if System.IsManagedType(K) then begin Finalize(LSibling^.Keys[LSibling^.Count]); FillChar(LSibling^.Keys[LSibling^.Count], SizeOf(K), 0); end;
+  if System.IsManagedType(V) then begin Finalize(LSibling^.Values[LSibling^.Count]); FillChar(LSibling^.Values[LSibling^.Count], SizeOf(V), 0); end;
 end;
 
 procedure TBTreeMap.MergeChildren(ANode: PNode; AIndex: Int32);
@@ -663,8 +671,9 @@ begin
   for i := AIndex + 1 to ANode^.Count - 1 do
     ANode^.Children[i] := ANode^.Children[i + 1];
   Dec(ANode^.Count);
+  if System.IsManagedType(K) then begin Finalize(ANode^.Keys[ANode^.Count]); FillChar(ANode^.Keys[ANode^.Count], SizeOf(K), 0); end;
+  if System.IsManagedType(V) then begin Finalize(ANode^.Values[ANode^.Count]); FillChar(ANode^.Values[ANode^.Count], SizeOf(V), 0); end;
 
-  LRight^.Count := 0;
   FreeNode(LRight);
 end;
 
