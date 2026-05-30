@@ -3081,7 +3081,7 @@ function ParseBlockDeclarations(
 var
   DeclTerminatorSet: TTokenKindSet;
 begin
-  DeclTerminatorSet := [tkBeginKeyword, tkEndKeyword,
+  DeclTerminatorSet := [tkBeginKeyword,
     tkImplementationKeyword, tkInitializationKeyword,
     tkFinalizationKeyword, tkEOF];
 
