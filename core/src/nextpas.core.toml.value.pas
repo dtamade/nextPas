@@ -79,7 +79,7 @@ end;
 
 function TTomlValue.IsValid: Boolean;
 begin
-  Result := FIdx <> TOML_NODE_NONE;
+  Result := (FDoc <> nil) and (FIdx <> TOML_NODE_NONE);
 end;
 
 function TTomlValue.Kind: TTomlNodeKind;

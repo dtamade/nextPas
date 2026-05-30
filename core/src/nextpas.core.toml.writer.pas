@@ -28,8 +28,8 @@ type
     FNeedNewline: Boolean;
     FIndent: Int32;
     FPretty: Boolean;
-    FFirstStack: array[0..31] of Boolean;
-    FIsArrayStack: array[0..31] of Boolean;
+    FFirstStack: array[0..127] of Boolean;
+    FIsArrayStack: array[0..127] of Boolean;
     procedure WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
     procedure WriteBareOrQuotedKey(const AKey: PAnsiChar; ALen: SizeUInt);
     procedure PrepareValue;
@@ -311,6 +311,14 @@ begin
     if AValue.Nanosecond > 0 then
     begin
       FBuilder^.AppendChar('.');
+      if AValue.Nanosecond < 100000000 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 10000000 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 1000000 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 100000 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 10000 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 1000 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 100 then FBuilder^.AppendChar('0');
+      if AValue.Nanosecond < 10 then FBuilder^.AppendChar('0');
       FBuilder^.AppendInt(AValue.Nanosecond);
     end;
   end;
@@ -348,7 +356,7 @@ begin
   PrepareValue;
   FBuilder^.AppendBytes('{ ', 2);
   Inc(FInlineDepth);
-  if FInlineDepth > 31 then FInlineDepth := 31;
+  if FInlineDepth > 127 then FInlineDepth := 127;
   FIsArrayStack[FInlineDepth] := False;
   FFirstStack[FInlineDepth] := True;
 end;
@@ -365,7 +373,7 @@ begin
   PrepareValue;
   FBuilder^.AppendChar('[');
   Inc(FInlineDepth);
-  if FInlineDepth > 31 then FInlineDepth := 31;
+  if FInlineDepth > 127 then FInlineDepth := 127;
   FIsArrayStack[FInlineDepth] := True;
   FFirstStack[FInlineDepth] := True;
 end;

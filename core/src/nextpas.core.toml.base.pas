@@ -100,6 +100,7 @@ var
   LI: SizeUInt;
 begin
   LH := UInt32(2166136261);
+  if ALen > 0 then
   for LI := 0 to ALen - 1 do
     LH := (LH xor Byte(AData[LI])) * UInt32(16777619);
   Result := LH;

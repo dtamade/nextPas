@@ -950,6 +950,8 @@ begin
       end;
       Inc(LI);
     end;
+    if LUIntVal > UInt64(High(Int64)) then
+      Exit(SetError('integer overflow', 16));
     ANodeIdx := Doc^.AddNode;
     Doc^.FNodes[ANodeIdx].Kind := tnkInt;
     Doc^.FNodes[ANodeIdx].IntVal := Int64(LUIntVal);
@@ -1134,6 +1136,8 @@ begin
         Inc(LFracLen);
         Inc(LP);
       end;
+      if LFracLen = 0 then
+        Exit(SetError('fractional seconds need at least 1 digit', 41));
       while LFracLen < 9 do begin LFrac := LFrac * 10; Inc(LFracLen); end;
       LNano := UInt32(LFrac);
     end;
