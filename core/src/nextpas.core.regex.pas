@@ -57,8 +57,9 @@ begin
   Result.FProgram.LiteralPrefixLen := 0;
   Result.FProgram.NumSlots := 0;
   Result.FValid := False;
-  LAst := RegexParse(APattern, LNumCaptures);
+  LAst := nil;
   try
+    LAst := RegexParse(APattern, LNumCaptures);
     Result.FProgram := RegexCompile(LAst, LNumCaptures);
     Result.FValid := True;
   finally

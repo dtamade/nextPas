@@ -199,7 +199,12 @@ begin
         Result^.Left := ParseAlternate(P);
       end;
       if Peek(P) = ')' then Next(P)
-      else raise ERegexCompileError.Create('unclosed group', P.Pos);
+      else
+      begin
+        RegexFreeAst(Result);
+        Result := nil;
+        raise ERegexCompileError.Create('unclosed group', P.Pos);
+      end;
     end;
   else
     Next(P);
