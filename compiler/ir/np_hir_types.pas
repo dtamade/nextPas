@@ -72,6 +72,7 @@ type
     hnkFieldStoreStrRuntime,
     hnkAssignStrFieldLoadRuntime,
     hnkVmtStoreRuntime,
+    hnkIntfAdjustRuntime,
     hnkTryBeginRuntime,
     hnkTryEndRuntime,
     hnkFinallyBeginRuntime,
@@ -194,6 +195,7 @@ begin
     'field-store-str-runtime': Result := hnkFieldStoreStrRuntime;
     'assign-str-field-load-runtime': Result := hnkAssignStrFieldLoadRuntime;
     'vmt-store-runtime': Result := hnkVmtStoreRuntime;
+    'intf-adjust-runtime': Result := hnkIntfAdjustRuntime;
     'try-begin-runtime': Result := hnkTryBeginRuntime;
     'try-end-runtime': Result := hnkTryEndRuntime;
     'finally-begin-runtime': Result := hnkFinallyBeginRuntime;

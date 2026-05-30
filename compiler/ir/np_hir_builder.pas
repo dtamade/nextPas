@@ -116,6 +116,8 @@ type
     procedure BlobArrLoadVar(var S: TExprStack; const AArg: string);
     procedure BlobField(var S: TExprStack; const AArg: string);
     procedure BlobVcall(var S: TExprStack; AArg: string);
+    procedure BlobIvcall(var S: TExprStack; AArg: string);
+    procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
     procedure ProcessNode(const ANode: TTypedHirNode);
     procedure ProcessVarDecl(const ANode: TTypedHirNode);
     procedure ProcessAssign(const ANode: TTypedHirNode);
@@ -1067,6 +1069,91 @@ begin
     S.Push(Instr.ResultId);
 end;
 
+procedure THIRBuilder.ProcessIntfAdjust(const ANode: TTypedHirNode);
+var
+  VarName: string;
+  SlotIdx, TabPos: LongInt;
+  ObjPtr, OffsetVal, SlotPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos = 0 then Exit;
+  VarName := Copy(ANode.Operand, 1, TabPos - 1);
+  SlotIdx := StrToIntDef(Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand)), 0);
+
+  ObjPtr := FindAlloca(VarName);
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
+  EmitInstr(Instr);
+  OffsetVal := Instr.ResultId;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ObjPtr);
+  Instr.Operands[1] := MakeOperand(OffsetVal);
+  EmitInstr(Instr);
+  SlotPtr := Instr.ResultId;
+
+  EmitStore(GetPtrType, SlotPtr, FindAlloca(VarName));
+end;
+
+procedure THIRBuilder.BlobIvcall(var S: TExprStack; AArg: string);
+var
+  Instr: THIRInstr;
+  IntfPtr, ImtPtr, FnPtr: THIRValueId;
+  SlotIdx, SpacePos: LongInt;
+begin
+  SpacePos := Pos(' ', AArg);
+  if SpacePos > 0 then
+    SlotIdx := StrToIntDef(Copy(AArg, 1, SpacePos - 1), 0)
+  else
+    SlotIdx := StrToIntDef(AArg, 0);
+
+  IntfPtr := S.Pop;
+
+  ImtPtr := EmitLoad(GetPtrType, IntfPtr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(SlotIdx);
+  EmitInstr(Instr);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(ImtPtr);
+  Instr.Operands[1] := MakeOperand(Instr.ResultId - 1);
+  EmitInstr(Instr);
+
+  FnPtr := EmitLoad(GetPtrType, Instr.ResultId);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'vcall';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeOperand(FnPtr);
+  Instr.Operands[1] := MakeTypedOperand(IntfPtr, GetPtrType);
+  EmitInstr(Instr);
+  S.Push(Instr.ResultId);
+end;
+
 function THIRBuilder.ParseIntBlob(const ABlob: string): THIRValueId;
 var
   S: TExprStack;
@@ -1144,7 +1231,8 @@ begin
     else if Token = 'strpos' then BlobStrCmpPos(S, Arg, 'str_pos')
     else if Token = 'arrload' then BlobArrLoadVar(S, Arg)
     else if Token = 'field' then BlobField(S, Arg)
-    else if Token = 'vcall' then BlobVcall(S, Arg);
+    else if Token = 'vcall' then BlobVcall(S, Arg)
+    else if Token = 'ivcall' then BlobIvcall(S, Arg);
   end;
 
   if S.Count > 0 then
@@ -3483,6 +3571,8 @@ begin
       ProcessAssignStrFieldLoad(ANode);
     hnkVmtStoreRuntime:
       ProcessVmtStore(ANode);
+    hnkIntfAdjustRuntime:
+      ProcessIntfAdjust(ANode);
     hnkTryBeginRuntime, hnkTryEndRuntime,
     hnkFinallyBeginRuntime, hnkFinallyEndRuntime,
     hnkExceptBeginRuntime, hnkExceptEndRuntime,

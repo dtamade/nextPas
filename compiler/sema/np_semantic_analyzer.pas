@@ -520,10 +520,14 @@ end;
 procedure TSemanticAnalyzer.RegisterClassVar(const AName, AClassName: string);
 var
   Idx: LongInt;
+  V: Int64;
 begin
   for Idx := 0 to Length(FClassVarNames) - 1 do
     if SameText(FClassVarNames[Idx], AName) then
     begin
+      if FModel.LookupConstValue(FClassVarTypes[Idx] + '$vmt_count', V) and
+        (TypeMetaSize(FClassVarTypes[Idx]) = 8) then
+        Exit;
       FClassVarTypes[Idx] := AClassName;
       Exit;
     end;
@@ -6375,8 +6379,12 @@ begin
           Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text);
           if Folded >= 0 then
           begin
-            ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
-              'vcall ' + IntToStr(Folded) + ' 0';
+            if TypeMetaSize(FuncName) = 8 then
+              ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+                'ivcall ' + IntToStr(Folded) + ' 0'
+            else
+              ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+                'vcall ' + IntToStr(Folded) + ' 0';
             if TypeMetaRetPtr(FuncName, ANode.ChildAt(1).Text) then
               ABlob := ABlob + ' p' + #10
             else
@@ -6939,6 +6947,13 @@ begin
             FModel.AddTypedHirNode('vmt-store-runtime',
               Arg.ChildAt(0).Text, 0, 0,
               Decoded + #9 + Arg.ChildAt(0).Text);
+          if (LookupClassVar(Decoded) <> '') and
+            (TypeMetaSize(LookupClassVar(Decoded)) = 8) and
+            FModel.LookupConstValue(
+              Arg.ChildAt(0).Text + '$intf_offset_' + LookupClassVar(Decoded),
+              Value) then
+            FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
+              Decoded + #9 + IntToStr(Value div 8));
           Continue;
         end;
       end;
