@@ -776,6 +776,58 @@ begin
     TStringView.Create(PAnsiChar('\x64'), 4)), 'value = \x64');
 end;
 
+{ Codex review regression tests }
+
+procedure TestEmptyQuotedKey;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('"" = "blank"');
+  Check(not LDoc.HasError, 'empty quoted key accepted');
+  Check(LDoc.Root.Get('').AsStr.Equals(
+    TStringView.Create(PAnsiChar('blank'), 5)), 'empty key value');
+end;
+
+procedure TestRejectHexOverflow;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 0xffffffffffffffff');
+  Check(LDoc.HasError, 'hex overflow rejected');
+  LDoc := TomlParse('x = 0x8000000000000000');
+  Check(LDoc.HasError, 'hex > Int64.Max rejected');
+end;
+
+procedure TestRejectValueArrayAsArrayTable;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('fruits = ["apple"]' + #10 + '[[fruits]]' + #10 + 'name = "banana"');
+  Check(LDoc.HasError, 'value array then [[]] rejected');
+end;
+
+procedure TestRejectDottedKeyReopen;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('fruit.apple.color = "red"' + #10 + '[fruit.apple]' + #10 + 'taste = "sweet"');
+  Check(LDoc.HasError, 'dotted key table reopen rejected');
+end;
+
+procedure TestMultiLine4Quotes;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('s = """line""""');
+  Check(not LDoc.HasError, '4 quotes accepted');
+  Check(LDoc.Root.Get('s').AsStr.Equals(
+    TStringView.Create(PAnsiChar('line"'), 5)), '4 quotes = line"');
+end;
+
+procedure TestMultiLineEscapedBsNewline;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('s = """a\\' + #10 + 'b"""');
+  Check(not LDoc.HasError, 'escaped-bs + newline ok');
+  Check(LDoc.Root.Get('s').AsStr.Equals(
+    TStringView.Create(PAnsiChar('a\' + #10 + 'b'), 4)), 'a\ + newline + b');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -873,6 +925,13 @@ begin
   T.Run('valid inline-table nested', @TestValidInlineTableNest);
   T.Run('valid multiline line continuation', @TestValidMultilineContinuation);
   T.Run('valid escaped backslash', @TestValidEscapedBackslash);
+  { Codex review regression tests }
+  T.Run('empty quoted key', @TestEmptyQuotedKey);
+  T.Run('reject hex overflow', @TestRejectHexOverflow);
+  T.Run('reject value-array as array-table', @TestRejectValueArrayAsArrayTable);
+  T.Run('reject dotted key reopen', @TestRejectDottedKeyReopen);
+  T.Run('multi-line 4 quotes', @TestMultiLine4Quotes);
+  T.Run('multi-line escaped-bs newline', @TestMultiLineEscapedBsNewline);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
