@@ -255,39 +255,33 @@ const
 {$I nextpas.core.crypto.ed25519.comb.inc}
 var
   Q, T, LPt: TEdPoint;
-  I, K, W: Integer;
+  I, K, BitPos: Integer;
 begin
-  // Comb method: split 256-bit scalar into 4×64-bit parts
-  // Process 4 bits per iteration (one from each 64-bit part)
-  // Only 64 doublings + up to 64×4 additions
+  // 8-table comb method: 32 doublings + up to 256 conditional additions
+  // Table[k][i] = i * 2^(32*k) * B, k=0..7, i=0..14
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
 
-  for I := 63 downto 0 do
+  for I := 31 downto 0 do
   begin
-    // Double once per bit position
-    if I < 63 then
+    if I < 31 then
     begin
       EdPointDouble(T, Q); Q := T;
     end;
 
-    // For each of the 4 tables, extract 4-bit window at position I
-    for K := 0 to 3 do
+    for K := 0 to 7 do
     begin
-      // Extract 4 bits: scalar bits at positions K*64+I*1 ... but we need 4 bits
-      // Actually for comb: extract single bit from each of 4 positions
-      // Wait — comb processes 1 bit per table per iteration, not 4 bits.
-      // Let me use the simpler approach: 4-bit window from each 64-bit chunk
-
-      // Single bit from chunk K at position I
-      W := (AScalar[(K * 64 + I) shr 3] shr ((K * 64 + I) and 7)) and 1;
-      if W = 1 then
+      BitPos := K * 32 + I;
+      if BitPos < 256 then
       begin
-        LPt.X := ED25519_COMB_TABLE[K, 0].X;
-        LPt.Y := ED25519_COMB_TABLE[K, 0].Y;
-        LPt.Z := ED25519_COMB_TABLE[K, 0].Z;
-        LPt.T := ED25519_COMB_TABLE[K, 0].T;
-        EdPointAdd(T, Q, LPt);
-        Q := T;
+        if ((AScalar[BitPos shr 3] shr (BitPos and 7)) and 1) = 1 then
+        begin
+          LPt.X := ED25519_COMB_TABLE[K, 0].X;
+          LPt.Y := ED25519_COMB_TABLE[K, 0].Y;
+          LPt.Z := ED25519_COMB_TABLE[K, 0].Z;
+          LPt.T := ED25519_COMB_TABLE[K, 0].T;
+          EdPointAdd(T, Q, LPt);
+          Q := T;
+        end;
       end;
     end;
   end;
