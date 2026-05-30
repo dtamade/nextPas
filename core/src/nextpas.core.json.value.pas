@@ -1,4 +1,9 @@
 unit nextpas.core.json.value;
+{ Zero-cost JSON value accessor. TJsonValue is an 8-byte record (pointer + index)
+  that borrows into a TJsonDocument's node array. No heap allocation per access.
+
+  Lifetime: valid as long as the owning TJsonDocument/IJsonDocument is alive.
+  Invalid values (missing keys, out-of-bounds) return safe defaults (0, empty, false). }
 
 {$I nextpas.core.settings.inc}
 
@@ -10,14 +15,16 @@ uses
   nextpas.core.json.parser;
 
 type
+  { Borrowed view into a JSON document node. 8 bytes, zero allocation.
+    Chain calls: Doc.Root.ObjectGet('user').ObjectGet('name').AsStr.ToString }
   TJsonValue = record
   public
     FDoc: ^TJsonDocument;
     FIdx: UInt32;
   public
     class function Create(var ADoc: TJsonDocument; AIdx: UInt32): TJsonValue; static; inline;
-    function IsValid: Boolean; inline;
-    function Kind: TJsonNodeKind; inline;
+    function IsValid: Boolean; inline;       { False for missing keys / out-of-bounds }
+    function Kind: TJsonNodeKind; inline;     { jnkNull for invalid values }
     function IsNull: Boolean; inline;
     function IsBool: Boolean; inline;
     function IsInt: Boolean; inline;
@@ -25,19 +32,19 @@ type
     function IsStr: Boolean; inline;
     function IsArray: Boolean; inline;
     function IsObject: Boolean; inline;
-    function AsBool: Boolean;
-    function AsInt: Int64;
-    function AsFloat: Double;
-    function AsStr: TStringView;
-    function ArrayLen: UInt32;
-    function ArrayGet(AIndex: UInt32): TJsonValue;
-    function ObjectGet(const AKey: TStringView): TJsonValue; overload;
+    function AsBool: Boolean;                { False if not bool }
+    function AsInt: Int64;                   { 0 if not int; truncates float }
+    function AsFloat: Double;               { 0.0 if not number; promotes int }
+    function AsStr: TStringView;            { Empty if not string }
+    function ArrayLen: UInt32;              { 0 if not array }
+    function ArrayGet(AIndex: UInt32): TJsonValue;  { Invalid if out of bounds }
+    function ObjectGet(const AKey: TStringView): TJsonValue; overload; { Invalid if missing }
     function ObjectGet(const AKey: string): TJsonValue; overload;
     function ObjectHas(const AKey: TStringView): Boolean; overload;
     function ObjectHas(const AKey: string): Boolean; overload;
-    function ObjectLen: UInt32;
-    function ObjectKeyAt(AIndex: UInt32): TStringView;
-    function ObjectValueAt(AIndex: UInt32): TJsonValue;
+    function ObjectLen: UInt32;             { Number of key-value pairs }
+    function ObjectKeyAt(AIndex: UInt32): TStringView;   { Key at position }
+    function ObjectValueAt(AIndex: UInt32): TJsonValue;  { Value at position }
   end;
 
 implementation

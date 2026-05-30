@@ -1,4 +1,14 @@
 unit nextpas.core.json;
+{ High-level JSON facade with automatic lifetime management.
+  Parse JSON into IJsonDocument (refcounted, auto-released).
+  Access values via TJsonValue (zero-cost record view).
+
+  Usage:
+    var Doc: IJsonDocument;
+    Doc := JsonParse('{"name":"Alice","age":30}');
+    WriteLn(Doc.Root.ObjectGet('name').AsStr.ToString);
+    // auto-released when Doc goes out of scope
+}
 
 {$I nextpas.core.settings.inc}
 
@@ -14,6 +24,8 @@ uses
   nextpas.core.json.writer;
 
 type
+  { Parsed JSON document with automatic lifetime management.
+    All values remain valid as long as the document is alive. }
   IJsonDocument = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
     function Root: TJsonValue;
@@ -23,10 +35,15 @@ type
     function StringifyPretty(const AIndent: Int32 = 2): string;
   end;
 
+{ Parse JSON string into a document. Returns IJsonDocument (auto-released). }
 function JsonParse(const AInput: string): IJsonDocument; overload;
 function JsonParse(const AInput: TStringView): IJsonDocument; overload;
+
+{ Parse with custom allocator (arena/pool for bulk allocation). }
 function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument; overload;
 function JsonParseWith(const AInput: TStringView; const AAllocator: IAllocator): IJsonDocument; overload;
+
+{ Serialize a TJsonValue subtree to compact JSON string. }
 function JsonStringify(const AValue: TJsonValue): string;
 
 implementation

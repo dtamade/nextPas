@@ -1,0 +1,12 @@
+[package]
+name = "json-bench"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_json = "1"
+simd-json = "0.14"
+
+[[bin]]
+name = "json-bench"
+path = "main.rs"
