@@ -338,6 +338,11 @@ begin
   if (node = nil) or (not node^.HasValue) then
     Exit(False);
 
+  if System.IsManagedType(V) then
+  begin
+    Finalize(node^.Value);
+    FillChar(node^.Value, SizeOf(V), 0);
+  end;
   node^.HasValue := False;
   Dec(FCount);
   Result := True;

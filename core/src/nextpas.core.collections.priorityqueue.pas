@@ -184,6 +184,7 @@ begin
     FItems[0] := FItems[FCount];
     SiftDown(0);
   end;
+  FItems[FCount] := Default(T);
 end;
 
 function TPriorityQueue.Pop: T;
@@ -247,9 +248,13 @@ begin
 end;
 
 procedure TPriorityQueue.DoZero;
+var i: SizeUInt;
 begin
-  if FCount > 0 then
-    FillChar(FItems[0], FCount * SizeOf(T), 0);
+  if FCount = 0 then Exit;
+  if IsManagedType then
+    for i := 0 to FCount - 1 do
+      Finalize(FItems[i]);
+  FillChar(FItems[0], FCount * SizeOf(T), 0);
 end;
 
 procedure TPriorityQueue.DoReverse;

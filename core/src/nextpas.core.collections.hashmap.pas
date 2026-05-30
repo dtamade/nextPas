@@ -389,8 +389,9 @@ begin
         idx := (idx + 1) and FMask;
       (FBuckets + idx)^.State := Ord(bsOccupied);
       (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
-      (FBuckets + idx)^.Key := (oldBuckets + i)^.Key;
-      (FBuckets + idx)^.Value := (oldBuckets + i)^.Value;
+      Move((oldBuckets + i)^.Key, (FBuckets + idx)^.Key, SizeOf(K));
+      Move((oldBuckets + i)^.Value, (FBuckets + idx)^.Value, SizeOf(V));
+
       Inc(FCount); Inc(FUsed);
     end;
   end;
