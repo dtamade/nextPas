@@ -19,29 +19,44 @@ const
 
 function HexEncode(const AData: TBytes; const ACase: THexCase): string;
 var
-  LI, LJ: Integer;
+  LI, LJ, LLen: Integer;
+  LP: PByte;
+  LD: PChar;
+  LTable: PChar;
 begin
-  if Length(AData) = 0 then
+  LLen := Length(AData);
+  if LLen = 0 then
     Exit('');
 
-  SetLength(Result, Length(AData) * 2);
-  LJ := 1;
+  SetLength(Result, LLen * 2);
+  LP := @AData[0];
+  LD := @Result[1];
 
   case ACase of
-    hcLower:
-      for LI := 0 to High(AData) do
-      begin
-        Result[LJ]     := HEX_LOWER[AData[LI] shr 4];
-        Result[LJ + 1] := HEX_LOWER[AData[LI] and $0F];
-        Inc(LJ, 2);
-      end;
-    hcUpper:
-      for LI := 0 to High(AData) do
-      begin
-        Result[LJ]     := HEX_UPPER[AData[LI] shr 4];
-        Result[LJ + 1] := HEX_UPPER[AData[LI] and $0F];
-        Inc(LJ, 2);
-      end;
+    hcLower: LTable := @HEX_LOWER[0];
+    hcUpper: LTable := @HEX_UPPER[0];
+  end;
+
+  LI := 0;
+  while LI + 4 <= LLen do
+  begin
+    LD[0] := LTable[LP[LI] shr 4];
+    LD[1] := LTable[LP[LI] and $0F];
+    LD[2] := LTable[LP[LI+1] shr 4];
+    LD[3] := LTable[LP[LI+1] and $0F];
+    LD[4] := LTable[LP[LI+2] shr 4];
+    LD[5] := LTable[LP[LI+2] and $0F];
+    LD[6] := LTable[LP[LI+3] shr 4];
+    LD[7] := LTable[LP[LI+3] and $0F];
+    Inc(LI, 4);
+    Inc(LD, 8);
+  end;
+  while LI < LLen do
+  begin
+    LD[0] := LTable[LP[LI] shr 4];
+    LD[1] := LTable[LP[LI] and $0F];
+    Inc(LI);
+    Inc(LD, 2);
   end;
 end;
 
