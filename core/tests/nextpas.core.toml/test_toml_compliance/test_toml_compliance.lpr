@@ -404,7 +404,8 @@ procedure TestRejectHexEscape;
 var LDoc: ITomlDocument;
 begin
   LDoc := TomlParse('x = "\x33"');
-  Check(LDoc.HasError, 'hex escape \x rejected in TOML v1.0');
+  Check(not LDoc.HasError, 'hex escape \x accepted (TOML v1.1)');
+  Check(LDoc.Root.Get('x').AsStr.Equals(TStringView.Create(PAnsiChar('3'), 1)), '\x33 = "3"');
 end;
 
 procedure TestMultilineArray;
@@ -487,8 +488,6 @@ begin
   Check(LDoc.HasError, '\a rejected');
   LDoc := TomlParse('x = "\0"');
   Check(LDoc.HasError, '\0 rejected');
-  LDoc := TomlParse('x = "\x33"');
-  Check(LDoc.HasError, '\x rejected');
 end;
 
 procedure TestRejectBadUnicode;

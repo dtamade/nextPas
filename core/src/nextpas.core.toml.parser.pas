@@ -32,8 +32,13 @@ type
     FOwnedCount: UInt32;
     FOwnedCap: UInt32;
     FCurrentTable: UInt32;
+    FHashBuckets: PUInt32;
+    FHashCap: UInt32;
+    FHashOwner: UInt32;
     function AddNode: UInt32;
     procedure AddOwnedBuf(ABuf: Pointer);
+    procedure BuildHashIndex(ATableIdx: UInt32);
+    function HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
   public
     procedure Init(const AAllocator: IAllocator);
     procedure Done;
@@ -111,6 +116,28 @@ begin
       Ord('n'):  begin ADst[LOut] := #10; Inc(LOut); end;
       Ord('r'):  begin ADst[LOut] := #13; Inc(LOut); end;
       Ord('t'):  begin ADst[LOut] := #9; Inc(LOut); end;
+      Ord('e'):  begin ADst[LOut] := #27; Inc(LOut); end;
+      Ord('x'):
+      begin
+        if LPos + 2 > ALen then
+        begin
+          AError := ueTruncated;
+          Exit(LOut);
+        end;
+        LCP := 0;
+        for LI := 0 to 1 do
+        begin
+          if HexDigitVal(Byte(ASrc[LPos + SizeUInt(LI)])) < 0 then
+          begin
+            AError := ueInvalidEscape;
+            Exit(LOut);
+          end;
+          LCP := (LCP shl 4) or UInt32(HexDigitVal(Byte(ASrc[LPos + SizeUInt(LI)])));
+        end;
+        Inc(LPos, 2);
+        ADst[LOut] := AnsiChar(LCP);
+        Inc(LOut);
+      end;
       Ord('u'), Ord('U'):
       begin
         if LCh = Ord('u') then LHexLen := 4 else LHexLen := 8;
@@ -164,12 +191,20 @@ begin
   FOwnedCount := 0;
   FOwnedCap := 0;
   FCurrentTable := TOML_NODE_NONE;
+  FHashBuckets := nil;
+  FHashCap := 0;
+  FHashOwner := TOML_NODE_NONE;
 end;
 
 procedure TTomlDocument.Done;
 var
   LI: UInt32;
 begin
+  if FHashBuckets <> nil then
+  begin
+    FAllocator.Deallocate(FHashBuckets);
+    FHashBuckets := nil;
+  end;
   if FOwnedBufs <> nil then
   begin
     for LI := 0 to FOwnedCount - 1 do
@@ -221,6 +256,66 @@ begin
   FillChar(FNodes[FNodeCount], SizeOf(TTomlNode), 0);
   FNodes[FNodeCount].Next := TOML_NODE_NONE;
   Inc(FNodeCount);
+end;
+
+const
+  HASH_INDEX_THRESHOLD = 32;
+
+procedure TTomlDocument.BuildHashIndex(ATableIdx: UInt32);
+var
+  LCount, LCap, LSlot: UInt32;
+  LCur: UInt32;
+begin
+  LCount := FNodes[ATableIdx].Container.Count;
+  LCap := LCount * 2;
+  if LCap < 64 then LCap := 64;
+  if (FHashBuckets <> nil) and (FHashCap < LCap) then
+  begin
+    FAllocator.Deallocate(FHashBuckets);
+    FHashBuckets := nil;
+  end;
+  if FHashBuckets = nil then
+  begin
+    FHashBuckets := FAllocator.Allocate(LCap * SizeOf(UInt32));
+    FHashCap := LCap;
+  end;
+  FillChar(FHashBuckets^, LCap * SizeOf(UInt32), $FF);
+  FHashOwner := ATableIdx;
+  LCur := FNodes[ATableIdx].Container.FirstChild;
+  while LCur <> TOML_NODE_NONE do
+  begin
+    LSlot := FNodes[LCur].KeyHash mod LCap;
+    while FHashBuckets[LSlot] <> TOML_NODE_NONE do
+    begin
+      LSlot := (LSlot + 1) mod LCap;
+    end;
+    FHashBuckets[LSlot] := LCur;
+    LCur := FNodes[LCur].Next;
+  end;
+end;
+
+function TTomlDocument.HashLookup(ATableIdx: UInt32; const AKey: TStringView; AHash: UInt32): UInt32;
+var
+  LSlot, LIdx: UInt32;
+begin
+  if (FHashBuckets = nil) or (FHashOwner <> ATableIdx) then
+  begin
+    if FNodes[ATableIdx].Container.Count >= HASH_INDEX_THRESHOLD then
+      BuildHashIndex(ATableIdx)
+    else
+      Exit(TOML_NODE_NONE);
+  end;
+  if (FHashBuckets = nil) or (FHashOwner <> ATableIdx) then
+    Exit(TOML_NODE_NONE);
+  LSlot := AHash mod FHashCap;
+  while True do
+  begin
+    LIdx := FHashBuckets[LSlot];
+    if LIdx = TOML_NODE_NONE then Exit(TOML_NODE_NONE);
+    if (FNodes[LIdx].KeyHash = AHash) and FNodes[LIdx].Key.Equals(AKey) then
+      Exit(LIdx);
+    LSlot := (LSlot + 1) mod FHashCap;
+  end;
 end;
 
 function TTomlDocument.Root: UInt32;
@@ -1297,6 +1392,11 @@ var
   LHash: UInt32;
 begin
   LHash := TomlKeyHash(AKey.Data, AKey.Len);
+  if Doc^.FNodes[ATableIdx].Container.Count >= HASH_INDEX_THRESHOLD then
+  begin
+    Result := Doc^.HashLookup(ATableIdx, AKey, LHash);
+    Exit;
+  end;
   LCur := Doc^.FNodes[ATableIdx].Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
   begin
@@ -1308,6 +1408,8 @@ begin
 end;
 
 procedure TTomlParser.AddChild(ATableIdx: UInt32; AChildIdx: UInt32);
+var
+  LSlot: UInt32;
 begin
   if Doc^.FNodes[ATableIdx].Container.FirstChild = TOML_NODE_NONE then
   begin
@@ -1318,6 +1420,18 @@ begin
   begin
     Doc^.FNodes[Doc^.FNodes[ATableIdx].Container.LastChild].Next := AChildIdx;
     Doc^.FNodes[ATableIdx].Container.LastChild := AChildIdx;
+  end;
+  if (Doc^.FHashBuckets <> nil) and (Doc^.FHashOwner = ATableIdx) then
+  begin
+    if Doc^.FNodes[ATableIdx].Container.Count >= Doc^.FHashCap div 2 then
+      Doc^.BuildHashIndex(ATableIdx)
+    else
+    begin
+      LSlot := Doc^.FNodes[AChildIdx].KeyHash mod Doc^.FHashCap;
+      while Doc^.FHashBuckets[LSlot] <> TOML_NODE_NONE do
+        LSlot := (LSlot + 1) mod Doc^.FHashCap;
+      Doc^.FHashBuckets[LSlot] := AChildIdx;
+    end;
   end;
 end;
 
