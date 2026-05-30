@@ -762,8 +762,8 @@ begin
     Exit(True);
   end;
 
-  // Check base prefix (only allowed without sign)
-  if (not LNeg) and (Pos + 1 < SrcLen) and (Src[Pos] = '0') then
+  // Check base prefix (only allowed without any sign)
+  if (Pos = LStart) and (Pos + 1 < SrcLen) and (Src[Pos] = '0') then
   begin
     case Src[Pos+1] of
       'x': begin LBase := 16; Inc(Pos, 2); Col := Col + 2; end;
@@ -771,7 +771,7 @@ begin
       'b': begin LBase := 2; Inc(Pos, 2); Col := Col + 2; end;
     end;
   end
-  else if LNeg and (Pos + 1 < SrcLen) and (Src[Pos] = '0') and
+  else if (Pos <> LStart) and (Pos + 1 < SrcLen) and (Src[Pos] = '0') and
     ((Src[Pos+1] = 'x') or (Src[Pos+1] = 'o') or (Src[Pos+1] = 'b')) then
     Exit(SetError('sign not allowed with base prefix', 34));
 

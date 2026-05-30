@@ -30,11 +30,13 @@ type
     function HasError: Boolean;
     function Error: TTomlError;
     function Stringify: string;
+    function StringifyPretty(const AIndent: Int32): string;
   end;
 
 function TomlParse(const AInput: string): ITomlDocument; overload;
 function TomlParse(const AInput: TStringView): ITomlDocument; overload;
 function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument; overload;
+function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument; overload;
 
 implementation
 
@@ -54,7 +56,7 @@ type
     function HasError: Boolean;
     function Error: TTomlError;
     function Stringify: string;
-    function StringifyPretty(const AIndent: Int32 = 2): string;
+    function StringifyPretty(const AIndent: Int32): string;
   end;
 
 constructor TTomlDocumentImpl.Create(const AInput: string; const AAllocator: IAllocator);
@@ -209,7 +211,7 @@ begin
   LBuilder.Done;
 end;
 
-function TTomlDocumentImpl.StringifyPretty(const AIndent: Int32 = 2): string;
+function TTomlDocumentImpl.StringifyPretty(const AIndent: Int32): string;
 var
   LBuilder: TStringBuilder;
   LWriter: TTomlWriter;

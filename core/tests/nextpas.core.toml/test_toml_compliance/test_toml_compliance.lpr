@@ -415,6 +415,108 @@ begin
   CheckEqual(Int64(2), LDoc.Root.Get('hosts').ArrayLen, 'hosts len');
 end;
 
+{ toml-test/invalid/integer }
+
+procedure TestRejectCapitalBin;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 0B0');
+  Check(LDoc.HasError, 'capital 0B rejected');
+end;
+
+procedure TestRejectCapitalHex;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 0X1');
+  Check(LDoc.HasError, 'capital 0X rejected');
+end;
+
+procedure TestRejectCapitalOct;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 0O0');
+  Check(LDoc.HasError, 'capital 0O rejected');
+end;
+
+procedure TestRejectDoubleSign;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = --99');
+  Check(LDoc.HasError, 'double sign -- rejected');
+  LDoc := TomlParse('x = ++99');
+  Check(LDoc.HasError, 'double sign ++ rejected');
+end;
+
+procedure TestRejectSignedBase;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = -0b11010110');
+  Check(LDoc.HasError, 'negative bin rejected');
+  LDoc := TomlParse('x = +0xff');
+  Check(LDoc.HasError, 'positive hex rejected');
+  LDoc := TomlParse('x = -0o755');
+  Check(LDoc.HasError, 'negative oct rejected');
+end;
+
+procedure TestRejectLeadingZeroSigned;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = -01');
+  Check(LDoc.HasError, '-01 rejected');
+  LDoc := TomlParse('x = +01');
+  Check(LDoc.HasError, '+01 rejected');
+end;
+
+procedure TestRejectUsAfterPrefix;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 0b_1');
+  Check(LDoc.HasError, '0b_ rejected');
+  LDoc := TomlParse('x = 0x_f');
+  Check(LDoc.HasError, '0x_ rejected');
+  LDoc := TomlParse('x = 0o_7');
+  Check(LDoc.HasError, '0o_ rejected');
+end;
+
+{ toml-test/invalid/string }
+
+procedure TestRejectBadEscapes;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "\a"');
+  Check(LDoc.HasError, '\a rejected');
+  LDoc := TomlParse('x = "\0"');
+  Check(LDoc.HasError, '\0 rejected');
+  LDoc := TomlParse('x = "\x33"');
+  Check(LDoc.HasError, '\x rejected');
+end;
+
+procedure TestRejectBadUnicode;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "\uD800"');
+  Check(LDoc.HasError, 'surrogate \uD800 rejected');
+  LDoc := TomlParse('x = "\U00110000"');
+  Check(LDoc.HasError, 'out of range \U00110000 rejected');
+  LDoc := TomlParse('x = "\u00"');
+  Check(LDoc.HasError, 'short \u00 rejected');
+end;
+
+procedure TestRejectTextAfterString;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "a"b');
+  Check(LDoc.HasError, 'text after string rejected');
+end;
+
+procedure TestStringifyPretty;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('nums = [1, 2, 3]');
+  Check(not LDoc.HasError, 'parse ok');
+  Check(Pos(#10 + '  ', LDoc.StringifyPretty(2)) > 0, 'pretty has indentation');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -464,6 +566,20 @@ begin
   T.Run('implicit-explicit-after', @TestImplicitExplicitAfter);
   T.Run('reject hex escape', @TestRejectHexEscape);
   T.Run('multiline array', @TestMultilineArray);
+  { toml-test/invalid/integer }
+  T.Run('reject capital 0B/0X/0O', @TestRejectCapitalBin);
+  T.Run('reject capital 0X', @TestRejectCapitalHex);
+  T.Run('reject capital 0O', @TestRejectCapitalOct);
+  T.Run('reject double sign', @TestRejectDoubleSign);
+  T.Run('reject signed base prefix', @TestRejectSignedBase);
+  T.Run('reject leading zero signed', @TestRejectLeadingZeroSigned);
+  T.Run('reject underscore after prefix', @TestRejectUsAfterPrefix);
+  { toml-test/invalid/string }
+  T.Run('reject bad escapes', @TestRejectBadEscapes);
+  T.Run('reject bad unicode', @TestRejectBadUnicode);
+  T.Run('reject text after string', @TestRejectTextAfterString);
+  { StringifyPretty }
+  T.Run('stringify pretty', @TestStringifyPretty);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
