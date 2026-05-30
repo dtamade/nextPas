@@ -17,6 +17,27 @@ const
   HEX_LOWER: array[0..15] of Char = '0123456789abcdef';
   HEX_UPPER: array[0..15] of Char = '0123456789ABCDEF';
 
+var
+  HEX_DECODE_TABLE: array[0..255] of ShortInt;
+  HexDecodeTableInitialized: Boolean = False;
+
+procedure InitHexDecodeTable;
+var i: Integer;
+begin
+  if HexDecodeTableInitialized then Exit;
+  FillChar(HEX_DECODE_TABLE, SizeOf(HEX_DECODE_TABLE), -1);
+  for i := 0 to 9 do
+  begin
+    HEX_DECODE_TABLE[Ord('0') + i] := i;
+  end;
+  for i := 0 to 5 do
+  begin
+    HEX_DECODE_TABLE[Ord('a') + i] := 10 + i;
+    HEX_DECODE_TABLE[Ord('A') + i] := 10 + i;
+  end;
+  HexDecodeTableInitialized := True;
+end;
+
 function HexEncode(const AData: TBytes; const ACase: THexCase): string;
 var
   LI, LJ, LLen: Integer;
@@ -73,7 +94,10 @@ end;
 
 function HexDecode(const AHex: string): TBytes;
 var
-  LLen, LI, LJ: Integer;
+  LLen, LI: Integer;
+  LP: PByte;
+  LD: PByte;
+  LHi, LLo: ShortInt;
 begin
   Result := nil;
   LLen := Length(AHex);
@@ -85,14 +109,38 @@ begin
   if (LLen mod 2) <> 0 then
     raise EConvertError.Create('Hex string must have even length');
 
+  InitHexDecodeTable;
   SetLength(Result, LLen div 2);
-  LJ := 0;
-  LI := 1;
-  while LI < LLen do
+  LP := PByte(@AHex[1]);
+  LD := @Result[0];
+
+  LI := 0;
+  while LI + 8 <= LLen do
   begin
-    Result[LJ] := (HexCharToNibble(AHex[LI]) shl 4) or HexCharToNibble(AHex[LI + 1]);
+    LHi := HEX_DECODE_TABLE[LP[LI]]; LLo := HEX_DECODE_TABLE[LP[LI+1]];
+    if (LHi or LLo) < 0 then raise EConvertError.Create('Invalid hex character');
+    LD^ := Byte(LHi shl 4) or Byte(LLo); Inc(LD);
+
+    LHi := HEX_DECODE_TABLE[LP[LI+2]]; LLo := HEX_DECODE_TABLE[LP[LI+3]];
+    if (LHi or LLo) < 0 then raise EConvertError.Create('Invalid hex character');
+    LD^ := Byte(LHi shl 4) or Byte(LLo); Inc(LD);
+
+    LHi := HEX_DECODE_TABLE[LP[LI+4]]; LLo := HEX_DECODE_TABLE[LP[LI+5]];
+    if (LHi or LLo) < 0 then raise EConvertError.Create('Invalid hex character');
+    LD^ := Byte(LHi shl 4) or Byte(LLo); Inc(LD);
+
+    LHi := HEX_DECODE_TABLE[LP[LI+6]]; LLo := HEX_DECODE_TABLE[LP[LI+7]];
+    if (LHi or LLo) < 0 then raise EConvertError.Create('Invalid hex character');
+    LD^ := Byte(LHi shl 4) or Byte(LLo); Inc(LD);
+
+    Inc(LI, 8);
+  end;
+  while LI + 2 <= LLen do
+  begin
+    LHi := HEX_DECODE_TABLE[LP[LI]]; LLo := HEX_DECODE_TABLE[LP[LI+1]];
+    if (LHi or LLo) < 0 then raise EConvertError.Create('Invalid hex character');
+    LD^ := Byte(LHi shl 4) or Byte(LLo); Inc(LD);
     Inc(LI, 2);
-    Inc(LJ);
   end;
 end;
 
