@@ -11,7 +11,11 @@ uses
   nextpas.core.compress.intf,
   nextpas.core.compress.deflate,
   nextpas.core.compress.gzip,
-  nextpas.core.compress.lz4;
+  nextpas.core.compress.lz4
+  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
+  , nextpas.core.compress.lz4.ffi
+  {$ENDIF}
+  ;
 
 type
   TCompressionLevel = nextpas.core.compress.base.TCompressionLevel;
@@ -82,17 +86,29 @@ end;
 
 function Lz4Compress(const AData: TBytes): TBytes;
 begin
+  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
+  Result := nextpas.core.compress.lz4.ffi.NativeLz4Compress(AData);
+  {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4Compress(AData);
+  {$ENDIF}
 end;
 
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 begin
+  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
+  Result := nextpas.core.compress.lz4.ffi.NativeLz4Decompress(AData, AOriginalSize);
+  {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4Decompress(AData, AOriginalSize);
+  {$ENDIF}
 end;
 
 function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
 begin
+  {$IFDEF NEXTPAS_USE_LZ4_NATIVE}
+  Result := SizeUInt(nextpas.core.compress.lz4.ffi.NativeLz4CompressBound(Int32(AInputSize)));
+  {$ELSE}
   Result := nextpas.core.compress.lz4.Lz4CompressBound(AInputSize);
+  {$ENDIF}
 end;
 
 end.
