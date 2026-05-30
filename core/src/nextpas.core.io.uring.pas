@@ -211,6 +211,9 @@ function TIoUring.GetSqe: PIoUringSqe;
 var
   LIdx: UInt32;
 begin
+  // Read kernel's SQ head to know how many slots are free
+  ReadBarrier;
+  FSqHead := FSqRing.Head^;
   if (FSqTail - FSqHead) >= FSqeCount then
   begin
     Result := nil;
