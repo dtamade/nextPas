@@ -174,8 +174,11 @@ begin
   AppendToContainer(LIdx);
   if LCont <> YAML_NODE_NONE then
     Inc(FDoc.Nodes[LCont].Container.Count);
-  Inc(FStackTop);
-  FStack[FStackTop] := LIdx;
+  if FStackTop < 31 then
+  begin
+    Inc(FStackTop);
+    FStack[FStackTop] := LIdx;
+  end;
 end;
 
 procedure TYamlBuilder.EndSeq;
@@ -195,8 +198,11 @@ begin
   AppendToContainer(LIdx);
   if LCont <> YAML_NODE_NONE then
     Inc(FDoc.Nodes[LCont].Container.Count);
-  Inc(FStackTop);
-  FStack[FStackTop] := LIdx;
+  if FStackTop < 31 then
+  begin
+    Inc(FStackTop);
+    FStack[FStackTop] := LIdx;
+  end;
 end;
 
 procedure TYamlBuilder.EndMap;

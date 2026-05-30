@@ -22,6 +22,7 @@ type
     RootIdx: UInt32;
     Anchors: array of TYamlAnchorEntry;
     AnchorCount: UInt32;
+    ParseDepth: Int32;
     Error: TYamlError;
     HasError: Boolean;
   end;
@@ -42,6 +43,7 @@ begin
   ADoc.RootIdx := 0;
   SetLength(ADoc.Anchors, 16);
   ADoc.AnchorCount := 0;
+  ADoc.ParseDepth := 0;
   ADoc.HasError := False;
 end;
 
@@ -494,6 +496,15 @@ var
   LKeyNode, LValNode, LFirst, LPrev, LIdx: UInt32;
   LCount, LMapCol: UInt32;
 begin
+  Inc(ADoc.ParseDepth);
+  if ADoc.ParseDepth > 256 then
+  begin
+    SetError(ADoc, 'nesting too deep', ACurToken.Line, ACurToken.Col, 0);
+    Result := AddNode(ADoc);
+    ADoc.Nodes[Result].Kind := ynkNull;
+    Dec(ADoc.ParseDepth);
+    Exit;
+  end;
   case ACurToken.Kind of
     ytkFlowSeqStart:
       Result := ParseFlowSequence(ADoc, AScanner, ACurToken);
@@ -582,6 +593,7 @@ begin
     Result := AddNode(ADoc);
     ADoc.Nodes[Result].Kind := ynkNull;
   end;
+  Dec(ADoc.ParseDepth);
 end;
 
 procedure YamlDocParse(var ADoc: TYamlDocument; const AInput: PAnsiChar; const ALen: SizeUInt);

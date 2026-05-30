@@ -211,6 +211,11 @@ begin
   case LNode^.Kind of
     ynkNull, ynkBool, ynkInt, ynkFloat, ynkString:
       WriteScalar(AW, LNode);
+    ynkAlias:
+      if LNode^.AliasTarget < ADoc.NodeCount then
+        StringifyBlock(ADoc, LNode^.AliasTarget, AW, ADepth, AIndent)
+      else
+        AW.AppendStr('null');
     ynkSequence:
     begin
       if LNode^.Container.Count = 0 then
