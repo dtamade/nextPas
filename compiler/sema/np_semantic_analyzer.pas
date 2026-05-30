@@ -7533,6 +7533,19 @@ begin
                   RhsNode.Text + #9 + Operand
                 );
             end;
+          end
+          else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
+            (FCurrentMethodClass <> '') and
+            (TypeMetaFieldIndex(FCurrentMethodClass, RhsNode.Text) >= 0) then
+          begin
+            if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
+            begin
+              Value := TypeMetaFieldIndex(FCurrentMethodClass, RhsNode.Text);
+              FModel.AddTypedHirNode(
+                'assign-arr-elem-runtime', '__field_setlength__', 0, 0,
+                'self' + #9 + IntToStr(Value) + #9 + Operand
+              );
+            end;
           end;
         end;
         Continue;

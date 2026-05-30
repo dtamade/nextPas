@@ -2745,14 +2745,6 @@ begin
     if TabPos2 = 0 then Exit;
     FieldIdxStr := Copy(Rest, 1, TabPos2 - 1);
     Rest := Copy(Rest, TabPos2 + 1, Length(Rest));
-    TabPos3 := Pos(#9, Rest);
-    if TabPos3 = 0 then Exit;
-    IdxBlob := Copy(Rest, 1, TabPos3 - 1);
-    ValBlob := Copy(Rest, TabPos3 + 1, Length(Rest));
-
-    IdxVal := ParseIntBlob(IdxBlob);
-    ValVal := ParseIntBlob(ValBlob);
-    if (IdxVal = 0) or (ValVal = 0) then Exit;
 
     ObjPtr := FindAlloca('self');
     if ObjPtr = 0 then Exit;
@@ -2775,20 +2767,48 @@ begin
     Instr.Operands[0] := MakeOperand(ObjPtr);
     Instr.Operands[1] := MakeOperand(FieldIdx);
     EmitInstr(Instr);
-    BasePtr := EmitLoad(GetPtrType, Instr.ResultId);
-
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := GetPtrType;
-    Instr.IntrinsicName := 'gep_i64';
-    SetLength(Instr.Operands, 2);
-    Instr.Operands[0] := MakeOperand(BasePtr);
-    Instr.Operands[1] := MakeOperand(IdxVal);
-    EmitInstr(Instr);
     ElemPtr := Instr.ResultId;
 
-    EmitStore(GetIntType, ValVal, ElemPtr);
+    if ANode.DisplayName = '__field_setlength__' then
+    begin
+      IdxVal := ParseIntBlob(Rest);
+      if IdxVal = 0 then Exit;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'arr_alloc';
+      SetLength(Instr.Operands, 1);
+      Instr.Operands[0] := MakeOperand(IdxVal);
+      EmitInstr(Instr);
+      EmitStore(GetPtrType, Instr.ResultId, ElemPtr);
+    end
+    else
+    begin
+      TabPos3 := Pos(#9, Rest);
+      if TabPos3 = 0 then Exit;
+      IdxBlob := Copy(Rest, 1, TabPos3 - 1);
+      ValBlob := Copy(Rest, TabPos3 + 1, Length(Rest));
+
+      IdxVal := ParseIntBlob(IdxBlob);
+      ValVal := ParseIntBlob(ValBlob);
+      if (IdxVal = 0) or (ValVal = 0) then Exit;
+
+      BasePtr := EmitLoad(GetPtrType, ElemPtr);
+
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'gep_i64';
+      SetLength(Instr.Operands, 2);
+      Instr.Operands[0] := MakeOperand(BasePtr);
+      Instr.Operands[1] := MakeOperand(IdxVal);
+      EmitInstr(Instr);
+      ElemPtr := Instr.ResultId;
+
+      EmitStore(GetIntType, ValVal, ElemPtr);
+    end;
     Exit;
   end;
 
