@@ -248,6 +248,44 @@ begin
   finally M.Free; end;
 end;
 
+procedure TestIsEmpty;
+var M: TIntConcMap;
+begin
+  M := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    Check(M.IsEmpty, 'empty initially');
+    M.Put(1, 10);
+    Check(not M.IsEmpty, 'not empty');
+    M.Remove(1);
+    Check(M.IsEmpty, 'empty after remove');
+  finally M.Free; end;
+end;
+
+procedure TestKeys;
+var M: TIntConcMap; K: TIntConcMap.TKeyArray; i: Integer;
+begin
+  M := TIntConcMap.Create(@HashInt, @EqInt);
+  try
+    for i := 0 to 49 do M.Put(i, i * 10);
+    K := M.Keys;
+    CheckEqual(Int64(50), Int64(Length(K)), 'keys length');
+  finally M.Free; end;
+end;
+
+procedure TestDefaultHash;
+var M: TIntConcMap; i, v: Integer; ok: Boolean;
+begin
+  M := TIntConcMap.Create(nil, nil);
+  try
+    for i := 0 to 99 do M.Put(i, i * 10);
+    CheckEqual(Int64(100), Int64(M.Count), 'count');
+    ok := True;
+    for i := 0 to 99 do
+      if not M.TryGetValue(i, v) or (v <> i * 10) then ok := False;
+    Check(ok, 'all correct with default hash');
+  finally M.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.collections.concurrent.hashmap');
   T.Run('Put/Get', @TestPutGet);
@@ -256,6 +294,9 @@ begin
   T.Run('GetOrInsert', @TestGetOrInsert);
   T.Run('PutIfAbsent', @TestPutIfAbsent);
   T.Run('Compute', @TestCompute);
+  T.Run('IsEmpty', @TestIsEmpty);
+  T.Run('Keys', @TestKeys);
+  T.Run('Default hash (nil)', @TestDefaultHash);
   T.Run('Clear', @TestClear);
   T.Run('String key', @TestStringKey);
   T.Run('Multi-thread stress (4W+4R)', @TestMultiThreadStress);
