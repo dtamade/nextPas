@@ -156,7 +156,7 @@ LAgain:
     begin
       FTokenKind := jtkEndObject;
       FInput.Advance(1);
-      Dec(FDepth);
+      if FDepth > 0 then Dec(FDepth);
     end;
     Ord('['):
     begin
@@ -174,7 +174,7 @@ LAgain:
     begin
       FTokenKind := jtkEndArray;
       FInput.Advance(1);
-      Dec(FDepth);
+      if FDepth > 0 then Dec(FDepth);
     end;
     Ord(','), Ord(':'):
     begin
