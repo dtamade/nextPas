@@ -91,17 +91,17 @@ Key optimizations:
 
 ## Testing
 
-224 tests across 9 suites:
+226 tests across 9 suites:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | test_toml_base | 17 | Type layout, datetime constructors, flags encoding |
 | test_toml_parser | 32 | All value types, tables, arrays, error detection |
-| test_toml_value | 22 | All accessor methods, for..in, FindByPath, Key |
+| test_toml_value | 22 | All accessor methods, for..in, FindByPath, Key, AsString |
 | test_toml_writer | 21 | All serialization methods, pretty-print, nested |
 | test_toml_facade | 12 | High-level API, builder all types, allocator |
-| test_toml_compliance | 78 | TOML v1.0 + toml-test official valid/invalid cases |
-| test_toml_robustness | 21 | Deep nesting, long strings, malicious input |
+| test_toml_compliance | 78 | TOML v1.0/v1.1 + toml-test official valid/invalid cases |
+| test_toml_robustness | 23 | Deep nesting, long strings, hash index, malicious input |
 | test_toml_fuzz | 5 | 1700 random/binary/semi-valid inputs |
 | test_toml_roundtrip | 16 | Parse → Stringify → Parse → deep compare |
 

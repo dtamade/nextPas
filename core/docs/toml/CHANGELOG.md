@@ -1,5 +1,35 @@
 # nextpas.core.toml Changelog
 
+## 2026-05-30 — v1.1 Extensions + Hash Index
+
+### New Features
+- TOML v1.1 escape support: `\xNN` (hex byte), `\e` (ESC 0x1B)
+- TTomlValue.FindByPath('a.b.c') — dot-separated deep lookup
+- TTomlValue.AsString — convenience method returning Pascal string
+- TTomlValue.Key — access node key during iteration
+- ITomlDocument.StringifyPretty(AIndent) — multi-line array formatting
+- TomlParseWith(TStringView, IAllocator) — view-based parse with custom allocator
+- TTomlValueEnumerator + TomlEnumerate() — for..in iteration
+- TTomlWriter.InitPretty() — configurable indentation
+
+### Performance
+- Hash table index for large tables (>256 keys): O(1) lookup
+- 10000 keys: 1010ms → 4.5ms (223x speedup)
+- Standard benchmarks unchanged (no overhead for small tables)
+
+### Correctness
+- Reject leading zeros in floats (03.14)
+- Reject duplicate keys in inline tables
+- Reject +0xff (sign with base prefix)
+- Reject capital Inf/NaN
+- Reject \a, \0 escapes
+- Reject datetime without seconds, without leading zeros, without T separator
+
+### Testing
+- 226 tests across 9 suites
+- toml-test official suite coverage expanded
+- Hash index correctness tests (500 keys + dup detection)
+
 ## 2026-05-30 — Initial Release
 
 ### Features
