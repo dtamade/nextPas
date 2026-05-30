@@ -141,6 +141,11 @@ begin
   case LNode^.Kind of
     ynkNull, ynkBool, ynkInt, ynkFloat, ynkString:
       WriteScalar(AW, LNode);
+    ynkAlias:
+      if LNode^.AliasTarget < ADoc.NodeCount then
+        StringifyFlow(ADoc, LNode^.AliasTarget, AW)
+      else
+        AW.AppendStr('null');
     ynkSequence:
     begin
       AW.AppendChar('[');
@@ -252,11 +257,7 @@ begin
         // Value
         if (ADoc.Nodes[LCur].Kind = ynkMapping) or
            (ADoc.Nodes[LCur].Kind = ynkSequence) then
-        begin
-          AW.AppendChar(#10);
-          WriteIndent(AW, ADepth + 1, AIndent);
-          StringifyBlock(ADoc, LCur, AW, ADepth + 1, AIndent);
-        end
+          StringifyFlow(ADoc, LCur, AW)
         else
           StringifyBlock(ADoc, LCur, AW, ADepth + 1, AIndent);
         if LI < LNode^.Container.Count then
