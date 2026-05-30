@@ -547,7 +547,7 @@ begin
   LEstimate := UInt32(AInput.Len div 4);
   if LEstimate > FNodeCap then
   begin
-    ReallocMem(FNodes, LEstimate * SizeOf(TJsonNode));
+    FNodes := FAllocator.Reallocate(FNodes, LEstimate * SizeOf(TJsonNode));
     FNodeCap := LEstimate;
   end;
   LState.Doc := @Self;
