@@ -486,6 +486,125 @@ begin
   CheckEqual('price $42', s, '$$ literal');
 end;
 
+procedure TestZeroRepeat;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('a{0}');
+  Check(R.IsMatch(''), '{0} matches empty');
+  Check(R.IsMatch('b'), '{0} matches anything');
+
+  R := TRegex.Compile('a{0,2}');
+  Check(R.IsMatch(''), '{0,2} zero');
+  Check(R.IsMatch('a'), '{0,2} one');
+  Check(R.IsMatch('aa'), '{0,2} two');
+
+  R := TRegex.Compile('x(ab){0}y');
+  M := R.Find('xy');
+  Check(M.Found, '{0} in sequence');
+  CheckEqual('xy', M.Value('xy'), '{0} value');
+end;
+
+procedure TestAlternationPriority;
+var R: TRegex; M: TMatch;
+begin
+  // POSIX leftmost-longest: among matches at same start, longest wins
+  R := TRegex.Compile('a|ab');
+  M := R.Find('ab');
+  Check(M.Found, 'alt found');
+  CheckEqual('ab', M.Value('ab'), 'longest wins at same start');
+
+  R := TRegex.Compile('ab|a');
+  M := R.Find('ab');
+  Check(M.Found, 'alt2 found');
+  CheckEqual('ab', M.Value('ab'), 'longest wins regardless of order');
+
+  // Leftmost always wins over longest at later position
+  R := TRegex.Compile('b|ab');
+  M := R.Find('ab');
+  Check(M.Found, 'leftmost found');
+  CheckEqual('ab', M.Value('ab'), 'longest at leftmost start');
+end;
+
+procedure TestSplitZero;
+var R: TRegex; parts: TStringArray;
+begin
+  R := TRegex.Compile(',');
+  parts := R.Split('a,b,c', 0);
+  CheckEqual(Int64(1), Int64(Length(parts)), 'split 0 = no split');
+  CheckEqual('a,b,c', parts[0], 'split 0 value');
+end;
+
+procedure TestMalformedTemplate;
+var R: TRegex; s: string;
+begin
+  R := TRegex.Compile('(\w+)');
+
+  // $ at end of template
+  s := R.ReplaceAllExpand('hello', 'x$');
+  CheckEqual('x$', s, '$ at end preserved');
+
+  // ${ without }
+  s := R.ReplaceAllExpand('hello', '${broken');
+  CheckEqual('${broken', s, '${ without } preserved');
+
+  // ${} empty name
+  s := R.ReplaceAllExpand('hello', '${}');
+  CheckEqual('', s, '${} empty name');
+
+  // unknown group name
+  s := R.ReplaceAllExpand('hello', '${nonexist}');
+  CheckEqual('', s, 'unknown group empty');
+end;
+
+procedure TestFindAtBoundary;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('\d+');
+
+  // Start beyond input length
+  M := R.FindAt('hello123', 999);
+  Check(not M.Found, 'beyond length');
+
+  // Start at exact match position
+  M := R.FindAt('abc123def', 3);
+  Check(M.Found, 'at digit start');
+  CheckEqual('123', M.Value('abc123def'), 'at digit value');
+
+  // Start past the match
+  M := R.FindAt('abc123def', 6);
+  Check(not M.Found, 'past digits');
+end;
+
+procedure TestLargeRepeat;
+var R: TRegex; input: string; i: Integer;
+begin
+  // a{100} should compile without stack overflow
+  R := TRegex.Compile('a{100}');
+  SetLength(input, 100);
+  for i := 1 to 100 do input[i] := 'a';
+  Check(R.IsMatch(input), 'a{100} match');
+  Check(not R.IsMatch('aaa'), 'a{100} too few');
+end;
+
+procedure TestMemoryStress;
+var R: TRegex; MA: TMatchArray; longInput: string; i: Integer;
+begin
+  // Many matches on long input — tests slot pool doesn't explode
+  SetLength(longInput, 10000);
+  for i := 1 to 10000 do
+    if i mod 10 = 0 then longInput[i] := ' '
+    else longInput[i] := 'a';
+
+  R := TRegex.Compile('a+');
+  MA := R.FindAll(longInput);
+  Check(Length(MA) = 1000, 'many matches count');
+
+  // Verify no crash with capture-heavy pattern on long input
+  R := TRegex.Compile('(a+)( )');
+  MA := R.FindAll(longInput);
+  Check(Length(MA) > 0, 'capture stress');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -519,5 +638,12 @@ begin
   T.Run('Split with limit', @TestSplitLimit);
   T.Run('ReplaceFunc', @TestReplaceFunc);
   T.Run('ReplaceExpand', @TestReplaceExpand);
+  T.Run('Zero repeat {0}', @TestZeroRepeat);
+  T.Run('Alternation priority', @TestAlternationPriority);
+  T.Run('Split zero', @TestSplitZero);
+  T.Run('Malformed template', @TestMalformedTemplate);
+  T.Run('FindAt boundary', @TestFindAtBoundary);
+  T.Run('Large repeat {100}', @TestLargeRepeat);
+  T.Run('Memory stress', @TestMemoryStress);
   T.Summary;
 end.

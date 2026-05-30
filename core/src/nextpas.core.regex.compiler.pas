@@ -124,8 +124,9 @@ begin
     end;
     rkRange:
     begin
-      for i := 0 to ANode^.RepeatMin - 1 do
-        CompileNode(C, ANode^.Left);
+      if ANode^.RepeatMin > 0 then
+        for i := 0 to ANode^.RepeatMin - 1 do
+          CompileNode(C, ANode^.Left);
       if ANode^.RepeatMax = $FFFFFFFF then
       begin
         splitPC := C.Count;
@@ -141,7 +142,7 @@ begin
         C.Code[splitPC].X := bodyStart;
         C.Code[splitPC].Y := C.Count;
       end
-      else
+      else if ANode^.RepeatMax > ANode^.RepeatMin then
       begin
         for i := ANode^.RepeatMin to ANode^.RepeatMax - 1 do
         begin
