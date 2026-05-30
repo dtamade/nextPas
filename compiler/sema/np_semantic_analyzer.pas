@@ -6565,6 +6565,16 @@ begin
       (ANode.ChildAt(1) <> nil) and
       (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
     begin
+      if TypeMetaSize(ANode.ChildAt(1).Text) = 8 then
+      begin
+        if (LookupClassVar(ANode.ChildAt(0).Text) <> '') and
+          (Pos(ANode.ChildAt(1).Text,
+            TypeMetaInterfaces(LookupClassVar(ANode.ChildAt(0).Text))) > 0) then
+          ABlob := 'int 1' + #10 + 'int 0' + #10 + 'cmp ne' + #10
+        else
+          ABlob := 'int 0' + #10 + 'int 0' + #10 + 'cmp ne' + #10;
+        Exit(True);
+      end;
       ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
         'is ' + ANode.ChildAt(1).Text + #10 +
         'int 0' + #10 + 'cmp ne' + #10;
