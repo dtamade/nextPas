@@ -4,7 +4,7 @@ BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.toml/test_toml_value
 PROGRAM := test_toml_value
 SOURCE := test_toml_value.lpr
 EXTRA_FLAGS ?=
-FPC_FLAGS := -MObjFPC -Sh -O2 -gl $(EXTRA_FLAGS)
+FPC_FLAGS := -MObjFPC -Sh -O2 $(EXTRA_FLAGS)
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/build/lib
 
 .PHONY: build run test clean

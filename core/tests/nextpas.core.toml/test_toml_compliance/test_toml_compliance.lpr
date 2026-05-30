@@ -636,6 +636,62 @@ begin
   CheckEqual('', LDoc.Root.Get('missing').AsString, 'AsString on missing');
 end;
 
+{ toml-test/valid/datetime }
+
+procedure TestValidDateTimeLowerCase;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('a = 1987-07-05t17:45:00z');
+  Check(not LDoc.HasError, 'lowercase t and z accepted');
+  Check(LDoc.Root.Get('a').IsDateTime, 'is datetime');
+  CheckEqual(Int64(1987), Int64(LDoc.Root.Get('a').AsDateTime.Year), 'year');
+end;
+
+{ toml-test/valid/key }
+
+procedure TestValidDottedKeyMixed;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('name.first = "Arthur"' + #10 + '"name".''last'' = "Dent"');
+  Check(not LDoc.HasError, 'mixed quote dotted key ok');
+  Check(LDoc.Root.Get('name').Get('first').AsStr.Equals(
+    TStringView.Create(PAnsiChar('Arthur'), 6)), 'name.first');
+  Check(LDoc.Root.Get('name').Get('last').AsStr.Equals(
+    TStringView.Create(PAnsiChar('Dent'), 4)), 'name.last');
+end;
+
+procedure TestValidKeySpaces;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('"a b" = 1' + #10 + '" c d " = 2');
+  Check(not LDoc.HasError, 'quoted key with spaces ok');
+  CheckEqual(Int64(1), LDoc.Root.Get('a b').AsInt, 'a b = 1');
+  CheckEqual(Int64(2), LDoc.Root.Get(' c d ').AsInt, ' c d  = 2');
+end;
+
+{ toml-test/invalid/datetime }
+
+procedure TestRejectDateTimeNoT;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1987-07-0517:45:00Z');
+  Check(LDoc.HasError, 'no T separator rejected');
+end;
+
+procedure TestRejectDateTimeNoLeads;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1987-7-05T17:45:00Z');
+  Check(LDoc.HasError, 'no leading zero in month rejected');
+end;
+
+procedure TestRejectDateTimeNoSecs;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = 1987-07-05T17:45Z');
+  Check(LDoc.HasError, 'no seconds rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -715,6 +771,15 @@ begin
   T.Run('implicit-groups', @TestImplicitGroups);
   { AsString convenience }
   T.Run('AsString method', @TestAsStringMethod);
+  { toml-test/valid/datetime }
+  T.Run('valid datetime lowercase t/z', @TestValidDateTimeLowerCase);
+  { toml-test/valid/key }
+  T.Run('valid dotted key mixed quotes', @TestValidDottedKeyMixed);
+  T.Run('valid key with spaces', @TestValidKeySpaces);
+  { toml-test/invalid/datetime }
+  T.Run('reject datetime no-t', @TestRejectDateTimeNoT);
+  T.Run('reject datetime no-leads', @TestRejectDateTimeNoLeads);
+  T.Run('reject datetime no-secs', @TestRejectDateTimeNoSecs);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
