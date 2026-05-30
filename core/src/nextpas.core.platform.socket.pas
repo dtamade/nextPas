@@ -290,6 +290,7 @@ end;
 
 {$IFDEF NEXTPAS_WINDOWS}
 uses
+  nextpas.core.platform.windows.base,
   nextpas.core.platform.windows.ffi;
 
 function platform_socket_create(const ADomain, AType, AProtocol: Int32;
