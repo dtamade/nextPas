@@ -22,9 +22,9 @@ function FsPathEnsureSep(const APath: string): string;
 function FsPathTrimSep(const APath: string): string;
 function FsPathChangeExt(const APath, ANewExt: string): string;
 function FsPathWithoutExt(const APath: string): string;
+function FsSameFileName(const A, B: string): Boolean;
 
 implementation
-
 
 const
   PATH_BUF_SIZE = 1024;
@@ -201,6 +201,16 @@ begin
       Break;
   end;
   Result := APath;
+end;
+
+function FsSameFileName(const A, B: string): Boolean;
+begin
+  if Length(A) <> Length(B) then Exit(False);
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := LowerCase(A) = LowerCase(B);
+  {$ELSE}
+  Result := A = B;
+  {$ENDIF}
 end;
 
 end.
