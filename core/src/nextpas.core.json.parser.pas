@@ -193,6 +193,11 @@ begin
     SetError('unterminated string', 19);
     Exit(JSON_NODE_NONE);
   end;
+  if LEndPos <= LStartPos then
+  begin
+    SetError('invalid string bounds', 21);
+    Exit(JSON_NODE_NONE);
+  end;
   LRaw := TStringView.Create(Input + LStartPos + 1, LEndPos - LStartPos - 1);
   LHasEscape := False;
   for I := 0 to LRaw.Len - 1 do
