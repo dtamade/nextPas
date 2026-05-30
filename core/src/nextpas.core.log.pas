@@ -198,7 +198,7 @@ end;
 
 var
   GEventPool: array[0..15] of TLogEvent;
-  GEventIdx: Int32 = 0;
+  GEventIdx: UInt32 = 0;
 
 class function TLogger.New(const AHandler: ILogHandler; ALevel: TLogLevel): TLogger;
 begin
@@ -238,7 +238,6 @@ begin
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llTrace);
   Result^.FRec.Level := llTrace;
-  SetLength(Result^.FRec.Attrs, 8);
 end;
 
 function TLogger.Debug: PLogEvent;
@@ -250,7 +249,6 @@ begin
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llDebug);
   Result^.FRec.Level := llDebug;
-  SetLength(Result^.FRec.Attrs, 8);
 end;
 
 function TLogger.Info: PLogEvent;
@@ -262,7 +260,6 @@ begin
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llInfo);
   Result^.FRec.Level := llInfo;
-  SetLength(Result^.FRec.Attrs, 8);
 end;
 
 function TLogger.Warn: PLogEvent;
@@ -274,7 +271,6 @@ begin
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llWarn);
   Result^.FRec.Level := llWarn;
-  SetLength(Result^.FRec.Attrs, 8);
 end;
 
 function TLogger.Error: PLogEvent;
@@ -286,7 +282,6 @@ begin
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llError);
   Result^.FRec.Level := llError;
-  SetLength(Result^.FRec.Attrs, 8);
 end;
 
 function TLogger.Fatal: PLogEvent;
@@ -298,7 +293,6 @@ begin
   Result^.FHandler := FHandler;
   Result^.FEnabled := Enabled(llFatal);
   Result^.FRec.Level := llFatal;
-  SetLength(Result^.FRec.Attrs, 8);
 end;
 
 { Console Handler }
@@ -646,7 +640,7 @@ begin
   end;
   WriteLn(FFile);
   System.Flush(FFile);
-  Inc(FCurrentSize, 80);
+  Inc(FCurrentSize, Int64(Length(ARecord.Message)) + Int64(ARecord.AttrCount) * 20 + 10);
 end;
 
 function TFileHandler.WithAttrs(const AAttrs: array of TAttr): ILogHandler;
