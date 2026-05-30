@@ -2421,11 +2421,19 @@ begin
                 end
                 else
                 begin
+                  I := 0;
                   while (ACursor < ALexer.TokenCount) and
-                    (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
-                    (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
-                    (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+                    not ((I = 0) and (CurrentToken(ALexer, ACursor).Kind in
+                      [tkSemicolon, tkEndKeyword, tkEOF])) do
+                  begin
+                    if CurrentToken(ALexer, ACursor).Kind in
+                      [tkRecordKeyword, tkObjectKeyword] then
+                      Inc(I)
+                    else if (CurrentToken(ALexer, ACursor).Kind = tkEndKeyword) and
+                      (I > 0) then
+                      Dec(I);
                     Inc(ACursor);
+                  end;
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                   TypeNode.AppendChild(ElementNode);
                   Inc(ATree.FNodeCount);
@@ -2730,7 +2738,16 @@ begin
         (CurrentToken(ALexer, ACursor).Kind = tkStringLiteral) then
         Inc(ACursor);
     end;
-    MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    if not MatchTokenSilent(ALexer, ACursor, tkSemicolon) then
+    begin
+      while (ACursor < ALexer.TokenCount) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEndKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkImplementationKeyword) and
+        (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+        Inc(ACursor);
+      MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+    end;
   end;
 
   Result := True;
@@ -2817,7 +2834,7 @@ begin
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end
-  else
+  else if AParent.NodeKind <> gnkInterfaceSection then
   begin
     while (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind in
@@ -3007,7 +3024,7 @@ begin
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end
-  else
+  else if AParent.NodeKind <> gnkInterfaceSection then
   begin
     while (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind in
