@@ -9,35 +9,28 @@ function TextFormat(const AFmt: string; const AArgs: array of const): string;
 implementation
 
 uses
-  nextpas.core.text.conv;
+  nextpas.core.text.conv,
+  nextpas.core.text.builder;
 
 function TextFormat(const AFmt: string; const AArgs: array of const): string;
 var
   LIdx, LLen, LArgIdx: Integer;
-  LWidth: Integer;
+  LWidth, LPrec: Integer;
   LZeroPad: Boolean;
   LCh: Char;
+  LSb: TStringBuilder;
 
-  procedure AppendStr(const AStr: string);
+  procedure SbAppendPadded(const AStr: string);
+  var LPad: Integer; LPadCh: Char;
   begin
-    Result := Result + AStr;
-  end;
-
-  procedure AppendPadded(const AStr: string; const AWidth: Integer; const AZero: Boolean);
-  var
-    LPad: Integer;
-    LPadCh: Char;
-  begin
-    LPad := AWidth - Length(AStr);
+    LPad := LWidth - Length(AStr);
     if LPad <= 0 then
-      AppendStr(AStr)
+      LSb.AppendStr(AStr)
     else
     begin
-      if AZero then
-        LPadCh := '0'
-      else
-        LPadCh := ' ';
-      AppendStr(StringOfChar(LPadCh, LPad) + AStr);
+      if LZeroPad then LPadCh := '0' else LPadCh := ' ';
+      LSb.AppendChars(AnsiChar(LPadCh), LPad);
+      LSb.AppendStr(AStr);
     end;
   end;
 
@@ -57,7 +50,7 @@ var
     HEX_UP: array[0..15] of Char = '0123456789ABCDEF';
   var
     LBuf: array[0..15] of Char;
-    LI, LBufIdx: Integer;
+    LBufIdx: Integer;
     LV: UInt64;
   begin
     LV := AVal;
@@ -81,25 +74,25 @@ var
     Move(LBuf[LBufIdx + 1], Result[1], 15 - LBufIdx);
   end;
 
-  function FormatFloat(const AVal: Double; const APrec: Integer): string;
+  function FormatFloat(const AVal: Double; const ADigits: Integer): string;
   var
     LInt: Int64;
     LFrac: Double;
     LI, LDigit: Integer;
     LNeg: Boolean;
+    LAbs: Double;
   begin
+    if AVal <> AVal then Exit('NaN');
+    if AVal = 1.0/0.0 then Exit('Inf');
+    if AVal = -1.0/0.0 then Exit('-Inf');
     LNeg := AVal < 0;
-    if LNeg then
-      LFrac := -AVal
-    else
-      LFrac := AVal;
-    LInt := Trunc(LFrac);
-    LFrac := LFrac - LInt;
+    if LNeg then LAbs := -AVal else LAbs := AVal;
+    LInt := Trunc(LAbs);
+    LFrac := LAbs - LInt;
     Result := IntToStr(LInt);
-    if LNeg then
-      Result := '-' + Result;
+    if LNeg then Result := '-' + Result;
     Result := Result + '.';
-    for LI := 1 to APrec do
+    for LI := 1 to ADigits do
     begin
       LFrac := LFrac * 10;
       LDigit := Trunc(LFrac);
@@ -108,126 +101,131 @@ var
     end;
   end;
 
-  function GetArgInt(const AArgIdx: Integer): Int64;
+  function GetArgInt(const AIdx: Integer): Int64;
   begin
     Result := 0;
-    if AArgIdx > High(AArgs) then Exit;
-    case AArgs[AArgIdx].VType of
-      vtInteger: Result := AArgs[AArgIdx].VInteger;
-      vtInt64: Result := AArgs[AArgIdx].VInt64^;
-      vtQWord: Result := Int64(AArgs[AArgIdx].VQWord^);
+    if AIdx > High(AArgs) then Exit;
+    case AArgs[AIdx].VType of
+      vtInteger: Result := AArgs[AIdx].VInteger;
+      vtInt64: Result := AArgs[AIdx].VInt64^;
+      vtQWord: Result := Int64(AArgs[AIdx].VQWord^);
     end;
   end;
 
-  function GetArgUInt(const AArgIdx: Integer): UInt64;
+  function GetArgUInt(const AIdx: Integer): UInt64;
   begin
     Result := 0;
-    if AArgIdx > High(AArgs) then Exit;
-    case AArgs[AArgIdx].VType of
-      vtInteger: Result := UInt64(AArgs[AArgIdx].VInteger);
-      vtInt64: Result := UInt64(AArgs[AArgIdx].VInt64^);
-      vtQWord: Result := AArgs[AArgIdx].VQWord^;
+    if AIdx > High(AArgs) then Exit;
+    case AArgs[AIdx].VType of
+      vtInteger: Result := UInt64(AArgs[AIdx].VInteger);
+      vtInt64: Result := UInt64(AArgs[AIdx].VInt64^);
+      vtQWord: Result := AArgs[AIdx].VQWord^;
     end;
   end;
 
-  function GetArgStr(const AArgIdx: Integer): string;
+  function GetArgStr(const AIdx: Integer): string;
   begin
     Result := '';
-    if AArgIdx > High(AArgs) then Exit;
-    case AArgs[AArgIdx].VType of
-      vtString: Result := AArgs[AArgIdx].VString^;
-      vtAnsiString: Result := AnsiString(AArgs[AArgIdx].VAnsiString);
-      vtChar: Result := AArgs[AArgIdx].VChar;
-      vtPChar: Result := AArgs[AArgIdx].VPChar;
+    if AIdx > High(AArgs) then Exit;
+    case AArgs[AIdx].VType of
+      vtString: Result := AArgs[AIdx].VString^;
+      vtAnsiString: Result := AnsiString(AArgs[AIdx].VAnsiString);
+      vtChar: Result := AArgs[AIdx].VChar;
+      vtPChar: Result := AArgs[AIdx].VPChar;
     end;
   end;
 
-  function GetArgFloat(const AArgIdx: Integer): Double;
+  function GetArgFloat(const AIdx: Integer): Double;
   begin
     Result := 0.0;
-    if AArgIdx > High(AArgs) then Exit;
-    case AArgs[AArgIdx].VType of
-      vtExtended: Result := AArgs[AArgIdx].VExtended^;
-      vtInteger: Result := AArgs[AArgIdx].VInteger;
-      vtInt64: Result := AArgs[AArgIdx].VInt64^;
+    if AIdx > High(AArgs) then Exit;
+    case AArgs[AIdx].VType of
+      vtExtended: Result := AArgs[AIdx].VExtended^;
+      vtInteger: Result := AArgs[AIdx].VInteger;
+      vtInt64: Result := AArgs[AIdx].VInt64^;
     end;
   end;
 
 begin
-  Result := '';
   LLen := Length(AFmt);
-  LIdx := 1;
-  LArgIdx := 0;
-  while LIdx <= LLen do
-  begin
-    LCh := AFmt[LIdx];
-    if LCh <> '%' then
+  if LLen = 0 then Exit('');
+  LSb.Init(LLen + Length(AArgs) * 8);
+  try
+    LIdx := 1;
+    LArgIdx := 0;
+    while LIdx <= LLen do
     begin
-      Result := Result + LCh;
+      LCh := AFmt[LIdx];
+      if LCh <> '%' then
+      begin
+        LSb.AppendChar(AnsiChar(LCh));
+        Inc(LIdx);
+        Continue;
+      end;
       Inc(LIdx);
-      Continue;
-    end;
-    Inc(LIdx);
-    if LIdx > LLen then
-      Break;
-    if AFmt[LIdx] = '%' then
-    begin
-      Result := Result + '%';
-      Inc(LIdx);
-      Continue;
-    end;
-    LWidth := 0;
-    LZeroPad := False;
-    if AFmt[LIdx] = '0' then
-    begin
-      LZeroPad := True;
-      Inc(LIdx);
-    end;
-    while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
-    begin
-      LWidth := LWidth * 10 + (Ord(AFmt[LIdx]) - Ord('0'));
-      Inc(LIdx);
-    end;
-    if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
-    begin
-      Inc(LIdx);
+      if LIdx > LLen then Break;
+      if AFmt[LIdx] = '%' then
+      begin
+        LSb.AppendChar('%');
+        Inc(LIdx);
+        Continue;
+      end;
       LWidth := 0;
+      LPrec := -1;
+      LZeroPad := False;
+      if AFmt[LIdx] = '0' then
+      begin
+        LZeroPad := True;
+        Inc(LIdx);
+      end;
       while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
       begin
         LWidth := LWidth * 10 + (Ord(AFmt[LIdx]) - Ord('0'));
         Inc(LIdx);
       end;
+      if (LIdx <= LLen) and (AFmt[LIdx] = '.') then
+      begin
+        Inc(LIdx);
+        LPrec := 0;
+        while (LIdx <= LLen) and (AFmt[LIdx] >= '0') and (AFmt[LIdx] <= '9') do
+        begin
+          LPrec := LPrec * 10 + (Ord(AFmt[LIdx]) - Ord('0'));
+          Inc(LIdx);
+        end;
+      end;
+      if LIdx > LLen then Break;
+      case AFmt[LIdx] of
+        'd': begin
+          SbAppendPadded(FormatInt(GetArgInt(LArgIdx)));
+          Inc(LArgIdx);
+        end;
+        'u': begin
+          SbAppendPadded(FormatUInt(GetArgUInt(LArgIdx)));
+          Inc(LArgIdx);
+        end;
+        'x': begin
+          SbAppendPadded(FormatHex(GetArgUInt(LArgIdx), False));
+          Inc(LArgIdx);
+        end;
+        'X': begin
+          SbAppendPadded(FormatHex(GetArgUInt(LArgIdx), True));
+          Inc(LArgIdx);
+        end;
+        's': begin
+          SbAppendPadded(GetArgStr(LArgIdx));
+          Inc(LArgIdx);
+        end;
+        'f': begin
+          if LPrec < 0 then LPrec := 6;
+          LSb.AppendStr(FormatFloat(GetArgFloat(LArgIdx), LPrec));
+          Inc(LArgIdx);
+        end;
+      end;
+      Inc(LIdx);
     end;
-    if LIdx > LLen then
-      Break;
-    case AFmt[LIdx] of
-      'd': begin
-        AppendPadded(FormatInt(GetArgInt(LArgIdx)), LWidth, LZeroPad);
-        Inc(LArgIdx);
-      end;
-      'u': begin
-        AppendPadded(FormatUInt(GetArgUInt(LArgIdx)), LWidth, LZeroPad);
-        Inc(LArgIdx);
-      end;
-      'x': begin
-        AppendPadded(FormatHex(GetArgUInt(LArgIdx), False), LWidth, LZeroPad);
-        Inc(LArgIdx);
-      end;
-      'X': begin
-        AppendPadded(FormatHex(GetArgUInt(LArgIdx), True), LWidth, LZeroPad);
-        Inc(LArgIdx);
-      end;
-      's': begin
-        AppendPadded(GetArgStr(LArgIdx), LWidth, False);
-        Inc(LArgIdx);
-      end;
-      'f': begin
-        if LWidth = 0 then LWidth := 6;
-        AppendStr(FormatFloat(GetArgFloat(LArgIdx), LWidth));
-        Inc(LArgIdx);
-      end;
-    end;
-    Inc(LIdx);
+    Result := LSb.ToString;
+  finally
+    LSb.Done;
   end;
 end;
 
