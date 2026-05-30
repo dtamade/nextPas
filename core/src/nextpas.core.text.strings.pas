@@ -35,6 +35,10 @@ type
     function Filter(APredicate: TStringPredicate): TStringArray;
     function Map(AMapper: TStringMapper): TStringArray;
     function Unique: TStringArray;
+    function TrimAll: TStringArray;
+    function ToUpper: TStringArray;
+    function ToLower: TStringArray;
+    function RemoveEmpty: TStringArray;
   end;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
@@ -58,6 +62,12 @@ function StringsParseKeyValues(const AText: string; ASeparator: Char = '='): TSt
 function StringPairsGet(const APairs: TStringPairArray; const AKey: string; const ADefault: string = ''): string;
 function StringPairsContains(const APairs: TStringPairArray; const AKey: string): Boolean;
 function StringPairsKeys(const APairs: TStringPairArray): TStringArray;
+
+{ Batch transform utilities }
+function StringsTrimAll(const AArr: TStringArray): TStringArray;
+function StringsToUpper(const AArr: TStringArray): TStringArray;
+function StringsToLower(const AArr: TStringArray): TStringArray;
+function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
 
 implementation
 
@@ -307,6 +317,46 @@ begin
     Result[i] := APairs[i].Key;
 end;
 
+{ Batch transforms }
+
+function StringsTrimAll(const AArr: TStringArray): TStringArray;
+var i: SizeInt;
+begin
+  SetLength(Result, Length(AArr));
+  for i := 0 to High(AArr) do
+    Result[i] := Trim(AArr[i]);
+end;
+
+function StringsToUpper(const AArr: TStringArray): TStringArray;
+var i: SizeInt;
+begin
+  SetLength(Result, Length(AArr));
+  for i := 0 to High(AArr) do
+    Result[i] := UpperCase(AArr[i]);
+end;
+
+function StringsToLower(const AArr: TStringArray): TStringArray;
+var i: SizeInt;
+begin
+  SetLength(Result, Length(AArr));
+  for i := 0 to High(AArr) do
+    Result[i] := LowerCase(AArr[i]);
+end;
+
+function StringsRemoveEmpty(const AArr: TStringArray): TStringArray;
+var i, LCount: SizeInt;
+begin
+  SetLength(Result, Length(AArr));
+  LCount := 0;
+  for i := 0 to High(AArr) do
+    if AArr[i] <> '' then
+    begin
+      Result[LCount] := AArr[i];
+      Inc(LCount);
+    end;
+  SetLength(Result, LCount);
+end;
+
 { TStringArrayHelper }
 
 procedure TStringArrayHelper.Add(const AValue: string);
@@ -382,6 +432,26 @@ end;
 function TStringArrayHelper.Unique: TStringArray;
 begin
   Result := StringsUnique(Self);
+end;
+
+function TStringArrayHelper.TrimAll: TStringArray;
+begin
+  Result := StringsTrimAll(Self);
+end;
+
+function TStringArrayHelper.ToUpper: TStringArray;
+begin
+  Result := StringsToUpper(Self);
+end;
+
+function TStringArrayHelper.ToLower: TStringArray;
+begin
+  Result := StringsToLower(Self);
+end;
+
+function TStringArrayHelper.RemoveEmpty: TStringArray;
+begin
+  Result := StringsRemoveEmpty(Self);
 end;
 
 end.
