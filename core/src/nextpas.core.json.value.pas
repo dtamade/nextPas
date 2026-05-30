@@ -105,29 +105,40 @@ end;
 
 function TJsonValue.AsBool: Boolean;
 begin
-  if FIdx = JSON_NODE_NONE then Exit(False);
+  if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkBool) then Exit(False);
   Result := FDoc^.Node(FIdx)^.BoolVal;
 end;
 
 function TJsonValue.AsInt: Int64;
+var LNode: PJsonNode;
 begin
   if FIdx = JSON_NODE_NONE then Exit(0);
-  if FDoc^.Node(FIdx)^.Kind = jnkReal then
-    Exit(Int64(Trunc(FDoc^.Node(FIdx)^.RealVal)));
-  Result := FDoc^.Node(FIdx)^.IntVal;
+  LNode := FDoc^.Node(FIdx);
+  case LNode^.Kind of
+    jnkInt: Result := LNode^.IntVal;
+    jnkReal: Result := Int64(Trunc(LNode^.RealVal));
+  else
+    Result := 0;
+  end;
 end;
 
 function TJsonValue.AsFloat: Double;
+var LNode: PJsonNode;
 begin
   if FIdx = JSON_NODE_NONE then Exit(0.0);
-  if FDoc^.Node(FIdx)^.Kind = jnkInt then
-    Exit(Double(FDoc^.Node(FIdx)^.IntVal));
-  Result := FDoc^.Node(FIdx)^.RealVal;
+  LNode := FDoc^.Node(FIdx);
+  case LNode^.Kind of
+    jnkReal: Result := LNode^.RealVal;
+    jnkInt: Result := Double(LNode^.IntVal);
+  else
+    Result := 0.0;
+  end;
 end;
 
 function TJsonValue.AsStr: TStringView;
 begin
-  if FIdx = JSON_NODE_NONE then Exit(TStringView.Empty);
+  if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkString) then
+    Exit(TStringView.Empty);
   Result := FDoc^.Node(FIdx)^.Str;
 end;
 

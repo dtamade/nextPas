@@ -564,6 +564,18 @@ begin
     FHasError := True;
     Exit(False);
   end;
+  if LState.LastPos <> POS_NONE then
+  begin
+    LState.LastPos := LState.LastPos + 1;
+    while (LState.LastPos < UInt32(AInput.Len)) and (Byte(AInput.Data[LState.LastPos]) <= 32) do
+      Inc(LState.LastPos);
+    if LState.LastPos < UInt32(AInput.Len) then
+    begin
+      FError.Message := TStringView.Create(PAnsiChar('trailing content'), 16);
+      FHasError := True;
+      Exit(False);
+    end;
+  end;
   Result := True;
 end;
 
