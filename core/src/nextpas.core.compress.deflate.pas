@@ -28,9 +28,8 @@ begin
   case ALevel of
     clNone: Result := Z_NO_COMPRESSION;
     clFastest: Result := Z_BEST_SPEED;
-    clDefault: Result := Z_DEFAULT_COMPRESSION;
     clBest: Result := Z_BEST_COMPRESSION;
-  else
+  otherwise
     Result := Z_DEFAULT_COMPRESSION;
   end;
 end;
@@ -81,8 +80,12 @@ destructor TDeflateWriter.Destroy;
 begin
   if FInitialized then
   begin
-    FlushOutput(Z_FINISH);
-    deflateEnd(FStream);
+    FInitialized := False;
+    try
+      FlushOutput(Z_FINISH);
+    finally
+      deflateEnd(FStream);
+    end;
   end;
   inherited;
 end;
@@ -217,6 +220,8 @@ begin
 end;
 
 function DeflateDecompress(const AData: TBytes): TBytes;
+const
+  MAX_DECOMPRESS_SIZE = 256 * 1024 * 1024; // 256 MB limit
 var
   LDstLen: ULong;
   LRet: Int32;
@@ -225,6 +230,8 @@ begin
     Exit(nil);
   LDstLen := Length(AData) * 4;
   repeat
+    if LDstLen > MAX_DECOMPRESS_SIZE then
+      raise EIOError.Create('deflate: decompressed size exceeds limit');
     SetLength(Result, LDstLen);
     LRet := uncompress(@Result[0], @LDstLen, @AData[0], Length(AData));
     if LRet = Z_BUF_ERROR then

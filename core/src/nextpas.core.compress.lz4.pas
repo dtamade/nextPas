@@ -49,7 +49,7 @@ begin
   LLen := Length(AData);
   if (LLen = 0) or (LLen > LZ4_MAX_INPUT_SIZE) then
   begin
-    SetLength(Result, 0);
+    Result := nil;
     Exit;
   end;
 
@@ -74,7 +74,7 @@ begin
     begin
       // Extend match
       LMatchLen := 4;
-      while (LSrc + LMatchLen < LEnd) and
+      while (LSrc + LMatchLen < LEnd) and (LRef + LMatchLen < LEnd) and
             (AData[LRef + LMatchLen] = AData[LSrc + LMatchLen]) do
         Inc(LMatchLen);
 
@@ -162,7 +162,7 @@ var
 begin
   if (Length(AData) = 0) or (AOriginalSize <= 0) then
   begin
-    SetLength(Result, 0);
+    Result := nil;
     Exit;
   end;
 
@@ -181,6 +181,8 @@ begin
         if LSrc >= LEnd then
           raise EIOError.Create('lz4: truncated literal length');
         LLitLen := LLitLen + AData[LSrc]; Inc(LSrc);
+        if LLitLen > AOriginalSize then
+          raise EIOError.Create('lz4: literal length overflow');
       until AData[LSrc - 1] <> 255;
     end;
 
@@ -189,6 +191,8 @@ begin
     begin
       if LSrc + LLitLen > LEnd then
         raise EIOError.Create('lz4: literal overflow');
+      if LDst + LLitLen > AOriginalSize then
+        raise EIOError.Create('lz4: output overflow');
       Move(AData[LSrc], Result[LDst], LLitLen);
       Inc(LSrc, LLitLen);
       Inc(LDst, LLitLen);
@@ -218,14 +222,16 @@ begin
         if LSrc >= LEnd then
           raise EIOError.Create('lz4: truncated match length');
         LMatchLen := LMatchLen + AData[LSrc]; Inc(LSrc);
+        if LMatchLen > AOriginalSize then
+          raise EIOError.Create('lz4: match length overflow');
       until AData[LSrc - 1] <> 255;
     end;
 
     // Copy match (byte-by-byte for overlapping)
+    if LDst + LMatchLen > AOriginalSize then
+      raise EIOError.Create('lz4: output overflow');
     while LMatchLen > 0 do
     begin
-      if LDst >= AOriginalSize then
-        raise EIOError.Create('lz4: output overflow');
       Result[LDst] := Result[LMatchPos];
       Inc(LDst);
       Inc(LMatchPos);
@@ -234,7 +240,7 @@ begin
   end;
 
   if LDst <> AOriginalSize then
-    SetLength(Result, LDst);
+    raise EIOError.Create('lz4: decompressed size mismatch');
 end;
 
 end.

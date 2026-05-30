@@ -37,9 +37,8 @@ begin
   case ALevel of
     clNone: Result := Z_NO_COMPRESSION;
     clFastest: Result := Z_BEST_SPEED;
-    clDefault: Result := Z_DEFAULT_COMPRESSION;
     clBest: Result := Z_BEST_COMPRESSION;
-  else
+  otherwise
     Result := Z_DEFAULT_COMPRESSION;
   end;
 end;
@@ -54,6 +53,7 @@ var
   LCRC: UInt32;
   LSize: UInt32;
 begin
+  Result := nil;
   if Length(AData) = 0 then
   begin
     SetLength(Result, 20);
@@ -113,7 +113,12 @@ var
   LOutLen, LHave: SizeUInt;
   LOffset: SizeUInt;
   LRet: Int32;
+  LFlags: Byte;
+  LExpectedCRC, LActualCRC: UInt32;
+  LExpectedSize: UInt32;
+  LTrailerOfs: SizeUInt;
 begin
+  Result := nil;
   if Length(AData) < 18 then
     raise EIOError.Create('gzip: data too short');
   if (AData[0] <> $1F) or (AData[1] <> $8B) then
@@ -121,8 +126,26 @@ begin
   if AData[2] <> $08 then
     raise EIOError.Create('gzip: unsupported method');
 
-  // Skip header (simplified: no FEXTRA/FNAME/FCOMMENT/FHCRC)
+  // Parse header flags and skip optional fields (RFC 1952)
+  LFlags := AData[3];
   LOffset := 10;
+  if (LFlags and $04) <> 0 then // FEXTRA
+  begin
+    if LOffset + 2 > SizeUInt(Length(AData)) then
+      raise EIOError.Create('gzip: truncated FEXTRA');
+    LOffset := LOffset + 2 + UInt16(AData[LOffset]) + (UInt16(AData[LOffset + 1]) shl 8);
+  end;
+  if (LFlags and $08) <> 0 then // FNAME
+    while (LOffset < SizeUInt(Length(AData))) and (AData[LOffset] <> 0) do Inc(LOffset);
+  if (LFlags and $08) <> 0 then Inc(LOffset); // skip null terminator
+  if (LFlags and $10) <> 0 then // FCOMMENT
+    while (LOffset < SizeUInt(Length(AData))) and (AData[LOffset] <> 0) do Inc(LOffset);
+  if (LFlags and $10) <> 0 then Inc(LOffset);
+  if (LFlags and $02) <> 0 then // FHCRC
+    Inc(LOffset, 2);
+
+  if LOffset + 8 >= SizeUInt(Length(AData)) then
+    raise EIOError.Create('gzip: header too large');
 
   FillChar(LStream, SizeOf(LStream), 0);
   LStream.next_in := @AData[LOffset];
@@ -152,6 +175,23 @@ begin
 
   inflateEnd(LStream);
   SetLength(Result, LOutLen);
+
+  // Verify CRC32 and original size from trailer
+  LTrailerOfs := SizeUInt(Length(AData)) - 8;
+  LExpectedCRC := UInt32(AData[LTrailerOfs]) or (UInt32(AData[LTrailerOfs + 1]) shl 8) or
+    (UInt32(AData[LTrailerOfs + 2]) shl 16) or (UInt32(AData[LTrailerOfs + 3]) shl 24);
+  LExpectedSize := UInt32(AData[LTrailerOfs + 4]) or (UInt32(AData[LTrailerOfs + 5]) shl 8) or
+    (UInt32(AData[LTrailerOfs + 6]) shl 16) or (UInt32(AData[LTrailerOfs + 7]) shl 24);
+
+  if LExpectedSize <> UInt32(LOutLen) then
+    raise EIOError.Create('gzip: size mismatch');
+
+  if LOutLen > 0 then
+    LActualCRC := UInt32(crc32(0, @Result[0], LOutLen))
+  else
+    LActualCRC := 0;
+  if LActualCRC <> LExpectedCRC then
+    raise EIOError.Create('gzip: CRC32 mismatch');
 end;
 
 end.
