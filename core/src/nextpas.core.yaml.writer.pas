@@ -25,6 +25,8 @@ type
 function NeedsQuoting(const AView: TStringView): Boolean;
 var
   LStr: string;
+  LCh: Byte;
+  LI: SizeUInt;
 begin
   if AView.IsEmpty then begin Result := True; Exit; end;
   LStr := AView.ToString;
@@ -39,19 +41,59 @@ begin
     Result := True;
     Exit;
   end;
-  if (AView.Data[0] = '{') or (AView.Data[0] = '[') or
-     (AView.Data[0] = '&') or (AView.Data[0] = '*') or
-     (AView.Data[0] = '#') or (AView.Data[0] = '''') or
-     (AView.Data[0] = '"') or (AView.Data[0] = '|') or
-     (AView.Data[0] = '>') or (AView.Data[0] = '%') or
-     (AView.Data[0] = '@') or (AView.Data[0] = '`') then
+  LCh := Byte(AView.Data[0]);
+  if (LCh = Byte('{')) or (LCh = Byte('[')) or
+     (LCh = Byte('&')) or (LCh = Byte('*')) or
+     (LCh = Byte('#')) or (LCh = Byte('''')) or
+     (LCh = Byte('"')) or (LCh = Byte('|')) or
+     (LCh = Byte('>')) or (LCh = Byte('%')) or
+     (LCh = Byte('@')) or (LCh = Byte('`')) or
+     (LCh = Byte('!')) or (LCh = Byte(',')) or
+     (LCh = Byte(' ')) or (LCh = Byte(#9)) then
   begin
     Result := True;
     Exit;
   end;
-  if AView.IndexOf(AnsiChar(':')) >= 0 then begin Result := True; Exit; end;
-  if AView.IndexOf(AnsiChar('#')) >= 0 then begin Result := True; Exit; end;
+  // Numeric-looking strings need quoting to prevent type coercion
+  if ((LCh >= Byte('0')) and (LCh <= Byte('9'))) or
+     (LCh = Byte('+')) or (LCh = Byte('-')) or (LCh = Byte('.')) then
+  begin
+    Result := True;
+    Exit;
+  end;
+  for LI := 0 to AView.Len - 1 do
+  begin
+    LCh := Byte(AView.Data[LI]);
+    if (LCh = Byte(':')) or (LCh = Byte('#')) or (LCh = Byte('"')) or
+       (LCh = Byte('\')) or (LCh < 32) then
+    begin
+      Result := True;
+      Exit;
+    end;
+  end;
   Result := False;
+end;
+
+procedure WriteQuotedStr(var AW: TYamlStringBuilder; const AView: TStringView);
+var
+  LI: SizeUInt;
+  LCh: Byte;
+begin
+  AW.AppendChar('"');
+  for LI := 0 to AView.Len - 1 do
+  begin
+    LCh := Byte(AView.Data[LI]);
+    case LCh of
+      Byte('\'): begin AW.AppendChar('\'); AW.AppendChar('\'); end;
+      Byte('"'): begin AW.AppendChar('\'); AW.AppendChar('"'); end;
+      10: begin AW.AppendChar('\'); AW.AppendChar('n'); end;
+      13: begin AW.AppendChar('\'); AW.AppendChar('r'); end;
+      9: begin AW.AppendChar('\'); AW.AppendChar('t'); end;
+    else
+      AW.AppendByte(LCh);
+    end;
+  end;
+  AW.AppendChar('"');
 end;
 
 procedure WriteScalar(var AW: TYamlStringBuilder; const ANode: PYamlNode);
@@ -77,11 +119,7 @@ begin
     ynkString:
     begin
       if NeedsQuoting(ANode^.Str) then
-      begin
-        AW.AppendChar('"');
-        AW.AppendView(ANode^.Str);
-        AW.AppendChar('"');
-      end
+        WriteQuotedStr(AW, ANode^.Str)
       else
         AW.AppendView(ANode^.Str);
     end;

@@ -50,9 +50,24 @@ begin
 end;
 
 function TYamlValue.GetNode: PYamlNode;
+var
+  LIdx: UInt32;
+  LDepth: Int32;
 begin
-  if (FDoc <> nil) and (FIdx < FDoc^.NodeCount) then
-    Result := @FDoc^.Nodes[FIdx]
+  if (FDoc = nil) or (FIdx >= FDoc^.NodeCount) then
+  begin
+    Result := nil;
+    Exit;
+  end;
+  LIdx := FIdx;
+  LDepth := 0;
+  while (LIdx < FDoc^.NodeCount) and (FDoc^.Nodes[LIdx].Kind = ynkAlias) and (LDepth < 64) do
+  begin
+    LIdx := FDoc^.Nodes[LIdx].AliasTarget;
+    Inc(LDepth);
+  end;
+  if LIdx < FDoc^.NodeCount then
+    Result := @FDoc^.Nodes[LIdx]
   else
     Result := nil;
 end;
@@ -165,7 +180,10 @@ begin
   end;
   LCur := LN^.Container.FirstChild;
   for LI := 1 to AIndex do
+  begin
+    if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
     LCur := FDoc^.Nodes[LCur].Next;
+  end;
   Result := TYamlValue.Create(FDoc^, LCur);
 end;
 

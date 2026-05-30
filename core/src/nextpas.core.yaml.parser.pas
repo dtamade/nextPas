@@ -555,12 +555,18 @@ begin
     end;
     ytkAlias:
     begin
-      Result := ResolveAlias(ADoc, ACurToken.Value);
-      if Result = YAML_NODE_NONE then
+      LIdx := ResolveAlias(ADoc, ACurToken.Value);
+      if LIdx = YAML_NODE_NONE then
       begin
         SetError(ADoc, 'undefined alias', ACurToken.Line, ACurToken.Col, 0);
         Result := AddNode(ADoc);
         ADoc.Nodes[Result].Kind := ynkNull;
+      end
+      else
+      begin
+        Result := AddNode(ADoc);
+        ADoc.Nodes[Result].Kind := ynkAlias;
+        ADoc.Nodes[Result].AliasTarget := LIdx;
       end;
       ACurToken := AScanner.NextToken;
     end;

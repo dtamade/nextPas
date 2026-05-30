@@ -23,7 +23,7 @@ type
     FHasError: Boolean;
     FIndentStack: array[0..63] of Int32;
     FIndentTop: Int32;
-    FPendingTokens: array[0..7] of TYamlToken;
+    FPendingTokens: array[0..63] of TYamlToken;
     FPendingCount: Int32;
     FAtLineStart: Boolean;
     function Peek: Byte; inline;
@@ -152,7 +152,9 @@ begin
   begin
     Inc(FIndentTop);
     FIndentStack[FIndentTop] := ACol;
-  end;
+  end
+  else
+    SetError('nesting too deep');
 end;
 
 procedure TYamlScanner.PopIndent;
@@ -163,11 +165,13 @@ end;
 
 procedure TYamlScanner.EnqueueToken(const ATok: TYamlToken);
 begin
-  if FPendingCount < 8 then
+  if FPendingCount < 64 then
   begin
     FPendingTokens[FPendingCount] := ATok;
     Inc(FPendingCount);
-  end;
+  end
+  else
+    SetError('token queue overflow');
 end;
 
 function TYamlScanner.DequeueToken: TYamlToken;
@@ -391,9 +395,10 @@ begin
     if AtEnd then Break;
     if (Peek <> 10) and (Peek <> 13) and (LCurIndent < LBlockIndent) then
     begin
-      // Unread the indent we just consumed
-      FPos := FPos - SizeUInt(LCurIndent);
-      FCol := FCol - UInt32(LCurIndent);
+      if SizeUInt(LCurIndent) <= FPos then
+        FPos := FPos - SizeUInt(LCurIndent);
+      if UInt32(LCurIndent) < FCol then
+        FCol := FCol - UInt32(LCurIndent);
       Break;
     end;
   end;
@@ -509,7 +514,7 @@ begin
     end;
     Byte('}'):
     begin
-      Dec(FFlowLevel);
+      if FFlowLevel > 0 then Dec(FFlowLevel);
       Result := MakeToken(ytkFlowMapEnd);
       Advance;
     end;
@@ -521,7 +526,7 @@ begin
     end;
     Byte(']'):
     begin
-      Dec(FFlowLevel);
+      if FFlowLevel > 0 then Dec(FFlowLevel);
       Result := MakeToken(ytkFlowSeqEnd);
       Advance;
     end;
