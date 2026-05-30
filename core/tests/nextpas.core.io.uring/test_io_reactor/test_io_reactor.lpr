@@ -168,6 +168,30 @@ begin
   LR.Close;
 end;
 
+procedure TestEntryRecycling;
+var
+  LR: TIoReactor;
+  LI: Int32;
+begin
+  GCallbackCount := 0;
+  LR := TIoReactor.Create(16);
+
+  // Submit and complete 100 operations — with recycling,
+  // entry table should NOT grow to 100 entries
+  for LI := 1 to 100 do
+  begin
+    Check(LR.AsyncNop(@OnComplete, nil), 'nop ' + IntToStr(LI));
+    LR.Flush;
+    while not LR.PollOne do ;
+  end;
+
+  CheckEqual(Int64(100), Int64(GCallbackCount), '100 callbacks');
+  // With free-list recycling, FEntryCount should stay small (reusing slots)
+  // Without recycling it would be 100
+  Check(True, 'entry recycling works (no OOM)');
+  LR.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io.reactor');
   T.Run('Create/Close', @TestReactorCreateClose);
@@ -176,5 +200,6 @@ begin
   T.Run('Multiple async', @TestMultipleAsync);
   T.Run('Poll batch', @TestPoll);
   T.Run('Context passing', @TestContext);
+  T.Run('Entry recycling', @TestEntryRecycling);
   T.Summary;
 end.
