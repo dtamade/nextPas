@@ -75,8 +75,9 @@ begin
 
     LPool.FMutex.Release;
 
-    LTask := LNode^.Task;
-    LNode^.Task := nil;
+    // Transfer ownership without triggering refcount (avoid race)
+    Pointer(LTask) := Pointer(LNode^.Task);
+    Pointer(LNode^.Task) := nil;
     Dispose(LNode);
 
     try

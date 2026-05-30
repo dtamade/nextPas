@@ -86,28 +86,28 @@ begin
 
     LPool.FMutex.Acquire;
 
-    // Try own queue
+    // Try own queue (pop from front)
     if LPool.FQueues[LMyID].Count > 0 then
     begin
-      LTask := LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head];
-      LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head] := nil;
+      Pointer(LTask) := Pointer(LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head]);
+      Pointer(LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head]) := nil;
       LPool.FQueues[LMyID].Head := (LPool.FQueues[LMyID].Head + 1) mod QUEUE_CAPACITY;
       Dec(LPool.FQueues[LMyID].Count);
       LFound := True;
     end;
 
-    // Try stealing
+    // Try stealing from back of victim's queue
     if not LFound then
       for LI := 1 to LPool.FWorkerCount - 1 do
       begin
         LVictim := (LMyID + LI) mod LPool.FWorkerCount;
         if LPool.FQueues[LVictim].Count > 0 then
         begin
+          // Pop from back: decrement Tail
+          LPool.FQueues[LVictim].Tail := (LPool.FQueues[LVictim].Tail - 1 + QUEUE_CAPACITY) mod QUEUE_CAPACITY;
           Dec(LPool.FQueues[LVictim].Count);
-          LTask := LPool.FQueues[LVictim].Tasks[
-            (LPool.FQueues[LVictim].Head + LPool.FQueues[LVictim].Count) mod QUEUE_CAPACITY];
-          LPool.FQueues[LVictim].Tasks[
-            (LPool.FQueues[LVictim].Head + LPool.FQueues[LVictim].Count) mod QUEUE_CAPACITY] := nil;
+          Pointer(LTask) := Pointer(LPool.FQueues[LVictim].Tasks[LPool.FQueues[LVictim].Tail]);
+          Pointer(LPool.FQueues[LVictim].Tasks[LPool.FQueues[LVictim].Tail]) := nil;
           LFound := True;
           Break;
         end;
@@ -118,8 +118,8 @@ begin
     if LFound then
     begin
       LTask();
-      LTask := nil;
       LPool.FMutex.Acquire;
+      LTask := nil;  // Release ref under mutex protection
       Dec(LPool.FPendingTasks);
       if LPool.FPendingTasks = 0 then
         LPool.FDoneCondVar.Broadcast;
@@ -200,8 +200,8 @@ begin
     FQueues[LQIdx].Tasks[FQueues[LQIdx].Tail] := ATask;
     FQueues[LQIdx].Tail := (FQueues[LQIdx].Tail + 1) mod QUEUE_CAPACITY;
     Inc(FQueues[LQIdx].Count);
+    Inc(FPendingTasks);
   end;
-  Inc(FPendingTasks);
 
   FCondVar.Broadcast;
   FMutex.Release;
