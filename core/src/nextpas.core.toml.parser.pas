@@ -324,9 +324,13 @@ begin
 end;
 
 procedure TTomlParser.SkipWhitespaceInline;
+var
+  LStart: SizeUInt;
 begin
+  LStart := Pos;
   while (Pos < SrcLen) and ((Src[Pos] = ' ') or (Src[Pos] = #9)) do
-    Advance;
+    Inc(Pos);
+  Col := Col + UInt32(Pos - LStart);
 end;
 
 procedure TTomlParser.SkipWhitespaceAndNewlines;
@@ -345,11 +349,24 @@ begin
 end;
 
 function TTomlParser.SkipComment: Boolean;
+var
+  LRemaining: SizeUInt;
+  LFound: PtrInt;
 begin
   if (Pos < SrcLen) and (Src[Pos] = '#') then
   begin
-    while (Pos < SrcLen) and (Src[Pos] <> #10) do
-      Advance;
+    LRemaining := SrcLen - Pos;
+    LFound := ScanFindByte(Src + Pos, LRemaining, Ord(#10));
+    if LFound >= 0 then
+    begin
+      Col := Col + UInt32(LFound);
+      Inc(Pos, SizeUInt(LFound));
+    end
+    else
+    begin
+      Col := Col + UInt32(LRemaining);
+      Pos := SrcLen;
+    end;
   end;
   Result := True;
 end;
@@ -383,10 +400,18 @@ end;
 function TTomlParser.ParseBareKey(out AKey: TStringView): Boolean;
 var
   LStart: SizeUInt;
+  LCh: Byte;
 begin
   LStart := Pos;
-  while (Pos < SrcLen) and IsBareKeyChar(Byte(Src[Pos])) do
+  while Pos < SrcLen do
+  begin
+    LCh := Byte(Src[Pos]);
+    if not (((LCh or 32) >= Ord('a')) and ((LCh or 32) <= Ord('z'))
+      or (LCh >= Ord('0')) and (LCh <= Ord('9'))
+      or (LCh = Ord('-')) or (LCh = Ord('_'))) then
+      Break;
     Inc(Pos);
+  end;
   if Pos = LStart then
     Exit(SetError('expected key', 12));
   AKey := TStringView.Create(Src + LStart, Pos - LStart);
