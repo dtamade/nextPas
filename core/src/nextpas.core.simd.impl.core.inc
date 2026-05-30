@@ -2881,3 +2881,60 @@ begin
   Result.f[6] := g;
   Result.f[7] := h;
 end;
+
+// === P2 Completeness: Batch Array F64 Extensions (inline facade) ===
+
+procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    aDst[i] := aSrc1[i] * aSrc2[i] + aSrc3[i];
+end;
+
+procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    if aSrc1[i] < aSrc2[i] then
+      aDst[i] := aSrc1[i]
+    else
+      aDst[i] := aSrc2[i];
+end;
+
+procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    if aSrc1[i] > aSrc2[i] then
+      aDst[i] := aSrc1[i]
+    else
+      aDst[i] := aSrc2[i];
+end;
+
+procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    aDst[i] := System.Exp(aSrc[i]);
+end;
+
+procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    aDst[i] := System.Ln(aSrc[i]);
+end;
+
+procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    aDst[i] := System.Sin(aSrc[i]);
+end;
+
+procedure ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt);
+var i: SizeUInt;
+begin
+  for i := 0 to aCount - 1 do
+    aDst[i] := System.Cos(aSrc[i]);
+end;

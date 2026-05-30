@@ -4431,3 +4431,72 @@ begin
     Result.i[i] := v;
   end;
 end;
+
+// === P2 Completeness: I32x8 Utility Functions ===
+
+function VecI32x8Splat(value: Int32): TVecI32x8;
+var i: Integer;
+begin
+  for i := 0 to 7 do
+    Result.i[i] := value;
+end;
+
+function VecI32x8Zero: TVecI32x8;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+end;
+
+function VecI32x8Load(p: PInt32): TVecI32x8;
+begin
+  Move(p^, Result, SizeOf(TVecI32x8));
+end;
+
+procedure VecI32x8Store(p: PInt32; const a: TVecI32x8);
+begin
+  Move(a, p^, SizeOf(TVecI32x8));
+end;
+
+// === P2 Completeness: I32x8 Reduce Functions ===
+
+function VecI32x8ReduceAdd(const a: TVecI32x8): Int32;
+var i: Integer;
+begin
+  Result := a.i[0];
+  for i := 1 to 7 do
+    Result := Result + a.i[i];
+end;
+
+function VecI32x8ReduceMin(const a: TVecI32x8): Int32;
+var i: Integer;
+begin
+  Result := a.i[0];
+  for i := 1 to 7 do
+    if a.i[i] < Result then
+      Result := a.i[i];
+end;
+
+function VecI32x8ReduceMax(const a: TVecI32x8): Int32;
+var i: Integer;
+begin
+  Result := a.i[0];
+  for i := 1 to 7 do
+    if a.i[i] > Result then
+      Result := a.i[i];
+end;
+
+// === P2 Completeness: F64x4 Make + Lerp ===
+
+function VecF64x4Make(x, y, z, w: Double): TVecF64x4;
+begin
+  Result.d[0] := x;
+  Result.d[1] := y;
+  Result.d[2] := z;
+  Result.d[3] := w;
+end;
+
+function VecF64x4Lerp(const a, b: TVecF64x4; t: Double): TVecF64x4;
+var i: Integer;
+begin
+  for i := 0 to 3 do
+    Result.d[i] := a.d[i] + t * (b.d[i] - a.d[i]);
+end;

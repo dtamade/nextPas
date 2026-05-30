@@ -1267,6 +1267,41 @@ function VecI32x4Make(a, b, c, d: Int32): TVecI32x4; inline;
 {** Create F32x8 from individual values. @returns([a, b, c, d, e, f, g, h]) *}
 function VecF32x8Make(a, b, c, d, e, f, g, h: Single): TVecF32x8; inline;
 
+// === P2 Completeness Gap Functions ===
+
+// I32x8 Utility (inline, no dispatch slot)
+{** Broadcast scalar to all 8 lanes. @returns([value x8]) *}
+function VecI32x8Splat(value: Int32): TVecI32x8; inline;
+{** Create zero vector. @returns([0 x8]) *}
+function VecI32x8Zero: TVecI32x8; inline;
+{** Load 8 Int32 from memory (unaligned). *}
+function VecI32x8Load(p: PInt32): TVecI32x8; inline;
+{** Store 8 Int32 to memory (unaligned). *}
+procedure VecI32x8Store(p: PInt32; const a: TVecI32x8); inline;
+
+// I32x8 Reduce (inline, no dispatch slot)
+{** Horizontal sum of all I32x8 elements. *}
+function VecI32x8ReduceAdd(const a: TVecI32x8): Int32; inline;
+{** Minimum of all I32x8 elements. *}
+function VecI32x8ReduceMin(const a: TVecI32x8): Int32; inline;
+{** Maximum of all I32x8 elements. *}
+function VecI32x8ReduceMax(const a: TVecI32x8): Int32; inline;
+
+// F64x4 Make + Lerp (inline, no dispatch slot)
+{** Create F64x4 from individual values. @returns([x, y, z, w]) *}
+function VecF64x4Make(x, y, z, w: Double): TVecF64x4; inline;
+{** Linear interpolation. @returns(result[i] = a[i] + t * (b[i] - a[i])) *}
+function VecF64x4Lerp(const a, b: TVecF64x4; t: Double): TVecF64x4; inline;
+
+// Batch Array F64 Extensions (inline facade, no dispatch slot)
+procedure ArrayFmaF64(aSrc1, aSrc2, aSrc3, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayMinF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayMaxF64(aSrc1, aSrc2, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayExpF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayLogF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArraySinF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+procedure ArrayCosF64(aSrc, aDst: PDouble; aCount: SizeUInt); inline;
+
 // === Framework Information ===
 
 // Get current backend information
