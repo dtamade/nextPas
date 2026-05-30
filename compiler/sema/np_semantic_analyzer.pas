@@ -6122,6 +6122,12 @@ begin
         ABlob := ABlob + 'abs' + #10;
       Exit(True);
     end;
+    if SameText(ANode.ChildAt(0).Text, 'Ord') and
+      EncodeRuntimeBoolExprFold(ANode.ChildAt(1), ABlob) then
+    begin
+      ABlob := ABlob + 'zext' + #10;
+      Exit(True);
+    end;
   end;
   if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and
