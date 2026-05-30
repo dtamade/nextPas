@@ -494,6 +494,47 @@ begin
   CheckEqual(Int64(0), Int64(Length(LS)));
   LS := NanoIdCustom('', 10);
   CheckEqual(Int64(0), Int64(Length(LS)));
+  LS := NanoIdCustom(StringOfChar('x', 300), 5);
+  CheckEqual(Int64(0), Int64(Length(LS)));
+end;
+
+procedure TestUuidNoDash;
+var LU: TUuid; LS: string;
+begin
+  LU := TUuid.NewV4;
+  LS := LU.ToStringNoDash;
+  CheckEqual(Int64(32), Int64(Length(LS)));
+  Check(Pos('-', LS) = 0, 'no dashes');
+end;
+
+procedure TestUuidHash;
+var LA, LB: TUuid;
+begin
+  LA := TUuid.NewV4;
+  LB := LA;
+  CheckEqual(Int64(LA.Hash), Int64(LB.Hash));
+  LB := TUuid.NewV4;
+  Check(LA.Hash <> LB.Hash, 'different UUIDs should have different hashes (probabilistic)');
+end;
+
+procedure TestXidNil;
+var LX: TXid;
+begin
+  LX := TXid.Nil_;
+  Check(LX.IsNil, 'Nil_ must be nil');
+end;
+
+procedure TestXidParseInvalid;
+begin
+  Check(TXid.Parse('').IsNil, 'empty');
+  Check(TXid.Parse('too-short').IsNil, 'short');
+  Check(TXid.Parse('ZZZZZZZZZZZZZZZZZZZZ').IsNil, 'invalid chars');
+end;
+
+procedure TestKsuidParseInvalidChars;
+var LK: TKsuid;
+begin
+  Check(not TKsuid.TryParse('!!!!!!!!!!!!!!!!!!!!!!!!!!!', LK), 'invalid base62');
 end;
 
 begin
@@ -559,6 +600,11 @@ begin
   T.Run('KSUID parse invalid', @TestKsuidParseInvalid);
   T.Run('XID roundtrip', @TestXidRoundTrip);
   T.Run('NanoID boundary', @TestNanoIdBoundary);
+  T.Run('UUID NoDash', @TestUuidNoDash);
+  T.Run('UUID Hash', @TestUuidHash);
+  T.Run('XID Nil', @TestXidNil);
+  T.Run('XID parse invalid', @TestXidParseInvalid);
+  T.Run('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
 
   T.Summary;
 end.
