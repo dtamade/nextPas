@@ -103,8 +103,10 @@ var
 begin
   LH := UInt32(2166136261);
   if ALen > 0 then
+  {$PUSH}{$R-}{$Q-}
   for LI := 0 to ALen - 1 do
     LH := (LH xor Byte(AData[LI])) * UInt32(16777619);
+  {$POP}
   Result := LH;
 end;
 
