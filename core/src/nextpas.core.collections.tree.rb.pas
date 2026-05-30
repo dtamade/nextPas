@@ -425,7 +425,7 @@ begin
 end;
 
 function TRBTreeCore.Remove(const AValue: T): Boolean;
-var Z, X, Y: PNode; YOriginalColor: TColor;
+var Z, X, Y: PNode; YOriginalColor: TColor; ZParent: PNode;
 begin
   // Find Z
   Z := FRoot;
@@ -437,6 +437,7 @@ begin
 
   Y := Z;
   YOriginalColor := Y^.Color;
+  ZParent := Z^.Parent;
   if Z^.Left = @FSentinel then
   begin
     X := Z^.Right;
@@ -455,9 +456,11 @@ begin
     if Y^.Parent = Z then
     begin
       if X <> @FSentinel then X^.Parent := Y;
+      ZParent := Y;
     end
     else
     begin
+      ZParent := Y^.Parent;
       Transplant(Y, Y^.Right);
       Y^.Right := Z^.Right;
       if Y^.Right <> @FSentinel then Y^.Right^.Parent := Y;
@@ -473,9 +476,8 @@ begin
 
   if YOriginalColor = Black then
   begin
-    // X may be sentinel; ensure parent is valid (sentinel has self-parent)
     if X = @FSentinel then
-      DeleteFixup(X, Z^.Parent) // when X is sentinel, Z's original parent is the correct reference
+      DeleteFixup(X, ZParent)
     else
       DeleteFixup(X, X^.Parent);
   end;

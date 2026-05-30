@@ -460,19 +460,18 @@ function TSkipList.Range(const aFrom, aTo: K): TEntryArray;
 var
   update: array[0..SKIPLIST_MAX_LEVEL-1] of PNode;
   x: PNode;
-  cnt: SizeUInt;
+  cnt, cap: SizeUInt;
   cmp: SizeInt;
 begin
   Result := nil;
 
   x := FindNode(aFrom, update);
 
-  // x is now at or after aFrom
-  // But FindNode returns first node >= aFrom, handle case where x is before
   if x = nil then
     Exit;
 
   cnt := 0;
+  cap := 0;
   while x <> nil do
   begin
     if Assigned(FCompare) then
@@ -483,13 +482,18 @@ begin
     if cmp > 0 then
       Break;
 
-    SetLength(Result, cnt + 1);
+    if cnt >= cap then
+    begin
+      if cap = 0 then cap := 8 else cap := cap * 2;
+      SetLength(Result, cap);
+    end;
     Result[cnt].Key := x^.Key;
     Result[cnt].Value := x^.Value;
     Inc(cnt);
 
     x := x^.Forward[0];
   end;
+  SetLength(Result, cnt);
 end;
 
 function TSkipList.ToArray: TEntryArray;

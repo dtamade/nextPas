@@ -495,8 +495,7 @@ var
   LCurrent: PNode;
   LZeroValue: V;
 begin
-  // Zero all values while preserving keys and order
-  FillChar(LZeroValue, SizeOf(V), 0);
+  LZeroValue := Default(V);
 
   LCurrent := FHead;
   while LCurrent <> nil do
