@@ -58,6 +58,8 @@ type
     NumCaptures: UInt32;
     LiteralPrefix: string;
     LiteralPrefixLen: SizeUInt;
+    StartClass: TCharBitmap;
+    StartClassSize: UInt32;
   end;
 
   TGroup = record

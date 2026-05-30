@@ -18,6 +18,8 @@ procedure CharBitmapInitWord(var ABitmap: TCharBitmap);
 procedure CharBitmapInitSpace(var ABitmap: TCharBitmap);
 
 function IsWordChar(ACh: Byte): Boolean; inline;
+function CharBitmapPopCount(const ABitmap: TCharBitmap): UInt32;
+procedure CharBitmapOr(var ADst: TCharBitmap; const ASrc: TCharBitmap);
 
 implementation
 
@@ -83,6 +85,28 @@ begin
   else
     Result := False;
   end;
+end;
+
+function CharBitmapPopCount(const ABitmap: TCharBitmap): UInt32;
+var i: Integer; b: Byte;
+begin
+  Result := 0;
+  for i := 0 to 31 do
+  begin
+    b := ABitmap[i];
+    while b <> 0 do
+    begin
+      Inc(Result);
+      b := b and (b - 1);
+    end;
+  end;
+end;
+
+procedure CharBitmapOr(var ADst: TCharBitmap; const ASrc: TCharBitmap);
+var i: Integer;
+begin
+  for i := 0 to 31 do
+    ADst[i] := ADst[i] or ASrc[i];
 end;
 
 end.

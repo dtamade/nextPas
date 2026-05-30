@@ -83,6 +83,7 @@ var
   LPrefixLen: SizeUInt;
   LPrefixByte: Byte;
   LHasPrefix: Boolean;
+  LHasStartClass: Boolean;
   LPrefixStr: string;
   k: SizeUInt;
 
@@ -152,6 +153,8 @@ begin
   LHasPrefix := AProgram.LiteralPrefixLen > 0;
   LPrefixLen := AProgram.LiteralPrefixLen;
   LPrefixStr := AProgram.LiteralPrefix;
+  LHasStartClass := (not LHasPrefix) and (AProgram.StartClassSize > 0) and
+                    (AProgram.StartClassSize < 128);
   if LHasPrefix then
     LPrefixByte := Byte(LPrefixStr[1])
   else
@@ -181,6 +184,12 @@ begin
         startPos := startPos + 1 + SizeUInt(prefixPos);
       end;
     end;
+  end
+  else if LHasStartClass then
+  begin
+    while (startPos < ALen) and
+          (not CharBitmapTest(AProgram.StartClass, Ord(AInput[startPos]))) do
+      Inc(startPos);
   end;
 
   pos := startPos;
@@ -224,23 +233,31 @@ begin
 
     Inc(pos);
 
-    // SIMD prefilter skip: when no threads survived and we have a literal prefix,
-    // jump to the next verified candidate position
-    if (NCount = 0) and LHasPrefix and (pos < ALen) then
+    // Prefilter skip: when no threads survived, jump to next candidate position
+    if (NCount = 0) and (pos < ALen) then
     begin
-      while True do
+      if LHasPrefix then
       begin
-        prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos, LPrefixByte));
-        if prefixPos < 0 then Exit;
-        pos := pos + SizeUInt(prefixPos);
-        if LPrefixLen <= 1 then Break;
-        if pos + LPrefixLen > ALen then Exit;
-        k := 1;
-        while (k < LPrefixLen) and (AInput[pos + k] = AnsiChar(LPrefixStr[k + 1])) do
-          Inc(k);
-        if k = LPrefixLen then Break;
-        Inc(pos);
-        if pos >= ALen then Exit;
+        while True do
+        begin
+          prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos, LPrefixByte));
+          if prefixPos < 0 then Exit;
+          pos := pos + SizeUInt(prefixPos);
+          if LPrefixLen <= 1 then Break;
+          if pos + LPrefixLen > ALen then Exit;
+          k := 1;
+          while (k < LPrefixLen) and (AInput[pos + k] = AnsiChar(LPrefixStr[k + 1])) do
+            Inc(k);
+          if k = LPrefixLen then Break;
+          Inc(pos);
+          if pos >= ALen then Exit;
+        end;
+      end
+      else if LHasStartClass then
+      begin
+        while (pos < ALen) and
+              (not CharBitmapTest(AProgram.StartClass, Ord(AInput[pos]))) do
+          Inc(pos);
       end;
     end;
   end;
@@ -526,25 +543,33 @@ begin
     if (NList.Count = 0) and matched then Break;
     if (NList.Count = 0) and AAnchored then Break;
 
-    // SIMD prefilter skip for NfaSearch
-    if (NList.Count = 0) and (not matched) and
-       (AProgram.LiteralPrefixLen > 0) and (pos < ALen) then
+    // Prefilter skip for NfaSearch
+    if (NList.Count = 0) and (not matched) and (pos < ALen) then
     begin
-      while True do
+      if AProgram.LiteralPrefixLen > 0 then
       begin
-        prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos,
-                      Byte(AProgram.LiteralPrefix[1])));
-        if prefixPos < 0 then Exit;
-        pos := pos + SizeUInt(prefixPos);
-        if AProgram.LiteralPrefixLen <= 1 then Break;
-        if pos + AProgram.LiteralPrefixLen > ALen then Exit;
-        k := 1;
-        while (k < AProgram.LiteralPrefixLen) and
-              (AInput[pos + k] = AnsiChar(AProgram.LiteralPrefix[k + 1])) do
-          Inc(k);
-        if k = AProgram.LiteralPrefixLen then Break;
-        Inc(pos);
-        if pos >= ALen then Exit;
+        while True do
+        begin
+          prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos,
+                        Byte(AProgram.LiteralPrefix[1])));
+          if prefixPos < 0 then Exit;
+          pos := pos + SizeUInt(prefixPos);
+          if AProgram.LiteralPrefixLen <= 1 then Break;
+          if pos + AProgram.LiteralPrefixLen > ALen then Exit;
+          k := 1;
+          while (k < AProgram.LiteralPrefixLen) and
+                (AInput[pos + k] = AnsiChar(AProgram.LiteralPrefix[k + 1])) do
+            Inc(k);
+          if k = AProgram.LiteralPrefixLen then Break;
+          Inc(pos);
+          if pos >= ALen then Exit;
+        end;
+      end
+      else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) then
+      begin
+        while (pos < ALen) and
+              (not CharBitmapTest(AProgram.StartClass, Ord(AInput[pos]))) do
+          Inc(pos);
       end;
     end;
   end;
