@@ -1,6 +1,7 @@
 unit nextpas.core.text.strings;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch typehelpers}
 
 interface
 
@@ -17,6 +18,24 @@ type
     Value: string;
   end;
   TStringPairArray = array of TStringPair;
+
+  TStringArrayHelper = type helper for TStringArray
+    procedure Add(const AValue: string);
+    procedure Insert(AIndex: SizeUInt; const AValue: string);
+    procedure Delete(AIndex: SizeUInt);
+    procedure Clear;
+    procedure Sort;
+    procedure Reverse;
+    function Contains(const AValue: string): Boolean;
+    function IndexOf(const AValue: string): SizeInt;
+    function Count: SizeInt; inline;
+    function IsEmpty: Boolean; inline;
+    function Join(const ASep: string): string;
+    function Slice(AStart, AEnd: SizeUInt): TStringArray;
+    function Filter(APredicate: TStringPredicate): TStringArray;
+    function Map(AMapper: TStringMapper): TStringArray;
+    function Unique: TStringArray;
+  end;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
 function StringsIndexOf(const AArr: TStringArray; const AValue: string): SizeInt;
@@ -286,6 +305,83 @@ begin
   SetLength(Result, Length(APairs));
   for i := 0 to High(APairs) do
     Result[i] := APairs[i].Key;
+end;
+
+{ TStringArrayHelper }
+
+procedure TStringArrayHelper.Add(const AValue: string);
+begin
+  StringsAppend(Self, AValue);
+end;
+
+procedure TStringArrayHelper.Insert(AIndex: SizeUInt; const AValue: string);
+begin
+  StringsInsert(Self, AIndex, AValue);
+end;
+
+procedure TStringArrayHelper.Delete(AIndex: SizeUInt);
+begin
+  StringsDelete(Self, AIndex);
+end;
+
+procedure TStringArrayHelper.Clear;
+begin
+  Self := nil;
+end;
+
+procedure TStringArrayHelper.Sort;
+begin
+  StringsSort(Self);
+end;
+
+procedure TStringArrayHelper.Reverse;
+begin
+  StringsReverse(Self);
+end;
+
+function TStringArrayHelper.Contains(const AValue: string): Boolean;
+begin
+  Result := StringsContains(Self, AValue);
+end;
+
+function TStringArrayHelper.IndexOf(const AValue: string): SizeInt;
+begin
+  Result := StringsIndexOf(Self, AValue);
+end;
+
+function TStringArrayHelper.Count: SizeInt;
+begin
+  Result := Length(Self);
+end;
+
+function TStringArrayHelper.IsEmpty: Boolean;
+begin
+  Result := Length(Self) = 0;
+end;
+
+function TStringArrayHelper.Join(const ASep: string): string;
+begin
+  Result := StringsJoin(Self, ASep);
+end;
+
+function TStringArrayHelper.Slice(AStart, AEnd: SizeUInt): TStringArray;
+begin
+  Result := StringsSlice(Self, AStart, AEnd);
+end;
+
+function TStringArrayHelper.Filter(APredicate: TStringPredicate): TStringArray;
+begin
+  Result := StringsFilter(Self, APredicate);
+end;
+
+function TStringArrayHelper.Map(AMapper: TStringMapper): TStringArray;
+begin
+  Result := StringsMap(Self, AMapper);
+end;
+
+function TStringArrayHelper.Unique: TStringArray;
+begin
+  Result := StringsUnique(Self);
 end;
 
 end.
