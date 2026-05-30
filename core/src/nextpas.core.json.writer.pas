@@ -44,6 +44,8 @@ type
     procedure Str(const AValue: PAnsiChar; const ALen: SizeUInt); overload;
     procedure Str(const AValue: TStringView); overload;
     procedure Str(const AValue: string); overload;
+    procedure StrClean(const AValue: PAnsiChar; const ALen: SizeUInt);
+    procedure KeyClean(const AKey: PAnsiChar; const ALen: SizeUInt);
     procedure RawValue(const AJson: PAnsiChar; const ALen: SizeUInt);
   end;
 
@@ -265,6 +267,24 @@ end;
 procedure TJsonWriter.Key(const AKey: string);
 begin
   Key(PAnsiChar(AKey), SizeUInt(Length(AKey)));
+end;
+
+procedure TJsonWriter.StrClean(const AValue: PAnsiChar; const ALen: SizeUInt);
+begin
+  if FNeedComma then FBuilder^.AppendChar(',');
+  FBuilder^.AppendChar('"');
+  FBuilder^.AppendBytes(AValue, ALen);
+  FBuilder^.AppendChar('"');
+  FNeedComma := True;
+end;
+
+procedure TJsonWriter.KeyClean(const AKey: PAnsiChar; const ALen: SizeUInt);
+begin
+  if FNeedComma then FBuilder^.AppendChar(',');
+  FBuilder^.AppendChar('"');
+  FBuilder^.AppendBytes(AKey, ALen);
+  FBuilder^.AppendBytes('":', 2);
+  FNeedComma := False;
 end;
 
 procedure TJsonWriter.RawValue(const AJson: PAnsiChar; const ALen: SizeUInt);

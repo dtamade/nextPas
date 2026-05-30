@@ -124,7 +124,11 @@ begin
     jnkBool: AW.Bool(LNode^.BoolVal);
     jnkInt: AW.Int(LNode^.IntVal);
     jnkReal: AW.Float(LNode^.RealVal);
-    jnkString: AW.Str(LNode^.Str);
+    jnkString:
+      if (LNode^.Flags and JNF_CLEAN_STR) <> 0 then
+        AW.StrClean(LNode^.Str.Data, LNode^.Str.Len)
+      else
+        AW.Str(LNode^.Str);
     jnkArray:
     begin
       AW.BeginArray;
@@ -144,7 +148,10 @@ begin
       for I := 0 to LNode^.Container.Count - 1 do
       begin
         if LChild = JSON_NODE_NONE then Break;
-        AW.Key(ADoc.Node(LChild)^.Str);
+        if (ADoc.Node(LChild)^.Flags and JNF_CLEAN_STR) <> 0 then
+          AW.KeyClean(ADoc.Node(LChild)^.Str.Data, ADoc.Node(LChild)^.Str.Len)
+        else
+          AW.Key(ADoc.Node(LChild)^.Str);
         StringifyNode(ADoc, ADoc.Node(LChild)^.Next, AW);
         LChild := ADoc.Node(ADoc.Node(LChild)^.Next)^.Next;
       end;

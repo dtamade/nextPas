@@ -7,6 +7,9 @@ interface
 uses
   nextpas.core.text.view;
 
+const
+  JNF_CLEAN_STR = 1;
+
 type
   TJsonNodeKind = (
     jnkNull,
@@ -20,6 +23,7 @@ type
 
   TJsonNode = record
     Kind: TJsonNodeKind;
+    Flags: Byte;
     Next: UInt32;
     case Byte of
       0: (BoolVal: Boolean);

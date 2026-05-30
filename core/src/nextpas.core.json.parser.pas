@@ -102,6 +102,7 @@ begin
   end;
   Result := FNodeCount;
   FNodes[FNodeCount].Next := JSON_NODE_NONE;
+  FNodes[FNodeCount].Flags := 0;
   Inc(FNodeCount);
 end;
 
@@ -266,7 +267,10 @@ begin
     Doc^.FNodes[LIdx].Str := TStringView.Create(LBuf, LDecLen);
   end
   else
+  begin
     Doc^.FNodes[LIdx].Str := LRaw;
+    Doc^.FNodes[LIdx].Flags := JNF_CLEAN_STR;
+  end;
   Result := LIdx;
 end;
 
