@@ -663,7 +663,7 @@ function TTomlParser.ParseMultiLineBasicString(out AStr: TStringView; out AOwned
 var
   LStart, LEnd, LBufLen: SizeUInt;
   LBuf, LDst: PAnsiChar;
-  LI: SizeUInt;
+  LI, LBsStart, LBsCount: SizeUInt;
   LErr: TUnescapeError;
 begin
   AOwned := False;
@@ -703,20 +703,36 @@ begin
       begin
         if (Src[LI] = '\') and (LI + 1 < LEnd) then
         begin
-          if Src[LI+1] = #10 then
+          // Count consecutive backslashes to determine if last one is continuation
+          LBsStart := LI;
+          while (LI < LEnd) and (Src[LI] = '\') do
+            Inc(LI);
+          LBsCount := LI - LBsStart;
+          // Check if what follows the backslashes is a newline
+          if (LI < LEnd) and ((Src[LI] = #10) or
+            ((Src[LI] = #13) and (LI + 1 < LEnd) and (Src[LI+1] = #10))) then
           begin
-            Inc(LI, 2);
-            while (LI < LEnd) and ((Src[LI] = ' ') or (Src[LI] = #9) or (Src[LI] = #10) or (Src[LI] = #13)) do
-              Inc(LI);
-            Continue;
-          end
-          else if (Src[LI+1] = #13) and (LI + 2 < LEnd) and (Src[LI+2] = #10) then
-          begin
-            Inc(LI, 3);
-            while (LI < LEnd) and ((Src[LI] = ' ') or (Src[LI] = #9) or (Src[LI] = #10) or (Src[LI] = #13)) do
-              Inc(LI);
-            Continue;
+            if (LBsCount mod 2) = 1 then
+            begin
+              // Odd: last \ is continuation, copy the rest literally
+              while LBsStart < LI - 1 do
+              begin
+                LDst^ := Src[LBsStart]; Inc(LDst); Inc(LBsStart);
+              end;
+              // Skip continuation \ + newline + whitespace
+              if Src[LI] = #13 then Inc(LI);
+              if (LI < LEnd) and (Src[LI] = #10) then Inc(LI);
+              while (LI < LEnd) and ((Src[LI] = ' ') or (Src[LI] = #9) or (Src[LI] = #10) or (Src[LI] = #13)) do
+                Inc(LI);
+              Continue;
+            end;
           end;
+          // Not continuation — copy all backslashes literally
+          while LBsStart < LI do
+          begin
+            LDst^ := Src[LBsStart]; Inc(LDst); Inc(LBsStart);
+          end;
+          Continue;
         end;
         if Src[LI] = #13 then
         begin

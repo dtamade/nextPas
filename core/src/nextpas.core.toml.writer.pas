@@ -32,6 +32,7 @@ type
     FIsArrayStack: array[0..127] of Boolean;
     procedure WriteEscapedStr(const AValue: PAnsiChar; ALen: SizeUInt);
     procedure WriteBareOrQuotedKey(const AKey: PAnsiChar; ALen: SizeUInt);
+    procedure WriteDottedPath(const APath: PAnsiChar; ALen: SizeUInt);
     procedure PrepareValue;
     procedure WriteIndent;
   public
@@ -147,6 +148,29 @@ begin
     WriteEscapedStr(AKey, ALen);
 end;
 
+procedure TTomlWriter.WriteDottedPath(const APath: PAnsiChar; ALen: SizeUInt);
+var
+  LStart, LI: SizeUInt;
+  LFirst: Boolean;
+begin
+  LStart := 0;
+  LFirst := True;
+  LI := 0;
+  while LI < ALen do
+  begin
+    if APath[LI] = '.' then
+    begin
+      if not LFirst then FBuilder^.AppendChar('.');
+      LFirst := False;
+      WriteBareOrQuotedKey(APath + LStart, LI - LStart);
+      LStart := LI + 1;
+    end;
+    Inc(LI);
+  end;
+  if not LFirst then FBuilder^.AppendChar('.');
+  WriteBareOrQuotedKey(APath + LStart, LI - LStart);
+end;
+
 procedure TTomlWriter.PrepareValue;
 begin
   if (FInlineDepth > 0) and FIsArrayStack[FInlineDepth] then
@@ -175,7 +199,7 @@ procedure TTomlWriter.BeginTable(const AKey: string);
 begin
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendChar('[');
-  WriteBareOrQuotedKey(PAnsiChar(AKey), SizeUInt(Length(AKey)));
+  WriteDottedPath(PAnsiChar(AKey), SizeUInt(Length(AKey)));
   FBuilder^.AppendChar(']');
   FBuilder^.AppendChar(#10);
   FNeedNewline := True;
@@ -185,7 +209,7 @@ procedure TTomlWriter.BeginArrayTable(const AKey: string);
 begin
   if FNeedNewline then FBuilder^.AppendChar(#10);
   FBuilder^.AppendBytes('[[', 2);
-  WriteBareOrQuotedKey(PAnsiChar(AKey), SizeUInt(Length(AKey)));
+  WriteDottedPath(PAnsiChar(AKey), SizeUInt(Length(AKey)));
   FBuilder^.AppendBytes(']]', 2);
   FBuilder^.AppendChar(#10);
   FNeedNewline := True;
