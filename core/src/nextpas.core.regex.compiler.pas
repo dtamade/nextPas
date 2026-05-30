@@ -236,6 +236,35 @@ end;
 
 function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32): TRegexProgram;
 var C: TCompiler; inst: TInstruction; i: UInt32;
+    visited: array of Boolean;
+    startBitmap, classBitmap: TCharBitmap;
+    startClassFull: Boolean;
+
+  procedure CollectStartBytes(APC: UInt32);
+  var LInst: TInstruction;
+  begin
+    if startClassFull then Exit;
+    if APC >= C.Count then Exit;
+    if visited[APC] then Exit;
+    visited[APC] := True;
+    LInst := C.Code[APC];
+    case LInst.Op of
+      opSave: CollectStartBytes(APC + 1);
+      opJump: CollectStartBytes(LInst.Target);
+      opSplit: begin CollectStartBytes(LInst.X); CollectStartBytes(LInst.Y); end;
+      opAssert: CollectStartBytes(APC + 1);
+      opLiteral: CharBitmapSet(startBitmap, LInst.Ch);
+      opCharClass:
+      begin
+        classBitmap := Result.Classes[LInst.ClassIdx];
+        if LInst.Negated then CharBitmapNegate(classBitmap);
+        CharBitmapOr(startBitmap, classBitmap);
+      end;
+      opAnyChar: startClassFull := True;
+      opMatch: startClassFull := True;
+    end;
+  end;
+
 begin
   FillChar(C, SizeOf(C), 0);
   // Wrap entire pattern in Save(0)...Save(1) for whole-match tracking
@@ -261,7 +290,8 @@ begin
   Result.NumCaptures := ANumCaptures;
   SetLength(Result.GroupNames, C.NumGroupNames);
   if C.NumGroupNames > 0 then
-    Move(C.GroupNames[0], Result.GroupNames[0], C.NumGroupNames * SizeOf(TGroupName));
+    for i := 0 to C.NumGroupNames - 1 do
+      Result.GroupNames[i] := C.GroupNames[i];
   Result.LiteralPrefix := '';
   Result.LiteralPrefixLen := 0;
 
@@ -276,6 +306,20 @@ begin
       Inc(i);
     end;
     Result.LiteralPrefixLen := Length(Result.LiteralPrefix);
+  end;
+
+  // Compute start byte class (set of bytes that can begin a match)
+  CharBitmapClear(startBitmap);
+  startClassFull := False;
+  SetLength(visited, C.Count);
+  FillChar(visited[0], C.Count, 0);
+  CollectStartBytes(0);
+  if startClassFull or (Result.LiteralPrefixLen > 0) then
+    Result.StartClassSize := 256
+  else
+  begin
+    Result.StartClass := startBitmap;
+    Result.StartClassSize := CharBitmapPopCount(startBitmap);
   end;
 end;
 
