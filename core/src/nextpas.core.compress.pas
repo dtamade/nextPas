@@ -32,6 +32,7 @@ function GzipCompress(const AData: TBytes;
 function GzipDecompress(const AData: TBytes): TBytes; inline;
 function Lz4Compress(const AData: TBytes): TBytes; inline;
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes; inline;
+function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
 
 implementation
 
@@ -87,6 +88,11 @@ end;
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 begin
   Result := nextpas.core.compress.lz4.Lz4Decompress(AData, AOriginalSize);
+end;
+
+function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
+begin
+  Result := nextpas.core.compress.lz4.Lz4CompressBound(AInputSize);
 end;
 
 end.

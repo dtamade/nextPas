@@ -374,6 +374,8 @@ begin
 end;
 
 function GzipDecompress(const AData: TBytes): TBytes;
+const
+  MAX_DECOMPRESS_SIZE = 256 * 1024 * 1024;
 var
   LStream: z_stream;
   LBuf: array[0..32767] of Byte;
@@ -433,6 +435,11 @@ begin
       raise EIOError.Create('gzip: inflate failed (' + IntToStr(LRet) + ')');
     end;
     LHave := SizeOf(LBuf) - LStream.avail_out;
+    if LOutLen + LHave > MAX_DECOMPRESS_SIZE then
+    begin
+      inflateEnd(LStream);
+      raise EIOError.Create('gzip: decompressed size exceeds limit');
+    end;
     if LOutLen + LHave > SizeUInt(Length(Result)) then
       SetLength(Result, (LOutLen + LHave) * 2);
     Move(LBuf[0], Result[LOutLen], LHave);

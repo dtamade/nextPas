@@ -316,6 +316,82 @@ begin
   Check((LOut[0]=1) and (LOut[4]=5), 'gzip small stream data');
 end;
 
+procedure TestGzipCrossAPI;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LSrc, LCompressed, LOut: TBytes;
+  LReader: IDecompressReader;
+  LI: Integer;
+begin
+  SetLength(LSrc, 2048);
+  for LI := 0 to High(LSrc) do LSrc[LI] := Byte(LI mod 173);
+
+  // Streaming write → one-shot decompress
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], Length(LSrc));
+  LWriter.Close;
+  LBuf.Seek(0, soBeginning);
+  SetLength(LCompressed, LBuf.Size);
+  LBuf.Read(LCompressed[0], Length(LCompressed));
+  LOut := GzipDecompress(LCompressed);
+  CheckEqual(Int64(2048), Int64(Length(LOut)), 'cross: stream→oneshot length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LOut[LI] then
+    begin
+      Check(False, 'cross: stream→oneshot mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+
+  // One-shot compress → streaming read
+  LCompressed := GzipCompress(LSrc);
+  LBuf := CreateBytesStreamFrom(LCompressed);
+  LReader := GzipReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LReader.Close;
+  CheckEqual(Int64(2048), Int64(Length(LOut)), 'cross: oneshot→stream length');
+  for LI := 0 to High(LSrc) do
+    if LSrc[LI] <> LOut[LI] then
+    begin
+      Check(False, 'cross: oneshot→stream mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+  Check(True, 'cross-API gzip interop');
+end;
+
+procedure TestGzipStreamCRCCorrupt;
+var
+  LBuf: IStream;
+  LWriter: ICompressWriter;
+  LReader: IDecompressReader;
+  LSrc, LOut, LRaw: TBytes;
+  LGotException: Boolean;
+begin
+  LSrc := TBytes.Create(10, 20, 30, 40, 50);
+  LBuf := CreateBytesStream;
+  LWriter := GzipWriter(LBuf as IWriter);
+  LWriter.Write(LSrc[0], 5);
+  LWriter.Close;
+
+  // Tamper with CRC in the trailer (last 8 bytes)
+  LBuf.Seek(0, soBeginning);
+  SetLength(LRaw, LBuf.Size);
+  LBuf.Read(LRaw[0], Length(LRaw));
+  LRaw[Length(LRaw) - 5] := LRaw[Length(LRaw) - 5] xor $AA;
+
+  LBuf := CreateBytesStreamFrom(LRaw);
+  LReader := GzipReader(LBuf as IReader);
+  LOut := IoReadAll(LReader as IReader);
+  LGotException := False;
+  try
+    LReader.Close;
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'gzip stream CRC corrupt raises on Close');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.compress');
   T.Run('Deflate round-trip', @TestDeflateRoundTrip);
@@ -334,5 +410,7 @@ begin
   T.Run('Corrupted gzip', @TestGzipCorrupted);
   T.Run('Corrupted lz4', @TestLz4Corrupted);
   T.Run('Gzip stream small', @TestGzipStreamSmall);
+  T.Run('Gzip cross-API', @TestGzipCrossAPI);
+  T.Run('Gzip stream CRC corrupt', @TestGzipStreamCRCCorrupt);
   T.Summary;
 end.

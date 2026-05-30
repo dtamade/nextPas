@@ -9,6 +9,7 @@ uses
 
 function Lz4Compress(const AData: TBytes): TBytes;
 function Lz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
+function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt; inline;
 
 implementation
 
@@ -237,6 +238,11 @@ begin
 
   if LDst <> AOriginalSize then
     raise EIOError.Create('lz4: decompressed size mismatch');
+end;
+
+function Lz4CompressBound(const AInputSize: SizeUInt): SizeUInt;
+begin
+  Result := AInputSize + (AInputSize div 255) + 16;
 end;
 
 end.
