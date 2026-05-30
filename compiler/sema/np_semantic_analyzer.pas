@@ -7602,6 +7602,25 @@ begin
               InhParentName := '';
           end;
           if InhParentName = '' then InhParentName := StringValue;
+          if TypeMetaSize(StringValue) = 8 then
+          begin
+            Value := TypeMetaVmtSlot(StringValue,
+              Child.ChildAt(0).ChildAt(0).ChildAt(1).Text);
+            if Value >= 0 then
+            begin
+              Operand := 'var ' + Child.ChildAt(0).ChildAt(0).ChildAt(0).Text + #10;
+              for ArgIndex := 1 to Child.ChildAt(0).ChildCount - 1 do
+              begin
+                RhsNode := Child.ChildAt(0).ChildAt(ArgIndex);
+                if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+                  Operand := Operand + Decoded;
+              end;
+              Operand := Operand + 'ivcall ' + IntToStr(Value) + ' ' +
+                IntToStr(Child.ChildAt(0).ChildCount - 1) + #10;
+              FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+              Continue;
+            end;
+          end;
           Operand := InhParentName + '.' +
             Child.ChildAt(0).ChildAt(0).ChildAt(1).Text + #9 +
             'var ' + Child.ChildAt(0).ChildAt(0).ChildAt(0).Text + #10;

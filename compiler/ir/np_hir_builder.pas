@@ -1503,6 +1503,8 @@ var
   Instr: THIRInstr;
 begin
   V := ParseIntBlob(ANode.Operand);
+  if SameText(ANode.DisplayName, '__discard__') then
+    Exit;
   if V <> 0 then
   begin
     FillChar(Instr, SizeOf(Instr), 0);
