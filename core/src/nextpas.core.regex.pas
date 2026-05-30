@@ -89,10 +89,9 @@ begin
 end;
 
 function TRegex.IsMatch(const AInput: string): Boolean;
-var LMatch: TMatch;
 begin
   if not FValid then Exit(False);
-  Result := NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, 0, LMatch);
+  Result := NfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
 function TRegex.Find(const AInput: string): TMatch;
@@ -147,7 +146,7 @@ function TRegex.Split(const AInput: string): TStringArray;
 var
   LMatches: TMatchArray;
   i: SizeInt;
-  LPos, LCount: SizeUInt;
+  LPos: SizeUInt;
 begin
   LMatches := FindAll(AInput);
   if Length(LMatches) = 0 then

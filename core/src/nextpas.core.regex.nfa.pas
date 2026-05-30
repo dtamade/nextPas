@@ -23,136 +23,119 @@ implementation
 
 uses SysUtils, nextpas.core.text.scan;
 
+{ --- Sparse Set: O(1) add, contains, clear --- }
+
 type
-  TThread = record
-    PC: UInt32;
-    Slots: array of SizeInt;
-  end;
-  TThreadList = record
-    Items: array of TThread;
+  TSparseSet = record
+    Dense: array of UInt32;
+    Sparse: array of UInt32;
     Count: UInt32;
-    MaxCount: UInt32;
-    Gen: array of UInt32;
-    CurGen: UInt32;
+    Cap: UInt32;
   end;
 
-procedure InitThreadList(var TL: TThreadList; AMaxPC: UInt32);
+procedure SparseInit(out S: TSparseSet; ACap: UInt32);
 begin
-  TL.MaxCount := AMaxPC + 1;
-  SetLength(TL.Items, TL.MaxCount);
-  TL.Count := 0;
-  SetLength(TL.Gen, AMaxPC + 1);
-  FillChar(TL.Gen[0], (AMaxPC + 1) * SizeOf(UInt32), 0);
-  TL.CurGen := 1;
+  S.Cap := ACap;
+  SetLength(S.Dense, ACap);
+  SetLength(S.Sparse, ACap);
+  S.Count := 0;
 end;
 
-procedure ClearThreadList(var TL: TThreadList);
+function SparseContains(const S: TSparseSet; AVal: UInt32): Boolean; inline;
 begin
-  TL.Count := 0;
-  Inc(TL.CurGen);
+  Result := (AVal < S.Cap) and (S.Sparse[AVal] < S.Count) and
+            (S.Dense[S.Sparse[AVal]] = AVal);
 end;
 
-procedure AddThread(var TL: TThreadList; const AProgram: TRegexProgram;
-  APC: UInt32; const ASlots: array of SizeInt; APos: SizeUInt;
-  const AInput: PAnsiChar; ALen: SizeUInt);
-var inst: TInstruction; newSlots: array of SizeInt; i: Integer;
+function SparseAdd(var S: TSparseSet; AVal: UInt32): Boolean; inline;
 begin
-  if APC >= UInt32(Length(AProgram.Code)) then Exit;
-  if TL.Gen[APC] = TL.CurGen then Exit;
-  TL.Gen[APC] := TL.CurGen;
-
-  inst := AProgram.Code[APC];
-  case inst.Op of
-    opSplit:
-    begin
-      AddThread(TL, AProgram, inst.X, ASlots, APos, AInput, ALen);
-      AddThread(TL, AProgram, inst.Y, ASlots, APos, AInput, ALen);
-    end;
-    opJump:
-      AddThread(TL, AProgram, inst.Target, ASlots, APos, AInput, ALen);
-    opSave:
-    begin
-      SetLength(newSlots, Length(ASlots));
-      for i := 0 to High(ASlots) do newSlots[i] := ASlots[i];
-      if inst.Slot < UInt32(Length(newSlots)) then
-        newSlots[inst.Slot] := SizeInt(APos);
-      AddThread(TL, AProgram, APC + 1, newSlots, APos, AInput, ALen);
-    end;
-    opAssert:
-    begin
-      case inst.Assert of
-        akStart: if APos = 0 then AddThread(TL, AProgram, APC + 1, ASlots, APos, AInput, ALen);
-        akEnd: if APos = ALen then AddThread(TL, AProgram, APC + 1, ASlots, APos, AInput, ALen);
-        akWordBoundary:
-        begin
-          if ((APos = 0) or not IsWordChar(Ord(AInput[APos - 1]))) <>
-             ((APos >= ALen) or not IsWordChar(Ord(AInput[APos]))) then
-            AddThread(TL, AProgram, APC + 1, ASlots, APos, AInput, ALen);
-        end;
-        akNotWordBoundary:
-        begin
-          if not (((APos = 0) or not IsWordChar(Ord(AInput[APos - 1]))) <>
-                  ((APos >= ALen) or not IsWordChar(Ord(AInput[APos])))) then
-            AddThread(TL, AProgram, APC + 1, ASlots, APos, AInput, ALen);
-        end;
-      end;
-    end;
-  else
-    if TL.Count < TL.MaxCount then
-    begin
-      TL.Items[TL.Count].PC := APC;
-      SetLength(TL.Items[TL.Count].Slots, Length(ASlots));
-      for i := 0 to High(ASlots) do
-        TL.Items[TL.Count].Slots[i] := ASlots[i];
-      Inc(TL.Count);
-    end;
-  end;
+  if SparseContains(S, AVal) then Exit(False);
+  S.Sparse[AVal] := S.Count;
+  S.Dense[S.Count] := AVal;
+  Inc(S.Count);
+  Result := True;
 end;
 
-{ NfaIsMatch — PC-only Thompson VM, no Slots allocation }
+procedure SparseClear(var S: TSparseSet); inline;
+begin
+  S.Count := 0;
+end;
+
+{ --- NfaIsMatch: zero-allocation PC-only Thompson VM --- }
+{ Uses iterative worklist for epsilon closure (no recursion) }
 
 function NfaIsMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 var
   CList, NList: array of UInt32;
   CCount, NCount: UInt32;
-  Gen: array of UInt32;
-  CurGen: UInt32;
+  Seen: TSparseSet;
+  Stack: array of UInt32;
+  StackTop: UInt32;
   LCodeLen: UInt32;
   pos: SizeUInt;
   i: UInt32;
+  pc: UInt32;
   inst: TInstruction;
   ch: Byte;
   prefixPos: SizeInt;
   startPos: SizeUInt;
+  LPrefixLen: SizeUInt;
+  LPrefixByte: Byte;
+  LHasPrefix: Boolean;
+  LPrefixStr: string;
+  k: SizeUInt;
 
-  procedure AddPC(APC: UInt32);
+  procedure EpsilonClose(AStartPC: UInt32);
   var LInst: TInstruction;
   begin
-    if APC >= LCodeLen then Exit;
-    if Gen[APC] = CurGen then Exit;
-    Gen[APC] := CurGen;
-    LInst := AProgram.Code[APC];
-    case LInst.Op of
-      opSplit: begin AddPC(LInst.X); AddPC(LInst.Y); end;
-      opJump: AddPC(LInst.Target);
-      opSave: AddPC(APC + 1);
-      opAssert:
-        case LInst.Assert of
-          akStart: if pos = 0 then AddPC(APC + 1);
-          akEnd: if pos = ALen then AddPC(APC + 1);
-          akWordBoundary:
-            if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
-               ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
-              AddPC(APC + 1);
-          akNotWordBoundary:
-            if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
-                    ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
-              AddPC(APC + 1);
+    if AStartPC >= LCodeLen then Exit;
+    if SparseContains(Seen, AStartPC) then Exit;
+    StackTop := 0;
+    Stack[StackTop] := AStartPC;
+    Inc(StackTop);
+    while StackTop > 0 do
+    begin
+      Dec(StackTop);
+      pc := Stack[StackTop];
+      if pc >= LCodeLen then Continue;
+      if not SparseAdd(Seen, pc) then Continue;
+      LInst := AProgram.Code[pc];
+      case LInst.Op of
+        opSplit:
+        begin
+          Stack[StackTop] := LInst.X; Inc(StackTop);
+          Stack[StackTop] := LInst.Y; Inc(StackTop);
         end;
-    else
-      CList[CCount] := APC;
-      Inc(CCount);
+        opJump:
+        begin
+          Stack[StackTop] := LInst.Target; Inc(StackTop);
+        end;
+        opSave:
+        begin
+          Stack[StackTop] := pc + 1; Inc(StackTop);
+        end;
+        opAssert:
+        begin
+          case LInst.Assert of
+            akStart:
+              if pos = 0 then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+            akEnd:
+              if pos = ALen then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+            akWordBoundary:
+              if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                 ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
+              begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+            akNotWordBoundary:
+              if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                      ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
+              begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+          end;
+        end;
+      else
+        CList[CCount] := pc;
+        Inc(CCount);
+      end;
     end;
   end;
 
@@ -163,35 +146,62 @@ begin
 
   SetLength(CList, LCodeLen);
   SetLength(NList, LCodeLen);
-  SetLength(Gen, LCodeLen);
-  FillChar(Gen[0], LCodeLen * SizeOf(UInt32), 0);
-  CurGen := 1;
-  CCount := 0;
-  NCount := 0;
+  SetLength(Stack, LCodeLen * 2);
+  SparseInit(Seen, LCodeLen);
+
+  LHasPrefix := AProgram.LiteralPrefixLen > 0;
+  LPrefixLen := AProgram.LiteralPrefixLen;
+  LPrefixStr := AProgram.LiteralPrefix;
+  if LHasPrefix then
+    LPrefixByte := Byte(LPrefixStr[1])
+  else
+    LPrefixByte := 0;
 
   startPos := 0;
-  if AProgram.LiteralPrefixLen > 0 then
+  if LHasPrefix then
   begin
-    prefixPos := SizeInt(ScanFindByte(AInput, ALen, Byte(AProgram.LiteralPrefix[1])));
+    prefixPos := SizeInt(ScanFindByte(AInput, ALen, LPrefixByte));
     if prefixPos < 0 then Exit;
     startPos := SizeUInt(prefixPos);
+    // Verify full prefix at candidate position
+    if LPrefixLen > 1 then
+    begin
+      while True do
+      begin
+        if startPos + LPrefixLen > ALen then Exit;
+        k := 1;
+        while (k < LPrefixLen) and (AInput[startPos + k] = AnsiChar(LPrefixStr[k + 1])) do
+          Inc(k);
+        if k = LPrefixLen then Break;
+        // Skip to next candidate
+        if startPos + 1 >= ALen then Exit;
+        prefixPos := SizeInt(ScanFindByte(AInput + startPos + 1,
+                      ALen - startPos - 1, LPrefixByte));
+        if prefixPos < 0 then Exit;
+        startPos := startPos + 1 + SizeUInt(prefixPos);
+      end;
+    end;
   end;
 
   pos := startPos;
-  AddPC(0);
+  NCount := 0;
 
   while pos <= ALen do
   begin
-    // Re-inject start state
-    AddPC(0);
+    SparseClear(Seen);
+    CCount := 0;
+    if NCount > 0 then
+      for i := 0 to NCount - 1 do
+        EpsilonClose(NList[i]);
+    EpsilonClose(0);
 
-    // Check for match in current list
-    for i := 0 to CCount - 1 do
-      if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
+    if CCount > 0 then
+      for i := 0 to CCount - 1 do
+        if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
 
     if pos = ALen then Break;
+    if CCount = 0 then Break;
 
-    // Step: advance one byte, collect next PCs (raw, no epsilon closure yet)
     NCount := 0;
     for i := 0 to CCount - 1 do
     begin
@@ -199,38 +209,106 @@ begin
       case inst.Op of
         opLiteral:
           if Ord(AInput[pos]) = inst.Ch then
-          begin
-            if NCount < LCodeLen then begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
-          end;
+          begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         opAnyChar:
           if AInput[pos] <> #10 then
-          begin
-            if NCount < LCodeLen then begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
-          end;
+          begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         opCharClass:
         begin
           ch := Ord(AInput[pos]);
           if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
-          begin
-            if NCount < LCodeLen then begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
-          end;
+          begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         end;
       end;
     end;
 
-    // Advance position, then do epsilon closure on collected PCs
     Inc(pos);
-    Inc(CurGen);
-    CCount := 0;
-    for i := 0 to NCount - 1 do
-      AddPC(NList[i]);
 
-    if CCount = 0 then Exit;
+    // SIMD prefilter skip: when no threads survived and we have a literal prefix,
+    // jump to the next verified candidate position
+    if (NCount = 0) and LHasPrefix and (pos < ALen) then
+    begin
+      while True do
+      begin
+        prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos, LPrefixByte));
+        if prefixPos < 0 then Exit;
+        pos := pos + SizeUInt(prefixPos);
+        if LPrefixLen <= 1 then Break;
+        if pos + LPrefixLen > ALen then Exit;
+        k := 1;
+        while (k < LPrefixLen) and (AInput[pos + k] = AnsiChar(LPrefixStr[k + 1])) do
+          Inc(k);
+        if k = LPrefixLen then Break;
+        Inc(pos);
+        if pos >= ALen then Exit;
+      end;
+    end;
+  end;
+end;
+
+{ --- NfaSearch: full Thompson VM with capture slots --- }
+{ Uses slot pool to reduce per-thread allocation }
+
+type
+  TSlotArray = array of SizeInt;
+
+  TThread = record
+    PC: UInt32;
+    SlotIdx: UInt32;
   end;
 
-  // Final check
-  for i := 0 to CCount - 1 do
-    if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
+  TSlotPool = record
+    Slots: array of TSlotArray;
+    Count: UInt32;
+    Cap: UInt32;
+    NumSlots: UInt32;
+  end;
+
+procedure SlotPoolInit(out P: TSlotPool; ACap, ANumSlots: UInt32);
+var i: UInt32;
+begin
+  P.Cap := ACap;
+  P.NumSlots := ANumSlots;
+  P.Count := 0;
+  SetLength(P.Slots, ACap);
+  if ACap > 0 then
+    for i := 0 to ACap - 1 do
+      SetLength(P.Slots[i], ANumSlots);
+end;
+
+function SlotPoolAlloc(var P: TSlotPool): UInt32;
+var i: UInt32; oldCap: UInt32;
+begin
+  if P.Count >= P.Cap then
+  begin
+    oldCap := P.Cap;
+    P.Cap := P.Cap * 2;
+    SetLength(P.Slots, P.Cap);
+    for i := oldCap to P.Cap - 1 do
+      SetLength(P.Slots[i], P.NumSlots);
+  end;
+  Result := P.Count;
+  Inc(P.Count);
+end;
+
+function SlotPoolClone(var P: TSlotPool; ASrcIdx: UInt32): UInt32;
+begin
+  Result := SlotPoolAlloc(P);
+  Move(P.Slots[ASrcIdx][0], P.Slots[Result][0], P.NumSlots * SizeOf(SizeInt));
+end;
+
+type
+  TThreadList2 = record
+    Items: array of TThread;
+    Count: UInt32;
+    MaxCount: UInt32;
+  end;
+
+procedure InitThreadList2(out TL: TThreadList2; AMax: UInt32);
+begin
+  TL.MaxCount := AMax;
+  SetLength(TL.Items, AMax);
+  TL.Count := 0;
 end;
 
 function NfaSearch(const AProgram: TRegexProgram;
@@ -238,99 +316,237 @@ function NfaSearch(const AProgram: TRegexProgram;
   AStartPos: SizeUInt;
   out AMatch: TMatch): Boolean;
 var
-  CList, NList, Tmp: TThreadList;
+  CList, NList: TThreadList2;
+  Pool: TSlotPool;
+  Seen: TSparseSet;
+  Stack: array of UInt32;
+  StackSlot: array of UInt32;
+  StackTop: UInt32;
+  LCodeLen: UInt32;
   i, pos: SizeUInt;
   ch: Byte;
   inst: TInstruction;
   matched: Boolean;
-  matchSlots: array of SizeInt;
-  initSlots: array of SizeInt;
+  matchSlots: TSlotArray;
+  initSlotIdx: UInt32;
   startPos: SizeUInt;
   prefixPos: SizeInt;
+  curSlotIdx: UInt32;
+  k: SizeUInt;
+
+  procedure EpsilonClose(AStartPC, ASlotIdx: UInt32);
+  var LInst: TInstruction; LPC, LSIdx, LNewIdx: UInt32;
+  begin
+    if AStartPC >= LCodeLen then Exit;
+    if SparseContains(Seen, AStartPC) then Exit;
+    StackTop := 0;
+    Stack[StackTop] := AStartPC;
+    StackSlot[StackTop] := ASlotIdx;
+    Inc(StackTop);
+    while StackTop > 0 do
+    begin
+      Dec(StackTop);
+      LPC := Stack[StackTop];
+      LSIdx := StackSlot[StackTop];
+      if LPC >= LCodeLen then Continue;
+      if not SparseAdd(Seen, LPC) then Continue;
+      LInst := AProgram.Code[LPC];
+      case LInst.Op of
+        opSplit:
+        begin
+          Stack[StackTop] := LInst.X;
+          StackSlot[StackTop] := LSIdx;
+          Inc(StackTop);
+          Stack[StackTop] := LInst.Y;
+          StackSlot[StackTop] := LSIdx;
+          Inc(StackTop);
+        end;
+        opJump:
+        begin
+          Stack[StackTop] := LInst.Target;
+          StackSlot[StackTop] := LSIdx;
+          Inc(StackTop);
+        end;
+        opSave:
+        begin
+          LNewIdx := SlotPoolClone(Pool, LSIdx);
+          if LInst.Slot < Pool.NumSlots then
+            Pool.Slots[LNewIdx][LInst.Slot] := SizeInt(pos);
+          Stack[StackTop] := LPC + 1;
+          StackSlot[StackTop] := LNewIdx;
+          Inc(StackTop);
+        end;
+        opAssert:
+        begin
+          case LInst.Assert of
+            akStart:
+              if pos = 0 then begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+            akEnd:
+              if pos = ALen then begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+            akWordBoundary:
+              if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                 ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
+              begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+            akNotWordBoundary:
+              if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                      ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
+              begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+          end;
+        end;
+      else
+        if CList.Count < CList.MaxCount then
+        begin
+          CList.Items[CList.Count].PC := LPC;
+          CList.Items[CList.Count].SlotIdx := LSIdx;
+          Inc(CList.Count);
+        end;
+      end;
+    end;
+  end;
+
 begin
   AMatch.Start := -1;
   AMatch.Len := 0;
   AMatch.Groups := nil;
   Result := False;
 
-  if Length(AProgram.Code) = 0 then Exit;
+  LCodeLen := Length(AProgram.Code);
+  if LCodeLen = 0 then Exit;
 
-  InitThreadList(CList, Length(AProgram.Code));
-  InitThreadList(NList, Length(AProgram.Code));
+  InitThreadList2(CList, LCodeLen);
+  InitThreadList2(NList, LCodeLen);
+  SparseInit(Seen, LCodeLen);
+  SetLength(Stack, LCodeLen * 2);
+  SetLength(StackSlot, LCodeLen * 2);
 
-  SetLength(initSlots, AProgram.NumSlots);
-  for i := 0 to High(initSlots) do initSlots[i] := -1;
+  SlotPoolInit(Pool, LCodeLen * 2, AProgram.NumSlots);
+
   SetLength(matchSlots, AProgram.NumSlots);
   matched := False;
 
   startPos := AStartPos;
-
-  // SIMD prefilter: skip to first candidate position
   if (not AAnchored) and (AProgram.LiteralPrefixLen > 0) and (AStartPos < ALen) then
   begin
-    prefixPos := SizeInt(ScanFindByte(AInput + AStartPos, ALen - AStartPos, Byte(AProgram.LiteralPrefix[1])));
+    prefixPos := SizeInt(ScanFindByte(AInput + AStartPos, ALen - AStartPos,
+                  Byte(AProgram.LiteralPrefix[1])));
     if prefixPos < 0 then Exit;
     startPos := AStartPos + SizeUInt(prefixPos);
   end;
 
   pos := startPos;
-  ClearThreadList(CList);
-  AddThread(CList, AProgram, 0, initSlots, pos, AInput, ALen);
 
   while pos <= ALen do
   begin
-    if (not AAnchored) and (not matched) then
-      AddThread(CList, AProgram, 0, initSlots, pos, AInput, ALen);
+    SparseClear(Seen);
+    CList.Count := 0;
 
-    ClearThreadList(NList);
+    // Epsilon closure on NList items from previous byte step
+    if NList.Count > 0 then
+      for i := 0 to NList.Count - 1 do
+        EpsilonClose(NList.Items[i].PC, NList.Items[i].SlotIdx);
+
+    // Inject start state (unanchored search, before first match)
+    if (not AAnchored) and (not matched) then
+    begin
+      initSlotIdx := SlotPoolAlloc(Pool);
+      if AProgram.NumSlots > 0 then
+        for i := 0 to AProgram.NumSlots - 1 do
+          Pool.Slots[initSlotIdx][i] := -1;
+      EpsilonClose(0, initSlotIdx);
+    end;
+
+    // Process consuming instructions
+    NList.Count := 0;
 
     if CList.Count > 0 then
     for i := 0 to CList.Count - 1 do
     begin
       inst := AProgram.Code[CList.Items[i].PC];
+      curSlotIdx := CList.Items[i].SlotIdx;
       case inst.Op of
         opLiteral:
-        begin
           if (pos < ALen) and (Ord(AInput[pos]) = inst.Ch) then
-            AddThread(NList, AProgram, CList.Items[i].PC + 1,
-              CList.Items[i].Slots, pos + 1, AInput, ALen);
-        end;
+          begin
+            if NList.Count < NList.MaxCount then
+            begin
+              NList.Items[NList.Count].PC := CList.Items[i].PC + 1;
+              NList.Items[NList.Count].SlotIdx := curSlotIdx;
+              Inc(NList.Count);
+            end;
+          end;
         opAnyChar:
-        begin
           if (pos < ALen) and (AInput[pos] <> #10) then
-            AddThread(NList, AProgram, CList.Items[i].PC + 1,
-              CList.Items[i].Slots, pos + 1, AInput, ALen);
-        end;
+          begin
+            if NList.Count < NList.MaxCount then
+            begin
+              NList.Items[NList.Count].PC := CList.Items[i].PC + 1;
+              NList.Items[NList.Count].SlotIdx := curSlotIdx;
+              Inc(NList.Count);
+            end;
+          end;
         opCharClass:
-        begin
           if pos < ALen then
           begin
             ch := Ord(AInput[pos]);
             if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
-              AddThread(NList, AProgram, CList.Items[i].PC + 1,
-                CList.Items[i].Slots, pos + 1, AInput, ALen);
+            begin
+              if NList.Count < NList.MaxCount then
+              begin
+                NList.Items[NList.Count].PC := CList.Items[i].PC + 1;
+                NList.Items[NList.Count].SlotIdx := curSlotIdx;
+                Inc(NList.Count);
+              end;
+            end;
           end;
-        end;
         opMatch:
         begin
-          if (Length(CList.Items[i].Slots) >= 2) and
-             ((not matched) or (CList.Items[i].Slots[0] < matchSlots[0]) or
-             ((CList.Items[i].Slots[0] = matchSlots[0]) and
-              (SizeInt(pos) - CList.Items[i].Slots[0] > matchSlots[1] - matchSlots[0]))) then
+          if (not matched) or
+             (Pool.Slots[curSlotIdx][0] < matchSlots[0]) or
+             ((Pool.Slots[curSlotIdx][0] = matchSlots[0]) and
+              (SizeInt(pos) - Pool.Slots[curSlotIdx][0] > matchSlots[1] - matchSlots[0])) then
           begin
             matched := True;
-            Move(CList.Items[i].Slots[0], matchSlots[0], Length(matchSlots) * SizeOf(SizeInt));
+            Move(Pool.Slots[curSlotIdx][0], matchSlots[0],
+                 AProgram.NumSlots * SizeOf(SizeInt));
             matchSlots[1] := SizeInt(pos);
           end;
         end;
       end;
     end;
 
-    Tmp := CList; CList := NList; NList := Tmp;
     Inc(pos);
+    if (NList.Count = 0) and matched then Break;
+    if (NList.Count = 0) and AAnchored then Break;
 
-    if (CList.Count = 0) and matched then Break;
-    if (CList.Count = 0) and AAnchored then Break;
+    // SIMD prefilter skip for NfaSearch
+    if (NList.Count = 0) and (not matched) and
+       (AProgram.LiteralPrefixLen > 0) and (pos < ALen) then
+    begin
+      while True do
+      begin
+        prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos,
+                      Byte(AProgram.LiteralPrefix[1])));
+        if prefixPos < 0 then Exit;
+        pos := pos + SizeUInt(prefixPos);
+        if AProgram.LiteralPrefixLen <= 1 then Break;
+        if pos + AProgram.LiteralPrefixLen > ALen then Exit;
+        k := 1;
+        while (k < AProgram.LiteralPrefixLen) and
+              (AInput[pos + k] = AnsiChar(AProgram.LiteralPrefix[k + 1])) do
+          Inc(k);
+        if k = AProgram.LiteralPrefixLen then Break;
+        Inc(pos);
+        if pos >= ALen then Exit;
+      end;
+    end;
   end;
 
   if matched then
@@ -340,7 +556,6 @@ begin
       AMatch.Start := matchSlots[0];
       AMatch.Len := matchSlots[1] - matchSlots[0];
     end;
-    // Extract capture groups
     if AProgram.NumSlots > 2 then
     begin
       SetLength(AMatch.Groups, (AProgram.NumSlots - 2) div 2);
@@ -355,10 +570,6 @@ begin
     end;
     Result := True;
   end;
-
-  // Cleanup thread lists to avoid leaking Slots arrays
-  for i := 0 to High(CList.Items) do CList.Items[i].Slots := nil;
-  for i := 0 to High(NList.Items) do NList.Items[i].Slots := nil;
 end;
 
 function NfaFindAll(const AProgram: TRegexProgram;
