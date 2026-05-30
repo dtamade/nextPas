@@ -79,6 +79,8 @@ type
   end;
   TMatchArray = array of TMatch;
 
+  TReplaceFunc = function(const AInput: string; const AMatch: TMatch): string;
+
   ERegexError = class(Exception);
   ERegexCompileError = class(ERegexError)
   public

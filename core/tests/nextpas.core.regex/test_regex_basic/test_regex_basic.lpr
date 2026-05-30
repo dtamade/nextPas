@@ -319,6 +319,173 @@ begin
   CheckEqual(Int64(-1), Int64(R.GroupIndexByName('nonexist')), 'bad name');
 end;
 
+procedure TestNegatedShorthand;
+var R: TRegex; M: TMatch;
+begin
+  // \D matches non-digit
+  R := TRegex.Compile('\D+');
+  Check(R.IsMatch('abc'), '\D matches letters');
+  Check(R.IsMatch('!@#'), '\D matches symbols');
+  M := R.Find('123abc456');
+  Check(M.Found, '\D find');
+  CheckEqual('abc', M.Value('123abc456'), '\D value');
+
+  // \W matches non-word
+  R := TRegex.Compile('\W+');
+  Check(R.IsMatch('hello world'), '\W matches space');
+  M := R.Find('hello world');
+  Check(M.Found, '\W find');
+  CheckEqual(' ', M.Value('hello world'), '\W value');
+  Check(not R.IsMatch('helloworld'), '\W no match all word');
+
+  // \S matches non-space
+  R := TRegex.Compile('\S+');
+  M := R.Find('  hello  ');
+  Check(M.Found, '\S find');
+  CheckEqual('hello', M.Value('  hello  '), '\S value');
+end;
+
+procedure TestFindAt;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('\d+');
+  M := R.FindAt('a1 b22 c333', 0);
+  Check(M.Found, 'findAt 0 found');
+  CheckEqual('1', M.Value('a1 b22 c333'), 'findAt 0 value');
+
+  M := R.FindAt('a1 b22 c333', 3);
+  Check(M.Found, 'findAt 3 found');
+  CheckEqual('22', M.Value('a1 b22 c333'), 'findAt 3 value');
+
+  M := R.FindAt('a1 b22 c333', 7);
+  Check(M.Found, 'findAt 7 found');
+  CheckEqual('333', M.Value('a1 b22 c333'), 'findAt 7 value');
+
+  M := R.FindAt('abc', 0);
+  Check(not M.Found, 'findAt no match');
+end;
+
+procedure TestIsFullMatch;
+var R: TRegex;
+begin
+  R := TRegex.Compile('\d+');
+  Check(R.IsFullMatch('12345'), 'full digits');
+  Check(not R.IsFullMatch('abc123'), 'partial start');
+  Check(not R.IsFullMatch('123abc'), 'partial end');
+  Check(not R.IsFullMatch(''), 'empty');
+
+  R := TRegex.Compile('[a-z]+');
+  Check(R.IsFullMatch('hello'), 'full alpha');
+  Check(not R.IsFullMatch('Hello'), 'has upper');
+
+  R := TRegex.Compile('.*');
+  Check(R.IsFullMatch(''), 'dotstar empty');
+  Check(R.IsFullMatch('anything'), 'dotstar any');
+end;
+
+procedure TestQuoteMeta;
+var s: string;
+begin
+  s := RegexQuoteMeta('hello');
+  CheckEqual('hello', s, 'no meta');
+
+  s := RegexQuoteMeta('a.b');
+  CheckEqual('a\.b', s, 'dot');
+
+  s := RegexQuoteMeta('a+b*c?');
+  CheckEqual('a\+b\*c\?', s, 'quantifiers');
+
+  s := RegexQuoteMeta('(a|b)');
+  CheckEqual('\(a\|b\)', s, 'parens pipe');
+
+  s := RegexQuoteMeta('[a-z]');
+  CheckEqual('\[a-z\]', s, 'brackets');
+
+  s := RegexQuoteMeta('^start$');
+  CheckEqual('\^start\$', s, 'anchors');
+
+  s := RegexQuoteMeta('a{3}');
+  CheckEqual('a\{3\}', s, 'braces');
+
+  s := RegexQuoteMeta('a\b');
+  CheckEqual('a\\b', s, 'backslash');
+end;
+
+procedure TestSplitLimit;
+var R: TRegex; parts: TStringArray;
+begin
+  R := TRegex.Compile(',');
+  parts := R.Split('a,b,c,d,e', 2);
+  CheckEqual(Int64(3), Int64(Length(parts)), 'limit 2 count');
+  CheckEqual('a', parts[0], 'limit[0]');
+  CheckEqual('b', parts[1], 'limit[1]');
+  CheckEqual('c,d,e', parts[2], 'limit[2] remainder');
+
+  parts := R.Split('a,b,c,d,e', 1);
+  CheckEqual(Int64(2), Int64(Length(parts)), 'limit 1 count');
+  CheckEqual('a', parts[0], 'limit1[0]');
+  CheckEqual('b,c,d,e', parts[1], 'limit1[1] remainder');
+
+  // No limit (default)
+  parts := R.Split('a,b,c');
+  CheckEqual(Int64(3), Int64(Length(parts)), 'no limit count');
+
+  // Limit larger than matches
+  parts := R.Split('a,b', 10);
+  CheckEqual(Int64(2), Int64(Length(parts)), 'big limit count');
+  CheckEqual('a', parts[0], 'big[0]');
+  CheckEqual('b', parts[1], 'big[1]');
+end;
+
+function UpperReplace(const AInput: string; const AMatch: TMatch): string;
+begin
+  Result := UpCase(AMatch.Value(AInput));
+end;
+
+function LenReplace(const AInput: string; const AMatch: TMatch): string;
+begin
+  Result := IntToStr(AMatch.Len);
+end;
+
+procedure TestReplaceFunc;
+var R: TRegex; s: string;
+begin
+  R := TRegex.Compile('[a-z]+');
+  s := R.ReplaceFirstFunc('hello world', @UpperReplace);
+  CheckEqual('HELLO world', s, 'replaceFirst func');
+
+  s := R.ReplaceAllFunc('hello world', @UpperReplace);
+  CheckEqual('HELLO WORLD', s, 'replaceAll func');
+
+  R := TRegex.Compile('\w+');
+  s := R.ReplaceAllFunc('ab cde f', @LenReplace);
+  CheckEqual('2 3 1', s, 'replaceAll len');
+end;
+
+procedure TestReplaceExpand;
+var R: TRegex; s: string;
+begin
+  // $0 = full match
+  R := TRegex.Compile('\d+');
+  s := R.ReplaceAllExpand('a1 b22', '[$0]');
+  CheckEqual('a[1] b[22]', s, '$0 expand');
+
+  // $1, $2 = capture groups
+  R := TRegex.Compile('(\w+)=(\w+)');
+  s := R.ReplaceAllExpand('x=1 y=2', '$2:$1');
+  CheckEqual('1:x 2:y', s, '$1 $2 expand');
+
+  // ${name} = named capture
+  R := TRegex.Compile('(?P<key>\w+)=(?P<val>\w+)');
+  s := R.ReplaceAllExpand('x=1', '${val}->${key}');
+  CheckEqual('1->x', s, 'named expand');
+
+  // $$ = literal $
+  R := TRegex.Compile('\d+');
+  s := R.ReplaceAllExpand('price 42', '$$$0');
+  CheckEqual('price $42', s, '$$ literal');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -345,5 +512,12 @@ begin
   T.Run('Escapes', @TestEscapes);
   T.Run('StartClass prefilter', @TestStartClassPrefilter);
   T.Run('Named groups', @TestNamedGroups);
+  T.Run('Negated shorthand (\D \W \S)', @TestNegatedShorthand);
+  T.Run('FindAt', @TestFindAt);
+  T.Run('IsFullMatch', @TestIsFullMatch);
+  T.Run('QuoteMeta', @TestQuoteMeta);
+  T.Run('Split with limit', @TestSplitLimit);
+  T.Run('ReplaceFunc', @TestReplaceFunc);
+  T.Run('ReplaceExpand', @TestReplaceExpand);
   T.Summary;
 end.
