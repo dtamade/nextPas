@@ -7454,7 +7454,12 @@ begin
             begin
               FuncName := LookupClassVar(RhsNode.ChildAt(0).Text);
               Value := TypeMetaVmtSlot(FuncName, RhsNode.ChildAt(1).Text);
-              if Value >= 0 then
+              if (Value >= 0) and
+                EncodeRuntimeIntExprFold(RhsNode, Operand) then
+                FModel.AddTypedHirNode(
+                  'write-int-runtime', 'Write', 0, 0, Operand
+                )
+              else if Value >= 0 then
               begin
                 Inc(FBlockLabelCounter);
                 Operand := '$wrt_tmp_' + IntToStr(FBlockLabelCounter);
