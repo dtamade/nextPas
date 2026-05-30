@@ -24,6 +24,7 @@ type
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
+    procedure Flush;
     function WithGroup(const AName: string): ILogHandler;
   end;
 
@@ -60,6 +61,10 @@ begin
     LNew.FPrefix[FPrefixCount + LI] := AAttrs[LI];
   LNew.FPrefixCount := FPrefixCount + Length(AAttrs);
   Result := LNew;
+end;
+
+procedure TCaptureHandler.Flush;
+begin
 end;
 
 function TCaptureHandler.WithGroup(const AName: string): ILogHandler;
