@@ -2975,6 +2975,8 @@ end;
 procedure THIRBuilder.ProcessExceptionNode(const ANode: TTypedHirNode);
 var
   Instr: THIRInstr;
+  LabelName: string;
+  BlockId: THIRBlockId;
 begin
   FillChar(Instr, SizeOf(Instr), 0);
   case ANode.NodeKind of
@@ -2988,7 +2990,16 @@ begin
   else
     Exit;
   end;
-  Instr.IntrinsicName := ANode.Operand;
+  if (ANode.NodeKind = hnkTryBeginRuntime) and (ANode.Operand <> '') then
+  begin
+    LabelName := ANode.Operand;
+    if (Length(LabelName) > 0) and (LabelName[Length(LabelName)] = #10) then
+      LabelName := Copy(LabelName, 1, Length(LabelName) - 1);
+    BlockId := EnsureBlock(LabelName);
+    Instr.IntrinsicName := 'bb' + IntToStr(BlockId);
+  end
+  else
+    Instr.IntrinsicName := ANode.Operand;
   EmitInstr(Instr);
 end;
 

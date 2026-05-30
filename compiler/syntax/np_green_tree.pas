@@ -3660,13 +3660,7 @@ begin
   else if (ACursor < ALexer.TokenCount) and
     (CurrentToken(ALexer, ACursor).Kind = tkExceptKeyword) then
   begin
-    Node.Free;
-    Node := TGreenNode.Create(gnkTryExceptStatement, TryOffset, 0, '');
-
-    ParseStatementList(ALexer, ACursor, Node,
-      [tkExceptKeyword, tkEOF],
-      ATree, ADiagnostics, ARootFileId);
-
+    Node.FNodeKind := gnkTryExceptStatement;
     Inc(ACursor);
 
     if (ACursor < ALexer.TokenCount) and

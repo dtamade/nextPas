@@ -1116,7 +1116,7 @@ end;
 procedure THIRLlvmEmitter.EmitExceptionRuntimeHelpers;
 begin
   Emit('');
-  Emit('; --- Exception runtime (setjmp/longjmp) ---');
+  Emit('; --- Exception runtime (freestanding setjmp/longjmp) ---');
   Emit('@__np_exc_stack = internal global ptr null');
   Emit('@__np_exc_pending = internal global i1 false');
   Emit('');
@@ -1138,17 +1138,25 @@ begin
   Emit('  ret void');
   Emit('}');
   Emit('');
-  Emit('define internal i32 @np_setjmp(ptr %buf) {');
+  Emit('; np_setjmp: save rbx,rbp,r12,r13,r14,r15,rsp,rip into buf[0..4]');
+  Emit('define internal i32 @np_setjmp(ptr %buf) naked nounwind {');
   Emit('entry:');
-  Emit('  %r = call i32 @setjmp(ptr %buf)');
-  Emit('  ret i32 %r');
+  Emit('  call void asm sideeffect "movq %rbx, (%rdi)\0Amovq %rbp, 8(%rdi)\0Amovq %r12, 16(%rdi)\0Amovq %r13, 24(%rdi)\0Aleaq 8(%rsp), %rax\0Amovq %rax, 32(%rdi)\0Amovq (%rsp), %rax\0Amovq %rax, 40(%rdi)\0Axorl %eax, %eax\0Aretq", ""()');
+  Emit('  ret i32 0');
+  Emit('}');
+  Emit('');
+  Emit('; np_longjmp: restore regs from buf, return val');
+  Emit('define internal void @np_longjmp(ptr %buf, i32 %val) naked noreturn nounwind {');
+  Emit('entry:');
+  Emit('  call void asm sideeffect "movq (%rdi), %rbx\0Amovq 8(%rdi), %rbp\0Amovq 16(%rdi), %r12\0Amovq 24(%rdi), %r13\0Amovq 32(%rdi), %rsp\0Amovq 40(%rdi), %rcx\0Amovl %esi, %eax\0Atestl %eax, %eax\0Ajnz 2f\0Aincl %eax\0A2: jmpq *%rcx", ""()');
+  Emit('  unreachable');
   Emit('}');
   Emit('');
   Emit('define internal void @np_raise() {');
   Emit('entry:');
   Emit('  store i1 true, ptr @__np_exc_pending');
   Emit('  %buf = load ptr, ptr @__np_exc_stack');
-  Emit('  call void @longjmp(ptr %buf, i32 1)');
+  Emit('  call void @np_longjmp(ptr %buf, i32 1)');
   Emit('  unreachable');
   Emit('}');
   Emit('');
@@ -1168,9 +1176,6 @@ begin
   Emit('  store i1 false, ptr @__np_exc_pending');
   Emit('  ret void');
   Emit('}');
-  Emit('');
-  Emit('declare i32 @setjmp(ptr) nounwind');
-  Emit('declare void @longjmp(ptr, i32) noreturn nounwind');
 end;
 
 procedure THIRLlvmEmitter.EmitVmtGlobals;
