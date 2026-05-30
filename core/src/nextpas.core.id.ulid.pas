@@ -9,6 +9,8 @@ uses
 
 function Ulid: TUlidString;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString;
+function UlidIsValid(const AStr: string): Boolean;
+function UlidTimestampMs(const AStr: string): UInt64;
 
 implementation
 
@@ -25,6 +27,11 @@ var
   LI: Integer;
   LTs: UInt64;
 begin
+  if ATimestampMs > UInt64($FFFFFFFFFFFF) then
+  begin
+    Result := '';
+    Exit;
+  end;
   SetLength(Result, ULID_LENGTH);
 
   LTs := ATimestampMs;
@@ -65,6 +72,42 @@ end;
 function UlidFromTimestamp(const ATimestampMs: UInt64): TUlidString;
 begin
   Result := EncodeUlid(ATimestampMs);
+end;
+
+function CrockfordVal(ACh: Char): Int32;
+begin
+  case ACh of
+    '0'..'9': Result := Ord(ACh) - Ord('0');
+    'A'..'H': Result := Ord(ACh) - Ord('A') + 10;
+    'J', 'K': Result := Ord(ACh) - Ord('J') + 18;
+    'M', 'N': Result := Ord(ACh) - Ord('M') + 20;
+    'P'..'T': Result := Ord(ACh) - Ord('P') + 22;
+    'V'..'Z': Result := Ord(ACh) - Ord('V') + 27;
+  else
+    Result := -1;
+  end;
+end;
+
+function UlidIsValid(const AStr: string): Boolean;
+var LI: Integer;
+begin
+  if Length(AStr) <> ULID_LENGTH then Exit(False);
+  for LI := 1 to ULID_LENGTH do
+    if CrockfordVal(AStr[LI]) < 0 then Exit(False);
+  Result := True;
+end;
+
+function UlidTimestampMs(const AStr: string): UInt64;
+var LI: Integer; LVal: Int32;
+begin
+  Result := 0;
+  if Length(AStr) <> ULID_LENGTH then Exit;
+  for LI := 1 to 10 do
+  begin
+    LVal := CrockfordVal(AStr[LI]);
+    if LVal < 0 then Exit(0);
+    Result := (Result shl 5) or UInt64(LVal);
+  end;
 end;
 
 end.

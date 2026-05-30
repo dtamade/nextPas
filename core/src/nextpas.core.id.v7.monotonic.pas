@@ -28,7 +28,8 @@ implementation
 uses
   nextpas.core.atomic,
   nextpas.core.id.rng,
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  nextpas.core.platform.thread;
 
 procedure TUuidV7Generator.Init;
 begin
@@ -48,7 +49,10 @@ begin
     if FRandA > $0FFF then
     begin
       while LMs = FLastMs do
+      begin
+        platform_thread_yield;
         LMs := platform_realtime_ns div 1000000;
+      end;
       IdRngFillBytes(@FRandA, 2);
       FRandA := FRandA and $0FFF;
     end;

@@ -8,6 +8,7 @@ uses
   nextpas.core.id,
   nextpas.core.id.base,
   nextpas.core.id.uuid,
+  nextpas.core.id.ulid,
   nextpas.core.id.v7.monotonic,
   nextpas.core.id.snowflake,
   nextpas.core.id.ksuid,
@@ -446,6 +447,55 @@ begin
   Check(LA <> LB, 'must differ');
 end;
 
+{ Boundary tests (L5) }
+
+procedure TestUlidValidation;
+begin
+  Check(UlidIsValid(Ulid), 'valid ULID');
+  Check(not UlidIsValid(''), 'empty invalid');
+  Check(not UlidIsValid('short'), 'short invalid');
+  Check(not UlidIsValid('01ARZ3NDEKTSV4RRFFQ69G5FAI'), 'I invalid in Crockford');
+end;
+
+procedure TestUlidTimestamp;
+var LMs: UInt64;
+begin
+  LMs := UlidTimestampMs(UlidFromTimestamp(12345678));
+  CheckEqual(Int64(12345678), Int64(LMs));
+end;
+
+procedure TestUlidOverflow;
+var LS: string;
+begin
+  LS := UlidFromTimestamp(UInt64($FFFFFFFFFFFFFF));
+  CheckEqual(Int64(0), Int64(Length(LS)));
+end;
+
+procedure TestKsuidParseInvalid;
+var LK: TKsuid;
+begin
+  LK := TKsuid.Parse('invalid');
+  Check(LK.IsNil, 'invalid parse returns nil');
+  Check(not TKsuid.TryParse('', LK), 'empty fails');
+end;
+
+procedure TestXidRoundTrip;
+var LX: TXid; LS: string;
+begin
+  LX := TXid.New;
+  LS := LX.ToString;
+  Check(TXid.Parse(LS) = LX, 'xid roundtrip');
+end;
+
+procedure TestNanoIdBoundary;
+var LS: string;
+begin
+  LS := NanoIdCustom('abc', 0);
+  CheckEqual(Int64(0), Int64(Length(LS)));
+  LS := NanoIdCustom('', 10);
+  CheckEqual(Int64(0), Int64(Length(LS)));
+end;
+
 begin
   Randomize;
   T := TTestRunner.Create('nextpas.core.id');
@@ -502,6 +552,13 @@ begin
   T.Run('XID timestamp', @TestXidTimestamp);
   T.Run('XID ordering', @TestXidOrdering);
   T.Run('XID uniqueness', @TestXidUniqueness);
+
+  T.Run('ULID validation', @TestUlidValidation);
+  T.Run('ULID timestamp extract', @TestUlidTimestamp);
+  T.Run('ULID overflow', @TestUlidOverflow);
+  T.Run('KSUID parse invalid', @TestKsuidParseInvalid);
+  T.Run('XID roundtrip', @TestXidRoundTrip);
+  T.Run('NanoID boundary', @TestNanoIdBoundary);
 
   T.Summary;
 end.

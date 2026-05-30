@@ -210,9 +210,13 @@ begin
 end;
 
 function TUuid.Hash: UInt32;
+var LA, LB, LC, LD: UInt32;
 begin
-  Result := PUInt32(@FBytes[0])^ xor PUInt32(@FBytes[4])^ xor
-            PUInt32(@FBytes[8])^ xor PUInt32(@FBytes[12])^;
+  Move(FBytes[0], LA, 4);
+  Move(FBytes[4], LB, 4);
+  Move(FBytes[8], LC, 4);
+  Move(FBytes[12], LD, 4);
+  Result := LA xor LB xor LC xor LD;
 end;
 
 class operator TUuid.= (const A, B: TUuid): Boolean;

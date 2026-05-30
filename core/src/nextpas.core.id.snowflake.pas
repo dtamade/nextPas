@@ -26,10 +26,13 @@ const
 implementation
 
 uses
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  nextpas.core.platform.thread;
 
 procedure TSnowflakeGenerator.Init(AWorkerId: UInt16; AEpochMs: Int64);
 begin
+  if AWorkerId > 1023 then
+    RunError(201);
   if AEpochMs = 0 then
     FEpochMs := SNOWFLAKE_EPOCH_TWITTER
   else
@@ -47,7 +50,10 @@ begin
   if LMs < FLastMs then
   begin
     while LMs < FLastMs do
+    begin
+      platform_thread_yield;
       LMs := Int64(platform_realtime_ns div 1000000) - FEpochMs;
+    end;
   end;
   if LMs = FLastMs then
   begin
@@ -55,7 +61,10 @@ begin
     if FSequence > $0FFF then
     begin
       while LMs = FLastMs do
+      begin
+        platform_thread_yield;
         LMs := Int64(platform_realtime_ns div 1000000) - FEpochMs;
+      end;
       FSequence := 0;
     end;
   end
