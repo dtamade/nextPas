@@ -1,7 +1,7 @@
 {
   "version": "1.0",
   "description": "fafafa.core.simd dispatch table slot definitions",
-  "total_slots": 611,
+  "total_slots": 616,
   "slots": [
     {
       "name": "AddF32x4",
@@ -7329,6 +7329,66 @@
       "params": "aSrc, aDst: PSingle; aCount: SizeUInt; aMean, aInvStd: Single",
       "return_type": null,
       "section": "Fused Batch Operations",
+      "category": "batch",
+      "width": null,
+      "element_type": "batch",
+      "lanes": null,
+      "op": null
+    },
+    {
+      "name": "ArrayLinearReLUF32",
+      "kind": "procedure",
+      "params": "aSrc, aDst: PSingle; aCount: SizeUInt; aScale, aBias: Single",
+      "return_type": null,
+      "section": "Fused Batch Operations",
+      "category": "batch",
+      "width": null,
+      "element_type": "batch",
+      "lanes": null,
+      "op": null
+    },
+    {
+      "name": "ArrayMulScalarF64",
+      "kind": "procedure",
+      "params": "aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double",
+      "return_type": null,
+      "section": "Batch Array Operations - F64",
+      "category": "batch",
+      "width": null,
+      "element_type": "batch",
+      "lanes": null,
+      "op": null
+    },
+    {
+      "name": "ArrayAddScalarF64",
+      "kind": "procedure",
+      "params": "aSrc, aDst: PDouble; aCount: SizeUInt; aScalar: Double",
+      "return_type": null,
+      "section": "Batch Array Operations - F64",
+      "category": "batch",
+      "width": null,
+      "element_type": "batch",
+      "lanes": null,
+      "op": null
+    },
+    {
+      "name": "ArrayClampF64",
+      "kind": "procedure",
+      "params": "aSrc, aDst: PDouble; aCount: SizeUInt; aMin, aMax: Double",
+      "return_type": null,
+      "section": "Batch Array Operations - F64",
+      "category": "batch",
+      "width": null,
+      "element_type": "batch",
+      "lanes": null,
+      "op": null
+    },
+    {
+      "name": "ArrayLinearF64",
+      "kind": "procedure",
+      "params": "aSrc, aDst: PDouble; aCount: SizeUInt; aScale, aBias: Double",
+      "return_type": null,
+      "section": "Batch Array Operations - F64",
       "category": "batch",
       "width": null,
       "element_type": "batch",

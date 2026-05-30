@@ -134,25 +134,41 @@ begin
 end;
 
 procedure Vec16AddWhere(AData: PByte; AMask: TMask16; ADelta: Byte); inline;
-var
-  i: Integer;
 begin
-  {$PUSH}{$R-}{$Q-}
-  for i := 0 to 15 do
-    if (AMask and (1 shl i)) <> 0 then
-      AData[i] := AData[i] + ADelta;
-  {$POP}
+  if AMask = 0 then Exit;
+  asm
+    mov rax, AData
+    movzx ecx, AMask
+    movzx edx, ADelta
+    xor r8d, r8d
+  @addloop:
+    bt ecx, r8d
+    jnc @addskip
+    add byte [rax + r8], dl
+  @addskip:
+    inc r8d
+    cmp r8d, 16
+    jl @addloop
+  end;
 end;
 
 procedure Vec16SubWhere(AData: PByte; AMask: TMask16; ADelta: Byte); inline;
-var
-  i: Integer;
 begin
-  {$PUSH}{$R-}{$Q-}
-  for i := 0 to 15 do
-    if (AMask and (1 shl i)) <> 0 then
-      AData[i] := AData[i] - ADelta;
-  {$POP}
+  if AMask = 0 then Exit;
+  asm
+    mov rax, AData
+    movzx ecx, AMask
+    movzx edx, ADelta
+    xor r8d, r8d
+  @subloop:
+    bt ecx, r8d
+    jnc @subskip
+    sub byte [rax + r8], dl
+  @subskip:
+    inc r8d
+    cmp r8d, 16
+    jl @subloop
+  end;
 end;
 
 procedure Vec16ProbeGroup(AData: PByte; AH2: Byte; out AMatchMask, AEmptyMask: TMask16); inline;
