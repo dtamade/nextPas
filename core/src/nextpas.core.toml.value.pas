@@ -143,16 +143,18 @@ function TTomlValue.Get(const AKey: TStringView): TTomlValue;
 var
   LNode: PTomlNode;
   LCur: UInt32;
+  LHash: UInt32;
 begin
   Result.FDoc := FDoc;
   Result.FIdx := TOML_NODE_NONE;
   if (FIdx = TOML_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> tnkTable) then
     Exit;
+  LHash := TomlKeyHash(AKey.Data, AKey.Len);
   LNode := FDoc^.Node(FIdx);
   LCur := LNode^.Container.FirstChild;
   while LCur <> TOML_NODE_NONE do
   begin
-    if FDoc^.Node(LCur)^.Key.Equals(AKey) then
+    if (FDoc^.Node(LCur)^.KeyHash = LHash) and FDoc^.Node(LCur)^.Key.Equals(AKey) then
     begin
       Result.FIdx := LCur;
       Exit;
