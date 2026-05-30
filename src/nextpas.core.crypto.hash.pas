@@ -195,6 +195,11 @@ function GetHashAlgorithmName(AAlgorithm: THashAlgorithm): string;
 
 implementation
 
+uses
+  nextpas.core.hash.sha256,
+  nextpas.core.hash.sha512,
+  nextpas.core.hash.intf;
+
 // ========================================================================
 // THashContext 基类实现
 // ========================================================================
@@ -1056,15 +1061,11 @@ end;
 
 function SHA256(const AData: TBytes): TBytes;
 var
-  Ctx: TSHA256Context;
+  LH: IHasher;
 begin
-  Ctx := TSHA256Context.Create;
-  try
-    Ctx.Update(AData);
-    Result := Ctx.Final;
-  finally
-    Ctx.Free;
-  end;
+  LH := nextpas.core.hash.sha256.NewSHA256;
+  LH.Write(AData[0], Length(AData));
+  Result := LH.SumBytes;
 end;
 
 function SHA256(const AData: string): TBytes;
