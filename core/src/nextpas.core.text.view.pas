@@ -54,7 +54,7 @@ implementation
 uses
   nextpas.core.text.char,
   nextpas.core.simd.base,
-  nextpas.core.simd.vec16;
+  nextpas.core.simd.vec;
 
 class function TStringView.Create(const AData: PAnsiChar; const ALen: SizeUInt): TStringView;
 begin
@@ -125,6 +125,7 @@ end;
 function TStringView.TrimLeft: TStringView;
 var
   LPos: SizeUInt;
+  i: Integer;
 begin
   LPos := 0;
   while (LPos < FLen) and IsWhitespace(Byte(FData[LPos])) do
@@ -152,6 +153,7 @@ end;
 function TStringView.Equals(const AOther: TStringView): Boolean;
 var
   LPos: SizeUInt;
+  i: Integer;
 begin
   if FLen <> AOther.FLen then
     Exit(False);
@@ -160,11 +162,11 @@ begin
   if FData = AOther.FData then
     Exit(True);
   LPos := 0;
-  while LPos + 16 <= FLen do
+  while LPos + VecWidth <= FLen do
   begin
-    if Vec16CmpEq2(@FData[LPos], @AOther.FData[LPos]) <> MASK16_ALL_SET then
+    if VecCmpEq2(@FData[LPos], @AOther.FData[LPos]) <> TVecMask(not TVecMask(0)) then
       Exit(False);
-    Inc(LPos, 16);
+    Inc(LPos, VecWidth);
   end;
   while LPos < FLen do
   begin
@@ -178,25 +180,26 @@ end;
 function TStringView.EqualsIgnoreCase(const AOther: TStringView): Boolean;
 var
   LPos: SizeUInt;
+  i: Integer;
   LBufA, LBufB: array[0..15] of Byte;
-  LMaskA, LMaskB: TMask16;
+  LMaskA, LMaskB: TVecMask;
 begin
   if FLen <> AOther.FLen then
     Exit(False);
   if FLen = 0 then
     Exit(True);
   LPos := 0;
-  while LPos + 16 <= FLen do
+  while LPos + VecWidth <= FLen do
   begin
     Move(FData[LPos], LBufA[0], 16);
     Move(AOther.FData[LPos], LBufB[0], 16);
-    LMaskA := Vec16CmpRange(@LBufA[0], Ord('A'), Ord('Z'));
-    Vec16AddWhere(@LBufA[0], LMaskA, 32);
-    LMaskB := Vec16CmpRange(@LBufB[0], Ord('A'), Ord('Z'));
-    Vec16AddWhere(@LBufB[0], LMaskB, 32);
-    if Vec16CmpEq2(@LBufA[0], @LBufB[0]) <> MASK16_ALL_SET then
+    LMaskA := VecCmpRange(@LBufA[0], Ord('A'), Ord('Z'));
+    for i := 0 to 15 do if (LMaskA and (1 shl i)) <> 0 then LBufA[i] := LBufA[i] + 32;
+    LMaskB := VecCmpRange(@LBufB[0], Ord('A'), Ord('Z'));
+    for i := 0 to 15 do if (LMaskB and (1 shl i)) <> 0 then LBufB[i] := LBufB[i] + 32;
+    if VecCmpEq2(@LBufA[0], @LBufB[0]) <> TVecMask(not TVecMask(0)) then
       Exit(False);
-    Inc(LPos, 16);
+    Inc(LPos, VecWidth);
   end;
   while LPos < FLen do
   begin
@@ -233,18 +236,19 @@ end;
 
 function TStringView.IndexOf(const ACh: AnsiChar): PtrInt;
 var
-  LMask: TMask16;
+  LMask: TVecMask;
   LPos: SizeUInt;
+  i: Integer;
 begin
   if FLen = 0 then
     Exit(-1);
   LPos := 0;
-  while LPos + 16 <= FLen do
+  while LPos + VecWidth <= FLen do
   begin
-    LMask := Vec16CmpEq(@FData[LPos], Byte(ACh));
-    if LMask <> MASK16_NONE_SET then
-      Exit(PtrInt(LPos) + Vec16Ctz(LMask));
-    Inc(LPos, 16);
+    LMask := VecCmpEq(@FData[LPos], Byte(ACh));
+    if LMask <> TVecMask(0) then
+      Exit(PtrInt(LPos) + VecCtz(LMask));
+    Inc(LPos, VecWidth);
   end;
   while LPos < FLen do
   begin
@@ -269,8 +273,9 @@ end;
 
 function TStringView.IndexOfStr(const ANeedle: TStringView): PtrInt;
 var
-  LMaskFirst, LMaskLast, LCombined: TMask16;
+  LMaskFirst, LMaskLast, LCombined: TVecMask;
   LPos: SizeUInt;
+  i: Integer;
   LBit: Int32;
   LLastOfs: SizeUInt;
 begin
@@ -284,17 +289,17 @@ begin
   LPos := 0;
   while LPos + 16 + LLastOfs <= FLen do
   begin
-    LMaskFirst := Vec16CmpEq(@FData[LPos], Byte(ANeedle.FData[0]));
-    LMaskLast := Vec16CmpEq(@FData[LPos + LLastOfs], Byte(ANeedle.FData[LLastOfs]));
+    LMaskFirst := VecCmpEq(@FData[LPos], Byte(ANeedle.FData[0]));
+    LMaskLast := VecCmpEq(@FData[LPos + LLastOfs], Byte(ANeedle.FData[LLastOfs]));
     LCombined := LMaskFirst and LMaskLast;
-    while LCombined <> MASK16_NONE_SET do
+    while LCombined <> TVecMask(0) do
     begin
-      LBit := Vec16Ctz(LCombined);
+      LBit := VecCtz(LCombined);
       if Slice(LPos + SizeUInt(LBit), ANeedle.FLen).Equals(ANeedle) then
         Exit(PtrInt(LPos) + LBit);
-      LCombined := LCombined and not TMask16(TMask16(1) shl LBit);
+      LCombined := LCombined and not TVecMask(TVecMask(1) shl LBit);
     end;
-    Inc(LPos, 16);
+    Inc(LPos, VecWidth);
   end;
   while LPos <= FLen - ANeedle.FLen do
   begin
@@ -315,15 +320,16 @@ end;
 function TStringView.CountChar(const ACh: AnsiChar): SizeUInt;
 var
   LPos: SizeUInt;
+  i: Integer;
 begin
   Result := 0;
   if FLen = 0 then
     Exit;
   LPos := 0;
-  while LPos + 16 <= FLen do
+  while LPos + VecWidth <= FLen do
   begin
-    Inc(Result, Vec16Popcnt(Vec16CmpEq(@FData[LPos], Byte(ACh))));
-    Inc(LPos, 16);
+    Inc(Result, Vec16Popcnt(VecCmpEq(@FData[LPos], Byte(ACh))));
+    Inc(LPos, VecWidth);
   end;
   while LPos < FLen do
   begin
