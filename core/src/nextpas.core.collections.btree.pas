@@ -113,8 +113,18 @@ type
   public type
     TCompareFunc = function(const A, B: T; aData: Pointer): SizeInt;
     TForEachCallback = procedure(const AItem: T; aData: Pointer);
+    TItemArray = array of T;
   private type
     TInner = specialize TBTreeMap<T, Byte>;
+  public type
+    TEnumerator = record
+    private
+      FInnerEnum: TInner.TEnumerator;
+    public
+      function MoveNext: Boolean;
+      function GetCurrent: T;
+      property Current: T read GetCurrent;
+    end;
   private
     FInner: TInner;
   public
@@ -133,9 +143,13 @@ type
     function LowerBound(const AItem: T; out AFound: T): Boolean;
     function UpperBound(const AItem: T; out AFound: T): Boolean;
     function Floor(const AItem: T; out AFound: T): Boolean;
+    function Ceiling(const AItem: T; out AFound: T): Boolean; inline;
     procedure Union(AOther: TBTreeSet);
     procedure Intersection(AOther: TBTreeSet);
     procedure Difference(AOther: TBTreeSet);
+
+    function GetEnumerator: TEnumerator;
+    function ToArray: TItemArray;
 
     function GetCount: SizeUInt;
     function IsEmpty: Boolean; inline;
@@ -1163,6 +1177,38 @@ var E: TInner.TEntry;
 begin
   for E in AOther.FInner do
     FInner.Remove(E.Key);
+end;
+
+function TBTreeSet.Ceiling(const AItem: T; out AFound: T): Boolean;
+begin
+  Result := LowerBound(AItem, AFound);
+end;
+
+function TBTreeSet.TEnumerator.MoveNext: Boolean;
+begin
+  Result := FInnerEnum.MoveNext;
+end;
+
+function TBTreeSet.TEnumerator.GetCurrent: T;
+begin
+  Result := FInnerEnum.Current.Key;
+end;
+
+function TBTreeSet.GetEnumerator: TEnumerator;
+begin
+  Result.FInnerEnum := FInner.GetEnumerator;
+end;
+
+function TBTreeSet.ToArray: TItemArray;
+var E: TInner.TEntry; i: SizeUInt;
+begin
+  SetLength(Result, FInner.Count);
+  i := 0;
+  for E in FInner do
+  begin
+    Result[i] := E.Key;
+    Inc(i);
+  end;
 end;
 
 end.
