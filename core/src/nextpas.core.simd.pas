@@ -82,6 +82,7 @@ operator - (const a: TVecF64x2): TVecF64x2; inline;
 
 operator + (const a, b: TVecI32x4): TVecI32x4; inline;
 operator - (const a, b: TVecI32x4): TVecI32x4; inline;
+operator * (const a, b: TVecI32x4): TVecI32x4; inline;
 operator - (const a: TVecI32x4): TVecI32x4; inline;
 
 operator + (const a, b: TVecU32x4): TVecU32x4; inline;
@@ -1216,6 +1217,55 @@ function VecU8x16SatAdd(const a, b: TVecU8x16): TVecU8x16; inline;
 function VecU8x16SatSub(const a, b: TVecU8x16): TVecU8x16; inline;
 function VecU16x8SatAdd(const a, b: TVecU16x8): TVecU16x8; inline;
 function VecU16x8SatSub(const a, b: TVecU16x8): TVecU16x8; inline;
+// === P1 Missing Functions: Integer Abs ===
+{** Element-wise absolute value for I32x4. @returns(result[i] = |a[i]|) *}
+function VecI32x4Abs(const a: TVecI32x4): TVecI32x4; inline;
+{** Element-wise absolute value for I32x8. @returns(result[i] = |a[i]|) *}
+function VecI32x8Abs(const a: TVecI32x8): TVecI32x8; inline;
+{** Element-wise absolute value for I16x8. @returns(result[i] = |a[i]|) *}
+function VecI16x8Abs(const a: TVecI16x8): TVecI16x8; inline;
+{** Element-wise absolute value for I8x16. @returns(result[i] = |a[i]|) *}
+function VecI8x16Abs(const a: TVecI8x16): TVecI8x16; inline;
+
+// === P1 Missing Functions: I32x4 Splat/Zero/Load/Store ===
+{** Broadcast scalar to all lanes. @returns([value, value, value, value]) *}
+function VecI32x4Splat(value: Int32): TVecI32x4; inline;
+{** Create zero vector. @returns([0, 0, 0, 0]) *}
+function VecI32x4Zero: TVecI32x4; inline;
+{** Load 4 Int32 from memory (unaligned). @param(p Pointer to 4 consecutive Int32) *}
+function VecI32x4Load(p: PInt32): TVecI32x4; inline;
+{** Store 4 Int32 to memory (unaligned). *}
+procedure VecI32x4Store(p: PInt32; const a: TVecI32x4); inline;
+
+// === P1 Missing Functions: Integer Clamp ===
+{** Clamp I32x4 to range. @returns(result[i] = max(minVal[i], min(a[i], maxVal[i]))) *}
+function VecI32x4Clamp(const a, minVal, maxVal: TVecI32x4): TVecI32x4; inline;
+{** Clamp I32x8 to range. @returns(result[i] = max(minVal[i], min(a[i], maxVal[i]))) *}
+function VecI32x8Clamp(const a, minVal, maxVal: TVecI32x8): TVecI32x8; inline;
+
+// === P1 Missing Functions: Integer Reduce ===
+{** Horizontal sum of all I32x4 elements. @returns(a[0] + a[1] + a[2] + a[3]) *}
+function VecI32x4ReduceAdd(const a: TVecI32x4): Int32; inline;
+{** Minimum of all I32x4 elements. @returns(min(a[0], a[1], a[2], a[3])) *}
+function VecI32x4ReduceMin(const a: TVecI32x4): Int32; inline;
+{** Maximum of all I32x4 elements. @returns(max(a[0], a[1], a[2], a[3])) *}
+function VecI32x4ReduceMax(const a: TVecI32x4): Int32; inline;
+
+// === P1 Missing Functions: VecF32x4Lerp ===
+{** Linear interpolation. @returns(result[i] = a[i] + t * (b[i] - a[i])) *}
+function VecF32x4Lerp(const a, b: TVecF32x4; t: Single): TVecF32x4; inline;
+
+// === P1 Missing Functions: VecU32x4CmpNe ===
+{** Not-equal comparison (unsigned). @returns(mask[i] = (a[i] != b[i])) *}
+function VecU32x4CmpNe(const a, b: TVecU32x4): TMask4; inline;
+
+// === P1 Missing Functions: Make functions ===
+{** Create F64x2 from individual values. @returns([x, y]) *}
+function VecF64x2Make(x, y: Double): TVecF64x2; inline;
+{** Create I32x4 from individual values. @returns([a, b, c, d]) *}
+function VecI32x4Make(a, b, c, d: Int32): TVecI32x4; inline;
+{** Create F32x8 from individual values. @returns([a, b, c, d, e, f, g, h]) *}
+function VecF32x8Make(a, b, c, d, e, f, g, h: Single): TVecF32x8; inline;
 
 // === Framework Information ===
 

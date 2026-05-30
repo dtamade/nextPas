@@ -4406,3 +4406,28 @@ begin
   end;
   Result := LFunc(a, b);
 end;
+
+// === P1 Missing Functions: I32x8 Abs/Clamp (256-bit) ===
+
+function VecI32x8Abs(const a: TVecI32x8): TVecI32x8;
+var i: Integer;
+begin
+  for i := 0 to 7 do
+    if a.i[i] < 0 then
+      Result.i[i] := -a.i[i]
+    else
+      Result.i[i] := a.i[i];
+end;
+
+function VecI32x8Clamp(const a, minVal, maxVal: TVecI32x8): TVecI32x8;
+var i: Integer;
+    v: Int32;
+begin
+  for i := 0 to 7 do
+  begin
+    v := a.i[i];
+    if v < minVal.i[i] then v := minVal.i[i];
+    if v > maxVal.i[i] then v := maxVal.i[i];
+    Result.i[i] := v;
+  end;
+end;
