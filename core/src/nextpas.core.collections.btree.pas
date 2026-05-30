@@ -108,7 +108,7 @@ type
     property Count: SizeUInt read FCount;
   end;
 
-  generic TBTreeSet<T> = class
+  generic TBTreeSet<T> = class(TInterfacedObject, specialize IBTreeSet<T>)
   public type
     TCompareFunc = function(const A, B: T; aData: Pointer): SizeInt;
     TForEachCallback = procedure(const AItem: T; aData: Pointer);

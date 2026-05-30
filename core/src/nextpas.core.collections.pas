@@ -86,6 +86,8 @@ uses
   // 新增：有序容器和缓存
   nextpas.core.collections.treemap,
   nextpas.core.collections.tree_set,
+  nextpas.core.collections.btree,
+  nextpas.core.collections.btree.intf,
   nextpas.core.collections.skiplist,
   nextpas.core.collections.trie,
   nextpas.core.collections.priorityqueue,
@@ -147,6 +149,7 @@ type
   generic TTreeValueSupplierFunc<V> = function: V;
   generic TTreeValueModifierProc<V> = procedure(var Value: V);
   generic THashFunc<T> = function(const aValue: T; aData: Pointer): UInt64;
+  generic TBTreeCompareFunc<T> = function(const A, B: T; aData: Pointer): SizeInt;
 
   // 增长策略导出（接口优先 + 兼容类基实现）
   IGrowthStrategy          = nextpas.core.collections.base.IGrowthStrategy;
@@ -227,6 +230,8 @@ generic function MakeTreeMap<K,V>(aCapacity: SizeUInt = 0; aCompare: specialize 
 generic function MakeTreeSet<T>(aAllocator: IAllocator = nil): specialize ITreeSet<T>;
 generic function MakeLinkedHashSet<T>: specialize ILinkedHashSet<T>;
 generic function MakeRBTreeMap<K,V>(aKeyComparer: specialize TCompareFunc<K>; aAllocator: IAllocator = nil): specialize IRBTreeMap<K,V>;
+generic function MakeBTreeMap<K,V>(aCompare: specialize TBTreeCompareFunc<K>): specialize IBTreeMap<K,V>;
+generic function MakeBTreeSet<T>(aCompare: specialize TBTreeCompareFunc<T>): specialize IBTreeSet<T>;
 generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
 generic function MakeSkipList<K,V>(aCompare: specialize TSkipListCompareFunc<K>): specialize ISkipList<K,V>;
 generic function MakeTrie<V>: specialize ITrie<V>;
@@ -829,6 +834,16 @@ begin
     Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer, aAllocator)
   else
     Result := specialize TRBTreeMap<K,V>.Create(aKeyComparer);
+end;
+
+generic function MakeBTreeMap<K,V>(aCompare: specialize TBTreeCompareFunc<K>): specialize IBTreeMap<K,V>;
+begin
+  Result := specialize TBTreeMap<K,V>.Create(specialize TBTreeMap<K,V>.TKeyCompareFunc(aCompare));
+end;
+
+generic function MakeBTreeSet<T>(aCompare: specialize TBTreeCompareFunc<T>): specialize IBTreeSet<T>;
+begin
+  Result := specialize TBTreeSet<T>.Create(specialize TBTreeSet<T>.TCompareFunc(aCompare));
 end;
 
 generic function MakeSkipList<K,V>: specialize ISkipList<K,V>;
