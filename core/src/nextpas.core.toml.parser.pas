@@ -43,7 +43,8 @@ uses
   nextpas.core.text.scan,
   nextpas.core.text.char,
   nextpas.core.text.number,
-  nextpas.core.text.escape;
+  nextpas.core.text.escape,
+  nextpas.core.text.utf8;
 
 const
   INITIAL_NODE_CAP = 64;
@@ -52,6 +53,93 @@ const
 
 var
   TOML_NAN: Double absolute NAN_BITS;
+
+function HexDigitVal(ACh: Byte): Int32; inline;
+begin
+  if (ACh >= Ord('0')) and (ACh <= Ord('9')) then Exit(ACh - Ord('0'));
+  if (ACh >= Ord('a')) and (ACh <= Ord('f')) then Exit(ACh - Ord('a') + 10);
+  if (ACh >= Ord('A')) and (ACh <= Ord('F')) then Exit(ACh - Ord('A') + 10);
+  Result := -1;
+end;
+
+function TomlUnescapeToBuffer(const ASrc: PAnsiChar; const ALen: SizeUInt;
+  const ADst: PAnsiChar; out AError: TUnescapeError): SizeUInt;
+var
+  LPos, LOut: SizeUInt;
+  LCh: Byte;
+  LCP: UInt32;
+  LI: Int32;
+  LHexLen: Int32;
+  LEncLen: Byte;
+begin
+  AError := ueNone;
+  LPos := 0;
+  LOut := 0;
+  while LPos < ALen do
+  begin
+    LCh := Byte(ASrc[LPos]);
+    if LCh <> Ord('\') then
+    begin
+      ADst[LOut] := AnsiChar(LCh);
+      Inc(LOut);
+      Inc(LPos);
+      Continue;
+    end;
+    Inc(LPos);
+    if LPos >= ALen then
+    begin
+      AError := ueTruncated;
+      Exit(LOut);
+    end;
+    LCh := Byte(ASrc[LPos]);
+    Inc(LPos);
+    case LCh of
+      Ord('"'):  begin ADst[LOut] := '"'; Inc(LOut); end;
+      Ord('\'): begin ADst[LOut] := '\'; Inc(LOut); end;
+      Ord('b'):  begin ADst[LOut] := #8; Inc(LOut); end;
+      Ord('f'):  begin ADst[LOut] := #12; Inc(LOut); end;
+      Ord('n'):  begin ADst[LOut] := #10; Inc(LOut); end;
+      Ord('r'):  begin ADst[LOut] := #13; Inc(LOut); end;
+      Ord('t'):  begin ADst[LOut] := #9; Inc(LOut); end;
+      Ord('u'), Ord('U'):
+      begin
+        if LCh = Ord('u') then LHexLen := 4 else LHexLen := 8;
+        if LPos + SizeUInt(LHexLen) > ALen then
+        begin
+          AError := ueTruncated;
+          Exit(LOut);
+        end;
+        LCP := 0;
+        for LI := 0 to LHexLen - 1 do
+        begin
+          if HexDigitVal(Byte(ASrc[LPos + SizeUInt(LI)])) < 0 then
+          begin
+            AError := ueInvalidUnicode;
+            Exit(LOut);
+          end;
+          LCP := (LCP shl 4) or UInt32(HexDigitVal(Byte(ASrc[LPos + SizeUInt(LI)])));
+        end;
+        Inc(LPos, SizeUInt(LHexLen));
+        if LCP > $10FFFF then
+        begin
+          AError := ueInvalidUnicode;
+          Exit(LOut);
+        end;
+        if (LCP >= $D800) and (LCP <= $DFFF) then
+        begin
+          AError := ueInvalidUnicode;
+          Exit(LOut);
+        end;
+        LEncLen := UTF8Encode(LCP, PByte(@ADst[LOut]));
+        Inc(LOut, LEncLen);
+      end;
+    else
+      AError := ueInvalidEscape;
+      Exit(LOut);
+    end;
+  end;
+  Result := LOut;
+end;
 
 { TTomlDocument }
 
@@ -378,7 +466,7 @@ begin
   begin
     LBufLen := LEnd - LStart;
     LBuf := Doc^.FAllocator.Allocate(LBufLen);
-    LBufLen := JsonUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
+    LBufLen := TomlUnescapeToBuffer(Src + LStart, LEnd - LStart, LBuf, LErr);
     if LErr <> ueNone then
     begin
       Doc^.FAllocator.Deallocate(LBuf);
@@ -469,7 +557,7 @@ begin
         end;
       end;
       LBufLen := LDst - LBuf;
-      LBufLen := JsonUnescapeToBuffer(LBuf, LBufLen, LBuf, LErr);
+      LBufLen := TomlUnescapeToBuffer(LBuf, LBufLen, LBuf, LErr);
       if LErr <> ueNone then
       begin
         Doc^.FAllocator.Deallocate(LBuf);

@@ -318,6 +318,30 @@ begin
   Check(LDoc.HasError, 'trailing underscore rejected');
 end;
 
+procedure TestRejectEscapeSlash;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "a\/b"');
+  Check(LDoc.HasError, 'escape slash \/ rejected in TOML');
+end;
+
+procedure TestUnicodeEscape4;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "A"');
+  Check(not LDoc.HasError, 'no error');
+  Check(LDoc.Root.Get('x').AsStr.Equals(
+    TStringView.Create(PAnsiChar('A'), 1)), 'A = A');
+end;
+
+procedure TestUnicodeEscape8;
+var LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse('x = "\U0001F600"');
+  Check(not LDoc.HasError, 'no error');
+  Check(LDoc.Root.Get('x').AsStr.Len = 4, '\U0001F600 is 4 UTF-8 bytes');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.toml compliance');
   { Valid }
@@ -357,6 +381,9 @@ begin
   T.Run('reject double underscore', @TestRejectDoubleUnderscore);
   T.Run('reject leading underscore', @TestRejectLeadingUnderscore);
   T.Run('reject trailing underscore', @TestRejectTrailingUnderscore);
+  T.Run('reject escape slash', @TestRejectEscapeSlash);
+  T.Run('unicode escape \\u', @TestUnicodeEscape4);
+  T.Run('unicode escape \\U', @TestUnicodeEscape8);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
