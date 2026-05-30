@@ -9,15 +9,12 @@ uses
   nextpas.core.thread.intf;
 
 {**
- * CreateWorkStealingPool - 创建 work-stealing 线程池
+ * CreateWorkStealingPool - work-stealing 线程池
  *
  * @desc
- *   每个 worker 拥有独立的本地任务队列。Submit 将任务分配到
- *   负载最轻的 worker。空闲 worker 从其他 worker 的队列尾部偷取任务。
- *   相比单队列线程池，在高并发场景下减少锁竞争。
- *
- * @params
- *   AWorkerCount  工作线程数（0 = CPU 核心数）
+ *   支持 reference to procedure / procedure of object / plain procedure。
+ *   每个 worker 有独立队列，空闲时从其他 worker 偷取。
+ *   跨平台（POSIX pthread / Windows threads via platform layer）。
  *}
 function CreateWorkStealingPool(const AWorkerCount: Integer = 0): IThreadPool;
 
@@ -28,31 +25,38 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.sync.condvar,
-  nextpas.core.platform.thread,
-  nextpas.core.atomic;
+  nextpas.core.platform.thread;
 
 const
   QUEUE_CAPACITY = 4096;
+  MAX_WORKERS = 64;
 
 type
-  TWorkQueue = record
+  TTaskQueue = record
     Tasks: array[0..QUEUE_CAPACITY - 1] of TThreadTask;
     Head: Integer;
     Tail: Integer;
     Count: Integer;
-    Mutex: IMutex;
   end;
-  PWorkQueue = ^TWorkQueue;
+
+  TWorkStealingPool = class;
+
+  PWorkerCtx = ^TWorkerCtx;
+  TWorkerCtx = record
+    Pool: TWorkStealingPool;
+    ID: Integer;
+  end;
 
   TWorkStealingPool = class(TInterfacedObject, IThreadPool)
   private
-    FQueues: array of TWorkQueue;
+    FQueues: array[0..MAX_WORKERS - 1] of TTaskQueue;
+    FContexts: array[0..MAX_WORKERS - 1] of TWorkerCtx;
     FWorkerCount: Integer;
-    FWorkers: array of TPlatformThreadHandle;
-    FShutdown: Boolean;
-    FGlobalMutex: IMutex;
+    FWorkers: array[0..MAX_WORKERS - 1] of TPlatformThreadHandle;
+    FMutex: IMutex;
     FCondVar: ICondVar;
     FDoneCondVar: ICondVar;
+    FShutdown: Boolean;
     FPendingTasks: Integer;
     FNextQueue: Integer;
   public
@@ -64,109 +68,76 @@ type
     function GetWorkerCount: Integer;
   end;
 
-type
-  PWorkerContext = ^TWorkerContext;
-  TWorkerContext = record
-    Pool: TWorkStealingPool;
-    WorkerID: Integer;
-  end;
-
+function WorkerMain(AArg: Pointer): Pointer; cdecl;
 var
-  GContexts: array[0..63] of TWorkerContext;
-
-function TryDequeue(AQueue: PWorkQueue; out ATask: TThreadTask): Boolean;
-begin
-  Result := False;
-  AQueue^.Mutex.Acquire;
-  if AQueue^.Count > 0 then
-  begin
-    ATask := AQueue^.Tasks[AQueue^.Head];
-    AQueue^.Tasks[AQueue^.Head] := nil;
-    AQueue^.Head := (AQueue^.Head + 1) mod QUEUE_CAPACITY;
-    Dec(AQueue^.Count);
-    Result := True;
-  end;
-  AQueue^.Mutex.Release;
-end;
-
-function TrySteal(AQueue: PWorkQueue; out ATask: TThreadTask): Boolean;
-begin
-  Result := False;
-  AQueue^.Mutex.Acquire;
-  if AQueue^.Count > 0 then
-  begin
-    Dec(AQueue^.Count);
-    ATask := AQueue^.Tasks[(AQueue^.Head + AQueue^.Count) mod QUEUE_CAPACITY];
-    AQueue^.Tasks[(AQueue^.Head + AQueue^.Count) mod QUEUE_CAPACITY] := nil;
-    Result := True;
-  end;
-  AQueue^.Mutex.Release;
-end;
-
-function WorkerProc(AArg: Pointer): Pointer; cdecl;
-var
-  LCtx: PWorkerContext;
   LPool: TWorkStealingPool;
   LMyID, LVictim, LI: Integer;
   LTask: TThreadTask;
-  LGotWork: Boolean;
+  LFound: Boolean;
 begin
   Result := nil;
-  LCtx := PWorkerContext(AArg);
-  LPool := LCtx^.Pool;
-  LMyID := LCtx^.WorkerID;
+  LPool := PWorkerCtx(AArg)^.Pool;
+  LMyID := PWorkerCtx(AArg)^.ID;
 
   while True do
   begin
-    LGotWork := False;
+    LTask := nil;
+    LFound := False;
 
-    // Try own queue first
-    if TryDequeue(@LPool.FQueues[LMyID], LTask) then
-      LGotWork := True
-    else
+    LPool.FMutex.Acquire;
+
+    // Try own queue
+    if LPool.FQueues[LMyID].Count > 0 then
     begin
-      // Try stealing from others
+      LTask := LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head];
+      LPool.FQueues[LMyID].Tasks[LPool.FQueues[LMyID].Head] := nil;
+      LPool.FQueues[LMyID].Head := (LPool.FQueues[LMyID].Head + 1) mod QUEUE_CAPACITY;
+      Dec(LPool.FQueues[LMyID].Count);
+      LFound := True;
+    end;
+
+    // Try stealing
+    if not LFound then
       for LI := 1 to LPool.FWorkerCount - 1 do
       begin
         LVictim := (LMyID + LI) mod LPool.FWorkerCount;
-        if TrySteal(@LPool.FQueues[LVictim], LTask) then
+        if LPool.FQueues[LVictim].Count > 0 then
         begin
-          LGotWork := True;
+          Dec(LPool.FQueues[LVictim].Count);
+          LTask := LPool.FQueues[LVictim].Tasks[
+            (LPool.FQueues[LVictim].Head + LPool.FQueues[LVictim].Count) mod QUEUE_CAPACITY];
+          LPool.FQueues[LVictim].Tasks[
+            (LPool.FQueues[LVictim].Head + LPool.FQueues[LVictim].Count) mod QUEUE_CAPACITY] := nil;
+          LFound := True;
           Break;
         end;
       end;
-    end;
 
-    if LGotWork then
+    LPool.FMutex.Release;
+
+    if LFound then
     begin
-      try
-        LTask();
-      except
-      end;
+      LTask();
       LTask := nil;
-
-      LPool.FGlobalMutex.Acquire;
+      LPool.FMutex.Acquire;
       Dec(LPool.FPendingTasks);
       if LPool.FPendingTasks = 0 then
         LPool.FDoneCondVar.Broadcast;
-      LPool.FGlobalMutex.Release;
+      LPool.FMutex.Release;
     end
     else
     begin
-      // No work — wait or exit
-      LPool.FGlobalMutex.Acquire;
+      LPool.FMutex.Acquire;
       if LPool.FShutdown then
       begin
-        LPool.FGlobalMutex.Release;
+        LPool.FMutex.Release;
         Break;
       end;
-      LPool.FCondVar.Wait(LPool.FGlobalMutex);
-      LPool.FGlobalMutex.Release;
+      LPool.FCondVar.Wait(LPool.FMutex);
+      LPool.FMutex.Release;
     end;
   end;
 end;
-
-{ TWorkStealingPool }
 
 constructor TWorkStealingPool.Create(const AWorkerCount: Integer);
 var
@@ -177,17 +148,12 @@ begin
   FPendingTasks := 0;
   FNextQueue := 0;
 
-  if AWorkerCount > 0 then
-    LCount := AWorkerCount
-  else
-    LCount := platform_cpu_count;
-  if LCount > 64 then LCount := 64;
-
+  if AWorkerCount > 0 then LCount := AWorkerCount
+  else LCount := platform_cpu_count;
+  if LCount > MAX_WORKERS then LCount := MAX_WORKERS;
   FWorkerCount := LCount;
-  SetLength(FQueues, LCount);
-  SetLength(FWorkers, LCount);
 
-  FGlobalMutex := nextpas.core.sync.mutex.TMutex.Create;
+  FMutex := nextpas.core.sync.mutex.TMutex.Create;
   FCondVar := nextpas.core.sync.condvar.TCondVar.Create;
   FDoneCondVar := nextpas.core.sync.condvar.TCondVar.Create;
 
@@ -196,14 +162,13 @@ begin
     FQueues[LI].Head := 0;
     FQueues[LI].Tail := 0;
     FQueues[LI].Count := 0;
-    FQueues[LI].Mutex := nextpas.core.sync.mutex.TMutex.Create;
   end;
 
   for LI := 0 to LCount - 1 do
   begin
-    GContexts[LI].Pool := Self;
-    GContexts[LI].WorkerID := LI;
-    platform_thread_create(FWorkers[LI], @WorkerProc, @GContexts[LI]);
+    FContexts[LI].Pool := Self;
+    FContexts[LI].ID := LI;
+    platform_thread_create(FWorkers[LI], @WorkerMain, @FContexts[LI]);
   end;
 end;
 
@@ -212,75 +177,67 @@ begin
   Shutdown;
   FDoneCondVar := nil;
   FCondVar := nil;
-  FGlobalMutex := nil;
+  FMutex := nil;
   inherited Destroy;
 end;
 
 procedure TWorkStealingPool.Submit(const ATask: TThreadTask);
 var
-  LQueueIdx: Integer;
-  LQ: PWorkQueue;
+  LQIdx: Integer;
 begin
-  FGlobalMutex.Acquire;
+  FMutex.Acquire;
   if FShutdown then
   begin
-    FGlobalMutex.Release;
+    FMutex.Release;
     Exit;
   end;
 
-  // Round-robin distribution
-  LQueueIdx := FNextQueue mod FWorkerCount;
+  LQIdx := FNextQueue;
   FNextQueue := (FNextQueue + 1) mod FWorkerCount;
-  Inc(FPendingTasks);
-  FGlobalMutex.Release;
 
-  LQ := @FQueues[LQueueIdx];
-  LQ^.Mutex.Acquire;
-  if LQ^.Count < QUEUE_CAPACITY then
+  if FQueues[LQIdx].Count < QUEUE_CAPACITY then
   begin
-    LQ^.Tasks[LQ^.Tail] := ATask;
-    LQ^.Tail := (LQ^.Tail + 1) mod QUEUE_CAPACITY;
-    Inc(LQ^.Count);
+    FQueues[LQIdx].Tasks[FQueues[LQIdx].Tail] := ATask;
+    FQueues[LQIdx].Tail := (FQueues[LQIdx].Tail + 1) mod QUEUE_CAPACITY;
+    Inc(FQueues[LQIdx].Count);
   end;
-  LQ^.Mutex.Release;
+  Inc(FPendingTasks);
 
   FCondVar.Broadcast;
+  FMutex.Release;
 end;
 
 procedure TWorkStealingPool.Shutdown;
 var
   LI: Integer;
-  LRetVal: Pointer;
+  LRet: Pointer;
 begin
-  FGlobalMutex.Acquire;
+  FMutex.Acquire;
   if FShutdown then
   begin
-    FGlobalMutex.Release;
+    FMutex.Release;
     Exit;
   end;
   FShutdown := True;
-  FGlobalMutex.Release;
-
   FCondVar.Broadcast;
+  FMutex.Release;
 
   for LI := 0 to FWorkerCount - 1 do
-    platform_thread_join(FWorkers[LI], LRetVal);
+    platform_thread_join(FWorkers[LI], LRet);
 end;
 
 procedure TWorkStealingPool.WaitAll;
 begin
-  FGlobalMutex.Acquire;
+  FMutex.Acquire;
   while FPendingTasks > 0 do
-    FDoneCondVar.Wait(FGlobalMutex);
-  FGlobalMutex.Release;
+    FDoneCondVar.Wait(FMutex);
+  FMutex.Release;
 end;
 
 function TWorkStealingPool.GetWorkerCount: Integer;
 begin
   Result := FWorkerCount;
 end;
-
-{ Factory }
 
 function CreateWorkStealingPool(const AWorkerCount: Integer): IThreadPool;
 begin

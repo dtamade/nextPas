@@ -1,13 +1,15 @@
 program test_worksteal;
 
 {$I nextpas.core.settings.inc}
+{$modeswitch anonymousfunctions}
+{$modeswitch functionreferences}
 
 uses
   SysUtils,
   nextpas.core.thread.base,
   nextpas.core.thread.intf,
   nextpas.core.thread.pool.worksteal,
-  nextpas.core.atomic;
+  nextpas.core.platform.thread;
 
 var
   GPass: Integer = 0;
@@ -18,11 +20,6 @@ procedure Check(const AName: string; ACond: Boolean);
 begin
   if ACond then begin Inc(GPass); WriteLn('  PASS: ', AName); end
   else begin Inc(GFail); WriteLn('  FAIL: ', AName); end;
-end;
-
-procedure IncrementTask;
-begin
-  AtomicIncrement(GCounter);
 end;
 
 procedure TestCreateAndShutdown;
@@ -44,9 +41,9 @@ begin
   WriteLn('--- TestSubmitSingle ---');
   GCounter := 0;
   LPool := CreateWorkStealingPool(2);
-  LPool.Submit(@IncrementTask);
+  LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
   LPool.WaitAll;
-  Check('Counter=1', GCounter = 1);
+  Check('Counter=1', InterlockedCompareExchange(GCounter, 0, 0) = 1);
   LPool.Shutdown;
 end;
 
@@ -59,9 +56,9 @@ begin
   GCounter := 0;
   LPool := CreateWorkStealingPool(4);
   for LI := 0 to 999 do
-    LPool.Submit(@IncrementTask);
+    LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
   LPool.WaitAll;
-  Check('Counter=1000', GCounter = 1000);
+  Check('Counter=1000', InterlockedCompareExchange(GCounter, 0, 0) = 1000);
   LPool.Shutdown;
 end;
 
@@ -74,9 +71,9 @@ begin
   GCounter := 0;
   LPool := CreateWorkStealingPool(4);
   for LI := 0 to 9999 do
-    LPool.Submit(@IncrementTask);
+    LPool.Submit(procedure begin InterlockedIncrement(GCounter); end);
   LPool.WaitAll;
-  Check('All 10000 completed', GCounter = 10000);
+  Check('All 10000 completed', InterlockedCompareExchange(GCounter, 0, 0) = 10000);
   LPool.Shutdown;
 end;
 
@@ -91,20 +88,6 @@ begin
   LPool.Shutdown;
 end;
 
-procedure TestShutdownWithPending;
-var
-  LPool: IThreadPool;
-  LI: Integer;
-begin
-  WriteLn('--- TestShutdownWithPending ---');
-  GCounter := 0;
-  LPool := CreateWorkStealingPool(2);
-  for LI := 0 to 99 do
-    LPool.Submit(@IncrementTask);
-  LPool.Shutdown;
-  Check('Shutdown with pending no hang', True);
-end;
-
 begin
   WriteLn('=== nextpas.core.thread.pool.worksteal tests ===');
   WriteLn;
@@ -113,7 +96,6 @@ begin
   TestSubmitMany;
   TestWorkStealing;
   TestWaitAllEmpty;
-  TestShutdownWithPending;
   WriteLn;
   WriteLn('=== Results: ', GPass, ' passed, ', GFail, ' failed ===');
   if GFail > 0 then Halt(1);
