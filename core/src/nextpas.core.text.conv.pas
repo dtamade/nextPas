@@ -31,9 +31,13 @@ function TrimLeft(const AStr: string): string; inline;
 function TrimRight(const AStr: string): string; inline;
 function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): string;
 
+
+function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
 implementation
 
 uses
+  nextpas.core.text.number,
   SysUtils;
 
 function IntToStr(const AValue: Int64): string;
@@ -132,4 +136,17 @@ begin
   Result := SysUtils.StringReplace(AStr, AOld, ANew, LFlags);
 end;
 
+
+function TextOfChar(const ACh: Char; const ACount: Integer): string;
+begin
+  Result := StringOfChar(ACh, ACount);
+end;
+
+function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+var LBuf: array[0..31] of AnsiChar; LLen: Int32;
+begin
+  LLen := nextpas.core.text.number.IntToHexBuffer(AValue, @LBuf[0], ADigits);
+  SetLength(Result, LLen);
+  Move(LBuf[0], Result[1], LLen);
+end;
 end.
