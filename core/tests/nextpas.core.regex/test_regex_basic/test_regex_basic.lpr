@@ -205,6 +205,67 @@ begin
   Check(R.IsMatch(input), 'no blowup');
 end;
 
+procedure TestCaptureGroups;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('(\d+)-(\d+)');
+  M := R.Find('date: 2026-05-31');
+  Check(M.Found, 'found');
+  CheckEqual('2026-05', M.Value('date: 2026-05-31'), 'full match');
+  CheckEqual(Int64(2), Int64(Length(M.Groups)), 'group count');
+  CheckEqual('2026', M.Groups[0].Value('date: 2026-05-31'), 'group 0');
+  CheckEqual('05', M.Groups[1].Value('date: 2026-05-31'), 'group 1');
+end;
+
+procedure TestWordBoundary;
+var R: TRegex;
+begin
+  R := TRegex.Compile('\bword\b');
+  Check(R.IsMatch('a word here'), 'word isolated');
+  Check(not R.IsMatch('password'), 'inside word');
+  Check(not R.IsMatch('wordy'), 'prefix');
+  Check(R.IsMatch('word'), 'exact');
+  Check(R.IsMatch('word.'), 'before punct');
+end;
+
+procedure TestNonCapturingGroup;
+var R: TRegex;
+begin
+  R := TRegex.Compile('(?:ab)+c');
+  Check(R.IsMatch('abc'), 'one ab');
+  Check(R.IsMatch('ababc'), 'two ab');
+  Check(not R.IsMatch('ac'), 'no ab');
+end;
+
+procedure TestEdgeCases;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('.*');
+  Check(R.IsMatch(''), 'empty input matches .*');
+  Check(R.IsMatch('anything'), 'anything matches .*');
+
+  R := TRegex.Compile('');
+  Check(R.IsMatch('hello'), 'empty pattern matches');
+
+  R := TRegex.Compile('a');
+  M := R.Find('');
+  Check(not M.Found, 'no match in empty');
+end;
+
+procedure TestEscapes;
+var R: TRegex;
+begin
+  R := TRegex.Compile('\.');
+  Check(R.IsMatch('a.b'), 'escaped dot');
+  Check(not R.IsMatch('axb'), 'escaped dot miss');
+
+  R := TRegex.Compile('\*');
+  Check(R.IsMatch('a*b'), 'escaped star');
+
+  R := TRegex.Compile('\(');
+  Check(R.IsMatch('f(x)'), 'escaped paren');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -224,5 +285,10 @@ begin
   T.Run('TryCompile', @TestTryCompile);
   T.Run('Convenience functions', @TestConvenience);
   T.Run('No exponential blowup', @TestNoExponentialBlowup);
+  T.Run('Capture groups', @TestCaptureGroups);
+  T.Run('Word boundary (\b)', @TestWordBoundary);
+  T.Run('Non-capturing group', @TestNonCapturingGroup);
+  T.Run('Edge cases', @TestEdgeCases);
+  T.Run('Escapes', @TestEscapes);
   T.Summary;
 end.
