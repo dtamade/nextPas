@@ -14,16 +14,21 @@ type
   public
     class function NewV4: TUuid; static;
     class function NewV7: TUuid; static;
+    class function NewV7At(const ATimestampMs: UInt64): TUuid; static;
     class function Parse(const AStr: string): TUuid; static;
     class function TryParse(const AStr: string; out AUuid: TUuid): Boolean; static;
     class function Nil_: TUuid; static;
     function ToString: string;
+    function ToStringNoDash: string;
     function Version: Byte;
     function Variant: Byte;
     function IsNil: Boolean;
     function Equals(const AOther: TUuid): Boolean;
     function CompareTo(const AOther: TUuid): Int32;
     function TimestampMs: UInt64;
+    function Hash: UInt32;
+    class operator = (const A, B: TUuid): Boolean;
+    class operator < (const A, B: TUuid): Boolean;
   end;
 
 function UuidV4: TUuidString;
@@ -93,6 +98,19 @@ begin
   Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80;
 end;
 
+class function TUuid.NewV7At(const ATimestampMs: UInt64): TUuid;
+begin
+  Result.FBytes[0] := Byte(ATimestampMs shr 40);
+  Result.FBytes[1] := Byte(ATimestampMs shr 32);
+  Result.FBytes[2] := Byte(ATimestampMs shr 24);
+  Result.FBytes[3] := Byte(ATimestampMs shr 16);
+  Result.FBytes[4] := Byte(ATimestampMs shr 8);
+  Result.FBytes[5] := Byte(ATimestampMs);
+  IdRngFillBytes(@Result.FBytes[6], 10);
+  Result.FBytes[6] := (Result.FBytes[6] and $0F) or $70;
+  Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80;
+end;
+
 class function TUuid.TryParse(const AStr: string; out AUuid: TUuid): Boolean;
 var
   LI, LJ, LHi, LLo: Int32;
@@ -133,6 +151,17 @@ end;
 function TUuid.ToString: string;
 begin
   FormatUuid(FBytes, Result);
+end;
+
+function TUuid.ToStringNoDash: string;
+var LI: Integer;
+begin
+  SetLength(Result, 32);
+  for LI := 0 to 15 do
+  begin
+    Result[LI * 2 + 1] := HEX_CHARS[FBytes[LI] shr 4];
+    Result[LI * 2 + 2] := HEX_CHARS[FBytes[LI] and $0F];
+  end;
 end;
 
 function TUuid.Version: Byte;
@@ -178,6 +207,31 @@ begin
   Result := (UInt64(FBytes[0]) shl 40) or (UInt64(FBytes[1]) shl 32) or
             (UInt64(FBytes[2]) shl 24) or (UInt64(FBytes[3]) shl 16) or
             (UInt64(FBytes[4]) shl 8) or UInt64(FBytes[5]);
+end;
+
+function TUuid.Hash: UInt32;
+begin
+  Result := PUInt32(@FBytes[0])^ xor PUInt32(@FBytes[4])^ xor
+            PUInt32(@FBytes[8])^ xor PUInt32(@FBytes[12])^;
+end;
+
+class operator TUuid.= (const A, B: TUuid): Boolean;
+var LI: Integer;
+begin
+  for LI := 0 to 15 do
+    if A.FBytes[LI] <> B.FBytes[LI] then Exit(False);
+  Result := True;
+end;
+
+class operator TUuid.< (const A, B: TUuid): Boolean;
+var LI: Integer;
+begin
+  for LI := 0 to 15 do
+  begin
+    if A.FBytes[LI] < B.FBytes[LI] then Exit(True);
+    if A.FBytes[LI] > B.FBytes[LI] then Exit(False);
+  end;
+  Result := False;
 end;
 
 function UuidV4: TUuidString;

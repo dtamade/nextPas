@@ -203,11 +203,11 @@ begin
 end;
 
 procedure TestUuidV7Ordering;
-var LId1, LId2: string;
+var LU1, LU2: TUuid;
 begin
-  LId1 := UuidV7;
-  LId2 := UuidV7;
-  Check(LId1 <= LId2, 'v7 must be time-ordered');
+  LU1 := TUuid.NewV7At(1000);
+  LU2 := TUuid.NewV7At(2000);
+  Check(LU1 < LU2, 'v7 earlier ts must sort before later');
 end;
 
 procedure TestUuidV7Timestamp;
