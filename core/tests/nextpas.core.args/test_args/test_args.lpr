@@ -217,6 +217,40 @@ begin
   LA.Free;
 end;
 
+procedure TestParseResetState;
+var
+  LA: TArgParser;
+begin
+  LA := TArgParser.Create('test', '');
+  LA.AddFlag('verbose', 'v', '');
+  LA.AddInt('port', 'p', '', 80);
+  LA.ParseFrom(['--verbose', '--port', '9090']);
+  Check(LA.GetBool('verbose'), 'first parse verbose');
+  CheckEqual(Int64(9090), LA.GetInt('port'), 'first parse port');
+  LA.ParseFrom([]);
+  Check(not LA.GetBool('verbose'), 'second parse verbose reset');
+  CheckEqual(Int64(80), LA.GetInt('port'), 'second parse port reset to default');
+  Check(not LA.IsPresent('verbose'), 'second parse not present');
+  LA.Free;
+end;
+
+procedure TestFlagRejectsValue;
+var
+  LA: TArgParser;
+  LGot: Boolean;
+begin
+  LA := TArgParser.Create('test', '');
+  LA.AddFlag('verbose', 'v', '');
+  LGot := False;
+  try
+    LA.ParseFrom(['--verbose=yes']);
+  except
+    on EArgParseError do LGot := True;
+  end;
+  Check(LGot, '--verbose=yes raises EArgParseError');
+  LA.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.args');
   T.Run('empty parse', @TestEmptyParse);
@@ -235,6 +269,8 @@ begin
   T.Run('TryParse false', @TestTryParseFalse);
   T.Run('mixed', @TestMixed);
   T.Run('help text', @TestHelpText);
+  T.Run('parse reset state', @TestParseResetState);
+  T.Run('flag rejects value', @TestFlagRejectsValue);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
