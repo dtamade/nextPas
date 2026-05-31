@@ -284,6 +284,91 @@ begin
   CheckEqual('field1: manual error', R.ErrorMessages, 'format');
 end;
 
+
+{ === Additional Boundary Tests === }
+
+procedure TestRangeIntMinEqualsMax;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').RangeInt(5, 5, 5);
+  Check(V.IsValid, 'min=max=value should pass');
+end;
+
+procedure TestRangeIntAtBoundaryLow;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').RangeInt(1, 1, 100);
+  Check(V.IsValid, 'exactly at min should pass');
+end;
+
+procedure TestRangeIntAtBoundaryHigh;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').RangeInt(100, 1, 100);
+  Check(V.IsValid, 'exactly at max should pass');
+end;
+
+procedure TestRangeIntJustBelowMin;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').RangeInt(0, 1, 100);
+  Check(not V.IsValid, 'just below min should fail');
+end;
+
+procedure TestRangeIntJustAboveMax;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').RangeInt(101, 1, 100);
+  Check(not V.IsValid, 'just above max should fail');
+end;
+
+procedure TestOneOfEmptyOptions;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').OneOf('anything', []);
+  Check(not V.IsValid, 'empty options should always fail');
+end;
+
+procedure TestMatchesEmptyPattern;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').Matches('hello', '');
+  { Empty pattern should not match non-empty value }
+  Check(not V.IsValid, 'empty pattern should fail for non-empty value');
+end;
+
+procedure TestMatchesEmptyBoth;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').Matches('', '');
+  { Empty value with empty pattern should match }
+  Check(V.IsValid, 'empty value + empty pattern should pass');
+end;
+
+procedure TestFirstErrorNoErrors;
+var V: TValidator;
+begin
+  V := TValidator.Create('x').Required('hello');
+  Check(V.IsValid, 'should be valid');
+  CheckEqual('', V.FirstError, 'no errors returns empty');
+end;
+
+procedure TestErrorMessagesMultiple;
+var R: TValidationResult;
+begin
+  R := TValidationResult.Create;
+  R.Add(TValidator.Create('name').Required(''));
+  R.Add(TValidator.Create('age').MinInt(-1, 0));
+  R.Add(TValidator.Create('email').Email('bad'));
+  Check(not R.IsValid, 'should have errors');
+  { ErrorMessages should contain all field names }
+  Check(Pos('name:', R.ErrorMessages) > 0, 'has name error');
+  Check(Pos('age:', R.ErrorMessages) > 0, 'has age error');
+  Check(Pos('email:', R.ErrorMessages) > 0, 'has email error');
+  { Separated by semicolons }
+  Check(Pos('; ', R.ErrorMessages) > 0, 'semicolon separator');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.validation');
   { Required }
@@ -328,6 +413,16 @@ begin
   T.Run('empty validator', @TestEmptyValidator);
   T.Run('chain multiple errors', @TestChainMultipleErrors);
   T.Run('result add error direct', @TestResultAddErrorDirect);
+  T.Run('rangeint min=max', @TestRangeIntMinEqualsMax);
+  T.Run('rangeint at boundary low', @TestRangeIntAtBoundaryLow);
+  T.Run('rangeint at boundary high', @TestRangeIntAtBoundaryHigh);
+  T.Run('rangeint just below min', @TestRangeIntJustBelowMin);
+  T.Run('rangeint just above max', @TestRangeIntJustAboveMax);
+  T.Run('oneof empty options', @TestOneOfEmptyOptions);
+  T.Run('matches empty pattern', @TestMatchesEmptyPattern);
+  T.Run('matches empty both', @TestMatchesEmptyBoth);
+  T.Run('first error no errors', @TestFirstErrorNoErrors);
+  T.Run('error messages multiple', @TestErrorMessagesMultiple);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

@@ -436,6 +436,92 @@ begin
   end;
 end;
 
+
+{ === Additional GetFloat/Has/GetKeys/Count Boundary Tests === }
+
+procedure TestGetFloatZero;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[x]' + #10 + 'val=0.0' + #10);
+    Check(LCfg.GetFloat('x.val') < 0.001, 'zero float');
+    Check(LCfg.GetFloat('x.val') > -0.001, 'zero float neg');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetFloatNegative;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[x]' + #10 + 'val=-99.5' + #10);
+    LVal := LCfg.GetFloat('x.val');
+    Check((LVal > -99.6) and (LVal < -99.4), 'negative float');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestHasAfterMultipleLoads;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[a]' + #10 + 'x=1' + #10);
+    LCfg.LoadFromJson('{"b.y":"2"}');
+    CheckEqual(True, LCfg.Has('a.x'), 'has ini key');
+    CheckEqual(True, LCfg.Has('b.y'), 'has json key');
+    CheckEqual(False, LCfg.Has('c.z'), 'missing key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetKeysOrder;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[s]' + #10 + 'alpha=1' + #10 + 'beta=2' + #10 + 'gamma=3' + #10);
+    LKeys := LCfg.GetKeys;
+    CheckEqual(Int64(3), Int64(Length(LKeys)), 'key count');
+    { Keys should contain all three }
+    Check((LKeys[0] = 's.alpha') or (LKeys[1] = 's.alpha') or (LKeys[2] = 's.alpha'), 'has alpha');
+    Check((LKeys[0] = 's.beta') or (LKeys[1] = 's.beta') or (LKeys[2] = 's.beta'), 'has beta');
+    Check((LKeys[0] = 's.gamma') or (LKeys[1] = 's.gamma') or (LKeys[2] = 's.gamma'), 'has gamma');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestCountAfterOverride;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"k1":"a","k2":"b"}');
+    CheckEqual(Int64(2), Int64(LCfg.Count), 'initial 2');
+    { Override existing key should not increase count }
+    LCfg.LoadFromJson('{"k1":"override"}');
+    CheckEqual(Int64(2), Int64(LCfg.Count), 'override no increase');
+    { Add new key }
+    LCfg.LoadFromJson('{"k3":"c"}');
+    CheckEqual(Int64(3), Int64(LCfg.Count), 'new key increases');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -465,5 +551,10 @@ begin
   T.Run('Override.Priority', @TestOverridePriority);
   T.Run('Override.EnvHighest', @TestOverrideEnvHighest);
   T.Run('Count', @TestCount);
+  T.Run('GetFloat.Zero', @TestGetFloatZero);
+  T.Run('GetFloat.Negative', @TestGetFloatNegative);
+  T.Run('Has.AfterMultipleLoads', @TestHasAfterMultipleLoads);
+  T.Run('GetKeys.Order', @TestGetKeysOrder);
+  T.Run('Count.AfterOverride', @TestCountAfterOverride);
   T.Summary;
 end.

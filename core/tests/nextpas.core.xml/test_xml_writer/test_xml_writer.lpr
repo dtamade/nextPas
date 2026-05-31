@@ -380,6 +380,91 @@ begin
   end;
 end;
 
+
+{ === Additional Coverage Tests === }
+
+procedure TestNamespaceDeclMultiple;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('root');
+    LW.NamespaceDecl('a', 'urn:a');
+    LW.NamespaceDecl('b', 'urn:b');
+    LW.EndElement('root');
+    CheckEqual('<root xmlns:a="urn:a" xmlns:b="urn:b"/>', LW.ToString, 'multi ns decl');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestRawUnescaped;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(False);
+  try
+    LW.StartElement('r');
+    LW.Text('before');
+    LW.EndElement('r');
+    LW.Raw('<custom a="b">raw & unescaped</custom>');
+    CheckEqual('<r>before</r><custom a="b">raw & unescaped</custom>', LW.ToString, 'raw unescaped');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestClearResetsCompletely;
+var
+  LW: TXmlWriter;
+begin
+  LW := TXmlWriter.Create(True, '  ');
+  try
+    LW.StartElement('deep');
+    LW.StartElement('nested');
+    LW.Text('x');
+    LW.EndElement('nested');
+    LW.EndElement('deep');
+    LW.Clear;
+    { After clear, depth should be 0 and output empty }
+    LW.StartElement('fresh');
+    LW.EndElement('fresh');
+    CheckEqual('<fresh/>', LW.ToString, 'clear resets depth');
+  finally
+    LW.Free;
+  end;
+end;
+
+procedure TestConsecutiveStartEndDepth;
+var
+  LW: TXmlWriter;
+  LExpected: string;
+begin
+  LW := TXmlWriter.Create(True, '  ');
+  try
+    LW.StartElement('a');
+    LW.StartElement('b');
+    LW.StartElement('c');
+    LW.Text('leaf');
+    LW.EndElement('c');
+    LW.EndElement('b');
+    LW.StartElement('d');
+    LW.Text('sibling');
+    LW.EndElement('d');
+    LW.EndElement('a');
+    LExpected := '<a>' + #10 +
+                 '  <b>' + #10 +
+                 '    <c>leaf</c>' + #10 +
+                 '  </b>' + #10 +
+                 '  <d>sibling</d>' + #10 +
+                 '</a>';
+    CheckEqual(LExpected, LW.ToString, 'depth tracking');
+  finally
+    LW.Free;
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -405,5 +490,9 @@ begin
   T.Run('Clear', @TestClear);
   T.Run('RoundTrip', @TestRoundTrip);
   T.Run('MultipleAttributes', @TestMultipleAttributes);
+  T.Run('NamespaceDeclMultiple', @TestNamespaceDeclMultiple);
+  T.Run('RawUnescaped', @TestRawUnescaped);
+  T.Run('ClearResetsCompletely', @TestClearResetsCompletely);
+  T.Run('ConsecutiveStartEndDepth', @TestConsecutiveStartEndDepth);
   T.Summary;
 end.

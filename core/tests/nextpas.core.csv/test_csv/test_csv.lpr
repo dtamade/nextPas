@@ -312,6 +312,42 @@ begin
   CheckEqual('', Fields[2], 'empty quoted f2');
 end;
 
+
+{ === Error Handling Tests === }
+
+procedure TestHasErrorUnclosedQuote;
+var
+  R: TCsvReader;
+  Fields: TStringArray;
+begin
+  R := TCsvReader.Create('"unclosed field,b');
+  R.ReadRow(Fields);
+  Check(R.HasError, 'unclosed quote should set error');
+  Check(Length(R.GetError) > 0, 'error message not empty');
+end;
+
+procedure TestHasErrorNormal;
+var
+  R: TCsvReader;
+  Fields: TStringArray;
+begin
+  R := TCsvReader.Create('a,b,c');
+  R.ReadRow(Fields);
+  Check(not R.HasError, 'normal parse no error');
+  CheckEqual('', R.GetError, 'no error message');
+end;
+
+procedure TestHasErrorMultilineUnclosed;
+var
+  R: TCsvReader;
+  Fields: TStringArray;
+begin
+  R := TCsvReader.Create('"line1' + #10 + 'line2' + #10 + 'line3');
+  R.ReadRow(Fields);
+  Check(R.HasError, 'multiline unclosed quote should error');
+  Check(Length(R.GetError) > 0, 'multiline error msg not empty');
+end;
+
 { === Main === }
 
 begin
@@ -346,6 +382,11 @@ begin
   T.Run('Roundtrip', @TestRoundtrip);
   T.Run('RFC4180QuotedCRLF', @TestRFC4180QuotedCRLF);
   T.Run('RFC4180EmptyQuoted', @TestRFC4180EmptyQuoted);
+
+  { Error handling tests }
+  T.Run('HasError.UnclosedQuote', @TestHasErrorUnclosedQuote);
+  T.Run('HasError.Normal', @TestHasErrorNormal);
+  T.Run('HasError.MultilineUnclosed', @TestHasErrorMultilineUnclosed);
 
   T.Summary;
 end.
