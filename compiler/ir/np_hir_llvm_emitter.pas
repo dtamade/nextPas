@@ -566,6 +566,12 @@ begin
           Emit('  call void @np_intf_release(ptr ' +
             ValueRef(AInstr.Operands[0].ValueId) + ')');
       end
+      else if AInstr.IntrinsicName = 'exc_store' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  store ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
+            ', ptr @__np_exc_object');
+      end
       else if AInstr.IntrinsicName = 'vcall' then
       begin
         if Length(AInstr.Operands) >= 2 then
@@ -1192,6 +1198,7 @@ begin
   Emit('; --- Exception runtime (freestanding setjmp/longjmp) ---');
   Emit('@__np_exc_stack = internal global ptr null');
   Emit('@__np_exc_pending = internal global i1 false');
+  Emit('@__np_exc_object = internal global ptr null');
   Emit('');
   Emit('define internal void @np_try_push(ptr %buf) {');
   Emit('entry:');

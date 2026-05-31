@@ -3525,7 +3525,24 @@ begin
     hnkFinallyEndRuntime:   Instr.Kind := hikFinallyEnd;
     hnkExceptBeginRuntime:  Instr.Kind := hikExceptBegin;
     hnkExceptEndRuntime:    Instr.Kind := hikExceptEnd;
-    hnkRaiseRuntime:        Instr.Kind := hikRaise;
+    hnkRaiseRuntime:
+    begin
+      if ANode.Operand <> '' then
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := 0;
+        Instr.IntrinsicName := 'exc_store';
+        SetLength(Instr.Operands, 1);
+        Instr.Operands[0] := MakeTypedOperand(ParseIntBlob(ANode.Operand), GetPtrType);
+        EmitInstr(Instr);
+      end;
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.Kind := hikRaise;
+      EmitInstr(Instr);
+      Exit;
+    end;
   else
     Exit;
   end;

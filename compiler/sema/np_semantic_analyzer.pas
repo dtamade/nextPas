@@ -7151,7 +7151,15 @@ begin
     end;
     if (Child.NodeKind = gnkRaiseStatement) and FNoFold then
     begin
-      FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
+      if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) then
+      begin
+        if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
+          FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, Operand)
+        else
+          FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
+      end
+      else
+        FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
       FCurrentBlockTerminated := True;
       Continue;
     end;
