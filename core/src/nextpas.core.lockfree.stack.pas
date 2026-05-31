@@ -132,6 +132,7 @@ begin
   while LIdx <> -1 do
   begin
     Inc(LCount);
+    if LCount > FCapacity then Break;
     LIdx := FSlots[LIdx].Next;
   end;
   Result := LCount;
