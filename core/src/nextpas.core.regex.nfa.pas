@@ -147,7 +147,7 @@ begin
 
   SetLength(CList, LCodeLen);
   SetLength(NList, LCodeLen);
-  SetLength(Stack, LCodeLen * 2);
+  SetLength(Stack, LCodeLen * 3);
   SparseInit(Seen, LCodeLen);
 
   LHasPrefix := AProgram.LiteralPrefixLen > 0;
@@ -441,10 +441,10 @@ begin
   InitThreadList2(CList, LCodeLen);
   InitThreadList2(NList, LCodeLen);
   SparseInit(Seen, LCodeLen);
-  SetLength(Stack, LCodeLen * 2);
-  SetLength(StackSlot, LCodeLen * 2);
+  SetLength(Stack, LCodeLen * 3);
+  SetLength(StackSlot, LCodeLen * 3);
 
-  SlotPoolInit(Pool, LCodeLen * 2, AProgram.NumSlots);
+  SlotPoolInit(Pool, LCodeLen * 3, AProgram.NumSlots);
 
   SetLength(matchSlots, AProgram.NumSlots);
   matched := False;
