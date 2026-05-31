@@ -24,7 +24,7 @@ const
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 class function TNetAddress.Create(const AIP: string; APort: UInt16): TNetAddress;
 begin

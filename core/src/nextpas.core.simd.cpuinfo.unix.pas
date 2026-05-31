@@ -11,7 +11,7 @@ function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 implementation
 
 uses
-  SysUtils
+  nextpas.core.text.conv
   {$IFDEF LINUX}
   , Unix
   {$ENDIF}

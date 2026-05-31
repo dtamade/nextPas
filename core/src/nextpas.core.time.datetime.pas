@@ -51,7 +51,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 const
   NS_PER_SEC_C  = Int64(1000000000);

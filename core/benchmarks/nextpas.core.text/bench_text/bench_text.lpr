@@ -11,7 +11,8 @@ uses
   nextpas.core.text.escape,
   nextpas.core.text.scan,
   nextpas.core.text.utf8,
-  nextpas.core.text.builder;
+  nextpas.core.text.builder,
+  nextpas.core.text.conv;
 
 const
   ITERATIONS = 100000;
@@ -251,6 +252,89 @@ begin
   BenchOp('FPC string concat 10x', N, LStart.Elapsed);
 end;
 
+{ === text.conv vs SysUtils comparison === }
+
+procedure BenchConvIntToStr;
+const N = ITERATIONS * 5;
+var LStart: TInstant; I: Int32; LS: string;
+begin
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := nextpas.core.text.conv.IntToStr(Int64(I) * 123456789);
+  BenchOp('text.conv.IntToStr', N, LStart.Elapsed);
+
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := SysUtils.IntToStr(Int64(I) * 123456789);
+  BenchOp('SysUtils.IntToStr', N, LStart.Elapsed);
+end;
+
+procedure BenchConvTrim;
+const
+  PADDED = '   hello world   ';
+  N = ITERATIONS * 10;
+var LStart: TInstant; I: Int32; LS: string;
+begin
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := nextpas.core.text.conv.Trim(PADDED);
+  BenchOp('text.conv.Trim', N, LStart.Elapsed);
+
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := SysUtils.Trim(PADDED);
+  BenchOp('SysUtils.Trim', N, LStart.Elapsed);
+end;
+
+procedure BenchConvLowerCase;
+const
+  MIXED = 'The Quick Brown Fox Jumps Over The Lazy Dog';
+  N = ITERATIONS * 10;
+var LStart: TInstant; I: Int32; LS: string;
+begin
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := nextpas.core.text.conv.LowerCase(MIXED);
+  BenchOp('text.conv.LowerCase 44B', N, LStart.Elapsed);
+
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := SysUtils.LowerCase(MIXED);
+  BenchOp('SysUtils.LowerCase 44B', N, LStart.Elapsed);
+end;
+
+procedure BenchConvFormat;
+const N = ITERATIONS;
+var LStart: TInstant; I: Int32; LS: string;
+begin
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := nextpas.core.text.conv.Format('item %d: %s = %d', [I, 'value', I * 10]);
+  BenchOp('text.conv.Format (3 args)', N, LStart.Elapsed);
+
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    LS := SysUtils.Format('item %d: %s = %d', [I, 'value', I * 10]);
+  BenchOp('SysUtils.Format (3 args)', N, LStart.Elapsed);
+end;
+
+procedure BenchConvStrToInt;
+const
+  NUMS: array[0..4] of string = ('12345', '-99999', '0', '2147483647', '-1');
+  N = ITERATIONS * 5;
+var LStart: TInstant; I, LCode: Int32; LV: Int64;
+begin
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    nextpas.core.text.conv.TryStrToInt(NUMS[I mod 5], LV);
+  BenchOp('text.conv.TryStrToInt', N, LStart.Elapsed);
+
+  LStart := TInstant.Now;
+  for I := 1 to N do
+    System.Val(NUMS[I mod 5], LV, LCode);
+  BenchOp('System.Val (baseline)', N, LStart.Elapsed);
+end;
+
 begin
   WriteLn('=== nextpas.core.text benchmarks ===');
   WriteLn('  (', ITERATIONS, ' base iterations, higher = more precise)');
@@ -290,6 +374,14 @@ begin
 
   WriteLn('--- StringBuilder ---');
   BenchStringBuilder;
+  WriteLn;
+
+  WriteLn('--- text.conv vs SysUtils ---');
+  BenchConvIntToStr;
+  BenchConvTrim;
+  BenchConvLowerCase;
+  BenchConvFormat;
+  BenchConvStrToInt;
   WriteLn;
 
   WriteLn('--- Reference (literature/known values) ---');

@@ -12,7 +12,7 @@ procedure RaiseFsError(const ACode: Int32; const AOp, APath: string);
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors;
 
 {$IFDEF NEXTPAS_WINDOWS}

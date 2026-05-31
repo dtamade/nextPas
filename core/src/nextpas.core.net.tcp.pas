@@ -14,7 +14,7 @@ function NetTcpConnect(const AAddr: string; const APort: UInt16): ITcpStream;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.errors,
