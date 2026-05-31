@@ -49,6 +49,8 @@ type
     FTitleStyle: TStyle;
   public
     class function New: IBlock; static;
+    { 快捷：全边框 + 标题（最常用模式） }
+    class function Bordered(const ATitle: AnsiString): IBlock; static;
 
     { IBlock builder 链 }
     function WithBorders(ABorders: TBorders): IBlock;
@@ -96,6 +98,11 @@ begin
   LBlock.FBorderStyle := TStyle.Default;
   LBlock.FTitleStyle := TStyle.Default;
   Result := LBlock;
+end;
+
+class function TBlock.Bordered(const ATitle: AnsiString): IBlock;
+begin
+  Result := TBlock.New.WithBorders(BORDERS_ALL).WithTitle(ATitle);
 end;
 
 function TBlock.WithBorders(ABorders: TBorders): IBlock;
