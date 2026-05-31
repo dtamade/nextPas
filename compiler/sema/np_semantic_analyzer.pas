@@ -37,6 +37,8 @@ type
     FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
+    FCompilerProcNames: array of string;
+    FCompilerProcCount: LongInt;
     FGenericWorkQueue: array of LongInt;
     FGenericWorkCount: LongInt;
     FGenericCacheKeys: array of string;
@@ -1059,11 +1061,21 @@ procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
 var
   Index: LongInt;
   NextIndex: SizeInt;
-  Sig, ExistingSig: string;
+  Sig, ExistingSig, CleanName: string;
 begin
+  if Pos(';compilerproc', AName) > 0 then
+  begin
+    CleanName := Copy(AName, 1, Pos(';', AName) - 1);
+    if FCompilerProcCount >= Length(FCompilerProcNames) then
+      SetLength(FCompilerProcNames, FCompilerProcCount + 16);
+    FCompilerProcNames[FCompilerProcCount] := CleanName;
+    Inc(FCompilerProcCount);
+  end
+  else
+    CleanName := AName;
   Sig := GetParamSignature(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, AName) and
+    if SameText(FProcedureBodies[Index].Name, CleanName) and
       SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
       ExistingSig := GetParamSignature(FProcedureBodies[Index].Decl);
@@ -1078,7 +1090,7 @@ begin
     end;
   NextIndex := Length(FProcedureBodies);
   SetLength(FProcedureBodies, NextIndex + 1);
-  FProcedureBodies[NextIndex].Name := AName;
+  FProcedureBodies[NextIndex].Name := CleanName;
   FProcedureBodies[NextIndex].Body := ABody;
   FProcedureBodies[NextIndex].Decl := ADecl;
   FProcedureBodies[NextIndex].OwnerUnitId := AOwnerUnitId;

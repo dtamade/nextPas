@@ -2942,6 +2942,9 @@ begin
      ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
       IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
   begin
+    if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
+      Node.FText := Node.FText + ';compilerproc';
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
@@ -3146,6 +3149,9 @@ begin
      ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
       IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
   begin
+    if (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      SameText(CurrentToken(ALexer, ACursor).Lexeme, 'compilerproc') then
+      Node.FText := Node.FText + ';compilerproc';
     Inc(ACursor);
     MatchTokenSilent(ALexer, ACursor, tkSemicolon);
   end;
