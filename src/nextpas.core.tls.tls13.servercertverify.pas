@@ -117,7 +117,8 @@ uses
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.ecdsa,
   nextpas.core.crypto.p384,
-  nextpas.core.crypto.ed25519;
+  nextpas.core.crypto.ed25519,
+  nextpas.core.crypto.rsa.ct;
 
 const
   TLS13_SERVER_CERTVERIFY_CONTEXT = 'TLS 1.3, server CertificateVerify';
@@ -2209,7 +2210,7 @@ function TryRSASignWithPrivateExponent(
   out AError: string
 ): Boolean;
 begin
-  Result := TryRSAModExpSignPurePascal(
+  Result := TryRSACTModExpSign(
     AEncodedMessage,
     AModulus,
     APrivateExponent,

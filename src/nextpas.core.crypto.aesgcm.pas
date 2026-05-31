@@ -28,7 +28,8 @@ implementation
 
 uses
   nextpas.core.crypto.constant_time,
-  nextpas.core.crypto.aesni;
+  nextpas.core.crypto.aesni,
+  nextpas.core.crypto.aes.ct64;
 
 var
   GAESNIDetected: Boolean = False;
@@ -572,6 +573,7 @@ procedure GCTR(const AExpandedKey: TAESExpandedKey; ANr: Integer;
 var
   CB, EncCB: TAESBlock;
   I, J, Blocks, Rem: Integer;
+  LCtKey: TAESCt64Key;
 begin
   if AInputLen = 0 then Exit;
 
@@ -579,9 +581,13 @@ begin
   Blocks := AInputLen div 16;
   Rem := AInputLen mod 16;
 
+  // Use CT AES for the non-AES-NI path (this function is only called when AES-NI is unavailable)
+  LCtKey.Nr := ANr;
+  Move(AExpandedKey[0], LCtKey.RK[0], (ANr + 1) * 4 * SizeOf(UInt32));
+
   for I := 0 to Blocks - 1 do
   begin
-    AESEncryptBlock(CB, EncCB, AExpandedKey, ANr);
+    AESCt64EncryptBlock(@CB[0], @EncCB[0], LCtKey);
     for J := 0 to 15 do
       AOutput[AOutputOffset + I * 16 + J] := AInput[AInputOffset + I * 16 + J] xor EncCB[J];
     IncrementCounter(CB);
@@ -589,7 +595,7 @@ begin
 
   if Rem > 0 then
   begin
-    AESEncryptBlock(CB, EncCB, AExpandedKey, ANr);
+    AESCt64EncryptBlock(@CB[0], @EncCB[0], LCtKey);
     for J := 0 to Rem - 1 do
       AOutput[AOutputOffset + Blocks * 16 + J] := AInput[AInputOffset + Blocks * 16 + J] xor EncCB[J];
   end;

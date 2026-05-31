@@ -51,7 +51,9 @@ implementation
 uses
   nextpas.core.tls.asn1,
   nextpas.core.crypto.bigint,
-  nextpas.core.crypto.hmac;
+  nextpas.core.crypto.hmac,
+  nextpas.core.crypto.p256.field,
+  nextpas.core.crypto.p256.point;
 
 const
   P256_FIELD_P: array[0..31] of Byte = (
@@ -523,95 +525,69 @@ end;
 
 function TryP256ScalarMult(const AScalar: TBytes; const APoint: TECPoint; out AResult: TECPoint; out AError: string): Boolean;
 var
-  LScalar32: TBytes;
-  LR0, LR1: TECPoint;
-  LAddResult, LDblResult: TECPoint;
-  LByteIndex: Integer;
-  LBitIndex: Integer;
-  LBit: Integer;
-  LSwap: Integer;
-  LPrevSwap: Integer;
-
-  procedure CTSwapPoint(var A, B: TECPoint; AFlag: Integer);
-  var
-    LMask: Byte;
-    I, LLen: Integer;
-    LTmp: Byte;
-    LA32, LB32: TBytes;
-    LAErr: string;
-    LInfA, LInfB, LInfTmp: Byte;
-  begin
-    LMask := Byte(-AFlag and $FF);
-    LLen := 32;
-    if not TryToFixedLength32(A.X, LA32, LAErr) then SetLength(LA32, LLen);
-    if not TryToFixedLength32(B.X, LB32, LAErr) then SetLength(LB32, LLen);
-    for I := 0 to LLen - 1 do
-    begin
-      LTmp := LMask and (LA32[I] xor LB32[I]);
-      LA32[I] := LA32[I] xor LTmp;
-      LB32[I] := LB32[I] xor LTmp;
-    end;
-    A.X := LA32; B.X := LB32;
-
-    if not TryToFixedLength32(A.Y, LA32, LAErr) then SetLength(LA32, LLen);
-    if not TryToFixedLength32(B.Y, LB32, LAErr) then SetLength(LB32, LLen);
-    for I := 0 to LLen - 1 do
-    begin
-      LTmp := LMask and (LA32[I] xor LB32[I]);
-      LA32[I] := LA32[I] xor LTmp;
-      LB32[I] := LB32[I] xor LTmp;
-    end;
-    A.Y := LA32; B.Y := LB32;
-
-    LInfA := Byte(A.IsInfinity);
-    LInfB := Byte(B.IsInfinity);
-    LInfTmp := LMask and (LInfA xor LInfB);
-    A.IsInfinity := Boolean(LInfA xor LInfTmp);
-    B.IsInfinity := Boolean(LInfB xor LInfTmp);
-  end;
-
+  LJacIn, LJacOut: TP256JacPoint;
+  LAffX, LAffY: TP256Fe;
+  LXBytes, LYBytes, LPadX, LPadY: TBytes;
 begin
   AResult := P256InfinityPoint;
   AError := '';
   Result := False;
 
-  if not TryToFixedLength32(StripLeadingZeroBytes(AScalar), LScalar32, AError) then
-    Exit;
-
-  // Montgomery ladder: constant-time scalar multiplication.
-  // R0 starts at infinity, R1 starts at the input point.
-  // Each iteration: swap based on current bit, then R1=Add(R0,R1), R0=Double(R0), swap back.
-  LR0 := P256InfinityPoint;
-  LR1 := APoint;
-  LPrevSwap := 0;
-
-  for LByteIndex := 0 to 31 do
+  if APoint.IsInfinity then
   begin
-    for LBitIndex := 7 downto 0 do
-    begin
-      LBit := (LScalar32[LByteIndex] shr LBitIndex) and 1;
-      LSwap := LBit xor LPrevSwap;
-      CTSwapPoint(LR0, LR1, LSwap);
-      LPrevSwap := LBit;
-
-      if not TryP256PointAdd(LR0, LR1, LAddResult, AError) then Exit;
-      if not TryP256PointDouble(LR0, LDblResult, AError) then Exit;
-      LR1 := LAddResult;
-      LR0 := LDblResult;
-    end;
+    AResult := P256InfinityPoint;
+    Exit(True);
   end;
-  CTSwapPoint(LR0, LR1, LPrevSwap);
 
-  AResult := LR0;
+  // Convert affine TECPoint to Jacobian TP256JacPoint
+  if not TryToFixedLength32(APoint.X, LPadX, AError) then Exit;
+  if not TryToFixedLength32(APoint.Y, LPadY, AError) then Exit;
+  P256FeFromBytes(LPadX, LJacIn.X);
+  P256FeFromBytes(LPadY, LJacIn.Y);
+  P256FeOne(LJacIn.Z);
+
+  P256ScalarMult(AScalar, LJacIn, LJacOut);
+
+  if P256PointIsInfinity(LJacOut) = 1 then
+  begin
+    AResult := P256InfinityPoint;
+    Exit(True);
+  end;
+
+  P256PointToAffine(LJacOut, LAffX, LAffY);
+  P256FeToBytes(LAffX, LXBytes);
+  P256FeToBytes(LAffY, LYBytes);
+  AResult.X := StripLeadingZeroBytes(LXBytes);
+  AResult.Y := StripLeadingZeroBytes(LYBytes);
+  AResult.IsInfinity := False;
   Result := True;
 end;
 
 function TryP256ScalarMultBase(const AScalar: TBytes; out AResult: TECPoint; out AError: string): Boolean;
 var
-  LG: TECPoint;
+  LJac: TP256JacPoint;
+  LAffX, LAffY: TP256Fe;
+  LXBytes, LYBytes: TBytes;
 begin
-  LG := P256GeneratorPoint;
-  Result := TryP256ScalarMult(AScalar, LG, AResult, AError);
+  AResult := P256InfinityPoint;
+  AError := '';
+  Result := False;
+  if Length(AScalar) = 0 then begin AError := 'empty scalar'; Exit; end;
+
+  P256ScalarMultBase(AScalar, LJac);
+  if P256PointIsInfinity(LJac) = 1 then
+  begin
+    AResult := P256InfinityPoint;
+    Exit(True);
+  end;
+
+  P256PointToAffine(LJac, LAffX, LAffY);
+  P256FeToBytes(LAffX, LXBytes);
+  P256FeToBytes(LAffY, LYBytes);
+  AResult.X := StripLeadingZeroBytes(LXBytes);
+  AResult.Y := StripLeadingZeroBytes(LYBytes);
+  AResult.IsInfinity := False;
+  Result := True;
 end;
 
 function TryValidateP256Point(const APoint: TECPoint; out AError: string): Boolean;
