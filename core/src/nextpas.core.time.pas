@@ -14,7 +14,8 @@ uses
   nextpas.core.time.deadline,
   nextpas.core.time.sleep,
   nextpas.core.time.timer,
-  nextpas.core.time.ticker;
+  nextpas.core.time.ticker,
+  nextpas.core.time.period;
 
 type
   TDuration = nextpas.core.time.base.TDuration;
@@ -31,6 +32,7 @@ type
   TTimer = nextpas.core.time.timer.TTimer;
   TTick = nextpas.core.time.ticker.TTick;
   TTicker = nextpas.core.time.ticker.TTicker;
+  TPeriod = nextpas.core.time.period.TPeriod;
 
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate; inline;
 function TryParseISO8601Date(const AStr: string; out ADate: nextpas.core.time.date.TDate): Boolean; inline;
