@@ -123,11 +123,18 @@ end;
 procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission);
 var
-  LFile: IFile;
+  LData: TBytes;
+  LI: SizeInt;
 begin
-  LFile := FsOpenFile(APath, [fmWrite, fmCreate, fmTruncate], APerm);
   if Length(AText) > 0 then
-    LFile.Write(AText[1], Length(AText));
+  begin
+    SetLength(LData, Length(AText));
+    for LI := 0 to Length(AText) - 1 do
+      LData[LI] := Byte(AText[LI + 1]);
+    nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
+  end
+  else
+    nextpas.core.fs.util.FsWriteFile(APath, nil, APerm);
 end;
 
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
