@@ -7243,7 +7243,23 @@ begin
       Decoded := Child.Text;
       if (Decoded = 'Result') and (FCurrentRetVarName <> '') then
         Decoded := FCurrentRetVarName;
-      if (Child.ChildCount >= 1) and
+      if FNoFold and (Child.ChildCount >= 2) and
+        (Child.ChildAt(0) <> nil) and
+        (Child.ChildAt(0).NodeKind = gnkDereference) and
+        (Child.ChildAt(0).ChildCount >= 1) and
+        (Child.ChildAt(0).ChildAt(0) <> nil) then
+      begin
+        Arg := Child.ChildAt(1);
+        if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
+        begin
+          FModel.AddTypedHirNode(
+            'assign-runtime', '*' + Child.ChildAt(0).ChildAt(0).Text, 0, 0,
+            '*' + Child.ChildAt(0).ChildAt(0).Text + #9 + Operand
+          );
+        end;
+        Continue;
+      end
+      else if (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
         (Child.ChildAt(0).ChildCount >= 2) then
       begin
@@ -9301,6 +9317,11 @@ begin
                   RegisterRuntimeArrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
+                  (Length(TypeChild.Text) > 1) and (TypeChild.Text[1] = '^') then
+                begin
+                  RegisterClassVar(RetVarName, 'Pointer');
+                end
+                else if (TypeChild <> nil) and
                   (TypeMetaSize(TypeChild.Text) > 0) then
                 begin
                   if TypeMetaIsRecord(TypeChild.Text) then
@@ -9313,6 +9334,11 @@ begin
                 ParamTypes := ParamTypes + 's'
               else if IsRuntimeArrVar(RetVarName) then
                 ParamTypes := ParamTypes + 'a'
+              else if (ParamChild.ChildCount > 0) and
+                (ParamChild.ChildAt(0) <> nil) and
+                (Length(ParamChild.ChildAt(0).Text) > 1) and
+                (ParamChild.ChildAt(0).Text[1] = '^') then
+                ParamTypes := ParamTypes + 'p'
               else if (ParamChild.ChildCount > 0) and
                 (ParamChild.ChildAt(0) <> nil) and
                 (TypeMetaSize(ParamChild.ChildAt(0).Text) > 0) then

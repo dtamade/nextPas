@@ -1653,8 +1653,8 @@ end;
 procedure THIRBuilder.ProcessAssign(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
-  VarName, Blob: string;
-  V, Addr: THIRValueId;
+  VarName, Blob, RealName: string;
+  V, Addr, PtrVal: THIRValueId;
   StoreType: THIRTypeId;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -1663,6 +1663,19 @@ begin
   Blob := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
 
   V := ParseIntBlob(Blob);
+
+  if (Length(VarName) > 1) and (VarName[1] = '*') then
+  begin
+    RealName := Copy(VarName, 2, Length(VarName));
+    Addr := FindAlloca(RealName);
+    if (V <> 0) and (Addr <> 0) then
+    begin
+      PtrVal := EmitLoad(GetPtrType, Addr);
+      EmitStore(GetIntType, V, PtrVal);
+    end;
+    Exit;
+  end;
+
   Addr := FindAlloca(VarName);
   if Addr = 0 then
   begin
