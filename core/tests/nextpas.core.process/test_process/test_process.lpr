@@ -4,6 +4,7 @@ program test_process;
 
 uses
   nextpas.core.process,
+  nextpas.core.time.base,
   nextpas.core.process.base,
   nextpas.core.process.child,
   nextpas.core.process.pipe,
@@ -369,6 +370,19 @@ begin
 end;
 
 
+procedure TestTimeout;
+var LOut: TProcessOutput; LStart: TInstant;
+begin
+  LStart := TInstant.Now;
+  LOut := TCommand.New('/bin/sleep')
+    .Arg('10')
+    .Timeout(TDuration.FromMilliseconds(200))
+    .Output;
+  Check('Timeout — killed (signaled)', LOut.Status = psSignaled);
+  Check('Timeout — elapsed < 2s', LStart.Elapsed.AsMilliseconds < 2000);
+end;
+
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -395,6 +409,7 @@ begin
   TestSpawnChdirFailRaisesException;
   TestEnvAddInheritsPath;
   TestEnvReplaceWithPathSearch;
+  TestTimeout;
   TestEnvAdd;
   TestStdinNull;
   TestStdoutNull;
