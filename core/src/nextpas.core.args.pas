@@ -98,6 +98,7 @@ type
     function Positional(const AIndex: Int32): string;
     function PositionalCount: Int32;
     function HelpText: string;
+    function OptionNeedsValue(const AArg: string): Boolean;
   end;
 
   TArgCommandHandler = procedure(const AParser: TArgParser);
@@ -711,6 +712,27 @@ begin
   end;
 end;
 
+function TArgParser.OptionNeedsValue(const AArg: string): Boolean;
+var
+  LName: string;
+  LIdx: Int32;
+begin
+  Result := False;
+  if (Length(AArg) > 2) and (AArg[1] = '-') and (AArg[2] = '-') then
+  begin
+    LName := Copy(AArg, 3, Length(AArg) - 2);
+    LIdx := FindOption(LName);
+    if (LIdx >= 0) and (FOptions[LIdx].Kind <> akFlag) then
+      Result := True;
+  end
+  else if (Length(AArg) = 2) and (AArg[1] = '-') then
+  begin
+    LIdx := FindShort(AArg[2]);
+    if (LIdx >= 0) and (FOptions[LIdx].Kind <> akFlag) then
+      Result := True;
+  end;
+end;
+
 { TArgApp }
 
 constructor TArgApp.Create(const AAppName, ADescription, AVersion: string);
@@ -895,6 +917,15 @@ begin
       begin
         SetLength(LGlobalArgs, Length(LGlobalArgs) + 1);
         LGlobalArgs[High(LGlobalArgs)] := AArgs[LI];
+        if (Pos('=', AArgs[LI]) = 0) and (LI + 1 <= High(AArgs)) then
+        begin
+          if FGlobalParser.OptionNeedsValue(AArgs[LI]) then
+          begin
+            Inc(LI);
+            SetLength(LGlobalArgs, Length(LGlobalArgs) + 1);
+            LGlobalArgs[High(LGlobalArgs)] := AArgs[LI];
+          end;
+        end;
       end
       else
       begin

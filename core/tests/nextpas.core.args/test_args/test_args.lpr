@@ -832,6 +832,24 @@ begin
   LApp.Free;
 end;
 
+procedure TestAppGlobalStringOption;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+begin
+  LApp := TArgApp.Create('nextpas', '', '');
+  LApp.AddGlobalString('config', 'c', 'config file', '');
+  LCmd := LApp.AddCommand('build', 'Build');
+  LCmd.AddString('output', 'o', '', 'a.out');
+  LApp.SetHandler('build', @BuildHandler);
+  GHandlerCalled := False;
+  LApp.RunFrom(['--config', 'app.toml', 'build', '--output', 'main']);
+  Check(GHandlerCalled, 'handler called');
+  CheckEqual('app.toml', LApp.GlobalParser.GetString('config'), 'global config');
+  CheckEqual('main', GHandlerOutput, 'cmd output');
+  LApp.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.args');
   { Basic }
@@ -894,6 +912,7 @@ begin
   T.Run('app trailing args', @TestAppTrailingArgs);
   T.Run('app no command', @TestAppNoCommand);
   T.Run('app command help', @TestAppCommandHelp);
+  T.Run('app global string option', @TestAppGlobalStringOption);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
