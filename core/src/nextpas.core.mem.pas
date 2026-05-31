@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.mem.base,
   nextpas.core.mem.intf,
+  nextpas.core.mem.error,
   nextpas.core.mem.default,
   nextpas.core.mem.arena,
   nextpas.core.mem.pool;
@@ -41,7 +42,10 @@ function AllocArray(const AAllocator: IAllocator; const ACount, AElemSize: SizeU
 var
   LTotal: SizeUInt;
 begin
+  if (ACount = 0) or (AElemSize = 0) then Exit(nil);
   LTotal := ACount * AElemSize;
+  if (LTotal div AElemSize) <> ACount then
+    raise EOutOfMemory.Create(aeOutOfMemory, 'AllocArray: size overflow');
   Result := AAllocator.Allocate(LTotal);
   if Result <> nil then
     FillChar(Result^, LTotal, 0);

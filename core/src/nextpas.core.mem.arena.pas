@@ -5,7 +5,8 @@ unit nextpas.core.mem.arena;
 interface
 
 uses
-  nextpas.core.mem.base;
+  nextpas.core.mem.base,
+  nextpas.core.mem.error;
 
 type
   {**
@@ -40,6 +41,8 @@ implementation
 procedure TArena.Init(const ACapacity: SizeUInt);
 begin
   FBacking := GetMem(ACapacity);
+  if (ACapacity > 0) and (FBacking = nil) then
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TArena.Init: out of memory');
   FCapacity := ACapacity;
   FOffset := 0;
 end;
