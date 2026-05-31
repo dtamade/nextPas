@@ -1,0 +1,459 @@
+program test_xml_dom;
+{**
+ * @desc XML DOM 测试套件：20+ 测试覆盖树构建、查询、路径选择等场景。
+ *}
+
+{$I nextpas.core.settings.inc}
+
+uses
+  nextpas.core.text.conv,
+  nextpas.core.errors,
+  nextpas.core.testing,
+  nextpas.core.xml.base,
+  nextpas.core.xml.dom;
+
+var
+  T: TTestRunner;
+
+{ === Tests === }
+
+procedure TestParseSimple;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<root>hello</root>');
+  try
+    Check(LDoc.Root <> nil, 'root not nil');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name');
+    CheckEqual('hello', LDoc.Root.Text, 'root text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseNested;
+var
+  LDoc: TXmlDocument;
+  LChild: TXmlNode;
+begin
+  LDoc := TXmlDocument.Parse('<a><b>inner</b></a>');
+  try
+    Check(LDoc.Root <> nil, 'root');
+    CheckEqual('a', LDoc.Root.Name.Local, 'root name');
+    CheckEqual(Int64(1), Int64(LDoc.Root.ChildCount), 'child count');
+    LChild := LDoc.Root.FindChild('b');
+    Check(LChild <> nil, 'find b');
+    CheckEqual('inner', LChild.Text, 'b text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParseAttributes;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<item id="42" name="test">x</item>');
+  try
+    CheckEqual('42', LDoc.Root.GetAttr('id'), 'id attr');
+    CheckEqual('test', LDoc.Root.GetAttr('name'), 'name attr');
+    CheckEqual('default', LDoc.Root.GetAttr('missing', 'default'), 'default attr');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestFindChild;
+var
+  LDoc: TXmlDocument;
+  LChild: TXmlNode;
+begin
+  LDoc := TXmlDocument.Parse('<r><a>1</a><b>2</b><c>3</c></r>');
+  try
+    LChild := LDoc.Root.FindChild('b');
+    Check(LChild <> nil, 'find b');
+    CheckEqual('2', LChild.Text, 'b text');
+    LChild := LDoc.Root.FindChild('missing');
+    Check(LChild = nil, 'missing is nil');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestFindChildren;
+var
+  LDoc: TXmlDocument;
+  LItems: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<r><item>a</item><other/><item>b</item><item>c</item></r>');
+  try
+    LItems := LDoc.Root.FindChildren('item');
+    CheckEqual(Int64(3), Int64(Length(LItems)), 'item count');
+    CheckEqual('a', LItems[0].Text, 'item 0');
+    CheckEqual('b', LItems[1].Text, 'item 1');
+    CheckEqual('c', LItems[2].Text, 'item 2');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestTextConcat;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<r>hello <![CDATA[world]]> end</r>');
+  try
+    CheckEqual('hello world end', LDoc.Root.Text, 'text concat');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestTextRecursive;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<p>Hello <b>world</b>!</p>');
+  try
+    CheckEqual('Hello world!', LDoc.Root.Text, 'recursive text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathSimple;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<root><child><name>test</name></child></root>');
+  try
+    LNodes := LDoc.SelectPath('/root/child/name');
+    CheckEqual(Int64(1), Int64(Length(LNodes)), 'path count');
+    CheckEqual('test', LNodes[0].Text, 'path text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathMultiple;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<root><items><item>a</item><item>b</item></items></root>');
+  try
+    LNodes := LDoc.SelectPath('/root/items/item');
+    CheckEqual(Int64(2), Int64(Length(LNodes)), 'path count');
+    CheckEqual('a', LNodes[0].Text, 'item 0');
+    CheckEqual('b', LNodes[1].Text, 'item 1');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathNoMatch;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<root><a/></root>');
+  try
+    LNodes := LDoc.SelectPath('/root/missing');
+    CheckEqual(Int64(0), Int64(Length(LNodes)), 'no match');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathRootMismatch;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<root/>');
+  try
+    LNodes := LDoc.SelectPath('/other');
+    CheckEqual(Int64(0), Int64(Length(LNodes)), 'root mismatch');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestEmptyDocument;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('');
+  try
+    Check(LDoc.Root = nil, 'empty doc root nil');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelfClosingElement;
+var
+  LDoc: TXmlDocument;
+  LChild: TXmlNode;
+begin
+  LDoc := TXmlDocument.Parse('<r><br/><hr/></r>');
+  try
+    CheckEqual(Int64(2), Int64(LDoc.Root.ChildCount), 'child count');
+    LChild := LDoc.Root.FindChild('br');
+    Check(LChild <> nil, 'br found');
+    CheckEqual(Int64(0), Int64(LChild.ChildCount), 'br no children');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestCommentNode;
+var
+  LDoc: TXmlDocument;
+  LI: Integer;
+  LFound: Boolean;
+begin
+  LDoc := TXmlDocument.Parse('<r><!-- hello --><a/></r>');
+  try
+    LFound := False;
+    for LI := 0 to LDoc.Root.ChildCount - 1 do
+      if LDoc.Root.Children[LI].Kind = xnkComment then
+      begin
+        CheckEqual(' hello ', LDoc.Root.Children[LI].Value, 'comment value');
+        LFound := True;
+      end;
+    Check(LFound, 'comment found');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestCDataNode;
+var
+  LDoc: TXmlDocument;
+  LI: Integer;
+  LFound: Boolean;
+begin
+  LDoc := TXmlDocument.Parse('<r><![CDATA[raw<>&data]]></r>');
+  try
+    LFound := False;
+    for LI := 0 to LDoc.Root.ChildCount - 1 do
+      if LDoc.Root.Children[LI].Kind = xnkCData then
+      begin
+        CheckEqual('raw<>&data', LDoc.Root.Children[LI].Value, 'cdata value');
+        LFound := True;
+      end;
+    Check(LFound, 'cdata found');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestPINode;
+var
+  LDoc: TXmlDocument;
+  LI: Integer;
+  LFound: Boolean;
+begin
+  LDoc := TXmlDocument.Parse('<?target data?><r/>');
+  try
+    LFound := False;
+    for LI := 0 to LDoc.ChildCount - 1 do
+      if LDoc.Children[LI].Kind = xnkPI then
+      begin
+        CheckEqual('target', LDoc.Children[LI].Name.Local, 'pi target');
+        CheckEqual('data', LDoc.Children[LI].Value, 'pi data');
+        LFound := True;
+      end;
+    Check(LFound, 'pi found');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestNamespacedAttributes;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<r xmlns:ns="urn:x" ns:attr="val">x</r>');
+  try
+    CheckEqual('val', LDoc.Root.GetAttr('attr'), 'ns attr');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestDeepNesting;
+var
+  LXml: string;
+  LI: Integer;
+  LDoc: TXmlDocument;
+  LNode: TXmlNode;
+begin
+  LXml := '';
+  for LI := 1 to 20 do
+    LXml := LXml + '<d' + IntToStr(LI) + '>';
+  LXml := LXml + 'deep';
+  for LI := 20 downto 1 do
+    LXml := LXml + '</d' + IntToStr(LI) + '>';
+  LDoc := TXmlDocument.Parse(LXml);
+  try
+    Check(LDoc.Root <> nil, 'root');
+    CheckEqual('d1', LDoc.Root.Name.Local, 'root name');
+    { Navigate to deepest }
+    LNode := LDoc.Root;
+    for LI := 2 to 20 do
+    begin
+      LNode := LNode.FindChild('d' + IntToStr(LI));
+      Check(LNode <> nil, 'd' + IntToStr(LI) + ' found');
+    end;
+    CheckEqual('deep', LNode.Text, 'deep text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestLargeDocument;
+var
+  LXml: string;
+  LI: Integer;
+  LDoc: TXmlDocument;
+  LItems: TXmlNodeArray;
+begin
+  LXml := '<root>';
+  for LI := 1 to 200 do
+    LXml := LXml + '<item id="' + IntToStr(LI) + '">val' + IntToStr(LI) + '</item>';
+  LXml := LXml + '</root>';
+  LDoc := TXmlDocument.Parse(LXml);
+  try
+    LItems := LDoc.Root.FindChildren('item');
+    CheckEqual(Int64(200), Int64(Length(LItems)), 'item count');
+    CheckEqual('1', LItems[0].GetAttr('id'), 'first id');
+    CheckEqual('val1', LItems[0].Text, 'first text');
+    CheckEqual('200', LItems[199].GetAttr('id'), 'last id');
+    CheckEqual('val200', LItems[199].Text, 'last text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestParentLink;
+var
+  LDoc: TXmlDocument;
+  LChild: TXmlNode;
+begin
+  LDoc := TXmlDocument.Parse('<a><b>x</b></a>');
+  try
+    LChild := LDoc.Root.FindChild('b');
+    Check(LChild <> nil, 'b found');
+    Check(LChild.Parent = LDoc.Root, 'parent is root');
+    Check(LDoc.Root.Parent = LDoc, 'root parent is doc');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestNodeKinds;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<r/>');
+  try
+    Check(LDoc.Kind = xnkDocument, 'doc kind');
+    Check(LDoc.Root.Kind = xnkElement, 'root kind');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestMixedContent;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<p>Hello <b>world</b> end</p>');
+  try
+    { p has: text("Hello "), element(b), text(" end") }
+    CheckEqual(Int64(3), Int64(LDoc.Root.ChildCount), 'child count');
+    Check(LDoc.Root.Children[0].Kind = xnkText, 'text node');
+    Check(LDoc.Root.Children[1].Kind = xnkElement, 'element node');
+    Check(LDoc.Root.Children[2].Kind = xnkText, 'text node 2');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathDeep;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<a><b><c><d>found</d></c></b></a>');
+  try
+    LNodes := LDoc.SelectPath('/a/b/c/d');
+    CheckEqual(Int64(1), Int64(Length(LNodes)), 'deep path count');
+    CheckEqual('found', LNodes[0].Text, 'deep path text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestGetAttrWithPrefix;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<r xml:lang="en" id="1">x</r>');
+  try
+    CheckEqual('en', LDoc.Root.GetAttr('lang'), 'prefixed attr');
+    CheckEqual('1', LDoc.Root.GetAttr('id'), 'plain attr');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestEmptyRoot;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<empty/>');
+  try
+    Check(LDoc.Root <> nil, 'root not nil');
+    CheckEqual('empty', LDoc.Root.Name.Local, 'root name');
+    CheckEqual(Int64(0), Int64(LDoc.Root.ChildCount), 'no children');
+    CheckEqual('', LDoc.Root.Text, 'empty text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+{ === Main === }
+
+begin
+  T := TTestRunner.Create('XML DOM');
+  T.Run('ParseSimple', @TestParseSimple);
+  T.Run('ParseNested', @TestParseNested);
+  T.Run('ParseAttributes', @TestParseAttributes);
+  T.Run('FindChild', @TestFindChild);
+  T.Run('FindChildren', @TestFindChildren);
+  T.Run('TextConcat', @TestTextConcat);
+  T.Run('TextRecursive', @TestTextRecursive);
+  T.Run('SelectPathSimple', @TestSelectPathSimple);
+  T.Run('SelectPathMultiple', @TestSelectPathMultiple);
+  T.Run('SelectPathNoMatch', @TestSelectPathNoMatch);
+  T.Run('SelectPathRootMismatch', @TestSelectPathRootMismatch);
+  T.Run('EmptyDocument', @TestEmptyDocument);
+  T.Run('SelfClosingElement', @TestSelfClosingElement);
+  T.Run('CommentNode', @TestCommentNode);
+  T.Run('CDataNode', @TestCDataNode);
+  T.Run('PINode', @TestPINode);
+  T.Run('NamespacedAttributes', @TestNamespacedAttributes);
+  T.Run('DeepNesting', @TestDeepNesting);
+  T.Run('LargeDocument', @TestLargeDocument);
+  T.Run('ParentLink', @TestParentLink);
+  T.Run('NodeKinds', @TestNodeKinds);
+  T.Run('MixedContent', @TestMixedContent);
+  T.Run('SelectPathDeep', @TestSelectPathDeep);
+  T.Run('GetAttrWithPrefix', @TestGetAttrWithPrefix);
+  T.Run('EmptyRoot', @TestEmptyRoot);
+  T.Summary;
+end.
