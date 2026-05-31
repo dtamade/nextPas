@@ -53,7 +53,7 @@ type
     function Union(const AOther: TRect): TRect;
     function Inner(const AMargin: TMargin): TRect;
     { 便利收缩：各边缩进指定量 }
-    function Shrink(ALeft, ATop, ARight, ABottom: Word): TRect;
+    function Shrink(ALeft, ATop, ARight, ABottom: Word): TRect; inline;
   end;
 
 function PositionMake(const AX, AY: Word): TPosition; inline;

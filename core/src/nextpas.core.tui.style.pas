@@ -33,15 +33,15 @@ type
 
     class function Default: TStyle; static; inline;
 
-    function WithFg(const AColor: TColor): TStyle;
-    function WithBg(const AColor: TColor): TStyle;
-    function WithUnderline(const AColor: TColor): TStyle;
+    function WithFg(const AColor: TColor): TStyle; inline;
+    function WithBg(const AColor: TColor): TStyle; inline;
+    function WithUnderline(const AColor: TColor): TStyle; inline;
 
     { 加入修饰位并从 SubMod 清除 }
-    function WithModifier(const AModifier: TModifier): TStyle;
+    function WithModifier(const AModifier: TModifier): TStyle; inline;
 
     { 加入修饰位到 SubMod 并从 AddMod 清除 }
-    function WithoutModifier(const AModifier: TModifier): TStyle;
+    function WithoutModifier(const AModifier: TModifier): TStyle; inline;
 
     { 合并两个样式。AOther 按 ratatui 规则逐字段覆盖 Self（见单元头）。 }
     function Patch(const AOther: TStyle): TStyle;
