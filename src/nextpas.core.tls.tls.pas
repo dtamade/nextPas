@@ -43,6 +43,9 @@ type
     function Seek(const Offset: Int64; Origin: TSeekOrigin): Int64; override;
 
     procedure Close;
+    procedure SetReadTimeout(AMs: Integer);
+    procedure SetWriteTimeout(AMs: Integer);
+    function GetSelectedALPN: string;
 
     property Connection: ISSLConnection read FConnection;
   end;
@@ -258,6 +261,27 @@ begin
       // ignore
     end;
   end;
+end;
+
+procedure TSSLStream.SetReadTimeout(AMs: Integer);
+begin
+  if FConnection <> nil then
+    FConnection.SetTimeout(AMs);
+end;
+
+procedure TSSLStream.SetWriteTimeout(AMs: Integer);
+begin
+  if FConnection <> nil then
+    FConnection.SetTimeout(AMs);
+end;
+
+function TSSLStream.GetSelectedALPN: string;
+var
+  LInfo: ISSLConnectionInfo;
+begin
+  Result := '';
+  if (FConnection <> nil) and Supports(FConnection, ISSLConnectionInfo, LInfo) then
+    Result := LInfo.GetSelectedALPNProtocol;
 end;
 
 { TSSLConnector }
