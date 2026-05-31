@@ -25,7 +25,7 @@ type
     function WithStyle(const S: TStyle): TStatusSegment;
   end;
 
-  TStatusBar = class(TInterfacedObject, IWidget)
+  TStatusBar = record
     Left: array of TStatusSegment;
     Center: array of TStatusSegment;
     Right: array of TStatusSegment;

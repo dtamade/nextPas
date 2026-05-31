@@ -26,7 +26,7 @@ type
     Style: TStyle;
   end;
 
-  TDialog = class(TInterfacedObject, IWidget)
+  TDialog = record
     Title: AnsiString;
     Body: AnsiString;
     Buttons: array of TDialogButton;

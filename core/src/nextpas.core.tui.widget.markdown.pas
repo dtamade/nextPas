@@ -42,7 +42,7 @@ type
     class function Default: TMdTheme; static;
   end;
 
-  TMarkdown = class(TInterfacedObject, IWidget)
+  TMarkdown = record
     Source: AnsiString;
     Theme: TMdTheme;
     HasBlock: Boolean;

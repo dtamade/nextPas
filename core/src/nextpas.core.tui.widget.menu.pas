@@ -40,7 +40,7 @@ type
     class function Default: TMenuState; static;
   end;
 
-  TMenu = class(TInterfacedObject)
+  TMenu = record
     Items: array of TMenuItem;
     Style: TStyle;
     HighlightStyle: TStyle;

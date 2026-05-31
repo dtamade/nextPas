@@ -20,7 +20,7 @@ uses
 type
   TNotifLevel = (nlInfo, nlWarning, nlError, nlSuccess);
 
-  TNotification = class(TInterfacedObject)
+  TNotification = record
     Title: AnsiString;
     Body: AnsiString;
     Level: TNotifLevel;

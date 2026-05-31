@@ -21,7 +21,7 @@ uses
 type
   TTooltipPosition = (ttpAbove, ttpBelow, ttpLeft, ttpRight);
 
-  TTooltip = class(TInterfacedObject)
+  TTooltip = record
     Text: AnsiString;
     Position: TTooltipPosition;
     Style: TStyle;

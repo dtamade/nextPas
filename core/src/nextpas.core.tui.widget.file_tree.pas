@@ -17,7 +17,7 @@ uses
   nextpas.core.tui.widget.block;
 
 type
-  TFileNode = class(TInterfacedObject)
+  TFileNode = record
     Name: AnsiString;
     IsDir: Boolean;
     Depth: Integer;
@@ -38,7 +38,7 @@ type
     function VisibleCount: Integer;
   end;
 
-  TFileTree = class(TInterfacedObject)
+  TFileTree = record
     Style: TStyle;
     DirStyle: TStyle;
     FileStyle: TStyle;

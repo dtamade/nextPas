@@ -17,7 +17,7 @@ uses
   nextpas.core.tui.widget.intf;
 
 type
-  TBreadcrumb = class(TInterfacedObject, IWidget)
+  TBreadcrumb = record
     Items: array of AnsiString;
     Separator: AnsiString;
     Style: TStyle;

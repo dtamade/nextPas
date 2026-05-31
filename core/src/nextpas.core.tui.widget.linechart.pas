@@ -39,7 +39,7 @@ type
     function WithStyle(const S: TStyle): TDataSeries;
   end;
 
-  TLineChart = class(TInterfacedObject, IWidget)
+  TLineChart = record
     Series: array of TDataSeries;
     MinY, MaxY: Double;
     ShowAxes: Boolean;

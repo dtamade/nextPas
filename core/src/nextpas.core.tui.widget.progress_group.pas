@@ -26,7 +26,7 @@ type
     function WithStyle(const S: TStyle): TProgressItem;
   end;
 
-  TProgressGroup = class(TInterfacedObject, IWidget)
+  TProgressGroup = record
     Items: array of TProgressItem;
     LabelWidth: Integer;
     ShowPercent: Boolean;

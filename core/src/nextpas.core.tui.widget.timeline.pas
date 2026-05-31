@@ -28,7 +28,7 @@ type
     function WithStyle(const S: TStyle): TTimelineEvent;
   end;
 
-  TTimeline = class(TInterfacedObject, IWidget)
+  TTimeline = record
     Events: array of TTimelineEvent;
     Style: TStyle;
     LineStyle: TStyle;
