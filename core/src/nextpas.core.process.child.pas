@@ -10,16 +10,32 @@ uses
   nextpas.core.platform.process.base;
 
 type
-  { IChild — 正在运行的子进程 }
+  {**
+   * IChild
+   *
+   * @desc 正在运行的子进程句柄
+   *
+   * @note 释放时自动 Kill + Wait（防止僵尸进程）
+   * @note 如果 stdout/stderr 是 Piped，必须在 Wait 之前读完（否则可能死锁）
+   *       推荐用 WaitWithOutput 自动处理
+   *}
   IChild = interface
     ['{A1B2C3D4-E5F6-7890-AB01-000000000001}']
+    {** 阻塞等待子进程退出，返回退出状态 *}
     function Wait: TProcessOutput;
+    {** 非阻塞检查子进程是否已退出。返回 False 表示仍在运行 *}
     function TryWait(out AOutput: TProcessOutput): Boolean;
+    {** 发送 SIGKILL 终止子进程 *}
     procedure Kill;
+    {** 子进程 PID *}
     function Pid: Integer;
+    {** 取走 stdin 写入器（调用后 IChild 不再持有）*}
     function TakeStdin: IWriter;
+    {** 取走 stdout 读取器 *}
     function TakeStdout: IReader;
+    {** 取走 stderr 读取器 *}
     function TakeStderr: IReader;
+    {** 关闭 stdin，并发读取 stdout+stderr，然后 Wait。推荐用法 *}
     function WaitWithOutput: TProcessOutput;
   end;
 

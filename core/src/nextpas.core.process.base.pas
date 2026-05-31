@@ -9,22 +9,38 @@ uses
   nextpas.core.errors;
 
 type
-  { Stdio 配置：子进程的 stdin/stdout/stderr 如何处理 }
+  {**
+   * TStdio
+   *
+   * @desc 子进程 stdio 流的配置模式
+   *
+   * @note 每个流（stdin/stdout/stderr）可独立配置
+   *}
   TStdio = (
-    stInherit,  // 继承父进程（默认）
-    stPiped,    // 创建管道，可通过 IReader/IWriter 访问
-    stNull      // 重定向到 /dev/null (Unix) 或 NUL (Windows)
+    stInherit,  { 继承父进程的对应 fd（默认行为） }
+    stPiped,    { 创建管道，父进程可通过 IReader/IWriter 访问 }
+    stNull      { 重定向到 /dev/null (Unix) 或 NUL (Windows) }
   );
 
-  { 进程状态 }
+  {**
+   * TProcessStatus
+   *
+   * @desc 子进程的终止状态
+   *}
   TProcessStatus = (
-    psRunning,
-    psExited,
-    psSignaled,
-    psUnknown
+    psRunning,   { 进程仍在运行（TryWait 返回时） }
+    psExited,    { 正常退出（ExitCode 有效） }
+    psSignaled,  { 被信号终止（ExitCode = 信号号） }
+    psUnknown    { 未知状态 }
   );
 
-  { 进程执行结果 }
+  {**
+   * TProcessOutput
+   *
+   * @desc 进程执行的完整结果
+   *
+   * @note StdOut/StdErr 仅在对应流设为 stPiped 时有内容
+   *}
   TProcessOutput = record
     ExitCode: Integer;
     Status: TProcessStatus;
@@ -32,7 +48,13 @@ type
     StdErr: string;
   end;
 
-  { EProcessError — 进程执行失败异常 }
+  {**
+   * EProcessError
+   *
+   * @desc 进程启动失败时抛出的异常
+   *
+   * @note ExitCode 为平台错误码（errno 或 GetLastError）
+   *}
   EProcessError = class(Exception)
   private
     FExitCode: Integer;

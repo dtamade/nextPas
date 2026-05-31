@@ -10,19 +10,40 @@ uses
   nextpas.core.process.child;
 
 type
-  { ICommand — Builder 接口，链式配置子进程 }
+  {**
+   * ICommand
+   *
+   * @desc 子进程配置 Builder（链式 API）
+   *
+   * @note 可多次调用 Spawn/Output/Status（每次创建新子进程）
+   * @note 引用计数自动管理，无需手动释放
+   *
+   * @example
+   *   Command('/bin/fpc').Args(['--version']).Dir('/tmp').Output;
+   *}
   ICommand = interface
     ['{A1B2C3D4-E5F6-7890-AB01-000000000010}']
+    {** 追加单个命令行参数 *}
     function Arg(const AValue: string): ICommand;
+    {** 追加多个命令行参数 *}
     function Args(const AValues: array of string): ICommand;
+    {** 设置子进程工作目录 *}
     function Dir(const AWorkDir: string): ICommand;
+    {** 完全替换子进程环境变量（格式：KEY=VALUE） *}
     function Env(const AEnvPairs: array of string): ICommand;
+    {** 追加/覆盖单个环境变量（继承父进程其余环境） *}
     function EnvAdd(const AKey, AValue: string): ICommand;
+    {** 配置 stdin 模式 *}
     function Stdin(const AMode: TStdio): ICommand;
+    {** 配置 stdout 模式 *}
     function Stdout(const AMode: TStdio): ICommand;
+    {** 配置 stderr 模式 *}
     function Stderr(const AMode: TStdio): ICommand;
+    {** 异步启动子进程，返回 IChild 句柄 *}
     function Spawn: IChild;
+    {** 同步执行：自动设置 stdout+stderr 为 Piped，捕获输出 *}
     function Output: TProcessOutput;
+    {** 同步执行：只返回退出码 *}
     function Status: Integer;
   end;
 
