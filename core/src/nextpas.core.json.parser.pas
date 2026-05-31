@@ -59,7 +59,8 @@ uses
   nextpas.core.text.number,
   nextpas.core.text.char,
   nextpas.core.hash.wyhash,
-  nextpas.core.json.scanner;
+  nextpas.core.json.scanner,
+  nextpas.core.mem.default;
 
 const
   INITIAL_NODE_CAP = 64;
@@ -67,7 +68,10 @@ const
 
 procedure TJsonDocument.Init(const AAllocator: IAllocator);
 begin
-  FAllocator := AAllocator;
+  if AAllocator <> nil then
+    FAllocator := AAllocator
+  else
+    FAllocator := DefaultAllocator;
   FNodeCap := INITIAL_NODE_CAP;
   FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TJsonNode));
   FNodeCount := 0;
