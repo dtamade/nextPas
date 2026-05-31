@@ -105,8 +105,11 @@ var
   LBuf: array[0..15] of AnsiChar;
   LIdx: Int32;
   LVal: UInt64;
+  LMin: Int32;
 begin
-  if (AValue = 0) and (AMinDigits <= 1) then
+  LMin := AMinDigits;
+  if LMin > 16 then LMin := 16;
+  if (AValue = 0) and (LMin <= 1) then
   begin
     ADst[0] := '0';
     Result := 1;
@@ -121,7 +124,7 @@ begin
     LVal := LVal shr 4;
   end;
   Result := 16 - LIdx;
-  while Result < AMinDigits do
+  while Result < LMin do
   begin
     Dec(LIdx);
     LBuf[LIdx] := '0';
