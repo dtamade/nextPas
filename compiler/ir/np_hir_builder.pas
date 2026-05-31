@@ -3177,7 +3177,7 @@ begin
   end;
   FModule.AddVmtGlobal(ClsName, Funcs);
 
-  if (ParentClass <> '') then
+  while ParentClass <> '' do
   begin
     if FSemaModel.GetTypeMetaByName(ParentClass, Meta) then
     begin
@@ -3201,6 +3201,7 @@ begin
         Funcs[I + 1] := FuncName;
       end;
       FModule.AddVmtGlobal(ParentClass, Funcs);
+      ParentClass := Meta.ParentClassName;
     end
     else if FSemaModel.LookupConstValue(ParentClass + '$vmt_count', VmtCount) then
     begin
@@ -3223,7 +3224,11 @@ begin
         Funcs[I + 1] := FuncName;
       end;
       FModule.AddVmtGlobal(ParentClass, Funcs);
-    end;
+      if not FSemaModel.LookupStringConstValue(ParentClass + '$parent_class', ParentClass) then
+        ParentClass := '';
+    end
+    else
+      ParentClass := '';
   end;
 
   ObjPtr := FindAlloca(VarName);
