@@ -1,9 +1,7 @@
 unit nextpas.core.args;
 {**
- * @desc Production-grade CLI argument parser.
- *       Supports flags, string/int/stringlist/choice options, required flags,
- *       named positionals, short flag clustering, duplicate detection,
- *       auto --help/--version, and subcommand routing via TArgApp.
+ * @desc Production-grade CLI argument parser with subcommand routing.
+ *       Two-layer architecture: TArgParser (single-command) + TArgApp (router).
  *}
 
 {$I nextpas.core.settings.inc}
@@ -11,39 +9,17 @@ unit nextpas.core.args;
 interface
 
 uses
-  nextpas.core.errors,
+  nextpas.core.args.base,
   nextpas.core.text.number;
 
 type
-  TArgKind = (akFlag, akString, akInt, akStringList, akChoice);
-
-  EArgParseError = class(ENextPasError);
-  EArgHelp = class(ENextPasError);
-  EArgVersion = class(ENextPasError);
-
-  TStringArray = array of string;
-
-  TArgOption = record
-    Name: string;
-    Short: AnsiChar;
-    Help: string;
-    Kind: TArgKind;
-    Required: Boolean;
-    DefaultStr: string;
-    DefaultInt: Int64;
-    Choices: TStringArray;
-    ValueStr: string;
-    ValueInt: Int64;
-    ValueBool: Boolean;
-    ValueList: TStringArray;
-    Present: Boolean;
-  end;
-
-  TArgPositionalSpec = record
-    Name: string;
-    Help: string;
-    Required: Boolean;
-  end;
+  TArgKind = nextpas.core.args.base.TArgKind;
+  EArgParseError = nextpas.core.args.base.EArgParseError;
+  EArgHelp = nextpas.core.args.base.EArgHelp;
+  EArgVersion = nextpas.core.args.base.EArgVersion;
+  TStringArray = nextpas.core.args.base.TStringArray;
+  TArgOption = nextpas.core.args.base.TArgOption;
+  TArgPositionalSpec = nextpas.core.args.base.TArgPositionalSpec;
 
   TArgParser = class
   private
@@ -101,7 +77,9 @@ type
     function HelpText: string;
   end;
 
-  TArgCommandHandler = procedure(const AParser: TArgParser);
+  TArgCommandHandler = reference to procedure(const AParser: TArgParser);
+  TArgCommandHandlerMethod = procedure(const AParser: TArgParser) of object;
+  TArgCommandHandlerProc = procedure(const AParser: TArgParser);
 
   TArgCommand = record
     Name: string;
@@ -128,9 +106,11 @@ type
     procedure AddGlobalFlag(const AName: string; const AShort: AnsiChar; const AHelp: string);
     procedure AddGlobalString(const AName: string; const AShort: AnsiChar; const AHelp, ADefault: string);
     procedure AddGlobalInt(const AName: string; const AShort: AnsiChar; const AHelp: string; const ADefault: Int64);
-    { Commands }
+    { Commands — AddCommand returns a borrowed reference, owned by TArgApp }
     function AddCommand(const AName, ADescription: string): TArgParser;
-    procedure SetHandler(const ACommandName: string; const AHandler: TArgCommandHandler);
+    procedure SetHandler(const ACommandName: string; const AHandler: TArgCommandHandler); overload;
+    procedure SetHandler(const ACommandName: string; const AHandler: TArgCommandHandlerMethod); overload;
+    procedure SetHandler(const ACommandName: string; const AHandler: TArgCommandHandlerProc); overload;
     { Execution }
     procedure Run;
     procedure RunFrom(const AArgs: array of string);
@@ -805,6 +785,17 @@ begin
   FCommands[LIdx].Handler := AHandler;
 end;
 
+procedure TArgApp.SetHandler(const ACommandName: string; const AHandler: TArgCommandHandlerMethod);
+begin
+  SetHandler(ACommandName, TArgCommandHandler(AHandler));
+end;
+
+procedure TArgApp.SetHandler(const ACommandName: string; const AHandler: TArgCommandHandlerProc);
+begin
+  SetHandler(ACommandName, TArgCommandHandler(
+    procedure(const AParser: TArgParser) begin AHandler(AParser); end));
+end;
+
 function TArgApp.FindCommand(const AName: string): Int32;
 var
   LI: Int32;
@@ -978,7 +969,7 @@ begin
   FGlobalParser.ParseFrom(LGlobalArgs);
   FCommands[LCmdIdx].Parser.ParseFrom(LCmdArgs);
 
-  if Assigned(FCommands[LCmdIdx].Handler) then
+  if FCommands[LCmdIdx].Handler <> nil then
     FCommands[LCmdIdx].Handler(FCommands[LCmdIdx].Parser);
 end;
 
