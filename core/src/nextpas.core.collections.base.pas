@@ -648,13 +648,17 @@ begin
   LLeftLen := Length(aLeft);
   LRightLen := Length(aRight);
   if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
-  Result := CompareByte(aLeft[1], aRight[1], LMinLen);
+  if LMinLen > 0 then
+    Result := CompareByte(aLeft[1], aRight[1], LMinLen)
+  else
+    Result := 0;
   if Result = 0 then
     Result := LLeftLen - LRightLen;
 end;
 
 function CompareMemRange(aLeft, aRight: Pointer; aSize: PtrUInt): SizeInt;
 begin
+  if aSize = 0 then Exit(0);
   Result := CompareByte(aLeft^, aRight^, aSize);
 end;
 
@@ -665,7 +669,10 @@ begin
   LLeftLen := Length(aLeft);
   LRightLen := Length(aRight);
   if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
-  Result := CompareByte(aLeft[1], aRight[1], LMinLen);
+  if LMinLen > 0 then
+    Result := CompareByte(aLeft[1], aRight[1], LMinLen)
+  else
+    Result := 0;
   if Result = 0 then
     Result := LLeftLen - LRightLen;
 end;
@@ -677,7 +684,10 @@ begin
   LLeftLen := Length(aLeft);
   LRightLen := Length(aRight);
   if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
-  Result := CompareByte(aLeft[1], aRight[1], LMinLen * SizeOf(WideChar));
+  if LMinLen > 0 then
+    Result := CompareByte(aLeft[1], aRight[1], LMinLen * SizeOf(WideChar))
+  else
+    Result := 0;
   if Result = 0 then
     Result := LLeftLen - LRightLen;
 end;
@@ -689,7 +699,10 @@ begin
   LLeftLen := Length(aLeft);
   LRightLen := Length(aRight);
   if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
-  Result := CompareByte(aLeft[1], aRight[1], LMinLen * SizeOf(UnicodeChar));
+  if LMinLen > 0 then
+    Result := CompareByte(aLeft[1], aRight[1], LMinLen * SizeOf(UnicodeChar))
+  else
+    Result := 0;
   if Result = 0 then
     Result := LLeftLen - LRightLen;
 end;
