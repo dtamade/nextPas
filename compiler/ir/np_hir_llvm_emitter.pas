@@ -572,6 +572,11 @@ begin
           Emit('  store ptr ' + ValueRef(AInstr.Operands[0].ValueId) +
             ', ptr @__np_exc_object');
       end
+      else if AInstr.IntrinsicName = 'exc_load' then
+      begin
+        Emit('  ' + ValueRef(AInstr.ResultId) +
+          ' = load ptr, ptr @__np_exc_object');
+      end
       else if AInstr.IntrinsicName = 'vcall' then
       begin
         if Length(AInstr.Operands) >= 2 then

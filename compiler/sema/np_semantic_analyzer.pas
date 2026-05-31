@@ -6069,6 +6069,17 @@ begin
     ABlob := 'null' + #10;
     Exit(True);
   end;
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'ExceptObject') then
+  begin
+    ABlob := 'exc_load' + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
+    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text, 'ExceptObject') then
+  begin
+    ABlob := 'exc_load' + #10;
+    Exit(True);
+  end;
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
   begin
     ABlob := 'int 1' + #10;

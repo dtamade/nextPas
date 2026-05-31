@@ -1296,6 +1296,7 @@ var
   LineCount, I, SpacePos: LongInt;
   Line, Token, Arg: string;
   V: THIRValueId;
+  Instr: THIRInstr;
 begin
   Result := 0;
   S.Init;
@@ -1344,6 +1345,16 @@ begin
 
     if Token = 'int' then BlobInt(S, Arg)
     else if Token = 'null' then BlobNull(S)
+    else if Token = 'exc_load' then
+    begin
+      FillChar(Instr, SizeOf(Instr), 0);
+      Instr.ResultId := FModule.NewValue;
+      Instr.Kind := hikIntrinsic;
+      Instr.TypeId := GetPtrType;
+      Instr.IntrinsicName := 'exc_load';
+      EmitInstr(Instr);
+      S.PushTyped(Instr.ResultId, GetPtrType);
+    end
     else if Token = 'var' then BlobVar(S, Arg)
     else if Token = 'varref' then BlobVarRef(S, Arg)
     else if Token = 'recvar' then BlobRecVar(S, Arg)
