@@ -3072,6 +3072,447 @@ begin
   Check(True, '500 error compiles no crash');
 end;
 
+{ ===== ENCODING CORRECTNESS TESTS ===== }
+
+{ --- ENC 1. TestUTF8Bytes --- }
+procedure TestUTF8Bytes;
+var R: TRegex; M: TMatch; MA: TMatchArray;
+    utf8_hello: string;
+    utf8_cjk: string;
+begin
+  // 'e-acute' is 2 bytes in UTF-8: $C3 $A9
+  // 'Hello' = H + $C3$A9 + l + l + o = 7 bytes
+  utf8_hello := 'H' + Chr($C3) + Chr($A9) + 'llo';
+
+  // . matches each BYTE, not each codepoint
+  R := TRegex.Compile('...');
+  M := R.Find(utf8_hello);
+  Check(M.Found, 'dot matches bytes');
+  CheckEqual(Int64(3), Int64(M.Len), 'dot 3 bytes');
+  // First 3 bytes: H, $C3, $A9
+
+  // \w matches ASCII only — high bytes are NOT word chars
+  R := TRegex.Compile('\w+');
+  M := R.Find(utf8_hello);
+  Check(M.Found, '\w on utf8');
+  CheckEqual('H', M.Value(utf8_hello), '\w stops at non-ASCII');
+
+  // Literal ASCII in UTF-8 string — 'llo' starts at byte 3 (H=0, $C3=1, $A9=2, l=3)
+  R := TRegex.Compile('llo');
+  M := R.Find(utf8_hello);
+  Check(M.Found, 'literal in utf8');
+  CheckEqual(Int64(3), Int64(M.Start), 'literal position in utf8');
+
+  // FindAll \w+ on mixed UTF-8/ASCII
+  // 'cafe-acute' = c + a + f + $C3$A9 = 5 bytes. \w+ matches 'caf' then stops
+  R := TRegex.Compile('\w+');
+  MA := R.FindAll('caf' + Chr($C3) + Chr($A9) + ' ok');
+  // Should find 'caf' and 'ok'
+  CheckEqual(Int64(2), Int64(Length(MA)), 'utf8 word split');
+  CheckEqual('caf', MA[0].Value('caf' + Chr($C3) + Chr($A9) + ' ok'), 'first word');
+
+  // CJK: U+4E2D = $E4$B8$AD (3 bytes)
+  utf8_cjk := Chr($E4) + Chr($B8) + Chr($AD);
+  R := TRegex.Compile('...');
+  M := R.Find(utf8_cjk);
+  Check(M.Found, 'cjk 3 bytes');
+  CheckEqual(Int64(3), Int64(M.Len), 'cjk dot len');
+
+  // \d should NOT match CJK bytes
+  R := TRegex.Compile('\d');
+  Check(not R.IsMatch(utf8_cjk), 'cjk not digit');
+end;
+
+{ --- ENC 2. TestLatin1Bytes --- }
+procedure TestLatin1Bytes;
+var R: TRegex; M: TMatch;
+    latin1: string;
+begin
+  // In Latin-1, n-tilde = $F1, u-umlaut = $FC, sharp-s = $DF
+  latin1 := 'espa' + Chr($F1) + 'ol';  // 'espanol' with n-tilde
+
+  // . matches the high byte
+  R := TRegex.Compile('espa.ol');
+  Check(R.IsMatch(latin1), 'dot matches latin1 high byte');
+
+  // \w does NOT match high bytes (ASCII only)
+  R := TRegex.Compile('^\w+$');
+  Check(not R.IsFullMatch(latin1), '\w rejects latin1');
+
+  // [a-z] does NOT match high bytes
+  R := TRegex.Compile('^[a-z]+$');
+  Check(not R.IsFullMatch(latin1), '[a-z] rejects latin1');
+
+  // [^a-zA-Z0-9] matches the n-tilde byte
+  R := TRegex.Compile('[^a-zA-Z0-9]');
+  M := R.Find(latin1);
+  Check(M.Found, 'non-ascii found');
+  CheckEqual(Int64(4), Int64(M.Start), 'non-ascii position');
+
+  // Literal high byte in pattern
+  R := TRegex.Compile(Chr($F1));
+  M := R.Find(latin1);
+  Check(M.Found, 'literal high byte');
+  CheckEqual(Int64(4), Int64(M.Start), 'high byte position');
+end;
+
+{ --- ENC 3. TestControlChars --- }
+procedure TestControlChars;
+var R: TRegex; M: TMatch; MA: TMatchArray;
+    input: string;
+begin
+  // Tab, CR, LF handling
+  input := 'line1' + #9 + 'tab' + #13 + #10 + 'line2';
+
+  // \s matches tab, cr, lf
+  R := TRegex.Compile('\s+');
+  MA := R.FindAll(input);
+  Check(Length(MA) >= 2, 'whitespace in control chars');
+
+  // . does NOT match \n (byte 10) but DOES match \r (byte 13) and \t (byte 9)
+  R := TRegex.Compile('.+');
+  M := R.Find(input);
+  Check(M.Found, 'dot stops at LF');
+  // Should match 'line1\ttab\r' (everything up to \n)
+  CheckEqual(Int64(10), Int64(M.Len), 'dot len before LF');
+
+  // Null byte (0x00) — . matches it (it's not \n)
+  input := 'a' + #0 + 'b';
+  R := TRegex.Compile('.+');
+  M := R.Find(input);
+  Check(M.Found, 'dot matches null');
+  CheckEqual(Int64(3), Int64(M.Len), 'dot through null');
+
+  // \s does NOT match null
+  R := TRegex.Compile('\s');
+  Check(not R.IsMatch(#0), 'null not whitespace');
+
+  // Bell, escape, form feed
+  R := TRegex.Compile('.');
+  Check(R.IsMatch(#7), 'dot matches bell');
+  Check(R.IsMatch(#27), 'dot matches escape');
+  Check(R.IsMatch(#12), 'dot matches form feed');
+  Check(not R.IsMatch(#10), 'dot rejects LF');
+end;
+
+{ --- ENC 4. TestByteExactness --- }
+procedure TestByteExactness;
+var R: TRegex; M: TMatch;
+    input: string;
+begin
+  // Multi-byte UTF-8 char followed by ASCII
+  // u-umlaut in UTF-8: $C3$BC + b + e + r = 5 bytes
+  input := Chr($C3) + Chr($BC) + 'ber';
+
+  // Find 'ber' — should be at byte offset 2, not codepoint offset 1
+  R := TRegex.Compile('ber');
+  M := R.Find(input);
+  Check(M.Found, 'find after multibyte');
+  CheckEqual(Int64(2), Int64(M.Start), 'byte offset after multibyte');
+
+  // 3-byte UTF-8 + ASCII: euro + 'abc' = $E2$82$AC + a + b + c = 6 bytes
+  input := Chr($E2) + Chr($82) + Chr($AC) + 'abc';
+  R := TRegex.Compile('abc');
+  M := R.Find(input);
+  Check(M.Found, 'find after 3-byte');
+  CheckEqual(Int64(3), Int64(M.Start), 'byte offset after 3-byte');
+
+  // 4-byte UTF-8 + ASCII: emoji + 'hi' = 4 + 2 = 6 bytes
+  // U+1F600 = $F0$9F$98$80
+  input := Chr($F0) + Chr($9F) + Chr($98) + Chr($80) + 'hi';
+  R := TRegex.Compile('hi');
+  M := R.Find(input);
+  Check(M.Found, 'find after 4-byte');
+  CheckEqual(Int64(4), Int64(M.Start), 'byte offset after 4-byte');
+
+  // Verify Len is in bytes
+  R := TRegex.Compile('..');
+  M := R.Find(input);
+  CheckEqual(Int64(2), Int64(M.Len), 'len is bytes not codepoints');
+end;
+
+{ --- ENC 5. TestWordBoundaryWithEncoding --- }
+procedure TestWordBoundaryWithEncoding;
+var R: TRegex; MA: TMatchArray;
+begin
+  // \b is ASCII-only: high bytes are non-word chars
+  // 'cafe-acute' (UTF-8) = c,a,f,$C3,$A9 — \b sees boundary between 'f' and $C3
+  R := TRegex.Compile('\b\w+\b');
+  MA := R.FindAll('caf' + Chr($C3) + Chr($A9) + ' world');
+  // Should find 'caf' and 'world' (high bytes break the word)
+  Check(Length(MA) >= 2, 'word boundary with utf8');
+  CheckEqual('caf', MA[0].Value('caf' + Chr($C3) + Chr($A9) + ' world'), 'word before utf8');
+
+  // \b at high byte boundary
+  R := TRegex.Compile('\btest\b');
+  Check(R.IsMatch(Chr($FF) + 'test' + Chr($FF)), '\b with high bytes');
+  Check(R.IsMatch('test'), '\b normal');
+
+  // \B (non-boundary) between ASCII word chars
+  R := TRegex.Compile('a\Bb');
+  Check(R.IsMatch('ab'), '\B between word chars');
+  Check(not R.IsMatch('a b'), '\B not between word and space');
+end;
+
+{ --- ENC 6. TestCharClassWithHighBytes --- }
+procedure TestCharClassWithHighBytes;
+var R: TRegex; i: Integer;
+begin
+  // [^a-zA-Z0-9\s] should match high bytes
+  R := TRegex.Compile('[^a-zA-Z0-9\s]');
+  Check(R.IsMatch(Chr($80)), 'class matches $80');
+  Check(R.IsMatch(Chr($FF)), 'class matches $FF');
+  Check(R.IsMatch(Chr($C3)), 'class matches $C3');
+  Check(not R.IsMatch('a'), 'class rejects a');
+  Check(not R.IsMatch(' '), 'class rejects space');
+
+  // Negated \w matches high bytes
+  R := TRegex.Compile('\W');
+  Check(R.IsMatch(Chr($80)), '\W matches high byte');
+  Check(R.IsMatch(Chr($FF)), '\W matches $FF');
+
+  // \d does NOT match any high byte
+  R := TRegex.Compile('\d');
+  for i := 128 to 255 do
+    Check(not R.IsMatch(Chr(i)), '\d rejects byte ' + IntToStr(i));
+
+  // Dot matches all high bytes (they are not \n)
+  R := TRegex.Compile('^.$');
+  for i := 128 to 255 do
+    Check(R.IsFullMatch(Chr(i)), 'dot matches byte ' + IntToStr(i));
+end;
+
+{ --- ENC 7. TestNewlineHandling --- }
+procedure TestNewlineHandling;
+var R: TRegex; M: TMatch; MA: TMatchArray;
+begin
+  // . stops at \n only, not \r
+  R := TRegex.Compile('.+');
+  M := R.Find('abc' + #13 + #10 + 'def');
+  Check(M.Found, 'dot with CRLF');
+  CheckEqual(Int64(4), Int64(M.Len), 'dot includes CR');
+  // Matches 'abc\r' (4 bytes), stops at \n
+
+  // In single-line mode, ^ matches start of input, $ matches end
+  R := TRegex.Compile('^abc$');
+  Check(not R.IsMatch('abc' + #10 + 'def'), '^ $ single line');
+  Check(R.IsFullMatch('abc'), '^ $ exact');
+
+  // \s matches \r and \n
+  R := TRegex.Compile('\s');
+  Check(R.IsMatch(#13), '\s matches CR');
+  Check(R.IsMatch(#10), '\s matches LF');
+
+  // FindAll .+ splits on \n
+  R := TRegex.Compile('.+');
+  MA := R.FindAll('line1' + #10 + 'line2' + #10 + 'line3');
+  CheckEqual(Int64(3), Int64(Length(MA)), 'dot findall lines');
+  CheckEqual('line1', MA[0].Value('line1' + #10 + 'line2' + #10 + 'line3'), 'first line');
+end;
+
+{ --- ENC 8. TestMixedEncodingInput --- }
+procedure TestMixedEncodingInput;
+var R: TRegex; M: TMatch;
+    input: string;
+begin
+  // Log line with UTF-8 username: '2026-05-31 [user-cn] logged in'
+  // Chinese chars = $E7$94$A8 + $E6$88$B7 = 6 bytes
+  input := '2026-05-31 [' + Chr($E7) + Chr($94) + Chr($A8) + Chr($E6) + Chr($88) + Chr($B7) + '] logged in';
+
+  // Extract date with \d pattern
+  R := TRegex.Compile('\d{4}-\d{2}-\d{2}');
+  M := R.Find(input);
+  Check(M.Found, 'date in mixed');
+  CheckEqual('2026-05-31', M.Value(input), 'date value');
+
+  // Extract bracketed content with [^\[\]]+
+  R := TRegex.Compile('\[([^\[\]]+)\]');
+  M := R.Find(input);
+  Check(M.Found, 'bracket in mixed');
+  // The bracketed content is the 6 UTF-8 bytes
+  CheckEqual(Int64(6), Int64(M.Groups[0].Len), 'bracket content len');
+
+  // Find 'logged in' after UTF-8 content
+  R := TRegex.Compile('logged in');
+  M := R.Find(input);
+  Check(M.Found, 'ascii after utf8');
+
+  // Email with international domain (punycode-like)
+  input := 'user@xn--e1afmapc.xn--p1ai';
+  R := TRegex.Compile('[a-z0-9.]+@[a-z0-9.-]+');
+  M := R.Find(input);
+  Check(M.Found, 'email punycode');
+  CheckEqual(input, M.Value(input), 'email full');
+end;
+
+{ --- ENC 9. TestPatternWithHighBytes --- }
+procedure TestPatternWithHighBytes;
+var R: TRegex;
+begin
+  // Literal high byte in pattern
+  R := TRegex.Compile(Chr($C3) + Chr($A9));  // e-acute in UTF-8
+  Check(R.IsMatch('caf' + Chr($C3) + Chr($A9)), 'literal utf8 in pattern');
+  Check(not R.IsMatch('cafe'), 'literal utf8 miss');
+
+  // High byte in char class
+  R := TRegex.Compile('[' + Chr($C3) + ']');
+  Check(R.IsMatch(Chr($C3)), 'high byte in class');
+  Check(not R.IsMatch('a'), 'high byte class miss');
+
+  // Alternation with high bytes
+  R := TRegex.Compile('cat|' + Chr($E7) + Chr($8C) + Chr($AB));  // cat|cat-cn
+  Check(R.IsMatch('cat'), 'alt ascii');
+  Check(R.IsMatch(Chr($E7) + Chr($8C) + Chr($AB)), 'alt utf8');
+  Check(not R.IsMatch('dog'), 'alt miss');
+end;
+
+{ --- ENC 10. TestOffByOnePositions --- }
+procedure TestOffByOnePositions;
+var R: TRegex; M: TMatch;
+begin
+  // Match at position 0
+  R := TRegex.Compile('a');
+  M := R.Find('abc');
+  CheckEqual(Int64(0), Int64(M.Start), 'pos 0');
+  CheckEqual(Int64(1), Int64(M.Len), 'len 1');
+
+  // Match at last position
+  M := R.Find('xxa');
+  CheckEqual(Int64(2), Int64(M.Start), 'last pos');
+
+  // Match entire string
+  R := TRegex.Compile('abc');
+  M := R.Find('abc');
+  CheckEqual(Int64(0), Int64(M.Start), 'full start');
+  CheckEqual(Int64(3), Int64(M.Len), 'full len');
+
+  // Single char input
+  R := TRegex.Compile('.');
+  M := R.Find('x');
+  CheckEqual(Int64(0), Int64(M.Start), 'single start');
+  CheckEqual(Int64(1), Int64(M.Len), 'single len');
+
+  // Empty match at end ($)
+  R := TRegex.Compile('$');
+  M := R.Find('abc');
+  CheckEqual(Int64(3), Int64(M.Start), '$ position');
+  CheckEqual(Int64(0), Int64(M.Len), '$ len');
+
+  // Empty match at start (^)
+  R := TRegex.Compile('^');
+  M := R.Find('abc');
+  CheckEqual(Int64(0), Int64(M.Start), '^ position');
+  CheckEqual(Int64(0), Int64(M.Len), '^ len');
+
+  // FindAt at exact boundary
+  R := TRegex.Compile('b');
+  M := R.FindAt('abc', 1);
+  CheckEqual(Int64(1), Int64(M.Start), 'findAt exact');
+  M := R.FindAt('abc', 2);
+  Check(not M.Found, 'findAt past');
+end;
+
+{ --- ENC 11. TestCaseFoldingBoundary --- }
+procedure TestCaseFoldingBoundary;
+var R: TRegex;
+begin
+  // (?i) only folds ASCII letters (a-z, A-Z)
+  // High bytes should NOT be case-folded
+  R := TRegex.Compile('(?i)' + Chr($C3) + Chr($A9));  // e-acute — no uppercase fold
+  Check(R.IsMatch(Chr($C3) + Chr($A9)), '(?i) high byte exact');
+  Check(not R.IsMatch(Chr($C3) + Chr($89)), '(?i) no high byte fold');
+  // $C3$89 would be E-acute in UTF-8, but our engine does not know that
+
+  // (?i) with mixed ASCII and high bytes
+  R := TRegex.Compile('(?i)caf' + Chr($C3) + Chr($A9));
+  Check(R.IsMatch('CAF' + Chr($C3) + Chr($A9)), '(?i) ascii fold only');
+  Check(not R.IsMatch('CAF' + Chr($C3) + Chr($89)), '(?i) no utf8 fold');
+
+  // (?i) at byte 127/128 boundary
+  R := TRegex.Compile('(?i)z');  // z=$7A, Z=$5A
+  Check(R.IsMatch('z'), '(?i) z');
+  Check(R.IsMatch('Z'), '(?i) Z');
+  // Byte $7B ('{') should NOT match
+  Check(not R.IsMatch('{'), '(?i) z not {');
+end;
+
+{ --- ENC 12. TestShorthandWithEncoding --- }
+procedure TestShorthandWithEncoding;
+var R: TRegex; i: Integer;
+begin
+  // \d matches ONLY 0-9 (bytes 48-57)
+  R := TRegex.Compile('^\d$');
+  for i := 0 to 255 do
+  begin
+    if (i >= 48) and (i <= 57) then
+      Check(R.IsFullMatch(Chr(i)), '\d matches ' + IntToStr(i))
+    else
+      Check(not R.IsFullMatch(Chr(i)), '\d rejects ' + IntToStr(i));
+  end;
+
+  // \w matches a-z, A-Z, 0-9, _ (and nothing else)
+  R := TRegex.Compile('^\w$');
+  for i := 0 to 255 do
+  begin
+    if ((i >= 97) and (i <= 122)) or   // a-z
+       ((i >= 65) and (i <= 90)) or    // A-Z
+       ((i >= 48) and (i <= 57)) or    // 0-9
+       (i = 95) then                    // _
+      Check(R.IsFullMatch(Chr(i)), '\w matches ' + IntToStr(i))
+    else
+      Check(not R.IsFullMatch(Chr(i)), '\w rejects ' + IntToStr(i));
+  end;
+
+  // \s matches space(32), \t(9), \n(10), \r(13), \f(12), \v(11)
+  R := TRegex.Compile('^\s$');
+  Check(R.IsFullMatch(Chr(32)), '\s space');
+  Check(R.IsFullMatch(Chr(9)), '\s tab');
+  Check(R.IsFullMatch(Chr(10)), '\s lf');
+  Check(R.IsFullMatch(Chr(13)), '\s cr');
+  Check(R.IsFullMatch(Chr(12)), '\s ff');
+  Check(R.IsFullMatch(Chr(11)), '\s vt');
+  Check(not R.IsFullMatch(Chr(0)), '\s not null');
+  Check(not R.IsFullMatch(Chr(128)), '\s not $80');
+end;
+
+{ --- ENC 13. TestValueExtraction --- }
+procedure TestValueExtraction;
+var R: TRegex; M: TMatch;
+    input: string;
+begin
+  // Value() uses Copy(AInput, Start+1, Len) — verify with multi-byte
+  input := 'xx' + Chr($E4) + Chr($B8) + Chr($AD) + 'yy';  // 'xx' + CJK + 'yy'
+  R := TRegex.Compile('...');
+  M := R.Find(input);
+  // First 3 bytes: 'x', 'x', $E4
+  Check(M.Found, 'value extract');
+  CheckEqual(Int64(0), Int64(M.Start), 'value start');
+  CheckEqual(Int64(3), Int64(M.Len), 'value len');
+  // Value should be exactly 3 bytes
+  CheckEqual(Int64(3), Int64(Length(M.Value(input))), 'value string len');
+
+  // Capture group value with high bytes
+  R := TRegex.Compile('x(..)y');
+  M := R.Find(input);
+  if M.Found then
+  begin
+    // Group should capture the 2 bytes between x and y
+    Check(M.Groups[0].Found, 'group found');
+    CheckEqual(Int64(2), Int64(M.Groups[0].Len), 'group len');
+  end;
+
+  // Empty match value
+  R := TRegex.Compile('');
+  M := R.Find('abc');
+  Check(M.Found, 'empty match');
+  CheckEqual('', M.Value('abc'), 'empty value');
+
+  // Full match value
+  R := TRegex.Compile('.*');
+  M := R.Find(input);
+  CheckEqual(input, M.Value(input), 'full value');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -3171,5 +3612,19 @@ begin
   T.Run('ADV: Case insensitive with captures', @TestCaseInsensitiveWithCaptures);
   T.Run('ADV: QuoteMeta round trip', @TestQuoteMetaRoundTrip);
   T.Run('ADV: Memory leak on error', @TestMemoryLeakOnError);
+  { --- 13 encoding correctness tests --- }
+  T.Run('ENC: UTF-8 bytes', @TestUTF8Bytes);
+  T.Run('ENC: Latin-1 bytes', @TestLatin1Bytes);
+  T.Run('ENC: Control chars', @TestControlChars);
+  T.Run('ENC: Byte exactness', @TestByteExactness);
+  T.Run('ENC: Word boundary with encoding', @TestWordBoundaryWithEncoding);
+  T.Run('ENC: Char class with high bytes', @TestCharClassWithHighBytes);
+  T.Run('ENC: Newline handling', @TestNewlineHandling);
+  T.Run('ENC: Mixed encoding input', @TestMixedEncodingInput);
+  T.Run('ENC: Pattern with high bytes', @TestPatternWithHighBytes);
+  T.Run('ENC: Off-by-one positions', @TestOffByOnePositions);
+  T.Run('ENC: Case folding boundary', @TestCaseFoldingBoundary);
+  T.Run('ENC: Shorthand with encoding', @TestShorthandWithEncoding);
+  T.Run('ENC: Value extraction', @TestValueExtraction);
   T.Summary;
 end.
