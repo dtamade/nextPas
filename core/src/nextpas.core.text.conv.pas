@@ -126,12 +126,17 @@ begin
 end;
 
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-var LCode: Integer; LTrimmed: string;
+var LCode: Integer; LStart, LEnd: Integer;
 begin
-  LTrimmed := AStr;
-  while (Length(LTrimmed) > 0) and (LTrimmed[1] <= ' ') do Delete(LTrimmed, 1, 1);
-  while (Length(LTrimmed) > 0) and (LTrimmed[Length(LTrimmed)] <= ' ') do Delete(LTrimmed, Length(LTrimmed), 1);
-  Val(LTrimmed, AValue, LCode);
+  LStart := 1;
+  LEnd := Length(AStr);
+  while (LStart <= LEnd) and (AStr[LStart] <= ' ') do Inc(LStart);
+  while (LEnd >= LStart) and (AStr[LEnd] <= ' ') do Dec(LEnd);
+  if LStart > LEnd then begin AValue := 0; Exit(False); end;
+  if (LStart = 1) and (LEnd = Length(AStr)) then
+    Val(AStr, AValue, LCode)
+  else
+    Val(Copy(AStr, LStart, LEnd - LStart + 1), AValue, LCode);
   Result := (LCode = 0);
 end;
 
@@ -167,12 +172,17 @@ begin
 end;
 
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
-var LCode: Integer; LTrimmed: string;
+var LCode: Integer; LStart, LEnd: Integer;
 begin
-  LTrimmed := AStr;
-  while (Length(LTrimmed) > 0) and (LTrimmed[1] <= ' ') do Delete(LTrimmed, 1, 1);
-  while (Length(LTrimmed) > 0) and (LTrimmed[Length(LTrimmed)] <= ' ') do Delete(LTrimmed, Length(LTrimmed), 1);
-  Val(LTrimmed, AValue, LCode);
+  LStart := 1;
+  LEnd := Length(AStr);
+  while (LStart <= LEnd) and (AStr[LStart] <= ' ') do Inc(LStart);
+  while (LEnd >= LStart) and (AStr[LEnd] <= ' ') do Dec(LEnd);
+  if LStart > LEnd then begin AValue := 0.0; Exit(False); end;
+  if (LStart = 1) and (LEnd = Length(AStr)) then
+    Val(AStr, AValue, LCode)
+  else
+    Val(Copy(AStr, LStart, LEnd - LStart + 1), AValue, LCode);
   Result := (LCode = 0);
 end;
 
@@ -194,9 +204,70 @@ var
   LZeroPad, LLeftAlign: Boolean;
   LFmtStart: Integer;
   LPadLen: Integer;
+  LBuf: array[0..1023] of AnsiChar;
+  LBufPos: Integer;
+  LOverflow: string;
+
+  procedure BufAppendChar(C: AnsiChar); inline;
+  begin
+    if LBufPos <= High(LBuf) then
+    begin
+      LBuf[LBufPos] := C;
+      Inc(LBufPos);
+    end
+    else
+      LOverflow := LOverflow + C;
+  end;
+
+  procedure BufAppendStr(const S: string);
+  var LK, LSLen, LSpace: Integer;
+  begin
+    LSLen := Length(S);
+    if LSLen = 0 then Exit;
+    LSpace := High(LBuf) - LBufPos + 1;
+    if LSLen <= LSpace then
+    begin
+      Move(S[1], LBuf[LBufPos], LSLen);
+      Inc(LBufPos, LSLen);
+    end
+    else
+    begin
+      if LSpace > 0 then
+      begin
+        Move(S[1], LBuf[LBufPos], LSpace);
+        LBufPos := High(LBuf) + 1;
+        LOverflow := LOverflow + Copy(S, LSpace + 1, LSLen - LSpace);
+      end
+      else
+        LOverflow := LOverflow + S;
+    end;
+  end;
+
+  procedure BufAppendPad(C: AnsiChar; ACount: Integer);
+  var LK, LSpace: Integer;
+  begin
+    if ACount <= 0 then Exit;
+    LSpace := High(LBuf) - LBufPos + 1;
+    if ACount <= LSpace then
+    begin
+      FillChar(LBuf[LBufPos], ACount, Ord(C));
+      Inc(LBufPos, ACount);
+    end
+    else
+    begin
+      if LSpace > 0 then
+      begin
+        FillChar(LBuf[LBufPos], LSpace, Ord(C));
+        LBufPos := High(LBuf) + 1;
+        LOverflow := LOverflow + StringOfChar(C, ACount - LSpace);
+      end
+      else
+        LOverflow := LOverflow + StringOfChar(C, ACount);
+    end;
+  end;
 
   procedure ParseWidthPrec;
-  var LCode: Integer; LS: string;
+  var LDigit: Integer;
   begin
     LWidth := 0;
     LPrec := -1;
@@ -205,62 +276,82 @@ var
     LFmtStart := LI;
     if (LI <= LLen) and (AFmt[LI] = '-') then begin LLeftAlign := True; Inc(LI); end;
     if (LI <= LLen) and (AFmt[LI] = '0') then begin LZeroPad := True; end;
-    LS := '';
-    while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do begin LS := LS + AFmt[LI]; Inc(LI); end;
-    if LS <> '' then begin Val(LS, LWidth, LCode); if LCode <> 0 then LWidth := 0; end;
+    while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do
+    begin
+      LWidth := LWidth * 10 + (Ord(AFmt[LI]) - Ord('0'));
+      Inc(LI);
+    end;
     if (LI <= LLen) and (AFmt[LI] = '.') then
     begin
       Inc(LI);
-      LS := '';
-      while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do begin LS := LS + AFmt[LI]; Inc(LI); end;
-      if LS <> '' then begin Val(LS, LPrec, LCode); if LCode <> 0 then LPrec := -1; end
-      else LPrec := 0;
+      LPrec := 0;
+      while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do
+      begin
+        LPrec := LPrec * 10 + (Ord(AFmt[LI]) - Ord('0'));
+        Inc(LI);
+      end;
     end;
   end;
 
-  function PadInt(const S: string): string;
-  var LMinDigits, LPad: Integer; LNeg: Boolean; LDigits: string;
+  procedure EmitPadInt(const S: string);
+  var LMinDigits, LPad, LSLen: Integer; LNeg: Boolean;
+      LDigStart, LDigLen: Integer;
   begin
-    LNeg := (Length(S) > 0) and (S[1] = '-');
-    if LNeg then LDigits := Copy(S, 2, Length(S) - 1) else LDigits := S;
+    LSLen := Length(S);
+    LNeg := (LSLen > 0) and (S[1] = '-');
+    if LNeg then begin LDigStart := 2; LDigLen := LSLen - 1; end
+    else begin LDigStart := 1; LDigLen := LSLen; end;
     LMinDigits := LPrec;
     if LMinDigits < 0 then LMinDigits := 1;
-    while Length(LDigits) < LMinDigits do LDigits := '0' + LDigits;
-    if LNeg then Result := '-' + LDigits else Result := LDigits;
-    LPad := LWidth - Length(Result);
-    if LPad > 0 then
+    LPad := LWidth - LDigLen;
+    if LMinDigits > LDigLen then LPad := LWidth - LMinDigits;
+    if LNeg then Dec(LPad);
+    if LPad < 0 then LPad := 0;
+
+    if LLeftAlign then
     begin
-      if LLeftAlign then
-        Result := Result + StringOfChar(' ', LPad)
-      else if LZeroPad and (LPrec < 0) then
-      begin
-        if LNeg then
-          Result := '-' + StringOfChar('0', LPad) + Copy(Result, 2, Length(Result) - 1)
-        else
-          Result := StringOfChar('0', LPad) + Result;
-      end
-      else
-        Result := StringOfChar(' ', LPad) + Result;
+      if LNeg then BufAppendChar('-');
+      if LMinDigits > LDigLen then BufAppendPad('0', LMinDigits - LDigLen);
+      BufAppendStr(Copy(S, LDigStart, LDigLen));
+      BufAppendPad(' ', LPad);
+    end
+    else if LZeroPad and (LPrec < 0) then
+    begin
+      if LNeg then BufAppendChar('-');
+      BufAppendPad('0', LPad);
+      BufAppendStr(Copy(S, LDigStart, LDigLen));
+    end
+    else
+    begin
+      BufAppendPad(' ', LPad);
+      if LNeg then BufAppendChar('-');
+      if LMinDigits > LDigLen then BufAppendPad('0', LMinDigits - LDigLen);
+      BufAppendStr(Copy(S, LDigStart, LDigLen));
     end;
   end;
 
-  function PadStr(const S: string): string;
+  procedure EmitPadStr(const S: string);
+  var LActual: Integer;
   begin
-    Result := S;
-    if (LPrec >= 0) and (Length(Result) > LPrec) then
-      SetLength(Result, LPrec);
-    LPadLen := LWidth - Length(Result);
-    if LPadLen > 0 then
+    LActual := Length(S);
+    if (LPrec >= 0) and (LActual > LPrec) then LActual := LPrec;
+    LPadLen := LWidth - LActual;
+    if LPadLen < 0 then LPadLen := 0;
+    if LLeftAlign then
     begin
-      if LLeftAlign then
-        Result := Result + StringOfChar(' ', LPadLen)
-      else
-        Result := StringOfChar(' ', LPadLen) + Result;
+      BufAppendStr(Copy(S, 1, LActual));
+      BufAppendPad(' ', LPadLen);
+    end
+    else
+    begin
+      BufAppendPad(' ', LPadLen);
+      BufAppendStr(Copy(S, 1, LActual));
     end;
   end;
 
 begin
-  Result := '';
+  LBufPos := 0;
+  LOverflow := '';
   LArgIdx := 0;
   LLen := Length(AFmt);
   LI := 1;
@@ -282,7 +373,7 @@ begin
             else Str(0, LTmp);
             end;
             while (Length(LTmp) > 0) and (LTmp[1] = ' ') do Delete(LTmp, 1, 1);
-            Result := Result + PadInt(LTmp);
+            EmitPadInt(LTmp);
             Inc(LArgIdx);
           end;
         'u':
@@ -295,7 +386,7 @@ begin
             else Str(UInt64(0), LTmp);
             end;
             while (Length(LTmp) > 0) and (LTmp[1] = ' ') do Delete(LTmp, 1, 1);
-            Result := Result + PadInt(LTmp);
+            EmitPadInt(LTmp);
             Inc(LArgIdx);
           end;
         's':
@@ -308,7 +399,7 @@ begin
               vtChar:        LTmp := AArgs[LArgIdx].VChar;
             else LTmp := '?';
             end;
-            Result := Result + PadStr(LTmp);
+            EmitPadStr(LTmp);
             Inc(LArgIdx);
           end;
         'x', 'X':
@@ -322,7 +413,7 @@ begin
             end;
             if AFmt[LI] = 'x' then LTmp := System.LowerCase(LTmp);
             LPrec := -1;
-            Result := Result + PadInt(LTmp);
+            EmitPadInt(LTmp);
             Inc(LArgIdx);
           end;
         'f', 'e', 'g':
@@ -333,20 +424,28 @@ begin
               vtExtended: Str(AArgs[LArgIdx].VExtended^:0:LPrec, LTmp);
             else Str(0.0:0:LPrec, LTmp);
             end;
-            Result := Result + LTmp;
+            BufAppendStr(LTmp);
             Inc(LArgIdx);
           end;
-        '%': Result := Result + '%';
+        '%': BufAppendChar('%');
       else
-        Result := Result + '%' + AFmt[LI];
+        BufAppendChar('%');
+        BufAppendChar(AFmt[LI]);
       end;
       Inc(LI);
     end
     else
     begin
-      Result := Result + AFmt[LI];
+      BufAppendChar(AFmt[LI]);
       Inc(LI);
     end;
+  end;
+  if LOverflow = '' then
+    SetString(Result, @LBuf[0], LBufPos)
+  else
+  begin
+    SetString(Result, @LBuf[0], LBufPos);
+    Result := Result + LOverflow;
   end;
 end;
 
