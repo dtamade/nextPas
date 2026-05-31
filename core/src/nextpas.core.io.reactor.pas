@@ -73,7 +73,7 @@ begin
   SetLength(Result.FEntries, INITIAL_ENTRIES);
   Result.FEntryCount := 0;
   Result.FFreeHead := -1;
-  AtomicStore32(Result.FRunning, 0, moRelaxed);
+  AtomicStore32(Result.FRunning, 0, moRelease);
 end;
 
 procedure TIoReactor.Close;
@@ -279,8 +279,8 @@ const
   EINTR = 4;
   EAGAIN = 11;
 begin
-  AtomicStore32(FRunning, 1, moRelaxed);
-  while AtomicLoad32(FRunning, moRelaxed) <> 0 do
+  AtomicStore32(FRunning, 1, moRelease);
+  while AtomicLoad32(FRunning, moAcquire) <> 0 do
   begin
     LRet := FRing.SubmitAndWait(1);
     if LRet < 0 then
@@ -288,7 +288,7 @@ begin
       if (LRet = -EINTR) or (LRet = -EAGAIN) then Continue;
       Break;
     end;
-    while (AtomicLoad32(FRunning, moRelaxed) <> 0) and FRing.PeekCqe(LCqe) do
+    while (AtomicLoad32(FRunning, moAcquire) <> 0) and FRing.PeekCqe(LCqe) do
     begin
       LId := IoUringCqeGetData(LCqe);
       try
@@ -305,7 +305,7 @@ end;
 
 procedure TIoReactor.Stop;
 begin
-  AtomicStore32(FRunning, 0, moRelaxed);
+  AtomicStore32(FRunning, 0, moRelease);
 end;
 
 end.
