@@ -11,7 +11,8 @@ uses
   nextpas.core.tui.base,
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf;
 
 type
   TModalSize = record
@@ -22,75 +23,88 @@ type
     UsePercent: Boolean;
   end;
 
-  TModal = record
-    Visible: Boolean;
-    Size: TModalSize;
-    DimBackground: Boolean;
-    Style: TStyle;
-
-    class function Create: TModal; static;
-    function WithSize(W, H: Integer): TModal;
-    function WithSizePercent(WPct, HPct: Integer): TModal;
-    function WithDimBackground(Dim: Boolean): TModal;
-    function WithStyle(const S: TStyle): TModal;
+  IModal = interface(IWidget)
+    ['{E1F2A3B4-C5D6-7890-EFAB-123456789012}']
+    function WithSize(W, H: Integer): IModal;
+    function WithSizePercent(WPct, HPct: Integer): IModal;
+    function WithDimBackground(Dim: Boolean): IModal;
+    function WithStyle(const S: TStyle): IModal;
+    function WithVisible(V: Boolean): IModal;
     function ContentArea(const Container: TRect): TRect;
-    procedure RenderBackground(const Container: TRect; ABuf: TBuffer);
+  end;
+
+  TModal = class(TInterfacedObject, IWidget, IModal)
+  private
+    FVisible: Boolean;
+    FSize: TModalSize;
+    FDimBackground: Boolean;
+    FStyle: TStyle;
+  public
+    class function New: IModal; static;
+
+    function WithSize(W, H: Integer): IModal;
+    function WithSizePercent(WPct, HPct: Integer): IModal;
+    function WithDimBackground(Dim: Boolean): IModal;
+    function WithStyle(const S: TStyle): IModal;
+    function WithVisible(V: Boolean): IModal;
+    function ContentArea(const Container: TRect): TRect;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
 
-class function TModal.Create: TModal;
+class function TModal.New: IModal;
+var LSelf: TModal;
 begin
-  Result.Visible := False;
-  Result.Size.Width := 40;
-  Result.Size.Height := 12;
-  Result.Size.WidthPct := 60;
-  Result.Size.HeightPct := 60;
-  Result.Size.UsePercent := False;
-  Result.DimBackground := True;
-  Result.Style := TStyle.Default;
+  LSelf := TModal.Create;
+  LSelf.FVisible := False;
+  LSelf.FSize.Width := 40;
+  LSelf.FSize.Height := 12;
+  LSelf.FSize.WidthPct := 60;
+  LSelf.FSize.HeightPct := 60;
+  LSelf.FSize.UsePercent := False;
+  LSelf.FDimBackground := True;
+  LSelf.FStyle := TStyle.Default;
+  Result := LSelf;
 end;
 
-function TModal.WithSize(W, H: Integer): TModal;
+function TModal.WithSize(W, H: Integer): IModal;
 begin
+  FSize.Width := W; FSize.Height := H;
+  FSize.UsePercent := False;
   Result := Self;
-  Result.Size.Width := W;
-  Result.Size.Height := H;
-  Result.Size.UsePercent := False;
 end;
 
-function TModal.WithSizePercent(WPct, HPct: Integer): TModal;
+function TModal.WithSizePercent(WPct, HPct: Integer): IModal;
 begin
+  FSize.WidthPct := WPct; FSize.HeightPct := HPct;
+  FSize.UsePercent := True;
   Result := Self;
-  Result.Size.WidthPct := WPct;
-  Result.Size.HeightPct := HPct;
-  Result.Size.UsePercent := True;
 end;
 
-function TModal.WithDimBackground(Dim: Boolean): TModal;
-begin
-  Result := Self;
-  Result.DimBackground := Dim;
-end;
+function TModal.WithDimBackground(Dim: Boolean): IModal;
+begin FDimBackground := Dim; Result := Self; end;
 
-function TModal.WithStyle(const S: TStyle): TModal;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
+function TModal.WithStyle(const S: TStyle): IModal;
+begin FStyle := S; Result := Self; end;
+
+function TModal.WithVisible(V: Boolean): IModal;
+begin FVisible := V; Result := Self; end;
 
 function TModal.ContentArea(const Container: TRect): TRect;
 var W, H, X, Y: Integer;
 begin
-  if Size.UsePercent then
+  if FSize.UsePercent then
   begin
-    W := (Container.Width * Size.WidthPct) div 100;
-    H := (Container.Height * Size.HeightPct) div 100;
+    W := (Container.Width * FSize.WidthPct) div 100;
+    H := (Container.Height * FSize.HeightPct) div 100;
   end
   else
   begin
-    W := Size.Width;
-    H := Size.Height;
+    W := FSize.Width;
+    H := FSize.Height;
   end;
   if W > Container.Width then W := Container.Width;
   if H > Container.Height then H := Container.Height;
@@ -101,12 +115,12 @@ begin
   Result := TRect.Make(X, Y, W, H);
 end;
 
-procedure TModal.RenderBackground(const Container: TRect; ABuf: TBuffer);
+procedure TModal.Render(const AArea: TRect; ABuffer: TBuffer);
 begin
-  if not Visible then Exit;
-  if DimBackground then
-    ABuf.SetStyle(Container, TStyle.Default.WithModifier([mbDim]));
-  ABuf.SetStyle(ContentArea(Container), Style);
+  if not FVisible then Exit;
+  if FDimBackground then
+    ABuffer.SetStyle(AArea, TStyle.Default.WithModifier([mbDim]));
+  ABuffer.SetStyle(ContentArea(AArea), FStyle);
 end;
 
 end.
