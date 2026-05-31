@@ -132,14 +132,21 @@ begin
     end;
   end;
 
-  // Wildcard match (*.example.com)
+  // Wildcard match (*.example.com) — RFC 6125 style
+  // Only matches exactly one label before the suffix
   for I := 0 to High(FEntries) do
   begin
     if (Length(FEntries[I].Hostname) > 2) and
        (FEntries[I].Hostname[1] = '*') and
        (FEntries[I].Hostname[2] = '.') then
     begin
-      if Pos(Copy(FEntries[I].Hostname, 2, MaxInt), LName) > 0 then
+      // Suffix = ".example.com" (from position 2 onwards)
+      // Name must end with suffix AND have exactly one dot before it
+      if (Length(LName) > Length(FEntries[I].Hostname) - 1) and
+         (Copy(LName, Length(LName) - Length(FEntries[I].Hostname) + 2 + 1,
+               Length(FEntries[I].Hostname) - 1) =
+          Copy(FEntries[I].Hostname, 2, Length(FEntries[I].Hostname) - 1)) and
+         (Pos('.', Copy(LName, 1, Length(LName) - Length(FEntries[I].Hostname) + 2)) = 0) then
       begin
         ACredential := TSSLSimpleServerCredential.Create(
           FEntries[I].CertPEM, FEntries[I].KeyPEM, FEntries[I].KeyPassword);
