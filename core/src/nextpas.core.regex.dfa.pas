@@ -761,7 +761,9 @@ begin
 end;
 
 { --- DfaFindAll: find all non-overlapping matches (no captures) --- }
-{ Uses anchored DFA from each candidate start position, longest match }
+{ Uses anchored DFA from each candidate start position, longest match.
+  Key optimization: uses MatchOnTrans from cached transitions instead of
+  calling CheckStateMatch (full epsilon closure) at every position. }
 
 function DfaFindAll(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): TMatchArray;
@@ -779,8 +781,7 @@ var
   LPrevIsWord: Boolean;
   LCurrIsWord: Boolean;
   LAtStart: Boolean;
-  LRoots: array of UInt32;
-  LPCCount: UInt32;
+  LRoots: array[0..0] of UInt32;
   LInitCount: UInt32;
   LPrefixByte: Byte;
   LHasPrefix: Boolean;
@@ -788,6 +789,7 @@ var
   LPrefixStr: string;
   prefixPos: SizeInt;
   k: SizeUInt;
+  LHasStartClass: Boolean;
 begin
   SetLength(Result, 0);
   LCodeLen := Length(AProgram.Code);
@@ -800,13 +802,20 @@ begin
   LHasPrefix := AProgram.LiteralPrefixLen > 0;
   LPrefixLen := AProgram.LiteralPrefixLen;
   LPrefixStr := AProgram.LiteralPrefix;
+  LHasStartClass := (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128)
+                     and (not LHasPrefix);
+  if LHasPrefix then
+    LPrefixByte := Byte(LPrefixStr[1])
+  else
+    LPrefixByte := 0;
+
+  LRoots[0] := 0;
 
   while LStart <= ALen do
   begin
     // Prefilter: skip to candidate
     if LHasPrefix and (LStart < ALen) then
     begin
-      LPrefixByte := Byte(LPrefixStr[1]);
       while True do
       begin
         prefixPos := SizeInt(ScanFindByte(AInput + LStart, ALen - LStart, LPrefixByte));
@@ -822,27 +831,18 @@ begin
         if LStart >= ALen then begin SetLength(Result, LCount); Exit; end;
       end;
     end
-    else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) and
-            (not LHasPrefix) and (LStart < ALen) then
+    else if LHasStartClass and (LStart < ALen) then
     begin
       while (LStart < ALen) and
             (not CharBitmapTest(AProgram.StartClass, Ord(AInput[LStart]))) do
         Inc(LStart);
     end;
 
-    // Run anchored DFA from LStart
+    // Run anchored DFA from LStart — find longest match
     LMatchEnd := -1;
 
-    // Check if empty match at LStart
     LAtStart := (LStart = 0);
     LPrevIsWord := (LStart > 0) and IsWordChar(Ord(AInput[LStart - 1]));
-    if LStart < ALen then
-      LCurrIsWord := IsWordChar(Ord(AInput[LStart]))
-    else
-      LCurrIsWord := False;
-
-    SetLength(LRoots, 1);
-    LRoots[0] := 0;
 
     if LStart >= ALen then
     begin
@@ -853,12 +853,14 @@ begin
     end
     else
     begin
-      // Check if match before consuming first byte
+      LCurrIsWord := IsWordChar(Ord(AInput[LStart]));
+
+      // Check if match before consuming first byte (empty match possible)
       if EpsilonClose(Cache, AProgram, LRoots, 1,
            LAtStart, LPrevIsWord, LCurrIsWord, False) then
         LMatchEnd := SizeInt(LStart);
 
-      // Now do byte step to build initial state
+      // Byte step on first char to build initial state
       ByteStep(Cache, AProgram, Ord(AInput[LStart]));
 
       if Cache.NextCount > 0 then
@@ -869,7 +871,6 @@ begin
 
         if curState = DFA_UNKNOWN then
         begin
-          // Overflow - fall back to NFA
           Result := NfaFindAll(AProgram, AInput, ALen);
           Exit;
         end;
@@ -878,28 +879,12 @@ begin
         begin
           LPos := LStart + 1;
 
-          // Check if match after consuming first byte
-          LPrevIsWord := IsWordChar(Ord(AInput[LStart]));
-          if LPos < ALen then
-          begin
-            LCurrIsWord := IsWordChar(Ord(AInput[LPos]));
-            LCtx := Ord(LPrevIsWord);
-            if CheckStateMatch(Cache, AProgram, curState, LCtx, LCurrIsWord, False) then
-              LMatchEnd := SizeInt(LPos);
-          end
-          else
-          begin
-            LCtx := Ord(LPrevIsWord);
-            if CheckEofAccept(Cache, AProgram, curState, LCtx, False) then
-              LMatchEnd := SizeInt(LPos);
-          end;
-
-          // Continue consuming bytes
+          // Main inner loop: consume bytes, detect matches via MatchOnTrans
           while LPos < ALen do
           begin
             ch := Ord(AInput[LPos]);
             LPrevIsWord := IsWordChar(Ord(AInput[LPos - 1]));
-            LCtx := Ord(LPrevIsWord); // AtStart=False after first byte
+            LCtx := Ord(LPrevIsWord);
 
             nextState := Cache.States[curState].Next[LCtx, ch];
             if nextState = DFA_UNKNOWN then
@@ -912,27 +897,24 @@ begin
               end;
             end;
 
+            // MatchOnTrans: epsilon closure of curState (before consuming ch)
+            // reached opMatch => match ends at LPos
+            if Cache.States[curState].MatchOnTrans[LCtx, ch] then
+              LMatchEnd := SizeInt(LPos);
+
             if nextState = DFA_DEAD then Break;
 
             curState := nextState;
             Inc(LPos);
+          end;
 
-            // Check if match at new position
-            if LPos < ALen then
-            begin
-              LCurrIsWord := IsWordChar(Ord(AInput[LPos]));
-              LPrevIsWord := IsWordChar(Ord(AInput[LPos - 1]));
-              LCtx := Ord(LPrevIsWord);
-              if CheckStateMatch(Cache, AProgram, curState, LCtx, LCurrIsWord, False) then
-                LMatchEnd := SizeInt(LPos);
-            end
-            else
-            begin
-              LPrevIsWord := IsWordChar(Ord(AInput[LPos - 1]));
-              LCtx := Ord(LPrevIsWord);
-              if CheckEofAccept(Cache, AProgram, curState, LCtx, False) then
-                LMatchEnd := SizeInt(LPos);
-            end;
+          // EOF check: does curState accept at end of input?
+          if LPos >= ALen then
+          begin
+            LPrevIsWord := (ALen > 0) and IsWordChar(Ord(AInput[ALen - 1]));
+            LCtx := Ord(LPrevIsWord);
+            if CheckEofAccept(Cache, AProgram, curState, LCtx, False) then
+              LMatchEnd := SizeInt(ALen);
           end;
         end;
       end;
