@@ -48,9 +48,9 @@ type
     function WithPlaceholderStyle(const S: TStyle): IInput;
     function WithCursorStyle(const S: TStyle): IInput;
     function WithBlock(ABlock: IBlock): IInput;
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TInputState);
-    procedure RenderInline(ABuf: TBuffer; X, Y, MaxWidth: Integer;
+    procedure RenderInline(ABuffer: TBuffer; X, Y, MaxWidth: Integer;
       var AState: TInputState);
   end;
 
@@ -73,11 +73,11 @@ type
     function WithBlock(ABlock: IBlock): IInput;
 
     { IWidget }
-    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { IInput }
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TInputState);
-    procedure RenderInline(ABuf: TBuffer; X, Y, MaxWidth: Integer;
+    procedure RenderInline(ABuffer: TBuffer; X, Y, MaxWidth: Integer;
       var AState: TInputState);
   end;
 
@@ -86,7 +86,7 @@ implementation
 type
   TInputAdv = record ByteLen, Width: Integer; Codepoint: UInt32; end;
 
-function InputGraphemeAt(const ABuf; ALen, AOffset: Integer): TInputAdv;
+function InputGraphemeAt(const ABuffer; ALen, AOffset: Integer): TInputAdv;
 var
   P: PByte;
   B0, B1, B2, B3: Byte;
@@ -97,7 +97,7 @@ begin
   Result.Width := 1;
   Result.Codepoint := $FFFD;
   if AOffset >= ALen then Exit;
-  P := PByte(@ABuf);
+  P := PByte(@ABuffer);
   B0 := P[AOffset];
   if B0 < $80 then
   begin
@@ -340,14 +340,14 @@ begin FCursorStyle := S; Result := Self; end;
 function TInput.WithBlock(ABlock: IBlock): IInput;
 begin FBlock := ABlock; Result := Self; end;
 
-procedure TInput.Render(const AArea: TRect; ABuf: TBuffer);
+procedure TInput.Render(const AArea: TRect; ABuffer: TBuffer);
 var LState: TInputState;
 begin
   LState := TInputState.Empty;
-  RenderStateful(AArea, ABuf, LState);
+  RenderStateful(AArea, ABuffer, LState);
 end;
 
-procedure TInput.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TInputState);
+procedure TInput.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TInputState);
 var
   Inner: TRect;
   DisplayText: AnsiString;
@@ -356,11 +356,11 @@ var
   Adv: TInputAdv;
 begin
   if AArea.IsEmpty then Exit;
-  ABuf.SetStyle(AArea, FStyle);
+  ABuffer.SetStyle(AArea, FStyle);
 
   if FBlock <> nil then
   begin
-    FBlock.Render(AArea, ABuf);
+    FBlock.Render(AArea, ABuffer);
     Inner := FBlock.Inner(AArea);
   end
   else
@@ -407,32 +407,32 @@ begin
   if AState.ScrollX < 0 then begin AState.ScrollX := 0; ScrollCol := 0; end;
 
   if (Length(DisplayText) = 0) and (Length(FPlaceholder) > 0) then
-    ABuf.SetStringN(Inner.X, Inner.Y, FPlaceholder, VisibleW, FPlaceholderStyle)
+    ABuffer.SetStringN(Inner.X, Inner.Y, FPlaceholder, VisibleW, FPlaceholderStyle)
   else if Length(DisplayText) > 0 then
   begin
     if FMaskChar <> #0 then
-      ABuf.SetStringN(Inner.X, Inner.Y,
+      ABuffer.SetStringN(Inner.X, Inner.Y,
         Copy(DisplayText, ScrollCol + 1, Length(DisplayText) - ScrollCol),
         VisibleW, FStyle)
     else
-      ABuf.SetStringN(Inner.X, Inner.Y,
+      ABuffer.SetStringN(Inner.X, Inner.Y,
         Copy(DisplayText, AState.ScrollX + 1, Length(DisplayText) - AState.ScrollX),
         VisibleW, FStyle);
   end;
 
   Col := CurCol - ScrollCol;
   if (Col >= 0) and (Col < VisibleW) then
-    ABuf.SetStyle(TRect.Make(Inner.X + Col, Inner.Y, 1, 1), FCursorStyle);
+    ABuffer.SetStyle(TRect.Make(Inner.X + Col, Inner.Y, 1, 1), FCursorStyle);
 end;
 
-procedure TInput.RenderInline(ABuf: TBuffer; X, Y, MaxWidth: Integer; var AState: TInputState);
+procedure TInput.RenderInline(ABuffer: TBuffer; X, Y, MaxWidth: Integer; var AState: TInputState);
 var Area: TRect; SaveBlock: IBlock;
 begin
   if MaxWidth <= 0 then Exit;
   SaveBlock := FBlock;
   FBlock := nil;
   Area := TRect.Make(Word(X), Word(Y), Word(MaxWidth), 1);
-  RenderStateful(Area, ABuf, AState);
+  RenderStateful(Area, ABuffer, AState);
   FBlock := SaveBlock;
 end;
 

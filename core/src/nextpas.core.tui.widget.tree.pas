@@ -47,7 +47,7 @@ type
     function WithStyle(const AStyle: TStyle): ITree;
     function WithHighlightStyle(const AStyle: TStyle): ITree;
     function WithIndent(N: Integer): ITree;
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTreeState);
   end;
 
@@ -67,9 +67,9 @@ type
     function WithIndent(N: Integer): ITree;
 
     { IWidget }
-    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { ITree }
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTreeState);
   end;
 
@@ -220,15 +220,15 @@ begin
   end;
 end;
 
-procedure TTree.Render(const AArea: TRect; ABuf: TBuffer);
+procedure TTree.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   LState: TTreeState;
 begin
   LState := TTreeState.Empty;
-  RenderStateful(AArea, ABuf, LState);
+  RenderStateful(AArea, ABuffer, LState);
 end;
 
-procedure TTree.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TTreeState);
+procedure TTree.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TTreeState);
 var
   Inner: TRect;
   Rows: TFlatRows;
@@ -239,11 +239,11 @@ var
 begin
   if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(AArea, FStyle);
+  ABuffer.SetStyle(AArea, FStyle);
 
   if FBlock <> nil then
   begin
-    FBlock.Render(AArea, ABuf);
+    FBlock.Render(AArea, ABuffer);
     Inner := FBlock.Inner(AArea);
   end
   else
@@ -298,24 +298,24 @@ begin
     if RowY >= Inner.Y + Inner.Height then Break;
 
     Sty := FStyle.Patch(Rows[I].NodeStyle);
-    ABuf.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), Sty);
+    ABuffer.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), Sty);
 
     X := Inner.X + FIndentSize * Rows[I].Depth;
 
     if Rows[I].HasChildren then
     begin
       if Rows[I].IsOpen then
-        ABuf.SetStringN(X, RowY, '[-] ', 4, Sty)
+        ABuffer.SetStringN(X, RowY, '[-] ', 4, Sty)
       else
-        ABuf.SetStringN(X, RowY, '[+] ', 4, Sty);
+        ABuffer.SetStringN(X, RowY, '[+] ', 4, Sty);
     end
     else
-      ABuf.SetStringN(X, RowY, '    ', 4, Sty);
+      ABuffer.SetStringN(X, RowY, '    ', 4, Sty);
     Inc(X, 4);
-    ABuf.SetStringN(X, RowY, Rows[I].Label_, ColW - (X - Inner.X), Sty);
+    ABuffer.SetStringN(X, RowY, Rows[I].Label_, ColW - (X - Inner.X), Sty);
 
     if I = Sel then
-      ABuf.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), FHighlightStyle);
+      ABuffer.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), FHighlightStyle);
 
     Inc(RowY);
   end;

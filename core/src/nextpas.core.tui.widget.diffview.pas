@@ -41,7 +41,7 @@ type
     function WithAddedStyle(const S: TStyle): IDiffView;
     function WithRemovedStyle(const S: TStyle): IDiffView;
     function WithBlock(ABlock: IBlock): IDiffView;
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TDiffViewState);
   end;
 
@@ -64,9 +64,9 @@ type
     function WithBlock(ABlock: IBlock): IDiffView;
 
     { IWidget }
-    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { IDiffView }
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TDiffViewState);
   end;
 
@@ -201,15 +201,15 @@ begin FRemovedStyle := S; Result := Self; end;
 function TDiffView.WithBlock(ABlock: IBlock): IDiffView;
 begin FBlock := ABlock; Result := Self; end;
 
-procedure TDiffView.Render(const AArea: TRect; ABuf: TBuffer);
+procedure TDiffView.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   St: TDiffViewState;
 begin
   St := TDiffViewState.Empty;
-  RenderStateful(AArea, ABuf, St);
+  RenderStateful(AArea, ABuffer, St);
 end;
 
-procedure TDiffView.RenderStateful(const AArea: TRect; ABuf: TBuffer;
+procedure TDiffView.RenderStateful(const AArea: TRect; ABuffer: TBuffer;
   var AState: TDiffViewState);
 var
   Inner: TRect;
@@ -220,11 +220,11 @@ var
 begin
   if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(AArea, FStyle);
+  ABuffer.SetStyle(AArea, FStyle);
 
   if FBlock <> nil then
   begin
-    FBlock.Render(AArea, ABuf);
+    FBlock.Render(AArea, ABuffer);
     Inner := FBlock.Inner(AArea);
   end
   else
@@ -278,9 +278,9 @@ begin
     else
       NumBuf := '    ';
 
-    ABuf.SetStringN(Inner.X, Y, NumBuf, GutterW - 1, FLineNumStyle);
-    ABuf.SetStringN(Inner.X + GutterW - 1, Y, Prefix, 1, LineSty);
-    ABuf.SetStringN(TextX, Y, FLines[Row].Text, TextW, LineSty);
+    ABuffer.SetStringN(Inner.X, Y, NumBuf, GutterW - 1, FLineNumStyle);
+    ABuffer.SetStringN(Inner.X + GutterW - 1, Y, Prefix, 1, LineSty);
+    ABuffer.SetStringN(TextX, Y, FLines[Row].Text, TextW, LineSty);
 
     Inc(Y);
   end;

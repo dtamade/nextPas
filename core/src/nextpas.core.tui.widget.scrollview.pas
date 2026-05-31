@@ -38,8 +38,8 @@ type
     function WithScrollbarStyle(const S: TStyle): IScrollView;
     function WithShowScrollbar(V: Boolean): IScrollView;
     function WithBlock(ABlock: IBlock): IScrollView;
-    function ContentArea(const Area: TRect): TRect;
-    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TScrollViewState);
+    function ContentArea(const AArea: TRect): TRect;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TScrollViewState);
   end;
 
   TScrollView = class(TInterfacedObject, IWidget, IScrollView)
@@ -61,8 +61,8 @@ type
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
 
     { IScrollView }
-    function ContentArea(const Area: TRect): TRect;
-    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TScrollViewState);
+    function ContentArea(const AArea: TRect): TRect;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TScrollViewState);
   end;
 
 implementation
@@ -164,60 +164,60 @@ begin
   { ScrollView is stateful-only; Render without state is a no-op. }
 end;
 
-function TScrollView.ContentArea(const Area: TRect): TRect;
+function TScrollView.ContentArea(const AArea: TRect): TRect;
 var Inner: TRect;
 begin
   if FBlock <> nil then
-    Inner := FBlock.Inner(Area)
+    Inner := FBlock.Inner(AArea)
   else
-    Inner := Area;
+    Inner := AArea;
   if FShowScrollbar and (Inner.Width > 1) then
     Result := TRect.Make(Inner.X, Inner.Y, Inner.Width - 1, Inner.Height)
   else
     Result := Inner;
 end;
 
-procedure TScrollView.RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TScrollViewState);
+procedure TScrollView.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TScrollViewState);
 var
   Inner: TRect;
   ScrollCol, ViewH, ThumbPos, ThumbLen, MaxOffset, I: Integer;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuffer.SetStyle(Area, FStyle);
+  ABuffer.SetStyle(AArea, FStyle);
 
   if FBlock <> nil then
   begin
-    FBlock.Render(Area, ABuffer);
-    Inner := FBlock.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
   ViewH := Inner.Height;
 
   // Clamp offset
-  if State.ContentHeight <= ViewH then
-    State.OffsetY := 0
+  if AState.ContentHeight <= ViewH then
+    AState.OffsetY := 0
   else
   begin
-    MaxOffset := State.ContentHeight - ViewH;
-    if State.OffsetY > MaxOffset then State.OffsetY := MaxOffset;
-    if State.OffsetY < 0 then State.OffsetY := 0;
+    MaxOffset := AState.ContentHeight - ViewH;
+    if AState.OffsetY > MaxOffset then AState.OffsetY := MaxOffset;
+    if AState.OffsetY < 0 then AState.OffsetY := 0;
   end;
 
   // Render scrollbar
-  if FShowScrollbar and (Inner.Width > 0) and (State.ContentHeight > ViewH) then
+  if FShowScrollbar and (Inner.Width > 0) and (AState.ContentHeight > ViewH) then
   begin
     ScrollCol := Inner.X + Inner.Width - 1;
 
     // Thumb size and position
-    ThumbLen := (ViewH * ViewH) div State.ContentHeight;
+    ThumbLen := (ViewH * ViewH) div AState.ContentHeight;
     if ThumbLen < 1 then ThumbLen := 1;
-    if State.ContentHeight > ViewH then
-      ThumbPos := (State.OffsetY * (ViewH - ThumbLen)) div (State.ContentHeight - ViewH)
+    if AState.ContentHeight > ViewH then
+      ThumbPos := (AState.OffsetY * (ViewH - ThumbLen)) div (AState.ContentHeight - ViewH)
     else
       ThumbPos := 0;
 

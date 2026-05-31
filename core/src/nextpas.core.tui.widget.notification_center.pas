@@ -47,7 +47,7 @@ type
     function GetCount: Integer;
     function UnreadCount: Integer;
     function GetItem(I: Integer): TNotification;
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TNotificationCenterState);
     property Count: Integer read GetCount;
   end;
@@ -74,7 +74,7 @@ type
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { INotificationCenter }
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TNotificationCenterState);
   end;
 
@@ -163,7 +163,7 @@ begin
   RenderStateful(AArea, ABuffer, LState);
 end;
 
-procedure TNotificationCenter.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TNotificationCenterState);
+procedure TNotificationCenter.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TNotificationCenterState);
 var
   PanelX, PanelW, PanelH, I, Y, Row, ViewH: Integer;
   PanelArea, Inner: TRect;
@@ -180,13 +180,13 @@ begin
   PanelX := AArea.X + AArea.Width - PanelW;
 
   PanelArea := TRect.Make(PanelX, AArea.Y, PanelW, PanelH);
-  ABuf.SetStyle(PanelArea, FStyle);
+  ABuffer.SetStyle(PanelArea, FStyle);
 
   Str(UnreadCount, UnreadStr);
   TBlock.New.WithBorders(BORDERS_ALL)
     .WithTitle(' Notifications (' + UnreadStr + ') ')
     .WithBorderStyle(FStyle)
-    .Render(PanelArea, ABuf);
+    .Render(PanelArea, ABuffer);
 
   Inner := TRect.Make(PanelX + 1, AArea.Y + 1, PanelW - 2, PanelH - 2);
   ViewH := Inner.Height;
@@ -215,10 +215,10 @@ begin
       nlSuccess: LevelStr := '+';
     end;
 
-    ABuf.SetStringN(Inner.X, Y, '[', 1, LineSty);
-    ABuf.SetStringN(Inner.X + 1, Y, LevelStr, 1, LineSty);
-    ABuf.SetStringN(Inner.X + 2, Y, '] ', 2, LineSty);
-    ABuf.SetStringN(Inner.X + 4, Y, FItems[Row].Title, Inner.Width - 4, LineSty);
+    ABuffer.SetStringN(Inner.X, Y, '[', 1, LineSty);
+    ABuffer.SetStringN(Inner.X + 1, Y, LevelStr, 1, LineSty);
+    ABuffer.SetStringN(Inner.X + 2, Y, '] ', 2, LineSty);
+    ABuffer.SetStringN(Inner.X + 4, Y, FItems[Row].Title, Inner.Width - 4, LineSty);
     Inc(Y);
   end;
 end;

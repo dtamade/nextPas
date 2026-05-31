@@ -33,11 +33,11 @@ type
     function WithMinSize2(N: Integer): ISplitPane;
     function WithDividerStyle(const S: TStyle): ISplitPane;
     function WithDividerChar(const C: AnsiString): ISplitPane;
-    function Split(const Area: TRect; const State: TSplitPaneState;
+    function Split(const AArea: TRect; const AState: TSplitPaneState;
       out Pane1, Pane2, Divider: TRect): Boolean;
     procedure RenderDivider(const Divider: TRect; ABuffer: TBuffer);
-    function HandleMouse(const Area: TRect; const M: TMouseEvent;
-      var State: TSplitPaneState): Boolean;
+    function HandleMouse(const AArea: TRect; const M: TMouseEvent;
+      var AState: TSplitPaneState): Boolean;
   end;
 
   TSplitPane = class(TInterfacedObject, IWidget, ISplitPane)
@@ -62,11 +62,11 @@ type
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
 
     { ISplitPane }
-    function Split(const Area: TRect; const State: TSplitPaneState;
+    function Split(const AArea: TRect; const AState: TSplitPaneState;
       out Pane1, Pane2, Divider: TRect): Boolean;
     procedure RenderDivider(const Divider: TRect; ABuffer: TBuffer);
-    function HandleMouse(const Area: TRect; const M: TMouseEvent;
-      var State: TSplitPaneState): Boolean;
+    function HandleMouse(const AArea: TRect; const M: TMouseEvent;
+      var AState: TSplitPaneState): Boolean;
   end;
 
 implementation
@@ -138,7 +138,7 @@ begin
   { SplitPane is a layout helper; Render is a no-op. Use Split + RenderDivider. }
 end;
 
-function TSplitPane.Split(const Area: TRect; const State: TSplitPaneState;
+function TSplitPane.Split(const AArea: TRect; const AState: TSplitPaneState;
   out Pane1, Pane2, Divider: TRect): Boolean;
 var
   Total, DivSize, Size1, Size2: Integer;
@@ -149,19 +149,19 @@ begin
   Pane2 := TRect.Make(0, 0, 0, 0);
   Divider := TRect.Make(0, 0, 0, 0);
 
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
   DivSize := 0;
   if FShowDivider then DivSize := 1;
 
   if FDirection = sdHorizontal then
-    Total := Area.Width
+    Total := AArea.Width
   else
-    Total := Area.Height;
+    Total := AArea.Height;
 
   if Total < FMinSize1 + FMinSize2 + DivSize then Exit;
 
-  R := State.Ratio;
+  R := AState.Ratio;
   if R < 0.0 then R := 0.0;
   if R > 1.0 then R := 1.0;
 
@@ -177,15 +177,15 @@ begin
 
   if FDirection = sdHorizontal then
   begin
-    Pane1 := TRect.Make(Area.X, Area.Y, Size1, Area.Height);
-    Divider := TRect.Make(Area.X + Size1, Area.Y, DivSize, Area.Height);
-    Pane2 := TRect.Make(Area.X + Size1 + DivSize, Area.Y, Size2, Area.Height);
+    Pane1 := TRect.Make(AArea.X, AArea.Y, Size1, AArea.Height);
+    Divider := TRect.Make(AArea.X + Size1, AArea.Y, DivSize, AArea.Height);
+    Pane2 := TRect.Make(AArea.X + Size1 + DivSize, AArea.Y, Size2, AArea.Height);
   end
   else
   begin
-    Pane1 := TRect.Make(Area.X, Area.Y, Area.Width, Size1);
-    Divider := TRect.Make(Area.X, Area.Y + Size1, Area.Width, DivSize);
-    Pane2 := TRect.Make(Area.X, Area.Y + Size1 + DivSize, Area.Width, Size2);
+    Pane1 := TRect.Make(AArea.X, AArea.Y, AArea.Width, Size1);
+    Divider := TRect.Make(AArea.X, AArea.Y + Size1, AArea.Width, DivSize);
+    Pane2 := TRect.Make(AArea.X, AArea.Y + Size1 + DivSize, AArea.Width, Size2);
   end;
   Result := True;
 end;
@@ -208,8 +208,8 @@ begin
   end;
 end;
 
-function TSplitPane.HandleMouse(const Area: TRect; const M: TMouseEvent;
-  var State: TSplitPaneState): Boolean;
+function TSplitPane.HandleMouse(const AArea: TRect; const M: TMouseEvent;
+  var AState: TSplitPaneState): Boolean;
 var
   Total, Pos: Integer;
 begin
@@ -218,31 +218,31 @@ begin
   case M.Kind of
     mkDown:
     begin
-      State.Dragging := True;
+      AState.Dragging := True;
       Result := True;
     end;
     mkUp:
     begin
-      State.Dragging := False;
+      AState.Dragging := False;
       Result := True;
     end;
     mkMoved, mkDrag:
     begin
-      if not State.Dragging then Exit;
+      if not AState.Dragging then Exit;
       if FDirection = sdHorizontal then
       begin
-        Total := Area.Width;
-        Pos := Integer(M.X) - Area.X;
+        Total := AArea.Width;
+        Pos := Integer(M.X) - AArea.X;
       end
       else
       begin
-        Total := Area.Height;
-        Pos := Integer(M.Y) - Area.Y;
+        Total := AArea.Height;
+        Pos := Integer(M.Y) - AArea.Y;
       end;
       if Total <= 0 then Exit;
-      State.Ratio := Pos / Total;
-      if State.Ratio < 0.0 then State.Ratio := 0.0;
-      if State.Ratio > 1.0 then State.Ratio := 1.0;
+      AState.Ratio := Pos / Total;
+      if AState.Ratio < 0.0 then AState.Ratio := 0.0;
+      if AState.Ratio > 1.0 then AState.Ratio := 1.0;
       Result := True;
     end;
   else end;

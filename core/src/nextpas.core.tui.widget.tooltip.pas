@@ -27,7 +27,7 @@ type
     function WithStyle(const S: TStyle): ITooltip;
     function WithBorderStyle(const S: TStyle): ITooltip;
     function WithMaxWidth(W: Integer): ITooltip;
-    procedure RenderAt(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
+    procedure RenderAt(const Anchor: TRect; const Bounds: TRect; ABuffer: TBuffer);
   end;
 
   TTooltip = class(TInterfacedObject, IWidget, ITooltip)
@@ -48,7 +48,7 @@ type
     { IWidget — renders tooltip at top-left of Area }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { ITooltip — renders relative to Anchor within Bounds }
-    procedure RenderAt(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
+    procedure RenderAt(const Anchor: TRect; const Bounds: TRect; ABuffer: TBuffer);
   end;
 
 implementation
@@ -85,7 +85,7 @@ begin
   RenderAt(TRect.Make(AArea.X, AArea.Y, 1, 1), AArea, ABuffer);
 end;
 
-procedure TTooltip.RenderAt(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
+procedure TTooltip.RenderAt(const Anchor: TRect; const Bounds: TRect; ABuffer: TBuffer);
 var
   TipW, TipH, TipX, TipY: Integer;
   TipArea: TRect;
@@ -115,11 +115,11 @@ begin
   TipArea := TRect.Make(TipX, TipY, TipW, TipH);
   if TipArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(TipArea, FStyle);
+  ABuffer.SetStyle(TipArea, FStyle);
   TBlock.New.WithBorders(BORDERS_ALL)
     .WithBorderStyle(FBorderStyle)
-    .Render(TipArea, ABuf);
-  ABuf.SetStringN(TipX + 1, TipY + 1, FText, TipW - 2, FStyle);
+    .Render(TipArea, ABuffer);
+  ABuffer.SetStringN(TipX + 1, TipY + 1, FText, TipW - 2, FStyle);
 end;
 
 end.

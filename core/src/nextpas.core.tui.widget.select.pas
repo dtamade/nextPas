@@ -39,7 +39,7 @@ type
     function WithStyle(const S: TStyle): ISelect;
     function WithHighlightStyle(const S: TStyle): ISelect;
     function WithBlock(ABlock: IBlock): ISelect;
-    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TSelectState);
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TSelectState);
   end;
 
   TSelect = class(TInterfacedObject, IWidget, ISelect)
@@ -66,7 +66,7 @@ type
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
 
     { ISelect }
-    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TSelectState);
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TSelectState);
   end;
 
 implementation
@@ -169,57 +169,57 @@ begin
   { Select is stateful-only; Render without state is a no-op. }
 end;
 
-procedure TSelect.RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TSelectState);
+procedure TSelect.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TSelectState);
 var
   W, DropH, DropY, I, Y: Integer;
   DisplayText: AnsiString;
   Sty: TStyle;
   DropArea: TRect;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
   W := FWidth;
-  if W <= 0 then W := Area.Width;
-  if W > Area.Width then W := Area.Width;
+  if W <= 0 then W := AArea.Width;
+  if W > AArea.Width then W := AArea.Width;
 
-  if (State.Selected >= 0) and (State.Selected < Length(FItems)) then
-    DisplayText := FItems[State.Selected]
+  if (AState.Selected >= 0) and (AState.Selected < Length(FItems)) then
+    DisplayText := FItems[AState.Selected]
   else
     DisplayText := FPlaceholder;
 
-  ABuffer.SetStyle(TRect.Make(Area.X, Area.Y, W, 1), FStyle);
-  if State.Open then
-    ABuffer.SetStringN(Area.X, Area.Y, DisplayText + ' [v]', W, FStyle.Patch(FHighlightStyle))
+  ABuffer.SetStyle(TRect.Make(AArea.X, AArea.Y, W, 1), FStyle);
+  if AState.Open then
+    ABuffer.SetStringN(AArea.X, AArea.Y, DisplayText + ' [v]', W, FStyle.Patch(FHighlightStyle))
   else
-    ABuffer.SetStringN(Area.X, Area.Y, DisplayText + ' [>]', W, FStyle);
+    ABuffer.SetStringN(AArea.X, AArea.Y, DisplayText + ' [>]', W, FStyle);
 
-  if not State.Open then Exit;
+  if not AState.Open then Exit;
   if Length(FItems) = 0 then Exit;
 
   DropH := Length(FItems);
   if DropH > FMaxDropHeight then DropH := FMaxDropHeight;
-  DropY := Area.Y + 1;
+  DropY := AArea.Y + 1;
 
-  if DropY + DropH > Area.Y + Area.Height then
-    DropH := Area.Y + Area.Height - DropY;
+  if DropY + DropH > AArea.Y + AArea.Height then
+    DropH := AArea.Y + AArea.Height - DropY;
   if DropH <= 0 then Exit;
 
-  DropArea := TRect.Make(Area.X, DropY, W, DropH);
+  DropArea := TRect.Make(AArea.X, DropY, W, DropH);
   ABuffer.SetStyle(DropArea, FStyle);
 
-  if State.HighlightIdx < 0 then State.HighlightIdx := 0;
-  if State.HighlightIdx >= Length(FItems) then
-    State.HighlightIdx := Length(FItems) - 1;
+  if AState.HighlightIdx < 0 then AState.HighlightIdx := 0;
+  if AState.HighlightIdx >= Length(FItems) then
+    AState.HighlightIdx := Length(FItems) - 1;
 
   Y := DropY;
   for I := 0 to DropH - 1 do
   begin
     if I >= Length(FItems) then Break;
-    if I = State.HighlightIdx then
+    if I = AState.HighlightIdx then
       Sty := FHighlightStyle
     else
       Sty := FStyle;
-    ABuffer.SetStringN(Area.X, Y, ' ' + FItems[I], W, Sty);
+    ABuffer.SetStringN(AArea.X, Y, ' ' + FItems[I], W, Sty);
     Inc(Y);
   end;
 end;

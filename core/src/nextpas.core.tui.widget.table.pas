@@ -57,7 +57,7 @@ type
     function WithHeaderStyle(const S: TStyle): ITable;
     function WithHighlightStyle(const S: TStyle): ITable;
     function WithHeader(Show: Boolean): ITable;
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTableState);
   end;
 
@@ -81,9 +81,9 @@ type
     function WithHeader(Show: Boolean): ITable;
 
     { IWidget }
-    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { ITable }
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTableState);
   end;
 
@@ -201,14 +201,14 @@ begin
   Result := Self;
 end;
 
-procedure TTable.Render(const AArea: TRect; ABuf: TBuffer);
+procedure TTable.Render(const AArea: TRect; ABuffer: TBuffer);
 var Dummy: TTableState;
 begin
   Dummy := TTableState.Empty;
-  RenderStateful(AArea, ABuf, Dummy);
+  RenderStateful(AArea, ABuffer, Dummy);
 end;
 
-procedure AlignedWrite(ABuf: TBuffer; X, Y, ColW: Integer;
+procedure AlignedWrite(ABuffer: TBuffer; X, Y, ColW: Integer;
   const Text: AnsiString; Align: TContentAlign; const Sty: TStyle);
 var TW, Pad: Integer;
 begin
@@ -220,10 +220,10 @@ begin
     caCenter: Pad := (ColW - TW) div 2;
     caRight:  Pad := ColW - TW;
   end;
-  ABuf.SetStringN(X + Pad, Y, Text, ColW - Pad, Sty);
+  ABuffer.SetStringN(X + Pad, Y, Text, ColW - Pad, Sty);
 end;
 
-procedure TTable.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TTableState);
+procedure TTable.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TTableState);
 var
   Inner: TRect;
   NCols, NRows, MaxRows, Visible: Integer;
@@ -236,11 +236,11 @@ var
 begin
   if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(AArea, FStyle);
+  ABuffer.SetStyle(AArea, FStyle);
 
   if FBlock <> nil then
   begin
-    FBlock.Render(AArea, ABuf);
+    FBlock.Render(AArea, ABuffer);
     Inner := FBlock.Inner(AArea);
   end
   else
@@ -263,9 +263,9 @@ begin
   if FHasHeader and (Inner.Height > 0) then
   begin
     RowY := Inner.Y;
-    ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), FHeaderStyle);
+    ABuffer.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), FHeaderStyle);
     for I := 0 to NCols - 1 do
-      AlignedWrite(ABuf, ColWidths[I].X, RowY, ColWidths[I].Width,
+      AlignedWrite(ABuffer, ColWidths[I].X, RowY, ColWidths[I].Width,
         FColumns[I].Title, FColumns[I].Align, FHeaderStyle);
   end;
 
@@ -314,7 +314,7 @@ begin
   while (RowIdx < LastVis) and (RowY < Inner.Y + Inner.Height) do
   begin
     Sty := FStyle.Patch(FRows[RowIdx].Style);
-    ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), Sty);
+    ABuffer.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), Sty);
 
     for I := 0 to NCols - 1 do
     begin
@@ -322,12 +322,12 @@ begin
         CellText := FRows[RowIdx].Cells[I]
       else
         CellText := '';
-      AlignedWrite(ABuf, ColWidths[I].X, RowY, ColWidths[I].Width,
+      AlignedWrite(ABuffer, ColWidths[I].X, RowY, ColWidths[I].Width,
         CellText, FColumns[I].Align, Sty);
     end;
 
     if AState.HasSelection and (RowIdx = AState.Selected) then
-      ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), FHighlightStyle);
+      ABuffer.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), FHighlightStyle);
 
     Inc(RowIdx);
     Inc(RowY);

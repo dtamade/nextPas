@@ -40,7 +40,7 @@ type
     function WithTodayStyle(const S: TStyle): ICalendar;
     function WithWeekendStyle(const S: TStyle): ICalendar;
     function WithBlock(ABlock: IBlock): ICalendar;
-    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TCalendarState);
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TCalendarState);
   end;
 
   TCalendar = class(TInterfacedObject, IWidget, ICalendar)
@@ -66,7 +66,7 @@ type
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
 
     { ICalendar }
-    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TCalendarState);
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TCalendarState);
   end;
 
 implementation
@@ -202,7 +202,7 @@ begin
   { Calendar is stateful-only; Render without state is a no-op. }
 end;
 
-procedure TCalendar.RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TCalendarState);
+procedure TCalendar.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TCalendarState);
 var
   Inner: TRect;
   HeaderStr: AnsiString;
@@ -214,22 +214,22 @@ var
 const
   DowHeader = 'Mo Tu We Th Fr Sa Su';
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuffer.SetStyle(Area, FStyle);
+  ABuffer.SetStyle(AArea, FStyle);
 
   if FBlock <> nil then
   begin
-    FBlock.Render(Area, ABuffer);
-    Inner := FBlock.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if (Inner.Width < 20) or (Inner.Height < 3) then Exit;
 
   // Header: "January 2026"
-  HeaderStr := FormatDateTime('mmmm yyyy', EncodeDate(State.Year, State.Month, 1));
+  HeaderStr := FormatDateTime('mmmm yyyy', EncodeDate(AState.Year, AState.Month, 1));
   X := Inner.X + (Inner.Width - Length(HeaderStr)) div 2;
   if X < Inner.X then X := Inner.X;
   ABuffer.SetStringN(X, Inner.Y, HeaderStr, Inner.Width, FHeaderStyle);
@@ -239,8 +239,8 @@ begin
   ABuffer.SetStringN(Inner.X, Y, DowHeader, Inner.Width, FHeaderStyle);
 
   // Calendar grid
-  Days := State.DaysInMonth;
-  FirstDow := DayOfTheWeek(EncodeDate(State.Year, State.Month, 1)); // 1=Mon..7=Sun
+  Days := AState.DaysInMonth;
+  FirstDow := DayOfTheWeek(EncodeDate(AState.Year, AState.Month, 1)); // 1=Mon..7=Sun
 
   DecodeDate(Now, NowY, NowM, NowD);
 
@@ -261,9 +261,9 @@ begin
 
       Str(Day:2, DayBuf);
 
-      IsToday := (State.Year = NowY) and (State.Month = NowM) and (Word(Day) = NowD);
+      IsToday := (AState.Year = NowY) and (AState.Month = NowM) and (Word(Day) = NowD);
 
-      if Word(Day) = State.SelectedDay then
+      if Word(Day) = AState.SelectedDay then
         CellStyle := FSelectedStyle
       else if IsToday then
         CellStyle := FTodayStyle

@@ -38,7 +38,7 @@ type
     function WithHighlightStyle(const S: TStyle): IPopover;
     function WithBorder(B: Boolean): IPopover;
     procedure RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
-      ABuffer: TBuffer; var State: TPopoverState);
+      ABuffer: TBuffer; var AState: TPopoverState);
   end;
 
   TPopover = class(TInterfacedObject, IWidget, IPopover)
@@ -66,7 +66,7 @@ type
 
     { IPopover }
     procedure RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
-      ABuffer: TBuffer; var State: TPopoverState);
+      ABuffer: TBuffer; var AState: TPopoverState);
   end;
 
 implementation
@@ -151,14 +151,14 @@ begin
 end;
 
 procedure TPopover.RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
-  ABuffer: TBuffer; var State: TPopoverState);
+  ABuffer: TBuffer; var AState: TPopoverState);
 var
   PopX, PopY, PopW, PopH: Integer;
   Inner: TRect;
   I, Y, VisH: Integer;
   Sty: TStyle;
 begin
-  if not State.Visible then Exit;
+  if not AState.Visible then Exit;
   if Length(FItems) = 0 then Exit;
 
   PopW := FWidth;
@@ -209,15 +209,15 @@ begin
 
   if Inner.IsEmpty then Exit;
 
-  if State.Selected < 0 then State.Selected := 0;
-  if State.Selected >= Length(FItems) then State.Selected := Length(FItems) - 1;
+  if AState.Selected < 0 then AState.Selected := 0;
+  if AState.Selected >= Length(FItems) then AState.Selected := Length(FItems) - 1;
 
   VisH := Inner.Height;
   Y := Inner.Y;
   for I := 0 to Length(FItems) - 1 do
   begin
     if I >= VisH then Break;
-    if I = State.Selected then
+    if I = AState.Selected then
       Sty := FHighlightStyle
     else
       Sty := FStyle;

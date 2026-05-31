@@ -48,7 +48,7 @@ type
     function WithWidth(W: Integer): IMenu;
     function ItemCount: Integer;
     function SelectableCount: Integer;
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TMenuState);
     procedure MoveUp(var AState: TMenuState);
     procedure MoveDown(var AState: TMenuState);
@@ -74,7 +74,7 @@ type
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
     { IMenu }
-    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TMenuState);
     procedure MoveUp(var AState: TMenuState);
     procedure MoveDown(var AState: TMenuState);
@@ -161,7 +161,7 @@ begin
   RenderStateful(AArea, ABuffer, LState);
 end;
 
-procedure TMenu.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TMenuState);
+procedure TMenu.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TMenuState);
 var
   I, Y, W, ShortcutX: Integer;
   Sty: TStyle;
@@ -174,7 +174,7 @@ begin
   if W <= 0 then W := AArea.Width;
   if W > AArea.Width then W := AArea.Width;
 
-  ABuf.SetStyle(TRect.Make(AArea.X, AArea.Y, W, AArea.Height), FStyle);
+  ABuffer.SetStyle(TRect.Make(AArea.X, AArea.Y, W, AArea.Height), FStyle);
 
   Y := AArea.Y;
   for I := 0 to High(FItems) do
@@ -184,7 +184,7 @@ begin
     if FItems[I].Kind = mikSeparator then
     begin
       Line := StringOfChar('-', W);
-      ABuf.SetStringN(AArea.X, Y, Line, W, FStyle);
+      ABuffer.SetStringN(AArea.X, Y, Line, W, FStyle);
     end
     else
     begin
@@ -192,19 +192,19 @@ begin
       else if I = AState.Selected then Sty := FHighlightStyle
       else Sty := FStyle;
 
-      ABuf.SetStyle(TRect.Make(AArea.X, Y, W, 1), Sty);
-      ABuf.SetStringN(AArea.X + 1, Y, FItems[I].Label_, W - 2, Sty);
+      ABuffer.SetStyle(TRect.Make(AArea.X, Y, W, 1), Sty);
+      ABuffer.SetStringN(AArea.X + 1, Y, FItems[I].Label_, W - 2, Sty);
 
       if FItems[I].Shortcut <> '' then
       begin
         ShortcutX := AArea.X + W - Integer(StringDisplayWidth(FItems[I].Shortcut)) - 1;
         if ShortcutX > AArea.X + 1 then
-          ABuf.SetStringN(ShortcutX, Y, FItems[I].Shortcut,
+          ABuffer.SetStringN(ShortcutX, Y, FItems[I].Shortcut,
             Integer(StringDisplayWidth(FItems[I].Shortcut)), Sty);
       end;
 
       if FItems[I].Kind = mikSubmenu then
-        ABuf.SetStringN(AArea.X + W - 2, Y, '>', 1, Sty);
+        ABuffer.SetStringN(AArea.X + W - 2, Y, '>', 1, Sty);
     end;
     Inc(Y);
   end;
