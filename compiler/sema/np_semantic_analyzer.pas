@@ -6713,6 +6713,13 @@ begin
     end;
   end;
   if (ANode.NodeKind = gnkBinaryExpression) and
+    SameText(ANode.Text, 'as') and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(0), ABlob) then
+      Exit(True);
+  end;
+  if (ANode.NodeKind = gnkBinaryExpression) and
     (ANode.ChildCount >= 2) then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) and
