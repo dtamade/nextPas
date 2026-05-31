@@ -8,7 +8,8 @@ unit nextpas.core.mem.pool.slab;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.platform.time,
+  nextpas.core.errors,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
@@ -1074,7 +1075,7 @@ begin
   if LPerfEnabled then
   begin
     Inc(FPerf.AllocCalls);
-    LStart := GetTickCount64;
+    LStart := (platform_monotonic_ns div 1000000);
   end;
   try
     if IsOversize(aSize) then Exit(nil);
@@ -1119,7 +1120,7 @@ begin
     if Result<>nil then Inc(FTotalAllocs);
   finally
     if LPerfEnabled then
-      Inc(FPerf.AllocTime, GetTickCount64 - LStart);
+      Inc(FPerf.AllocTime, (platform_monotonic_ns div 1000000) - LStart);
   end;
 end;
 
@@ -1181,7 +1182,7 @@ begin
   if LPerfEnabled then
   begin
     Inc(FPerf.FreeCalls);
-    LStart := GetTickCount64;
+    LStart := (platform_monotonic_ns div 1000000);
   end;
   try
     LIndex:=FindOwnerSegment(aDst);
@@ -1201,7 +1202,7 @@ begin
       raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
   finally
     if LPerfEnabled then
-      Inc(FPerf.FreeTime, GetTickCount64 - LStart);
+      Inc(FPerf.FreeTime, (platform_monotonic_ns div 1000000) - LStart);
   end;
 end;
 
@@ -1288,11 +1289,11 @@ begin
     if LPerfEnabled then
     begin
       Inc(FPerf.AllocCalls);
-      LStart := GetTickCount64;
+      LStart := (platform_monotonic_ns div 1000000);
       try
         Result := AllocFallback(aSize, aAlignment);
       finally
-        Inc(FPerf.AllocTime, GetTickCount64 - LStart);
+        Inc(FPerf.AllocTime, (platform_monotonic_ns div 1000000) - LStart);
       end;
     end
     else
@@ -1309,11 +1310,11 @@ begin
     if LPerfEnabled then
     begin
       Inc(FPerf.AllocCalls);
-      LStart := GetTickCount64;
+      LStart := (platform_monotonic_ns div 1000000);
       try
         Result := AllocFallback(aSize, aAlignment);
       finally
-        Inc(FPerf.AllocTime, GetTickCount64 - LStart);
+        Inc(FPerf.AllocTime, (platform_monotonic_ns div 1000000) - LStart);
       end;
     end
     else

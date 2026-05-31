@@ -5,7 +5,10 @@ unit nextpas.core.mem.allocator.mimalloc;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.os.env,
+  nextpas.core.errors,
+  nextpas.core.path,
+  nextpas.core.text.conv,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,dynlibs
