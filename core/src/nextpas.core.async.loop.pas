@@ -282,9 +282,11 @@ var
   LFired: UInt32;
   LIo: Int32;
 begin
+  { Timers first (consistent with Run) }
+  LFired := FTimers.FireExpired;
+  { Then I/O }
   FPoller.Flush;
   LIo := FPoller.Poll;
-  LFired := FTimers.FireExpired;
   { Drain wake fd and pending queue }
   DrainWakeFd;
   DrainPending;
@@ -351,10 +353,11 @@ begin
   { Drain pending first }
   DrainWakeFd;
   DrainPending;
-  { Try non-blocking first }
+  { Timers first (consistent with Run) }
+  LFired := FTimers.FireExpired;
+  { Then I/O }
   FPoller.Flush;
   LIo := FPoller.Poll;
-  LFired := FTimers.FireExpired;
   if (LFired > 0) or (LIo > 0) then
     Exit;
   { Block until next timer or wake }
