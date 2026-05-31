@@ -43,7 +43,7 @@ begin
   if LLen <> Length(B) then
     Exit(Length(A) < Length(B));
   LBorrow := 0;
-  for I := 0 to LLen - 1 do
+  for I := LLen - 1 downto 0 do
   begin
     LDiff := Integer(A[I]) - Integer(B[I]) - LBorrow;
     LBorrow := (LDiff shr 31) and 1;
