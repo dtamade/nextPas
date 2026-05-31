@@ -267,6 +267,8 @@ begin
   FGroupCount := ACapacity div GROUP_SIZE;
   LCtrlSize := ACapacity + GROUP_SIZE;
   LSlotSize := ACapacity * SizeOf(TSlot);
+  FCtrl := nil;
+  FSlots := nil;
 
   if FAllocator <> nil then
   begin
@@ -276,7 +278,13 @@ begin
   else
   begin
     GetMem(FCtrl, LCtrlSize);
-    GetMem(FSlots, LSlotSize);
+    try
+      GetMem(FSlots, LSlotSize);
+    except
+      FreeMem(FCtrl);
+      FCtrl := nil;
+      raise;
+    end;
   end;
 
   FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);

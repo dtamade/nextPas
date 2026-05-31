@@ -77,6 +77,8 @@ procedure TSwissTableI32.AllocTable(ACapacity: SizeUInt);
 begin
   FCapacity := ACapacity;
   FGroupCount := ACapacity div GROUP_SIZE;
+  FCtrl := nil;
+  FSlots := nil;
   if FAllocator <> nil then
   begin
     FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE);
@@ -85,7 +87,13 @@ begin
   else
   begin
     GetMem(FCtrl, ACapacity + GROUP_SIZE);
-    GetMem(FSlots, ACapacity * SizeOf(TSlot));
+    try
+      GetMem(FSlots, ACapacity * SizeOf(TSlot));
+    except
+      FreeMem(FCtrl);
+      FCtrl := nil;
+      raise;
+    end;
   end;
   FillChar(FCtrl^, ACapacity + GROUP_SIZE, CTRL_EMPTY);
   FillChar(FSlots^, ACapacity * SizeOf(TSlot), 0);

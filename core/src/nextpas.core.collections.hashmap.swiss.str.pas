@@ -79,8 +79,24 @@ procedure TSwissTableStr.AllocTable(ACapacity: SizeUInt);
 begin
   FCapacity := ACapacity;
   FGroupCount := ACapacity div GROUP_SIZE;
-  if FAllocator <> nil then FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE) else GetMem(FCtrl, ACapacity + GROUP_SIZE);
-  if FAllocator <> nil then FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot)) else GetMem(FSlots, ACapacity * SizeOf(TSlot));
+  FCtrl := nil;
+  FSlots := nil;
+  if FAllocator <> nil then
+  begin
+    FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE);
+    FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot));
+  end
+  else
+  begin
+    GetMem(FCtrl, ACapacity + GROUP_SIZE);
+    try
+      GetMem(FSlots, ACapacity * SizeOf(TSlot));
+    except
+      FreeMem(FCtrl);
+      FCtrl := nil;
+      raise;
+    end;
+  end;
   FillChar(FCtrl^, ACapacity + GROUP_SIZE, CTRL_EMPTY);
   FillChar(FSlots^, ACapacity * SizeOf(TSlot), 0);
   FGrowthLeft := ACapacity - ACapacity div 8;
