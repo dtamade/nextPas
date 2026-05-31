@@ -40,6 +40,10 @@ type
 
     class function Raw(const AStr: AnsiString): TSpan; static;
     class function Styled(const AStr: AnsiString; const AStyle: TStyle): TSpan; static;
+    { 快捷：带前景色的文本片段 }
+    class function Colored(const AStr: AnsiString; const AColor: TColor): TSpan; static;
+    { 快捷：加粗文本 }
+    class function Bold(const AStr: AnsiString): TSpan; static;
 
     function Width: Integer;       { 码点级显示宽度 }
     function WithStyle(const AStyle: TStyle): TSpan;
@@ -110,6 +114,20 @@ function TSpan.WithStyle(const AStyle: TStyle): TSpan;
 begin
   Result := Self;
   Result.Style := AStyle;
+end;
+
+class function TSpan.Colored(const AStr: AnsiString; const AColor: TColor): TSpan;
+begin
+  Result.Content := AStr;
+  Result.Style := TStyle.Default;
+  Result.Style.Fg := AColor;
+end;
+
+class function TSpan.Bold(const AStr: AnsiString): TSpan;
+begin
+  Result.Content := AStr;
+  Result.Style := TStyle.Default;
+  Result.Style.AddMod := [mbBold];
 end;
 
 { TLine }

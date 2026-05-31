@@ -45,6 +45,7 @@ type
 
     class function Default: TGauge; static;
     function WithRatio(R: Double): TGauge;
+    function WithPercent(APercent: Integer): TGauge;
     function WithLabel(const S: AnsiString): TGauge;
     function WithFilledStyle(const S: TStyle): TGauge;
     function WithEmptyStyle(const S: TStyle): TGauge;
@@ -104,6 +105,11 @@ begin
   if R < 0.0 then R := 0.0;
   if R > 1.0 then R := 1.0;
   Result.Ratio := R;
+end;
+
+function TGauge.WithPercent(APercent: Integer): TGauge;
+begin
+  Result := WithRatio(APercent / 100.0);
 end;
 
 function TGauge.WithLabel(const S: AnsiString): TGauge;

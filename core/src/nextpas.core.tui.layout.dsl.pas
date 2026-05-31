@@ -25,6 +25,7 @@ function Flex(AWeight: Word = 1): TConstraint; inline;
 function Pct(AN: Word): TConstraint; inline;
 function AtLeast(AN: Word): TConstraint; inline;
 function AtMost(AN: Word): TConstraint; inline;
+function Even(ACount: Word): TConstraints;
 
 function V(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
 function H(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
@@ -66,4 +67,11 @@ begin
   Result := HorizontalSplit(AArea, ACs);
 end;
 
+function Even(ACount: Word): TConstraints;
+var LI: Integer;
+begin
+  SetLength(Result, ACount);
+  for LI := 0 to ACount - 1 do
+    Result[LI] := FillConstraint(1);
+end;
 end.
