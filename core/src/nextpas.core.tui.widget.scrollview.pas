@@ -1,0 +1,209 @@
+unit nextpas.core.tui.widget.scrollview;
+
+{$I nextpas.core.settings.inc}
+
+{$packenum 1}
+{$packset 2}
+
+interface
+
+uses
+  nextpas.core.tui.base,
+  nextpas.core.tui.color,
+  nextpas.core.tui.modifier,
+  nextpas.core.tui.style,
+  nextpas.core.tui.cell,
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.block;
+
+type
+  TScrollViewState = record
+    OffsetY: Integer;
+    ContentHeight: Integer;
+
+    class function Empty: TScrollViewState; static;
+    procedure ScrollUp(N: Integer = 1);
+    procedure ScrollDown(N: Integer = 1);
+    procedure PageUp(ViewHeight: Integer);
+    procedure PageDown(ViewHeight: Integer);
+    procedure ScrollToTop;
+    procedure ScrollToBottom(ViewHeight: Integer);
+    procedure EnsureVisible(Row, ViewHeight: Integer);
+  end;
+
+  TScrollView = record
+    Style: TStyle;
+    ScrollbarStyle: TStyle;
+    ShowScrollbar: Boolean;
+    HasBlock: Boolean;
+    Block: IBlock;
+
+    class function Default: TScrollView; static;
+    function WithStyle(const S: TStyle): TScrollView;
+    function WithScrollbarStyle(const S: TStyle): TScrollView;
+    function WithShowScrollbar(V: Boolean): TScrollView;
+    function WithBlock(const B: TBlock): TScrollView;
+    function ContentArea(const Area: TRect): TRect;
+    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TScrollViewState);
+  end;
+
+implementation
+
+uses
+  SysUtils;
+
+{ TScrollViewState }
+
+class function TScrollViewState.Empty: TScrollViewState;
+begin
+  Result.OffsetY := 0;
+  Result.ContentHeight := 0;
+end;
+
+procedure TScrollViewState.ScrollUp(N: Integer);
+begin
+  Dec(OffsetY, N);
+  if OffsetY < 0 then OffsetY := 0;
+end;
+
+procedure TScrollViewState.ScrollDown(N: Integer);
+begin
+  Inc(OffsetY, N);
+end;
+
+procedure TScrollViewState.PageUp(ViewHeight: Integer);
+begin
+  ScrollUp(ViewHeight);
+end;
+
+procedure TScrollViewState.PageDown(ViewHeight: Integer);
+begin
+  ScrollDown(ViewHeight);
+end;
+
+procedure TScrollViewState.ScrollToTop;
+begin
+  OffsetY := 0;
+end;
+
+procedure TScrollViewState.ScrollToBottom(ViewHeight: Integer);
+begin
+  if ContentHeight > ViewHeight then
+    OffsetY := ContentHeight - ViewHeight
+  else
+    OffsetY := 0;
+end;
+
+procedure TScrollViewState.EnsureVisible(Row, ViewHeight: Integer);
+begin
+  if Row < OffsetY then
+    OffsetY := Row;
+  if Row >= OffsetY + ViewHeight then
+    OffsetY := Row - ViewHeight + 1;
+  if OffsetY < 0 then OffsetY := 0;
+end;
+
+{ TScrollView }
+
+class function TScrollView.Default: TScrollView;
+begin
+  Result.Style := TStyle.Default;
+  Result.ScrollbarStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  Result.ShowScrollbar := True;
+  Result.HasBlock := False;
+  Result.Block := nil;
+end;
+
+function TScrollView.WithStyle(const S: TStyle): TScrollView;
+begin
+  Result := Self;
+  Result.Style := S;
+end;
+
+function TScrollView.WithScrollbarStyle(const S: TStyle): TScrollView;
+begin
+  Result := Self;
+  Result.ScrollbarStyle := S;
+end;
+
+function TScrollView.WithShowScrollbar(V: Boolean): TScrollView;
+begin
+  Result := Self;
+  Result.ShowScrollbar := V;
+end;
+
+function TScrollView.WithBlock(const B: TBlock): TScrollView;
+begin
+  Result := Self;
+  Result.HasBlock := True;
+  Result.Block := B;
+end;
+
+function TScrollView.ContentArea(const Area: TRect): TRect;
+var Inner: TRect;
+begin
+  if HasBlock then
+    Inner := Block.Inner(Area)
+  else
+    Inner := Area;
+  if ShowScrollbar and (Inner.Width > 1) then
+    Result := TRect.Make(Inner.X, Inner.Y, Inner.Width - 1, Inner.Height)
+  else
+    Result := Inner;
+end;
+
+procedure TScrollView.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TScrollViewState);
+var
+  Inner: TRect;
+  ScrollCol, ViewH, ThumbPos, ThumbLen, MaxOffset, I: Integer;
+begin
+  if Area.IsEmpty then Exit;
+
+  ABuf.SetStyle(Area, Style);
+
+  if HasBlock then
+  begin
+    Block.Render(Area, ABuf);
+    Inner := Block.Inner(Area);
+  end
+  else
+    Inner := Area;
+
+  if Inner.IsEmpty then Exit;
+
+  ViewH := Inner.Height;
+
+  // Clamp offset
+  if State.ContentHeight <= ViewH then
+    State.OffsetY := 0
+  else
+  begin
+    MaxOffset := State.ContentHeight - ViewH;
+    if State.OffsetY > MaxOffset then State.OffsetY := MaxOffset;
+    if State.OffsetY < 0 then State.OffsetY := 0;
+  end;
+
+  // Render scrollbar
+  if ShowScrollbar and (Inner.Width > 0) and (State.ContentHeight > ViewH) then
+  begin
+    ScrollCol := Inner.X + Inner.Width - 1;
+
+    // Thumb size and position
+    ThumbLen := (ViewH * ViewH) div State.ContentHeight;
+    if ThumbLen < 1 then ThumbLen := 1;
+    if State.ContentHeight > ViewH then
+      ThumbPos := (State.OffsetY * (ViewH - ThumbLen)) div (State.ContentHeight - ViewH)
+    else
+      ThumbPos := 0;
+
+    for I := 0 to ViewH - 1 do
+    begin
+      if (I >= ThumbPos) and (I < ThumbPos + ThumbLen) then
+        ABuf.SetStringN(ScrollCol, Inner.Y + I, #$E2#$96#$88, 1, ScrollbarStyle)
+      else
+        ABuf.SetStringN(ScrollCol, Inner.Y + I, #$E2#$96#$91, 1, ScrollbarStyle);
+    end;
+  end;
+end;
+
+end.
