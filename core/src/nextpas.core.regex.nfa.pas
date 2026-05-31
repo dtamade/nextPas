@@ -470,8 +470,8 @@ begin
       for i := 0 to NList.Count - 1 do
         EpsilonClose(NList.Items[i].PC, NList.Items[i].SlotIdx);
 
-    // Inject start state (unanchored search, before first match)
-    if (not AAnchored) and (not matched) then
+    // Inject start state: always on first iteration, unanchored on subsequent
+    if ((not AAnchored) or (pos = startPos)) and (not matched) then
     begin
       initSlotIdx := SlotPoolAlloc(Pool);
       if AProgram.NumSlots > 0 then

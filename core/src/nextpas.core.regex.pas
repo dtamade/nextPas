@@ -157,7 +157,7 @@ function TRegex.IsFullMatch(const AInput: string): Boolean;
 var LMatch: TMatch;
 begin
   if not FValid then Exit(False);
-  if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, 0, LMatch) then
+  if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), True, 0, LMatch) then
     Exit(False);
   Result := (LMatch.Start = 0) and (LMatch.Len = SizeInt(Length(AInput)));
 end;
