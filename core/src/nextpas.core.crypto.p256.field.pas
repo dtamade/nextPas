@@ -28,6 +28,9 @@ procedure P256FeCondCopy(const ASrc: TP256Fe; var ADst: TP256Fe; ACond: QWord);
 
 implementation
 
+uses
+  nextpas.core.mem.secure;
+
 const
   P256_P: TP256Fe = (
     QWord($FFFFFFFFFFFFFFFF),
@@ -268,6 +271,9 @@ begin
   S[2] := QWord(C[10]) or (QWord(C[11]) shl 32);
   S[3] := QWord(0) or (QWord(C[13]) shl 32);
   P256FeSub(R, S, R);
+
+  SecureZeroMemory(@LT, SizeOf(LT));
+  SecureZeroMemory(@C, SizeOf(C));
 end;
 
 procedure P256FeSqr(const A: TP256Fe; out R: TP256Fe);

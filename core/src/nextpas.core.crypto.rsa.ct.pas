@@ -20,6 +20,9 @@ function TryRSACTSignWithCRT(
 
 implementation
 
+uses
+  nextpas.core.mem.secure;
+
 type
   TCTNat = array of UInt32;
 
@@ -513,11 +516,10 @@ begin
   CTNatToBytes(LSig, LNLimbs, ASignature, Length(AModulus));
   Result := True;
 
-  // Zeroize private key intermediates
-  if Length(LM1) > 0 then FillChar(LM1[0], Length(LM1) * 4, 0);
-  if Length(LM2) > 0 then FillChar(LM2[0], Length(LM2) * 4, 0);
-  if Length(LH) > 0 then FillChar(LH[0], Length(LH) * 4, 0);
-  if Length(LTemp) > 0 then FillChar(LTemp[0], Length(LTemp) * 4, 0);
+  if Length(LM1) > 0 then SecureZeroMemory(@LM1[0], Length(LM1) * SizeOf(UInt32));
+  if Length(LM2) > 0 then SecureZeroMemory(@LM2[0], Length(LM2) * SizeOf(UInt32));
+  if Length(LH) > 0 then SecureZeroMemory(@LH[0], Length(LH) * SizeOf(UInt32));
+  if Length(LTemp) > 0 then SecureZeroMemory(@LTemp[0], Length(LTemp) * SizeOf(UInt32));
 end;
 
 end.
