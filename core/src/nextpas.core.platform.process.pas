@@ -180,8 +180,8 @@ begin
       dup2(Int32(AChildStderr), 2);
       if AChildStderr <> 2 then close(Int32(AChildStderr));
     end;
-    { Close all inherited fds > 2 that are not stdin/stdout/stderr }
-    for LPid := 3 to 255 do
+    { Close all inherited fds > 2 }
+    for LPid := 3 to 1023 do
       close(LPid);
     if AEnvp <> nil then
       execve(APath, AArgv, AEnvp)

@@ -189,7 +189,6 @@ begin
     if pipe(@LStdinPipe[0]) <> 0 then
       raise EProcessError.Create('Failed to create stdin pipe');
     LChildStdin := LStdinPipe[0];
-    LStdinW := TPipeWriter.Create(LStdinPipe[1]) as IWriter;
   end
   else if FStdinMode = stNull then
   begin
@@ -203,7 +202,6 @@ begin
     if pipe(@LStdoutPipe[0]) <> 0 then
       raise EProcessError.Create('Failed to create stdout pipe');
     LChildStdout := LStdoutPipe[1];
-    LStdoutR := TPipeReader.Create(LStdoutPipe[0]) as IReader;
   end
   else if FStdoutMode = stNull then
   begin
@@ -217,7 +215,6 @@ begin
     if pipe(@LStderrPipe[0]) <> 0 then
       raise EProcessError.Create('Failed to create stderr pipe');
     LChildStderr := LStderrPipe[1];
-    LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
   end
   else if FStderrMode = stNull then
   begin
@@ -242,6 +239,13 @@ begin
     nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
   if (FStderrMode = stPiped) then
     nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+
+  if FStdinMode = stPiped then
+    LStdinW := TPipeWriter.Create(LStdinPipe[1]) as IWriter;
+  if FStdoutMode = stPiped then
+    LStdoutR := TPipeReader.Create(LStdoutPipe[0]) as IReader;
+  if FStderrMode = stPiped then
+    LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR);
 end;

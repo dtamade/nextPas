@@ -89,6 +89,7 @@ function pthread_cond_signal(cond: Pointer): Int32; cdecl; external 'pthread' na
 function pthread_cond_broadcast(cond: Pointer): Int32; cdecl; external 'pthread' name 'pthread_cond_broadcast';
 
 function pipe(pipefd: PInt32): cint; cdecl; external 'c' name 'pipe';
+function pipe2(pipefd: PInt32; flags: cint): cint; cdecl; external 'c' name 'pipe2';
 function dup(oldfd: cint): cint; cdecl; external 'c' name 'dup';
 function dup2(oldfd: cint; newfd: cint): cint; cdecl; external 'c' name 'dup2';
 function readlink(path: PAnsiChar; buf: PAnsiChar; bufsiz: size_t): ssize_t; cdecl; external 'c' name 'readlink';

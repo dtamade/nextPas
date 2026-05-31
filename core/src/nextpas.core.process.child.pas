@@ -159,8 +159,6 @@ end;
 function TChild.TakeStdin: IWriter;
 begin
   Result := FStdinWriter;
-  if FStdinWriter <> nil then
-    (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
 end;
 
