@@ -7813,6 +7813,52 @@ begin
         FCurrentBlockTerminated := True;
         Continue;
       end;
+      if FNoFold and (Pos('specialize ', Child.Text) = 1) then
+      begin
+        ArgName := Copy(Child.Text, 12, Length(Child.Text) - 11);
+        DotPos := Pos('<', ArgName);
+        if DotPos > 0 then
+        begin
+          FuncName := Copy(ArgName, 1, DotPos - 1);
+          Operand := Copy(ArgName, DotPos + 1, Pos('>', ArgName) - DotPos - 1);
+          ArgName := FuncName + '$' + Operand;
+          if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
+          begin
+            for K := 0 to Length(FProcedureBodies) - 1 do
+              if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
+              begin
+                RegisterProcedureBody(ArgName,
+                  FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
+                  FProcedureBodies[K].OwnerUnitId);
+                if FGenericWorkCount >= Length(FGenericWorkQueue) then
+                  SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
+                FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
+                Inc(FGenericWorkCount);
+                Break;
+              end;
+          end;
+          Decoded := ArgName;
+          Operand := ArgName;
+          Arg := nil;
+          if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) and
+            (Child.ChildAt(0).NodeKind = gnkFunctionCall) then
+            Arg := Child.ChildAt(0);
+          if Arg <> nil then
+          begin
+            Operand := ArgName + #9;
+            for ArgIndex := 1 to Arg.ChildCount - 1 do
+            begin
+              RhsNode := Arg.ChildAt(ArgIndex);
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+                Operand := Operand + #9 + StringValue;
+            end;
+            FModel.AddTypedHirNode('call-runtime', ArgName, 0, 0, Operand);
+          end
+          else
+            FModel.AddTypedHirNode('call-runtime', ArgName, 0, 0, ArgName);
+        end;
+        Continue;
+      end;
       if SameText(Child.Text, 'WriteLn') or SameText(Child.Text, 'Write') then
       begin
         Arg := nil;
