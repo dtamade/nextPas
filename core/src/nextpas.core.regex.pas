@@ -173,10 +173,36 @@ begin
 end;
 
 function TRegex.FindAt(const AInput: string; AStartPos: SizeUInt): TMatch;
+var LPos: SizeInt;
 begin
   if not FValid then
   begin
     Result.Start := -1; Result.Len := 0; Result.Groups := nil;
+    Exit;
+  end;
+  if FProgram.IsPureLiteral then
+  begin
+    if AStartPos > SizeUInt(Length(AInput)) then
+    begin
+      Result.Start := -1; Result.Len := 0; Result.Groups := nil;
+      Exit;
+    end;
+    if FProgram.LiteralPrefixLen = 0 then
+    begin
+      Result.Start := SizeInt(AStartPos); Result.Len := 0; Result.Groups := nil;
+      Exit;
+    end;
+    LPos := ScanFindSubstring(PAnsiChar(AInput) + AStartPos,
+              SizeUInt(Length(AInput)) - AStartPos,
+              PAnsiChar(FProgram.LiteralPrefix), FProgram.LiteralPrefixLen);
+    if LPos >= 0 then
+    begin
+      Result.Start := SizeInt(AStartPos) + LPos;
+      Result.Len := SizeInt(FProgram.LiteralPrefixLen);
+      Result.Groups := nil;
+    end else begin
+      Result.Start := -1; Result.Len := 0; Result.Groups := nil;
+    end;
     Exit;
   end;
   if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, AStartPos, Result) then
