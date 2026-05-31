@@ -124,6 +124,7 @@ type
     procedure SetHandshakeError(ACode: TSSLErrorCode; const AMessage: string);
     procedure InitializeState(AContext: ISSLContext);
     procedure SendPlaintextAlert(ALevel, ADescription: Byte);
+    procedure SendEncryptedAlert(ALevel, ADescription: Byte);
     function ErrorCodeToAlertDescription(ACode: TSSLErrorCode): Byte;
     procedure AppendHandshakeBytes(var ADest: TBytes; const ASource: TBytes);
     function TryPopHandshakeMessage(var ABuffer: TBytes; out AMessage: TBytes): Boolean;
@@ -1179,7 +1180,10 @@ begin
   FLastErrorCode := ACode;
   FLastErrorString := AMessage;
   RecordError(FLastErrorCode, FLastErrorString);
-  SendPlaintextAlert(2, ErrorCodeToAlertDescription(ACode));
+  if FApplicationSecrets.Valid then
+    SendEncryptedAlert(2, ErrorCodeToAlertDescription(ACode))
+  else
+    SendPlaintextAlert(2, ErrorCodeToAlertDescription(ACode));
 end;
 
 function TFreePascalConnection.ErrorCodeToAlertDescription(ACode: TSSLErrorCode): Byte;
@@ -1207,6 +1211,57 @@ begin
   LRecord[5] := ALevel;
   LRecord[6] := ADescription;
   SendAll(LRecord);
+end;
+
+procedure TFreePascalConnection.SendEncryptedAlert(ALevel, ADescription: Byte);
+var
+  LAlertData, LInnerPlaintext, LAAD, LNonce, LEncrypted, LRecord: TBytes;
+  LError: string;
+  LKey, LIV: TBytes;
+  LSeq: PQWord;
+begin
+  if not FApplicationSecrets.Valid then
+  begin
+    SendPlaintextAlert(ALevel, ADescription);
+    Exit;
+  end;
+
+  SetLength(LAlertData, 2);
+  LAlertData[0] := ALevel;
+  LAlertData[1] := ADescription;
+
+  LInnerPlaintext := BuildTLS13InnerPlaintext(LAlertData, 21);
+
+  if FIsServerMode then
+  begin
+    LKey := FApplicationSecrets.ServerApplicationKey;
+    LIV := FApplicationSecrets.ServerApplicationIV;
+    LSeq := @FServerApplicationSeq;
+  end
+  else
+  begin
+    LKey := FApplicationSecrets.ClientApplicationKey;
+    LIV := FApplicationSecrets.ClientApplicationIV;
+    LSeq := @FClientApplicationSeq;
+  end;
+
+  try
+    LNonce := BuildTLS13RecordNonce(LIV, LSeq^);
+  except
+    SendPlaintextAlert(ALevel, ADescription);
+    Exit;
+  end;
+
+  LAAD := BuildTLS13RecordAAD(Word(Length(LInnerPlaintext) + TLS13AEADTagLength(FApplicationSecrets.CipherSuite)));
+  if not TryTLS13AEADEncrypt(FApplicationSecrets.CipherSuite, LKey, LNonce, LAAD, LInnerPlaintext, LEncrypted, LError) then
+  begin
+    SendPlaintextAlert(ALevel, ADescription);
+    Exit;
+  end;
+
+  LRecord := BuildTLSPlaintext(TLS_CONTENT_TYPE_APPLICATION_DATA, LEncrypted);
+  SendAll(LRecord);
+  IncrementTLS13Sequence(LSeq^);
 end;
 
 function TFreePascalConnection.SendTLS12ProtectedRecord(
@@ -3128,6 +3183,8 @@ begin
 end;
 
 function TFreePascalConnection.DoConnectTLS12Fallback(const AServerHelloRecord: TBytes; const AClientHelloHandshake: TBytes): Boolean;
+const
+  TLS13_DOWNGRADE_SENTINEL: array[0..7] of Byte = ($44, $4F, $57, $4E, $47, $52, $44, $01);
 var
   LState: TTLS12ClientState;
   LError: string;
@@ -3144,6 +3201,17 @@ begin
   begin
     SetHandshakeError(sslErrProtocol, 'ClientHello too short for TLS 1.2 fallback');
     Exit;
+  end;
+
+  // RFC 8446 §4.1.3: check downgrade sentinel in server_random[24..31]
+  // ServerHello record layout: 5 (record hdr) + 4 (handshake hdr) + 2 (version) + 32 (random)
+  if Length(AServerHelloRecord) >= 43 then
+  begin
+    if CompareMem(@AServerHelloRecord[35], @TLS13_DOWNGRADE_SENTINEL[0], 8) then
+    begin
+      SetHandshakeError(sslErrProtocol, 'TLS 1.3 downgrade attack detected (RFC 8446 §4.1.3)');
+      Exit;
+    end;
   end;
 
   // Extract ClientRandom from the TLS 1.3 ClientHello handshake (offset 6, 32 bytes)
