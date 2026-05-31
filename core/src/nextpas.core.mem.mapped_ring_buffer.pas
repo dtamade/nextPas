@@ -6,7 +6,7 @@ unit nextpas.core.mem.mapped_ring_buffer;
 interface
 
 uses
-  SysUtils, nextpas.core.mem.memory_map;
+  nextpas.core.base.utils, nextpas.core.mem.memory_map;
 
 type
   {**
@@ -198,6 +198,7 @@ type
 implementation
 
 uses
+  nextpas.core.fs.util,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,
   nextpas.core.atomic;
@@ -433,7 +434,7 @@ begin
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
-    if FileExists(aFileName) then
+    if FsExists(aFileName) then
     begin
       if not FMemoryMap.OpenFile(aFileName, LAccess) then Exit;
       FIsCreator := False;
@@ -483,7 +484,7 @@ begin
   Result := False;
   Close;
 
-  if not FileExists(aFileName) then Exit;
+  if not FsExists(aFileName) then Exit;
 
   case aMode of
     mrbProducer: LAccess := mmaWrite;

@@ -5,7 +5,7 @@ unit nextpas.core.encoding.varint;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.errors;
 
 function VarintEncode(const AValue: UInt64): TBytes;

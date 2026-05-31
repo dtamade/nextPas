@@ -6,7 +6,7 @@ unit nextpas.core.mem.mapped_slab_pool;
 interface
 
 uses
-  SysUtils, nextpas.core.mem.memory_map;
+  nextpas.core.base.utils, nextpas.core.mem.memory_map;
 
 type
   {**
@@ -255,6 +255,8 @@ type
 implementation
 
 uses
+  nextpas.core.fs.util,
+  nextpas.core.text.conv,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
 
@@ -414,7 +416,7 @@ begin
   FMemoryMap := TMemoryMap.Create;
   try
     // 尝试打开现有文件
-    if FileExists(aFileName) then
+    if FsExists(aFileName) then
     begin
       if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then Exit;
       FIsCreator := False;
@@ -455,7 +457,7 @@ begin
   Result := False;
   Close;
 
-  if not FileExists(aFileName) then Exit;
+  if not FsExists(aFileName) then Exit;
 
   FMemoryMap := TMemoryMap.Create;
   try
