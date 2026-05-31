@@ -101,6 +101,7 @@ begin
   LParser.Feed('lo' + #10 + #10);
   Check(LParser.TryReadEvent(LEvent), 'event available');
   CheckEqual('hello', LEvent.Data, 'data');
+  LParser.Free;
 end;
 
 procedure TestMultipleEvents;
@@ -126,6 +127,7 @@ begin
   LParser.Feed('id: bad' + #0 + 'id' + #10 + 'data: b' + #10 + #10);
   LParser.TryReadEvent(LEvent);
   CheckEqual('good', LParser.GetLastEventId, 'nul id ignored');
+  LParser.Free;
 end;
 
 procedure TestNonNumericRetryIgnored;
@@ -150,6 +152,7 @@ begin
   LParser.Feed('data: b' + #10 + #10);
   LParser.TryReadEvent(LEvent);
   CheckEqual('42', LEvent.Id, 'id carried forward');
+  LParser.Free;
 end;
 
 procedure TestFinishWithoutBlankLineNoDispatch;
@@ -162,6 +165,7 @@ begin
   LParser.Feed('data: incomplete');
   LParser.Finish;
   Check(not LParser.TryReadEvent(LEvent), 'no dispatch without blank line');
+  LParser.Free;
 end;
 
 procedure TestFinishWithBlankLineDispatches;
@@ -175,6 +179,7 @@ begin
   LParser.Finish;
   Check(LParser.TryReadEvent(LEvent), 'dispatch with blank line');
   CheckEqual('complete', LEvent.Data, 'data');
+  LParser.Free;
 end;
 
 procedure TestEmptyDataField;
@@ -200,6 +205,7 @@ begin
   LParser.Feed(LHuge);
   Check(LParser.HasError, 'error state set');
   Check(not LParser.TryReadEvent(LEvent), 'no events after overflow');
+  LParser.Free;
 end;
 
 begin

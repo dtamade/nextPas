@@ -26,13 +26,17 @@ begin
   SetLength(Result, 0);
   LCount := 0;
   LParser := TSseParser.Create;
-  LParser.Feed(AInput);
-  LParser.Finish;
-  while LParser.TryReadEvent(LEvent) do
-  begin
-    Inc(LCount);
-    SetLength(Result, LCount);
-    Result[LCount - 1] := LEvent;
+  try
+    LParser.Feed(AInput);
+    LParser.Finish;
+    while LParser.TryReadEvent(LEvent) do
+    begin
+      Inc(LCount);
+      SetLength(Result, LCount);
+      Result[LCount - 1] := LEvent;
+    end;
+  finally
+    LParser.Free;
   end;
 end;
 
