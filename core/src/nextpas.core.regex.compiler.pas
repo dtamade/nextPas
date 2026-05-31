@@ -9,7 +9,7 @@ uses
   nextpas.core.regex.charclass,
   nextpas.core.regex.parser;
 
-function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32): TRegexProgram;
+function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32; AFlags: TRegexFlags): TRegexProgram;
 
 implementation
 
@@ -24,6 +24,7 @@ type
     NumClasses: UInt32;
     GroupNames: TGroupNameArray;
     NumGroupNames: UInt32;
+    Flags: TRegexFlags;
   end;
 
 const
@@ -166,6 +167,8 @@ end;
 
 procedure CompileNode(var C: TCompiler; ANode: PAstNode);
 var inst: TInstruction; splitPC, jumpPC: UInt32;
+    ciBitmap: TCharBitmap;
+    chLo, chHi: Byte;
 begin
   if ANode = nil then Exit;
   FillChar(inst, SizeOf(inst), 0);
@@ -173,9 +176,27 @@ begin
   case ANode^.Kind of
     akLiteral:
     begin
-      inst.Op := opLiteral;
-      inst.Ch := ANode^.Ch;
-      Emit(C, inst);
+      if (rfCaseInsensitive in C.Flags) and
+         (((ANode^.Ch >= Ord('A')) and (ANode^.Ch <= Ord('Z'))) or
+          ((ANode^.Ch >= Ord('a')) and (ANode^.Ch <= Ord('z')))) then
+      begin
+        // Emit as char class with both cases
+        chLo := ANode^.Ch or $20;  // to lowercase
+        chHi := ANode^.Ch and (not Byte($20));  // to uppercase
+        CharBitmapClear(ciBitmap);
+        CharBitmapSet(ciBitmap, chLo);
+        CharBitmapSet(ciBitmap, chHi);
+        inst.Op := opCharClass;
+        inst.ClassIdx := AddClass(C, ciBitmap);
+        inst.Negated := False;
+        Emit(C, inst);
+      end
+      else
+      begin
+        inst.Op := opLiteral;
+        inst.Ch := ANode^.Ch;
+        Emit(C, inst);
+      end;
     end;
     akAnyChar:
     begin
@@ -185,7 +206,22 @@ begin
     akCharClass:
     begin
       inst.Op := opCharClass;
-      inst.ClassIdx := AddClass(C, ANode^.ClassBitmap);
+      if rfCaseInsensitive in C.Flags then
+      begin
+        ciBitmap := ANode^.ClassBitmap;
+        // Expand bitmap to include both cases for all letters
+        for chLo := Ord('a') to Ord('z') do
+        begin
+          chHi := chLo - 32; // uppercase
+          if CharBitmapTest(ciBitmap, chLo) then
+            CharBitmapSet(ciBitmap, chHi);
+          if CharBitmapTest(ciBitmap, chHi) then
+            CharBitmapSet(ciBitmap, chLo);
+        end;
+        inst.ClassIdx := AddClass(C, ciBitmap);
+      end
+      else
+        inst.ClassIdx := AddClass(C, ANode^.ClassBitmap);
       inst.Negated := ANode^.ClassNegated;
       Emit(C, inst);
     end;
@@ -240,7 +276,7 @@ begin
   end;
 end;
 
-function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32): TRegexProgram;
+function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32; AFlags: TRegexFlags): TRegexProgram;
 var C: TCompiler; inst: TInstruction; i: UInt32;
     visited: array of Boolean;
     startBitmap, classBitmap: TCharBitmap;
@@ -273,6 +309,7 @@ var C: TCompiler; inst: TInstruction; i: UInt32;
 
 begin
   FillChar(C, SizeOf(C), 0);
+  C.Flags := AFlags;
   // Wrap entire pattern in Save(0)...Save(1) for whole-match tracking
   FillChar(inst, SizeOf(inst), 0);
   inst.Op := opSave;
@@ -298,6 +335,7 @@ begin
   if C.NumGroupNames > 0 then
     for i := 0 to C.NumGroupNames - 1 do
       Result.GroupNames[i] := C.GroupNames[i];
+  Result.Flags := AFlags;
   Result.LiteralPrefix := '';
   Result.LiteralPrefixLen := 0;
 

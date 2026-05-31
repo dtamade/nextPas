@@ -60,6 +60,7 @@ type
     LiteralPrefixLen: SizeUInt;
     StartClass: TCharBitmap;
     StartClassSize: UInt32;
+    Flags: TRegexFlags;
   end;
 
   TGroup = record

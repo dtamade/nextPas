@@ -14,6 +14,7 @@ uses
   nextpas.core.text.base;
 
 type
+  TRegexFlags = nextpas.core.regex.base.TRegexFlags;
   TMatch = nextpas.core.regex.base.TMatch;
   TMatchArray = nextpas.core.regex.base.TMatchArray;
   TGroup = nextpas.core.regex.base.TGroup;
@@ -27,6 +28,7 @@ type
     FValid: Boolean;
   public
     class function Compile(const APattern: string): TRegex; static;
+    class function Compile(const APattern: string; AFlags: TRegexFlags): TRegex; static;
     class function TryCompile(const APattern: string; out ARegex: TRegex; out AError: string): Boolean; static;
 
     function IsMatch(const AInput: string): Boolean;
@@ -60,6 +62,7 @@ class function TRegex.Compile(const APattern: string): TRegex;
 var
   LAst: PAstNode;
   LNumCaptures: UInt32;
+  LFlags: TRegexFlags;
 begin
   Result.FProgram.Code := nil;
   Result.FProgram.Classes := nil;
@@ -69,8 +72,31 @@ begin
   Result.FValid := False;
   LAst := nil;
   try
-    LAst := RegexParse(APattern, LNumCaptures);
-    Result.FProgram := RegexCompile(LAst, LNumCaptures);
+    LAst := RegexParse(APattern, LNumCaptures, LFlags);
+    Result.FProgram := RegexCompile(LAst, LNumCaptures, LFlags);
+    Result.FValid := True;
+  finally
+    RegexFreeAst(LAst);
+  end;
+end;
+
+class function TRegex.Compile(const APattern: string; AFlags: TRegexFlags): TRegex;
+var
+  LAst: PAstNode;
+  LNumCaptures: UInt32;
+  LFlags: TRegexFlags;
+begin
+  Result.FProgram.Code := nil;
+  Result.FProgram.Classes := nil;
+  Result.FProgram.LiteralPrefix := '';
+  Result.FProgram.LiteralPrefixLen := 0;
+  Result.FProgram.NumSlots := 0;
+  Result.FValid := False;
+  LAst := nil;
+  try
+    LAst := RegexParse(APattern, LNumCaptures, LFlags);
+    LFlags := LFlags + AFlags;
+    Result.FProgram := RegexCompile(LAst, LNumCaptures, LFlags);
     Result.FValid := True;
   finally
     RegexFreeAst(LAst);
