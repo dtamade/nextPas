@@ -1437,6 +1437,618 @@ begin
   CheckEqual('a*b2c3', s, 'func first only');
 end;
 
+{ === NEW TEST PROCEDURES === }
+
+{ --- 1. TestMultipleCaptures --- }
+procedure TestMultipleCaptures;
+var R: TRegex; M: TMatch;
+begin
+  // Pattern with 5+ capture groups
+  R := TRegex.Compile('(a)(b)(c)(d)(e)(f)');
+  M := R.Find('abcdef');
+  Check(M.Found, '6 groups found');
+  CheckEqual('abcdef', M.Value('abcdef'), '6 groups full');
+  CheckEqual(Int64(6), Int64(Length(M.Groups)), '6 groups count');
+  CheckEqual('a', M.Groups[0].Value('abcdef'), '6g group 0');
+  CheckEqual('b', M.Groups[1].Value('abcdef'), '6g group 1');
+  CheckEqual('c', M.Groups[2].Value('abcdef'), '6g group 2');
+  CheckEqual('d', M.Groups[3].Value('abcdef'), '6g group 3');
+  CheckEqual('e', M.Groups[4].Value('abcdef'), '6g group 4');
+  CheckEqual('f', M.Groups[5].Value('abcdef'), '6g group 5');
+
+  // Captures inside alternation: (a)|(b) on 'b' — group 0 not found, group 1 found
+  R := TRegex.Compile('(a)|(b)');
+  M := R.Find('b');
+  Check(M.Found, 'alt cap found');
+  CheckEqual('b', M.Value('b'), 'alt cap value');
+  CheckEqual(Int64(2), Int64(Length(M.Groups)), 'alt cap count');
+  Check(not M.Groups[0].Found, 'alt cap group 0 not found');
+  Check(M.Groups[1].Found, 'alt cap group 1 found');
+  CheckEqual('b', M.Groups[1].Value('b'), 'alt cap group 1 value');
+
+  // Captures inside repetition: ((ab)+) on 'ababab'
+  // Outer captures full, inner captures last iteration
+  R := TRegex.Compile('((ab)+)');
+  M := R.Find('ababab');
+  Check(M.Found, 'rep cap found');
+  CheckEqual('ababab', M.Value('ababab'), 'rep cap full');
+  CheckEqual(Int64(2), Int64(Length(M.Groups)), 'rep cap count');
+  CheckEqual('ababab', M.Groups[0].Value('ababab'), 'rep cap outer');
+  CheckEqual('ab', M.Groups[1].Value('ababab'), 'rep cap inner last');
+
+  // Nested alternation with captures: ((a|b)(c|d)) on 'ad'
+  R := TRegex.Compile('((a|b)(c|d))');
+  M := R.Find('ad');
+  Check(M.Found, 'nested alt found');
+  CheckEqual('ad', M.Value('ad'), 'nested alt full');
+  CheckEqual(Int64(3), Int64(Length(M.Groups)), 'nested alt count');
+  CheckEqual('ad', M.Groups[0].Value('ad'), 'nested alt group 0');
+  CheckEqual('a', M.Groups[1].Value('ad'), 'nested alt group 1');
+  CheckEqual('d', M.Groups[2].Value('ad'), 'nested alt group 2');
+
+  // Optional captures in sequence: (a)?(b)?(c)? on 'ac'
+  R := TRegex.Compile('(a)?(b)?(c)?');
+  M := R.Find('ac');
+  Check(M.Found, 'opt seq found');
+  CheckEqual('ac', M.Value('ac'), 'opt seq full');
+  CheckEqual(Int64(3), Int64(Length(M.Groups)), 'opt seq count');
+  Check(M.Groups[0].Found, 'opt seq group 0 found');
+  CheckEqual('a', M.Groups[0].Value('ac'), 'opt seq group 0 val');
+  Check(not M.Groups[1].Found, 'opt seq group 1 not found');
+  Check(M.Groups[2].Found, 'opt seq group 2 found');
+  CheckEqual('c', M.Groups[2].Value('ac'), 'opt seq group 2 val');
+end;
+
+{ --- 2. TestOverlappingPatterns --- }
+procedure TestOverlappingPatterns;
+var R: TRegex; M: TMatch;
+begin
+  // a.*a on 'abcabc' — greedy, matches 'abca' (leftmost-longest)
+  R := TRegex.Compile('a.*a');
+  M := R.Find('abcabc');
+  Check(M.Found, 'a.*a found');
+  CheckEqual('abca', M.Value('abcabc'), 'a.*a greedy');
+
+  // a.*?a on 'abcabc' — POSIX still matches 'abca' (leftmost-longest)
+  R := TRegex.Compile('a.*?a');
+  M := R.Find('abcabc');
+  Check(M.Found, 'a.*?a found');
+  CheckEqual('abca', M.Value('abcabc'), 'a.*?a POSIX longest');
+
+  // (a+)(a+) on 'aaaa' — POSIX: first gets max → (aaa)(a)
+  R := TRegex.Compile('(a+)(a+)');
+  M := R.Find('aaaa');
+  Check(M.Found, '(a+)(a+) found');
+  CheckEqual('aaaa', M.Value('aaaa'), '(a+)(a+) full');
+  CheckEqual(Int64(2), Int64(Length(M.Groups)), '(a+)(a+) count');
+  CheckEqual('aaa', M.Groups[0].Value('aaaa'), '(a+)(a+) first max');
+  CheckEqual('a', M.Groups[1].Value('aaaa'), '(a+)(a+) second min');
+
+  // (.*)(.+) on 'hello' — first gets 'hell', second gets 'o'
+  R := TRegex.Compile('(.*)(.+)');
+  M := R.Find('hello');
+  Check(M.Found, '(.*)(.+) found');
+  CheckEqual('hello', M.Value('hello'), '(.*)(.+) full');
+  CheckEqual('hell', M.Groups[0].Value('hello'), '(.*)(.+) first');
+  CheckEqual('o', M.Groups[1].Value('hello'), '(.*)(.+) second');
+
+  // Nested quantifiers: (a+)+ on 'aaa'
+  R := TRegex.Compile('(a+)+');
+  M := R.Find('aaa');
+  Check(M.Found, '(a+)+ found');
+  CheckEqual('aaa', M.Value('aaa'), '(a+)+ full');
+  CheckEqual(Int64(1), Int64(Length(M.Groups)), '(a+)+ count');
+  CheckEqual('aaa', M.Groups[0].Value('aaa'), '(a+)+ inner');
+end;
+
+{ --- 3. TestSpecialInputs --- }
+procedure TestSpecialInputs;
+var R: TRegex; M: TMatch; MA: TMatchArray; input: string; i: Integer;
+begin
+  // Input with null bytes: 'a\x00b' — engine handles embedded nulls
+  R := TRegex.Compile('a.b');
+  Check(R.IsMatch('a'#0'b'), 'null byte dot');
+  R := TRegex.Compile('a\x00b');
+  // \x00 is not a supported escape, so test literal null via char class
+  R := TRegex.Compile('a');
+  M := R.Find('a'#0'b');
+  Check(M.Found, 'null byte find a');
+  CheckEqual('a', M.Value('a'#0'b'), 'null byte find a val');
+
+  // Input with high bytes (128-255): binary data
+  input := 'x' + Chr(200) + Chr(255) + 'y';
+  R := TRegex.Compile('x..y');
+  Check(R.IsMatch(input), 'high bytes dot');
+  R := TRegex.Compile('x\w');
+  Check(not R.IsMatch(input), 'high bytes not word');
+
+  // Very short inputs: single char
+  R := TRegex.Compile('a');
+  Check(R.IsMatch('a'), 'single char match');
+  Check(not R.IsMatch('b'), 'single char miss');
+  M := R.Find('a');
+  Check(M.Found, 'single char find');
+  CheckEqual(Int64(0), Int64(M.Start), 'single char start');
+  CheckEqual(Int64(1), Int64(M.Len), 'single char len');
+
+  // Two char input
+  R := TRegex.Compile('ab');
+  Check(R.IsMatch('ab'), 'two char match');
+  Check(not R.IsMatch('a'), 'two char too short');
+
+  // Input that is all the same character
+  input := 'aaaaaaa';
+  R := TRegex.Compile('a+');
+  M := R.Find(input);
+  Check(M.Found, 'all same found');
+  CheckEqual(input, M.Value(input), 'all same full');
+
+  R := TRegex.Compile('a{3}');
+  MA := R.FindAll(input);
+  CheckEqual(Int64(2), Int64(Length(MA)), 'all same {3} count');
+
+  // Input with only special regex chars
+  input := '.*+?()[]{}|^$';
+  R := TRegex.Compile('\W+');
+  Check(R.IsFullMatch(input), 'special chars fullmatch');
+  R := TRegex.Compile(RegexQuoteMeta(input));
+  Check(R.IsMatch(input), 'special chars quoted');
+end;
+
+{ --- 4. TestQuantifierBoundaries --- }
+procedure TestQuantifierBoundaries;
+var R: TRegex; M: TMatch;
+begin
+  // a{0} on '' and 'a' — matches empty
+  R := TRegex.Compile('a{0}');
+  Check(R.IsMatch(''), '{0} empty');
+  Check(R.IsMatch('a'), '{0} on a');
+  M := R.Find('a');
+  CheckEqual(Int64(0), Int64(M.Len), '{0} len=0');
+
+  // a{1} on '' — no match
+  R := TRegex.Compile('^a{1}$');
+  Check(not R.IsMatch(''), '{1} empty no match');
+  Check(R.IsMatch('a'), '{1} one a');
+
+  // a{5} on 'aaaa' — no match (too few)
+  R := TRegex.Compile('^a{5}$');
+  Check(not R.IsMatch('aaaa'), '{5} too few');
+  Check(R.IsMatch('aaaaa'), '{5} exact');
+
+  // a{2,2} — same as a{2}
+  R := TRegex.Compile('^a{2,2}$');
+  Check(not R.IsMatch('a'), '{2,2} one');
+  Check(R.IsMatch('aa'), '{2,2} two');
+  Check(not R.IsMatch('aaa'), '{2,2} three');
+
+  // a{0,0} — matches empty only
+  R := TRegex.Compile('a{0,0}');
+  M := R.Find('a');
+  Check(M.Found, '{0,0} found');
+  CheckEqual(Int64(0), Int64(M.Len), '{0,0} len=0');
+
+  // a{0,1} — same as a?
+  R := TRegex.Compile('^a{0,1}$');
+  Check(R.IsMatch(''), '{0,1} empty');
+  Check(R.IsMatch('a'), '{0,1} one');
+  Check(not R.IsMatch('aa'), '{0,1} two');
+
+  // a{1,} — same as a+
+  R := TRegex.Compile('^a{1,}$');
+  Check(not R.IsMatch(''), '{1,} empty');
+  Check(R.IsMatch('a'), '{1,} one');
+  Check(R.IsMatch('aaaa'), '{1,} many');
+
+  // a{0,} — same as a*
+  R := TRegex.Compile('^a{0,}$');
+  Check(R.IsMatch(''), '{0,} empty');
+  Check(R.IsMatch('a'), '{0,} one');
+  Check(R.IsMatch('aaaa'), '{0,} many');
+end;
+
+{ --- 5. TestComplexPatterns --- }
+procedure TestComplexPatterns;
+var R: TRegex; M: TMatch;
+begin
+  // Email-like
+  R := TRegex.Compile('[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-z]{2,4}');
+  Check(R.IsMatch('user@example.com'), 'email match');
+  Check(R.IsMatch('a.b@host.org'), 'email dot');
+  Check(not R.IsMatch('noatsign'), 'email miss');
+
+  // IP address
+  R := TRegex.Compile('\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}');
+  Check(R.IsMatch('192.168.1.1'), 'ip match');
+  Check(R.IsMatch('10.0.0.255'), 'ip match2');
+  Check(not R.IsMatch('192.168.1'), 'ip incomplete');
+
+  // Date: YYYY-MM-DD
+  R := TRegex.Compile('\d{4}-\d{2}-\d{2}');
+  M := R.Find('today is 2026-05-31 ok');
+  Check(M.Found, 'date found');
+  CheckEqual('2026-05-31', M.Value('today is 2026-05-31 ok'), 'date value');
+
+  // URL path
+  R := TRegex.Compile('/[a-z]+(/[a-z]+)*');
+  Check(R.IsMatch('/api/users/list'), 'url path');
+  Check(R.IsMatch('/root'), 'url path single');
+
+  // Hex color
+  R := TRegex.Compile('#[0-9a-fA-F]{6}');
+  Check(R.IsMatch('#FF00AA'), 'hex color upper');
+  Check(R.IsMatch('#ff00aa'), 'hex color lower');
+  Check(not R.IsMatch('#GG0000'), 'hex color invalid');
+
+  // Quoted string
+  R := TRegex.Compile('"[^"]*"');
+  M := R.Find('say "hello world" now');
+  Check(M.Found, 'quoted found');
+  CheckEqual('"hello world"', M.Value('say "hello world" now'), 'quoted value');
+
+  // C identifier
+  R := TRegex.Compile('[a-zA-Z_][a-zA-Z0-9_]*');
+  M := R.Find('  _myVar123  ');
+  Check(M.Found, 'ident found');
+  CheckEqual('_myVar123', M.Value('  _myVar123  '), 'ident value');
+end;
+
+{ --- 6. TestFindAllProgress --- }
+procedure TestFindAllProgress;
+var R: TRegex; MA: TMatchArray;
+begin
+  // Pattern that matches empty at every position: a* on 'bbb'
+  R := TRegex.Compile('a*');
+  MA := R.FindAll('bbb');
+  // Matches empty at pos 0, 1, 2, 3 (after last char)
+  CheckEqual(Int64(4), Int64(Length(MA)), 'a* on bbb count');
+  CheckEqual(Int64(0), Int64(MA[0].Len), 'a* on bbb [0] len');
+  CheckEqual(Int64(1), Int64(MA[1].Start), 'a* on bbb [1] start');
+
+  // FindAll with pattern that matches at position 0 with len=0
+  R := TRegex.Compile('');
+  MA := R.FindAll('abc');
+  // Empty pattern matches at every position: 0, 1, 2, 3
+  CheckEqual(Int64(4), Int64(Length(MA)), 'empty on abc count');
+  CheckEqual(Int64(0), Int64(MA[0].Start), 'empty [0] start');
+  CheckEqual(Int64(3), Int64(MA[3].Start), 'empty [3] start');
+
+  // FindAll on empty input with non-empty pattern
+  R := TRegex.Compile('a');
+  MA := R.FindAll('');
+  CheckEqual(Int64(0), Int64(Length(MA)), 'a on empty count');
+
+  // FindAll on empty input with empty-matching pattern
+  R := TRegex.Compile('a*');
+  MA := R.FindAll('');
+  CheckEqual(Int64(1), Int64(Length(MA)), 'a* on empty count');
+  CheckEqual(Int64(0), Int64(MA[0].Start), 'a* on empty start');
+  CheckEqual(Int64(0), Int64(MA[0].Len), 'a* on empty len');
+
+  // FindAll with no matches returns empty array
+  R := TRegex.Compile('xyz');
+  MA := R.FindAll('abc def ghi');
+  CheckEqual(Int64(0), Int64(Length(MA)), 'no matches empty');
+
+  // .* on 'hello' — matches 'hello' then empty at end
+  R := TRegex.Compile('.*');
+  MA := R.FindAll('hello');
+  CheckEqual(Int64(2), Int64(Length(MA)), '.* on hello count');
+  CheckEqual('hello', MA[0].Value('hello'), '.* on hello [0]');
+  CheckEqual(Int64(0), Int64(MA[1].Len), '.* on hello [1] empty');
+end;
+
+{ --- 7. TestReplaceAllExpandAdvanced --- }
+procedure TestReplaceAllExpandAdvanced;
+var R: TRegex; s: string;
+begin
+  // Multiple $0 in template: '$0-$0' duplicates match
+  R := TRegex.Compile('\d+');
+  s := R.ReplaceAllExpand('42', '$0-$0');
+  CheckEqual('42-42', s, 'double $0');
+
+  // $1 when group didn not participate (optional group)
+  R := TRegex.Compile('(a)?(b)');
+  s := R.ReplaceAllExpand('b', '[$1][$2]');
+  // group 1 not found -> empty, group 2 = 'b'
+  CheckEqual('[][b]', s, 'optional group expand');
+
+  // Template with no $ signs (literal replacement)
+  R := TRegex.Compile('\d+');
+  s := R.ReplaceAllExpand('a1b2', 'X');
+  CheckEqual('aXbX', s, 'literal template');
+
+  // Template that is empty string
+  R := TRegex.Compile('\d+');
+  s := R.ReplaceAllExpand('a1b2', '');
+  CheckEqual('ab', s, 'empty template');
+
+  // $10 — should be $1 followed by literal '0' (single digit parsing)
+  R := TRegex.Compile('(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)');
+  s := R.ReplaceAllExpand('abcdefghij', '$1');
+  CheckEqual('a', s, '$1 of 10 groups');
+  s := R.ReplaceAllExpand('abcdefghij', '$10');
+  // Engine parses $1 then literal '0'
+  CheckEqual('a0', s, '$10 is $1 + literal 0');
+
+  // $$ produces literal $
+  R := TRegex.Compile('x');
+  s := R.ReplaceAllExpand('x', '$$');
+  CheckEqual('$', s, '$$ literal dollar');
+
+  // ${name} with valid name
+  R := TRegex.Compile('(?P<num>\d+)');
+  s := R.ReplaceAllExpand('val=42', '${num}!');
+  CheckEqual('val=42!', s, 'named expand');
+end;
+
+{ --- 8. TestSplitAdvanced --- }
+procedure TestSplitAdvanced;
+var R: TRegex; parts: TStringArray;
+begin
+  // Split with regex that matches empty: split 'abc' on ''
+  R := TRegex.Compile('');
+  parts := R.Split('abc');
+  // Empty pattern matches at every position (0,1,2,3) -> splits into chars + edges
+  CheckEqual(Int64(5), Int64(Length(parts)), 'empty split count');
+  CheckEqual('', parts[0], 'empty split [0]');
+  CheckEqual('a', parts[1], 'empty split [1]');
+  CheckEqual('b', parts[2], 'empty split [2]');
+  CheckEqual('c', parts[3], 'empty split [3]');
+  CheckEqual('', parts[4], 'empty split [4]');
+
+  // Split where every char is a delimiter
+  R := TRegex.Compile('.');
+  parts := R.Split('abc');
+  // 3 matches -> 4 parts: '', '', '', ''
+  CheckEqual(Int64(4), Int64(Length(parts)), 'all delim count');
+  CheckEqual('', parts[0], 'all delim [0]');
+  CheckEqual('', parts[1], 'all delim [1]');
+  CheckEqual('', parts[2], 'all delim [2]');
+  CheckEqual('', parts[3], 'all delim [3]');
+
+  // Split on pattern that does not exist in input
+  R := TRegex.Compile('xyz');
+  parts := R.Split('hello world');
+  CheckEqual(Int64(1), Int64(Length(parts)), 'no match split count');
+  CheckEqual('hello world', parts[0], 'no match split value');
+
+  // Split with multi-char regex delimiter
+  R := TRegex.Compile('\s+');
+  parts := R.Split('a  b   c');
+  CheckEqual(Int64(3), Int64(Length(parts)), 'multi space count');
+  CheckEqual('a', parts[0], 'multi space [0]');
+  CheckEqual('b', parts[1], 'multi space [1]');
+  CheckEqual('c', parts[2], 'multi space [2]');
+
+  // Split with limit = 0 (no split)
+  R := TRegex.Compile(',');
+  parts := R.Split('a,b,c', 0);
+  CheckEqual(Int64(1), Int64(Length(parts)), 'limit 0 count');
+  CheckEqual('a,b,c', parts[0], 'limit 0 value');
+end;
+
+{ --- 9. TestCaseInsensitiveAdvanced --- }
+procedure TestCaseInsensitiveAdvanced;
+var R: TRegex; M: TMatch; MA: TMatchArray; s: string;
+begin
+  // (?i) with word boundary
+  R := TRegex.Compile('(?i)\bHello\b');
+  Check(R.IsMatch('HELLO world'), 'ci wb upper');
+  Check(R.IsMatch('say hello!'), 'ci wb lower');
+  Check(not R.IsMatch('HELLOWORLD'), 'ci wb no boundary');
+
+  // (?i) with repetition: (?i)(abc){2} matches 'ABCabc'
+  R := TRegex.Compile('(?i)(abc){2}');
+  Check(R.IsMatch('ABCabc'), 'ci rep mixed');
+  Check(R.IsMatch('abcABC'), 'ci rep mixed2');
+  Check(R.IsMatch('ABCABC'), 'ci rep upper');
+  Check(not R.IsMatch('abc'), 'ci rep too few');
+
+  // (?i) with alternation
+  R := TRegex.Compile('(?i)yes|no');
+  Check(R.IsMatch('YES'), 'ci alt YES');
+  Check(R.IsMatch('No'), 'ci alt No');
+  Check(R.IsMatch('yes'), 'ci alt yes');
+  Check(R.IsMatch('NO'), 'ci alt NO');
+
+  // (?i) with FindAll
+  R := TRegex.Compile('(?i)cat');
+  MA := R.FindAll('Cat CAT cat cAt CaT');
+  CheckEqual(Int64(5), Int64(Length(MA)), 'ci findall count');
+
+  // (?i) with ReplaceAll
+  R := TRegex.Compile('(?i)hello');
+  s := R.ReplaceAll('Hello HELLO hello', 'X');
+  CheckEqual('X X X', s, 'ci replace all');
+
+  // (?i) with char class that already has both cases: (?i)[a-zA-Z]
+  R := TRegex.Compile('(?i)[a-zA-Z]+');
+  Check(R.IsFullMatch('Hello'), 'ci both cases');
+  Check(R.IsFullMatch('WORLD'), 'ci both cases upper');
+
+  // Compile flag vs inline: both should work identically
+  R := TRegex.Compile('hello', [rfCaseInsensitive]);
+  Check(R.IsMatch('HELLO'), 'flag ci');
+  R := TRegex.Compile('(?i)hello');
+  Check(R.IsMatch('HELLO'), 'inline ci');
+end;
+
+{ --- 10. TestBacktrackingImmunity --- }
+procedure TestBacktrackingImmunity;
+var R: TRegex; input: string; i: Integer;
+begin
+  // (a|a)*b on 'aaa...ab' (many a's) — must be O(n)
+  SetLength(input, 26);
+  for i := 1 to 25 do input[i] := 'a';
+  input[26] := 'b';
+  R := TRegex.Compile('(a|a)*b');
+  Check(R.IsMatch(input), '(a|a)*b match');
+
+  // (a?){n}a{n} for n=15 — classic exponential blowup test
+  R := TRegex.Compile('a?a?a?a?a?a?a?a?a?a?a?a?a?a?a?aaaaaaaaaaaaaaa');
+  SetLength(input, 15);
+  for i := 1 to 15 do input[i] := 'a';
+  Check(R.IsMatch(input), '(a?){15}a{15} match');
+
+  // .*.*.*.*x on long input without x — must complete fast
+  SetLength(input, 200);
+  for i := 1 to 200 do input[i] := 'a';
+  R := TRegex.Compile('.*.*.*.*x');
+  Check(not R.IsMatch(input), '.*.*.*.*x no match');
+
+  // (a+)+b on 'aaa...a' (no b) — must not hang
+  SetLength(input, 30);
+  for i := 1 to 30 do input[i] := 'a';
+  R := TRegex.Compile('(a+)+b');
+  Check(not R.IsMatch(input), '(a+)+b no match');
+
+  // Alternation with many branches
+  R := TRegex.Compile('a|b|c|d|e|f|g|h|i|j|k|l|m|n|o|p|q|r|s|t|u|v|w|x|y|z');
+  SetLength(input, 500);
+  for i := 1 to 500 do input[i] := '0';
+  input[500] := 'z';
+  Check(R.IsMatch(input), 'many alts match');
+
+  // Nested quantifiers: ((a*)*) on long input
+  SetLength(input, 100);
+  for i := 1 to 100 do input[i] := 'a';
+  R := TRegex.Compile('((a*)*)');
+  Check(R.IsMatch(input), 'nested quant match');
+end;
+
+{ --- 11. TestGroupByNameAdvanced --- }
+procedure TestGroupByNameAdvanced;
+var R: TRegex; M: TMatch; G: TGroup;
+begin
+  // Multiple named groups with same pattern structure
+  R := TRegex.Compile('(?P<first>\w+)\s+(?P<second>\w+)\s+(?P<third>\w+)');
+  M := R.Find('hello world foo');
+  Check(M.Found, 'multi named found');
+  G := R.GroupByName(M, 'first');
+  Check(G.Found, 'first found');
+  CheckEqual('hello', G.Value('hello world foo'), 'first value');
+  G := R.GroupByName(M, 'second');
+  CheckEqual('world', G.Value('hello world foo'), 'second value');
+  G := R.GroupByName(M, 'third');
+  CheckEqual('foo', G.Value('hello world foo'), 'third value');
+
+  // GroupByName on a match that has no groups
+  R := TRegex.Compile('hello');
+  M := R.Find('hello');
+  Check(M.Found, 'no groups found');
+  G := R.GroupByName(M, 'anything');
+  Check(not G.Found, 'no groups name miss');
+
+  // GroupByName with empty string name
+  R := TRegex.Compile('(?P<x>a)');
+  M := R.Find('a');
+  G := R.GroupByName(M, '');
+  Check(not G.Found, 'empty name not found');
+
+  // GroupIndexByName returns correct indices for multiple names
+  R := TRegex.Compile('(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})');
+  CheckEqual(Int64(0), Int64(R.GroupIndexByName('year')), 'year index');
+  CheckEqual(Int64(1), Int64(R.GroupIndexByName('month')), 'month index');
+  CheckEqual(Int64(2), Int64(R.GroupIndexByName('day')), 'day index');
+  CheckEqual(Int64(-1), Int64(R.GroupIndexByName('hour')), 'hour index -1');
+
+  // NumCaptures with mixed named and unnamed groups
+  R := TRegex.Compile('(a)(?P<mid>b)(c)');
+  CheckEqual(Int64(3), Int64(R.NumCaptures), 'mixed num captures');
+  CheckEqual(Int64(1), Int64(R.GroupIndexByName('mid')), 'mixed mid index');
+  CheckEqual(Int64(-1), Int64(R.GroupIndexByName('a')), 'unnamed not named');
+end;
+
+{ --- 12. TestIsMatchVsFind --- }
+procedure TestIsMatchVsFind;
+var R: TRegex; M: TMatch;
+begin
+  // IsMatch returns true iff Find returns Found=true
+  R := TRegex.Compile('\d+');
+  Check(R.IsMatch('abc123') = R.Find('abc123').Found, 'consistency match');
+  Check(R.IsMatch('abc') = R.Find('abc').Found, 'consistency miss');
+
+  // IsMatch on patterns with captures (should still work)
+  R := TRegex.Compile('(\d+)-(\d+)');
+  Check(R.IsMatch('12-34'), 'ismatch with captures');
+  Check(not R.IsMatch('abcd'), 'ismatch with captures miss');
+
+  // IsMatch with (?i)
+  R := TRegex.Compile('(?i)hello');
+  Check(R.IsMatch('HELLO'), 'ismatch ci');
+  Check(not R.IsMatch('world'), 'ismatch ci miss');
+
+  // IsMatch on empty pattern
+  R := TRegex.Compile('');
+  Check(R.IsMatch('anything'), 'ismatch empty pattern');
+  Check(R.IsMatch(''), 'ismatch empty both');
+
+  // IsMatch on anchored pattern
+  R := TRegex.Compile('^abc$');
+  Check(R.IsMatch('abc'), 'ismatch anchored match');
+  Check(not R.IsMatch('abcd'), 'ismatch anchored miss');
+  M := R.Find('abc');
+  Check(M.Found, 'find anchored match');
+  M := R.Find('abcd');
+  Check(not M.Found, 'find anchored miss');
+
+  // IsMatch with word boundary
+  R := TRegex.Compile('\bfoo\b');
+  Check(R.IsMatch('foo bar'), 'ismatch wb');
+  Check(not R.IsMatch('foobar'), 'ismatch wb miss');
+  Check(R.IsMatch('foo bar') = R.Find('foo bar').Found, 'consistency wb');
+end;
+
+{ --- 13. TestCompileReuse --- }
+procedure TestCompileReuse;
+var R: TRegex; M: TMatch; MA: TMatchArray; s: string; i: Integer;
+begin
+  // Same TRegex used for multiple different inputs
+  R := TRegex.Compile('\d+');
+  Check(R.IsMatch('abc123'), 'reuse input 1');
+  Check(R.IsMatch('456def'), 'reuse input 2');
+  Check(not R.IsMatch('nodigits'), 'reuse input 3');
+  Check(R.IsMatch('x7y'), 'reuse input 4');
+
+  // Same TRegex used for IsMatch, Find, FindAll, Replace in sequence
+  R := TRegex.Compile('\w+');
+  Check(R.IsMatch('hello world'), 'reuse op ismatch');
+  M := R.Find('hello world');
+  Check(M.Found, 'reuse op find');
+  CheckEqual('hello', M.Value('hello world'), 'reuse op find val');
+  MA := R.FindAll('hello world');
+  CheckEqual(Int64(2), Int64(Length(MA)), 'reuse op findall');
+  s := R.ReplaceAll('hello world', 'X');
+  CheckEqual('X X', s, 'reuse op replace');
+
+  // Compile once, match 100 times
+  R := TRegex.Compile('test\d+');
+  for i := 1 to 100 do
+  begin
+    s := 'prefix_test' + IntToStr(i) + '_suffix';
+    Check(R.IsMatch(s), 'reuse 100 iter ' + IntToStr(i));
+  end;
+
+  // Reuse with captures
+  R := TRegex.Compile('(\w+)=(\d+)');
+  M := R.Find('x=1');
+  Check(M.Found, 'reuse cap 1');
+  CheckEqual('x', M.Groups[0].Value('x=1'), 'reuse cap 1 g0');
+  CheckEqual('1', M.Groups[1].Value('x=1'), 'reuse cap 1 g1');
+  M := R.Find('key=999');
+  Check(M.Found, 'reuse cap 2');
+  CheckEqual('key', M.Groups[0].Value('key=999'), 'reuse cap 2 g0');
+  CheckEqual('999', M.Groups[1].Value('key=999'), 'reuse cap 2 g1');
+
+  // Reuse with split
+  R := TRegex.Compile(',');
+  MA := R.FindAll('a,b,c');
+  CheckEqual(Int64(2), Int64(Length(MA)), 'reuse findall comma');
+  s := R.ReplaceAll('a,b,c', ';');
+  CheckEqual('a;b;c', s, 'reuse replace comma');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -1494,5 +2106,19 @@ begin
   T.Run('Performance regression', @TestPerformanceRegression);
   T.Run('QuoteMeta thorough', @TestQuoteMetaThorough);
   T.Run('ReplaceFunc edge cases', @TestReplaceFuncEdgeCases);
+  { --- 13 new test areas --- }
+  T.Run('Multiple captures', @TestMultipleCaptures);
+  T.Run('Overlapping patterns', @TestOverlappingPatterns);
+  T.Run('Special inputs', @TestSpecialInputs);
+  T.Run('Quantifier boundaries', @TestQuantifierBoundaries);
+  T.Run('Complex patterns', @TestComplexPatterns);
+  T.Run('FindAll progress', @TestFindAllProgress);
+  T.Run('ReplaceAllExpand advanced', @TestReplaceAllExpandAdvanced);
+  T.Run('Split advanced', @TestSplitAdvanced);
+  T.Run('Case insensitive advanced', @TestCaseInsensitiveAdvanced);
+  T.Run('Backtracking immunity', @TestBacktrackingImmunity);
+  T.Run('GroupByName advanced', @TestGroupByNameAdvanced);
+  T.Run('IsMatch vs Find', @TestIsMatchVsFind);
+  T.Run('Compile reuse', @TestCompileReuse);
   T.Summary;
 end.
