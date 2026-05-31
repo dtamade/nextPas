@@ -193,22 +193,29 @@ var
   LIter: IDirIterator;
   LEntry: TDirEntry;
   LChild: string;
+  LOk: Boolean;
 begin
   if not IsRealDir(APath) then
     Exit(platform_file_unlink(PAnsiChar(APath)) = 0);
 
+  LOk := True;
   LIter := FsOpenDir(APath);
   while LIter.Next do
   begin
     LEntry := LIter.Entry;
     LChild := APath + '/' + LEntry.Name;
     if IsRealDir(LChild) then
-      FsRemoveAll(LChild)
+    begin
+      if not FsRemoveAll(LChild) then LOk := False;
+    end
     else
-      platform_file_unlink(PAnsiChar(LChild));
+    begin
+      if platform_file_unlink(PAnsiChar(LChild)) <> 0 then LOk := False;
+    end;
   end;
   LIter.Close;
-  Result := platform_file_rmdir(PAnsiChar(APath)) = 0;
+  if platform_file_rmdir(PAnsiChar(APath)) <> 0 then LOk := False;
+  Result := LOk;
 end;
 
 function FsRename(const AOld, ANew: string): Boolean;

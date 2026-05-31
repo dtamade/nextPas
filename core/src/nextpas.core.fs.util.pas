@@ -98,9 +98,11 @@ var
   LSrcFile, LDstFile: IFile;
   LBuf: array[0..32767] of Byte;
   LRead, LWritten, LTotal: SizeUInt;
+  LStat: TFileInfo;
 begin
   LSrcFile := FsOpen(ASrc, [fmRead]);
-  LDstFile := FsOpenFile(ADst, [fmWrite, fmCreate, fmTruncate], PermDefault);
+  LStat := FsStat(ASrc);
+  LDstFile := FsOpenFile(ADst, [fmWrite, fmCreate, fmTruncate], LStat.Permission);
   Result := 0;
   repeat
     LRead := LSrcFile.Read(LBuf[0], SizeOf(LBuf));
