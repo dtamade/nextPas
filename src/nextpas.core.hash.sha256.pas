@@ -34,6 +34,7 @@ type
     procedure Reset;
     function DigestSize: SizeUInt;
     function BlockSize: SizeUInt;
+    function Clone: IHasher;
   end;
 
 function NewSHA256: IHasher;
@@ -317,6 +318,18 @@ end;
 function TSHA256Hasher.BlockSize: SizeUInt;
 begin
   Result := SHA256_BLOCK_SIZE;
+end;
+
+function TSHA256Hasher.Clone: IHasher;
+var
+  LClone: TSHA256Hasher;
+begin
+  LClone := TSHA256Hasher.Create;
+  Move(FH[0], LClone.FH[0], SizeOf(FH));
+  Move(FBuf[0], LClone.FBuf[0], SizeOf(FBuf));
+  LClone.FBufLen := FBufLen;
+  LClone.FTotalLen := FTotalLen;
+  Result := LClone;
 end;
 
 function NewSHA256: IHasher;

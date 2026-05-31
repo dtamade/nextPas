@@ -16,6 +16,7 @@ type
     procedure Reset;
     function DigestSize: SizeUInt;
     function BlockSize: SizeUInt;
+    function Clone: IHasher;
   end;
 
 implementation

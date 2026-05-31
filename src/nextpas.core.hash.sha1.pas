@@ -30,6 +30,7 @@ type
     procedure Reset;
     function DigestSize: SizeUInt;
     function BlockSize: SizeUInt;
+    function Clone: IHasher;
   end;
 
 function NewSHA1: IHasher;
@@ -179,6 +180,18 @@ end;
 function TSHA1Hasher.BlockSize: SizeUInt;
 begin
   Result := SHA1_BLOCK_SIZE;
+end;
+
+function TSHA1Hasher.Clone: IHasher;
+var
+  LClone: TSHA1Hasher;
+begin
+  LClone := TSHA1Hasher.Create;
+  Move(FH[0], LClone.FH[0], SizeOf(FH));
+  Move(FBuf[0], LClone.FBuf[0], SizeOf(FBuf));
+  LClone.FBufLen := FBufLen;
+  LClone.FTotalLen := FTotalLen;
+  Result := LClone;
 end;
 
 function NewSHA1: IHasher;

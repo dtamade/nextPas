@@ -33,6 +33,7 @@ type
     procedure Reset;
     function DigestSize: SizeUInt;
     function BlockSize: SizeUInt;
+    function Clone: IHasher;
   end;
 
 function NewSHA512: IHasher;
@@ -256,6 +257,18 @@ end;
 function TSHA512Hasher.BlockSize: SizeUInt;
 begin
   Result := SHA512_BLOCK_SIZE;
+end;
+
+function TSHA512Hasher.Clone: IHasher;
+var
+  LClone: TSHA512Hasher;
+begin
+  LClone := TSHA512Hasher.Create(FIs384);
+  Move(FH[0], LClone.FH[0], SizeOf(FH));
+  Move(FBuf[0], LClone.FBuf[0], SizeOf(FBuf));
+  LClone.FBufLen := FBufLen;
+  LClone.FTotalLen := FTotalLen;
+  Result := LClone;
 end;
 
 function NewSHA512: IHasher;

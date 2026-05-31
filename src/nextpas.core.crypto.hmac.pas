@@ -39,12 +39,14 @@ type
     FOPad: array[0..127] of Byte;
   public
     constructor Create(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt);
+    destructor Destroy; override;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Sum(out ADst; const ASize: SizeUInt);
     function SumBytes: TBytes;
     procedure Reset;
     function DigestSize: SizeUInt;
     function BlockSize: SizeUInt;
+    function Clone: IHasher;
   end;
 
 constructor THMACHasher.Create(AAlgo: THashAlgorithm; const AKey; AKeyLen: SizeUInt);
@@ -85,6 +87,25 @@ begin
 
   FillChar(LKeyBlock[0], SizeOf(LKeyBlock), 0);
   FillChar(LIPad[0], SizeOf(LIPad), 0);
+end;
+
+destructor THMACHasher.Destroy;
+begin
+  FillChar(FOPad[0], SizeOf(FOPad), 0);
+  FInner := nil;
+  inherited Destroy;
+end;
+
+function THMACHasher.Clone: IHasher;
+var
+  LClone: THMACHasher;
+begin
+  LClone := THMACHasher.Create(FAlgo, FOPad[0], 0);
+  Move(FOPad[0], LClone.FOPad[0], SizeOf(FOPad));
+  LClone.FBlockSize := FBlockSize;
+  LClone.FDigestSize := FDigestSize;
+  LClone.FInner := FInner.Clone;
+  Result := LClone;
 end;
 
 function THMACHasher.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
