@@ -476,6 +476,258 @@ begin
   end;
 end;
 
+{ Test 10: POST body readable via IReader }
+procedure TestPostBodyReadable;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBuf: array[0..4095] of Byte; LN: SizeUInt; LBody: string;
+  begin
+    LBody := '';
+    if AReq.Body <> nil then
+    begin
+      LN := AReq.Body.Read(LBuf[0], 4096);
+      if LN > 0 then SetString(LBody, PAnsiChar(@LBuf[0]), LN);
+    end;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    if Length(LBody) > 0 then
+      AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'POST / HTTP/1.1'#13#10 +
+      'Host: x'#13#10 +
+      'Content-Length: 11'#13#10 +
+      'Connection: close'#13#10#13#10 +
+      'hello world');
+    Check(Pos('hello world', LResp) > 0, 'body echoed back');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 11: Large body (131072 bytes) }
+procedure TestLargeBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LReq: string;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBuf: array[0..4095] of Byte; LN: SizeUInt; LTotal: SizeUInt; LReply: string;
+  begin
+    LTotal := 0;
+    if AReq.Body <> nil then
+    begin
+      repeat
+        LN := AReq.Body.Read(LBuf[0], 4096);
+        LTotal := LTotal + LN;
+      until LN = 0;
+    end;
+    LReply := IntToStr(Int64(LTotal));
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], SizeUInt(Length(LReply)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    SetLength(LBody, 131072);
+    FillChar(LBody[1], 131072, Ord('x'));
+    LReq := 'POST / HTTP/1.1'#13#10 +
+      'Host: x'#13#10 +
+      'Content-Length: 131072'#13#10 +
+      'Connection: close'#13#10#13#10 +
+      LBody;
+    LResp := SendRawRequest(LPort, LReq);
+    Check(Pos('131072', LResp) > 0, 'large body length echoed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 12: Malformed request returns 400 or closes }
+procedure TestMalformedRequest;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GARBAGE DATA HERE'#13#10#13#10);
+    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0), 'malformed request: 400 or closed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 13: Query parameters }
+procedure TestQueryParam;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/search', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := AReq.QueryParam('q') + ':' + AReq.QueryParam('page');
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /search?q=hello&page=2 HTTP/1.1'#13#10 +
+      'Host: x'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('hello', LResp) > 0, 'query param q=hello');
+    Check(Pos('2', LResp) > 0, 'query param page=2');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 14: RemoteAddr contains 127.0.0.1 }
+procedure TestRemoteAddr;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := AReq.RemoteAddr;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET / HTTP/1.1'#13#10 +
+      'Host: x'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('127.0.0.1', LResp) > 0, 'remote addr is 127.0.0.1');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 15: Concurrent stress — 10 threads x 100 requests }
+var
+  GStressSuccess: Int32 = 0;
+  GStressDone: Int32 = 0;
+  GServerPort: UInt16 = 0;
+
+function StressThread(AParam: Pointer): Pointer; cdecl;
+var
+  LI: Int32;
+  LConn: ITcpStream;
+  LBuf: array[0..1023] of Byte;
+  LN, LRead: SizeUInt;
+  LReq: string;
+  LHeaderEnd: Int32;
+  LResp: string;
+begin
+  Result := nil;
+  try
+    LReq := 'GET / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10;
+    LConn := TcpConnect('127.0.0.1', GServerPort);
+    LConn.SetNoDelay(True);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(10)));
+    for LI := 1 to 100 do
+    begin
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      { Read until we see end of response (CRLFCRLF + body) }
+      LResp := '';
+      repeat
+        LRead := LConn.Read(LBuf[0], 1024);
+        if LRead > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LRead));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LRead) + 1], LRead);
+        end;
+        LHeaderEnd := Pos(#13#10#13#10, LResp);
+      until (LHeaderEnd > 0) or (LRead = 0);
+      if Pos('200', LResp) > 0 then
+        InterlockedIncrement(GStressSuccess);
+    end;
+    LConn.Close;
+  except
+  end;
+  InterlockedIncrement(GStressDone);
+end;
+
+procedure TestConcurrentStress;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LThreads: array[0..9] of TPlatformThreadHandle;
+  LI, LWait: Int32;
+  LRet: Pointer;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    GServerPort := LPort;
+    GStressSuccess := 0;
+    GStressDone := 0;
+    for LI := 0 to 9 do
+      platform_thread_create(LThreads[LI], @StressThread, nil);
+    { Wait for all threads to finish }
+    LWait := 0;
+    while (GStressDone < 10) and (LWait < 2000) do
+    begin
+      platform_thread_sleep_ns(5000000); { 5ms }
+      Inc(LWait);
+    end;
+    for LI := 0 to 9 do
+      platform_thread_join(LThreads[LI], LRet);
+    Check(GStressSuccess = 1000, 'stress: 1000 successes (got ' + IntToStr(Int64(GStressSuccess)) + ')');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -489,5 +741,11 @@ begin
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);
+  T.Run('POST body readable via IReader', @TestPostBodyReadable);
+  T.Run('Large body 131072 bytes', @TestLargeBody);
+  T.Run('Malformed request -> 400 or close', @TestMalformedRequest);
+  T.Run('Query parameters', @TestQueryParam);
+  T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
+  T.Run('Concurrent stress 10x100', @TestConcurrentStress);
   T.Summary;
 end.

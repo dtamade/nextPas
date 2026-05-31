@@ -44,9 +44,11 @@ function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServer
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.intf,
   nextpas.core.io.buffer,
+  nextpas.core.io.memory,
   nextpas.core.net.tcp,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -94,6 +96,13 @@ begin
   end;
 end;
 
+function StrToBytes(const S: string): TBytes;
+begin
+  SetLength(Result, Length(S));
+  if Length(S) > 0 then
+    Move(S[1], Result[0], Length(S));
+end;
+
 procedure HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler;
   const AOptions: THttpServerOptions);
 var
@@ -106,6 +115,9 @@ var
   LKeepAlive: Boolean;
   LIdleMs: Int64;
   LBufWriter: IWriter;
+  LBodyStr: string;
+  LBodyReader: IReader;
+  LContentLen: Int64;
 begin
   LParser := NewH1RequestParser;
   LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
@@ -143,8 +155,22 @@ begin
 
       { Build request }
       LUrl := TUrl.Parse(LParser.GetUrl);
+      LBodyStr := LParser.GetBody;
+      if LBodyStr <> '' then
+      begin
+        LBodyReader := CreateBytesStreamFrom(StrToBytes(LBodyStr)) as IReader;
+        LContentLen := Int64(Length(LBodyStr));
+      end
+      else
+      begin
+        LBodyReader := nil;
+        LContentLen := 0;
+      end;
       LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
-        LParser.GetHeaders, nil, 0);
+        LParser.GetHeaders, LBodyReader, LContentLen);
+
+      { Set remote address }
+      (LReq as THttpRequest).SetRemoteAddr(AConn.RemoteAddr.ToString);
 
       { Dispatch to handler }
       LW := TH1ResponseWriter.Create(LBufWriter);

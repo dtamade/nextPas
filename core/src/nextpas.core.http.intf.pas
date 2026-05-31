@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.io.intf,
+  nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.http.base;
 
@@ -36,13 +37,16 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
+    function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
+    function QueryParam(const AName: string): string;
     property Method: THttpMethod read GetMethod;
     property Url: TUrl read GetUrl;
     property Version: THttpVersion read GetVersion;
     property Headers: IHttpHeaders read GetHeaders;
     property Body: IReader read GetBody;
     property ContentLength: Int64 read GetContentLength;
+    property RemoteAddr: string read GetRemoteAddr;
   end;
 
   IHttpResponse = interface
@@ -58,6 +62,7 @@ type
   IHttpResponseWriter = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000004}']
     procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
@@ -92,6 +97,7 @@ type
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000008}']
     procedure ListenAndServe(const AAddr: string; const APort: UInt16);
     procedure Shutdown;
+    function LocalAddr: TNetAddress;
   end;
 
   IHttpClient = interface
@@ -99,6 +105,10 @@ type
     function Do_(const AReq: IHttpRequest): IHttpResponse;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Head(const AUrl: string): IHttpResponse;
   end;
 
   { Transport layer — protocol implementations register these }

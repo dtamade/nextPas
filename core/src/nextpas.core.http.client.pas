@@ -33,6 +33,10 @@ type
     function Do_(const AReq: IHttpRequest): IHttpResponse;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Head(const AUrl: string): IHttpResponse;
   end;
 
 function NewHttpClient: IHttpClient; overload;
@@ -308,6 +312,106 @@ begin
   else
     LReq := THttpRequest.Create(hmPost, LUrl, hvHttp11, LHeaders, nil, 0);
 
+  Result := Do_(LReq);
+end;
+
+function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LBodyBuf: string;
+  LTmp: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LBodyStream: IStream;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-type', AContentType);
+
+  LBodyBuf := '';
+  if ABody <> nil then
+  begin
+    repeat
+      LN := ABody.Read(LTmp[0], 4096);
+      if LN > 0 then
+      begin
+        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
+        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+  end;
+
+  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
+
+  if LBodyBuf <> '' then
+  begin
+    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
+    LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
+  end
+  else
+    LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, LHeaders, nil, 0);
+
+  Result := Do_(LReq);
+end;
+
+function THttpClient.Delete(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmDelete, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
+  Result := Do_(LReq);
+end;
+
+function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LBodyBuf: string;
+  LTmp: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LBodyStream: IStream;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-type', AContentType);
+
+  LBodyBuf := '';
+  if ABody <> nil then
+  begin
+    repeat
+      LN := ABody.Read(LTmp[0], 4096);
+      if LN > 0 then
+      begin
+        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
+        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+  end;
+
+  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
+
+  if LBodyBuf <> '' then
+  begin
+    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
+    LReq := THttpRequest.Create(hmPatch, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
+  end
+  else
+    LReq := THttpRequest.Create(hmPatch, LUrl, hvHttp11, LHeaders, nil, 0);
+
+  Result := Do_(LReq);
+end;
+
+function THttpClient.Head(const AUrl: string): IHttpResponse;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse(AUrl);
+  LReq := THttpRequest.Create(hmHead, LUrl, hvHttp11, NewHttpHeaders, nil, 0);
   Result := Do_(LReq);
 end;
 

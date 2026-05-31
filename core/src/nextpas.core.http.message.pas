@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.http.base,
-  nextpas.core.http.intf;
+  nextpas.core.http.intf,
+  nextpas.core.http.url;
 
 type
   THttpRequest = class(TInterfacedObject, IHttpRequest)
@@ -25,18 +26,24 @@ type
       FBody: IReader;
       FContentLength: Int64;
       FPathParams: array of TPathParam;
+      FRemoteAddr: string;
+      FQueryParsed: Boolean;
+      FQueryParams: TQueryParams;
   public
     constructor Create(const AMethod: THttpMethod; const AUrl: TUrl;
       const AVersion: THttpVersion; const AHeaders: IHttpHeaders;
       const ABody: IReader; const AContentLength: Int64);
     procedure SetPathParam(const AName, AValue: string);
+    procedure SetRemoteAddr(const AAddr: string);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
+    function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
+    function QueryParam(const AName: string): string;
   end;
 
   THttpResponse = class(TInterfacedObject, IHttpResponse)
@@ -126,6 +133,26 @@ begin
     if FPathParams[LI].Name = AName then
       Exit(FPathParams[LI].Value);
   Result := '';
+end;
+
+function THttpRequest.GetRemoteAddr: string;
+begin
+  Result := FRemoteAddr;
+end;
+
+procedure THttpRequest.SetRemoteAddr(const AAddr: string);
+begin
+  FRemoteAddr := AAddr;
+end;
+
+function THttpRequest.QueryParam(const AName: string): string;
+begin
+  if not FQueryParsed then
+  begin
+    FQueryParams := ParseQueryString(FUrl.RawQuery);
+    FQueryParsed := True;
+  end;
+  Result := QueryParamValue(FQueryParams, AName);
 end;
 
 { THttpResponse }
