@@ -1,0 +1,254 @@
+program test_http_h1parser;
+
+{$I nextpas.core.settings.inc}
+
+uses
+  nextpas.core.base,
+  nextpas.core.testing,
+  nextpas.core.http.base,
+  nextpas.core.http.intf,
+  nextpas.core.http.impl.h1.parser;
+
+var
+  T: TTestRunner;
+
+procedure TestSimpleGet;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'should be complete');
+  Check(not LP.HasError, 'no error');
+  Check(LP.GetMethod = hmGet, 'method is GET');
+  CheckEqual('/', LP.GetUrl, 'url is /');
+  Check(LP.GetHttpVersion = hvHttp11, 'version is HTTP/1.1');
+end;
+
+procedure TestGetWithPath;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET /index.html HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual('/index.html', LP.GetUrl, 'url is /index.html');
+end;
+
+procedure TestPostWithBody;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  Check(LP.GetMethod = hmPost, 'method is POST');
+  CheckEqual('hello', LP.GetBody, 'body is hello');
+end;
+
+procedure TestMultipleHeaders;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: example.com'#13#10 +
+           'Content-Type: text/plain'#13#10 +
+           'Accept: */*'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual('example.com', LP.GetHeaders.Get('Host'), 'host header');
+  CheckEqual('text/plain', LP.GetHeaders.Get('Content-Type'), 'content-type');
+  CheckEqual('*/*', LP.GetHeaders.Get('Accept'), 'accept');
+end;
+
+procedure TestHttp10Version;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.0'#13#10'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  Check(LP.GetHttpVersion = hvHttp10, 'version is HTTP/1.0');
+end;
+
+procedure TestResponse200;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+            'Content-Length: 5'#13#10#13#10 +
+            'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual(Int64(200), Int64(LP.GetStatusCode), 'status 200');
+  CheckEqual('hello', LP.GetBody, 'body');
+end;
+
+procedure TestResponse404;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 404 Not Found'#13#10 +
+            'Content-Length: 9'#13#10#13#10 +
+            'not found';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual(Int64(404), Int64(LP.GetStatusCode), 'status 404');
+end;
+
+procedure TestResponse204NoBody;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 204 No Content'#13#10#13#10;
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual(Int64(204), Int64(LP.GetStatusCode), 'status 204');
+  CheckEqual('', LP.GetBody, 'empty body');
+end;
+
+procedure TestContentLengthBody;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 11'#13#10#13#10 +
+           'hello world';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual('hello world', LP.GetBody, 'exact body');
+end;
+
+procedure TestHeadRequest;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'HEAD /status HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  Check(LP.GetMethod = hmHead, 'method is HEAD');
+  CheckEqual('', LP.GetBody, 'no body for HEAD');
+end;
+
+procedure TestInvalidRequest;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'INVALID DATA HERE'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.HasError, 'should have error');
+  Check(LP.ErrorMessage <> '', 'error message not empty');
+end;
+
+procedure TestIncompleteInput;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10'Host: local';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'should not be complete');
+  Check(not LP.HasError, 'no error on partial');
+end;
+
+procedure TestResetAndReparse;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET /first HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'first complete');
+  CheckEqual('/first', LP.GetUrl, 'first url');
+
+  LP.Reset;
+  LReq := 'POST /second HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 3'#13#10#13#10 +
+           'abc';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'second complete');
+  Check(LP.GetMethod = hmPost, 'second method POST');
+  CheckEqual('/second', LP.GetUrl, 'second url');
+  CheckEqual('abc', LP.GetBody, 'second body');
+end;
+
+procedure TestRequestWithQuery;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET /search?q=test HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  CheckEqual('/search?q=test', LP.GetUrl, 'url with query');
+end;
+
+procedure TestMultipleHeadersSameName;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LAll: TStringArray;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Custom: value1'#13#10 +
+           'X-Custom: value2'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'complete');
+  LAll := LP.GetHeaders.GetAll('X-Custom');
+  CheckEqual(Int64(2), Int64(Length(LAll)), 'two values');
+  CheckEqual('value1', LAll[0], 'first value');
+  CheckEqual('value2', LAll[1], 'second value');
+end;
+
+begin
+  T := TTestRunner.Create('nextpas.core.http.impl.h1.parser');
+  T.Run('Simple GET', @TestSimpleGet);
+  T.Run('GET with path', @TestGetWithPath);
+  T.Run('POST with body', @TestPostWithBody);
+  T.Run('Multiple headers', @TestMultipleHeaders);
+  T.Run('HTTP/1.0 version', @TestHttp10Version);
+  T.Run('Response 200', @TestResponse200);
+  T.Run('Response 404', @TestResponse404);
+  T.Run('Response 204 no body', @TestResponse204NoBody);
+  T.Run('Content-Length body', @TestContentLengthBody);
+  T.Run('HEAD request', @TestHeadRequest);
+  T.Run('Invalid request', @TestInvalidRequest);
+  T.Run('Incomplete input', @TestIncompleteInput);
+  T.Run('Reset and reparse', @TestResetAndReparse);
+  T.Run('Request with query', @TestRequestWithQuery);
+  T.Run('Multiple headers same name', @TestMultipleHeadersSameName);
+  T.Summary;
+end.
