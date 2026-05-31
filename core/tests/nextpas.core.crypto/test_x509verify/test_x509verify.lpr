@@ -4,7 +4,7 @@ program test_x509verify;
 
 uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
-  SysUtils, Classes,
+  SysUtils, Classes, Process,
   nextpas.core.tls.x509,
   nextpas.core.crypto.x509verify;
 
@@ -31,6 +31,25 @@ begin
     Result.LoadFromDER(LData);
   finally
     LStream.Free;
+  end;
+end;
+
+function EnsureTestCert: string;
+var LRet: Integer;
+begin
+  Result := '/tmp/test_cert.der';
+  if not FileExists(Result) then
+  begin
+    LRet := ExecuteProcess('/usr/bin/openssl',
+      'req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 ' +
+      '-keyout /tmp/test_key.pem -out /tmp/test_cert.pem -days 1 -nodes ' +
+      '-subj "/CN=test.example.com" -addext "subjectAltName=DNS:test.example.com,DNS:*.example.com"');
+    if LRet <> 0 then
+    begin
+      WriteLn('SKIP: openssl not available');
+      Halt(0);
+    end;
+    ExecuteProcess('/usr/bin/openssl', 'x509 -in /tmp/test_cert.pem -outform DER -out ' + Result);
   end;
 end;
 
@@ -116,6 +135,7 @@ end;
 begin
   GPass := 0;
   GFail := 0;
+  EnsureTestCert;
   WriteLn('=== X509 Verify Tests ===');
   WriteLn;
 
