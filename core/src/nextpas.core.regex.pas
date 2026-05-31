@@ -131,10 +131,8 @@ begin
       Exit(True);
     Exit(Pos(FProgram.LiteralPrefix, AInput) > 0);
   end;
-  // DFA fast path for patterns without assertions
-  if not ProgramHasAsserts(FProgram) then
-    Exit(DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput)));
-  Result := NfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
+  // DFA handles all patterns (assertions via context); falls back to NFA on overflow
+  Result := DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
 function TRegex.Find(const AInput: string): TMatch;
@@ -189,7 +187,8 @@ begin
   if not FValid then Exit(False);
   if FProgram.IsPureLiteral then
     Exit(AInput = FProgram.LiteralPrefix);
-  Result := NfaIsFullMatch(FProgram, PAnsiChar(AInput), Length(AInput));
+  // DFA handles all patterns; falls back to NFA on overflow
+  Result := DfaIsFullMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
 function TRegex.FindAll(const AInput: string): TMatchArray;
@@ -232,8 +231,8 @@ begin
     SetLength(Result, LCount);
     Exit;
   end;
-  // DFA fast path: only when no captures needed and no assertions
-  if (FProgram.NumCaptures = 0) and (not ProgramHasAsserts(FProgram)) then
+  // DFA fast path: only when no captures needed
+  if FProgram.NumCaptures = 0 then
   begin
     Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
     Exit;
