@@ -203,10 +203,10 @@ begin FBlock := ABlock; Result := Self; end;
 
 procedure TDiffView.Render(const AArea: TRect; ABuffer: TBuffer);
 var
-  St: TDiffViewState;
+  LState: TDiffViewState;
 begin
-  St := TDiffViewState.Empty;
-  RenderStateful(AArea, ABuffer, St);
+  LState := TDiffViewState.Empty;
+  RenderStateful(AArea, ABuffer, LState);
 end;
 
 procedure TDiffView.RenderStateful(const AArea: TRect; ABuffer: TBuffer;

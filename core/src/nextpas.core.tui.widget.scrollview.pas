@@ -160,8 +160,10 @@ begin
 end;
 
 procedure TScrollView.Render(const AArea: TRect; ABuffer: TBuffer);
+var LState: TScrollViewState;
 begin
-  { ScrollView is stateful-only; Render without state is a no-op. }
+  LState := TScrollViewState.Empty;
+  RenderStateful(AArea, ABuffer, LState);
 end;
 
 function TScrollView.ContentArea(const AArea: TRect): TRect;

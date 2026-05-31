@@ -165,8 +165,12 @@ begin
 end;
 
 procedure TSelect.Render(const AArea: TRect; ABuffer: TBuffer);
+var LState: TSelectState;
 begin
-  { Select is stateful-only; Render without state is a no-op. }
+  LState.Selected := 0;
+  LState.Open := False;
+  LState.HighlightIdx := 0;
+  RenderStateful(AArea, ABuffer, LState);
 end;
 
 procedure TSelect.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TSelectState);

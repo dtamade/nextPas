@@ -200,6 +200,7 @@ class function TSpinner.Custom(const AFrames: array of AnsiString; AIntervalMs: 
 var
   I: Integer;
 begin
+  Result.Frames := nil;
   SetLength(Result.Frames, Length(AFrames));
   for I := 0 to High(AFrames) do
     Result.Frames[I] := AFrames[I];
