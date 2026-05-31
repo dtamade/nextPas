@@ -28,7 +28,7 @@ unit nextpas.core.collections.list;
 interface
 
 uses
-  SysUtils, Classes, typinfo,
+  SysUtils, typinfo,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,

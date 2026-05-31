@@ -51,7 +51,9 @@ implementation
 {$IFDEF SIMD_RISCV_AVAILABLE}
 
 uses
-  SysUtils, nextpas.core.text.strings;
+  SysUtils,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files;
 
 {$IFDEF LINUX}
 const
@@ -67,46 +69,38 @@ type
 
 function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
-  LFile: TFileStream;
+  LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: LongInt;
+  LReadBytes: Int64;
 begin
   Result := False;
   aHWCAP := 0;
   aHWCAP2 := 0;
 
-  if not FileExists('/proc/self/auxv') then
+  if platform_file_open('/proc/self/auxv', fomReadOnly, fcmOpenExisting, LHandle) <> 0 then
     Exit;
-
   try
-    LFile := TFileStream.Create('/proc/self/auxv', fmOpenRead or fmShareDenyNone);
-    try
-      while True do
-      begin
-        LReadBytes := LFile.Read(LEntry, SizeOf(LEntry));
-        if LReadBytes <> SizeOf(LEntry) then
-          Break;
-        if LEntry.Tag = LINUX_AUXV_AT_NULL then
-          Break;
+    while True do
+    begin
+      LReadBytes := platform_file_read(LHandle, @LEntry, SizeOf(LEntry));
+      if LReadBytes <> SizeOf(LEntry) then
+        Break;
+      if LEntry.Tag = LINUX_AUXV_AT_NULL then
+        Break;
 
-        if LEntry.Tag = LINUX_AUXV_AT_HWCAP then
-        begin
-          aHWCAP := QWord(LEntry.Value);
-          Result := True;
-        end
-        else if LEntry.Tag = LINUX_AUXV_AT_HWCAP2 then
-        begin
-          aHWCAP2 := QWord(LEntry.Value);
-          Result := True;
-        end;
+      if LEntry.Tag = LINUX_AUXV_AT_HWCAP then
+      begin
+        aHWCAP := QWord(LEntry.Value);
+        Result := True;
+      end
+      else if LEntry.Tag = LINUX_AUXV_AT_HWCAP2 then
+      begin
+        aHWCAP2 := QWord(LEntry.Value);
+        Result := True;
       end;
-    finally
-      LFile.Free;
     end;
-  except
-    aHWCAP := 0;
-    aHWCAP2 := 0;
-    Result := False;
+  finally
+    platform_file_close(LHandle);
   end;
 end;
 {$ENDIF}
@@ -184,43 +178,46 @@ end;
 function ReadDeviceTreeTextFromPaths(const aPaths: array of string; out aText: string): Boolean;
 var
   LPath: string;
-  LFile: TFileStream;
+  LHandle: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
   LRaw: RawByteString;
   LIndex: Integer;
+  LRead: Int64;
 begin
   Result := False;
   aText := '';
 
   for LPath in aPaths do
   begin
-    if not FileExists(LPath) then
+    if platform_file_stat(PAnsiChar(LPath), LStat) <> 0 then
       Continue;
 
+    if platform_file_open(PAnsiChar(LPath), fomReadOnly, fcmOpenExisting, LHandle) <> 0 then
+      Continue;
     try
-      LFile := TFileStream.Create(LPath, fmOpenRead or fmShareDenyNone);
-      try
-        SetLength(LRaw, LFile.Size);
-        if Length(LRaw) > 0 then
-          LFile.ReadBuffer(LRaw[1], Length(LRaw));
-      finally
-        LFile.Free;
-      end;
-
-      if LRaw = '' then
-        Continue;
-
-      for LIndex := 1 to Length(LRaw) do
+      SetLength(LRaw, LStat.Size);
+      if Length(LRaw) > 0 then
       begin
-        if LRaw[LIndex] = #0 then
-          LRaw[LIndex] := ' ';
+        LRead := platform_file_read(LHandle, @LRaw[1], Length(LRaw));
+        if LRead < Length(LRaw) then
+          SetLength(LRaw, LRead);
       end;
-
-      aText := NormalizeFieldValue(LRaw);
-      if aText <> '' then
-        Exit(True);
-    except
-      // Ignore read failures, continue with next candidate.
+    finally
+      platform_file_close(LHandle);
     end;
+
+    if LRaw = '' then
+      Continue;
+
+    for LIndex := 1 to Length(LRaw) do
+    begin
+      if LRaw[LIndex] = #0 then
+        LRaw[LIndex] := ' ';
+    end;
+
+    aText := NormalizeFieldValue(LRaw);
+    if aText <> '' then
+      Exit(True);
   end;
 end;
 {$ENDIF}
@@ -475,7 +472,7 @@ end;
 
 function ParseRISCVVendorModelFromCpuInfo(const aCpuInfo: string; out aVendor, aModel: string): Boolean;
 var
-  LLines: TStringArray;
+  LLines: TStringList;
   LLine: string;
   LKey: string;
   LValue: string;
@@ -488,12 +485,14 @@ begin
   LVendorPriority := 0;
   LModelPriority := 0;
 
-  LLines := StringsParseLines(aCpuInfo);
-  for LLineIndex := 0 to High(LLines) do
-  begin
-    LLine := Trim(LLines[LLineIndex]);
-    if not TryParseKeyValueLine(LLine, LKey, LValue) then
-      Continue;
+  LLines := TStringList.Create;
+  try
+    LLines.Text := ReplaceChar(aCpuInfo, #13, #10);
+    for LLineIndex := 0 to LLines.Count - 1 do
+    begin
+      LLine := Trim(LLines[LLineIndex]);
+      if not TryParseKeyValueLine(LLine, LKey, LValue) then
+        Continue;
 
       LValue := NormalizeFieldValue(LValue);
       if LValue = '' then
@@ -530,6 +529,9 @@ begin
         PromoteIdentityCandidate(aModel, LModelPriority, LValue, 10);
         Continue;
       end;
+    end;
+  finally
+    LLines.Free;
   end;
 
   Result := (aVendor <> '') or (aModel <> '');
@@ -1146,7 +1148,7 @@ end;
 function ExtractBestRISCVISAFromCpuInfo(const aCpuInfo: string; out aISA: string;
   out aFeatures: TRISCVFeatures): Boolean;
 var
-  LLines: TStringArray;
+  LLines: TStringList;
   LLine: string;
   LKey: string;
   LValue: string;
@@ -1176,12 +1178,14 @@ begin
   LFoundCandidate := False;
   LFoundMISA := False;
 
-  LLines := StringsParseLines(aCpuInfo);
-  for LLineIndex := 0 to High(LLines) do
-  begin
-    LLine := Trim(LLines[LLineIndex]);
-    if not TryParseKeyValueLine(LLine, LKey, LValue) then
-      Continue;
+  LLines := TStringList.Create;
+  try
+    LLines.Text := ReplaceChar(aCpuInfo, #13, #10);
+    for LLineIndex := 0 to LLines.Count - 1 do
+    begin
+      LLine := Trim(LLines[LLineIndex]);
+      if not TryParseKeyValueLine(LLine, LKey, LValue) then
+        Continue;
 
       if IsMISAKey(LKey) then
       begin
@@ -1227,6 +1231,9 @@ begin
         LBestTextLength := LCandidateTextLength;
         LFoundCandidate := True;
       end;
+    end;
+  finally
+    LLines.Free;
   end;
 
   if LFoundCandidate then
@@ -1444,7 +1451,7 @@ end;
 
 function ParseRISCVFeaturesFromCpuInfo(const cpuInfo: string): TRISCVFeatures;
 var
-  LLines: TStringArray;
+  LLines: TStringList;
   LLine: string;
   LKey: string;
   LValue: string;
@@ -1453,17 +1460,19 @@ var
 begin
   FillChar(Result, SizeOf(TRISCVFeatures), 0);
 
-  LLines := StringsParseLines(cpuInfo);
-  for LLineIndex := 0 to High(LLines) do
-  begin
-    LLine := Trim(LLines[LLineIndex]);
-    if not TryParseKeyValueLine(LLine, LKey, LValue) then
-      Continue;
-
-    if not IsISAKey(LKey) then
+  LLines := TStringList.Create;
+  try
+    LLines.Text := ReplaceChar(cpuInfo, #13, #10);
+    for LLineIndex := 0 to LLines.Count - 1 do
     begin
-      if IsMISAKey(LKey) then
+      LLine := Trim(LLines[LLineIndex]);
+      if not TryParseKeyValueLine(LLine, LKey, LValue) then
+        Continue;
+
+      if not IsISAKey(LKey) then
       begin
+        if IsMISAKey(LKey) then
+        begin
           LValue := NormalizeFieldValue(LValue);
           if TryParseRISCVMISAValue(LValue, LMISA) then
             MergeRISCVFeaturesFromMISA(Result, LMISA);
@@ -1475,6 +1484,9 @@ begin
       if IsWeakRISCVISAKey(LKey) and not IsLikelyRISCVISAValue(LValue) then
         Continue;
       ParseISAString(LValue, Result);
+    end;
+  finally
+    LLines.Free;
   end;
 
   // Keep parser deterministic when mixed ISA lines report conflicting RV base.

@@ -23,7 +23,8 @@ implementation
 uses
   SysUtils
   {$IFDEF LINUX}
-  , nextpas.core.text.strings
+  , nextpas.core.platform.files.base
+  , nextpas.core.platform.files
   {$ENDIF}
   ;
 
@@ -43,46 +44,38 @@ type
 
 function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
-  LFile: TFileStream;
+  LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: LongInt;
+  LReadBytes: Int64;
 begin
   Result := False;
   aHWCAP := 0;
   aHWCAP2 := 0;
 
-  if not FileExists('/proc/self/auxv') then
+  if platform_file_open('/proc/self/auxv', fomReadOnly, fcmOpenExisting, LHandle) <> 0 then
     Exit;
-
   try
-    LFile := TFileStream.Create('/proc/self/auxv', fmOpenRead or fmShareDenyNone);
-    try
-      while True do
-      begin
-        LReadBytes := LFile.Read(LEntry, SizeOf(LEntry));
-        if LReadBytes <> SizeOf(LEntry) then
-          Break;
-        if LEntry.Tag = LINUX_AUXV_AT_NULL then
-          Break;
+    while True do
+    begin
+      LReadBytes := platform_file_read(LHandle, @LEntry, SizeOf(LEntry));
+      if LReadBytes <> SizeOf(LEntry) then
+        Break;
+      if LEntry.Tag = LINUX_AUXV_AT_NULL then
+        Break;
 
-        if LEntry.Tag = LINUX_AUXV_AT_HWCAP then
-        begin
-          aHWCAP := QWord(LEntry.Value);
-          Result := True;
-        end
-        else if LEntry.Tag = LINUX_AUXV_AT_HWCAP2 then
-        begin
-          aHWCAP2 := QWord(LEntry.Value);
-          Result := True;
-        end;
+      if LEntry.Tag = LINUX_AUXV_AT_HWCAP then
+      begin
+        aHWCAP := QWord(LEntry.Value);
+        Result := True;
+      end
+      else if LEntry.Tag = LINUX_AUXV_AT_HWCAP2 then
+      begin
+        aHWCAP2 := QWord(LEntry.Value);
+        Result := True;
       end;
-    finally
-      LFile.Free;
     end;
-  except
-    aHWCAP := 0;
-    aHWCAP2 := 0;
-    Result := False;
+  finally
+    platform_file_close(LHandle);
   end;
 end;
 
@@ -215,8 +208,8 @@ const
   );
 var
   LCPUInfoText: string;
-  LLines: TStringArray;
-  LLineIndex: Integer;
+  LLine: string;
+  LPos, LStart, LLen: Integer;
   LKey: string;
   LValue: string;
 
@@ -239,22 +232,32 @@ begin
   if LCPUInfoText = '' then
     Exit;
 
-  LLines := StringsParseLines(LCPUInfoText);
-  for LLineIndex := 0 to High(LLines) do
+  LLen := Length(LCPUInfoText);
+  LStart := 1;
+  LPos := 1;
+  while LPos <= LLen do
   begin
-    if not TryParseKeyValueLine(LLines[LLineIndex], LKey, LValue) then
-      Continue;
-    if LValue = '' then
-      Continue;
+    if (LCPUInfoText[LPos] = #10) or (LPos = LLen) then
+    begin
+      if LPos = LLen then
+        LLine := Copy(LCPUInfoText, LStart, LPos - LStart + 1)
+      else
+        LLine := Copy(LCPUInfoText, LStart, LPos - LStart);
+      LStart := LPos + 1;
 
-    if KeyMatches(LKey, VENDOR_KEYS) and (aCPUInfo.Vendor = 'LoongArch') then
-      aCPUInfo.Vendor := LValue;
+      if TryParseKeyValueLine(LLine, LKey, LValue) and (LValue <> '') then
+      begin
+        if KeyMatches(LKey, VENDOR_KEYS) and (aCPUInfo.Vendor = 'LoongArch') then
+          aCPUInfo.Vendor := LValue;
 
-    if KeyMatches(LKey, MODEL_KEYS) and (aCPUInfo.Model = 'Unknown LoongArch Processor') then
-      aCPUInfo.Model := LValue;
+        if KeyMatches(LKey, MODEL_KEYS) and (aCPUInfo.Model = 'Unknown LoongArch Processor') then
+          aCPUInfo.Model := LValue;
 
-    if (aCPUInfo.Vendor <> 'LoongArch') and (aCPUInfo.Model <> 'Unknown LoongArch Processor') then
-      Break;
+        if (aCPUInfo.Vendor <> 'LoongArch') and (aCPUInfo.Model <> 'Unknown LoongArch Processor') then
+          Break;
+      end;
+    end;
+    Inc(LPos);
   end;
   {$ENDIF}
 end;
