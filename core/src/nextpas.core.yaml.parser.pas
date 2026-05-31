@@ -325,7 +325,10 @@ begin
 
     if ACurToken.Kind = ytkScalar then
     begin
-      LKeyNode := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
+      LKeyNode := AddNode(ADoc);
+      ADoc.Nodes[LKeyNode].Kind := ynkString;
+      ADoc.Nodes[LKeyNode].Str := ACurToken.Value;
+      ADoc.Nodes[LKeyNode].Next := YAML_NODE_NONE;
       ACurToken := AScanner.NextToken;
     end
     else
@@ -447,7 +450,10 @@ begin
 
     if ACurToken.Kind = ytkScalar then
     begin
-      LKeyNode := ResolveScalar(ACurToken.Value, ACurToken.Style, ADoc);
+      LKeyNode := AddNode(ADoc);
+      ADoc.Nodes[LKeyNode].Kind := ynkString;
+      ADoc.Nodes[LKeyNode].Str := ACurToken.Value;
+      ADoc.Nodes[LKeyNode].Next := YAML_NODE_NONE;
       ACurToken := AScanner.NextToken;
     end
     else
