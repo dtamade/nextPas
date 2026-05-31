@@ -84,11 +84,16 @@
 - [ ] input ← ftui_input_parser
 - [ ] interaction ← ftui_interaction / focus ← ftui_focus / keybind ← ftui_keybind
 
-### Phase 5 — Core Widgets [未开始]
-- [ ] block / paragraph / list / table / gauge / tabs / scrollbar / clear / input / sparkline / barchart / canvas
+### Phase 5 — Core Widgets [完成]
+- [x] block / paragraph / list / table / gauge / tabs / scrollbar / clear / input / sparkline / barchart / canvas
+- 全部转为 class(TInterfacedObject, IWidget, IXxx) 模式
+- TScrollbar 重设计：样式吸收为内部字段，标准 IWidget.Render 签名
 
-### Phase 6 — Extended Widgets [未开始]
-- [ ] tree / dialog / menu / modal / select / panel / split_pane / popover / toast / tooltip / statusbar / form / scrollview / virtual_list / input_editor / calendar / linechart / markdown / syntax / image / diffview / file_tree / kanban / timeline / breadcrumb / progress_group / command_palette / notification_center
+### Phase 6 — Extended Widgets [完成]
+- [x] tree / dialog / menu / modal / select / panel / split_pane / popover / toast / tooltip / statusbar / form / scrollview / virtual_list / input_editor / calendar / linechart / markdown / syntax / diffview / file_tree / kanban / timeline / breadcrumb / progress_group / command_palette / notification_center
+- TPanel 重设计：RenderGrid 返回 TPanelGrid，Render 作为 IWidget 标准入口
+- TInputEditor 重设计：样式参数吸收为 builder，标准 IWidget.Render 签名
+- 全部 widget 单元测试覆盖（30 测试项目，230+ 用例，0 泄漏）
 
 ### Phase 7 — App + 收尾 [未开始]
 - [ ] app ← ftui_app / app.screen ← ftui_screen
@@ -104,9 +109,13 @@
 - Phase 0.1 ✅ text.width（12/12）
 - Phase 1 ✅ 完成：base/error/color/modifier/style/cell/widget.intf
 - Phase 2 ✅ 完成：image_cap/buffer/overlay/text/borders/layout/layout.grid/layout.dsl/text.format
-- 全量回归：16 测试项目、107 用例全通过、全 0 泄漏、0 警告
-- 累计 16 src 单元（含 text.width）
-- 下一步：Phase 3 — ANSI backend + Terminal（触及 platform 集成：raw mode/FlushToFd/SIGWINCH）
+- Phase 3 🔧 进行中：platform 前置依赖完成，ansi/backend/terminal 待落地
+- Phase 4 ⏳ 待开始：event/input/interaction/focus/keybind（已有源码，待正式迁移验证）
+- Phase 5 ✅ 完成：12 个 core widget 全部 class+interface
+- Phase 6 ✅ 完成：28 个 extended widget 全部 class+interface + 单元测试
+- 全量回归：30 测试项目、230+ 用例全通过、全 0 泄漏
+- 累计 77+ src 单元
+- 下一步：Phase 3 收尾（ansi/backend/terminal）→ Phase 4 → Phase 7 → benchmark + SIMD
 
 ### Phase 3 — ANSI Backend + Terminal [进行中]
 - [x] platform 前置依赖（与 Codex 讨论后下沉到 platform 层，符合 host-owner 模型）✅
