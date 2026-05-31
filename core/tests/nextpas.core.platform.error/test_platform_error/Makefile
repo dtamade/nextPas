@@ -3,7 +3,7 @@ CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.platform.error/test_platform_error
 PROGRAM := test_platform_error
 SOURCE := test_platform_error.lpr
-FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
 .PHONY: build run test clean
