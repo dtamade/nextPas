@@ -3369,7 +3369,8 @@ begin
         begin
           SymId := FModel.LookupSymbol(Name, FCurrentScopeId);
           if (SymId = 0) and (FModel.FindTypeByName(Name) = 0) and
-            not IsBuiltinProcedure(Name) then
+            not IsBuiltinProcedure(Name) and
+            not IsRuntimeVar(Name) then
             EmitSemaError(
               'sema.undeclared-identifier',
               'identifier not found "' + Name + '"',
@@ -6249,6 +6250,18 @@ begin
       end;
       ABlob := ABlob + 'call ' + MangledNameSig(ANode.ChildAt(0).Text, ArgName) +
         ' ' + IntToStr(StrCallArgCount) + #10;
+    end
+    else if (FCurrentMethodClass <> '') and
+      (FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text) > 0) then
+    begin
+      Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.ChildAt(0).Text);
+      if Folded >= 0 then
+        ABlob := 'var self' + #10 + ABlob +
+          'vcall ' + IntToStr(Folded) + ' ' + IntToStr(StrCallArgCount) + #10
+      else
+        ABlob := 'var self' + #10 + ABlob +
+          'call ' + FCurrentMethodClass + '.' + ANode.ChildAt(0).Text +
+          ' ' + IntToStr(StrCallArgCount + 1) + #10;
     end
     else
       ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
