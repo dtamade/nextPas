@@ -422,11 +422,19 @@ begin
     LOffset := LOffset + 2 + UInt16(AData[LOffset]) + (UInt16(AData[LOffset + 1]) shl 8);
   end;
   if (LFlags and $08) <> 0 then
+  begin
     while (LOffset < SizeUInt(Length(AData))) and (AData[LOffset] <> 0) do Inc(LOffset);
-  if (LFlags and $08) <> 0 then Inc(LOffset);
+    if LOffset >= SizeUInt(Length(AData)) then
+      raise EIOError.Create('gzip: truncated FNAME');
+    Inc(LOffset);
+  end;
   if (LFlags and $10) <> 0 then
+  begin
     while (LOffset < SizeUInt(Length(AData))) and (AData[LOffset] <> 0) do Inc(LOffset);
-  if (LFlags and $10) <> 0 then Inc(LOffset);
+    if LOffset >= SizeUInt(Length(AData)) then
+      raise EIOError.Create('gzip: truncated FCOMMENT');
+    Inc(LOffset);
+  end;
   if (LFlags and $02) <> 0 then
     Inc(LOffset, 2);
 
