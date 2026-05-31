@@ -292,6 +292,12 @@ const
 { signal constants and types - full signal table, sigaction, sigset }
 {$I nextpas.core.platform.linux.base.signal.inc}
 
+{ eventfd constants }
+const
+  EFD_SEMAPHORE = cint(1);
+  EFD_NONBLOCK  = O_NONBLOCK;
+  EFD_CLOEXEC   = O_CLOEXEC;
+
 { epoll types and constants }
 {$I nextpas.core.platform.linux.base.epoll.inc}
 
