@@ -215,15 +215,10 @@ var
   BytesRead: Integer;
 begin
   SetLength(Buffer, 8192);
-  AStream.Position := 0;
   repeat
-    BytesRead := AStream.Read(Buffer[0], Length(Buffer));
+    BytesRead := AStream.Read(Buffer[0], 8192);
     if BytesRead > 0 then
-    begin
-      SetLength(Buffer, BytesRead);
-      Update(Buffer);
-      SetLength(Buffer, 8192);
-    end;
+      Update(Copy(Buffer, 0, BytesRead));
   until BytesRead = 0;
 end;
 
@@ -1111,12 +1106,18 @@ begin
 end;
 
 function HashToHex(const AHash: TBytes): string;
+const
+  HEX: array[0..15] of Char = '0123456789abcdef';
 var
   I: Integer;
 begin
-  Result := '';
+  if Length(AHash) = 0 then begin Result := ''; Exit; end;
+  SetLength(Result, Length(AHash) * 2);
   for I := 0 to High(AHash) do
-    Result := Result + LowerCase(IntToHex(AHash[I], 2));
+  begin
+    Result[I * 2 + 1] := HEX[AHash[I] shr 4];
+    Result[I * 2 + 2] := HEX[AHash[I] and $0F];
+  end;
 end;
 
 function CreateHashContext(AAlgorithm: THashAlgorithm): THashContext;

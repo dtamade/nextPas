@@ -124,19 +124,8 @@ begin
     // XOR finds differences, OR accumulates any difference
     Diff := Diff or (A[I] xor B[I]);
   end;
-  
-  // Convert Diff to 0 or 1 in constant time
-  // If Diff = 0 (equal): (0 - 1) = $FF, ($FF shr 8) = 0, (0 and 1) = 0, (1 - 0) = 1
-  // If Diff > 0 (diff):  (X - 1) = Y,  (Y shr 8) = Z, (Z and 1) = 1, (1 - 1) = 0
-  Result := 1 - (Integer((Diff - 1) shr 8) and 1);
-  
-  // Alternative simpler form:
-  // Result := Integer((Diff - 1) shr 8) and 1;
-  // Returns 1 if equal, 0 if different
-  // Actually let's use this form for clarity:
+
   Result := Integer(((Cardinal(Diff) - 1) shr 31) and 1);
-  // If Diff=0: (0-1)=$FFFFFFFF, shr 31 = 1, and 1 = 1 (EQUAL)
-  // If Diff>0: (N-1)=M<$FFFFFFFF, shr 31 = 0, and 1 = 0 (DIFFERENT)
 end;
 
 class function TConstantTime.CompareBuffer(A, B: Pointer; Len: NativeUInt): Integer;
