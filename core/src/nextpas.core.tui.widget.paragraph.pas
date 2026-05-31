@@ -51,6 +51,8 @@ type
   public
     class function New(const AText: TText): IParagraph; static;
     class function FromString(const AStr: AnsiString): IParagraph; static;
+    { 快捷：带 wrap+trim 的文本段落（最常用模式） }
+    class function Wrapped(const AStr: AnsiString): IParagraph; static;
 
     function WithStyle(const AStyle: TStyle): IParagraph;
     function WithBlock(ABlock: IBlock): IParagraph;
@@ -245,6 +247,11 @@ end;
 class function TParagraph.FromString(const AStr: AnsiString): IParagraph;
 begin
   Result := New(TText.FromString(AStr));
+end;
+
+class function TParagraph.Wrapped(const AStr: AnsiString): IParagraph;
+begin
+  Result := FromString(AStr).WithWrap(WRAP_TRIM);
 end;
 
 function TParagraph.WithStyle(const AStyle: TStyle): IParagraph;

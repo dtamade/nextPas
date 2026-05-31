@@ -43,6 +43,10 @@ function RgbColor(const AR, AG, AB: Byte): TColor; inline;
 function ColorEquals(const A, B: TColor): Boolean; inline;
 function ColorIsSet(const AColor: TColor): Boolean; inline;
 
+{ 短名便利函数（与 RgbColor/IndexedColor 等价，更简洁） }
+function Rgb(const AR, AG, AB: Byte): TColor; inline;
+function Idx(const AIndex: Byte): TColor; inline;
+
 const
   { 命名色映射到 indexed 0..15 —— 与 ratatui 完全一致 }
   TUI_BLACK:         TColor = (Kind: ckIndexed; Index: 0);
@@ -108,6 +112,16 @@ end;
 function ColorIsSet(const AColor: TColor): Boolean;
 begin
   Result := AColor.Kind <> ckUnset;
+end;
+
+function Rgb(const AR, AG, AB: Byte): TColor;
+begin
+  Result := RgbColor(AR, AG, AB);
+end;
+
+function Idx(const AIndex: Byte): TColor;
+begin
+  Result := IndexedColor(AIndex);
 end;
 
 end.

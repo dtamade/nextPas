@@ -51,6 +51,8 @@ type
     class function New: IBlock; static;
     { 快捷：全边框 + 标题（最常用模式） }
     class function Bordered(const ATitle: AnsiString): IBlock; static;
+    { 快捷：圆角边框 + 标题 }
+    class function Rounded(const ATitle: AnsiString): IBlock; static;
 
     { IBlock builder 链 }
     function WithBorders(ABorders: TBorders): IBlock;
@@ -103,6 +105,11 @@ end;
 class function TBlock.Bordered(const ATitle: AnsiString): IBlock;
 begin
   Result := TBlock.New.WithBorders(BORDERS_ALL).WithTitle(ATitle);
+end;
+
+class function TBlock.Rounded(const ATitle: AnsiString): IBlock;
+begin
+  Result := TBlock.New.WithBorders(BORDERS_ALL).WithBorderSet(BorderSetRounded).WithTitle(ATitle);
 end;
 
 function TBlock.WithBorders(ABorders: TBorders): IBlock;
