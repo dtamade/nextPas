@@ -56,7 +56,13 @@ function StringDisplayWidth(const AStr: AnsiString): SizeUInt; overload; inline;
 implementation
 
 uses
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.simd.cpuinfo;
+
+{$ifdef CPUX86_64}
+var
+  GHasAVX2: Boolean;
+{$endif}
 
 { 宽度表 - East Asian Wide + Fullwidth 区间（Unicode 15.1，W/F 类别），
   按 Lo 升序排列，供二分查找。 }
@@ -222,35 +228,76 @@ function StringDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
   LDec: TUTF8DecodeResult;
-  LAllAscii: Boolean;
-  LI: SizeUInt;
+  {$ifdef CPUX86_64}
+  LMask: UInt32;
+  LP: PByte;
+  {$endif}
 begin
   if ALen = 0 then
     Exit(0);
 
-  { 纯 ASCII 快路径：高位无 1 则宽度 = 字节数 }
-  LAllAscii := True;
-  LI := 0;
-  while LI < ALen do
-  begin
-    if AData[LI] >= $80 then
-    begin
-      LAllAscii := False;
-      Break;
-    end;
-    Inc(LI);
-  end;
-  if LAllAscii then
-    Exit(ALen);
-
-  Result := 0;
+  {$ifdef CPUX86_64}
   LPos := 0;
+
+  if GHasAVX2 then
+  begin
+    { AVX2 路径：32 字节一组 }
+    while LPos + 32 <= ALen do
+    begin
+      LP := @AData[LPos];
+      {$asmmode intel}
+      asm
+        mov rax, [LP]
+        vmovdqu ymm0, [rax]
+        vpmovmskb eax, ymm0
+        mov [LMask], eax
+      end;
+      {$asmmode default}
+      if LMask = 0 then
+        Inc(LPos, 32)
+      else
+        Break;
+    end;
+  end;
+
+  { SSE2 路径：处理 AVX2 剩余或无 AVX2 时的主循环 }
+  while LPos + 16 <= ALen do
+  begin
+    LP := @AData[LPos];
+    {$asmmode intel}
+    asm
+      mov rax, [LP]
+      movdqu xmm0, [rax]
+      pmovmskb eax, xmm0
+      mov [LMask], eax
+    end;
+    {$asmmode default}
+    if LMask = 0 then
+      Inc(LPos, 16)
+    else
+      Break;
+  end;
+
+  { 标量扫描尾部 }
+  while (LPos < ALen) and (AData[LPos] < $80) do
+    Inc(LPos);
+  if LPos = ALen then
+  begin
+    { 清除 AVX 上半状态（避免 SSE/AVX 切换惩罚） }
+    if GHasAVX2 then
+      asm vzeroupper end;
+    Exit(ALen);
+  end;
+  if GHasAVX2 then
+    asm vzeroupper end;
+
+  { 非 ASCII 部分逐码点 }
+  Result := LPos;
   while LPos < ALen do
   begin
     LDec := UTF8Decode(@AData[LPos], ALen - LPos);
     if LDec.ByteLen = 0 then
     begin
-      { 非法字节：跳过 1 字节，按宽度 1 计 }
       Inc(Result, 1);
       Inc(LPos, 1);
     end
@@ -260,6 +307,30 @@ begin
       Inc(LPos, LDec.ByteLen);
     end;
   end;
+  {$else}
+  { 非 x86_64 标量路径 }
+  LPos := 0;
+  while (LPos < ALen) and (AData[LPos] < $80) do
+    Inc(LPos);
+  if LPos = ALen then
+    Exit(ALen);
+
+  Result := LPos;
+  while LPos < ALen do
+  begin
+    LDec := UTF8Decode(@AData[LPos], ALen - LPos);
+    if LDec.ByteLen = 0 then
+    begin
+      Inc(Result, 1);
+      Inc(LPos, 1);
+    end
+    else
+    begin
+      Inc(Result, CodepointWidth(LDec.CodePoint));
+      Inc(LPos, LDec.ByteLen);
+    end;
+  end;
+  {$endif}
 end;
 
 function StringDisplayWidth(const AStr: AnsiString): SizeUInt;
@@ -268,5 +339,10 @@ begin
     Exit(0);
   Result := StringDisplayWidth(@AStr[1], Length(AStr));
 end;
+
+{$ifdef CPUX86_64}
+initialization
+  GHasAVX2 := HasAVX2;
+{$endif}
 
 end.
