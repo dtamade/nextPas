@@ -6329,6 +6329,13 @@ begin
         ABlob := ABlob + 'call ' + ArgName + ' ' +
           IntToStr(StrCallArgCount) + #10;
     end
+    else if (TypeMetaSize(ANode.ChildAt(0).Text) > 0) and
+      (LookupClassVar(ANode.ChildAt(0).Text) = '') and
+      (ANode.ChildCount = 2) then
+    begin
+      ABlob := ABlob;
+      Exit(True);
+    end
     else if HasOverload(ANode.ChildAt(0).Text) then
     begin
       ArgName := '';
