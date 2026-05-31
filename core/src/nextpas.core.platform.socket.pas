@@ -19,7 +19,10 @@ const
   PLATFORM_IPPROTO_UDP = 17;
   PLATFORM_SOL_SOCKET  = $FFFF;
   PLATFORM_SO_REUSEADDR = $0004;
+  PLATFORM_SO_REUSEPORT = $0004;
   PLATFORM_SO_KEEPALIVE = $0008;
+  PLATFORM_SO_RCVTIMEO = $1006;
+  PLATFORM_SO_SNDTIMEO = $1005;
   PLATFORM_TCP_NODELAY  = $0001;
   PLATFORM_SHUT_RD     = 0;
   PLATFORM_SHUT_WR     = 1;
@@ -33,7 +36,10 @@ const
   PLATFORM_IPPROTO_UDP = IPPROTO_UDP;
   PLATFORM_SOL_SOCKET  = SOL_SOCKET;
   PLATFORM_SO_REUSEADDR = SO_REUSEADDR;
+  PLATFORM_SO_REUSEPORT = 15;
   PLATFORM_SO_KEEPALIVE = SO_KEEPALIVE;
+  PLATFORM_SO_RCVTIMEO = 20;
+  PLATFORM_SO_SNDTIMEO = 21;
   PLATFORM_TCP_NODELAY  = TCP_NODELAY;
   PLATFORM_SHUT_RD     = SHUT_RD;
   PLATFORM_SHUT_WR     = SHUT_WR;
@@ -88,12 +94,20 @@ function platform_socket_getsockname(const ASocket: TPlatformSocket;
 function platform_socket_getpeername(const ASocket: TPlatformSocket;
   AAddr: Pointer; AAddrLen: Pointer): Int32;
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32;
+function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
+  const ANonBlock: Boolean): Int32;
+function platform_socket_set_timeout(const ASocket: TPlatformSocket;
+  const AOptName: Int32; const AMs: UInt32): Int32;
 
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
 uses
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi,
+  {$IFDEF NEXTPAS_LINUX}nextpas.core.platform.linux.base{$ENDIF}
+  {$IFDEF NEXTPAS_DARWIN}nextpas.core.platform.darwin.base{$ENDIF}
+  {$IFDEF NEXTPAS_FREEBSD}nextpas.core.platform.freebsd.base{$ENDIF}
+  ;
 
 function platform_socket_create(const ADomain, AType, AProtocol: Int32;
   out ASocket: TPlatformSocket): Int32;
@@ -284,6 +298,33 @@ begin
   AAddr := LSa^.sin_addr.s_addr;
   freeaddrinfo(LRes);
   Result := 0;
+end;
+
+function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
+  const ANonBlock: Boolean): Int32;
+var
+  LFlags: PtrInt;
+begin
+  LFlags := fcntl(TPlatformFileDescriptor(ASocket.Value), F_GETFL, 0);
+  if LFlags < 0 then Exit(platform_get_errno);
+  if ANonBlock then
+    LFlags := LFlags or O_NONBLOCK
+  else
+    LFlags := LFlags and (not O_NONBLOCK);
+  if fcntl(TPlatformFileDescriptor(ASocket.Value), F_SETFL, LFlags) < 0 then
+    Exit(platform_get_errno);
+  Result := 0;
+end;
+
+function platform_socket_set_timeout(const ASocket: TPlatformSocket;
+  const AOptName: Int32; const AMs: UInt32): Int32;
+var
+  LTv: timeval;
+begin
+  LTv.tv_sec := AMs div 1000;
+  LTv.tv_usec := (AMs mod 1000) * 1000;
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
+    @LTv, SizeOf(LTv));
 end;
 
 {$ENDIF}
@@ -509,6 +550,22 @@ begin
   Result := 0;
 end;
 
+function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
+  const ANonBlock: Boolean): Int32;
+begin
+  Result := -1; // TODO: ioctlsocket(FIONBIO)
+end;
+
+function platform_socket_set_timeout(const ASocket: TPlatformSocket;
+  const AOptName: Int32; const AMs: UInt32): Int32;
+var
+  LMs: Int32;
+begin
+  LMs := Int32(AMs);
+  Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
+    @LMs, SizeOf(LMs));
+end;
+
 var
   GWsaData: array[0..511] of Byte;
 
@@ -534,6 +591,8 @@ function platform_socket_setsockopt(const ASocket: TPlatformSocket; ALevel, AOpt
 function platform_socket_getsockname(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
 function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Pointer; AAddrLen: Pointer): Int32; begin Result := -1; end;
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := -1; end;
+function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := -1; end;
+function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const AMs: UInt32): Int32; begin Result := -1; end;
 {$ENDIF}
 
 end.

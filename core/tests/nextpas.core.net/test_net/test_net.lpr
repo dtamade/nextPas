@@ -8,6 +8,8 @@ uses
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.io.intf,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.tcp,
@@ -233,6 +235,27 @@ begin
   platform_thread_join(LHandle, LRetVal);
 end;
 
+procedure TestReadDeadline;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LGot: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LClient.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(50)));
+  LGot := False;
+  try
+    LClient.Read(LBuf[0], 32);
+  except
+    on ENetworkError do LGot := True;
+  end;
+  Check(LGot, 'read deadline triggers timeout');
+  LClient.Close;
+  LListener.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP echo', @TestTcpEcho);
@@ -243,5 +266,6 @@ begin
   T.Run('NetAddress', @TestNetAddress);
   T.Run('Connect refused', @TestConnectRefused);
   T.Run('IO integration', @TestIoIntegration);
+  T.Run('Read deadline', @TestReadDeadline);
   T.Summary;
 end.
