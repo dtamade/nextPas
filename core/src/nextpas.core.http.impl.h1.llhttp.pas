@@ -2953,20 +2953,14 @@ begin
     begin
       _L_s_n_llhttp__internal__n_header_value_relaxed:
       begin
+        while (p <> endp) and (_static_llhttp__internal__run_lookup_table_5[UInt8(p^)] = 1) do
+          Inc(p);
         if (p = endp) then
         begin
           Result := s_n_llhttp__internal__n_header_value_relaxed;
           Exit;
         end;
-        case _static_llhttp__internal__run_lookup_table_5[UInt8(p^)] of
-          1:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_value_relaxed;
-          end;
-          else
-            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
-        end;
+        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
       end;
     end;
     s_n_llhttp__internal__n_error_54:
@@ -3008,25 +3002,19 @@ begin
     begin
       _L_s_n_llhttp__internal__n_header_value_connection_token:
       begin
+        while (p <> endp) and (_static_llhttp__internal__run_lookup_table_6[UInt8(p^)] = 1) do
+          Inc(p);
         if (p = endp) then
         begin
           Result := s_n_llhttp__internal__n_header_value_connection_token;
           Exit;
         end;
-        case _static_llhttp__internal__run_lookup_table_6[UInt8(p^)] of
-          1:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_value_connection_token;
-          end;
-          2:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_value_connection;
-          end;
-          else
-            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+        if (_static_llhttp__internal__run_lookup_table_6[UInt8(p^)] = 2) then
+        begin
+          Inc(p);
+          goto _L_s_n_llhttp__internal__n_header_value_connection;
         end;
+        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
       end;
     end;
     s_n_llhttp__internal__n_header_value_connection_ws:
@@ -3382,45 +3370,33 @@ begin
     begin
       _L_s_n_llhttp__internal__n_header_value:
       begin
+        while (p <> endp) and (_static_llhttp__internal__run_lookup_table_7[UInt8(p^)] = 1) do
+          Inc(p);
         if (p = endp) then
         begin
           Result := s_n_llhttp__internal__n_header_value;
           Exit;
         end;
-        case _static_llhttp__internal__run_lookup_table_7[UInt8(p^)] of
-          1:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_value;
-          end;
-          else
-            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
-        end;
+        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
       end;
     end;
     s_n_llhttp__internal__n_header_value_te_token:
     begin
       _L_s_n_llhttp__internal__n_header_value_te_token:
       begin
+        while (p <> endp) and (_static_llhttp__internal__run_lookup_table_8[UInt8(p^)] = 1) do
+          Inc(p);
         if (p = endp) then
         begin
           Result := s_n_llhttp__internal__n_header_value_te_token;
           Exit;
         end;
-        case _static_llhttp__internal__run_lookup_table_8[UInt8(p^)] of
-          1:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_value_te_token;
-          end;
-          2:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
-          end;
-          else
-            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_9;
+        if (_static_llhttp__internal__run_lookup_table_8[UInt8(p^)] = 2) then
+        begin
+          Inc(p);
+          goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
         end;
+        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_9;
       end;
     end;
     s_n_llhttp__internal__n_header_value_te_chunked_last:
@@ -3588,20 +3564,14 @@ begin
     begin
       _L_s_n_llhttp__internal__n_header_field_general:
       begin
+        while (p <> endp) and (_static_llhttp__internal__run_lookup_table_9[UInt8(p^)] = 1) do
+          Inc(p);
         if (p = endp) then
         begin
           Result := s_n_llhttp__internal__n_header_field_general;
           Exit;
         end;
-        case _static_llhttp__internal__run_lookup_table_9[UInt8(p^)] of
-          1:
-          begin
-            Inc(p);
-            goto _L_s_n_llhttp__internal__n_header_field_general;
-          end;
-          else
-            goto _L_s_n_llhttp__internal__n_header_field_general_otherwise;
-        end;
+        goto _L_s_n_llhttp__internal__n_header_field_general_otherwise;
       end;
     end;
     s_n_llhttp__internal__n_header_field_colon:
