@@ -1154,7 +1154,7 @@ end;
 procedure THIRBuilder.ProcessIntfAddRef(const ANode: TTypedHirNode);
 var
   VarName: string;
-  ObjPtr: THIRValueId;
+  ObjPtr, OldObjPtr: THIRValueId;
   Instr: THIRInstr;
   I: LongInt;
   Found: Boolean;
@@ -1163,6 +1163,21 @@ begin
   ObjPtr := FindAlloca(VarName);
   if ObjPtr = 0 then Exit;
   ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+
+  OldObjPtr := FindAlloca(VarName + '$obj');
+  if OldObjPtr <> 0 then
+  begin
+    OldObjPtr := EmitLoad(GetPtrType, OldObjPtr);
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := 0;
+    Instr.IntrinsicName := 'intf_release';
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeTypedOperand(OldObjPtr, GetPtrType);
+    EmitInstr(Instr);
+  end;
+
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikIntrinsic;

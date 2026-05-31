@@ -448,6 +448,9 @@ procedure THIRModule.AddImtGlobal(const AClassName, AInterfaceName: string;
 var
   Idx, I: LongInt;
 begin
+  for Idx := 0 to Length(FImtGlobals) - 1 do
+    if (FImtGlobals[Idx].ClassName = AClassName) and
+      (FImtGlobals[Idx].InterfaceName = AInterfaceName) then Exit;
   Idx := Length(FImtGlobals);
   SetLength(FImtGlobals, Idx + 1);
   FImtGlobals[Idx].ClassName := AClassName;
