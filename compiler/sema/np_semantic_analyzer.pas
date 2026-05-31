@@ -6311,6 +6311,38 @@ begin
     (ANode.ChildAt(0).ChildAt(0) <> nil) and
     (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(0).ChildAt(1) <> nil) and
+    (ANode.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) and
+    (TypeMetaSize(ANode.ChildAt(0).ChildAt(0).Text) > 0) and
+    (LookupClassVar(ANode.ChildAt(0).ChildAt(0).Text) = '') then
+  begin
+    Inc(FBlockLabelCounter);
+    FuncName := '$new_tmp_' + IntToStr(FBlockLabelCounter);
+    Folded := TypeMetaSize(ANode.ChildAt(0).ChildAt(0).Text);
+    ArgName := FuncName + #9 +
+      ANode.ChildAt(0).ChildAt(0).Text + '.' +
+      ANode.ChildAt(0).ChildAt(1).Text;
+    for StrCallIdx := 1 to ANode.ChildCount - 1 do
+      if (ANode.ChildAt(StrCallIdx) <> nil) and
+        EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), Operand) then
+        ArgName := ArgName + #9 + Operand;
+    RegisterRuntimeVar(FuncName);
+    RegisterClassVar(FuncName, ANode.ChildAt(0).ChildAt(0).Text);
+    FModel.AddTypedHirNode(
+      'class-new-runtime', IntToStr(Folded), 0, 0, ArgName);
+    if TypeMetaVmtCount(ANode.ChildAt(0).ChildAt(0).Text) > 0 then
+      FModel.AddTypedHirNode('vmt-store-runtime',
+        ANode.ChildAt(0).ChildAt(0).Text, 0, 0,
+        FuncName + #9 + ANode.ChildAt(0).ChildAt(0).Text);
+    ABlob := 'var ' + FuncName + #10;
+    Exit(True);
+  end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
+    (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).NodeKind = gnkDotAccess) and
+    (ANode.ChildAt(0).ChildCount >= 2) and
+    (ANode.ChildAt(0).ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(0).ChildAt(1) <> nil) and
     (ANode.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) then
   begin
     FuncName := LookupClassVar(ANode.ChildAt(0).ChildAt(0).Text);
@@ -7267,7 +7299,34 @@ begin
               IsRuntimeStrVar(RhsNode.Text) then
               Operand := Operand + #9 + 'strvar ' + RhsNode.Text + #10
             else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
-              Operand := Operand + #9 + StringValue;
+              Operand := Operand + #9 + StringValue
+            else if (RhsNode.NodeKind = gnkFunctionCall) and
+              (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
+              (RhsNode.ChildAt(0).NodeKind = gnkDotAccess) and
+              (RhsNode.ChildAt(0).ChildCount >= 2) and
+              (RhsNode.ChildAt(0).ChildAt(0) <> nil) and
+              (TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) then
+            begin
+              Inc(FBlockLabelCounter);
+              FuncName := '$arg_tmp_' + IntToStr(FBlockLabelCounter);
+              Value := TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text);
+              StringValue := FuncName + #9 +
+                RhsNode.ChildAt(0).ChildAt(0).Text + '.' +
+                RhsNode.ChildAt(0).ChildAt(1).Text;
+              for K := 1 to RhsNode.ChildCount - 1 do
+                if (RhsNode.ChildAt(K) <> nil) and
+                  EncodeRuntimeIntExprFold(RhsNode.ChildAt(K), ArgName) then
+                  StringValue := StringValue + #9 + ArgName;
+              RegisterRuntimeVar(FuncName);
+              RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
+              FModel.AddTypedHirNode(
+                'class-new-runtime', IntToStr(Value), 0, 0, StringValue);
+              if TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0 then
+                FModel.AddTypedHirNode('vmt-store-runtime',
+                  RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
+                  FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
+              Operand := Operand + #9 + 'var ' + FuncName + #10;
+            end;
           end;
           CondValue := -1;
           if FCurrentMethodClass <> '' then
