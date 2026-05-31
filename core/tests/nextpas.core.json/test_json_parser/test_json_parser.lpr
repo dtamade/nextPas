@@ -310,6 +310,221 @@ begin
   B.Done;
 end;
 
+procedure TestInitNilAllocator;
+var Doc: TJsonDocument; V: TJsonValue;
+begin
+  Doc.Init(nil);
+  Check(Doc.Parse(SV('{"x":42}')), 'parse with nil allocator');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsObject, 'is object');
+  CheckEqual(Int64(42), V.ObjectGet(SV('x')).AsInt, 'x=42');
+  Doc.Done;
+end;
+
+procedure TestDeepNesting500;
+var
+  S: string;
+  I: Integer;
+  Doc: TJsonDocument;
+  V: TJsonValue;
+begin
+  S := '';
+  for I := 1 to 500 do
+    S := S + '[';
+  S := S + '1';
+  for I := 1 to 500 do
+    S := S + ']';
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.Create(PAnsiChar(S), Length(S))), 'parse 500 deep');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsArray, 'root is array');
+  Doc.Done;
+end;
+
+procedure TestDeepNestingExceedsLimit;
+var
+  S: string;
+  I: Integer;
+  Doc: TJsonDocument;
+begin
+  S := '';
+  for I := 1 to 513 do
+    S := S + '[';
+  S := S + '1';
+  for I := 1 to 513 do
+    S := S + ']';
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(TStringView.Create(PAnsiChar(S), Length(S))), 'reject 513 deep');
+  Check(Doc.HasError, 'has depth error');
+  Doc.Done;
+end;
+
+procedure TestEmptyInput;
+var Doc: TJsonDocument;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('')), 'reject empty');
+  Check(Doc.HasError, 'empty has error');
+  Doc.Done;
+end;
+
+procedure TestWhitespaceOnlyInput;
+var Doc: TJsonDocument;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('   '#9#10#13'  ')), 'reject whitespace only');
+  Check(Doc.HasError, 'whitespace has error');
+  Doc.Done;
+end;
+
+procedure TestUnicodeKeys;
+var Doc: TJsonDocument; V: TJsonValue;
+const
+  INPUT = '{"世界":"hello","é":"accent"}';
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.Create(PAnsiChar(INPUT), Length(INPUT))), 'parse unicode keys');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsObject, 'is object');
+  Doc.Done;
+end;
+
+procedure TestSurrogatePair;
+var Doc: TJsonDocument; V: TJsonValue; S: string;
+const
+  INPUT = '{"emoji":"😀"}';
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.Create(PAnsiChar(INPUT), Length(INPUT))), 'parse surrogate');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  S := V.ObjectGet(SV('emoji')).AsStr.ToString;
+  Check(Length(S) = 4, 'surrogate -> 4 utf8 bytes');
+  Check(Ord(S[1]) = $F0, 'utf8 byte 0');
+  Doc.Done;
+end;
+
+procedure TestLargeDocument;
+var
+  B: TStringBuilder;
+  W: TJsonWriter;
+  I: Int32;
+  Doc: TJsonDocument;
+  V: TJsonValue;
+  LKey: string;
+begin
+  B.Init(65536);
+  W.Init(B);
+  W.BeginObject;
+  for I := 0 to 999 do
+  begin
+    Str(I, LKey);
+    LKey := 'field_' + LKey;
+    W.Key(TStringView.FromStr(LKey));
+    W.BeginObject;
+      W.Key(SV('value')); W.Int(I);
+      W.Key(SV('name')); W.Str(TStringView.FromStr(LKey));
+    W.EndObject;
+  end;
+  W.EndObject;
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.FromStr(B.ToString)), 'parse 1000-field doc');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsObject, 'is object');
+  CheckEqual(Int64(1000), Int64(V.ObjectLen), 'len=1000');
+  CheckEqual(Int64(500), V.ObjectGet('field_500').ObjectGet(SV('value')).AsInt, 'field_500.value');
+  Doc.Done;
+  B.Done;
+end;
+
+procedure TestNumberEdgeCases;
+var Doc: TJsonDocument; V: TJsonValue;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('0')), 'parse 0');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual(Int64(0), V.AsInt, 'val 0');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('-0')), 'parse -0');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('1e308')), 'parse 1e308');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('-9223372036854775808')), 'parse int64 min');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual(Int64(-9223372036854775808), V.AsInt, 'int64 min');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('9223372036854775807')), 'parse int64 max');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual(Int64(9223372036854775807), V.AsInt, 'int64 max');
+  Doc.Done;
+end;
+
+procedure TestMultipleErrors;
+var Doc: TJsonDocument;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{')), 'reject unclosed object');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('[')), 'reject unclosed array');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('"unterminated')), 'reject unclosed string');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('tru')), 'reject truncated true');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('[1,]')), 'reject trailing comma');
+  Doc.Done;
+end;
+
+procedure TestDocReuse;
+var Doc: TJsonDocument; V: TJsonValue;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('1')), 'first parse');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('"hello"')), 'second parse');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual('hello', V.AsStr.ToString, 'reuse val');
+  Doc.Done;
+end;
+
+procedure TestNestedObjectArray;
+var Doc: TJsonDocument; V, Arr, Obj: TJsonValue;
+const
+  INPUT = '{"data":[{"id":1,"tags":["a","b"]},{"id":2,"tags":[]}]}';
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV(INPUT)), 'parse nested obj/arr');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Arr := V.ObjectGet(SV('data'));
+  Check(Arr.IsArray, 'data is array');
+  CheckEqual(Int64(2), Int64(Arr.ArrayLen), 'data len=2');
+  Obj := Arr.ArrayGet(0);
+  CheckEqual(Int64(1), Obj.ObjectGet(SV('id')).AsInt, '[0].id=1');
+  CheckEqual(Int64(2), Int64(Obj.ObjectGet(SV('tags')).ArrayLen), '[0].tags len=2');
+  CheckEqual('a', Obj.ObjectGet(SV('tags')).ArrayGet(0).AsStr.ToString, 'tag a');
+  Obj := Arr.ArrayGet(1);
+  CheckEqual(Int64(2), Obj.ObjectGet(SV('id')).AsInt, '[1].id=2');
+  CheckEqual(Int64(0), Int64(Obj.ObjectGet(SV('tags')).ArrayLen), '[1].tags empty');
+  Doc.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.parser');
   T.Run('parse null', @TestParseNull);
@@ -331,5 +546,17 @@ begin
   T.Run('round trip', @TestRoundTrip);
   T.Run('large array', @TestLargeArray);
   T.Run('large object hash lookup', @TestLargeObjectHashLookup);
+  T.Run('init nil allocator', @TestInitNilAllocator);
+  T.Run('deep nesting 500', @TestDeepNesting500);
+  T.Run('deep nesting exceeds limit', @TestDeepNestingExceedsLimit);
+  T.Run('empty input', @TestEmptyInput);
+  T.Run('whitespace only input', @TestWhitespaceOnlyInput);
+  T.Run('unicode keys', @TestUnicodeKeys);
+  T.Run('surrogate pair', @TestSurrogatePair);
+  T.Run('large document', @TestLargeDocument);
+  T.Run('number edge cases', @TestNumberEdgeCases);
+  T.Run('multiple errors', @TestMultipleErrors);
+  T.Run('doc reuse', @TestDocReuse);
+  T.Run('nested object array', @TestNestedObjectArray);
   T.Summary;
 end.
