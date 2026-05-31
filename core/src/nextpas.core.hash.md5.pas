@@ -37,6 +37,10 @@ function NewMD5: IHasher;
 
 implementation
 
+{$IFDEF CPUX86_64}
+{$I nextpas.core.hash.md5.x64.inc}
+{$ENDIF}
+
 function RL(AX: UInt32; AN: Integer): UInt32; inline;
 begin
   Result := (AX shl AN) or (AX shr (32 - AN));
@@ -74,6 +78,10 @@ var
   A, B, C, D, F: UInt32;
   G, I: Integer;
 begin
+  {$IFDEF CPUX86_64}
+  MD5ProcessBlockX64(ABlock, AA, AB, AC, AD);
+  Exit;
+  {$ENDIF}
   for I := 0 to 15 do
     M[I] := UInt32(ABlock[I*4]) or (UInt32(ABlock[I*4+1]) shl 8) or
             (UInt32(ABlock[I*4+2]) shl 16) or (UInt32(ABlock[I*4+3]) shl 24);

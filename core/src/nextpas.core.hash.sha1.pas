@@ -42,12 +42,20 @@ begin
   Result := (AX shl AN) or (AX shr (32 - AN));
 end;
 
+{$IFDEF CPUX86_64}
+{$I nextpas.core.hash.sha1.x64.inc}
+{$ENDIF}
+
 procedure SHA1ProcessBlock(ABlock: PByte; var AH: array of UInt32);
 var
   W: array[0..79] of UInt32;
   A, B, C, D, E, F, K, Tmp: UInt32;
   I: Integer;
 begin
+  {$IFDEF CPUX86_64}
+  SHA1ProcessBlockX64(ABlock, AH);
+  Exit;
+  {$ENDIF}
   for I := 0 to 15 do
     W[I] := (UInt32(ABlock[I*4]) shl 24) or (UInt32(ABlock[I*4+1]) shl 16)
           or (UInt32(ABlock[I*4+2]) shl 8) or UInt32(ABlock[I*4+3]);
