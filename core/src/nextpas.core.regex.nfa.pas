@@ -209,9 +209,9 @@ begin
         if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
 
     if pos = ALen then Break;
-    if CCount = 0 then Break;
 
     NCount := 0;
+    if CCount > 0 then
     for i := 0 to CCount - 1 do
     begin
       inst := AProgram.Code[CList[i]];
@@ -542,23 +542,6 @@ begin
     Inc(pos);
     if (NList.Count = 0) and matched then Break;
     if (NList.Count = 0) and AAnchored then Break;
-
-    // Compact slot pool: only keep slots referenced by NList
-    if NList.Count > 0 then
-    begin
-      for i := 0 to NList.Count - 1 do
-      begin
-        if NList.Items[i].SlotIdx <> UInt32(i) then
-        begin
-          Move(Pool.Slots[NList.Items[i].SlotIdx][0], Pool.Slots[i][0],
-               Pool.NumSlots * SizeOf(SizeInt));
-          NList.Items[i].SlotIdx := UInt32(i);
-        end;
-      end;
-      Pool.Count := NList.Count;
-    end
-    else
-      Pool.Count := 0;
 
     // Prefilter skip for NfaSearch
     if (NList.Count = 0) and (not matched) and (pos < ALen) then
