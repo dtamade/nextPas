@@ -37,38 +37,35 @@ type
 implementation
 
 uses
-  {$IFDEF UNIX}Sockets, BaseUnix, netdb,{$ENDIF}
+  {$IFDEF UNIX}Sockets, BaseUnix,{$ENDIF}
+  {$IFDEF WINDOWS}WinSock2,{$ENDIF}
+  nextpas.core.net.base,
+  nextpas.core.net.resolve,
   nextpas.core.tls.quick,
   nextpas.core.tls.connection.builder;
 
-{$IFDEF UNIX}
 function ResolveAndConnect(const AHost: string; APort: Word;
   out ASocket: THandle; out AError: string): Boolean;
 var
+  LAddr: TNetAddress;
+  {$IFDEF UNIX}
   LSock: LongInt;
-  LAddr: TInetSockAddr;
-  LIP: in_addr;
-  LHostEntry: THostEntry;
-  LResolved: Boolean;
+  LSockAddr: TInetSockAddr;
+  {$ENDIF}
 begin
   ASocket := THandle(-1);
   AError := '';
   Result := False;
 
-  // Try as IP literal first
-  LIP := StrToNetAddr(AHost);
-  if LIP.s_addr = 0 then
+  // Use framework DNS resolver
+  LAddr := NetResolve(AHost);
+  if LAddr.IP = '' then
   begin
-    // DNS resolve
-    LResolved := ResolveHostByName(AHost, LHostEntry);
-    if not LResolved then
-    begin
-      AError := 'DNS resolution failed for: ' + AHost;
-      Exit;
-    end;
-    LIP := LHostEntry.Addr;
+    AError := 'DNS resolution failed for: ' + AHost;
+    Exit;
   end;
 
+  {$IFDEF UNIX}
   LSock := fpSocket(AF_INET, SOCK_STREAM, 0);
   if LSock < 0 then
   begin
@@ -76,12 +73,12 @@ begin
     Exit;
   end;
 
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := AF_INET;
-  LAddr.sin_port := htons(APort);
-  LAddr.sin_addr := LIP;
+  FillChar(LSockAddr, SizeOf(LSockAddr), 0);
+  LSockAddr.sin_family := AF_INET;
+  LSockAddr.sin_port := htons(APort);
+  LSockAddr.sin_addr := StrToNetAddr(LAddr.IP);
 
-  if fpConnect(LSock, @LAddr, SizeOf(LAddr)) <> 0 then
+  if fpConnect(LSock, @LSockAddr, SizeOf(LSockAddr)) <> 0 then
   begin
     fpClose(LSock);
     AError := 'TCP connect failed to ' + AHost + ':' + IntToStr(APort);
@@ -90,8 +87,10 @@ begin
 
   ASocket := THandle(LSock);
   Result := True;
+  {$ELSE}
+  AError := 'Platform not yet supported for TLS dialer';
+  {$ENDIF}
 end;
-{$ENDIF}
 
 constructor TSSLDialer.Create(AConfig: ISSLContext);
 begin
@@ -123,16 +122,11 @@ begin
   Result.Stream := nil;
   Result.Error := TSSLOperationResult.Ok;
 
-  {$IFDEF UNIX}
   if not ResolveAndConnect(AHost, APort, LSocket, LError) then
   begin
     Result.Error := TSSLOperationResult.Err(sslErrIO, LError);
     Exit;
   end;
-  {$ELSE}
-  Result.Error := TSSLOperationResult.Err(sslErrUnsupported, 'Dial not implemented for this platform');
-  Exit;
-  {$ENDIF}
 
   try
     LBuilder := TSSLConnectionBuilder.CreateWithContext(FConfig);
@@ -143,18 +137,12 @@ begin
 
     Result.Error := LBuilder.TryBuildClient(Result.Connection);
     if Result.Error.IsErr then
-    begin
-      {$IFDEF UNIX}fpClose(LongInt(LSocket));{$ENDIF}
       Exit;
-    end;
 
     Result.Stream := TSSLStream.Create(Result.Connection);
   except
     on E: Exception do
-    begin
       Result.Error := TSSLOperationResult.Err(sslErrOther, E.Message);
-      {$IFDEF UNIX}fpClose(LongInt(LSocket));{$ENDIF}
-    end;
   end;
 end;
 
