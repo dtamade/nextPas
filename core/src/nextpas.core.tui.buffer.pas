@@ -492,6 +492,7 @@ begin
       LSrc := @LOld[(LY - LOldArea.Y) * LOldArea.Width + (LX - LOldArea.X)];
       FContent[(LY - ANewArea.Y) * ANewArea.Width + (LX - ANewArea.X)] := LSrc^;
     end;
+  FDirtyRows := QWord(-1);
 end;
 
 procedure TBuffer.Diff(const ANext: TBuffer; out APatches: TDiffEntries);
