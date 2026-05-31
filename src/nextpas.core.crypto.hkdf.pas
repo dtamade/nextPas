@@ -139,6 +139,7 @@ function HKDF_ExpandBytes(AAlgo: THashAlgorithm;
 begin
   SetLength(Result, ALength);
   if ALength = 0 then Exit;
+  if Length(APRK) = 0 then begin SetLength(Result, 0); Exit; end;
   if Length(AInfo) > 0 then
     HKDF_Expand(AAlgo, APRK[0], Length(APRK), AInfo[0], Length(AInfo), Result[0], ALength)
   else

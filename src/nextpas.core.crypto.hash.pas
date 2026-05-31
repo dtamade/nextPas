@@ -1064,7 +1064,8 @@ var
   LH: IHasher;
 begin
   LH := nextpas.core.hash.sha256.NewSHA256;
-  LH.Write(AData[0], Length(AData));
+  if Length(AData) > 0 then
+    LH.Write(AData[0], Length(AData));
   Result := LH.SumBytes;
 end;
 

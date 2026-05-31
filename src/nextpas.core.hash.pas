@@ -124,6 +124,7 @@ var
 const
   HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
 begin
+  if ALen = 0 then begin Result := ''; Exit; end;
   SetLength(Result, ALen * 2);
   P := @ABuf;
   for I := 0 to ALen - 1 do
