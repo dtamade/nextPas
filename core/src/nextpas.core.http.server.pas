@@ -20,6 +20,7 @@ type
     WriteTimeout: Int64;  // milliseconds, 0 = no timeout
     IdleTimeout: Int64;   // milliseconds between requests, default 30000
     MaxHeaderSize: Int32; // bytes, default 8192
+    MaxBodySize: Int64;   // bytes, default 4194304 (4MB), 0 = unlimited
     class function Default: THttpServerOptions; static;
   end;
 
@@ -118,6 +119,8 @@ var
   LBodyStr: string;
   LBodyReader: IReader;
   LContentLen: Int64;
+  LTotalRead: SizeUInt;
+  LHeadersDone: Boolean;
 begin
   LParser := NewH1RequestParser;
   LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
@@ -137,10 +140,27 @@ begin
 
       { Parse request }
       LParser.Reset;
+      LTotalRead := 0;
+      LHeadersDone := False;
       repeat
         LN := AConn.Read(LBuf[0], 4096);
         if LN = 0 then begin LKeepAlive := False; Break; end;
+        Inc(LTotalRead, LN);
         LParser.Execute(@LBuf[0], LN);
+        { Detect when headers become available }
+        if (not LHeadersDone) and ((LParser.GetUrl <> '') or LParser.IsComplete) then
+        begin
+          LHeadersDone := True;
+          { Check header size limit: total bytes read when headers parsed
+            minus body length gives approximate header size }
+          if (AOptions.MaxHeaderSize > 0) and
+             (Int64(LTotalRead) - Int64(Length(LParser.GetBody)) > Int64(AOptions.MaxHeaderSize)) then
+          begin
+            WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
+            LKeepAlive := False;
+            Break;
+          end;
+        end;
       until LParser.IsComplete or LParser.HasError;
 
       if not LParser.IsComplete then
@@ -148,6 +168,18 @@ begin
         if LParser.HasError then
           WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
         Break;
+      end;
+
+      { Check body size limit }
+      if AOptions.MaxBodySize > 0 then
+      begin
+        LBodyStr := LParser.GetBody;
+        if Int64(Length(LBodyStr)) > AOptions.MaxBodySize then
+        begin
+          WriteErrorResponse(AConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+          LKeepAlive := False;
+          Continue;
+        end;
       end;
 
       { Determine keep-alive before dispatching }
@@ -182,6 +214,7 @@ begin
         LW.GetHeaders.Set_('connection', 'close');
 
       AHandler.ServeHTTP(LReq, LW);
+      LW.Flush;
       (LBufWriter as IFlusher).Flush;
 
       { If response writer forced connection close (no content-length),
@@ -229,6 +262,7 @@ begin
   Result.WriteTimeout := 0;
   Result.IdleTimeout := 30000; { 30 seconds between requests }
   Result.MaxHeaderSize := 8192;
+  Result.MaxBodySize := 4194304; { 4 MB }
 end;
 
 { THttpServer }
