@@ -169,7 +169,7 @@ begin
   {$IFDEF CPUX86_64}
   if GHasSHANI then
     ProcessBlockSHANI(ABlock, @FH[0])
-  else if GHasAVX then
+  else if GHasAVX2 then
     ProcessBlockAVX2(ABlock, @FH[0])
   else if GHasSSSE3 then
     ProcessBlockX64V2(ABlock, @FH[0])
