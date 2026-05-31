@@ -4,6 +4,7 @@ program test_io_binary;
 
 uses
   SysUtils,
+  nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
@@ -229,29 +230,29 @@ end;
 procedure TestInitNilReader;
 var
   R: TBinaryReader;
-  LGotException: Boolean;
+  LGot: Boolean;
 begin
-  LGotException := False;
+  LGot := False;
   try
     R.Init(IReader(nil));
   except
-    LGotException := True;
+    on E: EArgumentError do LGot := True;
   end;
-  Check(LGotException, 'Init nil reader raises');
+  Check(LGot, 'Init nil reader raises EArgumentError');
 end;
 
 procedure TestInitNilWriter;
 var
   W: TBinaryWriter;
-  LGotException: Boolean;
+  LGot: Boolean;
 begin
-  LGotException := False;
+  LGot := False;
   try
     W.Init(IWriter(nil));
   except
-    LGotException := True;
+    on E: EArgumentError do LGot := True;
   end;
-  Check(LGotException, 'Init nil writer raises');
+  Check(LGot, 'Init nil writer raises EArgumentError');
 end;
 
 procedure TestEOFOnRead;
@@ -259,7 +260,7 @@ var
   LS: IStream;
   W: TBinaryWriter;
   R: TBinaryReader;
-  LGotException: Boolean;
+  LGot: Boolean;
 begin
   LS := CreateBytesStream;
   W.Init(LS as IWriter);
@@ -267,37 +268,54 @@ begin
   LS.Seek(0, soBeginning);
   R.Init(LS as IReader);
   CheckEqual(Int64(42), Int64(R.ReadUInt8), 'first byte ok');
-  LGotException := False;
+  LGot := False;
   try
     R.ReadUInt32LE;
   except
-    LGotException := True;
+    on E: EIOError do LGot := True;
   end;
-  Check(LGotException, 'EOF raises on ReadUInt32LE');
+  Check(LGot, 'EOF raises EIOError');
 end;
 
 procedure TestAllocLimit;
 var
   LS: IStream;
   R: TBinaryReader;
-  LGotException: Boolean;
+  LGot: Boolean;
 begin
   LS := CreateBytesStream;
   R.Init(LS as IReader);
-  LGotException := False;
+  LGot := False;
   try
     R.ReadBytes(128 * 1024 * 1024);
   except
-    LGotException := True;
+    on E: EIOError do LGot := True;
   end;
-  Check(LGotException, 'ReadBytes over limit raises');
-  LGotException := False;
+  Check(LGot, 'ReadBytes over limit raises EIOError');
+  LGot := False;
   try
     R.ReadString(128 * 1024 * 1024);
   except
-    LGotException := True;
+    on E: EIOError do LGot := True;
   end;
-  Check(LGotException, 'ReadString over limit raises');
+  Check(LGot, 'ReadString over limit raises EIOError');
+end;
+
+procedure TestWriteBytesRawNil;
+var
+  LS: IStream;
+  W: TBinaryWriter;
+  LGot: Boolean;
+begin
+  LS := CreateBytesStream;
+  W.Init(LS as IWriter);
+  LGot := False;
+  try
+    W.WriteBytesRaw(nil, 10);
+  except
+    on E: EArgumentError do LGot := True;
+  end;
+  Check(LGot, 'WriteBytesRaw(nil,>0) raises EArgumentError');
 end;
 
 begin
@@ -319,6 +337,7 @@ begin
   T.Run('init nil writer', @TestInitNilWriter);
   T.Run('EOF on read', @TestEOFOnRead);
   T.Run('alloc limit', @TestAllocLimit);
+  T.Run('WriteBytesRaw nil', @TestWriteBytesRawNil);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
