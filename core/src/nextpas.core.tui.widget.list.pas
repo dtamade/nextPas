@@ -41,6 +41,11 @@ type
     class function Empty: TListState; static;
     procedure Select(AIndex: Integer);
     procedure ClearSelection;
+    { 导航便利——自动 clamp 到 [0, AItemCount-1] }
+    procedure Next(AItemCount: Integer);
+    procedure Previous;
+    procedure First;
+    procedure Last(AItemCount: Integer);
   end;
 
   IListWidget = interface(IWidget)
@@ -115,6 +120,31 @@ end;
 procedure TListState.ClearSelection;
 begin
   HasSelection := False;
+end;
+
+procedure TListState.Next(AItemCount: Integer);
+begin
+  if not HasSelection then begin Select(0); Exit; end;
+  if Selected < AItemCount - 1 then
+    Selected := Selected + 1;
+end;
+
+procedure TListState.Previous;
+begin
+  if not HasSelection then begin Select(0); Exit; end;
+  if Selected > 0 then
+    Selected := Selected - 1;
+end;
+
+procedure TListState.First;
+begin
+  Select(0);
+end;
+
+procedure TListState.Last(AItemCount: Integer);
+begin
+  if AItemCount > 0 then
+    Select(AItemCount - 1);
 end;
 
 { TListWidget }

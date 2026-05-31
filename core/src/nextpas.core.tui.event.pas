@@ -68,6 +68,15 @@ function MouseEvent(AKind: TMouseEventKind; ABtn: TMouseButton;
   AX, AY: Word; AMods: TKeyModifiers): TEvent;
 function ResizeEvent(AWidth, AHeight: Word): TEvent;
 
+{ TEvent 便利判断——简化消费方的 case 分派 }
+function IsNone(const AEv: TEvent): Boolean; inline;
+function IsKey(const AEv: TEvent): Boolean; inline;
+function IsMouse(const AEv: TEvent): Boolean; inline;
+function IsResize(const AEv: TEvent): Boolean; inline;
+function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean; inline;
+function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean; inline;
+function IsQuit(const AEv: TEvent): Boolean; inline;
+
 implementation
 
 function NoneEvent: TEvent;
@@ -120,6 +129,33 @@ begin
   Result.Kind := evResize;
   Result.Resize.Width := AWidth;
   Result.Resize.Height := AHeight;
+end;
+
+function IsNone(const AEv: TEvent): Boolean;
+begin Result := AEv.Kind = evNone; end;
+
+function IsKey(const AEv: TEvent): Boolean;
+begin Result := AEv.Kind = evKey; end;
+
+function IsMouse(const AEv: TEvent): Boolean;
+begin Result := AEv.Kind = evMouse; end;
+
+function IsResize(const AEv: TEvent): Boolean;
+begin Result := AEv.Kind = evResize; end;
+
+function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean;
+begin
+  Result := (AEv.Kind = evKey) and (AEv.Key.Code = kcChar) and (AEv.Key.Ch = ACh);
+end;
+
+function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean;
+begin
+  Result := (AEv.Kind = evKey) and (AEv.Key.Code = ACode);
+end;
+
+function IsQuit(const AEv: TEvent): Boolean;
+begin
+  Result := IsKeyCode(AEv, kcEsc) or IsKeyChar(AEv, Ord('q'));
 end;
 
 end.
