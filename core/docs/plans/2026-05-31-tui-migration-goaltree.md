@@ -63,16 +63,16 @@
 - [x] nextpas.core.tui.cell ← ftui_cell ✅ 9/9
 - [x] nextpas.core.tui.widget.intf（IWidget 基础接口）✅ 2/2，class 实现+多态集合+引用计数验证
 
-### Phase 2 — Buffer + Text + Layout [进行中]
+### Phase 2 — Buffer + Text + Layout [完成]
 - [x] nextpas.core.tui.image_cap ← ftui_image_cap ✅（图像协议检测）
 - [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 11/11，保持 class，热路径全保留
 - [x] nextpas.core.tui.overlay ← ftui_overlay ✅ 6/6，稀疏覆盖层 + merge
 - [x] nextpas.core.tui.text ← ftui_text ✅ 11/11，TSpan/TLine/TText，宽度走 text.width
 - [x] nextpas.core.tui.borders ← ftui_borders ✅ 6/6，5 套边框字形集
 - [x] nextpas.core.tui.layout ← ftui_layout ✅ 9/9，6 遍约束求解器（用 base.TDirection）
-- [ ] nextpas.core.tui.layout.grid ← ftui_grid
-- [ ] nextpas.core.tui.layout.dsl ← ftui_layout_dsl
-- [ ] nextpas.core.tui.text.format ← ftui_format
+- [x] nextpas.core.tui.layout.grid ← ftui_grid ✅ 4/4，2D 网格切分
+- [x] nextpas.core.tui.layout.dsl ← ftui_layout_dsl ✅ 3/3，约束/切分短名 DSL
+- [x] nextpas.core.tui.text.format ← ftui_format ✅ 5/5，字节数人类可读格式化
 
 ### Phase 3 — ANSI Backend + Terminal [未开始]
 - [ ] ansi ← ftui_ansi / backend.ansi ← ftui_ansi_backend
@@ -103,10 +103,19 @@
 
 - Phase 0.1 ✅ text.width（12/12）
 - Phase 1 ✅ 完成：base/error/color/modifier/style/cell/widget.intf
-- Phase 2 进行中：image_cap ✅ buffer ✅ overlay ✅ text ✅ borders ✅ layout ✅
-- 全量回归：13 测试项目、95 用例全通过、全 0 泄漏、0 警告
-- 累计 13 src 单元（含 text.width）
-- 下一步：layout.grid → layout.dsl → text.format（收尾 Phase 2），然后 Phase 3 backend/terminal
+- Phase 2 ✅ 完成：image_cap/buffer/overlay/text/borders/layout/layout.grid/layout.dsl/text.format
+- 全量回归：16 测试项目、107 用例全通过、全 0 泄漏、0 警告
+- 累计 16 src 单元（含 text.width）
+- 下一步：Phase 3 — ANSI backend + Terminal（触及 platform 集成：raw mode/FlushToFd/SIGWINCH）
+
+## Phase 3 准备事项（platform 集成）
+
+Phase 3 会触及之前推迟的 platform 前置依赖，需先和 Codex 讨论 nextpas platform 规范下的方案：
+- ansi（escape 序列 emitter）→ 用 core 的 text.builder.TStringBuilder（已有 AppendUInt 等）
+- backend.ansi / backend.test
+- terminal.raw → 用 platform.console + posix.ffi 的 termios（不能用 FPC BaseUnix/termio）
+- terminal → SIGWINCH 用 platform.signal；read/write 用 platform.posix.ffi；epoll 用 platform.io
+- FlushToFd helper（EINTR/short-write 重试）
 
 ## 关键技术笔记
 
