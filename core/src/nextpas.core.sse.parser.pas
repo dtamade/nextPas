@@ -9,21 +9,28 @@ uses
 type
   TSseParser = record
   private
-    FBuffer: string;
+    FBuf: PAnsiChar;
+    FBufLen: SizeUInt;
+    FBufCap: SizeUInt;
     FLastEventId: string;
     FEventType: string;
     FData: string;
+    FDataLen: SizeUInt;
     FRetryMs: Int32;
     FHasRetry: Boolean;
     FHasData: Boolean;
     FEvents: TSseEventArray;
     FEventCount: SizeUInt;
+    FEventHead: SizeUInt;
     FError: Boolean;
-    procedure ProcessLine(const ALine: string);
+    procedure ProcessLine(AStart, ALen: SizeUInt);
     procedure DispatchEvent;
+    procedure GrowBuf(ANeeded: SizeUInt);
   public
     class function Create: TSseParser; static;
-    procedure Feed(const AChunk: string);
+    procedure Free;
+    procedure Feed(const AChunk: string); overload;
+    procedure Feed(AData: PAnsiChar; ALen: SizeUInt); overload;
     procedure Finish;
     function TryReadEvent(out AEvent: TSseEvent): Boolean;
     function GetLastEventId: string;
@@ -33,81 +40,158 @@ type
 
 implementation
 
+uses SysUtils;
+
 const
-  SSE_MAX_BUFFER_SIZE = 1024 * 1024; { 1MB }
+  SSE_MAX_BUFFER_SIZE = 1024 * 1024;
+  SSE_INITIAL_BUF = 4096;
 
 class function TSseParser.Create: TSseParser;
 begin
   Result := Default(TSseParser);
+  Result.FBufCap := SSE_INITIAL_BUF;
+  GetMem(Result.FBuf, SSE_INITIAL_BUF);
+  Result.FBufLen := 0;
   Result.FEventCount := 0;
+  Result.FEventHead := 0;
   Result.FHasData := False;
   Result.FError := False;
-  SetLength(Result.FEvents, 0);
+  Result.FDataLen := 0;
 end;
 
-procedure TSseParser.ProcessLine(const ALine: string);
+procedure TSseParser.Free;
+begin
+  if FBuf <> nil then
+  begin
+    FreeMem(FBuf);
+    FBuf := nil;
+  end;
+  FBufLen := 0;
+  FBufCap := 0;
+  SetLength(FEvents, 0);
+end;
+
+procedure TSseParser.GrowBuf(ANeeded: SizeUInt);
+var LNewCap: SizeUInt;
+begin
+  if ANeeded <= FBufCap then Exit;
+  LNewCap := FBufCap;
+  while LNewCap < ANeeded do
+    LNewCap := LNewCap * 2;
+  ReallocMem(FBuf, LNewCap);
+  FBufCap := LNewCap;
+end;
+
+procedure TSseParser.ProcessLine(AStart, ALen: SizeUInt);
 var
-  LLen, LColon, LValStart: Integer;
-  LField, LValue: string;
+  LColon, LI, LValStart, LValLen: SizeUInt;
+  LValue: string;
   LRetry: Int32;
   LCode: Integer;
-  LI: Integer;
 begin
-  LLen := Length(ALine);
-  { Empty line dispatches event }
-  if LLen = 0 then
+  if ALen = 0 then
   begin
     DispatchEvent;
     Exit;
   end;
-  { Comment line }
-  if ALine[1] = ':' then
+  if FBuf[AStart] = ':' then
     Exit;
-  { Find first colon }
+
   LColon := 0;
-  for LI := 1 to LLen do
-    if ALine[LI] = ':' then
+  for LI := 0 to ALen - 1 do
+    if FBuf[AStart + LI] = ':' then
     begin
       LColon := LI;
       Break;
     end;
-  if LColon = 0 then
+
+  if (LColon = 0) and (FBuf[AStart] <> ':') then
   begin
-    { Entire line is field name, value is empty }
-    LField := ALine;
-    LValue := '';
-  end
-  else
-  begin
-    LField := Copy(ALine, 1, LColon - 1);
-    LValStart := LColon + 1;
-    { Skip single space after colon }
-    if (LValStart <= LLen) and (ALine[LValStart] = ' ') then
-      Inc(LValStart);
-    LValue := Copy(ALine, LValStart, LLen - LValStart + 1);
+    // Check if it's a known field with no colon
+    LColon := ALen; // entire line is field name
   end;
 
-  if LField = 'data' then
+  // Determine field
+  if (LColon >= 4) and (FBuf[AStart] = 'd') and (FBuf[AStart+1] = 'a') and
+     (FBuf[AStart+2] = 't') and (FBuf[AStart+3] = 'a') and
+     ((LColon = 4) or (FBuf[AStart+4] = ':')) then
   begin
+    // data field
     FHasData := True;
-    if FData <> '' then
-      FData := FData + #10 + LValue
-    else
-      FData := LValue;
-  end
-  else if LField = 'event' then
-    FEventType := LValue
-  else if LField = 'id' then
-  begin
-    { Ignore if value contains NUL }
-    if Pos(#0, LValue) = 0 then
-      FLastEventId := LValue;
-  end
-  else if LField = 'retry' then
-  begin
-    { Only accept if all digits }
-    if LValue <> '' then
+    if LColon < ALen then
     begin
+      LValStart := AStart + LColon + 1;
+      LValLen := ALen - LColon - 1;
+      if (LValLen > 0) and (FBuf[LValStart] = ' ') then
+      begin Inc(LValStart); Dec(LValLen); end;
+    end
+    else
+    begin
+      LValStart := 0;
+      LValLen := 0;
+    end;
+    if FDataLen > 0 then
+    begin
+      FData := FData + #10;
+      Inc(FDataLen);
+    end;
+    if LValLen > 0 then
+    begin
+      SetLength(LValue, LValLen);
+      Move(FBuf[LValStart], LValue[1], LValLen);
+      FData := FData + LValue;
+      Inc(FDataLen, LValLen);
+    end;
+  end
+  else if (LColon >= 5) and (FBuf[AStart] = 'e') and (FBuf[AStart+1] = 'v') and
+          (FBuf[AStart+2] = 'e') and (FBuf[AStart+3] = 'n') and
+          (FBuf[AStart+4] = 't') and ((LColon = 5) or (FBuf[AStart+5] = ':')) then
+  begin
+    if LColon < ALen then
+    begin
+      LValStart := AStart + LColon + 1;
+      LValLen := ALen - LColon - 1;
+      if (LValLen > 0) and (FBuf[LValStart] = ' ') then
+      begin Inc(LValStart); Dec(LValLen); end;
+      SetLength(FEventType, LValLen);
+      if LValLen > 0 then
+        Move(FBuf[LValStart], FEventType[1], LValLen);
+    end
+    else
+      FEventType := '';
+  end
+  else if (LColon >= 2) and (FBuf[AStart] = 'i') and (FBuf[AStart+1] = 'd') and
+          ((LColon = 2) or (FBuf[AStart+2] = ':')) then
+  begin
+    if LColon < ALen then
+    begin
+      LValStart := AStart + LColon + 1;
+      LValLen := ALen - LColon - 1;
+      if (LValLen > 0) and (FBuf[LValStart] = ' ') then
+      begin Inc(LValStart); Dec(LValLen); end;
+      SetLength(LValue, LValLen);
+      if LValLen > 0 then
+        Move(FBuf[LValStart], LValue[1], LValLen);
+      // Ignore if contains NUL
+      if Pos(#0, LValue) = 0 then
+        FLastEventId := LValue;
+    end
+    else
+      FLastEventId := '';
+  end
+  else if (LColon >= 5) and (FBuf[AStart] = 'r') and (FBuf[AStart+1] = 'e') and
+          (FBuf[AStart+2] = 't') and (FBuf[AStart+3] = 'r') and
+          (FBuf[AStart+4] = 'y') and ((LColon = 5) or (FBuf[AStart+5] = ':')) then
+  begin
+    if LColon < ALen then
+    begin
+      LValStart := AStart + LColon + 1;
+      LValLen := ALen - LColon - 1;
+      if (LValLen > 0) and (FBuf[LValStart] = ' ') then
+      begin Inc(LValStart); Dec(LValLen); end;
+      SetLength(LValue, LValLen);
+      if LValLen > 0 then
+        Move(FBuf[LValStart], LValue[1], LValLen);
       Val(LValue, LRetry, LCode);
       if LCode = 0 then
       begin
@@ -120,11 +204,10 @@ end;
 
 procedure TSseParser.DispatchEvent;
 begin
-  { Only dispatch if data field was set (even if empty string via "data:") }
   if FHasData then
   begin
     if FEventCount >= SizeUInt(Length(FEvents)) then
-      SetLength(FEvents, FEventCount + 8);
+      SetLength(FEvents, FEventCount + 16);
     if FEventType = '' then
       FEvents[FEventCount].EventType := 'message'
     else
@@ -135,84 +218,86 @@ begin
     FEvents[FEventCount].HasRetry := FHasRetry;
     Inc(FEventCount);
   end;
-  { Reset per-event state }
   FData := '';
+  FDataLen := 0;
   FEventType := '';
   FHasRetry := False;
   FHasData := False;
 end;
 
 procedure TSseParser.Feed(const AChunk: string);
-var
-  LI, LLineStart, LLen: Integer;
-  LLine: string;
-  LCh: Char;
 begin
-  if FError then
-    Exit;
-  FBuffer := FBuffer + AChunk;
-  if Length(FBuffer) > SSE_MAX_BUFFER_SIZE then
+  if Length(AChunk) > 0 then
+    Feed(PAnsiChar(AChunk), Length(AChunk));
+end;
+
+procedure TSseParser.Feed(AData: PAnsiChar; ALen: SizeUInt);
+var
+  LI, LLineStart: SizeUInt;
+begin
+  if FError then Exit;
+  if FBufLen + ALen > SSE_MAX_BUFFER_SIZE then
   begin
-    FBuffer := '';
     FError := True;
     Exit;
   end;
-  LLen := Length(FBuffer);
-  LLineStart := 1;
-  LI := 1;
-  while LI <= LLen do
+
+  GrowBuf(FBufLen + ALen);
+  Move(AData^, FBuf[FBufLen], ALen);
+  Inc(FBufLen, ALen);
+
+  LLineStart := 0;
+  LI := 0;
+  while LI < FBufLen do
   begin
-    LCh := FBuffer[LI];
-    if LCh = #10 then
+    if FBuf[LI] = #10 then
     begin
-      LLine := Copy(FBuffer, LLineStart, LI - LLineStart);
-      ProcessLine(LLine);
+      ProcessLine(LLineStart, LI - LLineStart);
       LLineStart := LI + 1;
     end
-    else if LCh = #13 then
+    else if FBuf[LI] = #13 then
     begin
-      LLine := Copy(FBuffer, LLineStart, LI - LLineStart);
-      ProcessLine(LLine);
-      { Skip LF after CR }
-      if (LI < LLen) and (FBuffer[LI + 1] = #10) then
+      ProcessLine(LLineStart, LI - LLineStart);
+      if (LI + 1 < FBufLen) and (FBuf[LI + 1] = #10) then
         Inc(LI);
       LLineStart := LI + 1;
     end;
     Inc(LI);
   end;
-  { Keep unprocessed remainder }
-  if LLineStart <= LLen then
-    FBuffer := Copy(FBuffer, LLineStart, LLen - LLineStart + 1)
-  else
-    FBuffer := '';
+
+  // Move remainder to front
+  if LLineStart > 0 then
+  begin
+    if LLineStart < FBufLen then
+      Move(FBuf[LLineStart], FBuf[0], FBufLen - LLineStart);
+    FBufLen := FBufLen - LLineStart;
+  end;
 end;
 
 procedure TSseParser.Finish;
 begin
-  { Per SSE spec: do NOT dispatch incomplete event at EOF.
-    Only process the remaining buffer as a line (which may set fields),
-    but do not force a dispatch. Events are only dispatched on blank line. }
-  if FBuffer <> '' then
+  if FBufLen > 0 then
   begin
-    ProcessLine(FBuffer);
-    FBuffer := '';
+    ProcessLine(0, FBufLen);
+    FBufLen := 0;
   end;
 end;
 
 function TSseParser.TryReadEvent(out AEvent: TSseEvent): Boolean;
-var
-  LI: SizeUInt;
 begin
-  if FEventCount = 0 then
+  if FEventHead >= FEventCount then
   begin
-    AEvent := Default(TSseEvent);
-    Exit(False);
+    Result := False;
+    Exit;
   end;
-  AEvent := FEvents[0];
-  { Shift remaining events }
-  for LI := 1 to FEventCount - 1 do
-    FEvents[LI - 1] := FEvents[LI];
-  Dec(FEventCount);
+  AEvent := FEvents[FEventHead];
+  Inc(FEventHead);
+  // Compact when all consumed
+  if FEventHead = FEventCount then
+  begin
+    FEventHead := 0;
+    FEventCount := 0;
+  end;
   Result := True;
 end;
 
@@ -228,16 +313,16 @@ end;
 
 procedure TSseParser.Reset;
 begin
-  FBuffer := '';
+  FBufLen := 0;
   FLastEventId := '';
   FEventType := '';
   FData := '';
-  FRetryMs := 0;
+  FDataLen := 0;
   FHasRetry := False;
   FHasData := False;
-  FError := False;
   FEventCount := 0;
-  SetLength(FEvents, 0);
+  FEventHead := 0;
+  FError := False;
 end;
 
 end.
