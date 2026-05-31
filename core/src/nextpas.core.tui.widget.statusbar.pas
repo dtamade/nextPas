@@ -25,18 +25,30 @@ type
     function WithStyle(const S: TStyle): TStatusSegment;
   end;
 
-  TStatusBar = record
-    Left: array of TStatusSegment;
-    Center: array of TStatusSegment;
-    Right: array of TStatusSegment;
-    Style: TStyle;
+  IStatusBar = interface(IWidget)
+    ['{A3B4C5D6-E7F8-9012-ABCD-345678901234}']
+    function WithStyle(const S: TStyle): IStatusBar;
+    function WithLeft(const Segs: array of TStatusSegment): IStatusBar;
+    function WithCenter(const Segs: array of TStatusSegment): IStatusBar;
+    function WithRight(const Segs: array of TStatusSegment): IStatusBar;
+  end;
 
-    class function Default: TStatusBar; static;
-    function WithStyle(const S: TStyle): TStatusBar;
-    function WithLeft(const Segs: array of TStatusSegment): TStatusBar;
-    function WithCenter(const Segs: array of TStatusSegment): TStatusBar;
-    function WithRight(const Segs: array of TStatusSegment): TStatusBar;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TStatusBar = class(TInterfacedObject, IWidget, IStatusBar)
+  private
+    FLeft: array of TStatusSegment;
+    FCenter: array of TStatusSegment;
+    FRight: array of TStatusSegment;
+    FStyle: TStyle;
+  public
+    class function New: IStatusBar; static;
+
+    function WithStyle(const S: TStyle): IStatusBar;
+    function WithLeft(const Segs: array of TStatusSegment): IStatusBar;
+    function WithCenter(const Segs: array of TStatusSegment): IStatusBar;
+    function WithRight(const Segs: array of TStatusSegment): IStatusBar;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
@@ -50,94 +62,88 @@ begin
 end;
 
 function TStatusSegment.WithStyle(const S: TStyle): TStatusSegment;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
+begin Result := Self; Result.Style := S; end;
 
 { TStatusBar }
 
-class function TStatusBar.Default: TStatusBar;
+class function TStatusBar.New: IStatusBar;
+var LSelf: TStatusBar;
 begin
-  Result.Left := nil;
-  Result.Center := nil;
-  Result.Right := nil;
-  Result.Style := TStyle.Default;
+  LSelf := TStatusBar.Create;
+  LSelf.FLeft := nil;
+  LSelf.FCenter := nil;
+  LSelf.FRight := nil;
+  LSelf.FStyle := TStyle.Default;
+  Result := LSelf;
 end;
 
-function TStatusBar.WithStyle(const S: TStyle): TStatusBar;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
+function TStatusBar.WithStyle(const S: TStyle): IStatusBar;
+begin FStyle := S; Result := Self; end;
 
-function TStatusBar.WithLeft(const Segs: array of TStatusSegment): TStatusBar;
+function TStatusBar.WithLeft(const Segs: array of TStatusSegment): IStatusBar;
 var I: Integer;
 begin
+  SetLength(FLeft, Length(Segs));
+  for I := 0 to High(Segs) do FLeft[I] := Segs[I];
   Result := Self;
-  SetLength(Result.Left, Length(Segs));
-  for I := 0 to High(Segs) do Result.Left[I] := Segs[I];
 end;
 
-function TStatusBar.WithCenter(const Segs: array of TStatusSegment): TStatusBar;
+function TStatusBar.WithCenter(const Segs: array of TStatusSegment): IStatusBar;
 var I: Integer;
 begin
+  SetLength(FCenter, Length(Segs));
+  for I := 0 to High(Segs) do FCenter[I] := Segs[I];
   Result := Self;
-  SetLength(Result.Center, Length(Segs));
-  for I := 0 to High(Segs) do Result.Center[I] := Segs[I];
 end;
 
-function TStatusBar.WithRight(const Segs: array of TStatusSegment): TStatusBar;
+function TStatusBar.WithRight(const Segs: array of TStatusSegment): IStatusBar;
 var I: Integer;
 begin
+  SetLength(FRight, Length(Segs));
+  for I := 0 to High(Segs) do FRight[I] := Segs[I];
   Result := Self;
-  SetLength(Result.Right, Length(Segs));
-  for I := 0 to High(Segs) do Result.Right[I] := Segs[I];
 end;
 
-procedure TStatusBar.Render(const Area: TRect; ABuf: TBuffer);
+procedure TStatusBar.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   I, X, W, TotalRight, TotalCenter, CenterStart: Integer;
 begin
-  if Area.IsEmpty then Exit;
-  W := Area.Width;
+  if AArea.IsEmpty then Exit;
+  W := AArea.Width;
 
-  ABuf.SetStyle(TRect.Make(Area.X, Area.Y, W, 1), Style);
+  ABuffer.SetStyle(TRect.Make(AArea.X, AArea.Y, W, 1), FStyle);
 
-  // Left segments
-  X := Area.X;
-  for I := 0 to High(Left) do
+  X := AArea.X;
+  for I := 0 to High(FLeft) do
   begin
-    if X >= Area.X + W then Break;
-    ABuf.SetStringN(X, Area.Y, Left[I].Text, W - (X - Area.X), Style.Patch(Left[I].Style));
-    Inc(X, Integer(StringDisplayWidth(Left[I].Text)));
+    if X >= AArea.X + W then Break;
+    ABuffer.SetStringN(X, AArea.Y, FLeft[I].Text, W - (X - AArea.X), FStyle.Patch(FLeft[I].Style));
+    Inc(X, Integer(StringDisplayWidth(FLeft[I].Text)));
   end;
 
-  // Right segments (render from right edge)
   TotalRight := 0;
-  for I := 0 to High(Right) do
-    Inc(TotalRight, Integer(StringDisplayWidth(Right[I].Text)));
-  X := Area.X + W - TotalRight;
-  if X < Area.X then X := Area.X;
-  for I := 0 to High(Right) do
+  for I := 0 to High(FRight) do
+    Inc(TotalRight, Integer(StringDisplayWidth(FRight[I].Text)));
+  X := AArea.X + W - TotalRight;
+  if X < AArea.X then X := AArea.X;
+  for I := 0 to High(FRight) do
   begin
-    if X >= Area.X + W then Break;
-    ABuf.SetStringN(X, Area.Y, Right[I].Text, W - (X - Area.X), Style.Patch(Right[I].Style));
-    Inc(X, Integer(StringDisplayWidth(Right[I].Text)));
+    if X >= AArea.X + W then Break;
+    ABuffer.SetStringN(X, AArea.Y, FRight[I].Text, W - (X - AArea.X), FStyle.Patch(FRight[I].Style));
+    Inc(X, Integer(StringDisplayWidth(FRight[I].Text)));
   end;
 
-  // Center segments
   TotalCenter := 0;
-  for I := 0 to High(Center) do
-    Inc(TotalCenter, Integer(StringDisplayWidth(Center[I].Text)));
-  CenterStart := Area.X + (W - TotalCenter) div 2;
-  if CenterStart < Area.X then CenterStart := Area.X;
+  for I := 0 to High(FCenter) do
+    Inc(TotalCenter, Integer(StringDisplayWidth(FCenter[I].Text)));
+  CenterStart := AArea.X + (W - TotalCenter) div 2;
+  if CenterStart < AArea.X then CenterStart := AArea.X;
   X := CenterStart;
-  for I := 0 to High(Center) do
+  for I := 0 to High(FCenter) do
   begin
-    if X >= Area.X + W then Break;
-    ABuf.SetStringN(X, Area.Y, Center[I].Text, W - (X - Area.X), Style.Patch(Center[I].Style));
-    Inc(X, Integer(StringDisplayWidth(Center[I].Text)));
+    if X >= AArea.X + W then Break;
+    ABuffer.SetStringN(X, AArea.Y, FCenter[I].Text, W - (X - AArea.X), FStyle.Patch(FCenter[I].Style));
+    Inc(X, Integer(StringDisplayWidth(FCenter[I].Text)));
   end;
 end;
 

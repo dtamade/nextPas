@@ -21,19 +21,34 @@ uses
 type
   TTooltipPosition = (ttpAbove, ttpBelow, ttpLeft, ttpRight);
 
-  TTooltip = record
-    Text: AnsiString;
-    Position: TTooltipPosition;
-    Style: TStyle;
-    BorderStyle: TStyle;
-    MaxWidth: Integer;
+  ITooltip = interface(IWidget)
+    ['{F2A3B4C5-D6E7-8901-FABC-234567890123}']
+    function WithPosition(P: TTooltipPosition): ITooltip;
+    function WithStyle(const S: TStyle): ITooltip;
+    function WithBorderStyle(const S: TStyle): ITooltip;
+    function WithMaxWidth(W: Integer): ITooltip;
+    procedure RenderAt(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
+  end;
 
-    class function Create(const AText: AnsiString): TTooltip; static;
-    function WithPosition(P: TTooltipPosition): TTooltip;
-    function WithStyle(const S: TStyle): TTooltip;
-    function WithBorderStyle(const S: TStyle): TTooltip;
-    function WithMaxWidth(W: Integer): TTooltip;
-    procedure Render(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
+  TTooltip = class(TInterfacedObject, IWidget, ITooltip)
+  private
+    FText: AnsiString;
+    FPosition: TTooltipPosition;
+    FStyle: TStyle;
+    FBorderStyle: TStyle;
+    FMaxWidth: Integer;
+  public
+    class function New(const AText: AnsiString): ITooltip; static;
+
+    function WithPosition(P: TTooltipPosition): ITooltip;
+    function WithStyle(const S: TStyle): ITooltip;
+    function WithBorderStyle(const S: TStyle): ITooltip;
+    function WithMaxWidth(W: Integer): ITooltip;
+
+    { IWidget — renders tooltip at top-left of Area }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    { ITooltip — renders relative to Anchor within Bounds }
+    procedure RenderAt(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
   end;
 
 implementation
@@ -41,85 +56,70 @@ implementation
 uses
   SysUtils, nextpas.core.text.width, nextpas.core.text.utf8;
 
-class function TTooltip.Create(const AText: AnsiString): TTooltip;
+class function TTooltip.New(const AText: AnsiString): ITooltip;
+var LSelf: TTooltip;
 begin
-  Result.Text := AText;
-  Result.Position := ttpAbove;
-  Result.Style := TStyle.Default;
-  Result.BorderStyle := TStyle.Default.WithFg(TUI_WHITE);
-  Result.MaxWidth := 40;
+  LSelf := TTooltip.Create;
+  LSelf.FText := AText;
+  LSelf.FPosition := ttpAbove;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FBorderStyle := TStyle.Default.WithFg(TUI_WHITE);
+  LSelf.FMaxWidth := 40;
+  Result := LSelf;
 end;
 
-function TTooltip.WithPosition(P: TTooltipPosition): TTooltip;
-begin Result := Self; Result.Position := P; end;
+function TTooltip.WithPosition(P: TTooltipPosition): ITooltip;
+begin FPosition := P; Result := Self; end;
 
-function TTooltip.WithStyle(const S: TStyle): TTooltip;
-begin Result := Self; Result.Style := S; end;
+function TTooltip.WithStyle(const S: TStyle): ITooltip;
+begin FStyle := S; Result := Self; end;
 
-function TTooltip.WithBorderStyle(const S: TStyle): TTooltip;
-begin Result := Self; Result.BorderStyle := S; end;
+function TTooltip.WithBorderStyle(const S: TStyle): ITooltip;
+begin FBorderStyle := S; Result := Self; end;
 
-function TTooltip.WithMaxWidth(W: Integer): TTooltip;
-begin Result := Self; Result.MaxWidth := W; end;
+function TTooltip.WithMaxWidth(W: Integer): ITooltip;
+begin FMaxWidth := W; Result := Self; end;
 
-procedure TTooltip.Render(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
+procedure TTooltip.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  RenderAt(TRect.Make(AArea.X, AArea.Y, 1, 1), AArea, ABuffer);
+end;
+
+procedure TTooltip.RenderAt(const Anchor: TRect; const Bounds: TRect; ABuf: TBuffer);
 var
   TipW, TipH, TipX, TipY: Integer;
   TipArea: TRect;
 begin
-  if Length(Text) = 0 then Exit;
+  if Length(FText) = 0 then Exit;
 
-  TipW := Integer(StringDisplayWidth(Text)) + 2;
-  if TipW > MaxWidth then TipW := MaxWidth;
-  TipH := 3; // border + text + border
+  TipW := Integer(StringDisplayWidth(FText)) + 2;
+  if TipW > FMaxWidth then TipW := FMaxWidth;
+  TipH := 3;
 
-  // Position relative to anchor
-  case Position of
-    ttpAbove:
-    begin
-      TipX := Anchor.X;
-      TipY := Anchor.Y - TipH;
-    end;
-    ttpBelow:
-    begin
-      TipX := Anchor.X;
-      TipY := Anchor.Y + Anchor.Height;
-    end;
-    ttpLeft:
-    begin
-      TipX := Anchor.X - TipW;
-      TipY := Anchor.Y;
-    end;
-    ttpRight:
-    begin
-      TipX := Anchor.X + Anchor.Width;
-      TipY := Anchor.Y;
-    end;
+  case FPosition of
+    ttpAbove: begin TipX := Anchor.X; TipY := Anchor.Y - TipH; end;
+    ttpBelow: begin TipX := Anchor.X; TipY := Anchor.Y + Anchor.Height; end;
+    ttpLeft:  begin TipX := Anchor.X - TipW; TipY := Anchor.Y; end;
+    ttpRight: begin TipX := Anchor.X + Anchor.Width; TipY := Anchor.Y; end;
   end;
 
-  // Clamp to bounds (upper first, then lower wins if too small)
   if TipX + TipW > Bounds.X + Bounds.Width then
     TipX := Bounds.X + Bounds.Width - TipW;
   if TipY + TipH > Bounds.Y + Bounds.Height then
     TipY := Bounds.Y + Bounds.Height - TipH;
   if TipX < Bounds.X then TipX := Bounds.X;
   if TipY < Bounds.Y then TipY := Bounds.Y;
-
-  // Clamp width if tooltip wider than bounds
   if TipW > Bounds.Width then TipW := Bounds.Width;
   if TipH > Bounds.Height then TipH := Bounds.Height;
 
   TipArea := TRect.Make(TipX, TipY, TipW, TipH);
   if TipArea.IsEmpty then Exit;
 
-  // Render bordered tooltip
-  ABuf.SetStyle(TipArea, Style);
+  ABuf.SetStyle(TipArea, FStyle);
   TBlock.New.WithBorders(BORDERS_ALL)
-    .WithBorderStyle(BorderStyle)
+    .WithBorderStyle(FBorderStyle)
     .Render(TipArea, ABuf);
-
-  // Text inside
-  ABuf.SetStringN(TipX + 1, TipY + 1, Text, TipW - 2, Style);
+  ABuf.SetStringN(TipX + 1, TipY + 1, FText, TipW - 2, FStyle);
 end;
 
 end.

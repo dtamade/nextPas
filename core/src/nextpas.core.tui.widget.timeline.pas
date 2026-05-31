@@ -28,20 +28,31 @@ type
     function WithStyle(const S: TStyle): TTimelineEvent;
   end;
 
-  TTimeline = record
-    Events: array of TTimelineEvent;
-    Style: TStyle;
-    LineStyle: TStyle;
-    NodeChar: AnsiString;
-    HasBlock: Boolean;
-    Block: IBlock;
+  ITimeline = interface(IWidget)
+    ['{B4C5D6E7-F8A9-0123-BCDE-456789012345}']
+    function WithStyle(const S: TStyle): ITimeline;
+    function WithLineStyle(const S: TStyle): ITimeline;
+    function WithNodeChar(const C: AnsiString): ITimeline;
+    function WithBlock(ABlock: IBlock): ITimeline;
+  end;
 
-    class function Create(const AEvents: array of TTimelineEvent): TTimeline; static;
-    function WithStyle(const S: TStyle): TTimeline;
-    function WithLineStyle(const S: TStyle): TTimeline;
-    function WithNodeChar(const C: AnsiString): TTimeline;
-    function WithBlock(const B: TBlock): TTimeline;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TTimeline = class(TInterfacedObject, IWidget, ITimeline)
+  private
+    FEvents: array of TTimelineEvent;
+    FStyle: TStyle;
+    FLineStyle: TStyle;
+    FNodeChar: AnsiString;
+    FBlock: IBlock;
+  public
+    class function New(const AEvents: array of TTimelineEvent): ITimeline; static;
+
+    function WithStyle(const S: TStyle): ITimeline;
+    function WithLineStyle(const S: TStyle): ITimeline;
+    function WithNodeChar(const C: AnsiString): ITimeline;
+    function WithBlock(ABlock: IBlock): ITimeline;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
@@ -51,10 +62,8 @@ uses
 
 class function TTimelineEvent.Make(const ATime, ATitle: AnsiString): TTimelineEvent;
 begin
-  Result.Time := ATime;
-  Result.Title := ATitle;
-  Result.Description := '';
-  Result.Style := TStyle.Default;
+  Result.Time := ATime; Result.Title := ATitle;
+  Result.Description := ''; Result.Style := TStyle.Default;
 end;
 
 function TTimelineEvent.WithDescription(const D: AnsiString): TTimelineEvent;
@@ -63,56 +72,56 @@ begin Result := Self; Result.Description := D; end;
 function TTimelineEvent.WithStyle(const S: TStyle): TTimelineEvent;
 begin Result := Self; Result.Style := S; end;
 
-class function TTimeline.Create(const AEvents: array of TTimelineEvent): TTimeline;
-var I: Integer;
+{ TTimeline }
+
+class function TTimeline.New(const AEvents: array of TTimelineEvent): ITimeline;
+var LSelf: TTimeline; I: Integer;
 begin
-  SetLength(Result.Events, Length(AEvents));
-  for I := 0 to High(AEvents) do
-    Result.Events[I] := AEvents[I];
-  Result.Style := TStyle.Default;
-  Result.LineStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
-  Result.NodeChar := #$E2#$97#$8F; // ●
-  Result.HasBlock := False;
-  Result.Block := nil;
+  LSelf := TTimeline.Create;
+  SetLength(LSelf.FEvents, Length(AEvents));
+  for I := 0 to High(AEvents) do LSelf.FEvents[I] := AEvents[I];
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FLineStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  LSelf.FNodeChar := #$E2#$97#$8F;
+  LSelf.FBlock := nil;
+  Result := LSelf;
 end;
 
-function TTimeline.WithStyle(const S: TStyle): TTimeline;
-begin Result := Self; Result.Style := S; end;
+function TTimeline.WithStyle(const S: TStyle): ITimeline;
+begin FStyle := S; Result := Self; end;
 
-function TTimeline.WithLineStyle(const S: TStyle): TTimeline;
-begin Result := Self; Result.LineStyle := S; end;
+function TTimeline.WithLineStyle(const S: TStyle): ITimeline;
+begin FLineStyle := S; Result := Self; end;
 
-function TTimeline.WithNodeChar(const C: AnsiString): TTimeline;
-begin Result := Self; Result.NodeChar := C; end;
+function TTimeline.WithNodeChar(const C: AnsiString): ITimeline;
+begin FNodeChar := C; Result := Self; end;
 
-function TTimeline.WithBlock(const B: TBlock): TTimeline;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TTimeline.WithBlock(ABlock: IBlock): ITimeline;
+begin FBlock := ABlock; Result := Self; end;
 
-procedure TTimeline.Render(const Area: TRect; ABuf: TBuffer);
+procedure TTimeline.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner: TRect;
   I, Y, TimeW, NodeX, TextX, TextW: Integer;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
+  ABuffer.SetStyle(AArea, FStyle);
 
-  ABuf.SetStyle(Area, Style);
-
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
-  // Layout: [time] [node] [title/desc]
   TimeW := 0;
-  for I := 0 to High(Events) do
-    if Integer(StringDisplayWidth(Events[I].Time)) > TimeW then
-      TimeW := Integer(StringDisplayWidth(Events[I].Time));
-  Inc(TimeW); // space
+  for I := 0 to High(FEvents) do
+    if Integer(StringDisplayWidth(FEvents[I].Time)) > TimeW then
+      TimeW := Integer(StringDisplayWidth(FEvents[I].Time));
+  Inc(TimeW);
 
   NodeX := Inner.X + TimeW;
   TextX := NodeX + 2;
@@ -120,33 +129,22 @@ begin
   if TextW < 1 then TextW := 1;
 
   Y := Inner.Y;
-  for I := 0 to High(Events) do
+  for I := 0 to High(FEvents) do
   begin
     if Y >= Inner.Y + Inner.Height then Break;
-
-    // Time
-    ABuf.SetStringN(Inner.X, Y, Events[I].Time, TimeW, LineStyle);
-
-    // Node marker
-    ABuf.SetStringN(NodeX, Y, NodeChar, 1, Events[I].Style);
-
-    // Title
-    ABuf.SetStringN(TextX, Y, Events[I].Title, TextW, Events[I].Style);
+    ABuffer.SetStringN(Inner.X, Y, FEvents[I].Time, TimeW, FLineStyle);
+    ABuffer.SetStringN(NodeX, Y, FNodeChar, 1, FEvents[I].Style);
+    ABuffer.SetStringN(TextX, Y, FEvents[I].Title, TextW, FEvents[I].Style);
     Inc(Y);
-
-    // Description (if present and space available)
-    if (Events[I].Description <> '') and (Y < Inner.Y + Inner.Height) then
+    if (FEvents[I].Description <> '') and (Y < Inner.Y + Inner.Height) then
     begin
-      // Connector line
-      ABuf.SetStringN(NodeX, Y, #$E2#$94#$82, 1, LineStyle); // │
-      ABuf.SetStringN(TextX, Y, Events[I].Description, TextW, Style);
+      ABuffer.SetStringN(NodeX, Y, #$E2#$94#$82, 1, FLineStyle);
+      ABuffer.SetStringN(TextX, Y, FEvents[I].Description, TextW, FStyle);
       Inc(Y);
     end;
-
-    // Connector to next
-    if (I < High(Events)) and (Y < Inner.Y + Inner.Height) then
+    if (I < High(FEvents)) and (Y < Inner.Y + Inner.Height) then
     begin
-      ABuf.SetStringN(NodeX, Y, #$E2#$94#$82, 1, LineStyle); // │
+      ABuffer.SetStringN(NodeX, Y, #$E2#$94#$82, 1, FLineStyle);
       Inc(Y);
     end;
   end;
