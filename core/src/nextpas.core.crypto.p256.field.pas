@@ -56,6 +56,7 @@ var
   I: Integer;
 begin
   P256FeZero(R);
+  if Length(ABytes) < 32 then Exit;
   for I := 0 to 31 do
     R[3 - (I div 8)] := R[3 - (I div 8)] or (QWord(ABytes[I]) shl ((7 - (I mod 8)) * 8));
 end;
@@ -178,129 +179,13 @@ end;
 procedure P256FeMul(const A, B: TP256Fe; out R: TP256Fe);
 var
   LT: array[0..7] of QWord;
-  {$IFNDEF CPUX86_64}
   LLo, LHi: QWord;
   I, J: Integer;
   LCarry: QWord;
-  {$ENDIF}
   C: array[0..15] of UInt32;
   S: TP256Fe;
   LI: Integer;
 begin
-  {$IFDEF CPUX86_64}
-  // Full ASM schoolbook 4x4 multiply (16 mulq, no function calls)
-  asm
-    push %rbx
-    push %r12
-    push %r13
-    push %r14
-    push %r15
-
-    movq A, %rsi
-    movq B, %rbx
-
-    // Column 0
-    movq (%rsi), %rax
-    mulq (%rbx)
-    movq %rax, %r8
-    movq %rdx, %r9
-
-    // Column 1
-    xorq %r10, %r10
-    movq (%rsi), %rax
-    mulq 8(%rbx)
-    addq %rax, %r9
-    adcq %rdx, %r10
-    movq 8(%rsi), %rax
-    mulq (%rbx)
-    addq %rax, %r9
-    adcq %rdx, %r10
-
-    // Column 2
-    xorq %r11, %r11
-    movq (%rsi), %rax
-    mulq 16(%rbx)
-    addq %rax, %r10
-    adcq %rdx, %r11
-    movq 8(%rsi), %rax
-    mulq 8(%rbx)
-    addq %rax, %r10
-    adcq %rdx, %r11
-    movq 16(%rsi), %rax
-    mulq (%rbx)
-    addq %rax, %r10
-    adcq %rdx, %r11
-
-    // Column 3
-    xorq %r12, %r12
-    movq (%rsi), %rax
-    mulq 24(%rbx)
-    addq %rax, %r11
-    adcq %rdx, %r12
-    movq 8(%rsi), %rax
-    mulq 16(%rbx)
-    addq %rax, %r11
-    adcq %rdx, %r12
-    movq 16(%rsi), %rax
-    mulq 8(%rbx)
-    addq %rax, %r11
-    adcq %rdx, %r12
-    movq 24(%rsi), %rax
-    mulq (%rbx)
-    addq %rax, %r11
-    adcq %rdx, %r12
-
-    // Column 4
-    xorq %r13, %r13
-    movq 8(%rsi), %rax
-    mulq 24(%rbx)
-    addq %rax, %r12
-    adcq %rdx, %r13
-    movq 16(%rsi), %rax
-    mulq 16(%rbx)
-    addq %rax, %r12
-    adcq %rdx, %r13
-    movq 24(%rsi), %rax
-    mulq 8(%rbx)
-    addq %rax, %r12
-    adcq %rdx, %r13
-
-    // Column 5
-    xorq %r14, %r14
-    movq 16(%rsi), %rax
-    mulq 24(%rbx)
-    addq %rax, %r13
-    adcq %rdx, %r14
-    movq 24(%rsi), %rax
-    mulq 16(%rbx)
-    addq %rax, %r13
-    adcq %rdx, %r14
-
-    // Column 6
-    xorq %r15, %r15
-    movq 24(%rsi), %rax
-    mulq 24(%rbx)
-    addq %rax, %r14
-    adcq %rdx, %r15
-
-    // Store 8 limbs to LT
-    leaq LT, %rcx
-    movq %r8, (%rcx)
-    movq %r9, 8(%rcx)
-    movq %r10, 16(%rcx)
-    movq %r11, 24(%rcx)
-    movq %r12, 32(%rcx)
-    movq %r13, 40(%rcx)
-    movq %r14, 48(%rcx)
-    movq %r15, 56(%rcx)
-
-    pop %r15
-    pop %r14
-    pop %r13
-    pop %r12
-    pop %rbx
-  end ['rax', 'rcx', 'rdx', 'rsi', 'rbx', 'r8', 'r9', 'r10', 'r11', 'r12', 'r13', 'r14', 'r15'];
-  {$ELSE}
   FillChar(LT, SizeOf(LT), 0);
   for I := 0 to 3 do
   begin
@@ -317,7 +202,6 @@ begin
     end;
     LT[I + 4] := LCarry;
   end;
-  {$ENDIF}
 
   // Split into 32-bit words for NIST P-256 fast reduction
   for LI := 0 to 7 do
