@@ -30,7 +30,7 @@ function MmapLines(const APath: string): IMappedLines;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.mem.memory_map;
 
