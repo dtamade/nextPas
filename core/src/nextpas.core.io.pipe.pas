@@ -108,6 +108,7 @@ var
   LDst: PByte;
   LToRead, LChunk: SizeUInt;
 begin
+  if ACount = 0 then Exit(0);
   LDst := @ABuf;
   FMutex.Acquire;
   try

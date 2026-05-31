@@ -5,6 +5,7 @@ unit nextpas.core.io.reactor;
 interface
 
 uses
+  nextpas.core.atomic,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.linux.modern,
   nextpas.core.io.uring;
@@ -25,7 +26,7 @@ type
     FEntryCount: UInt32;
     FEntryCap: UInt32;
     FFreeHead: Int32;
-    FRunning: Boolean;
+    FRunning: Int32;
     function AllocEntry(ACallback: TIoCompletion; AContext: Pointer): UInt64;
     procedure FreeEntry(AId: UInt64);
   public
@@ -72,7 +73,7 @@ begin
   SetLength(Result.FEntries, INITIAL_ENTRIES);
   Result.FEntryCount := 0;
   Result.FFreeHead := -1;
-  Result.FRunning := False;
+  AtomicStore32(Result.FRunning, 0, moRelaxed);
 end;
 
 procedure TIoReactor.Close;
@@ -248,11 +249,14 @@ begin
     Exit;
   end;
   LId := IoUringCqeGetData(LCqe);
-  if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then
-    FEntries[LId].Callback(LId, LCqe^.res, FEntries[LId].Context);
-  FRing.CqeSeen(LCqe);
-  if LId < FEntryCount then
-    FreeEntry(LId);
+  try
+    if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then
+      FEntries[LId].Callback(LId, LCqe^.res, FEntries[LId].Context);
+  finally
+    FRing.CqeSeen(LCqe);
+    if LId < FEntryCount then
+      FreeEntry(LId);
+  end;
   Result := True;
 end;
 
@@ -275,8 +279,8 @@ const
   EINTR = 4;
   EAGAIN = 11;
 begin
-  FRunning := True;
-  while FRunning do
+  AtomicStore32(FRunning, 1, moRelaxed);
+  while AtomicLoad32(FRunning, moRelaxed) <> 0 do
   begin
     LRet := FRing.SubmitAndWait(1);
     if LRet < 0 then
@@ -284,21 +288,24 @@ begin
       if (LRet = -EINTR) or (LRet = -EAGAIN) then Continue;
       Break;
     end;
-    while FRunning and FRing.PeekCqe(LCqe) do
+    while (AtomicLoad32(FRunning, moRelaxed) <> 0) and FRing.PeekCqe(LCqe) do
     begin
       LId := IoUringCqeGetData(LCqe);
-      if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then
-        FEntries[LId].Callback(LId, LCqe^.res, FEntries[LId].Context);
-      FRing.CqeSeen(LCqe);
-      if LId < FEntryCount then
-        FreeEntry(LId);
+      try
+        if (LId < FEntryCount) and Assigned(FEntries[LId].Callback) then
+          FEntries[LId].Callback(LId, LCqe^.res, FEntries[LId].Context);
+      finally
+        FRing.CqeSeen(LCqe);
+        if LId < FEntryCount then
+          FreeEntry(LId);
+      end;
     end;
   end;
 end;
 
 procedure TIoReactor.Stop;
 begin
-  FRunning := False;
+  AtomicStore32(FRunning, 0, moRelaxed);
 end;
 
 end.
