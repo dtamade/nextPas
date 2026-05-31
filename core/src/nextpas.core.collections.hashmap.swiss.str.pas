@@ -5,6 +5,7 @@ unit nextpas.core.collections.hashmap.swiss.str;
 interface
 
 uses
+  nextpas.core.mem.intf,
   SysUtils,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
@@ -29,6 +30,7 @@ type
     FGroupCount: SizeUInt;
     FCount: SizeUInt;
     FGrowthLeft: SizeUInt;
+    FAllocator: IAllocator;
 
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -38,6 +40,7 @@ type
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
+    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
     destructor Destroy; override;
 
     function TryGetValue(const AKey: string; out AValue: V): Boolean;
@@ -76,8 +79,8 @@ procedure TSwissTableStr.AllocTable(ACapacity: SizeUInt);
 begin
   FCapacity := ACapacity;
   FGroupCount := ACapacity div GROUP_SIZE;
-  GetMem(FCtrl, ACapacity + GROUP_SIZE);
-  GetMem(FSlots, ACapacity * SizeOf(TSlot));
+  if FAllocator <> nil then FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE) else GetMem(FCtrl, ACapacity + GROUP_SIZE);
+  if FAllocator <> nil then FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot)) else GetMem(FSlots, ACapacity * SizeOf(TSlot));
   FillChar(FCtrl^, ACapacity + GROUP_SIZE, CTRL_EMPTY);
   FillChar(FSlots^, ACapacity * SizeOf(TSlot), 0);
   FGrowthLeft := ACapacity - ACapacity div 8;
@@ -94,9 +97,9 @@ begin
       if System.IsManagedType(V) then
         Finalize(FSlots[i].Value);
     end;
-  FreeMem(FSlots);
-  FreeMem(FCtrl);
-  FCtrl := nil; FSlots := nil;
+  if FAllocator <> nil then FAllocator.Deallocate(FSlots) else FreeMem(FSlots);
+  if FAllocator <> nil then FAllocator.Deallocate(FCtrl) else FreeMem(FCtrl);
+  FCtrl := nil; FSlots := nil; FAllocator := nil;
 end;
 
 procedure TSwissTableStr.GrowAndRehash;
@@ -136,14 +139,33 @@ begin
           LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
         end;
       end;
-    FreeMem(LOldSlots); FreeMem(LOldCtrl);
+    if FAllocator <> nil then FAllocator.Deallocate(LOldSlots) else FreeMem(LOldSlots); if FAllocator <> nil then FAllocator.Deallocate(LOldCtrl) else FreeMem(LOldCtrl);
   end;
 end;
 
 constructor TSwissTableStr.Create(aCapacity: SizeUInt);
 begin
   inherited Create;
-  FCtrl := nil; FSlots := nil;
+  FCtrl := nil; FSlots := nil; FAllocator := nil;
+  FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
+  if aCapacity > 0 then
+  begin
+    if aCapacity < 16 then aCapacity := 16;
+    aCapacity := aCapacity + aCapacity div 7 + 1;
+    aCapacity := aCapacity or (aCapacity shr 1);
+    aCapacity := aCapacity or (aCapacity shr 2);
+    aCapacity := aCapacity or (aCapacity shr 4);
+    aCapacity := aCapacity or (aCapacity shr 8);
+    aCapacity := aCapacity or (aCapacity shr 16);
+    Inc(aCapacity);
+    AllocTable(aCapacity);
+  end;
+end;
+
+constructor TSwissTableStr.CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+begin
+  inherited Create;
+  FCtrl := nil; FSlots := nil; FAllocator := aAllocator;
   FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
   if aCapacity > 0 then
   begin
