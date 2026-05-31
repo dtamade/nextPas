@@ -53,7 +53,8 @@ implementation
 
 {$IFDEF LINUX}
 uses
-  Classes;
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files;
 {$ENDIF}
 
 // === Linux /proc/cpuinfo Parsing ===
@@ -114,46 +115,38 @@ type
 
 function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
-  LFile: TFileStream;
+  LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: LongInt;
+  LReadBytes: Int64;
 begin
   Result := False;
   aHWCAP := 0;
   aHWCAP2 := 0;
 
-  if not FileExists('/proc/self/auxv') then
+  if platform_file_open('/proc/self/auxv', fomReadOnly, fcmOpenExisting, LHandle) <> 0 then
     Exit;
-
   try
-    LFile := TFileStream.Create('/proc/self/auxv', fmOpenRead or fmShareDenyNone);
-    try
-      while True do
-      begin
-        LReadBytes := LFile.Read(LEntry, SizeOf(LEntry));
-        if LReadBytes <> SizeOf(LEntry) then
-          Break;
-        if LEntry.Tag = LINUX_AUXV_AT_NULL then
-          Break;
+    while True do
+    begin
+      LReadBytes := platform_file_read(LHandle, @LEntry, SizeOf(LEntry));
+      if LReadBytes <> SizeOf(LEntry) then
+        Break;
+      if LEntry.Tag = LINUX_AUXV_AT_NULL then
+        Break;
 
-        if LEntry.Tag = LINUX_AUXV_AT_HWCAP then
-        begin
-          aHWCAP := QWord(LEntry.Value);
-          Result := True;
-        end
-        else if LEntry.Tag = LINUX_AUXV_AT_HWCAP2 then
-        begin
-          aHWCAP2 := QWord(LEntry.Value);
-          Result := True;
-        end;
+      if LEntry.Tag = LINUX_AUXV_AT_HWCAP then
+      begin
+        aHWCAP := QWord(LEntry.Value);
+        Result := True;
+      end
+      else if LEntry.Tag = LINUX_AUXV_AT_HWCAP2 then
+      begin
+        aHWCAP2 := QWord(LEntry.Value);
+        Result := True;
       end;
-    finally
-      LFile.Free;
     end;
-  except
-    aHWCAP := 0;
-    aHWCAP2 := 0;
-    Result := False;
+  finally
+    platform_file_close(LHandle);
   end;
 end;
 {$ENDIF}
@@ -551,43 +544,46 @@ end;
 function ReadARMDeviceTreeTextFromPaths(const aPaths: array of string; out aText: string): Boolean;
 var
   LPath: string;
-  LFile: TFileStream;
+  LHandle: TPlatformFileHandle;
+  LStat: TPlatformFileStat;
   LRaw: RawByteString;
   LIndex: Integer;
+  LRead: Int64;
 begin
   Result := False;
   aText := '';
 
   for LPath in aPaths do
   begin
-    if not FileExists(LPath) then
+    if platform_file_stat(PAnsiChar(LPath), LStat) <> 0 then
       Continue;
 
+    if platform_file_open(PAnsiChar(LPath), fomReadOnly, fcmOpenExisting, LHandle) <> 0 then
+      Continue;
     try
-      LFile := TFileStream.Create(LPath, fmOpenRead or fmShareDenyNone);
-      try
-        SetLength(LRaw, LFile.Size);
-        if Length(LRaw) > 0 then
-          LFile.ReadBuffer(LRaw[1], Length(LRaw));
-      finally
-        LFile.Free;
-      end;
-
-      if LRaw = '' then
-        Continue;
-
-      for LIndex := 1 to Length(LRaw) do
+      SetLength(LRaw, LStat.Size);
+      if Length(LRaw) > 0 then
       begin
-        if LRaw[LIndex] = #0 then
-          LRaw[LIndex] := ' ';
+        LRead := platform_file_read(LHandle, @LRaw[1], Length(LRaw));
+        if LRead < Length(LRaw) then
+          SetLength(LRaw, LRead);
       end;
-
-      aText := NormalizeARMFieldValue(LRaw);
-      if aText <> '' then
-        Exit(True);
-    except
-      // Ignore read failures, continue with next candidate.
+    finally
+      platform_file_close(LHandle);
     end;
+
+    if LRaw = '' then
+      Continue;
+
+    for LIndex := 1 to Length(LRaw) do
+    begin
+      if LRaw[LIndex] = #0 then
+        LRaw[LIndex] := ' ';
+    end;
+
+    aText := NormalizeARMFieldValue(LRaw);
+    if aText <> '' then
+      Exit(True);
   end;
 end;
 

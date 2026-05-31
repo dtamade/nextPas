@@ -255,7 +255,8 @@ type
 implementation
 
 uses
-  Classes;
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files;
 
 const
   // 内存布局常量
@@ -401,6 +402,7 @@ function TMappedSlabPool.CreateFile(const aFileName: string; aPoolSize: UInt64;
   aPageSize: UInt32; aMaxSizeClass: UInt32): Boolean;
 var
   LRequiredSize: UInt64;
+  LFileHandle: TPlatformFileHandle;
 begin
   Result := False;
   Close;
@@ -419,13 +421,11 @@ begin
     end
     else
     begin
-      // 创建新文件
-      with TFileStream.Create(aFileName, fmCreate) do
-      try
-        Size := LRequiredSize;
-      finally
-        Free;
-      end;
+      // 创建新文件并设置大小
+      if platform_file_open(PAnsiChar(aFileName), fomReadWrite, fcmCreateAlways, LFileHandle) <> 0 then
+        Exit;
+      platform_file_truncate(LFileHandle, LRequiredSize);
+      platform_file_close(LFileHandle);
 
       if not FMemoryMap.OpenFile(aFileName, mmaReadWrite) then Exit;
       FIsCreator := True;
