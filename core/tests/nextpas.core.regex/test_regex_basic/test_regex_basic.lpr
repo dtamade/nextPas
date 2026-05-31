@@ -6,10 +6,25 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.regex,
-  nextpas.core.regex.base;
+  nextpas.core.regex.base,
+  nextpas.core.regex.nfa,
+  nextpas.core.regex.dfa,
+  nextpas.core.regex.parser,
+  nextpas.core.regex.compiler;
 
 var
   T: TTestRunner;
+
+function CompileProgram(const APattern: string): TRegexProgram;
+var LAst: PAstNode; LNumCaptures: UInt32; LFlags: TRegexFlags;
+begin
+  LAst := RegexParse(APattern, LNumCaptures, LFlags);
+  try
+    Result := RegexCompile(LAst, LNumCaptures, LFlags);
+  finally
+    RegexFreeAst(LAst);
+  end;
+end;
 
 procedure TestLiteral;
 var R: TRegex;
@@ -3513,6 +3528,296 @@ begin
   CheckEqual(input, M.Value(input), 'full value');
 end;
 
+{ ===== DFA v2 ASSERTION CORRECTNESS TESTS ===== }
+
+procedure TestDfaAssertionCorrectness;
+var R: TRegex; MA: TMatchArray;
+begin
+  // ^hello matches only at start
+  R := TRegex.Compile('^hello');
+  Check(R.IsMatch('hello world'), 'dfa ^hello start');
+  Check(not R.IsMatch('say hello'), 'dfa ^hello miss');
+  Check(R.IsMatch('hello'), 'dfa ^hello exact');
+
+  // world$ matches only at end
+  R := TRegex.Compile('world$');
+  Check(R.IsMatch('hello world'), 'dfa world$ end');
+  Check(not R.IsMatch('world!'), 'dfa world$ miss');
+  Check(R.IsMatch('world'), 'dfa world$ exact');
+
+  // ^exact$ full match only
+  R := TRegex.Compile('^exact$');
+  Check(R.IsMatch('exact'), 'dfa ^exact$ match');
+  Check(not R.IsMatch('not exact'), 'dfa ^exact$ miss start');
+  Check(not R.IsMatch('exact!'), 'dfa ^exact$ miss end');
+  Check(not R.IsMatch(''), 'dfa ^exact$ empty');
+
+  // \bword\b word boundaries
+  R := TRegex.Compile('\bword\b');
+  Check(R.IsMatch('a word here'), 'dfa wb isolated');
+  Check(not R.IsMatch('password'), 'dfa wb inside');
+  Check(not R.IsMatch('wordy'), 'dfa wb prefix');
+  Check(R.IsMatch('word'), 'dfa wb exact');
+  Check(R.IsMatch('word.'), 'dfa wb before punct');
+  Check(R.IsMatch('!word!'), 'dfa wb punct');
+  Check(R.IsMatch(' word '), 'dfa wb space');
+  Check(R.IsMatch('(word)'), 'dfa wb parens');
+
+  // \Boo\B non-word boundaries
+  R := TRegex.Compile('\Boo\B');
+  Check(R.IsMatch('foobar'), 'dfa nwb inside');
+  Check(not R.IsMatch('oo'), 'dfa nwb standalone');
+  Check(not R.IsMatch('foo'), 'dfa nwb at end');
+  Check(not R.IsMatch('oof'), 'dfa nwb at start');
+
+  // ^\d+$ anchored digits
+  R := TRegex.Compile('^\d+$');
+  Check(R.IsMatch('12345'), 'dfa ^d+$ digits');
+  Check(not R.IsMatch('abc'), 'dfa ^d+$ alpha');
+  Check(not R.IsMatch('12a'), 'dfa ^d+$ mixed');
+  Check(not R.IsMatch(''), 'dfa ^d+$ empty');
+
+  // ^[a-z]+$ on various inputs
+  R := TRegex.Compile('^[a-z]+$');
+  Check(R.IsMatch('hello'), 'dfa ^az+$ match');
+  Check(not R.IsMatch('Hello'), 'dfa ^az+$ upper');
+  Check(not R.IsMatch('hello world'), 'dfa ^az+$ space');
+  Check(not R.IsMatch(''), 'dfa ^az+$ empty');
+
+  // \b\w+\b FindAll must find all words
+  R := TRegex.Compile('\b\w+\b');
+  MA := R.FindAll('hello world 123');
+  CheckEqual(Int64(3), Int64(Length(MA)), 'dfa bwb findall count');
+  CheckEqual('hello', MA[0].Value('hello world 123'), 'dfa bwb word 0');
+  CheckEqual('world', MA[1].Value('hello world 123'), 'dfa bwb word 1');
+  CheckEqual('123', MA[2].Value('hello world 123'), 'dfa bwb word 2');
+
+  // ^$ on empty string must match
+  R := TRegex.Compile('^$');
+  Check(R.IsMatch(''), 'dfa ^$ empty match');
+  // ^$ on non-empty must NOT match
+  Check(not R.IsMatch('a'), 'dfa ^$ non-empty miss');
+
+  // \b at start/end of input
+  R := TRegex.Compile('\bfoo\b');
+  Check(R.IsMatch('foo'), 'dfa wb start+end');
+  Check(R.IsMatch('foo bar'), 'dfa wb at start');
+  Check(R.IsMatch('bar foo'), 'dfa wb at end');
+
+  // ^cat|^dog mixing assertions with alternation
+  R := TRegex.Compile('^cat|^dog');
+  Check(R.IsMatch('cat'), 'dfa ^cat|^dog cat');
+  Check(R.IsMatch('dog'), 'dfa ^cat|^dog dog');
+  Check(not R.IsMatch('bird'), 'dfa ^cat|^dog miss');
+  Check(not R.IsMatch('a cat'), 'dfa ^cat|^dog mid');
+
+  // ^\d+ mixing assertions with quantifiers
+  R := TRegex.Compile('^\d+');
+  Check(R.IsMatch('123abc'), 'dfa ^d+ start digits');
+  Check(not R.IsMatch('abc123'), 'dfa ^d+ no start digit');
+
+  // IsFullMatch with DFA must match NFA results
+  R := TRegex.Compile('^[a-z]+$');
+  Check(R.IsFullMatch('hello'), 'dfa fullmatch hello');
+  Check(not R.IsFullMatch('Hello'), 'dfa fullmatch upper');
+  Check(not R.IsFullMatch(''), 'dfa fullmatch empty');
+
+  R := TRegex.Compile('^\d{3}-\d{4}$');
+  Check(R.IsFullMatch('123-4567'), 'dfa fullmatch phone');
+  Check(not R.IsFullMatch('12-4567'), 'dfa fullmatch phone short');
+  Check(not R.IsFullMatch('123-456'), 'dfa fullmatch phone short2');
+
+  // DFA IsFullMatch vs NFA IsFullMatch consistency
+  R := TRegex.Compile('\b\w+\b');
+  Check(R.IsFullMatch('hello') = NfaIsFullMatch(CompileProgram('\b\w+\b'), PAnsiChar('hello'), 5),
+    'dfa vs nfa fullmatch hello');
+  Check(R.IsFullMatch('hello world') = NfaIsFullMatch(CompileProgram('\b\w+\b'), PAnsiChar('hello world'), 11),
+    'dfa vs nfa fullmatch multi');
+end;
+
+procedure TestDfaFindAllCorrectness;
+var R: TRegex; MA, NfaMA: TMatchArray; i: Integer; s: string; P: TRegexProgram;
+begin
+  // \w+ on 'hello world 123' same matches as NFA
+  R := TRegex.Compile('\w+');
+  P := CompileProgram('\w+');
+  s := 'hello world 123';
+  MA := R.FindAll(s);
+  NfaMA := NfaFindAll(P, PAnsiChar(s), Length(s));
+  CheckEqual(Int64(Length(NfaMA)), Int64(Length(MA)), 'dfa findall w+ count');
+  for i := 0 to High(MA) do
+  begin
+    CheckEqual(Int64(NfaMA[i].Start), Int64(MA[i].Start), 'dfa findall w+ start ' + IntToStr(i));
+    CheckEqual(Int64(NfaMA[i].Len), Int64(MA[i].Len), 'dfa findall w+ len ' + IntToStr(i));
+  end;
+
+  // \d+ on 'a1b22c333' same positions and lengths
+  R := TRegex.Compile('\d+');
+  P := CompileProgram('\d+');
+  s := 'a1b22c333';
+  MA := R.FindAll(s);
+  NfaMA := NfaFindAll(P, PAnsiChar(s), Length(s));
+  CheckEqual(Int64(Length(NfaMA)), Int64(Length(MA)), 'dfa findall d+ count');
+  for i := 0 to High(MA) do
+  begin
+    CheckEqual(Int64(NfaMA[i].Start), Int64(MA[i].Start), 'dfa findall d+ start ' + IntToStr(i));
+    CheckEqual(Int64(NfaMA[i].Len), Int64(MA[i].Len), 'dfa findall d+ len ' + IntToStr(i));
+  end;
+
+  // [a-z]+ on 'ABC def GHI jkl' same results
+  R := TRegex.Compile('[a-z]+');
+  P := CompileProgram('[a-z]+');
+  s := 'ABC def GHI jkl';
+  MA := R.FindAll(s);
+  NfaMA := NfaFindAll(P, PAnsiChar(s), Length(s));
+  CheckEqual(Int64(Length(NfaMA)), Int64(Length(MA)), 'dfa findall az+ count');
+  for i := 0 to High(MA) do
+  begin
+    CheckEqual(Int64(NfaMA[i].Start), Int64(MA[i].Start), 'dfa findall az+ start ' + IntToStr(i));
+    CheckEqual(Int64(NfaMA[i].Len), Int64(MA[i].Len), 'dfa findall az+ len ' + IntToStr(i));
+  end;
+
+  // Empty pattern on 'abc'
+  R := TRegex.Compile('');
+  s := 'abc';
+  MA := R.FindAll(s);
+  CheckEqual(Int64(4), Int64(Length(MA)), 'dfa findall empty count');
+  CheckEqual(Int64(0), Int64(MA[0].Start), 'dfa findall empty pos0');
+  CheckEqual(Int64(0), Int64(MA[0].Len), 'dfa findall empty len0');
+  CheckEqual(Int64(3), Int64(MA[3].Start), 'dfa findall empty pos3');
+
+  // Pattern matching entire input
+  R := TRegex.Compile('hello');
+  s := 'hello';
+  MA := R.FindAll(s);
+  CheckEqual(Int64(1), Int64(Length(MA)), 'dfa findall entire count');
+  CheckEqual(Int64(0), Int64(MA[0].Start), 'dfa findall entire start');
+  CheckEqual(Int64(5), Int64(MA[0].Len), 'dfa findall entire len');
+
+  // Pattern with no matches
+  R := TRegex.Compile('xyz');
+  s := 'hello world';
+  MA := R.FindAll(s);
+  CheckEqual(Int64(0), Int64(Length(MA)), 'dfa findall no match');
+
+  // Adjacent matches
+  R := TRegex.Compile('ab');
+  s := 'ababab';
+  MA := R.FindAll(s);
+  CheckEqual(Int64(3), Int64(Length(MA)), 'dfa findall adjacent count');
+  CheckEqual(Int64(0), Int64(MA[0].Start), 'dfa findall adjacent 0');
+  CheckEqual(Int64(2), Int64(MA[1].Start), 'dfa findall adjacent 1');
+  CheckEqual(Int64(4), Int64(MA[2].Start), 'dfa findall adjacent 2');
+
+  // Zero-length matches (pattern that can match empty)
+  R := TRegex.Compile('a*');
+  P := CompileProgram('a*');
+  s := 'bab';
+  MA := R.FindAll(s);
+  NfaMA := NfaFindAll(P, PAnsiChar(s), Length(s));
+  CheckEqual(Int64(Length(NfaMA)), Int64(Length(MA)), 'dfa findall a* count');
+  for i := 0 to High(MA) do
+  begin
+    CheckEqual(Int64(NfaMA[i].Start), Int64(MA[i].Start), 'dfa findall a* start ' + IntToStr(i));
+    CheckEqual(Int64(NfaMA[i].Len), Int64(MA[i].Len), 'dfa findall a* len ' + IntToStr(i));
+  end;
+end;
+
+{ ===== DFA vs NFA CROSS-VALIDATION (50+ pattern/input pairs) ===== }
+
+procedure TestDfaNfaCrossValidation;
+type
+  TTestCase = record
+    Pattern: string;
+    Input: string;
+  end;
+const
+  NUM_CASES = 60;
+  Cases: array[0..NUM_CASES-1] of TTestCase = (
+    { Patterns WITHOUT assertions }
+    (Pattern: 'hello'; Input: 'hello world'),
+    (Pattern: 'hello'; Input: 'goodbye'),
+    (Pattern: 'hello'; Input: ''),
+    (Pattern: 'a*'; Input: ''),
+    (Pattern: 'a*'; Input: 'aaa'),
+    (Pattern: 'a*'; Input: 'bbb'),
+    (Pattern: 'a+'; Input: ''),
+    (Pattern: 'a+'; Input: 'a'),
+    (Pattern: 'a+'; Input: 'b'),
+    (Pattern: 'cat|dog'; Input: 'cat'),
+    (Pattern: 'cat|dog'; Input: 'dog'),
+    (Pattern: 'cat|dog'; Input: 'bird'),
+    (Pattern: 'cat|dog'; Input: ''),
+    (Pattern: '\d+'; Input: 'abc 123 def'),
+    (Pattern: '\d+'; Input: 'no digits'),
+    (Pattern: '\d+'; Input: ''),
+    (Pattern: '\w+'; Input: 'hello'),
+    (Pattern: '\w+'; Input: '   '),
+    (Pattern: '[a-z]+'; Input: 'ABC'),
+    (Pattern: '[a-z]+'; Input: 'abc'),
+    (Pattern: '.'; Input: ''),
+    (Pattern: '.'; Input: 'x'),
+    (Pattern: 'a{2,4}'; Input: 'a'),
+    (Pattern: 'a{2,4}'; Input: 'aa'),
+    (Pattern: 'a{2,4}'; Input: 'aaaa'),
+    { Patterns WITH assertions - ^ }
+    (Pattern: '^hello'; Input: 'hello world'),
+    (Pattern: '^hello'; Input: 'say hello'),
+    (Pattern: '^hello'; Input: ''),
+    (Pattern: '^hello'; Input: 'h'),
+    (Pattern: '^'; Input: ''),
+    (Pattern: '^'; Input: 'abc'),
+    { Patterns WITH assertions - $ }
+    (Pattern: 'world$'; Input: 'hello world'),
+    (Pattern: 'world$'; Input: 'world!'),
+    (Pattern: 'world$'; Input: ''),
+    (Pattern: '$'; Input: ''),
+    (Pattern: '$'; Input: 'abc'),
+    (Pattern: '$'; Input: 'x'),
+    { Patterns WITH assertions - ^...$ }
+    (Pattern: '^exact$'; Input: 'exact'),
+    (Pattern: '^exact$'; Input: 'not exact'),
+    (Pattern: '^exact$'; Input: ''),
+    (Pattern: '^$'; Input: ''),
+    (Pattern: '^$'; Input: 'a'),
+    (Pattern: '^a+$'; Input: 'aaa'),
+    (Pattern: '^a+$'; Input: 'aab'),
+    (Pattern: '^a+$'; Input: ''),
+    { Patterns WITH assertions - \b }
+    (Pattern: '\bword\b'; Input: 'a word here'),
+    (Pattern: '\bword\b'; Input: 'password'),
+    (Pattern: '\bword\b'; Input: 'wordy'),
+    (Pattern: '\bword\b'; Input: 'word'),
+    (Pattern: '\bword\b'; Input: ''),
+    (Pattern: '\bfoo\b'; Input: 'foo'),
+    (Pattern: '\bfoo\b'; Input: 'foobar'),
+    (Pattern: '\bfoo\b'; Input: 'barfoo'),
+    { Patterns WITH assertions - \B }
+    (Pattern: '\Boo\B'; Input: 'foobar'),
+    (Pattern: '\Boo\B'; Input: 'oo'),
+    (Pattern: '\Boo\B'; Input: 'foo'),
+    (Pattern: '\Boo\B'; Input: ''),
+    { Mixed assertions }
+    (Pattern: '^\d+$'; Input: '12345'),
+    (Pattern: '^\d+$'; Input: 'abc'),
+    (Pattern: '\b\w+\b'; Input: 'hello world')
+  );
+var
+  i: Integer;
+  P: TRegexProgram;
+  LDfa, LNfa: Boolean;
+  LLabel: string;
+begin
+  for i := 0 to NUM_CASES - 1 do
+  begin
+    P := CompileProgram(Cases[i].Pattern);
+    LDfa := DfaIsMatch(P, PAnsiChar(Cases[i].Input), Length(Cases[i].Input));
+    LNfa := NfaIsMatch(P, PAnsiChar(Cases[i].Input), Length(Cases[i].Input));
+    LLabel := 'xval[' + IntToStr(i) + '] /' + Cases[i].Pattern + '/ on "' + Cases[i].Input + '"';
+    Check(LDfa = LNfa, LLabel);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -3626,5 +3931,9 @@ begin
   T.Run('ENC: Case folding boundary', @TestCaseFoldingBoundary);
   T.Run('ENC: Shorthand with encoding', @TestShorthandWithEncoding);
   T.Run('ENC: Value extraction', @TestValueExtraction);
+  { --- DFA v2 assertion correctness tests --- }
+  T.Run('DFA: Assertion correctness', @TestDfaAssertionCorrectness);
+  T.Run('DFA: FindAll correctness', @TestDfaFindAllCorrectness);
+  T.Run('DFA: NFA cross-validation', @TestDfaNfaCrossValidation);
   T.Summary;
 end.
