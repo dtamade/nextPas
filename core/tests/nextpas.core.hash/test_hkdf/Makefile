@@ -1,8 +1,8 @@
 FPC ?= fpc
 CORE_ROOT := ../../..
 REPO_ROOT := ../../../..
-BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.tls/test_tls13_e2e_openssl
-PROGRAM := test_tls13_e2e_openssl
+BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.hash/test_hkdf
+PROGRAM := test_hkdf
 SOURCE := $(PROGRAM).lpr
 FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(REPO_ROOT)/src -Fi$(REPO_ROOT)/src -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
@@ -14,7 +14,7 @@ build:
 	$(FPC) $(FPC_FLAGS) $(SOURCE)
 
 run: build
-	bash ./run_e2e.sh
+	$(BUILD_DIR)/$(PROGRAM)
 
 test: run
 

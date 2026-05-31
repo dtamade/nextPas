@@ -78,16 +78,14 @@ var
   LCert: TX509Certificate;
 begin
   LStore := TX509TrustStore.Create;
+  LCert := LoadCertFromFile('/tmp/test_cert.der');
   try
-    LCert := LoadCertFromFile('/tmp/test_cert.der');
     LStore.AddTrustedCertificate(LCert);
     Check('trust store: added cert is trusted', LStore.IsTrusted(LCert));
-
-    // A different cert should not be trusted
-    // (We only have one cert, so just verify the store works)
     Check('trust store: find issuer (self-signed)', LStore.FindIssuer(LCert) <> nil);
   finally
     LStore.Free;
+    LCert.Free;
   end;
 end;
 

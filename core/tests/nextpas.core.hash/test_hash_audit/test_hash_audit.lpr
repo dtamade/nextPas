@@ -5,7 +5,7 @@ program test_hash_audit;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.hash;
+  nextpas.core.crypto.hash;
 
 var
   T: TTestRunner;
