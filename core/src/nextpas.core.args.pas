@@ -65,6 +65,7 @@ type
     procedure ValidateRequired;
     procedure ValidatePositionals;
     function IsValidChoice(const AOptIdx: Int32; const AValue: string): Boolean;
+    function OptionNeedsValue(const AArg: string): Boolean;
   public
     constructor Create(const AAppName, ADescription: string);
     procedure SetVersion(const AVersion: string);
@@ -98,7 +99,6 @@ type
     function Positional(const AIndex: Int32): string;
     function PositionalCount: Int32;
     function HelpText: string;
-    function OptionNeedsValue(const AArg: string): Boolean;
   end;
 
   TArgCommandHandler = procedure(const AParser: TArgParser);
@@ -267,8 +267,17 @@ procedure TArgParser.AddChoice(const AName: string; const AShort: AnsiChar; cons
   const AChoices: array of string; const ADefault: string);
 var
   LIdx, LI: Int32;
+  LValid: Boolean;
 begin
   CheckDuplicate(AName, AShort);
+  if ADefault <> '' then
+  begin
+    LValid := False;
+    for LI := 0 to High(AChoices) do
+      if AChoices[LI] = ADefault then begin LValid := True; Break; end;
+    if not LValid then
+      raise EArgParseError.Create('invalid default "' + ADefault + '" for choice option: ' + AName);
+  end;
   LIdx := Length(FOptions);
   SetLength(FOptions, LIdx + 1);
   FOptions[LIdx].Name := AName;
