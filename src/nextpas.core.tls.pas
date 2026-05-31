@@ -4,16 +4,15 @@ unit nextpas.core.tls;
 
 { nextpas.core.tls — TLS 模块统一门面
 
-  一个 uses 搞定 TLS 连接：
+  对齐 Rust rustls API 设计：
 
-    uses nextpas.core.tls;
-    var S: TSSLStream; Err: string;
-    if TryTLSDial('example.com', 443, S, Err) then
-    begin
-      S.WriteBuffer(Request[1], Length(Request));
-      S.ReadBuffer(Response[0], Len);
-      S.Free;
-    end;
+  主 API（transport-first，类似 TlsConnector/TlsAcceptor）：
+    var Connector: TSSLConnector;
+    Connector := TSSLConnector.FromContext(TSSLQuick.SecureClient);
+    Stream := Connector.ConnectSocket(Socket, 'example.com');
+
+  便捷 API（含 DNS + TCP，类似 Go tls.Dial）：
+    if TryTLSDial('example.com', 443, S, Err) then ...;
 }
 
 interface
@@ -29,10 +28,16 @@ uses
   nextpas.core.tls.connection.builder;
 
 type
+  // Primary API (rustls-aligned)
+  TSSLConnector = nextpas.core.tls.tls.TSSLConnector;
+  TSSLAcceptor = nextpas.core.tls.tls.TSSLAcceptor;
   TSSLStream = nextpas.core.tls.tls.TSSLStream;
+
+  // Convenience
   TSSLDialer = nextpas.core.tls.dialer.TSSLDialer;
   TSSLDialResult = nextpas.core.tls.dialer.TSSLDialResult;
 
+// Convenience functions (DNS + TCP + TLS in one call)
 function TLSDial(const AHost: string; APort: Word): TSSLStream;
 function TryTLSDial(const AHost: string; APort: Word;
   out AStream: TSSLStream; out AError: string): Boolean;
