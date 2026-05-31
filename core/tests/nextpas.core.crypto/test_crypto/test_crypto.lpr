@@ -206,12 +206,10 @@ begin
   B := HexToBytes('00FF');
   M := HexToBytes('0101');
   R := CTBigIntModMul(A, B, M);
-  { 255*255 = 65025, 65025 mod 257 = 1 }
-  { BUG DOCUMENTED: CTBigIntModMul returns incorrect result for this case.
-    The underlying TryBigIntModMulFromUnsignedBytes may have issues with
-    small moduli or the Montgomery reduction setup. }
-  if R[High(R)] <> 1 then
-    WriteLn('    [BUG] CTBigIntModMul(255,255,257) = ', R[High(R)], ' (expected 1)')
+  { 255*255 = 65025, 65025 mod 257 = 4 (not 1 as previously documented) }
+  { 257*253 = 65021, 65025-65021 = 4 }
+  if R[High(R)] <> 4 then
+    WriteLn('    [BUG] CTBigIntModMul(255,255,257) = ', R[High(R)], ' (expected 4)')
   else
     Check(True);
 end;
