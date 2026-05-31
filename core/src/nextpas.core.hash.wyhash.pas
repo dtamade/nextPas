@@ -18,15 +18,16 @@ const
   WY_P3 = UInt64($589965cc75374cc3);
 
 function WyMix(A, B: UInt64): UInt64; inline;
-var lo, hi: UInt64;
+var Lo, Hi, AH, AL, BH, BL, T1, T2: UInt64;
 begin
   {$PUSH}{$Q-}{$R-}
-  lo := A * B;
-  hi := ((A shr 32) * (B and $FFFFFFFF) + (A and $FFFFFFFF) * (B shr 32)
-        + (A shr 32) * (B shr 32) shl 32);
-  // Proper 128-bit multiply: use compiler intrinsic if available
-  // Simplified: use the xor-fold approach
-  Result := lo xor hi;
+  Lo := A * B;
+  AH := A shr 32; AL := A and $FFFFFFFF;
+  BH := B shr 32; BL := B and $FFFFFFFF;
+  T1 := AH * BL + ((AL * BL) shr 32);
+  T2 := AL * BH + (T1 and $FFFFFFFF);
+  Hi := AH * BH + (T1 shr 32) + (T2 shr 32);
+  Result := Lo xor Hi;
   {$POP}
 end;
 
