@@ -43,7 +43,8 @@ var
 procedure InitXidDecodeTable;
 var LI: Integer;
 begin
-  FillChar(GXidDecodeTable, SizeOf(GXidDecodeTable), -1);
+  for LI := 0 to 127 do
+    GXidDecodeTable[LI] := -1;
   for LI := 0 to 31 do
     GXidDecodeTable[Ord(XID_ENCODING[LI + 1])] := ShortInt(LI);
 end;
