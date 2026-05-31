@@ -233,7 +233,7 @@ begin
 
   while (LabelIdx < LabelLen) and (LabelCol < W) do
   begin
-    Adv := GaugeGraphemeAt(Label_[1], LabelLen, LabelIdx);
+    Adv := GaugeGraphemeAt(Label_, LabelLen, LabelIdx);
     if Adv.Width = 0 then
     begin
       Inc(LabelIdx, Adv.ByteLen);
