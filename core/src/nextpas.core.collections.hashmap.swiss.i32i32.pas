@@ -42,6 +42,7 @@ type
     function TryGetValue(AKey: Int32; out AValue: Int32): Boolean; inline;
     function ContainsKey(AKey: Int32): Boolean; inline;
     procedure Put(AKey: Int32; AValue: Int32); inline;
+    procedure PutNew(AKey: Int32; AValue: Int32); inline;
     function Get(AKey: Int32): Int32; inline;
     function Remove(AKey: Int32): Boolean;
     procedure Clear;
@@ -263,6 +264,35 @@ begin
       Exit;
     end;
     Inc(LProbeOfs);
+  end;
+end;
+
+procedure TSwissTableI32I32.PutNew(AKey: Int32; AValue: Int32);
+var
+  Lh: UInt32;
+  LGroupIdx, LProbeOfs, LBase, LIdx: SizeUInt;
+  LFreeMask: TMask16;
+begin
+  if FGrowthLeft = 0 then GrowAndRehash;
+  Lh := SwissHashI32(UInt32(AKey));
+  LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
+  LProbeOfs := 0;
+  while True do
+  begin
+    LBase := LGroupIdx shl 4;
+    LFreeMask := Vec16CmpGtU(@FCtrl[LBase], $7F);
+    if LFreeMask <> 0 then
+    begin
+      LIdx := LBase + SizeUInt(Vec16Ctz(LFreeMask));
+      SetCtrl(LIdx, Lh and $7F);
+      FSlots[LIdx].Key := AKey;
+      FSlots[LIdx].Value := AValue;
+      Inc(FCount);
+      Dec(FGrowthLeft);
+      Exit;
+    end;
+    Inc(LProbeOfs);
+    LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
   end;
 end;
 
