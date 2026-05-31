@@ -193,7 +193,7 @@ begin
 end;
 
 var
-  GLogDepth: Int32 = 0;
+  GLogDepth: Int32 = 0; // TODO: threadvar when FPC supports threadvar initialization
 
 procedure TLogEvent.Msg(const AText: string);
 begin
@@ -221,7 +221,14 @@ end;
 
 var
   GEventPool: array[0..15] of TLogEvent;
-  GEventIdx: UInt32 = 0;
+  GEventIdx: Int32 = 0;
+
+function NextEventSlot: PLogEvent; inline;
+var LIdx: Int32;
+begin
+  LIdx := InterlockedIncrement(GEventIdx) - 1;
+  Result := @GEventPool[LIdx and 15];
+end;
 
 class function TLogger.New(const AHandler: ILogHandler; ALevel: TLogLevel): TLogger;
 begin
@@ -272,8 +279,7 @@ end;
 
 function TLogger.Trace: PLogEvent;
 begin
-  Result := @GEventPool[GEventIdx and 15];
-  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
+  Result := NextEventSlot;
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -283,8 +289,7 @@ end;
 
 function TLogger.Debug: PLogEvent;
 begin
-  Result := @GEventPool[GEventIdx and 15];
-  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
+  Result := NextEventSlot;
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -294,8 +299,7 @@ end;
 
 function TLogger.Info: PLogEvent;
 begin
-  Result := @GEventPool[GEventIdx and 15];
-  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
+  Result := NextEventSlot;
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -305,8 +309,7 @@ end;
 
 function TLogger.Warn: PLogEvent;
 begin
-  Result := @GEventPool[GEventIdx and 15];
-  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
+  Result := NextEventSlot;
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -316,8 +319,7 @@ end;
 
 function TLogger.Error: PLogEvent;
 begin
-  Result := @GEventPool[GEventIdx and 15];
-  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
+  Result := NextEventSlot;
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -327,8 +329,7 @@ end;
 
 function TLogger.Fatal: PLogEvent;
 begin
-  Result := @GEventPool[GEventIdx and 15];
-  {$PUSH}{$Q-}Inc(GEventIdx);{$POP}
+  Result := NextEventSlot;
   Finalize(Result^);
   FillChar(Result^, SizeOf(TLogEvent), 0);
   Result^.FHandler := FHandler;
@@ -907,5 +908,12 @@ function TLogger.AsILogger: ILogger;
 begin
   Result := TLoggerAdapter.Create(Self);
 end;
+
+var
+  GFinI: Int32;
+
+finalization
+  for GFinI := 0 to High(GEventPool) do
+    Finalize(GEventPool[GFinI]);
 
 end.
