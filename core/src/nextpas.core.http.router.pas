@@ -306,7 +306,7 @@ end;
 
 function THttpRouter.MatchNode(ANode: PRouteNode; const APath: string; var AParams: TRouteParams): THttpHandlerFunc;
 const
-  MAX_MATCH_DEPTH = 64;
+  MAX_MATCH_DEPTH = 128;
 
   function DoMatch(ANode: PRouteNode; const APath: string; ADepth: Int32): THttpHandlerFunc;
   var
