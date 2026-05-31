@@ -173,44 +173,74 @@ begin
   P256FeMul(P.Y, ZInv3, AY);
 end;
 
-// CT scalar multiplication using double-and-always-add with conditional copy
+// CT scalar multiplication using w=4 fixed-window method
+// Precompute table[0..15] = {0*P, 1*P, 2*P, ..., 15*P}
+// Process scalar in 4-bit windows from MSB: 64 windows × (4 doubles + 1 CT-select + 1 add)
 procedure P256ScalarMult(const AScalar: TBytes; const P: TP256JacPoint; out R: TP256JacPoint);
 var
-  LR0, LR1, LAdd, LDbl: TP256JacPoint;
-  I, J, LBit: Integer;
-  LSwap: QWord;
+  LTable: array[0..15] of TP256JacPoint;
+  LSelected, LTmp: TP256JacPoint;
+  I, J, K, LWin, LBitPos: Integer;
+  LMask: QWord;
 begin
-  P256PointInfinity(LR0);
-  LR1 := P;
+  // Build precomputed table
+  P256PointInfinity(LTable[0]);
+  LTable[1] := P;
+  for I := 2 to 15 do
+  begin
+    if (I and 1) = 0 then
+      P256PointDouble(LTable[I div 2], LTable[I])
+    else
+      P256PointAdd(LTable[I - 1], P, LTable[I]);
+  end;
 
-  for I := 0 to 31 do
-    for J := 7 downto 0 do
+  // Start with identity
+  P256PointInfinity(R);
+
+  // Process 64 windows of 4 bits each (scalar is big-endian TBytes, 256 bits)
+  for I := 0 to 63 do
+  begin
+    // Square 4 times
+    for K := 0 to 3 do
     begin
-      if I * 8 + (7 - J) < Length(AScalar) * 8 then
-        LBit := (AScalar[I] shr J) and 1
-      else
-        LBit := 0;
-
-      // Montgomery ladder: always compute both, select based on bit
-      P256PointAdd(LR0, LR1, LAdd);
-      P256PointDouble(LR0, LDbl);
-
-      // If bit=1: R0=Add, R1=Double(R1) — wait, standard ladder:
-      // If bit=1: R0=R0+R1, R1=2*R1
-      // If bit=0: R1=R0+R1, R0=2*R0
-      // Simpler CT: swap(R0,R1) if bit!=prev_bit, then R1=R0+R1, R0=2*R0, ...
-      // Actually simplest correct CT: double-and-always-add
-      P256PointDouble(LR0, LDbl);
-      P256PointAdd(LDbl, LR1, LAdd);
-      // If bit=1: R0 = Add; else R0 = Dbl
-      LSwap := QWord(LBit);
-      P256FeCondCopy(LAdd.X, LDbl.X, LSwap);
-      P256FeCondCopy(LAdd.Y, LDbl.Y, LSwap);
-      P256FeCondCopy(LAdd.Z, LDbl.Z, LSwap);
-      LR0 := LDbl;
+      P256PointDouble(R, LTmp);
+      R := LTmp;
     end;
 
-  R := LR0;
+    // Extract 4-bit window (big-endian scalar)
+    // Window I covers bits [255 - I*4 .. 252 - I*4] (MSB first)
+    LBitPos := (63 - I) * 4;
+    LWin := 0;
+    for K := 3 downto 0 do
+    begin
+      J := LBitPos + K;
+      if (J div 8) < Length(AScalar) then
+        LWin := LWin or (((AScalar[Length(AScalar) - 1 - (J div 8)] shr (J mod 8)) and 1) shl K);
+    end;
+
+    // CT table lookup: scan all 16 entries using byte-level masking
+    P256PointInfinity(LSelected);
+    for J := 0 to 15 do
+    begin
+      LMask := QWord(0) - QWord(Ord(J = LWin));
+      LSelected.X[0] := (LTable[J].X[0] and LMask) or (LSelected.X[0] and (not LMask));
+      LSelected.X[1] := (LTable[J].X[1] and LMask) or (LSelected.X[1] and (not LMask));
+      LSelected.X[2] := (LTable[J].X[2] and LMask) or (LSelected.X[2] and (not LMask));
+      LSelected.X[3] := (LTable[J].X[3] and LMask) or (LSelected.X[3] and (not LMask));
+      LSelected.Y[0] := (LTable[J].Y[0] and LMask) or (LSelected.Y[0] and (not LMask));
+      LSelected.Y[1] := (LTable[J].Y[1] and LMask) or (LSelected.Y[1] and (not LMask));
+      LSelected.Y[2] := (LTable[J].Y[2] and LMask) or (LSelected.Y[2] and (not LMask));
+      LSelected.Y[3] := (LTable[J].Y[3] and LMask) or (LSelected.Y[3] and (not LMask));
+      LSelected.Z[0] := (LTable[J].Z[0] and LMask) or (LSelected.Z[0] and (not LMask));
+      LSelected.Z[1] := (LTable[J].Z[1] and LMask) or (LSelected.Z[1] and (not LMask));
+      LSelected.Z[2] := (LTable[J].Z[2] and LMask) or (LSelected.Z[2] and (not LMask));
+      LSelected.Z[3] := (LTable[J].Z[3] and LMask) or (LSelected.Z[3] and (not LMask));
+    end;
+
+    // Add selected point
+    P256PointAdd(R, LSelected, LTmp);
+    R := LTmp;
+  end;
 end;
 
 procedure P256ScalarMultBase(const AScalar: TBytes; out R: TP256JacPoint);
