@@ -64,12 +64,15 @@
 - [x] nextpas.core.tui.widget.intf（IWidget 基础接口）✅ 2/2，class 实现+多态集合+引用计数验证
 
 ### Phase 2 — Buffer + Text + Layout [进行中]
-- [x] nextpas.core.tui.image_cap ← ftui_image_cap ✅（buffer 依赖，图像协议检测）
-- [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 11/11，无泄漏，保持 class；grapheme 路径改用 text.utf8+text.width；QWord×5 diff + 整行短路 + Move-doubling reset 全保留
-- [ ] nextpas.core.tui.overlay ← ftui_overlay
-- [ ] nextpas.core.tui.text ← ftui_text / text.format ← ftui_format
-- [ ] nextpas.core.tui.borders ← ftui_borders
-- [ ] nextpas.core.tui.layout ← ftui_layout / layout.grid ← ftui_grid / layout.dsl ← ftui_layout_dsl
+- [x] nextpas.core.tui.image_cap ← ftui_image_cap ✅（图像协议检测）
+- [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 11/11，保持 class，热路径全保留
+- [x] nextpas.core.tui.overlay ← ftui_overlay ✅ 6/6，稀疏覆盖层 + merge
+- [x] nextpas.core.tui.text ← ftui_text ✅ 11/11，TSpan/TLine/TText，宽度走 text.width
+- [x] nextpas.core.tui.borders ← ftui_borders ✅ 6/6，5 套边框字形集
+- [x] nextpas.core.tui.layout ← ftui_layout ✅ 9/9，6 遍约束求解器（用 base.TDirection）
+- [ ] nextpas.core.tui.layout.grid ← ftui_grid
+- [ ] nextpas.core.tui.layout.dsl ← ftui_layout_dsl
+- [ ] nextpas.core.tui.text.format ← ftui_format
 
 ### Phase 3 — ANSI Backend + Terminal [未开始]
 - [ ] ansi ← ftui_ansi / backend.ansi ← ftui_ansi_backend
@@ -99,10 +102,11 @@
 ## 当前状态
 
 - Phase 0.1 ✅ text.width（12/12）
-- Phase 1 ✅ 完成：base/error/color/modifier/style/cell/widget.intf（共 40 测试，全无泄漏）
-- Phase 2 进行中：image_cap ✅ + buffer ✅（11/11）
-- 累计 7 个 src 单元 + 8 个测试项目，全部通过、全部 0 泄漏
-- 下一步：overlay → text/text.format → borders → layout/grid/dsl
+- Phase 1 ✅ 完成：base/error/color/modifier/style/cell/widget.intf
+- Phase 2 进行中：image_cap ✅ buffer ✅ overlay ✅ text ✅ borders ✅ layout ✅
+- 全量回归：13 测试项目、95 用例全通过、全 0 泄漏、0 警告
+- 累计 13 src 单元（含 text.width）
+- 下一步：layout.grid → layout.dsl → text.format（收尾 Phase 2），然后 Phase 3 backend/terminal
 
 ## 关键技术笔记
 
@@ -116,3 +120,13 @@
 - managed-type 函数 Result（如 TBufferLines）显式 `Result := nil` 消除 FPC 未初始化警告
 - 文档注释 {** *} 内不能出现裸 { （触发嵌套注释告警）
 - IWidget 接口：class(TInterfacedObject, IWidget) 实现，多态集合 array of IWidget，引用计数自动释放
+
+## 有意偏离原始的设计升级（intentional divergence）
+
+- **Unicode 宽度模型升级**：全库（buffer/overlay/text）的码点宽度从 fafafa 原始的
+  "仅控制字符 0 宽，其余 1 宽，东亚少量 2 宽" 升级为 nextpas.core.text.width 的
+  "组合标记/ZWJ/变体选择符 0 宽 + 扩展东亚 63 段 2 宽"。
+  - 理由：Unicode 上更正确；全库用同一 text.width 模块，buffer/overlay/text 内部自洽
+    不会错位；符合"打造最优秀框架"目标。
+  - 影响：含组合标记/ZWJ 的字符串宽度比旧版更小（更准），影响 wrap/alignment。
+  - 已 Codex 复盘确认：这是系统级有意升级，非局部 bug。测试全过、0 泄漏。
