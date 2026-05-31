@@ -20,7 +20,7 @@ uses
   nextpas.core.platform.time;
 
 const
-  NUM_REQUESTS = 10000;
+  NUM_REQUESTS = 20000;
   NUM_THREADS = 4;
   REQ_PER_THREAD = NUM_REQUESTS div NUM_THREADS;
 
@@ -60,7 +60,7 @@ begin
         LN := LConn.Read(LBuf[LTotal], 4096 - LTotal);
         if LN = 0 then Break;
         Inc(LTotal, LN);
-      until LTotal >= 70;
+      until LTotal >= 50;
       if LN = 0 then Break;
       InterlockedIncrement(GSuccess);
     end;

@@ -46,6 +46,7 @@ implementation
 uses
   nextpas.core.errors,
   nextpas.core.io.intf,
+  nextpas.core.io.buffer,
   nextpas.core.net.tcp,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -104,8 +105,10 @@ var
   LW: IHttpResponseWriter;
   LKeepAlive: Boolean;
   LIdleMs: Int64;
+  LBufWriter: IWriter;
 begin
   LParser := NewH1RequestParser;
+  LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
   LKeepAlive := True;
   if AOptions.IdleTimeout > 0 then
     LIdleMs := AOptions.IdleTimeout
@@ -144,7 +147,7 @@ begin
         LParser.GetHeaders, nil, 0);
 
       { Dispatch to handler }
-      LW := TH1ResponseWriter.Create(AConn as IWriter);
+      LW := TH1ResponseWriter.Create(LBufWriter);
       { For HTTP/1.0 keep-alive, add the header explicitly }
       if LKeepAlive and (LParser.GetHttpVersion = hvHttp10) then
         LW.GetHeaders.Set_('connection', 'keep-alive');
@@ -153,6 +156,7 @@ begin
         LW.GetHeaders.Set_('connection', 'close');
 
       AHandler.ServeHTTP(LReq, LW);
+      (LBufWriter as IFlusher).Flush;
 
       { If response writer forced connection close (no content-length),
         the writer already set Connection: close — we must stop }
