@@ -59,6 +59,7 @@ type
 
 const
   JSON_NODE_NONE = UInt32($FFFFFFFF);
+  JSON_OBJECT_HASH_THRESHOLD = 16;
 
 implementation
 
