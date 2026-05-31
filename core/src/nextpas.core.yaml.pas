@@ -1,4 +1,7 @@
 unit nextpas.core.yaml;
+{**
+ * @desc YAML 门面：解析、序列化、DOM 访问。
+ *}
 
 {$I nextpas.core.settings.inc}
 

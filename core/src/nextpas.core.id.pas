@@ -1,4 +1,7 @@
 unit nextpas.core.id;
+{**
+ * @desc 唯一标识门面：UUID、ULID、Snowflake、NanoID、KSUID、XID。
+ *}
 
 {$I nextpas.core.settings.inc}
 

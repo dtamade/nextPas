@@ -1,4 +1,7 @@
 unit nextpas.core.errors;
+{**
+ * @desc 异常层次结构：ENextPasError 及其子类。
+ *}
 
 {$I nextpas.core.settings.inc}
 

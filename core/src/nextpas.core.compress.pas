@@ -1,4 +1,7 @@
 unit nextpas.core.compress;
+{**
+ * @desc 压缩门面：Gzip、Deflate、LZ4、Zlib。
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,7 @@
 unit nextpas.core.hash;
+{**
+ * @desc 哈希函数门面：WyHash 及通用哈希接口。
+ *}
 
 {$I nextpas.core.settings.inc}
 

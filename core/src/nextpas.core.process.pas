@@ -1,4 +1,7 @@
 unit nextpas.core.process;
+{**
+ * @desc 进程管理门面：启动子进程、管道、超时、环境变量。
+ *}
 
 {$I nextpas.core.settings.inc}
 

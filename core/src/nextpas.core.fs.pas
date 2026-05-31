@@ -1,4 +1,7 @@
 unit nextpas.core.fs;
+{**
+ * @desc 文件系统门面：读写文件、目录操作、路径工具。
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,7 @@
 unit nextpas.core.regex;
+{**
+ * @desc 正则表达式门面：编译、匹配、查找、替换、分割。
+ *}
 
 {$I nextpas.core.settings.inc}
 

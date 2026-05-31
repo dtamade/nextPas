@@ -1,4 +1,7 @@
 unit nextpas.core.collections;
+{**
+ * @desc 容器门面：Vec、HashMap、Deque、BTree、LRU、Pool。
+ *}
 
 {$I nextpas.core.settings.inc}
 {$DEFINE NEXTPAS_COLLECTIONS_FACADE}

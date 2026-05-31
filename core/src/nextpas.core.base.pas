@@ -1,4 +1,7 @@
 unit nextpas.core.base;
+{**
+ * @desc 框架根类型：基础类型定义、编译器设置。
+ *}
 
 {$I nextpas.core.settings.inc}
 

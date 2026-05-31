@@ -1,13 +1,7 @@
 unit nextpas.core.toml;
-{ High-level TOML facade with automatic lifetime management.
-  Parse TOML into ITomlDocument (refcounted, auto-released).
-  Access values via TTomlValue (zero-cost record view).
-
-  Usage:
-    var Doc: ITomlDocument;
-    Doc := TomlParse('[server]' + #10 + 'port = 8080');
-    WriteLn(Doc.Root.Get('server').Get('port').AsInt);
-    // auto-released when Doc goes out of scope }
+{**
+ * @desc TOML 门面：解析、序列化、DOM 访问。
+ *}
 
 {$I nextpas.core.settings.inc}
 

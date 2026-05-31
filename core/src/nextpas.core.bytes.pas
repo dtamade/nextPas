@@ -1,4 +1,7 @@
 unit nextpas.core.bytes;
+{**
+ * @desc 字节容器门面：Buffer、Builder、字节序操作。
+ *}
 
 {$I nextpas.core.settings.inc}
 

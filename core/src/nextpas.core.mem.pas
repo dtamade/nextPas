@@ -1,4 +1,7 @@
 unit nextpas.core.mem;
+{**
+ * @desc 内存管理门面：IAllocator 抽象、默认分配器、工具函数。
+ *}
 
 {$I nextpas.core.settings.inc}
 

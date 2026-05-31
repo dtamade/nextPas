@@ -1,4 +1,7 @@
 unit nextpas.core.thread;
+{**
+ * @desc 线程门面：线程池、Channel、Future、取消令牌。
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,7 @@
 unit nextpas.core.sync;
+{**
+ * @desc 同步原语门面：Mutex、RWLock、SpinLock、WaitGroup、CondVar、Semaphore。
+ *}
 
 {$I nextpas.core.settings.inc}
 

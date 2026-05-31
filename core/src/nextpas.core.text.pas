@@ -1,4 +1,7 @@
 unit nextpas.core.text;
+{**
+ * @desc 字符串操作门面：Unicode、格式化、转换、Builder。
+ *}
 
 {$I nextpas.core.settings.inc}
 

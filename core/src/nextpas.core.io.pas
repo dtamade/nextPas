@@ -1,4 +1,7 @@
 unit nextpas.core.io;
+{**
+ * @desc 流抽象门面：IReader、IWriter、Buffer、Scanner、Pipe、Copy。
+ *}
 
 {$I nextpas.core.settings.inc}
 

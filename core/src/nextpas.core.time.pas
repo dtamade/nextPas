@@ -1,4 +1,7 @@
 unit nextpas.core.time;
+{**
+ * @desc 时间门面：TDuration、TInstant、TDeadline、DateTime、Timer。
+ *}
 
 {$I nextpas.core.settings.inc}
 

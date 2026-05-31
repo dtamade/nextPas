@@ -1,4 +1,7 @@
 unit nextpas.core.encoding;
+{**
+ * @desc 编解码门面：Base64、Hex、URL 编码、Varint。
+ *}
 
 {$I nextpas.core.settings.inc}
 
