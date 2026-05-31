@@ -210,13 +210,15 @@ end;
 
 function platform_fs_write_atomic(const APath: PAnsiChar;
   AData: Pointer; ALen: PtrUInt): Int32;
+const
+  HEX: array[0..15] of AnsiChar = '0123456789abcdef';
 var
   LTmpPath: array[0..1023] of AnsiChar;
   LPathLen, I: Int32;
   LH: TPlatformFileHandle;
   LWritten: PtrUInt;
   LR: Int32;
-  LFd: Int32;
+  LRand: array[0..5] of Byte;
 begin
   if (APath = nil) or (APath[0] = #0) then
     Exit(-1);
@@ -227,9 +229,12 @@ begin
     Inc(LPathLen);
   end;
   LTmpPath[LPathLen] := '.'; Inc(LPathLen);
-  LTmpPath[LPathLen] := 't'; Inc(LPathLen);
-  LTmpPath[LPathLen] := 'm'; Inc(LPathLen);
-  LTmpPath[LPathLen] := 'p'; Inc(LPathLen);
+  platform_random_bytes(@LRand[0], 6);
+  for I := 0 to 5 do
+  begin
+    LTmpPath[LPathLen] := HEX[LRand[I] shr 4]; Inc(LPathLen);
+    LTmpPath[LPathLen] := HEX[LRand[I] and $0F]; Inc(LPathLen);
+  end;
   LTmpPath[LPathLen] := #0;
 
   LR := platform_file_open(@LTmpPath[0], fomWriteOnly, fcmCreateAlways, LH);
