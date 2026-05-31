@@ -1633,6 +1633,8 @@ begin
       begin
         Inc(ACursor);
         Result := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+        if Result <> nil then
+          Result.FText := '^' + Result.FText;
       end;
     tkSpecializeKeyword:
       begin

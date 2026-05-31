@@ -9080,6 +9080,14 @@ begin
           );
         end
         else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+          (Length(Decl.ChildAt(0).Text) > 1) and (Decl.ChildAt(0).Text[1] = '^') then
+        begin
+          RegisterRuntimeVar(Decl.Text);
+          FModel.AddTypedHirNode(
+            'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
+          );
+        end
+        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
           (TypeMetaSize(Decl.ChildAt(0).Text) > 0) then
         begin
           if TypeMetaIsRecord(Decl.ChildAt(0).Text) then
