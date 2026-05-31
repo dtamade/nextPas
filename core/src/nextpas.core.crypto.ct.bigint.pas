@@ -2,6 +2,15 @@ unit nextpas.core.crypto.ct.bigint;
 
 {$mode objfpc}{$H+}{$J-}
 
+{ Constant-time primitives for fixed-length byte arrays.
+  CTBigIntEqual/LessThan/Select/ConditionalSwap are truly constant-time
+  for equal-length inputs. Length comparisons are NOT constant-time
+  (lengths are assumed public/structural).
+
+  WARNING: BigIntModMul/BigIntModExp are NOT constant-time — they use
+  standard Montgomery multiplication with secret-dependent branching.
+  Do NOT use for private key operations. }
+
 interface
 
 uses
@@ -11,8 +20,10 @@ function CTBigIntEqual(const A, B: TBytes): Boolean;
 function CTBigIntLessThan(const A, B: TBytes): Boolean;
 function CTBigIntSelect(ACondition: Boolean; const AIfTrue, AIfFalse: TBytes): TBytes;
 procedure CTBigIntConditionalSwap(ACondition: Boolean; var A, B: TBytes);
-function CTBigIntModMul(const A, B, M: TBytes): TBytes;
-function CTBigIntModExp(const ABase, AExp, AMod: TBytes): TBytes;
+function BigIntModMul(const A, B, M: TBytes): TBytes;
+function BigIntModExp(const ABase, AExp, AMod: TBytes): TBytes;
+function CTBigIntModMul(const A, B, M: TBytes): TBytes; deprecated 'Use BigIntModMul — this is NOT constant-time';
+function CTBigIntModExp(const ABase, AExp, AMod: TBytes): TBytes; deprecated 'Use BigIntModExp — this is NOT constant-time';
 
 implementation
 
@@ -78,7 +89,7 @@ begin
   end;
 end;
 
-function CTBigIntModMul(const A, B, M: TBytes): TBytes;
+function BigIntModMul(const A, B, M: TBytes): TBytes;
 var
   LError: string;
 begin
@@ -86,12 +97,22 @@ begin
     SetLength(Result, Length(M));
 end;
 
-function CTBigIntModExp(const ABase, AExp, AMod: TBytes): TBytes;
+function BigIntModExp(const ABase, AExp, AMod: TBytes): TBytes;
 var
   LError: string;
 begin
   if not TryBigIntModExpFromUnsignedBytes(ABase, AExp, AMod, Result, LError) then
     SetLength(Result, Length(AMod));
+end;
+
+function CTBigIntModMul(const A, B, M: TBytes): TBytes;
+begin
+  Result := BigIntModMul(A, B, M);
+end;
+
+function CTBigIntModExp(const ABase, AExp, AMod: TBytes): TBytes;
+begin
+  Result := BigIntModExp(ABase, AExp, AMod);
 end;
 
 end.

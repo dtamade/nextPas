@@ -112,6 +112,7 @@ uses
   nextpas.core.tls.asn1,
   nextpas.core.tls.pem,
   nextpas.core.crypto.hash,
+  nextpas.core.crypto.constant_time,
   nextpas.core.tls.random,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.crypto.bigint,
@@ -1787,7 +1788,7 @@ begin
     Exit;
   end;
 
-  if not BytesEqual(LRecovered, LExpected) then
+  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1819,7 +1820,7 @@ begin
     Exit;
   end;
 
-  if not BytesEqual(LRecovered, LExpected) then
+  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -2127,12 +2128,17 @@ begin
   end;
 
   case ASignatureScheme of
+    TLS13_SIG_RSA_PKCS1_SHA256,
+    TLS13_SIG_RSA_PKCS1_SHA384:
+      begin
+        AError := 'rsa_pkcs1 signature schemes are not permitted in TLS 1.3 CertificateVerify (RFC 8446 §4.4.3)';
+        Exit;
+      end;
+
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256,
-    TLS13_SIG_RSA_PKCS1_SHA256,
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
-    TLS13_SIG_RSA_PSS_PSS_SHA384,
-    TLS13_SIG_RSA_PKCS1_SHA384:
+    TLS13_SIG_RSA_PSS_PSS_SHA384:
       begin
         if not SameText(APublicKeyInfo.KeyType, 'RSA') then
         begin
@@ -2154,24 +2160,6 @@ begin
           TLS13_SIG_RSA_PSS_RSAE_SHA384,
           TLS13_SIG_RSA_PSS_PSS_SHA384:
             Result := TryVerifyRSAPSSSignatureSHA384(
-              ACertificateVerifyInput,
-              ASignature,
-              APublicKeyInfo.RSAModulus,
-              APublicKeyInfo.RSAExponent,
-              AError
-            );
-
-          TLS13_SIG_RSA_PKCS1_SHA256:
-            Result := TryVerifyRSAPKCS1v15SignatureSHA256(
-              ACertificateVerifyInput,
-              ASignature,
-              APublicKeyInfo.RSAModulus,
-              APublicKeyInfo.RSAExponent,
-              AError
-            );
-
-          TLS13_SIG_RSA_PKCS1_SHA384:
-            Result := TryVerifyRSAPKCS1v15SignatureSHA384(
               ACertificateVerifyInput,
               ASignature,
               APublicKeyInfo.RSAModulus,
