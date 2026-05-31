@@ -551,6 +551,23 @@ begin
     (L = 'unimplemented') or (L = 'library') or (L = 'interrupt');
 end;
 
+
+function IsMethodNameToken(AKind: TTokenKind): Boolean;
+begin
+  Result := (AKind = tkIdentifier) or
+    (AKind = tkContainsKeyword) or (AKind = tkRequiresKeyword) or
+    (AKind = tkNameKeyword) or (AKind = tkMessageKeyword) or
+    (AKind = tkStringKeyword) or (AKind = tkFileKeyword) or
+    (AKind = tkOnKeyword) or (AKind = tkIsKeyword) or
+    (AKind = tkAsKeyword) or (AKind = tkInKeyword) or
+    (AKind = tkSelfKeyword) or (AKind = tkInlineKeyword) or
+    (AKind = tkOverloadKeyword) or (AKind = tkVirtualKeyword) or
+    (AKind = tkOverrideKeyword) or (AKind = tkAbstractKeyword) or
+    (AKind = tkStaticKeyword) or (AKind = tkDynamicKeyword) or
+    (AKind = tkReintroduceKeyword) or (AKind = tkDeprecatedKeyword) or
+    (AKind = tkPlatformKeyword) or (AKind = tkExperimentalKeyword);
+end;
+
 function IsDirectiveToken(AKind: TTokenKind): Boolean;
 begin
   Result := AKind in [tkInlineKeyword, tkOverloadKeyword, tkCdeclKeyword,
@@ -826,7 +843,9 @@ begin
   Token := CurrentToken(ALexer, ACursor);
   case Token.Kind of
     tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword,
-      tkInheritedKeyword:
+      tkInheritedKeyword, tkContainsKeyword, tkRequiresKeyword,
+      tkOnKeyword, tkIsKeyword, tkAsKeyword, tkInKeyword,
+      tkInlineKeyword, tkOverloadKeyword:
       begin
         Inc(ACursor);
         if (Token.Kind = tkInheritedKeyword) and (ACursor < ALexer.TokenCount) and
@@ -991,11 +1010,7 @@ begin
           begin
             Inc(ACursor);
             if (ACursor < ALexer.TokenCount) and
-              ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
-               (CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
-               (CurrentToken(ALexer, ACursor).Kind = tkMessageKeyword) or
-               (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword) or
-               (CurrentToken(ALexer, ACursor).Kind = tkFileKeyword)) then
+              IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
             begin
               Token := CurrentToken(ALexer, ACursor);
               RHS := TGreenNode.Create(gnkDotAccess, Result.ByteOffset, 0,
@@ -1235,11 +1250,7 @@ begin
         begin
           Inc(ACursor);
           if (ACursor < ALexer.TokenCount) and
-            ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
-             (CurrentToken(ALexer, ACursor).Kind = tkNameKeyword) or
-             (CurrentToken(ALexer, ACursor).Kind = tkMessageKeyword) or
-             (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword) or
-             (CurrentToken(ALexer, ACursor).Kind = tkFileKeyword)) then
+            IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
           begin
             RHS := TGreenNode.Create(gnkDotAccess, LhsNode.ByteOffset, 0,
               CurrentToken(ALexer, ACursor).Lexeme);
@@ -2189,7 +2200,7 @@ begin
                      tkGenericKeyword, tkOperatorKeyword]) do
                   Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
-                  (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+                  IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
                 begin
                   ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
                     CurrentToken(ALexer, ACursor).ByteOffset, 0,
@@ -2795,7 +2806,7 @@ begin
   begin
     Inc(ACursor);
     if (ACursor < ALexer.TokenCount) and
-      (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+      IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
       Node.FText := NameToken.Lexeme + '.' + CurrentToken(ALexer, ACursor).Lexeme;
       Inc(ACursor);
@@ -2969,7 +2980,7 @@ begin
   begin
     Inc(ACursor);
     if (ACursor < ALexer.TokenCount) and
-      (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+      IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
       Node.FText := NameToken.Lexeme + '.' + CurrentToken(ALexer, ACursor).Lexeme;
       Inc(ACursor);
@@ -3900,7 +3911,8 @@ var
           Result := True;
         end;
       tkIdentifier, tkSelfKeyword, tkNameKeyword, tkStringKeyword,
-        tkMessageKeyword, tkFileKeyword:
+        tkMessageKeyword, tkFileKeyword, tkContainsKeyword,
+        tkRequiresKeyword, tkOnKeyword, tkInlineKeyword, tkOverloadKeyword:
         begin
           if (ACursor + 1 < ALexer.TokenCount) and
             (ALexer.TokenAt(ACursor + 1).Kind = tkColon) then
