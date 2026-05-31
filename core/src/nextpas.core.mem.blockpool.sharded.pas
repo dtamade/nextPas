@@ -16,7 +16,7 @@ unit nextpas.core.mem.blockpool.sharded;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.atomic,
   nextpas.core.sync,

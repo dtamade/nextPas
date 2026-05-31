@@ -2,7 +2,7 @@ unit nextpas.core.mem.mapped_ring_buffer.sharded;
 
 interface
 uses
-  SysUtils, Classes, SyncObjs, nextpas.core.mem.mapped_ring_buffer;
+  SysUtils, SyncObjs, nextpas.core.mem.mapped_ring_buffer;
 
 type
   // 简单分片封装：将并发生产/消费分散到多条底层 ring
