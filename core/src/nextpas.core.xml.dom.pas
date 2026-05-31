@@ -172,9 +172,11 @@ var
   LCurrent: TXmlNode;
   LChild: TXmlNode;
   LI: Integer;
+  LRootCount: Integer;
 begin
   LDoc := TXmlDocument.Create(xnkDocument);
   LCurrent := LDoc;
+  LRootCount := 0;
   LReader := TXmlReader.Create(AInput);
   try
     while LReader.Next(LTok) do
@@ -182,6 +184,16 @@ begin
       case LTok.Kind of
         xtkStartElement:
         begin
+          { HIGH 5 fix: detect multiple root elements }
+          if LCurrent = LDoc then
+          begin
+            Inc(LRootCount);
+            if LRootCount > 1 then
+            begin
+              LDoc.Free;
+              raise EXmlError.Create('Multiple root elements', LReader.Position);
+            end;
+          end;
           LChild := TXmlNode.Create(xnkElement);
           LChild.FName := LTok.Name;
           LChild.FAttributes := LTok.Attributes;
@@ -195,6 +207,16 @@ begin
         end;
         xtkEmptyElement:
         begin
+          { HIGH 5 fix: detect multiple root elements }
+          if LCurrent = LDoc then
+          begin
+            Inc(LRootCount);
+            if LRootCount > 1 then
+            begin
+              LDoc.Free;
+              raise EXmlError.Create('Multiple root elements', LReader.Position);
+            end;
+          end;
           LChild := TXmlNode.Create(xnkElement);
           LChild.FName := LTok.Name;
           LChild.FAttributes := LTok.Attributes;

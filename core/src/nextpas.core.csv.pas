@@ -15,10 +15,13 @@ type
   { TCsvReader — streaming CSV parser with RFC 4180 support }
   TCsvReader = record
   private
+    FInput: string;       { holds string reference to prevent dangling pointer }
     FData: PAnsiChar;
     FLen: SizeUInt;
     FPos: SizeUInt;
     FDelimiter: AnsiChar;
+    FHasError: Boolean;
+    FError: string;
     function PeekChar: AnsiChar; inline;
     function AtEnd: Boolean; inline;
     function ReadQuotedField: string;
@@ -27,6 +30,8 @@ type
     class function Create(const AInput: string; ADelimiter: AnsiChar = ','): TCsvReader; static;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
+    function HasError: Boolean;
+    function GetError: string;
     property Delimiter: AnsiChar read FDelimiter write FDelimiter;
   end;
 
@@ -51,10 +56,13 @@ implementation
 
 class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar): TCsvReader;
 begin
-  Result.FData := PAnsiChar(AInput);
+  Result.FInput := AInput;  { HIGH 1 fix: hold reference to prevent dangling PAnsiChar }
+  Result.FData := PAnsiChar(Result.FInput);
   Result.FLen := Length(AInput);
   Result.FPos := 0;
   Result.FDelimiter := ADelimiter;
+  Result.FHasError := False;
+  Result.FError := '';
 end;
 
 function TCsvReader.PeekChar: AnsiChar;
@@ -70,7 +78,7 @@ end;
 function TCsvReader.ReadQuotedField: string;
 var
   LStart: SizeUInt;
-  LBuf: string;
+  LBuf, LPart: string;
 begin
   { Skip opening quote }
   Inc(FPos);
@@ -82,9 +90,18 @@ begin
     while (FPos < FLen) and (FData[FPos] <> '"') do
       Inc(FPos);
     if FPos > LStart then
-      LBuf := LBuf + Copy(string(FData), LStart + 1, FPos - LStart);
+    begin
+      { HIGH 2 fix: use SetString with precise length instead of string(FData) }
+      SetString(LPart, @FData[LStart], FPos - LStart);
+      LBuf := LBuf + LPart;
+    end;
     if AtEnd then
+    begin
+      { HIGH 3 fix: unclosed quote sets error }
+      FHasError := True;
+      FError := 'Unclosed quoted field';
       Break;
+    end;
     { We hit a quote }
     Inc(FPos); { consume the quote }
     { Check for escaped quote (doubled) }
@@ -107,7 +124,8 @@ begin
   while (not AtEnd) and (FData[FPos] <> FDelimiter) and
         (FData[FPos] <> #13) and (FData[FPos] <> #10) do
     Inc(FPos);
-  Result := Copy(string(FData), LStart + 1, FPos - LStart);
+  { HIGH 2 fix: use SetString with precise length }
+  SetString(Result, @FData[LStart], FPos - LStart);
 end;
 
 function TCsvReader.ReadRow(out AFields: TStringArray): Boolean;
@@ -184,6 +202,16 @@ begin
     SetLength(Result, LCount);
     Result[LCount - 1] := LRow;
   end;
+end;
+
+function TCsvReader.HasError: Boolean;
+begin
+  Result := FHasError;
+end;
+
+function TCsvReader.GetError: string;
+begin
+  Result := FError;
 end;
 
 { ===== TCsvWriter ===== }

@@ -621,7 +621,13 @@ begin
     Inc(FCol, 3);
   end;
 
-  if AtEnd then Exit;
+  if AtEnd then
+  begin
+    { HIGH 4 fix: check for unclosed tags at EOF }
+    if FTagStackTop >= 0 then
+      SetError('Unclosed element: ' + FTagStack[FTagStackTop]);
+    Exit;
+  end;
 
   if FData[FPos] = '<' then
   begin
