@@ -6271,17 +6271,33 @@ begin
         ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
           IntToStr(StrCallArgCount) + #10;
     end
-    else if (FCurrentMethodClass <> '') and
-      (FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text) > 0) then
+    else if (FCurrentMethodClass <> '') then
     begin
-      Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.ChildAt(0).Text);
-      if Folded >= 0 then
-        ABlob := 'var self' + #10 + ABlob +
-          'vcall ' + IntToStr(Folded) + ' ' + IntToStr(StrCallArgCount) + #10
+      FuncName := FCurrentMethodClass;
+      while (FuncName <> '') and
+        (FModel.FindSymbolByName(FuncName + '.' + ANode.ChildAt(0).Text) = 0) do
+      begin
+        Folded := FModel.FindTypeByName(FuncName);
+        if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
+          FuncName := FModel.TypeAt(
+            FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
+        else
+          FuncName := '';
+      end;
+      if FuncName <> '' then
+      begin
+        Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.ChildAt(0).Text);
+        if Folded >= 0 then
+          ABlob := 'var self' + #10 + ABlob +
+            'vcall ' + IntToStr(Folded) + ' ' + IntToStr(StrCallArgCount) + #10
+        else
+          ABlob := 'var self' + #10 + ABlob +
+            'call ' + FuncName + '.' + ANode.ChildAt(0).Text +
+            ' ' + IntToStr(StrCallArgCount + 1) + #10;
+      end
       else
-        ABlob := 'var self' + #10 + ABlob +
-          'call ' + FCurrentMethodClass + '.' + ANode.ChildAt(0).Text +
-          ' ' + IntToStr(StrCallArgCount + 1) + #10;
+        ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
+          IntToStr(StrCallArgCount) + #10;
     end
     else
       ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
@@ -6458,22 +6474,35 @@ begin
     end;
   end;
   if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
-    (ANode.Text <> '') and
-    (FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.Text) > 0) then
+    (ANode.Text <> '') then
   begin
-    Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.Text);
-    if Folded >= 0 then
+    FuncName := FCurrentMethodClass;
+    while (FuncName <> '') and
+      (FModel.FindSymbolByName(FuncName + '.' + ANode.Text) = 0) do
     begin
-      ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0';
-      if TypeMetaRetPtr(FCurrentMethodClass, ANode.Text) then
-        ABlob := ABlob + ' p' + #10
+      Folded := FModel.FindTypeByName(FuncName);
+      if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
+        FuncName := FModel.TypeAt(
+          FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
       else
-        ABlob := ABlob + #10;
-    end
-    else
-      ABlob := 'var self' + #10 +
-        'call ' + FCurrentMethodClass + '.' + ANode.Text + ' 1' + #10;
-    Exit(True);
+        FuncName := '';
+    end;
+    if FuncName <> '' then
+    begin
+      Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.Text);
+      if Folded >= 0 then
+      begin
+        ABlob := 'var self' + #10 + 'vcall ' + IntToStr(Folded) + ' 0';
+        if TypeMetaRetPtr(FCurrentMethodClass, ANode.Text) then
+          ABlob := ABlob + ' p' + #10
+        else
+          ABlob := ABlob + #10;
+      end
+      else
+        ABlob := 'var self' + #10 +
+          'call ' + FuncName + '.' + ANode.Text + ' 1' + #10;
+      Exit(True);
+    end;
   end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkDotAccess) and
