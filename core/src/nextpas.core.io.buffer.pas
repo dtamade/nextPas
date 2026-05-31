@@ -46,6 +46,7 @@ type
     destructor Destroy; override;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    function HasError: Boolean; inline;
   end;
 
 function CreateBufferedReader(const AInner: IReader; const ABufSize: SizeUInt): IReader;
@@ -251,6 +252,11 @@ procedure TBufferedWriter.Flush;
 begin
   if FBufPos > 0 then
     FlushBuffer;
+end;
+
+function TBufferedWriter.HasError: Boolean;
+begin
+  Result := FError;
 end;
 
 end.

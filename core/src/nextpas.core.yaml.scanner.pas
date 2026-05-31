@@ -368,12 +368,18 @@ begin
     Inc(LBlockIndent);
     Advance;
   end;
-  if LBlockIndent = 0 then
-    LBlockIndent := CurrentIndent + 1;
-
-  LStart := FPos - SizeUInt(LBlockIndent);
-  // Actually, let's just capture all lines with indent >= LBlockIndent
-  LStart := FPos;
+  if (AtEnd) or (Peek = 10) or (Peek = 13) then
+  begin
+    // First line is empty, need to find indent from next non-empty line
+    LBlockIndent := 0;
+    LStart := FPos;
+  end
+  else
+  begin
+    if LBlockIndent = 0 then
+      LBlockIndent := CurrentIndent + 1;
+    LStart := FPos;
+  end;
   LEnd := FPos;
 
   while not AtEnd do
