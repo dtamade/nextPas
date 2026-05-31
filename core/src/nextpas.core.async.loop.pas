@@ -6,20 +6,37 @@ interface
 
 uses
   nextpas.core.time.base, nextpas.core.time.deadline,
+  nextpas.core.platform.sync.base,
   nextpas.core.io.poller,
   nextpas.core.async.base, nextpas.core.async.timer,
   nextpas.core.async.task;
 
 type
+  TAsyncPendingItem = record
+    Callback: TAsyncCallback;
+    Context: Pointer;
+  end;
+
   TAsyncLoop = record
   private
     FPoller: TPoller;
     FTimers: TTimerHeap;
     FRunning: Int32;
+    FWakeFd: Int32;
+    FPendingQueue: array of TAsyncPendingItem;
+    FPendingCount: UInt32;
+    FPendingCap: UInt32;
+    FPendingLock: TPlatformMutex;
+    procedure DrainPending;
+    procedure DrainWakeFd;
   public
     class function Create(AQueueDepth: UInt32 = 64): TAsyncLoop; static;
     procedure Close;
     function IsValid: Boolean; inline;
+
+    { Cross-thread wake }
+    procedure Post(ACallback: TAsyncCallback; AContext: Pointer = nil);
+    procedure Wake;
 
     { Timer scheduling }
     function Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -64,10 +81,15 @@ type
 implementation
 
 uses
-  nextpas.core.time.cpu;
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.linux.base,
+  nextpas.core.platform.linux.ffi,
+  nextpas.core.platform.sync;
 
 const
   ETIMEDOUT_LINUX = 110;
+  PENDING_INITIAL_CAP = 32;
 
 type
   PTimeoutCtx = ^TTimeoutCtx;
@@ -123,16 +145,89 @@ begin
   Result.FPoller := TPoller.Create(AQueueDepth);
   Result.FTimers := TTimerHeap.Create;
   Result.FRunning := 0;
+  Result.FWakeFd := eventfd(0, EFD_NONBLOCK or EFD_CLOEXEC);
+  Result.FPendingCount := 0;
+  Result.FPendingCap := PENDING_INITIAL_CAP;
+  SetLength(Result.FPendingQueue, PENDING_INITIAL_CAP);
+  platform_mutex_init(Result.FPendingLock, PLATFORM_MUTEX_NORMAL);
 end;
 
 procedure TAsyncLoop.Close;
 begin
+  platform_mutex_destroy(FPendingLock);
+  if FWakeFd >= 0 then
+  begin
+    nextpas.core.platform.posix.ffi.close(FWakeFd);
+    FWakeFd := -1;
+  end;
   FPoller.Close;
 end;
 
 function TAsyncLoop.IsValid: Boolean;
 begin
-  Result := FPoller.IsValid;
+  if not FPoller.IsValid then
+    Exit(False);
+  Result := FWakeFd >= 0;
+end;
+
+{ Cross-thread wake }
+
+procedure TAsyncLoop.Wake;
+var
+  LVal: UInt64;
+begin
+  LVal := 1;
+  nextpas.core.platform.posix.ffi.write(FWakeFd, @LVal, 8);
+end;
+
+procedure TAsyncLoop.Post(ACallback: TAsyncCallback; AContext: Pointer);
+var
+  LNewCap: UInt32;
+begin
+  platform_mutex_lock(FPendingLock);
+  if FPendingCount >= FPendingCap then
+  begin
+    LNewCap := FPendingCap * 2;
+    SetLength(FPendingQueue, LNewCap);
+    FPendingCap := LNewCap;
+  end;
+  FPendingQueue[FPendingCount].Callback := ACallback;
+  FPendingQueue[FPendingCount].Context := AContext;
+  Inc(FPendingCount);
+  platform_mutex_unlock(FPendingLock);
+  Wake;
+end;
+
+procedure TAsyncLoop.DrainWakeFd;
+var
+  LVal: UInt64;
+begin
+  { Read 8 bytes to drain the eventfd counter }
+  nextpas.core.platform.posix.ffi.read(FWakeFd, @LVal, 8);
+end;
+
+procedure TAsyncLoop.DrainPending;
+var
+  LI: UInt32;
+  LItems: array of TAsyncPendingItem;
+  LCount: UInt32;
+begin
+  platform_mutex_lock(FPendingLock);
+  LCount := FPendingCount;
+  if LCount = 0 then
+  begin
+    platform_mutex_unlock(FPendingLock);
+    Exit;
+  end;
+  SetLength(LItems, LCount);
+  Move(FPendingQueue[0], LItems[0], LCount * SizeOf(TAsyncPendingItem));
+  FPendingCount := 0;
+  platform_mutex_unlock(FPendingLock);
+  for LI := 0 to LCount - 1 do
+  begin
+    if Assigned(LItems[LI].Callback) then
+      LItems[LI].Callback(LItems[LI].Context);
+  end;
 end;
 
 function TAsyncLoop.Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -190,6 +285,9 @@ begin
   FPoller.Flush;
   LIo := FPoller.Poll;
   LFired := FTimers.FireExpired;
+  { Drain wake fd and pending queue }
+  DrainWakeFd;
+  DrainPending;
   Result := LIo + Int32(LFired);
 end;
 
@@ -199,11 +297,18 @@ var
   LIo: Int32;
   LNext: TDeadline;
   LRemaining: TDuration;
-  LSleepNs: UInt64;
+  LTimeoutMs: Int32;
+  LPfd: pollfd;
 begin
   FRunning := 1;
   while FRunning <> 0 do
   begin
+    { Drain wake fd and process pending callbacks }
+    DrainWakeFd;
+    DrainPending;
+    { Check if stopped from pending callback }
+    if FRunning = 0 then
+      Break;
     { Fire expired timers }
     LFired := FTimers.FireExpired;
     { Check if stopped from callback }
@@ -215,16 +320,22 @@ begin
     { If we did work, loop immediately }
     if (LFired > 0) or (LIo > 0) then
       Continue;
-    { Nothing happened — sleep until next timer or short spin }
+    { Nothing happened — sleep on eventfd until woken or next timer }
     LNext := FTimers.NextDeadline;
     LRemaining := LNext.Remaining;
     if LRemaining.AsNanoseconds <= 0 then
       Continue;
     { Cap sleep at 10ms to stay responsive }
-    LSleepNs := UInt64(LRemaining.AsNanoseconds);
-    if LSleepNs > 10000000 then
-      LSleepNs := 10000000;
-    NanoSleep(LSleepNs);
+    LTimeoutMs := Int32(UInt64(LRemaining.AsNanoseconds) div 1000000);
+    if LTimeoutMs > 10 then
+      LTimeoutMs := 10;
+    if LTimeoutMs <= 0 then
+      LTimeoutMs := 1;
+    { Use poll() on eventfd so Wake/Post can interrupt the sleep }
+    LPfd.fd := FWakeFd;
+    LPfd.events := cshort(POLLIN);
+    LPfd.revents := 0;
+    nextpas.core.platform.posix.ffi.poll(@LPfd, 1, cint(LTimeoutMs));
   end;
 end;
 
@@ -234,25 +345,36 @@ var
   LIo: Int32;
   LNext: TDeadline;
   LRemaining: TDuration;
-  LSleepNs: UInt64;
+  LTimeoutMs: Int32;
+  LPfd: pollfd;
 begin
+  { Drain pending first }
+  DrainWakeFd;
+  DrainPending;
   { Try non-blocking first }
   FPoller.Flush;
   LIo := FPoller.Poll;
   LFired := FTimers.FireExpired;
   if (LFired > 0) or (LIo > 0) then
     Exit;
-  { Block until next timer }
+  { Block until next timer or wake }
   LNext := FTimers.NextDeadline;
   LRemaining := LNext.Remaining;
   if LRemaining.AsNanoseconds > 0 then
   begin
-    LSleepNs := UInt64(LRemaining.AsNanoseconds);
-    if LSleepNs > 10000000 then
-      LSleepNs := 10000000;
-    NanoSleep(LSleepNs);
+    LTimeoutMs := Int32(UInt64(LRemaining.AsNanoseconds) div 1000000);
+    if LTimeoutMs > 10 then
+      LTimeoutMs := 10;
+    if LTimeoutMs <= 0 then
+      LTimeoutMs := 1;
+    LPfd.fd := FWakeFd;
+    LPfd.events := cshort(POLLIN);
+    LPfd.revents := 0;
+    nextpas.core.platform.posix.ffi.poll(@LPfd, 1, cint(LTimeoutMs));
   end;
-  { Fire after sleep }
+  { Drain and fire after sleep }
+  DrainWakeFd;
+  DrainPending;
   FPoller.Flush;
   FPoller.Poll;
   FTimers.FireExpired;
