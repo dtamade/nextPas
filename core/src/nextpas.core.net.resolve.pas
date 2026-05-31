@@ -20,7 +20,7 @@ uses
 function NetResolveIPv4(const AIP: string): UInt32;
 var
   LParts: array[0..3] of Byte;
-  LI, LStart, LPart: Integer;
+  LI, LStart, LPart, LVal: Integer;
   LS: string;
 begin
   LStart := 1;
@@ -32,7 +32,10 @@ begin
       if LPart > 3 then
         raise EArgumentError.Create('invalid IPv4: ' + AIP);
       LS := Copy(AIP, LStart, LI - LStart);
-      LParts[LPart] := Byte(StrToInt(LS));
+      LVal := StrToInt(LS);
+      if (LVal < 0) or (LVal > 255) then
+        raise EArgumentError.Create('invalid IPv4 octet: ' + AIP);
+      LParts[LPart] := Byte(LVal);
       Inc(LPart);
       LStart := LI + 1;
     end;
