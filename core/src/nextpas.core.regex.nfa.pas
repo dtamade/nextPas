@@ -11,6 +11,9 @@ uses
 function NfaIsMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 
+function NfaIsFullMatch(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
+
 function NfaSearch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt; AAnchored: Boolean;
   AStartPos: SizeUInt;
@@ -260,6 +263,143 @@ begin
           Inc(pos);
       end;
     end;
+  end;
+end;
+
+{ --- NfaIsFullMatch: anchored PC-only Thompson VM, match only at end --- }
+
+function NfaIsFullMatch(const AProgram: TRegexProgram;
+  const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
+var
+  CList, NList: array of UInt32;
+  CCount, NCount: UInt32;
+  Seen: TSparseSet;
+  Stack: array of UInt32;
+  StackTop: UInt32;
+  LCodeLen: UInt32;
+  pos: SizeUInt;
+  i: UInt32;
+  pc: UInt32;
+  inst: TInstruction;
+  ch: Byte;
+  LFirstIter: Boolean;
+
+  procedure EpsilonClose(AStartPC: UInt32);
+  var LInst: TInstruction;
+  begin
+    if AStartPC >= LCodeLen then Exit;
+    if SparseContains(Seen, AStartPC) then Exit;
+    StackTop := 0;
+    Stack[StackTop] := AStartPC;
+    Inc(StackTop);
+    while StackTop > 0 do
+    begin
+      Dec(StackTop);
+      pc := Stack[StackTop];
+      if pc >= LCodeLen then Continue;
+      if not SparseAdd(Seen, pc) then Continue;
+      LInst := AProgram.Code[pc];
+      case LInst.Op of
+        opSplit:
+        begin
+          Stack[StackTop] := LInst.Y; Inc(StackTop);
+          Stack[StackTop] := LInst.X; Inc(StackTop);
+        end;
+        opJump:
+        begin
+          Stack[StackTop] := LInst.Target; Inc(StackTop);
+        end;
+        opSave:
+        begin
+          Stack[StackTop] := pc + 1; Inc(StackTop);
+        end;
+        opAssert:
+        begin
+          case LInst.Assert of
+            akStart:
+              if pos = 0 then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+            akEnd:
+              if pos = ALen then begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+            akWordBoundary:
+              if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                 ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
+              begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+            akNotWordBoundary:
+              if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                      ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
+              begin Stack[StackTop] := pc + 1; Inc(StackTop); end;
+          end;
+        end;
+      else
+        CList[CCount] := pc;
+        Inc(CCount);
+      end;
+    end;
+  end;
+
+begin
+  Result := False;
+  LCodeLen := Length(AProgram.Code);
+  if LCodeLen = 0 then Exit;
+
+  SetLength(CList, LCodeLen);
+  SetLength(NList, LCodeLen);
+  SetLength(Stack, LCodeLen * 3);
+  SparseInit(Seen, LCodeLen);
+
+  pos := 0;
+  NCount := 0;
+  LFirstIter := True;
+
+  while pos <= ALen do
+  begin
+    SparseClear(Seen);
+    CCount := 0;
+    if NCount > 0 then
+      for i := 0 to NCount - 1 do
+        EpsilonClose(NList[i]);
+
+    // Only inject start state on first iteration (anchored)
+    if LFirstIter then
+    begin
+      EpsilonClose(0);
+      LFirstIter := False;
+    end;
+
+    // At end of input, check if opMatch is reachable
+    if pos = ALen then
+    begin
+      if CCount > 0 then
+        for i := 0 to CCount - 1 do
+          if AProgram.Code[CList[i]].Op = opMatch then Exit(True);
+      Break;
+    end;
+
+    NCount := 0;
+    if CCount > 0 then
+    for i := 0 to CCount - 1 do
+    begin
+      inst := AProgram.Code[CList[i]];
+      case inst.Op of
+        opLiteral:
+          if Ord(AInput[pos]) = inst.Ch then
+          begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
+        opAnyChar:
+          if AInput[pos] <> #10 then
+          begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
+        opCharClass:
+        begin
+          ch := Ord(AInput[pos]);
+          if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
+          begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
+        end;
+      end;
+    end;
+
+    Inc(pos);
+
+    // If no threads survived, can't match
+    if NCount = 0 then Break;
   end;
 end;
 
@@ -600,17 +740,303 @@ end;
 function NfaFindAll(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): TMatchArray;
 var
-  LMatch: TMatch;
+  CList, NList: TThreadList2;
+  Pool: TSlotPool;
+  Seen: TSparseSet;
+  Stack: array of UInt32;
+  StackSlot: array of UInt32;
+  StackTop: UInt32;
+  LCodeLen: UInt32;
+  pos: SizeUInt;
+  ch: Byte;
+  inst: TInstruction;
+  matched: Boolean;
+  matchSlots: TSlotArray;
+  initSlotIdx: UInt32;
+  curSlotIdx: UInt32;
   LPos: SizeUInt;
   LCount: SizeUInt;
+  prefixPos: SizeInt;
+  k: SizeUInt;
+
+  procedure EpsilonClose(AStartPC, ASlotIdx: UInt32);
+  var LInst: TInstruction; LPC, LSIdx, LNewIdx: UInt32;
+  begin
+    if AStartPC >= LCodeLen then Exit;
+    if SparseContains(Seen, AStartPC) then Exit;
+    StackTop := 0;
+    Stack[StackTop] := AStartPC;
+    StackSlot[StackTop] := ASlotIdx;
+    Inc(StackTop);
+    while StackTop > 0 do
+    begin
+      Dec(StackTop);
+      LPC := Stack[StackTop];
+      LSIdx := StackSlot[StackTop];
+      if LPC >= LCodeLen then Continue;
+      if not SparseAdd(Seen, LPC) then Continue;
+      LInst := AProgram.Code[LPC];
+      case LInst.Op of
+        opSplit:
+        begin
+          Stack[StackTop] := LInst.Y;
+          StackSlot[StackTop] := LSIdx;
+          Inc(StackTop);
+          Stack[StackTop] := LInst.X;
+          StackSlot[StackTop] := LSIdx;
+          Inc(StackTop);
+        end;
+        opJump:
+        begin
+          Stack[StackTop] := LInst.Target;
+          StackSlot[StackTop] := LSIdx;
+          Inc(StackTop);
+        end;
+        opSave:
+        begin
+          LNewIdx := SlotPoolClone(Pool, LSIdx);
+          if LInst.Slot < Pool.NumSlots then
+            Pool.Slots[LNewIdx][LInst.Slot] := SizeInt(pos);
+          Stack[StackTop] := LPC + 1;
+          StackSlot[StackTop] := LNewIdx;
+          Inc(StackTop);
+        end;
+        opAssert:
+        begin
+          case LInst.Assert of
+            akStart:
+              if pos = 0 then begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+            akEnd:
+              if pos = ALen then begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+            akWordBoundary:
+              if ((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                 ((pos >= ALen) or not IsWordChar(Ord(AInput[pos]))) then
+              begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+            akNotWordBoundary:
+              if not (((pos = 0) or not IsWordChar(Ord(AInput[pos - 1]))) <>
+                      ((pos >= ALen) or not IsWordChar(Ord(AInput[pos])))) then
+              begin
+                Stack[StackTop] := LPC + 1; StackSlot[StackTop] := LSIdx; Inc(StackTop);
+              end;
+          end;
+        end;
+      else
+        if CList.Count < CList.MaxCount then
+        begin
+          CList.Items[CList.Count].PC := LPC;
+          CList.Items[CList.Count].SlotIdx := LSIdx;
+          Inc(CList.Count);
+        end;
+      end;
+    end;
+  end;
+
+  function RunSearch(AStartPos: SizeUInt; out AMatch: TMatch): Boolean;
+  var startPos: SizeUInt; li: UInt32; lj: SizeInt;
+  begin
+    AMatch.Start := -1;
+    AMatch.Len := 0;
+    AMatch.Groups := nil;
+    Result := False;
+
+    matched := False;
+    startPos := AStartPos;
+
+    // Prefilter: skip to first candidate position
+    if (AProgram.LiteralPrefixLen > 0) and (AStartPos < ALen) then
+    begin
+      while True do
+      begin
+        prefixPos := SizeInt(ScanFindByte(AInput + startPos, ALen - startPos,
+                      Byte(AProgram.LiteralPrefix[1])));
+        if prefixPos < 0 then Exit;
+        startPos := startPos + SizeUInt(prefixPos);
+        if AProgram.LiteralPrefixLen <= 1 then Break;
+        if startPos + AProgram.LiteralPrefixLen > ALen then Exit;
+        k := 1;
+        while (k < AProgram.LiteralPrefixLen) and
+              (AInput[startPos + k] = AnsiChar(AProgram.LiteralPrefix[k + 1])) do
+          Inc(k);
+        if k = AProgram.LiteralPrefixLen then Break;
+        Inc(startPos);
+        if startPos >= ALen then Exit;
+      end;
+    end
+    else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) and
+            (AProgram.LiteralPrefixLen = 0) then
+    begin
+      while (startPos < ALen) and
+            (not CharBitmapTest(AProgram.StartClass, Ord(AInput[startPos]))) do
+        Inc(startPos);
+    end;
+
+    pos := startPos;
+    NList.Count := 0;
+    Pool.Count := 0;
+
+    while pos <= ALen do
+    begin
+      SparseClear(Seen);
+      CList.Count := 0;
+
+      if NList.Count > 0 then
+        for li := 0 to NList.Count - 1 do
+          EpsilonClose(NList.Items[li].PC, NList.Items[li].SlotIdx);
+
+      // Inject start state (unanchored)
+      if not matched then
+      begin
+        initSlotIdx := SlotPoolAlloc(Pool);
+        if AProgram.NumSlots > 0 then
+          for li := 0 to AProgram.NumSlots - 1 do
+            Pool.Slots[initSlotIdx][li] := -1;
+        EpsilonClose(0, initSlotIdx);
+      end;
+
+      // Process consuming instructions
+      NList.Count := 0;
+
+      if CList.Count > 0 then
+      for li := 0 to CList.Count - 1 do
+      begin
+        inst := AProgram.Code[CList.Items[li].PC];
+        curSlotIdx := CList.Items[li].SlotIdx;
+        case inst.Op of
+          opLiteral:
+            if (pos < ALen) and (Ord(AInput[pos]) = inst.Ch) then
+            begin
+              if NList.Count < NList.MaxCount then
+              begin
+                NList.Items[NList.Count].PC := CList.Items[li].PC + 1;
+                NList.Items[NList.Count].SlotIdx := curSlotIdx;
+                Inc(NList.Count);
+              end;
+            end;
+          opAnyChar:
+            if (pos < ALen) and (AInput[pos] <> #10) then
+            begin
+              if NList.Count < NList.MaxCount then
+              begin
+                NList.Items[NList.Count].PC := CList.Items[li].PC + 1;
+                NList.Items[NList.Count].SlotIdx := curSlotIdx;
+                Inc(NList.Count);
+              end;
+            end;
+          opCharClass:
+            if pos < ALen then
+            begin
+              ch := Ord(AInput[pos]);
+              if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
+              begin
+                if NList.Count < NList.MaxCount then
+                begin
+                  NList.Items[NList.Count].PC := CList.Items[li].PC + 1;
+                  NList.Items[NList.Count].SlotIdx := curSlotIdx;
+                  Inc(NList.Count);
+                end;
+              end;
+            end;
+          opMatch:
+          begin
+            if (not matched) or
+               (Pool.Slots[curSlotIdx][0] < matchSlots[0]) or
+               ((Pool.Slots[curSlotIdx][0] = matchSlots[0]) and
+                (SizeInt(pos) - Pool.Slots[curSlotIdx][0] > matchSlots[1] - matchSlots[0])) then
+            begin
+              matched := True;
+              Move(Pool.Slots[curSlotIdx][0], matchSlots[0],
+                   AProgram.NumSlots * SizeOf(SizeInt));
+              matchSlots[1] := SizeInt(pos);
+            end;
+          end;
+        end;
+      end;
+
+      Inc(pos);
+      if (NList.Count = 0) and matched then Break;
+
+      // Prefilter skip
+      if (NList.Count = 0) and (not matched) and (pos < ALen) then
+      begin
+        if AProgram.LiteralPrefixLen > 0 then
+        begin
+          while True do
+          begin
+            prefixPos := SizeInt(ScanFindByte(AInput + pos, ALen - pos,
+                          Byte(AProgram.LiteralPrefix[1])));
+            if prefixPos < 0 then Exit;
+            pos := pos + SizeUInt(prefixPos);
+            if AProgram.LiteralPrefixLen <= 1 then Break;
+            if pos + AProgram.LiteralPrefixLen > ALen then Exit;
+            k := 1;
+            while (k < AProgram.LiteralPrefixLen) and
+                  (AInput[pos + k] = AnsiChar(AProgram.LiteralPrefix[k + 1])) do
+              Inc(k);
+            if k = AProgram.LiteralPrefixLen then Break;
+            Inc(pos);
+            if pos >= ALen then Exit;
+          end;
+        end
+        else if (AProgram.StartClassSize > 0) and (AProgram.StartClassSize < 128) then
+        begin
+          while (pos < ALen) and
+                (not CharBitmapTest(AProgram.StartClass, Ord(AInput[pos]))) do
+            Inc(pos);
+        end;
+      end;
+    end;
+
+    if matched then
+    begin
+      if Length(matchSlots) >= 2 then
+      begin
+        AMatch.Start := matchSlots[0];
+        AMatch.Len := matchSlots[1] - matchSlots[0];
+      end;
+      if AProgram.NumSlots > 2 then
+      begin
+        SetLength(AMatch.Groups, (AProgram.NumSlots - 2) div 2);
+        for lj := 0 to High(AMatch.Groups) do
+        begin
+          AMatch.Groups[lj].Start := matchSlots[(lj + 1) * 2];
+          if (matchSlots[(lj + 1) * 2] >= 0) and (matchSlots[(lj + 1) * 2 + 1] >= 0) then
+            AMatch.Groups[lj].Len := matchSlots[(lj + 1) * 2 + 1] - matchSlots[(lj + 1) * 2]
+          else
+            AMatch.Groups[lj].Len := 0;
+        end;
+      end;
+      Result := True;
+    end;
+  end;
+
+var
+  LMatch: TMatch;
 begin
   SetLength(Result, 0);
   LCount := 0;
   LPos := 0;
 
+  LCodeLen := Length(AProgram.Code);
+  if LCodeLen = 0 then Exit;
+
+  // Allocate all buffers ONCE
+  InitThreadList2(CList, LCodeLen);
+  InitThreadList2(NList, LCodeLen);
+  SparseInit(Seen, LCodeLen);
+  SetLength(Stack, LCodeLen * 3);
+  SetLength(StackSlot, LCodeLen * 3);
+  SlotPoolInit(Pool, LCodeLen * 3, AProgram.NumSlots);
+  SetLength(matchSlots, AProgram.NumSlots);
+
   while LPos <= ALen do
   begin
-    if not NfaSearch(AProgram, AInput, ALen, False, LPos, LMatch) then
+    if not RunSearch(LPos, LMatch) then
       Break;
 
     if LCount >= SizeUInt(Length(Result)) then
