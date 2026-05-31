@@ -50,6 +50,13 @@ type
 function StyleDefault: TStyle; inline;
 function StyleEquals(const A, B: TStyle): Boolean; inline;
 
+{ 便利构造器——一行创建常用样式 }
+function StyleFg(const AColor: TColor): TStyle; inline;
+function StyleBg(const AColor: TColor): TStyle; inline;
+function StyleFgBg(const AFg, ABg: TColor): TStyle; inline;
+function StyleBold: TStyle; inline;
+function StyleItalic: TStyle; inline;
+
 implementation
 
 {$if SizeOf(TStyle) <> 16}
@@ -119,6 +126,37 @@ begin
             ColorEquals(A.Ul, B.Ul) and
             (A.AddMod = B.AddMod) and
             (A.SubMod = B.SubMod);
+end;
+
+function StyleFg(const AColor: TColor): TStyle;
+begin
+  Result := TStyle.Default;
+  Result.Fg := AColor;
+end;
+
+function StyleBg(const AColor: TColor): TStyle;
+begin
+  Result := TStyle.Default;
+  Result.Bg := AColor;
+end;
+
+function StyleFgBg(const AFg, ABg: TColor): TStyle;
+begin
+  Result := TStyle.Default;
+  Result.Fg := AFg;
+  Result.Bg := ABg;
+end;
+
+function StyleBold: TStyle;
+begin
+  Result := TStyle.Default;
+  Result.AddMod := [mbBold];
+end;
+
+function StyleItalic: TStyle;
+begin
+  Result := TStyle.Default;
+  Result.AddMod := [mbItalic];
 end;
 
 end.

@@ -52,6 +52,8 @@ type
     function Intersection(const AOther: TRect): TRect;
     function Union(const AOther: TRect): TRect;
     function Inner(const AMargin: TMargin): TRect;
+    { 便利收缩：各边缩进指定量 }
+    function Shrink(ALeft, ATop, ARight, ABottom: Word): TRect;
   end;
 
 function PositionMake(const AX, AY: Word): TPosition; inline;
@@ -202,6 +204,17 @@ begin
     Exit;
   end;
   Result := TRect.Make(X + AMargin.Horizontal, Y + AMargin.Vertical, LNewW, LNewH);
+end;
+
+function TRect.Shrink(ALeft, ATop, ARight, ABottom: Word): TRect;
+var
+  LW, LH: LongInt;
+begin
+  LW := LongInt(Width) - LongInt(ALeft) - LongInt(ARight);
+  LH := LongInt(Height) - LongInt(ATop) - LongInt(ABottom);
+  if LW < 0 then LW := 0;
+  if LH < 0 then LH := 0;
+  Result := TRect.Make(X + ALeft, Y + ATop, LW, LH);
 end;
 
 end.
