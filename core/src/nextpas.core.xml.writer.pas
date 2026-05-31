@@ -22,6 +22,9 @@ type
     FHasChildren: Boolean;
     FHasChildStack: array of Boolean;
     FHasChildTop: Integer;
+    { HIGH 6 fix: element name stack to track open elements }
+    FElementStack: array of string;
+    FElementStackTop: Integer;
     procedure FlushStartTag;
     procedure WriteIndent;
     procedure AppendStr(const AStr: string);
@@ -63,6 +66,9 @@ begin
   FBufLen := 0;
   SetLength(FHasChildStack, 32);
   FHasChildTop := -1;
+  { HIGH 6 fix: initialize element stack }
+  SetLength(FElementStack, 32);
+  FElementStackTop := -1;
 end;
 
 destructor TXmlWriter.Destroy;
@@ -160,6 +166,11 @@ begin
     FHasChildren := True;
   PushHasChild;
   Inc(FDepth);
+  { HIGH 6 fix: push element name onto stack }
+  Inc(FElementStackTop);
+  if FElementStackTop >= Length(FElementStack) then
+    SetLength(FElementStack, Length(FElementStack) * 2);
+  FElementStack[FElementStackTop] := AName;
 end;
 
 procedure TXmlWriter.StartElement(const APrefix, ALocal: string);
@@ -190,6 +201,9 @@ end;
 
 procedure TXmlWriter.EndElement(const AName: string);
 begin
+  { HIGH 6 fix: validate depth > 0 before decrementing }
+  if (FDepth <= 0) and (not FInStartTag) then
+    Exit; { prevent negative depth }
   Dec(FDepth);
   if FInStartTag then
   begin
@@ -198,6 +212,9 @@ begin
     PopHasChild;
     if FHasChildTop >= 0 then
       FHasChildren := True;
+    { HIGH 6 fix: pop element stack }
+    if FElementStackTop >= 0 then
+      Dec(FElementStackTop);
     Exit;
   end;
   if FPretty and FHasChildren then
@@ -211,6 +228,9 @@ begin
   AppendChar('>');
   if FHasChildTop >= 0 then
     FHasChildren := True;
+  { HIGH 6 fix: pop element stack }
+  if FElementStackTop >= 0 then
+    Dec(FElementStackTop);
 end;
 
 procedure TXmlWriter.EmptyElement(const AName: string);
@@ -289,6 +309,7 @@ begin
   FInStartTag := False;
   FHasChildren := False;
   FHasChildTop := -1;
+  FElementStackTop := -1;
 end;
 
 end.
