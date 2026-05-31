@@ -52,10 +52,14 @@ type
   private
     FContext: ISSLContext;
     FTimeout: Integer;
+    FHandshakeTimeout: Integer;
+    FReadTimeout: Integer;
+    FWriteTimeout: Integer;
     FBlocking: Boolean;
     FSession: ISSLSession;
     FSessionReuse: Boolean;
     FEarlyData: TBytes;
+    FALPN: string;
 
     procedure ApplyClientOptions(AConn: ISSLConnection; const AServerName: string);
     function TryQueueEarlyData(AConn: ISSLConnection): TSSLOperationResult;
@@ -64,10 +68,14 @@ type
 
     function WithTimeout(AMs: Integer): TSSLConnector; overload;
     function WithTimeout(const ATimeout: TTimeoutDuration): TSSLConnector; overload;
+    function WithHandshakeTimeout(AMs: Integer): TSSLConnector;
+    function WithReadTimeout(AMs: Integer): TSSLConnector;
+    function WithWriteTimeout(AMs: Integer): TSSLConnector;
     function WithBlocking(ABlocking: Boolean): TSSLConnector;
     function WithSession(ASession: ISSLSession): TSSLConnector;
     function WithSessionReuse(AEnabled: Boolean): TSSLConnector;
     function WithEarlyData(const AData: TBytes): TSSLConnector;
+    function WithALPN(const AProtocols: string): TSSLConnector;
 
     function ConnectSocket(ASocket: THandle; const AServerName: string): TSSLStream;
     function TryConnectSocket(ASocket: THandle; const AServerName: string;
@@ -304,6 +312,30 @@ function TSSLConnector.WithEarlyData(const AData: TBytes): TSSLConnector;
 begin
   Result := Self;
   Result.FEarlyData := Copy(AData);
+end;
+
+function TSSLConnector.WithHandshakeTimeout(AMs: Integer): TSSLConnector;
+begin
+  Result := Self;
+  Result.FHandshakeTimeout := AMs;
+end;
+
+function TSSLConnector.WithReadTimeout(AMs: Integer): TSSLConnector;
+begin
+  Result := Self;
+  Result.FReadTimeout := AMs;
+end;
+
+function TSSLConnector.WithWriteTimeout(AMs: Integer): TSSLConnector;
+begin
+  Result := Self;
+  Result.FWriteTimeout := AMs;
+end;
+
+function TSSLConnector.WithALPN(const AProtocols: string): TSSLConnector;
+begin
+  Result := Self;
+  Result.FALPN := AProtocols;
 end;
 
 procedure TSSLConnector.ApplyClientOptions(AConn: ISSLConnection; const AServerName: string);

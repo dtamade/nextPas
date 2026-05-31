@@ -1502,6 +1502,87 @@ type
     function GetBlocking: Boolean;
   end;
 
+  { Granular timeout control (P1 improvement) }
+  TSSLConnectionTimeouts = record
+    HandshakeTimeout: Integer;
+    ReadTimeout: Integer;
+    WriteTimeout: Integer;
+    IdleTimeout: Integer;
+  end;
+
+  ISSLConnectionTimeoutControl = interface
+    ['{E2A641A2-0C36-4D7C-A3F3-6AA6F1D23741}']
+    procedure SetHandshakeTimeout(AMs: Integer);
+    function GetHandshakeTimeout: Integer;
+    procedure SetReadTimeout(AMs: Integer);
+    function GetReadTimeout: Integer;
+    procedure SetWriteTimeout(AMs: Integer);
+    function GetWriteTimeout: Integer;
+    procedure SetIdleTimeout(AMs: Integer);
+    function GetIdleTimeout: Integer;
+    procedure SetTimeouts(const ATimeouts: TSSLConnectionTimeouts);
+    function GetTimeouts: TSSLConnectionTimeouts;
+  end;
+
+  { Per-connection ALPN override (P1 improvement) }
+  ISSLClientALPNConnection = interface
+    ['{65A9E7D5-8B9F-4A3C-9C54-4E3F6C0B1D21}']
+    procedure SetALPNProtocols(const AProtocols: string);
+    function GetALPNProtocols: string;
+  end;
+
+  { Server certificate resolver for SNI routing (P2 improvement) }
+  TSSLClientHelloInfo = record
+    ServerName: string;
+    OfferedALPNProtocols: string;
+  end;
+
+  ISSLServerCredential = interface
+    ['{E7E36F8F-2612-4F30-A516-8A4F0D6D3842}']
+    function GetCertificateChainPEM: string;
+    function GetPrivateKeyPEM: string;
+    function GetPrivateKeyPassword: string;
+  end;
+
+  ISSLServerCertificateResolver = interface
+    ['{3A2F6C41-B28B-45F1-9B39-4D812A7F0C61}']
+    function ResolveServerCredential(
+      const AClientHello: TSSLClientHelloInfo;
+      out ACredential: ISSLServerCredential
+    ): TSSLOperationResult;
+  end;
+
+  { Custom server certificate verifier (P2 improvement) }
+  TSSLServerCertificateVerifyRequest = record
+    ServerName: string;
+    LeafCertificateDER: TBytes;
+    ChainDER: array of TBytes;
+    DefaultErrorCode: Integer;
+    DefaultErrorMessage: string;
+    OCSPResponse: TBytes;
+  end;
+
+  ISSLServerCertificateVerifier = interface
+    ['{6B8C841E-6A86-4D0A-9E8F-3BFE0D4E3F72}']
+    function VerifyServerCertificate(
+      const ARequest: TSSLServerCertificateVerifyRequest
+    ): TSSLOperationResult;
+  end;
+
+  { Async handshake support (P3 improvement) }
+  TSSLAsyncHandshakeStatus = (
+    sslAsyncComplete,
+    sslAsyncWantRead,
+    sslAsyncWantWrite,
+    sslAsyncFailed
+  );
+
+  TSSLAsyncHandshakeResult = record
+    Status: TSSLAsyncHandshakeStatus;
+    ErrorCode: TSSLErrorCode;
+    ErrorMessage: string;
+  end;
+
   {**
    * ISSLClientConnection - 客户端连接扩展接口（per-connection 设置）
    *
