@@ -64,6 +64,8 @@ type
     IsPureLiteral: Boolean;
     IsLiteralAlt: Boolean;
     LiteralAltPatterns: array of string;
+    IsCaseFoldLiteral: Boolean;
+    CaseFoldLiteral: string;
   end;
 
   TGroup = record

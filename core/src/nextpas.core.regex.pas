@@ -125,6 +125,14 @@ end;
 
 function TRegex.IsMatch(const AInput: string): Boolean;
 var i: Integer;
+    LPos: SizeUInt;
+    LNeedleLen: SizeUInt;
+    LNeedle: PAnsiChar;
+    LInputLen: SizeUInt;
+    LData: PAnsiChar;
+    LMatch: Boolean;
+    k: SizeUInt;
+    LCh: Byte;
 begin
   if not FValid then Exit(False);
   if FProgram.IsPureLiteral then
@@ -141,6 +149,39 @@ begin
            PAnsiChar(FProgram.LiteralAltPatterns[i]),
            Length(FProgram.LiteralAltPatterns[i])) >= 0 then
         Exit(True);
+    Exit(False);
+  end;
+  if FProgram.IsCaseFoldLiteral then
+  begin
+    LNeedle := PAnsiChar(FProgram.CaseFoldLiteral);
+    LNeedleLen := Length(FProgram.CaseFoldLiteral);
+    LData := PAnsiChar(AInput);
+    LInputLen := Length(AInput);
+    if LNeedleLen > LInputLen then Exit(False);
+    LPos := 0;
+    while LPos + LNeedleLen <= LInputLen do
+    begin
+      LCh := Byte(LData[LPos]);
+      if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then
+        LCh := LCh + 32;
+      if LCh = Byte(LNeedle[0]) then
+      begin
+        LMatch := True;
+        for k := 1 to LNeedleLen - 1 do
+        begin
+          LCh := Byte(LData[LPos + k]);
+          if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then
+            LCh := LCh + 32;
+          if LCh <> Byte(LNeedle[k]) then
+          begin
+            LMatch := False;
+            Break;
+          end;
+        end;
+        if LMatch then Exit(True);
+      end;
+      Inc(LPos);
+    end;
     Exit(False);
   end;
   Result := DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
