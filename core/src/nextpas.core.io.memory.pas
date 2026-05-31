@@ -72,6 +72,7 @@ function TBytesStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LAvailable: SizeUInt;
 begin
+  if FPosition >= FSize then Exit(0);
   LAvailable := FSize - FPosition;
   if ACount < LAvailable then
     Result := ACount
