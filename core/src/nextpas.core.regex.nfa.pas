@@ -20,7 +20,7 @@ function NfaSearch(const AProgram: TRegexProgram;
   out AMatch: TMatch): Boolean;
 
 function NfaFindAll(const AProgram: TRegexProgram;
-  const AInput: PAnsiChar; ALen: SizeUInt): TMatchArray;
+  const AInput: PAnsiChar; ALen: SizeUInt; AMaxMatches: SizeInt = -1): TMatchArray;
 
 implementation
 
@@ -738,7 +738,7 @@ begin
 end;
 
 function NfaFindAll(const AProgram: TRegexProgram;
-  const AInput: PAnsiChar; ALen: SizeUInt): TMatchArray;
+  const AInput: PAnsiChar; ALen: SizeUInt; AMaxMatches: SizeInt = -1): TMatchArray;
 var
   CList, NList: TThreadList2;
   Pool: TSlotPool;
@@ -1043,6 +1043,7 @@ begin
       SetLength(Result, LCount + 32);
     Result[LCount] := LMatch;
     Inc(LCount);
+    if (AMaxMatches > 0) and (SizeInt(LCount) >= AMaxMatches) then Break;
 
     if LMatch.Len > 0 then
       LPos := SizeUInt(LMatch.Start) + SizeUInt(LMatch.Len)

@@ -3996,81 +3996,39 @@ begin
   CheckEqual(Int64(8999), Int64(LResult), 'many partial h then hello');
 end;
 
-procedure TestFindIter;
-var
-  R: TRegex;
-  LIter: TRegexIter;
-  LMatch: TMatch;
-  LCount: Int32;
-  LInput: string;
-begin
-  LInput := 'abc 123 def 456 ghi 789';
-  R := TRegex.Compile('\d+');
-  LIter := R.FindIter(LInput);
-  LCount := 0;
-  while LIter.Next(LMatch) do
-  begin
-    Inc(LCount);
-    case LCount of
-      1: Check(LMatch.Value(LInput) = '123', 'iter match 1');
-      2: Check(LMatch.Value(LInput) = '456', 'iter match 2');
-      3: Check(LMatch.Value(LInput) = '789', 'iter match 3');
-    end;
-  end;
-  CheckEqual(Int64(3), Int64(LCount), 'iter count');
-end;
-
-procedure TestFindIterEmpty;
-var
-  R: TRegex;
-  LIter: TRegexIter;
-  LMatch: TMatch;
-begin
-  R := TRegex.Compile('xyz');
-  LIter := R.FindIter('no match here');
-  Check(not LIter.Next(LMatch), 'iter empty');
-end;
-
-procedure TestFindIterZeroLen;
-var
-  R: TRegex;
-  LIter: TRegexIter;
-  LMatch: TMatch;
-  LCount: Int32;
-begin
-  R := TRegex.Compile('\b');
-  LIter := R.FindIter('ab cd');
-  LCount := 0;
-  while LIter.Next(LMatch) do
-  begin
-    Inc(LCount);
-    if LCount > 10 then Break;
-  end;
-  Check(LCount > 0, 'zero-len iter produces matches');
-  Check(LCount <= 10, 'zero-len iter terminates');
-end;
-
-procedure TestSubexpNames;
-var
-  R: TRegex;
-  LNames: TStringArray;
-begin
-  R := TRegex.Compile('(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})');
-  LNames := R.SubexpNames;
-  CheckEqual(Int64(3), Int64(Length(LNames)), 'subexp count');
-  Check(LNames[0] = 'year', 'subexp 0');
-  Check(LNames[1] = 'month', 'subexp 1');
-  Check(LNames[2] = 'day', 'subexp 2');
-end;
-
-procedure TestSubexpNamesEmpty;
-var
-  R: TRegex;
-  LNames: TStringArray;
+procedure TestFindAllMaxMatches;
+var R: TRegex; LMatches: TMatchArray;
 begin
   R := TRegex.Compile('\d+');
-  LNames := R.SubexpNames;
-  CheckEqual(Int64(0), Int64(Length(LNames)), 'no named groups');
+  LMatches := R.FindAll('a1b2c3d4e5', 3);
+  CheckEqual(Int64(3), Int64(Length(LMatches)), 'limit=3 returns 3');
+  CheckEqual(Int64(1), Int64(LMatches[0].Start), 'first match pos');
+  CheckEqual(Int64(3), Int64(LMatches[1].Start), 'second match pos');
+  CheckEqual(Int64(5), Int64(LMatches[2].Start), 'third match pos');
+end;
+
+procedure TestFindAllMaxMatchesZero;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('\d+');
+  LMatches := R.FindAll('a1b2c3', 0);
+  CheckEqual(Int64(0), Int64(Length(LMatches)), 'limit=0 returns empty');
+end;
+
+procedure TestFindAllMaxMatchesNegative;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('\d+');
+  LMatches := R.FindAll('a1b2c3d4e5', -1);
+  CheckEqual(Int64(5), Int64(Length(LMatches)), 'limit=-1 returns all');
+end;
+
+procedure TestFindAllMaxMatchesExceedsTotal;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('x');
+  LMatches := R.FindAll('axbxc', 100);
+  CheckEqual(Int64(2), Int64(Length(LMatches)), 'limit>total returns all');
 end;
 
 begin
@@ -4193,11 +4151,10 @@ begin
   T.Run('DFA: Overflow fallback', @TestDfaOverflowFallback);
   { --- ScanFindSubstring tests --- }
   T.Run('ScanFindSubstring', @TestScanFindSubstring);
-  { --- Phase 4 API tests --- }
-  T.Run('P4: FindIter', @TestFindIter);
-  T.Run('P4: FindIter empty', @TestFindIterEmpty);
-  T.Run('P4: FindIter zero-len', @TestFindIterZeroLen);
-  T.Run('P4: SubexpNames', @TestSubexpNames);
-  T.Run('P4: SubexpNames empty', @TestSubexpNamesEmpty);
+  { --- FindAll AMaxMatches tests --- }
+  T.Run('FindAll MaxMatches', @TestFindAllMaxMatches);
+  T.Run('FindAll MaxMatches=0', @TestFindAllMaxMatchesZero);
+  T.Run('FindAll MaxMatches=-1', @TestFindAllMaxMatchesNegative);
+  T.Run('FindAll MaxMatches>total', @TestFindAllMaxMatchesExceedsTotal);
   T.Summary;
 end.

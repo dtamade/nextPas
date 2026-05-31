@@ -9195,6 +9195,13 @@ begin
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
     SetLength(FVarParamNames, 0);
+    SetLength(FRuntimeVarNames, 0);
+    SetLength(FRuntimeArrVarNames, 0);
+    SetLength(FRuntimeStrVarNames, 0);
+    SetLength(FClassVarNames, 0);
+    SetLength(FClassVarTypes, 0);
+    SetLength(FRecordVarNames, 0);
+    SetLength(FRecordVarTypes, 0);
     if HasOverload(Entry.Name) then
       EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
