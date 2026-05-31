@@ -220,7 +220,7 @@ begin
       Result := TYamlValue.Create(FDoc^, LKeyNode^.Next);
       Exit;
     end;
-    // Skip key + value
+    if LKeyNode^.Next = YAML_NODE_NONE then Break;
     LCur := FDoc^.Nodes[LKeyNode^.Next].Next;
   end;
   Result.FDoc := FDoc;
@@ -257,9 +257,12 @@ begin
   LCur := LN^.Container.FirstChild;
   for LI := 1 to AIndex do
   begin
-    LCur := FDoc^.Nodes[LCur].Next; // skip to value
-    LCur := FDoc^.Nodes[LCur].Next; // skip to next key
+    if LCur = YAML_NODE_NONE then Exit(TStringView.Empty);
+    LCur := FDoc^.Nodes[LCur].Next;
+    if LCur = YAML_NODE_NONE then Exit(TStringView.Empty);
+    LCur := FDoc^.Nodes[LCur].Next;
   end;
+  if LCur = YAML_NODE_NONE then Exit(TStringView.Empty);
   Result := FDoc^.Nodes[LCur].Str;
 end;
 
@@ -279,9 +282,12 @@ begin
   LCur := LN^.Container.FirstChild;
   for LI := 1 to AIndex do
   begin
+    if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
     LCur := FDoc^.Nodes[LCur].Next;
+    if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
     LCur := FDoc^.Nodes[LCur].Next;
   end;
+  if LCur = YAML_NODE_NONE then begin Result.FDoc := FDoc; Result.FIdx := YAML_NODE_NONE; Exit; end;
   Result := TYamlValue.Create(FDoc^, FDoc^.Nodes[LCur].Next);
 end;
 

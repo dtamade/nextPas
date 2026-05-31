@@ -19,6 +19,9 @@ implementation
 uses
   Math, nextpas.core.text.conv;
 
+const
+  HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
+
 type
   TYamlStringBuilder = nextpas.core.text.builder.TStringBuilder;
 
@@ -89,6 +92,12 @@ begin
       10: begin AW.AppendChar('\'); AW.AppendChar('n'); end;
       13: begin AW.AppendChar('\'); AW.AppendChar('r'); end;
       9: begin AW.AppendChar('\'); AW.AppendChar('t'); end;
+      0..8, 11, 12, 14..31:
+        begin
+          AW.AppendChar('\'); AW.AppendChar('x');
+          AW.AppendChar(AnsiChar(HEX_CHARS[LCh shr 4]));
+          AW.AppendChar(AnsiChar(HEX_CHARS[LCh and $F]));
+        end;
     else
       AW.AppendByte(LCh);
     end;
