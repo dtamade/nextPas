@@ -18,8 +18,23 @@ type
   EArgHelp = nextpas.core.args.base.EArgHelp;
   EArgVersion = nextpas.core.args.base.EArgVersion;
   TStringArray = nextpas.core.args.base.TStringArray;
-  TArgOption = nextpas.core.args.base.TArgOption;
   TArgPositionalSpec = nextpas.core.args.base.TArgPositionalSpec;
+
+  TArgOption = record
+    Name: string;
+    Short: AnsiChar;
+    Help: string;
+    Kind: TArgKind;
+    Required: Boolean;
+    DefaultStr: string;
+    DefaultInt: Int64;
+    Choices: TStringArray;
+    ValueStr: string;
+    ValueInt: Int64;
+    ValueBool: Boolean;
+    ValueList: TStringArray;
+    Present: Boolean;
+  end;
 
   TArgParser = class
   private
@@ -584,7 +599,8 @@ var
   LIdx: Int32;
 begin
   LIdx := FindOption(AName);
-  if LIdx < 0 then Exit(False);
+  if LIdx < 0 then
+    raise EArgParseError.Create('unknown option: ' + AName);
   Result := FOptions[LIdx].ValueBool;
 end;
 
@@ -593,7 +609,8 @@ var
   LIdx: Int32;
 begin
   LIdx := FindOption(AName);
-  if LIdx < 0 then Exit('');
+  if LIdx < 0 then
+    raise EArgParseError.Create('unknown option: ' + AName);
   Result := FOptions[LIdx].ValueStr;
 end;
 
@@ -602,7 +619,8 @@ var
   LIdx: Int32;
 begin
   LIdx := FindOption(AName);
-  if LIdx < 0 then Exit(0);
+  if LIdx < 0 then
+    raise EArgParseError.Create('unknown option: ' + AName);
   Result := FOptions[LIdx].ValueInt;
 end;
 
@@ -610,12 +628,10 @@ function TArgParser.GetStringList(const AName: string): TStringArray;
 var
   LIdx: Int32;
 begin
+  Result := nil;
   LIdx := FindOption(AName);
   if LIdx < 0 then
-  begin
-    SetLength(Result, 0);
-    Exit;
-  end;
+    raise EArgParseError.Create('unknown option: ' + AName);
   Result := FOptions[LIdx].ValueList;
 end;
 
@@ -670,6 +686,7 @@ begin
       akInt: Result := Result + ' <int>';
       akStringList: Result := Result + ' <string>...';
       akChoice: Result := Result + ' <choice>';
+      akFlag: ;
     end;
     if FOptions[LI].Required then
       Result := Result + ' (required)';
@@ -696,6 +713,7 @@ begin
         if FOptions[LI].DefaultStr <> '' then
           Result := Result + ' (default: "' + FOptions[LI].DefaultStr + '")';
       end;
+      akFlag, akStringList: ;
     end;
     Result := Result + LineEnding;
   end;
@@ -891,7 +909,6 @@ var
   LSuggestion: string;
   LDoubleDash: Boolean;
   LFoundCmd: Boolean;
-  LTrailStart: Int32;
 begin
   SetLength(LGlobalArgs, 0);
   SetLength(LCmdArgs, 0);
@@ -899,7 +916,6 @@ begin
   LFoundCmd := False;
   LCmdIdx := -1;
   LDoubleDash := False;
-  LTrailStart := -1;
 
   LI := 0;
   while LI <= High(AArgs) do
@@ -947,7 +963,6 @@ begin
       if (not LDoubleDash) and (AArgs[LI] = '--') then
       begin
         LDoubleDash := True;
-        LTrailStart := LI + 1;
       end
       else if LDoubleDash then
       begin

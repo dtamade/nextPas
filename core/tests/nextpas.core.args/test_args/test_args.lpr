@@ -657,7 +657,10 @@ var
 procedure BuildHandler(const AParser: TArgParser);
 begin
   GHandlerCalled := True;
-  GHandlerOutput := AParser.GetString('output');
+  if AParser.IsPresent('output') then
+    GHandlerOutput := AParser.GetString('output')
+  else
+    GHandlerOutput := '';
 end;
 
 procedure TestAppBasicDispatch;
@@ -915,13 +918,32 @@ end;
 procedure TestGetNonexistent;
 var
   LA: TArgParser;
+  LGot: Boolean;
 begin
   LA := TArgParser.Create('test', '');
   LA.ParseFrom([]);
-  CheckEqual('', LA.GetString('nope'), 'nonexistent string = empty');
-  CheckEqual(Int64(0), LA.GetInt('nope'), 'nonexistent int = 0');
-  Check(not LA.GetBool('nope'), 'nonexistent bool = false');
-  Check(not LA.IsPresent('nope'), 'nonexistent not present');
+  LGot := False;
+  try
+    LA.GetString('nope');
+  except
+    on EArgParseError do LGot := True;
+  end;
+  Check(LGot, 'GetString unknown raises');
+  LGot := False;
+  try
+    LA.GetInt('nope');
+  except
+    on EArgParseError do LGot := True;
+  end;
+  Check(LGot, 'GetInt unknown raises');
+  LGot := False;
+  try
+    LA.GetBool('nope');
+  except
+    on EArgParseError do LGot := True;
+  end;
+  Check(LGot, 'GetBool unknown raises');
+  Check(not LA.IsPresent('nope'), 'IsPresent unknown = false');
   CheckEqual('', LA.Positional(99), 'out of bounds positional = empty');
   LA.Free;
 end;

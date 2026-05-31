@@ -1,6 +1,6 @@
 unit nextpas.core.args.base;
 {**
- * @desc 命令行解析器基础类型定义。
+ * @desc 命令行解析器公共类型定义（enum、异常、spec record）。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -23,22 +23,6 @@ type
   EArgVersion = class(ENextPasError);
 
   TStringArray = array of string;
-
-  TArgOption = record
-    Name: string;
-    Short: AnsiChar;
-    Help: string;
-    Kind: TArgKind;
-    Required: Boolean;
-    DefaultStr: string;
-    DefaultInt: Int64;
-    Choices: TStringArray;
-    ValueStr: string;
-    ValueInt: Int64;
-    ValueBool: Boolean;
-    ValueList: TStringArray;
-    Present: Boolean;
-  end;
 
   TArgPositionalSpec = record
     Name: string;
