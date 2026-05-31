@@ -129,6 +129,49 @@ begin
   CheckEqual(Int64(0), Int64(CodepointWidth($1DC0)), 'combining supplement');
 end;
 
+procedure TestEmptyString;
+begin
+  CheckEqual(Int64(0), Int64(StringDisplayWidth('')), 'empty string = 0');
+end;
+
+procedure TestSimdBoundary16;
+var S: AnsiString;
+begin
+  S := StringOfChar('A', 15);
+  CheckEqual(Int64(15), Int64(StringDisplayWidth(S)), '15B ascii');
+  S := StringOfChar('B', 16);
+  CheckEqual(Int64(16), Int64(StringDisplayWidth(S)), '16B ascii (exact SSE2 boundary)');
+  S := StringOfChar('C', 17);
+  CheckEqual(Int64(17), Int64(StringDisplayWidth(S)), '17B ascii');
+end;
+
+procedure TestSimdBoundary32;
+var S: AnsiString;
+begin
+  S := StringOfChar('X', 31);
+  CheckEqual(Int64(31), Int64(StringDisplayWidth(S)), '31B ascii');
+  S := StringOfChar('Y', 32);
+  CheckEqual(Int64(32), Int64(StringDisplayWidth(S)), '32B ascii (exact AVX2 boundary)');
+  S := StringOfChar('Z', 33);
+  CheckEqual(Int64(33), Int64(StringDisplayWidth(S)), '33B ascii');
+  S := StringOfChar('W', 128);
+  CheckEqual(Int64(128), Int64(StringDisplayWidth(S)), '128B ascii (AVX2 threshold)');
+end;
+
+procedure TestLongAscii;
+var S: AnsiString;
+begin
+  S := StringOfChar('a', 4096);
+  CheckEqual(Int64(4096), Int64(StringDisplayWidth(S)), '4096B ascii');
+end;
+
+procedure TestNonAsciiAtEnd;
+var S: AnsiString;
+begin
+  S := StringOfChar('x', 100) + #$E4#$B8#$96;
+  CheckEqual(Int64(102), Int64(StringDisplayWidth(S)), '100 ascii + 1 wide CJK = 102');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.text.width');
   T.Run('control chars width 0', @TestControlChars);
@@ -143,6 +186,11 @@ begin
   T.Run('mixed cjk string', @TestMixedString);
   T.Run('emoji string', @TestEmojiString);
   T.Run('combining string', @TestCombiningString);
+  T.Run('empty string', @TestEmptyString);
+  T.Run('simd boundary 16B', @TestSimdBoundary16);
+  T.Run('simd boundary 32B', @TestSimdBoundary32);
+  T.Run('long ascii 4096B', @TestLongAscii);
+  T.Run('non-ascii at end', @TestNonAsciiAtEnd);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
