@@ -82,7 +82,16 @@ begin
       LHash := InlineHashMix32(LHash);
     end
     else
-      LHash := InlineHashMix32(PUInt32(@AKey)^);
+    begin
+      case SizeOf(K) of
+        1: LHash := InlineHashMix32(UInt32(PByte(@AKey)^));
+        2: LHash := InlineHashMix32(UInt32(PWord(@AKey)^));
+        4: LHash := InlineHashMix32(PUInt32(@AKey)^);
+        8: LHash := InlineHashMix32(UInt32(PQWord(@AKey)^ xor (PQWord(@AKey)^ shr 32)));
+      else
+        LHash := InlineHashMix32(PUInt32(@AKey)^);
+      end;
+    end;
   end;
   Result := (LHash shr 28) and CONCURRENT_SEGMENT_MASK;
 end;
@@ -254,7 +263,7 @@ begin
   try
     LExists := FSegments[LSeg].TryGetValue(AKey, LValue);
     if not LExists then
-      FillChar(LValue, SizeOf(V), 0);
+      LValue := Default(V);
     LKeep := AFunc(AKey, LValue, LExists);
     if LKeep then
       FSegments[LSeg].Put(AKey, LValue)
