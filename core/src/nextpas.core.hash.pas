@@ -169,7 +169,7 @@ end;
 procedure TSHA256State.Update(const AData: Pointer; ALen: SizeUInt);
 var
   LP: PByte;
-  LRemaining, LCopy: SizeUInt;
+  LCopy: SizeUInt;
 begin
   if (ALen = 0) or (AData = nil) then Exit;
   LP := PByte(AData);

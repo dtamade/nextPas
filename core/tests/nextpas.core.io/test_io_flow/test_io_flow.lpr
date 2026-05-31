@@ -50,7 +50,6 @@ end;
 procedure TestIoWriteLines;
 var
   LBuf: IStream;
-  LData: TBytes;
 begin
   LBuf := CreateBytesStream;
   IoWriteLines(LBuf as IWriter, TStringArray.Create('a', 'b', 'c'));

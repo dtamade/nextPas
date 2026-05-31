@@ -125,7 +125,6 @@ end;
 function TStringView.TrimLeft: TStringView;
 var
   LPos: SizeUInt;
-  i: Integer;
 begin
   LPos := 0;
   while (LPos < FLen) and IsWhitespace(Byte(FData[LPos])) do
@@ -153,7 +152,6 @@ end;
 function TStringView.Equals(const AOther: TStringView): Boolean;
 var
   LPos: SizeUInt;
-  i: Integer;
 begin
   if FLen <> AOther.FLen then
     Exit(False);
@@ -223,7 +221,6 @@ function TStringView.IndexOf(const ACh: AnsiChar): PtrInt;
 var
   LMask: TVecMask;
   LPos: SizeUInt;
-  i: Integer;
 begin
   if FLen = 0 then
     Exit(-1);
@@ -260,7 +257,6 @@ function TStringView.IndexOfStr(const ANeedle: TStringView): PtrInt;
 var
   LMaskFirst, LMaskLast, LCombined: TVecMask;
   LPos: SizeUInt;
-  i: Integer;
   LBit: Int32;
   LLastOfs: SizeUInt;
 begin
@@ -305,7 +301,6 @@ end;
 function TStringView.CountChar(const ACh: AnsiChar): SizeUInt;
 var
   LPos: SizeUInt;
-  i: Integer;
 begin
   Result := 0;
   if FLen = 0 then
