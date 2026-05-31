@@ -14,7 +14,7 @@ unit nextpas.core.io.binary;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.io.intf;
 
 const
