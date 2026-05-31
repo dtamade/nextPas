@@ -58,10 +58,9 @@ uses
   nextpas.core.io.intf,
   nextpas.core.process.pipe,
   nextpas.core.platform.process,
-  nextpas.core.platform.process.base
-  {$IFDEF NEXTPAS_UNIX}
-  , nextpas.core.platform.posix.ffi
-  {$ENDIF};
+  nextpas.core.platform.process.base,
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi;
 
 { TCommand }
 
@@ -147,12 +146,13 @@ var
   LEnvp: array of PAnsiChar;
   LArgc, LEnvc, I, LErr: Integer;
   LProc: TPlatformProcess;
-  LPipes: TPlatformProcessPipes;
   LCwd: PAnsiChar;
-  LNeedPipes: Boolean;
   LStdinW: IWriter;
   LStdoutR: IReader;
   LStderrR: IReader;
+  LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of Int32;
+  LChildStdin, LChildStdout, LChildStderr: PtrInt;
+  LDevNull: Int32;
 begin
   LArgc := Length(FArgs) + 2;
   SetLength(LArgv, LArgc);
@@ -180,56 +180,68 @@ begin
   LStdinW := nil;
   LStdoutR := nil;
   LStderrR := nil;
+  LChildStdin := -1;
+  LChildStdout := -1;
+  LChildStderr := -1;
 
-  LNeedPipes := (FStdinMode = stPiped) or (FStdoutMode = stPiped) or (FStderrMode = stPiped);
-
-  if LNeedPipes then
+  if FStdinMode = stPiped then
   begin
-    if LEnvp <> nil then
-      LErr := platform_process_spawn_piped_cwd(PAnsiChar(FPath), @LArgv[0], @LEnvp[0], LCwd, LProc, LPipes)
-    else
-      LErr := platform_process_spawn_piped_cwd(PAnsiChar(FPath), @LArgv[0], nil, LCwd, LProc, LPipes);
-
-    if LErr <> 0 then
-      raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
-
-    if FStdinMode = stPiped then
-      LStdinW := TPipeWriter.Create(LPipes.StdinWrite) as IWriter
-    else
-    begin
-      {$IFDEF NEXTPAS_UNIX}
-      nextpas.core.platform.posix.ffi.close(LPipes.StdinWrite);
-      {$ENDIF}
-    end;
-
-    if FStdoutMode = stPiped then
-      LStdoutR := TPipeReader.Create(LPipes.StdoutRead) as IReader
-    else
-    begin
-      {$IFDEF NEXTPAS_UNIX}
-      nextpas.core.platform.posix.ffi.close(LPipes.StdoutRead);
-      {$ENDIF}
-    end;
-
-    if FStderrMode = stPiped then
-      LStderrR := TPipeReader.Create(LPipes.StderrRead) as IReader
-    else
-    begin
-      {$IFDEF NEXTPAS_UNIX}
-      nextpas.core.platform.posix.ffi.close(LPipes.StderrRead);
-      {$ENDIF}
-    end;
+    if pipe(@LStdinPipe[0]) <> 0 then
+      raise EProcessError.Create('Failed to create stdin pipe');
+    LChildStdin := LStdinPipe[0];
+    LStdinW := TPipeWriter.Create(LStdinPipe[1]) as IWriter;
   end
-  else
+  else if FStdinMode = stNull then
   begin
-    if LEnvp <> nil then
-      LErr := platform_process_spawn_cwd(PAnsiChar(FPath), @LArgv[0], @LEnvp[0], LCwd, LProc)
-    else
-      LErr := platform_process_spawn_cwd(PAnsiChar(FPath), @LArgv[0], nil, LCwd, LProc);
-
-    if LErr <> 0 then
-      raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+    LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', 0, 0);
+    if LDevNull >= 0 then
+      LChildStdin := LDevNull;
   end;
+
+  if FStdoutMode = stPiped then
+  begin
+    if pipe(@LStdoutPipe[0]) <> 0 then
+      raise EProcessError.Create('Failed to create stdout pipe');
+    LChildStdout := LStdoutPipe[1];
+    LStdoutR := TPipeReader.Create(LStdoutPipe[0]) as IReader;
+  end
+  else if FStdoutMode = stNull then
+  begin
+    LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', 1, 0);
+    if LDevNull >= 0 then
+      LChildStdout := LDevNull;
+  end;
+
+  if FStderrMode = stPiped then
+  begin
+    if pipe(@LStderrPipe[0]) <> 0 then
+      raise EProcessError.Create('Failed to create stderr pipe');
+    LChildStderr := LStderrPipe[1];
+    LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
+  end
+  else if FStderrMode = stNull then
+  begin
+    LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', 1, 0);
+    if LDevNull >= 0 then
+      LChildStderr := LDevNull;
+  end;
+
+  if LEnvp <> nil then
+    LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], @LEnvp[0],
+      LCwd, LChildStdin, LChildStdout, LChildStderr, LProc)
+  else
+    LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], nil,
+      LCwd, LChildStdin, LChildStdout, LChildStderr, LProc);
+
+  if LErr <> 0 then
+    raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+
+  if (FStdinMode = stPiped) then
+    close(LStdinPipe[0]);
+  if (FStdoutMode = stPiped) then
+    close(LStdoutPipe[1]);
+  if (FStderrMode = stPiped) then
+    close(LStderrPipe[1]);
 
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR);
 end;

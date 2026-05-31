@@ -14,6 +14,10 @@ function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
   out APipes: TPlatformProcessPipes): Int32;
 function platform_process_spawn_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar; out AProc: TPlatformProcess): Int32;
+function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
+  AChildStdin, AChildStdout, AChildStderr: PtrInt;
+  out AProc: TPlatformProcess): Int32;
 function platform_process_spawn_piped_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
@@ -139,6 +143,47 @@ begin
       execve(APath, AArgv, AEnvp)
     else
       execve(APath, AArgv, nil);
+    halt(127);
+  end;
+  AProc.Pid := LPid;
+  Result := 0;
+end;
+
+function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
+  AChildStdin, AChildStdout, AChildStderr: PtrInt;
+  out AProc: TPlatformProcess): Int32;
+var
+  LPid: pid_t;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  LPid := fork;
+  if LPid < 0 then
+    Exit(platform_get_errno);
+  if LPid = 0 then
+  begin
+    if (ACwd <> nil) and (ACwd[0] <> #0) then
+      if chdir(ACwd) <> 0 then
+        halt(126);
+    if AChildStdin >= 0 then
+    begin
+      dup2(Int32(AChildStdin), 0);
+      close(Int32(AChildStdin));
+    end;
+    if AChildStdout >= 0 then
+    begin
+      dup2(Int32(AChildStdout), 1);
+      close(Int32(AChildStdout));
+    end;
+    if AChildStderr >= 0 then
+    begin
+      dup2(Int32(AChildStderr), 2);
+      close(Int32(AChildStderr));
+    end;
+    if AEnvp <> nil then
+      execve(APath, AArgv, AEnvp)
+    else
+      execvp(APath, AArgv);
     halt(127);
   end;
   AProc.Pid := LPid;
