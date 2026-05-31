@@ -60,9 +60,13 @@ begin
   LCert := LoadCertFromFile('/tmp/test_cert.der');
   try
     Check('match exact hostname', MatchHostname('test.example.com', LCert));
-    Check('match wildcard', MatchHostname('sub.example.com', LCert));
+    Check('match wildcard single label', MatchHostname('sub.example.com', LCert));
+    Check('reject multi-level subdomain (RFC 6125)',
+      not MatchHostname('a.b.example.com', LCert));
+    Check('reject bare domain for wildcard',
+      not MatchHostname('example.com', LCert));
     Check('no match different domain', not MatchHostname('other.org', LCert));
-    Check('empty hostname matches', MatchHostname('', LCert));
+    Check('empty hostname no match', not MatchHostname('', LCert));
   finally
     LCert.Free;
   end;

@@ -367,7 +367,9 @@ var
   Z: array[0..15] of Byte;
   I, J, K: Integer;
   Bit: Byte;
+  LMask: Byte;
   Carry: Byte;
+  LCarryMask: Byte;
 begin
   Move(LHPtr[0], V[0], 16);
   FillChar(Z[0], 16, 0);
@@ -376,16 +378,16 @@ begin
     for J := 7 downto 0 do
     begin
       Bit := (AX[I] shr J) and 1;
-      if Bit = 1 then
-        for K := 0 to 15 do
-          Z[K] := Z[K] xor V[K];
+      LMask := Byte(0) - Bit;
+      for K := 0 to 15 do
+        Z[K] := Z[K] xor (V[K] and LMask);
 
       Carry := V[15] and 1;
       for K := 15 downto 1 do
         V[K] := (V[K] shr 1) or ((V[K-1] and 1) shl 7);
       V[0] := V[0] shr 1;
-      if Carry = 1 then
-        V[0] := V[0] xor $E1;
+      LCarryMask := Byte(0) - Carry;
+      V[0] := V[0] xor ($E1 and LCarryMask);
     end;
 
   Move(Z[0], AX[0], 16);

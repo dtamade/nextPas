@@ -229,7 +229,7 @@ var
 begin
   Result := False;
   if AHostname = '' then
-    Exit(True);
+    Exit(False);
 
   LHost := LowerCase(AHostname);
 
@@ -245,8 +245,9 @@ begin
       begin
         LSuffix := Copy(LPattern, 2, Length(LPattern));
         LDotPos := Pos('.', LHost);
-        if (LDotPos > 0) and
-           (Copy(LHost, LDotPos, Length(LHost)) = LSuffix) then
+        if (LDotPos > 1) and
+           (Copy(LHost, LDotPos, Length(LHost)) = LSuffix) and
+           (Pos('.', Copy(LHost, 1, LDotPos - 1)) = 0) then
           Exit(True);
       end;
     end;

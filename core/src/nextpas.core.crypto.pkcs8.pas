@@ -271,6 +271,7 @@ begin
     begin
       AError := 'EncryptedPrivateKeyInfo must be a SEQUENCE with at least 2 elements';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -279,6 +280,7 @@ begin
     begin
       AError := 'encryptionAlgorithm must be a SEQUENCE';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -287,6 +289,7 @@ begin
     begin
       AError := 'Unsupported encryption algorithm: ' + LAlgOID + ' (only PBES2 supported)';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -295,6 +298,7 @@ begin
     begin
       AError := 'PBES2-params must be a SEQUENCE with KDF and encryption scheme';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -304,6 +308,7 @@ begin
     begin
       AError := 'keyDerivationFunc must be a SEQUENCE';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -312,6 +317,7 @@ begin
     begin
       AError := 'Unsupported KDF: ' + LKDFOID + ' (only PBKDF2 supported)';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -320,6 +326,7 @@ begin
     begin
       AError := 'PBKDF2-params must have salt and iteration count';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -355,6 +362,7 @@ begin
     begin
       AError := 'encryptionScheme must be a SEQUENCE';
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 
@@ -371,6 +379,7 @@ begin
     begin
       AError := 'Unsupported encryption scheme: ' + LEncOID;
       LRoot.Free;
+      LRoot := nil;
       Exit;
     end;
 

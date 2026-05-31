@@ -112,6 +112,7 @@ uses
   nextpas.core.tls.asn1,
   nextpas.core.tls.pem,
   nextpas.core.crypto.hash,
+  nextpas.core.crypto.constant_time,
   nextpas.core.tls.random,
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.crypto.bigint,
@@ -1787,7 +1788,7 @@ begin
     Exit;
   end;
 
-  if not BytesEqual(LRecovered, LExpected) then
+  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1819,7 +1820,7 @@ begin
     Exit;
   end;
 
-  if not BytesEqual(LRecovered, LExpected) then
+  if TConstantTime.CompareBytes(LRecovered, LExpected) <> 0 then
   begin
     AError := 'RSA PKCS#1 v1.5 signature does not match transcript';
     Exit;
@@ -1931,7 +1932,7 @@ begin
   Move(LSalt[0], LMPrime[8 + HASH_SIZE], SALT_SIZE);
   LExpectedH := SHA256(LMPrime);
 
-  if not BytesEqual(LH, LExpectedH) then
+  if TConstantTime.CompareBytes(LH, LExpectedH) <> 0 then
   begin
     AError := 'RSA-PSS signature hash does not match transcript';
     Exit;
@@ -2043,7 +2044,7 @@ begin
   Move(LSalt[0], LMPrime[8 + HASH_SIZE], SALT_SIZE);
   LExpectedH := SHA384(LMPrime);
 
-  if not BytesEqual(LH, LExpectedH) then
+  if TConstantTime.CompareBytes(LH, LExpectedH) <> 0 then
   begin
     AError := 'RSA-PSS signature hash does not match transcript';
     Exit;
@@ -2127,12 +2128,17 @@ begin
   end;
 
   case ASignatureScheme of
+    TLS13_SIG_RSA_PKCS1_SHA256,
+    TLS13_SIG_RSA_PKCS1_SHA384:
+      begin
+        AError := 'rsa_pkcs1 signature schemes are not permitted in TLS 1.3 CertificateVerify (RFC 8446 §4.4.3)';
+        Exit;
+      end;
+
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256,
-    TLS13_SIG_RSA_PKCS1_SHA256,
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
-    TLS13_SIG_RSA_PSS_PSS_SHA384,
-    TLS13_SIG_RSA_PKCS1_SHA384:
+    TLS13_SIG_RSA_PSS_PSS_SHA384:
       begin
         if not SameText(APublicKeyInfo.KeyType, 'RSA') then
         begin
@@ -2154,24 +2160,6 @@ begin
           TLS13_SIG_RSA_PSS_RSAE_SHA384,
           TLS13_SIG_RSA_PSS_PSS_SHA384:
             Result := TryVerifyRSAPSSSignatureSHA384(
-              ACertificateVerifyInput,
-              ASignature,
-              APublicKeyInfo.RSAModulus,
-              APublicKeyInfo.RSAExponent,
-              AError
-            );
-
-          TLS13_SIG_RSA_PKCS1_SHA256:
-            Result := TryVerifyRSAPKCS1v15SignatureSHA256(
-              ACertificateVerifyInput,
-              ASignature,
-              APublicKeyInfo.RSAModulus,
-              APublicKeyInfo.RSAExponent,
-              AError
-            );
-
-          TLS13_SIG_RSA_PKCS1_SHA384:
-            Result := TryVerifyRSAPKCS1v15SignatureSHA384(
               ACertificateVerifyInput,
               ASignature,
               APublicKeyInfo.RSAModulus,
@@ -2328,18 +2316,6 @@ begin
     Exit(True);
   end;
 
-  if TLS13ClientHelloOffersSignatureScheme(AClientHello, TLS13_SIG_RSA_PKCS1_SHA256) then
-  begin
-    ASignatureScheme := TLS13_SIG_RSA_PKCS1_SHA256;
-    Exit(True);
-  end;
-
-  if TLS13ClientHelloOffersSignatureScheme(AClientHello, TLS13_SIG_RSA_PKCS1_SHA384) then
-  begin
-    ASignatureScheme := TLS13_SIG_RSA_PKCS1_SHA384;
-    Exit(True);
-  end;
-
   if TLS13ClientHelloOffersSignatureScheme(AClientHello, TLS13_SIG_RSA_PSS_PSS_SHA256) then
   begin
     ASignatureScheme := TLS13_SIG_RSA_PSS_PSS_SHA256;
@@ -2387,18 +2363,6 @@ begin
     if TLS13ClientHelloOffersSignatureScheme(AClientHello, TLS13_SIG_RSA_PSS_RSAE_SHA384) then
     begin
       ASignatureScheme := TLS13_SIG_RSA_PSS_RSAE_SHA384;
-      Exit(True);
-    end;
-
-    if TLS13ClientHelloOffersSignatureScheme(AClientHello, TLS13_SIG_RSA_PKCS1_SHA256) then
-    begin
-      ASignatureScheme := TLS13_SIG_RSA_PKCS1_SHA256;
-      Exit(True);
-    end;
-
-    if TLS13ClientHelloOffersSignatureScheme(AClientHello, TLS13_SIG_RSA_PKCS1_SHA384) then
-    begin
-      ASignatureScheme := TLS13_SIG_RSA_PKCS1_SHA384;
       Exit(True);
     end;
 
@@ -2480,14 +2444,12 @@ begin
     begin
       if TrySelectFirstOfferedScheme([
         TLS13_SIG_RSA_PSS_RSAE_SHA384,
-        TLS13_SIG_RSA_PKCS1_SHA384,
         TLS13_SIG_RSA_PSS_PSS_SHA384
       ], ASignatureScheme) then
         Exit(True);
 
       if TrySelectFirstOfferedScheme([
         TLS13_SIG_RSA_PSS_RSAE_SHA256,
-        TLS13_SIG_RSA_PKCS1_SHA256,
         TLS13_SIG_RSA_PSS_PSS_SHA256
       ], ASignatureScheme) then
         Exit(True);
@@ -2496,14 +2458,12 @@ begin
     begin
       if TrySelectFirstOfferedScheme([
         TLS13_SIG_RSA_PSS_RSAE_SHA256,
-        TLS13_SIG_RSA_PKCS1_SHA256,
         TLS13_SIG_RSA_PSS_PSS_SHA256
       ], ASignatureScheme) then
         Exit(True);
 
       if TrySelectFirstOfferedScheme([
         TLS13_SIG_RSA_PSS_RSAE_SHA384,
-        TLS13_SIG_RSA_PKCS1_SHA384,
         TLS13_SIG_RSA_PSS_PSS_SHA384
       ], ASignatureScheme) then
         Exit(True);
@@ -2636,10 +2596,8 @@ begin
   case ASignatureScheme of
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256,
-    TLS13_SIG_RSA_PKCS1_SHA256,
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
     TLS13_SIG_RSA_PSS_PSS_SHA384,
-    TLS13_SIG_RSA_PKCS1_SHA384,
     TLS13_SIG_ECDSA_SECP256R1_SHA256,
     TLS13_SIG_ECDSA_SECP384R1_SHA384,
     TLS13_SIG_ED25519:
@@ -2744,12 +2702,16 @@ begin
   end;
 
   case ASignatureScheme of
+    TLS13_SIG_RSA_PKCS1_SHA256,
+    TLS13_SIG_RSA_PKCS1_SHA384:
+      begin
+        AError := 'rsa_pkcs1 signature schemes are not permitted in TLS 1.3 CertificateVerify (RFC 8446 §4.4.3)';
+        Exit;
+      end;
     TLS13_SIG_RSA_PSS_RSAE_SHA256,
     TLS13_SIG_RSA_PSS_PSS_SHA256,
-    TLS13_SIG_RSA_PKCS1_SHA256,
     TLS13_SIG_RSA_PSS_RSAE_SHA384,
     TLS13_SIG_RSA_PSS_PSS_SHA384,
-    TLS13_SIG_RSA_PKCS1_SHA384,
     TLS13_SIG_ECDSA_SECP256R1_SHA256:
       ;
   else
@@ -2807,17 +2769,6 @@ begin
           Exit;
       end;
 
-    TLS13_SIG_RSA_PKCS1_SHA256:
-      begin
-        if not TryBuildRSAPKCS1v15EncodedMessageSHA256(ACertificateVerifyInput, Length(LModulus), LEM, AError) then
-          Exit;
-      end;
-
-    TLS13_SIG_RSA_PKCS1_SHA384:
-      begin
-        if not TryBuildRSAPKCS1v15EncodedMessageSHA384(ACertificateVerifyInput, Length(LModulus), LEM, AError) then
-          Exit;
-      end;
   end;
 
   if (Length(LP) > 0) and (Length(LQ) > 0) and (Length(LDP) > 0) and
