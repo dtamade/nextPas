@@ -70,7 +70,7 @@ function MeasureTimeNs(const AProc: TMeasureProc): Int64;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 { TStopwatch }
 

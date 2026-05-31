@@ -58,7 +58,8 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors,
+  nextpas.core.text.conv;
 
 const
   NS_PER_SEC_L  = Int64(1000000000);

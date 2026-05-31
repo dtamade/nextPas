@@ -95,7 +95,8 @@ function DaysInMonthFn(AYear, AMonth: Integer): Integer;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.platform.time;
 
 const

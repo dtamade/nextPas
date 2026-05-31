@@ -5,7 +5,6 @@ unit nextpas.core.collections.multimap;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.multimap.intf,

@@ -5,6 +5,7 @@ unit nextpas.core.time.period;
 interface
 
 uses
+  nextpas.core.errors,
   nextpas.core.time.date,
   nextpas.core.time.datetime;
 
@@ -44,7 +45,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 { TPeriod }
 
