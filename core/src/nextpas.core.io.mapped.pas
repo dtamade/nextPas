@@ -30,14 +30,14 @@ function MmapLines(const APath: string): IMappedLines;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.errors,
-  nextpas.core.platform.mmap;
+  nextpas.core.mem.memory_map;
 
 type
   TMappedFileImpl = class(TInterfacedObject, IMappedFile)
   private
-    FMap: TPlatformMappedFile;
-    FValid: Boolean;
+    FMap: TMemoryMap;
   public
     constructor Create(const APath: string);
     destructor Destroy; override;
@@ -64,40 +64,37 @@ type
 { TMappedFileImpl }
 
 constructor TMappedFileImpl.Create(const APath: string);
-var
-  LRet: Int32;
 begin
   inherited Create;
-  FValid := False;
-  LRet := platform_mmap_file(PAnsiChar(APath), FMap);
-  if LRet <> 0 then
+  FMap := TMemoryMap.Create;
+  if not FMap.OpenFile(APath, mmaRead) then
   begin
-    // Empty file or error — set size 0, no mapping
-    FMap.Addr := nil;
-    FMap.Size := 0;
-    Exit;
+    FreeAndNil(FMap);
+    // Empty file or permission error — graceful degradation
   end;
-  FValid := True;
 end;
 
 destructor TMappedFileImpl.Destroy;
 begin
-  if FValid then
-    platform_mmap_close(FMap);
+  if FMap <> nil then
+  begin
+    FMap.Close;
+    FMap.Free;
+  end;
   inherited;
 end;
 
 function TMappedFileImpl.Data: PByte;
 begin
-  if FValid then
-    Result := PByte(FMap.Addr)
+  if FMap <> nil then
+    Result := PByte(FMap.BaseAddress)
   else
     Result := nil;
 end;
 
 function TMappedFileImpl.Size: Int64;
 begin
-  if FValid then
+  if FMap <> nil then
     Result := Int64(FMap.Size)
   else
     Result := 0;
@@ -105,8 +102,8 @@ end;
 
 function TMappedFileImpl.AsView: TStringView;
 begin
-  if FValid and (FMap.Addr <> nil) then
-    Result := TStringView.Create(PAnsiChar(FMap.Addr), FMap.Size)
+  if (FMap <> nil) and (FMap.BaseAddress <> nil) then
+    Result := TStringView.Create(PAnsiChar(FMap.BaseAddress), FMap.Size)
   else
     Result := TStringView.Empty;
 end;
