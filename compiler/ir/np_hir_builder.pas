@@ -55,6 +55,9 @@ type
     FAllocas: array of TAllocaEntry;
     FAllocaCount: LongInt;
 
+    FIntfVarNames: array of string;
+    FIntfVarCount: LongInt;
+
     FGlobalNames: array of string;
     FGlobalTypes: array of THIRTypeId;
     FGlobalCount: LongInt;
@@ -252,6 +255,7 @@ begin
   FCurrentBlockId := 0;
   FBlockTerminated := False;
   FAllocaCount := 0;
+  FIntfVarCount := 0;
   FBlockCount := 0;
   FGlobalCount := 0;
   FGlobalRefCount := 0;
@@ -1145,6 +1149,8 @@ var
   VarName: string;
   ObjPtr: THIRValueId;
   Instr: THIRInstr;
+  I: LongInt;
+  Found: Boolean;
 begin
   VarName := ANode.Operand;
   ObjPtr := FindAlloca(VarName);
@@ -1158,6 +1164,20 @@ begin
   SetLength(Instr.Operands, 1);
   Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
   EmitInstr(Instr);
+  Found := False;
+  for I := 0 to FIntfVarCount - 1 do
+    if SameText(FIntfVarNames[I], VarName) then
+    begin
+      Found := True;
+      Break;
+    end;
+  if not Found then
+  begin
+    if FIntfVarCount >= Length(FIntfVarNames) then
+      SetLength(FIntfVarNames, FIntfVarCount + 8);
+    FIntfVarNames[FIntfVarCount] := VarName;
+    Inc(FIntfVarCount);
+  end;
 end;
 
 procedure THIRBuilder.ProcessIntfRelease(const ANode: TTypedHirNode);
