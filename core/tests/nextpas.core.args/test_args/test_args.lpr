@@ -850,6 +850,82 @@ begin
   LApp.Free;
 end;
 
+procedure TestChoiceInvalidDefault;
+var
+  LA: TArgParser;
+  LGot: Boolean;
+begin
+  LA := TArgParser.Create('test', '');
+  LGot := False;
+  try
+    LA.AddChoice('mode', 'm', 'mode', ['debug', 'release'], 'invalid');
+  except
+    on EArgParseError do LGot := True;
+  end;
+  Check(LGot, 'invalid default raises at definition time');
+  LA.Free;
+end;
+
+procedure TestAppGlobalInt;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+begin
+  LApp := TArgApp.Create('test', '', '');
+  LApp.AddGlobalInt('jobs', 'j', 'parallel jobs', 4);
+  LCmd := LApp.AddCommand('build', '');
+  LApp.SetHandler('build', @BuildHandler);
+  GHandlerCalled := False;
+  LApp.RunFrom(['-j', '8', 'build']);
+  Check(GHandlerCalled, 'handler called');
+  CheckEqual(Int64(8), LApp.GlobalParser.GetInt('jobs'), 'global int');
+  LApp.Free;
+end;
+
+procedure TestAutoVersionDisabled;
+var
+  LA: TArgParser;
+  LGot: Boolean;
+begin
+  LA := TArgParser.Create('test', '');
+  LA.SetVersion('1.0.0');
+  LA.SetAutoVersion(False);
+  LA.SetAutoHelp(False);
+  LGot := False;
+  try
+    LA.ParseFrom(['--version']);
+  except
+    on EArgParseError do LGot := True;
+  end;
+  Check(LGot, 'disabled version -> unknown option');
+  LA.Free;
+end;
+
+procedure TestTryParseTrue;
+var
+  LA: TArgParser;
+begin
+  LA := TArgParser.Create('test', '');
+  LA.AddFlag('verbose', 'v', '');
+  Check(LA.TryParseFrom(['-v']), 'TryParse returns true on success');
+  Check(LA.GetBool('verbose'), 'value accessible after TryParse');
+  LA.Free;
+end;
+
+procedure TestGetNonexistent;
+var
+  LA: TArgParser;
+begin
+  LA := TArgParser.Create('test', '');
+  LA.ParseFrom([]);
+  CheckEqual('', LA.GetString('nope'), 'nonexistent string = empty');
+  CheckEqual(Int64(0), LA.GetInt('nope'), 'nonexistent int = 0');
+  Check(not LA.GetBool('nope'), 'nonexistent bool = false');
+  Check(not LA.IsPresent('nope'), 'nonexistent not present');
+  CheckEqual('', LA.Positional(99), 'out of bounds positional = empty');
+  LA.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.args');
   { Basic }
@@ -887,6 +963,7 @@ begin
   T.Run('choice invalid', @TestChoiceInvalid);
   T.Run('choice short', @TestChoiceShort);
   T.Run('choice equals', @TestChoiceEquals);
+  T.Run('choice invalid default', @TestChoiceInvalidDefault);
   { Cluster }
   T.Run('cluster flags', @TestClusterFlags);
   T.Run('cluster with int value', @TestClusterWithValue);
@@ -913,6 +990,11 @@ begin
   T.Run('app no command', @TestAppNoCommand);
   T.Run('app command help', @TestAppCommandHelp);
   T.Run('app global string option', @TestAppGlobalStringOption);
+  T.Run('app global int', @TestAppGlobalInt);
+  { Additional coverage }
+  T.Run('auto version disabled', @TestAutoVersionDisabled);
+  T.Run('TryParse true', @TestTryParseTrue);
+  T.Run('get nonexistent', @TestGetNonexistent);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
