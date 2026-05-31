@@ -163,13 +163,30 @@ end;
 function EncodeQueryString(const AParams: TQueryParams): string;
 var
   LI: SizeInt;
+  LParts: array of string;
+  LTotalLen: SizeInt;
+  LPos: SizeInt;
 begin
-  Result := '';
+  if Length(AParams) = 0 then Exit('');
+  SetLength(LParts, Length(AParams));
+  LTotalLen := 0;
   for LI := 0 to High(AParams) do
   begin
+    LParts[LI] := UrlEncode(AParams[LI].Name) + '=' + UrlEncode(AParams[LI].Value);
+    Inc(LTotalLen, Length(LParts[LI]));
+  end;
+  Inc(LTotalLen, Length(AParams) - 1);
+  SetLength(Result, LTotalLen);
+  LPos := 1;
+  for LI := 0 to High(LParts) do
+  begin
     if LI > 0 then
-      Result := Result + '&';
-    Result := Result + UrlEncode(AParams[LI].Name) + '=' + UrlEncode(AParams[LI].Value);
+    begin
+      Result[LPos] := '&';
+      Inc(LPos);
+    end;
+    Move(LParts[LI][1], Result[LPos], Length(LParts[LI]));
+    Inc(LPos, Length(LParts[LI]));
   end;
 end;
 
