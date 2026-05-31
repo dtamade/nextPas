@@ -2226,68 +2226,13 @@ function TryRSASignWithCRT(
   out ASignature: TBytes;
   out AError: string
 ): Boolean;
-var
-  LM1: TBytes;
-  LM2: TBytes;
-  LM1Exp: TBytes;
-  LM2Exp: TBytes;
-  LH: TBytes;
-  LHAdj: TBytes;
-  LQH: TBytes;
-  LPartial: TBytes;
-  LCheckP: TBytes;
-  LCheckQ: TBytes;
 begin
-  SetLength(ASignature, 0);
-  AError := '';
-  Result := False;
-
-  if not TryBigIntModFromUnsignedBytes(AEncodedMessage, AP, LM1, AError) then
-    Exit;
-  if not TryBigIntModFromUnsignedBytes(AEncodedMessage, AQ, LM2, AError) then
-    Exit;
-
-  if not TryBigIntModExpFromUnsignedBytes(LM1, ADP, AP, LM1Exp, AError) then
-    Exit;
-  if not TryBigIntModExpFromUnsignedBytes(LM2, ADQ, AQ, LM2Exp, AError) then
-    Exit;
-
-  LM1 := LM1Exp;
-  LM2 := LM2Exp;
-
-  if not TryBigIntSubtractModuloFromUnsignedBytes(LM1, LM2, AP, LH, AError) then
-    Exit;
-  if not TryBigIntModMulFromUnsignedBytes(AQInv, LH, AP, LHAdj, AError) then
-    Exit;
-
-  LH := LHAdj;
-
-  if not TryBigIntMulFromUnsignedBytes(AQ, LH, LQH, AError) then
-    Exit;
-  if not TryBigIntAddFromUnsignedBytes(LM2, LQH, LPartial, AError) then
-    Exit;
-
-  if not TryBigIntModFromUnsignedBytes(LPartial, AP, LCheckP, AError) then
-    Exit;
-  if not TryBigIntModFromUnsignedBytes(LPartial, AQ, LCheckQ, AError) then
-    Exit;
-
-  if not UnsignedBytesEqual(LCheckP, LM1) then
-  begin
-    AError := 'RSA CRT recombination check failed modulo p';
-    Exit;
-  end;
-
-  if not UnsignedBytesEqual(LCheckQ, LM2) then
-  begin
-    AError := 'RSA CRT recombination check failed modulo q';
-    Exit;
-  end;
-
-  if not TryBigIntToFixedLengthFromUnsignedBytes(LPartial, Length(AModulus), ASignature, AError) then
-    Exit;
-
-  Result := True;
+  Result := TryRSACTSignWithCRT(
+    AEncodedMessage, AModulus,
+    TBytes.Create($00, $01, $00, $01), // e=65537 for verify-after-sign
+    AP, AQ, ADP, ADQ, AQInv,
+    ASignature, AError
+  );
 end;
 
 function TrySelectTLS13ServerCertificateVerifyScheme(
