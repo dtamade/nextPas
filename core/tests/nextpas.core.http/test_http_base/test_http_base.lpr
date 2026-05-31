@@ -160,6 +160,20 @@ begin
   CheckEqual('example.com', LUrl.HostPort, 'without port');
 end;
 
+procedure TestUrlParseIPv6;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.Parse('http://[::1]:8080/path');
+  CheckEqual('::1', LUrl.Host, 'ipv6 host');
+  CheckEqual(UInt16(8080), LUrl.Port, 'ipv6 port');
+  CheckEqual('/path', LUrl.Path, 'ipv6 path');
+
+  LUrl := TUrl.Parse('http://[fe80::1]/index');
+  CheckEqual('fe80::1', LUrl.Host, 'ipv6 no port host');
+  CheckEqual(UInt16(0), LUrl.Port, 'ipv6 no port');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.base');
   T.Run('HttpMethodToStr', @TestHttpMethodToStr);
@@ -173,5 +187,6 @@ begin
   T.Run('TUrl.Parse empty raises', @TestUrlParseEmptyRaises);
   T.Run('TUrl.ToString round-trip', @TestUrlToString);
   T.Run('TUrl.HostPort', @TestUrlHostPort);
+  T.Run('TUrl.Parse IPv6', @TestUrlParseIPv6);
   T.Summary;
 end.

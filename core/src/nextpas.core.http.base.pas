@@ -82,8 +82,6 @@ begin
     hmOptions: Result := 'OPTIONS';
     hmConnect: Result := 'CONNECT';
     hmTrace:   Result := 'TRACE';
-  else
-    Result := 'GET';
   end;
 end;
 
@@ -131,8 +129,6 @@ begin
     hvHttp11: Result := 'HTTP/1.1';
     hvHttp2:  Result := 'HTTP/2';
     hvHttp3:  Result := 'HTTP/3';
-  else
-    Result := 'HTTP/1.1';
   end;
 end;
 
@@ -183,21 +179,40 @@ begin
       Delete(LAuthority, 1, LAtPos);
     end;
 
-    // Parse host:port
-    LColonPos := Pos(':', LAuthority);
-    if LColonPos > 0 then
+    // Parse host:port (handle IPv6 brackets)
+    if (Length(LAuthority) > 0) and (LAuthority[1] = '[') then
     begin
-      Result.Host := Copy(LAuthority, 1, LColonPos - 1);
-      LPortStr := Copy(LAuthority, LColonPos + 1, Length(LAuthority) - LColonPos);
-      if TryStrToInt(LPortStr, LPortVal) then
-        Result.Port := UInt16(LPortVal)
+      LColonPos := Pos(']', LAuthority);
+      if LColonPos > 0 then
+      begin
+        Result.Host := Copy(LAuthority, 2, LColonPos - 2);
+        if (LColonPos < Length(LAuthority)) and (LAuthority[LColonPos + 1] = ':') then
+        begin
+          LPortStr := Copy(LAuthority, LColonPos + 2, Length(LAuthority) - LColonPos - 1);
+          if TryStrToInt(LPortStr, LPortVal) then
+            Result.Port := UInt16(LPortVal);
+        end;
+      end
       else
-        Result.Port := 0;
+        Result.Host := LAuthority;
     end
     else
     begin
-      Result.Host := LAuthority;
-      Result.Port := 0;
+      LColonPos := Pos(':', LAuthority);
+      if LColonPos > 0 then
+      begin
+        Result.Host := Copy(LAuthority, 1, LColonPos - 1);
+        LPortStr := Copy(LAuthority, LColonPos + 1, Length(LAuthority) - LColonPos);
+        if TryStrToInt(LPortStr, LPortVal) then
+          Result.Port := UInt16(LPortVal)
+        else
+          Result.Port := 0;
+      end
+      else
+      begin
+        Result.Host := LAuthority;
+        Result.Port := 0;
+      end;
     end;
   end;
 
