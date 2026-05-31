@@ -134,7 +134,8 @@ begin
   LTrailer[5] := Byte(FSize shr 8);
   LTrailer[6] := Byte(FSize shr 16);
   LTrailer[7] := Byte(FSize shr 24);
-  FDst.Write(LTrailer[0], 8);
+  if FDst.Write(LTrailer[0], 8) <> 8 then
+    raise EIOError.Create('GzipWriter: trailer write failed');
 end;
 
 function TGzipWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -340,6 +341,7 @@ var
   LOutLen, LHave: SizeUInt;
   LCRC: UInt32;
   LSize: UInt32;
+  LRet: Int32;
 begin
   Result := nil;
   if Length(AData) = 0 then
@@ -367,7 +369,12 @@ begin
   repeat
     LStream.next_out := @LBuf[0];
     LStream.avail_out := SizeOf(LBuf);
-    deflate(LStream, Z_FINISH);
+    LRet := deflate(LStream, Z_FINISH);
+    if (LRet <> Z_OK) and (LRet <> Z_STREAM_END) then
+    begin
+      deflateEnd(LStream);
+      raise EIOError.Create('GzipCompress: deflate failed');
+    end;
     LHave := SizeOf(LBuf) - LStream.avail_out;
     if LOutLen + LHave > SizeUInt(Length(LOut)) then
       SetLength(LOut, (LOutLen + LHave) * 2);
