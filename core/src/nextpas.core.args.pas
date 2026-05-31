@@ -170,7 +170,6 @@ procedure TArgParser.SetAutoVersion(const AEnabled: Boolean);
 begin
   FAutoVersion := AEnabled;
 end;
-// PLACEHOLDER_METHODS_1
 
 procedure TArgParser.CheckDuplicate(const AName: string; const AShort: AnsiChar);
 begin
@@ -262,7 +261,6 @@ begin
   SetLength(FOptions[LIdx].ValueList, 0);
   FOptions[LIdx].Present := False;
 end;
-// PLACEHOLDER_METHODS_2
 
 procedure TArgParser.AddChoice(const AName: string; const AShort: AnsiChar; const AHelp: string;
   const AChoices: array of string; const ADefault: string);
@@ -322,7 +320,6 @@ begin
     if FOptions[AOptIdx].Choices[LI] = AValue then Exit(True);
   Result := False;
 end;
-// PLACEHOLDER_METHODS_3
 
 procedure TArgParser.ParseLong(const AArg: string; const AArgs: array of string; var AIdx: Int32);
 var
@@ -414,7 +411,6 @@ begin
     end;
   end;
 end;
-// PLACEHOLDER_METHODS_4
 
 procedure TArgParser.ParseShort(const AArg: string; const AArgs: array of string; var AIdx: Int32);
 var
@@ -495,7 +491,6 @@ begin
     end;
   end;
 end;
-// PLACEHOLDER_METHODS_5
 
 procedure TArgParser.ValidateRequired;
 var
@@ -593,7 +588,6 @@ begin
     on EArgParseError do Result := False;
   end;
 end;
-// PLACEHOLDER_METHODS_6
 
 function TArgParser.GetBool(const AName: string): Boolean;
 var
@@ -831,7 +825,6 @@ begin
     end;
   end;
 end;
-// PLACEHOLDER_ARGAPP_2
 
 function TArgApp.AppHelpText: string;
 var
