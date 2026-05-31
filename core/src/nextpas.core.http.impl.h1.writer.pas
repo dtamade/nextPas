@@ -23,6 +23,7 @@ type
   public
     constructor Create(const AWriter: IWriter);
     procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
@@ -96,6 +97,11 @@ end;
 function TH1ResponseWriter.GetHeaders: IHttpHeaders;
 begin
   Result := FHeaders;
+end;
+
+function TH1ResponseWriter.GetStatus: THttpStatus;
+begin
+  Result := FStatus;
 end;
 
 function TH1ResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
