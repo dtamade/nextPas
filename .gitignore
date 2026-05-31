@@ -29,3 +29,6 @@ tools/stage0/*.s
 # Compiled test/benchmark binaries
 tests/*/test_*/test_*[!.lpr]
 benchmarks/*/bench_*[!.lpr]
+
+# TUI migration staging (fafafa.tui reference source, not committed)
+core/_migration/
