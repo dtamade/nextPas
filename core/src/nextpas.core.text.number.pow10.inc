@@ -2,6 +2,7 @@
 { Range: 10^(-343) to 10^(324), 668 entries x 128-bit }
 { Format: normalized significand in [2^127, 2^128) }
 { Generated to match yyjson pow10_sig_table exactly }
+{$PUSH}{$R-}{$Q-}
 
 const
   POW10_MIN_EXP = -343;
@@ -685,3 +686,4 @@ const
     (Hi: $FCF62C1DEE382C42; Lo: $46729E03DD9ED7B5), // 10^(323)
     (Hi: $9E19DB92B4E31BA9; Lo: $6C07A2C26A8346D1) // 10^(324)
   );
+{$POP}
