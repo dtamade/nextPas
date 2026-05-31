@@ -244,13 +244,52 @@ begin
 end;
 
 procedure P256ScalarMultBase(const AScalar: TBytes; out R: TP256JacPoint);
+{$I nextpas.core.crypto.p256.basetable.inc}
 var
-  LG: TP256JacPoint;
+  LSelected, LTmp: TP256JacPoint;
+  I, J, K, LWin, LBitPos: Integer;
+  LMask: QWord;
 begin
-  LG.X := P256_GX;
-  LG.Y := P256_GY;
-  P256FeOne(LG.Z);
-  P256ScalarMult(AScalar, LG, R);
+  P256PointInfinity(R);
+
+  for I := 0 to 63 do
+  begin
+    for K := 0 to 3 do
+    begin
+      P256PointDouble(R, LTmp);
+      R := LTmp;
+    end;
+
+    LBitPos := (63 - I) * 4;
+    LWin := 0;
+    for K := 3 downto 0 do
+    begin
+      J := LBitPos + K;
+      if (J div 8) < Length(AScalar) then
+        LWin := LWin or (((AScalar[Length(AScalar) - 1 - (J div 8)] shr (J mod 8)) and 1) shl K);
+    end;
+
+    // CT table lookup from static precomputed table (affine points)
+    P256PointInfinity(LSelected);
+    for J := 0 to 15 do
+    begin
+      LMask := QWord(0) - QWord(Ord(J = LWin));
+      LSelected.X[0] := (P256_BASE_TABLE[J].X[0] and LMask) or (LSelected.X[0] and (not LMask));
+      LSelected.X[1] := (P256_BASE_TABLE[J].X[1] and LMask) or (LSelected.X[1] and (not LMask));
+      LSelected.X[2] := (P256_BASE_TABLE[J].X[2] and LMask) or (LSelected.X[2] and (not LMask));
+      LSelected.X[3] := (P256_BASE_TABLE[J].X[3] and LMask) or (LSelected.X[3] and (not LMask));
+      LSelected.Y[0] := (P256_BASE_TABLE[J].Y[0] and LMask) or (LSelected.Y[0] and (not LMask));
+      LSelected.Y[1] := (P256_BASE_TABLE[J].Y[1] and LMask) or (LSelected.Y[1] and (not LMask));
+      LSelected.Y[2] := (P256_BASE_TABLE[J].Y[2] and LMask) or (LSelected.Y[2] and (not LMask));
+      LSelected.Y[3] := (P256_BASE_TABLE[J].Y[3] and LMask) or (LSelected.Y[3] and (not LMask));
+      // Z = 1 for affine points (except infinity which has Z=0)
+      if J > 0 then
+        LSelected.Z[0] := (QWord(1) and LMask) or (LSelected.Z[0] and (not LMask));
+    end;
+
+    P256PointAdd(R, LSelected, LTmp);
+    R := LTmp;
+  end;
 end;
 
 end.
