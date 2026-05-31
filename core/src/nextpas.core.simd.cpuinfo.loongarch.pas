@@ -21,7 +21,7 @@ implementation
 {$IFDEF SIMD_LOONGARCH_AVAILABLE}
 
 uses
-  SysUtils
+  nextpas.core.text.conv
   {$IFDEF LINUX}
   , nextpas.core.platform.files.base
   , nextpas.core.platform.files
@@ -29,6 +29,13 @@ uses
   ;
 
 {$IFDEF LINUX}
+function PlatformFileExists(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_stat(PAnsiChar(APath), LStat) = 0;
+end;
+
 const
   LINUX_AUXV_AT_NULL   = 0;
   LINUX_AUXV_AT_HWCAP  = 16;
@@ -46,7 +53,7 @@ function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
   LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: Int64;
+  LReadBytes: PtrUInt;
 begin
   Result := False;
   aHWCAP := 0;
@@ -57,7 +64,8 @@ begin
   try
     while True do
     begin
-      LReadBytes := platform_file_read(LHandle, @LEntry, SizeOf(LEntry));
+      if platform_file_read(LHandle, @LEntry, SizeOf(LEntry), LReadBytes) <> 0 then
+        Break;
       if LReadBytes <> SizeOf(LEntry) then
         Break;
       if LEntry.Tag = LINUX_AUXV_AT_NULL then
@@ -89,7 +97,7 @@ begin
   LText := '';
   LOpened := False;
   try
-    if FileExists('/proc/cpuinfo') then
+    if PlatformFileExists('/proc/cpuinfo') then
     begin
       AssignFile(LFile, '/proc/cpuinfo');
       Reset(LFile);

@@ -5,7 +5,6 @@ unit nextpas.core.collections.deque;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.queue.intf,
@@ -395,7 +394,7 @@ begin
     Exit;
 
   // 快速路径：源实现同样暴露 IVecDeque 接口，可直接批量复制
-  if Supports(aOther, TVecDequeIntf, LVecDequeSrc) then
+  if (aOther.QueryInterface(TVecDequeIntf, LVecDequeSrc) = S_OK) then
   begin
     AppendFrom(LVecDequeSrc, 0, LCount);
     LVecDequeSrc.Clear;
@@ -435,8 +434,9 @@ begin
   if aSrc = nil then
     Exit;
 
-  if Supports(aSrc, TInternalDeque, LVecDequeSrc) then
+  if (aSrc as TObject) is TInternalDeque then
   begin
+    LVecDequeSrc := TInternalDeque(aSrc as TObject);
     FDeque.AppendFrom(LVecDequeSrc, aSrcIndex, aCount);
     Exit;
   end;

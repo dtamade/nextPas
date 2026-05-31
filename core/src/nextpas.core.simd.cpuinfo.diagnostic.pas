@@ -10,7 +10,8 @@ unit nextpas.core.simd.cpuinfo.diagnostic;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.platform.time,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base;
 
@@ -94,8 +95,8 @@ begin
   QueryPerformanceCounter(Result.StartTime);
   {$ELSE}
   // Simple fallback using GetTickCount64 equivalent
-  Result.Frequency := 1000;  // milliseconds
-  Result.StartTime := GetTickCount64;
+  Result.Frequency := 1000000;  // nanoseconds → milliseconds
+  Result.StartTime := platform_monotonic_ns;
   {$ENDIF}
 end;
 
@@ -107,8 +108,8 @@ begin
   QueryPerformanceCounter(EndTime);
   Result := ((EndTime - Counter.StartTime) * 1000.0) / Counter.Frequency;
   {$ELSE}
-  EndTime := GetTickCount64;
-  Result := (EndTime - Counter.StartTime);
+  EndTime := platform_monotonic_ns;
+  Result := (EndTime - Counter.StartTime) / Counter.Frequency;
   {$ENDIF}
 end;
 
@@ -243,19 +244,19 @@ begin
   
   // OS enablement details
   WriteLn('OS-Enablement:');
-  WriteLn('  OSXSAVE: ', BoolToStr(Info.OSXSAVE, True));
+  WriteLn('  OSXSAVE: ', BoolToStr(Info.OSXSAVE));
   WriteLn('  XCR0: $', IntToHex(Info.XCR0, 16));
   WriteLn;
   
   // Generic features (Raw / Usable)
   WriteLn('Generic Features (Raw / Usable):');
-  WriteLn('  SIMD-128: ', BoolToStr(gfSimd128 in Info.GenericRaw, True), ' / ', BoolToStr(gfSimd128 in Info.GenericUsable, True));
-  WriteLn('  SIMD-256: ', BoolToStr(gfSimd256 in Info.GenericRaw, True), ' / ', BoolToStr(gfSimd256 in Info.GenericUsable, True));
-  WriteLn('  SIMD-512: ', BoolToStr(gfSimd512 in Info.GenericRaw, True), ' / ', BoolToStr(gfSimd512 in Info.GenericUsable, True));
-  WriteLn('  AES: ', BoolToStr(gfAES in Info.GenericRaw, True), ' / ', BoolToStr(gfAES in Info.GenericUsable, True));
-  WriteLn('  FMA: ', BoolToStr(gfFMA in Info.GenericRaw, True), ' / ', BoolToStr(gfFMA in Info.GenericUsable, True));
+  WriteLn('  SIMD-128: ', BoolToStr(gfSimd128 in Info.GenericRaw), ' / ', BoolToStr(gfSimd128 in Info.GenericUsable));
+  WriteLn('  SIMD-256: ', BoolToStr(gfSimd256 in Info.GenericRaw), ' / ', BoolToStr(gfSimd256 in Info.GenericUsable));
+  WriteLn('  SIMD-512: ', BoolToStr(gfSimd512 in Info.GenericRaw), ' / ', BoolToStr(gfSimd512 in Info.GenericUsable));
+  WriteLn('  AES: ', BoolToStr(gfAES in Info.GenericRaw), ' / ', BoolToStr(gfAES in Info.GenericUsable));
+  WriteLn('  FMA: ', BoolToStr(gfFMA in Info.GenericRaw), ' / ', BoolToStr(gfFMA in Info.GenericUsable));
   {$if declared(gfSHA)}
-  WriteLn('  SHA: ', BoolToStr(gfSHA in Info.GenericRaw, True), ' / ', BoolToStr(gfSHA in Info.GenericUsable, True));
+  WriteLn('  SHA: ', BoolToStr(gfSHA in Info.GenericRaw), ' / ', BoolToStr(gfSHA in Info.GenericUsable));
   {$endif}
   WriteLn;
 
@@ -278,9 +279,9 @@ begin
 
     // Summary line for quick grep
     if (gfSimd256 in Info.GenericRaw) and not (gfSimd256 in Info.GenericUsable) then
-      WriteLn('Summary: SIMD-256 raw=true usable=false (OSXSAVE=', BoolToStr(Info.OSXSAVE, True), ', XCR0=$', IntToHex(Info.XCR0,16), ')');
+      WriteLn('Summary: SIMD-256 raw=true usable=false (OSXSAVE=', BoolToStr(Info.OSXSAVE), ', XCR0=$', IntToHex(Info.XCR0,16), ')');
     if (gfSimd512 in Info.GenericRaw) and not (gfSimd512 in Info.GenericUsable) then
-      WriteLn('Summary: SIMD-512 raw=true usable=false (OSXSAVE=', BoolToStr(Info.OSXSAVE, True), ', XCR0=$', IntToHex(Info.XCR0,16), ')');
+      WriteLn('Summary: SIMD-512 raw=true usable=false (OSXSAVE=', BoolToStr(Info.OSXSAVE), ', XCR0=$', IntToHex(Info.XCR0,16), ')');
   end;
   {$ENDIF}
   
@@ -288,18 +289,18 @@ begin
   WriteLn('x86 Features:');
   with Info.X86 do
   begin
-    WriteLn('  MMX: ', BoolToStr(HasMMX, True));
-    WriteLn('  SSE: ', BoolToStr(HasSSE, True));
-    WriteLn('  SSE2: ', BoolToStr(HasSSE2, True));
-    WriteLn('  SSE3: ', BoolToStr(HasSSE3, True));
-    WriteLn('  SSSE3: ', BoolToStr(HasSSSE3, True));
-    WriteLn('  SSE4.1: ', BoolToStr(HasSSE41, True));
-    WriteLn('  SSE4.2: ', BoolToStr(HasSSE42, True));
-    WriteLn('  AVX: ', BoolToStr(HasAVX, True));
-    WriteLn('  AVX2: ', BoolToStr(HasAVX2, True));
-    WriteLn('  AES: ', BoolToStr(HasAES, True));
-    WriteLn('  FMA: ', BoolToStr(HasFMA, True));
-    WriteLn('  AVX-512F: ', BoolToStr(HasAVX512F, True));
+    WriteLn('  MMX: ', BoolToStr(HasMMX));
+    WriteLn('  SSE: ', BoolToStr(HasSSE));
+    WriteLn('  SSE2: ', BoolToStr(HasSSE2));
+    WriteLn('  SSE3: ', BoolToStr(HasSSE3));
+    WriteLn('  SSSE3: ', BoolToStr(HasSSSE3));
+    WriteLn('  SSE4.1: ', BoolToStr(HasSSE41));
+    WriteLn('  SSE4.2: ', BoolToStr(HasSSE42));
+    WriteLn('  AVX: ', BoolToStr(HasAVX));
+    WriteLn('  AVX2: ', BoolToStr(HasAVX2));
+    WriteLn('  AES: ', BoolToStr(HasAES));
+    WriteLn('  FMA: ', BoolToStr(HasFMA));
+    WriteLn('  AVX-512F: ', BoolToStr(HasAVX512F));
   end;
   {$ENDIF}
   WriteLn;
@@ -314,13 +315,13 @@ begin
   try
     WriteLn(F, 'CPU Diagnostic Report');
     WriteLn(F, '====================');
-    WriteLn(F, 'Generated: ', DateTimeToStr(Now));
+    WriteLn(F, 'Generated: monotonic_ns=', IntToStr(platform_monotonic_ns));
     WriteLn(F);
     
     WriteLn(F, 'Detection Time: ', Format('%.3f ms', [Report.DetectionTime]));
     WriteLn(F, 'Cache Latency: ', Format('%.2f ns', [Report.CacheLatency]));
     WriteLn(F, 'Memory Bandwidth: ', Format('%.1f MB/s', [Report.MemoryBandwidth]));
-    WriteLn(F, 'Validation Passed: ', BoolToStr(Report.ValidationPassed, True));
+    WriteLn(F, 'Validation Passed: ', BoolToStr(Report.ValidationPassed));
     if Report.AdditionalNotes <> '' then
       WriteLn(F, 'Notes: ', Report.AdditionalNotes);
     WriteLn(F);
@@ -337,18 +338,18 @@ begin
     WriteLn(F, 'L3 Cache: ', Report.CPUInfo.Cache.L3KB, ' KB');
     
     // OS enablement
-    WriteLn(F, 'OSXSAVE: ', BoolToStr(Report.CPUInfo.OSXSAVE, True));
+    WriteLn(F, 'OSXSAVE: ', BoolToStr(Report.CPUInfo.OSXSAVE));
     WriteLn(F, 'XCR0: $', IntToHex(Report.CPUInfo.XCR0, 16));
 
     // Generic features (Raw / Usable)
     WriteLn(F, 'Generic Features (Raw / Usable):');
-    WriteLn(F, '  SIMD-128: ', BoolToStr(gfSimd128 in Report.CPUInfo.GenericRaw, True), ' / ', BoolToStr(gfSimd128 in Report.CPUInfo.GenericUsable, True));
-    WriteLn(F, '  SIMD-256: ', BoolToStr(gfSimd256 in Report.CPUInfo.GenericRaw, True), ' / ', BoolToStr(gfSimd256 in Report.CPUInfo.GenericUsable, True));
-    WriteLn(F, '  SIMD-512: ', BoolToStr(gfSimd512 in Report.CPUInfo.GenericRaw, True), ' / ', BoolToStr(gfSimd512 in Report.CPUInfo.GenericUsable, True));
-    WriteLn(F, '  AES: ', BoolToStr(gfAES in Report.CPUInfo.GenericRaw, True), ' / ', BoolToStr(gfAES in Report.CPUInfo.GenericUsable, True));
-    WriteLn(F, '  FMA: ', BoolToStr(gfFMA in Report.CPUInfo.GenericRaw, True), ' / ', BoolToStr(gfFMA in Report.CPUInfo.GenericUsable, True));
+    WriteLn(F, '  SIMD-128: ', BoolToStr(gfSimd128 in Report.CPUInfo.GenericRaw), ' / ', BoolToStr(gfSimd128 in Report.CPUInfo.GenericUsable));
+    WriteLn(F, '  SIMD-256: ', BoolToStr(gfSimd256 in Report.CPUInfo.GenericRaw), ' / ', BoolToStr(gfSimd256 in Report.CPUInfo.GenericUsable));
+    WriteLn(F, '  SIMD-512: ', BoolToStr(gfSimd512 in Report.CPUInfo.GenericRaw), ' / ', BoolToStr(gfSimd512 in Report.CPUInfo.GenericUsable));
+    WriteLn(F, '  AES: ', BoolToStr(gfAES in Report.CPUInfo.GenericRaw), ' / ', BoolToStr(gfAES in Report.CPUInfo.GenericUsable));
+    WriteLn(F, '  FMA: ', BoolToStr(gfFMA in Report.CPUInfo.GenericRaw), ' / ', BoolToStr(gfFMA in Report.CPUInfo.GenericUsable));
     {$if declared(gfSHA)}
-    WriteLn(F, '  SHA: ', BoolToStr(gfSHA in Report.CPUInfo.GenericRaw, True), ' / ', BoolToStr(gfSHA in Report.CPUInfo.GenericUsable, True));
+    WriteLn(F, '  SHA: ', BoolToStr(gfSHA in Report.CPUInfo.GenericRaw), ' / ', BoolToStr(gfSHA in Report.CPUInfo.GenericUsable));
     {$endif}
 
     // Usability reasons for x86
@@ -360,14 +361,14 @@ begin
         WriteLn(F, 'Note: SIMD-256 not usable:');
         if not Report.CPUInfo.OSXSAVE then WriteLn(F, '  - OSXSAVE not enabled by OS/CPU');
         if not X86XCR0_EnablesAVX_Local(Report.CPUInfo) then WriteLn(F, '  - XCR0 lacks XMM/YMM enable (bits 1 and 2)');
-        WriteLn(F, 'Summary: SIMD-256 raw=true usable=false (OSXSAVE=', BoolToStr(Report.CPUInfo.OSXSAVE, True), ', XCR0=$', IntToHex(Report.CPUInfo.XCR0,16), ')');
+        WriteLn(F, 'Summary: SIMD-256 raw=true usable=false (OSXSAVE=', BoolToStr(Report.CPUInfo.OSXSAVE), ', XCR0=$', IntToHex(Report.CPUInfo.XCR0,16), ')');
       end;
       if (gfSimd512 in Report.CPUInfo.GenericRaw) and not (gfSimd512 in Report.CPUInfo.GenericUsable) then
       begin
         WriteLn(F, 'Note: SIMD-512 not usable:');
         if not Report.CPUInfo.OSXSAVE then WriteLn(F, '  - OSXSAVE not enabled by OS/CPU');
         if not X86XCR0_EnablesAVX512_Local(Report.CPUInfo) then WriteLn(F, '  - XCR0 lacks AVX-512 enable (bits 1,2,5,6,7)');
-        WriteLn(F, 'Summary: SIMD-512 raw=true usable=false (OSXSAVE=', BoolToStr(Report.CPUInfo.OSXSAVE, True), ', XCR0=$', IntToHex(Report.CPUInfo.XCR0,16), ')');
+        WriteLn(F, 'Summary: SIMD-512 raw=true usable=false (OSXSAVE=', BoolToStr(Report.CPUInfo.OSXSAVE), ', XCR0=$', IntToHex(Report.CPUInfo.XCR0,16), ')');
       end;
     end;
     {$ENDIF}

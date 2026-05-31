@@ -131,7 +131,10 @@ function HasFeatureLazy(f: TGenericFeature): Boolean;
 implementation
 
 uses
-  SysUtils, nextpas.core.text.strings
+  nextpas.core.text.conv, nextpas.core.text.strings,
+  nextpas.core.os.env,
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files
   {$IFDEF DARWIN}
   , nextpas.core.simd.cpuinfo.darwin
   {$ELSE}
@@ -156,6 +159,11 @@ uses
 var
   g_LazyCPUInfo: TLazyCPUInfo = nil;
   g_SingletonLock: Integer = 0;
+
+function BoolToStr(const AValue: Boolean; const ATrue, AFalse: string): string; inline; overload;
+begin
+  if AValue then Result := ATrue else Result := AFalse;
+end;
 
 {$IFDEF LINUX}
 function ReadFirstLineTrimmedLazy(const aPath: string): string;
@@ -197,12 +205,27 @@ begin
       Exit(False);
 end;
 
+function PlatformDirectoryExistsLazy(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := (platform_file_stat(PAnsiChar(APath), LStat) = 0) and
+            (LStat.FileType = ftDirectory);
+end;
+
+function PlatformEntryNameLazy(const AEntry: TPlatformDirEntry): string;
+begin
+  SetString(Result, @AEntry.Name[0], AEntry.NameLen);
+end;
+
 procedure FillCacheInfoFromLinuxSysfsLazy(var aCache: TCacheInfo);
 var
   LCpuBase: string;
   LCpuCacheBase: string;
-  LCpuRec: TSearchRec;
-  LIndexRec: TSearchRec;
+  LCpuHandle: TPlatformDirHandle;
+  LIndexHandle: TPlatformDirHandle;
+  LCpuEntry: TPlatformDirEntry;
+  LIndexEntry: TPlatformDirEntry;
   LDir: string;
   LTypeText: string;
   LLevelText: string;
@@ -211,35 +234,40 @@ var
   LLevel: Integer;
   LSizeKB: Integer;
   LLineSize: Integer;
+  LEntryName: string;
 begin
   LCpuBase := '/sys/devices/system/cpu';
-  if not DirectoryExists(LCpuBase) then
+  if not PlatformDirectoryExistsLazy(LCpuBase) then
     Exit;
 
-  if FindFirst(LCpuBase + '/cpu*', faDirectory, LCpuRec) <> 0 then
+  if platform_dir_open(PAnsiChar(LCpuBase), LCpuHandle) <> 0 then
     Exit;
   try
-    repeat
-      if (LCpuRec.Name = '.') or (LCpuRec.Name = '..') then
+    while platform_dir_read(LCpuHandle, LCpuEntry) = 0 do
+    begin
+      LEntryName := PlatformEntryNameLazy(LCpuEntry);
+      if (LEntryName = '.') or (LEntryName = '..') then
         Continue;
-      if (LCpuRec.Attr and faDirectory) = 0 then
+      if LCpuEntry.FileType <> ftDirectory then
         Continue;
-      if not IsLinuxCpuDirectoryNameLazy(LCpuRec.Name) then
+      if not IsLinuxCpuDirectoryNameLazy(LEntryName) then
         Continue;
 
-      LCpuCacheBase := LCpuBase + '/' + LCpuRec.Name + '/cache';
-      if not DirectoryExists(LCpuCacheBase) then
+      LCpuCacheBase := LCpuBase + '/' + LEntryName + '/cache';
+      if not PlatformDirectoryExistsLazy(LCpuCacheBase) then
         Continue;
-      if FindFirst(LCpuCacheBase + '/index*', faDirectory, LIndexRec) <> 0 then
+      if platform_dir_open(PAnsiChar(LCpuCacheBase), LIndexHandle) <> 0 then
         Continue;
       try
-        repeat
-          if (LIndexRec.Name = '.') or (LIndexRec.Name = '..') then
+        while platform_dir_read(LIndexHandle, LIndexEntry) = 0 do
+        begin
+          LEntryName := PlatformEntryNameLazy(LIndexEntry);
+          if (LEntryName = '.') or (LEntryName = '..') then
             Continue;
-          if (LIndexRec.Attr and faDirectory) = 0 then
+          if LIndexEntry.FileType <> ftDirectory then
             Continue;
 
-          LDir := LCpuCacheBase + '/' + LIndexRec.Name;
+          LDir := LCpuCacheBase + '/' + LEntryName;
           LTypeText := LowerCase(ReadFirstLineTrimmedLazy(LDir + '/type'));
           LLevelText := ReadFirstLineTrimmedLazy(LDir + '/level');
           LSizeText := ReadFirstLineTrimmedLazy(LDir + '/size');
@@ -287,13 +315,13 @@ begin
                   aCache.L3KB := LSizeKB;
               end;
           end;
-        until FindNext(LIndexRec) <> 0;
+        end;
       finally
-        FindClose(LIndexRec);
+        platform_dir_close(LIndexHandle);
       end;
-    until FindNext(LCpuRec) <> 0;
+    end;
   finally
-    FindClose(LCpuRec);
+    platform_dir_close(LCpuHandle);
   end;
 end;
 {$ENDIF}
@@ -476,7 +504,7 @@ begin
             LLogCores := 0;
             {$ENDIF}
             {$IFDEF WINDOWS}
-            s := GetEnvironmentVariable('NUMBER_OF_PROCESSORS');
+            s := GetEnv('NUMBER_OF_PROCESSORS');
             FBasicInfo.LogicalCores := StrToIntDef(s, 1);
             {$ELSE}
               {$IFDEF UNIX}

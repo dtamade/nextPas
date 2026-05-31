@@ -31,7 +31,11 @@ unit nextpas.core.mem.memory_map;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
+  nextpas.core.os.env,
+  nextpas.core.fs.util,
+  nextpas.core.platform.files,
+  nextpas.core.platform.files.base,
   {$IFDEF WINDOWS}
   Windows,
   {$ELSE}
@@ -39,6 +43,11 @@ uses
   {$ENDIF}
   nextpas.core.base,
   nextpas.core.mem.allocator;
+
+{$IFNDEF WINDOWS}
+const
+  INVALID_HANDLE_VALUE = THandle(-1);
+{$ENDIF}
 
 type
   {**
@@ -345,18 +354,18 @@ var
   LDir: string;
   LBase: string;
 begin
-  LDir := GetEnvironmentVariable('NEXTPAS_SHM_DIR');
-  if LDir = '' then
-    LDir := GetTempDir;
+  LDir := GetEnv('NEXTPAS_SHM_DIR');
   if LDir = '' then
     LDir := '/tmp';
 
   LBase := aName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', [rfReplaceAll]);
+  LBase := StringReplace(LBase, '/', '_', True);
 
-  Result := IncludeTrailingPathDelimiter(LDir) + 'fafafa_shm_' + LBase;
+  if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
+    LDir := LDir + '/';
+  Result := LDir + 'fafafa_shm_' + LBase;
 end;
 {$ENDIF}
 
@@ -516,7 +525,7 @@ begin
     mmaCopyOnWrite: LDesiredAccess := GENERIC_READ;
   end;
 
-  if FileExists(aFileName) then
+  if FsExists(aFileName) then
     LCreationDisposition := OPEN_EXISTING
   else
     LCreationDisposition := CREATE_ALWAYS;
@@ -605,7 +614,7 @@ begin
     mmaCopyOnWrite: LOpenFlags := O_RDONLY;
   end;
 
-  if not FileExists(aFileName) then
+  if not FsExists(aFileName) then
     LOpenFlags := LOpenFlags or O_CREAT;
 
   FFileHandle := FpOpen(aFileName, LOpenFlags, &666);
@@ -1096,7 +1105,7 @@ begin
       if ShouldFallbackShm(LError) then
       begin
         LFallback := BuildSharedFallbackPath(FName);
-        LExists := FileExists(LFallback);
+        LExists := FsExists(LFallback);
         if not FMemoryMap.OpenFile(LFallback, aAccess, [mmfShared], FSize, 0) then Exit;
         FIsCreator := not LExists;
         FIsFileBacked := True;
@@ -1240,7 +1249,7 @@ begin
     if ShouldFallbackShm(LError) then
     begin
       LFallback := BuildSharedFallbackPath(FName);
-      if not FileExists(LFallback) then Exit;
+      if not FsExists(LFallback) then Exit;
       if not FMemoryMap.OpenFile(LFallback, aAccess, [mmfShared], 0, 0) then Exit;
       FIsFileBacked := True;
       FFallbackFile := LFallback;
@@ -1300,7 +1309,7 @@ begin
     if FIsFileBacked then
     begin
       if FIsCreator and (FFallbackFile <> '') then
-        DeleteFile(FFallbackFile);
+        platform_file_unlink(PAnsiChar(FFallbackFile));
       FFallbackFile := '';
       FIsFileBacked := False;
     end

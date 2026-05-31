@@ -9,7 +9,6 @@ interface
 {$IFDEF SIMD_ARM_AVAILABLE}
 
 uses
-  SysUtils, StrUtils,
   nextpas.core.simd.cpuinfo.base;
 
 type
@@ -51,10 +50,23 @@ procedure MergeARMFeaturesFromLinuxHWCAP(var aFeatures: TARMFeatures;
 
 implementation
 
-{$IFDEF LINUX}
+{$IFDEF UNIX}
 uses
+  nextpas.core.text.conv,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
+{$ELSE}
+uses
+  nextpas.core.text.conv;
+{$ENDIF}
+
+{$IFDEF UNIX}
+function PlatformFileExists(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_stat(PAnsiChar(APath), LStat) = 0;
+end;
 {$ENDIF}
 
 // === Linux /proc/cpuinfo Parsing ===
@@ -71,7 +83,7 @@ begin
   fileOpened := False;
   
   try
-    if FileExists('/proc/cpuinfo') then
+    if PlatformFileExists('/proc/cpuinfo') then
     begin
       AssignFile(f, '/proc/cpuinfo');
       Reset(f);

@@ -511,7 +511,7 @@ begin
     1, 2, 4, 8:
       Result := aScale;
   else
-    raise EArgumentOutOfRangeException.CreateFmt('AVX2 gather scale must be 1,2,4,8 (got %d)', [aScale]);
+    raise EArgumentError.CreateFmt('AVX2 gather scale must be 1,2,4,8 (got %d)', [aScale]);
   end;
 end;
 
@@ -559,7 +559,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentNilException.Create('base_addr');
+    raise EArgumentError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);
@@ -579,7 +579,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentNilException.Create('base_addr');
+    raise EArgumentError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);
@@ -599,7 +599,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentNilException.Create('base_addr');
+    raise EArgumentError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);
@@ -619,7 +619,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentNilException.Create('base_addr');
+    raise EArgumentError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);

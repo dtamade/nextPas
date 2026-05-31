@@ -79,7 +79,7 @@ constructor TMemPoolAdapter.Create(aPool: TMemPool);
 begin
   inherited Create;
   if aPool = nil then
-    raise EArgumentNilException.Create('TMemPoolAdapter.Create: aPool is nil');
+    raise EArgumentError.Create('TMemPoolAdapter.Create: aPool is nil');
   FPool := aPool;
 end;
 
@@ -129,7 +129,7 @@ constructor TStackPoolAdapter.Create(aPool: TStackPool);
 begin
   inherited Create;
   if aPool = nil then
-    raise EArgumentNilException.Create('TStackPoolAdapter.Create: aPool is nil');
+    raise EArgumentError.Create('TStackPoolAdapter.Create: aPool is nil');
   FPool := aPool;
 end;
 
@@ -169,7 +169,7 @@ constructor TSlabPoolAdapter.Create(aPool: TSlabPool);
 begin
   inherited Create;
   if aPool = nil then
-    raise EArgumentNilException.Create('TSlabPoolAdapter.Create: aPool is nil');
+    raise EArgumentError.Create('TSlabPoolAdapter.Create: aPool is nil');
   FPool := aPool;
 end;
 
