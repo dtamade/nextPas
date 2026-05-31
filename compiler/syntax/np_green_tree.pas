@@ -3992,6 +3992,20 @@ var
           end;
           Result := True;
         end;
+      tkSpecializeKeyword:
+        begin
+          RHS := ParsePrimaryExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+          if RHS <> nil then
+          begin
+            StmtNode := TGreenNode.Create(gnkProcedureCallStatement,
+              RHS.ByteOffset, 0, RHS.Text);
+            StmtNode.AppendChild(RHS);
+            List.AppendChild(StmtNode);
+            Inc(ATree.FNodeCount);
+          end;
+          MatchTokenSilent(ALexer, ACursor, tkSemicolon);
+          Result := True;
+        end;
       tkIdentifier, tkSelfKeyword, tkNameKeyword, tkStringKeyword,
         tkMessageKeyword, tkFileKeyword, tkContainsKeyword,
         tkRequiresKeyword, tkOnKeyword, tkInlineKeyword, tkOverloadKeyword:
