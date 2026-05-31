@@ -350,6 +350,12 @@ const
   POLLERR = Int16($0008);
   POLLHUP = Int16($0010);
   POLLNVAL = Int16($0020);
+
+const
+  O_CLOEXEC  = $80000;
+  F_SETFD    = 2;
+  FD_CLOEXEC = 1;
+  F_GETFD    = 1;
 implementation
 
 uses

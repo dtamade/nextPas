@@ -21,6 +21,12 @@ type
    * @example
    *   Command('/bin/fpc').Args(['--version']).Dir('/tmp').Output;
    *}
+  TProcessEnvMode = (
+    pemInherit,
+    pemReplace,
+    pemOverlay
+  );
+
   {** @note 非线程安全。不要在多个线程间共享同一个 ICommand 实例 *}
   ICommand = interface
     ['{A1B2C3D4-E5F6-7890-AB01-000000000010}']
@@ -54,7 +60,8 @@ type
     FPath: string;
     FArgs: TStringArray;
     FWorkDir: string;
-    FEnv: TStringArray;
+    FEnvMode: TProcessEnvMode;
+    FEnvPairs: TStringArray;
     FStdinMode: TStdio;
     FStdoutMode: TStdio;
     FStderrMode: TStdio;
@@ -81,10 +88,65 @@ uses
   nextpas.core.process.pipe,
   nextpas.core.platform.process,
   nextpas.core.platform.process.base,
-  nextpas.core.platform.posix.base,
-  nextpas.core.platform.posix.ffi;
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.platform.posix.base;
 
 { TCommand }
+
+procedure EnvPut(var AItems: TStringArray; const AKey, AValue: string);
+var
+  I, P: Integer;
+begin
+  for I := 0 to High(AItems) do
+  begin
+    P := Pos('=', AItems[I]);
+    if (P > 0) and (Copy(AItems[I], 1, P - 1) = AKey) then
+    begin
+      AItems[I] := AKey + '=' + AValue;
+      Exit;
+    end;
+  end;
+  SetLength(AItems, Length(AItems) + 1);
+  AItems[High(AItems)] := AKey + '=' + AValue;
+end;
+
+function BuildFinalEnv(const AMode: TProcessEnvMode;
+  const AExplicit: TStringArray): TStringArray;
+var
+  I, P, LCount: Integer;
+  LCur: PPAnsiChar;
+begin
+  case AMode of
+    pemInherit:
+      Result := nil;
+    pemReplace:
+    begin
+      SetLength(Result, Length(AExplicit));
+      for I := 0 to High(AExplicit) do
+        Result[I] := AExplicit[I];
+    end;
+    pemOverlay:
+    begin
+      { Snapshot parent environment }
+      LCur := environ;
+      LCount := 0;
+      if LCur <> nil then
+        while LCur[LCount] <> nil do
+          Inc(LCount);
+      SetLength(Result, LCount);
+      for I := 0 to LCount - 1 do
+        Result[I] := string(LCur[I]);
+      { Apply overlays }
+      for I := 0 to High(AExplicit) do
+      begin
+        P := Pos('=', AExplicit[I]);
+        if P > 0 then
+          EnvPut(Result, Copy(AExplicit[I], 1, P - 1),
+            Copy(AExplicit[I], P + 1, Length(AExplicit[I]) - P));
+      end;
+    end;
+  end;
+end;
 
 constructor TCommand.Create(const APath: string);
 begin
@@ -92,7 +154,8 @@ begin
   FPath := APath;
   FArgs := nil;
   FWorkDir := '';
-  FEnv := nil;
+  FEnvMode := pemInherit;
+  FEnvPairs := nil;
   FStdinMode := stInherit;
   FStdoutMode := stInherit;
   FStderrMode := stInherit;
@@ -131,16 +194,19 @@ function TCommand.Env(const AEnvPairs: array of string): ICommand;
 var
   I: Integer;
 begin
-  SetLength(FEnv, Length(AEnvPairs));
+  FEnvMode := pemReplace;
+  SetLength(FEnvPairs, Length(AEnvPairs));
   for I := 0 to High(AEnvPairs) do
-    FEnv[I] := AEnvPairs[I];
+    FEnvPairs[I] := AEnvPairs[I];
   Result := Self;
 end;
 
 function TCommand.EnvAdd(const AKey, AValue: string): ICommand;
 begin
-  SetLength(FEnv, Length(FEnv) + 1);
-  FEnv[High(FEnv)] := AKey + '=' + AValue;
+  if FEnvMode = pemInherit then
+    FEnvMode := pemOverlay;
+  SetLength(FEnvPairs, Length(FEnvPairs) + 1);
+  FEnvPairs[High(FEnvPairs)] := AKey + '=' + AValue;
   Result := Self;
 end;
 
@@ -175,12 +241,8 @@ var
   LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of Int32;
   LChildStdin, LChildStdout, LChildStderr: PtrInt;
   LDevNull: Int32;
-  LEnvMerged: TStringArray;
-  LEnvStr: string;
-  LErrPipe: array[0..1] of Int32;
-  LErrBuf: array[0..3] of Byte;
-  LErrRead: ssize_t;
-  LErrCode: Int32;
+  LFinalEnv: TStringArray;
+  LFailStage: TPlatformProcessSpawnStage;
 begin
   LArgc := Length(FArgs) + 2;
   SetLength(LArgv, LArgc);
@@ -189,17 +251,18 @@ begin
     LArgv[I + 1] := PAnsiChar(FArgs[I]);
   LArgv[LArgc - 1] := nil;
 
-  { Build envp: if FEnv is set, merge with parent env for EnvAdd semantics }
-  if Length(FEnv) > 0 then
-  begin
-    LEnvc := Length(FEnv) + 1;
-    SetLength(LEnvp, LEnvc);
-    for I := 0 to High(FEnv) do
-      LEnvp[I] := PAnsiChar(FEnv[I]);
-    LEnvp[LEnvc - 1] := nil;
-  end
+  { Build envp based on env mode }
+  if FEnvMode = pemInherit then
+    LEnvp := nil
   else
-    LEnvp := nil;
+  begin
+    LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
+    LEnvc := Length(LFinalEnv) + 1;
+    SetLength(LEnvp, LEnvc);
+    for I := 0 to High(LFinalEnv) do
+      LEnvp[I] := PAnsiChar(LFinalEnv[I]);
+    LEnvp[LEnvc - 1] := nil;
+  end;
 
   if FWorkDir <> '' then
     LCwd := PAnsiChar(FWorkDir)
@@ -262,13 +325,18 @@ begin
     { Spawn }
     if LEnvp <> nil then
       LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], @LEnvp[0],
-        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc)
+        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc, LFailStage)
     else
       LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], nil,
-        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc);
+        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc, LFailStage);
 
     if LErr <> 0 then
-      raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+      case LFailStage of
+        pssChdir: raise EProcessError.Create('Failed to chdir: ' + FWorkDir, LErr);
+        pssExec: raise EProcessError.Create('Failed to exec: ' + FPath, LErr);
+      else
+        raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+      end;
 
   except
     { Clean up all created fds on failure }
