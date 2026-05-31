@@ -39,9 +39,11 @@ type
     function WithGroup(const AName: string): ILogHandler;
   end;
 
-  {** PLogEvent points into a global ring buffer (16 slots).
-   *  MUST be used immediately in a single chain: Logger.Info^.Str(...)^.Msg(...)
-   *  Do NOT store PLogEvent across multiple statements or log calls. *}
+  {** PLogEvent points into a global ring buffer (256 slots).
+   *  Event pool: 256 slots, round-robin. Safe for single-threaded use and
+   *  for multi-threaded use when each log call is a single chained expression
+   *  (Logger.Info^.Str('k','v')^.Msg('text')). Do NOT store PLogEvent across
+   *  multiple statements or yield points. *}
   PLogEvent = ^TLogEvent;
   TLogEvent = record
   private
@@ -220,14 +222,14 @@ end;
 { TLogger }
 
 var
-  GEventPool: array[0..15] of TLogEvent;
+  GEventPool: array[0..255] of TLogEvent;
   GEventIdx: Int32 = 0;
 
 function NextEventSlot: PLogEvent; inline;
 var LIdx: Int32;
 begin
   LIdx := InterlockedIncrement(GEventIdx) - 1;
-  Result := @GEventPool[LIdx and 15];
+  Result := @GEventPool[LIdx and 255];
 end;
 
 class function TLogger.New(const AHandler: ILogHandler; ALevel: TLogLevel): TLogger;
@@ -238,24 +240,28 @@ end;
 
 function TLogger.With_(const AKey, AVal: string): TLogger;
 begin
+  if FHandler = nil then begin Result := Self; Exit; end;
   Result.FHandler := FHandler.WithAttrs([AttrStr(AKey, AVal)]);
   Result.FLevel := FLevel;
 end;
 
 function TLogger.WithInt(const AKey: string; AVal: Int64): TLogger;
 begin
+  if FHandler = nil then begin Result := Self; Exit; end;
   Result.FHandler := FHandler.WithAttrs([AttrInt(AKey, AVal)]);
   Result.FLevel := FLevel;
 end;
 
 function TLogger.WithAttrs(const AAttrs: array of TAttr): TLogger;
 begin
+  if FHandler = nil then begin Result := Self; Exit; end;
   Result.FHandler := FHandler.WithAttrs(AAttrs);
   Result.FLevel := FLevel;
 end;
 
 function TLogger.WithGroup(const AName: string): TLogger;
 begin
+  if FHandler = nil then begin Result := Self; Exit; end;
   Result.FHandler := FHandler.WithGroup(AName);
   Result.FLevel := FLevel;
 end;
@@ -448,6 +454,7 @@ type
     FMinLevel: TLogLevel;
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
+    FGroup: string;
   public
     constructor Create(AMinLevel: TLogLevel);
     function Enabled(const ALevel: TLogLevel): Boolean;
@@ -498,11 +505,13 @@ begin
   Write(StdErr, LBuf);
 end;
 
-procedure WriteJsonAttr(var AFirst: Boolean; const LA: TAttr);
+procedure WriteJsonAttr(var AFirst: Boolean; const AGroup: string; const LA: TAttr);
+var LKey: string;
 begin
   if not AFirst then Write(StdErr, ',');
   AFirst := False;
-  WriteJsonStr(LA.Key);
+  if AGroup <> '' then LKey := AGroup + '.' + LA.Key else LKey := LA.Key;
+  WriteJsonStr(LKey);
   Write(StdErr, ':');
   case LA.Kind of
     akString: WriteJsonStr(LA.SVal);
@@ -526,9 +535,9 @@ begin
   Write(StdErr, ',"ts":', ARecord.TimestampNs);
   LFirst := False;
   for LI := 0 to FPrefixCount - 1 do
-    WriteJsonAttr(LFirst, FPrefix[LI]);
+    WriteJsonAttr(LFirst, FGroup, FPrefix[LI]);
   for LI := 0 to ARecord.AttrCount - 1 do
-    WriteJsonAttr(LFirst, ARecord.Attrs[LI]);
+    WriteJsonAttr(LFirst, FGroup, ARecord.Attrs[LI]);
   WriteLn(StdErr, '}');
 end;
 
@@ -543,6 +552,7 @@ var
   LI: Int32;
 begin
   LNew := TJsonLogHandler.Create(FMinLevel);
+  LNew.FGroup := FGroup;
   SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
   for LI := 0 to FPrefixCount - 1 do
     LNew.FPrefix[LI] := FPrefix[LI];
@@ -553,8 +563,20 @@ begin
 end;
 
 function TJsonLogHandler.WithGroup(const AName: string): ILogHandler;
+var
+  LNew: TJsonLogHandler;
+  LI: Int32;
 begin
-  Result := Self; // JSON handler doesn't nest groups for simplicity
+  LNew := TJsonLogHandler.Create(FMinLevel);
+  SetLength(LNew.FPrefix, FPrefixCount);
+  for LI := 0 to FPrefixCount - 1 do
+    LNew.FPrefix[LI] := FPrefix[LI];
+  LNew.FPrefixCount := FPrefixCount;
+  if FGroup <> '' then
+    LNew.FGroup := FGroup + '.' + AName
+  else
+    LNew.FGroup := AName;
+  Result := LNew;
 end;
 
 { Factory }
@@ -632,6 +654,7 @@ type
     FBroken: Boolean;
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
+    FGroup: string;
     procedure EnsureOpen;
     procedure Rotate;
   public
@@ -715,40 +738,50 @@ procedure TFileHandler.Handle(const ARecord: TLogRecord);
 var
   LI: Int32;
   LSize: Int64;
+  LKeyPrefix: string;
 begin
   if FBroken then Exit;
-  if FCurrentSize >= FMaxBytes then Rotate;
-  EnsureOpen;
-  if not FOpened then Exit;
-  LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
-  Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
-  for LI := 0 to FPrefixCount - 1 do
-  begin
-    Write(FFile, ' ', FPrefix[LI].Key, '=');
-    LSize += 2 + Int64(Length(FPrefix[LI].Key));
-    case FPrefix[LI].Kind of
-      akString: begin Write(FFile, FPrefix[LI].SVal); LSize += Int64(Length(FPrefix[LI].SVal)); end;
-      akInt: begin Write(FFile, FPrefix[LI].IVal); LSize += 12; end;
-      akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize += 10; end;
-      akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
-              else begin Write(FFile, 'false'); LSize += 5; end;
+  try
+    if FCurrentSize >= FMaxBytes then Rotate;
+    EnsureOpen;
+    if not FOpened then Exit;
+    if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
+    LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
+    Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
+    for LI := 0 to FPrefixCount - 1 do
+    begin
+      Write(FFile, ' ', LKeyPrefix, FPrefix[LI].Key, '=');
+      LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(FPrefix[LI].Key));
+      case FPrefix[LI].Kind of
+        akString: begin Write(FFile, FPrefix[LI].SVal); LSize += Int64(Length(FPrefix[LI].SVal)); end;
+        akInt: begin Write(FFile, FPrefix[LI].IVal); LSize += 12; end;
+        akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize += 10; end;
+        akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
+                else begin Write(FFile, 'false'); LSize += 5; end;
+      end;
+    end;
+    for LI := 0 to ARecord.AttrCount - 1 do
+    begin
+      Write(FFile, ' ', LKeyPrefix, ARecord.Attrs[LI].Key, '=');
+      LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
+      case ARecord.Attrs[LI].Kind of
+        akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize += Int64(Length(ARecord.Attrs[LI].SVal)); end;
+        akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize += 12; end;
+        akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize += 10; end;
+        akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
+                else begin Write(FFile, 'false'); LSize += 5; end;
+      end;
+    end;
+    WriteLn(FFile);
+    System.Flush(FFile);
+    Inc(FCurrentSize, LSize + 1);
+  except
+    on E: Exception do
+    begin
+      FBroken := True;
+      if FOpened then begin System.Close(FFile); FOpened := False; end;
     end;
   end;
-  for LI := 0 to ARecord.AttrCount - 1 do
-  begin
-    Write(FFile, ' ', ARecord.Attrs[LI].Key, '=');
-    LSize += 2 + Int64(Length(ARecord.Attrs[LI].Key));
-    case ARecord.Attrs[LI].Kind of
-      akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize += Int64(Length(ARecord.Attrs[LI].SVal)); end;
-      akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize += 12; end;
-      akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize += 10; end;
-      akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
-              else begin Write(FFile, 'false'); LSize += 5; end;
-    end;
-  end;
-  WriteLn(FFile);
-  System.Flush(FFile);
-  Inc(FCurrentSize, LSize + 1);
 end;
 
 procedure TFileHandler.Flush;
@@ -765,6 +798,7 @@ begin
   // Rotation tracking is per-instance. For production use with child loggers,
   // prefer MultiHandler with a single FileHandler + ConsoleHandler for children.
   LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles);
+  LNew.FGroup := FGroup;
   SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
   for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
   for LI := 0 to High(AAttrs) do LNew.FPrefix[FPrefixCount + LI] := AAttrs[LI];
@@ -773,8 +807,19 @@ begin
 end;
 
 function TFileHandler.WithGroup(const AName: string): ILogHandler;
+var
+  LNew: TFileHandler;
+  LI: Int32;
 begin
-  Result := Self;
+  LNew := TFileHandler.Create(FPath, FMinLevel, FMaxBytes, FMaxFiles);
+  SetLength(LNew.FPrefix, FPrefixCount);
+  for LI := 0 to FPrefixCount - 1 do LNew.FPrefix[LI] := FPrefix[LI];
+  LNew.FPrefixCount := FPrefixCount;
+  if FGroup <> '' then
+    LNew.FGroup := FGroup + '.' + AName
+  else
+    LNew.FGroup := AName;
+  Result := LNew;
 end;
 
 function NewFileHandler(const APath: string; AMinLevel: TLogLevel;
