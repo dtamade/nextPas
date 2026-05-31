@@ -15,7 +15,7 @@
 
 1. **Widget = class + interface**：每个 widget 是 `class(TInterfacedObject, IXxx)`，所有可调用方法（含 builder 链、Inner、RenderStateful）都声明在接口上，builder 返回自身接口类型，`New` 返回接口。COM 引用计数，消费方全程持接口引用，不混用类引用。
 2. **数据层 = record**：TRect/TColor/TModifier/TStyle/TCell/TText/TLayout/TListState 等纯数据保持 record（规范要求）。
-3. **TBuffer = class**（保持）。
+3. **TBuffer = record（已改）**：原 fafafa 是 class，改为 advanced record。理由：① 省一次堆分配（外部不主动 new，由 TTerminal 嵌入持有）；② swap 仍 O(1)（FPC 托管动态数组字段赋值只拷指针+引用计数，不拷 cell 数据）；③ 与 JSON TStringBuilder 的 record-first 风格一致。代价：widget Render 签名用 `var ABuffer: TBuffer`（更明确表达"渲染会写 buffer"）。需 Init/Done 手动生命周期。
 4. **ByteBuilder**：用 core 的 `nextpas.core.text.builder.TStringBuilder`（已具备 AppendChar/AppendBytes/AppendUInt/AppendHex/Clear），仅补 FlushToFd helper。
 5. **执行**：copy-then-modify。完整源码已暂存在 `core/_migration/`（不编译，作参照）。逐文件改造落地到 `src/`。
 
@@ -56,12 +56,12 @@
 
 ### Phase 1 — 基础类型 [进行中]
 - [x] nextpas.core.tui.base（TRect/TPosition/TSize/TMargin/TDirection）← ftui_rect ✅ 9/9 测试，无泄漏，Codex 审查通过
-- [ ] nextpas.core.tui.error（ETui/ETuiBuffer/ETuiLayout/ETuiBackend）← ftui_error
-- [ ] nextpas.core.tui.color ← ftui_color
-- [ ] nextpas.core.tui.modifier ← ftui_modifier
-- [ ] nextpas.core.tui.style ← ftui_style
-- [ ] nextpas.core.tui.cell ← ftui_cell
-- [ ] nextpas.core.tui.widget.intf（IWidget 基础接口）
+- [x] nextpas.core.tui.error（ETui/ETuiBuffer/ETuiLayout/ETuiBackend/ETuiInput）← ftui_error ✅ 3/3，无泄漏，继承 ECore
+- [x] nextpas.core.tui.color ← ftui_color ✅ 5/5，无泄漏，TColor 4 字节；命名色 TUI_BLACK 风格；variant record 不能含方法，构造用自由函数
+- [x] nextpas.core.tui.modifier ← ftui_modifier ✅ 5/5，无泄漏，TModifier 2 字节（packset 2）
+- [x] nextpas.core.tui.style ← ftui_style ✅ 7/7，无泄漏，TStyle 16 字节，Patch 语义对齐 ratatui
+- [x] nextpas.core.tui.cell ← ftui_cell ✅ 9/9，无泄漏，TCell 40 字节（QWord 比较保留）
+- [ ] nextpas.core.tui.widget.intf（IWidget 基础接口）→ 移至 Phase 2 buffer 之后（Render 签名引用 TBuffer）
 
 ### Phase 2 — Buffer + Text + Layout [未开始]
 - [ ] buffer ← ftui_buffer / overlay ← ftui_overlay
@@ -96,7 +96,16 @@
 
 ## 当前状态
 
-- 已完成：worktree 创建、源码暂存、设计决策锁定、目标树建立
-- Phase 0.1 ✅ text.width（12/12 测试，无泄漏，Codex 审查 + 宽度表补缺）
-- Phase 1 ✅ tui.base（9/9 测试，无泄漏，Codex 审查通过）
-- 下一步：Phase 1 继续 — tui.error → tui.color → tui.modifier → tui.style → tui.cell → widget.intf
+- 已完成：worktree、源码暂存、设计决策锁定、目标树
+- Phase 0.1 ✅ text.width（12/12，无泄漏，Codex 审查 + 宽度表补缺）
+- Phase 1 ✅ base/error/color/modifier/style/cell 全部完成（共 38 测试，全无泄漏）
+  - 关键验证：TColor=4B, TModifier=2B, TStyle=16B, TCell=40B（packed 布局保留）
+  - 设计微调：colour 命名常量 TUI_*；variant record 不含方法（FPC 限制），构造用自由函数
+- 下一步：Phase 2 — buffer（record 化）→ widget.intf（IWidget）→ text → borders → layout
+
+## 关键技术笔记
+
+- variant record（含 case 部分）在 FPC 不能声明 class function/method，构造器必须用自由函数
+- packed 布局指令 {$packenum 1}{$packset 2} 必须在每个相关单元单独声明（settings.inc 未含）
+- TCell 40 字节断言 {$if SizeOf(TCell)<>40} 保留，QWord×5 比较依赖它
+- 测试 Makefile 模板：-O2 -gl -gh，BUILD_DIR 在 core/build/projects/<module>/<test>/
