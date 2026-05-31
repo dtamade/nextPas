@@ -295,7 +295,7 @@ begin
     case I div 64 of
       0: if ((PM2_0 shr (I mod 64)) and 1) = 1 then P256FeMul(R, LT, R);
       1: if ((PM2_1 shr (I mod 64)) and 1) = 1 then P256FeMul(R, LT, R);
-      2: ; // all zeros
+      2: ;
       3: if ((PM2_3 shr (I mod 64)) and 1) = 1 then P256FeMul(R, LT, R);
     end;
   end;

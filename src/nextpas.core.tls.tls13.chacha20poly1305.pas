@@ -1054,9 +1054,10 @@ function TryChaCha20Poly1305Decrypt(
 ): Boolean;
 var
   LBlock0: TBytes;
-  LPolyKey: TBytes;
-  LMacInput: TBytes;
-  LExpectedTag: TBytes;
+  LPolyCtx: TPoly1305Ctx;
+  LExpectedTag: array[0..15] of Byte;
+  LPadBlock: array[0..15] of Byte;
+  LOffset: Integer;
 begin
   SetLength(APlaintext, 0);
 
@@ -1068,13 +1069,45 @@ begin
     Exit(False);
 
   LBlock0 := ChaCha20Block(AKey, ANonce, 0);
-  SetLength(LPolyKey, POLY1305_KEY_SIZE);
-  Move(LBlock0[0], LPolyKey[0], POLY1305_KEY_SIZE);
+  Poly1305Init(LPolyCtx, @LBlock0[0]);
 
-  LMacInput := BuildPoly1305Input(AAAD, ACiphertext);
-  LExpectedTag := Poly1305MAC(LPolyKey, LMacInput);
+  // Process AAD
+  LOffset := 0;
+  while LOffset + 16 <= Length(AAAD) do
+  begin
+    Poly1305Update(LPolyCtx, @AAAD[LOffset], UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < Length(AAAD) then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move(AAAD[LOffset], LPadBlock[0], Length(AAAD) - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
 
-  if TConstantTime.CompareBytes(LExpectedTag, ATag) <> 1 then
+  // Process ciphertext
+  LOffset := 0;
+  while LOffset + 16 <= Length(ACiphertext) do
+  begin
+    Poly1305Update(LPolyCtx, @ACiphertext[LOffset], UInt64(1) shl 40);
+    Inc(LOffset, 16);
+  end;
+  if LOffset < Length(ACiphertext) then
+  begin
+    FillChar(LPadBlock, 16, 0);
+    Move(ACiphertext[LOffset], LPadBlock[0], Length(ACiphertext) - LOffset);
+    Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+  end;
+
+  // Length block
+  FillChar(LPadBlock, 16, 0);
+  PUInt64(@LPadBlock[0])^ := UInt64(Length(AAAD));
+  PUInt64(@LPadBlock[8])^ := UInt64(Length(ACiphertext));
+  Poly1305Update(LPolyCtx, @LPadBlock[0], UInt64(1) shl 40);
+
+  Poly1305Finish(LPolyCtx, @LExpectedTag[0]);
+
+  if TConstantTime.CompareBuffer(@LExpectedTag[0], @ATag[0], 16) <> 1 then
     Exit(False);
 
   APlaintext := ChaCha20Xor(AKey, ANonce, 1, ACiphertext);
