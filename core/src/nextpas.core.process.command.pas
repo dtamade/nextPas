@@ -89,7 +89,8 @@ uses
   nextpas.core.platform.process,
   nextpas.core.platform.process.base,
   nextpas.core.platform.posix.ffi,
-  nextpas.core.platform.posix.base;
+  nextpas.core.platform.posix.base,
+  nextpas.core.process.pathresolve;
 
 { TCommand }
 
@@ -243,10 +244,20 @@ var
   LDevNull: Int32;
   LFinalEnv: TStringArray;
   LFailStage: TPlatformProcessSpawnStage;
+  LResolvedPath: string;
 begin
+  { Resolve path: search PATH if using custom env and name has no '/' }
+  if (FEnvMode <> pemInherit) and (Pos('/', FPath) = 0) then
+  begin
+    LFinalEnv := BuildFinalEnv(FEnvMode, FEnvPairs);
+    LResolvedPath := ResolveExecutablePath(FPath, LFinalEnv);
+  end
+  else
+    LResolvedPath := FPath;
+
   LArgc := Length(FArgs) + 2;
   SetLength(LArgv, LArgc);
-  LArgv[0] := PAnsiChar(FPath);
+  LArgv[0] := PAnsiChar(LResolvedPath);
   for I := 0 to High(FArgs) do
     LArgv[I + 1] := PAnsiChar(FArgs[I]);
   LArgv[LArgc - 1] := nil;
@@ -324,10 +335,10 @@ begin
 
     { Spawn }
     if LEnvp <> nil then
-      LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], @LEnvp[0],
+      LErr := platform_process_spawn_fds(PAnsiChar(LResolvedPath), @LArgv[0], @LEnvp[0],
         LCwd, LChildStdin, LChildStdout, LChildStderr, LProc, LFailStage)
     else
-      LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], nil,
+      LErr := platform_process_spawn_fds(PAnsiChar(LResolvedPath), @LArgv[0], nil,
         LCwd, LChildStdin, LChildStdout, LChildStderr, LProc, LFailStage);
 
     if LErr <> 0 then
