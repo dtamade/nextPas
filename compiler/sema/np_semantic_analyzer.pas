@@ -6241,7 +6241,7 @@ begin
     end;
     if Pos('specialize ', ANode.ChildAt(0).Text) = 1 then
     begin
-      ArgName := Copy(ANode.ChildAt(0).Text, 11, Length(ANode.ChildAt(0).Text));
+      ArgName := Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11);
       DotPos := Pos('<', ArgName);
       if DotPos > 0 then
       begin
@@ -6251,7 +6251,7 @@ begin
         if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
         begin
           for K := 0 to Length(FProcedureBodies) - 1 do
-            if SameText(FProcedureBodies[K].Name, FuncName + '<' + Operand + '>') then
+            if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
             begin
               RegisterProcedureBody(ArgName,
                 FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
@@ -6289,7 +6289,7 @@ begin
     else if (FCurrentMethodClass <> '') and
       (Pos('inherited ', ANode.ChildAt(0).Text) = 1) then
     begin
-      ArgName := Copy(ANode.ChildAt(0).Text, 11, Length(ANode.ChildAt(0).Text));
+      ArgName := Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11);
       Folded := FModel.FindTypeByName(FCurrentMethodClass);
       FuncName := '';
       if Folded > 0 then
@@ -9042,6 +9042,7 @@ var
   Folded, Value: Int64;
   WorkQueue: array of LongInt;
   WorkCount, WorkHead: LongInt;
+  Found: Boolean;
 begin
   if Length(FGenericWorkQueue) < Length(FProcedureBodies) + 64 then
     SetLength(FGenericWorkQueue, Length(FProcedureBodies) + 64);
@@ -9052,6 +9053,10 @@ begin
       Continue;
     if Pos('<', FProcedureBodies[I].Name) > 0 then
       Continue;
+    Found := False;
+    for J := 0 to FGenericWorkCount - 1 do
+      if FGenericWorkQueue[J] = I then begin Found := True; Break; end;
+    if Found then Continue;
     if FGenericWorkCount >= Length(FGenericWorkQueue) then
       SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
     FGenericWorkQueue[FGenericWorkCount] := I;
@@ -9062,7 +9067,10 @@ begin
   begin
     I := FGenericWorkQueue[WorkHead];
     Inc(WorkHead);
+    if I < 0 then Continue;
     Entry := FProcedureBodies[I];
+    if (Entry.Body = nil) or (Entry.Decl = nil) then
+      Continue;
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
     SetLength(FVarParamNames, 0);
