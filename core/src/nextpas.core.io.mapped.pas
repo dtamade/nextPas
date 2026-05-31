@@ -30,22 +30,14 @@ function MmapLines(const APath: string): IMappedLines;
 implementation
 
 uses
-  BaseUnix, nextpas.core.errors;
-
-const
-  PROT_READ = 1;
-  MAP_PRIVATE = 2;
-  MAP_POPULATE = $8000;
-
-function do_mmap(addr: Pointer; len: SizeUInt; prot: cint; flags: cint;
-  fd: cint; offset: Int64): Pointer; cdecl; external 'c' name 'mmap';
-function do_munmap(addr: Pointer; len: SizeUInt): cint; cdecl; external 'c' name 'munmap';
+  nextpas.core.errors,
+  nextpas.core.platform.mmap;
 
 type
   TMappedFileImpl = class(TInterfacedObject, IMappedFile)
   private
-    FData: PByte;
-    FSize: Int64;
+    FMap: TPlatformMappedFile;
+    FValid: Boolean;
   public
     constructor Create(const APath: string);
     destructor Destroy; override;
@@ -73,55 +65,48 @@ type
 
 constructor TMappedFileImpl.Create(const APath: string);
 var
-  LFd: cint;
-  LStat: BaseUnix.Stat;
+  LRet: Int32;
 begin
   inherited Create;
-  LFd := FpOpen(PAnsiChar(APath), O_RDONLY);
-  if LFd < 0 then
-    raise EIOError.Create('mmap: cannot open ' + APath);
-  if FpFstat(LFd, LStat) <> 0 then
+  FValid := False;
+  LRet := platform_mmap_file(PAnsiChar(APath), FMap);
+  if LRet <> 0 then
   begin
-    FpClose(LFd);
-    raise EIOError.Create('mmap: cannot stat ' + APath);
-  end;
-  FSize := LStat.st_size;
-  if FSize = 0 then
-  begin
-    FpClose(LFd);
-    FData := nil;
+    // Empty file or error — set size 0, no mapping
+    FMap.Addr := nil;
+    FMap.Size := 0;
     Exit;
   end;
-  FData := do_mmap(nil, FSize, PROT_READ, MAP_PRIVATE or MAP_POPULATE, LFd, 0);
-  FpClose(LFd);
-  if FData = Pointer(-1) then
-  begin
-    FData := nil;
-    raise EIOError.Create('mmap: mmap failed for ' + APath);
-  end;
+  FValid := True;
 end;
 
 destructor TMappedFileImpl.Destroy;
 begin
-  if (FData <> nil) and (FSize > 0) then
-    do_munmap(FData, FSize);
+  if FValid then
+    platform_mmap_close(FMap);
   inherited;
 end;
 
 function TMappedFileImpl.Data: PByte;
 begin
-  Result := FData;
+  if FValid then
+    Result := PByte(FMap.Addr)
+  else
+    Result := nil;
 end;
 
 function TMappedFileImpl.Size: Int64;
 begin
-  Result := FSize;
+  if FValid then
+    Result := Int64(FMap.Size)
+  else
+    Result := 0;
 end;
 
 function TMappedFileImpl.AsView: TStringView;
 begin
-  if FData <> nil then
-    Result := TStringView.Create(PAnsiChar(FData), FSize)
+  if FValid and (FMap.Addr <> nil) then
+    Result := TStringView.Create(PAnsiChar(FMap.Addr), FMap.Size)
   else
     Result := TStringView.Empty;
 end;
