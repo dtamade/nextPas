@@ -8,7 +8,7 @@ unit nextpas.core.mem.pool.slab.sharded;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.atomic,
   nextpas.core.sync,

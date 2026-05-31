@@ -5,7 +5,7 @@ unit nextpas.core.mem.pool.fixed.concurrent;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.sync,
   nextpas.core.mem.pool.base,      // IPool
   nextpas.core.mem.pool.fixed,     // TFixedPool

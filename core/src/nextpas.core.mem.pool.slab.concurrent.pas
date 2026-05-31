@@ -5,7 +5,7 @@ unit nextpas.core.mem.pool.slab.concurrent;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.sync,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.memory_pool,
