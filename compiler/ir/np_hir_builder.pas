@@ -926,9 +926,16 @@ procedure THIRBuilder.BlobArrLoadVar(var S: TExprStack; const AArg: string);
 var
   Instr: THIRInstr;
   V, Rhs: THIRValueId;
+  VarName: string;
+  IsPtr: Boolean;
 begin
+  IsPtr := (Length(AArg) > 2) and (Copy(AArg, Length(AArg) - 1, 2) = ' p');
+  if IsPtr then
+    VarName := Copy(AArg, 1, Length(AArg) - 2)
+  else
+    VarName := AArg;
   Rhs := S.Pop;
-  V := FindAlloca(AArg + '$ptr');
+  V := FindAlloca(VarName + '$ptr');
   if V = 0 then
   begin
     S.Push(Rhs);
@@ -951,7 +958,10 @@ begin
   Instr.Operands[0] := MakeOperand(V);
   Instr.Operands[1] := MakeOperand(Rhs);
   EmitInstr(Instr);
-  S.Push(EmitLoad(GetIntType, Instr.ResultId));
+  if IsPtr then
+    S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType)
+  else
+    S.Push(EmitLoad(GetIntType, Instr.ResultId));
 end;
 
 procedure THIRBuilder.BlobField(var S: TExprStack; const AArg: string);
@@ -2855,7 +2865,12 @@ begin
   EmitInstr(Instr);
   ElemPtr := Instr.ResultId;
 
-  EmitStore(GetIntType, ValVal, ElemPtr);
+  if (Pos(' p' + #10, ValBlob) > 0) or
+    ((Length(ValBlob) > 4) and (Copy(ValBlob, 1, 4) = 'var ') and
+     (FindAllocaType(Copy(ValBlob, 5, Pos(#10, ValBlob) - 5)) = GetPtrType)) then
+    EmitStore(GetPtrType, ValVal, ElemPtr)
+  else
+    EmitStore(GetIntType, ValVal, ElemPtr);
 end;
 
 procedure THIRBuilder.ProcessMethodBegin(const ANode: TTypedHirNode);

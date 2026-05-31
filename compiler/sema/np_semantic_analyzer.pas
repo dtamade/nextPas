@@ -6548,6 +6548,45 @@ begin
     end;
   end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkArrayAccess) and
+    (ANode.ChildAt(0).ChildCount >= 2) and
+    (ANode.ChildAt(0).ChildAt(0) <> nil) and
+    (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    IsRuntimeArrVar(ANode.ChildAt(0).ChildAt(0).Text) then
+  begin
+    FuncName := '';
+    if FModel.LookupStringConstValue(
+      ANode.ChildAt(0).ChildAt(0).Text + '$arr_elem_type', FuncName) then
+    begin end;
+    if (FuncName = '') and
+      (TypeMetaSize(ANode.ChildAt(0).ChildAt(0).Text) > 0) then
+      FuncName := ANode.ChildAt(0).ChildAt(0).Text;
+    if FuncName <> '' then
+    begin
+      Folded := TypeMetaVmtSlot(FuncName, ANode.ChildAt(1).Text);
+      if (Folded >= 0) and
+        EncodeRuntimeIntExprFold(ANode.ChildAt(0).ChildAt(1), ArgName) then
+      begin
+        ABlob := ArgName + 'arrload ' + ANode.ChildAt(0).ChildAt(0).Text +
+          ' p' + #10 + 'vcall ' + IntToStr(Folded) + ' 0';
+        if TypeMetaRetPtr(FuncName, ANode.ChildAt(1).Text) then
+          ABlob := ABlob + ' p' + #10
+        else
+          ABlob := ABlob + #10;
+        Exit(True);
+      end;
+      Folded := TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text);
+      if (Folded >= 0) and
+        EncodeRuntimeIntExprFold(ANode.ChildAt(0).ChildAt(1), ArgName) then
+      begin
+        ABlob := ArgName + 'arrload ' + ANode.ChildAt(0).ChildAt(0).Text +
+          ' p' + #10 + 'int ' + IntToStr(Folded) + #10 + 'arr_load' + #10;
+        Exit(True);
+      end;
+    end;
+  end;
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin
@@ -7105,12 +7144,44 @@ begin
         if Child.ChildCount >= 2 then
           RhsNode := Child.ChildAt(1);
         if (RhsNode <> nil) and
-          EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) and
-          EncodeRuntimeIntExprFold(RhsNode, StringValue) then
-          FModel.AddTypedHirNode(
-            'assign-arr-elem-runtime', Decoded, 0, 0,
-            Decoded + #9 + Operand + #9 + StringValue
-          );
+          EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) then
+        begin
+          if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+            FModel.AddTypedHirNode(
+              'assign-arr-elem-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand + #9 + StringValue
+            )
+          else if (RhsNode.NodeKind = gnkFunctionCall) and
+            (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
+            (RhsNode.ChildAt(0).NodeKind = gnkDotAccess) and
+            (RhsNode.ChildAt(0).ChildCount >= 2) and
+            (RhsNode.ChildAt(0).ChildAt(0) <> nil) and
+            (TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) then
+          begin
+            Inc(FBlockLabelCounter);
+            FuncName := '$arr_obj_' + IntToStr(FBlockLabelCounter);
+            Value := TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text);
+            StringValue := FuncName + #9 +
+              RhsNode.ChildAt(0).ChildAt(0).Text + '.' +
+              RhsNode.ChildAt(0).ChildAt(1).Text;
+            for K := 1 to RhsNode.ChildCount - 1 do
+              if (RhsNode.ChildAt(K) <> nil) and
+                EncodeRuntimeIntExprFold(RhsNode.ChildAt(K), ArgName) then
+                StringValue := StringValue + #9 + ArgName;
+            RegisterRuntimeVar(FuncName);
+            RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
+            FModel.AddTypedHirNode(
+              'class-new-runtime', IntToStr(Value), 0, 0, StringValue);
+            if TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0 then
+              FModel.AddTypedHirNode('vmt-store-runtime',
+                RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
+                FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
+            FModel.AddTypedHirNode(
+              'assign-arr-elem-runtime', Decoded, 0, 0,
+              Decoded + #9 + Operand + #9 + 'var ' + FuncName + #10
+            );
+          end;
+        end;
         Continue;
       end;
       if FNoFold and (FCurrentMethodClass <> '') and
@@ -8699,11 +8770,11 @@ begin
           RegisterRuntimeArrVar(Decl.Text);
           if (NextSibling <> nil) and (NextSibling.NodeKind = gnkArrayType) and
             (NextSibling.ChildCount > 0) and (NextSibling.ChildAt(0) <> nil) and
-            TypeMetaIsRecord(NextSibling.ChildAt(0).Text) and
             (TypeMetaSize(NextSibling.ChildAt(0).Text) > 0) then
           begin
-            FModel.AddConstValue(Decl.Text + '$arr_elem_size',
-              TypeMetaSize(NextSibling.ChildAt(0).Text));
+            if TypeMetaIsRecord(NextSibling.ChildAt(0).Text) then
+              FModel.AddConstValue(Decl.Text + '$arr_elem_size',
+                TypeMetaSize(NextSibling.ChildAt(0).Text));
             FModel.AddStringConstValue(Decl.Text + '$arr_elem_type', NextSibling.ChildAt(0).Text);
           end;
           FModel.AddTypedHirNode(
