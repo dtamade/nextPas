@@ -11,6 +11,7 @@ uses
   nextpas.core.regex.parser,
   nextpas.core.regex.compiler,
   nextpas.core.regex.nfa,
+  nextpas.core.regex.dfa,
   nextpas.core.text.base;
 
 type
@@ -130,6 +131,9 @@ begin
       Exit(True);
     Exit(Pos(FProgram.LiteralPrefix, AInput) > 0);
   end;
+  // DFA fast path for patterns without assertions
+  if not ProgramHasAsserts(FProgram) then
+    Exit(DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput)));
   Result := NfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
@@ -226,6 +230,12 @@ begin
       LStart := LPos + LPrefixLen;
     end;
     SetLength(Result, LCount);
+    Exit;
+  end;
+  // DFA fast path: only when no captures needed and no assertions
+  if (FProgram.NumCaptures = 0) and (not ProgramHasAsserts(FProgram)) then
+  begin
+    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
     Exit;
   end;
   Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
