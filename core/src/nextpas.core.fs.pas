@@ -5,7 +5,7 @@ unit nextpas.core.fs;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.text.base,
   nextpas.core.fs.base,

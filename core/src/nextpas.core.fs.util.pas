@@ -5,7 +5,7 @@ unit nextpas.core.fs.util;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base, nextpas.core.os.env,
   nextpas.core.fs.base,
   nextpas.core.fs.intf,
   nextpas.core.text.base;
@@ -37,6 +37,7 @@ implementation
 
 uses
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
