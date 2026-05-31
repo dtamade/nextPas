@@ -330,6 +330,7 @@ begin
   if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
   if AX >= FArea.X + FArea.Width then Exit;
   if AX < FArea.X then AX := FArea.X;
+  MarkRowDirty(AY - FArea.Y);
   LRight := FArea.X + FArea.Width;
   LRemaining := LRight - AX;
   if LRemaining > AMaxWidth then LRemaining := AMaxWidth;
