@@ -1028,6 +1028,22 @@ begin
   LApp.Free;
 end;
 
+procedure TestAppGlobalShortFlag;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+begin
+  LApp := TArgApp.Create('test', '', '');
+  LApp.AddGlobalFlag('verbose', 'v', '');
+  LCmd := LApp.AddCommand('build', '');
+  LApp.SetHandler('build', @BuildHandler);
+  GHandlerCalled := False;
+  LApp.RunFrom(['-v', 'build']);
+  Check(GHandlerCalled, 'handler called');
+  Check(LApp.GlobalParser.GetBool('verbose'), 'global -v');
+  LApp.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.args');
   { Basic }
@@ -1100,6 +1116,7 @@ begin
   T.Run('wrong getter kind', @TestWrongGetterKind);
   T.Run('handler method overload', @TestHandlerMethodOverload);
   T.Run('handler anon overload', @TestHandlerAnonOverload);
+  T.Run('app global short flag', @TestAppGlobalShortFlag);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

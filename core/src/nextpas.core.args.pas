@@ -103,6 +103,10 @@ type
     Handler: TArgCommandHandler;
   end;
 
+  {**
+   * @desc Subcommand router. Global options are parsed individually before
+   *       the command name (no short-flag clustering at the app level).
+   *}
   TArgApp = class
   private
     FAppName: string;
