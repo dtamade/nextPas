@@ -13,9 +13,6 @@ unit nextpas.core.mem.allocator.instrumentation;
 
 interface
 
-uses
-  SysUtils;
-
 type
   { Summary statistics for allocator operations }
   TAllocatorStats = record

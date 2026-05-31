@@ -94,7 +94,8 @@ type
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.platform.time;
 
 { TDuration }
@@ -314,7 +315,7 @@ end;
 function TDuration.DivBy(const ADivisor: Int64): TDuration;
 begin
   if ADivisor = 0 then
-    raise EDivByZero.Create('TDuration.DivBy: division by zero');
+    raise EInvalidOperationError.Create('TDuration.DivBy: division by zero');
   Result.FNs := FNs div ADivisor;
 end;
 

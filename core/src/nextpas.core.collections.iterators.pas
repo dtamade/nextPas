@@ -20,7 +20,6 @@ unit nextpas.core.collections.iterators;
 interface
 
 uses
-  SysUtils,
   nextpas.core.collections.base,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.vec;

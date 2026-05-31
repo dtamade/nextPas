@@ -5,7 +5,7 @@ unit nextpas.core.regex.parser;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.regex.base,
   nextpas.core.regex.charclass;
 
@@ -45,6 +45,9 @@ function RegexParse(const APattern: string; out ANumCaptures: UInt32; out AFlags
 procedure RegexFreeAst(ANode: PAstNode);
 
 implementation
+
+uses
+  nextpas.core.errors;
 
 type
   TParser = record

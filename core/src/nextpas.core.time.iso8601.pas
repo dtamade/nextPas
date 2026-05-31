@@ -5,6 +5,7 @@ unit nextpas.core.time.iso8601;
 interface
 
 uses
+  nextpas.core.errors,
   nextpas.core.time.date,
   nextpas.core.time.timeofday,
   nextpas.core.time.datetime,
@@ -26,7 +27,7 @@ function TryParseISO8601DateTimeOffset(const AStr: string; out ADT: TOffsetDateT
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function TryParseISO8601Date(const AStr: string; out ADate: TDate): Boolean;
 var
