@@ -126,6 +126,8 @@ begin
 
   while LI + 4 <= LLen - LPad do
   begin
+    if (LP[LI] or LP[LI+1] or LP[LI+2] or LP[LI+3]) > 127 then
+      raise EConvertError.Create('Invalid base64 character');
     LA := ATable[LP[LI]];
     LB := ATable[LP[LI+1]];
     LC := ATable[LP[LI+2]];

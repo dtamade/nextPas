@@ -435,11 +435,24 @@ begin
 end;
 
 function TInstant.DurationSince(const AEarlier: TInstant): TDuration;
+var LDiff: UInt64;
 begin
   if FNs >= AEarlier.FNs then
-    Result := TDuration.FromNanoseconds(Int64(FNs - AEarlier.FNs))
+  begin
+    LDiff := FNs - AEarlier.FNs;
+    if LDiff > UInt64(High(Int64)) then
+      Result := TDuration.FromNanoseconds(High(Int64))
+    else
+      Result := TDuration.FromNanoseconds(Int64(LDiff));
+  end
   else
-    Result := TDuration.FromNanoseconds(-Int64(AEarlier.FNs - FNs));
+  begin
+    LDiff := AEarlier.FNs - FNs;
+    if LDiff > UInt64(High(Int64)) then
+      Result := TDuration.FromNanoseconds(Low(Int64))
+    else
+      Result := TDuration.FromNanoseconds(-Int64(LDiff));
+  end;
 end;
 
 function TInstant.Add(const ADuration: TDuration): TInstant;
