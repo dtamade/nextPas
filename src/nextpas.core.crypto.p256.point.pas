@@ -151,14 +151,27 @@ begin
   P256FeCondCopy(P.X, R.X, LQInf);
   P256FeCondCopy(P.Y, R.Y, LQInf);
   P256FeCondCopy(P.Z, R.Z, LQInf);
-  // If P = Q (H=0, S1=S2), use doubling
+  // If H=0 and not infinity: check if P=Q or P=-Q
   LEqual := P256FeIsZero(H) and (1 - LPInf) and (1 - LQInf);
   if LEqual = 1 then
   begin
-    P256PointDouble(P, LDbl);
-    P256FeCondCopy(LDbl.X, R.X, LEqual);
-    P256FeCondCopy(LDbl.Y, R.Y, LEqual);
-    P256FeCondCopy(LDbl.Z, R.Z, LEqual);
+    // Check S1 = S2 (same Y coordinate → P=Q → double)
+    // If S1 ≠ S2 → P=-Q → result is infinity
+    P256FeSub(S1, S2, H); // reuse H as temp
+    if P256FeIsZero(H) = 1 then
+    begin
+      P256PointDouble(P, LDbl);
+      P256FeCondCopy(LDbl.X, R.X, LEqual);
+      P256FeCondCopy(LDbl.Y, R.Y, LEqual);
+      P256FeCondCopy(LDbl.Z, R.Z, LEqual);
+    end
+    else
+    begin
+      // P = -Q → infinity
+      P256FeZero(R.X);
+      P256FeOne(R.Y);
+      P256FeZero(R.Z);
+    end;
   end;
 end;
 
