@@ -7,7 +7,6 @@ unit nextpas.core.collections.hashset;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,

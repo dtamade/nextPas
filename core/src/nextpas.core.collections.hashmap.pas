@@ -7,7 +7,7 @@ unit nextpas.core.collections.hashmap;
 interface
 
 uses
-  SysUtils, TypInfo,
+  TypInfo,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,

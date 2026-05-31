@@ -12,7 +12,6 @@ unit nextpas.core.collections.trie;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.trie.base,

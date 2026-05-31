@@ -5,7 +5,6 @@ unit nextpas.core.mem.blockpool.concurrent;
 interface
 
 uses
-  SysUtils,
   nextpas.core.sync,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.layout,

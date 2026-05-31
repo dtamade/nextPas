@@ -27,7 +27,6 @@ unit nextpas.core.mem.adapter;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.alloc,

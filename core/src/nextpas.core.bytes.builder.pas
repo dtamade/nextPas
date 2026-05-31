@@ -5,7 +5,6 @@ unit nextpas.core.bytes.builder;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.bytes.base,
   nextpas.core.mem.intf;

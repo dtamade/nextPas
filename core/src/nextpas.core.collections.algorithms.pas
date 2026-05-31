@@ -18,7 +18,7 @@ unit nextpas.core.collections.algorithms;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.collections.base;
 
 type

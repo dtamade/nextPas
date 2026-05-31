@@ -5,7 +5,7 @@ unit nextpas.core.collections.btree;
 interface
 
 uses
-  SysUtils, TypInfo,
+  TypInfo,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.btree.intf;

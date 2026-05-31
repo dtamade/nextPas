@@ -23,7 +23,6 @@ unit nextpas.core.mem.utils;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.math;
 

@@ -29,7 +29,7 @@ function PropsHas(const AEntries: TPropsArray; const AKey: string): Boolean;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.text,
   nextpas.core.fs;
 

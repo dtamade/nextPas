@@ -5,7 +5,6 @@ unit nextpas.core.bytes.ops;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base;
 
 function SpanEqual(const A, B: TByteSpan): Boolean;

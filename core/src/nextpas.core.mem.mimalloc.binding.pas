@@ -317,8 +317,6 @@ uses
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   DynLibs,
   {$ENDIF}
-  SysUtils;
-
 var
   GMimallocBinding: IAlloc = nil;
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}

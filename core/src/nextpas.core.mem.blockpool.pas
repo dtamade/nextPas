@@ -32,7 +32,6 @@ unit nextpas.core.mem.blockpool;
 interface
 
 uses
-  SysUtils,
   nextpas.core.mem.layout,
   nextpas.core.mem.error;
 

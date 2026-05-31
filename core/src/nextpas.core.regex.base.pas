@@ -5,7 +5,7 @@ unit nextpas.core.regex.base;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.regex.charclass;
 
 type

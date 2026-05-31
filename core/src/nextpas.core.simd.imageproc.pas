@@ -60,7 +60,7 @@ procedure ApplyEdgeDetection(var aDest: TImage; const aSrc: TImage);
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.simd.mathutil;
 
 const

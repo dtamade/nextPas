@@ -5,7 +5,6 @@ unit nextpas.core.mem.arena.growable;
 interface
 
 uses
-  SysUtils,
   nextpas.core.math,              // ✅ Math facade (for trunc)
   nextpas.core.mem.blockpool,
   nextpas.core.mem.alloc,

@@ -19,7 +19,6 @@ function FsFromHandle(const AHandle: Int32; const AName: string): IFile;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files.base,

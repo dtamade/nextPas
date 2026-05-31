@@ -5,7 +5,7 @@ unit nextpas.core.mem.adapters;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.mem.interfaces,
   nextpas.core.mem.mem_pool,
   nextpas.core.mem.stack_pool,

@@ -5,8 +5,6 @@ unit nextpas.core.compress.lz4.ffi;
 interface
 
 uses
-  SysUtils;
-
 function NativeLz4Compress(const AData: TBytes): TBytes;
 function NativeLz4Decompress(const AData: TBytes; const AOriginalSize: Int32): TBytes;
 function NativeLz4CompressBound(const AInputSize: Int32): Int32;

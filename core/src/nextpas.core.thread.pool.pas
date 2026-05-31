@@ -13,7 +13,7 @@ function CreateThreadPool(const AWorkerCount: Integer = 0): IThreadPool;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.sync.condvar,

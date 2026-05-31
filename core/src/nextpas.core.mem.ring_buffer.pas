@@ -31,7 +31,7 @@ unit nextpas.core.mem.ring_buffer;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.error;

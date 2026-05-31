@@ -22,7 +22,7 @@ unit nextpas.core.collections.smallvec;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.collections.smallvec.base;
 
 type

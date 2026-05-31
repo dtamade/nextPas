@@ -7,8 +7,8 @@ unit nextpas.core.collections.vec;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.math,
   nextpas.core.mem.utils,
   nextpas.core.collections.base,
