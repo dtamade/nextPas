@@ -275,10 +275,10 @@ const
 {$I nextpas.core.crypto.ed25519.comb.inc}
 var
   Q, T, LPt: TEdPoint;
-  I, K, BitPos: Integer;
+  I, K, BitPos, J: Integer;
+  LBit: Int64;
+  LMask: Int64;
 begin
-  // 8-table comb method: 32 doublings + up to 256 conditional additions
-  // Table[k][i] = i * 2^(32*k) * B, k=0..7, i=0..14
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
 
   for I := 31 downto 0 do
@@ -292,16 +292,30 @@ begin
     begin
       BitPos := K * 32 + I;
       if BitPos < 256 then
+        LBit := (AScalar[BitPos shr 3] shr (BitPos and 7)) and 1
+      else
+        LBit := 0;
+
+      // CT table select: scan table entry, masked by bit value
+      LPt.X := FE_ZERO; LPt.Y := FE_ONE; LPt.Z := FE_ONE; LPt.T := FE_ZERO;
+      LMask := -LBit; // all-ones if bit=1, all-zeros if bit=0
+      for J := 0 to 9 do
       begin
-        if ((AScalar[BitPos shr 3] shr (BitPos and 7)) and 1) = 1 then
-        begin
-          LPt.X := ED25519_COMB_TABLE[K, 0].X;
-          LPt.Y := ED25519_COMB_TABLE[K, 0].Y;
-          LPt.Z := ED25519_COMB_TABLE[K, 0].Z;
-          LPt.T := ED25519_COMB_TABLE[K, 0].T;
-          EdPointAdd(T, Q, LPt);
-          Q := T;
-        end;
+        LPt.X[J] := LPt.X[J] xor (ED25519_COMB_TABLE[K, 0].X[J] and LMask);
+        LPt.Y[J] := (LPt.Y[J] and (not LMask)) or (ED25519_COMB_TABLE[K, 0].Y[J] and LMask);
+        LPt.Z[J] := (LPt.Z[J] and (not LMask)) or (ED25519_COMB_TABLE[K, 0].Z[J] and LMask);
+        LPt.T[J] := LPt.T[J] xor (ED25519_COMB_TABLE[K, 0].T[J] and LMask);
+      end;
+
+      // Always add (identity if bit=0, point if bit=1)
+      EdPointAdd(T, Q, LPt);
+      // CT select: Q = T if bit=1, Q = Q if bit=0
+      for J := 0 to 9 do
+      begin
+        Q.X[J] := (T.X[J] and LMask) or (Q.X[J] and (not LMask));
+        Q.Y[J] := (T.Y[J] and LMask) or (Q.Y[J] and (not LMask));
+        Q.Z[J] := (T.Z[J] and LMask) or (Q.Z[J] and (not LMask));
+        Q.T[J] := (T.T[J] and LMask) or (Q.T[J] and (not LMask));
       end;
     end;
   end;
