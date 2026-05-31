@@ -41,8 +41,8 @@ uses
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions,
   nextpas.core.tls.errors,
-  nextpas.core.tls.openssl.errors,  // Phase 3.1 - OpenSSL-specific error handling
-  nextpas.core.tls.encoding,         // Phase 2.3.3 - Use unified encoding utilities
+  nextpas.core.tls.openssl.errors,
+  nextpas.core.tls.encoding,
   nextpas.core.tls.openssl.loader,
   nextpas.core.tls.openssl.api,
   nextpas.core.tls.openssl.api.core,
@@ -50,7 +50,8 @@ uses
   nextpas.core.tls.openssl.api.kdf,
   nextpas.core.tls.openssl.api.hmac,
   nextpas.core.tls.openssl.api.rand,
-  nextpas.core.tls.aesgcm.pool;      // Phase B - AES-GCM context pool optimization
+  nextpas.core.tls.aesgcm.pool,
+  nextpas.core.crypto.hash;
 
 type
   {**
@@ -70,7 +71,8 @@ type
     HASH_SHA256,
     HASH_SHA512,
     HASH_SHA1,
-    HASH_MD5
+    HASH_MD5,
+    HASH_SHA384
   );
 
   {**
@@ -808,6 +810,7 @@ begin
   case AAlgorithm of
     HASH_SHA256: Result := EVP_sha256();
     HASH_SHA512: Result := EVP_sha512();
+    HASH_SHA384: Result := EVP_sha384();
     HASH_SHA1: Result := EVP_sha1();
     HASH_MD5: Result := EVP_md5();
   end;
@@ -1588,6 +1591,7 @@ class function TCryptoUtils.CalculateHash(
 begin
   case AAlgorithm of
     HASH_SHA256: Result := SHA256(AData);
+    HASH_SHA384: Result := nextpas.core.crypto.hash.SHA384(AData);
     HASH_SHA512: Result := SHA512(AData);
   else
     RaiseUnsupported('hash algorithm');
@@ -1957,13 +1961,13 @@ var
   LCipher: PEVP_CIPHER;
   LLen, LPlainLen: Integer;
   LDataLen: Integer;
+  LTmp: TBytes;
 begin
   Result := False;
 
   try
     EnsureInitialized;
 
-    // Validate inputs
     if Length(AKey) <> 32 then Exit;
     if Length(AIV) <> 12 then Exit;
     if Length(ATag) <> 16 then Exit;
@@ -1979,29 +1983,26 @@ begin
       if LCipher = nil then Exit;
 
       if EVP_DecryptInit_ex(LCtx, LCipher, nil, nil, nil) <> 1 then Exit;
-
-      // Set IV length
       if EVP_CIPHER_CTX_ctrl(LCtx, EVP_CTRL_GCM_SET_IVLEN, Length(AIV), nil) <> 1 then Exit;
-
-      // Initialize with key and IV
       if EVP_DecryptInit_ex(LCtx, nil, nil, @AKey[0], @AIV[0]) <> 1 then Exit;
 
-      // Decrypt in place - output goes back into AData
-      if EVP_DecryptUpdate(LCtx, @AData[0], LLen, @AData[0], LDataLen) <> 1 then Exit;
+      SetLength(LTmp, LDataLen);
+      if EVP_DecryptUpdate(LCtx, @LTmp[0], LLen, @AData[0], LDataLen) <> 1 then Exit;
       LPlainLen := LLen;
 
-      // Set authentication tag
       if EVP_CIPHER_CTX_ctrl(LCtx, EVP_CTRL_GCM_SET_TAG, Length(ATag), @ATag[0]) <> 1 then Exit;
-
-      // Disable padding (GCM doesn't use it)
       EVP_CIPHER_CTX_set_padding(LCtx, 0);
 
-      // Finalize and verify tag
-      if EVP_DecryptFinal_ex(LCtx, @AData[LPlainLen], LLen) <> 1 then Exit;
+      if EVP_DecryptFinal_ex(LCtx, @LTmp[LPlainLen], LLen) <> 1 then
+      begin
+        FillChar(LTmp[0], Length(LTmp), 0);
+        Exit;
+      end;
       LPlainLen := LPlainLen + LLen;
 
-      // Resize AData to actual plaintext length
       SetLength(AData, LPlainLen);
+      Move(LTmp[0], AData[0], LPlainLen);
+      FillChar(LTmp[0], Length(LTmp), 0);
 
       Result := True;
     finally
@@ -2098,6 +2099,7 @@ begin
   // 设置哈希大小
   case AAlgorithm of
     HASH_SHA256: FHashSize := 32;
+    HASH_SHA384: FHashSize := 48;
     HASH_SHA512: FHashSize := 64;
     HASH_SHA1: FHashSize := 20;
     HASH_MD5: FHashSize := 16;
@@ -2456,6 +2458,7 @@ function HashAlgorithmToString(AAlgorithm: THashAlgorithm): string;
 begin
   case AAlgorithm of
     HASH_SHA256: Result := 'SHA-256';
+    HASH_SHA384: Result := 'SHA-384';
     HASH_SHA512: Result := 'SHA-512';
     HASH_SHA1: Result := 'SHA-1';
     HASH_MD5: Result := 'MD5';
@@ -2469,6 +2472,8 @@ begin
   LName := UpperCase(AName);
   if (LName = 'SHA256') or (LName = 'SHA-256') then
     Result := HASH_SHA256
+  else if (LName = 'SHA384') or (LName = 'SHA-384') then
+    Result := HASH_SHA384
   else if (LName = 'SHA512') or (LName = 'SHA-512') then
     Result := HASH_SHA512
   else if (LName = 'SHA1') or (LName = 'SHA-1') then
