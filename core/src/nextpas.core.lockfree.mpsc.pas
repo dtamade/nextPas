@@ -57,6 +57,9 @@ destructor TMpscQueue.Destroy;
 var
   LV: T;
 begin
+  {$IFDEF DEBUG}
+  Assert(FClosed <> 0, 'TMpscQueue.Destroy: Close must be called before Destroy to ensure all producers have stopped');
+  {$ENDIF}
   while TryDequeue(LV) do;
   inherited;
 end;

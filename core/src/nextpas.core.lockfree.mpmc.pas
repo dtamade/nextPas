@@ -30,7 +30,7 @@ type
     constructor Create(const ACapacity: PtrUInt);
     function TryEnqueue(const AValue: T): Boolean;
     function TryDequeue(out AValue: T): Boolean;
-    procedure EnqueueWait(const AValue: T);
+    function EnqueueWait(const AValue: T): Boolean;
     function DequeueWait(out AValue: T): Boolean;
     function EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
     function DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
@@ -140,25 +140,25 @@ begin
   end;
 end;
 
-procedure TMpmcQueue.EnqueueWait(const AValue: T);
+function TMpmcQueue.EnqueueWait(const AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
   if TryEnqueue(AValue) then
   begin
-    
-    Exit;
+
+    Exit(True);
   end;
   while True do
   begin
     LEpoch := AtomicLoad32(FSpaceEpoch, moAcquire);
     if TryEnqueue(AValue) then
     begin
-      
-      Exit;
+
+      Exit(True);
     end;
     if AtomicLoad32(FClosed, moAcquire) <> 0 then
-      Exit;
+      Exit(False);
     LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, -1);
   end;
 end;
