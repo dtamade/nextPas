@@ -182,6 +182,9 @@ function Format(const AFmt: string; const AArgs: array of const): string;
 var
   LI, LArgIdx, LLen: Integer;
   LTmp: string;
+  LPrecision, LWidth: Integer;
+  LDotPos: Integer;
+  LFmtSpec: string;
 begin
   Result := '';
   LArgIdx := 0;
@@ -192,9 +195,24 @@ begin
     if (AFmt[LI] = '%') and (LI < LLen) then
     begin
       Inc(LI);
+      LFmtSpec := '';
       while (LI <= LLen) and (AFmt[LI] in ['0'..'9', '-', '.', '*']) do
+      begin
+        LFmtSpec := LFmtSpec + AFmt[LI];
         Inc(LI);
+      end;
       if LI > LLen then Break;
+
+      LPrecision := -1;
+      LWidth := 0;
+      LDotPos := Pos('.', LFmtSpec);
+      if LDotPos > 0 then
+      begin
+        Val(Copy(LFmtSpec, LDotPos + 1, Length(LFmtSpec) - LDotPos), LPrecision, LWidth);
+        if LWidth <> 0 then LPrecision := 6;
+      end;
+      if LPrecision < 0 then LPrecision := 6;
+
       case AFmt[LI] of
         'd', 'i':
           if LArgIdx <= High(AArgs) then
@@ -251,8 +269,8 @@ begin
           if LArgIdx <= High(AArgs) then
           begin
             case AArgs[LArgIdx].VType of
-              vtExtended: Str(AArgs[LArgIdx].VExtended^:0:6, LTmp);
-            else Str(0.0:0:6, LTmp);
+              vtExtended: Str(AArgs[LArgIdx].VExtended^:0:LPrecision, LTmp);
+            else Str(0.0:0:LPrecision, LTmp);
             end;
             Result := Result + LTmp;
             Inc(LArgIdx);
