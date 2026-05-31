@@ -1,5 +1,28 @@
 # Findings & Decisions
 
+## 2026-05-31 Crypto/TLS Security Audit Findings
+
+- Deep audit scope covered `nextpas.core.crypto.field25519*`, `x25519`,
+  `ed25519`, `aesgcm`, `constant_time`, `ct.bigint`, `ecdsa`, `bigint`,
+  `rsa`, and the TLS 1.3 `chacha20poly1305`, `keyschedule`, `recordcrypto`,
+  `clienthello`, `serverhello`, and `aead` units.
+- High-risk findings identified in the current source:
+  - Pure-Pascal AES uses secret-dependent `SBox[...]` lookups, so the AES-GCM
+    fallback is not constant-time on non-AESNI systems.
+  - RSA/ECDSA big-int and scalar-multiplication paths are not constant-time;
+    the current `ct.bigint` API also overstates its guarantees.
+  - TLS 1.3 ChaCha20-Poly1305 has an x86_64 AVX2 path with no runtime feature
+    gate, creating a SIGILL/DoS risk on unsupported CPUs.
+  - The non-x86_64 streaming Poly1305 fallback is explicitly incomplete and is
+    not cryptographically correct for production use.
+  - Ed25519 verification accepts non-canonical signatures/encodings and the
+    unit still exposes public test helpers that can trigger short-input reads.
+  - The standalone `field25519.femul.x86_64.inc` variant is alias-unsafe if it
+    is ever wired in, even though the current live `FeMul` implementation uses
+    a safer temporary-buffer approach.
+- Fresh report for the user should be grouped by category with concrete
+  severity and `file:line` references, plus suggested fixes.
+
 ## 2026-05-28 Follow-up Findings 41
 
 - Wave 6 branch verification is complete in the isolated worktree:

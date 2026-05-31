@@ -3,6 +3,29 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
+## Session: 2026-05-31 (crypto/tls security audit)
+
+- **Status:** audit completed; no code changes to production modules in this pass
+- Scope:
+  - `nextpas.core.crypto.field25519*`, `x25519`, `ed25519`, `aesgcm`,
+    `constant_time`, `ct.bigint`, `ecdsa`, `bigint`, `rsa`
+  - TLS 1.3 `chacha20poly1305`, `keyschedule`, `recordcrypto`, `clienthello`,
+    `serverhello`, `aead`
+- Fresh evidence gathered from live source:
+  - Pure-Pascal AES-GCM fallback is not constant-time because AES round logic
+    indexes `SBox` with secret state.
+  - RSA/ECDSA secret-dependent big-int and scalar-multiplication paths are not
+    constant-time, despite local comments/API names that imply otherwise.
+  - x86_64 ChaCha20 code unconditionally enters AVX2 paths with no runtime CPU
+    feature gate; unsupported hosts can fault.
+  - Non-x86_64 streaming Poly1305 fallback is explicitly incomplete and not
+    cryptographically correct for production use.
+  - Ed25519 verify/sign paths still have canonicality/timing issues, and
+    public test helpers in the unit can read short inputs unsafely.
+  - Standalone `field25519.femul.x86_64.inc` is alias-unsafe if enabled; the
+    currently compiled `field25519.pas` `FeMul` path avoids that by staging
+    temporaries on the stack before writing output.
+
 当前最新本轮为 platform host abi completeness wave 6；上一轮包括
 platform host abi completeness wave 5；
 platform host abi completeness wave 4；
