@@ -90,6 +90,25 @@ begin
   end;
 end;
 
+procedure TestDuplicateParsedKeyUpdatesValue;
+var
+  Ini: TIniFile;
+  Keys: TStringArray;
+begin
+  Ini := TIniFile.Create;
+  try
+    Ini.LoadFromString('[app]' + #10 +
+      'name=first' + #10 +
+      'Name=second' + #10);
+    CheckEqual('second', Ini.ReadString('app', 'name', ''), 'last parsed value wins');
+    Keys := Ini.GetKeys('app');
+    CheckEqual(Int64(1), Int64(Length(Keys)), 'duplicate parsed key is not appended');
+    CheckEqual('name', LowerCase(Keys[0]), 'original key slot reused');
+  finally
+    Ini.Free;
+  end;
+end;
+
 procedure TestWriteInteger;
 var
   Ini: TIniFile;
@@ -448,6 +467,7 @@ begin
   T.Run('ReadInteger', @TestReadInteger);
   T.Run('ReadBool', @TestReadBool);
   T.Run('WriteString', @TestWriteString);
+  T.Run('Duplicate parsed key updates value', @TestDuplicateParsedKeyUpdatesValue);
   T.Run('WriteInteger', @TestWriteInteger);
   T.Run('WriteBool', @TestWriteBool);
   T.Run('SectionExists', @TestSectionExists);

@@ -118,7 +118,7 @@ end;
 procedure TIniFile.ParseLine(const ALine: string; var ACurrentSection: Integer);
 var
   LTrimmed: string;
-  LEqPos, LClose: Integer;
+  LEqPos, LClose, LKeyIdx: Integer;
   LKey, LValue, LSectionName: string;
 begin
   LTrimmed := TrimLeft(ALine);
@@ -150,11 +150,17 @@ begin
     begin
       with FSections[ACurrentSection] do
       begin
-        if EntryCount >= Length(Entries) then
-          SetLength(Entries, EntryCount + 8);
-        Entries[EntryCount].Key := LKey;
-        Entries[EntryCount].Value := LValue;
-        Inc(EntryCount);
+        LKeyIdx := FindKey(ACurrentSection, LKey);
+        if LKeyIdx >= 0 then
+          Entries[LKeyIdx].Value := LValue
+        else
+        begin
+          if EntryCount >= Length(Entries) then
+            SetLength(Entries, EntryCount + 8);
+          Entries[EntryCount].Key := LKey;
+          Entries[EntryCount].Value := LValue;
+          Inc(EntryCount);
+        end;
       end;
     end;
   end;
@@ -200,8 +206,45 @@ procedure TIniFile.LoadFromFile(const AFileName: string);
 var
   LFile: TextFile;
   LContent, LLine: string;
+  LLen, LCapacity: Integer;
+
+  procedure EnsureContentCapacity(AAdditional: Integer);
+  var
+    LRequired: Integer;
+  begin
+    LRequired := LLen + AAdditional;
+    if LRequired <= LCapacity then
+      Exit;
+    if LCapacity = 0 then
+      LCapacity := 1024;
+    while LCapacity < LRequired do
+      LCapacity := LCapacity * 2;
+    SetLength(LContent, LCapacity);
+  end;
+
+  procedure AppendToContent(const AText: string);
+  var
+    LTextLen: Integer;
+  begin
+    LTextLen := Length(AText);
+    if LTextLen = 0 then
+      Exit;
+    EnsureContentCapacity(LTextLen);
+    Move(AText[1], LContent[LLen + 1], LTextLen);
+    Inc(LLen, LTextLen);
+  end;
+
+  procedure AppendContentChar(ACh: AnsiChar);
+  begin
+    EnsureContentCapacity(1);
+    LContent[LLen + 1] := ACh;
+    Inc(LLen);
+  end;
+
 begin
   LContent := '';
+  LLen := 0;
+  LCapacity := 0;
   AssignFile(LFile, AFileName);
   {$I-}
   Reset(LFile);
@@ -212,30 +255,76 @@ begin
     while not EOF(LFile) do
     begin
       ReadLn(LFile, LLine);
-      LContent := LContent + LLine + #10;
+      AppendToContent(LLine);
+      AppendContentChar(#10);
     end;
   finally
     CloseFile(LFile);
   end;
+  SetLength(LContent, LLen);
   LoadFromString(LContent);
 end;
 
 function TIniFile.ToString: string;
 var
-  I, J: Integer;
+  I, J, LTotalLen, LPos: Integer;
+
+  procedure AppendChar(ACh: AnsiChar);
+  begin
+    Result[LPos] := ACh;
+    Inc(LPos);
+  end;
+
+  procedure AppendString(const AText: string);
+  var
+    LTextLen: Integer;
+  begin
+    LTextLen := Length(AText);
+    if LTextLen = 0 then
+      Exit;
+    Move(AText[1], Result[LPos], LTextLen);
+    Inc(LPos, LTextLen);
+  end;
+
 begin
-  Result := '';
+  LTotalLen := 0;
   for I := 0 to FSectionCount - 1 do
   begin
     if FSections[I].Name <> '' then
     begin
-      if Result <> '' then
-        Result := Result + #10;
-      Result := Result + '[' + FSections[I].Name + ']' + #10;
+      if LTotalLen <> 0 then
+        Inc(LTotalLen);
+      Inc(LTotalLen, Length(FSections[I].Name) + 3);
     end;
     for J := 0 to FSections[I].EntryCount - 1 do
-      Result := Result + FSections[I].Entries[J].Key + '=' +
-                FSections[I].Entries[J].Value + #10;
+      Inc(LTotalLen,
+        Length(FSections[I].Entries[J].Key) + 1 +
+        Length(FSections[I].Entries[J].Value) + 1);
+  end;
+
+  SetLength(Result, LTotalLen);
+  if LTotalLen = 0 then
+    Exit;
+
+  LPos := 1;
+  for I := 0 to FSectionCount - 1 do
+  begin
+    if FSections[I].Name <> '' then
+    begin
+      if LPos > 1 then
+        AppendChar(#10);
+      AppendChar('[');
+      AppendString(FSections[I].Name);
+      AppendChar(']');
+      AppendChar(#10);
+    end;
+    for J := 0 to FSections[I].EntryCount - 1 do
+    begin
+      AppendString(FSections[I].Entries[J].Key);
+      AppendChar('=');
+      AppendString(FSections[I].Entries[J].Value);
+      AppendChar(#10);
+    end;
   end;
 end;
 
