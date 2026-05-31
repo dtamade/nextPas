@@ -1220,12 +1220,9 @@ begin
 end;
 
 procedure TVec.EnsureCapacity(aCapacity: SizeUInt);
-var
-  LCap: SizeUInt;
 begin
-  LCap := GetCapacity;
-  if aCapacity > LCap then
-    Reserve(aCapacity - LCap);
+  if aCapacity > GetCapacity then
+    Reserve(aCapacity - FCount);
 end;
 
 procedure TVec.Shrink;
@@ -1993,9 +1990,10 @@ begin
     // 复制增长策略
     LResult.SetGrowStrategy(GetGrowStrategy);
 
+    if FCount > 0 then
     for i := 0 to FCount - 1 do
-      if aPredicate(GetUnchecked(i), aData) then  // 直接使用引用，避免拷贝
-        LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
+      if aPredicate(GetUnchecked(i), aData) then
+        LResult.PushUnchecked(GetUnchecked(i));
 
     // 收缩到实际大小
     LResult.ShrinkToFit;
@@ -2017,6 +2015,7 @@ begin
     // 复制增长策略
     LResult.SetGrowStrategy(GetGrowStrategy);
 
+    if FCount > 0 then
     for i := 0 to FCount - 1 do
       if aPredicate(GetUnchecked(i), aData) then  // 直接使用引用，避免拷贝
         LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
@@ -2042,6 +2041,7 @@ begin
     // 复制增长策略
     LResult.SetGrowStrategy(GetGrowStrategy);
 
+    if FCount > 0 then
     for i := 0 to FCount - 1 do
       if aPredicate(GetUnchecked(i)) then         // 直接使用引用，避免拷贝
         LResult.PushUnchecked(GetUnchecked(i));   // 无边界检查版本
@@ -2060,6 +2060,7 @@ function TVec.Any(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boo
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then begin Result := False; Exit; end;
   for i := 0 to FCount - 1 do
     if aPredicate(GetUnchecked(i), aData) then
       Exit(True);
@@ -2070,6 +2071,7 @@ function TVec.Any(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): B
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then begin Result := False; Exit; end;
   for i := 0 to FCount - 1 do
     if aPredicate(GetUnchecked(i), aData) then
       Exit(True);
@@ -2081,6 +2083,7 @@ function TVec.Any(aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then begin Result := False; Exit; end;
   for i := 0 to FCount - 1 do
     if aPredicate(GetUnchecked(i)) then
       Exit(True);
@@ -2092,6 +2095,7 @@ function TVec.All(aPredicate: specialize TPredicateFunc<T>; aData: Pointer): Boo
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then begin Result := True; Exit; end;
   for i := 0 to FCount - 1 do
     if not aPredicate(GetUnchecked(i), aData) then
       Exit(False);
@@ -2102,6 +2106,7 @@ function TVec.All(aPredicate: specialize TPredicateMethod<T>; aData: Pointer): B
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then begin Result := True; Exit; end;
   for i := 0 to FCount - 1 do
     if not aPredicate(GetUnchecked(i), aData) then
       Exit(False);
@@ -2113,6 +2118,7 @@ function TVec.All(aPredicate: specialize TPredicateRefFunc<T>): Boolean;
 var
   i: SizeUInt;
 begin
+  if FCount = 0 then begin Result := True; Exit; end;
   for i := 0 to FCount - 1 do
     if not aPredicate(GetUnchecked(i)) then
       Exit(False);
