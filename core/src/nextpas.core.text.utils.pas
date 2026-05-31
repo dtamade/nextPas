@@ -10,7 +10,7 @@ function TrimRight(const S: string): string;
 function UpperCase(const S: string): string;
 function StrToIntDef(const S: string; ADefault: Int64): Int64;
 function BoolToStr(AValue: Boolean; const ATrueStr: string = 'True'; const AFalseStr: string = 'False'): string;
-function StringReplace(const S, OldPattern, NewPattern: string): string;
+function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
 function QuotedStr(const S: string): string;
 
 implementation
@@ -72,7 +72,7 @@ begin
   if AValue then Result := ATrueStr else Result := AFalseStr;
 end;
 
-function StringReplace(const S, OldPattern, NewPattern: string): string;
+function StringReplace(const S, OldPattern, NewPattern: string; AReplaceAll: Boolean = True): string;
 var
   P, Start: SizeInt;
 begin
@@ -87,6 +87,11 @@ begin
     end;
     Result := Result + Copy(S, Start, P - Start) + NewPattern;
     Start := P + Length(OldPattern);
+    if not AReplaceAll then
+    begin
+      Result := Result + Copy(S, Start, Length(S) - Start + 1);
+      Break;
+    end;
   until False;
 end;
 
