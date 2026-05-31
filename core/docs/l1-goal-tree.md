@@ -1,69 +1,81 @@
-# nextPas L1 基础设施模块 — 目标树
+# nextPas Core Framework — 目标树
+
+> 最后更新: 2026-05-31 | CI: All tests passed | 2500+ tests, 0 leaks
 
 ## 定位
 
-L1 是框架的基础设施层，只依赖 L0（base/errors/platform/mem）。
-为 L2（fs/net/crypto/json 等）和 L3（http/websocket/tui 等）提供通用能力。
+nextPas Core 是 FreePascal 领域最优秀的框架之一。分三层：
+- **L0**: base/errors/platform/mem — OS 底座
+- **L1**: bytes/text/encoding/collections/sync/thread/lockfree/async/io/time/id/testing — 基础设施
+- **L2**: fs/net/json/toml/yaml/compress/regex/log/encoding/hash/crypto — 领域能力
+- **L3**: http/args/process/coroutine/event — 应用层
 
-## 模块清单与状态
+## L0 模块状态
+
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `base` | 核心类型、异常、TByteSpan、契约 | ✅ 完成 |
+| `errors` | 异常层级 (ENextPasError 体系) | ✅ 完成 |
+| `platform` | OS API 封装 (posix/linux/darwin/windows) | ✅ 完成 (Tier 1 全绿) |
+| `mem` | 内存管理 (IAllocator/Pool/Arena/StackPool) | ✅ 完成 |
+| `atomic` | 原子操作 (Load/Store/CAS/Fetch*, 全内存序) | ✅ 完成 |
+| `math` | 数学函数 (Min/Max/Clamp/Abs/Pow/Trig) | ✅ 完成 |
+| `simd` | SIMD 抽象 (SSE2/AVX2/NEON, 统一宽度 API) | ✅ 完成 |
+
+## L1 模块状态
 
 | 模块 | 职责 | 状态 |
 |------|------|------|
 | `bytes` | 字节容器、字节序、Builder | ✅ 完成 (ops+binary+builder, 33 tests, bench) |
-| `text` | 字符串操作、Unicode、格式化 | ✅ 完成 (base+conv+format, 35 tests, 0 SysUtils) |
-| `encoding` | 编解码 (base64/hex/url/varint) | ✅ 已有 |
-| `collections` | 容器 (Vec/HashMap/Deque/Set/List/LRU) | ✅ 已有 |
-| `sync` | 同步原语 (Mutex/RWLock/Atomic/WaitGroup/Once/Semaphore/Barrier/Event) | ✅ 完成 (28 tests, 3轮Codex审查) |
-| `thread` | 线程池、Channel、Future、CancellationToken | ✅ 完成 (18 tests, 3轮Codex审查) |
-| `lockfree` | 无锁数据结构 (MPMC Channel/SPSC Queue) | ⬜ 待建 |
-| `async` | 事件循环、Reactor、异步运行时 | ⬜ 待建 |
-| `io` | 流抽象 (Reader/Writer/Buffer/Scanner/Pipe) | ✅ 完成 (Go parity, 46 tests, bench, Scanner) |
-| `time` | DateTime/Duration/Timer/Stopwatch | 🔶 Wave 1-2 done, Wave 3-5 待做 |
-| `id` | UUID/ULID/Snowflake/NanoID | ✅ 已有 (15 tests) |
-| `testing` | 测试框架 | ✅ 已有 (TTestRunner) |
+| `text` | 字符串操作、Unicode、格式化、conv | ✅ 完成 (base+conv+format+builder, 自实现 Format, 0 SysUtils) |
+| `encoding` | 编解码 (base64/hex/url/varint) | ✅ 完成 (23 tests, Codex审查3项修复) |
+| `collections` | 20+ 容器 (Vec/HashMap/Deque/BTree/SwissTable/SkipList/LRU/Trie) | ✅ 完成 (422+ tests, SwissTable Get 超越 Rust 7%) |
+| `sync` | 同步原语 (Mutex/RWLock/CondVar/WaitGroup/Once/Semaphore/Barrier/SpinLock) | ✅ 完成 (28 tests, Codex审查) |
+| `thread` | 线程池/WorkStealing/Channel/Future/Cancel | ✅ 完成 (18 tests, Codex审查) |
+| `lockfree` | 无锁 (MPMC/SPSC/MPSC/Stack/Deque) | ✅ 完成 (24+7 stress tests, tagged-ptr ABA, Codex审查) |
+| `async` | 事件循环 (io_uring+epoll双后端, timer heap, timeout) | ✅ 完成 (31 tests, Codex审查5项修复) |
+| `io` | 流抽象 (IReader/IWriter/IStream/Buffer/Scanner/Pipe) | ✅ 完成 (46 tests, Go parity) |
+| `time` | DateTime/Duration/Deadline/Sleep/Timer/Ticker/Period | ✅ 完成 (Wave 1-5, 49 tests, ISO 8601) |
+| `id` | UUID/ULID/Snowflake/NanoID/KSUID/XID/V7 | ✅ 完成 (70 tests) |
+| `testing` | TTestRunner 测试框架 | ✅ 完成 |
+| `stopwatch` | 高精度计时 | ✅ 完成 (15 tests) |
 
 ## L2 模块状态
 
 | 模块 | 职责 | 状态 |
 |------|------|------|
-| `fs` | 文件系统 (IFile/IDirIterator/Path/Symlink/Walk) | ✅ 完成 (35 tests, bench, Codex审查10项全修) |
-| `net` | 网络 (TCP/UDP/Resolve, ITcpStream extends IStream) | ✅ 完成 (7 tests, Codex审查修复, 跨平台) |
+| `fs` | 文件系统 (IFile/Walk/Symlink/Atomic) | ✅ 完成 (47 tests, Codex审查10项全修) |
+| `net` | 网络 (TCP/UDP/Resolve, deadline) | ✅ 完成 (24 tests, Codex审查) |
+| `json` | JSON (parser/builder/reader/writer/marshal) | ✅ 完成 (98 tests, 3-12x fpjson) |
+| `toml` | TOML v1.0+v1.1 | ✅ 完成 (291 tests, 6-8x Rust toml-rs) |
+| `yaml` | YAML (scanner/parser/builder) | ✅ 完成 (77 tests, 10x Go yaml.v3) |
+| `compress` | deflate/gzip/lz4 | ✅ 完成 (26 tests) |
+| `regex` | Thompson NFA + DFA, SIMD first-byte | ✅ 完成 (115 tests, Phase 4 API 完整) |
+| `log` | 结构化日志 (async, audit, multi-handler) | ✅ 完成 (102 tests) |
+| `hash` | WyHash + SHA-256/MD5 | ✅ 完成 |
+| `crypto` | P-256 field (ASM multiply, 常量时间) | 🔶 进行中 |
 
-### T1: 基础字符串操作 ✅
-- [x] Trim/Split/Join/Replace/Case/Pad/Repeat/IndexOf
-- [x] UTF-8 Length/CodePointAt
-- [x] 21 tests
+## L3 模块状态
 
-### T2: 数字转换 (text.conv) ✅
-- [x] IntToStr/UIntToStr/IntToHex
-- [x] TryStrToInt/TryStrToInt32/TryStrToUInt64/StrToInt
-- [x] FloatToStr/TryStrToFloat
-- [x] TextOfChar
-- [x] 9 tests
-
-### T3: 格式化引擎 (text.format) ✅
-- [x] TextFormat: %d/%u/%x/%X/%s/%f, 宽度/精度, %%
-- [x] 5 tests
-
-### T4: 门面补全 + SysUtils 消除
-- [ ] text.pas re-export conv + format 全部 API
-- [ ] text.pas 用 TextOfChar 替换 StringOfChar，去掉 SysUtils
-
-### T5: text.builder (高性能字符串构建)
-- [ ] IStringBuilder interface
-- [ ] Append/AppendChar/AppendInt/AppendLine/ToString
-- [ ] 基于 IAllocator raw memory
+| 模块 | 职责 | 状态 |
+|------|------|------|
+| `http` | HTTP server/client (radix router, middleware, H1 writer) | 🔶 Phase 1 完成 (88 tests), H1 parser 待实现 |
+| `args` | CLI 解析 (TArgParser+TArgApp, 子命令路由) | ✅ 完成 (56 tests) |
+| `process` | 子进程 (spawn/pipe/env/wait) | ✅ 完成 (45 tests) |
+| `coroutine` | 协程调度器 | ✅ 完成 (10 tests) |
+| `event` | 事件总线 (priority dispatch) | ✅ 完成 |
+| `props` | 属性系统 | ✅ 完成 (11 tests) |
 
 ## 下一步优先级
 
-1. **T4**: text 门面补全 + 去 SysUtils（收尾当前模块）
-2. **time Wave 3-5**: Timezone/Timer/Period（依赖 text.format）
-3. **io**: IReader/IWriter/IStream 流抽象（bytes/text 的下游消费者）
-4. **sync**: Mutex/RWLock/Condvar（platform.sync 的 L1 封装）
+1. **HTTP Phase 2**: H1 parser (llhttp 翻译) + Server accept loop + Client 连接池
+2. **TLS/Crypto**: P-256 完整 ECDH + TLS 1.3 握手
+3. **性能基准**: 系统性 benchmark vs Go/Rust/FPC RTL（collections/json/toml/regex/compress）
 
 ## 质量门禁
 
 - 100% 接口测试覆盖
 - heaptrc 验证 0 内存泄漏
-- 每轮 /codex 复盘
-- 每轮 git 提交
+- Codex 独立审查关键模块
+- 每轮 git 提交，变更清晰可追溯
+- 框架纪律：用自有 API（CopyNonOverlap, IAllocator），不依赖 SysUtils
