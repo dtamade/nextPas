@@ -23,6 +23,7 @@ type
     function TryAcquire: Boolean;
     procedure Release;
     function Lock: ILockGuard;
+    function NativeHandle: Pointer;
   end;
 
   {**
@@ -38,6 +39,7 @@ type
     function TryAcquire: Boolean;
     procedure Release;
     function Lock: ILockGuard;
+    function NativeHandle: Pointer;
   end;
 
 implementation
@@ -116,6 +118,11 @@ begin
   Result := TLockGuardImpl.Create(Self);
 end;
 
+function TMutex.NativeHandle: Pointer;
+begin
+  Result := @FHandle;
+end;
+
 { TFutexMutex }
 
 const
@@ -183,6 +190,11 @@ function TFutexMutex.Lock: ILockGuard;
 begin
   Acquire;
   Result := TLockGuardImpl.Create(Self);
+end;
+
+function TFutexMutex.NativeHandle: Pointer;
+begin
+  Result := @FState;
 end;
 
 end.
