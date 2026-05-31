@@ -6,6 +6,7 @@ uses
   nextpas.core.process,
   nextpas.core.process.base,
   nextpas.core.process.child,
+  nextpas.core.process.pipe,
   nextpas.core.process.command,
   nextpas.core.io.intf;
 
@@ -194,6 +195,127 @@ begin
   Check('Spawn nonexistent — exit 127', LOut.ExitCode = 127);
 end;
 
+procedure TestEnvAdd;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/env')
+    .EnvAdd('TEST_KEY', 'test_value')
+    .Output;
+  Check('EnvAdd — key visible', Pos('TEST_KEY=test_value', LOut.StdOut) > 0);
+end;
+
+procedure TestStdinNull;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/cat')
+    .Stdin(stNull)
+    .Stdout(stPiped)
+    .Output;
+  Check('Stdin null — cat gets EOF immediately', LOut.ExitCode = 0);
+  Check('Stdin null — no output', LOut.StdOut = '');
+end;
+
+procedure TestStdoutNull;
+var LCode: Integer;
+begin
+  LCode := TCommand.New('/bin/echo')
+    .Args(['should not appear'])
+    .Stdout(stNull)
+    .Status;
+  Check('Stdout null — exits 0', LCode = 0);
+end;
+
+procedure TestStderrPiped;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'echo err >&2'])
+    .Stdout(stPiped)
+    .Stderr(stPiped)
+    .Output;
+  Check('Stderr piped — captured', Pos('err', LOut.StdErr) > 0);
+end;
+
+procedure TestDualPipeLargeOutput;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/sh')
+    .Args(['-c', 'seq 1 5000; echo err >&2'])
+    .Output;
+  Check('Large output — stdout > 10KB', Length(LOut.StdOut) > 10000);
+  Check('Large output — stderr present', Length(LOut.StdErr) > 0);
+  Check('Large output — no deadlock', LOut.ExitCode = 0);
+end;
+
+procedure TestMultipleSpawnSameCommand;
+var
+  LCmd: ICommand;
+  LOut1, LOut2: TProcessOutput;
+begin
+  LCmd := TCommand.New('/bin/echo').Args(['reuse']);
+  LOut1 := LCmd.Output;
+  LOut2 := LCmd.Output;
+  Check('Reuse command — first', Pos('reuse', LOut1.StdOut) > 0);
+  Check('Reuse command — second', Pos('reuse', LOut2.StdOut) > 0);
+end;
+
+procedure TestEmptyArgs;
+var LOut: TProcessOutput;
+begin
+  LOut := Run('/bin/echo', []);
+  Check('Empty args — exits 0', LOut.ExitCode = 0);
+end;
+
+procedure TestTakeStderr;
+var
+  LChild: IChild;
+  LReader: IReader;
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  LChild := TCommand.New('/bin/sh')
+    .Args(['-c', 'echo stderr_data >&2'])
+    .Stderr(stPiped)
+    .Spawn;
+  LReader := LChild.TakeStderr;
+  LN := LReader.Read(LBuf[0], 256);
+  Check('TakeStderr — read > 0', LN > 0);
+  LReader := nil;
+  LChild.Wait;
+end;
+
+procedure TestWaitWithOutputDualPipe;
+var
+  LChild: IChild;
+  LStdin: IWriter;
+  LOut: TProcessOutput;
+  LData: string;
+begin
+  LChild := TCommand.New('/bin/sh')
+    .Args(['-c', 'cat; echo err >&2'])
+    .Stdin(stPiped)
+    .Stdout(stPiped)
+    .Stderr(stPiped)
+    .Spawn;
+  LStdin := LChild.TakeStdin;
+  LData := 'dual pipe test';
+  LStdin.Write(LData[1], Length(LData));
+  (LStdin as TPipeWriter).Close;
+  LStdin := nil;
+  LOut := LChild.WaitWithOutput;
+  Check('Dual pipe — stdout', Pos('dual pipe test', LOut.StdOut) > 0);
+  Check('Dual pipe — stderr', Pos('err', LOut.StdErr) > 0);
+  Check('Dual pipe — exit 0', LOut.ExitCode = 0);
+end;
+
+procedure TestArgSingle;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/bin/echo').Arg('single').Output;
+  Check('Arg single — output', Pos('single', LOut.StdOut) > 0);
+end;
+
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -216,6 +338,16 @@ begin
   TestSpawnStdoutReader;
   TestCommandEnv;
   TestSpawnError;
+  TestEnvAdd;
+  TestStdinNull;
+  TestStdoutNull;
+  TestStderrPiped;
+  TestDualPipeLargeOutput;
+  TestMultipleSpawnSameCommand;
+  TestEmptyArgs;
+  TestTakeStderr;
+  TestWaitWithOutputDualPipe;
+  TestArgSingle;
 
   WriteLn('');
   WriteLn('--- ', LPassed, ' passed, ', LFailed, ' failed ---');
