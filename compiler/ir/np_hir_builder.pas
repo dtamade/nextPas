@@ -3122,7 +3122,7 @@ end;
 
 procedure THIRBuilder.ProcessVmtStore(const ANode: TTypedHirNode);
 var
-  ClsName, FuncName, VarName, ParentClass: string;
+  ClsName, FuncName, VarName, ParentClass, AbstractCheck: string;
   VmtCount: Int64;
   I, TabPos: LongInt;
   Funcs: array of string;
@@ -3168,6 +3168,11 @@ begin
     else if not FSemaModel.LookupStringConstValue(
       ClsName + '$vmt_func_' + IntToStr(I), FuncName) then
       FuncName := '';
+    if (FuncName <> '') and
+      FSemaModel.LookupStringConstValue(
+        Copy(FuncName, 1, Pos('.', FuncName) - 1) + '$abstract_' +
+        Copy(FuncName, Pos('.', FuncName) + 1, Length(FuncName)), AbstractCheck) then
+      FuncName := '';
     Funcs[I + 1] := FuncName;
   end;
   FModule.AddVmtGlobal(ClsName, Funcs);
@@ -3188,6 +3193,11 @@ begin
           FuncName := Meta.VmtSlots[I].FuncQualName
         else
           FuncName := '';
+        if (FuncName <> '') and (Pos('.', FuncName) > 0) and
+          FSemaModel.LookupStringConstValue(
+            Copy(FuncName, 1, Pos('.', FuncName) - 1) + '$abstract_' +
+            Copy(FuncName, Pos('.', FuncName) + 1, Length(FuncName)), AbstractCheck) then
+          FuncName := '';
         Funcs[I + 1] := FuncName;
       end;
       FModule.AddVmtGlobal(ParentClass, Funcs);
@@ -3204,6 +3214,11 @@ begin
       begin
         if not FSemaModel.LookupStringConstValue(
           ParentClass + '$vmt_func_' + IntToStr(I), FuncName) then
+          FuncName := '';
+        if (FuncName <> '') and (Pos('.', FuncName) > 0) and
+          FSemaModel.LookupStringConstValue(
+            Copy(FuncName, 1, Pos('.', FuncName) - 1) + '$abstract_' +
+            Copy(FuncName, Pos('.', FuncName) + 1, Length(FuncName)), AbstractCheck) then
           FuncName := '';
         Funcs[I + 1] := FuncName;
       end;
