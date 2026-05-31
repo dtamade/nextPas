@@ -131,13 +131,11 @@ procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission);
 var
   LData: TBytes;
-  LLocal: string;
 begin
   if Length(AText) > 0 then
   begin
-    LLocal := AText;
-    SetLength(LData, Length(LLocal));
-    Move(LLocal[1], LData[0], Length(LLocal));
+    SetLength(LData, Length(AText));
+    Move(PAnsiChar(AText)^, LData[0], Length(AText));
     nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
   end
   else
@@ -186,13 +184,11 @@ end;
 procedure AppendFileText(const APath: string; const AText: string);
 var
   LData: TBytes;
-  LLocal: string;
 begin
   if Length(AText) > 0 then
   begin
-    LLocal := AText;
-    SetLength(LData, Length(LLocal));
-    Move(LLocal[1], LData[0], Length(LLocal));
+    SetLength(LData, Length(AText));
+    Move(PAnsiChar(AText)^, LData[0], Length(AText));
     AppendFile(APath, LData);
   end;
 end;

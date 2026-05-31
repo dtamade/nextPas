@@ -154,7 +154,7 @@ begin
   if L = 0 then Exit;
   if FLen + L > FCap then
     Grow(L);
-  Move(AStr[1], FBuf[FLen], L);
+  Move(PAnsiChar(AStr)^, FBuf[FLen], L);
   Inc(FLen, L);
 end;
 
