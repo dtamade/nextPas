@@ -37,6 +37,7 @@ uses
   nextpas.core.tls.tls13.keyschedule,
   nextpas.core.tls.tls13.appschedule,
   nextpas.core.tls.tls13.posthandshake,
+  nextpas.core.tls.tls13.recordsealer,
   nextpas.core.tls.tls12.client,
   nextpas.core.tls.tls12.wire,
   nextpas.core.tls.tls12.recordcrypto,
@@ -75,6 +76,8 @@ type
     FApplicationSecrets: TTLS13ApplicationSecrets;
     FClientApplicationSeq: QWord;
     FServerApplicationSeq: QWord;
+    FAppWriteSealer: TTLS13RecordSealer;
+    FAppReadOpener: TTLS13RecordOpener;
     FApplicationReadBuffer: TBytes;
     FApplicationReadOffset: Integer;
     FPostHandshakeBuffer: TBytes;
@@ -2818,6 +2821,10 @@ begin
 
           FClientApplicationSeq := 0;
           FServerApplicationSeq := 0;
+          FAppWriteSealer.Init(FApplicationSecrets.CipherSuite,
+            FApplicationSecrets.ClientApplicationKey, FApplicationSecrets.ClientApplicationIV);
+          FAppReadOpener.Init(FApplicationSecrets.CipherSuite,
+            FApplicationSecrets.ServerApplicationKey, FApplicationSecrets.ServerApplicationIV);
           SetLength(FApplicationReadBuffer, 0);
           SetLength(FPostHandshakeBuffer, 0);
           FSessionTicketCount := 0;
