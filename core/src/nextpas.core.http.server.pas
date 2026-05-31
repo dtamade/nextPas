@@ -1,7 +1,7 @@
 unit nextpas.core.http.server;
 {**
- * @desc Thread-per-connection HTTP/1.1 server.
- *       No keep-alive in v1 — each connection handles one request then closes.
+ * @desc Thread-per-connection HTTP/1.1 server with keep-alive support.
+ *       Loops on each connection handling multiple requests until close.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -18,6 +18,7 @@ type
   THttpServerOptions = record
     ReadTimeout: Int64;   // milliseconds, 0 = no timeout
     WriteTimeout: Int64;  // milliseconds, 0 = no timeout
+    IdleTimeout: Int64;   // milliseconds between requests, default 30000
     MaxHeaderSize: Int32; // bytes, default 8192
     class function Default: THttpServerOptions; static;
   end;
@@ -63,6 +64,17 @@ type
     Options: THttpServerOptions;
   end;
 
+function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
+var
+  LConn: string;
+begin
+  LConn := AParser.GetHeaders.Get('connection');
+  if AParser.GetHttpVersion = hvHttp10 then
+    Result := (LConn = 'keep-alive')
+  else
+    Result := (LConn <> 'close');
+end;
+
 procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus);
 var
   LW: IHttpResponseWriter;
@@ -90,39 +102,69 @@ var
   LUrl: TUrl;
   LReq: IHttpRequest;
   LW: IHttpResponseWriter;
+  LKeepAlive: Boolean;
+  LIdleMs: Int64;
 begin
-  try
-    { Set deadlines }
-    if AOptions.ReadTimeout > 0 then
-      AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(AOptions.ReadTimeout)));
-    if AOptions.WriteTimeout > 0 then
-      AConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(AOptions.WriteTimeout)));
+  LParser := NewH1RequestParser;
+  LKeepAlive := True;
+  if AOptions.IdleTimeout > 0 then
+    LIdleMs := AOptions.IdleTimeout
+  else
+    LIdleMs := 30000;
 
-    { Parse request }
-    LParser := NewH1RequestParser;
-    repeat
-      LN := AConn.Read(LBuf[0], 4096);
-      if LN = 0 then Exit; { EOF — client disconnected }
-      LParser.Execute(@LBuf[0], LN);
-    until LParser.IsComplete or LParser.HasError;
+  while LKeepAlive do
+  begin
+    try
+      { Set idle timeout for reading next request }
+      AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(LIdleMs)));
+      if AOptions.WriteTimeout > 0 then
+        AConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(AOptions.WriteTimeout)));
 
-    if LParser.HasError then
-    begin
-      WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
-      Exit;
+      { Parse request }
+      LParser.Reset;
+      repeat
+        LN := AConn.Read(LBuf[0], 4096);
+        if LN = 0 then begin LKeepAlive := False; Break; end;
+        LParser.Execute(@LBuf[0], LN);
+      until LParser.IsComplete or LParser.HasError;
+
+      if not LParser.IsComplete then
+      begin
+        if LParser.HasError then
+          WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
+        Break;
+      end;
+
+      { Determine keep-alive before dispatching }
+      LKeepAlive := ShouldKeepAlive(LParser);
+
+      { Build request }
+      LUrl := TUrl.Parse(LParser.GetUrl);
+      LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
+        LParser.GetHeaders, nil, 0);
+
+      { Dispatch to handler }
+      LW := TH1ResponseWriter.Create(AConn as IWriter);
+      { For HTTP/1.0 keep-alive, add the header explicitly }
+      if LKeepAlive and (LParser.GetHttpVersion = hvHttp10) then
+        LW.GetHeaders.Set_('connection', 'keep-alive');
+      { If we plan to close, signal it }
+      if not LKeepAlive then
+        LW.GetHeaders.Set_('connection', 'close');
+
+      AHandler.ServeHTTP(LReq, LW);
+
+      { If response writer forced connection close (no content-length),
+        the writer already set Connection: close — we must stop }
+      if LW.GetHeaders.Get('connection') = 'close' then
+        LKeepAlive := False;
+    except
+      on E: Exception do
+      begin
+        WriteErrorResponse(AConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        LKeepAlive := False;
+      end;
     end;
-
-    { Build request }
-    LUrl := TUrl.Parse(LParser.GetUrl);
-    LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
-      LParser.GetHeaders, nil, 0);
-
-    { Dispatch to handler }
-    LW := TH1ResponseWriter.Create(AConn as IWriter);
-    AHandler.ServeHTTP(LReq, LW);
-  except
-    on E: Exception do
-      WriteErrorResponse(AConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
   end;
 end;
 
@@ -155,6 +197,7 @@ class function THttpServerOptions.Default: THttpServerOptions;
 begin
   Result.ReadTimeout := 0;
   Result.WriteTimeout := 0;
+  Result.IdleTimeout := 30000; { 30 seconds between requests }
   Result.MaxHeaderSize := 8192;
 end;
 

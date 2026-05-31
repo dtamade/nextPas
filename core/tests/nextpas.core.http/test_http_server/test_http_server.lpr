@@ -90,7 +90,7 @@ begin
   try
     LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
     LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
-    { Read response — server closes connection after response }
+    { Read response — read until connection closed or timeout }
     repeat
       try
         LN := LConn.Read(LBuf[0], 8192);
@@ -128,7 +128,7 @@ begin
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
-    LResp := SendRawRequest(LPort, 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10#13#10);
+    LResp := SendRawRequest(LPort, 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200 in response');
     Check(Pos('pong', LResp) > 0, 'body pong in response');
   finally
@@ -157,7 +157,7 @@ begin
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
-    LResp := SendRawRequest(LPort, 'GET /hello HTTP/1.1'#13#10'Host: localhost'#13#10#13#10);
+    LResp := SendRawRequest(LPort, 'GET /hello HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 200', LResp) > 0, 'status 200');
     Check(Pos('Hello, World!', LResp) > 0, 'custom body present');
     Check(Pos('content-type: text/plain', LResp) > 0, 'content-type header');
@@ -182,7 +182,7 @@ begin
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
-    LResp := SendRawRequest(LPort, 'GET /nope HTTP/1.1'#13#10'Host: localhost'#13#10#13#10);
+    LResp := SendRawRequest(LPort, 'GET /nope HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 404', LResp) > 0, 'status 404 for unmatched route');
   finally
     StopServer(LServer, LHandle);
@@ -211,7 +211,7 @@ begin
   LHandler := TCrashHandler.Create;
   LHandle := StartServer(LHandler, LServer, LPort);
   try
-    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10#13#10);
+    LResp := SendRawRequest(LPort, 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
     Check(Pos('HTTP/1.1 500', LResp) > 0, 'status 500 on handler exception');
   finally
     StopServer(LServer, LHandle);
@@ -275,10 +275,202 @@ begin
     LResp := SendRawRequest(LPort,
       'POST /echo HTTP/1.1'#13#10 +
       'Host: localhost'#13#10 +
-      'Content-Length: 5'#13#10#13#10 +
+      'Content-Length: 5'#13#10 +
+      'Connection: close'#13#10#13#10 +
       'hello');
     Check(Pos('HTTP/1.1 201', LResp) > 0, 'status 201 for POST');
     Check(Pos('received', LResp) > 0, 'response body present');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Helper: read a single HTTP response from a connection (reads headers + content-length body) }
+function ReadOneResponse(const AConn: ITcpStream): string;
+var
+  LBuf: array[0..0] of Byte;
+  LN: SizeUInt;
+  LHeaderEnd: Int32;
+  LContentLength: Int32;
+  LClPos, LClEnd: Int32;
+  LClStr: string;
+  LBodyRead: Int32;
+begin
+  Result := '';
+  { Read byte-by-byte until we see CRLFCRLF (header end) }
+  repeat
+    try
+      LN := AConn.Read(LBuf[0], 1);
+    except
+      LN := 0;
+    end;
+    if LN = 0 then Exit;
+    Result := Result + Chr(LBuf[0]);
+    LHeaderEnd := Pos(#13#10#13#10, Result);
+  until LHeaderEnd > 0;
+
+  { Parse content-length from headers }
+  LContentLength := 0;
+  LClPos := Pos('content-length: ', Result);
+  if LClPos > 0 then
+  begin
+    LClPos := LClPos + 16; { length of 'content-length: ' }
+    LClEnd := LClPos;
+    while (LClEnd <= Length(Result)) and (Result[LClEnd] >= '0') and (Result[LClEnd] <= '9') do
+      Inc(LClEnd);
+    LClStr := Copy(Result, LClPos, LClEnd - LClPos);
+    LContentLength := Int32(StrToInt(LClStr));
+  end;
+
+  { Read body bytes }
+  LBodyRead := Length(Result) - (LHeaderEnd + 3); { bytes after CRLFCRLF already in buffer }
+  while LBodyRead < LContentLength do
+  begin
+    try
+      LN := AConn.Read(LBuf[0], 1);
+    except
+      LN := 0;
+    end;
+    if LN = 0 then Exit;
+    Result := Result + Chr(LBuf[0]);
+    Inc(LBodyRead);
+  end;
+end;
+
+{ Test 7: Keep-alive — two requests on same connection }
+procedure TestKeepAlive;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+
+      { First request }
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'keep-alive: first response 200');
+      Check(Pos('pong', LResp1) > 0, 'keep-alive: first body');
+
+      { Second request on same connection }
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0, 'keep-alive: second response 200');
+      Check(Pos('pong', LResp2) > 0, 'keep-alive: second body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 8: Connection: close header stops keep-alive }
+procedure TestConnectionClose;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LBuf: array[0..0] of Byte;
+  LN: SizeUInt;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp) > 0, 'conn-close: got 200');
+      Check(Pos('connection: close', LResp) > 0, 'conn-close: header present');
+      { Verify server closed the connection }
+      try
+        LN := LConn.Read(LBuf[0], 1);
+      except
+        LN := 0;
+      end;
+      Check(LN = 0, 'conn-close: server closed connection');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 9: HTTP/1.0 without keep-alive closes connection }
+procedure TestHttp10NoKeepAlive;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LBuf: array[0..0] of Byte;
+  LN: SizeUInt;
+const
+  REQ = 'GET /ping HTTP/1.0'#13#10'Host: localhost'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('200', LResp) > 0, 'http10: got 200');
+      { Verify server closed the connection }
+      try
+        LN := LConn.Read(LBuf[0], 1);
+      except
+        LN := 0;
+      end;
+      Check(LN = 0, 'http10: server closed connection');
+    finally
+      LConn.Close;
+    end;
   finally
     StopServer(LServer, LHandle);
   end;
@@ -294,5 +486,8 @@ begin
   T.Run('Handler exception -> 500', @TestHandlerException500);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
+  T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
+  T.Run('Connection: close stops keep-alive', @TestConnectionClose);
+  T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);
   T.Summary;
 end.
