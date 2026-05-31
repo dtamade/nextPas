@@ -361,7 +361,6 @@ begin
 end;
 
 procedure THashMap.InitCapacity(aCapacity: SizeUInt);
-var i: SizeUInt;
 begin
   if aCapacity < 4 then aCapacity := 4;
   aCapacity := NextPow2(aCapacity);
@@ -370,7 +369,6 @@ begin
   FCapacity := aCapacity;
   FMask := aCapacity - 1;
   FCount := 0; FUsed := 0;
-  for i := 0 to aCapacity-1 do (FBuckets + i)^.State := Ord(bsEmpty);
   RecalcMaxLoad;
 end;
 
