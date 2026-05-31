@@ -3818,6 +3818,36 @@ begin
   end;
 end;
 
+procedure TestDfaOverflowFallback;
+var R: TRegex; M: TMatch; MA: TMatchArray;
+    pat: string; i: Integer;
+begin
+  pat := '';
+  for i := 1 to 9 do
+    pat := pat + '(?:a|b)';
+  R := TRegex.Compile(pat);
+  Check(R.IsMatch('aaaaaaaaa'), 'overflow isMatch true');
+  Check(R.IsMatch('ababababa'), 'overflow isMatch mixed');
+  Check(not R.IsMatch('aaaaaaaac'), 'overflow isMatch false');
+  M := R.Find('xxxaaaaaaaaa');
+  Check(M.Found, 'overflow find');
+  CheckEqual(Int64(9), Int64(M.Len), 'overflow find len');
+  Check(R.IsFullMatch('ababababa'), 'overflow fullmatch true');
+  Check(not R.IsFullMatch('abababab'), 'overflow fullmatch short');
+  MA := R.FindAll('aaaaaaaaa bbbbbbbbb');
+  Check(Length(MA) >= 2, 'overflow findall count');
+
+  pat := '';
+  for i := 1 to 50 do
+  begin
+    if i > 1 then pat := pat + '|';
+    pat := pat + 'word' + IntToStr(i);
+  end;
+  R := TRegex.Compile(pat);
+  Check(R.IsMatch('word25'), 'overflow alt isMatch');
+  Check(not R.IsMatch('xyz'), 'overflow alt miss');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -3935,5 +3965,6 @@ begin
   T.Run('DFA: Assertion correctness', @TestDfaAssertionCorrectness);
   T.Run('DFA: FindAll correctness', @TestDfaFindAllCorrectness);
   T.Run('DFA: NFA cross-validation', @TestDfaNfaCrossValidation);
+  T.Run('DFA: Overflow fallback', @TestDfaOverflowFallback);
   T.Summary;
 end.
