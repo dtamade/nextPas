@@ -1,4 +1,7 @@
 unit nextpas.core.regex;
+{**
+ * @desc 正则表达式门面：编译、匹配、查找、替换、分割。
+ *}
 
 {$I nextpas.core.settings.inc}
 
@@ -12,7 +15,6 @@ uses
   nextpas.core.regex.compiler,
   nextpas.core.regex.nfa,
   nextpas.core.regex.dfa,
-  nextpas.core.regex.teddy,
   nextpas.core.text.base,
   nextpas.core.text.scan;
 
@@ -24,13 +26,22 @@ type
   TReplaceFunc = nextpas.core.regex.base.TReplaceFunc;
   ERegexError = nextpas.core.regex.base.ERegexError;
   ERegexCompileError = nextpas.core.regex.base.ERegexCompileError;
+  PRegexProgram = nextpas.core.regex.base.PRegexProgram;
+
+  TRegexIter = record
+  private
+    FProgram: PRegexProgram;
+    FInput: string;
+    FPos: SizeUInt;
+    FDone: Boolean;
+  public
+    function Next(out AMatch: TMatch): Boolean;
+  end;
 
   TRegex = record
   private
     FProgram: TRegexProgram;
     FValid: Boolean;
-    FTeddy: TTeddyMatcher;
-    FHasTeddy: Boolean;
   public
     class function Compile(const APattern: string): TRegex; static;
     class function Compile(const APattern: string; AFlags: TRegexFlags): TRegex; static;
@@ -39,7 +50,8 @@ type
     function IsMatch(const AInput: string): Boolean;
     function Find(const AInput: string): TMatch;
     function FindAt(const AInput: string; AStartPos: SizeUInt): TMatch;
-    function FindAll(const AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
+    function FindAll(const AInput: string): TMatchArray;
+    function FindIter(const AInput: string): TRegexIter;
     function IsFullMatch(const AInput: string): Boolean;
     function ReplaceFirst(const AInput, AReplacement: string): string;
     function ReplaceAll(const AInput, AReplacement: string): string;
@@ -49,12 +61,13 @@ type
     function Split(const AInput: string; AMaxSplits: SizeInt = -1): TStringArray;
     function GroupByName(const AMatch: TMatch; const AName: string): TGroup;
     function GroupIndexByName(const AName: string): SizeInt;
+    function SubexpNames: TStringArray;
     function NumCaptures: UInt32;
   end;
 
 function RegexIsMatch(const APattern, AInput: string): Boolean;
 function RegexFind(const APattern, AInput: string): TMatch;
-function RegexFindAll(const APattern, AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
+function RegexFindAll(const APattern, AInput: string): TMatchArray;
 function RegexReplaceAll(const APattern, AInput, AReplacement: string): string;
 function RegexSplit(const APattern, AInput: string): TStringArray;
 function RegexQuoteMeta(const AStr: string): string;
@@ -75,20 +88,11 @@ begin
   Result.FProgram.LiteralPrefixLen := 0;
   Result.FProgram.NumSlots := 0;
   Result.FValid := False;
-  Result.FHasTeddy := False;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
     Result.FProgram := RegexCompile(LAst, LNumCaptures, LFlags);
     Result.FValid := True;
-    if Result.FProgram.IsLiteralAlt and
-       (Length(Result.FProgram.LiteralAltPatterns) >= 2) and
-       (Length(Result.FProgram.LiteralAltPatterns) <= 8) then
-    begin
-      Result.FTeddy := TeddyBuild(Result.FProgram.LiteralAltPatterns,
-        Length(Result.FProgram.LiteralAltPatterns));
-      Result.FHasTeddy := Result.FTeddy.PatternCount > 0;
-    end;
   finally
     RegexFreeAst(LAst);
   end;
@@ -156,8 +160,6 @@ begin
   end;
   if FProgram.IsLiteralAlt then
   begin
-    if FHasTeddy then
-      Exit(TeddyIsMatch(FTeddy, PAnsiChar(AInput), Length(AInput)));
     for i := 0 to High(FProgram.LiteralAltPatterns) do
       if ScanFindSubstring(PAnsiChar(AInput), Length(AInput),
            PAnsiChar(FProgram.LiteralAltPatterns[i]),
@@ -287,7 +289,7 @@ begin
   Result := DfaIsFullMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
-function TRegex.FindAll(const AInput: string; AMaxMatches: SizeInt): TMatchArray;
+function TRegex.FindAll(const AInput: string): TMatchArray;
 var
   LPos, LStart: SizeInt;
   LCount: SizeUInt;
@@ -295,17 +297,14 @@ var
   LFound: PtrInt;
 begin
   if not FValid then begin SetLength(Result, 0); Exit; end;
-  if AMaxMatches = 0 then begin SetLength(Result, 0); Exit; end;
   if FProgram.IsPureLiteral then
   begin
     LPrefixLen := SizeInt(FProgram.LiteralPrefixLen);
     if LPrefixLen = 0 then
     begin
-      if (AMaxMatches > 0) and (AMaxMatches < SizeInt(Length(AInput)) + 1) then
-        SetLength(Result, AMaxMatches)
-      else
-        SetLength(Result, Length(AInput) + 1);
-      for LPos := 0 to High(Result) do
+      // Empty pattern matches at every position (including after last char)
+      SetLength(Result, Length(AInput) + 1);
+      for LPos := 0 to Length(AInput) do
       begin
         Result[LPos].Start := LPos;
         Result[LPos].Len := 0;
@@ -318,7 +317,6 @@ begin
     LStart := 0;
     while LStart <= SizeInt(Length(AInput)) - LPrefixLen do
     begin
-      if (AMaxMatches > 0) and (SizeInt(LCount) >= AMaxMatches) then Break;
       LFound := ScanFindSubstring(@PAnsiChar(AInput)[LStart],
         SizeUInt(Length(AInput)) - SizeUInt(LStart),
         PAnsiChar(FProgram.LiteralPrefix), SizeUInt(LPrefixLen));
@@ -334,12 +332,13 @@ begin
     SetLength(Result, LCount);
     Exit;
   end;
+  // DFA fast path: only when no captures needed
   if FProgram.NumCaptures = 0 then
   begin
-    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
+    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
     Exit;
   end;
-  Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
+  Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
 function TRegex.ReplaceFirst(const AInput, AReplacement: string): string;
@@ -549,6 +548,59 @@ begin
   Result := FProgram.NumCaptures;
 end;
 
+function TRegex.FindIter(const AInput: string): TRegexIter;
+begin
+  Result.FProgram := @FProgram;
+  Result.FInput := AInput;
+  Result.FPos := 0;
+  Result.FDone := not FValid;
+end;
+
+function TRegex.SubexpNames: TStringArray;
+var
+  LI: SizeInt;
+begin
+  SetLength(Result, Length(FProgram.GroupNames));
+  for LI := 0 to High(FProgram.GroupNames) do
+    Result[LI] := FProgram.GroupNames[LI].Name;
+end;
+
+{ TRegexIter }
+
+function TRegexIter.Next(out AMatch: TMatch): Boolean;
+var
+  LLen: SizeUInt;
+begin
+  if FDone then
+  begin
+    AMatch.Start := -1;
+    AMatch.Len := 0;
+    AMatch.Groups := nil;
+    Exit(False);
+  end;
+  LLen := SizeUInt(Length(FInput));
+  if not NfaSearch(FProgram^, PAnsiChar(FInput), LLen, False, FPos, AMatch) then
+  begin
+    AMatch.Start := -1;
+    AMatch.Len := 0;
+    AMatch.Groups := nil;
+    FDone := True;
+    Exit(False);
+  end;
+  if AMatch.Len = 0 then
+  begin
+    if FPos >= LLen then
+    begin
+      FDone := True;
+      Exit(True);
+    end;
+    FPos := SizeUInt(AMatch.Start) + 1;
+  end
+  else
+    FPos := SizeUInt(AMatch.Start) + SizeUInt(AMatch.Len);
+  Result := True;
+end;
+
 { Convenience functions }
 
 function RegexIsMatch(const APattern, AInput: string): Boolean;
@@ -565,11 +617,11 @@ begin
   Result := R.Find(AInput);
 end;
 
-function RegexFindAll(const APattern, AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
+function RegexFindAll(const APattern, AInput: string): TMatchArray;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.FindAll(AInput, AMaxMatches);
+  Result := R.FindAll(AInput);
 end;
 
 function RegexReplaceAll(const APattern, AInput, AReplacement: string): string;
