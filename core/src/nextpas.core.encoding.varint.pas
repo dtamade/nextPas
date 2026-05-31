@@ -50,6 +50,8 @@ begin
   repeat
     if ABytesRead >= Length(AData) then
       raise EConvertError.Create('Truncated varint');
+    if LShift >= 64 then
+      raise EConvertError.Create('Varint overflow (>10 bytes)');
     LByte := AData[ABytesRead];
     Result := Result or (UInt64(LByte and $7F) shl LShift);
     Inc(ABytesRead);
