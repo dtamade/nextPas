@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block;
+  nextpas.core.tui.widget.block,
+  nextpas.core.tui.widget.intf;
 
 type
   TDiffLineKind = (dlContext, dlAdded, dlRemoved, dlHeader);
@@ -34,26 +35,45 @@ type
     procedure ScrollUp(N: Integer = 1);
   end;
 
-  TDiffView = record
-    Lines: array of TDiffLine;
-    Style: TStyle;
-    AddedStyle: TStyle;
-    RemovedStyle: TStyle;
-    HeaderStyle: TStyle;
-    LineNumStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  IDiffView = interface(IWidget)
+    ['{1A2B3C4D-5E6F-7890-ABCD-EF0123456701}']
+    function WithStyle(const S: TStyle): IDiffView;
+    function WithAddedStyle(const S: TStyle): IDiffView;
+    function WithRemovedStyle(const S: TStyle): IDiffView;
+    function WithBlock(ABlock: IBlock): IDiffView;
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TDiffViewState);
+  end;
 
-    class function Create(const ALines: array of TDiffLine): TDiffView; static;
-    class function FromUnifiedDiff(const Diff: AnsiString): TDiffView; static;
-    function WithStyle(const S: TStyle): TDiffView;
-    function WithAddedStyle(const S: TStyle): TDiffView;
-    function WithRemovedStyle(const S: TStyle): TDiffView;
-    function WithBlock(const B: TBlock): TDiffView;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TDiffViewState);
+  TDiffView = class(TInterfacedObject, IWidget, IDiffView)
+  private
+    FLines: array of TDiffLine;
+    FStyle: TStyle;
+    FAddedStyle: TStyle;
+    FRemovedStyle: TStyle;
+    FHeaderStyle: TStyle;
+    FLineNumStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New(const ALines: array of TDiffLine): IDiffView; static;
+    class function FromUnifiedDiff(const Diff: AnsiString): IDiffView; static;
+
+    function WithStyle(const S: TStyle): IDiffView;
+    function WithAddedStyle(const S: TStyle): IDiffView;
+    function WithRemovedStyle(const S: TStyle): IDiffView;
+    function WithBlock(ABlock: IBlock): IDiffView;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    { IDiffView }
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TDiffViewState);
   end;
 
 implementation
+
+uses
+  SysUtils;
 
 { TDiffViewState }
 
@@ -74,22 +94,25 @@ end;
 
 { TDiffView }
 
-class function TDiffView.Create(const ALines: array of TDiffLine): TDiffView;
-var I: Integer;
+class function TDiffView.New(const ALines: array of TDiffLine): IDiffView;
+var
+  Obj: TDiffView;
+  I: Integer;
 begin
-  SetLength(Result.Lines, Length(ALines));
+  Obj := TDiffView.Create;
+  SetLength(Obj.FLines, Length(ALines));
   for I := 0 to High(ALines) do
-    Result.Lines[I] := ALines[I];
-  Result.Style := TStyle.Default;
-  Result.AddedStyle := TStyle.Default.WithFg(TUI_GREEN);
-  Result.RemovedStyle := TStyle.Default.WithFg(TUI_RED);
-  Result.HeaderStyle := TStyle.Default.WithFg(TUI_CYAN).WithModifier([mbBold]);
-  Result.LineNumStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
-  Result.HasBlock := False;
-  Result.Block := nil;
+    Obj.FLines[I] := ALines[I];
+  Obj.FStyle := TStyle.Default;
+  Obj.FAddedStyle := TStyle.Default.WithFg(TUI_GREEN);
+  Obj.FRemovedStyle := TStyle.Default.WithFg(TUI_RED);
+  Obj.FHeaderStyle := TStyle.Default.WithFg(TUI_CYAN).WithModifier([mbBold]);
+  Obj.FLineNumStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  Obj.FBlock := nil;
+  Result := Obj;
 end;
 
-class function TDiffView.FromUnifiedDiff(const Diff: AnsiString): TDiffView;
+class function TDiffView.FromUnifiedDiff(const Diff: AnsiString): IDiffView;
 var
   I, Start, Len, Count: Integer;
   RawLine: AnsiString;
@@ -163,22 +186,31 @@ begin
     end;
   end;
 
-  Result := TDiffView.Create(ParsedLines);
+  Result := TDiffView.New(ParsedLines);
 end;
 
-function TDiffView.WithStyle(const S: TStyle): TDiffView;
-begin Result := Self; Result.Style := S; end;
+function TDiffView.WithStyle(const S: TStyle): IDiffView;
+begin FStyle := S; Result := Self; end;
 
-function TDiffView.WithAddedStyle(const S: TStyle): TDiffView;
-begin Result := Self; Result.AddedStyle := S; end;
+function TDiffView.WithAddedStyle(const S: TStyle): IDiffView;
+begin FAddedStyle := S; Result := Self; end;
 
-function TDiffView.WithRemovedStyle(const S: TStyle): TDiffView;
-begin Result := Self; Result.RemovedStyle := S; end;
+function TDiffView.WithRemovedStyle(const S: TStyle): IDiffView;
+begin FRemovedStyle := S; Result := Self; end;
 
-function TDiffView.WithBlock(const B: TBlock): TDiffView;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TDiffView.WithBlock(ABlock: IBlock): IDiffView;
+begin FBlock := ABlock; Result := Self; end;
 
-procedure TDiffView.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TDiffViewState);
+procedure TDiffView.Render(const AArea: TRect; ABuf: TBuffer);
+var
+  St: TDiffViewState;
+begin
+  St := TDiffViewState.Empty;
+  RenderStateful(AArea, ABuf, St);
+end;
+
+procedure TDiffView.RenderStateful(const AArea: TRect; ABuf: TBuffer;
+  var AState: TDiffViewState);
 var
   Inner: TRect;
   I, Y, Row, ViewH, GutterW, TextX, TextW: Integer;
@@ -186,17 +218,17 @@ var
   Prefix: AnsiChar;
   NumBuf: string[4];
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuf.SetStyle(AArea, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuf);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
@@ -207,48 +239,48 @@ begin
   if TextW < 1 then TextW := 1;
 
   // Clamp scroll
-  if State.ScrollY > Length(Lines) - ViewH then
-    State.ScrollY := Length(Lines) - ViewH;
-  if State.ScrollY < 0 then State.ScrollY := 0;
+  if AState.ScrollY > Length(FLines) - ViewH then
+    AState.ScrollY := Length(FLines) - ViewH;
+  if AState.ScrollY < 0 then AState.ScrollY := 0;
 
   Y := Inner.Y;
   for I := 0 to ViewH - 1 do
   begin
-    Row := State.ScrollY + I;
-    if Row >= Length(Lines) then Break;
+    Row := AState.ScrollY + I;
+    if Row >= Length(FLines) then Break;
 
-    case Lines[Row].Kind of
+    case FLines[Row].Kind of
       dlAdded:
       begin
-        LineSty := AddedStyle;
+        LineSty := FAddedStyle;
         Prefix := '+';
       end;
       dlRemoved:
       begin
-        LineSty := RemovedStyle;
+        LineSty := FRemovedStyle;
         Prefix := '-';
       end;
       dlHeader:
       begin
-        LineSty := HeaderStyle;
+        LineSty := FHeaderStyle;
         Prefix := ' ';
       end;
     else
-      LineSty := Style;
+      LineSty := FStyle;
       Prefix := ' ';
     end;
 
     // Line number
-    if Lines[Row].NewNum > 0 then
-      Str(Lines[Row].NewNum:4, NumBuf)
-    else if Lines[Row].OldNum > 0 then
-      Str(Lines[Row].OldNum:4, NumBuf)
+    if FLines[Row].NewNum > 0 then
+      Str(FLines[Row].NewNum:4, NumBuf)
+    else if FLines[Row].OldNum > 0 then
+      Str(FLines[Row].OldNum:4, NumBuf)
     else
       NumBuf := '    ';
 
-    ABuf.SetStringN(Inner.X, Y, NumBuf, GutterW - 1, LineNumStyle);
+    ABuf.SetStringN(Inner.X, Y, NumBuf, GutterW - 1, FLineNumStyle);
     ABuf.SetStringN(Inner.X + GutterW - 1, Y, Prefix, 1, LineSty);
-    ABuf.SetStringN(TextX, Y, Lines[Row].Text, TextW, LineSty);
+    ABuf.SetStringN(TextX, Y, FLines[Row].Text, TextW, LineSty);
 
     Inc(Y);
   end;
