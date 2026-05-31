@@ -181,6 +181,7 @@ begin
   Result.FId := LIdx;
   Result.FGen := FNextGen;
   Inc(FNextGen);
+  if FNextGen = 0 then FNextGen := 1;
 
   FHeap[FHeapCount] := LIdx;
   Inc(FHeapCount);

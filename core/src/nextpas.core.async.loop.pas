@@ -81,6 +81,7 @@ type
 implementation
 
 uses
+  nextpas.core.atomic,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.platform.linux.base,
@@ -177,6 +178,7 @@ procedure TAsyncLoop.Wake;
 var
   LVal: UInt64;
 begin
+  if FWakeFd < 0 then Exit;
   LVal := 1;
   nextpas.core.platform.posix.ffi.write(FWakeFd, @LVal, 8);
 end;
@@ -303,19 +305,19 @@ var
   LTimeoutMs: Int32;
   LPfd: pollfd;
 begin
-  FRunning := 1;
-  while FRunning <> 0 do
+  AtomicStore32(FRunning, 1, moRelease);
+  while AtomicLoad32(FRunning, moAcquire) <> 0 do
   begin
     { Drain wake fd and process pending callbacks }
     DrainWakeFd;
     DrainPending;
     { Check if stopped from pending callback }
-    if FRunning = 0 then
+    if AtomicLoad32(FRunning, moAcquire) = 0 then
       Break;
     { Fire expired timers }
     LFired := FTimers.FireExpired;
     { Check if stopped from callback }
-    if FRunning = 0 then
+    if AtomicLoad32(FRunning, moAcquire) = 0 then
       Break;
     { Poll I/O non-blocking }
     FPoller.Flush;
@@ -386,7 +388,7 @@ end;
 
 procedure TAsyncLoop.Stop;
 begin
-  FRunning := 0;
+  AtomicStore32(FRunning, 0, moRelease);
 end;
 
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
