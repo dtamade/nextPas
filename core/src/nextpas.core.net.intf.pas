@@ -7,6 +7,7 @@ interface
 uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.time.deadline,
   nextpas.core.net.base;
 
 type
@@ -17,6 +18,8 @@ type
     procedure Shutdown;
     procedure SetNoDelay(const AValue: Boolean);
     procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
   end;
 
   ITcpListener = interface

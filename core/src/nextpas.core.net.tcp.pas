@@ -18,6 +18,8 @@ uses
   nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.errors,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.socket,
   nextpas.core.net.resolve;
@@ -29,6 +31,10 @@ type
     FLocal: TNetAddress;
     FRemote: TNetAddress;
     FClosed: Boolean;
+    FReadDeadline: TDeadline;
+    FWriteDeadline: TDeadline;
+    procedure ApplyReadTimeout;
+    procedure ApplyWriteTimeout;
   public
     constructor Create(const ASocket: TPlatformSocket;
       const ALocal, ARemote: TNetAddress);
@@ -45,6 +51,8 @@ type
     procedure Shutdown;
     procedure SetNoDelay(const AValue: Boolean);
     procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
   end;
 
   TTcpListener = class(TInterfacedObject, ITcpListener)
@@ -105,6 +113,8 @@ begin
   FLocal := ALocal;
   FRemote := ARemote;
   FClosed := False;
+  FReadDeadline := TDeadline.Infinite;
+  FWriteDeadline := TDeadline.Infinite;
 end;
 
 destructor TTcpStream.Destroy;
@@ -120,6 +130,7 @@ var
   LResult: Int32;
 begin
   if ACount = 0 then Exit(0);
+  ApplyReadTimeout;
   LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
   if LResult <> 0 then
     raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
@@ -134,6 +145,7 @@ var
   LRemaining: SizeUInt;
 begin
   if ACount = 0 then Exit(0);
+  ApplyWriteTimeout;
   LPtr := @ABuf;
   LRemaining := ACount;
   Result := 0;
@@ -208,6 +220,52 @@ var
 begin
   if AValue then LVal := 1 else LVal := 0;
   platform_socket_setsockopt(FSocket, PLATFORM_SOL_SOCKET, PLATFORM_SO_KEEPALIVE, @LVal, SizeOf(LVal));
+end;
+
+procedure TTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+  FReadDeadline := ADeadline;
+end;
+
+procedure TTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+  FWriteDeadline := ADeadline;
+end;
+
+procedure TTcpStream.ApplyReadTimeout;
+var
+  LMs: UInt32;
+  LRemaining: TDuration;
+begin
+  if FReadDeadline.IsInfinite then
+  begin
+    platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
+    Exit;
+  end;
+  if FReadDeadline.IsExpired then
+    raise ENetworkError.Create('read deadline exceeded');
+  LRemaining := FReadDeadline.Remaining;
+  LMs := UInt32(LRemaining.AsMilliseconds);
+  if LMs = 0 then LMs := 1;
+  platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
+end;
+
+procedure TTcpStream.ApplyWriteTimeout;
+var
+  LMs: UInt32;
+  LRemaining: TDuration;
+begin
+  if FWriteDeadline.IsInfinite then
+  begin
+    platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
+    Exit;
+  end;
+  if FWriteDeadline.IsExpired then
+    raise ENetworkError.Create('write deadline exceeded');
+  LRemaining := FWriteDeadline.Remaining;
+  LMs := UInt32(LRemaining.AsMilliseconds);
+  if LMs = 0 then LMs := 1;
+  platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
 end;
 
 { TTcpListener }
