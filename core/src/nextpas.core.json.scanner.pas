@@ -108,19 +108,31 @@ begin
   begin
     LQuote := VecCmpEq(@FInput[FScanPos], Ord('"'));
     LBs := VecCmpEq(@FInput[FScanPos], Ord('\'));
-    LEscaped := OddBackslashEscaped(LBs, FPrevEscaped);
-    FPrevEscaped := (LEscaped shr (VecWidth - 1)) <> 0;
-    LRealQuotes := LQuote and (not LEscaped);
+    if (LBs = TVecMask(0)) and (not FPrevEscaped) then
+    begin
+      LRealQuotes := LQuote;
+    end
+    else
+    begin
+      LEscaped := OddBackslashEscaped(LBs, FPrevEscaped);
+      FPrevEscaped := (LEscaped shr (VecWidth - 1)) <> 0;
+      LRealQuotes := LQuote and (not LEscaped);
+    end;
     if FInString then LCarry := TVecMask(not TVecMask(0)) else LCarry := TVecMask(0);
     LInStr := PrefixXorMask(LRealQuotes) xor LCarry;
     FInString := (LInStr shr (VecWidth - 1)) <> 0;
+    if (LInStr = TVecMask(not TVecMask(0))) and (LRealQuotes = TVecMask(0)) then
+    begin
+      Inc(FScanPos, VecWidth);
+      Continue;
+    end;
     LStruct := VecCmpEq(@FInput[FScanPos], Ord('{')) or
                VecCmpEq(@FInput[FScanPos], Ord('}')) or
                VecCmpEq(@FInput[FScanPos], Ord('[')) or
                VecCmpEq(@FInput[FScanPos], Ord(']')) or
                VecCmpEq(@FInput[FScanPos], Ord(':')) or
                VecCmpEq(@FInput[FScanPos], Ord(','));
-    LResult := (LStruct and (not LInStr)) or (LQuote and (not LEscaped));
+    LResult := (LStruct and (not LInStr)) or LRealQuotes;
     while LResult <> TVecMask(0) do
     begin
       LBit := VecCtz(LResult);
