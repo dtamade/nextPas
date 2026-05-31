@@ -7809,7 +7809,36 @@ begin
           for ArgIndex := 1 to Child.ChildAt(0).ChildCount - 1 do
           begin
             RhsNode := Child.ChildAt(0).ChildAt(ArgIndex);
-            if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
+            if RhsNode = nil then
+              Continue;
+            if (RhsNode.NodeKind = gnkFunctionCall) and
+              (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
+              (RhsNode.ChildAt(0).NodeKind = gnkDotAccess) and
+              (RhsNode.ChildAt(0).ChildCount >= 2) and
+              (RhsNode.ChildAt(0).ChildAt(0) <> nil) and
+              (TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) then
+            begin
+              Inc(FBlockLabelCounter);
+              FuncName := '$arg_tmp_' + IntToStr(FBlockLabelCounter);
+              Value := TypeMetaSize(RhsNode.ChildAt(0).ChildAt(0).Text);
+              Decoded := FuncName + #9 +
+                RhsNode.ChildAt(0).ChildAt(0).Text + '.' +
+                RhsNode.ChildAt(0).ChildAt(1).Text;
+              for K := 1 to RhsNode.ChildCount - 1 do
+                if (RhsNode.ChildAt(K) <> nil) and
+                  EncodeRuntimeIntExprFold(RhsNode.ChildAt(K), ArgName) then
+                  Decoded := Decoded + #9 + ArgName;
+              RegisterRuntimeVar(FuncName);
+              RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
+              FModel.AddTypedHirNode(
+                'class-new-runtime', IntToStr(Value), 0, 0, Decoded);
+              if TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0 then
+                FModel.AddTypedHirNode('vmt-store-runtime',
+                  RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
+                  FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
+              Operand := Operand + #9 + 'var ' + FuncName + #10;
+            end
+            else if EncodeRuntimeIntExprFold(RhsNode, Decoded) then
               Operand := Operand + #9 + Decoded;
           end;
           FModel.AddTypedHirNode('call-runtime',
