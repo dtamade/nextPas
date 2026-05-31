@@ -124,6 +124,7 @@ begin
 end;
 
 function TRegex.IsMatch(const AInput: string): Boolean;
+var i: Integer;
 begin
   if not FValid then Exit(False);
   if FProgram.IsPureLiteral then
@@ -133,7 +134,15 @@ begin
     Exit(ScanFindSubstring(PAnsiChar(AInput), Length(AInput),
       PAnsiChar(FProgram.LiteralPrefix), FProgram.LiteralPrefixLen) >= 0);
   end;
-  // DFA handles all patterns (assertions via context); falls back to NFA on overflow
+  if FProgram.IsLiteralAlt then
+  begin
+    for i := 0 to High(FProgram.LiteralAltPatterns) do
+      if ScanFindSubstring(PAnsiChar(AInput), Length(AInput),
+           PAnsiChar(FProgram.LiteralAltPatterns[i]),
+           Length(FProgram.LiteralAltPatterns[i])) >= 0 then
+        Exit(True);
+    Exit(False);
+  end;
   Result := DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 

@@ -62,6 +62,8 @@ type
     StartClassSize: UInt32;
     Flags: TRegexFlags;
     IsPureLiteral: Boolean;
+    IsLiteralAlt: Boolean;
+    LiteralAltPatterns: array of string;
   end;
 
   TGroup = record
