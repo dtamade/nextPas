@@ -236,7 +236,6 @@ var
   LBuf: array[0..63] of Byte;
   LBufLen: SizeUInt;
   LTotalBits: UInt64;
-  LPadLen: SizeUInt;
   I: Integer;
   LDst: PByte;
 begin
