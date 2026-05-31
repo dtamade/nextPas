@@ -149,12 +149,18 @@ begin
 
     Result.Error := LBuilder.TryBuildClient(Result.Connection);
     if Result.Error.IsErr then
+    begin
+      {$IFDEF UNIX}fpClose(LongInt(LSocket));{$ENDIF}
       Exit;
+    end;
 
     Result.Stream := TSSLStream.Create(Result.Connection);
   except
     on E: Exception do
+    begin
+      {$IFDEF UNIX}fpClose(LongInt(LSocket));{$ENDIF}
       Result.Error := TSSLOperationResult.Err(sslErrOther, E.Message);
+    end;
   end;
 end;
 

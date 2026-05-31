@@ -512,6 +512,12 @@ begin
 
   CTNatToBytes(LSig, LNLimbs, ASignature, Length(AModulus));
   Result := True;
+
+  // Zeroize private key intermediates
+  if Length(LM1) > 0 then FillChar(LM1[0], Length(LM1) * 4, 0);
+  if Length(LM2) > 0 then FillChar(LM2[0], Length(LM2) * 4, 0);
+  if Length(LH) > 0 then FillChar(LH[0], Length(LH) * 4, 0);
+  if Length(LTemp) > 0 then FillChar(LTemp[0], Length(LTemp) * 4, 0);
 end;
 
 end.
