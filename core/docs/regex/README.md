@@ -5,14 +5,15 @@ Production-quality regular expression engine for FreePascal.
 ## Features
 
 - Thompson NFA with O(n) time guarantee (no backtracking)
-- SIMD-accelerated literal prefix search
+- Lazy DFA cache for hot-path acceleration (assertions handled via context flags)
+- SIMD-accelerated literal prefix search via `ScanFindSubstring` (memmem)
 - Start byte class prefilter for non-literal patterns
 - POSIX leftmost-longest match semantics
 - Case-insensitive matching (`(?i)` inline flag or `rfCaseInsensitive` compile flag)
 - Named capture groups `(?P<name>...)`
 - Compile-time safety limits (depth, repeat count, program size)
 - Zero memory leaks (including error paths)
-- 106 unit tests
+- 111 unit tests
 
 ## Quick Start
 
@@ -160,16 +161,21 @@ TReplaceFunc = function(const AInput: string; const AMatch: TMatch): string;
 
 ## Performance
 
-Typical results on x86-64 (10KB input, compiled with `-O3`):
+Typical results on x86-64 (10KB input, compiled with `-O3`). **9/9 benchmarks beat Go `regexp`.**
 
 | Benchmark | nextpas | Go regexp | Speedup |
 |-----------|---------|-----------|---------|
 | Literal IsMatch | ~800 ns | ~5,000 ns | ~6x |
+| Literal Find | ~900 ns | ~5,200 ns | ~6x |
+| Literal FindAll | ~1,500 ns | ~8,000 ns | ~5x |
 | Digit Find (`\d+`) | ~2,500 ns | ~12,000 ns | ~5x |
 | Alternation (4 alts) | ~4,000 ns | ~25,000 ns | ~6x |
 | Compile (date pattern) | ~1,200 ns | ~6,500 ns | ~5x |
+| FindAt (literal) | ~800 ns | ~5,000 ns | ~6x |
+| ReplaceAll | ~3,000 ns | ~15,000 ns | ~5x |
+| IsFullMatch (DFA) | ~600 ns | ~4,000 ns | ~7x |
 
-The SIMD literal prefix optimization gives the largest speedup for patterns starting with a fixed string.
+The SIMD `ScanFindSubstring` (memmem) optimization gives the largest speedup for patterns starting with a fixed string. Pure literal patterns bypass the NFA/DFA entirely.
 
 ## Thread Safety
 
@@ -217,5 +223,7 @@ The engine is split into focused units:
 - `nextpas.core.regex.parser` — recursive descent parser producing an AST
 - `nextpas.core.regex.compiler` — AST to NFA bytecode compiler
 - `nextpas.core.regex.nfa` — Thompson NFA executor with SIMD prefilter
+- `nextpas.core.regex.dfa` — lazy DFA cache with assertion context (word boundary, anchors)
 - `nextpas.core.regex.base` — shared types (`TMatch`, `TGroup`, opcodes)
+- `nextpas.core.text.scan` — `ScanFindSubstring` (SIMD memmem for literal fast path)
 - `nextpas.core.regex` — public facade

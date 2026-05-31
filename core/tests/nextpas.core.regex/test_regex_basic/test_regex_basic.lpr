@@ -3853,6 +3853,7 @@ procedure TestScanFindSubstring;
 var
   LResult: PtrInt;
   LBigInput: string;
+  LLongNeedle: string;
   i: Integer;
 begin
   { Basic: find 'hello' in 'say hello world' }
@@ -3870,35 +3871,101 @@ begin
     PAnsiChar('abc'), 3);
   CheckEqual(Int64(0), Int64(LResult), 'at start');
 
+  { At middle: 'cd' in 'abcdef' }
+  LResult := ScanFindSubstring(PAnsiChar('abcdef'), 6,
+    PAnsiChar('cd'), 2);
+  CheckEqual(Int64(2), Int64(LResult), 'at middle');
+
   { At end: 'def' in 'abcdef' }
   LResult := ScanFindSubstring(PAnsiChar('abcdef'), 6,
     PAnsiChar('def'), 3);
   CheckEqual(Int64(3), Int64(LResult), 'at end');
 
-  { Single char: 'x' in 'abcxdef' }
+  { Single char at start }
+  LResult := ScanFindSubstring(PAnsiChar('xbcdef'), 6,
+    PAnsiChar('x'), 1);
+  CheckEqual(Int64(0), Int64(LResult), 'single char start');
+
+  { Single char at middle }
   LResult := ScanFindSubstring(PAnsiChar('abcxdef'), 7,
     PAnsiChar('x'), 1);
-  CheckEqual(Int64(3), Int64(LResult), 'single char');
+  CheckEqual(Int64(3), Int64(LResult), 'single char middle');
+
+  { Single char at end }
+  LResult := ScanFindSubstring(PAnsiChar('abcdex'), 6,
+    PAnsiChar('x'), 1);
+  CheckEqual(Int64(5), Int64(LResult), 'single char end');
+
+  { Single char not found }
+  LResult := ScanFindSubstring(PAnsiChar('abcdef'), 6,
+    PAnsiChar('z'), 1);
+  CheckEqual(Int64(-1), Int64(LResult), 'single char miss');
 
   { Empty needle: '' in 'abc' -> 0 }
   LResult := ScanFindSubstring(PAnsiChar('abc'), 3,
     PAnsiChar(''), 0);
   CheckEqual(Int64(0), Int64(LResult), 'empty needle');
 
+  { Empty needle in empty haystack -> 0 }
+  LResult := ScanFindSubstring(PAnsiChar(''), 0,
+    PAnsiChar(''), 0);
+  CheckEqual(Int64(0), Int64(LResult), 'empty needle empty haystack');
+
   { Needle longer than haystack }
   LResult := ScanFindSubstring(PAnsiChar('ab'), 2,
     PAnsiChar('abcdef'), 6);
   CheckEqual(Int64(-1), Int64(LResult), 'needle longer');
+
+  { Exact match: needle = haystack }
+  LResult := ScanFindSubstring(PAnsiChar('hello'), 5,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(0), Int64(LResult), 'exact match');
 
   { Repeated first byte: 'he' in 'hhhhe' (many false positives for 'h') }
   LResult := ScanFindSubstring(PAnsiChar('hhhhe'), 5,
     PAnsiChar('he'), 2);
   CheckEqual(Int64(3), Int64(LResult), 'repeated first byte');
 
+  { Repeated first byte stress: 'ab' in 'aaaaaaaaab' }
+  LResult := ScanFindSubstring(PAnsiChar('aaaaaaaaab'), 10,
+    PAnsiChar('ab'), 2);
+  CheckEqual(Int64(8), Int64(LResult), 'repeated first byte stress');
+
+  { Two-byte filter stress: 'xy' in 'xaxbxcxdxy' }
+  LResult := ScanFindSubstring(PAnsiChar('xaxbxcxdxy'), 10,
+    PAnsiChar('xy'), 2);
+  CheckEqual(Int64(8), Int64(LResult), 'two-byte filter stress');
+
+  { Two-char needle where first=last }
+  LResult := ScanFindSubstring(PAnsiChar('aabaa'), 5,
+    PAnsiChar('aa'), 2);
+  CheckEqual(Int64(0), Int64(LResult), 'two char same');
+
+  { Many partial matches before real match: 'hel' 'hel' 'hel' then 'hello' }
+  LResult := ScanFindSubstring(PAnsiChar('helhelhelhello'), 14,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(9), Int64(LResult), 'partial matches then real');
+
   { Long needle (20+ chars) }
   LResult := ScanFindSubstring(PAnsiChar('prefix_abcdefghijklmnopqrst_suffix'), 34,
     PAnsiChar('abcdefghijklmnopqrst'), 20);
-  CheckEqual(Int64(7), Int64(LResult), 'long needle');
+  CheckEqual(Int64(7), Int64(LResult), 'long needle 20');
+
+  { Very long needle (50+ chars) }
+  SetLength(LLongNeedle, 55);
+  for i := 1 to 55 do LLongNeedle[i] := Chr(Ord('A') + (i - 1) mod 26);
+  SetLength(LBigInput, 200);
+  for i := 1 to 200 do LBigInput[i] := 'z';
+  Move(LLongNeedle[1], LBigInput[100], 55);
+  LResult := ScanFindSubstring(PAnsiChar(LBigInput), 200,
+    PAnsiChar(LLongNeedle), 55);
+  CheckEqual(Int64(99), Int64(LResult), 'very long needle 55');
+
+  { Very long needle not found }
+  for i := 1 to 200 do LBigInput[i] := 'z';
+  LResult := ScanFindSubstring(PAnsiChar(LBigInput), 200,
+    PAnsiChar(LLongNeedle), 55);
+  CheckEqual(Int64(-1), Int64(LResult), 'very long needle miss');
 
   { Large input (10KB) with needle near end }
   SetLength(LBigInput, 10000);
@@ -3914,15 +3981,19 @@ begin
     PAnsiChar('hello'), 5);
   CheckEqual(Int64(0), Int64(LResult), 'large input at start');
 
-  { Two-char needle where first=last }
-  LResult := ScanFindSubstring(PAnsiChar('aabaa'), 5,
-    PAnsiChar('aa'), 2);
-  CheckEqual(Int64(0), Int64(LResult), 'two char same');
-
-  { Exact match: needle = haystack }
-  LResult := ScanFindSubstring(PAnsiChar('hello'), 5,
+  { Needle at exact last position of large input }
+  for i := 1 to 10000 do LBigInput[i] := 'x';
+  Move('hello'[1], LBigInput[9996], 5);
+  LResult := ScanFindSubstring(PAnsiChar(LBigInput), 10000,
     PAnsiChar('hello'), 5);
-  CheckEqual(Int64(0), Int64(LResult), 'exact match');
+  CheckEqual(Int64(9995), Int64(LResult), 'large input at very end');
+
+  { Haystack with many partial matches }
+  for i := 1 to 10000 do LBigInput[i] := 'h';
+  Move('hello'[1], LBigInput[9000], 5);
+  LResult := ScanFindSubstring(PAnsiChar(LBigInput), 10000,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(8999), Int64(LResult), 'many partial h then hello');
 end;
 
 begin
