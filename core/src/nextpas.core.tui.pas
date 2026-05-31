@@ -34,6 +34,8 @@ uses
   nextpas.core.tui.backend.test,
   nextpas.core.tui.terminal,
   nextpas.core.tui.image_cap,
+  nextpas.core.tui.sixel,
+  nextpas.core.tui.image_mgr,
   nextpas.core.tui.anim,
   nextpas.core.tui.animator,
   nextpas.core.tui.theme,
