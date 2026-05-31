@@ -6247,24 +6247,53 @@ begin
       begin
         FuncName := Copy(ArgName, 1, DotPos - 1);
         Operand := Copy(ArgName, DotPos + 1, Pos('>', ArgName) - DotPos - 1);
-        ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
-        if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
+        K := Pos('.', FuncName);
+        if K > 0 then
         begin
-          for K := 0 to Length(FProcedureBodies) - 1 do
-            if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
-            begin
-              RegisterProcedureBody(ArgName,
-                FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
-                FProcedureBodies[K].OwnerUnitId);
-              if FGenericWorkCount >= Length(FGenericWorkQueue) then
-                SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
-              FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
-              Inc(FGenericWorkCount);
-              Break;
-            end;
+          ArgName := LookupClassVar(Copy(FuncName, 1, K - 1));
+          if ArgName <> '' then
+            FuncName := ArgName + '.' + Copy(FuncName, K + 1, Length(FuncName) - K);
+          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
+          if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
+          begin
+            for K := 0 to Length(FProcedureBodies) - 1 do
+              if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
+              begin
+                RegisterProcedureBody(ArgName,
+                  FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
+                  FProcedureBodies[K].OwnerUnitId);
+                if FGenericWorkCount >= Length(FGenericWorkQueue) then
+                  SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
+                FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
+                Inc(FGenericWorkCount);
+                Break;
+              end;
+          end;
+          Operand := Copy(Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11), 1, Pos('.', Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11)) - 1);
+          ABlob := 'var ' + Operand + #10 + ABlob +
+            'call ' + ArgName + ' ' + IntToStr(StrCallArgCount + 1) + #10;
+        end
+        else
+        begin
+          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
+          if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
+          begin
+            for K := 0 to Length(FProcedureBodies) - 1 do
+              if (Pos(FuncName + '<', FProcedureBodies[K].Name) = 1) then
+              begin
+                RegisterProcedureBody(ArgName,
+                  FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
+                  FProcedureBodies[K].OwnerUnitId);
+                if FGenericWorkCount >= Length(FGenericWorkQueue) then
+                  SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
+                FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
+                Inc(FGenericWorkCount);
+                Break;
+              end;
+          end;
+          ABlob := ABlob + 'call ' + ArgName + ' ' +
+            IntToStr(StrCallArgCount) + #10;
         end;
-        ABlob := ABlob + 'call ' + ArgName + ' ' +
-          IntToStr(StrCallArgCount) + #10;
       end
       else
         ABlob := ABlob + 'call ' + ArgName + ' ' +

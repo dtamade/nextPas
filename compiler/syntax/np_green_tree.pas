@@ -852,6 +852,13 @@ begin
           Token := CurrentToken(ALexer, ACursor);
           Token.Lexeme := 'specialize ' + Token.Lexeme;
           Inc(ACursor);
+          while (ACursor + 1 < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkDot) and
+            (ALexer.TokenAt(ACursor + 1).Kind = tkIdentifier) do
+          begin
+            Token.Lexeme := Token.Lexeme + '.' + ALexer.TokenAt(ACursor + 1).Lexeme;
+            Inc(ACursor, 2);
+          end;
           if (ACursor < ALexer.TokenCount) and
             (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
           begin
