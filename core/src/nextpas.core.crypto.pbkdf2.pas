@@ -21,6 +21,7 @@ implementation
 
 uses
   Math,
+  nextpas.core.hash.intf,
   nextpas.core.crypto.hmac;
 
 function PBKDF2(
@@ -31,13 +32,22 @@ function PBKDF2(
 var
   LDigestSize: Integer;
   LBlockCount, LBlock, LIter, I: Integer;
-  LInput, LU, LT: TBytes;
+  LInput: TBytes;
   LBlockIdx: array[0..3] of Byte;
-  LHmacResult: TBytes;
+  LU, LT: TBytes;
+  LHmac: IHasher;
 begin
   LDigestSize := GetDigestSize(AAlgo);
   SetLength(Result, AKeyLen);
   LBlockCount := (AKeyLen + LDigestSize - 1) div LDigestSize;
+
+  if Length(APassword) > 0 then
+    LHmac := NewHMAC(AAlgo, APassword[0], Length(APassword))
+  else
+    LHmac := NewHMAC(AAlgo, LBlockIdx[0], 0);
+
+  SetLength(LU, LDigestSize);
+  SetLength(LT, LDigestSize);
 
   for LBlock := 1 to LBlockCount do
   begin
@@ -51,27 +61,16 @@ begin
       Move(ASalt[0], LInput[0], Length(ASalt));
     Move(LBlockIdx[0], LInput[Length(ASalt)], 4);
 
-    case AAlgo of
-      haSHA256: LHmacResult := HMAC_SHA256(APassword, LInput);
-      haSHA384: LHmacResult := HMAC_SHA384(APassword, LInput);
-      haSHA1:   LHmacResult := HMAC_SHA1(APassword, LInput);
-    else
-      LHmacResult := HMAC_SHA256(APassword, LInput);
-    end;
-
-    LU := Copy(LHmacResult);
-    LT := Copy(LHmacResult);
+    LHmac.Reset;
+    LHmac.Write(LInput[0], Length(LInput));
+    LHmac.Sum(LU[0], LDigestSize);
+    Move(LU[0], LT[0], LDigestSize);
 
     for LIter := 2 to AIterations do
     begin
-      case AAlgo of
-        haSHA256: LHmacResult := HMAC_SHA256(APassword, LU);
-        haSHA384: LHmacResult := HMAC_SHA384(APassword, LU);
-        haSHA1:   LHmacResult := HMAC_SHA1(APassword, LU);
-      else
-        LHmacResult := HMAC_SHA256(APassword, LU);
-      end;
-      LU := LHmacResult;
+      LHmac.Reset;
+      LHmac.Write(LU[0], LDigestSize);
+      LHmac.Sum(LU[0], LDigestSize);
       for I := 0 to LDigestSize - 1 do
         LT[I] := LT[I] xor LU[I];
     end;
