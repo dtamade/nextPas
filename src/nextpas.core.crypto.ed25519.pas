@@ -16,6 +16,11 @@ function Ed25519Sign(const APrivateKey: TBytes; const AMessage: TBytes;
 
 function Ed25519PublicKeyFromPrivate(const APrivateKey: TBytes): TBytes;
 
+function TryEd25519Sign(const APrivateKey, AMessage: TBytes;
+  out ASignature: TBytes; out AError: string): Boolean;
+function TryEd25519PublicKeyFromPrivate(const APrivateKey: TBytes;
+  out APublicKey: TBytes; out AError: string): Boolean;
+
 function Ed25519TestScReduce(const AInput: TBytes): TBytes;
 function Ed25519TestScMulAdd(const A, B, C: TBytes): TBytes;
 function Ed25519TestFePow2523(const AInput: TBytes): TBytes;
@@ -625,6 +630,37 @@ begin
   Move(LRBytes[0], ASignature[0], 32);
   Move(LS[0], ASignature[32], 32);
   Result := True;
+end;
+
+function TryEd25519Sign(const APrivateKey, AMessage: TBytes;
+  out ASignature: TBytes; out AError: string): Boolean;
+begin
+  AError := '';
+  SetLength(ASignature, 0);
+  if Length(APrivateKey) <> 32 then
+  begin
+    AError := 'Ed25519: private key must be 32 bytes';
+    Exit(False);
+  end;
+  Result := Ed25519Sign(APrivateKey, AMessage, ASignature);
+  if not Result then
+    AError := 'Ed25519: signing failed';
+end;
+
+function TryEd25519PublicKeyFromPrivate(const APrivateKey: TBytes;
+  out APublicKey: TBytes; out AError: string): Boolean;
+begin
+  AError := '';
+  SetLength(APublicKey, 0);
+  if Length(APrivateKey) <> 32 then
+  begin
+    AError := 'Ed25519: private key must be 32 bytes';
+    Exit(False);
+  end;
+  APublicKey := Ed25519PublicKeyFromPrivate(APrivateKey);
+  Result := Length(APublicKey) = 32;
+  if not Result then
+    AError := 'Ed25519: public key derivation failed';
 end;
 
 end.
