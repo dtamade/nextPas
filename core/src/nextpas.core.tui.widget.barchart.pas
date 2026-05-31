@@ -25,7 +25,8 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.block,
-  nextpas.core.tui.borders;
+  nextpas.core.tui.borders,
+  nextpas.core.tui.widget.intf;
 
 type
   TBarData = record

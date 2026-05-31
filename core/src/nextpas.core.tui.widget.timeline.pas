@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block;
+  nextpas.core.tui.widget.block,
+  nextpas.core.tui.widget.intf;
 
 type
   TTimelineEvent = record
@@ -27,7 +28,7 @@ type
     function WithStyle(const S: TStyle): TTimelineEvent;
   end;
 
-  TTimeline = record
+  TTimeline = class(TInterfacedObject, IWidget)
     Events: array of TTimelineEvent;
     Style: TStyle;
     LineStyle: TStyle;

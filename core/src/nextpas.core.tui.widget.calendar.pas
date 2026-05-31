@@ -31,7 +31,7 @@ type
     function DaysInMonth: Word;
   end;
 
-  TCalendar = record
+  TCalendar = class(TInterfacedObject)
     Style: TStyle;
     HeaderStyle: TStyle;
     SelectedStyle: TStyle;

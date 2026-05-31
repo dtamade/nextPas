@@ -28,7 +28,7 @@ type
     procedure Hide;
   end;
 
-  TPopover = record
+  TPopover = class(TInterfacedObject)
     Items: array of AnsiString;
     Width: Integer;
     MaxHeight: Integer;

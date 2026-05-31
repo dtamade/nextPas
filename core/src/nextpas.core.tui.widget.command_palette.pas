@@ -39,7 +39,7 @@ type
     procedure SelectPrev;
   end;
 
-  TCommandPalette = record
+  TCommandPalette = class(TInterfacedObject)
     Items: array of TCommandItem;
     Style: TStyle;
     SelectedStyle: TStyle;

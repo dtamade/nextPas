@@ -13,10 +13,11 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf;
 
 type
-  TBreadcrumb = record
+  TBreadcrumb = class(TInterfacedObject, IWidget)
     Items: array of AnsiString;
     Separator: AnsiString;
     Style: TStyle;

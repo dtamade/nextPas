@@ -33,7 +33,7 @@ type
     procedure SelectLast;
   end;
 
-  TVirtualList = record
+  TVirtualList = class(TInterfacedObject)
     ItemProvider: TItemProviderFunc;
     Style: TStyle;
     SelectedStyle: TStyle;

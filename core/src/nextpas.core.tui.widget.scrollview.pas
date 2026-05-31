@@ -31,7 +31,7 @@ type
     procedure EnsureVisible(Row, ViewHeight: Integer);
   end;
 
-  TScrollView = record
+  TScrollView = class(TInterfacedObject)
     Style: TStyle;
     ScrollbarStyle: TStyle;
     ShowScrollbar: Boolean;

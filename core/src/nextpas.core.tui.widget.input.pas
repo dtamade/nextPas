@@ -39,7 +39,7 @@ type
     function TextWidth: Integer;
   end;
 
-  TInput = record
+  TInput = class(TInterfacedObject)
     Placeholder: AnsiString;
     MaskChar: Char;
     Style: TStyle;
@@ -62,7 +62,7 @@ type
 implementation
 
 type
-  TInputAdv = record ByteLen, Width: Integer; Codepoint: UInt32; end;
+  TInputAdv = class(TInterfacedObject) ByteLen, Width: Integer; Codepoint: UInt32; end;
 
 function InputGraphemeAt(const ABuf; ALen, AOffset: Integer): TInputAdv; inline;
 var LDec: TUTF8DecodeResult;

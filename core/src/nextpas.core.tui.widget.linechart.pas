@@ -27,7 +27,8 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.borders,
-  nextpas.core.tui.widget.canvas;
+  nextpas.core.tui.widget.canvas,
+  nextpas.core.tui.widget.intf;
 
 type
   TDataSeries = record
@@ -38,7 +39,7 @@ type
     function WithStyle(const S: TStyle): TDataSeries;
   end;
 
-  TLineChart = record
+  TLineChart = class(TInterfacedObject, IWidget)
     Series: array of TDataSeries;
     MinY, MaxY: Double;
     ShowAxes: Boolean;

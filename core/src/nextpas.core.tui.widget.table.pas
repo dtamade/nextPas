@@ -16,7 +16,8 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.layout,
-  nextpas.core.tui.widget.block;
+  nextpas.core.tui.widget.block,
+  nextpas.core.tui.widget.intf;
 
 type
   TContentAlign = (caLeft, caCenter, caRight);

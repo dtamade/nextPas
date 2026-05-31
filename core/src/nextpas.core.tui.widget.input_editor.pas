@@ -16,7 +16,8 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.text.width, nextpas.core.text.utf8,
   nextpas.core.tui.event,
-  nextpas.core.tui.widget.syntax;
+  nextpas.core.tui.widget.syntax,
+  nextpas.core.tui.widget.intf;
 
 type
   TEditorSnapshot = record

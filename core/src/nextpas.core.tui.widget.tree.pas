@@ -18,7 +18,7 @@ uses
 
 type
   PTreeNode = ^TTreeNode;
-  TTreeNode = record
+  TTreeNode = class(TInterfacedObject)
     Label_: AnsiString;
     Children: array of TTreeNode;
     Style: TStyle;
@@ -40,7 +40,7 @@ type
     function IsOpen(Idx: Integer): Boolean;
   end;
 
-  TTree = record
+  TTree = class(TInterfacedObject)
     Nodes: array of TTreeNode;
     Style: TStyle;
     HighlightStyle: TStyle;

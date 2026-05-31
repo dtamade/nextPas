@@ -17,7 +17,8 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.borders,
   nextpas.core.tui.widget.block,
-  nextpas.core.tui.widget.paragraph;
+  nextpas.core.tui.widget.paragraph,
+  nextpas.core.tui.widget.intf;
 
 type
   TDialogButton = record
@@ -25,7 +26,7 @@ type
     Style: TStyle;
   end;
 
-  TDialog = record
+  TDialog = class(TInterfacedObject, IWidget)
     Title: AnsiString;
     Body: AnsiString;
     Buttons: array of TDialogButton;

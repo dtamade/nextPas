@@ -19,7 +19,7 @@ uses
   nextpas.core.tui.layout;
 
 type
-  TKanbanCard = record
+  TKanbanCard = class(TInterfacedObject)
     Title: AnsiString;
     Tag: AnsiString;
     class function Make(const ATitle: AnsiString): TKanbanCard; static;
@@ -41,7 +41,7 @@ type
     procedure MoveUp;
   end;
 
-  TKanban = record
+  TKanban = class(TInterfacedObject)
     Columns: array of TKanbanColumn;
     Style: TStyle;
     HeaderStyle: TStyle;

@@ -30,7 +30,7 @@ type
     procedure Confirm;
   end;
 
-  TSelect = record
+  TSelect = class(TInterfacedObject)
     Items: array of AnsiString;
     Placeholder: AnsiString;
     Width: Integer;

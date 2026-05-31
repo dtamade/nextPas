@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block;
+  nextpas.core.tui.widget.block,
+  nextpas.core.tui.widget.intf;
 
 type
   TMdLineKind = (mlNormal, mlH1, mlH2, mlH3, mlBullet, mlNumbered, mlCode, mlCodeBlock, mlHRule);
@@ -41,7 +42,7 @@ type
     class function Default: TMdTheme; static;
   end;
 
-  TMarkdown = record
+  TMarkdown = class(TInterfacedObject, IWidget)
     Source: AnsiString;
     Theme: TMdTheme;
     HasBlock: Boolean;

@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf;
 
 type
   TStatusSegment = record
@@ -24,7 +25,7 @@ type
     function WithStyle(const S: TStyle): TStatusSegment;
   end;
 
-  TStatusBar = record
+  TStatusBar = class(TInterfacedObject, IWidget)
     Left: array of TStatusSegment;
     Center: array of TStatusSegment;
     Right: array of TStatusSegment;

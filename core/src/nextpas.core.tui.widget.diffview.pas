@@ -19,7 +19,7 @@ uses
 type
   TDiffLineKind = (dlContext, dlAdded, dlRemoved, dlHeader);
 
-  TDiffLine = record
+  TDiffLine = class(TInterfacedObject)
     Kind: TDiffLineKind;
     Text: AnsiString;
     OldNum: Integer;
@@ -34,7 +34,7 @@ type
     procedure ScrollUp(N: Integer = 1);
   end;
 
-  TDiffView = record
+  TDiffView = class(TInterfacedObject)
     Lines: array of TDiffLine;
     Style: TStyle;
     AddedStyle: TStyle;
