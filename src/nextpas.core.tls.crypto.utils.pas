@@ -1,4 +1,4 @@
-unit nextpas.core.crypto.utils;
+unit nextpas.core.tls.crypto.utils;
 
 {$mode objfpc}{$H+}
 {$IFDEF WINDOWS}{$CODEPAGE UTF8}{$ENDIF}
