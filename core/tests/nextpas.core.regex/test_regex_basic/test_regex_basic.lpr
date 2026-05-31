@@ -4031,7 +4031,9 @@ begin
   CheckEqual(Int64(2), Int64(Length(LMatches)), 'limit>total returns all');
 end;
 
-procedure TestP4FindIter;
+{ --- Phase 4: Iterator + SubexpNames + Edge Cases --- }
+
+procedure TestFindIter;
 var R: TRegex; LIter: TRegexIter; LMatch: TMatch; LCount: Int32; LInput: string;
 begin
   LInput := 'abc 123 def 456 ghi 789';
@@ -4050,15 +4052,40 @@ begin
   CheckEqual(Int64(3), Int64(LCount), 'iter count');
 end;
 
-procedure TestP4FindIterEmpty;
+procedure TestFindIterEmpty;
 var R: TRegex; LIter: TRegexIter; LMatch: TMatch;
 begin
   R := TRegex.Compile('xyz');
   LIter := R.FindIter('no match here');
-  Check(not LIter.Next(LMatch), 'iter empty');
+  Check(not LIter.Next(LMatch), 'iter empty no match');
 end;
 
-procedure TestP4SubexpNames;
+procedure TestFindIterZeroLen;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch; LCount: Int32;
+begin
+  R := TRegex.Compile('\b');
+  LIter := R.FindIter('ab cd');
+  LCount := 0;
+  while LIter.Next(LMatch) do
+  begin
+    Inc(LCount);
+    if LCount > 20 then Break;
+  end;
+  Check(LCount > 0, 'zero-len produces matches');
+  Check(LCount <= 20, 'zero-len terminates');
+end;
+
+procedure TestFindIterSingle;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch; LCount: Int32;
+begin
+  R := TRegex.Compile('x');
+  LIter := R.FindIter('x');
+  LCount := 0;
+  while LIter.Next(LMatch) do Inc(LCount);
+  CheckEqual(Int64(1), Int64(LCount), 'single char single match');
+end;
+
+procedure TestSubexpNames;
 var R: TRegex; LNames: TStringArray;
 begin
   R := TRegex.Compile('(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})');
@@ -4069,18 +4096,57 @@ begin
   Check(LNames[2] = 'day', 'name 2');
 end;
 
-procedure TestP4LongestMatch;
+procedure TestSubexpNamesEmpty;
+var R: TRegex; LNames: TStringArray;
+begin
+  R := TRegex.Compile('\d+');
+  LNames := R.SubexpNames;
+  CheckEqual(Int64(0), Int64(Length(LNames)), 'no named groups');
+end;
+
+procedure TestLongestMatch;
 var R: TRegex; M: TMatch;
 begin
   R := TRegex.Compile('a|ab|abc');
   M := R.Find('abcdef');
   CheckEqual(Int64(3), Int64(M.Len), 'alternation longest');
+
   R := TRegex.Compile('a+');
   M := R.Find('aaaa');
   CheckEqual(Int64(4), Int64(M.Len), 'greedy longest');
 end;
 
-procedure TestP4LargeInput;
+procedure TestReplaceEdgeCasesP4;
+var R: TRegex; LResult: string;
+begin
+  R := TRegex.Compile('x');
+  LResult := R.ReplaceAll('', 'y');
+  Check(LResult = '', 'replace empty input');
+
+  LResult := R.ReplaceAll('abc', 'y');
+  Check(LResult = 'abc', 'replace no match');
+
+  R := TRegex.Compile('.');
+  LResult := R.ReplaceFirst('abc', '');
+  Check(LResult = 'bc', 'replace with empty string');
+end;
+
+procedure TestSplitEdgeCases;
+var R: TRegex; LParts: TStringArray;
+begin
+  R := TRegex.Compile(',');
+  LParts := R.Split('');
+  CheckEqual(Int64(1), Int64(Length(LParts)), 'split empty = 1 part');
+
+  LParts := R.Split(',a,b,');
+  Check(Length(LParts) >= 3, 'split leading/trailing sep');
+
+  LParts := R.Split('abc', 1);
+  CheckEqual(Int64(1), Int64(Length(LParts)), 'split limit=1');
+  Check(LParts[0] = 'abc', 'split limit=1 value');
+end;
+
+procedure TestLargeInput;
 var R: TRegex; LBig: string; M: TMatch; LI: Integer;
 begin
   SetLength(LBig, 100000);
@@ -4089,12 +4155,34 @@ begin
   R := TRegex.Compile('needle');
   M := R.Find(LBig);
   Check(M.Found, 'large input found');
-  CheckEqual(Int64(99989), Int64(M.Start), 'large input pos');
+  CheckEqual(Int64(99989), Int64(M.Start), 'large input position');
 end;
 
-procedure TestP4IterConsistency;
+procedure TestUnicodeBasic;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('...');
+  M := R.Find('abc');
+  Check(M.Found and (M.Len = 3), 'dot matches ascii');
+end;
+
+procedure TestErrorPatterns;
+var R: TRegex; LErr: string; LOk: Boolean;
+begin
+  LOk := TRegex.TryCompile('[', R, LErr);
+  Check(not LOk, 'unclosed bracket rejected');
+  Check(Length(LErr) > 0, 'error message present');
+
+  LOk := TRegex.TryCompile('*', R, LErr);
+  Check(not LOk, 'leading quantifier rejected');
+
+  LOk := TRegex.TryCompile('(?P<name>\d+)', R, LErr);
+  Check(LOk, 'valid named group accepted');
+end;
+
+procedure TestIterConsistencyWithFindAll;
 var R: TRegex; LIter: TRegexIter; LMatch: TMatch;
-    LMatches: TMatchArray; LCount: Int32; LInput: string;
+    LMatches: TMatchArray; LCount, LI: Int32; LInput: string;
 begin
   LInput := 'the quick brown fox jumps over the lazy dog';
   R := TRegex.Compile('\w+');
@@ -4104,21 +4192,13 @@ begin
   while LIter.Next(LMatch) do
   begin
     if LCount < Length(LMatches) then
-      CheckEqual(Int64(LMatches[LCount].Start), Int64(LMatch.Start), 'consistency ' + IntToStr(LCount));
+    begin
+      CheckEqual(Int64(LMatches[LCount].Start), Int64(LMatch.Start), 'iter/findall start ' + IntToStr(LCount));
+      CheckEqual(Int64(LMatches[LCount].Len), Int64(LMatch.Len), 'iter/findall len ' + IntToStr(LCount));
+    end;
     Inc(LCount);
   end;
-  CheckEqual(Int64(Length(LMatches)), Int64(LCount), 'iter/findall count');
-end;
-
-procedure TestP4ErrorPatterns;
-var R: TRegex; LErr: string; LOk: Boolean;
-begin
-  LOk := TRegex.TryCompile('[', R, LErr);
-  Check(not LOk, 'unclosed bracket');
-  LOk := TRegex.TryCompile('*', R, LErr);
-  Check(not LOk, 'leading quantifier');
-  LOk := TRegex.TryCompile('(?P<name>\d+)', R, LErr);
-  Check(LOk, 'valid named group');
+  CheckEqual(Int64(Length(LMatches)), Int64(LCount), 'iter/findall count match');
 end;
 
 begin
@@ -4168,7 +4248,6 @@ begin
   T.Run('Greedy vs Non-Greedy', @TestGreedyVsNonGreedy);
   T.Run('Capture edge cases', @TestCaptureEdgeCases);
   T.Run('FindAll edge cases', @TestFindAllEdgeCases);
-  T.Run('Replace edge cases', @TestReplaceEdgeCases);
   T.Run('Split edge cases', @TestSplitEdgeCases);
   T.Run('Char class edge cases', @TestCharClassEdgeCases);
   T.Run('Anchor edge cases', @TestAnchorEdgeCases);
@@ -4246,13 +4325,19 @@ begin
   T.Run('FindAll MaxMatches=0', @TestFindAllMaxMatchesZero);
   T.Run('FindAll MaxMatches=-1', @TestFindAllMaxMatchesNegative);
   T.Run('FindAll MaxMatches>total', @TestFindAllMaxMatchesExceedsTotal);
-  { --- Phase 4 tests --- }
-  T.Run('P4: FindIter', @TestP4FindIter);
-  T.Run('P4: FindIter empty', @TestP4FindIterEmpty);
-  T.Run('P4: SubexpNames', @TestP4SubexpNames);
-  T.Run('P4: Longest match', @TestP4LongestMatch);
-  T.Run('P4: Large input 100KB', @TestP4LargeInput);
-  T.Run('P4: Iter/FindAll consistency', @TestP4IterConsistency);
-  T.Run('P4: Error patterns', @TestP4ErrorPatterns);
+  { --- Phase 4 API + Edge Cases --- }
+  T.Run('P4: FindIter', @TestFindIter);
+  T.Run('P4: FindIter empty', @TestFindIterEmpty);
+  T.Run('P4: FindIter zero-len', @TestFindIterZeroLen);
+  T.Run('P4: FindIter single', @TestFindIterSingle);
+  T.Run('P4: SubexpNames', @TestSubexpNames);
+  T.Run('P4: SubexpNames empty', @TestSubexpNamesEmpty);
+  T.Run('P4: Longest match', @TestLongestMatch);
+  T.Run('P4: Replace edge cases', @TestReplaceEdgeCasesP4);
+  T.Run('P4: Split edge cases', @TestSplitEdgeCases);
+  T.Run('P4: Large input 100KB', @TestLargeInput);
+  T.Run('P4: Unicode basic', @TestUnicodeBasic);
+  T.Run('P4: Error patterns', @TestErrorPatterns);
+  T.Run('P4: Iter/FindAll consistency', @TestIterConsistencyWithFindAll);
   T.Summary;
 end.
