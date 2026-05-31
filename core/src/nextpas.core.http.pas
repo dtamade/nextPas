@@ -16,7 +16,9 @@ uses
   nextpas.core.http.url,
   nextpas.core.http.router,
   nextpas.core.http.middleware,
-  nextpas.core.http.message;
+  nextpas.core.http.message,
+  nextpas.core.http.server,
+  nextpas.core.http.client;
 
 type
   { Re-export base types }
@@ -44,6 +46,12 @@ type
   THttpHandlerMethod = nextpas.core.http.intf.THttpHandlerMethod;
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
+
+  { Re-export server/client types }
+  THttpServer = nextpas.core.http.server.THttpServer;
+  THttpServerOptions = nextpas.core.http.server.THttpServerOptions;
+  THttpClient = nextpas.core.http.client.THttpClient;
+  THttpClientOptions = nextpas.core.http.client.THttpClientOptions;
 
   { Re-export URL types }
   TQueryParam = nextpas.core.http.url.TQueryParam;
@@ -92,6 +100,11 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse; inline;
+
+{ Server/Client factories }
+function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer; inline;
+function NewHttpClient: IHttpClient; inline;
+function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overload; inline;
 
 implementation
 
@@ -168,6 +181,21 @@ end;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
 begin
   Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABody);
+end;
+
+function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer;
+begin
+  Result := nextpas.core.http.server.NewHttpServer(AHandler, AOptions);
+end;
+
+function NewHttpClient: IHttpClient;
+begin
+  Result := nextpas.core.http.client.NewHttpClient;
+end;
+
+function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient;
+begin
+  Result := nextpas.core.http.client.NewHttpClient(AOptions);
 end;
 
 end.
