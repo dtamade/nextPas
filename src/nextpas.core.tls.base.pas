@@ -1569,16 +1569,16 @@ type
     ): TSSLOperationResult;
   end;
 
-  { Async handshake support (P3 improvement) }
-  TSSLAsyncHandshakeStatus = (
-    sslAsyncComplete,
-    sslAsyncWantRead,
-    sslAsyncWantWrite,
-    sslAsyncFailed
+  { Non-blocking handshake state machine (for event-loop integration) }
+  TSSLHandshakeProgress = (
+    sslHandshakeComplete,
+    sslHandshakeWantRead,
+    sslHandshakeWantWrite,
+    sslHandshakeFailed
   );
 
-  TSSLAsyncHandshakeResult = record
-    Status: TSSLAsyncHandshakeStatus;
+  TSSLHandshakeStepResult = record
+    Progress: TSSLHandshakeProgress;
     ErrorCode: TSSLErrorCode;
     ErrorMessage: string;
   end;
