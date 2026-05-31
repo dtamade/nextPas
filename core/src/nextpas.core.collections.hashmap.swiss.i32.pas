@@ -6,6 +6,7 @@ interface
 
 uses
   SysUtils,
+  nextpas.core.mem.intf,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 
@@ -31,6 +32,7 @@ type
     FGroupCount: SizeUInt;
     FCount: SizeUInt;
     FGrowthLeft: SizeUInt;
+    FAllocator: IAllocator;
 
     procedure AllocTable(ACapacity: SizeUInt);
     procedure FreeTable;
@@ -39,6 +41,7 @@ type
 
   public
     constructor Create(aCapacity: SizeUInt = 0);
+    constructor CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
     destructor Destroy; override;
 
     function TryGetValue(AKey: Int32; out AValue: V): Boolean;
@@ -74,8 +77,16 @@ procedure TSwissTableI32.AllocTable(ACapacity: SizeUInt);
 begin
   FCapacity := ACapacity;
   FGroupCount := ACapacity div GROUP_SIZE;
-  GetMem(FCtrl, ACapacity + GROUP_SIZE);
-  GetMem(FSlots, ACapacity * SizeOf(TSlot));
+  if FAllocator <> nil then
+  begin
+    FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE);
+    FSlots := FAllocator.Allocate(ACapacity * SizeOf(TSlot));
+  end
+  else
+  begin
+    GetMem(FCtrl, ACapacity + GROUP_SIZE);
+    GetMem(FSlots, ACapacity * SizeOf(TSlot));
+  end;
   FillChar(FCtrl^, ACapacity + GROUP_SIZE, CTRL_EMPTY);
   FillChar(FSlots^, ACapacity * SizeOf(TSlot), 0);
   FGrowthLeft := ACapacity - ACapacity div 8;
@@ -89,8 +100,16 @@ begin
     for i := 0 to FCapacity - 1 do
       if FCtrl[i] < $80 then
         Finalize(FSlots[i].Value);
-  FreeMem(FSlots);
-  FreeMem(FCtrl);
+  if FAllocator <> nil then
+  begin
+    FAllocator.Deallocate(FSlots);
+    FAllocator.Deallocate(FCtrl);
+  end
+  else
+  begin
+    FreeMem(FSlots);
+    FreeMem(FCtrl);
+  end;
   FCtrl := nil;
   FSlots := nil;
 end;
@@ -140,15 +159,42 @@ begin
         end;
       end;
     end;
-    FreeMem(LOldSlots);
-    FreeMem(LOldCtrl);
+    if FAllocator <> nil then
+    begin
+      FAllocator.Deallocate(LOldSlots);
+      FAllocator.Deallocate(LOldCtrl);
+    end
+    else
+    begin
+      FreeMem(LOldSlots);
+      FreeMem(LOldCtrl);
+    end;
   end;
 end;
 
 constructor TSwissTableI32.Create(aCapacity: SizeUInt);
 begin
   inherited Create;
-  FCtrl := nil; FSlots := nil;
+  FCtrl := nil; FSlots := nil; FAllocator := nil;
+  FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
+  if aCapacity > 0 then
+  begin
+    if aCapacity < 16 then aCapacity := 16;
+    aCapacity := aCapacity + aCapacity div 7 + 1;
+    aCapacity := aCapacity or (aCapacity shr 1);
+    aCapacity := aCapacity or (aCapacity shr 2);
+    aCapacity := aCapacity or (aCapacity shr 4);
+    aCapacity := aCapacity or (aCapacity shr 8);
+    aCapacity := aCapacity or (aCapacity shr 16);
+    Inc(aCapacity);
+    AllocTable(aCapacity);
+  end;
+end;
+
+constructor TSwissTableI32.CreateWith(aCapacity: SizeUInt; const aAllocator: IAllocator);
+begin
+  inherited Create;
+  FCtrl := nil; FSlots := nil; FAllocator := aAllocator;
   FCapacity := 0; FGroupCount := 0; FCount := 0; FGrowthLeft := 0;
   if aCapacity > 0 then
   begin
