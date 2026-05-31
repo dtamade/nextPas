@@ -26,22 +26,34 @@ type
     function WithStyle(const S: TStyle): TProgressItem;
   end;
 
-  TProgressGroup = record
-    Items: array of TProgressItem;
-    LabelWidth: Integer;
-    ShowPercent: Boolean;
-    Style: TStyle;
-    EmptyStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  IProgressGroup = interface(IWidget)
+    ['{C5D6E7F8-A9B0-1234-CDEF-567890123456}']
+    function WithLabelWidth(W: Integer): IProgressGroup;
+    function WithShowPercent(V: Boolean): IProgressGroup;
+    function WithStyle(const S: TStyle): IProgressGroup;
+    function WithEmptyStyle(const S: TStyle): IProgressGroup;
+    function WithBlock(ABlock: IBlock): IProgressGroup;
+  end;
 
-    class function Create(const AItems: array of TProgressItem): TProgressGroup; static;
-    function WithLabelWidth(W: Integer): TProgressGroup;
-    function WithShowPercent(V: Boolean): TProgressGroup;
-    function WithStyle(const S: TStyle): TProgressGroup;
-    function WithEmptyStyle(const S: TStyle): TProgressGroup;
-    function WithBlock(const B: TBlock): TProgressGroup;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TProgressGroup = class(TInterfacedObject, IWidget, IProgressGroup)
+  private
+    FItems: array of TProgressItem;
+    FLabelWidth: Integer;
+    FShowPercent: Boolean;
+    FStyle: TStyle;
+    FEmptyStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New(const AItems: array of TProgressItem): IProgressGroup; static;
+
+    function WithLabelWidth(W: Integer): IProgressGroup;
+    function WithShowPercent(V: Boolean): IProgressGroup;
+    function WithStyle(const S: TStyle): IProgressGroup;
+    function WithEmptyStyle(const S: TStyle): IProgressGroup;
+    function WithBlock(ABlock: IBlock): IProgressGroup;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
@@ -68,111 +80,100 @@ begin
 end;
 
 function TProgressItem.WithStyle(const S: TStyle): TProgressItem;
-begin
-  Result := Self;
-  Result.FilledStyle := S;
-end;
+begin Result := Self; Result.FilledStyle := S; end;
 
 { TProgressGroup }
 
-class function TProgressGroup.Create(const AItems: array of TProgressItem): TProgressGroup;
-var I: Integer;
+class function TProgressGroup.New(const AItems: array of TProgressItem): IProgressGroup;
+var LSelf: TProgressGroup; I: Integer;
 begin
-  SetLength(Result.Items, Length(AItems));
-  for I := 0 to High(AItems) do
-    Result.Items[I] := AItems[I];
-  Result.LabelWidth := 0;
-  Result.ShowPercent := True;
-  Result.Style := TStyle.Default;
-  Result.EmptyStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
-  Result.HasBlock := False;
-  Result.Block := nil;
+  LSelf := TProgressGroup.Create;
+  SetLength(LSelf.FItems, Length(AItems));
+  for I := 0 to High(AItems) do LSelf.FItems[I] := AItems[I];
+  LSelf.FLabelWidth := 0;
+  LSelf.FShowPercent := True;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FEmptyStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  LSelf.FBlock := nil;
+  Result := LSelf;
 end;
 
-function TProgressGroup.WithLabelWidth(W: Integer): TProgressGroup;
-begin Result := Self; Result.LabelWidth := W; end;
+function TProgressGroup.WithLabelWidth(W: Integer): IProgressGroup;
+begin FLabelWidth := W; Result := Self; end;
 
-function TProgressGroup.WithShowPercent(V: Boolean): TProgressGroup;
-begin Result := Self; Result.ShowPercent := V; end;
+function TProgressGroup.WithShowPercent(V: Boolean): IProgressGroup;
+begin FShowPercent := V; Result := Self; end;
 
-function TProgressGroup.WithStyle(const S: TStyle): TProgressGroup;
-begin Result := Self; Result.Style := S; end;
+function TProgressGroup.WithStyle(const S: TStyle): IProgressGroup;
+begin FStyle := S; Result := Self; end;
 
-function TProgressGroup.WithEmptyStyle(const S: TStyle): TProgressGroup;
-begin Result := Self; Result.EmptyStyle := S; end;
+function TProgressGroup.WithEmptyStyle(const S: TStyle): IProgressGroup;
+begin FEmptyStyle := S; Result := Self; end;
 
-function TProgressGroup.WithBlock(const B: TBlock): TProgressGroup;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TProgressGroup.WithBlock(ABlock: IBlock): IProgressGroup;
+begin FBlock := ABlock; Result := Self; end;
 
-procedure TProgressGroup.Render(const Area: TRect; ABuf: TBuffer);
+procedure TProgressGroup.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner: TRect;
-  I, J, Y, LW, BarW, PctW, FilledCells, Frac, StartX: Integer;
+  I, J, Y, BarW, PctW, FilledCells, Frac, StartX: Integer;
   PctStr: AnsiString;
   EffLabelW: Integer;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
+  ABuffer.SetStyle(AArea, FStyle);
 
-  ABuf.SetStyle(Area, Style);
-
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
-  // Auto-detect label width if not set
-  EffLabelW := LabelWidth;
+  EffLabelW := FLabelWidth;
   if EffLabelW = 0 then
   begin
-    for I := 0 to High(Items) do
-      if Length(Items[I].Label_) > EffLabelW then
-        EffLabelW := Length(Items[I].Label_);
+    for I := 0 to High(FItems) do
+      if Length(FItems[I].Label_) > EffLabelW then
+        EffLabelW := Length(FItems[I].Label_);
     Inc(EffLabelW);
   end;
 
   PctW := 0;
-  if ShowPercent then PctW := 5;
+  if FShowPercent then PctW := 5;
 
   BarW := Inner.Width - EffLabelW - PctW;
   if BarW < 1 then BarW := 1;
 
-  for I := 0 to High(Items) do
+  for I := 0 to High(FItems) do
   begin
     Y := Inner.Y + I;
     if Y >= Inner.Y + Inner.Height then Break;
 
-    // Label
-    ABuf.SetStringN(Inner.X, Y, Items[I].Label_, EffLabelW, Style);
+    ABuffer.SetStringN(Inner.X, Y, FItems[I].Label_, EffLabelW, FStyle);
 
-    // Bar
-    FilledCells := Trunc(Items[I].Ratio * BarW);
-    Frac := Trunc((Items[I].Ratio * BarW - FilledCells) * 8);
+    FilledCells := Trunc(FItems[I].Ratio * BarW);
+    Frac := Trunc((FItems[I].Ratio * BarW - FilledCells) * 8);
     if FilledCells > BarW then FilledCells := BarW;
 
-    // Full block characters
     for J := 0 to FilledCells - 1 do
-      ABuf.SetStringN(Inner.X + EffLabelW + J, Y, FullBlock, 1, Items[I].FilledStyle);
+      ABuffer.SetStringN(Inner.X + EffLabelW + J, Y, FullBlock, 1, FItems[I].FilledStyle);
 
-    // Fractional cell
     if (FilledCells < BarW) and (Frac > 0) then
-      ABuf.SetStringN(Inner.X + EffLabelW + FilledCells, Y, BlockChars[Frac], 1, Items[I].FilledStyle);
+      ABuffer.SetStringN(Inner.X + EffLabelW + FilledCells, Y, BlockChars[Frac], 1, FItems[I].FilledStyle);
 
-    // Empty cells
     StartX := FilledCells;
     if Frac > 0 then Inc(StartX);
     for J := StartX to BarW - 1 do
-      ABuf.SetStringN(Inner.X + EffLabelW + J, Y, #$E2#$96#$91, 1, EmptyStyle);
+      ABuffer.SetStringN(Inner.X + EffLabelW + J, Y, #$E2#$96#$91, 1, FEmptyStyle);
 
-    // Percentage
-    if ShowPercent then
+    if FShowPercent then
     begin
-      PctStr := Format('%3d%%', [Round(Items[I].Ratio * 100)]);
-      ABuf.SetStringN(Inner.X + EffLabelW + BarW, Y, PctStr, PctW, Style);
+      PctStr := Format('%3d%%', [Round(FItems[I].Ratio * 100)]);
+      ABuffer.SetStringN(Inner.X + EffLabelW + BarW, Y, PctStr, PctW, FStyle);
     end;
   end;
 end;

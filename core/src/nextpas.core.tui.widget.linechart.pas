@@ -1,14 +1,5 @@
 unit nextpas.core.tui.widget.linechart;
 
-// Line chart widget with braille rendering, axes, and multiple series.
-//
-// Uses TCanvas internally for braille dot rendering. Supports:
-//   - Multiple data series with individual styles
-//   - Y axis with min/max labels (optional)
-//   - X axis (optional)
-//   - Legend row showing series names (optional)
-//   - Auto-scaling or manual Y range
-
 {$I nextpas.core.settings.inc}
 
 {$packenum 1}
@@ -39,24 +30,37 @@ type
     function WithStyle(const S: TStyle): TDataSeries;
   end;
 
-  TLineChart = record
-    Series: array of TDataSeries;
-    MinY, MaxY: Double;
-    ShowAxes: Boolean;
-    ShowLegend: Boolean;
-    Style: TStyle;
-    AxisStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  ILineChart = interface(IWidget)
+    ['{D6E7F8A9-B0C1-2345-DEFA-678901234567}']
+    function WithYRange(AMin, AMax: Double): ILineChart;
+    function WithShowAxes(V: Boolean): ILineChart;
+    function WithShowLegend(V: Boolean): ILineChart;
+    function WithStyle(const S: TStyle): ILineChart;
+    function WithAxisStyle(const S: TStyle): ILineChart;
+    function WithBlock(ABlock: IBlock): ILineChart;
+  end;
 
-    class function Create(const ASeries: array of TDataSeries): TLineChart; static;
-    function WithYRange(AMin, AMax: Double): TLineChart;
-    function WithShowAxes(V: Boolean): TLineChart;
-    function WithShowLegend(V: Boolean): TLineChart;
-    function WithStyle(const S: TStyle): TLineChart;
-    function WithAxisStyle(const S: TStyle): TLineChart;
-    function WithBlock(const B: TBlock): TLineChart;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TLineChart = class(TInterfacedObject, IWidget, ILineChart)
+  private
+    FSeries: array of TDataSeries;
+    FMinY, FMaxY: Double;
+    FShowAxes: Boolean;
+    FShowLegend: Boolean;
+    FStyle: TStyle;
+    FAxisStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New(const ASeries: array of TDataSeries): ILineChart; static;
+
+    function WithYRange(AMin, AMax: Double): ILineChart;
+    function WithShowAxes(V: Boolean): ILineChart;
+    function WithShowLegend(V: Boolean): ILineChart;
+    function WithStyle(const S: TStyle): ILineChart;
+    function WithAxisStyle(const S: TStyle): ILineChart;
+    function WithBlock(ABlock: IBlock): ILineChart;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
@@ -64,236 +68,165 @@ implementation
 { TDataSeries }
 
 class function TDataSeries.Create(const AName: AnsiString; const AData: array of Double): TDataSeries;
-var
-  I: Integer;
+var I: Integer;
 begin
   Result.Name := AName;
   SetLength(Result.Data, Length(AData));
-  for I := 0 to High(AData) do
-    Result.Data[I] := AData[I];
+  for I := 0 to High(AData) do Result.Data[I] := AData[I];
   Result.Style := TStyle.Default;
 end;
 
 function TDataSeries.WithStyle(const S: TStyle): TDataSeries;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
+begin Result := Self; Result.Style := S; end;
 
 { TLineChart }
 
-class function TLineChart.Create(const ASeries: array of TDataSeries): TLineChart;
+class function TLineChart.New(const ASeries: array of TDataSeries): ILineChart;
+var LSelf: TLineChart; I: Integer;
+begin
+  LSelf := TLineChart.Create;
+  SetLength(LSelf.FSeries, Length(ASeries));
+  for I := 0 to High(ASeries) do LSelf.FSeries[I] := ASeries[I];
+  LSelf.FMinY := 0.0; LSelf.FMaxY := 0.0;
+  LSelf.FShowAxes := True; LSelf.FShowLegend := True;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FAxisStyle := TStyle.Default;
+  LSelf.FBlock := nil;
+  Result := LSelf;
+end;
+
+function TLineChart.WithYRange(AMin, AMax: Double): ILineChart;
+begin FMinY := AMin; FMaxY := AMax; Result := Self; end;
+
+function TLineChart.WithShowAxes(V: Boolean): ILineChart;
+begin FShowAxes := V; Result := Self; end;
+
+function TLineChart.WithShowLegend(V: Boolean): ILineChart;
+begin FShowLegend := V; Result := Self; end;
+
+function TLineChart.WithStyle(const S: TStyle): ILineChart;
+begin FStyle := S; Result := Self; end;
+
+function TLineChart.WithAxisStyle(const S: TStyle): ILineChart;
+begin FAxisStyle := S; Result := Self; end;
+
+function TLineChart.WithBlock(ABlock: IBlock): ILineChart;
+begin FBlock := ABlock; Result := Self; end;
+
+procedure TLineChart.Render(const AArea: TRect; ABuffer: TBuffer);
 var
-  I: Integer;
-begin
-  SetLength(Result.Series, Length(ASeries));
-  for I := 0 to High(ASeries) do
-    Result.Series[I] := ASeries[I];
-  Result.MinY := 0.0;
-  Result.MaxY := 0.0;
-  Result.ShowAxes := True;
-  Result.ShowLegend := True;
-  Result.Style := TStyle.Default;
-  Result.AxisStyle := TStyle.Default;
-  Result.HasBlock := False;
-  Result.Block := nil;
-end;
-
-function TLineChart.WithYRange(AMin, AMax: Double): TLineChart;
-begin
-  Result := Self;
-  Result.MinY := AMin;
-  Result.MaxY := AMax;
-end;
-
-function TLineChart.WithShowAxes(V: Boolean): TLineChart;
-begin
-  Result := Self;
-  Result.ShowAxes := V;
-end;
-
-function TLineChart.WithShowLegend(V: Boolean): TLineChart;
-begin
-  Result := Self;
-  Result.ShowLegend := V;
-end;
-
-function TLineChart.WithStyle(const S: TStyle): TLineChart;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
-
-function TLineChart.WithAxisStyle(const S: TStyle): TLineChart;
-begin
-  Result := Self;
-  Result.AxisStyle := S;
-end;
-
-function TLineChart.WithBlock(const B: TBlock): TLineChart;
-begin
-  Result := Self;
-  Result.HasBlock := True;
-  Result.Block := B;
-end;
-
-procedure TLineChart.Render(const Area: TRect; ABuf: TBuffer);
-var
-  Inner: TRect;
-  ChartArea: TRect;
-  N, SI, I, DataLen: Integer;
+  Inner, ChartArea: TRect;
+  SI, I, DataLen: Integer;
   ActualMin, ActualMax, Val, Range: Double;
-  Canvas: ICanvas;
+  LCanvas: ICanvas;
   CellW, CellH: Integer;
   PrevX, PrevY, CurX, CurY: Integer;
   YAxisWidth, XAxisHeight, LegendHeight: Integer;
   MaxLabelStr, MinLabelStr: AnsiString;
   LegendX: Integer;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  // Handle block
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
-  // Determine Y range across all series
-  ActualMin := MinY;
-  ActualMax := MaxY;
+  ActualMin := FMinY; ActualMax := FMaxY;
   if (ActualMin = 0.0) and (ActualMax = 0.0) then
   begin
-    // Auto-scale: find global min/max
-    ActualMin := 1.0E308;
-    ActualMax := -1.0E308;
-    for SI := 0 to High(Series) do
+    ActualMin := 1.0E308; ActualMax := -1.0E308;
+    for SI := 0 to High(FSeries) do
     begin
-      DataLen := Length(Series[SI].Data);
+      DataLen := Length(FSeries[SI].Data);
       for I := 0 to DataLen - 1 do
       begin
-        Val := Series[SI].Data[I];
+        Val := FSeries[SI].Data[I];
         if Val < ActualMin then ActualMin := Val;
         if Val > ActualMax then ActualMax := Val;
       end;
     end;
-    if ActualMin > ActualMax then
-    begin
-      ActualMin := 0.0;
-      ActualMax := 1.0;
-    end;
+    if ActualMin > ActualMax then begin ActualMin := 0.0; ActualMax := 1.0; end;
   end;
   Range := ActualMax - ActualMin;
-  if Range <= 0.0 then
-    Range := 1.0;
+  if Range <= 0.0 then Range := 1.0;
 
-  // Calculate layout reservations
-  YAxisWidth := 0;
-  XAxisHeight := 0;
-  LegendHeight := 0;
+  YAxisWidth := 0; XAxisHeight := 0; LegendHeight := 0;
+  if FShowAxes then begin YAxisWidth := 5; XAxisHeight := 1; end;
+  if FShowLegend then LegendHeight := 1;
 
-  if ShowAxes then
-  begin
-    YAxisWidth := 5;  // space for Y labels + axis line
-    XAxisHeight := 1; // bottom row for X axis
-  end;
-  if ShowLegend then
-    LegendHeight := 1;
-
-  // Chart drawing area (in cells)
   ChartArea.X := Inner.X + YAxisWidth;
   ChartArea.Y := Inner.Y + LegendHeight;
   ChartArea.Width := Inner.Width - YAxisWidth;
   ChartArea.Height := Inner.Height - LegendHeight - XAxisHeight;
-
   if (ChartArea.Width <= 0) or (ChartArea.Height <= 0) then Exit;
 
-  CellW := ChartArea.Width;
-  CellH := ChartArea.Height;
+  CellW := ChartArea.Width; CellH := ChartArea.Height;
 
-  // Draw axes if enabled
-  if ShowAxes then
+  if FShowAxes then
   begin
-    // Y axis: vertical line at left edge of chart area
     for I := 0 to CellH - 1 do
-      ABuf.SetStringN(ChartArea.X - 1, ChartArea.Y + I, #$E2#$94#$82, 1, AxisStyle);
-
-    // X axis: horizontal line at bottom of chart area
+      ABuffer.SetStringN(ChartArea.X - 1, ChartArea.Y + I, #$E2#$94#$82, 1, FAxisStyle);
     for I := 0 to CellW - 1 do
-      ABuf.SetStringN(ChartArea.X + I, ChartArea.Y + CellH, #$E2#$94#$80, 1, AxisStyle);
-
-    // Corner
-    ABuf.SetStringN(ChartArea.X - 1, ChartArea.Y + CellH, #$E2#$94#$94, 1, AxisStyle);
-
-    // Y axis labels
+      ABuffer.SetStringN(ChartArea.X + I, ChartArea.Y + CellH, #$E2#$94#$80, 1, FAxisStyle);
+    ABuffer.SetStringN(ChartArea.X - 1, ChartArea.Y + CellH, #$E2#$94#$94, 1, FAxisStyle);
     MaxLabelStr := IntToStr(Trunc(ActualMax + 0.5));
     MinLabelStr := IntToStr(Trunc(ActualMin + 0.5));
     if Length(MaxLabelStr) <= YAxisWidth - 1 then
-      ABuf.SetStringN(Inner.X, ChartArea.Y, MaxLabelStr, YAxisWidth - 1, AxisStyle);
+      ABuffer.SetStringN(Inner.X, ChartArea.Y, MaxLabelStr, YAxisWidth - 1, FAxisStyle);
     if Length(MinLabelStr) <= YAxisWidth - 1 then
-      ABuf.SetStringN(Inner.X, ChartArea.Y + CellH - 1, MinLabelStr, YAxisWidth - 1, AxisStyle);
+      ABuffer.SetStringN(Inner.X, ChartArea.Y + CellH - 1, MinLabelStr, YAxisWidth - 1, FAxisStyle);
   end;
 
-  // Draw legend if enabled
-  if ShowLegend then
+  if FShowLegend then
   begin
     LegendX := Inner.X;
-    for SI := 0 to High(Series) do
+    for SI := 0 to High(FSeries) do
     begin
       if LegendX >= Inner.X + Inner.Width then Break;
-      ABuf.SetStringN(LegendX, Inner.Y, Series[SI].Name, Integer(StringDisplayWidth(Series[SI].Name)), Series[SI].Style);
-      Inc(LegendX, Integer(StringDisplayWidth(Series[SI].Name) + 2));
+      ABuffer.SetStringN(LegendX, Inner.Y, FSeries[SI].Name,
+        Integer(StringDisplayWidth(FSeries[SI].Name)), FSeries[SI].Style);
+      Inc(LegendX, Integer(StringDisplayWidth(FSeries[SI].Name) + 2));
     end;
   end;
 
-  // Render each series using a canvas
-  for SI := 0 to High(Series) do
+  for SI := 0 to High(FSeries) do
   begin
-    DataLen := Length(Series[SI].Data);
+    DataLen := Length(FSeries[SI].Data);
     if DataLen = 0 then Continue;
+    LCanvas := TCanvas.New(CellW, CellH).WithStyle(FSeries[SI].Style);
 
-    Canvas := TCanvas.New(CellW, CellH);
-    Canvas := Canvas.WithStyle(Series[SI].Style);
-
-    // Map data points to canvas dot coordinates and draw connected lines
-    Val := Series[SI].Data[0];
+    Val := FSeries[SI].Data[0];
     if Val < ActualMin then Val := ActualMin;
     if Val > ActualMax then Val := ActualMax;
     PrevX := 0;
-    PrevY := Canvas.Height - 1 - Trunc(((Val - ActualMin) / Range) * (Canvas.Height - 1) + 0.5);
+    PrevY := LCanvas.Height - 1 - Trunc(((Val - ActualMin) / Range) * (LCanvas.Height - 1) + 0.5);
     if PrevY < 0 then PrevY := 0;
-    if PrevY >= Canvas.Height then PrevY := Canvas.Height - 1;
+    if PrevY >= LCanvas.Height then PrevY := LCanvas.Height - 1;
 
     if DataLen = 1 then
-      Canvas.SetDot(PrevX, PrevY)
+      LCanvas.SetDot(PrevX, PrevY)
     else
-    begin
       for I := 1 to DataLen - 1 do
       begin
-        Val := Series[SI].Data[I];
+        Val := FSeries[SI].Data[I];
         if Val < ActualMin then Val := ActualMin;
         if Val > ActualMax then Val := ActualMax;
-
-        if Canvas.Width > 1 then
-          CurX := (I * (Canvas.Width - 1)) div (DataLen - 1)
-        else
-          CurX := 0;
-
-        CurY := Canvas.Height - 1 - Trunc(((Val - ActualMin) / Range) * (Canvas.Height - 1) + 0.5);
+        if LCanvas.Width > 1 then CurX := (I * (LCanvas.Width - 1)) div (DataLen - 1)
+        else CurX := 0;
+        CurY := LCanvas.Height - 1 - Trunc(((Val - ActualMin) / Range) * (LCanvas.Height - 1) + 0.5);
         if CurY < 0 then CurY := 0;
-        if CurY >= Canvas.Height then CurY := Canvas.Height - 1;
-
-        Canvas.DrawLine(PrevX, PrevY, CurX, CurY);
-        PrevX := CurX;
-        PrevY := CurY;
+        if CurY >= LCanvas.Height then CurY := LCanvas.Height - 1;
+        LCanvas.DrawLine(PrevX, PrevY, CurX, CurY);
+        PrevX := CurX; PrevY := CurY;
       end;
-    end;
 
-    Canvas.Render(ChartArea, ABuf);
+    LCanvas.Render(ChartArea, ABuffer);
   end;
 end;
 
