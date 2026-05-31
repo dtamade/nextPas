@@ -5,7 +5,7 @@ unit nextpas.core.collections.base;
 interface
 
 uses
-  SysUtils, Classes,typinfo,variants,
+  SysUtils,typinfo,variants,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.allocator,

@@ -10,7 +10,7 @@ unit nextpas.core.simd.cpuinfo.diagnostic;
 interface
 
 uses
-  Classes, SysUtils,
+  SysUtils,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base;
 

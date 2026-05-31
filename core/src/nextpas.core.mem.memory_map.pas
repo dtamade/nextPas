@@ -31,7 +31,7 @@ unit nextpas.core.mem.memory_map;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   {$IFDEF WINDOWS}
   Windows,
   {$ELSE}

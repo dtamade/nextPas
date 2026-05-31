@@ -30,7 +30,7 @@ unit nextpas.core.collections.forward_list;
 interface
 
 uses
-  SysUtils, Classes, typinfo,
+  SysUtils, typinfo,
   nextpas.core.base,
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   nextpas.core.mem.utils,

@@ -7,7 +7,7 @@ unit nextpas.core.collections.treemap;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,
