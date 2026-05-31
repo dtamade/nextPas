@@ -18,6 +18,7 @@ type
   IH1Parser = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-500000000001}']
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+    procedure Finish;
     function GetMethod: THttpMethod;
     function GetStatusCode: THttpStatus;
     function GetHttpVersion: THttpVersion;
@@ -59,6 +60,7 @@ type
   public
     constructor Create(const AType: TH1ParserType);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+    procedure Finish;
     function GetMethod: THttpMethod;
     function GetStatusCode: THttpStatus;
     function GetHttpVersion: THttpVersion;
@@ -223,6 +225,27 @@ begin
   end
   else
     Result := ALen;
+end;
+
+procedure TH1Parser.Finish;
+var
+  LErrno: TLlhttpErrnoT;
+begin
+  if FComplete then Exit;
+  LErrno := llhttp_finish(@FParser);
+  if (LErrno = HPE_OK) or (FComplete) then
+    { on_message_complete was called by llhttp_finish }
+  else
+  begin
+    { For responses, if we have status code and headers, treat EOF as complete }
+    if (FParserType = ptResponse) and (FStatusCode > 0) then
+      FComplete := True
+    else
+    begin
+      FError := True;
+      FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
+    end;
+  end;
 end;
 
 function TH1Parser.GetMethod: THttpMethod;
