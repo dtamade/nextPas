@@ -1,6 +1,7 @@
 unit nextpas.core.text.scan;
 
 {$I nextpas.core.settings.inc}
+{$IFDEF CPUX86_64}{$asmmode intel}{$ENDIF}
 
 interface
 
@@ -34,6 +35,7 @@ uses
   nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
+  nextpas.core.simd.cpuinfo,
   nextpas.core.text.char;
 
 function ScanFindByte(const AData: PAnsiChar; const ALen: SizeUInt;
@@ -261,6 +263,9 @@ var
   LMask1, LMask2, LCombined: TVecMask;
   LBit: Int32;
   LCandidate: SizeUInt;
+  {$IFDEF CPUX86_64}
+  LMask32: UInt32;
+  {$ENDIF}
 begin
   if ANeedleLen = 0 then
     Exit(0);
@@ -272,6 +277,57 @@ begin
   LFirstByte := Byte(ANeedle[0]);
   LLastByte := Byte(ANeedle[ANeedleLen - 1]);
   LSearchLen := ADataLen - ANeedleLen + 1;
+
+  {$IFDEF CPUX86_64}
+  if HasAVX2 then
+  begin
+    LPos := 0;
+    while LPos + 32 <= LSearchLen do
+    begin
+      asm
+        movzx eax, byte [LFirstByte]
+        vmovd xmm0, eax
+        vpbroadcastb ymm0, xmm0
+        movzx eax, byte [LLastByte]
+        vmovd xmm1, eax
+        vpbroadcastb ymm1, xmm1
+
+        mov rcx, [AData]
+        add rcx, [LPos]
+        vpcmpeqb ymm2, ymm0, ymmword [rcx]
+
+        mov rax, [ANeedleLen]
+        dec rax
+        add rcx, rax
+        vpcmpeqb ymm3, ymm1, ymmword [rcx]
+
+        vpand ymm2, ymm2, ymm3
+        vpmovmskb eax, ymm2
+        mov [LMask32], eax
+      end;
+      while LMask32 <> 0 do
+      begin
+        asm
+          bsf eax, [LMask32]
+          mov [LBit], eax
+        end;
+        LCandidate := LPos + SizeUInt(LBit);
+        if LCandidate < LSearchLen then
+        begin
+          if CompareMem(@AData[LCandidate + 1], @ANeedle[1], ANeedleLen - 2) then
+          begin
+            asm vzeroupper end;
+            Exit(PtrInt(LCandidate));
+          end;
+        end;
+        LMask32 := LMask32 and (LMask32 - 1);
+      end;
+      Inc(LPos, 32);
+    end;
+    asm vzeroupper end;
+    // Fall through to SSE2/scalar for remaining bytes
+  end;
+  {$ENDIF}
 
   LPos := 0;
   while LPos + VecWidth <= LSearchLen do
