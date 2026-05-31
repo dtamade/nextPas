@@ -116,7 +116,8 @@ function TSSLSNICertificateResolver.ResolveServerCredential(
 ): TSSLOperationResult;
 var
   I: Integer;
-  LName: string;
+  LName, LSuffix, LPrefix: string;
+  LSuffixLen: Integer;
 begin
   ACredential := nil;
   LName := LowerCase(AClientHello.ServerName);
@@ -140,17 +141,21 @@ begin
        (FEntries[I].Hostname[1] = '*') and
        (FEntries[I].Hostname[2] = '.') then
     begin
-      // Suffix = ".example.com" (from position 2 onwards)
-      // Name must end with suffix AND have exactly one dot before it
-      if (Length(LName) > Length(FEntries[I].Hostname) - 1) and
-         (Copy(LName, Length(LName) - Length(FEntries[I].Hostname) + 2 + 1,
-               Length(FEntries[I].Hostname) - 1) =
-          Copy(FEntries[I].Hostname, 2, Length(FEntries[I].Hostname) - 1)) and
-         (Pos('.', Copy(LName, 1, Length(LName) - Length(FEntries[I].Hostname) + 2)) = 0) then
+      // Suffix = ".example.com" (everything after the '*')
+      // e.g. for "*.example.com", suffix = ".example.com" (length = len-1)
+      LSuffix := Copy(FEntries[I].Hostname, 2, Length(FEntries[I].Hostname) - 1);
+      LSuffixLen := Length(LSuffix);
+      // Name must: end with suffix, be longer than suffix, have no dot in prefix
+      if (Length(LName) > LSuffixLen) and
+         (Copy(LName, Length(LName) - LSuffixLen + 1, LSuffixLen) = LSuffix) then
       begin
-        ACredential := TSSLSimpleServerCredential.Create(
-          FEntries[I].CertPEM, FEntries[I].KeyPEM, FEntries[I].KeyPassword);
-        Exit(TSSLOperationResult.Ok);
+        LPrefix := Copy(LName, 1, Length(LName) - LSuffixLen);
+        if (Length(LPrefix) > 0) and (Pos('.', LPrefix) = 0) then
+        begin
+          ACredential := TSSLSimpleServerCredential.Create(
+            FEntries[I].CertPEM, FEntries[I].KeyPEM, FEntries[I].KeyPassword);
+          Exit(TSSLOperationResult.Ok);
+        end;
       end;
     end;
   end;

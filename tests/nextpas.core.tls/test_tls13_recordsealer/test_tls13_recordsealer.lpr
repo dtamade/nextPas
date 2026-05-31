@@ -288,6 +288,65 @@ begin
   LOpener.Clear;
 end;
 
+procedure TestInvalidIV;
+var
+  LSealer: TTLS13RecordSealer;
+  LKey, LIV, LFragment, LRecord: TBytes;
+  LError: string;
+begin
+  WriteLn('--- Invalid IV rejected ---');
+  SetLength(LKey, 16);
+  FillChar(LKey[0], 16, $AA);
+  SetLength(LIV, 11); // Wrong! Should be 12
+  FillChar(LIV[0], 11, $BB);
+
+  LSealer.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LKey, LIV);
+  LFragment := TBytes.Create($01, $02, $03);
+
+  Check(not LSealer.Seal(LFragment, TLS_CONTENT_TYPE_APPLICATION_DATA, LRecord, LError),
+    'seal with 11-byte IV fails');
+  Check(Pos('IV', LError) > 0, 'error mentions IV');
+
+  // Zero-length IV
+  SetLength(LIV, 0);
+  LSealer.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LKey, LIV);
+  Check(not LSealer.Seal(LFragment, TLS_CONTENT_TYPE_APPLICATION_DATA, LRecord, LError),
+    'seal with empty IV fails');
+
+  LSealer.Clear;
+end;
+
+procedure TestOversizeFragment;
+var
+  LSealer: TTLS13RecordSealer;
+  LKey, LIV, LFragment, LRecord: TBytes;
+  LError: string;
+begin
+  WriteLn('--- Oversize fragment rejected ---');
+  SetLength(LKey, 16);
+  FillChar(LKey[0], 16, $CC);
+  SetLength(LIV, 12);
+  FillChar(LIV[0], 12, $DD);
+
+  LSealer.Init(TLS13_CIPHER_AES_128_GCM_SHA256, LKey, LIV);
+
+  // 16385 bytes = over TLS 1.3 max
+  SetLength(LFragment, 16385);
+  FillChar(LFragment[0], 16385, $EE);
+
+  Check(not LSealer.Seal(LFragment, TLS_CONTENT_TYPE_APPLICATION_DATA, LRecord, LError),
+    'seal with 16385-byte fragment fails');
+  Check(Pos('max', LError) > 0, 'error mentions max size');
+
+  // 16384 bytes = exactly at limit (should succeed)
+  SetLength(LFragment, 16384);
+  FillChar(LFragment[0], 16384, $FF);
+  Check(LSealer.Seal(LFragment, TLS_CONTENT_TYPE_APPLICATION_DATA, LRecord, LError),
+    'seal with 16384-byte fragment succeeds');
+
+  LSealer.Clear;
+end;
+
 begin
   WriteLn('=== TLS 1.3 RecordSealer/Opener Tests ===');
   WriteLn;
@@ -300,6 +359,8 @@ begin
   TestUpdateKey;
   TestEmptyFragment;
   TestAES256GCM;
+  TestInvalidIV;
+  TestOversizeFragment;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
