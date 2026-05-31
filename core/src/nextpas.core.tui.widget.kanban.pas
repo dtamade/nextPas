@@ -16,7 +16,8 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.borders,
-  nextpas.core.tui.layout;
+  nextpas.core.tui.layout,
+  nextpas.core.tui.widget.intf;
 
 type
   TKanbanCard = record
@@ -41,22 +42,38 @@ type
     procedure MoveUp;
   end;
 
-  TKanban = record
-    Columns: array of TKanbanColumn;
-    Style: TStyle;
-    HeaderStyle: TStyle;
-    CardStyle: TStyle;
-    ActiveCardStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  IKanban = interface(IWidget)
+    ['{B2C3D4E5-F6A7-8901-2345-6789ABCDEF01}']
+    function WithStyle(const AStyle: TStyle): IKanban;
+    function WithHeaderStyle(const AStyle: TStyle): IKanban;
+    function WithCardStyle(const AStyle: TStyle): IKanban;
+    function WithActiveCardStyle(const AStyle: TStyle): IKanban;
+    function WithBlock(ABlock: IBlock): IKanban;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TKanbanState);
+  end;
 
-    class function Create(const ACols: array of TKanbanColumn): TKanban; static;
-    function WithStyle(const S: TStyle): TKanban;
-    function WithHeaderStyle(const S: TStyle): TKanban;
-    function WithCardStyle(const S: TStyle): TKanban;
-    function WithActiveCardStyle(const S: TStyle): TKanban;
-    function WithBlock(const B: TBlock): TKanban;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TKanbanState);
+  TKanban = class(TInterfacedObject, IWidget, IKanban)
+  private
+    FColumns: array of TKanbanColumn;
+    FStyle: TStyle;
+    FHeaderStyle: TStyle;
+    FCardStyle: TStyle;
+    FActiveCardStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New(const ACols: array of TKanbanColumn): IKanban; static;
+
+    { IKanban builder }
+    function WithStyle(const AStyle: TStyle): IKanban;
+    function WithHeaderStyle(const AStyle: TStyle): IKanban;
+    function WithCardStyle(const AStyle: TStyle): IKanban;
+    function WithActiveCardStyle(const AStyle: TStyle): IKanban;
+    function WithBlock(ABlock: IBlock): IKanban;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    { IKanban stateful }
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TKanbanState);
   end;
 
 function MakeColumn(const ATitle: AnsiString; const ACards: array of TKanbanCard): TKanbanColumn;
@@ -118,36 +135,47 @@ end;
 
 { TKanban }
 
-class function TKanban.Create(const ACols: array of TKanbanColumn): TKanban;
-var I: Integer;
+class function TKanban.New(const ACols: array of TKanbanColumn): IKanban;
+var
+  LObj: TKanban;
+  I: Integer;
 begin
-  SetLength(Result.Columns, Length(ACols));
+  LObj := TKanban.Create;
+  SetLength(LObj.FColumns, Length(ACols));
   for I := 0 to High(ACols) do
-    Result.Columns[I] := ACols[I];
-  Result.Style := TStyle.Default;
-  Result.HeaderStyle := TStyle.Default.WithModifier([mbBold]);
-  Result.CardStyle := TStyle.Default;
-  Result.ActiveCardStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBlock := False;
-  Result.Block := nil;
+    LObj.FColumns[I] := ACols[I];
+  LObj.FStyle := TStyle.Default;
+  LObj.FHeaderStyle := TStyle.Default.WithModifier([mbBold]);
+  LObj.FCardStyle := TStyle.Default;
+  LObj.FActiveCardStyle := TStyle.Default.WithModifier([mbReversed]);
+  LObj.FBlock := nil;
+  Result := LObj;
 end;
 
-function TKanban.WithStyle(const S: TStyle): TKanban;
-begin Result := Self; Result.Style := S; end;
+function TKanban.WithStyle(const AStyle: TStyle): IKanban;
+begin FStyle := AStyle; Result := Self; end;
 
-function TKanban.WithHeaderStyle(const S: TStyle): TKanban;
-begin Result := Self; Result.HeaderStyle := S; end;
+function TKanban.WithHeaderStyle(const AStyle: TStyle): IKanban;
+begin FHeaderStyle := AStyle; Result := Self; end;
 
-function TKanban.WithCardStyle(const S: TStyle): TKanban;
-begin Result := Self; Result.CardStyle := S; end;
+function TKanban.WithCardStyle(const AStyle: TStyle): IKanban;
+begin FCardStyle := AStyle; Result := Self; end;
 
-function TKanban.WithActiveCardStyle(const S: TStyle): TKanban;
-begin Result := Self; Result.ActiveCardStyle := S; end;
+function TKanban.WithActiveCardStyle(const AStyle: TStyle): IKanban;
+begin FActiveCardStyle := AStyle; Result := Self; end;
 
-function TKanban.WithBlock(const B: TBlock): TKanban;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TKanban.WithBlock(ABlock: IBlock): IKanban;
+begin FBlock := ABlock; Result := Self; end;
 
-procedure TKanban.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TKanbanState);
+procedure TKanban.Render(const AArea: TRect; ABuffer: TBuffer);
+var
+  LState: TKanbanState;
+begin
+  LState := TKanbanState.Empty;
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TKanban.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TKanbanState);
 var
   Inner: TRect;
   ColRects: TRectArray;
@@ -156,40 +184,40 @@ var
   CSty: TStyle;
   CardText: AnsiString;
 begin
-  if Area.IsEmpty or (Length(Columns) = 0) then Exit;
+  if AArea.IsEmpty or (Length(FColumns) = 0) then Exit;
 
   // Clamp state indices
-  if State.ActiveCol < 0 then State.ActiveCol := 0;
-  if State.ActiveCol >= Length(Columns) then State.ActiveCol := Length(Columns) - 1;
-  if Length(Columns[State.ActiveCol].Cards) > 0 then
+  if AState.ActiveCol < 0 then AState.ActiveCol := 0;
+  if AState.ActiveCol >= Length(FColumns) then AState.ActiveCol := Length(FColumns) - 1;
+  if Length(FColumns[AState.ActiveCol].Cards) > 0 then
   begin
-    if State.ActiveCard < 0 then State.ActiveCard := 0;
-    if State.ActiveCard >= Length(Columns[State.ActiveCol].Cards) then
-      State.ActiveCard := Length(Columns[State.ActiveCol].Cards) - 1;
+    if AState.ActiveCard < 0 then AState.ActiveCard := 0;
+    if AState.ActiveCard >= Length(FColumns[AState.ActiveCol].Cards) then
+      AState.ActiveCard := Length(FColumns[AState.ActiveCol].Cards) - 1;
   end
   else
-    State.ActiveCard := 0;
+    AState.ActiveCard := 0;
 
-  ABuf.SetStyle(Area, Style);
+  ABuffer.SetStyle(AArea, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
   // Equal-width columns
-  SetLength(Constraints, Length(Columns));
-  for I := 0 to High(Columns) do
+  SetLength(Constraints, Length(FColumns));
+  for I := 0 to High(FColumns) do
     Constraints[I] := FillConstraint(1);
 
   ColRects := HorizontalSplit(Inner, Constraints);
 
-  for I := 0 to High(Columns) do
+  for I := 0 to High(FColumns) do
   begin
     if I >= Length(ColRects) then Break;
 
@@ -197,27 +225,27 @@ begin
     Y := ColRects[I].Y;
 
     // Column header
-    ABuf.SetStringN(ColRects[I].X, Y, Columns[I].Title, ColW, HeaderStyle);
+    ABuffer.SetStringN(ColRects[I].X, Y, FColumns[I].Title, ColW, FHeaderStyle);
     Inc(Y);
     // Separator
-    ABuf.SetStringN(ColRects[I].X, Y, StringOfChar('-', ColW), ColW, Style);
+    ABuffer.SetStringN(ColRects[I].X, Y, StringOfChar('-', ColW), ColW, FStyle);
     Inc(Y);
 
     // Cards
-    for J := 0 to High(Columns[I].Cards) do
+    for J := 0 to High(FColumns[I].Cards) do
     begin
       if Y >= ColRects[I].Y + ColRects[I].Height then Break;
 
-      if (I = State.ActiveCol) and (J = State.ActiveCard) then
-        CSty := ActiveCardStyle
+      if (I = AState.ActiveCol) and (J = AState.ActiveCard) then
+        CSty := FActiveCardStyle
       else
-        CSty := CardStyle;
+        CSty := FCardStyle;
 
-      CardText := Columns[I].Cards[J].Title;
-      if Columns[I].Cards[J].Tag <> '' then
-        CardText := '[' + Columns[I].Cards[J].Tag + '] ' + CardText;
+      CardText := FColumns[I].Cards[J].Title;
+      if FColumns[I].Cards[J].Tag <> '' then
+        CardText := '[' + FColumns[I].Cards[J].Tag + '] ' + CardText;
 
-      ABuf.SetStringN(ColRects[I].X, Y, CardText, ColW, CSty);
+      ABuffer.SetStringN(ColRects[I].X, Y, CardText, ColW, CSty);
       Inc(Y);
     end;
   end;

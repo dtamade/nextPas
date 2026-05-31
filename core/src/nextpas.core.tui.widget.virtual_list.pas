@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block;
+  nextpas.core.tui.widget.block,
+  nextpas.core.tui.widget.intf;
 
 type
   TItemProviderFunc = function(Index: Integer): AnsiString;
@@ -33,20 +34,35 @@ type
     procedure SelectLast;
   end;
 
-  TVirtualList = record
-    ItemProvider: TItemProviderFunc;
-    Style: TStyle;
-    SelectedStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
-    ShowIndex: Boolean;
+  IVirtualList = interface(IWidget)
+    ['{C3D4E5F6-A7B8-9012-3456-789ABCDEF012}']
+    function WithStyle(const AStyle: TStyle): IVirtualList;
+    function WithSelectedStyle(const AStyle: TStyle): IVirtualList;
+    function WithBlock(ABlock: IBlock): IVirtualList;
+    function WithShowIndex(AValue: Boolean): IVirtualList;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TVirtualListState);
+  end;
 
-    class function Create(Provider: TItemProviderFunc): TVirtualList; static;
-    function WithStyle(const S: TStyle): TVirtualList;
-    function WithSelectedStyle(const S: TStyle): TVirtualList;
-    function WithBlock(const B: TBlock): TVirtualList;
-    function WithShowIndex(V: Boolean): TVirtualList;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TVirtualListState);
+  TVirtualList = class(TInterfacedObject, IWidget, IVirtualList)
+  private
+    FItemProvider: TItemProviderFunc;
+    FStyle: TStyle;
+    FSelectedStyle: TStyle;
+    FBlock: IBlock;
+    FShowIndex: Boolean;
+  public
+    class function New(AProvider: TItemProviderFunc): IVirtualList; static;
+
+    { IVirtualList builder }
+    function WithStyle(const AStyle: TStyle): IVirtualList;
+    function WithSelectedStyle(const AStyle: TStyle): IVirtualList;
+    function WithBlock(ABlock: IBlock): IVirtualList;
+    function WithShowIndex(AValue: Boolean): IVirtualList;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    { IVirtualList stateful }
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TVirtualListState);
   end;
 
 implementation
@@ -96,29 +112,40 @@ end;
 
 { TVirtualList }
 
-class function TVirtualList.Create(Provider: TItemProviderFunc): TVirtualList;
+class function TVirtualList.New(AProvider: TItemProviderFunc): IVirtualList;
+var
+  LObj: TVirtualList;
 begin
-  Result.ItemProvider := Provider;
-  Result.Style := TStyle.Default;
-  Result.SelectedStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBlock := False;
-  Result.Block := nil;
-  Result.ShowIndex := False;
+  LObj := TVirtualList.Create;
+  LObj.FItemProvider := AProvider;
+  LObj.FStyle := TStyle.Default;
+  LObj.FSelectedStyle := TStyle.Default.WithModifier([mbReversed]);
+  LObj.FBlock := nil;
+  LObj.FShowIndex := False;
+  Result := LObj;
 end;
 
-function TVirtualList.WithStyle(const S: TStyle): TVirtualList;
-begin Result := Self; Result.Style := S; end;
+function TVirtualList.WithStyle(const AStyle: TStyle): IVirtualList;
+begin FStyle := AStyle; Result := Self; end;
 
-function TVirtualList.WithSelectedStyle(const S: TStyle): TVirtualList;
-begin Result := Self; Result.SelectedStyle := S; end;
+function TVirtualList.WithSelectedStyle(const AStyle: TStyle): IVirtualList;
+begin FSelectedStyle := AStyle; Result := Self; end;
 
-function TVirtualList.WithBlock(const B: TBlock): TVirtualList;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TVirtualList.WithBlock(ABlock: IBlock): IVirtualList;
+begin FBlock := ABlock; Result := Self; end;
 
-function TVirtualList.WithShowIndex(V: Boolean): TVirtualList;
-begin Result := Self; Result.ShowIndex := V; end;
+function TVirtualList.WithShowIndex(AValue: Boolean): IVirtualList;
+begin FShowIndex := AValue; Result := Self; end;
 
-procedure TVirtualList.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TVirtualListState);
+procedure TVirtualList.Render(const AArea: TRect; ABuffer: TBuffer);
+var
+  LState: TVirtualListState;
+begin
+  LState := TVirtualListState.Create(0);
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TVirtualList.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TVirtualListState);
 var
   Inner: TRect;
   ViewH, I, Row, GutterW, TextX, TextW: Integer;
@@ -128,40 +155,40 @@ var
   IdxLen, J, V, D: Integer;
   IdxStr: AnsiString;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuffer.SetStyle(AArea, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
   ViewH := Inner.Height;
 
   // Clamp state
-  if State.TotalItems <= 0 then Exit;
-  if State.Selected >= State.TotalItems then
-    State.Selected := State.TotalItems - 1;
-  if State.Selected < 0 then State.Selected := 0;
+  if AState.TotalItems <= 0 then Exit;
+  if AState.Selected >= AState.TotalItems then
+    AState.Selected := AState.TotalItems - 1;
+  if AState.Selected < 0 then AState.Selected := 0;
 
   // Ensure selected is visible
-  if State.Selected < State.Offset then
-    State.Offset := State.Selected;
-  if State.Selected >= State.Offset + ViewH then
-    State.Offset := State.Selected - ViewH + 1;
-  if State.Offset < 0 then State.Offset := 0;
+  if AState.Selected < AState.Offset then
+    AState.Offset := AState.Selected;
+  if AState.Selected >= AState.Offset + ViewH then
+    AState.Offset := AState.Selected - ViewH + 1;
+  if AState.Offset < 0 then AState.Offset := 0;
 
   // Gutter for index — compute digit count without IntToStr
   GutterW := 0;
-  if ShowIndex then
+  if FShowIndex then
   begin
-    V := State.TotalItems;
+    V := AState.TotalItems;
     GutterW := 1;
     while V >= 10 do begin Inc(GutterW); V := V div 10; end;
     Inc(GutterW); // trailing space
@@ -172,7 +199,7 @@ begin
   TextW := Inner.Width - GutterW;
   if TextW < 1 then TextW := 1;
 
-  if ShowIndex then
+  if FShowIndex then
   begin
     SetLength(IdxStr, GutterW);
     for J := 1 to GutterW do IdxStr[J] := ' ';
@@ -180,16 +207,16 @@ begin
 
   for I := 0 to ViewH - 1 do
   begin
-    Row := State.Offset + I;
-    if Row >= State.TotalItems then Break;
+    Row := AState.Offset + I;
+    if Row >= AState.TotalItems then Break;
 
-    if Row = State.Selected then
-      LineSty := SelectedStyle
+    if Row = AState.Selected then
+      LineSty := FSelectedStyle
     else
-      LineSty := Style;
+      LineSty := FStyle;
 
     // Index gutter — itoa without heap allocation
-    if ShowIndex then
+    if FShowIndex then
     begin
       V := Row + 1;
       IdxLen := 0;
@@ -205,16 +232,16 @@ begin
         IdxStr[D] := Chr(IdxBuf[J]);
         Dec(D);
       end;
-      ABuf.SetStringN(Inner.X, Inner.Y + I, IdxStr, GutterW, Style);
+      ABuffer.SetStringN(Inner.X, Inner.Y + I, IdxStr, GutterW, FStyle);
     end;
 
     // Item content via provider
-    if Assigned(ItemProvider) then
-      ItemText := ItemProvider(Row)
+    if Assigned(FItemProvider) then
+      ItemText := FItemProvider(Row)
     else
       ItemText := '';
 
-    ABuf.SetStringN(TextX, Inner.Y + I, ItemText, TextW, LineSty);
+    ABuffer.SetStringN(TextX, Inner.Y + I, ItemText, TextW, LineSty);
   end;
 end;
 

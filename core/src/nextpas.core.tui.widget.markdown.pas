@@ -42,16 +42,26 @@ type
     class function Default: TMdTheme; static;
   end;
 
-  TMarkdown = record
-    Source: AnsiString;
-    Theme: TMdTheme;
-    HasBlock: Boolean;
-    Block: IBlock;
+  IMarkdown = interface(IWidget)
+    ['{F1A2B3C4-D5E6-7890-ABCD-EF1234567890}']
+    function WithTheme(const ATheme: TMdTheme): IMarkdown;
+    function WithBlock(ABlock: IBlock): IMarkdown;
+  end;
 
-    class function Create(const ASource: AnsiString): TMarkdown; static;
-    function WithTheme(const T: TMdTheme): TMarkdown;
-    function WithBlock(const B: TBlock): TMarkdown;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TMarkdown = class(TInterfacedObject, IWidget, IMarkdown)
+  private
+    FSource: AnsiString;
+    FTheme: TMdTheme;
+    FBlock: IBlock;
+  public
+    class function New(const ASource: AnsiString): IMarkdown; static;
+
+    { IMarkdown builder }
+    function WithTheme(const ATheme: TMdTheme): IMarkdown;
+    function WithBlock(ABlock: IBlock): IMarkdown;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 function ParseMarkdownLines(const Source: AnsiString): TMdLineArray;
@@ -155,21 +165,30 @@ end;
 
 { TMarkdown }
 
-class function TMarkdown.Create(const ASource: AnsiString): TMarkdown;
+class function TMarkdown.New(const ASource: AnsiString): IMarkdown;
+var
+  LObj: TMarkdown;
 begin
-  Result.Source := ASource;
-  Result.Theme := TMdTheme.Default;
-  Result.HasBlock := False;
-  Result.Block := nil;
+  LObj := TMarkdown.Create;
+  LObj.FSource := ASource;
+  LObj.FTheme := TMdTheme.Default;
+  LObj.FBlock := nil;
+  Result := LObj;
 end;
 
-function TMarkdown.WithTheme(const T: TMdTheme): TMarkdown;
-begin Result := Self; Result.Theme := T; end;
+function TMarkdown.WithTheme(const ATheme: TMdTheme): IMarkdown;
+begin
+  FTheme := ATheme;
+  Result := Self;
+end;
 
-function TMarkdown.WithBlock(const B: TBlock): TMarkdown;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TMarkdown.WithBlock(ABlock: IBlock): IMarkdown;
+begin
+  FBlock := ABlock;
+  Result := Self;
+end;
 
-procedure TMarkdown.Render(const Area: TRect; ABuf: TBuffer);
+procedure TMarkdown.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner: TRect;
   Lines: TMdLineArray;
@@ -177,21 +196,21 @@ var
   LineSty: TStyle;
   Prefix: AnsiString;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Theme.Normal);
+  ABuffer.SetStyle(AArea, FTheme.Normal);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
-  Lines := ParseMarkdownLines(Source);
+  Lines := ParseMarkdownLines(FSource);
 
   Y := Inner.Y;
   for I := 0 to High(Lines) do
@@ -201,41 +220,41 @@ begin
     case Lines[I].Kind of
       mlH1:
       begin
-        LineSty := Theme.H1;
-        ABuf.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, LineSty);
+        LineSty := FTheme.H1;
+        ABuffer.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, LineSty);
       end;
       mlH2:
       begin
-        LineSty := Theme.H2;
-        ABuf.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, LineSty);
+        LineSty := FTheme.H2;
+        ABuffer.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, LineSty);
       end;
       mlH3:
       begin
-        LineSty := Theme.H3;
-        ABuf.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, LineSty);
+        LineSty := FTheme.H3;
+        ABuffer.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, LineSty);
       end;
       mlBullet:
       begin
         Prefix := '  ' + #$E2#$80#$A2 + ' ';
-        ABuf.SetStringN(Inner.X, Y, Prefix, 4, Theme.Bullet);
-        ABuf.SetStringN(Inner.X + 4, Y, Lines[I].Text, Inner.Width - 4, Theme.Normal);
+        ABuffer.SetStringN(Inner.X, Y, Prefix, 4, FTheme.Bullet);
+        ABuffer.SetStringN(Inner.X + 4, Y, Lines[I].Text, Inner.Width - 4, FTheme.Normal);
       end;
       mlNumbered:
       begin
         Prefix := '  ' + Lines[I].Text;
-        ABuf.SetStringN(Inner.X, Y, Prefix, Inner.Width, Theme.Normal);
+        ABuffer.SetStringN(Inner.X, Y, Prefix, Inner.Width, FTheme.Normal);
       end;
       mlCodeBlock:
       begin
-        ABuf.SetStringN(Inner.X, Y, '  ' + Lines[I].Text, Inner.Width, Theme.Code);
+        ABuffer.SetStringN(Inner.X, Y, '  ' + Lines[I].Text, Inner.Width, FTheme.Code);
       end;
       mlHRule:
       begin
-        ABuf.SetStringN(Inner.X, Y,
-          StringOfChar('-', Inner.Width), Inner.Width, Theme.HRule);
+        ABuffer.SetStringN(Inner.X, Y,
+          StringOfChar('-', Inner.Width), Inner.Width, FTheme.HRule);
       end;
     else
-      ABuf.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, Theme.Normal);
+      ABuffer.SetStringN(Inner.X, Y, Lines[I].Text, Inner.Width, FTheme.Normal);
     end;
 
     Inc(Y);

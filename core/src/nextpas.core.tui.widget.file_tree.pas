@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
-  nextpas.core.tui.widget.block;
+  nextpas.core.tui.widget.block,
+  nextpas.core.tui.widget.intf;
 
 type
   TFileNode = record
@@ -38,21 +39,37 @@ type
     function VisibleCount: Integer;
   end;
 
-  TFileTree = record
-    Style: TStyle;
-    DirStyle: TStyle;
-    FileStyle: TStyle;
-    SelectedStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  IFileTree = interface(IWidget)
+    ['{A1B2C3D4-E5F6-7890-1234-56789ABCDEF0}']
+    function WithStyle(const AStyle: TStyle): IFileTree;
+    function WithDirStyle(const AStyle: TStyle): IFileTree;
+    function WithFileStyle(const AStyle: TStyle): IFileTree;
+    function WithSelectedStyle(const AStyle: TStyle): IFileTree;
+    function WithBlock(ABlock: IBlock): IFileTree;
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TFileTreeState);
+  end;
 
-    class function Default: TFileTree; static;
-    function WithStyle(const S: TStyle): TFileTree;
-    function WithDirStyle(const S: TStyle): TFileTree;
-    function WithFileStyle(const S: TStyle): TFileTree;
-    function WithSelectedStyle(const S: TStyle): TFileTree;
-    function WithBlock(const B: TBlock): TFileTree;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TFileTreeState);
+  TFileTree = class(TInterfacedObject, IWidget, IFileTree)
+  private
+    FStyle: TStyle;
+    FDirStyle: TStyle;
+    FFileStyle: TStyle;
+    FSelectedStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New: IFileTree; static;
+
+    { IFileTree builder }
+    function WithStyle(const AStyle: TStyle): IFileTree;
+    function WithDirStyle(const AStyle: TStyle): IFileTree;
+    function WithFileStyle(const AStyle: TStyle): IFileTree;
+    function WithSelectedStyle(const AStyle: TStyle): IFileTree;
+    function WithBlock(ABlock: IBlock): IFileTree;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    { IFileTree stateful }
+    procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TFileTreeState);
   end;
 
 implementation
@@ -125,76 +142,87 @@ end;
 
 { TFileTree }
 
-class function TFileTree.Default: TFileTree;
+class function TFileTree.New: IFileTree;
+var
+  LObj: TFileTree;
 begin
-  Result.Style := TStyle.Default;
-  Result.DirStyle := TStyle.Default.WithFg(TUI_CYAN).WithModifier([mbBold]);
-  Result.FileStyle := TStyle.Default;
-  Result.SelectedStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBlock := False;
-  Result.Block := nil;
+  LObj := TFileTree.Create;
+  LObj.FStyle := TStyle.Default;
+  LObj.FDirStyle := TStyle.Default.WithFg(TUI_CYAN).WithModifier([mbBold]);
+  LObj.FFileStyle := TStyle.Default;
+  LObj.FSelectedStyle := TStyle.Default.WithModifier([mbReversed]);
+  LObj.FBlock := nil;
+  Result := LObj;
 end;
 
-function TFileTree.WithStyle(const S: TStyle): TFileTree;
-begin Result := Self; Result.Style := S; end;
+function TFileTree.WithStyle(const AStyle: TStyle): IFileTree;
+begin FStyle := AStyle; Result := Self; end;
 
-function TFileTree.WithDirStyle(const S: TStyle): TFileTree;
-begin Result := Self; Result.DirStyle := S; end;
+function TFileTree.WithDirStyle(const AStyle: TStyle): IFileTree;
+begin FDirStyle := AStyle; Result := Self; end;
 
-function TFileTree.WithFileStyle(const S: TStyle): TFileTree;
-begin Result := Self; Result.FileStyle := S; end;
+function TFileTree.WithFileStyle(const AStyle: TStyle): IFileTree;
+begin FFileStyle := AStyle; Result := Self; end;
 
-function TFileTree.WithSelectedStyle(const S: TStyle): TFileTree;
-begin Result := Self; Result.SelectedStyle := S; end;
+function TFileTree.WithSelectedStyle(const AStyle: TStyle): IFileTree;
+begin FSelectedStyle := AStyle; Result := Self; end;
 
-function TFileTree.WithBlock(const B: TBlock): TFileTree;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TFileTree.WithBlock(ABlock: IBlock): IFileTree;
+begin FBlock := ABlock; Result := Self; end;
 
-procedure TFileTree.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TFileTreeState);
+procedure TFileTree.Render(const AArea: TRect; ABuffer: TBuffer);
+var
+  LState: TFileTreeState;
+begin
+  LState := TFileTreeState.Empty;
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TFileTree.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TFileTreeState);
 var
   Inner: TRect;
   I, Y, ViewH, VisIdx: Integer;
   Prefix, Display: AnsiString;
   LineSty: TStyle;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuffer.SetStyle(AArea, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
   // Clamp state indices
-  if Length(State.Nodes) > 0 then
+  if Length(AState.Nodes) > 0 then
   begin
-    if State.Selected < 0 then State.Selected := 0;
-    if State.Selected >= Length(State.Nodes) then State.Selected := Length(State.Nodes) - 1;
+    if AState.Selected < 0 then AState.Selected := 0;
+    if AState.Selected >= Length(AState.Nodes) then AState.Selected := Length(AState.Nodes) - 1;
   end
   else
-    State.Selected := 0;
+    AState.Selected := 0;
 
   ViewH := Inner.Height;
 
   // Ensure selected visible
-  if State.Selected < State.ScrollY then
-    State.ScrollY := State.Selected;
-  if State.Selected >= State.ScrollY + ViewH then
-    State.ScrollY := State.Selected - ViewH + 1;
+  if AState.Selected < AState.ScrollY then
+    AState.ScrollY := AState.Selected;
+  if AState.Selected >= AState.ScrollY + ViewH then
+    AState.ScrollY := AState.Selected - ViewH + 1;
 
   Y := Inner.Y;
   VisIdx := 0;
-  for I := 0 to High(State.Nodes) do
+  for I := 0 to High(AState.Nodes) do
   begin
-    if not IsNodeVisible(State.Nodes, I) then Continue;
+    if not IsNodeVisible(AState.Nodes, I) then Continue;
 
-    if VisIdx < State.ScrollY then
+    if VisIdx < AState.ScrollY then
     begin
       Inc(VisIdx);
       Continue;
@@ -203,26 +231,26 @@ begin
     if Y >= Inner.Y + ViewH then Break;
 
     // Build prefix with indentation
-    Prefix := StringOfChar(' ', State.Nodes[I].Depth * 2);
-    if State.Nodes[I].IsDir then
+    Prefix := StringOfChar(' ', AState.Nodes[I].Depth * 2);
+    if AState.Nodes[I].IsDir then
     begin
-      if State.Nodes[I].Expanded then
+      if AState.Nodes[I].Expanded then
         Prefix := Prefix + '[-] '
       else
         Prefix := Prefix + '[+] ';
-      LineSty := DirStyle;
+      LineSty := FDirStyle;
     end
     else
     begin
       Prefix := Prefix + '    ';
-      LineSty := FileStyle;
+      LineSty := FFileStyle;
     end;
 
-    if I = State.Selected then
-      LineSty := SelectedStyle;
+    if I = AState.Selected then
+      LineSty := FSelectedStyle;
 
-    Display := Prefix + State.Nodes[I].Name;
-    ABuf.SetStringN(Inner.X, Y, Display, Inner.Width, LineSty);
+    Display := Prefix + AState.Nodes[I].Name;
+    ABuffer.SetStringN(Inner.X, Y, Display, Inner.Width, LineSty);
 
     Inc(Y);
     Inc(VisIdx);
