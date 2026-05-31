@@ -836,6 +836,7 @@ function ParsePrimaryExpression(
 var
   Token: TToken;
   RHS, RangeNode: TGreenNode;
+  J: LongInt;
 begin
   if ACursor >= ALexer.TokenCount then
     Exit(nil);
@@ -911,6 +912,35 @@ begin
         begin
           Token.Lexeme := 'inherited ' + CurrentToken(ALexer, ACursor).Lexeme;
           Inc(ACursor);
+        end;
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+        begin
+          J := ACursor + 1;
+          while (J < ALexer.TokenCount) and
+            (ALexer.TokenAt(J).Kind in [tkIdentifier, tkComma,
+              tkLessThan, tkGreaterThan, tkDot]) do
+            Inc(J);
+          if (J < ALexer.TokenCount) and
+            (ALexer.TokenAt(J - 1).Kind = tkGreaterThan) and
+            (ALexer.TokenAt(J).Kind = tkLParen) then
+          begin
+            Token.Lexeme := 'specialize ' + Token.Lexeme + '<';
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            begin
+              Token.Lexeme := Token.Lexeme + CurrentToken(ALexer, ACursor).Lexeme;
+              Inc(ACursor);
+            end;
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
+            begin
+              Token.Lexeme := Token.Lexeme + '>';
+              Inc(ACursor);
+            end;
+          end;
         end;
         if (ACursor < ALexer.TokenCount) and
           (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
