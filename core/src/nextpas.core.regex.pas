@@ -36,7 +36,7 @@ type
     function IsMatch(const AInput: string): Boolean;
     function Find(const AInput: string): TMatch;
     function FindAt(const AInput: string; AStartPos: SizeUInt): TMatch;
-    function FindAll(const AInput: string): TMatchArray;
+    function FindAll(const AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
     function IsFullMatch(const AInput: string): Boolean;
     function ReplaceFirst(const AInput, AReplacement: string): string;
     function ReplaceAll(const AInput, AReplacement: string): string;
@@ -51,7 +51,7 @@ type
 
 function RegexIsMatch(const APattern, AInput: string): Boolean;
 function RegexFind(const APattern, AInput: string): TMatch;
-function RegexFindAll(const APattern, AInput: string): TMatchArray;
+function RegexFindAll(const APattern, AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
 function RegexReplaceAll(const APattern, AInput, AReplacement: string): string;
 function RegexSplit(const APattern, AInput: string): TStringArray;
 function RegexQuoteMeta(const AStr: string): string;
@@ -273,7 +273,7 @@ begin
   Result := DfaIsFullMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
-function TRegex.FindAll(const AInput: string): TMatchArray;
+function TRegex.FindAll(const AInput: string; AMaxMatches: SizeInt): TMatchArray;
 var
   LPos, LStart: SizeInt;
   LCount: SizeUInt;
@@ -281,14 +281,17 @@ var
   LFound: PtrInt;
 begin
   if not FValid then begin SetLength(Result, 0); Exit; end;
+  if AMaxMatches = 0 then begin SetLength(Result, 0); Exit; end;
   if FProgram.IsPureLiteral then
   begin
     LPrefixLen := SizeInt(FProgram.LiteralPrefixLen);
     if LPrefixLen = 0 then
     begin
-      // Empty pattern matches at every position (including after last char)
-      SetLength(Result, Length(AInput) + 1);
-      for LPos := 0 to Length(AInput) do
+      if (AMaxMatches > 0) and (AMaxMatches < SizeInt(Length(AInput)) + 1) then
+        SetLength(Result, AMaxMatches)
+      else
+        SetLength(Result, Length(AInput) + 1);
+      for LPos := 0 to High(Result) do
       begin
         Result[LPos].Start := LPos;
         Result[LPos].Len := 0;
@@ -301,6 +304,7 @@ begin
     LStart := 0;
     while LStart <= SizeInt(Length(AInput)) - LPrefixLen do
     begin
+      if (AMaxMatches > 0) and (SizeInt(LCount) >= AMaxMatches) then Break;
       LFound := ScanFindSubstring(@PAnsiChar(AInput)[LStart],
         SizeUInt(Length(AInput)) - SizeUInt(LStart),
         PAnsiChar(FProgram.LiteralPrefix), SizeUInt(LPrefixLen));
@@ -316,13 +320,12 @@ begin
     SetLength(Result, LCount);
     Exit;
   end;
-  // DFA fast path: only when no captures needed
   if FProgram.NumCaptures = 0 then
   begin
-    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
+    Result := DfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
     Exit;
   end;
-  Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
+  Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput), AMaxMatches);
 end;
 
 function TRegex.ReplaceFirst(const AInput, AReplacement: string): string;
@@ -548,11 +551,11 @@ begin
   Result := R.Find(AInput);
 end;
 
-function RegexFindAll(const APattern, AInput: string): TMatchArray;
+function RegexFindAll(const APattern, AInput: string; AMaxMatches: SizeInt = -1): TMatchArray;
 var R: TRegex;
 begin
   R := TRegex.Compile(APattern);
-  Result := R.FindAll(AInput);
+  Result := R.FindAll(AInput, AMaxMatches);
 end;
 
 function RegexReplaceAll(const APattern, AInput, AReplacement: string): string;

@@ -49,7 +49,7 @@ function DfaIsFullMatch(const AProgram: TRegexProgram;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 
 function DfaFindAll(const AProgram: TRegexProgram;
-  const AInput: PAnsiChar; ALen: SizeUInt): TMatchArray;
+  const AInput: PAnsiChar; ALen: SizeUInt; AMaxMatches: SizeInt = -1): TMatchArray;
 
 function ProgramHasAsserts(const AProgram: TRegexProgram): Boolean;
 
@@ -756,7 +756,7 @@ end;
   calling CheckStateMatch (full epsilon closure) at every position. }
 
 function DfaFindAll(const AProgram: TRegexProgram;
-  const AInput: PAnsiChar; ALen: SizeUInt): TMatchArray;
+  const AInput: PAnsiChar; ALen: SizeUInt; AMaxMatches: SizeInt = -1): TMatchArray;
 var
   Cache: TDfaCache;
   LCodeLen: UInt32;
@@ -861,7 +861,7 @@ begin
 
         if curState = DFA_UNKNOWN then
         begin
-          Result := NfaFindAll(AProgram, AInput, ALen);
+          Result := NfaFindAll(AProgram, AInput, ALen, AMaxMatches);
           Exit;
         end;
 
@@ -882,7 +882,7 @@ begin
               nextState := ComputeTransition(Cache, AProgram, curState, LCtx, ch, False);
               if Cache.Overflow then
               begin
-                Result := NfaFindAll(AProgram, AInput, ALen);
+                Result := NfaFindAll(AProgram, AInput, ALen, AMaxMatches);
                 Exit;
               end;
             end;
@@ -919,6 +919,7 @@ begin
       Result[LCount].Len := LMatchEnd - SizeInt(LStart);
       Result[LCount].Groups := nil;
       Inc(LCount);
+      if (AMaxMatches > 0) and (SizeInt(LCount) >= AMaxMatches) then Break;
 
       if LMatchEnd > SizeInt(LStart) then
         LStart := SizeUInt(LMatchEnd)

@@ -3996,6 +3996,41 @@ begin
   CheckEqual(Int64(8999), Int64(LResult), 'many partial h then hello');
 end;
 
+procedure TestFindAllMaxMatches;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('\d+');
+  LMatches := R.FindAll('a1b2c3d4e5', 3);
+  CheckEqual(Int64(3), Int64(Length(LMatches)), 'limit=3 returns 3');
+  CheckEqual(Int64(1), Int64(LMatches[0].Start), 'first match pos');
+  CheckEqual(Int64(3), Int64(LMatches[1].Start), 'second match pos');
+  CheckEqual(Int64(5), Int64(LMatches[2].Start), 'third match pos');
+end;
+
+procedure TestFindAllMaxMatchesZero;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('\d+');
+  LMatches := R.FindAll('a1b2c3', 0);
+  CheckEqual(Int64(0), Int64(Length(LMatches)), 'limit=0 returns empty');
+end;
+
+procedure TestFindAllMaxMatchesNegative;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('\d+');
+  LMatches := R.FindAll('a1b2c3d4e5', -1);
+  CheckEqual(Int64(5), Int64(Length(LMatches)), 'limit=-1 returns all');
+end;
+
+procedure TestFindAllMaxMatchesExceedsTotal;
+var R: TRegex; LMatches: TMatchArray;
+begin
+  R := TRegex.Compile('x');
+  LMatches := R.FindAll('axbxc', 100);
+  CheckEqual(Int64(2), Int64(Length(LMatches)), 'limit>total returns all');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -4116,5 +4151,10 @@ begin
   T.Run('DFA: Overflow fallback', @TestDfaOverflowFallback);
   { --- ScanFindSubstring tests --- }
   T.Run('ScanFindSubstring', @TestScanFindSubstring);
+  { --- FindAll AMaxMatches tests --- }
+  T.Run('FindAll MaxMatches', @TestFindAllMaxMatches);
+  T.Run('FindAll MaxMatches=0', @TestFindAllMaxMatchesZero);
+  T.Run('FindAll MaxMatches=-1', @TestFindAllMaxMatchesNegative);
+  T.Run('FindAll MaxMatches>total', @TestFindAllMaxMatchesExceedsTotal);
   T.Summary;
 end.
