@@ -12,7 +12,9 @@ uses
   nextpas.core.time.datetime,
   nextpas.core.time.iso8601,
   nextpas.core.time.deadline,
-  nextpas.core.time.sleep;
+  nextpas.core.time.sleep,
+  nextpas.core.time.timer,
+  nextpas.core.time.ticker;
 
 type
   TDuration = nextpas.core.time.base.TDuration;
@@ -25,6 +27,10 @@ type
   TDeadlineKind = nextpas.core.time.deadline.TDeadlineKind;
   TDeadline = nextpas.core.time.deadline.TDeadline;
   TSleep = nextpas.core.time.sleep.TSleep;
+  TTimerState = nextpas.core.time.timer.TTimerState;
+  TTimer = nextpas.core.time.timer.TTimer;
+  TTick = nextpas.core.time.ticker.TTick;
+  TTicker = nextpas.core.time.ticker.TTicker;
 
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate; inline;
 function TryParseISO8601Date(const AStr: string; out ADate: nextpas.core.time.date.TDate): Boolean; inline;
