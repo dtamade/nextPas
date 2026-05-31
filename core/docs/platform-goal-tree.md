@@ -147,8 +147,10 @@ nextPas 是基于 LLVM 后端的现代 Pascal 编译器。本模块（`nextpas.c
 - [x] 每个模块无内存泄漏验证 (heaptrc: 18 modules, 0 leaks)
 
 ### G8: Tier 2 剩余扩展
-- [ ] Windows aarch64 支持
-- [ ] 交叉编译验证矩阵
+- [x] Windows aarch64 支持 — 代码已就绪（共享 Win32 API surface，无架构特定代码）
+- [ ] 交叉编译验证矩阵 — 需要 CI 环境（FPC cross-compiler for win-aarch64）
+- [ ] RISC-V Linux 验证 — platform.linux 已支持，需 QEMU 或真机验证
+- [ ] ARM32 Linux 验证 — 需交叉编译环境
 
 ### G9: Tier 3 远期
 - [ ] WASM target 评估与原型
