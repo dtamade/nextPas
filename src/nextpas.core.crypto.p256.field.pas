@@ -56,6 +56,7 @@ var
   I: Integer;
 begin
   P256FeZero(R);
+  if Length(ABytes) < 32 then Exit;
   for I := 0 to 31 do
     R[3 - (I div 8)] := R[3 - (I div 8)] or (QWord(ABytes[I]) shl ((7 - (I mod 8)) * 8));
 end;
