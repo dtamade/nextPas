@@ -44,6 +44,9 @@ function TryTLSDial(const AHost: string; APort: Word;
 
 implementation
 
+uses
+  nextpas.core.tls.freepascal.lib;
+
 var
   GDefaultDialer: TSSLDialer = nil;
 
@@ -69,6 +72,9 @@ function TryTLSDial(const AHost: string; APort: Word;
 begin
   Result := GetDefaultDialer.TryDial(AHost, APort, AStream, AError);
 end;
+
+initialization
+  RegisterFreePascalBackend;
 
 finalization
   FreeAndNil(GDefaultDialer);
