@@ -648,6 +648,190 @@ begin
   LA.Free;
 end;
 
+{ === TArgApp: Subcommand Router === }
+
+var
+  GHandlerCalled: Boolean;
+  GHandlerOutput: string;
+
+procedure BuildHandler(const AParser: TArgParser);
+begin
+  GHandlerCalled := True;
+  GHandlerOutput := AParser.GetString('output');
+end;
+
+procedure TestAppBasicDispatch;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+begin
+  LApp := TArgApp.Create('nextpas', 'compiler', '1.0.0');
+  LCmd := LApp.AddCommand('build', 'Build a project');
+  LCmd.AddString('output', 'o', 'output file', 'a.out');
+  LApp.SetHandler('build', @BuildHandler);
+  GHandlerCalled := False;
+  GHandlerOutput := '';
+  LApp.RunFrom(['build', '--output', 'main']);
+  Check(GHandlerCalled, 'handler called');
+  CheckEqual('main', GHandlerOutput, 'handler got output');
+  LApp.Free;
+end;
+
+procedure TestAppGlobalFlags;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+begin
+  LApp := TArgApp.Create('nextpas', 'compiler', '1.0.0');
+  LApp.AddGlobalFlag('verbose', 'v', 'verbose output');
+  LCmd := LApp.AddCommand('build', 'Build');
+  LCmd.AddString('output', 'o', '', 'a.out');
+  LApp.SetHandler('build', @BuildHandler);
+  GHandlerCalled := False;
+  LApp.RunFrom(['-v', 'build', '--output', 'bin']);
+  Check(GHandlerCalled, 'handler called');
+  Check(LApp.GlobalParser.GetBool('verbose'), 'global verbose');
+  CheckEqual('bin', GHandlerOutput, 'cmd output');
+  LApp.Free;
+end;
+
+procedure TestAppUnknownCommand;
+var
+  LApp: TArgApp;
+  LGot: Boolean;
+begin
+  LApp := TArgApp.Create('nextpas', '', '');
+  LApp.AddCommand('build', 'Build');
+  LApp.AddCommand('run', 'Run');
+  LGot := False;
+  try
+    LApp.RunFrom(['bild']);
+  except
+    on E: EArgParseError do
+    begin
+      LGot := True;
+      Check(Pos('build', E.Message) > 0, 'suggests build');
+    end;
+  end;
+  Check(LGot, 'unknown command raises');
+  LApp.Free;
+end;
+
+procedure TestAppHelp;
+var
+  LApp: TArgApp;
+  LGot: Boolean;
+  LMsg: string;
+begin
+  LApp := TArgApp.Create('nextpas', 'compiler', '1.0.0');
+  LApp.AddCommand('build', 'Build a project');
+  LApp.AddCommand('run', 'Run a program');
+  LGot := False;
+  LMsg := '';
+  try
+    LApp.RunFrom(['--help']);
+  except
+    on E: EArgHelp do
+    begin
+      LGot := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LGot, '--help raises EArgHelp');
+  Check(Pos('Commands:', LMsg) > 0, 'has Commands section');
+  Check(Pos('build', LMsg) > 0, 'lists build');
+  Check(Pos('run', LMsg) > 0, 'lists run');
+  LApp.Free;
+end;
+
+procedure TestAppVersion;
+var
+  LApp: TArgApp;
+  LGot: Boolean;
+  LMsg: string;
+begin
+  LApp := TArgApp.Create('nextpas', '', '2.3.4');
+  LApp.AddCommand('build', '');
+  LGot := False;
+  LMsg := '';
+  try
+    LApp.RunFrom(['--version']);
+  except
+    on E: EArgVersion do
+    begin
+      LGot := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LGot, '--version raises');
+  CheckEqual('2.3.4', LMsg, 'version string');
+  LApp.Free;
+end;
+
+procedure TestAppTrailingArgs;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+  LTrail: TStringArray;
+begin
+  LApp := TArgApp.Create('nextpas', '', '');
+  LCmd := LApp.AddCommand('run', 'Run');
+  LCmd.AddPositional('file', 'input', True);
+  LApp.SetHandler('run', @BuildHandler);
+  GHandlerCalled := False;
+  LApp.RunFrom(['run', 'main.pas', '--', 'arg1', 'arg2']);
+  Check(GHandlerCalled, 'handler called');
+  LTrail := LApp.TrailingArgs;
+  CheckEqual(Int64(2), Int64(Length(LTrail)), '2 trailing');
+  CheckEqual('arg1', LTrail[0], 'trail 0');
+  CheckEqual('arg2', LTrail[1], 'trail 1');
+  LApp.Free;
+end;
+
+procedure TestAppNoCommand;
+var
+  LApp: TArgApp;
+  LGot: Boolean;
+begin
+  LApp := TArgApp.Create('nextpas', '', '');
+  LApp.AddCommand('build', '');
+  LGot := False;
+  try
+    LApp.RunFrom([]);
+  except
+    on EArgHelp do LGot := True;
+  end;
+  Check(LGot, 'no command shows help');
+  LApp.Free;
+end;
+
+procedure TestAppCommandHelp;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+  LGot: Boolean;
+  LMsg: string;
+begin
+  LApp := TArgApp.Create('nextpas', '', '');
+  LCmd := LApp.AddCommand('build', 'Build project');
+  LCmd.AddString('output', 'o', 'Output file', 'a.out');
+  LApp.SetHandler('build', @BuildHandler);
+  LGot := False;
+  LMsg := '';
+  try
+    LApp.RunFrom(['build', '--help']);
+  except
+    on E: EArgHelp do
+    begin
+      LGot := True;
+      LMsg := E.Message;
+    end;
+  end;
+  Check(LGot, 'command --help raises EArgHelp');
+  Check(Pos('--output', LMsg) > 0, 'shows command options');
+  LApp.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.args');
   { Basic }
@@ -701,6 +885,15 @@ begin
   { Integration }
   T.Run('compiler scenario', @TestCompilerScenario);
   T.Run('help text format', @TestHelpTextFormat);
+  { TArgApp }
+  T.Run('app basic dispatch', @TestAppBasicDispatch);
+  T.Run('app global flags', @TestAppGlobalFlags);
+  T.Run('app unknown command', @TestAppUnknownCommand);
+  T.Run('app help', @TestAppHelp);
+  T.Run('app version', @TestAppVersion);
+  T.Run('app trailing args', @TestAppTrailingArgs);
+  T.Run('app no command', @TestAppNoCommand);
+  T.Run('app command help', @TestAppCommandHelp);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

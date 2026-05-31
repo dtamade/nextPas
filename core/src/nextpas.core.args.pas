@@ -100,6 +100,44 @@ type
     function HelpText: string;
   end;
 
+  TArgCommandHandler = procedure(const AParser: TArgParser);
+
+  TArgCommand = record
+    Name: string;
+    Description: string;
+    Parser: TArgParser;
+    Handler: TArgCommandHandler;
+  end;
+
+  TArgApp = class
+  private
+    FAppName: string;
+    FDescription: string;
+    FVersion: string;
+    FGlobalParser: TArgParser;
+    FCommands: array of TArgCommand;
+    FTrailingArgs: TStringArray;
+    function FindCommand(const AName: string): Int32;
+    function SuggestCommand(const AName: string): string;
+    function AppHelpText: string;
+  public
+    constructor Create(const AAppName, ADescription, AVersion: string);
+    destructor Destroy; override;
+    { Global flags — available to all commands }
+    procedure AddGlobalFlag(const AName: string; const AShort: AnsiChar; const AHelp: string);
+    procedure AddGlobalString(const AName: string; const AShort: AnsiChar; const AHelp, ADefault: string);
+    procedure AddGlobalInt(const AName: string; const AShort: AnsiChar; const AHelp: string; const ADefault: Int64);
+    { Commands }
+    function AddCommand(const AName, ADescription: string): TArgParser;
+    procedure SetHandler(const ACommandName: string; const AHandler: TArgCommandHandler);
+    { Execution }
+    procedure Run;
+    procedure RunFrom(const AArgs: array of string);
+    { Accessors }
+    function GlobalParser: TArgParser;
+    function TrailingArgs: TStringArray;
+  end;
+
 implementation
 
 { TArgParser }
@@ -677,6 +715,248 @@ begin
     end;
     Result := Result + LineEnding;
   end;
+end;
+
+{ TArgApp }
+
+constructor TArgApp.Create(const AAppName, ADescription, AVersion: string);
+begin
+  inherited Create;
+  FAppName := AAppName;
+  FDescription := ADescription;
+  FVersion := AVersion;
+  FGlobalParser := TArgParser.Create(AAppName, ADescription);
+  FGlobalParser.SetAutoHelp(False);
+  FGlobalParser.SetAutoVersion(False);
+  SetLength(FCommands, 0);
+  SetLength(FTrailingArgs, 0);
+end;
+
+destructor TArgApp.Destroy;
+var
+  LI: Int32;
+begin
+  FGlobalParser.Free;
+  for LI := 0 to Length(FCommands) - 1 do
+    FCommands[LI].Parser.Free;
+  inherited Destroy;
+end;
+
+procedure TArgApp.AddGlobalFlag(const AName: string; const AShort: AnsiChar; const AHelp: string);
+begin
+  FGlobalParser.AddFlag(AName, AShort, AHelp);
+end;
+
+procedure TArgApp.AddGlobalString(const AName: string; const AShort: AnsiChar; const AHelp, ADefault: string);
+begin
+  FGlobalParser.AddString(AName, AShort, AHelp, ADefault);
+end;
+
+procedure TArgApp.AddGlobalInt(const AName: string; const AShort: AnsiChar; const AHelp: string; const ADefault: Int64);
+begin
+  FGlobalParser.AddInt(AName, AShort, AHelp, ADefault);
+end;
+
+function TArgApp.AddCommand(const AName, ADescription: string): TArgParser;
+var
+  LIdx: Int32;
+begin
+  LIdx := Length(FCommands);
+  SetLength(FCommands, LIdx + 1);
+  FCommands[LIdx].Name := AName;
+  FCommands[LIdx].Description := ADescription;
+  FCommands[LIdx].Parser := TArgParser.Create(FAppName + ' ' + AName, ADescription);
+  FCommands[LIdx].Handler := nil;
+  Result := FCommands[LIdx].Parser;
+end;
+
+procedure TArgApp.SetHandler(const ACommandName: string; const AHandler: TArgCommandHandler);
+var
+  LIdx: Int32;
+begin
+  LIdx := FindCommand(ACommandName);
+  if LIdx < 0 then
+    raise EArgParseError.Create('unknown command: ' + ACommandName);
+  FCommands[LIdx].Handler := AHandler;
+end;
+
+function TArgApp.FindCommand(const AName: string): Int32;
+var
+  LI: Int32;
+begin
+  for LI := 0 to Length(FCommands) - 1 do
+    if FCommands[LI].Name = AName then Exit(LI);
+  Result := -1;
+end;
+
+function TArgApp.SuggestCommand(const AName: string): string;
+var
+  LI, LJ, LK: Int32;
+  LBest: Int32;
+  LDist: Int32;
+  LPrev, LCurr: array[0..63] of Int32;
+  LS: string;
+begin
+  Result := '';
+  LBest := MaxInt;
+  for LI := 0 to Length(FCommands) - 1 do
+  begin
+    LS := FCommands[LI].Name;
+    if (Length(AName) > 64) or (Length(LS) > 64) then Continue;
+    for LJ := 0 to Length(LS) do
+      LPrev[LJ] := LJ;
+    for LJ := 1 to Length(AName) do
+    begin
+      LCurr[0] := LJ;
+      for LK := 1 to Length(LS) do
+      begin
+        if AName[LJ] = LS[LK] then
+          LCurr[LK] := LPrev[LK - 1]
+        else
+        begin
+          LDist := LPrev[LK - 1];
+          if LPrev[LK] < LDist then LDist := LPrev[LK];
+          if LCurr[LK - 1] < LDist then LDist := LCurr[LK - 1];
+          LCurr[LK] := LDist + 1;
+        end;
+      end;
+      for LK := 0 to Length(LS) do
+        LPrev[LK] := LCurr[LK];
+    end;
+    LDist := LPrev[Length(LS)];
+    if (LDist < LBest) and (LDist <= 3) then
+    begin
+      LBest := LDist;
+      Result := LS;
+    end;
+  end;
+end;
+// PLACEHOLDER_ARGAPP_2
+
+function TArgApp.AppHelpText: string;
+var
+  LI: Int32;
+begin
+  Result := FAppName;
+  if FVersion <> '' then
+    Result := Result + ' ' + FVersion;
+  Result := Result + LineEnding;
+  if FDescription <> '' then
+    Result := Result + FDescription + LineEnding;
+  Result := Result + LineEnding + 'Usage:' + LineEnding;
+  Result := Result + '  ' + FAppName + ' [global options] <command> [command options]' + LineEnding;
+  Result := Result + LineEnding + 'Commands:' + LineEnding;
+  for LI := 0 to Length(FCommands) - 1 do
+    Result := Result + '  ' + FCommands[LI].Name + '      ' + FCommands[LI].Description + LineEnding;
+  Result := Result + LineEnding + 'Global Options:' + LineEnding;
+  Result := Result + '  -h, --help       Show this help' + LineEnding;
+  if FVersion <> '' then
+    Result := Result + '  -V, --version    Show version' + LineEnding;
+  Result := Result + FGlobalParser.HelpText;
+end;
+
+procedure TArgApp.Run;
+var
+  LArgs: array of string;
+  LI: Int32;
+begin
+  SetLength(LArgs, ParamCount);
+  for LI := 1 to ParamCount do
+    LArgs[LI - 1] := ParamStr(LI);
+  RunFrom(LArgs);
+end;
+
+procedure TArgApp.RunFrom(const AArgs: array of string);
+var
+  LI: Int32;
+  LGlobalArgs: array of string;
+  LCmdArgs: array of string;
+  LCmdIdx: Int32;
+  LCmdName: string;
+  LSuggestion: string;
+  LDoubleDash: Boolean;
+  LFoundCmd: Boolean;
+  LTrailStart: Int32;
+begin
+  SetLength(LGlobalArgs, 0);
+  SetLength(LCmdArgs, 0);
+  SetLength(FTrailingArgs, 0);
+  LFoundCmd := False;
+  LCmdIdx := -1;
+  LDoubleDash := False;
+  LTrailStart := -1;
+
+  LI := 0;
+  while LI <= High(AArgs) do
+  begin
+    if (not LFoundCmd) and (not LDoubleDash) then
+    begin
+      if AArgs[LI] = '--help' then
+        raise EArgHelp.Create(AppHelpText);
+      if AArgs[LI] = '-h' then
+        raise EArgHelp.Create(AppHelpText);
+      if (FVersion <> '') and ((AArgs[LI] = '--version') or (AArgs[LI] = '-V')) then
+        raise EArgVersion.Create(FVersion);
+
+      if (Length(AArgs[LI]) > 0) and (AArgs[LI][1] = '-') then
+      begin
+        SetLength(LGlobalArgs, Length(LGlobalArgs) + 1);
+        LGlobalArgs[High(LGlobalArgs)] := AArgs[LI];
+      end
+      else
+      begin
+        LCmdName := AArgs[LI];
+        LCmdIdx := FindCommand(LCmdName);
+        if LCmdIdx < 0 then
+        begin
+          LSuggestion := SuggestCommand(LCmdName);
+          if LSuggestion <> '' then
+            raise EArgParseError.Create('unknown command: ' + LCmdName + '. Did you mean "' + LSuggestion + '"?')
+          else
+            raise EArgParseError.Create('unknown command: ' + LCmdName);
+        end;
+        LFoundCmd := True;
+      end;
+    end
+    else if LFoundCmd then
+    begin
+      if (not LDoubleDash) and (AArgs[LI] = '--') then
+      begin
+        LDoubleDash := True;
+        LTrailStart := LI + 1;
+      end
+      else if LDoubleDash then
+      begin
+        SetLength(FTrailingArgs, Length(FTrailingArgs) + 1);
+        FTrailingArgs[High(FTrailingArgs)] := AArgs[LI];
+      end
+      else
+      begin
+        SetLength(LCmdArgs, Length(LCmdArgs) + 1);
+        LCmdArgs[High(LCmdArgs)] := AArgs[LI];
+      end;
+    end;
+    Inc(LI);
+  end;
+
+  if not LFoundCmd then
+    raise EArgHelp.Create(AppHelpText);
+
+  FGlobalParser.ParseFrom(LGlobalArgs);
+  FCommands[LCmdIdx].Parser.ParseFrom(LCmdArgs);
+
+  if Assigned(FCommands[LCmdIdx].Handler) then
+    FCommands[LCmdIdx].Handler(FCommands[LCmdIdx].Parser);
+end;
+
+function TArgApp.GlobalParser: TArgParser;
+begin
+  Result := FGlobalParser;
+end;
+
+function TArgApp.TrailingArgs: TStringArray;
+begin
+  Result := FTrailingArgs;
 end;
 
 end.
