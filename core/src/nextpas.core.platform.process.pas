@@ -168,18 +168,21 @@ begin
     if AChildStdin >= 0 then
     begin
       dup2(Int32(AChildStdin), 0);
-      close(Int32(AChildStdin));
+      if AChildStdin <> 0 then close(Int32(AChildStdin));
     end;
     if AChildStdout >= 0 then
     begin
       dup2(Int32(AChildStdout), 1);
-      close(Int32(AChildStdout));
+      if AChildStdout <> 1 then close(Int32(AChildStdout));
     end;
     if AChildStderr >= 0 then
     begin
       dup2(Int32(AChildStderr), 2);
-      close(Int32(AChildStderr));
+      if AChildStderr <> 2 then close(Int32(AChildStderr));
     end;
+    { Close all inherited fds > 2 that are not stdin/stdout/stderr }
+    for LPid := 3 to 255 do
+      close(LPid);
     if AEnvp <> nil then
       execve(APath, AArgv, AEnvp)
     else

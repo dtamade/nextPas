@@ -98,6 +98,8 @@ begin
     Kill;
     platform_process_wait(FProc, LResult);
   end;
+  if FStdinWriter <> nil then
+    (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
   FStdoutReader := nil;
   FStderrReader := nil;
@@ -109,6 +111,8 @@ var
   LResult: TPlatformProcessResult;
 begin
   FillChar(Result, SizeOf(Result), 0);
+  if FStdinWriter <> nil then
+    (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
   platform_process_wait(FProc, LResult);
   FWaited := True;
@@ -155,6 +159,8 @@ end;
 function TChild.TakeStdin: IWriter;
 begin
   Result := FStdinWriter;
+  if FStdinWriter <> nil then
+    (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
 end;
 
@@ -181,6 +187,8 @@ var
   LStdoutFd, LStderrFd: PtrInt;
   LPollResult: Integer;
 begin
+  if FStdinWriter <> nil then
+    (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
   Result.StdOut := '';
   Result.StdErr := '';

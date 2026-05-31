@@ -237,11 +237,11 @@ begin
     raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
 
   if (FStdinMode = stPiped) then
-    close(LStdinPipe[0]);
+    nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
   if (FStdoutMode = stPiped) then
-    close(LStdoutPipe[1]);
+    nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
   if (FStderrMode = stPiped) then
-    close(LStderrPipe[1]);
+    nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
 
   Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR);
 end;
