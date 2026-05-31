@@ -188,11 +188,16 @@ begin
 end;
 
 procedure TestSpawnError;
-var
-  LOut: TProcessOutput;
+var LRaised: Boolean;
 begin
-  LOut := Command('/nonexistent_binary_xyz').Output;
-  Check('Spawn nonexistent — exit 127', LOut.ExitCode = 127);
+  LRaised := False;
+  try
+    Command('/nonexistent_binary_xyz').Output;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('Spawn nonexistent — raises EProcessError', LRaised);
 end;
 
 procedure TestEnvAdd;
@@ -316,6 +321,43 @@ begin
 end;
 
 
+procedure TestSpawnExecFailRaisesException;
+var LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    TCommand.New('/nonexistent_binary_xyz_123').Spawn;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('Exec fail — raises EProcessError', LRaised);
+end;
+
+procedure TestSpawnChdirFailRaisesException;
+var LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    TCommand.New('/bin/true').Dir('/nonexistent_dir_xyz').Spawn;
+  except
+    on E: EProcessError do
+      LRaised := True;
+  end;
+  Check('Chdir fail — raises EProcessError', LRaised);
+end;
+
+procedure TestEnvAddInheritsPath;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('/usr/bin/env')
+    .EnvAdd('MY_OVERLAY_VAR', 'overlay_value')
+    .Output;
+  Check('EnvAdd overlay — custom var', Pos('MY_OVERLAY_VAR=overlay_value', LOut.StdOut) > 0);
+  Check('EnvAdd overlay — PATH inherited', Pos('PATH=', LOut.StdOut) > 0);
+end;
+
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -338,6 +380,9 @@ begin
   TestSpawnStdoutReader;
   TestCommandEnv;
   TestSpawnError;
+  TestSpawnExecFailRaisesException;
+  TestSpawnChdirFailRaisesException;
+  TestEnvAddInheritsPath;
   TestEnvAdd;
   TestStdinNull;
   TestStdoutNull;

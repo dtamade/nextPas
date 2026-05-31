@@ -17,7 +17,8 @@ function platform_process_spawn_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
-  out AProc: TPlatformProcess): Int32;
+  out AProc: TPlatformProcess;
+  out AFailStage: TPlatformProcessSpawnStage): Int32;
 function platform_process_spawn_piped_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
@@ -152,46 +153,105 @@ end;
 function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   AChildStdin, AChildStdout, AChildStderr: PtrInt;
-  out AProc: TPlatformProcess): Int32;
+  out AProc: TPlatformProcess;
+  out AFailStage: TPlatformProcessSpawnStage): Int32;
 var
   LPid: pid_t;
+  LErrPipe: array[0..1] of Int32;
+  LWire: TPosixSpawnWireError;
+  LRead: ssize_t;
+  LFd: Int32;
 begin
   FillChar(AProc, SizeOf(AProc), 0);
+  AFailStage := pssNone;
+
+  if pipe2(@LErrPipe[0], O_CLOEXEC) <> 0 then
+  begin
+    AFailStage := pssPipe;
+    Exit(platform_get_errno);
+  end;
+
   LPid := fork;
   if LPid < 0 then
+  begin
+    close(LErrPipe[0]);
+    close(LErrPipe[1]);
+    AFailStage := pssFork;
     Exit(platform_get_errno);
+  end;
+
   if LPid = 0 then
   begin
+    close(LErrPipe[0]);
+    FillChar(LWire, SizeOf(LWire), 0);
+
     if (ACwd <> nil) and (ACwd[0] <> #0) then
       if chdir(ACwd) <> 0 then
-        halt(126);
+      begin
+        LWire.Stage := Ord(pssChdir);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
+
     if AChildStdin >= 0 then
-    begin
-      dup2(Int32(AChildStdin), 0);
-      if AChildStdin <> 0 then close(Int32(AChildStdin));
-    end;
+      if dup2(Int32(AChildStdin), 0) < 0 then
+      begin
+        LWire.Stage := Ord(pssDupStdin);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
     if AChildStdout >= 0 then
-    begin
-      dup2(Int32(AChildStdout), 1);
-      if AChildStdout <> 1 then close(Int32(AChildStdout));
-    end;
+      if dup2(Int32(AChildStdout), 1) < 0 then
+      begin
+        LWire.Stage := Ord(pssDupStdout);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
     if AChildStderr >= 0 then
-    begin
-      dup2(Int32(AChildStderr), 2);
-      if AChildStderr <> 2 then close(Int32(AChildStderr));
-    end;
-    { Close all inherited fds > 2 }
-    for LPid := 3 to 1023 do
-      close(LPid);
+      if dup2(Int32(AChildStderr), 2) < 0 then
+      begin
+        LWire.Stage := Ord(pssDupStderr);
+        LWire.ErrNo := platform_get_errno;
+        write(LErrPipe[1], @LWire, SizeOf(LWire));
+        posix_exit(127);
+      end;
+
+    for LFd := 3 to 1023 do
+      if LFd <> LErrPipe[1] then
+        close(LFd);
+
     if AEnvp <> nil then
       execve(APath, AArgv, AEnvp)
     else
       execvp(APath, AArgv);
-    halt(127);
+
+    LWire.Stage := Ord(pssExec);
+    LWire.ErrNo := platform_get_errno;
+    write(LErrPipe[1], @LWire, SizeOf(LWire));
+    posix_exit(127);
   end;
-  AProc.Pid := LPid;
-  Result := 0;
+
+  close(LErrPipe[1]);
+  FillChar(LWire, SizeOf(LWire), 0);
+  LRead := read(LErrPipe[0], @LWire, SizeOf(LWire));
+  close(LErrPipe[0]);
+
+  if LRead = 0 then
+  begin
+    AProc.Pid := LPid;
+    Result := 0;
+  end
+  else
+  begin
+    waitpid(LPid, nil, 0);
+    AFailStage := TPlatformProcessSpawnStage(LWire.Stage);
+    Result := LWire.ErrNo;
+  end;
 end;
+
 
 function platform_process_spawn_piped_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
