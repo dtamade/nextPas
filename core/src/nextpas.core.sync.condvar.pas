@@ -53,22 +53,18 @@ end;
 
 procedure TCondVar.Wait(const AMutex: IMutex);
 var
-  LMutex: TMutex;
   LRet: Int32;
 begin
-  LMutex := AMutex as TMutex;
-  LRet := platform_condvar_wait(FHandle, LMutex.FHandle);
+  LRet := platform_condvar_wait(FHandle, TPlatformMutex(AMutex.NativeHandle^));
   if LRet <> 0 then
     raise ENextPasError.CreateFmt('TCondVar.Wait failed: %d', [LRet]);
 end;
 
 function TCondVar.WaitTimeout(const AMutex: IMutex; const ATimeoutNs: Int64): Boolean;
 var
-  LMutex: TMutex;
   LRet: Int32;
 begin
-  LMutex := AMutex as TMutex;
-  LRet := platform_condvar_timedwait(FHandle, LMutex.FHandle, ATimeoutNs);
+  LRet := platform_condvar_timedwait(FHandle, TPlatformMutex(AMutex.NativeHandle^), ATimeoutNs);
   Result := (LRet = 0);
 end;
 

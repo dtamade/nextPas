@@ -22,6 +22,7 @@ type
 
   IMutex = interface(ILock)
     ['{E1F2A3B4-C5D6-7890-ABCD-EF1234560003}']
+    function NativeHandle: Pointer;
   end;
 
   IRWLock = interface

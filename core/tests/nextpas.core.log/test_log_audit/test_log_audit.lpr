@@ -643,9 +643,8 @@ begin
   LL := TLogger.New(LH, llDebug);
   LH.SetInner(LL);
   LL.Info^.Msg('trigger reentry');
-  { Should complete without hanging. Handler called once (reentrant call
-    goes to stderr via GLogDepth guard, not back to handler). }
   Check(LH.FCallCount = 1, 'handler called exactly once (reentry blocked)');
+  LH.SetInner(TLogger.New(nil, llFatal));
 end;
 
 procedure TestReentrancy_PoolSlotSafety;
@@ -678,6 +677,7 @@ begin
   { All 16 slots used. Next call reuses slot 0. }
   LL.Info^.Msg('reuse-slot-0');
   Check(LH.FCallCount = 17, 'all 17 events handled');
+  LH.SetInner(TLogger.New(nil, llFatal));
 end;
 
 { ============================================================

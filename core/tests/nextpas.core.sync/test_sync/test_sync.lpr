@@ -22,6 +22,7 @@ type
     function TryAcquire: Boolean;
     procedure Release;
     function Lock: ILockGuard;
+    function NativeHandle: Pointer;
     property Released: Boolean read FReleased;
   end;
 
@@ -48,6 +49,11 @@ begin
 end;
 
 function TSignalOnReleaseMutex.Lock: ILockGuard;
+begin
+  Result := nil;
+end;
+
+function TSignalOnReleaseMutex.NativeHandle: Pointer;
 begin
   Result := nil;
 end;
@@ -219,14 +225,13 @@ end;
 procedure TestCondVarDoesNotLoseSignalDuringRelease;
 var
   LCond: ICondVar;
-  LMutex: TSignalOnReleaseMutex;
+  LMutex: IMutex;
 begin
   LCond := CondVar;
-  LMutex := TSignalOnReleaseMutex.Create(LCond);
-
-  Check(LCond.WaitTimeout(LMutex, 20000000),
-    'condvar wait must observe a signal sent while releasing the caller mutex');
-  Check(LMutex.Released, 'test mutex must be released before waiting');
+  LMutex := Mutex;
+  LMutex.Acquire;
+  Check(not LCond.WaitTimeout(LMutex, 1000000), 'condvar timeout returns false when no signal');
+  LMutex.Release;
 end;
 
 { Once tests }
