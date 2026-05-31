@@ -722,6 +722,20 @@ begin
       end;
     end;
   end;
+  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and
+    SameText(ANode.ChildAt(0).Text, 'IntToStr') and
+    EncodeRuntimeIntExprFold(ANode.ChildAt(1), LitValue) then
+  begin
+    Inc(FBlockLabelCounter);
+    TempName := '$str_tmp_' + IntToStr(FBlockLabelCounter);
+    RegisterRuntimeVar(TempName);
+    RegisterRuntimeStrVar(TempName);
+    FModel.AddTypedHirNode('var-decl-str-runtime', TempName, 0, 0, TempName);
+    FModel.AddTypedHirNode('int-to-str-runtime', TempName, 0, 0,
+      TempName + #9 + LitValue);
+    Exit(TempName);
+  end;
   if ANode.NodeKind = gnkStringLiteral then
     LitValue := DecodePascalStringLiteral(ANode.Text)
   else if not EvaluateStringConstant(ANode, LitValue) then
