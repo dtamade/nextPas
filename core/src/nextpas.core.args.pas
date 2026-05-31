@@ -164,7 +164,11 @@ begin
   FOptions[LOptIdx].Present := True;
   case FOptions[LOptIdx].Kind of
     akFlag:
+    begin
+      if LEqPos > 0 then
+        raise EArgParseError.Create('--' + LName + ' is a flag and does not accept a value');
       FOptions[LOptIdx].ValueBool := True;
+    end;
     akString:
     begin
       if LValue = '' then
@@ -249,6 +253,13 @@ var
 begin
   FParsed := True;
   SetLength(FPositionals, 0);
+  for LI := 0 to Length(FOptions) - 1 do
+  begin
+    FOptions[LI].Present := False;
+    FOptions[LI].ValueBool := False;
+    FOptions[LI].ValueStr := FOptions[LI].DefaultStr;
+    FOptions[LI].ValueInt := FOptions[LI].DefaultInt;
+  end;
   LDoubleDash := False;
   LI := 0;
   while LI <= High(AArgs) do
