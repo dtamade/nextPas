@@ -601,6 +601,8 @@ begin
   LIdx := FindOption(AName);
   if LIdx < 0 then
     raise EArgParseError.Create('unknown option: ' + AName);
+  if FOptions[LIdx].Kind <> akFlag then
+    raise EArgParseError.Create('option ' + AName + ' is not a flag');
   Result := FOptions[LIdx].ValueBool;
 end;
 
@@ -611,6 +613,8 @@ begin
   LIdx := FindOption(AName);
   if LIdx < 0 then
     raise EArgParseError.Create('unknown option: ' + AName);
+  if not (FOptions[LIdx].Kind in [akString, akChoice]) then
+    raise EArgParseError.Create('option ' + AName + ' is not a string/choice');
   Result := FOptions[LIdx].ValueStr;
 end;
 
@@ -621,6 +625,8 @@ begin
   LIdx := FindOption(AName);
   if LIdx < 0 then
     raise EArgParseError.Create('unknown option: ' + AName);
+  if FOptions[LIdx].Kind <> akInt then
+    raise EArgParseError.Create('option ' + AName + ' is not an int');
   Result := FOptions[LIdx].ValueInt;
 end;
 
@@ -632,6 +638,8 @@ begin
   LIdx := FindOption(AName);
   if LIdx < 0 then
     raise EArgParseError.Create('unknown option: ' + AName);
+  if FOptions[LIdx].Kind <> akStringList then
+    raise EArgParseError.Create('option ' + AName + ' is not a string list');
   Result := FOptions[LIdx].ValueList;
 end;
 

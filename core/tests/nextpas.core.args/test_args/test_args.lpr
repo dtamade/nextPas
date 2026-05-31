@@ -948,6 +948,86 @@ begin
   LA.Free;
 end;
 
+{ === Wrong-getter kind mismatch === }
+
+procedure TestWrongGetterKind;
+var
+  LA: TArgParser;
+  LGot: Boolean;
+begin
+  LA := TArgParser.Create('test', '');
+  LA.AddFlag('verbose', 'v', '');
+  LA.AddInt('port', 'p', '', 80);
+  LA.AddStringList('include', 'I', '');
+  LA.ParseFrom(['-v', '--port', '99', '-I', '/a']);
+  LGot := False;
+  try LA.GetInt('verbose'); except on EArgParseError do LGot := True; end;
+  Check(LGot, 'GetInt on flag raises');
+  LGot := False;
+  try LA.GetBool('port'); except on EArgParseError do LGot := True; end;
+  Check(LGot, 'GetBool on int raises');
+  LGot := False;
+  try LA.GetStringList('port'); except on EArgParseError do LGot := True; end;
+  Check(LGot, 'GetStringList on int raises');
+  LGot := False;
+  try LA.GetString('verbose'); except on EArgParseError do LGot := True; end;
+  Check(LGot, 'GetString on flag raises');
+  LA.Free;
+end;
+
+{ === Callback overloads === }
+
+type
+  TTestObj = class
+    FCalled: Boolean;
+    FOutput: string;
+    procedure Handle(const AParser: TArgParser);
+  end;
+
+procedure TTestObj.Handle(const AParser: TArgParser);
+begin
+  FCalled := True;
+  if AParser.IsPresent('output') then
+    FOutput := AParser.GetString('output');
+end;
+
+procedure TestHandlerMethodOverload;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+  LObj: TTestObj;
+begin
+  LApp := TArgApp.Create('test', '', '');
+  LCmd := LApp.AddCommand('build', '');
+  LCmd.AddString('output', 'o', '', '');
+  LObj := TTestObj.Create;
+  LObj.FCalled := False;
+  LApp.SetHandler('build', @LObj.Handle);
+  LApp.RunFrom(['build', '--output', 'x']);
+  Check(LObj.FCalled, 'method handler called');
+  CheckEqual('x', LObj.FOutput, 'method handler got value');
+  LObj.Free;
+  LApp.Free;
+end;
+
+procedure TestHandlerAnonOverload;
+var
+  LApp: TArgApp;
+  LCmd: TArgParser;
+  LCalled: Boolean;
+begin
+  LApp := TArgApp.Create('test', '', '');
+  LCmd := LApp.AddCommand('run', '');
+  LCalled := False;
+  LApp.SetHandler('run', procedure(const AParser: TArgParser)
+    begin
+      LCalled := True;
+    end);
+  LApp.RunFrom(['run']);
+  Check(LCalled, 'anonymous handler called');
+  LApp.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.args');
   { Basic }
@@ -1017,6 +1097,9 @@ begin
   T.Run('auto version disabled', @TestAutoVersionDisabled);
   T.Run('TryParse true', @TestTryParseTrue);
   T.Run('get nonexistent', @TestGetNonexistent);
+  T.Run('wrong getter kind', @TestWrongGetterKind);
+  T.Run('handler method overload', @TestHandlerMethodOverload);
+  T.Run('handler anon overload', @TestHandlerAnonOverload);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.
