@@ -3243,7 +3243,12 @@ begin
         ParentClass := '';
     end
     else
+    begin
+      SetLength(Funcs, 1);
+      Funcs[0] := '';
+      FModule.AddVmtGlobal(ParentClass, Funcs);
       ParentClass := '';
+    end;
   end;
 
   ObjPtr := FindAlloca(VarName);

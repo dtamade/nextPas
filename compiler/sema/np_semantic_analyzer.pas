@@ -7405,7 +7405,8 @@ begin
           FModel.AddTypedHirNode(
             'class-new-runtime', IntToStr(Value), 0, 0, Operand
           );
-          if TypeMetaVmtCount(Arg.ChildAt(0).Text) > 0 then
+          if (TypeMetaVmtCount(Arg.ChildAt(0).Text) > 0) or
+            (TypeMetaInterfaces(Arg.ChildAt(0).Text) <> '') then
             FModel.AddTypedHirNode('vmt-store-runtime',
               Arg.ChildAt(0).Text, 0, 0,
               Decoded + #9 + Arg.ChildAt(0).Text);
@@ -8154,6 +8155,18 @@ begin
         StringValue := LookupClassVar(Child.ChildAt(0).ChildAt(0).Text);
         if StringValue <> '' then
         begin
+          if TypeMetaIsInterface(StringValue) then
+          begin
+            Value := TypeMetaVmtSlot(StringValue,
+              Child.ChildAt(0).ChildAt(1).Text);
+            if Value >= 0 then
+            begin
+              Operand := 'var ' + Child.ChildAt(0).ChildAt(0).Text + #10 +
+                'ivcall ' + IntToStr(Value) + ' 0' + #10;
+              FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+              Continue;
+            end;
+          end;
           InhParentName := StringValue;
           while (InhParentName <> '') and
             (FModel.FindSymbolByName(InhParentName + '.' +
