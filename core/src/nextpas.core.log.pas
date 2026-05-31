@@ -352,8 +352,10 @@ type
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
     FGroup: string;
+    FLock: TRTLCriticalSection;
   public
     constructor Create(AMinLevel: TLogLevel);
+    destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
     procedure Flush;
@@ -366,6 +368,13 @@ begin
   inherited Create;
   FMinLevel := AMinLevel;
   FPrefixCount := 0;
+  InitCriticalSection(FLock);
+end;
+
+destructor TConsoleHandler.Destroy;
+begin
+  DoneCriticalSection(FLock);
+  inherited;
 end;
 
 function TConsoleHandler.Enabled(const ALevel: TLogLevel): Boolean;
@@ -379,33 +388,38 @@ var
   LA: TAttr;
   LKeyPrefix: string;
 begin
-  if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
-  Write(StdErr, LEVEL_COLORS[ARecord.Level], LEVEL_NAMES[ARecord.Level], RESET, ' ');
-  if ARecord.Message <> '' then
-    Write(StdErr, ARecord.Message);
-  for LI := 0 to FPrefixCount - 1 do
-  begin
-    LA := FPrefix[LI];
-    Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
-    case LA.Kind of
-      akString: Write(StdErr, LA.SVal);
-      akInt: Write(StdErr, LA.IVal);
-      akFloat: Write(StdErr, LA.FVal:0:2);
-      akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
+  EnterCriticalSection(FLock);
+  try
+    if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
+    Write(StdErr, LEVEL_COLORS[ARecord.Level], LEVEL_NAMES[ARecord.Level], RESET, ' ');
+    if ARecord.Message <> '' then
+      Write(StdErr, ARecord.Message);
+    for LI := 0 to FPrefixCount - 1 do
+    begin
+      LA := FPrefix[LI];
+      Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
+      case LA.Kind of
+        akString: Write(StdErr, LA.SVal);
+        akInt: Write(StdErr, LA.IVal);
+        akFloat: Write(StdErr, LA.FVal:0:2);
+        akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
+      end;
     end;
-  end;
-  for LI := 0 to ARecord.AttrCount - 1 do
-  begin
-    LA := ARecord.Attrs[LI];
-    Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
-    case LA.Kind of
-      akString: Write(StdErr, LA.SVal);
-      akInt: Write(StdErr, LA.IVal);
-      akFloat: Write(StdErr, LA.FVal:0:2);
-      akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
+    for LI := 0 to ARecord.AttrCount - 1 do
+    begin
+      LA := ARecord.Attrs[LI];
+      Write(StdErr, ' ', DIM, LKeyPrefix, LA.Key, '=', RESET);
+      case LA.Kind of
+        akString: Write(StdErr, LA.SVal);
+        akInt: Write(StdErr, LA.IVal);
+        akFloat: Write(StdErr, LA.FVal:0:2);
+        akBool: if LA.BVal then Write(StdErr, 'true') else Write(StdErr, 'false');
+      end;
     end;
+    WriteLn(StdErr);
+  finally
+    LeaveCriticalSection(FLock);
   end;
-  WriteLn(StdErr);
 end;
 
 procedure TConsoleHandler.Flush;
@@ -455,8 +469,10 @@ type
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
     FGroup: string;
+    FLock: TRTLCriticalSection;
   public
     constructor Create(AMinLevel: TLogLevel);
+    destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
     function WithAttrs(const AAttrs: array of TAttr): ILogHandler;
@@ -469,6 +485,13 @@ begin
   inherited Create;
   FMinLevel := AMinLevel;
   FPrefixCount := 0;
+  InitCriticalSection(FLock);
+end;
+
+destructor TJsonLogHandler.Destroy;
+begin
+  DoneCriticalSection(FLock);
+  inherited;
 end;
 
 function TJsonLogHandler.Enabled(const ALevel: TLogLevel): Boolean;
@@ -526,19 +549,24 @@ var
   LI: Int32;
   LFirst: Boolean;
 begin
-  Write(StdErr, '{"level":"', LEVEL_NAMES[ARecord.Level], '"');
-  if ARecord.Message <> '' then
-  begin
-    Write(StdErr, ',"msg":');
-    WriteJsonStr(ARecord.Message);
+  EnterCriticalSection(FLock);
+  try
+    Write(StdErr, '{"level":"', LEVEL_NAMES[ARecord.Level], '"');
+    if ARecord.Message <> '' then
+    begin
+      Write(StdErr, ',"msg":');
+      WriteJsonStr(ARecord.Message);
+    end;
+    Write(StdErr, ',"ts":', ARecord.TimestampNs);
+    LFirst := False;
+    for LI := 0 to FPrefixCount - 1 do
+      WriteJsonAttr(LFirst, FGroup, FPrefix[LI]);
+    for LI := 0 to ARecord.AttrCount - 1 do
+      WriteJsonAttr(LFirst, FGroup, ARecord.Attrs[LI]);
+    WriteLn(StdErr, '}');
+  finally
+    LeaveCriticalSection(FLock);
   end;
-  Write(StdErr, ',"ts":', ARecord.TimestampNs);
-  LFirst := False;
-  for LI := 0 to FPrefixCount - 1 do
-    WriteJsonAttr(LFirst, FGroup, FPrefix[LI]);
-  for LI := 0 to ARecord.AttrCount - 1 do
-    WriteJsonAttr(LFirst, FGroup, ARecord.Attrs[LI]);
-  WriteLn(StdErr, '}');
 end;
 
 procedure TJsonLogHandler.Flush;
@@ -595,7 +623,8 @@ end;
 
 var
   GDefault: TLogger;
-  GDefaultInit: Boolean = False;
+  GDefaultInit: Int32 = 0; { 0=not init, 1=init }
+  GDefaultLock: TRTLCriticalSection;
   GLogContext: Pointer = nil;
 
 procedure SetLogContext(ACtx: Pointer);
@@ -610,16 +639,29 @@ end;
 
 procedure SetDefaultLogger(const ALogger: TLogger);
 begin
-  GDefault := ALogger;
-  GDefaultInit := True;
+  EnterCriticalSection(GDefaultLock);
+  try
+    GDefault := ALogger;
+    GDefaultInit := 1;
+  finally
+    LeaveCriticalSection(GDefaultLock);
+  end;
 end;
 
 function DefaultLogger: TLogger;
 begin
-  if not GDefaultInit then
+  if InterlockedCompareExchange(GDefaultInit, GDefaultInit, 1) <> 1 then
   begin
-    GDefault := TLogger.New(NewConsoleHandler(llInfo), llInfo);
-    GDefaultInit := True;
+    EnterCriticalSection(GDefaultLock);
+    try
+      if GDefaultInit = 0 then
+      begin
+        GDefault := TLogger.New(NewConsoleHandler(llInfo), llInfo);
+        GDefaultInit := 1;
+      end;
+    finally
+      LeaveCriticalSection(GDefaultLock);
+    end;
   end;
   Result := GDefault;
 end;
@@ -655,6 +697,7 @@ type
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
     FGroup: string;
+    FLock: TRTLCriticalSection;
     procedure EnsureOpen;
     procedure Rotate;
   public
@@ -679,12 +722,14 @@ begin
   FOpened := False;
   FCurrentSize := 0;
   FPrefixCount := 0;
+  InitCriticalSection(FLock);
 end;
 
 destructor TFileHandler.Destroy;
 begin
   if FOpened then
     System.Close(FFile);
+  DoneCriticalSection(FLock);
   inherited;
 end;
 
@@ -741,46 +786,52 @@ var
   LKeyPrefix: string;
 begin
   if FBroken then Exit;
+  EnterCriticalSection(FLock);
   try
-    if FCurrentSize >= FMaxBytes then Rotate;
-    EnsureOpen;
-    if not FOpened then Exit;
-    if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
-    LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
-    Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
-    for LI := 0 to FPrefixCount - 1 do
-    begin
-      Write(FFile, ' ', LKeyPrefix, FPrefix[LI].Key, '=');
-      LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(FPrefix[LI].Key));
-      case FPrefix[LI].Kind of
-        akString: begin Write(FFile, FPrefix[LI].SVal); LSize += Int64(Length(FPrefix[LI].SVal)); end;
-        akInt: begin Write(FFile, FPrefix[LI].IVal); LSize += 12; end;
-        akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize += 10; end;
-        akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
-                else begin Write(FFile, 'false'); LSize += 5; end;
+    if FBroken then Exit;
+    try
+      if FCurrentSize >= FMaxBytes then Rotate;
+      EnsureOpen;
+      if not FOpened then Exit;
+      if FGroup <> '' then LKeyPrefix := FGroup + '.' else LKeyPrefix := '';
+      LSize := Int64(Length(LEVEL_NAMES[ARecord.Level])) + 1 + Int64(Length(ARecord.Message));
+      Write(FFile, LEVEL_NAMES[ARecord.Level], ' ', ARecord.Message);
+      for LI := 0 to FPrefixCount - 1 do
+      begin
+        Write(FFile, ' ', LKeyPrefix, FPrefix[LI].Key, '=');
+        LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(FPrefix[LI].Key));
+        case FPrefix[LI].Kind of
+          akString: begin Write(FFile, FPrefix[LI].SVal); LSize += Int64(Length(FPrefix[LI].SVal)); end;
+          akInt: begin Write(FFile, FPrefix[LI].IVal); LSize += 12; end;
+          akFloat: begin Write(FFile, FPrefix[LI].FVal:0:2); LSize += 10; end;
+          akBool: if FPrefix[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
+                  else begin Write(FFile, 'false'); LSize += 5; end;
+        end;
+      end;
+      for LI := 0 to ARecord.AttrCount - 1 do
+      begin
+        Write(FFile, ' ', LKeyPrefix, ARecord.Attrs[LI].Key, '=');
+        LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
+        case ARecord.Attrs[LI].Kind of
+          akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize += Int64(Length(ARecord.Attrs[LI].SVal)); end;
+          akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize += 12; end;
+          akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize += 10; end;
+          akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
+                  else begin Write(FFile, 'false'); LSize += 5; end;
+        end;
+      end;
+      WriteLn(FFile);
+      System.Flush(FFile);
+      Inc(FCurrentSize, LSize + 1);
+    except
+      on E: Exception do
+      begin
+        FBroken := True;
+        if FOpened then begin System.Close(FFile); FOpened := False; end;
       end;
     end;
-    for LI := 0 to ARecord.AttrCount - 1 do
-    begin
-      Write(FFile, ' ', LKeyPrefix, ARecord.Attrs[LI].Key, '=');
-      LSize += 2 + Int64(Length(LKeyPrefix)) + Int64(Length(ARecord.Attrs[LI].Key));
-      case ARecord.Attrs[LI].Kind of
-        akString: begin Write(FFile, ARecord.Attrs[LI].SVal); LSize += Int64(Length(ARecord.Attrs[LI].SVal)); end;
-        akInt: begin Write(FFile, ARecord.Attrs[LI].IVal); LSize += 12; end;
-        akFloat: begin Write(FFile, ARecord.Attrs[LI].FVal:0:2); LSize += 10; end;
-        akBool: if ARecord.Attrs[LI].BVal then begin Write(FFile, 'true'); LSize += 4; end
-                else begin Write(FFile, 'false'); LSize += 5; end;
-      end;
-    end;
-    WriteLn(FFile);
-    System.Flush(FFile);
-    Inc(FCurrentSize, LSize + 1);
-  except
-    on E: Exception do
-    begin
-      FBroken := True;
-      if FOpened then begin System.Close(FFile); FOpened := False; end;
-    end;
+  finally
+    LeaveCriticalSection(FLock);
   end;
 end;
 
@@ -835,8 +886,10 @@ type
   private
     FHandlers: array of ILogHandler;
     FCount: Int32;
+    FLock: TRTLCriticalSection;
   public
     constructor Create(const AHandlers: array of ILogHandler);
+    destructor Destroy; override;
     function Enabled(const ALevel: TLogLevel): Boolean;
     procedure Handle(const ARecord: TLogRecord);
     procedure Flush;
@@ -851,6 +904,13 @@ begin
   FCount := Length(AHandlers);
   SetLength(FHandlers, FCount);
   for LI := 0 to FCount - 1 do FHandlers[LI] := AHandlers[LI];
+  InitCriticalSection(FLock);
+end;
+
+destructor TMultiHandler.Destroy;
+begin
+  DoneCriticalSection(FLock);
+  inherited;
 end;
 
 function TMultiHandler.Enabled(const ALevel: TLogLevel): Boolean;
@@ -864,9 +924,14 @@ end;
 procedure TMultiHandler.Handle(const ARecord: TLogRecord);
 var LI: Int32;
 begin
-  for LI := 0 to FCount - 1 do
-    if FHandlers[LI].Enabled(ARecord.Level) then
-      FHandlers[LI].Handle(ARecord);
+  EnterCriticalSection(FLock);
+  try
+    for LI := 0 to FCount - 1 do
+      if FHandlers[LI].Enabled(ARecord.Level) then
+        FHandlers[LI].Handle(ARecord);
+  finally
+    LeaveCriticalSection(FLock);
+  end;
 end;
 
 procedure TMultiHandler.Flush;
@@ -957,8 +1022,12 @@ end;
 var
   GFinI: Int32;
 
+initialization
+  InitCriticalSection(GDefaultLock);
+
 finalization
   for GFinI := 0 to High(GEventPool) do
     Finalize(GEventPool[GFinI]);
+  DoneCriticalSection(GDefaultLock);
 
 end.
