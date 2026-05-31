@@ -7,7 +7,8 @@ interface
 uses
   nextpas.core.time.base, nextpas.core.time.deadline,
   nextpas.core.io.poller,
-  nextpas.core.async.base, nextpas.core.async.timer;
+  nextpas.core.async.base, nextpas.core.async.timer,
+  nextpas.core.async.task;
 
 type
   TAsyncLoop = record
@@ -39,6 +40,20 @@ type
     function AsyncSend(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
       ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
 
+    { I/O with deadline }
+    function AsyncReadTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+      const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncWriteTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+      const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncRecvTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+    function AsyncSendTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+      const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer = nil): Boolean;
+
+    { Async sleep }
+    function AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
+      AContext: Pointer = nil): TAsyncTimerHandle;
+
     { Event loop }
     function Poll: Int32;
     procedure Run;
@@ -50,6 +65,55 @@ implementation
 
 uses
   nextpas.core.time.cpu;
+
+const
+  ETIMEDOUT_LINUX = 110;
+
+type
+  PTimeoutCtx = ^TTimeoutCtx;
+  TTimeoutCtx = record
+    Loop: Pointer;
+    UserCallback: TIoCompletion;
+    UserContext: Pointer;
+    TimerHandle: TAsyncTimerHandle;
+    IoCompleted: Boolean;
+    TimerFired: Boolean;
+  end;
+
+procedure TimeoutIoCallback(AUserData: UInt64; AResult: Int32; AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  if LCtx^.TimerFired then
+  begin
+    Dispose(LCtx);
+    Exit;
+  end;
+  LCtx^.IoCompleted := True;
+  // Cancel timer (best effort, may already be fired)
+  if LCtx^.TimerHandle.IsValid then
+    TAsyncLoop(LCtx^.Loop^).FTimers.Cancel(LCtx^.TimerHandle);
+  if Assigned(LCtx^.UserCallback) then
+    LCtx^.UserCallback(AUserData, AResult, LCtx^.UserContext);
+  Dispose(LCtx);
+end;
+
+procedure TimeoutTimerCallback(AContext: Pointer);
+var
+  LCtx: PTimeoutCtx;
+begin
+  LCtx := PTimeoutCtx(AContext);
+  if LCtx^.IoCompleted then
+  begin
+    Dispose(LCtx);
+    Exit;
+  end;
+  LCtx^.TimerFired := True;
+  if Assigned(LCtx^.UserCallback) then
+    LCtx^.UserCallback(0, -ETIMEDOUT_LINUX, LCtx^.UserContext);
+  { Note: LCtx will be freed when the I/O eventually completes }
+end;
 
 { TAsyncLoop }
 
@@ -197,6 +261,96 @@ end;
 procedure TAsyncLoop.Stop;
 begin
   FRunning := 0;
+end;
+
+function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
+  AContext: Pointer): TAsyncTimerHandle;
+begin
+  Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
+end;
+
+function TAsyncLoop.AsyncReadTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+  const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if ADeadline.IsInfinite then
+    Exit(AsyncRead(AFd, ABuf, ALen, AOffset, ACallback, AContext));
+  New(LCtx);
+  LCtx^.Loop := @Self;
+  LCtx^.UserCallback := ACallback;
+  LCtx^.UserContext := AContext;
+  LCtx^.IoCompleted := False;
+  LCtx^.TimerFired := False;
+  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  Result := FPoller.AsyncRead(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    FTimers.Cancel(LCtx^.TimerHandle);
+    Dispose(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncWriteTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AOffset: Int64;
+  const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if ADeadline.IsInfinite then
+    Exit(AsyncWrite(AFd, ABuf, ALen, AOffset, ACallback, AContext));
+  New(LCtx);
+  LCtx^.Loop := @Self;
+  LCtx^.UserCallback := ACallback;
+  LCtx^.UserContext := AContext;
+  LCtx^.IoCompleted := False;
+  LCtx^.TimerFired := False;
+  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  Result := FPoller.AsyncWrite(AFd, ABuf, ALen, AOffset, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    FTimers.Cancel(LCtx^.TimerHandle);
+    Dispose(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncRecvTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if ADeadline.IsInfinite then
+    Exit(AsyncRecv(AFd, ABuf, ALen, AFlags, ACallback, AContext));
+  New(LCtx);
+  LCtx^.Loop := @Self;
+  LCtx^.UserCallback := ACallback;
+  LCtx^.UserContext := AContext;
+  LCtx^.IoCompleted := False;
+  LCtx^.TimerFired := False;
+  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  Result := FPoller.AsyncRecv(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    FTimers.Cancel(LCtx^.TimerHandle);
+    Dispose(LCtx);
+  end;
+end;
+
+function TAsyncLoop.AsyncSendTimeout(AFd: Int32; ABuf: Pointer; ALen: UInt32; AFlags: Int32;
+  const ADeadline: TDeadline; ACallback: TIoCompletion; AContext: Pointer): Boolean;
+var LCtx: PTimeoutCtx;
+begin
+  if ADeadline.IsInfinite then
+    Exit(AsyncSend(AFd, ABuf, ALen, AFlags, ACallback, AContext));
+  New(LCtx);
+  LCtx^.Loop := @Self;
+  LCtx^.UserCallback := ACallback;
+  LCtx^.UserContext := AContext;
+  LCtx^.IoCompleted := False;
+  LCtx^.TimerFired := False;
+  LCtx^.TimerHandle := FTimers.Schedule(ADeadline, @TimeoutTimerCallback, LCtx);
+  Result := FPoller.AsyncSend(AFd, ABuf, ALen, AFlags, @TimeoutIoCallback, LCtx);
+  if not Result then
+  begin
+    FTimers.Cancel(LCtx^.TimerHandle);
+    Dispose(LCtx);
+  end;
 end;
 
 end.
