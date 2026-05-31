@@ -46,6 +46,7 @@ function ColorIsSet(const AColor: TColor): Boolean; inline;
 { 短名便利函数（与 RgbColor/IndexedColor 等价，更简洁） }
 function Rgb(const AR, AG, AB: Byte): TColor; inline;
 function Idx(const AIndex: Byte): TColor; inline;
+function HexColor(const AHex: AnsiString): TColor;
 
 const
   { 命名色映射到 indexed 0..15 —— 与 ratatui 完全一致 }
@@ -124,4 +125,26 @@ begin
   Result := IndexedColor(AIndex);
 end;
 
+function HexColor(const AHex: AnsiString): TColor;
+var
+  LStart: Integer;
+  LR, LG, LB: Byte;
+  function HexVal(AC: AnsiChar): Byte;
+  begin
+    case AC of
+      '0'..'9': Result := Byte(Ord(AC) - Ord('0'));
+      'a'..'f': Result := Byte(Ord(AC) - Ord('a') + 10);
+      'A'..'F': Result := Byte(Ord(AC) - Ord('A') + 10);
+    else Result := 0;
+    end;
+  end;
+begin
+  if Length(AHex) = 0 then Exit(ResetColor);
+  if AHex[1] = '#' then LStart := 2 else LStart := 1;
+  if Length(AHex) - LStart + 1 < 6 then Exit(ResetColor);
+  LR := HexVal(AHex[LStart]) * 16 + HexVal(AHex[LStart + 1]);
+  LG := HexVal(AHex[LStart + 2]) * 16 + HexVal(AHex[LStart + 3]);
+  LB := HexVal(AHex[LStart + 4]) * 16 + HexVal(AHex[LStart + 5]);
+  Result := RgbColor(LR, LG, LB);
+end;
 end.

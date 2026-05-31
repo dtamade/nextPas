@@ -68,6 +68,20 @@ type
   end;
   TLines = array of TLine;
 
+  { 链式 TLine 构建器 }
+  TLineBuilder = record
+  private
+    FSpans: TSpans;
+    FCount: Integer;
+  public
+    class function Start: TLineBuilder; static;
+    function Add(const AStr: AnsiString): TLineBuilder;
+    function AddStyled(const AStr: AnsiString; const AStyle: TStyle): TLineBuilder;
+    function AddColored(const AStr: AnsiString; const AColor: TColor): TLineBuilder;
+    function AddBold(const AStr: AnsiString): TLineBuilder;
+    function Build: TLine;
+  end;
+
   TText = record
     Lines: TLines;
     Style: TStyle;
@@ -289,4 +303,55 @@ begin
   Result.Alignment := AAlignment;
 end;
 
+{ TLineBuilder }
+
+class function TLineBuilder.Start: TLineBuilder;
+begin
+  Result.FSpans := nil;
+  Result.FCount := 0;
+end;
+
+function TLineBuilder.Add(const AStr: AnsiString): TLineBuilder;
+begin
+  Result := Self;
+  if Result.FCount >= Length(Result.FSpans) then
+    SetLength(Result.FSpans, Result.FCount + 4);
+  Result.FSpans[Result.FCount] := TSpan.Raw(AStr);
+  Inc(Result.FCount);
+end;
+
+function TLineBuilder.AddStyled(const AStr: AnsiString; const AStyle: TStyle): TLineBuilder;
+begin
+  Result := Self;
+  if Result.FCount >= Length(Result.FSpans) then
+    SetLength(Result.FSpans, Result.FCount + 4);
+  Result.FSpans[Result.FCount] := TSpan.Styled(AStr, AStyle);
+  Inc(Result.FCount);
+end;
+
+function TLineBuilder.AddColored(const AStr: AnsiString; const AColor: TColor): TLineBuilder;
+begin
+  Result := Self;
+  if Result.FCount >= Length(Result.FSpans) then
+    SetLength(Result.FSpans, Result.FCount + 4);
+  Result.FSpans[Result.FCount] := TSpan.Colored(AStr, AColor);
+  Inc(Result.FCount);
+end;
+
+function TLineBuilder.AddBold(const AStr: AnsiString): TLineBuilder;
+begin
+  Result := Self;
+  if Result.FCount >= Length(Result.FSpans) then
+    SetLength(Result.FSpans, Result.FCount + 4);
+  Result.FSpans[Result.FCount] := TSpan.Bold(AStr);
+  Inc(Result.FCount);
+end;
+
+function TLineBuilder.Build: TLine;
+begin
+  Result := TLine.Empty;
+  SetLength(Result.Spans, FCount);
+  if FCount > 0 then
+    Move(FSpans[0], Result.Spans[0], FCount * SizeOf(TSpan));
+end;
 end.

@@ -58,6 +58,7 @@ function MinConstraint(AN: Word): TConstraint; inline;
 function MaxConstraint(AN: Word): TConstraint; inline;
 function PercentageConstraint(AN: Word): TConstraint; inline;
 function FillConstraint(AWeight: Word): TConstraint; inline;
+function RatioConstraint(ANumerator, ADenominator: Word): TConstraint; inline;
 
 { 独立 helper：调用方无需先建 TLayout 即可切分 rect。 }
 function HorizontalSplit(const AArea: TRect; const ACs: array of TConstraint): TRectArray;
@@ -102,6 +103,14 @@ begin
   Result.Value := 0;
   Result.Value2 := AWeight;
   if AWeight = 0 then Result.Value2 := 1;
+end;
+
+function RatioConstraint(ANumerator, ADenominator: Word): TConstraint;
+begin
+  if ADenominator = 0 then ADenominator := 1;
+  Result.Kind := ckPercentage;
+  Result.Value := (ANumerator * 100) div ADenominator;
+  Result.Value2 := 0;
 end;
 
 { TLayout }
