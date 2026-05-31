@@ -37,6 +37,8 @@ type
     FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
+    FGenericWorkQueue: array of LongInt;
+    FGenericWorkCount: LongInt;
     FGenericCacheKeys: array of string;
     FGenericCacheTypeIds: array of LongInt;
     FPendingSignatures: array of record
@@ -3901,6 +3903,8 @@ begin
   SeedRuntimeVarDecls;
   if FNoFold then
     PreRegisterFunctionReturnTypes;
+  FGenericWorkCount := 0;
+  SetLength(FGenericWorkQueue, 64);
   SeedHaltCalls;
   if FNoFold then
     SeedFunctionBodies;
@@ -6242,7 +6246,7 @@ begin
       if DotPos > 0 then
       begin
         FuncName := Copy(ArgName, 1, DotPos - 1);
-        Operand := Copy(ArgName, DotPos + 1, Length(ArgName) - DotPos - 1);
+        Operand := Copy(ArgName, DotPos + 1, Pos('>', ArgName) - DotPos - 1);
         ArgName := FuncName + '$' + Operand;
         if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
         begin
@@ -6252,6 +6256,10 @@ begin
               RegisterProcedureBody(ArgName,
                 FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
                 FProcedureBodies[K].OwnerUnitId);
+              if FGenericWorkCount >= Length(FGenericWorkQueue) then
+                SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
+              FGenericWorkQueue[FGenericWorkCount] := Length(FProcedureBodies) - 1;
+              Inc(FGenericWorkCount);
               Break;
             end;
         end;
@@ -7783,7 +7791,8 @@ begin
         begin
           Arg := Child.ChildAt(0);
           if (Arg <> nil) and (Arg.NodeKind = gnkFunctionCall) and
-            (Arg.ChildCount >= 2) then
+            (Arg.ChildCount >= 2) and (Arg.ChildAt(0) <> nil) and
+            SameText(Arg.ChildAt(0).Text, 'Halt') then
             Arg := Arg.ChildAt(1);
         end;
         if FNoFold and (Arg <> nil) then
@@ -9031,11 +9040,30 @@ var
   IsStrParam, IsStrReturn, IsPtrReturn, IsVarP, IsRecReturn: Boolean;
   PtrReturnClass: string;
   Folded, Value: Int64;
+  WorkQueue: array of LongInt;
+  WorkCount, WorkHead: LongInt;
 begin
+  if Length(FGenericWorkQueue) < Length(FProcedureBodies) + 64 then
+    SetLength(FGenericWorkQueue, Length(FProcedureBodies) + 64);
+  WorkHead := 0;
   for I := 0 to Length(FProcedureBodies) - 1 do
   begin
+    if (FProcedureBodies[I].Body = nil) then
+      Continue;
+    if Pos('<', FProcedureBodies[I].Name) > 0 then
+      Continue;
+    if FGenericWorkCount >= Length(FGenericWorkQueue) then
+      SetLength(FGenericWorkQueue, FGenericWorkCount + 64);
+    FGenericWorkQueue[FGenericWorkCount] := I;
+    Inc(FGenericWorkCount);
+  end;
+
+  while WorkHead < FGenericWorkCount do
+  begin
+    I := FGenericWorkQueue[WorkHead];
+    Inc(WorkHead);
     Entry := FProcedureBodies[I];
-    if Entry.Body = nil then
+    if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
     SetLength(FVarParamNames, 0);
     if HasOverload(Entry.Name) then
