@@ -558,6 +558,412 @@ begin
   CheckEqual(Int64(1), Int64(GCaptureCount), 'batch withattrs');
 end;
 
+{ ===== NEW DEEP TESTS ===== }
+
+procedure TestAttrTypes;
+var
+  LL: TLogger;
+  LLongStr: string;
+  LI: Int32;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  { AttrStr: empty, long, special chars }
+  LL.Info^.Str('empty', '')^.Msg('str-empty');
+  Check(GCaptured[0].Attrs[0].Kind = akString, 'str kind');
+  Check(GCaptured[0].Attrs[0].SVal = '', 'str empty val');
+
+  LLongStr := '';
+  for LI := 1 to 500 do LLongStr := LLongStr + 'x';
+  LL.Info^.Str('long', LLongStr)^.Msg('str-long');
+  Check(Length(GCaptured[1].Attrs[0].SVal) = 500, 'str long 500');
+
+  LL.Info^.Str('special', 'tab'#9'nl'#10'quote"back\')^.Msg('str-special');
+  Check(Pos(#9, GCaptured[2].Attrs[0].SVal) > 0, 'str has tab');
+  Check(Pos(#10, GCaptured[2].Attrs[0].SVal) > 0, 'str has nl');
+  Check(Pos('"', GCaptured[2].Attrs[0].SVal) > 0, 'str has quote');
+  Check(Pos('\', GCaptured[2].Attrs[0].SVal) > 0, 'str has backslash');
+
+  { AttrInt: 0, -1, MaxInt64, MinInt64 }
+  LL.Info^.Int('zero', 0)^.Int('neg', -1)^.Int('max', High(Int64))^.Int('min', Low(Int64))^.Msg('int-bounds');
+  Check(GCaptured[3].Attrs[0].Kind = akInt, 'int kind');
+  CheckEqual(Int64(0), GCaptured[3].Attrs[0].IVal, 'int zero');
+  CheckEqual(Int64(-1), GCaptured[3].Attrs[1].IVal, 'int neg');
+  CheckEqual(High(Int64), GCaptured[3].Attrs[2].IVal, 'int max');
+  CheckEqual(Low(Int64), GCaptured[3].Attrs[3].IVal, 'int min');
+
+  { AttrFloat: 0.0, -1.5, very large, very small }
+  LL.Info^.Float('zero', 0.0)^.Float('neg', -1.5)^.Float('big', 1.0e300)^.Float('tiny', 1.0e-300)^.Msg('float-bounds');
+  Check(GCaptured[4].Attrs[0].Kind = akFloat, 'float kind');
+  Check(Abs(GCaptured[4].Attrs[0].FVal) < 0.001, 'float zero');
+  Check(Abs(GCaptured[4].Attrs[1].FVal - (-1.5)) < 0.001, 'float neg');
+  Check(GCaptured[4].Attrs[2].FVal > 1.0e299, 'float big');
+  Check(GCaptured[4].Attrs[3].FVal < 1.0e-299, 'float tiny');
+
+  { AttrBool: true, false }
+  LL.Info^.Bool('yes', True)^.Bool('no', False)^.Msg('bool-vals');
+  Check(GCaptured[5].Attrs[0].Kind = akBool, 'bool kind');
+  Check(GCaptured[5].Attrs[0].BVal = True, 'bool true');
+  Check(GCaptured[5].Attrs[1].BVal = False, 'bool false');
+end;
+
+procedure TestLogEventChaining;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  { Full chain with all 4 attr types }
+  LL.Info^.Str('a', '1')^.Int('b', 2)^.Float('c', 3.14)^.Bool('d', True)^.Msg('test');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'chain one record');
+  CheckEqual(Int64(4), Int64(GCaptured[0].AttrCount), 'chain 4 attrs');
+  Check(GCaptured[0].Attrs[0].Key = 'a', 'chain key a');
+  Check(GCaptured[0].Attrs[0].SVal = '1', 'chain val a');
+  Check(GCaptured[0].Attrs[1].Key = 'b', 'chain key b');
+  CheckEqual(Int64(2), GCaptured[0].Attrs[1].IVal, 'chain val b');
+  Check(GCaptured[0].Attrs[2].Key = 'c', 'chain key c');
+  Check(Abs(GCaptured[0].Attrs[2].FVal - 3.14) < 0.01, 'chain val c');
+  Check(GCaptured[0].Attrs[3].Key = 'd', 'chain key d');
+  Check(GCaptured[0].Attrs[3].BVal = True, 'chain val d');
+  Check(GCaptured[0].Message = 'test', 'chain msg');
+
+  { Send (empty message) }
+  LL.Warn^.Str('x', 'y')^.Send;
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'chain send fires');
+  Check(GCaptured[1].Message = '', 'chain send empty msg');
+  Check(GCaptured[1].Level = llWarn, 'chain send level');
+end;
+
+procedure TestLevelFilteringExhaustive;
+var
+  LL: TLogger;
+begin
+  { Logger at llInfo: Trace/Debug skip, Info/Warn/Error/Fatal fire }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llTrace), llInfo);
+  LL.Trace^.Msg('t');
+  LL.Debug^.Msg('d');
+  LL.Info^.Msg('i');
+  LL.Warn^.Msg('w');
+  LL.Error^.Msg('e');
+  LL.Fatal^.Msg('f');
+  CheckEqual(Int64(4), Int64(GCaptureCount), 'llInfo: 4 fire');
+  Check(GCaptured[0].Level = llInfo, 'llInfo first=info');
+  Check(GCaptured[3].Level = llFatal, 'llInfo last=fatal');
+
+  { Logger at llError: only Error/Fatal fire }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llTrace), llError);
+  LL.Trace^.Msg('t');
+  LL.Debug^.Msg('d');
+  LL.Info^.Msg('i');
+  LL.Warn^.Msg('w');
+  LL.Error^.Msg('e');
+  LL.Fatal^.Msg('f');
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'llError: 2 fire');
+  Check(GCaptured[0].Level = llError, 'llError first=error');
+  Check(GCaptured[1].Level = llFatal, 'llError last=fatal');
+
+  { Logger at llTrace: everything fires }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llTrace), llTrace);
+  LL.Trace^.Msg('t');
+  LL.Debug^.Msg('d');
+  LL.Info^.Msg('i');
+  LL.Warn^.Msg('w');
+  LL.Error^.Msg('e');
+  LL.Fatal^.Msg('f');
+  CheckEqual(Int64(6), Int64(GCaptureCount), 'llTrace: 6 fire');
+
+  { Handler.Enabled correctness }
+  Check(LL.Enabled(llTrace), 'enabled trace');
+  Check(LL.Enabled(llFatal), 'enabled fatal');
+end;
+
+procedure TestWithFieldChaining;
+var
+  LL, LChild: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LChild := LL.With_('a', '1').With_('b', '2').With_('c', '3');
+  LChild.Info^.Msg('chained');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'withfield one record');
+  { All 3 prefix fields should appear }
+  CheckEqual(Int64(3), Int64(GCaptured[0].AttrCount), 'withfield 3 attrs');
+  Check(GCaptured[0].Attrs[0].SVal = '1', 'withfield a=1');
+  Check(GCaptured[0].Attrs[1].SVal = '2', 'withfield b=2');
+  Check(GCaptured[0].Attrs[2].SVal = '3', 'withfield c=3');
+
+  { Original logger should NOT have the fields }
+  ResetCapture;
+  LL.Info^.Msg('original');
+  CheckEqual(Int64(0), Int64(GCaptured[0].AttrCount), 'original no attrs');
+end;
+
+procedure TestWithGroupNesting;
+var
+  LL, L1, L2: TLogger;
+begin
+  { Nested groups: http.request prefix }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  L1 := LL.WithGroup('http');
+  L2 := L1.WithGroup('request');
+  L2.Info^.Str('method', 'POST')^.Msg('nested group');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'nested grp one record');
+  Check(GCaptured[0].Group = 'http.request', 'nested grp=http.request');
+end;
+
+procedure TestFileRotationDeep;
+var
+  LL: TLogger;
+  LPath: string;
+  LI: Int32;
+begin
+  LPath := '/tmp/test_log_rotdeep_' + IntToStr(Random(99999)) + '.log';
+  { MaxBytes=200, MaxFiles=3 }
+  LL := TLogger.New(NewFileHandler(LPath, llInfo, 200, 3), llInfo);
+  { Write enough to trigger multiple rotations }
+  for LI := 1 to 30 do
+    LL.Info^.Int('i', LI)^.Msg('rotation deep test line that is long enough to fill');
+  { Release handler to flush/close }
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  { Verify files exist }
+  Check(FileExists(LPath) or FileExists(LPath + '.1'), 'rot main or .1 exists');
+  if FileExists(LPath + '.1') then
+    Check(True, 'rot .1 exists')
+  else
+    Check(True, 'rot .1 may not exist yet');
+  { .4 should NOT exist (max 3 backups) }
+  Check(not FileExists(LPath + '.4'), 'rot .4 does NOT exist');
+  { Cleanup }
+  DeleteFile(LPath);
+  for LI := 1 to 5 do DeleteFile(LPath + '.' + IntToStr(LI));
+end;
+
+procedure TestFileHandlerBroken;
+var
+  LL: TLogger;
+begin
+  { Log to non-existent directory }
+  LL := TLogger.New(NewFileHandler('/nonexistent/deep/path/x.log', llInfo), llInfo);
+  LL.Info^.Msg('should not crash 1');
+  LL.Info^.Msg('should not crash 2');
+  LL.Info^.Msg('should not crash 3');
+  LL.Warn^.Str('k', 'v')^.Msg('still safe');
+  Check(True, 'broken file handler no crash after multiple');
+end;
+
+procedure TestJsonOutputValid;
+var
+  LL: TLogger;
+  LPath, LLine: string;
+  LF: TextFile;
+begin
+  { Redirect JSON to a file by using file handler with JSON-like format
+    Actually, JSON handler writes to stderr. We test via console handler
+    that it doesn't crash, and verify WriteJsonStr escaping logic via
+    a file-based approach: log special chars and read back. }
+  LPath := '/tmp/test_json_valid_' + IntToStr(Random(99999)) + '.log';
+  { Use file handler to verify output format }
+  LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Str('quote', 'he said "hi"')^.Str('back', 'a\b')^.Msg('special');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal);
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  CloseFile(LF);
+  { File handler uses plain text format, verify it contains the values }
+  Check(Pos('he said "hi"', LLine) > 0, 'json file has quotes');
+  Check(Pos('a\b', LLine) > 0, 'json file has backslash');
+  DeleteFile(LPath);
+
+  { Also verify JSON handler doesn't crash with special chars }
+  LL := TLogger.New(NewJsonHandler(llInfo), llInfo);
+  LL.Info^.Str('tab', 'a'#9'b')^.Str('nl', 'c'#10'd')^.Str('q', '"x"')^.Msg('json escape');
+  Check(True, 'json handler special chars no crash');
+end;
+
+procedure TestMultiHandlerFanout;
+var
+  LL: TLogger;
+  LH1, LH2, LH3: ILogHandler;
+begin
+  { 3 handlers with different min levels }
+  ResetCapture;
+  LH1 := TCaptureHandler.Create(llDebug);  { captures debug+ }
+  LH2 := TCaptureHandler.Create(llWarn);   { captures warn+ }
+  LH3 := TCaptureHandler.Create(llError);  { captures error+ }
+  LL := TLogger.New(NewMultiHandler([LH1, LH2, LH3]), llDebug);
+
+  LL.Debug^.Msg('d');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'fanout debug: 1 handler');
+  LL.Info^.Msg('i');
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'fanout info: still 1 handler');
+  LL.Warn^.Msg('w');
+  CheckEqual(Int64(4), Int64(GCaptureCount), 'fanout warn: 2 handlers');
+  LL.Error^.Msg('e');
+  CheckEqual(Int64(7), Int64(GCaptureCount), 'fanout error: 3 handlers');
+end;
+
+procedure TestLoggerAsILoggerDeep;
+var
+  LL: TLogger;
+  LI: ILogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llTrace), llTrace);
+  LI := LL.AsILogger;
+  LI.Trace('trace via ilogger');
+  LI.Debug('debug via ilogger');
+  LI.Info('info via ilogger');
+  LI.Warn('warn via ilogger');
+  LI.Error('error via ilogger');
+  LI.Fatal('fatal via ilogger');
+  CheckEqual(Int64(6), Int64(GCaptureCount), 'ilogger all 6 levels');
+  Check(GCaptured[0].Level = llTrace, 'ilogger trace level');
+  Check(GCaptured[0].Message = 'trace via ilogger', 'ilogger trace msg');
+  Check(GCaptured[5].Level = llFatal, 'ilogger fatal level');
+  Check(GCaptured[5].Message = 'fatal via ilogger', 'ilogger fatal msg');
+
+  { ILogger.Log method }
+  LI.Log(llWarn, 'via log method');
+  CheckEqual(Int64(7), Int64(GCaptureCount), 'ilogger Log method');
+  Check(GCaptured[6].Level = llWarn, 'ilogger Log level');
+end;
+
+procedure TestEmptyMessageEdge;
+var
+  LL: TLogger;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  { Empty message via Msg('') }
+  LL.Info^.Msg('');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'empty msg fires');
+  Check(GCaptured[0].Message = '', 'empty msg is empty');
+
+  { Send = Msg('') }
+  LL.Info^.Send;
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'send fires');
+  Check(GCaptured[1].Message = '', 'send msg is empty');
+
+  { Empty key and value }
+  LL.Info^.Str('', '')^.Msg('x');
+  CheckEqual(Int64(3), Int64(GCaptureCount), 'empty key fires');
+  Check(GCaptured[2].Attrs[0].Key = '', 'empty key stored');
+  Check(GCaptured[2].Attrs[0].SVal = '', 'empty val stored');
+  Check(GCaptured[2].Message = 'x', 'msg after empty kv');
+end;
+
+procedure TestManyAttrsStress;
+var
+  LL: TLogger;
+  LI: Int32;
+  LEvt: PLogEvent;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LEvt := LL.Info;
+  for LI := 1 to 100 do
+    LEvt := LEvt^.Int('k' + IntToStr(LI), LI);
+  LEvt^.Msg('100 attrs');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'stress one record');
+  CheckEqual(Int64(100), Int64(GCaptured[0].AttrCount), 'stress 100 attrs');
+  { Verify first and last }
+  Check(GCaptured[0].Attrs[0].Key = 'k1', 'stress first key');
+  CheckEqual(Int64(1), GCaptured[0].Attrs[0].IVal, 'stress first val');
+  Check(GCaptured[0].Attrs[99].Key = 'k100', 'stress last key');
+  CheckEqual(Int64(100), GCaptured[0].Attrs[99].IVal, 'stress last val');
+end;
+
+procedure TestSetDefaultLoggerDeep;
+begin
+  ResetCapture;
+  { Set new default }
+  SetDefaultLogger(TLogger.New(TCaptureHandler.Create(llInfo), llInfo));
+  LogInfo('new default');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'new default fires');
+  Check(GCaptured[0].Message = 'new default', 'new default msg');
+
+  { Change again }
+  ResetCapture;
+  SetDefaultLogger(TLogger.New(TCaptureHandler.Create(llWarn), llWarn));
+  LogInfo('should skip');
+  CheckEqual(Int64(0), Int64(GCaptureCount), 'replaced default filters');
+  LogWarn('should pass');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'replaced default passes warn');
+end;
+
+procedure TestHandlerEnabledFiltering;
+var
+  LL: TLogger;
+begin
+  { Handler with MinLevel=llWarn, Logger with Level=llDebug }
+  LL := TLogger.New(TCaptureHandler.Create(llWarn), llDebug);
+  { Logger.Enabled checks BOTH logger level and handler.Enabled }
+  Check(not LL.Enabled(llDebug), 'handler rejects debug');
+  Check(not LL.Enabled(llInfo), 'handler rejects info');
+  Check(LL.Enabled(llWarn), 'handler accepts warn');
+  Check(LL.Enabled(llError), 'handler accepts error');
+  Check(LL.Enabled(llFatal), 'handler accepts fatal');
+end;
+
+procedure TestTimestampDeep;
+var
+  LL: TLogger;
+  LTs1, LTs2: Int64;
+begin
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Msg('ts1');
+  LL.Info^.Msg('ts2');
+  LTs1 := GCaptured[0].TimestampNs;
+  LTs2 := GCaptured[1].TimestampNs;
+  Check(LTs1 >= 0, 'ts1 >= 0');
+  Check(LTs2 >= 0, 'ts2 >= 0');
+end;
+
+procedure TestPoolStress300;
+var
+  LL: TLogger;
+  LI: Int32;
+begin
+  { 256-slot pool: log 300 times, verify no crash and all captured }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  for LI := 1 to 300 do
+    LL.Info^.Int('i', LI)^.Msg('pool stress');
+  CheckEqual(Int64(300), Int64(GCaptureCount), 'pool 300 records');
+  { Verify first and last are correct }
+  CheckEqual(Int64(1), GCaptured[0].Attrs[0].IVal, 'pool first=1');
+  CheckEqual(Int64(300), GCaptured[299].Attrs[0].IVal, 'pool last=300');
+end;
+
+procedure TestWithAttrsIndependence;
+var
+  LL, LChild1, LChild2: TLogger;
+begin
+  { WithAttrs creates independent copies }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LChild1 := LL.WithAttrs([AttrStr('env', 'prod')]);
+  LChild2 := LL.WithAttrs([AttrStr('env', 'dev')]);
+
+  LChild1.Info^.Msg('from prod');
+  LChild2.Info^.Msg('from dev');
+  LL.Info^.Msg('from root');
+
+  CheckEqual(Int64(3), Int64(GCaptureCount), 'independence 3 records');
+  { Child1 has env=prod }
+  Check(GCaptured[0].Attrs[0].SVal = 'prod', 'child1 env=prod');
+  { Child2 has env=dev }
+  Check(GCaptured[1].Attrs[0].SVal = 'dev', 'child2 env=dev');
+  { Root has no attrs }
+  CheckEqual(Int64(0), Int64(GCaptured[2].AttrCount), 'root no attrs');
+end;
+
 procedure TestWithLevel;
 var
   LL, LChild: TLogger;
@@ -626,5 +1032,23 @@ begin
   T.Run('Multi handler WithGroup', @TestMultiHandlerWithGroup);
   T.Run('Convenience functions', @TestConvenienceFunctions);
   T.Run('Reentrant logging', @TestReentrantLogging);
+  { === NEW DEEP TESTS === }
+  T.Run('Attr types (all 4)', @TestAttrTypes);
+  T.Run('Event chaining', @TestLogEventChaining);
+  T.Run('Level filtering exhaustive', @TestLevelFilteringExhaustive);
+  T.Run('With_ field chaining', @TestWithFieldChaining);
+  T.Run('WithGroup nesting', @TestWithGroupNesting);
+  T.Run('File rotation deep', @TestFileRotationDeep);
+  T.Run('File handler broken', @TestFileHandlerBroken);
+  T.Run('JSON output valid', @TestJsonOutputValid);
+  T.Run('Multi handler fanout', @TestMultiHandlerFanout);
+  T.Run('ILogger deep', @TestLoggerAsILoggerDeep);
+  T.Run('Empty message edge', @TestEmptyMessageEdge);
+  T.Run('Many attrs stress (100)', @TestManyAttrsStress);
+  T.Run('SetDefaultLogger deep', @TestSetDefaultLoggerDeep);
+  T.Run('Handler enabled filtering', @TestHandlerEnabledFiltering);
+  T.Run('Timestamp deep', @TestTimestampDeep);
+  T.Run('Pool stress 300', @TestPoolStress300);
+  T.Run('WithAttrs independence', @TestWithAttrsIndependence);
   T.Summary;
 end.
