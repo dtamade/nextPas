@@ -5,7 +5,8 @@ unit nextpas.core.testing;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors,
+  nextpas.core.text.conv;
 
 type
   TTestProc = procedure;
@@ -73,10 +74,10 @@ begin
   begin
     if AMessage <> '' then
       raise EAssertionFailed.CreateFmt('%s: expected %s, got %s',
-        [AMessage, BoolToStr(AExpected, True), BoolToStr(AActual, True)])
+        [AMessage, BoolToStr(AExpected), BoolToStr(AActual)])
     else
       raise EAssertionFailed.CreateFmt('expected %s, got %s',
-        [BoolToStr(AExpected, True), BoolToStr(AActual, True)]);
+        [BoolToStr(AExpected), BoolToStr(AActual)]);
   end;
 end;
 

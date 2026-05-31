@@ -5,7 +5,7 @@ unit nextpas.core.thread.future;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.thread.base,
   nextpas.core.thread.intf;
 
@@ -42,7 +42,6 @@ function WhenAny(const AFutures: array of IFutureVoid): IFutureVoid;
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.atomic,
   nextpas.core.sync,
   nextpas.core.sync.intf,
