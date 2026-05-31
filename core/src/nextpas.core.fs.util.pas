@@ -363,7 +363,7 @@ begin
   P := BaseUnix.fpGetEnv(PChar(AName));
   if P <> nil then Result := P else Result := '';
   {$ELSE}
-  Result := SysUtils.GetEnvironmentVariable(AName);
+  Result := nextpas.core.os.env.GetEnvironmentVariable(AName);
   {$ENDIF}
 end;
 
