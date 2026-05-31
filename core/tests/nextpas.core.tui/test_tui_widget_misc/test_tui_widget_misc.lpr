@@ -56,53 +56,42 @@ end;
 
 { === TScrollbar === }
 procedure TestScrollbarThumb;
-var LS: TScrollbar;
+var LS: IScrollbar;
 begin
-  LS.TotalItems := 100;
-  LS.VisibleItems := 10;
-  LS.ScrollOffset := 0;
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(0);
   CheckEqual(Int64(1), Int64(LS.ThumbSize(10)), 'thumb size 1 (10% of 10)');
   CheckEqual(Int64(0), Int64(LS.ThumbStart(10)), 'thumb at top');
-  LS.ScrollOffset := 90;
+  LS := TScrollbar.New.WithTotal(100).WithVisible(10).WithOffset(90);
   CheckEqual(Int64(9), Int64(LS.ThumbStart(10)), 'thumb at bottom');
 end;
 
 procedure TestScrollbarRender;
-var LS: TScrollbar; LBuf: TBuffer; LSty: TScrollbarStyle;
+var LS: IScrollbar; LBuf: TBuffer;
 begin
-  LS.TotalItems := 20;
-  LS.VisibleItems := 5;
-  LS.ScrollOffset := 0;
-  LSty := DefaultScrollbarStyle;
+  LS := TScrollbar.New.WithTotal(20).WithVisible(5).WithOffset(0);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
   try
-    LS.Render(TRect.Make(0, 0, 1, 5), LBuf, LSty);
-    { 不崩溃即可——视觉验证需要真实终端 }
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
     Check(True, 'scrollbar rendered without crash');
   finally LBuf.Free; end;
 end;
 
 procedure TestScrollbarHitTest;
-var LS: TScrollbar;
+var LS: IScrollbar;
 begin
-  LS.TotalItems := 20;
-  LS.VisibleItems := 5;
-  LS.ScrollOffset := 0;
-  { thumb at top, size ~1 in track height 5 }
+  LS := TScrollbar.New.WithTotal(20).WithVisible(5).WithOffset(0);
   Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 0) = shThumb, 'hit thumb at 0');
   Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 3) = shBelow, 'hit below');
   Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 10) = shNone, 'hit none outside');
 end;
 
 procedure TestScrollbarPageUpDown;
-var LS: TScrollbar;
+var LS: IScrollbar;
 begin
-  LS.TotalItems := 50;
-  LS.VisibleItems := 10;
-  LS.ScrollOffset := 20;
+  LS := TScrollbar.New.WithTotal(50).WithVisible(10).WithOffset(20);
   CheckEqual(Int64(10), Int64(LS.PageUp), 'page up');
   CheckEqual(Int64(30), Int64(LS.PageDown), 'page down');
-  LS.ScrollOffset := 0;
+  LS := TScrollbar.New.WithTotal(50).WithVisible(10).WithOffset(0);
   CheckEqual(Int64(0), Int64(LS.PageUp), 'page up clamped at 0');
 end;
 

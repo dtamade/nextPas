@@ -1,18 +1,5 @@
 unit nextpas.core.tui.widget.scrollbar;
 
-{**
- * @desc TScrollbar — 滚动条原语（track/thumb 计算 + 命中测试 + 渲染）。
- *
- * 垂直方向。消费方设置 TotalItems/VisibleItems/ScrollOffset，调 Render 绘制。
- * 鼠标交互通过 HitAt/OffsetFromDragY 计算新 offset。
- *
- * 这是一个"哑" record——不持有超出消费方传入的状态。Drag 状态由外部
- * TPointerCapture + TInteractionSession 管理。
- *
- * @note 不实现 IWidget（Render 需要额外 TScrollbarStyle 参数），
- *       作为其他 widget 的内部构建块使用。
- *}
-
 {$I nextpas.core.settings.inc}
 {$packenum 1}
 
@@ -23,64 +10,116 @@ uses
   nextpas.core.tui.color,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf;
 
 type
   TScrollbarHit = (shNone, shAbove, shThumb, shBelow);
 
-  TScrollbarStyle = record
-    TrackChar: AnsiChar;
-    ThumbChar: AnsiChar;
-    TrackStyle: TStyle;
-    ThumbStyle: TStyle;
-  end;
-
-  TScrollbar = record
-    TotalItems: Integer;
-    VisibleItems: Integer;
-    ScrollOffset: Integer;
-
+  IScrollbar = interface(IWidget)
+    ['{B1C2D3E4-F5A6-7890-BCDE-F1A2B3C4D5E6}']
+    function WithTotal(N: Integer): IScrollbar;
+    function WithVisible(N: Integer): IScrollbar;
+    function WithOffset(N: Integer): IScrollbar;
+    function WithTrackChar(C: AnsiChar): IScrollbar;
+    function WithThumbChar(C: AnsiChar): IScrollbar;
+    function WithTrackStyle(const S: TStyle): IScrollbar;
+    function WithThumbStyle(const S: TStyle): IScrollbar;
     function ThumbStart(ATrackHeight: Integer): Integer;
     function ThumbSize(ATrackHeight: Integer): Integer;
-    function HitAt(ATrackArea: TRect; AY: Integer): TScrollbarHit;
-    function OffsetFromDragY(ATrackArea: TRect; ADragY: Integer): Integer;
+    function HitAt(const ATrackArea: TRect; AY: Integer): TScrollbarHit;
+    function OffsetFromDragY(const ATrackArea: TRect; ADragY: Integer): Integer;
     function PageUp: Integer;
     function PageDown: Integer;
     function Clamped: Integer;
-    procedure Render(const ATrackArea: TRect; ABuffer: TBuffer;
-      const AStyle: TScrollbarStyle);
   end;
 
-function DefaultScrollbarStyle: TScrollbarStyle;
+  TScrollbar = class(TInterfacedObject, IWidget, IScrollbar)
+  private
+    FTotalItems: Integer;
+    FVisibleItems: Integer;
+    FScrollOffset: Integer;
+    FTrackChar: AnsiChar;
+    FThumbChar: AnsiChar;
+    FTrackStyle: TStyle;
+    FThumbStyle: TStyle;
+  public
+    class function New: IScrollbar; static;
+
+    function WithTotal(N: Integer): IScrollbar;
+    function WithVisible(N: Integer): IScrollbar;
+    function WithOffset(N: Integer): IScrollbar;
+    function WithTrackChar(C: AnsiChar): IScrollbar;
+    function WithThumbChar(C: AnsiChar): IScrollbar;
+    function WithTrackStyle(const S: TStyle): IScrollbar;
+    function WithThumbStyle(const S: TStyle): IScrollbar;
+    function ThumbStart(ATrackHeight: Integer): Integer;
+    function ThumbSize(ATrackHeight: Integer): Integer;
+    function HitAt(const ATrackArea: TRect; AY: Integer): TScrollbarHit;
+    function OffsetFromDragY(const ATrackArea: TRect; ADragY: Integer): Integer;
+    function PageUp: Integer;
+    function PageDown: Integer;
+    function Clamped: Integer;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+  end;
 
 implementation
 
-function DefaultScrollbarStyle: TScrollbarStyle;
+class function TScrollbar.New: IScrollbar;
+var LSelf: TScrollbar;
 begin
-  Result.TrackChar := ' ';
-  Result.ThumbChar := ' ';
-  Result.TrackStyle := TStyle.Default.WithBg(IndexedColor(236));
-  Result.ThumbStyle := TStyle.Default.WithBg(IndexedColor(245));
+  LSelf := TScrollbar.Create;
+  LSelf.FTotalItems := 0;
+  LSelf.FVisibleItems := 0;
+  LSelf.FScrollOffset := 0;
+  LSelf.FTrackChar := ' ';
+  LSelf.FThumbChar := ' ';
+  LSelf.FTrackStyle := TStyle.Default.WithBg(IndexedColor(236));
+  LSelf.FThumbStyle := TStyle.Default.WithBg(IndexedColor(245));
+  Result := LSelf;
 end;
+
+function TScrollbar.WithTotal(N: Integer): IScrollbar;
+begin FTotalItems := N; Result := Self; end;
+
+function TScrollbar.WithVisible(N: Integer): IScrollbar;
+begin FVisibleItems := N; Result := Self; end;
+
+function TScrollbar.WithOffset(N: Integer): IScrollbar;
+begin FScrollOffset := N; Result := Self; end;
+
+function TScrollbar.WithTrackChar(C: AnsiChar): IScrollbar;
+begin FTrackChar := C; Result := Self; end;
+
+function TScrollbar.WithThumbChar(C: AnsiChar): IScrollbar;
+begin FThumbChar := C; Result := Self; end;
+
+function TScrollbar.WithTrackStyle(const S: TStyle): IScrollbar;
+begin FTrackStyle := S; Result := Self; end;
+
+function TScrollbar.WithThumbStyle(const S: TStyle): IScrollbar;
+begin FThumbStyle := S; Result := Self; end;
 
 function TScrollbar.ThumbStart(ATrackHeight: Integer): Integer;
 begin
-  if TotalItems <= VisibleItems then Exit(0);
-  Result := (ScrollOffset * (ATrackHeight - ThumbSize(ATrackHeight))) div (TotalItems - VisibleItems);
+  if FTotalItems <= FVisibleItems then Exit(0);
+  Result := (FScrollOffset * (ATrackHeight - ThumbSize(ATrackHeight)))
+    div (FTotalItems - FVisibleItems);
   if Result < 0 then Result := 0;
 end;
 
 function TScrollbar.ThumbSize(ATrackHeight: Integer): Integer;
 begin
-  if TotalItems <= 0 then Exit(ATrackHeight);
-  Result := (VisibleItems * ATrackHeight) div TotalItems;
+  if FTotalItems <= 0 then Exit(ATrackHeight);
+  Result := (FVisibleItems * ATrackHeight) div FTotalItems;
   if Result < 1 then Result := 1;
   if Result > ATrackHeight then Result := ATrackHeight;
 end;
 
-function TScrollbar.HitAt(ATrackArea: TRect; AY: Integer): TScrollbarHit;
-var
-  LRelY, LTS, LTSz: Integer;
+function TScrollbar.HitAt(const ATrackArea: TRect; AY: Integer): TScrollbarHit;
+var LRelY, LTS, LTSz: Integer;
 begin
   Result := shNone;
   if (AY < ATrackArea.Y) or (AY >= ATrackArea.Y + ATrackArea.Height) then Exit;
@@ -92,15 +131,14 @@ begin
   else Result := shBelow;
 end;
 
-function TScrollbar.OffsetFromDragY(ATrackArea: TRect; ADragY: Integer): Integer;
-var
-  LRelY, LTrackH, LTSz, LMaxOffset, LAvailTrack: Integer;
+function TScrollbar.OffsetFromDragY(const ATrackArea: TRect; ADragY: Integer): Integer;
+var LRelY, LTrackH, LTSz, LMaxOffset, LAvailTrack: Integer;
 begin
   LTrackH := ATrackArea.Height;
   LTSz := ThumbSize(LTrackH);
   LAvailTrack := LTrackH - LTSz;
   if LAvailTrack <= 0 then Exit(0);
-  LMaxOffset := TotalItems - VisibleItems;
+  LMaxOffset := FTotalItems - FVisibleItems;
   if LMaxOffset <= 0 then Exit(0);
   LRelY := ADragY - ATrackArea.Y;
   if LRelY < 0 then LRelY := 0;
@@ -110,55 +148,52 @@ end;
 
 function TScrollbar.PageUp: Integer;
 begin
-  Result := ScrollOffset - VisibleItems;
+  Result := FScrollOffset - FVisibleItems;
   if Result < 0 then Result := 0;
 end;
 
 function TScrollbar.PageDown: Integer;
-var
-  LMax: Integer;
+var LMax: Integer;
 begin
-  LMax := TotalItems - VisibleItems;
+  LMax := FTotalItems - FVisibleItems;
   if LMax < 0 then LMax := 0;
-  Result := ScrollOffset + VisibleItems;
+  Result := FScrollOffset + FVisibleItems;
   if Result > LMax then Result := LMax;
 end;
 
 function TScrollbar.Clamped: Integer;
-var
-  LMax: Integer;
+var LMax: Integer;
 begin
-  LMax := TotalItems - VisibleItems;
+  LMax := FTotalItems - FVisibleItems;
   if LMax < 0 then LMax := 0;
-  Result := ScrollOffset;
+  Result := FScrollOffset;
   if Result < 0 then Result := 0;
   if Result > LMax then Result := LMax;
 end;
 
-procedure TScrollbar.Render(const ATrackArea: TRect; ABuffer: TBuffer;
-  const AStyle: TScrollbarStyle);
+procedure TScrollbar.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   LY, LTS, LTSz: Integer;
   LC: TCell;
   LP: PCell;
 begin
-  if ATrackArea.IsEmpty or (ATrackArea.Width < 1) then Exit;
-  LTS := ThumbStart(ATrackArea.Height);
-  LTSz := ThumbSize(ATrackArea.Height);
-  for LY := 0 to ATrackArea.Height - 1 do
+  if AArea.IsEmpty or (AArea.Width < 1) then Exit;
+  LTS := ThumbStart(AArea.Height);
+  LTSz := ThumbSize(AArea.Height);
+  for LY := 0 to AArea.Height - 1 do
   begin
     LC := CELL_EMPTY;
     if (LY >= LTS) and (LY < LTS + LTSz) then
     begin
-      CellSetSymbolAscii(LC, AStyle.ThumbChar);
-      CellApplyStyle(LC, AStyle.ThumbStyle);
+      CellSetSymbolAscii(LC, FThumbChar);
+      CellApplyStyle(LC, FThumbStyle);
     end
     else
     begin
-      CellSetSymbolAscii(LC, AStyle.TrackChar);
-      CellApplyStyle(LC, AStyle.TrackStyle);
+      CellSetSymbolAscii(LC, FTrackChar);
+      CellApplyStyle(LC, FTrackStyle);
     end;
-    LP := ABuffer.CellAt(ATrackArea.X, ATrackArea.Y + LY);
+    LP := ABuffer.CellAt(AArea.X, AArea.Y + LY);
     if LP <> nil then LP^ := LC;
   end;
 end;
