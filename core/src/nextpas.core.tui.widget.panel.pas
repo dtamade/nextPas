@@ -15,7 +15,8 @@ uses
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
   nextpas.core.tui.borders,
-  nextpas.core.tui.layout;
+  nextpas.core.tui.layout,
+  nextpas.core.tui.widget.intf;
 
 const
   PANEL_MAX_COLS = 8;
@@ -56,7 +57,34 @@ type
     SepIndex: Integer;
   end;
 
-  TPanel = record
+  IPanel = interface(IWidget)
+    ['{A0B1C2D3-E4F5-6789-ABCD-E0F1A2B3C4D5}']
+    function WithBorderSet(const BS: TBorderSet): IPanel;
+    function WithSepSet(const BS: TBorderSet): IPanel;
+    function WithEdges(E: TPanelEdges): IPanel;
+    function WithBorderStyle(const S: TStyle): IPanel;
+    function WithHSepStartCol(Col: Integer): IPanel;
+    function WithHSepStartColAt(SepIndex: Integer; Col: Integer): IPanel;
+    function WithVSepStartRow(Row: Integer): IPanel;
+    function WithVSepEndRow(Row: Integer): IPanel;
+    function WithHSepVisible(SepIndex: Integer; Visible: Boolean): IPanel;
+    function WithVSepVisible(SepIndex: Integer; Visible: Boolean): IPanel;
+    function WithHSepTitle(SepIndex: Integer; const ATitle: AnsiString): IPanel;
+    function WithHSepTitleStyle(SepIndex: Integer; const ATitle: AnsiString; const S: TStyle): IPanel;
+    function WithFocus(Col, Row: Integer): IPanel;
+    function WithFocusStyle(const S: TStyle): IPanel;
+    function WithPadding(P: Byte): IPanel;
+    function WithCellPadding(Col, Row: Integer; P: Byte): IPanel;
+    function WithMinWidth(Col: Integer; Min: Integer): IPanel;
+    function WithMinHeight(Row: Integer; Min: Integer): IPanel;
+    function WithColWeight(Col: Integer; Weight: Word): IPanel;
+    function WithRowWeight(Row: Integer; Weight: Word): IPanel;
+    function WithDebug(Enable: Boolean): IPanel;
+    function Layout(const AArea: TRect): TPanelGrid;
+    function RenderGrid(const AArea: TRect; ABuffer: TBuffer): TPanelGrid;
+  end;
+
+  TPanel = class(TInterfacedObject, IWidget, IPanel)
   private
     FCols: array[0..PANEL_MAX_COLS - 1] of TConstraint;
     FRows: array[0..PANEL_MAX_ROWS - 1] of TConstraint;
@@ -84,35 +112,39 @@ type
     FMinHeights: array[0..PANEL_MAX_ROWS - 1] of Integer;
     FDebug: Boolean;
   public
-    class function Create(
+    class function New(
       const Cols: array of TConstraint;
-      const Rows: array of TConstraint): TPanel; static;
-    function WithBorderSet(const BS: TBorderSet): TPanel;
-    function WithSepSet(const BS: TBorderSet): TPanel;
-    function WithEdges(E: TPanelEdges): TPanel;
-    function WithBorderStyle(const S: TStyle): TPanel;
-    function WithHSepStartCol(Col: Integer): TPanel;
-    function WithHSepStartColAt(SepIndex: Integer; Col: Integer): TPanel;
-    function WithVSepStartRow(Row: Integer): TPanel;
-    function WithVSepEndRow(Row: Integer): TPanel;
-    function WithHSepVisible(SepIndex: Integer; Visible: Boolean): TPanel;
-    function WithVSepVisible(SepIndex: Integer; Visible: Boolean): TPanel;
-    function WithHSepTitle(SepIndex: Integer; const ATitle: AnsiString): TPanel;
-    function WithHSepTitleStyle(SepIndex: Integer; const ATitle: AnsiString; const S: TStyle): TPanel;
-    function WithFocus(Col, Row: Integer): TPanel;
-    function WithFocusStyle(const S: TStyle): TPanel;
-    function WithPadding(P: Byte): TPanel;
-    function WithCellPadding(Col, Row: Integer; P: Byte): TPanel;
-    function WithMinWidth(Col: Integer; Min: Integer): TPanel;
-    function WithMinHeight(Row: Integer; Min: Integer): TPanel;
-    function WithColWeight(Col: Integer; Weight: Word): TPanel;
-    function WithRowWeight(Row: Integer; Weight: Word): TPanel;
-    function WithDebug(Enable: Boolean): TPanel;
-    function Layout(const Area: TRect): TPanelGrid;
-    function Render(const Area: TRect; ABuf: TBuffer): TPanelGrid;
-    class function Sidebar(SidebarWidth: Integer): TPanel; static;
-    class function HSplit(TopHeight: Integer): TPanel; static;
-    class function Grid(ACols, ARows: Integer): TPanel; static;
+      const Rows: array of TConstraint): IPanel; static;
+    class function Sidebar(SidebarWidth: Integer): IPanel; static;
+    class function HSplit(TopHeight: Integer): IPanel; static;
+    class function Grid(ACols, ARows: Integer): IPanel; static;
+
+    function WithBorderSet(const BS: TBorderSet): IPanel;
+    function WithSepSet(const BS: TBorderSet): IPanel;
+    function WithEdges(E: TPanelEdges): IPanel;
+    function WithBorderStyle(const S: TStyle): IPanel;
+    function WithHSepStartCol(Col: Integer): IPanel;
+    function WithHSepStartColAt(SepIndex: Integer; Col: Integer): IPanel;
+    function WithVSepStartRow(Row: Integer): IPanel;
+    function WithVSepEndRow(Row: Integer): IPanel;
+    function WithHSepVisible(SepIndex: Integer; Visible: Boolean): IPanel;
+    function WithVSepVisible(SepIndex: Integer; Visible: Boolean): IPanel;
+    function WithHSepTitle(SepIndex: Integer; const ATitle: AnsiString): IPanel;
+    function WithHSepTitleStyle(SepIndex: Integer; const ATitle: AnsiString; const S: TStyle): IPanel;
+    function WithFocus(Col, Row: Integer): IPanel;
+    function WithFocusStyle(const S: TStyle): IPanel;
+    function WithPadding(P: Byte): IPanel;
+    function WithCellPadding(Col, Row: Integer; P: Byte): IPanel;
+    function WithMinWidth(Col: Integer; Min: Integer): IPanel;
+    function WithMinHeight(Row: Integer; Min: Integer): IPanel;
+    function WithColWeight(Col: Integer; Weight: Word): IPanel;
+    function WithRowWeight(Row: Integer; Weight: Word): IPanel;
+    function WithDebug(Enable: Boolean): IPanel;
+    function Layout(const AArea: TRect): TPanelGrid;
+    function RenderGrid(const AArea: TRect; ABuffer: TBuffer): TPanelGrid;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 function PanelCell(const Grid: TPanelGrid; Col, Row: Integer): TRect; inline;
@@ -185,207 +217,210 @@ end;
 
 { TPanel }
 
-class function TPanel.Create(
+class function TPanel.New(
   const Cols: array of TConstraint;
-  const Rows: array of TConstraint): TPanel;
+  const Rows: array of TConstraint): IPanel;
 var
+  LSelf: TPanel;
   I: Integer;
 begin
-  Result.FColCount := Length(Cols);
-  if Result.FColCount > PANEL_MAX_COLS then Result.FColCount := PANEL_MAX_COLS;
-  for I := 0 to Result.FColCount - 1 do
-    Result.FCols[I] := Cols[I];
+  LSelf := TPanel.Create;
+  LSelf.FColCount := Length(Cols);
+  if LSelf.FColCount > PANEL_MAX_COLS then LSelf.FColCount := PANEL_MAX_COLS;
+  for I := 0 to LSelf.FColCount - 1 do
+    LSelf.FCols[I] := Cols[I];
 
-  Result.FRowCount := Length(Rows);
-  if Result.FRowCount > PANEL_MAX_ROWS then Result.FRowCount := PANEL_MAX_ROWS;
-  for I := 0 to Result.FRowCount - 1 do
-    Result.FRows[I] := Rows[I];
+  LSelf.FRowCount := Length(Rows);
+  if LSelf.FRowCount > PANEL_MAX_ROWS then LSelf.FRowCount := PANEL_MAX_ROWS;
+  for I := 0 to LSelf.FRowCount - 1 do
+    LSelf.FRows[I] := Rows[I];
 
-  Result.FBorderSet := BorderSetPlain;
-  Result.FHasSepSet := False;
-  Result.FEdges := PanelEdgesAll;
-  Result.FBorderStyle := TStyle.Default;
-  Result.FVSepStartRow := 0;
-  Result.FVSepEndRow := PANEL_MAX_ROWS;
-  Result.FHasFocus := False;
-  Result.FFocusCol := 0;
-  Result.FFocusRow := 0;
-  Result.FFocusStyle := TStyle.Default.WithFg(TUI_WHITE).WithModifier([mbBold]);
-  Result.FPadding := 0;
-  Result.FHasCellPadding := False;
-  Result.FDebug := False;
+  LSelf.FBorderSet := BorderSetPlain;
+  LSelf.FHasSepSet := False;
+  LSelf.FEdges := PanelEdgesAll;
+  LSelf.FBorderStyle := TStyle.Default;
+  LSelf.FVSepStartRow := 0;
+  LSelf.FVSepEndRow := PANEL_MAX_ROWS;
+  LSelf.FHasFocus := False;
+  LSelf.FFocusCol := 0;
+  LSelf.FFocusRow := 0;
+  LSelf.FFocusStyle := TStyle.Default.WithFg(TUI_WHITE).WithModifier([mbBold]);
+  LSelf.FPadding := 0;
+  LSelf.FHasCellPadding := False;
+  LSelf.FDebug := False;
   for I := 0 to PANEL_MAX_HSEP - 1 do
   begin
-    Result.FHSepVisible[I] := True;
-    Result.FHSepTitles[I].HasTitle := False;
-    Result.FHSepStartCol[I] := 0;
+    LSelf.FHSepVisible[I] := True;
+    LSelf.FHSepTitles[I].HasTitle := False;
+    LSelf.FHSepStartCol[I] := 0;
   end;
   for I := 0 to PANEL_MAX_VSEP - 1 do
-    Result.FVSepVisible[I] := True;
+    LSelf.FVSepVisible[I] := True;
   for I := 0 to PANEL_MAX_COLS - 1 do
-    Result.FMinWidths[I] := 0;
+    LSelf.FMinWidths[I] := 0;
   for I := 0 to PANEL_MAX_ROWS - 1 do
-    Result.FMinHeights[I] := 0;
+    LSelf.FMinHeights[I] := 0;
   for I := 0 to PANEL_MAX_CELLS - 1 do
-    Result.FCellPadding[I] := 0;
+    LSelf.FCellPadding[I] := 0;
+  Result := LSelf;
 end;
 
-function TPanel.WithBorderSet(const BS: TBorderSet): TPanel;
-begin Result := Self; Result.FBorderSet := BS; end;
+function TPanel.WithBorderSet(const BS: TBorderSet): IPanel;
+begin FBorderSet := BS; Result := Self; end;
 
-function TPanel.WithSepSet(const BS: TBorderSet): TPanel;
-begin Result := Self; Result.FSepSet := BS; Result.FHasSepSet := True; end;
+function TPanel.WithSepSet(const BS: TBorderSet): IPanel;
+begin FSepSet := BS; FHasSepSet := True; Result := Self; end;
 
-function TPanel.WithEdges(E: TPanelEdges): TPanel;
-begin Result := Self; Result.FEdges := E; end;
+function TPanel.WithEdges(E: TPanelEdges): IPanel;
+begin FEdges := E; Result := Self; end;
 
-function TPanel.WithBorderStyle(const S: TStyle): TPanel;
-begin Result := Self; Result.FBorderStyle := S; end;
+function TPanel.WithBorderStyle(const S: TStyle): IPanel;
+begin FBorderStyle := S; Result := Self; end;
 
-function TPanel.WithHSepStartCol(Col: Integer): TPanel;
+function TPanel.WithHSepStartCol(Col: Integer): IPanel;
 var I: Integer;
 begin
-  Result := Self;
   if Col < 0 then Col := 0;
-  if Col >= Result.FColCount then Col := Result.FColCount - 1;
+  if Col >= FColCount then Col := FColCount - 1;
   for I := 0 to PANEL_MAX_HSEP - 1 do
-    Result.FHSepStartCol[I] := Col;
+    FHSepStartCol[I] := Col;
+  Result := Self;
 end;
 
-function TPanel.WithHSepStartColAt(SepIndex: Integer; Col: Integer): TPanel;
+function TPanel.WithHSepStartColAt(SepIndex: Integer; Col: Integer): IPanel;
 begin
-  Result := Self;
   if (SepIndex >= 0) and (SepIndex < PANEL_MAX_HSEP) then
   begin
     if Col < 0 then Col := 0;
-    if Col >= Result.FColCount then Col := Result.FColCount - 1;
-    Result.FHSepStartCol[SepIndex] := Col;
+    if Col >= FColCount then Col := FColCount - 1;
+    FHSepStartCol[SepIndex] := Col;
   end;
+  Result := Self;
 end;
 
-function TPanel.WithVSepStartRow(Row: Integer): TPanel;
+function TPanel.WithVSepStartRow(Row: Integer): IPanel;
 begin
-  Result := Self;
   if Row < 0 then Row := 0;
-  if Row >= Result.FRowCount then Row := Result.FRowCount - 1;
-  Result.FVSepStartRow := Row;
+  if Row >= FRowCount then Row := FRowCount - 1;
+  FVSepStartRow := Row;
+  Result := Self;
 end;
 
-function TPanel.WithVSepEndRow(Row: Integer): TPanel;
+function TPanel.WithVSepEndRow(Row: Integer): IPanel;
 begin
-  Result := Self;
   if Row < 1 then Row := 1;
-  if Row > Result.FRowCount then Row := Result.FRowCount;
-  Result.FVSepEndRow := Row;
+  if Row > FRowCount then Row := FRowCount;
+  FVSepEndRow := Row;
+  Result := Self;
 end;
 
-function TPanel.WithHSepVisible(SepIndex: Integer; Visible: Boolean): TPanel;
+function TPanel.WithHSepVisible(SepIndex: Integer; Visible: Boolean): IPanel;
 begin
-  Result := Self;
   if (SepIndex >= 0) and (SepIndex < PANEL_MAX_HSEP) then
-    Result.FHSepVisible[SepIndex] := Visible;
+    FHSepVisible[SepIndex] := Visible;
+  Result := Self;
 end;
 
-function TPanel.WithVSepVisible(SepIndex: Integer; Visible: Boolean): TPanel;
+function TPanel.WithVSepVisible(SepIndex: Integer; Visible: Boolean): IPanel;
 begin
-  Result := Self;
   if (SepIndex >= 0) and (SepIndex < PANEL_MAX_VSEP) then
-    Result.FVSepVisible[SepIndex] := Visible;
+    FVSepVisible[SepIndex] := Visible;
+  Result := Self;
 end;
 
-function TPanel.WithHSepTitle(SepIndex: Integer; const ATitle: AnsiString): TPanel;
+function TPanel.WithHSepTitle(SepIndex: Integer; const ATitle: AnsiString): IPanel;
 begin
-  Result := Self;
   if (SepIndex >= 0) and (SepIndex < PANEL_MAX_HSEP) then
   begin
-    Result.FHSepTitles[SepIndex].Text := ATitle;
-    Result.FHSepTitles[SepIndex].HasTitle := True;
-    Result.FHSepTitles[SepIndex].HasStyle := False;
+    FHSepTitles[SepIndex].Text := ATitle;
+    FHSepTitles[SepIndex].HasTitle := True;
+    FHSepTitles[SepIndex].HasStyle := False;
   end;
+  Result := Self;
 end;
 
-function TPanel.WithHSepTitleStyle(SepIndex: Integer; const ATitle: AnsiString; const S: TStyle): TPanel;
+function TPanel.WithHSepTitleStyle(SepIndex: Integer; const ATitle: AnsiString; const S: TStyle): IPanel;
 begin
-  Result := Self;
   if (SepIndex >= 0) and (SepIndex < PANEL_MAX_HSEP) then
   begin
-    Result.FHSepTitles[SepIndex].Text := ATitle;
-    Result.FHSepTitles[SepIndex].Style := S;
-    Result.FHSepTitles[SepIndex].HasTitle := True;
-    Result.FHSepTitles[SepIndex].HasStyle := True;
+    FHSepTitles[SepIndex].Text := ATitle;
+    FHSepTitles[SepIndex].Style := S;
+    FHSepTitles[SepIndex].HasTitle := True;
+    FHSepTitles[SepIndex].HasStyle := True;
   end;
+  Result := Self;
 end;
 
-function TPanel.WithFocus(Col, Row: Integer): TPanel;
+function TPanel.WithFocus(Col, Row: Integer): IPanel;
 begin
+  FHasFocus := True;
+  FFocusCol := Col;
+  FFocusRow := Row;
   Result := Self;
-  Result.FHasFocus := True;
-  Result.FFocusCol := Col;
-  Result.FFocusRow := Row;
 end;
 
-function TPanel.WithFocusStyle(const S: TStyle): TPanel;
-begin Result := Self; Result.FFocusStyle := S; end;
+function TPanel.WithFocusStyle(const S: TStyle): IPanel;
+begin FFocusStyle := S; Result := Self; end;
 
-function TPanel.WithPadding(P: Byte): TPanel;
-begin Result := Self; Result.FPadding := P; end;
+function TPanel.WithPadding(P: Byte): IPanel;
+begin FPadding := P; Result := Self; end;
 
-function TPanel.WithCellPadding(Col, Row: Integer; P: Byte): TPanel;
+function TPanel.WithCellPadding(Col, Row: Integer; P: Byte): IPanel;
 begin
-  Result := Self;
   if (Col >= 0) and (Col < PANEL_MAX_COLS) and (Row >= 0) and (Row < PANEL_MAX_ROWS) then
   begin
-    Result.FCellPadding[Row * PANEL_MAX_COLS + Col] := P;
-    Result.FHasCellPadding := True;
+    FCellPadding[Row * PANEL_MAX_COLS + Col] := P;
+    FHasCellPadding := True;
   end;
+  Result := Self;
 end;
 
-function TPanel.WithMinWidth(Col: Integer; Min: Integer): TPanel;
+function TPanel.WithMinWidth(Col: Integer; Min: Integer): IPanel;
 begin
-  Result := Self;
   if (Col >= 0) and (Col < PANEL_MAX_COLS) then
-    Result.FMinWidths[Col] := Min;
+    FMinWidths[Col] := Min;
+  Result := Self;
 end;
 
-function TPanel.WithMinHeight(Row: Integer; Min: Integer): TPanel;
+function TPanel.WithMinHeight(Row: Integer; Min: Integer): IPanel;
 begin
-  Result := Self;
   if (Row >= 0) and (Row < PANEL_MAX_ROWS) then
-    Result.FMinHeights[Row] := Min;
-end;
-
-function TPanel.WithColWeight(Col: Integer; Weight: Word): TPanel;
-begin
+    FMinHeights[Row] := Min;
   Result := Self;
-  if (Col >= 0) and (Col < Result.FColCount) then
-    Result.FCols[Col] := FillConstraint(Weight);
 end;
 
-function TPanel.WithRowWeight(Row: Integer; Weight: Word): TPanel;
+function TPanel.WithColWeight(Col: Integer; Weight: Word): IPanel;
 begin
+  if (Col >= 0) and (Col < FColCount) then
+    FCols[Col] := FillConstraint(Weight);
   Result := Self;
-  if (Row >= 0) and (Row < Result.FRowCount) then
-    Result.FRows[Row] := FillConstraint(Weight);
 end;
 
-function TPanel.WithDebug(Enable: Boolean): TPanel;
-begin Result := Self; Result.FDebug := Enable; end;
-
-class function TPanel.Sidebar(SidebarWidth: Integer): TPanel;
+function TPanel.WithRowWeight(Row: Integer; Weight: Word): IPanel;
 begin
-  Result := TPanel.Create(
+  if (Row >= 0) and (Row < FRowCount) then
+    FRows[Row] := FillConstraint(Weight);
+  Result := Self;
+end;
+
+function TPanel.WithDebug(Enable: Boolean): IPanel;
+begin FDebug := Enable; Result := Self; end;
+
+class function TPanel.Sidebar(SidebarWidth: Integer): IPanel;
+begin
+  Result := TPanel.New(
     [LengthConstraint(SidebarWidth), MinConstraint(0)],
     [MinConstraint(0)]);
 end;
 
-class function TPanel.HSplit(TopHeight: Integer): TPanel;
+class function TPanel.HSplit(TopHeight: Integer): IPanel;
 begin
-  Result := TPanel.Create(
+  Result := TPanel.New(
     [MinConstraint(0)],
     [LengthConstraint(TopHeight), MinConstraint(0)]);
 end;
 
-class function TPanel.Grid(ACols, ARows: Integer): TPanel;
+class function TPanel.Grid(ACols, ARows: Integer): IPanel;
 var
   Cs: array[0..PANEL_MAX_COLS - 1] of TConstraint;
   Rs: array[0..PANEL_MAX_ROWS - 1] of TConstraint;
@@ -395,10 +430,10 @@ begin
   if ARows > PANEL_MAX_ROWS then ARows := PANEL_MAX_ROWS;
   for I := 0 to ACols - 1 do Cs[I] := MinConstraint(0);
   for I := 0 to ARows - 1 do Rs[I] := MinConstraint(0);
-  Result := TPanel.Create(Slice(Cs, ACols), Slice(Rs, ARows));
+  Result := TPanel.New(Slice(Cs, ACols), Slice(Rs, ARows));
 end;
 
-function TPanel.Layout(const Area: TRect): TPanelGrid;
+function TPanel.Layout(const AArea: TRect): TPanelGrid;
 var
   ColSizes, RowSizes: TIntArray;
   InnerW, InnerH: Integer;
@@ -410,7 +445,7 @@ begin
   Result.ColCount := FColCount;
   Result.RowCount := FRowCount;
 
-  if (FColCount = 0) or (FRowCount = 0) or Area.IsEmpty then Exit;
+  if (FColCount = 0) or (FRowCount = 0) or AArea.IsEmpty then Exit;
 
   BorderL := Ord(peLeft in FEdges);
   BorderR := Ord(peRight in FEdges);
@@ -419,8 +454,8 @@ begin
   if peInnerV in FEdges then InnerVCount := FColCount - 1 else InnerVCount := 0;
   if peInnerH in FEdges then InnerHCount := FRowCount - 1 else InnerHCount := 0;
 
-  InnerW := Integer(Area.Width) - BorderL - BorderR - InnerVCount;
-  InnerH := Integer(Area.Height) - BorderT - BorderB - InnerHCount;
+  InnerW := Integer(AArea.Width) - BorderL - BorderR - InnerVCount;
+  InnerH := Integer(AArea.Height) - BorderT - BorderB - InnerHCount;
   if InnerW < 0 then InnerW := 0;
   if InnerH < 0 then InnerH := 0;
 
@@ -473,7 +508,7 @@ begin
     end;
   end;
 
-  Cursor := Integer(Area.X) + BorderL;
+  Cursor := Integer(AArea.X) + BorderL;
   for I := 0 to FColCount - 1 do
   begin
     Result.ColOffsets[I] := Cursor;
@@ -483,7 +518,7 @@ begin
   end;
   Result.ColOffsets[FColCount] := Cursor;
 
-  Cursor := Integer(Area.Y) + BorderT;
+  Cursor := Integer(AArea.Y) + BorderT;
   for I := 0 to FRowCount - 1 do
   begin
     Result.RowOffsets[I] := Cursor;
@@ -502,7 +537,12 @@ begin
         RowSizes[Row]);
 end;
 
-function TPanel.Render(const Area: TRect; ABuf: TBuffer): TPanelGrid;
+procedure TPanel.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  RenderGrid(AArea, ABuffer);
+end;
+
+function TPanel.RenderGrid(const AArea: TRect; ABuffer: TBuffer): TPanelGrid;
 var
   G: TPanelGrid;
   BS, SS: TBorderSet;
@@ -516,8 +556,8 @@ var
   HSepActive, VSepActive: Boolean;
   TitleLen, TitleX: Integer;
 begin
-  G := Layout(Area);
-  if (G.ColCount = 0) or (G.RowCount = 0) or Area.IsEmpty then
+  G := Layout(AArea);
+  if (G.ColCount = 0) or (G.RowCount = 0) or AArea.IsEmpty then
   begin
     Result := G;
     Exit;
@@ -527,18 +567,18 @@ begin
   if FHasSepSet then SS := FSepSet else SS := BS;
   Edges := FEdges;
   Sty := FBorderStyle;
-  Left_ := Area.X;
-  Top_ := Area.Y;
-  Right_ := Integer(Area.X) + Integer(Area.Width) - 1;
-  Bottom_ := Integer(Area.Y) + Integer(Area.Height) - 1;
+  Left_ := AArea.X;
+  Top_ := AArea.Y;
+  Right_ := Integer(AArea.X) + Integer(AArea.Width) - 1;
+  Bottom_ := Integer(AArea.Y) + Integer(AArea.Height) - 1;
 
   // Draw outer horizontal edges
   if peTop in Edges then
     for X := Left_ + 1 to Right_ - 1 do
-      ABuf.SetStringN(X, Top_, BS.Horizontal, 1, Sty);
+      ABuffer.SetStringN(X, Top_, BS.Horizontal, 1, Sty);
   if peBottom in Edges then
     for X := Left_ + 1 to Right_ - 1 do
-      ABuf.SetStringN(X, Bottom_, BS.Horizontal, 1, Sty);
+      ABuffer.SetStringN(X, Bottom_, BS.Horizontal, 1, Sty);
 
   // Draw inner horizontal separators
   if peInnerH in Edges then
@@ -551,7 +591,7 @@ begin
       else
         HStart := Left_ + Ord(peLeft in Edges);
       for X := HStart to Right_ - Ord(peRight in Edges) do
-        ABuf.SetStringN(X, SepY, SS.Horizontal, 1, Sty);
+        ABuffer.SetStringN(X, SepY, SS.Horizontal, 1, Sty);
       // Draw title on separator
       if FHSepTitles[J - 1].HasTitle then
       begin
@@ -560,9 +600,9 @@ begin
         if TitleX + TitleLen < Right_ then
         begin
           if FHSepTitles[J - 1].HasStyle then
-            ABuf.SetStringN(TitleX, SepY, FHSepTitles[J - 1].Text, TitleLen, FHSepTitles[J - 1].Style)
+            ABuffer.SetStringN(TitleX, SepY, FHSepTitles[J - 1].Text, TitleLen, FHSepTitles[J - 1].Style)
           else
-            ABuf.SetStringN(TitleX, SepY, FHSepTitles[J - 1].Text, TitleLen, Sty);
+            ABuffer.SetStringN(TitleX, SepY, FHSepTitles[J - 1].Text, TitleLen, Sty);
         end;
       end;
     end;
@@ -570,10 +610,10 @@ begin
   // Draw outer vertical edges
   if peLeft in Edges then
     for Y := Top_ + 1 to Bottom_ - 1 do
-      ABuf.SetStringN(Left_, Y, BS.Vertical, 1, Sty);
+      ABuffer.SetStringN(Left_, Y, BS.Vertical, 1, Sty);
   if peRight in Edges then
     for Y := Top_ + 1 to Bottom_ - 1 do
-      ABuf.SetStringN(Right_, Y, BS.Vertical, 1, Sty);
+      ABuffer.SetStringN(Right_, Y, BS.Vertical, 1, Sty);
 
   // Draw inner vertical separators
   if peInnerV in Edges then
@@ -590,7 +630,7 @@ begin
       else
         SepY := Bottom_ - Ord(peBottom in Edges);
       for Y := VStart to SepY do
-        ABuf.SetStringN(SepX, Y, SS.Vertical, 1, Sty);
+        ABuffer.SetStringN(SepX, Y, SS.Vertical, 1, Sty);
     end;
 
   // Draw junctions
@@ -688,7 +728,7 @@ begin
           $D, $E: if (J = 0) or (J = G.RowCount) then Glyph := BS.LeftT;
         end;
 
-      ABuf.SetStringN(X, Y, Glyph, 1, Sty);
+      ABuffer.SetStringN(X, Y, Glyph, 1, Sty);
     end;
 
   // Focus highlight: re-draw borders around focused cell with focus style
@@ -701,38 +741,38 @@ begin
     SepY := Y + PanelCell(G, FFocusCol, FFocusRow).Height - 1;
     // Top edge of focused cell
     if (FFocusRow = 0) and (peTop in Edges) then
-      for I := X to SepX do ABuf.SetStringN(I, Top_, BS.Horizontal, 1, FFocusStyle)
+      for I := X to SepX do ABuffer.SetStringN(I, Top_, BS.Horizontal, 1, FFocusStyle)
     else if (FFocusRow > 0) and (peInnerH in Edges) and FHSepVisible[FFocusRow - 1] then
-      for I := X to SepX do ABuf.SetStringN(I, Y - 1, SS.Horizontal, 1, FFocusStyle);
+      for I := X to SepX do ABuffer.SetStringN(I, Y - 1, SS.Horizontal, 1, FFocusStyle);
     // Bottom edge of focused cell
     if (FFocusRow = G.RowCount - 1) and (peBottom in Edges) then
-      for I := X to SepX do ABuf.SetStringN(I, Bottom_, BS.Horizontal, 1, FFocusStyle)
+      for I := X to SepX do ABuffer.SetStringN(I, Bottom_, BS.Horizontal, 1, FFocusStyle)
     else if (FFocusRow < G.RowCount - 1) and (peInnerH in Edges) and FHSepVisible[FFocusRow] then
-      for I := X to SepX do ABuf.SetStringN(I, SepY + 1, SS.Horizontal, 1, FFocusStyle);
+      for I := X to SepX do ABuffer.SetStringN(I, SepY + 1, SS.Horizontal, 1, FFocusStyle);
     // Left edge of focused cell
     if (FFocusCol = 0) and (peLeft in Edges) then
-      for J := Y to SepY do ABuf.SetStringN(Left_, J, BS.Vertical, 1, FFocusStyle)
+      for J := Y to SepY do ABuffer.SetStringN(Left_, J, BS.Vertical, 1, FFocusStyle)
     else if (FFocusCol > 0) and (peInnerV in Edges) and FVSepVisible[FFocusCol - 1] then
-      for J := Y to SepY do ABuf.SetStringN(X - 1, J, SS.Vertical, 1, FFocusStyle);
+      for J := Y to SepY do ABuffer.SetStringN(X - 1, J, SS.Vertical, 1, FFocusStyle);
     // Right edge of focused cell
     if (FFocusCol = G.ColCount - 1) and (peRight in Edges) then
-      for J := Y to SepY do ABuf.SetStringN(Right_, J, BS.Vertical, 1, FFocusStyle)
+      for J := Y to SepY do ABuffer.SetStringN(Right_, J, BS.Vertical, 1, FFocusStyle)
     else if (FFocusCol < G.ColCount - 1) and (peInnerV in Edges) and FVSepVisible[FFocusCol] then
-      for J := Y to SepY do ABuf.SetStringN(SepX + 1, J, SS.Vertical, 1, FFocusStyle);
+      for J := Y to SepY do ABuffer.SetStringN(SepX + 1, J, SS.Vertical, 1, FFocusStyle);
     // Re-color the 4 corner junctions of the focused cell
     if (FFocusRow = 0) and (peTop in Edges) then
     begin
       if (FFocusCol = 0) and (peLeft in Edges) then
-        ABuf.SetStringN(Left_, Top_, BS.TopLeft, 1, FFocusStyle);
+        ABuffer.SetStringN(Left_, Top_, BS.TopLeft, 1, FFocusStyle);
       if (FFocusCol = G.ColCount - 1) and (peRight in Edges) then
-        ABuf.SetStringN(Right_, Top_, BS.TopRight, 1, FFocusStyle);
+        ABuffer.SetStringN(Right_, Top_, BS.TopRight, 1, FFocusStyle);
     end;
     if (FFocusRow = G.RowCount - 1) and (peBottom in Edges) then
     begin
       if (FFocusCol = 0) and (peLeft in Edges) then
-        ABuf.SetStringN(Left_, Bottom_, BS.BottomLeft, 1, FFocusStyle);
+        ABuffer.SetStringN(Left_, Bottom_, BS.BottomLeft, 1, FFocusStyle);
       if (FFocusCol = G.ColCount - 1) and (peRight in Edges) then
-        ABuf.SetStringN(Right_, Bottom_, BS.BottomRight, 1, FFocusStyle);
+        ABuffer.SetStringN(Right_, Bottom_, BS.BottomRight, 1, FFocusStyle);
     end;
   end;
 
@@ -746,7 +786,7 @@ begin
         Glyph[1] := AnsiChar(Ord('0') + I);
         Glyph[2] := ',';
         Glyph[3] := AnsiChar(Ord('0') + J);
-        ABuf.SetStringN(
+        ABuffer.SetStringN(
           G.Cells[J * G.ColCount + I].X,
           G.Cells[J * G.ColCount + I].Y,
           Glyph, Length(Glyph), TStyle.Default.WithFg(TUI_YELLOW));
