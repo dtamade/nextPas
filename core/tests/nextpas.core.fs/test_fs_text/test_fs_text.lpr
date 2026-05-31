@@ -133,6 +133,54 @@ begin
   DeleteFile(LPath);
 end;
 
+procedure TestAppendFileLine;
+var
+  LPath: string;
+  LLines: TStringArray;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFileText(LPath, '');
+  AppendFileLine(LPath, 'first');
+  AppendFileLine(LPath, 'second');
+  AppendFileLine(LPath, 'third');
+  LLines := ReadFileLines(LPath);
+  Check(Length(LLines) >= 3, 'append 3 lines');
+  Check(LLines[0] = 'first', 'line 1');
+  Check(LLines[2] = 'third', 'line 3');
+  DeleteFile(LPath);
+end;
+
+procedure TestScanFileLines;
+var
+  LPath: string;
+  LScanner: IScanner;
+  LCount: Int32;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFileLines(LPath, TStringArray.Create('alpha', 'beta', 'gamma'));
+  LScanner := ScanFileLines(LPath);
+  LCount := 0;
+  while LScanner.Scan do Inc(LCount);
+  CheckEqual(Int64(3), Int64(LCount), 'scan 3 lines');
+  DeleteFile(LPath);
+end;
+
+procedure TestMapFileLines;
+var
+  LPath: string;
+  LMap: IMappedLines;
+begin
+  LPath := TmpPath + '.txt';
+  WriteFileText(LPath, 'one' + #10 + 'two' + #10 + 'three');
+  LMap := MapFileLines(LPath);
+  CheckEqual(Int64(3), Int64(LMap.Count), 'map 3 lines');
+  Check(LMap.Line(0).ToString = 'one', 'map line 0');
+  Check(LMap.Line(2).ToString = 'three', 'map line 2');
+  Check(LMap.Contains('two'), 'map contains');
+  LMap := nil;
+  DeleteFile(LPath);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.fs.text');
   T.Run('WriteFileText', @TestWriteFileText);
@@ -144,5 +192,8 @@ begin
   T.Run('Append non-existent', @TestAppendToNonExistent);
   T.Run('Large text 100KB', @TestWriteReadLargeText);
   T.Run('Unicode lines', @TestWriteFileLinesUnicode);
+  T.Run('AppendFileLine', @TestAppendFileLine);
+  T.Run('ScanFileLines', @TestScanFileLines);
+  T.Run('MapFileLines', @TestMapFileLines);
   T.Summary;
 end.

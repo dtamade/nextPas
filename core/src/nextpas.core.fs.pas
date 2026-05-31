@@ -13,7 +13,9 @@ uses
   nextpas.core.fs.stream,
   nextpas.core.fs.dir,
   nextpas.core.fs.path,
-  nextpas.core.fs.util;
+  nextpas.core.fs.util,
+  nextpas.core.io.scanner,
+  nextpas.core.io.mapped;
 
 type
   TFileMode = nextpas.core.fs.base.TFileMode;
@@ -23,6 +25,8 @@ type
   TDirEntry = nextpas.core.fs.base.TDirEntry;
   TDirEntryArray = nextpas.core.fs.base.TDirEntryArray;
   IFile = nextpas.core.fs.intf.IFile;
+  IScanner = nextpas.core.io.scanner.IScanner;
+  IMappedLines = nextpas.core.io.mapped.IMappedLines;
   IDirIterator = nextpas.core.fs.intf.IDirIterator;
   TWalkFunc = nextpas.core.fs.dir.TWalkFunc;
 
@@ -43,6 +47,9 @@ procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission = PermDefault);
 procedure AppendFile(const APath: string; const AData: TBytes);
 procedure AppendFileText(const APath: string; const AText: string);
+procedure AppendFileLine(const APath: string; const ALine: string);
+function ScanFileLines(const APath: string): IScanner;
+function MapFileLines(const APath: string): IMappedLines;
 procedure WriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
 function CopyFile(const ASrc, ADst: string): Int64; inline;
@@ -170,6 +177,24 @@ begin
       LData[LI] := Byte(AText[LI + 1]);
     AppendFile(APath, LData);
   end;
+end;
+
+procedure AppendFileLine(const APath: string; const ALine: string);
+begin
+  AppendFileText(APath, ALine + #10);
+end;
+
+function ScanFileLines(const APath: string): IScanner;
+var
+  LFile: IFile;
+begin
+  LFile := FsOpen(APath, [fmRead]);
+  Result := CreateScanner(LFile as IReader);
+end;
+
+function MapFileLines(const APath: string): IMappedLines;
+begin
+  Result := MmapLines(APath);
 end;
 
 procedure WriteAtomic(const APath: string; const AData: TBytes;
