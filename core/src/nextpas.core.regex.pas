@@ -161,25 +161,28 @@ begin
     LPos := 0;
     while LPos + LNeedleLen <= LInputLen do
     begin
-      LCh := Byte(LData[LPos]);
-      if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then
-        LCh := LCh + 32;
-      if LCh = Byte(LNeedle[0]) then
+      if (Byte(LNeedle[0]) >= Ord('a')) and (Byte(LNeedle[0]) <= Ord('z')) then
+        i := ScanFindByte2(LData + LPos, LInputLen - LPos - LNeedleLen + 1,
+               Byte(LNeedle[0]), Byte(LNeedle[0]) - 32)
+      else
+        i := ScanFindByte(LData + LPos, LInputLen - LPos - LNeedleLen + 1,
+               Byte(LNeedle[0]));
+      if i < 0 then Exit(False);
+      LPos := LPos + SizeUInt(i);
+      if LPos + LNeedleLen > LInputLen then Exit(False);
+      LMatch := True;
+      for k := 1 to LNeedleLen - 1 do
       begin
-        LMatch := True;
-        for k := 1 to LNeedleLen - 1 do
+        LCh := Byte(LData[LPos + k]);
+        if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then
+          LCh := LCh + 32;
+        if LCh <> Byte(LNeedle[k]) then
         begin
-          LCh := Byte(LData[LPos + k]);
-          if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then
-            LCh := LCh + 32;
-          if LCh <> Byte(LNeedle[k]) then
-          begin
-            LMatch := False;
-            Break;
-          end;
+          LMatch := False;
+          Break;
         end;
-        if LMatch then Exit(True);
       end;
+      if LMatch then Exit(True);
       Inc(LPos);
     end;
     Exit(False);
