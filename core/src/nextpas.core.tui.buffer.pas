@@ -110,6 +110,7 @@ type
 
     { 终端检测到的本帧图像协议（由 TTerminal 设置）。 }
     property ImageProtocol: TImageProtocol read FImageProtocol write FImageProtocol;
+    property DirtyRows: QWord read FDirtyRows write FDirtyRows;
 
     { 图像协议支持的占位声明。DataPtr 须保持有效直到 EndFrame 完成
       （调用方拥有数据）。 }

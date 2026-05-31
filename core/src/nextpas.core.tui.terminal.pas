@@ -405,7 +405,10 @@ begin
   EnsureEndFrameAllowed(AFrame);
 
   if (FCurr.Length_ > 0) and (FMerged.Length_ > 0) then
-    Move(FCurr.ContentPtr^, FMerged.ContentPtr^, FCurr.Length_ * SizeOf(TCell))
+  begin
+    Move(FCurr.ContentPtr^, FMerged.ContentPtr^, FCurr.Length_ * SizeOf(TCell));
+    FMerged.DirtyRows := FCurr.DirtyRows;
+  end
   else
     FMerged.Reset;
   FOverlay.MergeInto(FCurr, FMerged);
