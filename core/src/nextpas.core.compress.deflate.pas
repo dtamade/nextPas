@@ -231,14 +231,21 @@ var
 begin
   if Length(AData) = 0 then
     Exit(nil);
-  LDstLen := Length(AData) * 4;
+  LDstLen := SizeUInt(Length(AData)) * 4;
+  if LDstLen < SizeUInt(Length(AData)) then
+    LDstLen := MAX_DECOMPRESS_SIZE;
   repeat
     if LDstLen > MAX_DECOMPRESS_SIZE then
       raise EIOError.Create('deflate: decompressed size exceeds limit');
     SetLength(Result, LDstLen);
     LRet := uncompress(@Result[0], @LDstLen, @AData[0], Length(AData));
     if LRet = Z_BUF_ERROR then
-      LDstLen := LDstLen * 2
+    begin
+      if LDstLen > MAX_DECOMPRESS_SIZE div 2 then
+        LDstLen := MAX_DECOMPRESS_SIZE
+      else
+        LDstLen := LDstLen * 2;
+    end
     else if LRet <> Z_OK then
       raise EIOError.Create('deflate decompress failed (' + IntToStr(LRet) + ')');
   until LRet = Z_OK;
