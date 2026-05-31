@@ -6247,7 +6247,7 @@ begin
       begin
         FuncName := Copy(ArgName, 1, DotPos - 1);
         Operand := Copy(ArgName, DotPos + 1, Pos('>', ArgName) - DotPos - 1);
-        ArgName := FuncName + '$' + Operand;
+        ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
         if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
         begin
           for K := 0 to Length(FProcedureBodies) - 1 do
@@ -7821,7 +7821,7 @@ begin
         begin
           FuncName := Copy(ArgName, 1, DotPos - 1);
           Operand := Copy(ArgName, DotPos + 1, Pos('>', ArgName) - DotPos - 1);
-          ArgName := FuncName + '$' + Operand;
+          ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
             for K := 0 to Length(FProcedureBodies) - 1 do
