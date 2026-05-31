@@ -868,6 +868,65 @@ begin
   AError := 'Unsupported DER private key format (expected RSA PKCS#8 or PKCS#1)';
 end;
 
+function TryExtractRSAPublicExponent(
+  const APrivateKeyBlob: TBytes;
+  out APublicExponent: TBytes;
+  out AError: string
+): Boolean;
+var
+  LReader: TASN1Reader;
+  LRoot: TASN1Node;
+  LKeyDER: TBytes;
+  LPEMReader: TPEMReader;
+  LBlocks: TPEMBlockArray;
+  LText: AnsiString;
+  I: Integer;
+begin
+  SetLength(APublicExponent, 0);
+  AError := '';
+  Result := False;
+
+  if Length(APrivateKeyBlob) = 0 then Exit;
+
+  LKeyDER := nil;
+  if BlobLooksLikePEM(APrivateKeyBlob) then
+  begin
+    LPEMReader := TPEMReader.Create;
+    try
+      LText := BytesToAnsiString(APrivateKeyBlob);
+      try LPEMReader.LoadFromString(string(LText)); except Exit; end;
+      LBlocks := LPEMReader.GetPrivateKeys;
+      for I := 0 to High(LBlocks) do
+        if (not LBlocks[I].IsEncrypted) and (LBlocks[I].BlockType = pemRSAPrivateKey) then
+        begin
+          LKeyDER := LBlocks[I].Data;
+          Break;
+        end;
+    finally
+      LPEMReader.Free;
+    end;
+  end
+  else
+    LKeyDER := APrivateKeyBlob;
+
+  if Length(LKeyDER) = 0 then Exit;
+
+  LReader := TASN1Reader.Create(LKeyDER);
+  try
+    try LRoot := LReader.Parse; except Exit; end;
+    try
+      if (LRoot = nil) or (not LRoot.IsSequence) or (LRoot.ChildCount < 4) then Exit;
+      if not LRoot.GetChild(2).IsInteger then Exit;
+      APublicExponent := StripLeadingZeroBytes(LRoot.GetChild(2).AsBigInteger);
+      Result := Length(APublicExponent) > 0;
+    finally
+      LRoot.Free;
+    end;
+  finally
+    LReader.Free;
+  end;
+end;
+
 function TryExtractRSAPrivateKeyCRTComponents(
   const APrivateKeyBlob: TBytes;
   out AP, AQ, ADP, ADQ, AQInv: TBytes;
@@ -2222,14 +2281,14 @@ end;
 function TryRSASignWithCRT(
   const AEncodedMessage: TBytes;
   const AModulus: TBytes;
+  const APublicExponent: TBytes;
   const AP, AQ, ADP, ADQ, AQInv: TBytes;
   out ASignature: TBytes;
   out AError: string
 ): Boolean;
 begin
   Result := TryRSACTSignWithCRT(
-    AEncodedMessage, AModulus,
-    TBytes.Create($00, $01, $00, $01), // e=65537 for verify-after-sign
+    AEncodedMessage, AModulus, APublicExponent,
     AP, AQ, ADP, ADQ, AQInv,
     ASignature, AError
   );
@@ -2665,6 +2724,7 @@ function TryBuildTLS13CertificateVerifySignature(
 var
   LModulus: TBytes;
   LPrivateExponent: TBytes;
+  LPublicExponent: TBytes;
   LP, LQ, LDP, LDQ, LQInv: TBytes;
   LEM: TBytes;
   LModBits: Integer;
@@ -2713,6 +2773,13 @@ begin
   if not TryExtractRSAPrivateKeyComponents(APrivateKeyBlob, LModulus, LPrivateExponent, AError) then
     Exit;
 
+  // Extract public exponent from PKCS#1 key (child[2] in ASN.1 SEQUENCE)
+  LPublicExponent := nil;
+  TryExtractRSAPublicExponent(APrivateKeyBlob, LPublicExponent, AError);
+  if Length(LPublicExponent) = 0 then
+    LPublicExponent := TBytes.Create($01, $00, $01); // fallback to e=65537
+  AError := '';
+
   if not TryExtractRSAPrivateKeyCRTComponents(APrivateKeyBlob, LP, LQ, LDP, LDQ, LQInv, AError) then
   begin
     SetLength(LP, 0);
@@ -2759,7 +2826,7 @@ begin
     LCRTErr := '';
     if TryValidateRSACRTComponents(LModulus, LPrivateExponent, LP, LQ, LDP, LDQ, LQInv, LCRTErr) then
     begin
-      if TryRSASignWithCRT(LEM, LModulus, LP, LQ, LDP, LDQ, LQInv, ASignature, AError) then
+      if TryRSASignWithCRT(LEM, LModulus, LPublicExponent, LP, LQ, LDP, LDQ, LQInv, ASignature, AError) then
         Exit(True);
       LCRTErr := AError;
     end;
