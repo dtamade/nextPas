@@ -78,6 +78,8 @@ function PathChangeExt(const APath, ANewExt: string): string; inline;
 function PathWithoutExt(const APath: string): string; inline;
 function GetCwd: string; inline;
 procedure SetCwd(const APath: string); inline;
+function GetEnv(const AName: string): string; inline;
+function GetTempDir: string;
 
 implementation
 
@@ -281,6 +283,24 @@ end;
 procedure SetCwd(const APath: string);
 begin
   nextpas.core.fs.util.FsSetCwd(APath);
+end;
+
+function GetEnv(const AName: string): string;
+begin
+  Result := nextpas.core.fs.util.FsGetEnv(AName);
+end;
+
+function GetTempDir: string;
+begin
+  {$IFDEF NEXTPAS_WINDOWS}
+  Result := GetEnv('TEMP');
+  if Result = '' then Result := GetEnv('TMP');
+  if Result = '' then Result := 'C:\Temp';
+  {$ELSE}
+  Result := GetEnv('TMPDIR');
+  if Result = '' then Result := '/tmp';
+  {$ENDIF}
+  Result := PathEnsureSep(Result);
 end;
 
 end.
