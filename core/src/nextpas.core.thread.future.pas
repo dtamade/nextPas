@@ -5,6 +5,7 @@ unit nextpas.core.thread.future;
 interface
 
 uses
+  SysUtils,
   nextpas.core.thread.base,
   nextpas.core.thread.intf;
 
