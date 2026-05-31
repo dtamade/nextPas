@@ -554,6 +554,18 @@ begin
         if (Length(AInstr.Operands) >= 1) and (AInstr.CallTarget <> '') then
           Emit('  store ptr @' + AInstr.CallTarget + ', ptr ' + ValueRef(AInstr.Operands[0].ValueId));
       end
+      else if AInstr.IntrinsicName = 'intf_addref' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @np_intf_addref(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'intf_release' then
+      begin
+        if Length(AInstr.Operands) >= 1 then
+          Emit('  call void @np_intf_release(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ')');
+      end
       else if AInstr.IntrinsicName = 'vcall' then
       begin
         if Length(AInstr.Operands) >= 2 then

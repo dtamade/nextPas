@@ -119,6 +119,8 @@ type
     procedure BlobVcall(var S: TExprStack; AArg: string);
     procedure BlobIvcall(var S: TExprStack; AArg: string);
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
+    procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
+    procedure ProcessIntfRelease(const ANode: TTypedHirNode);
     procedure ProcessNode(const ANode: TTypedHirNode);
     procedure ProcessVarDecl(const ANode: TTypedHirNode);
     procedure ProcessAssign(const ANode: TTypedHirNode);
@@ -1136,6 +1138,46 @@ begin
   SlotPtr := Instr.ResultId;
 
   EmitStore(GetPtrType, SlotPtr, FindAlloca(VarName));
+end;
+
+procedure THIRBuilder.ProcessIntfAddRef(const ANode: TTypedHirNode);
+var
+  VarName: string;
+  ObjPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  VarName := ANode.Operand;
+  ObjPtr := FindAlloca(VarName);
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := 0;
+  Instr.IntrinsicName := 'intf_addref';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
+  EmitInstr(Instr);
+end;
+
+procedure THIRBuilder.ProcessIntfRelease(const ANode: TTypedHirNode);
+var
+  VarName: string;
+  ObjPtr: THIRValueId;
+  Instr: THIRInstr;
+begin
+  VarName := ANode.Operand;
+  ObjPtr := FindAlloca(VarName);
+  if ObjPtr = 0 then Exit;
+  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := 0;
+  Instr.IntrinsicName := 'intf_release';
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(ObjPtr, GetPtrType);
+  EmitInstr(Instr);
 end;
 
 procedure THIRBuilder.BlobIvcall(var S: TExprStack; AArg: string);
@@ -3814,6 +3856,10 @@ begin
       ProcessVmtStore(ANode);
     hnkIntfAdjustRuntime:
       ProcessIntfAdjust(ANode);
+    hnkIntfAddRefRuntime:
+      ProcessIntfAddRef(ANode);
+    hnkIntfReleaseRuntime:
+      ProcessIntfRelease(ANode);
     hnkTryBeginRuntime, hnkTryEndRuntime,
     hnkFinallyBeginRuntime, hnkFinallyEndRuntime,
     hnkExceptBeginRuntime, hnkExceptEndRuntime,

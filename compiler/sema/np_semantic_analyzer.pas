@@ -7378,8 +7378,11 @@ begin
               FModel.LookupConstValue(
                 Arg.ChildAt(0).ChildAt(0).Text + '$intf_offset_' + LookupClassVar(Decoded),
                 Value) then
+            begin
+              FModel.AddTypedHirNode('intf-addref-runtime', Decoded, 0, 0, Decoded);
               FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
                 Decoded + #9 + IntToStr(Value div 8));
+            end;
           end;
           Continue;
         end;
@@ -7427,8 +7430,11 @@ begin
             FModel.LookupConstValue(
               Arg.ChildAt(0).Text + '$intf_offset_' + LookupClassVar(Decoded),
               Value) then
+          begin
+            FModel.AddTypedHirNode('intf-addref-runtime', Decoded, 0, 0, Decoded);
             FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
               Decoded + #9 + IntToStr(Value div 8));
+          end;
           Continue;
         end;
       end;
@@ -7725,8 +7731,11 @@ begin
                 FModel.LookupConstValue(
                   LookupClassVar(Arg.Text) + '$intf_offset_' + LookupClassVar(Decoded),
                   Value) then
+              begin
+                FModel.AddTypedHirNode('intf-addref-runtime', Decoded, 0, 0, Decoded);
                 FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
                   Decoded + #9 + IntToStr(Value div 8));
+              end;
             end;
           end;
         end
