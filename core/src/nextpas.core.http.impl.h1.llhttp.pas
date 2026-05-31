@@ -1146,89 +1146,89 @@ begin
   Result := res;
 end;
 
-function llhttp__internal__c_load_initial_message_completed(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_load_initial_message_completed(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := state^.initial_message_completed;
 end;
 
-function llhttp__internal__c_update_finish(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_finish(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.finish := 2;
   Result := 0;
 end;
 
-function llhttp__internal__c_load_type(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_load_type(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := state^.&type;
 end;
 
-function llhttp__internal__c_store_method(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl;
+function llhttp__internal__c_store_method(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl; inline;
 begin
   state^.method := match;
   Result := 0;
 end;
 
-function llhttp__internal__c_is_equal_method(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_is_equal_method(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt((state^.method = 5));
 end;
 
-function llhttp__internal__c_update_http_major(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_http_major(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.http_major := 0;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_http_minor(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_http_minor(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.http_minor := LLHTTP_VERSION_MAJOR;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_lenient_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 1) = 1));
 end;
 
-function llhttp__internal__c_test_lenient_flags_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 256) = 256));
 end;
 
-function llhttp__internal__c_test_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.flags and 128) = 128));
 end;
 
-function llhttp__internal__c_is_equal_upgrade(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_is_equal_upgrade(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt((state^.upgrade = 1));
 end;
 
-function llhttp__internal__c_update_content_length(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_content_length(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.content_length := 0;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_initial_message_completed(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_initial_message_completed(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.initial_message_completed := 1;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_finish_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_finish_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.finish := 0;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_lenient_flags_2(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_2(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and LLHTTP_VERSION_MINOR) = LLHTTP_VERSION_MINOR));
 end;
 
-function llhttp__internal__c_test_lenient_flags_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 32) = 32));
 end;
@@ -1261,131 +1261,131 @@ begin
   Result := 0;
 end;
 
-function llhttp__internal__c_test_lenient_flags_4(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_4(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 512) = 512));
 end;
 
-function llhttp__internal__c_is_equal_content_length(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_is_equal_content_length(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt((state^.content_length = 0));
 end;
 
-function llhttp__internal__c_test_lenient_flags_7(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_7(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 128) = 128));
 end;
 
-function llhttp__internal__c_or_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 128;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_lenient_flags_8(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_8(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 64) = 64));
 end;
 
-function llhttp__internal__c_update_finish_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_finish_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.finish := 1;
   Result := 0;
 end;
 
-function llhttp__internal__c_or_flags_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 64;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_upgrade(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_upgrade(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.upgrade := 1;
   Result := 0;
 end;
 
-function llhttp__internal__c_store_header_state(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl;
+function llhttp__internal__c_store_header_state(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl; inline;
 begin
   state^.header_state := match;
   Result := 0;
 end;
 
-function llhttp__internal__c_load_header_state(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_load_header_state(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := state^.header_state;
 end;
 
-function llhttp__internal__c_test_flags_4(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_flags_4(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.flags and 512) = 512));
 end;
 
-function llhttp__internal__c_test_lenient_flags_23(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_23(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 2) = 2));
 end;
 
-function llhttp__internal__c_or_flags_5(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_5(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 1;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_header_state(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_header_state(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.header_state := 1;
   Result := 0;
 end;
 
-function llhttp__internal__c_or_flags_6(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_6(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 2;
   Result := 0;
 end;
 
-function llhttp__internal__c_or_flags_7(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_7(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or LLHTTP_VERSION_MINOR;
   Result := 0;
 end;
 
-function llhttp__internal__c_or_flags_8(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_8(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 8;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_header_state_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_header_state_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.header_state := 6;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_header_state_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_header_state_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.header_state := 0;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_lenient_flags_20(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_20(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 1024) = 1024));
 end;
 
-function llhttp__internal__c_update_header_state_6(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_header_state_6(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.header_state := 5;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_header_state_7(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_header_state_7(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.header_state := 7;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_flags_2(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_flags_2(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.flags and 32) = 32));
 end;
@@ -1418,79 +1418,79 @@ begin
   Result := 0;
 end;
 
-function llhttp__internal__c_or_flags_17(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_17(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 32;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_flags_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_flags_3(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.flags and 8) = 8));
 end;
 
-function llhttp__internal__c_test_lenient_flags_21(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_21(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 8) = 8));
 end;
 
-function llhttp__internal__c_or_flags_18(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_18(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 512;
   Result := 0;
 end;
 
-function llhttp__internal__c_and_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_and_flags(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags and (-LLHTTP_VERSION_MAJOR);
   Result := 0;
 end;
 
-function llhttp__internal__c_update_header_state_8(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_header_state_8(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.header_state := 8;
   Result := 0;
 end;
 
-function llhttp__internal__c_or_flags_20(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_or_flags_20(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.flags := state^.flags or 16;
   Result := 0;
 end;
 
-function llhttp__internal__c_load_method(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_load_method(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := state^.method;
 end;
 
-function llhttp__internal__c_store_http_major(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl;
+function llhttp__internal__c_store_http_major(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl; inline;
 begin
   state^.http_major := match;
   Result := 0;
 end;
 
-function llhttp__internal__c_store_http_minor(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl;
+function llhttp__internal__c_store_http_minor(State: PTLlhttpInternalT; P: PByte; Endp: PByte; Match: LongInt): LongInt; cdecl; inline;
 begin
   state^.http_minor := match;
   Result := 0;
 end;
 
-function llhttp__internal__c_test_lenient_flags_25(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_test_lenient_flags_25(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := LongInt(((state^.lenient_flags and 16) = 16));
 end;
 
-function llhttp__internal__c_load_http_major(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_load_http_major(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := state^.http_major;
 end;
 
-function llhttp__internal__c_load_http_minor(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_load_http_minor(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   Result := state^.http_minor;
 end;
 
-function llhttp__internal__c_update_status_code(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_status_code(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.status_code := 0;
   Result := 0;
@@ -1524,13 +1524,13 @@ begin
   Result := 0;
 end;
 
-function llhttp__internal__c_update_type(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_type(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.&type := 1;
   Result := 0;
 end;
 
-function llhttp__internal__c_update_type_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl;
+function llhttp__internal__c_update_type_1(State: PTLlhttpInternalT; P: PByte; Endp: PByte): LongInt; cdecl; inline;
 begin
   state^.&type := 2;
   Result := 0;
@@ -1544,7 +1544,7 @@ begin
 end;
 
 function llhttp__internal__run(State: PTLlhttpInternalT; P: PByte; Endp: PByte): TLlparseStateT; cdecl;
-label _L__sw0_def, _L__sw0_end, _L__sw0_c1, _L_s_n_llhttp__internal__n_closed, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_3, _L__sw0_c2, _L_s_n_llhttp__internal__n_invoke_llhttp__after_message_complete, _L_s_n_llhttp__internal__n_invoke_update_content_length, _L_s_n_llhttp__internal__n_invoke_update_finish_1, _L__sw0_c3, _L_s_n_llhttp__internal__n_pause_1, _L__sw0_c4, _L_s_n_llhttp__internal__n_invoke_is_equal_upgrade, _L__sw0_c5, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_2, _L_s_n_llhttp__internal__n_pause_13, _L_s_n_llhttp__internal__n_error_38, _L__sw0_c6, _L_s_n_llhttp__internal__n_chunk_data_almost_done_1, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_7, _L__sw0_c7, _L_s_n_llhttp__internal__n_chunk_data_almost_done, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_6, _L__sw0_c8, _L_s_n_llhttp__internal__n_consume_content_length, _L_s_n_llhttp__internal__n_span_end_llhttp__on_body, _L__sw0_c9, _L_s_n_llhttp__internal__n_span_start_llhttp__on_body, _L__sw0_c10, _L_s_n_llhttp__internal__n_invoke_is_equal_content_length, _L_s_n_llhttp__internal__n_invoke_or_flags, _L__sw0_c11, _L_s_n_llhttp__internal__n_chunk_size_almost_done, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_header, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_8, _L__sw0_c12, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_9, _L_s_n_llhttp__internal__n_error_20, _L__sw0_c13, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete, _L_s_n_llhttp__internal__n_pause_5, _L_s_n_llhttp__internal__n_error_19, _L__sw0_c14, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_1, _L_s_n_llhttp__internal__n_pause_6, _L_s_n_llhttp__internal__n_error_21, _L__sw0_c15, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_2, _L_s_n_llhttp__internal__n_chunk_extensions, _L_s_n_llhttp__internal__n_pause_7, _L_s_n_llhttp__internal__n_error_22, _L__sw0_c16, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_10, _L_s_n_llhttp__internal__n_error_25, _L__sw0_c17, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete, _L_s_n_llhttp__internal__n_pause_8, _L_s_n_llhttp__internal__n_error_24, _L__sw0_c18, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_1, _L_s_n_llhttp__internal__n_pause_9, _L_s_n_llhttp__internal__n_error_26, _L__sw0_c19, _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_done, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_11, _L_s_n_llhttp__internal__n_error_29, _L__sw0_c20, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_2, _L_s_n_llhttp__internal__n_pause_10, _L_s_n_llhttp__internal__n_error_27, _L__sw0_c21, _L_s_n_llhttp__internal__n_error_30, _L__sw0_c22, _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair, _L_s_n_llhttp__internal__n_chunk_extension_quoted_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_3, _L__sw0_c23, _L_s_n_llhttp__internal__n_error_31, _L__sw0_c24, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_4, _L__sw0_c25, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_3, _L_s_n_llhttp__internal__n_pause_11, _L_s_n_llhttp__internal__n_error_32, _L__sw0_c26, _L_s_n_llhttp__internal__n_error_33, _L__sw0_c27, _L_s_n_llhttp__internal__n_chunk_extension_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_5, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_6, _L__sw0_c28, _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_3, _L__sw0_c29, _L_s_n_llhttp__internal__n_error_34, _L__sw0_c30, _L_s_n_llhttp__internal__n_chunk_extension_name, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_4, _L__sw0_c31, _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name, _L__sw0_c32, _L_s_n_llhttp__internal__n_error_17, _L_s_n_llhttp__internal__n_error_18, _L__sw0_c33, _L_s_n_llhttp__internal__n_chunk_size_otherwise, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_4, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_5, _L_s_n_llhttp__internal__n_error_35, _L__sw0_c34, _L_s_n_llhttp__internal__n_chunk_size, _L_s_n_llhttp__internal__n_invoke_mul_add_content_length, _L__sw0_c35, _L_s_n_llhttp__internal__n_chunk_size_digit, _L_s_n_llhttp__internal__n_error_37, _L__sw0_c36, _L_s_n_llhttp__internal__n_invoke_update_content_length_1, _L__sw0_c37, _L_s_n_llhttp__internal__n_consume_content_length_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_body_1, _L__sw0_c38, _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_1, _L__sw0_c39, _L_s_n_llhttp__internal__n_eof, _L__sw0_c40, _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_2, _L__sw0_c41, _L_s_n_llhttp__internal__n_invoke_llhttp__after_headers_complete, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_1, _L_s_n_llhttp__internal__n_invoke_update_finish_3, _L_s_n_llhttp__internal__n_error_39, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete, _L__sw0_c42, _L_s_n_llhttp__internal__n_error_5, _L__sw0_c43, _L_s_n_llhttp__internal__n_headers_almost_done, _L_s_n_llhttp__internal__n_invoke_test_flags_1, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_12, _L__sw0_c44, _L_s_n_llhttp__internal__n_header_field_colon_discard_ws, _L_s_n_llhttp__internal__n_header_field_colon, _L__sw0_c45, _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_value_complete, _L_s_n_llhttp__internal__n_header_field_start, _L_s_n_llhttp__internal__n_pause_18, _L_s_n_llhttp__internal__n_error_48, _L__sw0_c46, _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value, _L__sw0_c47, _L_s_n_llhttp__internal__n_header_value_discard_lws, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_15, _L_s_n_llhttp__internal__n_invoke_load_header_state_1, _L__sw0_c48, _L_s_n_llhttp__internal__n_header_value_discard_ws_almost_done, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_16, _L__sw0_c49, _L_s_n_llhttp__internal__n_header_value_lws, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_18, _L_s_n_llhttp__internal__n_invoke_load_header_state_5, _L__sw0_c50, _L_s_n_llhttp__internal__n_header_value_almost_done, _L_s_n_llhttp__internal__n_error_53, _L__sw0_c51, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_17, _L_s_n_llhttp__internal__n_error_51, _L__sw0_c52, _L_s_n_llhttp__internal__n_header_value_lenient, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_4, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_5, _L__sw0_c53, _L_s_n_llhttp__internal__n_header_value_relaxed, _L_s_n_llhttp__internal__n_header_value_otherwise, _L__sw0_c54, _L_s_n_llhttp__internal__n_error_54, _L__sw0_c55, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_2, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_19, _L__sw0_c56, _L_s_n_llhttp__internal__n_header_value_connection_token, _L_s_n_llhttp__internal__n_header_value_connection, _L__sw0_c57, _L_s_n_llhttp__internal__n_header_value_connection_ws, _L_s_n_llhttp__internal__n_invoke_load_header_state_6, _L_s_n_llhttp__internal__n_invoke_update_header_state_5, _L__sw0_c58, _L_s_n_llhttp__internal__n_header_value_connection_1, _L_s_n_llhttp__internal__n_invoke_update_header_state_3, _L__sw0_c59, _L_s_n_llhttp__internal__n_header_value_connection_2, _L_s_n_llhttp__internal__n_invoke_update_header_state_6, _L__sw0_c60, _L_s_n_llhttp__internal__n_header_value_connection_3, _L_s_n_llhttp__internal__n_invoke_update_header_state_7, _L__sw0_c61, _L__sw0_c62, _L_s_n_llhttp__internal__n_error_56, _L__sw0_c63, _L_s_n_llhttp__internal__n_error_57, _L__sw0_c64, _L_s_n_llhttp__internal__n_header_value_content_length_ws, _L_s_n_llhttp__internal__n_invoke_or_flags_17, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_7, _L__sw0_c65, _L_s_n_llhttp__internal__n_header_value_content_length, _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1, _L__sw0_c66, _L_s_n_llhttp__internal__n_error_59, _L__sw0_c67, _L_s_n_llhttp__internal__n_error_58, _L__sw0_c68, _L_s_n_llhttp__internal__n_header_value_te_token_ows, _L_s_n_llhttp__internal__n_header_value_te_chunked, _L__sw0_c69, _L_s_n_llhttp__internal__n_header_value, _L__sw0_c70, _L_s_n_llhttp__internal__n_header_value_te_token, _L_s_n_llhttp__internal__n_invoke_update_header_state_9, _L__sw0_c71, _L_s_n_llhttp__internal__n_header_value_te_chunked_last, _L_s_n_llhttp__internal__n_invoke_update_header_state_8, _L_s_n_llhttp__internal__n_invoke_load_type_1, _L__sw0_c72, _L__sw0_c73, _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1, _L_s_n_llhttp__internal__n_invoke_load_header_state_3, _L__sw0_c74, _L_s_n_llhttp__internal__n_header_value_discard_ws, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_14, _L__sw0_c75, _L_s_n_llhttp__internal__n_invoke_load_header_state, _L_s_n_llhttp__internal__n_invoke_test_flags_4, _L_s_n_llhttp__internal__n_invoke_test_flags_5, _L__sw0_c76, _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_field_complete, _L_s_n_llhttp__internal__n_pause_19, _L_s_n_llhttp__internal__n_error_45, _L__sw0_c77, _L_s_n_llhttp__internal__n_header_field_general_otherwise, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_2, _L_s_n_llhttp__internal__n_error_62, _L__sw0_c78, _L_s_n_llhttp__internal__n_header_field_general, _L__sw0_c79, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_13, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_1, _L_s_n_llhttp__internal__n_invoke_update_header_state_10, _L__sw0_c80, _L_s_n_llhttp__internal__n_header_field_3, _L_s_n_llhttp__internal__n_invoke_store_header_state, _L_s_n_llhttp__internal__n_invoke_update_header_state_11, _L__sw0_c81, _L_s_n_llhttp__internal__n_header_field_4, _L__sw0_c82, _L_s_n_llhttp__internal__n_header_field_2, _L__sw0_c83, _L_s_n_llhttp__internal__n_header_field_1, _L__sw0_c84, _L_s_n_llhttp__internal__n_header_field_5, _L__sw0_c85, _L_s_n_llhttp__internal__n_header_field_6, _L__sw0_c86, _L_s_n_llhttp__internal__n_header_field_7, _L__sw0_c87, _L_s_n_llhttp__internal__n_header_field, _L__sw0_c88, _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_field, _L__sw0_c89, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_1, _L_s_n_llhttp__internal__n_error_44, _L__sw0_c90, _L_s_n_llhttp__internal__n_headers_start, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags, _L__sw0_c91, _L_s_n_llhttp__internal__n_url_to_http_09, _L_s_n_llhttp__internal__n_error_2, _L_s_n_llhttp__internal__n_invoke_update_http_major, _L__sw0_c92, _L_s_n_llhttp__internal__n_url_skip_to_http09, _L__sw0_c93, _L_s_n_llhttp__internal__n_url_skip_lf_to_http09_1, _L_s_n_llhttp__internal__n_error_63, _L__sw0_c94, _L_s_n_llhttp__internal__n_url_skip_lf_to_http09, _L__sw0_c95, _L_s_n_llhttp__internal__n_req_pri_upgrade, _L_s_n_llhttp__internal__n_error_72, _L_s_n_llhttp__internal__n_error_73, _L__sw0_c96, _L_s_n_llhttp__internal__n_req_http_complete_crlf, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_27, _L__sw0_c97, _L_s_n_llhttp__internal__n_req_http_complete, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_26, _L_s_n_llhttp__internal__n_error_71, _L__sw0_c98, _L_s_n_llhttp__internal__n_invoke_load_method_1, _L__sw0_c99, _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete, _L_s_n_llhttp__internal__n_pause_21, _L_s_n_llhttp__internal__n_error_68, _L__sw0_c100, _L_s_n_llhttp__internal__n_error_67, _L__sw0_c101, _L_s_n_llhttp__internal__n_error_74, _L__sw0_c102, _L_s_n_llhttp__internal__n_req_http_minor, _L_s_n_llhttp__internal__n_invoke_store_http_minor, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_2, _L__sw0_c103, _L_s_n_llhttp__internal__n_error_75, _L__sw0_c104, _L_s_n_llhttp__internal__n_req_http_dot, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_3, _L__sw0_c105, _L_s_n_llhttp__internal__n_error_76, _L__sw0_c106, _L_s_n_llhttp__internal__n_req_http_major, _L_s_n_llhttp__internal__n_invoke_store_http_major, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_4, _L__sw0_c107, _L_s_n_llhttp__internal__n_span_start_llhttp__on_version, _L__sw0_c108, _L_s_n_llhttp__internal__n_req_after_protocol, _L_s_n_llhttp__internal__n_error_77, _L__sw0_c109, _L_s_n_llhttp__internal__n_invoke_load_method, _L_s_n_llhttp__internal__n_error_66, _L__sw0_c110, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete, _L_s_n_llhttp__internal__n_pause_22, _L_s_n_llhttp__internal__n_error_65, _L__sw0_c111, _L_s_n_llhttp__internal__n_error_82, _L__sw0_c112, _L_s_n_llhttp__internal__n_req_after_http_start_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3, _L__sw0_c113, _L_s_n_llhttp__internal__n_invoke_load_method_2, _L_s_n_llhttp__internal__n_error_79, _L__sw0_c114, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_1, _L_s_n_llhttp__internal__n_pause_23, _L_s_n_llhttp__internal__n_error_78, _L__sw0_c115, _L_s_n_llhttp__internal__n_req_after_http_start_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_1, _L__sw0_c116, _L_s_n_llhttp__internal__n_invoke_load_method_3, _L_s_n_llhttp__internal__n_error_81, _L__sw0_c117, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_2, _L_s_n_llhttp__internal__n_pause_24, _L_s_n_llhttp__internal__n_error_80, _L__sw0_c118, _L_s_n_llhttp__internal__n_req_after_http_start_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_2, _L__sw0_c119, _L_s_n_llhttp__internal__n_req_after_http_start, _L__sw0_c120, _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol, _L__sw0_c121, _L_s_n_llhttp__internal__n_req_http_start, _L__sw0_c122, _L_s_n_llhttp__internal__n_url_to_http, _L_s_n_llhttp__internal__n_invoke_llhttp__on_url_complete_1, _L__sw0_c123, _L_s_n_llhttp__internal__n_url_skip_to_http, _L__sw0_c124, _L_s_n_llhttp__internal__n_url_fragment, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_6, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_7, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_8, _L_s_n_llhttp__internal__n_error_83, _L__sw0_c125, _L_s_n_llhttp__internal__n_span_end_stub_query_3, _L__sw0_c126, _L_s_n_llhttp__internal__n_url_query, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_9, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_10, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_11, _L_s_n_llhttp__internal__n_error_84, _L__sw0_c127, _L_s_n_llhttp__internal__n_url_query_or_fragment, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_4, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_5, _L_s_n_llhttp__internal__n_error_85, _L__sw0_c128, _L_s_n_llhttp__internal__n_url_path, _L__sw0_c129, _L_s_n_llhttp__internal__n_span_start_stub_path_2, _L__sw0_c130, _L_s_n_llhttp__internal__n_span_start_stub_path, _L__sw0_c131, _L_s_n_llhttp__internal__n_span_start_stub_path_1, _L__sw0_c132, _L_s_n_llhttp__internal__n_url_server_with_at, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_12, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_13, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_14, _L_s_n_llhttp__internal__n_url_server, _L_s_n_llhttp__internal__n_error_86, _L_s_n_llhttp__internal__n_error_87, _L__sw0_c133, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_2, _L_s_n_llhttp__internal__n_error_88, _L__sw0_c134, _L_s_n_llhttp__internal__n_url_schema_delim_1, _L_s_n_llhttp__internal__n_error_89, _L__sw0_c135, _L_s_n_llhttp__internal__n_url_schema_delim, _L__sw0_c136, _L_s_n_llhttp__internal__n_span_end_stub_schema, _L__sw0_c137, _L_s_n_llhttp__internal__n_url_schema, _L_s_n_llhttp__internal__n_error_90, _L__sw0_c138, _L_s_n_llhttp__internal__n_url_start, _L_s_n_llhttp__internal__n_error_91, _L__sw0_c139, _L_s_n_llhttp__internal__n_span_start_llhttp__on_url_1, _L__sw0_c140, _L_s_n_llhttp__internal__n_url_entry_normal, _L__sw0_c141, _L_s_n_llhttp__internal__n_span_start_llhttp__on_url, _L__sw0_c142, _L_s_n_llhttp__internal__n_url_entry_connect, _L__sw0_c143, _L_s_n_llhttp__internal__n_req_spaces_before_url, _L_s_n_llhttp__internal__n_invoke_is_equal_method, _L__sw0_c144, _L_s_n_llhttp__internal__n_req_first_space_before_url, _L_s_n_llhttp__internal__n_error_92, _L__sw0_c145, _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete_1, _L_s_n_llhttp__internal__n_pause_29, _L_s_n_llhttp__internal__n_error_111, _L__sw0_c146, _L_s_n_llhttp__internal__n_after_start_req_2, _L_s_n_llhttp__internal__n_invoke_store_method_1, _L_s_n_llhttp__internal__n_error_112, _L__sw0_c147, _L_s_n_llhttp__internal__n_after_start_req_3, _L__sw0_c148, _L_s_n_llhttp__internal__n_after_start_req_1, _L__sw0_c149, _L_s_n_llhttp__internal__n_after_start_req_4, _L__sw0_c150, _L_s_n_llhttp__internal__n_after_start_req_6, _L__sw0_c151, _L_s_n_llhttp__internal__n_after_start_req_8, _L__sw0_c152, _L_s_n_llhttp__internal__n_after_start_req_9, _L__sw0_c153, _L_s_n_llhttp__internal__n_after_start_req_7, _L__sw0_c154, _L_s_n_llhttp__internal__n_after_start_req_5, _L__sw0_c155, _L_s_n_llhttp__internal__n_after_start_req_12, _L__sw0_c156, _L_s_n_llhttp__internal__n_after_start_req_13, _L__sw0_c157, _L_s_n_llhttp__internal__n_after_start_req_11, _L__sw0_c158, _L_s_n_llhttp__internal__n_after_start_req_10, _L__sw0_c159, _L_s_n_llhttp__internal__n_after_start_req_14, _L__sw0_c160, _L_s_n_llhttp__internal__n_after_start_req_17, _L__sw0_c161, _L_s_n_llhttp__internal__n_after_start_req_16, _L__sw0_c162, _L_s_n_llhttp__internal__n_after_start_req_15, _L__sw0_c163, _L_s_n_llhttp__internal__n_after_start_req_18, _L__sw0_c164, _L_s_n_llhttp__internal__n_after_start_req_20, _L__sw0_c165, _L_s_n_llhttp__internal__n_after_start_req_21, _L__sw0_c166, _L_s_n_llhttp__internal__n_after_start_req_19, _L__sw0_c167, _L_s_n_llhttp__internal__n_after_start_req_23, _L__sw0_c168, _L_s_n_llhttp__internal__n_after_start_req_24, _L__sw0_c169, _L_s_n_llhttp__internal__n_after_start_req_26, _L__sw0_c170, _L_s_n_llhttp__internal__n_after_start_req_28, _L__sw0_c171, _L_s_n_llhttp__internal__n_after_start_req_29, _L__sw0_c172, _L_s_n_llhttp__internal__n_after_start_req_27, _L__sw0_c173, _L_s_n_llhttp__internal__n_after_start_req_25, _L__sw0_c174, _L_s_n_llhttp__internal__n_after_start_req_30, _L__sw0_c175, _L_s_n_llhttp__internal__n_after_start_req_22, _L__sw0_c176, _L_s_n_llhttp__internal__n_after_start_req_31, _L__sw0_c177, _L_s_n_llhttp__internal__n_after_start_req_32, _L__sw0_c178, _L_s_n_llhttp__internal__n_after_start_req_35, _L__sw0_c179, _L_s_n_llhttp__internal__n_after_start_req_36, _L__sw0_c180, _L_s_n_llhttp__internal__n_after_start_req_34, _L__sw0_c181, _L_s_n_llhttp__internal__n_after_start_req_37, _L__sw0_c182, _L_s_n_llhttp__internal__n_after_start_req_38, _L__sw0_c183, _L_s_n_llhttp__internal__n_after_start_req_42, _L__sw0_c184, _L_s_n_llhttp__internal__n_after_start_req_43, _L__sw0_c185, _L_s_n_llhttp__internal__n_after_start_req_41, _L__sw0_c186, _L_s_n_llhttp__internal__n_after_start_req_40, _L__sw0_c187, _L_s_n_llhttp__internal__n_after_start_req_39, _L__sw0_c188, _L_s_n_llhttp__internal__n_after_start_req_45, _L__sw0_c189, _L_s_n_llhttp__internal__n_after_start_req_44, _L__sw0_c190, _L_s_n_llhttp__internal__n_after_start_req_33, _L__sw0_c191, _L_s_n_llhttp__internal__n_after_start_req_46, _L__sw0_c192, _L_s_n_llhttp__internal__n_after_start_req_49, _L__sw0_c193, _L_s_n_llhttp__internal__n_after_start_req_50, _L__sw0_c194, _L_s_n_llhttp__internal__n_after_start_req_51, _L__sw0_c195, _L_s_n_llhttp__internal__n_after_start_req_52, _L__sw0_c196, _L_s_n_llhttp__internal__n_after_start_req_48, _L__sw0_c197, _L_s_n_llhttp__internal__n_after_start_req_47, _L__sw0_c198, _L_s_n_llhttp__internal__n_after_start_req_55, _L__sw0_c199, _L_s_n_llhttp__internal__n_after_start_req_57, _L__sw0_c200, _L_s_n_llhttp__internal__n_after_start_req_58, _L__sw0_c201, _L_s_n_llhttp__internal__n_after_start_req_56, _L__sw0_c202, _L_s_n_llhttp__internal__n_after_start_req_54, _L__sw0_c203, _L_s_n_llhttp__internal__n_after_start_req_59, _L__sw0_c204, _L_s_n_llhttp__internal__n_after_start_req_60, _L__sw0_c205, _L_s_n_llhttp__internal__n_after_start_req_53, _L__sw0_c206, _L_s_n_llhttp__internal__n_after_start_req_62, _L__sw0_c207, _L_s_n_llhttp__internal__n_after_start_req_63, _L__sw0_c208, _L_s_n_llhttp__internal__n_after_start_req_61, _L__sw0_c209, _L_s_n_llhttp__internal__n_after_start_req_66, _L__sw0_c210, _L_s_n_llhttp__internal__n_after_start_req_68, _L__sw0_c211, _L_s_n_llhttp__internal__n_after_start_req_69, _L__sw0_c212, _L_s_n_llhttp__internal__n_after_start_req_67, _L__sw0_c213, _L_s_n_llhttp__internal__n_after_start_req_70, _L__sw0_c214, _L_s_n_llhttp__internal__n_after_start_req_65, _L__sw0_c215, _L_s_n_llhttp__internal__n_after_start_req_64, _L__sw0_c216, _L_s_n_llhttp__internal__n_after_start_req, _L__sw0_c217, _L_s_n_llhttp__internal__n_span_start_llhttp__on_method_1, _L__sw0_c218, _L_s_n_llhttp__internal__n_res_line_almost_done, _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_30, _L__sw0_c219, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_31, _L_s_n_llhttp__internal__n_error_98, _L__sw0_c220, _L_s_n_llhttp__internal__n_res_status, _L_s_n_llhttp__internal__n_span_end_llhttp__on_status, _L_s_n_llhttp__internal__n_span_end_llhttp__on_status_1, _L__sw0_c221, _L_s_n_llhttp__internal__n_span_start_llhttp__on_status, _L__sw0_c222, _L_s_n_llhttp__internal__n_res_status_code_otherwise, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_29, _L_s_n_llhttp__internal__n_error_99, _L__sw0_c223, _L_s_n_llhttp__internal__n_res_status_code_digit_3, _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2, _L_s_n_llhttp__internal__n_error_101, _L__sw0_c224, _L_s_n_llhttp__internal__n_res_status_code_digit_2, _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1, _L_s_n_llhttp__internal__n_error_103, _L__sw0_c225, _L_s_n_llhttp__internal__n_res_status_code_digit_1, _L_s_n_llhttp__internal__n_invoke_mul_add_status_code, _L_s_n_llhttp__internal__n_error_105, _L__sw0_c226, _L_s_n_llhttp__internal__n_res_after_version, _L_s_n_llhttp__internal__n_invoke_update_status_code, _L_s_n_llhttp__internal__n_error_106, _L__sw0_c227, _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete_1, _L_s_n_llhttp__internal__n_pause_28, _L_s_n_llhttp__internal__n_error_94, _L__sw0_c228, _L_s_n_llhttp__internal__n_error_93, _L__sw0_c229, _L_s_n_llhttp__internal__n_error_107, _L__sw0_c230, _L_s_n_llhttp__internal__n_res_http_minor, _L_s_n_llhttp__internal__n_invoke_store_http_minor_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_7, _L__sw0_c231, _L_s_n_llhttp__internal__n_error_108, _L__sw0_c232, _L_s_n_llhttp__internal__n_res_http_dot, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_8, _L__sw0_c233, _L_s_n_llhttp__internal__n_error_109, _L__sw0_c234, _L_s_n_llhttp__internal__n_res_http_major, _L_s_n_llhttp__internal__n_invoke_store_http_major_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_9, _L__sw0_c235, _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1, _L__sw0_c236, _L_s_n_llhttp__internal__n_res_after_protocol, _L_s_n_llhttp__internal__n_error_114, _L__sw0_c237, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_3, _L_s_n_llhttp__internal__n_pause_30, _L_s_n_llhttp__internal__n_error_113, _L__sw0_c238, _L_s_n_llhttp__internal__n_error_115, _L__sw0_c239, _L_s_n_llhttp__internal__n_res_after_start_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5, _L__sw0_c240, _L_s_n_llhttp__internal__n_res_after_start_2, _L__sw0_c241, _L_s_n_llhttp__internal__n_res_after_start_3, _L__sw0_c242, _L_s_n_llhttp__internal__n_res_after_start, _L__sw0_c243, _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1, _L__sw0_c244, _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete, _L_s_n_llhttp__internal__n_pause_26, _L_s_n_llhttp__internal__n_error_1, _L__sw0_c245, _L_s_n_llhttp__internal__n_req_or_res_method_2, _L_s_n_llhttp__internal__n_invoke_store_method, _L_s_n_llhttp__internal__n_error_110, _L__sw0_c246, _L_s_n_llhttp__internal__n_invoke_update_type_1, _L__sw0_c247, _L_s_n_llhttp__internal__n_req_or_res_method_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_method_1, _L__sw0_c248, _L_s_n_llhttp__internal__n_req_or_res_method_1, _L__sw0_c249, _L_s_n_llhttp__internal__n_req_or_res_method, _L__sw0_c250, _L_s_n_llhttp__internal__n_span_start_llhttp__on_method, _L__sw0_c251, _L_s_n_llhttp__internal__n_start_req_or_res, _L_s_n_llhttp__internal__n_invoke_update_type_2, _L__sw0_c252, _L_s_n_llhttp__internal__n_invoke_load_type, _L__sw0_c253, _L_s_n_llhttp__internal__n_invoke_update_finish, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_begin, _L__sw0_c254, _L_s_n_llhttp__internal__n_start, _L_s_n_llhttp__internal__n_invoke_load_initial_message_completed, _L_s_n_llhttp__internal__n_invoke_update_finish_2, _L_s_n_llhttp__internal__n_invoke_update_initial_message_completed, _L_s_n_llhttp__internal__n_error_8, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_2, _L_s_n_llhttp__internal__n_pause_15, _L_s_n_llhttp__internal__n_error_40, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete_1, _L_s_n_llhttp__internal__n_pause_2, _L_s_n_llhttp__internal__n_error_9, _L_s_n_llhttp__internal__n_error_36, _L_s_n_llhttp__internal__n_error_10, _L_s_n_llhttp__internal__n_pause_3, _L_s_n_llhttp__internal__n_error_14, _L_s_n_llhttp__internal__n_error_13, _L_s_n_llhttp__internal__n_error_15, _L_s_n_llhttp__internal__n_pause_4, _L_s_n_llhttp__internal__n_error_12, _L_s_n_llhttp__internal__n_error_16, _L_s_n_llhttp__internal__n_error_11, _L_s_n_llhttp__internal__n_error_28, _L_s_n_llhttp__internal__n_pause_12, _L_s_n_llhttp__internal__n_error_23, _L_s_n_llhttp__internal__n_pause, _L_s_n_llhttp__internal__n_error_7, _L_s_n_llhttp__internal__n_invoke_or_flags_1, _L_s_n_llhttp__internal__n_invoke_or_flags_2, _L_s_n_llhttp__internal__n_invoke_update_upgrade, _L_s_n_llhttp__internal__n_pause_14, _L_s_n_llhttp__internal__n_error_6, _L_s_n_llhttp__internal__n_invoke_llhttp__on_headers_complete, _L_s_n_llhttp__internal__n_invoke_llhttp__before_headers_complete, _L_s_n_llhttp__internal__n_invoke_test_flags, _L_s_n_llhttp__internal__n_pause_17, _L_s_n_llhttp__internal__n_error_42, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete_2, _L_s_n_llhttp__internal__n_invoke_or_flags_3, _L_s_n_llhttp__internal__n_invoke_or_flags_4, _L_s_n_llhttp__internal__n_invoke_update_upgrade_1, _L_s_n_llhttp__internal__n_pause_16, _L_s_n_llhttp__internal__n_error_41, _L_s_n_llhttp__internal__n_invoke_llhttp__on_headers_complete_1, _L_s_n_llhttp__internal__n_invoke_llhttp__before_headers_complete_1, _L_s_n_llhttp__internal__n_error_43, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field, _L_s_n_llhttp__internal__n_error_60, _L_s_n_llhttp__internal__n_error_47, _L_s_n_llhttp__internal__n_error_49, _L_s_n_llhttp__internal__n_invoke_update_header_state, _L_s_n_llhttp__internal__n_invoke_or_flags_5, _L_s_n_llhttp__internal__n_invoke_or_flags_6, _L_s_n_llhttp__internal__n_invoke_or_flags_7, _L_s_n_llhttp__internal__n_invoke_or_flags_8, _L_s_n_llhttp__internal__n_invoke_load_header_state_2, _L_s_n_llhttp__internal__n_error_46, _L_s_n_llhttp__internal__n_error_50, _L_s_n_llhttp__internal__n_invoke_update_header_state_1, _L_s_n_llhttp__internal__n_invoke_load_header_state_4, _L_s_n_llhttp__internal__n_error_52, _L_s_n_llhttp__internal__n_invoke_update_header_state_2, _L_s_n_llhttp__internal__n_invoke_or_flags_9, _L_s_n_llhttp__internal__n_invoke_or_flags_10, _L_s_n_llhttp__internal__n_invoke_or_flags_11, _L_s_n_llhttp__internal__n_invoke_or_flags_12, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_3, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_20, _L_s_n_llhttp__internal__n_invoke_update_header_state_4, _L_s_n_llhttp__internal__n_invoke_or_flags_13, _L_s_n_llhttp__internal__n_invoke_or_flags_14, _L_s_n_llhttp__internal__n_invoke_or_flags_15, _L_s_n_llhttp__internal__n_invoke_or_flags_16, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_6, _L_s_n_llhttp__internal__n_error_55, _L_s_n_llhttp__internal__n_invoke_test_flags_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_9, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_8, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_21, _L_s_n_llhttp__internal__n_invoke_and_flags, _L_s_n_llhttp__internal__n_invoke_or_flags_19, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_22, _L_s_n_llhttp__internal__n_invoke_load_type_2, _L_s_n_llhttp__internal__n_invoke_or_flags_18, _L_s_n_llhttp__internal__n_invoke_test_flags_3, _L_s_n_llhttp__internal__n_invoke_or_flags_20, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_23, _L_s_n_llhttp__internal__n_error_61, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_24, _L_s_n_llhttp__internal__n_error_4, _L_s_n_llhttp__internal__n_pause_20, _L_s_n_llhttp__internal__n_error_3, _L_s_n_llhttp__internal__n_invoke_llhttp__on_url_complete, _L_s_n_llhttp__internal__n_invoke_update_http_minor, _L_s_n_llhttp__internal__n_error_70, _L_s_n_llhttp__internal__n_error_69, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version, _L_s_n_llhttp__internal__n_invoke_load_http_minor, _L_s_n_llhttp__internal__n_invoke_load_http_minor_1, _L_s_n_llhttp__internal__n_invoke_load_http_minor_2, _L_s_n_llhttp__internal__n_invoke_load_http_major, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_25, _L_s_n_llhttp__internal__n_pause_25, _L_s_n_llhttp__internal__n_error_64, _L_s_n_llhttp__internal__n_span_end_llhttp__on_method_2, _L_s_n_llhttp__internal__n_error_104, _L_s_n_llhttp__internal__n_error_102, _L_s_n_llhttp__internal__n_error_100, _L_s_n_llhttp__internal__n_pause_27, _L_s_n_llhttp__internal__n_error_96, _L_s_n_llhttp__internal__n_error_95, _L_s_n_llhttp__internal__n_error_97, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_6, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_5, _L_s_n_llhttp__internal__n_invoke_load_http_minor_3, _L_s_n_llhttp__internal__n_invoke_load_http_minor_4, _L_s_n_llhttp__internal__n_invoke_load_http_minor_5, _L_s_n_llhttp__internal__n_invoke_load_http_major_1, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_28, _L_s_n_llhttp__internal__n_span_end_llhttp__on_method, _L_s_n_llhttp__internal__n_invoke_update_type, _L_s_n_llhttp__internal__n_pause_31, _L_s_n_llhttp__internal__n_error, _L_s_n_llhttp__internal__n_pause_32, _L_s_n_llhttp__internal__n_error_116, _L_s_n_llhttp__internal__n_invoke_llhttp__on_reset;
+label _L_s_n_llhttp__internal__n_closed, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_3, _L_s_n_llhttp__internal__n_invoke_llhttp__after_message_complete, _L_s_n_llhttp__internal__n_invoke_update_content_length, _L_s_n_llhttp__internal__n_invoke_update_finish_1, _L_s_n_llhttp__internal__n_pause_1, _L_s_n_llhttp__internal__n_invoke_is_equal_upgrade, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_2, _L_s_n_llhttp__internal__n_pause_13, _L_s_n_llhttp__internal__n_error_38, _L_s_n_llhttp__internal__n_chunk_data_almost_done_1, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_7, _L_s_n_llhttp__internal__n_chunk_data_almost_done, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_6, _L_s_n_llhttp__internal__n_consume_content_length, _L_s_n_llhttp__internal__n_span_end_llhttp__on_body, _L_s_n_llhttp__internal__n_span_start_llhttp__on_body, _L_s_n_llhttp__internal__n_invoke_is_equal_content_length, _L_s_n_llhttp__internal__n_invoke_or_flags, _L_s_n_llhttp__internal__n_chunk_size_almost_done, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_header, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_8, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_9, _L_s_n_llhttp__internal__n_error_20, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete, _L_s_n_llhttp__internal__n_pause_5, _L_s_n_llhttp__internal__n_error_19, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_1, _L_s_n_llhttp__internal__n_pause_6, _L_s_n_llhttp__internal__n_error_21, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_2, _L_s_n_llhttp__internal__n_chunk_extensions, _L_s_n_llhttp__internal__n_pause_7, _L_s_n_llhttp__internal__n_error_22, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_10, _L_s_n_llhttp__internal__n_error_25, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete, _L_s_n_llhttp__internal__n_pause_8, _L_s_n_llhttp__internal__n_error_24, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_1, _L_s_n_llhttp__internal__n_pause_9, _L_s_n_llhttp__internal__n_error_26, _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_done, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_11, _L_s_n_llhttp__internal__n_error_29, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_2, _L_s_n_llhttp__internal__n_pause_10, _L_s_n_llhttp__internal__n_error_27, _L_s_n_llhttp__internal__n_error_30, _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair, _L_s_n_llhttp__internal__n_chunk_extension_quoted_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_3, _L_s_n_llhttp__internal__n_error_31, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_4, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_3, _L_s_n_llhttp__internal__n_pause_11, _L_s_n_llhttp__internal__n_error_32, _L_s_n_llhttp__internal__n_error_33, _L_s_n_llhttp__internal__n_chunk_extension_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_5, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_6, _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_3, _L_s_n_llhttp__internal__n_error_34, _L_s_n_llhttp__internal__n_chunk_extension_name, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_4, _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name, _L_s_n_llhttp__internal__n_error_17, _L_s_n_llhttp__internal__n_error_18, _L_s_n_llhttp__internal__n_chunk_size_otherwise, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_4, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_5, _L_s_n_llhttp__internal__n_error_35, _L_s_n_llhttp__internal__n_chunk_size, _L_s_n_llhttp__internal__n_invoke_mul_add_content_length, _L_s_n_llhttp__internal__n_chunk_size_digit, _L_s_n_llhttp__internal__n_error_37, _L_s_n_llhttp__internal__n_invoke_update_content_length_1, _L_s_n_llhttp__internal__n_consume_content_length_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_body_1, _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_1, _L_s_n_llhttp__internal__n_eof, _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_2, _L_s_n_llhttp__internal__n_invoke_llhttp__after_headers_complete, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_1, _L_s_n_llhttp__internal__n_invoke_update_finish_3, _L_s_n_llhttp__internal__n_error_39, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete, _L_s_n_llhttp__internal__n_error_5, _L_s_n_llhttp__internal__n_headers_almost_done, _L_s_n_llhttp__internal__n_invoke_test_flags_1, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_12, _L_s_n_llhttp__internal__n_header_field_colon_discard_ws, _L_s_n_llhttp__internal__n_header_field_colon, _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_value_complete, _L_s_n_llhttp__internal__n_header_field_start, _L_s_n_llhttp__internal__n_pause_18, _L_s_n_llhttp__internal__n_error_48, _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value, _L_s_n_llhttp__internal__n_header_value_discard_lws, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_15, _L_s_n_llhttp__internal__n_invoke_load_header_state_1, _L_s_n_llhttp__internal__n_header_value_discard_ws_almost_done, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_16, _L_s_n_llhttp__internal__n_header_value_lws, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_18, _L_s_n_llhttp__internal__n_invoke_load_header_state_5, _L_s_n_llhttp__internal__n_header_value_almost_done, _L_s_n_llhttp__internal__n_error_53, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_17, _L_s_n_llhttp__internal__n_error_51, _L_s_n_llhttp__internal__n_header_value_lenient, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_4, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_5, _L_s_n_llhttp__internal__n_header_value_relaxed, _L_s_n_llhttp__internal__n_header_value_otherwise, _L_s_n_llhttp__internal__n_error_54, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_2, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_19, _L_s_n_llhttp__internal__n_header_value_connection_token, _L_s_n_llhttp__internal__n_header_value_connection, _L_s_n_llhttp__internal__n_header_value_connection_ws, _L_s_n_llhttp__internal__n_invoke_load_header_state_6, _L_s_n_llhttp__internal__n_invoke_update_header_state_5, _L_s_n_llhttp__internal__n_header_value_connection_1, _L_s_n_llhttp__internal__n_invoke_update_header_state_3, _L_s_n_llhttp__internal__n_header_value_connection_2, _L_s_n_llhttp__internal__n_invoke_update_header_state_6, _L_s_n_llhttp__internal__n_header_value_connection_3, _L_s_n_llhttp__internal__n_invoke_update_header_state_7, _L_s_n_llhttp__internal__n_error_56, _L_s_n_llhttp__internal__n_error_57, _L_s_n_llhttp__internal__n_header_value_content_length_ws, _L_s_n_llhttp__internal__n_invoke_or_flags_17, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_7, _L_s_n_llhttp__internal__n_header_value_content_length, _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1, _L_s_n_llhttp__internal__n_error_59, _L_s_n_llhttp__internal__n_error_58, _L_s_n_llhttp__internal__n_header_value_te_token_ows, _L_s_n_llhttp__internal__n_header_value_te_chunked, _L_s_n_llhttp__internal__n_header_value, _L_s_n_llhttp__internal__n_header_value_te_token, _L_s_n_llhttp__internal__n_invoke_update_header_state_9, _L_s_n_llhttp__internal__n_header_value_te_chunked_last, _L_s_n_llhttp__internal__n_invoke_update_header_state_8, _L_s_n_llhttp__internal__n_invoke_load_type_1, _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1, _L_s_n_llhttp__internal__n_invoke_load_header_state_3, _L_s_n_llhttp__internal__n_header_value_discard_ws, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_14, _L_s_n_llhttp__internal__n_invoke_load_header_state, _L_s_n_llhttp__internal__n_invoke_test_flags_4, _L_s_n_llhttp__internal__n_invoke_test_flags_5, _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_field_complete, _L_s_n_llhttp__internal__n_pause_19, _L_s_n_llhttp__internal__n_error_45, _L_s_n_llhttp__internal__n_header_field_general_otherwise, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_2, _L_s_n_llhttp__internal__n_error_62, _L_s_n_llhttp__internal__n_header_field_general, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_13, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_1, _L_s_n_llhttp__internal__n_invoke_update_header_state_10, _L_s_n_llhttp__internal__n_header_field_3, _L_s_n_llhttp__internal__n_invoke_store_header_state, _L_s_n_llhttp__internal__n_invoke_update_header_state_11, _L_s_n_llhttp__internal__n_header_field_4, _L_s_n_llhttp__internal__n_header_field_2, _L_s_n_llhttp__internal__n_header_field_1, _L_s_n_llhttp__internal__n_header_field_5, _L_s_n_llhttp__internal__n_header_field_6, _L_s_n_llhttp__internal__n_header_field_7, _L_s_n_llhttp__internal__n_header_field, _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_field, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_1, _L_s_n_llhttp__internal__n_error_44, _L_s_n_llhttp__internal__n_headers_start, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags, _L_s_n_llhttp__internal__n_url_to_http_09, _L_s_n_llhttp__internal__n_error_2, _L_s_n_llhttp__internal__n_invoke_update_http_major, _L_s_n_llhttp__internal__n_url_skip_to_http09, _L_s_n_llhttp__internal__n_url_skip_lf_to_http09_1, _L_s_n_llhttp__internal__n_error_63, _L_s_n_llhttp__internal__n_url_skip_lf_to_http09, _L_s_n_llhttp__internal__n_req_pri_upgrade, _L_s_n_llhttp__internal__n_error_72, _L_s_n_llhttp__internal__n_error_73, _L_s_n_llhttp__internal__n_req_http_complete_crlf, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_27, _L_s_n_llhttp__internal__n_req_http_complete, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_26, _L_s_n_llhttp__internal__n_error_71, _L_s_n_llhttp__internal__n_invoke_load_method_1, _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete, _L_s_n_llhttp__internal__n_pause_21, _L_s_n_llhttp__internal__n_error_68, _L_s_n_llhttp__internal__n_error_67, _L_s_n_llhttp__internal__n_error_74, _L_s_n_llhttp__internal__n_req_http_minor, _L_s_n_llhttp__internal__n_invoke_store_http_minor, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_2, _L_s_n_llhttp__internal__n_error_75, _L_s_n_llhttp__internal__n_req_http_dot, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_3, _L_s_n_llhttp__internal__n_error_76, _L_s_n_llhttp__internal__n_req_http_major, _L_s_n_llhttp__internal__n_invoke_store_http_major, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_4, _L_s_n_llhttp__internal__n_span_start_llhttp__on_version, _L_s_n_llhttp__internal__n_req_after_protocol, _L_s_n_llhttp__internal__n_error_77, _L_s_n_llhttp__internal__n_invoke_load_method, _L_s_n_llhttp__internal__n_error_66, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete, _L_s_n_llhttp__internal__n_pause_22, _L_s_n_llhttp__internal__n_error_65, _L_s_n_llhttp__internal__n_error_82, _L_s_n_llhttp__internal__n_req_after_http_start_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3, _L_s_n_llhttp__internal__n_invoke_load_method_2, _L_s_n_llhttp__internal__n_error_79, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_1, _L_s_n_llhttp__internal__n_pause_23, _L_s_n_llhttp__internal__n_error_78, _L_s_n_llhttp__internal__n_req_after_http_start_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_1, _L_s_n_llhttp__internal__n_invoke_load_method_3, _L_s_n_llhttp__internal__n_error_81, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_2, _L_s_n_llhttp__internal__n_pause_24, _L_s_n_llhttp__internal__n_error_80, _L_s_n_llhttp__internal__n_req_after_http_start_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_2, _L_s_n_llhttp__internal__n_req_after_http_start, _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol, _L_s_n_llhttp__internal__n_req_http_start, _L_s_n_llhttp__internal__n_url_to_http, _L_s_n_llhttp__internal__n_invoke_llhttp__on_url_complete_1, _L_s_n_llhttp__internal__n_url_skip_to_http, _L_s_n_llhttp__internal__n_url_fragment, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_6, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_7, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_8, _L_s_n_llhttp__internal__n_error_83, _L_s_n_llhttp__internal__n_span_end_stub_query_3, _L_s_n_llhttp__internal__n_url_query, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_9, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_10, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_11, _L_s_n_llhttp__internal__n_error_84, _L_s_n_llhttp__internal__n_url_query_or_fragment, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_4, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_5, _L_s_n_llhttp__internal__n_error_85, _L_s_n_llhttp__internal__n_url_path, _L_s_n_llhttp__internal__n_span_start_stub_path_2, _L_s_n_llhttp__internal__n_span_start_stub_path, _L_s_n_llhttp__internal__n_span_start_stub_path_1, _L_s_n_llhttp__internal__n_url_server_with_at, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_12, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_13, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_14, _L_s_n_llhttp__internal__n_url_server, _L_s_n_llhttp__internal__n_error_86, _L_s_n_llhttp__internal__n_error_87, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_2, _L_s_n_llhttp__internal__n_error_88, _L_s_n_llhttp__internal__n_url_schema_delim_1, _L_s_n_llhttp__internal__n_error_89, _L_s_n_llhttp__internal__n_url_schema_delim, _L_s_n_llhttp__internal__n_span_end_stub_schema, _L_s_n_llhttp__internal__n_url_schema, _L_s_n_llhttp__internal__n_error_90, _L_s_n_llhttp__internal__n_url_start, _L_s_n_llhttp__internal__n_error_91, _L_s_n_llhttp__internal__n_span_start_llhttp__on_url_1, _L_s_n_llhttp__internal__n_url_entry_normal, _L_s_n_llhttp__internal__n_span_start_llhttp__on_url, _L_s_n_llhttp__internal__n_url_entry_connect, _L_s_n_llhttp__internal__n_req_spaces_before_url, _L_s_n_llhttp__internal__n_invoke_is_equal_method, _L_s_n_llhttp__internal__n_req_first_space_before_url, _L_s_n_llhttp__internal__n_error_92, _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete_1, _L_s_n_llhttp__internal__n_pause_29, _L_s_n_llhttp__internal__n_error_111, _L_s_n_llhttp__internal__n_after_start_req_2, _L_s_n_llhttp__internal__n_invoke_store_method_1, _L_s_n_llhttp__internal__n_error_112, _L_s_n_llhttp__internal__n_after_start_req_3, _L_s_n_llhttp__internal__n_after_start_req_1, _L_s_n_llhttp__internal__n_after_start_req_4, _L_s_n_llhttp__internal__n_after_start_req_6, _L_s_n_llhttp__internal__n_after_start_req_8, _L_s_n_llhttp__internal__n_after_start_req_9, _L_s_n_llhttp__internal__n_after_start_req_7, _L_s_n_llhttp__internal__n_after_start_req_5, _L_s_n_llhttp__internal__n_after_start_req_12, _L_s_n_llhttp__internal__n_after_start_req_13, _L_s_n_llhttp__internal__n_after_start_req_11, _L_s_n_llhttp__internal__n_after_start_req_10, _L_s_n_llhttp__internal__n_after_start_req_14, _L_s_n_llhttp__internal__n_after_start_req_17, _L_s_n_llhttp__internal__n_after_start_req_16, _L_s_n_llhttp__internal__n_after_start_req_15, _L_s_n_llhttp__internal__n_after_start_req_18, _L_s_n_llhttp__internal__n_after_start_req_20, _L_s_n_llhttp__internal__n_after_start_req_21, _L_s_n_llhttp__internal__n_after_start_req_19, _L_s_n_llhttp__internal__n_after_start_req_23, _L_s_n_llhttp__internal__n_after_start_req_24, _L_s_n_llhttp__internal__n_after_start_req_26, _L_s_n_llhttp__internal__n_after_start_req_28, _L_s_n_llhttp__internal__n_after_start_req_29, _L_s_n_llhttp__internal__n_after_start_req_27, _L_s_n_llhttp__internal__n_after_start_req_25, _L_s_n_llhttp__internal__n_after_start_req_30, _L_s_n_llhttp__internal__n_after_start_req_22, _L_s_n_llhttp__internal__n_after_start_req_31, _L_s_n_llhttp__internal__n_after_start_req_32, _L_s_n_llhttp__internal__n_after_start_req_35, _L_s_n_llhttp__internal__n_after_start_req_36, _L_s_n_llhttp__internal__n_after_start_req_34, _L_s_n_llhttp__internal__n_after_start_req_37, _L_s_n_llhttp__internal__n_after_start_req_38, _L_s_n_llhttp__internal__n_after_start_req_42, _L_s_n_llhttp__internal__n_after_start_req_43, _L_s_n_llhttp__internal__n_after_start_req_41, _L_s_n_llhttp__internal__n_after_start_req_40, _L_s_n_llhttp__internal__n_after_start_req_39, _L_s_n_llhttp__internal__n_after_start_req_45, _L_s_n_llhttp__internal__n_after_start_req_44, _L_s_n_llhttp__internal__n_after_start_req_33, _L_s_n_llhttp__internal__n_after_start_req_46, _L_s_n_llhttp__internal__n_after_start_req_49, _L_s_n_llhttp__internal__n_after_start_req_50, _L_s_n_llhttp__internal__n_after_start_req_51, _L_s_n_llhttp__internal__n_after_start_req_52, _L_s_n_llhttp__internal__n_after_start_req_48, _L_s_n_llhttp__internal__n_after_start_req_47, _L_s_n_llhttp__internal__n_after_start_req_55, _L_s_n_llhttp__internal__n_after_start_req_57, _L_s_n_llhttp__internal__n_after_start_req_58, _L_s_n_llhttp__internal__n_after_start_req_56, _L_s_n_llhttp__internal__n_after_start_req_54, _L_s_n_llhttp__internal__n_after_start_req_59, _L_s_n_llhttp__internal__n_after_start_req_60, _L_s_n_llhttp__internal__n_after_start_req_53, _L_s_n_llhttp__internal__n_after_start_req_62, _L_s_n_llhttp__internal__n_after_start_req_63, _L_s_n_llhttp__internal__n_after_start_req_61, _L_s_n_llhttp__internal__n_after_start_req_66, _L_s_n_llhttp__internal__n_after_start_req_68, _L_s_n_llhttp__internal__n_after_start_req_69, _L_s_n_llhttp__internal__n_after_start_req_67, _L_s_n_llhttp__internal__n_after_start_req_70, _L_s_n_llhttp__internal__n_after_start_req_65, _L_s_n_llhttp__internal__n_after_start_req_64, _L_s_n_llhttp__internal__n_after_start_req, _L_s_n_llhttp__internal__n_span_start_llhttp__on_method_1, _L_s_n_llhttp__internal__n_res_line_almost_done, _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_30, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_31, _L_s_n_llhttp__internal__n_error_98, _L_s_n_llhttp__internal__n_res_status, _L_s_n_llhttp__internal__n_span_end_llhttp__on_status, _L_s_n_llhttp__internal__n_span_end_llhttp__on_status_1, _L_s_n_llhttp__internal__n_span_start_llhttp__on_status, _L_s_n_llhttp__internal__n_res_status_code_otherwise, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_29, _L_s_n_llhttp__internal__n_error_99, _L_s_n_llhttp__internal__n_res_status_code_digit_3, _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2, _L_s_n_llhttp__internal__n_error_101, _L_s_n_llhttp__internal__n_res_status_code_digit_2, _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1, _L_s_n_llhttp__internal__n_error_103, _L_s_n_llhttp__internal__n_res_status_code_digit_1, _L_s_n_llhttp__internal__n_invoke_mul_add_status_code, _L_s_n_llhttp__internal__n_error_105, _L_s_n_llhttp__internal__n_res_after_version, _L_s_n_llhttp__internal__n_invoke_update_status_code, _L_s_n_llhttp__internal__n_error_106, _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete_1, _L_s_n_llhttp__internal__n_pause_28, _L_s_n_llhttp__internal__n_error_94, _L_s_n_llhttp__internal__n_error_93, _L_s_n_llhttp__internal__n_error_107, _L_s_n_llhttp__internal__n_res_http_minor, _L_s_n_llhttp__internal__n_invoke_store_http_minor_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_7, _L_s_n_llhttp__internal__n_error_108, _L_s_n_llhttp__internal__n_res_http_dot, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_8, _L_s_n_llhttp__internal__n_error_109, _L_s_n_llhttp__internal__n_res_http_major, _L_s_n_llhttp__internal__n_invoke_store_http_major_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_9, _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1, _L_s_n_llhttp__internal__n_res_after_protocol, _L_s_n_llhttp__internal__n_error_114, _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_3, _L_s_n_llhttp__internal__n_pause_30, _L_s_n_llhttp__internal__n_error_113, _L_s_n_llhttp__internal__n_error_115, _L_s_n_llhttp__internal__n_res_after_start_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4, _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5, _L_s_n_llhttp__internal__n_res_after_start_2, _L_s_n_llhttp__internal__n_res_after_start_3, _L_s_n_llhttp__internal__n_res_after_start, _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1, _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete, _L_s_n_llhttp__internal__n_pause_26, _L_s_n_llhttp__internal__n_error_1, _L_s_n_llhttp__internal__n_req_or_res_method_2, _L_s_n_llhttp__internal__n_invoke_store_method, _L_s_n_llhttp__internal__n_error_110, _L_s_n_llhttp__internal__n_invoke_update_type_1, _L_s_n_llhttp__internal__n_req_or_res_method_3, _L_s_n_llhttp__internal__n_span_end_llhttp__on_method_1, _L_s_n_llhttp__internal__n_req_or_res_method_1, _L_s_n_llhttp__internal__n_req_or_res_method, _L_s_n_llhttp__internal__n_span_start_llhttp__on_method, _L_s_n_llhttp__internal__n_start_req_or_res, _L_s_n_llhttp__internal__n_invoke_update_type_2, _L_s_n_llhttp__internal__n_invoke_load_type, _L_s_n_llhttp__internal__n_invoke_update_finish, _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_begin, _L_s_n_llhttp__internal__n_start, _L_s_n_llhttp__internal__n_invoke_load_initial_message_completed, _L_s_n_llhttp__internal__n_invoke_update_finish_2, _L_s_n_llhttp__internal__n_invoke_update_initial_message_completed, _L_s_n_llhttp__internal__n_error_8, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_2, _L_s_n_llhttp__internal__n_pause_15, _L_s_n_llhttp__internal__n_error_40, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete_1, _L_s_n_llhttp__internal__n_pause_2, _L_s_n_llhttp__internal__n_error_9, _L_s_n_llhttp__internal__n_error_36, _L_s_n_llhttp__internal__n_error_10, _L_s_n_llhttp__internal__n_pause_3, _L_s_n_llhttp__internal__n_error_14, _L_s_n_llhttp__internal__n_error_13, _L_s_n_llhttp__internal__n_error_15, _L_s_n_llhttp__internal__n_pause_4, _L_s_n_llhttp__internal__n_error_12, _L_s_n_llhttp__internal__n_error_16, _L_s_n_llhttp__internal__n_error_11, _L_s_n_llhttp__internal__n_error_28, _L_s_n_llhttp__internal__n_pause_12, _L_s_n_llhttp__internal__n_error_23, _L_s_n_llhttp__internal__n_pause, _L_s_n_llhttp__internal__n_error_7, _L_s_n_llhttp__internal__n_invoke_or_flags_1, _L_s_n_llhttp__internal__n_invoke_or_flags_2, _L_s_n_llhttp__internal__n_invoke_update_upgrade, _L_s_n_llhttp__internal__n_pause_14, _L_s_n_llhttp__internal__n_error_6, _L_s_n_llhttp__internal__n_invoke_llhttp__on_headers_complete, _L_s_n_llhttp__internal__n_invoke_llhttp__before_headers_complete, _L_s_n_llhttp__internal__n_invoke_test_flags, _L_s_n_llhttp__internal__n_pause_17, _L_s_n_llhttp__internal__n_error_42, _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete_2, _L_s_n_llhttp__internal__n_invoke_or_flags_3, _L_s_n_llhttp__internal__n_invoke_or_flags_4, _L_s_n_llhttp__internal__n_invoke_update_upgrade_1, _L_s_n_llhttp__internal__n_pause_16, _L_s_n_llhttp__internal__n_error_41, _L_s_n_llhttp__internal__n_invoke_llhttp__on_headers_complete_1, _L_s_n_llhttp__internal__n_invoke_llhttp__before_headers_complete_1, _L_s_n_llhttp__internal__n_error_43, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field, _L_s_n_llhttp__internal__n_error_60, _L_s_n_llhttp__internal__n_error_47, _L_s_n_llhttp__internal__n_error_49, _L_s_n_llhttp__internal__n_invoke_update_header_state, _L_s_n_llhttp__internal__n_invoke_or_flags_5, _L_s_n_llhttp__internal__n_invoke_or_flags_6, _L_s_n_llhttp__internal__n_invoke_or_flags_7, _L_s_n_llhttp__internal__n_invoke_or_flags_8, _L_s_n_llhttp__internal__n_invoke_load_header_state_2, _L_s_n_llhttp__internal__n_error_46, _L_s_n_llhttp__internal__n_error_50, _L_s_n_llhttp__internal__n_invoke_update_header_state_1, _L_s_n_llhttp__internal__n_invoke_load_header_state_4, _L_s_n_llhttp__internal__n_error_52, _L_s_n_llhttp__internal__n_invoke_update_header_state_2, _L_s_n_llhttp__internal__n_invoke_or_flags_9, _L_s_n_llhttp__internal__n_invoke_or_flags_10, _L_s_n_llhttp__internal__n_invoke_or_flags_11, _L_s_n_llhttp__internal__n_invoke_or_flags_12, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_3, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_20, _L_s_n_llhttp__internal__n_invoke_update_header_state_4, _L_s_n_llhttp__internal__n_invoke_or_flags_13, _L_s_n_llhttp__internal__n_invoke_or_flags_14, _L_s_n_llhttp__internal__n_invoke_or_flags_15, _L_s_n_llhttp__internal__n_invoke_or_flags_16, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_6, _L_s_n_llhttp__internal__n_error_55, _L_s_n_llhttp__internal__n_invoke_test_flags_2, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_9, _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_8, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_21, _L_s_n_llhttp__internal__n_invoke_and_flags, _L_s_n_llhttp__internal__n_invoke_or_flags_19, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_22, _L_s_n_llhttp__internal__n_invoke_load_type_2, _L_s_n_llhttp__internal__n_invoke_or_flags_18, _L_s_n_llhttp__internal__n_invoke_test_flags_3, _L_s_n_llhttp__internal__n_invoke_or_flags_20, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_23, _L_s_n_llhttp__internal__n_error_61, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_24, _L_s_n_llhttp__internal__n_error_4, _L_s_n_llhttp__internal__n_pause_20, _L_s_n_llhttp__internal__n_error_3, _L_s_n_llhttp__internal__n_invoke_llhttp__on_url_complete, _L_s_n_llhttp__internal__n_invoke_update_http_minor, _L_s_n_llhttp__internal__n_error_70, _L_s_n_llhttp__internal__n_error_69, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_1, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version, _L_s_n_llhttp__internal__n_invoke_load_http_minor, _L_s_n_llhttp__internal__n_invoke_load_http_minor_1, _L_s_n_llhttp__internal__n_invoke_load_http_minor_2, _L_s_n_llhttp__internal__n_invoke_load_http_major, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_25, _L_s_n_llhttp__internal__n_pause_25, _L_s_n_llhttp__internal__n_error_64, _L_s_n_llhttp__internal__n_span_end_llhttp__on_method_2, _L_s_n_llhttp__internal__n_error_104, _L_s_n_llhttp__internal__n_error_102, _L_s_n_llhttp__internal__n_error_100, _L_s_n_llhttp__internal__n_pause_27, _L_s_n_llhttp__internal__n_error_96, _L_s_n_llhttp__internal__n_error_95, _L_s_n_llhttp__internal__n_error_97, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_6, _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_5, _L_s_n_llhttp__internal__n_invoke_load_http_minor_3, _L_s_n_llhttp__internal__n_invoke_load_http_minor_4, _L_s_n_llhttp__internal__n_invoke_load_http_minor_5, _L_s_n_llhttp__internal__n_invoke_load_http_major_1, _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_28, _L_s_n_llhttp__internal__n_span_end_llhttp__on_method, _L_s_n_llhttp__internal__n_invoke_update_type, _L_s_n_llhttp__internal__n_pause_31, _L_s_n_llhttp__internal__n_error, _L_s_n_llhttp__internal__n_pause_32, _L_s_n_llhttp__internal__n_error_116, _L_s_n_llhttp__internal__n_invoke_llhttp__on_reset;
 var
   match: LongInt;
   avail: SizeUInt;
@@ -1741,7299 +1741,6788 @@ var
   start_63: PByte;
   err_63: LongInt;
 begin
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_closed) then
-  begin
-    goto _L__sw0_c1;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__after_message_complete) then
-  begin
-    goto _L__sw0_c2;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_pause_1) then
-  begin
-    goto _L__sw0_c3;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_is_equal_upgrade) then
-  begin
-    goto _L__sw0_c4;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_2) then
-  begin
-    goto _L__sw0_c5;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_data_almost_done_1) then
-  begin
-    goto _L__sw0_c6;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_data_almost_done) then
-  begin
-    goto _L__sw0_c7;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_consume_content_length) then
-  begin
-    goto _L__sw0_c8;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_body) then
-  begin
-    goto _L__sw0_c9;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_is_equal_content_length) then
-  begin
-    goto _L__sw0_c10;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_size_almost_done) then
-  begin
-    goto _L__sw0_c11;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_test_lenient_flags_9) then
-  begin
-    goto _L__sw0_c12;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete) then
-  begin
-    goto _L__sw0_c13;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_1) then
-  begin
-    goto _L__sw0_c14;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_2) then
-  begin
-    goto _L__sw0_c15;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_test_lenient_flags_10) then
-  begin
-    goto _L__sw0_c16;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete) then
-  begin
-    goto _L__sw0_c17;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_1) then
-  begin
-    goto _L__sw0_c18;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_extension_quoted_value_done) then
-  begin
-    goto _L__sw0_c19;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_2) then
-  begin
-    goto _L__sw0_c20;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_30) then
-  begin
-    goto _L__sw0_c21;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair) then
-  begin
-    goto _L__sw0_c22;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_31) then
-  begin
-    goto _L__sw0_c23;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_extension_quoted_value) then
-  begin
-    goto _L__sw0_c24;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_3) then
-  begin
-    goto _L__sw0_c25;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_33) then
-  begin
-    goto _L__sw0_c26;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_extension_value) then
-  begin
-    goto _L__sw0_c27;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value) then
-  begin
-    goto _L__sw0_c28;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_34) then
-  begin
-    goto _L__sw0_c29;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_extension_name) then
-  begin
-    goto _L__sw0_c30;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name) then
-  begin
-    goto _L__sw0_c31;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_extensions) then
-  begin
-    goto _L__sw0_c32;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_size_otherwise) then
-  begin
-    goto _L__sw0_c33;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_size) then
-  begin
-    goto _L__sw0_c34;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_chunk_size_digit) then
-  begin
-    goto _L__sw0_c35;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_update_content_length_1) then
-  begin
-    goto _L__sw0_c36;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_consume_content_length_1) then
-  begin
-    goto _L__sw0_c37;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_body_1) then
-  begin
-    goto _L__sw0_c38;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_eof) then
-  begin
-    goto _L__sw0_c39;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_body_2) then
-  begin
-    goto _L__sw0_c40;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__after_headers_complete) then
-  begin
-    goto _L__sw0_c41;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_5) then
-  begin
-    goto _L__sw0_c42;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_headers_almost_done) then
-  begin
-    goto _L__sw0_c43;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_colon_discard_ws) then
-  begin
-    goto _L__sw0_c44;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_header_value_complete) then
-  begin
-    goto _L__sw0_c45;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_header_value) then
-  begin
-    goto _L__sw0_c46;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_discard_lws) then
-  begin
-    goto _L__sw0_c47;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_discard_ws_almost_done) then
-  begin
-    goto _L__sw0_c48;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_lws) then
-  begin
-    goto _L__sw0_c49;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_almost_done) then
-  begin
-    goto _L__sw0_c50;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_test_lenient_flags_17) then
-  begin
-    goto _L__sw0_c51;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_lenient) then
-  begin
-    goto _L__sw0_c52;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_relaxed) then
-  begin
-    goto _L__sw0_c53;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_54) then
-  begin
-    goto _L__sw0_c54;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_otherwise) then
-  begin
-    goto _L__sw0_c55;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_connection_token) then
-  begin
-    goto _L__sw0_c56;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_connection_ws) then
-  begin
-    goto _L__sw0_c57;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_connection_1) then
-  begin
-    goto _L__sw0_c58;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_connection_2) then
-  begin
-    goto _L__sw0_c59;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_connection_3) then
-  begin
-    goto _L__sw0_c60;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_connection) then
-  begin
-    goto _L__sw0_c61;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_56) then
-  begin
-    goto _L__sw0_c62;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_57) then
-  begin
-    goto _L__sw0_c63;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_content_length_ws) then
-  begin
-    goto _L__sw0_c64;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_content_length) then
-  begin
-    goto _L__sw0_c65;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_59) then
-  begin
-    goto _L__sw0_c66;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_58) then
-  begin
-    goto _L__sw0_c67;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_te_token_ows) then
-  begin
-    goto _L__sw0_c68;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value) then
-  begin
-    goto _L__sw0_c69;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_te_token) then
-  begin
-    goto _L__sw0_c70;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_te_chunked_last) then
-  begin
-    goto _L__sw0_c71;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_te_chunked) then
-  begin
-    goto _L__sw0_c72;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1) then
-  begin
-    goto _L__sw0_c73;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_value_discard_ws) then
-  begin
-    goto _L__sw0_c74;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_load_header_state) then
-  begin
-    goto _L__sw0_c75;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_header_field_complete) then
-  begin
-    goto _L__sw0_c76;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_general_otherwise) then
-  begin
-    goto _L__sw0_c77;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_general) then
-  begin
-    goto _L__sw0_c78;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_colon) then
-  begin
-    goto _L__sw0_c79;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_3) then
-  begin
-    goto _L__sw0_c80;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_4) then
-  begin
-    goto _L__sw0_c81;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_2) then
-  begin
-    goto _L__sw0_c82;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_1) then
-  begin
-    goto _L__sw0_c83;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_5) then
-  begin
-    goto _L__sw0_c84;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_6) then
-  begin
-    goto _L__sw0_c85;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_7) then
-  begin
-    goto _L__sw0_c86;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field) then
-  begin
-    goto _L__sw0_c87;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_header_field) then
-  begin
-    goto _L__sw0_c88;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_header_field_start) then
-  begin
-    goto _L__sw0_c89;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_headers_start) then
-  begin
-    goto _L__sw0_c90;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_to_http_09) then
-  begin
-    goto _L__sw0_c91;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_skip_to_http09) then
-  begin
-    goto _L__sw0_c92;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_skip_lf_to_http09_1) then
-  begin
-    goto _L__sw0_c93;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_skip_lf_to_http09) then
-  begin
-    goto _L__sw0_c94;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_pri_upgrade) then
-  begin
-    goto _L__sw0_c95;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_http_complete_crlf) then
-  begin
-    goto _L__sw0_c96;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_http_complete) then
-  begin
-    goto _L__sw0_c97;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_load_method_1) then
-  begin
-    goto _L__sw0_c98;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_version_complete) then
-  begin
-    goto _L__sw0_c99;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_67) then
-  begin
-    goto _L__sw0_c100;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_74) then
-  begin
-    goto _L__sw0_c101;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_http_minor) then
-  begin
-    goto _L__sw0_c102;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_75) then
-  begin
-    goto _L__sw0_c103;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_http_dot) then
-  begin
-    goto _L__sw0_c104;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_76) then
-  begin
-    goto _L__sw0_c105;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_http_major) then
-  begin
-    goto _L__sw0_c106;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_version) then
-  begin
-    goto _L__sw0_c107;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_after_protocol) then
-  begin
-    goto _L__sw0_c108;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_load_method) then
-  begin
-    goto _L__sw0_c109;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete) then
-  begin
-    goto _L__sw0_c110;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_82) then
-  begin
-    goto _L__sw0_c111;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_after_http_start_1) then
-  begin
-    goto _L__sw0_c112;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_load_method_2) then
-  begin
-    goto _L__sw0_c113;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_1) then
-  begin
-    goto _L__sw0_c114;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_after_http_start_2) then
-  begin
-    goto _L__sw0_c115;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_load_method_3) then
-  begin
-    goto _L__sw0_c116;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_2) then
-  begin
-    goto _L__sw0_c117;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_after_http_start_3) then
-  begin
-    goto _L__sw0_c118;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_after_http_start) then
-  begin
-    goto _L__sw0_c119;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_protocol) then
-  begin
-    goto _L__sw0_c120;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_http_start) then
-  begin
-    goto _L__sw0_c121;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_to_http) then
-  begin
-    goto _L__sw0_c122;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_skip_to_http) then
-  begin
-    goto _L__sw0_c123;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_fragment) then
-  begin
-    goto _L__sw0_c124;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_end_stub_query_3) then
-  begin
-    goto _L__sw0_c125;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_query) then
-  begin
-    goto _L__sw0_c126;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_query_or_fragment) then
-  begin
-    goto _L__sw0_c127;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_path) then
-  begin
-    goto _L__sw0_c128;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_stub_path_2) then
-  begin
-    goto _L__sw0_c129;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_stub_path) then
-  begin
-    goto _L__sw0_c130;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_stub_path_1) then
-  begin
-    goto _L__sw0_c131;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_server_with_at) then
-  begin
-    goto _L__sw0_c132;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_server) then
-  begin
-    goto _L__sw0_c133;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_schema_delim_1) then
-  begin
-    goto _L__sw0_c134;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_schema_delim) then
-  begin
-    goto _L__sw0_c135;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_end_stub_schema) then
-  begin
-    goto _L__sw0_c136;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_schema) then
-  begin
-    goto _L__sw0_c137;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_start) then
-  begin
-    goto _L__sw0_c138;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_url_1) then
-  begin
-    goto _L__sw0_c139;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_entry_normal) then
-  begin
-    goto _L__sw0_c140;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_url) then
-  begin
-    goto _L__sw0_c141;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_url_entry_connect) then
-  begin
-    goto _L__sw0_c142;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_spaces_before_url) then
-  begin
-    goto _L__sw0_c143;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_first_space_before_url) then
-  begin
-    goto _L__sw0_c144;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_method_complete_1) then
-  begin
-    goto _L__sw0_c145;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_2) then
-  begin
-    goto _L__sw0_c146;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_3) then
-  begin
-    goto _L__sw0_c147;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_1) then
-  begin
-    goto _L__sw0_c148;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_4) then
-  begin
-    goto _L__sw0_c149;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_6) then
-  begin
-    goto _L__sw0_c150;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_8) then
-  begin
-    goto _L__sw0_c151;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_9) then
-  begin
-    goto _L__sw0_c152;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_7) then
-  begin
-    goto _L__sw0_c153;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_5) then
-  begin
-    goto _L__sw0_c154;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_12) then
-  begin
-    goto _L__sw0_c155;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_13) then
-  begin
-    goto _L__sw0_c156;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_11) then
-  begin
-    goto _L__sw0_c157;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_10) then
-  begin
-    goto _L__sw0_c158;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_14) then
-  begin
-    goto _L__sw0_c159;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_17) then
-  begin
-    goto _L__sw0_c160;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_16) then
-  begin
-    goto _L__sw0_c161;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_15) then
-  begin
-    goto _L__sw0_c162;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_18) then
-  begin
-    goto _L__sw0_c163;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_20) then
-  begin
-    goto _L__sw0_c164;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_21) then
-  begin
-    goto _L__sw0_c165;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_19) then
-  begin
-    goto _L__sw0_c166;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_23) then
-  begin
-    goto _L__sw0_c167;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_24) then
-  begin
-    goto _L__sw0_c168;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_26) then
-  begin
-    goto _L__sw0_c169;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_28) then
-  begin
-    goto _L__sw0_c170;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_29) then
-  begin
-    goto _L__sw0_c171;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_27) then
-  begin
-    goto _L__sw0_c172;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_25) then
-  begin
-    goto _L__sw0_c173;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_30) then
-  begin
-    goto _L__sw0_c174;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_22) then
-  begin
-    goto _L__sw0_c175;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_31) then
-  begin
-    goto _L__sw0_c176;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_32) then
-  begin
-    goto _L__sw0_c177;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_35) then
-  begin
-    goto _L__sw0_c178;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_36) then
-  begin
-    goto _L__sw0_c179;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_34) then
-  begin
-    goto _L__sw0_c180;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_37) then
-  begin
-    goto _L__sw0_c181;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_38) then
-  begin
-    goto _L__sw0_c182;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_42) then
-  begin
-    goto _L__sw0_c183;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_43) then
-  begin
-    goto _L__sw0_c184;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_41) then
-  begin
-    goto _L__sw0_c185;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_40) then
-  begin
-    goto _L__sw0_c186;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_39) then
-  begin
-    goto _L__sw0_c187;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_45) then
-  begin
-    goto _L__sw0_c188;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_44) then
-  begin
-    goto _L__sw0_c189;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_33) then
-  begin
-    goto _L__sw0_c190;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_46) then
-  begin
-    goto _L__sw0_c191;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_49) then
-  begin
-    goto _L__sw0_c192;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_50) then
-  begin
-    goto _L__sw0_c193;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_51) then
-  begin
-    goto _L__sw0_c194;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_52) then
-  begin
-    goto _L__sw0_c195;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_48) then
-  begin
-    goto _L__sw0_c196;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_47) then
-  begin
-    goto _L__sw0_c197;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_55) then
-  begin
-    goto _L__sw0_c198;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_57) then
-  begin
-    goto _L__sw0_c199;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_58) then
-  begin
-    goto _L__sw0_c200;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_56) then
-  begin
-    goto _L__sw0_c201;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_54) then
-  begin
-    goto _L__sw0_c202;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_59) then
-  begin
-    goto _L__sw0_c203;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_60) then
-  begin
-    goto _L__sw0_c204;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_53) then
-  begin
-    goto _L__sw0_c205;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_62) then
-  begin
-    goto _L__sw0_c206;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_63) then
-  begin
-    goto _L__sw0_c207;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_61) then
-  begin
-    goto _L__sw0_c208;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_66) then
-  begin
-    goto _L__sw0_c209;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_68) then
-  begin
-    goto _L__sw0_c210;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_69) then
-  begin
-    goto _L__sw0_c211;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_67) then
-  begin
-    goto _L__sw0_c212;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_70) then
-  begin
-    goto _L__sw0_c213;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_65) then
-  begin
-    goto _L__sw0_c214;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req_64) then
-  begin
-    goto _L__sw0_c215;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_after_start_req) then
-  begin
-    goto _L__sw0_c216;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_method_1) then
-  begin
-    goto _L__sw0_c217;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_line_almost_done) then
-  begin
-    goto _L__sw0_c218;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_test_lenient_flags_31) then
-  begin
-    goto _L__sw0_c219;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_status) then
-  begin
-    goto _L__sw0_c220;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_status) then
-  begin
-    goto _L__sw0_c221;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_status_code_otherwise) then
-  begin
-    goto _L__sw0_c222;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_status_code_digit_3) then
-  begin
-    goto _L__sw0_c223;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_status_code_digit_2) then
-  begin
-    goto _L__sw0_c224;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_status_code_digit_1) then
-  begin
-    goto _L__sw0_c225;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_after_version) then
-  begin
-    goto _L__sw0_c226;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_version_complete_1) then
-  begin
-    goto _L__sw0_c227;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_93) then
-  begin
-    goto _L__sw0_c228;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_107) then
-  begin
-    goto _L__sw0_c229;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_http_minor) then
-  begin
-    goto _L__sw0_c230;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_108) then
-  begin
-    goto _L__sw0_c231;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_http_dot) then
-  begin
-    goto _L__sw0_c232;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_109) then
-  begin
-    goto _L__sw0_c233;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_http_major) then
-  begin
-    goto _L__sw0_c234;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_version_1) then
-  begin
-    goto _L__sw0_c235;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_after_protocol) then
-  begin
-    goto _L__sw0_c236;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_3) then
-  begin
-    goto _L__sw0_c237;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_error_115) then
-  begin
-    goto _L__sw0_c238;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_after_start_1) then
-  begin
-    goto _L__sw0_c239;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_after_start_2) then
-  begin
-    goto _L__sw0_c240;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_after_start_3) then
-  begin
-    goto _L__sw0_c241;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_res_after_start) then
-  begin
-    goto _L__sw0_c242;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1) then
-  begin
-    goto _L__sw0_c243;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_llhttp__on_method_complete) then
-  begin
-    goto _L__sw0_c244;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_or_res_method_2) then
-  begin
-    goto _L__sw0_c245;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_update_type_1) then
-  begin
-    goto _L__sw0_c246;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_or_res_method_3) then
-  begin
-    goto _L__sw0_c247;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_or_res_method_1) then
-  begin
-    goto _L__sw0_c248;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_req_or_res_method) then
-  begin
-    goto _L__sw0_c249;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_span_start_llhttp__on_method) then
-  begin
-    goto _L__sw0_c250;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_start_req_or_res) then
-  begin
-    goto _L__sw0_c251;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_load_type) then
-  begin
-    goto _L__sw0_c252;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_invoke_update_finish) then
-  begin
-    goto _L__sw0_c253;
-  end;
-  if (TLlparseStateT(PtrInt(state^._current)) = s_n_llhttp__internal__n_start) then
-  begin
-    goto _L__sw0_c254;
-  end;
-  goto _L__sw0_def;
-  goto _L__sw0_end;
-  _L__sw0_c1:
-  _L_s_n_llhttp__internal__n_closed:
-  begin
-    if (p = endp) then
+  case TLlparseStateT(PtrInt(state^._current)) of
+    s_n_llhttp__internal__n_closed:
     begin
-      Result := s_n_llhttp__internal__n_closed;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_closed:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_closed;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_closed;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_closed;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_closed;
+          end;
+          else
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_3;
+        end;
       end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_closed;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__after_message_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__after_message_complete:
+      case llhttp__after_message_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_update_content_length;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_invoke_update_finish_1;
       end;
-      else
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_3;
     end;
-  end;
-  _L__sw0_c2:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__after_message_complete:
-  case llhttp__after_message_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    1:
+    s_n_llhttp__internal__n_pause_1:
     begin
-      goto _L_s_n_llhttp__internal__n_invoke_update_content_length;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_invoke_update_finish_1;
-  end;
-  _L__sw0_c3:
-  _L_s_n_llhttp__internal__n_pause_1:
-  begin
-    state^.error := 22;
-    state^.reason := 'Pause on CONNECT/Upgrade';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_n_llhttp__internal__n_invoke_llhttp__after_message_complete));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c4:
-  _L_s_n_llhttp__internal__n_invoke_is_equal_upgrade:
-  case llhttp__internal__c_is_equal_upgrade(state, p, endp) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_llhttp__after_message_complete;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_pause_1;
-  end;
-  _L__sw0_c5:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_2:
-  case llhttp__on_message_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_is_equal_upgrade;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_13;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_38;
-  end;
-  _L__sw0_c6:
-  _L_s_n_llhttp__internal__n_chunk_data_almost_done_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_chunk_data_almost_done_1;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_pause_1:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete;
+        state^.error := 22;
+        state^.reason := 'Pause on CONNECT/Upgrade';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_n_llhttp__internal__n_invoke_llhttp__after_message_complete));
+        Result := s_error;
+        Exit;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_7;
     end;
-  end;
-  _L__sw0_c7:
-  _L_s_n_llhttp__internal__n_chunk_data_almost_done:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_is_equal_upgrade:
     begin
-      Result := s_n_llhttp__internal__n_chunk_data_almost_done;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_6;
+      _L_s_n_llhttp__internal__n_invoke_is_equal_upgrade:
+      case llhttp__internal__c_is_equal_upgrade(state, p, endp) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_llhttp__after_message_complete;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_pause_1;
       end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_data_almost_done_1;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_2:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_2:
+      case llhttp__on_message_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_is_equal_upgrade;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_13;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_38;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_7;
     end;
-  end;
-  _L__sw0_c8:
-  _L_s_n_llhttp__internal__n_consume_content_length:
-  begin
-    avail := endp - p;
-    need := state^.content_length;
-    if (avail >= need) then
+    s_n_llhttp__internal__n_chunk_data_almost_done_1:
     begin
-      Inc(p, need);
-      state^.content_length := 0;
-      goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_body;
-    end;
-    Dec(state^.content_length, avail);
-    Result := s_n_llhttp__internal__n_consume_content_length;
-    Exit;
-  end;
-  _L__sw0_c9:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_body:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_body;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_body);
-    goto _L_s_n_llhttp__internal__n_consume_content_length;
-  end;
-  _L__sw0_c10:
-  _L_s_n_llhttp__internal__n_invoke_is_equal_content_length:
-  case llhttp__internal__c_is_equal_content_length(state, p, endp) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_body;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_invoke_or_flags;
-  end;
-  _L__sw0_c11:
-  _L_s_n_llhttp__internal__n_chunk_size_almost_done:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_chunk_size_almost_done;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_chunk_data_almost_done_1:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_header;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_data_almost_done_1;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_complete;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_7;
+        end;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_8;
     end;
-  end;
-  _L__sw0_c12:
-  _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_9:
-  case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
-    1:
+    s_n_llhttp__internal__n_chunk_data_almost_done:
     begin
-      goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_20;
-  end;
-  _L__sw0_c13:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete:
-  case llhttp__on_chunk_extension_name_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_9;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_5;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_19;
-  end;
-  _L__sw0_c14:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_1:
-  case llhttp__on_chunk_extension_name_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_6;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_21;
-  end;
-  _L__sw0_c15:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_2:
-  case llhttp__on_chunk_extension_name_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_chunk_extensions;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_7;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_22;
-  end;
-  _L__sw0_c16:
-  _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_10:
-  case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
-    1:
-    begin
-      goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_25;
-  end;
-  _L__sw0_c17:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete:
-  case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_10;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_8;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_24;
-  end;
-  _L__sw0_c18:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_1:
-  case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_9;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_26;
-  end;
-  _L__sw0_c19:
-  _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_done:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_chunk_extension_quoted_value_done;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_chunk_data_almost_done:
       begin
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_11;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_data_almost_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_6;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_data_almost_done_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_7;
+        end;
       end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
-      end;
-      LongInt(';'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extensions;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_29;
     end;
-  end;
-  _L__sw0_c20:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_2:
-  case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
+    s_n_llhttp__internal__n_consume_content_length:
     begin
-      goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_done;
+      _L_s_n_llhttp__internal__n_consume_content_length:
+      begin
+        avail := endp - p;
+        need := state^.content_length;
+        if (avail >= need) then
+        begin
+          Inc(p, need);
+          state^.content_length := 0;
+          goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_body;
+        end;
+        Dec(state^.content_length, avail);
+        Result := s_n_llhttp__internal__n_consume_content_length;
+        Exit;
+      end;
     end;
-    21:
+    s_n_llhttp__internal__n_span_start_llhttp__on_body:
     begin
-      goto _L_s_n_llhttp__internal__n_pause_10;
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_body:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_body;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_body);
+        goto _L_s_n_llhttp__internal__n_consume_content_length;
+      end;
     end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_27;
-  end;
-  _L__sw0_c21:
-  _L_s_n_llhttp__internal__n_error_30:
-  begin
-    state^.error := 2;
-    state^.reason := 'Invalid quoted-pair in chunk extensions quoted value';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c22:
-  _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_is_equal_content_length:
     begin
-      Result := s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value;
+      _L_s_n_llhttp__internal__n_invoke_is_equal_content_length:
+      case llhttp__internal__c_is_equal_content_length(state, p, endp) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_body;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_invoke_or_flags;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_3;
     end;
-  end;
-  _L__sw0_c23:
-  _L_s_n_llhttp__internal__n_error_31:
-  begin
-    state^.error := 2;
-    state^.reason := 'Invalid character in chunk extensions quoted value';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c24:
-  _L_s_n_llhttp__internal__n_chunk_extension_quoted_value:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_chunk_size_almost_done:
     begin
-      Result := s_n_llhttp__internal__n_chunk_extension_quoted_value;
-      Exit;
+      _L_s_n_llhttp__internal__n_chunk_size_almost_done:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_size_almost_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_header;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_8;
+        end;
+      end;
     end;
-    case _static_llhttp__internal__run_lookup_table_2[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value;
-      end;
-      2:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_2;
-      end;
-      3:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_4;
-    end;
-  end;
-  _L__sw0_c25:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_3:
-  case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
+    s_n_llhttp__internal__n_invoke_test_lenient_flags_9:
     begin
-      goto _L_s_n_llhttp__internal__n_chunk_extensions;
+      _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_9:
+      case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_20;
+      end;
     end;
-    21:
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete:
     begin
-      goto _L_s_n_llhttp__internal__n_pause_11;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete:
+      case llhttp__on_chunk_extension_name_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_9;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_5;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_19;
+      end;
     end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_32;
-  end;
-  _L__sw0_c26:
-  _L_s_n_llhttp__internal__n_error_33:
-  begin
-    state^.error := 2;
-    state^.reason := 'Invalid character in chunk extensions value';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c27:
-  _L_s_n_llhttp__internal__n_chunk_extension_value:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_1:
     begin
-      Result := s_n_llhttp__internal__n_chunk_extension_value;
-      Exit;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_1:
+      case llhttp__on_chunk_extension_name_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_6;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_21;
+      end;
     end;
-    case _static_llhttp__internal__run_lookup_table_3[UInt8(p^)] of
-      1:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value;
-      end;
-      2:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_1;
-      end;
-      3:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extension_value;
-      end;
-      4:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value;
-      end;
-      5:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_5;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_6;
-    end;
-  end;
-  _L__sw0_c28:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_2:
     begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value;
-      Exit;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_2:
+      case llhttp__on_chunk_extension_name_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_extensions;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_7;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_22;
+      end;
     end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_chunk_extension_value);
-    goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_3;
-  end;
-  _L__sw0_c29:
-  _L_s_n_llhttp__internal__n_error_34:
-  begin
-    state^.error := 2;
-    state^.reason := 'Invalid character in chunk extensions name';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c30:
-  _L_s_n_llhttp__internal__n_chunk_extension_name:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_test_lenient_flags_10:
     begin
-      Result := s_n_llhttp__internal__n_chunk_extension_name;
-      Exit;
+      _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_10:
+      case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_25;
+      end;
     end;
-    case _static_llhttp__internal__run_lookup_table_4[UInt8(p^)] of
-      1:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name;
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete:
+      case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_10;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_8;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_24;
       end;
-      2:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_1;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_1:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_1:
+      case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_9;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_26;
       end;
-      3:
+    end;
+    s_n_llhttp__internal__n_chunk_extension_quoted_value_done:
+    begin
+      _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_done:
       begin
-        Inc(p);
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_extension_quoted_value_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_11;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
+          end;
+          LongInt(';'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extensions;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_29;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_2:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_2:
+      case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_done;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_10;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_27;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_30:
+    begin
+      _L_s_n_llhttp__internal__n_error_30:
+      begin
+        state^.error := 2;
+        state^.reason := 'Invalid quoted-pair in chunk extensions quoted value';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair:
+    begin
+      _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_3;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_31:
+    begin
+      _L_s_n_llhttp__internal__n_error_31:
+      begin
+        state^.error := 2;
+        state^.reason := 'Invalid character in chunk extensions quoted value';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_chunk_extension_quoted_value:
+    begin
+      _L_s_n_llhttp__internal__n_chunk_extension_quoted_value:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_extension_quoted_value;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_2[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value;
+          end;
+          2:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_2;
+          end;
+          3:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value_quoted_pair;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_4;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_3:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_value_complete_3:
+      case llhttp__on_chunk_extension_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_chunk_extensions;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_11;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_32;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_33:
+    begin
+      _L_s_n_llhttp__internal__n_error_33:
+      begin
+        state^.error := 2;
+        state^.reason := 'Invalid character in chunk extensions value';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_chunk_extension_value:
+    begin
+      _L_s_n_llhttp__internal__n_chunk_extension_value:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_extension_value;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_3[UInt8(p^)] of
+          1:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_1;
+          end;
+          3:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extension_value;
+          end;
+          4:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extension_quoted_value;
+          end;
+          5:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_5;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_value_6;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_value;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_chunk_extension_value);
+        goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_chunk_extension_name_complete_3;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_34:
+    begin
+      _L_s_n_llhttp__internal__n_error_34:
+      begin
+        state^.error := 2;
+        state^.reason := 'Invalid character in chunk extensions name';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_chunk_extension_name:
+    begin
+      _L_s_n_llhttp__internal__n_chunk_extension_name:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_extension_name;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_4[UInt8(p^)] of
+          1:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_1;
+          end;
+          3:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extension_name;
+          end;
+          4:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_2;
+          end;
+          5:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_4;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_chunk_extension_name);
         goto _L_s_n_llhttp__internal__n_chunk_extension_name;
       end;
-      4:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_2;
-      end;
-      5:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_chunk_extension_name_4;
     end;
-  end;
-  _L__sw0_c31:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_chunk_extensions:
     begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name;
-      Exit;
+      _L_s_n_llhttp__internal__n_chunk_extensions:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_extensions;
+          Exit;
+        end;
+        case p^ of
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_17;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_18;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name;
+        end;
+      end;
     end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_chunk_extension_name);
-    goto _L_s_n_llhttp__internal__n_chunk_extension_name;
-  end;
-  _L__sw0_c32:
-  _L_s_n_llhttp__internal__n_chunk_extensions:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_chunk_size_otherwise:
     begin
-      Result := s_n_llhttp__internal__n_chunk_extensions;
-      Exit;
-    end;
-    case p^ of
-      13:
+      _L_s_n_llhttp__internal__n_chunk_size_otherwise:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_17;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_size_otherwise;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_4;
+          end;
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_5;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_4;
+          end;
+          LongInt(';'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_chunk_extensions;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_35;
+        end;
       end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_18;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_chunk_extension_name;
     end;
-  end;
-  _L__sw0_c33:
-  _L_s_n_llhttp__internal__n_chunk_size_otherwise:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_chunk_size:
     begin
-      Result := s_n_llhttp__internal__n_chunk_size_otherwise;
-      Exit;
+      _L_s_n_llhttp__internal__n_chunk_size:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_size;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('A'):
+          begin
+            Inc(p);
+            match := 10;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('B'):
+          begin
+            Inc(p);
+            match := 11;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('C'):
+          begin
+            Inc(p);
+            match := 12;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('D'):
+          begin
+            Inc(p);
+            match := 13;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('E'):
+          begin
+            Inc(p);
+            match := 14;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('F'):
+          begin
+            Inc(p);
+            match := 15;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('a'):
+          begin
+            Inc(p);
+            match := 10;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('b'):
+          begin
+            Inc(p);
+            match := 11;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('c'):
+          begin
+            Inc(p);
+            match := 12;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('d'):
+          begin
+            Inc(p);
+            match := 13;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('e'):
+          begin
+            Inc(p);
+            match := 14;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('f'):
+          begin
+            Inc(p);
+            match := 15;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_chunk_size_otherwise;
+        end;
+      end;
     end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_4;
-      end;
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_5;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_size_almost_done;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_4;
-      end;
-      LongInt(';'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_chunk_extensions;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_35;
-    end;
-  end;
-  _L__sw0_c34:
-  _L_s_n_llhttp__internal__n_chunk_size:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_chunk_size_digit:
     begin
-      Result := s_n_llhttp__internal__n_chunk_size;
-      Exit;
+      _L_s_n_llhttp__internal__n_chunk_size_digit:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_chunk_size_digit;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('A'):
+          begin
+            Inc(p);
+            match := 10;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('B'):
+          begin
+            Inc(p);
+            match := 11;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('C'):
+          begin
+            Inc(p);
+            match := 12;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('D'):
+          begin
+            Inc(p);
+            match := 13;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('E'):
+          begin
+            Inc(p);
+            match := 14;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('F'):
+          begin
+            Inc(p);
+            match := 15;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('a'):
+          begin
+            Inc(p);
+            match := 10;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('b'):
+          begin
+            Inc(p);
+            match := 11;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('c'):
+          begin
+            Inc(p);
+            match := 12;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('d'):
+          begin
+            Inc(p);
+            match := 13;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('e'):
+          begin
+            Inc(p);
+            match := 14;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          LongInt('f'):
+          begin
+            Inc(p);
+            match := 15;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_37;
+        end;
+      end;
     end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('A'):
-      begin
-        Inc(p);
-        match := 10;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('B'):
-      begin
-        Inc(p);
-        match := 11;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('C'):
-      begin
-        Inc(p);
-        match := 12;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('D'):
-      begin
-        Inc(p);
-        match := 13;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('E'):
-      begin
-        Inc(p);
-        match := 14;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('F'):
-      begin
-        Inc(p);
-        match := 15;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('a'):
-      begin
-        Inc(p);
-        match := 10;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('b'):
-      begin
-        Inc(p);
-        match := 11;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('c'):
-      begin
-        Inc(p);
-        match := 12;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('d'):
-      begin
-        Inc(p);
-        match := 13;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('e'):
-      begin
-        Inc(p);
-        match := 14;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('f'):
-      begin
-        Inc(p);
-        match := 15;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_chunk_size_otherwise;
-    end;
-  end;
-  _L__sw0_c35:
-  _L_s_n_llhttp__internal__n_chunk_size_digit:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_update_content_length_1:
     begin
-      Result := s_n_llhttp__internal__n_chunk_size_digit;
-      Exit;
+      _L_s_n_llhttp__internal__n_invoke_update_content_length_1:
+      llhttp__internal__c_update_content_length(state, p, endp);
+      goto _L_s_n_llhttp__internal__n_chunk_size_digit;
     end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('A'):
-      begin
-        Inc(p);
-        match := 10;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('B'):
-      begin
-        Inc(p);
-        match := 11;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('C'):
-      begin
-        Inc(p);
-        match := 12;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('D'):
-      begin
-        Inc(p);
-        match := 13;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('E'):
-      begin
-        Inc(p);
-        match := 14;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('F'):
-      begin
-        Inc(p);
-        match := 15;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('a'):
-      begin
-        Inc(p);
-        match := 10;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('b'):
-      begin
-        Inc(p);
-        match := 11;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('c'):
-      begin
-        Inc(p);
-        match := 12;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('d'):
-      begin
-        Inc(p);
-        match := 13;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('e'):
-      begin
-        Inc(p);
-        match := 14;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      LongInt('f'):
-      begin
-        Inc(p);
-        match := 15;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_37;
-    end;
-  end;
-  _L__sw0_c36:
-  _L_s_n_llhttp__internal__n_invoke_update_content_length_1:
-  llhttp__internal__c_update_content_length(state, p, endp);
-  goto _L_s_n_llhttp__internal__n_chunk_size_digit;
-  _L__sw0_c37:
-  _L_s_n_llhttp__internal__n_consume_content_length_1:
-  begin
-    avail_2 := endp - p;
-    need_2 := state^.content_length;
-    if (avail_2 >= need_2) then
+    s_n_llhttp__internal__n_consume_content_length_1:
     begin
-      Inc(p, need_2);
-      state^.content_length := 0;
-      goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_body_1;
-    end;
-    Dec(state^.content_length, avail_2);
-    Result := s_n_llhttp__internal__n_consume_content_length_1;
-    Exit;
-  end;
-  _L__sw0_c38:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_body_1;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_body);
-    goto _L_s_n_llhttp__internal__n_consume_content_length_1;
-  end;
-  _L__sw0_c39:
-  _L_s_n_llhttp__internal__n_eof:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_eof;
-      Exit;
-    end;
-    Inc(p);
-    goto _L_s_n_llhttp__internal__n_eof;
-  end;
-  _L__sw0_c40:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_2:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_body_2;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_body);
-    goto _L_s_n_llhttp__internal__n_eof;
-  end;
-  _L__sw0_c41:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__after_headers_complete:
-  case llhttp__after_headers_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    1:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_1;
-    end;
-    2:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_update_content_length_1;
-    end;
-    3:
-    begin
-      goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_1;
-    end;
-    4:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_update_finish_3;
-    end;
-    5:
-    begin
-      goto _L_s_n_llhttp__internal__n_error_39;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete;
-  end;
-  _L__sw0_c42:
-  _L_s_n_llhttp__internal__n_error_5:
-  begin
-    state^.error := 10;
-    state^.reason := 'Invalid header field char';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c43:
-  _L_s_n_llhttp__internal__n_headers_almost_done:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_headers_almost_done;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_consume_content_length_1:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_flags_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_12;
-    end;
-  end;
-  _L__sw0_c44:
-  _L_s_n_llhttp__internal__n_header_field_colon_discard_ws:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_colon_discard_ws;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_colon_discard_ws;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_field_colon;
-    end;
-  end;
-  _L__sw0_c45:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_value_complete:
-  case llhttp__on_header_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_header_field_start;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_18;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_48;
-  end;
-  _L__sw0_c46:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_header_value;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_header_value);
-    goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value;
-  end;
-  _L__sw0_c47:
-  _L_s_n_llhttp__internal__n_header_value_discard_lws:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_discard_lws;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_15;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_15;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_load_header_state_1;
-    end;
-  end;
-  _L__sw0_c48:
-  _L_s_n_llhttp__internal__n_header_value_discard_ws_almost_done:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_discard_ws_almost_done;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_discard_lws;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_16;
-    end;
-  end;
-  _L__sw0_c49:
-  _L_s_n_llhttp__internal__n_header_value_lws:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_lws;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_18;
-      end;
-      LongInt(' '):
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_18;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_load_header_state_5;
-    end;
-  end;
-  _L__sw0_c50:
-  _L_s_n_llhttp__internal__n_header_value_almost_done:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_almost_done;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_lws;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_53;
-    end;
-  end;
-  _L__sw0_c51:
-  _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_17:
-  case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
-    1:
-    begin
-      goto _L_s_n_llhttp__internal__n_header_value_almost_done;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_51;
-  end;
-  _L__sw0_c52:
-  _L_s_n_llhttp__internal__n_header_value_lenient:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_lenient;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_4;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_5;
-      end;
-      else
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_lenient;
-    end;
-  end;
-  _L__sw0_c53:
-  _L_s_n_llhttp__internal__n_header_value_relaxed:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_relaxed;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_5[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_relaxed;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
-    end;
-  end;
-  _L__sw0_c54:
-  _L_s_n_llhttp__internal__n_error_54:
-  begin
-    state^.error := 10;
-    state^.reason := 'Invalid header value char';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c55:
-  _L_s_n_llhttp__internal__n_header_value_otherwise:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_otherwise;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_1;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_19;
-    end;
-  end;
-  _L__sw0_c56:
-  _L_s_n_llhttp__internal__n_header_value_connection_token:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_connection_token;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_6[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection_token;
-      end;
-      2:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
-    end;
-  end;
-  _L__sw0_c57:
-  _L_s_n_llhttp__internal__n_header_value_connection_ws:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_connection_ws;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection_ws;
-      end;
-      LongInt(','):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_load_header_state_6;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_5;
-    end;
-  end;
-  _L__sw0_c58:
-  _L_s_n_llhttp__internal__n_header_value_connection_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_connection_1;
-      Exit;
-    end;
-    match_seq := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob2[0]), LLHTTP_VERSION_MINOR);
-    p := match_seq.current;
-    case match_seq.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_3;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_header_value_connection_1;
+        avail_2 := endp - p;
+        need_2 := state^.content_length;
+        if (avail_2 >= need_2) then
+        begin
+          Inc(p, need_2);
+          state^.content_length := 0;
+          goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_body_1;
+        end;
+        Dec(state^.content_length, avail_2);
+        Result := s_n_llhttp__internal__n_consume_content_length_1;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_header_value_connection_token;
-      end;
     end;
-  end;
-  _L__sw0_c59:
-  _L_s_n_llhttp__internal__n_header_value_connection_2:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_span_start_llhttp__on_body_1:
     begin
-      Result := s_n_llhttp__internal__n_header_value_connection_2;
-      Exit;
-    end;
-    match_seq_2 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob4[0]), LLHTTP_VERSION_MAJOR);
-    p := match_seq_2.current;
-    case match_seq_2.status of
-      kMatchComplete:
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_1:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_6;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_body_1;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_body);
+        goto _L_s_n_llhttp__internal__n_consume_content_length_1;
       end;
-      kMatchPause:
+    end;
+    s_n_llhttp__internal__n_eof:
+    begin
+      _L_s_n_llhttp__internal__n_eof:
       begin
-        Result := s_n_llhttp__internal__n_header_value_connection_2;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_eof;
+          Exit;
+        end;
+        Inc(p);
+        goto _L_s_n_llhttp__internal__n_eof;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_body_2:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_body_2;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_body);
+        goto _L_s_n_llhttp__internal__n_eof;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__after_headers_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__after_headers_complete:
+      case llhttp__after_headers_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete_1;
+        end;
+        2:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_update_content_length_1;
+        end;
+        3:
+        begin
+          goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_body_1;
+        end;
+        4:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_update_finish_3;
+        end;
+        5:
+        begin
+          goto _L_s_n_llhttp__internal__n_error_39;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_complete;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_5:
+    begin
+      _L_s_n_llhttp__internal__n_error_5:
+      begin
+        state^.error := 10;
+        state^.reason := 'Invalid header field char';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_header_value_connection_token;
-      end;
     end;
-  end;
-  _L__sw0_c60:
-  _L_s_n_llhttp__internal__n_header_value_connection_3:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_headers_almost_done:
     begin
-      Result := s_n_llhttp__internal__n_header_value_connection_3;
-      Exit;
-    end;
-    match_seq_3 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob5[0]), 6);
-    p := match_seq_3.current;
-    case match_seq_3.status of
-      kMatchComplete:
+      _L_s_n_llhttp__internal__n_headers_almost_done:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_7;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_headers_almost_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_flags_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_12;
+        end;
       end;
-      kMatchPause:
+    end;
+    s_n_llhttp__internal__n_header_field_colon_discard_ws:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_colon_discard_ws:
       begin
-        Result := s_n_llhttp__internal__n_header_value_connection_3;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_colon_discard_ws;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_colon_discard_ws;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_field_colon;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_header_value_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_value_complete:
+      case llhttp__on_header_value_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_header_field_start;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_18;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_48;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_header_value:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_header_value;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_header_value);
+        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_discard_lws:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_discard_lws:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_discard_lws;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_15;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_15;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_load_header_state_1;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_discard_ws_almost_done:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_discard_ws_almost_done:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_discard_ws_almost_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_discard_lws;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_16;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_lws:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_lws:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_lws;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_18;
+          end;
+          LongInt(' '):
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_18;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_load_header_state_5;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_almost_done:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_almost_done:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_almost_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_lws;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_53;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_test_lenient_flags_17:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_17:
+      case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_header_value_almost_done;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_51;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_lenient:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_lenient:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_lenient;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_4;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_5;
+          end;
+          else
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_lenient;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_relaxed:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_relaxed:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_relaxed;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_5[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_relaxed;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_54:
+    begin
+      _L_s_n_llhttp__internal__n_error_54:
+      begin
+        state^.error := 10;
+        state^.reason := 'Invalid header value char';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_header_value_connection_token;
-      end;
     end;
-  end;
-  _L__sw0_c61:
-  _L_s_n_llhttp__internal__n_header_value_connection:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_otherwise:
     begin
-      Result := s_n_llhttp__internal__n_header_value_connection;
-      Exit;
+      _L_s_n_llhttp__internal__n_header_value_otherwise:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_otherwise;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_1;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_19;
+        end;
+      end;
     end;
-    if ((p^ >= 65) and (p^ <= 90)) then
+    s_n_llhttp__internal__n_header_value_connection_token:
     begin
-      __c2p_cond_1 := p^ or 32;
-    end
-    else
+      _L_s_n_llhttp__internal__n_header_value_connection_token:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_connection_token;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_6[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection_token;
+          end;
+          2:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_connection_ws:
     begin
-      __c2p_cond_1 := p^;
+      _L_s_n_llhttp__internal__n_header_value_connection_ws:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_connection_ws;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection_ws;
+          end;
+          LongInt(','):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_load_header_state_6;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_5;
+        end;
+      end;
     end;
-    case __c2p_cond_1 of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection;
-      end;
-      LongInt('c'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection_1;
-      end;
-      LongInt('k'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection_2;
-      end;
-      LongInt('u'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_connection_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_connection_token;
-    end;
-  end;
-  _L__sw0_c62:
-  _L_s_n_llhttp__internal__n_error_56:
-  begin
-    state^.error := 11;
-    state^.reason := 'Content-Length overflow';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c63:
-  _L_s_n_llhttp__internal__n_error_57:
-  begin
-    state^.error := 11;
-    state^.reason := 'Invalid character in Content-Length';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c64:
-  _L_s_n_llhttp__internal__n_header_value_content_length_ws:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_connection_1:
     begin
-      Result := s_n_llhttp__internal__n_header_value_content_length_ws;
-      Exit;
+      _L_s_n_llhttp__internal__n_header_value_connection_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_connection_1;
+          Exit;
+        end;
+        match_seq := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob2[0]), LLHTTP_VERSION_MINOR);
+        p := match_seq.current;
+        case match_seq.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_3;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_value_connection_1;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_header_value_connection_token;
+          end;
+        end;
+      end;
     end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_content_length_ws;
-      end;
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_or_flags_17;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_or_flags_17;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_content_length_ws;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_7;
-    end;
-  end;
-  _L__sw0_c65:
-  _L_s_n_llhttp__internal__n_header_value_content_length:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_connection_2:
     begin
-      Result := s_n_llhttp__internal__n_header_value_content_length;
-      Exit;
+      _L_s_n_llhttp__internal__n_header_value_connection_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_connection_2;
+          Exit;
+        end;
+        match_seq_2 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob4[0]), LLHTTP_VERSION_MAJOR);
+        p := match_seq_2.current;
+        case match_seq_2.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_6;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_value_connection_2;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_header_value_connection_token;
+          end;
+        end;
+      end;
     end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_content_length_ws;
-    end;
-  end;
-  _L__sw0_c66:
-  _L_s_n_llhttp__internal__n_error_59:
-  begin
-    state^.error := 15;
-    state^.reason := 'Invalid `Transfer-Encoding` header value';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c67:
-  _L_s_n_llhttp__internal__n_error_58:
-  begin
-    state^.error := 15;
-    state^.reason := 'Invalid `Transfer-Encoding` header value';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c68:
-  _L_s_n_llhttp__internal__n_header_value_te_token_ows:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_connection_3:
     begin
-      Result := s_n_llhttp__internal__n_header_value_te_token_ows;
-      Exit;
-    end;
-    case p^ of
-      9:
+      _L_s_n_llhttp__internal__n_header_value_connection_3:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_connection_3;
+          Exit;
+        end;
+        match_seq_3 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob5[0]), 6);
+        p := match_seq_3.current;
+        case match_seq_3.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_7;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_value_connection_3;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_header_value_connection_token;
+          end;
+        end;
       end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_te_chunked;
     end;
-  end;
-  _L__sw0_c69:
-  _L_s_n_llhttp__internal__n_header_value:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_connection:
     begin
-      Result := s_n_llhttp__internal__n_header_value;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_7[UInt8(p^)] of
-      1:
+      _L_s_n_llhttp__internal__n_header_value_connection:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_connection;
+          Exit;
+        end;
+        if ((p^ >= 65) and (p^ <= 90)) then
+        begin
+          __c2p_cond_1 := p^ or 32;
+        end
+        else
+        begin
+          __c2p_cond_1 := p^;
+        end;
+        case __c2p_cond_1 of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection;
+          end;
+          LongInt('c'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection_1;
+          end;
+          LongInt('k'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection_2;
+          end;
+          LongInt('u'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_connection_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_connection_token;
+        end;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_otherwise;
     end;
-  end;
-  _L__sw0_c70:
-  _L_s_n_llhttp__internal__n_header_value_te_token:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_error_56:
     begin
-      Result := s_n_llhttp__internal__n_header_value_te_token;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_8[UInt8(p^)] of
-      1:
+      _L_s_n_llhttp__internal__n_error_56:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_te_token;
-      end;
-      2:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_9;
-    end;
-  end;
-  _L__sw0_c71:
-  _L_s_n_llhttp__internal__n_header_value_te_chunked_last:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_te_chunked_last;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_8;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_8;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_te_chunked_last;
-      end;
-      LongInt(','):
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_load_type_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_value_te_token;
-    end;
-  end;
-  _L__sw0_c72:
-  _L_s_n_llhttp__internal__n_header_value_te_chunked:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_te_chunked;
-      Exit;
-    end;
-    match_seq_4 := llparse__match_sequence_to_lower_unsafe(state, p, endp, PByte(@llparse_blob6[0]), 7);
-    p := match_seq_4.current;
-    case match_seq_4.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_te_chunked_last;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_header_value_te_chunked;
+        state^.error := 11;
+        state^.reason := 'Content-Length overflow';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_header_value_te_token;
-      end;
     end;
-  end;
-  _L__sw0_c73:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_error_57:
     begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_header_value);
-    goto _L_s_n_llhttp__internal__n_invoke_load_header_state_3;
-  end;
-  _L__sw0_c74:
-  _L_s_n_llhttp__internal__n_header_value_discard_ws:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_value_discard_ws;
-      Exit;
-    end;
-    case p^ of
-      9:
+      _L_s_n_llhttp__internal__n_error_57:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_discard_ws;
-      end;
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_14;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_discard_ws_almost_done;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_value_discard_ws;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1;
-    end;
-  end;
-  _L__sw0_c75:
-  _L_s_n_llhttp__internal__n_invoke_load_header_state:
-  case llhttp__internal__c_load_header_state(state, p, endp) of
-    2:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_test_flags_4;
-    end;
-    3:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_test_flags_5;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_header_value_discard_ws;
-  end;
-  _L__sw0_c76:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_field_complete:
-  case llhttp__on_header_field_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_load_header_state;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_19;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_45;
-  end;
-  _L__sw0_c77:
-  _L_s_n_llhttp__internal__n_header_field_general_otherwise:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_general_otherwise;
-      Exit;
-    end;
-    case p^ of
-      LongInt(':'):
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_62;
-    end;
-  end;
-  _L__sw0_c78:
-  _L_s_n_llhttp__internal__n_header_field_general:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_general;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_9[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_general;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_field_general_otherwise;
-    end;
-  end;
-  _L__sw0_c79:
-  _L_s_n_llhttp__internal__n_header_field_colon:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_colon;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_13;
-      end;
-      LongInt(':'):
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_10;
-    end;
-  end;
-  _L__sw0_c80:
-  _L_s_n_llhttp__internal__n_header_field_3:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_3;
-      Exit;
-    end;
-    match_seq_5 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob1[0]), 6);
-    p := match_seq_5.current;
-    case match_seq_5.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_header_field_3;
+        state^.error := 11;
+        state^.reason := 'Invalid character in Content-Length';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-      end;
     end;
-  end;
-  _L__sw0_c81:
-  _L_s_n_llhttp__internal__n_header_field_4:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_content_length_ws:
     begin
-      Result := s_n_llhttp__internal__n_header_field_4;
-      Exit;
-    end;
-    match_seq_6 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob10[0]), 10);
-    p := match_seq_6.current;
-    case match_seq_6.status of
-      kMatchComplete:
+      _L_s_n_llhttp__internal__n_header_value_content_length_ws:
       begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_content_length_ws;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_content_length_ws;
+          end;
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_or_flags_17;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_or_flags_17;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_content_length_ws;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_value_7;
+        end;
       end;
-      kMatchPause:
+    end;
+    s_n_llhttp__internal__n_header_value_content_length:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_content_length:
       begin
-        Result := s_n_llhttp__internal__n_header_field_4;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_content_length;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_content_length_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_content_length_ws;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_59:
+    begin
+      _L_s_n_llhttp__internal__n_error_59:
+      begin
+        state^.error := 15;
+        state^.reason := 'Invalid `Transfer-Encoding` header value';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-      end;
     end;
-  end;
-  _L__sw0_c82:
-  _L_s_n_llhttp__internal__n_header_field_2:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_error_58:
     begin
-      Result := s_n_llhttp__internal__n_header_field_2;
-      Exit;
-    end;
-    if ((p^ >= 65) and (p^ <= 90)) then
-    begin
-      __c2p_cond_2 := p^ or 32;
-    end
-    else
-    begin
-      __c2p_cond_2 := p^;
-    end;
-    case __c2p_cond_2 of
-      LongInt('n'):
+      _L_s_n_llhttp__internal__n_error_58:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_3;
-      end;
-      LongInt('t'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_4;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-    end;
-  end;
-  _L__sw0_c83:
-  _L_s_n_llhttp__internal__n_header_field_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_1;
-      Exit;
-    end;
-    match_seq_7 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob0[0]), 2);
-    p := match_seq_7.current;
-    case match_seq_7.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_2;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_header_field_1;
+        state^.error := 15;
+        state^.reason := 'Invalid `Transfer-Encoding` header value';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-      end;
     end;
-  end;
-  _L__sw0_c84:
-  _L_s_n_llhttp__internal__n_header_field_5:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_header_value_te_token_ows:
     begin
-      Result := s_n_llhttp__internal__n_header_field_5;
-      Exit;
-    end;
-    match_seq_8 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob11[0]), 15);
-    p := match_seq_8.current;
-    case match_seq_8.status of
-      kMatchComplete:
+      _L_s_n_llhttp__internal__n_header_value_te_token_ows:
       begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_te_token_ows;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_te_chunked;
+        end;
       end;
-      kMatchPause:
+    end;
+    s_n_llhttp__internal__n_header_value:
+    begin
+      _L_s_n_llhttp__internal__n_header_value:
       begin
-        Result := s_n_llhttp__internal__n_header_field_5;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_7[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_otherwise;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_te_token:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_te_token:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_te_token;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_8[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_te_token;
+          end;
+          2:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_te_token_ows;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_9;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_te_chunked_last:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_te_chunked_last:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_te_chunked_last;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_8;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_8;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_te_chunked_last;
+          end;
+          LongInt(','):
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_load_type_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_value_te_token;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_te_chunked:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_te_chunked:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_te_chunked;
+          Exit;
+        end;
+        match_seq_4 := llparse__match_sequence_to_lower_unsafe(state, p, endp, PByte(@llparse_blob6[0]), 7);
+        p := match_seq_4.current;
+        case match_seq_4.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_te_chunked_last;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_value_te_chunked;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_header_value_te_token;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_header_value);
+        goto _L_s_n_llhttp__internal__n_invoke_load_header_state_3;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_value_discard_ws:
+    begin
+      _L_s_n_llhttp__internal__n_header_value_discard_ws:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_value_discard_ws;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_discard_ws;
+          end;
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_14;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_discard_ws_almost_done;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_value_discard_ws;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_value_1;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_load_header_state:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_load_header_state:
+      case llhttp__internal__c_load_header_state(state, p, endp) of
+        2:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_test_flags_4;
+        end;
+        3:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_test_flags_5;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_header_value_discard_ws;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_header_field_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_header_field_complete:
+      case llhttp__on_header_field_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_load_header_state;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_19;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_45;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_general_otherwise:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_general_otherwise:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_general_otherwise;
+          Exit;
+        end;
+        case p^ of
+          LongInt(':'):
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_62;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_general:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_general:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_general;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_9[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_general;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_field_general_otherwise;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_colon:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_colon:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_colon;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_13;
+          end;
+          LongInt(':'):
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_header_field_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_10;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_3:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_3:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_3;
+          Exit;
+        end;
+        match_seq_5 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob1[0]), 6);
+        p := match_seq_5.current;
+        case match_seq_5.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_field_3;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_4:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_4:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_4;
+          Exit;
+        end;
+        match_seq_6 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob10[0]), 10);
+        p := match_seq_6.current;
+        case match_seq_6.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_field_4;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_2:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_2;
+          Exit;
+        end;
+        if ((p^ >= 65) and (p^ <= 90)) then
+        begin
+          __c2p_cond_2 := p^ or 32;
+        end
+        else
+        begin
+          __c2p_cond_2 := p^;
+        end;
+        case __c2p_cond_2 of
+          LongInt('n'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_3;
+          end;
+          LongInt('t'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_4;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_1:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_1;
+          Exit;
+        end;
+        match_seq_7 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob0[0]), 2);
+        p := match_seq_7.current;
+        case match_seq_7.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_2;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_field_1;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_5:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_5:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_5;
+          Exit;
+        end;
+        match_seq_8 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob11[0]), 15);
+        p := match_seq_8.current;
+        case match_seq_8.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_field_5;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_6:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_6:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_6;
+          Exit;
+        end;
+        match_seq_9 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob12[0]), 16);
+        p := match_seq_9.current;
+        case match_seq_9.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_field_6;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_7:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_7:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_7;
+          Exit;
+        end;
+        match_seq_10 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob13[0]), 6);
+        p := match_seq_10.current;
+        case match_seq_10.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_header_field_7;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field:
+    begin
+      _L_s_n_llhttp__internal__n_header_field:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field;
+          Exit;
+        end;
+        if ((p^ >= 65) and (p^ <= 90)) then
+        begin
+          __c2p_cond_3 := p^ or 32;
+        end
+        else
+        begin
+          __c2p_cond_3 := p^;
+        end;
+        case __c2p_cond_3 of
+          LongInt('c'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_1;
+          end;
+          LongInt('p'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_5;
+          end;
+          LongInt('t'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_6;
+          end;
+          LongInt('u'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_header_field_7;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_header_field:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_field:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_header_field;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_header_field);
+        goto _L_s_n_llhttp__internal__n_header_field;
+      end;
+    end;
+    s_n_llhttp__internal__n_header_field_start:
+    begin
+      _L_s_n_llhttp__internal__n_header_field_start:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_header_field_start;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_1;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_headers_almost_done;
+          end;
+          LongInt(':'):
+          begin
+            goto _L_s_n_llhttp__internal__n_error_44;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_field;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_headers_start:
+    begin
+      _L_s_n_llhttp__internal__n_headers_start:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_headers_start;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_header_field_start;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_to_http_09:
+    begin
+      _L_s_n_llhttp__internal__n_url_to_http_09:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_to_http_09;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_http_major;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_skip_to_http09:
+    begin
+      _L_s_n_llhttp__internal__n_url_skip_to_http09:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_skip_to_http09;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          else
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_to_http_09;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_skip_lf_to_http09_1:
+    begin
+      _L_s_n_llhttp__internal__n_url_skip_lf_to_http09_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_skip_lf_to_http09_1;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_to_http_09;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_63;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_skip_lf_to_http09:
+    begin
+      _L_s_n_llhttp__internal__n_url_skip_lf_to_http09:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_skip_lf_to_http09;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_skip_lf_to_http09_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_63;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_pri_upgrade:
+    begin
+      _L_s_n_llhttp__internal__n_req_pri_upgrade:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_pri_upgrade;
+          Exit;
+        end;
+        match_seq_11 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob15[0]), 10);
+        p := match_seq_11.current;
+        case match_seq_11.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_72;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_req_pri_upgrade;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_73;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_http_complete_crlf:
+    begin
+      _L_s_n_llhttp__internal__n_req_http_complete_crlf:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_http_complete_crlf;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_headers_start;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_27;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_http_complete:
+    begin
+      _L_s_n_llhttp__internal__n_req_http_complete:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_http_complete;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_26;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_http_complete_crlf;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_71;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_load_method_1:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_load_method_1:
+      case llhttp__internal__c_load_method(state, p, endp) of
+        34:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_pri_upgrade;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_req_http_complete;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_version_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete:
+      case llhttp__on_version_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_load_method_1;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_21;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_68;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_67:
+    begin
+      _L_s_n_llhttp__internal__n_error_67:
+      begin
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Invalid HTTP version';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-      end;
     end;
-  end;
-  _L__sw0_c85:
-  _L_s_n_llhttp__internal__n_header_field_6:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_error_74:
     begin
-      Result := s_n_llhttp__internal__n_header_field_6;
-      Exit;
-    end;
-    match_seq_9 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob12[0]), 16);
-    p := match_seq_9.current;
-    case match_seq_9.status of
-      kMatchComplete:
+      _L_s_n_llhttp__internal__n_error_74:
       begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_header_field_6;
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Invalid minor version';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-      end;
     end;
-  end;
-  _L__sw0_c86:
-  _L_s_n_llhttp__internal__n_header_field_7:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_req_http_minor:
     begin
-      Result := s_n_llhttp__internal__n_header_field_7;
-      Exit;
-    end;
-    match_seq_10 := llparse__match_sequence_to_lower(state, p, endp, PByte(@llparse_blob13[0]), 6);
-    p := match_seq_10.current;
-    case match_seq_10.status of
-      kMatchComplete:
+      _L_s_n_llhttp__internal__n_req_http_minor:
       begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_header_state;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_http_minor;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_2;
+        end;
       end;
-      kMatchPause:
+    end;
+    s_n_llhttp__internal__n_error_75:
+    begin
+      _L_s_n_llhttp__internal__n_error_75:
       begin
-        Result := s_n_llhttp__internal__n_header_field_7;
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Expected dot';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-      end;
     end;
-  end;
-  _L__sw0_c87:
-  _L_s_n_llhttp__internal__n_header_field:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_req_http_dot:
     begin
-      Result := s_n_llhttp__internal__n_header_field;
-      Exit;
+      _L_s_n_llhttp__internal__n_req_http_dot:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_http_dot;
+          Exit;
+        end;
+        case p^ of
+          LongInt('.'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_http_minor;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_3;
+        end;
+      end;
     end;
-    if ((p^ >= 65) and (p^ <= 90)) then
+    s_n_llhttp__internal__n_error_76:
     begin
-      __c2p_cond_3 := p^ or 32;
-    end
-    else
-    begin
-      __c2p_cond_3 := p^;
-    end;
-    case __c2p_cond_3 of
-      LongInt('c'):
+      _L_s_n_llhttp__internal__n_error_76:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_1;
-      end;
-      LongInt('p'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_5;
-      end;
-      LongInt('t'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_6;
-      end;
-      LongInt('u'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_header_field_7;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_header_state_11;
-    end;
-  end;
-  _L__sw0_c88:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_field:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_header_field;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_header_field);
-    goto _L_s_n_llhttp__internal__n_header_field;
-  end;
-  _L__sw0_c89:
-  _L_s_n_llhttp__internal__n_header_field_start:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_header_field_start;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_1;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_headers_almost_done;
-      end;
-      LongInt(':'):
-      begin
-        goto _L_s_n_llhttp__internal__n_error_44;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_header_field;
-    end;
-  end;
-  _L__sw0_c90:
-  _L_s_n_llhttp__internal__n_headers_start:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_headers_start;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_header_field_start;
-    end;
-  end;
-  _L__sw0_c91:
-  _L_s_n_llhttp__internal__n_url_to_http_09:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_to_http_09;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_http_major;
-    end;
-  end;
-  _L__sw0_c92:
-  _L_s_n_llhttp__internal__n_url_skip_to_http09:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_skip_to_http09;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      else
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_to_http_09;
-    end;
-  end;
-  _L__sw0_c93:
-  _L_s_n_llhttp__internal__n_url_skip_lf_to_http09_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_skip_lf_to_http09_1;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_to_http_09;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_63;
-    end;
-  end;
-  _L__sw0_c94:
-  _L_s_n_llhttp__internal__n_url_skip_lf_to_http09:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_skip_lf_to_http09;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_skip_lf_to_http09_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_63;
-    end;
-  end;
-  _L__sw0_c95:
-  _L_s_n_llhttp__internal__n_req_pri_upgrade:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_pri_upgrade;
-      Exit;
-    end;
-    match_seq_11 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob15[0]), 10);
-    p := match_seq_11.current;
-    case match_seq_11.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_72;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_req_pri_upgrade;
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Invalid major version';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
+    end;
+    s_n_llhttp__internal__n_req_http_major:
+    begin
+      _L_s_n_llhttp__internal__n_req_http_major:
       begin
-        goto _L_s_n_llhttp__internal__n_error_73;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_http_major;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_4;
+        end;
       end;
     end;
-  end;
-  _L__sw0_c96:
-  _L_s_n_llhttp__internal__n_req_http_complete_crlf:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_span_start_llhttp__on_version:
     begin
-      Result := s_n_llhttp__internal__n_req_http_complete_crlf;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_version:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_headers_start;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_version;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_version);
+        goto _L_s_n_llhttp__internal__n_req_http_major;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_27;
     end;
-  end;
-  _L__sw0_c97:
-  _L_s_n_llhttp__internal__n_req_http_complete:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_req_after_protocol:
     begin
-      Result := s_n_llhttp__internal__n_req_http_complete;
-      Exit;
-    end;
-    case p^ of
-      10:
+      _L_s_n_llhttp__internal__n_req_after_protocol:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_26;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_after_protocol;
+          Exit;
+        end;
+        case p^ of
+          LongInt('/'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_version;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_77;
+        end;
       end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_http_complete_crlf;
+    end;
+    s_n_llhttp__internal__n_invoke_load_method:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_load_method:
+      case llhttp__internal__c_load_method(state, p, endp) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        2:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        3:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        4:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        5:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        6:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        7:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        8:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        9:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        10:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        11:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        12:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        13:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        14:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        15:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        16:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        17:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        18:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        19:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        20:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        22:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        23:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        24:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        25:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        26:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        27:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        28:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        29:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        30:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        31:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        32:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        33:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        34:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        46:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_66;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_71;
     end;
-  end;
-  _L__sw0_c98:
-  _L_s_n_llhttp__internal__n_invoke_load_method_1:
-  case llhttp__internal__c_load_method(state, p, endp) of
-    34:
+    s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete:
     begin
-      goto _L_s_n_llhttp__internal__n_req_pri_upgrade;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_req_http_complete;
-  end;
-  _L__sw0_c99:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete:
-  case llhttp__on_version_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_load_method_1;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_21;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_68;
-  end;
-  _L__sw0_c100:
-  _L_s_n_llhttp__internal__n_error_67:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Invalid HTTP version';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c101:
-  _L_s_n_llhttp__internal__n_error_74:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Invalid minor version';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c102:
-  _L_s_n_llhttp__internal__n_req_http_minor:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_http_minor;
-      Exit;
-    end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete:
+      case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_load_method;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_22;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_65;
       end;
-      LongInt('1'):
+    end;
+    s_n_llhttp__internal__n_error_82:
+    begin
+      _L_s_n_llhttp__internal__n_error_82:
       begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_2;
-    end;
-  end;
-  _L__sw0_c103:
-  _L_s_n_llhttp__internal__n_error_75:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Expected dot';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c104:
-  _L_s_n_llhttp__internal__n_req_http_dot:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_http_dot;
-      Exit;
-    end;
-    case p^ of
-      LongInt('.'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_http_minor;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_3;
-    end;
-  end;
-  _L__sw0_c105:
-  _L_s_n_llhttp__internal__n_error_76:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Invalid major version';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c106:
-  _L_s_n_llhttp__internal__n_req_http_major:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_http_major;
-      Exit;
-    end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_4;
-    end;
-  end;
-  _L__sw0_c107:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_version:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_version;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_version);
-    goto _L_s_n_llhttp__internal__n_req_http_major;
-  end;
-  _L__sw0_c108:
-  _L_s_n_llhttp__internal__n_req_after_protocol:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_after_protocol;
-      Exit;
-    end;
-    case p^ of
-      LongInt('/'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_version;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_77;
-    end;
-  end;
-  _L__sw0_c109:
-  _L_s_n_llhttp__internal__n_invoke_load_method:
-  case llhttp__internal__c_load_method(state, p, endp) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    1:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    2:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    3:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    4:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    5:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    6:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    7:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    8:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    9:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    10:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    11:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    12:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    13:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    14:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    15:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    16:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    17:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    18:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    19:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    20:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    22:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    23:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    24:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    25:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    26:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    27:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    28:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    29:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    30:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    31:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    32:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    33:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    34:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    46:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_66;
-  end;
-  _L__sw0_c110:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete:
-  case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_load_method;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_22;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_65;
-  end;
-  _L__sw0_c111:
-  _L_s_n_llhttp__internal__n_error_82:
-  begin
-    state^.error := 8;
-    state^.reason := 'Expected HTTP/, RTSP/ or ICE/';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c112:
-  _L_s_n_llhttp__internal__n_req_after_http_start_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_after_http_start_1;
-      Exit;
-    end;
-    match_seq_12 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob14[0]), 3);
-    p := match_seq_12.current;
-    case match_seq_12.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_req_after_http_start_1;
+        state^.error := 8;
+        state^.reason := 'Expected HTTP/, RTSP/ or ICE/';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
         Exit;
       end;
-      kMatchMismatch:
+    end;
+    s_n_llhttp__internal__n_req_after_http_start_1:
+    begin
+      _L_s_n_llhttp__internal__n_req_after_http_start_1:
       begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_after_http_start_1;
+          Exit;
+        end;
+        match_seq_12 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob14[0]), 3);
+        p := match_seq_12.current;
+        case match_seq_12.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_req_after_http_start_1;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+          end;
+        end;
       end;
     end;
-  end;
-  _L__sw0_c113:
-  _L_s_n_llhttp__internal__n_invoke_load_method_2:
-  case llhttp__internal__c_load_method(state, p, endp) of
-    33:
+    s_n_llhttp__internal__n_invoke_load_method_2:
     begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_79;
-  end;
-  _L__sw0_c114:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_1:
-  case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_load_method_2;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_23;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_78;
-  end;
-  _L__sw0_c115:
-  _L_s_n_llhttp__internal__n_req_after_http_start_2:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_after_http_start_2;
-      Exit;
-    end;
-    match_seq_13 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob16[0]), 2);
-    p := match_seq_13.current;
-    case match_seq_13.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_req_after_http_start_2;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+      _L_s_n_llhttp__internal__n_invoke_load_method_2:
+      case llhttp__internal__c_load_method(state, p, endp) of
+        33:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_79;
       end;
     end;
-  end;
-  _L__sw0_c116:
-  _L_s_n_llhttp__internal__n_invoke_load_method_3:
-  case llhttp__internal__c_load_method(state, p, endp) of
-    1:
+    s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_1:
     begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    3:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    6:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    35:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    36:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    37:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    38:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    39:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    40:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    41:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    42:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    43:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    44:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    45:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_after_protocol;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_81;
-  end;
-  _L__sw0_c117:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_2:
-  case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_load_method_3;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_24;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_80;
-  end;
-  _L__sw0_c118:
-  _L_s_n_llhttp__internal__n_req_after_http_start_3:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_after_http_start_3;
-      Exit;
-    end;
-    match_seq_14 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob17[0]), 3);
-    p := match_seq_14.current;
-    case match_seq_14.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_2;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_req_after_http_start_3;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_1:
+      case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_load_method_2;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_23;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_78;
       end;
     end;
-  end;
-  _L__sw0_c119:
-  _L_s_n_llhttp__internal__n_req_after_http_start:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_req_after_http_start_2:
     begin
-      Result := s_n_llhttp__internal__n_req_after_http_start;
-      Exit;
+      _L_s_n_llhttp__internal__n_req_after_http_start_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_after_http_start_2;
+          Exit;
+        end;
+        match_seq_13 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob16[0]), 2);
+        p := match_seq_13.current;
+        case match_seq_13.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_req_after_http_start_2;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+          end;
+        end;
+      end;
     end;
-    case p^ of
-      LongInt('H'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_after_http_start_1;
-      end;
-      LongInt('I'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_after_http_start_2;
-      end;
-      LongInt('R'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_after_http_start_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
-    end;
-  end;
-  _L__sw0_c120:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_load_method_3:
     begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_protocol;
-      Exit;
+      _L_s_n_llhttp__internal__n_invoke_load_method_3:
+      case llhttp__internal__c_load_method(state, p, endp) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        3:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        6:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        35:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        36:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        37:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        38:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        39:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        40:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        41:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        42:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        43:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        44:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        45:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_after_protocol;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_81;
+      end;
     end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_protocol);
-    goto _L_s_n_llhttp__internal__n_req_after_http_start;
-  end;
-  _L__sw0_c121:
-  _L_s_n_llhttp__internal__n_req_http_start:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_2:
     begin
-      Result := s_n_llhttp__internal__n_req_http_start;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_http_start;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_2:
+      case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_load_method_3;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_24;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_80;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol;
     end;
-  end;
-  _L__sw0_c122:
-  _L_s_n_llhttp__internal__n_url_to_http:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_req_after_http_start_3:
     begin
-      Result := s_n_llhttp__internal__n_url_to_http;
-      Exit;
-    end;
-    case p^ of
-      9:
+      _L_s_n_llhttp__internal__n_req_after_http_start_3:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_after_http_start_3;
+          Exit;
+        end;
+        match_seq_14 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob17[0]), 3);
+        p := match_seq_14.current;
+        case match_seq_14.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_2;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_req_after_http_start_3;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+          end;
+        end;
       end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_url_complete_1;
     end;
-  end;
-  _L__sw0_c123:
-  _L_s_n_llhttp__internal__n_url_skip_to_http:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_req_after_http_start:
     begin
-      Result := s_n_llhttp__internal__n_url_skip_to_http;
-      Exit;
-    end;
-    case p^ of
-      9:
+      _L_s_n_llhttp__internal__n_req_after_http_start:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_after_http_start;
+          Exit;
+        end;
+        case p^ of
+          LongInt('H'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_after_http_start_1;
+          end;
+          LongInt('I'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_after_http_start_2;
+          end;
+          LongInt('R'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_after_http_start_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_3;
+        end;
       end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      else
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_to_http;
     end;
-  end;
-  _L__sw0_c124:
-  _L_s_n_llhttp__internal__n_url_fragment:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_span_start_llhttp__on_protocol:
     begin
-      Result := s_n_llhttp__internal__n_url_fragment;
-      Exit;
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_protocol;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_protocol);
+        goto _L_s_n_llhttp__internal__n_req_after_http_start;
+      end;
     end;
-    case _static_llhttp__internal__run_lookup_table_10[UInt8(p^)] of
-      1:
+    s_n_llhttp__internal__n_req_http_start:
+    begin
+      _L_s_n_llhttp__internal__n_req_http_start:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_http_start;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_http_start;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol;
+        end;
       end;
-      2:
+    end;
+    s_n_llhttp__internal__n_url_to_http:
+    begin
+      _L_s_n_llhttp__internal__n_url_to_http:
       begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_6;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_to_http;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_url_complete_1;
+        end;
       end;
-      3:
+    end;
+    s_n_llhttp__internal__n_url_skip_to_http:
+    begin
+      _L_s_n_llhttp__internal__n_url_skip_to_http:
       begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_7;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_skip_to_http;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          else
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_to_http;
+        end;
       end;
-      4:
+    end;
+    s_n_llhttp__internal__n_url_fragment:
+    begin
+      _L_s_n_llhttp__internal__n_url_fragment:
       begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_8;
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_fragment;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_10[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_6;
+          end;
+          3:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_7;
+          end;
+          4:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_8;
+          end;
+          5:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_fragment;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_83;
+        end;
       end;
-      5:
+    end;
+    s_n_llhttp__internal__n_span_end_stub_query_3:
+    begin
+      _L_s_n_llhttp__internal__n_span_end_stub_query_3:
       begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_end_stub_query_3;
+          Exit;
+        end;
         Inc(p);
         goto _L_s_n_llhttp__internal__n_url_fragment;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_83;
     end;
-  end;
-  _L__sw0_c125:
-  _L_s_n_llhttp__internal__n_span_end_stub_query_3:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_url_query:
     begin
-      Result := s_n_llhttp__internal__n_span_end_stub_query_3;
-      Exit;
+      _L_s_n_llhttp__internal__n_url_query:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_query;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_11[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_9;
+          end;
+          3:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_10;
+          end;
+          4:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_11;
+          end;
+          5:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_query;
+          end;
+          6:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_stub_query_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_84;
+        end;
+      end;
     end;
-    Inc(p);
-    goto _L_s_n_llhttp__internal__n_url_fragment;
-  end;
-  _L__sw0_c126:
-  _L_s_n_llhttp__internal__n_url_query:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_url_query_or_fragment:
     begin
-      Result := s_n_llhttp__internal__n_url_query;
-      Exit;
+      _L_s_n_llhttp__internal__n_url_query_or_fragment:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_query_or_fragment;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_3;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_4;
+          end;
+          LongInt(' '):
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_5;
+          end;
+          LongInt('#'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_fragment;
+          end;
+          LongInt('?'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_query;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_85;
+        end;
+      end;
     end;
-    case _static_llhttp__internal__run_lookup_table_11[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      2:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_9;
-      end;
-      3:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_10;
-      end;
-      4:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_11;
-      end;
-      5:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_query;
-      end;
-      6:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_stub_query_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_84;
-    end;
-  end;
-  _L__sw0_c127:
-  _L_s_n_llhttp__internal__n_url_query_or_fragment:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_url_path:
     begin
-      Result := s_n_llhttp__internal__n_url_query_or_fragment;
-      Exit;
+      _L_s_n_llhttp__internal__n_url_path:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_path;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_12[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_path;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_url_query_or_fragment;
+        end;
+      end;
     end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_3;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_4;
-      end;
-      LongInt(' '):
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_5;
-      end;
-      LongInt('#'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_fragment;
-      end;
-      LongInt('?'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_query;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_85;
-    end;
-  end;
-  _L__sw0_c128:
-  _L_s_n_llhttp__internal__n_url_path:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_span_start_stub_path_2:
     begin
-      Result := s_n_llhttp__internal__n_url_path;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_12[UInt8(p^)] of
-      1:
+      _L_s_n_llhttp__internal__n_span_start_stub_path_2:
       begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      2:
-      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_stub_path_2;
+          Exit;
+        end;
         Inc(p);
         goto _L_s_n_llhttp__internal__n_url_path;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_url_query_or_fragment;
     end;
-  end;
-  _L__sw0_c129:
-  _L_s_n_llhttp__internal__n_span_start_stub_path_2:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_span_start_stub_path:
     begin
-      Result := s_n_llhttp__internal__n_span_start_stub_path_2;
-      Exit;
-    end;
-    Inc(p);
-    goto _L_s_n_llhttp__internal__n_url_path;
-  end;
-  _L__sw0_c130:
-  _L_s_n_llhttp__internal__n_span_start_stub_path:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_stub_path;
-      Exit;
-    end;
-    Inc(p);
-    goto _L_s_n_llhttp__internal__n_url_path;
-  end;
-  _L__sw0_c131:
-  _L_s_n_llhttp__internal__n_span_start_stub_path_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_stub_path_1;
-      Exit;
-    end;
-    Inc(p);
-    goto _L_s_n_llhttp__internal__n_url_path;
-  end;
-  _L__sw0_c132:
-  _L_s_n_llhttp__internal__n_url_server_with_at:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_server_with_at;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_13[UInt8(p^)] of
-      1:
+      _L_s_n_llhttp__internal__n_span_start_stub_path:
       begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_stub_path;
+          Exit;
+        end;
         Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
+        goto _L_s_n_llhttp__internal__n_url_path;
       end;
-      2:
+    end;
+    s_n_llhttp__internal__n_span_start_stub_path_1:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_stub_path_1:
       begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_12;
-      end;
-      3:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_13;
-      end;
-      4:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_14;
-      end;
-      5:
-      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_stub_path_1;
+          Exit;
+        end;
         Inc(p);
+        goto _L_s_n_llhttp__internal__n_url_path;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_server_with_at:
+    begin
+      _L_s_n_llhttp__internal__n_url_server_with_at:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_server_with_at;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_13[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_12;
+          end;
+          3:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_13;
+          end;
+          4:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_14;
+          end;
+          5:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_server;
+          end;
+          6:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_start_stub_path_1;
+          end;
+          7:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_query;
+          end;
+          8:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_86;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_87;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_server:
+    begin
+      _L_s_n_llhttp__internal__n_url_server:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_server;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_14[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url;
+          end;
+          3:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_1;
+          end;
+          4:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_2;
+          end;
+          5:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_server;
+          end;
+          6:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_start_stub_path;
+          end;
+          7:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_query;
+          end;
+          8:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_server_with_at;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_88;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_schema_delim_1:
+    begin
+      _L_s_n_llhttp__internal__n_url_schema_delim_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_schema_delim_1;
+          Exit;
+        end;
+        case p^ of
+          LongInt('/'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_server;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_89;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_schema_delim:
+    begin
+      _L_s_n_llhttp__internal__n_url_schema_delim:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_schema_delim;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          LongInt('/'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_schema_delim_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_89;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_end_stub_schema:
+    begin
+      _L_s_n_llhttp__internal__n_span_end_stub_schema:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_end_stub_schema;
+          Exit;
+        end;
+        Inc(p);
+        goto _L_s_n_llhttp__internal__n_url_schema_delim;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_schema:
+    begin
+      _L_s_n_llhttp__internal__n_url_schema:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_schema;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_15[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_stub_schema;
+          end;
+          3:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_url_schema;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_90;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_start:
+    begin
+      _L_s_n_llhttp__internal__n_url_start:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_start;
+          Exit;
+        end;
+        case _static_llhttp__internal__run_lookup_table_16[UInt8(p^)] of
+          1:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          2:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_start_stub_path_2;
+          end;
+          3:
+          begin
+            goto _L_s_n_llhttp__internal__n_url_schema;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_91;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_url_1:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_url_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_url_1;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_url);
+        goto _L_s_n_llhttp__internal__n_url_start;
+      end;
+    end;
+    s_n_llhttp__internal__n_url_entry_normal:
+    begin
+      _L_s_n_llhttp__internal__n_url_entry_normal:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_entry_normal;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_url_1;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_url:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_url:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_url;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_url);
         goto _L_s_n_llhttp__internal__n_url_server;
       end;
-      6:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_start_stub_path_1;
-      end;
-      7:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_query;
-      end;
-      8:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_86;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_87;
-    end;
-  end;
-  _L__sw0_c133:
-  _L_s_n_llhttp__internal__n_url_server:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_server;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_14[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      2:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url;
-      end;
-      3:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_1;
-      end;
-      4:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_url_2;
-      end;
-      5:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_server;
-      end;
-      6:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_start_stub_path;
-      end;
-      7:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_query;
-      end;
-      8:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_server_with_at;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_88;
-    end;
-  end;
-  _L__sw0_c134:
-  _L_s_n_llhttp__internal__n_url_schema_delim_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_schema_delim_1;
-      Exit;
-    end;
-    case p^ of
-      LongInt('/'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_server;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_89;
-    end;
-  end;
-  _L__sw0_c135:
-  _L_s_n_llhttp__internal__n_url_schema_delim:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_schema_delim;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      LongInt('/'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_schema_delim_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_89;
-    end;
-  end;
-  _L__sw0_c136:
-  _L_s_n_llhttp__internal__n_span_end_stub_schema:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_end_stub_schema;
-      Exit;
-    end;
-    Inc(p);
-    goto _L_s_n_llhttp__internal__n_url_schema_delim;
-  end;
-  _L__sw0_c137:
-  _L_s_n_llhttp__internal__n_url_schema:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_schema;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_15[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      2:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_stub_schema;
-      end;
-      3:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_url_schema;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_90;
-    end;
-  end;
-  _L__sw0_c138:
-  _L_s_n_llhttp__internal__n_url_start:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_start;
-      Exit;
-    end;
-    case _static_llhttp__internal__run_lookup_table_16[UInt8(p^)] of
-      1:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      2:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_start_stub_path_2;
-      end;
-      3:
-      begin
-        goto _L_s_n_llhttp__internal__n_url_schema;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_91;
-    end;
-  end;
-  _L__sw0_c139:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_url_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_url_1;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_url);
-    goto _L_s_n_llhttp__internal__n_url_start;
-  end;
-  _L__sw0_c140:
-  _L_s_n_llhttp__internal__n_url_entry_normal:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_entry_normal;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_url_1;
-    end;
-  end;
-  _L__sw0_c141:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_url:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_url;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_url);
-    goto _L_s_n_llhttp__internal__n_url_server;
-  end;
-  _L__sw0_c142:
-  _L_s_n_llhttp__internal__n_url_entry_connect:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_url_entry_connect;
-      Exit;
-    end;
-    case p^ of
-      9:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      12:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_error_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_url;
-    end;
-  end;
-  _L__sw0_c143:
-  _L_s_n_llhttp__internal__n_req_spaces_before_url:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_spaces_before_url;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_spaces_before_url;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_is_equal_method;
-    end;
-  end;
-  _L__sw0_c144:
-  _L_s_n_llhttp__internal__n_req_first_space_before_url:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_first_space_before_url;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_spaces_before_url;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_92;
-    end;
-  end;
-  _L__sw0_c145:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete_1:
-  case llhttp__on_method_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_first_space_before_url;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_29;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_111;
-  end;
-  _L__sw0_c146:
-  _L_s_n_llhttp__internal__n_after_start_req_2:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_2;
-      Exit;
-    end;
-    case p^ of
-      LongInt('L'):
-      begin
-        Inc(p);
-        match := 19;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c147:
-  _L_s_n_llhttp__internal__n_after_start_req_3:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_3;
-      Exit;
-    end;
-    match_seq_15 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob18[0]), 6);
-    p := match_seq_15.current;
-    case match_seq_15.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 36;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_3;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c148:
-  _L_s_n_llhttp__internal__n_after_start_req_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_1;
-      Exit;
-    end;
-    case p^ of
-      LongInt('C'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_2;
-      end;
-      LongInt('N'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c149:
-  _L_s_n_llhttp__internal__n_after_start_req_4:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_4;
-      Exit;
-    end;
-    match_seq_16 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob19[0]), 3);
-    p := match_seq_16.current;
-    case match_seq_16.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 16;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_4;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c150:
-  _L_s_n_llhttp__internal__n_after_start_req_6:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_6;
-      Exit;
-    end;
-    match_seq_17 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob20[0]), 6);
-    p := match_seq_17.current;
-    case match_seq_17.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 22;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_6;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c151:
-  _L_s_n_llhttp__internal__n_after_start_req_8:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_8;
-      Exit;
-    end;
-    match_seq_18 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob21[0]), LLHTTP_VERSION_MINOR);
-    p := match_seq_18.current;
-    case match_seq_18.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_8;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c152:
-  _L_s_n_llhttp__internal__n_after_start_req_9:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_9;
-      Exit;
-    end;
-    case p^ of
-      LongInt('Y'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c153:
-  _L_s_n_llhttp__internal__n_after_start_req_7:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_7;
-      Exit;
-    end;
-    case p^ of
-      LongInt('N'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_8;
-      end;
-      LongInt('P'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_9;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c154:
-  _L_s_n_llhttp__internal__n_after_start_req_5:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_5;
-      Exit;
-    end;
-    case p^ of
-      LongInt('H'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_6;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_7;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c155:
-  _L_s_n_llhttp__internal__n_after_start_req_12:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_12;
-      Exit;
-    end;
-    match_seq_19 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob22[0]), 3);
-    p := match_seq_19.current;
-    case match_seq_19.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_12;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c156:
-  _L_s_n_llhttp__internal__n_after_start_req_13:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_13;
-      Exit;
-    end;
-    match_seq_20 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob23[0]), 5);
-    p := match_seq_20.current;
-    case match_seq_20.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 35;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_13;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c157:
-  _L_s_n_llhttp__internal__n_after_start_req_11:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_11;
-      Exit;
-    end;
-    case p^ of
-      LongInt('L'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_12;
-      end;
-      LongInt('S'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_13;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c158:
-  _L_s_n_llhttp__internal__n_after_start_req_10:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_10;
-      Exit;
-    end;
-    case p^ of
-      LongInt('E'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_11;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c159:
-  _L_s_n_llhttp__internal__n_after_start_req_14:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_14;
-      Exit;
-    end;
-    match_seq_21 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob24[0]), LLHTTP_VERSION_MINOR);
-    p := match_seq_21.current;
-    case match_seq_21.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 45;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_14;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c160:
-  _L_s_n_llhttp__internal__n_after_start_req_17:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_17;
-      Exit;
-    end;
-    match_seq_22 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob26[0]), LLHTTP_VERSION_MAJOR);
-    p := match_seq_22.current;
-    case match_seq_22.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 41;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_17;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c161:
-  _L_s_n_llhttp__internal__n_after_start_req_16:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_16;
-      Exit;
-    end;
-    case p^ of
-      LongInt('_'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_17;
-      end;
-      else
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-    end;
-  end;
-  _L__sw0_c162:
-  _L_s_n_llhttp__internal__n_after_start_req_15:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_15;
-      Exit;
-    end;
-    match_seq_23 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob25[0]), 2);
-    p := match_seq_23.current;
-    case match_seq_23.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_16;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_15;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c163:
-  _L_s_n_llhttp__internal__n_after_start_req_18:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_18;
-      Exit;
-    end;
-    match_seq_24 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob27[0]), 3);
-    p := match_seq_24.current;
-    case match_seq_24.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_18;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c164:
-  _L_s_n_llhttp__internal__n_after_start_req_20:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_20;
-      Exit;
-    end;
-    match_seq_25 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob28[0]), 2);
-    p := match_seq_25.current;
-    case match_seq_25.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 31;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_20;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c165:
-  _L_s_n_llhttp__internal__n_after_start_req_21:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_21;
-      Exit;
-    end;
-    match_seq_26 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob29[0]), 2);
-    p := match_seq_26.current;
-    case match_seq_26.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_21;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c166:
-  _L_s_n_llhttp__internal__n_after_start_req_19:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_19;
-      Exit;
-    end;
-    case p^ of
-      LongInt('I'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_20;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_21;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c167:
-  _L_s_n_llhttp__internal__n_after_start_req_23:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_23;
-      Exit;
-    end;
-    match_seq_27 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob30[0]), 6);
-    p := match_seq_27.current;
-    case match_seq_27.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 24;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_23;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c168:
-  _L_s_n_llhttp__internal__n_after_start_req_24:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_24;
-      Exit;
-    end;
-    match_seq_28 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob31[0]), 3);
-    p := match_seq_28.current;
-    case match_seq_28.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 23;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_24;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c169:
-  _L_s_n_llhttp__internal__n_after_start_req_26:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_26;
-      Exit;
-    end;
-    match_seq_29 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob32[0]), 7);
-    p := match_seq_29.current;
-    case match_seq_29.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 21;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_26;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c170:
-  _L_s_n_llhttp__internal__n_after_start_req_28:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_28;
-      Exit;
-    end;
-    match_seq_30 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob33[0]), 6);
-    p := match_seq_30.current;
-    case match_seq_30.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 30;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_28;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c171:
-  _L_s_n_llhttp__internal__n_after_start_req_29:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_29;
-      Exit;
-    end;
-    case p^ of
-      LongInt('L'):
-      begin
-        Inc(p);
-        match := 10;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c172:
-  _L_s_n_llhttp__internal__n_after_start_req_27:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_27;
-      Exit;
-    end;
-    case p^ of
-      LongInt('A'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_28;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_29;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c173:
-  _L_s_n_llhttp__internal__n_after_start_req_25:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_25;
-      Exit;
-    end;
-    case p^ of
-      LongInt('A'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_26;
-      end;
-      LongInt('C'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_27;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c174:
-  _L_s_n_llhttp__internal__n_after_start_req_30:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_30;
-      Exit;
-    end;
-    match_seq_31 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob34[0]), 2);
-    p := match_seq_31.current;
-    case match_seq_31.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 11;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_30;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c175:
-  _L_s_n_llhttp__internal__n_after_start_req_22:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_22;
-      Exit;
-    end;
-    case p^ of
-      LongInt('-'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_23;
-      end;
-      LongInt('E'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_24;
-      end;
-      LongInt('K'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_25;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_30;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c176:
-  _L_s_n_llhttp__internal__n_after_start_req_31:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_31;
-      Exit;
-    end;
-    match_seq_32 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob35[0]), 5);
-    p := match_seq_32.current;
-    case match_seq_32.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 25;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_31;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c177:
-  _L_s_n_llhttp__internal__n_after_start_req_32:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_32;
-      Exit;
-    end;
-    match_seq_33 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob36[0]), 6);
-    p := match_seq_33.current;
-    case match_seq_33.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_32;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c178:
-  _L_s_n_llhttp__internal__n_after_start_req_35:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_35;
-      Exit;
-    end;
-    match_seq_34 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob37[0]), 2);
-    p := match_seq_34.current;
-    case match_seq_34.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 28;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_35;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c179:
-  _L_s_n_llhttp__internal__n_after_start_req_36:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_36;
-      Exit;
-    end;
-    match_seq_35 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob38[0]), 2);
-    p := match_seq_35.current;
-    case match_seq_35.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 39;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_36;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c180:
-  _L_s_n_llhttp__internal__n_after_start_req_34:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_34;
-      Exit;
-    end;
-    case p^ of
-      LongInt('T'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_35;
-      end;
-      LongInt('U'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_36;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c181:
-  _L_s_n_llhttp__internal__n_after_start_req_37:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_37;
-      Exit;
-    end;
-    match_seq_36 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob39[0]), 2);
-    p := match_seq_36.current;
-    case match_seq_36.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 38;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_37;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c182:
-  _L_s_n_llhttp__internal__n_after_start_req_38:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_38;
-      Exit;
-    end;
-    match_seq_37 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob40[0]), 2);
-    p := match_seq_37.current;
-    case match_seq_37.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_38;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c183:
-  _L_s_n_llhttp__internal__n_after_start_req_42:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_42;
-      Exit;
-    end;
-    match_seq_38 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob41[0]), 3);
-    p := match_seq_38.current;
-    case match_seq_38.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 12;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_42;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c184:
-  _L_s_n_llhttp__internal__n_after_start_req_43:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_43;
-      Exit;
-    end;
-    match_seq_39 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob42[0]), LLHTTP_VERSION_MINOR);
-    p := match_seq_39.current;
-    case match_seq_39.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 13;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_43;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c185:
-  _L_s_n_llhttp__internal__n_after_start_req_41:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_41;
-      Exit;
-    end;
-    case p^ of
-      LongInt('F'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_42;
-      end;
-      LongInt('P'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_43;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c186:
-  _L_s_n_llhttp__internal__n_after_start_req_40:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_40;
-      Exit;
-    end;
-    case p^ of
-      LongInt('P'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_41;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c187:
-  _L_s_n_llhttp__internal__n_after_start_req_39:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_39;
-      Exit;
-    end;
-    case p^ of
-      LongInt('I'):
-      begin
-        Inc(p);
-        match := 34;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_40;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c188:
-  _L_s_n_llhttp__internal__n_after_start_req_45:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_45;
-      Exit;
-    end;
-    match_seq_40 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob43[0]), 2);
-    p := match_seq_40.current;
-    case match_seq_40.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 29;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_45;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c189:
-  _L_s_n_llhttp__internal__n_after_start_req_44:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_44;
-      Exit;
-    end;
-    case p^ of
-      LongInt('R'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_45;
-      end;
-      LongInt('T'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c190:
-  _L_s_n_llhttp__internal__n_after_start_req_33:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_33;
-      Exit;
-    end;
-    case p^ of
-      LongInt('A'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_34;
-      end;
-      LongInt('L'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_37;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_38;
-      end;
-      LongInt('R'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_39;
-      end;
-      LongInt('U'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_44;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c191:
-  _L_s_n_llhttp__internal__n_after_start_req_46:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_46;
-      Exit;
-    end;
-    match_seq_41 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob44[0]), LLHTTP_VERSION_MINOR);
-    p := match_seq_41.current;
-    case match_seq_41.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 46;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_46;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c192:
-  _L_s_n_llhttp__internal__n_after_start_req_49:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_49;
-      Exit;
-    end;
-    match_seq_42 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob45[0]), 3);
-    p := match_seq_42.current;
-    case match_seq_42.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 17;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_49;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c193:
-  _L_s_n_llhttp__internal__n_after_start_req_50:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_50;
-      Exit;
-    end;
-    match_seq_43 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob46[0]), 3);
-    p := match_seq_43.current;
-    case match_seq_43.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 44;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_50;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c194:
-  _L_s_n_llhttp__internal__n_after_start_req_51:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_51;
-      Exit;
-    end;
-    match_seq_44 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob47[0]), 5);
-    p := match_seq_44.current;
-    case match_seq_44.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 43;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_51;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c195:
-  _L_s_n_llhttp__internal__n_after_start_req_52:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_52;
-      Exit;
-    end;
-    match_seq_45 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob48[0]), 3);
-    p := match_seq_45.current;
-    case match_seq_45.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 20;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_52;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c196:
-  _L_s_n_llhttp__internal__n_after_start_req_48:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_48;
-      Exit;
-    end;
-    case p^ of
-      LongInt('B'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_49;
-      end;
-      LongInt('C'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_50;
-      end;
-      LongInt('D'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_51;
-      end;
-      LongInt('P'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_52;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c197:
-  _L_s_n_llhttp__internal__n_after_start_req_47:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_47;
-      Exit;
-    end;
-    case p^ of
-      LongInt('E'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_48;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c198:
-  _L_s_n_llhttp__internal__n_after_start_req_55:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_55;
-      Exit;
-    end;
-    match_seq_46 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob49[0]), 3);
-    p := match_seq_46.current;
-    case match_seq_46.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 14;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_55;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c199:
-  _L_s_n_llhttp__internal__n_after_start_req_57:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_57;
-      Exit;
-    end;
-    case p^ of
-      LongInt('P'):
-      begin
-        Inc(p);
-        match := 37;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c200:
-  _L_s_n_llhttp__internal__n_after_start_req_58:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_58;
-      Exit;
-    end;
-    match_seq_47 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob50[0]), LLHTTP_VERSION_MAJOR);
-    p := match_seq_47.current;
-    case match_seq_47.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 42;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_58;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c201:
-  _L_s_n_llhttp__internal__n_after_start_req_56:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_56;
-      Exit;
-    end;
-    case p^ of
-      LongInt('U'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_57;
-      end;
-      LongInt('_'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_58;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c202:
-  _L_s_n_llhttp__internal__n_after_start_req_54:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_54;
-      Exit;
-    end;
-    case p^ of
-      LongInt('A'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_55;
-      end;
-      LongInt('T'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_56;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c203:
-  _L_s_n_llhttp__internal__n_after_start_req_59:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_59;
-      Exit;
-    end;
-    match_seq_48 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob51[0]), LLHTTP_VERSION_MINOR);
-    p := match_seq_48.current;
-    case match_seq_48.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 33;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_59;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c204:
-  _L_s_n_llhttp__internal__n_after_start_req_60:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_60;
-      Exit;
-    end;
-    match_seq_49 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob52[0]), 7);
-    p := match_seq_49.current;
-    case match_seq_49.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 26;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_60;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c205:
-  _L_s_n_llhttp__internal__n_after_start_req_53:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_53;
-      Exit;
-    end;
-    case p^ of
-      LongInt('E'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_54;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_59;
-      end;
-      LongInt('U'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_60;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c206:
-  _L_s_n_llhttp__internal__n_after_start_req_62:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_62;
-      Exit;
-    end;
-    match_seq_50 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob53[0]), 6);
-    p := match_seq_50.current;
-    case match_seq_50.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 40;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_62;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c207:
-  _L_s_n_llhttp__internal__n_after_start_req_63:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_63;
-      Exit;
-    end;
-    match_seq_51 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob54[0]), 3);
-    p := match_seq_51.current;
-    case match_seq_51.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_63;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c208:
-  _L_s_n_llhttp__internal__n_after_start_req_61:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_61;
-      Exit;
-    end;
-    case p^ of
-      LongInt('E'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_62;
-      end;
-      LongInt('R'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_63;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c209:
-  _L_s_n_llhttp__internal__n_after_start_req_66:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_66;
-      Exit;
-    end;
-    match_seq_52 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob55[0]), 3);
-    p := match_seq_52.current;
-    case match_seq_52.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 18;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_66;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c210:
-  _L_s_n_llhttp__internal__n_after_start_req_68:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_68;
-      Exit;
-    end;
-    match_seq_53 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob56[0]), 2);
-    p := match_seq_53.current;
-    case match_seq_53.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 32;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_68;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c211:
-  _L_s_n_llhttp__internal__n_after_start_req_69:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_69;
-      Exit;
-    end;
-    match_seq_54 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob57[0]), 2);
-    p := match_seq_54.current;
-    case match_seq_54.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 15;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_69;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c212:
-  _L_s_n_llhttp__internal__n_after_start_req_67:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_67;
-      Exit;
-    end;
-    case p^ of
-      LongInt('I'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_68;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_69;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c213:
-  _L_s_n_llhttp__internal__n_after_start_req_70:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_70;
-      Exit;
-    end;
-    match_seq_55 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob58[0]), 8);
-    p := match_seq_55.current;
-    case match_seq_55.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 27;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_after_start_req_70;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_112;
-      end;
-    end;
-  end;
-  _L__sw0_c214:
-  _L_s_n_llhttp__internal__n_after_start_req_65:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_65;
-      Exit;
-    end;
-    case p^ of
-      LongInt('B'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_66;
-      end;
-      LongInt('L'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_67;
-      end;
-      LongInt('S'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_70;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c215:
-  _L_s_n_llhttp__internal__n_after_start_req_64:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req_64;
-      Exit;
-    end;
-    case p^ of
-      LongInt('N'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_65;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
-    end;
-  end;
-  _L__sw0_c216:
-  _L_s_n_llhttp__internal__n_after_start_req:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_after_start_req;
-      Exit;
-    end;
-    case p^ of
-      LongInt('A'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_1;
-      end;
-      LongInt('B'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_4;
-      end;
-      LongInt('C'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_5;
-      end;
-      LongInt('D'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_10;
-      end;
-      LongInt('F'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_14;
-      end;
-      LongInt('G'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_15;
-      end;
-      LongInt('H'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_18;
-      end;
-      LongInt('L'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_19;
-      end;
-      LongInt('M'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_22;
-      end;
-      LongInt('N'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_31;
-      end;
-      LongInt('O'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_32;
-      end;
-      LongInt('P'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_33;
-      end;
-      LongInt('Q'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_46;
-      end;
-      LongInt('R'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_47;
-      end;
-      LongInt('S'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_53;
-      end;
-      LongInt('T'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_61;
-      end;
-      LongInt('U'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_after_start_req_64;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_112;
     end;
-  end;
-  _L__sw0_c217:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_method_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_method_1;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_method);
-    goto _L_s_n_llhttp__internal__n_after_start_req;
-  end;
-  _L__sw0_c218:
-  _L_s_n_llhttp__internal__n_res_line_almost_done:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_line_almost_done;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_30;
-    end;
-  end;
-  _L__sw0_c219:
-  _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_31:
-  case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
-    1:
-    begin
-      goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_98;
-  end;
-  _L__sw0_c220:
-  _L_s_n_llhttp__internal__n_res_status:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_status;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_status;
-      end;
-      13:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_status_1;
-      end;
-      else
-        Inc(p);
+    s_n_llhttp__internal__n_url_entry_connect:
+    begin
+      _L_s_n_llhttp__internal__n_url_entry_connect:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_url_entry_connect;
+          Exit;
+        end;
+        case p^ of
+          9:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          12:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_error_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_url;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_spaces_before_url:
+    begin
+      _L_s_n_llhttp__internal__n_req_spaces_before_url:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_spaces_before_url;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_spaces_before_url;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_is_equal_method;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_first_space_before_url:
+    begin
+      _L_s_n_llhttp__internal__n_req_first_space_before_url:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_first_space_before_url;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_spaces_before_url;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_92;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_method_complete_1:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete_1:
+      case llhttp__on_method_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_first_space_before_url;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_29;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_111;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_2:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_2;
+          Exit;
+        end;
+        case p^ of
+          LongInt('L'):
+          begin
+            Inc(p);
+            match := 19;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_3:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_3:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_3;
+          Exit;
+        end;
+        match_seq_15 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob18[0]), 6);
+        p := match_seq_15.current;
+        case match_seq_15.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 36;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_3;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_1:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_1;
+          Exit;
+        end;
+        case p^ of
+          LongInt('C'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_2;
+          end;
+          LongInt('N'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_4:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_4:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_4;
+          Exit;
+        end;
+        match_seq_16 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob19[0]), 3);
+        p := match_seq_16.current;
+        case match_seq_16.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 16;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_4;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_6:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_6:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_6;
+          Exit;
+        end;
+        match_seq_17 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob20[0]), 6);
+        p := match_seq_17.current;
+        case match_seq_17.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 22;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_6;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_8:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_8:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_8;
+          Exit;
+        end;
+        match_seq_18 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob21[0]), LLHTTP_VERSION_MINOR);
+        p := match_seq_18.current;
+        case match_seq_18.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_8;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_9:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_9:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_9;
+          Exit;
+        end;
+        case p^ of
+          LongInt('Y'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_7:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_7:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_7;
+          Exit;
+        end;
+        case p^ of
+          LongInt('N'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_8;
+          end;
+          LongInt('P'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_9;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_5:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_5:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_5;
+          Exit;
+        end;
+        case p^ of
+          LongInt('H'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_6;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_7;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_12:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_12:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_12;
+          Exit;
+        end;
+        match_seq_19 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob22[0]), 3);
+        p := match_seq_19.current;
+        case match_seq_19.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_12;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_13:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_13:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_13;
+          Exit;
+        end;
+        match_seq_20 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob23[0]), 5);
+        p := match_seq_20.current;
+        case match_seq_20.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 35;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_13;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_11:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_11:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_11;
+          Exit;
+        end;
+        case p^ of
+          LongInt('L'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_12;
+          end;
+          LongInt('S'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_13;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_10:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_10:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_10;
+          Exit;
+        end;
+        case p^ of
+          LongInt('E'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_11;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_14:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_14:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_14;
+          Exit;
+        end;
+        match_seq_21 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob24[0]), LLHTTP_VERSION_MINOR);
+        p := match_seq_21.current;
+        case match_seq_21.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 45;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_14;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_17:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_17:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_17;
+          Exit;
+        end;
+        match_seq_22 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob26[0]), LLHTTP_VERSION_MAJOR);
+        p := match_seq_22.current;
+        case match_seq_22.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 41;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_17;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_16:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_16:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_16;
+          Exit;
+        end;
+        case p^ of
+          LongInt('_'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_17;
+          end;
+          else
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_15:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_15:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_15;
+          Exit;
+        end;
+        match_seq_23 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob25[0]), 2);
+        p := match_seq_23.current;
+        case match_seq_23.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_16;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_15;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_18:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_18:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_18;
+          Exit;
+        end;
+        match_seq_24 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob27[0]), 3);
+        p := match_seq_24.current;
+        case match_seq_24.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_18;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_20:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_20:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_20;
+          Exit;
+        end;
+        match_seq_25 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob28[0]), 2);
+        p := match_seq_25.current;
+        case match_seq_25.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 31;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_20;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_21:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_21:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_21;
+          Exit;
+        end;
+        match_seq_26 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob29[0]), 2);
+        p := match_seq_26.current;
+        case match_seq_26.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_21;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_19:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_19:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_19;
+          Exit;
+        end;
+        case p^ of
+          LongInt('I'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_20;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_21;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_23:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_23:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_23;
+          Exit;
+        end;
+        match_seq_27 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob30[0]), 6);
+        p := match_seq_27.current;
+        case match_seq_27.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 24;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_23;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_24:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_24:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_24;
+          Exit;
+        end;
+        match_seq_28 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob31[0]), 3);
+        p := match_seq_28.current;
+        case match_seq_28.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 23;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_24;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_26:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_26:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_26;
+          Exit;
+        end;
+        match_seq_29 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob32[0]), 7);
+        p := match_seq_29.current;
+        case match_seq_29.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 21;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_26;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_28:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_28:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_28;
+          Exit;
+        end;
+        match_seq_30 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob33[0]), 6);
+        p := match_seq_30.current;
+        case match_seq_30.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 30;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_28;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_29:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_29:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_29;
+          Exit;
+        end;
+        case p^ of
+          LongInt('L'):
+          begin
+            Inc(p);
+            match := 10;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_27:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_27:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_27;
+          Exit;
+        end;
+        case p^ of
+          LongInt('A'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_28;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_29;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_25:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_25:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_25;
+          Exit;
+        end;
+        case p^ of
+          LongInt('A'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_26;
+          end;
+          LongInt('C'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_27;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_30:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_30:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_30;
+          Exit;
+        end;
+        match_seq_31 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob34[0]), 2);
+        p := match_seq_31.current;
+        case match_seq_31.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 11;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_30;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_22:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_22:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_22;
+          Exit;
+        end;
+        case p^ of
+          LongInt('-'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_23;
+          end;
+          LongInt('E'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_24;
+          end;
+          LongInt('K'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_25;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_30;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_31:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_31:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_31;
+          Exit;
+        end;
+        match_seq_32 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob35[0]), 5);
+        p := match_seq_32.current;
+        case match_seq_32.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 25;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_31;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_32:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_32:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_32;
+          Exit;
+        end;
+        match_seq_33 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob36[0]), 6);
+        p := match_seq_33.current;
+        case match_seq_33.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_32;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_35:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_35:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_35;
+          Exit;
+        end;
+        match_seq_34 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob37[0]), 2);
+        p := match_seq_34.current;
+        case match_seq_34.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 28;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_35;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_36:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_36:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_36;
+          Exit;
+        end;
+        match_seq_35 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob38[0]), 2);
+        p := match_seq_35.current;
+        case match_seq_35.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 39;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_36;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_34:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_34:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_34;
+          Exit;
+        end;
+        case p^ of
+          LongInt('T'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_35;
+          end;
+          LongInt('U'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_36;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_37:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_37:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_37;
+          Exit;
+        end;
+        match_seq_36 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob39[0]), 2);
+        p := match_seq_36.current;
+        case match_seq_36.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 38;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_37;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_38:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_38:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_38;
+          Exit;
+        end;
+        match_seq_37 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob40[0]), 2);
+        p := match_seq_37.current;
+        case match_seq_37.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_38;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_42:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_42:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_42;
+          Exit;
+        end;
+        match_seq_38 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob41[0]), 3);
+        p := match_seq_38.current;
+        case match_seq_38.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 12;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_42;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_43:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_43:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_43;
+          Exit;
+        end;
+        match_seq_39 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob42[0]), LLHTTP_VERSION_MINOR);
+        p := match_seq_39.current;
+        case match_seq_39.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 13;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_43;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_41:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_41:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_41;
+          Exit;
+        end;
+        case p^ of
+          LongInt('F'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_42;
+          end;
+          LongInt('P'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_43;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_40:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_40:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_40;
+          Exit;
+        end;
+        case p^ of
+          LongInt('P'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_41;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_39:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_39:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_39;
+          Exit;
+        end;
+        case p^ of
+          LongInt('I'):
+          begin
+            Inc(p);
+            match := 34;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_40;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_45:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_45:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_45;
+          Exit;
+        end;
+        match_seq_40 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob43[0]), 2);
+        p := match_seq_40.current;
+        case match_seq_40.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 29;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_45;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_44:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_44:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_44;
+          Exit;
+        end;
+        case p^ of
+          LongInt('R'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_45;
+          end;
+          LongInt('T'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_33:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_33:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_33;
+          Exit;
+        end;
+        case p^ of
+          LongInt('A'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_34;
+          end;
+          LongInt('L'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_37;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_38;
+          end;
+          LongInt('R'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_39;
+          end;
+          LongInt('U'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_44;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_46:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_46:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_46;
+          Exit;
+        end;
+        match_seq_41 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob44[0]), LLHTTP_VERSION_MINOR);
+        p := match_seq_41.current;
+        case match_seq_41.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 46;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_46;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_49:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_49:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_49;
+          Exit;
+        end;
+        match_seq_42 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob45[0]), 3);
+        p := match_seq_42.current;
+        case match_seq_42.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 17;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_49;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_50:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_50:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_50;
+          Exit;
+        end;
+        match_seq_43 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob46[0]), 3);
+        p := match_seq_43.current;
+        case match_seq_43.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 44;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_50;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_51:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_51:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_51;
+          Exit;
+        end;
+        match_seq_44 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob47[0]), 5);
+        p := match_seq_44.current;
+        case match_seq_44.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 43;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_51;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_52:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_52:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_52;
+          Exit;
+        end;
+        match_seq_45 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob48[0]), 3);
+        p := match_seq_45.current;
+        case match_seq_45.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 20;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_52;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_48:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_48:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_48;
+          Exit;
+        end;
+        case p^ of
+          LongInt('B'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_49;
+          end;
+          LongInt('C'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_50;
+          end;
+          LongInt('D'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_51;
+          end;
+          LongInt('P'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_52;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_47:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_47:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_47;
+          Exit;
+        end;
+        case p^ of
+          LongInt('E'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_48;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_55:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_55:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_55;
+          Exit;
+        end;
+        match_seq_46 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob49[0]), 3);
+        p := match_seq_46.current;
+        case match_seq_46.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 14;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_55;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_57:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_57:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_57;
+          Exit;
+        end;
+        case p^ of
+          LongInt('P'):
+          begin
+            Inc(p);
+            match := 37;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_58:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_58:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_58;
+          Exit;
+        end;
+        match_seq_47 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob50[0]), LLHTTP_VERSION_MAJOR);
+        p := match_seq_47.current;
+        case match_seq_47.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 42;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_58;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_56:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_56:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_56;
+          Exit;
+        end;
+        case p^ of
+          LongInt('U'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_57;
+          end;
+          LongInt('_'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_58;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_54:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_54:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_54;
+          Exit;
+        end;
+        case p^ of
+          LongInt('A'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_55;
+          end;
+          LongInt('T'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_56;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_59:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_59:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_59;
+          Exit;
+        end;
+        match_seq_48 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob51[0]), LLHTTP_VERSION_MINOR);
+        p := match_seq_48.current;
+        case match_seq_48.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 33;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_59;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_60:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_60:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_60;
+          Exit;
+        end;
+        match_seq_49 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob52[0]), 7);
+        p := match_seq_49.current;
+        case match_seq_49.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 26;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_60;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_53:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_53:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_53;
+          Exit;
+        end;
+        case p^ of
+          LongInt('E'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_54;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_59;
+          end;
+          LongInt('U'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_60;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_62:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_62:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_62;
+          Exit;
+        end;
+        match_seq_50 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob53[0]), 6);
+        p := match_seq_50.current;
+        case match_seq_50.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 40;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_62;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_63:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_63:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_63;
+          Exit;
+        end;
+        match_seq_51 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob54[0]), 3);
+        p := match_seq_51.current;
+        case match_seq_51.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_63;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_61:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_61:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_61;
+          Exit;
+        end;
+        case p^ of
+          LongInt('E'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_62;
+          end;
+          LongInt('R'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_63;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_66:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_66:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_66;
+          Exit;
+        end;
+        match_seq_52 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob55[0]), 3);
+        p := match_seq_52.current;
+        case match_seq_52.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 18;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_66;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_68:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_68:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_68;
+          Exit;
+        end;
+        match_seq_53 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob56[0]), 2);
+        p := match_seq_53.current;
+        case match_seq_53.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 32;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_68;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_69:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_69:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_69;
+          Exit;
+        end;
+        match_seq_54 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob57[0]), 2);
+        p := match_seq_54.current;
+        case match_seq_54.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 15;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_69;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_67:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_67:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_67;
+          Exit;
+        end;
+        case p^ of
+          LongInt('I'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_68;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_69;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_70:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_70:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_70;
+          Exit;
+        end;
+        match_seq_55 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob58[0]), 8);
+        p := match_seq_55.current;
+        case match_seq_55.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 27;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_after_start_req_70;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_112;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_65:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_65:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_65;
+          Exit;
+        end;
+        case p^ of
+          LongInt('B'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_66;
+          end;
+          LongInt('L'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_67;
+          end;
+          LongInt('S'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_70;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req_64:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req_64:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req_64;
+          Exit;
+        end;
+        case p^ of
+          LongInt('N'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_65;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_after_start_req:
+    begin
+      _L_s_n_llhttp__internal__n_after_start_req:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_after_start_req;
+          Exit;
+        end;
+        case p^ of
+          LongInt('A'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_1;
+          end;
+          LongInt('B'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_4;
+          end;
+          LongInt('C'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_5;
+          end;
+          LongInt('D'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_10;
+          end;
+          LongInt('F'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_14;
+          end;
+          LongInt('G'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_15;
+          end;
+          LongInt('H'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_18;
+          end;
+          LongInt('L'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_19;
+          end;
+          LongInt('M'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_22;
+          end;
+          LongInt('N'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_31;
+          end;
+          LongInt('O'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_32;
+          end;
+          LongInt('P'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_33;
+          end;
+          LongInt('Q'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_46;
+          end;
+          LongInt('R'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_47;
+          end;
+          LongInt('S'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_53;
+          end;
+          LongInt('T'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_61;
+          end;
+          LongInt('U'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_after_start_req_64;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_112;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_method_1:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_method_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_method_1;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_method);
+        goto _L_s_n_llhttp__internal__n_after_start_req;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_line_almost_done:
+    begin
+      _L_s_n_llhttp__internal__n_res_line_almost_done:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_line_almost_done;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_30;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_test_lenient_flags_31:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_31:
+      case llhttp__internal__c_test_lenient_flags_1(state, p, endp) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_status_complete;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_98;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_status:
+    begin
+      _L_s_n_llhttp__internal__n_res_status:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_status;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_status;
+          end;
+          13:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_status_1;
+          end;
+          else
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_res_status;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_status:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_status:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_status;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_status);
         goto _L_s_n_llhttp__internal__n_res_status;
+      end;
     end;
-  end;
-  _L__sw0_c221:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_status:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_res_status_code_otherwise:
     begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_status;
-      Exit;
+      _L_s_n_llhttp__internal__n_res_status_code_otherwise:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_status_code_otherwise;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_29;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_res_line_almost_done;
+          end;
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_status;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_99;
+        end;
+      end;
     end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_status);
-    goto _L_s_n_llhttp__internal__n_res_status;
-  end;
-  _L__sw0_c222:
-  _L_s_n_llhttp__internal__n_res_status_code_otherwise:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_res_status_code_digit_3:
     begin
-      Result := s_n_llhttp__internal__n_res_status_code_otherwise;
-      Exit;
+      _L_s_n_llhttp__internal__n_res_status_code_digit_3:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_status_code_digit_3;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_101;
+        end;
+      end;
     end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_test_lenient_flags_29;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_res_line_almost_done;
-      end;
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_status;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_99;
-    end;
-  end;
-  _L__sw0_c223:
-  _L_s_n_llhttp__internal__n_res_status_code_digit_3:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_res_status_code_digit_2:
     begin
-      Result := s_n_llhttp__internal__n_res_status_code_digit_3;
-      Exit;
+      _L_s_n_llhttp__internal__n_res_status_code_digit_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_status_code_digit_2;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_103;
+        end;
+      end;
     end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_2;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_101;
-    end;
-  end;
-  _L__sw0_c224:
-  _L_s_n_llhttp__internal__n_res_status_code_digit_2:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_res_status_code_digit_1:
     begin
-      Result := s_n_llhttp__internal__n_res_status_code_digit_2;
-      Exit;
+      _L_s_n_llhttp__internal__n_res_status_code_digit_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_status_code_digit_1;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_105;
+        end;
+      end;
     end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_103;
-    end;
-  end;
-  _L__sw0_c225:
-  _L_s_n_llhttp__internal__n_res_status_code_digit_1:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_res_after_version:
     begin
-      Result := s_n_llhttp__internal__n_res_status_code_digit_1;
-      Exit;
+      _L_s_n_llhttp__internal__n_res_after_version:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_after_version;
+          Exit;
+        end;
+        case p^ of
+          LongInt(' '):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_invoke_update_status_code;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_106;
+        end;
+      end;
     end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_mul_add_status_code;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_105;
-    end;
-  end;
-  _L__sw0_c226:
-  _L_s_n_llhttp__internal__n_res_after_version:
-  begin
-    if (p = endp) then
+    s_n_llhttp__internal__n_invoke_llhttp__on_version_complete_1:
     begin
-      Result := s_n_llhttp__internal__n_res_after_version;
-      Exit;
-    end;
-    case p^ of
-      LongInt(' '):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_invoke_update_status_code;
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete_1:
+      case llhttp__on_version_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_res_after_version;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_28;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_94;
       end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_106;
     end;
-  end;
-  _L__sw0_c227:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_version_complete_1:
-  case llhttp__on_version_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
+    s_n_llhttp__internal__n_error_93:
     begin
-      goto _L_s_n_llhttp__internal__n_res_after_version;
+      _L_s_n_llhttp__internal__n_error_93:
+      begin
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Invalid HTTP version';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
     end;
-    21:
+    s_n_llhttp__internal__n_error_107:
     begin
-      goto _L_s_n_llhttp__internal__n_pause_28;
+      _L_s_n_llhttp__internal__n_error_107:
+      begin
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Invalid minor version';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_http_minor:
+    begin
+      _L_s_n_llhttp__internal__n_res_http_minor:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_http_minor;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_7;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_108:
+    begin
+      _L_s_n_llhttp__internal__n_error_108:
+      begin
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Expected dot';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_http_dot:
+    begin
+      _L_s_n_llhttp__internal__n_res_http_dot:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_http_dot;
+          Exit;
+        end;
+        case p^ of
+          LongInt('.'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_res_http_minor;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_8;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_109:
+    begin
+      _L_s_n_llhttp__internal__n_error_109:
+      begin
+        state^.error := LLHTTP_VERSION_MAJOR;
+        state^.reason := 'Invalid major version';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_http_major:
+    begin
+      _L_s_n_llhttp__internal__n_res_http_major:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_http_major;
+          Exit;
+        end;
+        case p^ of
+          LongInt('0'):
+          begin
+            Inc(p);
+            match := 0;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('1'):
+          begin
+            Inc(p);
+            match := 1;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('2'):
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('3'):
+          begin
+            Inc(p);
+            match := 3;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('4'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MINOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('5'):
+          begin
+            Inc(p);
+            match := 5;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('6'):
+          begin
+            Inc(p);
+            match := 6;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('7'):
+          begin
+            Inc(p);
+            match := 7;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('8'):
+          begin
+            Inc(p);
+            match := 8;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          LongInt('9'):
+          begin
+            Inc(p);
+            match := LLHTTP_VERSION_MAJOR;
+            goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_9;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_version_1:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_version_1;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_version);
+        goto _L_s_n_llhttp__internal__n_res_http_major;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_after_protocol:
+    begin
+      _L_s_n_llhttp__internal__n_res_after_protocol:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_after_protocol;
+          Exit;
+        end;
+        case p^ of
+          LongInt('/'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_114;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_3:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_3:
+      case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_res_after_protocol;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_30;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_113;
+      end;
+    end;
+    s_n_llhttp__internal__n_error_115:
+    begin
+      _L_s_n_llhttp__internal__n_error_115:
+      begin
+        state^.error := 8;
+        state^.reason := 'Expected HTTP/, RTSP/ or ICE/';
+        state^.error_pos := PAnsiChar(p);
+        state^._current := Pointer(PtrInt(s_error));
+        Result := s_error;
+        Exit;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_after_start_1:
+    begin
+      _L_s_n_llhttp__internal__n_res_after_start_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_after_start_1;
+          Exit;
+        end;
+        match_seq_56 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob59[0]), 3);
+        p := match_seq_56.current;
+        case match_seq_56.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_res_after_start_1;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_after_start_2:
+    begin
+      _L_s_n_llhttp__internal__n_res_after_start_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_after_start_2;
+          Exit;
+        end;
+        match_seq_57 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob60[0]), 2);
+        p := match_seq_57.current;
+        case match_seq_57.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_res_after_start_2;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_after_start_3:
+    begin
+      _L_s_n_llhttp__internal__n_res_after_start_3:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_after_start_3;
+          Exit;
+        end;
+        match_seq_58 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob61[0]), 3);
+        p := match_seq_58.current;
+        case match_seq_58.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_res_after_start_3;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_res_after_start:
+    begin
+      _L_s_n_llhttp__internal__n_res_after_start:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_res_after_start;
+          Exit;
+        end;
+        case p^ of
+          LongInt('H'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_res_after_start_1;
+          end;
+          LongInt('I'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_res_after_start_2;
+          end;
+          LongInt('R'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_res_after_start_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_protocol);
+        goto _L_s_n_llhttp__internal__n_res_after_start;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_llhttp__on_method_complete:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete:
+      case llhttp__on_method_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
+        0:
+        begin
+          goto _L_s_n_llhttp__internal__n_req_first_space_before_url;
+        end;
+        21:
+        begin
+          goto _L_s_n_llhttp__internal__n_pause_26;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_error_1;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_or_res_method_2:
+    begin
+      _L_s_n_llhttp__internal__n_req_or_res_method_2:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_or_res_method_2;
+          Exit;
+        end;
+        match_seq_59 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob62[0]), 2);
+        p := match_seq_59.current;
+        case match_seq_59.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            match := 2;
+            goto _L_s_n_llhttp__internal__n_invoke_store_method;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_req_or_res_method_2;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_110;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_update_type_1:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_update_type_1:
+      llhttp__internal__c_update_type_1(state, p, endp);
+      goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1;
+    end;
+    s_n_llhttp__internal__n_req_or_res_method_3:
+    begin
+      _L_s_n_llhttp__internal__n_req_or_res_method_3:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_or_res_method_3;
+          Exit;
+        end;
+        match_seq_60 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob63[0]), 3);
+        p := match_seq_60.current;
+        case match_seq_60.status of
+          kMatchComplete:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_method_1;
+          end;
+          kMatchPause:
+          begin
+            Result := s_n_llhttp__internal__n_req_or_res_method_3;
+            Exit;
+          end;
+          kMatchMismatch:
+          begin
+            goto _L_s_n_llhttp__internal__n_error_110;
+          end;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_or_res_method_1:
+    begin
+      _L_s_n_llhttp__internal__n_req_or_res_method_1:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_or_res_method_1;
+          Exit;
+        end;
+        case p^ of
+          LongInt('E'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_or_res_method_2;
+          end;
+          LongInt('T'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_or_res_method_3;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_110;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_req_or_res_method:
+    begin
+      _L_s_n_llhttp__internal__n_req_or_res_method:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_req_or_res_method;
+          Exit;
+        end;
+        case p^ of
+          LongInt('H'):
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_req_or_res_method_1;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_error_110;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_span_start_llhttp__on_method:
+    begin
+      _L_s_n_llhttp__internal__n_span_start_llhttp__on_method:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_span_start_llhttp__on_method;
+          Exit;
+        end;
+        state^._span_pos0 := Pointer(p);
+        state^._span_cb0 := Pointer(@llhttp__on_method);
+        goto _L_s_n_llhttp__internal__n_req_or_res_method;
+      end;
+    end;
+    s_n_llhttp__internal__n_start_req_or_res:
+    begin
+      _L_s_n_llhttp__internal__n_start_req_or_res:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_start_req_or_res;
+          Exit;
+        end;
+        case p^ of
+          LongInt('H'):
+          begin
+            goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_method;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_update_type_2;
+        end;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_load_type:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_load_type:
+      case llhttp__internal__c_load_type(state, p, endp) of
+        1:
+        begin
+          goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_method_1;
+        end;
+        2:
+        begin
+          goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1;
+        end;
+        else
+          goto _L_s_n_llhttp__internal__n_start_req_or_res;
+      end;
+    end;
+    s_n_llhttp__internal__n_invoke_update_finish:
+    begin
+      _L_s_n_llhttp__internal__n_invoke_update_finish:
+      llhttp__internal__c_update_finish(state, p, endp);
+      goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_begin;
+    end;
+    s_n_llhttp__internal__n_start:
+    begin
+      _L_s_n_llhttp__internal__n_start:
+      begin
+        if (p = endp) then
+        begin
+          Result := s_n_llhttp__internal__n_start;
+          Exit;
+        end;
+        case p^ of
+          10:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_start;
+          end;
+          13:
+          begin
+            Inc(p);
+            goto _L_s_n_llhttp__internal__n_start;
+          end;
+          else
+            goto _L_s_n_llhttp__internal__n_invoke_load_initial_message_completed;
+        end;
+      end;
     end;
     else
-      goto _L_s_n_llhttp__internal__n_error_94;
   end;
-  _L__sw0_c228:
-  _L_s_n_llhttp__internal__n_error_93:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Invalid HTTP version';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c229:
-  _L_s_n_llhttp__internal__n_error_107:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Invalid minor version';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c230:
-  _L_s_n_llhttp__internal__n_res_http_minor:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_http_minor;
-      Exit;
-    end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_minor_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_7;
-    end;
-  end;
-  _L__sw0_c231:
-  _L_s_n_llhttp__internal__n_error_108:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Expected dot';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c232:
-  _L_s_n_llhttp__internal__n_res_http_dot:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_http_dot;
-      Exit;
-    end;
-    case p^ of
-      LongInt('.'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_res_http_minor;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_8;
-    end;
-  end;
-  _L__sw0_c233:
-  _L_s_n_llhttp__internal__n_error_109:
-  begin
-    state^.error := LLHTTP_VERSION_MAJOR;
-    state^.reason := 'Invalid major version';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c234:
-  _L_s_n_llhttp__internal__n_res_http_major:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_http_major;
-      Exit;
-    end;
-    case p^ of
-      LongInt('0'):
-      begin
-        Inc(p);
-        match := 0;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('1'):
-      begin
-        Inc(p);
-        match := 1;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('2'):
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('3'):
-      begin
-        Inc(p);
-        match := 3;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('4'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MINOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('5'):
-      begin
-        Inc(p);
-        match := 5;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('6'):
-      begin
-        Inc(p);
-        match := 6;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('7'):
-      begin
-        Inc(p);
-        match := 7;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('8'):
-      begin
-        Inc(p);
-        match := 8;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      LongInt('9'):
-      begin
-        Inc(p);
-        match := LLHTTP_VERSION_MAJOR;
-        goto _L_s_n_llhttp__internal__n_invoke_store_http_major_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_version_9;
-    end;
-  end;
-  _L__sw0_c235:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_version_1;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_version);
-    goto _L_s_n_llhttp__internal__n_res_http_major;
-  end;
-  _L__sw0_c236:
-  _L_s_n_llhttp__internal__n_res_after_protocol:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_after_protocol;
-      Exit;
-    end;
-    case p^ of
-      LongInt('/'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_114;
-    end;
-  end;
-  _L__sw0_c237:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_protocol_complete_3:
-  case llhttp__on_protocol_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_res_after_protocol;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_30;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_113;
-  end;
-  _L__sw0_c238:
-  _L_s_n_llhttp__internal__n_error_115:
-  begin
-    state^.error := 8;
-    state^.reason := 'Expected HTTP/, RTSP/ or ICE/';
-    state^.error_pos := PAnsiChar(p);
-    state^._current := Pointer(PtrInt(s_error));
-    Result := s_error;
-    Exit;
-  end;
-  _L__sw0_c239:
-  _L_s_n_llhttp__internal__n_res_after_start_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_after_start_1;
-      Exit;
-    end;
-    match_seq_56 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob59[0]), 3);
-    p := match_seq_56.current;
-    case match_seq_56.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_res_after_start_1;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
-      end;
-    end;
-  end;
-  _L__sw0_c240:
-  _L_s_n_llhttp__internal__n_res_after_start_2:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_after_start_2;
-      Exit;
-    end;
-    match_seq_57 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob60[0]), 2);
-    p := match_seq_57.current;
-    case match_seq_57.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_res_after_start_2;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
-      end;
-    end;
-  end;
-  _L__sw0_c241:
-  _L_s_n_llhttp__internal__n_res_after_start_3:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_after_start_3;
-      Exit;
-    end;
-    match_seq_58 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob61[0]), 3);
-    p := match_seq_58.current;
-    case match_seq_58.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_4;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_res_after_start_3;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
-      end;
-    end;
-  end;
-  _L__sw0_c242:
-  _L_s_n_llhttp__internal__n_res_after_start:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_res_after_start;
-      Exit;
-    end;
-    case p^ of
-      LongInt('H'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_res_after_start_1;
-      end;
-      LongInt('I'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_res_after_start_2;
-      end;
-      LongInt('R'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_res_after_start_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_protocol_5;
-    end;
-  end;
-  _L__sw0_c243:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_protocol);
-    goto _L_s_n_llhttp__internal__n_res_after_start;
-  end;
-  _L__sw0_c244:
-  _L_s_n_llhttp__internal__n_invoke_llhttp__on_method_complete:
-  case llhttp__on_method_complete(state, PAnsiChar(p), PAnsiChar(endp)) of
-    0:
-    begin
-      goto _L_s_n_llhttp__internal__n_req_first_space_before_url;
-    end;
-    21:
-    begin
-      goto _L_s_n_llhttp__internal__n_pause_26;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_error_1;
-  end;
-  _L__sw0_c245:
-  _L_s_n_llhttp__internal__n_req_or_res_method_2:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_or_res_method_2;
-      Exit;
-    end;
-    match_seq_59 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob62[0]), 2);
-    p := match_seq_59.current;
-    case match_seq_59.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        match := 2;
-        goto _L_s_n_llhttp__internal__n_invoke_store_method;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_req_or_res_method_2;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_110;
-      end;
-    end;
-  end;
-  _L__sw0_c246:
-  _L_s_n_llhttp__internal__n_invoke_update_type_1:
-  llhttp__internal__c_update_type_1(state, p, endp);
-  goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_version_1;
-  _L__sw0_c247:
-  _L_s_n_llhttp__internal__n_req_or_res_method_3:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_or_res_method_3;
-      Exit;
-    end;
-    match_seq_60 := llparse__match_sequence_id(state, p, endp, PByte(@llparse_blob63[0]), 3);
-    p := match_seq_60.current;
-    case match_seq_60.status of
-      kMatchComplete:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_span_end_llhttp__on_method_1;
-      end;
-      kMatchPause:
-      begin
-        Result := s_n_llhttp__internal__n_req_or_res_method_3;
-        Exit;
-      end;
-      kMatchMismatch:
-      begin
-        goto _L_s_n_llhttp__internal__n_error_110;
-      end;
-    end;
-  end;
-  _L__sw0_c248:
-  _L_s_n_llhttp__internal__n_req_or_res_method_1:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_or_res_method_1;
-      Exit;
-    end;
-    case p^ of
-      LongInt('E'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_or_res_method_2;
-      end;
-      LongInt('T'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_or_res_method_3;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_110;
-    end;
-  end;
-  _L__sw0_c249:
-  _L_s_n_llhttp__internal__n_req_or_res_method:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_req_or_res_method;
-      Exit;
-    end;
-    case p^ of
-      LongInt('H'):
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_req_or_res_method_1;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_error_110;
-    end;
-  end;
-  _L__sw0_c250:
-  _L_s_n_llhttp__internal__n_span_start_llhttp__on_method:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_span_start_llhttp__on_method;
-      Exit;
-    end;
-    state^._span_pos0 := Pointer(p);
-    state^._span_cb0 := Pointer(@llhttp__on_method);
-    goto _L_s_n_llhttp__internal__n_req_or_res_method;
-  end;
-  _L__sw0_c251:
-  _L_s_n_llhttp__internal__n_start_req_or_res:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_start_req_or_res;
-      Exit;
-    end;
-    case p^ of
-      LongInt('H'):
-      begin
-        goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_method;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_update_type_2;
-    end;
-  end;
-  _L__sw0_c252:
-  _L_s_n_llhttp__internal__n_invoke_load_type:
-  case llhttp__internal__c_load_type(state, p, endp) of
-    1:
-    begin
-      goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_method_1;
-    end;
-    2:
-    begin
-      goto _L_s_n_llhttp__internal__n_span_start_llhttp__on_protocol_1;
-    end;
-    else
-      goto _L_s_n_llhttp__internal__n_start_req_or_res;
-  end;
-  _L__sw0_c253:
-  _L_s_n_llhttp__internal__n_invoke_update_finish:
-  llhttp__internal__c_update_finish(state, p, endp);
-  goto _L_s_n_llhttp__internal__n_invoke_llhttp__on_message_begin;
-  _L__sw0_c254:
-  _L_s_n_llhttp__internal__n_start:
-  begin
-    if (p = endp) then
-    begin
-      Result := s_n_llhttp__internal__n_start;
-      Exit;
-    end;
-    case p^ of
-      10:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_start;
-      end;
-      13:
-      begin
-        Inc(p);
-        goto _L_s_n_llhttp__internal__n_start;
-      end;
-      else
-        goto _L_s_n_llhttp__internal__n_invoke_load_initial_message_completed;
-    end;
-  end;
-  _L__sw0_def:
-  ;
-  _L__sw0_end:
-  ;
   _L_s_n_llhttp__internal__n_error_2:
   begin
     state^.error := 7;
@@ -12152,32 +11641,32 @@ begin
   parser^.settings := Pointer(settings);
 end;
 
-function llhttp_get_type(Parser: PTLlhttpInternalT): UInt8; cdecl;
+function llhttp_get_type(Parser: PTLlhttpInternalT): UInt8; cdecl; inline;
 begin
   Result := parser^.&type;
 end;
 
-function llhttp_get_http_major(Parser: PTLlhttpInternalT): UInt8; cdecl;
+function llhttp_get_http_major(Parser: PTLlhttpInternalT): UInt8; cdecl; inline;
 begin
   Result := parser^.http_major;
 end;
 
-function llhttp_get_http_minor(Parser: PTLlhttpInternalT): UInt8; cdecl;
+function llhttp_get_http_minor(Parser: PTLlhttpInternalT): UInt8; cdecl; inline;
 begin
   Result := parser^.http_minor;
 end;
 
-function llhttp_get_method(Parser: PTLlhttpInternalT): UInt8; cdecl;
+function llhttp_get_method(Parser: PTLlhttpInternalT): UInt8; cdecl; inline;
 begin
   Result := parser^.method;
 end;
 
-function llhttp_get_status_code(Parser: PTLlhttpInternalT): LongInt; cdecl;
+function llhttp_get_status_code(Parser: PTLlhttpInternalT): LongInt; cdecl; inline;
 begin
   Result := parser^.status_code;
 end;
 
-function llhttp_get_upgrade(Parser: PTLlhttpInternalT): UInt8; cdecl;
+function llhttp_get_upgrade(Parser: PTLlhttpInternalT): UInt8; cdecl; inline;
 begin
   Result := parser^.upgrade;
 end;
@@ -12201,18 +11690,17 @@ begin
   parser^.lenient_flags := lenient_flags;
 end;
 
-function llhttp_execute(Parser: PTLlhttpInternalT; Data: PAnsiChar; Len: SizeUInt): TLlhttpErrnoT; cdecl;
+function llhttp_execute(Parser: PTLlhttpInternalT; Data: PAnsiChar; Len: SizeUInt): TLlhttpErrnoT; cdecl; inline;
 begin
   Result := llhttp__internal_execute(parser, data, (data + len));
 end;
 
-procedure llhttp_settings_init(Settings: PTLlhttpSettingsT); cdecl;
+procedure llhttp_settings_init(Settings: PTLlhttpSettingsT); cdecl; inline;
 begin
   FillChar(settings^, SizeOf(settings^), 0);
 end;
 
 function llhttp_finish(Parser: PTLlhttpInternalT): TLlhttpErrnoT; cdecl;
-label _L__sw335_def, _L__sw335_end, _L__sw335_c1, _L__sw335_c2, _L__sw335_c3;
 var
   err: LongInt;
   settings: PTLlhttpSettingsT;
@@ -12222,55 +11710,41 @@ begin
     Result := 0;
     Exit;
   end;
-  if (parser^.finish = HTTP_FINISH_SAFE_WITH_CB) then
-  begin
-    goto _L__sw335_c1;
-  end;
-  if (parser^.finish = HTTP_FINISH_SAFE) then
-  begin
-    goto _L__sw335_c2;
-  end;
-  if (parser^.finish = HTTP_FINISH_UNSAFE) then
-  begin
-    goto _L__sw335_c3;
-  end;
-  goto _L__sw335_def;
-  goto _L__sw335_end;
-  _L__sw335_c1:
-  begin
-    repeat
-      settings := PTLlhttpSettingsT(parser^.settings);
-      if ((settings = nil) or (settings^.on_message_complete = nil)) then
-      begin
-        err := 0;
-        Break;
-      end;
-      err := settings^.on_message_complete(parser);
-    until (not (0 <> 0));
-    if (err <> HPE_OK) then
+  case parser^.finish of
+    HTTP_FINISH_SAFE_WITH_CB:
     begin
-      Result := err;
+      repeat
+        settings := PTLlhttpSettingsT(parser^.settings);
+        if ((settings = nil) or (settings^.on_message_complete = nil)) then
+        begin
+          err := 0;
+          Break;
+        end;
+        err := settings^.on_message_complete(parser);
+      until (not (0 <> 0));
+      if (err <> HPE_OK) then
+      begin
+        Result := err;
+        Exit;
+      end;
+    end;
+    HTTP_FINISH_SAFE:
+    begin
+      Result := HPE_OK;
       Exit;
     end;
+    HTTP_FINISH_UNSAFE:
+    begin
+      parser^.reason := 'Invalid EOF state';
+      Result := HPE_INVALID_EOF_STATE;
+      Exit;
+    end;
+    else
+      Halt();
   end;
-  _L__sw335_c2:
-  begin
-    Result := HPE_OK;
-    Exit;
-  end;
-  _L__sw335_c3:
-  begin
-    parser^.reason := 'Invalid EOF state';
-    Result := HPE_INVALID_EOF_STATE;
-    Exit;
-  end;
-  _L__sw335_def:
-  Halt();
-  _L__sw335_end:
-  ;
 end;
 
-procedure llhttp_pause(Parser: PTLlhttpInternalT); cdecl;
+procedure llhttp_pause(Parser: PTLlhttpInternalT); cdecl; inline;
 begin
   if (parser^.error <> HPE_OK) then
   begin
@@ -12280,7 +11754,7 @@ begin
   parser^.reason := 'Paused';
 end;
 
-procedure llhttp_resume(Parser: PTLlhttpInternalT); cdecl;
+procedure llhttp_resume(Parser: PTLlhttpInternalT); cdecl; inline;
 begin
   if (parser^.error <> HPE_PAUSED) then
   begin
@@ -12289,7 +11763,7 @@ begin
   parser^.error := 0;
 end;
 
-procedure llhttp_resume_after_upgrade(Parser: PTLlhttpInternalT); cdecl;
+procedure llhttp_resume_after_upgrade(Parser: PTLlhttpInternalT); cdecl; inline;
 begin
   if (parser^.error <> HPE_PAUSED_UPGRADE) then
   begin
@@ -12298,27 +11772,27 @@ begin
   parser^.error := 0;
 end;
 
-function llhttp_get_errno(Parser: PTLlhttpInternalT): TLlhttpErrnoT; cdecl;
+function llhttp_get_errno(Parser: PTLlhttpInternalT): TLlhttpErrnoT; cdecl; inline;
 begin
   Result := parser^.error;
 end;
 
-function llhttp_get_error_reason(Parser: PTLlhttpInternalT): PAnsiChar; cdecl;
+function llhttp_get_error_reason(Parser: PTLlhttpInternalT): PAnsiChar; cdecl; inline;
 begin
   Result := parser^.reason;
 end;
 
-procedure llhttp_set_error_reason(Parser: PTLlhttpInternalT; Reason: PAnsiChar); cdecl;
+procedure llhttp_set_error_reason(Parser: PTLlhttpInternalT; Reason: PAnsiChar); cdecl; inline;
 begin
   parser^.reason := reason;
 end;
 
-function llhttp_get_error_pos(Parser: PTLlhttpInternalT): PAnsiChar; cdecl;
+function llhttp_get_error_pos(Parser: PTLlhttpInternalT): PAnsiChar; cdecl; inline;
 begin
   Result := parser^.error_pos;
 end;
 
-function llhttp_errno_name(Err: TLlhttpErrnoT): PAnsiChar; cdecl;
+function llhttp_errno_name(Err: TLlhttpErrnoT): PAnsiChar; cdecl; inline;
 begin
   case err of
     HPE_OK:
@@ -12511,7 +11985,7 @@ begin
   end;
 end;
 
-function llhttp_method_name(Method: TLlhttpMethodT): PAnsiChar; cdecl;
+function llhttp_method_name(Method: TLlhttpMethodT): PAnsiChar; cdecl; inline;
 begin
   case method of
     HTTP_DELETE:
@@ -12754,7 +12228,7 @@ begin
   end;
 end;
 
-function llhttp_status_name(Status: TLlhttpStatusT): PAnsiChar; cdecl;
+function llhttp_status_name(Status: TLlhttpStatusT): PAnsiChar; cdecl; inline;
 begin
   case status of
     HTTP_STATUS_CONTINUE:
@@ -13257,7 +12731,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_headers(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_headers(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13269,7 +12743,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_chunked_length(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_chunked_length(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13281,7 +12755,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_keep_alive(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_keep_alive(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13293,7 +12767,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_transfer_encoding(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_transfer_encoding(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13305,7 +12779,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_version(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_version(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13317,7 +12791,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_data_after_close(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_data_after_close(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13329,7 +12803,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_optional_lf_after_cr(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_optional_lf_after_cr(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13341,7 +12815,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_optional_crlf_after_chunk(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_optional_crlf_after_chunk(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13353,7 +12827,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_optional_cr_before_lf(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_optional_cr_before_lf(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13365,7 +12839,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_spaces_after_chunk_size(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_spaces_after_chunk_size(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13377,7 +12851,7 @@ begin
   end;
 end;
 
-procedure llhttp_set_lenient_header_value_relaxed(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl;
+procedure llhttp_set_lenient_header_value_relaxed(Parser: PTLlhttpInternalT; Enabled: LongInt); cdecl; inline;
 begin
   if (enabled <> 0) then
   begin
@@ -13879,7 +13353,7 @@ begin
   end;
 end;
 
-function llhttp__before_headers_complete(Parser: PTLlhttpInternalT; P: PAnsiChar; Endp: PAnsiChar): LongInt; cdecl;
+function llhttp__before_headers_complete(Parser: PTLlhttpInternalT; P: PAnsiChar; Endp: PAnsiChar): LongInt; cdecl; inline;
 begin
   if (((parser^.flags and F_UPGRADE) <> 0) and ((parser^.flags and F_CONNECTION_UPGRADE) <> 0)) then
   begin
