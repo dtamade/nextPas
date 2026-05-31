@@ -24,6 +24,7 @@ type
     function Has(const AName: string): Boolean;
     procedure Del(const AName: string);
     function Count: Int32;
+    procedure ForEach(const ACallback: THeaderIterator);
     function Clone: IHttpHeaders;
   end;
 
