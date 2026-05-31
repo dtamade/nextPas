@@ -553,9 +553,10 @@ var
   Lh: UInt32;
   Lh2: Byte;
   LGroupIdx, LProbeOfs, Li, LInsertIdx, LBase: SizeUInt;
-  LMask, LEmptyMask: TSwissMask;
+  LMask, LFreeMask, LEmptyMask: TSwissMask;
   LBit: Integer;
   LFoundInsert: Boolean;
+  LCtrlPtr: PByte;
 begin
   if FGrowthLeft = 0 then
     GrowAndRehash;
@@ -573,7 +574,8 @@ begin
   while True do
   begin
     LBase := LGroupIdx * GROUP_SIZE;
-    LMask := SwissMatchH2(@FCtrl[LBase], Lh2);
+    LCtrlPtr := @FCtrl[LBase];
+    LMask := SwissMatchH2(LCtrlPtr, Lh2);
     while LMask <> 0 do
     begin
       LBit := SwissCtz(LMask);
@@ -588,22 +590,19 @@ begin
       LMask := LMask and (LMask - 1);
     end;
 
-    LEmptyMask := SwissMatchEmpty(@FCtrl[LBase]);
-    if LEmptyMask <> 0 then
+    LFreeMask := SwissMatchEmptyOrDeleted(LCtrlPtr);
+    if LFreeMask <> 0 then
     begin
-      // empty 槽位既是探测链终点，也是首选插入点
-      if not LFoundInsert then
-        LInsertIdx := LBase + SizeUInt(SwissCtz(LEmptyMask));
-      Break;
-    end;
-
-    // 整组无 empty：检查 deleted 槽位作为插入点（仅首次记录）
-    if not LFoundInsert then
-    begin
-      LMask := SwissMatchEmptyOrDeleted(@FCtrl[LBase]);
-      if LMask <> 0 then
+      LEmptyMask := SwissMatchEmpty(LCtrlPtr);
+      if LEmptyMask <> 0 then
       begin
-        LInsertIdx := LBase + SizeUInt(SwissCtz(LMask));
+        if not LFoundInsert then
+          LInsertIdx := LBase + SizeUInt(SwissCtz(LEmptyMask));
+        Break;
+      end;
+      if not LFoundInsert then
+      begin
+        LInsertIdx := LBase + SizeUInt(SwissCtz(LFreeMask));
         LFoundInsert := True;
       end;
     end;
