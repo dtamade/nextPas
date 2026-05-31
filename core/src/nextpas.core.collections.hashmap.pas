@@ -391,6 +391,8 @@ begin
       (FBuckets + idx)^.Hash := (oldBuckets + i)^.Hash;
       Move((oldBuckets + i)^.Key, (FBuckets + idx)^.Key, SizeOf(K));
       Move((oldBuckets + i)^.Value, (FBuckets + idx)^.Value, SizeOf(V));
+      FillChar((oldBuckets + i)^.Key, SizeOf(K), 0);
+      FillChar((oldBuckets + i)^.Value, SizeOf(V), 0);
 
       Inc(FCount); Inc(FUsed);
     end;
@@ -458,10 +460,11 @@ begin
     begin
       Finalize((FBuckets + i)^.Key);
       Finalize((FBuckets + i)^.Value);
+      FillChar((FBuckets + i)^.Key, SizeOf(K), 0);
+      FillChar((FBuckets + i)^.Value, SizeOf(V), 0);
     end;
     (FBuckets + i)^.State := Ord(bsEmpty);
     (FBuckets + i)^.Hash := 0;
-    // Key/Value 已经 Finalize；保持为已清空状态
   end;
   FCount := 0;
   FUsed := 0;
@@ -499,9 +502,8 @@ begin
   begin
     if (FBuckets + i)^.State = Ord(bsOccupied) then
     begin
-      // Finalize old value to release resources
       Finalize((FBuckets + i)^.Value);
-      // Assign fresh zero value
+      FillChar((FBuckets + i)^.Value, SizeOf(V), 0);
       (FBuckets + i)^.Value := defaultValue;
     end;
   end;
