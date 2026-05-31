@@ -54,10 +54,13 @@ begin
   LResult := platform_fs_read_file(PAnsiChar(APath), LData, LLen);
   if LResult <> 0 then
     RaiseFsError(LResult, 'read file', APath);
-  SetLength(Result, LLen);
-  if LLen > 0 then
-    Move(LData^, Result[0], LLen);
-  platform_fs_free_buf(LData);
+  try
+    SetLength(Result, LLen);
+    if LLen > 0 then
+      Move(LData^, Result[0], LLen);
+  finally
+    platform_fs_free_buf(LData);
+  end;
 end;
 
 procedure FsWriteFile(const APath: string; const AData: TBytes;

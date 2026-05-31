@@ -195,6 +195,8 @@ var
   LChild: string;
   LOk: Boolean;
 begin
+  if (APath = '') or (APath = '/') or (APath = '\') then
+    Exit(False);
   if not IsRealDir(APath) then
     Exit(platform_file_unlink(PAnsiChar(APath)) = 0);
 
@@ -203,6 +205,8 @@ begin
   while LIter.Next do
   begin
     LEntry := LIter.Entry;
+    if (LEntry.Name = '.') or (LEntry.Name = '..') then
+      Continue;
     LChild := APath + '/' + LEntry.Name;
     if IsRealDir(LChild) then
     begin
@@ -253,6 +257,8 @@ begin
   while LIter.Next do
   begin
     LEntry := LIter.Entry;
+    if (LEntry.Name = '.') or (LEntry.Name = '..') then
+      Continue;
     LChild := ARoot + '/' + LEntry.Name;
     FsWalk(LChild, AFunc);
   end;
