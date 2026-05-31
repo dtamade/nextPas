@@ -131,13 +131,13 @@ procedure WriteFileText(const APath: string; const AText: string;
   const APerm: TFilePermission);
 var
   LData: TBytes;
-  LI: SizeInt;
+  LLocal: string;
 begin
   if Length(AText) > 0 then
   begin
-    SetLength(LData, Length(AText));
-    for LI := 0 to Length(AText) - 1 do
-      LData[LI] := Byte(AText[LI + 1]);
+    LLocal := AText;
+    SetLength(LData, Length(LLocal));
+    Move(LLocal[1], LData[0], Length(LLocal));
     nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
   end
   else
@@ -147,13 +147,31 @@ end;
 procedure WriteFileLines(const APath: string; const ALines: TStringArray;
   const APerm: TFilePermission);
 var
-  LText: string;
-  LI: Int32;
+  LData: TBytes;
+  LTotal, LPos, LLen, LI: SizeInt;
 begin
-  LText := '';
+  LTotal := 0;
   for LI := 0 to Length(ALines) - 1 do
-    LText := LText + ALines[LI] + #10;
-  WriteFileText(APath, LText, APerm);
+    Inc(LTotal, Length(ALines[LI]) + 1);
+  if LTotal = 0 then
+  begin
+    nextpas.core.fs.util.FsWriteFile(APath, nil, APerm);
+    Exit;
+  end;
+  SetLength(LData, LTotal);
+  LPos := 0;
+  for LI := 0 to Length(ALines) - 1 do
+  begin
+    LLen := Length(ALines[LI]);
+    if LLen > 0 then
+    begin
+      Move(ALines[LI][1], LData[LPos], LLen);
+      Inc(LPos, LLen);
+    end;
+    LData[LPos] := 10;
+    Inc(LPos);
+  end;
+  nextpas.core.fs.util.FsWriteFile(APath, LData, APerm);
 end;
 
 procedure AppendFile(const APath: string; const AData: TBytes);
@@ -168,13 +186,13 @@ end;
 procedure AppendFileText(const APath: string; const AText: string);
 var
   LData: TBytes;
-  LI: SizeInt;
+  LLocal: string;
 begin
   if Length(AText) > 0 then
   begin
-    SetLength(LData, Length(AText));
-    for LI := 0 to Length(AText) - 1 do
-      LData[LI] := Byte(AText[LI + 1]);
+    LLocal := AText;
+    SetLength(LData, Length(LLocal));
+    Move(LLocal[1], LData[0], Length(LLocal));
     AppendFile(APath, LData);
   end;
 end;
