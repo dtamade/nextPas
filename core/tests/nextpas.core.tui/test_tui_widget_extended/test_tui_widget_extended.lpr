@@ -6,6 +6,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.buffer,
   nextpas.core.tui.borders,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.tree,
   nextpas.core.tui.widget.dialog,
@@ -15,9 +16,9 @@ var T: TTestRunner;
 
 { === TTree === }
 procedure TestTreeRender;
-var LTree: TTree; LState: TTreeState; LBuf: TBuffer; LLines: TBufferLines;
+var LTree: ITree; LState: TTreeState; LBuf: TBuffer; LLines: TBufferLines;
 begin
-  LTree := TTree.Create([
+  LTree := TTree.New([
     TTreeNode.Make('Root').WithChildren([
       TTreeNode.Make('Child 1'),
       TTreeNode.Make('Child 2')
@@ -34,9 +35,9 @@ end;
 
 { === TDialog === }
 procedure TestDialogRender;
-var LD: TDialog; LBuf: TBuffer; LLines: TBufferLines;
+var LD: IWidget; LBuf: TBuffer; LLines: TBufferLines;
 begin
-  LD := TDialog.Create('Confirm', 'Are you sure?');
+  LD := TDialog.New('Confirm', 'Are you sure?') as IWidget;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 30, 10));
   try
     LD.Render(TRect.Make(0, 0, 30, 10), LBuf);
@@ -47,9 +48,9 @@ end;
 
 { === TMenu === }
 procedure TestMenuRender;
-var LM: TMenu; LState: TMenuState; LBuf: TBuffer; LLines: TBufferLines;
+var LM: IMenu; LState: TMenuState; LBuf: TBuffer; LLines: TBufferLines;
 begin
-  LM := TMenu.Create([
+  LM := TMenu.New([
     TMenuItem.Action('Open'),
     TMenuItem.Action('Save'),
     TMenuItem.Separator,

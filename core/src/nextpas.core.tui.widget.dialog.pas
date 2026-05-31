@@ -26,110 +26,113 @@ type
     Style: TStyle;
   end;
 
-  TDialog = record
-    Title: AnsiString;
-    Body: AnsiString;
-    Buttons: array of TDialogButton;
-    SelectedButton: Integer;
-    Width: Integer;
-    Height: Integer;
-    Style: TStyle;
-    BorderStyle: TStyle;
-    ButtonStyle: TStyle;
-    ActiveButtonStyle: TStyle;
-    DimBackground: Boolean;
-
-    class function Create(const ATitle, ABody: AnsiString): TDialog; static;
-    function WithButtons(const ALabels: array of AnsiString): TDialog;
-    function WithWidth(W: Integer): TDialog;
-    function WithHeight(H: Integer): TDialog;
-    function WithStyle(const S: TStyle): TDialog;
-    function WithBorderStyle(const S: TStyle): TDialog;
-    function WithButtonStyle(const S: TStyle): TDialog;
-    function WithActiveButtonStyle(const S: TStyle): TDialog;
-    function WithDimBackground(Dim: Boolean): TDialog;
+  IDialog = interface(IWidget)
+    ['{B8C9D0E1-F2A3-4567-BCDE-F01234567890}']
+    function WithButtons(const ALabels: array of AnsiString): IDialog;
+    function WithWidth(W: Integer): IDialog;
+    function WithHeight(H: Integer): IDialog;
+    function WithStyle(const S: TStyle): IDialog;
+    function WithBorderStyle(const S: TStyle): IDialog;
+    function WithButtonStyle(const S: TStyle): IDialog;
+    function WithActiveButtonStyle(const S: TStyle): IDialog;
+    function WithDimBackground(Dim: Boolean): IDialog;
+    function WithSelected(Idx: Integer): IDialog;
     function CenteredArea(const Container: TRect): TRect;
-    procedure Render(const Container: TRect; ABuf: TBuffer);
+  end;
+
+  TDialog = class(TInterfacedObject, IWidget, IDialog)
+  private
+    FTitle: AnsiString;
+    FBody: AnsiString;
+    FButtons: array of TDialogButton;
+    FSelectedButton: Integer;
+    FWidth: Integer;
+    FHeight: Integer;
+    FStyle: TStyle;
+    FBorderStyle: TStyle;
+    FButtonStyle: TStyle;
+    FActiveButtonStyle: TStyle;
+    FDimBackground: Boolean;
+  public
+    class function New(const ATitle, ABody: AnsiString): IDialog; static;
+
+    function WithButtons(const ALabels: array of AnsiString): IDialog;
+    function WithWidth(W: Integer): IDialog;
+    function WithHeight(H: Integer): IDialog;
+    function WithStyle(const S: TStyle): IDialog;
+    function WithBorderStyle(const S: TStyle): IDialog;
+    function WithButtonStyle(const S: TStyle): IDialog;
+    function WithActiveButtonStyle(const S: TStyle): IDialog;
+    function WithDimBackground(Dim: Boolean): IDialog;
+    function WithSelected(Idx: Integer): IDialog;
+    function CenteredArea(const Container: TRect): TRect;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
 
 { TDialog }
 
-class function TDialog.Create(const ATitle, ABody: AnsiString): TDialog;
+class function TDialog.New(const ATitle, ABody: AnsiString): IDialog;
+var LSelf: TDialog;
 begin
-  Result.Title := ATitle;
-  Result.Body := ABody;
-  Result.Buttons := nil;
-  Result.SelectedButton := 0;
-  Result.Width := 40;
-  Result.Height := 10;
-  Result.Style := TStyle.Default;
-  Result.BorderStyle := TStyle.Default;
-  Result.ButtonStyle := TStyle.Default;
-  Result.ActiveButtonStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.DimBackground := True;
+  LSelf := TDialog.Create;
+  LSelf.FTitle := ATitle;
+  LSelf.FBody := ABody;
+  LSelf.FButtons := nil;
+  LSelf.FSelectedButton := 0;
+  LSelf.FWidth := 40;
+  LSelf.FHeight := 10;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FBorderStyle := TStyle.Default;
+  LSelf.FButtonStyle := TStyle.Default;
+  LSelf.FActiveButtonStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FDimBackground := True;
+  Result := LSelf;
 end;
 
-function TDialog.WithButtons(const ALabels: array of AnsiString): TDialog;
+function TDialog.WithButtons(const ALabels: array of AnsiString): IDialog;
 var I: Integer;
 begin
-  Result := Self;
-  SetLength(Result.Buttons, Length(ALabels));
+  SetLength(FButtons, Length(ALabels));
   for I := 0 to High(ALabels) do
   begin
-    Result.Buttons[I].Label_ := ALabels[I];
-    Result.Buttons[I].Style := TStyle.Default;
+    FButtons[I].Label_ := ALabels[I];
+    FButtons[I].Style := TStyle.Default;
   end;
+  Result := Self;
 end;
 
-function TDialog.WithWidth(W: Integer): TDialog;
-begin
-  Result := Self;
-  Result.Width := W;
-end;
+function TDialog.WithWidth(W: Integer): IDialog;
+begin FWidth := W; Result := Self; end;
 
-function TDialog.WithHeight(H: Integer): TDialog;
-begin
-  Result := Self;
-  Result.Height := H;
-end;
+function TDialog.WithHeight(H: Integer): IDialog;
+begin FHeight := H; Result := Self; end;
 
-function TDialog.WithStyle(const S: TStyle): TDialog;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
+function TDialog.WithStyle(const S: TStyle): IDialog;
+begin FStyle := S; Result := Self; end;
 
-function TDialog.WithBorderStyle(const S: TStyle): TDialog;
-begin
-  Result := Self;
-  Result.BorderStyle := S;
-end;
+function TDialog.WithBorderStyle(const S: TStyle): IDialog;
+begin FBorderStyle := S; Result := Self; end;
 
-function TDialog.WithButtonStyle(const S: TStyle): TDialog;
-begin
-  Result := Self;
-  Result.ButtonStyle := S;
-end;
+function TDialog.WithButtonStyle(const S: TStyle): IDialog;
+begin FButtonStyle := S; Result := Self; end;
 
-function TDialog.WithActiveButtonStyle(const S: TStyle): TDialog;
-begin
-  Result := Self;
-  Result.ActiveButtonStyle := S;
-end;
+function TDialog.WithActiveButtonStyle(const S: TStyle): IDialog;
+begin FActiveButtonStyle := S; Result := Self; end;
 
-function TDialog.WithDimBackground(Dim: Boolean): TDialog;
-begin
-  Result := Self;
-  Result.DimBackground := Dim;
-end;
+function TDialog.WithDimBackground(Dim: Boolean): IDialog;
+begin FDimBackground := Dim; Result := Self; end;
+
+function TDialog.WithSelected(Idx: Integer): IDialog;
+begin FSelectedButton := Idx; Result := Self; end;
 
 function TDialog.CenteredArea(const Container: TRect): TRect;
 var W, H, X, Y: Integer;
 begin
-  W := Width;
-  H := Height;
+  W := FWidth; H := FHeight;
   if W > Container.Width then W := Container.Width;
   if H > Container.Height then H := Container.Height;
   X := Container.X + (Container.Width - W) div 2;
@@ -137,7 +140,7 @@ begin
   Result := TRect.Make(X, Y, W, H);
 end;
 
-procedure TDialog.Render(const Container: TRect; ABuf: TBuffer);
+procedure TDialog.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   DialogArea, Inner, BodyArea, ButtonArea: TRect;
   Blk: IBlock;
@@ -146,29 +149,25 @@ var
   BtnText: AnsiString;
   Sty: TStyle;
 begin
-  if Container.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  // Dim background
-  if DimBackground then
-    ABuf.SetStyle(Container, TStyle.Default.WithModifier([mbDim]));
+  if FDimBackground then
+    ABuffer.SetStyle(AArea, TStyle.Default.WithModifier([mbDim]));
 
-  DialogArea := CenteredArea(Container);
+  DialogArea := CenteredArea(AArea);
   if DialogArea.IsEmpty then Exit;
 
-  // Clear dialog area with base style
-  ABuf.SetStyle(DialogArea, Style);
+  ABuffer.SetStyle(DialogArea, FStyle);
 
-  // Render bordered block
   Blk := TBlock.New
     .WithBorders(BORDERS_ALL)
-    .WithTitle(Title)
-    .WithBorderStyle(BorderStyle);
-  Blk.Render(DialogArea, ABuf);
+    .WithTitle(FTitle)
+    .WithBorderStyle(FBorderStyle);
+  Blk.Render(DialogArea, ABuffer);
   Inner := Blk.Inner(DialogArea);
   if Inner.IsEmpty then Exit;
 
-  // Body text area (leave 1 row at bottom for buttons)
-  if Length(Buttons) > 0 then
+  if Length(FButtons) > 0 then
   begin
     BodyArea := TRect.Make(Inner.X, Inner.Y, Inner.Width, Inner.Height - 2);
     ButtonArea := TRect.Make(Inner.X, Inner.Y + Inner.Height - 1, Inner.Width, 1);
@@ -179,35 +178,33 @@ begin
     ButtonArea := TRect.Make(0, 0, 0, 0);
   end;
 
-  // Render body
   if not BodyArea.IsEmpty then
   begin
-    BodyPara := TParagraph.FromString(Body).WithStyle(Style);
-    BodyPara.Render(BodyArea, ABuf);
+    BodyPara := TParagraph.FromString(FBody).WithStyle(FStyle);
+    BodyPara.Render(BodyArea, ABuffer);
   end;
 
-  // Render buttons centered on button row
-  if (Length(Buttons) > 0) and (not ButtonArea.IsEmpty) then
+  if (Length(FButtons) > 0) and (not ButtonArea.IsEmpty) then
   begin
     TotalBtnW := 0;
-    for I := 0 to High(Buttons) do
-      Inc(TotalBtnW, Integer(StringDisplayWidth(Buttons[I].Label_) + 4));
+    for I := 0 to High(FButtons) do
+      Inc(TotalBtnW, Integer(StringDisplayWidth(FButtons[I].Label_) + 4));
     Spacing := 2;
-    Inc(TotalBtnW, (Length(Buttons) - 1) * Spacing);
+    Inc(TotalBtnW, (Length(FButtons) - 1) * Spacing);
 
     BtnX := ButtonArea.X + (ButtonArea.Width - TotalBtnW) div 2;
     if BtnX < ButtonArea.X then BtnX := ButtonArea.X;
 
-    for I := 0 to High(Buttons) do
+    for I := 0 to High(FButtons) do
     begin
-      if I = SelectedButton then
-        Sty := ButtonStyle.Patch(ActiveButtonStyle)
+      if I = FSelectedButton then
+        Sty := FButtonStyle.Patch(FActiveButtonStyle)
       else
-        Sty := ButtonStyle;
+        Sty := FButtonStyle;
 
-      BtnText := '[ ' + Buttons[I].Label_ + ' ]';
+      BtnText := '[ ' + FButtons[I].Label_ + ' ]';
       BtnW := Integer(StringDisplayWidth(BtnText));
-      ABuf.SetStringN(BtnX, ButtonArea.Y, BtnText, BtnW, Sty);
+      ABuffer.SetStringN(BtnX, ButtonArea.Y, BtnText, BtnW, Sty);
       Inc(BtnX, BtnW + Spacing);
     end;
   end;

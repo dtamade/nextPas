@@ -9,6 +9,7 @@ uses
   nextpas.core.tui.buffer,
   nextpas.core.tui.layout,
   nextpas.core.tui.event,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.gauge,
   nextpas.core.tui.widget.sparkline,
   nextpas.core.tui.widget.barchart,
@@ -20,9 +21,9 @@ var T: TTestRunner;
 
 { === Gauge === }
 procedure TestGaugeEmpty;
-var LG: TGauge; LBuf: TBuffer;
+var LG: IWidget; LBuf: TBuffer;
 begin
-  LG := TGauge.Default.WithRatio(0.0);
+  LG := TGauge.New.WithRatio(0.0) as IWidget;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
   try LG.Render(TRect.Make(0, 0, 10, 1), LBuf);
     Check(True, 'empty gauge renders');
@@ -30,21 +31,20 @@ begin
 end;
 
 procedure TestGaugeFull;
-var LG: TGauge; LBuf: TBuffer; LRow: AnsiString;
+var LG: IWidget; LBuf: TBuffer; LRow: AnsiString;
 begin
-  LG := TGauge.Default.WithRatio(1.0);
+  LG := TGauge.New.WithRatio(1.0) as IWidget;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
   try LG.Render(TRect.Make(0, 0, 5, 1), LBuf);
     LRow := LBuf.RowAsString(0);
-    { 全满应有 full block 字符 U+2588 = E2 96 88 }
     Check(Pos(#$E2#$96#$88, LRow) > 0, 'full gauge has block chars');
   finally LBuf.Free; end;
 end;
 
 procedure TestGaugeLabel;
-var LG: TGauge; LBuf: TBuffer; LRow: AnsiString;
+var LG: IWidget; LBuf: TBuffer; LRow: AnsiString;
 begin
-  LG := TGauge.Default.WithRatio(0.5).WithLabel('50%');
+  LG := TGauge.New.WithRatio(0.5).WithLabel('50%') as IWidget;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
   try LG.Render(TRect.Make(0, 0, 20, 1), LBuf);
     LRow := LBuf.RowAsString(0);
@@ -54,52 +54,49 @@ end;
 
 { === Sparkline === }
 procedure TestSparklineRender;
-var LS: TSparkline; LBuf: TBuffer; LRow: AnsiString;
+var LS: IWidget; LBuf: TBuffer; LRow: AnsiString;
 begin
-  LS := TSparkline.Create([1.0, 5.0, 2.0, 8.0, 3.0]);
+  LS := TSparkline.New([1.0, 5.0, 2.0, 8.0, 3.0]) as IWidget;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
   try LS.Render(TRect.Make(0, 0, 5, 2), LBuf);
     LRow := LBuf.RowAsString(0);
-    { braille chars are U+2800..U+28FF = E2 A0 80..E2 A3 BF }
     Check(Length(LRow) > 0, 'sparkline has content');
   finally LBuf.Free; end;
 end;
 
 { === BarChart === }
 procedure TestBarchartWithData;
-var LB: TBarChart; LBuf: TBuffer; LLines: TBufferLines;
+var LB: IWidget; LBuf: TBuffer; LLines: TBufferLines;
 begin
-  LB := TBarChart.Create([
+  LB := TBarChart.New([
     TBarData.Make('A', 5.0),
     TBarData.Make('B', 10.0)
-  ]);
+  ]) as IWidget;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 8));
   try LB.Render(TRect.Make(0, 0, 20, 8), LBuf);
     LLines := LBuf.AsLines;
-    { 底部应有标签 }
     Check(Pos('A', LLines[High(LLines)]) > 0, 'label A at bottom');
   finally LBuf.Free; end;
 end;
 
 { === Canvas === }
 procedure TestCanvasDrawDot;
-var LC: TCanvas; LBuf: TBuffer; LRow: AnsiString;
+var LC: ICanvas; LBuf: TBuffer; LRow: AnsiString;
 begin
-  LC := TCanvas.Create(10, 8);
+  LC := TCanvas.New(5, 4);
   LC.SetDot(2, 3);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 4));
-  try LC.Render(TRect.Make(0, 0, 5, 4), LBuf);
+  try (LC as IWidget).Render(TRect.Make(0, 0, 5, 4), LBuf);
     LRow := LBuf.RowAsString(0);
-    { 应有非空 braille 字符 }
     Check(Length(LRow) > 0, 'canvas with dot has content');
   finally LBuf.Free; end;
 end;
 
 { === Table === }
 procedure TestTableWithData;
-var LT: TTable; LBuf: TBuffer; LState: TTableState; LLines: TBufferLines;
+var LT: ITable; LBuf: TBuffer; LState: TTableState; LLines: TBufferLines;
 begin
-  LT := TTable.Create([
+  LT := TTable.New([
     TTableColumn.Make('Name', LengthConstraint(10)),
     TTableColumn.Make('Age', LengthConstraint(5))
   ]).WithRows([
@@ -116,9 +113,9 @@ begin
 end;
 
 procedure TestTableSelection;
-var LT: TTable; LBuf: TBuffer; LState: TTableState;
+var LT: ITable; LBuf: TBuffer; LState: TTableState;
 begin
-  LT := TTable.Create([TTableColumn.Make('X', LengthConstraint(5))])
+  LT := TTable.New([TTableColumn.Make('X', LengthConstraint(5))])
     .WithRows([TTableRow.Make(['a']), TTableRow.Make(['b'])]);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 4));
   LState := TTableState.Empty;
@@ -131,9 +128,9 @@ end;
 
 { === Input === }
 procedure TestInputRender;
-var LI: TInput; LBuf: TBuffer; LS: TInputState; LRow: AnsiString;
+var LI: IInput; LBuf: TBuffer; LS: TInputState; LRow: AnsiString;
 begin
-  LI := TInput.Default;
+  LI := TInput.New;
   LS := TInputState.WithText('hello');
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 1));
   try LI.RenderStateful(TRect.Make(0, 0, 20, 1), LBuf, LS);
@@ -143,9 +140,9 @@ begin
 end;
 
 procedure TestInputCursor;
-var LI: TInput; LBuf: TBuffer; LS: TInputState;
+var LI: IInput; LBuf: TBuffer; LS: TInputState;
 begin
-  LI := TInput.Default;
+  LI := TInput.New;
   LS := TInputState.WithText('abc');
   LS.Cursor := 1;
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));

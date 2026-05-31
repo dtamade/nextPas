@@ -49,25 +49,42 @@ type
     procedure ClearSelection;
   end;
 
-  TTable = record
-    Columns: array of TTableColumn;
-    Rows: array of TTableRow;
-    Style: TStyle;
-    HeaderStyle: TStyle;
-    HighlightStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
-    HasHeader: Boolean;
+  ITable = interface(IWidget)
+    ['{F6A7B8C9-D0E1-2345-FABC-678901234567}']
+    function WithRows(const ARows: array of TTableRow): ITable;
+    function WithBlock(ABlock: IBlock): ITable;
+    function WithStyle(const S: TStyle): ITable;
+    function WithHeaderStyle(const S: TStyle): ITable;
+    function WithHighlightStyle(const S: TStyle): ITable;
+    function WithHeader(Show: Boolean): ITable;
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TTableState);
+  end;
 
-    class function Create(const ACols: array of TTableColumn): TTable; static;
-    function WithRows(const ARows: array of TTableRow): TTable;
-    function WithBlock(ABlock: IBlock): TTable;
-    function WithStyle(const S: TStyle): TTable;
-    function WithHeaderStyle(const S: TStyle): TTable;
-    function WithHighlightStyle(const S: TStyle): TTable;
-    function WithHeader(Show: Boolean): TTable;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TTableState);
+  TTable = class(TInterfacedObject, IWidget, ITable)
+  private
+    FColumns: array of TTableColumn;
+    FRows: array of TTableRow;
+    FStyle: TStyle;
+    FHeaderStyle: TStyle;
+    FHighlightStyle: TStyle;
+    FBlock: IBlock;
+    FHasHeader: Boolean;
+  public
+    class function New(const ACols: array of TTableColumn): ITable; static;
+
+    function WithRows(const ARows: array of TTableRow): ITable;
+    function WithBlock(ABlock: IBlock): ITable;
+    function WithStyle(const S: TStyle): ITable;
+    function WithHeaderStyle(const S: TStyle): ITable;
+    function WithHighlightStyle(const S: TStyle): ITable;
+    function WithHeader(Show: Boolean): ITable;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    { ITable }
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TTableState);
   end;
 
 implementation
@@ -92,6 +109,7 @@ end;
 class function TTableRow.Make(const ACells: array of AnsiString): TTableRow;
 var I: Integer;
 begin
+  Result.Cells := nil;
   SetLength(Result.Cells, Length(ACells));
   for I := 0 to High(ACells) do
     Result.Cells[I] := ACells[I];
@@ -126,66 +144,68 @@ end;
 
 { TTable }
 
-class function TTable.Create(const ACols: array of TTableColumn): TTable;
-var I: Integer;
+class function TTable.New(const ACols: array of TTableColumn): ITable;
+var
+  LSelf: TTable;
+  I: Integer;
 begin
-  SetLength(Result.Columns, Length(ACols));
+  LSelf := TTable.Create;
+  SetLength(LSelf.FColumns, Length(ACols));
   for I := 0 to High(ACols) do
-    Result.Columns[I] := ACols[I];
-  Result.Rows := nil;
-  Result.Style := TStyle.Default;
-  Result.HeaderStyle := TStyle.Default.WithModifier([mbBold]);
-  Result.HighlightStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBlock := False;
-  Result.Block := nil;
-  Result.HasHeader := True;
+    LSelf.FColumns[I] := ACols[I];
+  LSelf.FRows := nil;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FHeaderStyle := TStyle.Default.WithModifier([mbBold]);
+  LSelf.FHighlightStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FBlock := nil;
+  LSelf.FHasHeader := True;
+  Result := LSelf;
 end;
 
-function TTable.WithRows(const ARows: array of TTableRow): TTable;
+function TTable.WithRows(const ARows: array of TTableRow): ITable;
 var I: Integer;
 begin
-  Result := Self;
-  SetLength(Result.Rows, Length(ARows));
+  SetLength(FRows, Length(ARows));
   for I := 0 to High(ARows) do
-    Result.Rows[I] := ARows[I];
-end;
-
-function TTable.WithBlock(ABlock: IBlock): TTable;
-begin
+    FRows[I] := ARows[I];
   Result := Self;
-  Result.HasBlock := True;
-  Result.Block := ABlock;
 end;
 
-function TTable.WithStyle(const S: TStyle): TTable;
+function TTable.WithBlock(ABlock: IBlock): ITable;
 begin
+  FBlock := ABlock;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TTable.WithHeaderStyle(const S: TStyle): TTable;
+function TTable.WithStyle(const S: TStyle): ITable;
 begin
+  FStyle := S;
   Result := Self;
-  Result.HeaderStyle := S;
 end;
 
-function TTable.WithHighlightStyle(const S: TStyle): TTable;
+function TTable.WithHeaderStyle(const S: TStyle): ITable;
 begin
+  FHeaderStyle := S;
   Result := Self;
-  Result.HighlightStyle := S;
 end;
 
-function TTable.WithHeader(Show: Boolean): TTable;
+function TTable.WithHighlightStyle(const S: TStyle): ITable;
 begin
+  FHighlightStyle := S;
   Result := Self;
-  Result.HasHeader := Show;
 end;
 
-procedure TTable.Render(const Area: TRect; ABuf: TBuffer);
+function TTable.WithHeader(Show: Boolean): ITable;
+begin
+  FHasHeader := Show;
+  Result := Self;
+end;
+
+procedure TTable.Render(const AArea: TRect; ABuf: TBuffer);
 var Dummy: TTableState;
 begin
   Dummy := TTableState.Empty;
-  RenderStateful(Area, ABuf, Dummy);
+  RenderStateful(AArea, ABuf, Dummy);
 end;
 
 procedure AlignedWrite(ABuf: TBuffer; X, Y, ColW: Integer;
@@ -203,7 +223,7 @@ begin
   ABuf.SetStringN(X + Pad, Y, Text, ColW - Pad, Sty);
 end;
 
-procedure TTable.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TTableState);
+procedure TTable.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TTableState);
 var
   Inner: TRect;
   NCols, NRows, MaxRows, Visible: Integer;
@@ -214,59 +234,55 @@ var
   Sty: TStyle;
   CellText: AnsiString;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuf.SetStyle(AArea, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuf);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
-  NCols := System.Length(Columns);
-  NRows := System.Length(Rows);
+  NCols := System.Length(FColumns);
+  NRows := System.Length(FRows);
   if NCols = 0 then Exit;
 
   SetLength(Constraints, NCols);
   for I := 0 to NCols - 1 do
-    Constraints[I] := Columns[I].Width;
+    Constraints[I] := FColumns[I].Width;
   ColWidths := HorizontalSplit(TRect.Make(Inner.X, Inner.Y, Inner.Width, 1), Constraints);
 
   HeaderH := 0;
-  if HasHeader then
-    HeaderH := 1;
+  if FHasHeader then HeaderH := 1;
 
-  // Render header row
-  if HasHeader and (Inner.Height > 0) then
+  if FHasHeader and (Inner.Height > 0) then
   begin
     RowY := Inner.Y;
-    ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), HeaderStyle);
+    ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), FHeaderStyle);
     for I := 0 to NCols - 1 do
       AlignedWrite(ABuf, ColWidths[I].X, RowY, ColWidths[I].Width,
-        Columns[I].Title, Columns[I].Align, HeaderStyle);
+        FColumns[I].Title, FColumns[I].Align, FHeaderStyle);
   end;
 
-  // Data area
   MaxRows := Inner.Height - HeaderH;
   if MaxRows <= 0 then Exit;
   if NRows = 0 then Exit;
 
-  // Clamp selection
-  if State.HasSelection then
+  if AState.HasSelection then
   begin
-    if State.Selected < 0 then State.Selected := 0;
-    if State.Selected >= NRows then State.Selected := NRows - 1;
+    if AState.Selected < 0 then AState.Selected := 0;
+    if AState.Selected >= NRows then AState.Selected := NRows - 1;
   end;
 
   Visible := MaxRows;
   if Visible > NRows then Visible := NRows;
 
-  FirstVis := State.Offset;
+  FirstVis := AState.Offset;
   if FirstVis < 0 then FirstVis := 0;
   if FirstVis > NRows - 1 then FirstVis := NRows - 1;
   LastVis := FirstVis + Visible;
@@ -277,9 +293,9 @@ begin
     if FirstVis < 0 then FirstVis := 0;
   end;
 
-  if State.HasSelection then
+  if AState.HasSelection then
   begin
-    Sel := State.Selected;
+    Sel := AState.Selected;
     while Sel >= LastVis do
     begin
       Inc(LastVis);
@@ -291,28 +307,27 @@ begin
       if LastVis - FirstVis > Visible then Dec(LastVis);
     end;
   end;
-  State.Offset := FirstVis;
+  AState.Offset := FirstVis;
 
-  // Render data rows
   RowIdx := FirstVis;
   RowY := Inner.Y + HeaderH;
   while (RowIdx < LastVis) and (RowY < Inner.Y + Inner.Height) do
   begin
-    Sty := Style.Patch(Rows[RowIdx].Style);
+    Sty := FStyle.Patch(FRows[RowIdx].Style);
     ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), Sty);
 
     for I := 0 to NCols - 1 do
     begin
-      if I < System.Length(Rows[RowIdx].Cells) then
-        CellText := Rows[RowIdx].Cells[I]
+      if I < System.Length(FRows[RowIdx].Cells) then
+        CellText := FRows[RowIdx].Cells[I]
       else
         CellText := '';
       AlignedWrite(ABuf, ColWidths[I].X, RowY, ColWidths[I].Width,
-        CellText, Columns[I].Align, Sty);
+        CellText, FColumns[I].Align, Sty);
     end;
 
-    if State.HasSelection and (RowIdx = State.Selected) then
-      ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), HighlightStyle);
+    if AState.HasSelection and (RowIdx = AState.Selected) then
+      ABuf.SetStyle(TRect.Make(Inner.X, RowY, Inner.Width, 1), FHighlightStyle);
 
     Inc(RowIdx);
     Inc(RowY);

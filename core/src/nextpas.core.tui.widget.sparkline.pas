@@ -1,15 +1,5 @@
 unit nextpas.core.tui.widget.sparkline;
 
-// Braille-based sparkline widget.
-//
-// Renders data points as a line chart using Unicode braille characters
-// (U+2800..U+28FF). Each terminal cell is a 2x4 dot matrix (2 columns,
-// 4 rows = 8 dots per cell). The Y axis is auto-scaled to fit the
-// available height * 4 rows of dots.
-//
-// If there are more data points than available dot-columns (width * 2),
-// only the last N points that fit are shown.
-
 {$I nextpas.core.settings.inc}
 
 {$packenum 1}
@@ -28,25 +18,32 @@ uses
   nextpas.core.tui.widget.intf;
 
 type
-  TSparkline = record
-    Data: array of Double;
-    Style: TStyle;
-    MaxVal: Double;
-    HasBlock: Boolean;
-    Block: IBlock;
+  ISparkline = interface(IWidget)
+    ['{C3D4E5F6-A7B8-9012-CDEF-345678901234}']
+    function WithStyle(const S: TStyle): ISparkline;
+    function WithMax(M: Double): ISparkline;
+    function WithBlock(ABlock: IBlock): ISparkline;
+  end;
 
-    class function Create(const AData: array of Double): TSparkline; static;
-    function WithStyle(const S: TStyle): TSparkline;
-    function WithMax(M: Double): TSparkline;
-    function WithBlock(ABlock: IBlock): TSparkline;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TSparkline = class(TInterfacedObject, IWidget, ISparkline)
+  private
+    FData: array of Double;
+    FStyle: TStyle;
+    FMaxVal: Double;
+    FBlock: IBlock;
+  public
+    class function New(const AData: array of Double): ISparkline; static;
+
+    function WithStyle(const S: TStyle): ISparkline;
+    function WithMax(M: Double): ISparkline;
+    function WithBlock(ABlock: IBlock): ISparkline;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
 
-// Braille dot bit positions within a cell:
-//   Col0: rows 0-3 -> bits 0,1,2,6
-//   Col1: rows 0-3 -> bits 3,4,5,7
 const
   DOT_BITS: array[0..1, 0..3] of Byte = (
     ($01, $02, $04, $40),
@@ -55,7 +52,6 @@ const
 
 procedure BrailleToUtf8(CodePoint: Word; out B0, B1, B2: Byte); inline;
 begin
-  // U+2800..U+28FF -> 3-byte UTF-8
   B0 := $E0 or (CodePoint shr 12);
   B1 := $80 or ((CodePoint shr 6) and $3F);
   B2 := $80 or (CodePoint and $3F);
@@ -63,39 +59,40 @@ end;
 
 { TSparkline }
 
-class function TSparkline.Create(const AData: array of Double): TSparkline;
+class function TSparkline.New(const AData: array of Double): ISparkline;
 var
+  LSelf: TSparkline;
   I: Integer;
 begin
-  SetLength(Result.Data, Length(AData));
+  LSelf := TSparkline.Create;
+  SetLength(LSelf.FData, Length(AData));
   for I := 0 to High(AData) do
-    Result.Data[I] := AData[I];
-  Result.Style := TStyle.Default;
-  Result.MaxVal := 0.0;
-  Result.HasBlock := False;
-  Result.Block := nil;
+    LSelf.FData[I] := AData[I];
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FMaxVal := 0.0;
+  LSelf.FBlock := nil;
+  Result := LSelf;
 end;
 
-function TSparkline.WithStyle(const S: TStyle): TSparkline;
+function TSparkline.WithStyle(const S: TStyle): ISparkline;
 begin
+  FStyle := S;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TSparkline.WithMax(M: Double): TSparkline;
+function TSparkline.WithMax(M: Double): ISparkline;
 begin
+  FMaxVal := M;
   Result := Self;
-  Result.MaxVal := M;
 end;
 
-function TSparkline.WithBlock(ABlock: IBlock): TSparkline;
+function TSparkline.WithBlock(ABlock: IBlock): ISparkline;
 begin
+  FBlock := ABlock;
   Result := Self;
-  Result.HasBlock := True;
-  Result.Block := ABlock;
 end;
 
-procedure TSparkline.Render(const Area: TRect; ABuf: TBuffer);
+procedure TSparkline.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner: TRect;
   CellW, CellH: Integer;
@@ -103,7 +100,7 @@ var
   DataLen, DataStart, DataCount: Integer;
   ActualMax: Double;
   I: Integer;
-  Grid: array of array of Byte;  // [cellCol][cellRow] = braille bits
+  Grid: array of array of Byte;
   Col, Row: Integer;
   DotCol, DotRow: Integer;
   Val: Double;
@@ -112,20 +109,18 @@ var
   CP: Word;
   B0, B1, B2: Byte;
   GlyphStr: AnsiString;
-  PC: PCell;
 begin
-  if Area.IsEmpty then Exit;
-  DataLen := Length(Data);
+  if AArea.IsEmpty then Exit;
+  DataLen := Length(FData);
   if DataLen = 0 then Exit;
 
-  // Handle block
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
@@ -134,7 +129,6 @@ begin
   DotCols := CellW * 2;
   DotRows := CellH * 4;
 
-  // Determine how many data points to show
   if DataLen > DotCols then
   begin
     DataStart := DataLen - DotCols;
@@ -146,45 +140,35 @@ begin
     DataCount := DataLen;
   end;
 
-  // Determine max value for scaling
-  ActualMax := MaxVal;
+  ActualMax := FMaxVal;
   if ActualMax <= 0.0 then
   begin
     ActualMax := 0.0;
     for I := DataStart to DataStart + DataCount - 1 do
-      if Data[I] > ActualMax then
-        ActualMax := Data[I];
+      if FData[I] > ActualMax then
+        ActualMax := FData[I];
   end;
   if ActualMax <= 0.0 then
     ActualMax := 1.0;
 
-  // Allocate grid of braille bit patterns (one byte per cell)
-  // TODO(perf): Grid 每帧堆分配。若成为瓶颈，用 frame-local arena 统一解决。
   SetLength(Grid, CellW, CellH);
   for Col := 0 to CellW - 1 do
     for Row := 0 to CellH - 1 do
       Grid[Col][Row] := 0;
 
-  // Plot each data point as a dot
   for I := 0 to DataCount - 1 do
   begin
-    Val := Data[DataStart + I];
+    Val := FData[DataStart + I];
     if Val < 0.0 then Val := 0.0;
     if Val > ActualMax then Val := ActualMax;
 
-    // Scale to dot-row coordinate (0 = bottom, DotRows-1 = top)
     ScaledY := Trunc((Val / ActualMax) * (DotRows - 1) + 0.5);
     if ScaledY >= DotRows then ScaledY := DotRows - 1;
 
-    // DotCol is the horizontal dot position
     DotCol := I;
-
-    // Convert dot coordinates to cell coordinates
     CellCol := DotCol div 2;
     LocalCol := DotCol mod 2;
 
-    // Braille Y: row 0 is top of cell, but our ScaledY 0 is bottom of area
-    // Invert: actual dot row from top = (DotRows - 1 - ScaledY)
     DotRow := DotRows - 1 - ScaledY;
     CellRow := DotRow div 4;
     LocalRow := DotRow mod 4;
@@ -193,7 +177,6 @@ begin
       Grid[CellCol][CellRow] := Grid[CellCol][CellRow] or DOT_BITS[LocalCol][LocalRow];
   end;
 
-  // Render grid to buffer
   SetLength(GlyphStr, 3);
   for Col := 0 to CellW - 1 do
     for Row := 0 to CellH - 1 do
@@ -206,7 +189,7 @@ begin
       GlyphStr[2] := Chr(B1);
       GlyphStr[3] := Chr(B2);
 
-      ABuf.SetStringN(Inner.X + Col, Inner.Y + Row, GlyphStr, 1, Style);
+      ABuffer.SetStringN(Inner.X + Col, Inner.Y + Row, GlyphStr, 1, FStyle);
     end;
 end;
 

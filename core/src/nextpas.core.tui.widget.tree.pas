@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block;
 
 type
@@ -40,20 +41,36 @@ type
     function IsOpen(Idx: Integer): Boolean;
   end;
 
-  TTree = record
-    Nodes: array of TTreeNode;
-    Style: TStyle;
-    HighlightStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
-    IndentSize: Integer;
+  ITree = interface(IWidget)
+    ['{A1B2C3D4-E5F6-7890-ABCD-EF1234567890}']
+    function WithBlock(ABlock: IBlock): ITree;
+    function WithStyle(const AStyle: TStyle): ITree;
+    function WithHighlightStyle(const AStyle: TStyle): ITree;
+    function WithIndent(N: Integer): ITree;
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TTreeState);
+  end;
 
-    class function Create(const ANodes: array of TTreeNode): TTree; static;
-    function WithBlock(const B: TBlock): TTree;
-    function WithStyle(const S: TStyle): TTree;
-    function WithHighlightStyle(const S: TStyle): TTree;
-    function WithIndent(N: Integer): TTree;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TTreeState);
+  TTree = class(TInterfacedObject, IWidget, ITree)
+  private
+    FNodes: array of TTreeNode;
+    FStyle: TStyle;
+    FHighlightStyle: TStyle;
+    FBlock: IBlock;
+    FIndentSize: Integer;
+  public
+    class function New(const ANodes: array of TTreeNode): ITree; static;
+
+    function WithBlock(ABlock: IBlock): ITree;
+    function WithStyle(const AStyle: TStyle): ITree;
+    function WithHighlightStyle(const AStyle: TStyle): ITree;
+    function WithIndent(N: Integer): ITree;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuf: TBuffer);
+    { ITree }
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TTreeState);
   end;
 
 implementation
@@ -118,42 +135,44 @@ end;
 
 { TTree }
 
-class function TTree.Create(const ANodes: array of TTreeNode): TTree;
-var I: Integer;
+class function TTree.New(const ANodes: array of TTreeNode): ITree;
+var
+  LSelf: TTree;
+  I: Integer;
 begin
-  SetLength(Result.Nodes, Length(ANodes));
+  LSelf := TTree.Create;
+  SetLength(LSelf.FNodes, Length(ANodes));
   for I := 0 to High(ANodes) do
-    Result.Nodes[I] := ANodes[I];
-  Result.Style := TStyle.Default;
-  Result.HighlightStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBlock := False;
-  Result.Block := nil;
-  Result.IndentSize := 2;
+    LSelf.FNodes[I] := ANodes[I];
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FHighlightStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FBlock := nil;
+  LSelf.FIndentSize := 2;
+  Result := LSelf;
 end;
 
-function TTree.WithBlock(const B: TBlock): TTree;
+function TTree.WithBlock(ABlock: IBlock): ITree;
 begin
+  FBlock := ABlock;
   Result := Self;
-  Result.HasBlock := True;
-  Result.Block := B;
 end;
 
-function TTree.WithStyle(const S: TStyle): TTree;
+function TTree.WithStyle(const AStyle: TStyle): ITree;
 begin
+  FStyle := AStyle;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TTree.WithHighlightStyle(const S: TStyle): TTree;
+function TTree.WithHighlightStyle(const AStyle: TStyle): ITree;
 begin
+  FHighlightStyle := AStyle;
   Result := Self;
-  Result.HighlightStyle := S;
 end;
 
-function TTree.WithIndent(N: Integer): TTree;
+function TTree.WithIndent(N: Integer): ITree;
 begin
+  FIndentSize := N;
   Result := Self;
-  Result.IndentSize := N;
 end;
 
 type
@@ -171,7 +190,7 @@ procedure FlattenNodes(const Nodes: array of TTreeNode; Depth: Integer;
   var State: TTreeState; var FlatIdx: Integer; var Rows: TFlatRows;
   const ParentLast: array of Boolean);
 var
-  I, ChildIdx: Integer;
+  I: Integer;
   Row: TFlatRow;
   NewParentLast: array of Boolean;
   J: Integer;
@@ -188,7 +207,6 @@ begin
     if FlatIdx >= Length(Rows) then
       SetLength(Rows, Length(Rows) + 64);
     Rows[FlatIdx] := Row;
-    ChildIdx := FlatIdx;
     Inc(FlatIdx);
 
     if Row.IsOpen then
@@ -202,7 +220,15 @@ begin
   end;
 end;
 
-procedure TTree.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TTreeState);
+procedure TTree.Render(const AArea: TRect; ABuf: TBuffer);
+var
+  LState: TTreeState;
+begin
+  LState := TTreeState.Empty;
+  RenderStateful(AArea, ABuf, LState);
+end;
+
+procedure TTree.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TTreeState);
 var
   Inner: TRect;
   Rows: TFlatRows;
@@ -211,40 +237,37 @@ var
   RowY, I, X, ColW: Integer;
   Sty: TStyle;
 begin
-  if Area.IsEmpty then Exit;
+  if AArea.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuf.SetStyle(AArea, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuf);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
-  if Length(Nodes) = 0 then Exit;
+  if Length(FNodes) = 0 then Exit;
 
-  // Flatten tree into visible rows
   SetLength(Rows, 0);
   FlatIdx := 0;
-  FlattenNodes(Nodes, 0, State, FlatIdx, Rows, []);
+  FlattenNodes(FNodes, 0, AState, FlatIdx, Rows, []);
   SetLength(Rows, FlatIdx);
-  State.FlatCount := FlatIdx;
+  AState.FlatCount := FlatIdx;
 
   if FlatIdx = 0 then Exit;
 
-  // Clamp selection
-  if State.Selected < 0 then State.Selected := 0;
-  if State.Selected >= FlatIdx then State.Selected := FlatIdx - 1;
+  if AState.Selected < 0 then AState.Selected := 0;
+  if AState.Selected >= FlatIdx then AState.Selected := FlatIdx - 1;
 
-  // Scrolling
   MaxRows := Inner.Height;
   Visible := MaxRows;
   if Visible > FlatIdx then Visible := FlatIdx;
 
-  FirstVis := State.Offset;
+  FirstVis := AState.Offset;
   if FirstVis < 0 then FirstVis := 0;
   if FirstVis > FlatIdx - 1 then FirstVis := FlatIdx - 1;
   LastVis := FirstVis + Visible;
@@ -255,7 +278,7 @@ begin
     if FirstVis < 0 then FirstVis := 0;
   end;
 
-  Sel := State.Selected;
+  Sel := AState.Selected;
   while Sel >= LastVis do
   begin
     Inc(LastVis);
@@ -266,22 +289,19 @@ begin
     Dec(FirstVis);
     if LastVis - FirstVis > Visible then Dec(LastVis);
   end;
-  State.Offset := FirstVis;
+  AState.Offset := FirstVis;
 
-  // Render visible rows
   ColW := Inner.Width;
   RowY := Inner.Y;
   for I := FirstVis to LastVis - 1 do
   begin
     if RowY >= Inner.Y + Inner.Height then Break;
 
-    Sty := Style.Patch(Rows[I].NodeStyle);
+    Sty := FStyle.Patch(Rows[I].NodeStyle);
     ABuf.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), Sty);
 
-    // Indentation: skip IndentSize * Depth columns (already cleared by SetStyle)
-    X := Inner.X + IndentSize * Rows[I].Depth;
+    X := Inner.X + FIndentSize * Rows[I].Depth;
 
-    // Expand/collapse marker
     if Rows[I].HasChildren then
     begin
       if Rows[I].IsOpen then
@@ -294,9 +314,8 @@ begin
     Inc(X, 4);
     ABuf.SetStringN(X, RowY, Rows[I].Label_, ColW - (X - Inner.X), Sty);
 
-    // Highlight selected row
     if I = Sel then
-      ABuf.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), HighlightStyle);
+      ABuf.SetStyle(TRect.Make(Inner.X, RowY, ColW, 1), FHighlightStyle);
 
     Inc(RowY);
   end;

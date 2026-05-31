@@ -225,7 +225,7 @@ procedure TCommandPalette.RenderStateful(const Area: TRect; ABuf: TBuffer; var S
 var
   PalW, PalH, PalX, PalY, I, Row, ItemIdx, VisCount: Integer;
   PalArea, InputArea, ListArea: TRect;
-  Inp: TInput;
+  Inp: IInput;
   LineSty: TStyle;
   DisplayStr: AnsiString;
 begin
@@ -255,7 +255,7 @@ begin
 
   // Input area (first row inside block)
   InputArea := TRect.Make(PalX + 1, PalY + 1, PalW - 2, 1);
-  Inp := TInput.Default.WithPlaceholder('Search...');
+  Inp := TInput.New.WithPlaceholder('Search...');
   Inp.RenderStateful(InputArea, ABuf, State.Input);
 
   // List area

@@ -14,7 +14,8 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf;
 
 type
   TMenuItemKind = (mikAction, mikSeparator, mikSubmenu);
@@ -36,27 +37,47 @@ type
   TMenuState = record
     Selected: Integer;
     Open: Boolean;
-
     class function Default: TMenuState; static;
   end;
 
-  TMenu = record
-    Items: array of TMenuItem;
-    Style: TStyle;
-    HighlightStyle: TStyle;
-    DisabledStyle: TStyle;
-    Width: Integer;
-
-    class function Create(const AItems: array of TMenuItem): TMenu; static;
-    function WithStyle(const S: TStyle): TMenu;
-    function WithHighlightStyle(const S: TStyle): TMenu;
-    function WithDisabledStyle(const S: TStyle): TMenu;
-    function WithWidth(W: Integer): TMenu;
+  IMenu = interface(IWidget)
+    ['{C9D0E1F2-A3B4-5678-CDEF-012345678901}']
+    function WithStyle(const S: TStyle): IMenu;
+    function WithHighlightStyle(const S: TStyle): IMenu;
+    function WithDisabledStyle(const S: TStyle): IMenu;
+    function WithWidth(W: Integer): IMenu;
     function ItemCount: Integer;
     function SelectableCount: Integer;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TMenuState);
-    procedure MoveUp(var State: TMenuState);
-    procedure MoveDown(var State: TMenuState);
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TMenuState);
+    procedure MoveUp(var AState: TMenuState);
+    procedure MoveDown(var AState: TMenuState);
+  end;
+
+  TMenu = class(TInterfacedObject, IWidget, IMenu)
+  private
+    FItems: array of TMenuItem;
+    FStyle: TStyle;
+    FHighlightStyle: TStyle;
+    FDisabledStyle: TStyle;
+    FWidth: Integer;
+  public
+    class function New(const AItems: array of TMenuItem): IMenu; static;
+
+    function WithStyle(const S: TStyle): IMenu;
+    function WithHighlightStyle(const S: TStyle): IMenu;
+    function WithDisabledStyle(const S: TStyle): IMenu;
+    function WithWidth(W: Integer): IMenu;
+    function ItemCount: Integer;
+    function SelectableCount: Integer;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    { IMenu }
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TMenuState);
+    procedure MoveUp(var AState: TMenuState);
+    procedure MoveDown(var AState: TMenuState);
   end;
 
 implementation
@@ -65,191 +86,157 @@ implementation
 
 class function TMenuItem.Action(const ALabel: AnsiString): TMenuItem;
 begin
-  Result.Kind := mikAction;
-  Result.Label_ := ALabel;
-  Result.Shortcut := '';
-  Result.Enabled := True;
-  Result.Children := nil;
+  Result.Kind := mikAction; Result.Label_ := ALabel;
+  Result.Shortcut := ''; Result.Enabled := True; Result.Children := nil;
 end;
 
 class function TMenuItem.Separator: TMenuItem;
 begin
-  Result.Kind := mikSeparator;
-  Result.Label_ := '';
-  Result.Shortcut := '';
-  Result.Enabled := False;
-  Result.Children := nil;
+  Result.Kind := mikSeparator; Result.Label_ := '';
+  Result.Shortcut := ''; Result.Enabled := False; Result.Children := nil;
 end;
 
 function TMenuItem.WithShortcut(const S: AnsiString): TMenuItem;
-begin
-  Result := Self;
-  Result.Shortcut := S;
-end;
+begin Result := Self; Result.Shortcut := S; end;
 
 function TMenuItem.WithEnabled(E: Boolean): TMenuItem;
-begin
-  Result := Self;
-  Result.Enabled := E;
-end;
+begin Result := Self; Result.Enabled := E; end;
 
 function TMenuItem.WithChildren(const AItems: array of TMenuItem): TMenuItem;
 var I: Integer;
 begin
-  Result := Self;
-  Result.Kind := mikSubmenu;
+  Result := Self; Result.Kind := mikSubmenu;
   SetLength(Result.Children, Length(AItems));
-  for I := 0 to High(AItems) do
-    Result.Children[I] := AItems[I];
+  for I := 0 to High(AItems) do Result.Children[I] := AItems[I];
 end;
 
 { TMenuState }
 
 class function TMenuState.Default: TMenuState;
-begin
-  Result.Selected := 0;
-  Result.Open := True;
-end;
+begin Result.Selected := 0; Result.Open := True; end;
 
 { TMenu }
 
-class function TMenu.Create(const AItems: array of TMenuItem): TMenu;
-var I: Integer;
+class function TMenu.New(const AItems: array of TMenuItem): IMenu;
+var LSelf: TMenu; I: Integer;
 begin
-  SetLength(Result.Items, Length(AItems));
-  for I := 0 to High(AItems) do
-    Result.Items[I] := AItems[I];
-  Result.Style := TStyle.Default;
-  Result.HighlightStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.DisabledStyle := TStyle.Default.WithModifier([mbDim]);
-  Result.Width := 0;
+  LSelf := TMenu.Create;
+  SetLength(LSelf.FItems, Length(AItems));
+  for I := 0 to High(AItems) do LSelf.FItems[I] := AItems[I];
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FHighlightStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FDisabledStyle := TStyle.Default.WithModifier([mbDim]);
+  LSelf.FWidth := 0;
+  Result := LSelf;
 end;
 
-function TMenu.WithStyle(const S: TStyle): TMenu;
-begin
-  Result := Self;
-  Result.Style := S;
-end;
+function TMenu.WithStyle(const S: TStyle): IMenu;
+begin FStyle := S; Result := Self; end;
 
-function TMenu.WithHighlightStyle(const S: TStyle): TMenu;
-begin
-  Result := Self;
-  Result.HighlightStyle := S;
-end;
+function TMenu.WithHighlightStyle(const S: TStyle): IMenu;
+begin FHighlightStyle := S; Result := Self; end;
 
-function TMenu.WithDisabledStyle(const S: TStyle): TMenu;
-begin
-  Result := Self;
-  Result.DisabledStyle := S;
-end;
+function TMenu.WithDisabledStyle(const S: TStyle): IMenu;
+begin FDisabledStyle := S; Result := Self; end;
 
-function TMenu.WithWidth(W: Integer): TMenu;
-begin
-  Result := Self;
-  Result.Width := W;
-end;
+function TMenu.WithWidth(W: Integer): IMenu;
+begin FWidth := W; Result := Self; end;
 
 function TMenu.ItemCount: Integer;
-begin
-  Result := Length(Items);
-end;
+begin Result := Length(FItems); end;
 
 function TMenu.SelectableCount: Integer;
 var I, C: Integer;
 begin
   C := 0;
-  for I := 0 to High(Items) do
-    if (Items[I].Kind <> mikSeparator) and Items[I].Enabled then
-      Inc(C);
+  for I := 0 to High(FItems) do
+    if (FItems[I].Kind <> mikSeparator) and FItems[I].Enabled then Inc(C);
   Result := C;
 end;
 
-procedure TMenu.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TMenuState);
+procedure TMenu.Render(const AArea: TRect; ABuffer: TBuffer);
+var LState: TMenuState;
+begin
+  LState := TMenuState.Default;
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TMenu.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TMenuState);
 var
   I, Y, W, ShortcutX: Integer;
   Sty: TStyle;
   Line: AnsiString;
 begin
-  if Area.IsEmpty then Exit;
-  if Length(Items) = 0 then Exit;
+  if AArea.IsEmpty then Exit;
+  if Length(FItems) = 0 then Exit;
 
-  W := Width;
-  if W <= 0 then W := Area.Width;
-  if W > Area.Width then W := Area.Width;
+  W := FWidth;
+  if W <= 0 then W := AArea.Width;
+  if W > AArea.Width then W := AArea.Width;
 
-  ABuf.SetStyle(TRect.Make(Area.X, Area.Y, W, Area.Height), Style);
+  ABuf.SetStyle(TRect.Make(AArea.X, AArea.Y, W, AArea.Height), FStyle);
 
-  Y := Area.Y;
-  for I := 0 to High(Items) do
+  Y := AArea.Y;
+  for I := 0 to High(FItems) do
   begin
-    if Y >= Area.Y + Area.Height then Break;
+    if Y >= AArea.Y + AArea.Height then Break;
 
-    if Items[I].Kind = mikSeparator then
+    if FItems[I].Kind = mikSeparator then
     begin
       Line := StringOfChar('-', W);
-      ABuf.SetStringN(Area.X, Y, Line, W, Style);
+      ABuf.SetStringN(AArea.X, Y, Line, W, FStyle);
     end
     else
     begin
-      if not Items[I].Enabled then
-        Sty := DisabledStyle
-      else if I = State.Selected then
-        Sty := HighlightStyle
-      else
-        Sty := Style;
+      if not FItems[I].Enabled then Sty := FDisabledStyle
+      else if I = AState.Selected then Sty := FHighlightStyle
+      else Sty := FStyle;
 
-      ABuf.SetStyle(TRect.Make(Area.X, Y, W, 1), Sty);
-      ABuf.SetStringN(Area.X + 1, Y, Items[I].Label_, W - 2, Sty);
+      ABuf.SetStyle(TRect.Make(AArea.X, Y, W, 1), Sty);
+      ABuf.SetStringN(AArea.X + 1, Y, FItems[I].Label_, W - 2, Sty);
 
-      if Items[I].Shortcut <> '' then
+      if FItems[I].Shortcut <> '' then
       begin
-        ShortcutX := Area.X + W - Integer(StringDisplayWidth(Items[I].Shortcut)) - 1;
-        if ShortcutX > Area.X + 1 then
-          ABuf.SetStringN(ShortcutX, Y, Items[I].Shortcut,
-            Integer(StringDisplayWidth(Items[I].Shortcut)), Sty);
+        ShortcutX := AArea.X + W - Integer(StringDisplayWidth(FItems[I].Shortcut)) - 1;
+        if ShortcutX > AArea.X + 1 then
+          ABuf.SetStringN(ShortcutX, Y, FItems[I].Shortcut,
+            Integer(StringDisplayWidth(FItems[I].Shortcut)), Sty);
       end;
 
-      if Items[I].Kind = mikSubmenu then
-        ABuf.SetStringN(Area.X + W - 2, Y, '>', 1, Sty);
+      if FItems[I].Kind = mikSubmenu then
+        ABuf.SetStringN(AArea.X + W - 2, Y, '>', 1, Sty);
     end;
-
     Inc(Y);
   end;
 end;
 
-procedure TMenu.MoveDown(var State: TMenuState);
+procedure TMenu.MoveDown(var AState: TMenuState);
 var Start, I: Integer;
 begin
-  if Length(Items) = 0 then Exit;
-  Start := State.Selected;
-  I := (Start + 1) mod Length(Items);
+  if Length(FItems) = 0 then Exit;
+  Start := AState.Selected;
+  I := (Start + 1) mod Length(FItems);
   while I <> Start do
   begin
-    if (Items[I].Kind <> mikSeparator) and Items[I].Enabled then
-    begin
-      State.Selected := I;
-      Exit;
-    end;
-    I := (I + 1) mod Length(Items);
+    if (FItems[I].Kind <> mikSeparator) and FItems[I].Enabled then
+    begin AState.Selected := I; Exit; end;
+    I := (I + 1) mod Length(FItems);
   end;
 end;
 
-procedure TMenu.MoveUp(var State: TMenuState);
+procedure TMenu.MoveUp(var AState: TMenuState);
 var Start, I: Integer;
 begin
-  if Length(Items) = 0 then Exit;
-  Start := State.Selected;
+  if Length(FItems) = 0 then Exit;
+  Start := AState.Selected;
   I := Start - 1;
-  if I < 0 then I := High(Items);
+  if I < 0 then I := High(FItems);
   while I <> Start do
   begin
-    if (Items[I].Kind <> mikSeparator) and Items[I].Enabled then
-    begin
-      State.Selected := I;
-      Exit;
-    end;
+    if (FItems[I].Kind <> mikSeparator) and FItems[I].Enabled then
+    begin AState.Selected := I; Exit; end;
     Dec(I);
-    if I < 0 then I := High(Items);
+    if I < 0 then I := High(FItems);
   end;
 end;
 

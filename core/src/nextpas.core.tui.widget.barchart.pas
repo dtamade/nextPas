@@ -1,14 +1,5 @@
 unit nextpas.core.tui.widget.barchart;
 
-// Vertical bar chart widget with Unicode block character precision.
-//
-// Each bar is BarWidth cells wide with BarGap cells between bars.
-// Bars grow upward from the bottom of the area. Sub-cell precision
-// uses Unicode lower block characters (U+2581..U+2588) for the
-// fractional row at the top of each bar.
-//
-// Optional labels (1 row at bottom) and values (1 row at top).
-
 {$I nextpas.core.settings.inc}
 
 {$packenum 1}
@@ -37,42 +28,54 @@ type
     function WithStyle(const S: TStyle): TBarData;
   end;
 
-  TBarChart = record
-    Bars: array of TBarData;
-    MaxVal: Double;
-    BarWidth: Integer;
-    BarGap: Integer;
-    ShowValues: Boolean;
-    ShowLabels: Boolean;
-    Style: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  IBarChart = interface(IWidget)
+    ['{D4E5F6A7-B8C9-0123-DEFA-456789012345}']
+    function WithMax(M: Double): IBarChart;
+    function WithBarWidth(W: Integer): IBarChart;
+    function WithBarGap(G: Integer): IBarChart;
+    function WithShowValues(V: Boolean): IBarChart;
+    function WithShowLabels(L: Boolean): IBarChart;
+    function WithStyle(const S: TStyle): IBarChart;
+    function WithBlock(ABlock: IBlock): IBarChart;
+  end;
 
-    class function Create(const ABars: array of TBarData): TBarChart; static;
-    function WithMax(M: Double): TBarChart;
-    function WithBarWidth(W: Integer): TBarChart;
-    function WithBarGap(G: Integer): TBarChart;
-    function WithShowValues(V: Boolean): TBarChart;
-    function WithShowLabels(L: Boolean): TBarChart;
-    function WithStyle(const S: TStyle): TBarChart;
-    function WithBlock(ABlock: IBlock): TBarChart;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TBarChart = class(TInterfacedObject, IWidget, IBarChart)
+  private
+    FBars: array of TBarData;
+    FMaxVal: Double;
+    FBarWidth: Integer;
+    FBarGap: Integer;
+    FShowValues: Boolean;
+    FShowLabels: Boolean;
+    FStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New(const ABars: array of TBarData): IBarChart; static;
+
+    function WithMax(M: Double): IBarChart;
+    function WithBarWidth(W: Integer): IBarChart;
+    function WithBarGap(G: Integer): IBarChart;
+    function WithShowValues(V: Boolean): IBarChart;
+    function WithShowLabels(L: Boolean): IBarChart;
+    function WithStyle(const S: TStyle): IBarChart;
+    function WithBlock(ABlock: IBlock): IBarChart;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
 
-// Unicode lower block characters for sub-cell vertical precision.
-// LOWER_EIGHTHS[1] = lower 1/8, ..., LOWER_EIGHTHS[8] = full block.
 const
   LOWER_EIGHTHS: array[1..8] of AnsiString = (
-    #$E2#$96#$81,   // U+2581 LOWER ONE EIGHTH BLOCK
-    #$E2#$96#$82,   // U+2582 LOWER ONE QUARTER BLOCK
-    #$E2#$96#$83,   // U+2583 LOWER THREE EIGHTHS BLOCK
-    #$E2#$96#$84,   // U+2584 LOWER HALF BLOCK
-    #$E2#$96#$85,   // U+2585 LOWER FIVE EIGHTHS BLOCK
-    #$E2#$96#$86,   // U+2586 LOWER THREE QUARTERS BLOCK
-    #$E2#$96#$87,   // U+2587 LOWER SEVEN EIGHTHS BLOCK
-    #$E2#$96#$88    // U+2588 FULL BLOCK
+    #$E2#$96#$81,
+    #$E2#$96#$82,
+    #$E2#$96#$83,
+    #$E2#$96#$84,
+    #$E2#$96#$85,
+    #$E2#$96#$86,
+    #$E2#$96#$87,
+    #$E2#$96#$88
   );
 
 { TBarData }
@@ -92,69 +95,70 @@ end;
 
 { TBarChart }
 
-class function TBarChart.Create(const ABars: array of TBarData): TBarChart;
+class function TBarChart.New(const ABars: array of TBarData): IBarChart;
 var
+  LSelf: TBarChart;
   I: Integer;
 begin
-  SetLength(Result.Bars, Length(ABars));
+  LSelf := TBarChart.Create;
+  SetLength(LSelf.FBars, Length(ABars));
   for I := 0 to High(ABars) do
-    Result.Bars[I] := ABars[I];
-  Result.MaxVal := 0.0;
-  Result.BarWidth := 3;
-  Result.BarGap := 1;
-  Result.ShowValues := True;
-  Result.ShowLabels := True;
-  Result.Style := TStyle.Default;
-  Result.HasBlock := False;
-  Result.Block := nil;
+    LSelf.FBars[I] := ABars[I];
+  LSelf.FMaxVal := 0.0;
+  LSelf.FBarWidth := 3;
+  LSelf.FBarGap := 1;
+  LSelf.FShowValues := True;
+  LSelf.FShowLabels := True;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FBlock := nil;
+  Result := LSelf;
 end;
 
-function TBarChart.WithMax(M: Double): TBarChart;
+function TBarChart.WithMax(M: Double): IBarChart;
 begin
+  FMaxVal := M;
   Result := Self;
-  Result.MaxVal := M;
 end;
 
-function TBarChart.WithBarWidth(W: Integer): TBarChart;
+function TBarChart.WithBarWidth(W: Integer): IBarChart;
 begin
-  Result := Self;
   if W < 1 then W := 1;
-  Result.BarWidth := W;
+  FBarWidth := W;
+  Result := Self;
 end;
 
-function TBarChart.WithBarGap(G: Integer): TBarChart;
+function TBarChart.WithBarGap(G: Integer): IBarChart;
 begin
-  Result := Self;
   if G < 0 then G := 0;
-  Result.BarGap := G;
-end;
-
-function TBarChart.WithShowValues(V: Boolean): TBarChart;
-begin
+  FBarGap := G;
   Result := Self;
-  Result.ShowValues := V;
 end;
 
-function TBarChart.WithShowLabels(L: Boolean): TBarChart;
+function TBarChart.WithShowValues(V: Boolean): IBarChart;
 begin
+  FShowValues := V;
   Result := Self;
-  Result.ShowLabels := L;
 end;
 
-function TBarChart.WithStyle(const S: TStyle): TBarChart;
+function TBarChart.WithShowLabels(L: Boolean): IBarChart;
 begin
+  FShowLabels := L;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TBarChart.WithBlock(ABlock: IBlock): TBarChart;
+function TBarChart.WithStyle(const S: TStyle): IBarChart;
 begin
+  FStyle := S;
   Result := Self;
-  Result.HasBlock := True;
-  Result.Block := ABlock;
 end;
 
-procedure TBarChart.Render(const Area: TRect; ABuf: TBuffer);
+function TBarChart.WithBlock(ABlock: IBlock): IBarChart;
+begin
+  FBlock := ABlock;
+  Result := Self;
+end;
+
+procedure TBarChart.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Inner: TRect;
   N: Integer;
@@ -170,109 +174,98 @@ var
   LabelX, ValX: Integer;
   Sty: TStyle;
 begin
-  if Area.IsEmpty then Exit;
-  N := Length(Bars);
+  if AArea.IsEmpty then Exit;
+  N := Length(FBars);
   if N = 0 then Exit;
 
-  // Handle block
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(AArea, ABuffer);
+    Inner := FBlock.Inner(AArea);
   end
   else
-    Inner := Area;
+    Inner := AArea;
 
   if Inner.IsEmpty then Exit;
 
-  // Determine actual max value
-  ActualMax := MaxVal;
+  ActualMax := FMaxVal;
   if ActualMax <= 0.0 then
   begin
     ActualMax := 0.0;
     for I := 0 to N - 1 do
-      if Bars[I].Value > ActualMax then
-        ActualMax := Bars[I].Value;
+      if FBars[I].Value > ActualMax then
+        ActualMax := FBars[I].Value;
   end;
   if ActualMax <= 0.0 then
     ActualMax := 1.0;
 
-  // Calculate vertical layout
   BarAreaTop := Inner.Y;
   BarAreaBottom := Inner.Y + Inner.Height - 1;
 
-  if ShowValues then
-    Inc(BarAreaTop);  // reserve top row for values
-  if ShowLabels then
-    Dec(BarAreaBottom);  // reserve bottom row for labels
+  if FShowValues then
+    Inc(BarAreaTop);
+  if FShowLabels then
+    Dec(BarAreaBottom);
 
   BarAreaHeight := BarAreaBottom - BarAreaTop + 1;
   if BarAreaHeight <= 0 then Exit;
 
-  // Render each bar
   for I := 0 to N - 1 do
   begin
-    // Calculate horizontal position of this bar
-    BarX := Inner.X + I * (BarWidth + BarGap);
+    BarX := Inner.X + I * (FBarWidth + FBarGap);
     if BarX >= Inner.X + Inner.Width then Break;
 
-    // Determine bar style
-    Sty := Bars[I].Style;
+    Sty := FBars[I].Style;
 
-    // Calculate bar height in eighths
-    Ratio := Bars[I].Value / ActualMax;
+    Ratio := FBars[I].Value / ActualMax;
     if Ratio < 0.0 then Ratio := 0.0;
     if Ratio > 1.0 then Ratio := 1.0;
     FilledEighths := Trunc(Ratio * BarAreaHeight * 8 + 0.5);
     FullRows := FilledEighths div 8;
     FracEighths := FilledEighths mod 8;
 
-    // Draw full block rows (from bottom up)
     for Row := 0 to FullRows - 1 do
     begin
       DrawY := BarAreaBottom - Row;
       if DrawY < BarAreaTop then Break;
-      for Col := 0 to BarWidth - 1 do
+      for Col := 0 to FBarWidth - 1 do
       begin
         DrawX := BarX + Col;
         if DrawX >= Inner.X + Inner.Width then Break;
-        ABuf.SetStringN(DrawX, DrawY, LOWER_EIGHTHS[8], 1, Sty);
+        ABuffer.SetStringN(DrawX, DrawY, LOWER_EIGHTHS[8], 1, Sty);
       end;
     end;
 
-    // Draw fractional row
     if (FracEighths > 0) and (FullRows < BarAreaHeight) then
     begin
       DrawY := BarAreaBottom - FullRows;
       if DrawY >= BarAreaTop then
       begin
-        for Col := 0 to BarWidth - 1 do
+        for Col := 0 to FBarWidth - 1 do
         begin
           DrawX := BarX + Col;
           if DrawX >= Inner.X + Inner.Width then Break;
-          ABuf.SetStringN(DrawX, DrawY, LOWER_EIGHTHS[FracEighths], 1, Sty);
+          ABuffer.SetStringN(DrawX, DrawY, LOWER_EIGHTHS[FracEighths], 1, Sty);
         end;
       end;
     end;
 
-    // Draw value above bar
-    if ShowValues then
+    if FShowValues then
     begin
-      ValStr := IntToStr(Trunc(Bars[I].Value + 0.5));
-      ValX := BarX + (BarWidth - Length(ValStr)) div 2;
+      ValStr := IntToStr(Trunc(FBars[I].Value + 0.5));
+      ValX := BarX + (FBarWidth - Length(ValStr)) div 2;
       if ValX < BarX then ValX := BarX;
       if ValX >= Inner.X + Inner.Width then Continue;
-      ABuf.SetStringN(ValX, Inner.Y, ValStr, BarWidth, Style);
+      ABuffer.SetStringN(ValX, Inner.Y, ValStr, FBarWidth, FStyle);
     end;
 
-    // Draw label below bar
-    if ShowLabels then
+    if FShowLabels then
     begin
-      LabelStr := Bars[I].Label_;
-      LabelX := BarX + (BarWidth - Length(LabelStr)) div 2;
+      LabelStr := FBars[I].Label_;
+      LabelX := BarX + (FBarWidth - Length(LabelStr)) div 2;
       if LabelX < BarX then LabelX := BarX;
       if LabelX >= Inner.X + Inner.Width then Continue;
-      ABuf.SetStringN(LabelX, Inner.Y + Inner.Height - 1, LabelStr, BarWidth, Style);
+      ABuffer.SetStringN(LabelX, Inner.Y + Inner.Height - 1, LabelStr, FBarWidth, FStyle);
     end;
   end;
 end;

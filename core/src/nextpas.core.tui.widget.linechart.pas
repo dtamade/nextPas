@@ -143,7 +143,7 @@ var
   ChartArea: TRect;
   N, SI, I, DataLen: Integer;
   ActualMin, ActualMax, Val, Range: Double;
-  Canvas: TCanvas;
+  Canvas: ICanvas;
   CellW, CellH: Integer;
   PrevX, PrevY, CurX, CurY: Integer;
   YAxisWidth, XAxisHeight, LegendHeight: Integer;
@@ -256,7 +256,7 @@ begin
     DataLen := Length(Series[SI].Data);
     if DataLen = 0 then Continue;
 
-    Canvas := TCanvas.Create(CellW, CellH);
+    Canvas := TCanvas.New(CellW, CellH);
     Canvas := Canvas.WithStyle(Series[SI].Style);
 
     // Map data points to canvas dot coordinates and draw connected lines
