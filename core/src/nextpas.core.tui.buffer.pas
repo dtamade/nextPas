@@ -85,6 +85,9 @@ type
     { 用单字符 cell 与样式填充矩形区域。 }
     procedure FillRect(const A: TRect; ACh: AnsiChar; const AStyle: TStyle);
 
+    { 把矩形区域内每个 cell 重置为 CELL_EMPTY。 }
+    procedure ClearRect(const A: TRect);
+
     { 把每个 cell 重置为 CELL_EMPTY。 }
     procedure Reset;
 
@@ -401,6 +404,22 @@ begin
     begin
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := LCell;
+    end;
+end;
+
+procedure TBuffer.ClearRect(const A: TRect);
+var
+  LClip: TRect;
+  LX, LY: Integer;
+  LCP: PCell;
+begin
+  LClip := FArea.Intersection(A);
+  if LClip.IsEmpty then Exit;
+  for LY := LClip.Top to LClip.Bottom - 1 do
+    for LX := LClip.Left to LClip.Right - 1 do
+    begin
+      LCP := @FContent[IndexOfPos(LX, LY)];
+      LCP^ := CELL_EMPTY;
     end;
 end;
 
