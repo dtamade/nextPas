@@ -194,10 +194,13 @@ var
   LWriter: TJsonWriter;
 begin
   LBuilder.Init(FDoc.Input.Len + 32);
-  LWriter.Init(LBuilder);
-  StringifyNode(FDoc, FDoc.Root, LWriter);
-  Result := LBuilder.ToString;
-  LBuilder.Done;
+  try
+    LWriter.Init(LBuilder);
+    StringifyNode(FDoc, FDoc.Root, LWriter);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function TJsonDocumentImpl.StringifyPretty(const AIndent: Int32): string;
@@ -284,9 +287,12 @@ var
 
 begin
   LBuilder.Init(512);
-  WritePrettyNode(FDoc.Root, 0);
-  Result := LBuilder.ToString;
-  LBuilder.Done;
+  try
+    WritePrettyNode(FDoc.Root, 0);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 function JsonParse(const AInput: string): IJsonDocument;
@@ -315,10 +321,13 @@ var
   LWriter: TJsonWriter;
 begin
   LBuilder.Init(256);
-  LWriter.Init(LBuilder);
-  StringifyNode(AValue.FDoc^, AValue.FIdx, LWriter);
-  Result := LBuilder.ToString;
-  LBuilder.Done;
+  try
+    LWriter.Init(LBuilder);
+    StringifyNode(AValue.FDoc^, AValue.FIdx, LWriter);
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
+  end;
 end;
 
 end.
