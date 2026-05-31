@@ -5,7 +5,8 @@ unit nextpas.core.text.builder;
 interface
 
 uses
-  nextpas.core.text.view;
+  nextpas.core.text.view,
+  nextpas.core.mem.intf;
 
 type
   TStringBuilder = record
@@ -13,9 +14,11 @@ type
     FBuf: PAnsiChar;
     FLen: SizeUInt;
     FCap: SizeUInt;
+    FAllocator: IAllocator;
     procedure Grow(const ANeeded: SizeUInt);
   public
     procedure Init(const AInitialCap: SizeUInt = 256);
+    procedure InitWith(const AInitialCap: SizeUInt; const AAllocator: IAllocator);
     procedure Done;
 
     procedure AppendByte(const AByte: Byte); inline;
@@ -60,7 +63,10 @@ begin
     end;
     LNewCap := LNewCap * 2;
   end;
-  ReallocMem(FBuf, LNewCap);
+  if FAllocator <> nil then
+    FBuf := FAllocator.Reallocate(FBuf, LNewCap)
+  else
+    ReallocMem(FBuf, LNewCap);
   FCap := LNewCap;
 end;
 
@@ -68,8 +74,25 @@ procedure TStringBuilder.Init(const AInitialCap: SizeUInt);
 begin
   FLen := 0;
   FCap := AInitialCap;
+  FAllocator := nil;
   if FCap > 0 then
     GetMem(FBuf, FCap)
+  else
+    FBuf := nil;
+end;
+
+procedure TStringBuilder.InitWith(const AInitialCap: SizeUInt; const AAllocator: IAllocator);
+begin
+  FLen := 0;
+  FAllocator := AAllocator;
+  FCap := AInitialCap;
+  if FCap > 0 then
+  begin
+    if FAllocator <> nil then
+      FBuf := FAllocator.Allocate(FCap)
+    else
+      GetMem(FBuf, FCap);
+  end
   else
     FBuf := nil;
 end;
@@ -78,11 +101,15 @@ procedure TStringBuilder.Done;
 begin
   if FBuf <> nil then
   begin
-    FreeMem(FBuf);
+    if FAllocator <> nil then
+      FAllocator.Deallocate(FBuf)
+    else
+      FreeMem(FBuf);
     FBuf := nil;
   end;
   FLen := 0;
   FCap := 0;
+  FAllocator := nil;
 end;
 
 procedure TStringBuilder.AppendByte(const AByte: Byte);
