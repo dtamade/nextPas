@@ -4961,6 +4961,12 @@ begin
              SameText(Child.ChildAt(1).Text, ClsName)) then
             FModel.AddConstValue(
               ClsName + '$ret_ptr_' + NameNode.Text, 1);
+          if (Child.ChildCount > 1) and (Child.ChildAt(1) <> nil) and
+            (Child.ChildAt(1).NodeKind = gnkIdentifier) and
+            (SameText(Child.ChildAt(1).Text, 'String') or
+             SameText(Child.ChildAt(1).Text, 'AnsiString')) then
+            FModel.AddConstValue(
+              ClsName + '$ret_str_' + NameNode.Text, 1);
         end;
       end;
     end
@@ -7563,6 +7569,8 @@ begin
               FuncName := LookupClassVar(RhsNode.ChildAt(0).Text);
               Value := TypeMetaVmtSlot(FuncName, RhsNode.ChildAt(1).Text);
               if (Value >= 0) and
+                (not FModel.LookupConstValue(
+                  FuncName + '$ret_str_' + RhsNode.ChildAt(1).Text, CondValue)) and
                 EncodeRuntimeIntExprFold(RhsNode, Operand) then
                 FModel.AddTypedHirNode(
                   'write-int-runtime', 'Write', 0, 0, Operand
