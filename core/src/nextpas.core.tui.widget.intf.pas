@@ -30,15 +30,36 @@ uses
 type
   {**
    * @desc 无状态 widget 渲染契约。
-   * @params
-   *   AArea    渲染目标矩形区域
-   *   ABuffer  目标缓冲区（class 引用语义，写入直达）
    *}
   IWidget = interface
     ['{B7D3F1A0-9C42-4E18-8A6B-1F2E3D4C5A6B}']
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
+  { 渲染函数类型——用于把 record widget 包装为 IWidget }
+  TWidgetRenderFn = reference to procedure(const AArea: TRect; ABuffer: TBuffer);
+
+  { 通用 adapter：把任意渲染函数包装为 IWidget 接口。
+    用法：TWidgetAdapter.Create(procedure(const A: TRect; B: TBuffer) begin MyWidget.Render(A, B); end) }
+  TWidgetAdapter = class(TInterfacedObject, IWidget)
+  private
+    FProc: TWidgetRenderFn;
+  public
+    constructor Create(AProc: TWidgetRenderFn);
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+  end;
+
 implementation
+
+constructor TWidgetAdapter.Create(AProc: TWidgetRenderFn);
+begin
+  inherited Create;
+  FProc := AProc;
+end;
+
+procedure TWidgetAdapter.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  FProc(AArea, ABuffer);
+end;
 
 end.
