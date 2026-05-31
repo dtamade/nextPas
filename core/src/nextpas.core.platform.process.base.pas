@@ -28,9 +28,9 @@ type
   end;
 
   TPlatformProcessPipes = record
-    StdinWrite: Int32;
-    StdoutRead: Int32;
-    StderrRead: Int32;
+    StdinWrite: PtrInt;
+    StdoutRead: PtrInt;
+    StderrRead: PtrInt;
   end;
 
 implementation

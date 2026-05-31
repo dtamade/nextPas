@@ -11,25 +11,29 @@ type
   { TPipeReader — IReader 包装一个管道 fd (Unix) 或 HANDLE (Windows) }
   TPipeReader = class(TInterfacedObject, IReader)
   private
-    FFd: Int32;
+    FFd: PtrInt;
     FClosed: Boolean;
   public
-    constructor Create(const AFd: Int32);
+  public
+    constructor Create(const AFd: PtrInt);
     destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Close;
+    property Fd: PtrInt read FFd;
   end;
 
   { TPipeWriter — IWriter 包装一个管道 fd }
   TPipeWriter = class(TInterfacedObject, IWriter)
   private
-    FFd: Int32;
+    FFd: PtrInt;
     FClosed: Boolean;
   public
-    constructor Create(const AFd: Int32);
+  public
+    constructor Create(const AFd: PtrInt);
     destructor Destroy; override;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Close;
+    property Fd: PtrInt read FFd;
   end;
 
 implementation
@@ -40,7 +44,7 @@ uses
 
 { TPipeReader }
 
-constructor TPipeReader.Create(const AFd: Int32);
+constructor TPipeReader.Create(const AFd: PtrInt);
 begin
   inherited Create;
   FFd := AFd;
@@ -73,7 +77,7 @@ end;
 
 { TPipeWriter }
 
-constructor TPipeWriter.Create(const AFd: Int32);
+constructor TPipeWriter.Create(const AFd: PtrInt);
 begin
   inherited Create;
   FFd := AFd;

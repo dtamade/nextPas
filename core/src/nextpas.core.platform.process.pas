@@ -55,7 +55,7 @@ begin
     if AEnvp <> nil then
       execve(APath, AArgv, AEnvp)
     else
-      execve(APath, AArgv, nil);
+      execvp(APath, AArgv);
     halt(127);
   end;
   AProc.Pid := LPid;

@@ -44,6 +44,7 @@ function unsetenv(name: PAnsiChar): Int32; cdecl; external 'c' name 'unsetenv';
 function putenv(str: PAnsiChar): Int32; cdecl; external 'c' name 'putenv';
 function fork: pid_t; cdecl; external 'c' name 'fork';
 function execve(path: PAnsiChar; argv: Pointer; envp: Pointer): Int32; cdecl; external 'c' name 'execve';
+function execvp(filename: PAnsiChar; argv: Pointer): Int32; cdecl; external 'c' name 'execvp';
 function waitpid(pid: pid_t; stat_loc: PInt32; options: Int32): pid_t; cdecl; external 'c' name 'waitpid';
 procedure posix_exit(status: Int32); cdecl; external 'c' name '_exit';
 function kill(pid: pid_t; sig: Int32): Int32; cdecl; external 'c' name 'kill';

@@ -48,7 +48,10 @@ type
 implementation
 
 uses
-  nextpas.core.platform.process;
+  nextpas.core.platform.process,
+  nextpas.core.platform.posix.base,
+  nextpas.core.platform.posix.ffi,
+  nextpas.core.process.pipe;
 
 const
   READ_BUF_SIZE = 65536;
@@ -87,9 +90,14 @@ begin
 end;
 
 destructor TChild.Destroy;
+var
+  LResult: TPlatformProcessResult;
 begin
   if not FWaited then
+  begin
     Kill;
+    platform_process_wait(FProc, LResult);
+  end;
   FStdinWriter := nil;
   FStdoutReader := nil;
   FStderrReader := nil;
@@ -165,10 +173,98 @@ end;
 function TChild.WaitWithOutput: TProcessOutput;
 var
   LWait: TProcessOutput;
+  LFds: array[0..1] of TPollFd;
+  LNFds: Integer;
+  LBuf: array[0..65535] of Byte;
+  LRead: ssize_t;
+  LOutTotal, LErrTotal: Integer;
+  LStdoutFd, LStderrFd: PtrInt;
+  LPollResult: Integer;
 begin
   FStdinWriter := nil;
-  Result.StdOut := ReadAll(FStdoutReader);
-  Result.StdErr := ReadAll(FStderrReader);
+  Result.StdOut := '';
+  Result.StdErr := '';
+  LOutTotal := 0;
+  LErrTotal := 0;
+
+  LStdoutFd := -1;
+  LStderrFd := -1;
+  if (FStdoutReader <> nil) and (FStdoutReader is TPipeReader) then
+    LStdoutFd := TPipeReader(FStdoutReader as TObject).Fd;
+  if (FStderrReader <> nil) and (FStderrReader is TPipeReader) then
+    LStderrFd := TPipeReader(FStderrReader as TObject).Fd;
+
+  if (LStdoutFd >= 0) and (LStderrFd >= 0) then
+  begin
+    repeat
+      LNFds := 0;
+      if LStdoutFd >= 0 then
+      begin
+        LFds[LNFds].fd := LStdoutFd;
+        LFds[LNFds].events := POLLIN;
+        LFds[LNFds].revents := 0;
+        Inc(LNFds);
+      end;
+      if LStderrFd >= 0 then
+      begin
+        LFds[LNFds].fd := LStderrFd;
+        LFds[LNFds].events := POLLIN;
+        LFds[LNFds].revents := 0;
+        Inc(LNFds);
+      end;
+      if LNFds = 0 then Break;
+
+      LPollResult := poll(@LFds[0], LNFds, -1);
+      if LPollResult <= 0 then Break;
+
+      if (LStdoutFd >= 0) and ((LFds[0].revents and (POLLIN or POLLHUP)) <> 0) then
+      begin
+        LRead := read(LStdoutFd, @LBuf[0], SizeOf(LBuf));
+        if LRead > 0 then
+        begin
+          SetLength(Result.StdOut, LOutTotal + LRead);
+          Move(LBuf[0], Result.StdOut[LOutTotal + 1], LRead);
+          Inc(LOutTotal, LRead);
+        end
+        else
+          LStdoutFd := -1;
+      end;
+
+      if (LStderrFd >= 0) then
+      begin
+        if (LNFds = 2) and ((LFds[1].revents and (POLLIN or POLLHUP)) <> 0) then
+        begin
+          LRead := read(LStderrFd, @LBuf[0], SizeOf(LBuf));
+          if LRead > 0 then
+          begin
+            SetLength(Result.StdErr, LErrTotal + LRead);
+            Move(LBuf[0], Result.StdErr[LErrTotal + 1], LRead);
+            Inc(LErrTotal, LRead);
+          end
+          else
+            LStderrFd := -1;
+        end
+        else if (LNFds = 1) and ((LFds[0].revents and (POLLIN or POLLHUP)) <> 0) then
+        begin
+          LRead := read(LStderrFd, @LBuf[0], SizeOf(LBuf));
+          if LRead > 0 then
+          begin
+            SetLength(Result.StdErr, LErrTotal + LRead);
+            Move(LBuf[0], Result.StdErr[LErrTotal + 1], LRead);
+            Inc(LErrTotal, LRead);
+          end
+          else
+            LStderrFd := -1;
+        end;
+      end;
+    until (LStdoutFd < 0) and (LStderrFd < 0);
+  end
+  else
+  begin
+    Result.StdOut := ReadAll(FStdoutReader);
+    Result.StdErr := ReadAll(FStderrReader);
+  end;
+
   FStdoutReader := nil;
   FStderrReader := nil;
   LWait := Wait;
