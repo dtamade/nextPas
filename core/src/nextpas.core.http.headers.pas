@@ -27,6 +27,7 @@ type
     function Has(const AName: string): Boolean;
     procedure Del(const AName: string);
     function Count: Int32;
+    procedure ForEach(const ACallback: THeaderIterator);
     function Clone: IHttpHeaders;
   end;
 
@@ -163,6 +164,14 @@ end;
 function THttpHeaders.Count: Int32;
 begin
   Result := Length(FEntries);
+end;
+
+procedure THttpHeaders.ForEach(const ACallback: THeaderIterator);
+var
+  LI: Int32;
+begin
+  for LI := 0 to High(FEntries) do
+    ACallback(FEntries[LI].Name, FEntries[LI].Value);
 end;
 
 function THttpHeaders.Clone: IHttpHeaders;
