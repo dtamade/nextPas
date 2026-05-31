@@ -20,8 +20,8 @@ uses
   nextpas.core.platform.time;
 
 const
-  NUM_REQUESTS = 1000;
-  NUM_THREADS = 2;
+  NUM_REQUESTS = 10000;
+  NUM_THREADS = 4;
   REQ_PER_THREAD = NUM_REQUESTS div NUM_THREADS;
 
 var
@@ -41,25 +41,31 @@ function ClientThread(AParam: Pointer): Pointer; cdecl;
 var
   LI: Int32;
   LConn: ITcpStream;
-  LBuf: array[0..1023] of Byte;
+  LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
+  LTotal: SizeUInt;
 const
-  REQ: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  REQ: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
 begin
   Result := nil;
-  for LI := 1 to REQ_PER_THREAD do
-  begin
-    try
-      LConn := TcpConnect('127.0.0.1', GPort);
-      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(2)));
+  try
+    LConn := TcpConnect('127.0.0.1', GPort);
+    LConn.SetNoDelay(True);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(10)));
+    for LI := 1 to REQ_PER_THREAD do
+    begin
       LConn.Write(PAnsiChar(REQ)^, Length(REQ));
+      LTotal := 0;
       repeat
-        LN := LConn.Read(LBuf[0], 1024);
-      until LN = 0;
-      LConn.Close;
+        LN := LConn.Read(LBuf[LTotal], 4096 - LTotal);
+        if LN = 0 then Break;
+        Inc(LTotal, LN);
+      until LTotal >= 70;
+      if LN = 0 then Break;
       InterlockedIncrement(GSuccess);
-    except
     end;
+    LConn.Close;
+  except
   end;
   InterlockedIncrement(GDone);
 end;
