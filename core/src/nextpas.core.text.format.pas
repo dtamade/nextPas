@@ -77,7 +77,7 @@ var
   function FormatFloat(const AVal: Double; const ADigits: Integer): string;
   var
     LInt: Int64;
-    LFrac: Double;
+    LFrac, LRound: Double;
     LI, LDigit: Integer;
     LNeg: Boolean;
     LAbs: Double;
@@ -87,6 +87,14 @@ var
     if AVal = -1.0/0.0 then Exit('-Inf');
     LNeg := AVal < 0;
     if LNeg then LAbs := -AVal else LAbs := AVal;
+    if LAbs >= 9.2e18 then
+    begin
+      Str(AVal:0:ADigits, Result);
+      Exit;
+    end;
+    LRound := 0.5;
+    for LI := 1 to ADigits do LRound := LRound / 10;
+    LAbs := LAbs + LRound;
     LInt := Trunc(LAbs);
     LFrac := LAbs - LInt;
     Result := IntToStr(LInt);
@@ -96,6 +104,7 @@ var
     begin
       LFrac := LFrac * 10;
       LDigit := Trunc(LFrac);
+      if LDigit > 9 then LDigit := 9;
       Result := Result + Char(Ord('0') + LDigit);
       LFrac := LFrac - LDigit;
     end;
@@ -217,7 +226,7 @@ begin
         end;
         'f': begin
           if LPrec < 0 then LPrec := 6;
-          LSb.AppendStr(FormatFloat(GetArgFloat(LArgIdx), LPrec));
+          SbAppendPadded(FormatFloat(GetArgFloat(LArgIdx), LPrec));
           Inc(LArgIdx);
         end;
       end;
