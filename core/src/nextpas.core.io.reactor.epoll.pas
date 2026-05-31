@@ -346,18 +346,25 @@ function TEpollReactor.AsyncConnect(AFd: Int32; AAddr: Pointer;
 var
   LIdx: Int32;
   LRet: Int32;
+  LErrno: Int32;
 begin
   if not SetNonBlocking(AFd) then begin Result := False; Exit; end;
   LRet := connect(AFd, AAddr, AAddrLen);
   if LRet = 0 then
   begin
-    { Connected immediately }
     if Assigned(ACallback) then
       ACallback(0, 0, AContext);
     Result := True;
     Exit;
   end;
-  { Check if in progress }
+  LErrno := __errno_location()^;
+  if LErrno <> EINPROGRESS then
+  begin
+    if Assigned(ACallback) then
+      ACallback(0, -LErrno, AContext);
+    Result := True;
+    Exit;
+  end;
   LIdx := AllocOp(opConnect, AFd, nil, 0, -1, 0, AAddr, nil, AAddrLen,
     ACallback, AContext);
   Result := RegisterFd(AFd, EPOLLOUT or EPOLLET or EPOLLONESHOT, UInt64(LIdx));

@@ -92,9 +92,10 @@ const
   PENDING_INITIAL_CAP = 32;
 
 type
+  PAsyncLoop = ^TAsyncLoop;
   PTimeoutCtx = ^TTimeoutCtx;
   TTimeoutCtx = record
-    Loop: Pointer;
+    Loop: PAsyncLoop;
     UserCallback: TIoCompletion;
     UserContext: Pointer;
     TimerHandle: TAsyncTimerHandle;
@@ -115,7 +116,7 @@ begin
   LCtx^.IoCompleted := True;
   // Cancel timer (best effort, may already be fired)
   if LCtx^.TimerHandle.IsValid then
-    TAsyncLoop(LCtx^.Loop^).FTimers.Cancel(LCtx^.TimerHandle);
+    LCtx^.Loop^.FTimers.Cancel(LCtx^.TimerHandle);
   if Assigned(LCtx^.UserCallback) then
     LCtx^.UserCallback(AUserData, AResult, LCtx^.UserContext);
   Dispose(LCtx);
