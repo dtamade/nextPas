@@ -63,7 +63,8 @@ uses
   nextpas.core.text.char,
   nextpas.core.text.number,
   nextpas.core.text.escape,
-  nextpas.core.text.utf8;
+  nextpas.core.text.utf8,
+  nextpas.core.mem.default;
 
 const
   INITIAL_NODE_CAP = 64;
@@ -187,7 +188,10 @@ end;
 
 procedure TTomlDocument.Init(const AAllocator: IAllocator);
 begin
-  FAllocator := AAllocator;
+  if AAllocator = nil then
+    FAllocator := DefaultAllocator
+  else
+    FAllocator := AAllocator;
   FNodeCap := INITIAL_NODE_CAP;
   FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TTomlNode));
   FNodeCount := 0;
