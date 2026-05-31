@@ -99,15 +99,10 @@ begin
   SetLength(C.States[0].PCs, 0);
   C.States[0].Hash := 0;
   C.States[0].IsMatch := False;
+  FillWord(C.States[0].Next, SizeOf(C.States[0].Next) div 2, DFA_UNKNOWN);
+  FillChar(C.States[0].MatchOnTrans, SizeOf(C.States[0].MatchOnTrans), 0);
   for ctx := 0 to 3 do
-  begin
-    for j := 0 to 255 do
-    begin
-      C.States[0].Next[ctx, j] := DFA_UNKNOWN;
-      C.States[0].MatchOnTrans[ctx, j] := False;
-    end;
     C.States[0].AcceptEof[ctx] := -1;
-  end;
   C.StateCount := 1;
 end;
 
@@ -338,15 +333,10 @@ begin
     C.States[LNewIdx].PCs[j] := APCs[j];
   C.States[LNewIdx].Hash := LHash;
   C.States[LNewIdx].IsMatch := False;
+  FillWord(C.States[LNewIdx].Next, SizeOf(C.States[LNewIdx].Next) div 2, DFA_UNKNOWN);
+  FillChar(C.States[LNewIdx].MatchOnTrans, SizeOf(C.States[LNewIdx].MatchOnTrans), 0);
   for ctx := 0 to 3 do
-  begin
-    for j := 0 to 255 do
-    begin
-      C.States[LNewIdx].Next[ctx, j] := DFA_UNKNOWN;
-      C.States[LNewIdx].MatchOnTrans[ctx, j] := False;
-    end;
     C.States[LNewIdx].AcceptEof[ctx] := -1;
-  end;
 
   Result := LNewIdx;
 end;
