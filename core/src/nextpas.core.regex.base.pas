@@ -87,6 +87,8 @@ type
 
   TReplaceFunc = function(const AInput: string; const AMatch: TMatch): string;
 
+  PRegexProgram = ^TRegexProgram;
+
   ERegexError = class(Exception);
   ERegexCompileError = class(ERegexError)
   public

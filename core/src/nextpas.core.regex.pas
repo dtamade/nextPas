@@ -26,6 +26,17 @@ type
   TReplaceFunc = nextpas.core.regex.base.TReplaceFunc;
   ERegexError = nextpas.core.regex.base.ERegexError;
   ERegexCompileError = nextpas.core.regex.base.ERegexCompileError;
+  PRegexProgram = nextpas.core.regex.base.PRegexProgram;
+
+  TRegexIter = record
+  private
+    FProgram: PRegexProgram;
+    FInput: string;
+    FPos: SizeUInt;
+    FDone: Boolean;
+  public
+    function Next(out AMatch: TMatch): Boolean;
+  end;
 
   TRegex = record
   private
@@ -40,6 +51,7 @@ type
     function Find(const AInput: string): TMatch;
     function FindAt(const AInput: string; AStartPos: SizeUInt): TMatch;
     function FindAll(const AInput: string): TMatchArray;
+    function FindIter(const AInput: string): TRegexIter;
     function IsFullMatch(const AInput: string): Boolean;
     function ReplaceFirst(const AInput, AReplacement: string): string;
     function ReplaceAll(const AInput, AReplacement: string): string;
@@ -49,6 +61,7 @@ type
     function Split(const AInput: string; AMaxSplits: SizeInt = -1): TStringArray;
     function GroupByName(const AMatch: TMatch; const AName: string): TGroup;
     function GroupIndexByName(const AName: string): SizeInt;
+    function SubexpNames: TStringArray;
     function NumCaptures: UInt32;
   end;
 
@@ -533,6 +546,59 @@ end;
 function TRegex.NumCaptures: UInt32;
 begin
   Result := FProgram.NumCaptures;
+end;
+
+function TRegex.FindIter(const AInput: string): TRegexIter;
+begin
+  Result.FProgram := @FProgram;
+  Result.FInput := AInput;
+  Result.FPos := 0;
+  Result.FDone := not FValid;
+end;
+
+function TRegex.SubexpNames: TStringArray;
+var
+  LI: SizeInt;
+begin
+  SetLength(Result, Length(FProgram.GroupNames));
+  for LI := 0 to High(FProgram.GroupNames) do
+    Result[LI] := FProgram.GroupNames[LI].Name;
+end;
+
+{ TRegexIter }
+
+function TRegexIter.Next(out AMatch: TMatch): Boolean;
+var
+  LLen: SizeUInt;
+begin
+  if FDone then
+  begin
+    AMatch.Start := -1;
+    AMatch.Len := 0;
+    AMatch.Groups := nil;
+    Exit(False);
+  end;
+  LLen := SizeUInt(Length(FInput));
+  if not NfaSearch(FProgram^, PAnsiChar(FInput), LLen, False, FPos, AMatch) then
+  begin
+    AMatch.Start := -1;
+    AMatch.Len := 0;
+    AMatch.Groups := nil;
+    FDone := True;
+    Exit(False);
+  end;
+  if AMatch.Len = 0 then
+  begin
+    if FPos >= LLen then
+    begin
+      FDone := True;
+      Exit(True);
+    end;
+    FPos := SizeUInt(AMatch.Start) + 1;
+  end
+  else
+    FPos := SizeUInt(AMatch.Start) + SizeUInt(AMatch.Len);
+  Result := True;
 end;
 
 { Convenience functions }
