@@ -417,6 +417,7 @@ var
   LFound: Boolean;
   LI: SizeInt;
   LWrapped: IHttpHandler;
+  LAllow: string;
 begin
   LMethod := AReq.Method;
   LPath := AReq.Url.Path;
@@ -441,6 +442,7 @@ begin
 
   { Check other methods for 405 }
   LFound := False;
+  LAllow := '';
   for LM := Low(THttpMethod) to High(THttpMethod) do
   begin
     if LM = LMethod then
@@ -449,12 +451,16 @@ begin
     if MatchNode(FTrees[LM], LPath, LParams) <> nil then
     begin
       LFound := True;
-      Break;
+      if LAllow <> '' then LAllow := LAllow + ', ';
+      LAllow := LAllow + HttpMethodToStr(LM);
     end;
   end;
 
   if LFound then
-    AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED)
+  begin
+    AW.Headers.Set_('allow', LAllow);
+    AW.WriteHeader(HTTP_STATUS_METHOD_NOT_ALLOWED);
+  end
   else
     AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
 end;
