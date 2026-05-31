@@ -26,14 +26,49 @@ type
     Anchor: Integer;
   end;
 
-  TInputEditor = class
+  IInputEditor = interface(IWidget)
+    ['{D4E5F6A7-B8C9-4D0E-1F2A-3B4C5D6E7F80}']
+    procedure HandleKey(const K: TKeyEvent);
+    procedure InsertChar(Cp: LongWord);
+    procedure InsertNewline;
+    procedure DeleteBackward;
+    procedure DeleteForward;
+    procedure MoveLeft;
+    procedure MoveRight;
+    procedure MoveUp;
+    procedure MoveDown;
+    procedure MoveHome;
+    procedure MoveEnd;
+    procedure MoveWordLeft;
+    procedure MoveWordRight;
+    procedure SelectAll;
+    procedure CopySelection;
+    procedure CutSelection;
+    procedure Paste;
+    procedure DeleteLine;
+    procedure Undo;
+    procedure Redo;
+    procedure Clear;
+    function Content: AnsiString;
+    function IsEmpty: Boolean;
+    function LineCount: Integer;
+    function CursorScreenPos(const AArea: TRect): TPosition;
+    function WithTextStyle(const S: TStyle): IInputEditor;
+    function WithPlaceholderStyle(const S: TStyle): IInputEditor;
+    function WithSelectionStyle(const S: TStyle): IInputEditor;
+    function WithPlaceholder(const P: AnsiString): IInputEditor;
+    function WithMaxLines(N: Integer): IInputEditor;
+    procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
+  end;
+
+  TInputEditor = class(TInterfacedObject, IWidget, IInputEditor)
   private
     FText: AnsiString;
     FCurByte: Integer;
     FTargetCol: Integer;
     FMaxLines: Integer;
     FScrollRow: Integer;
-    FAnchor: Integer;         // -1 = no selection
+    FAnchor: Integer;
     FUndoStack: array of TEditorSnapshot;
     FUndoCount: Integer;
     FRedoStack: array of TEditorSnapshot;
@@ -42,6 +77,10 @@ type
     FHighlighter: IHighlighter;
     FSyntaxDoc: TSyntaxDoc;
     FSyntaxTheme: TSyntaxTheme;
+    FTextStyle: TStyle;
+    FPlaceholderStyle: TStyle;
+    FSelectionStyle: TStyle;
+    FPlaceholder: AnsiString;
 
     function LineCount_: Integer;
     procedure CursorToRowCol(out Row, Col: Integer);
@@ -76,8 +115,8 @@ type
     procedure NotifySyntaxEdit;
     procedure GetLineForSyntax(LineIndex: Integer; out P: PAnsiChar; out Len: Integer);
   public
-    constructor Create;
-    constructor CreateWithMaxLines(AMax: Integer);
+    class function New: IInputEditor; static;
+    class function NewWithMaxLines(AMax: Integer): IInputEditor; static;
     destructor Destroy; override;
 
     procedure HandleKey(const K: TKeyEvent);
@@ -102,21 +141,21 @@ type
     procedure Undo;
     procedure Redo;
 
-    procedure Render(const Area: TRect; ABuf: TBuffer;
-      const TextSty, PlaceholderSty: TStyle;
-      const Placeholder: AnsiString); overload;
-    procedure Render(const Area: TRect; ABuf: TBuffer;
-      const TextSty, PlaceholderSty, SelectionSty: TStyle;
-      const Placeholder: AnsiString); overload;
-    function CursorScreenPos(const Area: TRect): TPosition;
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+
+    function CursorScreenPos(const AArea: TRect): TPosition;
 
     procedure Clear;
     function Content: AnsiString;
     function IsEmpty: Boolean; inline;
     function LineCount: Integer; inline;
 
-    property MaxLines: Integer read FMaxLines write FMaxLines;
-    property ScrollRow: Integer read FScrollRow;
+    function WithTextStyle(const S: TStyle): IInputEditor;
+    function WithPlaceholderStyle(const S: TStyle): IInputEditor;
+    function WithSelectionStyle(const S: TStyle): IInputEditor;
+    function WithPlaceholder(const P: AnsiString): IInputEditor;
+    function WithMaxLines(N: Integer): IInputEditor;
     procedure SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
   end;
 
@@ -146,26 +185,48 @@ end;
 
 { TInputEditor }
 
-constructor TInputEditor.Create;
+class function TInputEditor.New: IInputEditor;
+var LSelf: TInputEditor;
 begin
-  inherited;
-  FText := '';
-  FCurByte := 0;
-  FTargetCol := -1;
-  FMaxLines := 4;
-  FScrollRow := 0;
-  FAnchor := -1;
-  SetLength(FUndoStack, UNDO_MAX);
-  FUndoCount := 0;
-  SetLength(FRedoStack, UNDO_MAX);
-  FRedoCount := 0;
-  FClipboard := '';
+  LSelf := TInputEditor.Create;
+  LSelf.FText := '';
+  LSelf.FCurByte := 0;
+  LSelf.FTargetCol := -1;
+  LSelf.FMaxLines := 4;
+  LSelf.FScrollRow := 0;
+  LSelf.FAnchor := -1;
+  SetLength(LSelf.FUndoStack, UNDO_MAX);
+  LSelf.FUndoCount := 0;
+  SetLength(LSelf.FRedoStack, UNDO_MAX);
+  LSelf.FRedoCount := 0;
+  LSelf.FClipboard := '';
+  LSelf.FTextStyle := TStyle.Default;
+  LSelf.FPlaceholderStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  LSelf.FSelectionStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FPlaceholder := '';
+  Result := LSelf;
 end;
 
-constructor TInputEditor.CreateWithMaxLines(AMax: Integer);
+class function TInputEditor.NewWithMaxLines(AMax: Integer): IInputEditor;
+var LSelf: TInputEditor;
 begin
-  Create;
-  FMaxLines := AMax;
+  LSelf := TInputEditor.Create;
+  LSelf.FText := '';
+  LSelf.FCurByte := 0;
+  LSelf.FTargetCol := -1;
+  LSelf.FMaxLines := AMax;
+  LSelf.FScrollRow := 0;
+  LSelf.FAnchor := -1;
+  SetLength(LSelf.FUndoStack, UNDO_MAX);
+  LSelf.FUndoCount := 0;
+  SetLength(LSelf.FRedoStack, UNDO_MAX);
+  LSelf.FRedoCount := 0;
+  LSelf.FClipboard := '';
+  LSelf.FTextStyle := TStyle.Default;
+  LSelf.FPlaceholderStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  LSelf.FSelectionStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FPlaceholder := '';
+  Result := LSelf;
 end;
 
 destructor TInputEditor.Destroy;
@@ -769,16 +830,22 @@ begin
 end;
 { Render }
 
-procedure TInputEditor.Render(const Area: TRect; ABuf: TBuffer;
-  const TextSty, PlaceholderSty: TStyle;
-  const Placeholder: AnsiString);
-begin
-  Render(Area, ABuf, TextSty, PlaceholderSty, TStyle.Default, Placeholder);
-end;
+function TInputEditor.WithTextStyle(const S: TStyle): IInputEditor;
+begin FTextStyle := S; Result := Self; end;
 
-procedure TInputEditor.Render(const Area: TRect; ABuf: TBuffer;
-  const TextSty, PlaceholderSty, SelectionSty: TStyle;
-  const Placeholder: AnsiString);
+function TInputEditor.WithPlaceholderStyle(const S: TStyle): IInputEditor;
+begin FPlaceholderStyle := S; Result := Self; end;
+
+function TInputEditor.WithSelectionStyle(const S: TStyle): IInputEditor;
+begin FSelectionStyle := S; Result := Self; end;
+
+function TInputEditor.WithPlaceholder(const P: AnsiString): IInputEditor;
+begin FPlaceholder := P; Result := Self; end;
+
+function TInputEditor.WithMaxLines(N: Integer): IInputEditor;
+begin FMaxLines := N; Result := Self; end;
+
+procedure TInputEditor.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   VisH, Row, I, StartB, EndB, DrawRow, LineLen: Integer;
   SelStart, SelEnd: Integer;
@@ -790,13 +857,13 @@ var
   TokPtr: PToken;
   TokCount, T: Integer;
 begin
-  VisH := Area.Height;
+  VisH := AArea.Height;
   if VisH <= 0 then Exit;
   EnsureCursorVisible(VisH);
 
   if IsEmpty then
   begin
-    ABuf.SetStringN(Area.X, Area.Y, Placeholder, Area.Width, PlaceholderSty);
+    ABuffer.SetStringN(AArea.X, AArea.Y, FPlaceholder, AArea.Width, FPlaceholderStyle);
     Exit;
   end;
 
@@ -829,16 +896,16 @@ begin
       FSyntaxDoc.GetTokens(FScrollRow + DrawRow, TokPtr, TokCount);
       for T := 0 to TokCount - 1 do
       begin
-        if TokPtr[T].Start - 1 < Area.Width then
-          ABuf.SetStringP(Area.X + TokPtr[T].Start - 1, Area.Y + DrawRow,
+        if TokPtr[T].Start - 1 < AArea.Width then
+          ABuffer.SetStringP(AArea.X + TokPtr[T].Start - 1, AArea.Y + DrawRow,
             @FText[StartB + TokPtr[T].Start], TokPtr[T].Len,
-            Area.Width - TokPtr[T].Start + 1,
+            AArea.Width - TokPtr[T].Start + 1,
             FSyntaxTheme.StyleFor(TokPtr[T].Kind));
       end;
     end
     else
-      ABuf.SetStringP(Area.X, Area.Y + DrawRow,
-        @FText[StartB + 1], LineLen, Area.Width, TextSty);
+      ABuffer.SetStringP(AArea.X, AArea.Y + DrawRow,
+        @FText[StartB + 1], LineLen, AArea.Width, FTextStyle);
 
     if SelActive and (SelStart < EndB) and (SelEnd > StartB) then
     begin
@@ -862,9 +929,9 @@ begin
       if SelColEnd > SelColStart then
       begin
         C := SelColEnd - SelColStart;
-        if C > Area.Width - SelColStart then C := Area.Width - SelColStart;
-        SelRect := TRect.Make(Area.X + SelColStart, Area.Y + DrawRow, C, 1);
-        ABuf.SetStyle(SelRect, SelectionSty);
+        if C > AArea.Width - SelColStart then C := AArea.Width - SelColStart;
+        SelRect := TRect.Make(AArea.X + SelColStart, AArea.Y + DrawRow, C, 1);
+        ABuffer.SetStyle(SelRect, FSelectionStyle);
       end;
     end;
 
@@ -876,12 +943,12 @@ begin
   end;
 end;
 
-function TInputEditor.CursorScreenPos(const Area: TRect): TPosition;
+function TInputEditor.CursorScreenPos(const AArea: TRect): TPosition;
 var Row, Col: Integer;
 begin
   CursorToRowCol(Row, Col);
-  Result.X := Area.X + Col;
-  Result.Y := Area.Y + (Row - FScrollRow);
+  Result.X := AArea.X + Col;
+  Result.Y := AArea.Y + (Row - FScrollRow);
 end;
 
 procedure TInputEditor.SetHighlighter(AHL: IHighlighter; const ATheme: TSyntaxTheme);
