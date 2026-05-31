@@ -286,6 +286,10 @@ var C: TCompiler; inst: TInstruction; i, j, k: UInt32;
     LLitAlts: array of string;
     LBranchStart: UInt32;
     LLit: string;
+    LIsCaseFold: Boolean;
+    LCaseFoldStr: string;
+    LPopCnt: UInt32;
+    LLowByte: Byte;
 
   procedure CollectStartBytes(APC: UInt32);
   var LInst: TInstruction;
@@ -422,6 +426,61 @@ begin
         SetLength(Result.LiteralAltPatterns, LLitAltCount);
         for k := 0 to LLitAltCount - 1 do
           Result.LiteralAltPatterns[k] := LLitAlts[k];
+      end;
+    end;
+  end;
+
+  Result.IsCaseFoldLiteral := False;
+  Result.CaseFoldLiteral := '';
+  if (not Result.IsPureLiteral) and (not Result.IsLiteralAlt) and
+     (rfCaseInsensitive in AFlags) then
+  begin
+    i := 0;
+    while (i < C.Count) and (Result.Code[i].Op = opSave) do Inc(i);
+    LIsCaseFold := True;
+    LCaseFoldStr := '';
+    while (i < C.Count) and LIsCaseFold do
+    begin
+      if Result.Code[i].Op = opLiteral then
+      begin
+        LCaseFoldStr := LCaseFoldStr + Chr(Result.Code[i].Ch);
+        Inc(i);
+      end
+      else if Result.Code[i].Op = opCharClass then
+      begin
+        LPopCnt := CharBitmapPopCount(Result.Classes[Result.Code[i].ClassIdx]);
+        if (LPopCnt = 2) and (not Result.Code[i].Negated) then
+        begin
+          LLowByte := 0;
+          for j := 0 to 255 do
+            if CharBitmapTest(Result.Classes[Result.Code[i].ClassIdx], j) then
+            begin
+              LLowByte := j;
+              Break;
+            end;
+          if (LLowByte >= Ord('A')) and (LLowByte <= Ord('Z')) then
+            LCaseFoldStr := LCaseFoldStr + Chr(LLowByte + 32)
+          else
+            LCaseFoldStr := LCaseFoldStr + Chr(LLowByte);
+          Inc(i);
+        end
+        else
+        begin
+          LIsCaseFold := False;
+        end;
+      end
+      else if (Result.Code[i].Op = opSave) or (Result.Code[i].Op = opMatch) then
+        Break
+      else
+        LIsCaseFold := False;
+    end;
+    if LIsCaseFold and (Length(LCaseFoldStr) > 0) then
+    begin
+      while (i < C.Count) and (Result.Code[i].Op = opSave) do Inc(i);
+      if (i < C.Count) and (Result.Code[i].Op = opMatch) and (i = C.Count - 1) then
+      begin
+        Result.IsCaseFoldLiteral := True;
+        Result.CaseFoldLiteral := LCaseFoldStr;
       end;
     end;
   end;
