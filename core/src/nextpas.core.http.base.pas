@@ -144,6 +144,7 @@ var
   LColonPos: SizeInt;
   LPortStr: string;
   LPortVal: Int64;
+  LI: SizeInt;
 begin
   Result := Default(TUrl);
   if ARaw = '' then
@@ -158,8 +159,14 @@ begin
     Result.Scheme := Copy(LRest, 1, LSchemeEnd - 1);
     Delete(LRest, 1, LSchemeEnd + 2);
 
-    // Extract authority (up to first / or end)
-    LPos := Pos('/', LRest);
+    // Extract authority (up to first /, ?, or # — or end)
+    LPos := 0;
+    for LI := 1 to Length(LRest) do
+      if (LRest[LI] = '/') or (LRest[LI] = '?') or (LRest[LI] = '#') then
+      begin
+        LPos := LI;
+        Break;
+      end;
     if LPos > 0 then
     begin
       LAuthority := Copy(LRest, 1, LPos - 1);
@@ -190,7 +197,11 @@ begin
         begin
           LPortStr := Copy(LAuthority, LColonPos + 2, Length(LAuthority) - LColonPos - 1);
           if TryStrToInt(LPortStr, LPortVal) then
+          begin
+            if (LPortVal < 0) or (LPortVal > 65535) then
+              raise EHttpError.Create('Port out of range: ' + LPortStr);
             Result.Port := UInt16(LPortVal);
+          end;
         end;
       end
       else
@@ -204,7 +215,11 @@ begin
         Result.Host := Copy(LAuthority, 1, LColonPos - 1);
         LPortStr := Copy(LAuthority, LColonPos + 1, Length(LAuthority) - LColonPos);
         if TryStrToInt(LPortStr, LPortVal) then
-          Result.Port := UInt16(LPortVal)
+        begin
+          if (LPortVal < 0) or (LPortVal > 65535) then
+            raise EHttpError.Create('Port out of range: ' + LPortStr);
+          Result.Port := UInt16(LPortVal);
+        end
         else
           Result.Port := 0;
       end

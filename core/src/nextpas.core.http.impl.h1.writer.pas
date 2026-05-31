@@ -85,6 +85,8 @@ begin
   if FHeadersSent then
     Exit;
   FStatus := AStatus;
+  if not FHeaders.Has('content-length') and not FHeaders.Has('transfer-encoding') then
+    FHeaders.Set_('connection', 'close');
   WriteStatusLine;
   WriteAllHeaders;
   WriteCRLF;

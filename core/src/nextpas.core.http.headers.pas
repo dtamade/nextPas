@@ -5,6 +5,7 @@ unit nextpas.core.http.headers;
 interface
 
 uses
+  nextpas.core.http.base,
   nextpas.core.http.intf;
 
 type
@@ -19,6 +20,8 @@ type
       FEntries: array of THeaderEntry;
     function FindFirst(const AName: string): Int32;
     class function Normalize(const AName: string): string; static;
+    class procedure ValidateName(const AName: string); static;
+    class procedure ValidateValue(const AValue: string); static;
   public
     procedure Set_(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
@@ -47,6 +50,26 @@ begin
       Result[LI] := Chr(Ord(Result[LI]) + 32);
 end;
 
+class procedure THttpHeaders.ValidateName(const AName: string);
+var
+  LI: SizeInt;
+begin
+  if AName = '' then
+    raise EHttpError.Create('empty header name');
+  for LI := 1 to Length(AName) do
+    if (Ord(AName[LI]) < 33) or (Ord(AName[LI]) > 126) or (AName[LI] = ':') then
+      raise EHttpError.Create('invalid header name character');
+end;
+
+class procedure THttpHeaders.ValidateValue(const AValue: string);
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(AValue) do
+    if (AValue[LI] = #13) or (AValue[LI] = #10) or (AValue[LI] = #0) then
+      raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
+end;
+
 function THttpHeaders.FindFirst(const AName: string): Int32;
 var
   LNorm: string;
@@ -65,6 +88,8 @@ var
   LI, LDst: Int32;
   LFound: Boolean;
 begin
+  ValidateName(AName);
+  ValidateValue(AValue);
   LNorm := Normalize(AName);
   LFound := False;
   LDst := 0;
@@ -102,6 +127,8 @@ procedure THttpHeaders.Add(const AName, AValue: string);
 var
   LLen: Int32;
 begin
+  ValidateName(AName);
+  ValidateValue(AValue);
   LLen := Length(FEntries);
   SetLength(FEntries, LLen + 1);
   FEntries[LLen].Name := Normalize(AName);

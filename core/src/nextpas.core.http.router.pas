@@ -30,6 +30,7 @@ type
       end;
     var
       FTrees: array[THttpMethod] of PRouteNode;
+      FMiddlewares: array of IHttpMiddleware;
     function NewNode(const APrefix: string; const AKind: TNodeKind): PRouteNode;
     procedure FreeNode(ANode: PRouteNode);
     procedure InsertRoute(var ARoot: PRouteNode; const APath: string; const AHandler: THttpHandlerFunc);
@@ -54,6 +55,10 @@ type
 function NewRouter: IHttpRouter;
 
 implementation
+
+uses
+  nextpas.core.http.message,
+  nextpas.core.http.middleware;
 
 { Helpers }
 
@@ -398,7 +403,8 @@ end;
 
 procedure THttpRouter.Use(const AMiddleware: IHttpMiddleware);
 begin
-  { Middleware support — stub for now }
+  SetLength(FMiddlewares, Length(FMiddlewares) + 1);
+  FMiddlewares[High(FMiddlewares)] := AMiddleware;
 end;
 
 procedure THttpRouter.ServeHTTP(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
@@ -409,6 +415,8 @@ var
   LPath: string;
   LM: THttpMethod;
   LFound: Boolean;
+  LI: SizeInt;
+  LWrapped: IHttpHandler;
 begin
   LMethod := AReq.Method;
   LPath := AReq.Url.Path;
@@ -416,7 +424,18 @@ begin
   LHandler := MatchNode(FTrees[LMethod], LPath, LParams);
   if LHandler <> nil then
   begin
-    LHandler(AReq, AW);
+    if LParams <> nil then
+      for LI := 0 to High(LParams) do
+        (AReq as THttpRequest).SetPathParam(LParams[LI].Name, LParams[LI].Value);
+    if Length(FMiddlewares) > 0 then
+    begin
+      LWrapped := HandlerFunc(LHandler);
+      for LI := High(FMiddlewares) downto 0 do
+        LWrapped := FMiddlewares[LI].Wrap(LWrapped);
+      LWrapped.ServeHTTP(AReq, AW);
+    end
+    else
+      LHandler(AReq, AW);
     Exit;
   end;
 
