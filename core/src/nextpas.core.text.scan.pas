@@ -22,6 +22,8 @@ function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeU
 function ScanJsonNumber(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;
   const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
+function ScanFindSubstringCI(const AData: PAnsiChar; const ADataLen: SizeUInt;
+  const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
 function ScanMatchLiteral(const AData: PAnsiChar; const ALen: SizeUInt;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
 procedure ViewSkipWhitespace(var AView: TStringView); inline;
@@ -358,6 +360,67 @@ begin
       if CompareMem(@AData[LPos + 1], @ANeedle[1], ANeedleLen - 2) then
         Exit(PtrInt(LPos));
     end;
+    Inc(LPos);
+  end;
+  Result := -1;
+end;
+
+function CIMatch(const AData, ANeedle: PAnsiChar; ALen: SizeUInt): Boolean; inline;
+var K: SizeUInt; LCh: Byte;
+begin
+  for K := 0 to ALen - 1 do
+  begin
+    LCh := Byte(AData[K]);
+    if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then LCh := LCh + 32;
+    if LCh <> Byte(ANeedle[K]) then Exit(False);
+  end;
+  Result := True;
+end;
+
+function ScanFindSubstringCI(const AData: PAnsiChar; const ADataLen: SizeUInt;
+  const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
+var
+  LFirstLo, LFirstHi, LLastLo, LLastHi: Byte;
+  LSearchLen: SizeUInt;
+  LPos: SizeUInt;
+  LMask1, LMask2, LCombined: TVecMask;
+  LBit: Int32;
+  LCandidate: SizeUInt;
+begin
+  if ANeedleLen = 0 then Exit(0);
+  if ANeedleLen > ADataLen then Exit(-1);
+
+  LFirstLo := Byte(ANeedle[0]);
+  LFirstHi := LFirstLo;
+  if (LFirstLo >= Ord('a')) and (LFirstLo <= Ord('z')) then LFirstHi := LFirstLo - 32;
+  LLastLo := Byte(ANeedle[ANeedleLen - 1]);
+  LLastHi := LLastLo;
+  if (LLastLo >= Ord('a')) and (LLastLo <= Ord('z')) then LLastHi := LLastLo - 32;
+  LSearchLen := ADataLen - ANeedleLen + 1;
+
+  LPos := 0;
+  while LPos + VecWidth <= LSearchLen do
+  begin
+    LMask1 := VecCmpEq(@AData[LPos], LFirstLo) or VecCmpEq(@AData[LPos], LFirstHi);
+    LMask2 := VecCmpEq(@AData[LPos + ANeedleLen - 1], LLastLo) or
+              VecCmpEq(@AData[LPos + ANeedleLen - 1], LLastHi);
+    LCombined := LMask1 and LMask2;
+    while LCombined <> TVecMask(0) do
+    begin
+      LBit := VecCtz(LCombined);
+      LCandidate := LPos + SizeUInt(LBit);
+      if LCandidate < LSearchLen then
+        if CIMatch(@AData[LCandidate], ANeedle, ANeedleLen) then
+          Exit(PtrInt(LCandidate));
+      LCombined := LCombined and (LCombined - 1);
+    end;
+    Inc(LPos, VecWidth);
+  end;
+
+  while LPos < LSearchLen do
+  begin
+    if CIMatch(@AData[LPos], ANeedle, ANeedleLen) then
+      Exit(PtrInt(LPos));
     Inc(LPos);
   end;
   Result := -1;

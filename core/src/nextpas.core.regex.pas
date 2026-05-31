@@ -158,6 +158,7 @@ var i: Integer;
     LMatch: Boolean;
     k: SizeUInt;
     LCh: Byte;
+    LLower: array of AnsiChar;
 begin
   if not FValid then Exit(False);
   if FProgram.IsPureLiteral then
@@ -185,32 +186,13 @@ begin
     LData := PAnsiChar(AInput);
     LInputLen := Length(AInput);
     if LNeedleLen > LInputLen then Exit(False);
+    // SIMD case-insensitive: search first+last byte (both cases) then verify
     LPos := 0;
     while LPos + LNeedleLen <= LInputLen do
     begin
-      if (Byte(LNeedle[0]) >= Ord('a')) and (Byte(LNeedle[0]) <= Ord('z')) then
-        i := ScanFindByte2(LData + LPos, LInputLen - LPos - LNeedleLen + 1,
-               Byte(LNeedle[0]), Byte(LNeedle[0]) - 32)
-      else
-        i := ScanFindByte(LData + LPos, LInputLen - LPos - LNeedleLen + 1,
-               Byte(LNeedle[0]));
+      i := ScanFindSubstringCI(@LData[LPos], LInputLen - LPos, LNeedle, LNeedleLen);
       if i < 0 then Exit(False);
-      LPos := LPos + SizeUInt(i);
-      if LPos + LNeedleLen > LInputLen then Exit(False);
-      LMatch := True;
-      for k := 1 to LNeedleLen - 1 do
-      begin
-        LCh := Byte(LData[LPos + k]);
-        if (LCh >= Ord('A')) and (LCh <= Ord('Z')) then
-          LCh := LCh + 32;
-        if LCh <> Byte(LNeedle[k]) then
-        begin
-          LMatch := False;
-          Break;
-        end;
-      end;
-      if LMatch then Exit(True);
-      Inc(LPos);
+      Exit(True);
     end;
     Exit(False);
   end;
