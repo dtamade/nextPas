@@ -22,6 +22,7 @@ unit nextpas.core.collections.smallvec;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.collections.smallvec.base;
 
@@ -253,7 +254,7 @@ function TSmallVec.Get(aIndex: SizeUInt): T;
 begin
   {$IFDEF DEBUG}
   if aIndex >= FCount then
-    raise ERangeError.CreateFmt('TSmallVec.Get: index %d out of range [0..%d)', [aIndex, FCount]);
+    raise EOutOfRange.CreateFmt('TSmallVec.Get: index %d out of range [0..%d)', [aIndex, FCount]);
   {$ENDIF}
   if FIsInline then
     Result := FInline[aIndex]
@@ -265,7 +266,7 @@ procedure TSmallVec.Put(aIndex: SizeUInt; const aValue: T);
 begin
   {$IFDEF DEBUG}
   if aIndex >= FCount then
-    raise ERangeError.CreateFmt('TSmallVec.Put: index %d out of range [0..%d)', [aIndex, FCount]);
+    raise EOutOfRange.CreateFmt('TSmallVec.Put: index %d out of range [0..%d)', [aIndex, FCount]);
   {$ENDIF}
   if FIsInline then
     FInline[aIndex] := aValue
@@ -277,7 +278,7 @@ function TSmallVec.GetPtr(aIndex: SizeUInt): PT;
 begin
   {$IFDEF DEBUG}
   if aIndex >= FCount then
-    raise ERangeError.CreateFmt('TSmallVec.GetPtr: index %d out of range [0..%d)', [aIndex, FCount]);
+    raise EOutOfRange.CreateFmt('TSmallVec.GetPtr: index %d out of range [0..%d)', [aIndex, FCount]);
   {$ENDIF}
   if FIsInline then
     Result := @FInline[aIndex]

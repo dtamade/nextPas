@@ -559,7 +559,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentError.Create('base_addr');
+    raise ENullReferenceError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);
@@ -579,7 +579,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentError.Create('base_addr');
+    raise ENullReferenceError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);
@@ -599,7 +599,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentError.Create('base_addr');
+    raise ENullReferenceError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);
@@ -619,7 +619,7 @@ var
   LIndex: Integer;
 begin
   if base_addr = nil then
-    raise EArgumentError.Create('base_addr');
+    raise ENullReferenceError.Create('base_addr');
 
   LScale := ValidateGatherScale(scale);
   LBase := PByte(base_addr);

@@ -9,6 +9,7 @@ uses
   SysUtils,
   fpcunit,
   testregistry,
+  nextpas.core.errors,
   nextpas.core.simd,
   nextpas.core.simd.testcase,
   nextpas.core.simd.base,
@@ -592,7 +593,7 @@ begin
   try
     ApplyGamma(FSrc1, 0.0);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
 
@@ -820,7 +821,7 @@ begin
   try
     GetPixelRGB(FSrc1, 1, 0);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
 
@@ -845,7 +846,7 @@ begin
   try
     SetPixelRGB(FSrc1, 0, 1, LColor);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
 
@@ -860,7 +861,7 @@ begin
   try
     FSrc1 := CreateImage(-1, 1, ifRGB24);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
 

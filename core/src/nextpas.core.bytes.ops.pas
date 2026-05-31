@@ -137,7 +137,7 @@ end;
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 begin
   if (ALength > 0) and (AOffset + ALength > ASpan.Len) then
-    raise ERangeError.Create('SpanCopySlice: offset+length exceeds span');
+    raise EOutOfRange.Create('SpanCopySlice: offset+length exceeds span');
   SetLength(Result, ALength);
   if ALength > 0 then
     Move(ASpan.Data[AOffset], Result[0], ALength);

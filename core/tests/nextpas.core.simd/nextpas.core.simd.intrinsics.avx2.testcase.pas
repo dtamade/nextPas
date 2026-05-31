@@ -9,6 +9,7 @@ interface
 uses
   SysUtils,
   fpcunit, testregistry,
+  nextpas.core.errors,
   nextpas.core.simd.intrinsics.base,
   nextpas.core.simd.intrinsics.avx2;
 
@@ -1041,19 +1042,19 @@ begin
   try
     avx2_gather_epi32(nil, LIndices, SizeOf(LongInt));
   except
-    on EArgumentNilException do
+    on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('nil base should raise EArgumentNilException', LRaised);
+  AssertTrue('nil base should raise ENullReferenceError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_epi32(@LData[0], LIndices, 3);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('invalid scale should raise EArgumentOutOfRangeException', LRaised);
+  AssertTrue('invalid scale should raise EArgumentError', LRaised);
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather_ScaleVariantsAndNegativeIndices;
@@ -1146,19 +1147,19 @@ begin
   try
     avx2_gather_epi64(nil, LIndices, SizeOf(Int64));
   except
-    on EArgumentNilException do
+    on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi64 nil base should raise EArgumentNilException', LRaised);
+  AssertTrue('gather_epi64 nil base should raise ENullReferenceError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_pd(LCenterF64, LIndices, 6);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_pd invalid scale should raise EArgumentOutOfRangeException', LRaised);
+  AssertTrue('gather_pd invalid scale should raise EArgumentError', LRaised);
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Gather64AndPD_ScaleVariants;
@@ -1245,73 +1246,73 @@ begin
   try
     avx2_gather_epi32(nil, LIndices256, SizeOf(LongInt));
   except
-    on EArgumentNilException do
+    on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi32 nil base should raise EArgumentNilException', LRaised);
+  AssertTrue('gather_epi32 nil base should raise ENullReferenceError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_epi64(nil, LIndices128, SizeOf(Int64));
   except
-    on EArgumentNilException do
+    on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi64 nil base should raise EArgumentNilException', LRaised);
+  AssertTrue('gather_epi64 nil base should raise ENullReferenceError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_ps(nil, LIndices256, SizeOf(Single));
   except
-    on EArgumentNilException do
+    on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_ps nil base should raise EArgumentNilException', LRaised);
+  AssertTrue('gather_ps nil base should raise ENullReferenceError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_pd(nil, LIndices128, SizeOf(Double));
   except
-    on EArgumentNilException do
+    on ENullReferenceError do
       LRaised := True;
   end;
-  AssertTrue('gather_pd nil base should raise EArgumentNilException', LRaised);
+  AssertTrue('gather_pd nil base should raise ENullReferenceError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_epi32(@LDataI32[0], LIndices256, 0);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi32 invalid scale should raise EArgumentOutOfRangeException', LRaised);
+  AssertTrue('gather_epi32 invalid scale should raise EArgumentError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_epi64(@LDataI64[0], LIndices128, 3);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_epi64 invalid scale should raise EArgumentOutOfRangeException', LRaised);
+  AssertTrue('gather_epi64 invalid scale should raise EArgumentError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_ps(@LDataF32[0], LIndices256, 5);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_ps invalid scale should raise EArgumentOutOfRangeException', LRaised);
+  AssertTrue('gather_ps invalid scale should raise EArgumentError', LRaised);
 
   LRaised := False;
   try
     avx2_gather_pd(@LDataF64[0], LIndices128, 16);
   except
-    on EArgumentOutOfRangeException do
+    on EArgumentError do
       LRaised := True;
   end;
-  AssertTrue('gather_pd invalid scale should raise EArgumentOutOfRangeException', LRaised);
+  AssertTrue('gather_pd invalid scale should raise EArgumentError', LRaised);
 end;
 
 procedure TTestCase_AVX2IntrinsicsFallback.Test_Pack_SaturatingSemantics;

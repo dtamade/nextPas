@@ -204,7 +204,9 @@ begin
 end;
 
 {$I nextpas.core.text.number.ieee.inc}
+{$push}{$R-}
 {$I nextpas.core.text.number.pow10.inc}
+{$pop}
 {$I nextpas.core.text.number.ryu.inc}
 
 function EiselLemire(const AMant: UInt64; const AExp10: Int32;

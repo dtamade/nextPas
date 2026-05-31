@@ -190,9 +190,75 @@ function Format(const AFmt: string; const AArgs: array of const): string;
 var
   LI, LArgIdx, LLen: Integer;
   LTmp: string;
-  LPrecision, LWidth: Integer;
-  LDotPos: Integer;
-  LFmtSpec: string;
+  LWidth, LPrec: Integer;
+  LZeroPad, LLeftAlign: Boolean;
+  LFmtStart: Integer;
+  LPadLen: Integer;
+
+  procedure ParseWidthPrec;
+  var LCode: Integer; LS: string;
+  begin
+    LWidth := 0;
+    LPrec := -1;
+    LZeroPad := False;
+    LLeftAlign := False;
+    LFmtStart := LI;
+    if (LI <= LLen) and (AFmt[LI] = '-') then begin LLeftAlign := True; Inc(LI); end;
+    if (LI <= LLen) and (AFmt[LI] = '0') then begin LZeroPad := True; end;
+    LS := '';
+    while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do begin LS := LS + AFmt[LI]; Inc(LI); end;
+    if LS <> '' then begin Val(LS, LWidth, LCode); if LCode <> 0 then LWidth := 0; end;
+    if (LI <= LLen) and (AFmt[LI] = '.') then
+    begin
+      Inc(LI);
+      LS := '';
+      while (LI <= LLen) and (AFmt[LI] in ['0'..'9']) do begin LS := LS + AFmt[LI]; Inc(LI); end;
+      if LS <> '' then begin Val(LS, LPrec, LCode); if LCode <> 0 then LPrec := -1; end
+      else LPrec := 0;
+    end;
+  end;
+
+  function PadInt(const S: string): string;
+  var LMinDigits, LPad: Integer; LNeg: Boolean; LDigits: string;
+  begin
+    LNeg := (Length(S) > 0) and (S[1] = '-');
+    if LNeg then LDigits := Copy(S, 2, Length(S) - 1) else LDigits := S;
+    LMinDigits := LPrec;
+    if LMinDigits < 0 then LMinDigits := 1;
+    while Length(LDigits) < LMinDigits do LDigits := '0' + LDigits;
+    if LNeg then Result := '-' + LDigits else Result := LDigits;
+    LPad := LWidth - Length(Result);
+    if LPad > 0 then
+    begin
+      if LLeftAlign then
+        Result := Result + StringOfChar(' ', LPad)
+      else if LZeroPad and (LPrec < 0) then
+      begin
+        if LNeg then
+          Result := '-' + StringOfChar('0', LPad) + Copy(Result, 2, Length(Result) - 1)
+        else
+          Result := StringOfChar('0', LPad) + Result;
+      end
+      else
+        Result := StringOfChar(' ', LPad) + Result;
+    end;
+  end;
+
+  function PadStr(const S: string): string;
+  begin
+    Result := S;
+    if (LPrec >= 0) and (Length(Result) > LPrec) then
+      SetLength(Result, LPrec);
+    LPadLen := LWidth - Length(Result);
+    if LPadLen > 0 then
+    begin
+      if LLeftAlign then
+        Result := Result + StringOfChar(' ', LPadLen)
+      else
+        Result := StringOfChar(' ', LPadLen) + Result;
+    end;
+  end;
+
 begin
   Result := '';
   LArgIdx := 0;
@@ -203,24 +269,8 @@ begin
     if (AFmt[LI] = '%') and (LI < LLen) then
     begin
       Inc(LI);
-      LFmtSpec := '';
-      while (LI <= LLen) and (AFmt[LI] in ['0'..'9', '-', '.', '*']) do
-      begin
-        LFmtSpec := LFmtSpec + AFmt[LI];
-        Inc(LI);
-      end;
+      ParseWidthPrec;
       if LI > LLen then Break;
-
-      LPrecision := -1;
-      LWidth := 0;
-      LDotPos := Pos('.', LFmtSpec);
-      if LDotPos > 0 then
-      begin
-        Val(Copy(LFmtSpec, LDotPos + 1, Length(LFmtSpec) - LDotPos), LPrecision, LWidth);
-        if LWidth <> 0 then LPrecision := 6;
-      end;
-      if LPrecision < 0 then LPrecision := 6;
-
       case AFmt[LI] of
         'd', 'i':
           if LArgIdx <= High(AArgs) then
@@ -231,7 +281,8 @@ begin
               vtQWord:    Str(AArgs[LArgIdx].VQWord^, LTmp);
             else Str(0, LTmp);
             end;
-            Result := Result + LTmp;
+            while (Length(LTmp) > 0) and (LTmp[1] = ' ') do Delete(LTmp, 1, 1);
+            Result := Result + PadInt(LTmp);
             Inc(LArgIdx);
           end;
         'u':
@@ -243,19 +294,21 @@ begin
               vtQWord:    Str(AArgs[LArgIdx].VQWord^, LTmp);
             else Str(UInt64(0), LTmp);
             end;
-            Result := Result + LTmp;
+            while (Length(LTmp) > 0) and (LTmp[1] = ' ') do Delete(LTmp, 1, 1);
+            Result := Result + PadInt(LTmp);
             Inc(LArgIdx);
           end;
         's':
           if LArgIdx <= High(AArgs) then
           begin
             case AArgs[LArgIdx].VType of
-              vtString:      Result := Result + AArgs[LArgIdx].VString^;
-              vtAnsiString:  Result := Result + AnsiString(AArgs[LArgIdx].VAnsiString);
-              vtPChar:       Result := Result + AArgs[LArgIdx].VPChar;
-              vtChar:        Result := Result + AArgs[LArgIdx].VChar;
-            else Result := Result + '?';
+              vtString:      LTmp := AArgs[LArgIdx].VString^;
+              vtAnsiString:  LTmp := AnsiString(AArgs[LArgIdx].VAnsiString);
+              vtPChar:       LTmp := AArgs[LArgIdx].VPChar;
+              vtChar:        LTmp := AArgs[LArgIdx].VChar;
+            else LTmp := '?';
             end;
+            Result := Result + PadStr(LTmp);
             Inc(LArgIdx);
           end;
         'x', 'X':
@@ -267,18 +320,18 @@ begin
               vtQWord:    LTmp := IntToHex(AArgs[LArgIdx].VQWord^, 1);
             else LTmp := '0';
             end;
-            if AFmt[LI] = 'x' then
-              Result := Result + System.LowerCase(LTmp)
-            else
-              Result := Result + LTmp;
+            if AFmt[LI] = 'x' then LTmp := System.LowerCase(LTmp);
+            LPrec := -1;
+            Result := Result + PadInt(LTmp);
             Inc(LArgIdx);
           end;
         'f', 'e', 'g':
           if LArgIdx <= High(AArgs) then
           begin
+            if LPrec < 0 then LPrec := 6;
             case AArgs[LArgIdx].VType of
-              vtExtended: Str(AArgs[LArgIdx].VExtended^:0:LPrecision, LTmp);
-            else Str(0.0:0:LPrecision, LTmp);
+              vtExtended: Str(AArgs[LArgIdx].VExtended^:0:LPrec, LTmp);
+            else Str(0.0:0:LPrec, LTmp);
             end;
             Result := Result + LTmp;
             Inc(LArgIdx);

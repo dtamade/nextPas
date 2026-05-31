@@ -8,7 +8,7 @@ unit nextpas.core.simd.memutils;
 interface
 
 uses
-  nextpas.core.errors;
+  nextpas.core.base;
 
 // === Aligned Memory Allocation ===
 
@@ -104,7 +104,7 @@ function AlignedAlloc(size: NativeUInt; alignment: NativeUInt): Pointer;
 begin
   Result := _aligned_malloc(size, alignment);
   if Result = nil then
-    raise EOutOfMemoryError.CreateFmt('Failed to allocate %d bytes with %d alignment', [size, alignment]);
+    raise EOutOfMemory.CreateFmt('Failed to allocate %d bytes with %d alignment', [size, alignment]);
 end;
 
 procedure AlignedFree(ptr: Pointer);
@@ -117,7 +117,7 @@ function AlignedRealloc(ptr: Pointer; newSize: NativeUInt; alignment: NativeUInt
 begin
   Result := _aligned_realloc(ptr, newSize, alignment);
   if (Result = nil) and (newSize > 0) then
-    raise EOutOfMemoryError.CreateFmt('Failed to reallocate %d bytes with %d alignment', [newSize, alignment]);
+    raise EOutOfMemory.CreateFmt('Failed to reallocate %d bytes with %d alignment', [newSize, alignment]);
 end;
 
 {$ELSE} // UNIX/Linux
@@ -141,11 +141,11 @@ begin
 
   // ✅ Safety check: prevent integer overflow in total size calculation
   if (size > High(NativeUInt) - alignment - headerOffset) then
-    raise EOutOfMemoryError.CreateFmt('Allocation size overflow: size=%d, alignment=%d', [size, alignment]);
+    raise EOutOfMemory.CreateFmt('Allocation size overflow: size=%d, alignment=%d', [size, alignment]);
 
   originalPtr := GetMem(size + alignment + headerOffset);
   if originalPtr = nil then
-    raise EOutOfMemoryError.CreateFmt('Failed to allocate %d bytes with %d alignment', [size, alignment]);
+    raise EOutOfMemory.CreateFmt('Failed to allocate %d bytes with %d alignment', [size, alignment]);
 
   {$PUSH}{$WARN 4055 OFF}
   // Calculate aligned address, leaving room for the header just before it
@@ -334,7 +334,7 @@ begin
     // ✅ Safety check: prevent integer overflow in size calculation
     maxCount := NativeUInt(High(NativeUInt)) div NativeUInt(SizeOf(T));
     if count > maxCount then
-      raise EOutOfMemoryError.CreateFmt('Allocation size overflow: count=%d, elemSize=%d', [count, SizeOf(T)]);
+      raise EOutOfMemory.CreateFmt('Allocation size overflow: count=%d, elemSize=%d', [count, SizeOf(T)]);
     Result.FData := AlignedAlloc(count * SizeOf(T), alignment);
   end
   else
@@ -370,7 +370,7 @@ type
 begin
   {$IFDEF SIMD_BOUNDS_CHECK}
   if index >= FSize then
-    raise EArgumentOutOfRangeException.CreateFmt('Index %d out of range [0..%d]', [index, FSize - 1]);
+    raise EOutOfRange.CreateFmt('Index %d out of range [0..%d]', [index, FSize - 1]);
   {$ENDIF}
   
   Result := PT(FData)[index];
@@ -382,7 +382,7 @@ type
 begin
   {$IFDEF SIMD_BOUNDS_CHECK}
   if index >= FSize then
-    raise EArgumentOutOfRangeException.CreateFmt('Index %d out of range [0..%d]', [index, FSize - 1]);
+    raise EOutOfRange.CreateFmt('Index %d out of range [0..%d]', [index, FSize - 1]);
   {$ENDIF}
   
   PT(FData)[index] := value;

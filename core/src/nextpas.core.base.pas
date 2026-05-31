@@ -162,7 +162,7 @@ end;
 function TByteSpan.Slice(const AOffset, ALength: SizeUInt): TByteSpan;
 begin
   if AOffset + ALength > Len then
-    raise ERangeError.CreateFmt('TByteSpan.Slice: offset %d + length %d > span length %d',
+    raise EOutOfRange.CreateFmt('TByteSpan.Slice: offset %d + length %d > span length %d',
       [AOffset, ALength, Len]);
   Result.Data := Data + AOffset;
   Result.Len := ALength;
@@ -171,7 +171,7 @@ end;
 function TByteSpan.GetByte(const AIndex: SizeUInt): Byte;
 begin
   if AIndex >= Len then
-    raise ERangeError.CreateFmt('TByteSpan: index %d out of range [0..%d]', [AIndex, Len - 1]);
+    raise EOutOfRange.CreateFmt('TByteSpan: index %d out of range [0..%d]', [AIndex, Len - 1]);
   Result := (Data + AIndex)^;
 end;
 
@@ -180,7 +180,7 @@ end;
 procedure Require(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
-    raise EArgumentException.Create(AMessage);
+    raise EInvalidArgument.Create(AMessage);
 end;
 
 procedure Ensure(const ACondition: Boolean; const AMessage: string);
