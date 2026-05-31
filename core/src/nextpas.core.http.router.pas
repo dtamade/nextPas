@@ -305,85 +305,86 @@ begin
 end;
 
 function THttpRouter.MatchNode(ANode: PRouteNode; const APath: string; var AParams: TRouteParams): THttpHandlerFunc;
-var
-  LPos, LEnd: SizeInt;
-  LSeg: string;
-  LI: SizeInt;
-  LCommon: SizeInt;
-  LRest: string;
-  LResult: THttpHandlerFunc;
-begin
-  Result := nil;
-  if ANode = nil then
-    Exit;
+const
+  MAX_MATCH_DEPTH = 64;
 
-  { Empty path — check if current node has a handler (root match) }
-  if APath = '' then
+  function DoMatch(ANode: PRouteNode; const APath: string; ADepth: Int32): THttpHandlerFunc;
+  var
+    LPos, LEnd: SizeInt;
+    LSeg: string;
+    LI: SizeInt;
+    LCommon: SizeInt;
+    LRest: string;
+    LResult: THttpHandlerFunc;
   begin
-    if ANode^.HasHandler then
-      Result := ANode^.Handler;
-    Exit;
-  end;
+    Result := nil;
+    if (ANode = nil) or (ADepth > MAX_MATCH_DEPTH) then
+      Exit;
 
-  { Priority: static > param > wildcard }
-  { Pass 1: try static children }
-  for LI := 0 to High(ANode^.Children) do
-  begin
-    if ANode^.Children[LI]^.Kind <> nkStatic then
-      Continue;
-    LCommon := CommonPrefixLen(ANode^.Children[LI]^.Prefix, APath);
-    if LCommon = Length(ANode^.Children[LI]^.Prefix) then
+    if APath = '' then
     begin
-      LRest := Copy(APath, LCommon + 1, Length(APath) - LCommon);
-      LResult := MatchNode(ANode^.Children[LI], LRest, AParams);
-      if LResult <> nil then
-        Exit(LResult);
+      if ANode^.HasHandler then
+        Result := ANode^.Handler;
+      Exit;
     end;
-  end;
 
-  { Pass 2: try param children }
-  for LI := 0 to High(ANode^.Children) do
-  begin
-    if ANode^.Children[LI]^.Kind <> nkParam then
-      Continue;
-    if (Length(APath) >= 1) and (APath[1] = '/') then
+    for LI := 0 to High(ANode^.Children) do
     begin
-      LPos := 2;
-      LEnd := LPos;
-      while (LEnd <= Length(APath)) and (APath[LEnd] <> '/') do
-        Inc(LEnd);
-      LSeg := Copy(APath, LPos, LEnd - LPos);
-      if LSeg <> '' then
+      if ANode^.Children[LI]^.Kind <> nkStatic then
+        Continue;
+      LCommon := CommonPrefixLen(ANode^.Children[LI]^.Prefix, APath);
+      if LCommon = Length(ANode^.Children[LI]^.Prefix) then
+      begin
+        LRest := Copy(APath, LCommon + 1, Length(APath) - LCommon);
+        LResult := DoMatch(ANode^.Children[LI], LRest, ADepth + 1);
+        if LResult <> nil then
+          Exit(LResult);
+      end;
+    end;
+
+    for LI := 0 to High(ANode^.Children) do
+    begin
+      if ANode^.Children[LI]^.Kind <> nkParam then
+        Continue;
+      if (Length(APath) >= 1) and (APath[1] = '/') then
+      begin
+        LPos := 2;
+        LEnd := LPos;
+        while (LEnd <= Length(APath)) and (APath[LEnd] <> '/') do
+          Inc(LEnd);
+        LSeg := Copy(APath, LPos, LEnd - LPos);
+        if LSeg <> '' then
+        begin
+          SetLength(AParams, Length(AParams) + 1);
+          AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
+          AParams[High(AParams)].Value := LSeg;
+          LRest := Copy(APath, LEnd, Length(APath) - LEnd + 1);
+          LResult := DoMatch(ANode^.Children[LI], LRest, ADepth + 1);
+          if LResult <> nil then
+            Exit(LResult);
+          SetLength(AParams, Length(AParams) - 1);
+        end;
+      end;
+    end;
+
+    for LI := 0 to High(ANode^.Children) do
+    begin
+      if ANode^.Children[LI]^.Kind <> nkWildcard then
+        Continue;
+      if (Length(APath) >= 1) and (APath[1] = '/') then
       begin
         SetLength(AParams, Length(AParams) + 1);
         AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
-        AParams[High(AParams)].Value := LSeg;
-        LRest := Copy(APath, LEnd, Length(APath) - LEnd + 1);
-        LResult := MatchNode(ANode^.Children[LI], LRest, AParams);
-        if LResult <> nil then
-          Exit(LResult);
-        { Backtrack }
+        AParams[High(AParams)].Value := Copy(APath, 2, Length(APath) - 1);
+        if ANode^.Children[LI]^.HasHandler then
+          Exit(ANode^.Children[LI]^.Handler);
         SetLength(AParams, Length(AParams) - 1);
       end;
     end;
   end;
 
-  { Pass 3: try wildcard children }
-  for LI := 0 to High(ANode^.Children) do
-  begin
-    if ANode^.Children[LI]^.Kind <> nkWildcard then
-      Continue;
-    if (Length(APath) >= 1) and (APath[1] = '/') then
-    begin
-      SetLength(AParams, Length(AParams) + 1);
-      AParams[High(AParams)].Name := ANode^.Children[LI]^.ParamName;
-      AParams[High(AParams)].Value := Copy(APath, 2, Length(APath) - 1);
-      if ANode^.Children[LI]^.HasHandler then
-        Exit(ANode^.Children[LI]^.Handler);
-      { Backtrack }
-      SetLength(AParams, Length(AParams) - 1);
-    end;
-  end;
+begin
+  Result := DoMatch(ANode, APath, 0);
 end;
 
 procedure THttpRouter.Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
