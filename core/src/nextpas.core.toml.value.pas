@@ -9,6 +9,7 @@ unit nextpas.core.toml.value;
     Doc.Root.Get('server').Get('port').AsInt  // chained access }
 
 {$I nextpas.core.settings.inc}
+{$BOOLEVAL OFF}
 
 interface
 
@@ -84,7 +85,7 @@ end;
 
 function TTomlValue.Kind: TTomlNodeKind;
 begin
-  if FIdx = TOML_NODE_NONE then
+  if not IsValid then
     Result := tnkTable
   else
     Result := FDoc^.Node(FIdx)^.Kind;
@@ -127,8 +128,8 @@ end;
 
 function TTomlValue.AsStr: TStringView;
 begin
-  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
-    Exit(TStringView.Empty);
+  if not IsValid then Exit(TStringView.Empty);
+  if FDoc^.Node(FIdx)^.Kind <> tnkString then Exit(TStringView.Empty);
   Result := FDoc^.Node(FIdx)^.Str;
 end;
 
@@ -152,14 +153,20 @@ end;
 
 function TTomlValue.AsBool: Boolean;
 begin
-  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkBool) then
+  if not IsValid then Exit(False);
+  if FDoc^.Node(FIdx)^.Kind <> tnkBool then
     Exit(False);
   Result := FDoc^.Node(FIdx)^.BoolVal;
 end;
 
 function TTomlValue.AsDateTime: TTomlDateTime;
 begin
-  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkDateTime) then
+  if not IsValid then
+  begin
+    FillChar(Result, SizeOf(Result), 0);
+    Exit;
+  end;
+  if FDoc^.Node(FIdx)^.Kind <> tnkDateTime then
   begin
     FillChar(Result, SizeOf(Result), 0);
     Exit;
@@ -285,15 +292,15 @@ end;
 
 function TTomlValue.Key: TStringView;
 begin
-  if FIdx = TOML_NODE_NONE then
+  if not IsValid then
     Exit(TStringView.Empty);
   Result := FDoc^.Node(FIdx)^.Key;
 end;
 
 function TTomlValue.AsString: string;
 begin
-  if not IsValid or (FDoc^.Node(FIdx)^.Kind <> tnkString) then
-    Exit('');
+  if not IsValid then Exit('');
+  if FDoc^.Node(FIdx)^.Kind <> tnkString then Exit('');
   Result := FDoc^.Node(FIdx)^.Str.ToString;
 end;
 
