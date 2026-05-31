@@ -56,18 +56,20 @@ end;
 {== Float/String conversion ==}
 
 function FloatToStr(const AValue: Double): string;
-var LI: Integer;
+var LI, LDot: Integer;
 begin
-  Str(AValue, Result);
-  while (Length(Result) > 0) and (Result[1] = ' ') do
-    Delete(Result, 1, 1);
-  LI := Length(Result);
-  if Pos('.', Result) > 0 then
-    while (LI > 1) and (Result[LI] = '0') and (Result[LI-1] <> '.') do
-    begin
-      Delete(Result, LI, 1);
+  Str(AValue:0:15, Result);
+  LDot := Pos('.', Result);
+  if LDot > 0 then
+  begin
+    LI := Length(Result);
+    while (LI > LDot) and (Result[LI] = '0') do
       Dec(LI);
-    end;
+    if LI = LDot then
+      SetLength(Result, LDot - 1)
+    else
+      SetLength(Result, LI);
+  end;
 end;
 
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
@@ -124,9 +126,12 @@ begin
 end;
 
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-var LCode: Integer;
+var LCode: Integer; LTrimmed: string;
 begin
-  Val(AStr, AValue, LCode);
+  LTrimmed := AStr;
+  while (Length(LTrimmed) > 0) and (LTrimmed[1] <= ' ') do Delete(LTrimmed, 1, 1);
+  while (Length(LTrimmed) > 0) and (LTrimmed[Length(LTrimmed)] <= ' ') do Delete(LTrimmed, Length(LTrimmed), 1);
+  Val(LTrimmed, AValue, LCode);
   Result := (LCode = 0);
 end;
 
@@ -162,9 +167,12 @@ begin
 end;
 
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
-var LCode: Integer;
+var LCode: Integer; LTrimmed: string;
 begin
-  Val(AStr, AValue, LCode);
+  LTrimmed := AStr;
+  while (Length(LTrimmed) > 0) and (LTrimmed[1] <= ' ') do Delete(LTrimmed, 1, 1);
+  while (Length(LTrimmed) > 0) and (LTrimmed[Length(LTrimmed)] <= ' ') do Delete(LTrimmed, Length(LTrimmed), 1);
+  Val(LTrimmed, AValue, LCode);
   Result := (LCode = 0);
 end;
 

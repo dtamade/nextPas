@@ -382,14 +382,14 @@ begin
 
   LBuf := CreateBytesStreamFrom(LRaw);
   LReader := GzipReader(LBuf as IReader);
-  LOut := IoReadAll(LReader as IReader);
   LGotException := False;
   try
+    LOut := IoReadAll(LReader as IReader);
     LReader.Close;
   except
     LGotException := True;
   end;
-  Check(LGotException, 'gzip stream CRC corrupt raises on Close');
+  Check(LGotException, 'gzip stream CRC corrupt detected');
 end;
 
 procedure TestGzipTruncatedStream;
