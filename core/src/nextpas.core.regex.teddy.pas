@@ -12,8 +12,10 @@ type
   TTeddyMatcher = record
     Patterns: array of string;
     PatternCount: Integer;
-    LoNibbleTable: TVecU8x16;
-    HiNibbleTable: TVecU8x16;
+    Lo0: TVecU8x16;
+    Hi0: TVecU8x16;
+    Lo1: TVecU8x16;
+    Hi1: TVecU8x16;
     MinPatLen: SizeUInt;
   end;
 
@@ -30,34 +32,42 @@ function TeddyBuild(const APatterns: array of string; ACount: Integer): TTeddyMa
 var
   i: Integer;
   LByte: Byte;
-  LLoNib, LHiNib: Byte;
   LBit: Byte;
-  LHiUsed: Integer;
 begin
   Result.PatternCount := ACount;
   SetLength(Result.Patterns, ACount);
   Result.MinPatLen := High(SizeUInt);
 
-  FillChar(Result.LoNibbleTable, 16, 0);
-  FillChar(Result.HiNibbleTable, 16, 0);
+  FillChar(Result.Lo0, 16, 0);
+  FillChar(Result.Hi0, 16, 0);
+  FillChar(Result.Lo1, 16, 0);
+  FillChar(Result.Hi1, 16, 0);
 
   for i := 0 to ACount - 1 do
   begin
     Result.Patterns[i] := APatterns[i];
     if SizeUInt(Length(APatterns[i])) < Result.MinPatLen then
       Result.MinPatLen := Length(APatterns[i]);
+    LBit := 1 shl i;
 
     LByte := Byte(APatterns[i][1]);
-    LLoNib := LByte and $0F;
-    LHiNib := LByte shr 4;
-    LBit := 1 shl i;
-    Result.LoNibbleTable.u[LLoNib] := Result.LoNibbleTable.u[LLoNib] or LBit;
-    Result.HiNibbleTable.u[LHiNib] := Result.HiNibbleTable.u[LHiNib] or LBit;
+    Result.Lo0.u[LByte and $0F] := Result.Lo0.u[LByte and $0F] or LBit;
+    Result.Hi0.u[LByte shr 4] := Result.Hi0.u[LByte shr 4] or LBit;
+
+    if Length(APatterns[i]) >= 2 then
+    begin
+      LByte := Byte(APatterns[i][2]);
+      Result.Lo1.u[LByte and $0F] := Result.Lo1.u[LByte and $0F] or LBit;
+      Result.Hi1.u[LByte shr 4] := Result.Hi1.u[LByte shr 4] or LBit;
+    end;
   end;
+
+  if Result.MinPatLen < 2 then
+    Result.PatternCount := 0;
 end;
 
 function TeddyVerify(const AMatcher: TTeddyMatcher;
-  const AInput: PAnsiChar; APos: SizeUInt; ALen: SizeUInt): Boolean;
+  const AInput: PAnsiChar; APos: SizeUInt; ALen: SizeUInt): Boolean; inline;
 var
   i: Integer;
   LPatLen: SizeUInt;
@@ -87,44 +97,65 @@ function TeddyIsMatchSSSE3(const AMatcher: TTeddyMatcher;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 var
   LPos: SizeUInt;
-  LLoTable, LHiTable: TVecU8x16;
-  LNibbleMask: TVecU8x16;
-  LInput, LLo, LHi, LCandVec: TVecU8x16;
   LCandMask: UInt32;
   LBit: Integer;
+  LNibbleMask: TVecU8x16;
+  LLo0, LHi0, LLo1, LHi1: TVecU8x16;
+  LCand0, LCand1: TVecU8x16;
 begin
-  LLoTable := AMatcher.LoNibbleTable;
-  LHiTable := AMatcher.HiNibbleTable;
   FillChar(LNibbleMask, 16, $0F);
-
+  LLo0 := AMatcher.Lo0;
+  LHi0 := AMatcher.Hi0;
+  LLo1 := AMatcher.Lo1;
+  LHi1 := AMatcher.Hi1;
   LPos := 0;
-  while LPos + 16 <= ALen do
+
+  while LPos + 17 <= ALen do
   begin
-    Move(AInput[LPos], LInput, 16);
     asm
-      movdqu xmm0, [LInput]
-      movdqa xmm1, xmm0
+      mov    rax, [AInput]
+      add    rax, [LPos]
+      movdqu xmm0, [rax]
       movdqu xmm6, [LNibbleMask]
+      movdqa xmm1, xmm0
       pand   xmm1, xmm6
-      movdqu xmm2, [LLoTable]
-      pshufb xmm2, xmm1
-      psrlw  xmm0, 4
-      pand   xmm0, xmm6
-      movdqu xmm3, [LHiTable]
-      pshufb xmm3, xmm0
-      pand   xmm2, xmm3
-      movdqu [LCandVec], xmm2
+      movdqa xmm2, xmm0
+      psrlw  xmm2, 4
+      pand   xmm2, xmm6
+      movdqu xmm3, [LLo0]
+      pshufb xmm3, xmm1
+      movdqu xmm4, [LHi0]
+      pshufb xmm4, xmm2
+      pand   xmm3, xmm4
+      movdqu [LCand0], xmm3
+
+      movdqu xmm0, [rax + 1]
+      movdqa xmm1, xmm0
+      pand   xmm1, xmm6
+      movdqa xmm2, xmm0
+      psrlw  xmm2, 4
+      pand   xmm2, xmm6
+      movdqu xmm3, [LLo1]
+      pshufb xmm3, xmm1
+      movdqu xmm4, [LHi1]
+      pshufb xmm4, xmm2
+      pand   xmm3, xmm4
+      movdqu [LCand1], xmm3
     end;
+
     LCandMask := 0;
     asm
-      movdqu xmm0, [LCandVec]
-      pxor   xmm1, xmm1
-      pcmpeqb xmm1, xmm0
-      pmovmskb eax, xmm1
+      movdqu xmm0, [LCand0]
+      movdqu xmm1, [LCand1]
+      pand   xmm0, xmm1
+      pxor   xmm2, xmm2
+      pcmpeqb xmm2, xmm0
+      pmovmskb eax, xmm2
       not    eax
       and    eax, $FFFF
       mov    [LCandMask], eax
     end;
+
     while LCandMask <> 0 do
     begin
       asm
@@ -137,6 +168,7 @@ begin
     end;
     Inc(LPos, 16);
   end;
+
   while LPos < ALen do
   begin
     if TeddyVerify(AMatcher, AInput, LPos, ALen) then
@@ -151,14 +183,16 @@ function TeddyIsMatchScalar(const AMatcher: TTeddyMatcher;
   const AInput: PAnsiChar; ALen: SizeUInt): Boolean;
 var
   LPos: SizeUInt;
-  LByte, LCand: Byte;
+  LB0, LB1, LCand: Byte;
 begin
+  if ALen < 2 then Exit(False);
   LPos := 0;
-  while LPos < ALen do
+  while LPos + 1 < ALen do
   begin
-    LByte := Byte(AInput[LPos]);
-    LCand := AMatcher.LoNibbleTable.u[LByte and $0F] and
-             AMatcher.HiNibbleTable.u[LByte shr 4];
+    LB0 := Byte(AInput[LPos]);
+    LB1 := Byte(AInput[LPos + 1]);
+    LCand := (AMatcher.Lo0.u[LB0 and $0F] and AMatcher.Hi0.u[LB0 shr 4]) and
+             (AMatcher.Lo1.u[LB1 and $0F] and AMatcher.Hi1.u[LB1 shr 4]);
     if LCand <> 0 then
       if TeddyVerify(AMatcher, AInput, LPos, ALen) then
         Exit(True);
