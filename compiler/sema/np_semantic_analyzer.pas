@@ -6235,7 +6235,34 @@ begin
         Break;
       end;
     end;
-    if HasOverload(ANode.ChildAt(0).Text) then
+    if Pos('specialize ', ANode.ChildAt(0).Text) = 1 then
+    begin
+      ArgName := Copy(ANode.ChildAt(0).Text, 11, Length(ANode.ChildAt(0).Text));
+      DotPos := Pos('<', ArgName);
+      if DotPos > 0 then
+      begin
+        FuncName := Copy(ArgName, 1, DotPos - 1);
+        Operand := Copy(ArgName, DotPos + 1, Length(ArgName) - DotPos - 1);
+        ArgName := FuncName + '$' + Operand;
+        if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
+        begin
+          for K := 0 to Length(FProcedureBodies) - 1 do
+            if SameText(FProcedureBodies[K].Name, FuncName + '<' + Operand + '>') then
+            begin
+              RegisterProcedureBody(ArgName,
+                FProcedureBodies[K].Body, FProcedureBodies[K].Decl,
+                FProcedureBodies[K].OwnerUnitId);
+              Break;
+            end;
+        end;
+        ABlob := ABlob + 'call ' + ArgName + ' ' +
+          IntToStr(StrCallArgCount) + #10;
+      end
+      else
+        ABlob := ABlob + 'call ' + ArgName + ' ' +
+          IntToStr(StrCallArgCount) + #10;
+    end
+    else if HasOverload(ANode.ChildAt(0).Text) then
     begin
       ArgName := '';
       for StrCallIdx := 1 to ANode.ChildCount - 1 do
@@ -8964,6 +8991,8 @@ begin
   begin
     Entry := FProcedureBodies[I];
     if (Entry.Decl = nil) or (Entry.Body = nil) then
+      Continue;
+    if Pos('<', Entry.Name) > 0 then
       Continue;
     for J := 0 to Entry.Decl.ChildCount - 1 do
     begin
