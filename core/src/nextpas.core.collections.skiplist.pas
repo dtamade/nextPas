@@ -198,6 +198,7 @@ begin
 
   // Create header node with max levels
   New(FHead);
+  Initialize(FHead^);
   SetLength(FHead^.Forward, SKIPLIST_MAX_LEVEL);
   FillChar(FHead^.Forward[0], SKIPLIST_MAX_LEVEL * SizeOf(PNode), 0);
   FHead^.Level := SKIPLIST_MAX_LEVEL;

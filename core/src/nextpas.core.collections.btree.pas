@@ -779,8 +779,16 @@ begin
   while LNode <> nil do
   begin
     SearchNode(LNode, AKey, LIdx);
-    if (LIdx < LNode^.Count) and (FCompare(AKey, LNode^.Keys[LIdx], FCompareData) = 0) then
-      Inc(LIdx);
+    if (LIdx < LNode^.Count) then
+    begin
+      if Assigned(FCompare) then
+      begin
+        if FCompare(AKey, LNode^.Keys[LIdx], FCompareData) = 0 then
+          Inc(LIdx);
+      end
+      else if PInt32(@AKey)^ = PInt32(@LNode^.Keys[LIdx])^ then
+        Inc(LIdx);
+    end;
     if LIdx < LNode^.Count then
     begin
       AFoundKey := LNode^.Keys[LIdx];
@@ -948,14 +956,23 @@ end;
 procedure TBTreeMap.RangeTraverse(ANode: PNode; const ALo, AHi: K;
   ACallback: TForEachCallback; AData: Pointer);
 var i: Int32;
+
+  function CmpKey(const A, B: K): Int32; inline;
+  begin
+    if Assigned(FCompare) then
+      Result := FCompare(A, B, FCompareData)
+    else
+      Result := Int32(PInt32(@A)^ > PInt32(@B)^) - Int32(PInt32(@A)^ < PInt32(@B)^);
+  end;
+
 begin
   if ANode = nil then Exit;
   if ANode^.IsLeaf then
   begin
     for i := 0 to ANode^.Count - 1 do
     begin
-      if FCompare(ANode^.Keys[i], ALo, FCompareData) < 0 then Continue;
-      if FCompare(ANode^.Keys[i], AHi, FCompareData) > 0 then Exit;
+      if CmpKey(ANode^.Keys[i], ALo) < 0 then Continue;
+      if CmpKey(ANode^.Keys[i], AHi) > 0 then Exit;
       ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
     end;
   end
@@ -963,13 +980,13 @@ begin
   begin
     for i := 0 to ANode^.Count - 1 do
     begin
-      if FCompare(ANode^.Keys[i], ALo, FCompareData) >= 0 then
+      if CmpKey(ANode^.Keys[i], ALo) >= 0 then
         RangeTraverse(ANode^.Children[i], ALo, AHi, ACallback, AData);
-      if FCompare(ANode^.Keys[i], ALo, FCompareData) < 0 then Continue;
-      if FCompare(ANode^.Keys[i], AHi, FCompareData) > 0 then Exit;
+      if CmpKey(ANode^.Keys[i], ALo) < 0 then Continue;
+      if CmpKey(ANode^.Keys[i], AHi) > 0 then Exit;
       ACallback(ANode^.Keys[i], ANode^.Values[i], AData);
     end;
-    if FCompare(ANode^.Keys[ANode^.Count - 1], AHi, FCompareData) <= 0 then
+    if CmpKey(ANode^.Keys[ANode^.Count - 1], AHi) <= 0 then
       RangeTraverse(ANode^.Children[ANode^.Count], ALo, AHi, ACallback, AData);
   end;
 end;
