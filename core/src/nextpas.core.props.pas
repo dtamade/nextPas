@@ -30,6 +30,7 @@ implementation
 
 uses
   SysUtils,
+  nextpas.core.text,
   nextpas.core.fs;
 
 function TrimStr(const S: string): string;
@@ -93,37 +94,13 @@ end;
 function ParseKeyValueText(const AText: string; ASep: Char): TPropsArray;
 var
   LLines: TStringArray;
-  LI, LStart, LLen, LCount: Int32;
+  LI: Int32;
 begin
-  LLen := Length(AText);
-  if LLen = 0 then begin Result := nil; Exit; end;
-
-  LCount := 0;
-  for LI := 1 to LLen do
-    if AText[LI] = #10 then Inc(LCount);
-  Inc(LCount);
-  SetLength(LLines, LCount);
-
-  LCount := 0;
-  LStart := 1;
-  for LI := 1 to LLen do
-  begin
-    if AText[LI] = #10 then
-    begin
-      if (LI > LStart) and (AText[LI - 1] = #13) then
-        LLines[LCount] := Copy(AText, LStart, LI - LStart - 1)
-      else
-        LLines[LCount] := Copy(AText, LStart, LI - LStart);
-      Inc(LCount);
-      LStart := LI + 1;
-    end;
-  end;
-  if LStart <= LLen then
-  begin
-    LLines[LCount] := Copy(AText, LStart, LLen - LStart + 1);
-    Inc(LCount);
-  end;
-  SetLength(LLines, LCount);
+  if Length(AText) = 0 then begin Result := nil; Exit; end;
+  LLines := TextSplit(AText, #10);
+  for LI := 0 to Length(LLines) - 1 do
+    if (Length(LLines[LI]) > 0) and (LLines[LI][Length(LLines[LI])] = #13) then
+      LLines[LI] := Copy(LLines[LI], 1, Length(LLines[LI]) - 1);
   Result := ParseKeyValueLines(LLines, ASep);
 end;
 
@@ -164,13 +141,13 @@ end;
 
 procedure WriteKeyValueFile(const APath: string; const AEntries: TPropsArray; ASep: Char);
 var
-  LText: string;
+  LLines: TStringArray;
   LI: Int32;
 begin
-  LText := '';
+  SetLength(LLines, Length(AEntries));
   for LI := 0 to Length(AEntries) - 1 do
-    LText := LText + AEntries[LI].Key + ASep + AEntries[LI].Value + #10;
-  WriteFileText(APath, LText);
+    LLines[LI] := AEntries[LI].Key + ASep + AEntries[LI].Value;
+  WriteFileLines(APath, LLines);
 end;
 
 function PropsGet(const AEntries: TPropsArray; const AKey: string; const ADefault: string): string;
