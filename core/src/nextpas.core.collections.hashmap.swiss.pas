@@ -623,7 +623,7 @@ end;
 function TSwissTable.Remove(const AKey: K): Boolean;
 var
   Lh: UInt32;
-  LIdx: SizeUInt;
+  LIdx, LGroupBase: SizeUInt;
 begin
   if FCapacity = 0 then Exit(False);
   if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
@@ -635,10 +635,16 @@ begin
   if System.IsManagedType(K) then Finalize(FSlots[LIdx].Key);
   if System.IsManagedType(V) then Finalize(FSlots[LIdx].Value);
   FillChar(FSlots[LIdx], SizeOf(TSlot), 0);
-  // Note: DELETED slots do not restore FGrowthLeft. This is intentional
-  // (matches Abseil/hashbrown): DELETED preserves probe chains.
-  // Growth budget is fully reclaimed on GrowAndRehash.
-  SetCtrl(LIdx, CTRL_DELETED);
+
+  LGroupBase := (LIdx div GROUP_SIZE) * GROUP_SIZE;
+  if SwissMatchEmpty(@FCtrl[LGroupBase]) <> 0 then
+  begin
+    SetCtrl(LIdx, CTRL_EMPTY);
+    Inc(FGrowthLeft);
+  end
+  else
+    SetCtrl(LIdx, CTRL_DELETED);
+
   Dec(FCount);
   Result := True;
 end;

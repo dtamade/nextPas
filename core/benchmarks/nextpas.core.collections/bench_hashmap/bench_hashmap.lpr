@@ -145,6 +145,34 @@ begin
         GSink := GSink + LVal;
 end;
 
+procedure BenchSwissGetMiss(aIters: Int64);
+var
+  it: Int64;
+  i: Integer;
+  LVal: Int32;
+begin
+  for it := 1 to aIters do
+    for i := 0 to N - 1 do
+      GSwiss.TryGetValue(i + N, LVal);
+end;
+
+procedure BenchSwissRemove(aIters: Int64);
+var
+  LM: TSwissTableI32I32;
+  it: Int64;
+  i: Integer;
+begin
+  for it := 1 to aIters do
+  begin
+    LM := TSwissTableI32I32.Create(N);
+    for i := 0 to N - 1 do
+      LM.Put(i, i);
+    for i := 0 to N - 1 do
+      LM.Remove(i);
+    LM.Free;
+  end;
+end;
+
 begin
   GMap := TIntMap.Create(N);
   for i := 0 to N - 1 do
@@ -167,6 +195,8 @@ begin
     B.Run('SwissTable.Put/N=100000', @BenchSwissPut);
     B.Run('SwissTable.Put+prealloc/N=100000', @BenchSwissPutPrealloc);
     B.Run('SwissTable.Get(hit)/N=100000', @BenchSwissGetHit);
+    B.Run('SwissTable.Get(miss)/N=100000', @BenchSwissGetMiss);
+    B.Run('SwissTable.Remove/N=100000', @BenchSwissRemove);
     B.Summary;
   finally
     B.Free;
