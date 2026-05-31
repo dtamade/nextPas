@@ -3,7 +3,7 @@ CORE_ROOT := ../../..
 BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.platform/test_platform_ffi_source_evidence_index
 PROGRAM := test_platform_ffi_source_evidence_index
 SOURCE := test_platform_ffi_source_evidence_index.lpr
-FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl
+FPC_FLAGS ?= -MObjFPC -Sh -O2 -gl -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src
 
 .PHONY: build run test clean

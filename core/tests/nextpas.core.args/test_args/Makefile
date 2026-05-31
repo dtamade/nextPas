@@ -4,7 +4,7 @@ BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.args/test_args
 PROGRAM := test_args
 SOURCE := test_args.lpr
 EXTRA_FLAGS ?=
-FPC_FLAGS := -MObjFPC -Sh -O2 $(EXTRA_FLAGS)
+FPC_FLAGS := -MObjFPC -Sh -O2 $(EXTRA_FLAGS) -gh
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/build/lib
 
 .PHONY: build run test clean
