@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block;
 
 type
@@ -31,20 +32,37 @@ type
     procedure EnsureVisible(Row, ViewHeight: Integer);
   end;
 
-  TScrollView = record
-    Style: TStyle;
-    ScrollbarStyle: TStyle;
-    ShowScrollbar: Boolean;
-    HasBlock: Boolean;
-    Block: IBlock;
-
-    class function Default: TScrollView; static;
-    function WithStyle(const S: TStyle): TScrollView;
-    function WithScrollbarStyle(const S: TStyle): TScrollView;
-    function WithShowScrollbar(V: Boolean): TScrollView;
-    function WithBlock(const B: TBlock): TScrollView;
+  IScrollView = interface(IWidget)
+    ['{E3F4A5B6-7C8D-9E0F-1A2B-3C4D5E6F7A8B}']
+    function WithStyle(const S: TStyle): IScrollView;
+    function WithScrollbarStyle(const S: TStyle): IScrollView;
+    function WithShowScrollbar(V: Boolean): IScrollView;
+    function WithBlock(ABlock: IBlock): IScrollView;
     function ContentArea(const Area: TRect): TRect;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TScrollViewState);
+    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TScrollViewState);
+  end;
+
+  TScrollView = class(TInterfacedObject, IWidget, IScrollView)
+  private
+    FStyle: TStyle;
+    FScrollbarStyle: TStyle;
+    FShowScrollbar: Boolean;
+    FBlock: IBlock;
+  public
+    class function New: IScrollView; static;
+
+    { IScrollView builder }
+    function WithStyle(const S: TStyle): IScrollView;
+    function WithScrollbarStyle(const S: TStyle): IScrollView;
+    function WithShowScrollbar(V: Boolean): IScrollView;
+    function WithBlock(ABlock: IBlock): IScrollView;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+
+    { IScrollView }
+    function ContentArea(const Area: TRect): TRect;
+    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TScrollViewState);
   end;
 
 implementation
@@ -105,66 +123,73 @@ end;
 
 { TScrollView }
 
-class function TScrollView.Default: TScrollView;
+class function TScrollView.New: IScrollView;
+var
+  LObj: TScrollView;
 begin
-  Result.Style := TStyle.Default;
-  Result.ScrollbarStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
-  Result.ShowScrollbar := True;
-  Result.HasBlock := False;
-  Result.Block := nil;
+  LObj := TScrollView.Create;
+  LObj.FStyle := TStyle.Default;
+  LObj.FScrollbarStyle := TStyle.Default.WithFg(TUI_DARK_GRAY);
+  LObj.FShowScrollbar := True;
+  LObj.FBlock := nil;
+  Result := LObj;
 end;
 
-function TScrollView.WithStyle(const S: TStyle): TScrollView;
+function TScrollView.WithStyle(const S: TStyle): IScrollView;
 begin
+  FStyle := S;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TScrollView.WithScrollbarStyle(const S: TStyle): TScrollView;
+function TScrollView.WithScrollbarStyle(const S: TStyle): IScrollView;
 begin
+  FScrollbarStyle := S;
   Result := Self;
-  Result.ScrollbarStyle := S;
 end;
 
-function TScrollView.WithShowScrollbar(V: Boolean): TScrollView;
+function TScrollView.WithShowScrollbar(V: Boolean): IScrollView;
 begin
+  FShowScrollbar := V;
   Result := Self;
-  Result.ShowScrollbar := V;
 end;
 
-function TScrollView.WithBlock(const B: TBlock): TScrollView;
+function TScrollView.WithBlock(ABlock: IBlock): IScrollView;
 begin
+  FBlock := ABlock;
   Result := Self;
-  Result.HasBlock := True;
-  Result.Block := B;
+end;
+
+procedure TScrollView.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  { ScrollView is stateful-only; Render without state is a no-op. }
 end;
 
 function TScrollView.ContentArea(const Area: TRect): TRect;
 var Inner: TRect;
 begin
-  if HasBlock then
-    Inner := Block.Inner(Area)
+  if FBlock <> nil then
+    Inner := FBlock.Inner(Area)
   else
     Inner := Area;
-  if ShowScrollbar and (Inner.Width > 1) then
+  if FShowScrollbar and (Inner.Width > 1) then
     Result := TRect.Make(Inner.X, Inner.Y, Inner.Width - 1, Inner.Height)
   else
     Result := Inner;
 end;
 
-procedure TScrollView.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TScrollViewState);
+procedure TScrollView.RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TScrollViewState);
 var
   Inner: TRect;
   ScrollCol, ViewH, ThumbPos, ThumbLen, MaxOffset, I: Integer;
 begin
   if Area.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuffer.SetStyle(Area, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(Area, ABuffer);
+    Inner := FBlock.Inner(Area);
   end
   else
     Inner := Area;
@@ -184,7 +209,7 @@ begin
   end;
 
   // Render scrollbar
-  if ShowScrollbar and (Inner.Width > 0) and (State.ContentHeight > ViewH) then
+  if FShowScrollbar and (Inner.Width > 0) and (State.ContentHeight > ViewH) then
   begin
     ScrollCol := Inner.X + Inner.Width - 1;
 
@@ -199,9 +224,9 @@ begin
     for I := 0 to ViewH - 1 do
     begin
       if (I >= ThumbPos) and (I < ThumbPos + ThumbLen) then
-        ABuf.SetStringN(ScrollCol, Inner.Y + I, #$E2#$96#$88, 1, ScrollbarStyle)
+        ABuffer.SetStringN(ScrollCol, Inner.Y + I, #$E2#$96#$88, 1, FScrollbarStyle)
       else
-        ABuf.SetStringN(ScrollCol, Inner.Y + I, #$E2#$96#$91, 1, ScrollbarStyle);
+        ABuffer.SetStringN(ScrollCol, Inner.Y + I, #$E2#$96#$91, 1, FScrollbarStyle);
     end;
   end;
 end;

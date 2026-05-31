@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block;
 
 type
@@ -31,23 +32,41 @@ type
     function DaysInMonth: Word;
   end;
 
-  TCalendar = record
-    Style: TStyle;
-    HeaderStyle: TStyle;
-    SelectedStyle: TStyle;
-    TodayStyle: TStyle;
-    WeekendStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  ICalendar = interface(IWidget)
+    ['{B5C6D7E8-9F0A-1B2C-3D4E-5F6A7B8C9D0E}']
+    function WithStyle(const S: TStyle): ICalendar;
+    function WithHeaderStyle(const S: TStyle): ICalendar;
+    function WithSelectedStyle(const S: TStyle): ICalendar;
+    function WithTodayStyle(const S: TStyle): ICalendar;
+    function WithWeekendStyle(const S: TStyle): ICalendar;
+    function WithBlock(ABlock: IBlock): ICalendar;
+    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TCalendarState);
+  end;
 
-    class function Default: TCalendar; static;
-    function WithStyle(const S: TStyle): TCalendar;
-    function WithHeaderStyle(const S: TStyle): TCalendar;
-    function WithSelectedStyle(const S: TStyle): TCalendar;
-    function WithTodayStyle(const S: TStyle): TCalendar;
-    function WithWeekendStyle(const S: TStyle): TCalendar;
-    function WithBlock(const B: TBlock): TCalendar;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TCalendarState);
+  TCalendar = class(TInterfacedObject, IWidget, ICalendar)
+  private
+    FStyle: TStyle;
+    FHeaderStyle: TStyle;
+    FSelectedStyle: TStyle;
+    FTodayStyle: TStyle;
+    FWeekendStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New: ICalendar; static;
+
+    { ICalendar builder }
+    function WithStyle(const S: TStyle): ICalendar;
+    function WithHeaderStyle(const S: TStyle): ICalendar;
+    function WithSelectedStyle(const S: TStyle): ICalendar;
+    function WithTodayStyle(const S: TStyle): ICalendar;
+    function WithWeekendStyle(const S: TStyle): ICalendar;
+    function WithBlock(ABlock: IBlock): ICalendar;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+
+    { ICalendar }
+    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TCalendarState);
   end;
 
 implementation
@@ -128,36 +147,62 @@ end;
 
 { TCalendar }
 
-class function TCalendar.Default: TCalendar;
+class function TCalendar.New: ICalendar;
+var
+  LObj: TCalendar;
 begin
-  Result.Style := TStyle.Default;
-  Result.HeaderStyle := TStyle.Default.WithModifier([mbBold]);
-  Result.SelectedStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.TodayStyle := TStyle.Default.WithFg(TUI_CYAN);
-  Result.WeekendStyle := TStyle.Default.WithFg(TUI_RED);
-  Result.HasBlock := False;
-  Result.Block := nil;
+  LObj := TCalendar.Create;
+  LObj.FStyle := TStyle.Default;
+  LObj.FHeaderStyle := TStyle.Default.WithModifier([mbBold]);
+  LObj.FSelectedStyle := TStyle.Default.WithModifier([mbReversed]);
+  LObj.FTodayStyle := TStyle.Default.WithFg(TUI_CYAN);
+  LObj.FWeekendStyle := TStyle.Default.WithFg(TUI_RED);
+  LObj.FBlock := nil;
+  Result := LObj;
 end;
 
-function TCalendar.WithStyle(const S: TStyle): TCalendar;
-begin Result := Self; Result.Style := S; end;
+function TCalendar.WithStyle(const S: TStyle): ICalendar;
+begin
+  FStyle := S;
+  Result := Self;
+end;
 
-function TCalendar.WithHeaderStyle(const S: TStyle): TCalendar;
-begin Result := Self; Result.HeaderStyle := S; end;
+function TCalendar.WithHeaderStyle(const S: TStyle): ICalendar;
+begin
+  FHeaderStyle := S;
+  Result := Self;
+end;
 
-function TCalendar.WithSelectedStyle(const S: TStyle): TCalendar;
-begin Result := Self; Result.SelectedStyle := S; end;
+function TCalendar.WithSelectedStyle(const S: TStyle): ICalendar;
+begin
+  FSelectedStyle := S;
+  Result := Self;
+end;
 
-function TCalendar.WithTodayStyle(const S: TStyle): TCalendar;
-begin Result := Self; Result.TodayStyle := S; end;
+function TCalendar.WithTodayStyle(const S: TStyle): ICalendar;
+begin
+  FTodayStyle := S;
+  Result := Self;
+end;
 
-function TCalendar.WithWeekendStyle(const S: TStyle): TCalendar;
-begin Result := Self; Result.WeekendStyle := S; end;
+function TCalendar.WithWeekendStyle(const S: TStyle): ICalendar;
+begin
+  FWeekendStyle := S;
+  Result := Self;
+end;
 
-function TCalendar.WithBlock(const B: TBlock): TCalendar;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TCalendar.WithBlock(ABlock: IBlock): ICalendar;
+begin
+  FBlock := ABlock;
+  Result := Self;
+end;
 
-procedure TCalendar.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TCalendarState);
+procedure TCalendar.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  { Calendar is stateful-only; Render without state is a no-op. }
+end;
+
+procedure TCalendar.RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TCalendarState);
 var
   Inner: TRect;
   HeaderStr: AnsiString;
@@ -171,12 +216,12 @@ const
 begin
   if Area.IsEmpty then Exit;
 
-  ABuf.SetStyle(Area, Style);
+  ABuffer.SetStyle(Area, FStyle);
 
-  if HasBlock then
+  if FBlock <> nil then
   begin
-    Block.Render(Area, ABuf);
-    Inner := Block.Inner(Area);
+    FBlock.Render(Area, ABuffer);
+    Inner := FBlock.Inner(Area);
   end
   else
     Inner := Area;
@@ -187,11 +232,11 @@ begin
   HeaderStr := FormatDateTime('mmmm yyyy', EncodeDate(State.Year, State.Month, 1));
   X := Inner.X + (Inner.Width - Length(HeaderStr)) div 2;
   if X < Inner.X then X := Inner.X;
-  ABuf.SetStringN(X, Inner.Y, HeaderStr, Inner.Width, HeaderStyle);
+  ABuffer.SetStringN(X, Inner.Y, HeaderStr, Inner.Width, FHeaderStyle);
 
   // Day-of-week header
   Y := Inner.Y + 1;
-  ABuf.SetStringN(Inner.X, Y, DowHeader, Inner.Width, HeaderStyle);
+  ABuffer.SetStringN(Inner.X, Y, DowHeader, Inner.Width, FHeaderStyle);
 
   // Calendar grid
   Days := State.DaysInMonth;
@@ -219,15 +264,15 @@ begin
       IsToday := (State.Year = NowY) and (State.Month = NowM) and (Word(Day) = NowD);
 
       if Word(Day) = State.SelectedDay then
-        CellStyle := SelectedStyle
+        CellStyle := FSelectedStyle
       else if IsToday then
-        CellStyle := TodayStyle
+        CellStyle := FTodayStyle
       else if (Col >= 6) then
-        CellStyle := WeekendStyle
+        CellStyle := FWeekendStyle
       else
-        CellStyle := Style;
+        CellStyle := FStyle;
 
-      ABuf.SetStringN(X, Y, DayBuf, 2, CellStyle);
+      ABuffer.SetStringN(X, Y, DayBuf, 2, CellStyle);
       Inc(Day);
     end;
     Inc(Row);

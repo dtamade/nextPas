@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.event;
 
 type
@@ -26,24 +27,44 @@ type
     class function Default: TSplitPaneState; static;
   end;
 
-  TSplitPane = record
-    Direction: TSplitDirection;
-    MinSize1: Integer;
-    MinSize2: Integer;
-    DividerStyle: TStyle;
-    DividerChar: AnsiString;
-    ShowDivider: Boolean;
-
-    class function Horizontal: TSplitPane; static;
-    class function Vertical: TSplitPane; static;
-    function WithMinSize1(N: Integer): TSplitPane;
-    function WithMinSize2(N: Integer): TSplitPane;
-    function WithDividerStyle(const S: TStyle): TSplitPane;
-    function WithDividerChar(const C: AnsiString): TSplitPane;
-
+  ISplitPane = interface(IWidget)
+    ['{F4A5B6C7-8D9E-0F1A-2B3C-4D5E6F7A8B9C}']
+    function WithMinSize1(N: Integer): ISplitPane;
+    function WithMinSize2(N: Integer): ISplitPane;
+    function WithDividerStyle(const S: TStyle): ISplitPane;
+    function WithDividerChar(const C: AnsiString): ISplitPane;
     function Split(const Area: TRect; const State: TSplitPaneState;
       out Pane1, Pane2, Divider: TRect): Boolean;
-    procedure RenderDivider(const Divider: TRect; ABuf: TBuffer);
+    procedure RenderDivider(const Divider: TRect; ABuffer: TBuffer);
+    function HandleMouse(const Area: TRect; const M: TMouseEvent;
+      var State: TSplitPaneState): Boolean;
+  end;
+
+  TSplitPane = class(TInterfacedObject, IWidget, ISplitPane)
+  private
+    FDirection: TSplitDirection;
+    FMinSize1: Integer;
+    FMinSize2: Integer;
+    FDividerStyle: TStyle;
+    FDividerChar: AnsiString;
+    FShowDivider: Boolean;
+  public
+    class function Horizontal: ISplitPane; static;
+    class function Vertical: ISplitPane; static;
+
+    { ISplitPane builder }
+    function WithMinSize1(N: Integer): ISplitPane;
+    function WithMinSize2(N: Integer): ISplitPane;
+    function WithDividerStyle(const S: TStyle): ISplitPane;
+    function WithDividerChar(const C: AnsiString): ISplitPane;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+
+    { ISplitPane }
+    function Split(const Area: TRect; const State: TSplitPaneState;
+      out Pane1, Pane2, Divider: TRect): Boolean;
+    procedure RenderDivider(const Divider: TRect; ABuffer: TBuffer);
     function HandleMouse(const Area: TRect; const M: TMouseEvent;
       var State: TSplitPaneState): Boolean;
   end;
@@ -60,48 +81,61 @@ end;
 
 { TSplitPane }
 
-class function TSplitPane.Horizontal: TSplitPane;
+class function TSplitPane.Horizontal: ISplitPane;
+var
+  LObj: TSplitPane;
 begin
-  Result.Direction := sdHorizontal;
-  Result.MinSize1 := 3;
-  Result.MinSize2 := 3;
-  Result.DividerStyle := TStyle.Default;
-  Result.DividerChar := #$E2#$94#$82;  // U+2502 │
-  Result.ShowDivider := True;
+  LObj := TSplitPane.Create;
+  LObj.FDirection := sdHorizontal;
+  LObj.FMinSize1 := 3;
+  LObj.FMinSize2 := 3;
+  LObj.FDividerStyle := TStyle.Default;
+  LObj.FDividerChar := #$E2#$94#$82;  // U+2502
+  LObj.FShowDivider := True;
+  Result := LObj;
 end;
 
-class function TSplitPane.Vertical: TSplitPane;
+class function TSplitPane.Vertical: ISplitPane;
+var
+  LObj: TSplitPane;
 begin
-  Result.Direction := sdVertical;
-  Result.MinSize1 := 1;
-  Result.MinSize2 := 1;
-  Result.DividerStyle := TStyle.Default;
-  Result.DividerChar := #$E2#$94#$80;  // U+2500 ─
-  Result.ShowDivider := True;
+  LObj := TSplitPane.Create;
+  LObj.FDirection := sdVertical;
+  LObj.FMinSize1 := 1;
+  LObj.FMinSize2 := 1;
+  LObj.FDividerStyle := TStyle.Default;
+  LObj.FDividerChar := #$E2#$94#$80;  // U+2500
+  LObj.FShowDivider := True;
+  Result := LObj;
 end;
 
-function TSplitPane.WithMinSize1(N: Integer): TSplitPane;
+function TSplitPane.WithMinSize1(N: Integer): ISplitPane;
 begin
+  FMinSize1 := N;
   Result := Self;
-  Result.MinSize1 := N;
 end;
 
-function TSplitPane.WithMinSize2(N: Integer): TSplitPane;
+function TSplitPane.WithMinSize2(N: Integer): ISplitPane;
 begin
+  FMinSize2 := N;
   Result := Self;
-  Result.MinSize2 := N;
 end;
 
-function TSplitPane.WithDividerStyle(const S: TStyle): TSplitPane;
+function TSplitPane.WithDividerStyle(const S: TStyle): ISplitPane;
 begin
+  FDividerStyle := S;
   Result := Self;
-  Result.DividerStyle := S;
 end;
 
-function TSplitPane.WithDividerChar(const C: AnsiString): TSplitPane;
+function TSplitPane.WithDividerChar(const C: AnsiString): ISplitPane;
 begin
+  FDividerChar := C;
   Result := Self;
-  Result.DividerChar := C;
+end;
+
+procedure TSplitPane.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  { SplitPane is a layout helper; Render is a no-op. Use Split + RenderDivider. }
 end;
 
 function TSplitPane.Split(const Area: TRect; const State: TSplitPaneState;
@@ -118,30 +152,30 @@ begin
   if Area.IsEmpty then Exit;
 
   DivSize := 0;
-  if ShowDivider then DivSize := 1;
+  if FShowDivider then DivSize := 1;
 
-  if Direction = sdHorizontal then
+  if FDirection = sdHorizontal then
     Total := Area.Width
   else
     Total := Area.Height;
 
-  if Total < MinSize1 + MinSize2 + DivSize then Exit;
+  if Total < FMinSize1 + FMinSize2 + DivSize then Exit;
 
   R := State.Ratio;
   if R < 0.0 then R := 0.0;
   if R > 1.0 then R := 1.0;
 
   Size1 := Round((Total - DivSize) * R);
-  if Size1 < MinSize1 then Size1 := MinSize1;
+  if Size1 < FMinSize1 then Size1 := FMinSize1;
   Size2 := Total - DivSize - Size1;
-  if Size2 < MinSize2 then
+  if Size2 < FMinSize2 then
   begin
-    Size2 := MinSize2;
+    Size2 := FMinSize2;
     Size1 := Total - DivSize - Size2;
-    if Size1 < MinSize1 then Size1 := MinSize1;
+    if Size1 < FMinSize1 then Size1 := FMinSize1;
   end;
 
-  if Direction = sdHorizontal then
+  if FDirection = sdHorizontal then
   begin
     Pane1 := TRect.Make(Area.X, Area.Y, Size1, Area.Height);
     Divider := TRect.Make(Area.X + Size1, Area.Y, DivSize, Area.Height);
@@ -156,21 +190,21 @@ begin
   Result := True;
 end;
 
-procedure TSplitPane.RenderDivider(const Divider: TRect; ABuf: TBuffer);
+procedure TSplitPane.RenderDivider(const Divider: TRect; ABuffer: TBuffer);
 var I: Integer;
 begin
   if Divider.IsEmpty then Exit;
-  if not ShowDivider then Exit;
+  if not FShowDivider then Exit;
 
-  if Direction = sdHorizontal then
+  if FDirection = sdHorizontal then
   begin
     for I := 0 to Divider.Height - 1 do
-      ABuf.SetStringN(Divider.X, Divider.Y + I, DividerChar, 1, DividerStyle);
+      ABuffer.SetStringN(Divider.X, Divider.Y + I, FDividerChar, 1, FDividerStyle);
   end
   else
   begin
     for I := 0 to Divider.Width - 1 do
-      ABuf.SetStringN(Divider.X + I, Divider.Y, DividerChar, 1, DividerStyle);
+      ABuffer.SetStringN(Divider.X + I, Divider.Y, FDividerChar, 1, FDividerStyle);
   end;
 end;
 
@@ -195,7 +229,7 @@ begin
     mkMoved, mkDrag:
     begin
       if not State.Dragging then Exit;
-      if Direction = sdHorizontal then
+      if FDirection = sdHorizontal then
       begin
         Total := Area.Width;
         Pos := Integer(M.X) - Area.X;

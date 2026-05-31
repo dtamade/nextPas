@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.borders;
 
@@ -28,24 +29,44 @@ type
     procedure Hide;
   end;
 
-  TPopover = record
-    Items: array of AnsiString;
-    Width: Integer;
-    MaxHeight: Integer;
-    Anchor: TPopoverAnchor;
-    Style: TStyle;
-    HighlightStyle: TStyle;
-    HasBorder: Boolean;
-
-    class function Create(const AItems: array of AnsiString): TPopover; static;
-    function WithWidth(W: Integer): TPopover;
-    function WithMaxHeight(H: Integer): TPopover;
-    function WithAnchor(A: TPopoverAnchor): TPopover;
-    function WithStyle(const S: TStyle): TPopover;
-    function WithHighlightStyle(const S: TStyle): TPopover;
-    function WithBorder(B: Boolean): TPopover;
+  IPopover = interface(IWidget)
+    ['{A1B2C3D4-5E6F-7A8B-9C0D-E1F2A3B4C5D6}']
+    function WithWidth(W: Integer): IPopover;
+    function WithMaxHeight(H: Integer): IPopover;
+    function WithAnchor(A: TPopoverAnchor): IPopover;
+    function WithStyle(const S: TStyle): IPopover;
+    function WithHighlightStyle(const S: TStyle): IPopover;
+    function WithBorder(B: Boolean): IPopover;
     procedure RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
-      ABuf: TBuffer; var State: TPopoverState);
+      ABuffer: TBuffer; var State: TPopoverState);
+  end;
+
+  TPopover = class(TInterfacedObject, IWidget, IPopover)
+  private
+    FItems: array of AnsiString;
+    FWidth: Integer;
+    FMaxHeight: Integer;
+    FAnchor: TPopoverAnchor;
+    FStyle: TStyle;
+    FHighlightStyle: TStyle;
+    FHasBorder: Boolean;
+  public
+    class function New(const AItems: array of AnsiString): IPopover; static;
+
+    { IPopover builder }
+    function WithWidth(W: Integer): IPopover;
+    function WithMaxHeight(H: Integer): IPopover;
+    function WithAnchor(A: TPopoverAnchor): IPopover;
+    function WithStyle(const S: TStyle): IPopover;
+    function WithHighlightStyle(const S: TStyle): IPopover;
+    function WithBorder(B: Boolean): IPopover;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+
+    { IPopover }
+    procedure RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
+      ABuffer: TBuffer; var State: TPopoverState);
   end;
 
 implementation
@@ -70,40 +91,67 @@ end;
 
 { TPopover }
 
-class function TPopover.Create(const AItems: array of AnsiString): TPopover;
-var I: Integer;
+class function TPopover.New(const AItems: array of AnsiString): IPopover;
+var
+  LObj: TPopover;
+  I: Integer;
 begin
-  SetLength(Result.Items, Length(AItems));
+  LObj := TPopover.Create;
+  SetLength(LObj.FItems, Length(AItems));
   for I := 0 to High(AItems) do
-    Result.Items[I] := AItems[I];
-  Result.Width := 20;
-  Result.MaxHeight := 10;
-  Result.Anchor := paBelow;
-  Result.Style := TStyle.Default;
-  Result.HighlightStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBorder := True;
+    LObj.FItems[I] := AItems[I];
+  LObj.FWidth := 20;
+  LObj.FMaxHeight := 10;
+  LObj.FAnchor := paBelow;
+  LObj.FStyle := TStyle.Default;
+  LObj.FHighlightStyle := TStyle.Default.WithModifier([mbReversed]);
+  LObj.FHasBorder := True;
+  Result := LObj;
 end;
 
-function TPopover.WithWidth(W: Integer): TPopover;
-begin Result := Self; Result.Width := W; end;
+function TPopover.WithWidth(W: Integer): IPopover;
+begin
+  FWidth := W;
+  Result := Self;
+end;
 
-function TPopover.WithMaxHeight(H: Integer): TPopover;
-begin Result := Self; Result.MaxHeight := H; end;
+function TPopover.WithMaxHeight(H: Integer): IPopover;
+begin
+  FMaxHeight := H;
+  Result := Self;
+end;
 
-function TPopover.WithAnchor(A: TPopoverAnchor): TPopover;
-begin Result := Self; Result.Anchor := A; end;
+function TPopover.WithAnchor(A: TPopoverAnchor): IPopover;
+begin
+  FAnchor := A;
+  Result := Self;
+end;
 
-function TPopover.WithStyle(const S: TStyle): TPopover;
-begin Result := Self; Result.Style := S; end;
+function TPopover.WithStyle(const S: TStyle): IPopover;
+begin
+  FStyle := S;
+  Result := Self;
+end;
 
-function TPopover.WithHighlightStyle(const S: TStyle): TPopover;
-begin Result := Self; Result.HighlightStyle := S; end;
+function TPopover.WithHighlightStyle(const S: TStyle): IPopover;
+begin
+  FHighlightStyle := S;
+  Result := Self;
+end;
 
-function TPopover.WithBorder(B: Boolean): TPopover;
-begin Result := Self; Result.HasBorder := B; end;
+function TPopover.WithBorder(B: Boolean): IPopover;
+begin
+  FHasBorder := B;
+  Result := Self;
+end;
+
+procedure TPopover.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  { Popover is stateful-only; Render without state is a no-op. }
+end;
 
 procedure TPopover.RenderStateful(const AnchorPos: TRect; const Bounds: TRect;
-  ABuf: TBuffer; var State: TPopoverState);
+  ABuffer: TBuffer; var State: TPopoverState);
 var
   PopX, PopY, PopW, PopH: Integer;
   Inner: TRect;
@@ -111,14 +159,14 @@ var
   Sty: TStyle;
 begin
   if not State.Visible then Exit;
-  if Length(Items) = 0 then Exit;
+  if Length(FItems) = 0 then Exit;
 
-  PopW := Width;
-  PopH := Length(Items);
-  if PopH > MaxHeight then PopH := MaxHeight;
-  if HasBorder then Inc(PopH, 2);
+  PopW := FWidth;
+  PopH := Length(FItems);
+  if PopH > FMaxHeight then PopH := FMaxHeight;
+  if FHasBorder then Inc(PopH, 2);
 
-  case Anchor of
+  case FAnchor of
     paBelow:
     begin
       PopX := AnchorPos.X;
@@ -148,12 +196,12 @@ begin
   if PopX < Bounds.X then PopX := Bounds.X;
   if PopY < Bounds.Y then PopY := Bounds.Y;
 
-  ABuf.SetStyle(TRect.Make(PopX, PopY, PopW, PopH), Style);
+  ABuffer.SetStyle(TRect.Make(PopX, PopY, PopW, PopH), FStyle);
 
-  if HasBorder then
+  if FHasBorder then
   begin
-    TBlock.New.WithBorders(BORDERS_ALL).WithBorderStyle(Style)
-      .Render(TRect.Make(PopX, PopY, PopW, PopH), ABuf);
+    TBlock.New.WithBorders(BORDERS_ALL).WithBorderStyle(FStyle)
+      .Render(TRect.Make(PopX, PopY, PopW, PopH), ABuffer);
     Inner := TRect.Make(PopX + 1, PopY + 1, PopW - 2, PopH - 2);
   end
   else
@@ -162,18 +210,18 @@ begin
   if Inner.IsEmpty then Exit;
 
   if State.Selected < 0 then State.Selected := 0;
-  if State.Selected >= Length(Items) then State.Selected := Length(Items) - 1;
+  if State.Selected >= Length(FItems) then State.Selected := Length(FItems) - 1;
 
   VisH := Inner.Height;
   Y := Inner.Y;
-  for I := 0 to Length(Items) - 1 do
+  for I := 0 to Length(FItems) - 1 do
   begin
     if I >= VisH then Break;
     if I = State.Selected then
-      Sty := HighlightStyle
+      Sty := FHighlightStyle
     else
-      Sty := Style;
-    ABuf.SetStringN(Inner.X, Y, Items[I], Inner.Width, Sty);
+      Sty := FStyle;
+    ABuffer.SetStringN(Inner.X, Y, FItems[I], Inner.Width, Sty);
     Inc(Y);
   end;
 end;

@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.borders;
 
@@ -30,24 +31,42 @@ type
     procedure Confirm;
   end;
 
-  TSelect = record
-    Items: array of AnsiString;
-    Placeholder: AnsiString;
-    Width: Integer;
-    MaxDropHeight: Integer;
-    Style: TStyle;
-    HighlightStyle: TStyle;
-    HasBlock: Boolean;
-    Block: IBlock;
+  ISelect = interface(IWidget)
+    ['{D2E3F4A5-6B7C-8D9E-0F1A-2B3C4D5E6F7A}']
+    function WithPlaceholder(const P: AnsiString): ISelect;
+    function WithWidth(W: Integer): ISelect;
+    function WithMaxDropHeight(H: Integer): ISelect;
+    function WithStyle(const S: TStyle): ISelect;
+    function WithHighlightStyle(const S: TStyle): ISelect;
+    function WithBlock(ABlock: IBlock): ISelect;
+    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TSelectState);
+  end;
 
-    class function Create(const AItems: array of AnsiString): TSelect; static;
-    function WithPlaceholder(const P: AnsiString): TSelect;
-    function WithWidth(W: Integer): TSelect;
-    function WithMaxDropHeight(H: Integer): TSelect;
-    function WithStyle(const S: TStyle): TSelect;
-    function WithHighlightStyle(const S: TStyle): TSelect;
-    function WithBlock(const B: TBlock): TSelect;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TSelectState);
+  TSelect = class(TInterfacedObject, IWidget, ISelect)
+  private
+    FItems: array of AnsiString;
+    FPlaceholder: AnsiString;
+    FWidth: Integer;
+    FMaxDropHeight: Integer;
+    FStyle: TStyle;
+    FHighlightStyle: TStyle;
+    FBlock: IBlock;
+  public
+    class function New(const AItems: array of AnsiString): ISelect; static;
+
+    { ISelect builder }
+    function WithPlaceholder(const P: AnsiString): ISelect;
+    function WithWidth(W: Integer): ISelect;
+    function WithMaxDropHeight(H: Integer): ISelect;
+    function WithStyle(const S: TStyle): ISelect;
+    function WithHighlightStyle(const S: TStyle): ISelect;
+    function WithBlock(ABlock: IBlock): ISelect;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+
+    { ISelect }
+    procedure RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TSelectState);
   end;
 
 implementation
@@ -91,40 +110,66 @@ end;
 
 { TSelect }
 
-class function TSelect.Create(const AItems: array of AnsiString): TSelect;
-var I: Integer;
+class function TSelect.New(const AItems: array of AnsiString): ISelect;
+var
+  LObj: TSelect;
+  I: Integer;
 begin
-  SetLength(Result.Items, Length(AItems));
+  LObj := TSelect.Create;
+  SetLength(LObj.FItems, Length(AItems));
   for I := 0 to High(AItems) do
-    Result.Items[I] := AItems[I];
-  Result.Placeholder := '-- select --';
-  Result.Width := 0;
-  Result.MaxDropHeight := 8;
-  Result.Style := TStyle.Default;
-  Result.HighlightStyle := TStyle.Default.WithModifier([mbReversed]);
-  Result.HasBlock := False;
-  Result.Block := nil;
+    LObj.FItems[I] := AItems[I];
+  LObj.FPlaceholder := '-- select --';
+  LObj.FWidth := 0;
+  LObj.FMaxDropHeight := 8;
+  LObj.FStyle := TStyle.Default;
+  LObj.FHighlightStyle := TStyle.Default.WithModifier([mbReversed]);
+  LObj.FBlock := nil;
+  Result := LObj;
 end;
 
-function TSelect.WithPlaceholder(const P: AnsiString): TSelect;
-begin Result := Self; Result.Placeholder := P; end;
+function TSelect.WithPlaceholder(const P: AnsiString): ISelect;
+begin
+  FPlaceholder := P;
+  Result := Self;
+end;
 
-function TSelect.WithWidth(W: Integer): TSelect;
-begin Result := Self; Result.Width := W; end;
+function TSelect.WithWidth(W: Integer): ISelect;
+begin
+  FWidth := W;
+  Result := Self;
+end;
 
-function TSelect.WithMaxDropHeight(H: Integer): TSelect;
-begin Result := Self; Result.MaxDropHeight := H; end;
+function TSelect.WithMaxDropHeight(H: Integer): ISelect;
+begin
+  FMaxDropHeight := H;
+  Result := Self;
+end;
 
-function TSelect.WithStyle(const S: TStyle): TSelect;
-begin Result := Self; Result.Style := S; end;
+function TSelect.WithStyle(const S: TStyle): ISelect;
+begin
+  FStyle := S;
+  Result := Self;
+end;
 
-function TSelect.WithHighlightStyle(const S: TStyle): TSelect;
-begin Result := Self; Result.HighlightStyle := S; end;
+function TSelect.WithHighlightStyle(const S: TStyle): ISelect;
+begin
+  FHighlightStyle := S;
+  Result := Self;
+end;
 
-function TSelect.WithBlock(const B: TBlock): TSelect;
-begin Result := Self; Result.HasBlock := True; Result.Block := B; end;
+function TSelect.WithBlock(ABlock: IBlock): ISelect;
+begin
+  FBlock := ABlock;
+  Result := Self;
+end;
 
-procedure TSelect.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TSelectState);
+procedure TSelect.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  { Select is stateful-only; Render without state is a no-op. }
+end;
+
+procedure TSelect.RenderStateful(const Area: TRect; ABuffer: TBuffer; var State: TSelectState);
 var
   W, DropH, DropY, I, Y: Integer;
   DisplayText: AnsiString;
@@ -133,26 +178,26 @@ var
 begin
   if Area.IsEmpty then Exit;
 
-  W := Width;
+  W := FWidth;
   if W <= 0 then W := Area.Width;
   if W > Area.Width then W := Area.Width;
 
-  if (State.Selected >= 0) and (State.Selected < Length(Items)) then
-    DisplayText := Items[State.Selected]
+  if (State.Selected >= 0) and (State.Selected < Length(FItems)) then
+    DisplayText := FItems[State.Selected]
   else
-    DisplayText := Placeholder;
+    DisplayText := FPlaceholder;
 
-  ABuf.SetStyle(TRect.Make(Area.X, Area.Y, W, 1), Style);
+  ABuffer.SetStyle(TRect.Make(Area.X, Area.Y, W, 1), FStyle);
   if State.Open then
-    ABuf.SetStringN(Area.X, Area.Y, DisplayText + ' [v]', W, Style.Patch(HighlightStyle))
+    ABuffer.SetStringN(Area.X, Area.Y, DisplayText + ' [v]', W, FStyle.Patch(FHighlightStyle))
   else
-    ABuf.SetStringN(Area.X, Area.Y, DisplayText + ' [>]', W, Style);
+    ABuffer.SetStringN(Area.X, Area.Y, DisplayText + ' [>]', W, FStyle);
 
   if not State.Open then Exit;
-  if Length(Items) = 0 then Exit;
+  if Length(FItems) = 0 then Exit;
 
-  DropH := Length(Items);
-  if DropH > MaxDropHeight then DropH := MaxDropHeight;
+  DropH := Length(FItems);
+  if DropH > FMaxDropHeight then DropH := FMaxDropHeight;
   DropY := Area.Y + 1;
 
   if DropY + DropH > Area.Y + Area.Height then
@@ -160,21 +205,21 @@ begin
   if DropH <= 0 then Exit;
 
   DropArea := TRect.Make(Area.X, DropY, W, DropH);
-  ABuf.SetStyle(DropArea, Style);
+  ABuffer.SetStyle(DropArea, FStyle);
 
   if State.HighlightIdx < 0 then State.HighlightIdx := 0;
-  if State.HighlightIdx >= Length(Items) then
-    State.HighlightIdx := Length(Items) - 1;
+  if State.HighlightIdx >= Length(FItems) then
+    State.HighlightIdx := Length(FItems) - 1;
 
   Y := DropY;
   for I := 0 to DropH - 1 do
   begin
-    if I >= Length(Items) then Break;
+    if I >= Length(FItems) then Break;
     if I = State.HighlightIdx then
-      Sty := HighlightStyle
+      Sty := FHighlightStyle
     else
-      Sty := Style;
-    ABuf.SetStringN(Area.X, Y, ' ' + Items[I], W, Sty);
+      Sty := FStyle;
+    ABuffer.SetStringN(Area.X, Y, ' ' + FItems[I], W, Sty);
     Inc(Y);
   end;
 end;
