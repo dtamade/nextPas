@@ -335,6 +335,21 @@ type
 
 function platform_get_errno: Int32; inline;
 
+
+
+type
+  TPollFd = record
+    fd: Int32;
+    events: Int16;
+    revents: Int16;
+  end;
+
+const
+  POLLIN  = Int16($0001);
+  POLLOUT = Int16($0004);
+  POLLERR = Int16($0008);
+  POLLHUP = Int16($0010);
+  POLLNVAL = Int16($0020);
 implementation
 
 uses
