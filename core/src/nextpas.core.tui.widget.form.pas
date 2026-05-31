@@ -17,136 +17,173 @@ uses
   nextpas.core.tui.widget.intf;
 
 type
-  TCheckbox = record
-    Label_: AnsiString;
-    Checked: Boolean;
-    Style: TStyle;
-    CheckedStyle: TStyle;
-
-    class function Create(const ALabel: AnsiString; AChecked: Boolean): TCheckbox; static;
-    function WithStyle(const S: TStyle): TCheckbox;
-    function WithCheckedStyle(const S: TStyle): TCheckbox;
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  ICheckbox = interface(IWidget)
+    ['{A1B2C3D4-E5F6-4718-9A0B-C1D2E3F4A5B6}']
+    function WithStyle(const AStyle: TStyle): ICheckbox;
+    function WithCheckedStyle(const AStyle: TStyle): ICheckbox;
     procedure Toggle;
+    function IsChecked: Boolean;
   end;
 
-  TRadioGroup = record
-    Items: array of AnsiString;
-    Selected: Integer;
-    Style: TStyle;
-    SelectedStyle: TStyle;
+  IRadioGroup = interface(IWidget)
+    ['{B2C3D4E5-F6A7-4829-0B1C-D2E3F4A5B6C7}']
+    function WithStyle(const AStyle: TStyle): IRadioGroup;
+    function WithSelectedStyle(const AStyle: TStyle): IRadioGroup;
+    procedure Select(AIdx: Integer);
+    function GetSelected: Integer;
+  end;
 
-    class function Create(const AItems: array of AnsiString): TRadioGroup; static;
-    function WithStyle(const S: TStyle): TRadioGroup;
-    function WithSelectedStyle(const S: TStyle): TRadioGroup;
-    procedure Select(Idx: Integer);
-    procedure Render(const Area: TRect; ABuf: TBuffer);
+  TCheckbox = class(TInterfacedObject, IWidget, ICheckbox)
+  private
+    FLabel: AnsiString;
+    FChecked: Boolean;
+    FStyle: TStyle;
+    FCheckedStyle: TStyle;
+  public
+    class function New(const ALabel: AnsiString; AChecked: Boolean): ICheckbox; static;
+    function WithStyle(const AStyle: TStyle): ICheckbox;
+    function WithCheckedStyle(const AStyle: TStyle): ICheckbox;
+    procedure Toggle;
+    function IsChecked: Boolean;
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+  end;
+
+  TRadioGroup = class(TInterfacedObject, IWidget, IRadioGroup)
+  private
+    FItems: array of AnsiString;
+    FSelected: Integer;
+    FStyle: TStyle;
+    FSelectedStyle: TStyle;
+  public
+    class function New(const AItems: array of AnsiString): IRadioGroup; static;
+    function WithStyle(const AStyle: TStyle): IRadioGroup;
+    function WithSelectedStyle(const AStyle: TStyle): IRadioGroup;
+    procedure Select(AIdx: Integer);
+    function GetSelected: Integer;
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
 
 { TCheckbox }
 
-class function TCheckbox.Create(const ALabel: AnsiString; AChecked: Boolean): TCheckbox;
+class function TCheckbox.New(const ALabel: AnsiString; AChecked: Boolean): ICheckbox;
+var Obj: TCheckbox;
 begin
-  Result.Label_ := ALabel;
-  Result.Checked := AChecked;
-  Result.Style := TStyle.Default;
-  Result.CheckedStyle := TStyle.Default;
+  Obj := TCheckbox.Create;
+  Obj.FLabel := ALabel;
+  Obj.FChecked := AChecked;
+  Obj.FStyle := TStyle.Default;
+  Obj.FCheckedStyle := TStyle.Default;
+  Result := Obj;
 end;
 
-function TCheckbox.WithStyle(const S: TStyle): TCheckbox;
+function TCheckbox.WithStyle(const AStyle: TStyle): ICheckbox;
 begin
+  FStyle := AStyle;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TCheckbox.WithCheckedStyle(const S: TStyle): TCheckbox;
+function TCheckbox.WithCheckedStyle(const AStyle: TStyle): ICheckbox;
 begin
+  FCheckedStyle := AStyle;
   Result := Self;
-  Result.CheckedStyle := S;
 end;
 
 procedure TCheckbox.Toggle;
 begin
-  Checked := not Checked;
+  FChecked := not FChecked;
 end;
 
-procedure TCheckbox.Render(const Area: TRect; ABuf: TBuffer);
+function TCheckbox.IsChecked: Boolean;
+begin
+  Result := FChecked;
+end;
+
+procedure TCheckbox.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   Marker, Text: AnsiString;
   Sty: TStyle;
 begin
-  if Area.IsEmpty then Exit;
-  if Checked then
+  if AArea.IsEmpty then Exit;
+  if FChecked then
   begin
     Marker := '[x] ';
-    Sty := Style.Patch(CheckedStyle);
+    Sty := FStyle.Patch(FCheckedStyle);
   end
   else
   begin
     Marker := '[ ] ';
-    Sty := Style;
+    Sty := FStyle;
   end;
-  Text := Marker + Label_;
-  ABuf.SetStringN(Area.X, Area.Y, Text, Area.Width, Sty);
+  Text := Marker + FLabel;
+  ABuffer.SetStringN(AArea.X, AArea.Y, Text, AArea.Width, Sty);
 end;
 
 { TRadioGroup }
 
-class function TRadioGroup.Create(const AItems: array of AnsiString): TRadioGroup;
-var I: Integer;
+class function TRadioGroup.New(const AItems: array of AnsiString): IRadioGroup;
+var
+  Obj: TRadioGroup;
+  I: Integer;
 begin
-  SetLength(Result.Items, Length(AItems));
+  Obj := TRadioGroup.Create;
+  SetLength(Obj.FItems, Length(AItems));
   for I := 0 to High(AItems) do
-    Result.Items[I] := AItems[I];
-  Result.Selected := 0;
-  Result.Style := TStyle.Default;
-  Result.SelectedStyle := TStyle.Default;
+    Obj.FItems[I] := AItems[I];
+  Obj.FSelected := 0;
+  Obj.FStyle := TStyle.Default;
+  Obj.FSelectedStyle := TStyle.Default;
+  Result := Obj;
 end;
 
-function TRadioGroup.WithStyle(const S: TStyle): TRadioGroup;
+function TRadioGroup.WithStyle(const AStyle: TStyle): IRadioGroup;
 begin
+  FStyle := AStyle;
   Result := Self;
-  Result.Style := S;
 end;
 
-function TRadioGroup.WithSelectedStyle(const S: TStyle): TRadioGroup;
+function TRadioGroup.WithSelectedStyle(const AStyle: TStyle): IRadioGroup;
 begin
+  FSelectedStyle := AStyle;
   Result := Self;
-  Result.SelectedStyle := S;
 end;
 
-procedure TRadioGroup.Select(Idx: Integer);
+procedure TRadioGroup.Select(AIdx: Integer);
 begin
-  if (Idx >= 0) and (Idx < Length(Items)) then
-    Selected := Idx;
+  if (AIdx >= 0) and (AIdx < Length(FItems)) then
+    FSelected := AIdx;
 end;
 
-procedure TRadioGroup.Render(const Area: TRect; ABuf: TBuffer);
+function TRadioGroup.GetSelected: Integer;
+begin
+  Result := FSelected;
+end;
+
+procedure TRadioGroup.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   I, Y, MaxRows: Integer;
   Marker, Text: AnsiString;
   Sty: TStyle;
 begin
-  if Area.IsEmpty then Exit;
-  MaxRows := Area.Height;
-  Y := Area.Y;
-  for I := 0 to High(Items) do
+  if AArea.IsEmpty then Exit;
+  MaxRows := AArea.Height;
+  Y := AArea.Y;
+  for I := 0 to High(FItems) do
   begin
     if I >= MaxRows then Break;
-    if I = Selected then
+    if I = FSelected then
     begin
       Marker := '(*) ';
-      Sty := Style.Patch(SelectedStyle);
+      Sty := FStyle.Patch(FSelectedStyle);
     end
     else
     begin
       Marker := '( ) ';
-      Sty := Style;
+      Sty := FStyle;
     end;
-    Text := Marker + Items[I];
-    ABuf.SetStringN(Area.X, Y, Text, Area.Width, Sty);
+    Text := Marker + FItems[I];
+    ABuffer.SetStringN(AArea.X, Y, Text, AArea.Width, Sty);
     Inc(Y);
   end;
 end;
