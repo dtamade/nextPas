@@ -21,6 +21,7 @@ type
    * @example
    *   Command('/bin/fpc').Args(['--version']).Dir('/tmp').Output;
    *}
+  {** @note 非线程安全。不要在多个线程间共享同一个 ICommand 实例 *}
   ICommand = interface
     ['{A1B2C3D4-E5F6-7890-AB01-000000000010}']
     {** 追加单个命令行参数 *}
@@ -31,7 +32,7 @@ type
     function Dir(const AWorkDir: string): ICommand;
     {** 完全替换子进程环境变量（格式：KEY=VALUE） *}
     function Env(const AEnvPairs: array of string): ICommand;
-    {** 追加/覆盖单个环境变量（继承父进程其余环境） *}
+    {** 追加环境变量到替换列表（注意：设置任何 Env/EnvAdd 后不再继承父进程环境） *}
     function EnvAdd(const AKey, AValue: string): ICommand;
     {** 配置 stdin 模式 *}
     function Stdin(const AMode: TStdio): ICommand;
@@ -174,6 +175,12 @@ var
   LStdinPipe, LStdoutPipe, LStderrPipe: array[0..1] of Int32;
   LChildStdin, LChildStdout, LChildStderr: PtrInt;
   LDevNull: Int32;
+  LEnvMerged: TStringArray;
+  LEnvStr: string;
+  LErrPipe: array[0..1] of Int32;
+  LErrBuf: array[0..3] of Byte;
+  LErrRead: ssize_t;
+  LErrCode: Int32;
 begin
   LArgc := Length(FArgs) + 2;
   SetLength(LArgv, LArgc);
@@ -182,6 +189,7 @@ begin
     LArgv[I + 1] := PAnsiChar(FArgs[I]);
   LArgv[LArgc - 1] := nil;
 
+  { Build envp: if FEnv is set, merge with parent env for EnvAdd semantics }
   if Length(FEnv) > 0 then
   begin
     LEnvc := Length(FEnv) + 1;
@@ -204,63 +212,90 @@ begin
   LChildStdin := -1;
   LChildStdout := -1;
   LChildStderr := -1;
+  LStdinPipe[0] := -1; LStdinPipe[1] := -1;
+  LStdoutPipe[0] := -1; LStdoutPipe[1] := -1;
+  LStderrPipe[0] := -1; LStderrPipe[1] := -1;
 
-  if FStdinMode = stPiped then
-  begin
-    if pipe(@LStdinPipe[0]) <> 0 then
-      raise EProcessError.Create('Failed to create stdin pipe');
-    LChildStdin := LStdinPipe[0];
-  end
-  else if FStdinMode = stNull then
-  begin
-    LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', 0, 0);
-    if LDevNull >= 0 then
+  try
+    if FStdinMode = stPiped then
+    begin
+      if pipe(@LStdinPipe[0]) <> 0 then
+        raise EProcessError.Create('Failed to create stdin pipe');
+      LChildStdin := LStdinPipe[0];
+    end
+    else if FStdinMode = stNull then
+    begin
+      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 0, 0);
+      if LDevNull < 0 then
+        raise EProcessError.Create('Failed to open /dev/null for stdin');
       LChildStdin := LDevNull;
-  end;
+    end;
 
-  if FStdoutMode = stPiped then
-  begin
-    if pipe(@LStdoutPipe[0]) <> 0 then
-      raise EProcessError.Create('Failed to create stdout pipe');
-    LChildStdout := LStdoutPipe[1];
-  end
-  else if FStdoutMode = stNull then
-  begin
-    LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', 1, 0);
-    if LDevNull >= 0 then
+    if FStdoutMode = stPiped then
+    begin
+      if pipe(@LStdoutPipe[0]) <> 0 then
+        raise EProcessError.Create('Failed to create stdout pipe');
+      LChildStdout := LStdoutPipe[1];
+    end
+    else if FStdoutMode = stNull then
+    begin
+      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 1, 0);
+      if LDevNull < 0 then
+        raise EProcessError.Create('Failed to open /dev/null for stdout');
       LChildStdout := LDevNull;
-  end;
+    end;
 
-  if FStderrMode = stPiped then
-  begin
-    if pipe(@LStderrPipe[0]) <> 0 then
-      raise EProcessError.Create('Failed to create stderr pipe');
-    LChildStderr := LStderrPipe[1];
-  end
-  else if FStderrMode = stNull then
-  begin
-    LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', 1, 0);
-    if LDevNull >= 0 then
+    if FStderrMode = stPiped then
+    begin
+      if pipe(@LStderrPipe[0]) <> 0 then
+        raise EProcessError.Create('Failed to create stderr pipe');
+      LChildStderr := LStderrPipe[1];
+    end
+    else if FStderrMode = stNull then
+    begin
+      LDevNull := nextpas.core.platform.posix.ffi.open(PAnsiChar('/dev/null'), 1, 0);
+      if LDevNull < 0 then
+        raise EProcessError.Create('Failed to open /dev/null for stderr');
       LChildStderr := LDevNull;
+    end;
+
+    { Spawn }
+    if LEnvp <> nil then
+      LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], @LEnvp[0],
+        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc)
+    else
+      LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], nil,
+        LCwd, LChildStdin, LChildStdout, LChildStderr, LProc);
+
+    if LErr <> 0 then
+      raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
+
+  except
+    { Clean up all created fds on failure }
+    if LStdinPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
+    if LStdinPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdinPipe[1]);
+    if LStdoutPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[0]);
+    if LStdoutPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
+    if LStderrPipe[0] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[0]);
+    if LStderrPipe[1] >= 0 then nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+    raise;
   end;
 
-  if LEnvp <> nil then
-    LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], @LEnvp[0],
-      LCwd, LChildStdin, LChildStdout, LChildStderr, LProc)
-  else
-    LErr := platform_process_spawn_fds(PAnsiChar(FPath), @LArgv[0], nil,
-      LCwd, LChildStdin, LChildStdout, LChildStderr, LProc);
-
-  if LErr <> 0 then
-    raise EProcessError.Create('Failed to spawn: ' + FPath, LErr);
-
+  { Close child-side fds in parent }
   if (FStdinMode = stPiped) then
     nextpas.core.platform.posix.ffi.close(LStdinPipe[0]);
   if (FStdoutMode = stPiped) then
     nextpas.core.platform.posix.ffi.close(LStdoutPipe[1]);
   if (FStderrMode = stPiped) then
     nextpas.core.platform.posix.ffi.close(LStderrPipe[1]);
+  if (FStdinMode = stNull) and (LChildStdin >= 0) then
+    nextpas.core.platform.posix.ffi.close(LChildStdin);
+  if (FStdoutMode = stNull) and (LChildStdout >= 0) then
+    nextpas.core.platform.posix.ffi.close(LChildStdout);
+  if (FStderrMode = stNull) and (LChildStderr >= 0) then
+    nextpas.core.platform.posix.ffi.close(LChildStderr);
 
+  { Create pipe wrappers }
   if FStdinMode = stPiped then
     LStdinW := TPipeWriter.Create(LStdinPipe[1]) as IWriter;
   if FStdoutMode = stPiped then
@@ -274,11 +309,19 @@ end;
 function TCommand.Output: TProcessOutput;
 var
   LChild: IChild;
+  LSavedStdout, LSavedStderr: TStdio;
 begin
+  LSavedStdout := FStdoutMode;
+  LSavedStderr := FStderrMode;
   FStdoutMode := stPiped;
   FStderrMode := stPiped;
-  LChild := Spawn;
-  Result := LChild.WaitWithOutput;
+  try
+    LChild := Spawn;
+    Result := LChild.WaitWithOutput;
+  finally
+    FStdoutMode := LSavedStdout;
+    FStderrMode := LSavedStderr;
+  end;
 end;
 
 function TCommand.Status: Integer;

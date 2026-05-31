@@ -14,7 +14,6 @@ type
     FFd: PtrInt;
     FClosed: Boolean;
   public
-  public
     constructor Create(const AFd: PtrInt);
     destructor Destroy; override;
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -27,7 +26,6 @@ type
   private
     FFd: PtrInt;
     FClosed: Boolean;
-  public
   public
     constructor Create(const AFd: PtrInt);
     destructor Destroy; override;

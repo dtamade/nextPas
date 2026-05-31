@@ -19,6 +19,7 @@ type
    * @note 如果 stdout/stderr 是 Piped，必须在 Wait 之前读完（否则可能死锁）
    *       推荐用 WaitWithOutput 自动处理
    *}
+  {** @note 非线程安全。IChild 的所有方法必须在同一线程调用 *}
   IChild = interface
     ['{A1B2C3D4-E5F6-7890-AB01-000000000001}']
     {** 阻塞等待子进程退出，返回退出状态 *}

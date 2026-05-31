@@ -85,6 +85,10 @@ WriteLn(Result.StdOut);  // "hello"
 
 每个流（stdin/stdout/stderr）可独立配置。
 
+## 平台支持
+
+当前实现仅支持 Unix (Linux/macOS)。Windows 支持在 platform 层已有基础（CreateProcess），但 L2 层尚未适配。
+
 ## 环境变量
 
 ```pascal
@@ -95,7 +99,10 @@ Command('/bin/env').Env(['KEY=VALUE']).Output;
 Command('/bin/env').EnvAdd('MY_VAR', 'my_value').Output;
 ```
 
-注意：不设置 Env 时，子进程自动继承父进程的完整环境（通过 execvp）。
+注意：
+- 不设置 Env/EnvAdd 时，子进程自动继承父进程的完整环境（通过 execvp）
+- 一旦调用 Env 或 EnvAdd，子进程环境被完全替换为指定的变量列表（不继承父进程）
+- 如需继承+覆盖，需手动读取父进程环境再合并
 
 ## 模块结构
 
