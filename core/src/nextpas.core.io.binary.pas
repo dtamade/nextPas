@@ -322,8 +322,10 @@ end;
 
 procedure TBinaryWriter.WriteBytesRaw(const AData: PByte; ALen: SizeUInt);
 begin
-  if (ALen > 0) and (AData <> nil) then
-    WriteAll(FWriter, AData^, ALen);
+  if ALen = 0 then Exit;
+  if AData = nil then
+    raise EArgumentError.Create('WriteBytesRaw: AData is nil with ALen > 0');
+  WriteAll(FWriter, AData^, ALen);
 end;
 
 procedure TBinaryWriter.WriteString(const AValue: string);
