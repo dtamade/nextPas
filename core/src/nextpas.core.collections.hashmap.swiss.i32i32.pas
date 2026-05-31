@@ -55,9 +55,9 @@ implementation
 
 function SwissHashI32(x: UInt32): UInt32;
 begin
-  x := (x xor (x shr 16)) * UInt32($7feb352d);
-  x := (x xor (x shr 15)) * UInt32($846ca68b);
-  Result := x xor (x shr 16);
+  {$PUSH}{$Q-}{$R-}
+  Result := UInt32((UInt64(x) * UInt64($517cc1b727220a95)) shr 32) xor x;
+  {$POP}
 end;
 
 procedure TSwissTableI32I32.SetCtrl(AIndex: SizeUInt; AValue: Byte);
@@ -68,20 +68,26 @@ begin
 end;
 
 procedure TSwissTableI32I32.AllocTable(ACapacity: SizeUInt);
+var LCtrlSize, LSlotSize, LTotal: SizeUInt;
 begin
   FCapacity := ACapacity;
   FGroupCount := ACapacity div GROUP_SIZE;
-  if FAllocator <> nil then FCtrl := FAllocator.Allocate(ACapacity + GROUP_SIZE) else GetMem(FCtrl, ACapacity + GROUP_SIZE);
-  GetMem(FSlots, ACapacity * SizeOf(TSwissSlotI32I32));
-  FillChar(FCtrl^, ACapacity + GROUP_SIZE, CTRL_EMPTY);
-  FillChar(FSlots^, ACapacity * SizeOf(TSwissSlotI32I32), 0);
+  LCtrlSize := ACapacity + GROUP_SIZE;
+  LSlotSize := ACapacity * SizeOf(TSwissSlotI32I32);
+  LTotal := LCtrlSize + LSlotSize;
+  if FAllocator <> nil then
+    FCtrl := FAllocator.Allocate(LTotal)
+  else
+    GetMem(FCtrl, LTotal);
+  FSlots := PSwissSlotI32I32(FCtrl + LCtrlSize);
+  FillChar(FCtrl^, LCtrlSize, CTRL_EMPTY);
+  FillChar(FSlots^, LSlotSize, 0);
   FGrowthLeft := ACapacity - ACapacity div 8;
 end;
 
 procedure TSwissTableI32I32.FreeTable;
 begin
   if FCtrl = nil then Exit;
-  if FAllocator <> nil then FAllocator.Deallocate(FSlots) else FreeMem(FSlots);
   if FAllocator <> nil then FAllocator.Deallocate(FCtrl) else FreeMem(FCtrl);
   FCtrl := nil; FSlots := nil; FAllocator := nil;
 end;
@@ -123,7 +129,7 @@ begin
           LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
         end;
       end;
-    if FAllocator <> nil then FAllocator.Deallocate(LOldSlots) else FreeMem(LOldSlots); if FAllocator <> nil then FAllocator.Deallocate(LOldCtrl) else FreeMem(LOldCtrl);
+    if FAllocator <> nil then FAllocator.Deallocate(LOldCtrl) else FreeMem(LOldCtrl);
   end;
 end;
 
