@@ -5,6 +5,7 @@ unit nextpas.core.io.scanner;
 interface
 
 uses
+  SysUtils,
   nextpas.core.errors,
   nextpas.core.io.intf;
 

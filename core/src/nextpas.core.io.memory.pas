@@ -5,6 +5,7 @@ unit nextpas.core.io.memory;
 interface
 
 uses
+  SysUtils,
   nextpas.core.io.base,
   nextpas.core.io.intf;
 
