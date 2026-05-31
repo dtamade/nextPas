@@ -358,6 +358,17 @@ begin
 end;
 
 
+procedure TestEnvReplaceWithPathSearch;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('echo')
+    .Args(['path search works'])
+    .Env(['PATH=/bin:/usr/bin'])
+    .Output;
+  Check('Env replace + PATH search — found echo', Pos('path search works', LOut.StdOut) > 0);
+end;
+
+
 begin
   LPassed := 0;
   LFailed := 0;
@@ -383,6 +394,7 @@ begin
   TestSpawnExecFailRaisesException;
   TestSpawnChdirFailRaisesException;
   TestEnvAddInheritsPath;
+  TestEnvReplaceWithPathSearch;
   TestEnvAdd;
   TestStdinNull;
   TestStdoutNull;
