@@ -22,9 +22,12 @@ type
     FNodeCount: UInt32;
     FNodeCap: UInt32;
     FAllocator: IAllocator;
-    FStrBufs: PPointer;
-    FStrBufCount: UInt32;
-    FStrBufCap: UInt32;
+    FStrArena: PAnsiChar;
+    FStrArenaUsed: UInt32;
+    FStrArenaCap: UInt32;
+    FStrOverflow: PPointer;
+    FStrOverflowCount: UInt32;
+    FStrOverflowCap: UInt32;
     FInput: TStringView;
     FError: TJsonError;
     FHasError: Boolean;
@@ -75,9 +78,12 @@ begin
   FNodeCap := INITIAL_NODE_CAP;
   FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TJsonNode));
   FNodeCount := 0;
-  FStrBufCap := 16;
-  FStrBufs := FAllocator.Allocate(FStrBufCap * SizeOf(PAnsiChar));
-  FStrBufCount := 0;
+  FStrArenaCap := 4096;
+  FStrArena := FAllocator.Allocate(FStrArenaCap);
+  FStrArenaUsed := 0;
+  FStrOverflowCap := 0;
+  FStrOverflow := nil;
+  FStrOverflowCount := 0;
   FHasError := False;
   FIndices := nil;
   FIndexCap := 0;
@@ -96,15 +102,20 @@ begin
     FIndices := nil;
     FIndexCap := 0;
   end;
-  if (FStrBufs <> nil) and (FStrBufCount > 0) then
+  if (FStrOverflow <> nil) and (FStrOverflowCount > 0) then
   begin
-    for I := 0 to FStrBufCount - 1 do
-      FAllocator.Deallocate(PPointer(PByte(FStrBufs) + I * SizeOf(Pointer))^);
+    for I := 0 to FStrOverflowCount - 1 do
+      FAllocator.Deallocate(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
   end;
-  if FStrBufs <> nil then
+  if FStrOverflow <> nil then
   begin
-    FAllocator.Deallocate(FStrBufs);
-    FStrBufs := nil;
+    FAllocator.Deallocate(FStrOverflow);
+    FStrOverflow := nil;
+  end;
+  if FStrArena <> nil then
+  begin
+    FAllocator.Deallocate(FStrArena);
+    FStrArena := nil;
   end;
   if FNodes <> nil then
   begin
@@ -113,7 +124,9 @@ begin
   end;
   FNodeCount := 0;
   FNodeCap := 0;
-  FStrBufCount := 0;
+  FStrArenaUsed := 0;
+  FStrArenaCap := 0;
+  FStrOverflowCount := 0;
 end;
 
 function TJsonDocument.AddNode: UInt32;
@@ -136,15 +149,24 @@ function TJsonDocument.AllocStrBuf(ASize: SizeUInt): PAnsiChar;
 var
   LNewCap: UInt32;
 begin
-  Result := FAllocator.Allocate(ASize);
-  if FStrBufCount >= FStrBufCap then
+  if FStrArenaUsed + UInt32(ASize) <= FStrArenaCap then
   begin
-    LNewCap := FStrBufCap * 2;
-    FStrBufs := FAllocator.Reallocate(FStrBufs, LNewCap * SizeOf(Pointer));
-    FStrBufCap := LNewCap;
+    Result := FStrArena + FStrArenaUsed;
+    Inc(FStrArenaUsed, UInt32(ASize));
+    Exit;
   end;
-  PPointer(PByte(FStrBufs) + FStrBufCount * SizeOf(Pointer))^ := Result;
-  Inc(FStrBufCount);
+  Result := FAllocator.Allocate(ASize);
+  if FStrOverflowCount >= FStrOverflowCap then
+  begin
+    if FStrOverflowCap = 0 then
+      LNewCap := 8
+    else
+      LNewCap := FStrOverflowCap * 2;
+    FStrOverflow := FAllocator.Reallocate(FStrOverflow, LNewCap * SizeOf(Pointer));
+    FStrOverflowCap := LNewCap;
+  end;
+  PPointer(PByte(FStrOverflow) + FStrOverflowCount * SizeOf(Pointer))^ := Result;
+  Inc(FStrOverflowCount);
 end;
 
 function TJsonDocument.Root: UInt32;
@@ -253,6 +275,7 @@ var
   LDecLen: SizeUInt;
   LErr: TUnescapeError;
   I: SizeUInt;
+  LMask: TVecMask;
 begin
   LStartPos := ConsumeStruct;
   LEndPos := ConsumeStruct;
@@ -271,13 +294,14 @@ begin
   I := 0;
   while I + VecWidth <= LRaw.Len do
   begin
-    if VecCmpLtU(@LRaw.Data[I], $20) <> TVecMask(0) then
+    LMask := VecCmpLtU(@LRaw.Data[I], $20) or VecCmpEq(@LRaw.Data[I], Ord('\'));
+    if LMask <> TVecMask(0) then
     begin
-      SetError('control char in string', 22);
-      Exit(JSON_NODE_NONE);
-    end;
-    if VecCmpEq(@LRaw.Data[I], Ord('\')) <> TVecMask(0) then
-    begin
+      if VecCmpLtU(@LRaw.Data[I], $20) <> TVecMask(0) then
+      begin
+        SetError('control char in string', 22);
+        Exit(JSON_NODE_NONE);
+      end;
       LHasEscape := True;
       Break;
     end;
@@ -605,13 +629,14 @@ begin
     FIndices := nil;
     FIndexCap := 0;
   end;
-  { Free string buffers from previous parse }
-  if (FStrBufs <> nil) and (FStrBufCount > 0) then
+  { Free overflow string buffers from previous parse }
+  if (FStrOverflow <> nil) and (FStrOverflowCount > 0) then
   begin
-    for I := 0 to FStrBufCount - 1 do
-      FAllocator.Deallocate(PPointer(PByte(FStrBufs) + I * SizeOf(Pointer))^);
-    FStrBufCount := 0;
+    for I := 0 to FStrOverflowCount - 1 do
+      FAllocator.Deallocate(PPointer(PByte(FStrOverflow) + I * SizeOf(Pointer))^);
+    FStrOverflowCount := 0;
   end;
+  FStrArenaUsed := 0;
   LEstimate := UInt32(AInput.Len div 4);
   if LEstimate > FNodeCap then
   begin
