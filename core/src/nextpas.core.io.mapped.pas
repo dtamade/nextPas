@@ -49,7 +49,7 @@ type
   TMappedLinesImpl = class(TInterfacedObject, IMappedLines)
   private
     FFile: IMappedFile;
-    FLineStarts: array of UInt32;
+    FLineStarts: array of SizeUInt;
     FLineLens: array of UInt32;
     FCount: Int32;
     procedure BuildIndex;
@@ -123,7 +123,7 @@ var
   LP: PByte;
   LSize: Int64;
   LI: Int64;
-  LStart: UInt32;
+  LStart: SizeUInt;
   LCap: Int32;
 begin
   LP := FFile.Data;
@@ -148,14 +148,14 @@ begin
       end;
       FLineStarts[FCount] := LStart;
       if (LI > LStart) and (LP[LI - 1] = 13) then
-        FLineLens[FCount] := UInt32(LI) - LStart - 1
+        FLineLens[FCount] := SizeUInt(LI) - LStart - 1
       else
-        FLineLens[FCount] := UInt32(LI) - LStart;
+        FLineLens[FCount] := SizeUInt(LI) - LStart;
       Inc(FCount);
-      LStart := UInt32(LI) + 1;
+      LStart := SizeUInt(LI) + 1;
     end;
   end;
-  if LStart < UInt32(LSize) then
+  if LStart < SizeUInt(LSize) then
   begin
     if FCount >= LCap then
     begin
@@ -164,7 +164,7 @@ begin
       SetLength(FLineLens, LCap);
     end;
     FLineStarts[FCount] := LStart;
-    FLineLens[FCount] := UInt32(LSize) - LStart;
+    FLineLens[FCount] := SizeUInt(LSize) - LStart;
     Inc(FCount);
   end;
 end;
