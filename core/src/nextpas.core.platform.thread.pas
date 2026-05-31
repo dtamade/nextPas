@@ -117,8 +117,7 @@ begin
     Exit(-1);
 
   Result := pthread_join(PPThreadToken(@AState^.Thread[0])^, @ARetVal);
-  if Result = 0 then
-    Dispose(AState);
+  Dispose(AState);
 end;
 
 function platform_thread_host_state_detach(const AState: PPlatformPThreadState): Int32; inline;
@@ -127,8 +126,7 @@ begin
     Exit(-1);
 
   Result := pthread_detach(PPThreadToken(@AState^.Thread[0])^);
-  if Result = 0 then
-    Dispose(AState);
+  Dispose(AState);
 end;
 
 function platform_thread_host_self_token_u64: UInt64; inline;
