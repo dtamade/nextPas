@@ -227,41 +227,50 @@ begin
 end;
 
 procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
-var
-  LInfo: TFileInfo;
-  LIter: IDirIterator;
-  LEntry: TDirEntry;
-  LChild: string;
-begin
-  try
-    LInfo := FsStat(ARoot);
-  except
-    on E: Exception do
-    begin
-      LInfo := Default(TFileInfo);
-      LInfo.Name := ARoot;
-      if not AFunc(ARoot, LInfo, E) then
-        Exit;
-      Exit;
-    end;
-  end;
+const
+  MAX_WALK_DEPTH = 256;
 
-  if not AFunc(ARoot, LInfo, nil) then
-    Exit;
-
-  if not LInfo.IsDir then
-    Exit;
-
-  LIter := FsOpenDir(ARoot);
-  while LIter.Next do
+  procedure DoWalk(const APath: string; ADepth: Int32);
+  var
+    LInfo: TFileInfo;
+    LIter: IDirIterator;
+    LEntry: TDirEntry;
+    LChild: string;
   begin
-    LEntry := LIter.Entry;
-    if (LEntry.Name = '.') or (LEntry.Name = '..') then
-      Continue;
-    LChild := ARoot + '/' + LEntry.Name;
-    FsWalk(LChild, AFunc);
+    if ADepth > MAX_WALK_DEPTH then
+      Exit;
+    try
+      LInfo := FsLstat(APath);
+    except
+      on E: Exception do
+      begin
+        LInfo := Default(TFileInfo);
+        LInfo.Name := APath;
+        AFunc(APath, LInfo, E);
+        Exit;
+      end;
+    end;
+
+    if not AFunc(APath, LInfo, nil) then
+      Exit;
+
+    if not LInfo.IsDir then
+      Exit;
+
+    LIter := FsOpenDir(APath);
+    while LIter.Next do
+    begin
+      LEntry := LIter.Entry;
+      if (LEntry.Name = '.') or (LEntry.Name = '..') then
+        Continue;
+      LChild := APath + '/' + LEntry.Name;
+      DoWalk(LChild, ADepth + 1);
+    end;
+    LIter.Close;
   end;
-  LIter.Close;
+
+begin
+  DoWalk(ARoot, 0);
 end;
 
 end.
