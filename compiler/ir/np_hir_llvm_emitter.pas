@@ -50,6 +50,7 @@ type
     procedure EmitStrConcatHelper;
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
+    procedure EmitIntfRefCountHelpers;
     procedure EmitObjectReleaseValidHelper;
     procedure EmitObjectReleaseInvalidHelper;
     procedure EmitExceptionRuntimeHelpers;
@@ -832,6 +833,9 @@ begin
   if FNeedsObjectFreeRelease then
     EmitObjectFreeReleaseHelper;
 
+  if FNeedsObjectAlloc then
+    EmitIntfRefCountHelpers;
+
   if FNeedsExceptionRuntime then
     EmitExceptionRuntimeHelpers;
 
@@ -1076,12 +1080,14 @@ begin
   Emit('');
   Emit('define internal ptr @np_object_alloc(i64 %size) {');
   Emit('entry:');
-  Emit('  %total = add i64 %size, 16');
+  Emit('  %total = add i64 %size, 24');
   Emit('  %raw = call ptr @np_alloc(i64 %total)');
   Emit('  store i64 %size, ptr %raw');
   Emit('  %magicp = getelementptr i8, ptr %raw, i64 8');
   Emit('  store i64 1313882451, ptr %magicp');
-  Emit('  %obj = getelementptr i8, ptr %raw, i64 16');
+  Emit('  %rcp = getelementptr i8, ptr %raw, i64 16');
+  Emit('  store i64 0, ptr %rcp');
+  Emit('  %obj = getelementptr i8, ptr %raw, i64 24');
   Emit('  ret ptr %obj');
   Emit('}');
 end;
@@ -1094,7 +1100,7 @@ begin
   Emit('  %isnull = icmp eq ptr %obj, null');
   Emit('  br i1 %isnull, label %done, label %header');
   Emit('header:');
-  Emit('  %raw = getelementptr i8, ptr %obj, i64 -16');
+  Emit('  %raw = getelementptr i8, ptr %obj, i64 -24');
   Emit('  %size = load i64, ptr %raw');
   Emit('  %magicp = getelementptr i8, ptr %raw, i64 8');
   Emit('  %magic = load i64, ptr %magicp');
@@ -1134,6 +1140,38 @@ begin
   Emit('}');
   Emit('');
   Emit('declare void @llvm.trap()');
+end;
+
+procedure THIRLlvmEmitter.EmitIntfRefCountHelpers;
+begin
+  Emit('');
+  Emit('define internal void @np_intf_addref(ptr %obj) {');
+  Emit('entry:');
+  Emit('  %isnull = icmp eq ptr %obj, null');
+  Emit('  br i1 %isnull, label %done, label %inc');
+  Emit('inc:');
+  Emit('  %rcp = getelementptr i8, ptr %obj, i64 -8');
+  Emit('  %old = load i64, ptr %rcp');
+  Emit('  %new = add i64 %old, 1');
+  Emit('  store i64 %new, ptr %rcp');
+  Emit('  br label %done');
+  Emit('done:');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_intf_release(ptr %obj) {');
+  Emit('entry:');
+  Emit('  %isnull = icmp eq ptr %obj, null');
+  Emit('  br i1 %isnull, label %done, label %dec');
+  Emit('dec:');
+  Emit('  %rcp = getelementptr i8, ptr %obj, i64 -8');
+  Emit('  %old = load i64, ptr %rcp');
+  Emit('  %new = sub i64 %old, 1');
+  Emit('  store i64 %new, ptr %rcp');
+  Emit('  br label %done');
+  Emit('done:');
+  Emit('  ret void');
+  Emit('}');
 end;
 
 procedure THIRLlvmEmitter.EmitExceptionRuntimeHelpers;
