@@ -206,6 +206,100 @@ begin
   Check(R.ReadBool, 'active');
 end;
 
+procedure TestBigEndian64;
+var
+  LS: IStream;
+  W: TBinaryWriter;
+  R: TBinaryReader;
+begin
+  LS := CreateBytesStream;
+  W.Init(LS as IWriter);
+  W.WriteUInt64BE($0102030405060708);
+  W.WriteInt64BE(-1);
+  W.WriteInt16BE(-256);
+  W.WriteInt32BE(16777216);
+  LS.Seek(0, soBeginning);
+  R.Init(LS as IReader);
+  CheckEqual(Int64($0102030405060708), Int64(R.ReadUInt64BE), 'u64 BE');
+  CheckEqual(Int64(-1), R.ReadInt64BE, 'i64 BE');
+  CheckEqual(Int64(-256), Int64(R.ReadInt16BE), 'i16 BE');
+  CheckEqual(Int64(16777216), Int64(R.ReadInt32BE), 'i32 BE');
+end;
+
+procedure TestInitNilReader;
+var
+  R: TBinaryReader;
+  LGotException: Boolean;
+begin
+  LGotException := False;
+  try
+    R.Init(IReader(nil));
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'Init nil reader raises');
+end;
+
+procedure TestInitNilWriter;
+var
+  W: TBinaryWriter;
+  LGotException: Boolean;
+begin
+  LGotException := False;
+  try
+    W.Init(IWriter(nil));
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'Init nil writer raises');
+end;
+
+procedure TestEOFOnRead;
+var
+  LS: IStream;
+  W: TBinaryWriter;
+  R: TBinaryReader;
+  LGotException: Boolean;
+begin
+  LS := CreateBytesStream;
+  W.Init(LS as IWriter);
+  W.WriteUInt8(42);
+  LS.Seek(0, soBeginning);
+  R.Init(LS as IReader);
+  CheckEqual(Int64(42), Int64(R.ReadUInt8), 'first byte ok');
+  LGotException := False;
+  try
+    R.ReadUInt32LE;
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'EOF raises on ReadUInt32LE');
+end;
+
+procedure TestAllocLimit;
+var
+  LS: IStream;
+  R: TBinaryReader;
+  LGotException: Boolean;
+begin
+  LS := CreateBytesStream;
+  R.Init(LS as IReader);
+  LGotException := False;
+  try
+    R.ReadBytes(128 * 1024 * 1024);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'ReadBytes over limit raises');
+  LGotException := False;
+  try
+    R.ReadString(128 * 1024 * 1024);
+  except
+    LGotException := True;
+  end;
+  Check(LGotException, 'ReadString over limit raises');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.io.binary');
   T.Run('uint8', @TestWriteReadUInt8);
@@ -219,6 +313,15 @@ begin
   T.Run('string', @TestWriteReadString);
   T.Run('bool', @TestWriteReadBool);
   T.Run('big-endian', @TestBigEndian);
+  T.Run('mixed types', @TestMixedTypes);
+  T.Run('BE 64-bit', @TestBigEndian64);
+  T.Run('init nil reader', @TestInitNilReader);
+  T.Run('init nil writer', @TestInitNilWriter);
+  T.Run('EOF on read', @TestEOFOnRead);
+  T.Run('alloc limit', @TestAllocLimit);
+  T.Summary;
+  if not T.AllPassed then Halt(1);
+end.
   T.Run('mixed types', @TestMixedTypes);
   T.Summary;
   if not T.AllPassed then Halt(1);
