@@ -1,0 +1,263 @@
+unit nextpas.core.tls.tls12.io;
+
+{$mode objfpc}{$H+}{$J-}
+
+interface
+
+uses
+  SysUtils, Classes;
+
+type
+  TTLS12HandshakeReader = class
+  private
+    FStream: TStream;
+    FBuffer: TBytes;
+    FNonHandshakeContentType: Byte;
+    FNonHandshakeData: TBytes;
+    FHasNonHandshake: Boolean;
+  public
+    constructor Create(AStream: TStream);
+    function ReadMessage(out AHandshakeType: Byte; out ABody: TBytes;
+      out AFullMessage: TBytes; out AAlertDesc: string): Boolean;
+    function HasPendingNonHandshake: Boolean;
+    function GetNonHandshakeContentType: Byte;
+    function GetNonHandshakeData: TBytes;
+  end;
+
+procedure TLS12AppendTranscript(var ATranscript: TBytes; const AData: TBytes);
+
+function TLS12SendRecord(AStream: TStream; AContentType: Byte; const AData: TBytes): Boolean;
+
+function TLS12ReadExact(AStream: TStream; var ABuf: TBytes; AOffset, ACount: Integer): Boolean;
+
+function TLS12ReadRecord(AStream: TStream; out AContentType: Byte; out AData: TBytes): Boolean;
+
+function TLS12ReadHandshakeMessage(AStream: TStream; out AHandshakeType: Byte;
+  out ABody: TBytes; out AFullMessage: TBytes; out AError: string): Boolean;
+
+implementation
+
+uses
+  nextpas.core.tls.tls12.wire;
+
+procedure TLS12AppendTranscript(var ATranscript: TBytes; const AData: TBytes);
+var
+  LOldLen: Integer;
+begin
+  LOldLen := Length(ATranscript);
+  SetLength(ATranscript, LOldLen + Length(AData));
+  Move(AData[0], ATranscript[LOldLen], Length(AData));
+end;
+
+function TLS12SendRecord(AStream: TStream; AContentType: Byte; const AData: TBytes): Boolean;
+var
+  LHeader: TBytes;
+begin
+  LHeader := TLS12BuildRecordHeader(AContentType, Length(AData));
+  AStream.WriteBuffer(LHeader[0], 5);
+  if Length(AData) > 0 then
+    AStream.WriteBuffer(AData[0], Length(AData));
+  Result := True;
+end;
+
+function TLS12ReadExact(AStream: TStream; var ABuf: TBytes; AOffset, ACount: Integer): Boolean;
+var
+  LRead, LTotal: Integer;
+begin
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LRead := AStream.Read(ABuf[AOffset + LTotal], ACount - LTotal);
+    if LRead <= 0 then
+      Exit(False);
+    Inc(LTotal, LRead);
+  end;
+  Result := True;
+end;
+
+function TLS12ReadRecord(AStream: TStream; out AContentType: Byte; out AData: TBytes): Boolean;
+var
+  LHeader: TBytes;
+  LLen: Integer;
+begin
+  SetLength(LHeader, 5);
+  if not TLS12ReadExact(AStream, LHeader, 0, 5) then Exit(False);
+  AContentType := LHeader[0];
+  LLen := (Integer(LHeader[3]) shl 8) or Integer(LHeader[4]);
+  if (LLen < 0) or (LLen > TLS12_RECORD_MAX_LENGTH + 256) then Exit(False);
+  SetLength(AData, LLen);
+  if LLen > 0 then
+    if not TLS12ReadExact(AStream, AData, 0, LLen) then Exit(False);
+  Result := True;
+end;
+
+function TLS12ReadHandshakeMessage(AStream: TStream; out AHandshakeType: Byte;
+  out ABody: TBytes; out AFullMessage: TBytes; out AError: string): Boolean;
+var
+  LBuffer, LData: TBytes;
+  LContentType: Byte;
+  LBodyLen, LOldLen: Integer;
+begin
+  Result := False;
+  AError := '';
+  AHandshakeType := 0;
+  SetLength(ABody, 0);
+  SetLength(AFullMessage, 0);
+  SetLength(LBuffer, 0);
+
+  while True do
+  begin
+    if Length(LBuffer) >= 4 then
+    begin
+      LBodyLen := (Integer(LBuffer[1]) shl 16) or (Integer(LBuffer[2]) shl 8) or Integer(LBuffer[3]);
+      if LBodyLen > 131072 then
+      begin
+        AError := 'Handshake message too large';
+        Exit;
+      end;
+      if Length(LBuffer) >= 4 + LBodyLen then
+      begin
+        AHandshakeType := LBuffer[0];
+        SetLength(ABody, LBodyLen);
+        if LBodyLen > 0 then
+          Move(LBuffer[4], ABody[0], LBodyLen);
+        SetLength(AFullMessage, 4 + LBodyLen);
+        Move(LBuffer[0], AFullMessage[0], Length(AFullMessage));
+        Result := True;
+        Exit;
+      end;
+    end;
+
+    if not TLS12ReadRecord(AStream, LContentType, LData) then
+    begin
+      AError := 'Failed to read handshake record';
+      Exit;
+    end;
+
+    if LContentType = TLS12_CONTENT_CHANGE_CIPHER_SPEC then
+      Continue;
+
+    if LContentType = TLS12_CONTENT_ALERT then
+    begin
+      if Length(LData) >= 2 then
+        AError := Format('received alert: level=%d desc=%d', [LData[0], LData[1]])
+      else
+        AError := 'received malformed alert';
+      Exit;
+    end;
+
+    if LContentType <> TLS12_CONTENT_HANDSHAKE then
+    begin
+      AError := Format('unexpected content type %d', [LContentType]);
+      Exit;
+    end;
+
+    LOldLen := Length(LBuffer);
+    SetLength(LBuffer, LOldLen + Length(LData));
+    if Length(LData) > 0 then
+      Move(LData[0], LBuffer[LOldLen], Length(LData));
+  end;
+end;
+
+{ TTLS12HandshakeReader }
+
+constructor TTLS12HandshakeReader.Create(AStream: TStream);
+begin
+  inherited Create;
+  FStream := AStream;
+  SetLength(FBuffer, 0);
+  FHasNonHandshake := False;
+end;
+
+function TTLS12HandshakeReader.ReadMessage(out AHandshakeType: Byte;
+  out ABody: TBytes; out AFullMessage: TBytes; out AAlertDesc: string): Boolean;
+var
+  LContentType: Byte;
+  LData: TBytes;
+  LBodyLen, LOldLen: Integer;
+begin
+  Result := False;
+  AAlertDesc := '';
+
+  while True do
+  begin
+    // Check if buffer has a complete handshake message
+    if Length(FBuffer) >= 4 then
+    begin
+      LBodyLen := (Integer(FBuffer[1]) shl 16) or (Integer(FBuffer[2]) shl 8) or Integer(FBuffer[3]);
+      if Length(FBuffer) >= 4 + LBodyLen then
+      begin
+        AHandshakeType := FBuffer[0];
+        SetLength(ABody, LBodyLen);
+        if LBodyLen > 0 then
+          Move(FBuffer[4], ABody[0], LBodyLen);
+        SetLength(AFullMessage, 4 + LBodyLen);
+        Move(FBuffer[0], AFullMessage[0], 4 + LBodyLen);
+
+        // Remove consumed bytes from buffer
+        LOldLen := Length(FBuffer) - (4 + LBodyLen);
+        if LOldLen > 0 then
+        begin
+          Move(FBuffer[4 + LBodyLen], FBuffer[0], LOldLen);
+          SetLength(FBuffer, LOldLen);
+        end
+        else
+          SetLength(FBuffer, 0);
+
+        Result := True;
+        Exit;
+      end;
+    end;
+
+    // Need more data — read another record
+    if not TLS12ReadRecord(FStream, LContentType, LData) then
+      Exit;
+
+    if LContentType = TLS12_CONTENT_ALERT then
+    begin
+      if Length(LData) >= 2 then
+        AAlertDesc := Format('server alert: level=%d desc=%d', [LData[0], LData[1]])
+      else
+        AAlertDesc := 'malformed alert';
+      Exit;
+    end;
+
+    if LContentType = TLS12_CONTENT_CHANGE_CIPHER_SPEC then
+      Continue;
+
+    if LContentType <> TLS12_CONTENT_HANDSHAKE then
+    begin
+      // Non-handshake record encountered (e.g., CCS) — save and return
+      FNonHandshakeContentType := LContentType;
+      FNonHandshakeData := LData;
+      FHasNonHandshake := True;
+      AAlertDesc := Format('unexpected content type %d', [LContentType]);
+      Exit;
+    end;
+
+    // Append handshake data to buffer
+    LOldLen := Length(FBuffer);
+    SetLength(FBuffer, LOldLen + Length(LData));
+    if Length(LData) > 0 then
+      Move(LData[0], FBuffer[LOldLen], Length(LData));
+  end;
+end;
+
+function TTLS12HandshakeReader.HasPendingNonHandshake: Boolean;
+begin
+  Result := FHasNonHandshake;
+end;
+
+function TTLS12HandshakeReader.GetNonHandshakeContentType: Byte;
+begin
+  Result := FNonHandshakeContentType;
+  FHasNonHandshake := False;
+end;
+
+function TTLS12HandshakeReader.GetNonHandshakeData: TBytes;
+begin
+  Result := FNonHandshakeData;
+  FHasNonHandshake := False;
+end;
+
+end.

@@ -1,0 +1,25 @@
+================================================================
+TLS Handshake Performance Benchmark
+================================================================
+
+Iterations per test: 200
+Test server: www.example.com:443
+
+Initializing test context for session resumption...
+[2026-01-20 18:18:53.817] [INFO] [OpenSSL] SSL Context created (Type: 0)
+Test context initialized
+
+Registering TLS handshake benchmark tests...
+Registered 4 TLS handshake benchmark tests
+
+Running TLS handshake benchmarks...
+Note: This may take a while due to network operations
+================================================================
+=== Performance Benchmark ===
+Iterations: 200
+Warmup: 10
+
+An unhandled exception occurred at $00000000004CCFDA:
+ESSLConnectionException: [TSSLConnector.ConnectSocket] Client handshake failed: OK
+  $00000000004CCFDA
+

@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "log_list_timestamp": "2026-01-01T00:00:00Z",
+  "operators": [
+    {
+      "name": "Test Operator",
+      "id": 1,
+      "logs": [
+        {
+          "log_id": "dGVzdC1sb2ctaWQtYmFzZTY0LWVuY29kZWQx",
+          "description": "Test CT Log",
+          "key": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAETest",
+          "url": "https://ct.test.example.com/",
+          "state": {
+            "usable": {
+              "timestamp": "2026-01-01T00:00:00Z"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

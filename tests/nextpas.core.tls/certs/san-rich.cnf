@@ -1,0 +1,30 @@
+[ req ]
+prompt = no
+default_bits = 2048
+default_md = sha256
+distinguished_name = dn
+req_extensions = req_ext
+
+[ dn ]
+C = CN
+ST = Test State
+L = Test City
+O = fafafa.ssl Test Suite
+OU = SAN Rich Certificate
+CN = san-test.local
+emailAddress = admin@example-rich.test
+
+[ req_ext ]
+subjectAltName = @alt_names
+keyUsage = critical,digitalSignature,keyEncipherment
+extendedKeyUsage = serverAuth,clientAuth,emailProtection
+
+[ alt_names ]
+DNS.1 = san-test.local
+DNS.2 = example.test
+DNS.3 = san-rich.local
+DNS.4 = example-rich.test
+IP.1 = 127.0.0.1
+IP.2 = 2001:db8::10
+email.1 = admin@example-rich.test
+URI.1 = spiffe://mesh/service

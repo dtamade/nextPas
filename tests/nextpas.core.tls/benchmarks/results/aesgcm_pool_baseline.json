@@ -1,0 +1,137 @@
+{
+  "generated": "24-1-26 18:52:34",
+  "tests": [
+    {
+      "name": "AES-GCM Decrypt 16KB (Pooled)",
+      "mean_ms": 0.020000,
+      "stddev_ms": 0.140000,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Decrypt 16KB (Traditional)",
+      "mean_ms": 0.018000,
+      "stddev_ms": 0.132951,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Decrypt 1KB (Pooled)",
+      "mean_ms": 0.008000,
+      "stddev_ms": 0.089084,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Decrypt 1KB (Traditional)",
+      "mean_ms": 0.005000,
+      "stddev_ms": 0.070534,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Decrypt 64B (Pooled)",
+      "mean_ms": 0.005000,
+      "stddev_ms": 0.070534,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Decrypt 64B (Traditional)",
+      "mean_ms": 0.004000,
+      "stddev_ms": 0.063119,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Encrypt 16KB (Pooled)",
+      "mean_ms": 0.012000,
+      "stddev_ms": 0.108885,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Encrypt 16KB (Traditional)",
+      "mean_ms": 0.009000,
+      "stddev_ms": 0.094440,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Encrypt 1KB (Pooled)",
+      "mean_ms": 0.001000,
+      "stddev_ms": 0.031607,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Encrypt 1KB (Traditional)",
+      "mean_ms": 0.004000,
+      "stddev_ms": 0.063119,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Encrypt 64B (Pooled)",
+      "mean_ms": 0.004000,
+      "stddev_ms": 0.063119,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    },
+    {
+      "name": "AES-GCM Encrypt 64B (Traditional)",
+      "mean_ms": 0.004000,
+      "stddev_ms": 0.063119,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 1000
+    }
+  ]
+}

@@ -1,0 +1,192 @@
+{
+  "generated": "21-1-26 14:00:52",
+  "tests": [
+    {
+      "name": "aes_gcm_dec_16kb",
+      "mean_ms": 0.010000,
+      "stddev_ms": 0.099499,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "aes_gcm_dec_1kb",
+      "mean_ms": 0.000000,
+      "stddev_ms": 0.000000,
+      "min_ms": 0.000000,
+      "max_ms": 0.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 100
+    },
+    {
+      "name": "aes_gcm_dec_64b",
+      "mean_ms": 0.000000,
+      "stddev_ms": 0.000000,
+      "min_ms": 0.000000,
+      "max_ms": 0.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 100
+    },
+    {
+      "name": "aes_gcm_enc_16kb",
+      "mean_ms": 0.020000,
+      "stddev_ms": 0.140000,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "aes_gcm_enc_1kb",
+      "mean_ms": 0.020000,
+      "stddev_ms": 0.140000,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "aes_gcm_enc_64b",
+      "mean_ms": 0.020000,
+      "stddev_ms": 0.140000,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "generate_key_128bit",
+      "mean_ms": 0.010000,
+      "stddev_ms": 0.099499,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "generate_key_256bit",
+      "mean_ms": 0.040000,
+      "stddev_ms": 0.313688,
+      "min_ms": 0.000000,
+      "max_ms": 3.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 3.000000,
+      "iterations": 100
+    },
+    {
+      "name": "secure_random_16kb",
+      "mean_ms": 0.090000,
+      "stddev_ms": 0.286182,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 1.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "secure_random_1kb",
+      "mean_ms": 0.020000,
+      "stddev_ms": 0.140000,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "secure_random_64b",
+      "mean_ms": 0.010000,
+      "stddev_ms": 0.099499,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "sha256_16kb",
+      "mean_ms": 0.080000,
+      "stddev_ms": 0.271293,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 1.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "sha256_1kb",
+      "mean_ms": 0.000000,
+      "stddev_ms": 0.000000,
+      "min_ms": 0.000000,
+      "max_ms": 0.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 100
+    },
+    {
+      "name": "sha256_64b",
+      "mean_ms": 0.000000,
+      "stddev_ms": 0.000000,
+      "min_ms": 0.000000,
+      "max_ms": 0.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 100
+    },
+    {
+      "name": "sha512_16kb",
+      "mean_ms": 0.060000,
+      "stddev_ms": 0.237487,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 1.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "sha512_1kb",
+      "mean_ms": 0.010000,
+      "stddev_ms": 0.099499,
+      "min_ms": 0.000000,
+      "max_ms": 1.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 1.000000,
+      "iterations": 100
+    },
+    {
+      "name": "sha512_64b",
+      "mean_ms": 0.000000,
+      "stddev_ms": 0.000000,
+      "min_ms": 0.000000,
+      "max_ms": 0.000000,
+      "p50_ms": 0.000000,
+      "p95_ms": 0.000000,
+      "p99_ms": 0.000000,
+      "iterations": 100
+    }
+  ]
+}

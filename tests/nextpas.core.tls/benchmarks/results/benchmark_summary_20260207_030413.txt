@@ -1,0 +1,175 @@
+================================================================
+性能基准测试汇总报告
+================================================================
+
+时间: Sat Feb  7 03:06:39 CST 2026
+迭代次数: 20 (加密算法), 5 (TLS 握手)
+
+----------------------------------------------------------------
+测试结果
+----------------------------------------------------------------
+总测试数: 3
+通过: 3
+失败: 0
+
+成功率: 100.0%
+
+----------------------------------------------------------------
+详细日志
+----------------------------------------------------------------
+
+=== benchmark_crypto_comprehensive_20260207_030413.log ===
+
+  aes_gcm_dec_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_dec_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_dec_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  aes_gcm_enc_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  generate_key_128bit: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  generate_key_256bit: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_16kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  secure_random_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha256_16kb: 0.050 ms/op (stddev: 0.218, ops/s: 20000.0)
+  sha256_1kb: 0.050 ms/op (stddev: 0.218, ops/s: 20000.0)
+  sha256_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha512_16kb: 0.050 ms/op (stddev: 0.218, ops/s: 20000.0)
+  sha512_1kb: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+  sha512_64b: 0.000 ms/op (stddev: 0.000, ops/s: 0.0)
+
+================================================================
+
+=== Benchmark Results ===
+
+Test                         Mean (ms)     P95 (ms)     P99 (ms)        Ops/s
+---------------------------------------------------------------------------
+aes_gcm_dec_16kb                 0.000        0.000        0.000          0.0
+aes_gcm_dec_1kb                  0.000        0.000        0.000          0.0
+aes_gcm_dec_64b                  0.000        0.000        0.000          0.0
+aes_gcm_enc_16kb                 0.000        0.000        0.000          0.0
+aes_gcm_enc_1kb                  0.000        0.000        0.000          0.0
+aes_gcm_enc_64b                  0.000        0.000        0.000          0.0
+generate_key_128bit              0.000        0.000        0.000          0.0
+generate_key_256bit              0.000        0.000        0.000          0.0
+secure_random_16kb               0.000        0.000        0.000          0.0
+secure_random_1kb                0.000        0.000        0.000          0.0
+secure_random_64b                0.000        0.000        0.000          0.0
+sha256_16kb                      0.050        1.000        1.000      20000.0
+sha256_1kb                       0.050        1.000        1.000      20000.0
+sha256_64b                       0.000        0.000        0.000          0.0
+sha512_16kb                      0.050        1.000        1.000      20000.0
+sha512_1kb                       0.000        0.000        0.000          0.0
+sha512_64b                       0.000        0.000        0.000          0.0
+
+
+Saving baseline to crypto_baseline.json...
+Baseline saved
+
+================================================================
+Benchmark completed successfully
+================================================================
+
+=== benchmark_random_pool_20260207_030413.log ===
+
+
+=================================
+  Random Pool - 1 KB (Standard)
+=================================
+
+Random Pool Enabled (1KB x 10000)       :    38.00 ms  (    256.99 MB/s)
+  Cache hit rate: 100.00%
+  Refill count: 1250
+Direct Generation (1KB x 10000)         :    81.00 ms  (    120.56 MB/s)
+
+
+==================================================
+  Random Pool - 4 KB (Boundary - MaxRequestSize)
+==================================================
+
+Random Pool Enabled (4KB x 1000)        :    15.00 ms  (    260.42 MB/s)
+  Cache hit rate: 100.00%
+  Refill count: 500
+Direct Generation (4KB x 1000)          :    18.00 ms  (    217.01 MB/s)
+
+
+==================================================
+  Random Pool - 8 KB (Large - Direct Generation)
+==================================================
+
+Random Pool Enabled (8KB x 1000)        :    32.00 ms  (    244.14 MB/s)
+  Cache hit rate: 0.00% (expected: 0% - bypasses pool)
+  Cache misses: 1000
+Direct Generation (8KB x 1000)          :    34.00 ms  (    229.78 MB/s)
+
+╔════════════════════════════════════════════════════════╗
+║  Random Pool Performance Summary                      ║
+╚════════════════════════════════════════════════════════╝
+
+Phase B 优化目标：2-5x 性能提升
+
+关键发现：
+  - 小数据块 (256B-1KB): 缓存池显著提升性能
+  - 边界场景 (4KB): 接近 MaxRequestSize，性能提升明显
+  - 大数据块 (8KB): 自动绕过缓存池，性能相当
+
+配置建议：
+  - PoolSize: 8KB (默认)
+  - RefillThreshold: 1KB (默认)
+  - MaxRequestSize: 4KB (默认)
+
+╔════════════════════════════════════════════════════════╗
+║  Benchmark Completed Successfully                     ║
+╚════════════════════════════════════════════════════════╝
+
+=== benchmark_tls_handshake_20260207_030413.log ===
+[2026-02-07 03:05:30.883] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:33.279] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:35.674] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:38.046] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:40.419] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:42.797] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:45.157] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:47.529] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:49.903] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:52.287] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:54.645] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:57.001] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:05:59.361] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:01.717] [INFO] [OpenSSL] SSL Context created (Type: 0)
+  tls12_handshake: 2368.600 ms/op (stddev: 22.249, ops/s: 0.4)
+[2026-02-07 03:06:04.130] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:06.503] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:08.851] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:11.226] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:13.609] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:15.965] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:18.338] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:20.730] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:23.101] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:25.487] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:27.845] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:30.246] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:32.611] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:34.988] [INFO] [OpenSSL] SSL Context created (Type: 0)
+[2026-02-07 03:06:37.362] [INFO] [OpenSSL] SSL Context created (Type: 0)
+  tls13_handshake: 2374.000 ms/op (stddev: 15.697, ops/s: 0.4)
+
+================================================================
+
+=== Benchmark Results ===
+
+Test                         Mean (ms)     P95 (ms)     P99 (ms)        Ops/s
+---------------------------------------------------------------------------
+session_resumption            2351.400     2440.000     2440.000          0.4
+tls12_13_handshake            2381.800     2402.000     2402.000          0.4
+tls12_handshake               2368.600     2413.000     2413.000          0.4
+tls13_handshake               2374.000     2400.000     2400.000          0.4
+
+
+Saving baseline to tls_handshake_baseline.json...
+Baseline saved
+
+================================================================
+Benchmark completed successfully
+================================================================

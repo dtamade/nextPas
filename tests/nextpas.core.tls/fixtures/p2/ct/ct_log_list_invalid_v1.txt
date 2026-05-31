@@ -1,0 +1,2 @@
+INVALID_CT_LOG_LIST
+this is not a valid OpenSSL ct log list format

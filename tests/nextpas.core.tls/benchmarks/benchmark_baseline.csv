@@ -1,0 +1,5 @@
+# Performance Benchmark Results
+# Generated: 2025-12-31 13:10:00
+Name,Duration(ms),Throughput(ops/s),Success
+TLS_ContextCreate_1000,264,3787.88,True
+TLS_ContextCreate_5000,1362,3671.07,True
