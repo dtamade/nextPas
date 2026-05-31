@@ -239,9 +239,8 @@ begin
   {$ifdef CPUX86_64}
   LPos := 0;
 
-  if GHasAVX2 then
+  if (ALen >= 128) and GHasAVX2 then
   begin
-    { AVX2 路径：32 字节一组 }
     while LPos + 32 <= ALen do
     begin
       LP := @AData[LPos];
@@ -258,6 +257,7 @@ begin
       else
         Break;
     end;
+    asm vzeroupper end;
   end;
 
   { SSE2 路径：处理 AVX2 剩余或无 AVX2 时的主循环 }
@@ -282,14 +282,7 @@ begin
   while (LPos < ALen) and (AData[LPos] < $80) do
     Inc(LPos);
   if LPos = ALen then
-  begin
-    { 清除 AVX 上半状态（避免 SSE/AVX 切换惩罚） }
-    if GHasAVX2 then
-      asm vzeroupper end;
     Exit(ALen);
-  end;
-  if GHasAVX2 then
-    asm vzeroupper end;
 
   { 非 ASCII 部分逐码点 }
   Result := LPos;

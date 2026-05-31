@@ -53,10 +53,12 @@ type
   private
     FArea: TRect;
     FContent: array of TCell;
+    FDirtyRows: QWord;
     FImagePlacements: array of TImagePlacement;
     FImagePlacementCount: Integer;
     FImageProtocol: TImageProtocol;
     function IndexOfPos(AX, AY: Integer): Integer; inline;
+    procedure MarkRowDirty(ARow: Integer); inline;
   public
     constructor CreateEmpty(const AArea: TRect);
     constructor CreateFilled(const AArea: TRect; const ACell: TCell);
@@ -164,6 +166,7 @@ constructor TBuffer.CreateEmpty(const AArea: TRect);
 begin
   inherited Create;
   FArea := AArea;
+  FDirtyRows := QWord(-1);
   SetLength(FContent, AArea.Area);
   Reset;
 end;
@@ -174,6 +177,7 @@ var
 begin
   inherited Create;
   FArea := AArea;
+  FDirtyRows := QWord(-1);
   LTotal := AArea.Area;
   SetLength(FContent, LTotal);
   for LIdx := 0 to LTotal - 1 do
@@ -205,8 +209,13 @@ end;
 
 function TBuffer.IndexOfPos(AX, AY: Integer): Integer;
 begin
-  { 调用方负责边界检查。此为内层热路径助手，不为每次读付一次 if。 }
   Result := (AY - FArea.Y) * FArea.Width + (AX - FArea.X);
+end;
+
+procedure TBuffer.MarkRowDirty(ARow: Integer);
+begin
+  if ARow < 64 then
+    FDirtyRows := FDirtyRows or (QWord(1) shl ARow);
 end;
 
 function TBuffer.CellAt(AX, AY: Integer): PCell;
@@ -236,6 +245,7 @@ begin
   if (AY < FArea.Y) or (AY >= FArea.Y + FArea.Height) then Exit;
   if AX >= FArea.X + FArea.Width then Exit;
   if AX < FArea.X then AX := FArea.X;
+  MarkRowDirty(AY - FArea.Y);
 
   LRight := FArea.X + FArea.Width;
   LRemaining := LRight - AX;
@@ -380,11 +390,14 @@ begin
   LClip := FArea.Intersection(A);
   if LClip.IsEmpty then Exit;
   for LY := LClip.Top to LClip.Bottom - 1 do
+  begin
+    MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
       LCP := @FContent[IndexOfPos(LX, LY)];
       CellApplyStyle(LCP^, AStyle);
     end;
+  end;
 end;
 
 procedure TBuffer.FillRect(const A: TRect; ACh: AnsiChar; const AStyle: TStyle);
@@ -400,11 +413,14 @@ begin
   CellSetSymbolAscii(LCell, ACh);
   CellApplyStyle(LCell, AStyle);
   for LY := LClip.Top to LClip.Bottom - 1 do
+  begin
+    MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := LCell;
     end;
+  end;
 end;
 
 procedure TBuffer.ClearRect(const A: TRect);
@@ -416,11 +432,14 @@ begin
   LClip := FArea.Intersection(A);
   if LClip.IsEmpty then Exit;
   for LY := LClip.Top to LClip.Bottom - 1 do
+  begin
+    MarkRowDirty(LY - FArea.Y);
     for LX := LClip.Left to LClip.Right - 1 do
     begin
       LCP := @FContent[IndexOfPos(LX, LY)];
       LCP^ := CELL_EMPTY;
     end;
+  end;
 end;
 
 procedure TBuffer.Reset;
@@ -443,6 +462,7 @@ begin
   if LI < LTotal then
     Move(FContent[0], FContent[LI], (LTotal - LI) * SizeOf(TCell));
   FImagePlacementCount := 0;
+  FDirtyRows := QWord(-1);
 end;
 
 procedure TBuffer.Resize(const ANewArea: TRect);
@@ -530,9 +550,13 @@ begin
     LPrevRow := LPrevBase + (LRow * LW);
     LCurrRow := LCurrBase + (LRow * LW);
 
-    if (LInvalidated = 0) and (LToSkip = 0) and
-       (CompareByte(LPrevRow^, LCurrRow^, LRowBytes) = 0) then
-      Continue;
+    if (LInvalidated = 0) and (LToSkip = 0) then
+    begin
+      if (LRow < 64) and ((ANext.FDirtyRows and (QWord(1) shl LRow)) = 0) then
+        Continue;
+      if CompareByte(LPrevRow^, LCurrRow^, LRowBytes) = 0 then
+        Continue;
+    end;
 
     LPosY := FArea.Y + LRow;
     for LCol := 0 to LW - 1 do
@@ -633,9 +657,13 @@ begin
     LPrevRow := LPrevBase + (LRow * LW);
     LCurrRow := LCurrBase + (LRow * LW);
 
-    if (LInvalidated = 0) and (LToSkip = 0) and
-       (CompareByte(LPrevRow^, LCurrRow^, LRowBytes) = 0) then
-      Continue;
+    if (LInvalidated = 0) and (LToSkip = 0) then
+    begin
+      if (LRow < 64) and ((ANext.FDirtyRows and (QWord(1) shl LRow)) = 0) then
+        Continue;
+      if CompareByte(LPrevRow^, LCurrRow^, LRowBytes) = 0 then
+        Continue;
+    end;
 
     LPosY := FArea.Y + LRow;
     for LCol := 0 to LW - 1 do
