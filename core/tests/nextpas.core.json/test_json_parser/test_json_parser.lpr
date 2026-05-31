@@ -277,6 +277,39 @@ begin
   B.Done;
 end;
 
+procedure TestLargeObjectHashLookup;
+var Doc: TJsonDocument; V: TJsonValue;
+    B: TStringBuilder; W: TJsonWriter;
+    I: Int32;
+    LKey: string;
+begin
+  B.Init(8192);
+  W.Init(B);
+  W.BeginObject;
+  for I := 0 to 99 do
+  begin
+    Str(I, LKey);
+    LKey := 'key' + LKey;
+    W.Key(TStringView.FromStr(LKey));
+    W.Int(I * 10);
+  end;
+  W.EndObject;
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.FromStr(B.ToString)), 'parse 100-key object');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  CheckEqual(Int64(100), Int64(V.ObjectLen), 'len=100');
+  for I := 0 to 99 do
+  begin
+    Str(I, LKey);
+    LKey := 'key' + LKey;
+    CheckEqual(Int64(I * 10), V.ObjectGet(LKey).AsInt, 'lookup ' + LKey);
+  end;
+  Check(not V.ObjectGet('nonexistent').IsValid, 'missing key');
+  Check(not V.ObjectGet('key100').IsValid, 'out of range key');
+  Doc.Done;
+  B.Done;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.json.parser');
   T.Run('parse null', @TestParseNull);
@@ -297,5 +330,6 @@ begin
   T.Run('JsonParseDoc func', @TestJsonParseDocFunc);
   T.Run('round trip', @TestRoundTrip);
   T.Run('large array', @TestLargeArray);
+  T.Run('large object hash lookup', @TestLargeObjectHashLookup);
   T.Summary;
 end.

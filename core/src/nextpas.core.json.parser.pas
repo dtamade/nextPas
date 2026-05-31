@@ -10,6 +10,12 @@ uses
   nextpas.core.json.types;
 
 type
+  TJsonObjectIndex = record
+    Slots: PUInt32;
+    Mask: UInt32;
+  end;
+  PJsonObjectIndex = ^TJsonObjectIndex;
+
   TJsonDocument = record
   private
     FNodes: PJsonNode;
@@ -22,6 +28,8 @@ type
     FInput: TStringView;
     FError: TJsonError;
     FHasError: Boolean;
+    FIndices: PJsonObjectIndex;
+    FIndexCap: UInt32;
     function AddNode: UInt32;
     function AllocStrBuf(ASize: SizeUInt): PAnsiChar;
   public
@@ -34,6 +42,8 @@ type
     function HasError: Boolean; inline;
     function Error: TJsonError; inline;
     function Input: TStringView; inline;
+    procedure EnsureObjectIndex(AObjectIdx: UInt32);
+    function LookupObjectIndex(AObjectIdx: UInt32; const AKey: TStringView): UInt32;
   end;
 
 function JsonParseDoc(const AInput: TStringView;
@@ -48,6 +58,7 @@ uses
   nextpas.core.text.escape,
   nextpas.core.text.number,
   nextpas.core.text.char,
+  nextpas.core.hash.wyhash,
   nextpas.core.json.scanner;
 
 const
@@ -64,12 +75,23 @@ begin
   FStrBufs := FAllocator.Allocate(FStrBufCap * SizeOf(PAnsiChar));
   FStrBufCount := 0;
   FHasError := False;
+  FIndices := nil;
+  FIndexCap := 0;
 end;
 
 procedure TJsonDocument.Done;
 var
   I: UInt32;
 begin
+  if FIndices <> nil then
+  begin
+    for I := 0 to FIndexCap - 1 do
+      if FIndices[I].Slots <> nil then
+        FAllocator.Deallocate(FIndices[I].Slots);
+    FAllocator.Deallocate(FIndices);
+    FIndices := nil;
+    FIndexCap := 0;
+  end;
   if (FStrBufs <> nil) and (FStrBufCount > 0) then
   begin
     for I := 0 to FStrBufCount - 1 do
@@ -600,6 +622,78 @@ begin
   Result.Init(AAllocator);
   if not Result.Parse(AInput) then
     ;
+end;
+
+function NextPow2(V: UInt32): UInt32; inline;
+begin
+  Dec(V);
+  V := V or (V shr 1);
+  V := V or (V shr 2);
+  V := V or (V shr 4);
+  V := V or (V shr 8);
+  V := V or (V shr 16);
+  Result := V + 1;
+end;
+
+procedure TJsonDocument.EnsureObjectIndex(AObjectIdx: UInt32);
+var
+  LNode: PJsonNode;
+  LCap, LSlot: UInt32;
+  LCur: UInt32;
+  LKeyNode: PJsonNode;
+  LH: UInt32;
+  LIdx: PJsonObjectIndex;
+begin
+  if FIndices = nil then
+  begin
+    FIndexCap := FNodeCount;
+    FIndices := FAllocator.Allocate(FIndexCap * SizeOf(TJsonObjectIndex));
+    FillChar(FIndices^, FIndexCap * SizeOf(TJsonObjectIndex), 0);
+  end;
+  if AObjectIdx >= FIndexCap then Exit;
+  LIdx := @FIndices[AObjectIdx];
+  if LIdx^.Slots <> nil then Exit;
+
+  LNode := @FNodes[AObjectIdx];
+  LCap := NextPow2(LNode^.Container.Count * 2);
+  if LCap < 8 then LCap := 8;
+  LIdx^.Mask := LCap - 1;
+  LIdx^.Slots := FAllocator.Allocate(LCap * SizeOf(UInt32));
+  FillChar(LIdx^.Slots^, LCap * SizeOf(UInt32), $FF);
+
+  LCur := LNode^.Container.FirstChild;
+  while LCur <> JSON_NODE_NONE do
+  begin
+    LKeyNode := @FNodes[LCur];
+    LH := WyHash32(LKeyNode^.Str.Data, LKeyNode^.Str.Len);
+    LSlot := LH and LIdx^.Mask;
+    while LIdx^.Slots[LSlot] <> JSON_NODE_NONE do
+      LSlot := (LSlot + 1) and LIdx^.Mask;
+    LIdx^.Slots[LSlot] := LCur;
+    if LKeyNode^.Next <> JSON_NODE_NONE then
+      LCur := FNodes[LKeyNode^.Next].Next
+    else
+      LCur := JSON_NODE_NONE;
+  end;
+end;
+
+function TJsonDocument.LookupObjectIndex(AObjectIdx: UInt32; const AKey: TStringView): UInt32;
+var
+  LIdx: PJsonObjectIndex;
+  LH, LSlot, LKeyIdx: UInt32;
+begin
+  if (FIndices = nil) or (AObjectIdx >= FIndexCap) then Exit(JSON_NODE_NONE);
+  LIdx := @FIndices[AObjectIdx];
+  if LIdx^.Slots = nil then Exit(JSON_NODE_NONE);
+  LH := WyHash32(AKey.Data, AKey.Len);
+  LSlot := LH and LIdx^.Mask;
+  while True do
+  begin
+    LKeyIdx := LIdx^.Slots[LSlot];
+    if LKeyIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+    if AKey.Equals(FNodes[LKeyIdx].Str) then Exit(LKeyIdx);
+    LSlot := (LSlot + 1) and LIdx^.Mask;
+  end;
 end;
 
 end.

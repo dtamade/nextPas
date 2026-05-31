@@ -177,12 +177,21 @@ var
   LNode: PJsonNode;
   LCur: UInt32;
   LKeyNode: PJsonNode;
+  LKeyIdx: UInt32;
 begin
   Result.FDoc := FDoc;
   Result.FIdx := JSON_NODE_NONE;
   if (FIdx = JSON_NODE_NONE) or (FDoc^.Node(FIdx)^.Kind <> jnkObject) then
     Exit;
   LNode := FDoc^.Node(FIdx);
+  if LNode^.Container.Count > JSON_OBJECT_HASH_THRESHOLD then
+  begin
+    FDoc^.EnsureObjectIndex(FIdx);
+    LKeyIdx := FDoc^.LookupObjectIndex(FIdx, AKey);
+    if LKeyIdx <> JSON_NODE_NONE then
+      Result.FIdx := FDoc^.Node(LKeyIdx)^.Next;
+    Exit;
+  end;
   LCur := LNode^.Container.FirstChild;
   while LCur <> JSON_NODE_NONE do
   begin
