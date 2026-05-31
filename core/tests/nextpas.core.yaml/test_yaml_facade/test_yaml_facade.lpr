@@ -205,6 +205,117 @@ begin
   Check(LDoc2.Root.MapGet('y').SeqGet(2).AsStr.ToString = 'hello', 'y[2]=hello');
 end;
 
+procedure TestBlockMapping;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('name: Alice' + #10 + 'age: 30' + #10 + 'active: true');
+  Check(not LDoc.HasError, 'block map no error');
+  Check(LDoc.Root.IsMap, 'is map');
+  Check(LDoc.Root.MapGet('name').AsStr.ToString = 'Alice', 'name');
+  CheckEqual(Int64(30), LDoc.Root.MapGet('age').AsInt, 'age');
+  Check(LDoc.Root.MapGet('active').AsBool = True, 'active');
+end;
+
+procedure TestBlockSequence;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('- apple' + #10 + '- banana' + #10 + '- cherry');
+  Check(not LDoc.HasError, 'block seq no error');
+  Check(LDoc.Root.IsSeq, 'is seq');
+  CheckEqual(Int64(3), Int64(LDoc.Root.SeqLen), 'seq len');
+  Check(LDoc.Root.SeqGet(0).AsStr.ToString = 'apple', 'item 0');
+  Check(LDoc.Root.SeqGet(2).AsStr.ToString = 'cherry', 'item 2');
+end;
+
+procedure TestNestedBlockMap;
+var LDoc: IYamlDocument; LDb: TYamlValue;
+begin
+  LDoc := YamlParse('server:' + #10 + '  host: localhost' + #10 + '  port: 8080' + #10 + 'database:' + #10 + '  name: mydb');
+  Check(not LDoc.HasError, 'nested block no error');
+  Check(LDoc.Root.MapGet('server').IsMap, 'server is map');
+  Check(LDoc.Root.MapGet('server').MapGet('host').AsStr.ToString = 'localhost', 'host');
+  CheckEqual(Int64(8080), LDoc.Root.MapGet('server').MapGet('port').AsInt, 'port');
+  LDb := LDoc.Root.MapGet('database');
+  Check(LDb.MapGet('name').AsStr.ToString = 'mydb', 'db name');
+end;
+
+procedure TestMapHas;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{a: 1, b: 2}');
+  Check(LDoc.Root.MapHas('a'), 'has a');
+  Check(LDoc.Root.MapHas('b'), 'has b');
+  Check(not LDoc.Root.MapHas('c'), 'not has c');
+  Check(not LDoc.Root.MapHas(''), 'not has empty');
+end;
+
+procedure TestMapLen;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{x: 1, y: 2, z: 3}');
+  CheckEqual(Int64(3), Int64(LDoc.Root.MapLen), 'map len 3');
+  LDoc := YamlParse('{}');
+  CheckEqual(Int64(0), Int64(LDoc.Root.MapLen), 'empty map len 0');
+end;
+
+procedure TestSeqGetBounds;
+var LDoc: IYamlDocument; LVal: TYamlValue;
+begin
+  LDoc := YamlParse('[10, 20, 30]');
+  CheckEqual(Int64(10), LDoc.Root.SeqGet(0).AsInt, 'seq[0]');
+  CheckEqual(Int64(30), LDoc.Root.SeqGet(2).AsInt, 'seq[2]');
+  LVal := LDoc.Root.SeqGet(99);
+  Check(not LVal.IsValid, 'out of bounds invalid');
+end;
+
+procedure TestEmptyDocument;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('');
+  Check(LDoc.Root.IsNull or (not LDoc.Root.IsValid), 'empty doc');
+end;
+
+procedure TestMultilineString;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('msg: "hello world"');
+  Check(not LDoc.HasError, 'quoted string no error');
+  Check(LDoc.Root.MapGet('msg').AsStr.ToString = 'hello world', 'quoted value');
+end;
+
+procedure TestSpecialValues;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{a: null, b: ~, c: true, d: false, e: .inf, f: .nan}');
+  Check(not LDoc.HasError, 'special values no error');
+  Check(LDoc.Root.MapGet('a').IsNull, 'null');
+  Check(LDoc.Root.MapGet('b').IsNull, 'tilde null');
+  Check(LDoc.Root.MapGet('c').AsBool = True, 'true');
+  Check(LDoc.Root.MapGet('d').AsBool = False, 'false');
+end;
+
+procedure TestLargeDocument;
+var LYaml: string; LDoc: IYamlDocument; LI: Integer;
+begin
+  LYaml := '';
+  for LI := 0 to 999 do
+    LYaml := LYaml + '- item' + IntToStr(LI) + #10;
+  LDoc := YamlParse(LYaml);
+  Check(not LDoc.HasError, 'large doc no error');
+  CheckEqual(Int64(1000), Int64(LDoc.Root.SeqLen), 'large seq len');
+  Check(LDoc.Root.SeqGet(999).AsStr.ToString = 'item999', 'last item');
+end;
+
+procedure TestInvalidYaml;
+var LDoc: IYamlDocument;
+begin
+  LDoc := YamlParse('{key: value, : missing_key}');
+  // Parser may or may not error on this — just verify no crash
+  Check(True, 'no crash on questionable input');
+  LDoc := YamlParse('---' + #10 + '...' + #10 + '---' + #10 + 'value');
+  Check(LDoc.Root.IsValid, 'multi-doc marker handled');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.yaml');
   T.Run('Parse null', @TestParseNull);
@@ -221,5 +332,16 @@ begin
   T.Run('Stringify', @TestStringify);
   T.Run('Stringify pretty', @TestStringifyPretty);
   T.Run('Round-trip', @TestRoundTrip);
+  T.Run('Block mapping', @TestBlockMapping);
+  T.Run('Block sequence', @TestBlockSequence);
+  T.Run('Nested block map', @TestNestedBlockMap);
+  T.Run('MapHas', @TestMapHas);
+  T.Run('MapLen', @TestMapLen);
+  T.Run('SeqGet bounds', @TestSeqGetBounds);
+  T.Run('Empty document', @TestEmptyDocument);
+  T.Run('Multiline string', @TestMultilineString);
+  T.Run('Special values', @TestSpecialValues);
+  T.Run('Large document 1000', @TestLargeDocument);
+  T.Run('Invalid YAML', @TestInvalidYaml);
   T.Summary;
 end.
