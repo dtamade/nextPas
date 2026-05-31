@@ -1295,6 +1295,7 @@ var
   Lines: array of string;
   LineCount, I, SpacePos: LongInt;
   Line, Token, Arg: string;
+  V: THIRValueId;
 begin
   Result := 0;
   S.Init;
@@ -1365,6 +1366,29 @@ begin
     else if Token = 'strlit' then BlobStrLit(S, Arg)
     else if Token = 'strcmp' then BlobStrCmpPos(S, Arg, 'str_cmp')
     else if Token = 'strpos' then BlobStrCmpPos(S, Arg, 'str_pos')
+    else if Token = 'arrvar' then
+    begin
+      V := FindAlloca(Arg + '$ptr');
+      if V <> 0 then
+        S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
+      else
+      begin
+        EnsureAlloca(Arg + '$ptr', GetPtrType);
+        V := FindAlloca(Arg + '$ptr');
+        if V <> 0 then
+          S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType);
+      end;
+      V := FindAlloca(Arg + '$len');
+      if V <> 0 then
+        S.Push(EmitLoad(GetIntType, V))
+      else
+      begin
+        EnsureAlloca(Arg + '$len', GetIntType);
+        V := FindAlloca(Arg + '$len');
+        if V <> 0 then
+          S.Push(EmitLoad(GetIntType, V));
+      end;
+    end
     else if Token = 'arrload' then BlobArrLoadVar(S, Arg)
     else if Token = 'field' then BlobField(S, Arg)
     else if Token = 'vcall' then BlobVcall(S, Arg)
@@ -1500,8 +1524,24 @@ begin
     end
     else
     begin
-      EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
-      EnsureAlloca(ANode.Operand + '$len', GetIntType);
+      if FPendingParamCount > 0 then
+      begin
+        ParamIdx := FPendingParamLlvmIdx;
+        ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
+        EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
+        EmitStore(GetPtrType, ParamValueId, FindAlloca(ANode.Operand + '$ptr'));
+        Inc(FPendingParamLlvmIdx);
+        ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[FPendingParamLlvmIdx].ValueId;
+        EnsureAlloca(ANode.Operand + '$len', GetIntType);
+        EmitStore(GetIntType, ParamValueId, FindAlloca(ANode.Operand + '$len'));
+        Dec(FPendingParamCount);
+        Inc(FPendingParamLlvmIdx);
+      end
+      else
+      begin
+        EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
+        EnsureAlloca(ANode.Operand + '$len', GetIntType);
+      end;
     end;
   end
   else if ANode.NodeKind = hnkVarDeclPtrRuntime then

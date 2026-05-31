@@ -6203,10 +6203,8 @@ begin
         (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
         IsRuntimeArrVar(ANode.ChildAt(StrCallIdx).Text) then
       begin
-        ABlob := ABlob + 'var ' + ANode.ChildAt(StrCallIdx).Text + '$ptr' + #10;
-        Inc(StrCallArgCount);
-        ABlob := ABlob + 'var ' + ANode.ChildAt(StrCallIdx).Text + '$len' + #10;
-        Inc(StrCallArgCount);
+        ABlob := ABlob + 'arrvar ' + ANode.ChildAt(StrCallIdx).Text + #10;
+        Inc(StrCallArgCount, 2);
       end
       else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), FuncName) then
       begin
@@ -9203,7 +9201,10 @@ begin
                   RegisterRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
-                  (TypeChild.NodeKind = gnkArrayType) then
+                  ((TypeChild.NodeKind = gnkArrayType) or
+                   ((TypeChild.Text = '') and (K + 1 < Child.ChildCount) and
+                    (Child.ChildAt(K + 1) <> nil) and
+                    (Child.ChildAt(K + 1).NodeKind = gnkArrayType))) then
                 begin
                   RegisterRuntimeArrVar(RetVarName);
                 end
