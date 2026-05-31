@@ -408,9 +408,27 @@ begin
           LLit := LLit + Chr(Result.Code[k].Ch);
           Inc(k);
         end;
-        if (LLit = '') or
-           ((k < C.Count) and (Result.Code[k].Op <> opJump) and
-            (Result.Code[k].Op <> opSave) and (Result.Code[k].Op <> opMatch)) then
+        if LLit = '' then
+        begin
+          LIsLitAlt := False;
+          Break;
+        end;
+        if (k < C.Count) and (Result.Code[k].Op = opJump) then
+        begin
+          if Result.Code[k].Target < C.Count then
+          begin
+            LBranchStart := Result.Code[k].Target;
+            while (LBranchStart < C.Count) and (Result.Code[LBranchStart].Op = opSave) do
+              Inc(LBranchStart);
+            if (LBranchStart >= C.Count) or (Result.Code[LBranchStart].Op <> opMatch) then
+            begin
+              LIsLitAlt := False;
+              Break;
+            end;
+          end;
+        end
+        else if (k < C.Count) and (Result.Code[k].Op <> opSave) and
+                (Result.Code[k].Op <> opMatch) then
         begin
           LIsLitAlt := False;
           Break;
@@ -458,10 +476,17 @@ begin
               LLowByte := j;
               Break;
             end;
-          if (LLowByte >= Ord('A')) and (LLowByte <= Ord('Z')) then
+          if (LLowByte >= Ord('A')) and (LLowByte <= Ord('Z')) and
+             CharBitmapTest(Result.Classes[Result.Code[i].ClassIdx], LLowByte + 32) then
             LCaseFoldStr := LCaseFoldStr + Chr(LLowByte + 32)
+          else if (LLowByte >= Ord('a')) and (LLowByte <= Ord('z')) and
+             CharBitmapTest(Result.Classes[Result.Code[i].ClassIdx], LLowByte - 32) then
+            LCaseFoldStr := LCaseFoldStr + Chr(LLowByte)
           else
-            LCaseFoldStr := LCaseFoldStr + Chr(LLowByte);
+          begin
+            LIsCaseFold := False;
+            Break;
+          end;
           Inc(i);
         end
         else
