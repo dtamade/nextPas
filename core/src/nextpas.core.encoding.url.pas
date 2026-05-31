@@ -82,8 +82,10 @@ begin
 
   while LI <= LLen do
   begin
-    if (AEncoded[LI] = '%') and (LI + 2 <= LLen) then
+    if AEncoded[LI] = '%' then
     begin
+      if LI + 2 > LLen then
+        raise EConvertError.Create('UrlDecode: truncated percent-encoding');
       Result[LJ] := Chr((HexVal(AEncoded[LI + 1]) shl 4) or HexVal(AEncoded[LI + 2]));
       Inc(LI, 3);
     end
