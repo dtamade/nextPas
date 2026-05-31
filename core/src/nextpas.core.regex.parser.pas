@@ -145,6 +145,8 @@ begin
         's': begin
           CharBitmapSet(Result^.ClassBitmap, 9);
           CharBitmapSet(Result^.ClassBitmap, 10);
+          CharBitmapSet(Result^.ClassBitmap, 11);
+          CharBitmapSet(Result^.ClassBitmap, 12);
           CharBitmapSet(Result^.ClassBitmap, 13);
           CharBitmapSet(Result^.ClassBitmap, 32);
         end;
@@ -168,6 +170,8 @@ begin
         Break;
       end;
       hi := Ord(Next(P));
+      if lo > hi then
+        raise Exception.Create('invalid character range in regex');
       CharBitmapSetRange(Result^.ClassBitmap, lo, hi);
     end
     else
