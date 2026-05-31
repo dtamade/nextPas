@@ -5,7 +5,7 @@ unit nextpas.core.collections.vecdeque;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,

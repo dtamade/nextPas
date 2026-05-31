@@ -7,7 +7,7 @@ unit nextpas.core.collections.bitset;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,

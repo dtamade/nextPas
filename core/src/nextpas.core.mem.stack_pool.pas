@@ -31,7 +31,7 @@ unit nextpas.core.mem.stack_pool;
 interface
 
 uses
-  SysUtils, Classes,
+  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.error;
@@ -228,7 +228,7 @@ type
    *}
   TStackPoolScopeManager = class
   private
-    FScopes: TList;
+    FScopes: array of TStackPoolScope;
     FPool: TScopedStackPool;
   public
     constructor Create(aPool: TScopedStackPool);
@@ -585,78 +585,92 @@ constructor TStackPoolScopeManager.Create(aPool: TScopedStackPool);
 begin
   inherited Create;
   FPool := aPool;
-  FScopes := TList.Create;
+  FScopes := nil;
 end;
 
 destructor TStackPoolScopeManager.Destroy;
 begin
   ClearAllScopes;
-  FScopes.Free;
+  FScopes := nil;
   inherited Destroy;
 end;
 
 function TStackPoolScopeManager.PushScope: TStackPoolScope;
+var
+  LLen: Integer;
 begin
   Result := TStackPoolScope.Create(FPool);
-  FScopes.Add(Result);
+  LLen := Length(FScopes);
+  SetLength(FScopes, LLen + 1);
+  FScopes[LLen] := Result;
 
   if FPool.Policy.EnableStatistics then
   begin
-    FPool.FStatistics.CurrentScopeDepth := FScopes.Count;
-    if FScopes.Count > FPool.FStatistics.MaxScopeDepth then
-      FPool.FStatistics.MaxScopeDepth := FScopes.Count;
+    FPool.FStatistics.CurrentScopeDepth := Length(FScopes);
+    if Length(FScopes) > FPool.FStatistics.MaxScopeDepth then
+      FPool.FStatistics.MaxScopeDepth := Length(FScopes);
   end;
 end;
 
 procedure TStackPoolScopeManager.PopScope;
 var
   LScope: TStackPoolScope;
+  LLen: Integer;
 begin
-  if FScopes.Count = 0 then Exit;
+  LLen := Length(FScopes);
+  if LLen = 0 then Exit;
 
-  LScope := TStackPoolScope(FScopes.Last);
-  FScopes.Delete(FScopes.Count - 1);
-  // ✅ M-5: 设置 FPool 为 nil，避免 Destroy 中重复调用 RemoveScope
+  LScope := FScopes[LLen - 1];
+  SetLength(FScopes, LLen - 1);
   LScope.FPool := nil;
   LScope.Free;
 
   if FPool.Policy.EnableStatistics then
-    FPool.FStatistics.CurrentScopeDepth := FScopes.Count;
+    FPool.FStatistics.CurrentScopeDepth := Length(FScopes);
 end;
 
 procedure TStackPoolScopeManager.RemoveScope(aScope: TStackPoolScope);
 var
-  LIndex: Integer;
+  LIndex, LLen, I: Integer;
 begin
-  LIndex := FScopes.IndexOf(aScope);
+  LLen := Length(FScopes);
+  LIndex := -1;
+  for I := 0 to LLen - 1 do
+    if FScopes[I] = aScope then
+    begin
+      LIndex := I;
+      Break;
+    end;
   if LIndex >= 0 then
   begin
-    FScopes.Delete(LIndex);
+    for I := LIndex to LLen - 2 do
+      FScopes[I] := FScopes[I + 1];
+    SetLength(FScopes, LLen - 1);
     if FPool.Policy.EnableStatistics then
-      FPool.FStatistics.CurrentScopeDepth := FScopes.Count;
+      FPool.FStatistics.CurrentScopeDepth := Length(FScopes);
   end;
 end;
 
 function TStackPoolScopeManager.GetCurrentScope: TStackPoolScope;
 begin
-  if FScopes.Count > 0 then
-    Result := TStackPoolScope(FScopes.Last)
+  if Length(FScopes) > 0 then
+    Result := FScopes[High(FScopes)]
   else
     Result := nil;
 end;
 
 function TStackPoolScopeManager.GetScopeDepth: Integer;
 begin
-  Result := FScopes.Count;
+  Result := Length(FScopes);
 end;
 
 procedure TStackPoolScopeManager.ClearAllScopes;
 var
   LIndex: Integer;
 begin
-  for LIndex := FScopes.Count - 1 downto 0 do
-    TStackPoolScope(FScopes[LIndex]).Free;
-  FScopes.Clear;
+  for LIndex := High(FScopes) downto 0 do
+    FScopes[LIndex].Free;
+  FScopes := nil;
 
   if FPool.Policy.EnableStatistics then
     FPool.FStatistics.CurrentScopeDepth := 0;

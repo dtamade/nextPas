@@ -5,7 +5,7 @@ unit nextpas.core.collections.intf;
 interface
 
 uses
-  SysUtils, Classes, TypInfo,
+  SysUtils, TypInfo,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,
