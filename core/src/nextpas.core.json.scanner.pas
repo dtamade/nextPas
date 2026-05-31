@@ -1,15 +1,15 @@
 unit nextpas.core.json.scanner;
-{ SIMD structural character scanner for JSON parsing.
-  Identifies positions of { } [ ] : , " using unified vec SIMD comparison.
-  Correctly handles escaped quotes via full odd-backslash algorithm.
-  Ring buffer (256 entries) filled lazily on demand.
-
-  Algorithm per VecWidth-byte chunk:
-  1. CmpEq for each structural char -> OR into structural mask
-  2. Odd-backslash: find escaped positions via even/odd carry propagation
-  3. PrefixXor for in-string tracking
-  4. Filter structural chars outside strings + real quotes
-  5. Expand bitmask to position array via Ctz loop }
+// SIMD structural character scanner for JSON parsing.
+// Identifies positions of { } [ ] : , " using unified vec SIMD comparison.
+// Correctly handles escaped quotes via full odd-backslash algorithm.
+// Ring buffer (256 entries) filled lazily on demand.
+//
+// Algorithm per VecWidth-byte chunk:
+// 1. CmpEq for each structural char -> OR into structural mask
+// 2. Odd-backslash: find escaped positions via even/odd carry propagation
+// 3. PrefixXor for in-string tracking
+// 4. Filter structural chars outside strings + real quotes
+// 5. Expand bitmask to position array via Ctz loop
 
 {$I nextpas.core.settings.inc}
 

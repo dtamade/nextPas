@@ -1,14 +1,13 @@
 unit nextpas.core.json;
-{ High-level JSON facade with automatic lifetime management.
-  Parse JSON into IJsonDocument (refcounted, auto-released).
-  Access values via TJsonValue (zero-cost record view).
-
-  Usage:
-    var Doc: IJsonDocument;
-    Doc := JsonParse('{"name":"Alice","age":30}');
-    WriteLn(Doc.Root.ObjectGet('name').AsStr.ToString);
-    // auto-released when Doc goes out of scope
-}
+// High-level JSON facade with automatic lifetime management.
+// Parse JSON into IJsonDocument (refcounted, auto-released).
+// Access values via TJsonValue (zero-cost record view).
+//
+// Usage:
+//   var Doc: IJsonDocument;
+//   Doc := JsonParse('{"name":"Alice","age":30}');
+//   WriteLn(Doc.Root.ObjectGet('name').AsStr.ToString);
+//   // auto-released when Doc goes out of scope
 
 {$I nextpas.core.settings.inc}
 

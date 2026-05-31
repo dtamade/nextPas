@@ -117,8 +117,6 @@ begin
     soBeginning: LNewPos := AOffset;
     soCurrent: LNewPos := Int64(FPosition) + AOffset;
     soEnd: LNewPos := Int64(FSize) + AOffset;
-  else
-    raise EArgumentError.Create('TBytesStream.Seek: invalid origin');
   end;
   if LNewPos < 0 then
     raise EArgumentError.Create('TBytesStream.Seek: negative position');

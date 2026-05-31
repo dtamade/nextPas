@@ -170,6 +170,7 @@ end;
 
 function TTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
 begin
+  Result := 0;
   raise ENotSupportedError.Create('tcp stream does not support seek');
 end;
 

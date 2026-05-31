@@ -1,17 +1,16 @@
 unit nextpas.core.json.writer;
-{ Streaming JSON serializer. Zero allocation — writes directly to a TStringBuilder.
-  Automatically inserts commas between values.
-
-  Usage:
-    var B: TStringBuilder; W: TJsonWriter;
-    B.Init(256); W.Init(B);
-    W.BeginObject;
-      W.Key('name'); W.Str('Alice');
-      W.Key('age'); W.Int(30);
-    W.EndObject;
-    WriteLn(B.ToString);  // {"name":"Alice","age":30}
-    B.Done;
-}
+// Streaming JSON serializer. Zero allocation — writes directly to a TStringBuilder.
+// Automatically inserts commas between values.
+//
+// Usage:
+//   var B: TStringBuilder; W: TJsonWriter;
+//   B.Init(256); W.Init(B);
+//   W.BeginObject;
+//     W.Key('name'); W.Str('Alice');
+//     W.Key('age'); W.Int(30);
+//   W.EndObject;
+//   WriteLn(B.ToString);  // {"name":"Alice","age":30}
+//   B.Done;
 
 {$I nextpas.core.settings.inc}
 
