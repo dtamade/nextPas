@@ -139,7 +139,7 @@ function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
 var LVal: Int64; LCode: Integer;
 begin
   Val(AStr, LVal, LCode);
-  Result := (LCode = 0);
+  Result := (LCode = 0) and (LVal >= Low(Integer)) and (LVal <= High(Integer));
   if Result then AValue := Integer(LVal);
 end;
 
