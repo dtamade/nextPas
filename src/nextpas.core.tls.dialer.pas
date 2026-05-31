@@ -122,6 +122,18 @@ begin
   Result.Stream := nil;
   Result.Error := TSSLOperationResult.Ok;
 
+  if AHost = '' then
+  begin
+    Result.Error := TSSLOperationResult.Err(sslErrIO, 'TLS dial: empty hostname');
+    Exit;
+  end;
+
+  if APort = 0 then
+  begin
+    Result.Error := TSSLOperationResult.Err(sslErrIO, 'TLS dial: port cannot be 0');
+    Exit;
+  end;
+
   if not ResolveAndConnect(AHost, APort, LSocket, LError) then
   begin
     Result.Error := TSSLOperationResult.Err(sslErrIO, LError);

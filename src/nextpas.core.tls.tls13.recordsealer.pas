@@ -53,6 +53,9 @@ uses
 
 procedure TTLS13RecordSealer.Init(ACipherSuite: Word; const AKey, AIV: TBytes);
 begin
+  // Securely zero old key material before replacing
+  if Length(FKey) > 0 then FillChar(FKey[0], Length(FKey), 0);
+  if Length(FIV) > 0 then FillChar(FIV[0], Length(FIV), 0);
   FCipherSuite := ACipherSuite;
   FKey := Copy(AKey);
   FIV := Copy(AIV);
@@ -73,6 +76,18 @@ begin
   if FState = tssExhausted then
   begin
     AError := 'TLS 1.3 record sealer: sequence number exhausted';
+    Exit;
+  end;
+
+  if Length(FKey) = 0 then
+  begin
+    AError := 'TLS 1.3 record sealer: not initialized (no key)';
+    Exit;
+  end;
+
+  if Length(FIV) <> 12 then
+  begin
+    AError := 'TLS 1.3 record sealer: IV must be 12 bytes (got ' + IntToStr(Length(FIV)) + ')';
     Exit;
   end;
 
@@ -138,6 +153,8 @@ end;
 
 procedure TTLS13RecordOpener.Init(ACipherSuite: Word; const AKey, AIV: TBytes);
 begin
+  if Length(FKey) > 0 then FillChar(FKey[0], Length(FKey), 0);
+  if Length(FIV) > 0 then FillChar(FIV[0], Length(FIV), 0);
   FCipherSuite := ACipherSuite;
   FKey := Copy(AKey);
   FIV := Copy(AIV);

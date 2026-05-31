@@ -115,15 +115,25 @@ var
 begin
   if AStream = nil then Exit;
 
+  // MaxIdle=0 means don't pool — close immediately
+  if FMaxIdle <= 0 then
+  begin
+    AStream.Free;
+    Exit;
+  end;
+
   FLock.Enter;
   try
     // Check pool capacity
     if Length(FEntries) >= FMaxIdle then
     begin
       // Pool full — close oldest
-      FEntries[0].Stream.Free;
-      FEntries[0] := FEntries[High(FEntries)];
-      SetLength(FEntries, Length(FEntries) - 1);
+      if Length(FEntries) > 0 then
+      begin
+        FEntries[0].Stream.Free;
+        FEntries[0] := FEntries[High(FEntries)];
+        SetLength(FEntries, Length(FEntries) - 1);
+      end;
     end;
 
     LIdx := Length(FEntries);
