@@ -34,6 +34,9 @@ function StringReplace(const AStr, AOld, ANew: string; AAll: Boolean = False): s
 
 function TextOfChar(const ACh: Char; const ACount: Integer): string; inline;
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
+function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
+function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
+
 implementation
 
 uses
@@ -76,9 +79,10 @@ begin
 end;
 
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
-var LCode: Integer;
+var LCode: Integer; LTrimmed: string;
 begin
-  Val(AStr, AValue, LCode);
+  LTrimmed := SysUtils.Trim(AStr);
+  Val(LTrimmed, AValue, LCode);
   Result := (LCode = 0);
 end;
 
@@ -143,10 +147,30 @@ begin
 end;
 
 function IntToHex(const AValue: UInt64; const ADigits: Integer): string;
-var LBuf: array[0..31] of AnsiChar; LLen: Int32;
+var LBuf: array[0..31] of AnsiChar; LLen, I: Int32;
 begin
   LLen := nextpas.core.text.number.IntToHexBuffer(AValue, @LBuf[0], ADigits);
   SetLength(Result, LLen);
-  Move(LBuf[0], Result[1], LLen);
+  for I := 0 to LLen - 1 do
+    if (LBuf[I] >= 'a') and (LBuf[I] <= 'f') then
+      Result[I + 1] := Chr(Ord(LBuf[I]) - 32)
+    else
+      Result[I + 1] := LBuf[I];
 end;
+
+function TryStrToInt32(const AStr: string; out AValue: Integer): Boolean;
+var LCode: Integer; LVal: Int32;
+begin
+  Val(AStr, LVal, LCode);
+  AValue := LVal;
+  Result := LCode = 0;
+end;
+
+function TryStrToUInt64(const AStr: string; out AValue: UInt64): Boolean;
+var LCode: Integer;
+begin
+  Val(AStr, AValue, LCode);
+  Result := LCode = 0;
+end;
+
 end.
