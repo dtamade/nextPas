@@ -202,10 +202,16 @@ begin
 end;
 
 function TTeeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LWritten: SizeUInt;
 begin
   Result := FInner.Read(ABuf, ACount);
   if Result > 0 then
-    FWriter.Write(ABuf, Result);
+  begin
+    LWritten := FWriter.Write(ABuf, Result);
+    if LWritten < Result then
+      Result := LWritten;
+  end;
 end;
 
 function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
@@ -277,10 +283,15 @@ end;
 function TMultiWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LI: Integer;
+  LWritten: SizeUInt;
 begin
   Result := ACount;
   for LI := 0 to High(FWriters) do
-    FWriters[LI].Write(ABuf, ACount);
+  begin
+    LWritten := FWriters[LI].Write(ABuf, ACount);
+    if LWritten < Result then
+      Result := LWritten;
+  end;
 end;
 
 function IoMultiWriter(const AWriters: array of IWriter): IWriter;

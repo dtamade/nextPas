@@ -261,8 +261,16 @@ begin
     LRet := inflate(FStream, Z_NO_FLUSH);
     if LRet = Z_STREAM_END then
     begin
-      FDone := True;
-      Break;
+      Result := ACount - FStream.avail_out;
+      if Result > 0 then
+      begin
+        {$PUSH}{$Q-}{$R-}
+        FCRC := UInt32(crc32(ULong(FCRC), @ABuf, Result));
+        Inc(FSize, UInt32(Result));
+        {$POP}
+      end;
+      Close;
+      Exit;
     end;
     if (LRet <> Z_OK) and (LRet <> Z_BUF_ERROR) then
       raise EIOError.Create('gzip: inflate failed (' + IntToStr(LRet) + ')');
