@@ -7718,6 +7718,15 @@ begin
                 'assign-runtime', Decoded, 0, 0,
                 Decoded + #9 + Operand
               );
+              if (LookupClassVar(Decoded) <> '') and
+                TypeMetaIsInterface(LookupClassVar(Decoded)) and
+                (Arg <> nil) and (Arg.NodeKind = gnkIdentifier) and
+                (LookupClassVar(Arg.Text) <> '') and
+                FModel.LookupConstValue(
+                  LookupClassVar(Arg.Text) + '$intf_offset_' + LookupClassVar(Decoded),
+                  Value) then
+                FModel.AddTypedHirNode('intf-adjust-runtime', Decoded, 0, 0,
+                  Decoded + #9 + IntToStr(Value div 8));
             end;
           end;
         end
