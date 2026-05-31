@@ -11,6 +11,20 @@ type
     procedure Free;
   end;
 
+  TInterfacedObject = class(TObject)
+    constructor Create;
+  end;
+
+  Exception = class(TObject)
+    FMessage: Integer;
+    constructor Create(Code: Integer);
+    function GetCode: Integer; virtual;
+  end;
+
+  EAbort = class(Exception);
+  ERangeError = class(Exception);
+  EDivByZero = class(Exception);
+
 implementation
 
 constructor TObject.Create;
@@ -23,6 +37,20 @@ end;
 
 procedure TObject.Free;
 begin
+end;
+
+constructor TInterfacedObject.Create;
+begin
+end;
+
+constructor Exception.Create(Code: Integer);
+begin
+  FMessage := Code;
+end;
+
+function Exception.GetCode: Integer;
+begin
+  Result := FMessage;
 end;
 
 end.
