@@ -107,6 +107,7 @@ type
     function AddOrAssign(const AKey: K; const AValue: V): Boolean;
     function Remove(const AKey: K): Boolean;
     procedure Put(const AKey: K; const AValue: V); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
+    procedure PutNew(const AKey: K; const AValue: V); {$IFDEF NEXTPAS_CORE_INLINE} inline; {$ENDIF}
     function Get(const AKey: K): V;
     function GetOrInsert(const AKey: K; const ADefault: V): V;
     procedure Clear;
@@ -651,6 +652,25 @@ end;
 procedure TSwissTable.Put(const AKey: K; const AValue: V);
 begin
   AddOrAssign(AKey, AValue);
+end;
+
+procedure TSwissTable.PutNew(const AKey: K; const AValue: V);
+var
+  Lh: UInt32;
+  LIdx: SizeUInt;
+begin
+  if FGrowthLeft = 0 then
+    GrowAndRehash;
+  if (GetTypeKind(K) = tkInteger) and (SizeOf(K) = 4) then
+    Lh := InlineHashMix32(PUInt32(@AKey)^)
+  else
+    Lh := KeyHash(AKey);
+  LIdx := FindInsertSlot(Lh);
+  SetCtrl(LIdx, Lh and $7F);
+  FSlots[LIdx].Key := AKey;
+  FSlots[LIdx].Value := AValue;
+  Inc(FCount);
+  Dec(FGrowthLeft);
 end;
 
 function TSwissTable.Get(const AKey: K): V;

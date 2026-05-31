@@ -128,7 +128,7 @@ begin
   begin
     LM := TSwissTableI32I32.Create(N);
     for i := 0 to N - 1 do
-      LM.Put(i, i);
+      LM.PutNew(i, i);
     LM.Free;
   end;
 end;
