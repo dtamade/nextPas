@@ -12,6 +12,7 @@ uses
   nextpas.core.regex.compiler,
   nextpas.core.regex.nfa,
   nextpas.core.regex.dfa,
+  nextpas.core.regex.teddy,
   nextpas.core.text.base,
   nextpas.core.text.scan;
 
@@ -38,6 +39,7 @@ type
   TRegex = record
   private
     FProgram: TRegexProgram;
+    FTeddy: TTeddyMatcher;
     FValid: Boolean;
   public
     class function Compile(const APattern: string): TRegex; static;
@@ -85,11 +87,16 @@ begin
   Result.FProgram.LiteralPrefixLen := 0;
   Result.FProgram.NumSlots := 0;
   Result.FValid := False;
+  Result.FTeddy.PatternCount := 0;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
     Result.FProgram := RegexCompile(LAst, LNumCaptures, LFlags);
     Result.FValid := True;
+    if Result.FProgram.IsLiteralAlt and
+       (Length(Result.FProgram.LiteralAltPatterns) <= 8) then
+      Result.FTeddy := TeddyBuild(Result.FProgram.LiteralAltPatterns,
+        Length(Result.FProgram.LiteralAltPatterns));
   finally
     RegexFreeAst(LAst);
   end;
@@ -107,12 +114,17 @@ begin
   Result.FProgram.LiteralPrefixLen := 0;
   Result.FProgram.NumSlots := 0;
   Result.FValid := False;
+  Result.FTeddy.PatternCount := 0;
   LAst := nil;
   try
     LAst := RegexParse(APattern, LNumCaptures, LFlags);
     LFlags := LFlags + AFlags;
     Result.FProgram := RegexCompile(LAst, LNumCaptures, LFlags);
     Result.FValid := True;
+    if Result.FProgram.IsLiteralAlt and
+       (Length(Result.FProgram.LiteralAltPatterns) <= 8) then
+      Result.FTeddy := TeddyBuild(Result.FProgram.LiteralAltPatterns,
+        Length(Result.FProgram.LiteralAltPatterns));
   finally
     RegexFreeAst(LAst);
   end;
@@ -157,6 +169,8 @@ begin
   end;
   if FProgram.IsLiteralAlt then
   begin
+    if FTeddy.PatternCount > 0 then
+      Exit(TeddyIsMatch(FTeddy, PAnsiChar(AInput), Length(AInput)));
     for i := 0 to High(FProgram.LiteralAltPatterns) do
       if ScanFindSubstring(PAnsiChar(AInput), Length(AInput),
            PAnsiChar(FProgram.LiteralAltPatterns[i]),

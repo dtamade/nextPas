@@ -54,12 +54,6 @@ begin
     Result.LoNibbleTable.u[LLoNib] := Result.LoNibbleTable.u[LLoNib] or LBit;
     Result.HiNibbleTable.u[LHiNib] := Result.HiNibbleTable.u[LHiNib] or LBit;
   end;
-
-  LHiUsed := 0;
-  for i := 0 to 15 do
-    if Result.HiNibbleTable.u[i] <> 0 then Inc(LHiUsed);
-  if LHiUsed < 2 then
-    Result.PatternCount := 0;
 end;
 
 function TeddyVerify(const AMatcher: TTeddyMatcher;
