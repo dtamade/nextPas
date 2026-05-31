@@ -37,6 +37,12 @@ function ReadFileText(const APath: string): string; inline;
 function ReadFileLines(const APath: string): TStringArray; inline;
 procedure WriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
+procedure WriteFileText(const APath: string; const AText: string;
+  const APerm: TFilePermission = PermDefault); inline;
+procedure WriteFileLines(const APath: string; const ALines: TStringArray;
+  const APerm: TFilePermission = PermDefault);
+procedure AppendFile(const APath: string; const AData: TBytes);
+procedure AppendFileText(const APath: string; const AText: string);
 procedure WriteAtomic(const APath: string; const AData: TBytes;
   const APerm: TFilePermission = PermDefault); inline;
 function CopyFile(const ASrc, ADst: string): Int64; inline;
@@ -112,6 +118,48 @@ procedure WriteFile(const APath: string; const AData: TBytes;
   const APerm: TFilePermission);
 begin
   nextpas.core.fs.util.FsWriteFile(APath, AData, APerm);
+end;
+
+procedure WriteFileText(const APath: string; const AText: string;
+  const APerm: TFilePermission);
+var
+  LFile: IFile;
+begin
+  LFile := FsOpenFile(APath, [fmWrite, fmCreate, fmTruncate], APerm);
+  if Length(AText) > 0 then
+    LFile.Write(AText[1], Length(AText));
+end;
+
+procedure WriteFileLines(const APath: string; const ALines: TStringArray;
+  const APerm: TFilePermission);
+var
+  LText: string;
+  LI: Int32;
+begin
+  LText := '';
+  for LI := 0 to Length(ALines) - 1 do
+    LText := LText + ALines[LI] + #10;
+  WriteFileText(APath, LText, APerm);
+end;
+
+procedure AppendFile(const APath: string; const AData: TBytes);
+var
+  LFile: IFile;
+begin
+  LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
+  if Length(AData) > 0 then
+    LFile.Write(AData[0], Length(AData));
+end;
+
+procedure AppendFileText(const APath: string; const AText: string);
+var
+  LFile: IFile;
+begin
+  if Length(AText) > 0 then
+  begin
+    LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
+    LFile.Write(AText[1], Length(AText));
+  end;
 end;
 
 procedure WriteAtomic(const APath: string; const AData: TBytes;
