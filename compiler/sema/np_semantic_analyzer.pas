@@ -6380,6 +6380,49 @@ begin
     Exit(True);
   end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkDotAccess) and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) then
+  begin
+    if Pos(' p' + #10, FuncName) > 0 then
+    begin
+      ArgName := '';
+      for StrCallIdx := 1 to FModel.SymbolCount do
+        if SameText(FModel.SymbolAt(StrCallIdx).Name,
+          ANode.ChildAt(0).ChildAt(1).Text) and
+          SameText(FModel.SymbolAt(StrCallIdx).Kind, 'field') then
+        begin
+          if FModel.SymbolAt(StrCallIdx).TypeId > 0 then
+            ArgName := FModel.TypeAt(
+              FModel.SymbolAt(StrCallIdx).TypeId - 1).Name;
+          Break;
+        end;
+      if ArgName <> '' then
+      begin
+        Folded := TypeMetaVmtSlot(ArgName, ANode.ChildAt(1).Text);
+        if Folded >= 0 then
+        begin
+          ABlob := FuncName + 'vcall ' + IntToStr(Folded) + ' 0';
+          if TypeMetaRetPtr(ArgName, ANode.ChildAt(1).Text) then
+            ABlob := ABlob + ' p' + #10
+          else
+            ABlob := ABlob + #10;
+          Exit(True);
+        end;
+        Folded := TypeMetaFieldIndex(ArgName, ANode.ChildAt(1).Text);
+        if Folded >= 0 then
+        begin
+          ABlob := FuncName + 'int ' + IntToStr(Folded) + #10;
+          if TypeMetaFieldIsPtr(ArgName, ANode.ChildAt(1).Text) then
+            ABlob := ABlob + 'arr_load_ptr' + #10
+          else
+            ABlob := ABlob + 'arr_load' + #10;
+          Exit(True);
+        end;
+      end;
+    end;
+  end;
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin

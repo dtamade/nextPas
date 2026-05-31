@@ -73,10 +73,14 @@ end;
 
 var
   List: TShapeList;
+  S1, S2, S3: TShape;
 begin
   List := TShapeList.Create;
-  List.Add(TShape.Create(27));
-  List.Add(TShape.Create(16));
-  List.Add(TShape.Create(12));
+  S1 := TShape.Create(27);
+  S2 := TShape.Create(16);
+  S3 := TShape.Create(12);
+  List.Add(S1);
+  List.Add(S2);
+  List.Add(S3);
   Halt(List.TotalArea + List.Count);
 end.
