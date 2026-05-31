@@ -108,14 +108,17 @@
 - 累计 16 src 单元（含 text.width）
 - 下一步：Phase 3 — ANSI backend + Terminal（触及 platform 集成：raw mode/FlushToFd/SIGWINCH）
 
-## Phase 3 准备事项（platform 集成）
-
-Phase 3 会触及之前推迟的 platform 前置依赖，需先和 Codex 讨论 nextpas platform 规范下的方案：
-- ansi（escape 序列 emitter）→ 用 core 的 text.builder.TStringBuilder（已有 AppendUInt 等）
-- backend.ansi / backend.test
-- terminal.raw → 用 platform.console + posix.ffi 的 termios（不能用 FPC BaseUnix/termio）
-- terminal → SIGWINCH 用 platform.signal；read/write 用 platform.posix.ffi；epoll 用 platform.io
-- FlushToFd helper（EINTR/short-write 重试）
+### Phase 3 — ANSI Backend + Terminal [进行中]
+- [x] platform 前置依赖（与 Codex 讨论后下沉到 platform 层，符合 host-owner 模型）✅
+  - platform.signal: 补 PLATFORM_SIGWINCH=28（Unix 统一，纯增量）
+  - platform.console: 补 set_raw/restore_raw（不透明 TPlatformConsoleMode 载体）、
+    read/write（EINTR+short-write）、wait_readable（三态 TPlatformConsoleWait）、get_size_fd
+  - 复用已有 platform_monotonic_ns（不重写 clock_gettime）
+  - 现有 console/signal 测试回归通过；新增 console.raw 测试 5/5（pipe 验证）
+- [ ] nextpas.core.tui.ansi ← ftui_ansi（用 TStringBuilder，AppendBytes 调用点加 PAnsiChar cast）
+- [ ] nextpas.core.tui.backend.ansi ← ftui_ansi_backend（Flush 走 platform_console_write）
+- [ ] nextpas.core.tui.backend.test ← ftui_test_backend
+- [ ] nextpas.core.tui.terminal.raw / terminal ← ftui_terminal（RAII owner，消费 platform.console/signal/time）
 
 ## 关键技术笔记
 
