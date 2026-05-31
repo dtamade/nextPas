@@ -31,6 +31,11 @@ type
   { TSSLQuick - Simple one-liner SSL/TLS operations }
   TSSLQuick = class
   public
+    { ==================== Quick Connection ==================== }
+
+    class function TryConnect(const AHost: string; APort: Word;
+      out AConnection: ISSLConnection; out AError: string): Boolean; static;
+
     { ==================== Quick Context Creation ==================== }
 
     class function SecureClient: ISSLContext; static;
@@ -70,9 +75,91 @@ type
 implementation
 
 uses
-  nextpas.core.tls.safety;
+  {$IFDEF UNIX}Sockets, BaseUnix,{$ENDIF}
+  {$IFDEF WINDOWS}WinSock2,{$ENDIF}
+  nextpas.core.tls.safety,
+  nextpas.core.tls.connection.builder;
+
+{$IFDEF UNIX}
+function QuickTcpConnect(const AHost: string; APort: Word; out ASocket: THandle; out AError: string): Boolean;
+var
+  LSock: LongInt;
+  LAddr: Sockets.TInetSockAddr;
+  LIP: Sockets.in_addr;
+begin
+  ASocket := THandle(-1);
+  AError := '';
+  Result := False;
+
+  LIP := Sockets.StrToNetAddr(AHost);
+  if LIP.s_addr = 0 then
+  begin
+    AError := 'Cannot resolve host: ' + AHost;
+    Exit;
+  end;
+
+  LSock := Sockets.fpSocket(2{AF_INET}, 1{SOCK_STREAM}, 0);
+  if LSock < 0 then
+  begin
+    AError := 'Socket creation failed';
+    Exit;
+  end;
+
+  FillChar(LAddr, SizeOf(LAddr), 0);
+  LAddr.sin_family := 2; // AF_INET
+  LAddr.sin_port := Sockets.htons(APort);
+  LAddr.sin_addr := LIP;
+
+  if Sockets.fpConnect(LSock, @LAddr, SizeOf(LAddr)) <> 0 then
+  begin
+    BaseUnix.fpClose(LSock);
+    AError := 'TCP connect failed to ' + AHost + ':' + IntToStr(APort);
+    Exit;
+  end;
+
+  ASocket := THandle(LSock);
+  Result := True;
+end;
+{$ENDIF}
 
 { TSSLQuick }
+
+class function TSSLQuick.TryConnect(const AHost: string; APort: Word;
+  out AConnection: ISSLConnection; out AError: string): Boolean;
+var
+  LCtx: ISSLContext;
+  LBuilder: ISSLConnectionBuilder;
+  LSocket: THandle;
+begin
+  AConnection := nil;
+  AError := '';
+  Result := False;
+
+  {$IFDEF UNIX}
+  if not QuickTcpConnect(AHost, APort, LSocket, AError) then
+    Exit;
+  {$ELSE}
+  AError := 'TryConnect not yet implemented for this platform';
+  Exit;
+  {$ENDIF}
+
+  try
+    LCtx := SecureClient;
+    LBuilder := TSSLConnectionBuilder.CreateWithContext(LCtx);
+    LBuilder.WithSocket(LSocket);
+    LBuilder.WithHostname(AHost);
+    AConnection := LBuilder.BuildClient;
+    if AConnection = nil then
+    begin
+      AError := 'TLS handshake failed to ' + AHost + ':' + IntToStr(APort);
+      Exit;
+    end;
+    Result := True;
+  except
+    on E: Exception do
+      AError := E.Message;
+  end;
+end;
 
 class function TSSLQuick.SecureClient: ISSLContext;
 var
