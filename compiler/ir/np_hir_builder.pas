@@ -393,7 +393,7 @@ var
   I: LongInt;
   Instr: THIRInstr;
 begin
-  for I := 0 to FAllocaCount - 1 do
+  for I := FAllocaCount - 1 downto 0 do
     if SameText(FAllocas[I].Name, AName) then
       Exit(FAllocas[I].Value);
   for I := 0 to FGlobalRefCount - 1 do
