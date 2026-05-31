@@ -79,10 +79,13 @@
 - [ ] backend.test ← ftui_test_backend
 - [ ] terminal ← ftui_terminal / terminal.raw ← ftui_termios + platform
 
-### Phase 4 — Event + Input [未开始]
-- [ ] event ← ftui_event
-- [ ] input ← ftui_input_parser
-- [ ] interaction ← ftui_interaction / focus ← ftui_focus / keybind ← ftui_keybind
+### Phase 4 — Event + Input [完成]
+- [x] nextpas.core.tui.event（161 行，TEvent variant: key/mouse/resize + 便利构造器）
+- [x] nextpas.core.tui.input（443 行，纯函数 byte-stream parser: ASCII/UTF-8/CSI/kitty/SGR mouse）
+- [x] nextpas.core.tui.interaction（121 行，pointer capture + session + hit test + hover）
+- [x] nextpas.core.tui.focus（218 行，TFocusManager: tab-order + spatial navigation）
+- [x] nextpas.core.tui.keybind（246 行，TKeybindManager: modal bindings Normal/Insert/Visual/Command）
+- 测试：test_tui_event + test_tui_interaction + terminal 集成测试（inject bytes → assert events）
 
 ### Phase 5 — Core Widgets [完成]
 - [x] block / paragraph / list / table / gauge / tabs / scrollbar / clear / input / sparkline / barchart / canvas
@@ -95,39 +98,40 @@
 - TInputEditor 重设计：样式参数吸收为 builder，标准 IWidget.Render 签名
 - 全部 widget 单元测试覆盖（30 测试项目，230+ 用例，0 泄漏）
 
-### Phase 7 — App + 收尾 [未开始]
-- [ ] app ← ftui_app / app.screen ← ftui_screen
-- [ ] anim ← ftui_anim / animator / theme ← ftui_theme / chat_theme
-- [ ] task ← ftui_task / loading / frame_budget / clipboard / sixel / image_mgr / 能力检测
-- [ ] 门面 nextpas.core.tui.pas
-- [ ] docs/tui/ + examples + benchmarks
+### Phase 7 — App + 收尾 [完成]
+- [x] nextpas.core.tui.app / app.screen（事件循环 + 多屏）
+- [x] nextpas.core.tui.anim / animator（动画原语 + 帧调度）
+- [x] nextpas.core.tui.theme（配色方案）
+- [x] nextpas.core.tui.task / frame_budget / clipboard / sixel（辅助模块）
+- [x] nextpas.core.tui.pas（门面 re-export）
+- [x] examples: demo_hello / demo_layout / demo_widgets
+- [x] benchmarks: bench_diff / bench_render / bench_input / bench_layout
+- [x] docs/tui/README.md
 
 ---
 
 ## 当前状态
 
-- Phase 0.1 ✅ text.width（12/12）
-- Phase 1 ✅ 完成：base/error/color/modifier/style/cell/widget.intf
-- Phase 2 ✅ 完成：image_cap/buffer/overlay/text/borders/layout/layout.grid/layout.dsl/text.format
-- Phase 3 🔧 进行中：platform 前置依赖完成，ansi/backend/terminal 待落地
-- Phase 4 ⏳ 待开始：event/input/interaction/focus/keybind（已有源码，待正式迁移验证）
-- Phase 5 ✅ 完成：12 个 core widget 全部 class+interface
-- Phase 6 ✅ 完成：28 个 extended widget 全部 class+interface + 单元测试
+- Phase 0.1 ✅ text.width
+- Phase 1 ✅ 基础类型（base/error/color/modifier/style/cell/widget.intf）
+- Phase 2 ✅ Buffer + Text + Layout（image_cap/buffer/overlay/text/borders/layout/grid/dsl/format）
+- Phase 3 ✅ ANSI Backend + Terminal（ansi/backend.ansi/backend.test/terminal）
+- Phase 4 ✅ Event + Input（event/input/interaction/focus/keybind）
+- Phase 5 ✅ Core Widgets（12 个，全部 class+interface）
+- Phase 6 ✅ Extended Widgets（28 个，全部 class+interface + 单元测试）
+- Phase 7 ✅ App Layer（app/anim/theme/task/sixel/clipboard/frame_budget/门面/examples/benchmarks）
 - 全量回归：30 测试项目、230+ 用例全通过、全 0 泄漏
-- 累计 77+ src 单元
-- 下一步：Phase 3 收尾（ansi/backend/terminal）→ Phase 4 → Phase 7 → benchmark + SIMD
+- 累计 77 src 单元、3 examples、4 benchmarks
+- **迁移主体完成。** 剩余：benchmark 数据记录 + SIMD 优化（text.width + buffer diff）
 
-### Phase 3 — ANSI Backend + Terminal [进行中]
-- [x] platform 前置依赖（与 Codex 讨论后下沉到 platform 层，符合 host-owner 模型）✅
-  - platform.signal: 补 PLATFORM_SIGWINCH=28（Unix 统一，纯增量）
-  - platform.console: 补 set_raw/restore_raw（不透明 TPlatformConsoleMode 载体）、
-    read/write（EINTR+short-write）、wait_readable（三态 TPlatformConsoleWait）、get_size_fd
-  - 复用已有 platform_monotonic_ns（不重写 clock_gettime）
-  - 现有 console/signal 测试回归通过；新增 console.raw 测试 5/5（pipe 验证）
-- [ ] nextpas.core.tui.ansi ← ftui_ansi（用 TStringBuilder，AppendBytes 调用点加 PAnsiChar cast）
-- [ ] nextpas.core.tui.backend.ansi ← ftui_ansi_backend（Flush 走 platform_console_write）
-- [ ] nextpas.core.tui.backend.test ← ftui_test_backend
-- [ ] nextpas.core.tui.terminal.raw / terminal ← ftui_terminal（RAII owner，消费 platform.console/signal/time）
+### Phase 3 — ANSI Backend + Terminal [完成]
+- [x] platform 前置依赖（platform.console: set_raw/restore_raw/read/write/wait_readable/get_size; platform.signal: SIGWINCH）
+- [x] nextpas.core.tui.ansi（346 行，ANSI escape emitter → TStringBuilder）
+- [x] nextpas.core.tui.backend.ansi（223 行，DiffEntries → ANSI bytes → platform_console_write）
+- [x] nextpas.core.tui.backend.test（126 行，内存 test backend）
+- [x] nextpas.core.tui.terminal（704 行，双缓冲 + overlay + input queue + SIGWINCH + BeginFrame/EndFrame）
+- terminal.raw 不需要独立单元（raw mode 在 platform.console 层）
+- 测试：test_tui_ansi + test_tui_backend + test_tui_terminal 全通过
 
 ## 关键技术笔记
 
