@@ -260,7 +260,10 @@ begin
     LResult := Scheme + '://';
     if UserInfo <> '' then
       LResult := LResult + UserInfo + '@';
-    LResult := LResult + Host;
+    if Pos(':', Host) > 0 then
+      LResult := LResult + '[' + Host + ']'
+    else
+      LResult := LResult + Host;
     if Port <> 0 then
       LResult := LResult + ':' + IntToStr(Int64(Port));
   end;
