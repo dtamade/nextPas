@@ -5,7 +5,7 @@ unit nextpas.core.encoding.hex;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.encoding.base;
 
 function HexEncode(const AData: TBytes; const ACase: THexCase = hcLower): string;

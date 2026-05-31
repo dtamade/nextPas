@@ -27,7 +27,6 @@ unit nextpas.core.mem.error;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base;  // ✅ MEM-002: 引入 ECore 基类
 
 type

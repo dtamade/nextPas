@@ -30,7 +30,8 @@ function ViewMatchLiteral(var AView: TStringView;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
+  nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
   nextpas.core.text.char;

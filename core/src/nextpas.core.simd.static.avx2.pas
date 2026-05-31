@@ -34,7 +34,7 @@ function VecF64x2Div(const a, b: TVecF64x2): TVecF64x2;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.simd.cpuinfo;
 
 procedure RequireStaticAVX2Target;

@@ -5,7 +5,7 @@ unit nextpas.core.thread.intf;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.thread.base;
 
 type

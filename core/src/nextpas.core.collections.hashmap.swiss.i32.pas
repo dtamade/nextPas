@@ -5,7 +5,7 @@ unit nextpas.core.collections.hashmap.swiss.i32;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.mem.intf,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;

@@ -19,7 +19,7 @@ unit nextpas.core.simd.intrinsics.avx2;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.simd.intrinsics.base;
 
 // === AVX2 256-bit 整数运算 ===

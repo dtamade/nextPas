@@ -23,7 +23,6 @@ procedure CreatePipe(out AReader: IPipeReader; out AWriter: IPipeWriter);
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.sync;
 

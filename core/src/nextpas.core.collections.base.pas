@@ -636,6 +636,7 @@ procedure CheckBounds(aIndex, aCount, aMax: SizeUInt; const aCallerName: string)
 implementation
 
 uses
+  nextpas.core.base.utils,
   nextpas.core.collections.element_manager;
 
 function compare_bool(const aLeft, aRight: Boolean): SizeInt;

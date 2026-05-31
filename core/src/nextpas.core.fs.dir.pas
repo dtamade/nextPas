@@ -5,7 +5,7 @@ unit nextpas.core.fs.dir;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.fs.base,
   nextpas.core.fs.intf;
 
@@ -27,7 +27,6 @@ procedure FsWalk(const ARoot: string; const AFunc: TWalkFunc);
 implementation
 
 uses
-  nextpas.core.errors,
   nextpas.core.fs.errors,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files,

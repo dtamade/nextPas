@@ -5,7 +5,6 @@ unit nextpas.core.collections.tree.rb;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.collections.base;
 

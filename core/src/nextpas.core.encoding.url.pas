@@ -5,7 +5,7 @@ unit nextpas.core.encoding.url;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 function UrlEncode(const AValue: string): string;
 function UrlDecode(const AEncoded: string): string;

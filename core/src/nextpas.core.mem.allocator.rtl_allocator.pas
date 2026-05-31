@@ -5,7 +5,7 @@ unit nextpas.core.mem.allocator.rtl_allocator;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.mem.allocator.base;
 
 type

@@ -5,7 +5,8 @@ unit nextpas.core.io.util;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.io.intf;
 
 function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;

@@ -5,7 +5,8 @@ unit nextpas.core.encoding.base64;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.encoding.base;
 
 function Base64Encode(const AData: TBytes): string;

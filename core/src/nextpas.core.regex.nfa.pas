@@ -24,7 +24,7 @@ function NfaFindAll(const AProgram: TRegexProgram;
 
 implementation
 
-uses SysUtils, nextpas.core.text.scan;
+uses nextpas.core.errors, nextpas.core.text.scan;
 
 { --- Sparse Set: O(1) add, contains, clear --- }
 

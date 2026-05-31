@@ -13,7 +13,7 @@ function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32; AFlags: TRegexFlags
 
 implementation
 
-uses SysUtils;
+uses nextpas.core.errors;
 
 type
   TCompiler = record

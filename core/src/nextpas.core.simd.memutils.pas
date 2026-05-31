@@ -8,7 +8,7 @@ unit nextpas.core.simd.memutils;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 // === Aligned Memory Allocation ===
 

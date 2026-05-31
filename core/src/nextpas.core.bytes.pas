@@ -5,7 +5,6 @@ unit nextpas.core.bytes;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.bytes.base,
   nextpas.core.bytes.ops,

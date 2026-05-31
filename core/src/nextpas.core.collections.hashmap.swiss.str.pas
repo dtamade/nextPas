@@ -6,7 +6,7 @@ interface
 
 uses
   nextpas.core.mem.intf,
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.simd.base,
   nextpas.core.simd.vec16;
 

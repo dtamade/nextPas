@@ -31,7 +31,6 @@ unit nextpas.core.mem.stack_pool;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.mem.error;
