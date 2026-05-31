@@ -64,12 +64,57 @@ implementation
 type
   TInputAdv = class(TInterfacedObject) ByteLen, Width: Integer; Codepoint: UInt32; end;
 
-function InputGraphemeAt(const ABuf; ALen, AOffset: Integer): TInputAdv; inline;
-var LDec: TUTF8DecodeResult;
+function InputGraphemeAt(const ABuf; ALen, AOffset: Integer): TInputAdv;
+var
+  P: PByte;
+  B0, B1, B2, B3: Byte;
+  Cp: LongWord;
+  Need: Integer;
 begin
-  LDec := UTF8Decode(@PByte(@ABuf)[AOffset], ALen - AOffset);
-  if LDec.ByteLen = 0 then begin Result.ByteLen := 1; Result.Width := 1; Result.Codepoint := $FFFD; end
-  else begin Result.ByteLen := LDec.ByteLen; Result.Width := CodepointWidth(LDec.CodePoint); Result.Codepoint := LDec.CodePoint; end;
+  Result.ByteLen := 1;
+  Result.Width := 1;
+  Result.Codepoint := $FFFD;
+  if AOffset >= ALen then Exit;
+  P := PByte(@ABuf);
+  B0 := P[AOffset];
+  if B0 < $80 then
+  begin
+    Result.Codepoint := B0;
+    Result.Width := CodepointWidth(B0);
+    Exit;
+  end;
+  if (B0 and $E0) = $C0 then Need := 2
+  else if (B0 and $F0) = $E0 then Need := 3
+  else if (B0 and $F8) = $F0 then Need := 4
+  else Exit;
+  if AOffset + Need > ALen then Exit;
+  case Need of
+    2: begin
+      B1 := P[AOffset + 1];
+      if (B1 and $C0) <> $80 then Exit;
+      Cp := (LongWord(B0 and $1F) shl 6) or LongWord(B1 and $3F);
+      if Cp < $80 then Exit;
+    end;
+    3: begin
+      B1 := P[AOffset + 1]; B2 := P[AOffset + 2];
+      if ((B1 and $C0) <> $80) or ((B2 and $C0) <> $80) then Exit;
+      Cp := (LongWord(B0 and $0F) shl 12) or (LongWord(B1 and $3F) shl 6) or LongWord(B2 and $3F);
+      if Cp < $800 then Exit;
+      if (Cp >= $D800) and (Cp <= $DFFF) then Exit;
+    end;
+    4: begin
+      B1 := P[AOffset + 1]; B2 := P[AOffset + 2]; B3 := P[AOffset + 3];
+      if ((B1 and $C0) <> $80) or ((B2 and $C0) <> $80) or ((B3 and $C0) <> $80) then Exit;
+      Cp := (LongWord(B0 and $07) shl 18) or (LongWord(B1 and $3F) shl 12) or
+            (LongWord(B2 and $3F) shl 6) or LongWord(B3 and $3F);
+      if Cp < $10000 then Exit;
+      if Cp > $10FFFF then Exit;
+    end;
+  else Exit;
+  end;
+  Result.ByteLen := Need;
+  Result.Codepoint := Cp;
+  Result.Width := CodepointWidth(Cp);
 end;
 
 function Ucs4ToUtf8(Cp: LongWord): AnsiString;
