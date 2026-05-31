@@ -235,6 +235,10 @@ end;
 function TParserState.SetError(const AMsg: PAnsiChar; ALen: Int32): Boolean;
 begin
   Doc^.FError.Message := TStringView.Create(AMsg, SizeUInt(ALen));
+  if LastPos <> POS_NONE then
+    Doc^.FError.Offset := SizeUInt(LastPos)
+  else
+    Doc^.FError.Offset := 0;
   Doc^.FHasError := True;
   Result := False;
 end;
@@ -581,10 +585,33 @@ function TJsonDocument.Parse(const AInput: TStringView): Boolean;
 var
   LState: TParserState;
   LEstimate: UInt32;
+  I: UInt32;
 begin
   FInput := AInput;
   FNodeCount := 0;
   FHasError := False;
+  FError.Message := TStringView.Create(nil, 0);
+  FError.Offset := 0;
+  { Clear cached object indices from previous parse }
+  if FIndices <> nil then
+  begin
+    for I := 0 to FIndexCap - 1 do
+      if FIndices[I].Slots <> nil then
+      begin
+        FAllocator.Deallocate(FIndices[I].Slots);
+        FIndices[I].Slots := nil;
+      end;
+    FAllocator.Deallocate(FIndices);
+    FIndices := nil;
+    FIndexCap := 0;
+  end;
+  { Free string buffers from previous parse }
+  if (FStrBufs <> nil) and (FStrBufCount > 0) then
+  begin
+    for I := 0 to FStrBufCount - 1 do
+      FAllocator.Deallocate(PPointer(PByte(FStrBufs) + I * SizeOf(Pointer))^);
+    FStrBufCount := 0;
+  end;
   LEstimate := UInt32(AInput.Len div 4);
   if LEstimate > FNodeCap then
   begin
