@@ -301,8 +301,6 @@ begin
       Exit;
     Inc(Result);
   end;
-  if Result > 0 then
-    
 end;
 
 function TMpmcQueue.IsEmpty: Boolean;
