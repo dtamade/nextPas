@@ -6329,7 +6329,8 @@ begin
     RegisterClassVar(FuncName, ANode.ChildAt(0).ChildAt(0).Text);
     FModel.AddTypedHirNode(
       'class-new-runtime', IntToStr(Folded), 0, 0, ArgName);
-    if TypeMetaVmtCount(ANode.ChildAt(0).ChildAt(0).Text) > 0 then
+    if (TypeMetaVmtCount(ANode.ChildAt(0).ChildAt(0).Text) > 0) or
+      (TypeMetaInterfaces(ANode.ChildAt(0).ChildAt(0).Text) <> '') then
       FModel.AddTypedHirNode('vmt-store-runtime',
         ANode.ChildAt(0).ChildAt(0).Text, 0, 0,
         FuncName + #9 + ANode.ChildAt(0).ChildAt(0).Text);
@@ -7211,7 +7212,8 @@ begin
             RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
             FModel.AddTypedHirNode(
               'class-new-runtime', IntToStr(Value), 0, 0, StringValue);
-            if TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0 then
+            if (TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) or
+              (TypeMetaInterfaces(RhsNode.ChildAt(0).ChildAt(0).Text) <> '') then
               FModel.AddTypedHirNode('vmt-store-runtime',
                 RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
                 FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
@@ -7328,7 +7330,8 @@ begin
               RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
               FModel.AddTypedHirNode(
                 'class-new-runtime', IntToStr(Value), 0, 0, StringValue);
-              if TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0 then
+              if (TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) or
+              (TypeMetaInterfaces(RhsNode.ChildAt(0).ChildAt(0).Text) <> '') then
                 FModel.AddTypedHirNode('vmt-store-runtime',
                   RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
                   FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
@@ -7349,7 +7352,8 @@ begin
             FModel.AddTypedHirNode(
               'class-new-runtime', IntToStr(Value), 0, 0, Operand
             );
-            if TypeMetaVmtCount(Arg.ChildAt(0).ChildAt(0).Text) > 0 then
+            if (TypeMetaVmtCount(Arg.ChildAt(0).ChildAt(0).Text) > 0) or
+              (TypeMetaInterfaces(Arg.ChildAt(0).ChildAt(0).Text) <> '') then
               FModel.AddTypedHirNode('vmt-store-runtime',
                 Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
                 FuncName + #9 + Arg.ChildAt(0).ChildAt(0).Text);
@@ -7364,7 +7368,8 @@ begin
             FModel.AddTypedHirNode(
               'class-new-runtime', IntToStr(Value), 0, 0, Operand
             );
-            if TypeMetaVmtCount(Arg.ChildAt(0).ChildAt(0).Text) > 0 then
+            if (TypeMetaVmtCount(Arg.ChildAt(0).ChildAt(0).Text) > 0) or
+              (TypeMetaInterfaces(Arg.ChildAt(0).ChildAt(0).Text) <> '') then
               FModel.AddTypedHirNode('vmt-store-runtime',
                 Arg.ChildAt(0).ChildAt(0).Text, 0, 0,
                 Decoded + #9 + Arg.ChildAt(0).ChildAt(0).Text);
@@ -8097,7 +8102,8 @@ begin
               RegisterClassVar(FuncName, RhsNode.ChildAt(0).ChildAt(0).Text);
               FModel.AddTypedHirNode(
                 'class-new-runtime', IntToStr(Value), 0, 0, Decoded);
-              if TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0 then
+              if (TypeMetaVmtCount(RhsNode.ChildAt(0).ChildAt(0).Text) > 0) or
+              (TypeMetaInterfaces(RhsNode.ChildAt(0).ChildAt(0).Text) <> '') then
                 FModel.AddTypedHirNode('vmt-store-runtime',
                   RhsNode.ChildAt(0).ChildAt(0).Text, 0, 0,
                   FuncName + #9 + RhsNode.ChildAt(0).ChildAt(0).Text);
