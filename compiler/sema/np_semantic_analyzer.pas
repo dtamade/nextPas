@@ -6252,6 +6252,26 @@ begin
         ' ' + IntToStr(StrCallArgCount) + #10;
     end
     else if (FCurrentMethodClass <> '') and
+      (Pos('inherited ', ANode.ChildAt(0).Text) = 1) then
+    begin
+      ArgName := Copy(ANode.ChildAt(0).Text, 11, Length(ANode.ChildAt(0).Text));
+      Folded := FModel.FindTypeByName(FCurrentMethodClass);
+      FuncName := '';
+      if Folded > 0 then
+      begin
+        DotPos := FModel.TypeAt(Folded - 1).ParentTypeId;
+        if DotPos > 0 then
+          FuncName := FModel.TypeAt(DotPos - 1).Name;
+      end;
+      if FuncName <> '' then
+        ABlob := 'var self' + #10 + ABlob +
+          'call ' + FuncName + '.' + ArgName +
+          ' ' + IntToStr(StrCallArgCount + 1) + #10
+      else
+        ABlob := ABlob + 'call ' + ANode.ChildAt(0).Text + ' ' +
+          IntToStr(StrCallArgCount) + #10;
+    end
+    else if (FCurrentMethodClass <> '') and
       (FModel.FindSymbolByName(FCurrentMethodClass + '.' + ANode.ChildAt(0).Text) > 0) then
     begin
       Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.ChildAt(0).Text);
@@ -6417,6 +6437,25 @@ begin
       ANode.ChildAt(1).Text);
     ABlob := 'field self ' + IntToStr(Folded) + #10;
     Exit(True);
+  end;
+  if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
+    (Pos('inherited ', ANode.Text) = 1) then
+  begin
+    ArgName := Copy(ANode.Text, 11, Length(ANode.Text));
+    Folded := FModel.FindTypeByName(FCurrentMethodClass);
+    FuncName := '';
+    if Folded > 0 then
+    begin
+      DotPos := FModel.TypeAt(Folded - 1).ParentTypeId;
+      if DotPos > 0 then
+        FuncName := FModel.TypeAt(DotPos - 1).Name;
+    end;
+    if FuncName <> '' then
+    begin
+      ABlob := 'var self' + #10 +
+        'call ' + FuncName + '.' + ArgName + ' 1' + #10;
+      Exit(True);
+    end;
   end;
   if (FCurrentMethodClass <> '') and (ANode.NodeKind = gnkIdentifier) and
     (ANode.Text <> '') and
