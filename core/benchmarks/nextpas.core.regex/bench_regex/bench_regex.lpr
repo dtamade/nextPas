@@ -1,6 +1,6 @@
 program bench_regex;
 {$I nextpas.core.settings.inc}
-uses SysUtils, nextpas.core.bench, nextpas.core.regex;
+uses SysUtils, nextpas.core.bench, nextpas.core.regex, nextpas.core.text.base;
 
 const
   INPUT_SIZE = 10000;
@@ -94,6 +94,41 @@ begin
   end;
 end;
 
+procedure BenchSplit(aIters: Int64);
+var R: TRegex; it: Int64; LParts: TStringArray;
+begin
+  R := TRegex.Compile('\s+');
+  for it := 1 to aIters do
+  begin
+    LParts := R.Split(GInput);
+    Inc(GSink, Length(LParts));
+  end;
+end;
+
+procedure BenchFindIter(aIters: Int64);
+var R: TRegex; it: Int64; LIter: TRegexIter; LM: TMatch; LCount: Int64;
+begin
+  R := TRegex.Compile('\w+');
+  for it := 1 to aIters do
+  begin
+    LIter := R.FindIter(GInput);
+    LCount := 0;
+    while LIter.Next(LM) do Inc(LCount);
+    Inc(GSink, LCount);
+  end;
+end;
+
+procedure BenchLargeInput(aIters: Int64);
+var R: TRegex; it: Int64; LBig: string; LI: Integer;
+begin
+  SetLength(LBig, 100000);
+  for LI := 1 to 100000 do LBig[LI] := Chr(Ord('a') + (LI mod 26));
+  Move('needle'[1], LBig[99990], 6);
+  R := TRegex.Compile('needle');
+  for it := 1 to aIters do
+    if R.IsMatch(LBig) then Inc(GSink);
+end;
+
 begin
   SetLength(GInput, INPUT_SIZE);
   for i := 1 to INPUT_SIZE do GInput[i] := Chr(Ord('a') + (i mod 26));
@@ -115,6 +150,10 @@ begin
   B.Run('Capture Groups (date)', @BenchCaptureGroups);
   B.Run('FindAll (\\w+)', @BenchFindAll);
   B.Run('ReplaceAll (\\d+ -> NUM)', @BenchReplaceAll);
+  B.Run('Split (\\s+)', @BenchSplit);
+  B.Run('FindIter (\\w+)', @BenchFindIter);
+  B.Run('Large 100KB literal', @BenchLargeInput);
+  B.Summary;
   B.Free;
   if GSink < 0 then Write('');
 end.
