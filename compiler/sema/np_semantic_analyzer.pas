@@ -6199,6 +6199,15 @@ begin
         ABlob := ABlob + 'strlit ' + ANode.ChildAt(StrCallIdx).Text + #10;
         Inc(StrCallArgCount, 2);
       end
+      else if (ANode.ChildAt(StrCallIdx) <> nil) and
+        (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
+        IsRuntimeArrVar(ANode.ChildAt(StrCallIdx).Text) then
+      begin
+        ABlob := ABlob + 'var ' + ANode.ChildAt(StrCallIdx).Text + '$ptr' + #10;
+        Inc(StrCallArgCount);
+        ABlob := ABlob + 'var ' + ANode.ChildAt(StrCallIdx).Text + '$len' + #10;
+        Inc(StrCallArgCount);
+      end
       else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), FuncName) then
       begin
         ABlob := ABlob + FuncName;
@@ -9194,6 +9203,11 @@ begin
                   RegisterRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
+                  (TypeChild.NodeKind = gnkArrayType) then
+                begin
+                  RegisterRuntimeArrVar(RetVarName);
+                end
+                else if (TypeChild <> nil) and
                   (TypeMetaSize(TypeChild.Text) > 0) then
                 begin
                   if TypeMetaIsRecord(TypeChild.Text) then
@@ -9204,6 +9218,8 @@ begin
               end;
               if IsStrParam then
                 ParamTypes := ParamTypes + 's'
+              else if IsRuntimeArrVar(RetVarName) then
+                ParamTypes := ParamTypes + 'a'
               else if (ParamChild.ChildCount > 0) and
                 (ParamChild.ChildAt(0) <> nil) and
                 (TypeMetaSize(ParamChild.ChildAt(0).Text) > 0) then
@@ -9297,6 +9313,9 @@ begin
                 RetVarName := Copy(RetVarName, 5, Length(RetVarName));
               if IsRuntimeStrVar(RetVarName) then
                 FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName,
+                  0, 0, RetVarName)
+              else if IsRuntimeArrVar(RetVarName) then
+                FModel.AddTypedHirNode('var-decl-arr-runtime', RetVarName,
                   0, 0, RetVarName)
               else if IsRecordVar(RetVarName) then
                 FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName,

@@ -1924,6 +1924,11 @@ begin
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_ptr', GetPtrType, False, False);
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntType, False, False);
       end
+      else if (I < Length(ParamName)) and (ParamName[I + 1] = 'a') then
+      begin
+        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_ptr', GetPtrType, False, False);
+        FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I) + '_len', GetIntType, False, False);
+      end
       else if (I < Length(ParamName)) and (ParamName[I + 1] = 'v') then
         FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I), GetPtrType, True, False)
       else if (I < Length(ParamName)) and
