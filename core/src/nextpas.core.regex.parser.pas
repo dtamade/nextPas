@@ -41,7 +41,7 @@ type
 
   TAstNodeArray = array of PAstNode;
 
-function RegexParse(const APattern: string; out ANumCaptures: UInt32): PAstNode;
+function RegexParse(const APattern: string; out ANumCaptures: UInt32; out AFlags: TRegexFlags): PAstNode;
 procedure RegexFreeAst(ANode: PAstNode);
 
 implementation
@@ -97,8 +97,11 @@ end;
 function ParseEscape(var P: TParser): PAstNode;
 var ch: Char;
 begin
+  if P.Pos > Length(P.Pattern) then
+    raise ERegexCompileError.Create('trailing backslash', P.Pos);
   ch := Next(P);
   case ch of
+    'p': raise ERegexCompileError.Create('Unicode properties not supported', P.Pos);
     'd': begin Result := NewNode(P, akCharClass); CharBitmapInitDigit(Result^.ClassBitmap); end;
     'D': begin Result := NewNode(P, akCharClass); CharBitmapInitDigit(Result^.ClassBitmap); Result^.ClassNegated := True; end;
     'w': begin Result := NewNode(P, akCharClass); CharBitmapInitWord(Result^.ClassBitmap); end;
@@ -170,7 +173,9 @@ begin
     else
       CharBitmapSet(Result^.ClassBitmap, lo);
   end;
-  if Peek(P) = ']' then Next(P);
+  if Peek(P) = ']' then Next(P)
+  else
+    raise ERegexCompileError.Create('unclosed character class', P.Pos);
 end;
 
 function ParseAtom(var P: TParser): PAstNode; forward;
@@ -182,7 +187,15 @@ var ch: Char; LName: string;
 begin
   ch := Peek(P);
   case ch of
-    #0, ')', '|': Result := nil;
+    #0, '|': Result := nil;
+    ')':
+    begin
+      if P.Depth = 0 then
+        raise ERegexCompileError.Create('unmatched closing parenthesis', P.Pos);
+      Result := nil;
+    end;
+    '*', '+', '?':
+      raise ERegexCompileError.Create('quantifier without preceding atom', P.Pos);
     '.': begin Next(P); Result := NewNode(P, akAnyChar); end;
     '^': begin Next(P); Result := NewNode(P, akAssert); Result^.AssertKind := akStart; end;
     '$': begin Next(P); Result := NewNode(P, akAssert); Result^.AssertKind := akEnd; end;
@@ -277,7 +290,11 @@ begin
         if s = '' then maxV := $FFFFFFFF
         else maxV := StrToIntDef(s, minV);
       end;
-      if Peek(P) = '}' then Next(P);
+      if Peek(P) <> '}' then
+        raise ERegexCompileError.Create('unclosed quantifier', P.Pos);
+      Next(P);
+      if (maxV <> $FFFFFFFF) and (minV > maxV) then
+        raise ERegexCompileError.Create('quantifier min exceeds max', P.Pos);
       if minV > MAX_REPEAT_COUNT then
         raise ERegexCompileError.Create('repeat count exceeds limit', P.Pos);
       if (maxV <> $FFFFFFFF) and (maxV > MAX_REPEAT_COUNT) then
@@ -335,7 +352,7 @@ begin
   Result := alt;
 end;
 
-function RegexParse(const APattern: string; out ANumCaptures: UInt32): PAstNode;
+function RegexParse(const APattern: string; out ANumCaptures: UInt32; out AFlags: TRegexFlags): PAstNode;
 var P: TParser; i: UInt32;
 begin
   P.Pattern := APattern;
@@ -344,6 +361,16 @@ begin
   P.Depth := 0;
   P.NodeCount := 0;
   P.Nodes := nil;
+  AFlags := [];
+
+  // Check for inline (?i) at pattern start
+  if (Length(APattern) >= 4) and (APattern[1] = '(') and (APattern[2] = '?') and
+     (APattern[3] = 'i') and (APattern[4] = ')') then
+  begin
+    AFlags := [rfCaseInsensitive];
+    P.Pos := 5;
+  end;
+
   try
     Result := ParseAlternate(P);
   except

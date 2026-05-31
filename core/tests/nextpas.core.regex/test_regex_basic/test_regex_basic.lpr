@@ -5,7 +5,8 @@ program test_regex_basic;
 uses
   SysUtils,
   nextpas.core.testing,
-  nextpas.core.regex;
+  nextpas.core.regex,
+  nextpas.core.regex.base;
 
 var
   T: TTestRunner;
@@ -627,6 +628,116 @@ begin
   Check(TRegex.TryCompile(pat, R, err), 'nesting at limit');
 end;
 
+procedure TestMalformedPatterns;
+var R: TRegex; err: string;
+begin
+  // Trailing backslash
+  Check(not TRegex.TryCompile('a\', R, err), 'trailing backslash');
+  Check(Pos('trailing backslash', err) > 0, 'trailing backslash msg');
+
+  // Unclosed character class
+  Check(not TRegex.TryCompile('[abc', R, err), 'unclosed char class');
+  Check(Pos('unclosed character class', err) > 0, 'unclosed char class msg');
+
+  // Unclosed quantifier
+  Check(not TRegex.TryCompile('a{', R, err), 'unclosed quantifier');
+  Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier msg');
+
+  Check(not TRegex.TryCompile('a{3', R, err), 'unclosed quantifier no }');
+  Check(Pos('unclosed quantifier', err) > 0, 'unclosed quantifier no } msg');
+
+  // min > max in quantifier
+  Check(not TRegex.TryCompile('a{3,2}', R, err), 'min > max');
+  Check(Pos('min exceeds max', err) > 0, 'min > max msg');
+
+  // Unmatched closing paren
+  Check(not TRegex.TryCompile(')', R, err), 'unmatched )');
+  Check(Pos('unmatched closing parenthesis', err) > 0, 'unmatched ) msg');
+
+  Check(not TRegex.TryCompile('a)', R, err), 'unmatched ) after atom');
+  Check(Pos('unmatched closing parenthesis', err) > 0, 'unmatched ) after atom msg');
+
+  // Quantifier at start (no preceding atom)
+  Check(not TRegex.TryCompile('*a', R, err), '* at start');
+  Check(Pos('quantifier without preceding atom', err) > 0, '* at start msg');
+
+  Check(not TRegex.TryCompile('+a', R, err), '+ at start');
+  Check(Pos('quantifier without preceding atom', err) > 0, '+ at start msg');
+
+  Check(not TRegex.TryCompile('?a', R, err), '? at start');
+  Check(Pos('quantifier without preceding atom', err) > 0, '? at start msg');
+
+  // Unicode properties rejected
+  Check(not TRegex.TryCompile('\p{L}', R, err), '\p{L}');
+  Check(Pos('Unicode properties not supported', err) > 0, '\p{L} msg');
+
+  // Valid patterns still work
+  Check(TRegex.TryCompile('a{3,5}', R, err), 'valid quantifier');
+  Check(TRegex.TryCompile('[abc]', R, err), 'valid char class');
+  Check(TRegex.TryCompile('(a)', R, err), 'valid group');
+  Check(TRegex.TryCompile('a\\b', R, err), 'valid escape');
+end;
+
+procedure TestCaseInsensitive;
+var R: TRegex; M: TMatch; MA: TMatchArray; G: TGroup;
+begin
+  // Inline (?i) flag - literal matching
+  R := TRegex.Compile('(?i)hello');
+  Check(R.IsMatch('hello'), 'ci lowercase');
+  Check(R.IsMatch('HELLO'), 'ci uppercase');
+  Check(R.IsMatch('Hello'), 'ci mixed');
+  Check(R.IsMatch('hElLo'), 'ci random case');
+  Check(not R.IsMatch('goodbye'), 'ci miss');
+
+  // Compile overload with flags
+  R := TRegex.Compile('hello', [rfCaseInsensitive]);
+  Check(R.IsMatch('hello'), 'flag lowercase');
+  Check(R.IsMatch('HELLO'), 'flag uppercase');
+  Check(R.IsMatch('HeLLo'), 'flag mixed');
+  Check(not R.IsMatch('world'), 'flag miss');
+
+  // Char class with case-insensitive
+  R := TRegex.Compile('(?i)[a-z]+');
+  Check(R.IsMatch('abc'), 'ci class lower');
+  Check(R.IsMatch('ABC'), 'ci class upper');
+  Check(R.IsMatch('AbC'), 'ci class mixed');
+  Check(R.IsFullMatch('HELLO'), 'ci class full');
+
+  // Mixed: dot still works
+  R := TRegex.Compile('(?i)a.b');
+  Check(R.IsMatch('a.b'), 'ci dot lower');
+  Check(R.IsMatch('A.B'), 'ci dot upper');
+  Check(R.IsMatch('A5B'), 'ci dot digit');
+  Check(not R.IsMatch('a' + #10 + 'b'), 'ci dot no newline');
+
+  // FindAll with case-insensitive
+  R := TRegex.Compile('(?i)cat');
+  MA := R.FindAll('Cat CAT cat cAt');
+  CheckEqual(Int64(4), Int64(Length(MA)), 'ci findall count');
+
+  // Named groups still work with (?i)
+  R := TRegex.Compile('(?i)(?P<word>[a-z]+)=(?P<num>\d+)');
+  M := R.Find('KEY=123');
+  Check(M.Found, 'ci named found');
+  G := R.GroupByName(M, 'word');
+  Check(G.Found, 'ci named word found');
+  CheckEqual('KEY', G.Value('KEY=123'), 'ci named word value');
+  G := R.GroupByName(M, 'num');
+  CheckEqual('123', G.Value('KEY=123'), 'ci named num value');
+
+  // Non-letter characters are not affected
+  R := TRegex.Compile('(?i)a1b');
+  Check(R.IsMatch('a1b'), 'ci digit unchanged');
+  Check(R.IsMatch('A1B'), 'ci digit upper');
+  Check(not R.IsMatch('a2b'), 'ci digit wrong');
+
+  // Case-insensitive with anchors
+  R := TRegex.Compile('(?i)^hello$');
+  Check(R.IsMatch('HELLO'), 'ci anchored upper');
+  Check(R.IsMatch('hello'), 'ci anchored lower');
+  Check(not R.IsMatch('HELLO!'), 'ci anchored miss');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -668,5 +779,7 @@ begin
   T.Run('Large repeat {100}', @TestLargeRepeat);
   T.Run('Memory stress', @TestMemoryStress);
   T.Run('Compile limits', @TestCompileLimits);
+  T.Run('Malformed patterns', @TestMalformedPatterns);
+  T.Run('Case insensitive', @TestCaseInsensitive);
   T.Summary;
 end.
