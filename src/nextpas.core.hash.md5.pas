@@ -30,6 +30,7 @@ type
     procedure Reset;
     function DigestSize: SizeUInt;
     function BlockSize: SizeUInt;
+    function Clone: IHasher;
   end;
 
 function NewMD5: IHasher;
@@ -73,7 +74,9 @@ var
   A, B, C, D, F: UInt32;
   G, I: Integer;
 begin
-  Move(ABlock^, M[0], 64);
+  for I := 0 to 15 do
+    M[I] := UInt32(ABlock[I*4]) or (UInt32(ABlock[I*4+1]) shl 8) or
+            (UInt32(ABlock[I*4+2]) shl 16) or (UInt32(ABlock[I*4+3]) shl 24);
   A := AA; B := AB; C := AC; D := AD;
 
   for I := 0 to 63 do
@@ -206,6 +209,18 @@ end;
 function TMD5Hasher.BlockSize: SizeUInt;
 begin
   Result := MD5_BLOCK_SIZE;
+end;
+
+function TMD5Hasher.Clone: IHasher;
+var
+  LClone: TMD5Hasher;
+begin
+  LClone := TMD5Hasher.Create;
+  LClone.FA := FA; LClone.FB := FB; LClone.FC := FC; LClone.FD := FD;
+  Move(FBuf[0], LClone.FBuf[0], SizeOf(FBuf));
+  LClone.FBufLen := FBufLen;
+  LClone.FTotalLen := FTotalLen;
+  Result := LClone;
 end;
 
 function NewMD5: IHasher;
