@@ -75,89 +75,35 @@ type
 implementation
 
 uses
-  {$IFDEF UNIX}Sockets, BaseUnix,{$ENDIF}
-  {$IFDEF WINDOWS}WinSock2,{$ENDIF}
   nextpas.core.tls.safety,
-  nextpas.core.tls.connection.builder;
-
-{$IFDEF UNIX}
-function QuickTcpConnect(const AHost: string; APort: Word; out ASocket: THandle; out AError: string): Boolean;
-var
-  LSock: LongInt;
-  LAddr: Sockets.TInetSockAddr;
-  LIP: Sockets.in_addr;
-begin
-  ASocket := THandle(-1);
-  AError := '';
-  Result := False;
-
-  LIP := Sockets.StrToNetAddr(AHost);
-  if LIP.s_addr = 0 then
-  begin
-    AError := 'Cannot resolve host: ' + AHost;
-    Exit;
-  end;
-
-  LSock := Sockets.fpSocket(2{AF_INET}, 1{SOCK_STREAM}, 0);
-  if LSock < 0 then
-  begin
-    AError := 'Socket creation failed';
-    Exit;
-  end;
-
-  FillChar(LAddr, SizeOf(LAddr), 0);
-  LAddr.sin_family := 2; // AF_INET
-  LAddr.sin_port := Sockets.htons(APort);
-  LAddr.sin_addr := LIP;
-
-  if Sockets.fpConnect(LSock, @LAddr, SizeOf(LAddr)) <> 0 then
-  begin
-    BaseUnix.fpClose(LSock);
-    AError := 'TCP connect failed to ' + AHost + ':' + IntToStr(APort);
-    Exit;
-  end;
-
-  ASocket := THandle(LSock);
-  Result := True;
-end;
-{$ENDIF}
+  nextpas.core.tls.dialer;
 
 { TSSLQuick }
 
 class function TSSLQuick.TryConnect(const AHost: string; APort: Word;
   out AConnection: ISSLConnection; out AError: string): Boolean;
 var
-  LCtx: ISSLContext;
-  LBuilder: ISSLConnectionBuilder;
-  LSocket: THandle;
+  LDialer: TSSLDialer;
+  LResult: TSSLDialResult;
 begin
   AConnection := nil;
   AError := '';
   Result := False;
 
-  {$IFDEF UNIX}
-  if not QuickTcpConnect(AHost, APort, LSocket, AError) then
-    Exit;
-  {$ELSE}
-  AError := 'TryConnect not yet implemented for this platform';
-  Exit;
-  {$ENDIF}
-
+  LDialer := TSSLDialer.CreateDefault;
   try
-    LCtx := SecureClient;
-    LBuilder := TSSLConnectionBuilder.CreateWithContext(LCtx);
-    LBuilder.WithSocket(LSocket);
-    LBuilder.WithHostname(AHost);
-    AConnection := LBuilder.BuildClient;
-    if AConnection = nil then
+    LResult := LDialer.Dial(AHost, APort);
+    if LResult.Error.IsErr then
     begin
-      AError := 'TLS handshake failed to ' + AHost + ':' + IntToStr(APort);
+      AError := LResult.Error.ErrorMessage;
       Exit;
     end;
+    AConnection := LResult.Connection;
+    if LResult.Stream <> nil then
+      LResult.Stream.Free;
     Result := True;
-  except
-    on E: Exception do
-      AError := E.Message;
+  finally
+    LDialer.Free;
   end;
 end;
 
