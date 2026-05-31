@@ -144,4 +144,7 @@ begin
   end;
 end;
 
+initialization
+  InitHexDecodeTable;
+
 end.

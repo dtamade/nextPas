@@ -53,6 +53,8 @@ begin
     if LShift >= 64 then
       raise EConvertError.Create('Varint overflow (>10 bytes)');
     LByte := AData[ABytesRead];
+    if (LShift = 63) and ((LByte and $7E) <> 0) then
+      raise EConvertError.Create('Varint overflow (10th byte > 1)');
     Result := Result or (UInt64(LByte and $7F) shl LShift);
     Inc(ABytesRead);
     Inc(LShift, 7);
