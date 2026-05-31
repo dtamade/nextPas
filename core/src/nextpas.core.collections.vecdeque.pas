@@ -1055,13 +1055,12 @@ begin
 
         2: // 保持分段但优化位置
         begin
-          // 将较大的段放在开头，较小的段放在末尾
           if LFirstPartSize >= LSecondPartSize then
           begin
-            LNewBuffer.OverwriteUnchecked(0, FBuffer.GetPtrUnchecked(FHead), LFirstPartSize);
-            LNewBuffer.OverwriteUnchecked(aNewCapacity - LSecondPartSize, FBuffer.GetPtrUnchecked(0), LSecondPartSize);
-            FHead := 0;
-            FTail := aNewCapacity - LSecondPartSize;
+            LNewBuffer.OverwriteUnchecked(0, FBuffer.GetPtrUnchecked(0), LSecondPartSize);
+            LNewBuffer.OverwriteUnchecked(aNewCapacity - LFirstPartSize, FBuffer.GetPtrUnchecked(FHead), LFirstPartSize);
+            FHead := aNewCapacity - LFirstPartSize;
+            FTail := LSecondPartSize;
           end
           else
           begin
