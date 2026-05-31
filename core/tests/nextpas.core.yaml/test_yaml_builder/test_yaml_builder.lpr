@@ -197,6 +197,110 @@ begin
   Check(LRoot.MapGet('a').MapGet('x').IsNull, 'int as map → null');
 end;
 
+procedure TestBuildFloat;
+var LB: TYamlBuilder; LOut: string;
+begin
+  LB.Init;
+  LB.PutFloat(3.14);
+  LOut := LB.Stringify;
+  Check(Pos('3.14', LOut) > 0, 'float 3.14');
+  LB.Done;
+end;
+
+procedure TestBuildString;
+var LB: TYamlBuilder; LOut: string;
+begin
+  LB.Init;
+  LB.PutStr('hello world');
+  LOut := LB.Stringify;
+  Check(Pos('hello world', LOut) > 0, 'string value');
+  LB.Done;
+end;
+
+procedure TestBuildEmptySeq;
+var LB: TYamlBuilder; LOut: string;
+begin
+  LB.Init;
+  LB.BeginSeq;
+  LB.EndSeq;
+  LOut := LB.Stringify;
+  Check(Pos('[]', LOut) > 0, 'empty seq');
+  LB.Done;
+end;
+
+procedure TestBuildEmptyMap;
+var LB: TYamlBuilder; LOut: string;
+begin
+  LB.Init;
+  LB.BeginMap;
+  LB.EndMap;
+  LOut := LB.Stringify;
+  Check(Pos('{}', LOut) > 0, 'empty map');
+  LB.Done;
+end;
+
+procedure TestBuildSeqOfMaps;
+var LB: TYamlBuilder; LOut: string; LDoc: IYamlDocument;
+begin
+  LB.Init;
+  LB.BeginSeq;
+  LB.BeginMap;
+  LB.PutKey('id'); LB.PutInt(1);
+  LB.PutKey('name'); LB.PutStr('Alice');
+  LB.EndMap;
+  LB.BeginMap;
+  LB.PutKey('id'); LB.PutInt(2);
+  LB.PutKey('name'); LB.PutStr('Bob');
+  LB.EndMap;
+  LB.EndSeq;
+  LOut := LB.Stringify;
+  LB.Done;
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'seq of maps no error');
+  CheckEqual(Int64(2), Int64(LDoc.Root.SeqLen), 'seq len 2');
+  CheckEqual(Int64(1), LDoc.Root.SeqGet(0).MapGet('id').AsInt, 'first id');
+  Check(LDoc.Root.SeqGet(1).MapGet('name').AsStr.ToString = 'Bob', 'second name');
+end;
+
+procedure TestBuildMapOfSeqs;
+var LB: TYamlBuilder; LOut: string; LDoc: IYamlDocument;
+begin
+  LB.Init;
+  LB.BeginMap;
+  LB.PutKey('fruits');
+  LB.BeginSeq; LB.PutStr('apple'); LB.PutStr('banana'); LB.EndSeq;
+  LB.PutKey('vegs');
+  LB.BeginSeq; LB.PutStr('carrot'); LB.EndSeq;
+  LB.EndMap;
+  LOut := LB.Stringify;
+  LB.Done;
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'map of seqs no error');
+  CheckEqual(Int64(2), Int64(LDoc.Root.MapGet('fruits').SeqLen), 'fruits len');
+  CheckEqual(Int64(1), Int64(LDoc.Root.MapGet('vegs').SeqLen), 'vegs len');
+end;
+
+procedure TestBuildAllTypes;
+var LB: TYamlBuilder; LOut: string; LDoc: IYamlDocument;
+begin
+  LB.Init;
+  LB.BeginMap;
+  LB.PutKey('null_val'); LB.PutNull;
+  LB.PutKey('bool_val'); LB.PutBool(False);
+  LB.PutKey('int_val'); LB.PutInt(-99);
+  LB.PutKey('float_val'); LB.PutFloat(2.718);
+  LB.PutKey('str_val'); LB.PutStr('test');
+  LB.EndMap;
+  LOut := LB.Stringify;
+  LB.Done;
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'all types no error');
+  Check(LDoc.Root.MapGet('null_val').IsNull, 'null');
+  Check(LDoc.Root.MapGet('bool_val').AsBool = False, 'bool');
+  CheckEqual(Int64(-99), LDoc.Root.MapGet('int_val').AsInt, 'int');
+  Check(LDoc.Root.MapGet('str_val').AsStr.ToString = 'test', 'str');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.yaml.builder');
   T.Run('Build scalar', @TestBuildScalar);
@@ -209,5 +313,12 @@ begin
   T.Run('Malformed input', @TestMalformedInput);
   T.Run('Large input', @TestLargeInput);
   T.Run('Invalid access graceful', @TestInvalidAccessGraceful);
+  T.Run('Build float', @TestBuildFloat);
+  T.Run('Build string', @TestBuildString);
+  T.Run('Build empty seq', @TestBuildEmptySeq);
+  T.Run('Build empty map', @TestBuildEmptyMap);
+  T.Run('Build seq of maps', @TestBuildSeqOfMaps);
+  T.Run('Build map of seqs', @TestBuildMapOfSeqs);
+  T.Run('Build all types', @TestBuildAllTypes);
   T.Summary;
 end.
