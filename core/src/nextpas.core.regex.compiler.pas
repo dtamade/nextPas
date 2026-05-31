@@ -277,10 +277,15 @@ begin
 end;
 
 function RegexCompile(ARoot: PAstNode; ANumCaptures: UInt32; AFlags: TRegexFlags): TRegexProgram;
-var C: TCompiler; inst: TInstruction; i: UInt32;
+var C: TCompiler; inst: TInstruction; i, j, k: UInt32;
     visited: array of Boolean;
     startBitmap, classBitmap: TCharBitmap;
     startClassFull: Boolean;
+    LIsLitAlt: Boolean;
+    LLitAltCount: UInt32;
+    LLitAlts: array of string;
+    LBranchStart: UInt32;
+    LLit: string;
 
   procedure CollectStartBytes(APC: UInt32);
   var LInst: TInstruction;
@@ -366,6 +371,59 @@ begin
     if (i < C.Count) and (Result.Code[i].Op = opSave) then Inc(i);
     if (i < C.Count) and (Result.Code[i].Op = opMatch) and (i = C.Count - 1) then
       Result.IsPureLiteral := True;
+  end;
+
+  Result.IsLiteralAlt := False;
+  Result.LiteralAltPatterns := nil;
+  if (not Result.IsPureLiteral) and (AFlags = []) then
+  begin
+    i := 0;
+    while (i < C.Count) and (Result.Code[i].Op = opSave) do Inc(i);
+    if (i < C.Count) and (Result.Code[i].Op = opSplit) then
+    begin
+      LIsLitAlt := True;
+      LLitAltCount := 0;
+      SetLength(LLitAlts, 32);
+      j := i;
+      while (j < C.Count) and LIsLitAlt do
+      begin
+        if Result.Code[j].Op = opSplit then
+        begin
+          LBranchStart := Result.Code[j].X;
+          j := Result.Code[j].Y;
+        end
+        else
+        begin
+          LBranchStart := j;
+          j := C.Count;
+        end;
+        LLit := '';
+        k := LBranchStart;
+        while (k < C.Count) and (Result.Code[k].Op = opLiteral) do
+        begin
+          LLit := LLit + Chr(Result.Code[k].Ch);
+          Inc(k);
+        end;
+        if (LLit = '') or
+           ((k < C.Count) and (Result.Code[k].Op <> opJump) and
+            (Result.Code[k].Op <> opSave) and (Result.Code[k].Op <> opMatch)) then
+        begin
+          LIsLitAlt := False;
+          Break;
+        end;
+        if LLitAltCount >= Length(LLitAlts) then
+          SetLength(LLitAlts, LLitAltCount * 2);
+        LLitAlts[LLitAltCount] := LLit;
+        Inc(LLitAltCount);
+      end;
+      if LIsLitAlt and (LLitAltCount >= 2) then
+      begin
+        Result.IsLiteralAlt := True;
+        SetLength(Result.LiteralAltPatterns, LLitAltCount);
+        for k := 0 to LLitAltCount - 1 do
+          Result.LiteralAltPatterns[k] := LLitAlts[k];
+      end;
+    end;
   end;
 
   // Compute start byte class (set of bytes that can begin a match)
