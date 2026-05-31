@@ -842,6 +842,64 @@ begin
 
   Token := CurrentToken(ALexer, ACursor);
   case Token.Kind of
+    tkSpecializeKeyword:
+      begin
+        Inc(ACursor);
+        if (ACursor < ALexer.TokenCount) and
+          (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
+        begin
+          Token := CurrentToken(ALexer, ACursor);
+          Token.Lexeme := 'specialize ' + Token.Lexeme;
+          Inc(ACursor);
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
+          begin
+            Token.Lexeme := Token.Lexeme + '<';
+            Inc(ACursor);
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            begin
+              Token.Lexeme := Token.Lexeme + CurrentToken(ALexer, ACursor).Lexeme;
+              Inc(ACursor);
+            end;
+            if (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
+            begin
+              Token.Lexeme := Token.Lexeme + '>';
+              Inc(ACursor);
+            end;
+          end;
+          if (ACursor < ALexer.TokenCount) and
+            (CurrentToken(ALexer, ACursor).Kind = tkLParen) then
+          begin
+            Inc(ACursor);
+            Result := TGreenNode.Create(gnkFunctionCall, Token.ByteOffset, 0,
+              Token.Lexeme);
+            Result.AppendChild(TGreenNode.Create(gnkIdentifier,
+              Token.ByteOffset, 0, Token.Lexeme));
+            while (ACursor < ALexer.TokenCount) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkRParen) and
+              (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+            begin
+              RHS := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+              if RHS <> nil then
+                Result.AppendChild(RHS);
+              if (ACursor < ALexer.TokenCount) and
+                (CurrentToken(ALexer, ACursor).Kind = tkComma) then
+                Inc(ACursor)
+              else
+                Break;
+            end;
+            MatchTokenSilent(ALexer, ACursor, tkRParen);
+          end
+          else
+            Result := TGreenNode.Create(gnkIdentifier, Token.ByteOffset, 0,
+              Token.Lexeme);
+        end
+        else
+          Result := nil;
+      end;
     tkIdentifier, tkNameKeyword, tkMessageKeyword, tkFileKeyword,
       tkInheritedKeyword, tkContainsKeyword, tkRequiresKeyword,
       tkOnKeyword, tkIsKeyword, tkAsKeyword, tkInKeyword,
@@ -2777,6 +2835,7 @@ var
   NameToken: TToken;
   I: LongInt;
   J: LongInt;
+  TypeParamText: string;
 begin
   Node := TGreenNode.Create(gnkProcedureDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2817,13 +2876,24 @@ begin
     (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
   begin
     Inc(ACursor);
+    TypeParamText := '';
     while (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
       (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+    begin
+      if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
+      begin
+        if TypeParamText <> '' then
+          TypeParamText := TypeParamText + ',';
+        TypeParamText := TypeParamText + CurrentToken(ALexer, ACursor).Lexeme;
+      end;
       Inc(ACursor);
+    end;
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
       Inc(ACursor);
+    if TypeParamText <> '' then
+      Node.FText := Node.FText + '<' + TypeParamText + '>';
   end;
 
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
@@ -2944,6 +3014,7 @@ var
   TypeNode: TGreenNode;
   I: LongInt;
   J: LongInt;
+  TypeParamText: string;
 begin
   Node := TGreenNode.Create(gnkFunctionDecl,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2991,13 +3062,24 @@ begin
     (CurrentToken(ALexer, ACursor).Kind = tkLessThan) then
   begin
     Inc(ACursor);
+    TypeParamText := '';
     while (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind <> tkGreaterThan) and
       (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
+    begin
+      if CurrentToken(ALexer, ACursor).Kind = tkIdentifier then
+      begin
+        if TypeParamText <> '' then
+          TypeParamText := TypeParamText + ',';
+        TypeParamText := TypeParamText + CurrentToken(ALexer, ACursor).Lexeme;
+      end;
       Inc(ACursor);
+    end;
     if (ACursor < ALexer.TokenCount) and
       (CurrentToken(ALexer, ACursor).Kind = tkGreaterThan) then
       Inc(ACursor);
+    if TypeParamText <> '' then
+      Node.FText := Node.FText + '<' + TypeParamText + '>';
   end;
 
   ParseParameterList(ALexer, ACursor, Node, ATree, ADiagnostics, ARootFileId);
