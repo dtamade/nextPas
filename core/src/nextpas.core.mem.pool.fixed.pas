@@ -5,7 +5,7 @@ unit nextpas.core.mem.pool.fixed;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.mem.pool.base,    // IPool (decoupled from facade)
   nextpas.core.mem.allocator,    // IAllocator + GetRtlAllocator
   nextpas.core.mem.error;        // EAllocError, TAllocError

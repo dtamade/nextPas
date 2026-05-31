@@ -13,7 +13,7 @@ function NetUdpBind(const AAddr: string; const APort: UInt16): IUdpSocket;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.platform.posix.base,
   nextpas.core.platform.socket,

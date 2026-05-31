@@ -13,7 +13,7 @@ function NetResolveIPv4(const AIP: string): UInt32;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.platform.socket;
 

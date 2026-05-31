@@ -155,7 +155,7 @@ function CollapseSpaces(const aStr: string): string;
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.text.conv;
 
 function RemoveChars(const aStr: string; aChar: Char): string;
 var

@@ -5,7 +5,8 @@ unit nextpas.core.compress.deflate;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
+  nextpas.core.text.conv,
   nextpas.core.io.intf,
   nextpas.core.compress.base,
   nextpas.core.compress.intf;

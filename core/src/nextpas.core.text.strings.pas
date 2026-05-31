@@ -81,7 +81,7 @@ function StringsChunk(const AArr: TStringArray; ASize: SizeUInt): TStringChunks;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.mem.utils;
 
 function StringsContains(const AArr: TStringArray; const AValue: string): Boolean;
