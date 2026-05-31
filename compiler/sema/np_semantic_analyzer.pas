@@ -7192,9 +7192,15 @@ begin
       begin
         Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
           Child.ChildAt(0).ChildAt(1).Text;
-        if FNoFold and IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) then
+        if FNoFold and (IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) or
+          (SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+           (FCurrentRetVarName <> '') and IsRecordVar(FCurrentRetVarName))) then
         begin
-          StringValue := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
+          if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+            (FCurrentRetVarName <> '') then
+            StringValue := LookupRecordVar(FCurrentRetVarName)
+          else
+            StringValue := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
           Value := -1;
           if StringValue <> '' then
             Value := TypeMetaFieldIndex(StringValue,
@@ -7205,11 +7211,21 @@ begin
             if Child.ChildCount >= 2 then
               Arg := Child.ChildAt(1);
             if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
-              FModel.AddTypedHirNode(
-                'record-field-store-runtime', Decoded, 0, 0,
-                Child.ChildAt(0).ChildAt(0).Text + #9 +
-                IntToStr(Value) + #9 + Operand
-              );
+            begin
+              if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
+                (FCurrentRetVarName <> '') then
+                FModel.AddTypedHirNode(
+                  'record-field-store-runtime', Decoded, 0, 0,
+                  FCurrentRetVarName + #9 +
+                  IntToStr(Value) + #9 + Operand
+                )
+              else
+                FModel.AddTypedHirNode(
+                  'record-field-store-runtime', Decoded, 0, 0,
+                  Child.ChildAt(0).ChildAt(0).Text + #9 +
+                  IntToStr(Value) + #9 + Operand
+                );
+            end;
             Continue;
           end;
         end;
