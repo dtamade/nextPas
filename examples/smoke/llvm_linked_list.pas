@@ -49,6 +49,6 @@ var
 begin
   L := TList.Create;
   L.Push(10);
-  L.Push(42);
+  L.Push(40);
   Halt(L.Top + L.Count);
 end.

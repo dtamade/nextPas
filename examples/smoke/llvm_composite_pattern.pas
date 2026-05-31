@@ -66,8 +66,8 @@ var
 begin
   Root := TComposite.Create(0);
   L1 := TLeaf.Create(1, 10);
-  L2 := TLeaf.Create(2, 20);
-  L3 := TLeaf.Create(3, 30);
+  L2 := TLeaf.Create(2, 12);
+  L3 := TLeaf.Create(3, 20);
   Root.Add(L1);
   Root.Add(L2);
   Root.Add(L3);

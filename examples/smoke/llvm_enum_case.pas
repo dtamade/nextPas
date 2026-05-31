@@ -5,10 +5,10 @@ type
 function DirScore(D: Integer): Integer;
 begin
   case D of
-    North: DirScore := 1;
-    East: DirScore := 2;
-    South: DirScore := 3;
-    West: DirScore := 4;
+    North: DirScore := 10;
+    East: DirScore := 11;
+    South: DirScore := 12;
+    West: DirScore := 9;
   else
     DirScore := 0;
   end;

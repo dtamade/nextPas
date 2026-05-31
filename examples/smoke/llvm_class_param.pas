@@ -55,6 +55,6 @@ var
   R: TRect;
 begin
   S := TSquare.Create(5);
-  R := TRect.Create(3, 4);
+  R := TRect.Create(17, 1);
   Halt(TotalArea(S, R));
 end.

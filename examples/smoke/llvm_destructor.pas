@@ -20,7 +20,7 @@ end;
 
 procedure TCounter.Inc;
 begin
-  FCount := FCount + 1;
+  FCount := FCount + 14;
 end;
 
 function TCounter.GetCount: Integer;

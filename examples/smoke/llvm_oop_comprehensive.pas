@@ -76,9 +76,9 @@ var
   S1, S2, S3: TShape;
 begin
   List := TShapeList.Create;
-  S1 := TShape.Create(27);
+  S1 := TShape.Create(10);
   S2 := TShape.Create(16);
-  S3 := TShape.Create(12);
+  S3 := TShape.Create(13);
   List.Add(S1);
   List.Add(S2);
   List.Add(S3);

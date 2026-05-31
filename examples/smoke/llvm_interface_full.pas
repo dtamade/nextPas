@@ -31,7 +31,7 @@ var
   I: Integer;
 begin
   A := TAdder.Create;
-  for I := 1 to 10 do
+  for I := 3 to 9 do
     A.Add(I);
   Halt(A.GetSum);
 end.

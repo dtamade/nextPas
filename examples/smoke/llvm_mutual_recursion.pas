@@ -15,5 +15,5 @@ begin
 end;
 
 begin
-  Halt(IsEven(10) * 10 + IsOdd(7));
+  Halt(IsEven(10) * 40 + IsOdd(7) * 2);
 end.

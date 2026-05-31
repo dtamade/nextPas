@@ -26,5 +26,5 @@ var
   M: TMath;
 begin
   M := TMath.Create(10);
-  Halt(M.Add(3, 7) + M.Scale(2));
+  Halt(M.Add(4, 8) + M.Scale(2));
 end.

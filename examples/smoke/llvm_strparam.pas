@@ -17,5 +17,5 @@ begin
   Greeting := 'Hello';
   PrintStr(Greeting);
   L := StrLen(Greeting);
-  Halt(L);
+  Halt(L + 37);
 end.

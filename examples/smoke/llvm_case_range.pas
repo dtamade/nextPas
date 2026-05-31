@@ -3,9 +3,9 @@ program Llvm_case_range;
 function Classify(X: Integer): Integer;
 begin
   case X of
-    0..9: Classify := 1;
-    10..19: Classify := 2;
-    20, 25, 30: Classify := 3;
+    0..9: Classify := 10;
+    10..19: Classify := 20;
+    20, 25, 30: Classify := 12;
   else
     Classify := 0;
   end;

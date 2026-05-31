@@ -19,9 +19,9 @@ end;
 function Classify(Ch: Integer): Integer;
 begin
   if IsDigit(Ch) = 1 then
-    Classify := 1
+    Classify := 10
   else if IsAlpha(Ch) = 1 then
-    Classify := 2
+    Classify := 16
   else
     Classify := 0;
 end;

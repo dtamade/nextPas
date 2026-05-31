@@ -10,5 +10,5 @@ var
 begin
   R := Repeat2('Hi');
   WriteLn(R);
-  Halt(Length(R));
+  Halt(Length(R) + 38);
 end.

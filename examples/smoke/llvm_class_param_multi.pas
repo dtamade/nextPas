@@ -50,6 +50,6 @@ var
 begin
   D := TDog.Create;
   C := TCat.Create;
-  A := TAnimal.Create(2);
+  A := TAnimal.Create(33);
   Halt(CountLegs(D, C, A));
 end.

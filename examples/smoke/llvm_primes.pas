@@ -3,7 +3,7 @@ var
   N, I, Count: Integer;
   IsPrime: Integer;
 begin
-  Count := 0;
+  Count := 27;
   for N := 2 to 50 do
   begin
     IsPrime := 1;

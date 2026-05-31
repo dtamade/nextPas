@@ -15,7 +15,7 @@ end;
 function TCounter.IsZero: Integer;
 begin
   if FCount = 0 then
-    Result := 1
+    Result := 42
   else
     Result := 0;
 end;

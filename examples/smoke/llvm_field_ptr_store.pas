@@ -53,7 +53,7 @@ var
 begin
   S := TStack.Create;
   S.Push(10);
-  S.Push(20);
+  S.Push(11);
   S.Push(30);
   R := S.Pop;
   R := R + S.Pop;

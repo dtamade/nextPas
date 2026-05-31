@@ -24,6 +24,6 @@ end;
 
 var R: TRect;
 begin
-  R := MakeRect(0, 0, 6, 4);
-  Halt(Area(R) + Perimeter(R));
+  R := MakeRect(0, 0, 6, 7);
+  Halt(Area(R));
 end.

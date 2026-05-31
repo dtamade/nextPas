@@ -11,7 +11,7 @@ type
 constructor TGreeter.Create;
 begin
   FName := 'Hello';
-  FCount := 7;
+  FCount := 37;
 end;
 
 function TGreeter.GetLen: Integer;

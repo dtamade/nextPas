@@ -16,5 +16,5 @@ begin
 end;
 
 begin
-  Halt(specialize MulAdd<Integer>(3, 4, 5));
+  Halt(specialize MulAdd<Integer>(5, 7, 7));
 end.

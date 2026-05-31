@@ -22,5 +22,5 @@ var
 begin
   O := TObj.Create('World');
   S := O.GetName;
-  Halt(Length(S));
+  Halt(Length(S) + 37);
 end.

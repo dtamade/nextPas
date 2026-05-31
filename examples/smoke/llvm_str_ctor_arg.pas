@@ -20,5 +20,5 @@ var
   O: TObj;
 begin
   O := TObj.Create('Hello');
-  Halt(O.GetLen);
+  Halt(O.GetLen + 37);
 end.

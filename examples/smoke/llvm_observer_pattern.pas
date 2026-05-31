@@ -56,7 +56,7 @@ var
 begin
   L := TLogger.Create(1);
   C := TCounter.Create(2);
-  R := Notify(L, 42);
+  R := Notify(L, 36);
   R := R + Notify(C, 0);
   R := R + Notify(C, 0);
   R := R + Notify(C, 0);

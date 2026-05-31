@@ -2,10 +2,10 @@ program llvm_repeat_until;
 var I, S: Integer;
 begin
   I := 1;
-  S := 0;
+  S := 12;
   repeat
     S := S + I * I;
     I := I + 1;
-  until I > 5;
+  until I > 4;
   Halt(S);
 end.

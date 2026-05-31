@@ -34,6 +34,6 @@ end;
 
 var D: TDerived;
 begin
-  D := TDerived.Create(7, 3);
+  D := TDerived.Create(7, 6);
   Halt(D.Compute);
 end.

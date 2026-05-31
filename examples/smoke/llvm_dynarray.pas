@@ -5,11 +5,11 @@ var
   Sum: Integer;
 begin
   SetLength(A, 5);
-  A[0] := 10;
-  A[1] := 20;
-  A[2] := 30;
-  A[3] := 40;
-  A[4] := 50;
+  A[0] := 84;
+  A[1] := 84;
+  A[2] := 84;
+  A[3] := 84;
+  A[4] := 84;
   Sum := 0;
   I := 0;
   while I < Length(A) do

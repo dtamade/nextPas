@@ -4,14 +4,14 @@ var
 begin
   X := 7;
   if (X mod 2) = 1 then
-    R := 1
+    R := 14
   else
     R := 0;
   X := 10;
   if (X mod 2) = 0 then
-    R := R + 1;
+    R := R + 14;
   X := 15;
   if (X mod 3) = 0 then
-    R := R + 1;
+    R := R + 14;
   Halt(R);
 end.

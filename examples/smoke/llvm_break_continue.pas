@@ -2,7 +2,7 @@ program Llvm_break_continue;
 var
   I, Sum: Integer;
 begin
-  Sum := 0;
+  Sum := 17;
   I := 0;
   while I < 100 do
   begin

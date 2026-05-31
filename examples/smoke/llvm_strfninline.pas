@@ -7,5 +7,5 @@ end;
 
 begin
   WriteLn(Greeting);
-  Halt(Length(Greeting));
+  Halt(Length(Greeting) + 31);
 end.

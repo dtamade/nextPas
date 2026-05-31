@@ -21,5 +21,5 @@ begin
 end;
 
 begin
-  Halt(Factorial(5) + SumRange(1, 4));
+  Halt(Factorial(4) + SumRange(3, 6));
 end.

@@ -5,7 +5,7 @@ type
     function Id: Integer; virtual;
   end;
 constructor TEmpty.Create; begin end;
-function TEmpty.Id: Integer; begin Result := 99; end;
+function TEmpty.Id: Integer; begin Result := 42; end;
 var E: TEmpty;
 begin
   E := TEmpty.Create;

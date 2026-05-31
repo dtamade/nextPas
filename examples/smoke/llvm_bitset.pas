@@ -68,5 +68,5 @@ begin
   S.Include(5);
   S.Include(7);
   S.Exclude(2);
-  Halt(S.Count * 10 + S.Contains(5));
+  Halt(S.Count * 14 + S.Contains(2));
 end.

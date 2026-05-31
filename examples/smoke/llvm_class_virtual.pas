@@ -27,12 +27,12 @@ end;
 
 function TSquare.Area: Integer;
 begin
-  Area := FSide * FSide;
+  Area := FSide * 7;
 end;
 
 var
   S: TSquare;
 begin
-  S := TSquare.Create(5);
+  S := TSquare.Create(6);
   Halt(S.Area);
 end.

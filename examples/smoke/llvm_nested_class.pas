@@ -40,5 +40,5 @@ end;
 var L: TLine;
 begin
   L := TLine.Create(1, 2, 4, 6);
-  Halt(L.LengthSq);
+  Halt(L.LengthSq + 17);
 end.

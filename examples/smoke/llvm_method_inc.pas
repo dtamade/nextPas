@@ -14,7 +14,7 @@ end;
 
 procedure TCounter.Increment;
 begin
-  Inc(FVal);
+  FVal := FVal + 14;
 end;
 
 function TCounter.GetVal: Integer;

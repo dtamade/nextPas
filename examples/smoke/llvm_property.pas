@@ -42,7 +42,7 @@ end;
 var
   B: TBox;
 begin
-  B := TBox.Create(3, 5);
+  B := TBox.Create(3, 35);
   B.Width := 7;
   Halt(B.Width + B.Height);
 end.

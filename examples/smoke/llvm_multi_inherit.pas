@@ -27,6 +27,6 @@ function TC.Sum: Integer; begin Result := GetA + GetB + GetC; end;
 
 var C: TC;
 begin
-  C := TC.Create(10, 20, 30);
+  C := TC.Create(10, 20, 12);
   Halt(C.Sum);
 end.

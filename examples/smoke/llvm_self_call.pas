@@ -36,6 +36,6 @@ var
 begin
   A := TAccum.Create(1);
   A.AddTwice(3);
-  A.Add(2);
+  A.Add(35);
   Halt(A.GetVal);
 end.

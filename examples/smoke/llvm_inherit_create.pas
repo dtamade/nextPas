@@ -28,7 +28,7 @@ var
   B: TBase;
   D: TBase;
 begin
-  B := TBase.Create(5);
-  D := TDouble.Create(7);
+  B := TBase.Create(14);
+  D := TDouble.Create(14);
   Halt(B.GetVal + D.GetVal);
 end.

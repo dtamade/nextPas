@@ -28,5 +28,5 @@ begin
 end;
 
 begin
-  Halt(EvalChain(2, 1, 3, 3, 4));
+  Halt(EvalChain(2, 1, 5, 3, 6));
 end.

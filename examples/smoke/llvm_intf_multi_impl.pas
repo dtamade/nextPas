@@ -24,7 +24,7 @@ var
 begin
   B := TBuffer.Create;
   W := B;
-  W.Store(77);
+  W.Store(42);
   R := B;
   Halt(R.Read);
 end.

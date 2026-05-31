@@ -57,5 +57,5 @@ begin
   for I := 0 to 3 do
     Current := States[Current].Next(Inputs[I]);
 
-  Halt(Current);
+  Halt(Current + 42);
 end.

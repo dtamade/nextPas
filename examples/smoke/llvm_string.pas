@@ -12,5 +12,5 @@ begin
   WriteLn(Greet);
   WriteLn(Who);
   WriteLn(Msg);
-  Halt(L);
+  Halt(L + 32);
 end.

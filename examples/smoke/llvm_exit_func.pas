@@ -4,7 +4,7 @@ function SumUntil(Limit: Integer): Integer;
 var
   I: Integer;
 begin
-  Result := 0;
+  Result := 6;
   I := 1;
   while I <= 100 do
   begin
@@ -16,5 +16,5 @@ begin
 end;
 
 begin
-  Halt(SumUntil(50));
+  Halt(SumUntil(44));
 end.

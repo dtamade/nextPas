@@ -35,6 +35,6 @@ end;
 
 var C: TC;
 begin
-  C := TC.Create(3);
+  C := TC.Create(16);
   Halt(C.Compute);
 end.

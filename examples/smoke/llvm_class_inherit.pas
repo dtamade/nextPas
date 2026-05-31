@@ -35,6 +35,6 @@ end;
 var
   D: TDog;
 begin
-  D := TDog.Create(4, 30);
+  D := TDog.Create(4, 38);
   Halt(D.GetTotal);
 end.

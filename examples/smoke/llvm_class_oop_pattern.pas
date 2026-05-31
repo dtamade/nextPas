@@ -41,6 +41,6 @@ end;
 var
   A: TAnimal;
 begin
-  A := TCat.Create(5, 9);
+  A := TCat.Create(30, 12);
   Halt(A.Info);
 end.

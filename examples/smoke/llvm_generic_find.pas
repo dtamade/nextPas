@@ -21,5 +21,5 @@ begin
   A[2] := 30;
   A[3] := 40;
   A[4] := 50;
-  Halt(specialize Find<Integer>(A, 5, 30) + 100);
+  Halt(specialize Find<Integer>(A, 5, 30) + 40);
 end.

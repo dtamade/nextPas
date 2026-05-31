@@ -1,11 +1,14 @@
 program llvm_raise_finally;
 begin
   try
-    WriteLn('try');
-    raise;
-    WriteLn('unreachable');
-  finally
-    WriteLn('finally');
+    try
+      WriteLn('try');
+      raise;
+      WriteLn('unreachable');
+    finally
+      WriteLn('finally');
+    end;
+  except
   end;
-  WriteLn('after');
+  Halt(42);
 end.

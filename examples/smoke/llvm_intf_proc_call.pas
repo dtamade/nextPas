@@ -23,7 +23,7 @@ end;
 
 procedure TCounter.Inc;
 begin
-  FVal := FVal + 1;
+  FVal := FVal + 14;
 end;
 
 var

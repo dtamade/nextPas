@@ -9,7 +9,7 @@ type
 
 function TImpl.Count: Integer;
 begin
-  Count := 99;
+  Count := 42;
 end;
 
 var

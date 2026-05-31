@@ -7,8 +7,8 @@ begin
   SetLength(Arr, N);
   Arr[0] := 42;
   Arr[1] := 17;
-  Arr[2] := 93;
-  Arr[3] := 5;
+  Arr[2] := 92;
+  Arr[3] := 4;
   Arr[4] := 28;
 
   for I := 0 to N - 2 do

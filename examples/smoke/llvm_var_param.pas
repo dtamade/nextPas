@@ -6,7 +6,7 @@ end;
 var
   A: Integer;
 begin
-  A := 5;
+  A := 40;
   Inc2(A);
   Halt(A);
 end.

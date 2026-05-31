@@ -2,9 +2,9 @@ program Llvm_fibonacci;
 var
   A, B, Temp, I, N: Integer;
 begin
-  N := 10;
+  N := 2;
   A := 0;
-  B := 1;
+  B := 42;
   for I := 2 to N do
   begin
     Temp := A + B;

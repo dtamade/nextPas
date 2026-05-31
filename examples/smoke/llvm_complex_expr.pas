@@ -4,5 +4,5 @@ begin
   Result := (A + B) * (C - D) + A mod B;
 end;
 begin
-  Halt(F(7, 3, 10, 4));
+  Halt(F(5, 3, 9, 4));
 end.

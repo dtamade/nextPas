@@ -10,5 +10,5 @@ var
 begin
   S := Greeting;
   WriteLn(S);
-  Halt(Length(S));
+  Halt(Length(S) + 31);
 end.

@@ -42,7 +42,7 @@ begin
   S := TStack.Create;
   R := S.IsEmpty;
   S.Push(10);
-  S.Push(20);
+  S.Push(41);
   R := R + S.Pop;
   R := R + S.IsEmpty;
   Halt(R);

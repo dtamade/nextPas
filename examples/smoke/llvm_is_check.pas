@@ -23,12 +23,12 @@ begin
   B := TBase.Create;
   R := 0;
   if C is TChild then
-    R := R + 10;
+    R := R + 11;
   if C is TBase then
-    R := R + 20;
+    R := R + 21;
   if B is TChild then
     R := R + 100;
   if B is TBase then
-    R := R + 1;
+    R := R + 10;
   Halt(R);
 end.

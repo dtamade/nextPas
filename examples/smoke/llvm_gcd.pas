@@ -10,5 +10,5 @@ begin
   GCD := A;
 end;
 begin
-  Halt(GCD(48, 18));
+  Halt(GCD(84, 42));
 end.

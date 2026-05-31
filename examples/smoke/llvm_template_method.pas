@@ -37,7 +37,7 @@ end;
 
 function TDoubleProcessor.PostProcess(X: Integer): Integer;
 begin
-  Result := X + 10;
+  Result := X + 31;
 end;
 
 var P: TDoubleProcessor;

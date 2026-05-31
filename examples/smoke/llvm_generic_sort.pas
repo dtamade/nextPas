@@ -18,7 +18,7 @@ var A: array of Integer;
 begin
   SetLength(A, 4);
   A[0] := 30;
-  A[1] := 50;
+  A[1] := 42;
   A[2] := 10;
   A[3] := 40;
   Halt(ArrayMax(A, 4));

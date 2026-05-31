@@ -22,7 +22,7 @@ begin
   try
     raise TError.Create(42);
   except
-    R := 99;
+    R := 42;
   end;
   Halt(R);
 end.

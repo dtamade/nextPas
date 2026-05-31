@@ -19,6 +19,6 @@ begin
   O := TImpl.Create;
   R := 0;
   if O is ICounter then
-    R := 50;
+    R := 42;
   Halt(R);
 end.

@@ -25,7 +25,7 @@ function TAnimal.Legs: Integer; begin Result := 0; end;
 function TDog.Sound: Integer; begin Result := 1; end;
 function TDog.Legs: Integer; begin Result := 4; end;
 function TCat.Sound: Integer; begin Result := 2; end;
-function TCat.Legs: Integer; begin Result := 4; end;
+function TCat.Legs: Integer; begin Result := 8; end;
 
 function Score(A: TAnimal): Integer;
 begin

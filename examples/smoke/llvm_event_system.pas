@@ -59,5 +59,5 @@ begin
   Bus.Subscribe(THandler.Create(1));
   Bus.Subscribe(THandler.Create(2));
   Bus.Subscribe(THandler.Create(3));
-  Halt(Bus.Dispatch(10));
+  Halt(Bus.Dispatch(12));
 end.

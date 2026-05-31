@@ -43,6 +43,6 @@ begin
   S := TStack.Create;
   S.Push(10);
   S.Push(20);
-  S.Push(30);
+  S.Push(40);
   Halt(S.Pop + S.Count);
 end.

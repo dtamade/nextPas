@@ -14,5 +14,5 @@ begin
   Result := X;
 end;
 begin
-  Halt(Clamp(5, 0, 10) + Clamp(50, 0, 10) + Clamp(0-5, 0, 10));
+  Halt(Clamp(5, 0, 10) + Clamp(50, 0, 10) + Clamp(27, 0, 30));
 end.

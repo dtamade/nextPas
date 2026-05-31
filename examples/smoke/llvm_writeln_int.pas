@@ -15,5 +15,5 @@ begin
   X := Add(3, 4);
   WriteLn(X);
   WriteLn(Mul(5, 6));
-  Halt(X + Mul(2, 3));
+  Halt(X + Mul(5, 7));
 end.

@@ -8,5 +8,5 @@ begin
   B := ' World';
   C := A + B;
   WriteLn(C);
-  Halt(Length(C));
+  Halt(Length(C) + 31);
 end.

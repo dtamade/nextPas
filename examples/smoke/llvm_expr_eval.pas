@@ -37,7 +37,7 @@ var E: TExpr;
 begin
   E := TBinOp.Create(
     TBinOp.Create(TNum.Create(3), TNum.Create(4), 0),
-    TNum.Create(2),
+    TNum.Create(6),
     2
   );
   Halt(E.Eval);

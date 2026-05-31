@@ -33,9 +33,9 @@ var
   A, B, C, Cur: TNode;
   Sum: Integer;
 begin
-  A := TNode.Create(3);
-  B := TNode.Create(7);
-  C := TNode.Create(11);
+  A := TNode.Create(10);
+  B := TNode.Create(14);
+  C := TNode.Create(18);
   A.SetNext(B);
   B.SetNext(C);
   Sum := 0;

@@ -22,9 +22,9 @@ var
 begin
   SetLength(Items, 4);
   Items[0] := TItem.Create(10);
-  Items[1] := TItem.Create(20);
-  Items[2] := TItem.Create(30);
-  Items[3] := TItem.Create(40);
+  Items[1] := TItem.Create(11);
+  Items[2] := TItem.Create(12);
+  Items[3] := TItem.Create(9);
   S := 0;
   for I := 0 to 3 do
     S := S + Items[I].GetVal;

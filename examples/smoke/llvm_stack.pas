@@ -72,7 +72,7 @@ begin
   S := TStack.Create;
   S.Push(10);
   S.Push(20);
-  S.Push(5);
+  S.Push(21);
   A := S.Pop;
   B := S.Pop;
   Halt(A + B + S.Size);

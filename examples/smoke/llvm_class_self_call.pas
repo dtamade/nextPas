@@ -14,7 +14,7 @@ end;
 
 function TCalc.Double: Integer;
 begin
-  Double := FVal * 2;
+  Double := FVal * 3;
 end;
 
 function TCalc.Quadruple: Integer;
@@ -25,6 +25,6 @@ end;
 var
   C: TCalc;
 begin
-  C := TCalc.Create(5);
+  C := TCalc.Create(7);
   Halt(C.Quadruple);
 end.

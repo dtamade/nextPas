@@ -31,8 +31,8 @@ var
 begin
   A := TDog.Create;
   R := 0;
-  if A is TDog then R := R + 10;
+  if A is TDog then R := R + 32;
   if A is TCat then R := R + 100;
-  if A is TAnimal then R := R + 1;
+  if A is TAnimal then R := R + 10;
   Halt(R);
 end.

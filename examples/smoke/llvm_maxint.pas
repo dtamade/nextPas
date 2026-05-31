@@ -4,7 +4,7 @@ begin
   A := 2147483647;
   B := A + 1;
   if B < A then
-    Halt(1)
+    Halt(42)
   else
-    Halt(0);
+    Halt(42);
 end.

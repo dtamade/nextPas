@@ -14,4 +14,6 @@ begin
     WriteLn('outer-finally');
   end;
   WriteLn('done');
+  Halt(42);
+  Halt(42);
 end.

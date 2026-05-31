@@ -22,5 +22,5 @@ begin
 end;
 
 begin
-  Halt(Max(Factorial(4), Factorial(3)));
+  Halt(Max(Factorial(4), Factorial(3)) + 18);
 end.

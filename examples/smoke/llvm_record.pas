@@ -7,8 +7,8 @@ type
 var
   P: TPoint;
 begin
-  P.X := 3;
-  P.Y := 4;
+  P.X := 20;
+  P.Y := 22;
   WriteLn(P.X + P.Y);
   Halt(P.X + P.Y);
 end.

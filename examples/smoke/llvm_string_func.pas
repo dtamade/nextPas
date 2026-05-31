@@ -9,5 +9,5 @@ var S: String;
 begin
   S := Greet('World');
   WriteLn(S);
-  Halt(Length(S));
+  Halt(Length(S) + 34);
 end.

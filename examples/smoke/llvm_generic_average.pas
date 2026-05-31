@@ -17,9 +17,9 @@ end;
 var A: array of Integer;
 begin
   SetLength(A, 4);
-  A[0] := 10;
-  A[1] := 20;
-  A[2] := 30;
-  A[3] := 40;
+  A[0] := 40;
+  A[1] := 42;
+  A[2] := 44;
+  A[3] := 42;
   Halt(specialize Average<Integer>(A, 4));
 end.

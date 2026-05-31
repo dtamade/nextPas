@@ -39,7 +39,7 @@ end;
 
 function TSquare.Perimeter: Integer;
 begin
-  Perimeter := FSide * 4;
+  Perimeter := FSide * 11;
 end;
 
 var

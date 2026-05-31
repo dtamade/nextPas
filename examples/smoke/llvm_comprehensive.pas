@@ -39,6 +39,6 @@ begin
   R.Value := SumRange(1, 10);
   R.IsValid := 1;
   X := Clamp(R.Value, 0, 100);
-  X := Abs(X - 60);
+  X := Abs(X - 97);
   Halt(X);
 end.

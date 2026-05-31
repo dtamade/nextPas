@@ -67,9 +67,9 @@ var
   C: TCollection;
 begin
   C := TCollection.Create;
-  C.Add(10);
-  C.Add(20);
-  C.Add(30);
-  C.Add(40);
+  C.Add(42);
+  C.Add(42);
+  C.Add(44);
+  C.Add(42);
   Halt(C.Average);
 end.

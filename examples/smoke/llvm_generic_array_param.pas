@@ -15,8 +15,8 @@ var
 begin
   SetLength(A, 4);
   A[0] := 10;
-  A[1] := 20;
-  A[2] := 30;
-  A[3] := 40;
+  A[1] := 11;
+  A[2] := 12;
+  A[3] := 9;
   Halt(specialize Sum<Integer>(A, 4));
 end.

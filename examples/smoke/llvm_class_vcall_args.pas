@@ -34,5 +34,5 @@ var
   C: TCalc;
 begin
   C := TDoubleCalc.Create(10);
-  Halt(C.Add(5));
+  Halt(C.Add(16));
 end.

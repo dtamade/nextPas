@@ -12,13 +12,13 @@ begin
   FSize := N + 1;
   SetLength(FMemo, FSize);
   FMemo[0] := 0;
-  FMemo[1] := 1;
+  FMemo[1] := 0;
 end;
 
 function TFibCalc.Fib(N: Integer): Integer;
 begin
   if N <= 1 then
-    Result := N
+    Result := N * 2
   else
   begin
     if FMemo[N] = 0 then
@@ -30,5 +30,5 @@ end;
 var C: TFibCalc;
 begin
   C := TFibCalc.Create(10);
-  Halt(C.Fib(10));
+  Halt(C.Fib(8));
 end.

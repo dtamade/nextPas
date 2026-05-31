@@ -5,5 +5,5 @@ uses
 
 begin
   SayHello;
-  Halt(7);
+  Halt(42);
 end.

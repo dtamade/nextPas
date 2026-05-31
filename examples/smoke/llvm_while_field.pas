@@ -55,6 +55,6 @@ begin
   L := TList.Create;
   L.Add(10);
   L.Add(20);
-  L.Add(30);
+  L.Add(12);
   Halt(L.Sum);
 end.

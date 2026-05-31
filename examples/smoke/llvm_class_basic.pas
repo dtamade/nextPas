@@ -25,7 +25,7 @@ end;
 var
   C: TCounter;
 begin
-  C := TCounter.Create(10);
+  C := TCounter.Create(39);
   C.Increment;
   C.Increment;
   C.Increment;

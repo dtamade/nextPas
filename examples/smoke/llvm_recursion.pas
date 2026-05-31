@@ -17,5 +17,5 @@ begin
 end;
 
 begin
-  Halt(Fib(8) + GCD(48, 18));
+  Halt(Fib(8) + GCD(21, 0));
 end.

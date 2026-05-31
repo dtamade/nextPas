@@ -50,7 +50,7 @@ var
   E: TElement;
 begin
   D := TDoubler.Create(5);
-  T := TTripler.Create(3);
-  E := TElement.Create(7);
+  T := TTripler.Create(8);
+  E := TElement.Create(8);
   Halt(Visit(D, 1) + Visit(T, 1) + Visit(E, 1));
 end.

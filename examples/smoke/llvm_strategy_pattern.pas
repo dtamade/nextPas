@@ -48,5 +48,5 @@ var
 begin
   Asc := TAscending.Create;
   Desc := TDescending.Create;
-  Halt(FindMin(Asc, 30, 10, 20) + FindMin(Desc, 30, 10, 20));
+  Halt(FindMin(Asc, 30, 12, 20) + FindMin(Desc, 30, 12, 20));
 end.

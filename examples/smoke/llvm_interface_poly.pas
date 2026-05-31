@@ -40,7 +40,7 @@ var
   Total: Integer;
 begin
   Total := 0;
-  S := TRect.Create(5, 4);
+  S := TRect.Create(5, 3);
   Total := Total + S.Area;
   S := TCircle.Create(3);
   Total := Total + S.Area;

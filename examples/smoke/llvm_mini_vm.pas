@@ -60,7 +60,7 @@ begin
   VM.Push(3);
   VM.Push(4);
   VM.Add;
-  VM.Push(5);
+  VM.Push(6);
   VM.Mul;
   Halt(VM.GetAcc);
 end.
