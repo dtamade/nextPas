@@ -4031,6 +4031,96 @@ begin
   CheckEqual(Int64(2), Int64(Length(LMatches)), 'limit>total returns all');
 end;
 
+procedure TestP4FindIter;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch; LCount: Int32; LInput: string;
+begin
+  LInput := 'abc 123 def 456 ghi 789';
+  R := TRegex.Compile('\d+');
+  LIter := R.FindIter(LInput);
+  LCount := 0;
+  while LIter.Next(LMatch) do
+  begin
+    Inc(LCount);
+    case LCount of
+      1: Check(LMatch.Value(LInput) = '123', 'iter 1');
+      2: Check(LMatch.Value(LInput) = '456', 'iter 2');
+      3: Check(LMatch.Value(LInput) = '789', 'iter 3');
+    end;
+  end;
+  CheckEqual(Int64(3), Int64(LCount), 'iter count');
+end;
+
+procedure TestP4FindIterEmpty;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch;
+begin
+  R := TRegex.Compile('xyz');
+  LIter := R.FindIter('no match here');
+  Check(not LIter.Next(LMatch), 'iter empty');
+end;
+
+procedure TestP4SubexpNames;
+var R: TRegex; LNames: TStringArray;
+begin
+  R := TRegex.Compile('(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})');
+  LNames := R.SubexpNames;
+  CheckEqual(Int64(3), Int64(Length(LNames)), 'name count');
+  Check(LNames[0] = 'year', 'name 0');
+  Check(LNames[1] = 'month', 'name 1');
+  Check(LNames[2] = 'day', 'name 2');
+end;
+
+procedure TestP4LongestMatch;
+var R: TRegex; M: TMatch;
+begin
+  R := TRegex.Compile('a|ab|abc');
+  M := R.Find('abcdef');
+  CheckEqual(Int64(3), Int64(M.Len), 'alternation longest');
+  R := TRegex.Compile('a+');
+  M := R.Find('aaaa');
+  CheckEqual(Int64(4), Int64(M.Len), 'greedy longest');
+end;
+
+procedure TestP4LargeInput;
+var R: TRegex; LBig: string; M: TMatch; LI: Integer;
+begin
+  SetLength(LBig, 100000);
+  for LI := 1 to 100000 do LBig[LI] := 'a';
+  Move('needle'[1], LBig[99990], 6);
+  R := TRegex.Compile('needle');
+  M := R.Find(LBig);
+  Check(M.Found, 'large input found');
+  CheckEqual(Int64(99989), Int64(M.Start), 'large input pos');
+end;
+
+procedure TestP4IterConsistency;
+var R: TRegex; LIter: TRegexIter; LMatch: TMatch;
+    LMatches: TMatchArray; LCount: Int32; LInput: string;
+begin
+  LInput := 'the quick brown fox jumps over the lazy dog';
+  R := TRegex.Compile('\w+');
+  LMatches := R.FindAll(LInput);
+  LIter := R.FindIter(LInput);
+  LCount := 0;
+  while LIter.Next(LMatch) do
+  begin
+    if LCount < Length(LMatches) then
+      CheckEqual(Int64(LMatches[LCount].Start), Int64(LMatch.Start), 'consistency ' + IntToStr(LCount));
+    Inc(LCount);
+  end;
+  CheckEqual(Int64(Length(LMatches)), Int64(LCount), 'iter/findall count');
+end;
+
+procedure TestP4ErrorPatterns;
+var R: TRegex; LErr: string; LOk: Boolean;
+begin
+  LOk := TRegex.TryCompile('[', R, LErr);
+  Check(not LOk, 'unclosed bracket');
+  LOk := TRegex.TryCompile('*', R, LErr);
+  Check(not LOk, 'leading quantifier');
+  LOk := TRegex.TryCompile('(?P<name>\d+)', R, LErr);
+  Check(LOk, 'valid named group');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -4156,5 +4246,13 @@ begin
   T.Run('FindAll MaxMatches=0', @TestFindAllMaxMatchesZero);
   T.Run('FindAll MaxMatches=-1', @TestFindAllMaxMatchesNegative);
   T.Run('FindAll MaxMatches>total', @TestFindAllMaxMatchesExceedsTotal);
+  { --- Phase 4 tests --- }
+  T.Run('P4: FindIter', @TestP4FindIter);
+  T.Run('P4: FindIter empty', @TestP4FindIterEmpty);
+  T.Run('P4: SubexpNames', @TestP4SubexpNames);
+  T.Run('P4: Longest match', @TestP4LongestMatch);
+  T.Run('P4: Large input 100KB', @TestP4LargeInput);
+  T.Run('P4: Iter/FindAll consistency', @TestP4IterConsistency);
+  T.Run('P4: Error patterns', @TestP4ErrorPatterns);
   T.Summary;
 end.
