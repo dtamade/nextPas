@@ -6854,6 +6854,25 @@ begin
       Exit(True);
     end;
   end;
+  if (ANode.NodeKind = gnkUnaryExpression) and
+    (ANode.ChildCount >= 1) and (ANode.Text = '@') then
+  begin
+    if (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
+      IsRuntimeVar(ANode.ChildAt(0).Text) then
+    begin
+      ABlob := 'varref ' + ANode.ChildAt(0).Text + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkDereference) and (ANode.ChildCount >= 1) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) then
+    begin
+      ABlob := FuncName + 'deref' + #10;
+      Exit(True);
+    end;
+  end;
   if (ANode.NodeKind = gnkIdentifier) and (ANode.Text = 'Result') and
     (FCurrentRetVarName <> '') then
   begin

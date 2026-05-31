@@ -591,6 +591,8 @@ end;
 procedure THIRBuilder.BlobVarRef(var S: TExprStack; const AArg: string);
 var
   V: THIRValueId;
+  I: LongInt;
+  Instr: THIRInstr;
 begin
   V := FindAlloca(AArg);
   if V <> 0 then
@@ -599,6 +601,22 @@ begin
       S.PushTyped(EmitLoad(GetPtrType, V), GetPtrType)
     else
       S.PushTyped(V, GetPtrType);
+  end
+  else
+  begin
+    for I := 0 to FGlobalCount - 1 do
+      if SameText(FGlobalNames[I], AArg) then
+      begin
+        FillChar(Instr, SizeOf(Instr), 0);
+        Instr.ResultId := FModule.NewValue;
+        Instr.Kind := hikIntrinsic;
+        Instr.TypeId := GetPtrType;
+        Instr.IntrinsicName := 'global_ref';
+        Instr.CallTarget := AArg;
+        EmitInstr(Instr);
+        S.PushTyped(Instr.ResultId, GetPtrType);
+        Exit;
+      end;
   end;
 end;
 
@@ -1357,6 +1375,11 @@ begin
     end
     else if Token = 'var' then BlobVar(S, Arg)
     else if Token = 'varref' then BlobVarRef(S, Arg)
+    else if Token = 'deref' then
+    begin
+      V := S.Pop;
+      S.Push(EmitLoad(GetIntType, V));
+    end
     else if Token = 'recvar' then BlobRecVar(S, Arg)
     else if Token = 'is' then BlobIs(S, Arg)
     else if Token = 'arr_load' then BlobArrLoad(S)
