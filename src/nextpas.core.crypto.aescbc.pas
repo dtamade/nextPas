@@ -10,6 +10,11 @@ uses
 function AESCBCEncryptNoPadding(const AKey, AIV, APlaintext: TBytes): TBytes;
 function AESCBCDecryptNoPadding(const AKey, AIV, ACiphertext: TBytes): TBytes;
 
+function TryAESCBCEncryptNoPadding(const AKey, AIV, APlaintext: TBytes;
+  out ACiphertext: TBytes; out AError: string): Boolean;
+function TryAESCBCDecryptNoPadding(const AKey, AIV, ACiphertext: TBytes;
+  out APlaintext: TBytes; out AError: string): Boolean;
+
 implementation
 
 uses
@@ -157,6 +162,36 @@ begin
     for J := 0 to 15 do
       Result[I * 16 + J] := OutBlock[J] xor Prev[J];
     Prev := NextPrev;
+  end;
+end;
+
+function TryAESCBCEncryptNoPadding(const AKey, AIV, APlaintext: TBytes;
+  out ACiphertext: TBytes; out AError: string): Boolean;
+begin
+  SetLength(ACiphertext, 0); AError := '';
+  if not (Length(AKey) in [16, 24, 32]) then begin AError := 'AES-CBC: key must be 16/24/32 bytes'; Exit(False); end;
+  if Length(AIV) <> 16 then begin AError := 'AES-CBC: IV must be 16 bytes'; Exit(False); end;
+  if (Length(APlaintext) = 0) or ((Length(APlaintext) mod 16) <> 0) then begin AError := 'AES-CBC: plaintext must be multiple of 16 bytes'; Exit(False); end;
+  try
+    ACiphertext := AESCBCEncryptNoPadding(AKey, AIV, APlaintext);
+    Result := True;
+  except
+    on E: Exception do begin AError := E.Message; Result := False; end;
+  end;
+end;
+
+function TryAESCBCDecryptNoPadding(const AKey, AIV, ACiphertext: TBytes;
+  out APlaintext: TBytes; out AError: string): Boolean;
+begin
+  SetLength(APlaintext, 0); AError := '';
+  if not (Length(AKey) in [16, 24, 32]) then begin AError := 'AES-CBC: key must be 16/24/32 bytes'; Exit(False); end;
+  if Length(AIV) <> 16 then begin AError := 'AES-CBC: IV must be 16 bytes'; Exit(False); end;
+  if (Length(ACiphertext) = 0) or ((Length(ACiphertext) mod 16) <> 0) then begin AError := 'AES-CBC: ciphertext must be multiple of 16 bytes'; Exit(False); end;
+  try
+    APlaintext := AESCBCDecryptNoPadding(AKey, AIV, ACiphertext);
+    Result := True;
+  except
+    on E: Exception do begin AError := E.Message; Result := False; end;
   end;
 end;
 
