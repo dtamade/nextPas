@@ -19,6 +19,7 @@ type
     FMinLevel: TLogLevel;
     FPrefix: array of TAttr;
     FPrefixCount: Int32;
+    FGroup: string;
   public
     constructor Create(AMinLevel: TLogLevel);
     function Enabled(const ALevel: TLogLevel): Boolean;
@@ -33,6 +34,7 @@ begin
   inherited Create;
   FMinLevel := AMinLevel;
   FPrefixCount := 0;
+  FGroup := '';
 end;
 
 function TCaptureHandler.Enabled(const ALevel: TLogLevel): Boolean;
@@ -41,10 +43,25 @@ begin
 end;
 
 procedure TCaptureHandler.Handle(const ARecord: TLogRecord);
+var
+  LRec: TLogRecord;
+  LI: Int32;
 begin
   if GCaptureCount >= Length(GCaptured) then
     SetLength(GCaptured, Length(GCaptured) + 16);
-  GCaptured[GCaptureCount] := ARecord;
+  { Merge prefix attrs + group into the captured record for test verification }
+  LRec := ARecord;
+  LRec.Group := FGroup;
+  if FPrefixCount > 0 then
+  begin
+    SetLength(LRec.Attrs, FPrefixCount + ARecord.AttrCount);
+    for LI := 0 to FPrefixCount - 1 do
+      LRec.Attrs[LI] := FPrefix[LI];
+    for LI := 0 to ARecord.AttrCount - 1 do
+      LRec.Attrs[FPrefixCount + LI] := ARecord.Attrs[LI];
+    LRec.AttrCount := FPrefixCount + ARecord.AttrCount;
+  end;
+  GCaptured[GCaptureCount] := LRec;
   Inc(GCaptureCount);
 end;
 
@@ -54,6 +71,7 @@ var
   LI: Int32;
 begin
   LNew := TCaptureHandler.Create(FMinLevel);
+  LNew.FGroup := FGroup;
   SetLength(LNew.FPrefix, FPrefixCount + Length(AAttrs));
   for LI := 0 to FPrefixCount - 1 do
     LNew.FPrefix[LI] := FPrefix[LI];
@@ -68,8 +86,20 @@ begin
 end;
 
 function TCaptureHandler.WithGroup(const AName: string): ILogHandler;
+var
+  LNew: TCaptureHandler;
+  LI: Int32;
 begin
-  Result := Self;
+  LNew := TCaptureHandler.Create(FMinLevel);
+  SetLength(LNew.FPrefix, FPrefixCount);
+  for LI := 0 to FPrefixCount - 1 do
+    LNew.FPrefix[LI] := FPrefix[LI];
+  LNew.FPrefixCount := FPrefixCount;
+  if FGroup <> '' then
+    LNew.FGroup := FGroup + '.' + AName
+  else
+    LNew.FGroup := AName;
+  Result := LNew;
 end;
 
 procedure ResetCapture;
@@ -354,6 +384,169 @@ begin
   Check(True, 'broken file handler no crash');
 end;
 
+{ === Bug fix verification tests === }
+
+procedure TestNilHandlerWith;
+var
+  LL, LChild: TLogger;
+begin
+  { Bug fix 2: nil handler must not crash in With_ methods }
+  LL := TLogger.New(nil, llInfo);
+  LChild := LL.With_('key', 'val');
+  Check(not LChild.Enabled(llInfo), 'nil handler With_ stays disabled');
+  LChild := LL.WithInt('port', 8080);
+  Check(not LChild.Enabled(llInfo), 'nil handler WithInt stays disabled');
+  LChild := LL.WithAttrs([AttrStr('a', 'b')]);
+  Check(not LChild.Enabled(llInfo), 'nil handler WithAttrs stays disabled');
+  LChild := LL.WithGroup('grp');
+  Check(not LChild.Enabled(llInfo), 'nil handler WithGroup stays disabled');
+end;
+
+procedure TestNilHandlerLog;
+var
+  LL: TLogger;
+begin
+  { Bug fix 2: nil handler must not crash when logging }
+  LL := TLogger.New(nil, llInfo);
+  LL.Info^.Str('k', 'v')^.Msg('no crash');
+  LL.Error^.Err('oops')^.Send;
+  Check(True, 'nil handler log no crash');
+end;
+
+procedure TestWithGroupPrefix;
+var
+  LL, LChild: TLogger;
+begin
+  { Bug fix 4/5: WithGroup must prefix keys }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LChild := LL.WithGroup('http');
+  LChild.Info^.Str('method', 'GET')^.Msg('request');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'one record');
+  Check(GCaptured[0].Group = 'http', 'group=http');
+end;
+
+procedure TestWithGroupNested;
+var
+  LL, L1, L2: TLogger;
+begin
+  { Bug fix 4/5: nested WithGroup must chain prefixes }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  L1 := LL.WithGroup('server');
+  L2 := L1.WithGroup('http');
+  L2.Info^.Str('path', '/api')^.Msg('nested');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'one record');
+  Check(GCaptured[0].Group = 'server.http', 'group=server.http');
+end;
+
+procedure TestFileHandlerWithGroup;
+var
+  LL, LChild: TLogger;
+  LPath: string;
+  LF: TextFile;
+  LLine: string;
+begin
+  { Bug fix 5: file handler WithGroup prefixes keys in output }
+  LPath := '/tmp/test_log_grp_' + IntToStr(Random(99999)) + '.log';
+  LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
+  LChild := LL.WithGroup('db');
+  LChild.Info^.Str('query', 'SELECT')^.Msg('exec');
+  LL := TLogger.New(NewConsoleHandler(llFatal), llFatal); // release file handler
+  AssignFile(LF, LPath);
+  Reset(LF);
+  ReadLn(LF, LLine);
+  Check(Pos('db.query=', LLine) > 0, 'file has db.query= prefix');
+  CloseFile(LF);
+  DeleteFile(LPath);
+end;
+
+procedure TestFileHandlerWriteError;
+var
+  LL: TLogger;
+  LPath: string;
+begin
+  { Bug fix 3: write errors mark handler broken, no crash }
+  LPath := '/proc/nonexistent_file_' + IntToStr(Random(99999));
+  LL := TLogger.New(NewFileHandler(LPath, llInfo), llInfo);
+  LL.Info^.Msg('trigger error');
+  LL.Info^.Msg('second call after broken');
+  Check(True, 'file write error no crash');
+end;
+
+procedure TestPoolSize256;
+var
+  LL: TLogger;
+  LI: Int32;
+begin
+  { Bug fix 1: pool is 256 slots, rapid logging must not crash }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  for LI := 1 to 300 do
+    LL.Info^.Int('i', LI)^.Msg('rapid');
+  CheckEqual(Int64(300), Int64(GCaptureCount), '300 rapid logs');
+end;
+
+procedure TestDefaultLoggerInit;
+var
+  LL: TLogger;
+begin
+  { DefaultLogger auto-initializes on first call }
+  ResetCapture;
+  SetDefaultLogger(TLogger.New(TCaptureHandler.Create(llInfo), llInfo));
+  LL := DefaultLogger;
+  LL.Info^.Msg('default init');
+  CheckEqual(Int64(1), Int64(GCaptureCount), 'default logger works');
+  Check(GCaptured[0].Message = 'default init', 'default msg');
+end;
+
+procedure TestMultiHandlerWithGroup;
+var
+  LL, LChild: TLogger;
+begin
+  { MultiHandler propagates WithGroup to all children }
+  ResetCapture;
+  LL := TLogger.New(NewMultiHandler([
+    TCaptureHandler.Create(llDebug) as ILogHandler,
+    TCaptureHandler.Create(llDebug) as ILogHandler
+  ]), llDebug);
+  LChild := LL.WithGroup('net');
+  LChild.Info^.Str('port', '443')^.Msg('multi grp');
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'both handlers fire');
+  Check(GCaptured[0].Group = 'net', 'handler1 group=net');
+  Check(GCaptured[1].Group = 'net', 'handler2 group=net');
+end;
+
+procedure TestConvenienceFunctions;
+begin
+  { LogInfo/LogWarn/LogError convenience functions }
+  ResetCapture;
+  SetDefaultLogger(TLogger.New(TCaptureHandler.Create(llTrace), llTrace));
+  LogTrace('trace msg');
+  LogDebug('debug msg');
+  LogInfo('info msg');
+  LogWarn('warn msg');
+  LogError('error msg');
+  CheckEqual(Int64(5), Int64(GCaptureCount), '5 convenience calls');
+  Check(GCaptured[0].Level = llTrace, 'conv trace level');
+  Check(GCaptured[1].Level = llDebug, 'conv debug level');
+  Check(GCaptured[2].Level = llInfo, 'conv info level');
+  Check(GCaptured[3].Level = llWarn, 'conv warn level');
+  Check(GCaptured[4].Level = llError, 'conv error level');
+end;
+
+procedure TestReentrantLogging;
+var
+  LL: TLogger;
+begin
+  { Reentrant logging must not crash (GLogDepth guard) }
+  ResetCapture;
+  LL := TLogger.New(TCaptureHandler.Create(llDebug), llDebug);
+  LL.Info^.Msg('first');
+  LL.Info^.Msg('second');
+  CheckEqual(Int64(2), Int64(GCaptureCount), 'sequential logs ok');
+end;
+
 procedure TestWithAttrsBatch;
 var
   LL, LChild: TLogger;
@@ -421,5 +614,17 @@ begin
   T.Run('WithAttrs batch', @TestWithAttrsBatch);
   T.Run('WithLevel', @TestWithLevel);
   T.Run('AsILogger bridge', @TestAsILogger);
+  { Bug fix verification tests }
+  T.Run('Nil handler With_', @TestNilHandlerWith);
+  T.Run('Nil handler log', @TestNilHandlerLog);
+  T.Run('WithGroup prefix', @TestWithGroupPrefix);
+  T.Run('WithGroup nested', @TestWithGroupNested);
+  T.Run('File handler WithGroup', @TestFileHandlerWithGroup);
+  T.Run('File handler write error', @TestFileHandlerWriteError);
+  T.Run('Pool size 256', @TestPoolSize256);
+  T.Run('Default logger init', @TestDefaultLoggerInit);
+  T.Run('Multi handler WithGroup', @TestMultiHandlerWithGroup);
+  T.Run('Convenience functions', @TestConvenienceFunctions);
+  T.Run('Reentrant logging', @TestReentrantLogging);
   T.Summary;
 end.
