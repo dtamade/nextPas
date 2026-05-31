@@ -12,7 +12,8 @@ uses
   nextpas.core.regex.compiler,
   nextpas.core.regex.nfa,
   nextpas.core.regex.dfa,
-  nextpas.core.text.base;
+  nextpas.core.text.base,
+  nextpas.core.text.scan;
 
 type
   TRegexFlags = nextpas.core.regex.base.TRegexFlags;
@@ -129,7 +130,8 @@ begin
   begin
     if FProgram.LiteralPrefixLen = 0 then
       Exit(True);
-    Exit(Pos(FProgram.LiteralPrefix, AInput) > 0);
+    Exit(ScanFindSubstring(PAnsiChar(AInput), Length(AInput),
+      PAnsiChar(FProgram.LiteralPrefix), FProgram.LiteralPrefixLen) >= 0);
   end;
   // DFA handles all patterns (assertions via context); falls back to NFA on overflow
   Result := DfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
@@ -150,10 +152,11 @@ begin
       Result.Start := 0; Result.Len := 0; Result.Groups := nil;
       Exit;
     end;
-    LPos := Pos(FProgram.LiteralPrefix, AInput);
-    if LPos > 0 then
+    LPos := ScanFindSubstring(PAnsiChar(AInput), Length(AInput),
+      PAnsiChar(FProgram.LiteralPrefix), FProgram.LiteralPrefixLen);
+    if LPos >= 0 then
     begin
-      Result.Start := LPos - 1;
+      Result.Start := LPos;
       Result.Len := SizeInt(FProgram.LiteralPrefixLen);
       Result.Groups := nil;
     end
@@ -196,6 +199,7 @@ var
   LPos, LStart: SizeInt;
   LCount: SizeUInt;
   LPrefixLen: SizeInt;
+  LFound: PtrInt;
 begin
   if not FValid then begin SetLength(Result, 0); Exit; end;
   if FProgram.IsPureLiteral then
@@ -215,18 +219,20 @@ begin
     end;
     SetLength(Result, 0);
     LCount := 0;
-    LStart := 1;
-    while LStart <= Length(AInput) do
+    LStart := 0;
+    while LStart <= SizeInt(Length(AInput)) - LPrefixLen do
     begin
-      LPos := Pos(FProgram.LiteralPrefix, AInput, LStart);
-      if LPos = 0 then Break;
+      LFound := ScanFindSubstring(@PAnsiChar(AInput)[LStart],
+        SizeUInt(Length(AInput)) - SizeUInt(LStart),
+        PAnsiChar(FProgram.LiteralPrefix), SizeUInt(LPrefixLen));
+      if LFound < 0 then Break;
       if LCount >= SizeUInt(Length(Result)) then
         SetLength(Result, LCount + 32);
-      Result[LCount].Start := LPos - 1;
+      Result[LCount].Start := LStart + SizeInt(LFound);
       Result[LCount].Len := LPrefixLen;
       Result[LCount].Groups := nil;
       Inc(LCount);
-      LStart := LPos + LPrefixLen;
+      LStart := LStart + SizeInt(LFound) + LPrefixLen;
     end;
     SetLength(Result, LCount);
     Exit;

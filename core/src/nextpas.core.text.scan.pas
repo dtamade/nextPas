@@ -19,6 +19,8 @@ function ScanFindNotInRange(const AData: PAnsiChar; const ALen: SizeUInt;
   const ALo, AHi: Byte): PtrInt;
 function ScanSkipWhitespace(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 function ScanJsonNumber(const AData: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;
+  const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
 function ScanMatchLiteral(const AData: PAnsiChar; const ALen: SizeUInt;
   const AExpected: PAnsiChar; const AExpectedLen: Byte): Boolean; inline;
 procedure ViewSkipWhitespace(var AView: TStringView); inline;
@@ -28,6 +30,7 @@ function ViewMatchLiteral(var AView: TStringView;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.simd.base,
   nextpas.core.simd.vec,
   nextpas.core.text.char;
@@ -246,6 +249,61 @@ begin
     end;
   end;
   Result := LPos;
+end;
+
+function ScanFindSubstring(const AData: PAnsiChar; const ADataLen: SizeUInt;
+  const ANeedle: PAnsiChar; const ANeedleLen: SizeUInt): PtrInt;
+var
+  LFirstByte, LLastByte: Byte;
+  LSearchLen: SizeUInt;
+  LPos: SizeUInt;
+  LMask1, LMask2, LCombined: TVecMask;
+  LBit: Int32;
+  LCandidate: SizeUInt;
+begin
+  if ANeedleLen = 0 then
+    Exit(0);
+  if ANeedleLen = 1 then
+    Exit(ScanFindByte(AData, ADataLen, Byte(ANeedle[0])));
+  if ANeedleLen > ADataLen then
+    Exit(-1);
+
+  LFirstByte := Byte(ANeedle[0]);
+  LLastByte := Byte(ANeedle[ANeedleLen - 1]);
+  LSearchLen := ADataLen - ANeedleLen + 1;
+
+  LPos := 0;
+  while LPos + VecWidth <= LSearchLen do
+  begin
+    LMask1 := VecCmpEq(@AData[LPos], LFirstByte);
+    LMask2 := VecCmpEq(@AData[LPos + ANeedleLen - 1], LLastByte);
+    LCombined := LMask1 and LMask2;
+    while LCombined <> TVecMask(0) do
+    begin
+      LBit := VecCtz(LCombined);
+      LCandidate := LPos + SizeUInt(LBit);
+      if LCandidate < LSearchLen then
+      begin
+        if CompareMem(@AData[LCandidate + 1], @ANeedle[1], ANeedleLen - 2) then
+          Exit(PtrInt(LCandidate));
+      end;
+      LCombined := LCombined and (LCombined - 1);
+    end;
+    Inc(LPos, VecWidth);
+  end;
+
+  { Scalar tail }
+  while LPos < LSearchLen do
+  begin
+    if (Byte(AData[LPos]) = LFirstByte) and
+       (Byte(AData[LPos + ANeedleLen - 1]) = LLastByte) then
+    begin
+      if CompareMem(@AData[LPos + 1], @ANeedle[1], ANeedleLen - 2) then
+        Exit(PtrInt(LPos));
+    end;
+    Inc(LPos);
+  end;
+  Result := -1;
 end;
 
 function ScanMatchLiteral(const AData: PAnsiChar; const ALen: SizeUInt;

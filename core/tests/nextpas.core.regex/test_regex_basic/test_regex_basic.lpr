@@ -10,7 +10,8 @@ uses
   nextpas.core.regex.nfa,
   nextpas.core.regex.dfa,
   nextpas.core.regex.parser,
-  nextpas.core.regex.compiler;
+  nextpas.core.regex.compiler,
+  nextpas.core.text.scan;
 
 var
   T: TTestRunner;
@@ -3848,6 +3849,82 @@ begin
   Check(not R.IsMatch('xyz'), 'overflow alt miss');
 end;
 
+procedure TestScanFindSubstring;
+var
+  LResult: PtrInt;
+  LBigInput: string;
+  i: Integer;
+begin
+  { Basic: find 'hello' in 'say hello world' }
+  LResult := ScanFindSubstring(PAnsiChar('say hello world'), 15,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(4), Int64(LResult), 'basic find hello');
+
+  { Not found: 'xyz' in 'abcdef' }
+  LResult := ScanFindSubstring(PAnsiChar('abcdef'), 6,
+    PAnsiChar('xyz'), 3);
+  CheckEqual(Int64(-1), Int64(LResult), 'not found');
+
+  { At start: 'abc' in 'abcdef' }
+  LResult := ScanFindSubstring(PAnsiChar('abcdef'), 6,
+    PAnsiChar('abc'), 3);
+  CheckEqual(Int64(0), Int64(LResult), 'at start');
+
+  { At end: 'def' in 'abcdef' }
+  LResult := ScanFindSubstring(PAnsiChar('abcdef'), 6,
+    PAnsiChar('def'), 3);
+  CheckEqual(Int64(3), Int64(LResult), 'at end');
+
+  { Single char: 'x' in 'abcxdef' }
+  LResult := ScanFindSubstring(PAnsiChar('abcxdef'), 7,
+    PAnsiChar('x'), 1);
+  CheckEqual(Int64(3), Int64(LResult), 'single char');
+
+  { Empty needle: '' in 'abc' -> 0 }
+  LResult := ScanFindSubstring(PAnsiChar('abc'), 3,
+    PAnsiChar(''), 0);
+  CheckEqual(Int64(0), Int64(LResult), 'empty needle');
+
+  { Needle longer than haystack }
+  LResult := ScanFindSubstring(PAnsiChar('ab'), 2,
+    PAnsiChar('abcdef'), 6);
+  CheckEqual(Int64(-1), Int64(LResult), 'needle longer');
+
+  { Repeated first byte: 'he' in 'hhhhe' (many false positives for 'h') }
+  LResult := ScanFindSubstring(PAnsiChar('hhhhe'), 5,
+    PAnsiChar('he'), 2);
+  CheckEqual(Int64(3), Int64(LResult), 'repeated first byte');
+
+  { Long needle (20+ chars) }
+  LResult := ScanFindSubstring(PAnsiChar('prefix_abcdefghijklmnopqrst_suffix'), 34,
+    PAnsiChar('abcdefghijklmnopqrst'), 20);
+  CheckEqual(Int64(7), Int64(LResult), 'long needle');
+
+  { Large input (10KB) with needle near end }
+  SetLength(LBigInput, 10000);
+  for i := 1 to 10000 do LBigInput[i] := 'x';
+  Move('hello'[1], LBigInput[9990], 5);
+  LResult := ScanFindSubstring(PAnsiChar(LBigInput), 10000,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(9989), Int64(LResult), 'large input near end');
+
+  { Needle at very start of large input }
+  Move('hello'[1], LBigInput[1], 5);
+  LResult := ScanFindSubstring(PAnsiChar(LBigInput), 10000,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(0), Int64(LResult), 'large input at start');
+
+  { Two-char needle where first=last }
+  LResult := ScanFindSubstring(PAnsiChar('aabaa'), 5,
+    PAnsiChar('aa'), 2);
+  CheckEqual(Int64(0), Int64(LResult), 'two char same');
+
+  { Exact match: needle = haystack }
+  LResult := ScanFindSubstring(PAnsiChar('hello'), 5,
+    PAnsiChar('hello'), 5);
+  CheckEqual(Int64(0), Int64(LResult), 'exact match');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.regex');
   T.Run('Literal', @TestLiteral);
@@ -3966,5 +4043,7 @@ begin
   T.Run('DFA: FindAll correctness', @TestDfaFindAllCorrectness);
   T.Run('DFA: NFA cross-validation', @TestDfaNfaCrossValidation);
   T.Run('DFA: Overflow fallback', @TestDfaOverflowFallback);
+  { --- ScanFindSubstring tests --- }
+  T.Run('ScanFindSubstring', @TestScanFindSubstring);
   T.Summary;
 end.
