@@ -44,7 +44,7 @@ type
 implementation
 
 uses
-  nextpas.core.errors;
+  SysUtils;
 
 type
   TTypeRegistry = class(TInterfacedObject, ITypeRegistry)
@@ -223,12 +223,9 @@ begin
     LPtr := AData + LField^.Offset;
     case LField^.Kind of
       fkBool: AVisitor.VisitBool(LField^, PBoolean(LPtr));
-      fkInt8, fkInt16: AVisitor.VisitInt32(LField^, PInt32(LPtr));
       fkInt32: AVisitor.VisitInt32(LField^, PInt32(LPtr));
       fkInt64: AVisitor.VisitInt64(LField^, PInt64(LPtr));
-      fkUInt8, fkUInt16: AVisitor.VisitUInt32(LField^, PDWord(LPtr));
       fkUInt32: AVisitor.VisitUInt32(LField^, PDWord(LPtr));
-      fkUInt64: AVisitor.VisitInt64(LField^, PInt64(LPtr));
       fkFloat32: AVisitor.VisitFloat32(LField^, PSingle(LPtr));
       fkFloat64: AVisitor.VisitFloat64(LField^, PDouble(LPtr));
       fkString: AVisitor.VisitString(LField^, PString(LPtr));
