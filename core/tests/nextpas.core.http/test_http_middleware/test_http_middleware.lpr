@@ -20,6 +20,7 @@ type
   public
     constructor Create;
     procedure WriteHeader(const AStatus: THttpStatus);
+    function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
@@ -40,7 +41,9 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
     function GetContentLength: Int64;
+    function GetRemoteAddr: string;
     function PathParam(const AName: string): string;
+    function QueryParam(const AName: string): string;
   end;
 
 { TMockResponseWriter }
@@ -56,6 +59,11 @@ end;
 procedure TMockResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
   FStatus := AStatus;
+end;
+
+function TMockResponseWriter.GetStatus: THttpStatus;
+begin
+  Result := FStatus;
 end;
 
 function TMockResponseWriter.GetHeaders: IHttpHeaders;
@@ -120,6 +128,16 @@ begin
 end;
 
 function TMockRequest.PathParam(const AName: string): string;
+begin
+  Result := '';
+end;
+
+function TMockRequest.GetRemoteAddr: string;
+begin
+  Result := '127.0.0.1';
+end;
+
+function TMockRequest.QueryParam(const AName: string): string;
 begin
   Result := '';
 end;
