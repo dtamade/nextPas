@@ -67,8 +67,8 @@ begin
   // python3: from ecdsa import NIST256p; G=NIST256p.generator; P=2*G; hex(P.x())
   // = 0x7cf27b188d034f7e8a52380304b51ac3c90e3e7f1bb6e3e0e2e3e3e3e3e3e3e3 (placeholder)
   // Let's use the known value:
-  Check(BytesToHex(LXBytes) = '7cf27b188d034f7e8a52380304b51ac3c90e3e7f1bb6e3e0e2e3e3e3e3e3e3e3',
-    '2G.x matches NIST (may fail - need exact value)');
+  Check(BytesToHex(LXBytes) = '7cf27b188d034f7e8a52380304b51ac3c08969e277f21b35a60b48fc47669978',
+    '2G.x matches NIST');
 end;
 
 procedure TestDoubleEqualsAdd;
