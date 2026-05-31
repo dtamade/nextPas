@@ -45,7 +45,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.errors;
+  nextpas.core.errors;
 
 type
   TLockGuardImpl = class(TInterfacedObject, ILockGuard)

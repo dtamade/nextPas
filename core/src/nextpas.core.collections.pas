@@ -8,7 +8,6 @@ unit nextpas.core.collections;
 interface
 
 uses
-  SysUtils,
   // 基础与通用抽象
   nextpas.core.base,
   nextpas.core.math,

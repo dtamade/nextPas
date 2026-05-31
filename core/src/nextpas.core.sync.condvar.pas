@@ -29,7 +29,6 @@ type
 implementation
 
 uses
-  SysUtils,
   nextpas.core.errors,
   nextpas.core.sync.mutex;
 

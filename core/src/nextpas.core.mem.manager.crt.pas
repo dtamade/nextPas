@@ -21,8 +21,6 @@ interface
 
 {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 uses
-  SysUtils;
-
 procedure InstallCrtMemoryManager;
 procedure UninstallCrtMemoryManager;
 function IsCrtMemoryManagerInstalled: Boolean;

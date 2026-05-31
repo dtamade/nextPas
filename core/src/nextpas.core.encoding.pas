@@ -5,7 +5,7 @@ unit nextpas.core.encoding;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.encoding.base,
   nextpas.core.encoding.base64,
   nextpas.core.encoding.hex,

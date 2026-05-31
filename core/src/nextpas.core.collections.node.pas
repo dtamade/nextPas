@@ -7,7 +7,7 @@ unit nextpas.core.collections.node;
 interface
 
 uses
-  SysUtils, typinfo,
+  typinfo,
   nextpas.core.base,
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   {$HINTS OFF}nextpas.core.mem.utils,{$HINTS ON}

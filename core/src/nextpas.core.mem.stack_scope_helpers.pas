@@ -7,7 +7,6 @@ unit nextpas.core.mem.stack_scope_helpers;
 interface
 
 uses
-  SysUtils,
   nextpas.core.mem.stack_pool;
 
 // RAII 风格的 StackPool 作用域守卫：创建即保存状态，销毁即恢复状态

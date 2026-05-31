@@ -6,7 +6,6 @@ unit nextpas.core.collections.linkedhashset;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.linkedhashset.intf,

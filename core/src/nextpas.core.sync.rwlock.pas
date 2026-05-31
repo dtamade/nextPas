@@ -31,7 +31,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.errors;
+  nextpas.core.errors;
 
 type
   TReadGuard = class(TInterfacedObject, ILockGuard)
