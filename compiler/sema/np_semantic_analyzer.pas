@@ -698,6 +698,30 @@ begin
     );
     Exit(TempName);
   end;
+  if (ANode.NodeKind = gnkBinaryExpression) and (ANode.Text = '+') and
+    (ANode.ChildCount >= 2) and (ANode.ChildAt(0) <> nil) and
+    (ANode.ChildAt(1) <> nil) then
+  begin
+    LitValue := EmitStrConcatOperand(ANode.ChildAt(0), ADestVar);
+    if LitValue <> '' then
+    begin
+      TempName := EmitStrConcatOperand(ANode.ChildAt(1), ADestVar);
+      if TempName <> '' then
+      begin
+        Inc(FBlockLabelCounter);
+        Result := '$str_tmp_' + IntToStr(FBlockLabelCounter);
+        RegisterRuntimeVar(Result);
+        RegisterRuntimeStrVar(Result);
+        FModel.AddTypedHirNode('var-decl-str-runtime', Result, 0, 0, Result);
+        FModel.AddTypedHirNode(
+          'assign-str-concat-runtime',
+          LitValue + #9 + TempName,
+          0, 0, Result
+        );
+        Exit;
+      end;
+    end;
+  end;
   if ANode.NodeKind = gnkStringLiteral then
     LitValue := DecodePascalStringLiteral(ANode.Text)
   else if not EvaluateStringConstant(ANode, LitValue) then
