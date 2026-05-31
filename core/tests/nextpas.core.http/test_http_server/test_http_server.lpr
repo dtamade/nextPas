@@ -69,6 +69,29 @@ begin
   Result := LHandle;
 end;
 
+function StartServerWithOptions(const AHandler: IHttpHandler; const AOptions: THttpServerOptions;
+  out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
+var
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+begin
+  AServer := THttpServer.Create(AHandler, AOptions);
+  New(LCtx);
+  LCtx^.Server := AServer;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+  LWait := 0;
+  while (not AServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  APort := AServer.LocalAddr.Port;
+  Result := LHandle;
+end;
+
 procedure StopServer(var AServer: THttpServer; const AHandle: TPlatformThreadHandle);
 var
   LRet: Pointer;
@@ -728,6 +751,194 @@ begin
   end;
 end;
 
+{ Test 16: MaxHeaderSize enforcement — 431 }
+procedure TestMaxHeaderSize;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LOpts: THttpServerOptions;
+  LReq: string;
+  LBigHeader: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 2);
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256; { Very small limit for testing }
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    { Build a request with headers > 256 bytes }
+    SetLength(LBigHeader, 300);
+    FillChar(LBigHeader[1], 300, Ord('x'));
+    LReq := 'GET / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'X-Big: ' + LBigHeader + #13#10 +
+      'Connection: close'#13#10#13#10;
+    LResp := SendRawRequest(LPort, LReq);
+    Check((Pos('431', LResp) > 0) or (Length(LResp) = 0),
+      'max header size: 431 or connection closed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 17: MaxBodySize enforcement — 413 }
+procedure TestMaxBodySize;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LOpts: THttpServerOptions;
+  LBody: string;
+  LReq: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LReply: string;
+  begin
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024; { 1KB limit }
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    { Send body > 1KB }
+    SetLength(LBody, 2048);
+    FillChar(LBody[1], 2048, Ord('A'));
+    LReq := 'POST / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Content-Length: 2048'#13#10 +
+      'Connection: close'#13#10#13#10 +
+      LBody;
+    LResp := SendRawRequest(LPort, LReq);
+    Check((Pos('413', LResp) > 0) or (Length(LResp) = 0),
+      'max body size: 413 or connection closed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 18: Chunked response — handler writes without Content-Length }
+procedure TestChunkedResponse;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/chunked', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LP1, LP2, LP3: string;
+  begin
+    LP1 := 'Hello';
+    LP2 := ', ';
+    LP3 := 'World!';
+    { No content-length set — should trigger chunked encoding }
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LP1[1], SizeUInt(Length(LP1)));
+    AW.Write(LP2[1], SizeUInt(Length(LP2)));
+    AW.Write(LP3[1], SizeUInt(Length(LP3)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /chunked HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('transfer-encoding: chunked', LResp) > 0, 'chunked: has TE header');
+    Check(Pos('Hello', LResp) > 0, 'chunked: body contains Hello');
+    Check(Pos('World!', LResp) > 0, 'chunked: body contains World!');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 19: Chunked response preserves keep-alive }
+procedure TestChunkedKeepAlive;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+  LHeaderEnd: Int32;
+const
+  REQ1 = 'GET /chunked HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  REQ2 = 'GET /fixed HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/chunked', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'chunk1';
+    { No content-length — triggers chunked }
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/fixed', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'fixed';
+    AW.GetHeaders.Set_('content-length', '5');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 5);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+
+      { First request — chunked response }
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      { Read until we see the terminal chunk marker 0\r\n\r\n }
+      LResp1 := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 8192);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp1, Length(LResp1) + Int32(LN));
+          Move(LBuf[0], LResp1[Length(LResp1) - Int32(LN) + 1], LN);
+        end;
+      until (Pos(#13#10'0'#13#10#13#10, LResp1) > 0) or (LN = 0);
+      Check(Pos('200 OK', LResp1) > 0, 'chunked-ka: first response 200');
+      Check(Pos('chunk1', LResp1) > 0, 'chunked-ka: first body');
+
+      { Second request on same connection — proves keep-alive worked }
+      LConn.Write(REQ2[1], SizeUInt(Length(REQ2)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0, 'chunked-ka: second response 200');
+      Check(Pos('fixed', LResp2) > 0, 'chunked-ka: second body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -747,5 +958,9 @@ begin
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
+  T.Run('MaxHeaderSize enforcement -> 431', @TestMaxHeaderSize);
+  T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);
+  T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
+  T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Summary;
 end.

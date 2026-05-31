@@ -16,6 +16,7 @@ type
     FHeaders: IHttpHeaders;
     FHeadersSent: Boolean;
     FStatus: THttpStatus;
+    FChunkedWriter: IWriter;
     procedure WriteStatusLine;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
@@ -35,7 +36,8 @@ implementation
 uses
   nextpas.core.base.utils,
   nextpas.core.text.conv,
-  nextpas.core.http.headers;
+  nextpas.core.http.headers,
+  nextpas.core.http.impl.h1.chunked;
 
 { TH1ResponseWriter }
 
@@ -87,11 +89,13 @@ begin
     Exit;
   FStatus := AStatus;
   if not FHeaders.Has('content-length') and not FHeaders.Has('transfer-encoding') then
-    FHeaders.Set_('connection', 'close');
+    FHeaders.Set_('transfer-encoding', 'chunked');
   WriteStatusLine;
   WriteAllHeaders;
   WriteCRLF;
   FHeadersSent := True;
+  if FHeaders.Get('transfer-encoding') = 'chunked' then
+    FChunkedWriter := TChunkedWriter.Create(FWriter);
 end;
 
 function TH1ResponseWriter.GetHeaders: IHttpHeaders;
@@ -108,13 +112,18 @@ function TH1ResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
   if not FHeadersSent then
     WriteHeader(HTTP_STATUS_OK);
-  Result := FWriter.Write(ABuf, ACount);
+  if FChunkedWriter <> nil then
+    Result := FChunkedWriter.Write(ABuf, ACount)
+  else
+    Result := FWriter.Write(ABuf, ACount);
 end;
 
 procedure TH1ResponseWriter.Flush;
 var
   LFlusher: IFlusher;
 begin
+  if FChunkedWriter <> nil then
+    (FChunkedWriter as IFlusher).Flush;
   if Supports(FWriter, IFlusher, LFlusher) then
     LFlusher.Flush;
 end;
