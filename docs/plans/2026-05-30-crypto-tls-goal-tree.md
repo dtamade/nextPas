@@ -26,6 +26,10 @@
 | G7 | OpenSSL backend integration | **DONE** ✅ | Real HTTPS to Cloudflare (TLS 1.3) |
 | G8 | Performance parity with Go net/tls | **DONE** ✅ | X25519=Go, AES-GCM 1.6x faster, ChaCha20 1.6x gap |
 | G9 | Production readiness | **DONE** ✅ | 37 test suites, ~372 tests, zero leaks, SIMD optimized |
+| G10 | Record layer nonce safety | **DONE** ✅ | TLS13RecordSealer/Opener, 35 tests, seq exhaustion |
+| G11 | RSA CT signing (pure Pascal) | **DONE** ✅ | w=4 fixed-window Montgomery, 18 tests, CRT+verify |
+| G12 | AES constant-time fallback | **DONE** ✅ | CT S-box scan, integrated into GCM GCTR path |
+| G13 | P-256 CT scalar multiplication | **DONE** ✅ | Jacobian 4×64 field, integrated into ECDSA sign |
 
 ---
 
