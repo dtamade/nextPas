@@ -145,6 +145,18 @@ begin
 end;
 
 // 64x64 -> 128 bit multiply
+{$IFDEF CPUX86_64}
+{$ASMMODE ATT}
+procedure Mul64(A, B: QWord; out Lo, Hi: QWord); assembler; nostackframe;
+asm
+  // A=rdi, B=rsi, @Lo=rdx, @Hi=rcx
+  movq %rdx, %r8       // save @Lo (rdx will be clobbered by mulq)
+  movq %rdi, %rax      // rax = A
+  mulq %rsi            // rdx:rax = A * B
+  movq %rax, (%r8)     // *Lo = rax
+  movq %rdx, (%rcx)    // *Hi = rdx
+end;
+{$ELSE}
 procedure Mul64(A, B: QWord; out Lo, Hi: QWord);
 var
   AH, AL, BH, BL, M1, M2, M: QWord;
@@ -161,6 +173,7 @@ begin
   if Lo < (M shl 32) then Inc(Hi);
   Hi := Hi + (M shr 32);
 end;
+{$ENDIF}
 
 procedure P256FeMul(const A, B: TP256Fe; out R: TP256Fe);
 var
