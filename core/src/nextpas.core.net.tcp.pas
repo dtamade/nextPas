@@ -1,4 +1,8 @@
 unit nextpas.core.net.tcp;
+{**
+ * @desc TCP 实现：TTcpStream（带 deadline 超时）+ TTcpListener。
+ *       SO_REUSEADDR 默认启用，支持 SetNoDelay/SetKeepAlive。
+ *}
 
 {$I nextpas.core.settings.inc}
 

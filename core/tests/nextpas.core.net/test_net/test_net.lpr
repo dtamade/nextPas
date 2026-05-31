@@ -256,6 +256,72 @@ begin
   LListener.Close;
 end;
 
+procedure TestExpiredDeadline;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LGot: Boolean;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LClient.SetReadDeadline(TDeadline.Expired);
+  LGot := False;
+  try
+    LClient.Read(LBuf[0], 32);
+  except
+    on ENetworkError do LGot := True;
+  end;
+  Check(LGot, 'expired deadline raises immediately');
+  LClient.Close;
+  LListener.Close;
+end;
+
+procedure TestInfiniteDeadline;
+var
+  LListener: ITcpListener;
+  LServer, LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LServer := LListener.Accept;
+  LClient.SetReadDeadline(TDeadline.Infinite);
+  LServer.Write(PAnsiChar('hi')^, 2);
+  LN := LClient.Read(LBuf[0], 32);
+  CheckEqual(SizeUInt(2), LN, 'infinite deadline reads normally');
+  LClient.Close;
+  LServer.Close;
+  LListener.Close;
+end;
+
+procedure TestSetNoDelay;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LClient.SetNoDelay(True);
+  LClient.SetNoDelay(False);
+  LClient.Close;
+  LListener.Close;
+end;
+
+procedure TestSetKeepAlive;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+  LClient.SetKeepAlive(True);
+  LClient.SetKeepAlive(False);
+  LClient.Close;
+  LListener.Close;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP echo', @TestTcpEcho);
@@ -267,5 +333,9 @@ begin
   T.Run('Connect refused', @TestConnectRefused);
   T.Run('IO integration', @TestIoIntegration);
   T.Run('Read deadline', @TestReadDeadline);
+  T.Run('Expired deadline', @TestExpiredDeadline);
+  T.Run('Infinite deadline', @TestInfiniteDeadline);
+  T.Run('SetNoDelay', @TestSetNoDelay);
+  T.Run('SetKeepAlive', @TestSetKeepAlive);
   T.Summary;
 end.

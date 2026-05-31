@@ -1,4 +1,7 @@
 unit nextpas.core.net.resolve;
+{**
+ * @desc DNS/地址解析：主机名→IP、IPv4 字面量解析。
+ *}
 
 {$I nextpas.core.settings.inc}
 

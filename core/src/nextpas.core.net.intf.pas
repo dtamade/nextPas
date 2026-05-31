@@ -1,4 +1,8 @@
 unit nextpas.core.net.intf;
+{**
+ * @desc 网络接口定义：ITcpStream、ITcpListener、IUdpSocket。
+ *       ITcpStream 继承 IStream，支持 deadline 超时控制。
+ *}
 
 {$I nextpas.core.settings.inc}
 

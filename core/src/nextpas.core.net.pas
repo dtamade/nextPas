@@ -1,4 +1,8 @@
 unit nextpas.core.net;
+{**
+ * @desc TCP/UDP 网络模块门面。提供 TCP 监听/连接、UDP 绑定、DNS 解析。
+ *       消费方只需 uses nextpas.core.net 即可获得完整网络能力。
+ *}
 
 {$I nextpas.core.settings.inc}
 

@@ -1,4 +1,7 @@
 unit nextpas.core.net.udp;
+{**
+ * @desc UDP socket 实现：SendTo/RecvFrom 无连接数据报。
+ *}
 
 {$I nextpas.core.settings.inc}
 

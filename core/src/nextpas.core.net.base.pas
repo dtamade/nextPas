@@ -1,4 +1,7 @@
 unit nextpas.core.net.base;
+{**
+ * @desc 网络模块基础类型：TNetAddress、常量。
+ *}
 
 {$I nextpas.core.settings.inc}
 
