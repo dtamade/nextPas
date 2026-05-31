@@ -33,6 +33,8 @@ type
     FClosed: Boolean;
     FReadDeadline: TDeadline;
     FWriteDeadline: TDeadline;
+    FLastReadTimeoutMs: UInt32;
+    FLastWriteTimeoutMs: UInt32;
     procedure ApplyReadTimeout;
     procedure ApplyWriteTimeout;
   public
@@ -115,6 +117,8 @@ begin
   FClosed := False;
   FReadDeadline := TDeadline.Infinite;
   FWriteDeadline := TDeadline.Infinite;
+  FLastReadTimeoutMs := 0;
+  FLastWriteTimeoutMs := 0;
 end;
 
 destructor TTcpStream.Destroy;
@@ -159,6 +163,8 @@ begin
     Inc(LPtr, LSent);
     Dec(LRemaining, SizeUInt(LSent));
     Inc(Result, SizeUInt(LSent));
+    if (LRemaining > 0) and (not FWriteDeadline.IsInfinite) then
+      ApplyWriteTimeout;
   end;
 end;
 
@@ -239,7 +245,11 @@ var
 begin
   if FReadDeadline.IsInfinite then
   begin
-    platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
+    if FLastReadTimeoutMs <> 0 then
+    begin
+      platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, 0);
+      FLastReadTimeoutMs := 0;
+    end;
     Exit;
   end;
   if FReadDeadline.IsExpired then
@@ -247,7 +257,11 @@ begin
   LRemaining := FReadDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
-  platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
+  if LMs <> FLastReadTimeoutMs then
+  begin
+    platform_socket_set_timeout(FSocket, PLATFORM_SO_RCVTIMEO, LMs);
+    FLastReadTimeoutMs := LMs;
+  end;
 end;
 
 procedure TTcpStream.ApplyWriteTimeout;
@@ -257,7 +271,11 @@ var
 begin
   if FWriteDeadline.IsInfinite then
   begin
-    platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
+    if FLastWriteTimeoutMs <> 0 then
+    begin
+      platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, 0);
+      FLastWriteTimeoutMs := 0;
+    end;
     Exit;
   end;
   if FWriteDeadline.IsExpired then
@@ -265,7 +283,11 @@ begin
   LRemaining := FWriteDeadline.Remaining;
   LMs := UInt32(LRemaining.AsMilliseconds);
   if LMs = 0 then LMs := 1;
-  platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
+  if LMs <> FLastWriteTimeoutMs then
+  begin
+    platform_socket_set_timeout(FSocket, PLATFORM_SO_SNDTIMEO, LMs);
+    FLastWriteTimeoutMs := LMs;
+  end;
 end;
 
 { TTcpListener }
