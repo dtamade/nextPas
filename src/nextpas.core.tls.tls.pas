@@ -26,6 +26,7 @@ interface
 uses
   SysUtils, Classes,
   nextpas.core.tls.base,
+  nextpas.core.tls.pending,
   nextpas.core.tls.safety,
   nextpas.core.tls.exceptions;
 
@@ -87,6 +88,8 @@ type
     function ConnectStream(ATransport: TStream; const AServerName: string): TSSLStream;
     function TryConnectStream(ATransport: TStream; const AServerName: string;
       out AStream: TSSLStream): TSSLOperationResult;
+
+    function BeginConnectSocket(ASocket: THandle; const AServerName: string): TSSLPendingClientConnect;
   end;
 
   { TSSLAcceptor - 服务端接收器（Rust 风格门面） }
@@ -549,6 +552,17 @@ begin
       R.ErrorCode,
       'TSSLConnector.ConnectStream'
     );
+end;
+
+function TSSLConnector.BeginConnectSocket(ASocket: THandle;
+  const AServerName: string): TSSLPendingClientConnect;
+var
+  LConn: ISSLConnection;
+begin
+  LConn := FContext.CreateConnection(ASocket);
+  ApplyClientOptions(LConn, AServerName);
+  LConn.SetBlocking(False);
+  Result := TSSLPendingClientConnect.Create(LConn);
 end;
 
 { TSSLAcceptor }

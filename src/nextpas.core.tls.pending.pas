@@ -7,8 +7,7 @@ interface
 uses
   SysUtils, Classes,
   nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  nextpas.core.tls.tls;
+  nextpas.core.tls.exceptions;
 
 type
   TSSLPendingClientConnect = class
@@ -22,14 +21,17 @@ type
 
     function Poll: TSSLHandshakeStepResult;
     function IsComplete: Boolean;
-    function FinishStream: TSSLStream;
-    function TryFinishStream(out AStream: TSSLStream): TSSLOperationResult;
+    function FinishStream: TStream;
+    function TryFinishStream(out AStream: TStream): TSSLOperationResult;
     procedure Cancel;
 
     property Connection: ISSLConnection read FConnection;
   end;
 
 implementation
+
+uses
+  nextpas.core.tls.tls;
 
 constructor TSSLPendingClientConnect.Create(AConnection: ISSLConnection);
 begin
@@ -100,14 +102,14 @@ begin
   Result := FCompleted;
 end;
 
-function TSSLPendingClientConnect.FinishStream: TSSLStream;
+function TSSLPendingClientConnect.FinishStream: TStream;
 begin
   if not FCompleted then
     raise ESSLException.Create('Handshake not complete');
   Result := TSSLStream.Create(FConnection);
 end;
 
-function TSSLPendingClientConnect.TryFinishStream(out AStream: TSSLStream): TSSLOperationResult;
+function TSSLPendingClientConnect.TryFinishStream(out AStream: TStream): TSSLOperationResult;
 begin
   AStream := nil;
   if not FCompleted then
