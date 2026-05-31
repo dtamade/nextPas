@@ -182,6 +182,7 @@ var
   LBuf: array[0..65535] of Byte;
   LRead: ssize_t;
   LOutTotal, LErrTotal: Integer;
+  LOutCap, LErrCap: Integer;
   LStdoutFd, LStderrFd: PtrInt;
   LPollResult: Integer;
 begin
@@ -192,6 +193,8 @@ begin
   Result.StdErr := '';
   LOutTotal := 0;
   LErrTotal := 0;
+  LOutCap := 0;
+  LErrCap := 0;
 
   LStdoutFd := -1;
   LStderrFd := -1;
@@ -228,7 +231,11 @@ begin
         LRead := read(LStdoutFd, @LBuf[0], SizeOf(LBuf));
         if LRead > 0 then
         begin
-          SetLength(Result.StdOut, LOutTotal + LRead);
+          if LOutTotal + LRead > LOutCap then
+          begin
+            LOutCap := (LOutTotal + LRead) * 2;
+            SetLength(Result.StdOut, LOutCap);
+          end;
           Move(LBuf[0], Result.StdOut[LOutTotal + 1], LRead);
           Inc(LOutTotal, LRead);
         end
@@ -243,7 +250,11 @@ begin
           LRead := read(LStderrFd, @LBuf[0], SizeOf(LBuf));
           if LRead > 0 then
           begin
-            SetLength(Result.StdErr, LErrTotal + LRead);
+            if LErrTotal + LRead > LErrCap then
+            begin
+              LErrCap := (LErrTotal + LRead) * 2;
+              SetLength(Result.StdErr, LErrCap);
+            end;
             Move(LBuf[0], Result.StdErr[LErrTotal + 1], LRead);
             Inc(LErrTotal, LRead);
           end
@@ -255,7 +266,11 @@ begin
           LRead := read(LStderrFd, @LBuf[0], SizeOf(LBuf));
           if LRead > 0 then
           begin
-            SetLength(Result.StdErr, LErrTotal + LRead);
+            if LErrTotal + LRead > LErrCap then
+            begin
+              LErrCap := (LErrTotal + LRead) * 2;
+              SetLength(Result.StdErr, LErrCap);
+            end;
             Move(LBuf[0], Result.StdErr[LErrTotal + 1], LRead);
             Inc(LErrTotal, LRead);
           end
@@ -264,6 +279,8 @@ begin
         end;
       end;
     until (LStdoutFd < 0) and (LStderrFd < 0);
+    SetLength(Result.StdOut, LOutTotal);
+    SetLength(Result.StdErr, LErrTotal);
   end
   else
   begin
