@@ -28,6 +28,7 @@ implementation
 
 const
   SCANNER_BUF_SIZE = 4096;
+  SCANNER_MAX_TOKEN_SIZE = 1048576;
 
 type
   TScanner = class(TInterfacedObject, IScanner)
@@ -39,6 +40,7 @@ type
     FEnd: SizeUInt;
     FToken: TBytes;
     FEOF: Boolean;
+    FMaxTokenSize: SizeUInt;
   public
     constructor Create(const AInner: IReader; const ASplit: TSplitFunc);
     function Scan: Boolean;
@@ -117,6 +119,7 @@ begin
   FEnd := 0;
   FToken := nil;
   FEOF := False;
+  FMaxTokenSize := SCANNER_MAX_TOKEN_SIZE;
 end;
 
 function TScanner.Scan: Boolean;
@@ -159,6 +162,11 @@ begin
     if FEnd >= SizeUInt(Length(FBuf)) then
     begin
       LNewCap := SizeUInt(Length(FBuf)) * 2;
+      if LNewCap > FMaxTokenSize then
+      begin
+        Result := False;
+        Exit;
+      end;
       SetLength(FBuf, LNewCap);
     end;
 
