@@ -171,7 +171,7 @@ var
   LP: PByte;
   LRemaining, LCopy: SizeUInt;
 begin
-  if ALen = 0 then Exit;
+  if (ALen = 0) or (AData = nil) then Exit;
   LP := PByte(AData);
   FTotalLen += ALen;
   if FBufLen > 0 then
@@ -333,7 +333,7 @@ end;
 procedure TMD5State.Update(const AData: Pointer; ALen: SizeUInt);
 var LP: PByte; LCopy: SizeUInt;
 begin
-  if ALen = 0 then Exit;
+  if (ALen = 0) or (AData = nil) then Exit;
   LP := PByte(AData);
   FTotalLen += ALen;
   if FBufLen > 0 then
