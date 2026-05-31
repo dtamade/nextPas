@@ -160,12 +160,15 @@ end;
 
 procedure AppendFileText(const APath: string; const AText: string);
 var
-  LFile: IFile;
+  LData: TBytes;
+  LI: SizeInt;
 begin
   if Length(AText) > 0 then
   begin
-    LFile := FsOpenFile(APath, [fmWrite, fmAppend, fmCreate], PermDefault);
-    LFile.Write(AText[1], Length(AText));
+    SetLength(LData, Length(AText));
+    for LI := 0 to Length(AText) - 1 do
+      LData[LI] := Byte(AText[LI + 1]);
+    AppendFile(APath, LData);
   end;
 end;
 
