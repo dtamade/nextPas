@@ -1,6 +1,6 @@
 unit nextpas.core.http.client;
 {**
- * @desc Simple HTTP/1.1 client. New connection per request (no pooling in v1).
+ * @desc HTTP/1.1 client with per-host connection pooling and keep-alive.
  *       Supports automatic redirect following.
  *}
 
@@ -22,9 +22,19 @@ type
     class function Default: THttpClientOptions; static;
   end;
 
+  TPoolEntry = record
+    Host: string;
+    Port: UInt16;
+    Conn: ITcpStream;
+  end;
+
   THttpClient = class(TInterfacedObject, IHttpClient)
   private
     FOptions: THttpClientOptions;
+    FPool: array of TPoolEntry;
+    FPoolCount: Int32;
+    function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
+    procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
     function ReadResponse(const AReader: IReader): IHttpResponse;
@@ -80,6 +90,31 @@ constructor THttpClient.Create(const AOptions: THttpClientOptions);
 begin
   inherited Create;
   FOptions := AOptions;
+  FPoolCount := 0;
+end;
+
+function THttpClient.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
+var LI: Int32;
+begin
+  Result := nil;
+  for LI := 0 to FPoolCount - 1 do
+    if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
+    begin
+      Result := FPool[LI].Conn;
+      FPool[LI] := FPool[FPoolCount - 1];
+      Dec(FPoolCount);
+      Exit;
+    end;
+end;
+
+procedure THttpClient.PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
+begin
+  if FPoolCount >= Length(FPool) then
+    SetLength(FPool, FPoolCount + 4);
+  FPool[FPoolCount].Host := AHost;
+  FPool[FPoolCount].Port := APort;
+  FPool[FPoolCount].Conn := AConn;
+  Inc(FPoolCount);
 end;
 
 function THttpClient.WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
@@ -173,6 +208,14 @@ begin
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
 end;
 
+function ResponseKeepAlive(const AResp: IHttpResponse): Boolean;
+var LConn: string;
+begin
+  LConn := AResp.Headers.Get('connection');
+  { HTTP/1.1 default is keep-alive unless 'close' is specified }
+  Result := (LConn <> 'close');
+end;
+
 function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
 var
   LUrl: TUrl;
@@ -183,6 +226,7 @@ var
   LLocation: string;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
+  LPooled: Boolean;
 begin
   LUrl := AReq.Url;
 
@@ -197,32 +241,54 @@ begin
       LPort := 80;
   end;
 
-  // Connect
-  LConn := TcpConnect(LHost, LPort);
-  try
-    // Set deadline
-    if FOptions.Timeout > 0 then
-    begin
-      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-      LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-    end;
+  // Try pooled connection first
+  LConn := PoolGet(LHost, LPort);
+  LPooled := (LConn <> nil);
 
-    // Ensure Host header
-    if not AReq.Headers.Has('host') then
-      AReq.Headers.Set_('host', LUrl.HostPort);
+  if not LPooled then
+    LConn := TcpConnect(LHost, LPort);
 
-    // Ensure Connection: close (no keep-alive in v1)
-    if not AReq.Headers.Has('connection') then
-      AReq.Headers.Set_('connection', 'close');
-
-    // Write request
-    WriteRequest(LConn as IWriter, AReq);
-
-    // Read response
-    LResp := ReadResponse(LConn as IReader);
-  finally
-    LConn.Close;
+  // Set deadline
+  if FOptions.Timeout > 0 then
+  begin
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
+    LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
   end;
+
+  // Ensure Host header
+  if not AReq.Headers.Has('host') then
+    AReq.Headers.Set_('host', LUrl.HostPort);
+
+  // Write request + read response; retry once if pooled connection is stale
+  try
+    WriteRequest(LConn as IWriter, AReq);
+    LResp := ReadResponse(LConn as IReader);
+  except
+    if LPooled then
+    begin
+      // Stale pooled connection — discard and retry with fresh
+      LConn.Close;
+      LConn := TcpConnect(LHost, LPort);
+      if FOptions.Timeout > 0 then
+      begin
+        LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
+        LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
+      end;
+      WriteRequest(LConn as IWriter, AReq);
+      LResp := ReadResponse(LConn as IReader);
+    end
+    else
+    begin
+      LConn.Close;
+      raise;
+    end;
+  end;
+
+  // Determine if we can reuse the connection
+  if ResponseKeepAlive(LResp) then
+    PoolPut(LHost, LPort, LConn)
+  else
+    LConn.Close;
 
   // Handle redirects
   if FOptions.FollowRedirects and

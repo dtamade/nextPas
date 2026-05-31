@@ -215,6 +215,10 @@ begin
     { Check if this is a wildcard segment: /* }
     if (Length(LSeg) >= 2) and (LSeg[1] = '/') and (LSeg[2] = '*') then
     begin
+      { Check for existing wildcard at this level }
+      for LJ := 0 to High(LCur^.Children) do
+        if LCur^.Children[LJ]^.Kind = nkWildcard then
+          raise EHttpError.Create('Duplicate wildcard at: ' + APath);
       LChild := NewNode('', nkWildcard);
       LChild^.ParamName := Copy(LSeg, 3, Length(LSeg) - 2);
       SetLength(LCur^.Children, Length(LCur^.Children) + 1);

@@ -4,6 +4,7 @@ program test_http_client;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.text.conv,
@@ -13,6 +14,7 @@ uses
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.tcp,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -393,6 +395,92 @@ begin
   end;
 end;
 
+{ Test 9: Connection reuse — multiple requests share one TCP connection }
+var
+  GAcceptCount: Int32;
+  GPoolListener: ITcpListener;
+
+function PoolAcceptThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LReply: string;
+  LAccum: string;
+  LP: SizeInt;
+begin
+  Result := nil;
+  while True do
+  begin
+    try
+      LConn := GPoolListener.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then Break;
+    InterlockedIncrement(GAcceptCount);
+    { Serve multiple requests on this connection by detecting \r\n\r\n boundaries }
+    try
+      LAccum := '';
+      while True do
+      begin
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN = 0 then Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        { Process all complete requests in the buffer }
+        while True do
+        begin
+          LP := Pos(#13#10#13#10, LAccum);
+          if LP = 0 then Break;
+          { Found a complete request — send response }
+          LReply := 'HTTP/1.1 200 OK'#13#10 +
+                    'Content-Length: 2'#13#10 +
+                    #13#10 +
+                    'ok';
+          LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+          { Remove processed request from buffer }
+          System.Delete(LAccum, 1, LP + 3);
+        end;
+      end;
+    except
+    end;
+    LConn.Close;
+  end;
+end;
+
+procedure TestConnectionReuse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LI: Int32;
+  LRet: Pointer;
+begin
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAcceptThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    for LI := 1 to 3 do
+    begin
+      LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ping');
+      CheckEqual(Int64(200), Int64(LResp.StatusCode), 'request ' + IntToStr(Int64(LI)) + ' status 200');
+    end;
+    { All 3 requests should have reused 1 connection }
+    CheckEqual(Int64(1), Int64(GAcceptCount), 'only 1 accept (connection reused)');
+    { Release client to close pooled connections, unblocking server thread }
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+  end;
+end;
+
 { Main }
 
 begin
@@ -405,6 +493,7 @@ begin
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
+  T.Run('Connection reuse', @TestConnectionReuse);
   T.Summary;
 end.
 
