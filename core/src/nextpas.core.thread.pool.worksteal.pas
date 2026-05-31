@@ -21,6 +21,7 @@ function CreateWorkStealingPool(const AWorkerCount: Integer = 0): IThreadPool;
 implementation
 
 uses
+  nextpas.core.base,
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.sync.condvar,
@@ -200,6 +201,12 @@ begin
     FQueues[LQIdx].Tail := (FQueues[LQIdx].Tail + 1) mod QUEUE_CAPACITY;
     Inc(FQueues[LQIdx].Count);
     Inc(FPendingTasks);
+  end
+  else
+  begin
+    FCondVar.Broadcast;
+    FMutex.Release;
+    raise EInvalidOperation.Create('TWorkStealingPool.Submit: queue full');
   end;
 
   FCondVar.Broadcast;
