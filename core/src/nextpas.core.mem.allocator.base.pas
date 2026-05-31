@@ -5,7 +5,6 @@ unit nextpas.core.mem.allocator.base;
 interface
 
 uses
-  SysUtils,
   nextpas.core.mem.intf,
   nextpas.core.contracts
   {$IFDEF NEXTPAS_CORE_STRICT_NULL_FREE}

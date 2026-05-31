@@ -18,9 +18,6 @@ unit nextpas.core.mem.manager.rtl;
 
 interface
 
-uses
-  SysUtils;
-
 procedure InstallRtlMemoryManager;
 procedure UninstallRtlMemoryManager;
 function IsRtlMemoryManagerInstalled: Boolean;
@@ -30,7 +27,8 @@ implementation
 uses
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.rtl_allocator,
-  nextpas.core.sync;
+  nextpas.core.sync,
+  nextpas.core.sync.mutex;
 
 var
   GOldManager: TMemoryManager;

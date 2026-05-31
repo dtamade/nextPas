@@ -12,7 +12,6 @@ unit nextpas.core.collections.multiset;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.mem.allocator,
   nextpas.core.collections.base,

@@ -24,7 +24,6 @@ unit nextpas.core.collections.builder;
 interface
 
 uses
-  SysUtils,
   nextpas.core.collections.vec.intf,
   nextpas.core.collections.hashmap.intf,
   nextpas.core.collections.vec,

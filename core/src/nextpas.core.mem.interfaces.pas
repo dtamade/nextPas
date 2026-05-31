@@ -5,7 +5,7 @@ unit nextpas.core.mem.interfaces;
 interface
 
 uses
-  SysUtils, nextpas.core.mem.allocator;
+  nextpas.core.mem.allocator;
 
 // 说明：本单元仅声明接口类型（P2 预研）。
 // 不改变现有类用法；实现仍由现有类（TMemPool/TStackPool）提供。

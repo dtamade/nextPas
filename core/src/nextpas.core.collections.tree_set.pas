@@ -6,7 +6,6 @@ unit nextpas.core.collections.tree_set;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.collections.base,
   nextpas.core.collections.intf,

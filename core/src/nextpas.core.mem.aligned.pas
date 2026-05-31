@@ -5,7 +5,7 @@ unit nextpas.core.mem.aligned;
 interface
 
 uses
-  SysUtils, nextpas.core.base;
+  nextpas.core.base;
 
 { Minimal, cross-platform aligned allocation shim.
   - Windows: use _aligned_malloc/_aligned_free

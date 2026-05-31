@@ -5,7 +5,6 @@ unit nextpas.core.mem.allocator.callback_allocator;
 interface
 
 uses
-  SysUtils,
   {$IFDEF NEXTPAS_CORE_CONTRACTS}
   nextpas.core.base,
   {$ENDIF}

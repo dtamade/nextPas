@@ -5,7 +5,6 @@ unit nextpas.core.collections.lrucache;
 interface
 
 uses
-  SysUtils,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.utils,

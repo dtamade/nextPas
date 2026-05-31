@@ -21,7 +21,6 @@ interface
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_ALLOCATOR}
 uses
-  SysUtils,
   nextpas.core.mem.allocator.mimalloc,
   nextpas.core.mem.allocator.base;
 
