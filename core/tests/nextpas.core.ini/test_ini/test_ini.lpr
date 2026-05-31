@@ -3,6 +3,7 @@ program test_ini;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.ini,
@@ -459,6 +460,82 @@ begin
   end;
 end;
 
+
+{ === File I/O Tests === }
+
+procedure TestSaveAndLoadFromFile;
+var
+  Ini, Ini2: TIniFile;
+  LPath: string;
+begin
+  LPath := '/tmp/test_ini_roundtrip.ini';
+  Ini := TIniFile.Create;
+  try
+    Ini.WriteString('server', 'host', 'localhost');
+    Ini.WriteString('server', 'port', '3000');
+    Ini.WriteString('db', 'name', 'testdb');
+    Ini.WriteBool('flags', 'debug', True);
+    Ini.SaveToFile(LPath);
+  finally
+    Ini.Free;
+  end;
+
+  Ini2 := TIniFile.Create;
+  try
+    Ini2.LoadFromFile(LPath);
+    CheckEqual('localhost', Ini2.ReadString('server', 'host', ''), 'file roundtrip host');
+    CheckEqual('3000', Ini2.ReadString('server', 'port', ''), 'file roundtrip port');
+    CheckEqual('testdb', Ini2.ReadString('db', 'name', ''), 'file roundtrip db');
+    CheckEqual(True, Ini2.ReadBool('flags', 'debug', False), 'file roundtrip bool');
+  finally
+    Ini2.Free;
+  end;
+  DeleteFile(LPath);
+end;
+
+procedure TestSaveToFileFormat;
+var
+  Ini: TIniFile;
+  LPath: string;
+  LFile: TextFile;
+  LLine, LContent: string;
+begin
+  LPath := '/tmp/test_ini_format.ini';
+  Ini := TIniFile.Create;
+  try
+    Ini.WriteString('section1', 'key1', 'value1');
+    Ini.WriteString('section1', 'key2', 'value2');
+    Ini.WriteString('section2', 'alpha', 'beta');
+    Ini.SaveToFile(LPath);
+  finally
+    Ini.Free;
+  end;
+
+  { Read raw file content }
+  LContent := '';
+  AssignFile(LFile, LPath);
+  Reset(LFile);
+  try
+    while not Eof(LFile) do
+    begin
+      ReadLn(LFile, LLine);
+      LContent := LContent + LLine + #10;
+    end;
+  finally
+    CloseFile(LFile);
+  end;
+
+  { Verify format: [section] header + key=value lines }
+  Check(Pos('[section1]', LContent) > 0, 'has [section1] header');
+  Check(Pos('[section2]', LContent) > 0, 'has [section2] header');
+  Check(Pos('key1=value1', LContent) > 0, 'has key1=value1');
+  Check(Pos('key2=value2', LContent) > 0, 'has key2=value2');
+  Check(Pos('alpha=beta', LContent) > 0, 'has alpha=beta');
+  { section1 should appear before section2 }
+  Check(Pos('[section1]', LContent) < Pos('[section2]', LContent), 'section order');
+  DeleteFile(LPath);
+end;
+
 { === Main === }
 
 begin
@@ -488,5 +565,7 @@ begin
   T.Run('CRLF line endings', @TestCRLFLineEndings);
   T.Run('Value with equals sign', @TestValueWithEquals);
   T.Run('Delete non-existent', @TestDeleteNonExistent);
+  T.Run('SaveToFile + LoadFromFile roundtrip', @TestSaveAndLoadFromFile);
+  T.Run('SaveToFile format', @TestSaveToFileFormat);
   T.Summary;
 end.

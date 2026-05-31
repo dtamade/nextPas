@@ -426,6 +426,77 @@ begin
   end;
 end;
 
+
+{ === Additional SelectPath & ChildCount Tests === }
+
+procedure TestSelectPathEmpty;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<root><a/></root>');
+  try
+    LNodes := LDoc.SelectPath('');
+    CheckEqual(Int64(0), Int64(Length(LNodes)), 'empty path returns nothing');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathNonExistentDeep;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse('<root><a><b>x</b></a></root>');
+  try
+    LNodes := LDoc.SelectPath('/root/a/b/c/d/e');
+    CheckEqual(Int64(0), Int64(Length(LNodes)), 'deep non-existent path');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestSelectPathMultiDepth;
+var
+  LDoc: TXmlDocument;
+  LNodes: TXmlNodeArray;
+begin
+  LDoc := TXmlDocument.Parse(
+    '<root><level1><level2><level3><target>found</target></level3></level2></level1></root>');
+  try
+    LNodes := LDoc.SelectPath('/root/level1/level2/level3/target');
+    CheckEqual(Int64(1), Int64(Length(LNodes)), 'multi depth count');
+    CheckEqual('found', LNodes[0].Text, 'multi depth text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestChildCountVaried;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<r><a/><b/><c/><d/><e/></r>');
+  try
+    CheckEqual(Int64(5), Int64(LDoc.Root.ChildCount), '5 children');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestChildCountZero;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := TXmlDocument.Parse('<empty/>');
+  try
+    CheckEqual(Int64(0), Int64(LDoc.Root.ChildCount), 'zero children');
+  finally
+    LDoc.Free;
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -455,5 +526,10 @@ begin
   T.Run('SelectPathDeep', @TestSelectPathDeep);
   T.Run('GetAttrWithPrefix', @TestGetAttrWithPrefix);
   T.Run('EmptyRoot', @TestEmptyRoot);
+  T.Run('SelectPathEmpty', @TestSelectPathEmpty);
+  T.Run('SelectPathNonExistentDeep', @TestSelectPathNonExistentDeep);
+  T.Run('SelectPathMultiDepth', @TestSelectPathMultiDepth);
+  T.Run('ChildCountVaried', @TestChildCountVaried);
+  T.Run('ChildCountZero', @TestChildCountZero);
   T.Summary;
 end.

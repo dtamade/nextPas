@@ -269,6 +269,84 @@ begin
   CheckEqual('no', TemplateRender('{{if .Val}}yes{{else}}no{{end}}', LCtx));
 end;
 
+{ === TTemplateContext Direct Access Tests === }
+
+procedure Test_GetVar_Existing;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'Alice');
+  CheckEqual('Alice', LCtx.GetVar('Name'));
+end;
+
+procedure Test_GetVar_Missing;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  CheckEqual('', LCtx.GetVar('NonExistent'));
+end;
+
+procedure Test_GetBool_True;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Flag', True);
+  CheckEqual(True, LCtx.GetBool('Flag'));
+end;
+
+procedure Test_GetBool_False;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetBool('Flag', False);
+  CheckEqual(False, LCtx.GetBool('Flag'));
+end;
+
+procedure Test_GetBool_Missing;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  CheckEqual(False, LCtx.GetBool('Missing'));
+end;
+
+procedure Test_GetList_Existing;
+var
+  LCtx: TTemplateContext;
+  LList: TStringArray;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetList('Items', ['x', 'y', 'z']);
+  LList := LCtx.GetList('Items');
+  CheckEqual(Int64(3), Int64(Length(LList)), 'list length');
+  CheckEqual('x', LList[0], 'item 0');
+  CheckEqual('y', LList[1], 'item 1');
+  CheckEqual('z', LList[2], 'item 2');
+end;
+
+procedure Test_GetList_Missing;
+var
+  LCtx: TTemplateContext;
+  LList: TStringArray;
+begin
+  LCtx := TTemplateContext.Create;
+  LList := LCtx.GetList('Missing');
+  CheckEqual(Int64(0), Int64(Length(LList)), 'missing list empty');
+end;
+
+procedure Test_SetInt_GetVar;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetInt('Count', 99);
+  CheckEqual('99', LCtx.GetVar('Count'));
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.template');
   T.Run('SimpleVar', @Test_SimpleVar);
@@ -299,6 +377,14 @@ begin
   T.Run('BoolTruthy_NonEmpty', @Test_BoolTruthy_NonEmpty);
   T.Run('BoolFalsy_Empty', @Test_BoolFalsy_Empty);
   T.Run('BoolFalsy_Zero', @Test_BoolFalsy_Zero);
+  T.Run('GetVar_Existing', @Test_GetVar_Existing);
+  T.Run('GetVar_Missing', @Test_GetVar_Missing);
+  T.Run('GetBool_True', @Test_GetBool_True);
+  T.Run('GetBool_False', @Test_GetBool_False);
+  T.Run('GetBool_Missing', @Test_GetBool_Missing);
+  T.Run('GetList_Existing', @Test_GetList_Existing);
+  T.Run('GetList_Missing', @Test_GetList_Missing);
+  T.Run('SetInt_GetVar', @Test_SetInt_GetVar);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
