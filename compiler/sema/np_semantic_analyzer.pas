@@ -7885,7 +7885,11 @@ begin
             for ArgIndex := 1 to Arg.ChildCount - 1 do
             begin
               RhsNode := Arg.ChildAt(ArgIndex);
-              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+              if RhsNode = nil then Continue;
+              if (RhsNode.NodeKind = gnkIdentifier) and
+                IsRuntimeArrVar(RhsNode.Text) then
+                Operand := Operand + #9 + 'arrvar ' + RhsNode.Text + #10
+              else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
                 Operand := Operand + #9 + StringValue;
             end;
             FModel.AddTypedHirNode('call-runtime', ArgName, 0, 0, Operand);
