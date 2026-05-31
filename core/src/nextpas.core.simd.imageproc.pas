@@ -150,7 +150,7 @@ var
   LNormalized: Single;
 begin
   if aGamma <= 0.0 then
-    raise EArgumentOutOfRangeException.Create('Gamma must be > 0');
+    raise EArgumentError.Create('Gamma must be > 0');
 
   LInvGamma := 1.0 / aGamma;
   for LIndex := 0 to 255 do
@@ -207,7 +207,7 @@ end;
 procedure RequireImageData(const aImg: TImage; const aName: string); inline;
 begin
   if (aImg.DataSize > 0) and (aImg.Data = nil) then
-    raise EArgumentException.CreateFmt('%s.Data must not be nil', [aName]);
+    raise EArgumentError.CreateFmt('%s.Data must not be nil', [aName]);
 end;
 
 procedure BuildBlendLuts(aAlpha: Single; out aLutSrc1, aLutSrc2: TByteLut); inline;
@@ -264,7 +264,7 @@ end;
 procedure ValidateCoordinates(const aImg: TImage; aX, aY: Integer);
 begin
   if (aX < 0) or (aX >= aImg.Width) or (aY < 0) or (aY >= aImg.Height) then
-    raise EArgumentOutOfRangeException.CreateFmt(
+    raise EArgumentError.CreateFmt(
       'Pixel coordinate (%d,%d) out of range %dx%d',
       [aX, aY, aImg.Width, aImg.Height]
     );
@@ -452,13 +452,13 @@ var
   LBytesPerPixel: Integer;
 begin
   if (aWidth < 0) or (aHeight < 0) then
-    raise EArgumentOutOfRangeException.CreateFmt('Invalid image size: %dx%d', [aWidth, aHeight]);
+    raise EArgumentError.CreateFmt('Invalid image size: %dx%d', [aWidth, aHeight]);
 
   LBytesPerPixel := BytesPerPixel(aFormat);
   LDataSize64 := Int64(aWidth) * Int64(aHeight) * Int64(LBytesPerPixel);
 
   if LDataSize64 > High(Integer) then
-    raise EOutOfMemory.CreateFmt('Image too large: %dx%d (%d bytes)', [aWidth, aHeight, LDataSize64]);
+    raise EOutOfMemoryError.CreateFmt('Image too large: %dx%d (%d bytes)', [aWidth, aHeight, LDataSize64]);
 
   Result.Width := aWidth;
   Result.Height := aHeight;

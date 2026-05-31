@@ -110,7 +110,11 @@ procedure LogError(const AMsg: string);
 implementation
 
 uses
-  SysUtils, Math,
+  nextpas.core.text.conv, Math,
+  nextpas.core.errors,
+  nextpas.core.fs.util,
+  nextpas.core.platform.files,
+  nextpas.core.platform.files.base,
   nextpas.core.time.base;
 
 const
@@ -738,7 +742,7 @@ begin
   if FBroken or FOpened then Exit;
   try
     AssignFile(FFile, FPath);
-    if FileExists(FPath) then
+    if FsExists(FPath) then
       Append(FFile)
     else
       Rewrite(FFile);
@@ -763,14 +767,14 @@ begin
     FOpened := False;
   end;
   LDst := FPath + '.' + IntToStr(FMaxFiles);
-  if FileExists(LDst) then DeleteFile(LDst);
+  if FsExists(LDst) then platform_file_unlink(PAnsiChar(LDst));
   for LI := FMaxFiles - 1 downto 1 do
   begin
     LSrc := FPath + '.' + IntToStr(LI);
     LDst := FPath + '.' + IntToStr(LI + 1);
-    if FileExists(LSrc) then RenameFile(LSrc, LDst);
+    if FsExists(LSrc) then platform_file_rename(PAnsiChar(LSrc), PAnsiChar(LDst));
   end;
-  if FileExists(FPath) then RenameFile(FPath, FPath + '.1');
+  if FsExists(FPath) then platform_file_rename(PAnsiChar(FPath), PAnsiChar(FPath + '.1'));
   FCurrentSize := 0;
 end;
 

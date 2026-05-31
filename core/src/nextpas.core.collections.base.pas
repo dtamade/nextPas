@@ -5,7 +5,8 @@ unit nextpas.core.collections.base;
 interface
 
 uses
-  SysUtils,typinfo,variants,
+  typinfo,variants,
+  nextpas.core.text.conv,
   nextpas.core.base,
   nextpas.core.math,
   nextpas.core.mem.allocator,
@@ -636,8 +637,62 @@ procedure CheckBounds(aIndex, aCount, aMax: SizeUInt; const aCallerName: string)
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.base.utils,
   nextpas.core.collections.element_manager;
+
+function CompareStr(const aLeft, aRight: string): SizeInt;
+var
+  LMinLen, LLeftLen, LRightLen: SizeInt;
+begin
+  LLeftLen := Length(aLeft);
+  LRightLen := Length(aRight);
+  if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
+  Result := CompareByte(aLeft[1], aRight[1], LMinLen);
+  if Result = 0 then
+    Result := LLeftLen - LRightLen;
+end;
+
+function CompareMemRange(aLeft, aRight: Pointer; aSize: PtrUInt): SizeInt;
+begin
+  Result := CompareByte(aLeft^, aRight^, aSize);
+end;
+
+function AnsiCompareStr(const aLeft, aRight: AnsiString): SizeInt;
+var
+  LMinLen, LLeftLen, LRightLen: SizeInt;
+begin
+  LLeftLen := Length(aLeft);
+  LRightLen := Length(aRight);
+  if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
+  Result := CompareByte(aLeft[1], aRight[1], LMinLen);
+  if Result = 0 then
+    Result := LLeftLen - LRightLen;
+end;
+
+function WideCompareStr(const aLeft, aRight: WideString): SizeInt;
+var
+  LMinLen, LLeftLen, LRightLen: SizeInt;
+begin
+  LLeftLen := Length(aLeft);
+  LRightLen := Length(aRight);
+  if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
+  Result := CompareByte(aLeft[1], aRight[1], LMinLen * SizeOf(WideChar));
+  if Result = 0 then
+    Result := LLeftLen - LRightLen;
+end;
+
+function UnicodeCompareStr(const aLeft, aRight: UnicodeString): SizeInt;
+var
+  LMinLen, LLeftLen, LRightLen: SizeInt;
+begin
+  LLeftLen := Length(aLeft);
+  LRightLen := Length(aRight);
+  if LLeftLen < LRightLen then LMinLen := LLeftLen else LMinLen := LRightLen;
+  Result := CompareByte(aLeft[1], aRight[1], LMinLen * SizeOf(UnicodeChar));
+  if Result = 0 then
+    Result := LLeftLen - LRightLen;
+end;
 
 function compare_bool(const aLeft, aRight: Boolean): SizeInt;
 begin

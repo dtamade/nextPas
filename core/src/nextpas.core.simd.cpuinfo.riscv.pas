@@ -51,9 +51,29 @@ implementation
 {$IFDEF SIMD_RISCV_AVAILABLE}
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
+
+function PlatformFileExists(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_stat(PAnsiChar(APath), LStat) = 0;
+end;
+
+function PlatformDirectoryExists(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := (platform_file_stat(PAnsiChar(APath), LStat) = 0) and
+            (LStat.FileType = ftDirectory);
+end;
+
+function PlatformEntryName(const AEntry: TPlatformDirEntry): string;
+begin
+  SetString(Result, @AEntry.Name[0], AEntry.NameLen);
+end;
 
 {$IFDEF LINUX}
 const
@@ -225,26 +245,32 @@ end;
 {$IFDEF LINUX}
 function ReadRISCVISAFromCpuNodeDirectory(const aDirectory: string; out aISA: string): Boolean;
 var
-  LNodeRec: TSearchRec;
+  LDirHandle: TPlatformDirHandle;
+  LEntry: TPlatformDirEntry;
   LNodePath: string;
   LCandidatePaths: array[0..0] of string;
+  LEntryName: string;
 begin
   Result := False;
   aISA := '';
 
-  if not DirectoryExists(aDirectory) then
+  if not PlatformDirectoryExists(aDirectory) then
     Exit;
 
-  if FindFirst(aDirectory + '/cpu*', faDirectory, LNodeRec) <> 0 then
+  if platform_dir_open(PAnsiChar(aDirectory), LDirHandle) <> 0 then
     Exit;
   try
-    repeat
-      if (LNodeRec.Name = '.') or (LNodeRec.Name = '..') then
+    while platform_dir_read(LDirHandle, LEntry) = 0 do
+    begin
+      LEntryName := PlatformEntryName(LEntry);
+      if (LEntryName = '.') or (LEntryName = '..') then
         Continue;
-      if (LNodeRec.Attr and faDirectory) = 0 then
+      if LEntry.FileType <> ftDirectory then
+        Continue;
+      if (Length(LEntryName) < 4) or (Copy(LEntryName, 1, 3) <> 'cpu') then
         Continue;
 
-      LNodePath := aDirectory + '/' + LNodeRec.Name + '/riscv,isa';
+      LNodePath := aDirectory + '/' + LEntryName + '/riscv,isa';
       LCandidatePaths[0] := LNodePath;
       if ReadDeviceTreeTextFromPaths(LCandidatePaths, aISA) then
       begin
@@ -252,9 +278,9 @@ begin
         if aISA <> '' then
           Exit(True);
       end;
-    until FindNext(LNodeRec) <> 0;
+    end;
   finally
-    FindClose(LNodeRec);
+    platform_dir_close(LDirHandle);
   end;
 end;
 
@@ -359,7 +385,7 @@ begin
   Result := False;
   aContent := '';
 
-  if not FileExists('/proc/cpuinfo') then
+  if not PlatformFileExists('/proc/cpuinfo') then
     Exit;
 
   LOpened := False;

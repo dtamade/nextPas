@@ -7,7 +7,7 @@ unit nextpas.core.simd.cpuinfo;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.text.conv,
   nextpas.core.simd.base,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.atomic
@@ -92,6 +92,10 @@ implementation
 {$IF DEFINED(SIMD_X86_AVAILABLE) OR DEFINED(SIMD_ARM_AVAILABLE) OR DEFINED(SIMD_RISCV_AVAILABLE) OR DEFINED(SIMD_LOONGARCH_AVAILABLE)}
 uses
   nextpas.core.simd.backend.priority,
+  {$IFDEF LINUX}
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files,
+  {$ENDIF}
   {$IFDEF SIMD_X86_AVAILABLE}
   nextpas.core.simd.cpuinfo.x86
     {$IF DEFINED(SIMD_ARM_AVAILABLE) OR DEFINED(SIMD_RISCV_AVAILABLE) OR DEFINED(SIMD_LOONGARCH_AVAILABLE)}
@@ -114,6 +118,12 @@ uses
   nextpas.core.simd.cpuinfo.loongarch
   {$ENDIF}
   ;
+{$ELSE}
+  {$IFDEF LINUX}
+uses
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files;
+  {$ENDIF}
 {$ENDIF}
 
 var
@@ -236,12 +246,34 @@ begin
       Exit(False);
 end;
 
+{$IFDEF LINUX}
+function PlatformDirectoryExists(const APath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := (platform_file_stat(PAnsiChar(APath), LStat) = 0) and
+            (LStat.FileType = ftDirectory);
+end;
+
+function PlatformIsDirectory(const AEntry: TPlatformDirEntry): Boolean;
+begin
+  Result := AEntry.FileType = ftDirectory;
+end;
+
+function PlatformEntryName(const AEntry: TPlatformDirEntry): string;
+begin
+  SetString(Result, @AEntry.Name[0], AEntry.NameLen);
+end;
+{$ENDIF}
+
 procedure FillCacheInfoFromLinuxSysfs(var aCache: TCacheInfo);
 var
   LCpuBase: string;
   LCpuCacheBase: string;
-  LCpuRec: TSearchRec;
-  LIndexRec: TSearchRec;
+  LCpuHandle: TPlatformDirHandle;
+  LIndexHandle: TPlatformDirHandle;
+  LCpuEntry: TPlatformDirEntry;
+  LIndexEntry: TPlatformDirEntry;
   LDir: string;
   LTypeText: string;
   LLevelText: string;
@@ -250,35 +282,40 @@ var
   LLevel: Integer;
   LSizeKB: Integer;
   LLineSize: Integer;
+  LEntryName: string;
 begin
   LCpuBase := '/sys/devices/system/cpu';
-  if not DirectoryExists(LCpuBase) then
+  if not PlatformDirectoryExists(LCpuBase) then
     Exit;
 
-  if FindFirst(LCpuBase + '/cpu*', faDirectory, LCpuRec) <> 0 then
+  if platform_dir_open(PAnsiChar(LCpuBase), LCpuHandle) <> 0 then
     Exit;
   try
-    repeat
-      if (LCpuRec.Name = '.') or (LCpuRec.Name = '..') then
+    while platform_dir_read(LCpuHandle, LCpuEntry) = 0 do
+    begin
+      LEntryName := PlatformEntryName(LCpuEntry);
+      if (LEntryName = '.') or (LEntryName = '..') then
         Continue;
-      if (LCpuRec.Attr and faDirectory) = 0 then
+      if not PlatformIsDirectory(LCpuEntry) then
         Continue;
-      if not IsLinuxCpuDirectoryName(LCpuRec.Name) then
+      if not IsLinuxCpuDirectoryName(LEntryName) then
         Continue;
 
-      LCpuCacheBase := LCpuBase + '/' + LCpuRec.Name + '/cache';
-      if not DirectoryExists(LCpuCacheBase) then
+      LCpuCacheBase := LCpuBase + '/' + LEntryName + '/cache';
+      if not PlatformDirectoryExists(LCpuCacheBase) then
         Continue;
-      if FindFirst(LCpuCacheBase + '/index*', faDirectory, LIndexRec) <> 0 then
+      if platform_dir_open(PAnsiChar(LCpuCacheBase), LIndexHandle) <> 0 then
         Continue;
       try
-        repeat
-          if (LIndexRec.Name = '.') or (LIndexRec.Name = '..') then
+        while platform_dir_read(LIndexHandle, LIndexEntry) = 0 do
+        begin
+          LEntryName := PlatformEntryName(LIndexEntry);
+          if (LEntryName = '.') or (LEntryName = '..') then
             Continue;
-          if (LIndexRec.Attr and faDirectory) = 0 then
+          if not PlatformIsDirectory(LIndexEntry) then
             Continue;
 
-          LDir := LCpuCacheBase + '/' + LIndexRec.Name;
+          LDir := LCpuCacheBase + '/' + LEntryName;
           LTypeText := LowerCase(ReadFirstLineTrimmed(LDir + '/type'));
           LLevelText := ReadFirstLineTrimmed(LDir + '/level');
           LSizeText := ReadFirstLineTrimmed(LDir + '/size');
@@ -326,13 +363,13 @@ begin
                   aCache.L3KB := LSizeKB;
               end;
           end;
-        until FindNext(LIndexRec) <> 0;
+        end;
       finally
-        FindClose(LIndexRec);
+        platform_dir_close(LIndexHandle);
       end;
-    until FindNext(LCpuRec) <> 0;
+    end;
   finally
-    FindClose(LCpuRec);
+    platform_dir_close(LCpuHandle);
   end;
 end;
 {$ENDIF}
