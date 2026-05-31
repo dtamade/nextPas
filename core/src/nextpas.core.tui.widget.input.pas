@@ -39,7 +39,7 @@ type
     function TextWidth: Integer;
   end;
 
-  TInput = class(TInterfacedObject)
+  TInput = record
     Placeholder: AnsiString;
     MaskChar: Char;
     Style: TStyle;
@@ -115,6 +115,7 @@ end;
 function GraphemeCount(const S: AnsiString): Integer;
 var P: Integer; Adv: TInputAdv;
 begin
+  if Length(S) = 0 then Exit(0);
   Result := 0;
   P := 0;
   while P < Length(S) do
@@ -128,6 +129,7 @@ end;
 function GraphemeCountUpTo(const S: AnsiString; BytePos: Integer): Integer;
 var P: Integer; Adv: TInputAdv;
 begin
+  if Length(S) = 0 then Exit(0);
   Result := 0;
   P := 0;
   while P < BytePos do
@@ -142,6 +144,7 @@ end;
 function ColWidthUpTo(const S: AnsiString; BytePos: Integer): Integer;
 var P: Integer; Adv: TInputAdv;
 begin
+  if Length(S) = 0 then Exit(0);
   Result := 0;
   P := 0;
   while P < BytePos do
@@ -368,7 +371,7 @@ begin
     while (P > 0) and (Col < VisibleW - 1) do
     begin
       P := PrevGraphemeByte(State.Text, P);
-      Adv := InputGraphemeAt(State.Text[1], Length(State.Text), P);
+      if Length(State.Text) = 0 then Break; Adv := InputGraphemeAt(State.Text[1], Length(State.Text), P);
       Inc(Col, Adv.Width);
       if MaskChar <> #0 then Col := Col - Adv.Width + 1;
     end;
