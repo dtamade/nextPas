@@ -61,6 +61,7 @@ type
     StartClass: TCharBitmap;
     StartClassSize: UInt32;
     Flags: TRegexFlags;
+    IsPureLiteral: Boolean;
   end;
 
   TGroup = record

@@ -352,6 +352,22 @@ begin
     Result.LiteralPrefixLen := Length(Result.LiteralPrefix);
   end;
 
+  // Detect pure literal pattern: opSave(0), opLiteral*, opSave(1), opMatch
+  // No char classes, no splits, no asserts, no quantifiers
+  Result.IsPureLiteral := False;
+  if (Result.LiteralPrefixLen > 0) and (AFlags = []) then
+  begin
+    i := 0;
+    // Skip leading opSave instructions
+    while (i < C.Count) and (Result.Code[i].Op = opSave) do Inc(i);
+    // Check all remaining are opLiteral until opSave(1) + opMatch
+    while (i < C.Count) and (Result.Code[i].Op = opLiteral) do Inc(i);
+    // Should be opSave(1) then opMatch
+    if (i < C.Count) and (Result.Code[i].Op = opSave) then Inc(i);
+    if (i < C.Count) and (Result.Code[i].Op = opMatch) and (i = C.Count - 1) then
+      Result.IsPureLiteral := True;
+  end;
+
   // Compute start byte class (set of bytes that can begin a match)
   CharBitmapClear(startBitmap);
   startClassFull := False;

@@ -124,14 +124,41 @@ end;
 function TRegex.IsMatch(const AInput: string): Boolean;
 begin
   if not FValid then Exit(False);
+  if FProgram.IsPureLiteral then
+  begin
+    if FProgram.LiteralPrefixLen = 0 then
+      Exit(True);
+    Exit(Pos(FProgram.LiteralPrefix, AInput) > 0);
+  end;
   Result := NfaIsMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
 function TRegex.Find(const AInput: string): TMatch;
+var LPos: SizeInt;
 begin
   if not FValid then
   begin
     Result.Start := -1; Result.Len := 0; Result.Groups := nil;
+    Exit;
+  end;
+  if FProgram.IsPureLiteral then
+  begin
+    if FProgram.LiteralPrefixLen = 0 then
+    begin
+      Result.Start := 0; Result.Len := 0; Result.Groups := nil;
+      Exit;
+    end;
+    LPos := Pos(FProgram.LiteralPrefix, AInput);
+    if LPos > 0 then
+    begin
+      Result.Start := LPos - 1;
+      Result.Len := SizeInt(FProgram.LiteralPrefixLen);
+      Result.Groups := nil;
+    end
+    else
+    begin
+      Result.Start := -1; Result.Len := 0; Result.Groups := nil;
+    end;
     Exit;
   end;
   if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), False, 0, Result) then
@@ -154,17 +181,53 @@ begin
 end;
 
 function TRegex.IsFullMatch(const AInput: string): Boolean;
-var LMatch: TMatch;
 begin
   if not FValid then Exit(False);
-  if not NfaSearch(FProgram, PAnsiChar(AInput), Length(AInput), True, 0, LMatch) then
-    Exit(False);
-  Result := (LMatch.Start = 0) and (LMatch.Len = SizeInt(Length(AInput)));
+  if FProgram.IsPureLiteral then
+    Exit(AInput = FProgram.LiteralPrefix);
+  Result := NfaIsFullMatch(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
 function TRegex.FindAll(const AInput: string): TMatchArray;
+var
+  LPos, LStart: SizeInt;
+  LCount: SizeUInt;
+  LPrefixLen: SizeInt;
 begin
   if not FValid then begin SetLength(Result, 0); Exit; end;
+  if FProgram.IsPureLiteral then
+  begin
+    LPrefixLen := SizeInt(FProgram.LiteralPrefixLen);
+    if LPrefixLen = 0 then
+    begin
+      // Empty pattern matches at every position (including after last char)
+      SetLength(Result, Length(AInput) + 1);
+      for LPos := 0 to Length(AInput) do
+      begin
+        Result[LPos].Start := LPos;
+        Result[LPos].Len := 0;
+        Result[LPos].Groups := nil;
+      end;
+      Exit;
+    end;
+    SetLength(Result, 0);
+    LCount := 0;
+    LStart := 1;
+    while LStart <= Length(AInput) do
+    begin
+      LPos := Pos(FProgram.LiteralPrefix, AInput, LStart);
+      if LPos = 0 then Break;
+      if LCount >= SizeUInt(Length(Result)) then
+        SetLength(Result, LCount + 32);
+      Result[LCount].Start := LPos - 1;
+      Result[LCount].Len := LPrefixLen;
+      Result[LCount].Groups := nil;
+      Inc(LCount);
+      LStart := LPos + LPrefixLen;
+    end;
+    SetLength(Result, LCount);
+    Exit;
+  end;
   Result := NfaFindAll(FProgram, PAnsiChar(AInput), Length(AInput));
 end;
 
