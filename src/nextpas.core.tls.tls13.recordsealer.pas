@@ -91,6 +91,12 @@ begin
     Exit;
   end;
 
+  if Length(AFragment) > 16384 then
+  begin
+    AError := 'TLS 1.3 record sealer: fragment exceeds max size (16384 bytes)';
+    Exit;
+  end;
+
   LInnerPlaintext := BuildTLS13InnerPlaintext(AFragment, AContentType);
   LNonce := BuildTLS13RecordNonce(FIV, FSequence);
   LEncLen := Word(Length(LInnerPlaintext) + TLS13AEADTagLength(FCipherSuite));

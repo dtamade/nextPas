@@ -62,13 +62,18 @@ end;
 procedure TSSLPinningVerifier.AddPinHex(const AHexHash: string);
 var
   LBytes: TBytes;
-  I: Integer;
+  I, LVal: Integer;
 begin
   if Length(AHexHash) <> 64 then
     raise ESSLException.Create('Certificate pin hex must be 64 characters');
   SetLength(LBytes, 32);
   for I := 0 to 31 do
-    LBytes[I] := StrToInt('$' + Copy(AHexHash, I * 2 + 1, 2));
+  begin
+    LVal := StrToIntDef('$' + Copy(AHexHash, I * 2 + 1, 2), -1);
+    if LVal < 0 then
+      raise ESSLException.Create('Invalid hex at position ' + IntToStr(I * 2 + 1) + ' in pin hash');
+    LBytes[I] := Byte(LVal);
+  end;
   AddPin(LBytes);
 end;
 
