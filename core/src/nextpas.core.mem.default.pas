@@ -22,11 +22,21 @@ type
 
 var
   GDefaultAllocator: IAllocator = nil;
+  GDefaultAllocatorInit: LongInt = 0;
 
 function DefaultAllocator: IAllocator;
+var LNew: IAllocator;
 begin
   if GDefaultAllocator = nil then
-    GDefaultAllocator := TDefaultAllocator.Create;
+  begin
+    if InterlockedCompareExchange(GDefaultAllocatorInit, 1, 0) = 0 then
+    begin
+      LNew := TDefaultAllocator.Create;
+      GDefaultAllocator := LNew;
+    end
+    else
+      while GDefaultAllocator = nil do ;
+  end;
   Result := GDefaultAllocator;
 end;
 

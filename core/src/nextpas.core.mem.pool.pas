@@ -5,6 +5,7 @@ unit nextpas.core.mem.pool;
 interface
 
 uses
+  nextpas.core.mem.error,
   nextpas.core.mem.allocator.base,
   nextpas.core.mem.pool.base,
   nextpas.core.mem.pool.memory_pool,
@@ -78,6 +79,7 @@ var
   LActualBlockSize: SizeUInt;
   LI: SizeUInt;
   LNode: PFreeNode;
+  LTotalSize: SizeUInt;
 begin
   LActualBlockSize := ABlockSize;
   if LActualBlockSize < SizeOf(TFreeNode) then
@@ -86,8 +88,13 @@ begin
   FBlockCount := ABlockCount;
   FAcquired := 0;
 
-  FBacking := GetMem(LActualBlockSize * ABlockCount);
-  FillChar(FBacking^, LActualBlockSize * ABlockCount, 0);
+  LTotalSize := LActualBlockSize * ABlockCount;
+  if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TPool.Init: size overflow');
+  FBacking := GetMem(LTotalSize);
+  if FBacking = nil then
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TPool.Init: out of memory');
+  FillChar(FBacking^, LTotalSize, 0);
 
   FFreeStack := nil;
   for LI := 0 to ABlockCount - 1 do
