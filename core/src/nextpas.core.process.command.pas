@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.text.base,
+  nextpas.core.time.base,
   nextpas.core.process.base,
   nextpas.core.process.child;
 
@@ -52,6 +53,8 @@ type
     function Output: TProcessOutput;
     {** 同步执行：只返回退出码 *}
     function Status: Integer;
+    {** 设置超时时间，超时后自动 Kill *}
+    function Timeout(const ADuration: TDuration): ICommand;
   end;
 
   { TCommand — ICommand 实现 }
@@ -65,6 +68,7 @@ type
     FStdinMode: TStdio;
     FStdoutMode: TStdio;
     FStderrMode: TStdio;
+    FTimeout: TDuration;
   public
     constructor Create(const APath: string);
     class function New(const APath: string): ICommand;
@@ -79,6 +83,7 @@ type
     function Spawn: IChild;
     function Output: TProcessOutput;
     function Status: Integer;
+    function Timeout(const ADuration: TDuration): ICommand;
   end;
 
 implementation
@@ -160,6 +165,7 @@ begin
   FStdinMode := stInherit;
   FStdoutMode := stInherit;
   FStderrMode := stInherit;
+  FTimeout := TDuration.Zero;
 end;
 
 class function TCommand.New(const APath: string): ICommand;
@@ -382,13 +388,40 @@ begin
   if FStderrMode = stPiped then
     LStderrR := TPipeReader.Create(LStderrPipe[0]) as IReader;
 
-  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR);
+  Result := TChild.Create(LProc, LStdinW, LStdoutR, LStderrR, FTimeout);
+end;
+
+function ReadAllFromReader(const AReader: IReader): string;
+var
+  LBuf: array[0..65535] of Byte;
+  LRead: SizeUInt;
+  LTotal: Integer;
+begin
+  Result := '';
+  if AReader = nil then Exit;
+  LTotal := 0;
+  repeat
+    LRead := AReader.Read(LBuf[0], 65536);
+    if LRead > 0 then
+    begin
+      SetLength(Result, LTotal + Integer(LRead));
+      Move(LBuf[0], Result[LTotal + 1], LRead);
+      Inc(LTotal, Integer(LRead));
+    end;
+  until LRead = 0;
+end;
+
+function TCommand.Timeout(const ADuration: TDuration): ICommand;
+begin
+  FTimeout := ADuration;
+  Result := Self;
 end;
 
 function TCommand.Output: TProcessOutput;
 var
   LChild: IChild;
   LSavedStdout, LSavedStderr: TStdio;
+  LWait: TProcessOutput;
 begin
   LSavedStdout := FStdoutMode;
   LSavedStderr := FStderrMode;
@@ -396,7 +429,17 @@ begin
   FStderrMode := stPiped;
   try
     LChild := Spawn;
-    Result := LChild.WaitWithOutput;
+    if FTimeout.IsZero then
+      Result := LChild.WaitWithOutput
+    else
+    begin
+      { With timeout: Wait first (may kill), then drain pipes }
+      LWait := LChild.Wait;
+      Result.StdOut := ReadAllFromReader(LChild.TakeStdout);
+      Result.StdErr := ReadAllFromReader(LChild.TakeStderr);
+      Result.ExitCode := LWait.ExitCode;
+      Result.Status := LWait.Status;
+    end;
   finally
     FStdoutMode := LSavedStdout;
     FStderrMode := LSavedStderr;

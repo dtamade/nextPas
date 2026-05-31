@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.io.intf,
+  nextpas.core.time.base,
   nextpas.core.process.base,
   nextpas.core.platform.process.base;
 
@@ -48,9 +49,11 @@ type
     FStdoutReader: IReader;
     FStderrReader: IReader;
     FWaited: Boolean;
+    FTimeout: TDuration;
   public
     constructor Create(const AProc: TPlatformProcess;
-      const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader);
+      const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
+      const ATimeout: TDuration);
     destructor Destroy; override;
     function Wait: TProcessOutput;
     function TryWait(out AOutput: TProcessOutput): Boolean;
@@ -96,7 +99,8 @@ end;
 { TChild }
 
 constructor TChild.Create(const AProc: TPlatformProcess;
-  const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader);
+  const AStdin: IWriter; const AStdout: IReader; const AStderr: IReader;
+  const ATimeout: TDuration);
 begin
   inherited Create;
   FProc := AProc;
@@ -104,6 +108,7 @@ begin
   FStdoutReader := AStdout;
   FStderrReader := AStderr;
   FWaited := False;
+  FTimeout := ATimeout;
 end;
 
 destructor TChild.Destroy;
@@ -126,12 +131,33 @@ end;
 function TChild.Wait: TProcessOutput;
 var
   LResult: TPlatformProcessResult;
+  LDeadline: TInstant;
+  LTs: TTimeSpec;
 begin
   FillChar(Result, SizeOf(Result), 0);
   if FStdinWriter <> nil then
     (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;
-  platform_process_wait(FProc, LResult);
+  if FTimeout.IsZero then
+    platform_process_wait(FProc, LResult)
+  else
+  begin
+    LDeadline := TInstant.Now.Add(FTimeout);
+    repeat
+      platform_process_try_wait(FProc, LResult);
+      if LResult.Status <> nextpas.core.platform.process.base.psRunning then
+        Break;
+      if TInstant.Now.DurationSince(LDeadline).IsPositive then
+      begin
+        platform_process_kill(FProc);
+        platform_process_wait(FProc, LResult);
+        Break;
+      end;
+      LTs.tv_sec := 0;
+      LTs.tv_nsec := 10000000;
+      nanosleep(@LTs, nil);
+    until False;
+  end;
   FWaited := True;
   Result.ExitCode := LResult.ExitCode;
   case LResult.Status of
