@@ -14,6 +14,7 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.borders;
 
@@ -37,7 +38,21 @@ type
     Visible: Boolean;
   end;
 
-  TNotificationCenter = class
+  INotificationCenter = interface(IWidget)
+    ['{E7F8A9B0-C1D2-3456-EFAB-789012345678}']
+    procedure Push(const N: TNotification);
+    procedure MarkRead(Index: Integer);
+    procedure MarkAllRead;
+    procedure Clear;
+    function GetCount: Integer;
+    function UnreadCount: Integer;
+    function GetItem(I: Integer): TNotification;
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TNotificationCenterState);
+    property Count: Integer read GetCount;
+  end;
+
+  TNotificationCenter = class(TInterfacedObject, IWidget, INotificationCenter)
   private
     FItems: array of TNotification;
     FCount: Integer;
@@ -46,19 +61,21 @@ type
     FUnreadStyle: TStyle;
     FWidth: Integer;
   public
-    constructor Create;
+    class function New: INotificationCenter; static;
+
     procedure Push(const N: TNotification);
     procedure MarkRead(Index: Integer);
     procedure MarkAllRead;
     procedure Clear;
-    function Count: Integer; inline;
+    function GetCount: Integer; inline;
     function UnreadCount: Integer;
     function GetItem(I: Integer): TNotification;
-    procedure RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TNotificationCenterState);
-    property Style: TStyle read FStyle write FStyle;
-    property SelectedStyle: TStyle read FSelectedStyle write FSelectedStyle;
-    property UnreadStyle: TStyle read FUnreadStyle write FUnreadStyle;
-    property Width: Integer read FWidth write FWidth;
+
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
+    { INotificationCenter }
+    procedure RenderStateful(const AArea: TRect; ABuf: TBuffer;
+      var AState: TNotificationCenterState);
   end;
 
 implementation
@@ -82,15 +99,17 @@ begin Result := Self; Result.Timestamp := T; end;
 
 { TNotificationCenter }
 
-constructor TNotificationCenter.Create;
+class function TNotificationCenter.New: INotificationCenter;
+var LSelf: TNotificationCenter;
 begin
-  inherited Create;
-  FItems := nil;
-  FCount := 0;
-  FStyle := TStyle.Default;
-  FSelectedStyle := TStyle.Default.WithModifier([mbReversed]);
-  FUnreadStyle := TStyle.Default.WithModifier([mbBold]);
-  FWidth := 40;
+  LSelf := TNotificationCenter.Create;
+  LSelf.FItems := nil;
+  LSelf.FCount := 0;
+  LSelf.FStyle := TStyle.Default;
+  LSelf.FSelectedStyle := TStyle.Default.WithModifier([mbReversed]);
+  LSelf.FUnreadStyle := TStyle.Default.WithModifier([mbBold]);
+  LSelf.FWidth := 40;
+  Result := LSelf;
 end;
 
 procedure TNotificationCenter.Push(const N: TNotification);
@@ -119,7 +138,7 @@ begin
   FCount := 0;
 end;
 
-function TNotificationCenter.Count: Integer;
+function TNotificationCenter.GetCount: Integer;
 begin
   Result := FCount;
 end;
@@ -137,7 +156,14 @@ begin
   Result := FItems[I];
 end;
 
-procedure TNotificationCenter.RenderStateful(const Area: TRect; ABuf: TBuffer; var State: TNotificationCenterState);
+procedure TNotificationCenter.Render(const AArea: TRect; ABuffer: TBuffer);
+var LState: TNotificationCenterState;
+begin
+  LState.Selected := 0; LState.ScrollY := 0; LState.Visible := True;
+  RenderStateful(AArea, ABuffer, LState);
+end;
+
+procedure TNotificationCenter.RenderStateful(const AArea: TRect; ABuf: TBuffer; var AState: TNotificationCenterState);
 var
   PanelX, PanelW, PanelH, I, Y, Row, ViewH: Integer;
   PanelArea, Inner: TRect;
@@ -145,15 +171,15 @@ var
   LevelStr: AnsiChar;
   UnreadStr: string[8];
 begin
-  if not State.Visible then Exit;
-  if Area.IsEmpty then Exit;
+  if not AState.Visible then Exit;
+  if AArea.IsEmpty then Exit;
 
   PanelW := FWidth;
-  if PanelW > Area.Width then PanelW := Area.Width;
-  PanelH := Area.Height;
-  PanelX := Area.X + Area.Width - PanelW;
+  if PanelW > AArea.Width then PanelW := AArea.Width;
+  PanelH := AArea.Height;
+  PanelX := AArea.X + AArea.Width - PanelW;
 
-  PanelArea := TRect.Make(PanelX, Area.Y, PanelW, PanelH);
+  PanelArea := TRect.Make(PanelX, AArea.Y, PanelW, PanelH);
   ABuf.SetStyle(PanelArea, FStyle);
 
   Str(UnreadCount, UnreadStr);
@@ -162,20 +188,20 @@ begin
     .WithBorderStyle(FStyle)
     .Render(PanelArea, ABuf);
 
-  Inner := TRect.Make(PanelX + 1, Area.Y + 1, PanelW - 2, PanelH - 2);
+  Inner := TRect.Make(PanelX + 1, AArea.Y + 1, PanelW - 2, PanelH - 2);
   ViewH := Inner.Height;
 
-  if State.ScrollY > FCount - ViewH then
-    State.ScrollY := FCount - ViewH;
-  if State.ScrollY < 0 then State.ScrollY := 0;
+  if AState.ScrollY > FCount - ViewH then
+    AState.ScrollY := FCount - ViewH;
+  if AState.ScrollY < 0 then AState.ScrollY := 0;
 
   Y := Inner.Y;
   for I := 0 to ViewH - 1 do
   begin
-    Row := State.ScrollY + I;
+    Row := AState.ScrollY + I;
     if Row >= FCount then Break;
 
-    if Row = State.Selected then
+    if Row = AState.Selected then
       LineSty := FSelectedStyle
     else if not FItems[Row].Read then
       LineSty := FUnreadStyle

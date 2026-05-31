@@ -13,7 +13,8 @@ uses
   nextpas.core.tui.modifier,
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.widget.intf;
 
 type
   TToastPosition = (tpTopRight, tpBottomRight, tpTopCenter, tpBottomCenter);
@@ -25,7 +26,17 @@ type
     RemainingMs: Integer;
   end;
 
-  TToastManager = class
+  IToastManager = interface(IWidget)
+    ['{F8A9B0C1-D2E3-4567-FABC-890123456789}']
+    procedure Push(const Msg: AnsiString; Level: TToastLevel);
+    procedure Tick(DeltaMs: Integer);
+    function GetCount: Integer;
+    function GetVisible: Integer;
+    property Count: Integer read GetCount;
+    property Visible: Integer read GetVisible;
+  end;
+
+  TToastManager = class(TInterfacedObject, IWidget, IToastManager)
   private
     FItems: array of TToastItem;
     FPosition: TToastPosition;
@@ -37,37 +48,33 @@ type
     FWarningStyle: TStyle;
     FErrorStyle: TStyle;
   public
-    constructor Create;
+    class function New: IToastManager; static;
+
     procedure Push(const Msg: AnsiString; Level: TToastLevel);
     procedure Tick(DeltaMs: Integer);
-    procedure Render(const Container: TRect; ABuf: TBuffer);
-    function Count: Integer;
-    function Visible: Integer;
+    function GetCount: Integer;
+    function GetVisible: Integer;
 
-    property Position: TToastPosition read FPosition write FPosition;
-    property DurationMs: Integer read FDurationMs write FDurationMs;
-    property MaxVisible: Integer read FMaxVisible write FMaxVisible;
-    property Width: Integer read FWidth write FWidth;
-    property InfoStyle: TStyle read FInfoStyle write FInfoStyle;
-    property SuccessStyle: TStyle read FSuccessStyle write FSuccessStyle;
-    property WarningStyle: TStyle read FWarningStyle write FWarningStyle;
-    property ErrorStyle: TStyle read FErrorStyle write FErrorStyle;
+    { IWidget }
+    procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
 implementation
 
-constructor TToastManager.Create;
+class function TToastManager.New: IToastManager;
+var LSelf: TToastManager;
 begin
-  inherited;
-  FItems := nil;
-  FPosition := tpTopRight;
-  FDurationMs := 3000;
-  FMaxVisible := 5;
-  FWidth := 30;
-  FInfoStyle := TStyle.Default.WithFg(TUI_WHITE).WithBg(TUI_BLUE);
-  FSuccessStyle := TStyle.Default.WithFg(TUI_WHITE).WithBg(TUI_GREEN);
-  FWarningStyle := TStyle.Default.WithFg(TUI_BLACK).WithBg(TUI_YELLOW);
-  FErrorStyle := TStyle.Default.WithFg(TUI_WHITE).WithBg(TUI_RED);
+  LSelf := TToastManager.Create;
+  LSelf.FItems := nil;
+  LSelf.FPosition := tpTopRight;
+  LSelf.FDurationMs := 3000;
+  LSelf.FMaxVisible := 5;
+  LSelf.FWidth := 30;
+  LSelf.FInfoStyle := TStyle.Default.WithFg(TUI_WHITE).WithBg(TUI_BLUE);
+  LSelf.FSuccessStyle := TStyle.Default.WithFg(TUI_WHITE).WithBg(TUI_GREEN);
+  LSelf.FWarningStyle := TStyle.Default.WithFg(TUI_BLACK).WithBg(TUI_YELLOW);
+  LSelf.FErrorStyle := TStyle.Default.WithFg(TUI_WHITE).WithBg(TUI_RED);
+  Result := LSelf;
 end;
 
 procedure TToastManager.Push(const Msg: AnsiString; Level: TToastLevel);
@@ -96,25 +103,25 @@ begin
   SetLength(FItems, W);
 end;
 
-function TToastManager.Count: Integer;
+function TToastManager.GetCount: Integer;
 begin
   Result := Length(FItems);
 end;
 
-function TToastManager.Visible: Integer;
+function TToastManager.GetVisible: Integer;
 begin
   Result := Length(FItems);
   if Result > FMaxVisible then Result := FMaxVisible;
 end;
 
-procedure TToastManager.Render(const Container: TRect; ABuf: TBuffer);
+procedure TToastManager.Render(const AArea: TRect; ABuffer: TBuffer);
 var
   I, N, X, Y, H: Integer;
   Sty: TStyle;
   Txt: AnsiString;
 begin
-  if Container.IsEmpty then Exit;
-  N := Visible;
+  if AArea.IsEmpty then Exit;
+  N := GetVisible;
   if N = 0 then Exit;
 
   H := N;
@@ -122,27 +129,27 @@ begin
   case FPosition of
     tpTopRight:
     begin
-      X := Container.X + Container.Width - FWidth;
-      Y := Container.Y;
+      X := AArea.X + AArea.Width - FWidth;
+      Y := AArea.Y;
     end;
     tpBottomRight:
     begin
-      X := Container.X + Container.Width - FWidth;
-      Y := Container.Y + Container.Height - H;
+      X := AArea.X + AArea.Width - FWidth;
+      Y := AArea.Y + AArea.Height - H;
     end;
     tpTopCenter:
     begin
-      X := Container.X + (Container.Width - FWidth) div 2;
-      Y := Container.Y;
+      X := AArea.X + (AArea.Width - FWidth) div 2;
+      Y := AArea.Y;
     end;
     tpBottomCenter:
     begin
-      X := Container.X + (Container.Width - FWidth) div 2;
-      Y := Container.Y + Container.Height - H;
+      X := AArea.X + (AArea.Width - FWidth) div 2;
+      Y := AArea.Y + AArea.Height - H;
     end;
   end;
 
-  if X < Container.X then X := Container.X;
+  if X < AArea.X then X := AArea.X;
 
   for I := 0 to N - 1 do
   begin
@@ -153,9 +160,9 @@ begin
       tlError: Sty := FErrorStyle;
     end;
 
-    ABuf.SetStyle(TRect.Make(X, Y + I, FWidth, 1), Sty);
+    ABuffer.SetStyle(TRect.Make(X, Y + I, FWidth, 1), Sty);
     Txt := ' ' + FItems[I].Message;
-    ABuf.SetStringN(X, Y + I, Txt, FWidth, Sty);
+    ABuffer.SetStringN(X, Y + I, Txt, FWidth, Sty);
   end;
 end;
 
