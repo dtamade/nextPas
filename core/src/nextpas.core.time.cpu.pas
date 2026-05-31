@@ -9,11 +9,13 @@ procedure SchedYield; inline;
 procedure NanoSleep(const ANanoseconds: UInt64); inline;
 function CpuCount: Int32; inline;
 function CurrentThreadId: UInt64; inline;
+function GetTickCount64: UInt64; inline;
 
 implementation
 
 uses
-  nextpas.core.platform.thread;
+  nextpas.core.platform.thread,
+  nextpas.core.platform.time;
 
 procedure CpuRelax;
 begin
@@ -38,6 +40,11 @@ end;
 function CurrentThreadId: UInt64;
 begin
   Result := platform_thread_id;
+end;
+
+function GetTickCount64: UInt64;
+begin
+  Result := platform_monotonic_ns div 1000000;
 end;
 
 end.

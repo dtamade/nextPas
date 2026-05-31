@@ -13,14 +13,19 @@ function IntToStr(const AValue: Int64): string; inline;
 function UIntToStr(const AValue: UInt64): string; inline;
 function FloatToStr(const AValue: Double): string; inline;
 function FloatToStrF(const AValue: Double; ADecimals: Integer): string;
+function FormatFloat(const AFmt: string; const AValue: Double): string;
 function BoolToStr(const AValue: Boolean): string; inline;
 
 function StrToInt(const AStr: string): Int64; inline;
 function StrToIntDef(const AStr: string; const ADefault: Int64): Int64; inline;
+function StrToInt64Def(const AStr: string; const ADefault: Int64): Int64; inline;
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
+function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean; inline;
 function StrToFloat(const AStr: string): Double; inline;
 function StrToFloatDef(const AStr: string; const ADefault: Double): Double;
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
+function TryStrToFloat(const AStr: string; out AValue: Single): Boolean;
 
 function Format(const AFmt: string; const AArgs: array of const): string; inline;
 
@@ -63,6 +68,11 @@ begin
   Str(AValue:0:ADecimals, Result);
 end;
 
+function FormatFloat(const AFmt: string; const AValue: Double): string;
+begin
+  Result := SysUtils.FormatFloat(AFmt, AValue);
+end;
+
 function BoolToStr(const AValue: Boolean): string;
 begin
   if AValue then Result := 'true' else Result := 'false';
@@ -78,11 +88,31 @@ begin
   Result := SysUtils.StrToInt64Def(AStr, ADefault);
 end;
 
+function StrToInt64Def(const AStr: string; const ADefault: Int64): Int64;
+begin
+  Result := SysUtils.StrToInt64Def(AStr, ADefault);
+end;
+
 function TryStrToInt(const AStr: string; out AValue: Int64): Boolean;
 var LCode: Integer; LTrimmed: string;
 begin
   LTrimmed := SysUtils.Trim(AStr);
   Val(LTrimmed, AValue, LCode);
+  Result := (LCode = 0);
+end;
+
+function TryStrToInt(const AStr: string; out AValue: Integer): Boolean;
+var LVal: Int64; LCode: Integer;
+begin
+  Val(SysUtils.Trim(AStr), LVal, LCode);
+  Result := (LCode = 0);
+  if Result then AValue := Integer(LVal);
+end;
+
+function TryStrToInt64(const AStr: string; out AValue: Int64): Boolean;
+var LCode: Integer;
+begin
+  Val(SysUtils.Trim(AStr), AValue, LCode);
   Result := (LCode = 0);
 end;
 
@@ -100,6 +130,13 @@ end;
 function TryStrToFloat(const AStr: string; out AValue: Double): Boolean;
 begin
   Result := SysUtils.TryStrToFloat(AStr, AValue);
+end;
+
+function TryStrToFloat(const AStr: string; out AValue: Single): Boolean;
+var LDbl: Double;
+begin
+  Result := SysUtils.TryStrToFloat(AStr, LDbl);
+  if Result then AValue := Single(LDbl);
 end;
 
 function Format(const AFmt: string; const AArgs: array of const): string;

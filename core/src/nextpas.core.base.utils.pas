@@ -11,6 +11,11 @@ procedure SafeFree(var AObj); inline;
 {** 内存操作（System 内建的包装，确保接口一致） *}
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt); inline;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt); inline;
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean; inline;
+
+{** 接口查询 *}
+function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
+function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
 
 implementation
 
@@ -35,6 +40,25 @@ end;
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);
 begin
   Move(ASrc^, ADst^, ASize);
+end;
+
+function CompareMem(A, B: Pointer; ASize: SizeUInt): Boolean;
+begin
+  if ASize = 0 then Exit(True);
+  if (A = nil) or (B = nil) then Exit(A = B);
+  Result := System.CompareByte(A^, B^, ASize) = 0;
+end;
+
+function Supports(const AInstance: TObject; const AIID: TGuid; out AIntf): Boolean;
+begin
+  if AInstance = nil then Exit(False);
+  Result := AInstance.GetInterface(AIID, AIntf);
+end;
+
+function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Boolean;
+begin
+  if AInstance = nil then Exit(False);
+  Result := AInstance.QueryInterface(AIID, AIntf) = S_OK;
 end;
 
 end.
