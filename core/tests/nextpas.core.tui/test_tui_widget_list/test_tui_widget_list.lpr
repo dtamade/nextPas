@@ -13,9 +13,9 @@ uses
 var T: TTestRunner;
 
 procedure TestSimpleRender;
-var LL: ITuiList; LBuf: TBuffer; LLines: TBufferLines;
+var LL: IListWidget; LBuf: TBuffer; LLines: TBufferLines;
 begin
-  LL := TTuiList.FromStrings(['alpha', 'beta', 'gamma']);
+  LL := TListWidget.FromStrings(['alpha', 'beta', 'gamma']);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 3));
   try
     LL.Render(TRect.Make(0, 0, 10, 3), LBuf);
@@ -27,13 +27,13 @@ begin
 end;
 
 procedure TestStatefulSelection;
-var LL: ITuiList; LBuf: TBuffer; LState: TTuiListState;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
     LLines: TBufferLines;
 begin
-  LL := TTuiList.FromStrings(['a', 'b', 'c'])
+  LL := TListWidget.FromStrings(['a', 'b', 'c'])
     .WithHighlightStyle(StyleDefault.WithFg(TUI_RED));
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
-  LState := TTuiListState.Empty;
+  LState := TListState.Empty;
   LState.Select(1);
   try
     LL.RenderStateful(TRect.Make(0, 0, 5, 3), LBuf, LState);
@@ -43,13 +43,13 @@ begin
 end;
 
 procedure TestScrollOffset;
-var LL: ITuiList; LBuf: TBuffer; LState: TTuiListState;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
     LLines: TBufferLines;
 begin
   { 5 items, area height 2, select item 4 -> should scroll }
-  LL := TTuiList.FromStrings(['i0', 'i1', 'i2', 'i3', 'i4']);
+  LL := TListWidget.FromStrings(['i0', 'i1', 'i2', 'i3', 'i4']);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 2));
-  LState := TTuiListState.Empty;
+  LState := TListState.Empty;
   LState.Select(4);
   try
     LL.RenderStateful(TRect.Make(0, 0, 5, 2), LBuf, LState);
@@ -62,13 +62,13 @@ begin
 end;
 
 procedure TestWithBlock;
-var LL: ITuiList; LBuf: TBuffer; LState: TTuiListState;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
     LLines: TBufferLines;
 begin
-  LL := TTuiList.FromStrings(['x', 'y'])
+  LL := TListWidget.FromStrings(['x', 'y'])
     .WithBlock(TBlock.New.WithBorders(BORDERS_ALL));
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 4));
-  LState := TTuiListState.Empty;
+  LState := TListState.Empty;
   try
     LL.RenderStateful(TRect.Make(0, 0, 6, 4), LBuf, LState);
     LLines := LBuf.AsLines;
@@ -78,13 +78,13 @@ begin
 end;
 
 procedure TestHighlightSymbol;
-var LL: ITuiList; LBuf: TBuffer; LState: TTuiListState;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
     LLines: TBufferLines;
 begin
-  LL := TTuiList.FromStrings(['aa', 'bb'])
+  LL := TListWidget.FromStrings(['aa', 'bb'])
     .WithHighlightSymbol('> ');
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 2));
-  LState := TTuiListState.Empty;
+  LState := TListState.Empty;
   LState.Select(0);
   try
     LL.RenderStateful(TRect.Make(0, 0, 8, 2), LBuf, LState);
@@ -98,7 +98,7 @@ end;
 procedure TestAsIWidget;
 var LW: IWidget; LBuf: TBuffer;
 begin
-  LW := TTuiList.FromStrings(['test']);
+  LW := TListWidget.FromStrings(['test']);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 8, 1));
   try
     LW.Render(TRect.Make(0, 0, 8, 1), LBuf);
@@ -107,11 +107,11 @@ begin
 end;
 
 procedure TestEmptyList;
-var LL: ITuiList; LBuf: TBuffer; LState: TTuiListState;
+var LL: IListWidget; LBuf: TBuffer; LState: TListState;
 begin
-  LL := TTuiList.FromStrings([]);
+  LL := TListWidget.FromStrings([]);
   LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 3));
-  LState := TTuiListState.Empty;
+  LState := TListState.Empty;
   LState.Select(0);
   try
     LL.RenderStateful(TRect.Make(0, 0, 5, 3), LBuf, LState);

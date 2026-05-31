@@ -1,10 +1,10 @@
 unit nextpas.core.tui.widget.list;
 
 {**
- * @desc TTuiList — 垂直滚动列表 widget（stateful）。
+ * @desc TListWidget — 垂直滚动列表 widget（stateful）。
  *
- * 实现 IWidget + ITuiList。ITuiList 扩展 IWidget 加 builder 链 +
- * RenderStateful（带 var TTuiListState）。
+ * 实现 IWidget + IListWidget。IListWidget 扩展 IWidget 加 builder 链 +
+ * RenderStateful（带 var TListState）。
  *
  * 第一个 stateful widget，验证 interface 上声明 var state 参数的模式。
  *}
@@ -26,56 +26,56 @@ uses
   nextpas.core.tui.widget.block;
 
 type
-  TTuiListItem = record
+  TListItem = record
     Content: AnsiString;
     Style: TStyle;
-    class function FromString(const AStr: AnsiString): TTuiListItem; static;
-    function WithStyle(const AStyle: TStyle): TTuiListItem;
+    class function FromString(const AStr: AnsiString): TListItem; static;
+    function WithStyle(const AStyle: TStyle): TListItem;
   end;
-  TTuiListItems = array of TTuiListItem;
+  TListItems = array of TListItem;
 
-  TTuiListState = record
+  TListState = record
     Offset: Integer;
     HasSelection: Boolean;
     Selected: Integer;
-    class function Empty: TTuiListState; static;
+    class function Empty: TListState; static;
     procedure Select(AIndex: Integer);
     procedure ClearSelection;
   end;
 
-  ITuiList = interface(IWidget)
+  IListWidget = interface(IWidget)
     ['{E2F3A4B5-C6D7-8E9F-0A1B-2C3D4E5F6A7B}']
-    function WithBlock(ABlock: IBlock): ITuiList;
-    function WithStyle(const AStyle: TStyle): ITuiList;
-    function WithHighlightStyle(const AStyle: TStyle): ITuiList;
-    function WithHighlightSymbol(const ASym: AnsiString): ITuiList;
+    function WithBlock(ABlock: IBlock): IListWidget;
+    function WithStyle(const AStyle: TStyle): IListWidget;
+    function WithHighlightStyle(const AStyle: TStyle): IListWidget;
+    function WithHighlightSymbol(const ASym: AnsiString): IListWidget;
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
-      var AState: TTuiListState);
+      var AState: TListState);
   end;
 
-  TTuiList = class(TInterfacedObject, IWidget, ITuiList)
+  TListWidget = class(TInterfacedObject, IWidget, IListWidget)
   private
-    FItems: TTuiListItems;
+    FItems: TListItems;
     FStyle: TStyle;
     FHighlightStyle: TStyle;
     FHighlightSymbol: AnsiString;
     FHasHighlightSymbol: Boolean;
     FBlock: IBlock;
   public
-    class function New(const AItems: array of TTuiListItem): ITuiList; static;
-    class function FromStrings(const AItems: array of AnsiString): ITuiList; static;
+    class function New(const AItems: array of TListItem): IListWidget; static;
+    class function FromStrings(const AItems: array of AnsiString): IListWidget; static;
 
-    function WithBlock(ABlock: IBlock): ITuiList;
-    function WithStyle(const AStyle: TStyle): ITuiList;
-    function WithHighlightStyle(const AStyle: TStyle): ITuiList;
-    function WithHighlightSymbol(const ASym: AnsiString): ITuiList;
+    function WithBlock(ABlock: IBlock): IListWidget;
+    function WithStyle(const AStyle: TStyle): IListWidget;
+    function WithHighlightStyle(const AStyle: TStyle): IListWidget;
+    function WithHighlightSymbol(const ASym: AnsiString): IListWidget;
 
     { IWidget — 无状态渲染（无高亮） }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
 
-    { ITuiList — 有状态渲染 }
+    { IListWidget — 有状态渲染 }
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
-      var AState: TTuiListState);
+      var AState: TListState);
   end;
 
 implementation
@@ -83,48 +83,48 @@ implementation
 uses
   nextpas.core.text.width;
 
-{ TTuiListItem }
+{ TListItem }
 
-class function TTuiListItem.FromString(const AStr: AnsiString): TTuiListItem;
+class function TListItem.FromString(const AStr: AnsiString): TListItem;
 begin
   Result.Content := AStr;
   Result.Style := TStyle.Default;
 end;
 
-function TTuiListItem.WithStyle(const AStyle: TStyle): TTuiListItem;
+function TListItem.WithStyle(const AStyle: TStyle): TListItem;
 begin
   Result := Self;
   Result.Style := AStyle;
 end;
 
-{ TTuiListState }
+{ TListState }
 
-class function TTuiListState.Empty: TTuiListState;
+class function TListState.Empty: TListState;
 begin
   Result.Offset := 0;
   Result.HasSelection := False;
   Result.Selected := 0;
 end;
 
-procedure TTuiListState.Select(AIndex: Integer);
+procedure TListState.Select(AIndex: Integer);
 begin
   HasSelection := True;
   Selected := AIndex;
 end;
 
-procedure TTuiListState.ClearSelection;
+procedure TListState.ClearSelection;
 begin
   HasSelection := False;
 end;
 
-{ TTuiList }
+{ TListWidget }
 
-class function TTuiList.New(const AItems: array of TTuiListItem): ITuiList;
+class function TListWidget.New(const AItems: array of TListItem): IListWidget;
 var
-  LL: TTuiList;
+  LL: TListWidget;
   LI: Integer;
 begin
-  LL := TTuiList.Create;
+  LL := TListWidget.Create;
   SetLength(LL.FItems, System.Length(AItems));
   for LI := 0 to System.High(AItems) do
     LL.FItems[LI] := AItems[LI];
@@ -136,43 +136,43 @@ begin
   Result := LL;
 end;
 
-class function TTuiList.FromStrings(const AItems: array of AnsiString): ITuiList;
+class function TListWidget.FromStrings(const AItems: array of AnsiString): IListWidget;
 var
-  LBuilt: array of TTuiListItem;
+  LBuilt: array of TListItem;
   LI: Integer;
 begin
   SetLength(LBuilt, System.Length(AItems));
   for LI := 0 to System.High(AItems) do
-    LBuilt[LI] := TTuiListItem.FromString(AItems[LI]);
-  Result := TTuiList.New(LBuilt);
+    LBuilt[LI] := TListItem.FromString(AItems[LI]);
+  Result := TListWidget.New(LBuilt);
 end;
 
-function TTuiList.WithBlock(ABlock: IBlock): ITuiList;
+function TListWidget.WithBlock(ABlock: IBlock): IListWidget;
 begin FBlock := ABlock; Result := Self; end;
 
-function TTuiList.WithStyle(const AStyle: TStyle): ITuiList;
+function TListWidget.WithStyle(const AStyle: TStyle): IListWidget;
 begin FStyle := AStyle; Result := Self; end;
 
-function TTuiList.WithHighlightStyle(const AStyle: TStyle): ITuiList;
+function TListWidget.WithHighlightStyle(const AStyle: TStyle): IListWidget;
 begin FHighlightStyle := AStyle; Result := Self; end;
 
-function TTuiList.WithHighlightSymbol(const ASym: AnsiString): ITuiList;
+function TListWidget.WithHighlightSymbol(const ASym: AnsiString): IListWidget;
 begin
   FHighlightSymbol := ASym;
   FHasHighlightSymbol := System.Length(ASym) > 0;
   Result := Self;
 end;
 
-procedure TTuiList.Render(const AArea: TRect; ABuffer: TBuffer);
+procedure TListWidget.Render(const AArea: TRect; ABuffer: TBuffer);
 var
-  LDummy: TTuiListState;
+  LDummy: TListState;
 begin
-  LDummy := TTuiListState.Empty;
+  LDummy := TListState.Empty;
   RenderStateful(AArea, ABuffer, LDummy);
 end;
 
-procedure TTuiList.RenderStateful(const AArea: TRect; ABuffer: TBuffer;
-  var AState: TTuiListState);
+procedure TListWidget.RenderStateful(const AArea: TRect; ABuffer: TBuffer;
+  var AState: TListState);
 var
   LClip, LInner: TRect;
   LN, LGutterW, LMaxRows, LVisible: Integer;
