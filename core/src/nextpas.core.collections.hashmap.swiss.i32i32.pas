@@ -222,10 +222,29 @@ begin
   Lh := SwissHashI32(UInt32(AKey));
   Lh2 := Lh and $7F;
   LGroupIdx := (Lh shr 7) and (FGroupCount - 1);
-  LProbeOfs := 0;
+  LBase := LGroupIdx shl 4;
+  Vec16ProbeGroup(@FCtrl[LBase], Lh2, LMask, LEmptyMask);
+  while LMask <> 0 do
+  begin
+    Li := LBase + SizeUInt(Vec16Ctz(LMask));
+    if FSlots[Li].Key = AKey then
+    begin FSlots[Li].Value := AValue; Exit; end;
+    LMask := LMask and (LMask - 1);
+  end;
+  if LEmptyMask <> 0 then
+  begin
+    LInsertIdx := LBase + SizeUInt(Vec16Ctz(LEmptyMask));
+    SetCtrl(LInsertIdx, Lh2);
+    FSlots[LInsertIdx].Key := AKey;
+    FSlots[LInsertIdx].Value := AValue;
+    Inc(FCount); Dec(FGrowthLeft);
+    Exit;
+  end;
+  LProbeOfs := 1;
   while True do
   begin
-    LBase := LGroupIdx * GROUP_SIZE;
+    LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
+    LBase := LGroupIdx shl 4;
     Vec16ProbeGroup(@FCtrl[LBase], Lh2, LMask, LEmptyMask);
     while LMask <> 0 do
     begin
@@ -244,7 +263,6 @@ begin
       Exit;
     end;
     Inc(LProbeOfs);
-    LGroupIdx := (LGroupIdx + LProbeOfs) and (FGroupCount - 1);
   end;
 end;
 
