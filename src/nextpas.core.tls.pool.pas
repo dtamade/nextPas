@@ -68,11 +68,13 @@ function TSSLConnectionPool.Acquire(const AHost: string; APort: Word;
 var
   I: Integer;
   LNow: TDateTime;
+  LExpired: TSSLStream;
 begin
   AStream := nil;
   AError := '';
   Result := False;
   LNow := Now;
+  LExpired := nil;
 
   FLock.Enter;
   try
@@ -93,8 +95,8 @@ begin
         end
         else
         begin
-          // Expired — close and remove
-          FEntries[I].Stream.Free;
+          // Expired — remove from pool, free after unlock
+          LExpired := FEntries[I].Stream;
           FEntries[I] := FEntries[High(FEntries)];
           SetLength(FEntries, Length(FEntries) - 1);
         end;
@@ -103,6 +105,10 @@ begin
   finally
     FLock.Leave;
   end;
+
+  // Free expired stream outside lock (may block on shutdown)
+  if LExpired <> nil then
+    LExpired.Free;
 
   // No idle connection found — create new
   Result := FDialer.TryDial(AHost, APort, AStream, AError);

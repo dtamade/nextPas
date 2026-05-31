@@ -115,6 +115,11 @@ var
   I, R: Integer;
   A, B, C, D: Byte;
 begin
+  if AExpKey.Nr = 0 then
+  begin
+    FillChar(AOut^, 16, 0);
+    Exit;
+  end;
   for I := 0 to 15 do
     S[I] := AIn[I] xor Byte(AExpKey.RK[I div 4] shr (24 - (I mod 4) * 8));
 
