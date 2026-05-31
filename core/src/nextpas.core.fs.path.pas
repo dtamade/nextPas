@@ -5,7 +5,8 @@ unit nextpas.core.fs.path;
 interface
 
 uses
-  nextpas.core.platform.path;
+  nextpas.core.platform.path,
+  nextpas.core.fs.util;
 
 const
   PathDelim = PLATFORM_PATH_SEP;
@@ -133,18 +134,29 @@ var
   LStack: array[0..PATH_BUF_SIZE - 1] of AnsiChar;
   LNeed: Int32;
   LHeap: array of AnsiChar;
+  LCwd: string;
 begin
+  if APath = '' then Exit('');
   LNeed := platform_path_resolve(PAnsiChar(APath), @LStack[0], PATH_BUF_SIZE);
-  if LNeed <= 0 then
-    Exit(APath);
-  if LNeed < PATH_BUF_SIZE then
+  if LNeed > 0 then
   begin
-    SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+    if LNeed < PATH_BUF_SIZE then
+    begin
+      SetString(Result, PAnsiChar(@LStack[0]), LNeed);
+      Exit;
+    end;
+    SetLength(LHeap, LNeed + 1);
+    platform_path_resolve(PAnsiChar(APath), @LHeap[0], Length(LHeap));
+    SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
     Exit;
   end;
-  SetLength(LHeap, LNeed + 1);
-  platform_path_resolve(PAnsiChar(APath), @LHeap[0], Length(LHeap));
-  SetString(Result, PAnsiChar(@LHeap[0]), LNeed);
+  if FsPathIsAbs(APath) then
+    Result := FsPathClean(APath)
+  else
+  begin
+    LCwd := FsGetCwd;
+    Result := FsPathClean(LCwd + PLATFORM_PATH_SEP + APath);
+  end;
 end;
 
 function FsPathIsAbs(const APath: string): Boolean;
