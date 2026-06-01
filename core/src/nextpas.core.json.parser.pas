@@ -33,6 +33,7 @@ type
     FHasError: Boolean;
     FIndices: PJsonObjectIndex;
     FIndexCap: UInt32;
+    FCombinedAlloc: Boolean;
     function AddNode: UInt32;
     function AllocStrBuf(ASize: SizeUInt): PAnsiChar;
   public
@@ -66,20 +67,27 @@ uses
   nextpas.core.mem.default;
 
 const
-  INITIAL_NODE_CAP = 64;
+  INITIAL_NODE_CAP = 32;
+  INITIAL_ARENA_CAP = 1024;
   POS_NONE = UInt32($FFFFFFFF);
 
 procedure TJsonDocument.Init(const AAllocator: IAllocator);
+var
+  LNodeSize, LTotalSize: SizeUInt;
+  LBase: PAnsiChar;
 begin
   if AAllocator <> nil then
     FAllocator := AAllocator
   else
     FAllocator := DefaultAllocator;
   FNodeCap := INITIAL_NODE_CAP;
-  FNodes := FAllocator.Allocate(FNodeCap * SizeOf(TJsonNode));
+  LNodeSize := FNodeCap * SizeOf(TJsonNode);
+  FStrArenaCap := INITIAL_ARENA_CAP;
+  LTotalSize := LNodeSize + FStrArenaCap;
+  LBase := FAllocator.Allocate(LTotalSize);
+  FNodes := PJsonNode(LBase);
+  FStrArena := LBase + LNodeSize;
   FNodeCount := 0;
-  FStrArenaCap := 4096;
-  FStrArena := FAllocator.Allocate(FStrArenaCap);
   FStrArenaUsed := 0;
   FStrOverflowCap := 0;
   FStrOverflow := nil;
@@ -87,6 +95,7 @@ begin
   FHasError := False;
   FIndices := nil;
   FIndexCap := 0;
+  FCombinedAlloc := True;
 end;
 
 procedure TJsonDocument.Done;
@@ -112,15 +121,25 @@ begin
     FAllocator.Deallocate(FStrOverflow);
     FStrOverflow := nil;
   end;
-  if FStrArena <> nil then
+  if FCombinedAlloc then
   begin
-    FAllocator.Deallocate(FStrArena);
-    FStrArena := nil;
-  end;
-  if FNodes <> nil then
-  begin
-    FAllocator.Deallocate(FNodes);
+    if FNodes <> nil then
+      FAllocator.Deallocate(FNodes);
     FNodes := nil;
+    FStrArena := nil;
+  end
+  else
+  begin
+    if FStrArena <> nil then
+    begin
+      FAllocator.Deallocate(FStrArena);
+      FStrArena := nil;
+    end;
+    if FNodes <> nil then
+    begin
+      FAllocator.Deallocate(FNodes);
+      FNodes := nil;
+    end;
   end;
   FNodeCount := 0;
   FNodeCap := 0;
@@ -132,11 +151,28 @@ end;
 function TJsonDocument.AddNode: UInt32;
 var
   LNewCap: UInt32;
+  LNewNodes: PJsonNode;
+  LNewArena: PAnsiChar;
 begin
   if FNodeCount >= FNodeCap then
   begin
     LNewCap := FNodeCap * 2;
-    FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
+    if FCombinedAlloc then
+    begin
+      LNewNodes := FAllocator.Allocate(LNewCap * SizeOf(TJsonNode));
+      Move(FNodes^, LNewNodes^, FNodeCap * SizeOf(TJsonNode));
+      LNewArena := FAllocator.Allocate(FStrArenaCap);
+      if FStrArenaUsed > 0 then
+        Move(FStrArena^, LNewArena^, FStrArenaUsed);
+      FAllocator.Deallocate(FNodes);
+      FNodes := LNewNodes;
+      FStrArena := LNewArena;
+      FCombinedAlloc := False;
+    end
+    else
+    begin
+      FNodes := FAllocator.Reallocate(FNodes, LNewCap * SizeOf(TJsonNode));
+    end;
     FNodeCap := LNewCap;
   end;
   Result := FNodeCount;
@@ -610,6 +646,7 @@ var
   LState: TParserState;
   LEstimate: UInt32;
   I: UInt32;
+  LBase: PAnsiChar;
 begin
   FInput := AInput;
   FNodeCount := 0;
@@ -640,7 +677,16 @@ begin
   LEstimate := UInt32(AInput.Len div 4);
   if LEstimate > FNodeCap then
   begin
-    FNodes := FAllocator.Reallocate(FNodes, LEstimate * SizeOf(TJsonNode));
+    if FCombinedAlloc then
+    begin
+      LBase := PAnsiChar(FNodes);
+      FNodes := FAllocator.Allocate(LEstimate * SizeOf(TJsonNode));
+      FStrArena := FAllocator.Allocate(FStrArenaCap);
+      FAllocator.Deallocate(LBase);
+      FCombinedAlloc := False;
+    end
+    else
+      FNodes := FAllocator.Reallocate(FNodes, LEstimate * SizeOf(TJsonNode));
     FNodeCap := LEstimate;
   end;
   LState.Doc := @Self;
