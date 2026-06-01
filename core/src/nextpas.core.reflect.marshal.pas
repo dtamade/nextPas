@@ -15,31 +15,82 @@ procedure ConfigUnmarshal(AConfig: TConfig; ARegistry: ITypeRegistry;
 
 implementation
 
-procedure WriteFieldFromConfig(AConfig: TConfig; const AField: TFieldDef;
-  AFieldPtr: Pointer);
+uses
+  nextpas.core.reflect;
+
+type
+  TConfigUnmarshalVisitor = class(TBaseTypeVisitor)
+  private
+    FConfig: TConfig;
+  public
+    constructor Create(AConfig: TConfig);
+    function ShouldVisit(const AField: TFieldDef): Boolean; override;
+    procedure VisitBool(const AField: TFieldDef; APtr: PBoolean); override;
+    procedure VisitInt32(const AField: TFieldDef; APtr: PInt32); override;
+    procedure VisitInt64(const AField: TFieldDef; APtr: PInt64); override;
+    procedure VisitFloat64(const AField: TFieldDef; APtr: PDouble); override;
+    procedure VisitString(const AField: TFieldDef; APtr: PString); override;
+    procedure VisitDynArray(const AField: TFieldDef; AArrayPtr: PPointer;
+      AElementType: PTypeDef); override;
+  end;
+
+constructor TConfigUnmarshalVisitor.Create(AConfig: TConfig);
+begin
+  inherited Create;
+  FConfig := AConfig;
+end;
+
+function TConfigUnmarshalVisitor.ShouldVisit(const AField: TFieldDef): Boolean;
+begin
+  Result := FConfig.Has(AField.Name);
+end;
+
+procedure TConfigUnmarshalVisitor.VisitBool(const AField: TFieldDef;
+  APtr: PBoolean);
+begin
+  APtr^ := FConfig.GetBool(AField.Name);
+end;
+
+procedure TConfigUnmarshalVisitor.VisitInt32(const AField: TFieldDef;
+  APtr: PInt32);
 begin
   case AField.Kind of
-    fkString:
-      PString(AFieldPtr)^ := AConfig.GetString(AField.Name);
-    fkInt32:
-      PInt32(AFieldPtr)^ := Int32(AConfig.GetInt(AField.Name));
-    fkInt64:
-      PInt64(AFieldPtr)^ := AConfig.GetInt(AField.Name);
-    fkBool:
-      PBoolean(AFieldPtr)^ := AConfig.GetBool(AField.Name);
-    fkFloat64:
-      PDouble(AFieldPtr)^ := AConfig.GetFloat(AField.Name);
+    fkInt8: PInt8(APtr)^ := Int8(FConfig.GetInt(AField.Name));
+    fkInt16: PInt16(APtr)^ := Int16(FConfig.GetInt(AField.Name));
   else
-    ;
+    APtr^ := Int32(FConfig.GetInt(AField.Name));
   end;
+end;
+
+procedure TConfigUnmarshalVisitor.VisitInt64(const AField: TFieldDef;
+  APtr: PInt64);
+begin
+  APtr^ := FConfig.GetInt(AField.Name);
+end;
+
+procedure TConfigUnmarshalVisitor.VisitFloat64(const AField: TFieldDef;
+  APtr: PDouble);
+begin
+  APtr^ := FConfig.GetFloat(AField.Name);
+end;
+
+procedure TConfigUnmarshalVisitor.VisitString(const AField: TFieldDef;
+  APtr: PString);
+begin
+  APtr^ := FConfig.GetString(AField.Name);
+end;
+
+procedure TConfigUnmarshalVisitor.VisitDynArray(const AField: TFieldDef;
+  AArrayPtr: PPointer; AElementType: PTypeDef);
+begin
 end;
 
 procedure ConfigUnmarshal(AConfig: TConfig; ARegistry: ITypeRegistry;
   ATypeID: TTypeID; ATarget: Pointer);
 var
   LTypeDef: PTypeDef;
-  LIndex: Integer;
-  LField: PFieldDef;
+  LVisitor: TConfigUnmarshalVisitor;
+  LIntf: ITypeVisitor;
 begin
   if (AConfig = nil) or (ARegistry = nil) or (ATarget = nil) then
     Exit;
@@ -48,12 +99,10 @@ begin
   if LTypeDef = nil then
     Exit;
 
-  for LIndex := 0 to LTypeDef^.FieldCount - 1 do
-  begin
-    LField := @LTypeDef^.Fields[LIndex];
-    if AConfig.Has(LField^.Name) then
-      WriteFieldFromConfig(AConfig, LField^, PByte(ATarget) + LField^.Offset);
-  end;
+  LVisitor := TConfigUnmarshalVisitor.Create(AConfig);
+  LIntf := LVisitor as ITypeVisitor;
+  ARegistry.Visit(LTypeDef, ATarget, LIntf);
+  LIntf := nil;
 end;
 
 end.

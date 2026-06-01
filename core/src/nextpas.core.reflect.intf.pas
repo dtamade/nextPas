@@ -28,6 +28,8 @@ type
     procedure VisitFloat64(const AField: TFieldDef; APtr: PDouble);
     procedure VisitString(const AField: TFieldDef; APtr: PString);
     procedure VisitRecord(const AField: TFieldDef; APtr: Pointer; ASubType: PTypeDef);
+    procedure VisitDynArray(const AField: TFieldDef; AArrayPtr: PPointer;
+      AElementType: PTypeDef);
     procedure VisitPointer(const AField: TFieldDef; APtr: PPointer);
   end;
 
@@ -44,6 +46,9 @@ type
     function AddField(ATypeID: TTypeID; const AName: string;
       AOffset: PtrUInt; AKind: TFieldKind; ASize: Integer = 0;
       AFlags: TFieldFlags = []): Boolean;
+    function AddDynArrayField(ATypeID: TTypeID; const AName: string;
+      AOffset: PtrUInt; AElementKind: TFieldKind; AElementSize: SizeUInt;
+      ADynArrayTypeInfo: Pointer; AElementTypeID: TTypeID = 0): Boolean;
     function FindType(const AName: string): PTypeDef;
     function FindTypeByID(AID: TTypeID): PTypeDef;
     function GetTypeID(const AName: string): TTypeID;

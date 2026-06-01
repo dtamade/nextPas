@@ -38,6 +38,10 @@ type
     Kind: TFieldKind;
     Flags: TFieldFlags;
     SubTypeID: TTypeID;
+    ElementKind: TFieldKind;
+    ElementSize: SizeUInt;
+    ElementTypeID: TTypeID;
+    DynArrayTypeInfo: Pointer;
   end;
 
   {** TTypeDef - 类型定义 *}
