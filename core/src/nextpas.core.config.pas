@@ -57,6 +57,7 @@ type
     procedure SetDefault(const AKey, AValue: string);
 
     function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetStringArray(const AKey: string): TStringArray;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
@@ -64,6 +65,7 @@ type
     procedure ReplaceFrom(AOther: TConfig);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
+    function GetSection(const APrefix: string): TStringArray;
     property Count: Integer read GetCount;
   end;
 
@@ -103,6 +105,14 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml.base;
 
+type
+  TIndexedConfigValue = record
+    Index: Int64;
+    Value: string;
+  end;
+
+  TIndexedConfigValueArray = array of TIndexedConfigValue;
+
 {$IFDEF NEXTPAS_UNIX}
 var
   environ: PPAnsiChar; cvar; external;
@@ -120,6 +130,124 @@ begin
     Result := AKey
   else
     Result := APrefix + '.' + AKey;
+end;
+
+function GetSectionSuffix(const AKey, APrefix: string; out ASuffix: string): Boolean;
+var
+  LPrefixLen: Integer;
+begin
+  ASuffix := '';
+  if AKey = '' then
+    Exit(False);
+
+  if APrefix = '' then
+  begin
+    ASuffix := AKey;
+    Exit(True);
+  end;
+
+  LPrefixLen := Length(APrefix);
+  if Length(AKey) <= LPrefixLen then
+    Exit(False);
+  if AKey[LPrefixLen + 1] <> '.' then
+    Exit(False);
+  if LowerCase(Copy(AKey, 1, LPrefixLen)) <> LowerCase(APrefix) then
+    Exit(False);
+
+  ASuffix := Copy(AKey, LPrefixLen + 2, Length(AKey) - LPrefixLen - 1);
+  Result := ASuffix <> '';
+end;
+
+function DirectChildSegment(const ASuffix: string): string;
+var
+  LDotPos: Integer;
+begin
+  LDotPos := Pos('.', ASuffix);
+  if LDotPos > 0 then
+    Result := Copy(ASuffix, 1, LDotPos - 1)
+  else
+    Result := ASuffix;
+end;
+
+function DirectArraySegment(const AKey, APrefix: string; out ASegment: string): Boolean;
+var
+  LSuffix: string;
+begin
+  Result := False;
+  ASegment := '';
+  if not GetSectionSuffix(AKey, APrefix, LSuffix) then
+    Exit;
+  if Pos('.', LSuffix) > 0 then
+    Exit;
+  ASegment := LSuffix;
+  Result := ASegment <> '';
+end;
+
+function StringArrayContains(const AItems: TStringArray; const ACount: Integer;
+  const AValue: string): Boolean;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AValue);
+  for LI := 0 to ACount - 1 do
+    if LowerCase(AItems[LI]) = LLower then
+      Exit(True);
+  Result := False;
+end;
+
+procedure AddUniqueString(var AItems: TStringArray; var ACount: Integer;
+  const AValue: string);
+begin
+  if AValue = '' then
+    Exit;
+  if StringArrayContains(AItems, ACount, AValue) then
+    Exit;
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount] := AValue;
+  Inc(ACount);
+end;
+
+function TryParseArrayIndex(const AValue: string; out AIndex: Int64): Boolean;
+var
+  LI: Integer;
+begin
+  AIndex := 0;
+  if AValue = '' then
+    Exit(False);
+  for LI := 1 to Length(AValue) do
+    if (AValue[LI] < '0') or (AValue[LI] > '9') then
+      Exit(False);
+  Result := TryStrToInt64(AValue, AIndex) and (AIndex >= 0);
+end;
+
+procedure AddIndexedValue(var AItems: TIndexedConfigValueArray; var ACount: Integer;
+  const AIndex: Int64; const AValue: string);
+begin
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount].Index := AIndex;
+  AItems[ACount].Value := AValue;
+  Inc(ACount);
+end;
+
+procedure SortIndexedValues(var AItems: TIndexedConfigValueArray; const ACount: Integer);
+var
+  LI, LJ: Integer;
+  LItem: TIndexedConfigValue;
+begin
+  for LI := 1 to ACount - 1 do
+  begin
+    LItem := AItems[LI];
+    LJ := LI - 1;
+    while (LJ >= 0) and (AItems[LJ].Index > LItem.Index) do
+    begin
+      AItems[LJ + 1] := AItems[LJ];
+      Dec(LJ);
+    end;
+    AItems[LJ + 1] := LItem;
+  end;
 end;
 
 function PadZero(const AValue: Int64; const AWidth: Integer): string;
@@ -720,6 +848,32 @@ begin
   end;
 end;
 
+function TConfig.GetStringArray(const AKey: string): TStringArray;
+var
+  LI, LCount: Integer;
+  LSegment: string;
+  LIndex: Int64;
+  LItems: TIndexedConfigValueArray;
+begin
+  Result := nil;
+  FLock.AcquireRead;
+  try
+    LItems := nil;
+    LCount := 0;
+    for LI := 0 to FCount - 1 do
+      if DirectArraySegment(FEntries[LI].Key, AKey, LSegment) and
+         TryParseArrayIndex(LSegment, LIndex) then
+        AddIndexedValue(LItems, LCount, LIndex, FEntries[LI].Value);
+
+    SortIndexedValues(LItems, LCount);
+    SetLength(Result, LCount);
+    for LI := 0 to LCount - 1 do
+      Result[LI] := LItems[LI].Value;
+  finally
+    FLock.ReleaseRead;
+  end;
+end;
+
 function TConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
 var
   LIdx: Integer;
@@ -830,6 +984,27 @@ begin
     SetLength(Result, FCount);
     for LI := 0 to FCount - 1 do
       Result[LI] := FEntries[LI].Key;
+  finally
+    FLock.ReleaseRead;
+  end;
+end;
+
+function TConfig.GetSection(const APrefix: string): TStringArray;
+var
+  LI, LCount: Integer;
+  LSuffix, LChild: string;
+begin
+  FLock.AcquireRead;
+  try
+    Result := nil;
+    LCount := 0;
+    for LI := 0 to FCount - 1 do
+      if GetSectionSuffix(FEntries[LI].Key, APrefix, LSuffix) then
+      begin
+        LChild := DirectChildSegment(LSuffix);
+        AddUniqueString(Result, LCount, LChild);
+      end;
+    SetLength(Result, LCount);
   finally
     FLock.ReleaseRead;
   end;

@@ -335,6 +335,167 @@ begin
   end;
 end;
 
+{ === Section / Array 读取 API === }
+
+procedure TestGetSectionRoot;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"server":{"host":"localhost","port":8080},"tags":["a"],"name":"app"}');
+    LKeys := LCfg.GetSection('');
+    CheckEqual(Int64(3), Int64(Length(LKeys)), 'root count');
+    CheckEqual('server', LKeys[0], 'root server');
+    CheckEqual('tags', LKeys[1], 'root tags');
+    CheckEqual('name', LKeys[2], 'root scalar');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetSectionPrefixDirectChildren;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"server":{"host":"localhost","port":8080,"tls":{"enabled":true}}}');
+    LKeys := LCfg.GetSection('server');
+    CheckEqual(Int64(3), Int64(Length(LKeys)), 'server section count');
+    CheckEqual('host', LKeys[0], 'server host child');
+    CheckEqual('port', LKeys[1], 'server port child');
+    CheckEqual('tls', LKeys[2], 'server tls child');
+
+    LKeys := LCfg.GetSection('server.tls');
+    CheckEqual(Int64(1), Int64(Length(LKeys)), 'tls section count');
+    CheckEqual('enabled', LKeys[0], 'tls enabled child');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetSectionArrayIndexes;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"servers":[{"host":"a","port":1},{"host":"b","port":2}]}');
+    LKeys := LCfg.GetSection('servers');
+    CheckEqual(Int64(2), Int64(Length(LKeys)), 'servers section count');
+    CheckEqual('0', LKeys[0], 'server index 0');
+    CheckEqual('1', LKeys[1], 'server index 1');
+
+    LKeys := LCfg.GetSection('servers.0');
+    CheckEqual(Int64(2), Int64(Length(LKeys)), 'server 0 section count');
+    CheckEqual('host', LKeys[0], 'server 0 host');
+    CheckEqual('port', LKeys[1], 'server 0 port');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetSectionMissingAndCaseInsensitive;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[Server]' + #10 + 'Host=localhost' + #10 + 'Port=8080' + #10);
+    LKeys := LCfg.GetSection('server');
+    CheckEqual(Int64(2), Int64(Length(LKeys)), 'case-insensitive section count');
+    CheckEqual('Host', LKeys[0], 'preserves child case host');
+    CheckEqual('Port', LKeys[1], 'preserves child case port');
+
+    LKeys := LCfg.GetSection('missing');
+    CheckEqual(Int64(0), Int64(Length(LKeys)), 'missing section empty');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetStringArrayBasic;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"tags":["alpha","beta","gamma"]}');
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(3), Int64(Length(LItems)), 'tags count');
+    CheckEqual('alpha', LItems[0], 'tag 0');
+    CheckEqual('beta', LItems[1], 'tag 1');
+    CheckEqual('gamma', LItems[2], 'tag 2');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetStringArraySortsNumericIndexesAndSkipsHoles;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetDefault('tags.2', 'two');
+    LCfg.SetDefault('tags.10', 'ten');
+    LCfg.SetDefault('tags.0', 'zero');
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(3), Int64(Length(LItems)), 'sparse tags count');
+    CheckEqual('zero', LItems[0], 'index 0 first');
+    CheckEqual('two', LItems[1], 'index 2 second');
+    CheckEqual('ten', LItems[2], 'index 10 third');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetStringArrayIgnoresObjectArrayItems;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"servers":[{"host":"a"},{"host":"b"}],"tags":["x"]}');
+    LItems := LCfg.GetStringArray('servers');
+    CheckEqual(Int64(0), Int64(Length(LItems)), 'object array has no direct string items');
+
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(1), Int64(Length(LItems)), 'tags still readable');
+    CheckEqual('x', LItems[0], 'tag x');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetStringArrayTopLevelArrayAndMissing;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('["x","y"]');
+    LItems := LCfg.GetStringArray('');
+    CheckEqual(Int64(2), Int64(Length(LItems)), 'root array count');
+    CheckEqual('x', LItems[0], 'root array 0');
+    CheckEqual('y', LItems[1], 'root array 1');
+
+    LItems := LCfg.GetStringArray('missing');
+    CheckEqual(Int64(0), Int64(Length(LItems)), 'missing array empty');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestMalformedLoadRaisesConfigError;
 var
   LCfg: TConfig;
@@ -410,6 +571,14 @@ begin
   T.Run('Json.TopLevelArray', @TestJsonTopLevelArray);
   T.Run('Json.TopLevelScalar', @TestJsonTopLevelScalar);
   T.Run('Yaml.TopLevelSequence', @TestYamlTopLevelSequence);
+  T.Run('GetSection.Root', @TestGetSectionRoot);
+  T.Run('GetSection.PrefixDirectChildren', @TestGetSectionPrefixDirectChildren);
+  T.Run('GetSection.ArrayIndexes', @TestGetSectionArrayIndexes);
+  T.Run('GetSection.MissingAndCaseInsensitive', @TestGetSectionMissingAndCaseInsensitive);
+  T.Run('GetStringArray.Basic', @TestGetStringArrayBasic);
+  T.Run('GetStringArray.SparseNumericOrder', @TestGetStringArraySortsNumericIndexesAndSkipsHoles);
+  T.Run('GetStringArray.IgnoresObjectArrayItems', @TestGetStringArrayIgnoresObjectArrayItems);
+  T.Run('GetStringArray.TopLevelArrayAndMissing', @TestGetStringArrayTopLevelArrayAndMissing);
   T.Run('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);
   T.Summary;
 end.

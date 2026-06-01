@@ -36,3 +36,19 @@
   `HasError`. For config error-contract tests, `{a: *missing}` is the reliable
   invalid YAML fixture because existing YAML tests verify undefined aliases are
   parser errors.
+
+## P1 Section / Array Notes
+
+- `GetSection` is a read-only convenience over the flat key table. It should not
+  expose full descendant paths; it returns only the next segment below the
+  requested prefix.
+- `GetSection('')` is useful and deterministic: it returns root-level direct
+  children in stored order.
+- `GetSection` uses case-insensitive prefix matching and case-insensitive
+  de-duplication, consistent with `FindIndex`, but preserves the spelling of the
+  first stored key segment.
+- `GetStringArray` reconstructs scalar arrays from direct numeric children only.
+  Object arrays remain navigable via `GetSection('servers')` and
+  `GetSection('servers.0')` instead of being coerced into strings.
+- Sparse numeric arrays are returned compactly in numeric index order; missing
+  indices do not inject empty strings.

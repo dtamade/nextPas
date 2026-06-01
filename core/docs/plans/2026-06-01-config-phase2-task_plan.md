@@ -6,7 +6,7 @@ Move `nextpas.core.config` toward the v2 contract without disrupting the
 existing IRWLock, watcher, `ReplaceFrom`, DOM flattening, or struct mapping
 work already merged.
 
-## Current Batch
+## Batch 1
 
 Priority: P0 error semantics.
 
@@ -21,7 +21,18 @@ Priority: P0 error semantics.
   variants.
 - [x] Implement the minimum code to pass those tests.
 - [x] Run focused tests with heaptrc and check for zero leaks.
-- [ ] Commit the batch with a clear message.
+- [x] Commit the batch with a clear message.
+
+## Batch 2
+
+Priority: P1 section and string-array accessors.
+
+- [x] Confirm isolated worktree is clean and no newer same-file config commits
+  exist.
+- [x] Add RED tests for `GetSection` and `GetStringArray`.
+- [x] Implement the minimum code to pass those tests.
+- [x] Run focused tests with heaptrc and check for zero leaks.
+- [x] Commit the batch with a clear message.
 
 ## Design Decisions
 
@@ -32,10 +43,11 @@ Priority: P0 error semantics.
 | Try aliases | Keep existing `TryLoadFromJson/Yaml/Toml`; add `TryLoadJson/Yaml/Toml` aliases | Existing API already exists after API consistency work; short aliases satisfy the Phase 2 spelling without breaking callers. |
 | Failed load mutation | Failed loads must not modify existing entries | Existing `TryLoadFromXxx` already parses before flattening; `LoadFromXxx` should preserve this property. |
 | Watcher behavior | `TConfigWatcher.DoReload` may propagate `EConfigError`; `ReplaceFrom` only happens after successful parse | This preserves old config on bad reload and lets application boundaries decide whether to catch. |
+| Section semantics | `GetSection('')` returns root-level direct children; `GetSection(prefix)` returns direct child segments only, de-duplicated case-insensitively while preserving first-seen spelling | Matches flattened dot-path model and keeps API useful for object and array traversal. |
+| String array semantics | `GetStringArray(prefix)` reads direct numeric children (`prefix.0`, `prefix.1`, ...), sorts by numeric index, skips sparse holes, and ignores object-array descendants such as `servers.0.host` | Reconstructs scalar arrays from the .NET-style flattened storage without inventing object-array serialization. |
 
 ## Later Batches
 
-- P1: `GetStringArray` and `GetSection`.
 - P2: `${VAR}` interpolation with a precise unresolved-placeholder policy.
 - P3: required-value APIs such as `GetIntRequired` and `Require`.
 - Final round: documentation refresh and benchmark comparison after interfaces

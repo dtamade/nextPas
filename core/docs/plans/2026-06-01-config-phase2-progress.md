@@ -52,3 +52,42 @@
 
 - Commit P0 error semantics.
 - Start P1: `GetStringArray` and `GetSection` with test-first coverage.
+
+## 2026-06-02 Batch 2: P1 Section and String Array Accessors
+
+### Completed
+
+- Verified worktree state before editing:
+  - branch `codex/config-phase2-main-20260601`
+  - head `a0442c0a`
+  - no uncommitted changes
+  - latest config file commit was the P0 commit
+- Added RED tests for:
+  - `GetSection('')` root direct children;
+  - `GetSection(prefix)` direct children;
+  - array index sections such as `servers`, `servers.0`;
+  - missing and case-insensitive section lookup;
+  - `GetStringArray` basic scalar arrays;
+  - sparse numeric ordering (`0`, `2`, `10`);
+  - object-array descendants being ignored by `GetStringArray`;
+  - top-level array reconstruction with `GetStringArray('')`.
+- Verified RED failure before implementation:
+  `test_config_nested.lpr` failed to compile with missing `GetSection` and
+  `GetStringArray` members.
+- Implemented:
+  - public `TConfig.GetSection`;
+  - public `TConfig.GetStringArray`;
+  - private helper routines for direct-child extraction, case-insensitive
+    de-duplication, numeric index parsing, and small insertion-sort of array
+    elements.
+- Verification:
+  - `make -C core/tests/nextpas.core.config/test_config clean test`:
+    `41 total, 41 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `make -C core/tests/nextpas.core.config/test_config_nested clean test`:
+    `28 total, 28 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `git diff --check`: exit 0.
+
+### Next
+
+- Commit P1 accessors.
+- Start P2: `${VAR}` interpolation policy and tests.
