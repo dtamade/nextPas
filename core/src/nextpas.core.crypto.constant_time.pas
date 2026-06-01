@@ -19,9 +19,9 @@ unit nextpas.core.crypto.constant_time;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.tls.base,
-  nextpas.core.tls.exceptions,
-  SysUtils, Classes;
+  nextpas.core.tls.exceptions;
 
 type
   { Constant-time operations for cryptographic purposes }
@@ -163,9 +163,10 @@ var
   ABytes, BBytes: TBytes;
   CompResult: Integer;
 begin
-  // Convert to UTF-8 bytes
-  ABytes := TEncoding.UTF8.GetBytes(UnicodeString(A));
-  BBytes := TEncoding.UTF8.GetBytes(UnicodeString(B));
+  SetLength(ABytes, Length(A));
+  if Length(A) > 0 then Move(A[1], ABytes[0], Length(A));
+  SetLength(BBytes, Length(B));
+  if Length(B) > 0 then Move(B[1], BBytes[0], Length(B));
   
   try
     // Constant-time comparison

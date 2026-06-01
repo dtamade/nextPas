@@ -5,6 +5,7 @@ unit nextpas.core.crypto.x25519;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.tls.errors;
 

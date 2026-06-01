@@ -4,6 +4,7 @@ unit nextpas.core.multipart;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.multipart.base;
 

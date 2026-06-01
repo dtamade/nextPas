@@ -5,6 +5,7 @@ unit nextpas.core.crypto.tls12record;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors;
 
 function TLS12CBCEncrypt_SHA256(

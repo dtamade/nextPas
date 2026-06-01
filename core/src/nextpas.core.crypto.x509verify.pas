@@ -5,7 +5,7 @@ unit nextpas.core.crypto.x509verify;
 interface
 
 uses
-  SysUtils, Classes, nextpas.core.tls.x509;
+  SysUtils, nextpas.core.text.conv, nextpas.core.tls.x509;
 
 type
   TX509TrustStore = class

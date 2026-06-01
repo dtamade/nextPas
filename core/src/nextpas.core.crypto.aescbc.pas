@@ -5,6 +5,7 @@ unit nextpas.core.crypto.aescbc;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors;
 
 function AESCBCEncryptNoPadding(const AKey, AIV, APlaintext: TBytes): TBytes;

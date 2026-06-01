@@ -17,6 +17,7 @@ unit nextpas.core.crypto.ecdsa;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.errors;
 
 type

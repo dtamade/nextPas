@@ -7,7 +7,8 @@ unit nextpas.core.crypto.p384;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base,
+  nextpas.core.text.conv;
 
 type
   TP384Point = record

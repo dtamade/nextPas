@@ -5,7 +5,8 @@ unit nextpas.core.crypto.rsa;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base,
+  nextpas.core.text.conv;
 
 function TryRSAES_PKCS1v15_Encode(
   const AMessage: TBytes;

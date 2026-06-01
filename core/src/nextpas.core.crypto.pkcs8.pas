@@ -5,7 +5,10 @@ unit nextpas.core.crypto.pkcs8;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base,
+  nextpas.core.errors,
+  nextpas.core.text.conv,
+  nextpas.core.text.utils;
 
 function TryDecryptPKCS8EncryptedPrivateKey(
   const AEncryptedDER: TBytes;
@@ -394,7 +397,7 @@ begin
   end;
 
   // Derive key
-  LPasswordBytes := TEncoding.UTF8.GetBytes(APassword);
+  SetLength(LPasswordBytes, Length(APassword)); if Length(APassword) > 0 then Move(APassword[1], LPasswordBytes[0], Length(APassword));
   if LUseSHA256 then
     LKey := PBKDF2_HMAC_SHA256(LPasswordBytes, LSalt, LIterations, LKeyLen)
   else
@@ -428,7 +431,7 @@ var
   LPassBytes, LInput, LHash: TBytes;
   LOffset: Integer;
 begin
-  LPassBytes := TEncoding.UTF8.GetBytes(APassword);
+  SetLength(LPassBytes, Length(APassword)); if Length(APassword) > 0 then Move(APassword[1], LPassBytes[0], Length(APassword));
   SetLength(Result, AKeyLen);
   LOffset := 0;
 
