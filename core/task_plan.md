@@ -13,11 +13,15 @@ Phase 1: public contract audit and HTTP test baseline.
 - [x] Re-read `task_plan.md` and `docs/nextpas.core.http.inbox.md`.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
 - [x] Extract HTTP public API surfaces from `src/nextpas.core.http*.pas`.
-- [ ] Build the public API coverage matrix.
+- [x] Build the public API coverage matrix.
 - [x] Run existing `tests/nextpas.core.http/*` baseline.
 - [x] Record pass/fail and heaptrc evidence.
 - [x] Refresh docs and progress after rerunning the two changed tests.
 - [x] Commit the documentation/baseline batch.
+- [x] Add focused coverage for `IHttpClient.Put/Delete/Patch/Head`.
+- [x] Run full HTTP suite after client coverage changes.
+- [x] Update inbox, findings, and progress for this coverage batch.
+- [x] Commit this coverage batch.
 
 ## Quality Gates
 
@@ -43,10 +47,10 @@ Phase 1: public contract audit and HTTP test baseline.
    - [x] Prepare the planning-only batch for a narrow commit.
 
 2. **Phase 1: Public contract audit**
-   - [ ] Build an API matrix for facade, `http.base`, `http.intf`, headers, URL, message, router, middleware, server, client, static, websocket, and H1 parser/writer/scan/fast units.
-   - [ ] Map every public type/function/method to existing focused tests.
-   - [ ] Identify missing coverage before implementation changes.
-   - [ ] Run the narrow existing HTTP test suites to establish the current baseline.
+   - [x] Build an API matrix for facade, `http.base`, `http.intf`, headers, URL, message, router, middleware, server, client, static, websocket, and H1 parser/writer/scan/fast units.
+   - [x] Map major public type/function/method groups to existing focused tests.
+   - [x] Identify missing coverage before implementation changes.
+   - [x] Run the HTTP test suite to establish the current baseline.
 
 3. **Phase 2: H1 correctness hardening**
    - [ ] Prioritize RFC-critical request/response parsing, serialization, chunked transfer, limits, keep-alive, upgrade, and malformed-input behavior.
@@ -77,11 +81,12 @@ Phase 1: public contract audit and HTTP test baseline.
 
 ## Decisions
 
-| Decision                                       | Rationale                                                                                                  |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Keep the H1 writer chunked-by-default contract | Matches current implementation and server tests; do not force a production change without a tested reason. |
-| Keep benchmark work after correctness          | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.             |
-| Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                       |
+| Decision                                       | Rationale                                                                                                   |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Keep the H1 writer chunked-by-default contract | Matches current implementation and server tests; do not force a production change without a tested reason.  |
+| Keep benchmark work after correctness          | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.              |
+| Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                        |
+| Treat empty DELETE body by behavior            | The public contract is no request body and zero content length, not the internal `Body=nil` representation. |
 
 ## Errors Encountered
 

@@ -85,21 +85,38 @@ begin
   AServer := nil;
 end;
 
-function ReadBodyStr(const AResp: IHttpResponse): string;
+function ReadReaderStr(const AReader: IReader): string;
 var
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
 begin
   Result := '';
-  if AResp.Body = nil then Exit;
+  if AReader = nil then Exit;
   repeat
-    LN := AResp.Body.Read(LBuf[0], 4096);
+    LN := AReader.Read(LBuf[0], 4096);
     if LN > 0 then
     begin
       SetLength(Result, Length(Result) + Int32(LN));
       Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
     end;
   until LN = 0;
+end;
+
+function ReadBodyStr(const AResp: IHttpResponse): string;
+begin
+  if AResp.Body = nil then
+    Exit('');
+  Result := ReadReaderStr(AResp.Body);
+end;
+
+function StringBodyReader(const AValue: string): IReader;
+var
+  LData: TBytes;
+begin
+  SetLength(LData, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], LData[0], Length(AValue));
+  Result := CreateBytesStreamFrom(LData) as IReader;
 end;
 
 { Test 1: Client GET returns 200 + body }
@@ -217,6 +234,175 @@ begin
 end;
 
 // PLACEHOLDER_TEST4
+
+procedure TestClientPutBodyAndContentType;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentType: string;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotMethod := hmGet;
+  LGotContentType := '';
+  LGotContentLength := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Put('/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LB: string;
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'put-ok';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Put(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource',
+      'application/json',
+      StringBodyReader('{"name":"next"}'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmPut, 'server received PUT');
+    CheckEqual('application/json', LGotContentType, 'content-type forwarded');
+    CheckEqual(Int64(15), LGotContentLength, 'content-length forwarded');
+    CheckEqual('{"name":"next"}', LGotBody, 'body forwarded');
+    CheckEqual('put-ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientDeleteNoBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotMethod := hmGet;
+  LGotContentLength := -1;
+  LGotBody := 'not-read';
+  LRouter := THttpRouter.Create;
+  LRouter.Delete('/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LB: string;
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'deleted';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Delete('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmDelete, 'server received DELETE');
+    CheckEqual(Int64(0), LGotContentLength, 'delete content-length is zero');
+    CheckEqual('', LGotBody, 'delete body is empty');
+    CheckEqual('deleted', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientPatchBodyAndContentType;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+  LGotContentType: string;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotMethod := hmGet;
+  LGotContentType := '';
+  LGotContentLength := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmPatch, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LB: string;
+  begin
+    LGotMethod := AReq.Method;
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'patch-ok';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Patch(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource',
+      'application/merge-patch+json',
+      StringBodyReader('{"enabled":true}'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmPatch, 'server received PATCH');
+    CheckEqual('application/merge-patch+json', LGotContentType, 'content-type forwarded');
+    CheckEqual(Int64(16), LGotContentLength, 'content-length forwarded');
+    CheckEqual('{"enabled":true}', LGotBody, 'body forwarded');
+    CheckEqual('patch-ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientHeadSendsHead;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotMethod: THttpMethod;
+begin
+  LGotMethod := hmGet;
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmHead, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LGotMethod := AReq.Method;
+    AW.GetHeaders.Set_('content-length', '0');
+    AW.GetHeaders.Set_('x-head-ok', 'yes');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Head('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    Check(LGotMethod = hmHead, 'server received HEAD');
+    CheckEqual('yes', LResp.Headers.Get('x-head-ok'), 'response headers are available');
+    CheckEqual('', ReadBodyStr(LResp), 'head response body is empty');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
 
 { Test 4: Client follows redirect (301 -> 200) }
 procedure TestClientFollowsRedirect;
@@ -488,6 +674,10 @@ begin
   T.Run('Client GET returns 200 + body', @TestClientGet200);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
   T.Run('Client POST with body', @TestClientPostBody);
+  T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
+  T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
+  T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
+  T.Run('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
@@ -496,7 +686,3 @@ begin
   T.Run('Connection reuse', @TestConnectionReuse);
   T.Summary;
 end.
-
-
-
-

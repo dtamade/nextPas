@@ -29,6 +29,14 @@
 - The stale expectations in `test_http_h1writer` and `test_http_integration` were test-only drift, not a production regression.
 - The updated tests now assert chunked framing and explicit flush behavior.
 
+## API Coverage Findings
+
+- First public coverage matrix is now in `docs/http/API_COVERAGE.md`.
+- `IHttpClient.Put`, `Delete`, `Patch`, and `Head` now have direct focused tests in `test_http_client`.
+- The extra verb tests use real local HTTP server/client paths and assert method dispatch, body/header forwarding, and HEAD response header access.
+- A test-only leak appeared when request bodies were read by wrapping `AReq.Body` in temporary `THttpResponse` objects; replacing that with direct `IReader` reads restored heaptrc to zero.
+- The `Delete` test now asserts the public behavior, namely method dispatch, zero content length, and empty body, instead of depending on the internal `Body=nil` representation.
+
 ## Git and Collaboration Findings
 
 - Current directory is `/home/dtamade/projects/nextPas/core`.
@@ -39,10 +47,10 @@
 ## Gaps to Audit Next
 
 - `docs/http/ARCHITECTURE.md` mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
-- The public API coverage matrix has not yet been built; existing tests are numerous but not proven to cover every public function/method.
-- `IHttpClient` extra verbs (`Put`, `Delete`, `Patch`, `Head`) need explicit coverage mapping.
+- Keep the matrix current as public APIs change.
 - `IHttpTransport` and `IHttpServerTransport` need focused contract mapping.
 - `THttpHandlerMethod` / `THttpHandlerProc` aliases and some `static` helpers are still only indirectly exercised.
+- `IHttpHijacker` needs a direct lifecycle test before websocket/server upgrade work expands.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 
 ## Communication Cadence Adopted
@@ -50,3 +58,9 @@
 - Start every HTTP batch by showing an explicit task checklist.
 - Keep `docs/nextpas.core.http.inbox.md` short and user-facing; keep `task_plan.md`, `findings.md`, and `progress.md` detailed enough for execution recovery.
 - End every batch with what changed, verification evidence, retrospective, next plan, and git status/commit state.
+
+## Review Findings
+
+- `/codex` read-only review found no blocking issue in this batch.
+- Review risk to enforce at commit time: stage only the owned HTTP planning/test files, because the shared checkout contains unrelated dirty and untracked files.
+- Review follow-up: coverage matrix is surface/group level; later API-completion work should refine it toward method/function-level coverage where necessary.

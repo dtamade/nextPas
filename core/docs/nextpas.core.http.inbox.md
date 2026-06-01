@@ -1,18 +1,18 @@
 # nextpas.core.http Inbox
 
-最近更新：2026-06-01
+最近更新：2026-06-02
 
 ## 当前批次
 
-- 公开 API 覆盖矩阵
-- H1 writer / integration 语义对齐
-- HTTP 基线测试与 heaptrc 零泄漏
+- 公开 API 覆盖矩阵落地
+- `IHttpClient.Put/Delete/Patch/Head` focused 覆盖
+- HTTP suite + heaptrc 验证
 
 ## 当前重点
 
-- 先把 `nextpas.core.http` 的公开契约列清：已覆盖、间接覆盖、待补测试。
-- 现阶段已确认的 writer 语义：当 `Content-Length` 和 `Transfer-Encoding` 都未预设时，默认补 `Transfer-Encoding: chunked`。
-- 先做正确性、边界和可维护性，benchmark 放最后。
+- 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
+- 已补齐 `IHttpClient` 额外动词的直接测试证据。
+- 下一步继续补真正缺口，不做 benchmark。
 
 ## 路线图
 
@@ -25,5 +25,5 @@
 
 ## 下一步
 
-- 先补完公开 API 覆盖矩阵。
-- 下一批重点看 `IHttpClient` 额外动词、transport 接口、H1 writer / response 行为。
+- 优先处理 `IHttpTransport` / `IHttpServerTransport` 是否应保留为公开 contract。
+- 再补 `IHttpHijacker` 和 H1 writer 边界测试。
