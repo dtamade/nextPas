@@ -38,6 +38,8 @@ type
     procedure VisitFloat64(const {%H-}AField: TFieldDef; {%H-}APtr: PDouble); virtual;
     procedure VisitString(const {%H-}AField: TFieldDef; {%H-}APtr: PString); virtual;
     procedure VisitRecord(const {%H-}AField: TFieldDef; {%H-}APtr: Pointer; {%H-}ASubType: PTypeDef); virtual;
+    procedure VisitDynArray(const {%H-}AField: TFieldDef; {%H-}AArrayPtr: PPointer;
+      {%H-}AElementType: PTypeDef); virtual;
     procedure VisitPointer(const {%H-}AField: TFieldDef; {%H-}APtr: PPointer); virtual;
   end;
 
@@ -59,6 +61,9 @@ type
     function AddField(ATypeID: TTypeID; const AName: string;
       AOffset: PtrUInt; AKind: TFieldKind; ASize: Integer = 0;
       AFlags: TFieldFlags = []): Boolean;
+    function AddDynArrayField(ATypeID: TTypeID; const AName: string;
+      AOffset: PtrUInt; AElementKind: TFieldKind; AElementSize: SizeUInt;
+      ADynArrayTypeInfo: Pointer; AElementTypeID: TTypeID = 0): Boolean;
     function FindType(const AName: string): PTypeDef;
     function FindTypeByID(AID: TTypeID): PTypeDef;
     function GetTypeID(const AName: string): TTypeID;
@@ -129,6 +134,10 @@ begin
       FTypes[LIdx].Fields[LFieldIdx].Kind := AKind;
       FTypes[LIdx].Fields[LFieldIdx].Flags := AFlags;
       FTypes[LIdx].Fields[LFieldIdx].SubTypeID := TYPE_ID_NONE;
+      FTypes[LIdx].Fields[LFieldIdx].ElementKind := fkPointer;
+      FTypes[LIdx].Fields[LFieldIdx].ElementSize := 0;
+      FTypes[LIdx].Fields[LFieldIdx].ElementTypeID := TYPE_ID_NONE;
+      FTypes[LIdx].Fields[LFieldIdx].DynArrayTypeInfo := nil;
       if ASize > 0 then
         FTypes[LIdx].Fields[LFieldIdx].Size := ASize
       else
@@ -145,6 +154,33 @@ begin
       Inc(FTypes[LIdx].FieldCount);
       Exit(True);
     end;
+end;
+
+function TTypeRegistry.AddDynArrayField(ATypeID: TTypeID; const AName: string;
+  AOffset: PtrUInt; AElementKind: TFieldKind; AElementSize: SizeUInt;
+  ADynArrayTypeInfo: Pointer; AElementTypeID: TTypeID): Boolean;
+var
+  LType: PTypeDef;
+  LField: PFieldDef;
+begin
+  Result := False;
+  if (AElementSize = 0) or (ADynArrayTypeInfo = nil) then
+    Exit;
+  if (AElementKind = fkRecord) and (AElementTypeID = TYPE_ID_NONE) then
+    Exit;
+  if not AddField(ATypeID, AName, AOffset, fkDynArray, SizeOf(Pointer)) then
+    Exit;
+
+  LType := FindTypeByID(ATypeID);
+  if (LType = nil) or (LType^.FieldCount <= 0) then
+    Exit;
+  LField := @LType^.Fields[LType^.FieldCount - 1];
+
+  LField^.ElementKind := AElementKind;
+  LField^.ElementSize := AElementSize;
+  LField^.ElementTypeID := AElementTypeID;
+  LField^.DynArrayTypeInfo := ADynArrayTypeInfo;
+  Result := True;
 end;
 
 function TTypeRegistry.FindType(const AName: string): PTypeDef;
@@ -223,13 +259,16 @@ begin
     LPtr := AData + LField^.Offset;
     case LField^.Kind of
       fkBool: AVisitor.VisitBool(LField^, PBoolean(LPtr));
-      fkInt32: AVisitor.VisitInt32(LField^, PInt32(LPtr));
-      fkInt64: AVisitor.VisitInt64(LField^, PInt64(LPtr));
-      fkUInt32: AVisitor.VisitUInt32(LField^, PDWord(LPtr));
+      fkInt8, fkInt16, fkInt32: AVisitor.VisitInt32(LField^, PInt32(LPtr));
+      fkInt64, fkUInt64: AVisitor.VisitInt64(LField^, PInt64(LPtr));
+      fkUInt8, fkUInt16, fkUInt32: AVisitor.VisitUInt32(LField^, PDWord(LPtr));
       fkFloat32: AVisitor.VisitFloat32(LField^, PSingle(LPtr));
       fkFloat64: AVisitor.VisitFloat64(LField^, PDouble(LPtr));
       fkString: AVisitor.VisitString(LField^, PString(LPtr));
+      fkEnum: ;
       fkRecord: AVisitor.VisitRecord(LField^, LPtr, FindTypeByID(LField^.SubTypeID));
+      fkDynArray: AVisitor.VisitDynArray(LField^, PPointer(LPtr),
+        FindTypeByID(LField^.ElementTypeID));
       fkPointer: AVisitor.VisitPointer(LField^, PPointer(LPtr));
     end;
   end;
@@ -254,6 +293,8 @@ procedure TBaseTypeVisitor.VisitFloat32(const AField: TFieldDef; APtr: PSingle);
 procedure TBaseTypeVisitor.VisitFloat64(const AField: TFieldDef; APtr: PDouble); begin end;
 procedure TBaseTypeVisitor.VisitString(const AField: TFieldDef; APtr: PString); begin end;
 procedure TBaseTypeVisitor.VisitRecord(const AField: TFieldDef; APtr: Pointer; ASubType: PTypeDef); begin end;
+procedure TBaseTypeVisitor.VisitDynArray(const AField: TFieldDef;
+  AArrayPtr: PPointer; AElementType: PTypeDef); begin end;
 procedure TBaseTypeVisitor.VisitPointer(const AField: TFieldDef; APtr: PPointer); begin end;
 
 { Factory }

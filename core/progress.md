@@ -1,82 +1,83 @@
 # Progress Log
 
-## Session: 2026-05-31
+## Session: 2026-06-01
 
-### Phase 1: Scope & Discovery
-- **Status:** complete
-- **Started:** 2026-05-31
-- Actions taken:
-  - Loaded startup, planning, debugging, and verification skill guidance.
-  - Ran a quick memory pass for `nextPas` review constraints.
-  - Checked session catchup and repo planning state before starting the review.
-  - Rebased local planning files from the previous regex audit to this log-module audit.
-- Files created/modified:
-  - `task_plan.md` (replaced)
-  - `findings.md` (replaced)
-  - `progress.md` (replaced)
-
-### Phase 2: Code Inspection
+### Phase 0: Scope & Discovery
 - **Status:** complete
 - Actions taken:
-  - Read the public interface and implementation units with line numbers.
-  - Read the shipped log tests, log audit tests, and the module planning note.
-  - Identified concurrency, ownership, and handler-state hot spots for deeper validation.
-- Files created/modified:
-  - `findings.md` (updated)
-  - `progress.md` (updated)
+  - Loaded required workflow skills.
+  - Confirmed current directory is already an isolated linked worktree on `feat/rtl-deep2`.
+  - Read reflection base/interface/registry, JSON marshal, config marshal, JSON value/writer, and current JSON tests.
+  - Replaced stale planning files from a previous log review with this dynarray task's files.
 
-### Phase 3: Risk Validation
+### Phase 1: RED tests
 - **Status:** complete
 - Actions taken:
-  - Built and ran the three shipped log-related suites under heaptrc.
-  - Built and ran a threaded probe that demonstrated concurrent log loss and global reentrancy cross-talk.
-  - Built and ran file-handler probes for mid-stream write failure, post-failure recovery, and `With_` rotation behavior.
-- Files created/modified:
-  - `findings.md` (updated)
-  - `progress.md` (updated)
+  - Added named dynamic array types and `TData` test record.
+  - Added tests for int arrays, string arrays, record arrays, empty arrays, null arrays, replacement, and round-trip.
+  - Built the test target and confirmed RED at the missing registry API.
 
-### Phase 4: Review Write-up
-- **Status:** in_progress
+### Phase 2: Reflection surface
+- **Status:** complete
 - Actions taken:
-  - Ordered validated findings by severity and mapped them to the user’s requested checklist.
-- Files created/modified:
-  - `task_plan.md` (updated)
-  - `progress.md` (updated)
+  - Added dynamic array element metadata to `TFieldDef`.
+  - Added `VisitDynArray` to `ITypeVisitor` and `TBaseTypeVisitor`.
+  - Added `AddDynArrayField` to `ITypeRegistry` and `TTypeRegistry`.
+  - Added `fkDynArray` dispatch in `TTypeRegistry.Visit`.
+
+### Phase 3: RTL wrapper
+- **Status:** complete
+- Actions taken:
+  - Created `src/nextpas.core.reflect.dynarray.pas`.
+  - Wrapped `DynArraySize`, `DynArraySetLength`, `DynArrayClear`, and element pointer arithmetic.
+
+### Phase 4: JSON marshal/unmarshal
+- **Status:** complete
+- Actions taken:
+  - Added dynamic array marshal with per-element primitive and record writing.
+  - Added transactional dynamic array unmarshal with temporary array rollback.
+  - Added null handling via `DynArrayFree`.
+
+### Phase 5: Verification
+- **Status:** complete
+- Actions taken:
+  - Compiled and ran the normal JSON marshal test binary once.
+  - Re-ran the requested JSON marshal compile/run command after final edits.
+  - Recompiled and ran JSON marshal with heaptrc enabled.
+  - Compiled and ran `test_reflect` and `test_marshal` with heaptrc enabled.
+  - Confirmed all `TBaseTypeVisitor` derived visitors either override or inherit `VisitDynArray`; Config unmarshal now has an explicit empty implementation.
 
 ## Verification Evidence
-| Check | Command or probe | Result |
-|------|-------------------|--------|
-| Shipped module tests | `make -C tests/nextpas.core.log/test_log` + run binary | 26/26 passed, heaptrc clean |
-| Shipped audit tests | `make -C tests/nextpas.core.log/test_log_audit` + run binary | 33/33 passed, heaptrc clean |
-| Interface tests | `make -C tests/nextpas.core.log.intf/test_log_intf` + run binary | passed, heaptrc clean |
-| Concurrent pool/depth probe | `/tmp/log_thread_probe` | 32 attempts produced only 13 handled records and fallback `[REENTRANT]` lines |
-| File write failure probe | `/tmp/log_file_failure_probe` | both writes raised `EInOutError: Disk Full` |
-| File open recovery probe | `/tmp/log_file_recovery_probe` | initial open failure set broken state permanently; later directory creation did not recover |
-| File child-logger rotation probe | `/tmp/log_file_withattrs_probe` | main file reached 631 bytes with `AMaxBytes=100`, no rotated `.1` file |
+| Check | Command | Result |
+|---|---|---|
+| RED compile | `rm -rf build/lib && mkdir -p build/lib build/bin && fpc -MObjFPC -Sh -O2 -FUbuild/lib -FEbuild/bin -Fusrc -Fu/home/dtamade/projects/nextPas/core/src -Fisrc tests/nextpas.core.json/test_json_marshal/test_json_marshal.lpr` | Failed as expected: `ITypeRegistry` has no `AddDynArrayField` |
+| Normal compile | `rm -rf build/lib && mkdir -p build/lib build/bin && fpc -MObjFPC -Sh -O2 -FUbuild/lib -FEbuild/bin -Fusrc -Fu/home/dtamade/projects/nextPas/core/src -Fisrc tests/nextpas.core.json/test_json_marshal/test_json_marshal.lpr` | Linked `build/bin/test_json_marshal` |
+| Normal run | `./build/bin/test_json_marshal` | 17 total, 17 passed, 0 failed |
+| Final requested compile and run | `rm -rf build/lib && mkdir -p build/lib build/bin && fpc -MObjFPC -Sh -O2 -FUbuild/lib -FEbuild/bin -Fusrc -Fu/home/dtamade/projects/nextPas/core/src -Fisrc tests/nextpas.core.json/test_json_marshal/test_json_marshal.lpr && ./build/bin/test_json_marshal` | 18 total, 18 passed, 0 failed |
+| JSON heaptrc compile and run | `rm -rf build/lib && mkdir -p build/lib build/bin && fpc -MObjFPC -Sh -O2 -gh -gl -FUbuild/lib -FEbuild/bin -Fusrc -Fu/home/dtamade/projects/nextPas/core/src -Fisrc tests/nextpas.core.json/test_json_marshal/test_json_marshal.lpr && ./build/bin/test_json_marshal 2>&1` | 18 total, 18 passed, 0 unfreed memory blocks |
+| Reflect heaptrc | `fpc -MObjFPC -Sh -O2 -gh -gl ... tests/nextpas.core.reflect/test_reflect/test_reflect.lpr && ./build/bin/test_reflect 2>&1` | 31 passed, 0 failed, 0 unfreed memory blocks |
+| Reflect marshal heaptrc | `fpc -MObjFPC -Sh -O2 -gh -gl ... tests/nextpas.core.reflect/test_marshal/test_marshal.lpr && ./build/bin/test_marshal 2>&1` | 5 total, 5 passed, 0 failed, 0 unfreed memory blocks |
 
 ## Test Results
-| Test | Input | Expected | Actual | Status |
-|------|-------|----------|--------|--------|
-| Memory quick pass | `MEMORY.md` nextPas search | Relevant repo rules found | Found quality-bar notes | ✓ |
-| Session catchup | `session-catchup.py` | Detect stale planning or unsynced context | Found prior unsynced context, no planning updates | ✓ |
-| Shipped log suite | `./build/projects/nextpas.core.log/test_log/test_log` | Existing tests pass | 26/26 passed, heaptrc clean | ✓ |
-| Shipped audit suite | `./build/projects/nextpas.core.log/test_log_audit/test_log_audit` | Existing tests pass | 33/33 passed, heaptrc clean | ✓ |
-| Log interface suite | `./build/projects/nextpas.core.log.intf/test_log_intf/test_log_intf` | Existing tests pass | Passed, heaptrc clean | ✓ |
-| Concurrent probe | `/tmp/log_thread_probe` | All records handled exactly once | Only 13/32 handled; fallback reentrant lines observed | ✓ |
-| `/dev/full` probe | `/tmp/log_file_failure_probe` | Graceful degradation or broken-state transition | Repeated `EInOutError: Disk Full` exceptions | ✓ |
-| Open-recovery probe | `/tmp/log_file_recovery_probe` | Handler recovers after directory appears | Stayed broken, file never created | ✓ |
-| Child file logger probe | `/tmp/log_file_withattrs_probe` | Rotation respects `AMaxBytes` | Main file 631 bytes, no `.1` rotation | ✓ |
+| Test | Expected | Actual | Status |
+|---|---|---|---|
+| Extended JSON marshal compile | Fail before implementation | Failed at missing `AddDynArrayField` | RED |
+| JSON marshal suite | All old and new tests pass | 17/17 passed | PASS |
+| Final JSON marshal suite | Existing 9 plus dynarray tests pass | 18/18 passed | PASS |
+| Heaptrc JSON marshal | No unfreed blocks | 105 allocated, 105 freed, 0 unfreed | PASS |
+| Reflect suite | No interface regression | 31/31 passed, 0 unfreed | PASS |
+| Reflect marshal suite | Config unmarshal behavior unchanged | 5/5 passed, 0 unfreed | PASS |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
-|-----------|-------|---------|------------|
-| 2026-05-31 | Temporary probe compile errors | 1 | Fixed harness definitions and recompiled |
+|---|---|---|---|
+| 2026-06-01 17:18:14 +0800 | Missing `AddDynArrayField` on `ITypeRegistry` | 1 | Expected RED failure before production implementation |
 
 ## 5-Question Reboot Check
 | Question | Answer |
-|----------|--------|
-| Where am I? | Phase 4, finishing the review write-up |
-| Where am I going? | Deliver the ordered findings with concrete repro cases |
-| What's the goal? | Produce a thorough log module code review with concrete findings |
-| What have I learned? | The biggest real defects are concurrent logging, file-child state sharing, and file failure handling |
-| What have I done? | Reviewed the code, ran the shipped suites, and validated the risky paths with targeted probes |
+|---|---|
+| Where am I? | Verification complete |
+| Where am I going? | Final report |
+| What's the goal? | Dynamic array support for reflect/marshal using RTL dynarray APIs |
+| What have I learned? | FPC 3.3.1 accepts the provided RTL signatures directly; `ITypeVisitor` implementers are covered through `TBaseTypeVisitor` plus explicit Config visitor |
+| What have I done? | Added metadata/API/dispatch/wrapper/JSON support/tests and verified heaptrc zero leaks |
