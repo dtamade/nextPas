@@ -14,7 +14,8 @@
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
 - `IHttpClient.Get/Post/Do_` 原本已覆盖；本轮补齐 `Put/Delete/Patch/Head` focused 覆盖。
 - `IHttpTransport`、`IHttpServerTransport` 已有 focused shape 覆盖；registry / 注入机制仍未实现。
-- `IHttpHijacker`、`THttpHandlerMethod`、`THttpHandlerProc` 仍是优先缺口。
+- `IHttpHijacker` 已有 facade alias、writer 行为和 server ownership 覆盖。
+- `THttpHandlerMethod`、`THttpHandlerProc` 仍是优先缺口。
 - facade 覆盖主要来自 `test_http_contract` 和 `test_http_smoke`，下一步需要把“只 uses `nextpas.core.http`”的 facade smoke 范围再收紧。
 
 ## Public Surface Matrix
@@ -35,7 +36,7 @@
 | `IHttpClient` / `THttpClient`                  | do/get/post/put/delete/patch/head, redirects, timeout, host header, pooling                       | focused               | `test_http_client`, `test_http_smoke`                                    | Add chunked response and close-delimited response coverage next.                           |
 | `IHttpTransport`                               | `RoundTrip`                                                                                       | focused shape         | `test_http_contract`                                                     | Add registry/client injection tests only after transport ownership is designed.            |
 | `IHttpServerTransport`                         | `ServeConn`                                                                                       | focused shape         | `test_http_contract`                                                     | Add server protocol-registration tests only after registry ownership is designed.          |
-| `IHttpHijacker` / `TH1ResponseWriter.Hijack`   | connection takeover                                                                               | gap                   | websocket path is adjacent but not a direct contract test                | Add focused hijack lifecycle test before expanding websocket/server upgrade work.          |
+| `IHttpHijacker` / `TH1ResponseWriter.Hijack`   | facade alias, connection takeover, server ownership transfer                                      | focused + integration | `test_http_contract`, `test_http_h1writer`, `test_http_server`           | Add exception-after-hijack and websocket upgrade ownership regression tests later.         |
 | Static serving                                 | `ServeFile`, `ServeDir`                                                                           | focused               | `test_http_static`                                                       | Add helper-level MIME tests only if helper API becomes public.                             |
 | WebSocket                                      | upgrade, frame read/write, ping/pong/close                                                        | focused               | `test_http_websocket`                                                    | Add negative frame/oversize tests later.                                                   |
 | H1 parser                                      | request/response parser API                                                                       | focused               | `test_http_h1parser`, `test_http_security`                               | Add more malformed chunked/body edge cases in H1 hardening phase.                          |
@@ -45,7 +46,7 @@
 
 ## Highest-Priority Gaps
 
-1. `IHttpHijacker` lifecycle and ownership after hijack.
-2. facade-only smoke coverage for callback aliases and server/client overloads.
-3. H1 writer boundary tests for pre-set `Transfer-Encoding`, explicit `Content-Length`, and flush finalization.
+1. facade-only smoke coverage for callback aliases and server/client overloads.
+2. H1 writer boundary tests for pre-set `Transfer-Encoding`, explicit `Content-Length`, and flush finalization.
+3. client chunked response and close-delimited response coverage.
 4. transport registry / protocol ownership design before any H2/H3 expansion.

@@ -104,8 +104,8 @@ begin
     Move(S[1], Result[0], Length(S));
 end;
 
-procedure HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler;
-  const AOptions: THttpServerOptions);
+function HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions): Boolean;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
@@ -122,6 +122,7 @@ var
   LTotalRead: SizeUInt;
   LHeadersDone: Boolean;
 begin
+  Result := True;
   LParser := NewH1RequestParser;
   LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
   LKeepAlive := True;
@@ -218,6 +219,7 @@ begin
       { If connection was hijacked (e.g. WebSocket upgrade), stop loop }
       if (LW as TH1ResponseWriter).IsHijacked then
       begin
+        Result := False;
         LKeepAlive := False;
         Continue;
       end;
@@ -232,7 +234,10 @@ begin
     except
       on E: Exception do
       begin
-        WriteErrorResponse(AConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
+          Result := False
+        else
+          WriteErrorResponse(AConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
         LKeepAlive := False;
       end;
     end;
@@ -245,6 +250,7 @@ var
   LConn: ITcpStream;
   LHandler: IHttpHandler;
   LOptions: THttpServerOptions;
+  LServerOwnsConn: Boolean;
 begin
   Result := nil;
   LCtx := PConnContext(AArg);
@@ -252,11 +258,15 @@ begin
   LHandler := LCtx^.Handler;
   LOptions := LCtx^.Options;
   Dispose(LCtx);
+  LServerOwnsConn := True;
   try
-    HandleConnection(LConn, LHandler, LOptions);
+    LServerOwnsConn := HandleConnection(LConn, LHandler, LOptions);
   finally
-    LConn.Shutdown;
-    LConn.Close;
+    if LServerOwnsConn then
+    begin
+      LConn.Shutdown;
+      LConn.Close;
+    end;
     LConn := nil;
     LHandler := nil;
   end;
@@ -320,8 +330,8 @@ begin
     else
     begin
       { Thread creation failed — handle inline }
-      HandleConnection(LConn, FHandler, FOptions);
-      LConn.Close;
+      if HandleConnection(LConn, FHandler, FOptions) then
+        LConn.Close;
       Dispose(LCtx);
     end;
   end;

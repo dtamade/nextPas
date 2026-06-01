@@ -118,3 +118,43 @@
 - Review confirmed this batch proves public shape contract only, not facade-only smoke, registry, injection, protocol dispatch, or real TCP connection lifecycle.
 - Review noted the full-suite evidence was still missing in its snapshot; mainline completed `make TESTS_DIR=tests/nextpas.core.http test` afterward and recorded the result above.
 - Review reiterated the staging risk: the shared checkout has unrelated dirty/untracked files, so stage only the six owned HTTP files.
+
+## Session: 2026-06-02 hijack lifecycle
+
+### Phase 1: `IHttpHijacker` lifecycle and connection ownership
+
+- **Status:** review
+- **Scope:** facade alias, H1 writer hijack behavior, server ownership transfer after hijack.
+- **Checklist:**
+  - [x] Checked Git status before edits; HTTP target files were clean, unrelated dirty/untracked files remain outside this batch.
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Added facade-only `IHttpHijacker` alias coverage to `test_http_contract`.
+  - [x] Added `TH1ResponseWriter.Hijack` focused tests to `test_http_h1writer`.
+  - [x] Added server integration test proving hijack keeps the connection open for handler ownership.
+  - [x] Verified RED: facade alias missing and server closed hijacked connections after handler return.
+  - [x] Re-exported `IHttpHijacker` from `nextpas.core.http`.
+  - [x] Made `HandleConnection` return server connection ownership and guarded thread cleanup.
+  - [x] Ran focused GREEN tests with heaptrc proof.
+  - [x] Run full HTTP suite.
+  - [x] Complete local `/codex`-style review and final diff check.
+  - [ ] Commit this batch.
+
+## Verification Evidence 2026-06-02 Hijack
+
+| Check                   | Command                                                         | Result                                                          |
+| ----------------------- | --------------------------------------------------------------- | --------------------------------------------------------------- |
+| Git safety state        | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files              |
+| RED facade alias        | `make -C tests/nextpas.core.http/test_http_contract clean test` | Failed to compile: `Identifier not found "IHttpHijacker"`       |
+| RED server ownership    | `make -C tests/nextpas.core.http/test_http_server clean test`   | Failed new hijack ownership assertion; heaptrc 0 unfreed blocks |
+| Focused contract GREEN  | `make -C tests/nextpas.core.http/test_http_contract clean test` | 15/15 passed, 0 unfreed memory blocks                           |
+| Focused H1 writer GREEN | `make -C tests/nextpas.core.http/test_http_h1writer clean test` | 12/12 passed, 0 unfreed memory blocks                           |
+| Focused server GREEN    | `make -C tests/nextpas.core.http/test_http_server clean test`   | 20/20 passed, 0 unfreed memory blocks                           |
+| Full HTTP suite         | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test                   |
+
+## Notes 2026-06-02 Hijack
+
+- `TH1ResponseWriter` already had the correct direct hijack behavior; this batch made that contract explicit.
+- The production fix is in server connection lifecycle, not in websocket code.
+- `HandleConnection` now reports whether the server still owns the connection. After hijack, cleanup does not `Shutdown` or `Close` the stream.
+- `/codex`-style read-only review found no blocking issue.
+- Review noted that the first server hijack test treated any read exception as open-connection evidence; the test now proves ownership directly by reading a client probe byte from the handler-held `ITcpStream` after handler return.

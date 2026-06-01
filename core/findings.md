@@ -38,6 +38,9 @@
 - The `Delete` test now asserts the public behavior, namely method dispatch, zero content length, and empty body, instead of depending on the internal `Body=nil` representation.
 - `IHttpTransport` and `IHttpServerTransport` are currently exposed only as public interfaces and facade aliases; there is no implemented registry, protocol owner, or client/server injection path yet.
 - Transport tests in `test_http_contract` therefore cover contract shape and external implementability, not production protocol dispatch.
+- `IHttpHijacker` was defined in `http.intf` but was missing from the facade aliases; `test_http_contract` now proves it can be consumed through `nextpas.core.http`.
+- `TH1ResponseWriter.Hijack` already raised `EHttpError` without a connection and returned the underlying connection when present; focused tests now lock that behavior.
+- `THttpServer` previously stopped the request loop after hijack but still closed the connection in thread cleanup; `test_http_server` now proves ownership transfers to the handler after hijack.
 
 ## Git and Collaboration Findings
 
@@ -51,7 +54,7 @@
 - `docs/http/ARCHITECTURE.md` mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
 - Keep the matrix current as public APIs change.
 - `THttpHandlerMethod` / `THttpHandlerProc` aliases and some `static` helpers are still only indirectly exercised.
-- `IHttpHijacker` needs a direct lifecycle test before websocket/server upgrade work expands.
+- Hijack exception-after-takeover and websocket upgrade ownership regressions are useful later hardening tests.
 - Transport registry / protocol ownership still needs design before H2/H3 expansion or pluggable client/server transports.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 

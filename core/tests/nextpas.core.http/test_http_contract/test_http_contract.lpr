@@ -304,6 +304,15 @@ begin
   Check(LHandlerCalled, 'ServeConn can dispatch handler');
 end;
 
+{ Test 15: IHttpHijacker is exported by facade }
+procedure TestHttpHijackerFacadeAlias;
+var
+  LHijacker: IHttpHijacker;
+begin
+  LHijacker := nil;
+  Check(LHijacker = nil, 'IHttpHijacker type is available through facade');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
@@ -320,5 +329,6 @@ begin
   T.Run('HttpStatusText known codes', @TestHttpStatusText);
   T.Run('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
+  T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
   T.Summary;
 end.

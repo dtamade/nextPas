@@ -4,8 +4,13 @@ program test_http_h1writer;
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
+  nextpas.core.net.base,
+  nextpas.core.net.intf,
+  nextpas.core.time.deadline,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -18,6 +23,24 @@ type
   public
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function GetOutput: string;
+  end;
+
+  TMockTcpStream = class(TInterfacedObject, ITcpStream)
+  public
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
   end;
 
 function TBytesWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -35,6 +58,69 @@ end;
 function TBytesWriter.GetOutput: string;
 begin
   Result := FBuf;
+end;
+
+function TMockTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+function TMockTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := ACount;
+end;
+
+function TMockTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := 0;
+end;
+
+procedure TMockTcpStream.Close;
+begin
+end;
+
+function TMockTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TMockTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TMockTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TMockTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TMockTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TMockTcpStream.Shutdown;
+begin
+end;
+
+procedure TMockTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TMockTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TMockTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TMockTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
 end;
 
 var
@@ -233,6 +319,49 @@ begin
   LRW.Free;
 end;
 
+procedure TestHijackWithoutConnectionRaises;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRaised := False;
+    try
+      LRW.Hijack;
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'Hijack without connection raises EHttpError');
+    Check(not LRW.IsHijacked, 'failed hijack does not mark writer hijacked');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestHijackReturnsConnectionAndMarksWriter;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LConn: ITcpStream;
+  LHijacked: ITcpStream;
+begin
+  LW := TBytesWriter.Create;
+  LConn := TMockTcpStream.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter, LConn);
+  try
+    Check(not LRW.IsHijacked, 'new writer is not hijacked');
+    LHijacked := LRW.Hijack;
+    Check(LHijacked = LConn, 'Hijack returns the underlying connection');
+    Check(LRW.IsHijacked, 'Hijack marks writer hijacked');
+  finally
+    LRW.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.writer');
   T.Run('WriteHeader writes status line', @TestWriteHeaderStatusLine);
@@ -246,5 +375,7 @@ begin
   T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
   T.Run('Full response format', @TestFullResponse);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
+  T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
+  T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
   T.Summary;
 end.

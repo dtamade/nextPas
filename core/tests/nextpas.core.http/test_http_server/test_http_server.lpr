@@ -4,6 +4,7 @@ program test_http_server;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.text.conv,
@@ -939,6 +940,65 @@ begin
   end;
 end;
 
+{ Test 20: Hijack transfers connection ownership away from server loop }
+procedure TestHijackLeavesConnectionOpenForHandlerOwner;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LServerSideConn: ITcpStream;
+  LHijacker: IHttpHijacker;
+  LResp: string;
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+  LProbe: string;
+const
+  REQ = 'GET /hijack HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Connection: keep-alive'#13#10#13#10;
+  RAW_RESP = 'HTTP/1.1 200 OK'#13#10 +
+             'content-length: 7'#13#10 +
+             'connection: keep-alive'#13#10#13#10 +
+             'hijack!';
+begin
+  LServerSideConn := nil;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/hijack', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    if not Supports(AW, IHttpHijacker, LHijacker) then
+      Fail('response writer does not support IHttpHijacker');
+    LServerSideConn := LHijacker.Hijack;
+    LServerSideConn.Write(RAW_RESP[1], SizeUInt(Length(RAW_RESP)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('hijack!', LResp) > 0, 'hijack owner wrote raw response');
+
+      platform_thread_sleep_ns(100000000); { let the server loop return }
+      Check(LServerSideConn <> nil, 'handler captured hijacked connection');
+      LProbe := '!';
+      LServerSideConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(1)));
+      LConn.Write(LProbe[1], SizeUInt(Length(LProbe)));
+      LN := LServerSideConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      CheckEqual(Int64(Length(LProbe)), Int64(LN),
+        'handler-owned stream can read after handler returns');
+      Check(Chr(LBuf[0]) = LProbe, 'handler-owned stream received probe byte');
+    finally
+      LConn.Close;
+      LServerSideConn := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -962,5 +1022,6 @@ begin
   T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
+  T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
   T.Summary;
 end.

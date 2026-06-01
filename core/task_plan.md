@@ -10,23 +10,16 @@ Phase 1: public contract audit and HTTP test baseline.
 
 ## Active Batch Checklist
 
-- [x] Re-read `task_plan.md` and `docs/nextpas.core.http.inbox.md`.
+- [x] Re-read HTTP inbox, API coverage, plan, findings, and progress.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
-- [x] Extract HTTP public API surfaces from `src/nextpas.core.http*.pas`.
-- [x] Build the public API coverage matrix.
-- [x] Run existing `tests/nextpas.core.http/*` baseline.
-- [x] Record pass/fail and heaptrc evidence.
-- [x] Refresh docs and progress after rerunning the two changed tests.
-- [x] Commit the documentation/baseline batch.
-- [x] Add focused coverage for `IHttpClient.Put/Delete/Patch/Head`.
-- [x] Run full HTTP suite after client coverage changes.
-- [x] Update inbox, findings, and progress for this coverage batch.
-- [x] Commit this coverage batch.
-- [x] Audit `IHttpTransport` / `IHttpServerTransport` public contract shape.
-- [x] Add focused shape coverage for `RoundTrip` and `ServeConn`.
-- [x] Run full HTTP suite after transport contract coverage changes.
+- [x] Add `IHttpHijacker` facade alias coverage and verify RED.
+- [x] Add `TH1ResponseWriter.Hijack` focused lifecycle coverage.
+- [x] Add server integration coverage proving hijack transfers connection ownership.
+- [x] Fix facade re-export and server close/shutdown ownership.
+- [x] Run focused GREEN tests with heaptrc evidence.
 - [x] Update inbox, coverage matrix, findings, and progress for this coverage batch.
-- [x] Commit this coverage batch.
+- [x] Run full HTTP suite after hijack lifecycle changes.
+- [ ] Complete `/codex` review, final git status check, and commit this coverage batch.
 
 ## Quality Gates
 
@@ -93,6 +86,7 @@ Phase 1: public contract audit and HTTP test baseline.
 | Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                                                    |
 | Treat empty DELETE body by behavior            | The public contract is no request body and zero content length, not the internal `Body=nil` representation.                             |
 | Treat transport coverage as shape-only         | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only. |
+| Transfer hijacked connection ownership         | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                |
 
 ## Errors Encountered
 
@@ -100,3 +94,4 @@ Phase 1: public contract audit and HTTP test baseline.
 | --------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
 | Root planning files described an old parser TryParse task | 1       | Replaced them with the active HTTP ownership plan while preserving old content in git history. |
 | Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                  |
+| Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.        |

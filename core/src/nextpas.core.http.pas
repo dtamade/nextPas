@@ -40,6 +40,7 @@ type
   IHttpClient = nextpas.core.http.intf.IHttpClient;
   IHttpTransport = nextpas.core.http.intf.IHttpTransport;
   IHttpServerTransport = nextpas.core.http.intf.IHttpServerTransport;
+  IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
 
   { Re-export callback types }
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
