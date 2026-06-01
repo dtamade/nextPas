@@ -37,6 +37,7 @@ type
   TTicker = nextpas.core.time.ticker.TTicker;
   TPeriod = nextpas.core.time.period.TPeriod;
 
+function DateTimeNow: TDateTime;
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate; inline;
 function TryParseISO8601Date(const AStr: string; out ADate: nextpas.core.time.date.TDate): Boolean; inline;
 function ParseISO8601Time(const AStr: string): nextpas.core.time.timeofday.TTimeOfDay; inline;
@@ -45,6 +46,31 @@ function ParseISO8601DateTime(const AStr: string): nextpas.core.time.datetime.TN
 function TryParseISO8601DateTime(const AStr: string; out ADT: nextpas.core.time.datetime.TNaiveDateTime): Boolean; inline;
 
 implementation
+
+uses
+  nextpas.core.platform.time;
+
+const
+  UNIX_EPOCH_TDATETIME = 25569.0;
+
+function DateTimeNow: TDateTime;
+var
+  LNowNs: Int64;
+  LDays: Int64;
+  LDayNs: Int64;
+begin
+  LNowNs := Int64(nextpas.core.platform.time.platform_realtime_ns) +
+    Int64(nextpas.core.platform.time.platform_utc_offset_seconds) * NS_PER_SEC;
+  LDays := LNowNs div NS_PER_DAY;
+  LDayNs := LNowNs mod NS_PER_DAY;
+  if LDayNs < 0 then
+  begin
+    Dec(LDays);
+    Inc(LDayNs, NS_PER_DAY);
+  end;
+
+  Result := UNIX_EPOCH_TDATETIME + LDays + (LDayNs / Double(NS_PER_DAY));
+end;
 
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate;
 begin

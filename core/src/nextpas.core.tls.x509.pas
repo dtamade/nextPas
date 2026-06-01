@@ -281,6 +281,9 @@ type
 
 implementation
 
+uses
+  nextpas.core.time;
+
 // ========================================================================
 // Base64 解码辅助函数 (必须在使用前声明)
 // ========================================================================
@@ -449,7 +452,7 @@ end;
 
 function TX509Validity.IsValid: Boolean;
 begin
-  Result := IsValidAt(Now);
+  Result := IsValidAt(nextpas.core.time.DateTimeNow);
 end;
 
 function TX509Validity.IsValidAt(ATime: TDateTime): Boolean;

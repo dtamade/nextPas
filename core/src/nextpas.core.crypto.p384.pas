@@ -33,6 +33,8 @@ function TryP384ValidatePublicKey(const APeerPublicKey: TBytes; out AError: stri
 implementation
 
 uses
+  nextpas.core.errors,
+  nextpas.core.base.utils,
   nextpas.core.tls.asn1,
   nextpas.core.crypto.bigint,
   nextpas.core.tls.random;

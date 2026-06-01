@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.platform,
+  nextpas.core.platform.time,
   nextpas.core.time,
   nextpas.core.time.base;
 
@@ -174,6 +175,35 @@ begin
   Check(LResolution >= 1, 'resolution must be at least one nanosecond');
 end;
 
+function DateTimeToLocalUnixNanos(const AValue: TDateTime): Int64;
+const
+  UNIX_EPOCH_TDATETIME = 25569.0;
+begin
+  Result := Round((AValue - UNIX_EPOCH_TDATETIME) * Double(NS_PER_DAY));
+end;
+
+procedure TestDateTimeNow;
+var
+  LBeforeNs: UInt64;
+  LAfterNs: UInt64;
+  LNow: TDateTime;
+  LNowNs: Int64;
+  LLowerBound: Int64;
+  LUpperBound: Int64;
+begin
+  LBeforeNs := platform_realtime_ns;
+  LNow := DateTimeNow;
+  LAfterNs := platform_realtime_ns;
+  LNowNs := DateTimeToLocalUnixNanos(LNow);
+
+  LLowerBound := Int64(LBeforeNs) + Int64(platform_utc_offset_seconds) * NS_PER_SEC - NS_PER_SEC;
+  LUpperBound := Int64(LAfterNs) + Int64(platform_utc_offset_seconds) * NS_PER_SEC + NS_PER_SEC;
+
+  Check(LNow > 40000, 'datetime now should be a modern date');
+  Check((LNowNs >= LLowerBound) and (LNowNs <= LUpperBound),
+    'datetime now should track platform realtime clock');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.time');
   T.Run('Duration zero', @TestDurationZero);
@@ -189,5 +219,6 @@ begin
   T.Run('Stopwatch accumulate', @TestStopwatchAccumulate);
   T.Run('Stopwatch reset', @TestStopwatchReset);
   T.Run('Platform time', @TestPlatformTime);
+  T.Run('DateTime now', @TestDateTimeNow);
   T.Summary;
 end.

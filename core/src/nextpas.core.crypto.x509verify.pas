@@ -5,7 +5,8 @@ unit nextpas.core.crypto.x509verify;
 interface
 
 uses
-  SysUtils, nextpas.core.text.conv, nextpas.core.tls.x509;
+  nextpas.core.base,
+  nextpas.core.text.conv, nextpas.core.tls.x509;
 
 type
   TX509TrustStore = class
@@ -49,6 +50,8 @@ function MatchHostname(const AHostname: string; ACert: TX509Certificate): Boolea
 implementation
 
 uses
+  nextpas.core.time,
+  nextpas.core.base.utils,
   nextpas.core.crypto.bigint,
   nextpas.core.crypto.hmac,
   nextpas.core.tls.tls13.servercertverify,
@@ -270,6 +273,7 @@ var
   I: Integer;
   LCurrent, LIssuer: TX509Certificate;
   LChainLen: Integer;
+  LNow: TDateTime;
 begin
   Result.IsValid := False;
   Result.ErrorCode := 0;
@@ -284,13 +288,14 @@ begin
     Exit;
   end;
 
+  LNow := nextpas.core.time.DateTimeNow;
   for I := 0 to LChainLen - 1 do
   begin
     LCurrent := AChain[I];
 
-    if LCurrent.Validity.IsValid = False then
+    if LCurrent.Validity.IsValidAt(LNow) = False then
     begin
-      if Now > LCurrent.Validity.NotAfter then
+      if LNow > LCurrent.Validity.NotAfter then
       begin
         Result.ErrorCode := X509_V_ERR_CERT_HAS_EXPIRED;
         Result.ErrorMessage := Format('Certificate expired: %s', [LCurrent.Subject.CommonName]);

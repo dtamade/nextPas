@@ -4,6 +4,7 @@ program test_x509;
 
 uses
   SysUtils, Classes,
+  nextpas.core.time,
   nextpas.core.tls.asn1, nextpas.core.tls.x509;
 
 var
@@ -114,6 +115,7 @@ var
   Validity: TX509Validity;
   AlgId: TX509AlgorithmIdentifier;
   Ext: TX509Extension;
+  LNow: TDateTime;
 begin
   WriteLn;
   WriteLn('=== 测试记录类型方法 ===');
@@ -152,6 +154,11 @@ begin
   Check('TX509Validity.IsValidAt (before)', not Validity.IsValidAt(EncodeDate(2023, 12, 31)));
   Check('TX509Validity.IsValidAt (after)', not Validity.IsValidAt(EncodeDate(2026, 1, 1)));
   Check('TX509Validity.ToString', Pos('Not Before', Validity.ToString) > 0);
+
+  LNow := DateTimeNow;
+  Validity.NotBefore := LNow - 1.0;
+  Validity.NotAfter := LNow + 1.0;
+  Check('TX509Validity.IsValid (now)', Validity.IsValid);
 
   // TX509Extension
   Ext.OID := '2.5.29.15';
