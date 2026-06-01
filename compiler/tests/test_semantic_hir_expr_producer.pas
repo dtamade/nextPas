@@ -79,6 +79,27 @@ begin
     Halt(ABaseExitCode + 3);
 end;
 
+procedure AssertRuntimeSymbolExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedName: string;
+  const ABaseExitCode: LongInt);
+var
+  Expr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 2);
+  if Expr.SymbolId = 0 then
+    Halt(ABaseExitCode + 3);
+  Symbol := AModel.SymbolAt(Expr.SymbolId - 1);
+  if Symbol.Name <> AExpectedName then
+    Halt(ABaseExitCode + 4);
+end;
+
 procedure TestHaltRuntimeExprProducer;
 var
   Model: TSemanticModel;
@@ -131,7 +152,36 @@ begin
   end;
 end;
 
+procedure TestRetRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'function AddOne(x: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Result := x + 4;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    '  Halt(AddOne(3));'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(20);
+    if Model.Status <> 'ready' then
+      Halt(21);
+    if not FindFirstNodeByKind(Model, 'ret-runtime', Node) then
+      Halt(22);
+    AssertRuntimeSymbolExpr(Model, Node, 'AddOne', 23);
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
+  TestRetRuntimeExprProducer;
 end.

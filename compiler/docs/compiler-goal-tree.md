@@ -100,3 +100,9 @@
   assignment/return/cond-br producer。TDD RED=`test_semantic_hir_expr_producer`
   退出 13；GREEN 后 focused tests + 完整重编译（43668 lines compiled）+
   137/137 LLVM smoke 全绿。
+- 2026-06-01 C3-B3：sema producer 第三刀，仅迁移 `ret-runtime` 返回值读取：
+  在 `Exit;` 与函数隐式收尾生成的 `ret-runtime` 节点上，保留旧
+  `var <retvar>` blob，同时附加指向当前返回变量的 `shekSymbolValue ExprId`。
+  本轮不回溯 `Result := ...` 的原始表达式树，只先把 return 消费面切到结构化
+  路径。TDD RED=`test_semantic_hir_expr_producer` 退出 23；GREEN 后 focused
+  tests + 完整重编译（43694 lines compiled）+ 137/137 LLVM smoke 全绿。

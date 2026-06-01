@@ -327,6 +327,8 @@ type
     function EvaluateStringConstant(const ANode: TGreenNode;
       out AValue: string): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
+    procedure AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
+      const AReturnVarName: string);
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
@@ -7090,6 +7092,24 @@ begin
   Result := True;
 end;
 
+procedure TSemanticAnalyzer.AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
+  const AReturnVarName: string);
+var
+  Children: array of LongInt;
+  ExprId, SymbolId: LongInt;
+begin
+  if (AHirNodeId <= 0) or (AReturnVarName = '') then
+    Exit;
+  SymbolId := FModel.FindSymbolByName(AReturnVarName);
+  if SymbolId <= 0 then
+    Exit;
+  SetLength(Children, 0);
+  ExprId := FModel.AddHirExpr(
+    shekSymbolValue, 0, SymbolId, Children, 0, '', '', 0, shvcScalar
+  );
+  FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
+end;
+
 function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
   const ANode: TGreenNode; out ABlob: string): Boolean;
 var
@@ -7370,8 +7390,11 @@ begin
       if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
         FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0, FCurrentRetVarName)
       else if FCurrentRetVarName <> '' then
-        FModel.AddTypedHirNode('ret-runtime', FCurrentRetVarName, 0, 0,
-          'var ' + FCurrentRetVarName + #10)
+      begin
+        NodeId := FModel.AddTypedHirNode('ret-runtime', FCurrentRetVarName, 0, 0,
+          'var ' + FCurrentRetVarName + #10);
+        AttachRuntimeReturnExpr(NodeId, FCurrentRetVarName);
+      end
       else
         FModel.AddTypedHirNode('ret-runtime', '0', 0, 0, 'int 0' + #10);
       FCurrentBlockTerminated := True;
@@ -9360,7 +9383,7 @@ var
   PtrReturnClass: string;
   Folded, Value: Int64;
   WorkQueue: array of LongInt;
-  WorkCount, WorkHead: LongInt;
+  NodeId, WorkCount, WorkHead: LongInt;
   Found: Boolean;
 begin
   if Length(FGenericWorkQueue) < Length(FProcedureBodies) + 64 then
@@ -9653,8 +9676,11 @@ begin
       if IsStrReturn then
         FModel.AddTypedHirNode('ret-str-runtime', RetVarName, 0, 0, RetVarName)
       else
-        FModel.AddTypedHirNode('ret-runtime', RetVarName, 0, 0,
+      begin
+        NodeId := FModel.AddTypedHirNode('ret-runtime', RetVarName, 0, 0,
           'var ' + RetVarName + #10);
+        AttachRuntimeReturnExpr(NodeId, RetVarName);
+      end;
     end;
     FModel.AddTypedHirNode('function-body-end', EffName, 0, 0, '');
     FCurrentBlockTerminated := SavedTerminated;
