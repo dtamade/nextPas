@@ -3,14 +3,30 @@ program test_config;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.fs,
   nextpas.core.text.conv,
   nextpas.core.errors,
   nextpas.core.os.env,
+  nextpas.core.time,
   nextpas.core.config,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+type
+  TConfigReloadProbe = class
+  private
+    FReloaded: Boolean;
+  public
+    procedure MarkReloaded(ASender: TConfig);
+    property Reloaded: Boolean read FReloaded;
+  end;
+
+procedure TConfigReloadProbe.MarkReloaded(ASender: TConfig);
+begin
+  FReloaded := ASender <> nil;
+end;
 
 { === GetString Tests === }
 
@@ -577,6 +593,79 @@ begin
   end;
 end;
 
+procedure TestReplaceFrom;
+var
+  LTarget: TConfig;
+  LSource: TConfig;
+begin
+  LTarget := TConfig.Create;
+  LSource := TConfig.Create;
+  try
+    LTarget.LoadFromIni('[server]' + #10 + 'host=old' + #10 + 'port=1000' + #10);
+    LSource.LoadFromIni('[server]' + #10 + 'host=new' + #10 + 'debug=true' + #10);
+
+    LTarget.ReplaceFrom(LSource);
+
+    CheckEqual('new', LTarget.GetString('server.host'), 'replaced value');
+    CheckEqual(False, LTarget.Has('server.port'), 'old key removed');
+    CheckEqual(True, LTarget.GetBool('server.debug'), 'new key copied');
+    CheckEqual(Int64(2), Int64(LTarget.Count), 'replacement count');
+  finally
+    LSource.Free;
+    LTarget.Free;
+  end;
+end;
+
+{ === Hot Reload Tests === }
+
+procedure TestConfigWatcherHotReloadIni;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LProbe: TConfigReloadProbe;
+  LPath: string;
+  LReloaded: Boolean;
+  LAttempt: Integer;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config.ini';
+  Remove(LPath);
+  WriteFileText(LPath, '[server]' + #10 + 'host=initial' + #10 + 'port=1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni(ReadFileText(LPath));
+    LProbe := TConfigReloadProbe.Create;
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfIni);
+    try
+      LWatcher.OnReload := @LProbe.MarkReloaded;
+
+      CheckEqual(False, LWatcher.CheckReload, 'unchanged file should not reload');
+
+      LReloaded := False;
+      for LAttempt := 0 to 20 do
+      begin
+        TSleep.ForDuration(TDuration.FromMilliseconds(20));
+        WriteFileText(LPath, '[server]' + #10 + 'host=updated' + #10 +
+          'port=2000' + #10 + 'extra=changed-size' + #10);
+        LReloaded := LWatcher.CheckReload;
+        if LReloaded then
+          Break;
+      end;
+
+      CheckEqual(True, LReloaded, 'modified file should reload');
+      CheckEqual('updated', LCfg.GetString('server.host'), 'reloaded host');
+      CheckEqual(Int64(2000), LCfg.GetInt('server.port'), 'reloaded port');
+      CheckEqual(True, LProbe.Reloaded, 'reload callback');
+      CheckEqual(False, LWatcher.CheckReload, 'stable file should not reload twice');
+    finally
+      LWatcher.Free;
+      LProbe.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -614,5 +703,7 @@ begin
   T.Run('LoadFromYaml.Basic', @TestLoadFromYamlBasic);
   T.Run('LoadFromToml.Section', @TestLoadFromTomlSection);
   T.Run('MultiSource.Override', @TestMultiSourceOverride);
+  T.Run('ReplaceFrom', @TestReplaceFrom);
+  T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
   T.Summary;
 end.
