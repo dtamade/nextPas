@@ -44,6 +44,29 @@ begin
   Check(R.Width = 2, 'ZWJ man+woman = 2 cols');
 end;
 
+procedure TestFamilyEmoji;
+var S: AnsiString; R: TGraphemeResult;
+begin
+  S := #$F0#$9F#$91#$A8 + #$E2#$80#$8D +
+       #$F0#$9F#$91#$A9 + #$E2#$80#$8D +
+       #$F0#$9F#$91#$A7 + #$E2#$80#$8D +
+       #$F0#$9F#$91#$A6;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(25), Int64(R.ByteLen), 'family emoji = full cluster bytes');
+  CheckEqual(Int64(7), Int64(R.CodePoints), 'family emoji = 7 cps');
+  CheckEqual(Int64(2), Int64(R.Width), 'family emoji = 2 cols');
+end;
+
+procedure TestSkinToneEmoji;
+var S: AnsiString; R: TGraphemeResult;
+begin
+  S := #$F0#$9F#$91#$8D + #$F0#$9F#$8F#$BD;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(8), Int64(R.ByteLen), 'thumbs up medium skin tone = full cluster bytes');
+  CheckEqual(Int64(2), Int64(R.CodePoints), 'thumbs up medium skin tone = 2 cps');
+  CheckEqual(Int64(2), Int64(R.Width), 'thumbs up medium skin tone = 2 cols');
+end;
+
 procedure TestRegionalIndicator;
 var S: AnsiString; R: TGraphemeResult;
 begin
@@ -85,6 +108,8 @@ begin
   T.Run('cjk', @TestCJK);
   T.Run('combining mark', @TestCombiningMark);
   T.Run('zwj emoji', @TestZWJEmoji);
+  T.Run('family emoji', @TestFamilyEmoji);
+  T.Run('skin tone emoji', @TestSkinToneEmoji);
   T.Run('regional indicator', @TestRegionalIndicator);
   T.Run('variation selector', @TestVariationSelector);
   T.Run('empty', @TestEmpty);

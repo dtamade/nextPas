@@ -98,6 +98,21 @@ begin
   CheckEqual(Int64(3), Int64(StringDisplayWidth('a' + #$F0#$9F#$98#$80)), 'a emoji');
 end;
 
+procedure TestEmojiClusterString;
+var
+  LFamily: AnsiString;
+  LSkinTone: AnsiString;
+begin
+  LFamily := #$F0#$9F#$91#$A8 + #$E2#$80#$8D +
+             #$F0#$9F#$91#$A9 + #$E2#$80#$8D +
+             #$F0#$9F#$91#$A7 + #$E2#$80#$8D +
+             #$F0#$9F#$91#$A6;
+  LSkinTone := #$F0#$9F#$91#$8D + #$F0#$9F#$8F#$BD;
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(LFamily)), 'family emoji cluster width');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(LSkinTone)), 'skin tone emoji cluster width');
+  CheckEqual(Int64(5), Int64(StringDisplayWidth('a' + LFamily + LSkinTone)), 'mixed emoji clusters width');
+end;
+
 { StringDisplayWidth - 组合标记不计宽 }
 procedure TestCombiningString;
 begin
@@ -185,6 +200,7 @@ begin
   T.Run('ascii string fast path', @TestAsciiString);
   T.Run('mixed cjk string', @TestMixedString);
   T.Run('emoji string', @TestEmojiString);
+  T.Run('emoji cluster string', @TestEmojiClusterString);
   T.Run('combining string', @TestCombiningString);
   T.Run('empty string', @TestEmptyString);
   T.Run('simd boundary 16B', @TestSimdBoundary16);

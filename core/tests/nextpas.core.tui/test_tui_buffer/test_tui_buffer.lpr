@@ -232,6 +232,31 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestFamilyEmoji;
+var LBuf: TBuffer; LWritten: Integer; S: AnsiString;
+begin
+  S := #$F0#$9F#$91#$A8 + #$E2#$80#$8D +
+       #$F0#$9F#$91#$A9 + #$E2#$80#$8D +
+       #$F0#$9F#$91#$A7 + #$E2#$80#$8D +
+       #$F0#$9F#$91#$A6 + 'B';
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, S, TStyle.Default);
+    Check(LWritten = 3, 'family emoji(2) + B(1) = 3 cols');
+  finally LBuf.Free; end;
+end;
+
+procedure TestSkinToneEmoji;
+var LBuf: TBuffer; LWritten: Integer; S: AnsiString;
+begin
+  S := #$F0#$9F#$91#$8D + #$F0#$9F#$8F#$BD + 'C';
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, S, TStyle.Default);
+    Check(LWritten = 3, 'skin tone emoji(2) + C(1) = 3 cols');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.buffer');
   T.Run('create empty', @TestCreateEmpty);
@@ -247,6 +272,8 @@ begin
   T.Run('style applied', @TestStyleApplied);
   T.Run('combining mark grapheme', @TestCombiningMark);
   T.Run('zwj emoji grapheme', @TestZWJEmoji);
+  T.Run('family emoji grapheme', @TestFamilyEmoji);
+  T.Run('skin tone emoji grapheme', @TestSkinToneEmoji);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

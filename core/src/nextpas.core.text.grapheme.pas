@@ -72,6 +72,7 @@ begin
   if (ACp >= $1AB0) and (ACp <= $1AFF) then Exit(gbExtend);
   if (ACp >= $1DC0) and (ACp <= $1DFF) then Exit(gbExtend);
   if (ACp >= $20D0) and (ACp <= $20F0) then Exit(gbExtend);
+  if (ACp >= $1F3FB) and (ACp <= $1F3FF) then Exit(gbExtend);
   if (ACp >= $FE00) and (ACp <= $FE0F) then Exit(gbExtend);
   if (ACp >= $FE20) and (ACp <= $FE2F) then Exit(gbExtend);
   if (ACp >= $E0100) and (ACp <= $E01EF) then Exit(gbExtend);
