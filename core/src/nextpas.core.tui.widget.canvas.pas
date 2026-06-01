@@ -28,7 +28,7 @@ type
     procedure DrawLine(X1, Y1, X2, Y2: Integer);
     procedure DrawRect(X1, Y1, X2, Y2: Integer);
     procedure DrawCircle(CX, CY, Radius: Integer);
-    procedure Plot(const Data: array of Double; PlotMax: Double);
+    procedure Plot(const AData: array of Double; APlotMax: Double);
     function WithStyle(const S: TStyle): ICanvas;
     property Width: Integer read GetWidth;
     property Height: Integer read GetHeight;
@@ -51,7 +51,7 @@ type
     procedure DrawLine(X1, Y1, X2, Y2: Integer);
     procedure DrawRect(X1, Y1, X2, Y2: Integer);
     procedure DrawCircle(CX, CY, Radius: Integer);
-    procedure Plot(const Data: array of Double; PlotMax: Double);
+    procedure Plot(const AData: array of Double; APlotMax: Double);
     function WithStyle(const S: TStyle): ICanvas;
 
     { IWidget }
@@ -181,26 +181,26 @@ begin
   end;
 end;
 
-procedure TCanvas.Plot(const Data: array of Double; PlotMax: Double);
+procedure TCanvas.Plot(const AData: array of Double; APlotMax: Double);
 var
   N, I: Integer;
   ActualMax: Double;
   PrevX, PrevY, CurX, CurY: Integer;
   Val: Double;
 begin
-  N := Length(Data);
+  N := Length(AData);
   if N = 0 then Exit;
-  ActualMax := PlotMax;
+  ActualMax := APlotMax;
   if ActualMax <= 0.0 then
   begin
     ActualMax := 0.0;
     for I := 0 to N - 1 do
-      if Data[I] > ActualMax then ActualMax := Data[I];
+      if AData[I] > ActualMax then ActualMax := AData[I];
   end;
   if ActualMax <= 0.0 then ActualMax := 1.0;
 
   PrevX := 0;
-  Val := Data[0];
+  Val := AData[0];
   if Val < 0.0 then Val := 0.0;
   if Val > ActualMax then Val := ActualMax;
   PrevY := FHeight - 1 - Trunc((Val / ActualMax) * (FHeight - 1) + 0.5);
@@ -211,7 +211,7 @@ begin
   begin
     if FWidth > 1 then CurX := (I * (FWidth - 1)) div (N - 1)
     else CurX := 0;
-    Val := Data[I];
+    Val := AData[I];
     if Val < 0.0 then Val := 0.0;
     if Val > ActualMax then Val := ActualMax;
     CurY := FHeight - 1 - Trunc((Val / ActualMax) * (FHeight - 1) + 0.5);

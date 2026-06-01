@@ -34,8 +34,8 @@ type
     function WithDividerStyle(const S: TStyle): ISplitPane;
     function WithDividerChar(const C: AnsiString): ISplitPane;
     function Split(const AArea: TRect; const AState: TSplitPaneState;
-      out Pane1, Pane2, Divider: TRect): Boolean;
-    procedure RenderDivider(const Divider: TRect; ABuffer: TBuffer);
+      out Pane1, Pane2, ADivider: TRect): Boolean;
+    procedure RenderDivider(const ADivider: TRect; ABuffer: TBuffer);
     function HandleMouse(const AArea: TRect; const M: TMouseEvent;
       var AState: TSplitPaneState): Boolean;
   end;
@@ -63,8 +63,8 @@ type
 
     { ISplitPane }
     function Split(const AArea: TRect; const AState: TSplitPaneState;
-      out Pane1, Pane2, Divider: TRect): Boolean;
-    procedure RenderDivider(const Divider: TRect; ABuffer: TBuffer);
+      out Pane1, Pane2, ADivider: TRect): Boolean;
+    procedure RenderDivider(const ADivider: TRect; ABuffer: TBuffer);
     function HandleMouse(const AArea: TRect; const M: TMouseEvent;
       var AState: TSplitPaneState): Boolean;
   end;
@@ -139,7 +139,7 @@ begin
 end;
 
 function TSplitPane.Split(const AArea: TRect; const AState: TSplitPaneState;
-  out Pane1, Pane2, Divider: TRect): Boolean;
+  out Pane1, Pane2, ADivider: TRect): Boolean;
 var
   Total, DivSize, Size1, Size2: Integer;
   R: Double;
@@ -147,7 +147,7 @@ begin
   Result := False;
   Pane1 := TRect.Make(0, 0, 0, 0);
   Pane2 := TRect.Make(0, 0, 0, 0);
-  Divider := TRect.Make(0, 0, 0, 0);
+  ADivider := TRect.Make(0, 0, 0, 0);
 
   if AArea.IsEmpty then Exit;
 
@@ -178,33 +178,33 @@ begin
   if FDirection = sdHorizontal then
   begin
     Pane1 := TRect.Make(AArea.X, AArea.Y, Size1, AArea.Height);
-    Divider := TRect.Make(AArea.X + Size1, AArea.Y, DivSize, AArea.Height);
+    ADivider := TRect.Make(AArea.X + Size1, AArea.Y, DivSize, AArea.Height);
     Pane2 := TRect.Make(AArea.X + Size1 + DivSize, AArea.Y, Size2, AArea.Height);
   end
   else
   begin
     Pane1 := TRect.Make(AArea.X, AArea.Y, AArea.Width, Size1);
-    Divider := TRect.Make(AArea.X, AArea.Y + Size1, AArea.Width, DivSize);
+    ADivider := TRect.Make(AArea.X, AArea.Y + Size1, AArea.Width, DivSize);
     Pane2 := TRect.Make(AArea.X, AArea.Y + Size1 + DivSize, AArea.Width, Size2);
   end;
   Result := True;
 end;
 
-procedure TSplitPane.RenderDivider(const Divider: TRect; ABuffer: TBuffer);
+procedure TSplitPane.RenderDivider(const ADivider: TRect; ABuffer: TBuffer);
 var I: Integer;
 begin
-  if Divider.IsEmpty then Exit;
+  if ADivider.IsEmpty then Exit;
   if not FShowDivider then Exit;
 
   if FDirection = sdHorizontal then
   begin
-    for I := 0 to Divider.Height - 1 do
-      ABuffer.SetStringN(Divider.X, Divider.Y + I, FDividerChar, 1, FDividerStyle);
+    for I := 0 to ADivider.Height - 1 do
+      ABuffer.SetStringN(ADivider.X, ADivider.Y + I, FDividerChar, 1, FDividerStyle);
   end
   else
   begin
-    for I := 0 to Divider.Width - 1 do
-      ABuffer.SetStringN(Divider.X + I, Divider.Y, FDividerChar, 1, FDividerStyle);
+    for I := 0 to ADivider.Width - 1 do
+      ABuffer.SetStringN(ADivider.X + I, ADivider.Y, FDividerChar, 1, FDividerStyle);
   end;
 end;
 

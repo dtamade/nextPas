@@ -30,7 +30,7 @@ type
     function WithDimBackground(Dim: Boolean): IModal;
     function WithStyle(const S: TStyle): IModal;
     function WithVisible(V: Boolean): IModal;
-    function ContentArea(const Container: TRect): TRect;
+    function ContentArea(const AContainer: TRect): TRect;
   end;
 
   TModal = class(TInterfacedObject, IWidget, IModal)
@@ -47,7 +47,7 @@ type
     function WithDimBackground(Dim: Boolean): IModal;
     function WithStyle(const S: TStyle): IModal;
     function WithVisible(V: Boolean): IModal;
-    function ContentArea(const Container: TRect): TRect;
+    function ContentArea(const AContainer: TRect): TRect;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -93,25 +93,25 @@ begin FStyle := S; Result := Self; end;
 function TModal.WithVisible(V: Boolean): IModal;
 begin FVisible := V; Result := Self; end;
 
-function TModal.ContentArea(const Container: TRect): TRect;
+function TModal.ContentArea(const AContainer: TRect): TRect;
 var W, H, X, Y: Integer;
 begin
   if FSize.UsePercent then
   begin
-    W := (Container.Width * FSize.WidthPct) div 100;
-    H := (Container.Height * FSize.HeightPct) div 100;
+    W := (AContainer.Width * FSize.WidthPct) div 100;
+    H := (AContainer.Height * FSize.HeightPct) div 100;
   end
   else
   begin
     W := FSize.Width;
     H := FSize.Height;
   end;
-  if W > Container.Width then W := Container.Width;
-  if H > Container.Height then H := Container.Height;
+  if W > AContainer.Width then W := AContainer.Width;
+  if H > AContainer.Height then H := AContainer.Height;
   if W < 1 then W := 1;
   if H < 1 then H := 1;
-  X := Container.X + (Container.Width - W) div 2;
-  Y := Container.Y + (Container.Height - H) div 2;
+  X := AContainer.X + (AContainer.Width - W) div 2;
+  Y := AContainer.Y + (AContainer.Height - H) div 2;
   Result := TRect.Make(X, Y, W, H);
 end;
 

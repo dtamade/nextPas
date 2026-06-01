@@ -37,7 +37,7 @@ type
     function WithActiveButtonStyle(const S: TStyle): IDialog;
     function WithDimBackground(Dim: Boolean): IDialog;
     function WithSelected(Idx: Integer): IDialog;
-    function CenteredArea(const Container: TRect): TRect;
+    function CenteredArea(const AContainer: TRect): TRect;
   end;
 
   TDialog = class(TInterfacedObject, IWidget, IDialog)
@@ -65,7 +65,7 @@ type
     function WithActiveButtonStyle(const S: TStyle): IDialog;
     function WithDimBackground(Dim: Boolean): IDialog;
     function WithSelected(Idx: Integer): IDialog;
-    function CenteredArea(const Container: TRect): TRect;
+    function CenteredArea(const AContainer: TRect): TRect;
 
     { IWidget }
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
@@ -129,14 +129,14 @@ begin FDimBackground := Dim; Result := Self; end;
 function TDialog.WithSelected(Idx: Integer): IDialog;
 begin FSelectedButton := Idx; Result := Self; end;
 
-function TDialog.CenteredArea(const Container: TRect): TRect;
+function TDialog.CenteredArea(const AContainer: TRect): TRect;
 var W, H, X, Y: Integer;
 begin
   W := FWidth; H := FHeight;
-  if W > Container.Width then W := Container.Width;
-  if H > Container.Height then H := Container.Height;
-  X := Container.X + (Container.Width - W) div 2;
-  Y := Container.Y + (Container.Height - H) div 2;
+  if W > AContainer.Width then W := AContainer.Width;
+  if H > AContainer.Height then H := AContainer.Height;
+  X := AContainer.X + (AContainer.Width - W) div 2;
+  Y := AContainer.Y + (AContainer.Height - H) div 2;
   Result := TRect.Make(X, Y, W, H);
 end;
 
