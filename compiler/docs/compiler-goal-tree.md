@@ -119,3 +119,10 @@
   初始化/步进仍走旧路径。TDD RED=`test_semantic_hir_expr_producer` 退出 43；
   GREEN 后 focused tests + 完整重编译（43753 lines compiled）+
   137/137 LLVM smoke 全绿。
+- 2026-06-02 C3-B6：sema producer 第六刀，迁移普通标量变量的 `Inc/Dec`
+  合成 `assign-runtime`：保留旧 `var x` + delta + `add/sub` blob，同时附加结构化
+  `shekBinaryOp`（`+`/`-`）表达式。field `Inc/Dec`、`for` 初始化/步进、
+  `call-runtime` 参数 blob、指针/lvalue 与 string/array/record/class ownership
+  场景继续留给后续节点。TDD RED=`test_semantic_hir_expr_producer` 退出 53；
+  GREEN 后 focused tests + 完整重编译（43803 lines compiled）+
+  137/137 LLVM smoke 全绿。C3 的安全单表达式 producer 面已足够，下一步进入 C4。

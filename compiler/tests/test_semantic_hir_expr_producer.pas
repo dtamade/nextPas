@@ -268,10 +268,68 @@ begin
   end;
 end;
 
+procedure TestIncRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var x: Integer;'#10 +
+    'begin'#10 +
+    '  x := 3;'#10 +
+    '  Inc(x, 4);'#10 +
+    '  Halt(x);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(50);
+    if Model.Status <> 'ready' then
+      Halt(51);
+    if not FindFirstNodeByKindAndOperandText(Model, 'assign-runtime',
+      'add', Node) then
+      Halt(52);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 53);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestDecRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var x: Integer;'#10 +
+    'begin'#10 +
+    '  x := 3;'#10 +
+    '  Dec(x, 2);'#10 +
+    '  Halt(x);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(60);
+    if Model.Status <> 'ready' then
+      Halt(61);
+    if not FindFirstNodeByKindAndOperandText(Model, 'assign-runtime',
+      'sub', Node) then
+      Halt(62);
+    AssertRuntimeBinaryExpr(Model, Node, '-', 63);
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
   TestRetRuntimeExprProducer;
   TestCondBrRuntimeExprProducer;
   TestAssignRuntimeExprProducer;
+  TestIncRuntimeExprProducer;
+  TestDecRuntimeExprProducer;
 end.

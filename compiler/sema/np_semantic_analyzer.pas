@@ -7334,6 +7334,56 @@ var
     if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
       FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
   end;
+
+  procedure AddIncDecAssignRuntimeNode(const ADestVar, AOp: string;
+    const ADeltaExprNode: TGreenNode; const AOperand: string);
+  var
+    Children: array of LongInt;
+    DeltaExprId, LocalNodeId, ResultExprId, SymbolExprId, SymbolId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'assign-runtime', ADestVar, 0, 0, ADestVar + #9 + AOperand
+    );
+    if Pos('.', ADestVar) <> 0 then
+      Exit;
+    if IsRuntimeStrVar(ADestVar) or IsRuntimeArrVar(ADestVar) or
+      IsRecordVar(ADestVar) or (LookupClassVar(ADestVar) <> '') then
+      Exit;
+    SymbolId := FModel.FindSymbolByName(ADestVar);
+    if SymbolId <= 0 then
+      Exit;
+    SetLength(Children, 0);
+    SymbolExprId := FModel.AddHirExpr(
+      shekSymbolValue, 0, SymbolId, Children, 0, '', '', 0, shvcScalar
+    );
+    if ADeltaExprNode <> nil then
+    begin
+      if not BuildRuntimeScalarHirExpr(ADeltaExprNode, DeltaExprId) then
+        Exit;
+    end
+    else
+    begin
+      SetLength(Children, 0);
+      DeltaExprId := FModel.AddHirExpr(
+        shekIntLiteral, 0, 0, Children, 1, '', '', 0, shvcScalar
+      );
+    end;
+    SetLength(Children, 2);
+    Children[0] := SymbolExprId;
+    Children[1] := DeltaExprId;
+    ResultExprId := FModel.AddHirExpr(
+      shekBinaryOp, 0, 0, Children, 0, '', AOp, 0, shvcScalar
+    );
+    FModel.SetTypedHirNodeExprId(LocalNodeId, ResultExprId);
+  end;
+
+  function IncDecStructuredOp(const ABlobOp: string): string;
+  begin
+    if ABlobOp = 'add' then
+      Result := '+'
+    else
+      Result := '-';
+  end;
 begin
   if ANode = nil then
     Exit;
@@ -8429,13 +8479,13 @@ begin
             begin
               if (Arg.ChildCount > ArgIndex + 1) and
                 EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
-                FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
-                  Decoded + #9 + 'var ' + Decoded + #10 + Operand +
-                  StringValue + #10)
+                AddIncDecAssignRuntimeNode(Decoded, IncDecStructuredOp(StringValue),
+                  Arg.ChildAt(ArgIndex + 1),
+                  'var ' + Decoded + #10 + Operand + StringValue + #10)
               else
-                FModel.AddTypedHirNode('assign-runtime', Decoded, 0, 0,
-                  Decoded + #9 + 'var ' + Decoded + #10 + 'int 1' + #10 +
-                  StringValue + #10);
+                AddIncDecAssignRuntimeNode(Decoded, IncDecStructuredOp(StringValue),
+                  nil,
+                  'var ' + Decoded + #10 + 'int 1' + #10 + StringValue + #10);
             end;
           end;
         end;
