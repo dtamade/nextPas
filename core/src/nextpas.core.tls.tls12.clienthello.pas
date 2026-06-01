@@ -5,7 +5,7 @@ unit nextpas.core.tls.tls12.clienthello;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.tls.tls12.ciphersuite;
 
 type
@@ -24,6 +24,7 @@ function BuildTLS12ClientHello(const AOptions: TTLS12ClientHelloOptions; const A
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.tls.tls12.wire;
 
 procedure AppendBytes(var ADest: TBytes; const ASrc: TBytes);
@@ -51,15 +52,23 @@ begin
   AppendByte(ADest, Byte(AValue));
 end;
 
+function StringToBytes(const AValue: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
 function BuildSNIExtension(const AHostname: string): TBytes;
 var
   LNameBytes: TBytes;
   LNameLen, LListLen: Integer;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   if AHostname = '' then Exit;
 
-  LNameBytes := TEncoding.ASCII.GetBytes(AHostname);
+  LNameBytes := StringToBytes(AHostname);
   LNameLen := Length(LNameBytes);
   LListLen := LNameLen + 3;
 
@@ -73,7 +82,7 @@ end;
 
 function BuildSupportedGroupsExtension: TBytes;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   AppendUInt16(Result, TLS12_EXT_SUPPORTED_GROUPS);
   AppendUInt16(Result, 6);
   AppendUInt16(Result, 4);
@@ -83,7 +92,7 @@ end;
 
 function BuildECPointFormatsExtension: TBytes;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   AppendUInt16(Result, TLS12_EXT_EC_POINT_FORMATS);
   AppendUInt16(Result, 2);
   AppendByte(Result, 1);
@@ -92,7 +101,7 @@ end;
 
 function BuildSignatureAlgorithmsExtension: TBytes;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   AppendUInt16(Result, TLS12_EXT_SIGNATURE_ALGORITHMS);
   AppendUInt16(Result, 8);
   AppendUInt16(Result, 6);
@@ -103,14 +112,14 @@ end;
 
 function BuildEMSExtension: TBytes;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   AppendUInt16(Result, TLS12_EXT_EXTENDED_MASTER_SECRET);
   AppendUInt16(Result, 0);
 end;
 
 function BuildRenegotiationInfoExtension(const ARenegotiatedConnection: TBytes): TBytes;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   AppendUInt16(Result, TLS12_EXT_RENEGOTIATION_INFO);
   AppendUInt16(Result, Word(Length(ARenegotiatedConnection) + 1));
   AppendByte(Result, Byte(Length(ARenegotiatedConnection)));
@@ -123,13 +132,13 @@ var
   LProtoBytes: TBytes;
   I: Integer;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   if Length(AProtocols) = 0 then Exit;
 
   SetLength(LProtoList, 0);
   for I := 0 to High(AProtocols) do
   begin
-    LProtoBytes := TEncoding.ASCII.GetBytes(AProtocols[I]);
+    LProtoBytes := StringToBytes(AProtocols[I]);
     AppendByte(LProtoList, Byte(Length(LProtoBytes)));
     AppendBytes(LProtoList, LProtoBytes);
   end;

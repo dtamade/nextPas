@@ -20,6 +20,72 @@ begin
   end;
 end;
 
+function ReadUInt16(const AData: TBytes; AOffset: Integer): Word;
+begin
+  Result := (Word(AData[AOffset]) shl 8) or Word(AData[AOffset + 1]);
+end;
+
+function TryFindClientHelloExtension(const AHello: TBytes; AExtensionType: Word;
+  out ADataOffset: Integer; out ADataLength: Integer): Boolean;
+var
+  LOffset: Integer;
+  LSessionLen: Integer;
+  LCipherLen: Integer;
+  LCompressionLen: Integer;
+  LExtensionsEnd: Integer;
+  LExtensionType: Word;
+  LExtensionLen: Integer;
+begin
+  Result := False;
+  ADataOffset := 0;
+  ADataLength := 0;
+
+  if (Length(AHello) < 4 + 2 + 32 + 1) or (AHello[0] <> TLS12_HANDSHAKE_CLIENT_HELLO) then
+    Exit;
+
+  LOffset := 4 + 2 + 32;
+  LSessionLen := AHello[LOffset];
+  Inc(LOffset);
+  if LOffset + LSessionLen + 2 > Length(AHello) then
+    Exit;
+  Inc(LOffset, LSessionLen);
+
+  LCipherLen := ReadUInt16(AHello, LOffset);
+  Inc(LOffset, 2);
+  if LOffset + LCipherLen + 1 > Length(AHello) then
+    Exit;
+  Inc(LOffset, LCipherLen);
+
+  LCompressionLen := AHello[LOffset];
+  Inc(LOffset);
+  if LOffset + LCompressionLen + 2 > Length(AHello) then
+    Exit;
+  Inc(LOffset, LCompressionLen);
+
+  LExtensionsEnd := LOffset + 2 + ReadUInt16(AHello, LOffset);
+  Inc(LOffset, 2);
+  if LExtensionsEnd > Length(AHello) then
+    Exit;
+
+  while LOffset + 4 <= LExtensionsEnd do
+  begin
+    LExtensionType := ReadUInt16(AHello, LOffset);
+    LExtensionLen := ReadUInt16(AHello, LOffset + 2);
+    Inc(LOffset, 4);
+    if LOffset + LExtensionLen > LExtensionsEnd then
+      Exit;
+
+    if LExtensionType = AExtensionType then
+    begin
+      ADataOffset := LOffset;
+      ADataLength := LExtensionLen;
+      Exit(True);
+    end;
+
+    Inc(LOffset, LExtensionLen);
+  end;
+end;
+
 procedure TestClientHelloStructure;
 var
   LOptions: TTLS12ClientHelloOptions;
@@ -85,8 +151,10 @@ var
   LOptions: TTLS12ClientHelloOptions;
   LRandom: TBytes;
   LHello: TBytes;
-  I: Integer;
-  LFound: Boolean;
+  LOffset: Integer;
+  LLength: Integer;
+  LExtLen: Integer;
+  LProtoListLen: Integer;
 begin
   WriteLn('Test: TLS 1.2 ClientHello with ALPN');
   LOptions.ServerName := 'test.com';
@@ -101,14 +169,46 @@ begin
   LHello := BuildTLS12ClientHello(LOptions, LRandom);
   Check(Length(LHello) > 50, 'ClientHello with ALPN should be substantial');
 
-  LFound := False;
-  for I := 0 to Length(LHello) - 2 do
-    if (LHello[I] = Byte(TLS12_EXT_ALPN shr 8)) and (LHello[I+1] = Byte(TLS12_EXT_ALPN)) then
-    begin
-      LFound := True;
-      Break;
-    end;
-  Check(LFound, 'ALPN extension should be present');
+  Check(TryFindClientHelloExtension(LHello, TLS12_EXT_ALPN, LOffset, LLength),
+    'ALPN extension should be present');
+  LExtLen := LLength;
+  LProtoListLen := ReadUInt16(LHello, LOffset);
+  Check(LExtLen = 14, 'ALPN extension length should match protocol list');
+  Check(LProtoListLen = 12, 'ALPN protocol list length should match h2/http1.1');
+  Check(LHello[LOffset + 2] = 2, 'First ALPN protocol length should be 2');
+  Check((LHello[LOffset + 3] = Ord('h')) and (LHello[LOffset + 4] = Ord('2')),
+    'First ALPN protocol should be h2 bytes');
+  Check(LHello[LOffset + 5] = 8, 'Second ALPN protocol length should be 8');
+  Check((LHello[LOffset + 6] = Ord('h')) and (LHello[LOffset + 13] = Ord('1')),
+    'Second ALPN protocol should be http/1.1 bytes');
+end;
+
+procedure TestClientHelloSNIUsesHostBytes;
+var
+  LOptions: TTLS12ClientHelloOptions;
+  LRandom: TBytes;
+  LHello: TBytes;
+  LOffset: Integer;
+  LLength: Integer;
+begin
+  WriteLn('Test: TLS 1.2 ClientHello SNI host bytes');
+  LOptions.ServerName := 'api.example';
+  LOptions.SupportEMS := False;
+  SetLength(LOptions.ALPNProtocols, 0);
+
+  SetLength(LRandom, 32);
+  FillChar(LRandom[0], 32, $CE);
+
+  LHello := BuildTLS12ClientHello(LOptions, LRandom);
+
+  Check(TryFindClientHelloExtension(LHello, TLS12_EXT_SERVER_NAME, LOffset, LLength),
+    'SNI extension should be present');
+  Check(LLength = 16, 'SNI extension length should match hostname');
+  Check(ReadUInt16(LHello, LOffset) = 14, 'SNI list length should match hostname');
+  Check(LHello[LOffset + 2] = 0, 'SNI name type should be host_name');
+  Check(ReadUInt16(LHello, LOffset + 3) = 11, 'SNI host length should be 11');
+  Check((LHello[LOffset + 5] = Ord('a')) and (LHello[LOffset + 15] = Ord('e')),
+    'SNI host bytes should be copied verbatim');
 end;
 
 procedure TestClientHelloEMS;
@@ -147,6 +247,7 @@ begin
   TestClientHelloStructure;
   TestClientHelloCipherSuites;
   TestClientHelloWithALPN;
+  TestClientHelloSNIUsesHostBytes;
   TestClientHelloEMS;
 
   WriteLn('');

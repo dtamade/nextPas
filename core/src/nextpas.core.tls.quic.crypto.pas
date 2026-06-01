@@ -5,7 +5,7 @@ unit nextpas.core.tls.quic.crypto;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 const
   QUIC_VERSION_1 = $00000001;
@@ -38,6 +38,14 @@ implementation
 uses
   nextpas.core.crypto.hkdf, nextpas.core.crypto.hash;
 
+function StringToBytes(const AValue: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
 function QUICDeriveInitialSecret(const AConnectionID: TBytes): TBytes;
 var
   LSalt: TBytes;
@@ -53,7 +61,7 @@ var
   LLabelBytes: TBytes;
   LPos: Integer;
 begin
-  LLabelBytes := TEncoding.ASCII.GetBytes('tls13 ' + ALabel);
+  LLabelBytes := StringToBytes('tls13 ' + ALabel);
   SetLength(LInfo, 2 + 1 + Length(LLabelBytes) + 1);
   LInfo[0] := Byte(ALength shr 8);
   LInfo[1] := Byte(ALength);

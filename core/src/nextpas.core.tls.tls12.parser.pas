@@ -5,7 +5,7 @@ unit nextpas.core.tls.tls12.parser;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TTLS12ServerHello = record
@@ -47,6 +47,7 @@ function TryParseTLS12Finished(const AData: TBytes; AOffset: Integer; ALength: I
 implementation
 
 uses
+  nextpas.core.text.conv,
   nextpas.core.tls.tls12.wire;
 
 function ReadUInt16(const AData: TBytes; AOffset: Integer): Word; inline;
@@ -57,6 +58,13 @@ end;
 function ReadUInt24(const AData: TBytes; AOffset: Integer): Integer; inline;
 begin
   Result := (Integer(AData[AOffset]) shl 16) or (Integer(AData[AOffset+1]) shl 8) or Integer(AData[AOffset+2]);
+end;
+
+function BytesToString(const AData: TBytes; AOffset, ALength: Integer): string;
+begin
+  SetLength(Result, ALength);
+  if ALength > 0 then
+    Move(AData[AOffset], Result[1], ALength);
 end;
 
 function TryParseTLS12ServerHello(const AData: TBytes; AOffset: Integer;
@@ -165,7 +173,7 @@ begin
             LProtoLen := AData[LPos];
             Inc(LPos);
             if LPos + LProtoLen <= AOffset + Integer(LExtDataLen) then
-              AServerHello.ALPNProtocol := TEncoding.ASCII.GetString(AData, LPos, LProtoLen);
+              AServerHello.ALPNProtocol := BytesToString(AData, LPos, LProtoLen);
           end;
         end;
     end;

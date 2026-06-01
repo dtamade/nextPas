@@ -51,6 +51,35 @@ begin
   Check(Length(LSH.ServerRandom) = 32, 'ServerRandom should be 32 bytes');
 end;
 
+procedure TestServerHelloParseALPN;
+var
+  LData: TBytes;
+  LSH: TTLS12ServerHello;
+  LError: string;
+  LOk: Boolean;
+begin
+  WriteLn('Test: Parse TLS 1.2 ServerHello ALPN');
+  SetLength(LData, 51);
+  LData[0] := 3; LData[1] := 3;
+  FillChar(LData[2], 32, $BC);
+  LData[34] := 0;
+  LData[35] := $C0; LData[36] := $2F;
+  LData[37] := 0;
+  LData[38] := 0; LData[39] := 11; // extensions length
+  LData[40] := 0; LData[41] := 16; // ALPN extension
+  LData[42] := 0; LData[43] := 7;  // extension data length
+  LData[44] := 0; LData[45] := 5;  // protocol_name_list length
+  LData[46] := 4;                  // selected protocol length
+  LData[47] := Ord('h');
+  LData[48] := Ord('t');
+  LData[49] := Ord('t');
+  LData[50] := Ord('p');
+
+  LOk := TryParseTLS12ServerHello(LData, 0, LSH, LError);
+  Check(LOk, 'ServerHello ALPN parse should succeed: ' + LError);
+  Check(LSH.ALPNProtocol = 'http', 'ALPN protocol should be copied from wire bytes');
+end;
+
 procedure TestGCMRecordRoundtrip;
 var
   LKey, LIV, LPlaintext, LEncrypted, LDecrypted: TBytes;
@@ -153,6 +182,7 @@ begin
   WriteLn('');
 
   TestServerHelloParse;
+  TestServerHelloParseALPN;
   TestGCMRecordRoundtrip;
   TestGCMRecordBadTag;
   TestEMSMasterSecret;

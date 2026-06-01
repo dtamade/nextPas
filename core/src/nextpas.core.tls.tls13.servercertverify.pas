@@ -150,6 +150,14 @@ begin
     Move(AData[0], Result[1], Length(AData));
 end;
 
+function StringToBytes(const AValue: string): TBytes;
+begin
+  Result := nil;
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
 function BlobLooksLikePEM(const ABlob: TBytes): Boolean;
 var
   LText: AnsiString;
@@ -2501,7 +2509,7 @@ begin
   if (Length(ATranscriptHash) <> 32) and (Length(ATranscriptHash) <> 48) then
     RaiseInvalidParameter('TLS13TranscriptHashSHA256');
 
-  LContextBytes := TEncoding.ASCII.GetBytes(TLS13_SERVER_CERTVERIFY_CONTEXT);
+  LContextBytes := StringToBytes(TLS13_SERVER_CERTVERIFY_CONTEXT);
 
   SetLength(Result, 64 + Length(LContextBytes) + 1 + Length(ATranscriptHash));
 
@@ -2530,7 +2538,7 @@ begin
   if (Length(ATranscriptHash) <> 32) and (Length(ATranscriptHash) <> 48) then
     RaiseInvalidParameter('TLS13TranscriptHash');
 
-  LContextBytes := TEncoding.ASCII.GetBytes(TLS13_CLIENT_CERTVERIFY_CONTEXT);
+  LContextBytes := StringToBytes(TLS13_CLIENT_CERTVERIFY_CONTEXT);
 
   SetLength(Result, 64 + Length(LContextBytes) + 1 + Length(ATranscriptHash));
 
