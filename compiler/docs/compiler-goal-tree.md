@@ -112,3 +112,10 @@
   `for` 的手工拼接循环条件暂不迁移。TDD RED=`test_semantic_hir_expr_producer`
   退出 33；GREEN 后 focused tests + 完整重编译（43739 lines compiled）+
   137/137 LLVM smoke 全绿。
+- 2026-06-02 C3-B5：sema producer 第五刀，仅迁移普通标量变量赋值
+  `assign-runtime`：例如 `x := x + 4` 会保留旧 `Operand` blob，同时在目标不是
+  dotted/string/array/record/class 变量时附加结构化 scalar `ExprId`。指针解引用、
+  field/array store、字符串/record/class 赋值、`Inc/Dec` 合成 blob 与 `for`
+  初始化/步进仍走旧路径。TDD RED=`test_semantic_hir_expr_producer` 退出 43；
+  GREEN 后 focused tests + 完整重编译（43753 lines compiled）+
+  137/137 LLVM smoke 全绿。

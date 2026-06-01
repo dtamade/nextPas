@@ -7317,6 +7317,23 @@ var
     if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
       FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
   end;
+
+  procedure AddScalarAssignRuntimeNode(const ADestVar: string;
+    const AExprNode: TGreenNode; const AOperand: string);
+  var
+    LocalExprId, LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'assign-runtime', ADestVar, 0, 0, ADestVar + #9 + AOperand
+    );
+    if Pos('.', ADestVar) <> 0 then
+      Exit;
+    if IsRuntimeStrVar(ADestVar) or IsRuntimeArrVar(ADestVar) or
+      IsRecordVar(ADestVar) or (LookupClassVar(ADestVar) <> '') then
+      Exit;
+    if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
+      FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
+  end;
 begin
   if ANode = nil then
     Exit;
@@ -8080,10 +8097,7 @@ begin
             else
             begin
               RegisterRuntimeVar(Decoded);
-              FModel.AddTypedHirNode(
-                'assign-runtime', Decoded, 0, 0,
-                Decoded + #9 + Operand
-              );
+              AddScalarAssignRuntimeNode(Decoded, Arg, Operand);
               if (LookupClassVar(Decoded) <> '') and
                 TypeMetaIsInterface(LookupClassVar(Decoded)) and
                 (Arg <> nil) and (Arg.NodeKind = gnkIdentifier) and
