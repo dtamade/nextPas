@@ -34,6 +34,7 @@ type
     ptssSetsid,
     ptssOpenSlave,
     ptssTiocsctty,
+    ptssChdir,
     ptssDup,
     ptssExec
   );

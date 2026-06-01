@@ -46,6 +46,23 @@ uses
 {$ENDIF}
   ;
 
+type
+  TPlatformPtySpawnWireError = packed record
+    Stage: UInt8;
+    Reserved: array[0..2] of UInt8;
+    ErrNo: Int32;
+  end;
+
+procedure WriteSpawnError(AFd: Int32; AStage: TPlatformPtySpawnStage; AErrNo: Int32);
+var
+  LWire: TPlatformPtySpawnWireError;
+begin
+  FillChar(LWire, SizeOf(LWire), 0);
+  LWire.Stage := Ord(AStage);
+  LWire.ErrNo := AErrNo;
+  write(AFd, @LWire, SizeOf(LWire));
+end;
+
 function platform_pty_open(const ASize: TPlatformPtySize;
   out APty: TPlatformPty): Int32;
 var
@@ -76,7 +93,7 @@ function platform_pty_spawn(var APty: TPlatformPty;
 var
   LErrPipe: array[0..1] of Int32;
   LPid: pid_t;
-  LStage: Int32;
+  LWire: TPlatformPtySpawnWireError;
   LN: ssize_t;
   LErrno: Int32;
 begin
@@ -106,25 +123,36 @@ begin
 
     if setsid < 0 then
     begin
-      LStage := Int32(ptssSetsid);
       LErrno := platform_get_errno;
-      write(LErrPipe[1], @LStage, SizeOf(LStage));
-      write(LErrPipe[1], @LErrno, SizeOf(LErrno));
+      WriteSpawnError(LErrPipe[1], ptssSetsid, LErrno);
       posix_exit(127);
     end;
 
     if ioctl(APty.FSlaveFd, TIOCSCTTY, Pointer(0)) < 0 then
     begin
-      LStage := Int32(ptssTiocsctty);
       LErrno := platform_get_errno;
-      write(LErrPipe[1], @LStage, SizeOf(LStage));
-      write(LErrPipe[1], @LErrno, SizeOf(LErrno));
+      WriteSpawnError(LErrPipe[1], ptssTiocsctty, LErrno);
       posix_exit(127);
     end;
 
-    dup2(APty.FSlaveFd, 0);
-    dup2(APty.FSlaveFd, 1);
-    dup2(APty.FSlaveFd, 2);
+    if dup2(APty.FSlaveFd, 0) < 0 then
+    begin
+      LErrno := platform_get_errno;
+      WriteSpawnError(LErrPipe[1], ptssDup, LErrno);
+      posix_exit(127);
+    end;
+    if dup2(APty.FSlaveFd, 1) < 0 then
+    begin
+      LErrno := platform_get_errno;
+      WriteSpawnError(LErrPipe[1], ptssDup, LErrno);
+      posix_exit(127);
+    end;
+    if dup2(APty.FSlaveFd, 2) < 0 then
+    begin
+      LErrno := platform_get_errno;
+      WriteSpawnError(LErrPipe[1], ptssDup, LErrno);
+      posix_exit(127);
+    end;
     if APty.FSlaveFd > 2 then
       close(APty.FSlaveFd);
     close(APty.FMasterFd);
@@ -133,10 +161,8 @@ begin
     begin
       if chdir(ACwd) <> 0 then
       begin
-        LStage := Int32(ptssExec);
         LErrno := platform_get_errno;
-        write(LErrPipe[1], @LStage, SizeOf(LStage));
-        write(LErrPipe[1], @LErrno, SizeOf(LErrno));
+        WriteSpawnError(LErrPipe[1], ptssChdir, LErrno);
         posix_exit(127);
       end;
     end;
@@ -146,10 +172,8 @@ begin
     else
       execvp(APath, AArgv);
 
-    LStage := Int32(ptssExec);
     LErrno := platform_get_errno;
-    write(LErrPipe[1], @LStage, SizeOf(LStage));
-    write(LErrPipe[1], @LErrno, SizeOf(LErrno));
+    WriteSpawnError(LErrPipe[1], ptssExec, LErrno);
     posix_exit(127);
   end;
 
@@ -158,17 +182,17 @@ begin
   close(APty.FSlaveFd);
   APty.FSlaveFd := -1;
 
-  LN := read(LErrPipe[0], @LStage, SizeOf(LStage));
+  FillChar(LWire, SizeOf(LWire), 0);
+  LN := read(LErrPipe[0], @LWire, SizeOf(LWire));
+  close(LErrPipe[0]);
 
-  if LN = SizeOf(LStage) then
+  if LN = SizeOf(LWire) then
   begin
-    read(LErrPipe[0], @LErrno, SizeOf(LErrno));
-    close(LErrPipe[0]);
-    AFailStage := TPlatformPtySpawnStage(LStage);
-    Exit(LErrno);
+    waitpid(LPid, nil, 0);
+    AFailStage := TPlatformPtySpawnStage(LWire.Stage);
+    Exit(LWire.ErrNo);
   end;
 
-  close(LErrPipe[0]);
   APid := Int32(LPid);
   Result := 0;
 end;
@@ -226,9 +250,9 @@ begin
   LSize.X := Int16(ASize.FCols);
   LSize.Y := Int16(ASize.FRows);
 
-  if not CreatePipe(LPipeInRead, LPipeInWrite, nil, 0) then
+  if not CreatePipe(@LPipeInRead, @LPipeInWrite, nil, 0) then
     Exit(Int32(GetLastError));
-  if not CreatePipe(LPipeOutRead, LPipeOutWrite, nil, 0) then
+  if not CreatePipe(@LPipeOutRead, @LPipeOutWrite, nil, 0) then
   begin
     CloseHandle(LPipeInRead);
     CloseHandle(LPipeInWrite);
@@ -256,7 +280,7 @@ function platform_pty_spawn(var APty: TPlatformPty;
   const ACwd: PAnsiChar; out APid: Int32;
   out AFailStage: TPlatformPtySpawnStage): Int32;
 var
-  LSiEx: STARTUPINFOEXW;
+  LSiEx: STARTUPINFOEXA;
   LPi: PROCESS_INFORMATION;
   LAttrSize: PtrUInt;
   LAttrList: Pointer;
