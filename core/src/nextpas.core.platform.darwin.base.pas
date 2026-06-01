@@ -157,6 +157,9 @@ const
 { socket constants - Darwin-specific values }
 {$I nextpas.core.platform.darwin.base.socket.inc}
 
+{ termios ioctl constants and winsize }
+{$I nextpas.core.platform.darwin.base.termios.inc}
+
 { stat structure - Darwin 64-bit (new iostructs layout) }
 const
   S_IFMT  = $F000;

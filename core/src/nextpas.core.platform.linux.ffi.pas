@@ -61,6 +61,10 @@ function splice(fd_in: cint; off_in: Pointer; fd_out: cint; off_out: Pointer; le
 function copy_file_range(fd_in: cint; off_in: Pointer; fd_out: cint; off_out: Pointer; len: size_t; flags: cuint): ssize_t; cdecl; external 'c' name 'copy_file_range';
 function prctl(option: cint; arg2: culong; arg3: culong; arg4: culong; arg5: culong): cint; cdecl; external 'c' name 'prctl';
 
+{ PTY — libutil }
+function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer; winp: Pointer): cint; cdecl; external 'util' name 'openpty';
+function login_tty(AFd: cint): cint; cdecl; external 'util' name 'login_tty';
+
 implementation
 
 end.

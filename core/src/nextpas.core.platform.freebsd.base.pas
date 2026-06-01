@@ -152,6 +152,9 @@ const
 { socket constants }
 {$I nextpas.core.platform.freebsd.base.socket.inc}
 
+{ termios ioctl constants and winsize }
+{$I nextpas.core.platform.freebsd.base.termios.inc}
+
 { stat structure - FreeBSD 12+ }
 const
   S_IFMT  = $F000;

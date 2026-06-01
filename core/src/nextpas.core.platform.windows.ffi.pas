@@ -145,6 +145,14 @@ function FindNextFileA(hFindFile: HANDLE; lpFindFileData: LPWIN32_FIND_DATAA): W
 { advapi32 FFI }
 {$I nextpas.core.platform.windows.ffi.advapi32.inc}
 
+{ ConPTY (Windows 10 1809+) }
+function CreatePseudoConsole(size: COORD; hInput: HANDLE; hOutput: HANDLE; dwFlags: DWORD; out phPC: HPCON): Int32; stdcall; external 'kernel32' name 'CreatePseudoConsole';
+procedure ClosePseudoConsole(hPC: HPCON); stdcall; external 'kernel32' name 'ClosePseudoConsole';
+function ResizePseudoConsole(hPC: HPCON; size: COORD): Int32; stdcall; external 'kernel32' name 'ResizePseudoConsole';
+function InitializeProcThreadAttributeList(lpAttributeList: Pointer; dwAttributeCount: DWORD; dwFlags: DWORD; var lpSize: PtrUInt): WINBOOL; stdcall; external 'kernel32' name 'InitializeProcThreadAttributeList';
+function UpdateProcThreadAttribute(lpAttributeList: Pointer; dwFlags: DWORD; Attribute: PtrUInt; lpValue: Pointer; cbSize: PtrUInt; lpPreviousValue: Pointer; lpReturnSize: Pointer): WINBOOL; stdcall; external 'kernel32' name 'UpdateProcThreadAttribute';
+procedure DeleteProcThreadAttributeList(lpAttributeList: Pointer); stdcall; external 'kernel32' name 'DeleteProcThreadAttributeList';
+
 implementation
 
 end.

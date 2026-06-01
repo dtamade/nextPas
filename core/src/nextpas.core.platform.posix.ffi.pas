@@ -177,6 +177,13 @@ function __error: PInt32; cdecl; external 'c' name '__error';
 function __error: PInt32; cdecl; external 'c' name '__error';
 {$ENDIF}
 
+{ PTY / session }
+function setsid: pid_t; cdecl; external 'c' name 'setsid';
+function posix_openpt(AFlags: cint): cint; cdecl; external 'c' name 'posix_openpt';
+function grantpt(AFd: cint): cint; cdecl; external 'c' name 'grantpt';
+function unlockpt(AFd: cint): cint; cdecl; external 'c' name 'unlockpt';
+function ptsname(AFd: cint): PAnsiChar; cdecl; external 'c' name 'ptsname';
+
 implementation
 
 end.
