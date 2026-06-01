@@ -71,7 +71,6 @@ type
 implementation
 
 uses
-  nextpas.core.text.utf8,
   nextpas.core.text.width,
   nextpas.core.text.grapheme;
 

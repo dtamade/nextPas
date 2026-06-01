@@ -5,8 +5,7 @@ unit nextpas.core.text.grapheme;
 interface
 
 uses
-  nextpas.core.text.utf8,
-  nextpas.core.text.width;
+  nextpas.core.text.utf8;
 
 type
   TGraphemeResult = record
@@ -18,6 +17,9 @@ type
 function GraphemeNext(const AData: PByte; ALen: SizeUInt): TGraphemeResult;
 
 implementation
+
+uses
+  nextpas.core.text.width;
 
 type
   TGBCategory = (

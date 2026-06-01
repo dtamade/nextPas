@@ -185,7 +185,10 @@ begin
     else
       FOut.AppendBytes(PAnsiChar(@APatches[LI].Cell.Glyph.Bytes[0]), LGlyphLen);
 
-    Inc(LCurX);
+    if APatches[LI].Cell.Width > 1 then
+      Inc(LCurX, APatches[LI].Cell.Width)
+    else
+      Inc(LCurX);
   end;
 end;
 

@@ -57,6 +57,7 @@ implementation
 
 uses
   nextpas.core.text.utf8,
+  nextpas.core.text.grapheme,
   nextpas.core.simd.cpuinfo;
 
 {$ifdef CPUX86_64}
@@ -227,7 +228,7 @@ end;
 function StringDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LDec: TUTF8DecodeResult;
+  LGR: TGraphemeResult;
   {$ifdef CPUX86_64}
   LMask: UInt32;
   LP: PByte;
@@ -284,21 +285,13 @@ begin
   if LPos = ALen then
     Exit(ALen);
 
-  { 非 ASCII 部分逐码点 }
+  { 非 ASCII 部分逐 grapheme cluster }
   Result := LPos;
   while LPos < ALen do
   begin
-    LDec := UTF8Decode(@AData[LPos], ALen - LPos);
-    if LDec.ByteLen = 0 then
-    begin
-      Inc(Result, 1);
-      Inc(LPos, 1);
-    end
-    else
-    begin
-      Inc(Result, CodepointWidth(LDec.CodePoint));
-      Inc(LPos, LDec.ByteLen);
-    end;
+    LGR := GraphemeNext(@AData[LPos], ALen - LPos);
+    Inc(Result, LGR.Width);
+    Inc(LPos, LGR.ByteLen);
   end;
   {$else}
   { 非 x86_64 标量路径 }
@@ -311,17 +304,10 @@ begin
   Result := LPos;
   while LPos < ALen do
   begin
-    LDec := UTF8Decode(@AData[LPos], ALen - LPos);
-    if LDec.ByteLen = 0 then
-    begin
-      Inc(Result, 1);
-      Inc(LPos, 1);
-    end
-    else
-    begin
-      Inc(Result, CodepointWidth(LDec.CodePoint));
-      Inc(LPos, LDec.ByteLen);
-    end;
+    LGR := GraphemeNext(@AData[LPos], ALen - LPos);
+    Inc(Result, LGR.Width);
+    Inc(LPos, LGR.ByteLen);
+  end;
   end;
   {$endif}
 end;

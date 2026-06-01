@@ -52,7 +52,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.text.width, nextpas.core.text.utf8;
+  SysUtils, nextpas.core.text.width;
 
 class function TBreadcrumb.New(const AItems: array of AnsiString): IBreadcrumb;
 var LSelf: TBreadcrumb; I: Integer;

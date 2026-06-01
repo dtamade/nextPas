@@ -211,6 +211,27 @@ begin
   end;
 end;
 
+procedure TestCombiningMark;
+var LBuf: TBuffer; LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, 'e' + #$CC#$81 + 'x', TStyle.Default);
+    Check(LWritten = 2, 'e+combining+x = 2 cols written');
+  finally LBuf.Free; end;
+end;
+
+procedure TestZWJEmoji;
+var LBuf: TBuffer; LWritten: Integer; S: AnsiString;
+begin
+  S := #$F0#$9F#$91#$A8 + #$E2#$80#$8D + #$F0#$9F#$91#$A9 + 'A';
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, S, TStyle.Default);
+    Check(LWritten = 3, 'ZWJ emoji(2) + A(1) = 3 cols');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.buffer');
   T.Run('create empty', @TestCreateEmpty);
@@ -224,6 +245,8 @@ begin
   T.Run('diff into', @TestDiffInto);
   T.Run('resize', @TestResize);
   T.Run('style applied', @TestStyleApplied);
+  T.Run('combining mark grapheme', @TestCombiningMark);
+  T.Run('zwj emoji grapheme', @TestZWJEmoji);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

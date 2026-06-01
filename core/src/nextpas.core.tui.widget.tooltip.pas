@@ -54,7 +54,7 @@ type
 implementation
 
 uses
-  SysUtils, nextpas.core.text.width, nextpas.core.text.utf8;
+  SysUtils, nextpas.core.text.width;
 
 class function TTooltip.New(const AText: AnsiString): ITooltip;
 var LSelf: TTooltip;
