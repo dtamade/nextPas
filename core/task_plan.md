@@ -1,51 +1,46 @@
-# Task Plan: reflect/marshal dynarray support
+# Task Plan: parser TryParse API compliance
 
 ## Goal
-Implement dynamic array reflection metadata, visitor dispatch, JSON marshal/unmarshal, and heaptrc-verified tests using only FPC RTL dynarray APIs.
+Add backward-compatible TryParse facade APIs for JSON, YAML, TOML, and XML parser modules following `docs/api-conventions.md`, with focused tests and leak-aware verification.
 
 ## Current Phase
-Phase 1
+Complete
 
 ## Phases
 
+### Phase 0: Conventions and discovery
+- [x] Read `docs/api-conventions.md`.
+- [x] Confirm actual parse function names, document types, and error/HasError surfaces.
+- [x] Locate relevant test files and existing compile/run conventions.
+- **Status:** complete
+
 ### Phase 1: RED tests
-- [x] Extend `tests/nextpas.core.json/test_json_marshal/test_json_marshal.lpr` with named dynamic array types and coverage for int, string, record, empty, null, replacement, and round-trip.
-- [x] Build test target and confirm the new tests fail before implementation.
+- [x] Add TryParse success/failure tests for JSON.
+- [x] Add TryParse success/failure tests for YAML.
+- [x] Add TryParse success/failure tests for TOML.
+- [x] Add TryParse success/failure tests for XML, including failed-output ownership.
+- [x] Compile modified tests and confirm expected failures before production code.
 - **Status:** complete
 
-### Phase 2: Reflection surface
-- [x] Extend `TFieldDef` with element metadata and typeinfo pointer.
-- [x] Add `VisitDynArray` to `ITypeVisitor` and `TBaseTypeVisitor`.
-- [x] Add `AddDynArrayField` to `ITypeRegistry` and `TTypeRegistry`.
-- [x] Dispatch `fkDynArray` in `TTypeRegistry.Visit`.
+### Phase 2: Thin wrapper APIs
+- [x] Add interface and implementation declarations for `TryJsonParse`.
+- [x] Add interface and implementation declarations for `TryYamlParse`.
+- [x] Add interface and implementation declarations for `TryTomlParse`.
+- [x] Add interface and implementation declarations for `TryXmlParse`.
 - **Status:** complete
 
-### Phase 3: RTL wrapper
-- [x] Create `src/nextpas.core.reflect.dynarray.pas`.
-- [x] Wrap `DynArraySize`, `DynArraySetLength`, `DynArrayClear`, and element pointer arithmetic.
-- **Status:** complete
-
-### Phase 4: JSON marshal/unmarshal
-- [x] Marshal arrays with `DynArrayGetLength` and per-element primitive/record writing.
-- [x] Unmarshal arrays transactionally using a temporary dynarray and rollback on failure.
-- [x] Handle JSON null by `DynArrayFree`.
-- **Status:** complete
-
-### Phase 5: Interface implementers and verification
-- [x] Grep all `ITypeVisitor` implementers and add `VisitDynArray` declarations/implementations as needed.
-- [x] Compile and run the JSON marshal test with the requested command.
-- [x] Confirm all existing 9 tests still pass and heaptrc reports no leaks.
-- [x] Check `git status` and report touched files.
+### Phase 3: Verification and cleanup
+- [x] Compile and run modified tests with heaptrc where supported.
+- [x] Check git diff/status and remove accidental generated outputs.
+- [x] Record PASS/FAIL and leak evidence.
 - **Status:** complete
 
 ## Decisions
 | Decision | Rationale |
 |---|---|
-| Use user-provided FPC 3.3.1 RTL signatures exactly | Avoid unsafe dynarray header assumptions |
-| Use named array TypeInfo in tests | `TypeInfo(array of T)` is explicitly forbidden |
-| Make unmarshal fail the whole call only for failed array element conversion | Missing or mismatched field nodes preserve existing behavior by skipping |
+| Keep TryParse as thin facade wrappers | User explicitly requested backward-compatible wrapper APIs and no parsing logic duplication |
 
 ## Errors Encountered
 | Error | Attempt | Resolution |
 |---|---|---|
-| `ITypeRegistry` has no `AddDynArrayField` | RED compile of extended JSON test | Expected pre-implementation failure; proceed with reflection API |
+| Unrelated config/ini files were modified in the worktree by closeout | 1 | Confirmed they are outside this parser TryParse task and left them untouched |

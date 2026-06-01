@@ -29,6 +29,7 @@ type
 
 function YamlParse(const AInput: string): IYamlDocument; overload;
 function YamlParse(const AInput: TStringView): IYamlDocument; overload;
+function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
 
 implementation
 
@@ -100,6 +101,12 @@ end;
 function YamlParse(const AInput: TStringView): IYamlDocument;
 begin
   Result := TYamlDocumentImpl.CreateFromView(AInput);
+end;
+
+function TryYamlParse(const AInput: string; out ADoc: IYamlDocument): Boolean;
+begin
+  ADoc := YamlParse(AInput);
+  Result := not ADoc.HasError;
 end;
 
 end.

@@ -29,6 +29,7 @@ type
 
 function TomlParse(const AInput: string): ITomlDocument; overload;
 function TomlParse(const AInput: TStringView): ITomlDocument; overload;
+function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean;
 function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument; overload;
 function TomlParseWith(const AInput: TStringView; const AAllocator: IAllocator): ITomlDocument; overload;
 
@@ -299,6 +300,12 @@ end;
 function TomlParse(const AInput: TStringView): ITomlDocument;
 begin
   Result := TTomlDocumentImpl.CreateFromView(AInput, DefaultAllocator);
+end;
+
+function TryTomlParse(const AInput: string; out ADoc: ITomlDocument): Boolean;
+begin
+  ADoc := TomlParse(AInput);
+  Result := not ADoc.HasError;
 end;
 
 function TomlParseWith(const AInput: string; const AAllocator: IAllocator): ITomlDocument;

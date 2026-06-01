@@ -302,6 +302,53 @@ begin
   end;
 end;
 
+procedure TestTryLoadFromIniValid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    CheckEqual(True, LCfg.TryLoadFromIni('[app]' + #10 + 'name=nextpas' + #10, LError),
+      'TryLoadFromIni valid');
+    CheckEqual('', LError, 'valid ini clears error');
+    CheckEqual('nextpas', LCfg.GetString('app.name'), 'valid ini loads key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadFromJsonValid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    CheckEqual(True, LCfg.TryLoadFromJson('{"host":"localhost","port":8080}', LError),
+      'TryLoadFromJson valid');
+    CheckEqual('', LError, 'valid json clears error');
+    CheckEqual('localhost', LCfg.GetString('host'), 'valid json loads host');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadFromJsonInvalid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    CheckEqual(False, LCfg.TryLoadFromJson('{not valid json', LError),
+      'TryLoadFromJson invalid');
+    Check(LError <> '', 'invalid json returns error');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === LoadFromEnv Tests === }
 
 procedure TestLoadFromEnvBasic;
@@ -687,6 +734,9 @@ begin
   T.Run('LoadFromIni.GlobalKeys', @TestLoadFromIniGlobalKeys);
   T.Run('LoadFromJson.Basic', @TestLoadFromJsonBasic);
   T.Run('LoadFromJson.Types', @TestLoadFromJsonTypes);
+  T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
+  T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
+  T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
   T.Run('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
   T.Run('LoadFromEnv.Override', @TestLoadFromEnvOverride);
   T.Run('Has', @TestHas);

@@ -169,6 +169,26 @@ begin
   Check(LDoc.HasError, 'error on missing :');
 end;
 
+procedure TestTryYamlParseSuccess;
+var
+  LDoc: IYamlDocument;
+begin
+  Check(TryYamlParse('{name: Alice, enabled: true}', LDoc), 'try parse success');
+  Check(LDoc <> nil, 'doc assigned');
+  Check(not LDoc.HasError, 'no error');
+  Check(LDoc.Root.MapGet('name').AsStr.ToString = 'Alice', 'name');
+  Check(LDoc.Root.MapGet('enabled').AsBool = True, 'enabled');
+end;
+
+procedure TestTryYamlParseFailureReturnsDiagnosticDoc;
+var
+  LDoc: IYamlDocument;
+begin
+  Check(not TryYamlParse('{a: 1, b}', LDoc), 'try parse failure');
+  Check(LDoc <> nil, 'diagnostic doc assigned');
+  Check(LDoc.HasError, 'diagnostic doc has error');
+end;
+
 procedure TestStringify;
 var
   LDoc: IYamlDocument;
@@ -329,6 +349,8 @@ begin
   T.Run('Map key/value at', @TestMapKeyAt);
   T.Run('Doc start marker', @TestDocStartMarker);
   T.Run('Error handling', @TestErrorHandling);
+  T.Run('TryYamlParse success', @TestTryYamlParseSuccess);
+  T.Run('TryYamlParse failure returns diagnostic doc', @TestTryYamlParseFailureReturnsDiagnosticDoc);
   T.Run('Stringify', @TestStringify);
   T.Run('Stringify pretty', @TestStringifyPretty);
   T.Run('Round-trip', @TestRoundTrip);

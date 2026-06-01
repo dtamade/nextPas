@@ -43,6 +43,7 @@ const
   xtkDoctype         = nextpas.core.xml.base.xtkDoctype;
 
 function XmlParse(const AInput: string): TXmlDocument; inline;
+function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
 function XmlTokenize(const AInput: string): TXmlTokenArray;
 function XmlDecodeEntities(const AStr: string): string; inline;
 function XmlEncodeText(const AStr: string): string; inline;
@@ -50,9 +51,27 @@ function XmlEncodeAttr(const AStr: string): string; inline;
 
 implementation
 
+uses
+  SysUtils;
+
 function XmlParse(const AInput: string): TXmlDocument;
 begin
   Result := TXmlDocument.Parse(AInput);
+end;
+
+function TryXmlParse(const AInput: string; out ADoc: TXmlDocument): Boolean;
+begin
+  ADoc := nil;
+  try
+    ADoc := XmlParse(AInput);
+    Result := True;
+  except
+    on EXmlError do
+    begin
+      FreeAndNil(ADoc);
+      Result := False;
+    end;
+  end;
 end;
 
 function XmlTokenize(const AInput: string): TXmlTokenArray;

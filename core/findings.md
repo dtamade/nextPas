@@ -1,36 +1,28 @@
-# Findings: reflect/marshal dynarray support
+# Findings: parser TryParse API compliance
 
 ## Requirements
-- Add dynamic array metadata to `TFieldDef`.
-- Extend visitor and registry APIs with dynamic array support.
-- Wrap RTL dynarray functions without manually touching headers.
-- Marshal and unmarshal JSON arrays for primitive and record elements.
-- Preserve transaction semantics during unmarshal.
-- Extend existing JSON marshal tests and verify heaptrc zero leaks.
+- Read `docs/api-conventions.md` first.
+- Add `TryJsonParse`, `TryYamlParse`, `TryTomlParse`, and `TryXmlParse`.
+- Preserve existing parse APIs exactly.
+- For JSON/YAML/TOML, return parsed document through the `out` parameter even when `HasError` is true.
+- For XML, catch `EXmlError`, free any assigned class document, and return `False`.
+- Add success/failure tests for each parser facade.
+- Verify tests and memory leak behavior.
 
 ## Research Findings
-- `fkDynArray` already exists in `TFieldKind`, but `TFieldDef` does not yet store element metadata or typeinfo.
-- `ITypeVisitor` currently has no dynamic array method; the main concrete visitors inherit from `TBaseTypeVisitor`.
-- `TTypeRegistry.Visit` already does centralized per-kind dispatch, so `fkDynArray` should be added there.
-- `TJsonWriter` already supports `BeginArray` and `EndArray`; nested record marshal can reuse `FRegistry.Visit`.
-- `TJsonValue` supports `IsArray`, `ArrayLen`, and `ArrayGet`.
-- Current JSON marshal test has 9 tests covering simple, nested, missing fields, and round-trip behavior.
-
-## Implementation Notes
-- Dynamic array field pointers must be treated as `PPointer` pointing to the dynarray variable.
-- Array data pointer is `AArrayPtr^`; element pointer is `PtrUInt(AArrayPtr^) + Index * ElementSize`.
-- `DynArrayClear` should be used for both old field values and temporary rollback arrays.
+- `docs/api-conventions.md` requires parser modules to keep existing `Parse` APIs and add `TryXxx` as a supplemental branch-friendly form.
+- JSON facade already exports `JsonParse` and `JsonParseWith`; `IJsonDocument` exposes `HasError` and `Error`.
+- YAML facade already exports `YamlParse` overloads; `IYamlDocument` exposes `HasError` and `Error`.
+- TOML facade already exports `TomlParse` and `TomlParseWith`; `ITomlDocument` exposes `HasError` and `Error`.
+- XML facade exports `XmlParse(const AInput: string): TXmlDocument` and re-exports `EXmlError`; document ownership is manual because `TXmlDocument` is a class.
+- Best-fit existing test files are:
+  - `tests/nextpas.core.json/test_json_facade/test_json_facade.lpr`
+  - `tests/nextpas.core.yaml/test_yaml_facade/test_yaml_facade.lpr`
+  - `tests/nextpas.core.toml/test_toml_facade/test_toml_facade.lpr`
+  - `tests/nextpas.core.xml/test_xml/test_xml.lpr`
+- These facade tests already have dedicated `Makefile`s using `-gh -gl`, so they are the most direct place to add API-surface verification and leak checks.
 
 ## Issues Encountered
 | Issue | Resolution |
 |---|---|
-| Existing planning files described a previous log review | Replaced them with this task's plan/findings/progress |
-
-## Resources
-- `src/nextpas.core.reflect.base.pas`
-- `src/nextpas.core.reflect.intf.pas`
-- `src/nextpas.core.reflect.pas`
-- `src/nextpas.core.reflect.dynarray.pas`
-- `src/nextpas.core.json.marshal.pas`
-- `src/nextpas.core.reflect.marshal.pas`
-- `tests/nextpas.core.json/test_json_marshal/test_json_marshal.lpr`
+| `/home/dtamade/.codex/memories/MEMORY.md` is missing in this environment | Continued with system-provided memory summary and live repo inspection |

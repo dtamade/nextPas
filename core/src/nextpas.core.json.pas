@@ -31,6 +31,7 @@ type
 { Parse JSON string into a document. Returns IJsonDocument (auto-released). }
 function JsonParse(const AInput: string): IJsonDocument; overload;
 function JsonParse(const AInput: TStringView): IJsonDocument; overload;
+function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean;
 
 { Parse with custom allocator (arena/pool for bulk allocation). }
 function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument; overload;
@@ -296,6 +297,12 @@ end;
 function JsonParse(const AInput: TStringView): IJsonDocument;
 begin
   Result := TJsonDocumentImpl.CreateFromView(AInput, DefaultAllocator);
+end;
+
+function TryJsonParse(const AInput: string; out ADoc: IJsonDocument): Boolean;
+begin
+  ADoc := JsonParse(AInput);
+  Result := not ADoc.HasError;
 end;
 
 function JsonParseWith(const AInput: string; const AAllocator: IAllocator): IJsonDocument;
