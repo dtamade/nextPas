@@ -44,7 +44,7 @@
 | 节点 | 内容 | 依赖 | 状态 |
 |------|------|------|------|
 | **C0** | 137 smoke 基线冻结 + 本目标树固化 | — | ✅ 2026-06-01 |
-| **C1** | 债务3 第一刀：target facts 接入 emitter，去硬编码 triple/datalayout | C0 | 🎯 进行中 |
+| **C1** | 债务3 第一刀：target facts 接入 emitter，去硬编码 triple/datalayout | C0 | ✅ 2026-06-01 |
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ⬜ |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ⬜ |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ⬜ |
@@ -79,3 +79,7 @@
 ## 变更记录
 
 - 2026-06-01 C0：固化本目标树。4 债务路线图与 Codex 研究确认。
+- 2026-06-01 C1：target facts 接入 emitter（双构造器 overload，去硬编码 triple/datalayout，
+  用上 toml 完整 datalayout）。修复 merge `5de44530` 对 sema 的 156 行回归。137/137 全绿。
+  **Codex 建议（C4 采纳）**：债务2 起把 emitter 的裸字符串参数升级为结构化 `TCodegenTargetInfo`
+  （由 TTargetFactsView 派生），承载宽度/指针宽度/ABI 对齐/调用约定；默认回退只留 legacy 无参构造器。
