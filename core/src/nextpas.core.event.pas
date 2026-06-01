@@ -28,8 +28,6 @@ function EventDataPtr(AValue: Pointer): TEventData; inline;
 
 implementation
 
-uses
-
 type
   TSubscriptionEntry = record
     ID: TSubscriptionID;
