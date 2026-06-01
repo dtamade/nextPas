@@ -4,14 +4,14 @@
 
 ## 当前在做什么
 
-- 编译器主线停在 `C3-B5`：普通标量变量赋值的 `assign-runtime` 已接入结构化 `ExprId`，同时保留旧 assignment blob。
-- 本轮核心取舍：只覆盖 `x := x + 4` 这类 plain scalar var；指针解引用、field/array store、字符串/record/class、`Inc/Dec` 和 `for` 合成赋值仍走旧 blob。
-- 最近验证：`scripts/rebuild-compiler.sh` 输出 `43753 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 编译器主线停在 `C3-B6`：普通标量变量赋值和 `Inc/Dec` 合成 `assign-runtime` 已接入结构化 `ExprId`，同时保留旧 blob。
+- 当前结论：C3 的安全单表达式 producer 面已经足够；`call-runtime` 参数列表、`for` 合成循环赋值、field/address/lvalue 场景不适合继续用单个 `ExprId` 硬迁移。
+- 最近验证：`scripts/rebuild-compiler.sh` 输出 `43803 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. `C3-B6`：判断是否再迁移一个安全 scalar producer，或停止 C3 进入 C4。
-2. `C4`：把整数宽度从单一 `i64` 推进到真实标量宽度。
+1. `C4`：把整数宽度从单一 `i64` 推进到真实标量宽度，先设计 TypeId -> HIR type 的宽度/符号来源。
+2. `C4` 后续：补 cast/extend/trunc、signedness，明确 `sdiv/udiv` 与 `icmp signed/unsigned`。
 3. `C5`：补 `lvalue/address` 模型，修 `P^.Field`、`@Arr[i]` 一类地址表达式。
 4. `C6`：补 allocator 和真实释放。
 5. `C7/C8`：多目标、优化、自举探针。
@@ -26,4 +26,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 当前批次：[`compiler/docs/plans/2026-06-02-c3b5-assign-expr-producer.md`](../compiler/docs/plans/2026-06-02-c3b5-assign-expr-producer.md)
+- 当前批次：[`compiler/docs/plans/2026-06-02-c3b6-incdec-expr-producer.md`](../compiler/docs/plans/2026-06-02-c3b6-incdec-expr-producer.md)
