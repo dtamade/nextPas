@@ -349,6 +349,57 @@ begin
   end;
 end;
 
+procedure TestTryLoadShortVariantsInvalid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"keep":"value"}');
+
+    CheckEqual(False, LCfg.TryLoadJson('{not valid json', LError),
+      'TryLoadJson invalid');
+    Check(LError <> '', 'TryLoadJson returns error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadJson preserves existing');
+
+    CheckEqual(False, LCfg.TryLoadYaml('{a: *missing}', LError),
+      'TryLoadYaml invalid');
+    Check(LError <> '', 'TryLoadYaml returns error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadYaml preserves existing');
+
+    CheckEqual(False, LCfg.TryLoadToml('key = ', LError),
+      'TryLoadToml invalid');
+    Check(LError <> '', 'TryLoadToml returns error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadToml preserves existing');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadShortVariantsValid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    CheckEqual(True, LCfg.TryLoadJson('{"json":"ok"}', LError), 'TryLoadJson valid');
+    CheckEqual('', LError, 'TryLoadJson clears error');
+    CheckEqual('ok', LCfg.GetString('json'), 'TryLoadJson loads key');
+
+    CheckEqual(True, LCfg.TryLoadYaml('yaml: ok' + #10, LError), 'TryLoadYaml valid');
+    CheckEqual('', LError, 'TryLoadYaml clears error');
+    CheckEqual('ok', LCfg.GetString('yaml'), 'TryLoadYaml loads key');
+
+    CheckEqual(True, LCfg.TryLoadToml('toml = "ok"' + #10, LError), 'TryLoadToml valid');
+    CheckEqual('', LError, 'TryLoadToml clears error');
+    CheckEqual('ok', LCfg.GetString('toml'), 'TryLoadToml loads key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === LoadFromEnv Tests === }
 
 procedure TestLoadFromEnvBasic;
@@ -713,6 +764,44 @@ begin
   end;
 end;
 
+procedure TestConfigWatcherBadJsonRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_json.json';
+  Remove(LPath);
+  WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfJson);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, '{"server":{"host":');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -737,6 +826,8 @@ begin
   T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
   T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
   T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
+  T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);
+  T.Run('TryLoad.ShortVariantsValid', @TestTryLoadShortVariantsValid);
   T.Run('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
   T.Run('LoadFromEnv.Override', @TestLoadFromEnvOverride);
   T.Run('Has', @TestHas);
@@ -755,5 +846,6 @@ begin
   T.Run('MultiSource.Override', @TestMultiSourceOverride);
   T.Run('ReplaceFrom', @TestReplaceFrom);
   T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
+  T.Run('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
   T.Summary;
 end.

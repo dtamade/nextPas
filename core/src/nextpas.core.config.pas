@@ -22,6 +22,8 @@ uses
 type
   TStringArray = array of string;
 
+  EConfigError = class(EParseError);
+
   TConfigEntry = record
     Key: string;
     Value: string;
@@ -48,6 +50,9 @@ type
     function TryLoadFromJson(const AContent: string; out AError: string): Boolean;
     function TryLoadFromYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadFromToml(const AContent: string; out AError: string): Boolean;
+    function TryLoadJson(const AContent: string; out AError: string): Boolean;
+    function TryLoadYaml(const AContent: string; out AError: string): Boolean;
+    function TryLoadToml(const AContent: string; out AError: string): Boolean;
     procedure LoadFromEnv(const APrefix: string);
     procedure SetDefault(const AKey, AValue: string);
 
@@ -481,9 +486,8 @@ var
   LDoc: IJsonDocument;
 begin
   LDoc := JsonParse(AContent);
-  { 解析失败静默保留已有数据（最小侵入；EConfigError/TryLoadJson 留待下一轮） }
   if LDoc.HasError then
-    Exit;
+    raise EConfigError.Create(FormatJsonLoadError(LDoc.Error));
   LoadConfigFromJsonDocument(Self, LDoc);
 end;
 
@@ -493,7 +497,7 @@ var
 begin
   LDoc := YamlParse(AContent);
   if LDoc.HasError then
-    Exit;
+    raise EConfigError.Create(FormatYamlLoadError(LDoc.Error));
   LoadConfigFromYamlDocument(Self, LDoc);
 end;
 
@@ -503,7 +507,7 @@ var
 begin
   LDoc := TomlParse(AContent);
   if LDoc.HasError then
-    Exit;
+    raise EConfigError.Create(FormatTomlLoadError(LDoc.Error));
   LoadConfigFromTomlDocument(Self, LDoc);
 end;
 
@@ -599,6 +603,21 @@ begin
       Result := False;
     end;
   end;
+end;
+
+function TConfig.TryLoadJson(const AContent: string; out AError: string): Boolean;
+begin
+  Result := TryLoadFromJson(AContent, AError);
+end;
+
+function TConfig.TryLoadYaml(const AContent: string; out AError: string): Boolean;
+begin
+  Result := TryLoadFromYaml(AContent, AError);
+end;
+
+function TConfig.TryLoadToml(const AContent: string; out AError: string): Boolean;
+begin
+  Result := TryLoadFromToml(AContent, AError);
 end;
 
 procedure TConfig.LoadFromEnv(const APrefix: string);

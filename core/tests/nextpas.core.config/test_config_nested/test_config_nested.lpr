@@ -335,18 +335,53 @@ begin
   end;
 end;
 
-procedure TestMalformedNoCorruption;
+procedure TestMalformedLoadRaisesConfigError;
 var
   LCfg: TConfig;
+  LRaised: Boolean;
 begin
   LCfg := TConfig.Create;
   try
     LCfg.LoadFromJson('{"good":"value"}');
-    { 解析失败应静默保留已有数据，不损坏 }
-    LCfg.LoadFromJson('{not valid json');
-    CheckEqual('value', LCfg.GetString('good'), 'kept after malformed');
-    LCfg.LoadFromYaml(': : : bad');
+
+    LRaised := False;
+    try
+      LCfg.LoadFromJson('{not valid json');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('JSON parse error', E.Message) > 0, 'json error message');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'bad json raises');
+    CheckEqual('value', LCfg.GetString('good'), 'kept after bad json');
+
+    LRaised := False;
+    try
+      LCfg.LoadFromYaml('{a: *missing}');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('YAML parse error', E.Message) > 0, 'yaml error message');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'bad yaml raises');
     CheckEqual('value', LCfg.GetString('good'), 'kept after bad yaml');
+
+    LRaised := False;
+    try
+      LCfg.LoadFromToml('key = ');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('TOML parse error', E.Message) > 0, 'toml error message');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'bad toml raises');
+    CheckEqual('value', LCfg.GetString('good'), 'kept after bad toml');
   finally
     LCfg.Free;
   end;
@@ -375,6 +410,6 @@ begin
   T.Run('Json.TopLevelArray', @TestJsonTopLevelArray);
   T.Run('Json.TopLevelScalar', @TestJsonTopLevelScalar);
   T.Run('Yaml.TopLevelSequence', @TestYamlTopLevelSequence);
-  T.Run('Malformed.NoCorruption', @TestMalformedNoCorruption);
+  T.Run('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);
   T.Summary;
 end.
