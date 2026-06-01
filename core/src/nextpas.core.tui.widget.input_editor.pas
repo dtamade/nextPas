@@ -161,15 +161,21 @@ type
 
 implementation
 
+uses
+  nextpas.core.text.grapheme;
+
 type
   TEditorAdv = record ByteLen, Width: Integer; Codepoint: UInt32; end;
 
 function EditorGraphemeAt(const ABuf; ALen, AOffset: Integer): TEditorAdv; inline;
-var LDec: TUTF8DecodeResult;
+var LGR: TGraphemeResult; LDec: TUTF8DecodeResult;
 begin
+  LGR := GraphemeNext(@PByte(@ABuf)[AOffset], ALen - AOffset);
+  Result.ByteLen := LGR.ByteLen;
+  Result.Width := LGR.Width;
   LDec := UTF8Decode(@PByte(@ABuf)[AOffset], ALen - AOffset);
-  if LDec.ByteLen = 0 then begin Result.ByteLen := 1; Result.Width := 1; Result.Codepoint := $FFFD; end
-  else begin Result.ByteLen := LDec.ByteLen; Result.Width := CodepointWidth(LDec.CodePoint); Result.Codepoint := LDec.CodePoint; end;
+  if LDec.ByteLen > 0 then Result.Codepoint := LDec.CodePoint
+  else Result.Codepoint := $FFFD;
 end;
 
 const

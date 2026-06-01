@@ -61,18 +61,17 @@ type
 implementation
 
 uses
-  nextpas.core.text.utf8,
-  nextpas.core.text.width;
+  nextpas.core.text.grapheme, nextpas.core.text.width;
 
 type
   TGaugeAdv = record ByteLen, Width: Integer; end;
 
 function GaugeGraphemeAt(const ABuf: AnsiString; ALen, AOffset: Integer): TGaugeAdv; inline;
-var LDec: TUTF8DecodeResult;
+var LGR: TGraphemeResult;
 begin
-  LDec := UTF8Decode(@PByte(Pointer(ABuf))[AOffset], ALen - AOffset);
-  if LDec.ByteLen = 0 then begin Result.ByteLen := 1; Result.Width := 1; end
-  else begin Result.ByteLen := LDec.ByteLen; Result.Width := CodepointWidth(LDec.CodePoint); end;
+  LGR := GraphemeNext(@PByte(Pointer(ABuf))[AOffset], ALen - AOffset);
+  Result.ByteLen := LGR.ByteLen;
+  Result.Width := LGR.Width;
 end;
 
 const

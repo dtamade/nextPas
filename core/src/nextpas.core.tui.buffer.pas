@@ -127,7 +127,8 @@ implementation
 
 uses
   nextpas.core.text.utf8,
-  nextpas.core.text.width;
+  nextpas.core.text.width,
+  nextpas.core.text.grapheme;
 
 type
   { 单个 grapheme 解码结果（byte 长度 + 显示宽度 + 码点） }
@@ -141,24 +142,12 @@ type
   非法字节返回 ByteLen=1 / Width=1 / Codepoint=$FFFD，调用方可继续前进。 }
 function GraphemeAt(const ABuf; ALen, AOffset: Integer): TGraphemeAdvance; inline;
 var
-  LDec: TUTF8DecodeResult;
-  LPtr: PByte;
+  LGR: TGraphemeResult;
 begin
-  LPtr := PByte(@ABuf);
-  LDec := UTF8Decode(@LPtr[AOffset], ALen - AOffset);
-  if LDec.ByteLen = 0 then
-  begin
-    { 非法/截断：跳过一字节，按宽度 1 计 }
-    Result.ByteLen := 1;
-    Result.Width := 1;
-    Result.Codepoint := $FFFD;
-  end
-  else
-  begin
-    Result.ByteLen := LDec.ByteLen;
-    Result.Codepoint := LDec.CodePoint;
-    Result.Width := CodepointWidth(LDec.CodePoint);
-  end;
+  LGR := GraphemeNext(@PByte(@ABuf)[AOffset], ALen - AOffset);
+  Result.ByteLen := LGR.ByteLen;
+  Result.Width := LGR.Width;
+  Result.Codepoint := $FFFD;
 end;
 
 { TBuffer }

@@ -72,7 +72,8 @@ implementation
 
 uses
   nextpas.core.text.utf8,
-  nextpas.core.text.width;
+  nextpas.core.text.width,
+  nextpas.core.text.grapheme;
 
 type
   TGraphemeAdvance = record
@@ -82,24 +83,12 @@ type
   end;
 
 function GraphemeAt(const ABuf; ALen, AOffset: Integer): TGraphemeAdvance; inline;
-var
-  LDec: TUTF8DecodeResult;
-  LPtr: PByte;
+var LGR: TGraphemeResult;
 begin
-  LPtr := PByte(@ABuf);
-  LDec := UTF8Decode(@LPtr[AOffset], ALen - AOffset);
-  if LDec.ByteLen = 0 then
-  begin
-    Result.ByteLen := 1;
-    Result.Width := 1;
-    Result.Codepoint := $FFFD;
-  end
-  else
-  begin
-    Result.ByteLen := LDec.ByteLen;
-    Result.Codepoint := LDec.CodePoint;
-    Result.Width := CodepointWidth(LDec.CodePoint);
-  end;
+  LGR := GraphemeNext(@PByte(@ABuf)[AOffset], ALen - AOffset);
+  Result.ByteLen := LGR.ByteLen;
+  Result.Width := LGR.Width;
+  Result.Codepoint := $FFFD;
 end;
 
 { TOverlayBuffer }

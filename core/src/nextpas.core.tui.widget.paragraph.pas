@@ -69,8 +69,7 @@ const
 implementation
 
 uses
-  nextpas.core.text.utf8,
-  nextpas.core.text.width;
+  nextpas.core.text.grapheme;
 
 type
   TGraphemeAdv = record
@@ -80,19 +79,11 @@ type
 
 function GraphemeAt(const ABuf: AnsiString; ALen, AOffset: Integer): TGraphemeAdv; inline;
 var
-  LDec: TUTF8DecodeResult;
+  LGR: TGraphemeResult;
 begin
-  LDec := UTF8Decode(@PByte(Pointer(ABuf))[AOffset], ALen - AOffset);
-  if LDec.ByteLen = 0 then
-  begin
-    Result.ByteLen := 1;
-    Result.Width := 1;
-  end
-  else
-  begin
-    Result.ByteLen := LDec.ByteLen;
-    Result.Width := CodepointWidth(LDec.CodePoint);
-  end;
+  LGR := GraphemeNext(@PByte(Pointer(ABuf))[AOffset], ALen - AOffset);
+  Result.ByteLen := LGR.ByteLen;
+  Result.Width := LGR.Width;
 end;
 
 function GraphemeWidthRange(const AStr: AnsiString; AByteStart, AByteEnd: Integer): Integer;
