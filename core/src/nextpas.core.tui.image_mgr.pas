@@ -363,6 +363,8 @@ begin
           FSlots[SlotIdx].PlacedArea := P.Area;
         end;
       end;
+    else
+      { ipAuto / ipHalfBlock: no image protocol output }
     end;
   end;
 
