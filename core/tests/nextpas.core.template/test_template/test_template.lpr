@@ -347,6 +347,160 @@ begin
   CheckEqual('99', LCtx.GetVar('Count'));
 end;
 
+{ === New Feature Tests === }
+
+procedure Test_NestedField;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('User.Name', 'Alice');
+  CheckEqual('Hello Alice', TemplateRender('Hello {{.User.Name}}', LCtx));
+end;
+
+procedure Test_CompareEq_True;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Status', 'active');
+  CheckEqual('yes', TemplateRender('{{if eq .Status "active"}}yes{{else}}no{{end}}', LCtx));
+end;
+
+procedure Test_CompareEq_False;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Status', 'inactive');
+  CheckEqual('no', TemplateRender('{{if eq .Status "active"}}yes{{else}}no{{end}}', LCtx));
+end;
+
+procedure Test_CompareNe;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Status', 'inactive');
+  CheckEqual('different', TemplateRender('{{if ne .Status "active"}}different{{else}}same{{end}}', LCtx));
+end;
+
+procedure Test_CompareGt_Numeric;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Age', '25');
+  CheckEqual('adult', TemplateRender('{{if gt .Age "18"}}adult{{else}}minor{{end}}', LCtx));
+end;
+
+procedure Test_CompareLt_Numeric;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Age', '10');
+  CheckEqual('minor', TemplateRender('{{if lt .Age "18"}}minor{{else}}adult{{end}}', LCtx));
+end;
+
+procedure Test_CompareGe_Equal;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Score', '18');
+  CheckEqual('pass', TemplateRender('{{if ge .Score "18"}}pass{{else}}fail{{end}}', LCtx));
+end;
+
+procedure Test_CompareLe_Equal;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Score', '18');
+  CheckEqual('ok', TemplateRender('{{if le .Score "18"}}ok{{else}}over{{end}}', LCtx));
+end;
+
+procedure Test_CompareGe_Greater;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Score', '20');
+  CheckEqual('pass', TemplateRender('{{if ge .Score "18"}}pass{{else}}fail{{end}}', LCtx));
+end;
+
+procedure Test_CompareLe_Less;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Score', '10');
+  CheckEqual('ok', TemplateRender('{{if le .Score "18"}}ok{{else}}over{{end}}', LCtx));
+end;
+
+function ExclaimFunc(const AValue: string): string;
+begin
+  Result := AValue + '!';
+end;
+
+procedure Test_CustomFunc;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'World');
+  LCtx.RegisterFunc('exclaim', @ExclaimFunc);
+  CheckEqual('World!', TemplateRender('{{.Name | exclaim}}', LCtx));
+end;
+
+function ReverseFunc(const AValue: string): string;
+var
+  LI, LLen: Integer;
+begin
+  LLen := Length(AValue);
+  SetLength(Result, LLen);
+  for LI := 1 to LLen do
+    Result[LLen - LI + 1] := AValue[LI];
+end;
+
+procedure Test_CustomFunc_Chain;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'hello');
+  LCtx.RegisterFunc('reverse', @ReverseFunc);
+  CheckEqual('OLLEH', TemplateRender('{{.Name | reverse | upper}}', LCtx));
+end;
+
+procedure Test_VarAssign;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'Alice');
+  CheckEqual('Hello Alice', TemplateRender('{{$x := .Name}}Hello {{$x}}', LCtx));
+end;
+
+procedure Test_VarAssign_WithFilter;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'alice');
+  CheckEqual('ALICE', TemplateRender('{{$u := .Name | upper}}{{$u}}', LCtx));
+end;
+
+procedure Test_CompareElse;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Role', 'guest');
+  CheckEqual('denied', TemplateRender('{{if eq .Role "admin"}}granted{{else}}denied{{end}}', LCtx));
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.template');
   T.Run('SimpleVar', @Test_SimpleVar);
@@ -385,6 +539,22 @@ begin
   T.Run('GetList_Existing', @Test_GetList_Existing);
   T.Run('GetList_Missing', @Test_GetList_Missing);
   T.Run('SetInt_GetVar', @Test_SetInt_GetVar);
+  { New feature tests }
+  T.Run('NestedField', @Test_NestedField);
+  T.Run('CompareEq_True', @Test_CompareEq_True);
+  T.Run('CompareEq_False', @Test_CompareEq_False);
+  T.Run('CompareNe', @Test_CompareNe);
+  T.Run('CompareGt_Numeric', @Test_CompareGt_Numeric);
+  T.Run('CompareLt_Numeric', @Test_CompareLt_Numeric);
+  T.Run('CompareGe_Equal', @Test_CompareGe_Equal);
+  T.Run('CompareLe_Equal', @Test_CompareLe_Equal);
+  T.Run('CompareGe_Greater', @Test_CompareGe_Greater);
+  T.Run('CompareLe_Less', @Test_CompareLe_Less);
+  T.Run('CustomFunc', @Test_CustomFunc);
+  T.Run('CustomFunc_Chain', @Test_CustomFunc_Chain);
+  T.Run('VarAssign', @Test_VarAssign);
+  T.Run('VarAssign_WithFilter', @Test_VarAssign_WithFilter);
+  T.Run('CompareElse', @Test_CompareElse);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

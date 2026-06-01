@@ -15,11 +15,15 @@ type
     class function NewV4: TUuid; static;
     class function NewV7: TUuid; static;
     class function NewV7At(const ATimestampMs: UInt64): TUuid; static;
+    class function NewV5(const ANamespace: TUuid; const AName: string): TUuid; static;
     class function Parse(const AStr: string): TUuid; static;
     class function TryParse(const AStr: string; out AUuid: TUuid): Boolean; static;
     class function Nil_: TUuid; static;
+    class function Max: TUuid; static;
+    class function FromBytes(const ABytes: array of Byte): TUuid; static;
     function ToString: string;
     function ToStringNoDash: string;
+    function ToURN: string;
     function Version: Byte;
     function Variant: Byte;
     function IsNil: Boolean;
@@ -39,8 +43,11 @@ function UuidIsValid(const AStr: string): Boolean;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.id.rng,
-  nextpas.core.platform.time;
+  nextpas.core.platform.time,
+  nextpas.core.hash.intf,
+  nextpas.core.hash.sha1;
 
 const
   HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
@@ -111,6 +118,32 @@ begin
   Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80;
 end;
 
+class function TUuid.NewV5(const ANamespace: TUuid; const AName: string): TUuid;
+var
+  LHasher: IHasher;
+  LDigest: array[0..19] of Byte;
+begin
+  LHasher := NewSHA1;
+  LHasher.Write(ANamespace.FBytes[0], 16);
+  if Length(AName) > 0 then
+    LHasher.Write(AName[1], Length(AName));
+  LHasher.Sum(LDigest[0], 20);
+  Move(LDigest[0], Result.FBytes[0], 16);
+  Result.FBytes[6] := (Result.FBytes[6] and $0F) or $50; { version 5 }
+  Result.FBytes[8] := (Result.FBytes[8] and $3F) or $80; { variant 10xx }
+end;
+
+class function TUuid.FromBytes(const ABytes: array of Byte): TUuid;
+var
+  LI, LLen: Integer;
+begin
+  FillChar(Result.FBytes, 16, 0);
+  LLen := Length(ABytes);
+  if LLen > 16 then LLen := 16;
+  for LI := 0 to LLen - 1 do
+    Result.FBytes[LI] := ABytes[LI];
+end;
+
 class function TUuid.TryParse(const AStr: string; out AUuid: TUuid): Boolean;
 var
   LI, LJ, LHi, LLo: Int32;
@@ -148,6 +181,11 @@ begin
   FillChar(Result.FBytes, 16, 0);
 end;
 
+class function TUuid.Max: TUuid;
+begin
+  FillChar(Result.FBytes, 16, $FF);
+end;
+
 function TUuid.ToString: string;
 begin
   FormatUuid(FBytes, Result);
@@ -162,6 +200,11 @@ begin
     Result[LI * 2 + 1] := HEX_CHARS[FBytes[LI] shr 4];
     Result[LI * 2 + 2] := HEX_CHARS[FBytes[LI] and $0F];
   end;
+end;
+
+function TUuid.ToURN: string;
+begin
+  Result := 'urn:uuid:' + ToString;
 end;
 
 function TUuid.Version: Byte;
