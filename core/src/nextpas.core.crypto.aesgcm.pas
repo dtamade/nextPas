@@ -5,7 +5,7 @@ unit nextpas.core.crypto.aesgcm;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TAESBlock = array[0..15] of Byte;

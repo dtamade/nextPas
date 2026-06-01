@@ -5,7 +5,7 @@ unit nextpas.core.crypto.tls12record;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 function TLS12CBCEncrypt_SHA256(
   const AEncKey, AMACKey: TBytes;

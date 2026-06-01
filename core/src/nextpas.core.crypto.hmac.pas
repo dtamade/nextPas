@@ -11,7 +11,7 @@ unit nextpas.core.crypto.hmac;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash;

@@ -5,7 +5,7 @@ unit nextpas.core.crypto.pbkdf2;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.hash.base;
 
 function PBKDF2(

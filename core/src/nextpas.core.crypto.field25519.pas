@@ -5,7 +5,7 @@ unit nextpas.core.crypto.field25519;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TFe25519 = array[0..9] of Int64;

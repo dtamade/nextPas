@@ -4,7 +4,7 @@ unit nextpas.core.websocket;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.websocket.base;
 
 type

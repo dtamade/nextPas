@@ -12,7 +12,7 @@ unit nextpas.core.crypto.hkdf;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.hash.base;
 
 function HKDF_Extract(AAlgo: THashAlgorithm;

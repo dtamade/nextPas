@@ -4,7 +4,7 @@ unit nextpas.core.cookie;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.cookie.base;
 
 type

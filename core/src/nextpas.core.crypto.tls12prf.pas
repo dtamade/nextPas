@@ -5,7 +5,7 @@ unit nextpas.core.crypto.tls12prf;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 function TLS12PRF_SHA256(
   const ASecret: TBytes;

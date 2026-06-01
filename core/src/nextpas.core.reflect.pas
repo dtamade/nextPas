@@ -44,7 +44,7 @@ type
 implementation
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TTypeRegistry = class(TInterfacedObject, ITypeRegistry)

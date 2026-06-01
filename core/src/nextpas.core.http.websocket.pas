@@ -50,7 +50,7 @@ function UpgradeWebSocket(const AReq: IHttpRequest;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.hash,
   nextpas.core.hash.base,

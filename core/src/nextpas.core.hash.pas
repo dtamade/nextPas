@@ -18,7 +18,6 @@ unit nextpas.core.hash;
 interface
 
 uses
-  SysUtils,
   nextpas.core.hash.base,
   nextpas.core.hash.intf,
   nextpas.core.hash.md5,

@@ -4,7 +4,7 @@ unit nextpas.core.multipart;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.multipart.base;
 
 type

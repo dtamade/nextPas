@@ -13,7 +13,7 @@ unit nextpas.core.hash.sha256;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.hash.base,
   nextpas.core.hash.intf;

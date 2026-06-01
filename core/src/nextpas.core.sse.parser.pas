@@ -40,8 +40,6 @@ type
 
 implementation
 
-uses SysUtils;
-
 const
   SSE_MAX_BUFFER_SIZE = 1024 * 1024;
   SSE_INITIAL_BUF = 4096;

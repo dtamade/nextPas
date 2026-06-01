@@ -5,7 +5,7 @@ unit nextpas.core.crypto.aesni;
 interface
 
 uses
-  SysUtils, Math;
+  Math;
 
 type
   TAESNIBlock = array[0..15] of Byte;

@@ -17,7 +17,7 @@ unit nextpas.core.crypto.ecdsa;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.errors;
 
 type
   TECPoint = record

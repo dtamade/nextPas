@@ -6,7 +6,7 @@ unit nextpas.core.crypto.argon2;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TArgon2Type = (atArgon2d, atArgon2i, atArgon2id);

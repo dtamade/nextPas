@@ -12,7 +12,7 @@ unit nextpas.core.mem.secure;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 {**
  * Securely zero memory to prevent sensitive data from remaining

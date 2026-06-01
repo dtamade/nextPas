@@ -12,7 +12,7 @@ function RecoveryMiddleware: IHttpMiddleware;
 implementation
 
 uses
-  SysUtils,
+  nextpas.core.errors,
   nextpas.core.http.base,
   nextpas.core.http.middleware;
 

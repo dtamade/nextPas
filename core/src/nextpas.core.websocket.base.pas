@@ -4,7 +4,7 @@ unit nextpas.core.websocket.base;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 const
   WS_OPCODE_CONTINUATION = $0;

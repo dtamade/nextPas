@@ -17,7 +17,6 @@ unit nextpas.core.crypto;
 interface
 
 uses
-  SysUtils,
   nextpas.core.crypto.hash,
   nextpas.core.crypto.hmac,
   nextpas.core.crypto.hkdf,

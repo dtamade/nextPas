@@ -5,7 +5,7 @@ unit nextpas.core.crypto.aes.ct64;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TAESCt64Key = record

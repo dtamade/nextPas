@@ -14,7 +14,7 @@ unit nextpas.core.crypto.ct.bigint;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 function CTBigIntEqual(const A, B: TBytes): Boolean;
 function CTBigIntLessThan(const A, B: TBytes): Boolean;

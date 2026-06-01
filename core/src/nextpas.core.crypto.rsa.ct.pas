@@ -5,7 +5,7 @@ unit nextpas.core.crypto.rsa.ct;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 function TryRSACTModExpSign(
   const AEncodedMessage, AModulus, APrivateExponent: TBytes;

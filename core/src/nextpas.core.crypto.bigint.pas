@@ -16,7 +16,7 @@ unit nextpas.core.crypto.bigint;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 function TryRSAModExpSignPurePascal(
   const AEncodedMessage: TBytes;

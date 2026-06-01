@@ -43,7 +43,6 @@ function UuidIsValid(const AStr: string): Boolean;
 implementation
 
 uses
-  SysUtils,
   nextpas.core.id.rng,
   nextpas.core.platform.time,
   nextpas.core.hash.intf,

@@ -5,7 +5,7 @@ unit nextpas.core.hash.intf;
 interface
 
 uses
-  SysUtils,
+  nextpas.core.base,
   nextpas.core.io.intf;
 
 type

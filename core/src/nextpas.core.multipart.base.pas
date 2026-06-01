@@ -4,7 +4,7 @@ unit nextpas.core.multipart.base;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TMultipartHeader = record

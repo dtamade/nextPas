@@ -6,7 +6,7 @@ unit nextpas.core.crypto.ed25519;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 function Ed25519Verify(const APublicKey: TBytes; const AMessage: TBytes;
   const ASignature: TBytes): Boolean;

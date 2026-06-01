@@ -6,7 +6,7 @@ unit nextpas.core.crypto.p256.field;
 interface
 
 uses
-  SysUtils;
+  nextpas.core.base;
 
 type
   TP256Fe = array[0..3] of QWord;
