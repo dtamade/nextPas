@@ -118,6 +118,7 @@ end;
 procedure TModal.Render(const AArea: TRect; ABuffer: TBuffer);
 begin
   if not FVisible then Exit;
+  if AArea.IsEmpty then Exit;
   if FDimBackground then
     ABuffer.SetStyle(AArea, TStyle.Default.WithModifier([mbDim]));
   ABuffer.SetStyle(ContentArea(AArea), FStyle);
