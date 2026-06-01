@@ -38,6 +38,9 @@ type
   TPeriod = nextpas.core.time.period.TPeriod;
 
 function DateTimeNow: TDateTime;
+function DateTimeSecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate; inline;
 function TryParseISO8601Date(const AStr: string; out ADate: nextpas.core.time.date.TDate): Boolean; inline;
 function ParseISO8601Time(const AStr: string): nextpas.core.time.timeofday.TTimeOfDay; inline;
@@ -70,6 +73,21 @@ begin
   end;
 
   Result := UNIX_EPOCH_TDATETIME + LDays + (LDayNs / Double(NS_PER_DAY));
+end;
+
+function DateTimeSecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+begin
+  Result := Trunc((ANewer - AOlder) * 86400.0);
+end;
+
+function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
+begin
+  Result := Trunc((ANewer - AOlder) * 86400000.0);
+end;
+
+function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
+begin
+  Result := AValue + (ASeconds / 86400.0);
 end;
 
 function ParseISO8601Date(const AStr: string): nextpas.core.time.date.TDate;

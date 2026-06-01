@@ -204,6 +204,23 @@ begin
     'datetime now should track platform realtime clock');
 end;
 
+procedure TestDateTimeMath;
+var
+  LA: TDateTime;
+  LB: TDateTime;
+begin
+  LA := 45000.25;
+  LB := LA + (90.5 / 86400.0);
+
+  CheckEqual(Int64(90), DateTimeSecondsBetween(LB, LA), 'seconds between truncates toward zero');
+  CheckEqual(Int64(90500), DateTimeMillisecondsBetween(LB, LA), 'milliseconds between');
+  CheckEqual(Int64(-90), DateTimeSecondsBetween(LA, LB), 'seconds between keeps sign');
+  Check(Abs(DateTimeAddSeconds(LA, 90) - (LA + (90.0 / 86400.0))) < 0.000000001,
+    'add seconds');
+  Check(Abs(DateTimeAddSeconds(LA, -90) - (LA - (90.0 / 86400.0))) < 0.000000001,
+    'add negative seconds');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.time');
   T.Run('Duration zero', @TestDurationZero);
@@ -220,5 +237,6 @@ begin
   T.Run('Stopwatch reset', @TestStopwatchReset);
   T.Run('Platform time', @TestPlatformTime);
   T.Run('DateTime now', @TestDateTimeNow);
+  T.Run('DateTime math', @TestDateTimeMath);
   T.Summary;
 end.

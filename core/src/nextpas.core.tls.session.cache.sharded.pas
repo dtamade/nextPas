@@ -22,7 +22,8 @@ unit nextpas.core.tls.session.cache.sharded;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, DateUtils, fgl,
+  SysUtils, Classes, SyncObjs, fgl,
+  nextpas.core.time,
   nextpas.core.tls.base;
 
 const
@@ -145,7 +146,7 @@ var
 
 function TShardedSessionEntry.IsExpired(ATimeoutSec: Integer): Boolean;
 begin
-  Result := SecondsBetween(Now, CreatedAt) > ATimeoutSec;
+  Result := DateTimeSecondsBetween(DateTimeNow, CreatedAt) > ATimeoutSec;
 end;
 
 { ========================================================================
@@ -194,7 +195,7 @@ begin
       begin
         ASession := Entry.Session;
         // 更新访问时间
-        Entry.LastAccess := Now;
+        Entry.LastAccess := DateTimeNow;
         Inc(Entry.AccessCount);
         FMap.Data[Index] := Entry;
         Inc(FHits);
@@ -304,7 +305,7 @@ begin
   begin
     // 找最旧的条目
     OldestIndex := 0;
-    OldestTime := Now;
+    OldestTime := DateTimeNow;
     for I := 0 to FMap.Count - 1 do
     begin
       Entry := FMap.Data[I];
@@ -443,8 +444,8 @@ begin
   Entry.Session := ASession;
   Entry.HostName := AHostName;
   Entry.Port := APort;
-  Entry.CreatedAt := Now;
-  Entry.LastAccess := Now;
+  Entry.CreatedAt := DateTimeNow;
+  Entry.LastAccess := Entry.CreatedAt;
   Entry.AccessCount := 0;
 
   FShards[ShardIdx].Put(Key, Entry);

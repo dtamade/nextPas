@@ -43,7 +43,7 @@ type
 implementation
 
 uses
-  DateUtils;
+  nextpas.core.time;
 
 constructor TSSLConnectionPool.Create(ADialer: TSSLDialer; AMaxIdle: Integer;
   AIdleTimeoutMs: Integer);
@@ -73,7 +73,7 @@ begin
   AStream := nil;
   AError := '';
   Result := False;
-  LNow := Now;
+  LNow := DateTimeNow;
   LExpired := nil;
 
   FLock.Enter;
@@ -84,7 +84,7 @@ begin
       if (FEntries[I].Host = AHost) and (FEntries[I].Port = APort) then
       begin
         // Check if not expired
-        if MilliSecondsBetween(LNow, FEntries[I].IdleSince) < FIdleTimeoutMs then
+        if DateTimeMillisecondsBetween(LNow, FEntries[I].IdleSince) < FIdleTimeoutMs then
         begin
           AStream := FEntries[I].Stream;
           // Remove from pool
@@ -147,7 +147,7 @@ begin
     FEntries[LIdx].Host := AHost;
     FEntries[LIdx].Port := APort;
     FEntries[LIdx].Stream := AStream;
-    FEntries[LIdx].IdleSince := Now;
+    FEntries[LIdx].IdleSince := DateTimeNow;
   finally
     FLock.Leave;
   end;
@@ -158,13 +158,13 @@ var
   I: Integer;
   LNow: TDateTime;
 begin
-  LNow := Now;
+  LNow := DateTimeNow;
   FLock.Enter;
   try
     I := 0;
     while I <= High(FEntries) do
     begin
-      if MilliSecondsBetween(LNow, FEntries[I].IdleSince) >= FIdleTimeoutMs then
+      if DateTimeMillisecondsBetween(LNow, FEntries[I].IdleSince) >= FIdleTimeoutMs then
       begin
         FEntries[I].Stream.Free;
         FEntries[I] := FEntries[High(FEntries)];

@@ -25,8 +25,9 @@ unit nextpas.core.tls.session.cache;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, DateUtils, fgl,
+  SysUtils, Classes, SyncObjs, fgl,
   {$IFDEF UNIX}BaseUnix,{$ENDIF}
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.random,
   nextpas.core.crypto.hmac,
@@ -150,7 +151,7 @@ function TSessionCacheEntry.IsExpired(ATimeout: Integer): Boolean;
 var
   Age: Int64;
 begin
-  Age := SecondsBetween(Now, CreatedAt);
+  Age := DateTimeSecondsBetween(DateTimeNow, CreatedAt);
   Result := Age > ATimeout;
 end;
 
@@ -238,7 +239,7 @@ begin
       end;
       
       // 更新访问信息
-      Entry.LastAccessedAt := Now;
+      Entry.LastAccessedAt := DateTimeNow;
       Inc(Entry.AccessCount);
       FCache.Data[Idx] := Entry;
       
@@ -267,8 +268,8 @@ begin
   Entry.Session := ASession;
   Entry.HostName := AHostName;
   Entry.Port := APort;
-  Entry.CreatedAt := Now;
-  Entry.LastAccessedAt := Now;
+  Entry.CreatedAt := DateTimeNow;
+  Entry.LastAccessedAt := Entry.CreatedAt;
   Entry.AccessCount := 0;
   
   FLock.Enter;

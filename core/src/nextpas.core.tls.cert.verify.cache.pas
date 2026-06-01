@@ -26,7 +26,8 @@ unit nextpas.core.tls.cert.verify.cache;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, DateUtils,
+  SysUtils, Classes, SyncObjs,
+  nextpas.core.time,
   nextpas.core.tls.openssl.base;
 
 type
@@ -242,7 +243,7 @@ end;
 
 function TCertVerifyCache.IsExpired(const AEntry: TCacheEntry): Boolean;
 begin
-  Result := SecondsBetween(Now, AEntry.Result.VerifiedAt) > FTTL;
+  Result := DateTimeSecondsBetween(DateTimeNow, AEntry.Result.VerifiedAt) > FTTL;
 end;
 
 procedure TCertVerifyCache.EvictOldest;
@@ -311,7 +312,7 @@ begin
 
     // 缓存命中
     AResult := FEntries[LIdx].Result;
-    FEntries[LIdx].LastAccess := Now;
+    FEntries[LIdx].LastAccess := DateTimeNow;
     Inc(FEntries[LIdx].HitCount);
     Inc(FHits);
     Result := True;
@@ -338,7 +339,7 @@ begin
     begin
       // 更新现有条目
       FEntries[LIdx].Result := AResult;
-      FEntries[LIdx].LastAccess := Now;
+      FEntries[LIdx].LastAccess := DateTimeNow;
       Exit;
     end;
 
@@ -351,7 +352,7 @@ begin
 
     Move(LFingerprint[0], FEntries[LIdx].Fingerprint[0], 32);
     FEntries[LIdx].Result := AResult;
-    FEntries[LIdx].LastAccess := Now;
+    FEntries[LIdx].LastAccess := DateTimeNow;
     FEntries[LIdx].HitCount := 0;
 
   finally
