@@ -290,7 +290,7 @@ procedure AESNIEncryptCTR256(const AKey: TAESNIExpandedKey256;
 var
   LCtr: TAESNIBlock;
   LEnc: TAESNIBlock;
-  LCtrs: array[0..3] of TAESNIBlock;
+  LCtrs: array[0..7] of TAESNIBlock;
   LBlockIdx, LRemain, I: Integer;
 
   procedure IncCtr(var C: TAESNIBlock); inline;
@@ -308,6 +308,204 @@ begin
   LCtr := AICB;
   LBlockIdx := 0;
   LRemain := AInputLen;
+
+  while LRemain >= 128 do
+  begin
+    LCtrs[0] := LCtr;
+    IncCtr(LCtr); LCtrs[1] := LCtr;
+    IncCtr(LCtr); LCtrs[2] := LCtr;
+    IncCtr(LCtr); LCtrs[3] := LCtr;
+    IncCtr(LCtr); LCtrs[4] := LCtr;
+    IncCtr(LCtr); LCtrs[5] := LCtr;
+    IncCtr(LCtr); LCtrs[6] := LCtr;
+    IncCtr(LCtr); LCtrs[7] := LCtr;
+    IncCtr(LCtr);
+
+    asm
+      lea rax, LCtrs
+      mov rcx, AKey
+
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rax+16]
+      movdqu xmm2, [rax+32]
+      movdqu xmm3, [rax+48]
+      movdqu xmm4, [rax+64]
+      movdqu xmm5, [rax+80]
+      movdqu xmm6, [rax+96]
+      movdqu xmm7, [rax+112]
+
+      movdqu xmm8, [rcx]
+      pxor xmm0, xmm8
+      pxor xmm1, xmm8
+      pxor xmm2, xmm8
+      pxor xmm3, xmm8
+      pxor xmm4, xmm8
+      pxor xmm5, xmm8
+      pxor xmm6, xmm8
+      pxor xmm7, xmm8
+
+      movdqu xmm8, [rcx+16]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+32]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+48]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+64]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+80]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+96]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+112]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+128]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+144]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+160]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+176]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+192]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+208]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+224]
+      aesenclast xmm0, xmm8
+      aesenclast xmm1, xmm8
+      aesenclast xmm2, xmm8
+      aesenclast xmm3, xmm8
+      aesenclast xmm4, xmm8
+      aesenclast xmm5, xmm8
+      aesenclast xmm6, xmm8
+      aesenclast xmm7, xmm8
+
+      mov rax, AInput
+      movsxd rcx, dword ptr LBlockIdx
+      add rax, rcx
+      mov rdx, AOutput
+      add rdx, rcx
+
+      movdqu xmm8, [rax]
+      pxor xmm0, xmm8
+      movdqu [rdx], xmm0
+      movdqu xmm9, [rax+16]
+      pxor xmm1, xmm9
+      movdqu [rdx+16], xmm1
+      movdqu xmm10, [rax+32]
+      pxor xmm2, xmm10
+      movdqu [rdx+32], xmm2
+      movdqu xmm11, [rax+48]
+      pxor xmm3, xmm11
+      movdqu [rdx+48], xmm3
+      movdqu xmm12, [rax+64]
+      pxor xmm4, xmm12
+      movdqu [rdx+64], xmm4
+      movdqu xmm13, [rax+80]
+      pxor xmm5, xmm13
+      movdqu [rdx+80], xmm5
+      movdqu xmm14, [rax+96]
+      pxor xmm6, xmm14
+      movdqu [rdx+96], xmm6
+      movdqu xmm15, [rax+112]
+      pxor xmm7, xmm15
+      movdqu [rdx+112], xmm7
+    end ['rax', 'rcx', 'rdx', 'xmm0', 'xmm1', 'xmm2', 'xmm3', 'xmm4', 'xmm5', 'xmm6', 'xmm7', 'xmm8', 'xmm9', 'xmm10', 'xmm11', 'xmm12', 'xmm13', 'xmm14', 'xmm15'];
+
+    Inc(LBlockIdx, 128);
+    Dec(LRemain, 128);
+  end;
 
   while LRemain >= 64 do
   begin
@@ -443,7 +641,7 @@ procedure AESNIEncryptCTR128(const AKey: TAESNIExpandedKey128;
 var
   LCtr: TAESNIBlock;
   LEnc: TAESNIBlock;
-  LCtrs: array[0..3] of TAESNIBlock;
+  LCtrs: array[0..7] of TAESNIBlock;
   LBlockIdx, LRemain, I: Integer;
 
   procedure IncCtr(var C: TAESNIBlock); inline;
@@ -461,6 +659,168 @@ begin
   LCtr := AICB;
   LBlockIdx := 0;
   LRemain := AInputLen;
+
+  while LRemain >= 128 do
+  begin
+    LCtrs[0] := LCtr;
+    IncCtr(LCtr); LCtrs[1] := LCtr;
+    IncCtr(LCtr); LCtrs[2] := LCtr;
+    IncCtr(LCtr); LCtrs[3] := LCtr;
+    IncCtr(LCtr); LCtrs[4] := LCtr;
+    IncCtr(LCtr); LCtrs[5] := LCtr;
+    IncCtr(LCtr); LCtrs[6] := LCtr;
+    IncCtr(LCtr); LCtrs[7] := LCtr;
+    IncCtr(LCtr);
+
+    asm
+      lea rax, LCtrs
+      mov rcx, AKey
+
+      movdqu xmm0, [rax]
+      movdqu xmm1, [rax+16]
+      movdqu xmm2, [rax+32]
+      movdqu xmm3, [rax+48]
+      movdqu xmm4, [rax+64]
+      movdqu xmm5, [rax+80]
+      movdqu xmm6, [rax+96]
+      movdqu xmm7, [rax+112]
+
+      movdqu xmm8, [rcx]
+      pxor xmm0, xmm8
+      pxor xmm1, xmm8
+      pxor xmm2, xmm8
+      pxor xmm3, xmm8
+      pxor xmm4, xmm8
+      pxor xmm5, xmm8
+      pxor xmm6, xmm8
+      pxor xmm7, xmm8
+
+      movdqu xmm8, [rcx+16]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+32]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+48]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+64]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+80]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+96]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+112]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+128]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+144]
+      aesenc xmm0, xmm8
+      aesenc xmm1, xmm8
+      aesenc xmm2, xmm8
+      aesenc xmm3, xmm8
+      aesenc xmm4, xmm8
+      aesenc xmm5, xmm8
+      aesenc xmm6, xmm8
+      aesenc xmm7, xmm8
+      movdqu xmm8, [rcx+160]
+      aesenclast xmm0, xmm8
+      aesenclast xmm1, xmm8
+      aesenclast xmm2, xmm8
+      aesenclast xmm3, xmm8
+      aesenclast xmm4, xmm8
+      aesenclast xmm5, xmm8
+      aesenclast xmm6, xmm8
+      aesenclast xmm7, xmm8
+
+      mov rax, AInput
+      movsxd rcx, dword ptr LBlockIdx
+      add rax, rcx
+      mov rdx, AOutput
+      add rdx, rcx
+
+      movdqu xmm8, [rax]
+      pxor xmm0, xmm8
+      movdqu [rdx], xmm0
+      movdqu xmm9, [rax+16]
+      pxor xmm1, xmm9
+      movdqu [rdx+16], xmm1
+      movdqu xmm10, [rax+32]
+      pxor xmm2, xmm10
+      movdqu [rdx+32], xmm2
+      movdqu xmm11, [rax+48]
+      pxor xmm3, xmm11
+      movdqu [rdx+48], xmm3
+      movdqu xmm12, [rax+64]
+      pxor xmm4, xmm12
+      movdqu [rdx+64], xmm4
+      movdqu xmm13, [rax+80]
+      pxor xmm5, xmm13
+      movdqu [rdx+80], xmm5
+      movdqu xmm14, [rax+96]
+      pxor xmm6, xmm14
+      movdqu [rdx+96], xmm6
+      movdqu xmm15, [rax+112]
+      pxor xmm7, xmm15
+      movdqu [rdx+112], xmm7
+    end ['rax', 'rcx', 'rdx', 'xmm0', 'xmm1', 'xmm2', 'xmm3', 'xmm4', 'xmm5', 'xmm6', 'xmm7', 'xmm8', 'xmm9', 'xmm10', 'xmm11', 'xmm12', 'xmm13', 'xmm14', 'xmm15'];
+
+    Inc(LBlockIdx, 128);
+    Dec(LRemain, 128);
+  end;
 
   while LRemain >= 64 do
   begin
