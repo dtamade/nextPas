@@ -86,7 +86,7 @@ end;
 | 项 | 优先级 | 行动 |
 |----|--------|------|
 | 错误模型（异常 + TryXxx 补充） | **P0** | 新代码遵循；解析器补 TryParse |
-| 入口命名公约 | **P0** | 新模块强制；Config 补 TryLoadFromXxx |
+| 入口命名公约 | **P0** | 新模块强制；Config 已补 TryLoadFromXxx/TryLoadXxx |
 | HasError 标记 legacy | P1 | 文档注明，不删除 |
 | XML IXmlDocument 便利层 | P1 | 补充，旧 API 保留 |
 | 生命周期统一 | 非 P0 | 保持现状（class/interface/record 各得其所）|
@@ -103,5 +103,5 @@ end;
 | xml | XmlParse ✅ | EXmlError (异常+position) ✅ | 待补 IXmlDocument |
 | ini | LoadFromString ✅ | 无 | 待补错误 + TryLoad |
 | csv | ReadRow ✅ | HasError/GetError | 合规 |
-| config | LoadFromXxx ✅ | 无 | 待补 TryLoadFromXxx |
+| config | LoadFromXxx ✅ | EConfigError + TryLoadFromXxx/TryLoadXxx ✅ | 合规 |
 | validation | (Builder) | 错误收集模式 ✅ | 合规（特殊领域）|

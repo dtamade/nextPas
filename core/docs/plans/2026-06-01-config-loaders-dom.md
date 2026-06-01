@@ -73,3 +73,20 @@ TomlDateTimeToStr 的 ISO8601（offset/nanosecond 全路径正确）、FloatToSt
 - float NaN/Inf 不支持往返（FloatToStr 渲染为 "Nan"/"Inf"）——config 场景基本无害，已知限制。
 - GetStringArray/GetSection、IConfig/Builder fluent、${VAR} 插值、必填校验。
 
+## Phase 2 状态更新（2026-06-02）
+
+上述 Phase 2 待办中的 config v2 API 已在后续批次完成：
+
+- `LoadFromJson` / `LoadFromYaml` / `LoadFromToml` 解析失败抛 `EConfigError`，
+  `TryLoadJson` / `TryLoadYaml` / `TryLoadToml` 与兼容的 `TryLoadFromXxx`
+  变体返回 `Boolean` 和错误文本。
+- `GetSection` 与 `GetStringArray` 已覆盖扁平 dot-path 子段和标量数组重组。
+- `${...}` 插值已接入 `GetString`、类型 getter、默认字符串和 `GetStringArray`；
+  配置 key 优先，其次环境变量，`$${...}` 转义，未解析占位符在普通读取中保留。
+- `GetStringRequired` / `GetIntRequired` / `GetBoolRequired` /
+  `GetFloatRequired` / `Require` 已完成。required API 会对缺失、空白、
+  未解析占位符和非法类型抛 `EConfigError`。
+- `TConfigWatcher` 在 JSON/YAML/TOML 坏 reload 时传播 `EConfigError`，
+  并保留旧配置。
+
+仍不在 Phase 2 范围：IConfig/Builder fluent、基准对照、单元拆分。

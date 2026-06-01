@@ -22,6 +22,8 @@ uses
 type
   TStringArray = array of string;
 
+  EConfigError = class(EParseError);
+
   TConfigEntry = record
     Key: string;
     Value: string;
@@ -48,17 +50,27 @@ type
     function TryLoadFromJson(const AContent: string; out AError: string): Boolean;
     function TryLoadFromYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadFromToml(const AContent: string; out AError: string): Boolean;
+    function TryLoadJson(const AContent: string; out AError: string): Boolean;
+    function TryLoadYaml(const AContent: string; out AError: string): Boolean;
+    function TryLoadToml(const AContent: string; out AError: string): Boolean;
     procedure LoadFromEnv(const APrefix: string);
     procedure SetDefault(const AKey, AValue: string);
 
     function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetStringArray(const AKey: string): TStringArray;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetStringRequired(const AKey: string): string;
+    function GetIntRequired(const AKey: string): Int64;
+    function GetBoolRequired(const AKey: string): Boolean;
+    function GetFloatRequired(const AKey: string): Double;
+    procedure Require(const AKeys: array of string);
 
     procedure ReplaceFrom(AOther: TConfig);
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
+    function GetSection(const APrefix: string): TStringArray;
     property Count: Integer read GetCount;
   end;
 
@@ -98,6 +110,16 @@ uses
   nextpas.core.toml.value,
   nextpas.core.toml.base;
 
+type
+  TConfigEntryArray = array of TConfigEntry;
+
+  TIndexedConfigValue = record
+    Index: Int64;
+    Value: string;
+  end;
+
+  TIndexedConfigValueArray = array of TIndexedConfigValue;
+
 {$IFDEF NEXTPAS_UNIX}
 var
   environ: PPAnsiChar; cvar; external;
@@ -106,7 +128,7 @@ var
 { DOM 展平 helper —— 把 JSON/YAML/TOML 嵌套结构递归展平成扁平 dot-path。
   嵌套对象/表 → server.host；数组/序列 → tags.0、servers.0.host（.NET IConfiguration 模型）。
   注意（扁平模型固有约束）：
-  - 字面含点的键与真实层级会撞 key，例如 {"a.b":1} 与 {"a":{"b":1}} 都展平成 a.b；后写覆盖先写。
+  - 字面含点的键与真实层级会撞 key，例如 dotted a.b 与 nested a/b 都展平成 a.b；后写覆盖先写。
   - 递归深度 = 配置嵌套深度，由底层 DOM 解析器自身的深度上限先行约束。 }
 
 function JoinKey(const APrefix, AKey: string): string;
@@ -115,6 +137,301 @@ begin
     Result := AKey
   else
     Result := APrefix + '.' + AKey;
+end;
+
+function GetSectionSuffix(const AKey, APrefix: string; out ASuffix: string): Boolean;
+var
+  LPrefixLen: Integer;
+begin
+  ASuffix := '';
+  if AKey = '' then
+    Exit(False);
+
+  if APrefix = '' then
+  begin
+    ASuffix := AKey;
+    Exit(True);
+  end;
+
+  LPrefixLen := Length(APrefix);
+  if Length(AKey) <= LPrefixLen then
+    Exit(False);
+  if AKey[LPrefixLen + 1] <> '.' then
+    Exit(False);
+  if LowerCase(Copy(AKey, 1, LPrefixLen)) <> LowerCase(APrefix) then
+    Exit(False);
+
+  ASuffix := Copy(AKey, LPrefixLen + 2, Length(AKey) - LPrefixLen - 1);
+  Result := ASuffix <> '';
+end;
+
+function DirectChildSegment(const ASuffix: string): string;
+var
+  LDotPos: Integer;
+begin
+  LDotPos := Pos('.', ASuffix);
+  if LDotPos > 0 then
+    Result := Copy(ASuffix, 1, LDotPos - 1)
+  else
+    Result := ASuffix;
+end;
+
+function DirectArraySegment(const AKey, APrefix: string; out ASegment: string): Boolean;
+var
+  LSuffix: string;
+begin
+  Result := False;
+  ASegment := '';
+  if not GetSectionSuffix(AKey, APrefix, LSuffix) then
+    Exit;
+  if Pos('.', LSuffix) > 0 then
+    Exit;
+  ASegment := LSuffix;
+  Result := ASegment <> '';
+end;
+
+function StringArrayContains(const AItems: TStringArray; const ACount: Integer;
+  const AValue: string): Boolean;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AValue);
+  for LI := 0 to ACount - 1 do
+    if LowerCase(AItems[LI]) = LLower then
+      Exit(True);
+  Result := False;
+end;
+
+procedure AddUniqueString(var AItems: TStringArray; var ACount: Integer;
+  const AValue: string);
+begin
+  if AValue = '' then
+    Exit;
+  if StringArrayContains(AItems, ACount, AValue) then
+    Exit;
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount] := AValue;
+  Inc(ACount);
+end;
+
+function TryParseArrayIndex(const AValue: string; out AIndex: Int64): Boolean;
+var
+  LI: Integer;
+begin
+  AIndex := 0;
+  if AValue = '' then
+    Exit(False);
+  for LI := 1 to Length(AValue) do
+    if (AValue[LI] < '0') or (AValue[LI] > '9') then
+      Exit(False);
+  Result := TryStrToInt64(AValue, AIndex) and (AIndex >= 0);
+end;
+
+procedure AddIndexedValue(var AItems: TIndexedConfigValueArray; var ACount: Integer;
+  const AIndex: Int64; const AValue: string);
+begin
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount].Index := AIndex;
+  AItems[ACount].Value := AValue;
+  Inc(ACount);
+end;
+
+procedure SortIndexedValues(var AItems: TIndexedConfigValueArray; const ACount: Integer);
+var
+  LI, LJ: Integer;
+  LItem: TIndexedConfigValue;
+begin
+  for LI := 1 to ACount - 1 do
+  begin
+    LItem := AItems[LI];
+    LJ := LI - 1;
+    while (LJ >= 0) and (AItems[LJ].Index > LItem.Index) do
+    begin
+      AItems[LJ + 1] := AItems[LJ];
+      Dec(LJ);
+    end;
+    AItems[LJ + 1] := LItem;
+  end;
+end;
+
+function FindEntryIndexInSnapshot(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AKey: string): Integer;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AKey);
+  for LI := 0 to ACount - 1 do
+    if LowerCase(AEntries[LI].Key) = LLower then
+      Exit(LI);
+  Result := -1;
+end;
+
+procedure SnapshotConfigEntries(ACfg: TConfig; out AEntries: TConfigEntryArray;
+  out ACount: Integer);
+var
+  LI: Integer;
+begin
+  ACfg.FLock.AcquireRead;
+  try
+    ACount := ACfg.FCount;
+    SetLength(AEntries, ACount);
+    for LI := 0 to ACount - 1 do
+      AEntries[LI] := ACfg.FEntries[LI];
+  finally
+    ACfg.FLock.ReleaseRead;
+  end;
+end;
+
+function FindPlaceholderEnd(const AValue: string; const AStart: Integer): Integer;
+begin
+  Result := AStart;
+  while (Result <= Length(AValue)) and (AValue[Result] <> '}') do
+    Inc(Result);
+  if Result > Length(AValue) then
+    Result := 0;
+end;
+
+function ConfigKeyStackContains(const AStack: TStringArray; const AKey: string): Boolean;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AKey);
+  for LI := 0 to Length(AStack) - 1 do
+    if LowerCase(AStack[LI]) = LLower then
+      Exit(True);
+  Result := False;
+end;
+
+procedure PushConfigKey(var AStack: TStringArray; const AKey: string);
+var
+  LLen: Integer;
+begin
+  LLen := Length(AStack);
+  SetLength(AStack, LLen + 1);
+  AStack[LLen] := AKey;
+end;
+
+procedure PopConfigKey(var AStack: TStringArray);
+begin
+  if Length(AStack) > 0 then
+    SetLength(AStack, Length(AStack) - 1);
+end;
+
+function InterpolateConfigValue(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AValue: string; var AStack: TStringArray;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): string; forward;
+
+function ResolveConfigEntryByIndex(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AIndex: Integer; var AStack: TStringArray;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): string;
+var
+  LKey: string;
+begin
+  LKey := AEntries[AIndex].Key;
+  if ConfigKeyStackContains(AStack, LKey) then
+    raise EConfigError.Create('Config interpolation cycle at key "' + LKey + '"');
+
+  PushConfigKey(AStack, LKey);
+  try
+    Result := InterpolateConfigValue(AEntries, ACount, AEntries[AIndex].Value, AStack,
+      AFailOnUnresolved, ARequiredKey);
+  finally
+    PopConfigKey(AStack);
+  end;
+end;
+
+function ResolveConfigKeyInSnapshot(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AKey: string; out AValue: string;
+  var AStack: TStringArray; const AFailOnUnresolved: Boolean;
+  const ARequiredKey: string): Boolean;
+var
+  LIdx: Integer;
+begin
+  LIdx := FindEntryIndexInSnapshot(AEntries, ACount, AKey);
+  Result := LIdx >= 0;
+  if Result then
+    AValue := ResolveConfigEntryByIndex(AEntries, ACount, LIdx, AStack,
+      AFailOnUnresolved, ARequiredKey)
+  else
+    AValue := '';
+end;
+
+function ResolvePlaceholder(const AEntries: TConfigEntryArray; const ACount: Integer;
+  const AName: string; var AStack: TStringArray; out AValue: string;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): Boolean;
+begin
+  if AName = '' then
+  begin
+    AValue := '';
+    Exit(False);
+  end;
+
+  if ResolveConfigKeyInSnapshot(AEntries, ACount, AName, AValue, AStack,
+    AFailOnUnresolved, ARequiredKey) then
+    Exit(True);
+
+  if nextpas.core.os.env.HasEnv(AName) then
+  begin
+    AValue := nextpas.core.os.env.GetEnv(AName);
+    Exit(True);
+  end;
+
+  AValue := '';
+  Result := False;
+end;
+
+function InterpolateConfigValue(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AValue: string; var AStack: TStringArray;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): string;
+var
+  LI: Integer;
+  LEnd: Integer;
+  LName: string;
+  LResolved: string;
+begin
+  Result := '';
+  LI := 1;
+  while LI <= Length(AValue) do
+  begin
+    if (AValue[LI] = '$') and (LI < Length(AValue)) and (AValue[LI + 1] = '$') and
+       (LI + 2 <= Length(AValue)) and (AValue[LI + 2] = '{') then
+    begin
+      Result := Result + '${';
+      Inc(LI, 3);
+    end
+    else if (AValue[LI] = '$') and (LI < Length(AValue)) and (AValue[LI + 1] = '{') then
+    begin
+      LEnd := FindPlaceholderEnd(AValue, LI + 2);
+      if LEnd = 0 then
+      begin
+        Result := Result + AValue[LI];
+        Inc(LI);
+      end
+      else
+      begin
+        LName := Copy(AValue, LI + 2, LEnd - LI - 2);
+        if ResolvePlaceholder(AEntries, ACount, LName, AStack, LResolved,
+          AFailOnUnresolved, ARequiredKey) then
+          Result := Result + LResolved
+        else if AFailOnUnresolved then
+          raise EConfigError.Create('Required config key "' + ARequiredKey +
+            '" has unresolved placeholder')
+        else
+          Result := Result + '${' + LName + '}';
+        LI := LEnd + 1;
+      end;
+    end
+    else
+    begin
+      Result := Result + AValue[LI];
+      Inc(LI);
+    end;
+  end;
 end;
 
 function PadZero(const AValue: Int64; const AWidth: Integer): string;
@@ -299,12 +616,40 @@ end;
 
 { TConfig }
 
-function FormatJsonLoadError(const AError: TJsonError): string;
+procedure JsonOffsetToLineColumn(const AContent: string; const AOffset: SizeUInt;
+  out ALine, AColumn: UInt32);
+var
+  LI: Integer;
+  LMax: Integer;
+begin
+  ALine := 1;
+  AColumn := 1;
+  LMax := Length(AContent);
+  LI := 1;
+  while (LI <= LMax) and (SizeUInt(LI - 1) < AOffset) do
+  begin
+    if AContent[LI] = #10 then
+    begin
+      Inc(ALine);
+      AColumn := 1;
+    end
+    else
+      Inc(AColumn);
+    Inc(LI);
+  end;
+end;
+
+function FormatJsonLoadError(const AContent: string; const AError: TJsonError): string;
+var
+  LLine: UInt32;
+  LColumn: UInt32;
 begin
   Result := AError.Message.ToString;
   if Result = '' then
     Result := 'parse error';
-  Result := 'JSON parse error at offset ' + UIntToStr(AError.Offset) + ': ' + Result;
+  JsonOffsetToLineColumn(AContent, AError.Offset, LLine, LColumn);
+  Result := 'JSON parse error at line ' + UIntToStr(LLine) + ', column ' +
+    UIntToStr(LColumn) + ' (offset ' + UIntToStr(AError.Offset) + '): ' + Result;
 end;
 
 function FormatYamlLoadError(const AError: TYamlError): string;
@@ -481,9 +826,8 @@ var
   LDoc: IJsonDocument;
 begin
   LDoc := JsonParse(AContent);
-  { 解析失败静默保留已有数据（最小侵入；EConfigError/TryLoadJson 留待下一轮） }
   if LDoc.HasError then
-    Exit;
+    raise EConfigError.Create(FormatJsonLoadError(AContent, LDoc.Error));
   LoadConfigFromJsonDocument(Self, LDoc);
 end;
 
@@ -493,7 +837,7 @@ var
 begin
   LDoc := YamlParse(AContent);
   if LDoc.HasError then
-    Exit;
+    raise EConfigError.Create(FormatYamlLoadError(LDoc.Error));
   LoadConfigFromYamlDocument(Self, LDoc);
 end;
 
@@ -503,7 +847,7 @@ var
 begin
   LDoc := TomlParse(AContent);
   if LDoc.HasError then
-    Exit;
+    raise EConfigError.Create(FormatTomlLoadError(LDoc.Error));
   LoadConfigFromTomlDocument(Self, LDoc);
 end;
 
@@ -541,7 +885,7 @@ begin
     LDoc := JsonParse(AContent);
     if LDoc.HasError then
     begin
-      AError := FormatJsonLoadError(LDoc.Error);
+      AError := FormatJsonLoadError(AContent, LDoc.Error);
       Exit(False);
     end;
     LoadConfigFromJsonDocument(Self, LDoc);
@@ -599,6 +943,21 @@ begin
       Result := False;
     end;
   end;
+end;
+
+function TConfig.TryLoadJson(const AContent: string; out AError: string): Boolean;
+begin
+  Result := TryLoadFromJson(AContent, AError);
+end;
+
+function TConfig.TryLoadYaml(const AContent: string; out AError: string): Boolean;
+begin
+  Result := TryLoadFromYaml(AContent, AError);
+end;
+
+function TConfig.TryLoadToml(const AContent: string; out AError: string): Boolean;
+begin
+  Result := TryLoadFromToml(AContent, AError);
 end;
 
 procedure TConfig.LoadFromEnv(const APrefix: string);
@@ -687,78 +1046,139 @@ end;
 
 function TConfig.GetString(const AKey: string; const ADefault: string): string;
 var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
   LIdx: Integer;
+  LStack: TStringArray;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx >= 0 then
-      Result := FEntries[LIdx].Value
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
+  LStack := nil;
+  if LIdx >= 0 then
+    Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack, False, '')
+  else
+    Result := InterpolateConfigValue(LEntries, LCount, ADefault, LStack, False, '');
+end;
+
+function TConfig.GetStringArray(const AKey: string): TStringArray;
+var
+  LI, LCount: Integer;
+  LEntryCount: Integer;
+  LEntries: TConfigEntryArray;
+  LSegment: string;
+  LIndex: Int64;
+  LItems: TIndexedConfigValueArray;
+  LStack: TStringArray;
+begin
+  Result := nil;
+  SnapshotConfigEntries(Self, LEntries, LEntryCount);
+  LItems := nil;
+  LCount := 0;
+  for LI := 0 to LEntryCount - 1 do
+    if DirectArraySegment(LEntries[LI].Key, AKey, LSegment) and
+       TryParseArrayIndex(LSegment, LIndex) then
+      AddIndexedValue(LItems, LCount, LIndex, LEntries[LI].Value);
+
+  SortIndexedValues(LItems, LCount);
+  SetLength(Result, LCount);
+  LStack := nil;
+  for LI := 0 to LCount - 1 do
+    Result[LI] := InterpolateConfigValue(LEntries, LEntryCount, LItems[LI].Value,
+      LStack, False, '');
 end;
 
 function TConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
 var
-  LIdx: Integer;
   LVal: Int64;
+  LText: string;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx < 0 then
-      Exit(ADefault);
-    if TryStrToInt64(FEntries[LIdx].Value, LVal) then
-      Result := LVal
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  LText := GetString(AKey, '');
+  if (LText <> '') and TryStrToInt64(LText, LVal) then
+    Result := LVal
+  else
+    Result := ADefault;
 end;
 
 function TConfig.GetBool(const AKey: string; ADefault: Boolean): Boolean;
 var
-  LIdx: Integer;
   LStr: string;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx < 0 then
-      Exit(ADefault);
-    LStr := LowerCase(Trim(FEntries[LIdx].Value));
-    if (LStr = 'true') or (LStr = '1') or (LStr = 'yes') or (LStr = 'on') then
-      Result := True
-    else if (LStr = 'false') or (LStr = '0') or (LStr = 'no') or (LStr = 'off') then
-      Result := False
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  LStr := LowerCase(Trim(GetString(AKey, '')));
+  if (LStr = 'true') or (LStr = '1') or (LStr = 'yes') or (LStr = 'on') then
+    Result := True
+  else if (LStr = 'false') or (LStr = '0') or (LStr = 'no') or (LStr = 'off') then
+    Result := False
+  else
+    Result := ADefault;
 end;
 
 function TConfig.GetFloat(const AKey: string; ADefault: Double): Double;
 var
-  LIdx: Integer;
   LVal: Double;
+  LText: string;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx < 0 then
-      Exit(ADefault);
-    if TryStrToFloat(FEntries[LIdx].Value, LVal) then
-      Result := LVal
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  LText := GetString(AKey, '');
+  if (LText <> '') and TryStrToFloat(LText, LVal) then
+    Result := LVal
+  else
+    Result := ADefault;
+end;
+
+function TConfig.GetStringRequired(const AKey: string): string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+  LIdx: Integer;
+  LStack: TStringArray;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
+  if LIdx < 0 then
+    raise EConfigError.Create('Required config key "' + AKey + '" is missing');
+
+  LStack := nil;
+  Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack, True, AKey);
+  if Trim(Result) = '' then
+    raise EConfigError.Create('Required config key "' + AKey + '" is empty');
+end;
+
+function TConfig.GetIntRequired(const AKey: string): Int64;
+var
+  LText: string;
+begin
+  LText := GetStringRequired(AKey);
+  if not TryStrToInt64(LText, Result) then
+    raise EConfigError.Create('Required config key "' + AKey + '" is not an integer');
+end;
+
+function TConfig.GetBoolRequired(const AKey: string): Boolean;
+var
+  LText: string;
+begin
+  LText := LowerCase(Trim(GetStringRequired(AKey)));
+  if (LText = 'true') or (LText = '1') or (LText = 'yes') or (LText = 'on') then
+    Result := True
+  else if (LText = 'false') or (LText = '0') or (LText = 'no') or (LText = 'off') then
+    Result := False
+  else
+    raise EConfigError.Create('Required config key "' + AKey + '" is not a boolean');
+end;
+
+function TConfig.GetFloatRequired(const AKey: string): Double;
+var
+  LText: string;
+begin
+  LText := GetStringRequired(AKey);
+  if not TryStrToFloat(LText, Result) then
+    raise EConfigError.Create('Required config key "' + AKey + '" is not a float');
+end;
+
+procedure TConfig.Require(const AKeys: array of string);
+var
+  LI: Integer;
+begin
+  for LI := 0 to Length(AKeys) - 1 do
+    GetStringRequired(AKeys[LI]);
 end;
 
 procedure TConfig.ReplaceFrom(AOther: TConfig);
@@ -811,6 +1231,27 @@ begin
     SetLength(Result, FCount);
     for LI := 0 to FCount - 1 do
       Result[LI] := FEntries[LI].Key;
+  finally
+    FLock.ReleaseRead;
+  end;
+end;
+
+function TConfig.GetSection(const APrefix: string): TStringArray;
+var
+  LI, LCount: Integer;
+  LSuffix, LChild: string;
+begin
+  FLock.AcquireRead;
+  try
+    Result := nil;
+    LCount := 0;
+    for LI := 0 to FCount - 1 do
+      if GetSectionSuffix(FEntries[LI].Key, APrefix, LSuffix) then
+      begin
+        LChild := DirectChildSegment(LSuffix);
+        AddUniqueString(Result, LCount, LChild);
+      end;
+    SetLength(Result, LCount);
   finally
     FLock.ReleaseRead;
   end;

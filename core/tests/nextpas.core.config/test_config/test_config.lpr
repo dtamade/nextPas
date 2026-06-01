@@ -71,6 +71,413 @@ begin
   end;
 end;
 
+{ === Interpolation Tests === }
+
+procedure TestInterpolationConfigKeys;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 +
+      'host=localhost' + #10 +
+      'port=8080' + #10 +
+      '[service]' + #10 +
+      'url=https://${server.host}:${server.port}' + #10);
+    CheckEqual('https://localhost:8080', LCfg.GetString('service.url'),
+      'config key placeholders');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationEnvFallback;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_REGION', 'ap-east');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('region=${NEXTPAS_CFG_REGION}' + #10);
+      CheckEqual('ap-east', LCfg.GetString('region'), 'env fallback placeholder');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_REGION');
+  end;
+end;
+
+procedure TestInterpolationDefaultValue;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_DEFAULT_REGION', 'ap-south');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('host=localhost' + #10);
+      CheckEqual('http://localhost',
+        LCfg.GetString('missing.url', 'http://${host}'),
+        'default config interpolation');
+      CheckEqual('ap-south',
+        LCfg.GetString('missing.region', '${NEXTPAS_CFG_DEFAULT_REGION}'),
+        'default env interpolation');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_DEFAULT_REGION');
+  end;
+end;
+
+procedure TestInterpolationConfigWinsOverEnv;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_NAME', 'env_name');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('NEXTPAS_CFG_NAME=config_name' + #10 +
+        'display=${NEXTPAS_CFG_NAME}' + #10);
+      CheckEqual('config_name', LCfg.GetString('display'),
+        'config placeholder wins over env');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_NAME');
+  end;
+end;
+
+procedure TestInterpolationEscapeAndUnresolved;
+var
+  LCfg: TConfig;
+begin
+  UnsetEnv('NEXTPAS_CFG_MISSING_INTERPOLATION');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 +
+      'host=localhost' + #10 +
+      '[values]' + #10 +
+      'literal=$${server.host}' + #10 +
+      'missing=${NEXTPAS_CFG_MISSING_INTERPOLATION}' + #10);
+    CheckEqual('${server.host}', LCfg.GetString('values.literal'),
+      'escaped placeholder');
+    CheckEqual('${NEXTPAS_CFG_MISSING_INTERPOLATION}',
+      LCfg.GetString('values.missing'), 'unresolved placeholder preserved');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationTypedGetters;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[source]' + #10 +
+      'port=8080' + #10 +
+      'enabled=true' + #10 +
+      'ratio=2.5' + #10 +
+      '[derived]' + #10 +
+      'port=${source.port}' + #10 +
+      'enabled=${source.enabled}' + #10 +
+      'ratio=${source.ratio}' + #10);
+    CheckEqual(Int64(8080), LCfg.GetInt('derived.port'), 'interpolated int');
+    CheckEqual(True, LCfg.GetBool('derived.enabled'), 'interpolated bool');
+    LVal := LCfg.GetFloat('derived.ratio');
+    Check((LVal > 2.4) and (LVal < 2.6), 'interpolated float');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationStringArray;
+var
+  LCfg: TConfig;
+  LTags: TStringArray;
+begin
+  SetEnv('NEXTPAS_CFG_TAG', 'env_tag');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromJson('{"tag_source":"blue","tags":["${tag_source}",' +
+        '"$${tag_source}","${NEXTPAS_CFG_TAG}"]}');
+      LTags := LCfg.GetStringArray('tags');
+      CheckEqual(Int64(3), Int64(Length(LTags)), 'tag count');
+      CheckEqual('blue', LTags[0], 'array config interpolation');
+      CheckEqual('${tag_source}', LTags[1], 'array escaped interpolation');
+      CheckEqual('env_tag', LTags[2], 'array env interpolation');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_TAG');
+  end;
+end;
+
+procedure TestInterpolationCycleRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('a=${b}' + #10 + 'b=${a}' + #10 + 'self=${self}' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetString('a');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'cross-key cycle raises');
+
+    LRaised := False;
+    try
+      LCfg.GetString('self');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'self cycle raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+{ === Required Value Tests === }
+
+procedure TestRequiredStringAndRequire;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 +
+      'host=localhost' + #10 +
+      'port=8080' + #10 +
+      '[service]' + #10 +
+      'url=https://${server.host}:${server.port}' + #10);
+
+    CheckEqual('https://localhost:8080', LCfg.GetStringRequired('service.url'),
+      'required string interpolates');
+    LCfg.Require(['server.host', 'server.port', 'service.url']);
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredMissingRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 + 'host=localhost' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('server.port');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'missing string required raises');
+
+    LRaised := False;
+    try
+      LCfg.GetIntRequired('server.port');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'missing int required raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['server.host', 'server.port']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for missing key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredEmptyRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('empty=' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('empty');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'empty required string raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['empty']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for empty key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredTypedValues;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[source]' + #10 +
+      'port=8080' + #10 +
+      'enabled=yes' + #10 +
+      'ratio=2.5' + #10 +
+      '[derived]' + #10 +
+      'port=${source.port}' + #10 +
+      'enabled=${source.enabled}' + #10 +
+      'ratio=${source.ratio}' + #10);
+
+    CheckEqual(Int64(8080), LCfg.GetIntRequired('derived.port'),
+      'required int interpolates');
+    CheckEqual(True, LCfg.GetBoolRequired('derived.enabled'),
+      'required bool interpolates');
+    LVal := LCfg.GetFloatRequired('derived.ratio');
+    Check((LVal > 2.4) and (LVal < 2.6), 'required float interpolates');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredTypedInvalidRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[bad]' + #10 +
+      'port=abc' + #10 +
+      'enabled=maybe' + #10 +
+      'ratio=hello' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetIntRequired('bad.port');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'invalid required int raises');
+
+    LRaised := False;
+    try
+      LCfg.GetBoolRequired('bad.enabled');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'invalid required bool raises');
+
+    LRaised := False;
+    try
+      LCfg.GetFloatRequired('bad.ratio');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'invalid required float raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredUnresolvedPlaceholderRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  UnsetEnv('NEXTPAS_CFG_REQUIRED_SECRET');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('secret=${NEXTPAS_CFG_REQUIRED_SECRET}' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('secret');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'unresolved required placeholder raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['secret']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for unresolved placeholder');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredWhitespaceRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('blank=   ' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('blank');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'whitespace required string raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['blank']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for whitespace key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === GetInt Tests === }
 
 procedure TestGetIntBasic;
@@ -344,6 +751,57 @@ begin
     CheckEqual(False, LCfg.TryLoadFromJson('{not valid json', LError),
       'TryLoadFromJson invalid');
     Check(LError <> '', 'invalid json returns error');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadShortVariantsInvalid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson('{"keep":"value"}');
+
+    CheckEqual(False, LCfg.TryLoadJson('{not valid json', LError),
+      'TryLoadJson invalid');
+    Check(LError <> '', 'TryLoadJson returns error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadJson preserves existing');
+
+    CheckEqual(False, LCfg.TryLoadYaml('{a: *missing}', LError),
+      'TryLoadYaml invalid');
+    Check(LError <> '', 'TryLoadYaml returns error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadYaml preserves existing');
+
+    CheckEqual(False, LCfg.TryLoadToml('key = ', LError),
+      'TryLoadToml invalid');
+    Check(LError <> '', 'TryLoadToml returns error');
+    CheckEqual('value', LCfg.GetString('keep'), 'TryLoadToml preserves existing');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestTryLoadShortVariantsValid;
+var
+  LCfg: TConfig;
+  LError: string;
+begin
+  LCfg := TConfig.Create;
+  try
+    CheckEqual(True, LCfg.TryLoadJson('{"json":"ok"}', LError), 'TryLoadJson valid');
+    CheckEqual('', LError, 'TryLoadJson clears error');
+    CheckEqual('ok', LCfg.GetString('json'), 'TryLoadJson loads key');
+
+    CheckEqual(True, LCfg.TryLoadYaml('yaml: ok' + #10, LError), 'TryLoadYaml valid');
+    CheckEqual('', LError, 'TryLoadYaml clears error');
+    CheckEqual('ok', LCfg.GetString('yaml'), 'TryLoadYaml loads key');
+
+    CheckEqual(True, LCfg.TryLoadToml('toml = "ok"' + #10, LError), 'TryLoadToml valid');
+    CheckEqual('', LError, 'TryLoadToml clears error');
+    CheckEqual('ok', LCfg.GetString('toml'), 'TryLoadToml loads key');
   finally
     LCfg.Free;
   end;
@@ -713,6 +1171,120 @@ begin
   end;
 end;
 
+procedure TestConfigWatcherBadJsonRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_json.json';
+  Remove(LPath);
+  WriteFileText(LPath, '{"server":{"host":"initial","port":1000}}');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromJson(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfJson);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, '{"server":{"host":');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherBadYamlRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_yaml.yaml';
+  Remove(LPath);
+  WriteFileText(LPath, 'server:' + #10 + '  host: initial' + #10 + '  port: 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromYaml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfYaml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, '{a: *missing}');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad yaml watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old yaml host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old yaml port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherBadTomlRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_toml.toml';
+  Remove(LPath);
+  WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 + 'port = 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromToml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfToml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, 'key = ');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad toml watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old toml host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old toml port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -720,6 +1292,21 @@ begin
   T.Run('GetString.Basic', @TestGetStringBasic);
   T.Run('GetString.Default', @TestGetStringDefault);
   T.Run('GetString.CaseInsensitive', @TestGetStringCaseInsensitive);
+  T.Run('Interpolation.ConfigKeys', @TestInterpolationConfigKeys);
+  T.Run('Interpolation.EnvFallback', @TestInterpolationEnvFallback);
+  T.Run('Interpolation.DefaultValue', @TestInterpolationDefaultValue);
+  T.Run('Interpolation.ConfigWinsOverEnv', @TestInterpolationConfigWinsOverEnv);
+  T.Run('Interpolation.EscapeAndUnresolved', @TestInterpolationEscapeAndUnresolved);
+  T.Run('Interpolation.TypedGetters', @TestInterpolationTypedGetters);
+  T.Run('Interpolation.StringArray', @TestInterpolationStringArray);
+  T.Run('Interpolation.CycleRaises', @TestInterpolationCycleRaises);
+  T.Run('Required.StringAndRequire', @TestRequiredStringAndRequire);
+  T.Run('Required.MissingRaises', @TestRequiredMissingRaises);
+  T.Run('Required.EmptyRaises', @TestRequiredEmptyRaises);
+  T.Run('Required.TypedValues', @TestRequiredTypedValues);
+  T.Run('Required.TypedInvalidRaises', @TestRequiredTypedInvalidRaises);
+  T.Run('Required.UnresolvedPlaceholderRaises', @TestRequiredUnresolvedPlaceholderRaises);
+  T.Run('Required.WhitespaceRaises', @TestRequiredWhitespaceRaises);
   T.Run('GetInt.Basic', @TestGetIntBasic);
   T.Run('GetInt.Default', @TestGetIntDefault);
   T.Run('GetInt.Invalid', @TestGetIntInvalid);
@@ -737,6 +1324,8 @@ begin
   T.Run('TryLoadFromIni.Valid', @TestTryLoadFromIniValid);
   T.Run('TryLoadFromJson.Valid', @TestTryLoadFromJsonValid);
   T.Run('TryLoadFromJson.Invalid', @TestTryLoadFromJsonInvalid);
+  T.Run('TryLoad.ShortVariantsInvalid', @TestTryLoadShortVariantsInvalid);
+  T.Run('TryLoad.ShortVariantsValid', @TestTryLoadShortVariantsValid);
   T.Run('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
   T.Run('LoadFromEnv.Override', @TestLoadFromEnvOverride);
   T.Run('Has', @TestHas);
@@ -755,5 +1344,8 @@ begin
   T.Run('MultiSource.Override', @TestMultiSourceOverride);
   T.Run('ReplaceFrom', @TestReplaceFrom);
   T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
+  T.Run('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.BadYamlRaises', @TestConfigWatcherBadYamlRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.BadTomlRaises', @TestConfigWatcherBadTomlRaisesAndPreservesOldConfig);
   T.Summary;
 end.
