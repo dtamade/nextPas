@@ -23,6 +23,7 @@ var
   LTok: TXmlToken;
   LCount, LCap: Integer;
 begin
+  Result := nil;
   LReader := TXmlReader.Create(AXml);
   try
     LCount := 0;

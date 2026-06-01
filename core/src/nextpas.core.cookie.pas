@@ -70,8 +70,9 @@ end;
 function ParseCookieHeader(const AHeader: string): TCookieArray;
 var
   LPos, LStart, LLen, LEq, LCount, LCap: Integer;
-  LNameStart, LNameEnd, LValStart, LValEnd: Integer;
+  LNameStart, LNameEnd, LValStart: Integer;
 begin
+  Result := nil;
   LLen := Length(AHeader);
   if LLen = 0 then
   begin

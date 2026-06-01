@@ -24,7 +24,7 @@ var
   LEvent: TSseEvent;
   LCount: SizeUInt;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   LCount := 0;
   LParser := TSseParser.Create;
   try

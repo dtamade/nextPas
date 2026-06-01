@@ -29,6 +29,19 @@ type
   TXmlNodeArray = nextpas.core.xml.dom.TXmlNodeArray;
   TXmlDocument = nextpas.core.xml.dom.TXmlDocument;
 
+const
+  { Re-export TXmlTokenKind 枚举值，使 facade 完全自包含（无需 uses base 即可比较 token 类型） }
+  xtkNone            = nextpas.core.xml.base.xtkNone;
+  xtkStartElement    = nextpas.core.xml.base.xtkStartElement;
+  xtkEndElement      = nextpas.core.xml.base.xtkEndElement;
+  xtkEmptyElement    = nextpas.core.xml.base.xtkEmptyElement;
+  xtkText            = nextpas.core.xml.base.xtkText;
+  xtkCData           = nextpas.core.xml.base.xtkCData;
+  xtkComment         = nextpas.core.xml.base.xtkComment;
+  xtkProcessingInstr = nextpas.core.xml.base.xtkProcessingInstr;
+  xtkXmlDecl         = nextpas.core.xml.base.xtkXmlDecl;
+  xtkDoctype         = nextpas.core.xml.base.xtkDoctype;
+
 function XmlParse(const AInput: string): TXmlDocument; inline;
 function XmlTokenize(const AInput: string): TXmlTokenArray;
 function XmlDecodeEntities(const AStr: string): string; inline;
@@ -48,6 +61,7 @@ var
   LTok: TXmlToken;
   LCount, LCap: Integer;
 begin
+  Result := nil;
   LReader := TXmlReader.Create(AInput);
   try
     LCount := 0;
@@ -64,6 +78,9 @@ begin
       Inc(LCount);
     end;
     SetLength(Result, LCount);
+    { 与 XmlParse 保持一致：非法 XML 必须抛错，不静默返回部分 token }
+    if LReader.HasError then
+      raise EXmlError.Create(LReader.GetError, LReader.Position);
   finally
     LReader.Free;
   end;

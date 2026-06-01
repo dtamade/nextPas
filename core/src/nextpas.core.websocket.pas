@@ -114,6 +114,7 @@ var
   LMaskKey: array[0..3] of Byte;
   I: SizeUInt;
 begin
+  Result := nil;
   LPayloadLen := Length(AFrame.Payload);
   LMask := (ARole = wsrClient);
 

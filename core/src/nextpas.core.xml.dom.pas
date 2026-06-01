@@ -116,6 +116,7 @@ function TXmlNode.FindChildren(const AName: string): TXmlNodeArray;
 var
   LI, LCount: Integer;
 begin
+  Result := nil;
   LCount := 0;
   SetLength(Result, FChildCount);
   for LI := 0 to FChildCount - 1 do
@@ -247,6 +248,9 @@ begin
           LChild.FValue := LTok.Value;
           LCurrent.AddChild(LChild);
         end;
+        xtkNone, xtkXmlDecl, xtkDoctype:
+          { 声明/DTD/空 token 不构建 DOM 节点（当前 DOM 合同不表示它们） }
+          ;
       end; { case }
     end;
     if LReader.HasError then
@@ -293,6 +297,7 @@ var
   LNextCount: Integer;
   LNode: TXmlNode;
 begin
+  Result := nil;
   { Split path by '/' }
   LPartCount := 0;
   SetLength(LParts, 16);
