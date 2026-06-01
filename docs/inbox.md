@@ -4,13 +4,13 @@
 
 ## 当前在做什么
 
-- 编译器主线停在 `C3-B3`：`ret-runtime` 已接入结构化 `ExprId`，同时保留旧 `Operand` blob。
-- 本轮核心取舍：`ret-runtime` 先表达“读取返回槽变量”，不回溯 `Result := ...` 的原始表达式树。
-- 最近验证：`scripts/rebuild-compiler.sh` 输出 `43694 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 编译器主线停在 `C3-B4`：`if/while/repeat` 的 `cond-br-runtime` 已在安全 bool 条件上接入结构化 `ExprId`，同时保留旧 condition blob。
+- 本轮核心取舍：只迁移能证明产出 bool/i1 的条件表达式；`for` 的手工循环条件暂不迁移。
+- 最近验证：`scripts/rebuild-compiler.sh` 输出 `43739 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. `C3-B4`：迁移 `cond-br` producer，让运行时条件分支优先走结构化表达式。
+1. `C3-B5`：评估并迁移下一批安全 producer，优先看 `assign-runtime` 中不涉及 lvalue/address 的标量表达式。
 2. `C4`：把整数宽度从单一 `i64` 推进到真实标量宽度。
 3. `C5`：补 `lvalue/address` 模型，修 `P^.Field`、`@Arr[i]` 一类地址表达式。
 4. `C6`：补 allocator 和真实释放。
@@ -26,6 +26,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 批次计划：[`compiler/docs/plans/2026-06-01-c3b1-halt-expr-producer.md`](../compiler/docs/plans/2026-06-01-c3b1-halt-expr-producer.md)
-- 上一批次：[`compiler/docs/plans/2026-06-01-c3b2-write-int-expr-producer.md`](../compiler/docs/plans/2026-06-01-c3b2-write-int-expr-producer.md)
-- 当前批次：[`compiler/docs/plans/2026-06-01-c3b3-ret-runtime-expr-producer.md`](../compiler/docs/plans/2026-06-01-c3b3-ret-runtime-expr-producer.md)
+- 当前批次：[`compiler/docs/plans/2026-06-02-c3b4-cond-br-expr-producer.md`](../compiler/docs/plans/2026-06-02-c3b4-cond-br-expr-producer.md)
