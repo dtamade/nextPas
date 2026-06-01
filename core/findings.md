@@ -1,28 +1,43 @@
-# Findings: parser TryParse API compliance
+# Findings: nextpas.core.http module ownership
 
-## Requirements
-- Read `docs/api-conventions.md` first.
-- Add `TryJsonParse`, `TryYamlParse`, `TryTomlParse`, and `TryXmlParse`.
-- Preserve existing parse APIs exactly.
-- For JSON/YAML/TOML, return parsed document through the `out` parameter even when `HasError` is true.
-- For XML, catch `EXmlError`, free any assigned class document, and return `False`.
-- Add success/failure tests for each parser facade.
-- Verify tests and memory leak behavior.
+## Project Rules Read
 
-## Research Findings
-- `docs/api-conventions.md` requires parser modules to keep existing `Parse` APIs and add `TryXxx` as a supplemental branch-friendly form.
-- JSON facade already exports `JsonParse` and `JsonParseWith`; `IJsonDocument` exposes `HasError` and `Error`.
-- YAML facade already exports `YamlParse` overloads; `IYamlDocument` exposes `HasError` and `Error`.
-- TOML facade already exports `TomlParse` and `TomlParseWith`; `ITomlDocument` exposes `HasError` and `Error`.
-- XML facade exports `XmlParse(const AInput: string): TXmlDocument` and re-exports `EXmlError`; document ownership is manual because `TXmlDocument` is a class.
-- Best-fit existing test files are:
-  - `tests/nextpas.core.json/test_json_facade/test_json_facade.lpr`
-  - `tests/nextpas.core.yaml/test_yaml_facade/test_yaml_facade.lpr`
-  - `tests/nextpas.core.toml/test_toml_facade/test_toml_facade.lpr`
-  - `tests/nextpas.core.xml/test_xml/test_xml.lpr`
-- These facade tests already have dedicated `Makefile`s using `-gh -gl`, so they are the most direct place to add API-surface verification and leak checks.
+- `docs/design-conventions.md` is the binding style and architecture guide for `nextpas.core`.
+- `http` is an L3 framework module and may depend only on L0-L2 modules.
+- Module shape is responsibility-driven: facade/base/intf/ffi/implementation files exist only when their responsibilities are real.
+- Facades must explicitly re-export public types and forward functions because FPC does not auto re-export.
+- Public APIs should use small interfaces, COM reference counting for builders/handlers where appropriate, default exception propagation, and `TryXxx` only when branch-friendly failure handling is useful.
+- Tests are independent `.lpr` projects under `tests/nextpas.core.<module>/...`; benchmarks are independent projects under `benchmarks/nextpas.core.<module>/...`.
 
-## Issues Encountered
-| Issue | Resolution |
-|---|---|
-| `/home/dtamade/.codex/memories/MEMORY.md` is missing in this environment | Continued with system-provided memory summary and live repo inspection |
+## HTTP Architecture Findings
+
+- `docs/http/ARCHITECTURE.md` positions HTTP as a unified facade plus shared application layer plus isolated protocol implementations.
+- Current long-term architecture expects H1 first, then H2 after TLS/ALPN readiness, then H3 after QUIC readiness.
+- Current source tree has implemented H1 parser/writer/scan/fast units, middleware presets, static serving, websocket upgrade, server/client skeletons, and public facade forwarding.
+- Existing HTTP source inventory contains 22 `src/nextpas.core.http*.pas` units:
+  - facade/contracts: `http`, `http.base`, `http.intf`
+  - shared application layer: headers, URL, message, router, middleware, server, client, static, websocket
+  - H1 protocol layer: llhttp, parser, writer, chunked, scan, fast
+  - preset middleware: CORS, logger, recovery, timeout
+- Existing HTTP tests contain 19 focused test projects covering base, client, contract, H1 parser/scan/writer/fast, headers, integration, message, middleware(s), router, security, server, smoke, static, URL, websocket.
+- Existing benchmark projects cover H1 parser, headers, router, server, full chain, generic HTTP, and protocol comparison.
+
+## Git and Collaboration Findings
+
+- Current directory is `/home/dtamade/projects/nextPas/core`.
+- `git_dir` equals `git_common`; this is the normal `main` checkout, not a linked worktree.
+- The shared checkout has unrelated modified and untracked files outside this batch.
+- Safe rule for this batch: touch only HTTP takeover planning/control-map files and do not stage unrelated work.
+
+## Gaps to Audit Next
+
+- `docs/http/ARCHITECTURE.md` mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
+- The public API coverage matrix has not yet been built; existing tests are numerous but not proven to cover every public function/method.
+- The current leak status of all HTTP tests has not been verified in this round.
+- Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
+
+## Communication Cadence Adopted
+
+- Start every HTTP batch by showing an explicit task checklist.
+- Keep `docs/nextpas.core.http.inbox.md` short and user-facing; keep `task_plan.md`, `findings.md`, and `progress.md` detailed enough for execution recovery.
+- End every batch with what changed, verification evidence, retrospective, next plan, and git status/commit state.

@@ -1,70 +1,45 @@
-# Progress Log
+# Progress Log: nextpas.core.http
 
 ## Session: 2026-06-01
 
-### Phase 0: Conventions and discovery
-- **Status:** complete
-- Actions taken:
-  - Loaded required workflow skills.
-  - Confirmed current directory is `/home/dtamade/projects/nextPas/.worktrees/api-compliance/core`.
-  - Confirmed working tree started clean.
-  - Replaced stale planning files with this TryParse task's files.
-  - Read `docs/api-conventions.md` and confirmed the requested direction matches the P0 migration item for parser `TryParse`.
-  - Confirmed JSON/YAML/TOML use interface documents with `HasError`, while XML uses `TXmlDocument` and raises `EXmlError`.
-  - Located existing facade test programs and their local `Makefile` compile conventions.
+### Phase 0: Takeover and control map
 
-### Phase 1: RED tests
-- **Status:** complete
-- Actions taken:
-  - Chose existing facade test programs as the narrowest compatibility surface for the new APIs.
-  - Added success/failure TryParse tests to JSON, YAML, TOML, and XML facade suites.
-  - Compiled all four modified tests before production implementation.
-  - Confirmed expected RED failures:
-    - JSON: `Identifier not found "TryJsonParse"`.
-    - YAML: `Identifier not found "TryYamlParse"`.
-    - TOML: `Identifier not found "TryTomlParse"`.
-    - XML: `Identifier not found "TryXmlParse"`.
-
-### Phase 2: Thin wrapper APIs
-- **Status:** complete
-- Actions taken:
-  - Added `TryJsonParse` to `src/nextpas.core.json.pas`.
-  - Added `TryYamlParse` to `src/nextpas.core.yaml.pas`.
-  - Added `TryTomlParse` to `src/nextpas.core.toml.pas`.
-  - Added `TryXmlParse` to `src/nextpas.core.xml.pas` with `EXmlError` handling and `FreeAndNil`.
-
-### Phase 3: Verification and cleanup
-- **Status:** complete
-- Actions taken:
-  - Recompiled all four facade test targets successfully.
-  - Ran all four test binaries with heaptrc enabled.
-  - Confirmed 0 failed tests and 0 unfreed memory blocks in each suite.
-  - Checked `git status` and `git diff`; unrelated config/ini module and test files were left untouched.
+- **Status:** in progress
+- **Scope:** planning/control-map only; no `src/` or `tests/` implementation edits.
+- **Checklist:**
+  - [x] Read active skill rules for brainstorming, file planning, and implementation planning.
+  - [x] Read `docs/design-conventions.md`.
+  - [x] Checked Git state before edits.
+  - [x] Confirmed current checkout is `main`, not a linked worktree.
+  - [x] Reviewed `docs/http/README.md`.
+  - [x] Reviewed `docs/http/ARCHITECTURE.md`.
+  - [x] Reviewed `src/nextpas.core.http.pas`, `src/nextpas.core.http.base.pas`, and `src/nextpas.core.http.intf.pas`.
+  - [x] Inventoried HTTP source, tests, and benchmark directories.
+  - [x] Replaced stale root planning files with HTTP ownership planning files.
+  - [x] Added `docs/nextpas.core.http.inbox.md` as the compact user-facing control map.
+  - [x] Ran hygiene checks and prepared the planning batch for a narrow commit.
 
 ## Verification Evidence
-| Check | Command | Result |
-|---|---|---|
-| JSON RED compile | `make -C tests/nextpas.core.json/test_json_facade clean build` | Failed as expected: missing `TryJsonParse` |
-| YAML RED compile | `make -C tests/nextpas.core.yaml/test_yaml_facade clean build` | Failed as expected: missing `TryYamlParse` |
-| TOML RED compile | `make -C tests/nextpas.core.toml/test_toml_facade clean build` | Failed as expected: missing `TryTomlParse` |
-| XML RED compile | `make -C tests/nextpas.core.xml/test_xml clean build` | Failed as expected: missing `TryXmlParse` |
-| JSON GREEN compile/run | `make -C tests/nextpas.core.json/test_json_facade clean build && ./build/projects/nextpas.core.json/test_json_facade/test_json_facade 2>&1` | 13/13 passed, 0 unfreed memory blocks |
-| YAML GREEN compile/run | `make -C tests/nextpas.core.yaml/test_yaml_facade clean build && ./build/projects/nextpas.core.yaml/test_yaml_facade/test_yaml_facade 2>&1` | 27/27 passed, 0 unfreed memory blocks |
-| TOML GREEN compile/run | `make -C tests/nextpas.core.toml/test_toml_facade clean build && ./build/projects/nextpas.core.toml/test_toml_facade/test_toml_facade 2>&1` | 14/14 passed, 0 unfreed memory blocks |
-| XML GREEN compile/run | `make -C tests/nextpas.core.xml/test_xml clean build && ./build/projects/nextpas.core.xml/test_xml/test_xml 2>&1` | 16/16 passed, 0 unfreed memory blocks |
 
-## Test Results
-| Test | Expected | Actual | Status |
-|---|---|---|---|
-| JSON facade TryParse tests | Fail before implementation | Missing symbol | RED |
-| YAML facade TryParse tests | Fail before implementation | Missing symbol | RED |
-| TOML facade TryParse tests | Fail before implementation | Missing symbol | RED |
-| XML facade TryParse tests | Fail before implementation | Missing symbol | RED |
-| JSON facade TryParse tests | Pass after implementation | 13/13 passed, 0 leaks | PASS |
-| YAML facade TryParse tests | Pass after implementation | 27/27 passed, 0 leaks | PASS |
-| TOML facade TryParse tests | Pass after implementation | 14/14 passed, 0 leaks | PASS |
-| XML facade TryParse tests | Pass after implementation | 16/16 passed, 0 leaks | PASS |
+| Check                    | Command                                                                                    | Result                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------- |
+| Design conventions read  | `sed -n '1,620p' docs/design-conventions.md`                                               | Completed                                      |
+| Git safety state         | `git status --short --branch`                                                              | Shared checkout is dirty outside this batch    |
+| Worktree detection       | `git rev-parse --git-dir`, `git rev-parse --git-common-dir`                                | Normal checkout on `main`, not linked worktree |
+| HTTP source inventory    | `find src -maxdepth 1 -name 'nextpas.core.http*.pas'`                                      | 22 source units                                |
+| HTTP test inventory      | `find tests/nextpas.core.http -mindepth 1 -maxdepth 1 -type d`                             | 19 test projects                               |
+| HTTP benchmark inventory | `find benchmarks/nextpas.core.http* -mindepth 1 -maxdepth 1 -type d`                       | 7 benchmark projects                           |
+| Markdown formatting      | `prettier --write docs/nextpas.core.http.inbox.md task_plan.md findings.md progress.md`    | Completed                                      |
+| Whitespace check         | `git diff --check -- docs/nextpas.core.http.inbox.md task_plan.md findings.md progress.md` | No errors                                      |
+
+## Notes
+
+- The root planning files previously described a completed parser TryParse task. They now describe the active HTTP module ownership work.
+- No correctness claim is made for HTTP in this phase; current tests and leak status still need a fresh baseline run.
 
 ## Error Log
-| Timestamp | Error | Attempt | Resolution |
-|---|---|---|---|
+
+| Timestamp  | Error                                               | Attempt | Resolution                                           |
+| ---------- | --------------------------------------------------- | ------- | ---------------------------------------------------- |
+| 2026-06-01 | Stale root planning files from prior task           | 1       | Replaced with active HTTP plan/findings/progress     |
+| 2026-06-01 | Shared checkout has unrelated dirty/untracked files | 1       | Kept this batch scoped to planning/control-map files |
