@@ -148,3 +148,49 @@
 
 - Commit P2 interpolation.
 - Start P3 required-value APIs.
+
+## 2026-06-02 Batch 4: P3 Required-Value APIs
+
+### Completed So Far
+
+- Verified worktree state before editing:
+  - branch `codex/config-phase2-main-20260601`
+  - head `3aae82a6`
+  - no uncommitted changes
+  - latest config file commit was the P2 commit
+- Re-read the Phase 2 task plan and current `TConfig` public API.
+- Added RED tests for:
+  - `GetStringRequired` returning an interpolated required value;
+  - `Require(keys)` accepting present non-empty values;
+  - missing required string/int values raising `EConfigError`;
+  - `Require(keys)` raising for missing and empty keys;
+  - required empty string raising `EConfigError`;
+  - required int/bool/float parsing interpolated values;
+  - invalid required int/bool/float values raising `EConfigError`.
+- Verified RED failure before implementation:
+  - `make -C core/tests/nextpas.core.config/test_config test` failed to
+    compile with missing members: `GetStringRequired`, `GetIntRequired`,
+    `GetBoolRequired`, `GetFloatRequired`, and `Require`.
+- Implemented:
+  - public `GetStringRequired`;
+  - public `GetIntRequired`;
+  - public `GetBoolRequired`;
+  - public `GetFloatRequired`;
+  - public `Require(const AKeys: array of string)`.
+- Focused GREEN verification:
+  - `make -C core/tests/nextpas.core.config/test_config test`:
+    `54 total, 54 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `make -C core/tests/nextpas.core.config/test_config_nested test`:
+    `28 total, 28 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `git diff --check`: exit 0.
+- Final clean verification:
+  - `make -C core/tests/nextpas.core.config/test_config clean test`:
+    `54 total, 54 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `make -C core/tests/nextpas.core.config/test_config_nested clean test`:
+    `28 total, 28 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `git diff --check`: exit 0.
+
+### Next
+
+- Commit P3 required-value APIs.
+- Start final documentation/API audit round before benchmarks.

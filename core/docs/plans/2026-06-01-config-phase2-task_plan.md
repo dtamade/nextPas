@@ -50,6 +50,18 @@ Priority: P2 placeholder interpolation.
 - [x] Run clean focused tests with heaptrc and check for zero leaks.
 - [x] Commit the batch with a clear message.
 
+## Batch 4
+
+Priority: P3 required-value APIs.
+
+- [x] Confirm isolated worktree is clean and no newer same-file config commits
+  exist.
+- [x] Add RED tests for `Require`, required string/int/bool/float getters,
+  missing keys, empty values, interpolation, and invalid typed values.
+- [x] Implement required getter APIs with `EConfigError`.
+- [x] Run clean focused tests with heaptrc and check for zero leaks.
+- [x] Commit the batch with a clear message.
+
 ## Design Decisions
 
 | Topic | Decision | Reason |
@@ -66,10 +78,11 @@ Priority: P2 placeholder interpolation.
 | Escaping | `$${name}` returns literal `${name}` | Gives callers a minimal escape hatch without adding parser modes. |
 | Cycle handling | Config-key interpolation cycles raise `EConfigError` | Cycles are invalid configuration, and throwing follows the framework default-error convention. |
 | Getter coverage | `GetString`, typed getters, default strings, and `GetStringArray` items interpolate; `GetSection`, `Has`, `GetKeys`, and `Count` remain structural/raw | Value-returning APIs expose final effective values; structural APIs must continue reflecting the flat key table. |
+| Required APIs | Add `GetStringRequired`, `GetIntRequired`, `GetBoolRequired`, `GetFloatRequired`, and `Require(keys)`; missing, empty, and invalid typed values raise `EConfigError` | Keeps existing default-returning getters compatible while giving callers an explicit fail-fast contract for required config. |
+| Required interpolation | Required getters resolve interpolation before emptiness/type checks | Required APIs should validate the final effective value, not the raw stored placeholder text. |
 
 ## Later Batches
 
-- P3: required-value APIs such as `GetIntRequired` and `Require`.
 - Final round: documentation refresh and benchmark comparison after interfaces
   are complete and stable.
 

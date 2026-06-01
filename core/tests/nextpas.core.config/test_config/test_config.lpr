@@ -252,6 +252,169 @@ begin
   end;
 end;
 
+{ === Required Value Tests === }
+
+procedure TestRequiredStringAndRequire;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 +
+      'host=localhost' + #10 +
+      'port=8080' + #10 +
+      '[service]' + #10 +
+      'url=https://${server.host}:${server.port}' + #10);
+
+    CheckEqual('https://localhost:8080', LCfg.GetStringRequired('service.url'),
+      'required string interpolates');
+    LCfg.Require(['server.host', 'server.port', 'service.url']);
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredMissingRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 + 'host=localhost' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('server.port');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'missing string required raises');
+
+    LRaised := False;
+    try
+      LCfg.GetIntRequired('server.port');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'missing int required raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['server.host', 'server.port']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for missing key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredEmptyRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('empty=' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('empty');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'empty required string raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['empty']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for empty key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredTypedValues;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[source]' + #10 +
+      'port=8080' + #10 +
+      'enabled=yes' + #10 +
+      'ratio=2.5' + #10 +
+      '[derived]' + #10 +
+      'port=${source.port}' + #10 +
+      'enabled=${source.enabled}' + #10 +
+      'ratio=${source.ratio}' + #10);
+
+    CheckEqual(Int64(8080), LCfg.GetIntRequired('derived.port'),
+      'required int interpolates');
+    CheckEqual(True, LCfg.GetBoolRequired('derived.enabled'),
+      'required bool interpolates');
+    LVal := LCfg.GetFloatRequired('derived.ratio');
+    Check((LVal > 2.4) and (LVal < 2.6), 'required float interpolates');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredTypedInvalidRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[bad]' + #10 +
+      'port=abc' + #10 +
+      'enabled=maybe' + #10 +
+      'ratio=hello' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetIntRequired('bad.port');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'invalid required int raises');
+
+    LRaised := False;
+    try
+      LCfg.GetBoolRequired('bad.enabled');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'invalid required bool raises');
+
+    LRaised := False;
+    try
+      LCfg.GetFloatRequired('bad.ratio');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'invalid required float raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === GetInt Tests === }
 
 procedure TestGetIntBasic;
@@ -998,6 +1161,11 @@ begin
   T.Run('Interpolation.TypedGetters', @TestInterpolationTypedGetters);
   T.Run('Interpolation.StringArray', @TestInterpolationStringArray);
   T.Run('Interpolation.CycleRaises', @TestInterpolationCycleRaises);
+  T.Run('Required.StringAndRequire', @TestRequiredStringAndRequire);
+  T.Run('Required.MissingRaises', @TestRequiredMissingRaises);
+  T.Run('Required.EmptyRaises', @TestRequiredEmptyRaises);
+  T.Run('Required.TypedValues', @TestRequiredTypedValues);
+  T.Run('Required.TypedInvalidRaises', @TestRequiredTypedInvalidRaises);
   T.Run('GetInt.Basic', @TestGetIntBasic);
   T.Run('GetInt.Default', @TestGetIntDefault);
   T.Run('GetInt.Invalid', @TestGetIntInvalid);

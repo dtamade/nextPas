@@ -61,6 +61,11 @@ type
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetStringRequired(const AKey: string): string;
+    function GetIntRequired(const AKey: string): Int64;
+    function GetBoolRequired(const AKey: string): Boolean;
+    function GetFloatRequired(const AKey: string): Double;
+    procedure Require(const AKeys: array of string);
 
     procedure ReplaceFrom(AOther: TConfig);
     function Has(const AKey: string): Boolean;
@@ -1076,6 +1081,63 @@ begin
     Result := LVal
   else
     Result := ADefault;
+end;
+
+function TConfig.GetStringRequired(const AKey: string): string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+  LIdx: Integer;
+  LStack: TStringArray;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
+  if LIdx < 0 then
+    raise EConfigError.Create('Required config key "' + AKey + '" is missing');
+
+  LStack := nil;
+  Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack);
+  if Result = '' then
+    raise EConfigError.Create('Required config key "' + AKey + '" is empty');
+end;
+
+function TConfig.GetIntRequired(const AKey: string): Int64;
+var
+  LText: string;
+begin
+  LText := GetStringRequired(AKey);
+  if not TryStrToInt64(LText, Result) then
+    raise EConfigError.Create('Required config key "' + AKey + '" is not an integer');
+end;
+
+function TConfig.GetBoolRequired(const AKey: string): Boolean;
+var
+  LText: string;
+begin
+  LText := LowerCase(Trim(GetStringRequired(AKey)));
+  if (LText = 'true') or (LText = '1') or (LText = 'yes') or (LText = 'on') then
+    Result := True
+  else if (LText = 'false') or (LText = '0') or (LText = 'no') or (LText = 'off') then
+    Result := False
+  else
+    raise EConfigError.Create('Required config key "' + AKey + '" is not a boolean');
+end;
+
+function TConfig.GetFloatRequired(const AKey: string): Double;
+var
+  LText: string;
+begin
+  LText := GetStringRequired(AKey);
+  if not TryStrToFloat(LText, Result) then
+    raise EConfigError.Create('Required config key "' + AKey + '" is not a float');
+end;
+
+procedure TConfig.Require(const AKeys: array of string);
+var
+  LI: Integer;
+begin
+  for LI := 0 to Length(AKeys) - 1 do
+    GetStringRequired(AKeys[LI]);
 end;
 
 procedure TConfig.ReplaceFrom(AOther: TConfig);

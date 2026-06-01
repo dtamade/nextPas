@@ -79,3 +79,17 @@
   `Has`, `GetKeys`, `GetSection`, and `Count`.
 - Default strings passed to `GetString` are interpolated against the same
   snapshot, so callers can use defaults such as `http://${host}`.
+
+## P3 Required API Notes
+
+- Required APIs are additive and do not change the existing default-returning
+  getter semantics.
+- `GetStringRequired` requires the key to exist and its interpolated value to be
+  non-empty. Empty strings are treated as invalid required values.
+- `GetIntRequired`, `GetBoolRequired`, and `GetFloatRequired` all validate the
+  interpolated final value. Missing keys, empty values, and invalid typed values
+  raise `EConfigError`.
+- `Require(keys)` is a bulk presence/value check over `GetStringRequired`; it
+  is intentionally structural-light and does not parse typed values.
+- Error messages include the requested key name but not the raw config value,
+  which keeps diagnostics useful without echoing possible secret contents.
