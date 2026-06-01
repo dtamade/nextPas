@@ -44,7 +44,11 @@ end;
 
 {$IFDEF CPUX86_64}
 {$I nextpas.core.hash.sha1.x64.inc}
+{$I nextpas.core.hash.sha1.ssse3.inc}
 {$ENDIF}
+
+var
+  GSHA1HasSSSE3: Boolean = False;
 
 procedure SHA1ProcessBlock(ABlock: PByte; var AH: array of UInt32);
 var
@@ -53,6 +57,11 @@ var
   I: Integer;
 begin
   {$IFDEF CPUX86_64}
+  if GSHA1HasSSSE3 then
+  begin
+    SHA1ProcessBlockSSSE3(ABlock, AH);
+    Exit;
+  end;
   SHA1ProcessBlockX64(ABlock, AH);
   Exit;
   {$ENDIF}
@@ -206,5 +215,25 @@ function NewSHA1: IHasher;
 begin
   Result := TSHA1Hasher.Create;
 end;
+
+{$IFDEF CPUX86_64}
+procedure DetectSHA1Features;
+var
+  LEcx: DWord;
+begin
+  LEcx := 0;
+  asm
+    movl $1, %eax
+    cpuid
+    movl %ecx, LEcx
+  end ['eax', 'ebx', 'ecx', 'edx'];
+  GSHA1HasSSSE3 := (LEcx and (1 shl 9)) <> 0;
+end;
+{$ENDIF}
+
+initialization
+  {$IFDEF CPUX86_64}
+  DetectSHA1Features;
+  {$ENDIF}
 
 end.
