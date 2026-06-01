@@ -174,3 +174,21 @@ type
 const
   LOCKFILE_FAIL_IMMEDIATELY = DWORD(1);
   LOCKFILE_EXCLUSIVE_LOCK   = DWORD(2);
+
+{ ConPTY (Windows 10 1809+) }
+type
+  COORD = record
+    X: Int16;
+    Y: Int16;
+  end;
+  HPCON = Pointer;
+
+  STARTUPINFOEXW = record
+    StartupInfo: STARTUPINFOW;
+    lpAttributeList: Pointer;
+  end;
+  LPSTARTUPINFOEXW = ^STARTUPINFOEXW;
+
+const
+  PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE = PtrUInt($00020016);
+  EXTENDED_STARTUPINFO_PRESENT        = DWORD($00080000);

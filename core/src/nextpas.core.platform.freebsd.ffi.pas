@@ -64,6 +64,10 @@ function getnameinfo(sa: Pointer; salen: UInt32; host: PAnsiChar; hostlen: PtrUI
 procedure arc4random_buf(buf: Pointer; nbytes: PtrUInt); cdecl; external 'c' name 'arc4random_buf';
 function getdents(fd: Int32; buf: PAnsiChar; nbytes: PtrUInt): PtrInt; cdecl; external 'c' name 'getdents';
 
+{ PTY — in libc on FreeBSD }
+function openpty(amaster: pcint; aslave: pcint; name: PAnsiChar; termp: Pointer; winp: Pointer): cint; cdecl; external 'c' name 'openpty';
+function login_tty(AFd: cint): cint; cdecl; external 'c' name 'login_tty';
+
 implementation
 
 end.
