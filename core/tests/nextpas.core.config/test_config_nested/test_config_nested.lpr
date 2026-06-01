@@ -548,6 +548,32 @@ begin
   end;
 end;
 
+procedure TestMalformedJsonErrorIncludesLineAndColumn;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LRaised := False;
+    try
+      LCfg.LoadFromJson('{' + #10 +
+        '  "server": ' + #10 +
+        '}');
+    except
+      on E: EConfigError do
+      begin
+        LRaised := True;
+        Check(Pos('line 2', E.Message) > 0, 'json error line');
+        Check(Pos('column', E.Message) > 0, 'json error column');
+      end;
+    end;
+    CheckEqual(True, LRaised, 'bad multiline json raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -580,5 +606,6 @@ begin
   T.Run('GetStringArray.IgnoresObjectArrayItems', @TestGetStringArrayIgnoresObjectArrayItems);
   T.Run('GetStringArray.TopLevelArrayAndMissing', @TestGetStringArrayTopLevelArrayAndMissing);
   T.Run('Malformed.LoadRaisesConfigError', @TestMalformedLoadRaisesConfigError);
+  T.Run('Malformed.JsonLineColumn', @TestMalformedJsonErrorIncludesLineAndColumn);
   T.Summary;
 end.

@@ -194,3 +194,63 @@
 
 - Commit P3 required-value APIs.
 - Start final documentation/API audit round before benchmarks.
+
+## 2026-06-02 Batch 5: Final API and Documentation Audit
+
+### Completed So Far
+
+- Verified worktree state before editing:
+  - branch `codex/config-phase2-main-20260601`
+  - head `8ade3d68`
+  - no uncommitted changes at batch start
+  - latest config file commits were the four Phase 2 commits
+- Re-read:
+  - `core/docs/design-conventions.md`
+  - `core/docs/api-conventions.md`
+  - `core/docs/plans/2026-06-01-config-loaders-dom.md`
+  - Phase 2 task/findings/progress files
+  - `core/src/nextpas.core.config.pas`
+  - both config test projects
+- Found and fixed a diagnostics gap:
+  - JSON load errors included byte offset but not line/column.
+  - Added `Malformed.JsonLineColumn` RED test.
+  - Wrapped JSON parser offset with config-level line/column calculation while
+    preserving the offset in the error text.
+- Ran read-only review against the Phase 2 contract. Findings adopted:
+  - required getters should reject unresolved placeholders instead of accepting
+    the preserved `${...}` text;
+  - required getters should reject whitespace-only values;
+  - watcher bad reload preservation needed YAML/TOML coverage in addition to
+    JSON.
+- Added RED/GREEN tests:
+  - `Required.UnresolvedPlaceholderRaises`
+  - `Required.WhitespaceRaises`
+  - `ConfigWatcher.BadYamlRaises`
+  - `ConfigWatcher.BadTomlRaises`
+- Implemented strict interpolation only for required getters. Ordinary
+  `GetString`, typed default getters, and `GetStringArray` still preserve
+  unresolved placeholders.
+- Added `core/docs/config/README.md` covering loaders, flattened dot-path
+  semantics, load errors, try-load variants, sections/arrays, interpolation,
+  required APIs, and watcher behavior.
+- Updated stale docs:
+  - `core/docs/api-conventions.md`
+  - `core/docs/plans/2026-06-01-config-loaders-dom.md`
+  - `core/docs/plans/2026-06-01-config-phase2-task_plan.md`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.config/test_config_nested test`:
+    `29 total, 29 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `make -C core/tests/nextpas.core.config/test_config test`:
+    `58 total, 58 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+
+### Next
+
+- Final clean verification completed:
+  - `make -C core/tests/nextpas.core.config/test_config clean test`:
+    `58 total, 58 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `make -C core/tests/nextpas.core.config/test_config_nested clean test`:
+    `29 total, 29 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+  - `git diff --check`: exit 0.
+- Commit final audit batch.
+- Then decide integration path for the feature branch; benchmarks remain a
+  later round.

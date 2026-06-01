@@ -415,6 +415,69 @@ begin
   end;
 end;
 
+procedure TestRequiredUnresolvedPlaceholderRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  UnsetEnv('NEXTPAS_CFG_REQUIRED_SECRET');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('secret=${NEXTPAS_CFG_REQUIRED_SECRET}' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('secret');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'unresolved required placeholder raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['secret']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for unresolved placeholder');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredWhitespaceRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('blank=   ' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetStringRequired('blank');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'whitespace required string raises');
+
+    LRaised := False;
+    try
+      LCfg.Require(['blank']);
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'Require raises for whitespace key');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === GetInt Tests === }
 
 procedure TestGetIntBasic;
@@ -1146,6 +1209,82 @@ begin
   end;
 end;
 
+procedure TestConfigWatcherBadYamlRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_yaml.yaml';
+  Remove(LPath);
+  WriteFileText(LPath, 'server:' + #10 + '  host: initial' + #10 + '  port: 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromYaml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfYaml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, '{a: *missing}');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad yaml watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old yaml host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old yaml port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
+procedure TestConfigWatcherBadTomlRaisesAndPreservesOldConfig;
+var
+  LCfg: TConfig;
+  LWatcher: TConfigWatcher;
+  LPath: string;
+  LRaised: Boolean;
+begin
+  LPath := '/tmp/test_hotreload_nextpas_config_bad_toml.toml';
+  Remove(LPath);
+  WriteFileText(LPath, '[server]' + #10 + 'host = "initial"' + #10 + 'port = 1000' + #10);
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromToml(ReadFileText(LPath));
+    LWatcher := TConfigWatcher.Create(LCfg, LPath, cfToml);
+    try
+      TSleep.ForDuration(TDuration.FromMilliseconds(20));
+      WriteFileText(LPath, 'key = ');
+
+      LRaised := False;
+      try
+        LWatcher.CheckReload;
+      except
+        on E: EConfigError do
+          LRaised := True;
+      end;
+
+      CheckEqual(True, LRaised, 'bad toml watcher reload raises EConfigError');
+      CheckEqual('initial', LCfg.GetString('server.host'), 'old toml host preserved');
+      CheckEqual(Int64(1000), LCfg.GetInt('server.port'), 'old toml port preserved');
+    finally
+      LWatcher.Free;
+    end;
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -1166,6 +1305,8 @@ begin
   T.Run('Required.EmptyRaises', @TestRequiredEmptyRaises);
   T.Run('Required.TypedValues', @TestRequiredTypedValues);
   T.Run('Required.TypedInvalidRaises', @TestRequiredTypedInvalidRaises);
+  T.Run('Required.UnresolvedPlaceholderRaises', @TestRequiredUnresolvedPlaceholderRaises);
+  T.Run('Required.WhitespaceRaises', @TestRequiredWhitespaceRaises);
   T.Run('GetInt.Basic', @TestGetIntBasic);
   T.Run('GetInt.Default', @TestGetIntDefault);
   T.Run('GetInt.Invalid', @TestGetIntInvalid);
@@ -1204,5 +1345,7 @@ begin
   T.Run('ReplaceFrom', @TestReplaceFrom);
   T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
   T.Run('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.BadYamlRaises', @TestConfigWatcherBadYamlRaisesAndPreservesOldConfig);
+  T.Run('ConfigWatcher.BadTomlRaises', @TestConfigWatcherBadTomlRaisesAndPreservesOldConfig);
   T.Summary;
 end.

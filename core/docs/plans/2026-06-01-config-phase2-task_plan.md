@@ -62,6 +62,23 @@ Priority: P3 required-value APIs.
 - [x] Run clean focused tests with heaptrc and check for zero leaks.
 - [x] Commit the batch with a clear message.
 
+## Batch 5
+
+Priority: final API/documentation audit.
+
+- [x] Confirm isolated worktree state and same-file config history.
+- [x] Re-read design conventions, Phase 2 plans, current source, and tests.
+- [x] Run a read-only review of the Phase 2 requirements against source and
+  tests.
+- [x] Add coverage for JSON load errors including line/column diagnostics.
+- [x] Add coverage for required unresolved placeholders and whitespace-only
+  values.
+- [x] Add coverage for watcher YAML/TOML bad reload preserving old config.
+- [x] Document the config module public contract in `docs/config/README.md`.
+- [x] Update stale API convention and Phase 2 plan notes.
+- [x] Run final clean config tests, heaptrc verification, and `git diff --check`.
+- [ ] Commit the final audit batch.
+
 ## Design Decisions
 
 | Topic | Decision | Reason |
@@ -80,11 +97,15 @@ Priority: P3 required-value APIs.
 | Getter coverage | `GetString`, typed getters, default strings, and `GetStringArray` items interpolate; `GetSection`, `Has`, `GetKeys`, and `Count` remain structural/raw | Value-returning APIs expose final effective values; structural APIs must continue reflecting the flat key table. |
 | Required APIs | Add `GetStringRequired`, `GetIntRequired`, `GetBoolRequired`, `GetFloatRequired`, and `Require(keys)`; missing, empty, and invalid typed values raise `EConfigError` | Keeps existing default-returning getters compatible while giving callers an explicit fail-fast contract for required config. |
 | Required interpolation | Required getters resolve interpolation before emptiness/type checks | Required APIs should validate the final effective value, not the raw stored placeholder text. |
+| Required strictness | Required getters treat whitespace-only strings and unresolved placeholders as `EConfigError`; ordinary getters still preserve unresolved placeholders | Required config should fail fast on ineffective values while optional/default reads remain branch-friendly. |
+| JSON parser diagnostics | Config wraps JSON parser offset with line/column computed from the original input | Keeps JSON parser compatibility while satisfying config's user-facing parse diagnostics contract. |
 
 ## Later Batches
 
-- Final round: documentation refresh and benchmark comparison after interfaces
-  are complete and stable.
+- Benchmark comparison after interfaces and documentation are stable.
+- Consider splitting `nextpas.core.config.pas` after Phase 2 because the unit now
+  exceeds the 800-line soft guideline; defer until behavior is frozen to avoid
+  mixing refactor risk with API work.
 
 ## Verification Gates
 
@@ -105,3 +126,4 @@ Priority: P3 required-value APIs.
 | Direct `docs/...` reads failed in the worktree | This worktree root is the parent `nextPas` repo, so config docs are under `core/docs/...`. |
 | FPC warned about nested comment markers in the DOM note | Avoid literal Pascal/JSON brace examples inside `{ ... }` comments. |
 | Env interpolation initially returned empty strings | Qualify calls as `nextpas.core.os.env.HasEnv/GetEnv` to avoid ambiguity with other env helpers in used units. |
+| Final review found required unresolved placeholders passed validation | Add strict interpolation mode for required getters while preserving ordinary getter semantics. |

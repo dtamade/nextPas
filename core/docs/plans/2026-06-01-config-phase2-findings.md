@@ -68,9 +68,10 @@
   important because an intentionally empty environment value is distinct from a
   missing variable.
 - `$${name}` escapes to literal `${name}`.
-- Missing placeholders stay unchanged, for example `${OPTIONAL_SECRET}`. This
-  makes optional deployment-time variables safe to leave unresolved until the
-  caller decides to validate required keys.
+- Missing placeholders stay unchanged in ordinary value getters, for example
+  `${OPTIONAL_SECRET}`. Required getters use stricter validation and raise
+  `EConfigError` when the effective value still contains an unresolved
+  placeholder.
 - Config-key cycles, including self-cycles, raise `EConfigError` because they
   are invalid configuration. The stack check is case-insensitive, matching
   config key lookup.
@@ -85,11 +86,14 @@
 - Required APIs are additive and do not change the existing default-returning
   getter semantics.
 - `GetStringRequired` requires the key to exist and its interpolated value to be
-  non-empty. Empty strings are treated as invalid required values.
+  non-empty after trimming whitespace. Empty or whitespace-only strings are
+  treated as invalid required values.
 - `GetIntRequired`, `GetBoolRequired`, and `GetFloatRequired` all validate the
   interpolated final value. Missing keys, empty values, and invalid typed values
   raise `EConfigError`.
 - `Require(keys)` is a bulk presence/value check over `GetStringRequired`; it
   is intentionally structural-light and does not parse typed values.
+- Required APIs reject unresolved placeholders. Ordinary `GetString` and typed
+  default getters still preserve unresolved placeholders for optional config.
 - Error messages include the requested key name but not the raw config value,
   which keeps diagnostics useful without echoing possible secret contents.

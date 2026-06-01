@@ -323,10 +323,12 @@ begin
 end;
 
 function InterpolateConfigValue(const AEntries: TConfigEntryArray;
-  const ACount: Integer; const AValue: string; var AStack: TStringArray): string; forward;
+  const ACount: Integer; const AValue: string; var AStack: TStringArray;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): string; forward;
 
 function ResolveConfigEntryByIndex(const AEntries: TConfigEntryArray;
-  const ACount: Integer; const AIndex: Integer; var AStack: TStringArray): string;
+  const ACount: Integer; const AIndex: Integer; var AStack: TStringArray;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): string;
 var
   LKey: string;
 begin
@@ -336,7 +338,8 @@ begin
 
   PushConfigKey(AStack, LKey);
   try
-    Result := InterpolateConfigValue(AEntries, ACount, AEntries[AIndex].Value, AStack);
+    Result := InterpolateConfigValue(AEntries, ACount, AEntries[AIndex].Value, AStack,
+      AFailOnUnresolved, ARequiredKey);
   finally
     PopConfigKey(AStack);
   end;
@@ -344,20 +347,23 @@ end;
 
 function ResolveConfigKeyInSnapshot(const AEntries: TConfigEntryArray;
   const ACount: Integer; const AKey: string; out AValue: string;
-  var AStack: TStringArray): Boolean;
+  var AStack: TStringArray; const AFailOnUnresolved: Boolean;
+  const ARequiredKey: string): Boolean;
 var
   LIdx: Integer;
 begin
   LIdx := FindEntryIndexInSnapshot(AEntries, ACount, AKey);
   Result := LIdx >= 0;
   if Result then
-    AValue := ResolveConfigEntryByIndex(AEntries, ACount, LIdx, AStack)
+    AValue := ResolveConfigEntryByIndex(AEntries, ACount, LIdx, AStack,
+      AFailOnUnresolved, ARequiredKey)
   else
     AValue := '';
 end;
 
 function ResolvePlaceholder(const AEntries: TConfigEntryArray; const ACount: Integer;
-  const AName: string; var AStack: TStringArray; out AValue: string): Boolean;
+  const AName: string; var AStack: TStringArray; out AValue: string;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): Boolean;
 begin
   if AName = '' then
   begin
@@ -365,7 +371,8 @@ begin
     Exit(False);
   end;
 
-  if ResolveConfigKeyInSnapshot(AEntries, ACount, AName, AValue, AStack) then
+  if ResolveConfigKeyInSnapshot(AEntries, ACount, AName, AValue, AStack,
+    AFailOnUnresolved, ARequiredKey) then
     Exit(True);
 
   if nextpas.core.os.env.HasEnv(AName) then
@@ -379,7 +386,8 @@ begin
 end;
 
 function InterpolateConfigValue(const AEntries: TConfigEntryArray;
-  const ACount: Integer; const AValue: string; var AStack: TStringArray): string;
+  const ACount: Integer; const AValue: string; var AStack: TStringArray;
+  const AFailOnUnresolved: Boolean; const ARequiredKey: string): string;
 var
   LI: Integer;
   LEnd: Integer;
@@ -407,8 +415,12 @@ begin
       else
       begin
         LName := Copy(AValue, LI + 2, LEnd - LI - 2);
-        if ResolvePlaceholder(AEntries, ACount, LName, AStack, LResolved) then
+        if ResolvePlaceholder(AEntries, ACount, LName, AStack, LResolved,
+          AFailOnUnresolved, ARequiredKey) then
           Result := Result + LResolved
+        else if AFailOnUnresolved then
+          raise EConfigError.Create('Required config key "' + ARequiredKey +
+            '" has unresolved placeholder')
         else
           Result := Result + '${' + LName + '}';
         LI := LEnd + 1;
@@ -604,12 +616,40 @@ end;
 
 { TConfig }
 
-function FormatJsonLoadError(const AError: TJsonError): string;
+procedure JsonOffsetToLineColumn(const AContent: string; const AOffset: SizeUInt;
+  out ALine, AColumn: UInt32);
+var
+  LI: Integer;
+  LMax: Integer;
+begin
+  ALine := 1;
+  AColumn := 1;
+  LMax := Length(AContent);
+  LI := 1;
+  while (LI <= LMax) and (SizeUInt(LI - 1) < AOffset) do
+  begin
+    if AContent[LI] = #10 then
+    begin
+      Inc(ALine);
+      AColumn := 1;
+    end
+    else
+      Inc(AColumn);
+    Inc(LI);
+  end;
+end;
+
+function FormatJsonLoadError(const AContent: string; const AError: TJsonError): string;
+var
+  LLine: UInt32;
+  LColumn: UInt32;
 begin
   Result := AError.Message.ToString;
   if Result = '' then
     Result := 'parse error';
-  Result := 'JSON parse error at offset ' + UIntToStr(AError.Offset) + ': ' + Result;
+  JsonOffsetToLineColumn(AContent, AError.Offset, LLine, LColumn);
+  Result := 'JSON parse error at line ' + UIntToStr(LLine) + ', column ' +
+    UIntToStr(LColumn) + ' (offset ' + UIntToStr(AError.Offset) + '): ' + Result;
 end;
 
 function FormatYamlLoadError(const AError: TYamlError): string;
@@ -787,7 +827,7 @@ var
 begin
   LDoc := JsonParse(AContent);
   if LDoc.HasError then
-    raise EConfigError.Create(FormatJsonLoadError(LDoc.Error));
+    raise EConfigError.Create(FormatJsonLoadError(AContent, LDoc.Error));
   LoadConfigFromJsonDocument(Self, LDoc);
 end;
 
@@ -845,7 +885,7 @@ begin
     LDoc := JsonParse(AContent);
     if LDoc.HasError then
     begin
-      AError := FormatJsonLoadError(LDoc.Error);
+      AError := FormatJsonLoadError(AContent, LDoc.Error);
       Exit(False);
     end;
     LoadConfigFromJsonDocument(Self, LDoc);
@@ -1015,9 +1055,9 @@ begin
   LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
   LStack := nil;
   if LIdx >= 0 then
-    Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack)
+    Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack, False, '')
   else
-    Result := InterpolateConfigValue(LEntries, LCount, ADefault, LStack);
+    Result := InterpolateConfigValue(LEntries, LCount, ADefault, LStack, False, '');
 end;
 
 function TConfig.GetStringArray(const AKey: string): TStringArray;
@@ -1043,7 +1083,8 @@ begin
   SetLength(Result, LCount);
   LStack := nil;
   for LI := 0 to LCount - 1 do
-    Result[LI] := InterpolateConfigValue(LEntries, LEntryCount, LItems[LI].Value, LStack);
+    Result[LI] := InterpolateConfigValue(LEntries, LEntryCount, LItems[LI].Value,
+      LStack, False, '');
 end;
 
 function TConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
@@ -1096,8 +1137,8 @@ begin
     raise EConfigError.Create('Required config key "' + AKey + '" is missing');
 
   LStack := nil;
-  Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack);
-  if Result = '' then
+  Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack, True, AKey);
+  if Trim(Result) = '' then
     raise EConfigError.Create('Required config key "' + AKey + '" is empty');
 end;
 
