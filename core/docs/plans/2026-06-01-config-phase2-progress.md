@@ -251,6 +251,7 @@
   - `make -C core/tests/nextpas.core.config/test_config_nested clean test`:
     `29 total, 29 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
   - `git diff --check`: exit 0.
-- Commit final audit batch.
-- Then decide integration path for the feature branch; benchmarks remain a
-  later round.
+- Committed final audit batch:
+  `8aa862c2 chore(config): finalize phase2 API contract`.
+- Decide integration path for the feature branch; benchmarks remain a later
+  round.

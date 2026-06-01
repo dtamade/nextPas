@@ -77,7 +77,7 @@ Priority: final API/documentation audit.
 - [x] Document the config module public contract in `docs/config/README.md`.
 - [x] Update stale API convention and Phase 2 plan notes.
 - [x] Run final clean config tests, heaptrc verification, and `git diff --check`.
-- [ ] Commit the final audit batch.
+- [x] Commit the final audit batch.
 
 ## Design Decisions
 
