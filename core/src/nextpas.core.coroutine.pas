@@ -348,6 +348,7 @@ begin
           if FindEntry(FEntries[LIdx].Yield.WaitCoroID) < 0 then
             LResumed := True;
         end;
+        ykNone: ; { csSuspended 状态下不应出现无挂起，显式忽略 }
       end;
 
       if LResumed then

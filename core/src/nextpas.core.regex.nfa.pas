@@ -231,6 +231,8 @@ begin
           if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
           begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         end;
+        else
+          ; { 非消费型 opcode (split/jump/save/assert) 已在 closure 阶段处理 }
       end;
     end;
 
@@ -393,6 +395,8 @@ begin
           if CharBitmapTest(AProgram.Classes[inst.ClassIdx], ch) xor inst.Negated then
           begin NList[NCount] := CList[i] + 1; Inc(NCount); end;
         end;
+        else
+          ; { 非消费型 opcode (split/jump/save/assert) 已在 closure 阶段处理 }
       end;
     end;
 
@@ -676,6 +680,8 @@ begin
             matchSlots[1] := SizeInt(pos);
           end;
         end;
+        else
+          ; { 非消费型 opcode (split/jump/save/assert) 已在 closure 阶段处理 }
       end;
     end;
 
@@ -955,6 +961,8 @@ var
               matchSlots[1] := SizeInt(pos);
             end;
           end;
+          else
+            ; { 非消费型 opcode (split/jump/save/assert) 已在 closure 阶段处理 }
         end;
       end;
 
@@ -1018,7 +1026,7 @@ var
 var
   LMatch: TMatch;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   LCount := 0;
   LPos := 0;
 

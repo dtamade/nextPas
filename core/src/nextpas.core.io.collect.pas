@@ -19,6 +19,7 @@ function CollectLines(const AScanner: IScanner): TStringArray;
 var
   LCount, LCap: Int32;
 begin
+  Result := nil;
   LCount := 0;
   LCap := 64;
   SetLength(Result, LCap);

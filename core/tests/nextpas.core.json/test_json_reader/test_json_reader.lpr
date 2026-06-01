@@ -70,6 +70,8 @@ begin
     case R.TokenKind of
       jtkBeginObject, jtkBeginArray: Inc(LDepth);
       jtkEndObject, jtkEndArray: Dec(LDepth);
+    else
+      ; { 其余 token (键/值/标点) 不影响深度计数 }
     end;
   Check(LDepth = 0, 'balanced');
 end;

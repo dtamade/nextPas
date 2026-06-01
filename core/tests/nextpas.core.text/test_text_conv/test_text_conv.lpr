@@ -77,7 +77,7 @@ begin
   Check(TryStrToUInt64('0', LVal), 'zero');
   CheckEqual(UInt64(0), LVal);
   Check(TryStrToUInt64('18446744073709551615', LVal), 'max');
-  CheckEqual(High(UInt64), LVal);
+  Check(LVal = High(UInt64), 'max value');
   Check(not TryStrToUInt64('-1', LVal), 'negative');
   Check(not TryStrToUInt64('18446744073709551616', LVal), 'overflow');
 end;

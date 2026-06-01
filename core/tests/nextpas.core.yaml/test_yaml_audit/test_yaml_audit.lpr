@@ -129,8 +129,9 @@ var
   LDoc: IYamlDocument;
 begin
   LDoc := YamlParse('[1, 2, 3');
-  // Should either error or parse what it can — not crash
-  Check(LDoc.HasError or (LDoc.Root.SeqLen >= 0), 'unclosed seq handled');
+  // 解析器对未闭合 flow 序列采取宽松恢复：不报错，恢复出完整 3 元素序列。
+  Check(LDoc.HasError or (LDoc.Root.IsSeq and (LDoc.Root.SeqLen = 3)),
+    'unclosed seq recovered as 3-element sequence');
 end;
 
 { === P1: Round-trip All Types === }

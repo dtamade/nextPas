@@ -4131,7 +4131,7 @@ begin
   Check(LResult = 'bc', 'replace with empty string');
 end;
 
-procedure TestSplitEdgeCases;
+procedure TestSplitEdgeCases2;
 var R: TRegex; LParts: TStringArray;
 begin
   R := TRegex.Compile(',');
@@ -4334,7 +4334,7 @@ begin
   T.Run('P4: SubexpNames empty', @TestSubexpNamesEmpty);
   T.Run('P4: Longest match', @TestLongestMatch);
   T.Run('P4: Replace edge cases', @TestReplaceEdgeCasesP4);
-  T.Run('P4: Split edge cases', @TestSplitEdgeCases);
+  T.Run('P4: Split edge cases', @TestSplitEdgeCases2);
   T.Run('P4: Large input 100KB', @TestLargeInput);
   T.Run('P4: Unicode basic', @TestUnicodeBasic);
   T.Run('P4: Error patterns', @TestErrorPatterns);

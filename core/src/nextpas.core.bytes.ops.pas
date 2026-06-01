@@ -127,6 +127,7 @@ end;
 
 function SpanConcat(const A, B: TByteSpan): TBytes;
 begin
+  Result := nil;
   SetLength(Result, A.Len + B.Len);
   if A.Len > 0 then
     Move(A.Data^, Result[0], A.Len);
@@ -136,6 +137,7 @@ end;
 
 function SpanCopySlice(const ASpan: TByteSpan; const AOffset, ALength: SizeUInt): TBytes;
 begin
+  Result := nil;
   if (ALength > 0) and (AOffset + ALength > ASpan.Len) then
     raise EOutOfRange.Create('SpanCopySlice: offset+length exceeds span');
   SetLength(Result, ALength);
@@ -145,6 +147,7 @@ end;
 
 function SpanClone(const ASpan: TByteSpan): TBytes;
 begin
+  Result := nil;
   SetLength(Result, ASpan.Len);
   if ASpan.Len > 0 then
     Move(ASpan.Data^, Result[0], ASpan.Len);

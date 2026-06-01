@@ -245,6 +245,8 @@ begin
           C.NextPCs[C.NextCount] := pc + 1;
           Inc(C.NextCount);
         end;
+      else
+        ; { 非消费型 opcode (split/jump/save/assert) 已在 closure 阶段处理 }
     end;
   end;
 end;
@@ -781,7 +783,7 @@ var
   k: SizeUInt;
   LHasStartClass: Boolean;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   LCodeLen := Length(AProgram.Code);
   if LCodeLen = 0 then Exit;
 

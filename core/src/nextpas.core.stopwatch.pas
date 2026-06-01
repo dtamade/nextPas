@@ -211,6 +211,7 @@ function TStopwatch.GetLaps: TLapArray;
 var
   LI: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(FLaps));
   for LI := 0 to High(FLaps) do
     Result[LI] := TDuration.FromNanoseconds(TicksToNs(FLaps[LI]));

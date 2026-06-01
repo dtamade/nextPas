@@ -248,7 +248,7 @@ var
   LRow: TStringArray;
   LCount: Integer;
 begin
-  SetLength(Result, 0);
+  Result := nil;
   LCount := 0;
   while ReadRow(LRow) do
   begin

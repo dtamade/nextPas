@@ -26,7 +26,8 @@ procedure InitHexDecodeTable;
 var i: Integer;
 begin
   if HexDecodeTableInitialized then Exit;
-  FillChar(HEX_DECODE_TABLE, SizeOf(HEX_DECODE_TABLE), -1);
+  { $FF 作为 byte 填充值，按 ShortInt 读出即 -1（非 hex 字符哨兵） }
+  FillChar(HEX_DECODE_TABLE, SizeOf(HEX_DECODE_TABLE), $FF);
   for i := 0 to 9 do
   begin
     HEX_DECODE_TABLE[Ord('0') + i] := i;

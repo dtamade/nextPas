@@ -47,7 +47,7 @@ var
   LBase, LI: Integer;
 begin
   Result := nil;
-  LBase := Integer(PtrInt(AArg)) * MPMC_SAT_PER_PRODUCER;
+  LBase := Integer(PtrUInt(AArg)) * MPMC_SAT_PER_PRODUCER;
   for LI := 0 to MPMC_SAT_PER_PRODUCER - 1 do
     GMpmcSatQ.EnqueueWait(LBase + LI);
 end;
@@ -187,7 +187,7 @@ var
   LIdx, LCount: Integer;
 begin
   Result := nil;
-  LIdx := Integer(PtrInt(AArg));
+  LIdx := Integer(PtrUInt(AArg));
   LCount := 0;
   while not GMpscCloseQ.IsClosed do
   begin
@@ -444,7 +444,7 @@ var
   LBase, LI: Integer;
 begin
   Result := nil;
-  LBase := Integer(PtrInt(AArg)) * MPMC_CYCLE_PER_PRODUCER + 1;
+  LBase := Integer(PtrUInt(AArg)) * MPMC_CYCLE_PER_PRODUCER + 1;
   for LI := LBase to LBase + MPMC_CYCLE_PER_PRODUCER - 1 do
     GMpmcCycleQ.EnqueueWait(LI);
 end;

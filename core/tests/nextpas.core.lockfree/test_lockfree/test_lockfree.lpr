@@ -177,7 +177,7 @@ var
   LI, LStart: Integer;
 begin
   Result := nil;
-  LStart := Integer(PtrInt(AArg));
+  LStart := Integer(PtrUInt(AArg));
   for LI := LStart to LStart + 249 do
     GMpmcQ.EnqueueWait(LI);
 end;
@@ -308,7 +308,7 @@ var
   LI, LStart: Integer;
 begin
   Result := nil;
-  LStart := Integer(PtrInt(AArg));
+  LStart := Integer(PtrUInt(AArg));
   for LI := LStart to LStart + 99 do
     GMpscQ.Enqueue(LI);
 end;

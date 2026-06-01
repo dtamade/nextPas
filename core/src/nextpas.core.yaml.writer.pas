@@ -132,6 +132,11 @@ begin
       else
         AW.AppendView(ANode^.Str);
     end;
+  else
+    { 兼容降级，非正确序列化：调用方 (StringifyFlow/Block) 保证只把标量
+      (null/bool/int/float/string) 送入此处，容器类型 (seq/map/alias)
+      不应到达。若内部不变量被破坏则降级为 null，避免崩溃。 }
+    AW.AppendStr('null');
   end;
 end;
 

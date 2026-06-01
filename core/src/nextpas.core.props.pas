@@ -77,6 +77,7 @@ var
   LI, LCount: Int32;
   LKey, LValue: string;
 begin
+  Result := nil;
   LCount := 0;
   SetLength(Result, Length(ALines));
   for LI := 0 to Length(ALines) - 1 do
@@ -110,6 +111,7 @@ var
   LCount, LCap: Int32;
   LKey, LValue: string;
 begin
+  Result := nil;
   LScanner := CreateScanner(AReader);
   LCount := 0;
   LCap := 32;

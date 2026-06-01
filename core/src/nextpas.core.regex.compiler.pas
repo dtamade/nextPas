@@ -317,6 +317,7 @@ var C: TCompiler; inst: TInstruction; i, j, k: UInt32;
   end;
 
 begin
+  Result := Default(TRegexProgram);
   FillChar(C, SizeOf(C), 0);
   C.Flags := AFlags;
   // Wrap entire pattern in Save(0)...Save(1) for whole-match tracking

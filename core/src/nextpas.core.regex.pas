@@ -289,6 +289,7 @@ var
   LPrefixLen: SizeInt;
   LFound: PtrInt;
 begin
+  Result := nil;
   if not FValid then begin SetLength(Result, 0); Exit; end;
   if AMaxMatches = 0 then begin SetLength(Result, 0); Exit; end;
   if FProgram.IsPureLiteral then
@@ -489,6 +490,7 @@ var
   LCount: SizeInt;
   LLimit: SizeInt;
 begin
+  Result := nil;
   LMatches := FindAll(AInput);
   if (Length(LMatches) = 0) or (AMaxSplits = 0) then
   begin
@@ -555,6 +557,7 @@ end;
 function TRegex.SubexpNames: TStringArray;
 var LI: SizeInt;
 begin
+  Result := nil;
   SetLength(Result, Length(FProgram.GroupNames));
   for LI := 0 to High(FProgram.GroupNames) do
     Result[LI] := FProgram.GroupNames[LI].Name;

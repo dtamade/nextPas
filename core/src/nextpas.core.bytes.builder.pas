@@ -253,6 +253,7 @@ end;
 
 function TBytesBuilderImpl.ToBytes: TBytes;
 begin
+  Result := nil;
   SetLength(Result, FLen);
   if FLen > 0 then
     Move(FPtr^, Result[0], FLen);
