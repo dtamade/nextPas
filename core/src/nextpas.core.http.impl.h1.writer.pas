@@ -6,28 +6,34 @@ interface
 
 uses
   nextpas.core.io.intf,
+  nextpas.core.net.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
 type
-  TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter)
+  TH1ResponseWriter = class(TInterfacedObject, IHttpResponseWriter, IHttpHijacker)
   private
     FWriter: IWriter;
     FHeaders: IHttpHeaders;
     FHeadersSent: Boolean;
     FStatus: THttpStatus;
     FChunkedWriter: IWriter;
+    FConn: ITcpStream;
+    FHijacked: Boolean;
     procedure WriteStatusLine;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
   public
-    constructor Create(const AWriter: IWriter);
+    constructor Create(const AWriter: IWriter); overload;
+    constructor Create(const AWriter: IWriter; const AConn: ITcpStream); overload;
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
+    function Hijack: ITcpStream;
+    function IsHijacked: Boolean;
     property Headers: IHttpHeaders read GetHeaders;
   end;
 
@@ -48,6 +54,19 @@ begin
   FHeaders := NewHttpHeaders;
   FHeadersSent := False;
   FStatus := HTTP_STATUS_OK;
+  FConn := nil;
+  FHijacked := False;
+end;
+
+constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream);
+begin
+  inherited Create;
+  FWriter := AWriter;
+  FHeaders := NewHttpHeaders;
+  FHeadersSent := False;
+  FStatus := HTTP_STATUS_OK;
+  FConn := AConn;
+  FHijacked := False;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -126,6 +145,19 @@ begin
     (FChunkedWriter as IFlusher).Flush;
   if Supports(FWriter, IFlusher, LFlusher) then
     LFlusher.Flush;
+end;
+
+function TH1ResponseWriter.Hijack: ITcpStream;
+begin
+  if FConn = nil then
+    raise EHttpError.Create('Connection not available for hijack');
+  FHijacked := True;
+  Result := FConn;
+end;
+
+function TH1ResponseWriter.IsHijacked: Boolean;
+begin
+  Result := FHijacked;
 end;
 
 end.

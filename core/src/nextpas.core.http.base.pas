@@ -36,6 +36,7 @@ type
   end;
 
 const
+  HTTP_STATUS_SWITCHING_PROTOCOLS   = THttpStatus(101);
   HTTP_STATUS_OK                    = THttpStatus(200);
   HTTP_STATUS_CREATED               = THttpStatus(201);
   HTTP_STATUS_NO_CONTENT            = THttpStatus(204);
@@ -105,6 +106,7 @@ end;
 function HttpStatusText(const ACode: THttpStatus): string;
 begin
   case ACode of
+    101: Result := 'Switching Protocols';
     200: Result := 'OK';
     201: Result := 'Created';
     204: Result := 'No Content';

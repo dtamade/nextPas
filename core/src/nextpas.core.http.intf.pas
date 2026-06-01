@@ -69,6 +69,13 @@ type
     property Headers: IHttpHeaders read GetHeaders;
   end;
 
+  { Hijack the underlying connection from the HTTP server.
+    After Hijack, the server loop will not touch the connection. }
+  IHttpHijacker = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000000C}']
+    function Hijack: ITcpStream;
+  end;
+
   { Forward declarations for handler types }
   IHttpHandler = interface;
 

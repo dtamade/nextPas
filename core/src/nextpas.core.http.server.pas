@@ -205,7 +205,7 @@ begin
       (LReq as THttpRequest).SetRemoteAddr(AConn.RemoteAddr.ToString);
 
       { Dispatch to handler }
-      LW := TH1ResponseWriter.Create(LBufWriter);
+      LW := TH1ResponseWriter.Create(LBufWriter, AConn);
       { For HTTP/1.0 keep-alive, add the header explicitly }
       if LKeepAlive and (LParser.GetHttpVersion = hvHttp10) then
         LW.GetHeaders.Set_('connection', 'keep-alive');
@@ -214,6 +214,14 @@ begin
         LW.GetHeaders.Set_('connection', 'close');
 
       AHandler.ServeHTTP(LReq, LW);
+
+      { If connection was hijacked (e.g. WebSocket upgrade), stop loop }
+      if (LW as TH1ResponseWriter).IsHijacked then
+      begin
+        LKeepAlive := False;
+        Continue;
+      end;
+
       LW.Flush;
       (LBufWriter as IFlusher).Flush;
 
