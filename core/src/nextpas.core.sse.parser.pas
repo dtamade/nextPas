@@ -137,9 +137,8 @@ begin
     end;
     if LValLen > 0 then
     begin
-      SetLength(LValue, LValLen);
-      Move(FBuf[LValStart], LValue[1], LValLen);
-      FData := FData + LValue;
+      SetLength(FData, FDataLen + LValLen);
+      Move(FBuf[LValStart], FData[FDataLen + 1], LValLen);
       Inc(FDataLen, LValLen);
     end;
   end
