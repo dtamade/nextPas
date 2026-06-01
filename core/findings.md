@@ -1,18 +1,41 @@
-# Findings: INI 修复与 XML/INI/CSV Benchmark
+# Findings & Decisions
 
-## 2026-06-01 Context
+## Requirements
+- Review `src/nextpas.core.log.pas` and `src/nextpas.core.log.intf.pas`.
+- Focus on the ring buffer, `TLogEvent` finalization, `TFileHandler`, `TJsonHandler`, `TConsoleHandler`, context cloning APIs, `NextEventSlot`, `InterlockedIncrement`, default logger initialization, and missing `slog`-style APIs.
+- Report each finding with severity, approximate location, failure mode, and a specific test case.
 
-- 当前 worktree: `/home/dtamade/projects/nextPas/.worktrees/rtl-phase3/core`，branch `feat/rtl-phase3`。
-- 初始状态已有未跟踪文件 `src/nextpas.core.template.pas` 与 `src/nextpas.core.validation.pas`，本轮视为既有/用户改动，不纳入清理或提交。
-- `TIniFile.ParseLine` 当前解析 key/value 后直接追加 entry；`TIniFile.WriteString` 已有覆盖语义，可复用 `FindKey` 的一致行为。
-- `TIniFile.LoadFromFile` 当前 `LContent := LContent + LLine + #10` 循环拼接；`TIniFile.ToString` 当前同样用 `Result := Result + ...` 逐片段拼接。
-- XML facade 提供 `XmlTokenize` 和 `XmlParse`; DOM 类型为 `TXmlDocument`/`TXmlNode`。
-- CSV facade 提供 `TCsvReader.Create(...).ReadAll`。
-- 既有 benchmark 风格多为单 `.lpr`，但本轮用户要求统一输出 `操作名 迭代次数 总耗时 ns/op`，且计时必须使用 `platform_monotonic_ns`。
+## Research Findings
+- Memory quick pass confirms `nextPas` review work should stay correctness-first and call out leak risks explicitly.
+- The shipped `test_log`, `test_log_audit`, and `test_log_intf` suites all pass under heaptrc, so the main problems are in uncovered concurrent and shared-state paths rather than obvious single-thread leaks.
+- A threaded probe logged only 13 handled records out of 32 attempted events and emitted unexpected `[REENTRANT]` fallbacks, confirming that the global pool plus global depth guard breaks concurrent logging.
+- A file-handler probe using `With_` on a base file logger produced a 631-byte main log file with `AMaxBytes=100` and no rotated `.1` file, confirming that child loggers reset rotation state per derived handler.
+- A write-failure probe against `/dev/full` raised `EInOutError: Disk Full` on every call, confirming that mid-stream file errors are not converted into a broken-state fallback.
+- An open-failure recovery probe showed that once `EnsureOpen` marks the handler broken, later environmental recovery does not restore logging.
+- `TLogEvent` managed fields are finalized on slot reuse and unit finalization; the existing heaptrc runs did not show leaks from `Attrs` in single-threaded use.
 
-## 2026-06-01 Implementation Findings
+## Technical Decisions
+| Decision | Rationale |
+|----------|-----------|
+| Review by pipeline: event creation -> handler fanout -> helper APIs | Makes it easier to connect surface bugs to root causes |
+| Use shipped tests plus focused probes if needed | Confirms whether suspected issues are real or only theoretical |
 
-- INI 重复 key 的红测失败在 `ReadString('app', 'name', '')` 返回旧值 `first`；根因是 `ParseLine` 解析 key 时绕过了 `WriteString` 已具备的覆盖语义。
-- `LoadFromFile` 在 `TextFile`/`ReadLn` 约束下无法可靠预知全部行分隔符细节，本轮采用 growable string buffer，保留原行为：每个 `ReadLn` 后追加 `#10` 再交给 `LoadFromString`。
-- `ToString` 可以完全预估输出长度，因为 section、entry、分隔符和换行都是已知固定片段；本轮改为两趟写入。
-- INI `ReadString` benchmark 用 500 key 的末尾 key 查询，验证的是当前线性查找的 worst-ish path；100000 次足够稳定且不会让日常完整 benchmark 过慢。
+## Issues Encountered
+| Issue | Resolution |
+|-------|------------|
+| Existing planning notes were still for regex review | Replaced them with log-review scope before continuing |
+
+## Resources
+- `task_plan.md`
+- `src/nextpas.core.log.pas`
+- `src/nextpas.core.log.intf.pas`
+- `tests/nextpas.core.log/test_log/test_log.lpr`
+- `tests/nextpas.core.log/test_log_audit/test_log_audit.lpr`
+- `tests/nextpas.core.log.intf/test_log_intf/test_log_intf.lpr`
+- `/tmp/log_thread_probe.pas`
+- `/tmp/log_file_failure_probe.pas`
+- `/tmp/log_file_recovery_probe.pas`
+- `/tmp/log_file_withattrs_probe.pas`
+
+## Visual/Browser Findings
+- None; local source review only.

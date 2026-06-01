@@ -301,6 +301,50 @@ begin
   Check(LDoc.Root.MapGet('str_val').AsStr.ToString = 'test', 'str');
 end;
 
+procedure TestPutStrView;
+var LB: TYamlBuilder; LOut: string; LDoc: IYamlDocument;
+    LView: TStringView;
+begin
+  LB.Init;
+  LB.BeginMap;
+  LB.PutKey('msg');
+  LView := TStringView.FromStr('hello from view');
+  LB.PutStrView(LView);
+  LB.EndMap;
+  LOut := LB.Stringify;
+  LB.Done;
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'no error');
+  Check(LDoc.Root.MapGet('msg').AsStr.ToString = 'hello from view', 'strview val');
+end;
+
+procedure TestStringifyPrettyCustomIndent;
+var LB: TYamlBuilder; LOut: string;
+begin
+  LB.Init;
+  LB.BeginMap;
+  LB.PutKey('a'); LB.PutInt(1);
+  LB.PutKey('b'); LB.PutInt(2);
+  LB.EndMap;
+  LOut := LB.StringifyPretty(4);
+  LB.Done;
+  Check(Length(LOut) > 0, 'pretty output not empty');
+  Check(Pos('a', LOut) > 0, 'has key a');
+  Check(Pos('b', LOut) > 0, 'has key b');
+end;
+
+procedure TestStringifyPrettyZeroIndent;
+var LB: TYamlBuilder; LOut: string;
+begin
+  LB.Init;
+  LB.BeginSeq;
+  LB.PutInt(1); LB.PutInt(2);
+  LB.EndSeq;
+  LOut := LB.StringifyPretty(0);
+  LB.Done;
+  Check(Length(LOut) > 0, 'zero indent output not empty');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.yaml.builder');
   T.Run('Build scalar', @TestBuildScalar);
@@ -320,5 +364,8 @@ begin
   T.Run('Build seq of maps', @TestBuildSeqOfMaps);
   T.Run('Build map of seqs', @TestBuildMapOfSeqs);
   T.Run('Build all types', @TestBuildAllTypes);
+  T.Run('PutStrView', @TestPutStrView);
+  T.Run('StringifyPretty custom indent', @TestStringifyPrettyCustomIndent);
+  T.Run('StringifyPretty zero indent', @TestStringifyPrettyZeroIndent);
   T.Summary;
 end.

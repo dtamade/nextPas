@@ -1,89 +1,82 @@
-# Progress Log: INI 修复与 XML/INI/CSV Benchmark
+# Progress Log
 
-## Session: 2026-06-01
+## Session: 2026-05-31
 
-### Phase 1: Context + RED
+### Phase 1: Scope & Discovery
 - **Status:** complete
+- **Started:** 2026-05-31
 - Actions taken:
-  - Loaded required workflow skills and nextPas memory constraints.
-  - Checked session catchup, worktree status, and repo file layout.
-  - Replaced stale planning files with this round's plan/findings/progress.
-  - Read `src/nextpas.core.ini.pas` and `tests/nextpas.core.ini/test_ini/test_ini.lpr`.
-  - Read XML/CSV facade files and existing benchmark examples.
-  - Added duplicate parsed key regression test.
-  - Verified the test failed before implementation with `expected "second", got "first"`.
+  - Loaded startup, planning, debugging, and verification skill guidance.
+  - Ran a quick memory pass for `nextPas` review constraints.
+  - Checked session catchup and repo planning state before starting the review.
+  - Rebased local planning files from the previous regex audit to this log-module audit.
 - Files created/modified:
-  - `task_plan.md`
-  - `findings.md`
-  - `progress.md`
-  - `tests/nextpas.core.ini/test_ini/test_ini.lpr`
+  - `task_plan.md` (replaced)
+  - `findings.md` (replaced)
+  - `progress.md` (replaced)
 
-### Phase 2: INI Fix
+### Phase 2: Code Inspection
 - **Status:** complete
 - Actions taken:
-  - Updated `ParseLine` to reuse `FindKey` and update existing entries on duplicate parsed keys.
-  - Replaced `LoadFromFile` repeated concatenation with a growable string buffer.
-  - Replaced `ToString` repeated concatenation with precomputed length and direct writes.
-  - Re-ran the specified INI test command; all 25 tests passed.
+  - Read the public interface and implementation units with line numbers.
+  - Read the shipped log tests, log audit tests, and the module planning note.
+  - Identified concurrency, ownership, and handler-state hot spots for deeper validation.
 - Files created/modified:
-  - `src/nextpas.core.ini.pas`
-  - `tests/nextpas.core.ini/test_ini/test_ini.lpr`
+  - `findings.md` (updated)
+  - `progress.md` (updated)
 
-### Phase 3: Benchmarks
+### Phase 3: Risk Validation
 - **Status:** complete
 - Actions taken:
-  - Added XML benchmark for 10KB config and 100KB data inputs, covering tokenizer-only and DOM+query.
-  - Added Go `encoding/xml` compare benchmark for matching generated XML inputs.
-  - Added INI benchmark for 50-key parse, 500-key parse, and `ReadString` lookup.
-  - Added CSV benchmark for 1000x5 and 10000x5 parse inputs.
-  - Smoke-compiled and smoke-ran all benchmark programs.
+  - Built and ran the three shipped log-related suites under heaptrc.
+  - Built and ran a threaded probe that demonstrated concurrent log loss and global reentrancy cross-talk.
+  - Built and ran file-handler probes for mid-stream write failure, post-failure recovery, and `With_` rotation behavior.
 - Files created/modified:
-  - `benchmarks/nextpas.core.xml/bench_xml/bench_xml.lpr`
-  - `benchmarks/nextpas.core.xml/bench_xml/compare_go/main.go`
-  - `benchmarks/nextpas.core.ini/bench_ini/bench_ini.lpr`
-  - `benchmarks/nextpas.core.csv/bench_csv/bench_csv.lpr`
+  - `findings.md` (updated)
+  - `progress.md` (updated)
 
-### Phase 4: Verification + Closeout
-- **Status:** complete
+### Phase 4: Review Write-up
+- **Status:** in_progress
 - Actions taken:
-  - Ran the final requested INI test command.
-  - Ran the final requested XML/INI/CSV benchmark command sequence.
-  - Ran Go XML comparison because Go is available.
-  - Ran focused INI heaptrc check.
-  - Checked git status; `build/` is ignored and pre-existing/new unrelated template/validation files remain untracked.
+  - Ordered validated findings by severity and mapped them to the user’s requested checklist.
+- Files created/modified:
+  - `task_plan.md` (updated)
+  - `progress.md` (updated)
 
 ## Verification Evidence
-| Check | Command | Result |
-|-------|---------|--------|
-| INI RED | `rm -rf build/lib && mkdir -p build/lib build/bin; fpc ... tests/nextpas.core.ini/test_ini/test_ini.lpr && ./build/bin/test_ini` | Failed as expected: duplicate parsed key returned `first` |
-| INI GREEN | same command after implementation | `25 total, 25 passed, 0 failed` |
-| Benchmark smoke compile/run | `fpc ... bench_xml.lpr`, `bench_ini.lpr`, `bench_csv.lpr`, plus binaries | All compiled and emitted benchmark rows |
-| Go XML smoke | `cd benchmarks/nextpas.core.xml/bench_xml/compare_go && go run main.go` | Go available; emitted benchmark rows |
-| Final command sequence | User-provided INI test + XML/INI/CSV benchmark + Go compare commands | exit 0 |
-| INI heaptrc | `fpc -MObjFPC -Sh -O1 -gh ... test_ini.lpr && ./build/bin/test_ini` | `25 total, 25 passed, 0 failed`; `0 unfreed memory blocks` |
+| Check | Command or probe | Result |
+|------|-------------------|--------|
+| Shipped module tests | `make -C tests/nextpas.core.log/test_log` + run binary | 26/26 passed, heaptrc clean |
+| Shipped audit tests | `make -C tests/nextpas.core.log/test_log_audit` + run binary | 33/33 passed, heaptrc clean |
+| Interface tests | `make -C tests/nextpas.core.log.intf/test_log_intf` + run binary | passed, heaptrc clean |
+| Concurrent pool/depth probe | `/tmp/log_thread_probe` | 32 attempts produced only 13 handled records and fallback `[REENTRANT]` lines |
+| File write failure probe | `/tmp/log_file_failure_probe` | both writes raised `EInOutError: Disk Full` |
+| File open recovery probe | `/tmp/log_file_recovery_probe` | initial open failure set broken state permanently; later directory creation did not recover |
+| File child-logger rotation probe | `/tmp/log_file_withattrs_probe` | main file reached 631 bytes with `AMaxBytes=100`, no rotated `.1` file |
 
 ## Test Results
-| Test | Expected | Actual | Status |
-|------|----------|--------|--------|
-| Duplicate parsed INI key | Last parsed value wins; one key remains | Red before fix, green after fix | pass |
-
-## Final Benchmark Results
-| Benchmark | ns/op |
-|-----------|-------|
-| XML tokenize 10KB config | 601804.7 |
-| XML tokenize 100KB data | 6093018.9 |
-| XML DOM+query 10KB config | 835574.6 |
-| XML DOM+query 100KB data | 8562913.7 |
-| INI parse 1KB / 50 keys | 86261.4 |
-| INI parse 10KB / 500 keys | 6869804.7 |
-| INI ReadString key499 | 24874.3 |
-| CSV parse 10KB / 1000x5 | 622393.9 |
-| CSV parse 100KB / 10000x5 | 6528267.7 |
-| Go xml tokenize 10KB config | 783636.1 |
-| Go xml tokenize 100KB data | 8347527.4 |
-| Go xml unmarshal 10KB config | 1553418.8 |
-| Go xml unmarshal 100KB data | 13645205.2 |
+| Test | Input | Expected | Actual | Status |
+|------|-------|----------|--------|--------|
+| Memory quick pass | `MEMORY.md` nextPas search | Relevant repo rules found | Found quality-bar notes | ✓ |
+| Session catchup | `session-catchup.py` | Detect stale planning or unsynced context | Found prior unsynced context, no planning updates | ✓ |
+| Shipped log suite | `./build/projects/nextpas.core.log/test_log/test_log` | Existing tests pass | 26/26 passed, heaptrc clean | ✓ |
+| Shipped audit suite | `./build/projects/nextpas.core.log/test_log_audit/test_log_audit` | Existing tests pass | 33/33 passed, heaptrc clean | ✓ |
+| Log interface suite | `./build/projects/nextpas.core.log.intf/test_log_intf/test_log_intf` | Existing tests pass | Passed, heaptrc clean | ✓ |
+| Concurrent probe | `/tmp/log_thread_probe` | All records handled exactly once | Only 13/32 handled; fallback reentrant lines observed | ✓ |
+| `/dev/full` probe | `/tmp/log_file_failure_probe` | Graceful degradation or broken-state transition | Repeated `EInOutError: Disk Full` exceptions | ✓ |
+| Open-recovery probe | `/tmp/log_file_recovery_probe` | Handler recovers after directory appears | Stayed broken, file never created | ✓ |
+| Child file logger probe | `/tmp/log_file_withattrs_probe` | Rotation respects `AMaxBytes` | Main file 631 bytes, no `.1` rotation | ✓ |
 
 ## Error Log
 | Timestamp | Error | Attempt | Resolution |
 |-----------|-------|---------|------------|
+| 2026-05-31 | Temporary probe compile errors | 1 | Fixed harness definitions and recompiled |
+
+## 5-Question Reboot Check
+| Question | Answer |
+|----------|--------|
+| Where am I? | Phase 4, finishing the review write-up |
+| Where am I going? | Deliver the ordered findings with concrete repro cases |
+| What's the goal? | Produce a thorough log module code review with concrete findings |
+| What have I learned? | The biggest real defects are concurrent logging, file-child state sharing, and file failure handling |
+| What have I done? | Reviewed the code, ran the shipped suites, and validated the risky paths with targeted probes |

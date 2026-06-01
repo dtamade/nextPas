@@ -30,9 +30,7 @@ unit nextpas.core.collections.forward_list;
 interface
 
 uses
-  typinfo,
-  nextpas.core.base.utils,
-  nextpas.core.errors,
+  SysUtils, typinfo,
   nextpas.core.base,
   {$HINTS OFF}nextpas.core.math,{$HINTS ON}
   nextpas.core.mem.utils,
@@ -2125,7 +2123,7 @@ begin
     else
     begin
       // 没有提供比较函数时，抛出异常
-      raise EArgumentError.Create('For types without default equality, you must provide a comparer');
+      raise EInvalidArgument.Create('For types without default equality, you must provide a comparer');
     end;
   end;
   // 刷新尾指针
@@ -2169,7 +2167,7 @@ begin
     else
     begin
       // 没有提供比较函数时，抛出异常
-      raise EArgumentError.Create('For types without default equality, you must provide a comparer');
+      raise EInvalidArgument.Create('For types without default equality, you must provide a comparer');
     end;
   end;
   // 刷新尾指针

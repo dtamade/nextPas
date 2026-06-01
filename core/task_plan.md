@@ -1,54 +1,93 @@
-# Task Plan: INI 修复与 XML/INI/CSV Benchmark
+# Task Plan: SysUtils 依赖消除 — Phase 2
 
 ## Goal
-完成 `nextpas.core.ini` 的重复 key 语义修复和字符串构建优化，并新增 XML/INI/CSV benchmark 对照，确保指定测试与 benchmark 全部可编译运行。
+将剩余 15 个 SysUtils 硬依赖文件中可替换的调用全部迁移到框架自有 API，最终仅保留 base.pas/errors.pas（Exception 定义点）。
 
 ## Current Phase
-Phase 4: Verification + Closeout complete
-
-## Design
-
-- INI 行解析保持现有公开 API 和大小写不敏感语义：`ParseLine` 遇到同 section 的重复 key 时更新已有 entry 的 value，而不是追加新 entry。
-- `ToString` 改为两趟构建：先预估总长度，再 `SetLength` 分配目标字符串，最后用 `Move` 写入片段，避免 O(n²) 拼接。
-- `LoadFromFile` 也避免循环拼接：使用 growable buffer 收集文件内容，读完整内容后交给 `LoadFromString`。
-- Benchmark 采用现有仓库单文件 `.lpr` 风格，计时使用 `nextpas.core.platform.time.platform_monotonic_ns`，输出列为 `操作名 / 迭代次数 / 总耗时 / ns/op`。
-- XML benchmark 覆盖 tokenizer-only 与 DOM parse+query；INI benchmark 覆盖 1KB/10KB parse 与 ReadString 查找；CSV benchmark 覆盖 10KB/100KB parse。
+Phase 1
 
 ## Phases
 
-### Phase 1: Context + RED
-- [x] 检查 worktree 状态和现有规划文件
-- [x] 梳理 INI 实现、INI 测试、XML/CSV facade 与 benchmark 风格
-- [x] 添加 INI 重复 key 红测并确认失败
-- **Status:** complete
+### Phase 1: cpuinfo 5 文件 — FindFirst/DirectoryExists/FileExists → platform API
+- [ ] cpuinfo.pas: FindFirst/FindNext/FindClose/DirectoryExists → platform_dir_open/read/close + platform_file_stat
+- [ ] cpuinfo.lazy.pas: 同上 + GetEnvironmentVariable → os.env.GetEnv
+- [ ] cpuinfo.arm.pas: FileExists → platform_file_stat
+- [ ] cpuinfo.loongarch.pas: FileExists → platform_file_stat
+- [ ] cpuinfo.riscv.pas: FindFirst/FindNext/FindClose/DirectoryExists/FileExists → platform API
+- [ ] cpuinfo.diagnostic.pas: GetTickCount/Now → platform_monotonic_ns
+- [ ] 编译验证
+- **Status:** not_started
 
-### Phase 2: INI Fix
-- [x] 修复 `src/nextpas.core.ini.pas` 重复 key 更新语义
-- [x] 优化 `LoadFromFile` 和 `ToString` 字符串构建
-- [x] 运行指定 INI 测试并确认通过
-- **Status:** complete
+### Phase 2: log.pas — 文件操作 + 时间
+- [ ] FileExists → FsExists (nextpas.core.fs)
+- [ ] DeleteFile → FsRemove (nextpas.core.fs.dir)
+- [ ] RenameFile → FsRename (nextpas.core.fs.dir)
+- [ ] 验证 TInstant.Now 已自给（不依赖 SysUtils.Now）
+- [ ] 编译验证
+- **Status:** not_started
 
-### Phase 3: Benchmarks
-- [x] 新增 `benchmarks/nextpas.core.xml/bench_xml/bench_xml.lpr`
-- [x] 新增 `benchmarks/nextpas.core.xml/bench_xml/compare_go/main.go`
-- [x] 新增 `benchmarks/nextpas.core.ini/bench_ini/bench_ini.lpr`
-- [x] 新增 `benchmarks/nextpas.core.csv/bench_csv/bench_csv.lpr`
-- **Status:** complete
+### Phase 3: collections.base — CompareStr/CompareMemRange
+- [ ] CompareStr → 自实现 ASCII 比较（或 text.conv 提供）
+- [ ] AnsiCompareStr/WideCompareStr/UnicodeCompareStr → 内联实现
+- [ ] CompareMemRange → CompareMem (System) 或 platform_memcmp
+- [ ] 编译验证
+- **Status:** not_started
 
-### Phase 4: Verification + Closeout
-- [x] 编译运行指定 INI 测试
-- [x] 编译运行 XML/INI/CSV benchmark
-- [x] Go 可用时运行 XML Go 对照
-- [x] 检查 git status，清理本轮意外产物，提交本轮逻辑改动
-- **Status:** complete
+### Phase 4: collections.forward_list — FreeAndNil
+- [ ] FreeAndNil → nextpas.core.base.utils.FreeAndNil
+- [ ] 移除 SysUtils uses
+- [ ] 编译验证
+- **Status:** not_started
 
-## Error Log
-| Timestamp | Error | Attempt | Resolution |
-|-----------|-------|---------|------------|
+### Phase 5: collections.deque — Supports
+- [ ] Supports → 直接 QueryInterface 调用或自实现
+- [ ] 编译验证
+- **Status:** not_started
 
-## Verification Notes
-- RED: 指定 INI 测试命令新增重复 key 用例后失败，断言为 `expected "second", got "first"`。
-- GREEN: INI 修复后同一命令通过 `25 total, 25 passed, 0 failed`。
-- First benchmark smoke: XML/INI/CSV Pascal benchmark 均已编译并输出结果；Go 可用且 `go run main.go` 已输出 encoding/xml 对照。
-- Final requested command sequence exit 0，XML/INI/CSV benchmark 与 Go encoding/xml 对照均输出 `ns/op`。
-- Heaptrc focused INI check: `25 total, 25 passed, 0 failed` and `0 unfreed memory blocks`.
+### Phase 6: mem.memory_map — 最复杂（6+ 符号）
+- [ ] GetEnvironmentVariable → os.env.GetEnv
+- [ ] GetTempDir → nextpas.core.fs.GetTempDir
+- [ ] StringReplace → 自实现或 text.strings
+- [ ] IncludeTrailingPathDelimiter → fs.path 工具
+- [ ] INVALID_HANDLE_VALUE → PLATFORM_FILE_INVALID_HANDLE
+- [ ] FileExists → FsExists
+- [ ] DeleteFile → FsRemove / platform_file_unlink
+- [ ] 编译验证
+- **Status:** not_started
+
+### Phase 7: 最终验证
+- [ ] 全量编译 core 库
+- [ ] 运行现有测试套件
+- [ ] 确认仅 base.pas + errors.pas 保留 SysUtils
+- [ ] 提交 git
+- **Status:** not_started
+
+## 替换映射表
+| SysUtils API | 框架替代 | 来源单元 |
+|---|---|---|
+| FindFirst/FindNext/FindClose | platform_dir_open/read/close | platform.files |
+| DirectoryExists | platform_file_stat (check ftDirectory) | platform.files |
+| FileExists | platform_file_stat (check result=0) | platform.files / fs.util |
+| GetEnvironmentVariable | GetEnv | os.env |
+| GetTempDir | GetTempDir | fs |
+| DeleteFile | FsRemove / platform_file_unlink | fs.dir / platform.files |
+| RenameFile | FsRename / platform_file_rename | fs.dir / platform.files |
+| IncludeTrailingPathDelimiter | 手动 + PathDelim | fs.path |
+| StringReplace | 自实现循环 | 内联 |
+| INVALID_HANDLE_VALUE | PLATFORM_FILE_INVALID_HANDLE | platform.files.base |
+| CompareStr | 自实现 ASCII 比较 | 内联 |
+| CompareMemRange | CompareByte (System) | System |
+| FreeAndNil | FreeAndNil | base.utils |
+| Supports | QueryInterface | 内联 |
+| GetTickCount64 | platform_monotonic_ns div 1_000_000 | platform.time |
+
+## Decisions
+| Decision | Rationale |
+|---|---|
+| 用 platform_file_stat 替代 FileExists/DirectoryExists | 避免引入 fs.util 的额外依赖链，cpuinfo 只需最底层 API |
+| CompareStr 内联实现 | 纯 ASCII 比较，无需 locale，3 行循环足够 |
+| INVALID_HANDLE_VALUE → 常量 | platform.files.base 已定义 PLATFORM_FILE_INVALID_HANDLE |
+
+## Errors Encountered
+| Error | Attempt | Resolution |
+|---|---|---|
