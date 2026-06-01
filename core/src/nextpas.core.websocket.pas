@@ -74,10 +74,33 @@ end;
 
 procedure WebSocketMask(var AData: TBytes; const AMaskKey: array of Byte);
 var
-  I: SizeUInt;
+  LI, LLen: SizeUInt;
+  LMask32: UInt32;
+  LP: PUInt32;
 begin
-  for I := 0 to SizeUInt(Length(AData)) - 1 do
-    AData[I] := AData[I] xor AMaskKey[I mod 4];
+  LLen := Length(AData);
+  if LLen = 0 then Exit;
+
+  // Build 4-byte mask word
+  LMask32 := UInt32(AMaskKey[0]) or (UInt32(AMaskKey[1]) shl 8) or
+             (UInt32(AMaskKey[2]) shl 16) or (UInt32(AMaskKey[3]) shl 24);
+
+  // XOR 4 bytes at a time
+  LP := PUInt32(@AData[0]);
+  LI := 0;
+  while LI + 4 <= LLen do
+  begin
+    LP^ := LP^ xor LMask32;
+    Inc(LP);
+    Inc(LI, 4);
+  end;
+
+  // Handle remaining bytes
+  while LI < LLen do
+  begin
+    AData[LI] := AData[LI] xor AMaskKey[LI and 3];
+    Inc(LI);
+  end;
 end;
 
 { --- Frame encoding --- }
@@ -167,8 +190,20 @@ begin
   begin
     Move(AFrame.Payload[0], Result[LPos], LPayloadLen);
     if LMask then
-      for I := 0 to LPayloadLen - 1 do
-        Result[LPos + I] := Result[LPos + I] xor LMaskKey[I mod 4];
+    begin
+      { Unrolled 4-byte XOR }
+      I := 0;
+      while I + 4 <= LPayloadLen do
+      begin
+        PUInt32(@Result[LPos + I])^ := PUInt32(@Result[LPos + I])^ xor PUInt32(@LMaskKey[0])^;
+        Inc(I, 4);
+      end;
+      while I < LPayloadLen do
+      begin
+        Result[LPos + I] := Result[LPos + I] xor LMaskKey[I and 3];
+        Inc(I);
+      end;
+    end;
   end;
 end;
 
@@ -259,8 +294,20 @@ begin
   begin
     Move(AData[LPos], AFrame.Payload[0], LPayloadLen);
     if LMasked then
-      for I := 0 to LPayloadLen - 1 do
-        AFrame.Payload[I] := AFrame.Payload[I] xor AFrame.MaskKey[I mod 4];
+    begin
+      { Unrolled 4-byte XOR }
+      I := 0;
+      while I + 4 <= LPayloadLen do
+      begin
+        PUInt32(@AFrame.Payload[I])^ := PUInt32(@AFrame.Payload[I])^ xor PUInt32(@AFrame.MaskKey[0])^;
+        Inc(I, 4);
+      end;
+      while I < LPayloadLen do
+      begin
+        AFrame.Payload[I] := AFrame.Payload[I] xor AFrame.MaskKey[I and 3];
+        Inc(I);
+      end;
+    end;
   end;
 
   AConsumed := LPos + LPayloadLen - AOffset;

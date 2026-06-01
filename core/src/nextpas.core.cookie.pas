@@ -69,13 +69,23 @@ end;
 
 function ParseCookieHeader(const AHeader: string): TCookieArray;
 var
-  LPos, LStart, LLen, LEq, LCount: Integer;
-  LPair, LName, LValue: string;
+  LPos, LStart, LLen, LEq, LCount, LCap: Integer;
+  LNameStart, LNameEnd, LValStart, LValEnd: Integer;
 begin
-  SetLength(Result, 0);
   LLen := Length(AHeader);
   if LLen = 0 then
+  begin
+    SetLength(Result, 0);
     Exit;
+  end;
+
+  // Pre-count semicolons to estimate capacity
+  LCap := 1;
+  for LPos := 1 to LLen - 1 do
+    if (AHeader[LPos] = ';') and (LPos < LLen) and (AHeader[LPos + 1] = ' ') then
+      Inc(LCap);
+  SetLength(Result, LCap);
+
   LCount := 0;
   LStart := 1;
   LPos := 1;
@@ -83,26 +93,59 @@ begin
   begin
     if (LPos > LLen) or ((LPos < LLen) and (AHeader[LPos] = ';') and (AHeader[LPos + 1] = ' ')) then
     begin
-      LPair := Copy(AHeader, LStart, LPos - LStart);
-      if LPair <> '' then
+      // Pair is from LStart..LPos-1
+      if LPos > LStart then
       begin
-        LEq := Pos('=', LPair);
+        // Trim leading spaces from name
+        LNameStart := LStart;
+        while (LNameStart < LPos) and (AHeader[LNameStart] = ' ') do
+          Inc(LNameStart);
+
+        // Find '='
+        LEq := 0;
+        for LValStart := LNameStart to LPos - 1 do
+          if AHeader[LValStart] = '=' then
+          begin
+            LEq := LValStart;
+            Break;
+          end;
+
         if LEq > 0 then
         begin
-          LName := TrimStr(Copy(LPair, 1, LEq - 1));
-          LValue := Copy(LPair, LEq + 1, Length(LPair) - LEq);
+          // Trim trailing spaces from name
+          LNameEnd := LEq - 1;
+          while (LNameEnd >= LNameStart) and (AHeader[LNameEnd] = ' ') do
+            Dec(LNameEnd);
+
+          if LNameEnd >= LNameStart then
+          begin
+            if LCount >= LCap then
+            begin
+              LCap := LCap * 2;
+              SetLength(Result, LCap);
+            end;
+            Result[LCount].Name := Copy(AHeader, LNameStart, LNameEnd - LNameStart + 1);
+            Result[LCount].Value := Copy(AHeader, LEq + 1, LPos - LEq - 1);
+            Inc(LCount);
+          end;
         end
         else
         begin
-          LName := TrimStr(LPair);
-          LValue := '';
-        end;
-        if LName <> '' then
-        begin
-          Inc(LCount);
-          SetLength(Result, LCount);
-          Result[LCount - 1].Name := LName;
-          Result[LCount - 1].Value := LValue;
+          // No '=': entire pair is name
+          LNameEnd := LPos - 1;
+          while (LNameEnd >= LNameStart) and (AHeader[LNameEnd] = ' ') do
+            Dec(LNameEnd);
+          if LNameEnd >= LNameStart then
+          begin
+            if LCount >= LCap then
+            begin
+              LCap := LCap * 2;
+              SetLength(Result, LCap);
+            end;
+            Result[LCount].Name := Copy(AHeader, LNameStart, LNameEnd - LNameStart + 1);
+            Result[LCount].Value := '';
+            Inc(LCount);
+          end;
         end;
       end;
       if LPos > LLen then
@@ -113,6 +156,7 @@ begin
     else
       Inc(LPos);
   end;
+  SetLength(Result, LCount);
 end;
 
 function TryParseCookieHeader(const AHeader: string; out ACookies: TCookieArray): Boolean;

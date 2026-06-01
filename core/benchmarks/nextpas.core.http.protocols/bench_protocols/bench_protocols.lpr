@@ -68,6 +68,15 @@ begin
     LEvents := SseParseAll('data: hello' + #10 + #10);
 end;
 
+procedure BenchSseParseOne(aIters: Int64);
+var
+  it: Int64;
+  LEvent: TSseEvent;
+begin
+  for it := 1 to aIters do
+    SseParseOne('data: hello' + #10 + #10, LEvent);
+end;
+
 procedure BenchSseParseStream(aIters: Int64);
 var
   it: Int64;
@@ -319,6 +328,7 @@ begin
 
     WriteLn('--- SSE ---');
     B.Run('SseParseEvent (single)', @BenchSseParseEvent);
+    B.Run('SseParseOne (fast path)', @BenchSseParseOne);
     B.Run('SseParseStream (100 events)', @BenchSseParseStream);
     B.Run('SseFeed (10KB incremental)', @BenchSseFeed);
     WriteLn;
