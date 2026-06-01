@@ -86,3 +86,7 @@
 - 2026-06-01 C2：引入结构化表达式表 `TSemanticHirExpr`、`TTypedHirNode.ExprId` 与
   builder `LowerExpr` / blob fallback 双轨入口。本轮不迁移 producer，`ExprId=0` 继续走旧 blob；
   focused tests + 完整重编译 + 137/137 LLVM smoke 全绿。
+- 2026-06-01 C3-A：builder-only 结构化 scalar lowering：`LowerExpr` 支持 int literal、
+  symbol value、unary、binary arithmetic、compare、not/and/or，并在 lowering 前用
+  `CanLowerExpr` 预检整棵表达式，保证不支持节点完整回落 blob、不留下半截 HIR。
+  本轮仍不迁移 sema producer；focused tests + 完整重编译 + 137/137 LLVM smoke 全绿。

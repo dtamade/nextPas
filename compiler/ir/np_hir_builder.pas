@@ -128,6 +128,25 @@ type
     procedure BlobField(var S: TExprStack; const AArg: string);
     procedure BlobVcall(var S: TExprStack; AArg: string);
     procedure BlobIvcall(var S: TExprStack; AArg: string);
+    function LowerExprKind(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerUnaryExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerBinaryExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerCompareExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    procedure InitExprResult(out AResult: THIRExprResult);
+    procedure SetExprValue(out AResult: THIRExprResult;
+      const AValueId: THIRValueId; const ATypeId: THIRTypeId;
+      const AValueClass: TSemanticHirValueClass);
+    function CanLowerExpr(const AExprId: LongInt): Boolean;
+    function CanLowerExprKind(const AExpr: TSemanticHirExpr): Boolean;
+    function EmitConstInt(const AValue: Int64): THIRValueId;
+    function EmitStructuredSymbolValue(const ASymbolId: LongInt;
+      out AResult: THIRExprResult): Boolean;
+    function CompareKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
+    function BinaryKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
     function LowerExprValue(const AExprId: LongInt;
       out AResult: THIRExprResult): Boolean;
     function LowerExprAddress(const AExprId: LongInt;
@@ -327,6 +346,333 @@ begin
   Result := FModule;
 end;
 
+procedure THIRBuilder.InitExprResult(out AResult: THIRExprResult);
+begin
+  AResult.ValueId := 0;
+  AResult.TypeId := 0;
+  AResult.ValueClass := shvcNone;
+  AResult.AddressValueId := 0;
+end;
+
+procedure THIRBuilder.SetExprValue(out AResult: THIRExprResult;
+  const AValueId: THIRValueId; const ATypeId: THIRTypeId;
+  const AValueClass: TSemanticHirValueClass);
+begin
+  AResult.ValueId := AValueId;
+  AResult.TypeId := ATypeId;
+  AResult.ValueClass := AValueClass;
+  AResult.AddressValueId := 0;
+end;
+
+function THIRBuilder.CanLowerExprKind(const AExpr: TSemanticHirExpr): Boolean;
+var
+  I: LongInt;
+  Kind: THIRInstrKind;
+  Symbol: TSemanticSymbol;
+begin
+  case AExpr.Kind of
+    shekIntLiteral:
+      Result := True;
+    shekSymbolValue:
+      begin
+        if AExpr.SymbolId <= 0 then
+          Exit(False);
+        Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+        Result := Symbol.Name <> '';
+      end;
+    shekUnaryOp:
+      begin
+        Result := ((AExpr.Op = '-') or SameText(AExpr.Op, 'abs') or
+          SameText(AExpr.Op, 'not')) and (Length(AExpr.Children) >= 1);
+        if Result then
+          Result := CanLowerExpr(AExpr.Children[0]);
+      end;
+    shekBinaryOp:
+      begin
+        Result := (Length(AExpr.Children) >= 2) and
+          (BinaryKindForOp(AExpr.Op, Kind) or SameText(AExpr.Op, 'and') or
+           SameText(AExpr.Op, 'or'));
+        if Result then
+          for I := 0 to 1 do
+            if not CanLowerExpr(AExpr.Children[I]) then
+              Exit(False);
+      end;
+    shekCompareOp:
+      begin
+        Result := (Length(AExpr.Children) >= 2) and
+          CompareKindForOp(AExpr.Op, Kind);
+        if Result then
+          for I := 0 to 1 do
+            if not CanLowerExpr(AExpr.Children[I]) then
+              Exit(False);
+      end;
+  else
+    Result := False;
+  end;
+end;
+
+function THIRBuilder.CanLowerExpr(const AExprId: LongInt): Boolean;
+var
+  Expr: TSemanticHirExpr;
+begin
+  if (FSemaModel = nil) or (AExprId <= 0) then
+    Exit(False);
+  if AExprId > FSemaModel.HirExprCount then
+    Exit(False);
+  Expr := FSemaModel.HirExprAt(AExprId - 1);
+  Result := CanLowerExprKind(Expr);
+end;
+
+function THIRBuilder.EmitConstInt(const AValue: Int64): THIRValueId;
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'const:' + IntToStr(AValue);
+  EmitInstr(Instr);
+  Result := Instr.ResultId;
+end;
+
+function THIRBuilder.BinaryKindForOp(const AOp: string;
+  out AKind: THIRInstrKind): Boolean;
+begin
+  if AOp = '+' then AKind := hikAdd
+  else if AOp = '-' then AKind := hikSub
+  else if AOp = '*' then AKind := hikMul
+  else if SameText(AOp, 'div') or (AOp = '/') then AKind := hikDiv
+  else if SameText(AOp, 'mod') then AKind := hikMod
+  else
+    Exit(False);
+  Result := True;
+end;
+
+function THIRBuilder.CompareKindForOp(const AOp: string;
+  out AKind: THIRInstrKind): Boolean;
+begin
+  if (AOp = '=') or SameText(AOp, 'eq') then AKind := hikCmpEq
+  else if (AOp = '<>') or SameText(AOp, 'ne') then AKind := hikCmpNe
+  else if (AOp = '<') or SameText(AOp, 'slt') then AKind := hikCmpLt
+  else if (AOp = '<=') or SameText(AOp, 'sle') then AKind := hikCmpLe
+  else if (AOp = '>') or SameText(AOp, 'sgt') then AKind := hikCmpGt
+  else if (AOp = '>=') or SameText(AOp, 'sge') then AKind := hikCmpGe
+  else
+    Exit(False);
+  Result := True;
+end;
+
+function THIRBuilder.EmitStructuredSymbolValue(const ASymbolId: LongInt;
+  out AResult: THIRExprResult): Boolean;
+var
+  Symbol: TSemanticSymbol;
+  V: THIRValueId;
+  Instr: THIRInstr;
+  ConstVal: Int64;
+begin
+  InitExprResult(AResult);
+  if ASymbolId <= 0 then
+    Exit(False);
+  Symbol := FSemaModel.SymbolAt(ASymbolId - 1);
+  if Symbol.Name = '' then
+    Exit(False);
+
+  V := FindAlloca(Symbol.Name);
+  if (V = 0) and (Pos('.', Symbol.Name) > 0) then
+  begin
+    EnsureAlloca(Symbol.Name, GetIntType);
+    V := FindAlloca(Symbol.Name);
+  end;
+  if V <> 0 then
+  begin
+    if IsVarParamAlloca(Symbol.Name) then
+    begin
+      V := EmitLoad(GetPtrType, V);
+      SetExprValue(AResult, EmitLoad(GetIntType, V), GetIntType, shvcScalar);
+    end
+    else if FindAllocaType(Symbol.Name) = GetPtrType then
+      SetExprValue(AResult, EmitLoad(GetPtrType, V), GetPtrType, shvcScalar)
+    else
+      SetExprValue(AResult, EmitLoad(GetIntType, V), GetIntType, shvcScalar);
+    Exit(AResult.ValueId <> 0);
+  end;
+
+  if FSemaModel.LookupConstValue(Symbol.Name, ConstVal) then
+  begin
+    SetExprValue(AResult, EmitConstInt(ConstVal), GetIntType, shvcScalar);
+    Exit(True);
+  end;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := GetIntType;
+  Instr.CallTarget := Symbol.Name;
+  EmitInstr(Instr);
+  SetExprValue(AResult, Instr.ResultId, GetIntType, shvcScalar);
+  Result := True;
+end;
+
+function THIRBuilder.LowerCompareExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Lhs, Rhs: THIRExprResult;
+  Kind: THIRInstrKind;
+  ValueId: THIRValueId;
+begin
+  InitExprResult(AResult);
+  if Length(AExpr.Children) < 2 then
+    Exit(False);
+  if not CompareKindForOp(AExpr.Op, Kind) then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[0], Lhs) then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[1], Rhs) then
+    Exit(False);
+  ValueId := EmitCmpOp(Kind, GetBoolType, Lhs.ValueId, Rhs.ValueId,
+    Lhs.TypeId, Rhs.TypeId);
+  SetExprValue(AResult, ValueId, GetBoolType, shvcScalar);
+  Result := True;
+end;
+
+function THIRBuilder.LowerUnaryExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Child: THIRExprResult;
+  OneValue, ZextValue, SubValue, ZeroValue, CmpValue: THIRValueId;
+  Instr: THIRInstr;
+begin
+  InitExprResult(AResult);
+  if Length(AExpr.Children) < 1 then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[0], Child) then
+    Exit(False);
+
+  if AExpr.Op = '-' then
+  begin
+    SetExprValue(AResult, EmitBinOp(hikSub, GetIntType,
+      EmitConstInt(0), Child.ValueId), GetIntType, shvcScalar);
+    Exit(True);
+  end;
+
+  if SameText(AExpr.Op, 'abs') then
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'abs';
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeOperand(Child.ValueId);
+    EmitInstr(Instr);
+    SetExprValue(AResult, Instr.ResultId, GetIntType, shvcScalar);
+    Exit(True);
+  end;
+
+  if SameText(AExpr.Op, 'not') then
+  begin
+    OneValue := EmitConstInt(1);
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikZext;
+    Instr.TypeId := GetIntType;
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeOperand(Child.ValueId);
+    EmitInstr(Instr);
+    ZextValue := Instr.ResultId;
+    SubValue := EmitBinOp(hikSub, GetIntType, OneValue, ZextValue);
+    ZeroValue := EmitConstInt(0);
+    CmpValue := EmitCmpOp(hikCmpNe, GetBoolType, SubValue, ZeroValue, 0, 0);
+    SetExprValue(AResult, CmpValue, GetBoolType, shvcScalar);
+    Exit(True);
+  end;
+
+  Result := False;
+end;
+
+function THIRBuilder.LowerBinaryExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Lhs, Rhs: THIRExprResult;
+  Kind: THIRInstrKind;
+  ValueId, LhsInt, RhsInt, ZeroValue: THIRValueId;
+  Instr: THIRInstr;
+begin
+  InitExprResult(AResult);
+  if Length(AExpr.Children) < 2 then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[0], Lhs) then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[1], Rhs) then
+    Exit(False);
+
+  if BinaryKindForOp(AExpr.Op, Kind) then
+  begin
+    ValueId := EmitBinOp(Kind, GetIntType, Lhs.ValueId, Rhs.ValueId);
+    SetExprValue(AResult, ValueId, GetIntType, shvcScalar);
+    Exit(True);
+  end;
+
+  if SameText(AExpr.Op, 'and') or SameText(AExpr.Op, 'or') then
+  begin
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikZext;
+    Instr.TypeId := GetIntType;
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeOperand(Lhs.ValueId);
+    EmitInstr(Instr);
+    LhsInt := Instr.ResultId;
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikZext;
+    Instr.TypeId := GetIntType;
+    SetLength(Instr.Operands, 1);
+    Instr.Operands[0] := MakeOperand(Rhs.ValueId);
+    EmitInstr(Instr);
+    RhsInt := Instr.ResultId;
+
+    if SameText(AExpr.Op, 'and') then
+      ValueId := EmitBinOp(hikMul, GetIntType, LhsInt, RhsInt)
+    else
+      ValueId := EmitBinOp(hikAdd, GetIntType, LhsInt, RhsInt);
+    ZeroValue := EmitConstInt(0);
+    ValueId := EmitCmpOp(hikCmpNe, GetBoolType, ValueId, ZeroValue, 0, 0);
+    SetExprValue(AResult, ValueId, GetBoolType, shvcScalar);
+    Exit(True);
+  end;
+
+  Result := False;
+end;
+
+function THIRBuilder.LowerExprKind(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  ValueId: THIRValueId;
+begin
+  InitExprResult(AResult);
+  case AExpr.Kind of
+    shekIntLiteral:
+      begin
+        ValueId := EmitConstInt(AExpr.LiteralInt);
+        SetExprValue(AResult, ValueId, GetIntType, shvcScalar);
+        Result := True;
+      end;
+    shekSymbolValue:
+      Result := EmitStructuredSymbolValue(AExpr.SymbolId, AResult);
+    shekUnaryOp:
+      Result := LowerUnaryExpr(AExpr, AResult);
+    shekBinaryOp:
+      Result := LowerBinaryExpr(AExpr, AResult);
+    shekCompareOp:
+      Result := LowerCompareExpr(AExpr, AResult);
+  else
+    Result := False;
+  end;
+end;
+
 function THIRBuilder.LowerExprValue(const AExprId: LongInt;
   out AResult: THIRExprResult): Boolean;
 begin
@@ -344,21 +690,15 @@ function THIRBuilder.LowerExpr(const AExprId: LongInt;
 var
   Expr: TSemanticHirExpr;
 begin
-  AResult.ValueId := 0;
-  AResult.TypeId := 0;
-  AResult.ValueClass := shvcNone;
-  AResult.AddressValueId := 0;
+  InitExprResult(AResult);
   if (FSemaModel = nil) or (AExprId <= 0) then
     Exit(False);
   if AExprId > FSemaModel.HirExprCount then
     Exit(False);
+  if not CanLowerExpr(AExprId) then
+    Exit(False);
   Expr := FSemaModel.HirExprAt(AExprId - 1);
-  case Expr.Kind of
-    shekInvalid:
-      Result := False;
-  else
-    Result := False;
-  end;
+  Result := LowerExprKind(Expr, AResult);
 end;
 
 function THIRBuilder.LowerNodeExprOrBlob(const ANode: TTypedHirNode;
