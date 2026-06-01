@@ -90,3 +90,7 @@
   symbol value、unary、binary arithmetic、compare、not/and/or，并在 lowering 前用
   `CanLowerExpr` 预检整棵表达式，保证不支持节点完整回落 blob、不留下半截 HIR。
   本轮仍不迁移 sema producer；focused tests + 完整重编译 + 137/137 LLVM smoke 全绿。
+- 2026-06-01 C3-B1：sema producer 第一刀，仅迁移 `Halt(expr)` runtime 参数：
+  对简单 scalar 表达式生成 `TSemanticHirExpr` 并设置 `halt-call-runtime.ExprId`，
+  同时保留旧 `Operand` blob。runtime var 保持为 `shekSymbolValue`，不因 var-init
+  被折成 literal。focused tests + 完整重编译 + 137/137 LLVM smoke 全绿。

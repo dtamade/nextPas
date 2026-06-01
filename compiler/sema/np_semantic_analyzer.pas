@@ -327,6 +327,8 @@ type
     function EvaluateStringConstant(const ANode: TGreenNode;
       out AValue: string): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
+    function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
+      out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
       out ABlob: string): Boolean;
     function EncodeRuntimeBoolExprFold(const ANode: TGreenNode;
@@ -6963,6 +6965,131 @@ begin
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
+function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
+  out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  LeftExprId, RightExprId, SymbolId: LongInt;
+  Value: Int64;
+  ParseCode: Word;
+  Op, Pred: string;
+begin
+  AExprId := 0;
+  if ANode = nil then
+    Exit(False);
+
+  if ANode.NodeKind = gnkIntegerLiteral then
+  begin
+    Val(ANode.Text, Value, ParseCode);
+    if ParseCode <> 0 then
+      Exit(False);
+    SetLength(Children, 0);
+    AExprId := FModel.AddHirExpr(
+      shekIntLiteral, 0, 0, Children, Value, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
+  begin
+    SetLength(Children, 0);
+    AExprId := FModel.AddHirExpr(
+      shekIntLiteral, 0, 0, Children, 1, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'False') then
+  begin
+    SetLength(Children, 0);
+    AExprId := FModel.AddHirExpr(
+      shekIntLiteral, 0, 0, Children, 0, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkIdentifier) and
+    FModel.LookupConstValue(ANode.Text, Value) then
+  begin
+    SetLength(Children, 0);
+    AExprId := FModel.AddHirExpr(
+      shekIntLiteral, 0, 0, Children, Value, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkIdentifier) and IsRuntimeVar(ANode.Text) then
+  begin
+    SymbolId := FModel.FindSymbolByName(ANode.Text);
+    if SymbolId <= 0 then
+      Exit(False);
+    SetLength(Children, 0);
+    AExprId := FModel.AddHirExpr(
+      shekSymbolValue, 0, SymbolId, Children, 0, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) then
+  begin
+    if not BuildRuntimeScalarHirExpr(ANode.ChildAt(0), LeftExprId) then
+      Exit(False);
+    if ANode.Text = '-' then
+      Op := '-'
+    else if SameText(ANode.Text, 'not') then
+      Op := 'not'
+    else
+      Exit(False);
+    SetLength(Children, 1);
+    Children[0] := LeftExprId;
+    AExprId := FModel.AddHirExpr(
+      shekUnaryOp, 0, 0, Children, 0, '', Op, 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind <> gnkBinaryExpression) or (ANode.ChildCount < 2) then
+    Exit(False);
+
+  Op := ANode.Text;
+  if (Op = '+') or (Op = '-') or (Op = '*') or SameText(Op, 'div') or
+    SameText(Op, 'mod') or SameText(Op, 'and') or SameText(Op, 'or') then
+  begin
+    if not BuildRuntimeScalarHirExpr(ANode.ChildAt(0), LeftExprId) then
+      Exit(False);
+    if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), RightExprId) then
+      Exit(False);
+    SetLength(Children, 2);
+    Children[0] := LeftExprId;
+    Children[1] := RightExprId;
+    AExprId := FModel.AddHirExpr(
+      shekBinaryOp, 0, 0, Children, 0, '', Op, 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if Op = '=' then Pred := '='
+  else if Op = '<>' then Pred := '<>'
+  else if Op = '<' then Pred := '<'
+  else if Op = '<=' then Pred := '<='
+  else if Op = '>' then Pred := '>'
+  else if Op = '>=' then Pred := '>='
+  else
+    Exit(False);
+
+  if not BuildRuntimeScalarHirExpr(ANode.ChildAt(0), LeftExprId) then
+    Exit(False);
+  if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), RightExprId) then
+    Exit(False);
+  SetLength(Children, 2);
+  Children[0] := LeftExprId;
+  Children[1] := RightExprId;
+  AExprId := FModel.AddHirExpr(
+    shekCompareOp, 0, 0, Children, 0, '', Pred, 0, shvcScalar
+  );
+  Result := True;
+end;
+
 function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
   const ANode: TGreenNode; out ABlob: string): Boolean;
 var
@@ -7110,7 +7237,7 @@ end;
 
 procedure TSemanticAnalyzer.WalkHaltCalls(const ANode: TGreenNode);
 var
-  I, ArgIndex: LongInt;
+  I, ArgIndex, ExprId, NodeId: LongInt;
   Child, Arg, RhsNode, BranchNode, DeclNode: TGreenNode;
   Operand: string;
   Value, CondValue: Int64;
@@ -7924,7 +8051,10 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
-            FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, Operand);
+            NodeId := FModel.AddTypedHirNode(
+              'halt-call-runtime', 'Halt', 0, 0, Operand);
+            if BuildRuntimeScalarHirExpr(Arg, ExprId) then
+              FModel.SetTypedHirNodeExprId(NodeId, ExprId);
             FCurrentBlockTerminated := True;
             Continue;
           end;
