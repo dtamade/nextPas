@@ -86,12 +86,212 @@ implementation
 uses
   nextpas.core.fs,
   nextpas.core.platform.files,
-  nextpas.core.platform.files.base;
+  nextpas.core.platform.files.base,
+  nextpas.core.yaml,
+  nextpas.core.yaml.value,
+  nextpas.core.yaml.types,
+  nextpas.core.toml,
+  nextpas.core.toml.value,
+  nextpas.core.toml.base;
 
 {$IFDEF NEXTPAS_UNIX}
 var
   environ: PPAnsiChar; cvar; external;
 {$ENDIF}
+
+{ DOM 展平 helper —— 把 JSON/YAML/TOML 嵌套结构递归展平成扁平 dot-path。
+  嵌套对象/表 → server.host；数组/序列 → tags.0、servers.0.host（.NET IConfiguration 模型）。
+  注意（扁平模型固有约束）：
+  - 字面含点的键与真实层级会撞 key，例如 {"a.b":1} 与 {"a":{"b":1}} 都展平成 a.b；后写覆盖先写。
+  - 递归深度 = 配置嵌套深度，由底层 DOM 解析器自身的深度上限先行约束。 }
+
+function JoinKey(const APrefix, AKey: string): string;
+begin
+  if APrefix = '' then
+    Result := AKey
+  else
+    Result := APrefix + '.' + AKey;
+end;
+
+function PadZero(const AValue: Int64; const AWidth: Integer): string;
+begin
+  Result := IntToStr(AValue);
+  while Length(Result) < AWidth do
+    Result := '0' + Result;
+end;
+
+{ TOML datetime → ISO 8601 文本（忠实渲染，供类型 getter 还原）}
+function TomlDateTimeToStr(const ADT: TTomlDateTime): string;
+var
+  LAbs, LH, LM: Integer;
+  LFrac: string;
+  LLen: Integer;
+begin
+  Result := '';
+  if ADT.HasDate then
+    Result := PadZero(ADT.Year, 4) + '-' + PadZero(ADT.Month, 2) + '-' + PadZero(ADT.Day, 2);
+  if ADT.HasTime then
+  begin
+    if Result <> '' then
+      Result := Result + 'T';
+    Result := Result + PadZero(ADT.Hour, 2) + ':' + PadZero(ADT.Minute, 2) + ':' +
+      PadZero(ADT.Second, 2);
+    if ADT.Nanosecond > 0 then
+    begin
+      LFrac := PadZero(ADT.Nanosecond, 9);
+      LLen := Length(LFrac);
+      while (LLen > 1) and (LFrac[LLen] = '0') do
+        Dec(LLen);
+      Result := Result + '.' + Copy(LFrac, 1, LLen);
+    end;
+  end;
+  if ADT.HasOffset then
+  begin
+    if ADT.OffsetMinutes = 0 then
+      Result := Result + 'Z'
+    else
+    begin
+      LAbs := Abs(Integer(ADT.OffsetMinutes));
+      LH := LAbs div 60;
+      LM := LAbs mod 60;
+      if ADT.OffsetMinutes >= 0 then
+        Result := Result + '+'
+      else
+        Result := Result + '-';
+      Result := Result + PadZero(LH, 2) + ':' + PadZero(LM, 2);
+    end;
+  end;
+end;
+
+{ 标量忠实渲染 —— int/float/bool/null 转成可被类型 getter 还原的文本 }
+
+function RenderJsonScalar(const ANode: TJsonValue): string;
+begin
+  case ANode.Kind of
+    jnkString: Result := ANode.AsStr.ToString;
+    jnkInt:    Result := IntToStr(ANode.AsInt);
+    jnkReal:   Result := FloatToStr(ANode.AsFloat);
+    jnkBool:   if ANode.AsBool then Result := 'true' else Result := 'false';
+  else
+    Result := '';  { jnkNull / 其它 }
+  end;
+end;
+
+function RenderYamlScalar(const ANode: TYamlValue): string;
+begin
+  case ANode.Kind of
+    ynkString: Result := ANode.AsStr.ToString;
+    ynkInt:    Result := IntToStr(ANode.AsInt);
+    ynkFloat:  Result := FloatToStr(ANode.AsFloat);
+    ynkBool:   if ANode.AsBool then Result := 'true' else Result := 'false';
+  else
+    Result := '';  { ynkNull / ynkAlias / 其它 }
+  end;
+end;
+
+function RenderTomlScalar(const ANode: TTomlValue): string;
+begin
+  case ANode.Kind of
+    tnkString:   Result := ANode.AsStr.ToString;
+    tnkInt:      Result := IntToStr(ANode.AsInt);
+    tnkFloat:    Result := FloatToStr(ANode.AsFloat);
+    tnkBool:     if ANode.AsBool then Result := 'true' else Result := 'false';
+    tnkDateTime: Result := TomlDateTimeToStr(ANode.AsDateTime);
+  else
+    Result := '';
+  end;
+end;
+
+{ 递归展平 —— while + UInt32 计数，空容器零下溢 }
+
+procedure FlattenJsonNode(ACfg: TConfig; const APrefix: string; const ANode: TJsonValue);
+var
+  LI, LCount: UInt32;
+begin
+  case ANode.Kind of
+    jnkObject:
+      begin
+        LCount := ANode.ObjectLen;
+        LI := 0;
+        while LI < LCount do
+        begin
+          FlattenJsonNode(ACfg, JoinKey(APrefix, ANode.ObjectKeyAt(LI).ToString),
+            ANode.ObjectValueAt(LI));
+          Inc(LI);
+        end;
+      end;
+    jnkArray:
+      begin
+        LCount := ANode.ArrayLen;
+        LI := 0;
+        while LI < LCount do
+        begin
+          FlattenJsonNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.ArrayGet(LI));
+          Inc(LI);
+        end;
+      end;
+  else
+    ACfg.SetValueUnlocked(APrefix, RenderJsonScalar(ANode));
+  end;
+end;
+
+procedure FlattenYamlNode(ACfg: TConfig; const APrefix: string; const ANode: TYamlValue);
+var
+  LI, LCount: UInt32;
+begin
+  if ANode.IsMap then
+  begin
+    LCount := ANode.MapLen;
+    LI := 0;
+    while LI < LCount do
+    begin
+      FlattenYamlNode(ACfg, JoinKey(APrefix, ANode.MapKeyAt(LI).ToString),
+        ANode.MapValueAt(LI));
+      Inc(LI);
+    end;
+  end
+  else if ANode.IsSeq then
+  begin
+    LCount := ANode.SeqLen;
+    LI := 0;
+    while LI < LCount do
+    begin
+      FlattenYamlNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.SeqGet(LI));
+      Inc(LI);
+    end;
+  end
+  else
+    ACfg.SetValueUnlocked(APrefix, RenderYamlScalar(ANode));
+end;
+
+procedure FlattenTomlNode(ACfg: TConfig; const APrefix: string; const ANode: TTomlValue);
+var
+  LI, LCount: UInt32;
+begin
+  if ANode.IsTable then
+  begin
+    LCount := ANode.TableLen;
+    LI := 0;
+    while LI < LCount do
+    begin
+      FlattenTomlNode(ACfg, JoinKey(APrefix, ANode.TableKeyAt(LI).ToString),
+        ANode.TableValueAt(LI));
+      Inc(LI);
+    end;
+  end
+  else if ANode.IsArray then
+  begin
+    LCount := ANode.ArrayLen;
+    LI := 0;
+    while LI < LCount do
+    begin
+      FlattenTomlNode(ACfg, JoinKey(APrefix, UIntToStr(LI)), ANode.ArrayGet(LI));
+      Inc(LI);
+    end;
+  end
+  else
+    ACfg.SetValueUnlocked(APrefix, RenderTomlScalar(ANode));
+end;
 
 { TConfig }
 
@@ -195,36 +395,19 @@ procedure TConfig.LoadFromJson(const AContent: string);
 var
   LDoc: IJsonDocument;
   LRoot: TJsonValue;
-  LI: UInt32;
-  LKey, LValue: string;
-  LValNode: TJsonValue;
 begin
   LDoc := JsonParse(AContent);
+  { 解析失败静默保留已有数据（最小侵入；EConfigError/TryLoadJson 留待下一轮） }
   if LDoc.HasError then
     Exit;
   LRoot := LDoc.Root;
-  if not LRoot.IsObject then
-    Exit;
 
   FLock.AcquireWrite;
   try
-    for LI := 0 to LRoot.ObjectLen - 1 do
-    begin
-      LKey := LRoot.ObjectKeyAt(LI).ToString;
-      LValNode := LRoot.ObjectValueAt(LI);
-      case LValNode.Kind of
-        jnkString: LValue := LValNode.AsStr.ToString;
-        jnkInt: LValue := IntToStr(LValNode.AsInt);
-        jnkReal: LValue := FloatToStr(LValNode.AsFloat);
-        jnkBool:
-          if LValNode.AsBool then LValue := 'true'
-          else LValue := 'false';
-        jnkNull: LValue := '';
-      else
-        LValue := '';
-      end;
-      SetValueUnlocked(LKey, LValue);
-    end;
+    { 顶层容器（object/array）递归展平，顶层键不加前缀（JoinKey('',k)=k）。
+      顶层裸标量无键可映射，按 .NET IConfiguration 语义忽略。 }
+    if LRoot.IsObject or LRoot.IsArray then
+      FlattenJsonNode(Self, '', LRoot);
   finally
     FLock.ReleaseWrite;
   end;
@@ -232,48 +415,19 @@ end;
 
 procedure TConfig.LoadFromYaml(const AContent: string);
 var
-  LPos, LLen, LLineStart, LLineEnd: Integer;
-  LLine, LKey, LValue: string;
-  LColonPos: Integer;
+  LDoc: IYamlDocument;
+  LRoot: TYamlValue;
 begin
-  LLen := Length(AContent);
-  LPos := 1;
+  LDoc := YamlParse(AContent);
+  if LDoc.HasError then
+    Exit;
+  LRoot := LDoc.Root;
 
   FLock.AcquireWrite;
   try
-    while LPos <= LLen do
-    begin
-      { Find line boundaries }
-      LLineStart := LPos;
-      while (LPos <= LLen) and (AContent[LPos] <> #10) and (AContent[LPos] <> #13) do
-        Inc(LPos);
-      LLineEnd := LPos - 1;
-      { Skip line ending }
-      if (LPos <= LLen) and (AContent[LPos] = #13) then
-        Inc(LPos);
-      if (LPos <= LLen) and (AContent[LPos] = #10) then
-        Inc(LPos);
-
-      LLine := Trim(Copy(AContent, LLineStart, LLineEnd - LLineStart + 1));
-      { Skip empty lines and comments }
-      if (LLine = '') or (LLine[1] = '#') then
-        Continue;
-
-      { Find colon separator }
-      LColonPos := Pos(':', LLine);
-      if LColonPos < 2 then
-        Continue;
-
-      LKey := Trim(Copy(LLine, 1, LColonPos - 1));
-      LValue := Trim(Copy(LLine, LColonPos + 1, Length(LLine) - LColonPos));
-      { Strip surrounding quotes }
-      if (Length(LValue) >= 2) and (LValue[1] = '"') and (LValue[Length(LValue)] = '"') then
-        LValue := Copy(LValue, 2, Length(LValue) - 2)
-      else if (Length(LValue) >= 2) and (LValue[1] = '''') and (LValue[Length(LValue)] = '''') then
-        LValue := Copy(LValue, 2, Length(LValue) - 2);
-
-      SetValueUnlocked(LKey, LValue);
-    end;
+    { 顶层 mapping/sequence 递归展平；顶层裸标量按语义忽略。 }
+    if LRoot.IsMap or LRoot.IsSeq then
+      FlattenYamlNode(Self, '', LRoot);
   finally
     FLock.ReleaseWrite;
   end;
@@ -281,60 +435,19 @@ end;
 
 procedure TConfig.LoadFromToml(const AContent: string);
 var
-  LPos, LLen, LLineStart, LLineEnd: Integer;
-  LLine, LSection, LKey, LValue, LFullKey: string;
-  LEqPos: Integer;
+  LDoc: ITomlDocument;
+  LRoot: TTomlValue;
 begin
-  LLen := Length(AContent);
-  LPos := 1;
-  LSection := '';
+  LDoc := TomlParse(AContent);
+  if LDoc.HasError then
+    Exit;
+  LRoot := LDoc.Root;
 
   FLock.AcquireWrite;
   try
-    while LPos <= LLen do
-    begin
-      { Find line boundaries }
-      LLineStart := LPos;
-      while (LPos <= LLen) and (AContent[LPos] <> #10) and (AContent[LPos] <> #13) do
-        Inc(LPos);
-      LLineEnd := LPos - 1;
-      { Skip line ending }
-      if (LPos <= LLen) and (AContent[LPos] = #13) then
-        Inc(LPos);
-      if (LPos <= LLen) and (AContent[LPos] = #10) then
-        Inc(LPos);
-
-      LLine := Trim(Copy(AContent, LLineStart, LLineEnd - LLineStart + 1));
-      { Skip empty lines and comments }
-      if (LLine = '') or (LLine[1] = '#') then
-        Continue;
-
-      { Section header [name] }
-      if (LLine[1] = '[') and (LLine[Length(LLine)] = ']') then
-      begin
-        LSection := Trim(Copy(LLine, 2, Length(LLine) - 2));
-        Continue;
-      end;
-
-      { key = value }
-      LEqPos := Pos('=', LLine);
-      if LEqPos < 2 then
-        Continue;
-
-      LKey := Trim(Copy(LLine, 1, LEqPos - 1));
-      LValue := Trim(Copy(LLine, LEqPos + 1, Length(LLine) - LEqPos));
-      { Strip surrounding quotes }
-      if (Length(LValue) >= 2) and (LValue[1] = '"') and (LValue[Length(LValue)] = '"') then
-        LValue := Copy(LValue, 2, Length(LValue) - 2)
-      else if (Length(LValue) >= 2) and (LValue[1] = '''') and (LValue[Length(LValue)] = '''') then
-        LValue := Copy(LValue, 2, Length(LValue) - 2);
-
-      if LSection <> '' then
-        LFullKey := LSection + '.' + LKey
-      else
-        LFullKey := LKey;
-      SetValueUnlocked(LFullKey, LValue);
-    end;
+    { TOML 顶层恒为 table；递归展平嵌套表/数组（含内联表、dotted key、array-of-tables）。 }
+    if LRoot.IsTable then
+      FlattenTomlNode(Self, '', LRoot);
   finally
     FLock.ReleaseWrite;
   end;
