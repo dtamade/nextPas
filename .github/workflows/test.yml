@@ -1,0 +1,27 @@
+name: TUI Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install FPC
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fpc
+      - name: Run TUI tests
+        run: |
+          cd core
+          for d in tests/nextpas.core.tui/*/; do
+            if [ -f "$d/Makefile" ]; then
+              make -C "$d" test
+            fi
+          done
+      - name: Run text.width tests
+        run: |
+          cd core
+          make -C tests/nextpas.core.text.width/test_text_width test
+      - name: Run grapheme tests
+        run: |
+          cd core
+          make -C tests/nextpas.core.text.grapheme/test_grapheme test
