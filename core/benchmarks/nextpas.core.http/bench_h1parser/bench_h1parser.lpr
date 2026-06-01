@@ -4,7 +4,8 @@ program bench_h1parser;
 
 uses
   nextpas.core.bench,
-  nextpas.core.http.impl.h1.parser;
+  nextpas.core.http.impl.h1.parser,
+  nextpas.core.http.impl.h1.fast;
 
 var
   B: TBenchRunner;
@@ -113,6 +114,57 @@ begin
   GSink := LPos;
 end;
 
+{ === Fast path benchmarks === }
+
+procedure BenchFastParseSimpleGET(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+begin
+  for LIt := 1 to aIters do
+    LResult := FastParseRequest(PAnsiChar(REQ_SIMPLE), Length(REQ_SIMPLE));
+  if LResult.Success then GSink := LResult.Consumed;
+end;
+
+procedure BenchFastParse10Headers(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+begin
+  for LIt := 1 to aIters do
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+  if LResult.Success then GSink := LResult.Consumed;
+end;
+
+procedure BenchFastParsePost1K(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+begin
+  for LIt := 1 to aIters do
+    LResult := FastParseRequest(PAnsiChar(GReqPost1K), Length(GReqPost1K));
+  if LResult.Success then GSink := LResult.Consumed;
+end;
+
+procedure BenchFastParsePipeline10(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LPos: SizeUInt;
+begin
+  for LIt := 1 to aIters do
+  begin
+    LPos := 0;
+    while LPos < SizeUInt(Length(GPipeline)) do
+    begin
+      LResult := FastParseRequest(PAnsiChar(GPipeline) + LPos, SizeUInt(Length(GPipeline)) - LPos);
+      if not LResult.Success then Break;
+      Inc(LPos, LResult.Consumed);
+    end;
+  end;
+  GSink := LPos;
+end;
+
 begin
   InitData;
   B := TBenchRunner.Create;
@@ -122,10 +174,17 @@ begin
   WriteLn('  POST 1KB:   ', Length(GReqPost1K), ' bytes');
   WriteLn('  Pipeline:   ', Length(GPipeline), ' bytes (10 requests)');
   WriteLn;
-  B.Run('Parse simple GET (~60B)', @BenchParseSimpleGET);
-  B.Run('Parse 10 headers (~400B)', @BenchParse10Headers);
-  B.Run('Parse POST 1KB body', @BenchParsePost1K);
-  B.Run('Parse pipeline (10 reqs)', @BenchParsePipeline10);
+  WriteLn('--- llhttp ---');
+  B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);
+  B.Run('llhttp: 10 headers (~400B)', @BenchParse10Headers);
+  B.Run('llhttp: POST 1KB body', @BenchParsePost1K);
+  B.Run('llhttp: pipeline (10 reqs)', @BenchParsePipeline10);
+  WriteLn;
+  WriteLn('--- fast path (SIMD) ---');
+  B.Run('fast: simple GET (~60B)', @BenchFastParseSimpleGET);
+  B.Run('fast: 10 headers (~400B)', @BenchFastParse10Headers);
+  B.Run('fast: POST 1KB body', @BenchFastParsePost1K);
+  B.Run('fast: pipeline (10 reqs)', @BenchFastParsePipeline10);
   WriteLn;
   B.Summary;
   B.Free;
