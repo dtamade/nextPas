@@ -37,6 +37,8 @@ type
     function ToString: string;
     function Len: SizeUInt; inline;
     function Cap: SizeUInt; inline;
+    function Tail: PAnsiChar; inline;
+    procedure AdvanceLen(const ACount: SizeUInt); inline;
     procedure Clear; inline;
     procedure Reserve(const AAdditional: SizeUInt);
   end;
@@ -236,6 +238,16 @@ end;
 function TStringBuilder.Cap: SizeUInt;
 begin
   Result := FCap;
+end;
+
+function TStringBuilder.Tail: PAnsiChar;
+begin
+  Result := FBuf + FLen;
+end;
+
+procedure TStringBuilder.AdvanceLen(const ACount: SizeUInt);
+begin
+  Inc(FLen, ACount);
 end;
 
 procedure TStringBuilder.Clear;

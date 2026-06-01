@@ -231,22 +231,47 @@ begin
 end;
 
 procedure TJsonWriter.StrClean(const AValue: PAnsiChar; const ALen: SizeUInt);
+var
+  LNeed: SizeUInt;
+  LP: PAnsiChar;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
-  FBuilder^.Reserve(ALen + 2);
-  FBuilder^.AppendChar('"');
-  FBuilder^.AppendBytes(AValue, ALen);
-  FBuilder^.AppendChar('"');
+  if FNeedComma then
+    LNeed := ALen + 3
+  else
+    LNeed := ALen + 2;
+  FBuilder^.Reserve(LNeed);
+  LP := FBuilder^.Tail;
+  if FNeedComma then
+  begin
+    LP^ := ','; Inc(LP);
+  end;
+  LP^ := '"'; Inc(LP);
+  Move(AValue^, LP^, ALen); Inc(LP, ALen);
+  LP^ := '"'; Inc(LP);
+  FBuilder^.AdvanceLen(LNeed);
   FNeedComma := True;
 end;
 
 procedure TJsonWriter.KeyClean(const AKey: PAnsiChar; const ALen: SizeUInt);
+var
+  LNeed: SizeUInt;
+  LP: PAnsiChar;
 begin
-  if FNeedComma then FBuilder^.AppendChar(',');
-  FBuilder^.Reserve(ALen + 3);
-  FBuilder^.AppendChar('"');
-  FBuilder^.AppendBytes(AKey, ALen);
-  FBuilder^.AppendBytes('":', 2);
+  if FNeedComma then
+    LNeed := ALen + 4
+  else
+    LNeed := ALen + 3;
+  FBuilder^.Reserve(LNeed);
+  LP := FBuilder^.Tail;
+  if FNeedComma then
+  begin
+    LP^ := ','; Inc(LP);
+  end;
+  LP^ := '"'; Inc(LP);
+  Move(AKey^, LP^, ALen); Inc(LP, ALen);
+  LP^ := '"'; Inc(LP);
+  LP^ := ':'; Inc(LP);
+  FBuilder^.AdvanceLen(LNeed);
   FNeedComma := False;
 end;
 
