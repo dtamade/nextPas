@@ -29,6 +29,13 @@ type
     IsVarParam: Boolean;
   end;
 
+  THIRExprResult = record
+    ValueId: THIRValueId;
+    TypeId: THIRTypeId;
+    ValueClass: TSemanticHirValueClass;
+    AddressValueId: THIRValueId;
+  end;
+
   THIRBuilder = class
   private
     FSemaModel: TSemanticModel;
@@ -121,6 +128,12 @@ type
     procedure BlobField(var S: TExprStack; const AArg: string);
     procedure BlobVcall(var S: TExprStack; AArg: string);
     procedure BlobIvcall(var S: TExprStack; AArg: string);
+    function LowerExprValue(const AExprId: LongInt;
+      out AResult: THIRExprResult): Boolean;
+    function LowerExprAddress(const AExprId: LongInt;
+      out AResult: THIRExprResult): Boolean;
+    function LowerNodeExprOrBlob(const ANode: TTypedHirNode;
+      const ABlob: string): THIRValueId;
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
     procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
     procedure ProcessIntfRelease(const ANode: TTypedHirNode);
@@ -167,6 +180,8 @@ type
   public
     constructor Create(ASemaModel: TSemanticModel);
     destructor Destroy; override;
+    function LowerExpr(const AExprId: LongInt;
+      out AResult: THIRExprResult): Boolean;
     procedure Build;
     function Module: THIRModule;
   end;
@@ -310,6 +325,50 @@ end;
 function THIRBuilder.Module: THIRModule;
 begin
   Result := FModule;
+end;
+
+function THIRBuilder.LowerExprValue(const AExprId: LongInt;
+  out AResult: THIRExprResult): Boolean;
+begin
+  Result := LowerExpr(AExprId, AResult);
+end;
+
+function THIRBuilder.LowerExprAddress(const AExprId: LongInt;
+  out AResult: THIRExprResult): Boolean;
+begin
+  Result := LowerExpr(AExprId, AResult);
+end;
+
+function THIRBuilder.LowerExpr(const AExprId: LongInt;
+  out AResult: THIRExprResult): Boolean;
+var
+  Expr: TSemanticHirExpr;
+begin
+  AResult.ValueId := 0;
+  AResult.TypeId := 0;
+  AResult.ValueClass := shvcNone;
+  AResult.AddressValueId := 0;
+  if (FSemaModel = nil) or (AExprId <= 0) then
+    Exit(False);
+  if AExprId > FSemaModel.HirExprCount then
+    Exit(False);
+  Expr := FSemaModel.HirExprAt(AExprId - 1);
+  case Expr.Kind of
+    shekInvalid:
+      Result := False;
+  else
+    Result := False;
+  end;
+end;
+
+function THIRBuilder.LowerNodeExprOrBlob(const ANode: TTypedHirNode;
+  const ABlob: string): THIRValueId;
+var
+  ExprResult: THIRExprResult;
+begin
+  if (ANode.ExprId > 0) and LowerExprValue(ANode.ExprId, ExprResult) then
+    Exit(ExprResult.ValueId);
+  Result := ParseIntBlob(ABlob);
 end;
 
 function THIRBuilder.GetIntType: THIRTypeId;
@@ -1662,7 +1721,7 @@ begin
   VarName := Copy(ANode.Operand, 1, TabPos - 1);
   Blob := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
 
-  V := ParseIntBlob(Blob);
+  V := LowerNodeExprOrBlob(ANode, Blob);
 
   if (Length(VarName) > 1) and (VarName[1] = '*') then
   begin
@@ -1704,7 +1763,7 @@ var
   V: THIRValueId;
   Instr: THIRInstr;
 begin
-  V := ParseIntBlob(ANode.Operand);
+  V := LowerNodeExprOrBlob(ANode, ANode.Operand);
   if SameText(ANode.DisplayName, '__discard__') then
     Exit;
   if V <> 0 then
@@ -1758,7 +1817,7 @@ begin
   else
     Exit;
 
-  V := ParseIntBlob(Copy(Blob, 1, NlPos - 1));
+  V := LowerNodeExprOrBlob(ANode, Copy(Blob, 1, NlPos - 1));
 
   FillChar(Term, SizeOf(Term), 0);
   Term.Kind := htkCondBranch;
@@ -1783,7 +1842,7 @@ begin
   SwitchPos := Pos('switch ', Blob);
   if SwitchPos = 0 then Exit;
 
-  V := ParseIntBlob(Copy(Blob, 1, SwitchPos - 1));
+  V := LowerNodeExprOrBlob(ANode, Copy(Blob, 1, SwitchPos - 1));
   Rest := Copy(Blob, SwitchPos + 7, Length(Blob));
 
   NlPos := Pos(#10, Rest);
@@ -2106,7 +2165,7 @@ begin
   end
   else
   begin
-    V := ParseIntBlob(ANode.Operand);
+    V := LowerNodeExprOrBlob(ANode, ANode.Operand);
     FillChar(Term, SizeOf(Term), 0);
     Term.Kind := htkReturn;
     Term.ReturnValue := V;
@@ -2462,7 +2521,7 @@ var
   V: THIRValueId;
   Instr: THIRInstr;
 begin
-  V := ParseIntBlob(ANode.Operand);
+  V := LowerNodeExprOrBlob(ANode, ANode.Operand);
   if V <> 0 then
   begin
     FillChar(Instr, SizeOf(Instr), 0);

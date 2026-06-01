@@ -8,6 +8,49 @@ uses
   np_green_tree, np_hir_types;
 
 type
+  TSemanticHirValueClass = (
+    shvcNone,
+    shvcScalar,
+    shvcAddress,
+    shvcStringPair,
+    shvcVoid
+  );
+
+  TSemanticHirExprKind = (
+    shekInvalid,
+    shekIntLiteral,
+    shekStringLiteral,
+    shekNilLiteral,
+    shekSymbolValue,
+    shekSymbolAddress,
+    shekUnaryOp,
+    shekBinaryOp,
+    shekCompareOp,
+    shekCall,
+    shekVirtualCall,
+    shekInterfaceCall,
+    shekDeref,
+    shekAddressOf,
+    shekField,
+    shekArrayElem,
+    shekArrayBuffer,
+    shekStringChar,
+    shekIntrinsic
+  );
+
+  TSemanticHirExpr = record
+    ExprId: LongInt;
+    Kind: TSemanticHirExprKind;
+    TypeId: LongInt;
+    SymbolId: LongInt;
+    Children: array of LongInt;
+    LiteralInt: Int64;
+    LiteralStr: string;
+    Op: string;
+    SourceOffset: LongInt;
+    ValueClass: TSemanticHirValueClass;
+  end;
+
   TSemanticSymbol = record
     SymbolId: LongInt;
     Name: string;
@@ -47,6 +90,7 @@ type
     SymbolId: LongInt;
     TypeId: LongInt;
     Operand: string;
+    ExprId: LongInt;
   end;
 
   TSemanticBinding = record
@@ -156,6 +200,7 @@ type
 
   TSemanticModel = class
   private
+    FHirExprs: array of TSemanticHirExpr;
     FSymbols: array of TSemanticSymbol;
     FTypes: array of TSemanticType;
     FScopes: array of TSemanticScope;
@@ -213,6 +258,19 @@ type
       const ATypeId: LongInt;
       const AOperand: string
     ): LongInt;
+    function AddHirExpr(
+      const AKind: TSemanticHirExprKind;
+      const ATypeId: LongInt;
+      const ASymbolId: LongInt;
+      const AChildren: array of LongInt;
+      const ALiteralInt: Int64;
+      const ALiteralStr: string;
+      const AOp: string;
+      const ASourceOffset: LongInt;
+      const AValueClass: TSemanticHirValueClass
+    ): LongInt;
+    procedure SetTypedHirNodeExprId(const AHirNodeId: LongInt;
+      const AExprId: LongInt);
     function AddBinding(
       const AKind: string;
       const AName: string;
@@ -242,6 +300,8 @@ type
     function TypeAt(const AIndex: LongInt): TSemanticType;
     function TypedHirNodeCount: LongInt;
     function TypedHirNodeAt(const AIndex: LongInt): TTypedHirNode;
+    function HirExprCount: LongInt;
+    function HirExprAt(const AIndex: LongInt): TSemanticHirExpr;
     function BindingCount: LongInt;
     function BindingAt(const AIndex: LongInt): TSemanticBinding;
     function RuntimeContractCount: LongInt;
@@ -299,6 +359,7 @@ begin
   SetLength(FConstValues, 0);
   SetLength(FVarInitValues, 0);
   SetLength(FStringConstValues, 0);
+  SetLength(FHirExprs, 0);
   FRootName := '';
   FStatus := 'deferred';
 end;
@@ -666,7 +727,53 @@ begin
   FTypedHirNodes[NextIndex].SymbolId := ASymbolId;
   FTypedHirNodes[NextIndex].TypeId := ATypeId;
   FTypedHirNodes[NextIndex].Operand := AOperand;
+  FTypedHirNodes[NextIndex].ExprId := 0;
   Result := FTypedHirNodes[NextIndex].HirNodeId;
+end;
+
+function TSemanticModel.AddHirExpr(
+  const AKind: TSemanticHirExprKind;
+  const ATypeId: LongInt;
+  const ASymbolId: LongInt;
+  const AChildren: array of LongInt;
+  const ALiteralInt: Int64;
+  const ALiteralStr: string;
+  const AOp: string;
+  const ASourceOffset: LongInt;
+  const AValueClass: TSemanticHirValueClass
+): LongInt;
+var
+  NextIndex: SizeInt;
+  I: LongInt;
+begin
+  NextIndex := Length(FHirExprs);
+  SetLength(FHirExprs, NextIndex + 1);
+  FHirExprs[NextIndex].ExprId := NextIndex + 1;
+  FHirExprs[NextIndex].Kind := AKind;
+  FHirExprs[NextIndex].TypeId := ATypeId;
+  FHirExprs[NextIndex].SymbolId := ASymbolId;
+  SetLength(FHirExprs[NextIndex].Children, Length(AChildren));
+  for I := 0 to High(AChildren) do
+    FHirExprs[NextIndex].Children[I] := AChildren[I];
+  FHirExprs[NextIndex].LiteralInt := ALiteralInt;
+  FHirExprs[NextIndex].LiteralStr := ALiteralStr;
+  FHirExprs[NextIndex].Op := AOp;
+  FHirExprs[NextIndex].SourceOffset := ASourceOffset;
+  FHirExprs[NextIndex].ValueClass := AValueClass;
+  Result := FHirExprs[NextIndex].ExprId;
+end;
+
+procedure TSemanticModel.SetTypedHirNodeExprId(const AHirNodeId: LongInt;
+  const AExprId: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := AHirNodeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+    Exit;
+  if (AExprId < 0) or (AExprId > Length(FHirExprs)) then
+    Exit;
+  FTypedHirNodes[Idx].ExprId := AExprId;
 end;
 
 function TSemanticModel.AddBinding(
@@ -829,10 +936,37 @@ begin
     Result.DisplayName := '';
     Result.SymbolId := 0;
     Result.TypeId := 0;
+    Result.Operand := '';
+    Result.ExprId := 0;
     Exit;
   end;
 
   Result := FTypedHirNodes[AIndex];
+end;
+
+function TSemanticModel.HirExprCount: LongInt;
+begin
+  Result := Length(FHirExprs);
+end;
+
+function TSemanticModel.HirExprAt(const AIndex: LongInt): TSemanticHirExpr;
+begin
+  if (AIndex < 0) or (AIndex >= Length(FHirExprs)) then
+  begin
+    Result.ExprId := 0;
+    Result.Kind := shekInvalid;
+    Result.TypeId := 0;
+    Result.SymbolId := 0;
+    SetLength(Result.Children, 0);
+    Result.LiteralInt := 0;
+    Result.LiteralStr := '';
+    Result.Op := '';
+    Result.SourceOffset := 0;
+    Result.ValueClass := shvcNone;
+    Exit;
+  end;
+
+  Result := FHirExprs[AIndex];
 end;
 
 function TSemanticModel.BindingCount: LongInt;
