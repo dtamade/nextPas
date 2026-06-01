@@ -70,6 +70,10 @@ begin
   Result := (AX shr AN) or (AX shl (64 - AN));
 end;
 
+{$IFDEF CPUX86_64}
+{$I nextpas.core.hash.sha512.x64.inc}
+{$ENDIF}
+
 procedure ProcessBlockLocal512(ABlock: PByte; var AH: array of UInt64);
 var
   W: array[0..79] of UInt64;
@@ -77,6 +81,10 @@ var
   T1, T2: UInt64;
   I: Integer;
 begin
+  {$IFDEF CPUX86_64}
+  ProcessBlockX64_512(ABlock, AH);
+  Exit;
+  {$ENDIF}
   for I := 0 to 15 do
     W[I] := (UInt64(ABlock[I*8]) shl 56) or (UInt64(ABlock[I*8+1]) shl 48)
           or (UInt64(ABlock[I*8+2]) shl 40) or (UInt64(ABlock[I*8+3]) shl 32)
