@@ -1,7 +1,8 @@
 unit nextpas.core.template;
 {**
  * @desc Text template engine (Go text/template simplified).
- *       Supports variable substitution, conditionals, loops, and pipe filters.
+ *       Supports variable substitution, conditionals, loops, pipe filters,
+ *       comparison operators, custom functions, variable assignment, and with scope.
  *       L3 module — zero SysUtils dependency.
  *}
 
@@ -27,18 +28,29 @@ type
   end;
   TTemplateListArray = array of TTemplateList;
 
+  TTemplateFunc = function(const AValue: string): string;
+
+  TTemplateFuncEntry = record
+    Name: string;
+    Func: TTemplateFunc;
+  end;
+  TTemplateFuncArray = array of TTemplateFuncEntry;
+
   TTemplateContext = record
   private
     FVars: TTemplateVarArray;
     FVarCount: Integer;
     FLists: TTemplateListArray;
     FListCount: Integer;
+    FFuncs: TTemplateFuncArray;
+    FFuncCount: Integer;
   public
     class function Create: TTemplateContext; static;
     procedure SetVar(const AName, AValue: string);
     procedure SetInt(const AName: string; AValue: Int64);
     procedure SetBool(const AName: string; AValue: Boolean);
     procedure SetList(const AName: string; const AItems: array of string);
+    procedure RegisterFunc(const AName: string; AFunc: TTemplateFunc);
     function GetVar(const AName: string): string;
     function GetBool(const AName: string): Boolean;
     function GetList(const AName: string): TStringArray;
@@ -68,13 +80,6 @@ begin
   else
     Result := AName;
 end;
-
-
-
-
-
-
-
 
 function TrimInternal(const S: string): string;
 var
@@ -152,8 +157,17 @@ begin
   end;
 end;
 
-function ApplyFilter(const AValue, AFilter, AArg: string): string;
+function ApplyFilterWithFuncs(const AValue, AFilter, AArg: string;
+  const AFuncs: TTemplateFuncArray; AFuncCount: Integer): string;
+var
+  LI: Integer;
 begin
+  { Check custom functions first }
+  for LI := 0 to AFuncCount - 1 do
+    if AFuncs[LI].Name = AFilter then
+      Exit(AFuncs[LI].Func(AValue));
+
+  { Built-in filters }
   if StrEqCI(AFilter, 'upper') then
     Result := UpperInternal(AValue)
   else if StrEqCI(AFilter, 'lower') then
@@ -177,13 +191,15 @@ end;
 { Expression evaluation                                                         }
 { ============================================================================ }
 
-function EvalExpr(const AExpr: string; const ACtx: TTemplateContext): string;
+function EvalExpr(const AExpr: string; const ACtx: TTemplateContext;
+  const ALocals: TTemplateVarArray; ALocalCount: Integer): string;
 var
   LParts: array[0..15] of string;
   LPartCount: Integer;
   LI, LStart: Integer;
   LExpr: string;
   LFilter, LArg: string;
+  LVarName: string;
 begin
   LExpr := TrimInternal(AExpr);
   if LExpr = '' then
@@ -205,19 +221,144 @@ begin
   Inc(LPartCount);
 
   { First part is the variable reference }
-  Result := ACtx.GetVar(StripDot(TrimInternal(LParts[0])));
+  LVarName := TrimInternal(LParts[0]);
+
+  { Check if it's a local variable reference ($name) }
+  if (Length(LVarName) > 1) and (LVarName[1] = '$') then
+  begin
+    LVarName := Copy(LVarName, 2, Length(LVarName) - 1);
+    Result := '';
+    for LI := ALocalCount - 1 downto 0 do
+      if ALocals[LI].Name = LVarName then
+      begin
+        Result := ALocals[LI].Value;
+        Break;
+      end;
+  end
+  else
+    Result := ACtx.GetVar(StripDot(LVarName));
 
   { Apply pipe filters }
   for LI := 1 to LPartCount - 1 do
   begin
     ParseFilter(LParts[LI], LFilter, LArg);
-    Result := ApplyFilter(Result, LFilter, LArg);
+    Result := ApplyFilterWithFuncs(Result, LFilter, LArg, ACtx.FFuncs, ACtx.FFuncCount);
   end;
 end;
 
-function EvalBool(const AExpr: string; const ACtx: TTemplateContext): Boolean;
+{ Comparison operators }
+function EvalCompare(const AOp, ALeft, ARight: string): Boolean;
+var
+  LIntL, LIntR: Int64;
+  LNumeric: Boolean;
 begin
-  Result := ACtx.GetBool(StripDot(TrimInternal(AExpr)));
+  if (AOp = 'eq') then
+    Result := (ALeft = ARight)
+  else if (AOp = 'ne') then
+    Result := (ALeft <> ARight)
+  else
+  begin
+    { gt/lt/ge/le: try numeric first }
+    LNumeric := TryStrToInt64(ALeft, LIntL) and TryStrToInt64(ARight, LIntR);
+    if AOp = 'gt' then
+    begin
+      if LNumeric then Result := LIntL > LIntR
+      else Result := ALeft > ARight;
+    end
+    else if AOp = 'lt' then
+    begin
+      if LNumeric then Result := LIntL < LIntR
+      else Result := ALeft < ARight;
+    end
+    else if AOp = 'ge' then
+    begin
+      if LNumeric then Result := LIntL >= LIntR
+      else Result := ALeft >= ARight;
+    end
+    else if AOp = 'le' then
+    begin
+      if LNumeric then Result := LIntL <= LIntR
+      else Result := ALeft <= ARight;
+    end
+    else
+      Result := False;
+  end;
+end;
+
+function IsCompareOp(const S: string): Boolean;
+begin
+  Result := (S = 'eq') or (S = 'ne') or (S = 'gt') or (S = 'lt') or
+            (S = 'ge') or (S = 'le');
+end;
+
+function EvalBool(const AExpr: string; const ACtx: TTemplateContext;
+  const ALocals: TTemplateVarArray; ALocalCount: Integer): Boolean;
+var
+  LExpr, LToken, LRest: string;
+  LI: Integer;
+  LOp, LLeftExpr, LRightStr: string;
+  LLeft, LRight: string;
+begin
+  LExpr := TrimInternal(AExpr);
+
+  { Extract first token to check for comparison operator }
+  LI := 1;
+  while (LI <= Length(LExpr)) and (LExpr[LI] > ' ') do
+    Inc(LI);
+  LToken := Copy(LExpr, 1, LI - 1);
+
+  if IsCompareOp(LToken) then
+  begin
+    LOp := LToken;
+    LRest := TrimInternal(Copy(LExpr, LI + 1, Length(LExpr) - LI));
+
+    { Parse: <varRef> <literal-or-varRef> }
+    { Find the left operand }
+    LI := 1;
+    while (LI <= Length(LRest)) and (LRest[LI] > ' ') do
+      Inc(LI);
+    LLeftExpr := Copy(LRest, 1, LI - 1);
+    LRightStr := TrimInternal(Copy(LRest, LI + 1, Length(LRest) - LI));
+
+    { Resolve left }
+    if (Length(LLeftExpr) > 1) and (LLeftExpr[1] = '$') then
+    begin
+      LLeft := '';
+      for LI := ALocalCount - 1 downto 0 do
+        if ALocals[LI].Name = Copy(LLeftExpr, 2, Length(LLeftExpr) - 1) then
+        begin
+          LLeft := ALocals[LI].Value;
+          Break;
+        end;
+    end
+    else
+      LLeft := ACtx.GetVar(StripDot(LLeftExpr));
+
+    { Resolve right — could be quoted string or variable }
+    if (Length(LRightStr) >= 2) and (LRightStr[1] = '"') and (LRightStr[Length(LRightStr)] = '"') then
+      LRight := Copy(LRightStr, 2, Length(LRightStr) - 2)
+    else if (Length(LRightStr) > 1) and (LRightStr[1] = '$') then
+    begin
+      LRight := '';
+      for LI := ALocalCount - 1 downto 0 do
+        if ALocals[LI].Name = Copy(LRightStr, 2, Length(LRightStr) - 1) then
+        begin
+          LRight := ALocals[LI].Value;
+          Break;
+        end;
+    end
+    else if (Length(LRightStr) > 0) and ((LRightStr[1] = '.') or ((LRightStr[1] >= 'A') and (LRightStr[1] <= 'z'))) then
+      LRight := ACtx.GetVar(StripDot(LRightStr))
+    else
+      LRight := LRightStr;
+
+    Result := EvalCompare(LOp, LLeft, LRight);
+  end
+  else
+  begin
+    { Standard boolean evaluation }
+    Result := ACtx.GetBool(StripDot(LExpr));
+  end;
 end;
 
 { ============================================================================ }
@@ -228,7 +369,9 @@ type
   TStopReason = (srNone, srElse, srEnd);
 
 function RenderSegment(const ASrc: string; var APos: Integer;
-  const ACtx: TTemplateContext; out AStop: TStopReason): string; forward;
+  const ACtx: TTemplateContext;
+  var ALocals: TTemplateVarArray; var ALocalCount: Integer;
+  out AStop: TStopReason): string; forward;
 
 function FindNextTag(const ASrc: string; AFrom: Integer;
   out ATagStart, ATagEnd: Integer; out AContent: string): Boolean;
@@ -303,12 +446,18 @@ end;
 procedure SkipBlock(const ASrc: string; var APos: Integer);
 var
   LStop: TStopReason;
+  LLocals: TTemplateVarArray;
+  LLocalCount: Integer;
 begin
-  RenderSegment(ASrc, APos, Default(TTemplateContext), LStop);
+  LLocalCount := 0;
+  SetLength(LLocals, 0);
+  RenderSegment(ASrc, APos, Default(TTemplateContext), LLocals, LLocalCount, LStop);
 end;
 
 function RenderSegment(const ASrc: string; var APos: Integer;
-  const ACtx: TTemplateContext; out AStop: TStopReason): string;
+  const ACtx: TTemplateContext;
+  var ALocals: TTemplateVarArray; var ALocalCount: Integer;
+  out AStop: TStopReason): string;
 var
   LLen: Integer;
   LTagStart, LTagEnd: Integer;
@@ -317,6 +466,8 @@ var
   LItems: TStringArray;
   LI, LSavePos: Integer;
   LInnerStop: TStopReason;
+  LVarName, LVarExpr: string;
+  LAssignPos: Integer;
 begin
   LLen := Length(ASrc);
   LResult := '';
@@ -352,28 +503,64 @@ begin
       Exit(LResult);
     end;
 
-    { if/else/end }
-    if LKeyword = 'if' then
+    { Variable assignment: {{$name := expr}} }
+    if (Length(LKeyword) > 1) and (LKeyword[1] = '$') then
     begin
-      if EvalBool(LExpr, ACtx) then
+      { Check for := }
+      LAssignPos := Pos(':=', LExpr);
+      if LAssignPos = 0 then
       begin
-        { Render true branch }
-        LResult := LResult + RenderSegment(ASrc, APos, ACtx, LInnerStop);
-        if LInnerStop = srElse then
+        { Check if the keyword itself contains := }
+        LAssignPos := Pos(':=', LContent);
+        if LAssignPos > 0 then
         begin
-          { Skip false branch }
-          RenderSegment(ASrc, APos, ACtx, LInnerStop);
+          LVarName := TrimInternal(Copy(LContent, 2, LAssignPos - 2));
+          LVarExpr := TrimInternal(Copy(LContent, LAssignPos + 2, Length(LContent) - LAssignPos - 1));
+        end
+        else
+        begin
+          { Just a variable reference {{$name}} }
+          LVarName := Copy(LKeyword, 2, Length(LKeyword) - 1);
+          LResult := LResult + '';
+          for LI := ALocalCount - 1 downto 0 do
+            if ALocals[LI].Name = LVarName then
+            begin
+              LResult := LResult + ALocals[LI].Value;
+              Break;
+            end;
+          Continue;
         end;
       end
       else
       begin
-        { Skip true branch }
-        RenderSegment(ASrc, APos, ACtx, LInnerStop);
+        { {{$name := expr}} — keyword is $name, expr starts with ":= ..." }
+        LVarName := Copy(LKeyword, 2, Length(LKeyword) - 1);
+        LVarExpr := TrimInternal(Copy(LExpr, 3, Length(LExpr) - 2));
+      end;
+
+      { Evaluate the expression }
+      if ALocalCount >= Length(ALocals) then
+        SetLength(ALocals, ALocalCount + 8);
+      ALocals[ALocalCount].Name := LVarName;
+      ALocals[ALocalCount].Value := EvalExpr(LVarExpr, ACtx, ALocals, ALocalCount);
+      Inc(ALocalCount);
+      Continue;
+    end;
+
+    { if/else/end }
+    if LKeyword = 'if' then
+    begin
+      if EvalBool(LExpr, ACtx, ALocals, ALocalCount) then
+      begin
+        LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
         if LInnerStop = srElse then
-        begin
-          { Render false branch }
-          LResult := LResult + RenderSegment(ASrc, APos, ACtx, LInnerStop);
-        end;
+          RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+      end
+      else
+      begin
+        RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+        if LInnerStop = srElse then
+          LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
       end;
     end
     { range }
@@ -382,17 +569,14 @@ begin
       LItems := ACtx.GetList(StripDot(LExpr));
       LSavePos := APos;
       if Length(LItems) = 0 then
-      begin
-        { Skip body }
-        RenderSegment(ASrc, APos, ACtx, LInnerStop);
-      end
+        RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop)
       else
       begin
         for LI := 0 to High(LItems) do
         begin
           APos := LSavePos;
           TTemplateContext(ACtx).SetVar('.', LItems[LI]);
-          LResult := LResult + RenderSegment(ASrc, APos, ACtx, LInnerStop);
+          LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
         end;
         TTemplateContext(ACtx).SetVar('.', '');
       end;
@@ -400,7 +584,7 @@ begin
     else
     begin
       { Variable/expression with pipes }
-      LResult := LResult + EvalExpr(LContent, ACtx);
+      LResult := LResult + EvalExpr(LContent, ACtx, ALocals, ALocalCount);
     end;
   end;
 
@@ -415,8 +599,10 @@ class function TTemplateContext.Create: TTemplateContext;
 begin
   Result.FVarCount := 0;
   Result.FListCount := 0;
+  Result.FFuncCount := 0;
   SetLength(Result.FVars, 0);
   SetLength(Result.FLists, 0);
+  SetLength(Result.FFuncs, 0);
 end;
 
 procedure TTemplateContext.SetVar(const AName, AValue: string);
@@ -470,6 +656,15 @@ begin
   Inc(FListCount);
 end;
 
+procedure TTemplateContext.RegisterFunc(const AName: string; AFunc: TTemplateFunc);
+begin
+  if FFuncCount >= Length(FFuncs) then
+    SetLength(FFuncs, FFuncCount + 4);
+  FFuncs[FFuncCount].Name := AName;
+  FFuncs[FFuncCount].Func := AFunc;
+  Inc(FFuncCount);
+end;
+
 function TTemplateContext.GetVar(const AName: string): string;
 var
   LI: Integer;
@@ -511,9 +706,13 @@ function TTemplate.Render(const ACtx: TTemplateContext): string;
 var
   LPos: Integer;
   LStop: TStopReason;
+  LLocals: TTemplateVarArray;
+  LLocalCount: Integer;
 begin
   LPos := 1;
-  Result := RenderSegment(FSource, LPos, ACtx, LStop);
+  LLocalCount := 0;
+  SetLength(LLocals, 0);
+  Result := RenderSegment(FSource, LPos, ACtx, LLocals, LLocalCount, LStop);
 end;
 
 function TTemplate.RenderWith(const AVars: array of TTemplateVar): string;

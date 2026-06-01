@@ -35,6 +35,14 @@ type
     function Matches(const AValue, APattern: string): TValidator;
     function OneOf(const AValue: string; const AOptions: array of string): TValidator;
     function Custom(AValid: Boolean; const AMsg: string): TValidator;
+    function URL(const AValue: string): TValidator;
+    function IPv4(const AValue: string): TValidator;
+    function Contains(const AValue, ASubstr: string): TValidator;
+    function StartsWith(const AValue, APrefix: string): TValidator;
+    function EndsWith(const AValue, ASuffix: string): TValidator;
+    function Alpha(const AValue: string): TValidator;
+    function AlphaNum(const AValue: string): TValidator;
+    function Numeric(const AValue: string): TValidator;
     function IsValid: Boolean;
     function Errors: TValidationErrors;
     function FirstError: string;
@@ -105,6 +113,68 @@ begin
   while (PI <= Length(APattern)) and (APattern[PI] = '*') do
     Inc(PI);
   Result := PI > Length(APattern);
+end;
+
+function StrStartsWith(const S, Prefix: string): Boolean;
+var
+  I: Integer;
+begin
+  if Length(Prefix) > Length(S) then Exit(False);
+  for I := 1 to Length(Prefix) do
+    if S[I] <> Prefix[I] then Exit(False);
+  Result := True;
+end;
+
+function StrEndsWith(const S, Suffix: string): Boolean;
+var
+  I, Offset: Integer;
+begin
+  if Length(Suffix) > Length(S) then Exit(False);
+  Offset := Length(S) - Length(Suffix);
+  for I := 1 to Length(Suffix) do
+    if S[Offset + I] <> Suffix[I] then Exit(False);
+  Result := True;
+end;
+
+function StrContains(const S, Sub: string): Boolean;
+var
+  I, J: Integer;
+  Found: Boolean;
+begin
+  if Length(Sub) = 0 then Exit(True);
+  if Length(Sub) > Length(S) then Exit(False);
+  for I := 1 to Length(S) - Length(Sub) + 1 do
+  begin
+    Found := True;
+    for J := 1 to Length(Sub) do
+      if S[I + J - 1] <> Sub[J] then
+      begin
+        Found := False;
+        Break;
+      end;
+    if Found then Exit(True);
+  end;
+  Result := False;
+end;
+
+function ParseIPv4Octet(const S: string; var Pos: Integer; out Val: Integer): Boolean;
+var
+  Start: Integer;
+  Digits: Integer;
+begin
+  Result := False;
+  Val := 0;
+  Start := Pos;
+  Digits := 0;
+  while (Pos <= Length(S)) and (S[Pos] >= '0') and (S[Pos] <= '9') do
+  begin
+    Val := Val * 10 + (Ord(S[Pos]) - Ord('0'));
+    Inc(Pos);
+    Inc(Digits);
+  end;
+  if (Digits = 0) or (Digits > 3) then Exit;
+  if Val > 255 then Exit;
+  Result := True;
 end;
 
 { --- TValidator --- }
@@ -227,6 +297,140 @@ function TValidator.Custom(AValid: Boolean; const AMsg: string): TValidator;
 begin
   if not AValid then
     AddError(AMsg);
+  Result := Self;
+end;
+
+function TValidator.URL(const AValue: string): TValidator;
+var
+  Rest: string;
+begin
+  if StrStartsWith(AValue, 'https://') then
+    Rest := Copy(AValue, 9, Length(AValue) - 8)
+  else if StrStartsWith(AValue, 'http://') then
+    Rest := Copy(AValue, 8, Length(AValue) - 7)
+  else
+  begin
+    AddError('must be a valid URL');
+    Result := Self;
+    Exit;
+  end;
+  if Length(Rest) = 0 then
+    AddError('must be a valid URL');
+  Result := Self;
+end;
+
+function TValidator.IPv4(const AValue: string): TValidator;
+var
+  LPos, LOctet, LCount: Integer;
+begin
+  LPos := 1;
+  LCount := 0;
+  while LPos <= Length(AValue) do
+  begin
+    if not ParseIPv4Octet(AValue, LPos, LOctet) then
+    begin
+      AddError('must be a valid IPv4 address');
+      Result := Self;
+      Exit;
+    end;
+    Inc(LCount);
+    if LCount < 4 then
+    begin
+      if (LPos > Length(AValue)) or (AValue[LPos] <> '.') then
+      begin
+        AddError('must be a valid IPv4 address');
+        Result := Self;
+        Exit;
+      end;
+      Inc(LPos); { skip dot }
+    end;
+  end;
+  if LCount <> 4 then
+    AddError('must be a valid IPv4 address');
+  Result := Self;
+end;
+
+function TValidator.Contains(const AValue, ASubstr: string): TValidator;
+begin
+  if not StrContains(AValue, ASubstr) then
+    AddError('must contain "' + ASubstr + '"');
+  Result := Self;
+end;
+
+function TValidator.StartsWith(const AValue, APrefix: string): TValidator;
+begin
+  if not StrStartsWith(AValue, APrefix) then
+    AddError('must start with "' + APrefix + '"');
+  Result := Self;
+end;
+
+function TValidator.EndsWith(const AValue, ASuffix: string): TValidator;
+begin
+  if not StrEndsWith(AValue, ASuffix) then
+    AddError('must end with "' + ASuffix + '"');
+  Result := Self;
+end;
+
+function TValidator.Alpha(const AValue: string): TValidator;
+var
+  I: Integer;
+begin
+  if Length(AValue) = 0 then
+  begin
+    AddError('must contain only letters');
+    Result := Self;
+    Exit;
+  end;
+  for I := 1 to Length(AValue) do
+    if not ((AValue[I] >= 'a') and (AValue[I] <= 'z')) and
+       not ((AValue[I] >= 'A') and (AValue[I] <= 'Z')) then
+    begin
+      AddError('must contain only letters');
+      Result := Self;
+      Exit;
+    end;
+  Result := Self;
+end;
+
+function TValidator.AlphaNum(const AValue: string): TValidator;
+var
+  I: Integer;
+begin
+  if Length(AValue) = 0 then
+  begin
+    AddError('must contain only letters and digits');
+    Result := Self;
+    Exit;
+  end;
+  for I := 1 to Length(AValue) do
+    if not ((AValue[I] >= 'a') and (AValue[I] <= 'z')) and
+       not ((AValue[I] >= 'A') and (AValue[I] <= 'Z')) and
+       not ((AValue[I] >= '0') and (AValue[I] <= '9')) then
+    begin
+      AddError('must contain only letters and digits');
+      Result := Self;
+      Exit;
+    end;
+  Result := Self;
+end;
+
+function TValidator.Numeric(const AValue: string): TValidator;
+var
+  I: Integer;
+begin
+  if Length(AValue) = 0 then
+  begin
+    AddError('must contain only digits');
+    Result := Self;
+    Exit;
+  end;
+  for I := 1 to Length(AValue) do
+    if not ((AValue[I] >= '0') and (AValue[I] <= '9')) then
+    begin
+      AddError('must contain only digits');
+      Result := Self;
+      Exit;
+    end;
   Result := Self;
 end;
 

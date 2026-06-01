@@ -186,8 +186,7 @@ end;
 { === Writer Tests === }
 
 procedure TestWriterBasic;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create;
   W.WriteRow(['a', 'b', 'c']);
@@ -195,8 +194,7 @@ begin
 end;
 
 procedure TestWriterQuoting;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create;
   W.WriteRow(['hello', 'world,earth', 'done']);
@@ -204,8 +202,7 @@ begin
 end;
 
 procedure TestWriterQuoteEscape;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create;
   W.WriteRow(['say "hi"', 'ok']);
@@ -213,8 +210,7 @@ begin
 end;
 
 procedure TestWriterNewlineInField;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create;
   W.WriteRow(['line1' + #10 + 'line2', 'b']);
@@ -222,8 +218,7 @@ begin
 end;
 
 procedure TestWriterCRLF;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create(',', True);
   W.WriteRow(['a', 'b']);
@@ -231,8 +226,7 @@ begin
 end;
 
 procedure TestWriterCustomDelimiter;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create(#9);
   W.WriteRow(['a', 'b', 'c']);
@@ -240,8 +234,7 @@ begin
 end;
 
 procedure TestWriterMultiRow;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create;
   W.WriteRow(['a', 'b']);
@@ -250,8 +243,7 @@ begin
 end;
 
 procedure TestWriterFieldByField;
-var
-  W: TCsvWriter;
+var W: TCsvWriter;
 begin
   W := TCsvWriter.Create;
   W.WriteField('x');
@@ -271,14 +263,12 @@ begin
   W := TCsvWriter.Create;
   W.WriteRow(['hello', 'world,earth', 'say "hi"']);
   W.WriteRow(['line1' + #10 + 'line2', '', 'end']);
-
   R := TCsvReader.Create(W.ToString);
   Check(R.ReadRow(Fields), 'row 1');
   CheckEqual(Int64(3), Int64(Length(Fields)), 'r1 count');
   CheckEqual('hello', Fields[0], 'r1f0');
   CheckEqual('world,earth', Fields[1], 'r1f1');
   CheckEqual('say "hi"', Fields[2], 'r1f2');
-
   Check(R.ReadRow(Fields), 'row 2');
   CheckEqual(Int64(3), Int64(Length(Fields)), 'r2 count');
   CheckEqual('line1' + #10 + 'line2', Fields[0], 'r2f0');
@@ -287,11 +277,8 @@ begin
 end;
 
 procedure TestRFC4180QuotedCRLF;
-var
-  R: TCsvReader;
-  Fields: TStringArray;
+var R: TCsvReader; Fields: TStringArray;
 begin
-  { RFC 4180: fields with CRLF must be quoted }
   R := TCsvReader.Create('"field' + #13#10 + 'break",next');
   Check(R.ReadRow(Fields), 'read');
   CheckEqual(Int64(2), Int64(Length(Fields)), 'count');
@@ -300,9 +287,7 @@ begin
 end;
 
 procedure TestRFC4180EmptyQuoted;
-var
-  R: TCsvReader;
-  Fields: TStringArray;
+var R: TCsvReader; Fields: TStringArray;
 begin
   R := TCsvReader.Create('"",a,""');
   Check(R.ReadRow(Fields), 'read');
@@ -312,13 +297,10 @@ begin
   CheckEqual('', Fields[2], 'empty quoted f2');
 end;
 
-
 { === Error Handling Tests === }
 
 procedure TestHasErrorUnclosedQuote;
-var
-  R: TCsvReader;
-  Fields: TStringArray;
+var R: TCsvReader; Fields: TStringArray;
 begin
   R := TCsvReader.Create('"unclosed field,b');
   R.ReadRow(Fields);
@@ -327,9 +309,7 @@ begin
 end;
 
 procedure TestHasErrorNormal;
-var
-  R: TCsvReader;
-  Fields: TStringArray;
+var R: TCsvReader; Fields: TStringArray;
 begin
   R := TCsvReader.Create('a,b,c');
   R.ReadRow(Fields);
@@ -338,14 +318,100 @@ begin
 end;
 
 procedure TestHasErrorMultilineUnclosed;
-var
-  R: TCsvReader;
-  Fields: TStringArray;
+var R: TCsvReader; Fields: TStringArray;
 begin
   R := TCsvReader.Create('"line1' + #10 + 'line2' + #10 + 'line3');
   R.ReadRow(Fields);
   Check(R.HasError, 'multiline unclosed quote should error');
   Check(Length(R.GetError) > 0, 'multiline error msg not empty');
+end;
+
+{ === FieldsPerRecord Tests === }
+
+procedure TestFieldsPerRecordCorrect;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('a,b,c' + #10 + 'd,e,f', ',', 3);
+  Check(R.ReadRow(Fields), 'row 1');
+  Check(not R.HasError, 'no error row 1');
+  CheckEqual(Int64(3), Int64(Length(Fields)), 'count row 1');
+  Check(R.ReadRow(Fields), 'row 2');
+  Check(not R.HasError, 'no error row 2');
+end;
+
+procedure TestFieldsPerRecordMismatch;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('a,b,c' + #10 + 'd,e', ',', 3);
+  Check(R.ReadRow(Fields), 'row 1');
+  Check(not R.HasError, 'no error row 1');
+  Check(R.ReadRow(Fields), 'row 2');
+  Check(R.HasError, 'error on row 2 (2 fields, expected 3)');
+end;
+
+{ === TrimSpace Tests === }
+
+procedure TestTrimSpace;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create(' a , b , c ', ',', 0, True);
+  Check(R.ReadRow(Fields), 'read');
+  CheckEqual(Int64(3), Int64(Length(Fields)), 'count');
+  CheckEqual('a', Fields[0], 'trimmed f0');
+  CheckEqual('b', Fields[1], 'trimmed f1');
+  CheckEqual('c', Fields[2], 'trimmed f2');
+end;
+
+procedure TestTrimSpacePreservesQuoted;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('" a ",b', ',', 0, True);
+  Check(R.ReadRow(Fields), 'read');
+  CheckEqual('a', Fields[0], 'quoted trimmed');
+  CheckEqual('b', Fields[1], 'f1');
+end;
+
+{ === Comment Tests === }
+
+procedure TestCommentSkip;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('# comment' + #10 + 'a,b,c', ',', 0, False, '#');
+  Check(R.ReadRow(Fields), 'read');
+  CheckEqual(Int64(3), Int64(Length(Fields)), 'count');
+  CheckEqual('a', Fields[0], 'f0');
+  CheckEqual('b', Fields[1], 'f1');
+  CheckEqual('c', Fields[2], 'f2');
+end;
+
+procedure TestCommentMultipleLines;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('# line1' + #10 + '# line2' + #10 + 'x,y', ',', 0, False, '#');
+  Check(R.ReadRow(Fields), 'read');
+  CheckEqual(Int64(2), Int64(Length(Fields)), 'count');
+  CheckEqual('x', Fields[0], 'f0');
+  CheckEqual('y', Fields[1], 'f1');
+  Check(not R.ReadRow(Fields), 'no more rows');
+end;
+
+procedure TestCommentOnlyInput;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('# only comments' + #10 + '# here', ',', 0, False, '#');
+  Check(not R.ReadRow(Fields), 'no data rows');
+end;
+
+{ === Combined: Comment + TrimSpace === }
+
+procedure TestCommentPlusTrimSpace;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('# header' + #10 + ' a , b ', ',', 0, True, '#');
+  Check(R.ReadRow(Fields), 'read');
+  CheckEqual(Int64(2), Int64(Length(Fields)), 'count');
+  CheckEqual('a', Fields[0], 'trimmed f0');
+  CheckEqual('b', Fields[1], 'trimmed f1');
 end;
 
 { === Main === }
@@ -387,6 +453,22 @@ begin
   T.Run('HasError.UnclosedQuote', @TestHasErrorUnclosedQuote);
   T.Run('HasError.Normal', @TestHasErrorNormal);
   T.Run('HasError.MultilineUnclosed', @TestHasErrorMultilineUnclosed);
+
+  { FieldsPerRecord tests }
+  T.Run('FieldsPerRecord.Correct', @TestFieldsPerRecordCorrect);
+  T.Run('FieldsPerRecord.Mismatch', @TestFieldsPerRecordMismatch);
+
+  { TrimSpace tests }
+  T.Run('TrimSpace', @TestTrimSpace);
+  T.Run('TrimSpace.PreservesQuoted', @TestTrimSpacePreservesQuoted);
+
+  { Comment tests }
+  T.Run('Comment.Skip', @TestCommentSkip);
+  T.Run('Comment.MultipleLines', @TestCommentMultipleLines);
+  T.Run('Comment.OnlyInput', @TestCommentOnlyInput);
+
+  { Combined tests }
+  T.Run('Comment+TrimSpace', @TestCommentPlusTrimSpace);
 
   T.Summary;
 end.

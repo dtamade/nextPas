@@ -284,7 +284,6 @@ begin
   CheckEqual('field1: manual error', R.ErrorMessages, 'format');
 end;
 
-
 { === Additional Boundary Tests === }
 
 procedure TestRangeIntMinEqualsMax;
@@ -333,7 +332,6 @@ procedure TestMatchesEmptyPattern;
 var V: TValidator;
 begin
   V := TValidator.Create('x').Matches('hello', '');
-  { Empty pattern should not match non-empty value }
   Check(not V.IsValid, 'empty pattern should fail for non-empty value');
 end;
 
@@ -341,7 +339,6 @@ procedure TestMatchesEmptyBoth;
 var V: TValidator;
 begin
   V := TValidator.Create('x').Matches('', '');
-  { Empty value with empty pattern should match }
   Check(V.IsValid, 'empty value + empty pattern should pass');
 end;
 
@@ -361,12 +358,215 @@ begin
   R.Add(TValidator.Create('age').MinInt(-1, 0));
   R.Add(TValidator.Create('email').Email('bad'));
   Check(not R.IsValid, 'should have errors');
-  { ErrorMessages should contain all field names }
   Check(Pos('name:', R.ErrorMessages) > 0, 'has name error');
   Check(Pos('age:', R.ErrorMessages) > 0, 'has age error');
   Check(Pos('email:', R.ErrorMessages) > 0, 'has email error');
-  { Separated by semicolons }
   Check(Pos('; ', R.ErrorMessages) > 0, 'semicolon separator');
+end;
+
+{ === New: URL === }
+
+procedure TestURLValid;
+var V: TValidator;
+begin
+  V := TValidator.Create('u').URL('https://example.com');
+  Check(V.IsValid, 'https valid');
+end;
+
+procedure TestURLValidHttp;
+var V: TValidator;
+begin
+  V := TValidator.Create('u').URL('http://example.com/path');
+  Check(V.IsValid, 'http valid');
+end;
+
+procedure TestURLInvalidNoScheme;
+var V: TValidator;
+begin
+  V := TValidator.Create('u').URL('example.com');
+  Check(not V.IsValid, 'no scheme should fail');
+end;
+
+procedure TestURLInvalidEmpty;
+var V: TValidator;
+begin
+  V := TValidator.Create('u').URL('');
+  Check(not V.IsValid, 'empty should fail');
+end;
+
+procedure TestURLInvalidNoHost;
+var V: TValidator;
+begin
+  V := TValidator.Create('u').URL('http://');
+  Check(not V.IsValid, 'no host should fail');
+end;
+
+{ === New: IPv4 === }
+
+procedure TestIPv4Valid;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('192.168.1.1');
+  Check(V.IsValid, 'valid IPv4');
+end;
+
+procedure TestIPv4ValidZero;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('0.0.0.0');
+  Check(V.IsValid, '0.0.0.0 valid');
+end;
+
+procedure TestIPv4ValidMax;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('255.255.255.255');
+  Check(V.IsValid, '255.255.255.255 valid');
+end;
+
+procedure TestIPv4InvalidOctet;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('256.1.1.1');
+  Check(not V.IsValid, '256 octet should fail');
+end;
+
+procedure TestIPv4InvalidFormat;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('1.2.3');
+  Check(not V.IsValid, 'only 3 octets should fail');
+end;
+
+procedure TestIPv4InvalidChars;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('abc.def.ghi.jkl');
+  Check(not V.IsValid, 'non-numeric should fail');
+end;
+
+procedure TestIPv4InvalidEmpty;
+var V: TValidator;
+begin
+  V := TValidator.Create('ip').IPv4('');
+  Check(not V.IsValid, 'empty should fail');
+end;
+
+{ === New: Contains === }
+
+procedure TestContainsPass;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Contains('hello world', 'world');
+  Check(V.IsValid, 'contains should pass');
+end;
+
+procedure TestContainsFail;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Contains('hello world', 'xyz');
+  Check(not V.IsValid, 'not contains should fail');
+end;
+
+{ === New: StartsWith === }
+
+procedure TestStartsWithPass;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').StartsWith('hello world', 'hello');
+  Check(V.IsValid, 'starts with should pass');
+end;
+
+procedure TestStartsWithFail;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').StartsWith('hello world', 'world');
+  Check(not V.IsValid, 'not starts with should fail');
+end;
+
+{ === New: EndsWith === }
+
+procedure TestEndsWithPass;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').EndsWith('hello world', 'world');
+  Check(V.IsValid, 'ends with should pass');
+end;
+
+procedure TestEndsWithFail;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').EndsWith('hello world', 'hello');
+  Check(not V.IsValid, 'not ends with should fail');
+end;
+
+{ === New: Alpha === }
+
+procedure TestAlphaPass;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Alpha('Hello');
+  Check(V.IsValid, 'alpha should pass');
+end;
+
+procedure TestAlphaFail;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Alpha('Hello123');
+  Check(not V.IsValid, 'alpha with digits should fail');
+end;
+
+procedure TestAlphaEmpty;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Alpha('');
+  Check(not V.IsValid, 'empty alpha should fail');
+end;
+
+{ === New: AlphaNum === }
+
+procedure TestAlphaNumPass;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').AlphaNum('Hello123');
+  Check(V.IsValid, 'alphanum should pass');
+end;
+
+procedure TestAlphaNumFail;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').AlphaNum('Hello 123');
+  Check(not V.IsValid, 'alphanum with space should fail');
+end;
+
+procedure TestAlphaNumEmpty;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').AlphaNum('');
+  Check(not V.IsValid, 'empty alphanum should fail');
+end;
+
+{ === New: Numeric === }
+
+procedure TestNumericPass;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Numeric('12345');
+  Check(V.IsValid, 'numeric should pass');
+end;
+
+procedure TestNumericFail;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Numeric('123abc');
+  Check(not V.IsValid, 'numeric with letters should fail');
+end;
+
+procedure TestNumericEmpty;
+var V: TValidator;
+begin
+  V := TValidator.Create('f').Numeric('');
+  Check(not V.IsValid, 'empty numeric should fail');
 end;
 
 begin
@@ -423,6 +623,37 @@ begin
   T.Run('matches empty both', @TestMatchesEmptyBoth);
   T.Run('first error no errors', @TestFirstErrorNoErrors);
   T.Run('error messages multiple', @TestErrorMessagesMultiple);
+  { New: URL }
+  T.Run('url valid https', @TestURLValid);
+  T.Run('url valid http', @TestURLValidHttp);
+  T.Run('url invalid no scheme', @TestURLInvalidNoScheme);
+  T.Run('url invalid empty', @TestURLInvalidEmpty);
+  T.Run('url invalid no host', @TestURLInvalidNoHost);
+  { New: IPv4 }
+  T.Run('ipv4 valid', @TestIPv4Valid);
+  T.Run('ipv4 valid 0.0.0.0', @TestIPv4ValidZero);
+  T.Run('ipv4 valid 255.255.255.255', @TestIPv4ValidMax);
+  T.Run('ipv4 invalid 256', @TestIPv4InvalidOctet);
+  T.Run('ipv4 invalid format', @TestIPv4InvalidFormat);
+  T.Run('ipv4 invalid chars', @TestIPv4InvalidChars);
+  T.Run('ipv4 invalid empty', @TestIPv4InvalidEmpty);
+  { New: Contains/StartsWith/EndsWith }
+  T.Run('contains pass', @TestContainsPass);
+  T.Run('contains fail', @TestContainsFail);
+  T.Run('startswith pass', @TestStartsWithPass);
+  T.Run('startswith fail', @TestStartsWithFail);
+  T.Run('endswith pass', @TestEndsWithPass);
+  T.Run('endswith fail', @TestEndsWithFail);
+  { New: Alpha/AlphaNum/Numeric }
+  T.Run('alpha pass', @TestAlphaPass);
+  T.Run('alpha fail', @TestAlphaFail);
+  T.Run('alpha empty', @TestAlphaEmpty);
+  T.Run('alphanum pass', @TestAlphaNumPass);
+  T.Run('alphanum fail', @TestAlphaNumFail);
+  T.Run('alphanum empty', @TestAlphaNumEmpty);
+  T.Run('numeric pass', @TestNumericPass);
+  T.Run('numeric fail', @TestNumericFail);
+  T.Run('numeric empty', @TestNumericEmpty);
   T.Summary;
   if not T.AllPassed then Halt(1);
 end.

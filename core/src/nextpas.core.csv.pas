@@ -20,14 +20,20 @@ type
     FLen: SizeUInt;
     FPos: SizeUInt;
     FDelimiter: AnsiChar;
+    FFieldsPerRecord: Integer;
+    FTrimSpace: Boolean;
+    FComment: AnsiChar;
     FHasError: Boolean;
     FError: string;
     function PeekChar: AnsiChar; inline;
     function AtEnd: Boolean; inline;
     function ReadQuotedField: string;
     function ReadUnquotedField: string;
+    function TrimStr(const S: string): string;
   public
-    class function Create(const AInput: string; ADelimiter: AnsiChar = ','): TCsvReader; static;
+    class function Create(const AInput: string; ADelimiter: AnsiChar = ',';
+      AFieldsPerRecord: Integer = 0; ATrimSpace: Boolean = False;
+      AComment: AnsiChar = #0): TCsvReader; static;
     function ReadRow(out AFields: TStringArray): Boolean;
     function ReadAll: TStringMatrix;
     function HasError: Boolean;
@@ -54,13 +60,17 @@ implementation
 
 { ===== TCsvReader ===== }
 
-class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar): TCsvReader;
+class function TCsvReader.Create(const AInput: string; ADelimiter: AnsiChar;
+  AFieldsPerRecord: Integer; ATrimSpace: Boolean; AComment: AnsiChar): TCsvReader;
 begin
-  Result.FInput := AInput;  { HIGH 1 fix: hold reference to prevent dangling PAnsiChar }
+  Result.FInput := AInput;
   Result.FData := PAnsiChar(Result.FInput);
   Result.FLen := Length(AInput);
   Result.FPos := 0;
   Result.FDelimiter := ADelimiter;
+  Result.FFieldsPerRecord := AFieldsPerRecord;
+  Result.FTrimSpace := ATrimSpace;
+  Result.FComment := AComment;
   Result.FHasError := False;
   Result.FError := '';
 end;
@@ -73,6 +83,22 @@ end;
 function TCsvReader.AtEnd: Boolean;
 begin
   Result := FPos >= FLen;
+end;
+
+function TCsvReader.TrimStr(const S: string): string;
+var
+  LStart, LEnd: Integer;
+begin
+  LStart := 1;
+  LEnd := Length(S);
+  while (LStart <= LEnd) and ((S[LStart] = ' ') or (S[LStart] = #9)) do
+    Inc(LStart);
+  while (LEnd >= LStart) and ((S[LEnd] = ' ') or (S[LEnd] = #9)) do
+    Dec(LEnd);
+  if LStart > LEnd then
+    Result := ''
+  else
+    Result := Copy(S, LStart, LEnd - LStart + 1);
 end;
 
 function TCsvReader.ReadQuotedField: string;
@@ -91,13 +117,11 @@ begin
       Inc(FPos);
     if FPos > LStart then
     begin
-      { HIGH 2 fix: use SetString with precise length instead of string(FData) }
       SetString(LPart, @FData[LStart], FPos - LStart);
       LBuf := LBuf + LPart;
     end;
     if AtEnd then
     begin
-      { HIGH 3 fix: unclosed quote sets error }
       FHasError := True;
       FError := 'Unclosed quoted field';
       Break;
@@ -124,7 +148,6 @@ begin
   while (not AtEnd) and (FData[FPos] <> FDelimiter) and
         (FData[FPos] <> #13) and (FData[FPos] <> #10) do
     Inc(FPos);
-  { HIGH 2 fix: use SetString with precise length }
   SetString(Result, @FData[LStart], FPos - LStart);
 end;
 
@@ -137,6 +160,23 @@ begin
   if AtEnd then
     Exit;
 
+  { Comment line handling: skip lines starting with FComment }
+  if FComment <> #0 then
+  begin
+    while not AtEnd do
+    begin
+      if PeekChar <> FComment then
+        Break;
+      { Skip entire line }
+      while (not AtEnd) and (FData[FPos] <> #13) and (FData[FPos] <> #10) do
+        Inc(FPos);
+      if (not AtEnd) and (FData[FPos] = #13) then Inc(FPos);
+      if (not AtEnd) and (FData[FPos] = #10) then Inc(FPos);
+    end;
+    if AtEnd then
+      Exit;
+  end;
+
   SetLength(AFields, 0);
   LCount := 0;
 
@@ -146,6 +186,10 @@ begin
       LField := ReadQuotedField
     else
       LField := ReadUnquotedField;
+
+    { Trim if requested }
+    if FTrimSpace then
+      LField := TrimStr(LField);
 
     { Append to result }
     Inc(LCount);
@@ -164,7 +208,10 @@ begin
       begin
         Inc(LCount);
         SetLength(AFields, LCount);
-        AFields[LCount - 1] := '';
+        if FTrimSpace then
+          AFields[LCount - 1] := ''
+        else
+          AFields[LCount - 1] := '';
         Break;
       end;
       { If delimiter is followed by newline, add empty trailing field and stop }
@@ -185,6 +232,13 @@ begin
     Inc(FPos);
   if (not AtEnd) and (PeekChar = #10) then
     Inc(FPos);
+
+  { FieldsPerRecord check }
+  if (FFieldsPerRecord > 0) and (LCount <> FFieldsPerRecord) then
+  begin
+    FHasError := True;
+    FError := 'Wrong number of fields';
+  end;
 
   Result := True;
 end;

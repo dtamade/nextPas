@@ -163,7 +163,6 @@ begin
   Check(not LOk, 'misplaced dash fails');
 end;
 
-
 { --- ToString roundtrip --- }
 
 procedure TestToStringRoundTrip;
@@ -264,8 +263,7 @@ begin
 end;
 
 procedure TestV7ConsecutiveOrdering;
-var
-  LA, LB: TUuid;
+var LA, LB: TUuid;
 begin
   LA := TUuid.NewV7At(5000);
   LB := TUuid.NewV7At(6000);
@@ -362,6 +360,108 @@ begin
   Check(not UuidIsValid(''), 'empty');
 end;
 
+{ --- New: FromBytes --- }
+
+procedure TestFromBytes;
+var
+  LBytes: array[0..15] of Byte;
+  LU: TUuid;
+  LI: Integer;
+begin
+  for LI := 0 to 15 do
+    LBytes[LI] := Byte(LI + $10);
+  LU := TUuid.FromBytes(LBytes);
+  for LI := 0 to 15 do
+    if LU.FBytes[LI] <> LBytes[LI] then
+    begin
+      Fail('byte mismatch at ' + IntToStr(LI));
+      Exit;
+    end;
+end;
+
+procedure TestFromBytesToString;
+var
+  LU: TUuid;
+  LBytes: array[0..15] of Byte;
+begin
+  { Known UUID: 550e8400-e29b-41d4-a716-446655440000 }
+  LBytes[0] := $55; LBytes[1] := $0e; LBytes[2] := $84; LBytes[3] := $00;
+  LBytes[4] := $e2; LBytes[5] := $9b; LBytes[6] := $41; LBytes[7] := $d4;
+  LBytes[8] := $a7; LBytes[9] := $16; LBytes[10] := $44; LBytes[11] := $66;
+  LBytes[12] := $55; LBytes[13] := $44; LBytes[14] := $00; LBytes[15] := $00;
+  LU := TUuid.FromBytes(LBytes);
+  CheckEqual('550e8400-e29b-41d4-a716-446655440000', LU.ToString, 'FromBytes ToString');
+end;
+
+{ --- New: Max UUID --- }
+
+procedure TestMaxUuid;
+var LU: TUuid; LI: Integer;
+begin
+  LU := TUuid.Max;
+  for LI := 0 to 15 do
+    if LU.FBytes[LI] <> $FF then
+    begin
+      Fail('Max byte not $FF at ' + IntToStr(LI));
+      Exit;
+    end;
+  CheckEqual('ffffffff-ffff-ffff-ffff-ffffffffffff', LU.ToString, 'Max ToString');
+end;
+
+{ --- New: ToURN --- }
+
+procedure TestToURN;
+var LU: TUuid;
+begin
+  LU := TUuid.Parse('550e8400-e29b-41d4-a716-446655440000');
+  CheckEqual('urn:uuid:550e8400-e29b-41d4-a716-446655440000', LU.ToURN, 'ToURN');
+end;
+
+procedure TestToURNNil;
+var LU: TUuid;
+begin
+  LU := TUuid.Nil_;
+  CheckEqual('urn:uuid:00000000-0000-0000-0000-000000000000', LU.ToURN, 'ToURN nil');
+end;
+
+{ --- New: NewV5 --- }
+
+procedure TestV5Deterministic;
+var LA, LB, LNs: TUuid;
+begin
+  LNs := TUuid.Parse('6ba7b810-9dad-11d1-80b4-00c04fd430c8'); { DNS namespace }
+  LA := TUuid.NewV5(LNs, 'example.com');
+  LB := TUuid.NewV5(LNs, 'example.com');
+  Check(LA = LB, 'V5 must be deterministic');
+end;
+
+procedure TestV5VersionVariant;
+var LU, LNs: TUuid;
+begin
+  LNs := TUuid.Parse('6ba7b810-9dad-11d1-80b4-00c04fd430c8');
+  LU := TUuid.NewV5(LNs, 'test');
+  CheckEqual(Int64(5), Int64(LU.Version), 'version=5');
+  CheckEqual(Int64(2), Int64(LU.Variant), 'variant=2');
+end;
+
+procedure TestV5DifferentNames;
+var LA, LB, LNs: TUuid;
+begin
+  LNs := TUuid.Parse('6ba7b810-9dad-11d1-80b4-00c04fd430c8');
+  LA := TUuid.NewV5(LNs, 'foo');
+  LB := TUuid.NewV5(LNs, 'bar');
+  Check(not (LA = LB), 'different names produce different UUIDs');
+end;
+
+procedure TestV5DifferentNamespaces;
+var LA, LB, LNs1, LNs2: TUuid;
+begin
+  LNs1 := TUuid.Parse('6ba7b810-9dad-11d1-80b4-00c04fd430c8'); { DNS }
+  LNs2 := TUuid.Parse('6ba7b811-9dad-11d1-80b4-00c04fd430c8'); { URL }
+  LA := TUuid.NewV5(LNs1, 'test');
+  LB := TUuid.NewV5(LNs2, 'test');
+  Check(not (LA = LB), 'different namespaces produce different UUIDs');
+end;
 
 begin
   T := TTestRunner.Create('nextpas.core.id.uuid');
@@ -421,6 +521,23 @@ begin
   T.Run('V7 stress 10k', @TestV7Stress);
   T.Run('Parse nil string', @TestParseNilString);
   T.Run('UuidIsValid function', @TestUuidIsValidFunc);
+
+  { New: FromBytes }
+  T.Run('FromBytes', @TestFromBytes);
+  T.Run('FromBytes ToString', @TestFromBytesToString);
+
+  { New: Max UUID }
+  T.Run('Max UUID', @TestMaxUuid);
+
+  { New: ToURN }
+  T.Run('ToURN', @TestToURN);
+  T.Run('ToURN nil', @TestToURNNil);
+
+  { New: V5 }
+  T.Run('V5 deterministic', @TestV5Deterministic);
+  T.Run('V5 version+variant', @TestV5VersionVariant);
+  T.Run('V5 different names', @TestV5DifferentNames);
+  T.Run('V5 different namespaces', @TestV5DifferentNamespaces);
 
   T.Summary;
 end.
