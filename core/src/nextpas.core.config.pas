@@ -1,6 +1,6 @@
 unit nextpas.core.config;
 {**
- * @desc 配置管理模块。支持多源加载（INI/JSON/环境变量），类型安全读取，
+ * @desc 配置管理模块。支持多源加载（INI/JSON/YAML/TOML/环境变量），类型安全读取，
  *       分层覆盖（后加载覆盖先加载）。零 SysUtils 依赖，属于 L3。
  *}
 
@@ -37,6 +37,8 @@ type
 
     procedure LoadFromIni(const AContent: string);
     procedure LoadFromJson(const AContent: string);
+    procedure LoadFromYaml(const AContent: string);
+    procedure LoadFromToml(const AContent: string);
     procedure LoadFromEnv(const APrefix: string);
     procedure SetDefault(const AKey, AValue: string);
 
@@ -168,6 +170,104 @@ begin
       LValue := '';
     end;
     SetValue(LKey, LValue);
+  end;
+end;
+
+procedure TConfig.LoadFromYaml(const AContent: string);
+var
+  LPos, LLen, LLineStart, LLineEnd: Integer;
+  LLine, LKey, LValue: string;
+  LColonPos: Integer;
+begin
+  LLen := Length(AContent);
+  LPos := 1;
+  while LPos <= LLen do
+  begin
+    { Find line boundaries }
+    LLineStart := LPos;
+    while (LPos <= LLen) and (AContent[LPos] <> #10) and (AContent[LPos] <> #13) do
+      Inc(LPos);
+    LLineEnd := LPos - 1;
+    { Skip line ending }
+    if (LPos <= LLen) and (AContent[LPos] = #13) then
+      Inc(LPos);
+    if (LPos <= LLen) and (AContent[LPos] = #10) then
+      Inc(LPos);
+
+    LLine := Trim(Copy(AContent, LLineStart, LLineEnd - LLineStart + 1));
+    { Skip empty lines and comments }
+    if (LLine = '') or (LLine[1] = '#') then
+      Continue;
+
+    { Find colon separator }
+    LColonPos := Pos(':', LLine);
+    if LColonPos < 2 then
+      Continue;
+
+    LKey := Trim(Copy(LLine, 1, LColonPos - 1));
+    LValue := Trim(Copy(LLine, LColonPos + 1, Length(LLine) - LColonPos));
+    { Strip surrounding quotes }
+    if (Length(LValue) >= 2) and (LValue[1] = '"') and (LValue[Length(LValue)] = '"') then
+      LValue := Copy(LValue, 2, Length(LValue) - 2)
+    else if (Length(LValue) >= 2) and (LValue[1] = '''') and (LValue[Length(LValue)] = '''') then
+      LValue := Copy(LValue, 2, Length(LValue) - 2);
+
+    SetValue(LKey, LValue);
+  end;
+end;
+
+procedure TConfig.LoadFromToml(const AContent: string);
+var
+  LPos, LLen, LLineStart, LLineEnd: Integer;
+  LLine, LSection, LKey, LValue, LFullKey: string;
+  LEqPos: Integer;
+begin
+  LLen := Length(AContent);
+  LPos := 1;
+  LSection := '';
+  while LPos <= LLen do
+  begin
+    { Find line boundaries }
+    LLineStart := LPos;
+    while (LPos <= LLen) and (AContent[LPos] <> #10) and (AContent[LPos] <> #13) do
+      Inc(LPos);
+    LLineEnd := LPos - 1;
+    { Skip line ending }
+    if (LPos <= LLen) and (AContent[LPos] = #13) then
+      Inc(LPos);
+    if (LPos <= LLen) and (AContent[LPos] = #10) then
+      Inc(LPos);
+
+    LLine := Trim(Copy(AContent, LLineStart, LLineEnd - LLineStart + 1));
+    { Skip empty lines and comments }
+    if (LLine = '') or (LLine[1] = '#') then
+      Continue;
+
+    { Section header [name] }
+    if (LLine[1] = '[') and (LLine[Length(LLine)] = ']') then
+    begin
+      LSection := Trim(Copy(LLine, 2, Length(LLine) - 2));
+      Continue;
+    end;
+
+    { key = value }
+    LEqPos := Pos('=', LLine);
+    if LEqPos < 2 then
+      Continue;
+
+    LKey := Trim(Copy(LLine, 1, LEqPos - 1));
+    LValue := Trim(Copy(LLine, LEqPos + 1, Length(LLine) - LEqPos));
+    { Strip surrounding quotes }
+    if (Length(LValue) >= 2) and (LValue[1] = '"') and (LValue[Length(LValue)] = '"') then
+      LValue := Copy(LValue, 2, Length(LValue) - 2)
+    else if (Length(LValue) >= 2) and (LValue[1] = '''') and (LValue[Length(LValue)] = '''') then
+      LValue := Copy(LValue, 2, Length(LValue) - 2);
+
+    if LSection <> '' then
+      LFullKey := LSection + '.' + LKey
+    else
+      LFullKey := LKey;
+    SetValue(LFullKey, LValue);
   end;
 end;
 

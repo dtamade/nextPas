@@ -501,6 +501,38 @@ begin
   CheckEqual('denied', TemplateRender('{{if eq .Role "admin"}}granted{{else}}denied{{end}}', LCtx));
 end;
 
+{ === Define/Template/With Tests === }
+
+procedure Test_DefineAndTemplate;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('Name', 'World');
+  CheckEqual('Hello World',
+    TemplateRender('{{define "greeting"}}Hello {{.Name}}{{end}}{{template "greeting"}}', LCtx));
+end;
+
+procedure Test_WithScope;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  LCtx.SetVar('User.Name', 'Alice');
+  LCtx.SetVar('User.Age', '30');
+  CheckEqual('Alice is 30',
+    TemplateRender('{{with .User}}{{.Name}} is {{.Age}}{{end}}', LCtx));
+end;
+
+procedure Test_TemplateMissing;
+var
+  LCtx: TTemplateContext;
+begin
+  LCtx := TTemplateContext.Create;
+  CheckEqual('before-after',
+    TemplateRender('before-{{template "nonexistent"}}after', LCtx));
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.template');
   T.Run('SimpleVar', @Test_SimpleVar);
@@ -555,6 +587,10 @@ begin
   T.Run('VarAssign', @Test_VarAssign);
   T.Run('VarAssign_WithFilter', @Test_VarAssign_WithFilter);
   T.Run('CompareElse', @Test_CompareElse);
+  { Define/Template/With tests }
+  T.Run('DefineAndTemplate', @Test_DefineAndTemplate);
+  T.Run('WithScope', @Test_WithScope);
+  T.Run('TemplateMissing', @Test_TemplateMissing);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

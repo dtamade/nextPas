@@ -2,7 +2,8 @@ unit nextpas.core.template;
 {**
  * @desc Text template engine (Go text/template simplified).
  *       Supports variable substitution, conditionals, loops, pipe filters,
- *       comparison operators, custom functions, variable assignment, and with scope.
+ *       comparison operators, custom functions, variable assignment, with scope,
+ *       define/template blocks.
  *       L3 module — zero SysUtils dependency.
  *}
 
@@ -36,6 +37,11 @@ type
   end;
   TTemplateFuncArray = array of TTemplateFuncEntry;
 
+  TTemplateDefine = record
+    Name: string;
+    Body: string;
+  end;
+
   TTemplateContext = record
   private
     FVars: TTemplateVarArray;
@@ -44,6 +50,9 @@ type
     FListCount: Integer;
     FFuncs: TTemplateFuncArray;
     FFuncCount: Integer;
+    FDefines: array of TTemplateDefine;
+    FDefineCount: Integer;
+    FPrefix: string;
   public
     class function Create: TTemplateContext; static;
     procedure SetVar(const AName, AValue: string);
@@ -51,6 +60,9 @@ type
     procedure SetBool(const AName: string; AValue: Boolean);
     procedure SetList(const AName: string; const AItems: array of string);
     procedure RegisterFunc(const AName: string; AFunc: TTemplateFunc);
+    procedure SetPrefix(const AValue: string);
+    procedure Define(const AName, ABody: string);
+    function GetDefine(const AName: string): string;
     function GetVar(const AName: string): string;
     function GetBool(const AName: string): Boolean;
     function GetList(const AName: string): TStringArray;
@@ -454,6 +466,21 @@ begin
   RenderSegment(ASrc, APos, Default(TTemplateContext), LLocals, LLocalCount, LStop);
 end;
 
+{ Extract a quoted name from expression like "name" }
+function ExtractQuotedName(const AExpr: string): string;
+var
+  LStart, LEnd: Integer;
+begin
+  Result := '';
+  LStart := Pos('"', AExpr);
+  if LStart = 0 then Exit;
+  LEnd := LStart + 1;
+  while (LEnd <= Length(AExpr)) and (AExpr[LEnd] <> '"') do
+    Inc(LEnd);
+  if LEnd <= Length(AExpr) then
+    Result := Copy(AExpr, LStart + 1, LEnd - LStart - 1);
+end;
+
 function RenderSegment(const ASrc: string; var APos: Integer;
   const ACtx: TTemplateContext;
   var ALocals: TTemplateVarArray; var ALocalCount: Integer;
@@ -468,6 +495,8 @@ var
   LInnerStop: TStopReason;
   LVarName, LVarExpr: string;
   LAssignPos: Integer;
+  LDefName, LDefBody: string;
+  LWithVar, LSavedPrefix: string;
 begin
   LLen := Length(ASrc);
   LResult := '';
@@ -501,6 +530,37 @@ begin
     begin
       AStop := srElse;
       Exit(LResult);
+    end;
+
+    { define "name" — collect body until {{end}} }
+    if LKeyword = 'define' then
+    begin
+      LDefName := ExtractQuotedName(LExpr);
+      LDefBody := RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+      TTemplateContext(ACtx).Define(LDefName, LDefBody);
+      Continue;
+    end;
+
+    { template "name" — insert defined block }
+    if LKeyword = 'template' then
+    begin
+      LDefName := ExtractQuotedName(LExpr);
+      LResult := LResult + ACtx.GetDefine(LDefName);
+      Continue;
+    end;
+
+    { with .Var — set prefix for inner block }
+    if LKeyword = 'with' then
+    begin
+      LWithVar := StripDot(TrimInternal(LExpr));
+      LSavedPrefix := TTemplateContext(ACtx).FPrefix;
+      if LSavedPrefix <> '' then
+        TTemplateContext(ACtx).SetPrefix(LSavedPrefix + '.' + LWithVar)
+      else
+        TTemplateContext(ACtx).SetPrefix(LWithVar);
+      LResult := LResult + RenderSegment(ASrc, APos, ACtx, ALocals, ALocalCount, LInnerStop);
+      TTemplateContext(ACtx).SetPrefix(LSavedPrefix);
+      Continue;
     end;
 
     { Variable assignment: {{$name := expr}} }
@@ -600,9 +660,12 @@ begin
   Result.FVarCount := 0;
   Result.FListCount := 0;
   Result.FFuncCount := 0;
+  Result.FDefineCount := 0;
+  Result.FPrefix := '';
   SetLength(Result.FVars, 0);
   SetLength(Result.FLists, 0);
   SetLength(Result.FFuncs, 0);
+  SetLength(Result.FDefines, 0);
 end;
 
 procedure TTemplateContext.SetVar(const AName, AValue: string);
@@ -665,10 +728,51 @@ begin
   Inc(FFuncCount);
 end;
 
-function TTemplateContext.GetVar(const AName: string): string;
+procedure TTemplateContext.SetPrefix(const AValue: string);
+begin
+  FPrefix := AValue;
+end;
+
+procedure TTemplateContext.Define(const AName, ABody: string);
 var
   LI: Integer;
 begin
+  for LI := 0 to FDefineCount - 1 do
+    if FDefines[LI].Name = AName then
+    begin
+      FDefines[LI].Body := ABody;
+      Exit;
+    end;
+  if FDefineCount >= Length(FDefines) then
+    SetLength(FDefines, FDefineCount + 4);
+  FDefines[FDefineCount].Name := AName;
+  FDefines[FDefineCount].Body := ABody;
+  Inc(FDefineCount);
+end;
+
+function TTemplateContext.GetDefine(const AName: string): string;
+var
+  LI: Integer;
+begin
+  for LI := 0 to FDefineCount - 1 do
+    if FDefines[LI].Name = AName then
+      Exit(FDefines[LI].Body);
+  Result := '';
+end;
+
+function TTemplateContext.GetVar(const AName: string): string;
+var
+  LI: Integer;
+  LFullName: string;
+begin
+  { If prefix is set (inside with block), try prefix.name first }
+  if FPrefix <> '' then
+  begin
+    LFullName := FPrefix + '.' + AName;
+    for LI := 0 to FVarCount - 1 do
+      if FVars[LI].Name = LFullName then
+        Exit(FVars[LI].Value);
+  end;
   for LI := 0 to FVarCount - 1 do
     if FVars[LI].Name = AName then
       Exit(FVars[LI].Value);

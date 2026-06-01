@@ -522,6 +522,61 @@ begin
   end;
 end;
 
+{ === LoadFromYaml Tests === }
+
+procedure TestLoadFromYamlBasic;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromYaml('name: Alice' + #10 + 'port: 8080' + #10 + 'debug: true' + #10);
+    CheckEqual('Alice', LCfg.GetString('name'), 'yaml name');
+    CheckEqual(Int64(8080), LCfg.GetInt('port'), 'yaml port');
+    CheckEqual(True, LCfg.GetBool('debug'), 'yaml debug');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+{ === LoadFromToml Tests === }
+
+procedure TestLoadFromTomlSection;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromToml('[server]' + #10 + 'host = "localhost"' + #10 + 'port = 8080' + #10);
+    CheckEqual('localhost', LCfg.GetString('server.host'), 'toml host');
+    CheckEqual(Int64(8080), LCfg.GetInt('server.port'), 'toml port');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+{ === Multi-source Override Tests === }
+
+procedure TestMultiSourceOverride;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    { YAML first }
+    LCfg.LoadFromYaml('host: yaml_host' + #10 + 'port: 3000' + #10);
+    CheckEqual('yaml_host', LCfg.GetString('host'), 'yaml loaded');
+    { TOML overrides }
+    LCfg.LoadFromToml('host = "toml_host"' + #10);
+    CheckEqual('toml_host', LCfg.GetString('host'), 'toml overrides yaml');
+    { JSON overrides all }
+    LCfg.LoadFromJson('{"host":"json_host"}');
+    CheckEqual('json_host', LCfg.GetString('host'), 'json overrides toml');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === Main === }
 
 begin
@@ -556,5 +611,8 @@ begin
   T.Run('Has.AfterMultipleLoads', @TestHasAfterMultipleLoads);
   T.Run('GetKeys.Order', @TestGetKeysOrder);
   T.Run('Count.AfterOverride', @TestCountAfterOverride);
+  T.Run('LoadFromYaml.Basic', @TestLoadFromYamlBasic);
+  T.Run('LoadFromToml.Section', @TestLoadFromTomlSection);
+  T.Run('MultiSource.Override', @TestMultiSourceOverride);
   T.Summary;
 end.
