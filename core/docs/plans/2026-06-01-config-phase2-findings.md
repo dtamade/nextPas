@@ -52,3 +52,30 @@
   `GetSection('servers.0')` instead of being coerced into strings.
 - Sparse numeric arrays are returned compactly in numeric index order; missing
   indices do not inject empty strings.
+
+## P2 Interpolation Notes
+
+- Interpolation is read-time behavior, not load-time mutation. Raw entries stay
+  unchanged so `ReplaceFrom`, hot reload, and multi-source load order keep their
+  existing shape.
+- The resolver copies `FEntries` under a read lock and releases the lock before
+  recursive interpolation. This avoids recursive public getter calls while
+  holding `IRWLock` and gives each getter call stable snapshot semantics.
+- Placeholder resolution order is config key first, then environment variable.
+  This preserves explicit config overrides when a config key and an env var have
+  the same name.
+- Environment fallback uses `nextpas.core.os.env.HasEnv/GetEnv`. `HasEnv` is
+  important because an intentionally empty environment value is distinct from a
+  missing variable.
+- `$${name}` escapes to literal `${name}`.
+- Missing placeholders stay unchanged, for example `${OPTIONAL_SECRET}`. This
+  makes optional deployment-time variables safe to leave unresolved until the
+  caller decides to validate required keys.
+- Config-key cycles, including self-cycles, raise `EConfigError` because they
+  are invalid configuration. The stack check is case-insensitive, matching
+  config key lookup.
+- Value APIs expose interpolated values: `GetString`, `GetInt`, `GetBool`,
+  `GetFloat`, and `GetStringArray`. Structural APIs remain raw/structural:
+  `Has`, `GetKeys`, `GetSection`, and `Count`.
+- Default strings passed to `GetString` are interpolated against the same
+  snapshot, so callers can use defaults such as `http://${host}`.

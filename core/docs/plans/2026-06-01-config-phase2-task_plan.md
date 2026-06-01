@@ -34,6 +34,22 @@ Priority: P1 section and string-array accessors.
 - [x] Run focused tests with heaptrc and check for zero leaks.
 - [x] Commit the batch with a clear message.
 
+## Batch 3
+
+Priority: P2 placeholder interpolation.
+
+- [x] Confirm isolated worktree is clean and no newer same-file config commits
+  exist.
+- [x] Add RED tests for config-key interpolation, env fallback,
+  config-over-env precedence, default-value interpolation, `$${}` escaping,
+  unresolved placeholders, typed getter interpolation, string-array item
+  interpolation, and cycle detection.
+- [x] Implement read-time interpolation on a copied config-entry snapshot.
+- [x] Connect interpolation to `GetString`, `GetInt`, `GetBool`, `GetFloat`,
+  and `GetStringArray`.
+- [x] Run clean focused tests with heaptrc and check for zero leaks.
+- [x] Commit the batch with a clear message.
+
 ## Design Decisions
 
 | Topic | Decision | Reason |
@@ -45,10 +61,14 @@ Priority: P1 section and string-array accessors.
 | Watcher behavior | `TConfigWatcher.DoReload` may propagate `EConfigError`; `ReplaceFrom` only happens after successful parse | This preserves old config on bad reload and lets application boundaries decide whether to catch. |
 | Section semantics | `GetSection('')` returns root-level direct children; `GetSection(prefix)` returns direct child segments only, de-duplicated case-insensitively while preserving first-seen spelling | Matches flattened dot-path model and keeps API useful for object and array traversal. |
 | String array semantics | `GetStringArray(prefix)` reads direct numeric children (`prefix.0`, `prefix.1`, ...), sorts by numeric index, skips sparse holes, and ignores object-array descendants such as `servers.0.host` | Reconstructs scalar arrays from the .NET-style flattened storage without inventing object-array serialization. |
+| Interpolation timing | Resolve `${...}` lazily at read time from a copied entry snapshot | Loaders stay pure, hot reload and replacement keep raw values, and recursive resolution avoids holding a potentially non-reentrant read lock. |
+| Placeholder resolution | Config key wins first, then environment variable via `nextpas.core.os.env`; unresolved placeholders are preserved | Keeps config override semantics deterministic and avoids surprising data loss when optional env vars are absent. |
+| Escaping | `$${name}` returns literal `${name}` | Gives callers a minimal escape hatch without adding parser modes. |
+| Cycle handling | Config-key interpolation cycles raise `EConfigError` | Cycles are invalid configuration, and throwing follows the framework default-error convention. |
+| Getter coverage | `GetString`, typed getters, default strings, and `GetStringArray` items interpolate; `GetSection`, `Has`, `GetKeys`, and `Count` remain structural/raw | Value-returning APIs expose final effective values; structural APIs must continue reflecting the flat key table. |
 
 ## Later Batches
 
-- P2: `${VAR}` interpolation with a precise unresolved-placeholder policy.
 - P3: required-value APIs such as `GetIntRequired` and `Require`.
 - Final round: documentation refresh and benchmark comparison after interfaces
   are complete and stable.
@@ -69,3 +89,6 @@ Priority: P1 section and string-array accessors.
 | Existing root/core planning files belong to another HTTP task | Use config-specific files under `docs/plans/` and leave HTTP planning files untouched. |
 | Initial `apply_patch` call landed in the shared checkout | Move owned config changes to the isolated worktree and remove the accidental shared-checkout edits. |
 | YAML invalid fixture `: : : bad` parsed successfully | Use `{a: *missing}`, an existing YAML-suite-proven invalid fixture that sets `HasError`. |
+| Direct `docs/...` reads failed in the worktree | This worktree root is the parent `nextPas` repo, so config docs are under `core/docs/...`. |
+| FPC warned about nested comment markers in the DOM note | Avoid literal Pascal/JSON brace examples inside `{ ... }` comments. |
+| Env interpolation initially returned empty strings | Qualify calls as `nextpas.core.os.env.HasEnv/GetEnv` to avoid ambiguity with other env helpers in used units. |

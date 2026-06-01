@@ -71,6 +71,187 @@ begin
   end;
 end;
 
+{ === Interpolation Tests === }
+
+procedure TestInterpolationConfigKeys;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 +
+      'host=localhost' + #10 +
+      'port=8080' + #10 +
+      '[service]' + #10 +
+      'url=https://${server.host}:${server.port}' + #10);
+    CheckEqual('https://localhost:8080', LCfg.GetString('service.url'),
+      'config key placeholders');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationEnvFallback;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_REGION', 'ap-east');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('region=${NEXTPAS_CFG_REGION}' + #10);
+      CheckEqual('ap-east', LCfg.GetString('region'), 'env fallback placeholder');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_REGION');
+  end;
+end;
+
+procedure TestInterpolationDefaultValue;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_DEFAULT_REGION', 'ap-south');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('host=localhost' + #10);
+      CheckEqual('http://localhost',
+        LCfg.GetString('missing.url', 'http://${host}'),
+        'default config interpolation');
+      CheckEqual('ap-south',
+        LCfg.GetString('missing.region', '${NEXTPAS_CFG_DEFAULT_REGION}'),
+        'default env interpolation');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_DEFAULT_REGION');
+  end;
+end;
+
+procedure TestInterpolationConfigWinsOverEnv;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_NAME', 'env_name');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('NEXTPAS_CFG_NAME=config_name' + #10 +
+        'display=${NEXTPAS_CFG_NAME}' + #10);
+      CheckEqual('config_name', LCfg.GetString('display'),
+        'config placeholder wins over env');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_NAME');
+  end;
+end;
+
+procedure TestInterpolationEscapeAndUnresolved;
+var
+  LCfg: TConfig;
+begin
+  UnsetEnv('NEXTPAS_CFG_MISSING_INTERPOLATION');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[server]' + #10 +
+      'host=localhost' + #10 +
+      '[values]' + #10 +
+      'literal=$${server.host}' + #10 +
+      'missing=${NEXTPAS_CFG_MISSING_INTERPOLATION}' + #10);
+    CheckEqual('${server.host}', LCfg.GetString('values.literal'),
+      'escaped placeholder');
+    CheckEqual('${NEXTPAS_CFG_MISSING_INTERPOLATION}',
+      LCfg.GetString('values.missing'), 'unresolved placeholder preserved');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationTypedGetters;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[source]' + #10 +
+      'port=8080' + #10 +
+      'enabled=true' + #10 +
+      'ratio=2.5' + #10 +
+      '[derived]' + #10 +
+      'port=${source.port}' + #10 +
+      'enabled=${source.enabled}' + #10 +
+      'ratio=${source.ratio}' + #10);
+    CheckEqual(Int64(8080), LCfg.GetInt('derived.port'), 'interpolated int');
+    CheckEqual(True, LCfg.GetBool('derived.enabled'), 'interpolated bool');
+    LVal := LCfg.GetFloat('derived.ratio');
+    Check((LVal > 2.4) and (LVal < 2.6), 'interpolated float');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationStringArray;
+var
+  LCfg: TConfig;
+  LTags: TStringArray;
+begin
+  SetEnv('NEXTPAS_CFG_TAG', 'env_tag');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromJson('{"tag_source":"blue","tags":["${tag_source}",' +
+        '"$${tag_source}","${NEXTPAS_CFG_TAG}"]}');
+      LTags := LCfg.GetStringArray('tags');
+      CheckEqual(Int64(3), Int64(Length(LTags)), 'tag count');
+      CheckEqual('blue', LTags[0], 'array config interpolation');
+      CheckEqual('${tag_source}', LTags[1], 'array escaped interpolation');
+      CheckEqual('env_tag', LTags[2], 'array env interpolation');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_TAG');
+  end;
+end;
+
+procedure TestInterpolationCycleRaises;
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('a=${b}' + #10 + 'b=${a}' + #10 + 'self=${self}' + #10);
+
+    LRaised := False;
+    try
+      LCfg.GetString('a');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'cross-key cycle raises');
+
+    LRaised := False;
+    try
+      LCfg.GetString('self');
+    except
+      on E: EConfigError do
+        LRaised := True;
+    end;
+    CheckEqual(True, LRaised, 'self cycle raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === GetInt Tests === }
 
 procedure TestGetIntBasic;
@@ -809,6 +990,14 @@ begin
   T.Run('GetString.Basic', @TestGetStringBasic);
   T.Run('GetString.Default', @TestGetStringDefault);
   T.Run('GetString.CaseInsensitive', @TestGetStringCaseInsensitive);
+  T.Run('Interpolation.ConfigKeys', @TestInterpolationConfigKeys);
+  T.Run('Interpolation.EnvFallback', @TestInterpolationEnvFallback);
+  T.Run('Interpolation.DefaultValue', @TestInterpolationDefaultValue);
+  T.Run('Interpolation.ConfigWinsOverEnv', @TestInterpolationConfigWinsOverEnv);
+  T.Run('Interpolation.EscapeAndUnresolved', @TestInterpolationEscapeAndUnresolved);
+  T.Run('Interpolation.TypedGetters', @TestInterpolationTypedGetters);
+  T.Run('Interpolation.StringArray', @TestInterpolationStringArray);
+  T.Run('Interpolation.CycleRaises', @TestInterpolationCycleRaises);
   T.Run('GetInt.Basic', @TestGetIntBasic);
   T.Run('GetInt.Default', @TestGetIntDefault);
   T.Run('GetInt.Invalid', @TestGetIntInvalid);

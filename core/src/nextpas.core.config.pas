@@ -106,6 +106,8 @@ uses
   nextpas.core.toml.base;
 
 type
+  TConfigEntryArray = array of TConfigEntry;
+
   TIndexedConfigValue = record
     Index: Int64;
     Value: string;
@@ -121,7 +123,7 @@ var
 { DOM 展平 helper —— 把 JSON/YAML/TOML 嵌套结构递归展平成扁平 dot-path。
   嵌套对象/表 → server.host；数组/序列 → tags.0、servers.0.host（.NET IConfiguration 模型）。
   注意（扁平模型固有约束）：
-  - 字面含点的键与真实层级会撞 key，例如 {"a.b":1} 与 {"a":{"b":1}} 都展平成 a.b；后写覆盖先写。
+  - 字面含点的键与真实层级会撞 key，例如 dotted a.b 与 nested a/b 都展平成 a.b；后写覆盖先写。
   - 递归深度 = 配置嵌套深度，由底层 DOM 解析器自身的深度上限先行约束。 }
 
 function JoinKey(const APrefix, AKey: string): string;
@@ -247,6 +249,171 @@ begin
       Dec(LJ);
     end;
     AItems[LJ + 1] := LItem;
+  end;
+end;
+
+function FindEntryIndexInSnapshot(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AKey: string): Integer;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AKey);
+  for LI := 0 to ACount - 1 do
+    if LowerCase(AEntries[LI].Key) = LLower then
+      Exit(LI);
+  Result := -1;
+end;
+
+procedure SnapshotConfigEntries(ACfg: TConfig; out AEntries: TConfigEntryArray;
+  out ACount: Integer);
+var
+  LI: Integer;
+begin
+  ACfg.FLock.AcquireRead;
+  try
+    ACount := ACfg.FCount;
+    SetLength(AEntries, ACount);
+    for LI := 0 to ACount - 1 do
+      AEntries[LI] := ACfg.FEntries[LI];
+  finally
+    ACfg.FLock.ReleaseRead;
+  end;
+end;
+
+function FindPlaceholderEnd(const AValue: string; const AStart: Integer): Integer;
+begin
+  Result := AStart;
+  while (Result <= Length(AValue)) and (AValue[Result] <> '}') do
+    Inc(Result);
+  if Result > Length(AValue) then
+    Result := 0;
+end;
+
+function ConfigKeyStackContains(const AStack: TStringArray; const AKey: string): Boolean;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AKey);
+  for LI := 0 to Length(AStack) - 1 do
+    if LowerCase(AStack[LI]) = LLower then
+      Exit(True);
+  Result := False;
+end;
+
+procedure PushConfigKey(var AStack: TStringArray; const AKey: string);
+var
+  LLen: Integer;
+begin
+  LLen := Length(AStack);
+  SetLength(AStack, LLen + 1);
+  AStack[LLen] := AKey;
+end;
+
+procedure PopConfigKey(var AStack: TStringArray);
+begin
+  if Length(AStack) > 0 then
+    SetLength(AStack, Length(AStack) - 1);
+end;
+
+function InterpolateConfigValue(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AValue: string; var AStack: TStringArray): string; forward;
+
+function ResolveConfigEntryByIndex(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AIndex: Integer; var AStack: TStringArray): string;
+var
+  LKey: string;
+begin
+  LKey := AEntries[AIndex].Key;
+  if ConfigKeyStackContains(AStack, LKey) then
+    raise EConfigError.Create('Config interpolation cycle at key "' + LKey + '"');
+
+  PushConfigKey(AStack, LKey);
+  try
+    Result := InterpolateConfigValue(AEntries, ACount, AEntries[AIndex].Value, AStack);
+  finally
+    PopConfigKey(AStack);
+  end;
+end;
+
+function ResolveConfigKeyInSnapshot(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AKey: string; out AValue: string;
+  var AStack: TStringArray): Boolean;
+var
+  LIdx: Integer;
+begin
+  LIdx := FindEntryIndexInSnapshot(AEntries, ACount, AKey);
+  Result := LIdx >= 0;
+  if Result then
+    AValue := ResolveConfigEntryByIndex(AEntries, ACount, LIdx, AStack)
+  else
+    AValue := '';
+end;
+
+function ResolvePlaceholder(const AEntries: TConfigEntryArray; const ACount: Integer;
+  const AName: string; var AStack: TStringArray; out AValue: string): Boolean;
+begin
+  if AName = '' then
+  begin
+    AValue := '';
+    Exit(False);
+  end;
+
+  if ResolveConfigKeyInSnapshot(AEntries, ACount, AName, AValue, AStack) then
+    Exit(True);
+
+  if nextpas.core.os.env.HasEnv(AName) then
+  begin
+    AValue := nextpas.core.os.env.GetEnv(AName);
+    Exit(True);
+  end;
+
+  AValue := '';
+  Result := False;
+end;
+
+function InterpolateConfigValue(const AEntries: TConfigEntryArray;
+  const ACount: Integer; const AValue: string; var AStack: TStringArray): string;
+var
+  LI: Integer;
+  LEnd: Integer;
+  LName: string;
+  LResolved: string;
+begin
+  Result := '';
+  LI := 1;
+  while LI <= Length(AValue) do
+  begin
+    if (AValue[LI] = '$') and (LI < Length(AValue)) and (AValue[LI + 1] = '$') and
+       (LI + 2 <= Length(AValue)) and (AValue[LI + 2] = '{') then
+    begin
+      Result := Result + '${';
+      Inc(LI, 3);
+    end
+    else if (AValue[LI] = '$') and (LI < Length(AValue)) and (AValue[LI + 1] = '{') then
+    begin
+      LEnd := FindPlaceholderEnd(AValue, LI + 2);
+      if LEnd = 0 then
+      begin
+        Result := Result + AValue[LI];
+        Inc(LI);
+      end
+      else
+      begin
+        LName := Copy(AValue, LI + 2, LEnd - LI - 2);
+        if ResolvePlaceholder(AEntries, ACount, LName, AStack, LResolved) then
+          Result := Result + LResolved
+        else
+          Result := Result + '${' + LName + '}';
+        LI := LEnd + 1;
+      end;
+    end
+    else
+    begin
+      Result := Result + AValue[LI];
+      Inc(LI);
+    end;
   end;
 end;
 
@@ -834,104 +1001,81 @@ end;
 
 function TConfig.GetString(const AKey: string; const ADefault: string): string;
 var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
   LIdx: Integer;
+  LStack: TStringArray;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx >= 0 then
-      Result := FEntries[LIdx].Value
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
+  LStack := nil;
+  if LIdx >= 0 then
+    Result := ResolveConfigEntryByIndex(LEntries, LCount, LIdx, LStack)
+  else
+    Result := InterpolateConfigValue(LEntries, LCount, ADefault, LStack);
 end;
 
 function TConfig.GetStringArray(const AKey: string): TStringArray;
 var
   LI, LCount: Integer;
+  LEntryCount: Integer;
+  LEntries: TConfigEntryArray;
   LSegment: string;
   LIndex: Int64;
   LItems: TIndexedConfigValueArray;
+  LStack: TStringArray;
 begin
   Result := nil;
-  FLock.AcquireRead;
-  try
-    LItems := nil;
-    LCount := 0;
-    for LI := 0 to FCount - 1 do
-      if DirectArraySegment(FEntries[LI].Key, AKey, LSegment) and
-         TryParseArrayIndex(LSegment, LIndex) then
-        AddIndexedValue(LItems, LCount, LIndex, FEntries[LI].Value);
+  SnapshotConfigEntries(Self, LEntries, LEntryCount);
+  LItems := nil;
+  LCount := 0;
+  for LI := 0 to LEntryCount - 1 do
+    if DirectArraySegment(LEntries[LI].Key, AKey, LSegment) and
+       TryParseArrayIndex(LSegment, LIndex) then
+      AddIndexedValue(LItems, LCount, LIndex, LEntries[LI].Value);
 
-    SortIndexedValues(LItems, LCount);
-    SetLength(Result, LCount);
-    for LI := 0 to LCount - 1 do
-      Result[LI] := LItems[LI].Value;
-  finally
-    FLock.ReleaseRead;
-  end;
+  SortIndexedValues(LItems, LCount);
+  SetLength(Result, LCount);
+  LStack := nil;
+  for LI := 0 to LCount - 1 do
+    Result[LI] := InterpolateConfigValue(LEntries, LEntryCount, LItems[LI].Value, LStack);
 end;
 
 function TConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
 var
-  LIdx: Integer;
   LVal: Int64;
+  LText: string;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx < 0 then
-      Exit(ADefault);
-    if TryStrToInt64(FEntries[LIdx].Value, LVal) then
-      Result := LVal
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  LText := GetString(AKey, '');
+  if (LText <> '') and TryStrToInt64(LText, LVal) then
+    Result := LVal
+  else
+    Result := ADefault;
 end;
 
 function TConfig.GetBool(const AKey: string; ADefault: Boolean): Boolean;
 var
-  LIdx: Integer;
   LStr: string;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx < 0 then
-      Exit(ADefault);
-    LStr := LowerCase(Trim(FEntries[LIdx].Value));
-    if (LStr = 'true') or (LStr = '1') or (LStr = 'yes') or (LStr = 'on') then
-      Result := True
-    else if (LStr = 'false') or (LStr = '0') or (LStr = 'no') or (LStr = 'off') then
-      Result := False
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  LStr := LowerCase(Trim(GetString(AKey, '')));
+  if (LStr = 'true') or (LStr = '1') or (LStr = 'yes') or (LStr = 'on') then
+    Result := True
+  else if (LStr = 'false') or (LStr = '0') or (LStr = 'no') or (LStr = 'off') then
+    Result := False
+  else
+    Result := ADefault;
 end;
 
 function TConfig.GetFloat(const AKey: string; ADefault: Double): Double;
 var
-  LIdx: Integer;
   LVal: Double;
+  LText: string;
 begin
-  FLock.AcquireRead;
-  try
-    LIdx := FindIndex(AKey);
-    if LIdx < 0 then
-      Exit(ADefault);
-    if TryStrToFloat(FEntries[LIdx].Value, LVal) then
-      Result := LVal
-    else
-      Result := ADefault;
-  finally
-    FLock.ReleaseRead;
-  end;
+  LText := GetString(AKey, '');
+  if (LText <> '') and TryStrToFloat(LText, LVal) then
+    Result := LVal
+  else
+    Result := ADefault;
 end;
 
 procedure TConfig.ReplaceFrom(AOther: TConfig);
