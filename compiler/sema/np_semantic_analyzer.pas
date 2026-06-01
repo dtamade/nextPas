@@ -37,8 +37,6 @@ type
     FNoFold: Boolean;
     FModel: TSemanticModel;
     FProcedureBodies: array of TProcedureBodyEntry;
-    FCompilerProcNames: array of string;
-    FCompilerProcCount: LongInt;
     FGenericWorkQueue: array of LongInt;
     FGenericWorkCount: LongInt;
     FGenericCacheKeys: array of string;
@@ -1061,21 +1059,11 @@ procedure TSemanticAnalyzer.RegisterProcedureBody(const AName: string;
 var
   Index: LongInt;
   NextIndex: SizeInt;
-  Sig, ExistingSig, CleanName: string;
+  Sig, ExistingSig: string;
 begin
-  if Pos(';compilerproc', AName) > 0 then
-  begin
-    CleanName := Copy(AName, 1, Pos(';', AName) - 1);
-    if FCompilerProcCount >= Length(FCompilerProcNames) then
-      SetLength(FCompilerProcNames, FCompilerProcCount + 16);
-    FCompilerProcNames[FCompilerProcCount] := CleanName;
-    Inc(FCompilerProcCount);
-  end
-  else
-    CleanName := AName;
   Sig := GetParamSignature(ADecl);
   for Index := 0 to Length(FProcedureBodies) - 1 do
-    if SameText(FProcedureBodies[Index].Name, CleanName) and
+    if SameText(FProcedureBodies[Index].Name, AName) and
       SameText(FProcedureBodies[Index].OwnerUnitId, AOwnerUnitId) then
     begin
       ExistingSig := GetParamSignature(FProcedureBodies[Index].Decl);
@@ -1090,7 +1078,7 @@ begin
     end;
   NextIndex := Length(FProcedureBodies);
   SetLength(FProcedureBodies, NextIndex + 1);
-  FProcedureBodies[NextIndex].Name := CleanName;
+  FProcedureBodies[NextIndex].Name := AName;
   FProcedureBodies[NextIndex].Body := ABody;
   FProcedureBodies[NextIndex].Decl := ADecl;
   FProcedureBodies[NextIndex].OwnerUnitId := AOwnerUnitId;
@@ -6081,17 +6069,6 @@ begin
     ABlob := 'null' + #10;
     Exit(True);
   end;
-  if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'ExceptObject') then
-  begin
-    ABlob := 'exc_load' + #10;
-    Exit(True);
-  end;
-  if (ANode.NodeKind = gnkFunctionCall) and (ANode.ChildCount >= 1) and
-    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text, 'ExceptObject') then
-  begin
-    ABlob := 'exc_load' + #10;
-    Exit(True);
-  end;
   if (ANode.NodeKind = gnkIdentifier) and SameText(ANode.Text, 'True') then
   begin
     ABlob := 'int 1' + #10;
@@ -6222,13 +6199,6 @@ begin
         ABlob := ABlob + 'strlit ' + ANode.ChildAt(StrCallIdx).Text + #10;
         Inc(StrCallArgCount, 2);
       end
-      else if (ANode.ChildAt(StrCallIdx) <> nil) and
-        (ANode.ChildAt(StrCallIdx).NodeKind = gnkIdentifier) and
-        IsRuntimeArrVar(ANode.ChildAt(StrCallIdx).Text) then
-      begin
-        ABlob := ABlob + 'arrvar ' + ANode.ChildAt(StrCallIdx).Text + #10;
-        Inc(StrCallArgCount, 2);
-      end
       else if EncodeRuntimeIntExprFold(ANode.ChildAt(StrCallIdx), FuncName) then
       begin
         ABlob := ABlob + FuncName;
@@ -6280,9 +6250,16 @@ begin
         K := Pos('.', FuncName);
         if K > 0 then
         begin
-          ArgName := LookupClassVar(Copy(FuncName, 1, K - 1));
-          if ArgName <> '' then
-            FuncName := ArgName + '.' + Copy(FuncName, K + 1, Length(FuncName) - K);
+          ArgName := Copy(FuncName, 1, K - 1);
+          FuncName := LookupClassVar(ArgName);
+          if FuncName <> '' then
+            FuncName := FuncName + '.' + Copy(Copy(ArgName, 1, Length(ArgName)), K + 1, MaxInt)
+          else
+            FuncName := Copy(ArgName, 1, DotPos - 1);
+          FuncName := Copy(Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11), 1, DotPos - 1);
+          K := Pos('.', FuncName);
+          ArgName := Copy(FuncName, 1, K - 1);
+          FuncName := LookupClassVar(ArgName) + '.' + Copy(FuncName, K + 1, Length(FuncName));
           ArgName := FuncName + '$' + StringReplace(StringReplace(Operand, ', ', '$', [rfReplaceAll]), ',', '$', [rfReplaceAll]);
           if not LookupProcedureBody(ArgName, BranchNode, DeclNode) then
           begin
@@ -6299,8 +6276,7 @@ begin
                 Break;
               end;
           end;
-          Operand := Copy(Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11), 1, Pos('.', Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11)) - 1);
-          ABlob := 'var ' + Operand + #10 + ABlob +
+          ABlob := 'var ' + Copy(Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11), 1, Pos('.', Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11)) - 1) + #10 + ABlob +
             'call ' + ArgName + ' ' + IntToStr(StrCallArgCount + 1) + #10;
         end
         else
@@ -6328,13 +6304,6 @@ begin
       else
         ABlob := ABlob + 'call ' + ArgName + ' ' +
           IntToStr(StrCallArgCount) + #10;
-    end
-    else if (TypeMetaSize(ANode.ChildAt(0).Text) > 0) and
-      (LookupClassVar(ANode.ChildAt(0).Text) = '') and
-      (ANode.ChildCount = 2) then
-    begin
-      ABlob := ABlob;
-      Exit(True);
     end
     else if HasOverload(ANode.ChildAt(0).Text) then
     begin
@@ -6854,25 +6823,6 @@ begin
       Exit(True);
     end;
   end;
-  if (ANode.NodeKind = gnkUnaryExpression) and
-    (ANode.ChildCount >= 1) and (ANode.Text = '@') then
-  begin
-    if (ANode.ChildAt(0) <> nil) and
-      (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-      IsRuntimeVar(ANode.ChildAt(0).Text) then
-    begin
-      ABlob := 'varref ' + ANode.ChildAt(0).Text + #10;
-      Exit(True);
-    end;
-  end;
-  if (ANode.NodeKind = gnkDereference) and (ANode.ChildCount >= 1) then
-  begin
-    if EncodeRuntimeIntExprFold(ANode.ChildAt(0), FuncName) then
-    begin
-      ABlob := FuncName + 'deref' + #10;
-      Exit(True);
-    end;
-  end;
   if (ANode.NodeKind = gnkIdentifier) and (ANode.Text = 'Result') and
     (FCurrentRetVarName <> '') then
   begin
@@ -7200,15 +7150,7 @@ begin
     end;
     if (Child.NodeKind = gnkRaiseStatement) and FNoFold then
     begin
-      if (Child.ChildCount >= 1) and (Child.ChildAt(0) <> nil) then
-      begin
-        if EncodeRuntimeIntExprFold(Child.ChildAt(0), Operand) then
-          FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, Operand)
-        else
-          FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
-      end
-      else
-        FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
+      FModel.AddTypedHirNode('raise-runtime', 'raise', 0, 0, '');
       FCurrentBlockTerminated := True;
       Continue;
     end;
@@ -7243,37 +7185,15 @@ begin
       Decoded := Child.Text;
       if (Decoded = 'Result') and (FCurrentRetVarName <> '') then
         Decoded := FCurrentRetVarName;
-      if FNoFold and (Child.ChildCount >= 2) and
-        (Child.ChildAt(0) <> nil) and
-        (Child.ChildAt(0).NodeKind = gnkDereference) and
-        (Child.ChildAt(0).ChildCount >= 1) and
-        (Child.ChildAt(0).ChildAt(0) <> nil) then
-      begin
-        Arg := Child.ChildAt(1);
-        if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
-        begin
-          FModel.AddTypedHirNode(
-            'assign-runtime', '*' + Child.ChildAt(0).ChildAt(0).Text, 0, 0,
-            '*' + Child.ChildAt(0).ChildAt(0).Text + #9 + Operand
-          );
-        end;
-        Continue;
-      end
-      else if (Child.ChildCount >= 1) and
+      if (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
         (Child.ChildAt(0).ChildCount >= 2) then
       begin
         Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
           Child.ChildAt(0).ChildAt(1).Text;
-        if FNoFold and (IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) or
-          (SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
-           (FCurrentRetVarName <> '') and IsRecordVar(FCurrentRetVarName))) then
+        if FNoFold and IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) then
         begin
-          if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
-            (FCurrentRetVarName <> '') then
-            StringValue := LookupRecordVar(FCurrentRetVarName)
-          else
-            StringValue := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
+          StringValue := LookupRecordVar(Child.ChildAt(0).ChildAt(0).Text);
           Value := -1;
           if StringValue <> '' then
             Value := TypeMetaFieldIndex(StringValue,
@@ -7284,21 +7204,11 @@ begin
             if Child.ChildCount >= 2 then
               Arg := Child.ChildAt(1);
             if (Arg <> nil) and EncodeRuntimeIntExprFold(Arg, Operand) then
-            begin
-              if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
-                (FCurrentRetVarName <> '') then
-                FModel.AddTypedHirNode(
-                  'record-field-store-runtime', Decoded, 0, 0,
-                  FCurrentRetVarName + #9 +
-                  IntToStr(Value) + #9 + Operand
-                )
-              else
-                FModel.AddTypedHirNode(
-                  'record-field-store-runtime', Decoded, 0, 0,
-                  Child.ChildAt(0).ChildAt(0).Text + #9 +
-                  IntToStr(Value) + #9 + Operand
-                );
-            end;
+              FModel.AddTypedHirNode(
+                'record-field-store-runtime', Decoded, 0, 0,
+                Child.ChildAt(0).ChildAt(0).Text + #9 +
+                IntToStr(Value) + #9 + Operand
+              );
             Continue;
           end;
         end;
@@ -7974,11 +7884,7 @@ begin
             for ArgIndex := 1 to Arg.ChildCount - 1 do
             begin
               RhsNode := Arg.ChildAt(ArgIndex);
-              if RhsNode = nil then Continue;
-              if (RhsNode.NodeKind = gnkIdentifier) and
-                IsRuntimeArrVar(RhsNode.Text) then
-                Operand := Operand + #9 + 'arrvar ' + RhsNode.Text + #10
-              else if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
+              if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, StringValue) then
                 Operand := Operand + #9 + StringValue;
             end;
             FModel.AddTypedHirNode('call-runtime', ArgName, 0, 0, Operand);
@@ -9096,14 +9002,6 @@ begin
           );
         end
         else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
-          (Length(Decl.ChildAt(0).Text) > 1) and (Decl.ChildAt(0).Text[1] = '^') then
-        begin
-          RegisterRuntimeVar(Decl.Text);
-          FModel.AddTypedHirNode(
-            'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
-          );
-        end
-        else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
           (TypeMetaSize(Decl.ChildAt(0).Text) > 0) then
         begin
           if TypeMetaIsRecord(Decl.ChildAt(0).Text) then
@@ -9257,13 +9155,6 @@ begin
     if (Entry.Body = nil) or (Entry.Decl = nil) then
       Continue;
     SetLength(FVarParamNames, 0);
-    SetLength(FRuntimeVarNames, 0);
-    SetLength(FRuntimeArrVarNames, 0);
-    SetLength(FRuntimeStrVarNames, 0);
-    SetLength(FClassVarNames, 0);
-    SetLength(FClassVarTypes, 0);
-    SetLength(FRecordVarNames, 0);
-    SetLength(FRecordVarTypes, 0);
     if HasOverload(Entry.Name) then
       EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
@@ -9309,19 +9200,6 @@ begin
                   RegisterRuntimeStrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
-                  ((TypeChild.NodeKind = gnkArrayType) or
-                   ((TypeChild.Text = '') and (K + 1 < Child.ChildCount) and
-                    (Child.ChildAt(K + 1) <> nil) and
-                    (Child.ChildAt(K + 1).NodeKind = gnkArrayType))) then
-                begin
-                  RegisterRuntimeArrVar(RetVarName);
-                end
-                else if (TypeChild <> nil) and
-                  (Length(TypeChild.Text) > 1) and (TypeChild.Text[1] = '^') then
-                begin
-                  RegisterClassVar(RetVarName, 'Pointer');
-                end
-                else if (TypeChild <> nil) and
                   (TypeMetaSize(TypeChild.Text) > 0) then
                 begin
                   if TypeMetaIsRecord(TypeChild.Text) then
@@ -9332,13 +9210,6 @@ begin
               end;
               if IsStrParam then
                 ParamTypes := ParamTypes + 's'
-              else if IsRuntimeArrVar(RetVarName) then
-                ParamTypes := ParamTypes + 'a'
-              else if (ParamChild.ChildCount > 0) and
-                (ParamChild.ChildAt(0) <> nil) and
-                (Length(ParamChild.ChildAt(0).Text) > 1) and
-                (ParamChild.ChildAt(0).Text[1] = '^') then
-                ParamTypes := ParamTypes + 'p'
               else if (ParamChild.ChildCount > 0) and
                 (ParamChild.ChildAt(0) <> nil) and
                 (TypeMetaSize(ParamChild.ChildAt(0).Text) > 0) then
@@ -9432,9 +9303,6 @@ begin
                 RetVarName := Copy(RetVarName, 5, Length(RetVarName));
               if IsRuntimeStrVar(RetVarName) then
                 FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName,
-                  0, 0, RetVarName)
-              else if IsRuntimeArrVar(RetVarName) then
-                FModel.AddTypedHirNode('var-decl-arr-runtime', RetVarName,
                   0, 0, RetVarName)
               else if IsRecordVar(RetVarName) then
                 FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName,
