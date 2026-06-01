@@ -61,7 +61,7 @@
 - [x] nextpas.core.tui.modifier ← ftui_modifier ✅ 5/5
 - [x] nextpas.core.tui.style ← ftui_style ✅ 7/7
 - [x] nextpas.core.tui.cell ← ftui_cell ✅ 9/9
-- [x] nextpas.core.tui.widget.intf（IWidget 基础接口）✅ 2/2，class 实现+多态集合+引用计数验证
+- [x] nextpas.core.tui.widget.intf（IWidget 基础接口）✅ 4/4，class 实现+多态集合+TWidgetAdapter+引用计数验证
 
 ### Phase 2 — Buffer + Text + Layout [完成]
 - [x] nextpas.core.tui.image_cap ← ftui_image_cap ✅（图像协议检测）
@@ -96,17 +96,27 @@
 - [x] tree / dialog / menu / modal / select / panel / split_pane / popover / toast / tooltip / statusbar / form / scrollview / virtual_list / input_editor / calendar / linechart / markdown / syntax / diffview / file_tree / kanban / timeline / breadcrumb / progress_group / command_palette / notification_center
 - TPanel 重设计：RenderGrid 返回 TPanelGrid，Render 作为 IWidget 标准入口
 - TInputEditor 重设计：样式参数吸收为 builder，标准 IWidget.Render 签名
-- 全部 widget 单元测试覆盖（30 测试项目，230+ 用例，0 泄漏）
+- 全部 widget 单元测试覆盖；最终全量回归见当前状态的 32 测试项目 / 236 用例记录
 
 ### Phase 7 — App + 收尾 [完成]
 - [x] nextpas.core.tui.app / app.screen（事件循环 + 多屏）
 - [x] nextpas.core.tui.anim / animator（动画原语 + 帧调度）
 - [x] nextpas.core.tui.theme（配色方案）
 - [x] nextpas.core.tui.task / frame_budget / clipboard / sixel（辅助模块）
-- [x] nextpas.core.tui.pas（门面 re-export）
+- [x] nextpas.core.tui.pas（门面 re-export，2026-06-01 facade API surface 测试补强）
 - [x] examples: demo_hello / demo_layout / demo_widgets
 - [x] benchmarks: bench_diff / bench_render / bench_input / bench_layout
 - [x] docs/tui/README.md
+
+### 2026-06-01 — API Surface 收口 [完成]
+- [x] `nextpas.core.tui` 门面补齐自然名称 re-export：基础类型、样式、buffer、text、layout、event、terminal、app、全部 catalog widget 接口/类和常用 state/data 类型。
+- [x] 保留 `TTui*` / `ITui*` 兼容别名，降低消费方迁移风险。
+- [x] 新增 `test_tui_facade` 编译期 API 测试，证明 `uses nextpas.core.tui` 可直接使用 README/catalog 中的核心类型与 widget builder。
+- [x] `TWidgetAdapter` 决策：保留为自定义 render function / 外部 widget 桥接扩展点，并通过 facade 导出 `TWidgetRenderFn` / `TWidgetAdapter`。
+- [x] `TWidgetAdapter.Create(nil)` fail-fast 抛出 `EArgumentException`，防止 nil render function 造成后续调用崩溃或未接管对象泄漏。
+- [x] `/codex` 复盘 follow-up：补齐 `TWrap` / `WRAP_TRIM` / `TContentAlign` 等 builder 支撑类型；`BorderSet*` 改为 facade thin forwarding，避免复制初始化值。
+- [x] focused heaptrc 证据：`test_tui_facade` 4/4 通过、0 unfreed；`test_tui_widget_intf` 4/4 通过、0 unfreed。
+- [x] 全量 TUI 回归：32 个测试项目、236 用例全部通过；13 个 heaptrc 摘要均为 `0 unfreed memory blocks`。
 
 ---
 
@@ -120,7 +130,7 @@
 - Phase 5 ✅ Core Widgets（12 个，全部 class+interface）
 - Phase 6 ✅ Extended Widgets（28 个，全部 class+interface + 单元测试）
 - Phase 7 ✅ App Layer（app/anim/theme/task/sixel/clipboard/frame_budget/门面/examples/benchmarks）
-- 全量回归：30 测试项目、230+ 用例全通过、全 0 泄漏
+- 全量回归：32 测试项目、236 用例全通过；13 个 heaptrc 摘要全 0 泄漏
 - 累计 77 src 单元、3 examples、4 benchmarks
 - **迁移主体完成。** 剩余：benchmark 数据记录 + SIMD 优化（text.width + buffer diff）
 

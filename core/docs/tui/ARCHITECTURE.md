@@ -73,6 +73,17 @@ Each widget has a specific interface (e.g., `IBlock`, `ITable`, `ITree`) extendi
 | App | app, app.screen, anim, animator, theme, task, frame_budget, clipboard, sixel |
 | Facade | nextpas.core.tui (re-exports) |
 
+## Public Facade
+
+`nextpas.core.tui` is the preferred public entry point. Because FPC does not automatically re-export
+symbols from units listed in `uses`, the facade declares explicit type aliases and inline forwarding
+functions for public TUI contracts.
+
+The facade exposes natural names (`TRect`, `TBuffer`, `IWidget`, `TBlock`, `BORDERS_ALL`) and keeps
+existing `TTui*` / `ITui*` compatibility aliases. `TWidgetAdapter` is intentionally retained as an
+extension bridge for wrapping a non-nil `TWidgetRenderFn` as `IWidget`; built-in widgets should still
+prefer dedicated `class(TInterfacedObject, IWidget, IXxx)` implementations.
+
 ## Performance
 
 Measured on x86_64, FPC 3.3.1, -O2:

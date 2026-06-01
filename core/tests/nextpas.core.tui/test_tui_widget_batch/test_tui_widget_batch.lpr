@@ -126,6 +126,14 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestTableColumnAlignment;
+var LColumn: TTableColumn; LAlign: TContentAlign;
+begin
+  LAlign := caRight;
+  LColumn := TTableColumn.Make('X', LengthConstraint(5)).WithAlign(LAlign);
+  CheckEqual(Ord(caRight), Ord(LColumn.Align), 'table alignment constants remain public');
+end;
+
 { === Input === }
 procedure TestInputRender;
 var LI: IInput; LBuf: TBuffer; LS: TInputState; LRow: AnsiString;
@@ -161,6 +169,7 @@ begin
   T.Run('canvas draw dot', @TestCanvasDrawDot);
   T.Run('table with data', @TestTableWithData);
   T.Run('table selection', @TestTableSelection);
+  T.Run('table column alignment', @TestTableColumnAlignment);
   T.Run('input render', @TestInputRender);
   T.Run('input cursor', @TestInputCursor);
   T.Summary;

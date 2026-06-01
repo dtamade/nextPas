@@ -26,6 +26,15 @@ L3 框架层（只依赖 L0-L2）
 帧循环：BeginFrame → Render → EndFrame（merge overlay → diff → flush → swap）
 ```
 
+## 门面 API
+
+消费方优先 `uses nextpas.core.tui`。门面显式 re-export 基础类型、布局/事件 helper、
+widget 接口和 builder 类，让文档中的自然名称（如 `TRect`、`IWidget`、`TBlock`）可直接使用。
+旧的 `TTui*` / `ITui*` 兼容别名保留，便于已有调用方平滑迁移。
+
+`TWidgetAdapter` 保留为小型扩展点：当消费方已有自定义渲染函数，或需要桥接外部 widget
+实现时，可以把非空 `TWidgetRenderFn` 包装成 `IWidget`。传入 nil render function 会 fail-fast。
+
 ## 模块清单
 
 | 模块 | 职责 |

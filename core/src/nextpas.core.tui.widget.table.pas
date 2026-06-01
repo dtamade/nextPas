@@ -15,12 +15,13 @@ uses
   nextpas.core.tui.style,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
+  nextpas.core.tui.text,
   nextpas.core.tui.layout,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.intf;
 
 type
-  TContentAlign = (caLeft, caCenter, caRight);
+  TContentAlign = nextpas.core.tui.text.TAlignment;
 
   TTableColumn = record
     Title: AnsiString;
@@ -86,6 +87,11 @@ type
     procedure RenderStateful(const AArea: TRect; ABuffer: TBuffer;
       var AState: TTableState);
   end;
+
+const
+  caLeft = nextpas.core.tui.text.caLeft;
+  caCenter = nextpas.core.tui.text.caCenter;
+  caRight = nextpas.core.tui.text.caRight;
 
 implementation
 

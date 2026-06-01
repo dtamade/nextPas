@@ -1,39 +1,54 @@
 # Findings & Decisions
 
 ## Requirements
-- Review `src/nextpas.core.regex.nfa.pas`, `src/nextpas.core.regex.pas`, `src/nextpas.core.regex.compiler.pas`, and `src/nextpas.core.regex.parser.pas`.
-- Focus on memory leaks, crash edge cases, performance regressions, and correctness bugs.
-- Pay special attention to the slot pool in `NfaSearch`, malformed expand templates, `FindAt` bounds, `Split` with `AMaxSplits=0`, very large NFA programs, and sparse-set behavior when code length is zero.
-- Report each finding with severity, approximate location, failure mode, and suggested fix.
+- Continue `nextpas.core.tui` migration work from the v0.9.0 state.
+- Start from overall specification, architecture principles, and evolution route.
+- Use the TUI goal tree as the control map.
+- Do not call API/interface work complete without unit tests and memory-leak verification.
+- End the round with a detailed report, retrospective, next-step plan, and git commit.
 
 ## Research Findings
-- Memory file quick pass confirms `nextPas` review work should stay architecture- and correctness-first, with explicit attention to memory-leak proof for public surfaces.
-- `TRegex.FindAt` forwards `AStartPos` directly to `NfaSearch` with no wrapper-level bounds check.
-- `TRegex.ReplaceAllExpand` treats malformed `$` templates as literals or silently drops unterminated `${name` fragments instead of raising an error.
-- `TRegex.Split` maps `AMaxSplits <= 0` to "unlimited", which is surprising for `AMaxSplits = 0`.
-- `NfaSearch` uses a grow-only slot pool with no explicit teardown path and deduplicates epsilon closure only by program counter, not by `(pc, slot-state)`.
-- `RegexParse` accepts `{m,n}` without validating numeric size/order, and `RegexCompile` materializes bounded repeats by full unrolling.
-- The shipped `tests/nextpas.core.regex/test_regex_basic/test_regex_basic.lpr` passes cleanly, but it does not cover malformed expand templates, `Split(..., 0)`, `FindAt` with start beyond input, or very large repetition counts.
-- Checked the user-highlighted `LCodeLen = 0` sparse-set path: both `NfaIsMatch` and `NfaSearch` return before sparse-set initialization/use, so this specific edge looks safe.
+- `docs/design-conventions.md` defines facade units as explicit re-export units: types and functions must be redeclared because FPC does not automatically re-export `uses` units.
+- `docs/plans/2026-05-31-tui-migration-goaltree.md` marks all seven migration phases complete but still frames facade re-export and API proof as part of the public contract.
+- `src/nextpas.core.tui.pas` currently uses only 12 widget units plus `widget.intf`, and defines only `ITuiWidget` and `ITuiBlock` as widget interface aliases.
+- `docs/tui/WIDGET_CATALOG.md` lists 40+ widgets and states that all widgets implement `IWidget` via `class(TInterfacedObject, IWidget, IXxx)`.
+- `docs/tui/README.md` shows `uses nextpas.core.tui;` as the quick-start entry point and documents `IWidget` / `IBlock` directly.
+- `src/nextpas.core.tui.widget.intf.pas` still defines `TWidgetRenderFn` and `TWidgetAdapter`, but `rg` found no production or test consumers of either name.
+- `TCheckbox` and `TRadioGroup` live in `nextpas.core.tui.widget.form.pas`; they account for the catalog's extra widget entries beyond individual widget-unit count.
+- Focused TDD showed `TWidgetAdapter.Create(nil)` previously created an object without raising, and the test leaked one 48-byte block because no interface owned that object.
+- A retained public adapter also needs facade aliases; otherwise `uses nextpas.core.tui` cannot access the extension point.
+- Broad TUI verification must pass an explicit `FPC=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc` when launched from a shell that may not preserve the interactive FPC path.
+- Codex-style review found two API surface risks: facade missed some builder support types/constants (`TWrap`, `WRAP_TRIM`, `TContentAlign`), and copied `BorderSet*` values instead of forwarding to canonical initialized variables.
 
 ## Technical Decisions
 | Decision | Rationale |
 |----------|-----------|
-| Review by execution pipeline: parser -> compiler -> NFA -> wrapper API | Makes it easier to connect user-visible bugs to root causes |
-| Record both confirmed issues and disproved suspicions | Prevents noisy final review and captures what was validated |
+| Treat facade completion as the next API-quality slice | Consumer integration and merge are safer once `nextpas.core.tui` is a coherent single entry point |
+| Add compile-time facade tests | Missing aliases are compile-time API breaks, so a dedicated test project is the direct proof |
+| Keep `TWidgetAdapter` decision explicit | Removing unused API is tempting, but public API cleanup must be deliberate and documented |
+| Retain `TWidgetAdapter` | It is a small extension bridge for custom render functions/external widget shims, while built-in widgets continue to use dedicated `IWidget` classes |
+| Reject nil render functions in `TWidgetAdapter.Create` | Failing at construction is clearer than allowing a later nil callback and prevents ownership leaks in invalid construction paths |
+| Make table `TContentAlign` an alias of text `TAlignment` | Paragraph and table alignment share the same semantic values; using one canonical enum avoids duplicate `caLeft` / `caCenter` / `caRight` constants in facade consumers |
+| Forward `BorderSet*` from the facade as functions | The canonical border presets live as initialized variables in `nextpas.core.tui.borders`; forwarding avoids static copies drifting from the source unit |
 
 ## Issues Encountered
 | Issue | Resolution |
 |-------|------------|
-| Broad `rg --files` query returned too much noise | Switched to targeted file opens and narrower searches |
-| Test folder has no local `Makefile` | Compiled the regex test directly with `fpc -Fu./src -Fi./src` |
+| Existing planning files described an old regex review | Replaced them with this TUI API round plan |
+| `.github` was not present under `core/` | Used the root `Makefile` test discovery rules to understand test integration |
+| Facade compile test exposed missing `TWidgetAdapter` alias | Added `TWidgetRenderFn` and `TWidgetAdapter` aliases to `nextpas.core.tui` |
+| Focused facade compilation emits many existing warnings | Recorded as known dependency noise; not claimed as warning cleanup in this round |
+| Full TUI test loop initially failed with `make: fpc: No such file or directory` | Reran the same 32 test projects with explicit `FPC=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc`; all passed |
+| Codex-style review found missing facade builder support types and `BorderSet*` copy semantics | Added focused tests; exported missing aliases/constants; changed `BorderSet*` to forwarding functions; reran full suite |
 
 ## Resources
-- `task_plan.md`
-- `src/nextpas.core.regex.nfa.pas`
-- `src/nextpas.core.regex.pas`
-- `src/nextpas.core.regex.compiler.pas`
-- `src/nextpas.core.regex.parser.pas`
+- `docs/design-conventions.md`
+- `docs/plans/2026-05-31-tui-migration-goaltree.md`
+- `docs/tui/README.md`
+- `docs/tui/ARCHITECTURE.md`
+- `docs/tui/WIDGET_CATALOG.md`
+- `src/nextpas.core.tui.pas`
+- `src/nextpas.core.tui.widget.intf.pas`
 
 ## Visual/Browser Findings
-- None; local source review only.
+- None; this is source/API work.

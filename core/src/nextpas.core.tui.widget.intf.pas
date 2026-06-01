@@ -24,6 +24,7 @@ unit nextpas.core.tui.widget.intf;
 interface
 
 uses
+  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.buffer;
 
@@ -36,10 +37,10 @@ type
     procedure Render(const AArea: TRect; ABuffer: TBuffer);
   end;
 
-  { 渲染函数类型——用于把 record widget 包装为 IWidget }
+  { 渲染函数类型——用于把自定义渲染逻辑桥接为 IWidget }
   TWidgetRenderFn = reference to procedure(const AArea: TRect; ABuffer: TBuffer);
 
-  { 通用 adapter：把任意渲染函数包装为 IWidget 接口。
+  { 通用 adapter：把任意非空渲染函数包装为 IWidget 接口。
     用法：TWidgetAdapter.Create(procedure(const A: TRect; B: TBuffer) begin MyWidget.Render(A, B); end) }
   TWidgetAdapter = class(TInterfacedObject, IWidget)
   private
@@ -53,6 +54,8 @@ implementation
 
 constructor TWidgetAdapter.Create(AProc: TWidgetRenderFn);
 begin
+  if not Assigned(AProc) then
+    raise EArgumentException.Create('TWidgetAdapter.Create: render function must not be nil');
   inherited Create;
   FProc := AProc;
 end;

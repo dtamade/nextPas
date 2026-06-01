@@ -3,6 +3,7 @@ program test_tui_widget_intf;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.tui.base,
   nextpas.core.tui.color,
   nextpas.core.tui.style,
@@ -80,10 +81,51 @@ begin
   end;
 end;
 
+procedure TestAdapterRenderFunction;
+var
+  LWidget: IWidget;
+  LBuf: TBuffer;
+  LLines: TBufferLines;
+begin
+  LWidget := TWidgetAdapter.Create(
+    procedure(const AArea: TRect; ABuffer: TBuffer)
+    begin
+      ABuffer.FillRect(AArea, '#', StyleDefault);
+    end);
+
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 4, 1));
+  try
+    LWidget.Render(TRect.Make(0, 0, 4, 1), LBuf);
+    LLines := LBuf.AsLines;
+    CheckEqual('####', LLines[0], 'adapter invokes render function');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestAdapterRejectsNilRenderFunction;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    TWidgetAdapter.Create(nil);
+  except
+    on E: EArgumentException do
+    begin
+      LCaught := True;
+      Check(Pos('render function', E.Message) > 0, 'adapter error message names render function');
+    end;
+  end;
+  Check(LCaught, 'nil adapter render function rejected');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.widget.intf');
   T.Run('implement and render', @TestImplementAndRender);
   T.Run('polymorphic array', @TestPolymorphicArray);
+  T.Run('adapter render function', @TestAdapterRenderFunction);
+  T.Run('adapter rejects nil render function', @TestAdapterRejectsNilRenderFunction);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
