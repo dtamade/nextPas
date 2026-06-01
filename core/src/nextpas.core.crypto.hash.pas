@@ -36,7 +36,7 @@ unit nextpas.core.crypto.hash;
 interface
 
 uses
-  SysUtils, Classes;
+  nextpas.core.base, Classes;
 
 type
   // ========================================================================
@@ -200,13 +200,20 @@ uses
   nextpas.core.hash.sha512,
   nextpas.core.hash.intf;
 
+function StringToBytes(const S: string): TBytes;
+begin
+  SetLength(Result, Length(S));
+  if Length(S) > 0 then
+    Move(S[1], Result[0], Length(S));
+end;
+
 // ========================================================================
 // THashContext 基类实现
 // ========================================================================
 
 procedure THashContext.Update(const AData: string);
 begin
-  Update(TEncoding.UTF8.GetBytes(UnicodeString(AData)));
+  Update(StringToBytes(AData));
 end;
 
 procedure THashContext.Update(AStream: TStream);
@@ -1033,7 +1040,7 @@ end;
 
 function MD5(const AData: string): TBytes;
 begin
-  Result := MD5(TEncoding.UTF8.GetBytes(UnicodeString(AData)));
+  Result := MD5(StringToBytes(AData));
 end;
 
 function SHA1(const AData: TBytes): TBytes;
@@ -1051,7 +1058,7 @@ end;
 
 function SHA1(const AData: string): TBytes;
 begin
-  Result := SHA1(TEncoding.UTF8.GetBytes(UnicodeString(AData)));
+  Result := SHA1(StringToBytes(AData));
 end;
 
 function SHA256(const AData: TBytes): TBytes;
@@ -1066,7 +1073,7 @@ end;
 
 function SHA256(const AData: string): TBytes;
 begin
-  Result := SHA256(TEncoding.UTF8.GetBytes(UnicodeString(AData)));
+  Result := SHA256(StringToBytes(AData));
 end;
 
 function SHA384(const AData: TBytes): TBytes;
@@ -1084,7 +1091,7 @@ end;
 
 function SHA384(const AData: string): TBytes;
 begin
-  Result := SHA384(TEncoding.UTF8.GetBytes(UnicodeString(AData)));
+  Result := SHA384(StringToBytes(AData));
 end;
 
 function SHA512(const AData: TBytes): TBytes;
@@ -1102,7 +1109,7 @@ end;
 
 function SHA512(const AData: string): TBytes;
 begin
-  Result := SHA512(TEncoding.UTF8.GetBytes(UnicodeString(AData)));
+  Result := SHA512(StringToBytes(AData));
 end;
 
 function HashToHex(const AHash: TBytes): string;

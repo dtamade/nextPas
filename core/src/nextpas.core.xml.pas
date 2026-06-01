@@ -51,9 +51,6 @@ function XmlEncodeAttr(const AStr: string): string; inline;
 
 implementation
 
-uses
-  SysUtils;
-
 function XmlParse(const AInput: string): TXmlDocument;
 begin
   Result := TXmlDocument.Parse(AInput);

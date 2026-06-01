@@ -6,7 +6,7 @@ unit nextpas.core.crypto.p256.point;
 interface
 
 uses
-  SysUtils, nextpas.core.crypto.p256.field;
+  nextpas.core.base, nextpas.core.crypto.p256.field;
 
 type
   TP256JacPoint = record
