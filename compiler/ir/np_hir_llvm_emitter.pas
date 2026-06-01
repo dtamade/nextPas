@@ -7,10 +7,19 @@ interface
 uses
   np_hir_types, np_hir_model;
 
+const
+  { 默认目标元数据 —— 仅当 emitter 未被注入 target facts 时回退使用，
+    保持旧调用方（无参构造）行为等价于历史硬编码值。 }
+  DEFAULT_LLVM_TRIPLE = 'x86_64-unknown-linux-gnu';
+  DEFAULT_LLVM_DATALAYOUT =
+    'e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64';
+
 type
   THIRLlvmEmitter = class
   private
     FModule: THIRModule;
+    FLlvmTriple: string;
+    FLlvmDataLayout: string;
     FLines: array of string;
     FLineCount: LongInt;
     FGlobalRefNames: array of string;
@@ -57,7 +66,9 @@ type
     procedure EmitVmtGlobals;
     procedure EmitImtGlobals;
   public
-    constructor Create(AModule: THIRModule);
+    constructor Create(AModule: THIRModule); overload;
+    constructor Create(AModule: THIRModule;
+      const ALlvmTriple, ALlvmDataLayout: string); overload;
     procedure EmitModule;
     function AsText: string;
     procedure SaveToFile(const APath: string);
@@ -70,8 +81,22 @@ uses
 
 constructor THIRLlvmEmitter.Create(AModule: THIRModule);
 begin
+  Create(AModule, DEFAULT_LLVM_TRIPLE, DEFAULT_LLVM_DATALAYOUT);
+end;
+
+constructor THIRLlvmEmitter.Create(AModule: THIRModule;
+  const ALlvmTriple, ALlvmDataLayout: string);
+begin
   inherited Create;
   FModule := AModule;
+  if ALlvmTriple <> '' then
+    FLlvmTriple := ALlvmTriple
+  else
+    FLlvmTriple := DEFAULT_LLVM_TRIPLE;
+  if ALlvmDataLayout <> '' then
+    FLlvmDataLayout := ALlvmDataLayout
+  else
+    FLlvmDataLayout := DEFAULT_LLVM_DATALAYOUT;
   FLineCount := 0;
   FGlobalRefCount := 0;
   FNeedsWriteInt := False;
@@ -819,8 +844,8 @@ begin
   FPendingObjectFreeActive := False;
   FPendingObjectFreeEndLabel := '';
   Emit('; ModuleID = ''' + FModule.ModuleName + '''');
-  Emit('target triple = "x86_64-unknown-linux-gnu"');
-  Emit('target datalayout = "e-p:64:64:64-i1:8:8-i8:8:8-i16:16:16-i32:32:32-i64:64:64"');
+  Emit('target triple = "' + FLlvmTriple + '"');
+  Emit('target datalayout = "' + FLlvmDataLayout + '"');
 
   for I := 0 to FModule.GlobalCount - 1 do
   begin

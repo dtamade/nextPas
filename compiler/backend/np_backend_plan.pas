@@ -604,7 +604,8 @@ begin
     HirBuilder := THIRBuilder.Create(FSemaModel);
     try
       HirBuilder.Build;
-      HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module);
+      HirEmitter := THIRLlvmEmitter.Create(HirBuilder.Module,
+        FTargetFacts.LlvmTriple, FTargetFacts.LlvmDataLayout);
       try
         HirEmitter.EmitModule;
         HirEmitter.SaveToFile(LlvmIrArtifactPath);

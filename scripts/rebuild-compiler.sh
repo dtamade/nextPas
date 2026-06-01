@@ -1,14 +1,22 @@
 #!/bin/bash
 # rebuild-compiler.sh — 完整重编译编译器，避免 stale PPU 问题
+#
+# 关键教训（2026-06-01）：
+# 1. FPC 的 PPU 缓存会让源码改动不生效。必须先删所有 .ppu/.o 再编译。
+# 2. 散落在 rtl/units 目录的 .ppu 也会污染编译。一并清理。
+# 3. np_base_types/np_text_primitives 在 rtl/core/ 下，unit 路径必须包含它们，
+#    否则要么编译失败，要么用到 stale ppu。
 set -e
 
 ROOT="/home/dtamade/projects/nextPas"
 OUT="$ROOT/.sisyphus/tmp/stage0-bootstrap"
 
-# 清除旧的 PPU 缓存
-rm -f "$OUT"/np_*.ppu "$OUT"/np_*.o "$OUT"/nextpas_*.ppu "$OUT"/nextpas_*.o
+# 清除所有 PPU 缓存（stage0 输出目录 + rtl 源码目录的散落产物）
+rm -f "$OUT"/*.ppu "$OUT"/*.o
+rm -f "$ROOT"/rtl/core/base/*.ppu "$ROOT"/rtl/core/base/*.o
+rm -f "$ROOT"/rtl/core/text/*.ppu "$ROOT"/rtl/core/text/*.o
 
-# 完整重编译（显式指定所有 unit 路径）
+# 完整重编译（显式指定所有 unit 路径，含 rtl/core）
 fpc "$ROOT/tools/stage0/nextpas.pas" \
   -FE"$OUT" \
   -o"$OUT/nextpas" \
@@ -19,6 +27,9 @@ fpc "$ROOT/tools/stage0/nextpas.pas" \
   -Fu"$ROOT/compiler/diagnostics" \
   -Fu"$ROOT/compiler/syntax" \
   -Fu"$ROOT/compiler/toolchain" \
-  -Fu"$ROOT/compiler/targets"
+  -Fu"$ROOT/compiler/targets" \
+  -Fu"$ROOT/rtl/core/base" \
+  -Fu"$ROOT/rtl/core/text" \
+  2>&1 | grep -E "compiled|Error|Fatal" | tail -3
 
-echo "OK: $(wc -l < /dev/stdin 2>/dev/null || echo 'done')"
+echo "rebuild done — 确认上面是 'NNNNN lines compiled'（应 40000+），不是 '481 lines'"
