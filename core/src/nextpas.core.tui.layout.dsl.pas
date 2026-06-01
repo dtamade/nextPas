@@ -70,6 +70,7 @@ end;
 function Even(ACount: Word): TConstraints;
 var LI: Integer;
 begin
+  Result := nil;
   SetLength(Result, ACount);
   for LI := 0 to ACount - 1 do
     Result[LI] := FillConstraint(1);

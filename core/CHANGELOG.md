@@ -31,7 +31,7 @@ Full migration from fafafa.tui to nextpas.core.tui.
 - Bracketed paste (CSI 200~/201~)
 
 ### Testing
-- 31 test projects, 250+ test cases, 0 memory leaks
+- 32 TUI test projects, 240 TUI test cases, 0 memory leaks in heaptrc-covered runs
 - 4K terminal stress tests (300x80, 10000-item lists)
 - Input parser fuzz harness with 12-file corpus
 - 4 benchmarks (diff, render, input, layout)

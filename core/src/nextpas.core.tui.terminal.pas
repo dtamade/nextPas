@@ -605,7 +605,7 @@ end;
 procedure TTerminal.PostProcessEvent(var AEv: TEvent);
 begin
   case AEv.Kind of
-    evNone, evResize: ;
+    evNone, evResize, evPaste: ;
     evMouse:
       begin
         FLastMousePos.X := AEv.Mouse.X;

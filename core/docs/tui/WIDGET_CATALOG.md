@@ -52,12 +52,15 @@ Factory: `TXxx.New(...): IXxx`. Builder methods return the specific interface.
 | TCheckbox | ICheckbox | No | Toggle checkbox |
 | TRadioGroup | IRadioGroup | No | Single-selection radio group |
 
-## Non-Widget Utilities
+## Supporting Types And Utilities
 
 | Type | Kind | Description |
 |------|------|-------------|
-| TScrollbar (old) | — | Replaced by IScrollbar widget |
-| TPanel (old) | — | Replaced by IPanel widget |
+| TWidgetRenderFn | reference | Custom render callback used by `TWidgetAdapter` |
+| TWidgetAdapter | class | Wraps a non-nil `TWidgetRenderFn` as `IWidget` |
+| TScrollbarHit | enum | Hit-test result for scrollbar track/thumb interactions |
+| TPanelGrid | record | Grid layout result returned by `IPanel.Layout` and `RenderGrid` |
+| TSepHit | record | Separator hit-test result for panel grids |
 | chat_theme | record | Color theme data (not a widget) |
 
 ## Usage Pattern

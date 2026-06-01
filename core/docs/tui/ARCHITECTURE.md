@@ -57,6 +57,13 @@ Each widget has a specific interface (e.g., `IBlock`, `ITable`, `ITree`) extendi
 
 `TRect`, `TColor`, `TStyle`, `TCell`, `TModifier`, layout constraints, state types — all records. Zero heap allocation for data flow.
 
+### 5. Grapheme-Aware Text Pipeline
+
+All visible string rendering routes non-ASCII text through `GraphemeNext`. `StringDisplayWidth`
+keeps the ASCII SIMD fast path, then counts non-ASCII clusters by grapheme width, so ZWJ emoji,
+skin-tone modifiers, keycap emoji, variation selectors, combining marks, and East Asian wide
+characters stay consistent across `text.width`, `tui.buffer`, `tui.overlay`, and `tui.text`.
+
 ## Key Units (77 total)
 
 | Layer | Units |

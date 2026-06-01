@@ -53,4 +53,7 @@ All benchmarks show performance well within real-time TUI requirements:
 - **Input latency:** <1μs per event
 - **Layout:** <5μs even for complex grids
 
-No SIMD optimization is strictly necessary for correctness, but text.width and buffer diff are candidates for further improvement in high-throughput scenarios (e.g., streaming large text, 4K terminals).
+Current hot-path optimizations include AVX2+SSE2 acceleration for the ASCII branch of
+`StringDisplayWidth` and a dirty-row bitmap in `TBuffer.DiffInto` to skip unchanged rows before
+line comparison. Cross-runtime benchmark comparison against FPC RTL, Go, and Rust remains a final
+merge-readiness round item; this document records the current FreePascal baseline only.

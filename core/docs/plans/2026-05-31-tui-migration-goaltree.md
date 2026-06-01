@@ -149,17 +149,19 @@
 - color/style 也加了 SizeOf 断言（防 packed 指令误删）
 - 测试 Makefile 模板：-O2 -gl -gh，BUILD_DIR 在 core/build/projects/<module>/<test>/
 - TBuffer 保持 class（与 Codex 讨论后定，热路径性能与 owner 类型无关）
-- buffer grapheme：本地 GraphemeAt helper 包 text.utf8.UTF8Decode + text.width.CodepointWidth
+- buffer/overlay grapheme：本地 GraphemeAt helper 委托 text.grapheme.GraphemeNext
 - managed-type 函数 Result（如 TBufferLines）显式 `Result := nil` 消除 FPC 未初始化警告
 - 文档注释 {** *} 内不能出现裸 { （触发嵌套注释告警）
 - IWidget 接口：class(TInterfacedObject, IWidget) 实现，多态集合 array of IWidget，引用计数自动释放
 
 ## 有意偏离原始的设计升级（intentional divergence）
 
-- **Unicode 宽度模型升级**：全库（buffer/overlay/text）的码点宽度从 fafafa 原始的
-  "仅控制字符 0 宽，其余 1 宽，东亚少量 2 宽" 升级为 nextpas.core.text.width 的
-  "组合标记/ZWJ/变体选择符 0 宽 + 扩展东亚 63 段 2 宽"。
-  - 理由：Unicode 上更正确；全库用同一 text.width 模块，buffer/overlay/text 内部自洽
+- **Unicode 宽度模型升级**：全库（buffer/overlay/text）的字符串宽度从 fafafa 原始的
+  "仅控制字符 0 宽，其余 1 宽，东亚少量 2 宽" 升级为 nextpas.core.text.width +
+  nextpas.core.text.grapheme 的 grapheme-aware 模型：纯 ASCII 走 SIMD 快路径，非 ASCII 通过
+  GraphemeNext 统一处理组合标记、ZWJ emoji、skin tone modifier、keycap emoji、变体选择符和
+  扩展东亚宽字符。
+  - 理由：Unicode 上更正确；全库用同一 text.width/text.grapheme 管线，buffer/overlay/text 内部自洽
     不会错位；符合"打造最优秀框架"目标。
   - 影响：含组合标记/ZWJ 的字符串宽度比旧版更小（更准），影响 wrap/alignment。
   - 已 Codex 复盘确认：这是系统级有意升级，非局部 bug。测试全过、0 泄漏。

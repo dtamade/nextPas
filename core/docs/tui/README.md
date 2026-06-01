@@ -46,13 +46,13 @@ widget 接口和 builder 类，让文档中的自然名称（如 `TRect`、`IWid
 | `tui.cell` | TCell（40 字节 packed，23 字节内联 glyph） |
 | `tui.buffer` | TBuffer（连续 cell 数组，diff 引擎） |
 | `tui.overlay` | TOverlayBuffer（稀疏覆盖层） |
-| `tui.text` | TSpan / TLine / TText（样式文本树） |
+| `tui.text` | TSpan / TLine / TText（grapheme-aware 样式文本树） |
 | `tui.layout` | TLayout + TConstraint（约束求解器） |
 | `tui.event` | TEvent（键盘/鼠标/resize） |
 | `tui.input` | ParseOne（字节流 → TEvent） |
 | `tui.terminal` | TTerminal（帧生命周期 + 事件循环） |
 | `tui.app` | TApp（应用循环） |
-| `tui.widget.*` | 40+ widget（block/paragraph/list/table/gauge/...） |
+| `tui.widget.*` | 40 个 widget（block/paragraph/list/table/gauge/...） |
 
 ## Widget 接口设计
 
@@ -79,7 +79,8 @@ end;
 
 ## 依赖
 
-- `nextpas.core.text.width`（Unicode 显示宽度）
+- `nextpas.core.text.width`（grapheme-aware Unicode 显示宽度）
+- `nextpas.core.text.grapheme`（UAX#29 grapheme cluster 分段）
 - `nextpas.core.text.utf8`（UTF-8 解码）
 - `nextpas.core.text.builder`（TStringBuilder，ANSI 输出）
 - `nextpas.core.platform.console`（raw mode / read / write / wait）
