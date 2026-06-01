@@ -113,6 +113,19 @@ begin
   CheckEqual(Int64(5), Int64(StringDisplayWidth('a' + LFamily + LSkinTone)), 'mixed emoji clusters width');
 end;
 
+procedure TestKeycapEmojiString;
+var
+  LKeycap: AnsiString;
+begin
+  LKeycap := '1' + #$EF#$B8#$8F + #$E2#$83#$A3;
+  CheckEqual(Int64(2), Int64(StringDisplayWidth(LKeycap)), 'keycap emoji cluster width');
+  CheckEqual(Int64(5), Int64(StringDisplayWidth('a' + LKeycap + 'bc')), 'mixed keycap emoji width');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('1' + #$E2#$83#$A3)), 'keycap emoji without VS16 width');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('#' + #$EF#$B8#$8F + #$E2#$83#$A3)), 'keycap # width');
+  CheckEqual(Int64(2), Int64(StringDisplayWidth('*' + #$EF#$B8#$8F + #$E2#$83#$A3)), 'keycap * width');
+  CheckEqual(Int64(1), Int64(StringDisplayWidth('A' + #$E2#$83#$A3)), 'non-keycap base + U+20E3 width');
+end;
+
 { StringDisplayWidth - 组合标记不计宽 }
 procedure TestCombiningString;
 begin
@@ -201,6 +214,7 @@ begin
   T.Run('mixed cjk string', @TestMixedString);
   T.Run('emoji string', @TestEmojiString);
   T.Run('emoji cluster string', @TestEmojiClusterString);
+  T.Run('keycap emoji string', @TestKeycapEmojiString);
   T.Run('combining string', @TestCombiningString);
   T.Run('empty string', @TestEmptyString);
   T.Run('simd boundary 16B', @TestSimdBoundary16);

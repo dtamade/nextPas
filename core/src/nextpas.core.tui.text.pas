@@ -13,8 +13,9 @@ unit nextpas.core.tui.text;
  *   TLine : record (Spans + Style + Alignment)
  *   TText : record (Lines + Style + Alignment)
  *
- * 宽度计算走 nextpas.core.text.width.StringDisplayWidth（UTF-8 码点级显示
- * 宽度：组合标记/零宽字符 0 列，东亚宽字符 2 列）。
+ * 宽度计算走 nextpas.core.text.width.StringDisplayWidth：纯 ASCII 快路径，
+ * 非 ASCII 路径按 grapheme cluster 推进（组合标记/ZWJ/keycap/emoji 变体
+ * 不拆列，东亚宽字符 2 列）。
  *
  * 样式由渲染层（TBlock/TParagraph/TList）遍历树时把各节点 Style patch 到
  * Span.Style 上——文本 record 只携带样式，不应用样式。
@@ -45,7 +46,7 @@ type
     { 快捷：加粗文本 }
     class function Bold(const AStr: AnsiString): TSpan; static;
 
-    function Width: Integer;       { 码点级显示宽度 }
+    function Width: Integer;       { grapheme-aware 显示宽度 }
     function WithStyle(const AStyle: TStyle): TSpan;
   end;
   TSpans = array of TSpan;

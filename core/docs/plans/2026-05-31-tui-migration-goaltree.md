@@ -46,7 +46,7 @@
 ## Phase 进度
 
 ### Phase 0 — Core 前置依赖 [完成]
-- [x] nextpas.core.text.width（CodepointWidth + StringDisplayWidth + ASCII 快路径）✅ 10/10 测试通过，无泄漏
+- [x] nextpas.core.text.width（CodepointWidth + StringDisplayWidth + ASCII/SIMD 快路径 + grapheme-aware 非 ASCII 路径）✅ 19/19 测试通过，无泄漏
 
 > Phase 0 已收束。raw mode / write plumbing / SIGWINCH 已并入 `nextpas.core.platform.console`、
 > `nextpas.core.platform.signal` 和 `nextpas.core.tui.terminal`，不再单列为独立前置项。
@@ -62,9 +62,9 @@
 
 ### Phase 2 — Buffer + Text + Layout [完成]
 - [x] nextpas.core.tui.image_cap ← ftui_image_cap ✅（图像协议检测）
-- [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 11/11，保持 class，热路径全保留
+- [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 16/16，保持 class，热路径全保留
 - [x] nextpas.core.tui.overlay ← ftui_overlay ✅ 6/6，稀疏覆盖层 + merge
-- [x] nextpas.core.tui.text ← ftui_text ✅ 11/11，TSpan/TLine/TText，宽度走 text.width
+- [x] nextpas.core.tui.text ← ftui_text ✅ 12/12，TSpan/TLine/TText，宽度走 text.width
 - [x] nextpas.core.tui.borders ← ftui_borders ✅ 6/6，5 套边框字形集
 - [x] nextpas.core.tui.layout ← ftui_layout ✅ 9/9，6 遍约束求解器（用 base.TDirection）
 - [x] nextpas.core.tui.layout.grid ← ftui_grid ✅ 4/4，2D 网格切分
@@ -93,7 +93,7 @@
 - [x] tree / dialog / menu / modal / select / panel / split_pane / popover / toast / tooltip / statusbar / form / scrollview / virtual_list / input_editor / calendar / linechart / markdown / syntax / diffview / file_tree / kanban / timeline / breadcrumb / progress_group / command_palette / notification_center
 - TPanel 重设计：RenderGrid 返回 TPanelGrid，Render 作为 IWidget 标准入口
 - TInputEditor 重设计：样式参数吸收为 builder，标准 IWidget.Render 签名
-- 全部 widget 单元测试覆盖；最终全量回归见当前状态的 32 测试项目 / 238 用例记录
+- 全部 widget 单元测试覆盖；最终全量回归见当前状态的 32 测试项目 / 240 用例记录
 
 ### Phase 7 — App + 收尾 [完成]
 - [x] nextpas.core.tui.app / app.screen（事件循环 + 多屏）
@@ -113,7 +113,8 @@
 - [x] `TWidgetAdapter.Create(nil)` fail-fast 抛出 `EArgumentException`，防止 nil render function 造成后续调用崩溃或未接管对象泄漏。
 - [x] `/codex` 复盘 follow-up：补齐 `TWrap` / `WRAP_TRIM` / `TContentAlign` 等 builder 支撑类型；`BorderSet*` 改为 facade thin forwarding，避免复制初始化值。
 - [x] focused heaptrc 证据：`test_tui_facade` 4/4 通过、0 unfreed；`test_tui_widget_intf` 4/4 通过、0 unfreed。
-- [x] 全量 TUI 回归：32 个测试项目、238 用例全部通过；13 个 heaptrc 摘要均为 `0 unfreed memory blocks`。
+- [x] 全量 TUI 回归：32 个测试项目、240 用例全部通过；13 个 heaptrc 摘要均为 `0 unfreed memory blocks`。
+- [x] Unicode/grapheme 关键回归：family emoji、skin tone modifier 覆盖 text.grapheme / text.width / tui.buffer；keycap emoji 覆盖 text.grapheme / text.width / tui.buffer / tui.text。
 
 ---
 
@@ -127,9 +128,9 @@
 - Phase 5 ✅ Core Widgets（12 个，全部 class+interface）
 - Phase 6 ✅ Extended Widgets（28 个，全部 class+interface + 单元测试）
 - Phase 7 ✅ App Layer（app/anim/theme/task/sixel/clipboard/frame_budget/门面/examples/benchmarks）
-- 全量回归：32 测试项目、238 用例全通过；13 个 heaptrc 摘要全 0 泄漏
+- 全量回归：32 测试项目、240 用例全通过；13 个 heaptrc 摘要全 0 泄漏
 - 累计 77 src 单元、3 examples、4 benchmarks
-- **迁移主体完成。** 剩余：merge 前文档真相收口、补充关键 Unicode 回归场景、benchmark 数据记录与性能对照（最后一轮）。
+- **迁移主体完成。** 剩余：merge 前文档真相收口、benchmark 数据记录与性能对照（最后一轮）。
 
 ### Phase 3 — ANSI Backend + Terminal [完成]
 - [x] platform 前置依赖（platform.console: set_raw/restore_raw/read/write/wait_readable/get_size; platform.signal: SIGWINCH）

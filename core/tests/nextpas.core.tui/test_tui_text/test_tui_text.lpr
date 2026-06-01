@@ -39,6 +39,14 @@ begin
   CheckEqual(Int64(4), Int64(LSpan.Width), 'CJK width 4');
 end;
 
+procedure TestSpanKeycapEmojiWidth;
+var
+  LSpan: TSpan;
+begin
+  LSpan := TSpan.Raw('1' + #$EF#$B8#$8F + #$E2#$83#$A3);
+  CheckEqual(Int64(2), Int64(LSpan.Width), 'keycap emoji width 2');
+end;
+
 procedure TestLineFromString;
 var
   LLine: TLine;
@@ -117,6 +125,7 @@ begin
   T.Run('span raw', @TestSpanRaw);
   T.Run('span styled', @TestSpanStyled);
   T.Run('span cjk width', @TestSpanCJKWidth);
+  T.Run('span keycap emoji width', @TestSpanKeycapEmojiWidth);
   T.Run('line from string', @TestLineFromString);
   T.Run('line from spans', @TestLineFromSpans);
   T.Run('line alignment', @TestLineAlignment);

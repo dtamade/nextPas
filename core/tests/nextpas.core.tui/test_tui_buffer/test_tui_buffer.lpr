@@ -257,6 +257,17 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestKeycapEmoji;
+var LBuf: TBuffer; LWritten: Integer; S: AnsiString;
+begin
+  S := '1' + #$EF#$B8#$8F + #$E2#$83#$A3 + 'D';
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 10, 1));
+  try
+    LWritten := LBuf.SetString(0, 0, S, TStyle.Default);
+    Check(LWritten = 3, 'keycap emoji(2) + D(1) = 3 cols');
+  finally LBuf.Free; end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.buffer');
   T.Run('create empty', @TestCreateEmpty);
@@ -274,6 +285,7 @@ begin
   T.Run('zwj emoji grapheme', @TestZWJEmoji);
   T.Run('family emoji grapheme', @TestFamilyEmoji);
   T.Run('skin tone emoji grapheme', @TestSkinToneEmoji);
+  T.Run('keycap emoji grapheme', @TestKeycapEmoji);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

@@ -67,6 +67,35 @@ begin
   CheckEqual(Int64(2), Int64(R.Width), 'thumbs up medium skin tone = 2 cols');
 end;
 
+procedure TestKeycapEmoji;
+var S: AnsiString; R: TGraphemeResult;
+begin
+  S := '1' + #$EF#$B8#$8F + #$E2#$83#$A3;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(7), Int64(R.ByteLen), 'keycap 1 = full cluster bytes');
+  CheckEqual(Int64(3), Int64(R.CodePoints), 'keycap 1 = 3 cps');
+  CheckEqual(Int64(2), Int64(R.Width), 'keycap 1 = 2 cols');
+
+  S := '1' + #$E2#$83#$A3;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(4), Int64(R.ByteLen), 'keycap 1 without VS16 = full cluster bytes');
+  CheckEqual(Int64(2), Int64(R.CodePoints), 'keycap 1 without VS16 = 2 cps');
+  CheckEqual(Int64(2), Int64(R.Width), 'keycap 1 without VS16 = 2 cols');
+
+  S := '#' + #$EF#$B8#$8F + #$E2#$83#$A3;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(2), Int64(R.Width), 'keycap # = 2 cols');
+
+  S := '*' + #$EF#$B8#$8F + #$E2#$83#$A3;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(2), Int64(R.Width), 'keycap * = 2 cols');
+
+  S := 'A' + #$E2#$83#$A3;
+  R := GraphemeNext(PByte(PAnsiChar(S)), Length(S));
+  CheckEqual(Int64(4), Int64(R.ByteLen), 'non-keycap base + U+20E3 still clusters');
+  CheckEqual(Int64(1), Int64(R.Width), 'non-keycap base + U+20E3 remains 1 col');
+end;
+
 procedure TestRegionalIndicator;
 var S: AnsiString; R: TGraphemeResult;
 begin
@@ -110,6 +139,7 @@ begin
   T.Run('zwj emoji', @TestZWJEmoji);
   T.Run('family emoji', @TestFamilyEmoji);
   T.Run('skin tone emoji', @TestSkinToneEmoji);
+  T.Run('keycap emoji', @TestKeycapEmoji);
   T.Run('regional indicator', @TestRegionalIndicator);
   T.Run('variation selector', @TestVariationSelector);
   T.Run('empty', @TestEmpty);

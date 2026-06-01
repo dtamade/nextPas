@@ -93,6 +93,12 @@ begin
   Result := gbOther;
 end;
 
+function IsKeycapBase(ACp: UInt32): Boolean; inline;
+begin
+  Result := ((ACp >= Ord('0')) and (ACp <= Ord('9'))) or
+            (ACp = Ord('#')) or (ACp = Ord('*'));
+end;
+
 function GraphemeNext(const AData: PByte; ALen: SizeUInt): TGraphemeResult;
 var
   LPos: SizeUInt;
@@ -138,6 +144,8 @@ begin
     begin
       Inc(LPos, LDec.ByteLen);
       Inc(Result.CodePoints);
+      if (LDec.CodePoint = $20E3) and IsKeycapBase(LFirstCp) then
+        Result.Width := 2;
       LAfterZWJ := False;
       Continue;
     end;

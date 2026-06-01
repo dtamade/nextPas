@@ -1,7 +1,7 @@
 unit nextpas.core.text.width;
 
 {**
- * @desc 终端显示宽度计算（East Asian Width + 组合标记）。
+ * @desc 终端显示宽度计算（East Asian Width + grapheme cluster）。
  *
  * 依据 Unicode Standard Annex #11 (East Asian Width) 与组合标记
  * (General Category Mn/Me) 的代表性区间，计算单个码点在等宽终端中占用的
@@ -12,13 +12,14 @@ unit nextpas.core.text.width;
  *   - East Asian Wide / Fullwidth -> 2
  *   - 其余                        -> 1
  *
- * 本模块只做码点级宽度，不做 grapheme cluster 切分（ZWJ emoji、变体选择
- * 符、family emoji 等多码点簇按码点逐个计宽）。grapheme 切分属于更上层
- * 职责。组合标记表覆盖常用脚本（拉丁/西里尔/希伯来/阿拉伯/天城文/孟加拉/
- * 泰/老挝/谚文连接等）的代表性区间，非完整 Unicode Mn/Me 全集。
+ * CodepointWidth 只做单码点宽度；StringDisplayWidth 在非 ASCII 路径通过
+ * GraphemeNext 按 grapheme cluster 计宽，确保 ZWJ emoji、keycap、变体选择符
+ * 和组合标记等多码点簇按终端单个字形推进。组合标记表覆盖常用脚本
+ *（拉丁/西里尔/希伯来/阿拉伯/天城文/孟加拉/泰/老挝/谚文连接等）的代表性
+ * 区间，非完整 Unicode Mn/Me 全集。
  *
- * @note 热路径：StringDisplayWidth 对纯 ASCII 输入走标量快路径，直接返回
- *       字节数；含多字节序列时回退到逐码点解码。
+ * @note 热路径：StringDisplayWidth 对纯 ASCII 输入走 SIMD/标量快路径，直接
+ *       返回字节数；含多字节序列时回退到 grapheme cluster 解码。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -43,7 +44,7 @@ function CodepointWidth(const ACodePoint: UInt32): Byte; inline;
  * @params
  *   AData  UTF-8 字节起始指针
  *   ALen   字节长度
- * @return 总列宽（各码点宽度之和）
+ * @return 总列宽（非 ASCII 路径按 grapheme cluster 计宽）
  * @note 纯 ASCII 输入走 SIMD 快路径返回 ALen；非法字节按宽度 1 计。
  *}
 function StringDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
@@ -204,6 +205,29 @@ begin
   Result := False;
 end;
 
+function GraphemeWidthFrom(const AData: PByte; const ALen, AStart: SizeUInt): SizeUInt;
+var
+  LPos: SizeUInt;
+  LGR: TGraphemeResult;
+begin
+  Result := 0;
+  LPos := AStart;
+  while LPos < ALen do
+  begin
+    LGR := GraphemeNext(@AData[LPos], ALen - LPos);
+    Inc(Result, LGR.Width);
+    Inc(LPos, LGR.ByteLen);
+  end;
+end;
+
+function GraphemeFallbackStart(AAsciiPrefixLen: SizeUInt): SizeUInt; inline;
+begin
+  if AAsciiPrefixLen = 0 then
+    Result := 0
+  else
+    Result := AAsciiPrefixLen - 1;
+end;
+
 function CodepointWidth(const ACodePoint: UInt32): Byte;
 begin
   { 控制字符 C0/C1 -> 0 列 }
@@ -228,7 +252,6 @@ end;
 function StringDisplayWidth(const AData: PByte; const ALen: SizeUInt): SizeUInt;
 var
   LPos: SizeUInt;
-  LGR: TGraphemeResult;
   {$ifdef CPUX86_64}
   LMask: UInt32;
   LP: PByte;
@@ -285,14 +308,8 @@ begin
   if LPos = ALen then
     Exit(ALen);
 
-  { 非 ASCII 部分逐 grapheme cluster }
-  Result := LPos;
-  while LPos < ALen do
-  begin
-    LGR := GraphemeNext(@AData[LPos], ALen - LPos);
-    Inc(Result, LGR.Width);
-    Inc(LPos, LGR.ByteLen);
-  end;
+  LPos := GraphemeFallbackStart(LPos);
+  Result := LPos + GraphemeWidthFrom(AData, ALen, LPos);
   {$else}
   { 非 x86_64 标量路径 }
   LPos := 0;
@@ -301,14 +318,8 @@ begin
   if LPos = ALen then
     Exit(ALen);
 
-  Result := LPos;
-  while LPos < ALen do
-  begin
-    LGR := GraphemeNext(@AData[LPos], ALen - LPos);
-    Inc(Result, LGR.Width);
-    Inc(LPos, LGR.ByteLen);
-  end;
-  end;
+  LPos := GraphemeFallbackStart(LPos);
+  Result := LPos + GraphemeWidthFrom(AData, ALen, LPos);
   {$endif}
 end;
 
