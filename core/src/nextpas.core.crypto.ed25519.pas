@@ -276,52 +276,98 @@ begin
 end;
 
 function EdBasePointMul(const AScalar: array of Byte): TEdPoint;
+{ Signed radix-16 (4-bit window) base point multiplication.
+  Converts scalar to 64 signed digits in [-8..7], then:
+    Q = identity
+    for i = 63 downto 0:
+      Q = 16*Q  (4 doublings, skipped on first iteration)
+      d = digits[i]
+      P = CT_select(TABLE, |d|)   -- select from [1]B..[8]B
+      if d < 0: P = -P            -- CT negate
+      Q = Q + P
+  Total: 252 doublings + 64 additions (vs old: 31 doublings + 256 additions)
+  Since double is ~30% cheaper than add in extended coords, this is faster. }
 const
-{$I nextpas.core.crypto.ed25519.comb.inc}
+{$I nextpas.core.crypto.ed25519.table8.inc}
 var
   Q, T, LPt: TEdPoint;
-  I, K, BitPos, J: Integer;
-  LBit: Int64;
-  LMask: Int64;
+  Digits: array[0..63] of Int8;
+  I, J, K: Integer;
+  Carry, D, AbsD: Integer;
+  LMask, LNegMask, LSign: Int64;
 begin
+  { Step 1: Convert scalar to signed radix-16 digits.
+    Each digit is in [-8..7]. We process 4 bits at a time from LSB. }
+  Carry := 0;
+  for I := 0 to 63 do
+  begin
+    { Extract 4-bit nibble }
+    D := ((AScalar[I shr 1] shr ((I and 1) * 4)) and $F) + Carry;
+    { Convert to signed: if > 7, subtract 16 and carry 1 }
+    if D > 7 then
+    begin
+      D := D - 16;
+      Carry := 1;
+    end
+    else
+      Carry := 0;
+    Digits[I] := Int8(D);
+  end;
+  { Note: after clamping, scalar < L < 2^253, so carry=0 at end }
+
+  { Step 2: Evaluate using Horner-like scheme from MSB }
   Q.X := FE_ZERO; Q.Y := FE_ONE; Q.Z := FE_ONE; Q.T := FE_ZERO;
 
-  for I := 31 downto 0 do
+  for I := 63 downto 0 do
   begin
-    if I < 31 then
+    { 4 doublings (skip on first iteration since Q = identity) }
+    if I < 63 then
     begin
+      EdPointDouble(T, Q); Q := T;
+      EdPointDouble(T, Q); Q := T;
+      EdPointDouble(T, Q); Q := T;
       EdPointDouble(T, Q); Q := T;
     end;
 
+    { CT select: pick TABLE[|d|-1] if d<>0, identity if d=0 }
+    D := Digits[I];
+    { Compute sign mask: all-ones if negative }
+    LSign := Sar(Int64(D), 63); // -1 if d<0, 0 if d>=0
+    { Absolute value: (d XOR sign) - sign = |d| }
+    AbsD := (D xor Integer(LSign)) - Integer(LSign);
+
+    { CT table lookup: scan all 8 entries, select matching one }
+    LPt.X := FE_ZERO; LPt.Y := FE_ONE; LPt.Z := FE_ONE; LPt.T := FE_ZERO;
     for K := 0 to 7 do
     begin
-      BitPos := K * 32 + I;
-      if BitPos < 256 then
-        LBit := (AScalar[BitPos shr 3] shr (BitPos and 7)) and 1
-      else
-        LBit := 0;
-
-      // CT table select: scan table entry, masked by bit value
-      LPt.X := FE_ZERO; LPt.Y := FE_ONE; LPt.Z := FE_ONE; LPt.T := FE_ZERO;
-      LMask := -LBit; // all-ones if bit=1, all-zeros if bit=0
+      { LMask = all-ones if (K+1) = AbsD, else all-zeros }
+      LMask := -Int64(Ord((K + 1) = AbsD));
       for J := 0 to 9 do
       begin
-        LPt.X[J] := LPt.X[J] xor (ED25519_COMB_TABLE[K, 0].X[J] and LMask);
-        LPt.Y[J] := (LPt.Y[J] and (not LMask)) or (ED25519_COMB_TABLE[K, 0].Y[J] and LMask);
-        LPt.Z[J] := (LPt.Z[J] and (not LMask)) or (ED25519_COMB_TABLE[K, 0].Z[J] and LMask);
-        LPt.T[J] := LPt.T[J] xor (ED25519_COMB_TABLE[K, 0].T[J] and LMask);
+        LPt.X[J] := LPt.X[J] xor (ED25519_BASEMUL_TABLE[K].X[J] and LMask);
+        LPt.Y[J] := (LPt.Y[J] and (not LMask)) or (ED25519_BASEMUL_TABLE[K].Y[J] and LMask);
+        LPt.Z[J] := (LPt.Z[J] and (not LMask)) or (ED25519_BASEMUL_TABLE[K].Z[J] and LMask);
+        LPt.T[J] := LPt.T[J] xor (ED25519_BASEMUL_TABLE[K].T[J] and LMask);
       end;
+    end;
 
-      // Always add (identity if bit=0, point if bit=1)
-      EdPointAdd(T, Q, LPt);
-      // CT select: Q = T if bit=1, Q = Q if bit=0
-      for J := 0 to 9 do
-      begin
-        Q.X[J] := (T.X[J] and LMask) or (Q.X[J] and (not LMask));
-        Q.Y[J] := (T.Y[J] and LMask) or (Q.Y[J] and (not LMask));
-        Q.Z[J] := (T.Z[J] and LMask) or (Q.Z[J] and (not LMask));
-        Q.T[J] := (T.T[J] and LMask) or (Q.T[J] and (not LMask));
-      end;
+    { CT negate if digit was negative: -P = (-X, Y, Z, -T) }
+    for J := 0 to 9 do
+    begin
+      LPt.X[J] := (LPt.X[J] xor LSign) - LSign;
+      LPt.T[J] := (LPt.T[J] xor LSign) - LSign;
+    end;
+
+    { Always add (identity if d=0, so this is a no-op addition) }
+    EdPointAdd(T, Q, LPt);
+    { CT select: Q = T if d<>0, Q = Q if d=0 }
+    LNegMask := -Int64(Ord(AbsD <> 0));
+    for J := 0 to 9 do
+    begin
+      Q.X[J] := (T.X[J] and LNegMask) or (Q.X[J] and (not LNegMask));
+      Q.Y[J] := (T.Y[J] and LNegMask) or (Q.Y[J] and (not LNegMask));
+      Q.Z[J] := (T.Z[J] and LNegMask) or (Q.Z[J] and (not LNegMask));
+      Q.T[J] := (T.T[J] and LNegMask) or (Q.T[J] and (not LNegMask));
     end;
   end;
   Result := Q;
