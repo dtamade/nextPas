@@ -33,12 +33,19 @@ begin
   if Length(ARight) > 0 then Move(ARight[0], Result[Length(ALeft)], Length(ARight));
 end;
 
+function StringToBytes(const AValue: string): TBytes;
+begin
+  SetLength(Result, Length(AValue));
+  if Length(AValue) > 0 then
+    Move(AValue[1], Result[0], Length(AValue));
+end;
+
 function ConcatLabelAndSeed(const ALabel: string; const ASeed: TBytes): TBytes;
 var
   LLabelBytes: TBytes;
   LLabelLen, LSeedLen: Integer;
 begin
-  LLabelBytes := TEncoding.ASCII.GetBytes(ALabel);
+  LLabelBytes := StringToBytes(ALabel);
   LLabelLen := Length(LLabelBytes);
   LSeedLen := Length(ASeed);
   SetLength(Result, LLabelLen + LSeedLen);

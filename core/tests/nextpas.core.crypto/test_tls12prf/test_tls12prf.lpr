@@ -133,6 +133,25 @@ begin
     BytesToHex(LResult) = '72c350bc08df2a9dfede75c55a1612281929c452d032b6905f95304b92684d1b');
 end;
 
+procedure TestPRF_LabelBytesAreCopiedVerbatim;
+var
+  LSecret, LSeed: TBytes;
+  LLabel: string;
+  LResult1, LResult2: TBytes;
+begin
+  LSecret := HexToBytes('00112233445566778899aabbccddeeff');
+  LSeed := HexToBytes('0102030405060708');
+  LLabel := 'tls' + #0 + #$E9 + 'label';
+
+  LResult1 := TLS12PRF_SHA256(LSecret, LLabel, LSeed, 32);
+  LResult2 := TLS12PRF_SHA256(LSecret, LLabel, LSeed, 32);
+
+  Check('PRF label accepts embedded nul/high bytes', Length(LResult1) = 32);
+  Check('PRF label byte copy is deterministic', BytesToHex(LResult1) = BytesToHex(LResult2));
+  Check('PRF label byte copy differs from visible ASCII label',
+    BytesToHex(LResult1) <> BytesToHex(TLS12PRF_SHA256(LSecret, 'tlslabel', LSeed, 32)));
+end;
+
 begin
   GPass := 0;
   GFail := 0;
@@ -144,6 +163,7 @@ begin
   TestPRF_SHA256_RFC5246Vector;
   TestPRF_SHA384;
   TestPRF_SHA256_OpenSSLVector;
+  TestPRF_LabelBytesAreCopiedVerbatim;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
