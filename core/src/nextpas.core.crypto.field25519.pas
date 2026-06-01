@@ -382,6 +382,10 @@ begin
 end;
 {$ENDIF}
 
+{$IFDEF CPUX86_64}
+{$I nextpas.core.crypto.field25519.fesq.x86_64.inc}
+{$ENDIF}
+
 procedure FeSq(out H: TFe25519; const F: TFe25519);
 var
   F0, F1, F2, F3, F4, F5, F6, F7, F8, F9: Int64;
@@ -390,6 +394,10 @@ var
   H0, H1, H2, H3, H4, H5, H6, H7, H8, H9: Int64;
   C: Int64;
 begin
+  {$IFDEF CPUX86_64}
+  FeSqASM(H, F);
+  Exit;
+  {$ENDIF}
   F0 := F[0]; F1 := F[1]; F2 := F[2]; F3 := F[3]; F4 := F[4];
   F5 := F[5]; F6 := F[6]; F7 := F[7]; F8 := F[8]; F9 := F[9];
   F0_2 := 2*F0; F1_2 := 2*F1; F2_2 := 2*F2; F3_2 := 2*F3;
