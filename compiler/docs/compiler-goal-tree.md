@@ -106,3 +106,9 @@
   本轮不回溯 `Result := ...` 的原始表达式树，只先把 return 消费面切到结构化
   路径。TDD RED=`test_semantic_hir_expr_producer` 退出 23；GREEN 后 focused
   tests + 完整重编译（43694 lines compiled）+ 137/137 LLVM smoke 全绿。
+- 2026-06-02 C3-B4：sema producer 第四刀，迁移 `if/while/repeat` 的
+  `cond-br-runtime` 条件表达式：仅当结构化表达式可证明产出 bool/i1
+  （compare、not(compare)、and/or 组合）时设置 `ExprId`，保留旧 condition blob。
+  `for` 的手工拼接循环条件暂不迁移。TDD RED=`test_semantic_hir_expr_producer`
+  退出 33；GREEN 后 focused tests + 完整重编译（43739 lines compiled）+
+  137/137 LLVM smoke 全绿。

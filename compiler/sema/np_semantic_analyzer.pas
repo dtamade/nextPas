@@ -329,6 +329,8 @@ type
     procedure WalkHaltCalls(const ANode: TGreenNode);
     procedure AttachRuntimeReturnExpr(const AHirNodeId: LongInt;
       const AReturnVarName: string);
+    procedure AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
+      const ACondNode: TGreenNode);
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
@@ -7110,6 +7112,42 @@ begin
   FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
 end;
 
+procedure TSemanticAnalyzer.AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
+  const ACondNode: TGreenNode);
+
+  function IsRuntimeBoolExprNode(const ANode: TGreenNode): Boolean;
+  var
+    Op: string;
+  begin
+    if ANode = nil then
+      Exit(False);
+    if (ANode.NodeKind = gnkUnaryExpression) and
+      SameText(ANode.Text, 'not') and (ANode.ChildCount >= 1) then
+      Exit(IsRuntimeBoolExprNode(ANode.ChildAt(0)));
+    if (ANode.NodeKind <> gnkBinaryExpression) or (ANode.ChildCount < 2) then
+      Exit(False);
+    Op := ANode.Text;
+    if (Op = '=') or (Op = '<>') or (Op = '<') or (Op = '<=') or
+      (Op = '>') or (Op = '>=') then
+      Exit(True);
+    if SameText(Op, 'and') or SameText(Op, 'or') then
+      Exit(IsRuntimeBoolExprNode(ANode.ChildAt(0)) and
+        IsRuntimeBoolExprNode(ANode.ChildAt(1)));
+    Result := False;
+  end;
+
+var
+  ExprId: LongInt;
+begin
+  if AHirNodeId <= 0 then
+    Exit;
+  if not IsRuntimeBoolExprNode(ACondNode) then
+    Exit;
+  if not BuildRuntimeScalarHirExpr(ACondNode, ExprId) then
+    Exit;
+  FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
+end;
+
 function TSemanticAnalyzer.EncodeRuntimeBoolExprFold(
   const ANode: TGreenNode; out ABlob: string): Boolean;
 var
@@ -8763,6 +8801,7 @@ end;
 procedure TSemanticAnalyzer.LowerRuntimeIfStatement(
   const AIfNode: TGreenNode; const ACondBlob: string);
 var
+  NodeId: LongInt;
   ThenLabel, ElseLabel, EndLabel: string;
   HasElse: Boolean;
 begin
@@ -8775,10 +8814,12 @@ begin
   EndLabel := NewBlockLabel('endif');
   if not HasElse then
     ElseLabel := EndLabel;
-  FModel.AddTypedHirNode(
+  NodeId := FModel.AddTypedHirNode(
     'cond-br-runtime', 'if', 0, 0,
     ACondBlob + 'labels ' + ThenLabel + #9 + ElseLabel + #10
   );
+  if AIfNode.ChildCount >= 1 then
+    AttachRuntimeConditionExpr(NodeId, AIfNode.ChildAt(0));
   FCurrentBlockTerminated := True;
   EmitBlockLabel(ThenLabel);
   WalkHaltCalls(AIfNode.ChildAt(1));
@@ -8794,6 +8835,7 @@ end;
 
 procedure TSemanticAnalyzer.LowerRuntimeWhileStatement(const ANode: TGreenNode);
 var
+  NodeId: LongInt;
   CondNode, BodyNode: TGreenNode;
   CondBlob, CondLabel, BodyLabel, ExitLabel: string;
 begin
@@ -8812,10 +8854,11 @@ begin
   FContinueLabels[High(FContinueLabels)] := CondLabel;
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(CondLabel);
-  FModel.AddTypedHirNode(
+  NodeId := FModel.AddTypedHirNode(
     'cond-br-runtime', 'while', 0, 0,
     CondBlob + 'labels ' + BodyLabel + #9 + ExitLabel + #10
   );
+  AttachRuntimeConditionExpr(NodeId, CondNode);
   FCurrentBlockTerminated := True;
   EmitBlockLabel(BodyLabel);
   WalkHaltCalls(BodyNode);
@@ -8827,6 +8870,7 @@ end;
 
 procedure TSemanticAnalyzer.LowerRuntimeRepeatStatement(const ANode: TGreenNode);
 var
+  NodeId: LongInt;
   CondNode, BodyNode: TGreenNode;
   CondBlob, BodyLabel, CondLabel, ExitLabel: string;
 begin
@@ -8848,10 +8892,11 @@ begin
   WalkHaltCalls(BodyNode);
   EmitGotoLabel(CondLabel);
   EmitBlockLabel(CondLabel);
-  FModel.AddTypedHirNode(
+  NodeId := FModel.AddTypedHirNode(
     'cond-br-runtime', 'until', 0, 0,
     CondBlob + 'labels ' + ExitLabel + #9 + BodyLabel + #10
   );
+  AttachRuntimeConditionExpr(NodeId, CondNode);
   FCurrentBlockTerminated := True;
   EmitBlockLabel(ExitLabel);
   SetLength(FBreakLabels, Length(FBreakLabels) - 1);

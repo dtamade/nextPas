@@ -79,6 +79,23 @@ begin
     Halt(ABaseExitCode + 3);
 end;
 
+procedure AssertRuntimeCompareExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedOp: string;
+  const ABaseExitCode: LongInt);
+var
+  Expr: TSemanticHirExpr;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekCompareOp then
+    Halt(ABaseExitCode + 2);
+  if Expr.Op <> AExpectedOp then
+    Halt(ABaseExitCode + 3);
+end;
+
 procedure AssertRuntimeSymbolExpr(const AModel: TSemanticModel;
   const ANode: TTypedHirNode; const AExpectedName: string;
   const ABaseExitCode: LongInt);
@@ -180,8 +197,38 @@ begin
   end;
 end;
 
+procedure TestCondBrRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var x: Integer;'#10 +
+    'begin'#10 +
+    '  x := 3;'#10 +
+    '  if x > 0 then'#10 +
+    '    Halt(1)'#10 +
+    '  else'#10 +
+    '    Halt(2);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(30);
+    if Model.Status <> 'ready' then
+      Halt(31);
+    if not FindFirstNodeByKind(Model, 'cond-br-runtime', Node) then
+      Halt(32);
+    AssertRuntimeCompareExpr(Model, Node, '>', 33);
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
   TestRetRuntimeExprProducer;
+  TestCondBrRuntimeExprProducer;
 end.
