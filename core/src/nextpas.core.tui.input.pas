@@ -287,6 +287,16 @@ begin
             B := Param1 - 12;        // 23,24 -> F11,F12
             Out_ := KeyFunctionEvent(B, Mods);
           end;
+        200:
+          begin
+            Out_ := PasteEvent;
+            Exit(prSuccess);
+          end;
+        201:
+          begin
+            Out_ := NoneEvent;
+            Exit(prSuccess);
+          end;
       else
         Exit(prInvalid);
       end;

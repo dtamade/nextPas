@@ -19,7 +19,7 @@ unit nextpas.core.tui.event;
 interface
 
 type
-  TEventKind = (evNone, evKey, evMouse, evResize);
+  TEventKind = (evNone, evKey, evMouse, evResize, evPaste);
 
   TKeyCodeKind = (
     kcChar, kcEnter, kcEsc, kcTab, kcBackTab, kcBackspace, kcDelete,
@@ -67,12 +67,14 @@ function KeyFunctionEvent(AF: Byte; AMods: TKeyModifiers): TEvent;
 function MouseEvent(AKind: TMouseEventKind; ABtn: TMouseButton;
   AX, AY: Word; AMods: TKeyModifiers): TEvent;
 function ResizeEvent(AWidth, AHeight: Word): TEvent;
+function PasteEvent: TEvent;
 
 { TEvent 便利判断——简化消费方的 case 分派 }
 function IsNone(const AEv: TEvent): Boolean; inline;
 function IsKey(const AEv: TEvent): Boolean; inline;
 function IsMouse(const AEv: TEvent): Boolean; inline;
 function IsResize(const AEv: TEvent): Boolean; inline;
+function IsPaste(const AEv: TEvent): Boolean; inline;
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean; inline;
 function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean; inline;
 function IsQuit(const AEv: TEvent): Boolean; inline;
@@ -131,6 +133,12 @@ begin
   Result.Resize.Height := AHeight;
 end;
 
+function PasteEvent: TEvent;
+begin
+  FillChar(Result, SizeOf(Result), 0);
+  Result.Kind := evPaste;
+end;
+
 function IsNone(const AEv: TEvent): Boolean;
 begin Result := AEv.Kind = evNone; end;
 
@@ -142,6 +150,9 @@ begin Result := AEv.Kind = evMouse; end;
 
 function IsResize(const AEv: TEvent): Boolean;
 begin Result := AEv.Kind = evResize; end;
+
+function IsPaste(const AEv: TEvent): Boolean;
+begin Result := AEv.Kind = evPaste; end;
 
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean;
 begin
