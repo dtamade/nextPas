@@ -22,6 +22,13 @@
 - Existing HTTP tests contain 19 focused test projects covering base, client, contract, H1 parser/scan/writer/fast, headers, integration, message, middleware(s), router, security, server, smoke, static, URL, websocket.
 - Existing benchmark projects cover H1 parser, headers, router, server, full chain, generic HTTP, and protocol comparison.
 
+## Baseline Verification Findings
+
+- `TH1ResponseWriter` currently defaults to chunked transfer when neither `Content-Length` nor `Transfer-Encoding` is preset.
+- `nextpas.core.http.server` only adds `Connection: close` when the server itself plans to close the connection.
+- The stale expectations in `test_http_h1writer` and `test_http_integration` were test-only drift, not a production regression.
+- The updated tests now assert chunked framing and explicit flush behavior.
+
 ## Git and Collaboration Findings
 
 - Current directory is `/home/dtamade/projects/nextPas/core`.
@@ -33,7 +40,9 @@
 
 - `docs/http/ARCHITECTURE.md` mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
 - The public API coverage matrix has not yet been built; existing tests are numerous but not proven to cover every public function/method.
-- The current leak status of all HTTP tests has not been verified in this round.
+- `IHttpClient` extra verbs (`Put`, `Delete`, `Patch`, `Head`) need explicit coverage mapping.
+- `IHttpTransport` and `IHttpServerTransport` need focused contract mapping.
+- `THttpHandlerMethod` / `THttpHandlerProc` aliases and some `static` helpers are still only indirectly exercised.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 
 ## Communication Cadence Adopted

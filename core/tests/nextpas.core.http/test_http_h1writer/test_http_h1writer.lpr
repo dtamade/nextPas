@@ -109,7 +109,7 @@ begin
   LRW.Free;
 end;
 
-procedure TestMultipleWriteAppendsBody;
+procedure TestMultipleWritePreservesBodyOrder;
 var
   LW: TBytesWriter;
   LRW: TH1ResponseWriter;
@@ -123,8 +123,12 @@ begin
   LP2 := 'lo';
   LRW.Write(LP1[1], SizeUInt(Length(LP1)));
   LRW.Write(LP2[1], SizeUInt(Length(LP2)));
+  LRW.Flush;
   LOut := LW.GetOutput;
-  Check(Pos('hello', LOut) > 0, 'body concatenated');
+  Check(Pos('transfer-encoding: chunked', LOut) > 0, 'chunked header added');
+  Check(Pos('hel', LOut) > 0, 'first payload present');
+  Check(Pos('lo', LOut) > Pos('hel', LOut), 'second payload follows first');
+  Check(Pos('0'#13#10#13#10, LOut) > 0, 'final chunk written');
   LRW.Free;
 end;
 
@@ -235,7 +239,8 @@ begin
   T.Run('Headers written after status line', @TestHeadersWrittenAfterStatusLine);
   T.Run('CRLF separates headers from body', @TestCRLFSeparatesHeadersFromBody);
   T.Run('Write auto-calls WriteHeader(200)', @TestWriteAutoCallsWriteHeader200);
-  T.Run('Multiple Write calls append body', @TestMultipleWriteAppendsBody);
+  T.Run('Multiple Write preserves body order under chunked encoding',
+    @TestMultipleWritePreservesBodyOrder);
   T.Run('Custom status 404', @TestCustomStatus404);
   T.Run('Multiple headers written correctly', @TestMultipleHeadersWritten);
   T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);

@@ -611,20 +611,23 @@ end;
 
 { ===== H1 Writer integration ===== }
 
-procedure TestH1WriterConnectionClose;
+procedure TestH1WriterChunkedWhenNoContentLength;
 var
   LBuf: TBytesWriter;
   LRW: TH1ResponseWriter;
   LBody: string;
 begin
-  { When no Content-Length or Transfer-Encoding, Connection: close is auto-added }
+  { When no Content-Length or Transfer-Encoding, chunked encoding is auto-added }
   LBuf := TBytesWriter.Create;
   LRW := TH1ResponseWriter.Create(LBuf as IWriter);
   LRW.WriteHeader(HTTP_STATUS_OK);
   LBody := 'hello';
   LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
 
-  Check(Pos('connection: close', LBuf.Output) > 0, 'Connection: close auto-added');
+  Check(Pos('transfer-encoding: chunked', LBuf.Output) > 0, 'Transfer-Encoding: chunked auto-added');
+  Check(Pos('connection: close', LBuf.Output) = 0, 'Connection: close not auto-added');
+  Check(Pos('5'#13#10'hello'#13#10, LBuf.Output) > 0, 'chunked body written');
   LRW.Free;
 end;
 
@@ -672,7 +675,7 @@ begin
   T.Run('URL parse port overflow', @TestUrlParsePortOverflow);
   T.Run('URL parse IPv6 with port', @TestUrlParseIPv6WithPort);
   { H1 Writer }
-  T.Run('H1 Writer Connection: close auto-added', @TestH1WriterConnectionClose);
+  T.Run('H1 Writer chunked encoding auto-added', @TestH1WriterChunkedWhenNoContentLength);
   T.Run('H1 Writer explicit Content-Length', @TestH1WriterExplicitContentLength);
   T.Summary;
 end.

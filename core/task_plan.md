@@ -6,17 +6,18 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 0: module takeover and control map setup.
+Phase 1: public contract audit and HTTP test baseline.
 
 ## Active Batch Checklist
 
-- [x] Read `docs/design-conventions.md`.
-- [x] Inspect current Git/worktree safety state before editing.
-- [x] Review existing HTTP architecture docs, facade, base, and interface units.
-- [x] Inventory current HTTP source, tests, and benchmark surfaces.
-- [x] Create a compact HTTP inbox/control map for current work and route tracking.
-- [x] Replace stale root planning files with the active HTTP ownership plan.
-- [x] Prepare only this planning/control-map batch after review and hygiene checks.
+- [x] Re-read `task_plan.md` and `docs/nextpas.core.http.inbox.md`.
+- [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
+- [x] Extract HTTP public API surfaces from `src/nextpas.core.http*.pas`.
+- [ ] Build the public API coverage matrix.
+- [x] Run existing `tests/nextpas.core.http/*` baseline.
+- [x] Record pass/fail and heaptrc evidence.
+- [x] Refresh docs and progress after rerunning the two changed tests.
+- [x] Commit the documentation/baseline batch.
 
 ## Quality Gates
 
@@ -76,11 +77,11 @@ Phase 0: module takeover and control map setup.
 
 ## Decisions
 
-| Decision                                      | Rationale                                                                                                                          |
-| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| Treat this round as planning/control-map only | User asked to change communication and work cadence first; code changes need a clear `/plan` and target map before implementation. |
-| Keep benchmark work after correctness         | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.                                     |
-| Commit only owned planning files              | Current shared checkout has unrelated dirty/untracked files outside this HTTP takeover batch.                                      |
+| Decision                                       | Rationale                                                                                                  |
+| ---------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Keep the H1 writer chunked-by-default contract | Matches current implementation and server tests; do not force a production change without a tested reason. |
+| Keep benchmark work after correctness          | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.             |
+| Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                       |
 
 ## Errors Encountered
 
