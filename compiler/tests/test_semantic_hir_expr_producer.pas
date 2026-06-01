@@ -62,10 +62,27 @@ begin
   Result := False;
 end;
 
+procedure AssertRuntimeBinaryExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedOp: string;
+  const ABaseExitCode: LongInt);
+var
+  Expr: TSemanticHirExpr;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekBinaryOp then
+    Halt(ABaseExitCode + 2);
+  if Expr.Op <> AExpectedOp then
+    Halt(ABaseExitCode + 3);
+end;
+
+procedure TestHaltRuntimeExprProducer;
 var
   Model: TSemanticModel;
   Node: TTypedHirNode;
-  Expr: TSemanticHirExpr;
 begin
   Model := BuildModel(
     'program test;'#10 +
@@ -82,16 +99,39 @@ begin
       Halt(2);
     if not FindFirstNodeByKind(Model, 'halt-call-runtime', Node) then
       Halt(3);
-    if Node.ExprId = 0 then
-      Halt(4);
-    if Node.Operand = '' then
-      Halt(5);
-    Expr := Model.HirExprAt(Node.ExprId - 1);
-    if Expr.Kind <> shekBinaryOp then
-      Halt(6);
-    if Expr.Op <> '+' then
-      Halt(7);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 4);
   finally
     Model.Free;
   end;
+end;
+
+procedure TestWriteIntRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var x: Integer;'#10 +
+    'begin'#10 +
+    '  x := 3;'#10 +
+    '  WriteLn(x + 4);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(10);
+    if Model.Status <> 'ready' then
+      Halt(11);
+    if not FindFirstNodeByKind(Model, 'write-int-runtime', Node) then
+      Halt(12);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 13);
+  finally
+    Model.Free;
+  end;
+end;
+
+begin
+  TestHaltRuntimeExprProducer;
+  TestWriteIntRuntimeExprProducer;
 end.

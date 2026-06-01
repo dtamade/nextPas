@@ -46,7 +46,7 @@
 | **C0** | 137 smoke 基线冻结 + 本目标树固化 | — | ✅ 2026-06-01 |
 | **C1** | 债务3 第一刀：target facts 接入 emitter，去硬编码 triple/datalayout | C0 | ✅ 2026-06-01 |
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
-| **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ⬜ |
+| **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | 🚧 2026-06-01 |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ⬜ |
 | **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | ⬜ |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
@@ -68,7 +68,7 @@
 ## 工作纪律
 
 - 每轮前对照本树确认节点；每轮后同步状态 + 详细报告 + 下一步规划
-- 完整重编译验证（`scripts/rebuild-compiler.sh`，确认 15000+ lines；绝不信任 stale PPU）
+- 完整重编译验证（`scripts/rebuild-compiler.sh`，确认 40000+ lines；绝不信任 stale PPU）
 - 测试 100% 通过 + exit code 验证 + 无内存泄漏
 - 复杂取舍与 /codex 深入讨论
 - 每轮结束复盘 + git 提交（只 stage compiler/ 相关，绝不碰 core/ 未提交修改）
@@ -94,3 +94,9 @@
   对简单 scalar 表达式生成 `TSemanticHirExpr` 并设置 `halt-call-runtime.ExprId`，
   同时保留旧 `Operand` blob。runtime var 保持为 `shekSymbolValue`，不因 var-init
   被折成 literal。focused tests + 完整重编译 + 137/137 LLVM smoke 全绿。
+- 2026-06-01 C3-B2：sema producer 第二刀，仅迁移 `Write/WriteLn` 的
+  `write-int-runtime` 参数：三条 `write-int-runtime` 创建路径统一保留旧 `Operand`
+  blob，并在 `BuildRuntimeScalarHirExpr` 支持时设置 `ExprId`。本轮不迁移
+  assignment/return/cond-br producer。TDD RED=`test_semantic_hir_expr_producer`
+  退出 13；GREEN 后 focused tests + 完整重编译（43668 lines compiled）+
+  137/137 LLVM smoke 全绿。

@@ -7247,6 +7247,18 @@ var
   InhTypeId, InhParentId: LongInt;
   InhMethodName, InhParentName: string;
   DotPos, K: LongInt;
+
+  procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
+    const AOperand: string);
+  var
+    LocalExprId, LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'write-int-runtime', 'Write', 0, 0, AOperand
+    );
+    if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
+      FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
+  end;
 begin
   if ANode = nil then
     Exit;
@@ -8160,9 +8172,7 @@ begin
               (RhsNode.ChildCount >= 2) and (RhsNode.ChildAt(0) <> nil) and
               SameText(RhsNode.ChildAt(0).Text, 'IntToStr') and
               EncodeRuntimeIntExprFold(RhsNode.ChildAt(1), Operand) then
-              FModel.AddTypedHirNode(
-                'write-int-runtime', 'Write', 0, 0, Operand
-              )
+              AddWriteIntRuntimeNode(RhsNode.ChildAt(1), Operand)
             else if (RhsNode.NodeKind = gnkIdentifier) and
               LookupProcedureBody(RhsNode.Text, BranchNode, DeclNode) and
               IsRuntimeStrVar(RhsNode.Text) then
@@ -8193,9 +8203,7 @@ begin
                 (not FModel.LookupConstValue(
                   FuncName + '$ret_str_' + RhsNode.ChildAt(1).Text, CondValue)) and
                 EncodeRuntimeIntExprFold(RhsNode, Operand) then
-                FModel.AddTypedHirNode(
-                  'write-int-runtime', 'Write', 0, 0, Operand
-                )
+                AddWriteIntRuntimeNode(RhsNode, Operand)
               else if Value >= 0 then
               begin
                 Inc(FBlockLabelCounter);
@@ -8214,9 +8222,7 @@ begin
               end;
             end
             else if EncodeRuntimeIntExprFold(RhsNode, Operand) then
-              FModel.AddTypedHirNode(
-                'write-int-runtime', 'Write', 0, 0, Operand
-              );
+              AddWriteIntRuntimeNode(RhsNode, Operand);
             Inc(ArgIndex);
           end;
           if SameText(Child.Text, 'WriteLn') then
