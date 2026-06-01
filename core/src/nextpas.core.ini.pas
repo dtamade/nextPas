@@ -40,6 +40,8 @@ type
     destructor Destroy; override;
     procedure LoadFromFile(const AFileName: string);
     procedure LoadFromString(const AContent: string);
+    function TryLoadFromString(const AContent: string; out AError: string): Boolean;
+    function TryLoadFromFile(const APath: string; out AError: string): Boolean;
     procedure SaveToFile(const AFileName: string);
     function ToString: string; override;
 
@@ -200,6 +202,145 @@ begin
     LLine := Copy(AContent, LStart, LLen - LStart + 1);
     ParseLine(LLine, LCurrentSection);
   end;
+end;
+
+function TIniFile.TryLoadFromString(const AContent: string; out AError: string): Boolean;
+var
+  LStart, LPos, LLen, LLineNo: Integer;
+  LLine, LTrimmed: string;
+
+  function ValidateLine(const ALine: string; ALineNo: Integer): Boolean;
+  begin
+    LTrimmed := TrimLeft(ALine);
+    if (LTrimmed <> '') and (LTrimmed[1] = '[') and (Pos(']', LTrimmed) = 0) then
+    begin
+      AError := 'Line ' + IntToStr(ALineNo) + ': missing closing ] in section header';
+      Exit(False);
+    end;
+    Result := True;
+  end;
+
+begin
+  AError := '';
+
+  LLen := Length(AContent);
+  LStart := 1;
+  LPos := 1;
+  LLineNo := 1;
+  while LPos <= LLen do
+  begin
+    if AContent[LPos] = #10 then
+    begin
+      if (LPos > LStart) and (AContent[LPos - 1] = #13) then
+        LLine := Copy(AContent, LStart, LPos - LStart - 1)
+      else
+        LLine := Copy(AContent, LStart, LPos - LStart);
+      if not ValidateLine(LLine, LLineNo) then
+        Exit(False);
+      Inc(LLineNo);
+      LStart := LPos + 1;
+    end;
+    Inc(LPos);
+  end;
+  if LStart <= LLen then
+  begin
+    LLine := Copy(AContent, LStart, LLen - LStart + 1);
+    if not ValidateLine(LLine, LLineNo) then
+      Exit(False);
+  end;
+
+  try
+    LoadFromString(AContent);
+    Result := True;
+    AError := '';
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function TIniFile.TryLoadFromFile(const APath: string; out AError: string): Boolean;
+var
+  LFile: TextFile;
+  LContent, LLine: string;
+  LLen, LCapacity, LIOResult: Integer;
+
+  procedure EnsureContentCapacity(AAdditional: Integer);
+  var
+    LRequired: Integer;
+  begin
+    LRequired := LLen + AAdditional;
+    if LRequired <= LCapacity then
+      Exit;
+    if LCapacity = 0 then
+      LCapacity := 1024;
+    while LCapacity < LRequired do
+      LCapacity := LCapacity * 2;
+    SetLength(LContent, LCapacity);
+  end;
+
+  procedure AppendToContent(const AText: string);
+  var
+    LTextLen: Integer;
+  begin
+    LTextLen := Length(AText);
+    if LTextLen = 0 then
+      Exit;
+    EnsureContentCapacity(LTextLen);
+    Move(AText[1], LContent[LLen + 1], LTextLen);
+    Inc(LLen, LTextLen);
+  end;
+
+  procedure AppendContentChar(ACh: AnsiChar);
+  begin
+    EnsureContentCapacity(1);
+    LContent[LLen + 1] := ACh;
+    Inc(LLen);
+  end;
+
+begin
+  AError := '';
+  LContent := '';
+  LLen := 0;
+  LCapacity := 0;
+
+  try
+    AssignFile(LFile, APath);
+    {$I-}
+    Reset(LFile);
+    {$I+}
+    LIOResult := IOResult;
+    if LIOResult <> 0 then
+    begin
+      AError := 'Cannot open file "' + APath + '": IO error ' + IntToStr(LIOResult);
+      Exit(False);
+    end;
+
+    try
+      while not EOF(LFile) do
+      begin
+        ReadLn(LFile, LLine);
+        AppendToContent(LLine);
+        AppendContentChar(#10);
+      end;
+    finally
+      CloseFile(LFile);
+    end;
+  except
+    on E: Exception do
+    begin
+      AError := 'Cannot read file "' + APath + '": ' + E.Message;
+      Exit(False);
+    end;
+  end;
+
+  SetLength(LContent, LLen);
+  Result := TryLoadFromString(LContent, AError);
+  if not Result and (AError <> '') then
+    AError := 'Cannot parse file "' + APath + '": ' + AError;
 end;
 
 procedure TIniFile.LoadFromFile(const AFileName: string);

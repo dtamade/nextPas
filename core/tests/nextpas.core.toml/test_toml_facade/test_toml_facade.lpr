@@ -46,6 +46,25 @@ begin
   Check(LDoc.Error.Line > 0, 'error has line');
 end;
 
+procedure TestTryTomlParseSuccess;
+var
+  LDoc: ITomlDocument;
+begin
+  Check(TryTomlParse('answer = 42', LDoc), 'try parse success');
+  Check(LDoc <> nil, 'doc assigned');
+  Check(not LDoc.HasError, 'no error');
+  CheckEqual(Int64(42), LDoc.Root.Get('answer').AsInt, 'answer = 42');
+end;
+
+procedure TestTryTomlParseFailureReturnsDiagnosticDoc;
+var
+  LDoc: ITomlDocument;
+begin
+  Check(not TryTomlParse('= invalid', LDoc), 'try parse failure');
+  Check(LDoc <> nil, 'diagnostic doc assigned');
+  Check(LDoc.HasError, 'diagnostic doc has error');
+end;
+
 procedure TestAutoRelease;
 var
   LDoc: ITomlDocument;
@@ -185,6 +204,8 @@ begin
   T.Run('parse simple', @TestParseSimple);
   T.Run('parse nested', @TestParseNested);
   T.Run('parse error', @TestParseError);
+  T.Run('TryTomlParse success', @TestTryTomlParseSuccess);
+  T.Run('TryTomlParse failure returns diagnostic doc', @TestTryTomlParseFailureReturnsDiagnosticDoc);
   T.Run('auto release', @TestAutoRelease);
   T.Run('builder', @TestBuilder);
   T.Run('builder table', @TestBuilderTable);

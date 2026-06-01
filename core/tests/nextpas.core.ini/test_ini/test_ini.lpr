@@ -443,6 +443,52 @@ begin
   end;
 end;
 
+procedure TestTryLoadFromStringValid;
+var
+  Ini: TIniFile;
+  LError: string;
+begin
+  Ini := TIniFile.Create;
+  try
+    CheckEqual(True, Ini.TryLoadFromString('[service]' + #10 + 'host=localhost' + #10, LError),
+      'TryLoadFromString valid');
+    CheckEqual('', LError, 'valid load clears error');
+    CheckEqual('localhost', Ini.ReadString('service', 'host', ''), 'valid load keeps parsed value');
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TestTryLoadFromStringInvalidSection;
+var
+  Ini: TIniFile;
+  LError: string;
+begin
+  Ini := TIniFile.Create;
+  try
+    CheckEqual(False, Ini.TryLoadFromString('[section' + #10 + 'key=value' + #10, LError),
+      'TryLoadFromString invalid section');
+    Check(LError <> '', 'invalid section returns error');
+  finally
+    Ini.Free;
+  end;
+end;
+
+procedure TestTryLoadFromFileMissing;
+var
+  Ini: TIniFile;
+  LError: string;
+begin
+  Ini := TIniFile.Create;
+  try
+    CheckEqual(False, Ini.TryLoadFromFile('/tmp/nextpas_missing_try_load.ini', LError),
+      'TryLoadFromFile missing');
+    Check(LError <> '', 'missing file returns error');
+  finally
+    Ini.Free;
+  end;
+end;
+
 procedure TestDeleteNonExistent;
 var
   Ini: TIniFile;
@@ -564,6 +610,9 @@ begin
   T.Run('Empty value', @TestEmptyValue);
   T.Run('CRLF line endings', @TestCRLFLineEndings);
   T.Run('Value with equals sign', @TestValueWithEquals);
+  T.Run('TryLoadFromString valid', @TestTryLoadFromStringValid);
+  T.Run('TryLoadFromString invalid section', @TestTryLoadFromStringInvalidSection);
+  T.Run('TryLoadFromFile missing', @TestTryLoadFromFileMissing);
   T.Run('Delete non-existent', @TestDeleteNonExistent);
   T.Run('SaveToFile + LoadFromFile roundtrip', @TestSaveAndLoadFromFile);
   T.Run('SaveToFile format', @TestSaveToFileFormat);

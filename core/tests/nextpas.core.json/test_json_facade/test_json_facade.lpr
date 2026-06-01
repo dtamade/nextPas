@@ -56,6 +56,26 @@ begin
   Check(Doc.HasError, 'has error');
 end;
 
+procedure TestTryJsonParseSuccess;
+var
+  LDoc: IJsonDocument;
+begin
+  Check(TryJsonParse('{"ok":true,"n":7}', LDoc), 'try parse success');
+  Check(LDoc <> nil, 'doc assigned');
+  Check(not LDoc.HasError, 'no error');
+  Check(LDoc.Root.ObjectGet('ok').AsBool, 'ok=true');
+  CheckEqual(Int64(7), LDoc.Root.ObjectGet('n').AsInt, 'n=7');
+end;
+
+procedure TestTryJsonParseFailureReturnsDiagnosticDoc;
+var
+  LDoc: IJsonDocument;
+begin
+  Check(not TryJsonParse('{bad}', LDoc), 'try parse failure');
+  Check(LDoc <> nil, 'diagnostic doc assigned');
+  Check(LDoc.HasError, 'diagnostic doc has error');
+end;
+
 procedure TestJsonParseNested;
 var Doc: IJsonDocument; V: TJsonValue;
 begin
@@ -138,6 +158,8 @@ begin
   T.Run('stringify', @TestJsonStringify);
   T.Run('stringify func', @TestJsonStringifyFunc);
   T.Run('parse error', @TestJsonParseError);
+  T.Run('TryJsonParse success', @TestTryJsonParseSuccess);
+  T.Run('TryJsonParse failure returns diagnostic doc', @TestTryJsonParseFailureReturnsDiagnosticDoc);
   T.Run('parse nested', @TestJsonParseNested);
   T.Run('pretty print', @TestPrettyPrint);
   T.Run('parse with allocator', @TestJsonParseWithAllocator);

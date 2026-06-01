@@ -48,6 +48,29 @@ begin
   end;
 end;
 
+procedure TestTryXmlParseSuccess;
+var
+  LDoc: TXmlDocument;
+begin
+  Check(TryXmlParse('<root><item>ok</item></root>', LDoc), 'try parse success');
+  try
+    Check(LDoc <> nil, 'doc assigned');
+    CheckEqual('root', LDoc.Root.Name.Local, 'root name');
+    CheckEqual('ok', LDoc.Root.FindChild('item').Text, 'item text');
+  finally
+    LDoc.Free;
+  end;
+end;
+
+procedure TestTryXmlParseFailureReturnsNil;
+var
+  LDoc: TXmlDocument;
+begin
+  LDoc := nil;
+  Check(not TryXmlParse('<root><unclosed>', LDoc), 'try parse failure');
+  Check(LDoc = nil, 'doc remains nil on failure');
+end;
+
 { === XmlTokenize（转发 TXmlReader 流式 token） === }
 
 procedure TestXmlTokenizeBasic;
@@ -171,6 +194,8 @@ begin
   T := TTestRunner.Create('XML Facade');
   T.Run('XmlParseSimple', @TestXmlParseSimple);
   T.Run('XmlParseNested', @TestXmlParseNested);
+  T.Run('TryXmlParseSuccess', @TestTryXmlParseSuccess);
+  T.Run('TryXmlParseFailureReturnsNil', @TestTryXmlParseFailureReturnsNil);
   T.Run('XmlTokenizeBasic', @TestXmlTokenizeBasic);
   T.Run('XmlTokenizeEmpty', @TestXmlTokenizeEmpty);
   T.Run('XmlTokenizeText', @TestXmlTokenizeText);

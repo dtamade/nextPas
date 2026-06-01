@@ -44,6 +44,10 @@ type
     procedure LoadFromJson(const AContent: string);
     procedure LoadFromYaml(const AContent: string);
     procedure LoadFromToml(const AContent: string);
+    function TryLoadFromIni(const AContent: string; out AError: string): Boolean;
+    function TryLoadFromJson(const AContent: string; out AError: string): Boolean;
+    function TryLoadFromYaml(const AContent: string; out AError: string): Boolean;
+    function TryLoadFromToml(const AContent: string; out AError: string): Boolean;
     procedure LoadFromEnv(const APrefix: string);
     procedure SetDefault(const AKey, AValue: string);
 
@@ -295,6 +299,117 @@ end;
 
 { TConfig }
 
+function FormatJsonLoadError(const AError: TJsonError): string;
+begin
+  Result := AError.Message.ToString;
+  if Result = '' then
+    Result := 'parse error';
+  Result := 'JSON parse error at offset ' + UIntToStr(AError.Offset) + ': ' + Result;
+end;
+
+function FormatYamlLoadError(const AError: TYamlError): string;
+begin
+  Result := AError.Message.ToString;
+  if Result = '' then
+    Result := 'parse error';
+  Result := 'YAML parse error at line ' + UIntToStr(AError.Line) +
+    ', column ' + UIntToStr(AError.Col) + ': ' + Result;
+end;
+
+function FormatTomlLoadError(const AError: TTomlError): string;
+begin
+  Result := AError.Message.ToString;
+  if Result = '' then
+    Result := 'parse error';
+  Result := 'TOML parse error at line ' + UIntToStr(AError.Line) +
+    ', column ' + UIntToStr(AError.Col) + ': ' + Result;
+end;
+
+procedure LoadConfigFromIniFile(ACfg: TConfig; AIni: TIniFile);
+var
+  LSections: nextpas.core.ini.TStringArray;
+  LKeys: nextpas.core.ini.TStringArray;
+  LI, LJ: Integer;
+  LSection, LKey, LFullKey, LValue: string;
+begin
+  LSections := AIni.GetSections;
+
+  ACfg.FLock.AcquireWrite;
+  try
+    { Global section (no section header) }
+    LKeys := AIni.GetKeys('');
+    for LI := 0 to Length(LKeys) - 1 do
+    begin
+      LValue := AIni.ReadString('', LKeys[LI], '');
+      ACfg.SetValueUnlocked(LKeys[LI], LValue);
+    end;
+    { Named sections: section.key }
+    for LI := 0 to Length(LSections) - 1 do
+    begin
+      LSection := LSections[LI];
+      LKeys := AIni.GetKeys(LSection);
+      for LJ := 0 to Length(LKeys) - 1 do
+      begin
+        LKey := LKeys[LJ];
+        LFullKey := LSection + '.' + LKey;
+        LValue := AIni.ReadString(LSection, LKey, '');
+        ACfg.SetValueUnlocked(LFullKey, LValue);
+      end;
+    end;
+  finally
+    ACfg.FLock.ReleaseWrite;
+  end;
+end;
+
+procedure LoadConfigFromJsonDocument(ACfg: TConfig; const ADoc: IJsonDocument);
+var
+  LRoot: TJsonValue;
+begin
+  LRoot := ADoc.Root;
+
+  ACfg.FLock.AcquireWrite;
+  try
+    { 顶层容器（object/array）递归展平，顶层键不加前缀（JoinKey('',k)=k）。
+      顶层裸标量无键可映射，按 .NET IConfiguration 语义忽略。 }
+    if LRoot.IsObject or LRoot.IsArray then
+      FlattenJsonNode(ACfg, '', LRoot);
+  finally
+    ACfg.FLock.ReleaseWrite;
+  end;
+end;
+
+procedure LoadConfigFromYamlDocument(ACfg: TConfig; const ADoc: IYamlDocument);
+var
+  LRoot: TYamlValue;
+begin
+  LRoot := ADoc.Root;
+
+  ACfg.FLock.AcquireWrite;
+  try
+    { 顶层 mapping/sequence 递归展平；顶层裸标量按语义忽略。 }
+    if LRoot.IsMap or LRoot.IsSeq then
+      FlattenYamlNode(ACfg, '', LRoot);
+  finally
+    ACfg.FLock.ReleaseWrite;
+  end;
+end;
+
+procedure LoadConfigFromTomlDocument(ACfg: TConfig; const ADoc: ITomlDocument);
+var
+  LRoot: TTomlValue;
+begin
+  LRoot := ADoc.Root;
+
+  ACfg.FLock.AcquireWrite;
+  try
+    { TOML 顶层恒为 table；递归展平嵌套表/数组（含内联表、dotted key、array-of-tables）。 }
+    if LRoot.IsTable then
+      FlattenTomlNode(ACfg, '', LRoot);
+  finally
+    ACfg.FLock.ReleaseWrite;
+  end;
+end;
+
 constructor TConfig.Create;
 begin
   inherited Create;
@@ -351,41 +466,11 @@ end;
 procedure TConfig.LoadFromIni(const AContent: string);
 var
   LIni: TIniFile;
-  LSections: nextpas.core.ini.TStringArray;
-  LKeys: nextpas.core.ini.TStringArray;
-  LI, LJ: Integer;
-  LSection, LKey, LFullKey, LValue: string;
 begin
   LIni := TIniFile.Create;
   try
     LIni.LoadFromString(AContent);
-    LSections := LIni.GetSections;
-
-    FLock.AcquireWrite;
-    try
-      { Global section (no section header) }
-      LKeys := LIni.GetKeys('');
-      for LI := 0 to Length(LKeys) - 1 do
-      begin
-        LValue := LIni.ReadString('', LKeys[LI], '');
-        SetValueUnlocked(LKeys[LI], LValue);
-      end;
-      { Named sections: section.key }
-      for LI := 0 to Length(LSections) - 1 do
-      begin
-        LSection := LSections[LI];
-        LKeys := LIni.GetKeys(LSection);
-        for LJ := 0 to Length(LKeys) - 1 do
-        begin
-          LKey := LKeys[LJ];
-          LFullKey := LSection + '.' + LKey;
-          LValue := LIni.ReadString(LSection, LKey, '');
-          SetValueUnlocked(LFullKey, LValue);
-        end;
-      end;
-    finally
-      FLock.ReleaseWrite;
-    end;
+    LoadConfigFromIniFile(Self, LIni);
   finally
     LIni.Free;
   end;
@@ -394,62 +479,125 @@ end;
 procedure TConfig.LoadFromJson(const AContent: string);
 var
   LDoc: IJsonDocument;
-  LRoot: TJsonValue;
 begin
   LDoc := JsonParse(AContent);
   { 解析失败静默保留已有数据（最小侵入；EConfigError/TryLoadJson 留待下一轮） }
   if LDoc.HasError then
     Exit;
-  LRoot := LDoc.Root;
-
-  FLock.AcquireWrite;
-  try
-    { 顶层容器（object/array）递归展平，顶层键不加前缀（JoinKey('',k)=k）。
-      顶层裸标量无键可映射，按 .NET IConfiguration 语义忽略。 }
-    if LRoot.IsObject or LRoot.IsArray then
-      FlattenJsonNode(Self, '', LRoot);
-  finally
-    FLock.ReleaseWrite;
-  end;
+  LoadConfigFromJsonDocument(Self, LDoc);
 end;
 
 procedure TConfig.LoadFromYaml(const AContent: string);
 var
   LDoc: IYamlDocument;
-  LRoot: TYamlValue;
 begin
   LDoc := YamlParse(AContent);
   if LDoc.HasError then
     Exit;
-  LRoot := LDoc.Root;
-
-  FLock.AcquireWrite;
-  try
-    { 顶层 mapping/sequence 递归展平；顶层裸标量按语义忽略。 }
-    if LRoot.IsMap or LRoot.IsSeq then
-      FlattenYamlNode(Self, '', LRoot);
-  finally
-    FLock.ReleaseWrite;
-  end;
+  LoadConfigFromYamlDocument(Self, LDoc);
 end;
 
 procedure TConfig.LoadFromToml(const AContent: string);
 var
   LDoc: ITomlDocument;
-  LRoot: TTomlValue;
 begin
   LDoc := TomlParse(AContent);
   if LDoc.HasError then
     Exit;
-  LRoot := LDoc.Root;
+  LoadConfigFromTomlDocument(Self, LDoc);
+end;
 
-  FLock.AcquireWrite;
+function TConfig.TryLoadFromIni(const AContent: string; out AError: string): Boolean;
+var
+  LIni: TIniFile;
+begin
+  AError := '';
+  LIni := TIniFile.Create;
   try
-    { TOML 顶层恒为 table；递归展平嵌套表/数组（含内联表、dotted key、array-of-tables）。 }
-    if LRoot.IsTable then
-      FlattenTomlNode(Self, '', LRoot);
+    try
+      if not LIni.TryLoadFromString(AContent, AError) then
+        Exit(False);
+      LoadConfigFromIniFile(Self, LIni);
+      AError := '';
+      Result := True;
+    except
+      on E: Exception do
+      begin
+        AError := E.Message;
+        Result := False;
+      end;
+    end;
   finally
-    FLock.ReleaseWrite;
+    LIni.Free;
+  end;
+end;
+
+function TConfig.TryLoadFromJson(const AContent: string; out AError: string): Boolean;
+var
+  LDoc: IJsonDocument;
+begin
+  AError := '';
+  try
+    LDoc := JsonParse(AContent);
+    if LDoc.HasError then
+    begin
+      AError := FormatJsonLoadError(LDoc.Error);
+      Exit(False);
+    end;
+    LoadConfigFromJsonDocument(Self, LDoc);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function TConfig.TryLoadFromYaml(const AContent: string; out AError: string): Boolean;
+var
+  LDoc: IYamlDocument;
+begin
+  AError := '';
+  try
+    LDoc := YamlParse(AContent);
+    if LDoc.HasError then
+    begin
+      AError := FormatYamlLoadError(LDoc.Error);
+      Exit(False);
+    end;
+    LoadConfigFromYamlDocument(Self, LDoc);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function TConfig.TryLoadFromToml(const AContent: string; out AError: string): Boolean;
+var
+  LDoc: ITomlDocument;
+begin
+  AError := '';
+  try
+    LDoc := TomlParse(AContent);
+    if LDoc.HasError then
+    begin
+      AError := FormatTomlLoadError(LDoc.Error);
+      Exit(False);
+    end;
+    LoadConfigFromTomlDocument(Self, LDoc);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
   end;
 end;
 
