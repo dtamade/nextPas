@@ -1,7 +1,7 @@
 program test_http_contract;
 {**
- * @desc Facade contract tests — only uses nextpas.core.http (+ base/server/client for factories).
- *       Proves all re-exports work correctly.
+ * @desc Facade and public contract tests.
+ *       Proves the public HTTP surface can be consumed through exported contracts.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -10,6 +10,7 @@ uses
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.io.intf,
+  nextpas.core.net.intf,
   nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
@@ -18,6 +19,50 @@ uses
 
 var
   T: TTestRunner;
+
+type
+  TMockHttpTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FRoundTripCalled: Boolean;
+    FSeenMethod: THttpMethod;
+    FSeenPath: string;
+  public
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property RoundTripCalled: Boolean read FRoundTripCalled;
+    property SeenMethod: THttpMethod read FSeenMethod;
+    property SeenPath: string read FSeenPath;
+  end;
+
+  TMockServerTransport = class(TInterfacedObject, IHttpServerTransport)
+  private
+    FServeConnCalled: Boolean;
+  public
+    procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+    property ServeConnCalled: Boolean read FServeConnCalled;
+  end;
+
+{ TMockHttpTransport }
+
+function TMockHttpTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  FRoundTripCalled := True;
+  FSeenMethod := AReq.Method;
+  FSeenPath := AReq.Url.Path;
+  LHeaders := NewHeaders;
+  LHeaders.Set_('x-transport', 'mock');
+  Result := NewResponse(HTTP_STATUS_CREATED, LHeaders, nil);
+end;
+
+{ TMockServerTransport }
+
+procedure TMockServerTransport.ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+begin
+  FServeConnCalled := True;
+  if AHandler <> nil then
+    AHandler.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/transport')), nil);
+end;
 
 { Test 1: NewHeaders — Set/Get/Has/Del/Count/Clone }
 procedure TestNewHeaders;
@@ -218,6 +263,47 @@ begin
   CheckEqual('Bad Request', HttpStatusText(HTTP_STATUS_BAD_REQUEST), '400');
 end;
 
+{ Test 13: IHttpTransport public contract shape }
+procedure TestHttpTransportRoundTripContract;
+var
+  LObj: TMockHttpTransport;
+  LTransport: IHttpTransport;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+begin
+  LObj := TMockHttpTransport.Create;
+  LTransport := LObj;
+  LReq := NewRequest(hmPost, TUrl.Parse('/transport?x=1'));
+  LResp := LTransport.RoundTrip(LReq);
+  Check(LObj.RoundTripCalled, 'RoundTrip was called');
+  Check(LObj.SeenMethod = hmPost, 'RoundTrip receives request method');
+  CheckEqual('/transport', LObj.SeenPath, 'RoundTrip receives request path');
+  CheckEqual(Int64(201), Int64(LResp.StatusCode), 'RoundTrip returns response');
+  CheckEqual('mock', LResp.Headers.Get('x-transport'), 'RoundTrip response headers');
+end;
+
+{ Test 14: IHttpServerTransport public contract shape }
+procedure TestHttpServerTransportServeConnContract;
+var
+  LObj: TMockServerTransport;
+  LTransport: IHttpServerTransport;
+  LHandler: IHttpHandler;
+  LHandlerCalled: Boolean;
+begin
+  LObj := TMockServerTransport.Create;
+  LTransport := LObj;
+  LHandlerCalled := False;
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    Check(AReq.Method = hmGet, 'ServeConn passes request method');
+    CheckEqual('/transport', AReq.Url.Path, 'ServeConn passes request path');
+  end);
+  LTransport.ServeConn(nil, LHandler);
+  Check(LObj.ServeConnCalled, 'ServeConn was called');
+  Check(LHandlerCalled, 'ServeConn can dispatch handler');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
@@ -232,5 +318,7 @@ begin
   T.Run('HttpMethodToStr all methods', @TestHttpMethodToStr);
   T.Run('HttpStrToMethod all methods', @TestHttpStrToMethod);
   T.Run('HttpStatusText known codes', @TestHttpStatusText);
+  T.Run('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
+  T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Summary;
 end.

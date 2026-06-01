@@ -4,14 +4,14 @@
 
 ## 当前批次
 
-- 公开 API 覆盖矩阵落地
-- `IHttpClient.Put/Delete/Patch/Head` focused 覆盖
-- HTTP suite + heaptrc 验证
+- `IHttpTransport` / `IHttpServerTransport` contract shape 覆盖
+- 公开 API 覆盖矩阵继续收敛
+- HTTP focused/full suite + heaptrc 验证
 
 ## 当前重点
 
 - 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
-- 已补齐 `IHttpClient` 额外动词的直接测试证据。
+- Transport 当前只冻结公开接口形状；registry / client-server 注入机制仍未完成。
 - 下一步继续补真正缺口，不做 benchmark。
 
 ## 路线图
@@ -25,5 +25,5 @@
 
 ## 下一步
 
-- 优先处理 `IHttpTransport` / `IHttpServerTransport` 是否应保留为公开 contract。
-- 再补 `IHttpHijacker` 和 H1 writer 边界测试。
+- 优先补 `IHttpHijacker` 生命周期与 ownership 测试。
+- 再补 H1 writer 边界测试和 facade-only callback/overload smoke。

@@ -84,3 +84,37 @@
 - Review confirmed the new client verb tests use real local HTTP server/client paths rather than mocks.
 - Review suggested avoiding an implementation-detail assertion for DELETE `Body=nil`; the test now asserts empty body behavior instead.
 - Review reiterated the staging risk: do not use `git add .` in the dirty shared checkout.
+
+## Session: 2026-06-02 transport contract shape
+
+### Phase 1: transport public contract coverage
+
+- **Status:** complete
+- **Scope:** `IHttpTransport.RoundTrip` and `IHttpServerTransport.ServeConn` shape tests plus coverage docs.
+- **Checklist:**
+  - [x] Checked Git status before edits; HTTP files were clean, unrelated dirty/untracked files remain outside this batch.
+  - [x] Re-read HTTP inbox, task plan, findings, progress, and API coverage matrix.
+  - [x] Audited `http.intf`, facade re-exports, architecture docs, and source usage points.
+  - [x] Confirmed transport interfaces are public shape seams only; no registry or injection owner exists yet.
+  - [x] Added focused shape tests to `test_http_contract`.
+  - [x] Ran full HTTP suite after this batch.
+
+## Verification Evidence 2026-06-02 Transport
+
+| Check                 | Command                                                         | Result                                        |
+| --------------------- | --------------------------------------------------------------- | --------------------------------------------- |
+| Git safety state      | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP         |
+| Focused contract test | `make -C tests/nextpas.core.http/test_http_contract clean test` | 14/14 passed, 0 unfreed memory blocks         |
+| Full HTTP suite       | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test |
+
+## Notes 2026-06-02 Transport
+
+- Transport tests deliberately avoid claiming production registry coverage.
+- The current contract evidence is external implementability: mock classes can implement facade-exported `IHttpTransport` / `IHttpServerTransport`, receive request/handler parameters, and return or dispatch through the public HTTP types.
+
+## Review 2026-06-02 Transport
+
+- `/codex` read-only review found no blocking code issue.
+- Review confirmed this batch proves public shape contract only, not facade-only smoke, registry, injection, protocol dispatch, or real TCP connection lifecycle.
+- Review noted the full-suite evidence was still missing in its snapshot; mainline completed `make TESTS_DIR=tests/nextpas.core.http test` afterward and recorded the result above.
+- Review reiterated the staging risk: the shared checkout has unrelated dirty/untracked files, so stage only the six owned HTTP files.

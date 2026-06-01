@@ -22,6 +22,11 @@ Phase 1: public contract audit and HTTP test baseline.
 - [x] Run full HTTP suite after client coverage changes.
 - [x] Update inbox, findings, and progress for this coverage batch.
 - [x] Commit this coverage batch.
+- [x] Audit `IHttpTransport` / `IHttpServerTransport` public contract shape.
+- [x] Add focused shape coverage for `RoundTrip` and `ServeConn`.
+- [x] Run full HTTP suite after transport contract coverage changes.
+- [x] Update inbox, coverage matrix, findings, and progress for this coverage batch.
+- [x] Commit this coverage batch.
 
 ## Quality Gates
 
@@ -81,12 +86,13 @@ Phase 1: public contract audit and HTTP test baseline.
 
 ## Decisions
 
-| Decision                                       | Rationale                                                                                                   |
-| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Keep the H1 writer chunked-by-default contract | Matches current implementation and server tests; do not force a production change without a tested reason.  |
-| Keep benchmark work after correctness          | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.              |
-| Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                        |
-| Treat empty DELETE body by behavior            | The public contract is no request body and zero content length, not the internal `Body=nil` representation. |
+| Decision                                       | Rationale                                                                                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep the H1 writer chunked-by-default contract | Matches current implementation and server tests; do not force a production change without a tested reason.                              |
+| Keep benchmark work after correctness          | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.                                          |
+| Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                                                    |
+| Treat empty DELETE body by behavior            | The public contract is no request body and zero content length, not the internal `Body=nil` representation.                             |
+| Treat transport coverage as shape-only         | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only. |
 
 ## Errors Encountered
 
