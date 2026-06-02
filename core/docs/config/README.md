@@ -85,6 +85,95 @@ loads defaults first, then `app.toml`, then `local.toml`, then `APP_` overrides.
 Builder instances are reusable. Each build call returns an independent config
 instance.
 
+## Use config during app startup
+
+Most applications only need one of three patterns.
+
+### Pass a read-only snapshot into modules
+
+Use `Build` when a module should depend on `IConfig` and not on mutable config
+implementation details:
+
+```pascal
+procedure StartHttpServer(const AConfig: IConfig);
+begin
+  WriteLn(AConfig.GetStringRequired('server.host'));
+  WriteLn(AConfig.GetIntRequired('server.port'));
+end;
+
+var
+  LCfg: IConfig;
+begin
+  LCfg := ConfigBuilder
+    .AddFile('app.toml', cfToml)
+    .AddEnv('APP_')
+    .RequireKeys(['server.host', 'server.port'])
+    .Build;
+  StartHttpServer(LCfg);
+end;
+```
+
+This keeps startup wiring in one place while downstream modules consume a small
+read-only contract.
+
+### Catch config failures at the process boundary
+
+Use `TryBuild` when the process boundary wants an explicit success/failure
+branch instead of exception flow:
+
+```pascal
+var
+  LCfg: IConfig;
+  LError: string;
+begin
+  if not ConfigBuilder
+    .AddFile('app.toml', cfToml)
+    .AddEnv('APP_')
+    .RequireKeys(['server.host', 'server.port'])
+    .TryBuild(LCfg, LError) then
+  begin
+    WriteLn(LError);
+    Halt(1);
+  end;
+
+  StartHttpServer(LCfg);
+end;
+```
+
+This is usually the cleanest place to convert `EConfigError` into process exit
+behavior.
+
+### Keep one mutable live config for reloads
+
+Use `BuildConfig` when an application needs a mutable `TConfig` instance that
+stays alive for `TConfigWatcher` or manual updates:
+
+```pascal
+var
+  Live: TConfig;
+  Watcher: TConfigWatcher;
+begin
+  Live := ConfigBuilder
+    .AddFile('app.toml', cfToml)
+    .AddEnv('APP_')
+    .BuildConfig;
+  try
+    Watcher := TConfigWatcher.Create(Live, 'app.toml', cfToml);
+    try
+      { polling loop calls Watcher.CheckReload }
+    finally
+      Watcher.Free;
+    end;
+  finally
+    Live.Free;
+  end;
+end;
+```
+
+`TConfigWatcher` reloads into the same `TConfig` instance and updates it
+through `ReplaceFrom`, so callers that share that instance keep reading the live
+config object.
+
 ## Load mutable configs directly
 
 Use `TConfig` when the caller needs a mutable config object:
@@ -118,26 +207,8 @@ Supported direct loaders:
 ConfigBuilder.AddFile(APath, AFormat).Build
 ```
 
-## Use watcher-friendly mutable configs
-
-`TConfigWatcher` still works with mutable `TConfig`, not `IConfig`. Build the
-mutable config first when an application needs live reload:
-
-```pascal
-var
-  Live: TConfig;
-begin
-  Live := ConfigBuilder
-    .AddFile('app.toml', cfToml)
-    .AddEnv('APP_')
-    .BuildConfig;
-  try
-    { pass Live to TConfigWatcher.Create(...) }
-  finally
-    Live.Free;
-  end;
-end;
-```
+It fits small tools, tests, or one-file startup paths that do not need multiple
+sources or watcher integration.
 
 ## Handle load errors
 
