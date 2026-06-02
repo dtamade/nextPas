@@ -27,6 +27,9 @@ type
     function Wait: TProcessOutput;
     {** 非阻塞检查子进程是否已退出。返回 False 表示仍在运行 *}
     function TryWait(out AOutput: TProcessOutput): Boolean;
+    {** 放弃对子进程生命周期的管理，让子进程在句柄释放后继续运行。
+     *    适用于 launcher 这类父进程即将退出的场景，不提供长期 daemon reaping 语义。 *}
+    procedure Detach;
     {** 发送 SIGKILL 终止子进程 *}
     procedure Kill;
     {** 子进程 PID *}
@@ -49,6 +52,7 @@ type
     FStdoutReader: IReader;
     FStderrReader: IReader;
     FWaited: Boolean;
+    FDetached: Boolean;
     FTimeout: TDuration;
   public
     constructor Create(const AProc: TPlatformProcess;
@@ -57,6 +61,7 @@ type
     destructor Destroy; override;
     function Wait: TProcessOutput;
     function TryWait(out AOutput: TProcessOutput): Boolean;
+    procedure Detach;
     procedure Kill;
     function Pid: Integer;
     function TakeStdin: IWriter;
@@ -108,6 +113,7 @@ begin
   FStdoutReader := AStdout;
   FStderrReader := AStderr;
   FWaited := False;
+  FDetached := False;
   FTimeout := ATimeout;
 end;
 
@@ -115,7 +121,7 @@ destructor TChild.Destroy;
 var
   LResult: TPlatformProcessResult;
 begin
-  if not FWaited then
+  if (not FWaited) and (not FDetached) then
   begin
     Kill;
     platform_process_wait(FProc, LResult);
@@ -186,6 +192,17 @@ begin
     AOutput.Status := nextpas.core.process.base.psUnknown;
   end;
   Result := True;
+end;
+
+procedure TChild.Detach;
+begin
+  if FStdinWriter <> nil then
+    (FStdinWriter as TPipeWriter).Close;
+  FStdinWriter := nil;
+  FStdoutReader := nil;
+  FStderrReader := nil;
+  platform_process_detach(FProc);
+  FDetached := True;
 end;
 
 procedure TChild.Kill;

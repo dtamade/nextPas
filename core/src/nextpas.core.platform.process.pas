@@ -29,6 +29,7 @@ function platform_process_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
 function platform_process_try_wait(const AProc: TPlatformProcess;
   out AResult: TPlatformProcessResult): Int32;
+procedure platform_process_detach(var AProc: TPlatformProcess);
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;
 
@@ -366,6 +367,11 @@ begin
   Result := DecodeStatus(LStatus, AResult);
 end;
 
+procedure platform_process_detach(var AProc: TPlatformProcess);
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+end;
+
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin
   if kill(AProc.Pid, 9) = 0 then
@@ -452,6 +458,14 @@ begin
   if LWait <> 0 then Exit(Int32(GetLastError));
   LExitCode := 0; GetExitCodeProcess(HANDLE(AProc.ProcessHandle), @LExitCode);
   AResult.Status := psExited; AResult.ExitCode := Int32(LExitCode); CloseHandle(HANDLE(AProc.ProcessHandle)); Result := 0;
+end;
+
+procedure platform_process_detach(var AProc: TPlatformProcess);
+begin
+  if AProc.ProcessHandle <> 0 then
+    CloseHandle(HANDLE(AProc.ProcessHandle));
+  AProc.ProcessHandle := 0;
+  AProc.ThreadHandle := 0;
 end;
 
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
@@ -632,6 +646,8 @@ function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlat
 begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
 function platform_process_try_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
 begin FillChar(AResult, SizeOf(AResult), 0); Result := -1; end;
+procedure platform_process_detach(var AProc: TPlatformProcess);
+begin FillChar(AProc, SizeOf(AProc), 0); end;
 function platform_process_kill(const AProc: TPlatformProcess): Int32;
 begin Result := -1; end;
 function platform_process_pid(const AProc: TPlatformProcess): Int32;

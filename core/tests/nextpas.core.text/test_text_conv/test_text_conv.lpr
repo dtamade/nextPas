@@ -134,6 +134,10 @@ begin
   CheckEqual('042', TextFormat('%03d', [42]));
   CheckEqual('007', TextFormat('%03d', [7]));
   CheckEqual('1234', TextFormat('%02d', [1234]));
+  CheckEqual('a   ', TextFormat('%-4s', ['a']));
+  CheckEqual('42  ', TextFormat('%-4d', [42]));
+  CheckEqual('42  ', TextFormat('%-04d', [42]));
+  CheckEqual('-1  ', TextFormat('%-4d', [-1]));
 end;
 
 procedure TestFormatFloat;

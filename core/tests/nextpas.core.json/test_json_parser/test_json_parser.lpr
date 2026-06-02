@@ -148,6 +148,55 @@ begin
   Doc.Done;
 end;
 
+procedure TestRejectUnexpectedInterTokenContent;
+var Doc: TJsonDocument;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('BAD{"a":1}')), 'reject junk before top-level object');
+  Check(Doc.HasError, 'junk before top-level object has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{"a":"ok" INVALID}')), 'reject junk after object value');
+  Check(Doc.HasError, 'junk after object value has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{"a" INVALID : "ok"}')), 'reject junk before colon');
+  Check(Doc.HasError, 'junk before colon has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{BAD "a":1}')), 'reject junk before first object key');
+  Check(Doc.HasError, 'junk before first object key has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{"a":1, BAD "b":2}')), 'reject junk before later object key');
+  Check(Doc.HasError, 'junk before later object key has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{"a": BAD "ok"}')), 'reject junk before string value');
+  Check(Doc.HasError, 'junk before string value has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('{"a": BAD {"b":1}}')), 'reject junk before object value');
+  Check(Doc.HasError, 'junk before object value has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('[1, BAD []]')), 'reject junk before array value');
+  Check(Doc.HasError, 'junk before array value has error');
+  Doc.Done;
+
+  Doc.Init(DefaultAllocator);
+  Check(not Doc.Parse(SV('[1 INVALID]')), 'reject junk after array value');
+  Check(Doc.HasError, 'junk after array value has error');
+  Doc.Done;
+end;
+
 procedure TestObjectIteration;
 var Doc: TJsonDocument; V: TJsonValue;
 begin
@@ -537,6 +586,7 @@ begin
   T.Run('parse nested', @TestParseNested);
   T.Run('parse empty', @TestParseEmpty);
   T.Run('parse error', @TestParseError);
+  T.Run('reject unexpected inter-token content', @TestRejectUnexpectedInterTokenContent);
   T.Run('object iteration', @TestObjectIteration);
   T.Run('string escape', @TestStringEscape);
   T.Run('unicode escape', @TestUnicodeEscape);

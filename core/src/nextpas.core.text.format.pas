@@ -16,6 +16,7 @@ function TextFormat(const AFmt: string; const AArgs: array of const): string;
 var
   LIdx, LLen, LArgIdx: Integer;
   LWidth, LPrec: Integer;
+  LLeftAlign: Boolean;
   LZeroPad: Boolean;
   LCh: Char;
   LSb: TStringBuilder;
@@ -28,9 +29,17 @@ var
       LSb.AppendStr(AStr)
     else
     begin
-      if LZeroPad then LPadCh := '0' else LPadCh := ' ';
-      LSb.AppendChars(AnsiChar(LPadCh), LPad);
-      LSb.AppendStr(AStr);
+      if LLeftAlign then
+      begin
+        LSb.AppendStr(AStr);
+        LSb.AppendChars(' ', LPad);
+      end
+      else
+      begin
+        if LZeroPad then LPadCh := '0' else LPadCh := ' ';
+        LSb.AppendChars(AnsiChar(LPadCh), LPad);
+        LSb.AppendStr(AStr);
+      end;
     end;
   end;
 
@@ -181,8 +190,14 @@ begin
       end;
       LWidth := 0;
       LPrec := -1;
+      LLeftAlign := False;
       LZeroPad := False;
-      if AFmt[LIdx] = '0' then
+      if AFmt[LIdx] = '-' then
+      begin
+        LLeftAlign := True;
+        Inc(LIdx);
+      end;
+      if (LIdx <= LLen) and (AFmt[LIdx] = '0') and (not LLeftAlign) then
       begin
         LZeroPad := True;
         Inc(LIdx);

@@ -3,6 +3,7 @@ program test_process;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils, Classes,
   nextpas.core.process,
   nextpas.core.time.base,
   nextpas.core.process.base,
@@ -129,6 +130,41 @@ begin
   LChild.Kill;
   LOut := LChild.Wait;
   Check('Kill — signaled', LOut.Status = psSignaled);
+end;
+
+procedure TestSpawnDetach;
+var
+  LChild: IChild;
+  LPath: string;
+  LOut: TStringList;
+begin
+  LPath := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-process-detach-' + IntToStr(GetProcessID) + '.txt';
+  if FileExists(LPath) then
+    DeleteFile(LPath);
+
+  LChild := Command('/bin/sh')
+    .Args(['-c', 'sleep 0.1; printf detached > "' + LPath + '"'])
+    .Spawn;
+  LChild.Detach;
+  LChild := nil;
+
+  Sleep(300);
+  Check('Detach — child survives handle release', FileExists(LPath));
+  if FileExists(LPath) then
+  begin
+    LOut := TStringList.Create;
+    try
+      LOut.LoadFromFile(LPath);
+      Check('Detach — child completed work',
+        (LOut.Count = 1) and (LOut[0] = 'detached'));
+    finally
+      LOut.Free;
+      DeleteFile(LPath);
+    end;
+  end
+  else
+    Check('Detach — child completed work', False);
 end;
 
 procedure TestSpawnStdinPipe;
@@ -401,6 +437,7 @@ begin
   TestSpawnAndWait;
   TestSpawnTryWait;
   TestSpawnKill;
+  TestSpawnDetach;
   TestSpawnStdinPipe;
   TestSpawnStdoutReader;
   TestCommandEnv;

@@ -446,6 +446,7 @@ begin
       Doc^.FNodes[LIdx].RealVal := LFloat;
     end;
   end;
+  LastPos := UInt32((AData - Input) + LNumLen - 1);
   Result := LIdx;
 end;
 
@@ -458,6 +459,7 @@ begin
     LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkBool;
     Doc^.FNodes[LIdx].BoolVal := True;
+    LastPos := UInt32((AData - Input) + ALen - 1);
     Exit(LIdx);
   end;
   if (ALen = 5) and (AData[0] = 'f') and (AData[1] = 'a') and (AData[2] = 'l') and (AData[3] = 's') and (AData[4] = 'e') then
@@ -465,12 +467,14 @@ begin
     LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkBool;
     Doc^.FNodes[LIdx].BoolVal := False;
+    LastPos := UInt32((AData - Input) + ALen - 1);
     Exit(LIdx);
   end;
   if (ALen = 4) and (AData[0] = 'n') and (AData[1] = 'u') and (AData[2] = 'l') and (AData[3] = 'l') then
   begin
     LIdx := Doc^.AddNode;
     Doc^.FNodes[LIdx].Kind := jnkNull;
+    LastPos := UInt32((AData - Input) + ALen - 1);
     Exit(LIdx);
   end;
   SetError('invalid literal', 15);
@@ -512,6 +516,11 @@ begin
   begin
     LChild := ParseValue;
     if LChild = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+    if GetValueSlice(LGapData, LGapLen) then
+    begin
+      SetError('expected , or ]', 15);
+      Exit(JSON_NODE_NONE);
+    end;
     if LCount = 0 then
       Doc^.FNodes[LIdx].Container.FirstChild := LChild
     else
@@ -572,6 +581,11 @@ begin
   end;
   while True do
   begin
+    if GetValueSlice(LGapData, LGapLen) then
+    begin
+      SetError('expected string key', 19);
+      Exit(JSON_NODE_NONE);
+    end;
     if PeekCh <> Ord('"') then
     begin
       SetError('expected string key', 19);
@@ -579,9 +593,24 @@ begin
     end;
     LKeyIdx := ParseString;
     if LKeyIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+    if GetValueSlice(LGapData, LGapLen) then
+    begin
+      SetError('expected :', 10);
+      Exit(JSON_NODE_NONE);
+    end;
+    if PeekCh <> Ord(':') then
+    begin
+      SetError('expected :', 10);
+      Exit(JSON_NODE_NONE);
+    end;
     ConsumeStruct;
     LValIdx := ParseValue;
     if LValIdx = JSON_NODE_NONE then Exit(JSON_NODE_NONE);
+    if GetValueSlice(LGapData, LGapLen) then
+    begin
+      SetError('expected , or }', 15);
+      Exit(JSON_NODE_NONE);
+    end;
     Doc^.FNodes[LKeyIdx].Next := LValIdx;
     if LCount = 0 then
       Doc^.FNodes[LIdx].Container.FirstChild := LKeyIdx
@@ -614,30 +643,27 @@ var
   LData: PAnsiChar;
   LLen: SizeUInt;
 begin
+  if GetValueSlice(LData, LLen) then
+  begin
+    case LData[0] of
+      '-', '0'..'9': Exit(ParseNumber(LData, LLen));
+      't', 'f', 'n': Exit(ParseLiteral(LData, LLen));
+    else
+      SetError('unexpected character', 20);
+      Exit(JSON_NODE_NONE);
+    end;
+  end;
   LCh := PeekCh;
   case LCh of
     Ord('{'): Result := ParseObject;
     Ord('['): Result := ParseArray;
     Ord('"'): Result := ParseString;
   else
-    if GetValueSlice(LData, LLen) then
-    begin
-      case LData[0] of
-        '-', '0'..'9': Result := ParseNumber(LData, LLen);
-        't', 'f', 'n': Result := ParseLiteral(LData, LLen);
-      else
-        SetError('unexpected character', 20);
-        Result := JSON_NODE_NONE;
-      end;
-    end
+    if LCh = 0 then
+      SetError('unexpected end of input', 22)
     else
-    begin
-      if LCh = 0 then
-        SetError('unexpected end of input', 22)
-      else
-        SetError('unexpected character', 20);
-      Result := JSON_NODE_NONE;
-    end;
+      SetError('unexpected character', 20);
+    Result := JSON_NODE_NONE;
   end;
 end;
 
