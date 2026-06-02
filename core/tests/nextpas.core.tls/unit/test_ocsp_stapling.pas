@@ -169,8 +169,8 @@ var
   Retrieved: TBytes;
   ThisUpdate, NextUpdate: TDateTime;
 begin
-  ThisUpdate := Now;
-  NextUpdate := Now + 1.0;  // 1天后过期
+  ThisUpdate := DateTimeUtcNow;
+  NextUpdate := DateTimeUtcNow + 1.0;  // 1天后过期
   
   // 存储响应
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
@@ -198,8 +198,8 @@ var
   Retrieved: TBytes;
   ThisUpdate, NextUpdate: TDateTime;
 begin
-  ThisUpdate := Now;
-  NextUpdate := Now + (1.0 / 86400.0);  // 1秒后过期 (1/86400 天)
+  ThisUpdate := DateTimeUtcNow;
+  NextUpdate := DateTimeUtcNow + (1.0 / 86400.0);  // 1秒后过期 (1/86400 天)
   
   // 存储响应
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
@@ -221,8 +221,8 @@ var
   Retrieved: TBytes;
   ThisUpdate, NextUpdate: TDateTime;
 begin
-  ThisUpdate := Now;
-  NextUpdate := Now + 1.0;  // 1天后过期
+  ThisUpdate := DateTimeUtcNow;
+  NextUpdate := DateTimeUtcNow + 1.0;  // 1天后过期
   
   // 存储响应
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
@@ -243,8 +243,8 @@ var
   ThisUpdate, NextUpdate: TDateTime;
   TestSerial: TBytes;
 begin
-  ThisUpdate := Now;
-  NextUpdate := Now + 1.0;
+  ThisUpdate := DateTimeUtcNow;
+  NextUpdate := DateTimeUtcNow + 1.0;
   
   // 存储多个响应
   SetLength(TestSerial, 16);
@@ -271,8 +271,8 @@ var
   ThisUpdate, NextUpdate: TDateTime;
   TestSerial: TBytes;
 begin
-  ThisUpdate := Now;
-  NextUpdate := Now + 1.0;
+  ThisUpdate := DateTimeUtcNow;
+  NextUpdate := DateTimeUtcNow + 1.0;
   
   // 存储响应
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
@@ -301,8 +301,8 @@ var
   I: Integer;
   TestSerial: TBytes;
 begin
-  ThisUpdate := Now;
-  NextUpdate := Now + 1.0;
+  ThisUpdate := DateTimeUtcNow;
+  NextUpdate := DateTimeUtcNow + 1.0;
   
   // 存储响应
   FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
@@ -339,8 +339,8 @@ var
 begin
   TempFile := GetTempFileName;
   try
-    ThisUpdate := Now;
-    NextUpdate := Now + 1.0;
+    ThisUpdate := DateTimeUtcNow;
+    NextUpdate := DateTimeUtcNow + 1.0;
     
     // 存储响应
     FCache.Put(FTestSerialNumber, FTestResponse, ThisUpdate, NextUpdate);
@@ -443,7 +443,7 @@ var
   LResult: TOCSPStaplingResult;
 begin
   FillChar(LResult, SizeOf(LResult), 0);
-  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, 1800);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 1800);
   AssertTrue('Response expiring within one hour should refresh', LResult.NeedsRefresh);
 end;
 
@@ -452,7 +452,7 @@ var
   LResult: TOCSPStaplingResult;
 begin
   FillChar(LResult, SizeOf(LResult), 0);
-  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, -7200);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, -7200);
   AssertTrue('Expired response should refresh even when long expired', LResult.NeedsRefresh);
 end;
 
@@ -461,7 +461,7 @@ var
   LResult: TOCSPStaplingResult;
 begin
   FillChar(LResult, SizeOf(LResult), 0);
-  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, 7200);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 7200);
   AssertFalse('Response expiring after the refresh window should stay fresh', LResult.NeedsRefresh);
 end;
 
@@ -592,10 +592,13 @@ end;
 
 procedure TOCSPStaplingClientTest.TestResponseCaching;
 var
-  LResult: TOCSPStaplingResult;
+  LInvalidResult: TOCSPStaplingResult;
+  LEmptyResult: TOCSPStaplingResult;
   LInvalid, LEmpty: TBytes;
   LCert, LIssuerCert: TX509Certificate;
 begin
+  FillChar(LInvalidResult, SizeOf(LInvalidResult), 0);
+  FillChar(LEmptyResult, SizeOf(LEmptyResult), 0);
   SetLength(LInvalid, 10);
   FillChar(LInvalid[0], 10, 255);
   SetLength(LEmpty, 0);
@@ -603,16 +606,18 @@ begin
   LCert := TX509Certificate.Create;
   LIssuerCert := TX509Certificate.Create;
   try
-    LResult := FClient.ProcessStapledResponse(LInvalid, LCert, LIssuerCert);
+    LInvalidResult := FClient.ProcessStapledResponse(LInvalid, LCert, LIssuerCert);
     AssertTrue('Invalid response should fail verification',
-      LResult.Status = ossVerificationFailed);
+      LInvalidResult.Status = ossVerificationFailed);
     AssertEquals('Failed response should not be cached', 0, FCache.GetCount);
 
-    LResult := FClient.ProcessStapledResponse(LEmpty, LCert, LIssuerCert);
+    LEmptyResult := FClient.ProcessStapledResponse(LEmpty, LCert, LIssuerCert);
     AssertTrue('Empty response should be marked as not provided',
-      LResult.Status = ossNotProvided);
+      LEmptyResult.Status = ossNotProvided);
     AssertEquals('Empty response should not be cached', 0, FCache.GetCount);
   finally
+    Finalize(LEmptyResult);
+    Finalize(LInvalidResult);
     LCert.Free;
     LIssuerCert.Free;
   end;
@@ -710,8 +715,8 @@ begin
   LCachedResponse[2] := 10;
   LCachedResponse[3] := 1;
   LCachedResponse[4] := 0;
-  LThisUpdate := Now;
-  LNextUpdate := Now + 1.0;
+  LThisUpdate := DateTimeUtcNow;
+  LNextUpdate := DateTimeUtcNow + 1.0;
   FCache.Put(LSerial, LCachedResponse, LThisUpdate, LNextUpdate);
   AssertEquals('Cache should contain preload entry', 1, FCache.GetCount);
 

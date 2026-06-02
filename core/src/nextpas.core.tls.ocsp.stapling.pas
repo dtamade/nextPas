@@ -260,7 +260,7 @@ begin
   if NextUpdate = 0 then
     Exit(False);
 
-  TimeUntilExpiry := DateTimeSecondsBetween(NextUpdate, DateTimeNow);
+  TimeUntilExpiry := DateTimeSecondsBetween(NextUpdate, DateTimeUtcNow);
   Result := TimeUntilExpiry < 3600;  // 1小时内过期
 end;
 
@@ -455,7 +455,7 @@ function TOCSPStaplingClient.CheckResponseFreshness(
 var
   LNow: TDateTime;
 begin
-  LNow := DateTimeNow;
+  LNow := DateTimeUtcNow;
 
   // 检查 producedAt 不在未来
   if AResponse.ProducedAt > LNow then
@@ -675,7 +675,7 @@ begin
         begin
           TimeUntilExpiry := DateTimeSecondsBetween(
             OCSPResp.Responses[0].NextUpdate,
-            DateTimeNow
+            DateTimeUtcNow
           );
           Result := TimeUntilExpiry < FConfig.RefreshBeforeExpiry;
         end

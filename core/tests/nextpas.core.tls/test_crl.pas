@@ -23,6 +23,93 @@ begin
   end;
 end;
 
+function TempCRLDir: string;
+begin
+  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas_crl_' + IntToStr(GetProcessID);
+end;
+
+procedure WriteTextFile(const AFileName, AContent: string);
+var
+  LText: TStringList;
+begin
+  LText := TStringList.Create;
+  try
+    LText.Text := AContent;
+    LText.SaveToFile(AFileName);
+  finally
+    LText.Free;
+  end;
+end;
+
+procedure CleanupGeneratedCRLFixture(const ADir: string);
+begin
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'ca.crl');
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'ca.crt');
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'ca.key');
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'config.cnf');
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'index.txt');
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'serial');
+  DeleteFile(IncludeTrailingPathDelimiter(ADir) + 'crlnumber');
+  RemoveDir(IncludeTrailingPathDelimiter(ADir) + 'newcerts');
+  RemoveDir(ADir);
+end;
+
+function GenerateRuntimeCRL(out ACRLPath: string): Boolean;
+var
+  LDir: string;
+  LConfigPath: string;
+  LRet: Integer;
+begin
+  Result := False;
+  LDir := TempCRLDir;
+  CleanupGeneratedCRLFixture(LDir);
+  if not ForceDirectories(IncludeTrailingPathDelimiter(LDir) + 'newcerts') then
+    Exit(False);
+
+  WriteTextFile(IncludeTrailingPathDelimiter(LDir) + 'index.txt', '');
+  WriteTextFile(IncludeTrailingPathDelimiter(LDir) + 'serial', '1000');
+  WriteTextFile(IncludeTrailingPathDelimiter(LDir) + 'crlnumber', '1000');
+
+  LConfigPath := IncludeTrailingPathDelimiter(LDir) + 'config.cnf';
+  WriteTextFile(
+    LConfigPath,
+    '[ ca ]' + LineEnding +
+    'default_ca = CA_default' + LineEnding +
+    LineEnding +
+    '[ CA_default ]' + LineEnding +
+    'dir = ' + LDir + LineEnding +
+    'database = $dir/index.txt' + LineEnding +
+    'new_certs_dir = $dir/newcerts' + LineEnding +
+    'certificate = $dir/ca.crt' + LineEnding +
+    'private_key = $dir/ca.key' + LineEnding +
+    'serial = $dir/serial' + LineEnding +
+    'crlnumber = $dir/crlnumber' + LineEnding +
+    'default_md = sha256' + LineEnding +
+    'default_days = 1' + LineEnding +
+    'default_crl_hours = 1' + LineEnding +
+    'policy = policy_loose' + LineEnding +
+    LineEnding +
+    '[ policy_loose ]' + LineEnding +
+    'commonName = supplied'
+  );
+
+  LRet := ExecuteProcess(
+    '/usr/bin/openssl',
+    'req -x509 -newkey rsa:2048 -keyout ' +
+    IncludeTrailingPathDelimiter(LDir) + 'ca.key -out ' +
+    IncludeTrailingPathDelimiter(LDir) + 'ca.crt -sha256 -days 1 -nodes ' +
+    '-subj "/CN=nextpas-crl-ca" -addext "basicConstraints=critical,CA:TRUE"');
+  if LRet <> 0 then
+    Exit(False);
+
+  ACRLPath := IncludeTrailingPathDelimiter(LDir) + 'ca.crl';
+  LRet := ExecuteProcess(
+    '/usr/bin/openssl',
+    'ca -gencrl -config ' + LConfigPath + ' -out ' + ACRLPath + ' -batch');
+  Result := (LRet = 0) and FileExists(ACRLPath);
+end;
+
 // ========================================================================
 // TX509CRL 基础测试
 // ========================================================================
@@ -226,6 +313,7 @@ end;
 procedure TestCRLValidity;
 var
   CRL: TX509CRL;
+  LCRLPath: string;
 begin
   WriteLn;
   WriteLn('=== CRL 有效期测试 ===');
@@ -239,6 +327,23 @@ begin
     Check('ThisUpdate=0 时 IsValid', not CRL.IsValid);
   finally
     CRL.Free;
+  end;
+
+  if not GenerateRuntimeCRL(LCRLPath) then
+  begin
+    Check('运行时生成短时有效 CRL', False);
+    Exit;
+  end;
+
+  CRL := TX509CRL.Create;
+  try
+    CRL.LoadFromFile(LCRLPath);
+    Check('生成的 CRL 有 nextUpdate', CRL.HasNextUpdate);
+    Check('生成的 CRL 当前有效', CRL.IsValid);
+    Check('生成的 CRL 当前未过期', not CRL.IsExpired);
+  finally
+    CRL.Free;
+    CleanupGeneratedCRLFixture(TempCRLDir);
   end;
 end;
 

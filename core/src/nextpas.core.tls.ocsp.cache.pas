@@ -114,7 +114,8 @@ type
 implementation
 
 uses
-  nextpas.core.crypto.hash;
+  nextpas.core.crypto.hash,
+  nextpas.core.time;
 
 // ========================================================================
 // TOCSPCacheEntry
@@ -125,7 +126,7 @@ begin
   if NextUpdate = 0 then
     Result := False
   else
-    Result := Now >= NextUpdate;
+    Result := DateTimeUtcNow >= NextUpdate;
 end;
 
 function TOCSPCacheEntry.IsValid: Boolean;
@@ -304,11 +305,11 @@ begin
   Entry.ThisUpdate := AThisUpdate;
   
   if ANextUpdate = 0 then
-    Entry.NextUpdate := IncSecond(Now, FDefaultTTL)
+    Entry.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, FDefaultTTL)
   else
     Entry.NextUpdate := ANextUpdate;
   
-  Entry.CachedAt := Now;
+  Entry.CachedAt := DateTimeUtcNow;
   Entry.HitCount := 0;
   
   // 只锁定对应的分片

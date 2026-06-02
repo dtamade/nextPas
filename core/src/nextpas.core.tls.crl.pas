@@ -126,6 +126,9 @@ function CRLRevokeReasonToString(AReason: TCRLRevokeReason): string;
 
 implementation
 
+uses
+  nextpas.core.time;
+
 // ========================================================================
 // Forward declarations
 // ========================================================================
@@ -589,7 +592,7 @@ end;
 function TX509CRL.IsExpired: Boolean;
 begin
   if FHasNextUpdate then
-    Result := Now > FNextUpdate
+    Result := DateTimeUtcNow > FNextUpdate
   else
     Result := False;  // 无 nextUpdate 时不认为过期
 end;
@@ -597,7 +600,7 @@ end;
 function TX509CRL.IsValid: Boolean;
 begin
   // ThisUpdate 必须有效 (非零) 且当前时间在 thisUpdate 之后
-  Result := (FThisUpdate > 0) and (Now >= FThisUpdate) and (not IsExpired);
+  Result := (FThisUpdate > 0) and (DateTimeUtcNow >= FThisUpdate) and (not IsExpired);
 end;
 
 // ========================================================================

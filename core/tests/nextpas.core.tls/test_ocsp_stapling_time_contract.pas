@@ -39,17 +39,40 @@ begin
   LResult.CertStatus := ocspGood;
   Check(LResult.IsValid, 'Verified good response should be valid');
 
-  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, 1800);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 1800);
   Check(LResult.NeedsRefresh,
     'Response expiring within one hour should require refresh');
 
-  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, -7200);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, -7200);
   Check(LResult.NeedsRefresh,
     'Long-expired response should still require refresh');
 
-  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, 7200);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 7200);
   Check(not LResult.NeedsRefresh,
     'Response outside refresh window should remain fresh');
+end;
+
+procedure TestOCSPCacheUtcSemantics;
+var
+  LEntry: TOCSPCacheEntry;
+begin
+  WriteLn('Test: OCSP cache UTC expiry semantics');
+
+  FillChar(LEntry, SizeOf(LEntry), 0);
+  SetLength(LEntry.ResponseData, 1);
+  LEntry.ResponseData[0] := 1;
+
+  LEntry.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, 7200);
+  Check(not LEntry.IsExpired,
+    'Cache entry with UTC nextUpdate two hours ahead should stay unexpired');
+  Check(LEntry.IsValid,
+    'Cache entry with UTC nextUpdate two hours ahead should stay valid');
+
+  LEntry.NextUpdate := DateTimeAddSeconds(DateTimeUtcNow, -5);
+  Check(LEntry.IsExpired,
+    'Cache entry with UTC nextUpdate in the past should be expired');
+  Check(not LEntry.IsValid,
+    'Expired cache entry should not remain valid');
 end;
 
 procedure TestStaplingClientEmptyResponseContract;
@@ -89,6 +112,7 @@ begin
   WriteLn('');
 
   TestStaplingResultTimeSemantics;
+  TestOCSPCacheUtcSemantics;
   TestStaplingClientEmptyResponseContract;
 
   WriteLn('');
