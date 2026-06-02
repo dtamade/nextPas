@@ -2490,3 +2490,40 @@
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-paths` 与
   `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-host-abi-wave4-postmerge-verify`
   已删除，分支 `codex/platform-host-abi-wave4-paths` 已删除，`git worktree prune` 已执行。
+## 2026-06-03 C5-K0 Findings 1
+
+- 当前 `main@32a555d1` 的 compiler 路径没有 dirty 变更；dirty 范围集中在 `.claude/`、`.worktrees/`、`core/` 与 `core-tui-migration`，本轮必须 path-limited。
+- 目标树显示 C5 正在推进 address/value 模型；本轮不是新功能扩张，而是修 C5 主线后的 LLVM verifier 红点。
+- 用户报告的稳定现象：`test_obj_compose.ll` 中 `TRect.Create` 期望 `(ptr, i64, i64)`，但 `P.GetX/P.GetY` 的 `i64` 结果被按 `ptr` argument 传入。`test_nested_method` 仍正常，因此优先调查 constructor call lowering / arg classification。
+
+## 2026-06-03 C5-K0 Findings 2
+
+- 复现命令：stage0 `nextpas build examples/smoke/test_obj_compose.pas --target linux-x86_64 --toolchain-binding linux-x86_64-to-linux-x86_64-llvm`。
+- 失败位置稳定在 `examples/smoke/.nextpas/cache/backend/linux-x86_64/test_obj_compose.ll:24`：
+  `call i64 @TRect.Create(ptr %v11, ptr %v15, ptr %v17)`，其中 `%v15/%v17` 是
+  `call i64 @TPoint.GetX/GetY(...)` 的结果。
+- `TRect.Create` 定义是 `define i64 @TRect.Create(ptr %self, i64 %AW, i64 %AH)`；
+  同类工作样例 `test_nested_method` 的 `A.AddTo(B.Get)` 正确发出
+  `call i64 @TCalc.AddTo(ptr %self, i64 %nestedResult)`。
+
+## 2026-06-03 C5-K0 Findings 3
+
+- RED 已加入 `compiler/tests/test_semantic_hir_expr_producer.pas`：
+  `TestConstructorNestedMethodIntegerArgs` 从源码生成 LLVM 文本，定位
+  `call i64 @TRect.Create(...)`，要求非 self 参数不出现 `, ptr `，并至少出现
+  `, i64 `。
+- RED 运行证据：focused test 编译成功后退出 `148`，对应 constructor call 行仍含
+  `, ptr ` argument。
+- 代码坐标：`np_hir_builder.pas:4672` 的 `ProcessClassNew` 用整个 nested arg blob
+  判定 pointer，其中 `var P` 这类 receiver 行会污染后续 `call/vcall` 结果；这是字符串暗号导致的过宽匹配点。
+
+## 2026-06-03 C5-K0 Findings 4
+
+- GREEN 修复：builder 新增 `ParseIntBlobTyped(const ABlob; out ATypeId)`，
+  `ProcessClassNew` 不再对 constructor argument blob 做全文/首行 pointer 判定，
+  而是直接消费 blob lowering 的最终 `TypeId`。
+- 这样避免 `var P` receiver 出现在 nested method-call blob 前部时污染最终参数类型；
+  integer nested method-call 会保持 integer，pointer-return ordinary member call
+  也继续保留 `ptr`。
+- GREEN focused：`test_semantic_hir_expr_producer` 重新编译运行后退出 `0`，并新增
+  pointer-return constructor arg regression 覆盖。

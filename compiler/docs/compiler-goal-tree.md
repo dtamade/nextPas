@@ -48,7 +48,7 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ✅ 2026-06-02 |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-J |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-K0 |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
 | **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单" | C5,C6 | 🏁 里程碑 |
@@ -279,3 +279,13 @@
   退出 6 / `test_semantic_hir_expr_producer` 退出 148；review RED 退出 62；
   GREEN 后 focused tests + 完整重编译（46248 lines compiled）+ 137/137 LLVM smoke
   全绿。C5 下一步建议进入 `arr[i].A.B` 更深 field chain 或收口 field-array value load。
+- 2026-06-03 C5-K0：constructor arg classification 红点修复：`test_obj_compose`
+  中 `TRect.Create(P.GetX, P.GetY)` 曾把 `TPoint.GetX/GetY` 的 i64 结果按 ptr
+  参数传给 `(ptr, i64, i64)` constructor。根因是 builder 的 `ProcessClassNew`
+  用参数 blob 的 receiver/内部行推断 pointer，`var P` 污染了 nested method-call
+  最终结果。修复后新增 `ParseIntBlobTyped`，让 `ProcessClassNew` 直接消费 blob
+  lowering 的最终 `TypeId`：integer nested method-call 归为 `i64`，pointer-return
+  ordinary member call 继续归为 `ptr`。TDD RED=`test_semantic_hir_expr_producer`
+  退出 148；GREEN 后 focused tests + 完整重编译（46258 lines compiled）+
+  `test_obj_compose` / `test_nested_method` 对照通过 + 137/137 LLVM smoke 全绿。
+  C5 下一步仍建议进入 `arr[i].A.B` 更深 field chain 或 field-array value load。

@@ -123,6 +123,8 @@ type
     procedure EmitStore(AType: THIRTypeId; AVal, AAddr: THIRValueId);
 
     function ParseIntBlob(const ABlob: string): THIRValueId;
+    function ParseIntBlobTyped(const ABlob: string;
+      out ATypeId: THIRTypeId): THIRValueId;
     procedure BlobInt(var S: TExprStack; const AArg: string);
     procedure BlobNull(var S: TExprStack);
     procedure BlobVar(var S: TExprStack; const AArg: string);
@@ -2590,6 +2592,14 @@ end;
 
 function THIRBuilder.ParseIntBlob(const ABlob: string): THIRValueId;
 var
+  TypeId: THIRTypeId;
+begin
+  Result := ParseIntBlobTyped(ABlob, TypeId);
+end;
+
+function THIRBuilder.ParseIntBlobTyped(const ABlob: string;
+  out ATypeId: THIRTypeId): THIRValueId;
+var
   S: TExprStack;
   Lines: array of string;
   LineCount, I, SpacePos: LongInt;
@@ -2598,6 +2608,7 @@ var
   Instr: THIRInstr;
 begin
   Result := 0;
+  ATypeId := 0;
   S.Init;
 
   SetLength(Lines, 0);
@@ -2713,7 +2724,7 @@ begin
   end;
 
   if S.Count > 0 then
-    Result := S.Pop;
+    Result := S.PopTyped(ATypeId);
 end;
 
 procedure THIRBuilder.ProcessVarDecl(const ANode: TTypedHirNode);
@@ -4565,6 +4576,7 @@ var
   I, TabPos: LongInt;
   VarName, Rest, CtorName, ArgBlob: string;
   SizeVal, PtrVal, ArgValue, V: THIRValueId;
+  ArgType: THIRTypeId;
   Instr: THIRInstr;
   ArgOps: array of THIROperand;
   ArgCount: LongInt;
@@ -4665,14 +4677,12 @@ begin
     end
     else
     begin
-      ArgValue := ParseIntBlob(ArgBlob);
+      ArgValue := ParseIntBlobTyped(ArgBlob, ArgType);
       if ArgValue <> 0 then
       begin
         SetLength(ArgOps, ArgCount + 1);
-        if (Pos(' p' + #10, ArgBlob) > 0) or
-          ((Length(ArgBlob) > 4) and (Copy(ArgBlob, 1, 4) = 'var ') and
-           (FindAllocaType(Copy(ArgBlob, 5, Pos(#10, ArgBlob) - 5)) = GetPtrType)) then
-          ArgOps[ArgCount] := MakeTypedOperand(ArgValue, GetPtrType)
+        if ArgType <> 0 then
+          ArgOps[ArgCount] := MakeTypedOperand(ArgValue, ArgType)
         else
           ArgOps[ArgCount] := MakeOperand(ArgValue);
         Inc(ArgCount);

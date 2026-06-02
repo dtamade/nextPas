@@ -7941,3 +7941,17 @@ Hello from nextPas!
     - `make -C core benchmarks` 输出 `All benchmarks passed.`。
     - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
       `human-summary=local verification passed`。
+## 2026-06-03 07:09 CST - C5-K0 constructor arg classification redpoint
+
+- Started from `main@32a555d1`.
+- Safety check: compiler tree is clean; unrelated dirty files exist under `.claude/`, `.worktrees/`, `core/`, and `core-tui-migration`.
+- Read goal tree, design conventions, inbox, and current planning files.
+- Active plan updated to track `test_obj_compose` LLVM verifier redpoint before any production-code edit.
+- Reproduced `test_obj_compose`: `opt` fails at `test_obj_compose.ll:24` because `TRect.Create(ptr, i64, i64)` is called as `ptr, ptr, ptr`.
+- Added RED `TestConstructorNestedMethodIntegerArgs`; focused test exited `148`.
+- Implemented builder-only fix in `ProcessClassNew` via `ParseIntBlobTyped`; focused test now exits `0`.
+- Added `TestConstructorNestedMethodPointerArgs` to keep pointer-return ordinary member-call constructor args typed as `ptr`.
+- Focused suite: 7 compiler tests, `focused_failed=0`.
+- Full rebuild: `bash scripts/rebuild-compiler.sh` output `46258 lines compiled`.
+- Redpoint check: `test_obj_compose` now emits `call i64 @TRect.Create(ptr ..., i64 ..., i64 ...)`; `test_nested_method` still emits `call i64 @TCalc.AddTo(ptr ..., i64 ...)`.
+- LLVM smoke: `smoke_total=137 passed=137 failed=0 build_failed=0 run_failed=0`.

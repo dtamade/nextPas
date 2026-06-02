@@ -105,6 +105,27 @@ begin
   Result := False;
 end;
 
+function CountSubstring(const AText, ASubstring: string): LongInt;
+var
+  SearchFrom: LongInt;
+  FoundAt: LongInt;
+begin
+  Result := 0;
+  if ASubstring = '' then
+    Exit;
+
+  SearchFrom := 1;
+  while SearchFrom <= Length(AText) do
+  begin
+    FoundAt := Pos(ASubstring,
+      Copy(AText, SearchFrom, Length(AText) - SearchFrom + 1));
+    if FoundAt = 0 then
+      Exit;
+    Inc(Result);
+    Inc(SearchFrom, FoundAt + Length(ASubstring) - 1);
+  end;
+end;
+
 procedure AssertStaticArrayDeclMetadata(const AModel: TSemanticModel;
   const AName: string; const ALow, AHigh, ALen: Int64;
   const ABaseExitCode: LongInt);
@@ -1678,6 +1699,174 @@ begin
   end;
 end;
 
+procedure TestConstructorNestedMethodIntegerArgs;
+var
+  Model: TSemanticModel;
+  Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
+  IR: string;
+  CallPos: LongInt;
+  LineEnd: LongInt;
+  CallLine: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TPoint = class'#10 +
+    '    FX, FY: Integer;'#10 +
+    '    constructor Create(AX, AY: Integer);'#10 +
+    '    function GetX: Integer;'#10 +
+    '    function GetY: Integer;'#10 +
+    '  end;'#10 +
+    '  TRect = class'#10 +
+    '    FWidth, FHeight: Integer;'#10 +
+    '    constructor Create(AW, AH: Integer);'#10 +
+    '    function Area: Integer;'#10 +
+    '  end;'#10 +
+    'constructor TPoint.Create(AX, AY: Integer);'#10 +
+    'begin'#10 +
+    '  FX := AX;'#10 +
+    '  FY := AY;'#10 +
+    'end;'#10 +
+    'function TPoint.GetX: Integer;'#10 +
+    'begin'#10 +
+    '  GetX := FX;'#10 +
+    'end;'#10 +
+    'function TPoint.GetY: Integer;'#10 +
+    'begin'#10 +
+    '  GetY := FY;'#10 +
+    'end;'#10 +
+    'constructor TRect.Create(AW, AH: Integer);'#10 +
+    'begin'#10 +
+    '  FWidth := AW;'#10 +
+    '  FHeight := AH;'#10 +
+    'end;'#10 +
+    'function TRect.Area: Integer;'#10 +
+    'begin'#10 +
+    '  Area := FWidth * FHeight;'#10 +
+    'end;'#10 +
+    'var P: TPoint; R: TRect;'#10 +
+    'begin'#10 +
+    '  P := TPoint.Create(3, 4);'#10 +
+    '  R := TRect.Create(P.GetX, P.GetY);'#10 +
+    '  Halt(R.Area);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(145);
+    if Model.Status <> 'ready' then
+      Halt(146);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        IR := Emitter.AsText;
+        CallPos := Pos('call i64 @TRect.Create(', IR);
+        if CallPos = 0 then
+          Halt(147);
+        LineEnd := Pos(#10, Copy(IR, CallPos, Length(IR)));
+        if LineEnd > 0 then
+          CallLine := Copy(IR, CallPos, LineEnd - 1)
+        else
+          CallLine := Copy(IR, CallPos, Length(IR));
+        if CountSubstring(CallLine, ', ptr ') <> 0 then
+          Halt(148);
+        if CountSubstring(CallLine, ', i64 ') <> 2 then
+          Halt(149);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestConstructorNestedMethodPointerArgs;
+var
+  Model: TSemanticModel;
+  Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
+  IR: string;
+  CallPos: LongInt;
+  LineEnd: LongInt;
+  CallLine: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TNode = class'#10 +
+    '    FNext: TNode;'#10 +
+    '    constructor Create(ANext: TNode);'#10 +
+    '    function NextNode: TNode;'#10 +
+    '  end;'#10 +
+    '  THolder = class'#10 +
+    '    FNode: TNode;'#10 +
+    '    constructor Create(ANode: TNode);'#10 +
+    '  end;'#10 +
+    'constructor TNode.Create(ANext: TNode);'#10 +
+    'begin'#10 +
+    '  FNext := ANext;'#10 +
+    'end;'#10 +
+    'function TNode.NextNode: TNode;'#10 +
+    'begin'#10 +
+    '  NextNode := FNext;'#10 +
+    'end;'#10 +
+    'constructor THolder.Create(ANode: TNode);'#10 +
+    'begin'#10 +
+    '  FNode := ANode;'#10 +
+    'end;'#10 +
+    'var First, Second: TNode; Holder: THolder;'#10 +
+    'begin'#10 +
+    '  First := TNode.Create(nil);'#10 +
+    '  Second := TNode.Create(First);'#10 +
+    '  Holder := THolder.Create(Second.NextNode);'#10 +
+    '  if Holder = nil then Halt(1);'#10 +
+    '  Halt(42);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(150);
+    if Model.Status <> 'ready' then
+      Halt(151);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        IR := Emitter.AsText;
+        CallPos := Pos('call i64 @THolder.Create(', IR);
+        if CallPos = 0 then
+          Halt(152);
+        LineEnd := Pos(#10, Copy(IR, CallPos, Length(IR)));
+        if LineEnd > 0 then
+          CallLine := Copy(IR, CallPos, LineEnd - 1)
+        else
+          CallLine := Copy(IR, CallPos, Length(IR));
+        if CountSubstring(CallLine, ', ptr ') <> 1 then
+          Halt(153);
+        if CountSubstring(CallLine, ', i64 ') <> 0 then
+          Halt(154);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
@@ -1707,4 +1896,6 @@ begin
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;
   TestTypedStoreIntoLegacyAllocaWidening;
+  TestConstructorNestedMethodIntegerArgs;
+  TestConstructorNestedMethodPointerArgs;
 end.

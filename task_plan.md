@@ -1,6 +1,37 @@
 # Task Plan: nextPas active work
 
-## Active Session: 2026-06-03 C5-J field array target
+## Active Session: 2026-06-03 C5-K0 constructor arg classification redpoint
+
+### Goal
+
+修复当前 LLVM verify 唯一稳定红点：`examples/smoke/test_obj_compose.pas`
+中 `TRect.Create(P.GetX, P.GetY)` 把 `TPoint.GetX/GetY` 的 integer return value
+按 `ptr` 传给 constructor。目标是收紧 constructor call argument classification：
+参数类型应来自 callee signature / lowered expression result，而不是把 nested method-call
+结果误判为 address/pointer。保持 `test_nested_method` 正常，保持旧 blob fallback。
+
+### Checklist
+
+- [x] 确认当前 `main` 与 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或同事的 toolchain/targets/stage0 lane。
+- [x] 重读 `compiler/docs/compiler-goal-tree.md`、`core/docs/design-conventions.md`、`docs/inbox.md`、根计划文件。
+- [x] 稳定复现 `test_obj_compose` LLVM verifier 失败，记录 `.ll` 错误位置与实际 call shape。
+- [x] 对比 `test_nested_method` 的正常 lowering，限定问题在 constructor call argument classification。
+- [x] 写 RED：focused compiler test 覆盖 constructor nested method-call integer args 不应按 `ptr` 发射。
+- [x] 实现 GREEN：最小修复 constructor arg classification，保留 blob fallback，不扩大到无关 lowering。
+- [x] 跑 focused tests、完整重编译、全量 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md`、`docs/inbox.md` 与必要计划文档。
+- [x] path-limited stage/commit 本轮文件，并报告复盘和下一步。
+
+### Constraints
+
+- 只改本轮需要的 compiler/ir、compiler/sema、compiler/tests 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- `ExprId` 只表示 RHS/value；`TargetExprId` 只表示 LHS/address，不混用。
+- 结构化表达式和旧 blob 双轨必须保留；失败时 builder 仍回落旧 operand/blob。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-J field array target
 
 ### Goal
 
