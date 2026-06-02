@@ -135,6 +135,9 @@
 - 累计 77 src 单元、3 examples、4 benchmarks
 - 2026-06-02 benchmark baseline：Full render 120x40 约 158us；DiffInto 200x50 changed-row 约 47us；
   input parse <0.12us；8x8 grid layout 约 4.3us。CI 运行 benchmark smoke，不设置 hosted runner 绝对阈值。
+- 2026-06-02 buffer overwrite hardening：`SetString` / `SetStringN` / `SetStringP` 在覆盖旧宽字形
+  lead/tail cell 时先清理重叠残留，避免同一帧内留下 stale `Width=2`/`Skip=True` 状态；
+  `test_tui_buffer` 扩至 21/21，覆盖窄字形覆盖宽字形 lead/tail 与 `SetStringP` 路径。
 - **迁移主体完成。** 剩余：merge 前最终真相审计、全量 verification envelope、合并准备清单。
 
 ### Phase 3 — ANSI Backend + Terminal [完成]

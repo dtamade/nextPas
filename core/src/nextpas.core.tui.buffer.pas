@@ -59,6 +59,8 @@ type
     FImageProtocol: TImageProtocol;
     function IndexOfPos(AX, AY: Integer): Integer; inline;
     procedure MarkRowDirty(ARow: Integer); inline;
+    procedure ClearWideOverlapCell(AX, AY: Integer); inline;
+    procedure PrepareWriteSpan(AX, AY, AWidth: Integer); inline;
   public
     constructor CreateEmpty(const AArea: TRect);
     constructor CreateFilled(const AArea: TRect; const ACell: TCell);
@@ -208,6 +210,46 @@ begin
     FDirtyRows := FDirtyRows or (QWord(1) shl ARow);
 end;
 
+procedure TBuffer.ClearWideOverlapCell(AX, AY: Integer);
+var
+  LCell, LPeer: PCell;
+begin
+  LCell := @FContent[IndexOfPos(AX, AY)];
+
+  if LCell^.Skip and (LCell^.Width = 0) then
+  begin
+    if AX > FArea.X then
+    begin
+      LPeer := @FContent[IndexOfPos(AX - 1, AY)];
+      if (LPeer^.Width = 2) and (not LPeer^.Skip) then
+        CellReset(LPeer^);
+    end;
+  end
+  else if (LCell^.Width = 2) and (not LCell^.Skip) then
+  begin
+    if AX + 1 < FArea.X + FArea.Width then
+    begin
+      LPeer := @FContent[IndexOfPos(AX + 1, AY)];
+      CellReset(LPeer^);
+    end;
+  end;
+
+  CellReset(LCell^);
+end;
+
+procedure TBuffer.PrepareWriteSpan(AX, AY, AWidth: Integer);
+var
+  LX: Integer;
+  LCell: PCell;
+begin
+  for LX := AX to AX + AWidth - 1 do
+  begin
+    LCell := @FContent[IndexOfPos(LX, AY)];
+    if LCell^.Skip or (LCell^.Width <> 1) then
+      ClearWideOverlapCell(LX, AY);
+  end;
+end;
+
 function TBuffer.CellAt(AX, AY: Integer): PCell;
 begin
   if (AX < FArea.X) or (AX >= FArea.X + FArea.Width) or
@@ -261,6 +303,7 @@ begin
       if LRemaining = 0 then Break;
       LByte := Byte(AStr[LI]);
       if LByte < 32 then Continue;        { 丢弃控制字符（ratatui 对齐） }
+      PrepareWriteSpan(LCursor, AY, 1);
       LCP := @FContent[IndexOfPos(LCursor, AY)];
       CellSetSymbolAscii(LCP^, AStr[LI]);
       CellApplyStyle(LCP^, AStyle);
@@ -288,6 +331,7 @@ begin
 
     if LAdv.Width > LRemaining then Break;   { 宽字形空间不足 }
 
+    PrepareWriteSpan(LCursor, AY, LAdv.Width);
     LCP := @FContent[IndexOfPos(LCursor, AY)];
     CellSetSymbolBytes(LCP^, PByte(@AStr[1])[LI], LAdv.ByteLen, LAdv.Width);
     CellApplyStyle(LCP^, AStyle);
@@ -338,6 +382,7 @@ begin
       if LRemaining = 0 then Break;
       LByte := Byte(AStr[LI]);
       if LByte < 32 then Continue;
+      PrepareWriteSpan(LCursor, AY, 1);
       LCP := @FContent[IndexOfPos(LCursor, AY)];
       CellSetSymbolAscii(LCP^, AStr[LI]);
       CellApplyStyle(LCP^, AStyle);
@@ -355,6 +400,7 @@ begin
     LAdv := GraphemeAt(AStr^, ALen, LI);
     if LAdv.Width = 0 then begin Inc(LI, LAdv.ByteLen); Continue; end;
     if LAdv.Width > LRemaining then Break;
+    PrepareWriteSpan(LCursor, AY, LAdv.Width);
     LCP := @FContent[IndexOfPos(LCursor, AY)];
     CellSetSymbolBytes(LCP^, PByte(AStr)[LI], LAdv.ByteLen, LAdv.Width);
     CellApplyStyle(LCP^, AStyle);

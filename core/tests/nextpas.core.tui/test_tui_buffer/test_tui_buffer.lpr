@@ -86,6 +86,36 @@ begin
   end;
 end;
 
+procedure TestSetStringNWideClip;
+var
+  LBuf: TBuffer;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LWritten := LBuf.SetStringN(0, 0, #$E4#$B8#$AD + 'B', 1, StyleDefault);
+    CheckEqual(Int64(0), Int64(LWritten), 'max width smaller than grapheme width writes nothing');
+    AssertRows(LBuf, ['      '], 'set stringN leaves row unchanged on wide clip');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringP;
+var
+  LBuf: TBuffer;
+  LStr: AnsiString;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 5, 1));
+  try
+    LStr := 'Pas';
+    LBuf.SetStringP(1, 0, PAnsiChar(LStr), Length(LStr), MaxInt, StyleDefault);
+    AssertRows(LBuf, [' Pas '], 'set stringP');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestCellAt;
 var
   LBuf: TBuffer;
@@ -268,12 +298,85 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestOverwriteWideGlyphLeadWithNarrow;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LBuf.SetString(0, 0, 'A', StyleDefault);
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LLead^.Width), 'narrow overwrite leaves width 1 at lead cell');
+    CheckEqual('A', CellGlyphAsString(LLead^), 'lead cell now holds A');
+    CheckEqual(Int64(1), Int64(LTail^.Width), 'former tail restored to width 1 empty cell');
+    Check(not LTail^.Skip, 'former tail no longer skip sentinel');
+    CheckEqual(' ', CellGlyphAsString(LTail^), 'former tail reset to blank');
+    AssertRows(LBuf, ['A     '], 'overwrite wide lead with narrow');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestOverwriteWideGlyphTailWithNarrow;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LBuf.SetString(1, 0, 'A', StyleDefault);
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LLead^.Width), 'overwriting tail clears stale wide lead');
+    Check(not LLead^.Skip, 'cleared lead is not skip sentinel');
+    CheckEqual(' ', CellGlyphAsString(LLead^), 'cleared lead reset to blank');
+    CheckEqual(Int64(1), Int64(LTail^.Width), 'tail overwrite becomes regular narrow cell');
+    CheckEqual('A', CellGlyphAsString(LTail^), 'tail cell now holds A');
+    AssertRows(LBuf, [' A    '], 'overwrite wide tail with narrow');
+  finally
+    LBuf.Free;
+  end;
+end;
+
+procedure TestSetStringPOverwriteWideTailWithNarrow;
+var
+  LBuf: TBuffer;
+  LLead, LTail: PCell;
+  LStr: AnsiString;
+  LWritten: Integer;
+begin
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 6, 1));
+  try
+    LBuf.SetString(0, 0, #$E4#$B8#$AD, StyleDefault);
+    LStr := 'A';
+    LWritten := LBuf.SetStringP(1, 0, PAnsiChar(LStr), Length(LStr), MaxInt, StyleDefault);
+
+    LLead := LBuf.CellAt(0, 0);
+    LTail := LBuf.CellAt(1, 0);
+    CheckEqual(Int64(1), Int64(LWritten), 'set stringP wrote one narrow column');
+    CheckEqual(' ', CellGlyphAsString(LLead^), 'set stringP cleared stale wide lead');
+    Check(not LLead^.Skip, 'set stringP cleared stale skip state on lead');
+    CheckEqual('A', CellGlyphAsString(LTail^), 'set stringP wrote A into tail cell');
+    AssertRows(LBuf, [' A    '], 'set stringP overwrite wide tail with narrow');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.buffer');
   T.Run('create empty', @TestCreateEmpty);
   T.Run('set string', @TestSetString);
   T.Run('set string clip', @TestSetStringClip);
   T.Run('set string offset', @TestSetStringOffset);
+  T.Run('set stringN wide clip', @TestSetStringNWideClip);
+  T.Run('set stringP', @TestSetStringP);
   T.Run('cell at bounds', @TestCellAt);
   T.Run('cjk width', @TestCJKWidth);
   T.Run('fill rect', @TestFillRect);
@@ -286,6 +389,9 @@ begin
   T.Run('family emoji grapheme', @TestFamilyEmoji);
   T.Run('skin tone emoji grapheme', @TestSkinToneEmoji);
   T.Run('keycap emoji grapheme', @TestKeycapEmoji);
+  T.Run('overwrite wide lead with narrow', @TestOverwriteWideGlyphLeadWithNarrow);
+  T.Run('overwrite wide tail with narrow', @TestOverwriteWideGlyphTailWithNarrow);
+  T.Run('set stringP overwrite wide tail with narrow', @TestSetStringPOverwriteWideTailWithNarrow);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
