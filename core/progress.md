@@ -1,5 +1,48 @@
 # Progress Log: nextpas.core.http
 
+## Session: 2026-06-02 truncated fixed-length EOF rejection
+
+### Phase 2/3: parser and public client truncation hardening
+
+- **Status:** complete
+- **Scope:** reject truncated `Content-Length` responses at EOF in the H1 response parser, and lock the public client behavior with focused tests.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, architecture, task plan, findings, progress, and design conventions.
+  - [x] Audited parser/client response EOF behavior and chose the highest-value body-truncation gap.
+  - [x] Added RED parser and client tests for truncated fixed-length responses.
+  - [x] Verified RED: parser `Finish` and `IHttpClient` both accepted truncated fixed-length responses.
+  - [x] Tightened `TH1Parser.Finish` so only true close-delimited responses may complete at EOF.
+  - [x] Re-ran focused parser/client GREEN with heaptrc proof.
+  - [x] Re-ran the full HTTP suite after the parser fix.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 Truncation
+
+| Check                | Command                                                         | Result                                             |
+| -------------------- | --------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state     | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files |
+| RED parser           | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | 19 total, 18 passed, 1 failed                      |
+| RED client           | `make -C tests/nextpas.core.http/test_http_client clean test`   | 16 total, 15 passed, 1 failed                      |
+| Focused parser GREEN | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | 19/19 passed, 0 unfreed memory blocks              |
+| Focused client GREEN | `make -C tests/nextpas.core.http/test_http_client clean test`   | 16/16 passed, 0 unfreed memory blocks              |
+| Full HTTP suite      | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-02 Truncation
+
+- The real bug was in EOF handling, not routing or transport ownership: `TH1Parser.Finish` treated any parsed response as complete once the status line existed.
+- That behavior was only valid for close-delimited responses. It was wrong for `Content-Length` responses, because EOF before the declared byte count means the message is truncated.
+- The public impact was larger than the internal parser bug alone: `IHttpClient` would return a partial body and could infer keep-alive semantics from a corrupted response.
+- `test_http_smoke` still prints `True free heap : 260960 / Should be : 262144`, but heaptrc reports `0 unfreed memory blocks`; this remains a non-blocking observation.
+
+## Review 2026-06-02 Truncation
+
+- `/codex`-style review found no blocking issue in the fix shape: the change is narrow, test-driven, and keeps EOF completion semantics explicit.
+- The important design correction is semantic, not incidental: framing truth now owns completion truth.
+- Shared-checkout risk remains unchanged: commit must stay path-limited to owned HTTP files only.
+- Next route: add focused malformed chunked request/body coverage on the inbound path.
+
 ## Session: 2026-06-02 internal registry landing
 
 ### Phase 3: centralized default transport registry

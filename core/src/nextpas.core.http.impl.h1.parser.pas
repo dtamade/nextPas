@@ -59,6 +59,7 @@ type
     FErrorMsg: string;
     FCurrentField: string;
     FCurrentValue: string;
+    function ResponseEndsAtEof: Boolean;
   public
     constructor Create(const AType: TH1ParserType);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
@@ -240,8 +241,8 @@ begin
     { on_message_complete was called by llhttp_finish }
   else
   begin
-    { For responses, if we have status code and headers, treat EOF as complete }
-    if (FParserType = ptResponse) and (FStatusCode > 0) then
+    { Only close-delimited responses may complete at EOF. }
+    if (FParserType = ptResponse) and ResponseEndsAtEof then
       FComplete := True
     else
     begin
@@ -249,6 +250,29 @@ begin
       FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
     end;
   end;
+end;
+
+function TH1Parser.ResponseEndsAtEof: Boolean;
+var
+  LTransferEncoding: string;
+begin
+  Result := False;
+  if FStatusCode = 0 then
+    Exit(False);
+
+  if ((FStatusCode div 100) = 1) or
+     (FStatusCode = 204) or
+     (FStatusCode = 304) then
+    Exit(True);
+
+  LTransferEncoding := LowerCase(FHeaders.Get('transfer-encoding'));
+  if LTransferEncoding <> '' then
+    Exit(False);
+
+  if FHeaders.Get('content-length') <> '' then
+    Exit(False);
+
+  Result := True;
 end;
 
 function TH1Parser.GetMethod: THttpMethod;

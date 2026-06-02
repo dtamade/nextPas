@@ -516,6 +516,45 @@ begin
   end;
 end;
 
+procedure TestClientRejectsTruncatedContentLengthResponse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 10'#13#10 +
+                   'Content-Type: text/plain'#13#10 +
+                   #13#10 +
+                   'hello';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LRaised := False;
+    try
+      LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/truncated');
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'truncated content-length response raises EHttpError');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
 { Test 4: Client follows redirect (301 -> 200) }
 procedure TestClientFollowsRedirect;
 var
@@ -792,6 +831,7 @@ begin
   T.Run('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
   T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
+  T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);

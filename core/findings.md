@@ -56,6 +56,10 @@
 - `THttpClient` pooling now trusts parser-derived keep-alive semantics, so EOF-delimited responses and HTTP/1.0 responses without `Connection: keep-alive` are no longer returned to the pool.
 - `TChunkedWriter` now has direct focused tests in `test_http_h1chunked` for single/multiple chunks, zero-length writes, hex chunk lengths, terminal chunk idempotence, and write-after-finalization behavior.
 - `TChunkedWriter` previously allowed writes after the terminal chunk had been flushed; it now raises `EHttpError` at the helper level, not only through `TH1ResponseWriter`.
+- `TH1Parser.Finish` previously treated any parsed response with a status line as EOF-complete, even when a `Content-Length` body was truncated.
+- `test_http_h1parser` now locks that fixed-length truncation at EOF is an error, not a successful completion path.
+- `test_http_client` now proves the public client raises `EHttpError` on truncated fixed-length responses instead of returning a partial body.
+- EOF completion is now limited to true close-delimited responses (no `Transfer-Encoding`, no `Content-Length`, and status codes that may legally carry a body).
 
 ## Git and Collaboration Findings
 
@@ -74,6 +78,7 @@
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 - Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.
 - Future H2/H3 work should extend the landed internal registry instead of reintroducing version-default logic inside facade/client/server constructors.
+- The next parser-security gap is now more specific: malformed inbound chunked request bodies still need direct focused proof, distinct from the now-closed fixed-length EOF truncation bug.
 
 ## Communication Cadence Adopted
 

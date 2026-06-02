@@ -157,6 +157,22 @@ begin
   Check(LP.ShouldKeepAlive, 'content-length response is reusable');
 end;
 
+procedure TestResponseContentLengthTruncatedAtEof;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 10'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(not LP.IsComplete, 'truncated content-length response is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'finish reports truncated content-length as error');
+  Check(not LP.IsComplete, 'truncated content-length response stays incomplete');
+end;
+
 procedure TestResponseHttp10WithoutKeepAliveDoesNotReuse;
 var
   LP: IH1Parser;
@@ -290,6 +306,7 @@ begin
   T.Run('Response 204 no body', @TestResponse204NoBody);
   T.Run('Response close-delimited needs connection close', @TestResponseCloseDelimitedNeedsConnectionClose);
   T.Run('Response content-length keeps alive', @TestResponseContentLengthKeepsAlive);
+  T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('HEAD request', @TestHeadRequest);
