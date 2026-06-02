@@ -88,6 +88,36 @@ begin
     'DiscoverRepository should find ancestor .git directory');
 end;
 
+procedure TestDiscoverRepositorySupportsGitFileWorktree;
+var
+  LMgr: IGitManager;
+  LMainDir: string;
+  LLinkedDir: string;
+  LNestedDir: string;
+begin
+  LMainDir := nextpas.core.fs.PathJoin([GTmpDir, 'discover-main']);
+  LLinkedDir := nextpas.core.fs.PathJoin([GTmpDir, 'discover-linked']);
+  LNestedDir := nextpas.core.fs.PathJoin([LLinkedDir, 'nested']);
+  nextpas.core.fs.MkdirAll(LMainDir);
+
+  CheckGitOk(LMainDir, ['init'], 'git init main repo for worktree discover');
+  CheckGitOk(LMainDir, ['config', 'user.name', 'NextPas Tester'], 'git config user.name');
+  CheckGitOk(LMainDir, ['config', 'user.email', 'nextpas@example.invalid'], 'git config user.email');
+  nextpas.core.fs.WriteFile(
+    nextpas.core.fs.PathJoin([LMainDir, 'seed.txt']),
+    BytesOfString('seed')
+  );
+  CheckGitOk(LMainDir, ['add', 'seed.txt'], 'git add seed file');
+  CheckGitOk(LMainDir, ['commit', '-m', 'seed'], 'git commit seed');
+  CheckGitOk(LMainDir, ['worktree', 'add', '-b', 'linked-branch', LLinkedDir, 'HEAD'],
+    'git worktree add linked repo');
+  nextpas.core.fs.MkdirAll(LNestedDir);
+
+  LMgr := NewGitManager;
+  CheckEqual(ExpandFileName(LLinkedDir), LMgr.DiscoverRepository(LNestedDir),
+    'DiscoverRepository should resolve linked worktree .git file to worktree root');
+end;
+
 procedure TestFacadeReexportsBaseConstants;
 var
   LFlags: TGitStatusFlags;
@@ -264,6 +294,7 @@ begin
     T.Run('Facade re-exports base constants', @TestFacadeReexportsBaseConstants);
     T.Run('Unsupported callbacks are explicit', @TestUnsupportedCallbacksAreExplicit);
     T.Run('DiscoverRepository fallback', @TestDiscoverRepositoryFallsBackToDotGitDirectory);
+    T.Run('DiscoverRepository supports gitfile worktree', @TestDiscoverRepositorySupportsGitFileWorktree);
     T.Run('InitRepository discarded return value', @TestInitRepositorySupportsDiscardedReturnValue);
     T.Run('Initialize is idempotent', @TestInitializeIsIdempotent);
     T.Run('Status sees untracked file', @TestStatusSeesUntrackedFileAfterInit);
