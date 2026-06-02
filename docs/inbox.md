@@ -4,17 +4,17 @@
 
 ## 当前在做什么
 
-- `C5-B` 已完成：sema producer 现在会给普通 runtime scalar assignment 中的 `@x` / `p^` 附加结构化 `ExprId`。
-- `@x` 结构化为 `shekSymbolAddress -> shekAddressOf`；`p^` 结构化为 `shekDeref`，builder 仍通过 address/value 契约决定何时 load。
-- 旧 blob 没移除：`varref` / `deref` 仍保留在 `Operand`，结构化 lowering 失败时继续回退。
-- 最近验证：focused C3/C4/C5 tests `9/9`；`scripts/rebuild-compiler.sh` 输出 `44805 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
-- 本批没有引入精确 pointee metadata，也没有迁移 field/array/class/record address chain。
+- `C5-C` 已完成：builder 支持 `shekArrayElem` 作为 array element address，sema producer 支持 `@arr[i] -> shekArrayElem -> shekAddressOf`。
+- 本批覆盖动态 `array of Integer` 的元素地址；`p^` 继续复用 C5-B 的 deref/value lowering。
+- 旧 blob 仍保留：新增临时 fallback token `arr_elem_ref`，但结构化路径优先。
+- 最近验证：focused C3/C4/C5 tests `9/9`；`scripts/rebuild-compiler.sh` 输出 `44967 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 本批没有迁移 static array、array store、record/class field 或 `P^.Field`。
 - C4 已完成：typed scalar 表达式已经覆盖真实宽度、显式 cast、signed/unsigned opcode、sema-side promotion，以及 legacy alloca store 归一。
 
 ## 接下来怎么走
 
-1. `C5-C`：迁移一个 lvalue chain 切片，建议从 `@Arr[i]` 或 `P^.Field` 二选一开始。
-2. `C5-D+`：逐步补齐 field/array element/class/record address chain，并减少 `$ptr`、`arr_load_ptr` 这类 blob 暗号。
+1. `C5-D`：迁移 `P^.Field` 的结构化 field offset 链。
+2. `C5-E+`：补齐 array store、static array、record/class field 和剩余 address chain，继续减少 `$ptr`、`arr_load_ptr` 等 blob 暗号。
 3. `C6`：补 allocator 和真实释放。
 4. `C7/C8`：多目标、优化、自举探针。
 
@@ -30,4 +30,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 当前批次：[`compiler/docs/plans/2026-06-02-c5b-address-deref-producer.md`](../compiler/docs/plans/2026-06-02-c5b-address-deref-producer.md)
+- 当前批次：[`compiler/docs/plans/2026-06-02-c5c-array-element-address.md`](../compiler/docs/plans/2026-06-02-c5c-array-element-address.md)

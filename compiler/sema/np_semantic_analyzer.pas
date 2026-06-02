@@ -6883,6 +6883,18 @@ begin
       ABlob := 'varref ' + ANode.ChildAt(0).Text + #10;
       Exit(True);
     end;
+    if (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkArrayAccess) and
+      (ANode.ChildAt(0).ChildCount >= 2) and
+      (ANode.ChildAt(0).ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
+      IsRuntimeArrVar(ANode.ChildAt(0).ChildAt(0).Text) and
+      EncodeRuntimeIntExprFold(ANode.ChildAt(0).ChildAt(1), FuncName) then
+    begin
+      ABlob := FuncName + 'arr_elem_ref ' +
+        ANode.ChildAt(0).ChildAt(0).Text + #10;
+      Exit(True);
+    end;
   end;
   if (ANode.NodeKind = gnkDereference) and (ANode.ChildCount >= 1) then
   begin
@@ -7119,6 +7131,45 @@ var
     Result := True;
   end;
 
+  function BuildRuntimeArrayElementAddressHirExpr(const ALocalNode: TGreenNode;
+    out ALocalExprId: LongInt): Boolean;
+  var
+    Fact: TSemanticScalarTypeFact;
+    LocalChildren: array of LongInt;
+    LocalIndexExprId, LocalIndexTypeId, LocalSymbolId: LongInt;
+    ArrayName: string;
+  begin
+    ALocalExprId := 0;
+    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkArrayAccess) or
+      (ALocalNode.ChildCount < 2) then
+      Exit(False);
+    if (ALocalNode.ChildAt(0) = nil) or
+      (ALocalNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+      Exit(False);
+    ArrayName := ALocalNode.ChildAt(0).Text;
+    if (ArrayName = '') or (not IsRuntimeArrVar(ArrayName)) then
+      Exit(False);
+    LocalSymbolId := FModel.FindSymbolByName(ArrayName);
+    if LocalSymbolId <= 0 then
+      Exit(False);
+    if not BuildRuntimeScalarHirExpr(ALocalNode.ChildAt(1),
+      LocalIndexExprId) then
+      Exit(False);
+    LocalIndexTypeId := ExprTypeId(LocalIndexExprId);
+    if (LocalIndexTypeId <= 0) or
+      (not FModel.GetTypeScalarFact(LocalIndexTypeId, Fact)) or
+      (Fact.Kind <> sskInt) then
+      Exit(False);
+
+    SetLength(LocalChildren, 1);
+    LocalChildren[0] := LocalIndexExprId;
+    ALocalExprId := FModel.AddHirExpr(
+      shekArrayElem, FModel.FindTypeByName('Integer'), LocalSymbolId,
+      LocalChildren, 0, '', '', 0, shvcAddress
+    );
+    Result := ALocalExprId > 0;
+  end;
+
   function BuildRuntimePointerHirExpr(const ALocalNode: TGreenNode;
     out ALocalExprId: LongInt): Boolean;
   var
@@ -7204,6 +7255,21 @@ begin
   if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) and
     (ANode.Text = '@') then
   begin
+    if (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkArrayAccess) then
+    begin
+      if not BuildRuntimeArrayElementAddressHirExpr(ANode.ChildAt(0),
+        LeftExprId) then
+        Exit(False);
+      SetLength(Children, 1);
+      Children[0] := LeftExprId;
+      AExprId := FModel.AddHirExpr(
+        shekAddressOf, FModel.FindTypeByName('Pointer'), 0, Children,
+        0, '', '', 0, shvcScalar
+      );
+      Exit(True);
+    end;
+
     if (ANode.ChildAt(0) = nil) or
       (ANode.ChildAt(0).NodeKind <> gnkIdentifier) then
       Exit(False);
