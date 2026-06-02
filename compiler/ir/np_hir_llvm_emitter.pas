@@ -330,10 +330,22 @@ begin
           ', ' + ValueRef(AInstr.Operands[1].ValueId));
       end;
     end;
+    hikTrunc:
+      if Length(AInstr.Operands) >= 1 then
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = trunc ' +
+          OperandTypeToLlvm(AInstr.Operands[0], 'i64') + ' ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
+          TypeToLlvm(AInstr.TypeId));
     hikZext:
       if Length(AInstr.Operands) >= 1 then
         Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext ' +
           OperandTypeToLlvm(AInstr.Operands[0], 'i1') + ' ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
+          TypeToLlvm(AInstr.TypeId));
+    hikSext:
+      if Length(AInstr.Operands) >= 1 then
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sext ' +
+          OperandTypeToLlvm(AInstr.Operands[0], 'i64') + ' ' +
           ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
           TypeToLlvm(AInstr.TypeId));
     hikCall:

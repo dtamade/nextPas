@@ -110,6 +110,9 @@ type
     function ExprIdHirTypeId(const AExprId: LongInt): THIRTypeId;
     function HirTypeIsInt(const ATypeId: THIRTypeId): Boolean;
     function HirTypeIsBool(const ATypeId: THIRTypeId): Boolean;
+    function TryClassifyScalarCast(const ASourceTypeId,
+      ATargetTypeId: THIRTypeId; out AKind: THIRInstrKind;
+      out ANoOp: Boolean): Boolean;
 
     procedure EmitInstr(const AInstr: THIRInstr);
     function EmitBinOp(AKind: THIRInstrKind; AType: THIRTypeId;
@@ -144,6 +147,8 @@ type
     procedure BlobVcall(var S: TExprStack; AArg: string);
     procedure BlobIvcall(var S: TExprStack; AArg: string);
     function LowerExprKind(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerCastExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function LowerUnaryExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
@@ -394,6 +399,7 @@ var
   Kind: THIRInstrKind;
   Symbol: TSemanticSymbol;
   ResultType, LeftType, RightType: THIRTypeId;
+  NoOp: Boolean;
 begin
   case AExpr.Kind of
     shekIntLiteral:
@@ -404,6 +410,17 @@ begin
           Exit(False);
         Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
         Result := (Symbol.Name <> '') and (ExprHirTypeId(AExpr) <> 0);
+      end;
+    shekCast:
+      begin
+        Result := (Length(AExpr.Children) >= 1) and
+          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[0]);
+        if Result then
+        begin
+          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          Result := TryClassifyScalarCast(LeftType, ExprHirTypeId(AExpr),
+            Kind, NoOp);
+        end;
       end;
     shekUnaryOp:
       begin
@@ -610,6 +627,42 @@ begin
   Result := True;
 end;
 
+function THIRBuilder.LowerCastExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Child: THIRExprResult;
+  TargetType: THIRTypeId;
+  Kind: THIRInstrKind;
+  NoOp: Boolean;
+  Instr: THIRInstr;
+begin
+  InitExprResult(AResult);
+  if Length(AExpr.Children) < 1 then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[0], Child) then
+    Exit(False);
+  TargetType := ExprHirTypeId(AExpr);
+  if TargetType = 0 then
+    Exit(False);
+  if not TryClassifyScalarCast(Child.TypeId, TargetType, Kind, NoOp) then
+    Exit(False);
+  if NoOp then
+  begin
+    SetExprValue(AResult, Child.ValueId, TargetType, shvcScalar);
+    Exit(True);
+  end;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := Kind;
+  Instr.TypeId := TargetType;
+  SetLength(Instr.Operands, 1);
+  Instr.Operands[0] := MakeTypedOperand(Child.ValueId, Child.TypeId);
+  EmitInstr(Instr);
+  SetExprValue(AResult, Instr.ResultId, TargetType, shvcScalar);
+  Result := True;
+end;
+
 function THIRBuilder.LowerUnaryExpr(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
@@ -765,6 +818,8 @@ begin
       end;
     shekSymbolValue:
       Result := EmitStructuredSymbolValue(AExpr, AResult);
+    shekCast:
+      Result := LowerCastExpr(AExpr, AResult);
     shekUnaryOp:
       Result := LowerUnaryExpr(AExpr, AResult);
     shekBinaryOp:
@@ -958,6 +1013,60 @@ function THIRBuilder.HirTypeIsBool(const ATypeId: THIRTypeId): Boolean;
 begin
   Result := (ATypeId <> 0) and
     (FModule.Types.GetType(ATypeId).Kind = htkBool);
+end;
+
+function THIRBuilder.TryClassifyScalarCast(const ASourceTypeId,
+  ATargetTypeId: THIRTypeId; out AKind: THIRInstrKind;
+  out ANoOp: Boolean): Boolean;
+var
+  SourceType, TargetType: THIRTypeRec;
+begin
+  AKind := hikZext;
+  ANoOp := False;
+  if (ASourceTypeId = 0) or (ATargetTypeId = 0) then
+    Exit(False);
+  if ASourceTypeId = ATargetTypeId then
+  begin
+    ANoOp := True;
+    Exit(True);
+  end;
+
+  SourceType := FModule.Types.GetType(ASourceTypeId);
+  TargetType := FModule.Types.GetType(ATargetTypeId);
+
+  if SourceType.Kind = htkBool then
+  begin
+    if TargetType.Kind = htkBool then
+    begin
+      ANoOp := True;
+      Exit(True);
+    end;
+    if TargetType.Kind <> htkInt then
+      Exit(False);
+    AKind := hikZext;
+    Exit(TargetType.BitWidth > 1);
+  end;
+
+  if (SourceType.Kind <> htkInt) or (TargetType.Kind <> htkInt) then
+    Exit(False);
+
+  if SourceType.BitWidth = TargetType.BitWidth then
+  begin
+    ANoOp := True;
+    Exit(True);
+  end;
+
+  if SourceType.BitWidth < TargetType.BitWidth then
+  begin
+    if SourceType.Signed then
+      AKind := hikSext
+    else
+      AKind := hikZext;
+    Exit(True);
+  end;
+
+  AKind := hikTrunc;
+  Result := True;
 end;
 
 procedure THIRBuilder.EnsureAlloca(const AName: string; AType: THIRTypeId);

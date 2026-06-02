@@ -38,6 +38,7 @@ type
     shekNilLiteral,
     shekSymbolValue,
     shekSymbolAddress,
+    shekCast,
     shekUnaryOp,
     shekBinaryOp,
     shekCompareOp,

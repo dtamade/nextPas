@@ -4,17 +4,17 @@
 
 ## 当前在做什么
 
-- 编译器主线进入 `C4-A`：语义模型已有 scalar width facts，typed structured lowering 可以产出 i1/i8/i32/i64/f32/f64/ptr 等真实 HIR 类型。
-- 旧 blob 仍保持 legacy i64 路径；`Expr.TypeId=0` 或缺少 scalar fact 时必须回落 blob，避免半迁移破坏现有 smoke。
-- 最近验证：`scripts/rebuild-compiler.sh` 输出 `44143 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 编译器主线已完成 `C4-B`：结构化表达式新增 `shekCast`，builder 可以把显式 scalar cast lower 成 typed `zext` / `sext` / `trunc`。
+- 旧 blob 仍保持 legacy i64 路径；`Expr.TypeId=0`、缺少 scalar fact，或 cast 超出当前支持范围时，必须回落 blob。
+- 本轮没有迁移新的 sema producer，当前只是把 C4 后续 promotion/signedness 的 builder 骨架补齐。
+- 最近验证：focused tests 全绿；`scripts/rebuild-compiler.sh` 输出 `44265 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. `C4-B`：补 cast/extend/trunc 与 sema promotion 规则，解决不同宽度表达式同处一棵树的问题。
-2. `C4-C`：补 signedness lowering，明确 `sdiv/udiv`、`srem/urem` 与 `icmp signed/unsigned`。
-3. `C5`：补 `lvalue/address` 模型，修 `P^.Field`、`@Arr[i]` 一类地址表达式。
-4. `C6`：补 allocator 和真实释放。
-5. `C7/C8`：多目标、优化、自举探针。
+1. `C4-C`：补 signedness lowering，明确 `sdiv/udiv`、`srem/urem`、`icmp signed/unsigned`，并把 promotion 规则落回 sema。
+2. `C5`：补 `lvalue/address` 模型，修 `P^.Field`、`@Arr[i]` 一类地址表达式。
+3. `C6`：补 allocator 和真实释放。
+4. `C7/C8`：多目标、优化、自举探针。
 
 ## 重要约束
 
@@ -26,4 +26,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 当前批次：[`compiler/docs/plans/2026-06-02-c4a-scalar-width-facts.md`](../compiler/docs/plans/2026-06-02-c4a-scalar-width-facts.md)
+- 当前批次：[`compiler/docs/plans/2026-06-02-c4b-structured-casts.md`](../compiler/docs/plans/2026-06-02-c4b-structured-casts.md)

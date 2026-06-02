@@ -133,3 +133,9 @@
   映射，typed structured lowering 在 fact 完整且操作数同型时产出真实宽度，
   fact 缺失则回落旧 blob；LLVM emitter 的 `icmp`/`zext` 改用 typed operand/result。
   C4 仍未完成：cast/extend/trunc、promotion 与 unsigned `div/mod/icmp` 留给后续。
+- 2026-06-02 C4-B：结构化 cast 第一刀：`TSemanticHirExprKind` 新增 `shekCast`，
+  HIR builder 增加显式 cast lowering，按源/目标 typed HIR 标量类型产出
+  `zext` / `sext` / `trunc`；LLVM emitter 补齐 `trunc` 与 `sext`。本轮仍不迁移
+  sema producer，也不处理 `int -> bool`、pointer/float cast、`sdiv/udiv`、
+  `srem/urem`、signed/unsigned `icmp`。focused tests + 完整重编译（44265 lines compiled）+
+  137/137 LLVM smoke 全绿；下一步进入 C4-C signedness 与 promotion 规则。
