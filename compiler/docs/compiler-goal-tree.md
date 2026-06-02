@@ -146,13 +146,3 @@
   本轮仍未把 mixed-width promotion 决策放回 sema，也未扩到 pointer/float cast。
   focused tests + 完整重编译（44352 lines compiled）+ 137/137 LLVM smoke 全绿；
   C4 剩余主任务是 sema-side promotion 与显式 `shekCast` 物化。
-- 2026-06-02 C4-D：sema-side integer promotion 第一刀：`BuildRuntimeScalarHirExpr`
-  开始为已迁移 runtime scalar producer 写入具体 `TypeId`，对 mixed-width integer
-  binary/compare 表达式在 sema 选择 common type，并用显式 `shekCast` 物化
-  `zext` / `sext` / `trunc`。本轮保持 `var-decl-runtime` alloca 不切真实宽度，
-  旧 blob 仍可回退；同时在 builder 侧把 typed `Halt` 与 `Write/WriteLn` integer
-  runtime 参数归一到 legacy i64 helper ABI，修复 i32 值直传 i64 asm/helper 的 LLVM
-  verifier 回归。TDD RED=`test_semantic_hir_expr_producer` 退出 75/122/132；
-  GREEN 后 focused tests + 完整重编译（44536 lines compiled）+
-  137/137 LLVM smoke 全绿。C4 下一步建议先做剩余 legacy i64 ABI/alloca 审计，
-  再进入 C5 lvalue/address 模型。

@@ -53,6 +53,8 @@
 - `git_dir` equals `git_common`; this is the normal `main` checkout, not a linked worktree.
 - The shared checkout has unrelated modified and untracked files outside this batch.
 - Safe rule for this batch: touch only HTTP takeover planning/control-map files and do not stage unrelated work.
+- Commit `c9b2d26c` accidentally included unrelated compiler and root-doc files because the repo index already contained staged paths outside `core/`.
+- Safe recovery in this shared checkout is a narrow follow-up cleanup commit that restores only those unrelated paths to `HEAD~1`; avoid `reset`, `rebase`, `commit --amend`, or any other history rewrite.
 
 ## Gaps to Audit Next
 

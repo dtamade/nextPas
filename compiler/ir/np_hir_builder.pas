@@ -177,8 +177,6 @@ type
       const ABlob: string): THIRValueId;
     function LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
       const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
-    function NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
-      const ATypeId: THIRTypeId): THIRValueId;
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
     procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
     procedure ProcessIntfRelease(const ANode: TTypedHirNode);
@@ -881,36 +879,6 @@ begin
     Exit(ExprResult.ValueId);
   end;
   Result := ParseIntBlob(ABlob);
-end;
-
-function THIRBuilder.NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
-  const ATypeId: THIRTypeId): THIRValueId;
-var
-  RuntimeType: THIRTypeId;
-  Kind: THIRInstrKind;
-  NoOp: Boolean;
-  Instr: THIRInstr;
-begin
-  Result := AValueId;
-  if AValueId = 0 then
-    Exit(0);
-  if ATypeId = 0 then
-    Exit;
-
-  RuntimeType := GetIntType;
-  if not TryClassifyScalarCast(ATypeId, RuntimeType, Kind, NoOp) then
-    Exit(0);
-  if NoOp then
-    Exit;
-
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := Kind;
-  Instr.TypeId := RuntimeType;
-  SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(AValueId, ATypeId);
-  EmitInstr(Instr);
-  Result := Instr.ResultId;
 end;
 
 function THIRBuilder.GetIntType: THIRTypeId;
@@ -2473,16 +2441,9 @@ end;
 procedure THIRBuilder.ProcessHaltCall(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
-  ValueType: THIRTypeId;
   Instr: THIRInstr;
 begin
-  V := LowerNodeExprOrBlobTyped(ANode, ANode.Operand, ValueType);
-  if (V <> 0) and (ValueType <> 0) then
-  begin
-    V := NormalizeInt64RuntimeValue(V, ValueType);
-    if V = 0 then
-      V := ParseIntBlob(ANode.Operand);
-  end;
+  V := LowerNodeExprOrBlob(ANode, ANode.Operand);
   if SameText(ANode.DisplayName, '__discard__') then
     Exit;
   if V <> 0 then
@@ -2493,7 +2454,7 @@ begin
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
     Instr.IntrinsicName := 'halt';
     SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeTypedOperand(V, GetIntType);
+    Instr.Operands[0] := MakeOperand(V);
     EmitInstr(Instr);
     FBlockTerminated := True;
   end;
@@ -3238,16 +3199,9 @@ end;
 procedure THIRBuilder.ProcessWriteInt(const ANode: TTypedHirNode);
 var
   V: THIRValueId;
-  ValueType: THIRTypeId;
   Instr: THIRInstr;
 begin
-  V := LowerNodeExprOrBlobTyped(ANode, ANode.Operand, ValueType);
-  if (V <> 0) and (ValueType <> 0) then
-  begin
-    V := NormalizeInt64RuntimeValue(V, ValueType);
-    if V = 0 then
-      V := ParseIntBlob(ANode.Operand);
-  end;
+  V := LowerNodeExprOrBlob(ANode, ANode.Operand);
   if V <> 0 then
   begin
     FillChar(Instr, SizeOf(Instr), 0);
@@ -3256,7 +3210,7 @@ begin
     Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
     Instr.IntrinsicName := 'write_int';
     SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeTypedOperand(V, GetIntType);
+    Instr.Operands[0] := MakeOperand(V);
     EmitInstr(Instr);
   end;
 end;

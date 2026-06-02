@@ -6987,103 +6987,9 @@ function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
 var
   Children: array of LongInt;
   LeftExprId, RightExprId, SymbolId: LongInt;
-  LeftTypeId, RightTypeId, ResultTypeId, BoolTypeId: LongInt;
   Value: Int64;
   ParseCode: Word;
   Op, Pred: string;
-
-  function ExprTypeId(const ALocalExprId: LongInt): LongInt;
-  var
-    Expr: TSemanticHirExpr;
-  begin
-    if (ALocalExprId <= 0) or (ALocalExprId > FModel.HirExprCount) then
-      Exit(0);
-    Expr := FModel.HirExprAt(ALocalExprId - 1);
-    Result := Expr.TypeId;
-  end;
-
-  function FindScalarTypeId(const AKind: TSemanticScalarKind;
-    const ABitWidth: LongInt; const ASigned: Boolean): LongInt;
-  var
-    I: LongInt;
-    Fact: TSemanticScalarTypeFact;
-  begin
-    for I := 0 to FModel.TypeCount - 1 do
-    begin
-      if FModel.GetTypeScalarFact(I + 1, Fact) and
-        (Fact.Kind = AKind) and (Fact.BitWidth = ABitWidth) and
-        (Fact.Signed = ASigned) then
-        Exit(I + 1);
-    end;
-    Result := 0;
-  end;
-
-  function NextSignedWidth(const ABitWidth: LongInt): LongInt;
-  begin
-    if ABitWidth < 32 then
-      Result := 32
-    else if ABitWidth < 64 then
-      Result := 64
-    else
-      Result := 0;
-  end;
-
-  function CommonIntegerTypeId(const ALeftTypeId,
-    ARightTypeId: LongInt): LongInt;
-  var
-    LeftFact, RightFact: TSemanticScalarTypeFact;
-    MaxWidth, CommonWidth: LongInt;
-    CommonSigned: Boolean;
-  begin
-    Result := 0;
-    if (ALeftTypeId <= 0) or (ARightTypeId <= 0) then
-      Exit;
-    if ALeftTypeId = ARightTypeId then
-      Exit(ALeftTypeId);
-    if (not FModel.GetTypeScalarFact(ALeftTypeId, LeftFact)) or
-      (not FModel.GetTypeScalarFact(ARightTypeId, RightFact)) then
-      Exit;
-    if (LeftFact.Kind <> sskInt) or (RightFact.Kind <> sskInt) then
-      Exit;
-
-    MaxWidth := LeftFact.BitWidth;
-    if RightFact.BitWidth > MaxWidth then
-      MaxWidth := RightFact.BitWidth;
-
-    if LeftFact.Signed = RightFact.Signed then
-      Exit(FindScalarTypeId(sskInt, MaxWidth, LeftFact.Signed));
-
-    CommonSigned := True;
-    if LeftFact.Signed and (LeftFact.BitWidth > RightFact.BitWidth) then
-      CommonWidth := LeftFact.BitWidth
-    else if RightFact.Signed and (RightFact.BitWidth > LeftFact.BitWidth) then
-      CommonWidth := RightFact.BitWidth
-    else
-      CommonWidth := NextSignedWidth(MaxWidth);
-
-    if CommonWidth = 0 then
-      Exit(0);
-    Result := FindScalarTypeId(sskInt, CommonWidth, CommonSigned);
-  end;
-
-  function CastExprToType(const ALocalExprId,
-    ATargetTypeId: LongInt): LongInt;
-  var
-    LocalChildren: array of LongInt;
-    LocalTypeId: LongInt;
-  begin
-    Result := 0;
-    LocalTypeId := ExprTypeId(ALocalExprId);
-    if (ALocalExprId <= 0) or (LocalTypeId <= 0) or (ATargetTypeId <= 0) then
-      Exit;
-    if LocalTypeId = ATargetTypeId then
-      Exit(ALocalExprId);
-    SetLength(LocalChildren, 1);
-    LocalChildren[0] := ALocalExprId;
-    Result := FModel.AddHirExpr(
-      shekCast, ATargetTypeId, 0, LocalChildren, 0, '', '', 0, shvcScalar
-    );
-  end;
 begin
   AExprId := 0;
   if ANode = nil then
@@ -7096,8 +7002,7 @@ begin
       Exit(False);
     SetLength(Children, 0);
     AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Integer'), 0, Children,
-      Value, '', '', 0, shvcScalar
+      shekIntLiteral, 0, 0, Children, Value, '', '', 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7106,8 +7011,7 @@ begin
   begin
     SetLength(Children, 0);
     AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Boolean'), 0, Children,
-      1, '', '', 0, shvcScalar
+      shekIntLiteral, 0, 0, Children, 1, '', '', 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7116,8 +7020,7 @@ begin
   begin
     SetLength(Children, 0);
     AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Boolean'), 0, Children,
-      0, '', '', 0, shvcScalar
+      shekIntLiteral, 0, 0, Children, 0, '', '', 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7127,8 +7030,7 @@ begin
   begin
     SetLength(Children, 0);
     AExprId := FModel.AddHirExpr(
-      shekIntLiteral, FModel.FindTypeByName('Integer'), 0, Children,
-      Value, '', '', 0, shvcScalar
+      shekIntLiteral, 0, 0, Children, Value, '', '', 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7140,8 +7042,7 @@ begin
       Exit(False);
     SetLength(Children, 0);
     AExprId := FModel.AddHirExpr(
-      shekSymbolValue, FModel.SymbolTypeId(SymbolId), SymbolId, Children,
-      0, '', '', 0, shvcScalar
+      shekSymbolValue, 0, SymbolId, Children, 0, '', '', 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7158,14 +7059,8 @@ begin
       Exit(False);
     SetLength(Children, 1);
     Children[0] := LeftExprId;
-    ResultTypeId := ExprTypeId(LeftExprId);
-    if ResultTypeId <= 0 then
-      Exit(False);
-    if SameText(Op, 'not') and
-      (ResultTypeId <> FModel.FindTypeByName('Boolean')) then
-      Exit(False);
     AExprId := FModel.AddHirExpr(
-      shekUnaryOp, ResultTypeId, 0, Children, 0, '', Op, 0, shvcScalar
+      shekUnaryOp, 0, 0, Children, 0, '', Op, 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7181,29 +7076,11 @@ begin
       Exit(False);
     if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), RightExprId) then
       Exit(False);
-    LeftTypeId := ExprTypeId(LeftExprId);
-    RightTypeId := ExprTypeId(RightExprId);
-    if SameText(Op, 'and') or SameText(Op, 'or') then
-    begin
-      ResultTypeId := FModel.FindTypeByName('Boolean');
-      if (LeftTypeId <> ResultTypeId) or (RightTypeId <> ResultTypeId) then
-        Exit(False);
-    end
-    else
-    begin
-      ResultTypeId := CommonIntegerTypeId(LeftTypeId, RightTypeId);
-      if ResultTypeId <= 0 then
-        Exit(False);
-      LeftExprId := CastExprToType(LeftExprId, ResultTypeId);
-      RightExprId := CastExprToType(RightExprId, ResultTypeId);
-      if (LeftExprId <= 0) or (RightExprId <= 0) then
-        Exit(False);
-    end;
     SetLength(Children, 2);
     Children[0] := LeftExprId;
     Children[1] := RightExprId;
     AExprId := FModel.AddHirExpr(
-      shekBinaryOp, ResultTypeId, 0, Children, 0, '', Op, 0, shvcScalar
+      shekBinaryOp, 0, 0, Children, 0, '', Op, 0, shvcScalar
     );
     Exit(True);
   end;
@@ -7221,26 +7098,11 @@ begin
     Exit(False);
   if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), RightExprId) then
     Exit(False);
-  LeftTypeId := ExprTypeId(LeftExprId);
-  RightTypeId := ExprTypeId(RightExprId);
-  BoolTypeId := FModel.FindTypeByName('Boolean');
-  if (LeftTypeId = BoolTypeId) and (RightTypeId = BoolTypeId) then
-    ResultTypeId := BoolTypeId
-  else
-  begin
-    ResultTypeId := CommonIntegerTypeId(LeftTypeId, RightTypeId);
-    if ResultTypeId <= 0 then
-      Exit(False);
-    LeftExprId := CastExprToType(LeftExprId, ResultTypeId);
-    RightExprId := CastExprToType(RightExprId, ResultTypeId);
-    if (LeftExprId <= 0) or (RightExprId <= 0) then
-      Exit(False);
-  end;
   SetLength(Children, 2);
   Children[0] := LeftExprId;
   Children[1] := RightExprId;
   AExprId := FModel.AddHirExpr(
-    shekCompareOp, BoolTypeId, 0, Children, 0, '', Pred, 0, shvcScalar
+    shekCompareOp, 0, 0, Children, 0, '', Pred, 0, shvcScalar
   );
   Result := True;
 end;

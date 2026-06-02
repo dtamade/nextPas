@@ -10,16 +10,14 @@ Phase 1: public contract audit and HTTP test baseline.
 
 ## Active Batch Checklist
 
-- [x] Re-read HTTP inbox, API coverage, plan, findings, and progress.
-- [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
-- [x] Add focused client response framing tests in `test_http_client`.
-- [x] Cover chunked response body decoding through real HTTP server/client I/O.
-- [x] Cover close-delimited response body decoding through raw socket response I/O.
-- [x] Confirm current `http.client` implementation already satisfies both contracts; no production code change needed in this batch.
-- [x] Run focused GREEN tests with heaptrc evidence.
-- [x] Run full HTTP suite after client response coverage changes.
-- [x] Update inbox, coverage matrix, findings, and progress for this coverage batch.
-- [x] Complete `/codex` review, final git status check, and commit this coverage batch.
+- [x] Re-read HTTP inbox, API coverage, plan, findings, progress, and design conventions.
+- [x] Inspect Git status, HEAD diff, and repo prefix/root to confirm the mixed commit scope.
+- [x] Confirm the accidentally committed compiler/root-doc paths have no further local edits in this worktree.
+- [x] Restore only the unrelated paths to `HEAD~1` and stage the cleanup diff without touching HTTP files.
+- [x] Re-run focused client tests with heaptrc evidence.
+- [x] Re-run the full HTTP suite after git hygiene cleanup.
+- [x] Update inbox, findings, and progress so the control files reflect the cleanup honestly.
+- [x] Commit the cleanup batch as a follow-up hygiene commit instead of rewriting shared history.
 
 ## Quality Gates
 
@@ -90,6 +88,7 @@ Phase 1: public contract audit and HTTP test baseline.
 | Expose callback aliases through helpers        | `THttpHandlerMethod` / `THttpHandlerProc` should be usable from public helper APIs, not only exist as type aliases.                     |
 | Finalize chunked responses on flush            | Once a chunked response has emitted the terminal chunk, further body writes must raise `EHttpError` instead of corrupting the stream.   |
 | Treat coverage-only batches honestly           | If new focused tests pass immediately, record the batch as proof/coverage expansion rather than inventing a production bugfix.          |
+| Prefer follow-up cleanup over history rewrite  | In the shared checkout, undo accidental mixed commits with narrow follow-up commits rather than `reset`, `rebase`, or commit rewriting. |
 
 ## Errors Encountered
 
@@ -101,3 +100,4 @@ Phase 1: public contract audit and HTTP test baseline.
 | Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.                      |
 | Chunked writer accepted writes after final flush          | 1       | Added RED writer test, then tracked chunked finalization in `TH1ResponseWriter.Write/Flush`.                |
 | Client response framing lacked focused proof              | 1       | Added chunked and close-delimited client tests; both passed immediately, so no production fix was required. |
+| Coverage commit accidentally included unrelated files     | 1       | Restore only the unrelated compiler/root-doc paths in a follow-up commit; keep the HTTP coverage commit intact. |

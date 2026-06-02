@@ -272,3 +272,40 @@
 - `/codex`-style read-only review found no blocking issue.
 - Review risk remains unchanged: do not use `git add .` in the shared checkout, because unrelated files are dirty or untracked outside this batch.
 - Review follow-up: the next local HTTP slice should either add direct `TChunkedWriter` focused tests or audit close-delimited response reuse semantics in the client pooling path.
+
+## Session: 2026-06-02 mixed commit cleanup
+
+### Phase 1: git hygiene and traceability recovery
+
+- **Status:** complete
+- **Scope:** remove unrelated compiler/root-doc changes from the prior HTTP coverage commit without rewriting shared history.
+- **Checklist:**
+  - [x] Re-checked `git status`, `git show HEAD`, and repo prefix/root to isolate the mixed commit scope.
+  - [x] Confirmed the accidentally committed compiler/root-doc paths had no further local edits in this worktree.
+  - [x] Restored only the unrelated paths to `HEAD~1` and staged the cleanup diff.
+  - [x] Re-ran focused client framing tests with heaptrc proof.
+  - [x] Re-ran the full HTTP suite after the cleanup.
+  - [x] Updated inbox, task plan, findings, and progress to record the cleanup honestly.
+  - [x] Commit this cleanup as a follow-up hygiene batch.
+
+## Verification Evidence 2026-06-02 Cleanup
+
+| Check                    | Command                                                                                                                                                     | Result                                             |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| Git mixed-commit audit   | `git show --format= --name-only HEAD`, `git diff --name-status HEAD~1..HEAD`, `git rev-parse --show-prefix`, `git rev-parse --show-toplevel`             | Confirmed mixed commit scope and repo-root prefix  |
+| Worktree safety check    | `git status --short -- compiler/... docs/inbox.md`                                                                                                          | No additional local edits on the cleanup targets   |
+| Focused client test      | `make -C tests/nextpas.core.http/test_http_client clean test`                                                                                               | Passed with heaptrc 0 unfreed memory blocks        |
+| Full HTTP suite          | `make TESTS_DIR=tests/nextpas.core.http test`                                                                                                               | All tests passed; heaptrc zero leaks per test      |
+| Cleanup diff verification| `git diff --cached --name-status -- compiler/docs/compiler-goal-tree.md compiler/docs/plans/2026-06-02-c4d-sema-promotion-casts.md compiler/ir/np_hir_builder.pas compiler/sema/np_semantic_analyzer.pas compiler/tests/test_semantic_hir_expr_producer.pas docs/inbox.md` | Only unrelated paths staged for cleanup            |
+
+## Notes 2026-06-02 Cleanup
+
+- The HTTP client framing batch itself was already complete and verified; this session exists solely to recover clean history and scope discipline.
+- The safe fix in this shared checkout is a follow-up cleanup commit, not any history rewrite, because unrelated dirty work still exists elsewhere in the repo.
+- The next functional HTTP direction is unchanged: audit close-delimited pooling reuse semantics first, then decide whether `TChunkedWriter` deserves its own focused test surface.
+
+## Review 2026-06-02 Cleanup
+
+- `/codex`-style review conclusion: prioritize narrow follow-up cleanup over risky history edits in this shared tree.
+- Root cause was index hygiene, not HTTP runtime logic.
+- Batch discipline tightened: commit from repo root only after verifying both path scope and staged set.
