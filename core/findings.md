@@ -49,6 +49,8 @@
 - `THttpClient` previously decided pool reuse only from `Connection: close`, which was too weak for close-delimited responses and HTTP/1.0 semantics.
 - `IH1Parser` now exposes `ShouldKeepAlive`, and the implementation derives that answer from parsed version, framing headers, status code, and `Connection` semantics.
 - `THttpClient` pooling now trusts parser-derived keep-alive semantics, so EOF-delimited responses and HTTP/1.0 responses without `Connection: keep-alive` are no longer returned to the pool.
+- `TChunkedWriter` now has direct focused tests in `test_http_h1chunked` for single/multiple chunks, zero-length writes, hex chunk lengths, terminal chunk idempotence, and write-after-finalization behavior.
+- `TChunkedWriter` previously allowed writes after the terminal chunk had been flushed; it now raises `EHttpError` at the helper level, not only through `TH1ResponseWriter`.
 
 ## Git and Collaboration Findings
 
@@ -65,7 +67,7 @@
 - Keep the matrix current as public APIs change.
 - Hijack exception-after-takeover and websocket upgrade ownership regressions are useful later hardening tests.
 - Transport registry / protocol ownership still needs design before H2/H3 expansion or pluggable client/server transports.
-- Direct `TChunkedWriter` tests are still optional; decide that only if the helper remains a stable implementation surface worth testing independently.
+- Direct `TChunkedWriter` focused coverage is now complete for writer-side framing invariants; malformed inbound chunk parsing belongs in parser/security tests.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 - Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.
 

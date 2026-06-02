@@ -6,19 +6,21 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 3: server/client integration hardening.
+Phase 2: H1 correctness hardening.
 
 ## Active Batch Checklist
 
 - [x] Re-read HTTP inbox, API coverage, plan, findings, progress, and design conventions.
-- [x] Audit `http.client` pooling and response-read paths for close-delimited reuse semantics.
-- [x] Add RED parser tests for response keep-alive inference across close-delimited, `Content-Length`, and HTTP/1.0 cases.
-- [x] Verify RED by compiling/running `test_http_h1parser` and observing the missing `ShouldKeepAlive` seam.
-- [x] Implement minimal parser keep-alive inference and route `http.client` pooling decisions through it.
-- [x] Re-run focused parser and client tests with heaptrc evidence.
-- [x] Re-run the full HTTP suite after the pooling-semantics fix.
+- [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
+- [x] Audit `TChunkedWriter` implementation and existing indirect writer/server coverage.
+- [x] Add a new focused `test_http_h1chunked` project for chunk framing and finalization behavior.
+- [x] Verify RED: writing after `Flush` did not raise and produced an invalid post-terminal write path.
+- [x] Add minimal `TChunkedWriter.Write` guard after terminal chunk finalization.
+- [x] Re-run focused chunked helper tests with heaptrc evidence.
+- [x] Re-run existing H1 writer tests with heaptrc evidence.
+- [x] Re-run the full HTTP suite after adding the new test project.
 - [x] Update inbox, coverage matrix, findings, and progress for this batch.
-- [x] Commit only the owned HTTP files for this semantics fix.
+- [x] Commit only the owned HTTP files for this helper hardening batch.
 
 ## Quality Gates
 
@@ -91,6 +93,7 @@ Phase 3: server/client integration hardening.
 | Treat coverage-only batches honestly           | If new focused tests pass immediately, record the batch as proof/coverage expansion rather than inventing a production bugfix.          |
 | Prefer follow-up cleanup over history rewrite  | In the shared checkout, undo accidental mixed commits with narrow follow-up commits rather than `reset`, `rebase`, or commit rewriting. |
 | Let parser own response reuse semantics        | Client pooling should depend on parsed HTTP version/framing/connection semantics, not only on a `Connection: close` header guess.       |
+| Keep chunk finalization enforced at helper level | `TChunkedWriter` itself must reject writes after the terminal chunk, so all callers share the same framing invariant.                  |
 
 ## Errors Encountered
 
@@ -104,3 +107,4 @@ Phase 3: server/client integration hardening.
 | Client response framing lacked focused proof              | 1       | Added chunked and close-delimited client tests; both passed immediately, so no production fix was required. |
 | Coverage commit accidentally included unrelated files     | 1       | Restore only the unrelated compiler/root-doc paths in a follow-up commit; keep the HTTP coverage commit intact. |
 | Client reuse semantics lacked framing-aware proof         | 1       | Added RED parser tests, then routed pooling decisions through parser-derived keep-alive semantics.           |
+| Chunked helper allowed writes after terminal chunk        | 1       | Added focused `test_http_h1chunked`, then made `TChunkedWriter.Write` raise after `Flush`.                   |

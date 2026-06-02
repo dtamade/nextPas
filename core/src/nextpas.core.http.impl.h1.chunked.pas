@@ -10,6 +10,7 @@ unit nextpas.core.http.impl.h1.chunked;
 interface
 
 uses
+  nextpas.core.http.base,
   nextpas.core.io.intf;
 
 type
@@ -41,6 +42,8 @@ var
   LHexLen: Int32;
 begin
   if ACount = 0 then Exit(0);
+  if FFinished then
+    raise EHttpError.Create('chunked response already finalized');
   LHexLen := IntToHexBuffer(UInt64(ACount), @LHex[0], 1);
   FInner.Write(LHex[0], SizeUInt(LHexLen));
   FInner.Write(PAnsiChar(#13#10)^, 2);

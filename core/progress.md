@@ -350,3 +350,44 @@
 - `/codex`-style review found no blocking issue after the parser/client seam change.
 - The important design correction is that pooling now depends on parsed framing semantics, not on a header-only shortcut in `http.client`.
 - Follow-up route: move to direct `TChunkedWriter` focused tests before reopening larger transport-registry design work.
+
+## Session: 2026-06-02 chunked writer focused tests
+
+### Phase 2: helper-level chunk framing and finalization
+
+- **Status:** complete
+- **Scope:** direct `TChunkedWriter` focused coverage plus helper-level finalization guard.
+- **Checklist:**
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Audited `TChunkedWriter` and existing indirect H1 writer/server coverage.
+  - [x] Added new focused project `test_http_h1chunked`.
+  - [x] Verified RED: write after `Flush` failed the new test because helper allowed post-terminal writes.
+  - [x] Added minimal `EHttpError` guard in `TChunkedWriter.Write` after terminal chunk finalization.
+  - [x] Ran focused chunked GREEN with heaptrc proof.
+  - [x] Ran focused H1 writer GREEN with heaptrc proof.
+  - [x] Ran the full HTTP suite after the new test project and helper guard.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 Chunked
+
+| Check                 | Command                                                         | Result                                                                                     |
+| --------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| Git safety state      | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files                                         |
+| RED chunked helper    | `make -C tests/nextpas.core.http/test_http_h1chunked clean test` | 5/6 passed; `Write after Flush raises` failed; failing run showed heaptrc residual blocks   |
+| Focused chunked GREEN | `make -C tests/nextpas.core.http/test_http_h1chunked clean test` | 6/6 passed, 0 unfreed memory blocks                                                        |
+| Focused writer GREEN  | `make -C tests/nextpas.core.http/test_http_h1writer clean test`  | 15/15 passed, 0 unfreed memory blocks                                                       |
+| Full HTTP suite       | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test                                               |
+
+## Notes 2026-06-02 Chunked
+
+- This batch is a real helper-level hardening fix: `TH1ResponseWriter` already guarded finalized writes, but `TChunkedWriter` itself still accepted them.
+- The new focused test project proves chunk framing directly instead of relying on response-writer/server integration tests.
+- `test_http_smoke` still prints `True free heap : 261232 / Should be : 262144`, but heaptrc reports `0 unfreed memory blocks`; this remains a non-blocking observation.
+
+## Review 2026-06-02 Chunked
+
+- `/codex`-style review found no blocking issue in the helper hardening batch.
+- The invariant now lives at both levels: `TH1ResponseWriter` rejects finalized response writes, and `TChunkedWriter` rejects post-terminal chunk writes.
+- Follow-up route: return to transport registry / client-server injection ownership design, or add malformed inbound chunk/body parser/security tests before that if H1 correctness remains the priority.
