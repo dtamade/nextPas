@@ -108,6 +108,7 @@ function CreateWinSSLCertificateFromContext(ACertContext: PCCERT_CONTEXT; AOwnsC
 implementation
 
 uses
+  nextpas.core.time,
   nextpas.core.tls.asn1,
   nextpas.core.tls.x509,
   nextpas.core.crypto.hash;
@@ -1225,7 +1226,7 @@ function TWinSSLCertificate.IsExpired: Boolean;
 var
   CurrentTime: TDateTime;
 begin
-  CurrentTime := Now();
+  CurrentTime := DateTimeUtcNow;
   Result := (GetNotBefore > CurrentTime) or (GetNotAfter < CurrentTime);
 end;
 

@@ -155,6 +155,7 @@ implementation
 
 uses
   Contnrs, DateUtils,
+  nextpas.core.time,
   nextpas.core.tls.utils,
   nextpas.core.crypto.hash;
 
@@ -1322,7 +1323,7 @@ begin
     Exit;
   end;
 
-  Result := Now > LNotAfter;
+  Result := DateTimeUtcNow > LNotAfter;
 end;
 
 function TMbedTLSCertificate.IsSelfSigned: Boolean;

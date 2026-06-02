@@ -94,6 +94,7 @@ type
 implementation
 
 uses
+  nextpas.core.time,
   nextpas.core.tls.utils,  // Phase 3.2 - StringsToArray 统一实现
   nextpas.core.crypto.hash;
 
@@ -1432,7 +1433,7 @@ begin
   if FX509 = nil then
     Exit;
   
-  CurrentTime := Now;
+  CurrentTime := DateTimeUtcNow;
   Result := (CurrentTime < GetNotBefore) or (CurrentTime > GetNotAfter);
 end;
 

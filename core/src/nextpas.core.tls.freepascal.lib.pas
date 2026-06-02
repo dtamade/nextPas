@@ -73,6 +73,7 @@ implementation
 
 uses
   Classes,
+  nextpas.core.time,
   nextpas.core.tls.context.config,
   nextpas.core.tls.exceptions,
   nextpas.core.crypto.hash,
@@ -763,7 +764,7 @@ function TFreePascalCertificate.IsExpired: Boolean;
 begin
   if FInfo.NotAfter = 0 then
     Exit(False);
-  Result := Now > FInfo.NotAfter;
+  Result := DateTimeUtcNow > FInfo.NotAfter;
 end;
 
 function TFreePascalCertificate.IsSelfSigned: Boolean;
