@@ -414,7 +414,37 @@ begin
   end;
 end;
 
-{ Test 11: Very long method name (1000 chars) }
+{ Test 11: Request line truncated at EOF }
+procedure TestRequestLineTruncatedAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'GET / HTTP/1.';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated request line EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 12: Headers truncated at EOF }
+procedure TestHeadersTruncatedAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'GET / HTTP/1.1'#13#10'Host: local';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated headers EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 13: Very long method name (1000 chars) }
 procedure TestLongMethodName;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp, LReq, LMethod: string;
@@ -432,7 +462,7 @@ begin
   end;
 end;
 
-{ Test 12: Body larger than Content-Length }
+{ Test 14: Body larger than Content-Length }
 procedure TestBodyLargerThanContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
@@ -449,7 +479,7 @@ begin
   end;
 end;
 
-{ Test 13: Negative Content-Length }
+{ Test 15: Negative Content-Length }
 procedure TestNegativeContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: -1'#13#10 +
@@ -465,7 +495,7 @@ begin
   end;
 end;
 
-{ Test 14: Truncated Content-Length request body at EOF }
+{ Test 16: Truncated Content-Length request body at EOF }
 procedure TestTruncatedContentLengthRequestAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 10'#13#10 +
@@ -481,7 +511,7 @@ begin
   end;
 end;
 
-{ Test 15: Malformed trailer header field }
+{ Test 17: Malformed trailer header field }
 procedure TestMalformedTrailerField;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
@@ -501,7 +531,7 @@ begin
   end;
 end;
 
-{ Test 16: Truncated trailer section at EOF }
+{ Test 18: Truncated trailer section at EOF }
 procedure TestTruncatedTrailerAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
@@ -535,6 +565,8 @@ begin
   T.Run('HTTP/0.9 no version', @TestHttp09Request);
   T.Run('CRLF injection in path', @TestCrlfInjection);
   T.Run('Missing Host header', @TestMissingHost);
+  T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
+  T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name', @TestLongMethodName);
   T.Run('Body larger than CL', @TestBodyLargerThanContentLength);
   T.Run('Negative Content-Length', @TestNegativeContentLength);

@@ -455,6 +455,35 @@ begin
   Check(LP.ErrorMessage <> '', 'error message not empty');
 end;
 
+procedure TestRequestLineTruncatedAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated request line is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'finish reports truncated request line as error');
+  Check(not LP.IsComplete, 'truncated request line stays incomplete');
+end;
+
+procedure TestHeadersTruncatedAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET / HTTP/1.1'#13#10 +
+          'Host: local';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated headers are not complete');
+  LP.Finish;
+  Check(LP.HasError, 'finish reports truncated headers as error');
+  Check(not LP.IsComplete, 'truncated headers stay incomplete');
+end;
+
 procedure TestIncompleteInput;
 var
   LP: IH1Parser;
@@ -549,6 +578,8 @@ begin
   T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
+  T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
+  T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);
   T.Run('Reset and reparse', @TestResetAndReparse);
   T.Run('Request with query', @TestRequestWithQuery);
