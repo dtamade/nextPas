@@ -863,6 +863,39 @@ begin
   end;
 end;
 
+procedure TestContentLengthRequestTruncatedAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 10'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'hello';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated content-length request: status 400');
+    Check(not LHandlerCalled, 'truncated content-length request: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestChunkedRequestBodyReadable;
 var
   LRouter: THttpRouter;
@@ -1486,6 +1519,7 @@ begin
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
   T.Run('MaxHeaderSize enforcement -> 431', @TestMaxHeaderSize);
   T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);
+  T.Run('Content-Length request truncated at EOF -> 400', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body readable', @TestChunkedRequestBodyReadable);
   T.Run('Chunked request MaxBodySize -> 413', @TestChunkedRequestMaxBodySize);
   T.Run('Malformed chunked request invalid size -> 400', @TestMalformedChunkedRequestInvalidChunkSize);

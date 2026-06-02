@@ -465,7 +465,23 @@ begin
   end;
 end;
 
-{ Test 14: Malformed trailer header field }
+{ Test 14: Truncated Content-Length request body at EOF }
+procedure TestTruncatedContentLengthRequestAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 10'#13#10 +
+            'Connection: close'#13#10#13#10'hello';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated Content-Length request EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 15: Malformed trailer header field }
 procedure TestMalformedTrailerField;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
@@ -485,7 +501,7 @@ begin
   end;
 end;
 
-{ Test 15: Truncated trailer section at EOF }
+{ Test 16: Truncated trailer section at EOF }
 procedure TestTruncatedTrailerAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
@@ -522,6 +538,7 @@ begin
   T.Run('Very long method name', @TestLongMethodName);
   T.Run('Body larger than CL', @TestBodyLargerThanContentLength);
   T.Run('Negative Content-Length', @TestNegativeContentLength);
+  T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
   T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
   T.Summary;

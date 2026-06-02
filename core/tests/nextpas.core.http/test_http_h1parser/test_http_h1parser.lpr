@@ -202,6 +202,23 @@ begin
   CheckEqual('hello world', LP.GetBody, 'exact body');
 end;
 
+procedure TestContentLengthRequestTruncatedAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 10'#13#10#13#10 +
+          'hello';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated content-length request is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'finish reports truncated content-length request as error');
+  Check(not LP.IsComplete, 'truncated content-length request stays incomplete');
+end;
+
 procedure TestChunkedRequestBody;
 var
   LP: IH1Parser;
@@ -519,6 +536,7 @@ begin
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
+  T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body', @TestChunkedRequestBody);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
