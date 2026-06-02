@@ -5,6 +5,8 @@ checkout、脏 index、误提交、误覆盖和错误合并把仓库带进不可
 
 这是一份 repo 级长期规则，适用于人类开发者、Codex、Claude Code，以及任何会直接修改工作区的自动化代理。
 
+具体命名和操作步骤见 `docs/worktree-integration-runbook.md`。
+
 ---
 
 ## 1. 用一个可写 worktree 对应一个写作者
@@ -241,6 +243,8 @@ git show --stat --format=short HEAD --
 ---
 
 ## 10. 推荐最小流程
+
+更完整的命名、创建、集成和清理步骤见 `docs/worktree-integration-runbook.md`。
 
 新开一批任务时：
 
