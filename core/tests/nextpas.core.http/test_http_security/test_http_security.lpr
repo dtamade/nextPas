@@ -212,6 +212,24 @@ begin
 end;
 
 { Test 2: Malformed chunk extension }
+procedure TestInvalidChunkSize;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            'Z'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Invalid chunk size: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 2a: Malformed chunk extension }
 procedure TestMalformedChunkExtension;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
@@ -241,6 +259,23 @@ begin
     LResp := SendRaw(LPort, REQ);
     Check(Pos('HTTP/1.1 400', LResp) > 0,
       'Missing chunk-data CRLF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 2c: Truncated chunked request at EOF }
+procedure TestTruncatedChunkedRequestAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hel';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated chunked request EOF: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -581,8 +616,10 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.security');
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
+  T.Run('Invalid chunk size -> 400', @TestInvalidChunkSize);
   T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
   T.Run('Missing chunk-data CRLF', @TestMissingChunkDataCrLf);
+  T.Run('Truncated chunked request at EOF -> 400', @TestTruncatedChunkedRequestAtEof);
   T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);

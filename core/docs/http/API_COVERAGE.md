@@ -39,7 +39,7 @@
 - `IHttpServer` 现在也有 malformed trailer focused 覆盖：非法 trailer field-name 与 trailer section EOF truncation 都会返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 fixed-length request body EOF truncation focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 request-line / headers EOF truncation focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
-- `test_http_security` 现在把 `CL+TE` conflict 和 malformed chunk extension 从 broad safe-handling 收紧成 explicit `400` proof。
+- `test_http_security` 现在把 `CL+TE` conflict、invalid chunk size、malformed chunk extension、以及 truncated chunked EOF 都锁成 explicit `400` proof。
 - `test_http_security` 现在也包含 generic malformed request、`HTTP/1.1 missing Host`、`HTTP/0.9 / no-version`、`CRLF injection / request-line splitting`、`negative Content-Length`、`very long method`、`Content-Length + Connection: close + extra bytes after body`、duplicate `Content-Length`、`null-byte header`、missing chunk-data CRLF、malformed trailer、fixed-length request body EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
 - `TChunkedWriter` 现在有独立 focused 覆盖，并且 helper 自身会在 terminal chunk 后拒绝继续写入。
 - `WebSocket` 现在也有 upgrade read-ahead focused 覆盖：握手请求和首帧同包写入时，hijack 后依然能正确读到首帧。
