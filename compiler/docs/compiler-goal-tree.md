@@ -48,7 +48,7 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ✅ 2026-06-02 |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-E |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-G |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
 | **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单" | C5,C6 | 🏁 里程碑 |
@@ -227,3 +227,14 @@
   `test_semantic_hir_expr_producer` 编译失败；GREEN 后 focused tests +
   完整重编译（45545 lines compiled）+ 137/137 LLVM smoke 全绿。C5
   下一步进入 `array[i] := rhs`、static array address 与 nested field chain。
+- 2026-06-03 C5-G：array store target/address 第一刀：普通动态数组
+  `arr[i] := rhs` 的 `assign-arr-elem-runtime` 现在可通过独立
+  `TargetExprId` 表达 LHS 元素地址，builder 优先 `LowerExprAddress(TargetExprId)`，
+  成功时不再解析 legacy index，失败时仍完整回落旧 operand/blob 路径。sema
+  producer 为普通 runtime `array of Integer` store 生成
+  `shekArrayElem(ValueClass=shvcAddress)` target；static array、字段数组、
+  array-of-record-field、嵌套 lvalue chain 与 class/object RHS 特殊分支继续留给
+  后续 C5 切片。TDD RED=`test_hir_builder_structured_address` 退出 6 /
+  `test_semantic_hir_expr_producer` 退出 233；GREEN 后 focused tests +
+  完整重编译（45618 lines compiled）+ 137/137 LLVM smoke 全绿。C5
+  下一步建议处理 static array target 与 nested lvalue chain 的统一表达。

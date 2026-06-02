@@ -335,6 +335,8 @@ type
       const AReturnVarName: string);
     procedure AttachRuntimeConditionExpr(const AHirNodeId: LongInt;
       const ACondNode: TGreenNode);
+    function BuildRuntimeArrayElementAddressHirExpr(const ANode: TGreenNode;
+      out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
@@ -7075,6 +7077,53 @@ begin
   Result := EncodeRuntimeIntExpr(ANode, ABlob);
 end;
 
+function TSemanticAnalyzer.BuildRuntimeArrayElementAddressHirExpr(
+  const ANode: TGreenNode; out AExprId: LongInt): Boolean;
+var
+  ArrayName: string;
+  Children: array of LongInt;
+  Fact: TSemanticScalarTypeFact;
+  IndexExpr, Expr: TSemanticHirExpr;
+  IndexExprId, IndexTypeId, SymbolId: LongInt;
+begin
+  AExprId := 0;
+  if (ANode = nil) or (ANode.NodeKind <> gnkArrayAccess) or
+    (ANode.ChildCount < 2) then
+    Exit(False);
+  if (ANode.ChildAt(0) = nil) or
+    (ANode.ChildAt(0).NodeKind <> gnkIdentifier) then
+    Exit(False);
+
+  ArrayName := ANode.ChildAt(0).Text;
+  if (ArrayName = '') or (not IsRuntimeArrVar(ArrayName)) then
+    Exit(False);
+  SymbolId := FModel.FindSymbolByName(ArrayName);
+  if SymbolId <= 0 then
+    Exit(False);
+  if not BuildRuntimeScalarHirExpr(ANode.ChildAt(1), IndexExprId) then
+    Exit(False);
+  if (IndexExprId <= 0) or (IndexExprId > FModel.HirExprCount) then
+    Exit(False);
+
+  IndexExpr := FModel.HirExprAt(IndexExprId - 1);
+  IndexTypeId := IndexExpr.TypeId;
+  if (IndexTypeId <= 0) or
+    (not FModel.GetTypeScalarFact(IndexTypeId, Fact)) or
+    (Fact.Kind <> sskInt) then
+    Exit(False);
+
+  SetLength(Children, 1);
+  Children[0] := IndexExprId;
+  AExprId := FModel.AddHirExpr(
+    shekArrayElem, FModel.FindTypeByName('Integer'), SymbolId, Children,
+    0, '', '', 0, shvcAddress
+  );
+  if AExprId <= 0 then
+    Exit(False);
+  Expr := FModel.HirExprAt(AExprId - 1);
+  Result := (Expr.Kind = shekArrayElem) and (Expr.ValueClass = shvcAddress);
+end;
+
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
@@ -7210,45 +7259,6 @@ var
       0, '', '', 0, shvcScalar
     );
     Result := True;
-  end;
-
-  function BuildRuntimeArrayElementAddressHirExpr(const ALocalNode: TGreenNode;
-    out ALocalExprId: LongInt): Boolean;
-  var
-    Fact: TSemanticScalarTypeFact;
-    LocalChildren: array of LongInt;
-    LocalIndexExprId, LocalIndexTypeId, LocalSymbolId: LongInt;
-    ArrayName: string;
-  begin
-    ALocalExprId := 0;
-    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkArrayAccess) or
-      (ALocalNode.ChildCount < 2) then
-      Exit(False);
-    if (ALocalNode.ChildAt(0) = nil) or
-      (ALocalNode.ChildAt(0).NodeKind <> gnkIdentifier) then
-      Exit(False);
-    ArrayName := ALocalNode.ChildAt(0).Text;
-    if (ArrayName = '') or (not IsRuntimeArrVar(ArrayName)) then
-      Exit(False);
-    LocalSymbolId := FModel.FindSymbolByName(ArrayName);
-    if LocalSymbolId <= 0 then
-      Exit(False);
-    if not BuildRuntimeScalarHirExpr(ALocalNode.ChildAt(1),
-      LocalIndexExprId) then
-      Exit(False);
-    LocalIndexTypeId := ExprTypeId(LocalIndexExprId);
-    if (LocalIndexTypeId <= 0) or
-      (not FModel.GetTypeScalarFact(LocalIndexTypeId, Fact)) or
-      (Fact.Kind <> sskInt) then
-      Exit(False);
-
-    SetLength(LocalChildren, 1);
-    LocalChildren[0] := LocalIndexExprId;
-    ALocalExprId := FModel.AddHirExpr(
-      shekArrayElem, FModel.FindTypeByName('Integer'), LocalSymbolId,
-      LocalChildren, 0, '', '', 0, shvcAddress
-    );
-    Result := ALocalExprId > 0;
   end;
 
   function TryRuntimePointerFieldNode(const ALocalNode: TGreenNode;
@@ -8024,6 +8034,28 @@ var
     AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
+  procedure AttachArrayElementStoreTargetExpr(const AHirNodeId: LongInt;
+    const ATargetNode: TGreenNode);
+  var
+    LocalExprId: LongInt;
+  begin
+    if (AHirNodeId <= 0) or (ATargetNode = nil) then
+      Exit;
+    if BuildRuntimeArrayElementAddressHirExpr(ATargetNode, LocalExprId) then
+      FModel.SetTypedHirNodeTargetExprId(AHirNodeId, LocalExprId);
+  end;
+
+  procedure AddArrayElementStoreRuntimeNode(const ADisplayName,
+    AOperand: string; const ATargetNode: TGreenNode);
+  var
+    LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'assign-arr-elem-runtime', ADisplayName, 0, 0, AOperand
+    );
+    AttachArrayElementStoreTargetExpr(LocalNodeId, ATargetNode);
+  end;
+
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
     const AOperand: string);
   var
@@ -8336,9 +8368,10 @@ begin
           EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) then
         begin
           if EncodeRuntimeIntExprFold(RhsNode, StringValue) then
-            FModel.AddTypedHirNode(
-              'assign-arr-elem-runtime', Decoded, 0, 0,
-              Decoded + #9 + Operand + #9 + StringValue
+            AddArrayElementStoreRuntimeNode(
+              Decoded,
+              Decoded + #9 + Operand + #9 + StringValue,
+              Child.ChildAt(0)
             )
           else if (RhsNode.NodeKind = gnkFunctionCall) and
             (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and

@@ -254,6 +254,12 @@ begin
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprArrElement);
 
+    NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
+      'arr[1] := 5', 0, IntegerTypeId,
+      'missing'#9'int 99'#10#9'int 123'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprArrElement);
+
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := p^.Value',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprPField);
@@ -282,6 +288,10 @@ begin
         Halt(4);
       if CountIntrinsic(Func, 'gep_i64') < 4 then
         Halt(5);
+      if HasConstLoad(Func, 'const:99') then
+        Halt(6);
+      if HasConstLoad(Func, 'const:123') then
+        Halt(7);
     finally
       Builder.Free;
     end;

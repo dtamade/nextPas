@@ -4101,6 +4101,9 @@ var
   TabPos, TabPos2, TabPos3: LongInt;
   ArrName, Rest, IdxBlob, ValBlob, FieldIdxStr: string;
   IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx: THIRValueId;
+  StoreType, ValueType: THIRTypeId;
+  TargetResult: THIRExprResult;
+  Token: string;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -4185,6 +4188,43 @@ begin
   if TabPos2 = 0 then Exit;
   IdxBlob := Copy(Rest, 1, TabPos2 - 1);
   ValBlob := Copy(Rest, TabPos2 + 1, Length(Rest));
+
+  if LowerNodeTargetExprAddress(ANode, TargetResult) then
+  begin
+    ElemPtr := TargetResult.AddressValueId;
+    if ElemPtr = 0 then
+      Exit;
+
+    ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, ValueType);
+    if ValVal = 0 then
+      Exit;
+
+    if ValueType <> 0 then
+    begin
+      if FModule.Types.GetType(ValueType).Kind = htkPointer then
+        StoreType := GetPtrType
+      else
+        StoreType := GetIntType;
+      if StoreType <> ValueType then
+      begin
+        ValVal := NormalizeScalarValueToType(ValVal, ValueType, StoreType);
+        if ValVal = 0 then
+          ValVal := ParseIntBlob(ValBlob);
+      end;
+      if ValVal <> 0 then
+        EmitStore(StoreType, ValVal, ElemPtr);
+    end
+    else
+    begin
+      Token := ExtractVarOperandName(ValBlob);
+      if (Pos(' p' + #10, ValBlob) > 0) or
+        ((Token <> '') and (FindAllocaType(Token) = GetPtrType)) then
+        EmitStore(GetPtrType, ValVal, ElemPtr)
+      else
+        EmitStore(GetIntType, ValVal, ElemPtr);
+    end;
+    Exit;
+  end;
 
   IdxVal := ParseIntBlob(IdxBlob);
   ValVal := ParseIntBlob(ValBlob);
