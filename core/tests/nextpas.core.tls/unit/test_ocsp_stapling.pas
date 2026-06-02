@@ -24,7 +24,8 @@ uses
   nextpas.core.tls.ocsp.cache,
   nextpas.core.tls.ocsp.stapling,
   nextpas.core.tls.ocsp,
-  nextpas.core.tls.x509;
+  nextpas.core.tls.x509,
+  nextpas.core.time;
 
 type
   // ========================================================================
@@ -60,6 +61,15 @@ type
   published
     procedure TestDefaultConfig;
     procedure TestConfigCustomization;
+  end;
+
+  TOCSPStaplingResultTest = class(TTestCase)
+  published
+    procedure TestIsValid;
+    procedure TestNeedsRefreshWithoutNextUpdate;
+    procedure TestNeedsRefreshWithinWindow;
+    procedure TestNeedsRefreshWhenExpired;
+    procedure TestNeedsRefreshWhenFresh;
   end;
 
   // ========================================================================
@@ -406,6 +416,55 @@ begin
   AssertEquals('Timeout should be 30 seconds', 30, Config.TimeoutSeconds);
 end;
 
+procedure TOCSPStaplingResultTest.TestIsValid;
+var
+  LResult: TOCSPStaplingResult;
+begin
+  FillChar(LResult, SizeOf(LResult), 0);
+  LResult.Status := ossVerified;
+  LResult.CertStatus := ocspGood;
+  AssertTrue('Verified good response should be valid', LResult.IsValid);
+
+  LResult.Status := ossExpired;
+  AssertFalse('Expired response should not be valid', LResult.IsValid);
+end;
+
+procedure TOCSPStaplingResultTest.TestNeedsRefreshWithoutNextUpdate;
+var
+  LResult: TOCSPStaplingResult;
+begin
+  FillChar(LResult, SizeOf(LResult), 0);
+  LResult.NextUpdate := 0;
+  AssertFalse('Missing nextUpdate should not request refresh', LResult.NeedsRefresh);
+end;
+
+procedure TOCSPStaplingResultTest.TestNeedsRefreshWithinWindow;
+var
+  LResult: TOCSPStaplingResult;
+begin
+  FillChar(LResult, SizeOf(LResult), 0);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, 1800);
+  AssertTrue('Response expiring within one hour should refresh', LResult.NeedsRefresh);
+end;
+
+procedure TOCSPStaplingResultTest.TestNeedsRefreshWhenExpired;
+var
+  LResult: TOCSPStaplingResult;
+begin
+  FillChar(LResult, SizeOf(LResult), 0);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, -7200);
+  AssertTrue('Expired response should refresh even when long expired', LResult.NeedsRefresh);
+end;
+
+procedure TOCSPStaplingResultTest.TestNeedsRefreshWhenFresh;
+var
+  LResult: TOCSPStaplingResult;
+begin
+  FillChar(LResult, SizeOf(LResult), 0);
+  LResult.NextUpdate := DateTimeAddSeconds(DateTimeNow, 7200);
+  AssertFalse('Response expiring after the refresh window should stay fresh', LResult.NeedsRefresh);
+end;
+
 // ========================================================================
 // TOCSPStaplingClientTest 实现
 // ========================================================================
@@ -747,6 +806,7 @@ end;
 initialization
   RegisterTest(TOCSPCacheTest);
   RegisterTest(TOCSPStaplingConfigTest);
+  RegisterTest(TOCSPStaplingResultTest);
   RegisterTest(TOCSPStaplingClientTest);
   RegisterTest(TOCSPStaplingServerTest);
   RegisterTest(TOCSPStaplingManagerTest);

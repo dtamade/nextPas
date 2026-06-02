@@ -23,7 +23,7 @@ unit nextpas.core.tls.ocsp.stapling;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, DateUtils,
+  SysUtils, Classes, SyncObjs,
   nextpas.core.tls.base,
   nextpas.core.tls.ocsp,
   nextpas.core.tls.ocsp.cache,
@@ -223,6 +223,7 @@ type
 implementation
 
 uses
+  nextpas.core.time,
   nextpas.core.tls.http.client,
   nextpas.core.crypto.x509verify;
 
@@ -258,8 +259,8 @@ var
 begin
   if NextUpdate = 0 then
     Exit(False);
-  
-  TimeUntilExpiry := SecondsBetween(Now, NextUpdate);
+
+  TimeUntilExpiry := DateTimeSecondsBetween(NextUpdate, DateTimeNow);
   Result := TimeUntilExpiry < 3600;  // 1小时内过期
 end;
 
@@ -452,24 +453,24 @@ end;
 function TOCSPStaplingClient.CheckResponseFreshness(
   const AResponse: TOCSPResponse): Boolean;
 var
-  Now: TDateTime;
+  LNow: TDateTime;
 begin
-  Now := SysUtils.Now;
-  
+  LNow := DateTimeNow;
+
   // 检查 producedAt 不在未来
-  if AResponse.ProducedAt > Now then
+  if AResponse.ProducedAt > LNow then
     Exit(False);
-  
+
   // 检查至少有一个响应
   if Length(AResponse.Responses) = 0 then
     Exit(False);
-  
+
   // 检查第一个响应的时间
-  Result := (AResponse.Responses[0].ThisUpdate <= Now);
-  
+  Result := (AResponse.Responses[0].ThisUpdate <= LNow);
+
   // 如果有 nextUpdate,检查未过期
   if AResponse.Responses[0].HasNextUpdate then
-    Result := Result and (AResponse.Responses[0].NextUpdate > Now);
+    Result := Result and (AResponse.Responses[0].NextUpdate > LNow);
 end;
 
 // ========================================================================
@@ -672,7 +673,10 @@ begin
         // 检查是否在刷新窗口内
         if OCSPResp.Responses[0].HasNextUpdate then
         begin
-          TimeUntilExpiry := SecondsBetween(Now, OCSPResp.Responses[0].NextUpdate);
+          TimeUntilExpiry := DateTimeSecondsBetween(
+            OCSPResp.Responses[0].NextUpdate,
+            DateTimeNow
+          );
           Result := TimeUntilExpiry < FConfig.RefreshBeforeExpiry;
         end
         else
