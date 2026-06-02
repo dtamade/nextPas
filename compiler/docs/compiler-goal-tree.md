@@ -48,7 +48,7 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ✅ 2026-06-02 |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | ⬜ |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-02 |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
 | **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单" | C5,C6 | 🏁 里程碑 |
@@ -165,3 +165,10 @@
   lvalue/address 模型。TDD RED=`test_semantic_hir_expr_producer` 退出 142；
   GREEN 后 focused tests + 完整重编译（44547 lines compiled）+
   137/137 LLVM smoke 全绿。C4 现在可以进入 C5。
+- 2026-06-02 C5-A：address/value builder skeleton：不迁移 sema producer，先在
+  HIR builder 让结构化 `shekSymbolAddress`、`shekAddressOf`、`shekDeref`
+  区分 lvalue address 与 scalar value。`LowerExprValue` 现在会在遇到
+  `shvcAddress` 时显式 load；`LowerExprAddress` 只接受真正的 address 结果。
+  TDD RED=`test_hir_builder_structured_address` 退出 2；GREEN 后 focused
+  tests + 完整重编译（44709 lines compiled）+ 137/137 LLVM smoke 全绿。
+  C5 下一步迁移 `@x` / `P^` 这类最小 sema producer 切片。

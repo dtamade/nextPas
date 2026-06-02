@@ -160,12 +160,21 @@ type
     procedure SetExprValue(out AResult: THIRExprResult;
       const AValueId: THIRValueId; const ATypeId: THIRTypeId;
       const AValueClass: TSemanticHirValueClass);
+    procedure SetExprAddress(out AResult: THIRExprResult;
+      const AAddressValueId: THIRValueId; const ATypeId: THIRTypeId);
     function CanLowerExpr(const AExprId: LongInt): Boolean;
+    function CanLowerExprAsAddress(const AExprId: LongInt): Boolean;
     function CanLowerExprKind(const AExpr: TSemanticHirExpr): Boolean;
     function EmitConstInt(const AValue: Int64): THIRValueId;
     function EmitConstIntOfType(const AValue: Int64;
       const ATypeId: THIRTypeId): THIRValueId;
     function EmitStructuredSymbolValue(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerSymbolAddressExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerAddressOfExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerDerefExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function CompareKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
     function BinaryKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
@@ -397,6 +406,15 @@ begin
   AResult.AddressValueId := 0;
 end;
 
+procedure THIRBuilder.SetExprAddress(out AResult: THIRExprResult;
+  const AAddressValueId: THIRValueId; const ATypeId: THIRTypeId);
+begin
+  AResult.ValueId := 0;
+  AResult.TypeId := ATypeId;
+  AResult.ValueClass := shvcAddress;
+  AResult.AddressValueId := AAddressValueId;
+end;
+
 function THIRBuilder.CanLowerExprKind(const AExpr: TSemanticHirExpr): Boolean;
 var
   I: LongInt;
@@ -414,6 +432,34 @@ begin
           Exit(False);
         Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
         Result := (Symbol.Name <> '') and (ExprHirTypeId(AExpr) <> 0);
+      end;
+    shekSymbolAddress:
+      begin
+        if AExpr.SymbolId <= 0 then
+          Exit(False);
+        Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+        Result := (Symbol.Name <> '') and
+          ((ExprHirTypeId(AExpr) <> 0) or
+           (SemanticTypeIdToHirTypeId(Symbol.TypeId) <> 0));
+      end;
+    shekAddressOf:
+      begin
+        ResultType := ExprHirTypeId(AExpr);
+        Result := (Length(AExpr.Children) >= 1) and
+          (ResultType <> 0) and
+          (FModule.Types.GetType(ResultType).Kind = htkPointer) and
+          CanLowerExprAsAddress(AExpr.Children[0]);
+      end;
+    shekDeref:
+      begin
+        Result := (Length(AExpr.Children) >= 1) and
+          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[0]);
+        if Result then
+        begin
+          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          Result := (LeftType <> 0) and
+            (FModule.Types.GetType(LeftType).Kind = htkPointer);
+        end;
       end;
     shekCast:
       begin
@@ -498,6 +544,20 @@ begin
     Exit(False);
   Expr := FSemaModel.HirExprAt(AExprId - 1);
   Result := CanLowerExprKind(Expr);
+end;
+
+function THIRBuilder.CanLowerExprAsAddress(const AExprId: LongInt): Boolean;
+var
+  Expr: TSemanticHirExpr;
+begin
+  if (FSemaModel = nil) or (AExprId <= 0) then
+    Exit(False);
+  if AExprId > FSemaModel.HirExprCount then
+    Exit(False);
+  if not CanLowerExpr(AExprId) then
+    Exit(False);
+  Expr := FSemaModel.HirExprAt(AExprId - 1);
+  Result := Expr.ValueClass = shvcAddress;
 end;
 
 function THIRBuilder.EmitConstInt(const AValue: Int64): THIRValueId;
@@ -605,6 +665,80 @@ begin
   EmitInstr(Instr);
   SetExprValue(AResult, Instr.ResultId, HirType, shvcScalar);
   Result := True;
+end;
+
+function THIRBuilder.LowerSymbolAddressExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Symbol: TSemanticSymbol;
+  V: THIRValueId;
+  HirType: THIRTypeId;
+begin
+  InitExprResult(AResult);
+  if AExpr.SymbolId <= 0 then
+    Exit(False);
+  Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+  if Symbol.Name = '' then
+    Exit(False);
+
+  HirType := ExprHirTypeId(AExpr);
+  if HirType = 0 then
+    HirType := SemanticTypeIdToHirTypeId(Symbol.TypeId);
+  if HirType = 0 then
+    Exit(False);
+
+  V := FindAlloca(Symbol.Name);
+  if (V = 0) and (Pos('.', Symbol.Name) > 0) then
+  begin
+    EnsureAlloca(Symbol.Name, HirType);
+    V := FindAlloca(Symbol.Name);
+  end;
+  if V = 0 then
+    Exit(False);
+  if IsVarParamAlloca(Symbol.Name) then
+    V := EmitLoad(GetPtrType, V);
+  SetExprAddress(AResult, V, HirType);
+  Result := AResult.AddressValueId <> 0;
+end;
+
+function THIRBuilder.LowerAddressOfExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Child: THIRExprResult;
+  PointerType: THIRTypeId;
+begin
+  InitExprResult(AResult);
+  if Length(AExpr.Children) < 1 then
+    Exit(False);
+  if not LowerExprAddress(AExpr.Children[0], Child) then
+    Exit(False);
+  PointerType := ExprHirTypeId(AExpr);
+  if PointerType = 0 then
+    Exit(False);
+  if FModule.Types.GetType(PointerType).Kind <> htkPointer then
+    Exit(False);
+  SetExprValue(AResult, Child.AddressValueId, PointerType, shvcScalar);
+  Result := AResult.ValueId <> 0;
+end;
+
+function THIRBuilder.LowerDerefExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Child: THIRExprResult;
+  HirType: THIRTypeId;
+begin
+  InitExprResult(AResult);
+  if Length(AExpr.Children) < 1 then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[0], Child) then
+    Exit(False);
+  HirType := ExprHirTypeId(AExpr);
+  if (Child.ValueId = 0) or (Child.TypeId = 0) or (HirType = 0) then
+    Exit(False);
+  if FModule.Types.GetType(Child.TypeId).Kind <> htkPointer then
+    Exit(False);
+  SetExprAddress(AResult, Child.ValueId, HirType);
+  Result := AResult.AddressValueId <> 0;
 end;
 
 function THIRBuilder.LowerCompareExpr(const AExpr: TSemanticHirExpr;
@@ -822,6 +956,12 @@ begin
       end;
     shekSymbolValue:
       Result := EmitStructuredSymbolValue(AExpr, AResult);
+    shekSymbolAddress:
+      Result := LowerSymbolAddressExpr(AExpr, AResult);
+    shekAddressOf:
+      Result := LowerAddressOfExpr(AExpr, AResult);
+    shekDeref:
+      Result := LowerDerefExpr(AExpr, AResult);
     shekCast:
       Result := LowerCastExpr(AExpr, AResult);
     shekUnaryOp:
@@ -837,14 +977,36 @@ end;
 
 function THIRBuilder.LowerExprValue(const AExprId: LongInt;
   out AResult: THIRExprResult): Boolean;
+var
+  AddressValueId: THIRValueId;
+  TypeId: THIRTypeId;
 begin
   Result := LowerExpr(AExprId, AResult);
+  if not Result then
+    Exit(False);
+  if AResult.ValueClass = shvcScalar then
+    Exit(AResult.ValueId <> 0);
+  if AResult.ValueClass = shvcAddress then
+  begin
+    if (AResult.AddressValueId = 0) or (AResult.TypeId = 0) then
+      Exit(False);
+    AddressValueId := AResult.AddressValueId;
+    TypeId := AResult.TypeId;
+    SetExprValue(AResult, EmitLoad(TypeId, AddressValueId), TypeId,
+      shvcScalar);
+    Exit(AResult.ValueId <> 0);
+  end;
+  Result := False;
 end;
 
 function THIRBuilder.LowerExprAddress(const AExprId: LongInt;
   out AResult: THIRExprResult): Boolean;
 begin
   Result := LowerExpr(AExprId, AResult);
+  if not Result then
+    Exit(False);
+  Result := (AResult.ValueClass = shvcAddress) and
+    (AResult.AddressValueId <> 0);
 end;
 
 function THIRBuilder.LowerExpr(const AExprId: LongInt;
