@@ -451,8 +451,9 @@ begin
   LP := NewH1RequestParser;
   LReq := 'INVALID DATA HERE'#13#10#13#10;
   LP.Execute(PAnsiChar(LReq), Length(LReq));
-  Check(LP.HasError, 'should have error');
-  Check(LP.ErrorMessage <> '', 'error message not empty');
+  Check(LP.HasError, 'generic malformed request reports parser error');
+  Check(not LP.IsComplete, 'generic malformed request is not complete');
+  Check(LP.ErrorMessage <> '', 'generic malformed request has error message');
 end;
 
 procedure TestDuplicateContentLength;
@@ -620,7 +621,7 @@ begin
   T.Run('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);
   T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
   T.Run('HEAD request', @TestHeadRequest);
-  T.Run('Invalid request', @TestInvalidRequest);
+  T.Run('Generic malformed request', @TestInvalidRequest);
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
   T.Run('Header with null byte', @TestHeaderNullByte);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);

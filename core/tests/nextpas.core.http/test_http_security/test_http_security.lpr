@@ -229,7 +229,22 @@ begin
   end;
 end;
 
-{ Test 3: Duplicate Content-Length with different values }
+{ Test 3: Generic malformed request }
+procedure TestGenericMalformedRequest;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Generic malformed request: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4: Duplicate Content-Length with different values }
 procedure TestDuplicateContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
@@ -557,6 +572,7 @@ begin
   T := TTestRunner.Create('nextpas.core.http.security');
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
   T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
+  T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);

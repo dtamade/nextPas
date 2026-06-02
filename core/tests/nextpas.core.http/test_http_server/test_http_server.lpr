@@ -641,7 +641,7 @@ begin
   end;
 end;
 
-{ Test 12: Malformed request returns 400 or closes }
+{ Test 12: Generic malformed request returns explicit 400 }
 procedure TestMalformedRequest;
 var
   LRouter: THttpRouter;
@@ -649,16 +649,20 @@ var
   LPort: UInt16;
   LHandle: TPlatformThreadHandle;
   LResp: string;
+  LHandlerCalled: Boolean;
 begin
+  LHandlerCalled := False;
   LRouter := THttpRouter.Create;
   LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
+    LHandlerCalled := True;
     AW.WriteHeader(HTTP_STATUS_OK);
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LResp := SendRawRequest(LPort, 'GARBAGE DATA HERE'#13#10#13#10);
-    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0), 'malformed request: 400 or closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'generic malformed request: status 400');
+    Check(not LHandlerCalled, 'generic malformed request: handler not called');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -1669,7 +1673,7 @@ begin
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);
   T.Run('POST body readable via IReader', @TestPostBodyReadable);
   T.Run('Large body 131072 bytes', @TestLargeBody);
-  T.Run('Malformed request -> 400 or close', @TestMalformedRequest);
+  T.Run('Generic malformed request -> 400', @TestMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Header with null byte -> 400', @TestHeaderNullByte);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
