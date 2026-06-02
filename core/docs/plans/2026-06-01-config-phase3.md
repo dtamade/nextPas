@@ -16,7 +16,7 @@ Phase 2 已经让 `nextpas.core.config` 具备生产可用的加载、错误、�
 - current main base when seeded: `9ee09c80 feat(compiler): C4C add typed signedness emission`
 - latest config landing on main: `d5013326 merge: config phase2 api contract`
 - public unit: `nextpas.core.config`
-- current config tests: 87 tests, heaptrc 0 leaks
+- current config tests: 95 tests, heaptrc 0 leaks
 - current storage model: flat, case-insensitive dot-path KV
 
 ## 2026-06-02 首批落地状态
@@ -125,7 +125,13 @@ type
 生命周期原则：
 - `TConfig` 保持 manual Free，不改为 ref-counted class。
 - builder 返回的 `IConfig` 必须拥有内部 `TConfig`，调用方不需要 Free。
-- 现有 `TConfig` 转 `IConfig` 的 borrowed adapter 如果提供，必须命名为 `ConfigBorrowedView` 这类明确名字，并在文档中要求源 `TConfig` 存活时间覆盖 `IConfig` 使用期。Phase 3A 可以先不提供 borrowed adapter。
+- 现有 `TConfig` 转 `IConfig` 的 borrowed adapter 暂不进入 Phase 3 首批实现。原因是它会把
+  `TConfig` 的 manual lifetime 泄漏到 interface 调用方，很容易制造悬垂引用。
+- 如果后续确实有 watcher/live config consumer 需要 borrowed view，只允许以显式危险命名公开：
+  `ConfigBorrowedView(AConfig: TConfig): IConfig`。该函数不得取得所有权，必须要求源 `TConfig`
+  存活时间覆盖返回的 `IConfig` 使用期，并在 `AConfig = nil` 时抛 `EConfigError`。
+- borrowed view 的测试边界必须锁定三点：读取代理到源 `TConfig`；源变更后 view 反映最新值；
+  view 释放不释放源 `TConfig`。源提前释放后的行为不定义，不写“支持”测试。
 
 ### 插值模式
 
@@ -142,8 +148,16 @@ type
 ```
 
 实现顺序：
-- Phase 3A 先保持 `cimReadTime` 默认和现有 `TConfig` getter 行为。
-- 如果要支持 `cimDisabled`，需要新增原始读取接口，例如 `GetRawString` 或只在 `IConfig` 包装层内访问 raw value。该变更必须单独测试，避免破坏现有 `GetString`。
+- Phase 3A/3B/3C 已保持 `cimReadTime` 默认和现有 `TConfig` getter 行为。
+- 不直接公开 `WithInterpolation(cimDisabled)`。下一批先落显式 raw-read API，把“不插值读取”作为可测试的
+  独立能力，而不是先引入全局模式。
+- 推荐下一批新增 `GetRawString` / `GetRawStringArray` 到 `TConfig` 与 `IConfig`。它们只返回扁平存储中的原始值，
+  不展开 `${...}`，默认值也不展开。`GetSection` / `GetKeys` 天然不涉及插值，不需要 raw 变体。
+- 暂不新增 `GetRawStringRequired`。required 语义仍属于现有插值 getter；raw required 若有真实需求，
+  后续单独设计，避免把“原始文本存在”与“业务配置有效”混在一起。
+- 只有 raw-read API 的测试稳定后，才允许评估 `TConfigInterpolationMode` / `WithInterpolation`。
+  如果最终引入 mode，必须明确它是否影响 `BuildConfig` 返回的 mutable `TConfig`；不得让同一 builder 的
+  `Build` 与 `BuildConfig` 在插值策略上出现隐式分叉。
 
 ### Builder 接口
 
@@ -284,11 +298,26 @@ Tests:
 ### Phase 3D: Interpolation mode
 
 - Keep default `cimReadTime`.
-- Do not expose `WithInterpolation` in Phase 3A/3B.
-- Decide whether `cimDisabled` requires public `GetRawString` or an internal wrapper path before adding any public interpolation-mode method.
-- When `WithInterpolation` is introduced, `cimDisabled` must either be implemented with raw-read semantics and focused tests, or explicitly reject unsupported modes with `EConfigError` and focused tests.
+- Split this into two future slices:
+  - Phase 3D1: explicit raw-read API (`GetRawString` / `GetRawStringArray`) on `TConfig` and `IConfig`.
+  - Phase 3D2: optional whole-config interpolation policy only after raw-read behavior is locked.
+- Do not expose `WithInterpolation` before Phase 3D1 is complete.
+- When `WithInterpolation` is introduced, `cimDisabled` must be implemented by raw-read semantics and focused tests,
+  or explicitly rejected with `EConfigError` and focused tests.
 
 Do not implement `cimDisabled` by string post-processing after interpolation; raw read must bypass interpolation before placeholder expansion.
+
+Tests for Phase 3D1:
+- `GetRawString` returns raw stored values containing `${...}` without expansion.
+- `GetRawString` returns raw defaults without expansion.
+- `GetRawStringArray` preserves sparse numeric order and returns raw array values.
+- Existing `GetString` / `GetStringArray` interpolation tests remain unchanged.
+- `IConfig` raw methods delegate to the owned config and remain valid after builder release.
+
+Tests for Phase 3D2, if implemented:
+- `WithInterpolation(cimReadTime)` is default-compatible with existing getters.
+- `WithInterpolation(cimDisabled)` uses raw-read behavior for string, typed getters, arrays, and required checks.
+- `Build` and `BuildConfig` mode semantics are identical, or the API rejects unsupported combinations explicitly.
 
 ## Module organization
 
@@ -351,17 +380,16 @@ Completion requires:
 
 ## Open decisions before implementation
 
-1. Should Phase 3A expose a borrowed `IConfig` adapter for existing `TConfig`, or only owned builder results?
-   - Recommendation: only owned builder results first. Borrowed adapters are useful but create lifetime hazards.
-2. Should `cimDisabled` ship in Phase 3, or should Phase 3 only reserve the enum and keep `cimReadTime`?
-   - Recommendation: reserve the concept in design, do not expose `WithInterpolation` in Phase 3A/3B, and implement after raw-read API is reviewed.
-3. Should `BuildConfig` be in the first implementation slice?
-   - Recommendation: yes, because watcher still needs mutable `TConfig`.
+已收敛：
+
+1. Borrowed `IConfig` adapter 暂不实现。若后续有真实 consumer，再以 `ConfigBorrowedView` 显式危险命名设计。
+2. `cimDisabled` 暂不公开。下一批先实现显式 raw-read API，避免模式 API 先于底层语义。
+3. `BuildConfig` 已在首批实现，因为 watcher 仍需要 mutable `TConfig`。
 
 ## Recommended next implementation slice
 
 Phase 3 首批闭环已完成。建议下一批聚焦剩余的边界设计，而不是立刻继续加实现面：
 
-1. 评估是否需要 borrowed `IConfig` adapter；若做，必须先锁定生命周期语义与命名。
-2. 讨论 interpolation mode 是否公开；若公开，需要先决定 `GetRawString` / raw-read path。
-3. 再进入下一批 RED tests，避免把 builder、view、interpolation 三个方向混在同一轮。
+1. Phase 3D1：用 TDD 新增 `GetRawString` / `GetRawStringArray` 到 `TConfig` 与 `IConfig`。
+2. 跑 `test_config_phase3`、`test_config`、`test_config_nested`，确认现有插值行为不变且 heaptrc 0 leaks。
+3. 完成 Phase 3D1 后再讨论 `WithInterpolation` 或 borrowed view；不要把 raw-read、mode、borrowed view 混在同一 commit。
