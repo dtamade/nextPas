@@ -346,7 +346,7 @@ end;
 
 function TCertificateImpl.IsExpired: Boolean;
 begin
-  Result := nextpas.core.time.DateTimeNow > FInfo.NotAfter;
+  Result := nextpas.core.time.DateTimeUtcNow > FInfo.NotAfter;
 end;
 
 function TCertificateImpl.ToPEM: string;

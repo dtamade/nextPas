@@ -170,6 +170,9 @@ const
 
 implementation
 
+uses
+  nextpas.core.time;
+
 { TSSLCertificateChainVerifier }
 
 constructor TSSLCertificateChainVerifier.Create;
@@ -425,7 +428,7 @@ begin
     Exit;
     
   Info := ACert.GetInfo;
-  CurrentTime := Now;
+  CurrentTime := DateTimeUtcNow;
   
   // 检查证书是否在有效期内
   Result := (CurrentTime >= Info.NotBefore) and (CurrentTime <= Info.NotAfter);
