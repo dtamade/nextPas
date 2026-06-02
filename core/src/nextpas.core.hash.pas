@@ -4,7 +4,7 @@ unit nextpas.core.hash;
 
 { nextpas.core.hash — 哈希模块门面
 
-  L1 层模块。提供 SHA-256/384/512 和 MD5 哈希原语。
+  L2 系统能力模块。提供 SHA-256/384/512 和 MD5 哈希原语。
   IHasher 继承 IWriter，可直接与 io 层集成。
 
   用法：
@@ -23,7 +23,9 @@ uses
   nextpas.core.hash.md5,
   nextpas.core.hash.sha1,
   nextpas.core.hash.sha256,
-  nextpas.core.hash.sha512;
+  nextpas.core.hash.sha512,
+  nextpas.core.hash.util,
+  nextpas.core.hash.files;
 
 type
   THashAlgorithm = nextpas.core.hash.base.THashAlgorithm;
@@ -48,6 +50,8 @@ function SHA512Of(const ABuf; ALen: SizeUInt): TSHA512Digest;
 function MD5Of(const ABuf; ALen: SizeUInt): TMD5Digest;
 
 function DigestToHex(const ABuf; ALen: SizeUInt): string;
+function SHA256FileHex(const APath: string): string; inline;
+function SHA512FileHex(const APath: string): string; inline;
 
 implementation
 
@@ -117,20 +121,18 @@ begin
 end;
 
 function DigestToHex(const ABuf; ALen: SizeUInt): string;
-var
-  I: SizeUInt;
-  P: PByte;
-const
-  HEX_CHARS: array[0..15] of Char = '0123456789abcdef';
 begin
-  if ALen = 0 then begin Result := ''; Exit; end;
-  SetLength(Result, ALen * 2);
-  P := @ABuf;
-  for I := 0 to ALen - 1 do
-  begin
-    Result[I*2 + 1] := HEX_CHARS[P[I] shr 4];
-    Result[I*2 + 2] := HEX_CHARS[P[I] and $0F];
-  end;
+  Result := nextpas.core.hash.util.DigestToHex(ABuf, ALen);
+end;
+
+function SHA256FileHex(const APath: string): string;
+begin
+  Result := nextpas.core.hash.files.SHA256FileHex(APath);
+end;
+
+function SHA512FileHex(const APath: string): string;
+begin
+  Result := nextpas.core.hash.files.SHA512FileHex(APath);
 end;
 
 function NewHasher(AAlgo: THashAlgorithm): IHasher;
