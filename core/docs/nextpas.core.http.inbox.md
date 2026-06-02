@@ -4,6 +4,10 @@
 
 ## 当前批次
 
+- 本轮新增生产修复：同一 read 中若首个完整 request 后还跟着下一个 pipelined request，H1 parser 现在只消费首个 request，不再让后续字节污染当前 request 的 method/url/body
+- 本轮新增生产修复：H1 server transport 现在会保留单连接上的未消费尾巴，并把同一 write 里的第二个 request 留到下一轮分发；首个 response 不再误吃后续请求帧
+- 本轮新增生产修复：upgrade/hijack 场景下如果 WebSocket 握手和首帧同包到达，H1 server 现在会把 read-ahead 尾巴继续交给 hijacked `ITcpStream`，首帧不再丢失
+- 本轮 focused proof 继续扩到 parser/server 两层，并守住 `Connection: close` 下 `Content-Length` body 结束后 extra bytes 仍显式拒绝的旧契约
 - 本轮新增生产修复：`Content-Length` 请求在声明 body 结束后若仍携带额外字节，且同一请求显式 `Connection: close`，parser 现在会把该输入保持为 error/not-complete，server 统一返回显式 `400`
 - 这轮 focused proof 已补齐到 parser/server/security 三层；handler 不会落地
 - chunked trailer 契约边界已收紧并落地
@@ -52,8 +56,11 @@
 - `impl.h1.parser` 现在也有 `CRLF injection / request-line splitting` parser error focused proof。
 - `impl.h1.parser` 现在也有 `negative Content-Length` 与 `very long method` parser error focused proof。
 - `impl.h1.parser` 现在也有 `Content-Length + Connection: close + extra bytes after body` parser error focused proof。
+- `impl.h1.parser` 现在也有 `same-read pipelined next request does not pollute current request` focused proof。
 - `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、generic malformed request 显式 `400` rejection、`HTTP/1.1 missing Host` 显式 `400` rejection、`HTTP/1.0 missing Host` 仍允许的 focused 回归、`HTTP/0.9 / no-version` 显式 `400` rejection、`CRLF injection / request-line splitting` 显式 `400` rejection、`negative Content-Length` 显式 `400` rejection、`very long method` 显式 `400` rejection、`Content-Length + Connection: close + extra bytes after body` 显式 `400` rejection、CL-TE conflict rejection、duplicate `Content-Length` 显式 `400` rejection、`null-byte header` 显式 `400` rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
+- `THttpServer` 现在也有 `same-write pipelined requests` focused proof：首个 request 的 body/handler/response 不会被第二个 request 污染，第二个 request 仍会在同连接上继续完成。
 - `test_http_security` 现在也有 generic malformed request、`HTTP/1.1 missing Host`、`HTTP/0.9 / no-version`、`CRLF injection / request-line splitting`、`negative Content-Length`、`very long method`、`Content-Length + Connection: close + extra bytes after body`、duplicate `Content-Length`、`null-byte header`、malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
+- `test_http_websocket` 现在也有 `upgrade request + first frame in one write` focused regression proof，锁定 hijack 后 read-ahead 尾巴不会丢失。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -68,6 +75,7 @@
 
 ## 下一步
 
-- 下一步优先判断剩余非 `Connection: close` 的 `body larger than Content-Length` ingress case，究竟应该维持“严格按声明长度读取并安全丢弃/关闭”还是继续系统性收紧成显式契约；同时继续判断 trailer 是否最终需要显式 public API。
+- 下一步先回到 raw-wire malformed chunked request security proof，优先补剩余 chunk framing 异常变体是否都稳定落在显式 `400` 或安全关闭语义。
+- 同时继续判断剩余非 `Connection: close` 的 `body larger than Content-Length` ingress case，究竟应该维持“严格按声明长度读取并安全丢弃/关闭”还是继续系统性收紧成显式契约；并继续评估 trailer 是否最终需要显式 public API。
 - 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。

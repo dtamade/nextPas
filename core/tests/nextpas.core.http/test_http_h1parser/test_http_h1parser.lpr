@@ -605,6 +605,29 @@ begin
   CheckEqual('/ws', LP.GetUrl, 'upgrade request preserves url');
 end;
 
+procedure TestPipelinedNextRequestDoesNotPolluteCurrentRequest;
+var
+  LP: IH1Parser;
+  LReq1, LReq2, LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LReq2 := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+  LReq := LReq1 + LReq2;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'pipelined second request should not corrupt first request');
+  Check(LP.IsComplete, 'first pipelined request should complete');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'parser should consume only the first request');
+  Check(LP.GetMethod = hmPost, 'first pipelined request preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'first pipelined request preserves url');
+  CheckEqual('hello', LP.GetBody, 'first pipelined request preserves body');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -736,6 +759,7 @@ begin
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
+  T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);

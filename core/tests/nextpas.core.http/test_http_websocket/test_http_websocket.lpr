@@ -373,6 +373,82 @@ begin
   end;
 end;
 
+{ Test 4b: Upgrade request and first frame coalesced in one write }
+procedure TestTextFrameEchoWithCoalescedFirstFrame;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq, LFrame, LCombined: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LPayloadStart: Integer;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    LF := LWs.ReadFrame;
+    if LF.Opcode = wsOpText then
+      LWs.WriteText(LF.Payload);
+    LWs.Close(1000, '');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+    LFrame := BuildMaskedFrame($01, 'hello');
+    LCombined := LReq + LFrame;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LCombined[1], SizeUInt(Length(LCombined)));
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Pos(#13#10#13#10, LResp) > 0) and
+            (Length(LResp) >= Pos(#13#10#13#10, LResp) + 4 + 7) or
+            (LN = 0);
+
+      Check(Pos('101', LResp) > 0, 'coalesced echo: got 101');
+      LPayloadStart := Pos(#13#10#13#10, LResp) + 4;
+      Check(LPayloadStart >= 5, 'coalesced echo: headers complete');
+      Check(Length(LResp) >= LPayloadStart + 6, 'coalesced echo: got response frame');
+      Check(Ord(LResp[LPayloadStart]) = $81, 'coalesced echo: FIN+text opcode');
+      LPayloadLen := Ord(LResp[LPayloadStart + 1]) and $7F;
+      CheckEqual(Int64(5), Int64(LPayloadLen), 'coalesced echo: payload len = 5');
+      CheckEqual('hello', Copy(LResp, LPayloadStart + 2, LPayloadLen), 'coalesced echo: payload matches');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -551,6 +627,7 @@ begin
   T.Run('HandshakeNoUpgrade', @TestHandshakeNoUpgrade);
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
+  T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

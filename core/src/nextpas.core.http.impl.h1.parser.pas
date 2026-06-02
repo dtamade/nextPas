@@ -211,6 +211,10 @@ begin
     Exit(HPE_INVALID_VERSION);
   end;
   LSelf.FComplete := True;
+  if (LSelf.FParserType = ptRequest) and
+     (p0^.upgrade = 0) and
+     (llhttp_should_keep_alive(p0) <> 0) then
+    Exit(HPE_PAUSED);
   Result := 0;
 end;
 
@@ -250,14 +254,34 @@ end;
 function TH1Parser.Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
 var
   LErrno: TLlhttpErrnoT;
+  LErrorPos: PAnsiChar;
 begin
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
+  if (LErrno = HPE_PAUSED) and FComplete then
+  begin
+    FError := False;
+    FErrorMsg := '';
+    LErrorPos := llhttp_get_error_pos(@FParser);
+    if (LErrorPos <> nil) and
+       (PtrUInt(LErrorPos) >= PtrUInt(ABuf)) and
+       (PtrUInt(LErrorPos) <= PtrUInt(ABuf) + ALen) then
+      Result := SizeUInt(PtrUInt(LErrorPos) - PtrUInt(ABuf))
+    else
+      Result := ALen;
+    Exit;
+  end;
   if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
   begin
     FComplete := True;
     FError := False;
     FErrorMsg := '';
-    Result := ALen;
+    LErrorPos := llhttp_get_error_pos(@FParser);
+    if (LErrorPos <> nil) and
+       (PtrUInt(LErrorPos) >= PtrUInt(ABuf)) and
+       (PtrUInt(LErrorPos) <= PtrUInt(ABuf) + ALen) then
+      Result := SizeUInt(PtrUInt(LErrorPos) - PtrUInt(ABuf))
+    else
+      Result := ALen;
     Exit;
   end;
   if LErrno <> HPE_OK then

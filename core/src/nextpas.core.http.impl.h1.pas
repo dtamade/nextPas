@@ -37,6 +37,7 @@ uses
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.errors,
+  nextpas.core.io.base,
   nextpas.core.io.buffer,
   nextpas.core.io.memory,
   nextpas.core.net,
@@ -53,6 +54,29 @@ type
     Host: string;
     Port: UInt16;
     Conn: ITcpStream;
+  end;
+
+  TPrefixedTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
+  private
+    FInner: ITcpStream;
+    FPrefix: string;
+    FPrefixPos: SizeInt;
+  public
+    constructor Create(const AInner: ITcpStream; const APrefix: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
   end;
 
   TH1ClientTransport = class(TInterfacedObject, IHttpTransport)
@@ -95,6 +119,108 @@ begin
     Result := (LConn = 'keep-alive')
   else
     Result := (LConn <> 'close');
+end;
+
+{ TPrefixedTcpStream }
+
+constructor TPrefixedTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
+begin
+  inherited Create;
+  FInner := AInner;
+  FPrefix := APrefix;
+  FPrefixPos := 1;
+end;
+
+function TPrefixedTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LPtr: PByte;
+  LCopy: SizeUInt;
+begin
+  Result := 0;
+  if ACount = 0 then
+    Exit(0);
+
+  LPtr := @ABuf;
+  if (FPrefixPos > 0) and (FPrefixPos <= Length(FPrefix)) then
+  begin
+    LCopy := SizeUInt(Length(FPrefix) - FPrefixPos + 1);
+    if LCopy > ACount then
+      LCopy := ACount;
+    Move(FPrefix[FPrefixPos], LPtr^, LCopy);
+    Inc(FPrefixPos, SizeInt(LCopy));
+    Inc(Result, LCopy);
+    Inc(LPtr, LCopy);
+    if FPrefixPos > Length(FPrefix) then
+      FPrefix := '';
+  end;
+
+  if Result < ACount then
+    Inc(Result, FInner.Read(LPtr^, ACount - Result));
+end;
+
+function TPrefixedTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := FInner.Write(ABuf, ACount);
+end;
+
+function TPrefixedTcpStream.Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := FInner.Seek(AOffset, AOrigin);
+end;
+
+procedure TPrefixedTcpStream.Close;
+begin
+  FInner.Close;
+end;
+
+function TPrefixedTcpStream.GetSize: Int64;
+begin
+  Result := FInner.Size;
+end;
+
+function TPrefixedTcpStream.GetPosition: Int64;
+begin
+  Result := FInner.Position;
+end;
+
+procedure TPrefixedTcpStream.SetPosition(const AValue: Int64);
+begin
+  FInner.Position := AValue;
+end;
+
+function TPrefixedTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := FInner.LocalAddr;
+end;
+
+function TPrefixedTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := FInner.RemoteAddr;
+end;
+
+procedure TPrefixedTcpStream.Shutdown;
+begin
+  FInner.Shutdown;
+end;
+
+procedure TPrefixedTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+  FInner.SetNoDelay(AValue);
+end;
+
+procedure TPrefixedTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+  FInner.SetKeepAlive(AValue);
+end;
+
+procedure TPrefixedTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+  FInner.SetReadDeadline(ADeadline);
+end;
+
+procedure TPrefixedTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+  FInner.SetWriteDeadline(ADeadline);
 end;
 
 procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus);
@@ -325,6 +451,7 @@ var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
+  LConsumed: SizeUInt;
   LUrl: TUrl;
   LReq: IHttpRequest;
   LW: IHttpResponseWriter;
@@ -337,11 +464,14 @@ var
   LTotalRead: SizeUInt;
   LHeadersDone: Boolean;
   LRejected: Boolean;
+  LPending: string;
+  LHijackConn: ITcpStream;
 begin
   Result := True;
   LParser := NewH1RequestParser;
   LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
   LKeepAlive := True;
+  LPending := '';
   if FOptions.IdleTimeout > 0 then
     LIdleMs := FOptions.IdleTimeout
   else
@@ -359,16 +489,33 @@ begin
       LHeadersDone := False;
       LRejected := False;
       repeat
-        LN := AConn.Read(LBuf[0], 4096);
-        if LN = 0 then
+        if LPending <> '' then
         begin
-          LKeepAlive := False;
-          if (LTotalRead > 0) and (not LParser.IsComplete) and (not LParser.HasError) then
-            LParser.Finish;
-          Break;
+          LN := SizeUInt(Length(LPending));
+          LConsumed := LParser.Execute(PAnsiChar(LPending), LN);
+          if LConsumed < LN then
+            LPending := Copy(LPending, Int32(LConsumed) + 1, Int32(LN - LConsumed))
+          else
+            LPending := '';
+        end
+        else
+        begin
+          LN := AConn.Read(LBuf[0], 4096);
+          if LN = 0 then
+          begin
+            LKeepAlive := False;
+            if (LTotalRead > 0) and (not LParser.IsComplete) and (not LParser.HasError) then
+              LParser.Finish;
+            Break;
+          end;
+          LConsumed := LParser.Execute(@LBuf[0], LN);
+          if LConsumed < LN then
+          begin
+            SetLength(LPending, Int32(LN - LConsumed));
+            Move(LBuf[LConsumed], LPending[1], LN - LConsumed);
+          end;
         end;
-        Inc(LTotalRead, LN);
-        LParser.Execute(@LBuf[0], LN);
+        Inc(LTotalRead, LConsumed);
         if (not LHeadersDone) and ((LParser.GetUrl <> '') or LParser.IsComplete) then
         begin
           LHeadersDone := True;
@@ -442,7 +589,11 @@ begin
 
       (LReq as THttpRequest).SetRemoteAddr(AConn.RemoteAddr.ToString);
 
-      LW := TH1ResponseWriter.Create(LBufWriter, AConn);
+      if LPending <> '' then
+        LHijackConn := TPrefixedTcpStream.Create(AConn, LPending)
+      else
+        LHijackConn := AConn;
+      LW := TH1ResponseWriter.Create(LBufWriter, LHijackConn);
       if LKeepAlive and (LParser.GetHttpVersion = hvHttp10) then
         LW.GetHeaders.Set_('connection', 'keep-alive');
       if not LKeepAlive then
