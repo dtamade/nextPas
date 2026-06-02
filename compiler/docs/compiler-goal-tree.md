@@ -139,3 +139,10 @@
   sema producer，也不处理 `int -> bool`、pointer/float cast、`sdiv/udiv`、
   `srem/urem`、signed/unsigned `icmp`。focused tests + 完整重编译（44265 lines compiled）+
   137/137 LLVM smoke 全绿；下一步进入 C4-C signedness 与 promotion 规则。
+- 2026-06-02 C4-C：typed signedness 第一刀：保持 HIR model 与 producer 不变，
+  只在 LLVM emitter 依据 typed HIR operand type 选择具体 opcode：
+  unsigned `div/mod` 发 `udiv/urem`，unsigned ordered compare 发
+  `ult/ule/ugt/uge`，signed int 路径保持 `sdiv/srem/slt/sle/sgt/sge`。
+  本轮仍未把 mixed-width promotion 决策放回 sema，也未扩到 pointer/float cast。
+  focused tests + 完整重编译（44352 lines compiled）+ 137/137 LLVM smoke 全绿；
+  C4 剩余主任务是 sema-side promotion 与显式 `shekCast` 物化。

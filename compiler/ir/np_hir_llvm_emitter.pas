@@ -45,6 +45,11 @@ type
     function TypeToLlvm(ATypeId: THIRTypeId): string;
     function OperandTypeToLlvm(const AOperand: THIROperand;
       const AFallback: string): string;
+    function IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
+    function IsUnsignedOrderedCompareType(const ATypeId: THIRTypeId): Boolean;
+    function DivOpcodeToLlvm(const AInstr: THIRInstr): string;
+    function ModOpcodeToLlvm(const AInstr: THIRInstr): string;
+    function CompareOpcodeToLlvm(const AInstr: THIRInstr): string;
     function AddStrConstant(const AValue: string): LongInt;
     function EscapeLlvmStr(const AValue: string): string;
     function IsSretFunction(const AName: string): Boolean;
@@ -164,6 +169,93 @@ begin
     Result := TypeToLlvm(AOperand.TypeId)
   else
     Result := AFallback;
+end;
+
+function THIRLlvmEmitter.IsUnsignedIntegerType(const ATypeId: THIRTypeId): Boolean;
+var
+  TypeRec: THIRTypeRec;
+begin
+  if ATypeId = 0 then
+    Exit(False);
+  TypeRec := FModule.Types.GetType(ATypeId);
+  Result := (TypeRec.Kind = htkInt) and (not TypeRec.Signed);
+end;
+
+function THIRLlvmEmitter.IsUnsignedOrderedCompareType(
+  const ATypeId: THIRTypeId
+): Boolean;
+var
+  TypeRec: THIRTypeRec;
+begin
+  if ATypeId = 0 then
+    Exit(False);
+  TypeRec := FModule.Types.GetType(ATypeId);
+  Result := ((TypeRec.Kind = htkInt) and (not TypeRec.Signed)) or
+    (TypeRec.Kind = htkPointer) or (TypeRec.Kind = htkUntypedPtr);
+end;
+
+function THIRLlvmEmitter.DivOpcodeToLlvm(const AInstr: THIRInstr): string;
+var
+  OperandTypeId: THIRTypeId;
+begin
+  OperandTypeId := AInstr.TypeId;
+  if Length(AInstr.Operands) >= 1 then
+    OperandTypeId := AInstr.Operands[0].TypeId;
+  if IsUnsignedIntegerType(OperandTypeId) then
+    Result := 'udiv'
+  else
+    Result := 'sdiv';
+end;
+
+function THIRLlvmEmitter.ModOpcodeToLlvm(const AInstr: THIRInstr): string;
+var
+  OperandTypeId: THIRTypeId;
+begin
+  OperandTypeId := AInstr.TypeId;
+  if Length(AInstr.Operands) >= 1 then
+    OperandTypeId := AInstr.Operands[0].TypeId;
+  if IsUnsignedIntegerType(OperandTypeId) then
+    Result := 'urem'
+  else
+    Result := 'srem';
+end;
+
+function THIRLlvmEmitter.CompareOpcodeToLlvm(const AInstr: THIRInstr): string;
+var
+  OperandTypeId: THIRTypeId;
+begin
+  OperandTypeId := 0;
+  if Length(AInstr.Operands) >= 1 then
+    OperandTypeId := AInstr.Operands[0].TypeId;
+
+  case AInstr.Kind of
+    hikCmpEq:
+      Result := 'eq';
+    hikCmpNe:
+      Result := 'ne';
+    hikCmpLt:
+      if IsUnsignedOrderedCompareType(OperandTypeId) then
+        Result := 'ult'
+      else
+        Result := 'slt';
+    hikCmpLe:
+      if IsUnsignedOrderedCompareType(OperandTypeId) then
+        Result := 'ule'
+      else
+        Result := 'sle';
+    hikCmpGt:
+      if IsUnsignedOrderedCompareType(OperandTypeId) then
+        Result := 'ugt'
+      else
+        Result := 'sgt';
+    hikCmpGe:
+      if IsUnsignedOrderedCompareType(OperandTypeId) then
+        Result := 'uge'
+      else
+        Result := 'sge';
+  else
+    Result := 'eq';
+  end;
 end;
 
 procedure THIRLlvmEmitter.EmitCallInstr(const AInstr: THIRInstr);
@@ -300,12 +392,14 @@ begin
           ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikDiv:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = sdiv ' + LlvmType +
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = ' +
+          DivOpcodeToLlvm(AInstr) + ' ' + LlvmType +
           ' ' + ValueRef(AInstr.Operands[0].ValueId) +
           ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikMod:
       if Length(AInstr.Operands) >= 2 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = srem ' + LlvmType +
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = ' +
+          ModOpcodeToLlvm(AInstr) + ' ' + LlvmType +
           ' ' + ValueRef(AInstr.Operands[0].ValueId) +
           ', ' + ValueRef(AInstr.Operands[1].ValueId));
     hikNeg:
@@ -314,14 +408,7 @@ begin
           ' 0, ' + ValueRef(AInstr.Operands[0].ValueId));
     hikCmpEq, hikCmpNe, hikCmpLt, hikCmpLe, hikCmpGt, hikCmpGe:
     begin
-      case AInstr.Kind of
-        hikCmpEq: Op := 'eq';
-        hikCmpNe: Op := 'ne';
-        hikCmpLt: Op := 'slt';
-        hikCmpLe: Op := 'sle';
-        hikCmpGt: Op := 'sgt';
-        hikCmpGe: Op := 'sge';
-      end;
+      Op := CompareOpcodeToLlvm(AInstr);
       if Length(AInstr.Operands) >= 2 then
       begin
         LlvmType := OperandTypeToLlvm(AInstr.Operands[0], 'i64');

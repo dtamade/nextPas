@@ -4,14 +4,15 @@
 
 ## 当前在做什么
 
-- 编译器主线已完成 `C4-B`：结构化表达式新增 `shekCast`，builder 可以把显式 scalar cast lower 成 typed `zext` / `sext` / `trunc`。
-- 旧 blob 仍保持 legacy i64 路径；`Expr.TypeId=0`、缺少 scalar fact，或 cast 超出当前支持范围时，必须回落 blob。
-- 本轮没有迁移新的 sema producer，当前只是把 C4 后续 promotion/signedness 的 builder 骨架补齐。
-- 最近验证：focused tests 全绿；`scripts/rebuild-compiler.sh` 输出 `44265 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 编译器主线已完成 `C4-C` 第一刀：typed integer 表达式现在会按 operand signedness 发出正确 LLVM opcode。
+- 结构化路径里，无符号 `div/mod/< <= > >=` 已不再被硬编码成 signed LLVM 指令；有符号路径保持原语义。
+- 旧 blob 仍保持 legacy i64 路径；`Expr.TypeId=0`、缺少 scalar fact，或未迁移到 typed 路径的表达式，继续回落 blob。
+- 本轮仍没有把 mixed-width promotion 决策放回 sema；C4 还没结束。
+- 最近验证：focused tests 全绿；`scripts/rebuild-compiler.sh` 输出 `44352 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. `C4-C`：补 signedness lowering，明确 `sdiv/udiv`、`srem/urem`、`icmp signed/unsigned`，并把 promotion 规则落回 sema。
+1. 继续 `C4`：把 mixed-width promotion 规则落回 sema，并显式物化 `shekCast`。
 2. `C5`：补 `lvalue/address` 模型，修 `P^.Field`、`@Arr[i]` 一类地址表达式。
 3. `C6`：补 allocator 和真实释放。
 4. `C7/C8`：多目标、优化、自举探针。
@@ -26,4 +27,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 当前批次：[`compiler/docs/plans/2026-06-02-c4b-structured-casts.md`](../compiler/docs/plans/2026-06-02-c4b-structured-casts.md)
+- 当前批次：[`compiler/docs/plans/2026-06-02-c4c-typed-signedness.md`](../compiler/docs/plans/2026-06-02-c4c-typed-signedness.md)
