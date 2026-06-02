@@ -202,6 +202,57 @@ begin
   CheckEqual('hello world', LP.GetBody, 'exact body');
 end;
 
+procedure TestChunkedRequestBody;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '6'#13#10' world'#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'chunked request complete');
+  Check(LP.GetMethod = hmPost, 'chunked request method POST');
+  CheckEqual('hello world', LP.GetBody, 'chunked request body decoded');
+end;
+
+procedure TestChunkedRequestInvalidChunkSize;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          'Z'#13#10'hello'#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.HasError, 'invalid chunk size raises parser error');
+  Check(not LP.IsComplete, 'invalid chunk size is not complete');
+end;
+
+procedure TestChunkedRequestTruncatedAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5'#13#10'hel';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated chunked request is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'truncated chunked request reports error on finish');
+  Check(not LP.IsComplete, 'truncated chunked request stays incomplete');
+end;
+
 procedure TestHeadRequest;
 var
   LP: IH1Parser;
@@ -309,6 +360,9 @@ begin
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
+  T.Run('Chunked request body', @TestChunkedRequestBody);
+  T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
+  T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Incomplete input', @TestIncompleteInput);

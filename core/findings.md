@@ -60,6 +60,10 @@
 - `test_http_h1parser` now locks that fixed-length truncation at EOF is an error, not a successful completion path.
 - `test_http_client` now proves the public client raises `EHttpError` on truncated fixed-length responses instead of returning a partial body.
 - EOF completion is now limited to true close-delimited responses (no `Transfer-Encoding`, no `Content-Length`, and status codes that may legally carry a body).
+- `test_http_h1parser` 现在也直接证明了 request-side chunked 行为：正常 chunked body 解码、invalid chunk-size 触发 parser error、truncated chunked body 在 `Finish` 时失败。
+- `test_http_server` 现在证明了 handler 读取到的是 decoded chunked request body，而不是原始 chunk framing。
+- 同一组 server focused tests 也证明了 `THttpServerOptions.MaxBodySize` 会对 chunked inbound traffic 的跨 chunk 累加超限生效。
+- 这一轮没有生产代码改动；新增 focused tests 直接通过，说明现有实现已经满足这一组 inbound chunked request 契约。
 
 ## Git and Collaboration Findings
 
@@ -78,7 +82,7 @@
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 - Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.
 - Future H2/H3 work should extend the landed internal registry instead of reintroducing version-default logic inside facade/client/server constructors.
-- The next parser-security gap is now more specific: malformed inbound chunked request bodies still need direct focused proof, distinct from the now-closed fixed-length EOF truncation bug.
+- The next parser-security gap is now more specific: raw-wire malformed inbound chunked request rejection semantics still need direct focused proof, distinct from the now-closed fixed-length EOF truncation bug and the now-proved parser/server chunked decode paths.
 
 ## Communication Cadence Adopted
 

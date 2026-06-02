@@ -1,5 +1,46 @@
 # Progress Log: nextpas.core.http
 
+## Session: 2026-06-03 inbound chunked request coverage
+
+### Phase 2/3: parser and server inbound chunked request proof expansion
+
+- **Status:** complete
+- **Scope:** expand focused proof for inbound chunked request parsing and server handling, without changing production code.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, architecture, task plan, findings, progress, and design conventions.
+  - [x] Added focused parser tests for valid chunked request body decode.
+  - [x] Added focused parser tests for invalid chunk-size and truncated chunked EOF failure.
+  - [x] Added focused server tests for decoded chunked request body readability.
+  - [x] Added focused server tests for chunked inbound `MaxBodySize` enforcement.
+  - [x] Verified the new tests passed on current implementation; no production fix was required.
+  - [x] Re-ran focused parser/server suites with heaptrc proof.
+  - [x] Re-ran the full HTTP suite after the coverage expansion.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [ ] Commit this batch.
+
+## Verification Evidence 2026-06-03 Chunked Inbound
+
+| Check                | Command                                                         | Result                                             |
+| -------------------- | --------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state     | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files |
+| Focused parser GREEN | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | 22/22 passed, 0 unfreed memory blocks              |
+| Focused server GREEN | `make -C tests/nextpas.core.http/test_http_server clean test`   | 22/22 passed, 0 unfreed memory blocks              |
+| Full HTTP suite      | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-03 Chunked Inbound
+
+- 这一轮是 coverage-expansion 批次，不是 bugfix 批次：新增 focused tests 直接通过，说明 parser/server 现有实现已经具备这组 chunked inbound 语义。
+- parser 现在不仅锁定 response-side framing 语义，也直接锁定 request-side chunked decode / invalid chunk-size / truncation at EOF。
+- server 现在直接证明 handler 读取的是 decoded request body，并且 chunked ingress 在跨 chunk 累加后同样受 `MaxBodySize` 约束。
+- `test_http_smoke` 仍打印 `True free heap : 260960 / Should be : 262144`，但 heaptrc 仍报告 `0 unfreed memory blocks`；继续视为非阻塞观察项。
+
+## Review 2026-06-03 Chunked Inbound
+
+- `/codex`-style review 结论：这一轮应该如实记录为 coverage expansion，而不是虚构一个不存在的生产修复。
+- parser-focused proof 和 server-focused proof 现在已经补到同一条 inbound chunked request 路线上，后续应把缺口收窄到 raw-wire malformed chunk rejection semantics。
+- Shared-checkout 风险没有变化：提交时必须继续保持 path-limited staging，只提交本轮 HTTP 文件。
+
 ## Session: 2026-06-02 truncated fixed-length EOF rejection
 
 ### Phase 2/3: parser and public client truncation hardening
