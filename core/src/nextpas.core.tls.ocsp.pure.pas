@@ -36,7 +36,7 @@ function IsOCSPResponseFresh(const AResponse: TOCSPBasicResponse): Boolean;
 implementation
 
 uses
-  DateUtils, nextpas.core.tls.asn1;
+  DateUtils, nextpas.core.time, nextpas.core.tls.asn1;
 
 function TryParseOCSPResponse(const AData: TBytes; out AResponse: TOCSPBasicResponse;
   out AError: string): Boolean;
@@ -91,7 +91,7 @@ begin
       SetLength(AResponse.Responses, 1);
       AResponse.Responses[0].CertStatus := ocsGood; // Default
       AResponse.Responses[0].HasNextUpdate := False;
-      AResponse.ProducedAt := Now;
+      AResponse.ProducedAt := DateTimeUtcNow;
     end;
 
     Result := True;
@@ -106,7 +106,7 @@ begin
     Exit(False);
 
   if AResponse.Responses[0].HasNextUpdate then
-    Result := Now < AResponse.Responses[0].NextUpdate
+    Result := DateTimeUtcNow < AResponse.Responses[0].NextUpdate
   else
     Result := True; // No nextUpdate means always fresh per RFC 6960
 end;
