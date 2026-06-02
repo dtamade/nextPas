@@ -7084,6 +7084,61 @@ var
       shekCast, ATargetTypeId, 0, LocalChildren, 0, '', '', 0, shvcScalar
     );
   end;
+
+  function IsStructuredAddressableScalarType(const ATypeId: LongInt): Boolean;
+  var
+    Fact: TSemanticScalarTypeFact;
+  begin
+    if ATypeId <= 0 then
+      Exit(False);
+    if not FModel.GetTypeScalarFact(ATypeId, Fact) then
+      Exit(False);
+    Result := Fact.Kind in [sskBool, sskInt, sskFloat, sskPointer];
+  end;
+
+  function AddRuntimePointerSymbolValueExpr(const ASymbolName: string;
+    out ALocalExprId: LongInt): Boolean;
+  var
+    LocalChildren: array of LongInt;
+    LocalSymbolId, PointerTypeId: LongInt;
+  begin
+    ALocalExprId := 0;
+    if (ASymbolName = '') or (not IsRuntimeVar(ASymbolName)) then
+      Exit(False);
+    LocalSymbolId := FModel.FindSymbolByName(ASymbolName);
+    if LocalSymbolId <= 0 then
+      Exit(False);
+    PointerTypeId := FModel.FindTypeByName('Pointer');
+    if PointerTypeId <= 0 then
+      Exit(False);
+    SetLength(LocalChildren, 0);
+    ALocalExprId := FModel.AddHirExpr(
+      shekSymbolValue, PointerTypeId, LocalSymbolId, LocalChildren,
+      0, '', '', 0, shvcScalar
+    );
+    Result := True;
+  end;
+
+  function BuildRuntimePointerHirExpr(const ALocalNode: TGreenNode;
+    out ALocalExprId: LongInt): Boolean;
+  var
+    LocalExpr: TSemanticHirExpr;
+  begin
+    ALocalExprId := 0;
+    if ALocalNode = nil then
+      Exit(False);
+
+    if ALocalNode.NodeKind = gnkIdentifier then
+      Exit(AddRuntimePointerSymbolValueExpr(ALocalNode.Text, ALocalExprId));
+
+    if not BuildRuntimeScalarHirExpr(ALocalNode, ALocalExprId) then
+      Exit(False);
+    if (ALocalExprId <= 0) or (ALocalExprId > FModel.HirExprCount) then
+      Exit(False);
+    LocalExpr := FModel.HirExprAt(ALocalExprId - 1);
+    Result := (LocalExpr.TypeId = FModel.FindTypeByName('Pointer')) and
+      (LocalExpr.ValueClass = shvcScalar);
+  end;
 begin
   AExprId := 0;
   if ANode = nil then
@@ -7142,6 +7197,47 @@ begin
     AExprId := FModel.AddHirExpr(
       shekSymbolValue, FModel.SymbolTypeId(SymbolId), SymbolId, Children,
       0, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) and
+    (ANode.Text = '@') then
+  begin
+    if (ANode.ChildAt(0) = nil) or
+      (ANode.ChildAt(0).NodeKind <> gnkIdentifier) then
+      Exit(False);
+    if not IsRuntimeVar(ANode.ChildAt(0).Text) then
+      Exit(False);
+    SymbolId := FModel.FindSymbolByName(ANode.ChildAt(0).Text);
+    if SymbolId <= 0 then
+      Exit(False);
+    ResultTypeId := FModel.SymbolTypeId(SymbolId);
+    if not IsStructuredAddressableScalarType(ResultTypeId) then
+      Exit(False);
+    SetLength(Children, 0);
+    LeftExprId := FModel.AddHirExpr(
+      shekSymbolAddress, ResultTypeId, SymbolId, Children,
+      0, '', '', 0, shvcAddress
+    );
+    SetLength(Children, 1);
+    Children[0] := LeftExprId;
+    AExprId := FModel.AddHirExpr(
+      shekAddressOf, FModel.FindTypeByName('Pointer'), 0, Children,
+      0, '', '', 0, shvcScalar
+    );
+    Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkDereference) and (ANode.ChildCount >= 1) then
+  begin
+    if not BuildRuntimePointerHirExpr(ANode.ChildAt(0), LeftExprId) then
+      Exit(False);
+    SetLength(Children, 1);
+    Children[0] := LeftExprId;
+    AExprId := FModel.AddHirExpr(
+      shekDeref, FModel.FindTypeByName('Integer'), 0, Children,
+      0, '', '', 0, shvcAddress
     );
     Exit(True);
   end;

@@ -78,6 +78,21 @@ begin
   Result := False;
 end;
 
+function FindAssignRuntimeNodeForDestAndOperandText(const AModel: TSemanticModel;
+  const ADest, AText: string; out ANode: TTypedHirNode): Boolean;
+var
+  I: LongInt;
+begin
+  for I := 0 to AModel.TypedHirNodeCount - 1 do
+  begin
+    ANode := AModel.TypedHirNodeAt(I);
+    if (ANode.Kind = 'assign-runtime') and (ANode.DisplayName = ADest) and
+      (Pos(AText, ANode.Operand) > 0) then
+      Exit(True);
+  end;
+  Result := False;
+end;
+
 procedure AssertRuntimeBinaryExpr(const AModel: TSemanticModel;
   const ANode: TTypedHirNode; const AExpectedOp: string;
   const ABaseExitCode: LongInt);
@@ -190,6 +205,70 @@ begin
   Symbol := AModel.SymbolAt(Expr.SymbolId - 1);
   if Symbol.Name <> AExpectedName then
     Halt(ABaseExitCode + 4);
+end;
+
+procedure AssertAddressOfRuntimeExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedSymbolName: string;
+  const ABaseExitCode: LongInt);
+var
+  Expr, Child: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekAddressOf then
+    Halt(ABaseExitCode + 2);
+  if Expr.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 3);
+  AssertExprTypeName(AModel, Expr, 'Pointer', ABaseExitCode + 4);
+  if Length(Expr.Children) < 1 then
+    Halt(ABaseExitCode + 5);
+  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  if Child.Kind <> shekSymbolAddress then
+    Halt(ABaseExitCode + 6);
+  if Child.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 7);
+  AssertExprTypeName(AModel, Child, 'Integer', ABaseExitCode + 8);
+  if Child.SymbolId <= 0 then
+    Halt(ABaseExitCode + 9);
+  Symbol := AModel.SymbolAt(Child.SymbolId - 1);
+  if Symbol.Name <> AExpectedSymbolName then
+    Halt(ABaseExitCode + 10);
+end;
+
+procedure AssertDerefRuntimeExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedPointerName: string;
+  const ABaseExitCode: LongInt);
+var
+  Expr, Child: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekDeref then
+    Halt(ABaseExitCode + 2);
+  if Expr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 3);
+  AssertExprTypeName(AModel, Expr, 'Integer', ABaseExitCode + 4);
+  if Length(Expr.Children) < 1 then
+    Halt(ABaseExitCode + 5);
+  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  if Child.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 6);
+  if Child.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 7);
+  AssertExprTypeName(AModel, Child, 'Pointer', ABaseExitCode + 8);
+  if Child.SymbolId <= 0 then
+    Halt(ABaseExitCode + 9);
+  Symbol := AModel.SymbolAt(Child.SymbolId - 1);
+  if Symbol.Name <> AExpectedPointerName then
+    Halt(ABaseExitCode + 10);
 end;
 
 procedure TestHaltRuntimeExprProducer;
@@ -380,6 +459,43 @@ begin
       'sub', Node) then
       Halt(62);
     AssertRuntimeBinaryExpr(Model, Node, '-', 63);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestPointerAddressDerefRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var x: Integer;'#10 +
+    'var y: Integer;'#10 +
+    'var p: ^Integer;'#10 +
+    'begin'#10 +
+    '  x := 5;'#10 +
+    '  p := @x;'#10 +
+    '  y := p^;'#10 +
+    '  Halt(y);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(150);
+    if Model.Status <> 'ready' then
+      Halt(151);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'p',
+      'varref x', Node) then
+      Halt(152);
+    AssertAddressOfRuntimeExpr(Model, Node, 'x', 153);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'y',
+      'deref', Node) then
+      Halt(164);
+    AssertDerefRuntimeExpr(Model, Node, 'p', 165);
   finally
     Model.Free;
   end;
@@ -618,6 +734,7 @@ begin
   TestAssignRuntimeExprProducer;
   TestIncRuntimeExprProducer;
   TestDecRuntimeExprProducer;
+  TestPointerAddressDerefRuntimeExprProducer;
   TestMixedWidthPromotionExprProducer;
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;
