@@ -286,6 +286,7 @@ type
 implementation
 
 uses
+  nextpas.core.time,
   nextpas.core.tls.openssl.api.asn1,
   nextpas.core.tls.openssl.api.x509v3,
   nextpas.core.tls.openssl.api.stack,  // Added stack support
@@ -1973,10 +1974,13 @@ end;
 class function TCertificateUtils.IsValid(const ACertPEM: string): Boolean;
 var
   LInfo: TCertInfo;
+  LCurrentTime: TDateTime;
 begin
   LInfo := GetInfo(ACertPEM);
   try
-    Result := (Now >= LInfo.NotBefore) and (Now <= LInfo.NotAfter);
+    LCurrentTime := DateTimeUtcNow;
+    Result := (LCurrentTime >= LInfo.NotBefore) and
+      (LCurrentTime <= LInfo.NotAfter);
   finally
     LInfo.SubjectAltNames.Free;
   end;

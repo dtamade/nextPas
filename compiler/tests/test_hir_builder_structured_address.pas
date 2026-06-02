@@ -61,6 +61,18 @@ begin
   );
 end;
 
+function AddArrayElemAddress(const ASymbolId, AIndexExprId,
+  ATypeId: LongInt): LongInt;
+var
+  Children: array of LongInt;
+begin
+  SetLength(Children, 1);
+  Children[0] := AIndexExprId;
+  Result := Model.AddHirExpr(
+    shekArrayElem, ATypeId, ASymbolId, Children, 0, '', '', 0, shvcAddress
+  );
+end;
+
 function TypeIsIntWidth(const AModule: THIRModule; const ATypeId: THIRTypeId;
   const ABitWidth: Byte; const ASigned: Boolean): Boolean;
 var
@@ -134,10 +146,25 @@ begin
   Result := False;
 end;
 
+function HasIntrinsic(const AFunc: THIRFunction;
+  const AIntrinsicName: string): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikIntrinsic) and
+        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName =
+         AIntrinsicName) then
+        Exit(True);
+  Result := False;
+end;
+
 var
   IntegerTypeId, PointerTypeId: LongInt;
-  SymX, SymY: LongInt;
-  ExprFive, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
+  SymArr, SymX, SymY: LongInt;
+  ExprFive, ExprOne, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
+  ExprArrElement: LongInt;
   NodeId: LongInt;
   Builder: THIRBuilder;
   Func: THIRFunction;
@@ -149,14 +176,18 @@ begin
 
     SymX := Model.AddSymbol('x', 'variable', '', IntegerTypeId, 0);
     SymY := Model.AddSymbol('y', 'variable', '', IntegerTypeId, 0);
+    SymArr := Model.AddSymbol('arr', 'variable', '', 0, 0);
 
     ExprFive := AddIntLiteral(5, IntegerTypeId);
+    ExprOne := AddIntLiteral(1, IntegerTypeId);
     ExprXAddress := AddSymbolAddress(SymX, IntegerTypeId);
     ExprAddressOfX := AddAddressOf(ExprXAddress, PointerTypeId);
     ExprDerefAddressOfX := AddDeref(ExprAddressOfX, IntegerTypeId);
+    ExprArrElement := AddArrayElemAddress(SymArr, ExprOne, IntegerTypeId);
 
     Model.AddTypedHirNode('function-body-begin', 'TestAddress', 0,
       IntegerTypeId, '0::i');
+    Model.AddTypedHirNode('var-decl-arr-runtime', 'arr', SymArr, 0, 'arr');
     Model.AddTypedHirNode('var-decl-runtime', 'x', SymX, IntegerTypeId, 'x');
     Model.AddTypedHirNode('var-decl-runtime', 'y', SymY, IntegerTypeId, 'y');
 
@@ -167,6 +198,10 @@ begin
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := (@x)^',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprDerefAddressOfX);
+
+    NodeId := Model.AddTypedHirNode('assign-runtime', 'y := arr[1]',
+      SymY, IntegerTypeId, 'y'#9'int 0'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprArrElement);
     Model.AddTypedHirNode('function-body-end', 'TestAddress', 0, 0, '');
 
     Builder := THIRBuilder.Create(Model);
@@ -180,6 +215,8 @@ begin
         Halt(3);
       if not HasStoreWidth(Builder.Module, Func, 32, True) then
         Halt(4);
+      if not HasIntrinsic(Func, 'gep_i64') then
+        Halt(5);
     finally
       Builder.Free;
     end;

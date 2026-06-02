@@ -15,14 +15,7 @@ uses
   nextpas.core.http.intf;
 
 type
-  THttpServerOptions = record
-    ReadTimeout: Int64;   // milliseconds, 0 = no timeout
-    WriteTimeout: Int64;  // milliseconds, 0 = no timeout
-    IdleTimeout: Int64;   // milliseconds between requests, default 30000
-    MaxHeaderSize: Int32; // bytes, default 8192
-    MaxBodySize: Int64;   // bytes, default 4194304 (4MB), 0 = unlimited
-    class function Default: THttpServerOptions; static;
-  end;
+  THttpServerOptions = nextpas.core.http.base.THttpServerOptions;
 
   THttpServer = class(TInterfacedObject, IHttpServer)
   private
@@ -56,7 +49,7 @@ implementation
 
 uses
   nextpas.core.net.tcp,
-  nextpas.core.http.impl.h1,
+  nextpas.core.http.impl.registry,
   nextpas.core.platform.thread;
 
 type
@@ -83,17 +76,6 @@ begin
   end;
 end;
 
-{ THttpServerOptions }
-
-class function THttpServerOptions.Default: THttpServerOptions;
-begin
-  Result.ReadTimeout := 0;
-  Result.WriteTimeout := 0;
-  Result.IdleTimeout := 30000; { 30 seconds between requests }
-  Result.MaxHeaderSize := 8192;
-  Result.MaxBodySize := 4194304; { 4 MB }
-end;
-
 { THttpServer }
 
 constructor THttpServer.Create(const AHandler: IHttpHandler;
@@ -104,8 +86,6 @@ end;
 
 constructor THttpServer.Create(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport; const AOptions: THttpServerOptions);
-var
-  LH1Options: TH1ServerTransportOptions;
 begin
   inherited Create;
   FHandler := AHandler;
@@ -113,14 +93,7 @@ begin
   if ATransport <> nil then
     FTransport := ATransport
   else
-  begin
-    LH1Options.ReadTimeout := AOptions.ReadTimeout;
-    LH1Options.WriteTimeout := AOptions.WriteTimeout;
-    LH1Options.IdleTimeout := AOptions.IdleTimeout;
-    LH1Options.MaxHeaderSize := AOptions.MaxHeaderSize;
-    LH1Options.MaxBodySize := AOptions.MaxBodySize;
-    FTransport := NewH1ServerTransport(LH1Options);
-  end;
+    FTransport := ResolveDefaultServerTransport(AOptions);
   FRunning := False;
   FListener := nil;
 end;

@@ -131,6 +131,7 @@ type
     procedure BlobIs(var S: TExprStack; const AArg: string);
     procedure BlobArrLoad(var S: TExprStack);
     procedure BlobArrLoadPtr(var S: TExprStack);
+    procedure BlobArrElemRef(var S: TExprStack; const AArg: string);
     procedure BlobStrCharLoad(var S: TExprStack; const AArg: string);
     procedure BlobRLoad(var S: TExprStack; const AArg: string);
     procedure BlobUnaryOp(var S: TExprStack; AKind: THIRInstrKind;
@@ -175,6 +176,8 @@ type
     function LowerAddressOfExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function LowerDerefExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
+    function LowerArrayElemExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function CompareKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
     function BinaryKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
@@ -461,6 +464,21 @@ begin
             (FModule.Types.GetType(LeftType).Kind = htkPointer);
         end;
       end;
+    shekArrayElem:
+      begin
+        if AExpr.SymbolId <= 0 then
+          Exit(False);
+        Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+        Result := (Symbol.Name <> '') and (Length(AExpr.Children) >= 1) and
+          (ExprHirTypeId(AExpr) <> 0) and
+          (AExpr.ValueClass = shvcAddress) and
+          CanLowerExpr(AExpr.Children[0]);
+        if Result then
+        begin
+          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          Result := HirTypeIsInt(LeftType);
+        end;
+      end;
     shekCast:
       begin
         Result := (Length(AExpr.Children) >= 1) and
@@ -741,6 +759,56 @@ begin
   Result := AResult.AddressValueId <> 0;
 end;
 
+function THIRBuilder.LowerArrayElemExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Symbol: TSemanticSymbol;
+  IndexResult: THIRExprResult;
+  BaseAlloca, BasePtr, ElemPtr, IndexValue: THIRValueId;
+  HirType: THIRTypeId;
+  Instr: THIRInstr;
+begin
+  InitExprResult(AResult);
+  if (AExpr.SymbolId <= 0) or (Length(AExpr.Children) < 1) then
+    Exit(False);
+  Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+  if Symbol.Name = '' then
+    Exit(False);
+  if not LowerExprValue(AExpr.Children[0], IndexResult) then
+    Exit(False);
+  if (IndexResult.ValueId = 0) or (not HirTypeIsInt(IndexResult.TypeId)) then
+    Exit(False);
+
+  BaseAlloca := FindAlloca(Symbol.Name + '$ptr');
+  if BaseAlloca = 0 then
+    Exit(False);
+  BasePtr := EmitLoad(GetPtrType, BaseAlloca);
+  if BasePtr = 0 then
+    Exit(False);
+
+  IndexValue := NormalizeScalarValueToType(IndexResult.ValueId,
+    IndexResult.TypeId, GetIntType);
+  if IndexValue = 0 then
+    Exit(False);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(BasePtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(IndexValue, GetIntType);
+  EmitInstr(Instr);
+  ElemPtr := Instr.ResultId;
+
+  HirType := ExprHirTypeId(AExpr);
+  if HirType = 0 then
+    Exit(False);
+  SetExprAddress(AResult, ElemPtr, HirType);
+  Result := AResult.AddressValueId <> 0;
+end;
+
 function THIRBuilder.LowerCompareExpr(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
@@ -962,6 +1030,8 @@ begin
       Result := LowerAddressOfExpr(AExpr, AResult);
     shekDeref:
       Result := LowerDerefExpr(AExpr, AResult);
+    shekArrayElem:
+      Result := LowerArrayElemExpr(AExpr, AResult);
     shekCast:
       Result := LowerCastExpr(AExpr, AResult);
     shekUnaryOp:
@@ -1630,6 +1700,31 @@ begin
   Instr.Operands[1] := MakeOperand(Rhs);
   EmitInstr(Instr);
   S.PushTyped(EmitLoad(GetPtrType, Instr.ResultId), GetPtrType);
+end;
+
+procedure THIRBuilder.BlobArrElemRef(var S: TExprStack; const AArg: string);
+var
+  Instr: THIRInstr;
+  BaseAlloca, BasePtr, IndexVal: THIRValueId;
+begin
+  IndexVal := S.Pop;
+  BaseAlloca := FindAlloca(AArg + '$ptr');
+  if BaseAlloca = 0 then
+    Exit;
+  BasePtr := EmitLoad(GetPtrType, BaseAlloca);
+  if BasePtr = 0 then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(BasePtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(IndexVal, GetIntType);
+  EmitInstr(Instr);
+  S.PushTyped(Instr.ResultId, GetPtrType);
 end;
 
 procedure THIRBuilder.BlobStrCharLoad(var S: TExprStack; const AArg: string);
@@ -2313,6 +2408,7 @@ begin
     else if Token = 'is' then BlobIs(S, Arg)
     else if Token = 'arr_load' then BlobArrLoad(S)
     else if Token = 'arr_load_ptr' then BlobArrLoadPtr(S)
+    else if Token = 'arr_elem_ref' then BlobArrElemRef(S, Arg)
     else if Token = 'strcharload' then BlobStrCharLoad(S, Arg)
     else if Token = 'rload' then BlobRLoad(S, Arg)
     else if Token = 'add' then BlobBinOp(S, hikAdd)

@@ -5,14 +5,17 @@
 HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端能力。
 采用统一门面 + 协议实现隔离的架构，支持 HTTP/1.1、HTTP/2、HTTP/3 三个版本。
 
-消费方只需 `uses nextpas.core.http` 即可获得完整能力，协议版本协商透明。
+消费方只需 `uses nextpas.core.http` 即可获得完整能力；当前默认版本解析对应用层透明，但 H2/H3 仍处于规划阶段。
 
 ## 当前落地状态（2026-06-02）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
+- `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
+- `http.base` 现在拥有 `THttpClientOptions` / `THttpServerOptions` 这两个公共 options carrier。
 - `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造，server 负责 listener/accept/thread。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
-- `impl.registry` 仍是下一阶段工作；在 H2/H3 真正进入实现前，应先把默认协议选择与注册边界做实。
+- 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
+- 当前真实源码库存为 24 个 HTTP 单元，测试工程为 21 个；H2/H3 仍未进入实现。
 
 ---
 
@@ -27,12 +30,13 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 │  Request / Response / Headers / Router / Middleware      │
 │  Server 骨架 / Client 骨架                              │
 ├─────────────────────────────────────────────────────────┤
+│  内部 registry 层                                        │
+│  默认版本解析 + transport factory 注册                   │
+├─────────────────────────────────────────────────────────┤
 │  协议实现层（版本隔离）                                  │
 │  impl.h1: 文本协议、chunked、keep-alive、upgrade       │
 │  impl.h2: 二进制帧、多路复用、HPACK、流控、ALPN        │
 │  impl.h3: QUIC 帧、QPACK、0-RTT、Alt-Svc             │
-├─────────────────────────────────────────────────────────┤
-│  impl.registry: 协议版本注册 + 自动协商                 │
 ├─────────────────────────────────────────────────────────┤
 │  依赖层                                                  │
 │  H1/H2: net (TCP) + tls (ALPN)                          │
@@ -42,54 +46,42 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 
 ---
 
-## 文件结构
+## 文件结构（当前已落地）
 
 ```
 src/
   { 门面 + 公共层 }
   nextpas.core.http.pas                  ← 统一门面（re-export）
-  nextpas.core.http.base.pas             ← 公共类型
+  nextpas.core.http.base.pas             ← 公共类型 + public options carrier
   nextpas.core.http.intf.pas             ← 统一接口
   nextpas.core.http.message.pas          ← Request/Response 实现
   nextpas.core.http.headers.pas          ← Header 集合（解析/序列化/查找）
   nextpas.core.http.url.pas              ← URL 解析（scheme/host/path/query/fragment）
   nextpas.core.http.router.pas           ← Radix tree 路由 + 路径参数
   nextpas.core.http.middleware.pas       ← 中间件链
+  nextpas.core.http.middleware.cors.pas
+  nextpas.core.http.middleware.logger.pas
+  nextpas.core.http.middleware.recovery.pas
+  nextpas.core.http.middleware.timeout.pas
   nextpas.core.http.server.pas           ← Server 骨架（accept loop + transport dispatch）
   nextpas.core.http.client.pas           ← Client 骨架（redirect + helper request build）
+  nextpas.core.http.static.pas           ← 静态文件/目录服务
+  nextpas.core.http.websocket.pas        ← WebSocket upgrade 与 frame IO
 
-  { 协议注册 }
-  nextpas.core.http.impl.registry.pas    ← 协议版本注册表 + 自动协商
+  { 内部默认协议解析 }
+  nextpas.core.http.impl.registry.pas    ← 默认版本注册表 + transport factory 解析
 
   { HTTP/1.1 实现 }
   nextpas.core.http.impl.h1.pas          ← H1 transport owner（client round-trip + server per-conn serve）
+  nextpas.core.http.impl.h1.llhttp.pas   ← llhttp 翻译产物
   nextpas.core.http.impl.h1.parser.pas   ← H1 协议解析（基于 llhttp 翻译）
+  nextpas.core.http.impl.h1.scan.pas     ← H1 扫描辅助
+  nextpas.core.http.impl.h1.fast.pas     ← H1 快速解析路径
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
-  nextpas.core.http.impl.h1.conn.pas     ← H1 连接管理（keep-alive）
-  nextpas.core.http.impl.h1.upgrade.pas  ← H1 协议升级（WebSocket）
-
-  { HTTP/2 实现 }
-  nextpas.core.http.impl.h2.pas          ← H2 transport 入口
-  nextpas.core.http.impl.h2.frame.pas    ← H2 帧编解码
-  nextpas.core.http.impl.h2.hpack.pas    ← HPACK 头部压缩
-  nextpas.core.http.impl.h2.stream.pas   ← H2 流管理 + 流控
-  nextpas.core.http.impl.h2.conn.pas     ← H2 连接（多路复用）
-
-  { HTTP/3 实现 }
-  nextpas.core.http.impl.h3.pas          ← H3 transport 入口
-  nextpas.core.http.impl.h3.frame.pas    ← H3 帧编解码
-  nextpas.core.http.impl.h3.qpack.pas    ← QPACK 头部压缩
-  nextpas.core.http.impl.h3.stream.pas   ← H3 流管理
-  nextpas.core.http.impl.h3.conn.pas     ← H3 连接
-
-  { QUIC（独立 L2 模块，非 http 子模块） }
-  nextpas.core.quic.pas                  ← QUIC 门面
-  nextpas.core.quic.base.pas
-  nextpas.core.quic.intf.pas
-  nextpas.core.quic.conn.pas
-  nextpas.core.quic.stream.pas
-  nextpas.core.quic.crypto.pas
+  nextpas.core.http.impl.h1.chunked.pas  ← chunked writer/helper
 ```
+
+H2/H3 相关单元目前仍是架构规划，不属于当前源码库存。
 
 ---
 
@@ -202,18 +194,18 @@ type
 ## 依赖关系
 
 ```
-http.base       ← 无依赖（纯类型）
+http.base       ← errors
 http.intf       ← http.base, io.intf, net.intf
 http.headers    ← http.base, text, collections
 http.url        ← http.base, text
 http.message    ← http.intf, http.headers, io
 http.router     ← http.intf, collections
 http.middleware ← http.intf
-http.server     ← http.intf, net, time, thread
-http.client     ← http.intf, net, time, tls
+http.server     ← http.base, http.intf, net, thread, impl.registry
+http.client     ← http.base, http.intf, io, text, impl.registry
 
-impl.registry   ← http.intf
-impl.h1.*       ← http.intf, net, io, text
+impl.registry   ← http.base, http.intf, impl.h1
+impl.h1.*       ← http.base, http.intf, net, io, text
 impl.h2.*       ← http.intf, net, tls, io, collections
 impl.h3.*       ← http.intf, quic, io, collections
 ```
@@ -223,12 +215,14 @@ impl.h3.*       ← http.intf, quic, io, collections
 ## H1 Parser 策略
 
 基于 llhttp（Node.js 官方 HTTP parser）：
+
 - 用 c2pas888 项目翻译 llhttp C 源码为 Pascal
 - 修正为 nextpas 框架风格（命名规范、异常处理）
 - 放入 `nextpas.core.http.impl.h1.parser.pas`
 - 对外通过 `IHttpServerTransport` 接口暴露
 
 llhttp 优势：
+
 - 生产级验证（Node.js 全球流量）
 - 完整 HTTP/1.1 语义（chunked、keep-alive、upgrade、trailers）
 - 回调式 API 天然适合流式解析
@@ -244,18 +238,19 @@ llhttp 优势：
 http.base + http.intf + http.headers + http.url
 + http.message + http.router + http.middleware
 + http.server + http.client
-+ impl.h1.parser (llhttp) + impl.h1.writer + impl.h1.conn
++ impl.h1 + impl.h1.parser/scan/fast/writer/chunked
++ impl.registry
 ```
 
 依赖：net, io, text, time, thread
-测试：完整接口覆盖 + echo server + client round-trip + router dispatch
+测试：完整接口覆盖 + echo server + client round-trip + router dispatch + registry default resolution
 Benchmark：对照 Go net/http、Rust actix-web 的 hello-world QPS
 
 ### Phase 2: HTTP/2
 
 ```
-+ impl.h2.frame + impl.h2.hpack + impl.h2.stream + impl.h2.conn
-+ impl.registry (ALPN 协商)
++ impl.h2.* transport 家族
++ registry 扩展到 H2 默认解析 / ALPN 接线
 ```
 
 依赖：新增 tls

@@ -1,5 +1,51 @@
 # Progress Log: nextpas.core.http
 
+## Session: 2026-06-02 internal registry landing
+
+### Phase 3: centralized default transport registry
+
+- **Status:** complete
+- **Scope:** move public options into `http.base`, land `impl.registry`, route default client/server constructors through centralized resolution, and sync the HTTP control docs.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, architecture, task plan, findings, progress, and design conventions.
+  - [x] Moved `THttpClientOptions` / `THttpServerOptions` into `src/nextpas.core.http.base.pas`.
+  - [x] Added `src/nextpas.core.http.impl.registry.pas` with built-in H1 registration for `hvHttp10` / `hvHttp11`.
+  - [x] Routed `THttpClient` / `THttpServer` default constructors through registry resolution.
+  - [x] Added focused registry tests for missing-version errors and constructor default resolution.
+  - [x] Added focused base tests for `THttpClientOptions.Default` / `THttpServerOptions.Default`.
+  - [x] Ran focused registry/base/contract/client/server GREEN with heaptrc proof.
+  - [x] Ran the full HTTP suite after the registry refactor.
+  - [x] Updated inbox, coverage matrix, README/architecture, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 Registry
+
+| Check                  | Command                                                         | Result                                             |
+| ---------------------- | --------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state       | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files |
+| Focused registry GREEN | `make -C tests/nextpas.core.http/test_http_registry clean test` | 4/4 passed, 0 unfreed memory blocks                |
+| Focused base GREEN     | `make -C tests/nextpas.core.http/test_http_base clean test`     | 14/14 passed, 0 unfreed memory blocks              |
+| Focused contract GREEN | `make -C tests/nextpas.core.http/test_http_contract clean test` | 21/21 passed, 0 unfreed memory blocks              |
+| Focused client GREEN   | `make -C tests/nextpas.core.http/test_http_client clean test`   | 15/15 passed, 0 unfreed memory blocks              |
+| Focused server GREEN   | `make -C tests/nextpas.core.http/test_http_server clean test`   | 20/20 passed, 0 unfreed memory blocks              |
+| Full HTTP suite        | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-02 Registry
+
+- This batch finishes the transport-owner follow-up: default protocol selection is now centralized instead of being hardcoded inside `http.client` and `http.server`.
+- The registry remains an internal implementation layer; the public extensibility seam is still explicit `IHttpTransport` / `IHttpServerTransport` injection.
+- Built-in registry mapping is currently `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11` as the default client/server version.
+- Moving the public option records into `http.base` fixed the dependency direction problem: registry can now depend downward on base/intf/H1 without reaching upward into client/server.
+- `test_http_smoke` still prints `True free heap : 260960 / Should be : 262144`, but heaptrc reports `0 unfreed memory blocks`; this remains a non-blocking observation.
+
+## Review 2026-06-02 Registry
+
+- `/codex`-style review found no blocking issue in the landed registry design.
+- The architectural gain in this batch is real centralization: constructor defaults now go through one internal owner, which is the right base for future H2/H3 registration.
+- Shared-checkout risk remains unchanged: commit must stay path-limited to owned HTTP files only.
+- Next route: return to malformed chunk/body parser/security focused tests before benchmark work.
+
 ## Session: 2026-06-01
 
 ### Phase 1: public contract audit and HTTP test baseline
@@ -290,13 +336,13 @@
 
 ## Verification Evidence 2026-06-02 Cleanup
 
-| Check                    | Command                                                                                                                                                     | Result                                             |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
-| Git mixed-commit audit   | `git show --format= --name-only HEAD`, `git diff --name-status HEAD~1..HEAD`, `git rev-parse --show-prefix`, `git rev-parse --show-toplevel`             | Confirmed mixed commit scope and repo-root prefix  |
-| Worktree safety check    | `git status --short -- compiler/... docs/inbox.md`                                                                                                          | No additional local edits on the cleanup targets   |
-| Focused client test      | `make -C tests/nextpas.core.http/test_http_client clean test`                                                                                               | Passed with heaptrc 0 unfreed memory blocks        |
-| Full HTTP suite          | `make TESTS_DIR=tests/nextpas.core.http test`                                                                                                               | All tests passed; heaptrc zero leaks per test      |
-| Cleanup diff verification| `git diff --cached --name-status -- compiler/docs/compiler-goal-tree.md compiler/docs/plans/2026-06-02-c4d-sema-promotion-casts.md compiler/ir/np_hir_builder.pas compiler/sema/np_semantic_analyzer.pas compiler/tests/test_semantic_hir_expr_producer.pas docs/inbox.md` | Only unrelated paths staged for cleanup            |
+| Check                     | Command                                                                                                                                                                                                                                                                    | Result                                            |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| Git mixed-commit audit    | `git show --format= --name-only HEAD`, `git diff --name-status HEAD~1..HEAD`, `git rev-parse --show-prefix`, `git rev-parse --show-toplevel`                                                                                                                               | Confirmed mixed commit scope and repo-root prefix |
+| Worktree safety check     | `git status --short -- compiler/... docs/inbox.md`                                                                                                                                                                                                                         | No additional local edits on the cleanup targets  |
+| Focused client test       | `make -C tests/nextpas.core.http/test_http_client clean test`                                                                                                                                                                                                              | Passed with heaptrc 0 unfreed memory blocks       |
+| Full HTTP suite           | `make TESTS_DIR=tests/nextpas.core.http test`                                                                                                                                                                                                                              | All tests passed; heaptrc zero leaks per test     |
+| Cleanup diff verification | `git diff --cached --name-status -- compiler/docs/compiler-goal-tree.md compiler/docs/plans/2026-06-02-c4d-sema-promotion-casts.md compiler/ir/np_hir_builder.pas compiler/sema/np_semantic_analyzer.pas compiler/tests/test_semantic_hir_expr_producer.pas docs/inbox.md` | Only unrelated paths staged for cleanup           |
 
 ## Notes 2026-06-02 Cleanup
 
@@ -330,13 +376,13 @@
 
 ## Verification Evidence 2026-06-02 Pooling
 
-| Check               | Command                                                       | Result                                                                    |
-| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Git safety state    | `git status --short --branch`                                 | Shared checkout is dirty outside HTTP target files                        |
-| RED parser test     | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | Failed to compile: `IH1Parser` lacked `ShouldKeepAlive`                   |
-| Focused parser GREEN| `make -C tests/nextpas.core.http/test_http_h1parser clean test` | 18/18 passed, 0 unfreed memory blocks                                     |
-| Focused client GREEN| `make -C tests/nextpas.core.http/test_http_client clean test`   | 15/15 passed, 0 unfreed memory blocks                                     |
-| Full HTTP suite     | `make TESTS_DIR=tests/nextpas.core.http test`                 | All tests passed; heaptrc zero leaks per test                             |
+| Check                | Command                                                         | Result                                                  |
+| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------- |
+| Git safety state     | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files      |
+| RED parser test      | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | Failed to compile: `IH1Parser` lacked `ShouldKeepAlive` |
+| Focused parser GREEN | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | 18/18 passed, 0 unfreed memory blocks                   |
+| Focused client GREEN | `make -C tests/nextpas.core.http/test_http_client clean test`   | 15/15 passed, 0 unfreed memory blocks                   |
+| Full HTTP suite      | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test           |
 
 ## Notes 2026-06-02 Pooling
 
@@ -372,13 +418,13 @@
 
 ## Verification Evidence 2026-06-02 Chunked
 
-| Check                 | Command                                                         | Result                                                                                     |
-| --------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| Git safety state      | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files                                         |
-| RED chunked helper    | `make -C tests/nextpas.core.http/test_http_h1chunked clean test` | 5/6 passed; `Write after Flush raises` failed; failing run showed heaptrc residual blocks   |
-| Focused chunked GREEN | `make -C tests/nextpas.core.http/test_http_h1chunked clean test` | 6/6 passed, 0 unfreed memory blocks                                                        |
-| Focused writer GREEN  | `make -C tests/nextpas.core.http/test_http_h1writer clean test`  | 15/15 passed, 0 unfreed memory blocks                                                       |
-| Full HTTP suite       | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test                                               |
+| Check                 | Command                                                          | Result                                                                                    |
+| --------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Git safety state      | `git status --short --branch`                                    | Shared checkout is dirty outside HTTP target files                                        |
+| RED chunked helper    | `make -C tests/nextpas.core.http/test_http_h1chunked clean test` | 5/6 passed; `Write after Flush raises` failed; failing run showed heaptrc residual blocks |
+| Focused chunked GREEN | `make -C tests/nextpas.core.http/test_http_h1chunked clean test` | 6/6 passed, 0 unfreed memory blocks                                                       |
+| Focused writer GREEN  | `make -C tests/nextpas.core.http/test_http_h1writer clean test`  | 15/15 passed, 0 unfreed memory blocks                                                     |
+| Full HTTP suite       | `make TESTS_DIR=tests/nextpas.core.http test`                    | All tests passed; heaptrc zero leaks per test                                             |
 
 ## Notes 2026-06-02 Chunked
 
@@ -414,14 +460,14 @@
 
 ## Verification Evidence 2026-06-02 Transport Seam
 
-| Check                    | Command                                                            | Result                                                                 |
-| ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
-| Git safety state         | `git status --short --branch`                                      | Shared checkout is dirty outside owned HTTP target files               |
-| RED contract compile     | `make -C tests/nextpas.core.http/test_http_contract clean test`    | Failed to compile: transport injection overloads / constructor seams missing |
-| Focused contract GREEN   | `make -C tests/nextpas.core.http/test_http_contract clean test`    | 21/21 passed, 0 unfreed memory blocks                                  |
-| Focused client GREEN     | `make -C tests/nextpas.core.http/test_http_client clean test`      | 15/15 passed, 0 unfreed memory blocks                                  |
-| Focused server GREEN     | `make -C tests/nextpas.core.http/test_http_server clean test`      | 20/20 passed, 0 unfreed memory blocks                                  |
-| Full HTTP suite          | `make TESTS_DIR=tests/nextpas.core.http test`                      | All tests passed; heaptrc zero leaks per test                          |
+| Check                  | Command                                                         | Result                                                                       |
+| ---------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Git safety state       | `git status --short --branch`                                   | Shared checkout is dirty outside owned HTTP target files                     |
+| RED contract compile   | `make -C tests/nextpas.core.http/test_http_contract clean test` | Failed to compile: transport injection overloads / constructor seams missing |
+| Focused contract GREEN | `make -C tests/nextpas.core.http/test_http_contract clean test` | 21/21 passed, 0 unfreed memory blocks                                        |
+| Focused client GREEN   | `make -C tests/nextpas.core.http/test_http_client clean test`   | 15/15 passed, 0 unfreed memory blocks                                        |
+| Focused server GREEN   | `make -C tests/nextpas.core.http/test_http_server clean test`   | 20/20 passed, 0 unfreed memory blocks                                        |
+| Full HTTP suite        | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test                                |
 
 ## Notes 2026-06-02 Transport Seam
 

@@ -35,6 +35,22 @@ type
     function HostPort: string;
   end;
 
+  THttpClientOptions = record
+    Timeout: Int64;
+    MaxRedirects: Int32;
+    FollowRedirects: Boolean;
+    class function Default: THttpClientOptions; static;
+  end;
+
+  THttpServerOptions = record
+    ReadTimeout: Int64;
+    WriteTimeout: Int64;
+    IdleTimeout: Int64;
+    MaxHeaderSize: Int32;
+    MaxBodySize: Int64;
+    class function Default: THttpServerOptions; static;
+  end;
+
 const
   HTTP_STATUS_SWITCHING_PROTOCOLS   = THttpStatus(101);
   HTTP_STATUS_OK                    = THttpStatus(200);
@@ -287,6 +303,26 @@ begin
     Result := Host + ':' + IntToStr(Int64(Port))
   else
     Result := Host;
+end;
+
+{ THttpClientOptions }
+
+class function THttpClientOptions.Default: THttpClientOptions;
+begin
+  Result.Timeout := 30000;
+  Result.MaxRedirects := 10;
+  Result.FollowRedirects := True;
+end;
+
+{ THttpServerOptions }
+
+class function THttpServerOptions.Default: THttpServerOptions;
+begin
+  Result.ReadTimeout := 0;
+  Result.WriteTimeout := 0;
+  Result.IdleTimeout := 30000;
+  Result.MaxHeaderSize := 8192;
+  Result.MaxBodySize := 4194304;
 end;
 
 end.

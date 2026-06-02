@@ -6,20 +6,20 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 2/3 transition: H1 transport ownership seam landed; registry is the next architecture slice.
+Phase 3 integration hardening: H1 transport ownership seam and internal default registry are both landed; the next correctness slice returns to malformed input and parser/security boundaries.
 
 ## Active Batch Checklist
 
 - [x] Re-read HTTP inbox, API coverage, architecture, findings, progress, and design conventions.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
-- [x] Add RED public-contract tests for explicit client/server transport injection overloads.
-- [x] Extract default H1 client/server transport ownership into `src/nextpas.core.http.impl.h1.pas`.
-- [x] Turn `http.client` into an orchestrator over `IHttpTransport`.
-- [x] Turn `http.server` into a listener/accept skeleton over `IHttpServerTransport`.
-- [x] Re-run focused contract/client/server tests with heaptrc evidence.
-- [x] Re-run the full HTTP suite after the transport-owner refactor.
+- [x] Move public `THttpClientOptions` / `THttpServerOptions` carrier records into `src/nextpas.core.http.base.pas`.
+- [x] Land `src/nextpas.core.http.impl.registry.pas` as the internal default transport registry.
+- [x] Route `THttpClient` / `THttpServer` default constructors through registry resolution instead of hardcoded H1 selection.
+- [x] Add focused registry and base coverage for default resolution and moved option defaults.
+- [x] Re-run focused registry/base/contract/client/server tests with heaptrc evidence.
+- [x] Re-run the full HTTP suite after the registry refactor.
 - [x] Update inbox, coverage matrix, README/architecture, findings, and progress for this batch.
-- [x] Commit only the owned HTTP files for this transport seam batch.
+- [x] Commit only the owned HTTP files for this registry batch.
 
 ## Quality Gates
 
@@ -72,40 +72,43 @@ Phase 2/3 transition: H1 transport ownership seam landed; registry is the next a
 
 | Surface                 | Current count or files                              |
 | ----------------------- | --------------------------------------------------- |
-| HTTP source units       | 23 units under `src/nextpas.core.http*.pas`         |
-| HTTP test projects      | 19 directories under `tests/nextpas.core.http/`     |
+| HTTP source units       | 24 units under `src/nextpas.core.http*.pas`         |
+| HTTP test projects      | 21 directories under `tests/nextpas.core.http/`     |
 | HTTP benchmark projects | 7 directories under `benchmarks/nextpas.core.http*` |
 | Existing docs           | `docs/http/README.md`, `docs/http/ARCHITECTURE.md`  |
 
 ## Decisions
 
-| Decision                                       | Rationale                                                                                                                               |
-| ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Keep the H1 writer chunked-by-default contract | Matches current implementation and server tests; do not force a production change without a tested reason.                              |
-| Keep benchmark work after correctness          | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.                                          |
-| Commit only owned HTTP planning/test files     | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                                                    |
-| Treat empty DELETE body by behavior            | The public contract is no request body and zero content length, not the internal `Body=nil` representation.                             |
-| Treat transport coverage as shape-only         | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only. |
-| Transfer hijacked connection ownership         | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                |
-| Expose callback aliases through helpers        | `THttpHandlerMethod` / `THttpHandlerProc` should be usable from public helper APIs, not only exist as type aliases.                     |
-| Finalize chunked responses on flush            | Once a chunked response has emitted the terminal chunk, further body writes must raise `EHttpError` instead of corrupting the stream.   |
-| Treat coverage-only batches honestly           | If new focused tests pass immediately, record the batch as proof/coverage expansion rather than inventing a production bugfix.          |
-| Prefer follow-up cleanup over history rewrite  | In the shared checkout, undo accidental mixed commits with narrow follow-up commits rather than `reset`, `rebase`, or commit rewriting. |
-| Let parser own response reuse semantics        | Client pooling should depend on parsed HTTP version/framing/connection semantics, not only on a `Connection: close` header guess.       |
-| Keep chunk finalization enforced at helper level | `TChunkedWriter` itself must reject writes after the terminal chunk, so all callers share the same framing invariant.                  |
-| Land injection seam before registry            | Make transport ownership explicit in public factories first, then build `impl.registry` on top of a real client/server seam.            |
+| Decision                                         | Rationale                                                                                                                               |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Keep the H1 writer chunked-by-default contract   | Matches current implementation and server tests; do not force a production change without a tested reason.                              |
+| Keep benchmark work after correctness            | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.                                          |
+| Commit only owned HTTP planning/test files       | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                                                    |
+| Treat empty DELETE body by behavior              | The public contract is no request body and zero content length, not the internal `Body=nil` representation.                             |
+| Treat transport coverage as shape-only           | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only. |
+| Transfer hijacked connection ownership           | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                |
+| Expose callback aliases through helpers          | `THttpHandlerMethod` / `THttpHandlerProc` should be usable from public helper APIs, not only exist as type aliases.                     |
+| Finalize chunked responses on flush              | Once a chunked response has emitted the terminal chunk, further body writes must raise `EHttpError` instead of corrupting the stream.   |
+| Treat coverage-only batches honestly             | If new focused tests pass immediately, record the batch as proof/coverage expansion rather than inventing a production bugfix.          |
+| Prefer follow-up cleanup over history rewrite    | In the shared checkout, undo accidental mixed commits with narrow follow-up commits rather than `reset`, `rebase`, or commit rewriting. |
+| Let parser own response reuse semantics          | Client pooling should depend on parsed HTTP version/framing/connection semantics, not only on a `Connection: close` header guess.       |
+| Keep chunk finalization enforced at helper level | `TChunkedWriter` itself must reject writes after the terminal chunk, so all callers share the same framing invariant.                   |
+| Land injection seam before registry              | Make transport ownership explicit in public factories first, then build `impl.registry` on top of a real client/server seam.            |
+| Keep registry internal for now                   | The current need is centralized default resolution, not a public protocol-plugin surface before H2/H3 transports exist.                 |
+| Keep public options in `http.base`               | They are public carrier types and keeping them in `base` preserves clean downward dependency direction for the registry layer.          |
 
 ## Errors Encountered
 
-| Error                                                     | Attempt | Resolution                                                                                                  |
-| --------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| Root planning files described an old parser TryParse task | 1       | Replaced them with the active HTTP ownership plan while preserving old content in git history.              |
-| Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                               |
-| Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.                     |
-| Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.                      |
-| Chunked writer accepted writes after final flush          | 1       | Added RED writer test, then tracked chunked finalization in `TH1ResponseWriter.Write/Flush`.                |
-| Client response framing lacked focused proof              | 1       | Added chunked and close-delimited client tests; both passed immediately, so no production fix was required. |
-| Coverage commit accidentally included unrelated files     | 1       | Restore only the unrelated compiler/root-doc paths in a follow-up commit; keep the HTTP coverage commit intact. |
-| Client reuse semantics lacked framing-aware proof         | 1       | Added RED parser tests, then routed pooling decisions through parser-derived keep-alive semantics.           |
-| Chunked helper allowed writes after terminal chunk        | 1       | Added focused `test_http_h1chunked`, then made `TChunkedWriter.Write` raise after `Flush`.                   |
-| Transport interfaces had no production owner             | 1       | Added RED facade injection tests, then extracted default H1 transport ownership into `impl.h1` and public overloads. |
+| Error                                                     | Attempt | Resolution                                                                                                           |
+| --------------------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------- |
+| Root planning files described an old parser TryParse task | 1       | Replaced them with the active HTTP ownership plan while preserving old content in git history.                       |
+| Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                                        |
+| Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.                              |
+| Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.                               |
+| Chunked writer accepted writes after final flush          | 1       | Added RED writer test, then tracked chunked finalization in `TH1ResponseWriter.Write/Flush`.                         |
+| Client response framing lacked focused proof              | 1       | Added chunked and close-delimited client tests; both passed immediately, so no production fix was required.          |
+| Coverage commit accidentally included unrelated files     | 1       | Restore only the unrelated compiler/root-doc paths in a follow-up commit; keep the HTTP coverage commit intact.      |
+| Client reuse semantics lacked framing-aware proof         | 1       | Added RED parser tests, then routed pooling decisions through parser-derived keep-alive semantics.                   |
+| Chunked helper allowed writes after terminal chunk        | 1       | Added focused `test_http_h1chunked`, then made `TChunkedWriter.Write` raise after `Flush`.                           |
+| Transport interfaces had no production owner              | 1       | Added RED facade injection tests, then extracted default H1 transport ownership into `impl.h1` and public overloads. |
+| Public option carriers lived in client/server units       | 1       | Moved them into `http.base`, which let the new registry depend downward instead of upward on client/server.          |

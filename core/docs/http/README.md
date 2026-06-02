@@ -1,15 +1,19 @@
 # nextpas.core.http
 
 HTTP module providing server and client capabilities with radix-tree routing,
-middleware chaining, and protocol-version isolation (H1/H2/H3).
+middleware chaining, and a centralized internal transport registry.
 
 ## Architecture
 
 ```
 Facade (nextpas.core.http) — single uses entry point
   Application layer: Request, Response, Headers, Router, Middleware
-  Protocol layer: impl.h1 (text), impl.h2 (binary frames), impl.h3 (QUIC)
+  Internal registry: default version -> transport factory
+  Protocol layer: impl.h1 (landed), impl.h2/impl.h3 (planned)
 ```
+
+Current built-in mapping is `hvHttp10` / `hvHttp11` -> H1, with `hvHttp11`
+as the default client/server version.
 
 ## Quick Start
 
@@ -57,10 +61,11 @@ end);
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown`
 - `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)`
-- `NewHttpServer(Handler[, Transport][, Options])` — 默认自动接 H1，也可显式注入 `IHttpServerTransport`
-- `NewHttpClient([Transport][, Options])` — 默认自动接 H1，也可显式注入 `IHttpTransport`
+- `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
+- `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
 
 ## Cross-Platform
 
-Depends on `nextpas.core.net` (TCP/UDP) and `nextpas.core.io` (stream interfaces).
-Protocol negotiation is transparent to application code.
+Current transport implementation depends on `nextpas.core.net` (TCP) and
+`nextpas.core.io` (stream interfaces). Future H2/H3 work will extend this with
+TLS/ALPN and QUIC when those protocol families are actually implemented.

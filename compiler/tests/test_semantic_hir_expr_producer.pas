@@ -271,6 +271,51 @@ begin
     Halt(ABaseExitCode + 10);
 end;
 
+procedure AssertArrayElementAddressOfRuntimeExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedArrayName,
+  AExpectedIndexName: string; const ABaseExitCode: LongInt);
+var
+  Expr, Child, IndexExpr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekAddressOf then
+    Halt(ABaseExitCode + 2);
+  if Expr.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 3);
+  AssertExprTypeName(AModel, Expr, 'Pointer', ABaseExitCode + 4);
+  if Length(Expr.Children) < 1 then
+    Halt(ABaseExitCode + 5);
+
+  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  if Child.Kind <> shekArrayElem then
+    Halt(ABaseExitCode + 6);
+  if Child.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 7);
+  AssertExprTypeName(AModel, Child, 'Integer', ABaseExitCode + 8);
+  if Child.SymbolId <= 0 then
+    Halt(ABaseExitCode + 9);
+  Symbol := AModel.SymbolAt(Child.SymbolId - 1);
+  if Symbol.Name <> AExpectedArrayName then
+    Halt(ABaseExitCode + 10);
+  if Length(Child.Children) < 1 then
+    Halt(ABaseExitCode + 11);
+
+  IndexExpr := AModel.HirExprAt(Child.Children[0] - 1);
+  if IndexExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 12);
+  AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 13);
+  if IndexExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 14);
+  Symbol := AModel.SymbolAt(IndexExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedIndexName then
+    Halt(ABaseExitCode + 15);
+end;
+
 procedure TestHaltRuntimeExprProducer;
 var
   Model: TSemanticModel;
@@ -496,6 +541,41 @@ begin
       'deref', Node) then
       Halt(164);
     AssertDerefRuntimeExpr(Model, Node, 'p', 165);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestArrayElementAddressRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var arr: array of Integer;'#10 +
+    'var i: Integer;'#10 +
+    'var y: Integer;'#10 +
+    'var p: ^Integer;'#10 +
+    'begin'#10 +
+    '  SetLength(arr, 2);'#10 +
+    '  i := 1;'#10 +
+    '  arr[1] := 41;'#10 +
+    '  p := @arr[i];'#10 +
+    '  y := p^;'#10 +
+    '  Halt(y);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(180);
+    if Model.Status <> 'ready' then
+      Halt(181);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'p',
+      'arr_elem_ref arr', Node) then
+      Halt(182);
+    AssertArrayElementAddressOfRuntimeExpr(Model, Node, 'arr', 'i', 183);
   finally
     Model.Free;
   end;
@@ -735,6 +815,7 @@ begin
   TestIncRuntimeExprProducer;
   TestDecRuntimeExprProducer;
   TestPointerAddressDerefRuntimeExprProducer;
+  TestArrayElementAddressRuntimeExprProducer;
   TestMixedWidthPromotionExprProducer;
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;

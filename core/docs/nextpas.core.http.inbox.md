@@ -4,17 +4,19 @@
 
 ## 当前批次
 
-- transport injection seam 已落地
-- `impl.h1` 现在拥有默认 H1 client/server transport
-- HTTP focused/full suite + heaptrc 0 已验证
+- internal `impl.registry` 已落地
+- 默认协议选择已集中到 registry，不再散落在 `client/server`
+- `THttpClientOptions` / `THttpServerOptions` 已收敛到 `http.base`
+- `test_http_registry` 已补齐默认解析与缺失版本失败路径
 
 ## 当前重点
 
 - 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
-- `nextpas.core.http.impl.h1.pas` 已落地，默认 H1 连接复用、请求往返、per-connection serve loop 不再散落在 `client/server` 骨架里。
-- `nextpas.core.http.NewHttpClient` / `NewHttpServer` 现在支持显式注入 `IHttpTransport` / `IHttpServerTransport`。
-- `http.impl.h1.chunked`、client 复用语义、hijack ownership 这三条 H1 correctness 基线仍然保持成立。
-- transport registry 仍未落地；当前扩展 seam 是“显式 transport 注入”，不是“协议版本自动注册/协商”。
+- `nextpas.core.http.impl.h1.pas` 继续作为默认 H1 transport owner。
+- internal registry 当前内建 `hvHttp10` / `hvHttp11` -> H1，client/server 默认版本都是 `hvHttp11`。
+- `nextpas.core.http.NewHttpClient` / `NewHttpServer` 仍然支持显式注入 `IHttpTransport` / `IHttpServerTransport`；显式注入优先于 registry 默认解析。
+- `http.impl.h1.chunked`、client 复用语义、hijack ownership 三条 H1 correctness 基线仍然保持成立。
+- registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
 ## 路线图
@@ -28,5 +30,5 @@
 
 ## 下一步
 
-- 优先把 `impl.registry` 设计成真实默认协议解析层，而不是继续把默认选择散落在 facade/factory。
-- 如果继续走 H1 correctness，则转向 malformed chunk/body parser/security focused tests。
+- 优先回到 malformed chunk/body parser/security focused tests，继续做 H1 correctness 加固。
+- 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。
