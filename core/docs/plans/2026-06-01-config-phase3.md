@@ -19,6 +19,31 @@ Phase 2 已经让 `nextpas.core.config` 具备生产可用的加载、错误、�
 - current config tests: 87 tests, heaptrc 0 leaks
 - current storage model: flat, case-insensitive dot-path KV
 
+## 2026-06-02 首批落地状态
+
+已完成本轮首批闭环：
+
+- Phase 3A：`IConfig` 只读边界已落地，覆盖当前 `TConfig` 全部只读能力。
+- Phase 3B：`IConfigBuilder` + `ConfigBuilder` 已落地，支持 default / in-memory source / env / required / `Build` / `BuildConfig` / `TryBuild`。
+- Phase 3C：`AddFile` + `ConfigLoad` 已落地，文件加载失败带路径上下文。
+
+本轮刻意不做：
+
+- borrowed `IConfig` adapter
+- interpolation mode 扩展（继续保持现有 getter-time 严格插值）
+- `nextpas.core.config` 拆分重构
+
+本轮新增 focused suite：
+
+- `tests/nextpas.core.config/test_config_phase3`
+
+当前 config 测试基线已变为：
+
+- `58` existing config tests
+- `29` nested/DOM flatten tests
+- `8` Phase 3 builder/interface/file-source tests
+- 合计 `95` tests，heaptrc `0` leaks
+
 ## 非目标
 
 - 不改成树形配置对象。
@@ -335,9 +360,8 @@ Completion requires:
 
 ## Recommended next implementation slice
 
-Start with Phase 3A + the minimum of Phase 3B:
+Phase 3 首批闭环已完成。建议下一批聚焦剩余的边界设计，而不是立刻继续加实现面：
 
-1. create `test_config_phase3` with RED tests for `ConfigBuilder.AddDefault/AddJson/AddEnv/RequireKeys/Build`;
-2. implement `IConfig`, owned wrapper, `IConfigBuilder`, and in-memory source pipeline;
-3. verify all config suites with heaptrc;
-4. review before adding file sources or interpolation mode.
+1. 评估是否需要 borrowed `IConfig` adapter；若做，必须先锁定生命周期语义与命名。
+2. 讨论 interpolation mode 是否公开；若公开，需要先决定 `GetRawString` / raw-read path。
+3. 再进入下一批 RED tests，避免把 builder、view、interpolation 三个方向混在同一轮。
