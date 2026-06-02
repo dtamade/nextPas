@@ -15,7 +15,8 @@ interface
 
 uses
   SysUtils, Classes, DateUtils, ctypes,
-  nextpas.core.git.libgit2.ffi, nextpas.core.git.base;
+  nextpas.core.git.libgit2.ffi, nextpas.core.git.libgit2.binding,
+  nextpas.core.git.base;
 
 type
   EGitError = class(Exception)

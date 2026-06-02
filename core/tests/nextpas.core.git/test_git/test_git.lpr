@@ -6,9 +6,10 @@ uses
   SysUtils,
   nextpas.core.testing,
   nextpas.core.fs,
+  nextpas.core.os.env,
   nextpas.core.process,
   nextpas.core.git,
-  nextpas.core.git.libgit2.ffi;
+  nextpas.core.git.libgit2.binding;
 
 type
   TGitCallbackFixture = class
@@ -64,12 +65,100 @@ begin
       Exit(True);
 end;
 
+procedure RestoreEnv(const AName: string; const AHadValue: Boolean; const AOldValue: string);
+begin
+  if AHadValue then
+    SetEnv(AName, AOldValue)
+  else
+    UnsetEnv(AName);
+end;
+
 procedure CheckGitOk(const ADir: string; const AArgs: array of string; const AMessage: string);
 var
   LOut: TProcessOutput;
 begin
   LOut := nextpas.core.process.RunIn('/usr/bin/git', AArgs, ADir);
   CheckEqual(0, LOut.ExitCode, AMessage + ': ' + LOut.StdErr);
+end;
+
+procedure TestLibGit2LoaderReportsMissingOverride;
+const
+  LIBGIT2_PATH_ENV = 'NEXTPAS_LIBGIT2_PATH';
+var
+  LHadPath: Boolean;
+  LOldPath: string;
+  LMissingPath: string;
+begin
+  {$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
+  Exit;
+  {$ENDIF}
+
+  LHadPath := HasEnv(LIBGIT2_PATH_ENV);
+  LOldPath := GetEnv(LIBGIT2_PATH_ENV);
+  LMissingPath := nextpas.core.fs.PathJoin([GTmpDir, 'missing-libgit2.so']);
+
+  try
+    SetEnv(LIBGIT2_PATH_ENV, LMissingPath);
+
+    Check(not EnsureLibGit2Loaded,
+      'libgit2 loader should fail when explicit override points to a missing library');
+    Check(not IsLibGit2Loaded,
+      'libgit2 loader should remain unloaded after a failed explicit override');
+    CheckEqual('', GetLibGit2LoadedPath,
+      'libgit2 loaded path should be empty after failed load');
+  finally
+    RestoreEnv(LIBGIT2_PATH_ENV, LHadPath, LOldPath);
+  end;
+end;
+
+procedure TestLibGit2LoaderReportsSymbolResolutionFailure;
+const
+  LIBGIT2_PATH_ENV = 'NEXTPAS_LIBGIT2_PATH';
+var
+  LHadPath: Boolean;
+  LOldPath: string;
+  LWrongLibraryPath: string;
+begin
+  {$IFDEF NEXTPAS_CORE_GIT_LIBGIT2_STATIC}
+  Exit;
+  {$ENDIF}
+
+  {$IFDEF NEXTPAS_LINUX}
+  LWrongLibraryPath := '/lib/x86_64-linux-gnu/libc.so.6';
+  if not FileExists(LWrongLibraryPath) then
+    LWrongLibraryPath := '/lib64/libc.so.6';
+  if not FileExists(LWrongLibraryPath) then
+    Exit;
+  {$ELSE}
+  Exit;
+  {$ENDIF}
+
+  LHadPath := HasEnv(LIBGIT2_PATH_ENV);
+  LOldPath := GetEnv(LIBGIT2_PATH_ENV);
+  try
+    SetEnv(LIBGIT2_PATH_ENV, LWrongLibraryPath);
+
+    Check(not EnsureLibGit2Loaded,
+      'libgit2 loader should fail when required libgit2 symbols are missing');
+    Check(not IsLibGit2Loaded,
+      'libgit2 loader should remain unloaded after symbol resolution failure');
+    CheckEqual('', GetLibGit2LoadedPath,
+      'libgit2 loaded path should be empty after symbol resolution failure');
+  finally
+    RestoreEnv(LIBGIT2_PATH_ENV, LHadPath, LOldPath);
+  end;
+end;
+
+procedure TestLibGit2LoaderReportsLoadedPath;
+var
+  LPath: string;
+begin
+  Check(EnsureLibGit2Loaded, 'libgit2 loader should load the real library');
+  Check(IsLibGit2Loaded, 'libgit2 loader should report loaded state');
+  LPath := GetLibGit2LoadedPath;
+  Check(LPath <> '', 'libgit2 loader should expose the loaded library path');
+  Check(Pos('git2', LowerCase(LPath)) > 0,
+    'libgit2 loaded library path should identify a git2 library');
 end;
 
 procedure TestDiscoverRepositoryFallsBackToDotGitDirectory;
@@ -291,6 +380,9 @@ begin
   SetupTmpDir;
   try
     T := TTestRunner.Create('nextpas.core.git');
+    T.Run('libgit2 loader reports missing override', @TestLibGit2LoaderReportsMissingOverride);
+    T.Run('libgit2 loader reports symbol failure', @TestLibGit2LoaderReportsSymbolResolutionFailure);
+    T.Run('libgit2 loader reports loaded path', @TestLibGit2LoaderReportsLoadedPath);
     T.Run('Facade re-exports base constants', @TestFacadeReexportsBaseConstants);
     T.Run('Unsupported callbacks are explicit', @TestUnsupportedCallbacksAreExplicit);
     T.Run('DiscoverRepository fallback', @TestDiscoverRepositoryFallsBackToDotGitDirectory);
