@@ -11,6 +11,7 @@ interface
 
 uses
   SysUtils, DateUtils,
+  nextpas.core.time,
   nextpas.core.tls.base;
 
 type
@@ -254,7 +255,7 @@ constructor TFreePascalSession.Create;
 begin
   inherited Create;
   FSessionID := '';
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := SSL_DEFAULT_SESSION_TIMEOUT;
   FProtocolVersion := sslProtocolTLS13;
   FCipherName := '';
@@ -390,7 +391,7 @@ begin
   if LTimeout <= 0 then
     Exit(True);
 
-  LElapsedSeconds := SecondsBetween(Now, FCreationTime);
+  LElapsedSeconds := DateTimeSecondsBetween(DateTimeNow, FCreationTime);
   Result := LElapsedSeconds < LTimeout;
 end;
 

@@ -3,6 +3,7 @@ program test_mbedtls_connection_session_reused_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   SysUtils, Classes,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
@@ -110,6 +111,8 @@ begin
       not LResumption.IsSessionReused,
       'configured session should not be reported as an actually reused handshake');
   finally
+    LNativeAccess := nil;
+    LSession := nil;
     LResumption := nil;
     LConn := nil;
     LStream.Free;

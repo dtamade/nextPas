@@ -156,7 +156,7 @@ begin
 
   { v1.2.0: 初始化能力矩阵缓存 }
   FCapabilitiesCached := False;
-  FillChar(FCapabilitiesCache, SizeOf(FCapabilitiesCache), 0);
+  FCapabilitiesCache := Default(TSSLBackendCapabilities);
 end;
 
 destructor TWolfSSLLibrary.Destroy;
@@ -412,7 +412,7 @@ begin
     Exit;
   end;
 
-  FillChar(Result, SizeOf(Result), 0);
+  Result := Default(TSSLBackendCapabilities);
 
   if not FInitialized then
     Exit;
@@ -712,7 +712,7 @@ end;
 procedure TWolfSSLLibrary.InvalidateCapabilitiesCache;
 begin
   FCapabilitiesCached := False;
-  FillChar(FCapabilitiesCache, SizeOf(FCapabilitiesCache), 0);
+  FCapabilitiesCache := Default(TSSLBackendCapabilities);
 end;
 
 { 注册函数 }

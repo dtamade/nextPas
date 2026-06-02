@@ -3,6 +3,7 @@ program test_tls12_session_resume;
 {$mode objfpc}{$H+}{$J-}
 
 uses
+  {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils, DateUtils,
   nextpas.core.tls.base,

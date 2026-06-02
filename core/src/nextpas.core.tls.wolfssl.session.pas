@@ -19,6 +19,7 @@ interface
 
 uses
   SysUtils, Classes, DateUtils, ctypes,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
   nextpas.core.tls.wolfssl.native_handle,
@@ -312,7 +313,7 @@ begin
   inherited Create;
   FSession := nil;
   FOwnsSession := False;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := SSL_DEFAULT_SESSION_TIMEOUT;
   FSessionID := GenerateSessionID;  // 总是生成会话 ID
   FProtocolVersion := sslProtocolUnknown;
@@ -451,7 +452,7 @@ begin
 
   // 生成会话 ID
   FSessionID := GenerateSessionID;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   if TryExtractNativeSessionID(FSession, LSessionID) then
     FSessionID := LSessionID;
   if TryExtractNativeSessionCreationTime(FSession, LCreationTime) then
@@ -506,7 +507,7 @@ begin
   if FSession = nil then Exit;
 
   // 检查会话是否过期
-  LElapsed := SecondsBetween(Now, FCreationTime);
+  LElapsed := DateTimeSecondsBetween(DateTimeNow, FCreationTime);
   Result := LElapsed < FTimeout;
 end;
 

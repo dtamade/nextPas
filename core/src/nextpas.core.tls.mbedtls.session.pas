@@ -19,6 +19,7 @@ interface
 
 uses
   SysUtils, Classes, DateUtils,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.mbedtls.base,
   nextpas.core.tls.mbedtls.native_handle,
@@ -324,7 +325,7 @@ begin
   inherited Create;
   FSession := nil;
   FOwnsSession := False;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FTimeout := SSL_DEFAULT_SESSION_TIMEOUT;
   FSessionID := GenerateSessionID;
   FProtocolVersion := sslProtocolTLS12;
@@ -482,7 +483,7 @@ begin
   if FSession = nil then Exit;
 
   FSessionID := GenerateSessionID;
-  FCreationTime := Now;
+  FCreationTime := DateTimeNow;
   FProtocolVersion := sslProtocolTLS12;
   FCipherName := '';
 
@@ -531,7 +532,7 @@ begin
   Result := False;
   if FSession = nil then Exit;
 
-  LElapsed := SecondsBetween(Now, FCreationTime);
+  LElapsed := DateTimeSecondsBetween(DateTimeNow, FCreationTime);
   Result := LElapsed < FTimeout;
 end;
 

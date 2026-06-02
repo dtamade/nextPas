@@ -3,6 +3,7 @@ program test_wolfssl_connection_session_reused_contract;
 {$mode ObjFPC}{$H+}
 
 uses
+  {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   SysUtils, Classes, ctypes,
   nextpas.core.tls.base,
   nextpas.core.tls.wolfssl.base,
@@ -14,7 +15,7 @@ uses
 const
   STUB_WOLFSSL_NATIVE_SESSION_ID: array[0..3] of Byte = ($89, $AB, $CD, $EF);
   STUB_WOLFSSL_NATIVE_SESSION_TIMEOUT = 4321;
-  STUB_WOLFSSL_CIPHER_TLS13: AnsiString = 'TLS_AES_128_GCM_SHA256';
+  STUB_WOLFSSL_CIPHER_TLS13 = 'TLS_AES_128_GCM_SHA256';
 
 var
   TotalTests: Integer = 0;
@@ -220,6 +221,7 @@ begin
     AssertTrue('connection info IsResumed mirrors owner reuse truth after native hit',
       LInfo.IsResumed);
   finally
+    LNativeAccess := nil;
     LConnInfo := nil;
     LResumption := nil;
     LConn := nil;
@@ -236,6 +238,7 @@ begin
 
     if LLib <> nil then
       LLib.Finalize;
+    LLib := nil;
     LStream.Free;
   end;
 end;
