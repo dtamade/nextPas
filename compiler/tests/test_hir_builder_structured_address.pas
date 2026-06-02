@@ -197,11 +197,38 @@ begin
         Inc(Result);
 end;
 
+function HasInstrKind(const AFunc: THIRFunction;
+  const AKind: THIRInstrKind): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+      if AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = AKind then
+        Exit(True);
+  Result := False;
+end;
+
+function HasRecordAllocaSlots(const AFunc: THIRFunction;
+  const ASlotCount: LongInt): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikAlloca) and
+        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName =
+         'record:' + IntToStr(ASlotCount)) then
+        Exit(True);
+  Result := False;
+end;
+
 var
   IntegerTypeId, PointerTypeId, RecordTypeId: LongInt;
-  SymArr, SymP, SymRec, SymX, SymY: LongInt;
+  SymArr, SymP, SymRec, SymStaticArr, SymX, SymY: LongInt;
   ExprFive, ExprOne, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
-  ExprArrElement, ExprPValue, ExprDerefPRecord, ExprPField: LongInt;
+  ExprArrElement, ExprStaticArrElement, ExprPValue, ExprDerefPRecord,
+    ExprPField: LongInt;
   ExprRecAddress, ExprRecField: LongInt;
   NodeId: LongInt;
   Builder: THIRBuilder;
@@ -216,6 +243,7 @@ begin
     SymX := Model.AddSymbol('x', 'variable', '', IntegerTypeId, 0);
     SymY := Model.AddSymbol('y', 'variable', '', IntegerTypeId, 0);
     SymArr := Model.AddSymbol('arr', 'variable', '', 0, 0);
+    SymStaticArr := Model.AddSymbol('staticArr', 'variable', '', 0, 0);
     SymP := Model.AddSymbol('p', 'variable', '', PointerTypeId, 0);
     SymRec := Model.AddSymbol('rec', 'variable', '', RecordTypeId, 0);
 
@@ -225,6 +253,8 @@ begin
     ExprAddressOfX := AddAddressOf(ExprXAddress, PointerTypeId);
     ExprDerefAddressOfX := AddDeref(ExprAddressOfX, IntegerTypeId);
     ExprArrElement := AddArrayElemAddress(SymArr, ExprOne, IntegerTypeId);
+    ExprStaticArrElement := AddArrayElemAddress(SymStaticArr, ExprOne,
+      IntegerTypeId);
     ExprPValue := AddSymbolValue(SymP, PointerTypeId);
     ExprDerefPRecord := AddDeref(ExprPValue, RecordTypeId);
     ExprPField := AddFieldAddress(ExprDerefPRecord, IntegerTypeId, 2,
@@ -235,6 +265,12 @@ begin
     Model.AddTypedHirNode('function-body-begin', 'TestAddress', 0,
       IntegerTypeId, '0::i');
     Model.AddTypedHirNode('var-decl-arr-runtime', 'arr', SymArr, 0, 'arr');
+    Model.AddConstValue('staticArr$arr_static', 1);
+    Model.AddConstValue('staticArr$arr_low', 1);
+    Model.AddConstValue('staticArr$arr_high', 3);
+    Model.AddConstValue('staticArr$arr_len', 3);
+    Model.AddTypedHirNode('var-decl-arr-runtime', 'staticArr', SymStaticArr,
+      0, 'staticArr'#9'static'#9'1'#9'3'#9'3');
     Model.AddTypedHirNode('var-decl-ptr-runtime', 'p', SymP, PointerTypeId,
       'p');
     Model.AddTypedHirNode('var-decl-record-runtime', 'rec', SymRec,
@@ -259,6 +295,12 @@ begin
       'missing'#9'int 99'#10#9'int 123'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprFive);
     Model.SetTypedHirNodeTargetExprId(NodeId, ExprArrElement);
+
+    NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
+      'staticArr[1] := 5', 0, IntegerTypeId,
+      'staticArr'#9'int 99'#10#9'int 5'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprStaticArrElement);
 
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := p^.Value',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
@@ -292,6 +334,10 @@ begin
         Halt(6);
       if HasConstLoad(Func, 'const:123') then
         Halt(7);
+      if not HasRecordAllocaSlots(Func, 3) then
+        Halt(8);
+      if not HasInstrKind(Func, hikSub) then
+        Halt(9);
     finally
       Builder.Free;
     end;

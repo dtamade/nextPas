@@ -1505,6 +1505,46 @@ begin
   Result := True;
 end;
 
+function ParseArrayBoundsRange(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): TGreenNode;
+var
+  LowExpr, HighExpr: TGreenNode;
+  RangeOffset: LongInt;
+begin
+  Result := nil;
+  LowExpr := nil;
+  HighExpr := nil;
+  if ACursor >= ALexer.TokenCount then
+    Exit;
+
+  RangeOffset := CurrentToken(ALexer, ACursor).ByteOffset;
+  LowExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+  if LowExpr = nil then
+    Exit;
+
+  if (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkDotDot) then
+  begin
+    Inc(ACursor);
+    HighExpr := ParseExpression(ALexer, ACursor, ADiagnostics, ARootFileId);
+    if HighExpr <> nil then
+    begin
+      Result := TGreenNode.Create(gnkRangeExpression, RangeOffset, 0, '');
+      Result.AppendChild(LowExpr);
+      Result.AppendChild(HighExpr);
+      LowExpr := nil;
+      HighExpr := nil;
+    end;
+  end;
+
+  LowExpr.Free;
+  HighExpr.Free;
+end;
+
 function ParseTypeReference(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
@@ -1513,7 +1553,7 @@ function ParseTypeReference(
 ): TGreenNode;
 var
   Token: TToken;
-  NameNode, ArgNode: TGreenNode;
+  NameNode, ArgNode, RangeNode: TGreenNode;
   SpecArgs: string;
   Depth: LongInt;
 begin
@@ -1592,9 +1632,12 @@ begin
     tkArrayKeyword:
       begin
         Result := TGreenNode.Create(gnkArrayType, Token.ByteOffset, 0, '');
+        RangeNode := nil;
         Inc(ACursor);
         if MatchTokenSilent(ALexer, ACursor, tkLBracket) then
         begin
+          RangeNode := ParseArrayBoundsRange(ALexer, ACursor, ADiagnostics,
+            ARootFileId);
           while (ACursor < ALexer.TokenCount) and
             (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
             (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
@@ -1616,7 +1659,11 @@ begin
             ArgNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
           if ArgNode <> nil then
             Result.AppendChild(ArgNode);
-        end;
+          if RangeNode <> nil then
+            Result.AppendChild(RangeNode);
+        end
+        else
+          RangeNode.Free;
       end;
     tkSetKeyword:
       begin
@@ -1976,6 +2023,7 @@ var
   TypeParamNode: TGreenNode;
   IndexNode: TGreenNode;
   ElementNode: TGreenNode;
+  RangeNode: TGreenNode;
   SpecArgs: string;
   I: LongInt;
 begin
@@ -2170,6 +2218,7 @@ begin
           begin
             TypeNode := TGreenNode.Create(gnkArrayType,
               CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+            RangeNode := nil;
             Decl.AppendChild(TypeNode);
             Inc(ATree.FNodeCount);
             Inc(ACursor);
@@ -2177,6 +2226,8 @@ begin
               (CurrentToken(ALexer, ACursor).Kind = tkLBracket) then
             begin
               Inc(ACursor);
+              RangeNode := ParseArrayBoundsRange(ALexer, ACursor,
+                ADiagnostics, ARootFileId);
               while (ACursor < ALexer.TokenCount) and
                 (CurrentToken(ALexer, ACursor).Kind <> tkRBracket) and
                 (CurrentToken(ALexer, ACursor).Kind <> tkEOF) do
@@ -2202,7 +2253,14 @@ begin
                 TypeNode.AppendChild(ElementNode);
                 Inc(ATree.FNodeCount);
               end;
-            end;
+              if RangeNode <> nil then
+              begin
+                TypeNode.AppendChild(RangeNode);
+                Inc(ATree.FNodeCount);
+              end;
+            end
+            else
+              RangeNode.Free;
           end;
         tkClassKeyword:
           begin

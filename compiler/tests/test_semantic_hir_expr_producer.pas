@@ -50,6 +50,33 @@ begin
   end;
 end;
 
+function CountStaticArrayRangeNodes(const ANode: TGreenNode;
+  const ALowText, AHighText, AElementText: string): LongInt;
+var
+  I: LongInt;
+  RangeNode: TGreenNode;
+begin
+  Result := 0;
+  if ANode = nil then
+    Exit;
+
+  if (ANode.NodeKind = gnkArrayType) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and SameText(ANode.ChildAt(0).Text, AElementText) then
+  begin
+    RangeNode := ANode.ChildAt(1);
+    if (RangeNode <> nil) and (RangeNode.NodeKind = gnkRangeExpression) and
+      (RangeNode.ChildCount >= 2) and (RangeNode.ChildAt(0) <> nil) and
+      (RangeNode.ChildAt(1) <> nil) and
+      (RangeNode.ChildAt(0).Text = ALowText) and
+      (RangeNode.ChildAt(1).Text = AHighText) then
+      Inc(Result);
+  end;
+
+  for I := 0 to ANode.ChildCount - 1 do
+    Inc(Result, CountStaticArrayRangeNodes(ANode.ChildAt(I), ALowText,
+      AHighText, AElementText));
+end;
+
 function FindFirstNodeByKind(const AModel: TSemanticModel;
   const AKind: string; out ANode: TTypedHirNode): Boolean;
 var
@@ -76,6 +103,37 @@ begin
       Exit(True);
   end;
   Result := False;
+end;
+
+procedure AssertStaticArrayDeclMetadata(const AModel: TSemanticModel;
+  const AName: string; const ALow, AHigh, ALen: Int64;
+  const ABaseExitCode: LongInt);
+var
+  Node: TTypedHirNode;
+  Value: Int64;
+  ElementType: string;
+begin
+  if not FindFirstNodeByKindAndOperandText(AModel, 'var-decl-arr-runtime',
+    AName, Node) then
+    Halt(ABaseExitCode);
+  if Pos(#9'static'#9 + IntToStr(ALow) + #9 + IntToStr(AHigh) + #9 +
+    IntToStr(ALen), Node.Operand) = 0 then
+    Halt(ABaseExitCode + 1);
+  if (not AModel.LookupConstValue(AName + '$arr_static', Value)) or
+    (Value <> 1) then
+    Halt(ABaseExitCode + 2);
+  if (not AModel.LookupConstValue(AName + '$arr_low', Value)) or
+    (Value <> ALow) then
+    Halt(ABaseExitCode + 3);
+  if (not AModel.LookupConstValue(AName + '$arr_high', Value)) or
+    (Value <> AHigh) then
+    Halt(ABaseExitCode + 4);
+  if (not AModel.LookupConstValue(AName + '$arr_len', Value)) or
+    (Value <> ALen) then
+    Halt(ABaseExitCode + 5);
+  if (not AModel.LookupStringConstValue(AName + '$arr_elem_type',
+    ElementType)) or (not SameText(ElementType, 'Integer')) then
+    Halt(ABaseExitCode + 6);
 end;
 
 function FindAssignRuntimeNodeForDestAndOperandText(const AModel: TSemanticModel;
@@ -794,6 +852,88 @@ begin
   end;
 end;
 
+procedure TestStaticArrayBoundsParser;
+var
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  Tree: TGreenTree;
+  Count: LongInt;
+begin
+  Diagnostics := TDiagnosticsSink.CreateDefault;
+  Lexer := nil;
+  Tree := nil;
+  try
+    Lexer := TLexerResult.Create(
+      'program test;'#10 +
+      'type TArr = array[1..3] of Integer;'#10 +
+      'var directArr: array[1..3] of Integer;'#10 +
+      'begin'#10 +
+      'end.'#10,
+      Diagnostics, 1);
+    Tree := ParseGreenTree(Lexer, Diagnostics, 1);
+    if (Tree = nil) or (not Tree.IsValid) then
+      Halt(240);
+    Count := CountStaticArrayRangeNodes(Tree.RootNode, '1', '3', 'Integer');
+    if Count < 2 then
+      Halt(241);
+  finally
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+  end;
+end;
+
+procedure TestStaticArrayGlobalDeclMetadata;
+var
+  Model: TSemanticModel;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var globalArr: array[1..3] of Integer;'#10 +
+    'begin'#10 +
+    '  globalArr[1] := 40;'#10 +
+    '  globalArr[2] := 2;'#10 +
+    '  Halt(globalArr[1] + globalArr[2]);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(250);
+    if Model.Status <> 'ready' then
+      Halt(251);
+    AssertStaticArrayDeclMetadata(Model, 'globalArr', 1, 3, 3, 252);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestStaticArrayLocalDeclMetadata;
+var
+  Model: TSemanticModel;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'procedure Run;'#10 +
+    'var localArr: array[1..3] of Integer;'#10 +
+    'begin'#10 +
+    '  localArr[1] := 42;'#10 +
+    '  Halt(localArr[1]);'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    '  Run;'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(260);
+    if Model.Status <> 'ready' then
+      Halt(261);
+    AssertStaticArrayDeclMetadata(Model, 'localArr', 1, 3, 3, 262);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestPointerFieldAddressRuntimeExprProducer;
 var
   Model: TSemanticModel;
@@ -1177,6 +1317,9 @@ begin
   TestPointerAddressDerefRuntimeExprProducer;
   TestArrayElementAddressRuntimeExprProducer;
   TestArrayElementStoreTargetExprProducer;
+  TestStaticArrayBoundsParser;
+  TestStaticArrayGlobalDeclMetadata;
+  TestStaticArrayLocalDeclMetadata;
   TestPointerFieldAddressRuntimeExprProducer;
   TestClassFieldStoreRuntimeExprProducer;
   TestObjectFieldStoreRuntimeExprProducer;

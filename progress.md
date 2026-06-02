@@ -1,5 +1,49 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-H0 static array foundation
+
+- **Status:** implementation complete; final verification passed; pending path-limited commit.
+- Confirmed branch and safety state:
+  - Branch: `main`
+  - Latest compiler milestone commit in history: `9e6b3e23 feat(compiler): C5G lower array store targets`
+  - Current dirty files are unrelated `.claude/`, `.worktrees/`, and `core/` work; do not stage or edit them.
+- Read and applied:
+  - `core/docs/design-conventions.md`
+  - `compiler/docs/compiler-goal-tree.md`
+  - `docs/inbox.md`
+  - Claude memory `compiler-arch-debt-roadmap.md`
+  - Claude `MEMORY.md` stale PPU entry; the target `stale-ppu-discovery.md` file itself is missing.
+- Current decision:
+  - Do `C5-H0 static array foundation` before C5-H proper.
+  - This round will add bounds preservation, static array metadata, backing storage, and lower-bound index normalization while preserving legacy fallback.
+- RED evidence:
+  - `test_hir_builder_structured_address` compiled and exited `6`; current builder still exposes the bad legacy array index path and has no static-array backing storage.
+  - `test_semantic_hir_expr_producer` compiled and exited `241`; parser does not preserve the expected static array range nodes yet.
+- GREEN focused evidence for changed tests:
+  - `test_hir_builder_structured_address` now exits `0`.
+  - `test_semantic_hir_expr_producer` now exits `0`.
+- Full focused compiler test set:
+  - 9 tests executed.
+  - Result: `focused_failed=0`.
+- Full rebuild:
+  - `bash scripts/rebuild-compiler.sh`
+  - Result: `45932 lines compiled`, exit `0`.
+- Static-array runtime probes:
+  - `.sisyphus/tmp/c5h0-probes/static_array_global.pas` built and ran with exit `42`.
+  - `.sisyphus/tmp/c5h0-probes/static_array_local.pas` built and ran with exit `42`.
+- Smoke command error:
+  - First smoke attempt used `mapfile` under zsh and failed before running any smoke case.
+  - Resolution: rerun the same loop under explicit `bash -lc`.
+- Full LLVM smoke:
+  - `smoke_count=137 passed=137 failed=0`.
+- Final fresh verification after formatting cleanup:
+  - Focused C3/C4/C5 compiler tests: `focused_failed=0`.
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `45932 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_count=137 passed=137 failed=0`.
+  - Whitespace check: `git diff --check` -> clean.
+- Next immediate step:
+  - Path-limited stage/commit, then report retrospective and next C5-H plan.
+
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 

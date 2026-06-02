@@ -1,5 +1,18 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-H0 static array foundation
+
+- C5-G is complete and current `docs/inbox.md` still points to static array target/address as the next step.
+- Direct C5-H target/address migration is premature: static arrays are currently parsed and registered like dynamic arrays, so the builder can end up storing/loading through `arr$ptr = null`.
+- Parser investigation target: `compiler/syntax/np_green_tree.pas` `ParseTypeReference` and `ParseTypeSection` create `gnkArrayType`, but static bounds must be preserved as structured children instead of being skipped.
+- Sema investigation target: `compiler/sema/np_semantic_analyzer.pas` `WalkRuntimeVarDecls` registers direct `gnkArrayType` declarations through the dynamic array path.
+- Builder investigation target: `compiler/ir/np_hir_builder.pas` `ProcessVarDecl` treats `var-decl-arr-runtime` as `arr$ptr` + `arr$len`; C5-H0 should keep this channel but point static arrays at real backing storage and store compile-time length.
+- Parser already has `gnkRangeExpression` and `tkDotDot` support for set constructors and case labels. Static array bounds should reuse that node kind instead of inventing a string-only range marker.
+- HIR emitter already supports `hikAlloca` with `IntrinsicName='record:N'`, emitting `[N x i64]` stack storage. Builder can use that for integer static-array backing storage while preserving `arr$ptr`.
+- Existing array element address paths that need lower-bound normalization are `LowerArrayElemExpr`, `BlobArrElemRef`, `BlobArrLoadVar`, and `ProcessAssignArrElem` legacy fallback.
+- The requested Claude memory file `stale-ppu-discovery.md` is referenced by Claude `MEMORY.md` but is not present in the directory. The same discipline is still present in `compiler/docs/compiler-goal-tree.md`: full rebuild is mandatory because stale PPU can make compiler edits look active when they are not.
+- Design decision: split C5-H into C5-H0 foundation first, then C5-H proper for structured static-array target/address after metadata and storage are correct.
+
 ## 2026-05-31 Crypto/TLS Security Audit Findings
 
 - Deep audit scope covered `nextpas.core.crypto.field25519*`, `x25519`,
