@@ -3,6 +3,7 @@ program test_tls13_psk_negative;
 {$mode objfpc}{$H+}{$J-}
 
 uses
+  {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   {$IFDEF UNIX}cthreads, BaseUnix, Sockets,{$ENDIF}
   SysUtils, Classes,
   nextpas.core.tls.base,

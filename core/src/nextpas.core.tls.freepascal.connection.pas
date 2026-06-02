@@ -29,7 +29,8 @@ uses
   {$ELSE}
   Sockets,
   {$ENDIF}
-  SysUtils, Classes, DateUtils,
+  SysUtils, Classes,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.errors,
   nextpas.core.tls.connection.base,
@@ -1741,7 +1742,7 @@ begin
             LResumptionPSK,
             LTicket.TicketLifetime,
             LTicket.TicketAgeAdd,
-            Now,
+            DateTimeNow,
             LTimeout,
             LTicket.MaxEarlyDataSize
           );
@@ -2393,7 +2394,7 @@ begin
     SetLength(LConfiguredCipherSuites, 0);
   if LUseConfiguredSession then
   begin
-    LSessionAgeMs := MilliSecondsBetween(Now, FConfiguredSession.GetCreationTime);
+    LSessionAgeMs := DateTimeMillisecondsBetween(DateTimeNow, FConfiguredSession.GetCreationTime);
     if LSessionAgeMs < 0 then
       LSessionAgeMs := 0;
 
@@ -3161,7 +3162,7 @@ begin
           LNewSession.ConfigureTLS12Resumption(
             LState.CipherSuite, FCipherName,
             LState.SessionID, LState.MasterSecret,
-            Now, SSL_DEFAULT_SESSION_TIMEOUT);
+            DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
           LNewSession.BoundServerName := FServerName;
           FCurrentSession := LNewSession;
           if Supports(FContext, IFreePascalResumptionCache, LResumptionCache) then
@@ -3268,7 +3269,7 @@ begin
           LNewSession.ConfigureTLS12Resumption(
             LState.CipherSuite, FCipherName,
             LState.SessionID, LState.MasterSecret,
-            Now, SSL_DEFAULT_SESSION_TIMEOUT);
+            DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
           LNewSession.BoundServerName := FServerName;
           FCurrentSession := LNewSession;
         end;
@@ -3428,7 +3429,7 @@ begin
       LNewSession.ConfigureTLS12Resumption(
         FTLS12State.CipherSuite, FCipherName,
         FTLS12State.SessionID, FTLS12State.MasterSecret,
-        Now, SSL_DEFAULT_SESSION_TIMEOUT);
+        DateTimeNow, SSL_DEFAULT_SESSION_TIMEOUT);
       LNewSession.BoundServerName := FServerName;
       FCurrentSession := LNewSession;
     end;
