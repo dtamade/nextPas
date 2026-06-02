@@ -514,6 +514,23 @@ begin
   Check(LP.ErrorMessage <> '', 'http09 request has error message');
 end;
 
+procedure TestRequestLineSplittingRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET /path'#13#10 +
+          'Injected: header HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'request-line splitting reports parser error');
+  Check(not LP.IsComplete, 'request-line splitting is not complete');
+  Check(LP.ErrorMessage <> '', 'request-line splitting has error message');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -640,6 +657,7 @@ begin
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
   T.Run('Header with null byte', @TestHeaderNullByte);
   T.Run('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
+  T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);

@@ -401,12 +401,8 @@ begin
     Move(INJECT[1], LReq[Length(PART1)], Length(INJECT));
     Move(PART2[1], LReq[Length(PART1) + Length(INJECT)], Length(PART2));
     LResp := SendRawBytes(LPort, @LReq[0], SizeUInt(Length(LReq)));
-    { llhttp sees CRLF as end of request line — "GET /path" with no version,
-      which it may reject (400) or parse as incomplete. Either way, no header
-      injection is possible. Server may also respond 200 if it parses /path as URL. }
-    Check((Pos('400', LResp) > 0) or (Pos('200', LResp) > 0) or
-          (Pos('404', LResp) > 0) or (Length(LResp) = 0),
-      'CRLF injection: no header injection (server safe)');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'CRLF injection: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -577,7 +573,7 @@ begin
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Slowloris partial request', @TestSlowloris);
   T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
-  T.Run('CRLF injection in path', @TestCrlfInjection);
+  T.Run('CRLF injection in path -> 400', @TestCrlfInjection);
   T.Run('Missing Host header -> 400', @TestMissingHost);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
