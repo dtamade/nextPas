@@ -22,7 +22,7 @@ var
   Para: IParagraph;
   ListW: IListWidget;
   ListState: TListState;
-  Gauge: TGauge;
+  Gauge: IGauge;
   Areas, LeftRight: TRectArray;
 
 procedure SetupWidgets;
@@ -42,7 +42,7 @@ begin
     .WithHighlightSymbol('> ');
   ListState := TListState.Empty;
   ListState.Select(3);
-  Gauge := TGauge.Default.WithRatio(0.65).WithLabel('65%')
+  Gauge := TGauge.New.WithRatio(0.65).WithLabel('65%')
     .WithFilledStyle(StyleDefault.WithFg(TUI_GREEN));
 end;
 

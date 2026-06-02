@@ -103,6 +103,7 @@
 - [x] nextpas.core.tui.pas（门面 re-export，2026-06-01 facade API surface 测试补强）
 - [x] examples: demo_hello / demo_layout / demo_widgets
 - [x] benchmarks: bench_diff / bench_render / bench_input / bench_layout
+- [x] benchmark smoke：`benchmarks/nextpas.core.tui/run_all.sh` 聚合 4 个基准，并接入 TUI CI smoke
 - [x] docs/tui/README.md
 
 ### 2026-06-01 — API Surface 收口 [完成]
@@ -115,6 +116,8 @@
 - [x] focused heaptrc 证据：`test_tui_facade` 4/4 通过、0 unfreed；`test_tui_widget_intf` 4/4 通过、0 unfreed。
 - [x] 全量 TUI 回归：32 个测试项目、240 用例全部通过；13 个 heaptrc 摘要均为 `0 unfreed memory blocks`。
 - [x] Unicode/grapheme 关键回归：family emoji、skin tone modifier 覆盖 text.grapheme / text.width / tui.buffer；keycap emoji 覆盖 text.grapheme / text.width / tui.buffer / tui.text。
+- [x] 2026-06-02 benchmark 收口：修复 `bench_render` 的 IGauge builder 用法，4 个 TUI benchmark 全部可运行；
+  `docs/tui/BENCHMARK.md` 记录 FreePascal TUI 基线，并明确 CI smoke 与跨 runtime 对照边界。
 
 ---
 
@@ -130,7 +133,9 @@
 - Phase 7 ✅ App Layer（app/anim/theme/task/sixel/clipboard/frame_budget/门面/examples/benchmarks）
 - 全量回归：32 测试项目、240 用例全通过；13 个 heaptrc 摘要全 0 泄漏
 - 累计 77 src 单元、3 examples、4 benchmarks
-- **迁移主体完成。** 剩余：merge 前文档真相收口、benchmark 数据记录与性能对照（最后一轮）。
+- 2026-06-02 benchmark baseline：Full render 120x40 约 158us；DiffInto 200x50 changed-row 约 47us；
+  input parse <0.12us；8x8 grid layout 约 4.3us。CI 运行 benchmark smoke，不设置 hosted runner 绝对阈值。
+- **迁移主体完成。** 剩余：merge 前最终真相审计、全量 verification envelope、合并准备清单。
 
 ### Phase 3 — ANSI Backend + Terminal [完成]
 - [x] platform 前置依赖（platform.console: set_raw/restore_raw/read/write/wait_readable/get_size; platform.signal: SIGWINCH）

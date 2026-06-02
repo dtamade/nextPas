@@ -1,59 +1,83 @@
 # nextpas.core.tui Benchmark Results
 
 > Measured on: Linux x86_64, FPC 3.3.1-trunk, -O2
-> Date: 2026-06-01
-> Hardware: (see system info)
+> Date: 2026-06-02
+> Host: Debian Linux 6.12.74+deb13+1-amd64, x86_64
+> Baseline type: single local run; use repeated medians for regression decisions
 
-## Buffer Diff (200x50 terminal, 10000 cells)
+Run all TUI benchmarks:
 
-| Benchmark | ns/op | ops/s |
-|-----------|-------|-------|
-| DiffInto 200x50 (10 changed rows) | 46,563 | 21,476 |
-| DiffInto 200x50 (identical) | 26,262 | 38,078 |
+```bash
+FPC=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc benchmarks/nextpas.core.tui/run_all.sh
+```
 
-**Analysis:** Identical-buffer fast path is ~1.8x faster than changed case. At 21K ops/s for the changed case, this supports >300 FPS at 200x50 terminal size with comfortable headroom.
-
-## Widget Render (120x40 terminal)
+## Buffer diff baseline at 200x50
 
 | Benchmark | ns/op | ops/s |
-|-----------|-------|-------|
-| Full render (block+list+para+gauge) | 119,293 | 8,383 |
-| Block only 120x40 | 46,403 | 21,550 |
-| SetString 120x40 (40 rows) | 16,370 | 61,087 |
+| --- | ---: | ---: |
+| DiffInto 200x50 (10 changed rows) | 46,898 | 21,323 |
+| DiffInto 200x50 (identical) | 27,019 | 37,011 |
 
-**Analysis:** Full composite render at 8.3K ops/s = ~119μs per frame. Well under 16ms budget (60 FPS). SetString baseline shows buffer write throughput at 61K ops/s.
+The identical-buffer fast path is about 1.7x faster than the changed-row case. The changed-row case
+still leaves broad headroom against a 16 ms frame budget.
 
-## Input Parsing
-
-| Benchmark | ns/op | ops/s |
-|-----------|-------|-------|
-| ParseOne ASCII key | 99 | 10,119,511 |
-| ParseOne CSI arrow | 134 | 7,474,735 |
-| ParseOne SGR mouse (incomplete) | 50 | 20,152,758 |
-| ParseOne UTF-8 CJK | 44 | 22,691,173 |
-
-**Analysis:** Input parsing at 7-22M ops/s. Even the slowest case (CSI arrow at 134ns) can handle >7M events/sec — far exceeding any realistic input rate.
-
-## Layout Solver
+## Widget render baseline at 120x40
 
 | Benchmark | ns/op | ops/s |
-|-----------|-------|-------|
-| VerticalSplit 3 constraints | 354 | 2,826,440 |
-| HorizontalSplit 5 constraints | 423 | 2,365,274 |
-| Grid 4x4 uniform | 2,066 | 484,018 |
-| Grid 8x8 uniform | 4,351 | 229,854 |
+| --- | ---: | ---: |
+| Full render 120x40 (block+list+para+gauge) | 157,966 | 6,330 |
+| Block only 120x40 | 47,424 | 21,087 |
+| SetString 120x40 (40 rows) | 16,183 | 61,793 |
 
-**Analysis:** Layout solving at 230K-2.8M ops/s. Even the heaviest case (8x8 grid) at 4.3μs is negligible compared to render time.
+The full composite render is about 158 us per frame, well below the 16 ms target for 60 FPS. The
+SetString case records raw buffer write throughput for a full 120x40 surface.
+
+## Input parsing baseline
+
+| Benchmark | ns/op | ops/s |
+| --- | ---: | ---: |
+| ParseOne ASCII key | 89 | 11,259,233 |
+| ParseOne CSI arrow | 112 | 8,907,575 |
+| ParseOne SGR mouse (incomplete) | 96 | 10,438,086 |
+| ParseOne UTF-8 CJK | 83 | 12,099,360 |
+
+Input parsing is far below any realistic terminal input rate, including CSI and UTF-8 paths.
+
+## Layout solving baseline
+
+| Benchmark | ns/op | ops/s |
+| --- | ---: | ---: |
+| VerticalSplit 3 constraints | 349 | 2,865,830 |
+| HorizontalSplit 5 constraints | 415 | 2,408,901 |
+| Grid 4x4 uniform | 2,062 | 484,943 |
+| Grid 8x8 uniform | 4,332 | 230,850 |
+
+Even the 8x8 grid case is below 4.4 us, so layout cost remains small compared with render and diff.
+
+## CI verifies benchmark availability, not absolute speed
+
+The GitHub workflow runs `benchmarks/nextpas.core.tui/run_all.sh` as a smoke check. This proves the
+four benchmark projects compile and execute after API changes.
+
+The workflow does not enforce ns/op thresholds. Hosted runners are noisy, and hard limits would mix
+real regressions with scheduler, CPU, and thermal variance. Stable performance regression checks
+need fixed hardware, pinned compiler settings, repeated sampling, and a stored median baseline.
+
+## Cross-runtime comparison boundary
+
+The repository already has platform-level FPC RTL, Go, and Rust comparison benchmarks under
+`benchmarks/platform-comparison/`. Those cover shared platform operations such as path handling,
+file checks, mmap, and random bytes.
+
+The TUI benchmarks in this document measure nextpas-specific terminal buffer diffing, widget
+rendering, input parsing, and layout solving. Numeric Go or Rust comparisons should only be added
+after equivalent terminal buffer and widget workloads exist in those runtimes. Until then, this file
+records the FreePascal TUI baseline only.
 
 ## Summary
 
-All benchmarks show performance well within real-time TUI requirements:
-- **Render budget:** 119μs full frame << 16ms (60 FPS target)
-- **Diff budget:** 47μs << 16ms
-- **Input latency:** <1μs per event
-- **Layout:** <5μs even for complex grids
-
-Current hot-path optimizations include AVX2+SSE2 acceleration for the ASCII branch of
-`StringDisplayWidth` and a dirty-row bitmap in `TBuffer.DiffInto` to skip unchanged rows before
-line comparison. Cross-runtime benchmark comparison against FPC RTL, Go, and Rust remains a final
-merge-readiness round item; this document records the current FreePascal baseline only.
+- Full render: about 158 us, far below 16 ms.
+- Diff: about 47 us for changed rows and 27 us for identical buffers.
+- Input parsing: below 0.12 us per event.
+- Layout: below 4.4 us for the current grid workload.
+- Hot paths use AVX2+SSE2 `StringDisplayWidth` acceleration and dirty-row bitmap diff skipping.

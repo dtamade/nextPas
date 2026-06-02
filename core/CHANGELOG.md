@@ -35,6 +35,7 @@ Full migration from fafafa.tui to nextpas.core.tui.
 - 4K terminal stress tests (300x80, 10000-item lists)
 - Input parser fuzz harness with 12-file corpus
 - 4 benchmarks (diff, render, input, layout)
+- TUI benchmark smoke entrypoint for CI compile/run coverage
 
 ### Documentation
 - ARCHITECTURE.md, WIDGET_CATALOG.md, BENCHMARK.md

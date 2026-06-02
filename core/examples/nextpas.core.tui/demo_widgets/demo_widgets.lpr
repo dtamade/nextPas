@@ -24,7 +24,7 @@ var
   Areas, LeftRight: TRectArray;
   ListW: IListWidget;
   ListState: TListState;
-  Gauge: TGauge;
+  Gauge: IGauge;
   Para: IParagraph;
   Tick: Integer;
 begin
@@ -58,7 +58,7 @@ begin
     Para.Render(LeftRight[1], Frame.Buffer);
 
     { 底部：进度条 }
-    Gauge := TGauge.Default
+    Gauge := TGauge.New
       .WithRatio((Tick mod 100) / 100.0)
       .WithLabel(IntToStr(Tick mod 100) + '%')
       .WithFilledStyle(StyleDefault.WithFg(TUI_GREEN));
