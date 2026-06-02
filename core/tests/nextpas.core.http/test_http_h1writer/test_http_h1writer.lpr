@@ -307,6 +307,74 @@ begin
   LRW.Free;
 end;
 
+procedure TestPresetTransferEncodingPreserved;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LBody: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.GetHeaders.Set_('Transfer-Encoding', 'gzip');
+  LRW.WriteHeader(HTTP_STATUS_OK);
+  LBody := 'hello';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('transfer-encoding: gzip'#13#10, LOut) > 0, 'preset transfer-encoding preserved');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0, 'chunked header not injected');
+  Check(Pos('0'#13#10#13#10, LOut) = 0, 'non-chunked flush does not write final chunk');
+  LRW.Free;
+end;
+
+procedure TestFlushWithContentLengthDoesNotWriteFinalChunk;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LBody: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.GetHeaders.Set_('Content-Length', '5');
+  LRW.WriteHeader(HTTP_STATUS_OK);
+  LBody := 'hello';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('content-length: 5'#13#10, LOut) > 0, 'content-length preserved');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0, 'chunked header not injected');
+  Check(Pos('0'#13#10#13#10, LOut) = 0, 'content-length path does not write final chunk');
+  LRW.Free;
+end;
+
+procedure TestWriteAfterChunkedFlushRaises;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := 'hello';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LBefore := LW.GetOutput;
+  LRaised := False;
+  try
+    LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'write after chunked flush raises EHttpError');
+  CheckEqual(LBefore, LW.GetOutput, 'write after flush does not append bytes');
+  LRW.Free;
+end;
+
 procedure TestFlushNoOpWithoutFlusher;
 var
   LW: TBytesWriter;
@@ -374,6 +442,10 @@ begin
   T.Run('Multiple headers written correctly', @TestMultipleHeadersWritten);
   T.Run('WriteHeader only called once', @TestWriteHeaderOnlyOnce);
   T.Run('Full response format', @TestFullResponse);
+  T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
+  T.Run('Flush with Content-Length does not write final chunk',
+    @TestFlushWithContentLengthDoesNotWriteFinalChunk);
+  T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
   T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);

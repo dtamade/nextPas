@@ -197,3 +197,42 @@
 - `/codex`-style read-only review found no blocking issue.
 - Review risk remains unchanged: do not use `git add .` in the shared checkout, because unrelated files are dirty or untracked outside this batch.
 - Review follow-up: the next correctness slice should move to H1 writer boundary behavior before any benchmark work.
+
+## Session: 2026-06-02 H1 writer boundaries
+
+### Phase 1: H1 response writer flush/finalization contract
+
+- **Status:** complete
+- **Scope:** `TH1ResponseWriter` boundary behavior for pre-set `Transfer-Encoding`, explicit `Content-Length`, and chunked flush finalization.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Added failing boundary tests in `test_http_h1writer`.
+  - [x] Verified RED: writer still allowed `Write` after chunked `Flush`.
+  - [x] Added focused coverage for pre-set `Transfer-Encoding` and explicit `Content-Length` flush path.
+  - [x] Guarded `TH1ResponseWriter` against writes after chunked finalization.
+  - [x] Ran focused GREEN writer tests with heaptrc proof.
+  - [x] Ran full HTTP suite after the writer change.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 H1 Writer
+
+| Check                | Command                                                         | Result                                                                                                          |
+| -------------------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Git safety state     | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files                                                              |
+| RED writer test      | `make -C tests/nextpas.core.http/test_http_h1writer clean test` | 14/15 passed; `Write after chunked flush raises` failed; heaptrc non-0 because the failing test aborted cleanup |
+| Focused writer GREEN | `make -C tests/nextpas.core.http/test_http_h1writer clean test` | 15/15 passed, 0 unfreed memory blocks                                                                           |
+| Full HTTP suite      | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test                                                                   |
+
+## Notes 2026-06-02 H1 Writer
+
+- This batch tightened the H1 response writer state machine without changing server/client public API shape.
+- Chunked responses now become finalized after the terminal chunk is flushed, and later body writes raise `EHttpError`.
+- Pre-set `Transfer-Encoding` remains caller-owned, and explicit `Content-Length` responses do not emit a chunk terminator on `Flush`.
+
+## Review 2026-06-02 H1 Writer
+
+- `/codex`-style read-only review found no blocking issue.
+- Review risk remains unchanged: do not use `git add .` in the shared checkout, because unrelated files are dirty or untracked outside this batch.
+- Review follow-up: the next correctness slice should move to client chunked-response and close-delimited response coverage.

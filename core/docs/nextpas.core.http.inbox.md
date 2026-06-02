@@ -4,14 +4,14 @@
 
 ## 当前批次
 
-- facade callback/overload smoke 已完成
-- `HandlerFunc(THttpHandlerMethod/THttpHandlerProc)` 与 `NewHttpServer(IHttpHandler)` 已补齐到 facade
+- H1 writer 边界 smoke 已完成
+- 预设 `Transfer-Encoding`、显式 `Content-Length` flush 路径、chunked finalization 状态机 已补齐测试
 - HTTP focused/full suite + heaptrc 0 已验证
 
 ## 当前重点
 
 - 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
-- facade callback alias、server/client overload 现在有直接契约烟测。
+- `TH1ResponseWriter` 现在禁止在 chunked final chunk 发出后继续写 body。
 - Hijack 后 HTTP server 不再 `Shutdown/Close` 已移交给 handler 的连接。
 - transport 当前只冻结公开接口形状；registry / client-server 注入机制仍未完成。
 - benchmark 继续后置，先补 correctness 与契约边界。
@@ -27,5 +27,5 @@
 
 ## 下一步
 
-- 再补 H1 writer 边界测试：预设 `Transfer-Encoding`、显式 `Content-Length`、flush finalization。
 - 再补 client chunked response / close-delimited response 覆盖。
+- 视需要决定是否把 `TChunkedWriter` 单独提升为 focused 实现级测试对象。

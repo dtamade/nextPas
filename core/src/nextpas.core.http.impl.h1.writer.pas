@@ -20,6 +20,7 @@ type
     FChunkedWriter: IWriter;
     FConn: ITcpStream;
     FHijacked: Boolean;
+    FFinalized: Boolean;
     procedure WriteStatusLine;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
@@ -56,6 +57,7 @@ begin
   FStatus := HTTP_STATUS_OK;
   FConn := nil;
   FHijacked := False;
+  FFinalized := False;
 end;
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream);
@@ -67,6 +69,7 @@ begin
   FStatus := HTTP_STATUS_OK;
   FConn := AConn;
   FHijacked := False;
+  FFinalized := False;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -129,6 +132,8 @@ end;
 
 function TH1ResponseWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 begin
+  if FFinalized then
+    raise EHttpError.Create('response already finalized');
   if not FHeadersSent then
     WriteHeader(HTTP_STATUS_OK);
   if FChunkedWriter <> nil then
@@ -142,7 +147,10 @@ var
   LFlusher: IFlusher;
 begin
   if FChunkedWriter <> nil then
+  begin
     (FChunkedWriter as IFlusher).Flush;
+    FFinalized := True;
+  end;
   if Supports(FWriter, IFlusher, LFlusher) then
     LFlusher.Flush;
 end;

@@ -12,12 +12,12 @@ Phase 1: public contract audit and HTTP test baseline.
 
 - [x] Re-read HTTP inbox, API coverage, plan, findings, and progress.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
-- [x] Add failing facade callback/overload contract tests in `test_http_contract`.
-- [x] Verify RED: facade default `NewHttpServer(IHttpHandler)` overload is missing.
-- [x] Add `HandlerFunc` overloads for `THttpHandlerMethod` and `THttpHandlerProc` in middleware + facade.
-- [x] Add facade forwarding for `NewHttpServer(const AHandler: IHttpHandler)`.
+- [x] Add failing H1 writer boundary tests in `test_http_h1writer`.
+- [x] Verify RED: chunked writer still accepts writes after `Flush` finalization.
+- [x] Add focused boundary coverage for pre-set `Transfer-Encoding` and explicit `Content-Length` flush path.
+- [x] Guard `TH1ResponseWriter` against writes after chunked finalization.
 - [x] Run focused GREEN tests with heaptrc evidence.
-- [x] Run full HTTP suite after facade overload changes.
+- [x] Run full HTTP suite after H1 writer changes.
 - [x] Update inbox, coverage matrix, findings, and progress for this coverage batch.
 - [x] Complete `/codex` review, final git status check, and commit this coverage batch.
 
@@ -88,6 +88,7 @@ Phase 1: public contract audit and HTTP test baseline.
 | Treat transport coverage as shape-only         | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only. |
 | Transfer hijacked connection ownership         | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                |
 | Expose callback aliases through helpers        | `THttpHandlerMethod` / `THttpHandlerProc` should be usable from public helper APIs, not only exist as type aliases.                     |
+| Finalize chunked responses on flush            | Once a chunked response has emitted the terminal chunk, further body writes must raise `EHttpError` instead of corrupting the stream.   |
 
 ## Errors Encountered
 
@@ -97,3 +98,4 @@ Phase 1: public contract audit and HTTP test baseline.
 | Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                  |
 | Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.        |
 | Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.         |
+| Chunked writer accepted writes after final flush          | 1       | Added RED writer test, then tracked chunked finalization in `TH1ResponseWriter.Write/Flush`.   |
