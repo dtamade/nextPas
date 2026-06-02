@@ -452,7 +452,7 @@ end;
 
 function TX509Validity.IsValid: Boolean;
 begin
-  Result := IsValidAt(nextpas.core.time.DateTimeNow);
+  Result := IsValidAt(nextpas.core.time.DateTimeUtcNow);
 end;
 
 function TX509Validity.IsValidAt(ATime: TDateTime): Boolean;

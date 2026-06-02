@@ -288,7 +288,7 @@ begin
     Exit;
   end;
 
-  LNow := nextpas.core.time.DateTimeNow;
+  LNow := nextpas.core.time.DateTimeUtcNow;
   for I := 0 to LChainLen - 1 do
   begin
     LCurrent := AChain[I];

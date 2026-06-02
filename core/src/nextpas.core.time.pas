@@ -38,6 +38,7 @@ type
   TPeriod = nextpas.core.time.period.TPeriod;
 
 function DateTimeNow: TDateTime;
+function DateTimeUtcNow: TDateTime;
 function DateTimeSecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 function DateTimeMillisecondsBetween(const ANewer, AOlder: TDateTime): Int64;
 function DateTimeAddSeconds(const AValue: TDateTime; const ASeconds: Int64): TDateTime;
@@ -64,6 +65,24 @@ var
 begin
   LNowNs := Int64(nextpas.core.platform.time.platform_realtime_ns) +
     Int64(nextpas.core.platform.time.platform_utc_offset_seconds) * NS_PER_SEC;
+  LDays := LNowNs div NS_PER_DAY;
+  LDayNs := LNowNs mod NS_PER_DAY;
+  if LDayNs < 0 then
+  begin
+    Dec(LDays);
+    Inc(LDayNs, NS_PER_DAY);
+  end;
+
+  Result := UNIX_EPOCH_TDATETIME + LDays + (LDayNs / Double(NS_PER_DAY));
+end;
+
+function DateTimeUtcNow: TDateTime;
+var
+  LNowNs: Int64;
+  LDays: Int64;
+  LDayNs: Int64;
+begin
+  LNowNs := Int64(nextpas.core.platform.time.platform_realtime_ns);
   LDays := LNowNs div NS_PER_DAY;
   LDayNs := LNowNs mod NS_PER_DAY;
   if LDayNs < 0 then

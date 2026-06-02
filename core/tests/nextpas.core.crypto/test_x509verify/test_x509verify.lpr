@@ -10,6 +10,7 @@ uses
 
 var
   GPass, GFail: Integer;
+  GCertPath, GKeyPath, GPemPath: string;
 
 procedure Check(const AName: string; ACondition: Boolean);
 begin
@@ -34,30 +35,49 @@ begin
   end;
 end;
 
-function EnsureTestCert: string;
-var LRet: Integer;
+function TempFilePath(const ASuffix: string): string;
 begin
-  Result := '/tmp/test_cert.der';
-  if not FileExists(Result) then
+  Result := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas_x509verify_' + IntToStr(GetProcessID) + ASuffix;
+end;
+
+function EnsureTestCert: string;
+var
+  LRet: Integer;
+begin
+  GCertPath := TempFilePath('.der');
+  GKeyPath := TempFilePath('.key.pem');
+  GPemPath := TempFilePath('.cert.pem');
+  DeleteFile(GCertPath);
+  DeleteFile(GKeyPath);
+  DeleteFile(GPemPath);
+
+  LRet := ExecuteProcess('/usr/bin/openssl',
+    'req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 ' +
+    '-keyout ' + GKeyPath + ' -out ' + GPemPath + ' -days 1 -nodes ' +
+    '-subj "/CN=test.example.com" -addext "subjectAltName=DNS:test.example.com,DNS:*.example.com"');
+  if LRet <> 0 then
   begin
-    LRet := ExecuteProcess('/usr/bin/openssl',
-      'req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 ' +
-      '-keyout /tmp/test_key.pem -out /tmp/test_cert.pem -days 1 -nodes ' +
-      '-subj "/CN=test.example.com" -addext "subjectAltName=DNS:test.example.com,DNS:*.example.com"');
-    if LRet <> 0 then
-    begin
-      WriteLn('SKIP: openssl not available');
-      Halt(0);
-    end;
-    ExecuteProcess('/usr/bin/openssl', 'x509 -in /tmp/test_cert.pem -outform DER -out ' + Result);
+    WriteLn('SKIP: openssl not available');
+    Halt(0);
   end;
+
+  LRet := ExecuteProcess('/usr/bin/openssl',
+    'x509 -in ' + GPemPath + ' -outform DER -out ' + GCertPath);
+  if LRet <> 0 then
+  begin
+    WriteLn('SKIP: openssl DER conversion failed');
+    Halt(0);
+  end;
+
+  Result := GCertPath;
 end;
 
 procedure TestMatchHostname;
 var
   LCert: TX509Certificate;
 begin
-  LCert := LoadCertFromFile('/tmp/test_cert.der');
+  LCert := LoadCertFromFile(GCertPath);
   try
     Check('match exact hostname', MatchHostname('test.example.com', LCert));
     Check('match wildcard single label', MatchHostname('sub.example.com', LCert));
@@ -78,9 +98,10 @@ var
   LCert: TX509Certificate;
 begin
   LStore := TX509TrustStore.Create;
-  LCert := LoadCertFromFile('/tmp/test_cert.der');
+  LCert := LoadCertFromFile(GCertPath);
   try
     LStore.AddTrustedCertificate(LCert);
+    Check('loaded cert is valid now', LCert.IsValidNow);
     Check('trust store: added cert is trusted', LStore.IsTrusted(LCert));
     Check('trust store: find issuer (self-signed)', LStore.FindIssuer(LCert) <> nil);
   finally
@@ -96,7 +117,7 @@ var
   LChain: array of TX509Certificate;
   LResult: TX509VerifyResult;
 begin
-  LCert := LoadCertFromFile('/tmp/test_cert.der');
+  LCert := LoadCertFromFile(GCertPath);
   LStore := TX509TrustStore.Create;
   try
     LStore.AddTrustedCertificate(LCert);
@@ -119,7 +140,7 @@ var
   LChain: array of TX509Certificate;
   LResult: TX509VerifyResult;
 begin
-  LCert := LoadCertFromFile('/tmp/test_cert.der');
+  LCert := LoadCertFromFile(GCertPath);
   LStore := TX509TrustStore.Create;
   try
     LStore.AddTrustedCertificate(LCert);
@@ -137,16 +158,23 @@ end;
 begin
   GPass := 0;
   GFail := 0;
-  EnsureTestCert;
-  WriteLn('=== X509 Verify Tests ===');
-  WriteLn;
+  try
+    EnsureTestCert;
+    WriteLn('=== X509 Verify Tests ===');
+    WriteLn;
 
-  TestMatchHostname;
-  TestTrustStore;
-  TestVerifyChain_SelfSigned;
-  TestVerifyChain_WrongHostname;
+    TestMatchHostname;
+    TestTrustStore;
+    TestVerifyChain_SelfSigned;
+    TestVerifyChain_WrongHostname;
 
-  WriteLn;
-  WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+    WriteLn;
+    WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
+  finally
+    if GCertPath <> '' then DeleteFile(GCertPath);
+    if GKeyPath <> '' then DeleteFile(GKeyPath);
+    if GPemPath <> '' then DeleteFile(GPemPath);
+  end;
+
   if GFail > 0 then Halt(1);
 end.

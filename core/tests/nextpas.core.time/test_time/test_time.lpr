@@ -182,6 +182,13 @@ begin
   Result := Round((AValue - UNIX_EPOCH_TDATETIME) * Double(NS_PER_DAY));
 end;
 
+function DateTimeToUtcUnixNanos(const AValue: TDateTime): Int64;
+const
+  UNIX_EPOCH_TDATETIME = 25569.0;
+begin
+  Result := Round((AValue - UNIX_EPOCH_TDATETIME) * Double(NS_PER_DAY));
+end;
+
 procedure TestDateTimeNow;
 var
   LBeforeNs: UInt64;
@@ -202,6 +209,28 @@ begin
   Check(LNow > 40000, 'datetime now should be a modern date');
   Check((LNowNs >= LLowerBound) and (LNowNs <= LUpperBound),
     'datetime now should track platform realtime clock');
+end;
+
+procedure TestDateTimeUtcNow;
+var
+  LBeforeNs: UInt64;
+  LAfterNs: UInt64;
+  LNow: TDateTime;
+  LNowNs: Int64;
+  LLowerBound: Int64;
+  LUpperBound: Int64;
+begin
+  LBeforeNs := platform_realtime_ns;
+  LNow := DateTimeUtcNow;
+  LAfterNs := platform_realtime_ns;
+  LNowNs := DateTimeToUtcUnixNanos(LNow);
+
+  LLowerBound := Int64(LBeforeNs) - NS_PER_SEC;
+  LUpperBound := Int64(LAfterNs) + NS_PER_SEC;
+
+  Check(LNow > 40000, 'datetime UTC now should be a modern date');
+  Check((LNowNs >= LLowerBound) and (LNowNs <= LUpperBound),
+    'datetime UTC now should track platform realtime clock without local offset');
 end;
 
 procedure TestDateTimeMath;
@@ -237,6 +266,7 @@ begin
   T.Run('Stopwatch reset', @TestStopwatchReset);
   T.Run('Platform time', @TestPlatformTime);
   T.Run('DateTime now', @TestDateTimeNow);
+  T.Run('DateTime UTC now', @TestDateTimeUtcNow);
   T.Run('DateTime math', @TestDateTimeMath);
   T.Summary;
 end.

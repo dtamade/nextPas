@@ -155,7 +155,7 @@ begin
   Check('TX509Validity.IsValidAt (after)', not Validity.IsValidAt(EncodeDate(2026, 1, 1)));
   Check('TX509Validity.ToString', Pos('Not Before', Validity.ToString) > 0);
 
-  LNow := DateTimeNow;
+  LNow := DateTimeUtcNow;
   Validity.NotBefore := LNow - 1.0;
   Validity.NotAfter := LNow + 1.0;
   Check('TX509Validity.IsValid (now)', Validity.IsValid);
