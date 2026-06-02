@@ -2,7 +2,7 @@
 
 ## Session: 2026-06-03 config example smoke automation
 
-- **Status:** in progress
+- **Status:** complete
 - **Scope:** add a focused config suite that executes the runnable startup example and asserts its key success markers.
 - **Checklist:**
   - [x] Checked shared `main`, unrelated dirty files, and worktree inventory before any edits.
@@ -13,7 +13,7 @@
   - [x] Add `test_config_examples` suite and Makefile.
   - [x] Run the first focused execution and record whether it is RED or direct GREEN.
   - [x] Run focused + adjacent config verification with heaptrc evidence.
-  - [ ] Commit and merge safely.
+  - [x] Commit and merge safely.
 
 ## Baseline Evidence
 
@@ -47,3 +47,9 @@
 - 这轮没有发现阻塞性实现问题；新增 suite 的边界小、职责单一，且没有把 example 行为复制进测试实现里。
 - 当前最重要的事实是：Phase 3 startup example 现在已经进入自动化回归，不再只依赖 README 和人工 smoke。
 - residual risk 主要不在 config 实现，而在 example 自身未来若再扩充行为时，需要同步补 marker 或扩 suite 断言。
+
+## Final Merge State
+
+- feature commit: `d244307e test(config): add startup example smoke suite`
+- feature branch after syncing latest `main`: `218735c9`
+- shared `main` fast-forward merge completed at `218735c9`

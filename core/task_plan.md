@@ -24,7 +24,7 @@ focused smoke suite，不扩张 config API，不重开 Phase 3D2 设计。
 - [x] 如有失败，最小化修正测试 harness，直到 focused GREEN。
 - [x] 回归三组既有 config suite，并确认 heaptrc 0 泄漏。
 - [x] 运行 `git diff --check`，审查变更面，只提交本轮 config 文件。
-- [ ] 提交 feature worktree，并安全 fast-forward 合回 `main`。
+- [x] 提交 feature worktree，并安全 fast-forward 合回 `main`。
 
 ## Quality Gates
 
