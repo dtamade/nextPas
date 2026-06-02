@@ -7,6 +7,8 @@ uses
   np_ast_facade,
   np_diagnostics_sink,
   np_green_tree,
+  np_hir_builder,
+  np_hir_llvm_emitter,
   np_lexer,
   np_semantic_analyzer,
   np_semantic_model,
@@ -108,6 +110,65 @@ begin
     Halt(ABaseExitCode + 2);
   if Expr.Op <> AExpectedOp then
     Halt(ABaseExitCode + 3);
+end;
+
+function TypeNameOf(const AModel: TSemanticModel;
+  const ATypeId: LongInt): string;
+begin
+  if (ATypeId <= 0) or (ATypeId > AModel.TypeCount) then
+    Exit('');
+  Result := AModel.TypeAt(ATypeId - 1).Name;
+end;
+
+procedure AssertExprTypeName(const AModel: TSemanticModel;
+  const AExpr: TSemanticHirExpr; const AExpectedTypeName: string;
+  const AExitCode: LongInt);
+begin
+  if not SameText(TypeNameOf(AModel, AExpr.TypeId), AExpectedTypeName) then
+    Halt(AExitCode);
+end;
+
+procedure AssertCastChildType(const AModel: TSemanticModel;
+  const AExprId: LongInt; const AExpectedTargetTypeName,
+  AExpectedChildTypeName: string; const ABaseExitCode: LongInt);
+var
+  Expr, Child: TSemanticHirExpr;
+begin
+  if AExprId <= 0 then
+    Halt(ABaseExitCode);
+  Expr := AModel.HirExprAt(AExprId - 1);
+  if Expr.Kind <> shekCast then
+    Halt(ABaseExitCode + 1);
+  AssertExprTypeName(AModel, Expr, AExpectedTargetTypeName, ABaseExitCode + 2);
+  if Length(Expr.Children) < 1 then
+    Halt(ABaseExitCode + 3);
+  Child := AModel.HirExprAt(Expr.Children[0] - 1);
+  AssertExprTypeName(AModel, Child, AExpectedChildTypeName, ABaseExitCode + 4);
+end;
+
+function FindCompareExprWithFirstCastChild(const AModel: TSemanticModel;
+  const AChildTypeName: string; out AExpr: TSemanticHirExpr): Boolean;
+var
+  I: LongInt;
+  Node: TTypedHirNode;
+  FirstChild, CastChild: TSemanticHirExpr;
+begin
+  for I := 0 to AModel.TypedHirNodeCount - 1 do
+  begin
+    Node := AModel.TypedHirNodeAt(I);
+    if Node.ExprId <= 0 then
+      Continue;
+    AExpr := AModel.HirExprAt(Node.ExprId - 1);
+    if (AExpr.Kind <> shekCompareOp) or (Length(AExpr.Children) < 1) then
+      Continue;
+    FirstChild := AModel.HirExprAt(AExpr.Children[0] - 1);
+    if (FirstChild.Kind <> shekCast) or (Length(FirstChild.Children) < 1) then
+      Continue;
+    CastChild := AModel.HirExprAt(FirstChild.Children[0] - 1);
+    if SameText(TypeNameOf(AModel, CastChild.TypeId), AChildTypeName) then
+      Exit(True);
+  end;
+  Result := False;
 end;
 
 procedure AssertRuntimeSymbolExpr(const AModel: TSemanticModel;
@@ -324,6 +385,184 @@ begin
   end;
 end;
 
+procedure TestMixedWidthPromotionExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr: TSemanticHirExpr;
+  Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
+  IR: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var b: Byte;'#10 +
+    'var i: Integer;'#10 +
+    'var lw: LongWord;'#10 +
+    'begin'#10 +
+    '  b := 7;'#10 +
+    '  i := b + 4;'#10 +
+    '  if b < i then Halt(1);'#10 +
+    '  if lw < i then Halt(2);'#10 +
+    '  Halt(i);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(70);
+    if Model.Status <> 'ready' then
+      Halt(71);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'assign-runtime',
+      'add', Node) then
+      Halt(72);
+    if Node.ExprId = 0 then
+      Halt(73);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekBinaryOp then
+      Halt(74);
+    AssertExprTypeName(Model, Expr, 'Integer', 75);
+    if Length(Expr.Children) < 2 then
+      Halt(76);
+    AssertCastChildType(Model, Expr.Children[0], 'Integer', 'Byte', 77);
+    AssertExprTypeName(Model, Model.HirExprAt(Expr.Children[1] - 1),
+      'Integer', 82);
+
+    if not FindCompareExprWithFirstCastChild(Model, 'Byte', Expr) then
+      Halt(83);
+    if Expr.Kind <> shekCompareOp then
+      Halt(85);
+    AssertExprTypeName(Model, Expr, 'Boolean', 86);
+    if Length(Expr.Children) < 2 then
+      Halt(87);
+    AssertCastChildType(Model, Expr.Children[0], 'Integer', 'Byte', 88);
+    AssertExprTypeName(Model, Model.HirExprAt(Expr.Children[1] - 1),
+      'Integer', 93);
+
+    if not FindCompareExprWithFirstCastChild(Model, 'LongWord', Expr) then
+      Halt(94);
+    if Expr.Kind <> shekCompareOp then
+      Halt(96);
+    AssertExprTypeName(Model, Expr, 'Boolean', 97);
+    if Length(Expr.Children) < 2 then
+      Halt(98);
+    AssertCastChildType(Model, Expr.Children[0], 'Int64', 'LongWord', 99);
+    AssertCastChildType(Model, Expr.Children[1], 'Int64', 'Integer', 104);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        IR := Emitter.AsText;
+        if Pos('zext i8 ', IR) = 0 then
+          Halt(109);
+        if Pos(' to i32', IR) = 0 then
+          Halt(110);
+        if Pos('zext i32 ', IR) = 0 then
+          Halt(111);
+        if Pos('sext i32 ', IR) = 0 then
+          Halt(112);
+        if Pos(' to i64', IR) = 0 then
+          Halt(113);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestTypedHaltArgumentWidening;
+var
+  Model: TSemanticModel;
+  Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
+  IR: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var i: Integer;'#10 +
+    'begin'#10 +
+    '  i := 7;'#10 +
+    '  Halt(i);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(120);
+    if Model.Status <> 'ready' then
+      Halt(121);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        IR := Emitter.AsText;
+        if Pos('sext i32 ', IR) = 0 then
+          Halt(122);
+        if Pos(' to i64', IR) = 0 then
+          Halt(123);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestTypedWriteIntArgumentWidening;
+var
+  Model: TSemanticModel;
+  Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
+  IR: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var i: Integer;'#10 +
+    'begin'#10 +
+    '  i := 7;'#10 +
+    '  WriteLn(i);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(130);
+    if Model.Status <> 'ready' then
+      Halt(131);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        IR := Emitter.AsText;
+        if Pos('sext i32 ', IR) = 0 then
+          Halt(132);
+        if Pos('call void @write_i64_decimal(i64 ', IR) = 0 then
+          Halt(133);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
@@ -332,4 +571,7 @@ begin
   TestAssignRuntimeExprProducer;
   TestIncRuntimeExprProducer;
   TestDecRuntimeExprProducer;
+  TestMixedWidthPromotionExprProducer;
+  TestTypedHaltArgumentWidening;
+  TestTypedWriteIntArgumentWidening;
 end.
