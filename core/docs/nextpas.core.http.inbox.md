@@ -4,11 +4,10 @@
 
 ## 当前批次
 
-- chunk-specific security policy proof 已进一步收紧
-- `test_http_security` 现在明确锁定 `Content-Length + Transfer-Encoding: chunked` 冲突返回 `400`，并补齐 malformed chunk extension -> `400`
-- `test_http_h1parser` 现在明确锁定 `CL -> TE` / `TE -> CL` 两种顺序的 framing conflict 都是 parser error
-- `test_http_server` 现在明确锁定 `CL -> TE` / `TE -> CL` 两种顺序都返回 `400`，且不会进入 handler
-- 本轮是覆盖扩充批次，不是生产修复批次；现有实现直接通过新增 focused tests
+- chunked trailer 契约边界已收紧并落地
+- `test_http_h1parser` / `test_http_server` 先用 RED 证明 trailer 字段会污染普通 `Headers`
+- parser 现已隔离 trailer 字段：保留初始 `Trailer:` 声明头，但不再把实际 trailer 项混进常规请求头
+- 本轮包含生产修复：`nextpas.core.http.impl.h1.parser` 现在在 trailer 阶段忽略对普通 `Headers` 的写入
 
 ## 当前重点
 
@@ -17,8 +16,8 @@
 - internal registry 当前内建 `hvHttp10` / `hvHttp11` -> H1，client/server 默认版本都是 `hvHttp11`。
 - `nextpas.core.http.NewHttpClient` / `NewHttpServer` 仍然支持显式注入 `IHttpTransport` / `IHttpServerTransport`；显式注入优先于 registry 默认解析。
 - `http.impl.h1.chunked`、client 复用语义、hijack ownership 三条 H1 correctness 基线仍然保持成立。
-- `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / missing chunk-data CRLF / truncation / CL-TE conflict focused proof。
-- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、以及 CL-TE conflict rejection focused proof。
+- `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / missing chunk-data CRLF / truncation / CL-TE conflict / trailer isolation focused proof。
+- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、以及 trailer 不污染请求头 focused proof。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -33,6 +32,6 @@
 
 ## 下一步
 
-- 下一步优先审 `trailer` 的契约边界：当前实现大概率会把 trailer 字段混进普通 `Headers`，需要用 RED 先确认，再决定是 reject、ignore，还是补独立 trailer API。
-- malformed chunk extension 现在已有 security proof；后续如继续补 chunk 语义，优先考虑 trailer pollution / malformed trailer，而不是再堆普通 extension 兼容 case。
+- 下一步优先补 trailer 后续边界：malformed trailer、oversize trailer 是否需要更强的 parser/server proof，以及 trailer 是否最终需要显式 public API。
+- 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。

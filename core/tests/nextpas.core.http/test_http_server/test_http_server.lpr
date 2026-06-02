@@ -1094,6 +1094,67 @@ begin
   end;
 end;
 
+procedure TestChunkedRequestTrailerDoesNotPolluteHeaders;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+  LGotTrailerValues: TStringArray;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Auth-Context'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Auth-Context: admin'#13#10#13#10;
+begin
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+    LBuf: array[0..255] of Byte;
+    LN: SizeUInt;
+  begin
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Auth-Context');
+    LGotTrailerValues := AReq.Headers.GetAll('X-Auth-Context');
+    repeat
+      LN := AReq.Body.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      if LN > 0 then
+      begin
+        SetLength(LGotBody, Length(LGotBody) + Int32(LN));
+        Move(LBuf[0], LGotBody[Length(LGotBody) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'chunked trailer request: status 200');
+    CheckEqual('hello', LGotBody, 'chunked trailer request body decoded');
+    CheckEqual('X-Auth-Context', LGotTrailerDecl, 'trailer declaration preserved');
+    CheckEqual('', LGotTrailerValue, 'trailer field not exposed as regular header');
+    CheckEqual(Int64(0), Int64(Length(LGotTrailerValues)),
+      'trailer field has no regular header entries');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Chunked response — handler writes without Content-Length }
 procedure TestChunkedResponse;
 var
@@ -1286,6 +1347,7 @@ begin
   T.Run('Malformed chunked request truncated at EOF -> reject', @TestMalformedChunkedRequestTruncatedAtEof);
   T.Run('Chunked request content-length conflict -> 400', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order -> 400', @TestChunkedRequestContentLengthConflictReverseOrder);
+  T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);

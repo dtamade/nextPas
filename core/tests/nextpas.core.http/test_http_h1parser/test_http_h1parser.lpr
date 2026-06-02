@@ -312,6 +312,35 @@ begin
     'chunked then content-length mentions conflicting framing');
 end;
 
+procedure TestChunkedRequestTrailerDoesNotPolluteHeaders;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LAll: TStringArray;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Auth-Context'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'X-Auth-Context: admin'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.IsComplete, 'chunked trailer request complete');
+  Check(not LP.HasError, 'chunked trailer request has no parser error');
+  CheckEqual('hello', LP.GetBody, 'chunked trailer request body decoded');
+  CheckEqual('X-Auth-Context', LP.GetHeaders.Get('Trailer'),
+    'trailer declaration header preserved');
+  CheckEqual('', LP.GetHeaders.Get('X-Auth-Context'),
+    'trailer field does not appear as regular header');
+  LAll := LP.GetHeaders.GetAll('X-Auth-Context');
+  CheckEqual(Int64(0), Int64(Length(LAll)),
+    'trailer field has no regular header entries');
+end;
+
 procedure TestHeadRequest;
 var
   LP: IH1Parser;
@@ -425,6 +454,7 @@ begin
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
+  T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Incomplete input', @TestIncompleteInput);

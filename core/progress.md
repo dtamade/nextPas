@@ -1,5 +1,47 @@
 # Progress Log: nextpas.core.http
 
+## Session: 2026-06-03 chunked trailer isolation
+
+### Phase 2/3: parser and server trailer boundary hardening
+
+- **Status:** complete
+- **Scope:** prove trailer pollution with RED tests, land the narrowest parser fix, and lock the current trailer contract with focused coverage.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, architecture, task plan, findings, progress, and design conventions.
+  - [x] Added RED parser and server tests proving legal chunked trailers polluted ordinary request headers.
+  - [x] Used a `gpt-5.5 xhigh` 子代理做只读实现审查，确认 `CbOnHeaderValueComplete` + llhttp `F_TRAILING` 是最窄修复切点。
+  - [x] Landed the minimal parser fix so trailer fields no longer write into ordinary `Headers`.
+  - [x] Preserved the initial `Trailer:` declaration header as part of the ordinary request header view.
+  - [x] Re-ran focused parser/server/security suites with heaptrc proof.
+  - [x] Re-ran the full HTTP suite after the trailer isolation fix.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-03 Trailer Isolation
+
+| Check                  | Command                                                          | Result                                             |
+| ---------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state       | `git status --short --branch`                                    | Shared checkout is dirty outside HTTP target files |
+| Focused parser GREEN   | `make -C tests/nextpas.core.http/test_http_h1parser clean test`  | 26/26 passed, 0 unfreed memory blocks              |
+| Focused server GREEN   | `make -C tests/nextpas.core.http/test_http_server clean test`    | 27/27 passed, 0 unfreed memory blocks              |
+| Focused security GREEN | `make -C tests/nextpas.core.http/test_http_security clean test`  | 13/13 passed, 0 unfreed memory blocks              |
+| Full HTTP suite        | `make TESTS_DIR=tests/nextpas.core.http test`                    | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-03 Trailer Isolation
+
+- 这一轮是带最小生产修复的 correctness 批次，不再只是 coverage expansion：RED tests 先证明 trailer 污染存在，随后 parser 做了窄修复并保持 focused GREEN。
+- 修复边界刻意保持保守：只禁止实际 trailer 字段混入普通 `Headers`，不引入新的 public trailer API，也不改变初始 `Trailer:` 声明头的可见性。
+- `gpt-5.5 xhigh` 子代理给出的核心实现判断是正确的：llhttp `F_TRAILING` 在 header-value complete 回调时已经足够稳定，可直接作为隔离 trailer 写入的信号。
+- `test_http_smoke` 仍打印 `True free heap : 260960 / Should be : 262144`，但 heaptrc 仍报告 `0 unfreed memory blocks`；继续视为非阻塞观察项。
+
+## Review 2026-06-03 Trailer Isolation
+
+- `/codex`-style review 结论：这轮应如实记录为 trailer isolation bugfix，而不是仅仅“补测试”。
+- 现在 parser 和 server 两层都已经锁定当前窄契约：保留 `Trailer` 声明头，但 trailer 字段本身不再伪装成普通请求头。
+- Shared-checkout 风险没有变化：提交时必须继续保持 path-limited staging，只提交本轮 HTTP 文件。
+- 下一步优先级已经收窄到 malformed/oversize trailer proof，以及是否需要显式 public trailer API。
+
 ## Session: 2026-06-03 chunk-specific security policy tightening
 
 ### Phase 2/3: security / parser / server exact policy proof tightening

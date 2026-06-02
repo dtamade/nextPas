@@ -125,7 +125,10 @@ var
 begin
   LSelf := GetSelf(p0);
   if LSelf.FCurrentField <> '' then
-    LSelf.FHeaders.Add(LSelf.FCurrentField, LSelf.FCurrentValue);
+  begin
+    if (p0^.flags and F_TRAILING) = 0 then
+      LSelf.FHeaders.Add(LSelf.FCurrentField, LSelf.FCurrentValue);
+  end;
   LSelf.FCurrentField := '';
   LSelf.FCurrentValue := '';
   Result := 0;

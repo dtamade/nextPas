@@ -69,7 +69,8 @@
 - `test_http_server` 现在还直接锁定了 `CL -> TE` / `TE -> CL` 冲突都返回 `400`，并且都不会进入 handler。
 - 这一轮没有生产代码改动；新增 focused tests 直接通过，说明现有实现已经满足这一组 inbound chunked request 契约。
 - `test_http_security` 现在不再把 `CL+TE` conflict 放在 broad safe-handling 桶里，而是明确断言 `400`；同时也新增了 malformed chunk extension -> `400` 的 raw-wire proof。
-- 合法 trailer 现在大概率会被 parser wrapper 混进普通 `Headers`：wrapper 没有独立 trailer API，header callbacks 又会继续把 trailer 字段 `Add` 进同一个 `IHttpHeaders` 容器，这更像一个待确认的安全/契约风险，而不是已经定义好的行为。
+- 新增 RED parser/server proof 已确认合法 chunked trailer 之前会污染普通 `Headers`：`Trailer: X-Auth-Context` 声明头和实际 trailer 字段会一起进入同一个 `IHttpHeaders` 视图。
+- `nextpas.core.http.impl.h1.parser` 现在在 `CbOnHeaderValueComplete` 里读取 llhttp `F_TRAILING` 标志；普通 header 阶段仍写入 `FHeaders`，trailer 阶段则忽略写入，因此当前窄契约变成“保留初始 `Trailer:` 声明头，但实际 trailer 字段不进入普通请求头”。
 
 ## Git and Collaboration Findings
 
@@ -88,7 +89,7 @@
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 - Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.
 - Future H2/H3 work should extend the landed internal registry instead of reintroducing version-default logic inside facade/client/server constructors.
-- The next parser-security gap is now more specific: trailer policy 还没有被定义。下一步应先用 RED 证明 trailer 是否污染普通 `Headers`，再决定是 reject、ignore，还是补显式 trailer API。
+- The next parser-security gap is now more specific: malformed/oversize trailer behavior 还没有 focused proof，且是否需要独立 public trailer API 仍待决策；当前先维持“ignore trailer fields, preserve Trailer declaration header”的窄契约。
 
 ## Communication Cadence Adopted
 

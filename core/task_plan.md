@@ -6,20 +6,20 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF rejection, inbound chunked decode coverage, raw-wire malformed chunked parser/server proof, and `CL+TE` conflict policy proof are now locked; the next slice narrows to explicit trailer boundary policy.
+Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF rejection, inbound chunked decode coverage, raw-wire malformed chunked parser/server proof, `CL+TE` conflict policy proof, and trailer isolation are now locked; the next slice narrows to malformed/oversize trailer policy and whether a public trailer API is warranted.
 
 ## Active Batch Checklist
 
 - [x] Re-read HTTP inbox, API coverage, architecture, findings, progress, and design conventions.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
-- [x] Audit chunk-specific security policy gaps in parser, server, and security suites.
-- [x] Tighten `test_http_security` from broad safe-handling to explicit `400` proof for `CL+TE` conflict and malformed chunk extension.
-- [x] Add focused parser/server proof for `CL -> TE` and `TE -> CL` conflict rejection.
-- [x] Verify whether the new tests expose a parser/server gap or already pass on current implementation.
+- [x] Audit trailer boundary risk after chunk-specific security tightening and confirm the shared checkout scope remains HTTP-only.
+- [x] Add RED parser/server proof that legal chunked trailers pollute ordinary request headers.
+- [x] Use the llhttp trailing flag seam in `impl.h1.parser` to choose the narrowest production fix.
+- [x] Land the minimal parser fix so the initial `Trailer:` declaration header is preserved but actual trailer fields are ignored by ordinary `Headers`.
 - [x] Re-run focused parser/server/security tests with heaptrc evidence.
-- [x] Re-run the full HTTP suite after the coverage expansion.
+- [x] Re-run the full HTTP suite after the trailer isolation fix.
 - [x] Update inbox, coverage matrix, findings, and progress for this batch.
-- [x] Commit only the owned HTTP files for this malformed chunked coverage batch.
+- [x] Commit only the owned HTTP source/test/doc files for this trailer isolation batch.
 
 ## Quality Gates
 
@@ -83,7 +83,7 @@ Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF r
 | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | Keep the H1 writer chunked-by-default contract   | Matches current implementation and server tests; do not force a production change without a tested reason.                                 |
 | Keep benchmark work after correctness            | User explicitly asked to benchmark in the final round after interfaces are fixed and complete.                                             |
-| Commit only owned HTTP planning/test files       | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                                                       |
+| Commit only owned HTTP source/test/doc files    | Current shared checkout has unrelated dirty/untracked files outside this HTTP batch.                                                       |
 | Treat empty DELETE body by behavior              | The public contract is no request body and zero content length, not the internal `Body=nil` representation.                                |
 | Treat transport coverage as shape-only           | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only.    |
 | Transfer hijacked connection ownership           | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                   |
@@ -99,6 +99,7 @@ Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF r
 | Reject truncated fixed-length responses at EOF   | A response with declared `Content-Length` is not close-delimited; accepting EOF there would return corrupt bodies and mislead reuse logic. |
 | Reject malformed chunked requests before handler | Invalid chunk framing must never reach router/handler code; the server contract is `400` when parser errors eagerly and safe close on EOF truncation. |
 | Lock CL+TE conflict in multiple layers           | The strict llhttp default currently enforces `Content-Length` vs `Transfer-Encoding: chunked` conflict rejection, so parser/server/security tests should lock that behavior before any future parser config drift. |
+| Ignore trailer fields in ordinary headers for now | This keeps the current public surface small and avoids letting trailing metadata silently masquerade as regular request headers while no dedicated trailer API exists. |
 
 ## Errors Encountered
 
@@ -118,3 +119,4 @@ Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF r
 | Response parser treated truncated fixed-length EOF as complete | 1       | Added RED parser/client tests, then limited EOF completion to true close-delimited responses only.                   |
 | Malformed chunked request rejection lacked focused raw-wire proof | 1     | Added parser/server malformed chunk tests; they passed immediately, so this batch stayed coverage-only without production edits.            |
 | Chunk-specific security policy tests were too broad           | 1       | Tightened security proof for `CL+TE` and malformed chunk extension, then added parser/server focused conflict tests; all passed without production edits. |
+| Chunked trailer fields polluted ordinary request headers      | 1       | Added RED parser/server tests, then made `CbOnHeaderValueComplete` skip writes while `F_TRAILING` is set.            |
