@@ -32,11 +32,17 @@ type
 function QUICDeriveInitialSecret(const AConnectionID: TBytes): TBytes;
 function QUICDeriveClientInitialKeys(const AInitialSecret: TBytes): TQUICKeys;
 function QUICDeriveServerInitialKeys(const AInitialSecret: TBytes): TQUICKeys;
+function QUICBuildPacketProtectionNonce(const AIV: TBytes; APacketNumber: UInt64): TBytes;
+function QUICComputeAESHeaderProtectionMask(const AHPKey, ASample: TBytes): TBytes;
+procedure QUICApplyHeaderProtection(var APacket: TBytes; APacketNumberOffset: Integer;
+  APacketNumberLength: Integer; const AMask: TBytes);
 
 implementation
 
 uses
-  nextpas.core.crypto.hkdf, nextpas.core.crypto.hash;
+  nextpas.core.crypto.aesgcm,
+  nextpas.core.crypto.hkdf,
+  nextpas.core.errors;
 
 function StringToBytes(const AValue: string): TBytes;
 begin
@@ -90,6 +96,76 @@ begin
   Result.Key := HKDFExpandLabel(LServerSecret, 'quic key', 16);
   Result.IV := HKDFExpandLabel(LServerSecret, 'quic iv', 12);
   Result.HP := HKDFExpandLabel(LServerSecret, 'quic hp', 16);
+end;
+
+function QUICBuildPacketProtectionNonce(const AIV: TBytes; APacketNumber: UInt64): TBytes;
+var
+  I: Integer;
+  LPacketNumber: UInt64;
+begin
+  if Length(AIV) = 0 then
+    raise EArgumentError.Create('QUIC packet protection IV must not be empty');
+
+  Result := nil;
+  SetLength(Result, Length(AIV));
+  Move(AIV[0], Result[0], Length(AIV));
+
+  LPacketNumber := APacketNumber;
+  for I := 0 to Length(Result) - 1 do
+  begin
+    Result[Length(Result) - 1 - I] :=
+      Result[Length(Result) - 1 - I] xor Byte(LPacketNumber and $FF);
+    LPacketNumber := LPacketNumber shr 8;
+  end;
+end;
+
+function QUICComputeAESHeaderProtectionMask(const AHPKey, ASample: TBytes): TBytes;
+var
+  LExpandedKey: TAESExpandedKey;
+  LInputBlock: TAESBlock;
+  LOutputBlock: TAESBlock;
+  LNr: Integer;
+begin
+  if Length(ASample) <> SizeOf(TAESBlock) then
+    raise EArgumentError.Create('QUIC header protection sample must be exactly 16 bytes');
+
+  AESKeyExpand(AHPKey, LExpandedKey, LNr);
+  if LNr = 0 then
+    raise EArgumentError.Create('QUIC header protection key must be 16, 24, or 32 bytes');
+
+  Move(ASample[0], LInputBlock[0], SizeOf(LInputBlock));
+  AESEncryptBlock(LInputBlock, LOutputBlock, LExpandedKey, LNr);
+
+  Result := nil;
+  SetLength(Result, 5);
+  Move(LOutputBlock[0], Result[0], Length(Result));
+end;
+
+procedure QUICApplyHeaderProtection(var APacket: TBytes; APacketNumberOffset: Integer;
+  APacketNumberLength: Integer; const AMask: TBytes);
+var
+  I: Integer;
+  LHeaderMask: Byte;
+begin
+  if Length(APacket) = 0 then
+    raise EArgumentError.Create('QUIC packet must not be empty');
+  if (APacketNumberLength < 1) or (APacketNumberLength > 4) then
+    raise EArgumentError.Create('QUIC packet number length must be between 1 and 4 bytes');
+  if Length(AMask) <> 5 then
+    raise EArgumentError.Create('QUIC header protection mask must contain exactly 5 bytes');
+  if APacketNumberOffset <= 0 then
+    raise EArgumentError.Create('QUIC packet number offset must point past the first header byte');
+  if (APacketNumberOffset + APacketNumberLength) > Length(APacket) then
+    raise EArgumentError.Create('QUIC packet number range exceeds packet length');
+
+  if (APacket[0] and $80) <> 0 then
+    LHeaderMask := $0F
+  else
+    LHeaderMask := $1F;
+
+  APacket[0] := APacket[0] xor (AMask[0] and LHeaderMask);
+  for I := 0 to APacketNumberLength - 1 do
+    APacket[APacketNumberOffset + I] := APacket[APacketNumberOffset + I] xor AMask[I + 1];
 end;
 
 end.
