@@ -106,8 +106,10 @@ type
     ['{7F5F1A22-8C52-44C8-9E38-9CF5C3F2C101}']
     function GetCount: Integer;
     function GetString(const AKey: string; const ADefault: string = ''): string;
-    function GetStringRequired(const AKey: string): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
     function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
+    function GetStringRequired(const AKey: string): string;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetIntRequired(const AKey: string): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
@@ -137,7 +139,7 @@ type
 
 Phase 2 的默认行为是 getter-time 严格插值：`${KEY}` 先查 config，再查 env；未解析、空占位符、未闭合和循环都抛 `EConfigError`。
 
-Phase 3 不改变默认行为，只预留模式：
+Phase 3 不改变默认行为。以下枚举只是 future draft，用于约束后续设计方向；它还不是当前公开 API：
 
 ```pascal
 type
@@ -319,6 +321,20 @@ Tests for Phase 3D2, if implemented:
 - `WithInterpolation(cimDisabled)` uses raw-read behavior for string, typed getters, arrays, and required checks.
 - `Build` and `BuildConfig` mode semantics are identical, or the API rejects unsupported combinations explicitly.
 
+Design boundary for Phase 3D2:
+- Phase 3D2 remains deferred until a concrete consumer needs whole-config disabled interpolation. Phase 3D1 raw-read APIs
+  already cover the current "read without expansion" requirement.
+- If Phase 3D2 is revived, the only public mode entrypoint in this slice should be
+  `IConfigBuilder.WithInterpolation(AMode: TConfigInterpolationMode): IConfigBuilder`.
+- `WithInterpolation` must stamp the fresh built `TConfig` instance with one internal mode so that `Build` and `BuildConfig`
+  share identical read semantics. The builder must not let `Build` and `BuildConfig` silently diverge.
+- Do not add `WithInterpolation` to `IConfig`. That would immediately reopen borrowed/shared view semantics or clone
+  semantics, which are intentionally outside the Phase 3 scope.
+- Do not add a public mode-switch API to existing direct `TConfig.Create` consumers in Phase 3D2. In this slice, callers
+  that create `TConfig` manually keep using explicit raw getters when they need non-interpolated reads.
+- `TConfigWatcher` remains compatible because it reloads into the same `TConfig` instance; the instance-level mode chosen at
+  build time stays stable across `ReplaceFrom` / reload cycles.
+
 ## Module organization
 
 Keep Phase 3A/3B public types in `nextpas.core.config.pas` first. This is intentional:
@@ -385,12 +401,15 @@ Completion requires:
 1. Borrowed `IConfig` adapter 暂不实现。若后续有真实 consumer，再以 `ConfigBorrowedView` 显式危险命名设计。
 2. `cimDisabled` 暂不公开。下一批先实现显式 raw-read API，避免模式 API 先于底层语义。
 3. `BuildConfig` 已在首批实现，因为 watcher 仍需要 mutable `TConfig`。
+4. Phase 3D2 暂不立刻实现；只有出现真实 consumer 时，才重新开启 whole-config mode。
+5. 若 Phase 3D2 重启，mode API 只允许从 builder 进入；不新增 `IConfig.WithInterpolation`、borrowed view 或
+   raw required 的同批扩张。
 
 ## Recommended next implementation slice
 
-Phase 3 首批闭环与 Phase 3D1 raw-read 能力已完成。建议下一批继续聚焦剩余的边界设计，而不是立刻扩张实现面：
+Phase 3 首批闭环、Phase 3D1 raw-read 能力、以及 Phase 3D2 设计边界都已完成。建议下一批遵守以下收敛策略：
 
 1. 保持 `GetRawString` / `GetRawStringArray` 作为明确的 raw-read 基线，不继续追加 raw required 或 borrowed view。
-2. 仅在真实 consumer 出现后，再评估是否需要 `WithInterpolation(cimDisabled)`；如果推进，先明确 `Build` / `BuildConfig`
-   语义一致性与错误面。
-3. borrowed view 继续维持设计项，不与 interpolation mode 混入同一实现批次。
+2. 没有真实 consumer 之前，不实现 `WithInterpolation(cimDisabled)`；避免为了"接口完整"提前扩大行为面。
+3. 若后续确实需要 whole-config mode，单独开一个实现批次，只做 builder-scope `WithInterpolation` 与 focused tests，
+   不与 borrowed view、raw required、module split 混在同一 commit。
