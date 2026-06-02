@@ -13,6 +13,19 @@
 - `test_text_number` 默认 Makefile 只带 `-gl` 不带 `-gh`，所以它只能证明功能回归，不足以作为
   leak-proof 证据；`test_tui_facade` 默认带 `-gh`，可以作为本轮显式 heaptrc 证据来源。
 
+## 2026-06-02 Follow-up Findings 43
+
+- TUI 合并前最终 verification envelope 已 fresh 跑通：
+  - focused：`test_tui_facade 5/5`、`test_tui_widget_intf 4/4`、`test_tui_buffer 21/21`，三者 heaptrc 均为 0；
+  - benchmark smoke：`4` 个 benchmark，`status=0`，`warning_count=0`；
+  - full TUI tests：`32 projects`、`246/246 passed`、`13` 个 heaptrc zero summaries、`warning_count=0`。
+- 当前编译输出里仍有大量 FPC `Note:`，主要来自 `atomic` / `simd` 路径的 inline 与 local variable 提示；
+  这些不是 warning，也不阻断 TUI 合并前的 zero-warning 结论。
+- 用 zsh 记录 benchmark 日志时，第一次脚本误用了只读变量名 `status`，命令立即失败；改为 `rc` 后重跑，
+  benchmark 证据正常产出。该错误不影响仓库状态，但应记录为本轮脚本层失误，避免下轮重复。
+- /codex 复盘结果：无 Critical / Important findings；仅发现目标树中残留的 `240` 用例旧数字，以及
+  顶部 benchmark 叙事对“跨 runtime 对照时机”写得不够明确。这两处已在目标树中收口，不涉及源码行为风险。
+
 ## 2026-05-28 Follow-up Findings 41
 
 - Wave 6 branch verification is complete in the isolated worktree:

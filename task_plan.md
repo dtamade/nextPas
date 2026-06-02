@@ -48,6 +48,32 @@ fresh `bash build/verify_local.sh` 为准。
 - [x] facade 编译 warning=0
 - [x] heaptrc 证据单独标注，不把未启用 `-gh` 的测试误报为无泄漏
 
+## Addendum: 2026-06-02 TUI merge-prep final verification envelope
+
+### Goal
+
+在不实际执行合并的前提下，把 `nextpas.core.tui` 进入 `nextpas.core` 主线前所需的最终证据包跑全、
+写实并固化到目标树与 merge-prep 文档，确认当前状态是“可合并候选”，而不是只靠历史结论。
+
+### Planned Steps
+
+- [x] 复读 `docs/design-conventions.md`、目标树、merge-prep 与 planning files
+- [x] 检查分支/工作区安全状态
+- [x] fresh 跑 focused tests：`test_tui_facade` / `test_tui_widget_intf` / `test_tui_buffer`
+- [x] fresh 跑 benchmark smoke，并单独统计 warning_count
+- [x] fresh 跑 32 个 TUI 测试项目全量回归，并统计 projects / cases / heaptrc / warning_count
+- [x] 等待 /codex 复盘审查结果并记录
+- [x] 同步文档与 planning files，提交本轮 verification 记录
+
+### Audit Checklist
+
+- [x] focused tests 全通过且 heaptrc 为 0
+- [x] benchmark smoke `status=0` 且 `warning_count=0`
+- [x] full TUI tests：`32 projects / 246 passed / 0 failed`
+- [x] full TUI heaptrc zero summaries：`13`
+- [x] full TUI `warning_count=0`
+- [x] /codex 复盘结果已记录
+
 ## Master Addendum: FPC Platform ABI Full Inventory
 
 ### Goal

@@ -8,7 +8,7 @@
 
 - 设计：接口优先（IWidget/IBlock/IList... 全继承 IWidget），热路径零开销
 - 纪律：每个接口 100% 单测覆盖 + 无内存泄漏（-gh 验证）才算完成
-- 基准：fpc rtl / go / rust 对照（最后一轮做）
+- 基准：fpc rtl / go / rust 对照（最终 benchmark 对照轮做；当前 merge-prep 只要求 FreePascal 基线与 CI smoke 真相）
 - 文档/注释/多场景测试覆盖
 
 ## 核心设计决策（已锁定）
@@ -93,7 +93,7 @@
 - [x] tree / dialog / menu / modal / select / panel / split_pane / popover / toast / tooltip / statusbar / form / scrollview / virtual_list / input_editor / calendar / linechart / markdown / syntax / diffview / file_tree / kanban / timeline / breadcrumb / progress_group / command_palette / notification_center
 - TPanel 重设计：RenderGrid 返回 TPanelGrid，Render 作为 IWidget 标准入口
 - TInputEditor 重设计：样式参数吸收为 builder，标准 IWidget.Render 签名
-- 全部 widget 单元测试覆盖；最终全量回归见当前状态的 32 测试项目 / 240 用例记录
+- 全部 widget 单元测试覆盖；最终全量回归见当前状态的 32 测试项目 / 246 用例记录
 
 ### Phase 7 — App + 收尾 [完成]
 - [x] nextpas.core.tui.app / app.screen（事件循环 + 多屏）
@@ -144,6 +144,9 @@
 - 2026-06-02 merge-prep truth：README/catalog/facade 已对齐；`test_tui_facade` 现为 5/5；
   `nextpas.core.text.number.pow10.inc` typed constant warning 已修复，facade 编译 warning=0；
   benchmark smoke 无 warning 行。
+- 2026-06-02 final verification envelope：fresh focused tests（facade/widget_intf/buffer）全通过且 heaptrc 0；
+  full TUI tests `32 projects / 246 passed / 0 failed / 13 heaptrc zero summaries / warning_count=0`；
+  benchmark smoke `4` 项、`status=0`、`warning_count=0`。
 - **迁移主体完成。** 剩余：merge 前最终真相审计、全量 verification envelope、合并准备清单。
 
 ### Phase 3 — ANSI Backend + Terminal [完成]

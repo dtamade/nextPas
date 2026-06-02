@@ -28,6 +28,18 @@
   - `test_tui_widget_intf`：`4/4`，`0 unfreed memory blocks`
   - `test_tui_buffer`：`21/21`，`0 unfreed memory blocks`
 
+### 2.1 2026-06-02 最终 verification envelope
+
+- focused tests fresh pass：
+  - `test_tui_facade` → `5/5`，heaptrc `0 unfreed memory blocks`
+  - `test_tui_widget_intf` → `4/4`，heaptrc `0 unfreed memory blocks`
+  - `test_tui_buffer` → `21/21`，heaptrc `0 unfreed memory blocks`
+- full TUI tests fresh pass：
+  - `32` 项目
+  - `246/246` 用例通过
+  - `13` 个 heaptrc zero summaries
+  - `warning_count=0`
+
 ### 3. Benchmark smoke 基线
 
 - `DiffInto 200x50 (10 changed rows)`：`46.7 us`
@@ -50,6 +62,12 @@
 ### benchmark smoke warning
 
 - warning 行数：`0`
+
+### benchmark smoke fresh envelope
+
+- `status=0`
+- benchmark 数：`4`
+- `warning_count=0`
 
 ## 建议的合并说明
 

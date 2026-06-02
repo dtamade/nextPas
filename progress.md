@@ -33,6 +33,44 @@
   - `git diff --check` 通过，工作区范围保持为本轮 1 个代码文件 + 5 个文档/计划文件。
   - 已提交主修复 commit：`5b84d82d fix(text.number): zero facade pow10 warnings`。
 
+## Session: 2026-06-02 (tui merge-prep final verification envelope)
+
+- **Status:** completed
+- Goal tree:
+  - `nextpas.core.tui` merge-prep final truth
+- Objective:
+  - 在实际合并前，fresh 复跑 focused tests、benchmark smoke 与 full TUI tests，
+    把合并候选状态落成可追溯证据。
+- Baseline:
+  - 分支 `feat/tui-migration`，工作区 clean，最近两次提交为
+    `9d79734f docs: finalize facade warning closeout state`、
+    `5b84d82d fix(text.number): zero facade pow10 warnings`。
+- Verification:
+  - focused：
+    - `test_tui_facade`：`5 total, 5 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+    - `test_tui_widget_intf`：`4 total, 4 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+    - `test_tui_buffer`：`21 total, 21 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+  - benchmark smoke：
+    - 日志：`/tmp/nextpas-tui-bench-20260602-204259.log`
+    - `status=0`
+    - `benchmarks=4`
+    - `warning_count=0`
+  - full TUI tests：
+    - 日志：`/tmp/nextpas-tui-full-20260602-203945.log`
+    - `projects=32`
+    - `total=246 passed=246 failed=0`
+    - `heap_zero_count=13`
+    - `warning_count=0`
+- Errors:
+  - benchmark 日志化第一次脚本使用 zsh 只读变量名 `status`，命令即时失败；已改为 `rc` 并重跑成功。
+- Review:
+  - /codex 复盘已返回：无 Critical / Important findings。
+  - Minor 仅两项：目标树残留 `240` 用例旧数字；benchmark 对照时机表述略含混。
+  - 两项 minor 均已修正文档，不影响当前 merge-prep 结论。
+- Closeout:
+  - 目标树与 merge-prep 已同步 final verification envelope。
+  - 工作区仅保留本轮文档/计划文件修改，等待提交。
+
 当前最新本轮为 platform host abi completeness wave 6；上一轮包括
 platform host abi completeness wave 5；
 platform host abi completeness wave 4；
