@@ -57,6 +57,7 @@ fresh `bash build/verify_local.sh` 为准。
 - [x] post-merge 关键 TUI 测试 fresh pass
 - [x] post-merge benchmark smoke `status=0`
 - [x] 结论明确区分“候选分支已验证”和“主线引用已推进”
+- [x] 已补 wider verification 尝试，并确认 `verify_local` / `core test` 的红点属于主线既有入口问题
 
 ## Addendum: 2026-06-02 TUI facade zero-warning closeout
 

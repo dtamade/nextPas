@@ -48,6 +48,22 @@
     - 日志：`/tmp/nextpas-tui-examples-merge-20260602.log`
     - `status=0`
     - `warning_count=0`
+  - wider verification attempts：
+    - `bash build/verify_local.sh`
+      - 日志：`/tmp/nextpas-tui-verify-local-merge-20260602.log`
+      - 结果：`failure-kind=missing-required-path`
+      - 缺失路径：
+        `core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr`
+      - 该路径在 `main@8581cd55`、`feat/tui-migration@00a6dd93` 与当前 candidate 三边都不存在，
+        判定为主线既有 verify drift，而非 TUI merge regression。
+    - `make -C core test FPC=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc`
+      - 日志：`/tmp/nextpas-core-test-merge-20260602.log`
+      - 结果：`rc=2`
+      - 阻断原因：`core/Makefile` 报告若干 pre-existing 测试目录缺少项目 Makefile：
+        `tests/fuzz`、
+        `tests/nextpas.core.reflect/test_marshal`、
+        `tests/nextpas.core.template/test_template`、
+        `tests/nextpas.core.validation/test_validation`
 - Closeout:
   - merge candidate 分支已提交：
     `8774a739 merge(tui): integrate feat/tui-migration into main candidate`

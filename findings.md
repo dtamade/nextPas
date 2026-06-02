@@ -17,6 +17,21 @@
 - 因此本轮最诚实的工程结论是：`nextpas.core.tui` 已到达 `verified merge candidate ready`，
   剩余阻塞不在模块本身，而在主 checkout 何时提供一个安全的本地 `main` 推进窗口。
 
+## 2026-06-02 Follow-up Findings 46
+
+- 在 merge candidate 上继续尝试更宽的官方验证时，`bash build/verify_local.sh` 失败于
+  `failure-kind=missing-required-path`，目标路径是
+  `core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr`。
+  该路径不只 candidate 缺失，而是在 `main@8581cd55`、`feat/tui-migration@00a6dd93` 与当前 candidate
+  三边都不存在；说明这是主线自己的 verify route 漂移，不是 TUI merge 带来的回归。
+- 同一候选分支上，`make -C core test FPC=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc` 也没有成功产出更宽
+  绿证据，原因同样是 repo-level 既有问题：`core/Makefile` 先于测试执行阶段就检测到多个测试目录缺失
+  项目 Makefile（`tests/fuzz`、`test_marshal`、`test_template`、`test_validation`）。
+- 这两条 wider verification 红结果的工程含义不是“`nextpas.core.tui` 还不能合”，而是
+  “当前主线自己的更宽验证入口并不处于可用真相状态”。因此对外表述必须保持两层边界：
+  1) TUI module-level merge candidate 已经被真实 merge + focused/full/benchmark/examples 证明；
+  2) repo-level official verify 还需要主线单开一轮修正，之后才能把候选分支进一步升级成更强的主线证据。
+
 ## 2026-06-02 Follow-up Findings 44
 
 - `feat/tui-migration` 当前代码与 pre-merge 证据已经收口，但这并不等于可以直接在
