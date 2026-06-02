@@ -4,6 +4,8 @@
 
 ## 当前批次
 
+- 本轮继续做 raw-wire malformed chunked request security proof：`malformed chunk extension` 现在也在 parser/server 两层有 focused 证据，server 语义锁成显式 `400`
+- 这轮没有新增生产修复；当前 parser/H1 transport 已能安全拒绝该类异常 chunk framing，本轮主要是把 current truth 锁进回归
 - 本轮继续做 raw-wire malformed chunked request security proof：`missing chunk-data CRLF` 现在也在 server/security 两层有 focused 显式 `400` 证据
 - 这轮没有新增生产修复；当前 parser/H1 transport 已能安全拒绝该类异常 chunk framing，本轮主要是把 current truth 锁进回归
 - 本轮新增生产修复：同一 read 中若首个完整 request 后还跟着下一个 pipelined request，H1 parser 现在只消费首个 request，不再让后续字节污染当前 request 的 method/url/body
@@ -46,7 +48,7 @@
 - internal registry 当前内建 `hvHttp10` / `hvHttp11` -> H1，client/server 默认版本都是 `hvHttp11`。
 - `nextpas.core.http.NewHttpClient` / `NewHttpServer` 仍然支持显式注入 `IHttpTransport` / `IHttpServerTransport`；显式注入优先于 registry 默认解析。
 - `http.impl.h1.chunked`、client 复用语义、hijack ownership 三条 H1 correctness 基线仍然保持成立。
-- `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / missing chunk-data CRLF / truncation / CL-TE conflict / trailer isolation focused proof。
+- `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / malformed chunk extension / missing chunk-data CRLF / truncation / CL-TE conflict / trailer isolation focused proof。
 - `impl.h1.parser` 现在也有 late trailer byte accounting focused proof，用来支撑 server 对 trailer header budget 的后续判定。
 - `impl.h1.parser` 现在也有 malformed trailer grammar / trailer EOF truncation focused proof。
 - `impl.h1.parser` 现在也有 request-side fixed-length body EOF truncation focused proof。
@@ -59,7 +61,7 @@
 - `impl.h1.parser` 现在也有 `negative Content-Length` 与 `very long method` parser error focused proof。
 - `impl.h1.parser` 现在也有 `Content-Length + Connection: close + extra bytes after body` parser error focused proof。
 - `impl.h1.parser` 现在也有 `same-read pipelined next request does not pollute current request` focused proof。
-- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、generic malformed request 显式 `400` rejection、`HTTP/1.1 missing Host` 显式 `400` rejection、`HTTP/1.0 missing Host` 仍允许的 focused 回归、`HTTP/0.9 / no-version` 显式 `400` rejection、`CRLF injection / request-line splitting` 显式 `400` rejection、`negative Content-Length` 显式 `400` rejection、`very long method` 显式 `400` rejection、`Content-Length + Connection: close + extra bytes after body` 显式 `400` rejection、CL-TE conflict rejection、duplicate `Content-Length` 显式 `400` rejection、`null-byte header` 显式 `400` rejection、missing chunk-data CRLF 显式 `400` rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
+- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、generic malformed request 显式 `400` rejection、`HTTP/1.1 missing Host` 显式 `400` rejection、`HTTP/1.0 missing Host` 仍允许的 focused 回归、`HTTP/0.9 / no-version` 显式 `400` rejection、`CRLF injection / request-line splitting` 显式 `400` rejection、`negative Content-Length` 显式 `400` rejection、`very long method` 显式 `400` rejection、`Content-Length + Connection: close + extra bytes after body` 显式 `400` rejection、CL-TE conflict rejection、duplicate `Content-Length` 显式 `400` rejection、`null-byte header` 显式 `400` rejection、malformed chunk extension 显式 `400` rejection、missing chunk-data CRLF 显式 `400` rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
 - `THttpServer` 现在也有 `same-write pipelined requests` focused proof：首个 request 的 body/handler/response 不会被第二个 request 污染，第二个 request 仍会在同连接上继续完成。
 - `test_http_security` 现在也有 generic malformed request、`HTTP/1.1 missing Host`、`HTTP/0.9 / no-version`、`CRLF injection / request-line splitting`、`negative Content-Length`、`very long method`、`Content-Length + Connection: close + extra bytes after body`、duplicate `Content-Length`、`null-byte header`、missing chunk-data CRLF、malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
 - `test_http_websocket` 现在也有 `upgrade request + first frame in one write` focused regression proof，锁定 hijack 后 read-ahead 尾巴不会丢失。

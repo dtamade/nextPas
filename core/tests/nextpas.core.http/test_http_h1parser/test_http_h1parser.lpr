@@ -253,6 +253,24 @@ begin
   Check(not LP.IsComplete, 'invalid chunk size is not complete');
 end;
 
+procedure TestChunkedRequestMalformedChunkExtension;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5;'#13#10'hello'#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'malformed chunk extension reports parser error');
+  Check(not LP.IsComplete, 'malformed chunk extension is not complete');
+end;
+
 procedure TestChunkedRequestTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -741,6 +759,7 @@ begin
   T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body', @TestChunkedRequestBody);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
+  T.Run('Chunked request malformed chunk extension', @TestChunkedRequestMalformedChunkExtension);
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
