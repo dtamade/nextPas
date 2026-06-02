@@ -15,6 +15,39 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-06-02 TUI facade zero-warning closeout
+
+### Goal
+
+把 `nextpas.core.tui` merge-prep 审计里剩余的 facade 编译 warning 阻塞项彻底清掉。
+这轮不改 TUI 行为与公开接口，只处理 `nextpas.core.text.number.pow10.inc` 的常量类型噪声，
+让 `uses nextpas.core.tui` 的 facade 编译结果达到 warning=0。
+
+### Architecture Decision
+
+- 保持 `pow10` 表数据、布局和算法不变，只修正常量字面量的类型归属。
+- 对所有 64-bit 十六进制字面量显式包上 `QWord(...)`，避免 FPC 先按有符号常量求值后再做
+  QWord 赋值时触发 range-check warning。
+- 本轮不重构 `text.number` 算法，不扩散到 TUI 以外模块，不把 warning 抑制建立在编译开关上。
+
+### Planned Steps
+
+- [x] 复读 `docs/design-conventions.md`，确认最小修改原则与 facade thin-boundary 纪律
+- [x] 审计 facade warning 来源，确认 975 条均来自 `nextpas.core.text.number.pow10.inc`
+- [x] 机械改写 `pow10` 表项为 `QWord($...)`
+- [x] 同步目标树、merge-prep、planning files
+- [x] 重新跑 `test_text_number`、`test_tui_facade`，明确 warning 与泄漏证据边界
+- [ ] 完成 git hygiene 检查并提交本轮 commit
+
+### Audit Checklist
+
+- [x] 只改一个文件：`core/src/nextpas.core.text.number.pow10.inc`
+- [x] 不改变 `pow10` 表大小、顺序、数值语义
+- [x] `test_text_number` fresh pass
+- [x] `test_tui_facade` fresh pass
+- [x] facade 编译 warning=0
+- [x] heaptrc 证据单独标注，不把未启用 `-gh` 的测试误报为无泄漏
+
 ## Master Addendum: FPC Platform ABI Full Inventory
 
 ### Goal

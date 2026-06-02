@@ -8,7 +8,7 @@
 - TUI 自身公开面测试通过
 - 全量 TUI 回归通过
 - 4 个 benchmark smoke 可运行
-- 当前 facade 编译 warning 不属于 TUI 自身源码
+- facade 编译 warning 已收口到 0
 
 ## Merge 前真相
 
@@ -40,12 +40,12 @@
 
 ### facade 编译 warning
 
-- warning 总数：`975`
+- warning 总数：`0`
 - TUI 自身单元 warning 行数：`0`
-- `nextpas.core.text.number.pow10.inc` warning 行数：`975`
+- `nextpas.core.text.number.pow10.inc` warning 行数：`0`
 
-结论：当前 facade 编译 warning 全部来自 `nextpas.core.text.number.pow10.inc` 的既有常量求值噪声，
-不属于 `nextpas.core.tui` 自身源码，不构成 TUI 模块内阻塞项。
+结论：此前 facade 编译 warning 的唯一来源 `nextpas.core.text.number.pow10.inc` 已通过
+`QWord($...)` typed constant 显式类型化修复；当前 `uses nextpas.core.tui` 编译面已达到 warning=0。
 
 ### benchmark smoke warning
 
@@ -54,9 +54,8 @@
 ## 建议的合并说明
 
 1. `nextpas.core.tui` 模块内测试、文档、benchmark smoke 已闭环
-2. 若主线要求“合并时 facade 编译零 warning”，需要另开一轮处理
-   `nextpas.core.text.number.pow10.inc`
-3. 若主线接受“模块内零 warning + 外部既有 warning 单独跟踪”，则 TUI 已可进入合并流程
+2. facade compile 现在已是零 warning，可直接作为合并前基线
+3. 剩余工作集中在最终 verification envelope 与合并动作本身
 
 ## 推荐合并前命令
 

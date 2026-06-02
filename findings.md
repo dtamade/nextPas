@@ -1,5 +1,18 @@
 # Findings & Decisions
 
+## 2026-06-02 Follow-up Findings 42
+
+- `nextpas.core.tui` facade 编译期的 975 条 warning 全部不是 TUI 自身单元发出的，而是
+  `nextpas.core.text.number.pow10.inc` 中高位 bit 置位的 64-bit 十六进制 typed constant 在 FPC
+  下先按有符号常量求值，再赋给 `QWord` 字段时触发 range-check warning。
+- `{$R-}` 不能消掉这类 warning；显式写成 `QWord($...)` 可以稳定消除 warning，且不改变底层位模式。
+- 因此最小、正确、可维护的修复不是关 warning，也不是改算法，而是把 `POW10_TABLE` 的 `Hi/Lo`
+  常量统一类型化为 `QWord(...)`。
+- 这轮是编译质量收口，不是行为变更；验证重点应放在 `text.number` 数值格式化/解析回归与
+  `test_tui_facade` 编译面回归，而不是新增 TUI 行为测试。
+- `test_text_number` 默认 Makefile 只带 `-gl` 不带 `-gh`，所以它只能证明功能回归，不足以作为
+  leak-proof 证据；`test_tui_facade` 默认带 `-gh`，可以作为本轮显式 heaptrc 证据来源。
+
 ## 2026-05-28 Follow-up Findings 41
 
 - Wave 6 branch verification is complete in the isolated worktree:

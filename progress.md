@@ -3,6 +3,33 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
+## Session: 2026-06-02 (tui facade zero-warning closeout)
+
+- **Status:** in progress
+- Goal tree:
+  - `nextpas.core.tui` merge-prep final truth
+- Objective:
+  - 清掉 facade 编译剩余 warning，使 `uses nextpas.core.tui` 编译面达到 warning=0。
+  - 范围限定为 `nextpas.core.text.number.pow10.inc` typed constant 噪声修复，不改 TUI 行为。
+- Baseline:
+  - `feat/tui-migration` worktree 起始时工作区只有
+    `core/src/nextpas.core.text.number.pow10.inc` 未提交改动。
+  - 上一轮 merge-prep 文档记录：facade warning 共 `975` 条，全部来自该文件。
+- Actions so far:
+  - 已复读 `docs/design-conventions.md`，确认采用最小修改原则。
+  - 已确认根因：高位 bit 置位的 64-bit hex literal 直接进入 `QWord` typed constant 字段会触发 FPC
+    range-check warning；显式 `QWord($...)` 可消除 warning。
+  - 已将 `POW10_TABLE` 全部 `Hi/Lo` 字面量机械改写为 `QWord($...)`，不改变表规模与顺序。
+- Pending:
+  - `git diff --check` / `git diff --stat` / `git status --short` 后提交本轮 commit。
+- Verification:
+  - `test_text_number`：显式用 `-gh` 重编并运行，`12 total, 12 passed, 0 failed`，
+    heaptrc 为 `0 unfreed memory blocks`。
+  - `test_tui_facade`：`make clean test` fresh 运行，`5 total, 5 passed, 0 failed`，
+    heaptrc 为 `0 unfreed memory blocks`。
+  - 两次 fresh 编译输出均未出现 `Warning:` 行；当前 round 证据与文档中的
+    facade warning=0 结论一致。
+
 当前最新本轮为 platform host abi completeness wave 6；上一轮包括
 platform host abi completeness wave 5；
 platform host abi completeness wave 4；
