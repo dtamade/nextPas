@@ -605,6 +605,27 @@ begin
   Check(LP.ErrorMessage <> '', 'extra bytes after content-length close has error message');
 end;
 
+procedure TestChunkedRequestExtraBytesAfterCloseRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Connection: close'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10#13#10 +
+          'garbage';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'extra bytes after chunked close reports parser error');
+  Check(not LP.IsComplete, 'extra bytes after chunked close is not complete');
+  Check(LP.ErrorMessage <> '', 'extra bytes after chunked close has error message');
+end;
+
 procedure TestUpgradeRequestCompletesWithoutParserError;
 var
   LP: IH1Parser;
@@ -777,6 +798,7 @@ begin
   T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
+  T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
