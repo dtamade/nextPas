@@ -15,11 +15,11 @@
 
 ### 类型前缀
 
-| 前缀 | 用途 |
-|------|------|
-| `T` | 类（class）、记录（record） |
-| `I` | 接口（interface） |
-| `E` | 异常（exception） |
+| 前缀 | 用途                        |
+| ---- | --------------------------- |
+| `T`  | 类（class）、记录（record） |
+| `I`  | 接口（interface）           |
+| `E`  | 异常（exception）           |
 
 ### 文件组织
 
@@ -1170,3 +1170,16 @@ IConcurrentQueue = interface
 ```
 
 不标注 = 默认不安全。
+
+---
+
+## 23. 多人 / 多 AI 协作纪律
+
+仓库级多人 / 多 AI 并行开发纪律固定在 `docs/ai-collaboration-discipline.md`。
+
+后续任何 shared checkout / worktree / branch 并行开发，都必须以该文档为准，尤其是：
+
+- 主 checkout 只做集成，不做默认并行实现
+- 一个写作者对应一个可写 worktree
+- staging / commit 必须 path-limited
+- 冲突和脏 index 先停再判定，不能直接覆盖未知改动

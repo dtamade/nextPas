@@ -1167,11 +1167,39 @@ end;
 function TGitManager.DiscoverRepository(const AStartPath: string): string;
 var
   LPath, LPrev: string;
+  LBuf: git_buf;
+  LRawPath: string;
+  LRepoHandle: git_repository;
+  LWorkDir: PChar;
 begin
-  // To avoid ABI differences between different nextpas.core.git.libgit2.ffi versions, use safe pure Pascal fallback here:
-  // Search upward from AStartPath for directory containing .git
   if not FInitialized then
     Initialize;
+
+  LBuf := Default(git_buf);
+  try
+    if (git_repository_discover(LBuf, PChar(AStartPath), 0, nil) = GIT_OK) and
+       (LBuf.ptr <> nil) then
+    begin
+      LRawPath := ExcludeTrailingPathDelimiter(ExpandFileName(string(LBuf.ptr)));
+      LRepoHandle := nil;
+      if git_repository_open(LRepoHandle, PChar(LRawPath)) = GIT_OK then
+      begin
+        try
+          LWorkDir := git_repository_workdir(LRepoHandle);
+          if LWorkDir <> nil then
+            Exit(ExcludeTrailingPathDelimiter(ExpandFileName(string(LWorkDir))));
+        finally
+          git_repository_free(LRepoHandle);
+        end;
+      end;
+      if SameText(ExtractFileName(LRawPath), '.git') then
+        Exit(ExtractFileDir(LRawPath));
+      Exit(LRawPath);
+    end;
+  finally
+    git_buf_dispose(@LBuf);
+  end;
+
   Result := '';
   LPath := ExpandFileName(AStartPath);
   LPrev := '';
