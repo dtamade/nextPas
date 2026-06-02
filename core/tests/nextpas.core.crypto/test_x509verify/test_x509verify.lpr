@@ -6,6 +6,8 @@ uses
   {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   SysUtils, Classes, Process,
   nextpas.core.tls.x509,
+  nextpas.core.time,
+  nextpas.core.tls.cert.utils,
   nextpas.core.crypto.x509verify;
 
 var
@@ -71,6 +73,20 @@ begin
   end;
 
   Result := GCertPath;
+end;
+
+function BuildCurrentValidCertPEM(out ACertPEM: string): Boolean;
+var
+  LOptions: TCertGenOptions;
+  LKeyPEM: string;
+begin
+  LOptions := TCertificateUtils.DefaultGenOptions;
+  LOptions.CommonName := 'x509verify-utc-contract.local';
+  LOptions.Organization := 'nextpas core';
+  LOptions.ValidDays := 1;
+  LOptions.NotBefore := Now - (1.0 / 24.0);
+  LOptions.NotAfter := Now + (1.0 / 24.0);
+  Result := TCertificateUtils.GenerateSelfSigned(LOptions, ACertPEM, LKeyPEM);
 end;
 
 procedure TestMatchHostname;
@@ -155,6 +171,39 @@ begin
   end;
 end;
 
+procedure TestVerifyChain_UsesUtcValidityTime;
+var
+  LCert: TX509Certificate;
+  LCertPEM: string;
+  LStore: TX509TrustStore;
+  LChain: array of TX509Certificate;
+  LResult: TX509VerifyResult;
+begin
+  Check('build UTC contract cert', BuildCurrentValidCertPEM(LCertPEM));
+  if LCertPEM = '' then
+    Exit;
+
+  LCert := TX509Certificate.Create;
+  LStore := TX509TrustStore.Create;
+  try
+    LCert.LoadFromPEM(LCertPEM);
+    Check('UTC contract cert notBefore before current UTC',
+      LCert.Validity.NotBefore < DateTimeUtcNow);
+    Check('UTC contract cert notAfter after current UTC',
+      LCert.Validity.NotAfter > DateTimeUtcNow);
+
+    LStore.AddTrustedCertificate(LCert);
+    SetLength(LChain, 1);
+    LChain[0] := LCert;
+
+    LResult := VerifyX509Chain(LChain, LStore, 'x509verify-utc-contract.local');
+    Check('verify chain uses UTC validity time', LResult.IsValid);
+  finally
+    LStore.Free;
+    LCert.Free;
+  end;
+end;
+
 begin
   GPass := 0;
   GFail := 0;
@@ -167,6 +216,7 @@ begin
     TestTrustStore;
     TestVerifyChain_SelfSigned;
     TestVerifyChain_WrongHostname;
+    TestVerifyChain_UsesUtcValidityTime;
 
     WriteLn;
     WriteLn(Format('Results: %d passed, %d failed', [GPass, GFail]));
