@@ -7807,6 +7807,39 @@ var
   InhMethodName, InhParentName: string;
   DotPos, K: LongInt;
 
+  procedure AttachRuntimeScalarExpr(const AHirNodeId: LongInt;
+    const AExprNode: TGreenNode);
+  var
+    LocalExprId: LongInt;
+  begin
+    if (AHirNodeId <= 0) or (AExprNode = nil) then
+      Exit;
+    if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
+      FModel.SetTypedHirNodeExprId(AHirNodeId, LocalExprId);
+  end;
+
+  procedure AddFieldStoreRuntimeNode(const ADisplayName,
+    AOperand: string; const AExprNode: TGreenNode);
+  var
+    LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'field-store-runtime', ADisplayName, 0, 0, AOperand
+    );
+    AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
+  end;
+
+  procedure AddRecordFieldStoreRuntimeNode(const ADisplayName,
+    AOperand: string; const AExprNode: TGreenNode);
+  var
+    LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'record-field-store-runtime', ADisplayName, 0, 0, AOperand
+    );
+    AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
+  end;
+
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
     const AOperand: string);
   var
@@ -8055,16 +8088,18 @@ begin
             begin
               if SameText(Child.ChildAt(0).ChildAt(0).Text, 'Result') and
                 (FCurrentRetVarName <> '') then
-                FModel.AddTypedHirNode(
-                  'record-field-store-runtime', Decoded, 0, 0,
+                AddRecordFieldStoreRuntimeNode(
+                  Decoded,
                   FCurrentRetVarName + #9 +
-                  IntToStr(Value) + #9 + Operand
+                  IntToStr(Value) + #9 + Operand,
+                  Arg
                 )
               else
-                FModel.AddTypedHirNode(
-                  'record-field-store-runtime', Decoded, 0, 0,
+                AddRecordFieldStoreRuntimeNode(
+                  Decoded,
                   Child.ChildAt(0).ChildAt(0).Text + #9 +
-                  IntToStr(Value) + #9 + Operand
+                  IntToStr(Value) + #9 + Operand,
+                  Arg
                 );
             end;
             Continue;
@@ -8586,10 +8621,11 @@ begin
               begin
                 Value := TypeMetaFieldIndex(StringValue, FuncName);
                 if Value >= 0 then
-                  FModel.AddTypedHirNode(
-                    'field-store-runtime', Decoded, 0, 0,
+                  AddFieldStoreRuntimeNode(
+                    Decoded,
                     Copy(Decoded, 1, DotPos - 1) + #9 +
-                    IntToStr(Value) + #9 + Operand
+                    IntToStr(Value) + #9 + Operand,
+                    Arg
                   )
                 else
                 begin
@@ -8613,9 +8649,10 @@ begin
                   (TypeMetaFieldIndex(StringValue, FuncName) >= 0) then
                 begin
                   Value := TypeMetaFieldIndex(StringValue, FuncName);
-                  FModel.AddTypedHirNode(
-                    'field-store-runtime', Decoded, 0, 0,
-                    ArgName + #9 + IntToStr(Value) + #9 + Operand
+                  AddFieldStoreRuntimeNode(
+                    Decoded,
+                    ArgName + #9 + IntToStr(Value) + #9 + Operand,
+                    Arg
                   );
                 end
                 else
@@ -8631,9 +8668,10 @@ begin
               begin
                 Value := TypeMetaFieldIndex(FCurrentMethodClass, Decoded);
                 if Value >= 0 then
-                  FModel.AddTypedHirNode(
-                    'field-store-runtime', Decoded, 0, 0,
-                    'self' + #9 + IntToStr(Value) + #9 + Operand
+                  AddFieldStoreRuntimeNode(
+                    Decoded,
+                    'self' + #9 + IntToStr(Value) + #9 + Operand,
+                    Arg
                   )
                 else
                 begin

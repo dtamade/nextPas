@@ -4747,6 +4747,7 @@ var
   TabPos: LongInt;
   VarName, Rest, IdxStr, ValBlob, Token: string;
   ObjPtr, IdxVal, ValVal, FieldPtr: THIRValueId;
+  StoreType, ValueType: THIRTypeId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -4782,10 +4783,25 @@ begin
   EmitInstr(Instr);
   FieldPtr := Instr.ResultId;
 
-  ValVal := ParseIntBlob(ValBlob);
+  ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, ValueType);
   if ValVal <> 0 then
   begin
-    if (Length(ValBlob) > 4) and (Copy(ValBlob, 1, 4) = 'var ') then
+    if ValueType <> 0 then
+    begin
+      if FModule.Types.GetType(ValueType).Kind = htkPointer then
+        StoreType := GetPtrType
+      else
+        StoreType := GetIntType;
+      if StoreType <> ValueType then
+      begin
+        ValVal := NormalizeScalarValueToType(ValVal, ValueType, StoreType);
+        if ValVal = 0 then
+          ValVal := ParseIntBlob(ValBlob);
+      end;
+      if ValVal <> 0 then
+        EmitStore(StoreType, ValVal, FieldPtr);
+    end
+    else if (Length(ValBlob) > 4) and (Copy(ValBlob, 1, 4) = 'var ') then
     begin
       Token := Copy(ValBlob, 5, Length(ValBlob));
       if (Length(Token) > 0) and (Token[Length(Token)] = #10) then
@@ -4808,6 +4824,7 @@ var
   TabPos: LongInt;
   VarName, Rest, IdxStr, ValBlob: string;
   RecPtr, IdxVal, ValVal, FieldPtr: THIRValueId;
+  ValueType: THIRTypeId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -4845,9 +4862,18 @@ begin
   EmitInstr(Instr);
   FieldPtr := Instr.ResultId;
 
-  ValVal := ParseIntBlob(ValBlob);
+  ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, ValueType);
   if ValVal <> 0 then
-    EmitStore(GetIntType, ValVal, FieldPtr);
+  begin
+    if ValueType <> 0 then
+    begin
+      ValVal := NormalizeScalarValueToType(ValVal, ValueType, GetIntType);
+      if ValVal = 0 then
+        ValVal := ParseIntBlob(ValBlob);
+    end;
+    if ValVal <> 0 then
+      EmitStore(GetIntType, ValVal, FieldPtr);
+  end;
 end;
 
 procedure THIRBuilder.ProcessRecordCopy(const ANode: TTypedHirNode);

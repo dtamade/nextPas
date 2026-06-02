@@ -251,6 +251,10 @@ begin
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := p^.Value',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprPField);
+
+    NodeId := Model.AddTypedHirNode('field-store-runtime',
+      'p^.Value := 5', 0, IntegerTypeId, 'p'#9'2'#9'int 0'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
     Model.AddTypedHirNode('function-body-end', 'TestAddress', 0, 0, '');
 
     Builder := THIRBuilder.Create(Model);
@@ -266,7 +270,7 @@ begin
         Halt(4);
       if not HasIntrinsic(Func, 'gep_i64') then
         Halt(5);
-      if CountIntrinsic(Func, 'gep_i64') < 2 then
+      if CountIntrinsic(Func, 'gep_i64') < 3 then
         Halt(6);
     finally
       Builder.Free;

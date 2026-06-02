@@ -677,6 +677,75 @@ begin
   end;
 end;
 
+procedure TestRecordFieldStoreRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TPoint = record'#10 +
+    '  X: Integer;'#10 +
+    'end;'#10 +
+    'var p: TPoint;'#10 +
+    'var y: Integer;'#10 +
+    'begin'#10 +
+    '  y := 7;'#10 +
+    '  p.X := y + 5;'#10 +
+    '  Halt(p.X);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(200);
+    if Model.Status <> 'ready' then
+      Halt(201);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'record-field-store-runtime', 'add', Node) then
+      Halt(202);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 203);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestClassFieldStoreRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TCounter = class'#10 +
+    '  FValue: Integer;'#10 +
+    '  constructor Create(AInit: Integer);'#10 +
+    'end;'#10 +
+    'constructor TCounter.Create(AInit: Integer);'#10 +
+    'begin'#10 +
+    '  FValue := AInit + 1;'#10 +
+    'end;'#10 +
+    'var c: TCounter;'#10 +
+    'begin'#10 +
+    '  c := TCounter.Create(40);'#10 +
+    '  Halt(c.FValue);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(210);
+    if Model.Status <> 'ready' then
+      Halt(211);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'field-store-runtime',
+      'add', Node) then
+      Halt(212);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 213);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestMixedWidthPromotionExprProducer;
 var
   Model: TSemanticModel;
@@ -913,6 +982,8 @@ begin
   TestPointerAddressDerefRuntimeExprProducer;
   TestArrayElementAddressRuntimeExprProducer;
   TestPointerFieldAddressRuntimeExprProducer;
+  TestClassFieldStoreRuntimeExprProducer;
+  TestRecordFieldStoreRuntimeExprProducer;
   TestMixedWidthPromotionExprProducer;
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;

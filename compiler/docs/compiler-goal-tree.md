@@ -48,7 +48,7 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ✅ 2026-06-02 |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-02 C5-D |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-E |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
 | **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单" | C5,C6 | 🏁 里程碑 |
@@ -202,3 +202,15 @@
   `test_semantic_hir_expr_producer` 退出 192；GREEN 后 focused tests +
   完整重编译（45252 lines compiled）+ 137/137 LLVM smoke 全绿。C5
   下一步建议进入 field store / record-class field 剩余 address chain。
+- 2026-06-03 C5-E：field store RHS 第一刀：builder 让
+  `field-store-runtime` / `record-field-store-runtime` 先消费 RHS
+  `ExprId`，失败时继续回落旧 blob；sema producer 为普通 class/self
+  field store 与 record field store 的 scalar RHS 附加结构化表达式。
+  本轮刻意不把 `TTypedHirNode.ExprId` 复用成 LHS target/address 通道，
+  LHS 仍由既有 node kind + operand 描述；typed RHS store 继续在 builder
+  归一到 legacy i64/ptr field-slot ABI。TDD RED=
+  `test_hir_builder_structured_address` 退出 2 /
+  `test_semantic_hir_expr_producer` 退出 203、213；GREEN 后 focused tests +
+  完整重编译（45316 lines compiled）+ 137/137 LLVM smoke 全绿。C5
+  下一步应进入真正的 LHS target/address 结构：普通 `record.field` /
+  `class.field` address、嵌套 field chain、array store 与 static array。
