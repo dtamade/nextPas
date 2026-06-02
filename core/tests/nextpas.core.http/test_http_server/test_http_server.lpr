@@ -1020,8 +1020,8 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
-    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Length(LResp) = 0),
-      'truncated chunked request: 400 or connection closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated chunked request: status 400');
     Check(not LHandlerCalled, 'truncated chunked request: handler not called');
   finally
     StopServer(LServer, LHandle);
@@ -1256,8 +1256,8 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LResp := SendRawRequest(LPort, REQ);
-    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Length(LResp) = 0),
-      'invalid trailer field: 400 or connection closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'invalid trailer field: status 400');
     Check(not LHandlerCalled, 'invalid trailer field: handler not called');
   finally
     StopServer(LServer, LHandle);
@@ -1292,8 +1292,8 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
-    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Length(LResp) = 0),
-      'truncated trailer at eof: 400 or connection closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated trailer at eof: status 400');
     Check(not LHandlerCalled, 'truncated trailer at eof: handler not called');
   finally
     StopServer(LServer, LHandle);
@@ -1489,13 +1489,13 @@ begin
   T.Run('Chunked request body readable', @TestChunkedRequestBodyReadable);
   T.Run('Chunked request MaxBodySize -> 413', @TestChunkedRequestMaxBodySize);
   T.Run('Malformed chunked request invalid size -> 400', @TestMalformedChunkedRequestInvalidChunkSize);
-  T.Run('Malformed chunked request truncated at EOF -> reject', @TestMalformedChunkedRequestTruncatedAtEof);
+  T.Run('Malformed chunked request truncated at EOF -> 400', @TestMalformedChunkedRequestTruncatedAtEof);
   T.Run('Chunked request content-length conflict -> 400', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order -> 400', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('Chunked request oversize trailer uses MaxHeaderSize', @TestChunkedRequestOversizeTrailerUsesMaxHeaderSize);
-  T.Run('Malformed chunked request invalid trailer field -> reject', @TestMalformedChunkedRequestInvalidTrailerField);
-  T.Run('Malformed chunked request truncated trailer at EOF -> reject', @TestMalformedChunkedRequestTruncatedTrailerAtEof);
+  T.Run('Malformed chunked request invalid trailer field -> 400', @TestMalformedChunkedRequestInvalidTrailerField);
+  T.Run('Malformed chunked request truncated trailer at EOF -> 400', @TestMalformedChunkedRequestTruncatedTrailerAtEof);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);

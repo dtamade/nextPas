@@ -165,6 +165,36 @@ begin
   end;
 end;
 
+function SendRawAndShutdownWrite(const APort: UInt16; const AData: string; ATimeoutSec: Int32 = 3): string;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  LConn := TcpConnect('127.0.0.1', APort);
+  try
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(ATimeoutSec)));
+    if Length(AData) > 0 then
+      LConn.Write(AData[1], SizeUInt(Length(AData)));
+    LConn.Shutdown;
+    repeat
+      try
+        LN := LConn.Read(LBuf[0], 8192);
+      except
+        LN := 0;
+      end;
+      if LN > 0 then
+      begin
+        SetLength(Result, Length(Result) + Int32(LN));
+        Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+  finally
+    LConn.Close;
+  end;
+end;
+
 { Test 1: Content-Length + Transfer-Encoding conflict }
 procedure TestContentLengthTransferEncodingConflict;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -448,8 +478,8 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
-      'Malformed trailer field: rejected or closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Malformed trailer field: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -467,9 +497,9 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
 begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
-    LResp := SendRaw(LPort, REQ);
-    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
-      'Truncated trailer EOF: rejected or closed');
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated trailer EOF: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -492,7 +522,7 @@ begin
   T.Run('Very long method name', @TestLongMethodName);
   T.Run('Body larger than CL', @TestBodyLargerThanContentLength);
   T.Run('Negative Content-Length', @TestNegativeContentLength);
-  T.Run('Malformed trailer field', @TestMalformedTrailerField);
-  T.Run('Truncated trailer section at EOF', @TestTruncatedTrailerAtEof);
+  T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
+  T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
   T.Summary;
 end.

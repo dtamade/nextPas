@@ -363,6 +363,8 @@ begin
         if LN = 0 then
         begin
           LKeepAlive := False;
+          if (LTotalRead > 0) and (not LParser.IsComplete) and (not LParser.HasError) then
+            LParser.Finish;
           Break;
         end;
         Inc(LTotalRead, LN);

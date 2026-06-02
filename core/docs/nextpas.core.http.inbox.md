@@ -11,6 +11,7 @@
 - 本轮继续包含生产修复：chunked trailer 即使在后续 read 才到达，也会继续受 `MaxHeaderSize` 约束；超限时 server 返回 `431` 或安全关闭，且不进入 handler
 - 本轮再补 malformed trailer security proof：非法 trailer field-name 与 trailer section EOF 截断，都已在 parser/server/security 三层得到 focused proof
 - 这轮没有新增生产修复；现有 parser/H1 transport 已能安全拒绝上述 malformed trailer 输入
+- 本轮新增生产修复：对“客户端 half-close 后暴露出的部分 chunked/trailer 请求 EOF 截断”，H1 server 现在会先 `Finish` parser，再统一走显式 `400`，不再只是静默关闭
 
 ## 当前重点
 
@@ -22,8 +23,8 @@
 - `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / missing chunk-data CRLF / truncation / CL-TE conflict / trailer isolation focused proof。
 - `impl.h1.parser` 现在也有 late trailer byte accounting focused proof，用来支撑 server 对 trailer header budget 的后续判定。
 - `impl.h1.parser` 现在也有 malformed trailer grammar / trailer EOF truncation focused proof。
-- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、以及 malformed trailer reject focused proof。
-- `test_http_security` 现在也有 malformed trailer raw-wire safe-handling proof。
+- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、以及 malformed trailer 显式 `400` focused proof。
+- `test_http_security` 现在也有 malformed trailer raw-wire explicit `400` proof。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -38,6 +39,6 @@
 
 ## 下一步
 
-- 下一步优先判断 malformed trailer 是否要从当前的“`400` 或安全关闭”继续收紧成更明确的统一 reject 语义，以及 trailer 是否最终需要显式 public API。
+- 下一步优先判断是否继续把其他“partial request EOF”类场景也系统性收紧成显式 `400`，以及 trailer 是否最终需要显式 public API。
 - 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。
