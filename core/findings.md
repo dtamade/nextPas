@@ -61,9 +61,12 @@
 - `test_http_client` now proves the public client raises `EHttpError` on truncated fixed-length responses instead of returning a partial body.
 - EOF completion is now limited to true close-delimited responses (no `Transfer-Encoding`, no `Content-Length`, and status codes that may legally carry a body).
 - `test_http_h1parser` 现在也直接证明了 request-side chunked 行为：正常 chunked body 解码、invalid chunk-size 触发 parser error、truncated chunked body 在 `Finish` 时失败。
+- `test_http_h1parser` 现在还直接证明了 chunk data 后缺少 CRLF 会触发 parser error，而不会被误判为完整请求。
 - `test_http_server` 现在证明了 handler 读取到的是 decoded chunked request body，而不是原始 chunk framing。
 - 同一组 server focused tests 也证明了 `THttpServerOptions.MaxBodySize` 会对 chunked inbound traffic 的跨 chunk 累加超限生效。
+- `test_http_server` 现在也直接锁定 raw-wire malformed chunked request 语义：invalid chunk-size 返回 `400`，truncated EOF 则返回 `400` 或安全关闭，而且这两类异常 chunk 都不会进入 handler。
 - 这一轮没有生产代码改动；新增 focused tests 直接通过，说明现有实现已经满足这一组 inbound chunked request 契约。
+- `test_http_security` 本轮未新增 chunk-specific case；它继续承担 broad safe-handling smoke 的角色，而更精确的 malformed chunked 语义现在落在 parser/server focused suites。
 
 ## Git and Collaboration Findings
 
@@ -82,7 +85,7 @@
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 - Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.
 - Future H2/H3 work should extend the landed internal registry instead of reintroducing version-default logic inside facade/client/server constructors.
-- The next parser-security gap is now more specific: raw-wire malformed inbound chunked request rejection semantics still need direct focused proof, distinct from the now-closed fixed-length EOF truncation bug and the now-proved parser/server chunked decode paths.
+- The next parser-security gap is now more specific: `test_http_security` 里与 chunk 相关的 broad safe-handling case 仍可继续收紧到 exact policy proof，例如 `Content-Length + Transfer-Encoding` 冲突和 malformed chunk extension/trailer 语义。
 
 ## Communication Cadence Adopted
 

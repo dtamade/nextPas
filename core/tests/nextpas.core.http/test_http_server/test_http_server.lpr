@@ -132,6 +132,36 @@ begin
   end;
 end;
 
+function SendRawRequestAndShutdownWrite(const APort: UInt16; const ARequest: string): string;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  LConn := TcpConnect('127.0.0.1', APort);
+  try
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    if ARequest <> '' then
+      LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
+    LConn.Shutdown;
+    repeat
+      try
+        LN := LConn.Read(LBuf[0], 8192);
+      except
+        LN := 0;
+      end;
+      if LN > 0 then
+      begin
+        SetLength(Result, Length(Result) + Int32(LN));
+        Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+  finally
+    LConn.Close;
+  end;
+end;
+
 { Test 1: Server responds 200 to simple GET }
 procedure TestSimpleGet200;
 var
@@ -677,7 +707,7 @@ var
   LI: Int32;
   LConn: ITcpStream;
   LBuf: array[0..1023] of Byte;
-  LN, LRead: SizeUInt;
+  LRead: SizeUInt;
   LReq: string;
   LHeaderEnd: Int32;
   LResp: string;
@@ -932,6 +962,72 @@ begin
   end;
 end;
 
+procedure TestMalformedChunkedRequestInvalidChunkSize;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'Z'#13#10'hello'#13#10 +
+        '0'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'invalid chunk size: status 400');
+    Check(not LHandlerCalled, 'invalid chunk size: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestMalformedChunkedRequestTruncatedAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hel';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Length(LResp) = 0),
+      'truncated chunked request: 400 or connection closed');
+    Check(not LHandlerCalled, 'truncated chunked request: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Chunked response — handler writes without Content-Length }
 procedure TestChunkedResponse;
 var
@@ -979,7 +1075,6 @@ var
   LResp1, LResp2: string;
   LBuf: array[0..8191] of Byte;
   LN: SizeUInt;
-  LHeaderEnd: Int32;
 const
   REQ1 = 'GET /chunked HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
   REQ2 = 'GET /fixed HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10;
@@ -1121,6 +1216,8 @@ begin
   T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);
   T.Run('Chunked request body readable', @TestChunkedRequestBodyReadable);
   T.Run('Chunked request MaxBodySize -> 413', @TestChunkedRequestMaxBodySize);
+  T.Run('Malformed chunked request invalid size -> 400', @TestMalformedChunkedRequestInvalidChunkSize);
+  T.Run('Malformed chunked request truncated at EOF -> reject', @TestMalformedChunkedRequestTruncatedAtEof);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);

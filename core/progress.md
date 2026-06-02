@@ -1,5 +1,49 @@
 # Progress Log: nextpas.core.http
 
+## Session: 2026-06-03 malformed chunked request security proof
+
+### Phase 2/3: parser and server raw-wire malformed chunked proof expansion
+
+- **Status:** complete
+- **Scope:** expand focused malformed chunked request proof in parser/server suites, without changing production code.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, architecture, task plan, findings, progress, and design conventions.
+  - [x] Audited malformed chunked request/body gaps across `test_http_h1parser`, `test_http_server`, and `test_http_security`.
+  - [x] Added focused parser proof for missing chunk-data CRLF.
+  - [x] Added focused server proof for invalid chunk-size -> `400`.
+  - [x] Added focused server proof for truncated chunked EOF -> `400` or safe close, and no handler dispatch.
+  - [x] Verified the new tests passed on current implementation; no production fix was required.
+  - [x] Re-ran focused parser/server/security suites with heaptrc proof.
+  - [x] Re-ran the full HTTP suite after the coverage expansion.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-03 Malformed Chunked
+
+| Check                  | Command                                                          | Result                                             |
+| ---------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state       | `git status --short --branch`                                    | Shared checkout is dirty outside HTTP target files |
+| Focused parser GREEN   | `make -C tests/nextpas.core.http/test_http_h1parser clean test`  | 23/23 passed, 0 unfreed memory blocks              |
+| Focused server GREEN   | `make -C tests/nextpas.core.http/test_http_server clean test`    | 24/24 passed, 0 unfreed memory blocks              |
+| Focused security GREEN | `make -C tests/nextpas.core.http/test_http_security clean test`  | 12/12 passed, 0 unfreed memory blocks              |
+| Full HTTP suite        | `make TESTS_DIR=tests/nextpas.core.http test`                    | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-03 Malformed Chunked
+
+- 这一轮仍是 coverage-expansion 批次，不是 bugfix 批次：新增 malformed chunked focused tests 直接通过，说明 parser/server 现有实现已经具备这组 raw-wire 安全语义。
+- parser 现在不仅锁定 invalid chunk-size 和 EOF truncation，也直接锁定 chunk data 后缺少 CRLF 的 framing error。
+- server 现在直接证明 invalid chunk-size 会返回 `400`，而 truncated chunked EOF 会走 `400` 或安全关闭，并且两类异常请求都不会进入 handler。
+- `test_http_security` 继续全绿，但它仍以 broad safe-handling smoke 为主；更精确的 chunk-specific 语义现在由 parser/server focused suites 承担。
+- `test_http_smoke` 仍打印 `True free heap : 260960 / Should be : 262144`，但 heaptrc 仍报告 `0 unfreed memory blocks`；继续视为非阻塞观察项。
+
+## Review 2026-06-03 Malformed Chunked
+
+- `/codex`-style review 结论：这轮要如实记录为 malformed chunked security proof expansion，而不是虚构生产修复。
+- 新增 proof 把 parser framing error、server `400`、server safe close、以及“异常 chunk 不进 handler”串成了一条完整证据链。
+- Shared-checkout 风险没有变化：提交时必须继续保持 path-limited staging，只提交本轮 HTTP 文件。
+- 下一步应考虑把 `test_http_security` 里与 chunk 相关的 broad safe-handling case 收紧成更精确的 policy proof。
+
 ## Session: 2026-06-03 inbound chunked request coverage
 
 ### Phase 2/3: parser and server inbound chunked request proof expansion
@@ -17,7 +61,7 @@
   - [x] Re-ran focused parser/server suites with heaptrc proof.
   - [x] Re-ran the full HTTP suite after the coverage expansion.
   - [x] Updated inbox, coverage matrix, findings, and progress.
-  - [ ] Commit this batch.
+  - [x] Commit this batch.
 
 ## Verification Evidence 2026-06-03 Chunked Inbound
 

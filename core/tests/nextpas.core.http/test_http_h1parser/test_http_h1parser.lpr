@@ -253,6 +253,23 @@ begin
   Check(not LP.IsComplete, 'truncated chunked request stays incomplete');
 end;
 
+procedure TestChunkedRequestMissingChunkDataCrLf;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5'#13#10'hello0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'missing chunk-data CRLF reports parser error');
+  Check(not LP.IsComplete, 'missing chunk-data CRLF is not complete');
+end;
+
 procedure TestHeadRequest;
 var
   LP: IH1Parser;
@@ -363,6 +380,7 @@ begin
   T.Run('Chunked request body', @TestChunkedRequestBody);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
+  T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Incomplete input', @TestIncompleteInput);

@@ -6,18 +6,19 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 2/3 correctness hardening: internal registry and truncated fixed-length EOF rejection are already locked, inbound chunked request coverage is now expanded, and the next slice narrows to raw-wire malformed chunked request/body parser-security boundaries.
+Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF rejection, inbound chunked decode coverage, and raw-wire malformed chunked parser/server proof are now locked; the next slice narrows to tightening gateway-level security policy around remaining chunk-specific edge cases.
 
 ## Active Batch Checklist
 
 - [x] Re-read HTTP inbox, API coverage, architecture, findings, progress, and design conventions.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
-- [x] Add focused inbound chunked request tests in parser and server suites.
+- [x] Audit raw-wire malformed chunked request/body coverage gaps in parser, server, and security suites.
+- [x] Add focused malformed chunked request tests in parser and server suites.
 - [x] Verify whether the new tests expose a parser/server gap or already pass on current implementation.
-- [x] Re-run focused parser/server tests with heaptrc evidence.
+- [x] Re-run focused parser/server/security tests with heaptrc evidence.
 - [x] Re-run the full HTTP suite after the coverage expansion.
 - [x] Update inbox, coverage matrix, findings, and progress for this batch.
-- [ ] Commit only the owned HTTP files for this inbound chunked coverage batch.
+- [x] Commit only the owned HTTP files for this malformed chunked coverage batch.
 
 ## Quality Gates
 
@@ -95,6 +96,7 @@ Phase 2/3 correctness hardening: internal registry and truncated fixed-length EO
 | Keep registry internal for now                   | The current need is centralized default resolution, not a public protocol-plugin surface before H2/H3 transports exist.                    |
 | Keep public options in `http.base`               | They are public carrier types and keeping them in `base` preserves clean downward dependency direction for the registry layer.             |
 | Reject truncated fixed-length responses at EOF   | A response with declared `Content-Length` is not close-delimited; accepting EOF there would return corrupt bodies and mislead reuse logic. |
+| Reject malformed chunked requests before handler | Invalid chunk framing must never reach router/handler code; the server contract is `400` when parser errors eagerly and safe close on EOF truncation. |
 
 ## Errors Encountered
 
@@ -112,3 +114,4 @@ Phase 2/3 correctness hardening: internal registry and truncated fixed-length EO
 | Transport interfaces had no production owner                   | 1       | Added RED facade injection tests, then extracted default H1 transport ownership into `impl.h1` and public overloads. |
 | Public option carriers lived in client/server units            | 1       | Moved them into `http.base`, which let the new registry depend downward instead of upward on client/server.          |
 | Response parser treated truncated fixed-length EOF as complete | 1       | Added RED parser/client tests, then limited EOF completion to true close-delimited responses only.                   |
+| Malformed chunked request rejection lacked focused raw-wire proof | 1     | Added parser/server malformed chunk tests; they passed immediately, so this batch stayed coverage-only without production edits.            |
