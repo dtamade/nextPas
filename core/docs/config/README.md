@@ -89,6 +89,11 @@ instance.
 
 Most applications only need one of three patterns.
 
+See the [runnable startup demo](../../examples/nextpas.core.config/config_startup_patterns/config_startup_patterns.lpr)
+and its [Makefile](../../examples/nextpas.core.config/config_startup_patterns/Makefile).
+It exercises `Build`, `ConfigLoad`, `TryBuild`, and `BuildConfig` with the
+same public API shown below.
+
 ### Pass a read-only snapshot into modules
 
 Use `Build` when a module should depend on `IConfig` and not on mutable config
