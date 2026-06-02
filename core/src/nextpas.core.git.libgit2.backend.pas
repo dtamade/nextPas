@@ -1106,6 +1106,8 @@ end;
 
 function TGitManager.Initialize: Boolean;
 begin
+  if FInitialized then
+    Exit(True);
   try
     Result := git_libgit2_init >= 0;
     if Result then

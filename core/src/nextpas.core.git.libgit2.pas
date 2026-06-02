@@ -167,6 +167,8 @@ end;
 function TGitManagerImpl.Initialize: Boolean;
 begin
   Result := FMgr.Initialize;
+  if Result then
+    FFinalizeRequested := False;
 end;
 
 procedure TGitManagerImpl.Finalize;

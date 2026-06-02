@@ -7,7 +7,8 @@ uses
   nextpas.core.testing,
   nextpas.core.fs,
   nextpas.core.process,
-  nextpas.core.git;
+  nextpas.core.git,
+  nextpas.core.git.libgit2.ffi;
 
 type
   TGitCallbackFixture = class
@@ -204,6 +205,24 @@ begin
     'Finalize should complete after the last repository handle is released');
 end;
 
+procedure TestInitializeIsIdempotent;
+var
+  LMgr: IGitManager;
+  LInitCount: Integer;
+begin
+  LMgr := NewGitManager;
+  Check(LMgr.Initialize, 'first Initialize should succeed');
+  Check(LMgr.Initialize, 'second Initialize should be idempotent');
+  LMgr.Finalize;
+  Check(not LMgr.Initialized, 'single Finalize should close an idempotently initialized manager');
+
+  LInitCount := git_libgit2_init;
+  CheckEqual(1, LInitCount,
+    'libgit2 init refcount should be balanced after idempotent Initialize/Finalize');
+  CheckEqual(0, git_libgit2_shutdown,
+    'direct libgit2 cleanup should return to zero after refcount probe');
+end;
+
 procedure TestHeadCommitLoadsMetadataAndSurvivesRepositoryRelease;
 var
   LMgr: IGitManager;
@@ -246,6 +265,7 @@ begin
     T.Run('Unsupported callbacks are explicit', @TestUnsupportedCallbacksAreExplicit);
     T.Run('DiscoverRepository fallback', @TestDiscoverRepositoryFallsBackToDotGitDirectory);
     T.Run('InitRepository discarded return value', @TestInitRepositorySupportsDiscardedReturnValue);
+    T.Run('Initialize is idempotent', @TestInitializeIsIdempotent);
     T.Run('Status sees untracked file', @TestStatusSeesUntrackedFileAfterInit);
     T.Run('Explicit Finalize waits for live repository', @TestExplicitFinalizeWaitsForLiveRepository);
     T.Run('HeadCommit metadata', @TestHeadCommitLoadsMetadataAndSurvivesRepositoryRelease);
