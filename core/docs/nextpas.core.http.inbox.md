@@ -1,12 +1,13 @@
 # nextpas.core.http Inbox
 
-最近更新：2026-06-02
+最近更新：2026-06-03
 
 ## 当前批次
 
-- 截断 `Content-Length` 响应 EOF 误判已修复
-- `test_http_h1parser` / `test_http_client` 已补齐 fixed-length truncation focused proof
-- full HTTP suite + heaptrc 0 已重新验证
+- inbound chunked request focused coverage 已扩充完成
+- `test_http_h1parser` 已补齐 chunked request 的 valid / invalid chunk-size / truncated EOF proof
+- `test_http_server` 已补齐 chunked request body 可读性与 `MaxBodySize` 约束 proof
+- 本轮是覆盖扩充批次，不是生产修复批次；现有实现直接通过新增 focused tests
 
 ## 当前重点
 
@@ -15,8 +16,8 @@
 - internal registry 当前内建 `hvHttp10` / `hvHttp11` -> H1，client/server 默认版本都是 `hvHttp11`。
 - `nextpas.core.http.NewHttpClient` / `NewHttpServer` 仍然支持显式注入 `IHttpTransport` / `IHttpServerTransport`；显式注入优先于 registry 默认解析。
 - `http.impl.h1.chunked`、client 复用语义、hijack ownership 三条 H1 correctness 基线仍然保持成立。
-- `impl.h1.parser` 现在不会再把“声明了 `Content-Length` 但 body 没收全”的 response 在 EOF 时当成 complete。
-- `IHttpClient` 现在会对这类截断 fixed-length response 抛出 `EHttpError`，而不是返回截断 body 并误判连接可复用。
+- `impl.h1.parser` 现在同时有 request-side chunked decode / error / truncation focused proof。
+- `THttpServer` 现在有 inbound chunked request body 解码与跨 chunk 累加 size-limit enforcement focused proof。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -31,5 +32,5 @@
 
 ## 下一步
 
-- 优先继续补 malformed chunked request/body parser/security focused tests，尤其是 invalid chunk-size、truncated chunk body、chunked + limits 组合场景。
+- 优先补 raw-wire malformed chunked request security proof，锁定 server 对异常 chunk framing 的 `400` 或安全关闭语义。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。

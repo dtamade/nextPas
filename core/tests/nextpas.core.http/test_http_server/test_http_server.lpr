@@ -833,6 +833,105 @@ begin
   end;
 end;
 
+procedure TestChunkedRequestBodyReadable;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '6'#13#10' world'#13#10 +
+        '0'#13#10#13#10;
+begin
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+    LBuf: array[0..255] of Byte;
+    LN: SizeUInt;
+  begin
+    repeat
+      LN := AReq.Body.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      if LN > 0 then
+      begin
+        SetLength(LGotBody, Length(LGotBody) + Int32(LN));
+        Move(LBuf[0], LGotBody[Length(LGotBody) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'chunked request: status 200');
+    CheckEqual('hello world', LGotBody, 'chunked request body decoded for handler');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedRequestMaxBodySize;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LOpts: THttpServerOptions;
+  LChunk1: string;
+  LChunk2: string;
+  LReq: string;
+  LChunkHex1: string;
+  LChunkHex2: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    SetLength(LChunk1, 700);
+    FillChar(LChunk1[1], 700, Ord('B'));
+    SetLength(LChunk2, 700);
+    FillChar(LChunk2[1], 700, Ord('C'));
+    LChunkHex1 := IntToHex(Length(LChunk1), 1);
+    LChunkHex2 := IntToHex(Length(LChunk2), 1);
+    LReq := 'POST / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Transfer-Encoding: chunked'#13#10 +
+      'Connection: close'#13#10#13#10 +
+      LChunkHex1 + #13#10 +
+      LChunk1 + #13#10 +
+      LChunkHex2 + #13#10 +
+      LChunk2 + #13#10 +
+      '0'#13#10#13#10;
+    LResp := SendRawRequest(LPort, LReq);
+    Check((Pos('413', LResp) > 0) or (Length(LResp) = 0),
+      'chunked max body size across chunks: 413 or connection closed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Chunked response — handler writes without Content-Length }
 procedure TestChunkedResponse;
 var
@@ -1020,6 +1119,8 @@ begin
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
   T.Run('MaxHeaderSize enforcement -> 431', @TestMaxHeaderSize);
   T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);
+  T.Run('Chunked request body readable', @TestChunkedRequestBodyReadable);
+  T.Run('Chunked request MaxBodySize -> 413', @TestChunkedRequestMaxBodySize);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);

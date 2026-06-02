@@ -6,19 +6,18 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 2/3 correctness hardening: internal registry is landed, truncated fixed-length response EOF rejection is now locked, and the next slice narrows to malformed chunked request/body parser-security boundaries.
+Phase 2/3 correctness hardening: internal registry and truncated fixed-length EOF rejection are already locked, inbound chunked request coverage is now expanded, and the next slice narrows to raw-wire malformed chunked request/body parser-security boundaries.
 
 ## Active Batch Checklist
 
 - [x] Re-read HTTP inbox, API coverage, architecture, findings, progress, and design conventions.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
-- [x] Add RED parser/client tests for truncated `Content-Length` responses at EOF.
-- [x] Verify RED: parser `Finish` and public client both accepted truncated fixed-length responses.
-- [x] Tighten `src/nextpas.core.http.impl.h1.parser.pas` so only true close-delimited responses may complete at EOF.
-- [x] Re-run focused parser/client tests with heaptrc evidence.
-- [x] Re-run the full HTTP suite after the parser fix.
+- [x] Add focused inbound chunked request tests in parser and server suites.
+- [x] Verify whether the new tests expose a parser/server gap or already pass on current implementation.
+- [x] Re-run focused parser/server tests with heaptrc evidence.
+- [x] Re-run the full HTTP suite after the coverage expansion.
 - [x] Update inbox, coverage matrix, findings, and progress for this batch.
-- [x] Commit only the owned HTTP files for this truncation batch.
+- [ ] Commit only the owned HTTP files for this inbound chunked coverage batch.
 
 ## Quality Gates
 
