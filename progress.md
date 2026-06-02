@@ -69,7 +69,7 @@
   - 两项 minor 均已修正文档，不影响当前 merge-prep 结论。
 - Closeout:
   - 目标树与 merge-prep 已同步 final verification envelope。
-  - 工作区仅保留本轮文档/计划文件修改，等待提交。
+  - 已提交 verification 记录：`895f77cd docs(tui): record final merge-prep verification`。
 
 当前最新本轮为 platform host abi completeness wave 6；上一轮包括
 platform host abi completeness wave 5；
