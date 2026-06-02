@@ -70,7 +70,7 @@ type
 implementation
 
 uses
-  DateUtils;
+  nextpas.core.time;
 
 constructor TDTLSRecordLayer.Create(AMTU: Integer);
 begin
@@ -201,7 +201,7 @@ begin
   FRetransmitQueue[LIdx].Epoch := FWriteEpoch;
   FRetransmitQueue[LIdx].MessageSeq := AMessageSeq;
   FRetransmitQueue[LIdx].SendCount := 1;
-  FRetransmitQueue[LIdx].LastSentTime := Now;
+  FRetransmitQueue[LIdx].LastSentTime := DateTimeNow;
 end;
 
 function TDTLSRecordLayer.GetRetransmitData: TBytes;
@@ -218,7 +218,7 @@ begin
     Move(FRetransmitQueue[I].Data[0], Result[LPos], Length(FRetransmitQueue[I].Data));
     Inc(LPos, Length(FRetransmitQueue[I].Data));
     Inc(FRetransmitQueue[I].SendCount);
-    FRetransmitQueue[I].LastSentTime := Now;
+    FRetransmitQueue[I].LastSentTime := DateTimeNow;
   end;
 end;
 

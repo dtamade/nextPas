@@ -6,7 +6,8 @@ unit nextpas.core.tls.aesgcm.pool;
 interface
 
 uses
-  SysUtils, Classes, SyncObjs, DateUtils,
+  SysUtils, Classes, SyncObjs,
+  nextpas.core.time,
   nextpas.core.tls.openssl.api.evp,
   nextpas.core.tls.openssl.api.rand,
   nextpas.core.tls.exceptions;
@@ -280,7 +281,7 @@ var
   LOldestTime: TDateTime;
 begin
   Result := 0;
-  LOldestTime := Now;
+  LOldestTime := DateTimeNow;
 
   // 查找最旧的未使用条目
   for I := 0 to FPoolSize - 1 do
@@ -321,7 +322,7 @@ begin
 
   // 标记为已初始化
   FEntries[AEntryIndex].Initialized := True;
-  FEntries[AEntryIndex].LastUsed := Now;
+  FEntries[AEntryIndex].LastUsed := DateTimeNow;
 end;
 
 procedure TAESGCMContextPool.ResetEntry(AEntryIndex: Integer; const AKey: TBytes; AIsEncrypt: Boolean);
@@ -339,7 +340,7 @@ begin
 
   // 更新统计
   Inc(FContextResets);
-  FEntries[AEntryIndex].LastUsed := Now;
+  FEntries[AEntryIndex].LastUsed := DateTimeNow;
 end;
 
 procedure TAESGCMContextPool.RegenerateIVBase(AEntryIndex: Integer);
@@ -404,7 +405,7 @@ begin
 
     // 标记为正在使用
     FEntries[LEntryIndex].InUse := True;
-    FEntries[LEntryIndex].LastUsed := Now;
+    FEntries[LEntryIndex].LastUsed := DateTimeNow;
 
     // 生成唯一 IV
     AIV := GenerateUniqueIV(LEntryIndex);

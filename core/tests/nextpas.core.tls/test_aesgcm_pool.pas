@@ -3,6 +3,7 @@ program test_aesgcm_pool;
 {$mode objfpc}{$H+}{$J-}
 
 uses
+  {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   SysUtils, Classes,
   nextpas.core.tls.aesgcm.pool,
   nextpas.core.tls.crypto.utils,

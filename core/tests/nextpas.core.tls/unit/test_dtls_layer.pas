@@ -3,6 +3,7 @@ program test_dtls_layer;
 {$mode objfpc}{$H+}{$J-}
 
 uses
+  {$IFDEF USE_HEAPTRC}heaptrc,{$ENDIF}
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils, nextpas.core.tls.dtls.layer;
 
