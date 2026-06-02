@@ -146,4 +146,3 @@ Use `$${name}` to return a literal `${name}`.
 Interpolation cycles are invalid configuration and raise `EConfigError`.
 Structural APIs (`Has`, `GetKeys`, `GetSection`, and `Count`) stay raw and
 reflect the flat key table.
-
