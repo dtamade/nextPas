@@ -236,3 +236,39 @@
 - `/codex`-style read-only review found no blocking issue.
 - Review risk remains unchanged: do not use `git add .` in the shared checkout, because unrelated files are dirty or untracked outside this batch.
 - Review follow-up: the next correctness slice should move to client chunked-response and close-delimited response coverage.
+
+## Session: 2026-06-02 client response framing coverage
+
+### Phase 1: client chunked and close-delimited body proof
+
+- **Status:** complete
+- **Scope:** focused `IHttpClient` response-body coverage for chunked transfer and EOF-delimited framing.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Added focused chunked-response and close-delimited-response tests in `test_http_client`.
+  - [x] Verified the existing implementation already satisfies both contracts; no production code change was required in this batch.
+  - [x] Ran focused GREEN client tests with heaptrc proof.
+  - [x] Ran full HTTP suite after the coverage change.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 Client Framing
+
+| Check               | Command                                                       | Result                                             |
+| ------------------- | ------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state    | `git status --short --branch`                                 | Shared checkout is dirty outside HTTP target files |
+| Focused client test | `make -C tests/nextpas.core.http/test_http_client clean test` | 15/15 passed, 0 unfreed memory blocks              |
+| Full HTTP suite     | `make TESTS_DIR=tests/nextpas.core.http test`                 | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-02 Client Framing
+
+- This batch is coverage-only by design: the new tests passed on the first run, so no production bugfix was needed.
+- The chunked-response proof uses the normal `THttpServer` path to validate dechunked client body reads through real server/client I/O.
+- The close-delimited proof uses a raw socket response without `Content-Length`, which exercises the parser EOF completion path used by `THttpClient.ReadResponse`.
+
+## Review 2026-06-02 Client Framing
+
+- `/codex`-style read-only review found no blocking issue.
+- Review risk remains unchanged: do not use `git add .` in the shared checkout, because unrelated files are dirty or untracked outside this batch.
+- Review follow-up: the next local HTTP slice should either add direct `TChunkedWriter` focused tests or audit close-delimited response reuse semantics in the client pooling path.

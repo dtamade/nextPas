@@ -28,6 +28,10 @@ uses
 
 var
   T: TTestRunner;
+  GRawListener: ITcpListener;
+  GRawResponse1: string;
+  GRawResponse2: string;
+  GRawAcceptLimit: Int32;
 
 type
   PServerCtx = ^TServerCtx;
@@ -48,6 +52,50 @@ begin
   except
   end;
   Dispose(LCtx);
+end;
+
+function RawResponseThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LReply: string;
+  LI: Int32;
+  LP: SizeInt;
+begin
+  Result := nil;
+  for LI := 1 to GRawAcceptLimit do
+  begin
+    try
+      LConn := GRawListener.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then
+      Break;
+    try
+      LAccum := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN = 0 then
+          Break;
+        SetLength(LAccum, Length(LAccum) + Int32(LN));
+        Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+        LP := Pos(#13#10#13#10, LAccum);
+      until LP > 0;
+
+      if LI = 1 then
+        LReply := GRawResponse1
+      else
+        LReply := GRawResponse2;
+
+      if LReply <> '' then
+        LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    except
+    end;
+    LConn.Close;
+  end;
 end;
 
 // PLACEHOLDER_TEST_CONTINUE
@@ -404,6 +452,70 @@ begin
   end;
 end;
 
+procedure TestClientReadsChunkedResponse;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/chunked', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LPart1, LPart2: string;
+  begin
+    LPart1 := 'hello';
+    LPart2 := ' world';
+    AW.Write(LPart1[1], SizeUInt(Length(LPart1)));
+    AW.Write(LPart2[1], SizeUInt(Length(LPart2)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/chunked');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('chunked', LResp.Headers.Get('transfer-encoding'), 'chunked response header preserved');
+    CheckEqual('hello world', ReadBodyStr(LResp), 'chunked response body decoded');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientReadsCloseDelimitedResponse;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Type: text/plain'#13#10 +
+                   #13#10 +
+                   'close-body';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/close-delimited');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('close-body', ReadBodyStr(LResp), 'close-delimited body decoded');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+  end;
+end;
+
 { Test 4: Client follows redirect (301 -> 200) }
 procedure TestClientFollowsRedirect;
 var
@@ -678,6 +790,8 @@ begin
   T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
   T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
   T.Run('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
+  T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);
+  T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);

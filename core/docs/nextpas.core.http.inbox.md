@@ -4,13 +4,14 @@
 
 ## 当前批次
 
-- H1 writer 边界 smoke 已完成
-- 预设 `Transfer-Encoding`、显式 `Content-Length` flush 路径、chunked finalization 状态机 已补齐测试
+- client response framing smoke 已完成
+- chunked response / close-delimited response 现在有 focused 读取覆盖
 - HTTP focused/full suite + heaptrc 0 已验证
 
 ## 当前重点
 
 - 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
+- `http.client` 的 chunked / close-delimited body 读取行为已被 focused 测试直接证明。
 - `TH1ResponseWriter` 现在禁止在 chunked final chunk 发出后继续写 body。
 - Hijack 后 HTTP server 不再 `Shutdown/Close` 已移交给 handler 的连接。
 - transport 当前只冻结公开接口形状；registry / client-server 注入机制仍未完成。
@@ -27,5 +28,5 @@
 
 ## 下一步
 
-- 再补 client chunked response / close-delimited response 覆盖。
 - 视需要决定是否把 `TChunkedWriter` 单独提升为 focused 实现级测试对象。
+- 再决定 transport registry / client-server 注入 ownership 的设计边界。

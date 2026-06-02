@@ -12,12 +12,12 @@ Phase 1: public contract audit and HTTP test baseline.
 
 - [x] Re-read HTTP inbox, API coverage, plan, findings, and progress.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
-- [x] Add failing H1 writer boundary tests in `test_http_h1writer`.
-- [x] Verify RED: chunked writer still accepts writes after `Flush` finalization.
-- [x] Add focused boundary coverage for pre-set `Transfer-Encoding` and explicit `Content-Length` flush path.
-- [x] Guard `TH1ResponseWriter` against writes after chunked finalization.
+- [x] Add focused client response framing tests in `test_http_client`.
+- [x] Cover chunked response body decoding through real HTTP server/client I/O.
+- [x] Cover close-delimited response body decoding through raw socket response I/O.
+- [x] Confirm current `http.client` implementation already satisfies both contracts; no production code change needed in this batch.
 - [x] Run focused GREEN tests with heaptrc evidence.
-- [x] Run full HTTP suite after H1 writer changes.
+- [x] Run full HTTP suite after client response coverage changes.
 - [x] Update inbox, coverage matrix, findings, and progress for this coverage batch.
 - [x] Complete `/codex` review, final git status check, and commit this coverage batch.
 
@@ -89,13 +89,15 @@ Phase 1: public contract audit and HTTP test baseline.
 | Transfer hijacked connection ownership         | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                |
 | Expose callback aliases through helpers        | `THttpHandlerMethod` / `THttpHandlerProc` should be usable from public helper APIs, not only exist as type aliases.                     |
 | Finalize chunked responses on flush            | Once a chunked response has emitted the terminal chunk, further body writes must raise `EHttpError` instead of corrupting the stream.   |
+| Treat coverage-only batches honestly           | If new focused tests pass immediately, record the batch as proof/coverage expansion rather than inventing a production bugfix.          |
 
 ## Errors Encountered
 
-| Error                                                     | Attempt | Resolution                                                                                     |
-| --------------------------------------------------------- | ------- | ---------------------------------------------------------------------------------------------- |
-| Root planning files described an old parser TryParse task | 1       | Replaced them with the active HTTP ownership plan while preserving old content in git history. |
-| Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                  |
-| Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.        |
-| Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.         |
-| Chunked writer accepted writes after final flush          | 1       | Added RED writer test, then tracked chunked finalization in `TH1ResponseWriter.Write/Flush`.   |
+| Error                                                     | Attempt | Resolution                                                                                                  |
+| --------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| Root planning files described an old parser TryParse task | 1       | Replaced them with the active HTTP ownership plan while preserving old content in git history.              |
+| Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                               |
+| Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.                     |
+| Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.                      |
+| Chunked writer accepted writes after final flush          | 1       | Added RED writer test, then tracked chunked finalization in `TH1ResponseWriter.Write/Flush`.                |
+| Client response framing lacked focused proof              | 1       | Added chunked and close-delimited client tests; both passed immediately, so no production fix was required. |

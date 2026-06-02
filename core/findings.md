@@ -44,6 +44,8 @@
 - `nextpas.core.http` now explicitly forwards `HandlerFunc` overloads for `THttpHandlerMethod` and `THttpHandlerProc`, plus the default `NewHttpServer(const AHandler: IHttpHandler)` overload.
 - `test_http_contract` now gives direct facade smoke for callback aliases and server/client overloads, instead of leaving those entry points as inferred coverage only.
 - `TH1ResponseWriter` now preserves caller-supplied `Transfer-Encoding`, does not append a terminal chunk on explicit `Content-Length` responses, and raises `EHttpError` if code tries to write after chunked finalization.
+- `THttpClient.ReadResponse` already handled both chunked and close-delimited response bodies; this batch added focused proof rather than changing production code.
+- The new client coverage uses two distinct paths: a normal `THttpServer` chunked response and a raw socket response without `Content-Length`, proving EOF-delimited body completion through the parser `Finish` path.
 
 ## Git and Collaboration Findings
 
@@ -57,9 +59,9 @@
 - `docs/http/ARCHITECTURE.md` mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
 - Keep the matrix current as public APIs change.
 - Hijack exception-after-takeover and websocket upgrade ownership regressions are useful later hardening tests.
-- Client chunked-response and close-delimited response handling still need focused coverage.
 - Transport registry / protocol ownership still needs design before H2/H3 expansion or pluggable client/server transports.
 - Direct `TChunkedWriter` tests are still optional; decide that only if the helper remains a stable implementation surface worth testing independently.
+- Client pooling semantics for close-delimited responses without explicit `Connection: close` are still worth auditing, even though body decoding itself is now covered.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 
 ## Communication Cadence Adopted
