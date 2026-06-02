@@ -54,6 +54,9 @@ jobs:
       - name: Run all tests
         run: make test
 
+      - name: Run TUI benchmark smoke
+        run: FPC=fpc benchmarks/nextpas.core.tui/run_all.sh
+
   test-macos:
     runs-on: macos-14
     steps:

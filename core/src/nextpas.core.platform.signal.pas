@@ -18,6 +18,11 @@ const
   PLATFORM_SIGUSR1 = 10;
   PLATFORM_SIGUSR2 = 12;
 {$ENDIF}
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD) or defined(NEXTPAS_ANDROID)}
+  { 窗口尺寸变化信号。Linux/macOS/FreeBSD/Android 一致为 28。
+    Windows 无 SIGWINCH（窗口变化经输入事件处理），故不定义。 }
+  PLATFORM_SIGWINCH = 28;
+{$ENDIF}
 
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
