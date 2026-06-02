@@ -20,9 +20,47 @@ uses
   nextpas.core.errors;
 
 type
+  TConfig = class;
   TStringArray = array of string;
+  TConfigFormat = (cfIni, cfJson, cfYaml, cfToml);
 
   EConfigError = class(EParseError);
+
+  IConfig = interface
+    ['{7F5F1A22-8C52-44C8-9E38-9CF5C3F2C101}']
+    function GetCount: Integer;
+    function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
+    function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
+    function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
+    function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetStringRequired(const AKey: string): string;
+    function GetIntRequired(const AKey: string): Int64;
+    function GetBoolRequired(const AKey: string): Boolean;
+    function GetFloatRequired(const AKey: string): Double;
+    procedure Require(const AKeys: array of string);
+    function Has(const AKey: string): Boolean;
+    function GetKeys: TStringArray;
+    function GetSection(const APrefix: string): TStringArray;
+    property Count: Integer read GetCount;
+  end;
+
+  IConfigBuilder = interface
+    ['{B1C9DA74-337C-40D7-9703-029BD7D7E201}']
+    function AddDefault(const AKey, AValue: string): IConfigBuilder;
+    function AddIni(const AContent: string): IConfigBuilder;
+    function AddJson(const AContent: string): IConfigBuilder;
+    function AddYaml(const AContent: string): IConfigBuilder;
+    function AddToml(const AContent: string): IConfigBuilder;
+    function AddEnv(const APrefix: string): IConfigBuilder;
+    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function RequireKeys(const AKeys: array of string): IConfigBuilder;
+    function Build: IConfig;
+    function BuildConfig: TConfig;
+    function TryBuild(out AConfig: IConfig; out AError: string): Boolean;
+  end;
 
   TConfigEntry = record
     Key: string;
@@ -57,7 +95,9 @@ type
     procedure SetDefault(const AKey, AValue: string);
 
     function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
     function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
@@ -73,10 +113,12 @@ type
     function GetSection(const APrefix: string): TStringArray;
     property Count: Integer read GetCount;
   end;
-
-  TConfigFormat = (cfIni, cfJson, cfYaml, cfToml);
   TConfigReloadEvent = procedure(ASender: TConfig) of object;
 
+function ConfigBuilder: IConfigBuilder;
+function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+
+type
   TConfigWatcher = class
   private
     FConfig: TConfig;
@@ -112,6 +154,22 @@ uses
 
 type
   TConfigEntryArray = array of TConfigEntry;
+  TConfigSourceKind = (
+    cskIni,
+    cskJson,
+    cskYaml,
+    cskToml,
+    cskEnv,
+    cskFile
+  );
+
+  TConfigSource = record
+    Kind: TConfigSourceKind;
+    Value: string;
+    Format: TConfigFormat;
+  end;
+
+  TConfigSourceArray = array of TConfigSource;
 
   TIndexedConfigValue = record
     Index: Int64;
@@ -119,6 +177,61 @@ type
   end;
 
   TIndexedConfigValueArray = array of TIndexedConfigValue;
+
+  TOwnedConfig = class(TInterfacedObject, IConfig)
+  private
+    FConfig: TConfig;
+    function GetCount: Integer;
+  public
+    constructor Create(AConfig: TConfig);
+    destructor Destroy; override;
+    function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
+    function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
+    function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
+    function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
+    function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
+    function GetStringRequired(const AKey: string): string;
+    function GetIntRequired(const AKey: string): Int64;
+    function GetBoolRequired(const AKey: string): Boolean;
+    function GetFloatRequired(const AKey: string): Double;
+    procedure Require(const AKeys: array of string);
+    function Has(const AKey: string): Boolean;
+    function GetKeys: TStringArray;
+    function GetSection(const APrefix: string): TStringArray;
+  end;
+
+  TConfigBuilderImpl = class(TInterfacedObject, IConfigBuilder)
+  private
+    FDefaults: TConfigEntryArray;
+    FDefaultCount: Integer;
+    FSources: TConfigSourceArray;
+    FSourceCount: Integer;
+    FRequiredKeys: TStringArray;
+    FRequiredCount: Integer;
+    function DefaultIndexOf(const AKey: string): Integer;
+    procedure StoreDefault(const AKey, AValue: string);
+    procedure StoreSource(const AKind: TConfigSourceKind; const AValue: string;
+      AFormat: TConfigFormat);
+    procedure StoreRequiredKey(const AKey: string);
+    procedure ApplyDefaults(ACfg: TConfig);
+    procedure ApplySource(ACfg: TConfig; const ASource: TConfigSource);
+    procedure ApplyRequiredKeys(ACfg: TConfig);
+    function BuildFreshConfig: TConfig;
+  public
+    function AddDefault(const AKey, AValue: string): IConfigBuilder;
+    function AddIni(const AContent: string): IConfigBuilder;
+    function AddJson(const AContent: string): IConfigBuilder;
+    function AddYaml(const AContent: string): IConfigBuilder;
+    function AddToml(const AContent: string): IConfigBuilder;
+    function AddEnv(const APrefix: string): IConfigBuilder;
+    function AddFile(const APath: string; AFormat: TConfigFormat): IConfigBuilder;
+    function RequireKeys(const AKeys: array of string): IConfigBuilder;
+    function Build: IConfig;
+    function BuildConfig: TConfig;
+    function TryBuild(out AConfig: IConfig; out AError: string): Boolean;
+  end;
 
 {$IFDEF NEXTPAS_UNIX}
 var
@@ -214,6 +327,32 @@ begin
     SetLength(AItems, ACount + 8);
   AItems[ACount] := AValue;
   Inc(ACount);
+end;
+
+procedure AddString(var AItems: TStringArray; var ACount: Integer;
+  const AValue: string);
+begin
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount] := AValue;
+  Inc(ACount);
+end;
+
+procedure AddConfigSource(var AItems: TConfigSourceArray; var ACount: Integer;
+  const AKind: TConfigSourceKind; const AValue: string; AFormat: TConfigFormat);
+begin
+  if ACount >= Length(AItems) then
+    SetLength(AItems, ACount + 8);
+  AItems[ACount].Kind := AKind;
+  AItems[ACount].Value := AValue;
+  AItems[ACount].Format := AFormat;
+  Inc(ACount);
+end;
+
+function IsSupportedConfigFormat(AFormat: TConfigFormat): Boolean;
+begin
+  Result := (Ord(AFormat) >= Ord(Low(TConfigFormat))) and
+    (Ord(AFormat) <= Ord(High(TConfigFormat)));
 end;
 
 function TryParseArrayIndex(const AValue: string; out AIndex: Int64): Boolean;
@@ -670,6 +809,26 @@ begin
     ', column ' + UIntToStr(AError.Col) + ': ' + Result;
 end;
 
+function FormatConfigFileLoadError(const APath, AMessage: string): string;
+begin
+  Result := 'Config file load error: ' + APath;
+  if AMessage <> '' then
+    Result := Result + ': ' + AMessage;
+end;
+
+procedure LoadConfigTextByFormat(ACfg: TConfig; const AContent: string;
+  AFormat: TConfigFormat);
+begin
+  if not IsSupportedConfigFormat(AFormat) then
+    raise EConfigError.Create('unsupported config format');
+  case AFormat of
+    cfIni: ACfg.LoadFromIni(AContent);
+    cfJson: ACfg.LoadFromJson(AContent);
+    cfYaml: ACfg.LoadFromYaml(AContent);
+    cfToml: ACfg.LoadFromToml(AContent);
+  end;
+end;
+
 procedure LoadConfigFromIniFile(ACfg: TConfig; AIni: TIniFile);
 var
   LSections: nextpas.core.ini.TStringArray;
@@ -1060,6 +1219,20 @@ begin
     Result := InterpolateConfigValue(LEntries, LCount, ADefault, LStack, False, '');
 end;
 
+function TConfig.GetRawString(const AKey: string; const ADefault: string): string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+  LIdx: Integer;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
+  if LIdx >= 0 then
+    Result := LEntries[LIdx].Value
+  else
+    Result := ADefault;
+end;
+
 function TConfig.GetStringArray(const AKey: string): TStringArray;
 var
   LI, LCount: Integer;
@@ -1085,6 +1258,30 @@ begin
   for LI := 0 to LCount - 1 do
     Result[LI] := InterpolateConfigValue(LEntries, LEntryCount, LItems[LI].Value,
       LStack, False, '');
+end;
+
+function TConfig.GetRawStringArray(const AKey: string): TStringArray;
+var
+  LI, LCount: Integer;
+  LEntryCount: Integer;
+  LEntries: TConfigEntryArray;
+  LSegment: string;
+  LIndex: Int64;
+  LItems: TIndexedConfigValueArray;
+begin
+  Result := nil;
+  SnapshotConfigEntries(Self, LEntries, LEntryCount);
+  LItems := nil;
+  LCount := 0;
+  for LI := 0 to LEntryCount - 1 do
+    if DirectArraySegment(LEntries[LI].Key, AKey, LSegment) and
+       TryParseArrayIndex(LSegment, LIndex) then
+      AddIndexedValue(LItems, LCount, LIndex, LEntries[LI].Value);
+
+  SortIndexedValues(LItems, LCount);
+  SetLength(Result, LCount);
+  for LI := 0 to LCount - 1 do
+    Result[LI] := LItems[LI].Value;
 end;
 
 function TConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
@@ -1265,6 +1462,297 @@ begin
   finally
     FLock.ReleaseRead;
   end;
+end;
+
+{ TOwnedConfig }
+
+constructor TOwnedConfig.Create(AConfig: TConfig);
+begin
+  inherited Create;
+  FConfig := AConfig;
+end;
+
+destructor TOwnedConfig.Destroy;
+begin
+  if FConfig <> nil then
+    FConfig.Free;
+  inherited Destroy;
+end;
+
+function TOwnedConfig.GetCount: Integer;
+begin
+  Result := FConfig.Count;
+end;
+
+function TOwnedConfig.GetString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FConfig.GetString(AKey, ADefault);
+end;
+
+function TOwnedConfig.GetRawString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FConfig.GetRawString(AKey, ADefault);
+end;
+
+function TOwnedConfig.GetStringArray(const AKey: string): TStringArray;
+begin
+  Result := FConfig.GetStringArray(AKey);
+end;
+
+function TOwnedConfig.GetRawStringArray(const AKey: string): TStringArray;
+begin
+  Result := FConfig.GetRawStringArray(AKey);
+end;
+
+function TOwnedConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
+begin
+  Result := FConfig.GetInt(AKey, ADefault);
+end;
+
+function TOwnedConfig.GetBool(const AKey: string; ADefault: Boolean): Boolean;
+begin
+  Result := FConfig.GetBool(AKey, ADefault);
+end;
+
+function TOwnedConfig.GetFloat(const AKey: string; ADefault: Double): Double;
+begin
+  Result := FConfig.GetFloat(AKey, ADefault);
+end;
+
+function TOwnedConfig.GetStringRequired(const AKey: string): string;
+begin
+  Result := FConfig.GetStringRequired(AKey);
+end;
+
+function TOwnedConfig.GetIntRequired(const AKey: string): Int64;
+begin
+  Result := FConfig.GetIntRequired(AKey);
+end;
+
+function TOwnedConfig.GetBoolRequired(const AKey: string): Boolean;
+begin
+  Result := FConfig.GetBoolRequired(AKey);
+end;
+
+function TOwnedConfig.GetFloatRequired(const AKey: string): Double;
+begin
+  Result := FConfig.GetFloatRequired(AKey);
+end;
+
+procedure TOwnedConfig.Require(const AKeys: array of string);
+begin
+  FConfig.Require(AKeys);
+end;
+
+function TOwnedConfig.Has(const AKey: string): Boolean;
+begin
+  Result := FConfig.Has(AKey);
+end;
+
+function TOwnedConfig.GetKeys: TStringArray;
+begin
+  Result := FConfig.GetKeys;
+end;
+
+function TOwnedConfig.GetSection(const APrefix: string): TStringArray;
+begin
+  Result := FConfig.GetSection(APrefix);
+end;
+
+{ TConfigBuilderImpl }
+
+function TConfigBuilderImpl.DefaultIndexOf(const AKey: string): Integer;
+begin
+  Result := FindEntryIndexInSnapshot(FDefaults, FDefaultCount, AKey);
+end;
+
+procedure TConfigBuilderImpl.StoreDefault(const AKey, AValue: string);
+var
+  LIndex: Integer;
+begin
+  LIndex := DefaultIndexOf(AKey);
+  if LIndex >= 0 then
+    FDefaults[LIndex].Value := AValue
+  else
+  begin
+    if FDefaultCount >= Length(FDefaults) then
+      SetLength(FDefaults, FDefaultCount + 8);
+    FDefaults[FDefaultCount].Key := AKey;
+    FDefaults[FDefaultCount].Value := AValue;
+    Inc(FDefaultCount);
+  end;
+end;
+
+procedure TConfigBuilderImpl.StoreSource(const AKind: TConfigSourceKind;
+  const AValue: string; AFormat: TConfigFormat);
+begin
+  AddConfigSource(FSources, FSourceCount, AKind, AValue, AFormat);
+end;
+
+procedure TConfigBuilderImpl.StoreRequiredKey(const AKey: string);
+begin
+  AddString(FRequiredKeys, FRequiredCount, AKey);
+end;
+
+procedure TConfigBuilderImpl.ApplyDefaults(ACfg: TConfig);
+var
+  LI: Integer;
+begin
+  for LI := 0 to FDefaultCount - 1 do
+    ACfg.SetDefault(FDefaults[LI].Key, FDefaults[LI].Value);
+end;
+
+procedure TConfigBuilderImpl.ApplySource(ACfg: TConfig; const ASource: TConfigSource);
+var
+  LContent: string;
+begin
+  case ASource.Kind of
+    cskIni:
+      ACfg.LoadFromIni(ASource.Value);
+    cskJson:
+      ACfg.LoadFromJson(ASource.Value);
+    cskYaml:
+      ACfg.LoadFromYaml(ASource.Value);
+    cskToml:
+      ACfg.LoadFromToml(ASource.Value);
+    cskEnv:
+      ACfg.LoadFromEnv(ASource.Value);
+    cskFile:
+      begin
+        if not IsSupportedConfigFormat(ASource.Format) then
+          raise EConfigError.Create(FormatConfigFileLoadError(ASource.Value,
+            'unsupported config format'));
+        try
+          LContent := ReadFileText(ASource.Value);
+          try
+            LoadConfigTextByFormat(ACfg, LContent, ASource.Format);
+          except
+            on E: Exception do
+              raise EConfigError.Create(FormatConfigFileLoadError(ASource.Value,
+                E.Message));
+          end;
+        except
+          on E: EConfigError do
+            raise;
+          on E: Exception do
+            raise EConfigError.Create(FormatConfigFileLoadError(ASource.Value,
+              E.Message));
+        end;
+      end;
+  end;
+end;
+
+procedure TConfigBuilderImpl.ApplyRequiredKeys(ACfg: TConfig);
+var
+  LI: Integer;
+begin
+  for LI := 0 to FRequiredCount - 1 do
+    ACfg.GetStringRequired(FRequiredKeys[LI]);
+end;
+
+function TConfigBuilderImpl.BuildFreshConfig: TConfig;
+var
+  LI: Integer;
+begin
+  Result := TConfig.Create;
+  try
+    ApplyDefaults(Result);
+    for LI := 0 to FSourceCount - 1 do
+      ApplySource(Result, FSources[LI]);
+    ApplyRequiredKeys(Result);
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+function TConfigBuilderImpl.AddDefault(const AKey, AValue: string): IConfigBuilder;
+begin
+  StoreDefault(AKey, AValue);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddIni(const AContent: string): IConfigBuilder;
+begin
+  StoreSource(cskIni, AContent, cfIni);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddJson(const AContent: string): IConfigBuilder;
+begin
+  StoreSource(cskJson, AContent, cfJson);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddYaml(const AContent: string): IConfigBuilder;
+begin
+  StoreSource(cskYaml, AContent, cfYaml);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddToml(const AContent: string): IConfigBuilder;
+begin
+  StoreSource(cskToml, AContent, cfToml);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddEnv(const APrefix: string): IConfigBuilder;
+begin
+  StoreSource(cskEnv, APrefix, cfIni);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.AddFile(const APath: string;
+  AFormat: TConfigFormat): IConfigBuilder;
+begin
+  StoreSource(cskFile, APath, AFormat);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.RequireKeys(const AKeys: array of string): IConfigBuilder;
+var
+  LI: Integer;
+begin
+  for LI := 0 to Length(AKeys) - 1 do
+    StoreRequiredKey(AKeys[LI]);
+  Result := Self;
+end;
+
+function TConfigBuilderImpl.Build: IConfig;
+begin
+  Result := TOwnedConfig.Create(BuildFreshConfig);
+end;
+
+function TConfigBuilderImpl.BuildConfig: TConfig;
+begin
+  Result := BuildFreshConfig;
+end;
+
+function TConfigBuilderImpl.TryBuild(out AConfig: IConfig; out AError: string): Boolean;
+begin
+  AConfig := nil;
+  AError := '';
+  try
+    AConfig := Build;
+    Result := True;
+  except
+    on E: EConfigError do
+    begin
+      AConfig := nil;
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function ConfigBuilder: IConfigBuilder;
+begin
+  Result := TConfigBuilderImpl.Create;
+end;
+
+function ConfigLoad(const APath: string; AFormat: TConfigFormat): IConfig;
+begin
+  Result := ConfigBuilder.AddFile(APath, AFormat).Build;
 end;
 
 { TConfigWatcher }

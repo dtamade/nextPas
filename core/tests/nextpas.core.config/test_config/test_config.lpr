@@ -71,6 +71,31 @@ begin
   end;
 end;
 
+procedure TestGetRawStringPreservesPlaceholders;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_RAW_PORT', '8080');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('host=localhost' + #10 +
+        'url=http://${host}:${NEXTPAS_CFG_RAW_PORT}' + #10);
+      CheckEqual('http://${host}:${NEXTPAS_CFG_RAW_PORT}',
+        LCfg.GetRawString('url'), 'raw stored value');
+      CheckEqual('http://${host}',
+        LCfg.GetRawString('missing', 'http://${host}'),
+        'raw default value');
+      CheckEqual('http://localhost:8080',
+        LCfg.GetString('url'), 'normal getter still interpolates');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_RAW_PORT');
+  end;
+end;
+
 { === Interpolation Tests === }
 
 procedure TestInterpolationConfigKeys;
@@ -218,6 +243,35 @@ begin
     end;
   finally
     UnsetEnv('NEXTPAS_CFG_TAG');
+  end;
+end;
+
+procedure TestGetRawStringArrayPreservesPlaceholders;
+var
+  LCfg: TConfig;
+  LTags: TStringArray;
+begin
+  SetEnv('NEXTPAS_CFG_RAW_TAG', 'env_tag');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromJson('{"tag_source":"blue","tags":["${tag_source}",' +
+        '"$${tag_source}","${NEXTPAS_CFG_RAW_TAG}"]}');
+      LTags := LCfg.GetRawStringArray('tags');
+      CheckEqual(Int64(3), Int64(Length(LTags)), 'raw tag count');
+      CheckEqual('${tag_source}', LTags[0], 'raw placeholder');
+      CheckEqual('$${tag_source}', LTags[1], 'raw escaped placeholder');
+      CheckEqual('${NEXTPAS_CFG_RAW_TAG}', LTags[2], 'raw env placeholder');
+
+      LTags := LCfg.GetStringArray('tags');
+      CheckEqual('blue', LTags[0], 'interpolated placeholder');
+      CheckEqual('${tag_source}', LTags[1], 'interpolated escaped placeholder');
+      CheckEqual('env_tag', LTags[2], 'interpolated env placeholder');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_RAW_TAG');
   end;
 end;
 
@@ -1292,6 +1346,7 @@ begin
   T.Run('GetString.Basic', @TestGetStringBasic);
   T.Run('GetString.Default', @TestGetStringDefault);
   T.Run('GetString.CaseInsensitive', @TestGetStringCaseInsensitive);
+  T.Run('GetRawString.PreservesPlaceholders', @TestGetRawStringPreservesPlaceholders);
   T.Run('Interpolation.ConfigKeys', @TestInterpolationConfigKeys);
   T.Run('Interpolation.EnvFallback', @TestInterpolationEnvFallback);
   T.Run('Interpolation.DefaultValue', @TestInterpolationDefaultValue);
@@ -1299,6 +1354,7 @@ begin
   T.Run('Interpolation.EscapeAndUnresolved', @TestInterpolationEscapeAndUnresolved);
   T.Run('Interpolation.TypedGetters', @TestInterpolationTypedGetters);
   T.Run('Interpolation.StringArray', @TestInterpolationStringArray);
+  T.Run('GetRawStringArray.PreservesPlaceholders', @TestGetRawStringArrayPreservesPlaceholders);
   T.Run('Interpolation.CycleRaises', @TestInterpolationCycleRaises);
   T.Run('Required.StringAndRequire', @TestRequiredStringAndRequire);
   T.Run('Required.MissingRaises', @TestRequiredMissingRaises);
