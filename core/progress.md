@@ -309,3 +309,44 @@
 - `/codex`-style review conclusion: prioritize narrow follow-up cleanup over risky history edits in this shared tree.
 - Root cause was index hygiene, not HTTP runtime logic.
 - Batch discipline tightened: commit from repo root only after verifying both path scope and staged set.
+
+## Session: 2026-06-02 client pooling semantics
+
+### Phase 3: close-delimited and HTTP/1.0 reuse decisions
+
+- **Status:** complete
+- **Scope:** stop `http.client` from reusing connections when response framing/version semantics say the connection is not reusable.
+- **Checklist:**
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Audited `THttpClient.ReadResponse` and pooling logic for framing-aware reuse decisions.
+  - [x] Added RED parser tests for close-delimited, `Content-Length`, and HTTP/1.0 reuse semantics.
+  - [x] Verified RED: `ShouldKeepAlive` seam was missing from `IH1Parser`.
+  - [x] Added parser-level keep-alive inference and routed client pooling through it.
+  - [x] Ran focused parser GREEN with heaptrc proof.
+  - [x] Ran focused client GREEN with heaptrc proof.
+  - [x] Ran the full HTTP suite after the fix.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 Pooling
+
+| Check               | Command                                                       | Result                                                                    |
+| ------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Git safety state    | `git status --short --branch`                                 | Shared checkout is dirty outside HTTP target files                        |
+| RED parser test     | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | Failed to compile: `IH1Parser` lacked `ShouldKeepAlive`                   |
+| Focused parser GREEN| `make -C tests/nextpas.core.http/test_http_h1parser clean test` | 18/18 passed, 0 unfreed memory blocks                                     |
+| Focused client GREEN| `make -C tests/nextpas.core.http/test_http_client clean test`   | 15/15 passed, 0 unfreed memory blocks                                     |
+| Full HTTP suite     | `make TESTS_DIR=tests/nextpas.core.http test`                 | All tests passed; heaptrc zero leaks per test                             |
+
+## Notes 2026-06-02 Pooling
+
+- This batch is a real production fix, not coverage-only: the old client pooling rule only checked `Connection: close`, which did not encode all HTTP reuse semantics.
+- The parser now owns response reuse inference for the client path, using parsed status code, framing headers, HTTP version, and `Connection` header together.
+- The client now treats close-delimited responses and HTTP/1.0 responses without `Connection: keep-alive` as non-reusable connections.
+- `test_http_smoke` still prints `True free heap : 261232 / Should be : 262144`, but heaptrc reports `0 unfreed memory blocks`; this remains a non-blocking observation.
+
+## Review 2026-06-02 Pooling
+
+- `/codex`-style review found no blocking issue after the parser/client seam change.
+- The important design correction is that pooling now depends on parsed framing semantics, not on a header-only shortcut in `http.client`.
+- Follow-up route: move to direct `TChunkedWriter` focused tests before reopening larger transport-registry design work.

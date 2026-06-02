@@ -46,6 +46,9 @@
 - `TH1ResponseWriter` now preserves caller-supplied `Transfer-Encoding`, does not append a terminal chunk on explicit `Content-Length` responses, and raises `EHttpError` if code tries to write after chunked finalization.
 - `THttpClient.ReadResponse` already handled both chunked and close-delimited response bodies; this batch added focused proof rather than changing production code.
 - The new client coverage uses two distinct paths: a normal `THttpServer` chunked response and a raw socket response without `Content-Length`, proving EOF-delimited body completion through the parser `Finish` path.
+- `THttpClient` previously decided pool reuse only from `Connection: close`, which was too weak for close-delimited responses and HTTP/1.0 semantics.
+- `IH1Parser` now exposes `ShouldKeepAlive`, and the implementation derives that answer from parsed version, framing headers, status code, and `Connection` semantics.
+- `THttpClient` pooling now trusts parser-derived keep-alive semantics, so EOF-delimited responses and HTTP/1.0 responses without `Connection: keep-alive` are no longer returned to the pool.
 
 ## Git and Collaboration Findings
 
@@ -63,8 +66,8 @@
 - Hijack exception-after-takeover and websocket upgrade ownership regressions are useful later hardening tests.
 - Transport registry / protocol ownership still needs design before H2/H3 expansion or pluggable client/server transports.
 - Direct `TChunkedWriter` tests are still optional; decide that only if the helper remains a stable implementation surface worth testing independently.
-- Client pooling semantics for close-delimited responses without explicit `Connection: close` are still worth auditing, even though body decoding itself is now covered.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
+- Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.
 
 ## Communication Cadence Adopted
 

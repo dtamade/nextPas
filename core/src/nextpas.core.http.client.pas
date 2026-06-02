@@ -37,7 +37,7 @@ type
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
-    function ReadResponse(const AReader: IReader): IHttpResponse;
+    function ReadResponse(const AReader: IReader; out AKeepAlive: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: THttpClientOptions);
     function Do_(const AReq: IHttpRequest): IHttpResponse;
@@ -172,7 +172,7 @@ begin
     LFlusher.Flush;
 end;
 
-function THttpClient.ReadResponse(const AReader: IReader): IHttpResponse;
+function THttpClient.ReadResponse(const AReader: IReader; out AKeepAlive: Boolean): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
@@ -197,6 +197,8 @@ begin
   if not LParser.IsComplete then
     raise EHttpError.Create('HTTP response incomplete: connection closed');
 
+  AKeepAlive := LParser.ShouldKeepAlive;
+
   // Build body reader from parser body string
   LBodyStr := LParser.GetBody;
   if LBodyStr <> '' then
@@ -206,14 +208,6 @@ begin
   end
   else
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
-end;
-
-function ResponseKeepAlive(const AResp: IHttpResponse): Boolean;
-var LConn: string;
-begin
-  LConn := AResp.Headers.Get('connection');
-  { HTTP/1.1 default is keep-alive unless 'close' is specified }
-  Result := (LConn <> 'close');
 end;
 
 function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
@@ -227,6 +221,7 @@ var
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
   LPooled: Boolean;
+  LKeepAlive: Boolean;
 begin
   LUrl := AReq.Url;
 
@@ -262,7 +257,7 @@ begin
   // Write request + read response; retry once if pooled connection is stale
   try
     WriteRequest(LConn as IWriter, AReq);
-    LResp := ReadResponse(LConn as IReader);
+    LResp := ReadResponse(LConn as IReader, LKeepAlive);
   except
     if LPooled then
     begin
@@ -275,7 +270,7 @@ begin
         LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
       end;
       WriteRequest(LConn as IWriter, AReq);
-      LResp := ReadResponse(LConn as IReader);
+      LResp := ReadResponse(LConn as IReader, LKeepAlive);
     end
     else
     begin
@@ -285,7 +280,7 @@ begin
   end;
 
   // Determine if we can reuse the connection
-  if ResponseKeepAlive(LResp) then
+  if LKeepAlive then
     PoolPut(LHost, LPort, LConn)
   else
     LConn.Close;

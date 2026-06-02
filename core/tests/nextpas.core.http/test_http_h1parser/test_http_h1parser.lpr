@@ -126,6 +126,51 @@ begin
   CheckEqual('', LP.GetBody, 'empty body');
 end;
 
+procedure TestResponseCloseDelimitedNeedsConnectionClose;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Type: text/plain'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(not LP.IsComplete, 'close-delimited body waits for EOF');
+  Check(not LP.ShouldKeepAlive, 'close-delimited response is not reusable');
+  LP.Finish;
+  Check(LP.IsComplete, 'finish marks close-delimited response complete');
+  CheckEqual('hello', LP.GetBody, 'body after eof completion');
+end;
+
+procedure TestResponseContentLengthKeepsAlive;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'complete');
+  Check(LP.ShouldKeepAlive, 'content-length response is reusable');
+end;
+
+procedure TestResponseHttp10WithoutKeepAliveDoesNotReuse;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.0 200 OK'#13#10 +
+           'Content-Length: 2'#13#10#13#10 +
+           'ok';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'complete');
+  Check(not LP.ShouldKeepAlive, 'http/1.0 response without keep-alive is not reusable');
+end;
+
 procedure TestContentLengthBody;
 var
   LP: IH1Parser;
@@ -243,6 +288,9 @@ begin
   T.Run('Response 200', @TestResponse200);
   T.Run('Response 404', @TestResponse404);
   T.Run('Response 204 no body', @TestResponse204NoBody);
+  T.Run('Response close-delimited needs connection close', @TestResponseCloseDelimitedNeedsConnectionClose);
+  T.Run('Response content-length keeps alive', @TestResponseContentLengthKeepsAlive);
+  T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);

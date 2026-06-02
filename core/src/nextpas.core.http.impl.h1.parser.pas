@@ -26,6 +26,7 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: string;
     function IsComplete: Boolean;
+    function ShouldKeepAlive: Boolean;
     function HasError: Boolean;
     function ErrorMessage: string;
     procedure Reset;
@@ -37,6 +38,7 @@ function NewH1ResponseParser: IH1Parser;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers;
 
@@ -68,6 +70,7 @@ type
     function GetHeaders: IHttpHeaders;
     function GetBody: string;
     function IsComplete: Boolean;
+    function ShouldKeepAlive: Boolean;
     function HasError: Boolean;
     function ErrorMessage: string;
     procedure Reset;
@@ -281,6 +284,35 @@ end;
 function TH1Parser.IsComplete: Boolean;
 begin
   Result := FComplete;
+end;
+
+function TH1Parser.ShouldKeepAlive: Boolean;
+var
+  LConn: string;
+  LTransferEncoding: string;
+begin
+  if ((FStatusCode div 100) <> 1) and
+     (FStatusCode <> 204) and
+     (FStatusCode <> 304) then
+  begin
+    LTransferEncoding := LowerCase(FHeaders.Get('transfer-encoding'));
+    if LTransferEncoding <> '' then
+    begin
+      if Pos('chunked', LTransferEncoding) = 0 then
+        Exit(False);
+    end
+    else if FHeaders.Get('content-length') = '' then
+      Exit(False);
+  end;
+
+  LConn := LowerCase(FHeaders.Get('connection'));
+  if LConn = 'close' then
+    Exit(False);
+
+  if FVersion = hvHttp10 then
+    Result := (LConn = 'keep-alive')
+  else
+    Result := True;
 end;
 
 function TH1Parser.HasError: Boolean;

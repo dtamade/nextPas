@@ -4,14 +4,15 @@
 
 ## 当前批次
 
-- client response framing coverage 已完成
-- 本轮已完成 mixed commit git hygiene 收口，HTTP 变更重新隔离
-- HTTP focused/full suite + heaptrc 0 已重新验证
+- close-delimited response pooling semantics 已完成
+- parser 现在显式给出 keep-alive 语义，client 不再只靠 `Connection: close` 猜测连接是否可复用
+- HTTP focused/full suite + heaptrc 0 已验证
 
 ## 当前重点
 
 - 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
-- `http.client` 的 chunked / close-delimited body 读取行为已被 focused 测试直接证明，本批没有新的生产修复。
+- `http.client` 现在会把 close-delimited response、HTTP/1.0 非 keep-alive response 视为不可复用连接。
+- `http.impl.h1.parser` 新增 focused 复用语义覆盖：close-delimited / content-length / HTTP/1.0。
 - `TH1ResponseWriter` 现在禁止在 chunked final chunk 发出后继续写 body。
 - Hijack 后 HTTP server 不再 `Shutdown/Close` 已移交给 handler 的连接。
 - transport 当前只冻结公开接口形状；registry / client-server 注入机制仍未完成。
@@ -28,5 +29,5 @@
 
 ## 下一步
 
-- 先审 close-delimited response 在 client pooling 下的可复用语义。
-- 再决定是否把 `TChunkedWriter` 单独提升为 focused 实现级测试对象。
+- 优先决定是否把 `TChunkedWriter` 单独提升为 focused 实现级测试对象。
+- 再回到 transport registry / client-server 注入 ownership 设计边界。
