@@ -421,9 +421,8 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    { llhttp doesn't enforce Host requirement — server may still respond 200 }
-    Check((Pos('400', LResp) > 0) or (Pos('200', LResp) > 0) or (Length(LResp) = 0),
-      'Missing Host: server handled (200 or 400 both acceptable)');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Missing Host: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -580,7 +579,7 @@ begin
   T.Run('Slowloris partial request', @TestSlowloris);
   T.Run('HTTP/0.9 no version', @TestHttp09Request);
   T.Run('CRLF injection in path', @TestCrlfInjection);
-  T.Run('Missing Host header', @TestMissingHost);
+  T.Run('Missing Host header -> 400', @TestMissingHost);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name', @TestLongMethodName);

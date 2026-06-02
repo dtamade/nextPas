@@ -415,6 +415,14 @@ begin
 
       LKeepAlive := ShouldKeepAlive(LParser);
 
+      if (LParser.GetHttpVersion = hvHttp11) and
+         (LParser.GetHeaders.Get('host') = '') then
+      begin
+        WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
+        LKeepAlive := False;
+        Continue;
+      end;
+
       LUrl := TUrl.Parse(LParser.GetUrl);
       LBodyStr := LParser.GetBody;
       if LBodyStr <> '' then

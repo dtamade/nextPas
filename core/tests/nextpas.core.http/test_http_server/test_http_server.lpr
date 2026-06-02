@@ -795,6 +795,65 @@ begin
   end;
 end;
 
+procedure TestMissingHostHeader;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'GET / HTTP/1.1'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'missing host http11: status 400');
+    Check(not LHandlerCalled, 'missing host http11: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttp10WithoutHostStillAllowed;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+const
+  REQ = 'GET /ping HTTP/1.0'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'missing host http10: status 200');
+    Check(Pos('pong', LResp) > 0, 'missing host http10: body pong');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: Query parameters }
 procedure TestQueryParam;
 var
@@ -1678,6 +1737,8 @@ begin
   T.Run('Header with null byte -> 400', @TestHeaderNullByte);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
+  T.Run('HTTP/1.1 missing Host -> 400', @TestMissingHostHeader);
+  T.Run('HTTP/1.0 missing Host still allowed', @TestHttp10WithoutHostStillAllowed);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
