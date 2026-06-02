@@ -12,14 +12,14 @@ Phase 1: public contract audit and HTTP test baseline.
 
 - [x] Re-read HTTP inbox, API coverage, plan, findings, and progress.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this batch.
-- [x] Add `IHttpHijacker` facade alias coverage and verify RED.
-- [x] Add `TH1ResponseWriter.Hijack` focused lifecycle coverage.
-- [x] Add server integration coverage proving hijack transfers connection ownership.
-- [x] Fix facade re-export and server close/shutdown ownership.
+- [x] Add failing facade callback/overload contract tests in `test_http_contract`.
+- [x] Verify RED: facade default `NewHttpServer(IHttpHandler)` overload is missing.
+- [x] Add `HandlerFunc` overloads for `THttpHandlerMethod` and `THttpHandlerProc` in middleware + facade.
+- [x] Add facade forwarding for `NewHttpServer(const AHandler: IHttpHandler)`.
 - [x] Run focused GREEN tests with heaptrc evidence.
+- [x] Run full HTTP suite after facade overload changes.
 - [x] Update inbox, coverage matrix, findings, and progress for this coverage batch.
-- [x] Run full HTTP suite after hijack lifecycle changes.
-- [ ] Complete `/codex` review, final git status check, and commit this coverage batch.
+- [x] Complete `/codex` review, final git status check, and commit this coverage batch.
 
 ## Quality Gates
 
@@ -87,6 +87,7 @@ Phase 1: public contract audit and HTTP test baseline.
 | Treat empty DELETE body by behavior            | The public contract is no request body and zero content length, not the internal `Body=nil` representation.                             |
 | Treat transport coverage as shape-only         | `IHttpTransport` / `IHttpServerTransport` have no registry or injection owner yet, so this batch proves external implementability only. |
 | Transfer hijacked connection ownership         | After `IHttpHijacker.Hijack`, the HTTP server loop and thread cleanup must not write, shutdown, or close the connection.                |
+| Expose callback aliases through helpers        | `THttpHandlerMethod` / `THttpHandlerProc` should be usable from public helper APIs, not only exist as type aliases.                     |
 
 ## Errors Encountered
 
@@ -95,3 +96,4 @@ Phase 1: public contract audit and HTTP test baseline.
 | Root planning files described an old parser TryParse task | 1       | Replaced them with the active HTTP ownership plan while preserving old content in git history. |
 | Shared checkout is dirty with unrelated files             | 1       | Limited this batch to tracked planning/docs files owned by the HTTP takeover.                  |
 | Server closed hijacked connections after handler return   | 1       | Added RED integration test, then made `HandleConnection` return server ownership state.        |
+| Facade lacked `NewHttpServer(IHttpHandler)` overload      | 1       | Added RED contract test, then forwarded the default overload from `nextpas.core.http`.         |

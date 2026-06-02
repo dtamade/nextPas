@@ -158,3 +158,42 @@
 - `HandleConnection` now reports whether the server still owns the connection. After hijack, cleanup does not `Shutdown` or `Close` the stream.
 - `/codex`-style read-only review found no blocking issue.
 - Review noted that the first server hijack test treated any read exception as open-connection evidence; the test now proves ownership directly by reading a client probe byte from the handler-held `ITcpStream` after handler return.
+
+## Session: 2026-06-02 facade callback and overload smoke
+
+### Phase 1: facade helper/public forwarding completion
+
+- **Status:** complete
+- **Scope:** `HandlerFunc` callback aliases and facade `NewHttpServer` / `NewHttpClient` overload smoke.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Added failing contract tests for facade callback aliases and server/client overloads in `test_http_contract`.
+  - [x] Verified RED: `nextpas.core.http.NewHttpServer(IHttpHandler)` was missing from the facade.
+  - [x] Added `HandlerFunc` overloads for `THttpHandlerMethod` and `THttpHandlerProc` in middleware and facade.
+  - [x] Added facade forwarding for `NewHttpServer(const AHandler: IHttpHandler)`.
+  - [x] Ran focused GREEN contract tests with heaptrc proof.
+  - [x] Ran full HTTP suite after the facade overload changes.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-02 Facade
+
+| Check                  | Command                                                         | Result                                                              |
+| ---------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Git safety state       | `git status --short --branch`                                   | Shared checkout is dirty outside HTTP target files                  |
+| RED contract compile   | `make -C tests/nextpas.core.http/test_http_contract clean test` | Failed to compile: wrong parameter count for facade `NewHttpServer` |
+| Focused contract GREEN | `make -C tests/nextpas.core.http/test_http_contract clean test` | 19/19 passed, 0 unfreed memory blocks                               |
+| Full HTTP suite        | `make TESTS_DIR=tests/nextpas.core.http test`                   | All tests passed; heaptrc zero leaks per test                       |
+
+## Notes 2026-06-02 Facade
+
+- This batch tightened public helper ergonomics rather than changing runtime HTTP semantics.
+- `nextpas.core.http.HandlerFunc` now has explicit overloads for closure, plain procedure, and object method entry points.
+- `test_http_contract` now locks the callback alias path and both server/client facade overload families through direct `nextpas.core.http.*` calls.
+
+## Review 2026-06-02 Facade
+
+- `/codex`-style read-only review found no blocking issue.
+- Review risk remains unchanged: do not use `git add .` in the shared checkout, because unrelated files are dirty or untracked outside this batch.
+- Review follow-up: the next correctness slice should move to H1 writer boundary behavior before any benchmark work.

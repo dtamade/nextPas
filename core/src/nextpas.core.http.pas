@@ -94,7 +94,9 @@ function EncodeQueryString(const AParams: TQueryParams): string; inline;
 function NewRouter: IHttpRouter; inline;
 
 { Handler/Middleware helpers }
-function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; inline;
+function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; overload; inline;
+function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload; inline;
+function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload; inline;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
 { Message factories }
@@ -103,7 +105,8 @@ function NewGetRequest(const APath: string): IHttpRequest; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse; inline;
 
 { Server/Client factories }
-function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer; inline;
+function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
+function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer; overload; inline;
 function NewHttpClient: IHttpClient; inline;
 function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overload; inline;
 
@@ -164,6 +167,16 @@ begin
   Result := nextpas.core.http.middleware.HandlerFunc(AFunc);
 end;
 
+function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler;
+begin
+  Result := nextpas.core.http.middleware.HandlerFunc(AMethod);
+end;
+
+function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
+begin
+  Result := nextpas.core.http.middleware.HandlerFunc(AProc);
+end;
+
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 begin
   Result := nextpas.core.http.middleware.Chain(AHandler, AMiddlewares);
@@ -182,6 +195,11 @@ end;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
 begin
   Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABody);
+end;
+
+function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;
+begin
+  Result := nextpas.core.http.server.NewHttpServer(AHandler);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer;

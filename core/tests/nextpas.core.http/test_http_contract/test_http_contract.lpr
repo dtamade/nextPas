@@ -19,6 +19,8 @@ uses
 
 var
   T: TTestRunner;
+  GProcHandlerCalled: Boolean;
+  GProcHandlerPath: string;
 
 type
   TMockHttpTransport = class(TInterfacedObject, IHttpTransport)
@@ -41,6 +43,23 @@ type
     property ServeConnCalled: Boolean read FServeConnCalled;
   end;
 
+  TMethodHandlerTarget = class
+  private
+    FCalled: Boolean;
+    FSeenPath: string;
+  public
+    procedure Handle(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+    property Called: Boolean read FCalled;
+    property SeenPath: string read FSeenPath;
+  end;
+
+procedure PlainHandlerProc(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+begin
+  GProcHandlerCalled := True;
+  if AReq <> nil then
+    GProcHandlerPath := AReq.Url.Path;
+end;
+
 { TMockHttpTransport }
 
 function TMockHttpTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -62,6 +81,15 @@ begin
   FServeConnCalled := True;
   if AHandler <> nil then
     AHandler.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/transport')), nil);
+end;
+
+{ TMethodHandlerTarget }
+
+procedure TMethodHandlerTarget.Handle(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
+begin
+  FCalled := True;
+  if AReq <> nil then
+    FSeenPath := AReq.Url.Path;
 end;
 
 { Test 1: NewHeaders — Set/Get/Has/Del/Count/Clone }
@@ -151,7 +179,39 @@ begin
   Check(LCalled, 'HandlerFunc handler was called');
 end;
 
-{ Test 6: Chain applies middleware }
+{ Test 6: HandlerFunc wraps plain procedures through facade }
+procedure TestHandlerProcWrap;
+var
+  LHandler: IHttpHandler;
+begin
+  GProcHandlerCalled := False;
+  GProcHandlerPath := '';
+  LHandler := nextpas.core.http.HandlerFunc(@PlainHandlerProc);
+  Check(LHandler <> nil, 'Facade HandlerFunc(proc) returns non-nil');
+  LHandler.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/proc')), nil);
+  Check(GProcHandlerCalled, 'Facade HandlerFunc(proc) dispatches');
+  CheckEqual('/proc', GProcHandlerPath, 'Facade HandlerFunc(proc) keeps request');
+end;
+
+{ Test 7: HandlerFunc wraps object methods through facade }
+procedure TestHandlerMethodWrap;
+var
+  LTarget: TMethodHandlerTarget;
+  LHandler: IHttpHandler;
+begin
+  LTarget := TMethodHandlerTarget.Create;
+  try
+    LHandler := nextpas.core.http.HandlerFunc(@LTarget.Handle);
+    Check(LHandler <> nil, 'Facade HandlerFunc(method) returns non-nil');
+    LHandler.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/method')), nil);
+    Check(LTarget.Called, 'Facade HandlerFunc(method) dispatches');
+    CheckEqual('/method', LTarget.SeenPath, 'Facade HandlerFunc(method) keeps request');
+  finally
+    LTarget.Free;
+  end;
+end;
+
+{ Test 8: Chain applies middleware }
 procedure TestChainMiddleware;
 var
   LHandler: IHttpHandler;
@@ -176,7 +236,42 @@ begin
   CheckEqual('MH', LOrder, 'Chain: middleware then handler');
 end;
 
-{ Test 7: UrlEncode/UrlDecode round-trip }
+{ Test 9: Facade exposes server overloads }
+procedure TestHttpServerFacadeOverloads;
+var
+  LHandler: IHttpHandler;
+  LServer: IHttpServer;
+  LOptions: THttpServerOptions;
+begin
+  LHandler := nextpas.core.http.HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+  end);
+
+  LServer := nextpas.core.http.NewHttpServer(LHandler);
+  Check(LServer <> nil, 'Facade NewHttpServer(handler) returns non-nil');
+
+  LOptions := THttpServerOptions.Default;
+  LOptions.MaxHeaderSize := 4096;
+  LServer := nextpas.core.http.NewHttpServer(LHandler, LOptions);
+  Check(LServer <> nil, 'Facade NewHttpServer(handler, options) returns non-nil');
+end;
+
+{ Test 10: Facade exposes client overloads }
+procedure TestHttpClientFacadeOverloads;
+var
+  LClient: IHttpClient;
+  LOptions: THttpClientOptions;
+begin
+  LClient := nextpas.core.http.NewHttpClient;
+  Check(LClient <> nil, 'Facade NewHttpClient returns non-nil');
+
+  LOptions := THttpClientOptions.Default;
+  LOptions.Timeout := 1234;
+  LClient := nextpas.core.http.NewHttpClient(LOptions);
+  Check(LClient <> nil, 'Facade NewHttpClient(options) returns non-nil');
+end;
+
+{ Test 11: UrlEncode/UrlDecode round-trip }
 procedure TestUrlEncodeDecodeRoundTrip;
 var
   LOriginal, LEncoded, LDecoded: string;
@@ -189,7 +284,7 @@ begin
   CheckEqual(LOriginal, LDecoded, 'Round-trip preserves value');
 end;
 
-{ Test 8: ParseQueryString basic }
+{ Test 12: ParseQueryString basic }
 procedure TestParseQueryString;
 var
   LParams: TQueryParams;
@@ -204,7 +299,7 @@ begin
   CheckEqual('', LParams[2].Value, 'param 2 value empty');
 end;
 
-{ Test 9: EncodeQueryString round-trip }
+{ Test 13: EncodeQueryString round-trip }
 procedure TestEncodeQueryStringRoundTrip;
 var
   LParams, LParsed: TQueryParams;
@@ -224,7 +319,7 @@ begin
   CheckEqual('y&z', LParsed[1].Value, 'round-trip: value 1');
 end;
 
-{ Test 10: HttpMethodToStr all methods }
+{ Test 14: HttpMethodToStr all methods }
 procedure TestHttpMethodToStr;
 begin
   CheckEqual('GET', HttpMethodToStr(hmGet), 'GET');
@@ -238,7 +333,7 @@ begin
   CheckEqual('TRACE', HttpMethodToStr(hmTrace), 'TRACE');
 end;
 
-{ Test 11: HttpStrToMethod all methods }
+{ Test 15: HttpStrToMethod all methods }
 procedure TestHttpStrToMethod;
 begin
   Check(HttpStrToMethod('GET') = hmGet, 'GET');
@@ -252,7 +347,7 @@ begin
   Check(HttpStrToMethod('TRACE') = hmTrace, 'TRACE');
 end;
 
-{ Test 12: HttpStatusText known codes }
+{ Test 16: HttpStatusText known codes }
 procedure TestHttpStatusText;
 begin
   CheckEqual('OK', HttpStatusText(HTTP_STATUS_OK), '200');
@@ -263,7 +358,7 @@ begin
   CheckEqual('Bad Request', HttpStatusText(HTTP_STATUS_BAD_REQUEST), '400');
 end;
 
-{ Test 13: IHttpTransport public contract shape }
+{ Test 17: IHttpTransport public contract shape }
 procedure TestHttpTransportRoundTripContract;
 var
   LObj: TMockHttpTransport;
@@ -282,7 +377,7 @@ begin
   CheckEqual('mock', LResp.Headers.Get('x-transport'), 'RoundTrip response headers');
 end;
 
-{ Test 14: IHttpServerTransport public contract shape }
+{ Test 18: IHttpServerTransport public contract shape }
 procedure TestHttpServerTransportServeConnContract;
 var
   LObj: TMockServerTransport;
@@ -304,7 +399,7 @@ begin
   Check(LHandlerCalled, 'ServeConn can dispatch handler');
 end;
 
-{ Test 15: IHttpHijacker is exported by facade }
+{ Test 19: IHttpHijacker is exported by facade }
 procedure TestHttpHijackerFacadeAlias;
 var
   LHijacker: IHttpHijacker;
@@ -320,7 +415,11 @@ begin
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
+  T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);
+  T.Run('HandlerFunc wraps object methods through facade', @TestHandlerMethodWrap);
   T.Run('Chain applies middleware', @TestChainMiddleware);
+  T.Run('NewHttpServer overloads are available through facade', @TestHttpServerFacadeOverloads);
+  T.Run('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
   T.Run('UrlEncode/UrlDecode round-trip', @TestUrlEncodeDecodeRoundTrip);
   T.Run('ParseQueryString basic', @TestParseQueryString);
   T.Run('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);

@@ -45,7 +45,9 @@ type
   end;
 
 { Factory functions }
-function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
+function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler; overload;
+function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler; overload;
+function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler; overload;
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpMiddleware): IHttpHandler;
 
@@ -129,6 +131,22 @@ end;
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
 begin
   Result := TFuncHandler.Create(AFunc);
+end;
+
+function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler;
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AMethod(AReq, AW);
+  end);
+end;
+
+function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
+begin
+  Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AProc(AReq, AW);
+  end);
 end;
 
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
