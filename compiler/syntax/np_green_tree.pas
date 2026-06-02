@@ -2023,9 +2023,31 @@ var
   TypeParamNode: TGreenNode;
   IndexNode: TGreenNode;
   ElementNode: TGreenNode;
+  FieldTypeNode: TGreenNode;
   RangeNode: TGreenNode;
   SpecArgs: string;
-  I: LongInt;
+  FieldGroupStart, I, K: LongInt;
+  FieldNode: TGreenNode;
+  UsedOriginalTypeNode: Boolean;
+
+  function CloneTypeNode(const ANode: TGreenNode): TGreenNode;
+  var
+    ChildClone: TGreenNode;
+    ChildIndex: LongInt;
+  begin
+    Result := nil;
+    if ANode = nil then
+      Exit;
+    Result := TGreenNode.Create(ANode.NodeKind, ANode.ByteOffset,
+      ANode.ByteLength, ANode.Text);
+    Inc(ATree.FNodeCount);
+    for ChildIndex := 0 to ANode.ChildCount - 1 do
+    begin
+      ChildClone := CloneTypeNode(ANode.ChildAt(ChildIndex));
+      if ChildClone <> nil then
+        Result.AppendChild(ChildClone);
+    end;
+  end;
 begin
   Section := TGreenNode.Create(gnkTypeSection,
     CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
@@ -2540,6 +2562,7 @@ begin
                 if (ACursor < ALexer.TokenCount) and
                   (CurrentToken(ALexer, ACursor).Kind = tkComma) then
                 begin
+                  FieldGroupStart := TypeNode.ChildCount;
                   TypeNode.AppendChild(ElementNode);
                   Inc(ATree.FNodeCount);
                   while (ACursor < ALexer.TokenCount) and
@@ -2561,9 +2584,26 @@ begin
                     (CurrentToken(ALexer, ACursor).Kind = tkColon) then
                   begin
                     Inc(ACursor);
-                    if (ACursor < ALexer.TokenCount) and
-                      (CurrentToken(ALexer, ACursor).Kind = tkIdentifier) then
-                      Inc(ACursor);
+                    FieldTypeNode := ParseTypeReference(ALexer, ACursor,
+                      ADiagnostics, ARootFileId);
+                    UsedOriginalTypeNode := False;
+                    if FieldTypeNode <> nil then
+                      for K := FieldGroupStart to TypeNode.ChildCount - 1 do
+                      begin
+                        FieldNode := TypeNode.ChildAt(K);
+                        if (FieldNode = nil) or
+                          (FieldNode.NodeKind <> gnkClassField) or
+                          (FieldNode.ChildCount <> 0) then
+                          Continue;
+                        if not UsedOriginalTypeNode then
+                        begin
+                          FieldNode.AppendChild(FieldTypeNode);
+                          Inc(ATree.FNodeCount);
+                          UsedOriginalTypeNode := True;
+                        end
+                        else
+                          FieldNode.AppendChild(CloneTypeNode(FieldTypeNode));
+                      end;
                   end;
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                 end
@@ -2571,15 +2611,12 @@ begin
                   (CurrentToken(ALexer, ACursor).Kind = tkColon) then
                 begin
                   Inc(ACursor);
-                  if (ACursor < ALexer.TokenCount) and
-                    ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) or
-                     (CurrentToken(ALexer, ACursor).Kind = tkStringKeyword)) then
+                  FieldTypeNode := ParseTypeReference(ALexer, ACursor,
+                    ADiagnostics, ARootFileId);
+                  if FieldTypeNode <> nil then
                   begin
-                    ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
-                      CurrentToken(ALexer, ACursor).ByteOffset, 0,
-                      CurrentToken(ALexer, ACursor).Lexeme));
+                    ElementNode.AppendChild(FieldTypeNode);
                     Inc(ATree.FNodeCount);
-                    Inc(ACursor);
                   end;
                   MatchTokenSilent(ALexer, ACursor, tkSemicolon);
                   TypeNode.AppendChild(ElementNode);

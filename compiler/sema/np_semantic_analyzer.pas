@@ -4818,11 +4818,12 @@ var
   FieldTypeId: LongInt;
   FieldIndex: LongInt;
   ClassScopeId: LongInt;
-  ClsName, ParentName, ConstName, FieldName: string;
+  ClsName, ParentName, ConstName, FieldName, ParentStringVal: string;
   CurrentVisibility: string;
   ParentFieldVal: Int64;
   DotPos, IdxPos: LongInt;
   ParentTypeId: LongInt;
+  PointerTypeId: LongInt;
   SymbolId: LongInt;
   Meta, ParentMeta: TTypeMetadata;
   VmtCount: LongInt;
@@ -4865,6 +4866,18 @@ begin
             FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$str', 1);
           if ParentMeta.Fields[J].IsPointer then
             FModel.AddConstValue(ClsName + '.' + ParentMeta.Fields[J].Name + '$ptr', 1);
+          if FModel.LookupStringConstValue(
+            ParentName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_type',
+            ParentStringVal) then
+            FModel.AddStringConstValue(
+              ClsName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_type',
+              ParentStringVal);
+          if FModel.LookupConstValue(
+            ParentName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_size',
+            ParentFieldVal) then
+            FModel.AddConstValue(
+              ClsName + '.' + ParentMeta.Fields[J].Name + '$arr_elem_size',
+              ParentFieldVal);
           SetLength(Meta.Fields, Length(Meta.Fields) + 1);
           Meta.Fields[High(Meta.Fields)] := ParentMeta.Fields[J];
         end;
@@ -4972,6 +4985,12 @@ begin
         NameNode := Child.ChildAt(0);
         if (NameNode <> nil) and (NameNode.NodeKind = gnkIdentifier) then
           FieldTypeId := ResolveTypeIdForOwner(NameNode.Text, AOwnerUnitId);
+        if (NameNode <> nil) and (NameNode.NodeKind = gnkArrayType) then
+        begin
+          PointerTypeId := FModel.FindTypeByName('Pointer');
+          if PointerTypeId > 0 then
+            FieldTypeId := PointerTypeId;
+        end;
       end;
       FModel.AddSymbol(Child.Text, 'field', AOwnerUnitId, FieldTypeId,
         Child.ByteOffset);
@@ -4980,6 +4999,21 @@ begin
       FModel.AddConstValue(
         ClsName + '.' + Child.Text + '$idx',
         FieldIndex);
+      if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
+        (Child.ChildAt(0).NodeKind = gnkArrayType) then
+      begin
+        NameNode := ArrayElementTypeNode(Child.ChildAt(0));
+        if NameNode <> nil then
+        begin
+          FModel.AddStringConstValue(
+            ClsName + '.' + Child.Text + '$arr_elem_type',
+            NameNode.Text);
+          if TypeMetaIsRecord(NameNode.Text) then
+            FModel.AddConstValue(
+              ClsName + '.' + Child.Text + '$arr_elem_size',
+              TypeMetaSize(NameNode.Text));
+        end;
+      end;
       if (Child.ChildCount > 0) and (Child.ChildAt(0) <> nil) and
         ((TypeMetaSize(Child.ChildAt(0).Text) > 0) or
          SameText(Child.ChildAt(0).Text, ClsName)) then
@@ -8132,6 +8166,95 @@ var
       (FieldExpr.ValueClass = shvcAddress);
   end;
 
+  function TryCurrentClassFieldArrayAccess(const AArrayAccessNode: TGreenNode;
+    out AFieldName: string): Boolean;
+  var
+    BaseNode, FieldNode: TGreenNode;
+  begin
+    AFieldName := '';
+    if (AArrayAccessNode = nil) or
+      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
+      (AArrayAccessNode.ChildCount < 2) or
+      (AArrayAccessNode.ChildAt(0) = nil) or
+      (FCurrentMethodClass = '') then
+      Exit(False);
+
+    BaseNode := AArrayAccessNode.ChildAt(0);
+    if BaseNode.NodeKind = gnkIdentifier then
+      AFieldName := BaseNode.Text
+    else if (BaseNode.NodeKind = gnkDotAccess) and
+      (BaseNode.ChildCount >= 2) and
+      (BaseNode.ChildAt(0) <> nil) and
+      (BaseNode.ChildAt(1) <> nil) and
+      (BaseNode.ChildAt(0).NodeKind = gnkIdentifier) and
+      (BaseNode.ChildAt(1).NodeKind = gnkIdentifier) and
+      SameText(BaseNode.ChildAt(0).Text, 'Self') then
+    begin
+      FieldNode := BaseNode.ChildAt(1);
+      AFieldName := FieldNode.Text;
+    end;
+
+    Result := (AFieldName <> '') and (not IsRuntimeArrVar(AFieldName)) and
+      (TypeMetaFieldIndex(FCurrentMethodClass, AFieldName) >= 0);
+  end;
+
+  function BuildClassFieldArrayElementTargetExpr(
+    const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    ArrayExpr, FieldExpr, IndexExpr: TSemanticHirExpr;
+    ElementTypeId, FieldExprId, IndexExprId, IndexTypeId: LongInt;
+    ElementTypeName, FieldName: string;
+    Fact: TSemanticScalarTypeFact;
+  begin
+    AExprId := 0;
+    if not TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) then
+      Exit(False);
+
+    if not FModel.LookupStringConstValue(
+      FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+      ElementTypeName) then
+      Exit(False);
+    ElementTypeId := FModel.FindTypeByName(ElementTypeName);
+    if ElementTypeId <= 0 then
+      Exit(False);
+
+    if not BuildClassFieldTargetExpr('self', FCurrentMethodClass, FieldName,
+      FieldExprId) then
+      Exit(False);
+    if (FieldExprId <= 0) or (FieldExprId > FModel.HirExprCount) then
+      Exit(False);
+    FieldExpr := FModel.HirExprAt(FieldExprId - 1);
+    if (FieldExpr.Kind <> shekField) or
+      (FieldExpr.ValueClass <> shvcAddress) then
+      Exit(False);
+
+    if not BuildRuntimeScalarHirExpr(AArrayAccessNode.ChildAt(1),
+      IndexExprId) then
+      Exit(False);
+    if (IndexExprId <= 0) or (IndexExprId > FModel.HirExprCount) then
+      Exit(False);
+    IndexExpr := FModel.HirExprAt(IndexExprId - 1);
+    IndexTypeId := IndexExpr.TypeId;
+    if (IndexTypeId <= 0) or
+      (not FModel.GetTypeScalarFact(IndexTypeId, Fact)) or
+      (Fact.Kind <> sskInt) then
+      Exit(False);
+
+    SetLength(Children, 2);
+    Children[0] := FieldExprId;
+    Children[1] := IndexExprId;
+    AExprId := FModel.AddHirExpr(
+      shekArrayElem, ElementTypeId, 0, Children,
+      0, '', '', 0, shvcAddress
+    );
+    if (AExprId <= 0) or (AExprId > FModel.HirExprCount) then
+      Exit(False);
+    ArrayExpr := FModel.HirExprAt(AExprId - 1);
+    Result := (ArrayExpr.Kind = shekArrayElem) and
+      (ArrayExpr.ValueClass = shvcAddress);
+  end;
+
   function BuildFieldStoreTargetExpr(const ATargetNode: TGreenNode;
     out AExprId: LongInt): Boolean;
   var
@@ -8228,7 +8351,8 @@ var
   begin
     if (AHirNodeId <= 0) or (ATargetNode = nil) then
       Exit;
-    if BuildRuntimeArrayElementAddressHirExpr(ATargetNode, LocalExprId) then
+    if BuildRuntimeArrayElementAddressHirExpr(ATargetNode, LocalExprId) or
+      BuildClassFieldArrayElementTargetExpr(ATargetNode, LocalExprId) then
       FModel.SetTypedHirNodeTargetExprId(AHirNodeId, LocalExprId);
   end;
 
@@ -8614,22 +8738,20 @@ begin
         (Child.ChildCount >= 1) and
         (Child.ChildAt(0).NodeKind = gnkArrayAccess) and
         (Child.ChildAt(0).ChildCount >= 2) and
-        (Child.ChildAt(0).ChildAt(0) <> nil) and
-        (Child.ChildAt(0).ChildAt(0).NodeKind = gnkIdentifier) and
-        (not IsRuntimeArrVar(Child.ChildAt(0).ChildAt(0).Text)) and
-        (TypeMetaFieldIndex(FCurrentMethodClass, Child.ChildAt(0).ChildAt(0).Text) >= 0) then
+        TryCurrentClassFieldArrayAccess(Child.ChildAt(0), FuncName) then
       begin
-        Value := TypeMetaFieldIndex(FCurrentMethodClass,
-          Child.ChildAt(0).ChildAt(0).Text);
+        Value := TypeMetaFieldIndex(FCurrentMethodClass, FuncName);
         RhsNode := nil;
         if Child.ChildCount >= 2 then
           RhsNode := Child.ChildAt(1);
         if (RhsNode <> nil) and
           EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(1), Operand) and
           EncodeRuntimeIntExprFold(RhsNode, StringValue) then
-          FModel.AddTypedHirNode(
-            'assign-arr-elem-runtime', '__field_arr__', 0, 0,
-            'self' + #9 + IntToStr(Value) + #9 + Operand + #9 + StringValue
+          AddArrayElementStoreRuntimeNode(
+            '__field_arr__',
+            'self' + #9 + IntToStr(Value) + #9 + Operand + #9 + StringValue,
+            Child.ChildAt(0),
+            RhsNode
           );
         Continue;
       end;

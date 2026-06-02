@@ -1,5 +1,40 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-J field array target
+
+- **Status:** active.
+- Branch and safety state:
+  - Branch: `main`.
+  - Current HEAD: `7a62f257 feat(compiler): C5I lower array record field targets`.
+  - Unrelated dirty work exists in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Colleague lane remains off-limits: compiler/toolchain, compiler/targets, tools/stage0, tests/toolchain, build target/toolchain/profile files, and `build/verify_local.sh`.
+- Current decision:
+  - Continue with C5-J field arrays, not deeper `arr[i].A.B`.
+  - Target shape is `shekArrayElem(SymbolId=0, Children=[field-address, index])`, with symbol-backed array behavior preserved.
+- Evidence so far:
+  - `git status --short --branch` confirms no compiler dirty files before C5-J edits.
+  - `git diff --stat` shows unrelated diffs only in `.claude/`, `core-tui-migration`, and `core/tests/...`.
+  - First RED compile attempt failed before testing because `.sisyphus/tmp/c5j-red-*` output directories did not exist; fixed by creating the directories and rerunning.
+  - RED builder test: `test_hir_builder_structured_address` compiled, then exited `6`, proving base-address `shekArrayElem` still falls through to legacy `int 99`.
+  - RED producer test: `test_semantic_hir_expr_producer` compiled, then exited `148`, proving field-array store lacks the expected structured `TargetExprId`.
+  - GREEN producer changed test: `test_semantic_hir_expr_producer` exits `0` after class array field metadata and field-array target producer were added.
+  - GREEN builder changed test: `test_hir_builder_structured_address` exits `0` after field-array `self` fallback defers blob parsing until structured target lowering fails.
+  - Focused command first failed with `fpc: command not found` under `bash -lc`; rerun used `/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc`.
+  - Focused C3/C4/C5 compiler tests before review fixes: `focused_failed=0`.
+  - Full rebuild before review fixes: `bash scripts/rebuild-compiler.sh` -> `46176 lines compiled`, exit `0`.
+  - Full LLVM smoke before review fixes: `smoke_count=137 passed=137 failed=0`.
+  - Whitespace check: `git diff --check` -> clean.
+  - Git hygiene: unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; C5-J staging must be path-limited.
+  - /codex read-only review found blocking gaps: explicit `Self.FItems[i]` is not covered, and comma class field lists still drop type nodes. It also flagged inherited field-array metadata.
+  - Review RED producer test exited `62`, proving explicit `Self.FItems[i]` was not covered.
+  - Review GREEN changed tests: `test_semantic_hir_expr_producer` and `test_hir_builder_structured_address` both exit `0`.
+  - Final focused C3/C4/C5 compiler tests after review fixes: `focused_failed=0`.
+  - Final full rebuild after review fixes: `bash scripts/rebuild-compiler.sh` -> `46248 lines compiled`, exit `0`.
+  - Final LLVM smoke after review fixes: `smoke_count=137 passed=137 failed=0`.
+  - /codex re-review after fixes: no blocking findings.
+- Next immediate step:
+  - Path-limited commit; do not include unrelated staged core/http changes.
+
 ## Session: 2026-06-03 C5-I array record field target
 
 - **Status:** completed and committed.

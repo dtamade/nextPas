@@ -1,5 +1,18 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-J field array target
+
+- Current HEAD is `7a62f257 feat(compiler): C5I lower array record field targets`.
+- The working tree has unrelated dirty work in `.claude/`, `.worktrees/`, and `core/`; C5-J must use path-limited edits/staging only.
+- C5-J should choose field arrays `self.Items[i]` over deeper `arr[i].A.B` for this slice because it attacks the existing field-array string magic and forces a more general address/value contract.
+- Proposed shape: keep `shekArrayElem` as the element-address kind. Symbol-backed arrays continue to use `SymbolId > 0` with one index child. Field-array slots should use `SymbolId = 0`, child 0 as the array-slot address expression, and child 1 as the index expression.
+- This keeps the old blob fallback intact while allowing builder lowering to load the dynamic array pointer from the field slot, then perform the usual element GEP.
+- Class field metadata currently records `TFieldMeta.TypeId`, but `array of Integer` class fields enter as `gnkArrayType`, so they do not naturally get a scalar type id. C5-J should record array-field element metadata and treat the field slot itself as `Pointer` for address lowering.
+- `__field_arr__` producer currently creates `assign-arr-elem-runtime` directly and does not call the shared attach helpers; GREEN should add a field-array target helper rather than overloading `ExprId`.
+- Parser class-field handling previously skipped non-identifier field types. `FItems: array of Integer` therefore had no child type node, so sema could not record field-array element metadata until the parser preserved that type node.
+- Builder `ProcessAssignArrElem` must not parse field-array `IdxBlob` / `ValBlob` before checking `TargetExprId`; otherwise structured lowering can succeed while legacy `const:99` artifacts have already been emitted.
+- /codex review found two blocking gaps before commit: explicit `Self.FItems[i]` is not the same CST shape as implicit `FItems[i]`, and comma class field lists still drop type nodes. It also flagged inherited class array field metadata as a medium residual risk.
+
 ## 2026-06-03 C5-I array record field target
 
 - Existing legacy `arr[i].Field := rhs` support encodes the address as an offset blob: array index multiplied by record slot count plus field index. This keeps working as fallback but hides the lvalue chain from typed HIR.

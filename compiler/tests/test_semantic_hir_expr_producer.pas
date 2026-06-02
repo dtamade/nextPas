@@ -461,6 +461,73 @@ begin
     Halt(ABaseExitCode + 16);
 end;
 
+procedure AssertFieldArrayElementStoreTargetExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedFieldName,
+  AExpectedIndexName, AExpectedElementTypeName: string;
+  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+var
+  ArrayExpr, FieldExpr, DerefExpr, PointerExpr, IndexExpr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.TargetExprId = 0 then
+    Halt(ABaseExitCode);
+
+  ArrayExpr := AModel.HirExprAt(ANode.TargetExprId - 1);
+  if ArrayExpr.Kind <> shekArrayElem then
+    Halt(ABaseExitCode + 1);
+  if ArrayExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 2);
+  AssertExprTypeName(AModel, ArrayExpr, AExpectedElementTypeName,
+    ABaseExitCode + 3);
+  if ArrayExpr.SymbolId <> 0 then
+    Halt(ABaseExitCode + 4);
+  if Length(ArrayExpr.Children) < 2 then
+    Halt(ABaseExitCode + 5);
+
+  FieldExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  if FieldExpr.Kind <> shekField then
+    Halt(ABaseExitCode + 6);
+  if FieldExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 7);
+  AssertExprTypeName(AModel, FieldExpr, 'Pointer', ABaseExitCode + 8);
+  if FieldExpr.LiteralInt <> AExpectedFieldIndex then
+    Halt(ABaseExitCode + 9);
+  if FieldExpr.LiteralStr <> AExpectedFieldName then
+    Halt(ABaseExitCode + 10);
+  if Length(FieldExpr.Children) < 1 then
+    Halt(ABaseExitCode + 11);
+
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  if DerefExpr.Kind <> shekDeref then
+    Halt(ABaseExitCode + 12);
+  if DerefExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 13);
+  if Length(DerefExpr.Children) < 1 then
+    Halt(ABaseExitCode + 14);
+
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  if PointerExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 15);
+  if PointerExpr.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 16);
+  AssertExprTypeName(AModel, PointerExpr, 'Pointer', ABaseExitCode + 17);
+  if PointerExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 18);
+  Symbol := AModel.SymbolAt(PointerExpr.SymbolId - 1);
+  if Symbol.Name <> 'self' then
+    Halt(ABaseExitCode + 19);
+
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
+  if IndexExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 20);
+  AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 21);
+  if IndexExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 22);
+  Symbol := AModel.SymbolAt(IndexExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedIndexName then
+    Halt(ABaseExitCode + 23);
+end;
+
 procedure AssertFieldAddressOfRuntimeExpr(const AModel: TSemanticModel;
   const ANode: TTypedHirNode; const AExpectedPointerName,
   AExpectedRecordTypeName, AExpectedFieldName: string;
@@ -1011,6 +1078,152 @@ begin
   end;
 end;
 
+procedure TestFieldArrayStoreTargetExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of Integer;'#10 +
+    '  procedure Push(i: Integer; y: Integer);'#10 +
+    'end;'#10 +
+    'procedure TStack.Push(i: Integer; y: Integer);'#10 +
+    'begin'#10 +
+    '  FItems[i] := y + 1;'#10 +
+    '  Halt(y);'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(145);
+    if Model.Status <> 'ready' then
+      Halt(146);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'assign-arr-elem-runtime', 'add', Node) then
+      Halt(147);
+    AssertFieldArrayElementStoreTargetExpr(Model, Node, 'FItems', 'i',
+      'Integer', 1, 148);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 172);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestExplicitSelfFieldArrayStoreTargetExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of Integer;'#10 +
+    '  procedure Push(i: Integer; y: Integer);'#10 +
+    'end;'#10 +
+    'procedure TStack.Push(i: Integer; y: Integer);'#10 +
+    'begin'#10 +
+    '  Self.FItems[i] := y + 1;'#10 +
+    '  Halt(y);'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(60);
+    if Model.Status <> 'ready' then
+      Halt(61);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'assign-arr-elem-runtime', 'add', Node) then
+      Halt(62);
+    AssertFieldArrayElementStoreTargetExpr(Model, Node, 'FItems', 'i',
+      'Integer', 1, 63);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 87);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestCommaFieldArrayStoreTargetExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TStack = class'#10 +
+    '  FItems, FOther: array of Integer;'#10 +
+    '  procedure Push(i: Integer; y: Integer);'#10 +
+    'end;'#10 +
+    'procedure TStack.Push(i: Integer; y: Integer);'#10 +
+    'begin'#10 +
+    '  FOther[i] := y + 1;'#10 +
+    '  Halt(y);'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(90);
+    if Model.Status <> 'ready' then
+      Halt(91);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'assign-arr-elem-runtime', 'add', Node) then
+      Halt(92);
+    AssertFieldArrayElementStoreTargetExpr(Model, Node, 'FOther', 'i',
+      'Integer', 2, 93);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 117);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestInheritedFieldArrayStoreTargetExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TBase = class'#10 +
+    '  FItems: array of Integer;'#10 +
+    'end;'#10 +
+    'type TChild = class(TBase)'#10 +
+    '  procedure Push(i: Integer; y: Integer);'#10 +
+    'end;'#10 +
+    'procedure TChild.Push(i: Integer; y: Integer);'#10 +
+    'begin'#10 +
+    '  FItems[i] := y + 1;'#10 +
+    '  Halt(y);'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(105);
+    if Model.Status <> 'ready' then
+      Halt(106);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'assign-arr-elem-runtime', 'add', Node) then
+      Halt(107);
+    AssertFieldArrayElementStoreTargetExpr(Model, Node, 'FItems', 'i',
+      'Integer', 1, 108);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 132);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestStaticArrayBoundsParser;
 var
   Diagnostics: TDiagnosticsSink;
@@ -1482,6 +1695,10 @@ begin
   TestStaticArrayBoundsParser;
   TestStaticArrayGlobalDeclMetadata;
   TestStaticArrayLocalDeclMetadata;
+  TestFieldArrayStoreTargetExprProducer;
+  TestExplicitSelfFieldArrayStoreTargetExprProducer;
+  TestCommaFieldArrayStoreTargetExprProducer;
+  TestInheritedFieldArrayStoreTargetExprProducer;
   TestPointerFieldAddressRuntimeExprProducer;
   TestClassFieldStoreRuntimeExprProducer;
   TestObjectFieldStoreRuntimeExprProducer;

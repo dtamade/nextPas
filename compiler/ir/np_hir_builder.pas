@@ -479,15 +479,28 @@ begin
         CanLowerExprAsAddress(AExpr.Children[0]);
     shekArrayElem:
       begin
-        if AExpr.SymbolId <= 0 then
+        Result := (AExpr.TypeId > 0) and
+          (AExpr.ValueClass = shvcAddress);
+        if not Result then
           Exit(False);
-        Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
-        Result := (Symbol.Name <> '') and (Length(AExpr.Children) >= 1) and
-          (AExpr.TypeId > 0) and (AExpr.ValueClass = shvcAddress) and
-          CanLowerExpr(AExpr.Children[0]);
+        if AExpr.SymbolId > 0 then
+        begin
+          Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+          Result := (Symbol.Name <> '') and (Length(AExpr.Children) >= 1) and
+            CanLowerExpr(AExpr.Children[0]);
+          if Result then
+          begin
+            LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+            Result := HirTypeIsInt(LeftType);
+          end;
+          Exit;
+        end;
+        Result := (AExpr.SymbolId = 0) and (Length(AExpr.Children) >= 2) and
+          CanLowerExprAsAddress(AExpr.Children[0]) and
+          CanLowerExpr(AExpr.Children[1]);
         if Result then
         begin
-          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          LeftType := ExprIdHirTypeId(AExpr.Children[1]);
           Result := HirTypeIsInt(LeftType);
         end;
       end;
@@ -937,36 +950,59 @@ function THIRBuilder.LowerArrayElemExpr(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
   Symbol: TSemanticSymbol;
-  IndexResult: THIRExprResult;
+  BaseResult, IndexResult: THIRExprResult;
   BaseAlloca, BasePtr, ElemPtr, IndexValue: THIRValueId;
   HirType: THIRTypeId;
   Instr: THIRInstr;
 begin
   InitExprResult(AResult);
-  if (AExpr.SymbolId <= 0) or (Length(AExpr.Children) < 1) then
-    Exit(False);
-  Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
-  if Symbol.Name = '' then
-    Exit(False);
-  if not LowerExprValue(AExpr.Children[0], IndexResult) then
-    Exit(False);
-  if (IndexResult.ValueId = 0) or (not HirTypeIsInt(IndexResult.TypeId)) then
+  if ((AExpr.SymbolId > 0) and (Length(AExpr.Children) < 1)) or
+    ((AExpr.SymbolId = 0) and (Length(AExpr.Children) < 2)) then
     Exit(False);
 
-  BaseAlloca := FindAlloca(Symbol.Name + '$ptr');
-  if BaseAlloca = 0 then
-    Exit(False);
-  BasePtr := EmitLoad(GetPtrType, BaseAlloca);
-  if BasePtr = 0 then
+  if AExpr.SymbolId > 0 then
+  begin
+    Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
+    if Symbol.Name = '' then
+      Exit(False);
+    if not LowerExprValue(AExpr.Children[0], IndexResult) then
+      Exit(False);
+  end
+  else
+  begin
+    if not LowerExprAddress(AExpr.Children[0], BaseResult) then
+      Exit(False);
+    if BaseResult.AddressValueId = 0 then
+      Exit(False);
+    if not LowerExprValue(AExpr.Children[1], IndexResult) then
+      Exit(False);
+  end;
+
+  if (IndexResult.ValueId = 0) or (not HirTypeIsInt(IndexResult.TypeId)) then
     Exit(False);
 
   IndexValue := NormalizeScalarValueToType(IndexResult.ValueId,
     IndexResult.TypeId, GetIntType);
   if IndexValue = 0 then
     Exit(False);
-  IndexValue := NormalizeArrayIndexValue(Symbol.Name, IndexValue);
-  if IndexValue = 0 then
-    Exit(False);
+  if AExpr.SymbolId > 0 then
+  begin
+    BaseAlloca := FindAlloca(Symbol.Name + '$ptr');
+    if BaseAlloca = 0 then
+      Exit(False);
+    BasePtr := EmitLoad(GetPtrType, BaseAlloca);
+    if BasePtr = 0 then
+      Exit(False);
+    IndexValue := NormalizeArrayIndexValue(Symbol.Name, IndexValue);
+    if IndexValue = 0 then
+      Exit(False);
+  end
+  else
+  begin
+    BasePtr := EmitLoad(GetPtrType, BaseResult.AddressValueId);
+    if BasePtr = 0 then
+      Exit(False);
+  end;
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
@@ -4260,6 +4296,51 @@ begin
     FieldIdxStr := Copy(Rest, 1, TabPos2 - 1);
     Rest := Copy(Rest, TabPos2 + 1, Length(Rest));
 
+    if ANode.DisplayName <> '__field_setlength__' then
+    begin
+      TabPos3 := Pos(#9, Rest);
+      if TabPos3 = 0 then Exit;
+      IdxBlob := Copy(Rest, 1, TabPos3 - 1);
+      ValBlob := Copy(Rest, TabPos3 + 1, Length(Rest));
+
+      if LowerNodeTargetExprAddress(ANode, TargetResult) then
+      begin
+        ElemPtr := TargetResult.AddressValueId;
+        if ElemPtr = 0 then
+          Exit;
+
+        ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, ValueType);
+        if ValVal = 0 then
+          Exit;
+
+        if ValueType <> 0 then
+        begin
+          if FModule.Types.GetType(ValueType).Kind = htkPointer then
+            StoreType := GetPtrType
+          else
+            StoreType := GetIntType;
+          if StoreType <> ValueType then
+          begin
+            ValVal := NormalizeScalarValueToType(ValVal, ValueType, StoreType);
+            if ValVal = 0 then
+              ValVal := ParseIntBlob(ValBlob);
+          end;
+          if ValVal <> 0 then
+            EmitStore(StoreType, ValVal, ElemPtr);
+        end
+        else
+        begin
+          Token := ExtractVarOperandName(ValBlob);
+          if (Pos(' p' + #10, ValBlob) > 0) or
+            ((Token <> '') and (FindAllocaType(Token) = GetPtrType)) then
+            EmitStore(GetPtrType, ValVal, ElemPtr)
+          else
+            EmitStore(GetIntType, ValVal, ElemPtr);
+        end;
+        Exit;
+      end;
+    end;
+
     ObjPtr := FindAlloca('self');
     if ObjPtr = 0 then Exit;
     ObjPtr := EmitLoad(GetPtrType, ObjPtr);
@@ -4299,11 +4380,6 @@ begin
     end
     else
     begin
-      TabPos3 := Pos(#9, Rest);
-      if TabPos3 = 0 then Exit;
-      IdxBlob := Copy(Rest, 1, TabPos3 - 1);
-      ValBlob := Copy(Rest, TabPos3 + 1, Length(Rest));
-
       IdxVal := ParseIntBlob(IdxBlob);
       ValVal := ParseIntBlob(ValBlob);
       if (IdxVal = 0) or (ValVal = 0) then Exit;

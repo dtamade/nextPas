@@ -48,7 +48,7 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ✅ 2026-06-02 |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-I |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-J |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
 | **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单" | C5,C6 | 🏁 里程碑 |
@@ -268,3 +268,14 @@
   RED=`test_semantic_hir_expr_producer` 退出 173；GREEN 后 focused tests +
   完整重编译（46013 lines compiled）+ 137/137 LLVM smoke 全绿。C5 下一步建议在
   `self.Items[i]` 字段数组和 `arr[i].A.B` 更深 field chain 中择一继续拆小切片。
+- 2026-06-03 C5-J：field-array target 第一刀：`self.FItems[i] := rhs` 现在可生成
+  结构化 target `shekArrayElem(SymbolId=0) -> shekField(self.FItems) -> index`。
+  `shekArrayElem` 保持旧 symbol-backed direct array 形态，同时新增 base-address child
+  形态，用于从字段 slot load array buffer 后做元素 GEP；legacy `__field_arr__`
+  operand/blob fallback 原样保留。parser 现在保留 class field 的完整 type node，
+  包括逗号字段列表；sema 为 class array field 记录 element metadata，并覆盖隐式
+  `FItems[i]`、显式 `Self.FItems[i]` 和继承 field-array metadata。RHS 继续走
+  `ExprId`，LHS 走 `TargetExprId`。TDD RED=`test_hir_builder_structured_address`
+  退出 6 / `test_semantic_hir_expr_producer` 退出 148；review RED 退出 62；
+  GREEN 后 focused tests + 完整重编译（46248 lines compiled）+ 137/137 LLVM smoke
+  全绿。C5 下一步建议进入 `arr[i].A.B` 更深 field chain 或收口 field-array value load。

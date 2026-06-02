@@ -1,6 +1,36 @@
 # Task Plan: nextPas active work
 
-## Active Session: 2026-06-03 C5-I array record field target
+## Active Session: 2026-06-03 C5-J field array target
+
+### Goal
+
+在 C5-I 已完成 `arr[i].Field := rhs` 之后，打通字段数组 `self.Items[i] := rhs`
+这条更有价值的 lvalue chain。目标是让 legacy `__field_arr__` / `$ptr` 字符串暗号
+开始收口到结构化 target：`shekArrayElem -> shekField(self.Items) -> index`。
+旧 operand/blob fallback 必须保留。本轮不做更深 `arr[i].A.B`，不碰同事
+toolchain/targets/stage0/verify truth lane。
+
+### Checklist
+
+- [x] 确认当前 `main` 与并行 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或 toolchain/targets/stage0 lane。
+- [x] 重读 `compiler/docs/compiler-goal-tree.md`、`core/docs/design-conventions.md`、`docs/inbox.md`、根计划文件。
+- [x] 复核 legacy field-array store：确认 `self.Items[i] := rhs` 当前如何编码 `__field_arr__` 与 builder fallback。
+- [x] 写 RED：producer/builder 测试证明 field-array 缺结构化 `TargetExprId`。
+- [x] 实现 GREEN：让 `shekArrayElem` 支持 base-address child，同时保留 symbol-backed array 路径。
+- [x] 跑 changed/focused tests、完整重编译、全量 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md`、`docs/inbox.md` 与 C5-J plan 文档。
+- [ ] path-limited stage/commit 本轮文件，并报告复盘和下一步。（/codex re-review: no blocking findings）
+
+### Constraints
+
+- 只改 C5-J 需要的 compiler/ir、compiler/sema、compiler/tests 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- `ExprId` 只表示 RHS value；`TargetExprId` 表示 LHS address，不混用。
+- 结构化表达式和旧 blob 双轨必须保留；失败时 builder 仍回落旧 operand/blob。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-I array record field target
 
 ### Goal
 
