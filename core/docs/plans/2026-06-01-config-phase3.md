@@ -106,8 +106,10 @@ type
     ['{7F5F1A22-8C52-44C8-9E38-9CF5C3F2C101}']
     function GetCount: Integer;
     function GetString(const AKey: string; const ADefault: string = ''): string;
-    function GetStringRequired(const AKey: string): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
     function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
+    function GetStringRequired(const AKey: string): string;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetIntRequired(const AKey: string): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
@@ -137,7 +139,7 @@ type
 
 Phase 2 的默认行为是 getter-time 严格插值：`${KEY}` 先查 config，再查 env；未解析、空占位符、未闭合和循环都抛 `EConfigError`。
 
-Phase 3 不改变默认行为，只预留模式：
+Phase 3 不改变默认行为。以下枚举只是 future draft，用于约束后续设计方向；它还不是当前公开 API：
 
 ```pascal
 type
