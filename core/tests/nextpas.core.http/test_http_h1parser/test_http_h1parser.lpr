@@ -270,6 +270,48 @@ begin
   Check(not LP.IsComplete, 'missing chunk-data CRLF is not complete');
 end;
 
+procedure TestChunkedRequestContentLengthConflict;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 5'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'content-length then chunked reports parser error');
+  Check(not LP.IsComplete, 'content-length then chunked is not complete');
+  Check((Pos('Content-Length', LP.ErrorMessage) > 0) and
+        (Pos('Transfer-Encoding', LP.ErrorMessage) > 0),
+    'content-length then chunked mentions conflicting framing');
+end;
+
+procedure TestChunkedRequestContentLengthConflictReverseOrder;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Content-Length: 5'#13#10#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'chunked then content-length reports parser error');
+  Check(not LP.IsComplete, 'chunked then content-length is not complete');
+  Check((Pos('Content-Length', LP.ErrorMessage) > 0) and
+        (Pos('Transfer-Encoding', LP.ErrorMessage) > 0),
+    'chunked then content-length mentions conflicting framing');
+end;
+
 procedure TestHeadRequest;
 var
   LP: IH1Parser;
@@ -381,6 +423,8 @@ begin
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
+  T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
+  T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Incomplete input', @TestIncompleteInput);

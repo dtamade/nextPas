@@ -6,14 +6,15 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF rejection, inbound chunked decode coverage, and raw-wire malformed chunked parser/server proof are now locked; the next slice narrows to tightening gateway-level security policy around remaining chunk-specific edge cases.
+Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF rejection, inbound chunked decode coverage, raw-wire malformed chunked parser/server proof, and `CL+TE` conflict policy proof are now locked; the next slice narrows to explicit trailer boundary policy.
 
 ## Active Batch Checklist
 
 - [x] Re-read HTTP inbox, API coverage, architecture, findings, progress, and design conventions.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
-- [x] Audit raw-wire malformed chunked request/body coverage gaps in parser, server, and security suites.
-- [x] Add focused malformed chunked request tests in parser and server suites.
+- [x] Audit chunk-specific security policy gaps in parser, server, and security suites.
+- [x] Tighten `test_http_security` from broad safe-handling to explicit `400` proof for `CL+TE` conflict and malformed chunk extension.
+- [x] Add focused parser/server proof for `CL -> TE` and `TE -> CL` conflict rejection.
 - [x] Verify whether the new tests expose a parser/server gap or already pass on current implementation.
 - [x] Re-run focused parser/server/security tests with heaptrc evidence.
 - [x] Re-run the full HTTP suite after the coverage expansion.
@@ -97,6 +98,7 @@ Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF r
 | Keep public options in `http.base`               | They are public carrier types and keeping them in `base` preserves clean downward dependency direction for the registry layer.             |
 | Reject truncated fixed-length responses at EOF   | A response with declared `Content-Length` is not close-delimited; accepting EOF there would return corrupt bodies and mislead reuse logic. |
 | Reject malformed chunked requests before handler | Invalid chunk framing must never reach router/handler code; the server contract is `400` when parser errors eagerly and safe close on EOF truncation. |
+| Lock CL+TE conflict in multiple layers           | The strict llhttp default currently enforces `Content-Length` vs `Transfer-Encoding: chunked` conflict rejection, so parser/server/security tests should lock that behavior before any future parser config drift. |
 
 ## Errors Encountered
 
@@ -115,3 +117,4 @@ Phase 2/3 correctness hardening: internal registry, truncated fixed-length EOF r
 | Public option carriers lived in client/server units            | 1       | Moved them into `http.base`, which let the new registry depend downward instead of upward on client/server.          |
 | Response parser treated truncated fixed-length EOF as complete | 1       | Added RED parser/client tests, then limited EOF completion to true close-delimited responses only.                   |
 | Malformed chunked request rejection lacked focused raw-wire proof | 1     | Added parser/server malformed chunk tests; they passed immediately, so this batch stayed coverage-only without production edits.            |
+| Chunk-specific security policy tests were too broad           | 1       | Tightened security proof for `CL+TE` and malformed chunk extension, then added parser/server focused conflict tests; all passed without production edits. |

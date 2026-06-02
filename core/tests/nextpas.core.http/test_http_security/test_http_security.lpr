@@ -174,15 +174,32 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    { Server should reject (400) or handle via Transfer-Encoding only }
-    Check((Pos('400', LResp) > 0) or (Pos('200', LResp) > 0) or (Length(LResp) = 0),
-      'CL+TE conflict: server responded safely');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'CL+TE conflict: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
 
-{ Test 2: Duplicate Content-Length with different values }
+{ Test 2: Malformed chunk extension }
+procedure TestMalformedChunkExtension;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5;'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Malformed chunk extension: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 3: Duplicate Content-Length with different values }
 procedure TestDuplicateContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
@@ -198,7 +215,7 @@ begin
   end;
 end;
 
-{ Test 3: Oversized header (>8KB) — llhttp parses it; server doesn't crash }
+{ Test 4: Oversized header (>8KB) — llhttp parses it; server doesn't crash }
 procedure TestOversizedHeader;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp, LReq, LBig: string;
@@ -220,7 +237,7 @@ begin
   end;
 end;
 
-{ Test 4: Header with null byte }
+{ Test 5: Header with null byte }
 procedure TestHeaderNullByte;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp: string; LReq: array of Byte;
@@ -242,7 +259,7 @@ begin
   end;
 end;
 
-{ Test 5: Request line too long (>8KB URL) — llhttp parses it; server doesn't crash }
+{ Test 6: Request line too long (>8KB URL) — llhttp parses it; server doesn't crash }
 procedure TestRequestLineTooLong;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp, LReq, LPath: string;
@@ -263,7 +280,7 @@ begin
   end;
 end;
 
-{ Test 6: Slowloris — partial request, server should timeout and close }
+{ Test 7: Slowloris — partial request, server should timeout and close }
 procedure TestSlowloris;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LConn: ITcpStream; LBuf: array[0..1023] of Byte; LN: SizeUInt;
@@ -307,7 +324,7 @@ begin
   end;
 end;
 
-{ Test 7: HTTP/0.9 request — no version. llhttp may reject or parse as HTTP/1.0 }
+{ Test 8: HTTP/0.9 request — no version. llhttp may reject or parse as HTTP/1.0 }
 procedure TestHttp09Request;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'GET /'#13#10#13#10;
@@ -323,7 +340,7 @@ begin
   end;
 end;
 
-{ Test 8: CRLF injection in request path — llhttp treats CRLF as end of URL }
+{ Test 9: CRLF injection in request path — llhttp treats CRLF as end of URL }
 procedure TestCrlfInjection;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp: string; LReq: array of Byte;
@@ -351,7 +368,7 @@ begin
   end;
 end;
 
-{ Test 9: Missing Host header (HTTP/1.1 requires it) }
+{ Test 10: Missing Host header (HTTP/1.1 requires it) }
 procedure TestMissingHost;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'GET / HTTP/1.1'#13#10'Connection: close'#13#10#13#10;
@@ -367,7 +384,7 @@ begin
   end;
 end;
 
-{ Test 10: Very long method name (1000 chars) }
+{ Test 11: Very long method name (1000 chars) }
 procedure TestLongMethodName;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp, LReq, LMethod: string;
@@ -385,7 +402,7 @@ begin
   end;
 end;
 
-{ Test 11: Body larger than Content-Length }
+{ Test 12: Body larger than Content-Length }
 procedure TestBodyLargerThanContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
@@ -402,7 +419,7 @@ begin
   end;
 end;
 
-{ Test 12: Negative Content-Length }
+{ Test 13: Negative Content-Length }
 procedure TestNegativeContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: -1'#13#10 +
@@ -423,6 +440,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.security');
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
+  T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);
   T.Run('Null byte in header', @TestHeaderNullByte);

@@ -1,5 +1,49 @@
 # Progress Log: nextpas.core.http
 
+## Session: 2026-06-03 chunk-specific security policy tightening
+
+### Phase 2/3: security / parser / server exact policy proof tightening
+
+- **Status:** complete
+- **Scope:** tighten broad chunk-specific security assertions into explicit policy proof, without changing production code.
+- **Checklist:**
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Re-read HTTP inbox, API coverage, task plan, findings, progress, and design conventions.
+  - [x] Used two `gpt-5.5 xhigh` 子代理做并行只读审查：一个审 `CL+TE` conflict，一个审 chunk extension / trailer 风险。
+  - [x] Tightened `test_http_security` so `CL+TE` conflict now requires explicit `400`.
+  - [x] Added `test_http_security` malformed chunk extension -> `400` proof.
+  - [x] Added `test_http_h1parser` proof for `CL -> TE` and `TE -> CL` conflict parser errors.
+  - [x] Added `test_http_server` proof for `CL -> TE` and `TE -> CL` conflict `400` + no handler dispatch.
+  - [x] Verified the new tests passed on current implementation; no production fix was required.
+  - [x] Re-ran focused security/parser/server suites with heaptrc proof.
+  - [x] Re-ran the full HTTP suite after the coverage tightening.
+  - [x] Updated inbox, coverage matrix, findings, and progress.
+  - [x] Commit this batch.
+
+## Verification Evidence 2026-06-03 Chunk Policy
+
+| Check                  | Command                                                          | Result                                             |
+| ---------------------- | ---------------------------------------------------------------- | -------------------------------------------------- |
+| Git safety state       | `git status --short --branch`                                    | Shared checkout is dirty outside HTTP target files |
+| Focused security GREEN | `make -C tests/nextpas.core.http/test_http_security clean test`  | 13/13 passed, 0 unfreed memory blocks              |
+| Focused parser GREEN   | `make -C tests/nextpas.core.http/test_http_h1parser clean test`  | 25/25 passed, 0 unfreed memory blocks              |
+| Focused server GREEN   | `make -C tests/nextpas.core.http/test_http_server clean test`    | 26/26 passed, 0 unfreed memory blocks              |
+| Full HTTP suite        | `make TESTS_DIR=tests/nextpas.core.http test`                    | All tests passed; heaptrc zero leaks per test      |
+
+## Notes 2026-06-03 Chunk Policy
+
+- 这一轮仍然是 coverage-tightening 批次，不是 bugfix 批次：新增/收紧后的 chunk-specific security tests 直接通过，说明现有实现已经具备这组更精确的策略语义。
+- `CL+TE` conflict 不再是“200/400/close 都算安全”的模糊断言，而是被收紧为 parser error + server `400` + no handler dispatch。
+- malformed chunk extension 现在也有明确的 raw-wire `400` proof，而不再只是被笼统归到 safe-handling。
+- 两个 `gpt-5.5 xhigh` 子代理都支持本轮方向：一个确认 strict llhttp 默认下 `CL+TE` 冲突应锁成 explicit `400`；另一个指出更高风险的后续点是 trailer pollution，而不是继续堆 extension 兼容用例。
+- `test_http_smoke` 仍打印 `True free heap : 260960 / Should be : 262144`，但 heaptrc 仍报告 `0 unfreed memory blocks`；继续视为非阻塞观察项。
+
+## Review 2026-06-03 Chunk Policy
+
+- `/codex`-style review 结论：这轮应如实记录为 chunk-specific security policy tightening，不是生产修复。
+- 现在 parser、server、security 三层对 `CL+TE` conflict 已经形成了闭环证据，而不是只在单个 broad smoke 里宽松兜底。
+- 下一步最值得开的 RED 不是再补普通 chunk extension 兼容，而是定义 trailer 契约边界，确认 trailer 是否污染普通 `Headers`。
+
 ## Session: 2026-06-03 malformed chunked request security proof
 
 ### Phase 2/3: parser and server raw-wire malformed chunked proof expansion
