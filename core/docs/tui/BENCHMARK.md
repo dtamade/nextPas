@@ -15,8 +15,8 @@ FPC=/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc benchmarks/nextpas.core.tui/run_al
 
 | Benchmark | ns/op | ops/s |
 | --- | ---: | ---: |
-| DiffInto 200x50 (10 changed rows) | 46,898 | 21,323 |
-| DiffInto 200x50 (identical) | 27,019 | 37,011 |
+| DiffInto 200x50 (10 changed rows) | 46,661 | 21,431 |
+| DiffInto 200x50 (identical) | 26,295 | 38,031 |
 
 The identical-buffer fast path is about 1.7x faster than the changed-row case. The changed-row case
 still leaves broad headroom against a 16 ms frame budget.
@@ -25,9 +25,9 @@ still leaves broad headroom against a 16 ms frame budget.
 
 | Benchmark | ns/op | ops/s |
 | --- | ---: | ---: |
-| Full render 120x40 (block+list+para+gauge) | 157,966 | 6,330 |
-| Block only 120x40 | 47,424 | 21,087 |
-| SetString 120x40 (40 rows) | 16,183 | 61,793 |
+| Full render 120x40 (block+list+para+gauge) | 155,298 | 6,439 |
+| Block only 120x40 | 44,241 | 22,604 |
+| SetString 120x40 (40 rows) | 21,455 | 46,609 |
 
 The full composite render is about 158 us per frame, well below the 16 ms target for 60 FPS. The
 SetString case records raw buffer write throughput for a full 120x40 surface.
@@ -36,10 +36,10 @@ SetString case records raw buffer write throughput for a full 120x40 surface.
 
 | Benchmark | ns/op | ops/s |
 | --- | ---: | ---: |
-| ParseOne ASCII key | 89 | 11,259,233 |
-| ParseOne CSI arrow | 112 | 8,907,575 |
-| ParseOne SGR mouse (incomplete) | 96 | 10,438,086 |
-| ParseOne UTF-8 CJK | 83 | 12,099,360 |
+| ParseOne ASCII key | 44.4 | 22,502,757 |
+| ParseOne CSI arrow | 50.3 | 19,890,997 |
+| ParseOne SGR mouse (incomplete) | 47.8 | 20,900,826 |
+| ParseOne UTF-8 CJK | 45.9 | 21,791,240 |
 
 Input parsing is far below any realistic terminal input rate, including CSI and UTF-8 paths.
 
@@ -47,10 +47,10 @@ Input parsing is far below any realistic terminal input rate, including CSI and 
 
 | Benchmark | ns/op | ops/s |
 | --- | ---: | ---: |
-| VerticalSplit 3 constraints | 349 | 2,865,830 |
-| HorizontalSplit 5 constraints | 415 | 2,408,901 |
-| Grid 4x4 uniform | 2,062 | 484,943 |
-| Grid 8x8 uniform | 4,332 | 230,850 |
+| VerticalSplit 3 constraints | 364.6 | 2,742,551 |
+| HorizontalSplit 5 constraints | 431.2 | 2,318,954 |
+| Grid 4x4 uniform | 2,080.9 | 480,557 |
+| Grid 8x8 uniform | 4,427.4 | 225,867 |
 
 Even the 8x8 grid case is below 4.4 us, so layout cost remains small compared with render and diff.
 
@@ -76,8 +76,8 @@ records the FreePascal TUI baseline only.
 
 ## Summary
 
-- Full render: about 158 us, far below 16 ms.
-- Diff: about 47 us for changed rows and 27 us for identical buffers.
-- Input parsing: below 0.12 us per event.
-- Layout: below 4.4 us for the current grid workload.
+- Full render: about 155 us, far below 16 ms.
+- Diff: about 46.7 us for changed rows and 26.3 us for identical buffers.
+- Input parsing: about 44-50 ns per event.
+- Layout: about 4.4 us for the current grid workload.
 - Hot paths use AVX2+SSE2 `StringDisplayWidth` acceleration and dirty-row bitmap diff skipping.

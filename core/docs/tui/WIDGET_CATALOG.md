@@ -61,7 +61,7 @@ Factory: `TXxx.New(...): IXxx`. Builder methods return the specific interface.
 | TScrollbarHit | enum | Hit-test result for scrollbar track/thumb interactions |
 | TPanelGrid | record | Grid layout result returned by `IPanel.Layout` and `RenderGrid` |
 | TSepHit | record | Separator hit-test result for panel grids |
-| chat_theme | record | Color theme data (not a widget) |
+| TChatTheme | record | Color theme data (not a widget) |
 
 ## Usage Pattern
 

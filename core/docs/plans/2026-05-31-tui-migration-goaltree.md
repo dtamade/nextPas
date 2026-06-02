@@ -62,7 +62,7 @@
 
 ### Phase 2 — Buffer + Text + Layout [完成]
 - [x] nextpas.core.tui.image_cap ← ftui_image_cap ✅（图像协议检测）
-- [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 16/16，保持 class，热路径全保留
+- [x] nextpas.core.tui.buffer ← ftui_buffer ✅ 21/21，保持 class，热路径全保留
 - [x] nextpas.core.tui.overlay ← ftui_overlay ✅ 6/6，稀疏覆盖层 + merge
 - [x] nextpas.core.tui.text ← ftui_text ✅ 12/12，TSpan/TLine/TText，宽度走 text.width
 - [x] nextpas.core.tui.borders ← ftui_borders ✅ 6/6，5 套边框字形集
@@ -113,8 +113,8 @@
 - [x] `TWidgetAdapter` 决策：保留为自定义 render function / 外部 widget 桥接扩展点，并通过 facade 导出 `TWidgetRenderFn` / `TWidgetAdapter`。
 - [x] `TWidgetAdapter.Create(nil)` fail-fast 抛出 `EArgumentException`，防止 nil render function 造成后续调用崩溃或未接管对象泄漏。
 - [x] `/codex` 复盘 follow-up：补齐 `TWrap` / `WRAP_TRIM` / `TContentAlign` 等 builder 支撑类型；`BorderSet*` 改为 facade thin forwarding，避免复制初始化值。
-- [x] focused heaptrc 证据：`test_tui_facade` 4/4 通过、0 unfreed；`test_tui_widget_intf` 4/4 通过、0 unfreed。
-- [x] 全量 TUI 回归：32 个测试项目、240 用例全部通过；13 个 heaptrc 摘要均为 `0 unfreed memory blocks`。
+- [x] focused heaptrc 证据：`test_tui_facade` 5/5 通过、0 unfreed；`test_tui_widget_intf` 4/4 通过、0 unfreed。
+- [x] 全量 TUI 回归：32 个测试项目、246 用例全部通过；13 个 heaptrc 摘要均为 `0 unfreed memory blocks`。
 - [x] Unicode/grapheme 关键回归：family emoji、skin tone modifier 覆盖 text.grapheme / text.width / tui.buffer；keycap emoji 覆盖 text.grapheme / text.width / tui.buffer / tui.text。
 - [x] 2026-06-02 benchmark 收口：修复 `bench_render` 的 IGauge builder 用法，4 个 TUI benchmark 全部可运行；
   `docs/tui/BENCHMARK.md` 记录 FreePascal TUI 基线，并明确 CI smoke 与跨 runtime 对照边界。
@@ -131,10 +131,10 @@
 - Phase 5 ✅ Core Widgets（12 个，全部 class+interface）
 - Phase 6 ✅ Extended Widgets（28 个，全部 class+interface + 单元测试）
 - Phase 7 ✅ App Layer（app/anim/theme/task/sixel/clipboard/frame_budget/门面/examples/benchmarks）
-- 全量回归：32 测试项目、240 用例全通过；13 个 heaptrc 摘要全 0 泄漏
+- 全量回归：32 测试项目、246 用例全通过；13 个 heaptrc 摘要全 0 泄漏
 - 累计 77 src 单元、3 examples、4 benchmarks
-- 2026-06-02 benchmark baseline：Full render 120x40 约 158us；DiffInto 200x50 changed-row 约 47us；
-  input parse <0.12us；8x8 grid layout 约 4.3us。CI 运行 benchmark smoke，不设置 hosted runner 绝对阈值。
+- 2026-06-02 benchmark baseline：Full render 120x40 约 155us；DiffInto 200x50 changed-row 约 46.7us；
+  input parse 约 44-50ns；8x8 grid layout 约 4.4us。CI 运行 benchmark smoke，不设置 hosted runner 绝对阈值。
 - 2026-06-02 buffer overwrite hardening：`SetString` / `SetStringN` / `SetStringP` 在覆盖旧宽字形
   lead/tail cell 时先清理重叠残留，避免同一帧内留下 stale `Width=2`/`Skip=True` 状态；
   `test_tui_buffer` 扩至 21/21，覆盖窄字形覆盖宽字形 lead/tail 与 `SetStringP` 路径。

@@ -6,8 +6,19 @@ uses
   nextpas.core.tui,
   nextpas.core.testing;
 
+type
+  TReadmeRenderHost = class
+    procedure Render(AApp: TApp; var AFrame: TFrame);
+  end;
+
 var
   T: TTestRunner;
+
+procedure TReadmeRenderHost.Render(AApp: TApp; var AFrame: TFrame);
+begin
+  AFrame.Buffer.SetString(0, 0, 'x', StyleDefault);
+  AApp.RequestAnimationFrame;
+end;
 
 procedure TestCoreFacadeTypes;
 var
@@ -185,12 +196,29 @@ begin
   Check(LWidget <> nil, 'ITuiWidget compatibility alias remains');
 end;
 
+procedure TestReadmeQuickStartCompiles;
+var
+  LApp: TTuiApp;
+  LHost: TReadmeRenderHost;
+begin
+  LApp := TTuiApp.Create;
+  LHost := TReadmeRenderHost.Create;
+  try
+    LApp.OnRenderCb := @LHost.Render;
+    Check(True, 'README quick start callback wiring compiles against facade');
+  finally
+    LHost.Free;
+    LApp.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.tui.facade');
   T.Run('core facade types', @TestCoreFacadeTypes);
   T.Run('widget facade types', @TestWidgetFacadeTypes);
   T.Run('facade constants and helpers', @TestFacadeConstantsAndHelpers);
   T.Run('compatibility aliases remain', @TestCompatibilityAliasesRemain);
+  T.Run('readme quick start compiles', @TestReadmeQuickStartCompiles);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

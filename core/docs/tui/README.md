@@ -7,12 +7,24 @@ Terminal UI 渲染框架——把 ratatui 的核心思想（immediate mode、双
 ```pascal
 uses nextpas.core.tui;
 
+type
+  TDemo = class
+    procedure Render(App: TApp; var Frame: TFrame);
+  end;
+
 var
   App: TTuiApp;
+  Demo: TDemo;
 begin
   App := TTuiApp.Create;
-  App.OnRender := @MyRender;
-  App.Run;
+  Demo := TDemo.Create;
+  try
+    App.OnRenderCb := @Demo.Render;
+    App.Run;
+  finally
+    Demo.Free;
+    App.Free;
+  end;
 end;
 ```
 
