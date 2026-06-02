@@ -819,6 +819,40 @@ begin
   end;
 end;
 
+procedure TestStaticArrayElementAddressRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var arr: array[1..3] of Integer;'#10 +
+    'var i: Integer;'#10 +
+    'var y: Integer;'#10 +
+    'var p: ^Integer;'#10 +
+    'begin'#10 +
+    '  i := 1;'#10 +
+    '  arr[1] := 41;'#10 +
+    '  p := @arr[i];'#10 +
+    '  y := p^;'#10 +
+    '  Halt(y);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(218);
+    if Model.Status <> 'ready' then
+      Halt(219);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'p',
+      'arr_elem_ref arr', Node) then
+      Halt(220);
+    AssertArrayElementAddressOfRuntimeExpr(Model, Node, 'arr', 'i', 221);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestArrayElementStoreTargetExprProducer;
 var
   Model: TSemanticModel;
@@ -847,6 +881,40 @@ begin
       'assign-arr-elem-runtime', 'add', Node) then
       Halt(232);
     AssertArrayElementStoreTargetExpr(Model, Node, 'arr', 'i', 233);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 236);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestStaticArrayStoreTargetExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'var arr: array[1..3] of Integer;'#10 +
+    'var i: Integer;'#10 +
+    'var y: Integer;'#10 +
+    'begin'#10 +
+    '  i := 1;'#10 +
+    '  y := 41;'#10 +
+    '  arr[i] := y + 1;'#10 +
+    '  Halt(arr[i]);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(242);
+    if Model.Status <> 'ready' then
+      Halt(243);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'assign-arr-elem-runtime', 'add', Node) then
+      Halt(244);
+    AssertArrayElementStoreTargetExpr(Model, Node, 'arr', 'i', 245);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 246);
   finally
     Model.Free;
   end;
@@ -1316,7 +1384,9 @@ begin
   TestDecRuntimeExprProducer;
   TestPointerAddressDerefRuntimeExprProducer;
   TestArrayElementAddressRuntimeExprProducer;
+  TestStaticArrayElementAddressRuntimeExprProducer;
   TestArrayElementStoreTargetExprProducer;
+  TestStaticArrayStoreTargetExprProducer;
   TestStaticArrayBoundsParser;
   TestStaticArrayGlobalDeclMetadata;
   TestStaticArrayLocalDeclMetadata;

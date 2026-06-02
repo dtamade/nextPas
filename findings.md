@@ -1,5 +1,13 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-H static array target/address
+
+- C5-H0 already made builder-side static array address lowering viable: `shekArrayElem` can use `arr_low` metadata for lower-bound normalization and static backing storage is connected to `arr$ptr` / `arr$len`.
+- Direct static `@arr[i]` can reuse the existing `BuildRuntimeArrayElementAddressHirExpr` path because static arrays are registered as runtime array vars.
+- The real producer gap found by RED was direct array element store RHS: `assign-arr-elem-runtime` had a `TargetExprId` for LHS, but no structured RHS `ExprId`, so builder still had to parse the RHS blob even when the scalar expression was migratable.
+- The minimal fix is to make `AddArrayElementStoreRuntimeNode` mirror field-store behavior: attach scalar RHS `ExprId` when possible, then attach LHS `TargetExprId`, while keeping the old operand blob intact.
+- This intentionally also improves direct dynamic array stores, because the helper is shared. Field arrays, array-of-record-field, class/object RHS special branches, and nested lvalue chains remain out of scope.
+
 ## 2026-06-03 C5-H0 static array foundation
 
 - C5-G is complete and current `docs/inbox.md` still points to static array target/address as the next step.

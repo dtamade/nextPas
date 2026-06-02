@@ -1,6 +1,34 @@
 # Task Plan: nextPas active work
 
-## Active Session: 2026-06-03 C5-H0 static array foundation
+## Active Session: 2026-06-03 C5-H static array target/address
+
+### Goal
+
+在 C5-H0 已经提供 static array bounds/backing storage 的基础上，把 direct static
+array 的 `arr[i] := rhs` 与 `@arr[i]` 接到结构化 address/value 双轨。保持旧 blob
+fallback；不进入字段数组、array-of-record-field、嵌套 lvalue chain，也不碰同事的
+toolchain/targets/stage0/verify truth lane。
+
+### Checklist
+
+- [x] 确认当前 `main` 与并行 lane：本轮不碰 `compiler/toolchain/*`、`compiler/targets/*`、`tools/stage0/*`、`tests/toolchain/*`、`build/verify_local.sh` 等。
+- [x] 复核 C5-G/C5-H0：builder 已能 lower static `shekArrayElem`，缺口集中在 producer。
+- [x] 写 RED：static array store 缺 RHS `ExprId`，`test_semantic_hir_expr_producer` 退出 `246`。
+- [x] 实现 GREEN：direct array element store producer 同时挂 RHS `ExprId` 与 LHS `TargetExprId`。
+- [x] 补 static `@arr[i]` address producer 覆盖。
+- [x] 跑 focused tests、完整重编译、全量 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md` 和 `docs/inbox.md`。
+- [x] path-limited stage/commit 本轮文件，并报告复盘和下一步。
+
+### Constraints
+
+- 只改 C5-H proper 需要的 compiler/sema、compiler/tests 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- 结构化表达式和旧 blob 双轨必须保留；失败时 builder 仍回落旧 operand/blob。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-H0 static array foundation
 
 ### Goal
 

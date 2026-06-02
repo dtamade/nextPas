@@ -4,7 +4,10 @@
 
 ## 当前在做什么
 
-- `C5-H0` 已完成：先补静态数组基础，而不是直接做 static array target/address。
+- `C5-H` 已完成：direct static array `arr[i] := rhs` 与 `@arr[i]` 已接入结构化 target/address producer。
+- `assign-arr-elem-runtime` 现在在保留旧 operand/blob 的同时，为 direct array element store 附加 RHS `ExprId` 与 LHS `TargetExprId`。
+- static/dynamic array 仍共用 `shekArrayElem`，static 语义依赖 C5-H0 的 bounds/backing metadata 与 builder lower-bound normalization。
+- `C5-H0` 能力保留：先补静态数组基础，而不是直接做 static array target/address。
 - parser 现在保留 `array[lo..hi] of T` bounds；sema 区分 static/dynamic array 并记录 low/high/len；builder 给 static array 建真实存储，并在访问时做 low-bound index normalization。
 - 静态数组仍复用现有 `arr$ptr` / `arr$len` 通道，旧 blob fallback 保留。
 - `C5-G` 已完成：普通动态数组 `arr[i] := rhs` 的 LHS 现在可以走独立 `TargetExprId` target/address 通道。
@@ -18,14 +21,14 @@
 - `C5-D` 能力保留：builder 支持 `shekField` 作为 field address，sema producer 支持 `@p^.Field -> shekAddressOf -> shekField -> shekDeref -> shekSymbolValue`。
 - `shekDeref` 现在可作为 non-scalar aggregate address base；字段值仍由 `LowerExprValue` 显式 load。
 - 旧 blob 仍保留：新增临时 fallback token `field_ref`；C5-C 的 `arr_elem_ref` 继续保底 array element address。
-- 最近验证：focused C3/C4/C5 tests `9/9`；`scripts/rebuild-compiler.sh` 输出 `45932 lines compiled`；静态数组 global/local 探针 exit=42；LLVM smoke `137/137`，全部 exit=42。
-- 本批没有迁移 static array 的结构化 target/address producer、字段数组、array-of-record-field、class/object RHS 特殊分支或嵌套 field chain。
+- 最近验证：focused C3/C4/C5 tests `9/9`；`scripts/rebuild-compiler.sh` 输出 `45934 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 本批没有迁移字段数组、array-of-record-field、class/object RHS 特殊分支或嵌套 field chain。
 - C4 已完成：typed scalar 表达式已经覆盖真实宽度、显式 cast、signed/unsigned opcode、sema-side promotion，以及 legacy alloca store 归一。
 
 ## 接下来怎么走
 
-1. `C5-H`：static array target/address，复用 `shekArrayElem` 并依赖 C5-H0 metadata。
-2. `C5-I+`：补齐嵌套 field chain、字段数组和 array-of-record-field，继续减少 `$ptr`、`arr_load_ptr` 等 blob 暗号。
+1. `C5-I`：字段数组、array-of-record-field、嵌套 lvalue chain，继续减少 `$ptr`、`arr_load_ptr` 等 blob 暗号。
+2. `C5-J`：收口 class/object RHS 特殊分支和剩余 array/field store producer。
 3. `C6`：补 allocator 和真实释放。
 4. `C7/C8`：多目标、优化、自举探针。
 
@@ -42,4 +45,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 当前批次：[`compiler/docs/plans/2026-06-03-c5h0-static-array-foundation.md`](../compiler/docs/plans/2026-06-03-c5h0-static-array-foundation.md)
+- 当前批次：[`compiler/docs/plans/2026-06-03-c5h-static-array-target-address.md`](../compiler/docs/plans/2026-06-03-c5h-static-array-target-address.md)

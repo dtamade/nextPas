@@ -1,5 +1,29 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-H static array target/address
+
+- **Status:** completed and committed.
+- Branch and safety state:
+  - Branch: `main`
+  - Current HEAD at session start had advanced beyond C5-H0; compiler-domain latest code milestone remains `a49beb63 feat(compiler): C5H0 add static array foundation`.
+  - Unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - A parallel worktree `.worktrees/compiler-truth-audit-20260603/` exists for the colleague's toolchain/targets/stage0/verify truth lane; this C5-H lane must not touch it.
+- Current decision:
+  - Keep `shekArrayElem` as the shared dynamic/static array element address expression.
+  - Use C5-H0 metadata to distinguish static arrays at builder lowering time.
+  - Direct array element store producer should attach both LHS `TargetExprId` and scalar RHS `ExprId`; old operand blob remains as fallback.
+- RED evidence:
+  - `test_semantic_hir_expr_producer` exited `246`, proving direct static array store lacked structured RHS `ExprId`.
+- GREEN evidence so far:
+  - `test_semantic_hir_expr_producer` exits `0` after attaching RHS `ExprId` in the direct array element store producer and adding static `@arr[i]` coverage.
+- Full verification:
+  - Focused C3/C4/C5 compiler tests: `focused_failed=0`.
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `45934 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_count=137 passed=137 failed=0`.
+  - Whitespace check: `git diff --check` -> clean.
+- Next immediate step:
+  - Continue with C5-I: field arrays, array-of-record-field, and nested lvalue chain structure.
+
 ## Session: 2026-06-03 C5-H0 static array foundation
 
 - **Status:** completed and committed.

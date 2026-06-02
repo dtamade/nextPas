@@ -8165,13 +8165,14 @@ var
   end;
 
   procedure AddArrayElementStoreRuntimeNode(const ADisplayName,
-    AOperand: string; const ATargetNode: TGreenNode);
+    AOperand: string; const ATargetNode, AExprNode: TGreenNode);
   var
     LocalNodeId: LongInt;
   begin
     LocalNodeId := FModel.AddTypedHirNode(
       'assign-arr-elem-runtime', ADisplayName, 0, 0, AOperand
     );
+    AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
     AttachArrayElementStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
@@ -8490,7 +8491,8 @@ begin
             AddArrayElementStoreRuntimeNode(
               Decoded,
               Decoded + #9 + Operand + #9 + StringValue,
-              Child.ChildAt(0)
+              Child.ChildAt(0),
+              RhsNode
             )
           else if (RhsNode.NodeKind = gnkFunctionCall) and
             (RhsNode.ChildCount >= 1) and (RhsNode.ChildAt(0) <> nil) and
