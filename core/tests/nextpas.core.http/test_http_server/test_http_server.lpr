@@ -913,6 +913,71 @@ begin
   end;
 end;
 
+procedure TestNegativeContentLengthRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: -1'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'hello';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'negative content-length: status 400');
+    Check(not LHandlerCalled, 'negative content-length: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestVeryLongMethodRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+  LMethod: string;
+  LReq: string;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  SetLength(LMethod, 1000);
+  FillChar(LMethod[1], 1000, Ord('X'));
+  LReq := LMethod + ' / HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Connection: close'#13#10#13#10;
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, LReq);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'very long method: status 400');
+    Check(not LHandlerCalled, 'very long method: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: Query parameters }
 procedure TestQueryParam;
 var
@@ -1800,6 +1865,8 @@ begin
   T.Run('HTTP/1.0 missing Host still allowed', @TestHttp10WithoutHostStillAllowed);
   T.Run('HTTP/0.9 no version -> 400', @TestHttp09NoVersionRejected);
   T.Run('Request-line splitting -> 400', @TestRequestLineSplittingRejected);
+  T.Run('Negative Content-Length -> 400', @TestNegativeContentLengthRejected);
+  T.Run('Very long method -> 400', @TestVeryLongMethodRejected);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);

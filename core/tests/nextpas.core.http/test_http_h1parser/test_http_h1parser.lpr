@@ -531,6 +531,43 @@ begin
   Check(LP.ErrorMessage <> '', 'request-line splitting has error message');
 end;
 
+procedure TestNegativeContentLengthRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: -1'#13#10#13#10 +
+          'hello';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'negative content-length reports parser error');
+  Check(not LP.IsComplete, 'negative content-length is not complete');
+  Check(LP.ErrorMessage <> '', 'negative content-length has error message');
+end;
+
+procedure TestVeryLongMethodRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMethod: string;
+begin
+  LP := NewH1RequestParser;
+  SetLength(LMethod, 1000);
+  FillChar(LMethod[1], 1000, Ord('X'));
+  LReq := LMethod + ' / HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'very long method reports parser error');
+  Check(not LP.IsComplete, 'very long method is not complete');
+  Check(LP.ErrorMessage <> '', 'very long method has error message');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -658,6 +695,8 @@ begin
   T.Run('Header with null byte', @TestHeaderNullByte);
   T.Run('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
   T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
+  T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
+  T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);

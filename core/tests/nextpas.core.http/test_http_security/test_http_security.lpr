@@ -464,8 +464,8 @@ begin
     FillChar(LMethod[1], 1000, Ord('X'));
     LReq := LMethod + ' / HTTP/1.1'#13#10'Host: x'#13#10'Connection: close'#13#10#13#10;
     LResp := SendRaw(LPort, LReq);
-    Check((Pos('400', LResp) > 0) or (Pos('501', LResp) > 0) or (Length(LResp) = 0),
-      'Long method: rejected or closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Long method: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -497,8 +497,8 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
-      'Negative CL: rejected or closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Negative CL: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -577,9 +577,9 @@ begin
   T.Run('Missing Host header -> 400', @TestMissingHost);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
-  T.Run('Very long method name', @TestLongMethodName);
+  T.Run('Very long method name -> 400', @TestLongMethodName);
   T.Run('Body larger than CL', @TestBodyLargerThanContentLength);
-  T.Run('Negative Content-Length', @TestNegativeContentLength);
+  T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
   T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
   T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
