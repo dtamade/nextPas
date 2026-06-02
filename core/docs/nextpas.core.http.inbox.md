@@ -24,6 +24,8 @@
 - 这轮没有新增生产修复；当前 parser/H1 transport 已经会对 generic malformed request 返回 parser error / 显式 `400`
 - 本轮继续补 legacy request 语义收口：`HTTP/1.1 missing Host` 现在在 server/security 两层有 focused proof，并已从旧的 broad safe-handling 收紧成显式 `400`
 - 本轮包含生产修复：H1 server 现在会在请求分发前拒绝缺失 `Host` 的 HTTP/1.1 请求；同时 `HTTP/1.0 missing Host` focused 回归也已补齐，确保未被误伤
+- 本轮继续补 legacy request 语义收口：`HTTP/0.9 / no-version` 现在在 parser/server/security 三层有 focused proof，并已从旧的 broad safe-handling 收紧成显式 `400`
+- 本轮包含生产修复：H1 parser 现在会直接拒绝不带 HTTP version 的 request-line；server 对该类请求也稳定返回显式 `400`
 
 ## 当前重点
 
@@ -40,8 +42,9 @@
 - `impl.h1.parser` 现在也有 duplicate `Content-Length` parser error focused proof。
 - `impl.h1.parser` 现在也有 `null-byte header` parser error focused proof。
 - `impl.h1.parser` 现在也有 generic malformed request parser error focused proof。
-- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、generic malformed request 显式 `400` rejection、`HTTP/1.1 missing Host` 显式 `400` rejection、`HTTP/1.0 missing Host` 仍允许的 focused 回归、CL-TE conflict rejection、duplicate `Content-Length` 显式 `400` rejection、`null-byte header` 显式 `400` rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
-- `test_http_security` 现在也有 generic malformed request、`HTTP/1.1 missing Host`、duplicate `Content-Length`、`null-byte header`、malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
+- `impl.h1.parser` 现在也有 `HTTP/0.9 / no-version` parser error focused proof。
+- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、generic malformed request 显式 `400` rejection、`HTTP/1.1 missing Host` 显式 `400` rejection、`HTTP/1.0 missing Host` 仍允许的 focused 回归、`HTTP/0.9 / no-version` 显式 `400` rejection、CL-TE conflict rejection、duplicate `Content-Length` 显式 `400` rejection、`null-byte header` 显式 `400` rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
+- `test_http_security` 现在也有 generic malformed request、`HTTP/1.1 missing Host`、`HTTP/0.9 / no-version`、duplicate `Content-Length`、`null-byte header`、malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -56,6 +59,6 @@
 
 ## 下一步
 
-- 下一步优先判断 HTTP/0.9/no-version、以及其他仍保留 broad safe-handling 的 legacy 请求语义，哪些应该继续系统性收紧成显式契约，以及 trailer 是否最终需要显式 public API。
+- 下一步优先判断 CRLF injection / request-line splitting 这类目前仍保留 broad safe-handling 的 legacy 请求语义，哪些应该继续系统性收紧成显式契约，以及 trailer 是否最终需要显式 public API。
 - 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。

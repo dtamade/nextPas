@@ -82,9 +82,18 @@ type
 
 { Callback helpers }
 
+const
+  UNSUPPORTED_REQUEST_VERSION_REASON = 'Unsupported HTTP request version';
+
 function GetSelf(p0: PTLlhttpInternalT): TH1Parser; inline;
 begin
   Result := TH1Parser(p0^.data);
+end;
+
+function IsSupportedRequestVersion(const AParser: PTLlhttpInternalT): Boolean; inline;
+begin
+  Result := (AParser^.http_major = 1) and
+            ((AParser^.http_minor = 0) or (AParser^.http_minor = 1));
 end;
 
 { cdecl callbacks }
@@ -148,6 +157,11 @@ var
   LSelf: TH1Parser;
 begin
   LSelf := GetSelf(p0);
+  if (LSelf.FParserType = ptRequest) and (not IsSupportedRequestVersion(p0)) then
+  begin
+    llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_REQUEST_VERSION_REASON));
+    Exit(HPE_INVALID_VERSION);
+  end;
   // Extract version
   if (p0^.http_major = 1) and (p0^.http_minor = 0) then
     LSelf.FVersion := hvHttp10
@@ -191,6 +205,11 @@ var
   LSelf: TH1Parser;
 begin
   LSelf := GetSelf(p0);
+  if (LSelf.FParserType = ptRequest) and (not IsSupportedRequestVersion(p0)) then
+  begin
+    llhttp_set_error_reason(p0, PAnsiChar(UNSUPPORTED_REQUEST_VERSION_REASON));
+    Exit(HPE_INVALID_VERSION);
+  end;
   LSelf.FComplete := True;
   Result := 0;
 end;

@@ -854,6 +854,34 @@ begin
   end;
 end;
 
+procedure TestHttp09NoVersionRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'GET /'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'http09 request: status 400');
+    Check(not LHandlerCalled, 'http09 request: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: Query parameters }
 procedure TestQueryParam;
 var
@@ -1739,6 +1767,7 @@ begin
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('HTTP/1.1 missing Host -> 400', @TestMissingHostHeader);
   T.Run('HTTP/1.0 missing Host still allowed', @TestHttp10WithoutHostStillAllowed);
+  T.Run('HTTP/0.9 no version -> 400', @TestHttp09NoVersionRejected);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);

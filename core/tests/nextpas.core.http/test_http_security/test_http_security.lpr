@@ -377,9 +377,8 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    { llhttp may reject (400) or treat as HTTP/0.9 — both are safe }
-    Check((Pos('400', LResp) > 0) or (Pos('200', LResp) > 0) or (Length(LResp) = 0),
-      'HTTP/0.9: server handled safely (no crash)');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'HTTP/0.9: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -577,7 +576,7 @@ begin
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Slowloris partial request', @TestSlowloris);
-  T.Run('HTTP/0.9 no version', @TestHttp09Request);
+  T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
   T.Run('CRLF injection in path', @TestCrlfInjection);
   T.Run('Missing Host header -> 400', @TestMissingHost);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);

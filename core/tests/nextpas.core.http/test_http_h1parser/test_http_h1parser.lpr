@@ -499,6 +499,21 @@ begin
   Check(LP.ErrorMessage <> '', 'null byte in header has error message');
 end;
 
+procedure TestHttp09RequestRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET /'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'http09 request reports parser error');
+  Check(not LP.IsComplete, 'http09 request is not complete');
+  Check(LP.ErrorMessage <> '', 'http09 request has error message');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -624,6 +639,7 @@ begin
   T.Run('Generic malformed request', @TestInvalidRequest);
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
   T.Run('Header with null byte', @TestHeaderNullByte);
+  T.Run('HTTP/0.9 request rejected', @TestHttp09RequestRejected);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);
