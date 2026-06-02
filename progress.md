@@ -5,7 +5,7 @@
 
 ## Session: 2026-06-02 (tui facade zero-warning closeout)
 
-- **Status:** in progress
+- **Status:** completed
 - Goal tree:
   - `nextpas.core.tui` merge-prep final truth
 - Objective:
@@ -29,6 +29,9 @@
     heaptrc 为 `0 unfreed memory blocks`。
   - 两次 fresh 编译输出均未出现 `Warning:` 行；当前 round 证据与文档中的
     facade warning=0 结论一致。
+- Closeout:
+  - `git diff --check` 通过，工作区范围保持为本轮 1 个代码文件 + 5 个文档/计划文件。
+  - 已提交主修复 commit：`5b84d82d fix(text.number): zero facade pow10 warnings`。
 
 当前最新本轮为 platform host abi completeness wave 6；上一轮包括
 platform host abi completeness wave 5；

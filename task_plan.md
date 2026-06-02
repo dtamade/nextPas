@@ -37,7 +37,7 @@ fresh `bash build/verify_local.sh` 为准。
 - [x] 机械改写 `pow10` 表项为 `QWord($...)`
 - [x] 同步目标树、merge-prep、planning files
 - [x] 重新跑 `test_text_number`、`test_tui_facade`，明确 warning 与泄漏证据边界
-- [ ] 完成 git hygiene 检查并提交本轮 commit
+- [x] 完成 git hygiene 检查并提交本轮 commit
 
 ### Audit Checklist
 
