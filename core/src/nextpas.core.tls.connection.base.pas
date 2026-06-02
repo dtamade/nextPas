@@ -20,7 +20,8 @@ unit nextpas.core.tls.connection.base;
 interface
 
 uses
-  SysUtils, Classes, DateUtils,
+  SysUtils, Classes,
+  nextpas.core.time,
   nextpas.core.tls.base,
   nextpas.core.tls.exceptions;
 
@@ -409,7 +410,7 @@ begin
   FLastErrorString := AMessage;
 
   // 添加到历史
-  LEntry.Timestamp := Now;
+  LEntry.Timestamp := DateTimeNow;
   LEntry.ErrorCode := ACode;
   LEntry.ErrorMessage := AMessage;
 
@@ -437,7 +438,7 @@ begin
 
     if not FFirstByteRecorded then
     begin
-      FFirstByteTime := MilliSecondsBetween(Now, FConnectTime);
+      FFirstByteTime := DateTimeMillisecondsBetween(DateTimeNow, FConnectTime);
       FFirstByteRecorded := True;
     end;
   end;
@@ -456,8 +457,8 @@ end;
 
 function TBaseSSLConnection.Connect: Boolean;
 begin
-  FConnectTime := Now;
-  FHandshakeStartTime := Now;
+  FConnectTime := DateTimeNow;
+  FHandshakeStartTime := DateTimeNow;
 
   Result := DoConnect;
 
@@ -465,14 +466,14 @@ begin
   begin
     FConnected := True;
     FHandshakeComplete := True;
-    FHandshakeDuration := MilliSecondsBetween(Now, FHandshakeStartTime);
+    FHandshakeDuration := DateTimeMillisecondsBetween(DateTimeNow, FHandshakeStartTime);
   end;
 end;
 
 function TBaseSSLConnection.Accept: Boolean;
 begin
-  FConnectTime := Now;
-  FHandshakeStartTime := Now;
+  FConnectTime := DateTimeNow;
+  FHandshakeStartTime := DateTimeNow;
 
   Result := DoAccept;
 
@@ -480,7 +481,7 @@ begin
   begin
     FConnected := True;
     FHandshakeComplete := True;
-    FHandshakeDuration := MilliSecondsBetween(Now, FHandshakeStartTime);
+    FHandshakeDuration := DateTimeMillisecondsBetween(DateTimeNow, FHandshakeStartTime);
   end;
 end;
 
@@ -511,14 +512,14 @@ begin
   end;
 
   if not FHandshakeComplete then
-    FHandshakeStartTime := Now;
+    FHandshakeStartTime := DateTimeNow;
 
   Result := DoHandshakeInternal;
 
   if Result = sslHsCompleted then
   begin
     FHandshakeComplete := True;
-    FHandshakeDuration := MilliSecondsBetween(Now, FHandshakeStartTime);
+    FHandshakeDuration := DateTimeMillisecondsBetween(DateTimeNow, FHandshakeStartTime);
   end;
 end;
 
@@ -864,11 +865,11 @@ begin
   Result.IsConnected := FConnected;
   Result.HandshakeComplete := FHandshakeComplete;
   Result.LastError := FLastErrorCode;
-  Result.LastErrorTime := Now; // 简化实现
+  Result.LastErrorTime := DateTimeNow; // 简化实现
   Result.BytesSent := FBytesWritten;
   Result.BytesReceived := FBytesRead;
   if FConnectTime > 0 then
-    Result.ConnectionAge := Round((Now - FConnectTime) * 86400)
+    Result.ConnectionAge := DateTimeSecondsBetween(DateTimeNow, FConnectTime)
   else
     Result.ConnectionAge := 0;
 end;
