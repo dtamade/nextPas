@@ -107,6 +107,7 @@ type
     TypeId: LongInt;
     Operand: string;
     ExprId: LongInt;
+    TargetExprId: LongInt;
   end;
 
   TSemanticBinding = record
@@ -294,6 +295,8 @@ type
       const AValueClass: TSemanticHirValueClass
     ): LongInt;
     procedure SetTypedHirNodeExprId(const AHirNodeId: LongInt;
+      const AExprId: LongInt);
+    procedure SetTypedHirNodeTargetExprId(const AHirNodeId: LongInt;
       const AExprId: LongInt);
     function AddBinding(
       const AKind: string;
@@ -816,6 +819,7 @@ begin
   FTypedHirNodes[NextIndex].TypeId := ATypeId;
   FTypedHirNodes[NextIndex].Operand := AOperand;
   FTypedHirNodes[NextIndex].ExprId := 0;
+  FTypedHirNodes[NextIndex].TargetExprId := 0;
   Result := FTypedHirNodes[NextIndex].HirNodeId;
 end;
 
@@ -862,6 +866,19 @@ begin
   if (AExprId < 0) or (AExprId > Length(FHirExprs)) then
     Exit;
   FTypedHirNodes[Idx].ExprId := AExprId;
+end;
+
+procedure TSemanticModel.SetTypedHirNodeTargetExprId(
+  const AHirNodeId: LongInt; const AExprId: LongInt);
+var
+  Idx: LongInt;
+begin
+  Idx := AHirNodeId - 1;
+  if (Idx < 0) or (Idx >= Length(FTypedHirNodes)) then
+    Exit;
+  if (AExprId < 0) or (AExprId > Length(FHirExprs)) then
+    Exit;
+  FTypedHirNodes[Idx].TargetExprId := AExprId;
 end;
 
 function TSemanticModel.AddBinding(
@@ -1026,6 +1043,7 @@ begin
     Result.TypeId := 0;
     Result.Operand := '';
     Result.ExprId := 0;
+    Result.TargetExprId := 0;
     Exit;
   end;
 

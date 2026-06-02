@@ -7818,8 +7818,190 @@ var
       FModel.SetTypedHirNodeExprId(AHirNodeId, LocalExprId);
   end;
 
+  function FindSymbolByNameAndType(const AName: string;
+    const ATypeId: LongInt): LongInt;
+  var
+    I: LongInt;
+    Symbol: TSemanticSymbol;
+  begin
+    for I := FModel.SymbolCount - 1 downto 0 do
+    begin
+      Symbol := FModel.SymbolAt(I);
+      if SameText(Symbol.Name, AName) and
+        ((ATypeId <= 0) or (Symbol.TypeId = ATypeId)) then
+        Exit(Symbol.SymbolId);
+    end;
+    Result := 0;
+  end;
+
+  function EnsureSelfSymbolId(out ASelfTypeId: LongInt): LongInt;
+  begin
+    ASelfTypeId := 0;
+    if FCurrentMethodClass = '' then
+      Exit(0);
+    ASelfTypeId := FModel.FindTypeByName(FCurrentMethodClass);
+    if ASelfTypeId <= 0 then
+      Exit(0);
+    Result := FindSymbolByNameAndType('self', ASelfTypeId);
+    if Result = 0 then
+      Result := FModel.AddSymbol('self', 'parameter', '', ASelfTypeId, 0);
+  end;
+
+  function LookupFieldMetaByTypeName(const ATypeName, AFieldName: string;
+    out AOwnerTypeId: LongInt; out AFieldMeta: TFieldMeta): Boolean;
+  begin
+    AOwnerTypeId := FModel.FindTypeByName(ATypeName);
+    if AOwnerTypeId <= 0 then
+      Exit(False);
+    Result := FModel.GetFieldMetaByName(AOwnerTypeId, AFieldName, AFieldMeta);
+  end;
+
+  function BuildRecordFieldTargetExpr(const ARecordName, ARecordTypeName,
+    AFieldName: string; out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    RecordTypeId, RecordSymbolId, BaseExprId: LongInt;
+    FieldMeta: TFieldMeta;
+  begin
+    AExprId := 0;
+    if (ARecordName = '') or (ARecordTypeName = '') then
+      Exit(False);
+    if not LookupFieldMetaByTypeName(ARecordTypeName, AFieldName, RecordTypeId,
+      FieldMeta) then
+      Exit(False);
+
+    RecordSymbolId := FindSymbolByNameAndType(ARecordName, RecordTypeId);
+    if RecordSymbolId = 0 then
+      RecordSymbolId := FModel.FindSymbolByName(ARecordName);
+    if RecordSymbolId <= 0 then
+      Exit(False);
+
+    SetLength(Children, 0);
+    BaseExprId := FModel.AddHirExpr(
+      shekSymbolAddress, RecordTypeId, RecordSymbolId, Children,
+      0, '', '', 0, shvcAddress
+    );
+    SetLength(Children, 1);
+    Children[0] := BaseExprId;
+    AExprId := FModel.AddHirExpr(
+      shekField, FieldMeta.TypeId, 0, Children,
+      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+    );
+    Result := AExprId > 0;
+  end;
+
+  function BuildClassFieldTargetExpr(const ABaseName, AClassName,
+    AFieldName: string; out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    BaseTypeId, PointerTypeId, BaseSymbolId, PointerExprId, DerefExprId: LongInt;
+    FieldMeta: TFieldMeta;
+    SelfTypeId: LongInt;
+  begin
+    AExprId := 0;
+    PointerTypeId := FModel.FindTypeByName('Pointer');
+    if PointerTypeId <= 0 then
+      Exit(False);
+    if not LookupFieldMetaByTypeName(AClassName, AFieldName, BaseTypeId,
+      FieldMeta) then
+      Exit(False);
+
+    if SameText(ABaseName, 'self') then
+    begin
+      BaseSymbolId := EnsureSelfSymbolId(SelfTypeId);
+      if (BaseSymbolId <= 0) or (SelfTypeId <> BaseTypeId) then
+        Exit(False);
+    end
+    else
+    begin
+      BaseSymbolId := FindSymbolByNameAndType(ABaseName, BaseTypeId);
+      if BaseSymbolId = 0 then
+        BaseSymbolId := FModel.FindSymbolByName(ABaseName);
+      if BaseSymbolId <= 0 then
+        Exit(False);
+    end;
+
+    SetLength(Children, 0);
+    PointerExprId := FModel.AddHirExpr(
+      shekSymbolValue, PointerTypeId, BaseSymbolId, Children,
+      0, '', '', 0, shvcScalar
+    );
+    SetLength(Children, 1);
+    Children[0] := PointerExprId;
+    DerefExprId := FModel.AddHirExpr(
+      shekDeref, BaseTypeId, 0, Children,
+      0, '', '', 0, shvcAddress
+    );
+    SetLength(Children, 1);
+    Children[0] := DerefExprId;
+    AExprId := FModel.AddHirExpr(
+      shekField, FieldMeta.TypeId, 0, Children,
+      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+    );
+    Result := AExprId > 0;
+  end;
+
+  function BuildFieldStoreTargetExpr(const ATargetNode: TGreenNode;
+    out AExprId: LongInt): Boolean;
+  var
+    BaseName, FieldName, RecordTypeName, ClassTypeName: string;
+  begin
+    AExprId := 0;
+    if ATargetNode = nil then
+      Exit(False);
+
+    if (ATargetNode.NodeKind = gnkIdentifier) and
+      (FCurrentMethodClass <> '') and
+      (TypeMetaFieldIndex(FCurrentMethodClass, ATargetNode.Text) >= 0) then
+      Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
+        ATargetNode.Text, AExprId));
+
+    if (ATargetNode.NodeKind <> gnkDotAccess) or
+      (ATargetNode.ChildCount < 2) or
+      (ATargetNode.ChildAt(0) = nil) or
+      (ATargetNode.ChildAt(1) = nil) or
+      (ATargetNode.ChildAt(0).NodeKind <> gnkIdentifier) or
+      (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
+      Exit(False);
+
+    BaseName := ATargetNode.ChildAt(0).Text;
+    FieldName := ATargetNode.ChildAt(1).Text;
+
+    if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') and
+      IsRecordVar(FCurrentRetVarName) then
+      Exit(BuildRecordFieldTargetExpr(FCurrentRetVarName,
+        LookupRecordVar(FCurrentRetVarName), FieldName, AExprId));
+
+    if SameText(BaseName, 'Self') and (FCurrentMethodClass <> '') then
+      Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
+        FieldName, AExprId));
+
+    RecordTypeName := LookupRecordVar(BaseName);
+    if RecordTypeName <> '' then
+      Exit(BuildRecordFieldTargetExpr(BaseName, RecordTypeName, FieldName,
+        AExprId));
+
+    ClassTypeName := LookupClassVar(BaseName);
+    if ClassTypeName <> '' then
+      Exit(BuildClassFieldTargetExpr(BaseName, ClassTypeName, FieldName,
+        AExprId));
+
+    Result := False;
+  end;
+
+  procedure AttachFieldStoreTargetExpr(const AHirNodeId: LongInt;
+    const ATargetNode: TGreenNode);
+  var
+    LocalExprId: LongInt;
+  begin
+    if (AHirNodeId <= 0) or (ATargetNode = nil) then
+      Exit;
+    if BuildFieldStoreTargetExpr(ATargetNode, LocalExprId) then
+      FModel.SetTypedHirNodeTargetExprId(AHirNodeId, LocalExprId);
+  end;
+
   procedure AddFieldStoreRuntimeNode(const ADisplayName,
-    AOperand: string; const AExprNode: TGreenNode);
+    AOperand: string; const ATargetNode, AExprNode: TGreenNode);
   var
     LocalNodeId: LongInt;
   begin
@@ -7827,10 +8009,11 @@ var
       'field-store-runtime', ADisplayName, 0, 0, AOperand
     );
     AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
+    AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
   procedure AddRecordFieldStoreRuntimeNode(const ADisplayName,
-    AOperand: string; const AExprNode: TGreenNode);
+    AOperand: string; const ATargetNode, AExprNode: TGreenNode);
   var
     LocalNodeId: LongInt;
   begin
@@ -7838,6 +8021,7 @@ var
       'record-field-store-runtime', ADisplayName, 0, 0, AOperand
     );
     AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
+    AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
@@ -8092,6 +8276,7 @@ begin
                   Decoded,
                   FCurrentRetVarName + #9 +
                   IntToStr(Value) + #9 + Operand,
+                  Child.ChildAt(0),
                   Arg
                 )
               else
@@ -8099,6 +8284,7 @@ begin
                   Decoded,
                   Child.ChildAt(0).ChildAt(0).Text + #9 +
                   IntToStr(Value) + #9 + Operand,
+                  Child.ChildAt(0),
                   Arg
                 );
             end;
@@ -8625,6 +8811,7 @@ begin
                     Decoded,
                     Copy(Decoded, 1, DotPos - 1) + #9 +
                     IntToStr(Value) + #9 + Operand,
+                    Child.ChildAt(0),
                     Arg
                   )
                 else
@@ -8652,6 +8839,7 @@ begin
                   AddFieldStoreRuntimeNode(
                     Decoded,
                     ArgName + #9 + IntToStr(Value) + #9 + Operand,
+                    Child.ChildAt(0),
                     Arg
                   );
                 end
@@ -8671,6 +8859,7 @@ begin
                   AddFieldStoreRuntimeNode(
                     Decoded,
                     'self' + #9 + IntToStr(Value) + #9 + Operand,
+                    Child.ChildAt(0),
                     Arg
                   )
                 else

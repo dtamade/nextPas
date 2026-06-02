@@ -192,6 +192,8 @@ type
       const ABlob: string): THIRValueId;
     function LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
       const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
+    function LowerNodeTargetExprAddress(const ANode: TTypedHirNode;
+      out AResult: THIRExprResult): Boolean;
     function NormalizeScalarValueToType(const AValueId: THIRValueId;
       const ASourceTypeId, ATargetTypeId: THIRTypeId): THIRValueId;
     function NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
@@ -444,9 +446,7 @@ begin
         if AExpr.SymbolId <= 0 then
           Exit(False);
         Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
-        Result := (Symbol.Name <> '') and
-          ((ExprHirTypeId(AExpr) <> 0) or
-           (SemanticTypeIdToHirTypeId(Symbol.TypeId) <> 0));
+        Result := (Symbol.Name <> '') and (AExpr.ValueClass = shvcAddress);
       end;
     shekAddressOf:
       begin
@@ -710,13 +710,12 @@ begin
   HirType := ExprHirTypeId(AExpr);
   if HirType = 0 then
     HirType := SemanticTypeIdToHirTypeId(Symbol.TypeId);
-  if HirType = 0 then
-    Exit(False);
 
   V := FindAlloca(Symbol.Name);
   if (V = 0) and (Pos('.', Symbol.Name) > 0) then
   begin
-    EnsureAlloca(Symbol.Name, HirType);
+    if HirType <> 0 then
+      EnsureAlloca(Symbol.Name, HirType);
     V := FindAlloca(Symbol.Name);
   end;
   if V = 0 then
@@ -1163,6 +1162,15 @@ begin
     Exit(ExprResult.ValueId);
   end;
   Result := ParseIntBlob(ABlob);
+end;
+
+function THIRBuilder.LowerNodeTargetExprAddress(const ANode: TTypedHirNode;
+  out AResult: THIRExprResult): Boolean;
+begin
+  InitExprResult(AResult);
+  if ANode.TargetExprId <= 0 then
+    Exit(False);
+  Result := LowerExprAddress(ANode.TargetExprId, AResult);
 end;
 
 function THIRBuilder.NormalizeScalarValueToType(const AValueId: THIRValueId;
@@ -4748,6 +4756,7 @@ var
   VarName, Rest, IdxStr, ValBlob, Token: string;
   ObjPtr, IdxVal, ValVal, FieldPtr: THIRValueId;
   StoreType, ValueType: THIRTypeId;
+  TargetResult: THIRExprResult;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -4760,28 +4769,34 @@ begin
   IdxStr := Copy(Rest, 1, TabPos - 1);
   ValBlob := Copy(Rest, TabPos + 1, Length(Rest));
 
-  ObjPtr := FindAlloca(VarName);
-  if ObjPtr = 0 then Exit;
-  ObjPtr := EmitLoad(GetPtrType, ObjPtr);
+  if LowerNodeTargetExprAddress(ANode, TargetResult) then
+    FieldPtr := TargetResult.AddressValueId
+  else
+  begin
+    ObjPtr := FindAlloca(VarName);
+    if ObjPtr = 0 then Exit;
+    ObjPtr := EmitLoad(GetPtrType, ObjPtr);
 
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'const:' + IdxStr;
-  EmitInstr(Instr);
-  IdxVal := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + IdxStr;
+    EmitInstr(Instr);
+    IdxVal := Instr.ResultId;
 
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'gep_i64';
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeOperand(ObjPtr);
-  Instr.Operands[1] := MakeOperand(IdxVal);
-  EmitInstr(Instr);
-  FieldPtr := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(ObjPtr);
+    Instr.Operands[1] := MakeOperand(IdxVal);
+    EmitInstr(Instr);
+    FieldPtr := Instr.ResultId;
+  end;
+  if FieldPtr = 0 then Exit;
 
   ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, ValueType);
   if ValVal <> 0 then
@@ -4825,6 +4840,7 @@ var
   VarName, Rest, IdxStr, ValBlob: string;
   RecPtr, IdxVal, ValVal, FieldPtr: THIRValueId;
   ValueType: THIRTypeId;
+  TargetResult: THIRExprResult;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -4837,30 +4853,36 @@ begin
   IdxStr := Copy(Rest, 1, TabPos - 1);
   ValBlob := Copy(Rest, TabPos + 1, Length(Rest));
 
-  RecPtr := FindAlloca(VarName);
-  if RecPtr = 0 then Exit;
+  if LowerNodeTargetExprAddress(ANode, TargetResult) then
+    FieldPtr := TargetResult.AddressValueId
+  else
+  begin
+    RecPtr := FindAlloca(VarName);
+    if RecPtr = 0 then Exit;
 
-  if FindAllocaType(VarName) = GetPtrType then
-    RecPtr := EmitLoad(GetPtrType, RecPtr);
+    if FindAllocaType(VarName) = GetPtrType then
+      RecPtr := EmitLoad(GetPtrType, RecPtr);
 
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
-  Instr.IntrinsicName := 'const:' + IdxStr;
-  EmitInstr(Instr);
-  IdxVal := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikLoad;
+    Instr.TypeId := GetIntType;
+    Instr.IntrinsicName := 'const:' + IdxStr;
+    EmitInstr(Instr);
+    IdxVal := Instr.ResultId;
 
-  FillChar(Instr, SizeOf(Instr), 0);
-  Instr.ResultId := FModule.NewValue;
-  Instr.Kind := hikIntrinsic;
-  Instr.TypeId := GetPtrType;
-  Instr.IntrinsicName := 'gep_i64';
-  SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeOperand(RecPtr);
-  Instr.Operands[1] := MakeOperand(IdxVal);
-  EmitInstr(Instr);
-  FieldPtr := Instr.ResultId;
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeOperand(RecPtr);
+    Instr.Operands[1] := MakeOperand(IdxVal);
+    EmitInstr(Instr);
+    FieldPtr := Instr.ResultId;
+  end;
+  if FieldPtr = 0 then Exit;
 
   ValVal := LowerNodeExprOrBlobTyped(ANode, ValBlob, ValueType);
   if ValVal <> 0 then

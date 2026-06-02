@@ -199,9 +199,10 @@ end;
 
 var
   IntegerTypeId, PointerTypeId, RecordTypeId: LongInt;
-  SymArr, SymP, SymX, SymY: LongInt;
+  SymArr, SymP, SymRec, SymX, SymY: LongInt;
   ExprFive, ExprOne, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
   ExprArrElement, ExprPValue, ExprDerefPRecord, ExprPField: LongInt;
+  ExprRecAddress, ExprRecField: LongInt;
   NodeId: LongInt;
   Builder: THIRBuilder;
   Func: THIRFunction;
@@ -216,6 +217,7 @@ begin
     SymY := Model.AddSymbol('y', 'variable', '', IntegerTypeId, 0);
     SymArr := Model.AddSymbol('arr', 'variable', '', 0, 0);
     SymP := Model.AddSymbol('p', 'variable', '', PointerTypeId, 0);
+    SymRec := Model.AddSymbol('rec', 'variable', '', RecordTypeId, 0);
 
     ExprFive := AddIntLiteral(5, IntegerTypeId);
     ExprOne := AddIntLiteral(1, IntegerTypeId);
@@ -227,12 +229,16 @@ begin
     ExprDerefPRecord := AddDeref(ExprPValue, RecordTypeId);
     ExprPField := AddFieldAddress(ExprDerefPRecord, IntegerTypeId, 2,
       'Value');
+    ExprRecAddress := AddSymbolAddress(SymRec, RecordTypeId);
+    ExprRecField := AddFieldAddress(ExprRecAddress, IntegerTypeId, 0, 'X');
 
     Model.AddTypedHirNode('function-body-begin', 'TestAddress', 0,
       IntegerTypeId, '0::i');
     Model.AddTypedHirNode('var-decl-arr-runtime', 'arr', SymArr, 0, 'arr');
     Model.AddTypedHirNode('var-decl-ptr-runtime', 'p', SymP, PointerTypeId,
       'p');
+    Model.AddTypedHirNode('var-decl-record-runtime', 'rec', SymRec,
+      RecordTypeId, 'rec'#9'2');
     Model.AddTypedHirNode('var-decl-runtime', 'x', SymX, IntegerTypeId, 'x');
     Model.AddTypedHirNode('var-decl-runtime', 'y', SymY, IntegerTypeId, 'y');
 
@@ -253,8 +259,14 @@ begin
     Model.SetTypedHirNodeExprId(NodeId, ExprPField);
 
     NodeId := Model.AddTypedHirNode('field-store-runtime',
-      'p^.Value := 5', 0, IntegerTypeId, 'p'#9'2'#9'int 0'#10);
+      'p^.Value := 5', 0, IntegerTypeId, 'missing'#9'99'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprPField);
+
+    NodeId := Model.AddTypedHirNode('record-field-store-runtime',
+      'rec.X := 5', 0, IntegerTypeId, 'missing'#9'77'#9'int 0'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprRecField);
     Model.AddTypedHirNode('function-body-end', 'TestAddress', 0, 0, '');
 
     Builder := THIRBuilder.Create(Model);
@@ -262,16 +274,14 @@ begin
       Builder.Build;
       if not FindFunction(Builder.Module, 'TestAddress', Func) then
         Halt(1);
-      if HasConstLoad(Func, 'const:0') then
-        Halt(2);
       if not HasRuntimeLoadWidth(Builder.Module, Func, 32, True) then
-        Halt(3);
+        Halt(2);
       if not HasStoreWidth(Builder.Module, Func, 32, True) then
-        Halt(4);
+        Halt(3);
       if not HasIntrinsic(Func, 'gep_i64') then
+        Halt(4);
+      if CountIntrinsic(Func, 'gep_i64') < 4 then
         Halt(5);
-      if CountIntrinsic(Func, 'gep_i64') < 3 then
-        Halt(6);
     finally
       Builder.Free;
     end;

@@ -59,10 +59,13 @@ begin
     Halt(12);
 
   Model.SetTypedHirNodeExprId(NodeId, ExprId);
+  Model.SetTypedHirNodeTargetExprId(NodeId, ExprId);
 
   Node := Model.TypedHirNodeAt(0);
   if Node.ExprId <> ExprId then
     Halt(13);
+  if Node.TargetExprId <> ExprId then
+    Halt(14);
 
   Model.Free;
 end.

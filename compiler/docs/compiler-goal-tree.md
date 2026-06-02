@@ -214,3 +214,16 @@
   完整重编译（45316 lines compiled）+ 137/137 LLVM smoke 全绿。C5
   下一步应进入真正的 LHS target/address 结构：普通 `record.field` /
   `class.field` address、嵌套 field chain、array store 与 static array。
+- 2026-06-03 C5-F：field store target/address 第一刀：`TTypedHirNode`
+  新增独立 `TargetExprId`，保持 `ExprId` 只表示 RHS；builder 让
+  `field-store-runtime` / `record-field-store-runtime` 优先通过
+  `LowerExprAddress(TargetExprId)` 得到 LHS 地址，失败时仍回落旧 operand
+  target 解析。sema producer 为普通 `record.field := rhs`、方法内
+  `self.field := rhs` 和 `obj.field := rhs` 生成结构化 target：
+  record 走 `shekField -> shekSymbolAddress`，class/self 走
+  `shekField -> shekDeref -> shekSymbolValue`。本轮不迁移 array store、
+  static array 或嵌套 field chain。TDD RED=缺少 `TargetExprId` API 时
+  `test_semantic_hir_expr` / `test_hir_builder_structured_address` /
+  `test_semantic_hir_expr_producer` 编译失败；GREEN 后 focused tests +
+  完整重编译（45545 lines compiled）+ 137/137 LLVM smoke 全绿。C5
+  下一步进入 `array[i] := rhs`、static array address 与 nested field chain。

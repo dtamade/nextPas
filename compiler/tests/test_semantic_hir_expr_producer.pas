@@ -374,6 +374,93 @@ begin
     Halt(ABaseExitCode + 20);
 end;
 
+procedure AssertRecordFieldStoreTargetExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedRecordName,
+  AExpectedRecordTypeName, AExpectedFieldTypeName, AExpectedFieldName: string;
+  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+var
+  FieldExpr, BaseExpr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.TargetExprId = 0 then
+    Halt(ABaseExitCode);
+
+  FieldExpr := AModel.HirExprAt(ANode.TargetExprId - 1);
+  if FieldExpr.Kind <> shekField then
+    Halt(ABaseExitCode + 1);
+  if FieldExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 2);
+  AssertExprTypeName(AModel, FieldExpr, AExpectedFieldTypeName,
+    ABaseExitCode + 3);
+  if FieldExpr.LiteralInt <> AExpectedFieldIndex then
+    Halt(ABaseExitCode + 4);
+  if FieldExpr.LiteralStr <> AExpectedFieldName then
+    Halt(ABaseExitCode + 5);
+  if Length(FieldExpr.Children) < 1 then
+    Halt(ABaseExitCode + 6);
+
+  BaseExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  if BaseExpr.Kind <> shekSymbolAddress then
+    Halt(ABaseExitCode + 7);
+  if BaseExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 8);
+  AssertExprTypeName(AModel, BaseExpr, AExpectedRecordTypeName,
+    ABaseExitCode + 9);
+  if BaseExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 10);
+  Symbol := AModel.SymbolAt(BaseExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedRecordName then
+    Halt(ABaseExitCode + 11);
+end;
+
+procedure AssertClassFieldStoreTargetExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedBaseName,
+  AExpectedClassTypeName, AExpectedFieldTypeName, AExpectedFieldName: string;
+  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+var
+  FieldExpr, DerefExpr, PointerExpr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.TargetExprId = 0 then
+    Halt(ABaseExitCode);
+
+  FieldExpr := AModel.HirExprAt(ANode.TargetExprId - 1);
+  if FieldExpr.Kind <> shekField then
+    Halt(ABaseExitCode + 1);
+  if FieldExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 2);
+  AssertExprTypeName(AModel, FieldExpr, AExpectedFieldTypeName,
+    ABaseExitCode + 3);
+  if FieldExpr.LiteralInt <> AExpectedFieldIndex then
+    Halt(ABaseExitCode + 4);
+  if FieldExpr.LiteralStr <> AExpectedFieldName then
+    Halt(ABaseExitCode + 5);
+  if Length(FieldExpr.Children) < 1 then
+    Halt(ABaseExitCode + 6);
+
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  if DerefExpr.Kind <> shekDeref then
+    Halt(ABaseExitCode + 7);
+  if DerefExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 8);
+  AssertExprTypeName(AModel, DerefExpr, AExpectedClassTypeName,
+    ABaseExitCode + 9);
+  if Length(DerefExpr.Children) < 1 then
+    Halt(ABaseExitCode + 10);
+
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  if PointerExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 11);
+  if PointerExpr.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 12);
+  AssertExprTypeName(AModel, PointerExpr, 'Pointer', ABaseExitCode + 13);
+  if PointerExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 14);
+  Symbol := AModel.SymbolAt(PointerExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedBaseName then
+    Halt(ABaseExitCode + 15);
+end;
+
 procedure TestHaltRuntimeExprProducer;
 var
   Model: TSemanticModel;
@@ -705,6 +792,8 @@ begin
       'record-field-store-runtime', 'add', Node) then
       Halt(202);
     AssertRuntimeBinaryExpr(Model, Node, '+', 203);
+    AssertRecordFieldStoreTargetExpr(Model, Node, 'p', 'TPoint', 'Integer',
+      'X', 0, 207);
   finally
     Model.Free;
   end;
@@ -741,6 +830,44 @@ begin
       'add', Node) then
       Halt(212);
     AssertRuntimeBinaryExpr(Model, Node, '+', 213);
+    AssertClassFieldStoreTargetExpr(Model, Node, 'self', 'TCounter',
+      'Integer', 'FValue', 1, 217);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestObjectFieldStoreRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TCounter = class'#10 +
+    '  FValue: Integer;'#10 +
+    '  procedure CopyTo(Other: TCounter; v: Integer);'#10 +
+    'end;'#10 +
+    'procedure TCounter.CopyTo(Other: TCounter; v: Integer);'#10 +
+    'begin'#10 +
+    '  Other.FValue := v + 1;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    '  Halt(42);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(220);
+    if Model.Status <> 'ready' then
+      Halt(221);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'field-store-runtime',
+      'add', Node) then
+      Halt(222);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 223);
+    AssertClassFieldStoreTargetExpr(Model, Node, 'Other', 'TCounter',
+      'Integer', 'FValue', 1, 227);
   finally
     Model.Free;
   end;
@@ -983,6 +1110,7 @@ begin
   TestArrayElementAddressRuntimeExprProducer;
   TestPointerFieldAddressRuntimeExprProducer;
   TestClassFieldStoreRuntimeExprProducer;
+  TestObjectFieldStoreRuntimeExprProducer;
   TestRecordFieldStoreRuntimeExprProducer;
   TestMixedWidthPromotionExprProducer;
   TestTypedHaltArgumentWidening;
