@@ -563,6 +563,53 @@ begin
   end;
 end;
 
+procedure TestTypedStoreIntoLegacyAllocaWidening;
+var
+  Model: TSemanticModel;
+  Builder: THIRBuilder;
+  Emitter: THIRLlvmEmitter;
+  IR: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'function F: Integer;'#10 +
+    'begin'#10 +
+    '  F := 7;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    '  Halt(F);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(140);
+    if Model.Status <> 'ready' then
+      Halt(141);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Emitter := THIRLlvmEmitter.Create(Builder.Module);
+      try
+        Emitter.EmitModule;
+        IR := Emitter.AsText;
+        if Pos('store i32 ', IR) > 0 then
+          Halt(142);
+        if Pos('sext i32 ', IR) = 0 then
+          Halt(143);
+        if Pos('store i64 ', IR) = 0 then
+          Halt(144);
+      finally
+        Emitter.Free;
+      end;
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
@@ -574,4 +621,5 @@ begin
   TestMixedWidthPromotionExprProducer;
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;
+  TestTypedStoreIntoLegacyAllocaWidening;
 end.

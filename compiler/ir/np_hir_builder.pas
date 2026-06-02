@@ -177,6 +177,8 @@ type
       const ABlob: string): THIRValueId;
     function LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
       const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
+    function NormalizeScalarValueToType(const AValueId: THIRValueId;
+      const ASourceTypeId, ATargetTypeId: THIRTypeId): THIRValueId;
     function NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
       const ATypeId: THIRTypeId): THIRValueId;
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
@@ -883,10 +885,9 @@ begin
   Result := ParseIntBlob(ABlob);
 end;
 
-function THIRBuilder.NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
-  const ATypeId: THIRTypeId): THIRValueId;
+function THIRBuilder.NormalizeScalarValueToType(const AValueId: THIRValueId;
+  const ASourceTypeId, ATargetTypeId: THIRTypeId): THIRValueId;
 var
-  RuntimeType: THIRTypeId;
   Kind: THIRInstrKind;
   NoOp: Boolean;
   Instr: THIRInstr;
@@ -894,11 +895,10 @@ begin
   Result := AValueId;
   if AValueId = 0 then
     Exit(0);
-  if ATypeId = 0 then
-    Exit;
+  if (ASourceTypeId = 0) or (ATargetTypeId = 0) then
+    Exit(0);
 
-  RuntimeType := GetIntType;
-  if not TryClassifyScalarCast(ATypeId, RuntimeType, Kind, NoOp) then
+  if not TryClassifyScalarCast(ASourceTypeId, ATargetTypeId, Kind, NoOp) then
     Exit(0);
   if NoOp then
     Exit;
@@ -906,11 +906,17 @@ begin
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := Kind;
-  Instr.TypeId := RuntimeType;
+  Instr.TypeId := ATargetTypeId;
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeTypedOperand(AValueId, ATypeId);
+  Instr.Operands[0] := MakeTypedOperand(AValueId, ASourceTypeId);
   EmitInstr(Instr);
   Result := Instr.ResultId;
+end;
+
+function THIRBuilder.NormalizeInt64RuntimeValue(const AValueId: THIRValueId;
+  const ATypeId: THIRTypeId): THIRValueId;
+begin
+  Result := NormalizeScalarValueToType(AValueId, ATypeId, GetIntType);
 end;
 
 function THIRBuilder.GetIntType: THIRTypeId;
@@ -2461,11 +2467,16 @@ begin
     else
     begin
       StoreType := FindAllocaType(VarName);
-      if ValueType <> 0 then
-        StoreType := ValueType
-      else if StoreType = 0 then
+      if StoreType = 0 then
         StoreType := GetIntType;
-      EmitStore(StoreType, V, Addr);
+      if ValueType <> 0 then
+      begin
+        V := NormalizeScalarValueToType(V, ValueType, StoreType);
+        if V = 0 then
+          V := ParseIntBlob(Blob);
+      end;
+      if V <> 0 then
+        EmitStore(StoreType, V, Addr);
     end;
   end;
 end;
