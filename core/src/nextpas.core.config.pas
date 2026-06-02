@@ -30,7 +30,9 @@ type
     ['{7F5F1A22-8C52-44C8-9E38-9CF5C3F2C101}']
     function GetCount: Integer;
     function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
     function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
@@ -93,7 +95,9 @@ type
     procedure SetDefault(const AKey, AValue: string);
 
     function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
     function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
@@ -182,7 +186,9 @@ type
     constructor Create(AConfig: TConfig);
     destructor Destroy; override;
     function GetString(const AKey: string; const ADefault: string = ''): string;
+    function GetRawString(const AKey: string; const ADefault: string = ''): string;
     function GetStringArray(const AKey: string): TStringArray;
+    function GetRawStringArray(const AKey: string): TStringArray;
     function GetInt(const AKey: string; ADefault: Int64 = 0): Int64;
     function GetBool(const AKey: string; ADefault: Boolean = False): Boolean;
     function GetFloat(const AKey: string; ADefault: Double = 0.0): Double;
@@ -1213,6 +1219,20 @@ begin
     Result := InterpolateConfigValue(LEntries, LCount, ADefault, LStack, False, '');
 end;
 
+function TConfig.GetRawString(const AKey: string; const ADefault: string): string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+  LIdx: Integer;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  LIdx := FindEntryIndexInSnapshot(LEntries, LCount, AKey);
+  if LIdx >= 0 then
+    Result := LEntries[LIdx].Value
+  else
+    Result := ADefault;
+end;
+
 function TConfig.GetStringArray(const AKey: string): TStringArray;
 var
   LI, LCount: Integer;
@@ -1238,6 +1258,30 @@ begin
   for LI := 0 to LCount - 1 do
     Result[LI] := InterpolateConfigValue(LEntries, LEntryCount, LItems[LI].Value,
       LStack, False, '');
+end;
+
+function TConfig.GetRawStringArray(const AKey: string): TStringArray;
+var
+  LI, LCount: Integer;
+  LEntryCount: Integer;
+  LEntries: TConfigEntryArray;
+  LSegment: string;
+  LIndex: Int64;
+  LItems: TIndexedConfigValueArray;
+begin
+  Result := nil;
+  SnapshotConfigEntries(Self, LEntries, LEntryCount);
+  LItems := nil;
+  LCount := 0;
+  for LI := 0 to LEntryCount - 1 do
+    if DirectArraySegment(LEntries[LI].Key, AKey, LSegment) and
+       TryParseArrayIndex(LSegment, LIndex) then
+      AddIndexedValue(LItems, LCount, LIndex, LEntries[LI].Value);
+
+  SortIndexedValues(LItems, LCount);
+  SetLength(Result, LCount);
+  for LI := 0 to LCount - 1 do
+    Result[LI] := LItems[LI].Value;
 end;
 
 function TConfig.GetInt(const AKey: string; ADefault: Int64): Int64;
@@ -1445,9 +1489,19 @@ begin
   Result := FConfig.GetString(AKey, ADefault);
 end;
 
+function TOwnedConfig.GetRawString(const AKey: string; const ADefault: string): string;
+begin
+  Result := FConfig.GetRawString(AKey, ADefault);
+end;
+
 function TOwnedConfig.GetStringArray(const AKey: string): TStringArray;
 begin
   Result := FConfig.GetStringArray(AKey);
+end;
+
+function TOwnedConfig.GetRawStringArray(const AKey: string): TStringArray;
+begin
+  Result := FConfig.GetRawStringArray(AKey);
 end;
 
 function TOwnedConfig.GetInt(const AKey: string; ADefault: Int64): Int64;

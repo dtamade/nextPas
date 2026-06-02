@@ -149,9 +149,8 @@ type
 
 实现顺序：
 - Phase 3A/3B/3C 已保持 `cimReadTime` 默认和现有 `TConfig` getter 行为。
-- 不直接公开 `WithInterpolation(cimDisabled)`。下一批先落显式 raw-read API，把“不插值读取”作为可测试的
-  独立能力，而不是先引入全局模式。
-- 推荐下一批新增 `GetRawString` / `GetRawStringArray` 到 `TConfig` 与 `IConfig`。它们只返回扁平存储中的原始值，
+- Phase 3D1 已先落显式 raw-read API，把“不插值读取”作为可测试的独立能力，而不是先引入全局模式。
+- `GetRawString` / `GetRawStringArray` 已加入 `TConfig` 与 `IConfig`。它们只返回扁平存储中的原始值，
   不展开 `${...}`，默认值也不展开。`GetSection` / `GetKeys` 天然不涉及插值，不需要 raw 变体。
 - 暂不新增 `GetRawStringRequired`。required 语义仍属于现有插值 getter；raw required 若有真实需求，
   后续单独设计，避免把“原始文本存在”与“业务配置有效”混在一起。
@@ -301,6 +300,7 @@ Tests:
 - Split this into two future slices:
   - Phase 3D1: explicit raw-read API (`GetRawString` / `GetRawStringArray`) on `TConfig` and `IConfig`.
   - Phase 3D2: optional whole-config interpolation policy only after raw-read behavior is locked.
+- Status: Phase 3D1 is complete and covered by focused tests; only Phase 3D2 remains open.
 - Do not expose `WithInterpolation` before Phase 3D1 is complete.
 - When `WithInterpolation` is introduced, `cimDisabled` must be implemented by raw-read semantics and focused tests,
   or explicitly rejected with `EConfigError` and focused tests.
@@ -388,8 +388,9 @@ Completion requires:
 
 ## Recommended next implementation slice
 
-Phase 3 首批闭环已完成。建议下一批聚焦剩余的边界设计，而不是立刻继续加实现面：
+Phase 3 首批闭环与 Phase 3D1 raw-read 能力已完成。建议下一批继续聚焦剩余的边界设计，而不是立刻扩张实现面：
 
-1. Phase 3D1：用 TDD 新增 `GetRawString` / `GetRawStringArray` 到 `TConfig` 与 `IConfig`。
-2. 跑 `test_config_phase3`、`test_config`、`test_config_nested`，确认现有插值行为不变且 heaptrc 0 leaks。
-3. 完成 Phase 3D1 后再讨论 `WithInterpolation` 或 borrowed view；不要把 raw-read、mode、borrowed view 混在同一 commit。
+1. 保持 `GetRawString` / `GetRawStringArray` 作为明确的 raw-read 基线，不继续追加 raw required 或 borrowed view。
+2. 仅在真实 consumer 出现后，再评估是否需要 `WithInterpolation(cimDisabled)`；如果推进，先明确 `Build` / `BuildConfig`
+   语义一致性与错误面。
+3. borrowed view 继续维持设计项，不与 interpolation mode 混入同一实现批次。

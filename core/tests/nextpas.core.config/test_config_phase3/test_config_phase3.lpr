@@ -57,6 +57,34 @@ begin
   CheckEqual('owned', LCfg.GetString('name'), 'owned config remains readable');
 end;
 
+procedure TestBuildRawReadMethods;
+var
+  LCfg: IConfig;
+  LTags: TStringArray;
+begin
+  SetEnv('NEXTPAS_CFG_PHASE3_RAW', 'env-raw');
+  try
+    LCfg := ConfigBuilder
+      .AddJson('{"source":{"name":"blue"},' +
+        '"value":"${source.name}","tags":["${source.name}","$${source.name}",' +
+        '"${NEXTPAS_CFG_PHASE3_RAW}"]}')
+      .Build;
+
+    CheckEqual('${source.name}', LCfg.GetRawString('value'), 'raw string');
+    CheckEqual('${fallback}', LCfg.GetRawString('missing', '${fallback}'),
+      'raw default');
+    CheckEqual('blue', LCfg.GetString('value'), 'interpolated string');
+
+    LTags := LCfg.GetRawStringArray('tags');
+    CheckEqual(Int64(3), Int64(Length(LTags)), 'raw array count');
+    CheckEqual('${source.name}', LTags[0], 'raw array placeholder');
+    CheckEqual('$${source.name}', LTags[1], 'raw array escaped placeholder');
+    CheckEqual('${NEXTPAS_CFG_PHASE3_RAW}', LTags[2], 'raw array env placeholder');
+  finally
+    UnsetEnv('NEXTPAS_CFG_PHASE3_RAW');
+  end;
+end;
+
 procedure TestDefaultsStayLowestPriority;
 var
   LCfg: IConfig;
@@ -255,6 +283,7 @@ begin
   T := TTestRunner.Create('nextpas.core.config.phase3');
   T.Run('Build.ReadSurface', @TestBuildReturnsReadableIConfig);
   T.Run('Build.OwnsResult', @TestBuildOwnsResultAfterBuilderRelease);
+  T.Run('Build.RawReadMethods', @TestBuildRawReadMethods);
   T.Run('Builder.DefaultPriority', @TestDefaultsStayLowestPriority);
   T.Run('Builder.SourceOrderAndEnvPriority', @TestExplicitSourceOrderAndEnvPriority);
   T.Run('Builder.BuildConfigIndependent', @TestBuildConfigReturnsIndependentMutableConfigs);
