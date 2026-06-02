@@ -66,6 +66,8 @@ type
     FClassVarTypes: array of string;
     FRecordVarNames: array of string;
     FRecordVarTypes: array of string;
+    FPointerVarNames: array of string;
+    FPointerVarTypes: array of string;
     FVarParamNames: array of string;
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
@@ -75,6 +77,7 @@ type
     procedure RegisterRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
     procedure RegisterRecordVar(const AName, ATypeName: string);
+    procedure RegisterPointerVar(const AName, APointeeTypeName: string);
     procedure RegisterVarParam(const AName: string);
     procedure RegisterPtrReturnFunc(const AName, AClassName: string);
     procedure RegisterImportedUnitTree(const ATree: TGreenTree);
@@ -86,6 +89,7 @@ type
     function IsVarParamAtPosition(const ADecl: TGreenNode; APosition: LongInt): Boolean;
     function LookupClassVar(const AName: string): string;
     function LookupRecordVar(const AName: string): string;
+    function LookupPointerVar(const AName: string): string;
     function LookupPtrReturnFunc(const AName: string): string;
     function EmitStrConcatOperand(const ANode: TGreenNode;
       const ADestVar: string): string;
@@ -576,6 +580,26 @@ begin
   FRecordVarTypes[Idx] := ATypeName;
 end;
 
+procedure TSemanticAnalyzer.RegisterPointerVar(const AName,
+  APointeeTypeName: string);
+var
+  Idx: LongInt;
+begin
+  if (AName = '') or (APointeeTypeName = '') then
+    Exit;
+  for Idx := 0 to Length(FPointerVarNames) - 1 do
+    if SameText(FPointerVarNames[Idx], AName) then
+    begin
+      FPointerVarTypes[Idx] := APointeeTypeName;
+      Exit;
+    end;
+  Idx := Length(FPointerVarNames);
+  SetLength(FPointerVarNames, Idx + 1);
+  SetLength(FPointerVarTypes, Idx + 1);
+  FPointerVarNames[Idx] := AName;
+  FPointerVarTypes[Idx] := APointeeTypeName;
+end;
+
 function TSemanticAnalyzer.IsRecordVar(const AName: string): Boolean;
 var
   Idx: LongInt;
@@ -647,6 +671,16 @@ begin
   for Idx := 0 to Length(FRecordVarNames) - 1 do
     if SameText(FRecordVarNames[Idx], AName) then
       Exit(FRecordVarTypes[Idx]);
+  Result := '';
+end;
+
+function TSemanticAnalyzer.LookupPointerVar(const AName: string): string;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FPointerVarNames) - 1 do
+    if SameText(FPointerVarNames[Idx], AName) then
+      Exit(FPointerVarTypes[Idx]);
   Result := '';
 end;
 
@@ -6085,6 +6119,37 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
     Result := False;
   end;
 
+  function TryPointerFieldAccess(const ALocalNode: TGreenNode;
+    out APointerName, APointeeTypeName, AFieldName: string;
+    out AFieldIndex: Int64): Boolean;
+  var
+    BaseNode, DerefNode, FieldNode: TGreenNode;
+  begin
+    APointerName := '';
+    APointeeTypeName := '';
+    AFieldName := '';
+    AFieldIndex := -1;
+    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
+      (ALocalNode.ChildCount < 2) then
+      Exit(False);
+    DerefNode := ALocalNode.ChildAt(0);
+    FieldNode := ALocalNode.ChildAt(1);
+    if (DerefNode = nil) or (DerefNode.NodeKind <> gnkDereference) or
+      (DerefNode.ChildCount < 1) or (FieldNode = nil) or
+      (FieldNode.NodeKind <> gnkIdentifier) then
+      Exit(False);
+    BaseNode := DerefNode.ChildAt(0);
+    if (BaseNode = nil) or (BaseNode.NodeKind <> gnkIdentifier) then
+      Exit(False);
+    APointerName := BaseNode.Text;
+    APointeeTypeName := LookupPointerVar(APointerName);
+    if APointeeTypeName = '' then
+      Exit(False);
+    AFieldName := FieldNode.Text;
+    AFieldIndex := TypeMetaFieldIndex(APointeeTypeName, AFieldName);
+    Result := AFieldIndex >= 0;
+  end;
+
 var
   Folded: Int64;
   FuncName, ArgName: string;
@@ -6833,6 +6898,15 @@ begin
       Exit(True);
     end;
   end;
+  if TryPointerFieldAccess(ANode, FuncName, ArgName, Operand, Folded) then
+  begin
+    ABlob := 'var ' + FuncName + #10 + 'int ' + IntToStr(Folded) + #10;
+    if TypeMetaFieldIsPtr(ArgName, Operand) then
+      ABlob := ABlob + 'arr_load_ptr' + #10
+    else
+      ABlob := ABlob + 'arr_load' + #10;
+    Exit(True);
+  end;
   if (ANode.NodeKind = gnkBinaryExpression) and
     SameText(ANode.Text, 'as') and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) then
@@ -6876,6 +6950,13 @@ begin
   if (ANode.NodeKind = gnkUnaryExpression) and
     (ANode.ChildCount >= 1) and (ANode.Text = '@') then
   begin
+    if TryPointerFieldAccess(ANode.ChildAt(0), FuncName, ArgName, Operand,
+      Folded) then
+    begin
+      ABlob := 'var ' + FuncName + #10 + 'field_ref ' +
+        IntToStr(Folded) + #10;
+      Exit(True);
+    end;
     if (ANode.ChildAt(0) <> nil) and
       (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
       IsRuntimeVar(ANode.ChildAt(0).Text) then
@@ -7170,6 +7251,91 @@ var
     Result := ALocalExprId > 0;
   end;
 
+  function TryRuntimePointerFieldNode(const ALocalNode: TGreenNode;
+    out APointerName, APointeeTypeName, AFieldName: string;
+    out AFieldMeta: TFieldMeta): Boolean;
+  var
+    BaseNode, DerefNode, FieldNode: TGreenNode;
+    Meta: TTypeMetadata;
+    I: LongInt;
+  begin
+    APointerName := '';
+    APointeeTypeName := '';
+    AFieldName := '';
+    AFieldMeta.Name := '';
+    AFieldMeta.Index := 0;
+    AFieldMeta.IsString := False;
+    AFieldMeta.IsPointer := False;
+    AFieldMeta.TypeId := 0;
+    if (ALocalNode = nil) or (ALocalNode.NodeKind <> gnkDotAccess) or
+      (ALocalNode.ChildCount < 2) then
+      Exit(False);
+    DerefNode := ALocalNode.ChildAt(0);
+    FieldNode := ALocalNode.ChildAt(1);
+    if (DerefNode = nil) or (DerefNode.NodeKind <> gnkDereference) or
+      (DerefNode.ChildCount < 1) or (FieldNode = nil) or
+      (FieldNode.NodeKind <> gnkIdentifier) then
+      Exit(False);
+    BaseNode := DerefNode.ChildAt(0);
+    if (BaseNode = nil) or (BaseNode.NodeKind <> gnkIdentifier) then
+      Exit(False);
+    APointerName := BaseNode.Text;
+    APointeeTypeName := LookupPointerVar(APointerName);
+    if APointeeTypeName = '' then
+      Exit(False);
+    AFieldName := FieldNode.Text;
+    if not FModel.GetTypeMetaByName(APointeeTypeName, Meta) then
+      Exit(False);
+    for I := 0 to High(Meta.Fields) do
+      if SameText(Meta.Fields[I].Name, AFieldName) then
+      begin
+        AFieldMeta := Meta.Fields[I];
+        Exit(AFieldMeta.TypeId > 0);
+      end;
+    Result := False;
+  end;
+
+  function BuildRuntimePointerFieldAddressHirExpr(
+    const ALocalNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
+  var
+    LocalChildren: array of LongInt;
+    FieldExprId, PointeeTypeId, PointerExprId, PointerSymbolId: LongInt;
+    PointerTypeId: LongInt;
+    FieldMeta: TFieldMeta;
+    FieldName, PointerName, PointeeTypeName: string;
+  begin
+    ALocalExprId := 0;
+    if not TryRuntimePointerFieldNode(ALocalNode, PointerName, PointeeTypeName,
+      FieldName, FieldMeta) then
+      Exit(False);
+    PointerSymbolId := FModel.FindSymbolByName(PointerName);
+    PointerTypeId := FModel.FindTypeByName('Pointer');
+    PointeeTypeId := FModel.FindTypeByName(PointeeTypeName);
+    if (PointerSymbolId <= 0) or (PointerTypeId <= 0) or
+      (PointeeTypeId <= 0) then
+      Exit(False);
+
+    SetLength(LocalChildren, 0);
+    PointerExprId := FModel.AddHirExpr(
+      shekSymbolValue, PointerTypeId, PointerSymbolId, LocalChildren,
+      0, '', '', 0, shvcScalar
+    );
+
+    SetLength(LocalChildren, 1);
+    LocalChildren[0] := PointerExprId;
+    FieldExprId := FModel.AddHirExpr(
+      shekDeref, PointeeTypeId, 0, LocalChildren, 0, '', '', 0, shvcAddress
+    );
+
+    SetLength(LocalChildren, 1);
+    LocalChildren[0] := FieldExprId;
+    ALocalExprId := FModel.AddHirExpr(
+      shekField, FieldMeta.TypeId, 0, LocalChildren, FieldMeta.Index,
+      FieldName, '', 0, shvcAddress
+    );
+    Result := ALocalExprId > 0;
+  end;
+
   function BuildRuntimePointerHirExpr(const ALocalNode: TGreenNode;
     out ALocalExprId: LongInt): Boolean;
   var
@@ -7256,6 +7422,21 @@ begin
     (ANode.Text = '@') then
   begin
     if (ANode.ChildAt(0) <> nil) and
+      (ANode.ChildAt(0).NodeKind = gnkDotAccess) then
+    begin
+      if not BuildRuntimePointerFieldAddressHirExpr(ANode.ChildAt(0),
+        LeftExprId) then
+        Exit(False);
+      SetLength(Children, 1);
+      Children[0] := LeftExprId;
+      AExprId := FModel.AddHirExpr(
+        shekAddressOf, FModel.FindTypeByName('Pointer'), 0, Children,
+        0, '', '', 0, shvcScalar
+      );
+      Exit(True);
+    end;
+
+    if (ANode.ChildAt(0) <> nil) and
       (ANode.ChildAt(0).NodeKind = gnkArrayAccess) then
     begin
       if not BuildRuntimeArrayElementAddressHirExpr(ANode.ChildAt(0),
@@ -7306,6 +7487,13 @@ begin
       0, '', '', 0, shvcAddress
     );
     Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) then
+  begin
+    if BuildRuntimePointerFieldAddressHirExpr(ANode, AExprId) then
+      Exit(True);
+    Exit(False);
   end;
 
   if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) then
@@ -9680,6 +9868,8 @@ begin
           (Length(Decl.ChildAt(0).Text) > 1) and (Decl.ChildAt(0).Text[1] = '^') then
         begin
           RegisterRuntimeVar(Decl.Text);
+          RegisterPointerVar(Decl.Text, Copy(Decl.ChildAt(0).Text, 2,
+            Length(Decl.ChildAt(0).Text)));
           FModel.AddTypedHirNode(
             'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text
           );
@@ -9845,6 +10035,8 @@ begin
     SetLength(FClassVarTypes, 0);
     SetLength(FRecordVarNames, 0);
     SetLength(FRecordVarTypes, 0);
+    SetLength(FPointerVarNames, 0);
+    SetLength(FPointerVarTypes, 0);
     if HasOverload(Entry.Name) then
       EffName := MangledNameSig(Entry.Name, GetParamSignature(Entry.Decl))
     else
@@ -9901,6 +10093,8 @@ begin
                   (Length(TypeChild.Text) > 1) and (TypeChild.Text[1] = '^') then
                 begin
                   RegisterClassVar(RetVarName, 'Pointer');
+                  RegisterPointerVar(RetVarName, Copy(TypeChild.Text, 2,
+                    Length(TypeChild.Text)));
                 end
                 else if (TypeChild <> nil) and
                   (TypeMetaSize(TypeChild.Text) > 0) then
@@ -10083,6 +10277,15 @@ begin
               RegisterRuntimeStrVar(Decl.Text);
               FModel.AddTypedHirNode(
                 'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text);
+            end
+            else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+              (Length(Decl.ChildAt(0).Text) > 1) and
+              (Decl.ChildAt(0).Text[1] = '^') then
+            begin
+              RegisterPointerVar(Decl.Text, Copy(Decl.ChildAt(0).Text, 2,
+                Length(Decl.ChildAt(0).Text)));
+              FModel.AddTypedHirNode(
+                'var-decl-ptr-runtime', Decl.Text, 0, 0, Decl.Text);
             end
             else
               FModel.AddTypedHirNode(

@@ -316,6 +316,64 @@ begin
     Halt(ABaseExitCode + 15);
 end;
 
+procedure AssertFieldAddressOfRuntimeExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedPointerName,
+  AExpectedRecordTypeName, AExpectedFieldName: string;
+  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+var
+  Expr, FieldExpr, DerefExpr, PointerExpr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.ExprId = 0 then
+    Halt(ABaseExitCode);
+  if ANode.Operand = '' then
+    Halt(ABaseExitCode + 1);
+
+  Expr := AModel.HirExprAt(ANode.ExprId - 1);
+  if Expr.Kind <> shekAddressOf then
+    Halt(ABaseExitCode + 2);
+  if Expr.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 3);
+  AssertExprTypeName(AModel, Expr, 'Pointer', ABaseExitCode + 4);
+  if Length(Expr.Children) < 1 then
+    Halt(ABaseExitCode + 5);
+
+  FieldExpr := AModel.HirExprAt(Expr.Children[0] - 1);
+  if FieldExpr.Kind <> shekField then
+    Halt(ABaseExitCode + 6);
+  if FieldExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 7);
+  AssertExprTypeName(AModel, FieldExpr, 'Integer', ABaseExitCode + 8);
+  if FieldExpr.LiteralInt <> AExpectedFieldIndex then
+    Halt(ABaseExitCode + 9);
+  if FieldExpr.LiteralStr <> AExpectedFieldName then
+    Halt(ABaseExitCode + 10);
+  if Length(FieldExpr.Children) < 1 then
+    Halt(ABaseExitCode + 11);
+
+  DerefExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  if DerefExpr.Kind <> shekDeref then
+    Halt(ABaseExitCode + 12);
+  if DerefExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 13);
+  AssertExprTypeName(AModel, DerefExpr, AExpectedRecordTypeName,
+    ABaseExitCode + 14);
+  if Length(DerefExpr.Children) < 1 then
+    Halt(ABaseExitCode + 15);
+
+  PointerExpr := AModel.HirExprAt(DerefExpr.Children[0] - 1);
+  if PointerExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 16);
+  if PointerExpr.ValueClass <> shvcScalar then
+    Halt(ABaseExitCode + 17);
+  AssertExprTypeName(AModel, PointerExpr, 'Pointer', ABaseExitCode + 18);
+  if PointerExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 19);
+  Symbol := AModel.SymbolAt(PointerExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedPointerName then
+    Halt(ABaseExitCode + 20);
+end;
+
 procedure TestHaltRuntimeExprProducer;
 var
   Model: TSemanticModel;
@@ -581,6 +639,44 @@ begin
   end;
 end;
 
+procedure TestPointerFieldAddressRuntimeExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TNode = record'#10 +
+    '  Pad: Integer;'#10 +
+    '  Value: Integer;'#10 +
+    'end;'#10 +
+    'var node: TNode;'#10 +
+    'var p: ^TNode;'#10 +
+    'var ip: ^Integer;'#10 +
+    'begin'#10 +
+    '  node.Pad := 0;'#10 +
+    '  node.Value := 41;'#10 +
+    '  p := @node;'#10 +
+    '  ip := @p^.Value;'#10 +
+    '  Halt(ip^);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(190);
+    if Model.Status <> 'ready' then
+      Halt(191);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'ip',
+      'field_ref', Node) then
+      Halt(192);
+    AssertFieldAddressOfRuntimeExpr(Model, Node, 'p', 'TNode', 'Value', 1,
+      193);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestMixedWidthPromotionExprProducer;
 var
   Model: TSemanticModel;
@@ -816,6 +912,7 @@ begin
   TestDecRuntimeExprProducer;
   TestPointerAddressDerefRuntimeExprProducer;
   TestArrayElementAddressRuntimeExprProducer;
+  TestPointerFieldAddressRuntimeExprProducer;
   TestMixedWidthPromotionExprProducer;
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;

@@ -39,6 +39,16 @@ begin
   );
 end;
 
+function AddSymbolValue(const ASymbolId, ATypeId: LongInt): LongInt;
+var
+  Children: array of LongInt;
+begin
+  SetLength(Children, 0);
+  Result := Model.AddHirExpr(
+    shekSymbolValue, ATypeId, ASymbolId, Children, 0, '', '', 0, shvcScalar
+  );
+end;
+
 function AddAddressOf(const AChildExprId, APointerTypeId: LongInt): LongInt;
 var
   Children: array of LongInt;
@@ -70,6 +80,19 @@ begin
   Children[0] := AIndexExprId;
   Result := Model.AddHirExpr(
     shekArrayElem, ATypeId, ASymbolId, Children, 0, '', '', 0, shvcAddress
+  );
+end;
+
+function AddFieldAddress(const ABaseExprId, AFieldTypeId: LongInt;
+  const AFieldIndex: Int64; const AFieldName: string): LongInt;
+var
+  Children: array of LongInt;
+begin
+  SetLength(Children, 1);
+  Children[0] := ABaseExprId;
+  Result := Model.AddHirExpr(
+    shekField, AFieldTypeId, 0, Children, AFieldIndex, AFieldName, '', 0,
+    shvcAddress
   );
 end;
 
@@ -160,11 +183,25 @@ begin
   Result := False;
 end;
 
+function CountIntrinsic(const AFunc: THIRFunction;
+  const AIntrinsicName: string): LongInt;
 var
-  IntegerTypeId, PointerTypeId: LongInt;
-  SymArr, SymX, SymY: LongInt;
+  BlockIndex, InstrIndex: LongInt;
+begin
+  Result := 0;
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+      if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikIntrinsic) and
+        (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName =
+         AIntrinsicName) then
+        Inc(Result);
+end;
+
+var
+  IntegerTypeId, PointerTypeId, RecordTypeId: LongInt;
+  SymArr, SymP, SymX, SymY: LongInt;
   ExprFive, ExprOne, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
-  ExprArrElement: LongInt;
+  ExprArrElement, ExprPValue, ExprDerefPRecord, ExprPField: LongInt;
   NodeId: LongInt;
   Builder: THIRBuilder;
   Func: THIRFunction;
@@ -173,10 +210,12 @@ begin
   try
     IntegerTypeId := AddTypeWithFact('Integer', sskInt, 32, True);
     PointerTypeId := AddTypeWithFact('Pointer', sskPointer, 64, False);
+    RecordTypeId := Model.AddType('TNode', 'declared');
 
     SymX := Model.AddSymbol('x', 'variable', '', IntegerTypeId, 0);
     SymY := Model.AddSymbol('y', 'variable', '', IntegerTypeId, 0);
     SymArr := Model.AddSymbol('arr', 'variable', '', 0, 0);
+    SymP := Model.AddSymbol('p', 'variable', '', PointerTypeId, 0);
 
     ExprFive := AddIntLiteral(5, IntegerTypeId);
     ExprOne := AddIntLiteral(1, IntegerTypeId);
@@ -184,10 +223,16 @@ begin
     ExprAddressOfX := AddAddressOf(ExprXAddress, PointerTypeId);
     ExprDerefAddressOfX := AddDeref(ExprAddressOfX, IntegerTypeId);
     ExprArrElement := AddArrayElemAddress(SymArr, ExprOne, IntegerTypeId);
+    ExprPValue := AddSymbolValue(SymP, PointerTypeId);
+    ExprDerefPRecord := AddDeref(ExprPValue, RecordTypeId);
+    ExprPField := AddFieldAddress(ExprDerefPRecord, IntegerTypeId, 2,
+      'Value');
 
     Model.AddTypedHirNode('function-body-begin', 'TestAddress', 0,
       IntegerTypeId, '0::i');
     Model.AddTypedHirNode('var-decl-arr-runtime', 'arr', SymArr, 0, 'arr');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'p', SymP, PointerTypeId,
+      'p');
     Model.AddTypedHirNode('var-decl-runtime', 'x', SymX, IntegerTypeId, 'x');
     Model.AddTypedHirNode('var-decl-runtime', 'y', SymY, IntegerTypeId, 'y');
 
@@ -202,6 +247,10 @@ begin
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := arr[1]',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprArrElement);
+
+    NodeId := Model.AddTypedHirNode('assign-runtime', 'y := p^.Value',
+      SymY, IntegerTypeId, 'y'#9'int 0'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprPField);
     Model.AddTypedHirNode('function-body-end', 'TestAddress', 0, 0, '');
 
     Builder := THIRBuilder.Create(Model);
@@ -217,6 +266,8 @@ begin
         Halt(4);
       if not HasIntrinsic(Func, 'gep_i64') then
         Halt(5);
+      if CountIntrinsic(Func, 'gep_i64') < 2 then
+        Halt(6);
     finally
       Builder.Free;
     end;
