@@ -1,58 +1,47 @@
-# Findings: config startup example focused smoke
+# Findings: HTTP chunked pipelined request isolation proof
 
 ## Repo / Git Safety
 
-- 共享 checkout `main` 当前为 `fbd37d606bd7c5a6c4940bfaf7a54425aa4fca39`。
-- 共享 checkout 存在无关脏改动与未跟踪文件，不能在那上面直接开发或做危险操作。
-- `codex/config-phase3-example-main-20260603` worktree clean，且 `HEAD` 与当前 `main` 一致，
-  适合承接本轮 test-only 收口。
+- shared checkout 当前存在大量无关 dirty / untracked 路径，不能做任何广泛 staging 或回滚。
+- 本轮只允许提交：
+  - `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
+  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+  - `docs/nextpas.core.http.inbox.md`
+  - `docs/http/API_COVERAGE.md`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
 
-## Config Phase 3 Current Truth
+## Existing HTTP Truth Before This Batch
 
-- `README` 已对齐 Phase 3 已落地 API。
-- `examples/nextpas.core.config/config_startup_patterns` 已存在并可运行。
-- Phase 3D2 仍然没有进主线：`WithInterpolation(...)`、`TConfigInterpolationMode`、
-  borrowed view 等都不在当前实现范围内。
+- `Content-Length` 首请求的 same-read / same-write pipelining isolation proof 已经存在。
+- keep-alive `Content-Length` garbage tail 与 keep-alive chunked garbage tail 的 server/security
+  current-truth proof 已经存在：首个合法 request 先完成，尾巴随后作为 follow-up malformed request
+  返回 `400`。
+- 当前最有价值的缺口不是再堆 malformed close-only case，而是补齐
+  `chunked first request + next request in same buffer/write` 的正向隔离证明。
 
-## Example Behavior
+## New Evidence From This Batch
 
-- example 的成功标记是 `config-startup-patterns-status=pass`。
-- example 还会输出多条关键 smoke 行：
-  - `snapshot-host=127.0.0.1`
-  - `snapshot-port=8080`
-  - `snapshot-url=http://127.0.0.1:8080`
-  - `configload-host=127.0.0.1`
-  - `trybuild-valid=pass`
-  - `trybuild-invalid=pass`
-  - `mutable-port=9090`
-  - `snapshot-still-port=8080`
-- 这些输出正好覆盖 `Build`、`ConfigLoad`、`TryBuild`、`BuildConfig` 四条 Phase 3 启动路径。
+- parser focused test 证明：
+  - `chunked` 首请求后即使同一缓冲区里紧跟第二个 request，parser 也只消费首个完整 request；
+  - method / url / decoded body 保持为首个 request 的真实值，不会被第二个 request 污染。
+- server focused test 证明：
+  - 同一连接同一 write 中发送 `chunked POST` 后再跟 `GET`，两个 handler 都会依次完成；
+  - 首个 response body 保持 `upload:hello`，第二个 response body 保持 `next`；
+  - 这说明 H1 transport 的 read-ahead tail 在 chunked 首请求场景下也能正确保留与续派发。
 
-## Existing Test / Build Patterns
+## Batch Truth
 
-- `tests/nextpas.core.config/` 当前只有 `test_config`、`test_config_phase3`、
-  `test_config_nested` 三组 suite。
-- 顶层 `core/Makefile` 会自动发现 `tests/**/Makefile`，因此新增 `test_config_examples`
-  会自动进入 `make test` 总入口。
-- 现有独立 suite 的 Makefile 模式统一为：
-  `-MObjFPC -Sh -O2 -gl -gh` + `build/projects/...` 输出目录。
-- 进程输出捕获可直接复用 `test_winssl_session_resumption` 的
-  `TProcess + poUsePipes + poStderrToOutPut + AppendAvailableProcessOutput` 模式。
+- 这轮没有发现新的 HTTP 实现缺陷。
+- 两条新增 focused tests 首轮即 GREEN，因此本轮的真实性质是
+  **coverage expansion / current-truth locking**，不是生产修复。
+- 现阶段可以更明确地说：
+  - `same-read pipelined request isolation` 已覆盖 fixed-length 与 chunked 首请求；
+  - `same-write pipelined request isolation` 也已覆盖 fixed-length 与 chunked 首请求。
 
-## Design Boundaries For This Batch
+## Remaining Questions
 
-- 本轮只做 example smoke 自动化，不改 `nextpas.core.config.pas` 的生产实现。
-- suite 应优先覆盖“能否跑通”与“关键标记是否出现”，而不是重新在测试里复制 example 内部逻辑。
-- 即便本轮没有生产代码改动，也要保持 TDD 纪律：先写新 suite，再跑第一次结果，诚实记录是 RED
-  还是 coverage-only 直接 GREEN。
-
-## Final Batch Findings
-
-- 新建 `test_config_examples` 后，首跑就是直接 GREEN：
-  - `startup example run passes`
-  - `startup example reports key phase3 markers`
-- 这说明本轮的真实性质是 coverage expansion / automation closeout，而不是修复现有 config 生产缺陷。
-- 顶层总入口 `make TESTS_DIR=tests/nextpas.core.config test` 已确认会自动发现
-  `test_config_examples`，因此这组 smoke proof 不会只停留在手工单跑。
-- 当前新增 suite 不触碰 `TConfigWatcher`、`ReplaceFrom`、`IRWLock`、struct mapping，也没有引入
-  Phase 3D2 的 mode / borrowed-view 设计漂移。
+- 现在已经有 enough proof 支撑 keep-alive request-tail 行为讨论；下一步应决定哪些 tail / overrun
+  case 继续保持“首请求完成，尾巴 follow-up `400`”的 transport truth，哪些要进一步收紧成更早拒绝。
+- raw-wire malformed chunk framing 仍可继续系统性扫尾，但本轮不再需要为了 chunked pipelining 去改生产代码。

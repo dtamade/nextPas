@@ -649,6 +649,32 @@ begin
   CheckEqual('hello', LP.GetBody, 'keep-alive chunked first request preserves body');
 end;
 
+procedure TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq2: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+  LReq2 := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+  LReq := LReq1 + LReq2;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'pipelined chunked second request should not corrupt first request');
+  Check(LP.IsComplete, 'first pipelined chunked request should complete');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'chunked parser should consume only the first request');
+  Check(LP.GetMethod = hmPost, 'first pipelined chunked request preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'first pipelined chunked request preserves url');
+  CheckEqual('hello', LP.GetBody, 'first pipelined chunked request preserves decoded body');
+end;
+
 procedure TestUpgradeRequestCompletesWithoutParserError;
 var
   LP: IH1Parser;
@@ -823,6 +849,7 @@ begin
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
+  T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
