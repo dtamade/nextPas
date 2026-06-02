@@ -475,6 +475,29 @@ begin
     'duplicate content-length error mentions content-length');
 end;
 
+procedure TestHeaderNullByte;
+var
+  LP: IH1Parser;
+  LReq: array of Byte;
+const
+  PREFIX = 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Evil: foo';
+  SUFFIX = 'bar'#13#10#13#10;
+begin
+  LP := NewH1RequestParser;
+  SetLength(LReq, Length(PREFIX) + 1 + Length(SUFFIX));
+  Move(PREFIX[1], LReq[0], Length(PREFIX));
+  LReq[Length(PREFIX)] := 0;
+  Move(SUFFIX[1], LReq[Length(PREFIX) + 1], Length(SUFFIX));
+  LP.Execute(PAnsiChar(@LReq[0]), SizeUInt(Length(LReq)));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'null byte in header reports parser error');
+  Check(not LP.IsComplete, 'null byte in header is not complete');
+  Check(LP.ErrorMessage <> '', 'null byte in header has error message');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -599,6 +622,7 @@ begin
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
+  T.Run('Header with null byte', @TestHeaderNullByte);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);

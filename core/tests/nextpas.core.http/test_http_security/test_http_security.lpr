@@ -282,8 +282,8 @@ begin
     LReq[Length(PREFIX)] := 0; { null byte }
     Move(SUFFIX[1], LReq[Length(PREFIX) + 1], Length(SUFFIX));
     LResp := SendRawBytes(LPort, @LReq[0], SizeUInt(Length(LReq)));
-    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
-      'Null byte in header: rejected or closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Null byte in header: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -559,7 +559,7 @@ begin
   T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);
-  T.Run('Null byte in header', @TestHeaderNullByte);
+  T.Run('Null byte in header -> 400', @TestHeaderNullByte);
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Slowloris partial request', @TestSlowloris);
   T.Run('HTTP/0.9 no version', @TestHttp09Request);

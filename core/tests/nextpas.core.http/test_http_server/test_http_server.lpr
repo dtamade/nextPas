@@ -162,6 +162,35 @@ begin
   end;
 end;
 
+function SendRawRequestBytes(const APort: UInt16; const AData: PByte; ALen: SizeUInt): string;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  LConn := TcpConnect('127.0.0.1', APort);
+  try
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    if ALen > 0 then
+      LConn.Write(AData^, ALen);
+    repeat
+      try
+        LN := LConn.Read(LBuf[0], 8192);
+      except
+        LN := 0;
+      end;
+      if LN > 0 then
+      begin
+        SetLength(Result, Length(Result) + Int32(LN));
+        Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+  finally
+    LConn.Close;
+  end;
+end;
+
 { Test 1: Server responds 200 to simple GET }
 procedure TestSimpleGet200;
 var
@@ -663,6 +692,43 @@ begin
     LResp := SendRawRequest(LPort, REQ);
     Check(Pos('HTTP/1.1 400', LResp) > 0, 'duplicate content-length: status 400');
     Check(not LHandlerCalled, 'duplicate content-length: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHeaderNullByte;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LReq: array of Byte;
+  LHandlerCalled: Boolean;
+const
+  PREFIX = 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'X-Evil: foo';
+  SUFFIX = 'bar'#13#10 +
+           'Connection: close'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    SetLength(LReq, Length(PREFIX) + 1 + Length(SUFFIX));
+    Move(PREFIX[1], LReq[0], Length(PREFIX));
+    LReq[Length(PREFIX)] := 0;
+    Move(SUFFIX[1], LReq[Length(PREFIX) + 1], Length(SUFFIX));
+    LResp := SendRawRequestBytes(LPort, @LReq[0], SizeUInt(Length(LReq)));
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'null byte in header: status 400');
+    Check(not LHandlerCalled, 'null byte in header: handler not called');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -1605,6 +1671,7 @@ begin
   T.Run('Large body 131072 bytes', @TestLargeBody);
   T.Run('Malformed request -> 400 or close', @TestMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
+  T.Run('Header with null byte -> 400', @TestHeaderNullByte);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Query parameters', @TestQueryParam);
