@@ -341,6 +341,36 @@ begin
     'trailer field has no regular header entries');
 end;
 
+procedure TestChunkedRequestTrailerBytesTrackLateTrailer;
+var
+  LP: IH1Parser;
+  LPart1: string;
+  LPart2: string;
+begin
+  LP := NewH1RequestParser;
+  LPart1 := 'POST /upload HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Big'#13#10#13#10 +
+            '5'#13#10'hello'#13#10;
+  LPart2 := '0'#13#10 +
+            'X-Big: value'#13#10#13#10;
+  LP.Execute(PAnsiChar(LPart1), Length(LPart1));
+  Check(not LP.IsComplete, 'late trailer part1 not complete');
+  CheckEqual(Int64(0), LP.GetTrailerBytes,
+    'late trailer part1 has no trailer bytes yet');
+  LP.Execute(PAnsiChar(LPart2), Length(LPart2));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.IsComplete, 'late trailer request complete');
+  Check(not LP.HasError, 'late trailer request has no parser error');
+  CheckEqual(Int64(14), LP.GetTrailerBytes,
+    'late trailer bytes count field value and framing');
+  LP.Reset;
+  CheckEqual(Int64(0), LP.GetTrailerBytes,
+    'reset clears trailer byte count');
+end;
+
 procedure TestHeadRequest;
 var
   LP: IH1Parser;
@@ -455,6 +485,7 @@ begin
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
+  T.Run('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Incomplete input', @TestIncompleteInput);

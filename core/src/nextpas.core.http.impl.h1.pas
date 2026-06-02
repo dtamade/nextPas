@@ -336,6 +336,7 @@ var
   LContentLen: Int64;
   LTotalRead: SizeUInt;
   LHeadersDone: Boolean;
+  LRejected: Boolean;
 begin
   Result := True;
   LParser := NewH1RequestParser;
@@ -356,6 +357,7 @@ begin
       LParser.Reset;
       LTotalRead := 0;
       LHeadersDone := False;
+      LRejected := False;
       repeat
         LN := AConn.Read(LBuf[0], 4096);
         if LN = 0 then
@@ -373,11 +375,23 @@ begin
               Int64(FOptions.MaxHeaderSize)) then
           begin
             WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
+            LRejected := True;
             LKeepAlive := False;
             Break;
           end;
         end;
+        if LHeadersDone and (FOptions.MaxHeaderSize > 0) and
+           (LParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
+        begin
+          WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
+          LRejected := True;
+          LKeepAlive := False;
+          Break;
+        end;
       until LParser.IsComplete or LParser.HasError;
+
+      if LRejected then
+        Break;
 
       if not LParser.IsComplete then
       begin

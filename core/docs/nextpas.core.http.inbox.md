@@ -8,6 +8,7 @@
 - `test_http_h1parser` / `test_http_server` 先用 RED 证明 trailer 字段会污染普通 `Headers`
 - parser 现已隔离 trailer 字段：保留初始 `Trailer:` 声明头，但不再把实际 trailer 项混进常规请求头
 - 本轮包含生产修复：`nextpas.core.http.impl.h1.parser` 现在在 trailer 阶段忽略对普通 `Headers` 的写入
+- 本轮继续包含生产修复：chunked trailer 即使在后续 read 才到达，也会继续受 `MaxHeaderSize` 约束；超限时 server 返回 `431` 或安全关闭，且不进入 handler
 
 ## 当前重点
 
@@ -17,7 +18,8 @@
 - `nextpas.core.http.NewHttpClient` / `NewHttpServer` 仍然支持显式注入 `IHttpTransport` / `IHttpServerTransport`；显式注入优先于 registry 默认解析。
 - `http.impl.h1.chunked`、client 复用语义、hijack ownership 三条 H1 correctness 基线仍然保持成立。
 - `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / missing chunk-data CRLF / truncation / CL-TE conflict / trailer isolation focused proof。
-- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、以及 trailer 不污染请求头 focused proof。
+- `impl.h1.parser` 现在也有 late trailer byte accounting focused proof，用来支撑 server 对 trailer header budget 的后续判定。
+- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、trailer 不污染请求头、以及 oversize trailer 触发 `431`/安全关闭且 handler 不落地的 focused proof。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -32,6 +34,6 @@
 
 ## 下一步
 
-- 下一步优先补 trailer 后续边界：malformed trailer、oversize trailer 是否需要更强的 parser/server proof，以及 trailer 是否最终需要显式 public API。
+- 下一步优先补 malformed trailer 后续边界：非法 trailer header grammar、异常 trailer framing 是否需要更强的 parser/server/security proof，以及 trailer 是否最终需要显式 public API。
 - 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。

@@ -27,6 +27,7 @@ type
     function GetBody: string;
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
+    function GetTrailerBytes: Int64;
     function HasError: Boolean;
     function ErrorMessage: string;
     procedure Reset;
@@ -57,6 +58,7 @@ type
     FComplete: Boolean;
     FError: Boolean;
     FErrorMsg: string;
+    FTrailerBytes: Int64;
     FCurrentField: string;
     FCurrentValue: string;
     function ResponseEndsAtEof: Boolean;
@@ -72,6 +74,7 @@ type
     function GetBody: string;
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
+    function GetTrailerBytes: Int64;
     function HasError: Boolean;
     function ErrorMessage: string;
     procedure Reset;
@@ -104,6 +107,8 @@ var
 begin
   LSelf := GetSelf(p0);
   SetString(LChunk, p1, p2);
+  if (p0^.flags and F_TRAILING) <> 0 then
+    Inc(LSelf.FTrailerBytes, Int64(p2));
   LSelf.FCurrentField := LSelf.FCurrentField + LChunk;
   Result := 0;
 end;
@@ -115,6 +120,8 @@ var
 begin
   LSelf := GetSelf(p0);
   SetString(LChunk, p1, p2);
+  if (p0^.flags and F_TRAILING) <> 0 then
+    Inc(LSelf.FTrailerBytes, Int64(p2));
   LSelf.FCurrentValue := LSelf.FCurrentValue + LChunk;
   Result := 0;
 end;
@@ -128,6 +135,8 @@ begin
   begin
     if (p0^.flags and F_TRAILING) = 0 then
       LSelf.FHeaders.Add(LSelf.FCurrentField, LSelf.FCurrentValue);
+    if (p0^.flags and F_TRAILING) <> 0 then
+      Inc(LSelf.FTrailerBytes, 4);
   end;
   LSelf.FCurrentField := '';
   LSelf.FCurrentValue := '';
@@ -342,6 +351,11 @@ begin
     Result := True;
 end;
 
+function TH1Parser.GetTrailerBytes: Int64;
+begin
+  Result := FTrailerBytes;
+end;
+
 function TH1Parser.HasError: Boolean;
 begin
   Result := FError;
@@ -363,6 +377,7 @@ begin
   FComplete := False;
   FError := False;
   FErrorMsg := '';
+  FTrailerBytes := 0;
   FCurrentField := '';
   FCurrentValue := '';
   llhttp_reset(@FParser);

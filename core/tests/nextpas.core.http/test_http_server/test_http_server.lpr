@@ -1155,6 +1155,79 @@ begin
   end;
 end;
 
+procedure TestChunkedRequestOversizeTrailerUsesMaxHeaderSize;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+  LHandlerCalled: Boolean;
+  LOpts: THttpServerOptions;
+  LTrailerValue: string;
+  LPart1: string;
+  LPart2: string;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'ok';
+    LHandlerCalled := True;
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 2);
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    SetLength(LTrailerValue, 300);
+    FillChar(LTrailerValue[1], 300, Ord('x'));
+    LPart1 := 'POST / HTTP/1.1'#13#10 +
+              'Host: localhost'#13#10 +
+              'Transfer-Encoding: chunked'#13#10 +
+              'Trailer: X-Big'#13#10 +
+              'Connection: close'#13#10#13#10 +
+              '5'#13#10'hello'#13#10;
+    LPart2 := '0'#13#10 +
+              'X-Big: ' + LTrailerValue + #13#10#13#10;
+    LResp := '';
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LPart1[1], SizeUInt(Length(LPart1)));
+      platform_thread_sleep_ns(100000000);
+      LConn.Write(LPart2[1], SizeUInt(Length(LPart2)));
+      LConn.Shutdown;
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    finally
+      LConn.Close;
+    end;
+    Check((Pos('431', LResp) > 0) or (Length(LResp) = 0),
+      'oversize trailer: 431 or connection closed');
+    Check(not LHandlerCalled, 'oversize trailer: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Chunked response — handler writes without Content-Length }
 procedure TestChunkedResponse;
 var
@@ -1348,6 +1421,7 @@ begin
   T.Run('Chunked request content-length conflict -> 400', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order -> 400', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
+  T.Run('Chunked request oversize trailer uses MaxHeaderSize', @TestChunkedRequestOversizeTrailerUsesMaxHeaderSize);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
