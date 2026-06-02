@@ -4,14 +4,14 @@
 
 ## 当前在做什么
 
-- 编译器主线停在 `C3-B6`：普通标量变量赋值和 `Inc/Dec` 合成 `assign-runtime` 已接入结构化 `ExprId`，同时保留旧 blob。
-- 当前结论：C3 的安全单表达式 producer 面已经足够；`call-runtime` 参数列表、`for` 合成循环赋值、field/address/lvalue 场景不适合继续用单个 `ExprId` 硬迁移。
-- 最近验证：`scripts/rebuild-compiler.sh` 输出 `43803 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 编译器主线进入 `C4-A`：语义模型已有 scalar width facts，typed structured lowering 可以产出 i1/i8/i32/i64/f32/f64/ptr 等真实 HIR 类型。
+- 旧 blob 仍保持 legacy i64 路径；`Expr.TypeId=0` 或缺少 scalar fact 时必须回落 blob，避免半迁移破坏现有 smoke。
+- 最近验证：`scripts/rebuild-compiler.sh` 输出 `44143 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. `C4`：把整数宽度从单一 `i64` 推进到真实标量宽度，先设计 TypeId -> HIR type 的宽度/符号来源。
-2. `C4` 后续：补 cast/extend/trunc、signedness，明确 `sdiv/udiv` 与 `icmp signed/unsigned`。
+1. `C4-B`：补 cast/extend/trunc 与 sema promotion 规则，解决不同宽度表达式同处一棵树的问题。
+2. `C4-C`：补 signedness lowering，明确 `sdiv/udiv`、`srem/urem` 与 `icmp signed/unsigned`。
 3. `C5`：补 `lvalue/address` 模型，修 `P^.Field`、`@Arr[i]` 一类地址表达式。
 4. `C6`：补 allocator 和真实释放。
 5. `C7/C8`：多目标、优化、自举探针。
@@ -26,4 +26,4 @@
 ## 入口文档
 
 - 总路线：[`compiler/docs/compiler-goal-tree.md`](../compiler/docs/compiler-goal-tree.md)
-- 当前批次：[`compiler/docs/plans/2026-06-02-c3b6-incdec-expr-producer.md`](../compiler/docs/plans/2026-06-02-c3b6-incdec-expr-producer.md)
+- 当前批次：[`compiler/docs/plans/2026-06-02-c4a-scalar-width-facts.md`](../compiler/docs/plans/2026-06-02-c4a-scalar-width-facts.md)

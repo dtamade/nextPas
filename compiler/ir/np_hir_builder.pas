@@ -81,6 +81,13 @@ type
     FFwdFuncNames: array of string;
     FFwdFuncRetTypes: array of THIRTypeId;
     FFwdFuncCount: LongInt;
+    FLegacyIntType: THIRTypeId;
+    FBoolType: THIRTypeId;
+    FStringType: THIRTypeId;
+    FPtrType: THIRTypeId;
+    FIntTypeCache: array[0..3, 0..1] of THIRTypeId;
+    FFloat32Type: THIRTypeId;
+    FFloat64Type: THIRTypeId;
 
     function EnsureBlock(const AName: string): THIRBlockId;
     function FindBlock(const AName: string): THIRBlockId;
@@ -95,6 +102,14 @@ type
     function GetBoolType: THIRTypeId;
     function GetStringType: THIRTypeId;
     function GetPtrType: THIRTypeId;
+    function GetIntTypeByWidth(const ABitWidth: LongInt;
+      const ASigned: Boolean): THIRTypeId;
+    function GetFloatTypeByWidth(const ABitWidth: LongInt): THIRTypeId;
+    function SemanticTypeIdToHirTypeId(const ATypeId: LongInt): THIRTypeId;
+    function ExprHirTypeId(const AExpr: TSemanticHirExpr): THIRTypeId;
+    function ExprIdHirTypeId(const AExprId: LongInt): THIRTypeId;
+    function HirTypeIsInt(const ATypeId: THIRTypeId): Boolean;
+    function HirTypeIsBool(const ATypeId: THIRTypeId): Boolean;
 
     procedure EmitInstr(const AInstr: THIRInstr);
     function EmitBinOp(AKind: THIRInstrKind; AType: THIRTypeId;
@@ -143,7 +158,9 @@ type
     function CanLowerExpr(const AExprId: LongInt): Boolean;
     function CanLowerExprKind(const AExpr: TSemanticHirExpr): Boolean;
     function EmitConstInt(const AValue: Int64): THIRValueId;
-    function EmitStructuredSymbolValue(const ASymbolId: LongInt;
+    function EmitConstIntOfType(const AValue: Int64;
+      const ATypeId: THIRTypeId): THIRValueId;
+    function EmitStructuredSymbolValue(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function CompareKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
     function BinaryKindForOp(const AOp: string; out AKind: THIRInstrKind): Boolean;
@@ -153,6 +170,8 @@ type
       out AResult: THIRExprResult): Boolean;
     function LowerNodeExprOrBlob(const ANode: TTypedHirNode;
       const ABlob: string): THIRValueId;
+    function LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
+      const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
     procedure ProcessIntfAdjust(const ANode: TTypedHirNode);
     procedure ProcessIntfAddRef(const ANode: TTypedHirNode);
     procedure ProcessIntfRelease(const ANode: TTypedHirNode);
@@ -262,12 +281,6 @@ begin
   Result := Types[Count - 1];
 end;
 
-var
-  GIntType: THIRTypeId = 0;
-  GBoolType: THIRTypeId = 0;
-  GStringType: THIRTypeId = 0;
-  GPtrType: THIRTypeId = 0;
-
 function ExtractVarOperandName(const ABlob: string): string;
 begin
   Result := '';
@@ -281,6 +294,8 @@ begin
 end;
 
 constructor THIRBuilder.Create(ASemaModel: TSemanticModel);
+var
+  I, J: LongInt;
 begin
   inherited Create;
   FSemaModel := ASemaModel;
@@ -301,6 +316,15 @@ begin
   FPendingObjectFreeReceiverName := '';
   FPendingObjectFreeReceiverValue := 0;
   FPendingObjectFreeHeapRelease := False;
+  FLegacyIntType := 0;
+  FBoolType := 0;
+  FStringType := 0;
+  FPtrType := 0;
+  FFloat32Type := 0;
+  FFloat64Type := 0;
+  for I := Low(FIntTypeCache) to High(FIntTypeCache) do
+    for J := Low(FIntTypeCache[I]) to High(FIntTypeCache[I]) do
+      FIntTypeCache[I, J] := 0;
   SetLength(FAllocas, 0);
   SetLength(FGlobalNames, 0);
   SetLength(FGlobalTypes, 0);
@@ -369,42 +393,74 @@ var
   I: LongInt;
   Kind: THIRInstrKind;
   Symbol: TSemanticSymbol;
+  ResultType, LeftType, RightType: THIRTypeId;
 begin
   case AExpr.Kind of
     shekIntLiteral:
-      Result := True;
+      Result := ExprHirTypeId(AExpr) <> 0;
     shekSymbolValue:
       begin
         if AExpr.SymbolId <= 0 then
           Exit(False);
         Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
-        Result := Symbol.Name <> '';
+        Result := (Symbol.Name <> '') and (ExprHirTypeId(AExpr) <> 0);
       end;
     shekUnaryOp:
       begin
         Result := ((AExpr.Op = '-') or SameText(AExpr.Op, 'abs') or
-          SameText(AExpr.Op, 'not')) and (Length(AExpr.Children) >= 1);
-        if Result then
-          Result := CanLowerExpr(AExpr.Children[0]);
+          SameText(AExpr.Op, 'not')) and (Length(AExpr.Children) >= 1) and
+          (ExprHirTypeId(AExpr) <> 0) and CanLowerExpr(AExpr.Children[0]);
+        if Result and SameText(AExpr.Op, 'not') then
+          Result := HirTypeIsBool(ExprIdHirTypeId(AExpr.Children[0])) and
+            HirTypeIsBool(ExprHirTypeId(AExpr));
+        if Result and ((AExpr.Op = '-') or SameText(AExpr.Op, 'abs')) then
+          Result := HirTypeIsInt(ExprHirTypeId(AExpr)) and
+            (ExprHirTypeId(AExpr) = ExprIdHirTypeId(AExpr.Children[0]));
       end;
     shekBinaryOp:
       begin
+        ResultType := ExprHirTypeId(AExpr);
         Result := (Length(AExpr.Children) >= 2) and
+          (ResultType <> 0) and
           (BinaryKindForOp(AExpr.Op, Kind) or SameText(AExpr.Op, 'and') or
            SameText(AExpr.Op, 'or'));
         if Result then
           for I := 0 to 1 do
             if not CanLowerExpr(AExpr.Children[I]) then
               Exit(False);
+        if Result and BinaryKindForOp(AExpr.Op, Kind) then
+        begin
+          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          RightType := ExprIdHirTypeId(AExpr.Children[1]);
+          Result := HirTypeIsInt(ResultType) and (LeftType = ResultType) and
+            (RightType = ResultType);
+        end;
+        if Result and (SameText(AExpr.Op, 'and') or SameText(AExpr.Op, 'or')) then
+        begin
+          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          RightType := ExprIdHirTypeId(AExpr.Children[1]);
+          Result := HirTypeIsBool(ResultType) and HirTypeIsBool(LeftType) and
+            HirTypeIsBool(RightType);
+        end;
       end;
     shekCompareOp:
       begin
+        ResultType := ExprHirTypeId(AExpr);
         Result := (Length(AExpr.Children) >= 2) and
+          (ResultType <> 0) and HirTypeIsBool(ResultType) and
           CompareKindForOp(AExpr.Op, Kind);
         if Result then
           for I := 0 to 1 do
             if not CanLowerExpr(AExpr.Children[I]) then
               Exit(False);
+        if Result then
+        begin
+          LeftType := ExprIdHirTypeId(AExpr.Children[0]);
+          RightType := ExprIdHirTypeId(AExpr.Children[1]);
+          Result := (LeftType <> 0) and (LeftType = RightType) and
+            (HirTypeIsInt(LeftType) or HirTypeIsBool(LeftType) or
+             (FModule.Types.GetType(LeftType).Kind = htkPointer));
+        end;
       end;
   else
     Result := False;
@@ -424,13 +480,21 @@ begin
 end;
 
 function THIRBuilder.EmitConstInt(const AValue: Int64): THIRValueId;
+begin
+  Result := EmitConstIntOfType(AValue, GetIntType);
+end;
+
+function THIRBuilder.EmitConstIntOfType(const AValue: Int64;
+  const ATypeId: THIRTypeId): THIRValueId;
 var
   Instr: THIRInstr;
 begin
+  if ATypeId = 0 then
+    Exit(0);
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikLoad;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := ATypeId;
   Instr.IntrinsicName := 'const:' + IntToStr(AValue);
   EmitInstr(Instr);
   Result := Instr.ResultId;
@@ -463,25 +527,32 @@ begin
   Result := True;
 end;
 
-function THIRBuilder.EmitStructuredSymbolValue(const ASymbolId: LongInt;
+function THIRBuilder.EmitStructuredSymbolValue(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
   Symbol: TSemanticSymbol;
   V: THIRValueId;
   Instr: THIRInstr;
   ConstVal: Int64;
+  HirType: THIRTypeId;
 begin
   InitExprResult(AResult);
-  if ASymbolId <= 0 then
+  if AExpr.SymbolId <= 0 then
     Exit(False);
-  Symbol := FSemaModel.SymbolAt(ASymbolId - 1);
+  Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
   if Symbol.Name = '' then
+    Exit(False);
+
+  HirType := ExprHirTypeId(AExpr);
+  if HirType = 0 then
+    HirType := SemanticTypeIdToHirTypeId(Symbol.TypeId);
+  if HirType = 0 then
     Exit(False);
 
   V := FindAlloca(Symbol.Name);
   if (V = 0) and (Pos('.', Symbol.Name) > 0) then
   begin
-    EnsureAlloca(Symbol.Name, GetIntType);
+    EnsureAlloca(Symbol.Name, HirType);
     V := FindAlloca(Symbol.Name);
   end;
   if V <> 0 then
@@ -489,28 +560,29 @@ begin
     if IsVarParamAlloca(Symbol.Name) then
     begin
       V := EmitLoad(GetPtrType, V);
-      SetExprValue(AResult, EmitLoad(GetIntType, V), GetIntType, shvcScalar);
+      SetExprValue(AResult, EmitLoad(HirType, V), HirType, shvcScalar);
     end
     else if FindAllocaType(Symbol.Name) = GetPtrType then
       SetExprValue(AResult, EmitLoad(GetPtrType, V), GetPtrType, shvcScalar)
     else
-      SetExprValue(AResult, EmitLoad(GetIntType, V), GetIntType, shvcScalar);
+      SetExprValue(AResult, EmitLoad(HirType, V), HirType, shvcScalar);
     Exit(AResult.ValueId <> 0);
   end;
 
   if FSemaModel.LookupConstValue(Symbol.Name, ConstVal) then
   begin
-    SetExprValue(AResult, EmitConstInt(ConstVal), GetIntType, shvcScalar);
+    SetExprValue(AResult, EmitConstIntOfType(ConstVal, HirType), HirType,
+      shvcScalar);
     Exit(True);
   end;
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikCall;
-  Instr.TypeId := GetIntType;
+  Instr.TypeId := HirType;
   Instr.CallTarget := Symbol.Name;
   EmitInstr(Instr);
-  SetExprValue(AResult, Instr.ResultId, GetIntType, shvcScalar);
+  SetExprValue(AResult, Instr.ResultId, HirType, shvcScalar);
   Result := True;
 end;
 
@@ -530,6 +602,8 @@ begin
     Exit(False);
   if not LowerExprValue(AExpr.Children[1], Rhs) then
     Exit(False);
+  if (Lhs.TypeId = 0) or (Lhs.TypeId <> Rhs.TypeId) then
+    Exit(False);
   ValueId := EmitCmpOp(Kind, GetBoolType, Lhs.ValueId, Rhs.ValueId,
     Lhs.TypeId, Rhs.TypeId);
   SetExprValue(AResult, ValueId, GetBoolType, shvcScalar);
@@ -542,48 +616,62 @@ var
   Child: THIRExprResult;
   OneValue, ZextValue, SubValue, ZeroValue, CmpValue: THIRValueId;
   Instr: THIRInstr;
+  ResultType, BoolIntType: THIRTypeId;
 begin
   InitExprResult(AResult);
   if Length(AExpr.Children) < 1 then
     Exit(False);
   if not LowerExprValue(AExpr.Children[0], Child) then
     Exit(False);
+  ResultType := ExprHirTypeId(AExpr);
+  if ResultType = 0 then
+    Exit(False);
 
   if AExpr.Op = '-' then
   begin
-    SetExprValue(AResult, EmitBinOp(hikSub, GetIntType,
-      EmitConstInt(0), Child.ValueId), GetIntType, shvcScalar);
+    if Child.TypeId <> ResultType then
+      Exit(False);
+    SetExprValue(AResult, EmitBinOp(hikSub, ResultType,
+      EmitConstIntOfType(0, ResultType), Child.ValueId), ResultType,
+      shvcScalar);
     Exit(True);
   end;
 
   if SameText(AExpr.Op, 'abs') then
   begin
+    if Child.TypeId <> ResultType then
+      Exit(False);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikIntrinsic;
-    Instr.TypeId := GetIntType;
+    Instr.TypeId := ResultType;
     Instr.IntrinsicName := 'abs';
     SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeOperand(Child.ValueId);
+    Instr.Operands[0] := MakeTypedOperand(Child.ValueId, Child.TypeId);
     EmitInstr(Instr);
-    SetExprValue(AResult, Instr.ResultId, GetIntType, shvcScalar);
+    SetExprValue(AResult, Instr.ResultId, ResultType, shvcScalar);
     Exit(True);
   end;
 
   if SameText(AExpr.Op, 'not') then
   begin
-    OneValue := EmitConstInt(1);
+    if (not HirTypeIsBool(Child.TypeId)) or
+      (not HirTypeIsBool(ResultType)) then
+      Exit(False);
+    BoolIntType := GetIntTypeByWidth(32, True);
+    OneValue := EmitConstIntOfType(1, BoolIntType);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikZext;
-    Instr.TypeId := GetIntType;
+    Instr.TypeId := BoolIntType;
     SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeOperand(Child.ValueId);
+    Instr.Operands[0] := MakeTypedOperand(Child.ValueId, Child.TypeId);
     EmitInstr(Instr);
     ZextValue := Instr.ResultId;
-    SubValue := EmitBinOp(hikSub, GetIntType, OneValue, ZextValue);
-    ZeroValue := EmitConstInt(0);
-    CmpValue := EmitCmpOp(hikCmpNe, GetBoolType, SubValue, ZeroValue, 0, 0);
+    SubValue := EmitBinOp(hikSub, BoolIntType, OneValue, ZextValue);
+    ZeroValue := EmitConstIntOfType(0, BoolIntType);
+    CmpValue := EmitCmpOp(hikCmpNe, GetBoolType, SubValue, ZeroValue,
+      BoolIntType, BoolIntType);
     SetExprValue(AResult, CmpValue, GetBoolType, shvcScalar);
     Exit(True);
   end;
@@ -598,6 +686,7 @@ var
   Kind: THIRInstrKind;
   ValueId, LhsInt, RhsInt, ZeroValue: THIRValueId;
   Instr: THIRInstr;
+  ResultType, BoolIntType: THIRTypeId;
 begin
   InitExprResult(AResult);
   if Length(AExpr.Children) < 2 then
@@ -606,40 +695,50 @@ begin
     Exit(False);
   if not LowerExprValue(AExpr.Children[1], Rhs) then
     Exit(False);
+  ResultType := ExprHirTypeId(AExpr);
+  if ResultType = 0 then
+    Exit(False);
 
   if BinaryKindForOp(AExpr.Op, Kind) then
   begin
-    ValueId := EmitBinOp(Kind, GetIntType, Lhs.ValueId, Rhs.ValueId);
-    SetExprValue(AResult, ValueId, GetIntType, shvcScalar);
+    if (Lhs.TypeId <> ResultType) or (Rhs.TypeId <> ResultType) then
+      Exit(False);
+    ValueId := EmitBinOp(Kind, ResultType, Lhs.ValueId, Rhs.ValueId);
+    SetExprValue(AResult, ValueId, ResultType, shvcScalar);
     Exit(True);
   end;
 
   if SameText(AExpr.Op, 'and') or SameText(AExpr.Op, 'or') then
   begin
+    if (not HirTypeIsBool(ResultType)) or (not HirTypeIsBool(Lhs.TypeId)) or
+      (not HirTypeIsBool(Rhs.TypeId)) then
+      Exit(False);
+    BoolIntType := GetIntTypeByWidth(32, True);
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikZext;
-    Instr.TypeId := GetIntType;
+    Instr.TypeId := BoolIntType;
     SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeOperand(Lhs.ValueId);
+    Instr.Operands[0] := MakeTypedOperand(Lhs.ValueId, Lhs.TypeId);
     EmitInstr(Instr);
     LhsInt := Instr.ResultId;
 
     FillChar(Instr, SizeOf(Instr), 0);
     Instr.ResultId := FModule.NewValue;
     Instr.Kind := hikZext;
-    Instr.TypeId := GetIntType;
+    Instr.TypeId := BoolIntType;
     SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeOperand(Rhs.ValueId);
+    Instr.Operands[0] := MakeTypedOperand(Rhs.ValueId, Rhs.TypeId);
     EmitInstr(Instr);
     RhsInt := Instr.ResultId;
 
     if SameText(AExpr.Op, 'and') then
-      ValueId := EmitBinOp(hikMul, GetIntType, LhsInt, RhsInt)
+      ValueId := EmitBinOp(hikMul, BoolIntType, LhsInt, RhsInt)
     else
-      ValueId := EmitBinOp(hikAdd, GetIntType, LhsInt, RhsInt);
-    ZeroValue := EmitConstInt(0);
-    ValueId := EmitCmpOp(hikCmpNe, GetBoolType, ValueId, ZeroValue, 0, 0);
+      ValueId := EmitBinOp(hikAdd, BoolIntType, LhsInt, RhsInt);
+    ZeroValue := EmitConstIntOfType(0, BoolIntType);
+    ValueId := EmitCmpOp(hikCmpNe, GetBoolType, ValueId, ZeroValue,
+      BoolIntType, BoolIntType);
     SetExprValue(AResult, ValueId, GetBoolType, shvcScalar);
     Exit(True);
   end;
@@ -651,17 +750,21 @@ function THIRBuilder.LowerExprKind(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
   ValueId: THIRValueId;
+  HirType: THIRTypeId;
 begin
   InitExprResult(AResult);
   case AExpr.Kind of
     shekIntLiteral:
       begin
-        ValueId := EmitConstInt(AExpr.LiteralInt);
-        SetExprValue(AResult, ValueId, GetIntType, shvcScalar);
+        HirType := ExprHirTypeId(AExpr);
+        if HirType = 0 then
+          Exit(False);
+        ValueId := EmitConstIntOfType(AExpr.LiteralInt, HirType);
+        SetExprValue(AResult, ValueId, HirType, shvcScalar);
         Result := True;
       end;
     shekSymbolValue:
-      Result := EmitStructuredSymbolValue(AExpr.SymbolId, AResult);
+      Result := EmitStructuredSymbolValue(AExpr, AResult);
     shekUnaryOp:
       Result := LowerUnaryExpr(AExpr, AResult);
     shekBinaryOp:
@@ -704,39 +807,157 @@ end;
 function THIRBuilder.LowerNodeExprOrBlob(const ANode: TTypedHirNode;
   const ABlob: string): THIRValueId;
 var
+  TypeId: THIRTypeId;
+begin
+  Result := LowerNodeExprOrBlobTyped(ANode, ABlob, TypeId);
+end;
+
+function THIRBuilder.LowerNodeExprOrBlobTyped(const ANode: TTypedHirNode;
+  const ABlob: string; out ATypeId: THIRTypeId): THIRValueId;
+var
   ExprResult: THIRExprResult;
 begin
+  ATypeId := 0;
   if (ANode.ExprId > 0) and LowerExprValue(ANode.ExprId, ExprResult) then
+  begin
+    ATypeId := ExprResult.TypeId;
     Exit(ExprResult.ValueId);
+  end;
   Result := ParseIntBlob(ABlob);
 end;
 
 function THIRBuilder.GetIntType: THIRTypeId;
 begin
-  if GIntType = 0 then
-    GIntType := FModule.Types.AddIntType(64, True);
-  Result := GIntType;
+  if FLegacyIntType = 0 then
+    FLegacyIntType := FModule.Types.AddIntType(64, True);
+  Result := FLegacyIntType;
 end;
 
 function THIRBuilder.GetBoolType: THIRTypeId;
 begin
-  if GBoolType = 0 then
-    GBoolType := FModule.Types.AddType(htkBool, 'bool');
-  Result := GBoolType;
+  if FBoolType = 0 then
+    FBoolType := FModule.Types.AddType(htkBool, 'bool');
+  Result := FBoolType;
 end;
 
 function THIRBuilder.GetStringType: THIRTypeId;
 begin
-  if GStringType = 0 then
-    GStringType := FModule.Types.AddStringType(skAnsi);
-  Result := GStringType;
+  if FStringType = 0 then
+    FStringType := FModule.Types.AddStringType(skAnsi);
+  Result := FStringType;
 end;
 
 function THIRBuilder.GetPtrType: THIRTypeId;
 begin
-  if GPtrType = 0 then
-    GPtrType := FModule.Types.AddPointerType(0);
-  Result := GPtrType;
+  if FPtrType = 0 then
+    FPtrType := FModule.Types.AddPointerType(0);
+  Result := FPtrType;
+end;
+
+function THIRBuilder.GetIntTypeByWidth(const ABitWidth: LongInt;
+  const ASigned: Boolean): THIRTypeId;
+var
+  WidthIndex, SignedIndex: LongInt;
+begin
+  case ABitWidth of
+    1:
+      Exit(GetBoolType);
+    8:
+      WidthIndex := 0;
+    16:
+      WidthIndex := 1;
+    32:
+      WidthIndex := 2;
+    64:
+      WidthIndex := 3;
+  else
+    Exit(0);
+  end;
+
+  if ASigned then
+    SignedIndex := 1
+  else
+    SignedIndex := 0;
+  if FIntTypeCache[WidthIndex, SignedIndex] = 0 then
+    FIntTypeCache[WidthIndex, SignedIndex] :=
+      FModule.Types.AddIntType(ABitWidth, ASigned);
+  Result := FIntTypeCache[WidthIndex, SignedIndex];
+end;
+
+function THIRBuilder.GetFloatTypeByWidth(
+  const ABitWidth: LongInt
+): THIRTypeId;
+begin
+  case ABitWidth of
+    32:
+      begin
+        if FFloat32Type = 0 then
+          FFloat32Type := FModule.Types.AddFloatType(fwF32);
+        Result := FFloat32Type;
+      end;
+    64:
+      begin
+        if FFloat64Type = 0 then
+          FFloat64Type := FModule.Types.AddFloatType(fwF64);
+        Result := FFloat64Type;
+      end;
+  else
+    Result := 0;
+  end;
+end;
+
+function THIRBuilder.SemanticTypeIdToHirTypeId(
+  const ATypeId: LongInt
+): THIRTypeId;
+var
+  Fact: TSemanticScalarTypeFact;
+begin
+  if (FSemaModel = nil) or
+    (not FSemaModel.GetTypeScalarFact(ATypeId, Fact)) then
+    Exit(0);
+
+  case Fact.Kind of
+    sskBool:
+      Result := GetBoolType;
+    sskInt:
+      Result := GetIntTypeByWidth(Fact.BitWidth, Fact.Signed);
+    sskFloat:
+      Result := GetFloatTypeByWidth(Fact.BitWidth);
+    sskPointer:
+      Result := GetPtrType;
+  else
+    Result := 0;
+  end;
+end;
+
+function THIRBuilder.ExprHirTypeId(
+  const AExpr: TSemanticHirExpr
+): THIRTypeId;
+begin
+  Result := SemanticTypeIdToHirTypeId(AExpr.TypeId);
+end;
+
+function THIRBuilder.ExprIdHirTypeId(const AExprId: LongInt): THIRTypeId;
+var
+  Expr: TSemanticHirExpr;
+begin
+  if (FSemaModel = nil) or (AExprId <= 0) or
+    (AExprId > FSemaModel.HirExprCount) then
+    Exit(0);
+  Expr := FSemaModel.HirExprAt(AExprId - 1);
+  Result := ExprHirTypeId(Expr);
+end;
+
+function THIRBuilder.HirTypeIsInt(const ATypeId: THIRTypeId): Boolean;
+begin
+  Result := (ATypeId <> 0) and
+    (FModule.Types.GetType(ATypeId).Kind = htkInt);
+end;
+
+function THIRBuilder.HirTypeIsBool(const ATypeId: THIRTypeId): Boolean;
+begin
+  Result := (ATypeId <> 0) and
+    (FModule.Types.GetType(ATypeId).Kind = htkBool);
 end;
 
 procedure THIRBuilder.EnsureAlloca(const AName: string; AType: THIRTypeId);
@@ -857,8 +1078,8 @@ begin
   Instr.Kind := AKind;
   Instr.TypeId := AType;
   SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeOperand(ALhs);
-  Instr.Operands[1] := MakeOperand(ARhs);
+  Instr.Operands[0] := MakeTypedOperand(ALhs, AType);
+  Instr.Operands[1] := MakeTypedOperand(ARhs, AType);
   EmitInstr(Instr);
   Result := Instr.ResultId;
 end;
@@ -873,12 +1094,12 @@ begin
   Instr.Kind := AKind;
   Instr.TypeId := AType;
   SetLength(Instr.Operands, 2);
-  if (ALhsType <> 0) and (ALhsType = GetPtrType) then
-    Instr.Operands[0] := MakeTypedOperand(ALhs, GetPtrType)
+  if ALhsType <> 0 then
+    Instr.Operands[0] := MakeTypedOperand(ALhs, ALhsType)
   else
     Instr.Operands[0] := MakeOperand(ALhs);
-  if (ARhsType <> 0) and (ARhsType = GetPtrType) then
-    Instr.Operands[1] := MakeTypedOperand(ARhs, GetPtrType)
+  if ARhsType <> 0 then
+    Instr.Operands[1] := MakeTypedOperand(ARhs, ARhsType)
   else
     Instr.Operands[1] := MakeOperand(ARhs);
   EmitInstr(Instr);
@@ -895,7 +1116,7 @@ begin
   Instr.Kind := hikLoad;
   Instr.TypeId := AType;
   SetLength(Instr.Operands, 1);
-  Instr.Operands[0] := MakeOperand(AAddr);
+  Instr.Operands[0] := MakeTypedOperand(AAddr, GetPtrType);
   EmitInstr(Instr);
   Result := Instr.ResultId;
 end;
@@ -910,8 +1131,8 @@ begin
   Instr.Kind := hikStore;
   Instr.TypeId := AType;
   SetLength(Instr.Operands, 2);
-  Instr.Operands[0] := MakeOperand(AVal);
-  Instr.Operands[1] := MakeOperand(AAddr);
+  Instr.Operands[0] := MakeTypedOperand(AVal, AType);
+  Instr.Operands[1] := MakeTypedOperand(AAddr, GetPtrType);
   EmitInstr(Instr);
 end;
 
@@ -1839,9 +2060,13 @@ var
   ParamValueId: THIRValueId;
   Arg: string;
   TabPos, Code: LongInt;
+  DeclType: THIRTypeId;
 begin
   if ANode.NodeKind = hnkVarDeclRuntime then
   begin
+    DeclType := SemanticTypeIdToHirTypeId(ANode.TypeId);
+    if DeclType = 0 then
+      DeclType := GetIntType;
     if FPendingParamCount > 0 then
     begin
       ParamIdx := FPendingParamLlvmIdx;
@@ -1864,12 +2089,12 @@ begin
         FillChar(Instr, SizeOf(Instr), 0);
         Instr.ResultId := FModule.NewValue;
         Instr.Kind := hikAlloca;
-        Instr.TypeId := GetIntType;
+        Instr.TypeId := DeclType;
         EmitInstr(Instr);
 
-        RegisterAllocaEntry(ANode.Operand, Instr.ResultId, GetIntType, False);
+        RegisterAllocaEntry(ANode.Operand, Instr.ResultId, DeclType, False);
 
-        EmitStore(GetIntType, ParamValueId, Instr.ResultId);
+        EmitStore(DeclType, ParamValueId, Instr.ResultId);
       end;
       Dec(FPendingParamCount);
       Inc(FPendingParamLlvmIdx);
@@ -1887,7 +2112,7 @@ begin
       FModule.AddGlobal(ANode.Operand, GetIntType);
     end
     else
-      EnsureAlloca(ANode.Operand, GetIntType);
+      EnsureAlloca(ANode.Operand, DeclType);
   end
   else if ANode.NodeKind = hnkVarDeclStrRuntime then
   begin
@@ -2054,14 +2279,14 @@ var
   TabPos: LongInt;
   VarName, Blob, RealName: string;
   V, Addr, PtrVal: THIRValueId;
-  StoreType: THIRTypeId;
+  StoreType, ValueType: THIRTypeId;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos = 0 then Exit;
   VarName := Copy(ANode.Operand, 1, TabPos - 1);
   Blob := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
 
-  V := LowerNodeExprOrBlob(ANode, Blob);
+  V := LowerNodeExprOrBlobTyped(ANode, Blob, ValueType);
 
   if (Length(VarName) > 1) and (VarName[1] = '*') then
   begin
@@ -2070,7 +2295,9 @@ begin
     if (V <> 0) and (Addr <> 0) then
     begin
       PtrVal := EmitLoad(GetPtrType, Addr);
-      EmitStore(GetIntType, V, PtrVal);
+      if ValueType = 0 then
+        ValueType := GetIntType;
+      EmitStore(ValueType, V, PtrVal);
     end;
     Exit;
   end;
@@ -2086,12 +2313,16 @@ begin
     if IsVarParamAlloca(VarName) then
     begin
       Addr := EmitLoad(GetPtrType, Addr);
-      EmitStore(GetIntType, V, Addr);
+      if ValueType = 0 then
+        ValueType := GetIntType;
+      EmitStore(ValueType, V, Addr);
     end
     else
     begin
       StoreType := FindAllocaType(VarName);
-      if StoreType = 0 then
+      if ValueType <> 0 then
+        StoreType := ValueType
+      else if StoreType = 0 then
         StoreType := GetIntType;
       EmitStore(StoreType, V, Addr);
     end;

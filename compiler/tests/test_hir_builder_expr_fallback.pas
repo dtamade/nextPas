@@ -3,7 +3,7 @@ program test_hir_builder_expr_fallback;
 {$mode objfpc}{$H+}
 
 uses
-  SysUtils, np_semantic_model, np_hir_builder, np_hir_model;
+  SysUtils, np_semantic_model, np_hir_builder, np_hir_model, np_hir_types;
 
 function HasConstLoad(const AFunc: THIRFunction; const AName: string): Boolean;
 var
@@ -14,6 +14,42 @@ begin
       if (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].Kind = hikLoad) and
         (AFunc.Blocks[BlockIndex].Instrs[InstrIndex].IntrinsicName = AName) then
         Exit(True);
+  Result := False;
+end;
+
+function HasPointerStore(const AModule: THIRModule;
+  const AFunc: THIRFunction): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+  Instr: THIRInstr;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      if (Instr.Kind = hikStore) and
+        (AModule.Types.GetType(Instr.TypeId).Kind = htkPointer) then
+        Exit(True);
+    end;
+  Result := False;
+end;
+
+function HasIntStore(const AModule: THIRModule; const AFunc: THIRFunction;
+  const ABitWidth: Byte): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+  Instr: THIRInstr;
+  TypeRec: THIRTypeRec;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      TypeRec := AModule.Types.GetType(Instr.TypeId);
+      if (Instr.Kind = hikStore) and (TypeRec.Kind = htkInt) and
+        (TypeRec.BitWidth = ABitWidth) then
+        Exit(True);
+    end;
   Result := False;
 end;
 
@@ -172,6 +208,35 @@ begin
         Halt(7);
       if HasConstLoad(Func, 'const:123') then
         Halt(8);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'src', 0, 0, 'src');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'dst', 0, 0, 'dst');
+    Model.AddTypedHirNode('var-decl-runtime', 'value', 0, 0, 'value');
+    Model.AddTypedHirNode(
+      'assign-runtime', 'dst := src blob ptr', 0, 0, 'dst'#9'var src'#10
+    );
+    Model.AddTypedHirNode(
+      'assign-runtime', 'src^ := value blob int', 0, 0, '*src'#9'var value'#10
+    );
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      if Builder.Module.FunctionCount = 0 then
+        Halt(9);
+      Func := Builder.Module.FunctionAt(0);
+      if not HasPointerStore(Builder.Module, Func) then
+        Halt(10);
+      if not HasIntStore(Builder.Module, Func, 64) then
+        Halt(11);
     finally
       Builder.Free;
     end;

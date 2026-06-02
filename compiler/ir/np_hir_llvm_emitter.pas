@@ -43,6 +43,8 @@ type
     procedure Emit(const S: string);
     function ValueRef(AValueId: THIRValueId): string;
     function TypeToLlvm(ATypeId: THIRTypeId): string;
+    function OperandTypeToLlvm(const AOperand: THIROperand;
+      const AFallback: string): string;
     function AddStrConstant(const AValue: string): LongInt;
     function EscapeLlvmStr(const AValue: string): string;
     function IsSretFunction(const AName: string): Boolean;
@@ -153,6 +155,15 @@ begin
   else
     Result := 'i64';
   end;
+end;
+
+function THIRLlvmEmitter.OperandTypeToLlvm(const AOperand: THIROperand;
+  const AFallback: string): string;
+begin
+  if AOperand.TypeId <> 0 then
+    Result := TypeToLlvm(AOperand.TypeId)
+  else
+    Result := AFallback;
 end;
 
 procedure THIRLlvmEmitter.EmitCallInstr(const AInstr: THIRInstr);
@@ -313,20 +324,18 @@ begin
       end;
       if Length(AInstr.Operands) >= 2 then
       begin
-        if (AInstr.Operands[0].TypeId <> 0) and
-          (FModule.Types.GetType(AInstr.Operands[0].TypeId).Kind = htkPointer) then
-          Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' ptr' +
-            ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-            ', ' + ValueRef(AInstr.Operands[1].ValueId))
-        else
-          Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' i64' +
-            ' ' + ValueRef(AInstr.Operands[0].ValueId) +
-            ', ' + ValueRef(AInstr.Operands[1].ValueId));
+        LlvmType := OperandTypeToLlvm(AInstr.Operands[0], 'i64');
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = icmp ' + Op + ' ' +
+          LlvmType + ' ' + ValueRef(AInstr.Operands[0].ValueId) +
+          ', ' + ValueRef(AInstr.Operands[1].ValueId));
       end;
     end;
     hikZext:
       if Length(AInstr.Operands) >= 1 then
-        Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext i1 ' + ValueRef(AInstr.Operands[0].ValueId) + ' to i64');
+        Emit('  ' + ValueRef(AInstr.ResultId) + ' = zext ' +
+          OperandTypeToLlvm(AInstr.Operands[0], 'i1') + ' ' +
+          ValueRef(AInstr.Operands[0].ValueId) + ' to ' +
+          TypeToLlvm(AInstr.TypeId));
     hikCall:
       EmitCallInstr(AInstr);
     hikIntrinsic:

@@ -1976,20 +1976,13 @@ begin
     Exit;
 
   TypeInfo := FModel.TypeAt(ATypeId - 1);
+  if FModel.TypeHasScalarFact(ATypeId) then
+    Exit(True);
+
   if not SameText(TypeInfo.Kind, 'builtin') then
     Exit;
 
   Result :=
-    SameText(TypeInfo.Name, 'Boolean') or
-    SameText(TypeInfo.Name, 'Integer') or
-    SameText(TypeInfo.Name, 'Byte') or
-    SameText(TypeInfo.Name, 'Word') or
-    SameText(TypeInfo.Name, 'LongInt') or
-    SameText(TypeInfo.Name, 'Int64') or
-    SameText(TypeInfo.Name, 'QWord') or
-    SameText(TypeInfo.Name, 'Single') or
-    SameText(TypeInfo.Name, 'Double') or
-    SameText(TypeInfo.Name, 'Char') or
     SameText(TypeInfo.Name, 'AnsiString') or
     SameText(TypeInfo.Name, 'ShortString') or
     SameText(TypeInfo.Name, 'WideString') or
@@ -3296,19 +3289,25 @@ begin
 end;
 
 procedure TSemanticAnalyzer.SeedBuiltinTypes;
+var
+  BooleanTypeId, IntegerTypeId, CharTypeId: LongInt;
+  ByteTypeId, WordTypeId, LongIntTypeId, LongWordTypeId: LongInt;
+  Int64TypeId, QWordTypeId, SingleTypeId, DoubleTypeId: LongInt;
+  PointerTypeId, CardinalTypeId: LongInt;
 begin
-  FModel.AddType('Boolean', 'builtin');
-  FModel.AddType('Integer', 'builtin');
+  BooleanTypeId := FModel.AddType('Boolean', 'builtin');
+  IntegerTypeId := FModel.AddType('Integer', 'builtin');
   FModel.AddType('AnsiString', 'builtin');
-  FModel.AddType('Char', 'builtin');
-  FModel.AddType('Byte', 'builtin');
-  FModel.AddType('Word', 'builtin');
-  FModel.AddType('LongInt', 'builtin');
-  FModel.AddType('Int64', 'builtin');
-  FModel.AddType('QWord', 'builtin');
-  FModel.AddType('Single', 'builtin');
-  FModel.AddType('Double', 'builtin');
-  FModel.AddType('Pointer', 'builtin');
+  CharTypeId := FModel.AddType('Char', 'builtin');
+  ByteTypeId := FModel.AddType('Byte', 'builtin');
+  WordTypeId := FModel.AddType('Word', 'builtin');
+  LongIntTypeId := FModel.AddType('LongInt', 'builtin');
+  LongWordTypeId := FModel.AddType('LongWord', 'builtin');
+  Int64TypeId := FModel.AddType('Int64', 'builtin');
+  QWordTypeId := FModel.AddType('QWord', 'builtin');
+  SingleTypeId := FModel.AddType('Single', 'builtin');
+  DoubleTypeId := FModel.AddType('Double', 'builtin');
+  PointerTypeId := FModel.AddType('Pointer', 'builtin');
   FModel.AddType('Text', 'builtin');
   FModel.AddType('ShortString', 'builtin');
   FModel.AddType('WideString', 'builtin');
@@ -3316,7 +3315,21 @@ begin
   FModel.AddType('Variant', 'builtin');
   FModel.AddType('OleVariant', 'builtin');
   FModel.AddType('String', 'alias');
-  FModel.AddType('Cardinal', 'alias');
+  CardinalTypeId := FModel.AddType('Cardinal', 'alias');
+
+  FModel.SetTypeScalarFact(BooleanTypeId, sskBool, 1, False);
+  FModel.SetTypeScalarFact(CharTypeId, sskInt, 8, False);
+  FModel.SetTypeScalarFact(ByteTypeId, sskInt, 8, False);
+  FModel.SetTypeScalarFact(WordTypeId, sskInt, 16, False);
+  FModel.SetTypeScalarFact(IntegerTypeId, sskInt, 32, True);
+  FModel.SetTypeScalarFact(LongIntTypeId, sskInt, 32, True);
+  FModel.SetTypeScalarFact(LongWordTypeId, sskInt, 32, False);
+  FModel.SetTypeScalarFact(CardinalTypeId, sskInt, 32, False);
+  FModel.SetTypeScalarFact(Int64TypeId, sskInt, 64, True);
+  FModel.SetTypeScalarFact(QWordTypeId, sskInt, 64, False);
+  FModel.SetTypeScalarFact(SingleTypeId, sskFloat, 32, False);
+  FModel.SetTypeScalarFact(DoubleTypeId, sskFloat, 64, False);
+  FModel.SetTypeScalarFact(PointerTypeId, sskPointer, 64, False);
 end;
 
 procedure TSemanticAnalyzer.AssignScopesToSymbols;

@@ -46,8 +46,8 @@
 | **C0** | 137 smoke 基线冻结 + 本目标树固化 | — | ✅ 2026-06-01 |
 | **C1** | 债务3 第一刀：target facts 接入 emitter，去硬编码 triple/datalayout | C0 | ✅ 2026-06-01 |
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
-| **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | 🚧 2026-06-01 |
-| **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ⬜ |
+| **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
+| **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | 🚧 2026-06-02 |
 | **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | ⬜ |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
@@ -126,3 +126,10 @@
   场景继续留给后续节点。TDD RED=`test_semantic_hir_expr_producer` 退出 53；
   GREEN 后 focused tests + 完整重编译（43803 lines compiled）+
   137/137 LLVM smoke 全绿。C3 的安全单表达式 producer 面已足够，下一步进入 C4。
+- 2026-06-02 C4-A：真实标量宽度根基第一刀：`TSemanticModel` 增加
+  `TSemanticScalarTypeFact`，sema 种下 Boolean/i1、Byte/u8、Word/u16、
+  Integer/LongInt/i32、LongWord/Cardinal/u32、Int64/i64、QWord/u64、
+  Single/f32、Double/f64、Pointer/ptr facts；HIR builder 增加 TypeId→HIR type
+  映射，typed structured lowering 在 fact 完整且操作数同型时产出真实宽度，
+  fact 缺失则回落旧 blob；LLVM emitter 的 `icmp`/`zext` 改用 typed operand/result。
+  C4 仍未完成：cast/extend/trunc、promotion 与 unsigned `div/mod/icmp` 留给后续。

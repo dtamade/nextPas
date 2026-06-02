@@ -7,6 +7,7 @@ uses
 
 var
   Model: TSemanticModel;
+  IntegerTypeId, BooleanTypeId: LongInt;
 
 procedure AssertTrue(const ACondition: Boolean; const ACode: LongInt);
 begin
@@ -20,7 +21,7 @@ var
 begin
   SetLength(Children, 0);
   Result := Model.AddHirExpr(
-    shekIntLiteral, 0, 0, Children, AValue, '', '', 0, shvcScalar
+    shekIntLiteral, IntegerTypeId, 0, Children, AValue, '', '', 0, shvcScalar
   );
 end;
 
@@ -30,7 +31,8 @@ var
 begin
   SetLength(Children, 0);
   Result := Model.AddHirExpr(
-    shekSymbolValue, 0, ASymbolId, Children, 0, '', '', 0, shvcScalar
+    shekSymbolValue, IntegerTypeId, ASymbolId, Children, 0, '', '', 0,
+    shvcScalar
   );
 end;
 
@@ -41,7 +43,7 @@ begin
   SetLength(Children, 1);
   Children[0] := AChild;
   Result := Model.AddHirExpr(
-    shekUnaryOp, 0, 0, Children, 0, '', AOp, 0, shvcScalar
+    shekUnaryOp, BooleanTypeId, 0, Children, 0, '', AOp, 0, shvcScalar
   );
 end;
 
@@ -52,9 +54,14 @@ begin
   SetLength(Children, 2);
   Children[0] := ALeft;
   Children[1] := ARight;
-  Result := Model.AddHirExpr(
-    shekBinaryOp, 0, 0, Children, 0, '', AOp, 0, shvcScalar
-  );
+  if SameText(AOp, 'and') or SameText(AOp, 'or') then
+    Result := Model.AddHirExpr(
+      shekBinaryOp, BooleanTypeId, 0, Children, 0, '', AOp, 0, shvcScalar
+    )
+  else
+    Result := Model.AddHirExpr(
+      shekBinaryOp, IntegerTypeId, 0, Children, 0, '', AOp, 0, shvcScalar
+    );
 end;
 
 function AddCompareOp(const AOp: string; const ALeft, ARight: LongInt): LongInt;
@@ -65,7 +72,7 @@ begin
   Children[0] := ALeft;
   Children[1] := ARight;
   Result := Model.AddHirExpr(
-    shekCompareOp, 0, 0, Children, 0, '', AOp, 0, shvcScalar
+    shekCompareOp, BooleanTypeId, 0, Children, 0, '', AOp, 0, shvcScalar
   );
 end;
 
@@ -113,8 +120,12 @@ var
 begin
   Model := TSemanticModel.Create;
   try
-    SymY := Model.AddSymbol('y', 'var', '', 0, 0);
-    SymX := Model.AddSymbol('x', 'var', '', 0, 0);
+    IntegerTypeId := Model.AddType('Integer', 'builtin');
+    Model.SetTypeScalarFact(IntegerTypeId, sskInt, 32, True);
+    BooleanTypeId := Model.AddType('Boolean', 'builtin');
+    Model.SetTypeScalarFact(BooleanTypeId, sskBool, 1, False);
+    SymY := Model.AddSymbol('y', 'var', '', IntegerTypeId, 0);
+    SymX := Model.AddSymbol('x', 'var', '', IntegerTypeId, 0);
 
     ExprInt5 := AddIntLiteral(5);
     ExprSymY := AddSymbolValue(SymY);
@@ -126,7 +137,7 @@ begin
     ExprOr := AddBinaryOp('or', ExprAnd, ExprCmpY);
     ExprNot := AddUnaryOp('not', ExprOr);
 
-    Model.AddTypedHirNode('var-decl-runtime', 'y', 0, 0, 'y');
+    Model.AddTypedHirNode('var-decl-runtime', 'y', SymY, IntegerTypeId, 'y');
     NodeId := Model.AddTypedHirNode(
       'assign-runtime', 'y := structured literal', 0, 0, 'y'#9'int 0'#10
     );

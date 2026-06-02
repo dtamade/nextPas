@@ -16,6 +16,21 @@ type
     shvcVoid
   );
 
+  TSemanticScalarKind = (
+    sskNone,
+    sskBool,
+    sskInt,
+    sskFloat,
+    sskPointer
+  );
+
+  TSemanticScalarTypeFact = record
+    TypeId: LongInt;
+    Kind: TSemanticScalarKind;
+    BitWidth: LongInt;
+    Signed: Boolean;
+  end;
+
   TSemanticHirExprKind = (
     shekInvalid,
     shekIntLiteral,
@@ -213,8 +228,10 @@ type
     FVarInitValues: array of TSemanticVarInitValue;
     FStringConstValues: array of TSemanticStringConstValue;
     FTypeMetadataEntries: array of TTypeMetadata;
+    FTypeScalarFacts: array of TSemanticScalarTypeFact;
     FRootName: string;
     FStatus: string;
+    function FindTypeScalarFactIndex(const ATypeId: LongInt): LongInt;
   public
     constructor Create;
     function AddSymbol(
@@ -225,6 +242,12 @@ type
       const AByteOffset: LongInt
     ): LongInt;
     function AddType(const AName: string; const AKind: string): LongInt;
+    procedure SetTypeScalarFact(const ATypeId: LongInt;
+      const AKind: TSemanticScalarKind; const ABitWidth: LongInt;
+      const ASigned: Boolean);
+    function GetTypeScalarFact(const ATypeId: LongInt;
+      out AFact: TSemanticScalarTypeFact): Boolean;
+    function TypeHasScalarFact(const ATypeId: LongInt): Boolean;
     procedure SetTypeOwner(const ATypeId: LongInt; const AOwnerUnitId: string);
     procedure SetTypeParent(const ATypeId: LongInt; const AParentTypeId: LongInt);
     procedure SetTypeGenericParent(const ATypeId: LongInt;
@@ -359,9 +382,22 @@ begin
   SetLength(FConstValues, 0);
   SetLength(FVarInitValues, 0);
   SetLength(FStringConstValues, 0);
+  SetLength(FTypeScalarFacts, 0);
   SetLength(FHirExprs, 0);
   FRootName := '';
   FStatus := 'deferred';
+end;
+
+function TSemanticModel.FindTypeScalarFactIndex(
+  const ATypeId: LongInt
+): LongInt;
+var
+  I: LongInt;
+begin
+  for I := 0 to Length(FTypeScalarFacts) - 1 do
+    if FTypeScalarFacts[I].TypeId = ATypeId then
+      Exit(I);
+  Result := -1;
 end;
 
 function TSemanticModel.AddSymbol(
@@ -402,6 +438,57 @@ begin
   FTypes[NextIndex].Kind := AKind;
   FTypes[NextIndex].ParentTypeId := 0;
   Result := FTypes[NextIndex].TypeId;
+end;
+
+procedure TSemanticModel.SetTypeScalarFact(const ATypeId: LongInt;
+  const AKind: TSemanticScalarKind; const ABitWidth: LongInt;
+  const ASigned: Boolean);
+var
+  Idx: LongInt;
+begin
+  if (ATypeId <= 0) or (ATypeId > Length(FTypes)) then
+    Exit;
+  if AKind = sskNone then
+    Exit;
+  if ABitWidth <= 0 then
+    Exit;
+
+  Idx := FindTypeScalarFactIndex(ATypeId);
+  if Idx < 0 then
+  begin
+    Idx := Length(FTypeScalarFacts);
+    SetLength(FTypeScalarFacts, Idx + 1);
+  end;
+
+  FTypeScalarFacts[Idx].TypeId := ATypeId;
+  FTypeScalarFacts[Idx].Kind := AKind;
+  FTypeScalarFacts[Idx].BitWidth := ABitWidth;
+  FTypeScalarFacts[Idx].Signed := ASigned;
+end;
+
+function TSemanticModel.GetTypeScalarFact(const ATypeId: LongInt;
+  out AFact: TSemanticScalarTypeFact): Boolean;
+var
+  Idx: LongInt;
+begin
+  AFact.TypeId := 0;
+  AFact.Kind := sskNone;
+  AFact.BitWidth := 0;
+  AFact.Signed := False;
+
+  Idx := FindTypeScalarFactIndex(ATypeId);
+  if Idx < 0 then
+    Exit(False);
+
+  AFact := FTypeScalarFacts[Idx];
+  Result := True;
+end;
+
+function TSemanticModel.TypeHasScalarFact(const ATypeId: LongInt): Boolean;
+var
+  Fact: TSemanticScalarTypeFact;
+begin
+  Result := GetTypeScalarFact(ATypeId, Fact);
 end;
 
 procedure TSemanticModel.SetTypeOwner(const ATypeId: LongInt;
