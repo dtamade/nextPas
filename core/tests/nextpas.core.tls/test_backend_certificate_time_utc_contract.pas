@@ -77,6 +77,41 @@ begin
     ABackendName + ' IsExpired 应按 UTC 判断为未过期');
 end;
 
+procedure CheckBackendVerifyExUsesUtc(ABackend: TSSLLibraryType;
+  const ABackendName, ACertPEM: string);
+var
+  LCert: ISSLCertificate;
+  LStore: ISSLCertificateStore;
+  LVerifyResult: TSSLCertVerifyResult;
+  LVerified: Boolean;
+begin
+  if not TSSLFactory.IsLibraryAvailable(ABackend) then
+  begin
+    Skip(ABackendName + ' backend 当前环境不可用');
+    Exit;
+  end;
+
+  LCert := TSSLFactory.CreateCertificate(ABackend);
+  Check(LCert <> nil, ABackendName + ' VerifyEx CreateCertificate 应返回实例');
+  if LCert = nil then
+    Exit;
+
+  Check(LCert.LoadFromPEM(ACertPEM), ABackendName + ' VerifyEx 应能载入当前有效证书');
+
+  LStore := TSSLFactory.CreateCertificateStore(ABackend);
+  Check(LStore <> nil, ABackendName + ' VerifyEx CreateCertificateStore 应返回实例');
+  if LStore = nil then
+    Exit;
+
+  Check(LStore.AddCertificate(LCert), ABackendName + ' VerifyEx 测试应能把叶子证书加入 store');
+
+  LVerified := LCert.VerifyEx(LStore, [], LVerifyResult);
+  Check(
+    LVerified and LVerifyResult.Success,
+    ABackendName + ' VerifyEx 应按 UTC 判断当前证书有效'
+  );
+end;
+
 procedure TestBackendCertificateExpiryUsesUtc;
 var
   LOptions: TCertGenOptions;
@@ -97,6 +132,7 @@ begin
   CheckBackendIsExpiredUsesUtc(sslWolfSSL, 'WolfSSL', LCertPEM);
   CheckBackendIsExpiredUsesUtc(sslMbedTLS, 'MbedTLS', LCertPEM);
   CheckBackendIsExpiredUsesUtc(sslWinSSL, 'WinSSL', LCertPEM);
+  CheckBackendVerifyExUsesUtc(sslWolfSSL, 'WolfSSL', LCertPEM);
 end;
 
 procedure ReleaseBackendLibraries;

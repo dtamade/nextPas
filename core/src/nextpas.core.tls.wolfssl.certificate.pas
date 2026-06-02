@@ -1004,6 +1004,7 @@ function TWolfSSLCertificate.VerifyEx(ACAStore: ISSLCertificateStore;
 var
   LChain: TSSLCertificateArray;
   LCurrent: ISSLCertificate;
+  LCurrentTime: TDateTime;
   LRoot: ISSLCertificate;
   LSignatureError: string;
   LNotBefore: TDateTime;
@@ -1040,6 +1041,9 @@ begin
     Exit;
   end;
 
+  if not (sslCertVerifyIgnoreExpiry in AFlags) then
+    LCurrentTime := DateTimeUtcNow;
+
   for I := 0 to High(LChain) do
   begin
     LCurrent := LChain[I];
@@ -1064,7 +1068,7 @@ begin
         AResult.DetailedInfo := Format('WolfSSL VerifyEx requires validity metadata for chain entry %d', [I]);
         Exit;
       end;
-      if Now < LNotBefore then
+      if LCurrentTime < LNotBefore then
       begin
         AResult.ErrorCode := 6;
         AResult.ChainStatus := 1;
@@ -1072,7 +1076,7 @@ begin
         AResult.DetailedInfo := Format('WolfSSL VerifyEx rejected chain entry %d because notBefore is in the future', [I]);
         Exit;
       end;
-      if Now > LNotAfter then
+      if LCurrentTime > LNotAfter then
       begin
         AResult.ErrorCode := 7;
         AResult.ChainStatus := 1;
