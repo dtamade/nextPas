@@ -635,6 +635,39 @@ begin
   end;
 end;
 
+procedure TestDuplicateContentLength;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10 +
+        'Content-Length: 10'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'hello';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'duplicate content-length: status 400');
+    Check(not LHandlerCalled, 'duplicate content-length: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LRouter: THttpRouter;
@@ -1571,6 +1604,7 @@ begin
   T.Run('POST body readable via IReader', @TestPostBodyReadable);
   T.Run('Large body 131072 bytes', @TestLargeBody);
   T.Run('Malformed request -> 400 or close', @TestMalformedRequest);
+  T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Query parameters', @TestQueryParam);

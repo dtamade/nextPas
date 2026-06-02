@@ -16,6 +16,8 @@
 - 这轮没有新增生产修复；`Content-Length` request EOF case 是上一轮 EOF 修复顺带覆盖到的 current truth 收口
 - 本轮继续补 partial-request EOF 覆盖：`incomplete request-line` / `incomplete headers` EOF 现在也在 parser/server/security 三层有 focused proof
 - 这轮没有新增生产修复；这两类 case 也是上一轮 EOF 修复顺带覆盖到的 current truth 收口
+- 本轮继续补 malformed request 收口：`duplicate Content-Length` 现在也在 parser/server/security 三层有 focused proof，并已从旧的“拒绝或关闭”口径收紧成显式 `400`
+- 这轮没有新增生产修复；当前 parser/H1 transport 已经会拒绝 duplicate `Content-Length`
 
 ## 当前重点
 
@@ -29,8 +31,9 @@
 - `impl.h1.parser` 现在也有 malformed trailer grammar / trailer EOF truncation focused proof。
 - `impl.h1.parser` 现在也有 request-side fixed-length body EOF truncation focused proof。
 - `impl.h1.parser` 现在也有 request-line / headers EOF truncation focused proof。
-- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
-- `test_http_security` 现在也有 malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
+- `impl.h1.parser` 现在也有 duplicate `Content-Length` parser error focused proof。
+- `THttpServer` 现在有 inbound chunked request body 解码、跨 chunk 累加 size-limit enforcement、raw-wire malformed chunk rejection、CL-TE conflict rejection、duplicate `Content-Length` 显式 `400` rejection、trailer 不污染请求头、oversize trailer 触发 `431`/安全关闭且 handler 不落地、malformed trailer 显式 `400` proof、fixed-length request EOF truncation 显式 `400` proof、以及 request-line / headers EOF truncation 显式 `400` proof。
+- `test_http_security` 现在也有 duplicate `Content-Length`、malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
@@ -45,6 +48,6 @@
 
 ## 下一步
 
-- 下一步优先判断 generic malformed request / duplicate-content-length / null-byte header 这类目前仍允许“`400` 或安全关闭”的旧口径，哪些应该继续系统性收紧成显式 `400`，以及 trailer 是否最终需要显式 public API。
+- 下一步优先判断 generic malformed request / null-byte header 这类目前仍允许“`400` 或安全关闭”的旧口径，哪些应该继续系统性收紧成显式 `400`，以及 trailer 是否最终需要显式 public API。
 - 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。

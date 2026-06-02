@@ -238,8 +238,8 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
-      'Duplicate CL: rejected or closed');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Duplicate CL: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -557,7 +557,7 @@ begin
   T := TTestRunner.Create('nextpas.core.http.security');
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
   T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
-  T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
+  T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);
   T.Run('Null byte in header', @TestHeaderNullByte);
   T.Run('Request line too long', @TestRequestLineTooLong);

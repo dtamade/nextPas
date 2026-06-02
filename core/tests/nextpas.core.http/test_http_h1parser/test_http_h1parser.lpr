@@ -455,6 +455,26 @@ begin
   Check(LP.ErrorMessage <> '', 'error message not empty');
 end;
 
+procedure TestDuplicateContentLength;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 5'#13#10 +
+          'Content-Length: 10'#13#10#13#10 +
+          'hello';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'duplicate content-length reports parser error');
+  Check(not LP.IsComplete, 'duplicate content-length is not complete');
+  Check(Pos('Content-Length', LP.ErrorMessage) > 0,
+    'duplicate content-length error mentions content-length');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -578,6 +598,7 @@ begin
   T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
+  T.Run('Duplicate Content-Length', @TestDuplicateContentLength);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);
