@@ -480,9 +480,8 @@ begin
   LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
-    { Server should only read 5 bytes (Content-Length), respond with echo:5 }
-    Check((Pos('echo:5', LResp) > 0) or (Pos('400', LResp) > 0) or (Length(LResp) = 0),
-      'Body > CL: server read only Content-Length bytes or rejected');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Body > CL with Connection: close: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -578,7 +577,7 @@ begin
   T.Run('Request line truncated at EOF -> 400', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
-  T.Run('Body larger than CL', @TestBodyLargerThanContentLength);
+  T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
   T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);

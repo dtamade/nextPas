@@ -568,6 +568,43 @@ begin
   Check(LP.ErrorMessage <> '', 'very long method has error message');
 end;
 
+procedure TestContentLengthRequestExtraBytesAfterCloseRejected;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 5'#13#10 +
+          'Connection: close'#13#10#13#10 +
+          'hello_extra_bytes_here';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'extra bytes after content-length close reports parser error');
+  Check(not LP.IsComplete, 'extra bytes after content-length close is not complete');
+  Check(LP.ErrorMessage <> '', 'extra bytes after content-length close has error message');
+end;
+
+procedure TestUpgradeRequestCompletesWithoutParserError;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'GET /ws HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Upgrade: websocket'#13#10 +
+          'Connection: Upgrade'#13#10 +
+          'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+          'Sec-WebSocket-Version: 13'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'upgrade request should not report parser error');
+  Check(LP.IsComplete, 'upgrade request should complete');
+  CheckEqual('/ws', LP.GetUrl, 'upgrade request preserves url');
+end;
+
 procedure TestRequestLineTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -697,6 +734,8 @@ begin
   T.Run('Request-line splitting rejected', @TestRequestLineSplittingRejected);
   T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
+  T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
+  T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
   T.Run('Headers truncated at EOF', @TestHeadersTruncatedAtEof);
   T.Run('Incomplete input', @TestIncompleteInput);

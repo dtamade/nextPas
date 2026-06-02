@@ -252,9 +252,18 @@ var
   LErrno: TLlhttpErrnoT;
 begin
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
+  if (LErrno = HPE_PAUSED_UPGRADE) and (llhttp_get_upgrade(@FParser) <> 0) then
+  begin
+    FComplete := True;
+    FError := False;
+    FErrorMsg := '';
+    Result := ALen;
+    Exit;
+  end;
   if LErrno <> HPE_OK then
   begin
     FError := True;
+    FComplete := False;
     FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
     Result := 0;
   end

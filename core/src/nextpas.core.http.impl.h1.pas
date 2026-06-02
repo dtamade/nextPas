@@ -395,12 +395,14 @@ begin
       if LRejected then
         Break;
 
-      if not LParser.IsComplete then
+      if LParser.HasError then
       begin
-        if LParser.HasError then
-          WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
+        WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
         Break;
       end;
+
+      if not LParser.IsComplete then
+        Break;
 
       if FOptions.MaxBodySize > 0 then
       begin

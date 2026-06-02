@@ -978,6 +978,38 @@ begin
   end;
 end;
 
+procedure TestContentLengthRequestExtraBytesAfterCloseRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'hello_extra_bytes_here';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'content-length extra bytes after close: status 400');
+    Check(not LHandlerCalled, 'content-length extra bytes after close: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: Query parameters }
 procedure TestQueryParam;
 var
@@ -1867,6 +1899,7 @@ begin
   T.Run('Request-line splitting -> 400', @TestRequestLineSplittingRejected);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLengthRejected);
   T.Run('Very long method -> 400', @TestVeryLongMethodRejected);
+  T.Run('Content-Length extra bytes after close -> 400', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
