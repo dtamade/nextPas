@@ -225,10 +225,10 @@ end;
 
 var
   IntegerTypeId, PointerTypeId, RecordTypeId: LongInt;
-  SymArr, SymP, SymRec, SymStaticArr, SymX, SymY: LongInt;
+  SymArr, SymP, SymRec, SymRecArr, SymStaticArr, SymX, SymY: LongInt;
   ExprFive, ExprOne, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
-  ExprArrElement, ExprStaticArrElement, ExprPValue, ExprDerefPRecord,
-    ExprPField: LongInt;
+  ExprArrElement, ExprRecArrElement, ExprRecArrField, ExprStaticArrElement,
+    ExprPValue, ExprDerefPRecord, ExprPField: LongInt;
   ExprRecAddress, ExprRecField: LongInt;
   NodeId: LongInt;
   Builder: THIRBuilder;
@@ -243,6 +243,7 @@ begin
     SymX := Model.AddSymbol('x', 'variable', '', IntegerTypeId, 0);
     SymY := Model.AddSymbol('y', 'variable', '', IntegerTypeId, 0);
     SymArr := Model.AddSymbol('arr', 'variable', '', 0, 0);
+    SymRecArr := Model.AddSymbol('recArr', 'variable', '', 0, 0);
     SymStaticArr := Model.AddSymbol('staticArr', 'variable', '', 0, 0);
     SymP := Model.AddSymbol('p', 'variable', '', PointerTypeId, 0);
     SymRec := Model.AddSymbol('rec', 'variable', '', RecordTypeId, 0);
@@ -253,6 +254,10 @@ begin
     ExprAddressOfX := AddAddressOf(ExprXAddress, PointerTypeId);
     ExprDerefAddressOfX := AddDeref(ExprAddressOfX, IntegerTypeId);
     ExprArrElement := AddArrayElemAddress(SymArr, ExprOne, IntegerTypeId);
+    ExprRecArrElement := AddArrayElemAddress(SymRecArr, ExprOne,
+      RecordTypeId);
+    ExprRecArrField := AddFieldAddress(ExprRecArrElement, IntegerTypeId, 1,
+      'Value');
     ExprStaticArrElement := AddArrayElemAddress(SymStaticArr, ExprOne,
       IntegerTypeId);
     ExprPValue := AddSymbolValue(SymP, PointerTypeId);
@@ -265,6 +270,8 @@ begin
     Model.AddTypedHirNode('function-body-begin', 'TestAddress', 0,
       IntegerTypeId, '0::i');
     Model.AddTypedHirNode('var-decl-arr-runtime', 'arr', SymArr, 0, 'arr');
+    Model.AddTypedHirNode('var-decl-arr-runtime', 'recArr', SymRecArr, 0,
+      'recArr');
     Model.AddConstValue('staticArr$arr_static', 1);
     Model.AddConstValue('staticArr$arr_low', 1);
     Model.AddConstValue('staticArr$arr_high', 3);
@@ -302,6 +309,12 @@ begin
     Model.SetTypedHirNodeExprId(NodeId, ExprFive);
     Model.SetTypedHirNodeTargetExprId(NodeId, ExprStaticArrElement);
 
+    NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
+      'recArr[1].Value := 5', 0, IntegerTypeId,
+      'recArr'#9'int 99'#10#9'int 123'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprRecArrField);
+
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := p^.Value',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprPField);
@@ -328,7 +341,7 @@ begin
         Halt(3);
       if not HasIntrinsic(Func, 'gep_i64') then
         Halt(4);
-      if CountIntrinsic(Func, 'gep_i64') < 4 then
+      if CountIntrinsic(Func, 'gep_i64') < 6 then
         Halt(5);
       if HasConstLoad(Func, 'const:99') then
         Halt(6);

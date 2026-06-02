@@ -7203,7 +7203,8 @@ var
   Children: array of LongInt;
   Fact: TSemanticScalarTypeFact;
   IndexExpr, Expr: TSemanticHirExpr;
-  IndexExprId, IndexTypeId, SymbolId: LongInt;
+  CandidateTypeId, ElementTypeId, IndexExprId, IndexTypeId, SymbolId: LongInt;
+  ElementTypeName: string;
 begin
   AExprId := 0;
   if (ANode = nil) or (ANode.NodeKind <> gnkArrayAccess) or
@@ -7231,10 +7232,21 @@ begin
     (Fact.Kind <> sskInt) then
     Exit(False);
 
+  ElementTypeId := FModel.FindTypeByName('Integer');
+  if FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
+    ElementTypeName) and (ElementTypeName <> '') then
+  begin
+    CandidateTypeId := FModel.FindTypeByName(ElementTypeName);
+    if CandidateTypeId > 0 then
+      ElementTypeId := CandidateTypeId;
+  end;
+  if ElementTypeId <= 0 then
+    Exit(False);
+
   SetLength(Children, 1);
   Children[0] := IndexExprId;
   AExprId := FModel.AddHirExpr(
-    shekArrayElem, FModel.FindTypeByName('Integer'), SymbolId, Children,
+    shekArrayElem, ElementTypeId, SymbolId, Children,
     0, '', '', 0, shvcAddress
   );
   if AExprId <= 0 then
@@ -8070,6 +8082,56 @@ var
     Result := AExprId > 0;
   end;
 
+  function BuildArrayRecordFieldTargetExpr(const AArrayAccessNode: TGreenNode;
+    const AFieldName: string; out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    ArrayExpr, FieldExpr: TSemanticHirExpr;
+    ArrayExprId, ElementTypeId: LongInt;
+    ArrayName, ElementTypeName: string;
+    FieldMeta: TFieldMeta;
+  begin
+    AExprId := 0;
+    if (AArrayAccessNode = nil) or
+      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
+      (AArrayAccessNode.ChildCount < 2) or
+      (AArrayAccessNode.ChildAt(0) = nil) or
+      (AArrayAccessNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+      Exit(False);
+
+    ArrayName := AArrayAccessNode.ChildAt(0).Text;
+    if (ArrayName = '') or
+      (not FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
+        ElementTypeName)) or (ElementTypeName = '') then
+      Exit(False);
+    if not LookupFieldMetaByTypeName(ElementTypeName, AFieldName,
+      ElementTypeId, FieldMeta) then
+      Exit(False);
+    if not BuildRuntimeArrayElementAddressHirExpr(AArrayAccessNode,
+      ArrayExprId) then
+      Exit(False);
+    if (ArrayExprId <= 0) or (ArrayExprId > FModel.HirExprCount) then
+      Exit(False);
+
+    ArrayExpr := FModel.HirExprAt(ArrayExprId - 1);
+    if (ArrayExpr.Kind <> shekArrayElem) or
+      (ArrayExpr.ValueClass <> shvcAddress) or
+      (ArrayExpr.TypeId <> ElementTypeId) then
+      Exit(False);
+
+    SetLength(Children, 1);
+    Children[0] := ArrayExprId;
+    AExprId := FModel.AddHirExpr(
+      shekField, FieldMeta.TypeId, 0, Children,
+      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+    );
+    if AExprId <= 0 then
+      Exit(False);
+    FieldExpr := FModel.HirExprAt(AExprId - 1);
+    Result := (FieldExpr.Kind = shekField) and
+      (FieldExpr.ValueClass = shvcAddress);
+  end;
+
   function BuildFieldStoreTargetExpr(const ATargetNode: TGreenNode;
     out AExprId: LongInt): Boolean;
   var
@@ -8089,8 +8151,14 @@ var
       (ATargetNode.ChildCount < 2) or
       (ATargetNode.ChildAt(0) = nil) or
       (ATargetNode.ChildAt(1) = nil) or
-      (ATargetNode.ChildAt(0).NodeKind <> gnkIdentifier) or
       (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
+      Exit(False);
+
+    if ATargetNode.ChildAt(0).NodeKind = gnkArrayAccess then
+      Exit(BuildArrayRecordFieldTargetExpr(ATargetNode.ChildAt(0),
+        ATargetNode.ChildAt(1).Text, AExprId));
+
+    if ATargetNode.ChildAt(0).NodeKind <> gnkIdentifier then
       Exit(False);
 
     BaseName := ATargetNode.ChildAt(0).Text;
@@ -8174,6 +8242,18 @@ var
     );
     AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
     AttachArrayElementStoreTargetExpr(LocalNodeId, ATargetNode);
+  end;
+
+  procedure AddArrayRecordFieldStoreRuntimeNode(const ADisplayName,
+    AOperand: string; const ATargetNode, AExprNode: TGreenNode);
+  var
+    LocalNodeId: LongInt;
+  begin
+    LocalNodeId := FModel.AddTypedHirNode(
+      'assign-arr-elem-runtime', ADisplayName, 0, 0, AOperand
+    );
+    AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
+    AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
   end;
 
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
@@ -8463,11 +8543,13 @@ begin
             if (Arg <> nil) and
               EncodeRuntimeIntExprFold(Child.ChildAt(0).ChildAt(0).ChildAt(1), Operand) and
               EncodeRuntimeIntExprFold(Arg, StringValue) then
-              FModel.AddTypedHirNode(
-                'assign-arr-elem-runtime', FuncName, 0, 0,
+              AddArrayRecordFieldStoreRuntimeNode(
+                FuncName,
                 FuncName + #9 + Operand + 'int ' + IntToStr(CondValue div 8) +
                 #10 + 'mul' + #10 + 'int ' + IntToStr(Value) + #10 + 'add' + #10 +
-                #9 + StringValue
+                #9 + StringValue,
+                Child.ChildAt(0),
+                Arg
               );
             Continue;
           end;

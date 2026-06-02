@@ -1,5 +1,13 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-I array record field target
+
+- Existing legacy `arr[i].Field := rhs` support encodes the address as an offset blob: array index multiplied by record slot count plus field index. This keeps working as fallback but hides the lvalue chain from typed HIR.
+- `shekField` already composes over any address-producing child, so `arr[i].Field` does not need a new expression kind. The right structure is `shekField -> shekArrayElem -> index`.
+- The current blocker was `shekArrayElem` hard-coding `Integer` as element type and builder requiring a concrete scalar HIR type for every array element address. Record elements are addressable aggregates, not scalar values.
+- C5-I first slice lets aggregate array elements lower as addresses with no concrete HIR scalar type. Loading such an aggregate as a value still fails, preserving fallback behavior.
+- This slice intentionally does not cover field arrays (`self.Items[i]`) or deeper chains (`arr[i].A.B`); those need separate producer patterns.
+
 ## 2026-06-03 C5-H static array target/address
 
 - C5-H0 already made builder-side static array address lowering viable: `shekArrayElem` can use `arr_low` metadata for lower-bound normalization and static backing storage is connected to `arr$ptr` / `arr$len`.

@@ -409,6 +409,58 @@ begin
     Halt(ABaseExitCode + 10);
 end;
 
+procedure AssertArrayRecordFieldStoreTargetExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedArrayName,
+  AExpectedIndexName, AExpectedElementTypeName, AExpectedFieldTypeName,
+  AExpectedFieldName: string; const AExpectedFieldIndex: Int64;
+  const ABaseExitCode: LongInt);
+var
+  FieldExpr, ArrayExpr, IndexExpr: TSemanticHirExpr;
+  Symbol: TSemanticSymbol;
+begin
+  if ANode.TargetExprId = 0 then
+    Halt(ABaseExitCode);
+
+  FieldExpr := AModel.HirExprAt(ANode.TargetExprId - 1);
+  if FieldExpr.Kind <> shekField then
+    Halt(ABaseExitCode + 1);
+  if FieldExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 2);
+  AssertExprTypeName(AModel, FieldExpr, AExpectedFieldTypeName,
+    ABaseExitCode + 3);
+  if FieldExpr.LiteralInt <> AExpectedFieldIndex then
+    Halt(ABaseExitCode + 4);
+  if FieldExpr.LiteralStr <> AExpectedFieldName then
+    Halt(ABaseExitCode + 5);
+  if Length(FieldExpr.Children) < 1 then
+    Halt(ABaseExitCode + 6);
+
+  ArrayExpr := AModel.HirExprAt(FieldExpr.Children[0] - 1);
+  if ArrayExpr.Kind <> shekArrayElem then
+    Halt(ABaseExitCode + 7);
+  if ArrayExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 8);
+  AssertExprTypeName(AModel, ArrayExpr, AExpectedElementTypeName,
+    ABaseExitCode + 9);
+  if ArrayExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 10);
+  Symbol := AModel.SymbolAt(ArrayExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedArrayName then
+    Halt(ABaseExitCode + 11);
+  if Length(ArrayExpr.Children) < 1 then
+    Halt(ABaseExitCode + 12);
+
+  IndexExpr := AModel.HirExprAt(ArrayExpr.Children[0] - 1);
+  if IndexExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 13);
+  AssertExprTypeName(AModel, IndexExpr, 'Integer', ABaseExitCode + 14);
+  if IndexExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 15);
+  Symbol := AModel.SymbolAt(IndexExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedIndexName then
+    Halt(ABaseExitCode + 16);
+end;
+
 procedure AssertFieldAddressOfRuntimeExpr(const AModel: TSemanticModel;
   const ANode: TTypedHirNode; const AExpectedPointerName,
   AExpectedRecordTypeName, AExpectedFieldName: string;
@@ -920,6 +972,45 @@ begin
   end;
 end;
 
+procedure TestArrayRecordFieldStoreTargetExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TPair = record'#10 +
+    '  X: Integer;'#10 +
+    '  Y: Integer;'#10 +
+    'end;'#10 +
+    'var arr: array of TPair;'#10 +
+    'var i: Integer;'#10 +
+    'var y: Integer;'#10 +
+    'begin'#10 +
+    '  SetLength(arr, 2);'#10 +
+    '  i := 1;'#10 +
+    '  y := 41;'#10 +
+    '  arr[i].Y := y + 1;'#10 +
+    '  Halt(y);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(170);
+    if Model.Status <> 'ready' then
+      Halt(171);
+
+    if not FindFirstNodeByKindAndOperandText(Model,
+      'assign-arr-elem-runtime', 'add', Node) then
+      Halt(172);
+    AssertArrayRecordFieldStoreTargetExpr(Model, Node, 'arr', 'i', 'TPair',
+      'Integer', 'Y', 1, 173);
+    AssertRuntimeBinaryExpr(Model, Node, '+', 190);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestStaticArrayBoundsParser;
 var
   Diagnostics: TDiagnosticsSink;
@@ -1387,6 +1478,7 @@ begin
   TestStaticArrayElementAddressRuntimeExprProducer;
   TestArrayElementStoreTargetExprProducer;
   TestStaticArrayStoreTargetExprProducer;
+  TestArrayRecordFieldStoreTargetExprProducer;
   TestStaticArrayBoundsParser;
   TestStaticArrayGlobalDeclMetadata;
   TestStaticArrayLocalDeclMetadata;

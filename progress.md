@@ -1,5 +1,28 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-I array record field target
+
+- **Status:** completed and committed.
+- Branch and safety state:
+  - Branch: `main`
+  - Compiler latest commit before this slice: `ef26acb8 feat(compiler): C5H lower static array targets`.
+  - Unrelated dirty work exists in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Parallel worktree `.worktrees/compiler-truth-audit-20260603/` remains outside this lane.
+- Current decision:
+  - First C5-I slice is `arr[i].Field := rhs`, represented as `shekField -> shekArrayElem -> index`.
+  - `shekArrayElem` now carries semantic element type. Aggregate element addresses may have no concrete HIR scalar type; scalar value loads still require one.
+- RED evidence:
+  - `test_semantic_hir_expr_producer` exited `173`, proving `arr[i].Y := y + 1` lacked structured `TargetExprId`.
+- GREEN evidence so far:
+  - Changed tests `test_hir_builder_structured_address` and `test_semantic_hir_expr_producer` ran with `changed_failed=0`.
+- Full verification:
+  - Focused C3/C4/C5 compiler tests: `focused_failed=0`.
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `46013 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_count=137 passed=137 failed=0`.
+  - Whitespace check: `git diff --check` -> clean.
+- Next immediate step:
+  - Continue with C5-J: field arrays or deeper array-record field chains as a separate narrow slice.
+
 ## Session: 2026-06-03 C5-H static array target/address
 
 - **Status:** completed and committed.

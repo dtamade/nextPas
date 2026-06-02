@@ -483,8 +483,7 @@ begin
           Exit(False);
         Symbol := FSemaModel.SymbolAt(AExpr.SymbolId - 1);
         Result := (Symbol.Name <> '') and (Length(AExpr.Children) >= 1) and
-          (ExprHirTypeId(AExpr) <> 0) and
-          (AExpr.ValueClass = shvcAddress) and
+          (AExpr.TypeId > 0) and (AExpr.ValueClass = shvcAddress) and
           CanLowerExpr(AExpr.Children[0]);
         if Result then
         begin
@@ -981,8 +980,6 @@ begin
   ElemPtr := Instr.ResultId;
 
   HirType := ExprHirTypeId(AExpr);
-  if HirType = 0 then
-    Exit(False);
   SetExprAddress(AResult, ElemPtr, HirType);
   Result := AResult.AddressValueId <> 0;
 end;

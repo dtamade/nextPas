@@ -1,6 +1,35 @@
 # Task Plan: nextPas active work
 
-## Active Session: 2026-06-03 C5-H static array target/address
+## Active Session: 2026-06-03 C5-I array record field target
+
+### Goal
+
+在 C5-H 已完成 direct array element target/address 后，打通第一条嵌套 lvalue chain：
+`arr[i].Field := rhs`。结构化形态应为 `shekField -> shekArrayElem -> index`，
+旧 operand/blob fallback 保留。本轮不做 `self.Items[i]` 字段数组、不做
+`arr[i].A.B` 更深链，也不碰同事 toolchain/targets/stage0/verify truth lane。
+
+### Checklist
+
+- [x] 确认当前 `main` 与并行 lane：本轮不碰 toolchain/targets/stage0/verify truth。
+- [x] 复核 legacy array-of-record-field store：当前用 offset blob 表达 `index * elem_size + field_index`。
+- [x] 写 RED：`arr[i].Y := y + 1` 缺结构化 `TargetExprId`，`test_semantic_hir_expr_producer` 退出 `173`。
+- [x] 实现 GREEN：`shekArrayElem` 携带真实元素类型，`shekField` 可组合到 array element address。
+- [x] 增加 builder 覆盖：nested target 成功时不解析 legacy `int 99` index blob。
+- [x] 跑 focused tests、完整重编译、全量 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md` 和 `docs/inbox.md`。
+- [x] path-limited stage/commit 本轮文件，并报告复盘和下一步。
+
+### Constraints
+
+- 只改 C5-I 需要的 compiler/ir、compiler/sema、compiler/tests 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- 结构化表达式和旧 blob 双轨必须保留；失败时 builder 仍回落旧 operand/blob。
+- aggregate array element 只作为 address base 放行；value load 仍要求 concrete scalar HIR type。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-H static array target/address
 
 ### Goal
 
