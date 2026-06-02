@@ -174,6 +174,28 @@ begin
   CheckEqual(UInt16(0), LUrl.Port, 'ipv6 no port');
 end;
 
+procedure TestHttpClientOptionsDefault;
+var
+  LOptions: THttpClientOptions;
+begin
+  LOptions := THttpClientOptions.Default;
+  CheckEqual(Int64(30000), LOptions.Timeout, 'default timeout');
+  CheckEqual(Int64(10), Int64(LOptions.MaxRedirects), 'default max redirects');
+  Check(LOptions.FollowRedirects, 'default follows redirects');
+end;
+
+procedure TestHttpServerOptionsDefault;
+var
+  LOptions: THttpServerOptions;
+begin
+  LOptions := THttpServerOptions.Default;
+  CheckEqual(Int64(0), LOptions.ReadTimeout, 'default read timeout');
+  CheckEqual(Int64(0), LOptions.WriteTimeout, 'default write timeout');
+  CheckEqual(Int64(30000), LOptions.IdleTimeout, 'default idle timeout');
+  CheckEqual(Int64(8192), Int64(LOptions.MaxHeaderSize), 'default max header size');
+  CheckEqual(Int64(4194304), LOptions.MaxBodySize, 'default max body size');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.base');
   T.Run('HttpMethodToStr', @TestHttpMethodToStr);
@@ -188,5 +210,7 @@ begin
   T.Run('TUrl.ToString round-trip', @TestUrlToString);
   T.Run('TUrl.HostPort', @TestUrlHostPort);
   T.Run('TUrl.Parse IPv6', @TestUrlParseIPv6);
+  T.Run('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
+  T.Run('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
   T.Summary;
 end.

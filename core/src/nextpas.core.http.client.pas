@@ -15,12 +15,7 @@ uses
   nextpas.core.http.intf;
 
 type
-  THttpClientOptions = record
-    Timeout: Int64;           // request timeout in ms, default 30000
-    MaxRedirects: Int32;      // default 10, 0 = no redirects
-    FollowRedirects: Boolean; // default True
-    class function Default: THttpClientOptions; static;
-  end;
+  THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
 
   THttpClient = class(TInterfacedObject, IHttpClient)
   private
@@ -55,7 +50,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.http.headers,
   nextpas.core.http.message,
-  nextpas.core.http.impl.h1;
+  nextpas.core.http.impl.registry;
 
 function StrToBytes(const S: string): TBytes;
 begin
@@ -63,15 +58,6 @@ begin
   SetLength(Result, Length(S));
   if Length(S) > 0 then
     Move(S[1], Result[0], Length(S));
-end;
-
-{ THttpClientOptions }
-
-class function THttpClientOptions.Default: THttpClientOptions;
-begin
-  Result.Timeout := 30000;
-  Result.MaxRedirects := 10;
-  Result.FollowRedirects := True;
 end;
 
 { THttpClient }
@@ -83,18 +69,13 @@ end;
 
 constructor THttpClient.Create(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions);
-var
-  LH1Options: TH1ClientTransportOptions;
 begin
   inherited Create;
   FOptions := AOptions;
   if ATransport <> nil then
     FTransport := ATransport
   else
-  begin
-    LH1Options.Timeout := AOptions.Timeout;
-    FTransport := NewH1ClientTransport(LH1Options);
-  end;
+    FTransport := ResolveDefaultClientTransport(AOptions);
 end;
 
 function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
