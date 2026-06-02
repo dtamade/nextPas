@@ -4,19 +4,17 @@
 
 ## 当前批次
 
-- `TChunkedWriter` focused coverage 已完成
-- helper 现在在 terminal chunk 发出后拒绝继续写入，避免生成非法 chunked stream
+- transport injection seam 已落地
+- `impl.h1` 现在拥有默认 H1 client/server transport
 - HTTP focused/full suite + heaptrc 0 已验证
 
 ## 当前重点
 
 - 覆盖矩阵在 `docs/http/API_COVERAGE.md`，inbox 只保留路线状态。
-- `http.impl.h1.chunked` 已有 focused 覆盖：单 chunk、多 chunk、0 长写、hex 长度、terminal chunk 幂等、flush 后写入抛错。
-- `http.client` 现在会把 close-delimited response、HTTP/1.0 非 keep-alive response 视为不可复用连接。
-- `http.impl.h1.parser` 新增 focused 复用语义覆盖：close-delimited / content-length / HTTP/1.0。
-- `TH1ResponseWriter` 现在禁止在 chunked final chunk 发出后继续写 body。
-- Hijack 后 HTTP server 不再 `Shutdown/Close` 已移交给 handler 的连接。
-- transport 当前只冻结公开接口形状；registry / client-server 注入机制仍未完成。
+- `nextpas.core.http.impl.h1.pas` 已落地，默认 H1 连接复用、请求往返、per-connection serve loop 不再散落在 `client/server` 骨架里。
+- `nextpas.core.http.NewHttpClient` / `NewHttpServer` 现在支持显式注入 `IHttpTransport` / `IHttpServerTransport`。
+- `http.impl.h1.chunked`、client 复用语义、hijack ownership 这三条 H1 correctness 基线仍然保持成立。
+- transport registry 仍未落地；当前扩展 seam 是“显式 transport 注入”，不是“协议版本自动注册/协商”。
 - benchmark 继续后置，先补 correctness 与契约边界。
 
 ## 路线图
@@ -30,5 +28,5 @@
 
 ## 下一步
 
-- 回到 transport registry / client-server 注入 ownership 设计边界。
-- 继续补 H1 malformed chunk/body 边界时，优先从 parser/security focused tests 切入。
+- 优先把 `impl.registry` 设计成真实默认协议解析层，而不是继续把默认选择散落在 facade/factory。
+- 如果继续走 H1 correctness，则转向 malformed chunk/body parser/security focused tests。

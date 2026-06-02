@@ -14,7 +14,7 @@
 - `docs/http/ARCHITECTURE.md` positions HTTP as a unified facade plus shared application layer plus isolated protocol implementations.
 - Current long-term architecture expects H1 first, then H2 after TLS/ALPN readiness, then H3 after QUIC readiness.
 - Current source tree has implemented H1 parser/writer/scan/fast units, middleware presets, static serving, websocket upgrade, server/client skeletons, and public facade forwarding.
-- Existing HTTP source inventory contains 22 `src/nextpas.core.http*.pas` units:
+- Existing HTTP source inventory contains 23 `src/nextpas.core.http*.pas` units:
   - facade/contracts: `http`, `http.base`, `http.intf`
   - shared application layer: headers, URL, message, router, middleware, server, client, static, websocket
   - H1 protocol layer: llhttp, parser, writer, chunked, scan, fast
@@ -36,8 +36,10 @@
 - The extra verb tests use real local HTTP server/client paths and assert method dispatch, body/header forwarding, and HEAD response header access.
 - A test-only leak appeared when request bodies were read by wrapping `AReq.Body` in temporary `THttpResponse` objects; replacing that with direct `IReader` reads restored heaptrc to zero.
 - The `Delete` test now asserts the public behavior, namely method dispatch, zero content length, and empty body, instead of depending on the internal `Body=nil` representation.
-- `IHttpTransport` and `IHttpServerTransport` are currently exposed only as public interfaces and facade aliases; there is no implemented registry, protocol owner, or client/server injection path yet.
-- Transport tests in `test_http_contract` therefore cover contract shape and external implementability, not production protocol dispatch.
+- `nextpas.core.http.impl.h1.pas` now exists and owns the default H1 client/server transport behavior that used to live inside `http.client` / `http.server`.
+- `THttpClient` now acts as an orchestrator over `IHttpTransport`, while `THttpServer` owns only listener/accept/thread orchestration over `IHttpServerTransport`.
+- `nextpas.core.http` / `http.client` / `http.server` now expose explicit transport injection overloads, and `test_http_contract` proves both client and server runtime delegation through those seams.
+- `impl.registry` still does not exist, so protocol registration/default selection is not yet centralized; the current extensibility seam is explicit transport injection, not version lookup.
 - `IHttpHijacker` was defined in `http.intf` but was missing from the facade aliases; `test_http_contract` now proves it can be consumed through `nextpas.core.http`.
 - `TH1ResponseWriter.Hijack` already raised `EHttpError` without a connection and returned the underlying connection when present; focused tests now lock that behavior.
 - `THttpServer` previously stopped the request loop after hijack but still closed the connection in thread cleanup; `test_http_server` now proves ownership transfers to the handler after hijack.
@@ -63,10 +65,10 @@
 
 ## Gaps to Audit Next
 
-- `docs/http/ARCHITECTURE.md` mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
+- `docs/http/ARCHITECTURE.md` still mentions planned units such as `impl.registry`, `impl.h1.conn`, and H2/H3 units that are not present in the current source inventory.
 - Keep the matrix current as public APIs change.
 - Hijack exception-after-takeover and websocket upgrade ownership regressions are useful later hardening tests.
-- Transport registry / protocol ownership still needs design before H2/H3 expansion or pluggable client/server transports.
+- Real `impl.registry` default resolution still needs design before H2/H3 expansion or protocol-version auto-selection work.
 - Direct `TChunkedWriter` focused coverage is now complete for writer-side framing invariants; malformed inbound chunk parsing belongs in parser/security tests.
 - Benchmark baselines exist but should not drive changes until contract coverage and correctness gates are green.
 - Same-client regression coverage for “EOF-delimited first response, reusable second connection afterward” is still optional; the core reuse decision is now locked at parser level.

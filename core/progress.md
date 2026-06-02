@@ -137,7 +137,7 @@
   - [x] Ran focused GREEN tests with heaptrc proof.
   - [x] Run full HTTP suite.
   - [x] Complete local `/codex`-style review and final diff check.
-  - [ ] Commit this batch.
+  - [x] Commit this batch.
 
 ## Verification Evidence 2026-06-02 Hijack
 
@@ -391,3 +391,47 @@
 - `/codex`-style review found no blocking issue in the helper hardening batch.
 - The invariant now lives at both levels: `TH1ResponseWriter` rejects finalized response writes, and `TChunkedWriter` rejects post-terminal chunk writes.
 - Follow-up route: return to transport registry / client-server injection ownership design, or add malformed inbound chunk/body parser/security tests before that if H1 correctness remains the priority.
+
+## Session: 2026-06-02 transport injection seam
+
+### Phase 2/3: default H1 transport ownership and explicit injection
+
+- **Status:** complete
+- **Scope:** extract default H1 client/server protocol ownership into `impl.h1`, and make `IHttpTransport` / `IHttpServerTransport` usable through public client/server factory overloads.
+- **Checklist:**
+  - [x] Re-read HTTP inbox, API coverage, architecture, task plan, findings, progress, and design conventions.
+  - [x] Checked Git status before edits; unrelated dirty/untracked files remain outside this HTTP batch.
+  - [x] Added RED contract tests for explicit `NewHttpClient` / `NewHttpServer` transport injection overloads.
+  - [x] Verified RED: contract build failed because overloads and constructor seams did not exist.
+  - [x] Added `nextpas.core.http.impl.h1.pas` as the default H1 transport owner.
+  - [x] Refactored `http.client` to orchestrate redirect/helper behavior over `IHttpTransport`.
+  - [x] Refactored `http.server` to own listener/accept/thread orchestration over `IHttpServerTransport`.
+  - [x] Added facade forwarding overloads for explicit transport injection.
+  - [x] Ran focused contract/client/server GREEN with heaptrc proof.
+  - [x] Ran the full HTTP suite after the transport-owner refactor.
+  - [x] Updated inbox, coverage matrix, README/architecture, findings, and progress.
+  - [ ] Commit this batch.
+
+## Verification Evidence 2026-06-02 Transport Seam
+
+| Check                    | Command                                                            | Result                                                                 |
+| ------------------------ | ------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| Git safety state         | `git status --short --branch`                                      | Shared checkout is dirty outside owned HTTP target files               |
+| RED contract compile     | `make -C tests/nextpas.core.http/test_http_contract clean test`    | Failed to compile: transport injection overloads / constructor seams missing |
+| Focused contract GREEN   | `make -C tests/nextpas.core.http/test_http_contract clean test`    | 21/21 passed, 0 unfreed memory blocks                                  |
+| Focused client GREEN     | `make -C tests/nextpas.core.http/test_http_client clean test`      | 15/15 passed, 0 unfreed memory blocks                                  |
+| Focused server GREEN     | `make -C tests/nextpas.core.http/test_http_server clean test`      | 20/20 passed, 0 unfreed memory blocks                                  |
+| Full HTTP suite          | `make TESTS_DIR=tests/nextpas.core.http test`                      | All tests passed; heaptrc zero leaks per test                          |
+
+## Notes 2026-06-02 Transport Seam
+
+- This batch changed architecture, not just contract sugar: the default H1 client/server protocol owner is now a real implementation unit instead of logic split across two skeletons.
+- Public client/server factories now have an explicit transport injection seam, which makes mock transports, alternate protocol implementations, and future registry work practical.
+- `impl.registry` still does not exist; default protocol selection is therefore not centralized yet.
+- `test_http_smoke` still prints `True free heap : 260960 / Should be : 262144`, but heaptrc reports `0 unfreed memory blocks`; this remains a non-blocking observation.
+
+## Review 2026-06-02 Transport Seam
+
+- `/codex`-style review found no blocking issue after the transport-owner refactor.
+- The important architectural correction is that `IHttpTransport` / `IHttpServerTransport` now have a production owner and a public injection seam; they are no longer shape-only abstractions.
+- Next route: implement a real `impl.registry` default-resolution layer before H2/H3 work, or return to malformed chunk/body parser hardening if staying strictly in H1 correctness mode.

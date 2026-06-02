@@ -28,10 +28,15 @@ type
   private
     FHandler: IHttpHandler;
     FOptions: THttpServerOptions;
+    FTransport: IHttpServerTransport;
     FRunning: Boolean;
     FListener: ITcpListener;
   public
-    constructor Create(const AHandler: IHttpHandler; const AOptions: THttpServerOptions);
+    constructor Create(const AHandler: IHttpHandler;
+      const AOptions: THttpServerOptions); overload;
+    constructor Create(const AHandler: IHttpHandler;
+      const ATransport: IHttpServerTransport;
+      const AOptions: THttpServerOptions); overload;
     destructor Destroy; override;
     procedure ListenAndServe(const AAddr: string; const APort: UInt16);
     procedure Shutdown;
@@ -41,23 +46,17 @@ type
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload;
 function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer; overload;
+function NewHttpServer(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport): IHttpServer; overload;
+function NewHttpServer(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport;
+  const AOptions: THttpServerOptions): IHttpServer; overload;
 
 implementation
 
 uses
-  nextpas.core.base,
-  nextpas.core.errors,
-  nextpas.core.io.intf,
-  nextpas.core.io.buffer,
-  nextpas.core.io.memory,
   nextpas.core.net.tcp,
-  nextpas.core.time.base,
-  nextpas.core.time.deadline,
-  nextpas.core.text.conv,
-  nextpas.core.http.headers,
-  nextpas.core.http.message,
-  nextpas.core.http.impl.h1.parser,
-  nextpas.core.http.impl.h1.writer,
+  nextpas.core.http.impl.h1,
   nextpas.core.platform.thread;
 
 type
@@ -65,210 +64,22 @@ type
   TConnContext = record
     Conn: ITcpStream;
     Handler: IHttpHandler;
-    Options: THttpServerOptions;
+    Transport: IHttpServerTransport;
   end;
-
-function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
-var
-  LConn: string;
-begin
-  LConn := AParser.GetHeaders.Get('connection');
-  if AParser.GetHttpVersion = hvHttp10 then
-    Result := (LConn = 'keep-alive')
-  else
-    Result := (LConn <> 'close');
-end;
-
-procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus);
-var
-  LW: IHttpResponseWriter;
-  LBody: string;
-begin
-  try
-    LW := TH1ResponseWriter.Create(AConn as IWriter);
-    LBody := HttpStatusText(AStatus);
-    LW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
-    LW.GetHeaders.Set_('connection', 'close');
-    LW.WriteHeader(AStatus);
-    if Length(LBody) > 0 then
-      LW.Write(LBody[1], SizeUInt(Length(LBody)));
-  except
-    { Swallow write errors during error response }
-  end;
-end;
-
-function StrToBytes(const S: string): TBytes;
-begin
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-end;
-
-function HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler;
-  const AOptions: THttpServerOptions): Boolean;
-var
-  LParser: IH1Parser;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LUrl: TUrl;
-  LReq: IHttpRequest;
-  LW: IHttpResponseWriter;
-  LKeepAlive: Boolean;
-  LIdleMs: Int64;
-  LBufWriter: IWriter;
-  LBodyStr: string;
-  LBodyReader: IReader;
-  LContentLen: Int64;
-  LTotalRead: SizeUInt;
-  LHeadersDone: Boolean;
-begin
-  Result := True;
-  LParser := NewH1RequestParser;
-  LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
-  LKeepAlive := True;
-  if AOptions.IdleTimeout > 0 then
-    LIdleMs := AOptions.IdleTimeout
-  else
-    LIdleMs := 30000;
-
-  while LKeepAlive do
-  begin
-    try
-      { Set idle timeout for reading next request }
-      AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(LIdleMs)));
-      if AOptions.WriteTimeout > 0 then
-        AConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(AOptions.WriteTimeout)));
-
-      { Parse request }
-      LParser.Reset;
-      LTotalRead := 0;
-      LHeadersDone := False;
-      repeat
-        LN := AConn.Read(LBuf[0], 4096);
-        if LN = 0 then begin LKeepAlive := False; Break; end;
-        Inc(LTotalRead, LN);
-        LParser.Execute(@LBuf[0], LN);
-        { Detect when headers become available }
-        if (not LHeadersDone) and ((LParser.GetUrl <> '') or LParser.IsComplete) then
-        begin
-          LHeadersDone := True;
-          { Check header size limit: total bytes read when headers parsed
-            minus body length gives approximate header size }
-          if (AOptions.MaxHeaderSize > 0) and
-             (Int64(LTotalRead) - Int64(Length(LParser.GetBody)) > Int64(AOptions.MaxHeaderSize)) then
-          begin
-            WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
-            LKeepAlive := False;
-            Break;
-          end;
-        end;
-      until LParser.IsComplete or LParser.HasError;
-
-      if not LParser.IsComplete then
-      begin
-        if LParser.HasError then
-          WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
-        Break;
-      end;
-
-      { Check body size limit }
-      if AOptions.MaxBodySize > 0 then
-      begin
-        LBodyStr := LParser.GetBody;
-        if Int64(Length(LBodyStr)) > AOptions.MaxBodySize then
-        begin
-          WriteErrorResponse(AConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
-          LKeepAlive := False;
-          Continue;
-        end;
-      end;
-
-      { Determine keep-alive before dispatching }
-      LKeepAlive := ShouldKeepAlive(LParser);
-
-      { Build request }
-      LUrl := TUrl.Parse(LParser.GetUrl);
-      LBodyStr := LParser.GetBody;
-      if LBodyStr <> '' then
-      begin
-        LBodyReader := CreateBytesStreamFrom(StrToBytes(LBodyStr)) as IReader;
-        LContentLen := Int64(Length(LBodyStr));
-      end
-      else
-      begin
-        LBodyReader := nil;
-        LContentLen := 0;
-      end;
-      LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
-        LParser.GetHeaders, LBodyReader, LContentLen);
-
-      { Set remote address }
-      (LReq as THttpRequest).SetRemoteAddr(AConn.RemoteAddr.ToString);
-
-      { Dispatch to handler }
-      LW := TH1ResponseWriter.Create(LBufWriter, AConn);
-      { For HTTP/1.0 keep-alive, add the header explicitly }
-      if LKeepAlive and (LParser.GetHttpVersion = hvHttp10) then
-        LW.GetHeaders.Set_('connection', 'keep-alive');
-      { If we plan to close, signal it }
-      if not LKeepAlive then
-        LW.GetHeaders.Set_('connection', 'close');
-
-      AHandler.ServeHTTP(LReq, LW);
-
-      { If connection was hijacked (e.g. WebSocket upgrade), stop loop }
-      if (LW as TH1ResponseWriter).IsHijacked then
-      begin
-        Result := False;
-        LKeepAlive := False;
-        Continue;
-      end;
-
-      LW.Flush;
-      (LBufWriter as IFlusher).Flush;
-
-      { If response writer forced connection close (no content-length),
-        the writer already set Connection: close — we must stop }
-      if LW.GetHeaders.Get('connection') = 'close' then
-        LKeepAlive := False;
-    except
-      on E: Exception do
-      begin
-        if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
-          Result := False
-        else
-          WriteErrorResponse(AConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
-        LKeepAlive := False;
-      end;
-    end;
-  end;
-end;
 
 function ConnThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
   LCtx: PConnContext;
-  LConn: ITcpStream;
-  LHandler: IHttpHandler;
-  LOptions: THttpServerOptions;
-  LServerOwnsConn: Boolean;
 begin
   Result := nil;
   LCtx := PConnContext(AArg);
-  LConn := LCtx^.Conn;
-  LHandler := LCtx^.Handler;
-  LOptions := LCtx^.Options;
-  Dispose(LCtx);
-  LServerOwnsConn := True;
   try
-    LServerOwnsConn := HandleConnection(LConn, LHandler, LOptions);
+    LCtx^.Transport.ServeConn(LCtx^.Conn, LCtx^.Handler);
   finally
-    if LServerOwnsConn then
-    begin
-      LConn.Shutdown;
-      LConn.Close;
-    end;
-    LConn := nil;
-    LHandler := nil;
+    LCtx^.Conn := nil;
+    LCtx^.Handler := nil;
+    LCtx^.Transport := nil;
+    Dispose(LCtx);
   end;
 end;
 
@@ -285,11 +96,31 @@ end;
 
 { THttpServer }
 
-constructor THttpServer.Create(const AHandler: IHttpHandler; const AOptions: THttpServerOptions);
+constructor THttpServer.Create(const AHandler: IHttpHandler;
+  const AOptions: THttpServerOptions);
+begin
+  Create(AHandler, nil, AOptions);
+end;
+
+constructor THttpServer.Create(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport; const AOptions: THttpServerOptions);
+var
+  LH1Options: TH1ServerTransportOptions;
 begin
   inherited Create;
   FHandler := AHandler;
   FOptions := AOptions;
+  if ATransport <> nil then
+    FTransport := ATransport
+  else
+  begin
+    LH1Options.ReadTimeout := AOptions.ReadTimeout;
+    LH1Options.WriteTimeout := AOptions.WriteTimeout;
+    LH1Options.IdleTimeout := AOptions.IdleTimeout;
+    LH1Options.MaxHeaderSize := AOptions.MaxHeaderSize;
+    LH1Options.MaxBodySize := AOptions.MaxBodySize;
+    FTransport := NewH1ServerTransport(LH1Options);
+  end;
   FRunning := False;
   FListener := nil;
 end;
@@ -298,6 +129,7 @@ destructor THttpServer.Destroy;
 begin
   if FRunning then
     Shutdown;
+  FTransport := nil;
   FHandler := nil;
   FListener := nil;
   inherited;
@@ -324,15 +156,17 @@ begin
     New(LCtx);
     LCtx^.Conn := LConn;
     LCtx^.Handler := FHandler;
-    LCtx^.Options := FOptions;
+    LCtx^.Transport := FTransport;
     if platform_thread_create(LHandle, @ConnThreadFunc, LCtx) = 0 then
       platform_thread_detach(LHandle)
     else
     begin
       { Thread creation failed — handle inline }
-      if HandleConnection(LConn, FHandler, FOptions) then
-        LConn.Close;
-      Dispose(LCtx);
+      try
+        FTransport.ServeConn(LConn, FHandler);
+      finally
+        Dispose(LCtx);
+      end;
     end;
   end;
 end;
@@ -381,6 +215,19 @@ end;
 function NewHttpServer(const AHandler: IHttpHandler; const AOptions: THttpServerOptions): IHttpServer;
 begin
   Result := THttpServer.Create(AHandler, AOptions);
+end;
+
+function NewHttpServer(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport): IHttpServer;
+begin
+  Result := THttpServer.Create(AHandler, ATransport, THttpServerOptions.Default);
+end;
+
+function NewHttpServer(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport;
+  const AOptions: THttpServerOptions): IHttpServer;
+begin
+  Result := THttpServer.Create(AHandler, ATransport, AOptions);
 end;
 
 end.

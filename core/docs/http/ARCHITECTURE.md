@@ -7,6 +7,13 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 
 消费方只需 `uses nextpas.core.http` 即可获得完整能力，协议版本协商透明。
 
+## 当前落地状态（2026-06-02）
+
+- `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
+- `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造，server 负责 listener/accept/thread。
+- 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
+- `impl.registry` 仍是下一阶段工作；在 H2/H3 真正进入实现前，应先把默认协议选择与注册边界做实。
+
 ---
 
 ## 架构分层
@@ -48,14 +55,14 @@ src/
   nextpas.core.http.url.pas              ← URL 解析（scheme/host/path/query/fragment）
   nextpas.core.http.router.pas           ← Radix tree 路由 + 路径参数
   nextpas.core.http.middleware.pas       ← 中间件链
-  nextpas.core.http.server.pas           ← Server 骨架（accept loop + handler dispatch）
-  nextpas.core.http.client.pas           ← Client 骨架（连接池 + 重定向 + 超时）
+  nextpas.core.http.server.pas           ← Server 骨架（accept loop + transport dispatch）
+  nextpas.core.http.client.pas           ← Client 骨架（redirect + helper request build）
 
   { 协议注册 }
   nextpas.core.http.impl.registry.pas    ← 协议版本注册表 + 自动协商
 
   { HTTP/1.1 实现 }
-  nextpas.core.http.impl.h1.pas          ← H1 transport 入口
+  nextpas.core.http.impl.h1.pas          ← H1 transport owner（client round-trip + server per-conn serve）
   nextpas.core.http.impl.h1.parser.pas   ← H1 协议解析（基于 llhttp 翻译）
   nextpas.core.http.impl.h1.writer.pas   ← H1 响应序列化
   nextpas.core.http.impl.h1.conn.pas     ← H1 连接管理（keep-alive）

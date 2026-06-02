@@ -13,7 +13,7 @@
 
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
 - `IHttpClient.Get/Post/Do_` 原本已覆盖；本轮补齐 `Put/Delete/Patch/Head` focused 覆盖。
-- `IHttpTransport`、`IHttpServerTransport` 已有 focused shape 覆盖；registry / 注入机制仍未实现。
+- `IHttpTransport`、`IHttpServerTransport` 现在既有 focused shape 覆盖，也有 facade runtime 注入覆盖；registry 仍未实现。
 - `IHttpHijacker` 已有 facade alias、writer 行为和 server ownership 覆盖。
 - facade callback aliases 与 server/client overload 现在有直接 focused smoke。
 - `TH1ResponseWriter` 边界覆盖现在包括预设 `Transfer-Encoding`、显式 `Content-Length` flush 路径、以及 chunked finalization 后拒绝继续写入。
@@ -36,10 +36,10 @@
 | `IHttpHandler` / `HandlerFunc`                 | handler wrapping and serving                                                                       | focused               | `test_http_middleware`, `test_http_contract`                             | Add nil-callback contract coverage only if nil guarding becomes part of the public API.                                      |
 | `IHttpMiddleware` / `Chain` / `MiddlewareFunc` | wrapping, order, short-circuit, response mutation                                                  | focused               | `test_http_middleware`, `test_http_middlewares`, `test_http_integration` | None in this phase.                                                                                                          |
 | `IHttpRouter` / `THttpRouter`                  | handle/use/serve, params, wildcard, method dispatch, 404/405                                       | focused + integration | `test_http_router`, `test_http_integration`                              | Decide whether `Patch/Head/Options` convenience methods belong in public router API.                                         |
-| `IHttpServer` / `THttpServer`                  | listen/shutdown/local addr, limits, keep-alive, request body, remote addr                          | focused + integration | `test_http_server`, `test_http_smoke`, `test_http_contract`              | Keep ownership/limit coverage tight as H1 behavior evolves.                                                                  |
-| `IHttpClient` / `THttpClient`                  | do/get/post/put/delete/patch/head, redirects, timeout, host header, pooling, chunked/EOF body read | focused               | `test_http_client`, `test_http_smoke`                                    | Consider adding a same-client follow-up regression if later transport refactors reopen pooling behavior.                     |
-| `IHttpTransport`                               | `RoundTrip`                                                                                        | focused shape         | `test_http_contract`                                                     | Add registry/client injection tests only after transport ownership is designed.                                              |
-| `IHttpServerTransport`                         | `ServeConn`                                                                                        | focused shape         | `test_http_contract`                                                     | Add server protocol-registration tests only after registry ownership is designed.                                            |
+| `IHttpServer` / `THttpServer`                  | listen/shutdown/local addr, limits, keep-alive, request body, remote addr, explicit transport injection | focused + integration | `test_http_server`, `test_http_smoke`, `test_http_contract`              | Keep ownership/limit coverage tight as H1 behavior evolves; add registry resolution tests after `impl.registry` lands.      |
+| `IHttpClient` / `THttpClient`                  | do/get/post/put/delete/patch/head, redirects, timeout, host header, pooling, chunked/EOF body read, explicit transport injection | focused               | `test_http_client`, `test_http_smoke`, `test_http_contract`              | Consider adding a same-client follow-up regression if later transport refactors reopen pooling behavior.                     |
+| `IHttpTransport`                               | `RoundTrip`, facade client injection                                                               | focused               | `test_http_contract`                                                     | Add registry lookup/default-resolution tests after `impl.registry` is designed.                                              |
+| `IHttpServerTransport`                         | `ServeConn`, facade server injection                                                               | focused               | `test_http_contract`                                                     | Add server protocol-registration/default-resolution tests after `impl.registry` is designed.                                 |
 | `IHttpHijacker` / `TH1ResponseWriter.Hijack`   | facade alias, connection takeover, server ownership transfer                                       | focused + integration | `test_http_contract`, `test_http_h1writer`, `test_http_server`           | Add exception-after-hijack and websocket upgrade ownership regression tests later.                                           |
 | Static serving                                 | `ServeFile`, `ServeDir`                                                                            | focused               | `test_http_static`                                                       | Add helper-level MIME tests only if helper API becomes public.                                                               |
 | WebSocket                                      | upgrade, frame read/write, ping/pong/close                                                         | focused               | `test_http_websocket`                                                    | Add negative frame/oversize tests later.                                                                                     |
@@ -50,7 +50,6 @@
 
 ## Highest-Priority Gaps
 
-1. transport registry / protocol ownership design before any H2/H3 expansion.
-2. facade helper boundary audit to decide which non-forwarded helpers should stay unit-local versus move into `nextpas.core.http`.
-3. malformed chunk/body edge cases in parser/security focused tests.
-4. transport registry / injection ownership after the current H1 client/server seams stabilize.
+1. real `impl.registry` 默认协议解析/接线层，在 H2/H3 之前先把 owner 做实。
+2. malformed chunk/body edge cases in parser/security focused tests.
+3. facade helper boundary audit to decide which non-forwarded helpers should stay unit-local versus move into `nextpas.core.http`.

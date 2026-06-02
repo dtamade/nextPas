@@ -6,21 +6,20 @@ Drive `nextpas.core.http` toward a production-grade Free Pascal HTTP framework m
 
 ## Current Phase
 
-Phase 2: H1 correctness hardening.
+Phase 2/3 transition: H1 transport ownership seam landed; registry is the next architecture slice.
 
 ## Active Batch Checklist
 
-- [x] Re-read HTTP inbox, API coverage, plan, findings, progress, and design conventions.
+- [x] Re-read HTTP inbox, API coverage, architecture, findings, progress, and design conventions.
 - [x] Inspect Git status and confirm unrelated dirty files remain outside this HTTP batch.
-- [x] Audit `TChunkedWriter` implementation and existing indirect writer/server coverage.
-- [x] Add a new focused `test_http_h1chunked` project for chunk framing and finalization behavior.
-- [x] Verify RED: writing after `Flush` did not raise and produced an invalid post-terminal write path.
-- [x] Add minimal `TChunkedWriter.Write` guard after terminal chunk finalization.
-- [x] Re-run focused chunked helper tests with heaptrc evidence.
-- [x] Re-run existing H1 writer tests with heaptrc evidence.
-- [x] Re-run the full HTTP suite after adding the new test project.
-- [x] Update inbox, coverage matrix, findings, and progress for this batch.
-- [x] Commit only the owned HTTP files for this helper hardening batch.
+- [x] Add RED public-contract tests for explicit client/server transport injection overloads.
+- [x] Extract default H1 client/server transport ownership into `src/nextpas.core.http.impl.h1.pas`.
+- [x] Turn `http.client` into an orchestrator over `IHttpTransport`.
+- [x] Turn `http.server` into a listener/accept skeleton over `IHttpServerTransport`.
+- [x] Re-run focused contract/client/server tests with heaptrc evidence.
+- [x] Re-run the full HTTP suite after the transport-owner refactor.
+- [x] Update inbox, coverage matrix, README/architecture, findings, and progress for this batch.
+- [x] Commit only the owned HTTP files for this transport seam batch.
 
 ## Quality Gates
 
@@ -57,7 +56,7 @@ Phase 2: H1 correctness hardening.
    - [ ] Keep parser/writer contracts explicit and small.
 
 4. **Phase 3: Server/client integration hardening**
-   - [ ] Verify handler dispatch, response writer state machine, error boundaries, connection lifecycle, shutdown, and client request behavior.
+   - [ ] Verify handler dispatch, response writer state machine, error boundaries, connection lifecycle, shutdown, client request behavior, and default transport resolution.
    - [ ] Keep network-facing errors non-leaky and deterministic.
 
 5. **Phase 4: Documentation and examples**
@@ -73,7 +72,7 @@ Phase 2: H1 correctness hardening.
 
 | Surface                 | Current count or files                              |
 | ----------------------- | --------------------------------------------------- |
-| HTTP source units       | 22 units under `src/nextpas.core.http*.pas`         |
+| HTTP source units       | 23 units under `src/nextpas.core.http*.pas`         |
 | HTTP test projects      | 19 directories under `tests/nextpas.core.http/`     |
 | HTTP benchmark projects | 7 directories under `benchmarks/nextpas.core.http*` |
 | Existing docs           | `docs/http/README.md`, `docs/http/ARCHITECTURE.md`  |
@@ -94,6 +93,7 @@ Phase 2: H1 correctness hardening.
 | Prefer follow-up cleanup over history rewrite  | In the shared checkout, undo accidental mixed commits with narrow follow-up commits rather than `reset`, `rebase`, or commit rewriting. |
 | Let parser own response reuse semantics        | Client pooling should depend on parsed HTTP version/framing/connection semantics, not only on a `Connection: close` header guess.       |
 | Keep chunk finalization enforced at helper level | `TChunkedWriter` itself must reject writes after the terminal chunk, so all callers share the same framing invariant.                  |
+| Land injection seam before registry            | Make transport ownership explicit in public factories first, then build `impl.registry` on top of a real client/server seam.            |
 
 ## Errors Encountered
 
@@ -108,3 +108,4 @@ Phase 2: H1 correctness hardening.
 | Coverage commit accidentally included unrelated files     | 1       | Restore only the unrelated compiler/root-doc paths in a follow-up commit; keep the HTTP coverage commit intact. |
 | Client reuse semantics lacked framing-aware proof         | 1       | Added RED parser tests, then routed pooling decisions through parser-derived keep-alive semantics.           |
 | Chunked helper allowed writes after terminal chunk        | 1       | Added focused `test_http_h1chunked`, then made `TChunkedWriter.Write` raise after `Flush`.                   |
+| Transport interfaces had no production owner             | 1       | Added RED facade injection tests, then extracted default H1 transport ownership into `impl.h1` and public overloads. |

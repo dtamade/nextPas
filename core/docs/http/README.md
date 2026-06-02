@@ -57,6 +57,8 @@ end);
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown`
 - `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)`
+- `NewHttpServer(Handler[, Transport][, Options])` — 默认自动接 H1，也可显式注入 `IHttpServerTransport`
+- `NewHttpClient([Transport][, Options])` — 默认自动接 H1，也可显式注入 `IHttpTransport`
 
 ## Cross-Platform
 

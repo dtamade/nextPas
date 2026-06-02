@@ -22,24 +22,15 @@ type
     class function Default: THttpClientOptions; static;
   end;
 
-  TPoolEntry = record
-    Host: string;
-    Port: UInt16;
-    Conn: ITcpStream;
-  end;
-
   THttpClient = class(TInterfacedObject, IHttpClient)
   private
     FOptions: THttpClientOptions;
-    FPool: array of TPoolEntry;
-    FPoolCount: Int32;
-    function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
-    procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
+    FTransport: IHttpTransport;
     function DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
-    function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
-    function ReadResponse(const AReader: IReader; out AKeepAlive: Boolean): IHttpResponse;
   public
-    constructor Create(const AOptions: THttpClientOptions);
+    constructor Create(const AOptions: THttpClientOptions); overload;
+    constructor Create(const ATransport: IHttpTransport;
+      const AOptions: THttpClientOptions); overload;
     function Do_(const AReq: IHttpRequest): IHttpResponse;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
@@ -51,25 +42,24 @@ type
 
 function NewHttpClient: IHttpClient; overload;
 function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overload;
+function NewHttpClient(const ATransport: IHttpTransport): IHttpClient; overload;
+function NewHttpClient(const ATransport: IHttpTransport;
+  const AOptions: THttpClientOptions): IHttpClient; overload;
 
 implementation
 
 uses
   nextpas.core.base,
-  nextpas.core.base.utils,
   nextpas.core.errors,
-  nextpas.core.io.buffer,
   nextpas.core.io.memory,
-  nextpas.core.net,
-  nextpas.core.time.base,
-  nextpas.core.time.deadline,
   nextpas.core.text.conv,
   nextpas.core.http.headers,
   nextpas.core.http.message,
-  nextpas.core.http.impl.h1.parser;
+  nextpas.core.http.impl.h1;
 
 function StrToBytes(const S: string): TBytes;
 begin
+  Result := nil;
   SetLength(Result, Length(S));
   if Length(S) > 0 then
     Move(S[1], Result[0], Length(S));
@@ -88,202 +78,35 @@ end;
 
 constructor THttpClient.Create(const AOptions: THttpClientOptions);
 begin
+  Create(nil, AOptions);
+end;
+
+constructor THttpClient.Create(const ATransport: IHttpTransport;
+  const AOptions: THttpClientOptions);
+var
+  LH1Options: TH1ClientTransportOptions;
+begin
   inherited Create;
   FOptions := AOptions;
-  FPoolCount := 0;
-end;
-
-function THttpClient.PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
-var LI: Int32;
-begin
-  Result := nil;
-  for LI := 0 to FPoolCount - 1 do
-    if (FPool[LI].Host = AHost) and (FPool[LI].Port = APort) then
-    begin
-      Result := FPool[LI].Conn;
-      FPool[LI] := FPool[FPoolCount - 1];
-      Dec(FPoolCount);
-      Exit;
-    end;
-end;
-
-procedure THttpClient.PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
-begin
-  if FPoolCount >= Length(FPool) then
-    SetLength(FPool, FPoolCount + 4);
-  FPool[FPoolCount].Host := AHost;
-  FPool[FPoolCount].Port := APort;
-  FPool[FPoolCount].Conn := AConn;
-  Inc(FPoolCount);
-end;
-
-function THttpClient.WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
-const
-  CRLF: array[0..1] of Byte = (13, 10);
-var
-  LPath: string;
-  LBuf: IWriter;
-  LFlusher: IFlusher;
-  LN: SizeUInt;
-  LTmp: array[0..4095] of Byte;
-  LStr: string;
-begin
-  Result := True;
-  LBuf := CreateBufferedWriter(AWriter, 4096);
-
-  // Request line: METHOD /path HTTP/1.1\r\n
-  LStr := HttpMethodToStr(AReq.Method);
-  LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
-  LBuf.Write(PAnsiChar(' ')^, 1);
-  LPath := AReq.Url.Path;
-  if LPath = '' then
-    LPath := '/';
-  if AReq.Url.RawQuery <> '' then
-    LPath := LPath + '?' + AReq.Url.RawQuery;
-  LBuf.Write(LPath[1], SizeUInt(Length(LPath)));
-  LStr := ' HTTP/1.1';
-  LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
-  LBuf.Write(CRLF[0], 2);
-
-  // Headers
-  AReq.Headers.ForEach(procedure(const AName, AValue: string)
-  var LHdr: string;
-  begin
-    LHdr := AName + ': ' + AValue;
-    LBuf.Write(LHdr[1], SizeUInt(Length(LHdr)));
-    LBuf.Write(CRLF[0], 2);
-  end);
-
-  // End of headers
-  LBuf.Write(CRLF[0], 2);
-
-  // Body (if any)
-  if AReq.Body <> nil then
-  begin
-    repeat
-      LN := AReq.Body.Read(LTmp[0], 4096);
-      if LN > 0 then
-        LBuf.Write(LTmp[0], LN);
-    until LN = 0;
-  end;
-
-  // Flush
-  if Supports(LBuf, IFlusher, LFlusher) then
-    LFlusher.Flush;
-end;
-
-function THttpClient.ReadResponse(const AReader: IReader; out AKeepAlive: Boolean): IHttpResponse;
-var
-  LParser: IH1Parser;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
-  LBodyStr: string;
-begin
-  LParser := NewH1ResponseParser;
-  repeat
-    LN := AReader.Read(LBuf[0], 4096);
-    if LN = 0 then
-      Break;
-    LParser.Execute(@LBuf[0], LN);
-  until LParser.IsComplete or LParser.HasError;
-
-  // If connection closed before message complete, signal EOF to parser
-  if (not LParser.IsComplete) and (not LParser.HasError) then
-    LParser.Finish;
-
-  if LParser.HasError then
-    raise EHttpError.Create('HTTP parse error: ' + LParser.ErrorMessage);
-  if not LParser.IsComplete then
-    raise EHttpError.Create('HTTP response incomplete: connection closed');
-
-  AKeepAlive := LParser.ShouldKeepAlive;
-
-  // Build body reader from parser body string
-  LBodyStr := LParser.GetBody;
-  if LBodyStr <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyStr));
-    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, LBodyStream as IReader);
-  end
+  if ATransport <> nil then
+    FTransport := ATransport
   else
-    Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
+  begin
+    LH1Options.Timeout := AOptions.Timeout;
+    FTransport := NewH1ClientTransport(LH1Options);
+  end;
 end;
 
 function THttpClient.DoRequest(const AReq: IHttpRequest; ARedirectsLeft: Int32): IHttpResponse;
 var
   LUrl: TUrl;
-  LHost: string;
-  LPort: UInt16;
-  LConn: ITcpStream;
   LResp: IHttpResponse;
   LLocation: string;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
-  LPooled: Boolean;
-  LKeepAlive: Boolean;
 begin
   LUrl := AReq.Url;
-
-  // Determine host and port
-  LHost := LUrl.Host;
-  LPort := LUrl.Port;
-  if LPort = 0 then
-  begin
-    if LUrl.Scheme = 'https' then
-      LPort := 443
-    else
-      LPort := 80;
-  end;
-
-  // Try pooled connection first
-  LConn := PoolGet(LHost, LPort);
-  LPooled := (LConn <> nil);
-
-  if not LPooled then
-    LConn := TcpConnect(LHost, LPort);
-
-  // Set deadline
-  if FOptions.Timeout > 0 then
-  begin
-    LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-    LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-  end;
-
-  // Ensure Host header
-  if not AReq.Headers.Has('host') then
-    AReq.Headers.Set_('host', LUrl.HostPort);
-
-  // Write request + read response; retry once if pooled connection is stale
-  try
-    WriteRequest(LConn as IWriter, AReq);
-    LResp := ReadResponse(LConn as IReader, LKeepAlive);
-  except
-    if LPooled then
-    begin
-      // Stale pooled connection — discard and retry with fresh
-      LConn.Close;
-      LConn := TcpConnect(LHost, LPort);
-      if FOptions.Timeout > 0 then
-      begin
-        LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-        LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
-      end;
-      WriteRequest(LConn as IWriter, AReq);
-      LResp := ReadResponse(LConn as IReader, LKeepAlive);
-    end
-    else
-    begin
-      LConn.Close;
-      raise;
-    end;
-  end;
-
-  // Determine if we can reuse the connection
-  if LKeepAlive then
-    PoolPut(LHost, LPort, LConn)
-  else
-    LConn.Close;
+  LResp := FTransport.RoundTrip(AReq);
 
   // Handle redirects
   if FOptions.FollowRedirects and
@@ -486,6 +309,17 @@ end;
 function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient;
 begin
   Result := THttpClient.Create(AOptions);
+end;
+
+function NewHttpClient(const ATransport: IHttpTransport): IHttpClient;
+begin
+  Result := THttpClient.Create(ATransport, THttpClientOptions.Default);
+end;
+
+function NewHttpClient(const ATransport: IHttpTransport;
+  const AOptions: THttpClientOptions): IHttpClient;
+begin
+  Result := THttpClient.Create(ATransport, AOptions);
 end;
 
 end.
