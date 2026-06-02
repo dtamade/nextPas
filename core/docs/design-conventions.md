@@ -1176,6 +1176,7 @@ IConcurrentQueue = interface
 ## 23. 多人 / 多 AI 协作纪律
 
 仓库级多人 / 多 AI 并行开发纪律固定在 `docs/ai-collaboration-discipline.md`。
+具体 worktree 命名、创建、集成和清理步骤固定在 `docs/worktree-integration-runbook.md`。
 
 后续任何 shared checkout / worktree / branch 并行开发，都必须以该文档为准，尤其是：
 

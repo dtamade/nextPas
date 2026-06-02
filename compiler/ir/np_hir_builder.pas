@@ -170,6 +170,11 @@ type
     function EmitConstInt(const AValue: Int64): THIRValueId;
     function EmitConstIntOfType(const AValue: Int64;
       const ATypeId: THIRTypeId): THIRValueId;
+    function ParseArrayDeclOperand(const AOperand: string; out AName: string;
+      out AIsStatic: Boolean; out ALow, AHigh, ALength: Int64): Boolean;
+    procedure EmitStaticArrayBacking(const AName: string; const ALength: Int64);
+    function NormalizeArrayIndexValue(const AArrayName: string;
+      const AIndexValue: THIRValueId): THIRValueId;
     function EmitStructuredSymbolValue(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
     function LowerSymbolAddressExpr(const AExpr: TSemanticHirExpr;
@@ -607,6 +612,131 @@ begin
   Result := Instr.ResultId;
 end;
 
+function THIRBuilder.ParseArrayDeclOperand(const AOperand: string;
+  out AName: string; out AIsStatic: Boolean; out ALow, AHigh,
+  ALength: Int64): Boolean;
+var
+  TabPos, Code: LongInt;
+  Rest, Field: string;
+
+  function TakeField(var AText: string; out AField: string): Boolean;
+  var
+    PosTab: LongInt;
+  begin
+    PosTab := Pos(#9, AText);
+    if PosTab = 0 then
+    begin
+      AField := AText;
+      AText := '';
+    end
+    else
+    begin
+      AField := Copy(AText, 1, PosTab - 1);
+      AText := Copy(AText, PosTab + 1, Length(AText));
+    end;
+    Result := AField <> '';
+  end;
+
+begin
+  AName := AOperand;
+  AIsStatic := False;
+  ALow := 0;
+  AHigh := -1;
+  ALength := 0;
+  if AOperand = '' then
+    Exit(False);
+
+  TabPos := Pos(#9, AOperand);
+  if TabPos = 0 then
+    Exit(True);
+
+  AName := Copy(AOperand, 1, TabPos - 1);
+  Rest := Copy(AOperand, TabPos + 1, Length(AOperand));
+  if not TakeField(Rest, Field) then
+    Exit(True);
+  if not SameText(Field, 'static') then
+    Exit(True);
+  if not TakeField(Rest, Field) then
+    Exit(True);
+  Val(Field, ALow, Code);
+  if Code <> 0 then
+    Exit(True);
+  if not TakeField(Rest, Field) then
+    Exit(True);
+  Val(Field, AHigh, Code);
+  if Code <> 0 then
+    Exit(True);
+  if not TakeField(Rest, Field) then
+    Exit(True);
+  Val(Field, ALength, Code);
+  if Code <> 0 then
+    Exit(True);
+  AIsStatic := ALength > 0;
+  Result := True;
+end;
+
+procedure THIRBuilder.EmitStaticArrayBacking(const AName: string;
+  const ALength: Int64);
+var
+  Instr: THIRInstr;
+  PtrSlot, LenSlot, LenValue: THIRValueId;
+begin
+  if (AName = '') or (ALength <= 0) then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikAlloca;
+  Instr.TypeId := GetIntType;
+  Instr.IntrinsicName := 'record:' + IntToStr(ALength);
+  EmitInstr(Instr);
+
+  RegisterAllocaEntry(AName + '$storage', Instr.ResultId, GetIntType, False);
+  FAllocas[FAllocaCount - 1].RecordSlots := ALength;
+
+  PtrSlot := FindAlloca(AName + '$ptr');
+  LenSlot := FindAlloca(AName + '$len');
+  if PtrSlot <> 0 then
+    EmitStore(GetPtrType, Instr.ResultId, PtrSlot);
+  if LenSlot <> 0 then
+  begin
+    LenValue := EmitConstIntOfType(ALength, GetIntType);
+    if LenValue <> 0 then
+      EmitStore(GetIntType, LenValue, LenSlot);
+  end;
+end;
+
+function THIRBuilder.NormalizeArrayIndexValue(const AArrayName: string;
+  const AIndexValue: THIRValueId): THIRValueId;
+var
+  LowBound: Int64;
+  LowValue: THIRValueId;
+  Instr: THIRInstr;
+begin
+  Result := AIndexValue;
+  if (AArrayName = '') or (AIndexValue = 0) then
+    Exit;
+  if (FSemaModel = nil) or
+    (not FSemaModel.LookupConstValue(AArrayName + '$arr_low', LowBound)) then
+    Exit;
+  if LowBound = 0 then
+    Exit;
+
+  LowValue := EmitConstIntOfType(LowBound, GetIntType);
+  if LowValue = 0 then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikSub;
+  Instr.TypeId := GetIntType;
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(AIndexValue, GetIntType);
+  Instr.Operands[1] := MakeTypedOperand(LowValue, GetIntType);
+  EmitInstr(Instr);
+  Result := Instr.ResultId;
+end;
+
 function THIRBuilder.BinaryKindForOp(const AOp: string;
   out AKind: THIRInstrKind): Boolean;
 begin
@@ -833,6 +963,9 @@ begin
 
   IndexValue := NormalizeScalarValueToType(IndexResult.ValueId,
     IndexResult.TypeId, GetIntType);
+  if IndexValue = 0 then
+    Exit(False);
+  IndexValue := NormalizeArrayIndexValue(Symbol.Name, IndexValue);
   if IndexValue = 0 then
     Exit(False);
 
@@ -1764,6 +1897,7 @@ var
   BaseAlloca, BasePtr, IndexVal: THIRValueId;
 begin
   IndexVal := S.Pop;
+  IndexVal := NormalizeArrayIndexValue(AArg, IndexVal);
   BaseAlloca := FindAlloca(AArg + '$ptr');
   if BaseAlloca = 0 then
     Exit;
@@ -2072,6 +2206,7 @@ begin
   else
     VarName := AArg;
   Rhs := S.Pop;
+  Rhs := NormalizeArrayIndexValue(VarName, Rhs);
   V := FindAlloca(VarName + '$ptr');
   if V = 0 then
   begin
@@ -2556,6 +2691,9 @@ var
   Arg: string;
   TabPos, Code: LongInt;
   DeclType: THIRTypeId;
+  ArrName: string;
+  IsStaticArray: Boolean;
+  ArrLow, ArrHigh, ArrLength: Int64;
 begin
   if ANode.NodeKind = hnkVarDeclRuntime then
   begin
@@ -2654,6 +2792,9 @@ begin
   end
   else if ANode.NodeKind = hnkVarDeclArrRuntime then
   begin
+    if not ParseArrayDeclOperand(ANode.Operand, ArrName, IsStaticArray,
+      ArrLow, ArrHigh, ArrLength) then
+      ArrName := ANode.Operand;
     if FInStartFunc then
     begin
       if FGlobalCount >= Length(FGlobalNames) then
@@ -2661,19 +2802,21 @@ begin
         SetLength(FGlobalNames, FGlobalCount + 32);
         SetLength(FGlobalTypes, FGlobalCount + 32);
       end;
-      FGlobalNames[FGlobalCount] := ANode.Operand + '$ptr';
+      FGlobalNames[FGlobalCount] := ArrName + '$ptr';
       FGlobalTypes[FGlobalCount] := GetPtrType;
       Inc(FGlobalCount);
-      FModule.AddGlobal(ANode.Operand + '$ptr', GetPtrType);
+      FModule.AddGlobal(ArrName + '$ptr', GetPtrType);
       if FGlobalCount >= Length(FGlobalNames) then
       begin
         SetLength(FGlobalNames, FGlobalCount + 32);
         SetLength(FGlobalTypes, FGlobalCount + 32);
       end;
-      FGlobalNames[FGlobalCount] := ANode.Operand + '$len';
+      FGlobalNames[FGlobalCount] := ArrName + '$len';
       FGlobalTypes[FGlobalCount] := GetIntType;
       Inc(FGlobalCount);
-      FModule.AddGlobal(ANode.Operand + '$len', GetIntType);
+      FModule.AddGlobal(ArrName + '$len', GetIntType);
+      if IsStaticArray then
+        EmitStaticArrayBacking(ArrName, ArrLength);
     end
     else
     begin
@@ -2681,19 +2824,21 @@ begin
       begin
         ParamIdx := FPendingParamLlvmIdx;
         ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[ParamIdx].ValueId;
-        EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
-        EmitStore(GetPtrType, ParamValueId, FindAlloca(ANode.Operand + '$ptr'));
+        EnsureAlloca(ArrName + '$ptr', GetPtrType);
+        EmitStore(GetPtrType, ParamValueId, FindAlloca(ArrName + '$ptr'));
         Inc(FPendingParamLlvmIdx);
         ParamValueId := FModule.FunctionAt(FModule.FunctionCount - 1).Params[FPendingParamLlvmIdx].ValueId;
-        EnsureAlloca(ANode.Operand + '$len', GetIntType);
-        EmitStore(GetIntType, ParamValueId, FindAlloca(ANode.Operand + '$len'));
+        EnsureAlloca(ArrName + '$len', GetIntType);
+        EmitStore(GetIntType, ParamValueId, FindAlloca(ArrName + '$len'));
         Dec(FPendingParamCount);
         Inc(FPendingParamLlvmIdx);
       end
       else
       begin
-        EnsureAlloca(ANode.Operand + '$ptr', GetPtrType);
-        EnsureAlloca(ANode.Operand + '$len', GetIntType);
+        EnsureAlloca(ArrName + '$ptr', GetPtrType);
+        EnsureAlloca(ArrName + '$len', GetIntType);
+        if IsStaticArray then
+          EmitStaticArrayBacking(ArrName, ArrLength);
       end;
     end;
   end
@@ -4229,6 +4374,8 @@ begin
   IdxVal := ParseIntBlob(IdxBlob);
   ValVal := ParseIntBlob(ValBlob);
   if (IdxVal = 0) or (ValVal = 0) then Exit;
+  IdxVal := NormalizeArrayIndexValue(ArrName, IdxVal);
+  if IdxVal = 0 then Exit;
 
   BasePtr := EmitLoad(GetPtrType, FindAlloca(ArrName + '$ptr'));
 

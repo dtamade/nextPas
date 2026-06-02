@@ -328,6 +328,13 @@ type
     procedure UnrollAssignmentRepeatLoop(const ANode: TGreenNode);
     function EvaluateIntegerConstant(const ANode: TGreenNode;
       out AValue: Int64): Boolean;
+    function ArrayElementTypeNode(const AArrayTypeNode: TGreenNode): TGreenNode;
+    function TryGetArrayTypeBounds(const AArrayTypeNode: TGreenNode;
+      out ALow, AHigh, ALength: Int64): Boolean;
+    function FindArrayTypeNodeForVarDecl(const AVarSection: TGreenNode;
+      const ADeclIndex: LongInt): TGreenNode;
+    procedure RegisterArrayVarMetadata(const AVarName: string;
+      const AArrayTypeNode: TGreenNode; out AOperand: string);
     function EvaluateStringConstant(const ANode: TGreenNode;
       out AValue: string): Boolean;
     procedure WalkHaltCalls(const ANode: TGreenNode);
@@ -4338,6 +4345,10 @@ begin
   Meta.Interfaces := '';
   Meta.ArrElemSize := 0;
   Meta.ArrElemType := '';
+  Meta.ArrLowBound := 0;
+  Meta.ArrHighBound := -1;
+  Meta.ArrLength := 0;
+  Meta.IsStaticArray := False;
   SetLength(Meta.Fields, 0);
   SetLength(Meta.VmtSlots, 0);
   SetLength(Meta.RetPtrMethods, 0);
@@ -4464,6 +4475,10 @@ begin
     Interfaces := '';
     ArrElemSize := 0;
     ArrElemType := '';
+    ArrLowBound := 0;
+    ArrHighBound := -1;
+    ArrLength := 0;
+    IsStaticArray := False;
     SetLength(Fields, 0);
     SetLength(VmtSlots, 0);
     SetLength(RetPtrMethods, 0);
@@ -5113,6 +5128,10 @@ begin
   Meta.Interfaces := '';
   Meta.ArrElemSize := 0;
   Meta.ArrElemType := '';
+  Meta.ArrLowBound := 0;
+  Meta.ArrHighBound := -1;
+  Meta.ArrLength := 0;
+  Meta.IsStaticArray := False;
   FModel.SetTypeMeta(ATypeId, Meta);
 end;
 
@@ -6028,6 +6047,106 @@ begin
   Result := False;
 end;
 
+
+function TSemanticAnalyzer.ArrayElementTypeNode(
+  const AArrayTypeNode: TGreenNode): TGreenNode;
+begin
+  Result := nil;
+  if (AArrayTypeNode = nil) or (AArrayTypeNode.NodeKind <> gnkArrayType) then
+    Exit;
+  if AArrayTypeNode.ChildCount < 1 then
+    Exit;
+  Result := AArrayTypeNode.ChildAt(0);
+end;
+
+function TSemanticAnalyzer.TryGetArrayTypeBounds(
+  const AArrayTypeNode: TGreenNode; out ALow, AHigh, ALength: Int64): Boolean;
+var
+  RangeNode: TGreenNode;
+begin
+  ALow := 0;
+  AHigh := -1;
+  ALength := 0;
+  if (AArrayTypeNode = nil) or (AArrayTypeNode.NodeKind <> gnkArrayType) or
+    (AArrayTypeNode.ChildCount < 2) then
+    Exit(False);
+  RangeNode := AArrayTypeNode.ChildAt(1);
+  if (RangeNode = nil) or (RangeNode.NodeKind <> gnkRangeExpression) or
+    (RangeNode.ChildCount < 2) then
+    Exit(False);
+  if not EvaluateIntegerConstant(RangeNode.ChildAt(0), ALow) then
+    Exit(False);
+  if not EvaluateIntegerConstant(RangeNode.ChildAt(1), AHigh) then
+    Exit(False);
+  if AHigh < ALow then
+    Exit(False);
+  ALength := AHigh - ALow + 1;
+  Result := ALength > 0;
+end;
+
+function TSemanticAnalyzer.FindArrayTypeNodeForVarDecl(
+  const AVarSection: TGreenNode; const ADeclIndex: LongInt): TGreenNode;
+var
+  K: LongInt;
+  Decl, TypeChild, NextSibling: TGreenNode;
+begin
+  Result := nil;
+  if (AVarSection = nil) or (ADeclIndex < 0) or
+    (ADeclIndex >= AVarSection.ChildCount) then
+    Exit;
+  Decl := AVarSection.ChildAt(ADeclIndex);
+  if (Decl = nil) or (Decl.NodeKind <> gnkVarDecl) then
+    Exit;
+  if Decl.ChildCount > 0 then
+  begin
+    TypeChild := Decl.ChildAt(0);
+    if (TypeChild <> nil) and (TypeChild.NodeKind = gnkArrayType) then
+      Exit(TypeChild);
+    if (TypeChild <> nil) and (TypeChild.Text = '') then
+    begin
+      for K := ADeclIndex + 1 to AVarSection.ChildCount - 1 do
+      begin
+        NextSibling := AVarSection.ChildAt(K);
+        if (NextSibling <> nil) and (NextSibling.NodeKind <> gnkVarDecl) then
+        begin
+          if NextSibling.NodeKind = gnkArrayType then
+            Exit(NextSibling);
+          Break;
+        end;
+      end;
+    end;
+  end;
+end;
+
+procedure TSemanticAnalyzer.RegisterArrayVarMetadata(const AVarName: string;
+  const AArrayTypeNode: TGreenNode; out AOperand: string);
+var
+  ElementNode: TGreenNode;
+  LowBound, HighBound, ArrLength: Int64;
+begin
+  AOperand := AVarName;
+  RegisterRuntimeArrVar(AVarName);
+
+  ElementNode := ArrayElementTypeNode(AArrayTypeNode);
+  if ElementNode <> nil then
+  begin
+    FModel.AddStringConstValue(AVarName + '$arr_elem_type',
+      ElementNode.Text);
+    if TypeMetaIsRecord(ElementNode.Text) then
+      FModel.AddConstValue(AVarName + '$arr_elem_size',
+        TypeMetaSize(ElementNode.Text));
+  end;
+
+  if TryGetArrayTypeBounds(AArrayTypeNode, LowBound, HighBound, ArrLength) then
+  begin
+    FModel.AddConstValue(AVarName + '$arr_static', 1);
+    FModel.AddConstValue(AVarName + '$arr_low', LowBound);
+    FModel.AddConstValue(AVarName + '$arr_high', HighBound);
+    FModel.AddConstValue(AVarName + '$arr_len', ArrLength);
+    AOperand := AVarName + #9 + 'static' + #9 + IntToStr(LowBound) +
+      #9 + IntToStr(HighBound) + #9 + IntToStr(ArrLength);
+  end;
+end;
 
 function TSemanticAnalyzer.EvaluateStringConstant(const ANode: TGreenNode;
   out AValue: string): Boolean;
@@ -10053,9 +10172,10 @@ end;
 
 procedure TSemanticAnalyzer.WalkRuntimeVarDecls(const ANode: TGreenNode);
 var
-  I, J, K: LongInt;
-  Child, Decl, TypeChild, NextSibling: TGreenNode;
-  IsStr, IsArr: Boolean;
+  I, J: LongInt;
+  Child, Decl, TypeChild, ArrayTypeNode: TGreenNode;
+  IsStr: Boolean;
+  ArrOperand: string;
   Folded, Value: Int64;
 begin
   if ANode = nil then
@@ -10077,7 +10197,7 @@ begin
           (Decl.Text = '') then
           Continue;
         IsStr := False;
-        IsArr := False;
+        ArrayTypeNode := nil;
         if Decl.ChildCount > 0 then
         begin
           TypeChild := Decl.ChildAt(0);
@@ -10085,21 +10205,8 @@ begin
             (SameText(TypeChild.Text, 'String') or
              SameText(TypeChild.Text, 'AnsiString')) then
             IsStr := True;
-          if (TypeChild <> nil) and (TypeChild.Text = '') then
-          begin
-            for K := J + 1 to Child.ChildCount - 1 do
-            begin
-              NextSibling := Child.ChildAt(K);
-              if (NextSibling <> nil) and
-                (NextSibling.NodeKind <> gnkVarDecl) then
-              begin
-                if NextSibling.NodeKind = gnkArrayType then
-                  IsArr := True;
-                Break;
-              end;
-            end;
-          end;
         end;
+        ArrayTypeNode := FindArrayTypeNodeForVarDecl(Child, J);
         RegisterRuntimeVar(Decl.Text);
         if IsStr then
         begin
@@ -10108,20 +10215,11 @@ begin
             'var-decl-str-runtime', Decl.Text, 0, 0, Decl.Text
           );
         end
-        else if IsArr then
+        else if ArrayTypeNode <> nil then
         begin
-          RegisterRuntimeArrVar(Decl.Text);
-          if (NextSibling <> nil) and (NextSibling.NodeKind = gnkArrayType) and
-            (NextSibling.ChildCount > 0) and (NextSibling.ChildAt(0) <> nil) and
-            (TypeMetaSize(NextSibling.ChildAt(0).Text) > 0) then
-          begin
-            if TypeMetaIsRecord(NextSibling.ChildAt(0).Text) then
-              FModel.AddConstValue(Decl.Text + '$arr_elem_size',
-                TypeMetaSize(NextSibling.ChildAt(0).Text));
-            FModel.AddStringConstValue(Decl.Text + '$arr_elem_type', NextSibling.ChildAt(0).Text);
-          end;
+          RegisterArrayVarMetadata(Decl.Text, ArrayTypeNode, ArrOperand);
           FModel.AddTypedHirNode(
-            'var-decl-arr-runtime', Decl.Text, 0, 0, Decl.Text
+            'var-decl-arr-runtime', Decl.Text, 0, 0, ArrOperand
           );
         end
         else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
@@ -10248,9 +10346,9 @@ var
   I, J, K: LongInt;
   Entry: TProcedureBodyEntry;
   ParamCount: LongInt;
-  Child, ParamChild, TypeChild, Decl: TGreenNode;
+  Child, ParamChild, TypeChild, Decl, ArrayTypeNode: TGreenNode;
   SavedTerminated: Boolean;
-  ParamTypes, RetVarName, EffName: string;
+  ParamTypes, RetVarName, EffName, ArrOperand: string;
   IsStrParam, IsStrReturn, IsPtrReturn, IsVarP, IsRecReturn: Boolean;
   PtrReturnClass: string;
   Folded, Value: Int64;
@@ -10522,7 +10620,14 @@ begin
               (Decl.Text = '') then
               Continue;
             RegisterRuntimeVar(Decl.Text);
-            if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
+            ArrayTypeNode := FindArrayTypeNodeForVarDecl(Child, K);
+            if ArrayTypeNode <> nil then
+            begin
+              RegisterArrayVarMetadata(Decl.Text, ArrayTypeNode, ArrOperand);
+              FModel.AddTypedHirNode(
+                'var-decl-arr-runtime', Decl.Text, 0, 0, ArrOperand);
+            end
+            else if (Decl.ChildCount > 0) and (Decl.ChildAt(0) <> nil) and
               (TypeMetaSize(Decl.ChildAt(0).Text) > 0) and
               (not TypeMetaIsRecord(Decl.ChildAt(0).Text)) then
             begin

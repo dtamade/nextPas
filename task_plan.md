@@ -1,3 +1,35 @@
+# Task Plan: nextPas active work
+
+## Active Session: 2026-06-03 C5-H0 static array foundation
+
+### Goal
+
+先修静态数组基础语义，再做静态数组结构化 target/address。当前 C5-G 已把动态数组
+`arr[i] := rhs` 接入 `TargetExprId`，但静态数组仍缺 bounds 元数据和真实 backing storage；
+直接迁移 target/address 会把错误语义结构化。
+
+### Checklist
+
+- [x] 确认 Git 状态：`compiler/` 当前无未提交改动；脏文件集中在 `.claude/`、`.worktrees/`、`core/`。
+- [x] 重读 `core/docs/design-conventions.md`、`compiler/docs/compiler-goal-tree.md`、Claude memory、`docs/inbox.md`。
+- [x] 建立本轮计划文档：`compiler/docs/plans/2026-06-03-c5h0-static-array-foundation.md`。
+- [x] 写 RED 测试，证明静态数组 bounds/metadata/backing/index normalization 缺口。
+- [x] 实现 C5-H0：parser bounds、sema static metadata、builder backing storage 和 low-bound normalization。
+- [x] 跑 focused tests、完整重编译、全量 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md` 和 `docs/inbox.md`。
+- [ ] path-limited stage/commit 本轮文件，并报告复盘和下一步。
+
+### Constraints
+
+- 本轮只改 `compiler/`、`docs/inbox.md`、根目录计划文件；不碰 `core/` 并行工作。
+- 结构化表达式和旧 blob 双轨必须保留；未迁移 producer 必须能回退。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以现有 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Prior Historical Plan
+
+The following historical plan content is retained for recovery context.
+
 # Task Plan: P0/P1 verification fidelity + unit resolution correctness
 
 ## Goal

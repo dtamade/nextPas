@@ -180,6 +180,10 @@ type
     InterfaceSlots: array of TInterfaceSlotMeta;
     ArrElemSize: Int64;
     ArrElemType: string;
+    ArrLowBound: Int64;
+    ArrHighBound: Int64;
+    ArrLength: Int64;
+    IsStaticArray: Boolean;
   end;
 
   TSemanticConstValue = record
