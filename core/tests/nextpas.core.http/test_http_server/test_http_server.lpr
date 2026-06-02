@@ -1186,6 +1186,72 @@ begin
   end;
 end;
 
+procedure TestChunkedKeepAliveGarbageTailBecomesFollowUp400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10 +
+        'garbage';
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'keep-alive chunked tail: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'keep-alive chunked tail: first body preserved');
+      Check(LSeenUpload, 'keep-alive chunked tail: first handler called');
+      CheckEqual('hello', LGotBody, 'keep-alive chunked tail: handler sees decoded body only');
+      Check(Pos('HTTP/1.1 400', LResp2) > 0, 'keep-alive chunked tail: malformed follow-up gets 400');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: Query parameters }
 procedure TestQueryParam;
 var
@@ -2145,6 +2211,7 @@ begin
   T.Run('Content-Length extra bytes after close -> 400', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400', @TestContentLengthKeepAliveGarbageTailBecomesFollowUp400);
   T.Run('Chunked extra bytes after close -> 400', @TestChunkedRequestExtraBytesAfterCloseRejected);
+  T.Run('Chunked keep-alive garbage tail -> follow-up 400', @TestChunkedKeepAliveGarbageTailBecomesFollowUp400);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);

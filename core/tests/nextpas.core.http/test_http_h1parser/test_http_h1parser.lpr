@@ -626,6 +626,29 @@ begin
   Check(LP.ErrorMessage <> '', 'extra bytes after chunked close has error message');
 end;
 
+procedure TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+  LReq := LReq1 + 'garbage';
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive chunked tail should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive chunked first request should complete');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive chunked parser consumes only first request');
+  Check(LP.GetMethod = hmPost, 'keep-alive chunked first request preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive chunked first request preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive chunked first request preserves body');
+end;
+
 procedure TestUpgradeRequestCompletesWithoutParserError;
 var
   LP: IH1Parser;
@@ -799,6 +822,7 @@ begin
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
+  T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Request line truncated at EOF', @TestRequestLineTruncatedAtEof);
