@@ -1,5 +1,38 @@
 # Findings & Decisions
 
+## 2026-06-02 Follow-up Findings 45
+
+- 实际 merge 候选验证证明了一个重要事实：`feat/tui-migration` 与当前 `main` 的源码合并面本身是可落地的，
+  真正的冲突集中在共享 planning/control files，而不在 TUI 源码、测试或 benchmark 资产上。
+- 对这些共享 planning files（`findings.md`、`progress.md`、`task_plan.md` 及其 `core/` 同名文件）
+  保留 `main` 侧版本是正确的保守策略，因为主线此时正在承载 HTTP/crypto/platform 等并行批次的执行面；
+  把它们误切成 TUI 语境会造成跨模块控制面失真。TUI 自身真相应继续沉淀在
+  `core/docs/plans/2026-05-31-tui-migration-goaltree.md`、
+  `core/docs/plans/2026-06-02-tui-merge-prep.md` 和 `core/docs/tui/*`。
+- post-merge supporting/focused/full/benchmark/examples fresh 证据全部成立，说明此前的
+  pre-merge envelope 不是“只在 feature 分支自洽”，而是对最新 `main` 合并面也保持成立。
+- examples 编译中暴露的唯一 warning 来自 `demo_widgets.lpr` 的 `case` 未显式覆盖所有枚举值；
+  补 `else ;` 后 examples warning_count 回到 0。这个修复不影响 TUI 运行语义，但它把最终候选分支的
+  examples 质量补到了更完整的状态。
+- 因此本轮最诚实的工程结论是：`nextpas.core.tui` 已到达 `verified merge candidate ready`，
+  剩余阻塞不在模块本身，而在主 checkout 何时提供一个安全的本地 `main` 推进窗口。
+
+## 2026-06-02 Follow-up Findings 44
+
+- `feat/tui-migration` 当前代码与 pre-merge 证据已经收口，但这并不等于可以直接在
+  `/home/dtamade/projects/nextPas` 主 checkout 上执行本地 merge。当前主 checkout `main`
+  带有多处 unrelated tracked/untracked 改动，范围覆盖 `compiler/`、`core/tests/`、
+  `.claude/worktrees/` 与多份计划文件；若直接 merge，会把本轮 TUI 集成证据与其他 WIP 混在一起。
+- `git rev-list --left-right --count main...feat/tui-migration` 当前为 `588 87`，说明 feature 分支
+  相对最新 `main` 已有较大分叉；“pre-merge verified”只能证明 feature 自身状态正确，不能替代
+  基于最新 `main` 的真实合并验证。
+- 因此本轮的正确工程动作不是碰现有主 checkout，而是新建一个基于当前 `main` 的 clean integration
+  worktree，在候选分支里完成 merge、冲突处理与 post-merge 证明。只有这样，才能把“代码完成”
+  升级为“主线合并面真实可落地”。
+- 如果候选分支验证通过而主 checkout 仍保持脏状态，本轮收口应诚实表述为
+  `verified merge candidate ready`；是否真正推进 `main`，要看用户是否先清理主 checkout
+  或接受在独立候选分支上继续完成后续主线整合。
+
 ## 2026-06-02 Follow-up Findings 42
 
 - `nextpas.core.tui` facade 编译期的 975 条 warning 全部不是 TUI 自身单元发出的，而是

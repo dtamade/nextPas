@@ -147,7 +147,18 @@
 - 2026-06-02 final verification envelope：fresh focused tests（facade/widget_intf/buffer）全通过且 heaptrc 0；
   full TUI tests `32 projects / 246 passed / 0 failed / 13 heaptrc zero summaries / warning_count=0`；
   benchmark smoke `4` 项、`status=0`、`warning_count=0`。
-- **迁移主体完成。** 剩余：merge 前最终真相审计、全量 verification envelope、合并准备清单。
+- 2026-06-02 clean integration candidate：已在
+  `/home/dtamade/.config/superpowers/worktrees/nextPas/tui-main-merge-20260602`
+  的 `codex/tui-main-merge-20260602` 分支上，从 `main@8581cd55` 实际 merge
+  `feat/tui-migration@00a6dd93`；冲突仅在共享 planning files，已保守保留 `main` 侧当前控制面。
+- 2026-06-02 post-merge proof：supporting/focused tests
+  `test_platform_console_raw 5/5`、`test_grapheme 11/11`、`test_text_width 19/19`、
+  `test_tui_facade 5/5`、`test_tui_widget_intf 4/4` 均 heaptrc 0；full TUI tests 仍为
+  `32 projects / 246 passed / 0 failed / 13 heaptrc zero summaries / warning_count=0`；
+  benchmark smoke 仍为 `4` 项、`status=0`、`warning_count=0`；3 个 TUI examples 全部可编译且
+  `warning_count=0`。
+- **迁移主体完成。** 当前状态已提升为 verified merge candidate；剩余仅是等待安全的主线窗口推进
+  `main` 引用或决定正式合并路径。
 
 ### Phase 3 — ANSI Backend + Terminal [完成]
 - [x] platform 前置依赖（platform.console: set_raw/restore_raw/read/write/wait_readable/get_size; platform.signal: SIGWINCH）

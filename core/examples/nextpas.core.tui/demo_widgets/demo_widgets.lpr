@@ -69,15 +69,17 @@ begin
     Ev := Term.PollEvent(50);
     Inc(Tick);
     if Ev.Kind = evKey then
-    begin
-      case Ev.Key.Code of
-        kcEsc: Break;
-        kcChar: if Ev.Key.Ch = Ord('q') then Break;
-        kcUp: if ListState.Selected > 0 then ListState.Select(ListState.Selected - 1);
-        kcDown: if ListState.Selected < 4 then ListState.Select(ListState.Selected + 1);
-      end;
-    end;
-  until Term.ShouldQuit;
+	    begin
+	      case Ev.Key.Code of
+	        kcEsc: Break;
+	        kcChar: if Ev.Key.Ch = Ord('q') then Break;
+	        kcUp: if ListState.Selected > 0 then ListState.Select(ListState.Selected - 1);
+	        kcDown: if ListState.Selected < 4 then ListState.Select(ListState.Selected + 1);
+	      else
+	        ;
+	      end;
+	    end;
+	  until Term.ShouldQuit;
 
   Term.LeaveTui;
   Term.Free;

@@ -15,6 +15,49 @@
 说明：下面的 addendum 按时间保留当时的批次范围；当前 reality 以最新 addendum 与
 fresh `bash build/verify_local.sh` 为准。
 
+## Addendum: 2026-06-02 TUI main merge integration window
+
+### Goal
+
+在不污染主 checkout、不中断其他并行 worktree 的前提下，为 `feat/tui-migration` 建立一个
+基于最新 `main` 的干净 integration 候选分支，完成实际合并、冲突处理与 post-merge 验证。
+
+这轮目标不是重复 pre-merge 证明，而是回答两个更硬的问题：
+
+- `feat/tui-migration` 能否在当前 `main` 上无回归落地
+- 当前仓库现场是否允许直接推进主线，还是只能先交付一个已验证的 merge candidate
+
+### Architecture Decision
+
+- 主 checkout `/home/dtamade/projects/nextPas` 当前带有多处 unrelated tracked/untracked 改动，
+  不能直接作为本轮本地合并目标。
+- 采用独立 linked worktree + 新候选分支的方式，从当前 `main` 开 clean integration window；
+  在该候选分支执行 merge 与验证，避免把主 checkout 的脏状态、并行 worktree 或他人 WIP 混入证据。
+- 本轮优先验证 TUI 合并面与关键回归；若 merge 结果稳定，再评估是否补更宽的 `core` 级验证。
+- 若候选分支验证通过但主 checkout 仍不安全，本轮收口标准是“verified merge candidate ready”，
+  而不是强推 `main` 引用。
+
+### Planned Steps
+
+- [x] 复读 `docs/design-conventions.md`、目标树、merge-prep 与 planning files
+- [x] 审计主 checkout / feature worktree / worktree list，确认安全边界
+- [x] 记录 clean integration worktree 决策到 planning files
+- [x] 创建基于最新 `main` 的 integration worktree 与候选分支
+- [x] 在候选分支合并 `feat/tui-migration`
+- [x] 跑 post-merge focused tests、benchmark smoke，必要时补更宽验证
+- [x] 更新目标树、merge-prep 与 planning files
+- [x] git hygiene 检查并提交本轮 commit
+
+### Audit Checklist
+
+- [x] 已确认主 checkout `main` 不能直接本地 merge
+- [x] 已确认 `feat/tui-migration` 当前 worktree clean
+- [x] integration worktree 路径与分支命名可追溯
+- [x] merge 过程不污染主 checkout 与其他 worktree
+- [x] post-merge 关键 TUI 测试 fresh pass
+- [x] post-merge benchmark smoke `status=0`
+- [x] 结论明确区分“候选分支已验证”和“主线引用已推进”
+
 ## Addendum: 2026-06-02 TUI facade zero-warning closeout
 
 ### Goal

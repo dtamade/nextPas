@@ -3,6 +3,57 @@
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。
 
+## Session: 2026-06-02 (tui main merge integration window)
+
+- **Status:** completed
+- Goal tree:
+  - `nextpas.core.tui` merge-prep final truth
+- Objective:
+  - 在独立 integration window 中实际把 `feat/tui-migration` 合到当前 `main` 候选分支，
+    产出 post-merge 真实性证据。
+- Baseline:
+  - `feat/tui-migration` worktree clean，当前 HEAD 为 `00a6dd93`。
+  - `main` 当前 HEAD 为 `8581cd55`，与 feature 分支分叉计数为 `588 87`。
+  - 主 checkout `/home/dtamade/projects/nextPas` 带有多处 unrelated tracked/untracked 改动，
+    包括 `compiler/`、`core/tests/`、`.claude/worktrees/` 与多份 `core/docs/plans/*.md`，
+    不适合作为本轮本地 merge 目标。
+- Actions so far:
+  - 已复读 `docs/design-conventions.md`、相关技能与 planning files。
+  - 已确认当前 feature worktree 是 linked worktree，且 worktree list 中存在多个并行分支；
+    本轮必须在新建 clean integration worktree 中完成 merge 验证。
+  - 已创建 integration worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/tui-main-merge-20260602`
+    与候选分支 `codex/tui-main-merge-20260602`，base 为 `main@8581cd55`。
+  - 已在候选分支 merge `feat/tui-migration@00a6dd93`；冲突仅落在共享 planning files，
+    并保守保留 `main` 侧控制面，TUI 自身专属真相继续由 `core/docs/plans/` 和 `core/docs/tui/` 承载。
+  - 已修复 `core/examples/nextpas.core.tui/demo_widgets/demo_widgets.lpr` 的 examples warning：
+    为键盘 `case` 补 `else ;`，不改运行语义。
+- Verification:
+  - supporting / focused：
+    - `test_platform_console_raw`：`5 total, 5 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+    - `test_grapheme`：`11 total, 11 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+    - `test_text_width`：`19 total, 19 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+    - `test_tui_facade`：`5 total, 5 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+    - `test_tui_widget_intf`：`4 total, 4 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+  - full TUI tests：
+    - 日志：`/tmp/nextpas-tui-full-merge-20260602.log`
+    - `projects=32 total=246 passed=246 failed=0`
+    - `heap_zero_count=13`
+    - `warning_count=0`
+  - benchmark smoke：
+    - 日志：`/tmp/nextpas-tui-bench-merge-20260602.log`
+    - `bench_targets=4`
+    - `warning_count=0`
+  - examples：
+    - 日志：`/tmp/nextpas-tui-examples-merge-20260602.log`
+    - `status=0`
+    - `warning_count=0`
+- Closeout:
+  - merge candidate 分支已提交：
+    `8774a739 merge(tui): integrate feat/tui-migration into main candidate`
+  - 当前结论为 `verified merge candidate ready`；由于主 checkout `main` 仍脏，本轮未直接推进该工作区的
+    本地 `main` 引用。
+
 ## Session: 2026-06-02 (tui facade zero-warning closeout)
 
 - **Status:** completed
