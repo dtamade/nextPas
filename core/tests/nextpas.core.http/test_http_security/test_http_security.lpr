@@ -435,6 +435,46 @@ begin
   end;
 end;
 
+{ Test 14: Malformed trailer header field }
+procedure TestMalformedTrailerField;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Bad'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'Bad Header: value'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
+      'Malformed trailer field: rejected or closed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 15: Truncated trailer section at EOF }
+procedure TestTruncatedTrailerAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check((Pos('400', LResp) > 0) or (Length(LResp) = 0),
+      'Truncated trailer EOF: rejected or closed');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -452,5 +492,7 @@ begin
   T.Run('Very long method name', @TestLongMethodName);
   T.Run('Body larger than CL', @TestBodyLargerThanContentLength);
   T.Run('Negative Content-Length', @TestNegativeContentLength);
+  T.Run('Malformed trailer field', @TestMalformedTrailerField);
+  T.Run('Truncated trailer section at EOF', @TestTruncatedTrailerAtEof);
   T.Summary;
 end.

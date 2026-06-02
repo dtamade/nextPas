@@ -1228,6 +1228,78 @@ begin
   end;
 end;
 
+procedure TestMalformedChunkedRequestInvalidTrailerField;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Bad'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'Bad Header: value'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, REQ);
+    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Length(LResp) = 0),
+      'invalid trailer field: 400 or connection closed');
+    Check(not LHandlerCalled, 'invalid trailer field: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestMalformedChunkedRequestTruncatedTrailerAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: value'#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check((Pos('HTTP/1.1 400', LResp) > 0) or (Length(LResp) = 0),
+      'truncated trailer at eof: 400 or connection closed');
+    Check(not LHandlerCalled, 'truncated trailer at eof: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Chunked response — handler writes without Content-Length }
 procedure TestChunkedResponse;
 var
@@ -1422,6 +1494,8 @@ begin
   T.Run('Chunked request content-length conflict reverse order -> 400', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('Chunked request oversize trailer uses MaxHeaderSize', @TestChunkedRequestOversizeTrailerUsesMaxHeaderSize);
+  T.Run('Malformed chunked request invalid trailer field -> reject', @TestMalformedChunkedRequestInvalidTrailerField);
+  T.Run('Malformed chunked request truncated trailer at EOF -> reject', @TestMalformedChunkedRequestTruncatedTrailerAtEof);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);

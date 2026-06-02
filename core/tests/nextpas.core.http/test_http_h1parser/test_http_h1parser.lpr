@@ -371,6 +371,47 @@ begin
     'reset clears trailer byte count');
 end;
 
+procedure TestChunkedRequestInvalidTrailerField;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Bad'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'Bad Header: value'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'invalid trailer field reports parser error');
+  Check(not LP.IsComplete, 'invalid trailer field is not complete');
+end;
+
+procedure TestChunkedRequestTruncatedTrailerAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Test'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'X-Test: value'#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated trailer request is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'truncated trailer request reports parser error');
+  Check(not LP.IsComplete, 'truncated trailer request stays incomplete');
+end;
+
 procedure TestHeadRequest;
 var
   LP: IH1Parser;
@@ -486,6 +527,8 @@ begin
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
+  T.Run('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);
+  T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Invalid request', @TestInvalidRequest);
   T.Run('Incomplete input', @TestIncompleteInput);
