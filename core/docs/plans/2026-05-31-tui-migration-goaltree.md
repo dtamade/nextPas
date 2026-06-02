@@ -118,6 +118,9 @@
 - [x] Unicode/grapheme 关键回归：family emoji、skin tone modifier 覆盖 text.grapheme / text.width / tui.buffer；keycap emoji 覆盖 text.grapheme / text.width / tui.buffer / tui.text。
 - [x] 2026-06-02 benchmark 收口：修复 `bench_render` 的 IGauge builder 用法，4 个 TUI benchmark 全部可运行；
   `docs/tui/BENCHMARK.md` 记录 FreePascal TUI 基线，并明确 CI smoke 与跨 runtime 对照边界。
+- [x] 2026-06-02 merge-prep 审计：README quick-start 已对齐真实 facade API，并由 `test_tui_facade`
+  编译覆盖；facade 编译 warning 共 975 条，全部来自 `nextpas.core.text.number.pow10.inc`，
+  TUI 自身单元 warning 行数为 0；benchmark smoke 编译 warning 行数为 0。
 
 ---
 
@@ -138,6 +141,9 @@
 - 2026-06-02 buffer overwrite hardening：`SetString` / `SetStringN` / `SetStringP` 在覆盖旧宽字形
   lead/tail cell 时先清理重叠残留，避免同一帧内留下 stale `Width=2`/`Skip=True` 状态；
   `test_tui_buffer` 扩至 21/21，覆盖窄字形覆盖宽字形 lead/tail 与 `SetStringP` 路径。
+- 2026-06-02 merge-prep truth：README/catalog/facade 已对齐；`test_tui_facade` 现为 5/5；
+  facade 编译 warning 975 条全部来自 `nextpas.core.text.number.pow10.inc`，不属于 TUI 自身源码；
+  benchmark smoke 无 warning 行。
 - **迁移主体完成。** 剩余：merge 前最终真相审计、全量 verification envelope、合并准备清单。
 
 ### Phase 3 — ANSI Backend + Terminal [完成]
