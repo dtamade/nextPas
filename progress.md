@@ -2,7 +2,7 @@
 
 ## Session: 2026-06-03 C5-H0 static array foundation
 
-- **Status:** implementation complete; final verification passed; pending path-limited commit.
+- **Status:** completed and committed.
 - Confirmed branch and safety state:
   - Branch: `main`
   - Latest compiler milestone commit in history: `9e6b3e23 feat(compiler): C5G lower array store targets`
@@ -42,7 +42,7 @@
   - Full LLVM smoke: `smoke_count=137 passed=137 failed=0`.
   - Whitespace check: `git diff --check` -> clean.
 - Next immediate step:
-  - Path-limited stage/commit, then report retrospective and next C5-H plan.
+  - Continue with C5-H static array target/address producer, then expand to field arrays and nested lvalue chains.
 
 说明：历史 session/section 保留当时的推进语境；当前 execution reality 以本文件中最新的
 2026-05-28 记录为准。

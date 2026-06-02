@@ -17,7 +17,7 @@
 - [x] 实现 C5-H0：parser bounds、sema static metadata、builder backing storage 和 low-bound normalization。
 - [x] 跑 focused tests、完整重编译、全量 LLVM smoke。
 - [x] 更新 `compiler/docs/compiler-goal-tree.md` 和 `docs/inbox.md`。
-- [ ] path-limited stage/commit 本轮文件，并报告复盘和下一步。
+- [x] path-limited stage/commit 本轮文件，并报告复盘和下一步。
 
 ### Constraints
 
