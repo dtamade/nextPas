@@ -62,7 +62,7 @@ make -C examples/nextpas.core.http/http_get_client run
 
 ### Server / Client (interfaces)
 
-- `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown`
+- `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
 - `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
 - `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、`MaxHeaderSize`、`MaxBodySize`

@@ -114,6 +114,7 @@ type
     procedure ListenAndServe(const AAddr: string; const APort: UInt16);
     procedure Shutdown;
     function LocalAddr: TNetAddress;
+    function IsRunning: Boolean;
   end;
 
   IHttpClient = interface

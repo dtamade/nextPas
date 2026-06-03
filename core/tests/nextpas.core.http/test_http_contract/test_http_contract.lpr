@@ -649,6 +649,32 @@ begin
   Check(LRaised, 'NewHttpServer rejects nil handler');
 end;
 
+procedure TestHttpServerLifecycleContractOnInterface;
+var
+  LHandler: IHttpHandler;
+  LServer: IHttpServer;
+  LAddr: TNetAddress;
+begin
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+  end);
+
+  LServer := NewHttpServer(LHandler);
+  Check(LServer <> nil, 'NewHttpServer returns IHttpServer contract');
+  Check(not LServer.IsRunning, 'IHttpServer reports not running before listen');
+
+  LAddr := LServer.LocalAddr;
+  CheckEqual('0.0.0.0', LAddr.IP,
+    'IHttpServer.LocalAddr uses any-address placeholder before listen');
+  CheckEqual(Int64(0), Int64(LAddr.Port),
+    'IHttpServer.LocalAddr uses port 0 before listen');
+
+  LServer.Shutdown;
+  Check(not LServer.IsRunning,
+    'IHttpServer.Shutdown remains safe before listen');
+end;
+
 procedure TestHttpServerHonorsExplicitBackendSelection;
 var
   LOptions: THttpServerOptions;
@@ -712,6 +738,7 @@ begin
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
   T.Run('HttpServer rejects nil handler', @TestHttpServerRejectsNilHandler);
+  T.Run('IHttpServer lifecycle contract shape', @TestHttpServerLifecycleContractOnInterface);
   T.Run('HttpServer honors explicit backend selection',
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Summary;

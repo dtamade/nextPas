@@ -1,25 +1,26 @@
-# Findings: HTTP server backend contract surfacing batch 6
+# Findings: HTTP server lifecycle contract surfacing batch 7
 
 ## Root causes
 
-- `nextpas.core.net.server` 已经有 backend seam，但 `THttpServerOptions` 之前没有
-  把这条 seam 暴露给 HTTP public contract。
-- 结果是 runtime foundation 虽然已经落地，HTTP public API 却还不能显式表达
-  “这个 server 要选择哪个 runtime backend”。
-- 这会让 `HttpServer` 的 public surface 与已固定的 runtime architecture 真相脱节。
+- `THttpServer` 实际已经提供了 `IsRunning`，测试辅助代码也在直接消费它，
+  但 `IHttpServer` public contract 之前没有这条生命周期状态访问器。
+- 结果是同一个 HTTP server 生命周期语义只能通过具体类消费，不能通过公开接口消费。
+- 这会让 interface-first 使用方式与真实实现能力脱节，也让 `IHttpServer` /
+  `THttpServer` 这条公开契约在文档和测试层面不够自洽。
 
 ## Fixed design truth
 
-- `THttpServerOptions` 现在公开拥有 `Backend: TTcpServerBackend`。
-- `THttpServerOptions.Default.Backend` 现在锁定为 `TCP_SERVER_BACKEND_THREADED`。
-- `THttpServer.Create` 现在会把 `AOptions.Backend` 下沉到
-  `nextpas.core.net.server.NewTcpServer(LTcpOptions)`。
-- 因此当调用方显式选择尚未实现的 backend 时，会在 HTTP facade 层稳定得到
-  `ENotSupportedError`，而不是被静默忽略后继续走 threaded。
+- `IHttpServer` 现在公开拥有 `IsRunning: Boolean`。
+- 因此调用方可以只依赖 `IHttpServer`，直接读取 pre-listen / post-shutdown 的
+  生命周期状态，而不必向下转成 `THttpServer`。
+- `LocalAddr` 的 pre-listen placeholder 语义与 `Shutdown` 的 pre-listen
+  安全语义也已通过同一条 focused contract test 一起锁定。
 
 ## Why this is the right fix
 
-- 这让 HTTP public options 与 runtime architecture 对齐，不再把 backend 选择藏在下层。
-- 先把 seam 暴露并锁定 forward 语义，后续 `epoll/kqueue/IOCP` 真正落地时就不需要再改
-  `HttpServer` public API。
-- 当前先返回 `ENotSupportedError` 也符合 fail-fast 原则，比悄悄回退到 threaded 更可控。
+- 这让 `IHttpServer` 与 `THttpServer` 的生命周期公开面重新对齐，避免 public contract
+  和实现真相分叉。
+- `IsRunning` 已经是现有实现的稳定语义，补到 interface 不需要改运行时逻辑，
+  只是把已存在能力正式纳入 API contract。
+- 先用 focused test 锁住 lifecycle shape，后续 evented backend 演进时也能保持
+  HTTP facade 的公开语义稳定。
