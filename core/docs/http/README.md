@@ -24,8 +24,7 @@ make -C examples/nextpas.core.http/http_hello_server run
 make -C examples/nextpas.core.http/http_get_client run
 ```
 
-- `http_hello_server` shows `NewRouter`, `Handle(hmGet, ...)` via
-  `nextpas.core.http.base`,
+- `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
   `Req.PathParam`, `Req.QueryParam`, `NewHttpServer(..., THttpServerOptions.Default)`,
   and `ListenAndServe`.
 - `http_get_client` shows `NewHttpClient`, `Client.Get(URL)`, reading
@@ -38,10 +37,8 @@ make -C examples/nextpas.core.http/http_get_client run
 
 - `NewRouter` — create radix-tree router (implements IHttpRouter + IHttpHandler)
 - `Handle(Method, Pattern, Handler)` — register route with path params (`:name`) and wildcards
+- `Get/Post/Put/Delete(Pattern, Handler)` — public convenience methods on `IHttpRouter`
 - `Use(Middleware)` — append middleware to the router chain
-- `Get/Post/Put/Delete(Pattern, Handler)` — convenience methods on the concrete
-  `THttpRouter` class in `nextpas.core.http.router`; the facade interface path
-  uses `Handle(...)`
 
 ### Headers
 

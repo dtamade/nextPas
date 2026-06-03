@@ -190,7 +190,50 @@ begin
   Check(LCalled, 'Router dispatches handler');
 end;
 
-{ Test 3: NewRequest — Method/Url/Version accessible }
+{ Test 3: IHttpRouter convenience methods are callable through interface }
+procedure TestRouterConvenienceMethodsOnInterface;
+var
+  LRouter: IHttpRouter;
+  LHit: string;
+begin
+  LRouter := NewRouter;
+  Check(LRouter <> nil, 'NewRouter returns non-nil for interface convenience methods');
+
+  LRouter.Get('/iface-get', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'get';
+  end);
+  LRouter.Post('/iface-post', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'post';
+  end);
+  LRouter.Put('/iface-put', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'put';
+  end);
+  LRouter.Delete('/iface-delete', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'delete';
+  end);
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/iface-get')), nil);
+  CheckEqual('get', LHit, 'IHttpRouter.Get registers GET route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmPost, TUrl.Parse('/iface-post')), nil);
+  CheckEqual('post', LHit, 'IHttpRouter.Post registers POST route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmPut, TUrl.Parse('/iface-put')), nil);
+  CheckEqual('put', LHit, 'IHttpRouter.Put registers PUT route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmDelete, TUrl.Parse('/iface-delete')), nil);
+  CheckEqual('delete', LHit, 'IHttpRouter.Delete registers DELETE route');
+end;
+
+{ Test 4: NewRequest — Method/Url/Version accessible }
 procedure TestNewRequest;
 var
   LReq: IHttpRequest;
@@ -549,6 +592,7 @@ begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
   T.Run('NewRouter: Get route + FindRoute', @TestNewRouter);
+  T.Run('IHttpRouter convenience methods are callable through interface', @TestRouterConvenienceMethodsOnInterface);
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);

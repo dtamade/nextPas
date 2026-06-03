@@ -97,6 +97,10 @@ type
   IHttpRouter = interface(IHttpHandler)
     ['{A1B2C3D4-E5F6-7890-ABCD-400000000007}']
     procedure Handle(const AMethod: THttpMethod; const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Get(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Post(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Put(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Delete(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Use(const AMiddleware: IHttpMiddleware);
   end;
 

@@ -4,7 +4,6 @@ program hello_http_server;
 
 uses
   nextpas.core.http,
-  nextpas.core.http.base,
   nextpas.core.text.conv;
 
 procedure WritePlainText(const AW: IHttpResponseWriter; const AStatus: THttpStatus;
@@ -24,7 +23,7 @@ var
 
 begin
   LRouter := NewRouter;
-  LRouter.Handle(hmGet, '/hello/:name',
+  LRouter.Get('/hello/:name',
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
       LBody: string;
