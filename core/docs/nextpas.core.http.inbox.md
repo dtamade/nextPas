@@ -4,6 +4,8 @@
 
 ## 当前批次
 
+- 本轮继续补 raw-wire malformed chunk framing proof：terminal `0` chunk 带 extension、最终空 trailer section 只收到单个 `CR` 后 EOF 的子类，现在也已在 parser/server/security 三层有 focused 证据，输入 `...0;sig=abc\r\n\r` 会稳定被拒绝
+- 这轮没有新增生产修复；当前 parser/H1 transport 已能安全拒绝该类 terminal chunk ending after extension CR 截断，本轮主要是把 current truth 锁进回归
 - 本轮继续补 raw-wire malformed chunk framing proof：terminal `0` chunk 带 extension 且 extension line 已完整结束、但最终空 trailer section 缺失的 EOF 子类，现在也已在 parser/server/security 三层有 focused 证据，输入 `...0;sig=abc\r\n` 会稳定被拒绝
 - 这轮没有新增生产修复；当前 parser/H1 transport 已能安全拒绝该类 terminal chunk ending after extension 截断，本轮主要是把 current truth 锁进回归
 - 本轮继续补 raw-wire malformed chunk framing proof：terminal `0` chunk extension line 的 EOF 截断，现在也已在 parser/server/security 三层有 focused 证据，且把 `...0;sig=abc` 与 `...0;sig=abc\r` 两个相邻子类都单独锁实
@@ -71,6 +73,7 @@
 - `impl.h1.parser` 现在也有 `chunk-size line EOF truncation` focused proof。
 - `impl.h1.parser` 现在也有 `terminal chunk extension EOF truncation` focused proof。
 - `impl.h1.parser` 现在也有 `terminal chunk ending after extension EOF truncation` focused proof。
+- `impl.h1.parser` 现在也有 `terminal chunk ending after extension CR EOF truncation` focused proof。
 - `impl.h1.parser` 现在也有 `chunk-data CRLF EOF truncation` focused proof。
 - `impl.h1.parser` 现在也有 `terminal 0 chunk ending EOF truncation` focused proof。
 - `impl.h1.parser` 现在也有 late trailer byte accounting focused proof，用来支撑 server 对 trailer header budget 的后续判定。
@@ -96,6 +99,7 @@
 - `THttpServer` 现在也有 `chunk-size line EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
 - `THttpServer` 现在也有 `terminal chunk extension EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
 - `THttpServer` 现在也有 `terminal chunk ending after extension EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
+- `THttpServer` 现在也有 `terminal chunk ending after extension CR EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
 - `THttpServer` 现在也有 `chunk-extension line EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
 - `THttpServer` 现在也有 `chunk-data CRLF EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
 - `THttpServer` 现在也有 `terminal 0 chunk ending EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
@@ -103,6 +107,7 @@
 - `test_http_security` 现在也有 `terminal 0 chunk ending EOF truncation` 的 raw-wire explicit `400` proof。
 - `test_http_security` 现在也有 `terminal chunk extension EOF truncation` 的 raw-wire explicit `400` proof。
 - `test_http_security` 现在也有 `terminal chunk ending after extension EOF truncation` 的 raw-wire explicit `400` proof。
+- `test_http_security` 现在也有 `terminal chunk ending after extension CR EOF truncation` 的 raw-wire explicit `400` proof。
 - `test_http_security` 现在也有 `chunk-extension line EOF truncation` 的 raw-wire explicit `400` proof。
 - `test_http_security` 现在也有 `chunk-data CRLF EOF truncation` 的 raw-wire explicit `400` proof。
 - `test_http_security` 现在也有 `chunk-size line EOF truncation` 的 raw-wire explicit `400` proof。
@@ -122,7 +127,7 @@
 
 ## 下一步
 
-- 下一步优先把 keep-alive request-tail 契约定下来：当前 parser/server/security focused 证据已经覆盖 `Content-Length` tail、chunked tail、以及 fixed-length/chunked 首请求后的 same-read / same-write truth；接下来需要决定这些行为哪些保留为 transport truth，哪些继续系统性收紧成更早的显式拒绝。
-- 同时继续补剩余 raw-wire malformed chunk framing 变体是否都稳定落在显式 `400` 或安全关闭语义，并继续评估 trailer 是否最终需要显式 public API。
+- 下一步继续补剩余 raw-wire malformed chunk framing 变体，优先看 terminal `0` chunk 最终空 trailer section 的其余 CR-only EOF 相邻子类，确认 parser/server/security 三层都稳定落在显式 `400` 或安全关闭语义。
+- malformed chunk framing 审计再往前收一两格后，再回到 keep-alive request-tail 契约决策：当前 parser/server/security focused 证据已经覆盖 `Content-Length` tail、chunked tail、以及 fixed-length/chunked 首请求后的 same-read / same-write truth；届时需要决定这些行为哪些保留为 transport truth，哪些继续系统性收紧成更早的显式拒绝。
 - 当前阶段先保持“ignore trailer fields, preserve Trailer declaration header”的窄契约，不急着扩公开 API。
 - 后续如果扩协议层，直接在已落地的 registry 上接 H2/H3，而不是重新把默认选择散回 facade/factory。
