@@ -322,6 +322,60 @@ begin
   LListener.Close;
 end;
 
+procedure TestTcpListenerSupportsRuntimeSocketControl;
+var
+  LListener: ITcpListener;
+  LRuntime: ITcpSocketRuntime;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    Check(Supports(LListener, ITcpSocketRuntime, LRuntime),
+      'listener exposes runtime socket control');
+    Check(LRuntime.NativeSocketHandle <> 0, 'listener native handle available');
+    LRuntime.SetBlocking(False);
+    LRuntime.SetBlocking(True);
+  finally
+    LListener.Close;
+  end;
+end;
+
+procedure TestTcpStreamSupportsRuntimeSocketControl;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LAccepted: ITcpStream;
+  LClientRuntime: ITcpSocketRuntime;
+  LAcceptedRuntime: ITcpSocketRuntime;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+    try
+      LAccepted := LListener.Accept;
+      try
+        Check(Supports(LClient, ITcpSocketRuntime, LClientRuntime),
+          'client stream exposes runtime socket control');
+        Check(Supports(LAccepted, ITcpSocketRuntime, LAcceptedRuntime),
+          'accepted stream exposes runtime socket control');
+        Check(LClientRuntime.NativeSocketHandle <> 0,
+          'client stream native handle available');
+        Check(LAcceptedRuntime.NativeSocketHandle <> 0,
+          'accepted stream native handle available');
+        LClientRuntime.SetBlocking(False);
+        LClientRuntime.SetBlocking(True);
+        LAcceptedRuntime.SetBlocking(False);
+        LAcceptedRuntime.SetBlocking(True);
+      finally
+        LAccepted.Close;
+      end;
+    finally
+      LClient.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP echo', @TestTcpEcho);
@@ -337,5 +391,9 @@ begin
   T.Run('Infinite deadline', @TestInfiniteDeadline);
   T.Run('SetNoDelay', @TestSetNoDelay);
   T.Run('SetKeepAlive', @TestSetKeepAlive);
+  T.Run('TCP listener exposes runtime socket control',
+    @TestTcpListenerSupportsRuntimeSocketControl);
+  T.Run('TCP stream exposes runtime socket control',
+    @TestTcpStreamSupportsRuntimeSocketControl);
   T.Summary;
 end.

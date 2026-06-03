@@ -29,7 +29,8 @@ uses
   nextpas.core.net.resolve;
 
 type
-  TTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
+  TTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream,
+    ITcpSocketRuntime)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -59,9 +60,11 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
   end;
 
-  TTcpListener = class(TInterfacedObject, ITcpListener)
+  TTcpListener = class(TInterfacedObject, ITcpListener, ITcpSocketRuntime)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -72,6 +75,8 @@ type
     function Accept: ITcpStream;
     function LocalAddr: TNetAddress;
     procedure Close;
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
   end;
 
 function Htons(AVal: UInt16): UInt16; inline;
@@ -243,6 +248,17 @@ begin
   FWriteDeadline := ADeadline;
 end;
 
+function TTcpStream.NativeSocketHandle: PtrUInt;
+begin
+  Result := PtrUInt(FSocket.Value);
+end;
+
+procedure TTcpStream.SetBlocking(const ABlocking: Boolean);
+begin
+  if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
+    raise ENetworkError.Create('tcp set blocking failed');
+end;
+
 procedure TTcpStream.ApplyReadTimeout;
 var
   LMs: UInt32;
@@ -344,6 +360,17 @@ begin
     FClosed := True;
     platform_socket_close(FSocket);
   end;
+end;
+
+function TTcpListener.NativeSocketHandle: PtrUInt;
+begin
+  Result := PtrUInt(FSocket.Value);
+end;
+
+procedure TTcpListener.SetBlocking(const ABlocking: Boolean);
+begin
+  if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
+    raise ENetworkError.Create('tcp listener set blocking failed');
 end;
 
 { Factory functions }

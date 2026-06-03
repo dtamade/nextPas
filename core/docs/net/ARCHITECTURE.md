@@ -51,6 +51,11 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
   已固定 foundation contract：`ITcpServer` / `ITcpServerHandler`。
 - [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:1)
   是当前唯一已落地 backend，负责 listen / accept / shutdown / detach ownership。
+- [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
+  现在提供了可选 `ITcpSocketRuntime` seam，用来暴露 native socket handle 与 blocking control，
+  供 future evented backend 使用。
+- [src/nextpas.core.net.tcp.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.tcp.pas:1)
+  已让 `TTcpStream` / `TTcpListener` 实现 `ITcpSocketRuntime`，把 runtime access 前置条件收进 foundation。
 - [src/nextpas.core.http.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.server.pas:1)
   现在只是 HTTP facade，真实 runtime ownership 已下沉到 `ITcpServer`。
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:104)
@@ -92,6 +97,8 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 
 - `ITcpServer` 是协议模块消费的统一 runtime seam。
 - `ITcpServerHandler.ServeConn` 返回 ownership，server 与 handler 的连接责任要显式可证明。
+- `ITcpSocketRuntime` 是 lower-level runtime seam：普通业务代码可以忽略它，evented backend 可以通过
+  `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
 - `nextpas.core.http.server` 这类上层 facade 只能做编排，不再重复实现 accept loop。
 - 上层模块可以保留同步 handler surface；evented backend 必须在内部做 worker handoff，不能把任意 handler 直接跑在 reactor 线程。
 

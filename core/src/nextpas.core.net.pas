@@ -17,6 +17,7 @@ uses
 
 type
   TNetAddress = nextpas.core.net.base.TNetAddress;
+  ITcpSocketRuntime = nextpas.core.net.intf.ITcpSocketRuntime;
   ITcpStream = nextpas.core.net.intf.ITcpStream;
   ITcpListener = nextpas.core.net.intf.ITcpListener;
   IUdpSocket = nextpas.core.net.intf.IUdpSocket;

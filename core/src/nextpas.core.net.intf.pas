@@ -15,6 +15,14 @@ uses
   nextpas.core.net.base;
 
 type
+  { Runtime-facing socket seam for advanced server backends.
+    Ordinary consumers can ignore it; evented runtimes may opt-in via Supports. }
+  ITcpSocketRuntime = interface
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000004}']
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+  end;
+
   ITcpStream = interface(IStream)
     ['{C1D2E3F4-A5B6-7890-ABCD-300000000001}']
     function LocalAddr: TNetAddress;
