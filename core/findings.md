@@ -1,24 +1,22 @@
-# Findings: HTTP keep-alive tail policy decision
+# Findings: HTTP examples and facade truth
 
-## Decision
+## What landed
 
-- 当前 H1 keep-alive request-tail 行为不再视为“待决定”。
-- 结论：把它冻结为 **intentional transport policy**。
+- 新增两个可运行示例：
+  - `examples/nextpas.core.http/http_hello_server`
+  - `examples/nextpas.core.http/http_get_client`
+- `docs/http/README.md` 的 Quick Start 已从片段式伪代码切到可运行命令。
 
-## Policy
+## Key findings
 
-- 当前请求只要 framing 已完整，就先完整交付给 handler。
-- transport 会保留未消费尾字节，交给下一次 parse。
-- follow-up 只有在被证明 malformed，或在 EOF / half-close 下确定截断时，才返回 follow-up `400`。
-- 不对 partial follow-up line / partial follow-up headers 做更早显式拒绝。
+- `NewRouter` 返回的是 `IHttpRouter`，公开接口稳定面是 `Handle(...)` / `Use(...)`；
+  `Get/Post/Put/Delete` convenience methods 目前只在 concrete `THttpRouter` 上，不在 facade interface 上。
+- `hmGet` 等枚举值当前也不经过 `nextpas.core.http` facade 直接入作用域；
+  example 需要显式使用 `nextpas.core.http.base`。
+- 因而 README 若继续写成“只 `uses nextpas.core.http` 就能 `Router.Get(...)` / `Handle(hmGet, ...)`”
+  会误导使用者；本轮已把文档收口到 current truth。
 
-## Rationale
+## Scope decision
 
-- fixed-length、plain chunked、trailer-complete chunked 三条路径都已经有：
-  - garbage-tail proof
-  - partial follow-up request-line proof
-  - partial follow-up headers proof
-  - valid pipelined next-request isolation / completion proof
-- 另外 bridge proof 已证明：
-  partial follow-up request line 在后续字节补全后可以成为合法第二请求。
-- 因而“更早拒绝”会误伤合法分段到达的第二请求，不符合当前 H1 transport buffering 语义。
+- 本轮不扩公开 API，不为 example 去新增 facade re-export 或扩 `IHttpRouter`。
+- benchmark 继续后置；本轮目标是 examples/doc truth，不是性能工作。

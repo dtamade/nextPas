@@ -1,12 +1,16 @@
-# Progress Log: HTTP keep-alive tail policy decision
+# Progress Log: HTTP runnable examples and README truth pass
 
 ## Session
 
-- **Scope:** freeze keep-alive request-tail behavior as intentional H1 transport policy.
+- **Scope:** land runnable HTTP server/client examples and align README with real public API boundaries.
 - **Status:** completed
 
 ## Notes
 
-- 本轮没有新增生产代码。
-- 本轮没有新增测试；直接复用前几轮已经累计完成的 focused proof 作为决策依据。
-- gap #1 已从控制面移除，后续不再把它当开放问题重复讨论，除非 transport buffering 语义被有意修改。
+- 本轮没有修改生产实现单元；只新增 examples，并修正文档描述。
+- `http_hello_server` 证明了 `NewRouter` + `Handle(...)` + `PathParam` + `QueryParam` + `NewHttpServer` 的最小 runnable path。
+- `http_get_client` 证明了 `NewHttpClient` + `Get(...)` + body read + header iteration 的最小 runnable path。
+- changed-surface 验证已完成：
+  - `make -C examples/nextpas.core.http/http_hello_server clean build`
+  - `make -C examples/nextpas.core.http/http_get_client clean build`
+  - 本地 smoke：启动 `hello_http_server` 后运行 `http_get_client`，默认 URL 返回 `200` 且 body 为 `hello=world / page=1 / path=/hello/world`
