@@ -3614,6 +3614,74 @@ begin
   end;
 end;
 
+{ Test 18a: 204 response stays bodyless on the wire }
+procedure TestNoContentResponseDoesNotUseChunkedEncoding;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/no-content', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    AW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /no-content HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 204 No Content', LResp) = 1,
+      '204: status line present');
+    Check(Pos('transfer-encoding: chunked', LResp) = 0,
+      '204: no chunked header');
+    Check(Pos('content-length:', LResp) = 0,
+      '204: no forced content-length');
+    Check(Pos('0'#13#10#13#10, LResp) = 0,
+      '204: no chunk trailer');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 18b: 304 response stays bodyless on the wire }
+procedure TestNotModifiedResponseDoesNotUseChunkedEncoding;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/not-modified', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    AW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /not-modified HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 304 Not Modified', LResp) = 1,
+      '304: status line present');
+    Check(Pos('transfer-encoding: chunked', LResp) = 0,
+      '304: no chunked header');
+    Check(Pos('content-length:', LResp) = 0,
+      '304: no forced content-length');
+    Check(Pos('0'#13#10#13#10, LResp) = 0,
+      '304: no chunk trailer');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 19: Chunked response preserves keep-alive }
 procedure TestChunkedKeepAlive;
 var
@@ -3921,6 +3989,10 @@ begin
   T.Run('Malformed chunked request truncated trailer CR at EOF -> 400',
     @TestMalformedChunkedRequestTruncatedTrailerCrAtEof);
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
+  T.Run('204 response does not use chunked encoding',
+    @TestNoContentResponseDoesNotUseChunkedEncoding);
+  T.Run('304 response does not use chunked encoding',
+    @TestNotModifiedResponseDoesNotUseChunkedEncoding);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
   T.Run('Hijack exception does not write 500 or close handler connection',

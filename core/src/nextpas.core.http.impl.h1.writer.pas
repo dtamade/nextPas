@@ -21,10 +21,12 @@ type
     FConn: ITcpStream;
     FHijacked: Boolean;
     FFinalized: Boolean;
+    FNoBodyAllowed: Boolean;
     procedure WriteStatusLine;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
+    function ResponseMustNotHaveBody: Boolean;
   public
     constructor Create(const AWriter: IWriter); overload;
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream); overload;
@@ -58,6 +60,7 @@ begin
   FConn := nil;
   FHijacked := False;
   FFinalized := False;
+  FNoBodyAllowed := False;
 end;
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream);
@@ -70,6 +73,7 @@ begin
   FConn := AConn;
   FHijacked := False;
   FFinalized := False;
+  FNoBodyAllowed := False;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -105,12 +109,22 @@ begin
   end);
 end;
 
+function TH1ResponseWriter.ResponseMustNotHaveBody: Boolean;
+begin
+  Result := (FStatus = HTTP_STATUS_NO_CONTENT) or
+            (FStatus = HTTP_STATUS_NOT_MODIFIED) or
+            ((FStatus div 100) = 1);
+end;
+
 procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
   if FHeadersSent then
     Exit;
   FStatus := AStatus;
-  if not FHeaders.Has('content-length') and not FHeaders.Has('transfer-encoding') then
+  FNoBodyAllowed := ResponseMustNotHaveBody;
+  if (not FNoBodyAllowed) and
+     (not FHeaders.Has('content-length')) and
+     (not FHeaders.Has('transfer-encoding')) then
     FHeaders.Set_('transfer-encoding', 'chunked');
   WriteStatusLine;
   WriteAllHeaders;
@@ -136,6 +150,8 @@ begin
     raise EHttpError.Create('response already finalized');
   if not FHeadersSent then
     WriteHeader(HTTP_STATUS_OK);
+  if FNoBodyAllowed then
+    raise EHttpError.Create('response status must not include a body');
   if FChunkedWriter <> nil then
     Result := FChunkedWriter.Write(ABuf, ACount)
   else

@@ -349,6 +349,73 @@ begin
   LRW.Free;
 end;
 
+procedure TestNoContentResponseDoesNotInjectChunkedEncoding;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('HTTP/1.1 204 No Content'#13#10, LOut) = 1, 'status 204 written');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0,
+    '204 does not inject chunked header');
+  Check(Pos('content-length:', LOut) = 0,
+    '204 does not force content-length');
+  Check(Pos('0'#13#10#13#10, LOut) = 0,
+    '204 does not write final chunk');
+  LRW.Free;
+end;
+
+procedure TestNotModifiedResponseDoesNotInjectChunkedEncoding;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.WriteHeader(HTTP_STATUS_NOT_MODIFIED);
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('HTTP/1.1 304 Not Modified'#13#10, LOut) = 1, 'status 304 written');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0,
+    '304 does not inject chunked header');
+  Check(Pos('content-length:', LOut) = 0,
+    '304 does not force content-length');
+  Check(Pos('0'#13#10#13#10, LOut) = 0,
+    '304 does not write final chunk');
+  LRW.Free;
+end;
+
+procedure TestNoContentResponseRejectsBodyWrite;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.WriteHeader(HTTP_STATUS_NO_CONTENT);
+  LBefore := LW.GetOutput;
+  LBody := 'hello';
+  LRaised := False;
+  try
+    LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, '204 response rejects body write');
+  CheckEqual(LBefore, LW.GetOutput, '204 body write does not append bytes');
+  LRW.Free;
+end;
+
 procedure TestWriteAfterChunkedFlushRaises;
 var
   LW: TBytesWriter;
@@ -445,6 +512,12 @@ begin
   T.Run('Preset Transfer-Encoding is preserved', @TestPresetTransferEncodingPreserved);
   T.Run('Flush with Content-Length does not write final chunk',
     @TestFlushWithContentLengthDoesNotWriteFinalChunk);
+  T.Run('204 response does not inject chunked encoding',
+    @TestNoContentResponseDoesNotInjectChunkedEncoding);
+  T.Run('304 response does not inject chunked encoding',
+    @TestNotModifiedResponseDoesNotInjectChunkedEncoding);
+  T.Run('204 response rejects body write',
+    @TestNoContentResponseRejectsBodyWrite);
   T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
