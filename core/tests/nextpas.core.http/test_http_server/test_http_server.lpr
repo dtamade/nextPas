@@ -93,6 +93,18 @@ begin
   Result := LHandle;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+function StartEpollServer(const AHandler: IHttpHandler; out AServer: THttpServer;
+  out APort: UInt16): TPlatformThreadHandle;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  Result := StartServerWithOptions(AHandler, LOpts, AServer, APort);
+end;
+{$ENDIF}
+
 procedure StopServer(var AServer: THttpServer; const AHandle: TPlatformThreadHandle);
 var
   LRet: Pointer;
@@ -499,6 +511,51 @@ begin
   end;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestKeepAliveEpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+const
+  REQ = 'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'epoll keep-alive: first response 200');
+      Check(Pos('pong', LResp1) > 0, 'epoll keep-alive: first body');
+
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0, 'epoll keep-alive: second response 200');
+      Check(Pos('pong', LResp2) > 0, 'epoll keep-alive: second body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -576,6 +633,86 @@ begin
     StopServer(LServer, LHandle);
   end;
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestPipelinedRequestsInSingleWriteEpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+  LSeenUpload: Boolean;
+  LSeenNext: Boolean;
+  LCombinedReq: string;
+const
+  REQ1 = 'POST /upload HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Content-Length: 5'#13#10#13#10 +
+         'hello';
+  REQ2 = 'GET /next HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Connection: close'#13#10#13#10;
+begin
+  LSeenUpload := False;
+  LSeenNext := False;
+  LCombinedReq := REQ1 + REQ2;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/next', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LSeenNext := True;
+    LBody := 'next';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LCombinedReq[1], SizeUInt(Length(LCombinedReq)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'epoll pipeline-single-write: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'epoll pipeline-single-write: first body preserved');
+      Check(Pos('200 OK', LResp2) > 0, 'epoll pipeline-single-write: second response 200');
+      Check(Pos('next', LResp2) > 0, 'epoll pipeline-single-write: second body preserved');
+      Check(LSeenUpload, 'epoll pipeline-single-write: upload handler called');
+      Check(LSeenNext, 'epoll pipeline-single-write: next handler called');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
 
 { Test 8: Connection: close header stops keep-alive }
 procedure TestConnectionClose;
@@ -1986,6 +2123,88 @@ begin
     StopServer(LServer, LHandle);
   end;
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestChunkedPipelinedRequestsInSingleWriteEpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LSeenUpload: Boolean;
+  LSeenNext: Boolean;
+  LCombinedReq: string;
+const
+  REQ1 = 'POST /upload HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Transfer-Encoding: chunked'#13#10#13#10 +
+         '5'#13#10'hello'#13#10 +
+         '0'#13#10#13#10;
+  REQ2 = 'GET /next HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Connection: close'#13#10#13#10;
+begin
+  LSeenUpload := False;
+  LSeenNext := False;
+  LCombinedReq := REQ1 + REQ2;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/next', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LSeenNext := True;
+    LBody := 'next';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LCombinedReq[1], SizeUInt(Length(LCombinedReq)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'epoll pipeline-chunked: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'epoll pipeline-chunked: first body preserved');
+      Check(Pos('200 OK', LResp2) > 0, 'epoll pipeline-chunked: second response 200');
+      Check(Pos('next', LResp2) > 0, 'epoll pipeline-chunked: second body preserved');
+      Check(LSeenUpload, 'epoll pipeline-chunked: upload handler called');
+      Check(LSeenNext, 'epoll pipeline-chunked: next handler called');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
 
 { Test 13: Query parameters }
 procedure TestQueryParam;
@@ -3990,6 +4209,137 @@ begin
   end;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestHijackLeavesConnectionOpenForHandlerOwnerEpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LServerSideConn: ITcpStream;
+  LHijacker: IHttpHijacker;
+  LResp: string;
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+  LProbe: string;
+const
+  REQ = 'GET /hijack HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Connection: keep-alive'#13#10#13#10;
+  RAW_RESP = 'HTTP/1.1 200 OK'#13#10 +
+             'content-length: 7'#13#10 +
+             'connection: keep-alive'#13#10#13#10 +
+             'hijack!';
+begin
+  LServerSideConn := nil;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/hijack', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    if not Supports(AW, IHttpHijacker, LHijacker) then
+      Fail('response writer does not support IHttpHijacker');
+    LServerSideConn := LHijacker.Hijack;
+    LServerSideConn.Write(RAW_RESP[1], SizeUInt(Length(RAW_RESP)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('hijack!', LResp) > 0, 'epoll hijack owner wrote raw response');
+
+      platform_thread_sleep_ns(100000000);
+      Check(LServerSideConn <> nil, 'epoll handler captured hijacked connection');
+      LProbe := '!';
+      LServerSideConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(1)));
+      LConn.Write(LProbe[1], SizeUInt(Length(LProbe)));
+      LN := LServerSideConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      CheckEqual(Int64(Length(LProbe)), Int64(LN),
+        'epoll handler-owned stream can read after handler returns');
+      Check(Chr(LBuf[0]) = LProbe, 'epoll handler-owned stream received probe byte');
+    finally
+      LConn.Close;
+      LServerSideConn := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHijackExceptionDoesNotWrite500OrCloseHandlerConnectionEpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LServerSideConn: ITcpStream;
+  LHijacker: IHttpHijacker;
+  LResp: string;
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+  LProbe: string;
+const
+  REQ = 'GET /hijack-crash HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Connection: keep-alive'#13#10#13#10;
+  RAW_RESP = 'HTTP/1.1 200 OK'#13#10 +
+             'content-length: 7'#13#10 +
+             'connection: keep-alive'#13#10#13#10 +
+             'hijack!';
+begin
+  LServerSideConn := nil;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/hijack-crash', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    if not Supports(AW, IHttpHijacker, LHijacker) then
+      Fail('response writer does not support IHttpHijacker');
+    LServerSideConn := LHijacker.Hijack;
+    LServerSideConn.Write(RAW_RESP[1], SizeUInt(Length(RAW_RESP)));
+    raise Exception.Create('crash after hijack');
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('hijack!', LResp) > 0, 'epoll hijack-crash owner wrote raw response');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(200)));
+      try
+        LN := LConn.Read(LBuf[0], 1);
+      except
+        LN := 0;
+      end;
+      CheckEqual(Int64(0), Int64(LN),
+        'epoll server does not append 500 after hijack exception');
+
+      platform_thread_sleep_ns(100000000);
+      Check(LServerSideConn <> nil,
+        'epoll handler captured hijacked connection after exception');
+      LProbe := '?';
+      LServerSideConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(1)));
+      LConn.Write(LProbe[1], SizeUInt(Length(LProbe)));
+      LN := LServerSideConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      CheckEqual(Int64(Length(LProbe)), Int64(LN),
+        'epoll handler-owned stream stays readable after hijack exception');
+      Check(Chr(LBuf[0]) = LProbe,
+        'epoll handler-owned stream received probe after hijack exception');
+    finally
+      LConn.Close;
+      LServerSideConn := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 { Main }
 
 begin
@@ -3997,6 +4347,16 @@ begin
   T.Run('Simple GET 200', @TestSimpleGet200);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
+  T.Run('Keep-alive: two requests one connection with epoll backend',
+    @TestKeepAliveEpollBackend);
+  T.Run('Pipelined requests in single write with epoll backend',
+    @TestPipelinedRequestsInSingleWriteEpollBackend);
+  T.Run('Chunked pipelined requests in single write with epoll backend',
+    @TestChunkedPipelinedRequestsInSingleWriteEpollBackend);
+  T.Run('Hijack keeps connection open for handler owner with epoll backend',
+    @TestHijackLeavesConnectionOpenForHandlerOwnerEpollBackend);
+  T.Run('Hijack exception does not write 500 or close handler connection with epoll backend',
+    @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnectionEpollBackend);
   {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
