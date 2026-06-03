@@ -2196,6 +2196,7 @@ var
   LFirstCalls: Int32;
   LSecondCalls: Int32;
   LCompletedBodyWrites: Int32;
+  LHandlerReturned: Boolean;
   LBodyChunk: string;
   LTotalBodyLen: Int64;
 const
@@ -2216,6 +2217,7 @@ begin
   LFirstCalls := 0;
   LSecondCalls := 0;
   LCompletedBodyWrites := 0;
+  LHandlerReturned := False;
   SetLength(LBodyChunk, BODY_CHUNK_LEN);
   FillChar(LBodyChunk[1], BODY_CHUNK_LEN, Ord('a'));
   LTotalBodyLen := Int64(BODY_CHUNK_LEN) * BODY_CHUNK_COUNT;
@@ -2233,6 +2235,7 @@ begin
       AW.Write(LBodyChunk[1], SizeUInt(Length(LBodyChunk)));
       Inc(LCompletedBodyWrites);
     end;
+    LHandlerReturned := True;
   end);
   LRouter.Get('/after', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var
@@ -2274,6 +2277,10 @@ begin
         ABackendName + ' real socket backpressure handles the first request once');
       CheckEqual(Int64(0), Int64(LSecondCalls),
         ABackendName + ' real socket backpressure does not process later pipelined requests');
+      Check(LHandlerReturned,
+        ABackendName + ' real socket backpressure may finish handler-side production before timeout close');
+      CheckEqual(Int64(BODY_CHUNK_COUNT), Int64(LCompletedBodyWrites),
+        ABackendName + ' real socket backpressure completes every handler-side body write before timeout close');
       Check(Pos('HTTP/1.1 500', LResp) = 0,
         ABackendName + ' real socket backpressure does not append synthetic 500');
       Check(Pos('after', LResp) = 0,
