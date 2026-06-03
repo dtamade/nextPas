@@ -1,9 +1,10 @@
-# Findings: nextpas.core.http epoll backend differential proof
+# Findings: nextpas.core.http epoll trailer-complete differential proof
 
 ## Scope
 
 - 当前目标是继续收紧 `nextpas.core.http` 在 Linux `epoll` backend 下的契约证据，
-  重点验证 phase-1 backend 不会破坏 keep-alive / pipelining / hijack 这些 server 核心语义。
+  重点验证 phase-1 backend 不会破坏 chunked trailer-complete follow-up 这类最复杂的
+  keep-alive / pipelining 语义。
 - 本轮只看 `tests/nextpas.core.http/test_http_server` 与最小控制面文件。
 
 ## Baseline truths
@@ -21,43 +22,44 @@
 - 新增 `epoll` differential tests 直接通过，没有暴露新的 runtime bug。
 - 本轮不需要改 `src/nextpas.core.http.*` 或 `src/nextpas.core.net.server.*` 生产代码。
 
-### 2. `epoll` phase-1 已经不只是 simple GET smoke
+### 2. `epoll` phase-1 的 differential proof 已经推进到 trailer-complete follow-up 语义
 
 - 现在 `test_http_server` 已直接证明 `epoll` backend 下这些 contract 与 threaded 保持一致：
   - keep-alive 两次复用
   - fixed-length same-write pipelining
   - chunked first-request same-write pipelining
+  - chunked trailer-complete keep-alive garbage tail -> follow-up `400`
+  - chunked trailer-complete keep-alive truncated follow-up request line / headers -> follow-up `400`
+  - chunked trailer-complete same-write pipelined next-request
+  - chunked trailer-complete partial follow-up request line 在后续字节到达后可完成为合法第二请求
   - hijack ownership
   - hijack 后异常路径不补写 `500`、不回收 handler-owned connection
 
-### 3. phase-1 backend 的下一步仍然是更深的 backend-differential matrix，而不是先改模型
+### 3. 这轮仍然是 coverage-expansion，不需要生产修复
 
-- 这轮已经把最关键的 fixed/chunked pipeline 与 hijack ownership 收进 focused proof。
-- 更自然的下一批是：
-  - chunked trailer-complete pipelining under `epoll`
-  - keep-alive follow-up malformed tail under `epoll`
-  - 之后再看 backpressure / per-connection evented runtime
+- 新增 `epoll` trailer-complete tests 直接通过，没有暴露新的 runtime bug。
+- 因此本轮不改 `src/nextpas.core.http.*` 或 `src/nextpas.core.net.server.*` 生产代码。
 
 ## Verification evidence
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `93 total, 93 passed, 0 failed`
+  - `98 total, 98 passed, 0 failed`
   - 新增通过：
-    - `Keep-alive: two requests one connection with epoll backend`
-    - `Pipelined requests in single write with epoll backend`
-    - `Chunked pipelined requests in single write with epoll backend`
-    - `Hijack keeps connection open for handler owner with epoll backend`
-    - `Hijack exception does not write 500 or close handler connection with epoll backend`
+    - `Chunked trailer keep-alive garbage tail -> follow-up 400 with epoll backend`
+    - `Chunked trailer keep-alive truncated follow-up request line -> follow-up 400 with epoll backend`
+    - `Chunked trailer keep-alive truncated follow-up headers -> follow-up 400 with epoll backend`
+    - `Chunked trailer pipelined requests in single write with epoll backend`
+    - `Chunked trailer partial follow-up request line can complete later with epoll backend`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- Linux `epoll` 当前已补到 keep-alive / pipelining / hijack，但 trailer-complete pipelining、
-  malformed follow-up tail、backpressure 仍未形成独立 differential matrix。
+- Linux `epoll` 当前已把最复杂的 trailer-complete follow-up 路径补进 differential proof，
+  但如果要把矩阵做满，plain `Content-Length` / plain chunked 的 follow-up tail 仍可继续单独补 `epoll` focused variants。
 - `kqueue` / `IOCP` 仍未实现；Windows 长期目标仍是 `IOCP`，不是 `WSAPoll` 终态。
 - 当前还没有 benchmark 结论，性能判断必须后置到 correctness 和 backend contract 进一步稳定之后。
 
 ## Commit intent
 
-- 这批改动应该以 HTTP correctness coverage-expansion 提交。
+- 这批改动应该以 HTTP epoll trailer-complete differential coverage-expansion 提交。
 - 必须坚持 path-limited staging，不能把共享 worktree 中的其他改动带入本 commit。
