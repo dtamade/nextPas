@@ -80,6 +80,7 @@ procedure TTestBackend.DrawPatches(const APatches: TDiffEntries);
 var
   LI: Integer;
   LCP: PCell;
+  LLastWidth: Byte;
 begin
   for LI := 0 to System.High(APatches) do
   begin
@@ -89,7 +90,11 @@ begin
   end;
   if System.Length(APatches) > 0 then
   begin
-    FCursorX := APatches[System.High(APatches)].X + 1;
+    LLastWidth := APatches[System.High(APatches)].Cell.Width;
+    if LLastWidth > 1 then
+      FCursorX := APatches[System.High(APatches)].X + LLastWidth
+    else
+      FCursorX := APatches[System.High(APatches)].X + 1;
     FCursorY := APatches[System.High(APatches)].Y;
   end;
 end;

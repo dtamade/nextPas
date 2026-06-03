@@ -293,16 +293,10 @@ begin
   end
   else
   begin
-    if Res.Data <> nil then
-      FreeMem(Res.Data);
     if FOverflowCount >= Length(FOverflow) then
       GrowOverflowQueue;
     FOverflow[FOverflowTail].Id := Id;
-    FOverflow[FOverflowTail].Result.Data := nil;
-    FOverflow[FOverflowTail].Result.DataSize := 0;
-    FOverflow[FOverflowTail].Result.Error :=
-      PrefixTaskError(Name, 'completion queue overflow');
-    FOverflow[FOverflowTail].Result.Status := tsFailed;
+    FOverflow[FOverflowTail].Result := Res;
     FOverflowTail := (FOverflowTail + 1) mod Length(FOverflow);
     Inc(FOverflowCount);
   end;

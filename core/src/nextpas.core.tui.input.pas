@@ -116,6 +116,18 @@ begin
     Result := prInvalid;
 end;
 
+function UTF8SequenceLen(B: Byte): Integer; inline;
+begin
+  if (B and $E0) = $C0 then
+    Result := 2
+  else if (B and $F0) = $E0 then
+    Result := 3
+  else if (B and $F8) = $F0 then
+    Result := 4
+  else
+    Result := 1;
+end;
+
 // Parse a CSI body starting after `ESC [`.  Buf[0..Len-1] is the
 // whole input including the leading ESC; Body starts at index 2.
 // Returns prSuccess + number of bytes consumed (including ESC[ and
@@ -165,12 +177,14 @@ begin
     MouseX := Word(Param2 - 1);
     MouseY := Word(Param3 - 1);
     // SGR mouse button encoding:
-    //   bits 0-1: button (0=left, 1=middle, 2=right, 3=release/none)
+    //   bits 0-1: base button code (0=MB1/left, 1=MB2/middle, 2=MB3/right, 3=no button)
     //   bit 2 (4): shift
     //   bit 3 (8): alt/meta
     //   bit 4 (16): ctrl
     //   bit 5 (32): motion (drag or move)
     //   bits 6-7 (64,128): 64=scroll up, 65=scroll down
+    // In SGR mode, button release is carried by the final byte (`m`),
+    // while the button bits still preserve which button was released.
     Mods := [];
     if (Param1 and 4)  <> 0 then Include(Mods, kmShift);
     if (Param1 and 8)  <> 0 then Include(Mods, kmAlt);
@@ -305,7 +319,16 @@ begin
       // Param1 = Unicode codepoint or special key code.
       case Param1 of
         13: Out_ := KeyCodeEvent(kcEnter, Mods);     // Enter
-        9:  Out_ := KeyCodeEvent(kcTab, Mods);       // Tab
+        9:
+          begin
+            if kmShift in Mods then
+            begin
+              Exclude(Mods, kmShift);
+              Out_ := KeyCodeEvent(kcBackTab, Mods);
+            end
+            else
+              Out_ := KeyCodeEvent(kcTab, Mods);
+          end;
         27: Out_ := KeyCodeEvent(kcEsc, Mods);       // Esc
         127: Out_ := KeyCodeEvent(kcBackspace, Mods);// Backspace
       else
@@ -353,16 +376,20 @@ function ParseSingleByte(B: Byte; out Out_: TEvent): TParseResult;
 begin
   Out_ := NoneEvent;
   case B of
+    0:        Out_ := KeyCharEvent(Ord(' '), [kmCtrl]);
     9:        Out_ := KeyCodeEvent(kcTab, []);
     10, 13:   Out_ := KeyCodeEvent(kcEnter, []);
     127, 8:   Out_ := KeyCodeEvent(kcBackspace, []);
     32..126:
       Out_ := KeyCharEvent(B, []);
-    1..7, 11..12, 14..26, 28..31:
-      // Ctrl-A..G/K..L/N..Z/\..^/_  — Ctrl + lowercase letter.
-      // Ctrl-A is byte 1, Ctrl-Z is 26.  Ctrl-Space is 0 (NUL) but
-      // we don't surface that.
+    1..7, 11..12, 14..26:
+      // Ctrl-A..G/K..L/N..Z  — Ctrl + lowercase letter.
+      // Ctrl-A is byte 1, Ctrl-Z is 26.
       Out_ := KeyCharEvent(LongWord(B + Ord('a') - 1), [kmCtrl]);
+    28:       Out_ := KeyCharEvent(Ord('\'), [kmCtrl]);
+    29:       Out_ := KeyCharEvent(Ord(']'), [kmCtrl]);
+    30:       Out_ := KeyCharEvent(Ord('^'), [kmCtrl]);
+    31:       Out_ := KeyCharEvent(Ord('_'), [kmCtrl]);
   else
     Exit(prInvalid);
   end;
@@ -397,10 +424,7 @@ begin
     if LDec.ByteLen = 0 then
     begin
       // Could be truncated UTF-8 or genuinely invalid.
-      if      (B0 and $E0) = $C0 then Need := 2
-      else if (B0 and $F0) = $E0 then Need := 3
-      else if (B0 and $F8) = $F0 then Need := 4
-      else Need := 1;
+      Need := UTF8SequenceLen(B0);
       if Need > Len then Exit(IncompleteStatus(AtEOF));
       Consumed := 1;
       Exit(prInvalid);
@@ -425,9 +449,27 @@ begin
   B1 := ByteAt(Buf, 1);
   case B1 of
     Ord('['):
-      Exit(ParseCSI(Buf, Len, AtEOF, Out_, Consumed));
+      begin
+        R := ParseCSI(Buf, Len, AtEOF, Out_, Consumed);
+        if (R = prInvalid) and AtEOF then
+        begin
+          Out_ := KeyCodeEvent(kcEsc, []);
+          Consumed := 1;
+          Exit(prSuccess);
+        end;
+        Exit(R);
+      end;
     Ord('O'):
-      Exit(ParseSS3(Buf, Len, AtEOF, Out_, Consumed));
+      begin
+        R := ParseSS3(Buf, Len, AtEOF, Out_, Consumed);
+        if (R = prInvalid) and AtEOF then
+        begin
+          Out_ := KeyCodeEvent(kcEsc, []);
+          Consumed := 1;
+          Exit(prSuccess);
+        end;
+        Exit(R);
+      end;
     27:
       begin
         // ESC ESC -> bare ESC + reparse remainder on next call.
@@ -444,6 +486,26 @@ begin
       if Out_.Kind = evKey then
         Include(Out_.Key.Modifiers, kmAlt);
       Consumed := 2;
+      Exit(prSuccess);
+    end;
+    if B1 >= $80 then
+    begin
+      LDec := UTF8Decode(@PByte(@Buf)[1], Len - 1);
+      if LDec.ByteLen = 0 then
+      begin
+        Need := UTF8SequenceLen(B1);
+        if AtEOF then
+        begin
+          Out_ := KeyCodeEvent(kcEsc, []);
+          Consumed := 1;
+          Exit(prSuccess);
+        end;
+        if Need > (Len - 1) then
+          Exit(IncompleteStatus(AtEOF));
+        Exit(prInvalid);
+      end;
+      Out_ := KeyCharEvent(LDec.CodePoint, [kmAlt]);
+      Consumed := 1 + LDec.ByteLen;
       Exit(prSuccess);
     end;
     Exit(prInvalid);

@@ -1,107 +1,110 @@
 # nextpas.core.tui
 
-Terminal UI 渲染框架——把 ratatui 的核心思想（immediate mode、双缓冲 diff、数组化 cell 布局）以 FreePascal 原生方式实现。
+`nextpas.core.tui` 是一个 FreePascal TUI 框架。它保留了 ratatui 风格的 immediate-mode
+rendering、双缓冲 diff 和数组化 cell 布局，但现在 public surface 已经按方案 C 冻结成四层 facade，
+默认入口不再把 app/runtime、图像协议和迁移期兼容能力全塞到一个单元里。
 
-## 快速开始
+## 先选对 facade
+
+- `uses nextpas.core.tui`
+  Core 默认入口。只带终端正确性的最小闭包：`TTerminal`、`TBuffer`、`TEvent`、布局、文本、
+  ANSI backend，以及基础 widget。
+- `uses nextpas.core.tui.ext`
+  稳定增强入口。需要 `TApp`、theme、task、panel、focus、interaction、frame budget 时用它。
+- `uses nextpas.core.tui.experimental`
+  实验能力入口。图像协议、clipboard 这类高波动能力显式 opt-in。
+- `uses nextpas.core.tui.full`
+  迁移兼容入口。保留旧的宽门面，方便已有代码先迁进来，再逐步收窄依赖。
+
+如果你只需要自己持有终端循环和 buffer，默认 `nextpas.core.tui` 就够了。只要一进入应用框架层，
+就直接从 `nextpas.core.tui.ext` 开始，不要再假设 `TApp` 会从默认 core facade 漏出来。
+
+## 用 `nextpas.core.tui.ext` 启动应用
 
 ```pascal
-uses nextpas.core.tui;
+uses nextpas.core.tui.ext;
 
 type
-  TDemo = class
-    procedure Render(App: TApp; var Frame: TFrame);
+  TDemoScreen = class(TScreen)
+  public
+    procedure Render(const AArea: TRect; ABuffer: TBuffer); override;
+    procedure HandleEvent(const Ev: TEvent); override;
   end;
 
-var
-  App: TTuiApp;
-  Demo: TDemo;
+procedure TDemoScreen.Render(const AArea: TRect; ABuffer: TBuffer);
 begin
-  App := TTuiApp.Create;
-  Demo := TDemo.Create;
+  ABuffer.SetString(0, 0, 'hello', StyleDefault);
+end;
+
+procedure TDemoScreen.HandleEvent(const Ev: TEvent);
+begin
+  if IsQuit(Ev) then
+    Stack.RequestQuit;
+end;
+
+var
+  App: TApp;
+begin
+  App := TApp.Create;
   try
-    App.OnRenderCb := @Demo.Render;
+    App.Screens.Push(TDemoScreen.Create);
     App.Run;
   finally
-    Demo.Free;
     App.Free;
   end;
 end;
 ```
 
-## 架构
+这是 ext 现在的默认 happy path：`TApp` 拥有 `Screens`，在没有显式
+`OnRenderCb` / `OnEventCb` 时，默认 render/event path 会委托给栈顶 `TScreen`。
+如果你只是写一个很轻的单屏 demo，callbacks 仍然可用，但多屏应用优先走
+`TApp + TScreenStack`。
 
-```
-L3 框架层（只依赖 L0-L2）
+## 用 `nextpas.core.tui` 持有底层循环
 
-数据流：TCell → TBuffer → Diff → TAnsiBackend → stdout
-事件流：stdin → PollEvent → TEvent → 消费方
-帧循环：BeginFrame → Render → EndFrame（merge overlay → diff → flush → swap）
-```
+默认 core facade 适合自己拥有 render loop 的场景：
 
-## 门面 API
+- 直接操作 `TTerminal.BeginFrame` / `EndFrame`
+- 直接处理 `PollEvent` 返回的 `TEvent`
+- 组合 `TBuffer`、`TText`、`TLayout` 和基础 widget
 
-消费方优先 `uses nextpas.core.tui`。门面显式 re-export 基础类型、布局/事件 helper、
-widget 接口和 builder 类，让文档中的自然名称（如 `TRect`、`IWidget`、`TBlock`）可直接使用。
-旧的 `TTui*` / `ITui*` 兼容别名保留，便于已有调用方平滑迁移。
+这条路径故意不直接导出 `TApp`、`TClipboard` 或 `TImageProtocol`。这样 core default surface 才能保持
+“终端正确性第一”的边界。
 
-`TWidgetAdapter` 保留为小型扩展点：当消费方已有自定义渲染函数，或需要桥接外部 widget
-实现时，可以把非空 `TWidgetRenderFn` 包装成 `IWidget`。传入 nil render function 会 fail-fast。
+## 把 capability truth 放在 `TTerminal.CapabilityProfile`
 
-## 模块清单
+增强终端能力的 runtime truth 现在集中在 `TTerminal.CapabilityProfile`：
 
-| 模块 | 职责 |
-|------|------|
-| `tui.base` | TRect / TPosition / TSize / TMargin / TDirection |
-| `tui.color` | TColor（4 字节 packed，Reset/Indexed/Rgb） |
-| `tui.modifier` | TModifier（SGR 属性位集） |
-| `tui.style` | TStyle（Fg/Bg/Ul + AddMod/SubMod，Patch 语义） |
-| `tui.cell` | TCell（40 字节 packed，23 字节内联 glyph） |
-| `tui.buffer` | TBuffer（连续 cell 数组，diff 引擎） |
-| `tui.overlay` | TOverlayBuffer（稀疏覆盖层） |
-| `tui.text` | TSpan / TLine / TText（grapheme-aware 样式文本树） |
-| `tui.layout` | TLayout + TConstraint（约束求解器） |
-| `tui.event` | TEvent（键盘/鼠标/resize） |
-| `tui.input` | ParseOne（字节流 → TEvent） |
-| `tui.terminal` | TTerminal（帧生命周期 + 事件循环） |
-| `tui.app` | TApp（应用循环） |
-| `tui.widget.*` | 40 个 widget（block/paragraph/list/table/gauge/...） |
+- `Truecolor`
+- `KittyKeyboard`
+- `ImageProtocol`
 
-## Widget 接口设计
+每项能力都区分 `Requested`、`Detected`、`Active`、`Verified` 和 `FallbackReason`。兼容属性
+`HasTruecolor`、`HasKittyKeyboard`、`ImageProtocol` 仍然保留，但它们现在只是 active-state projection，
+不再自己承担 hint heuristic。
 
-```pascal
-// IWidget 基础渲染契约
-IWidget = interface
-  procedure Render(const AArea: TRect; ABuffer: TBuffer);
-end;
+这点对 kitty keyboard 很关键：终端 hint 可以说明“候选能力存在”，但在真正完成会话协商前，它不应该被
+当成 `Active=True`。
 
-// IBlock 容器接口（被其他 widget 引用）
-IBlock = interface(IWidget)
-  function Inner(const AArea: TRect): TRect;
-  function WithBorders(ABorders: TBorders): IBlock;
-  function WithTitle(const ATitle: AnsiString): IBlock;
-end;
+## 继续看哪里
 
-// 使用
-var Block: IBlock;
-begin
-  Block := TBlock.New.WithBorders(BORDERS_ALL).WithTitle('Dashboard');
-  Block.Render(Area, Buffer);
-end;
-```
+- 架构边界看 [ARCHITECTURE.md](./ARCHITECTURE.md)
+- 四层 facade 的冻结 ownership 看 [TIER_REGISTRY.md](./TIER_REGISTRY.md)
+- widget catalog 与 widget facade ownership 看 [WIDGET_CATALOG.md](./WIDGET_CATALOG.md)
+- benchmark smoke 口径看 [BENCHMARK.md](./BENCHMARK.md)
 
-## 依赖
+## 当前 focused verification envelope
 
-- `nextpas.core.text.width`（grapheme-aware Unicode 显示宽度）
-- `nextpas.core.text.grapheme`（UAX#29 grapheme cluster 分段）
-- `nextpas.core.text.utf8`（UTF-8 解码）
-- `nextpas.core.text.builder`（TStringBuilder，ANSI 输出）
-- `nextpas.core.platform.console`（raw mode / read / write / wait）
-- `nextpas.core.platform.signal`（SIGWINCH / SIGTERM）
-- `nextpas.core.platform.time`（monotonic clock）
+这条演进线只维护 TUI focused gates，不把全仓验证重新拖进来。当前里程碑的最小闭环是：
 
-## 设计原则
-
-1. **Immediate mode** — widget 不持有渲染状态，每帧重新描述 UI
-2. **热路径零分配** — cell 数组连续、PCell 指针直写、QWord×5 diff
-3. **接口优先** — IWidget/IBlock/IListWidget，COM 引用计数自动释放
-4. **Platform facade** — 不碰 host ABI，全部通过 platform.console/signal/time
+- `test_tui_cap_base`
+- `test_tui_core_facade`
+- `test_tui_ext_facade`
+- `test_tui_experimental_facade`
+- `test_tui_facade`
+- `test_tui_terminal`
+- `test_tui_image_cap`
+- `test_tui_backend`
+- `test_tui_buffer`
+- `test_tui_widget_intf`
+- `core/benchmarks/nextpas.core.tui/run_all.sh`

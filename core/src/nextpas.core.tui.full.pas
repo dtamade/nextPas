@@ -1,9 +1,8 @@
-unit nextpas.core.tui;
+unit nextpas.core.tui.full;
 
 {**
- * @desc nextpas.core.tui Core 门面——默认暴露终端正确性的最小闭包。
- *       非基础 app/runtime、图像、clipboard、复杂 widget 能力通过 ext /
- *       experimental / full 门面显式引入。
+ * @desc nextpas.core.tui.full 兼容门面——保留迁移期的全量公共 API。
+ *       通过类型别名和 inline 转发聚合子模块。
  *}
 
 {$I nextpas.core.settings.inc}
@@ -27,10 +26,25 @@ uses
   nextpas.core.tui.layout.dsl,
   nextpas.core.tui.event,
   nextpas.core.tui.input,
+  nextpas.core.tui.interaction,
+  nextpas.core.tui.focus,
+  nextpas.core.tui.keybind,
   nextpas.core.tui.ansi,
   nextpas.core.tui.backend.ansi,
   nextpas.core.tui.backend.test,
   nextpas.core.tui.terminal,
+  nextpas.core.tui.image_cap,
+  nextpas.core.tui.sixel,
+  nextpas.core.tui.image_mgr,
+  nextpas.core.tui.theme,
+  nextpas.core.tui.anim,
+  nextpas.core.tui.animator,
+  nextpas.core.tui.frame_budget,
+  nextpas.core.tui.clipboard,
+  nextpas.core.tui.task,
+  nextpas.core.tui.loading,
+  nextpas.core.tui.app,
+  nextpas.core.tui.app.screen,
   nextpas.core.tui.widget.intf,
   nextpas.core.tui.widget.block,
   nextpas.core.tui.widget.paragraph,
@@ -38,10 +52,46 @@ uses
   nextpas.core.tui.widget.clear,
   nextpas.core.tui.widget.tabs,
   nextpas.core.tui.widget.scrollbar,
+  nextpas.core.tui.widget.gauge,
+  nextpas.core.tui.widget.sparkline,
+  nextpas.core.tui.widget.barchart,
+  nextpas.core.tui.widget.canvas,
   nextpas.core.tui.widget.table,
-  nextpas.core.tui.widget.input;
+  nextpas.core.tui.widget.input,
+  nextpas.core.tui.widget.tree,
+  nextpas.core.tui.widget.dialog,
+  nextpas.core.tui.widget.menu,
+  nextpas.core.tui.widget.panel,
+  nextpas.core.tui.widget.split_pane,
+  nextpas.core.tui.widget.modal,
+  nextpas.core.tui.widget.popover,
+  nextpas.core.tui.widget.tooltip,
+  nextpas.core.tui.widget.select,
+  nextpas.core.tui.widget.scrollview,
+  nextpas.core.tui.widget.calendar,
+  nextpas.core.tui.widget.breadcrumb,
+  nextpas.core.tui.widget.statusbar,
+  nextpas.core.tui.widget.timeline,
+  nextpas.core.tui.widget.progress_group,
+  nextpas.core.tui.widget.linechart,
+  nextpas.core.tui.widget.input_editor,
+  nextpas.core.tui.widget.diffview,
+  nextpas.core.tui.widget.file_tree,
+  nextpas.core.tui.widget.kanban,
+  nextpas.core.tui.widget.markdown,
+  nextpas.core.tui.widget.virtual_list,
+  nextpas.core.tui.widget.command_palette,
+  nextpas.core.tui.widget.notification_center,
+  nextpas.core.tui.widget.form,
+  nextpas.core.tui.widget.syntax,
+  nextpas.core.tui.widget.toast,
+  nextpas.core.tui.widget.chat_theme;
+
+{ 门面 re-export：FPC 不支持自动 re-export，消费方 uses 本单元后
+  可直接访问上述所有子模块的公共类型和函数。 }
 
 type
+  { 基础类型 }
   TTuiRect = nextpas.core.tui.base.TRect;
   TTuiPosition = nextpas.core.tui.base.TPosition;
   TTuiSize = nextpas.core.tui.base.TSize;
@@ -52,6 +102,7 @@ type
   TMargin = nextpas.core.tui.base.TMargin;
   TDirection = nextpas.core.tui.base.TDirection;
 
+  { 样式 }
   TTuiColor = nextpas.core.tui.color.TColor;
   TTuiColorKind = nextpas.core.tui.color.TColorKind;
   TColor = nextpas.core.tui.color.TColor;
@@ -66,6 +117,12 @@ type
   TCell = nextpas.core.tui.cell.TCell;
   PCell = nextpas.core.tui.cell.PCell;
 
+  { Image }
+  TImageProtocol = nextpas.core.tui.image_cap.TImageProtocol;
+  TClipboardMethod = nextpas.core.tui.clipboard.TClipboardMethod;
+  TClipboard = nextpas.core.tui.clipboard.TClipboard;
+
+  { Buffer }
   TTuiBuffer = nextpas.core.tui.buffer.TBuffer;
   TTuiDiffEntries = nextpas.core.tui.buffer.TDiffEntries;
   TBuffer = nextpas.core.tui.buffer.TBuffer;
@@ -73,6 +130,7 @@ type
   TDiffEntries = nextpas.core.tui.buffer.TDiffEntries;
   TBufferLines = nextpas.core.tui.buffer.TBufferLines;
 
+  { Text }
   TAlignment = nextpas.core.tui.text.TAlignment;
   TSpan = nextpas.core.tui.text.TSpan;
   TSpans = nextpas.core.tui.text.TSpans;
@@ -80,6 +138,7 @@ type
   TLines = nextpas.core.tui.text.TLines;
   TText = nextpas.core.tui.text.TText;
 
+  { Layout }
   TConstraintKind = nextpas.core.tui.layout.TConstraintKind;
   TConstraint = nextpas.core.tui.layout.TConstraint;
   TConstraints = nextpas.core.tui.layout.TConstraints;
@@ -88,10 +147,12 @@ type
   TLayout = nextpas.core.tui.layout.TLayout;
   TGridResult = nextpas.core.tui.layout.grid.TGridResult;
 
+  { Borders }
   TBorderSide = nextpas.core.tui.borders.TBorderSide;
   TBorders = nextpas.core.tui.borders.TBorders;
   TBorderSet = nextpas.core.tui.borders.TBorderSet;
 
+  { 事件 }
   TTuiEvent = nextpas.core.tui.event.TEvent;
   TTuiEventKind = nextpas.core.tui.event.TEventKind;
   TEvent = nextpas.core.tui.event.TEvent;
@@ -105,6 +166,7 @@ type
   TMouseEvent = nextpas.core.tui.event.TMouseEvent;
   TResizeEvent = nextpas.core.tui.event.TResizeEvent;
 
+  { Terminal }
   TTuiTerminal = nextpas.core.tui.terminal.TTerminal;
   TTuiFrame = nextpas.core.tui.terminal.TFrame;
   TTuiTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;
@@ -112,6 +174,12 @@ type
   TFrame = nextpas.core.tui.terminal.TFrame;
   TTerminalOptions = nextpas.core.tui.terminal.TTerminalOptions;
 
+  { App }
+  TTuiApp = nextpas.core.tui.app.TApp;
+  TApp = nextpas.core.tui.app.TApp;
+  TTheme = nextpas.core.tui.theme.TTheme;
+
+  { Widget 接口 }
   ITuiWidget = nextpas.core.tui.widget.intf.IWidget;
   ITuiBlock = nextpas.core.tui.widget.block.IBlock;
   IWidget = nextpas.core.tui.widget.intf.IWidget;
@@ -123,7 +191,39 @@ type
   ITabsWidget = nextpas.core.tui.widget.tabs.ITabsWidget;
   IScrollbar = nextpas.core.tui.widget.scrollbar.IScrollbar;
   ITable = nextpas.core.tui.widget.table.ITable;
+  IGauge = nextpas.core.tui.widget.gauge.IGauge;
+  ISparkline = nextpas.core.tui.widget.sparkline.ISparkline;
+  IBarChart = nextpas.core.tui.widget.barchart.IBarChart;
+  ICanvas = nextpas.core.tui.widget.canvas.ICanvas;
   IInput = nextpas.core.tui.widget.input.IInput;
+  ITree = nextpas.core.tui.widget.tree.ITree;
+  IDialog = nextpas.core.tui.widget.dialog.IDialog;
+  IMenu = nextpas.core.tui.widget.menu.IMenu;
+  IPanel = nextpas.core.tui.widget.panel.IPanel;
+  ISplitPane = nextpas.core.tui.widget.split_pane.ISplitPane;
+  IModal = nextpas.core.tui.widget.modal.IModal;
+  IPopover = nextpas.core.tui.widget.popover.IPopover;
+  ITooltip = nextpas.core.tui.widget.tooltip.ITooltip;
+  ISelect = nextpas.core.tui.widget.select.ISelect;
+  IScrollView = nextpas.core.tui.widget.scrollview.IScrollView;
+  ICalendar = nextpas.core.tui.widget.calendar.ICalendar;
+  IBreadcrumb = nextpas.core.tui.widget.breadcrumb.IBreadcrumb;
+  IStatusBar = nextpas.core.tui.widget.statusbar.IStatusBar;
+  ITimeline = nextpas.core.tui.widget.timeline.ITimeline;
+  IProgressGroup = nextpas.core.tui.widget.progress_group.IProgressGroup;
+  ILineChart = nextpas.core.tui.widget.linechart.ILineChart;
+  IInputEditor = nextpas.core.tui.widget.input_editor.IInputEditor;
+  IDiffView = nextpas.core.tui.widget.diffview.IDiffView;
+  IFileTree = nextpas.core.tui.widget.file_tree.IFileTree;
+  IKanban = nextpas.core.tui.widget.kanban.IKanban;
+  IMarkdown = nextpas.core.tui.widget.markdown.IMarkdown;
+  IVirtualList = nextpas.core.tui.widget.virtual_list.IVirtualList;
+  ICommandPalette = nextpas.core.tui.widget.command_palette.ICommandPalette;
+  INotificationCenter = nextpas.core.tui.widget.notification_center.INotificationCenter;
+  ICheckbox = nextpas.core.tui.widget.form.ICheckbox;
+  IRadioGroup = nextpas.core.tui.widget.form.IRadioGroup;
+  IHighlighter = nextpas.core.tui.widget.syntax.IHighlighter;
+  IToastManager = nextpas.core.tui.widget.toast.IToastManager;
 
   TListItem = nextpas.core.tui.widget.list.TListItem;
   TListItems = nextpas.core.tui.widget.list.TListItems;
@@ -132,10 +232,68 @@ type
   TTabsState = nextpas.core.tui.widget.tabs.TTabsState;
   TScrollbarHit = nextpas.core.tui.widget.scrollbar.TScrollbarHit;
   TInputState = nextpas.core.tui.widget.input.TInputState;
+  TGaugeThreshold = nextpas.core.tui.widget.gauge.TGaugeThreshold;
+  TBarData = nextpas.core.tui.widget.barchart.TBarData;
   TContentAlign = nextpas.core.tui.widget.table.TContentAlign;
   TTableColumn = nextpas.core.tui.widget.table.TTableColumn;
   TTableRow = nextpas.core.tui.widget.table.TTableRow;
   TTableState = nextpas.core.tui.widget.table.TTableState;
+  TTreeNode = nextpas.core.tui.widget.tree.TTreeNode;
+  PTreeNode = nextpas.core.tui.widget.tree.PTreeNode;
+  TTreeState = nextpas.core.tui.widget.tree.TTreeState;
+  TDialogButton = nextpas.core.tui.widget.dialog.TDialogButton;
+  TMenuItemKind = nextpas.core.tui.widget.menu.TMenuItemKind;
+  TMenuItem = nextpas.core.tui.widget.menu.TMenuItem;
+  TMenuState = nextpas.core.tui.widget.menu.TMenuState;
+  TPanelEdge = nextpas.core.tui.widget.panel.TPanelEdge;
+  TPanelEdges = nextpas.core.tui.widget.panel.TPanelEdges;
+  TSepTitle = nextpas.core.tui.widget.panel.TSepTitle;
+  TPanelGrid = nextpas.core.tui.widget.panel.TPanelGrid;
+  TSepHit = nextpas.core.tui.widget.panel.TSepHit;
+  TSplitDirection = nextpas.core.tui.widget.split_pane.TSplitDirection;
+  TSplitPaneState = nextpas.core.tui.widget.split_pane.TSplitPaneState;
+  TModalSize = nextpas.core.tui.widget.modal.TModalSize;
+  TPopoverAnchor = nextpas.core.tui.widget.popover.TPopoverAnchor;
+  TPopoverState = nextpas.core.tui.widget.popover.TPopoverState;
+  TTooltipPosition = nextpas.core.tui.widget.tooltip.TTooltipPosition;
+  TSelectState = nextpas.core.tui.widget.select.TSelectState;
+  TScrollViewState = nextpas.core.tui.widget.scrollview.TScrollViewState;
+  TCalendarState = nextpas.core.tui.widget.calendar.TCalendarState;
+  TStatusSegment = nextpas.core.tui.widget.statusbar.TStatusSegment;
+  TTimelineEvent = nextpas.core.tui.widget.timeline.TTimelineEvent;
+  TProgressItem = nextpas.core.tui.widget.progress_group.TProgressItem;
+  TDataSeries = nextpas.core.tui.widget.linechart.TDataSeries;
+  TDiffLineKind = nextpas.core.tui.widget.diffview.TDiffLineKind;
+  TDiffLine = nextpas.core.tui.widget.diffview.TDiffLine;
+  TDiffViewState = nextpas.core.tui.widget.diffview.TDiffViewState;
+  TFileNode = nextpas.core.tui.widget.file_tree.TFileNode;
+  TFileTreeState = nextpas.core.tui.widget.file_tree.TFileTreeState;
+  TKanbanCard = nextpas.core.tui.widget.kanban.TKanbanCard;
+  TKanbanColumn = nextpas.core.tui.widget.kanban.TKanbanColumn;
+  TKanbanState = nextpas.core.tui.widget.kanban.TKanbanState;
+  TMdLineKind = nextpas.core.tui.widget.markdown.TMdLineKind;
+  TMdLine = nextpas.core.tui.widget.markdown.TMdLine;
+  TMdLineArray = nextpas.core.tui.widget.markdown.TMdLineArray;
+  TMdTheme = nextpas.core.tui.widget.markdown.TMdTheme;
+  TItemProviderFunc = nextpas.core.tui.widget.virtual_list.TItemProviderFunc;
+  TVirtualListState = nextpas.core.tui.widget.virtual_list.TVirtualListState;
+  TCommandItem = nextpas.core.tui.widget.command_palette.TCommandItem;
+  TCommandPaletteState = nextpas.core.tui.widget.command_palette.TCommandPaletteState;
+  TNotifLevel = nextpas.core.tui.widget.notification_center.TNotifLevel;
+  TNotification = nextpas.core.tui.widget.notification_center.TNotification;
+  TNotificationCenterState = nextpas.core.tui.widget.notification_center.TNotificationCenterState;
+  TTokenKind = nextpas.core.tui.widget.syntax.TTokenKind;
+  PToken = nextpas.core.tui.widget.syntax.PToken;
+  TToken = nextpas.core.tui.widget.syntax.TToken;
+  TTokenArray = nextpas.core.tui.widget.syntax.TTokenArray;
+  TLineState = nextpas.core.tui.widget.syntax.TLineState;
+  TGetLineFunc = nextpas.core.tui.widget.syntax.TGetLineFunc;
+  TPascalHighlighter = nextpas.core.tui.widget.syntax.TPascalHighlighter;
+  TSyntaxDoc = nextpas.core.tui.widget.syntax.TSyntaxDoc;
+  TSyntaxTheme = nextpas.core.tui.widget.syntax.TSyntaxTheme;
+  TToastPosition = nextpas.core.tui.widget.toast.TToastPosition;
+  TToastLevel = nextpas.core.tui.widget.toast.TToastLevel;
+  TToastItem = nextpas.core.tui.widget.toast.TToastItem;
 
   TBlock = nextpas.core.tui.widget.block.TBlock;
   TParagraph = nextpas.core.tui.widget.paragraph.TParagraph;
@@ -143,8 +301,41 @@ type
   TClearWidget = nextpas.core.tui.widget.clear.TClearWidget;
   TTabsWidget = nextpas.core.tui.widget.tabs.TTabsWidget;
   TScrollbar = nextpas.core.tui.widget.scrollbar.TScrollbar;
+  TGauge = nextpas.core.tui.widget.gauge.TGauge;
+  TSparkline = nextpas.core.tui.widget.sparkline.TSparkline;
+  TBarChart = nextpas.core.tui.widget.barchart.TBarChart;
+  TCanvas = nextpas.core.tui.widget.canvas.TCanvas;
   TTable = nextpas.core.tui.widget.table.TTable;
   TInput = nextpas.core.tui.widget.input.TInput;
+  TTree = nextpas.core.tui.widget.tree.TTree;
+  TDialog = nextpas.core.tui.widget.dialog.TDialog;
+  TMenu = nextpas.core.tui.widget.menu.TMenu;
+  TPanel = nextpas.core.tui.widget.panel.TPanel;
+  TSplitPane = nextpas.core.tui.widget.split_pane.TSplitPane;
+  TModal = nextpas.core.tui.widget.modal.TModal;
+  TPopover = nextpas.core.tui.widget.popover.TPopover;
+  TTooltip = nextpas.core.tui.widget.tooltip.TTooltip;
+  TSelect = nextpas.core.tui.widget.select.TSelect;
+  TScrollView = nextpas.core.tui.widget.scrollview.TScrollView;
+  TCalendar = nextpas.core.tui.widget.calendar.TCalendar;
+  TBreadcrumb = nextpas.core.tui.widget.breadcrumb.TBreadcrumb;
+  TStatusBar = nextpas.core.tui.widget.statusbar.TStatusBar;
+  TTimeline = nextpas.core.tui.widget.timeline.TTimeline;
+  TProgressGroup = nextpas.core.tui.widget.progress_group.TProgressGroup;
+  TLineChart = nextpas.core.tui.widget.linechart.TLineChart;
+  TInputEditor = nextpas.core.tui.widget.input_editor.TInputEditor;
+  TDiffView = nextpas.core.tui.widget.diffview.TDiffView;
+  TFileTree = nextpas.core.tui.widget.file_tree.TFileTree;
+  TKanban = nextpas.core.tui.widget.kanban.TKanban;
+  TMarkdown = nextpas.core.tui.widget.markdown.TMarkdown;
+  TVirtualList = nextpas.core.tui.widget.virtual_list.TVirtualList;
+  TCommandPalette = nextpas.core.tui.widget.command_palette.TCommandPalette;
+  TNotificationCenter = nextpas.core.tui.widget.notification_center.TNotificationCenter;
+  TCheckbox = nextpas.core.tui.widget.form.TCheckbox;
+  TRadioGroup = nextpas.core.tui.widget.form.TRadioGroup;
+  TToastManager = nextpas.core.tui.widget.toast.TToastManager;
+
+  TChatTheme = nextpas.core.tui.widget.chat_theme.TTheme;
 
 const
   ckUnset = nextpas.core.tui.color.ckUnset;
@@ -180,6 +371,14 @@ const
   mbCrossedOut = nextpas.core.tui.modifier.mbCrossedOut;
   MODIFIER_NONE: TModifier = [];
 
+  ipAuto = nextpas.core.tui.image_cap.ipAuto;
+  ipKitty = nextpas.core.tui.image_cap.ipKitty;
+  ipSixel = nextpas.core.tui.image_cap.ipSixel;
+  ipHalfBlock = nextpas.core.tui.image_cap.ipHalfBlock;
+  cmOSC52 = nextpas.core.tui.clipboard.cmOSC52;
+  cmExternal = nextpas.core.tui.clipboard.cmExternal;
+  cmNone = nextpas.core.tui.clipboard.cmNone;
+
   ckLength = nextpas.core.tui.layout.ckLength;
   ckMin = nextpas.core.tui.layout.ckMin;
   ckMax = nextpas.core.tui.layout.ckMax;
@@ -203,6 +402,30 @@ const
   BORDER_TOP_T: AnsiString = #$E2#$94#$AC;
   BORDER_BOTTOM_T: AnsiString = #$E2#$94#$B4;
   BORDER_CROSS: AnsiString = #$E2#$94#$BC;
+  BORDER_DOUBLE_H: AnsiString = #$E2#$95#$90;
+  BORDER_DOUBLE_V: AnsiString = #$E2#$95#$91;
+  BORDER_DOUBLE_TL: AnsiString = #$E2#$95#$94;
+  BORDER_DOUBLE_TR: AnsiString = #$E2#$95#$97;
+  BORDER_DOUBLE_BL: AnsiString = #$E2#$95#$9A;
+  BORDER_DOUBLE_BR: AnsiString = #$E2#$95#$9D;
+  BORDER_DOUBLE_LT: AnsiString = #$E2#$95#$A0;
+  BORDER_DOUBLE_RT: AnsiString = #$E2#$95#$A3;
+  BORDER_DOUBLE_TT: AnsiString = #$E2#$95#$A6;
+  BORDER_DOUBLE_BT: AnsiString = #$E2#$95#$A9;
+  BORDER_DOUBLE_CROSS: AnsiString = #$E2#$95#$AC;
+  BORDER_HEAVY_H: AnsiString = #$E2#$94#$81;
+  BORDER_HEAVY_V: AnsiString = #$E2#$94#$83;
+  BORDER_HEAVY_TL: AnsiString = #$E2#$94#$8F;
+  BORDER_HEAVY_TR: AnsiString = #$E2#$94#$93;
+  BORDER_HEAVY_BL: AnsiString = #$E2#$94#$97;
+  BORDER_HEAVY_BR: AnsiString = #$E2#$94#$9B;
+  BORDER_HEAVY_LT: AnsiString = #$E2#$94#$A3;
+  BORDER_HEAVY_RT: AnsiString = #$E2#$94#$AB;
+  BORDER_HEAVY_TT: AnsiString = #$E2#$94#$B3;
+  BORDER_HEAVY_BT: AnsiString = #$E2#$94#$BB;
+  BORDER_HEAVY_CROSS: AnsiString = #$E2#$95#$8B;
+  BORDER_DASHED_H: AnsiString = #$E2#$94#$84;
+  BORDER_DASHED_V: AnsiString = #$E2#$94#$86;
 
   evNone = nextpas.core.tui.event.evNone;
   evKey = nextpas.core.tui.event.evKey;
@@ -230,10 +453,42 @@ const
   kmAlt = nextpas.core.tui.event.kmAlt;
   kmShift = nextpas.core.tui.event.kmShift;
 
+  peTop = nextpas.core.tui.widget.panel.peTop;
+  peBottom = nextpas.core.tui.widget.panel.peBottom;
+  peLeft = nextpas.core.tui.widget.panel.peLeft;
+  peRight = nextpas.core.tui.widget.panel.peRight;
+  peInnerH = nextpas.core.tui.widget.panel.peInnerH;
+  peInnerV = nextpas.core.tui.widget.panel.peInnerV;
+
+  PanelEdgesAll: TPanelEdges = [peTop, peBottom, peLeft, peRight, peInnerH, peInnerV];
+  PanelEdgesOuter: TPanelEdges = [peTop, peBottom, peLeft, peRight];
+  PanelEdgesInner: TPanelEdges = [peInnerH, peInnerV];
+  PanelEdgesNone: TPanelEdges = [];
+
   shNone = nextpas.core.tui.widget.scrollbar.shNone;
   shAbove = nextpas.core.tui.widget.scrollbar.shAbove;
   shThumb = nextpas.core.tui.widget.scrollbar.shThumb;
   shBelow = nextpas.core.tui.widget.scrollbar.shBelow;
+  mlNormal = nextpas.core.tui.widget.markdown.mlNormal;
+  mlH1 = nextpas.core.tui.widget.markdown.mlH1;
+  mlH2 = nextpas.core.tui.widget.markdown.mlH2;
+  mlH3 = nextpas.core.tui.widget.markdown.mlH3;
+  mlBullet = nextpas.core.tui.widget.markdown.mlBullet;
+  mlNumbered = nextpas.core.tui.widget.markdown.mlNumbered;
+  mlCode = nextpas.core.tui.widget.markdown.mlCode;
+  mlCodeBlock = nextpas.core.tui.widget.markdown.mlCodeBlock;
+  mlHRule = nextpas.core.tui.widget.markdown.mlHRule;
+  tlInfo = nextpas.core.tui.widget.toast.tlInfo;
+  tlSuccess = nextpas.core.tui.widget.toast.tlSuccess;
+  tlWarning = nextpas.core.tui.widget.toast.tlWarning;
+  tlError = nextpas.core.tui.widget.toast.tlError;
+  tkNormal = nextpas.core.tui.widget.syntax.tkNormal;
+  tkKeyword = nextpas.core.tui.widget.syntax.tkKeyword;
+  tkString = nextpas.core.tui.widget.syntax.tkString;
+  tkComment = nextpas.core.tui.widget.syntax.tkComment;
+  tkNumber = nextpas.core.tui.widget.syntax.tkNumber;
+  tkDirective = nextpas.core.tui.widget.syntax.tkDirective;
+  tkSymbol = nextpas.core.tui.widget.syntax.tkSymbol;
 
   caLeft = nextpas.core.tui.text.caLeft;
   caCenter = nextpas.core.tui.text.caCenter;
@@ -258,6 +513,7 @@ function Idx(const AIndex: Byte): TColor; inline;
 function HexColor(const AHex: AnsiString): TColor; inline;
 function ModifierEquals(const A, B: TModifier): Boolean; inline;
 function ModifierIsEmpty(const AModifier: TModifier): Boolean; inline;
+function DetectImageProtocol: TImageProtocol; inline;
 
 function StyleDefault: TStyle; inline;
 function StyleEquals(const A, B: TStyle): Boolean; inline;
@@ -310,6 +566,27 @@ function IsPaste(const AEv: TEvent): Boolean; inline;
 function IsKeyChar(const AEv: TEvent; ACh: LongWord): Boolean; inline;
 function IsKeyCode(const AEv: TEvent; ACode: TKeyCodeKind): Boolean; inline;
 function IsQuit(const AEv: TEvent): Boolean; inline;
+function FormatBytes(ABytes: Int64): AnsiString; inline;
+function FormatBytesKB(AKB: Int64): AnsiString; inline;
+
+function PanelCell(const AGrid: TPanelGrid; ACol, ARow: Integer): TRect; inline;
+function PanelCellPadded(const APanel: TPanel; const AGrid: TPanelGrid;
+  ACol, ARow: Integer): TRect;
+function PanelCellSpan(const AGrid: TPanelGrid; ACol, ARow, AColSpan,
+  ARowSpan: Integer): TRect;
+function PanelHitTestSep(const AGrid: TPanelGrid; AX, AY: Integer): TSepHit;
+
+function MakeColumn(const ATitle: AnsiString;
+  const ACards: array of TKanbanCard): TKanbanColumn;
+function ParseMarkdownLines(const ASource: AnsiString): TMdLineArray;
+function FuzzyMatch(const APattern, AText: AnsiString): Boolean; inline;
+function FuzzyScore(const APattern, AText: AnsiString): Integer; inline;
+function TokenizePascal(const ALine: AnsiString): TTokenArray;
+function TokenizePascalStateful(const ALine: AnsiString;
+  const AStateIn: TLineState; out AStateOut: TLineState): TTokenArray;
+function IsPascalKeyword(const AWord: AnsiString): Boolean; inline;
+function IsPascalKeywordP(AP: PAnsiChar; ALen: Integer): Boolean; inline;
+function ThemeDefaultDark: TChatTheme; inline;
 
 implementation
 
@@ -391,6 +668,11 @@ end;
 function ModifierIsEmpty(const AModifier: TModifier): Boolean;
 begin
   Result := nextpas.core.tui.modifier.ModifierIsEmpty(AModifier);
+end;
+
+function DetectImageProtocol: TImageProtocol;
+begin
+  Result := nextpas.core.tui.image_cap.DetectImageProtocol;
 end;
 
 function StyleDefault: TStyle;
@@ -503,7 +785,7 @@ begin
   Result := nextpas.core.tui.layout.dsl.Fixed(AN);
 end;
 
-function Flex(AWeight: Word): TConstraint;
+function Flex(AWeight: Word = 1): TConstraint;
 begin
   Result := nextpas.core.tui.layout.dsl.Flex(AWeight);
 end;
@@ -623,6 +905,85 @@ end;
 function IsQuit(const AEv: TEvent): Boolean;
 begin
   Result := nextpas.core.tui.event.IsQuit(AEv);
+end;
+
+function FormatBytes(ABytes: Int64): AnsiString;
+begin
+  Result := nextpas.core.tui.text.format.FormatBytes(ABytes);
+end;
+
+function FormatBytesKB(AKB: Int64): AnsiString;
+begin
+  Result := nextpas.core.tui.text.format.FormatBytesKB(AKB);
+end;
+
+function PanelCell(const AGrid: TPanelGrid; ACol, ARow: Integer): TRect;
+begin
+  Result := nextpas.core.tui.widget.panel.PanelCell(AGrid, ACol, ARow);
+end;
+
+function PanelCellPadded(const APanel: TPanel; const AGrid: TPanelGrid;
+  ACol, ARow: Integer): TRect;
+begin
+  Result := nextpas.core.tui.widget.panel.PanelCellPadded(APanel, AGrid, ACol, ARow);
+end;
+
+function PanelCellSpan(const AGrid: TPanelGrid; ACol, ARow, AColSpan,
+  ARowSpan: Integer): TRect;
+begin
+  Result := nextpas.core.tui.widget.panel.PanelCellSpan(AGrid, ACol, ARow, AColSpan, ARowSpan);
+end;
+
+function PanelHitTestSep(const AGrid: TPanelGrid; AX, AY: Integer): TSepHit;
+begin
+  Result := nextpas.core.tui.widget.panel.PanelHitTestSep(AGrid, AX, AY);
+end;
+
+function MakeColumn(const ATitle: AnsiString;
+  const ACards: array of TKanbanCard): TKanbanColumn;
+begin
+  Result := nextpas.core.tui.widget.kanban.MakeColumn(ATitle, ACards);
+end;
+
+function ParseMarkdownLines(const ASource: AnsiString): TMdLineArray;
+begin
+  Result := nextpas.core.tui.widget.markdown.ParseMarkdownLines(ASource);
+end;
+
+function FuzzyMatch(const APattern, AText: AnsiString): Boolean;
+begin
+  Result := nextpas.core.tui.widget.command_palette.FuzzyMatch(APattern, AText);
+end;
+
+function FuzzyScore(const APattern, AText: AnsiString): Integer;
+begin
+  Result := nextpas.core.tui.widget.command_palette.FuzzyScore(APattern, AText);
+end;
+
+function TokenizePascal(const ALine: AnsiString): TTokenArray;
+begin
+  Result := nextpas.core.tui.widget.syntax.TokenizePascal(ALine);
+end;
+
+function TokenizePascalStateful(const ALine: AnsiString;
+  const AStateIn: TLineState; out AStateOut: TLineState): TTokenArray;
+begin
+  Result := nextpas.core.tui.widget.syntax.TokenizePascalStateful(ALine, AStateIn, AStateOut);
+end;
+
+function IsPascalKeyword(const AWord: AnsiString): Boolean;
+begin
+  Result := nextpas.core.tui.widget.syntax.IsPascalKeyword(AWord);
+end;
+
+function IsPascalKeywordP(AP: PAnsiChar; ALen: Integer): Boolean;
+begin
+  Result := nextpas.core.tui.widget.syntax.IsPascalKeywordP(AP, ALen);
+end;
+
+function ThemeDefaultDark: TChatTheme;
+begin
+  Result := nextpas.core.tui.widget.chat_theme.ThemeDefaultDark;
 end;
 
 end.

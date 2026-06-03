@@ -3,7 +3,11 @@
 All widgets implement `IWidget` via `class(TInterfacedObject, IWidget, IXxx)`.
 Factory: `TXxx.New(...): IXxx`. Builder methods return the specific interface.
 
-## Core Widgets
+This catalog is organized by facade ownership, not by widget complexity. `nextpas.core.tui` intentionally keeps
+the correctness-first default surface small. `nextpas.core.tui.ext` owns stable app/runtime orchestration helpers.
+`nextpas.core.tui.full` keeps the broader migration and compatibility catalog.
+
+## Default Core Widgets (`nextpas.core.tui`)
 
 | Widget | Interface | Stateful | Description |
 |--------|-----------|----------|-------------|
@@ -11,23 +15,28 @@ Factory: `TXxx.New(...): IXxx`. Builder methods return the specific interface.
 | TParagraph | IParagraph | No | Word-wrapped text block |
 | TListWidget | IListWidget | Yes | Vertical scrolling list with highlight |
 | TTable | ITable | Yes | Column-aligned data table with header |
-| TGauge | IGauge | No | Horizontal progress bar (sub-cell precision) |
 | TTabsWidget | ITabsWidget | No | Horizontal tab bar |
 | TScrollbar | IScrollbar | No | Vertical scrollbar (track/thumb) |
 | TClearWidget | IWidget | No | Fills area with empty cells |
 | TInput | IInput | Yes | Single-line text input with cursor |
-| TSparkline | ISparkline | No | Braille-based line sparkline |
-| TBarChart | IBarChart | No | Vertical bar chart (Unicode blocks) |
-| TCanvas | ICanvas | No | Braille dot-matrix drawing surface |
 
-## Extended Widgets
+## Stable Runtime Widgets (`nextpas.core.tui.ext`)
 
 | Widget | Interface | Stateful | Description |
 |--------|-----------|----------|-------------|
+| TPanel | IPanel | No | Grid layout with borders and separators for app/runtime composition |
+
+## Full Compatibility / Advanced Widgets (`nextpas.core.tui.full`)
+
+| Widget | Interface | Stateful | Description |
+|--------|-----------|----------|-------------|
+| TGauge | IGauge | No | Horizontal progress bar (sub-cell precision) |
+| TSparkline | ISparkline | No | Braille-based line sparkline |
+| TBarChart | IBarChart | No | Vertical bar chart (Unicode blocks) |
+| TCanvas | ICanvas | No | Braille dot-matrix drawing surface |
 | TTree | ITree | Yes | Hierarchical tree with expand/collapse |
 | TDialog | IDialog | No | Modal dialog with buttons |
 | TMenu | IMenu | Yes | Vertical menu with shortcuts |
-| TPanel | IPanel | No | Grid layout with borders/separators |
 | TSplitPane | ISplitPane | Yes | Horizontal/vertical split |
 | TModal | IModal | No | Centered overlay with dim background |
 | TPopover | IPopover | Yes | Positioned popup |
@@ -54,14 +63,20 @@ Factory: `TXxx.New(...): IXxx`. Builder methods return the specific interface.
 
 ## Supporting Types And Utilities
 
-| Type | Kind | Description |
-|------|------|-------------|
-| TWidgetRenderFn | reference | Custom render callback used by `TWidgetAdapter` |
-| TWidgetAdapter | class | Wraps a non-nil `TWidgetRenderFn` as `IWidget` |
-| TScrollbarHit | enum | Hit-test result for scrollbar track/thumb interactions |
-| TPanelGrid | record | Grid layout result returned by `IPanel.Layout` and `RenderGrid` |
-| TSepHit | record | Separator hit-test result for panel grids |
-| TChatTheme | record | Color theme data (not a widget) |
+| Type | Facade | Kind | Description |
+|------|--------|------|-------------|
+| TWidgetRenderFn | `core`, `full` | reference | Custom render callback used by `TWidgetAdapter` |
+| TWidgetAdapter | `core`, `full` | class | Wraps a non-nil `TWidgetRenderFn` as `IWidget` |
+| TScrollbarHit | `core`, `full` | enum | Hit-test result for scrollbar track/thumb interactions |
+| TPanelGrid | `ext`, `full` | record | Grid layout result returned by `IPanel.Layout` and `RenderGrid` |
+| TSepHit | `ext`, `full` | record | Separator hit-test result for panel grids |
+| TChatTheme | `ext`, `full` | record | Color theme data (not a widget) |
+
+## Usage Notes
+
+- Use `nextpas.core.tui` when you want the correctness-first default widget set with no app/runtime or protocol spillover.
+- Use `nextpas.core.tui.ext` when you need stable runtime composition helpers such as `TApp`, `TPanel`, or theme presets.
+- Use `nextpas.core.tui.full` when you need migration compatibility or the broader advanced widget catalog.
 
 ## Usage Pattern
 

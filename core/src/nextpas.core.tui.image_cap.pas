@@ -19,6 +19,9 @@ interface
 type
   TImageProtocol = (ipAuto, ipKitty, ipSixel, ipHalfBlock);
 
+function DetectImageProtocolFromHints(const ATerm, ATermProgram,
+  ATermFeatures, AKittyWindowId: AnsiString): TImageProtocol;
+
 {**
  * @desc 检测当前终端的图像协议能力。
  * @return ipKitty / ipSixel / ipHalfBlock（无法确定时回退 half-block）
@@ -30,32 +33,37 @@ implementation
 uses
   SysUtils;
 
-function DetectImageProtocol: TImageProtocol;
-var
-  LTerm, LTermProgram: AnsiString;
+function DetectImageProtocolFromHints(const ATerm, ATermProgram,
+  ATermFeatures, AKittyWindowId: AnsiString): TImageProtocol;
 begin
-  LTerm := GetEnvironmentVariable('TERM');
-  LTermProgram := GetEnvironmentVariable('TERM_PROGRAM');
-
   { Kitty graphics protocol: kitty, WezTerm, Ghostty }
-  if (Pos('kitty', LTerm) > 0) or (Pos('kitty', LTermProgram) > 0) or
-     (GetEnvironmentVariable('KITTY_WINDOW_ID') <> '') or
-     (Pos('WezTerm', LTermProgram) > 0) or (Pos('ghostty', LTermProgram) > 0) then
+  if (Pos('kitty', ATerm) > 0) or (Pos('kitty', ATermProgram) > 0) or
+     (AKittyWindowId <> '') or
+     (Pos('WezTerm', ATermProgram) > 0) or (Pos('ghostty', ATermProgram) > 0) then
     Result := ipKitty
 
   { Sixel：显式 TERM_FEATURES，或已知支持 sixel 的终端。
     注意：不匹配泛化的 'xterm'——许多非 Sixel 终端
     (gnome-terminal, tilix) 也设 TERM=xterm-256color。 }
-  else if (Pos('sixel', GetEnvironmentVariable('TERM_FEATURES')) > 0) or
-          (Pos('foot', LTerm) > 0) or (Pos('foot', LTermProgram) > 0) or
-          (Pos('mlterm', LTerm) > 0) or (Pos('mlterm', LTermProgram) > 0) or
-          (Pos('contour', LTermProgram) > 0) or
-          (Pos('yaft', LTerm) > 0) or
-          (LTermProgram = 'xterm') then
+  else if (Pos('sixel', ATermFeatures) > 0) or
+          (Pos('foot', ATerm) > 0) or (Pos('foot', ATermProgram) > 0) or
+          (Pos('mlterm', ATerm) > 0) or (Pos('mlterm', ATermProgram) > 0) or
+          (Pos('contour', ATermProgram) > 0) or
+          (Pos('yaft', ATerm) > 0) or
+          (ATermProgram = 'xterm') then
     Result := ipSixel
 
   else
     Result := ipHalfBlock;
+end;
+
+function DetectImageProtocol: TImageProtocol;
+begin
+  Result := DetectImageProtocolFromHints(
+    GetEnvironmentVariable('TERM'),
+    GetEnvironmentVariable('TERM_PROGRAM'),
+    GetEnvironmentVariable('TERM_FEATURES'),
+    GetEnvironmentVariable('KITTY_WINDOW_ID'));
 end;
 
 end.

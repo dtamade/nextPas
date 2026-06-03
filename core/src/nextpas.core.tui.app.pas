@@ -9,6 +9,7 @@ uses
   nextpas.core.tui.base,
   nextpas.core.tui.event,
   nextpas.core.tui.terminal,
+  nextpas.core.tui.app.screen,
   nextpas.core.tui.focus,
   nextpas.core.tui.frame_budget,
   nextpas.core.tui.task;
@@ -19,10 +20,14 @@ type
   TAppRenderProc = procedure(App: TApp; var Frame: TFrame) of object;
   TAppEventProc  = procedure(App: TApp; const Ev: TEvent) of object;
   TAppTickProc   = procedure(App: TApp; TickCount: Integer) of object;
+  TAppTaskCompletionProc = procedure(App: TApp;
+    const Slots: array of TCompletionSlot; SlotCount: Integer) of object;
 
   TApp = class
   private
     FTerminal: TTerminal;
+    FScreens: TScreenStack;
+    FSharedStateObject: TObject;
     FFocus: TFocusManager;
     FBudget: TFrameBudget;
     FUseFocus: Boolean;
@@ -33,18 +38,24 @@ type
     FOnRender: TAppRenderProc;
     FOnEvent: TAppEventProc;
     FOnTick: TAppTickProc;
+    FOnTaskCompletion: TAppTaskCompletionProc;
     FAnimTickInterval: Integer;
     FIdleTickInterval: Integer;
     FAnimationRequested: Boolean;
     FStartTime: QWord;
     FTasks: TTaskManager;
     function GetTerminalOptions: TTerminalOptions;
+    function GetSharedStateObject: TObject;
     procedure SetTerminalOptions(const AOptions: TTerminalOptions);
+    procedure SetSharedStateObject(AValue: TObject);
     procedure CleanupAfterRun(SuppressErrors: Boolean);
     procedure DispatchTick;
+    procedure ConsumeScreenQuitRequest;
   protected
     procedure Render(var Frame: TFrame); virtual;
     procedure HandleEvent(const Ev: TEvent); virtual;
+    procedure HandleTaskCompletions(const Slots: array of TCompletionSlot;
+      SlotCount: Integer); virtual;
     procedure OnTick; virtual;
     procedure OnInit; virtual;
     procedure OnDestroy; virtual;
@@ -65,6 +76,7 @@ type
     procedure RequestAnimationFrame;
     function ElapsedMs: QWord;
     property Terminal: TTerminal read FTerminal;
+    property Screens: TScreenStack read FScreens;
     property Focus: TFocusManager read FFocus;
     property Budget: TFrameBudget read FBudget;
     property TickInterval: Integer read FTickInterval write FTickInterval;
@@ -72,10 +84,13 @@ type
     property AnimTickInterval: Integer read FAnimTickInterval write FAnimTickInterval;
     property IdleTickInterval: Integer read FIdleTickInterval write FIdleTickInterval;
     property Tasks: TTaskManager read FTasks;
+    property SharedStateObject: TObject read GetSharedStateObject write SetSharedStateObject;
     property TerminalOptions: TTerminalOptions read GetTerminalOptions write SetTerminalOptions;
     property OnRenderCb: TAppRenderProc read FOnRender write FOnRender;
     property OnEventCb: TAppEventProc read FOnEvent write FOnEvent;
     property OnTickCb: TAppTickProc read FOnTick write FOnTick;
+    property OnTaskCompletionCb: TAppTaskCompletionProc
+      read FOnTaskCompletion write FOnTaskCompletion;
   end;
 
 implementation
@@ -87,6 +102,8 @@ constructor TApp.Create;
 begin
   inherited Create;
   FTerminal := TTerminal.Create;
+  FScreens := TScreenStack.Create;
+  FSharedStateObject := nil;
   FTasks := TTaskManager.Create;
   FFocus := nil;
   FUseFocus := False;
@@ -97,6 +114,7 @@ begin
   FOnRender := nil;
   FOnEvent := nil;
   FOnTick := nil;
+  FOnTaskCompletion := nil;
   FAnimTickInterval := 33;
   FIdleTickInterval := 200;
   FAnimationRequested := False;
@@ -105,6 +123,7 @@ end;
 
 destructor TApp.Destroy;
 begin
+  FScreens.Free;
   FTasks.Free;
   FFocus.Free;
   FTerminal.Free;
@@ -123,9 +142,21 @@ begin
   Result := FTerminal.Options;
 end;
 
+function TApp.GetSharedStateObject: TObject;
+begin
+  Result := FSharedStateObject;
+end;
+
 procedure TApp.SetTerminalOptions(const AOptions: TTerminalOptions);
 begin
   FTerminal.Options := AOptions;
+end;
+
+procedure TApp.SetSharedStateObject(AValue: TObject);
+begin
+  FSharedStateObject := AValue;
+  if FScreens <> nil then
+    FScreens.SharedStateObject := AValue;
 end;
 
 procedure TApp.EnableBudget(BudgetMs: Double);
@@ -152,6 +183,12 @@ begin
     FOnTick(Self, FTickCount)
   else
     OnTick;
+end;
+
+procedure TApp.ConsumeScreenQuitRequest;
+begin
+  if (FScreens <> nil) and FScreens.ConsumeQuitRequested then
+    Quit;
 end;
 
 function TApp.ElapsedMs: QWord;
@@ -223,6 +260,8 @@ procedure TApp.Run;
 var
   Frame: TFrame;
   Ev: TEvent;
+  LCompletionCount: Integer;
+  LCompletions: array[0..TASK_QUEUE_CAPACITY - 1] of TCompletionSlot;
 begin
   if not DoEnterTui then
   begin
@@ -239,11 +278,15 @@ begin
       FBudget.Reset;
     FStartTime := (platform_monotonic_ns div 1000000);
     OnInit;
+    ConsumeScreenQuitRequest;
     while not FShouldQuit do
     begin
       if FTasks.CompletionCount > 0 then
       begin
-        DispatchTick;
+        LCompletionCount := FTasks.DrainCompleted(LCompletions,
+          Length(LCompletions));
+        HandleTaskCompletions(LCompletions, LCompletionCount);
+        ConsumeScreenQuitRequest;
         if FTerminal.ShouldQuit then
           FShouldQuit := True;
         if FShouldQuit then
@@ -256,8 +299,11 @@ begin
         FOnRender(Self, Frame)
       else
         Render(Frame);
+      ConsumeScreenQuitRequest;
       DoEndFrame(Frame);
       if FUseBudget then FBudget.EndFrame;
+      if FShouldQuit then
+        Continue;
       Ev := DoPollEvent;
       if FTerminal.ShouldQuit then
       begin
@@ -274,6 +320,7 @@ begin
           FOnEvent(Self, Ev)
         else
           HandleEvent(Ev);
+        ConsumeScreenQuitRequest;
       end;
     end;
   except
@@ -293,8 +340,40 @@ begin
          or (Ev.Key.Ch = Ord('q')) or (Ev.Key.Ch = Ord('Q'));
 end;
 
-procedure TApp.Render(var Frame: TFrame); begin end;
-procedure TApp.HandleEvent(const Ev: TEvent); begin end;
+procedure TApp.Render(var Frame: TFrame);
+begin
+  if FScreens <> nil then
+    FScreens.Render(Frame.Area, Frame.Buffer);
+end;
+
+procedure TApp.HandleEvent(const Ev: TEvent);
+begin
+  if FScreens <> nil then
+    FScreens.HandleEvent(Ev);
+end;
+
+procedure TApp.HandleTaskCompletions(const Slots: array of TCompletionSlot;
+  SlotCount: Integer);
+var
+  LTop: TScreen;
+begin
+  if SlotCount <= 0 then
+    Exit;
+
+  if Assigned(FOnTaskCompletion) then
+  begin
+    FOnTaskCompletion(Self, Slots, SlotCount);
+    Exit;
+  end;
+
+  if FScreens = nil then
+    Exit;
+
+  LTop := FScreens.Top;
+  if LTop <> nil then
+    LTop.HandleTaskCompletions(Slots, SlotCount);
+end;
+
 procedure TApp.OnTick; begin end;
 procedure TApp.OnInit; begin end;
 procedure TApp.OnDestroy; begin end;

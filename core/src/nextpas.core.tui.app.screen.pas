@@ -8,7 +8,8 @@ uses
   nextpas.core.tui.base,
   nextpas.core.tui.error,
   nextpas.core.tui.event,
-  nextpas.core.tui.buffer;
+  nextpas.core.tui.buffer,
+  nextpas.core.tui.task;
 
 type
   TScreenStack = class;
@@ -18,10 +19,14 @@ type
   TScreen = class
   private
     FStack: TScreenStack;
+    function GetSharedStateObject: TObject;
   public
     property Stack: TScreenStack read FStack write FStack;
+    property SharedStateObject: TObject read GetSharedStateObject;
     procedure Render(const Area: TRect; Buf: TBuffer); virtual; abstract;
     procedure HandleEvent(const Ev: TEvent); virtual;
+    procedure HandleTaskCompletions(const Slots: array of TCompletionSlot;
+      SlotCount: Integer); virtual;
     procedure OnEnter; virtual;
     procedure OnLeave; virtual;
   end;
@@ -31,6 +36,7 @@ type
     FScreens: array of TScreen;
     FCount: Integer;
     FQuitRequested: Boolean;
+    FSharedStateObject: TObject;
     procedure ValidateIncomingScreen(AScreen: TScreen; const AOperation: AnsiString);
   public
     constructor Create;
@@ -45,6 +51,7 @@ type
     procedure ClearQuitRequest; inline;
     function ConsumeQuitRequested: Boolean; inline;
     property QuitRequested: Boolean read FQuitRequested write FQuitRequested;
+    property SharedStateObject: TObject read FSharedStateObject write FSharedStateObject;
     procedure Render(const Area: TRect; Buf: TBuffer);
     procedure HandleEvent(const Ev: TEvent);
   end;
@@ -53,7 +60,20 @@ implementation
 
 { TScreen }
 
+function TScreen.GetSharedStateObject: TObject;
+begin
+  if FStack <> nil then
+    Result := FStack.SharedStateObject
+  else
+    Result := nil;
+end;
+
 procedure TScreen.HandleEvent(const Ev: TEvent);
+begin
+end;
+
+procedure TScreen.HandleTaskCompletions(const Slots: array of TCompletionSlot;
+  SlotCount: Integer);
 begin
 end;
 
@@ -73,6 +93,7 @@ begin
   FCount := 0;
   FScreens := nil;
   FQuitRequested := False;
+  FSharedStateObject := nil;
 end;
 
 procedure TScreenStack.ValidateIncomingScreen(AScreen: TScreen;

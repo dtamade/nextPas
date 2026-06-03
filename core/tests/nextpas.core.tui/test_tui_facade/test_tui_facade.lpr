@@ -3,18 +3,18 @@ program test_tui_facade;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.tui,
+  nextpas.core.tui.full,
   nextpas.core.testing;
 
 type
-  TReadmeRenderHost = class
+  TFullFacadeRenderHost = class
     procedure Render(AApp: TApp; var AFrame: TFrame);
   end;
 
 var
   T: TTestRunner;
 
-procedure TReadmeRenderHost.Render(AApp: TApp; var AFrame: TFrame);
+procedure TFullFacadeRenderHost.Render(AApp: TApp; var AFrame: TFrame);
 begin
   AFrame.Buffer.SetString(0, 0, 'x', StyleDefault);
   AApp.RequestAnimationFrame;
@@ -118,6 +118,8 @@ var
   LColumn: TKanbanColumn;
   LMdLines: TMdLineArray;
   LChatTheme: TChatTheme;
+  LClipboard: TClipboard;
+  LClipboardMethod: TClipboardMethod;
   LImageProtocol: TImageProtocol;
   LInputState: TInputState;
   LTokens: TTokenArray;
@@ -161,6 +163,10 @@ begin
   CheckEqual('1 MB', FormatBytesKB(1024), 'KB format helper is re-exported');
   LImageProtocol := DetectImageProtocol;
   Check(Ord(LImageProtocol) >= Ord(ipKitty), 'image protocol helper is re-exported');
+  LClipboardMethod := cmOSC52;
+  CheckEqual(Ord(cmOSC52), Ord(LClipboardMethod), 'clipboard method constants are re-exported');
+  LClipboard := TClipboard.Detect;
+  Check(Ord(LClipboard.Method) >= Ord(cmOSC52), 'clipboard contract is re-exported');
 
   LColumn := MakeColumn('Todo', [TKanbanCard.Make('Ship')]);
   CheckEqual('Todo', LColumn.Title, 'kanban helper is re-exported');
@@ -196,16 +202,135 @@ begin
   Check(LWidget <> nil, 'ITuiWidget compatibility alias remains');
 end;
 
+procedure TestFullFacadeCoversExtAndExperimentalSurface;
+var
+  LCompatApp: TTuiApp;
+  LCompatTheme: TTheme;
+  LCompatChatTheme: TChatTheme;
+  LCompatPanel: IPanel;
+  LCompatGrid: TPanelGrid;
+  LCompatRect: TRect;
+  LCompatHit: TSepHit;
+  LCompatEdges: TPanelEdges;
+  LCompatEdge: TPanelEdge;
+  LCompatTitle: TSepTitle;
+  LCompatProtocol: TImageProtocol;
+  LCompatClipboard: TClipboard;
+  LCompatClipboardMethod: TClipboardMethod;
+begin
+  LCompatApp := TTuiApp.Create;
+  try
+    LCompatTheme := TTheme.Dark;
+    LCompatChatTheme := ThemeDefaultDark;
+    LCompatEdges := PanelEdgesOuter + PanelEdgesInner;
+    LCompatEdge := peInnerV;
+    LCompatTitle := Default(TSepTitle);
+    LCompatPanel := TPanel.Grid(1, 1).WithEdges(LCompatEdges);
+    LCompatGrid := LCompatPanel.Layout(TRect.Make(0, 0, 8, 4));
+    LCompatRect := PanelCell(LCompatGrid, 0, 0);
+    LCompatRect := PanelCellSpan(LCompatGrid, 0, 0, 1, 1);
+    LCompatHit := PanelHitTestSep(LCompatGrid, LCompatGrid.ColOffsets[0], LCompatGrid.RowOffsets[0]);
+    LCompatProtocol := ipSixel;
+    LCompatClipboardMethod := cmNone;
+    LCompatClipboard := TClipboard.Detect;
+
+    Check(LCompatApp <> nil, 'full facade exposes TTuiApp compatibility alias');
+    Check(SizeOf(TTuiFrame) > 0, 'full facade exposes TTuiFrame compatibility alias');
+    Check(ColorIsSet(LCompatTheme.Primary.Fg), 'full facade exposes stable TTheme record');
+    Check(ColorIsSet(LCompatChatTheme.FgPrimary), 'full facade exposes stable chat theme preset');
+    Check(LCompatEdge = peInnerV, 'full facade exposes panel edge constants');
+    Check(LCompatEdges = PanelEdgesAll, 'full facade exposes panel edge sets');
+    Check(not LCompatTitle.HasTitle, 'full facade exposes panel separator title record');
+    Check(LCompatRect.Width > 0, 'full facade exposes panel layout helpers');
+    Check(not LCompatHit.Found, 'full facade exposes panel separator hit type');
+    CheckEqual(Ord(ipSixel), Ord(LCompatProtocol), 'full facade exposes experimental image constants');
+    LCompatProtocol := ipHalfBlock;
+    CheckEqual(Ord(ipHalfBlock), Ord(LCompatProtocol), 'full facade exposes fallback image protocol constant');
+    CheckEqual(Ord(cmNone), Ord(LCompatClipboardMethod), 'full facade exposes clipboard method constants');
+    Check(Ord(LCompatClipboard.Method) >= Ord(cmOSC52), 'full facade exposes experimental clipboard contract');
+    LCompatProtocol := DetectImageProtocol;
+    Check(Ord(LCompatProtocol) >= Ord(ipAuto), 'full facade exposes experimental image helper');
+  finally
+    LCompatApp.Free;
+  end;
+end;
+
+procedure TestFullFacadeAdvancedWidgetCatalogRemainsUsable;
+var
+  LSparkline: ISparkline;
+  LBarChart: IBarChart;
+  LCanvas: ICanvas;
+  LTree: ITree;
+  LDialog: IDialog;
+  LMenu: IMenu;
+  LTreeState: TTreeState;
+  LMenuState: TMenuState;
+  LArea: TRect;
+  LBuf: TBuffer;
+  LLines: TBufferLines;
+begin
+  LSparkline := TSparkline.New([1.0, 5.0, 2.0]).WithStyle(StyleDefault.WithFg(TUI_CYAN));
+  LBarChart := TBarChart.New([
+    TBarData.Make('A', 3.0),
+    TBarData.Make('B', 7.0)
+  ]).WithBarWidth(2).WithShowValues(False);
+  LCanvas := TCanvas.New(4, 2).WithStyle(StyleDefault.WithFg(TUI_GREEN));
+  LCanvas.DrawLine(0, 0, LCanvas.Width - 1, LCanvas.Height - 1);
+  LTree := TTree.New([
+    TTreeNode.Make('Root').WithChildren([
+      TTreeNode.Make('Child')
+    ])
+  ]).WithIndent(3);
+  LDialog := TDialog.New('Confirm', 'Ship now?')
+    .WithButtons(['Yes', 'No'])
+    .WithWidth(24)
+    .WithHeight(7);
+  LMenu := TMenu.New([
+    TMenuItem.Action('Open'),
+    TMenuItem.Separator,
+    TMenuItem.Action('Quit')
+  ]).WithWidth(16);
+
+  LTreeState := TTreeState.Empty;
+  LTreeState.Toggle(0);
+  LMenuState := TMenuState.Default;
+  LMenu.MoveDown(LMenuState);
+  LArea := TRect.Make(0, 0, 24, 8);
+  LBuf := TBuffer.CreateEmpty(LArea);
+  try
+    (LSparkline as IWidget).Render(TRect.Make(0, 0, 8, 2), LBuf);
+    (LBarChart as IWidget).Render(TRect.Make(0, 2, 8, 6), LBuf);
+    (LCanvas as IWidget).Render(TRect.Make(9, 0, 4, 2), LBuf);
+    LTree.RenderStateful(TRect.Make(14, 0, 10, 4), LBuf, LTreeState);
+    LMenu.RenderStateful(TRect.Make(14, 4, 10, 3), LBuf, LMenuState);
+    LDialog.Render(LArea, LBuf);
+    LLines := LBuf.AsLines;
+
+    Check(LSparkline <> nil, 'full facade exposes sparkline contract');
+    Check(LBarChart <> nil, 'full facade exposes barchart contract');
+    CheckEqual(8, LCanvas.Width, 'full facade exposes canvas dimension contract');
+    Check(LCanvas.GetDot(0, 0), 'full facade exposes canvas drawing contract');
+    Check(LTreeState.IsOpen(0), 'full facade exposes tree state contract');
+    CheckEqual(2, LMenuState.Selected, 'full facade exposes menu navigation contract');
+    CheckEqual(2, LMenu.SelectableCount, 'full facade exposes menu selection contract');
+    CheckEqual(Word(24), LDialog.CenteredArea(TRect.Make(0, 0, 30, 12)).Width,
+      'full facade exposes dialog sizing contract');
+    Check(Pos('Confirm', LLines[0]) > 0, 'full facade advanced widgets still render into buffer');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestReadmeQuickStartCompiles;
 var
   LApp: TTuiApp;
-  LHost: TReadmeRenderHost;
+  LHost: TFullFacadeRenderHost;
 begin
   LApp := TTuiApp.Create;
-  LHost := TReadmeRenderHost.Create;
+  LHost := TFullFacadeRenderHost.Create;
   try
     LApp.OnRenderCb := @LHost.Render;
-    Check(True, 'README quick start callback wiring compiles against facade');
+    Check(True, 'full facade app callback wiring compiles');
   finally
     LHost.Free;
     LApp.Free;
@@ -218,7 +343,9 @@ begin
   T.Run('widget facade types', @TestWidgetFacadeTypes);
   T.Run('facade constants and helpers', @TestFacadeConstantsAndHelpers);
   T.Run('compatibility aliases remain', @TestCompatibilityAliasesRemain);
-  T.Run('readme quick start compiles', @TestReadmeQuickStartCompiles);
+  T.Run('full facade covers ext and experimental contract', @TestFullFacadeCoversExtAndExperimentalSurface);
+  T.Run('full facade advanced widget catalog remains usable', @TestFullFacadeAdvancedWidgetCatalogRemainsUsable);
+  T.Run('full facade app callback wiring compiles', @TestReadmeQuickStartCompiles);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

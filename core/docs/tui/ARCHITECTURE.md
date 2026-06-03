@@ -1,104 +1,185 @@
 # nextpas.core.tui Architecture
 
-## Overview
+## Start from the facade that matches your job
 
-`nextpas.core.tui` is a FreePascal TUI rendering framework inspired by ratatui's design: immediate-mode rendering, double-buffered diff, and array-based cell layout.
+Since the surface-freeze slice, the public surface is split into four facades:
 
-## Layer Diagram
+- `nextpas.core.tui`
+- `nextpas.core.tui.ext`
+- `nextpas.core.tui.experimental`
+- `nextpas.core.tui.full`
+
+The split is intentional:
+
+- `nextpas.core.tui` owns terminal correctness: buffer, text, layout, event/input, ANSI backend,
+  `TTerminal`, and the smallest useful widget set.
+- `nextpas.core.tui.ext` owns stable app/runtime framework concerns: `TApp`, panel/layout helpers,
+  theme, task, frame budget, focus, interaction, and animation primitives.
+- `nextpas.core.tui.experimental` owns high-volatility protocol features such as image capability
+  detection, image transport, sixel, and clipboard negotiation.
+- `nextpas.core.tui.full` keeps the migration-era broad surface alive, so existing code can keep
+  compiling while dependencies are moved toward `core` or `ext`.
+
+If a feature does not belong to terminal correctness, it should not quietly leak back into the default
+`nextpas.core.tui` facade.
+
+## Keep the runtime layers separate
 
 ```
-┌─────────────────────────────────────────────┐
-│  Application (TApp, event loop)             │
-├─────────────────────────────────────────────┤
-│  Widgets (IWidget interface hierarchy)      │
-│  Block, Paragraph, List, Table, Tree, ...   │
-├─────────────────────────────────────────────┤
-│  Layout (TConstraint solver, Grid, DSL)     │
-├─────────────────────────────────────────────┤
-│  Buffer (TBuffer: cell array + diff engine) │
-│  Text (TSpan/TLine/TText)                   │
-├─────────────────────────────────────────────┤
-│  Terminal (TTerminal: frame lifecycle)       │
-│  ANSI Backend (escape sequence emitter)     │
-├─────────────────────────────────────────────┤
-│  Platform (console, signal, time, io)       │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│ Public facades                                           │
+│ core | ext | experimental | full                         │
+├──────────────────────────────────────────────────────────┤
+│ App/runtime layer                                        │
+│ TApp, screens, tasks, themes, panel orchestration        │
+├──────────────────────────────────────────────────────────┤
+│ Widget layer                                              │
+│ IWidget hierarchy, basic widgets, advanced widgets       │
+├──────────────────────────────────────────────────────────┤
+│ Text/layout/render model                                  │
+│ TText, TLayout, TBuffer, overlay, diff                   │
+├──────────────────────────────────────────────────────────┤
+│ Terminal/runtime truth                                    │
+│ TTerminal, capability profile, ANSI backend, input       │
+├──────────────────────────────────────────────────────────┤
+│ Platform                                                  │
+│ console, signal, time, io                                │
+└──────────────────────────────────────────────────────────┘
 ```
 
-## Core Design Principles
+`full` is not another architectural layer. It is a compatibility aggregation of the other surfaces plus
+the still-migrating broad widget/runtime catalog.
 
-### 1. Immediate Mode Rendering
+## Keep `ext` app-first
 
-Widgets do not hold render state. Every frame:
-1. `TTerminal.BeginFrame` → fresh `TBuffer`
-2. Application calls `widget.Render(area, buffer)` for each widget
-3. `TTerminal.EndFrame` → diff prev/curr buffers → emit ANSI patches
+`nextpas.core.tui.ext` is no longer just a place where `TApp` happens to be visible. The intended stable
+happy path is now:
 
-### 2. Interface-First Widget System
+1. Create `TApp`
+2. Push a `TScreen` into `App.Screens`
+3. Let the default render/event path delegate to the top screen
 
-All widgets implement `IWidget`:
+That means:
+
+- `TApp.Render` defaults to `Screens.Render(...)` when no explicit callback or override is provided
+- `TApp.HandleEvent` defaults to `Screens.HandleEvent(...)`
+- `TScreenStack.RequestQuit` is consumed by the app loop, so a screen can terminate the app without
+  reaching back into terminal internals
+- `TApp.SharedStateObject` owns the app-level shared-state object for cross-screen runtime coordination
+- `TScreen.SharedStateObject` exposes that object to screens through `TScreenStack`, without adding an
+  `App` back-reference to the screen model
+
+Callbacks still exist for lightweight demos or adapter-style use, but the framework-level contract now
+centers `ext` on screen-driven apps rather than raw callback wiring.
+
+## Keep shared state app-owned and injected
+
+The current shared-state seam is intentionally small:
+
+- `TApp.SharedStateObject` is the single app-owned slot
+- `TScreenStack.SharedStateObject` carries the same object through runtime ownership
+- `TScreen.SharedStateObject` is the screen-facing read path
+
+This seam exists so cross-screen state can be injected through the stable `ext` runtime boundary without
+turning `nextpas.core.tui` into a retained-mode state framework.
+
+The contract remains strict:
+
+- background tasks do not mutate UI state directly from worker threads
+- completion-time writes still happen through the app-owned completion path
+- screens observe shared state, but they do not become implicit owners of callback-driven completion writes
+- this is not a store/reducer/message-bus system
+
+## Keep capability truth in `TTerminal.CapabilityProfile`
+
+Enhanced terminal features now flow through `TTerminal.CapabilityProfile`, not through a loose set of
+boolean fields.
+
+The profile currently owns:
+
+- `Truecolor`
+- `KittyKeyboard`
+- `ImageProtocol`
+
+Each capability tracks:
+
+- `Requested`
+- `Detected`
+- `Active`
+- `Verified`
+- `FallbackReason`
+
+This matters because some capabilities are only candidates until the session proves them. For example,
+kitty/wezterm/ghostty hints can mark kitty keyboard support as detected, but it remains inactive until
+terminal-side negotiation is implemented.
+
+Compatibility properties still exist:
+
+- `HasTruecolor`
+- `HasKittyKeyboard`
+- `ImageProtocol`
+
+They now read only the active projection. They are no longer the canonical source of runtime truth.
+
+## Keep rendering immediate-mode
+
+The render loop has not changed:
+
+1. `TTerminal.BeginFrame` prepares the current buffer.
+2. Application or caller code renders widgets into that buffer.
+3. `TTerminal.EndFrame` merges overlay state, diffs previous and current buffers, emits ANSI patches,
+   and swaps the frame buffers.
+
+Widgets still do not own render state. Stateful behavior lives in explicit state records or app/runtime
+orchestration.
+
+## Keep widget contracts interface-first
+
+All widgets still implement `IWidget`:
+
 ```pascal
 IWidget = interface
   procedure Render(const AArea: TRect; ABuffer: TBuffer);
 end;
 ```
 
-Each widget has a specific interface (e.g., `IBlock`, `ITable`, `ITree`) extending `IWidget` with builder methods and stateful render. Factory pattern: `TXxx.New(...): IXxx`.
+Dedicated widget interfaces add builder/state methods. `TWidgetAdapter` remains the escape hatch for
+wrapping a non-nil render callback as `IWidget`, but built-in widgets should continue to use dedicated
+`class(TInterfacedObject, IWidget, IXxx)` implementations.
 
-### 3. Zero-Allocation Hot Path
+## Keep the hot path allocation-light
 
-- `TCell` = 40-byte packed record (inline glyph + style + width)
-- `TBuffer.FContent` = contiguous `array of TCell`
-- Diff engine uses QWord×5 comparison per cell
-- ANSI output via `TStringBuilder` (append-only byte buffer)
-- Dirty-row bitmap skips unchanged rows without memcmp
+- `TCell` stays a 40-byte packed record.
+- `TBuffer` stores a contiguous cell array.
+- The diff engine still uses fixed-width cell comparison.
+- ANSI output still funnels through `TStringBuilder`.
+- Dirty-row tracking still avoids unnecessary patch emission.
 
-### 4. Data Types as Records
+The surface split is about contract clarity, not about changing the hot-path render model.
 
-`TRect`, `TColor`, `TStyle`, `TCell`, `TModifier`, layout constraints, state types — all records. Zero heap allocation for data flow.
+## Keep Unicode truth consistent end-to-end
 
-### 5. Grapheme-Aware Text Pipeline
-
-All visible string rendering routes non-ASCII text through `GraphemeNext`. `StringDisplayWidth`
-keeps the ASCII SIMD fast path, then counts non-ASCII clusters by grapheme width, so ZWJ emoji,
+Non-ASCII text still routes through the grapheme-aware path. The current contract is that
+`text.width`, `tui.buffer`, `tui.overlay`, and `tui.text` must agree on width for ZWJ emoji,
 skin-tone modifiers, keycap emoji, variation selectors, combining marks, and East Asian wide
-characters stay consistent across `text.width`, `tui.buffer`, `tui.overlay`, and `tui.text`.
+characters.
 
-## Key Units (77 total)
+That consistency goal is part of the core facade's correctness bar.
 
-| Layer | Units |
-|-------|-------|
-| Base types | base, error, color, modifier, style, cell |
-| Buffer | buffer, overlay, image_cap |
-| Text | text, text.format |
-| Layout | layout, layout.grid, layout.dsl |
-| Borders | borders |
-| ANSI | ansi, backend.ansi, backend.test |
-| Terminal | terminal |
-| Event/Input | event, input, interaction, focus, keybind |
-| Widgets | widget.intf + 40 widget units |
-| App | app, app.screen, anim, animator, theme, task, frame_budget, clipboard, sixel |
-| Facade | nextpas.core.tui (re-exports) |
+## Verify with focused TUI gates
 
-## Public Facade
+This line does not rely on full-repo verification to prove TUI correctness. The maintained envelope is:
 
-`nextpas.core.tui` is the preferred public entry point. Because FPC does not automatically re-export
-symbols from units listed in `uses`, the facade declares explicit type aliases and inline forwarding
-functions for public TUI contracts.
+- `test_tui_cap_base`
+- `test_tui_core_facade`
+- `test_tui_ext_facade`
+- `test_tui_experimental_facade`
+- `test_tui_facade`
+- `test_tui_terminal`
+- `test_tui_image_cap`
+- `test_tui_backend`
+- `test_tui_buffer`
+- `test_tui_widget_intf`
+- `core/benchmarks/nextpas.core.tui/run_all.sh`
 
-The facade exposes natural names (`TRect`, `TBuffer`, `IWidget`, `TBlock`, `BORDERS_ALL`) and keeps
-existing `TTui*` / `ITui*` compatibility aliases. `TWidgetAdapter` is intentionally retained as an
-extension bridge for wrapping a non-nil `TWidgetRenderFn` as `IWidget`; built-in widgets should still
-prefer dedicated `class(TInterfacedObject, IWidget, IXxx)` implementations.
-
-## Performance
-
-Measured on x86_64, FPC 3.3.1, -O2:
-
-- Full render (120×40, 4 widgets): 119μs/frame
-- Buffer diff (200×50): 26-47μs/frame
-- Input parse: 44-134ns/event
-- Layout solve: 354ns-4.3μs
-- StringDisplayWidth: 20ns/80B ASCII (AVX2+SSE2 SIMD)
-
-All well within 60 FPS budget (16ms).
+That keeps terminal correctness, facade ownership, and performance smoke tied to the TUI module itself.

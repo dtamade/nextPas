@@ -32,7 +32,10 @@ type
     FFd: Int32;
     FOut: TStringBuilder;
     FLastInit: Boolean;
-    FLastStyle: array[0..1] of QWord;
+    FLastFg: TColor;
+    FLastBg: TColor;
+    FLastUl: TColor;
+    FLastModifier: TModifier;
   public
     constructor Create(AFd: Int32);
     destructor Destroy; override;
@@ -92,8 +95,10 @@ end;
 procedure TAnsiBackend.ResetStyleCache;
 begin
   FLastInit := False;
-  FLastStyle[0] := 0;
-  FLastStyle[1] := 0;
+  FLastFg := UnsetColor;
+  FLastBg := UnsetColor;
+  FLastUl := UnsetColor;
+  FLastModifier := [];
 end;
 
 procedure TAnsiBackend.HideCursor;     begin AnsiHideCursor(FOut); end;
@@ -148,7 +153,6 @@ var
   LI: Integer;
   LCurX, LCurY: Integer;
   LGlyphLen: Integer;
-  LCellStyle: PQWord;
 begin
   if ACount = 0 then Exit;
   LCurX := -1;
@@ -162,8 +166,11 @@ begin
       LCurY := APatches[LI].Y;
     end;
 
-    LCellStyle := PQWord(@APatches[LI].Cell.Fg);
-    if (not FLastInit) or (LCellStyle[0] <> FLastStyle[0]) or (LCellStyle[1] <> FLastStyle[1]) then
+    if (not FLastInit) or
+       (not ColorEquals(APatches[LI].Cell.Fg, FLastFg)) or
+       (not ColorEquals(APatches[LI].Cell.Bg, FLastBg)) or
+       (not ColorEquals(APatches[LI].Cell.Ul, FLastUl)) or
+       (APatches[LI].Cell.Modifier <> FLastModifier) then
     begin
       AnsiSgrReset(FOut);
       if (APatches[LI].Cell.Fg.Kind = ckIndexed) or (APatches[LI].Cell.Fg.Kind = ckRgb) then
@@ -172,8 +179,10 @@ begin
         AnsiSgrBg(FOut, APatches[LI].Cell.Bg);
       if APatches[LI].Cell.Modifier <> [] then
         AnsiSgrModifierAdd(FOut, APatches[LI].Cell.Modifier);
-      FLastStyle[0] := LCellStyle[0];
-      FLastStyle[1] := LCellStyle[1];
+      FLastFg := APatches[LI].Cell.Fg;
+      FLastBg := APatches[LI].Cell.Bg;
+      FLastUl := APatches[LI].Cell.Ul;
+      FLastModifier := APatches[LI].Cell.Modifier;
       FLastInit := True;
     end;
 

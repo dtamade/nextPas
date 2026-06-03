@@ -23,6 +23,7 @@ interface
 uses
   SysUtils,
   nextpas.core.tui.base,
+  nextpas.core.tui.cap.base,
   nextpas.core.tui.error,
   nextpas.core.tui.cell,
   nextpas.core.tui.buffer,
@@ -66,6 +67,23 @@ type
     FrameId: Cardinal;
   end;
 
+  TTuiImageProtocolCapability = record
+    DetectedProtocol: TImageProtocol;
+    ActiveProtocol: TImageProtocol;
+    Status: TTuiCapabilityStatus;
+
+    class function Create(ADetectedProtocol, AActiveProtocol: TImageProtocol;
+      const AStatus: TTuiCapabilityStatus): TTuiImageProtocolCapability; static;
+  end;
+
+  TTuiTerminalCapabilityProfile = record
+    Truecolor: TTuiCapabilityStatus;
+    KittyKeyboard: TTuiCapabilityStatus;
+    ImageProtocol: TTuiImageProtocolCapability;
+
+    class function Default: TTuiTerminalCapabilityProfile; static;
+  end;
+
   TTerminal = class
   private
     FBackend: TAnsiBackend;
@@ -86,9 +104,7 @@ type
     FPrevMousePos: TPosition;
     FLastMousePos: TPosition;
     FHasMouseTracking: Boolean;
-    FHasTruecolor: Boolean;
-    FHasKittyKeyboard: Boolean;
-    FImageProtocol: TImageProtocol;
+    FCapabilityProfile: TTuiTerminalCapabilityProfile;
     FCellWidth: Word;
     FCellHeight: Word;
     FOptions: TTerminalOptions;
@@ -103,9 +119,16 @@ type
     procedure EnsureFrameRuntime(const AOperation: AnsiString);
     procedure EnsureEndFrameAllowed(const AFrame: TFrame);
     procedure ResizeBuffersTo(AWidth, AHeight: Word);
+    function GetHasTruecolor: Boolean; inline;
+    function GetHasKittyKeyboard: Boolean; inline;
+    function GetImageProtocol: TImageProtocol; inline;
   protected
     procedure DoLeaveTui; virtual;
   public
+    class function DetectCapabilityProfileFromHints(const AColorTerm,
+      ATermProgram, ATerm, ATermFeatures, AKittyWindowId: AnsiString)
+      : TTuiTerminalCapabilityProfile; static;
+
     constructor Create;
     destructor Destroy; override;
 
@@ -126,14 +149,16 @@ type
     procedure PromoteMousePos;
     procedure InjectInputBytesForTest(const ABytes: array of Byte);
     function PollQueuedEventForTest(AAtEOF: Boolean; out AEv: TEvent): Boolean;
+    procedure InitializeFrameRuntimeForTest(const AArea: TRect);
 
     property Capture: TPointerCapture read FCapture write FCapture;
     property Session: TInteractionSession read FSession write FSession;
     property PrevMousePos: TPosition read FPrevMousePos write FPrevMousePos;
     property HasMouseTracking: Boolean read FHasMouseTracking;
-    property HasTruecolor: Boolean read FHasTruecolor;
-    property HasKittyKeyboard: Boolean read FHasKittyKeyboard;
-    property ImageProtocol: TImageProtocol read FImageProtocol;
+    property HasTruecolor: Boolean read GetHasTruecolor;
+    property HasKittyKeyboard: Boolean read GetHasKittyKeyboard;
+    property ImageProtocol: TImageProtocol read GetImageProtocol;
+    property CapabilityProfile: TTuiTerminalCapabilityProfile read FCapabilityProfile;
     property CellWidth: Word read FCellWidth;
     property CellHeight: Word read FCellHeight;
     property Options: TTerminalOptions read FOptions write FOptions;
@@ -249,7 +274,64 @@ begin
   end;
 end;
 
+{ Capability profile }
+
+class function TTuiImageProtocolCapability.Create(ADetectedProtocol,
+  AActiveProtocol: TImageProtocol; const AStatus: TTuiCapabilityStatus)
+  : TTuiImageProtocolCapability;
+begin
+  Result.DetectedProtocol := ADetectedProtocol;
+  Result.ActiveProtocol := AActiveProtocol;
+  Result.Status := AStatus;
+end;
+
+class function TTuiTerminalCapabilityProfile.Default: TTuiTerminalCapabilityProfile;
+begin
+  Result.Truecolor := TTuiCapabilityStatus.Create(True, False, False, False,
+    'env-hint-missing');
+  Result.KittyKeyboard := TTuiCapabilityStatus.Create(True, False, False, False,
+    'env-hint-missing');
+  Result.ImageProtocol := TTuiImageProtocolCapability.Create(ipHalfBlock, ipHalfBlock,
+    TTuiCapabilityStatus.Create(True, False, False, False, 'half-block-fallback'));
+end;
+
 { TTerminal }
+
+class function TTerminal.DetectCapabilityProfileFromHints(const AColorTerm,
+  ATermProgram, ATerm, ATermFeatures, AKittyWindowId: AnsiString)
+  : TTuiTerminalCapabilityProfile;
+var
+  LImageProtocol: TImageProtocol;
+begin
+  Result := TTuiTerminalCapabilityProfile.Default;
+
+  if (AColorTerm = 'truecolor') or (AColorTerm = '24bit') then
+    Result.Truecolor := TTuiCapabilityStatus.Create(True, True, True, False, '')
+  else
+    Result.Truecolor := TTuiCapabilityStatus.Create(True, False, False, False,
+      'env-hint-missing');
+
+  if (Pos('kitty', ATermProgram) > 0) or (Pos('kitty', ATerm) > 0) or
+     (AKittyWindowId <> '') or
+     (Pos('WezTerm', ATermProgram) > 0) or
+     (Pos('ghostty', ATermProgram) > 0) then
+    Result.KittyKeyboard := TTuiCapabilityStatus.Create(True, True, False, False,
+      'session-negotiation-not-implemented')
+  else
+    Result.KittyKeyboard := TTuiCapabilityStatus.Create(True, False, False, False,
+      'env-hint-missing');
+
+  LImageProtocol := DetectImageProtocolFromHints(
+    ATerm, ATermProgram, ATermFeatures, AKittyWindowId);
+  if LImageProtocol = ipHalfBlock then
+    Result.ImageProtocol := TTuiImageProtocolCapability.Create(ipHalfBlock, ipHalfBlock,
+      TTuiCapabilityStatus.Create(True, False, False, False, 'half-block-fallback'))
+  else
+    Result.ImageProtocol := TTuiImageProtocolCapability.Create(
+      LImageProtocol,
+      LImageProtocol,
+      TTuiCapabilityStatus.Create(True, True, True, False, ''));
+end;
 
 constructor TTerminal.Create;
 begin
@@ -268,8 +350,7 @@ begin
   FCapture.Release;
   FSession.State := ssNone;
   FHasMouseTracking := False;
-  FHasTruecolor := False;
-  FHasKittyKeyboard := False;
+  FCapabilityProfile := TTuiTerminalCapabilityProfile.Default;
   FOptions := TTerminalOptions.Default;
   FActiveOptions := FOptions;
   SetLength(FInputQueue, 256);
@@ -382,7 +463,7 @@ function TTerminal.BeginFrame: TFrame;
 begin
   EnsureFrameRuntime('BeginFrame');
   FCurr.Reset;
-  FCurr.ImageProtocol := FImageProtocol;
+  FCurr.ImageProtocol := ImageProtocol;
   FOverlay.Clear;
   Inc(FFrameId);
   if FFrameId = 0 then Inc(FFrameId);
@@ -463,13 +544,30 @@ end;
 
 procedure TTerminal.DetectCapabilities;
 var
-  LCT, LTP: AnsiString;
+  LCT, LTP, LT, LTF, LKittyWindowId: AnsiString;
 begin
   LCT := GetEnvironmentVariable('COLORTERM');
   LTP := GetEnvironmentVariable('TERM_PROGRAM');
-  FHasTruecolor := (LCT = 'truecolor') or (LCT = '24bit');
-  FHasKittyKeyboard := (Pos('kitty', LTP) > 0) or (Pos('WezTerm', LTP) > 0) or (Pos('ghostty', LTP) > 0);
-  FImageProtocol := DetectImageProtocol;
+  LT := GetEnvironmentVariable('TERM');
+  LTF := GetEnvironmentVariable('TERM_FEATURES');
+  LKittyWindowId := GetEnvironmentVariable('KITTY_WINDOW_ID');
+  FCapabilityProfile := DetectCapabilityProfileFromHints(
+    LCT, LTP, LT, LTF, LKittyWindowId);
+end;
+
+function TTerminal.GetHasTruecolor: Boolean;
+begin
+  Result := FCapabilityProfile.Truecolor.Active;
+end;
+
+function TTerminal.GetHasKittyKeyboard: Boolean;
+begin
+  Result := FCapabilityProfile.KittyKeyboard.Active;
+end;
+
+function TTerminal.GetImageProtocol: TImageProtocol;
+begin
+  Result := FCapabilityProfile.ImageProtocol.ActiveProtocol;
 end;
 
 procedure TTerminal.ResizeBuffersTo(AWidth, AHeight: Word);
@@ -562,6 +660,8 @@ begin
       prSuccess:
         begin
           DropInputBytes(LConsumed);
+          if IsNone(AEv) then
+            Continue;
           Result := True;
           Exit;
         end;
@@ -595,6 +695,33 @@ var
 begin
   Result := TryParseQueuedEvent(AAtEOF, True, AEv, LNeedMore);
   if Result then PostProcessEvent(AEv);
+end;
+
+procedure TTerminal.InitializeFrameRuntimeForTest(const AArea: TRect);
+begin
+  if FInRawMode then
+    DoLeaveTui;
+  if FOverlay <> nil then begin FOverlay.Free; FOverlay := nil; end;
+  if FMerged <> nil then begin FMerged.Free; FMerged := nil; end;
+  if FCurr <> nil then begin FCurr.Free; FCurr := nil; end;
+  if FPrev <> nil then begin FPrev.Free; FPrev := nil; end;
+  if FBackend <> nil then begin FBackend.Free; FBackend := nil; end;
+
+  FBackend := TAnsiBackend.Create(-1);
+  FPrev := TBuffer.CreateEmpty(AArea);
+  FCurr := TBuffer.CreateEmpty(AArea);
+  FMerged := TBuffer.CreateEmpty(AArea);
+  FOverlay := TOverlayBuffer.Create(AArea);
+  FCapabilityProfile := TTuiTerminalCapabilityProfile.Default;
+  FActiveOptions := FOptions;
+  FFrameActive := False;
+  FFrameId := 0;
+  FInRawMode := True;
+  FRawModeCaptured := False;
+  FShouldQuit := False;
+  FHasMouseTracking := False;
+  FCellWidth := 0;
+  FCellHeight := 0;
 end;
 
 procedure TTerminal.PromoteMousePos;

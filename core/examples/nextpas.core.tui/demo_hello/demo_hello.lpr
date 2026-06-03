@@ -3,58 +3,37 @@ program demo_hello;
 {$I nextpas.core.settings.inc}
 
 uses
-  nextpas.core.tui.base,
-  nextpas.core.tui.color,
-  nextpas.core.tui.style,
-  nextpas.core.tui.buffer,
-  nextpas.core.tui.borders,
-  nextpas.core.tui.layout,
-  nextpas.core.tui.terminal,
-  nextpas.core.tui.event,
-  nextpas.core.tui.widget.block,
-  nextpas.core.tui.widget.paragraph,
-  nextpas.core.tui.text;
+  nextpas.core.tui.ext;
 
-var
-  Term: TTerminal;
-  Frame: TFrame;
-  Ev: TEvent;
-  Block: IBlock;
-  Para: IParagraph;
-
-begin
-  Term := TTerminal.Create;
-  if not Term.EnterTui then
-  begin
-    WriteLn('Not a terminal');
-    Term.Free;
-    Halt(1);
+type
+  THelloScreen = class(TScreen)
+  public
+    procedure Render(const AArea: TRect; ABuffer: TBuffer); override;
+    procedure HandleEvent(const Ev: TEvent); override;
   end;
 
-  Block := TBlock.New
-    .WithBorders(BORDERS_ALL)
-    .WithTitle('nextpas.core.tui')
-    .WithBorderStyle(StyleDefault.WithFg(TUI_CYAN));
+procedure THelloScreen.Render(const AArea: TRect; ABuffer: TBuffer);
+begin
+  ABuffer.SetString(0, 0, 'Hello from nextpas.core.tui.ext!', StyleDefault);
+  ABuffer.SetString(0, 2, 'This demo uses TApp + TScreen.', StyleDefault);
+  ABuffer.SetString(0, 4, 'Press Q or Esc to quit.', StyleDefault);
+end;
 
-  Para := TParagraph.New(TText.FromString(
-    'Hello from nextpas.core.tui!'#10 +
-    ''#10 +
-    'Press Q or Esc to quit.'))
-    .WithBlock(Block);
+procedure THelloScreen.HandleEvent(const Ev: TEvent);
+begin
+  if IsQuit(Ev) then
+    Stack.RequestQuit;
+end;
 
-  repeat
-    Frame := Term.BeginFrame;
-    Para.Render(Frame.Area, Frame.Buffer);
-    Term.EndFrame(Frame);
+var
+  App: TApp;
 
-    Ev := Term.PollEvent(100);
-    if Ev.Kind = evKey then
-    begin
-      if (Ev.Key.Code = kcEsc) then Break;
-      if (Ev.Key.Code = kcChar) and (Ev.Key.Ch = Ord('q')) then Break;
-    end;
-  until Term.ShouldQuit;
-
-  Term.LeaveTui;
-  Term.Free;
+begin
+  App := TApp.Create;
+  try
+    App.Screens.Push(THelloScreen.Create);
+    App.Run;
+  finally
+    App.Free;
+  end;
 end.
