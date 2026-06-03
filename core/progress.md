@@ -2,7 +2,7 @@
 
 ## Session: 2026-06-03 HTTP fixed-length keep-alive tail
 
-- **Status:** in_progress
+- **Status:** complete
 - **Scope:** add parser/security focused proof that a keep-alive `Content-Length` request completes first and isolates its garbage tail as a follow-up malformed request.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
@@ -15,7 +15,7 @@
   - [x] Determined this batch is direct GREEN coverage expansion, not a production bugfix.
   - [x] Updated HTTP route-tracking docs and batch control files.
   - [x] Run HTTP aggregate verification and diff hygiene.
-  - [ ] Commit this batch with path-limited staging only.
+  - [x] Commit this batch with path-limited staging only.
 
 ## Baseline Evidence
 
@@ -36,4 +36,4 @@
 ## Notes
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
-- The remaining work is procedural closeout: path-limited commit plus the round report.
+- This batch closed as coverage expansion for fixed-length keep-alive tail truth, not as a production fix.
