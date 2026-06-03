@@ -2872,7 +2872,13 @@ begin
               (CurrentToken(ALexer, ACursor).Kind = tkColon) then
             begin
               Inc(ACursor);
-              ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+              TypeNode := ParseTypeReference(
+                ALexer,
+                ACursor,
+                ADiagnostics,
+                ARootFileId
+              );
+              TypeNode.Free;
             end;
             while (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind <> tkSemicolon) and
@@ -4177,7 +4183,13 @@ var
               (CurrentToken(ALexer, ACursor).Kind = tkColon) then
             begin
               Inc(ACursor);
-              ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+              RHS := ParseTypeReference(
+                ALexer,
+                ACursor,
+                ADiagnostics,
+                ARootFileId
+              );
+              RHS.Free;
             end;
             if (ACursor < ALexer.TokenCount) and
               (CurrentToken(ALexer, ACursor).Kind = tkAssign) then
