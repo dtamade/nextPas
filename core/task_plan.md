@@ -9,6 +9,7 @@
 - `WriteTimeout > 0` 时 session 确实会设置 write deadline
 - timeout 发生在首个响应写出前时，不会补写 synthetic `500`
 - timeout 发生在部分字节已写出后时，session 会安全停止，且不再消费同连接后续 pipelined request
+- real socket stalled-peer/backpressure 下，连接会在放宽观察窗口内安全关闭，且不会消费后续 pipelined request
 
 ## Checklist
 
@@ -23,10 +24,15 @@
 - [x] 补 `test_http_server` focused proof：
   - timeout before any wire bytes: no synthetic `500`
   - partial-write timeout: safe-stop + no later pipelined request consumption
+- [x] 补 `test_http_server` real-socket stalled-peer proof：
+  - backpressure 下首个响应开始后会安全停会话
+  - 不追加 synthetic `500`
+  - 不消费后续 pipelined request
+- [x] 用隔离 worktree 对比当前测试在“带/不带 `src/nextpas.core.net.tcp.pas` patch”两种状态下的结果，确认是否真的需要生产修复。
 - [x] 运行 focused 验证：
   - `make -C tests/nextpas.core.http/test_http_server clean test`
 - [x] 更新 `docs/http/API_COVERAGE.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- [ ] 做 path-limited staging / commit，并输出中文收尾报告。
+- [x] 做 path-limited staging / commit，并输出中文收尾报告。
 
 ## Current Status
 
@@ -36,6 +42,7 @@
   `docs/http/ARCHITECTURE.md` 是 HTTP 侧架构入口，
   `docs/plans/2026-06-03-http-server-runtime-foundation.md` 保留原始决策记录。
 - 当前没有证据要求改生产代码；先把 timeout/backpressure 安全语义做成 focused proof。
+- isolated worktree 对比已经证明：real-socket proof 不要求 `src/nextpas.core.net.tcp.pas` 生产变更，这批应收口为纯测试/控制面提交。
 
 ## Out of Scope
 
