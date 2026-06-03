@@ -9,6 +9,7 @@ program test_http_contract;
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.io.intf,
   nextpas.core.net,
@@ -618,6 +619,36 @@ begin
   Check(LHijacker = nil, 'IHttpHijacker type is available through facade');
 end;
 
+procedure TestHttpServerRejectsNilHandler;
+var
+  LOptions: THttpServerOptions;
+  LRaised: Boolean;
+  LHandler: IHttpHandler;
+  LServer: IHttpServer;
+begin
+  LOptions := THttpServerOptions.Default;
+  LHandler := nil;
+
+  LRaised := False;
+  try
+    THttpServer.Create(LHandler, LOptions).Free;
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'THttpServer.Create rejects nil handler');
+
+  LRaised := False;
+  try
+    LServer := NewHttpServer(LHandler);
+    LServer := nil;
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'NewHttpServer rejects nil handler');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
@@ -642,5 +673,6 @@ begin
   T.Run('IHttpTransport RoundTrip contract shape', @TestHttpTransportRoundTripContract);
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
+  T.Run('HttpServer rejects nil handler', @TestHttpServerRejectsNilHandler);
   T.Summary;
 end.

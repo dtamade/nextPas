@@ -50,6 +50,7 @@ function NewHttpServer(const AHandler: IHttpHandler;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.http.impl.registry;
 
 type
@@ -87,6 +88,8 @@ end;
 constructor THttpServer.Create(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport; const AOptions: THttpServerOptions);
 begin
+  if AHandler = nil then
+    raise EArgumentError.Create('http server handler must not be nil');
   inherited Create;
   FHandler := AHandler;
   FOptions := AOptions;
@@ -100,7 +103,7 @@ end;
 
 destructor THttpServer.Destroy;
 begin
-  if IsRunning then
+  if (FTcpServer <> nil) and IsRunning then
     Shutdown;
   FConnHandler := nil;
   FTcpServer := nil;
@@ -116,17 +119,21 @@ end;
 
 procedure THttpServer.Shutdown;
 begin
-  FTcpServer.Shutdown;
+  if FTcpServer <> nil then
+    FTcpServer.Shutdown;
 end;
 
 function THttpServer.LocalAddr: TNetAddress;
 begin
-  Result := FTcpServer.LocalAddr;
+  if FTcpServer <> nil then
+    Result := FTcpServer.LocalAddr
+  else
+    Result := TNetAddress.Any(0);
 end;
 
 function THttpServer.IsRunning: Boolean;
 begin
-  Result := FTcpServer.IsRunning;
+  Result := (FTcpServer <> nil) and FTcpServer.IsRunning;
 end;
 
 { Factory functions }

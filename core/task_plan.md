@@ -1,14 +1,18 @@
-# Task Plan: HTTP server runtime foundation implementation batch 2
+# Task Plan: HTTP server correctness hardening batch 3
 
 ## Goal
 
-在已落地的 `nextpas.core.net.server` threaded foundation 上继续做 correctness
-收口，优先补齐 runtime 稳定性与 public transport contract 的边角。
+继续收紧 `HttpServer` 的 public contract 与 runtime correctness，优先补齐：
+
+- `HttpServer` public constructor/factory 的 fail-fast 输入校验
+- chunked ingress `MaxBodySize` 的越线即拒绝语义
+- hijack 后异常路径的 ownership contract proof
+- threaded foundation 在 wildcard / empty listen addr 下的 shutdown proof
 
 ## Checklist
 
-- [x] 用 focused RED 锁定 threaded runtime 的 handler 异常隔离语义。
-- [x] 修复 detached worker / inline fallback 在 handler 异常下不会打穿 accept loop。
-- [x] 让 `IHttpServerTransport` 的 ownership 类型/常量可经由 `nextpas.core.http`
-  facade 直接消费，不必额外 `uses nextpas.core.net.server`。
+- [x] 用 focused RED 锁定 `nil` handler 必须抛 `EArgumentError`。
+- [x] 用 focused RED 锁定 chunked body 超限后不必等待 terminal chunk 即返回 `413`。
+- [x] 证明 hijack 后 handler 再抛异常时，server 不补写 `500` 且不回收连接。
+- [x] 为 `net.server.threaded` 补 wildcard / empty listen addr shutdown proof。
 - [x] 跑 changed-surface focused tests，并确认 heaptrc 无泄漏。

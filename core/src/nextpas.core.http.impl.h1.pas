@@ -348,6 +348,14 @@ begin
           FKeepAlive := False;
           Break;
         end;
+        if (FOptions.MaxBodySize > 0) and
+           (FParser.GetBodySize > FOptions.MaxBodySize) then
+        begin
+          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+          LRejected := True;
+          FKeepAlive := False;
+          Break;
+        end;
       until FParser.IsComplete or FParser.HasError;
 
       if LRejected then

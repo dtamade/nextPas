@@ -307,6 +307,66 @@ begin
   platform_thread_join(LHandle, LRet);
 end;
 
+procedure TestThreadedServerShutdownWithWildcardListen;
+var
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LRet: Pointer;
+begin
+  LServer := NewTcpServer(TTcpServerOptions.Default);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := TEchoHandler.Create;
+  LCtx^.Addr := '0.0.0.0';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LServer.IsRunning, 'wildcard listener started');
+  Check(LServer.LocalAddr.Port > 0, 'wildcard listener exposes bound port');
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+  Check(not LServer.IsRunning, 'wildcard listener stopped after shutdown');
+end;
+
+procedure TestThreadedServerShutdownWithEmptyListenAddr;
+var
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LRet: Pointer;
+begin
+  LServer := NewTcpServer(TTcpServerOptions.Default);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := TEchoHandler.Create;
+  LCtx^.Addr := '';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LServer.IsRunning, 'empty-addr listener started');
+  Check(LServer.LocalAddr.Port > 0, 'empty-addr listener exposes bound port');
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+  Check(not LServer.IsRunning, 'empty-addr listener stopped after shutdown');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net.server');
   T.Run('Default options', @TestDefaultOptions);
@@ -315,5 +375,9 @@ begin
   T.Run('Threaded server detach keeps connection open', @TestThreadedServerDetachKeepsConnectionOpen);
   T.Run('Threaded server handler exception does not stop accept loop',
     @TestThreadedServerHandlerExceptionDoesNotStopAcceptLoop);
+  T.Run('Threaded server shutdown with wildcard listen',
+    @TestThreadedServerShutdownWithWildcardListen);
+  T.Run('Threaded server shutdown with empty listen addr',
+    @TestThreadedServerShutdownWithEmptyListenAddr);
   T.Summary;
 end.

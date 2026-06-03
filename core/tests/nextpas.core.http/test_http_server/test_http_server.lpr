@@ -2314,6 +2314,65 @@ begin
   end;
 end;
 
+procedure TestChunkedRequestMaxBodySizeRejectsBeforeTerminalChunk;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LOpts: THttpServerOptions;
+  LChunk1: string;
+  LChunk2: string;
+  LReq: string;
+  LChunkHex1: string;
+  LChunkHex2: string;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    SetLength(LChunk1, 700);
+    FillChar(LChunk1[1], 700, Ord('B'));
+    SetLength(LChunk2, 700);
+    FillChar(LChunk2[1], 700, Ord('C'));
+    LChunkHex1 := IntToHex(Length(LChunk1), 1);
+    LChunkHex2 := IntToHex(Length(LChunk2), 1);
+    LReq := 'POST / HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Transfer-Encoding: chunked'#13#10 +
+      'Connection: keep-alive'#13#10#13#10 +
+      LChunkHex1 + #13#10 +
+      LChunk1 + #13#10 +
+      LChunkHex2 + #13#10 +
+      LChunk2 + #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(500)));
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 413', LResp) > 0,
+        'chunked request over limit rejects before terminal chunk');
+      Check(not LHandlerCalled,
+        'chunked request over limit before terminal chunk does not reach handler');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestMalformedChunkedRequestInvalidChunkSize;
 var
   LRouter: THttpRouter;
@@ -3684,6 +3743,75 @@ begin
   end;
 end;
 
+procedure TestHijackExceptionDoesNotWrite500OrCloseHandlerConnection;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LServerSideConn: ITcpStream;
+  LHijacker: IHttpHijacker;
+  LResp: string;
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+  LProbe: string;
+const
+  REQ = 'GET /hijack-crash HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Connection: keep-alive'#13#10#13#10;
+  RAW_RESP = 'HTTP/1.1 200 OK'#13#10 +
+             'content-length: 7'#13#10 +
+             'connection: keep-alive'#13#10#13#10 +
+             'hijack!';
+begin
+  LServerSideConn := nil;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/hijack-crash', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    if not Supports(AW, IHttpHijacker, LHijacker) then
+      Fail('response writer does not support IHttpHijacker');
+    LServerSideConn := LHijacker.Hijack;
+    LServerSideConn.Write(RAW_RESP[1], SizeUInt(Length(RAW_RESP)));
+    raise Exception.Create('crash after hijack');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('hijack!', LResp) > 0, 'hijack-crash owner wrote raw response');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(200)));
+      try
+        LN := LConn.Read(LBuf[0], 1);
+      except
+        LN := 0;
+      end;
+      CheckEqual(Int64(0), Int64(LN),
+        'server does not append 500 after hijack exception');
+
+      platform_thread_sleep_ns(100000000);
+      Check(LServerSideConn <> nil, 'handler captured hijacked connection after exception');
+      LProbe := '?';
+      LServerSideConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(1)));
+      LConn.Write(LProbe[1], SizeUInt(Length(LProbe)));
+      LN := LServerSideConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+      CheckEqual(Int64(Length(LProbe)), Int64(LN),
+        'handler-owned stream stays readable after hijack exception');
+      Check(Chr(LBuf[0]) = LProbe,
+        'handler-owned stream received probe after hijack exception');
+    finally
+      LConn.Close;
+      LServerSideConn := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Main }
 
 begin
@@ -3742,6 +3870,8 @@ begin
   T.Run('Content-Length request truncated at EOF -> 400', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body readable', @TestChunkedRequestBodyReadable);
   T.Run('Chunked request MaxBodySize -> 413', @TestChunkedRequestMaxBodySize);
+  T.Run('Chunked request MaxBodySize rejects before terminal chunk',
+    @TestChunkedRequestMaxBodySizeRejectsBeforeTerminalChunk);
   T.Run('Malformed chunked request invalid size -> 400', @TestMalformedChunkedRequestInvalidChunkSize);
   T.Run('Malformed chunked request malformed chunk extension -> 400', @TestMalformedChunkedRequestMalformedChunkExtension);
   T.Run('Malformed chunked request truncated chunk extension at EOF -> 400', @TestMalformedChunkedRequestTruncatedChunkExtensionAtEof);
@@ -3793,5 +3923,7 @@ begin
   T.Run('Chunked response (no Content-Length)', @TestChunkedResponse);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
+  T.Run('Hijack exception does not write 500 or close handler connection',
+    @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnection);
   T.Summary;
 end.
