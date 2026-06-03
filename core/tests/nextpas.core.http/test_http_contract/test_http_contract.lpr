@@ -732,6 +732,9 @@ end;
 procedure TestHttpStatusText;
 begin
   CheckEqual('Continue', HttpStatusText(HTTP_STATUS_CONTINUE), '100');
+  CheckEqual('Switching Protocols',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_SWITCHING_PROTOCOLS), '101 facade');
   CheckEqual('OK', HttpStatusText(HTTP_STATUS_OK), '200');
   CheckEqual('Created', HttpStatusText(HTTP_STATUS_CREATED), '201');
   CheckEqual('Not Found', HttpStatusText(HTTP_STATUS_NOT_FOUND), '404');
