@@ -24,10 +24,35 @@ uses
   nextpas.core.http.server,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.platform.socket,
   nextpas.core.platform.thread;
 
 var
   T: TTestRunner;
+
+const
+{$IFDEF NEXTPAS_LINUX}
+  TEST_SOCKET_SO_RCVBUF = 8;
+  TEST_SOCKET_SO_SNDBUF = 7;
+{$ELSE}
+  {$IFDEF NEXTPAS_DARWIN}
+  TEST_SOCKET_SO_RCVBUF = $1002;
+  TEST_SOCKET_SO_SNDBUF = $1001;
+  {$ELSE}
+    {$IFDEF NEXTPAS_FREEBSD}
+  TEST_SOCKET_SO_RCVBUF = $1002;
+  TEST_SOCKET_SO_SNDBUF = $1001;
+    {$ELSE}
+      {$IFDEF NEXTPAS_WINDOWS}
+  TEST_SOCKET_SO_RCVBUF = $1002;
+  TEST_SOCKET_SO_SNDBUF = $1001;
+      {$ELSE}
+  TEST_SOCKET_SO_RCVBUF = 8;
+  TEST_SOCKET_SO_SNDBUF = 7;
+      {$ENDIF}
+    {$ENDIF}
+  {$ENDIF}
+{$ENDIF}
 
 type
   PServerCtx = ^TServerCtx;
@@ -104,6 +129,21 @@ type
     property WriteCalls: Int32 read FWriteCalls;
     property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
     property WriteDeadlineCalls: Int32 read FWriteDeadlineCalls;
+  end;
+
+  TSocketTuningServerTransport = class(TInterfacedObject, IHttpServerTransport,
+    IHttpServerSessionFactory)
+  private
+    FInner: IHttpServerTransport;
+    FSendBufferBytes: Int32;
+    procedure TuneConn(const AConn: ITcpStream);
+  public
+    constructor Create(const AInner: IHttpServerTransport;
+      const ASendBufferBytes: Int32);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): ITcpServerSession;
   end;
 
 constructor TZeroProgressTcpStream.Create(const AInput: string);
@@ -321,6 +361,54 @@ begin
   Inc(FWriteDeadlineCalls);
 end;
 
+constructor TSocketTuningServerTransport.Create(const AInner: IHttpServerTransport;
+  const ASendBufferBytes: Int32);
+begin
+  inherited Create;
+  FInner := AInner;
+  FSendBufferBytes := ASendBufferBytes;
+end;
+
+procedure TSocketTuningServerTransport.TuneConn(const AConn: ITcpStream);
+var
+  LRuntime: ITcpSocketRuntime;
+  LSocket: TPlatformSocket;
+  LSize: Int32;
+begin
+  if FSendBufferBytes <= 0 then
+    Exit;
+  if not Supports(AConn, ITcpSocketRuntime, LRuntime) then
+    Exit;
+  LSocket := PLATFORM_INVALID_SOCKET;
+{$IFDEF NEXTPAS_WINDOWS}
+  LSocket.Value := LRuntime.NativeSocketHandle;
+{$ELSE}
+  LSocket.Value := Int32(LRuntime.NativeSocketHandle);
+{$ENDIF}
+  LSize := FSendBufferBytes;
+  if platform_socket_setsockopt(LSocket, PLATFORM_SOL_SOCKET, TEST_SOCKET_SO_SNDBUF,
+       @LSize, SizeOf(LSize)) <> 0 then
+    raise EIOError.Create('server send buffer tuning failed');
+end;
+
+function TSocketTuningServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
+begin
+  TuneConn(AConn);
+  Result := FInner.ServeConn(AConn, AHandler);
+end;
+
+function TSocketTuningServerTransport.NewSession(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): ITcpServerSession;
+var
+  LFactory: IHttpServerSessionFactory;
+begin
+  TuneConn(AConn);
+  if not Supports(FInner, IHttpServerSessionFactory, LFactory) then
+    raise EInvalidOperationError.Create('inner transport does not expose session factory');
+  Result := LFactory.NewSession(AConn, AHandler);
+end;
+
 function DefaultH1ServerTransportOptions(
   const AHttpOptions: THttpServerOptions): TH1ServerTransportOptions;
 begin
@@ -390,6 +478,30 @@ begin
   Result := LHandle;
 end;
 
+function StartServerWithTransportAndOptions(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport; const AOptions: THttpServerOptions;
+  out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
+var
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+begin
+  AServer := THttpServer.Create(AHandler, ATransport, AOptions);
+  New(LCtx);
+  LCtx^.Server := AServer;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+  LWait := 0;
+  while (not AServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+  APort := AServer.LocalAddr.Port;
+  Result := LHandle;
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 function StartEpollServer(const AHandler: IHttpHandler; out AServer: THttpServer;
   out APort: UInt16): TPlatformThreadHandle;
@@ -410,6 +522,61 @@ begin
   platform_thread_join(AHandle, LRet);
   AServer.Free;
   AServer := nil;
+end;
+
+function SocketFromRuntime(const ARuntime: ITcpSocketRuntime): TPlatformSocket;
+begin
+  Result := PLATFORM_INVALID_SOCKET;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result.Value := ARuntime.NativeSocketHandle;
+{$ELSE}
+  Result.Value := Int32(ARuntime.NativeSocketHandle);
+{$ENDIF}
+end;
+
+procedure SetSocketRecvBuffer(const AConn: ITcpStream; const ASize: Int32);
+var
+  LRuntime: ITcpSocketRuntime;
+  LSocket: TPlatformSocket;
+  LSize: Int32;
+begin
+  Check(Supports(AConn, ITcpSocketRuntime, LRuntime),
+    'tcp stream exposes runtime socket control for recvbuf tuning');
+  LSocket := SocketFromRuntime(LRuntime);
+  LSize := ASize;
+  CheckEqual(Int64(0), Int64(platform_socket_setsockopt(LSocket,
+    PLATFORM_SOL_SOCKET, TEST_SOCKET_SO_RCVBUF, @LSize, SizeOf(LSize))),
+    'recv buffer tuning succeeds');
+end;
+
+function ReadUntilClosedOrDeadline(const AConn: ITcpStream;
+  const AReadTimeoutMs: Int64; out AClosed: Boolean; out ATimedOut: Boolean): string;
+var
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  AClosed := False;
+  ATimedOut := False;
+  AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(AReadTimeoutMs)));
+  repeat
+    try
+      LN := AConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    except
+      on ENetworkError do
+      begin
+        ATimedOut := True;
+        Break;
+      end;
+    end;
+    if LN = 0 then
+    begin
+      AClosed := True;
+      Break;
+    end;
+    SetLength(Result, Length(Result) + Int32(LN));
+    Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+  until False;
 end;
 
 function SendRawRequest(const APort: UInt16; const ARequest: string): string;
@@ -879,6 +1046,111 @@ begin
     'partial timeout preserves only already-written bytes');
   Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
     'partial timeout does not append synthetic 500 after partial response bytes');
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureStopsPipeline;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LTransport: IHttpServerTransport;
+  LH1Opts: TH1ServerTransportOptions;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+  LFirstCalls: Int32;
+  LSecondCalls: Int32;
+  LHttpOpts: THttpServerOptions;
+  LBodyChunk: string;
+  LTotalBodyLen: Int64;
+const
+  WRITE_TIMEOUT_MS = 50;
+  RECV_BUFFER_BYTES = 1024;
+  SEND_BUFFER_BYTES = 1024;
+  BACKPRESSURE_WAIT_NS = 500000000;
+  { Real TCP buffering can outlive the 50ms deadline; this window only proves eventual safe-close. }
+  CLOSE_WAIT_MS = 2000;
+  BODY_CHUNK_LEN = 8192;
+  BODY_CHUNK_COUNT = 2048; { 16 MiB total payload intent }
+  PIPELINED_REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /after HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10;
+begin
+  LFirstCalls := 0;
+  LSecondCalls := 0;
+  SetLength(LBodyChunk, BODY_CHUNK_LEN);
+  FillChar(LBodyChunk[1], BODY_CHUNK_LEN, Ord('a'));
+  LTotalBodyLen := Int64(BODY_CHUNK_LEN) * BODY_CHUNK_COUNT;
+
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/block', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LI: Int32;
+  begin
+    Inc(LFirstCalls);
+    AW.GetHeaders.Set_('content-length', IntToStr(LTotalBodyLen));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    for LI := 1 to BODY_CHUNK_COUNT do
+      AW.Write(LBodyChunk[1], SizeUInt(Length(LBodyChunk)));
+  end);
+  LRouter.Get('/after', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    Inc(LSecondCalls);
+    LBody := 'after';
+    AW.GetHeaders.Set_('content-length', '5');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 5);
+  end);
+
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+  LTransport := TSocketTuningServerTransport.Create(
+    NewH1ServerTransport(LH1Opts), SEND_BUFFER_BYTES);
+  LHandle := StartServerWithTransportAndOptions(LRouter as IHttpHandler,
+    LTransport, LHttpOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      SetSocketRecvBuffer(LConn, RECV_BUFFER_BYTES);
+      LConn.Write(PIPELINED_REQ[1], SizeUInt(Length(PIPELINED_REQ)));
+      platform_thread_sleep_ns(BACKPRESSURE_WAIT_NS);
+
+      LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
+
+      Check(LClosed,
+        'real socket backpressure path closes connection after write timeout' +
+        ' (timedOut=' + BoolToStr(LTimedOut) +
+        ', respLen=' + IntToStr(Int64(Length(LResp))) +
+        ', firstCalls=' + IntToStr(Int64(LFirstCalls)) +
+        ', secondCalls=' + IntToStr(Int64(LSecondCalls)) + ')');
+      Check(not LTimedOut,
+        'real socket backpressure path does not stay open past the close wait' +
+        ' (respLen=' + IntToStr(Int64(Length(LResp))) +
+        ', firstCalls=' + IntToStr(Int64(LFirstCalls)) +
+        ', secondCalls=' + IntToStr(Int64(LSecondCalls)) + ')');
+      CheckEqual(Int64(1), Int64(LFirstCalls),
+        'real socket backpressure handles the first request once');
+      CheckEqual(Int64(0), Int64(LSecondCalls),
+        'real socket backpressure does not process later pipelined requests');
+      Check(Pos('HTTP/1.1 500', LResp) = 0,
+        'real socket backpressure does not append synthetic 500');
+      Check(Pos('after', LResp) = 0,
+        'real socket backpressure does not emit the second response body');
+      Check(Pos('HTTP/1.1 200', LResp) > 0,
+        'real socket backpressure still begins the first response before timing out');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
 end;
 
 { Test 5: Shutdown stops accepting }
@@ -5686,6 +5958,8 @@ begin
     @TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500);
   T.Run('Write timeout after partial wire bytes stops pipeline without 500',
     @TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500);
+  T.Run('Real socket write timeout backpressure stops pipeline',
+    @TestRealSocketWriteTimeoutBackpressureStopsPipeline);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
