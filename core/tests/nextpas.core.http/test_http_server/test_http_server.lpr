@@ -2671,7 +2671,9 @@ begin
   RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400('epoll', LHttpOpts);
 end;
 
-procedure RunEpollRealSocketQueuedFollowUp400PreservesWireOrder;
+procedure RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
+  const ALabel, ARequest, AExpectedStatusLine: string;
+  const AMaxHeaderSize: Int32; const AMaxBodySize: Int64);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -2698,17 +2700,11 @@ const
   CLOSE_WAIT_MS = 5000;
   BODY_CHUNK_LEN = 8192;
   BODY_CHUNK_COUNT = 8;
-  PIPELINED_REQ =
-    'GET /block HTTP/1.1'#13#10 +
-    'Host: localhost'#13#10#13#10 +
-    'POST /bad HTTP/1.1'#13#10 +
-    'Host: localhost'#13#10 +
-    'Content-Length: 1'#13#10 +
-    'Content-Length: 1'#13#10 +
-    'Connection: close'#13#10#13#10;
 begin
   LHttpOpts := THttpServerOptions.Default;
   LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHttpOpts.MaxHeaderSize := AMaxHeaderSize;
+  LHttpOpts.MaxBodySize := AMaxBodySize;
   LFirstCalls := 0;
   LBodyPrefix := 'queued-order-prefix:';
   SetLength(LBodyChunk, BODY_CHUNK_LEN);
@@ -2738,34 +2734,34 @@ begin
     LConn := TcpConnect('127.0.0.1', LPort);
     try
       SetSocketRecvBuffer(LConn, RECV_BUFFER_BYTES);
-      LConn.Write(PIPELINED_REQ[1], SizeUInt(Length(PIPELINED_REQ)));
+      LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
       platform_thread_sleep_ns(BACKPRESSURE_WAIT_NS);
 
       LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
 
       Check(LClosed,
-        'epoll queued follow-up 400 live path closes the connection' +
+        ALabel + ': closes the connection' +
         ' (timedOut=' + BoolToStr(LTimedOut) +
         ', respLen=' + IntToStr(Int64(Length(LResp))) + ')');
       Check(not LTimedOut,
-        'epoll queued follow-up 400 live path finishes within close window' +
+        ALabel + ': finishes within close window' +
         ' (respLen=' + IntToStr(Int64(Length(LResp))) + ')');
       CheckEqual(Int64(1), Int64(LFirstCalls),
-        'epoll queued follow-up 400 live path handles the first request once');
+        ALabel + ': handles the first request once');
       Check(Pos('HTTP/1.1 500', LResp) = 0,
-        'epoll queued follow-up 400 live path does not append synthetic 500');
+        ALabel + ': does not append synthetic 500');
       CheckEqual(Int64(2), Int64(CountSubstring(LResp, 'HTTP/1.1 ')),
-        'epoll queued follow-up 400 live path emits exactly two status lines');
+        ALabel + ': emits exactly two status lines');
 
       LFirstStatusPos := Pos('HTTP/1.1 200 OK', LResp);
       LFirstBodyPos := Pos(LBodyPrefix, LResp);
-      LFollowStatusPos := Pos('HTTP/1.1 400 Bad Request', LResp);
+      LFollowStatusPos := Pos(AExpectedStatusLine, LResp);
       Check(LFirstStatusPos > 0,
-        'epoll queued follow-up 400 live path emits the first 200 status line');
+        ALabel + ': emits the first 200 status line');
       Check(LFirstBodyPos > LFirstStatusPos,
-        'epoll queued follow-up 400 live path emits first response body bytes');
+        ALabel + ': emits first response body bytes');
       Check(LFollowStatusPos > LFirstBodyPos,
-        'epoll queued follow-up 400 live path keeps follow-up 400 behind the first response body');
+        ALabel + ': keeps follow-up error behind the first response body');
     finally
       LConn.Close;
     end;
@@ -2774,9 +2770,66 @@ begin
   end;
 end;
 
+procedure RunEpollRealSocketQueuedFollowUp400PreservesWireOrder;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /bad HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    'epoll queued follow-up 400 live path', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure RunEpollRealSocketQueuedFollowUp413PreservesWireOrder;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    'epoll queued follow-up 413 live path', REQ,
+    'HTTP/1.1 413 Payload Too Large', 0, 2);
+end;
+
+procedure RunEpollRealSocketQueuedFollowUp431PreservesWireOrder;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /too-many-headers HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'X-Long: 0123456789012345678901234567890123456789'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    'epoll queued follow-up 431 live path', REQ,
+    'HTTP/1.1 431 Request Header Fields Too Large', 64, 0);
+end;
+
 procedure TestEpollRealSocketQueuedFollowUp400PreservesWireOrder;
 begin
   RunEpollRealSocketQueuedFollowUp400PreservesWireOrder;
+end;
+
+procedure TestEpollRealSocketQueuedFollowUp413PreservesWireOrder;
+begin
+  RunEpollRealSocketQueuedFollowUp413PreservesWireOrder;
+end;
+
+procedure TestEpollRealSocketQueuedFollowUp431PreservesWireOrder;
+begin
+  RunEpollRealSocketQueuedFollowUp431PreservesWireOrder;
 end;
 {$ENDIF}
 
@@ -7614,6 +7667,10 @@ begin
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400EpollBackend);
   T.Run('Real socket queued follow-up 400 preserves wire order with epoll backend',
     @TestEpollRealSocketQueuedFollowUp400PreservesWireOrder);
+  T.Run('Real socket queued follow-up 413 preserves wire order with epoll backend',
+    @TestEpollRealSocketQueuedFollowUp413PreservesWireOrder);
+  T.Run('Real socket queued follow-up 431 preserves wire order with epoll backend',
+    @TestEpollRealSocketQueuedFollowUp431PreservesWireOrder);
 {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
