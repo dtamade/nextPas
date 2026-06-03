@@ -51,6 +51,7 @@ end;
 
 procedure TestHttpStatusText;
 begin
+  CheckEqual('Continue', HttpStatusText(100), '100');
   CheckEqual('OK', HttpStatusText(200), '200');
   CheckEqual('Created', HttpStatusText(201), '201');
   CheckEqual('No Content', HttpStatusText(204), '204');

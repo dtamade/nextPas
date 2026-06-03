@@ -3682,6 +3682,43 @@ begin
   end;
 end;
 
+{ Test 18c: HEAD response stays bodyless on the wire even if handler writes }
+procedure TestHeadResponseDoesNotUseChunkedEncodingOrWriteBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmHead, '/head-body', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LBody := 'hello';
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'HEAD /head-body HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200 OK', LResp) = 1,
+      'HEAD: status line present');
+    Check(Pos('transfer-encoding: chunked', LResp) = 0,
+      'HEAD: no chunked header');
+    Check(Pos('0'#13#10#13#10, LResp) = 0,
+      'HEAD: no chunk trailer');
+    Check(Pos('hello', LResp) = 0,
+      'HEAD: no body bytes on wire');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 19: Chunked response preserves keep-alive }
 procedure TestChunkedKeepAlive;
 var
@@ -3993,6 +4030,8 @@ begin
     @TestNoContentResponseDoesNotUseChunkedEncoding);
   T.Run('304 response does not use chunked encoding',
     @TestNotModifiedResponseDoesNotUseChunkedEncoding);
+  T.Run('HEAD response does not use chunked encoding or write body',
+    @TestHeadResponseDoesNotUseChunkedEncodingOrWriteBody);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
   T.Run('Hijack exception does not write 500 or close handler connection',

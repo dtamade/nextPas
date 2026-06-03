@@ -421,7 +421,8 @@ begin
         LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
       else
         LHijackConn := FConn;
-      LW := TH1ResponseWriter.Create(FBufWriter, LHijackConn);
+      LW := TH1ResponseWriter.Create(FBufWriter, LHijackConn,
+        LReq.Method = hmHead);
       if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
         LW.GetHeaders.Set_('connection', 'keep-alive');
       if not FKeepAlive then

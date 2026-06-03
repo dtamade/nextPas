@@ -1,32 +1,34 @@
-# Progress Log: HTTP no-body response contract hardening batch 9
+# Progress Log: process PATH resolution contract and child wait warning batch 11
 
 ## Session
 
-- **Scope:** 收紧 response-side no-body status contract，修正 `204/304` 的 bodyless framing 语义。
-- **Status:** completed
+- **Scope:** 收紧 `process` 的 PATH 搜索 contract，并清掉 `TChild.Wait` warning。
+- **Status:** in_progress
 
-## Notes
+## Baseline audit
 
-- `src/nextpas.core.http.impl.h1.writer.pas` 现在新增
-  `FNoBodyAllowed` 与 `ResponseMustNotHaveBody`，统一收口
-  `1xx` / `204` / `304` no-body status 判断。
-- `WriteHeader` 现在不会再给 no-body status 自动注入
-  `Transfer-Encoding: chunked`。
-- `Write` 现在会拒绝 no-body status 下的 body write，避免错误 response framing
-  从 helper 层继续向下扩散。
-- `test_http_h1writer` 现在直接证明：
-  `204/304` 不注入 chunked，`204` 后续 body write 会抛 `EHttpError`。
-- `test_http_server` 现在直接证明：
-  `204/304` raw-wire 响应不带 chunked header、不带强制 `Content-Length`，
-  也不写 terminal chunk。
+- 读过 `docs/design-conventions.md`、现有 `docs/plans/2026-05-31-process-final-polish.md`、
+  `task_plan.md` / `findings.md` / `progress.md`，确认需要切换控制文件到 `process` 当前批次。
+- 核对 `git status --short --branch`：
+  仓库有多处非本模块脏改动，本轮只允许 path-limited 修改与提交。
+- 发现 `tests/nextpas.core.platform.process/test_platform_process/test_platform_process.lpr`
+  已新增 duplicate `EnvAdd('PATH', ...)` final-view case，但这个 contract 更适合沉到
+  高层 `process` suite 固化。
 
-## Fresh verification
+## Fresh baseline verification
 
-- `make -C tests/nextpas.core.http/test_http_h1writer clean test`
-  - `18/18 passed`
+- `make -C tests/nextpas.core.platform.process/test_platform_process test`
+  - `13/13 passed`
   - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `85/85 passed`
-  - heaptrc: `0 unfreed memory blocks`
+  - 但编译阶段有 warning：
+    `nextpas.core.process.child.pas(143,18) Warning: Function result variable of a managed type does not seem to be initialized`
+- `make -C tests/nextpas.core.process/test_process test`
+  - `49 passed, 0 failed`
+  - 当前输出未见 leak
 
-- 上述命令就是本轮 changed-surface focused 验证入口；结果已在本文件固化。
+## Next execution slice
+
+- 先在 `test_process` 写一个真正的 RED：
+  PATH 前置同名不可执行文件时，仍应继续解析到后续可执行目标。
+- 同批把 duplicate `EnvAdd('PATH', ...)` final-view 行为放入高层 `process` suite。
+- 然后最小修改 `pathresolve` 与 `TChild.Wait`，再回跑 focused tests。

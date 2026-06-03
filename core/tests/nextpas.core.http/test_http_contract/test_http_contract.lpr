@@ -558,6 +558,7 @@ end;
 { Test 18: HttpStatusText known codes }
 procedure TestHttpStatusText;
 begin
+  CheckEqual('Continue', HttpStatusText(HTTP_STATUS_CONTINUE), '100');
   CheckEqual('OK', HttpStatusText(HTTP_STATUS_OK), '200');
   CheckEqual('Created', HttpStatusText(HTTP_STATUS_CREATED), '201');
   CheckEqual('Not Found', HttpStatusText(HTTP_STATUS_NOT_FOUND), '404');

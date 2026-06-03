@@ -391,6 +391,27 @@ begin
   LRW.Free;
 end;
 
+procedure TestInformationalResponseDoesNotInjectChunkedEncoding;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.WriteHeader(HTTP_STATUS_CONTINUE);
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('HTTP/1.1 100 Continue'#13#10, LOut) = 1, 'status 100 written');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0,
+    '100 does not inject chunked header');
+  Check(Pos('content-length:', LOut) = 0,
+    '100 does not force content-length');
+  Check(Pos('0'#13#10#13#10, LOut) = 0,
+    '100 does not write final chunk');
+  LRW.Free;
+end;
+
 procedure TestNoContentResponseRejectsBodyWrite;
 var
   LW: TBytesWriter;
@@ -413,6 +434,32 @@ begin
   end;
   Check(LRaised, '204 response rejects body write');
   CheckEqual(LBefore, LW.GetOutput, '204 body write does not append bytes');
+  LRW.Free;
+end;
+
+procedure TestSuppressBodyWriteDoesNotEmitBodyOrChunkedEncoding;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LBody: string;
+  LWritten: SizeUInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter, nil, True);
+  LBody := 'hello';
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  CheckEqual(Int64(Length(LBody)), Int64(LWritten),
+    'suppressed-body write reports consumed bytes');
+  Check(Pos('HTTP/1.1 200 OK'#13#10, LOut) = 1, 'suppressed-body status 200 written');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0,
+    'suppressed-body path does not inject chunked header');
+  Check(Pos('0'#13#10#13#10, LOut) = 0,
+    'suppressed-body path does not write final chunk');
+  Check(Pos('hello', LOut) = 0,
+    'suppressed-body path does not emit body bytes');
   LRW.Free;
 end;
 
@@ -516,8 +563,12 @@ begin
     @TestNoContentResponseDoesNotInjectChunkedEncoding);
   T.Run('304 response does not inject chunked encoding',
     @TestNotModifiedResponseDoesNotInjectChunkedEncoding);
+  T.Run('100 response does not inject chunked encoding',
+    @TestInformationalResponseDoesNotInjectChunkedEncoding);
   T.Run('204 response rejects body write',
     @TestNoContentResponseRejectsBodyWrite);
+  T.Run('Suppressed-body write does not emit body or chunked encoding',
+    @TestSuppressBodyWriteDoesNotEmitBodyOrChunkedEncoding);
   T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);

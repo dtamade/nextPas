@@ -55,6 +55,7 @@ type
   end;
 
 const
+  HTTP_STATUS_CONTINUE              = THttpStatus(100);
   TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
   TCP_SERVER_BACKEND_EPOLL = nextpas.core.net.server.base.tsbEpoll;
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
@@ -130,6 +131,7 @@ end;
 function HttpStatusText(const ACode: THttpStatus): string;
 begin
   case ACode of
+    100: Result := 'Continue';
     101: Result := 'Switching Protocols';
     200: Result := 'OK';
     201: Result := 'Created';

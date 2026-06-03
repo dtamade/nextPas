@@ -22,6 +22,7 @@ type
     FHijacked: Boolean;
     FFinalized: Boolean;
     FNoBodyAllowed: Boolean;
+    FSuppressBody: Boolean;
     procedure WriteStatusLine;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
@@ -30,6 +31,8 @@ type
   public
     constructor Create(const AWriter: IWriter); overload;
     constructor Create(const AWriter: IWriter; const AConn: ITcpStream); overload;
+    constructor Create(const AWriter: IWriter; const AConn: ITcpStream;
+      const ASuppressBody: Boolean); overload;
     procedure WriteHeader(const AStatus: THttpStatus);
     function GetStatus: THttpStatus;
     function GetHeaders: IHttpHeaders;
@@ -52,18 +55,16 @@ uses
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter);
 begin
-  inherited Create;
-  FWriter := AWriter;
-  FHeaders := NewHttpHeaders;
-  FHeadersSent := False;
-  FStatus := HTTP_STATUS_OK;
-  FConn := nil;
-  FHijacked := False;
-  FFinalized := False;
-  FNoBodyAllowed := False;
+  Create(AWriter, nil, False);
 end;
 
 constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream);
+begin
+  Create(AWriter, AConn, False);
+end;
+
+constructor TH1ResponseWriter.Create(const AWriter: IWriter; const AConn: ITcpStream;
+  const ASuppressBody: Boolean);
 begin
   inherited Create;
   FWriter := AWriter;
@@ -74,6 +75,7 @@ begin
   FHijacked := False;
   FFinalized := False;
   FNoBodyAllowed := False;
+  FSuppressBody := ASuppressBody;
 end;
 
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
@@ -123,6 +125,7 @@ begin
   FStatus := AStatus;
   FNoBodyAllowed := ResponseMustNotHaveBody;
   if (not FNoBodyAllowed) and
+     (not FSuppressBody) and
      (not FHeaders.Has('content-length')) and
      (not FHeaders.Has('transfer-encoding')) then
     FHeaders.Set_('transfer-encoding', 'chunked');
@@ -152,6 +155,8 @@ begin
     WriteHeader(HTTP_STATUS_OK);
   if FNoBodyAllowed then
     raise EHttpError.Create('response status must not include a body');
+  if FSuppressBody then
+    Exit(ACount);
   if FChunkedWriter <> nil then
     Result := FChunkedWriter.Write(ABuf, ACount)
   else
