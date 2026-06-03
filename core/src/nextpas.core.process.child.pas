@@ -140,7 +140,10 @@ var
   LDeadline: TInstant;
   LTs: TTimeSpec;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  Result.ExitCode := 0;
+  Result.Status := nextpas.core.process.base.psUnknown;
+  Result.StdOut := '';
+  Result.StdErr := '';
   if FStdinWriter <> nil then
     (FStdinWriter as TPipeWriter).Close;
   FStdinWriter := nil;

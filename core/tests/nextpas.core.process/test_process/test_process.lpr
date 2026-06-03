@@ -10,7 +10,8 @@ uses
   nextpas.core.process.child,
   nextpas.core.process.pipe,
   nextpas.core.process.command,
-  nextpas.core.io.intf;
+  nextpas.core.io.intf,
+  nextpas.core.platform.posix.ffi;
 
 var
   LPassed, LFailed: Integer;
@@ -405,6 +406,79 @@ begin
   Check('Env replace + PATH search — found echo', Pos('path search works', LOut.StdOut) > 0);
 end;
 
+procedure TestEnvReplaceSkipsNonExecutablePathShadow;
+var
+  LTempRoot, LShadowDir, LRealDir, LToolName: string;
+  LShadowPath, LRealPath: string;
+  LFile: TextFile;
+  LOut: TProcessOutput;
+  LRaised: Boolean;
+begin
+  LToolName := 'nextpas_process_path_shadow';
+  LTempRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-process-path-shadow-' + IntToStr(GetProcessID);
+  LShadowDir := IncludeTrailingPathDelimiter(LTempRoot) + 'shadow';
+  LRealDir := IncludeTrailingPathDelimiter(LTempRoot) + 'real';
+  LShadowPath := IncludeTrailingPathDelimiter(LShadowDir) + LToolName;
+  LRealPath := IncludeTrailingPathDelimiter(LRealDir) + LToolName;
+  if DirectoryExists(LTempRoot) then
+    RemoveDir(LTempRoot);
+  ForceDirectories(LShadowDir);
+  ForceDirectories(LRealDir);
+  try
+    AssignFile(LFile, LShadowPath);
+    Rewrite(LFile);
+    WriteLn(LFile, 'not executable');
+    CloseFile(LFile);
+
+    AssignFile(LFile, LRealPath);
+    Rewrite(LFile);
+    WriteLn(LFile, '#!/bin/sh');
+    WriteLn(LFile, 'printf shadow-resolved');
+    CloseFile(LFile);
+    nextpas.core.platform.posix.ffi.chmod(PAnsiChar(LRealPath), &755);
+
+    LRaised := False;
+    try
+      LOut := TCommand.New(LToolName)
+        .Env(['PATH=' + LShadowDir + ':' + LRealDir])
+        .Output;
+    except
+      on E: EProcessError do
+        LRaised := True;
+    end;
+
+    Check('Env replace + PATH skips non-executable shadow — no spawn error', not LRaised);
+    if not LRaised then
+      Check('Env replace + PATH skips non-executable shadow — found executable target',
+        Pos('shadow-resolved', LOut.StdOut) > 0);
+  finally
+    if FileExists(LShadowPath) then
+      DeleteFile(LShadowPath);
+    if FileExists(LRealPath) then
+      DeleteFile(LRealPath);
+    if DirectoryExists(LShadowDir) then
+      RemoveDir(LShadowDir);
+    if DirectoryExists(LRealDir) then
+      RemoveDir(LRealDir);
+    if DirectoryExists(LTempRoot) then
+      RemoveDir(LTempRoot);
+  end;
+end;
+
+procedure TestEnvAddDuplicatePathUsesFinalResolvedView;
+var LOut: TProcessOutput;
+begin
+  LOut := TCommand.New('echo')
+    .Args(['envadd-path-final-view'])
+    .EnvAdd('PATH', '/definitely_missing_nextpas_process')
+    .EnvAdd('PATH', '/bin:/usr/bin')
+    .Output;
+  Check('EnvAdd duplicate PATH final view — exit 0', LOut.ExitCode = 0);
+  Check('EnvAdd duplicate PATH final view — resolved from final PATH',
+    Pos('envadd-path-final-view', LOut.StdOut) > 0);
+end;
+
 
 procedure TestTimeout;
 var LOut: TProcessOutput; LStart: TInstant;
@@ -446,6 +520,8 @@ begin
   TestSpawnChdirFailRaisesException;
   TestEnvAddInheritsPath;
   TestEnvReplaceWithPathSearch;
+  TestEnvReplaceSkipsNonExecutablePathShadow;
+  TestEnvAddDuplicatePathUsesFinalResolvedView;
   TestTimeout;
   TestEnvAdd;
   TestStdinNull;

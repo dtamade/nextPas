@@ -5,6 +5,7 @@ program test_platform_process;
 uses
   nextpas.core.platform.process.base,
   nextpas.core.platform.process,
+  nextpas.core.process,
   nextpas.core.platform.posix.ffi,
   nextpas.core.testing;
 
@@ -226,6 +227,20 @@ begin
   Check((LBuf[0] = '/') and (LBuf[1] = 't') and (LBuf[2] = 'm') and (LBuf[3] = 'p'), 'cwd is /tmp');
 end;
 
+procedure TestCommandEnvAddDuplicatePathUsesFinalResolvedView;
+var
+  LOut: nextpas.core.process.TProcessOutput;
+begin
+  LOut := Command('echo')
+    .Args(['envadd-path-final-view'])
+    .EnvAdd('PATH', '/definitely_missing_nextpas_process')
+    .EnvAdd('PATH', '/bin:/usr/bin')
+    .Output;
+  Check(LOut.ExitCode = 0, 'EnvAdd duplicate PATH exit 0');
+  Check(Pos('envadd-path-final-view', LOut.StdOut) > 0,
+    'EnvAdd duplicate PATH resolves using final PATH view');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.process');
   T.Run('spawn /bin/true', @TestSpawnTrue);
@@ -240,5 +255,6 @@ begin
   T.Run('piped: write stdin', @TestSpawnPipedStdin);
   T.Run('run: capture output', @TestRun);
   T.Run('run: working directory', @TestRunCwd);
+  T.Run('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
   T.Summary;
 end.

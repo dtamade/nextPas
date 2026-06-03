@@ -27,8 +27,23 @@ function ResolveExecutablePath(const AName: string;
 implementation
 
 uses
-  nextpas.core.fs,
-  nextpas.core.text.compare;
+  nextpas.core.text.compare,
+  nextpas.core.platform.fs
+  {$IFDEF NEXTPAS_UNIX}
+  , nextpas.core.platform.posix.ffi
+  {$ENDIF}
+  ;
+
+function IsExecutableCandidate(const APath: string): Boolean;
+begin
+  if APath = '' then
+    Exit(False);
+{$IFDEF NEXTPAS_UNIX}
+  Result := access(PAnsiChar(APath), 1{X_OK}) = 0;
+{$ELSE}
+  Result := platform_fs_is_file(PAnsiChar(APath));
+{$ENDIF}
+end;
 
 function ExtractPathFromEnv(const AEnv: TStringArray): string;
 var
@@ -38,10 +53,7 @@ begin
   if AEnv = nil then Exit;
   for I := 0 to High(AEnv) do
     if TextStartsWith(AEnv[I], 'PATH=') then
-    begin
       Result := Copy(AEnv[I], 6, Length(AEnv[I]) - 5);
-      Exit;
-    end;
 end;
 
 function ResolveExecutablePath(const AName: string;
@@ -63,7 +75,7 @@ begin
     LDir := Copy(LPath, LStart, LColon - LStart);
     if LDir = '' then LDir := '.';
     LCandidate := LDir + '/' + AName;
-    if Exists(LCandidate) then
+    if IsExecutableCandidate(LCandidate) then
       Exit(LCandidate);
     LStart := LColon + 1;
   end;

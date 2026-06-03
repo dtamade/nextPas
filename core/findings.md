@@ -6,6 +6,12 @@
   `tests/nextpas.core.platform.process/test_platform_process/test_platform_process.lpr`。
 - `src/nextpas.core.process.*` 当前 Linux focused tests 已经是绿的：
   功能表面没有红，但存在一个编译 warning，且 PATH 解析还有 contract 级别设计债。
+- 相关历史 worktree 已确认：
+  `platform-pty-clean-merge`、`platform-pty-integration`、
+  `platform-pty-main-merge`、`.claude/worktrees/platform-pty`。
+  其中 `codex/platform-pty-clean-merge` 已经是当前 `HEAD` 的祖先，
+  说明那条 `process/pty` 清理线已经合进当前主线；其余几条不是当前祖先，
+  但多出的提交仍主要围绕 `platform.pty`，不是新的 `process` 基础分叉。
 
 ## Root causes
 
@@ -27,3 +33,16 @@
 - PATH 解析应提升到“只接受真正可执行候选”的语义，并优先复用现有平台能力，
   避免 `process` 模块自带一份较弱的 PATH 搜索实现。
 - warning 清理不能靠压制编译器，而要让 `TProcessOutput` 的初始化路径对编译器也清晰可证。
+- 既然 `platform-pty-clean-merge` 的核心历史已经入主线，本轮应直接在当前工作树做
+  path-limited 收口，而不是切回旧 worktree 重复劳动。
+
+## Fixed design truth
+
+- `ResolveExecutablePath` 现在不再把“存在的同名文件”当成命中，而是只接受真正可执行的候选；
+  这样 PATH 前置的不可执行 shadow 文件不会再截断解析。
+- `ExtractPathFromEnv` 现在采用最后一次出现的 `PATH=` 视图，
+  与 final env view 的“后写覆盖前写”语义保持一致。
+- duplicate `EnvAdd('PATH', ...)` contract 已经在高层 `test_process` 固化，
+  不再只靠 `platform.process` suite 间接证明。
+- `TChild.Wait` 通过显式字段初始化消除了 managed-result warning，
+  不再依赖 `FillChar` 触发编译器疑虑。
