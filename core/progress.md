@@ -1,16 +1,18 @@
-# Progress Log: HTTP truncated trailer empty-value EOF proof
+# Progress Log: HTTP completed trailer-line final blank-line EOF proof
 
-## Session: 2026-06-03 HTTP truncated trailer empty-value EOF truncation
+## Session: 2026-06-03 HTTP completed trailer-line final blank-line EOF truncation
 
 - **Status:** completed
-- **Scope:** add parser/server/security focused proof that trailer grammar ending at `...0\r\nX-Test:\r` and `...0\r\nX-Test:\r\n` is rejected at EOF / peer half-close with explicit `400` semantics.
+- **Scope:** add parser/server/security focused proof that completed trailer lines ending at
+  `...0\r\nX-Test:\r\n\r`、`...0\r\nX-Test: \r\n`、`...0\r\nX-Test: \r\n\r`
+  are rejected at EOF / peer half-close with explicit `400` semantics.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
   - [x] Re-read design conventions, API coverage matrix, and current control files.
-  - [x] Confirmed the remaining malformed-chunk gap is trailer empty-value EOF truncation.
-  - [x] Added the new parser focused tests for trailer empty-value CR EOF and trailer empty-value EOF truncation.
-  - [x] Added the new server focused tests for trailer empty-value CR EOF and trailer empty-value EOF truncation.
-  - [x] Added the new security focused tests for trailer empty-value CR EOF and trailer empty-value EOF truncation.
+  - [x] Confirmed the remaining malformed-chunk gap is completed trailer-line final blank-line EOF truncation.
+  - [x] Added the new parser focused tests for trailer empty-value section CR EOF, trailer whitespace section EOF, and trailer whitespace section CR EOF truncation.
+  - [x] Added the new server focused tests for the same three trailer final-blank-line variants.
+  - [x] Added the new security focused tests for the same three trailer final-blank-line variants.
   - [x] Ran the first parser verification and recorded the result.
   - [x] Ran the first server verification and recorded the result.
   - [x] Ran the first security verification and recorded the result.
@@ -25,18 +27,18 @@
 - Existing chunked EOF proof already covered malformed chunk extension, chunk-extension line truncation,
   terminal chunk extension line truncation, chunk-size line truncation, chunk-data line-ending truncation,
   terminal `0` chunk ending truncation, terminal chunk ending-after-extension truncation, trailer-section truncation,
-  trailer-section CR truncation, trailer-field-name truncation, trailer-separator truncation, trailer-whitespace truncation,
-  and trailer-field-line truncation.
-- The missing boundary was trailer grammar on the no-OWS empty-value branch:
-  requests ending at `...0\r\nX-Test:\r` and `...0\r\nX-Test:\r\n`.
+  trailer-section CR truncation, trailer-field-name truncation, trailer-separator truncation, trailer-empty-value truncation,
+  trailer-whitespace truncation, and trailer-field-line truncation.
+- The missing boundary was completed trailer-line grammar followed by an incomplete final blank-line:
+  `...0\r\nX-Test:\r\n\r`, `...0\r\nX-Test: \r\n`, and `...0\r\nX-Test: \r\n\r`.
 
 ## Verification Evidence 2026-06-03 Focused First Run
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `66/66 passed`, heaptrc `0 unfreed memory blocks` |
-| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `69/69 passed`, heaptrc `0 unfreed memory blocks` |
-| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `45/45 passed`, heaptrc `0 unfreed memory blocks` |
+| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `69/69 passed`, heaptrc `0 unfreed memory blocks` |
+| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `72/72 passed`, heaptrc `0 unfreed memory blocks` |
+| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `48/48 passed`, heaptrc `0 unfreed memory blocks` |
 
 ## Verification Evidence 2026-06-03 HTTP Aggregate
 
@@ -48,4 +50,4 @@
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
 - `git diff --check` 已对本批路径通过。
-- 当前待完成项只剩中文收尾报告。
+- 本批已按 path-limited 提交。

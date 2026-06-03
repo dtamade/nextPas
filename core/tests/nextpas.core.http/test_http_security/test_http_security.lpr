@@ -946,6 +946,26 @@ begin
   end;
 end;
 
+{ Test 18e: Truncated trailer empty-value section CR at EOF }
+procedure TestTruncatedTrailerEmptyValueSectionCrAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test:'#13#10#13;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated trailer empty-value section CR EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18c: Truncated trailer whitespace at EOF }
 procedure TestTruncatedTrailerWhitespaceAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -981,6 +1001,46 @@ begin
     LResp := SendRawAndShutdownWrite(LPort, REQ);
     Check(Pos('HTTP/1.1 400', LResp) > 0,
       'Truncated trailer whitespace CR EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 18e: Truncated trailer whitespace section at EOF }
+procedure TestTruncatedTrailerWhitespaceSectionAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: '#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated trailer whitespace section EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 18f: Truncated trailer whitespace section CR at EOF }
+procedure TestTruncatedTrailerWhitespaceSectionCrAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: '#13#10#13;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated trailer whitespace section CR EOF: explicit 400');
   finally
     StopServer(LServer, LHandle);
   end;
@@ -1092,8 +1152,11 @@ begin
   T.Run('Truncated trailer separator at EOF -> 400', @TestTruncatedTrailerSeparatorAtEof);
   T.Run('Truncated trailer empty-value CR at EOF -> 400', @TestTruncatedTrailerEmptyValueCrAtEof);
   T.Run('Truncated trailer empty-value at EOF -> 400', @TestTruncatedTrailerEmptyValueAtEof);
+  T.Run('Truncated trailer empty-value section CR at EOF -> 400', @TestTruncatedTrailerEmptyValueSectionCrAtEof);
   T.Run('Truncated trailer whitespace at EOF -> 400', @TestTruncatedTrailerWhitespaceAtEof);
   T.Run('Truncated trailer whitespace CR at EOF -> 400', @TestTruncatedTrailerWhitespaceCrAtEof);
+  T.Run('Truncated trailer whitespace section at EOF -> 400', @TestTruncatedTrailerWhitespaceSectionAtEof);
+  T.Run('Truncated trailer whitespace section CR at EOF -> 400', @TestTruncatedTrailerWhitespaceSectionCrAtEof);
   T.Run('Truncated trailer field line at EOF -> 400', @TestTruncatedTrailerFieldLineAtEof);
   T.Run('Truncated trailer field CR at EOF -> 400', @TestTruncatedTrailerFieldCrAtEof);
   T.Run('Truncated trailer section CR at EOF -> 400', @TestTruncatedTrailerCrAtEof);

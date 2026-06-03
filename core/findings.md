@@ -1,4 +1,4 @@
-# Findings: HTTP truncated trailer empty-value EOF proof
+# Findings: HTTP completed trailer-line final blank-line EOF proof
 
 ## Repo / Git Safety
 
@@ -14,39 +14,39 @@
 
 ## Existing HTTP Truth Before This Batch
 
-- `terminal 0 chunk ending EOF truncation` 已覆盖 `0\r\n` 后最终空 trailer section 缺失。
-- `terminal chunk ending after extension CR EOF truncation` 已覆盖 `0;sig=abc\r\n\r` 这类 extension 存在时的 final blank-line CR-only EOF。
-- `terminal chunk ending CR EOF truncation` 已覆盖 `0\r\n\r` 这类无 extension 的 final blank-line CR-only EOF。
-- `chunk-extension line EOF truncation` 已覆盖普通 non-terminal chunk 的 extension line 截断。
-- `terminal chunk extension EOF truncation` 已覆盖 `0;sig=abc` 与 `0;sig=abc\r` 这两类 extension line 截断。
-- `terminal chunk ending after extension EOF truncation` 已覆盖 `0;sig=abc\r\n` 这类最终空 trailer section 整段缺失。
-- `chunk-size line EOF truncation`、`chunk-data CRLF EOF truncation`、
-  `truncated trailer section at EOF` 都已有单独 focused proof。
-- `truncated trailer section CR EOF truncation` 也已覆盖 `...0\r\nX-Test: value\r\n\r`。
-- `truncated trailer field line EOF truncation` 与 `truncated trailer field CR EOF truncation`
-  也已覆盖 `...0\r\nX-Test: value` 与 `...0\r\nX-Test: value\r`。
-- `truncated trailer field-name EOF truncation` 与 `truncated trailer separator EOF truncation`
-  也已覆盖 `...0\r\nX-Test` 与 `...0\r\nX-Test:`。
-- `truncated trailer whitespace EOF truncation` 与 `truncated trailer whitespace CR EOF truncation`
-  也已覆盖 `...0\r\nX-Test: ` 与 `...0\r\nX-Test: \r`。
-- 但 empty-value trailer line 自己若只收到 `CR`，或者空值 field line 已结束但最终空 trailer section 缺失，仍没有把
-  `...0\r\nX-Test:\r` 与 `...0\r\nX-Test:\r\n` 这两类输入单独锁住。
+- terminal / trailer EOF proof 已经覆盖：
+  - `terminal 0 chunk ending EOF truncation`
+  - `terminal chunk ending CR EOF truncation`
+  - `terminal chunk ending after extension EOF truncation`
+  - `terminal chunk ending after extension CR EOF truncation`
+  - trailer field-name / separator / empty-value CR / empty-value EOF
+  - trailer whitespace / whitespace CR
+  - trailer field line / field CR / section CR
+- 也就是说，trailer line 尚未完成的各类边界已经基本锁实。
+- 但仍缺少一组相邻 truth：
+  trailer field 本身已经完整结束，随后 final blank-line 又在下一步 EOF：
+  - `...0\r\nX-Test:\r\n\r`
+  - `...0\r\nX-Test: \r\n`
+  - `...0\r\nX-Test: \r\n\r`
 
 ## New Evidence From This Batch
 
 - parser focused tests 证明：
-  - 当输入结束在 `...0\r\nX-Test:\r` 或 `...0\r\nX-Test:\r\n` 时，`Finish` 后都会进入 parser error；
-  - 这两类输入都保持 not-complete，不会被误判成合法完成。
+  - 当输入结束在 `...0\r\nX-Test:\r\n\r`、`...0\r\nX-Test: \r\n`、`...0\r\nX-Test: \r\n\r` 时，
+    `Finish` 后都会进入 parser error；
+  - 三类输入都保持 not-complete，不会被误判成合法完成。
 - server focused tests 证明：
-  - peer half-close 暴露出 truncated trailer empty-value CR EOF / truncated trailer empty-value EOF 时，server 都返回显式 `400`；
-  - 两类输入下 handler 都不会被调用。
+  - peer half-close 暴露出 completed trailer line 后 final blank-line 未完整结束时，
+    server 都返回显式 `400`；
+  - 三类输入下 handler 都不会被调用。
 - security focused tests 证明：
-  - raw-wire 下这两个 empty-value trailer grammar 子类都稳定落到显式 `400`，没有静默关闭或 handler 落地。
+  - raw-wire 下这三个 completed-line grammar 子类都稳定落到显式 `400`，
+    没有静默关闭或 handler 落地。
 
 ## Batch Truth
 
 - 这轮没有发现新的 HTTP 实现缺陷。
-- 六条新增 focused tests 首轮即 GREEN，因此本轮仍然是
+- 九条新增 focused tests 首轮即 GREEN，因此本轮仍然是
   **coverage expansion / current-truth locking**，不是生产修复。
 - 现在 chunked EOF 截断的边界陈述又细了一层：
   - malformed chunk extension 已证明；
@@ -59,8 +59,11 @@
   - truncated trailer separator EOF 截断也已单独证明；
   - truncated trailer empty-value CR EOF 截断也已单独证明；
   - truncated trailer empty-value EOF 截断也已单独证明；
+  - truncated trailer empty-value section CR EOF 截断也已单独证明；
   - truncated trailer whitespace EOF 截断也已单独证明；
   - truncated trailer whitespace CR EOF 截断也已单独证明；
+  - truncated trailer whitespace section EOF 截断也已单独证明；
+  - truncated trailer whitespace section CR EOF 截断也已单独证明；
   - truncated trailer field line EOF 截断也已单独证明；
   - truncated trailer field CR EOF 截断也已单独证明；
   - truncated trailer section CR EOF 截断也已单独证明；
@@ -72,5 +75,5 @@
 ## Remaining Questions
 
 - malformed chunk framing 审计仍可继续细化其他 terminal/trailer grammar 子类，但这轮已经把
-  empty-value trailer line 的两类相邻 truth 锁实。
+  completed empty-value / OWS-only trailer line 之后 final blank-line 的剩余相邻 truth 锁实。
 - keep-alive request-tail 契约决策仍然存在，不过不阻塞继续把 H1 grammar truth 做扎实。
