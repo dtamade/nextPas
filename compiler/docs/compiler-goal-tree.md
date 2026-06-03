@@ -48,7 +48,7 @@
 | **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback）          | C1    | ✅ 2026-06-01      |
 | **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int                                                     | C2    | ✅ 2026-06-02      |
 | **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u\*）；提升/截断规则放 sema | C3    | ✅ 2026-06-02      |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | 🚧 2026-06-03 C5-M |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | 🚧 2026-06-03 C5-O |
 | **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放                       | C5    | ⬜                 |
 | **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6 | ⬜                 |
 | **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单"                                                          | C5,C6 | 🏁 里程碑          |
@@ -334,3 +334,18 @@
   完整重编译（44341 lines compiled）+ 137/137 LLVM smoke 全绿。C5 下一步建议把同一
   contract 推进到 ordinary member call，再进入 `shekVirtualCall` /
   `shekInterfaceCall`，而不是回到 scattered call special-case。
+- 2026-06-03 C5-O：ordinary member call expr lowering：`obj.Method(...)`、
+  `Self.Method(...)` 与 zero-arg `obj.Method` 现在也能 end-to-end 生成
+  `shekCall`。sema 新增 `TryGetOrdinaryMemberCallContract`，把 non-virtual ordinary
+  member call 收口到与 C5-N 相同的 call contract：`LiteralStr=callee`、
+  `Op=legacy ABI paramKinds`、`Children=args`、`TypeId=return type`。本轮同时修正
+  member declaration return-type 提取，避免把 method symbol 自身 `TypeId`
+  误当返回类型；class receiver 的结构化形态固定为
+  `shekDeref(shvcAddress) -> shekSymbolValue(Pointer)`，继续复用 C5 的
+  address/value 合同。为保持 dual-track 稳定，legacy blob 也补齐了显式
+  `Self.Method` / zero-arg dot-call 的兼容路径，structured lowering 失败时仍能回退。
+  TDD RED=`test_semantic_hir_expr_producer` 退出 321 后推进到 343；GREEN 后 focused
+  tests `test_semantic_hir_expr_producer`、`test_hir_builder_structured_address`
+  全绿 + 完整重编译（44591 lines compiled）+ 137/137 LLVM smoke 全绿。C5 下一步建议
+  进入 `shekVirtualCall` / `shekInterfaceCall`，再回头清理 constructor-like /
+  raw object-dot / pointer-return helper 的散落 special-case。

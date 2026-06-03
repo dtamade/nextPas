@@ -122,6 +122,8 @@ type
     procedure PopInlining;
     function CountDeclParams(const ADecl: TGreenNode): LongInt;
     function CountRequiredDeclParams(const ADecl: TGreenNode): LongInt;
+    function DeclReturnTypeId(const ADecl: TGreenNode;
+      const AOwnerUnitId: string): LongInt;
     function DeclAcceptsArgCount(const ADecl: TGreenNode;
       const AArgCount: LongInt): Boolean;
     function DeclParamSignatureMatchesArgs(const ADecl: TGreenNode;
@@ -363,8 +365,13 @@ type
       const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
     function ResolveArrayAccessElementTypeId(
       const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
+    function TryBuildLegacyParamKindsForDecl(const ADeclNode: TGreenNode;
+      const AParamCount: LongInt; out AParamKinds: string): Boolean;
     function TryGetDirectCallContract(const ACallNode: TGreenNode;
       out ACalleeName, AParamKinds: string; out AReturnTypeId: LongInt): Boolean;
+    function TryGetOrdinaryMemberCallContract(const ACallNode: TGreenNode;
+      out AReceiverVarName, ACalleeName, AParamKinds: string;
+      out AReturnTypeId: LongInt): Boolean;
     function BuildTargetAddressExpr(const ATargetNode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
@@ -969,6 +976,41 @@ begin
       end;
       Exit;
     end;
+  end;
+end;
+
+function TSemanticAnalyzer.DeclReturnTypeId(const ADecl: TGreenNode;
+  const AOwnerUnitId: string): LongInt;
+var
+  Child: TGreenNode;
+  Index: LongInt;
+begin
+  Result := 0;
+  if ADecl = nil then
+    Exit;
+
+  case ADecl.NodeKind of
+    gnkFunctionDecl:
+      Index := 0;
+    gnkClassMethod:
+      begin
+        Index := 0;
+        if (ADecl.ChildCount > 0) and (ADecl.ChildAt(0) <> nil) and
+          (ADecl.ChildAt(0).NodeKind = gnkIdentifier) then
+          Index := 1;
+      end;
+  else
+    Exit;
+  end;
+
+  for Index := Index to ADecl.ChildCount - 1 do
+  begin
+    Child := ADecl.ChildAt(Index);
+    if (Child = nil) or (Child.NodeKind <> gnkIdentifier) then
+      Continue;
+    Result := ResolveTypeIdForOwner(Child.Text, AOwnerUnitId);
+    if Result > 0 then
+      Exit;
   end;
 end;
 
@@ -6330,7 +6372,7 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
 
 var
   Folded: Int64;
-  BaseName, OwnerClassName, FieldName, FuncName, ArgName: string;
+  BaseName, OwnerClassName, FieldName, FuncName, ArgName, ReceiverVarName: string;
   StrCallIdx, StrCallArgCount, K, ArgIndex, DotPos: LongInt;
   BranchNode, DeclNode, RhsNode: TGreenNode;
   Operand: string;
@@ -6709,7 +6751,14 @@ begin
     (ANode.ChildAt(0).ChildAt(1) <> nil) and
     (ANode.ChildAt(0).ChildAt(1).NodeKind = gnkIdentifier) then
   begin
-    FuncName := LookupClassVar(ANode.ChildAt(0).ChildAt(0).Text);
+    ReceiverVarName := ANode.ChildAt(0).ChildAt(0).Text;
+    if SameText(ReceiverVarName, 'Self') and (FCurrentMethodClass <> '') then
+    begin
+      ReceiverVarName := 'self';
+      FuncName := FCurrentMethodClass;
+    end
+    else
+      FuncName := LookupClassVar(ReceiverVarName);
     if FuncName <> '' then
     begin
       ABlob := '';
@@ -6747,11 +6796,11 @@ begin
       if Folded >= 0 then
       begin
         if TypeMetaIsInterface(FuncName) then
-          ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+          ABlob := 'var ' + ReceiverVarName + #10 +
             ABlob + 'ivcall ' + IntToStr(Folded) + ' ' +
             IntToStr(StrCallArgCount)
         else
-          ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+          ABlob := 'var ' + ReceiverVarName + #10 +
             ABlob + 'vcall ' + IntToStr(Folded) + ' ' +
             IntToStr(StrCallArgCount);
         if TypeMetaRetPtr(FuncName, ANode.ChildAt(0).ChildAt(1).Text) then
@@ -6774,7 +6823,7 @@ begin
             ArgName := '';
         end;
         if ArgName = '' then ArgName := FuncName;
-        ABlob := 'var ' + ANode.ChildAt(0).ChildAt(0).Text + #10 +
+        ABlob := 'var ' + ReceiverVarName + #10 +
           ABlob + 'call ' + ArgName + '.' +
           ANode.ChildAt(0).ChildAt(1).Text + ' ' +
           IntToStr(StrCallArgCount + 1) + #10;
@@ -7020,7 +7069,14 @@ begin
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin
-    FuncName := LookupClassVar(ANode.ChildAt(0).Text);
+    ReceiverVarName := ANode.ChildAt(0).Text;
+    if SameText(ReceiverVarName, 'Self') and (FCurrentMethodClass <> '') then
+    begin
+      ReceiverVarName := 'self';
+      FuncName := FCurrentMethodClass;
+    end
+    else
+      FuncName := LookupClassVar(ReceiverVarName);
     if (FuncName = '') and (FCurrentMethodClass <> '') and
       TypeMetaFieldIsPtr(FCurrentMethodClass, ANode.ChildAt(0).Text) and
       (TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text) >= 0) then
@@ -7059,14 +7115,14 @@ begin
     begin
       if FModel.LookupStringConstValue(
         FuncName + '.' + ANode.ChildAt(1).Text + '$read', ArgName) then
-        ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+        ABlob := 'var ' + ReceiverVarName + #10 +
           'call ' + FuncName + '.' + ArgName + ' 1' + #10
       else
       begin
         Folded := TypeMetaFieldIndex(FuncName, ANode.ChildAt(1).Text);
         if Folded >= 0 then
         begin
-          ABlob := 'field ' + ANode.ChildAt(0).Text + ' ' + IntToStr(Folded);
+          ABlob := 'field ' + ReceiverVarName + ' ' + IntToStr(Folded);
           if TypeMetaFieldIsPtr(FuncName, ANode.ChildAt(1).Text) then
             ABlob := ABlob + ' p' + #10
           else
@@ -7078,10 +7134,10 @@ begin
           if Folded >= 0 then
           begin
             if TypeMetaIsInterface(FuncName) then
-              ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+              ABlob := 'var ' + ReceiverVarName + #10 +
                 'ivcall ' + IntToStr(Folded) + ' 0'
             else
-              ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+              ABlob := 'var ' + ReceiverVarName + #10 +
                 'vcall ' + IntToStr(Folded) + ' 0';
             if TypeMetaRetPtr(FuncName, ANode.ChildAt(1).Text) then
               ABlob := ABlob + ' p' + #10
@@ -7102,7 +7158,7 @@ begin
                 ArgName := '';
             end;
             if ArgName = '' then ArgName := FuncName;
-            ABlob := 'var ' + ANode.ChildAt(0).Text + #10 +
+            ABlob := 'var ' + ReceiverVarName + #10 +
               'call ' + ArgName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
           end;
         end;
@@ -7645,35 +7701,22 @@ begin
   Result := False;
 end;
 
-function TSemanticAnalyzer.TryGetDirectCallContract(
-  const ACallNode: TGreenNode; out ACalleeName, AParamKinds: string;
-  out AReturnTypeId: LongInt): Boolean;
+function TSemanticAnalyzer.TryBuildLegacyParamKindsForDecl(
+  const ADeclNode: TGreenNode; const AParamCount: LongInt;
+  out AParamKinds: string): Boolean;
 var
-  BodyNode, DeclNode, Child, ParamNode, TypeNode: TGreenNode;
-  I, J, ParamCount: LongInt;
+  Child, ParamNode, TypeNode: TGreenNode;
+  I, J, ParamIndex: LongInt;
   TypeName: string;
 begin
-  ACalleeName := '';
   AParamKinds := '';
-  AReturnTypeId := 0;
-  if (ACallNode = nil) or (ACallNode.NodeKind <> gnkFunctionCall) or
-    (ACallNode.ChildCount < 1) or (ACallNode.ChildAt(0) = nil) or
-    (ACallNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+  ParamIndex := 0;
+  if ADeclNode = nil then
     Exit(False);
 
-  ACalleeName := ACallNode.ChildAt(0).Text;
-  if (ACalleeName = '') or HasOverload(ACalleeName) or
-    (Pos('specialize ', ACalleeName) = 1) or
-    (Pos('.', ACalleeName) <> 0) or IsBuiltinProcedure(ACalleeName) or
-    (not LookupProcedureBody(ACalleeName, BodyNode, DeclNode)) or
-    (DeclNode = nil) then
-    Exit(False);
-
-  ParamCount := 0;
-  AParamKinds := '';
-  for I := 0 to DeclNode.ChildCount - 1 do
+  for I := 0 to ADeclNode.ChildCount - 1 do
   begin
-    Child := DeclNode.ChildAt(I);
+    Child := ADeclNode.ChildAt(I);
     if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
       Continue;
     for J := 0 to Child.ChildCount - 1 do
@@ -7681,7 +7724,7 @@ begin
       ParamNode := Child.ChildAt(J);
       if (ParamNode = nil) or (ParamNode.NodeKind <> gnkParameterDecl) then
         Continue;
-      Inc(ParamCount);
+      Inc(ParamIndex);
       if Pos('var:', ParamNode.Text) = 1 then
         Exit(False);
       if ParamNode.ChildCount <= 0 then
@@ -7705,9 +7748,8 @@ begin
       else if TypeMetaSize(TypeName) > 0 then
       begin
         if TypeMetaIsRecord(TypeName) then
-          Exit(False)
-        else
-          AParamKinds := AParamKinds + 'p';
+          Exit(False);
+        AParamKinds := AParamKinds + 'p';
       end
       else
         AParamKinds := AParamKinds + 'i';
@@ -7715,10 +7757,160 @@ begin
     Break;
   end;
 
-  if ParamCount <> (ACallNode.ChildCount - 1) then
+  Result := ParamIndex = AParamCount;
+end;
+
+function TSemanticAnalyzer.TryGetDirectCallContract(
+  const ACallNode: TGreenNode; out ACalleeName, AParamKinds: string;
+  out AReturnTypeId: LongInt): Boolean;
+var
+  BodyNode, DeclNode: TGreenNode;
+  ParamCount: LongInt;
+begin
+  ACalleeName := '';
+  AParamKinds := '';
+  AReturnTypeId := 0;
+  if (ACallNode = nil) or (ACallNode.NodeKind <> gnkFunctionCall) or
+    (ACallNode.ChildCount < 1) or (ACallNode.ChildAt(0) = nil) or
+    (ACallNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+    Exit(False);
+
+  ACalleeName := ACallNode.ChildAt(0).Text;
+  if (ACalleeName = '') or HasOverload(ACalleeName) or
+    (Pos('specialize ', ACalleeName) = 1) or
+    (Pos('.', ACalleeName) <> 0) or IsBuiltinProcedure(ACalleeName) or
+    (not LookupProcedureBody(ACalleeName, BodyNode, DeclNode)) or
+    (DeclNode = nil) then
+    Exit(False);
+
+  ParamCount := ACallNode.ChildCount - 1;
+  if not TryBuildLegacyParamKindsForDecl(DeclNode, ParamCount, AParamKinds) then
     Exit(False);
 
   AReturnTypeId := InferExpressionType(ACallNode);
+  if AReturnTypeId <= 0 then
+    Exit(False);
+  if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
+    AReturnTypeId := FModel.FindTypeByName('Pointer');
+
+  Result := AReturnTypeId > 0;
+end;
+
+function TSemanticAnalyzer.TryGetOrdinaryMemberCallContract(
+  const ACallNode: TGreenNode; out AReceiverVarName, ACalleeName,
+  AParamKinds: string; out AReturnTypeId: LongInt): Boolean;
+var
+  BodyNode, DeclNode: TGreenNode;
+  Candidates: TOverloadCandidateArray;
+  MemberNode, ReceiverNode: TGreenNode;
+  HasArgSignature, HasTypeMismatchEvidence: Boolean;
+  MemberName, ReceiverName, ResolutionFailureKind, ArgSignature, OwnerUnitId: string;
+  ArgCount, MemberOffset, ReceiverTypeId, TargetSymbolId: LongInt;
+  ReceiverTypeName: string;
+begin
+  AReceiverVarName := '';
+  ACalleeName := '';
+  AParamKinds := '';
+  AReturnTypeId := 0;
+  ReceiverName := '';
+  MemberName := '';
+  MemberOffset := 0;
+  ArgCount := 0;
+
+  if ExtractDirectMemberCall(ACallNode, ReceiverName, MemberName,
+    MemberOffset, ArgCount) then
+  begin
+    if SameText(ReceiverName, 'Self') then
+      AReceiverVarName := 'self'
+    else
+      AReceiverVarName := ReceiverName;
+    ReceiverTypeId := TypeIdForMemberReceiver(ReceiverName, FCurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+  end
+  else if (ACallNode <> nil) and (ACallNode.NodeKind = gnkDotAccess) and
+    (ACallNode.ChildCount >= 2) then
+  begin
+    ReceiverNode := ACallNode.ChildAt(0);
+    MemberNode := ACallNode.ChildAt(1);
+    if (ReceiverNode = nil) or (MemberNode = nil) or
+      (ReceiverNode.NodeKind <> gnkIdentifier) or
+      (MemberNode.NodeKind <> gnkIdentifier) then
+      Exit(False);
+    ReceiverName := ReceiverNode.Text;
+    MemberName := MemberNode.Text;
+    MemberOffset := MemberNode.ByteOffset;
+    ArgCount := 0;
+    if SameText(ReceiverName, 'Self') then
+      AReceiverVarName := 'self'
+    else
+      AReceiverVarName := ReceiverName;
+    ReceiverTypeId := TypeIdForMemberReceiver(ReceiverName, FCurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+  end
+  else if (FCurrentMethodClass <> '') and
+    (not IsQualifiedCallNode(ACallNode)) then
+  begin
+    MemberName := BareCallCalleeName(ACallNode);
+    if MemberName = '' then
+      Exit(False);
+    AReceiverVarName := 'self';
+    ReceiverTypeId := TypeIdForMemberReceiver('Self', FCurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+    ArgCount := CallArgumentCount(ACallNode);
+  end
+  else
+    Exit(False);
+
+  if (AReceiverVarName = '') or (ReceiverTypeId <= 0) or
+    (ReceiverTypeId > FModel.TypeCount) or (not IsRuntimeVar(AReceiverVarName)) then
+    Exit(False);
+
+  HasArgSignature := (ACallNode <> nil) and
+    (ACallNode.NodeKind in [gnkFunctionCall, gnkProcedureCallStatement]) and
+    CallArgumentSignature(ACallNode, ArgSignature);
+  HasTypeMismatchEvidence := HasArgSignature and
+    CallArgumentSignatureIsStable(ACallNode,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+  ResolutionFailureKind := '';
+  SetLength(Candidates, 0);
+  TargetSymbolId := MethodSymbolIdForClassTypeMember(
+    ReceiverTypeId,
+    MemberName,
+    ArgCount,
+    ArgSignature,
+    HasArgSignature,
+    HasTypeMismatchEvidence,
+    ResolutionFailureKind,
+    Candidates
+  );
+  if TargetSymbolId <= 0 then
+    Exit(False);
+
+  ReceiverTypeName := FModel.TypeAt(ReceiverTypeId - 1).Name;
+  if (ReceiverTypeName = '') or TypeMetaIsInterface(ReceiverTypeName) or
+    (TypeMetaVmtSlot(ReceiverTypeName, MemberName) >= 0) then
+    Exit(False);
+
+  ACalleeName := FModel.SymbolAt(TargetSymbolId - 1).Name;
+  if (ACalleeName = '') or
+    not LookupCallBindingDeclaration(
+      ACalleeName,
+      ArgCount,
+      ArgSignature,
+      HasArgSignature,
+      HasTypeMismatchEvidence,
+      ResolutionFailureKind,
+      BodyNode,
+      DeclNode,
+      OwnerUnitId
+    ) or (DeclNode = nil) then
+    Exit(False);
+
+  if not TryBuildLegacyParamKindsForDecl(DeclNode, ArgCount, AParamKinds) then
+    Exit(False);
+  AParamKinds := 'p' + AParamKinds;
+
+  AReturnTypeId := DeclReturnTypeId(DeclNode, OwnerUnitId);
   if AReturnTypeId <= 0 then
     Exit(False);
   if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
@@ -7818,7 +8010,7 @@ var
   ArgExprId, ArgIndex: LongInt;
   Value: Int64;
   ParseCode: Word;
-  Op, Pred, CalleeName, ParamKinds: string;
+  Op, Pred, CalleeName, ParamKinds, ReceiverVarName: string;
 
   function ExprTypeId(const ALocalExprId: LongInt): LongInt;
   var
@@ -7945,6 +8137,28 @@ var
       0, '', '', 0, shvcScalar
     );
     Result := True;
+  end;
+
+  function BuildRuntimeMemberReceiverExpr(const AReceiverName: string;
+    out ALocalExprId: LongInt): Boolean;
+  var
+    ClassTypeId: LongInt;
+    ClassTypeName: string;
+  begin
+    ALocalExprId := 0;
+    if SameText(AReceiverName, 'self') and (FCurrentMethodClass <> '') then
+      Exit(BuildClassBaseAddressExpr('self', FCurrentMethodClass, ALocalExprId));
+    ClassTypeId := TypeIdForVariable(AReceiverName);
+    if (ClassTypeId > 0) and (ClassTypeId <= FModel.TypeCount) then
+    begin
+      ClassTypeName := FModel.TypeAt(ClassTypeId - 1).Name;
+      if ClassTypeName <> '' then
+        Exit(BuildClassBaseAddressExpr(AReceiverName, ClassTypeName, ALocalExprId));
+    end;
+    ClassTypeName := LookupClassVar(AReceiverName);
+    if ClassTypeName <> '' then
+      Exit(BuildClassBaseAddressExpr(AReceiverName, ClassTypeName, ALocalExprId));
+    Result := AddRuntimePointerSymbolValueExpr(AReceiverName, ALocalExprId);
   end;
 
   function TryRuntimePointerFieldNode(const ALocalNode: TGreenNode;
@@ -8146,6 +8360,42 @@ begin
       0, '', '', 0, shvcScalar
     );
     Exit(True);
+  end;
+
+  if TryGetOrdinaryMemberCallContract(ANode, ReceiverVarName, CalleeName,
+    ParamKinds, ResultTypeId) then
+  begin
+    if not IsStructuredAddressableScalarType(ResultTypeId) then
+      Exit(False);
+    SetLength(Children, Length(ParamKinds));
+    if not BuildRuntimeMemberReceiverExpr(ReceiverVarName, ArgExprId) then
+      Exit(False);
+    Children[0] := ArgExprId;
+    for ArgIndex := 2 to Length(ParamKinds) do
+    begin
+      case ParamKinds[ArgIndex] of
+        'p':
+          begin
+            if not BuildRuntimePointerHirExpr(ANode.ChildAt(ArgIndex - 1),
+              ArgExprId) then
+              Exit(False);
+          end;
+        'i':
+          begin
+            if not BuildRuntimeScalarHirExpr(ANode.ChildAt(ArgIndex - 1),
+              ArgExprId) then
+              Exit(False);
+          end;
+      else
+        Exit(False);
+      end;
+      Children[ArgIndex - 1] := ArgExprId;
+    end;
+    AExprId := FModel.AddHirExpr(
+      shekCall, ResultTypeId, 0, Children, 0, CalleeName, ParamKinds,
+      ANode.ByteOffset, shvcScalar
+    );
+    Exit(AExprId > 0);
   end;
 
   if (ANode.NodeKind = gnkFunctionCall) and

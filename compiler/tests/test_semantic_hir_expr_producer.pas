@@ -222,6 +222,26 @@ begin
     Halt(AExitCode);
 end;
 
+procedure AssertClassReceiverAddressExpr(const AModel: TSemanticModel;
+  const AExpr: TSemanticHirExpr; const ASymbolName: string;
+  const ABaseExitCode: LongInt);
+var
+  BaseExpr: TSemanticHirExpr;
+begin
+  if AExpr.Kind <> shekDeref then
+    Halt(ABaseExitCode);
+  if AExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 1);
+  if Length(AExpr.Children) <> 1 then
+    Halt(ABaseExitCode + 2);
+  BaseExpr := AModel.HirExprAt(AExpr.Children[0] - 1);
+  if BaseExpr.Kind <> shekSymbolValue then
+    Halt(ABaseExitCode + 3);
+  if AModel.SymbolAt(BaseExpr.SymbolId - 1).Name <> ASymbolName then
+    Halt(ABaseExitCode + 4);
+  AssertExprTypeName(AModel, BaseExpr, 'Pointer', ABaseExitCode + 5);
+end;
+
 procedure AssertCastChildType(const AModel: TSemanticModel;
   const AExprId: LongInt; const AExpectedTargetTypeName,
   AExpectedChildTypeName: string; const ABaseExitCode: LongInt);
@@ -2738,6 +2758,127 @@ begin
   end;
 end;
 
+procedure TestOrdinaryMemberCallExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr, ReceiverExpr, ArgExpr, NestedExpr, NestedReceiverExpr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TCalc = class'#10 +
+    '    FVal: Integer;'#10 +
+    '    constructor Create(AVal: Integer);'#10 +
+    '    function Get: Integer;'#10 +
+    '    function AddTo(X: Integer): Integer;'#10 +
+    '    function Next: TCalc;'#10 +
+    '    function SumSelf: Integer;'#10 +
+    '  end;'#10 +
+    'constructor TCalc.Create(AVal: Integer);'#10 +
+    'begin'#10 +
+    '  FVal := AVal;'#10 +
+    'end;'#10 +
+    'function TCalc.Get: Integer;'#10 +
+    'begin'#10 +
+    '  Get := FVal;'#10 +
+    'end;'#10 +
+    'function TCalc.AddTo(X: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  AddTo := FVal + X;'#10 +
+    'end;'#10 +
+    'function TCalc.Next: TCalc;'#10 +
+    'begin'#10 +
+    '  Next := Self;'#10 +
+    'end;'#10 +
+    'function TCalc.SumSelf: Integer;'#10 +
+    'begin'#10 +
+    '  SumSelf := Self.AddTo(Get);'#10 +
+    'end;'#10 +
+    'var A, B, C: TCalc; X: Integer;'#10 +
+    'begin'#10 +
+    '  A := TCalc.Create(10);'#10 +
+    '  B := TCalc.Create(5);'#10 +
+    '  X := A.AddTo(B.Get);'#10 +
+    '  C := A.Next();'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(320);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'X',
+      'call TCalc.AddTo', Node) then
+      Halt(321);
+    if Node.ExprId = 0 then
+      Halt(322);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(323);
+    if (Expr.LiteralStr <> 'TCalc.AddTo') or (Expr.Op <> 'pi') then
+      Halt(324);
+    AssertExprTypeName(Model, Expr, 'Integer', 325);
+    if Length(Expr.Children) <> 2 then
+      Halt(326);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'A', 327);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    if ArgExpr.Kind <> shekCall then
+      Halt(333);
+    if (ArgExpr.LiteralStr <> 'TCalc.Get') or (ArgExpr.Op <> 'p') then
+      Halt(334);
+    AssertExprTypeName(Model, ArgExpr, 'Integer', 335);
+    if Length(ArgExpr.Children) <> 1 then
+      Halt(336);
+    NestedReceiverExpr := Model.HirExprAt(ArgExpr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, NestedReceiverExpr, 'B', 337);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'SumSelf',
+      'call TCalc.AddTo', Node) then
+      Halt(343);
+    if Node.ExprId = 0 then
+      Halt(344);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(345);
+    if (Expr.LiteralStr <> 'TCalc.AddTo') or (Expr.Op <> 'pi') then
+      Halt(346);
+    AssertExprTypeName(Model, Expr, 'Integer', 347);
+    if Length(Expr.Children) <> 2 then
+      Halt(348);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'self', 349);
+    NestedExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    if NestedExpr.Kind <> shekCall then
+      Halt(355);
+    if (NestedExpr.LiteralStr <> 'TCalc.Get') or (NestedExpr.Op <> 'p') then
+      Halt(356);
+    AssertExprTypeName(Model, NestedExpr, 'Integer', 357);
+    if Length(NestedExpr.Children) <> 1 then
+      Halt(358);
+    NestedReceiverExpr := Model.HirExprAt(NestedExpr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, NestedReceiverExpr, 'self', 359);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'C',
+      'call TCalc.Next', Node) then
+      Halt(365);
+    if Node.ExprId = 0 then
+      Halt(366);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(367);
+    if (Expr.LiteralStr <> 'TCalc.Next') or (Expr.Op <> 'p') then
+      Halt(368);
+    AssertExprTypeName(Model, Expr, 'Pointer', 369);
+    if Length(Expr.Children) <> 1 then
+      Halt(370);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'A', 371);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestConstructorNestedMethodIntegerArgs;
 var
   Model: TSemanticModel;
@@ -2949,6 +3090,7 @@ begin
   TestTypedStoreIntoLegacyAllocaWidening;
   TestDirectCallExprProducer;
   TestDirectPointerCallExprProducer;
+  TestOrdinaryMemberCallExprProducer;
   TestConstructorNestedMethodIntegerArgs;
   TestConstructorNestedMethodPointerArgs;
 end.

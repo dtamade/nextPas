@@ -4,27 +4,31 @@
 
 ## 当前在做什么
 
-- `C5-N` 已完成：first structured direct-call expr slice 已落地。
-  direct free-function call 现在可以生成 `shekCall`，不再只能靠 blob 文本回放。
-- 这条 call expr 合同很克制：
+- `C5-O` 已完成：ordinary non-virtual member call expr slice 已落地。
+  `obj.Method(...)`、`Self.Method(...)`、zero-arg `obj.Method` 现在都能生成
+  结构化 `shekCall`，不再只靠 member-call blob 文本回放。
+- 这条 member-call 合同继续复用 `C5-N` 的克制设计：
   `LiteralStr=callee`、`Op=legacy ABI paramKinds`、`Children=args`、
   `TypeId=return type`、`ValueClass=shvcScalar`。
-- builder 现在能真正 lower `shekCall`，但只接受 legacy ABI 兼容子集：
-  `i` / `p` 参数，`i64` / `ptr` 返回。超出这条边界时整条 call 继续回退旧 blob。
-- sema 里 direct pointer/class-return helper assignment 也开始挂 `ExprId`，
-  不再只留下旧 `assign-runtime` blob。
-- `ExprId` 继续只表示 RHS value；`TargetExprId` 表示 LHS address。
-- 最近验证：changed tests 绿；`scripts/rebuild-compiler.sh`
-  输出 `44341 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- class receiver 的结构化形态已经固定：
+  `shekDeref(shvcAddress) -> shekSymbolValue(Pointer)`。
+  这为后续 address/value 合同继续扩到 virtual/interface call 留了统一入口。
+- dual-track 仍然保留：builder 继续只 lower legacy ABI 兼容子集；
+  同时旧 blob 对显式 `Self.Method` / `Self.FieldLikeRead` 的兼容缺口已补齐，
+  structured lowering 失败时仍可完整回退。
+- 最近验证：focused
+  `test_semantic_hir_expr_producer`、`test_hir_builder_structured_address` 全绿；
+  `scripts/rebuild-compiler.sh` 输出 `44591 lines compiled`；
+  LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. 把同样的结构化 call 合同推进到 member call：
-   ordinary `obj.Method(...)` / `self.Method(...)`，优先收口最常见 non-virtual 直调。
-2. 再进入真正的 `shekVirtualCall` / `shekInterfaceCall` lowering，把 vcall/ivcall
+1. 进入 `shekVirtualCall` / `shekInterfaceCall`，把 `vcall` / `ivcall`
    从 blob-only 迁到结构化路径。
-3. 最后再回头清 `WalkHaltCalls` 里剩余 constructor-like / raw object-dot 特殊分支，
-   让 call producer 不再散落多套入口。
+2. 收口 `WalkHaltCalls` 里剩余 constructor-like / raw object-dot /
+   pointer-return helper call 特殊分支，减少 call producer 分叉。
+3. 评估 call contract 是否需要把 receiver 从 legacy `Op` 前导 `p`
+   抽成更显式的 kind；这一步先设计，后落地。
 4. `C6`：allocator 和真实释放；`C7/C8`：多目标、优化、自举探针。
 
 ## 重要约束
