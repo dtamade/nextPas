@@ -1,16 +1,16 @@
-# Progress Log: HTTP truncated trailer field EOF proof
+# Progress Log: HTTP truncated trailer field-name/separator EOF proof
 
-## Session: 2026-06-03 HTTP truncated trailer field EOF truncation
+## Session: 2026-06-03 HTTP truncated trailer field-name/separator EOF truncation
 
 - **Status:** completed
-- **Scope:** add parser/server/security focused proof that trailer field lines ending at `...0\r\nX-Test: value` and `...0\r\nX-Test: value\r` are rejected at EOF / peer half-close with explicit `400` semantics.
+- **Scope:** add parser/server/security focused proof that trailer field grammar ending at `...0\r\nX-Test` and `...0\r\nX-Test:` is rejected at EOF / peer half-close with explicit `400` semantics.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
-  - [x] Re-read design conventions, HTTP inbox, API coverage matrix, and current control files.
-  - [x] Confirmed the remaining malformed-chunk gap is trailer field line EOF truncation.
-  - [x] Added the new parser focused tests for trailer field line EOF and trailer field CR EOF truncation.
-  - [x] Added the new server focused tests for trailer field line EOF and trailer field CR EOF truncation.
-  - [x] Added the new security focused tests for trailer field line EOF and trailer field CR EOF truncation.
+  - [x] Re-read design conventions, API coverage matrix, and current control files.
+  - [x] Confirmed the remaining malformed-chunk gap is trailer field-name/separator EOF truncation.
+  - [x] Added the new parser focused tests for trailer field-name EOF and trailer separator EOF truncation.
+  - [x] Added the new server focused tests for trailer field-name EOF and trailer separator EOF truncation.
+  - [x] Added the new security focused tests for trailer field-name EOF and trailer separator EOF truncation.
   - [x] Ran the first parser verification and recorded the result.
   - [x] Ran the first server verification and recorded the result.
   - [x] Ran the first security verification and recorded the result.
@@ -25,17 +25,17 @@
 - Existing chunked EOF proof already covered malformed chunk extension, chunk-extension line truncation,
   terminal chunk extension line truncation, chunk-size line truncation, chunk-data line-ending truncation,
   terminal `0` chunk ending truncation, terminal chunk ending-after-extension truncation, trailer-section truncation,
-  and trailer-section CR truncation.
-- The missing boundary was trailer field lines whose own terminating `CRLF` was incomplete:
-  requests ending at `...0\r\nX-Test: value` and `...0\r\nX-Test: value\r`.
+  trailer-section CR truncation, and trailer-field-line truncation.
+- The missing boundary was trailer field grammar even earlier in the line:
+  requests ending at `...0\r\nX-Test` and `...0\r\nX-Test:`.
 
 ## Verification Evidence 2026-06-03 Focused First Run
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `60/60 passed`, heaptrc `0 unfreed memory blocks` |
-| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `63/63 passed`, heaptrc `0 unfreed memory blocks` |
-| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `39/39 passed`, heaptrc `0 unfreed memory blocks` |
+| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `62/62 passed`, heaptrc `0 unfreed memory blocks` |
+| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `65/65 passed`, heaptrc `0 unfreed memory blocks` |
+| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `41/41 passed`, heaptrc `0 unfreed memory blocks` |
 
 ## Verification Evidence 2026-06-03 HTTP Aggregate
 
@@ -46,5 +46,5 @@
 ## Notes
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
-- `git diff --check` 已对本批路径通过，`docs/nextpas.core.http.inbox.md` 本轮已回退为无改动。
+- `git diff --check` 已对本批路径通过，控制文件里对 inbox 的旧引用也已清掉。
 - 当前待完成项只剩中文收尾报告。
