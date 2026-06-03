@@ -4,6 +4,8 @@
 
 ## 当前批次
 
+- 本轮继续补 raw-wire malformed chunk framing proof：`chunk-size line EOF truncation` 现在也已在 parser/server/security 三层有 focused 证据，server 语义锁成显式 `400`
+- 这轮没有新增生产修复；当前 parser/H1 transport 已能安全拒绝该类 chunk framing 截断，本轮主要是把 current truth 锁进回归
 - 本轮继续补 keep-alive request-tail contract proof：`Content-Length` 首请求后紧跟 garbage tail 的 parser/security 证据现在也已补齐
 - 这轮没有新增生产修复；当前 parser/H1 transport 已经会把 fixed-length 首请求先完整交付，再把尾巴作为 follow-up malformed request 处理，本轮主要是把 current truth 锁进回归
 - 本轮继续补 keep-alive / pipelined request isolation proof：`chunked` 首请求后紧跟同包下一请求的 same-read / same-write 路径，现在都在 parser/server 两层有 focused 证据
@@ -55,6 +57,7 @@
 - `nextpas.core.http.NewHttpClient` / `NewHttpServer` 仍然支持显式注入 `IHttpTransport` / `IHttpServerTransport`；显式注入优先于 registry 默认解析。
 - `http.impl.h1.chunked`、client 复用语义、hijack ownership 三条 H1 correctness 基线仍然保持成立。
 - `impl.h1.parser` 现在同时有 request-side chunked decode / invalid size / malformed chunk extension / missing chunk-data CRLF / truncation / `Connection: close` terminal-chunk tail overrun / CL-TE conflict / trailer isolation focused proof。
+- `impl.h1.parser` 现在也有 `chunk-size line EOF truncation` focused proof。
 - `impl.h1.parser` 现在也有 late trailer byte accounting focused proof，用来支撑 server 对 trailer header budget 的后续判定。
 - `impl.h1.parser` 现在也有 malformed trailer grammar / trailer EOF truncation focused proof。
 - `impl.h1.parser` 现在也有 request-side fixed-length body EOF truncation focused proof。
@@ -75,7 +78,9 @@
 - `THttpServer` 现在也有 keep-alive chunked garbage tail focused 现状证据：首个合法 chunked request 会先完成并进入 handler，尾巴会在同连接上作为后续 malformed request 返回 `400`；这条同样先记为 transport current truth，尚未上升为最终收紧契约。
 - `THttpServer` 现在也有 `chunked first request + same-write pipelined next request` focused proof：首个 chunked request 的 handler/response/body 与第二个 request 保持分离，第二个 request 仍会在同连接上继续完成。
 - `THttpServer` 现在也有 `same-write pipelined requests` focused proof：首个 request 的 body/handler/response 不会被第二个 request 污染，第二个 request 仍会在同连接上继续完成。
+- `THttpServer` 现在也有 `chunk-size line EOF truncation` focused proof：peer half-close 后返回显式 `400`，且不进入 handler。
 - `test_http_security` 现在也有 generic malformed request、`HTTP/1.1 missing Host`、`HTTP/0.9 / no-version`、`CRLF injection / request-line splitting`、`negative Content-Length`、`very long method`、`Content-Length + Connection: close + extra bytes after body`、`chunked + Connection: close + extra bytes after terminal chunk`、duplicate `Content-Length`、`null-byte header`、invalid chunk size、malformed chunk extension、missing chunk-data CRLF、truncated chunked EOF、malformed trailer、fixed-length request EOF truncation、以及 request-line / headers EOF truncation 的 raw-wire explicit `400` proof；同时也有 keep-alive chunked garbage tail 的 safe-handling proof：首个请求完成，尾巴 follow-up `400`。
+- `test_http_security` 现在也有 `chunk-size line EOF truncation` 的 raw-wire explicit `400` proof。
 - `test_http_security` 现在也有 keep-alive `Content-Length` garbage tail 的 safe-handling proof：首个请求完成，尾巴 follow-up `400`。
 - `test_http_websocket` 现在也有 `upgrade request + first frame in one write` focused regression proof，锁定 hijack 后 read-ahead 尾巴不会丢失。
 - registry 目前保持内部实现边界；在 H2/H3 真正进入实现前，不急着把它抬成 facade API。
