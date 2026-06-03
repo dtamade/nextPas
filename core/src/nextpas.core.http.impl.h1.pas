@@ -101,6 +101,25 @@ type
     procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
   end;
 
+  // Connection state stays protocol-owned so future runtimes can drive
+  // the same H1 logic without keeping it welded to a thread entrypoint.
+  TH1ServerConnectionState = class
+  private
+    FOptions: TH1ServerTransportOptions;
+    FConn: ITcpStream;
+    FHandler: IHttpHandler;
+    FParser: IH1Parser;
+    FBufWriter: IWriter;
+    FPending: string;
+    FKeepAlive: Boolean;
+    FIdleMs: Int64;
+    FBuf: array[0..4095] of Byte;
+  public
+    constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
+      const AOptions: TH1ServerTransportOptions);
+    function Run: Boolean;
+  end;
+
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
 var
   LConn: string;
@@ -229,6 +248,189 @@ begin
       LW.Write(LBody[1], SizeUInt(Length(LBody)));
   except
     { Ignore secondary write failures while sending an error response. }
+  end;
+end;
+
+{ TH1ServerConnectionState }
+
+constructor TH1ServerConnectionState.Create(const AConn: ITcpStream;
+  const AHandler: IHttpHandler; const AOptions: TH1ServerTransportOptions);
+begin
+  inherited Create;
+  FOptions := AOptions;
+  FConn := AConn;
+  FHandler := AHandler;
+  FParser := NewH1RequestParser;
+  FBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
+  FPending := '';
+  FKeepAlive := True;
+  if FOptions.IdleTimeout > 0 then
+    FIdleMs := FOptions.IdleTimeout
+  else
+    FIdleMs := 30000;
+end;
+
+function TH1ServerConnectionState.Run: Boolean;
+var
+  LN: SizeUInt;
+  LConsumed: SizeUInt;
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LW: IHttpResponseWriter;
+  LBodyReader: IReader;
+  LContentLen: Int64;
+  LTotalRead: SizeUInt;
+  LHeadersDone: Boolean;
+  LRejected: Boolean;
+  LHijackConn: ITcpStream;
+begin
+  Result := True;
+  while FKeepAlive do
+  begin
+    try
+      FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)));
+      if FOptions.WriteTimeout > 0 then
+        FConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.WriteTimeout)));
+
+      FParser.Reset;
+      LTotalRead := 0;
+      LHeadersDone := False;
+      LRejected := False;
+      repeat
+        if FPending <> '' then
+        begin
+          LN := SizeUInt(Length(FPending));
+          LConsumed := FParser.Execute(PAnsiChar(FPending), LN);
+          if LConsumed < LN then
+            FPending := Copy(FPending, Int32(LConsumed) + 1, Int32(LN - LConsumed))
+          else
+            FPending := '';
+        end
+        else
+        begin
+          LN := FConn.Read(FBuf[0], 4096);
+          if LN = 0 then
+          begin
+            FKeepAlive := False;
+            if (LTotalRead > 0) and (not FParser.IsComplete) and
+               (not FParser.HasError) then
+              FParser.Finish;
+            Break;
+          end;
+          LConsumed := FParser.Execute(@FBuf[0], LN);
+          if LConsumed < LN then
+          begin
+            SetLength(FPending, Int32(LN - LConsumed));
+            Move(FBuf[LConsumed], FPending[1], LN - LConsumed);
+          end;
+        end;
+        Inc(LTotalRead, LConsumed);
+        if (not LHeadersDone) and ((FParser.GetUrl <> '') or FParser.IsComplete) then
+        begin
+          LHeadersDone := True;
+          if (FOptions.MaxHeaderSize > 0) and
+             (Int64(LTotalRead) - FParser.GetBodySize >
+              Int64(FOptions.MaxHeaderSize)) then
+          begin
+            WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+            LRejected := True;
+            FKeepAlive := False;
+            Break;
+          end;
+        end;
+        if LHeadersDone and (FOptions.MaxHeaderSize > 0) and
+           (FParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
+        begin
+          WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+          LRejected := True;
+          FKeepAlive := False;
+          Break;
+        end;
+      until FParser.IsComplete or FParser.HasError;
+
+      if LRejected then
+        Break;
+
+      if FParser.HasError then
+      begin
+        WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
+        Break;
+      end;
+
+      if not FParser.IsComplete then
+        Break;
+
+      if FOptions.MaxBodySize > 0 then
+      begin
+        if FParser.GetBodySize > FOptions.MaxBodySize then
+        begin
+          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+          FKeepAlive := False;
+          Continue;
+        end;
+      end;
+
+      FKeepAlive := ShouldKeepAlive(FParser);
+
+      if (FParser.GetHttpVersion = hvHttp11) and
+         (FParser.GetHeaders.Get('host') = '') then
+      begin
+        WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
+        FKeepAlive := False;
+        Continue;
+      end;
+
+      LUrl := TUrl.Parse(FParser.GetUrl);
+      LContentLen := FParser.GetBodySize;
+      LBodyReader := FParser.NewBodyReader;
+      if LBodyReader <> nil then
+      begin
+        LReq := THttpRequest.Create(FParser.GetMethod, LUrl, FParser.GetHttpVersion,
+          FParser.GetHeaders, LBodyReader, LContentLen);
+      end
+      else
+      begin
+        LContentLen := 0;
+        LReq := THttpRequest.Create(FParser.GetMethod, LUrl, FParser.GetHttpVersion,
+          FParser.GetHeaders, nil, LContentLen);
+      end;
+
+      (LReq as THttpRequest).SetRemoteAddr(FConn.RemoteAddr.ToString);
+
+      if FPending <> '' then
+        LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+      else
+        LHijackConn := FConn;
+      LW := TH1ResponseWriter.Create(FBufWriter, LHijackConn);
+      if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
+        LW.GetHeaders.Set_('connection', 'keep-alive');
+      if not FKeepAlive then
+        LW.GetHeaders.Set_('connection', 'close');
+
+      FHandler.ServeHTTP(LReq, LW);
+
+      if (LW as TH1ResponseWriter).IsHijacked then
+      begin
+        Result := False;
+        FKeepAlive := False;
+        Continue;
+      end;
+
+      LW.Flush;
+      (FBufWriter as IFlusher).Flush;
+
+      if LW.GetHeaders.Get('connection') = 'close' then
+        FKeepAlive := False;
+    except
+      on E: Exception do
+      begin
+        if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
+          Result := False
+        else
+          WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        FKeepAlive := False;
+      end;
+    end;
   end;
 end;
 
@@ -437,179 +639,13 @@ end;
 function TH1ServerTransport.HandleConnection(const AConn: ITcpStream;
   const AHandler: IHttpHandler): Boolean;
 var
-  LParser: IH1Parser;
-  LBuf: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LConsumed: SizeUInt;
-  LUrl: TUrl;
-  LReq: IHttpRequest;
-  LW: IHttpResponseWriter;
-  LKeepAlive: Boolean;
-  LIdleMs: Int64;
-  LBufWriter: IWriter;
-  LBodyReader: IReader;
-  LContentLen: Int64;
-  LTotalRead: SizeUInt;
-  LHeadersDone: Boolean;
-  LRejected: Boolean;
-  LPending: string;
-  LHijackConn: ITcpStream;
+  LState: TH1ServerConnectionState;
 begin
-  Result := True;
-  LParser := NewH1RequestParser;
-  LBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
-  LKeepAlive := True;
-  LPending := '';
-  if FOptions.IdleTimeout > 0 then
-    LIdleMs := FOptions.IdleTimeout
-  else
-    LIdleMs := 30000;
-
-  while LKeepAlive do
-  begin
-    try
-      AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(LIdleMs)));
-      if FOptions.WriteTimeout > 0 then
-        AConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.WriteTimeout)));
-
-      LParser.Reset;
-      LTotalRead := 0;
-      LHeadersDone := False;
-      LRejected := False;
-      repeat
-        if LPending <> '' then
-        begin
-          LN := SizeUInt(Length(LPending));
-          LConsumed := LParser.Execute(PAnsiChar(LPending), LN);
-          if LConsumed < LN then
-            LPending := Copy(LPending, Int32(LConsumed) + 1, Int32(LN - LConsumed))
-          else
-            LPending := '';
-        end
-        else
-        begin
-          LN := AConn.Read(LBuf[0], 4096);
-          if LN = 0 then
-          begin
-            LKeepAlive := False;
-            if (LTotalRead > 0) and (not LParser.IsComplete) and (not LParser.HasError) then
-              LParser.Finish;
-            Break;
-          end;
-          LConsumed := LParser.Execute(@LBuf[0], LN);
-          if LConsumed < LN then
-          begin
-            SetLength(LPending, Int32(LN - LConsumed));
-            Move(LBuf[LConsumed], LPending[1], LN - LConsumed);
-          end;
-        end;
-        Inc(LTotalRead, LConsumed);
-        if (not LHeadersDone) and ((LParser.GetUrl <> '') or LParser.IsComplete) then
-        begin
-          LHeadersDone := True;
-          if (FOptions.MaxHeaderSize > 0) and
-             (Int64(LTotalRead) - LParser.GetBodySize >
-              Int64(FOptions.MaxHeaderSize)) then
-          begin
-            WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
-            LRejected := True;
-            LKeepAlive := False;
-            Break;
-          end;
-        end;
-        if LHeadersDone and (FOptions.MaxHeaderSize > 0) and
-           (LParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
-        begin
-          WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
-          LRejected := True;
-          LKeepAlive := False;
-          Break;
-        end;
-      until LParser.IsComplete or LParser.HasError;
-
-      if LRejected then
-        Break;
-
-      if LParser.HasError then
-      begin
-        WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
-        Break;
-      end;
-
-      if not LParser.IsComplete then
-        Break;
-
-      if FOptions.MaxBodySize > 0 then
-      begin
-        if LParser.GetBodySize > FOptions.MaxBodySize then
-        begin
-          WriteErrorResponse(AConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
-          LKeepAlive := False;
-          Continue;
-        end;
-      end;
-
-      LKeepAlive := ShouldKeepAlive(LParser);
-
-      if (LParser.GetHttpVersion = hvHttp11) and
-         (LParser.GetHeaders.Get('host') = '') then
-      begin
-        WriteErrorResponse(AConn, HTTP_STATUS_BAD_REQUEST);
-        LKeepAlive := False;
-        Continue;
-      end;
-
-      LUrl := TUrl.Parse(LParser.GetUrl);
-      LContentLen := LParser.GetBodySize;
-      LBodyReader := LParser.NewBodyReader;
-      if LBodyReader <> nil then
-      begin
-        LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
-          LParser.GetHeaders, LBodyReader, LContentLen);
-      end
-      else
-      begin
-        LContentLen := 0;
-        LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
-          LParser.GetHeaders, nil, LContentLen);
-      end;
-
-      (LReq as THttpRequest).SetRemoteAddr(AConn.RemoteAddr.ToString);
-
-      if LPending <> '' then
-        LHijackConn := TPrefixedTcpStream.Create(AConn, LPending)
-      else
-        LHijackConn := AConn;
-      LW := TH1ResponseWriter.Create(LBufWriter, LHijackConn);
-      if LKeepAlive and (LParser.GetHttpVersion = hvHttp10) then
-        LW.GetHeaders.Set_('connection', 'keep-alive');
-      if not LKeepAlive then
-        LW.GetHeaders.Set_('connection', 'close');
-
-      AHandler.ServeHTTP(LReq, LW);
-
-      if (LW as TH1ResponseWriter).IsHijacked then
-      begin
-        Result := False;
-        LKeepAlive := False;
-        Continue;
-      end;
-
-      LW.Flush;
-      (LBufWriter as IFlusher).Flush;
-
-      if LW.GetHeaders.Get('connection') = 'close' then
-        LKeepAlive := False;
-    except
-      on E: Exception do
-      begin
-        if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
-          Result := False
-        else
-          WriteErrorResponse(AConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
-        LKeepAlive := False;
-      end;
-    end;
+  LState := TH1ServerConnectionState.Create(AConn, AHandler, FOptions);
+  try
+    Result := LState.Run;
+  finally
+    LState.Free;
   end;
 end;
 
