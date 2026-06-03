@@ -7,7 +7,35 @@ interface
 uses
   nextpas.core.net.intf,
   nextpas.core.net.server.base,
-  nextpas.core.net.server.intf;
+  nextpas.core.net.server.intf,
+  nextpas.core.platform.io.base,
+  nextpas.core.time.deadline;
+
+type
+  TTcpServerPollSessionTarget = class
+  private
+    FConn: ITcpStream;
+    FSocketRuntime: ITcpSocketRuntime;
+    FSession: ITcpServerSession;
+    FPollSession: ITcpServerPollDrivenSession;
+    FDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+    FEvents: TPlatformPollEvents;
+    FWakeDeadline: TDeadline;
+    procedure RefreshWakeDeadline;
+  public
+    constructor Create(const AConn: ITcpStream;
+      const ASocketRuntime: ITcpSocketRuntime;
+      const ASession: ITcpServerSession;
+      const APollSession: ITcpServerPollDrivenSession);
+    function SocketHandle: Int32;
+    function CurrentEvents: TPlatformPollEvents;
+    procedure SetCurrentEvents(const AEvents: TPlatformPollEvents);
+    function WakeDeadline: TDeadline;
+    function Connection: ITcpStream;
+    function HandleEvents(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
 
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
@@ -15,6 +43,9 @@ procedure CreateTcpServerRuntimeContext(
 function TryCreateTcpServerSession(const AHandler: ITcpServerHandler;
   const AConn: ITcpStream; const AContext: ITcpServerSessionContext;
   out ASession: ITcpServerSession): Boolean;
+function TryCreateTcpServerPollSessionTarget(const AConn: ITcpStream;
+  const ASession: ITcpServerSession;
+  out ATarget: TTcpServerPollSessionTarget): Boolean;
 function ExecuteTcpServerSession(
   const ASession: ITcpServerSession): TTcpServerConnOwnership;
 function ExecuteTcpServerConnHandler(const AHandler: ITcpServerHandler;
@@ -62,6 +93,67 @@ type
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
+
+constructor TTcpServerPollSessionTarget.Create(const AConn: ITcpStream;
+  const ASocketRuntime: ITcpSocketRuntime; const ASession: ITcpServerSession;
+  const APollSession: ITcpServerPollDrivenSession);
+begin
+  inherited Create;
+  FConn := AConn;
+  FSocketRuntime := ASocketRuntime;
+  FSession := ASession;
+  FPollSession := APollSession;
+  FEvents := FPollSession.PollEvents;
+  if Supports(ASession, ITcpServerPollDrivenSessionWithDeadline,
+    FDeadlineSession) then
+    RefreshWakeDeadline
+  else
+    FWakeDeadline := TDeadline.Infinite;
+  if (FEvents = []) and FWakeDeadline.IsInfinite then
+    raise EArgumentError.Create('poll-driven session must expose poll events');
+end;
+
+function TTcpServerPollSessionTarget.SocketHandle: Int32;
+begin
+  Result := Int32(FSocketRuntime.NativeSocketHandle);
+end;
+
+function TTcpServerPollSessionTarget.CurrentEvents: TPlatformPollEvents;
+begin
+  Result := FEvents;
+end;
+
+procedure TTcpServerPollSessionTarget.SetCurrentEvents(
+  const AEvents: TPlatformPollEvents);
+begin
+  FEvents := AEvents;
+end;
+
+procedure TTcpServerPollSessionTarget.RefreshWakeDeadline;
+begin
+  if FDeadlineSession <> nil then
+    FWakeDeadline := FDeadlineSession.WakeDeadline
+  else
+    FWakeDeadline := TDeadline.Infinite;
+end;
+
+function TTcpServerPollSessionTarget.WakeDeadline: TDeadline;
+begin
+  Result := FWakeDeadline;
+end;
+
+function TTcpServerPollSessionTarget.Connection: ITcpStream;
+begin
+  Result := FConn;
+end;
+
+function TTcpServerPollSessionTarget.HandleEvents(
+  const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+begin
+  Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
+  RefreshWakeDeadline;
+end;
 
 constructor TTcpServerWorkTask.Create(const AWork: ITcpServerWork;
   const ACompletion: ITcpServerWorkCompletion);
@@ -195,6 +287,25 @@ begin
     Exit(True);
   end;
   Result := False;
+end;
+
+function TryCreateTcpServerPollSessionTarget(const AConn: ITcpStream;
+  const ASession: ITcpServerSession;
+  out ATarget: TTcpServerPollSessionTarget): Boolean;
+var
+  LPollSession: ITcpServerPollDrivenSession;
+  LSocketRuntime: ITcpSocketRuntime;
+begin
+  ATarget := nil;
+  if not Supports(ASession, ITcpServerPollDrivenSession, LPollSession) then
+    Exit(False);
+  if not Supports(AConn, ITcpSocketRuntime, LSocketRuntime) then
+    Exit(False);
+
+  LSocketRuntime.SetBlocking(False);
+  ATarget := TTcpServerPollSessionTarget.Create(AConn, LSocketRuntime,
+    ASession, LPollSession);
+  Result := True;
 end;
 
 function ExecuteTcpServerSession(

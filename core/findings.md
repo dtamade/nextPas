@@ -1,66 +1,58 @@
-# Findings: http server runtime architecture refinement
+# Findings: net.server readiness driver extraction step1
 
 ## Scope
 
-- 这轮不是继续刷单点 HTTP correctness case。
-- 目标是把 `http` / `net.server` 的现代 server runtime 方向写硬，避免后续在
-  `threaded`、`epoll`、`kqueue`、`IOCP` 之间重复摇摆。
+- 这轮不是继续扩 HTTP 语义覆盖。
+- 目标是把 readiness-family runtime driver 的最小公共骨架，从
+  `nextpas.core.net.server.epoll` 收回到 `nextpas.core.net.server.runtime`。
 
 ## Confirmed truths
 
-### 1. 当前方向已经不是“HTTP 自己拥有线程模型”
+### 1. 当前最适合先收口的是 readiness-family foundation，不是先空转 `IOCP`
 
-- `nextpas.core.http.server` 现在是 facade / composition。
-- runtime ownership、backend 选择、session context、worker handoff 已经进入
-  `nextpas.core.net.server` foundation。
-- `TH1ServerConnectionState` 也已经是独立的 per-connection protocol state object。
+- `platform.io` 已经有 Linux `epoll` 与 BSD/macOS `kqueue` 的 poller 形态。
+- 现阶段真正重复风险最高的是：
+  - poll-driven session target
+  - current-events / wake-deadline bookkeeping
+  - runtime seam 检查与 nonblocking 切换
+- 所以先把这层收进 foundation，比先空造 Windows-only seam 更稳。
 
-### 2. 现有选型本身是对的，但文档里原先还少一条关键边界
+### 2. `epoll` 原先仍保留一块 readiness driver 私有骨架
 
-- 继续保持：
-  - public surface：Go-like
-  - protocol/runtime split：Tokio / Hyper-like
-  - backend policy：libuv-like
-- 真正还缺的是：
-  - `epoll` / `kqueue` 是 readiness family
-  - `IOCP` 是 completion/proactor family
-  - 不能把它们写成“都共用同一个伪装后的 readable/writable backend”
+- `TTcpEpollPollSessionTarget` 原先仍定义在 `nextpas.core.net.server.epoll.pas`。
+- 这会让 future `kqueue` 很容易复制一份同构状态壳，而不是复用 foundation helper。
 
-### 3. `IOCP` 的风险点在 foundation seam，不在 HTTP facade
+### 3. 这轮下沉后，代码边界更符合已固定的架构文档
 
-- 当前 `ITcpServerPollDrivenSession` 是 readiness-family seam，适合继续服务
-  Linux `epoll` 与 future `kqueue`。
-- Windows `IOCP` 需要保持同一 public ownership/session/handoff contract，
-  但允许 foundation 层补 completion-aware driver 规则。
-- 这意味着 future Windows 支持不应把 socket scheduling 分支重新拉回
-  `nextpas.core.http`。
+- `nextpas.core.net.server.runtime.pas` 现在拥有：
+  - `TTcpServerPollSessionTarget`
+  - `TryCreateTcpServerPollSessionTarget`
+- `nextpas.core.net.server.epoll.pas` 只保留 backend-specific 的：
+  - poller wait / add / modify / remove
+  - completion queue
+  - reactor wake
+  - accept loop
 
-### 4. `BaseServer` 路线现在应该视为已被正式排除
+### 4. 现有 HTTP contract 没被改动
 
-- 共享问题确实存在，但共享点是 foundation runtime，而不是大而全继承树。
-- 如果现在回退成 `TBaseServer`，会同时扭曲：
-  - protocol/runtime 职责边界
-  - readiness/completion backend 语义
-  - hijack / pipelining / backpressure 这类协议特有行为
+- 这轮没有改 `IHttpServer`、`IHttpHandler`、H1 parser/writer contract。
+- `test_http_server` 全绿证明：
+  - epoll backend 行为没回退
+  - H1 poll-driven request handoff / drain / deadline wake / bounded queue 语义保持不变
 
 ## Verification evidence
 
-- 文档与源码交叉审阅：
-  - `docs/http/ARCHITECTURE.md`
-  - `docs/net/ARCHITECTURE.md`
-  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
-  - `src/nextpas.core.net.server.intf.pas`
-  - `src/nextpas.core.net.intf.pas`
-  - `src/nextpas.core.http.impl.h1.pas`
-- 一手资料对照结论：
-  - Go `net/http` 提供同步 `ServeHTTP` handler surface
-  - Hyper 把一个连接作为由 runtime 驱动的 protocol object
-  - libuv 采用 `epoll` / `kqueue` / `IOCP` 的 backend discipline
-  - Microsoft 明确 `IOCP` 是 completion-port 模型，不是 readiness poll
+- `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - `22/22 passed`
+  - heaptrc: `0 unfreed memory blocks`
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `119/119 passed`
+  - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮只收紧了设计，不代表 `kqueue` / `IOCP` 已进入实现。
-- 当前 repo 仍只有 `threaded` 与 Linux `epoll` 落地。
-- 在真正开始 Windows backend 前，foundation 还需要先补
-  completion-aware driver 规则，否则很容易把 `IOCP` 错接成伪 readiness 层。
+- 这轮只抽出了 readiness-family poll-session target/helper，还没继续抽：
+  - completion queue/wake wrapper
+  - poll-driven session context wrapper
+- `kqueue` backend 还没落地到 `net.server`
+- `IOCP` completion-aware driver 仍是后续 foundation 任务，不在本轮范围
