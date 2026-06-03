@@ -112,6 +112,8 @@ type
     FTryWriteCalls: Int32;
     FWouldBlockCall: Int32;
     FMaxPerTryWrite: SizeUInt;
+    FWriteDeadlineCalls: Int32;
+    FLastWriteDeadline: TDeadline;
   public
     constructor Create(const AInput: string; const AWouldBlockCall: Int32;
       const AMaxPerTryWrite: SizeUInt);
@@ -140,6 +142,8 @@ type
     property Blocking: Boolean read FBlocking;
     property SyncWriteCalls: Int32 read FSyncWriteCalls;
     property TryWriteCalls: Int32 read FTryWriteCalls;
+    property WriteDeadlineCalls: Int32 read FWriteDeadlineCalls;
+    property LastWriteDeadline: TDeadline read FLastWriteDeadline;
   end;
 
   TTimedDrainRuntimeTcpStream = class(TInterfacedObject, IReader, IWriter,
@@ -427,6 +431,8 @@ begin
   FTryWriteCalls := 0;
   FWouldBlockCall := AWouldBlockCall;
   FMaxPerTryWrite := AMaxPerTryWrite;
+  FWriteDeadlineCalls := 0;
+  FLastWriteDeadline := TDeadline.Infinite;
 end;
 
 function TWritableDrainRuntimeTcpStream.Read(var ABuf;
@@ -505,6 +511,8 @@ end;
 procedure TWritableDrainRuntimeTcpStream.SetWriteDeadline(
   const ADeadline: TDeadline);
 begin
+  Inc(FWriteDeadlineCalls);
+  FLastWriteDeadline := ADeadline;
 end;
 
 function TWritableDrainRuntimeTcpStream.NativeSocketHandle: PtrUInt;
@@ -1834,6 +1842,93 @@ begin
     'timed stalled drain does not hand off follow-up request');
   CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
     'deadline wake closes without extra write retry');
+end;
+
+procedure TestH1PollDrivenSessionClearsWakeDeadlineAfterSuccessfulTimedDrain;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TWritableDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10;
+  BODY = 'ok';
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for timed drain reset test');
+
+  LStreamObj := TWritableDrainRuntimeTcpStream.Create(REQ, 1, 0);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(BODY[1], SizeUInt(Length(BODY)));
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for timed drain reset test');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    'timed drain reset session exposes deadline seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'first readable advance stays active while timed reset request work completes');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'timed reset request is handed off once');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'timed reset handler runs once');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'completion wake enters timed drain reset path');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    'timed reset completion wake attempts first nonblocking write once');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'timed reset path arms write deadline before stalled drain');
+  Check(not LDeadlineSession.WakeDeadline.IsInfinite,
+    'timed reset path exposes finite wake deadline while stalled');
+  Check(LNextEvents = [peWritable],
+    'timed reset path waits for writable after would-block');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    'writable wake completes timed reset drain for close-after-response request');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), 'timed reset drain keeps server ownership');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    'writable wake retries timed reset drain once');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    'successful timed drain clears wake deadline');
+  Check(Pos('HTTP/1.1 200 OK', LStreamObj.Output) > 0,
+    'timed reset drain writes response status line');
+  Check(Pos(BODY, LStreamObj.Output) > 0,
+    'timed reset drain writes response body');
 end;
 
 procedure TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp;
@@ -7272,6 +7367,8 @@ begin
     @TestH1PollDrivenSessionDrainsResponseViaWritableEvents);
   T.Run('H1 poll-driven session times out stalled drain on deadline wake',
     @TestH1PollDrivenSessionTimesOutStalledDrainOnDeadlineWake);
+  T.Run('H1 poll-driven session clears wake deadline after successful timed drain',
+    @TestH1PollDrivenSessionClearsWakeDeadlineAfterSuccessfulTimedDrain);
   T.Run('H1 poll-driven session partial timed drain stops buffered follow-up',
     @TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp);
   T.Run('H1 poll-driven session queues bounded responses while draining',
