@@ -1,42 +1,45 @@
-# Task Plan: nextpas.core.http zero-progress buffered write boundary
+# Task Plan: nextpas.core.http response-side write-timeout safety proof
 
 ## Goal
 
-继续收紧 `nextpas.core.http` 的 response-side correctness，
-把上轮已经明确的 silent flush-error residual 真正收口：
-当底层 `IWriter` 出现 zero-progress write 时，buffered writer 必须显式失败，
-HTTP server session 也必须在首个响应写失败后停止，不得继续消费同连接里的后续 pipelined request。
+继续 `nextpas.core.http` 的 response-side correctness 收口，
+这轮不重开 runtime 架构讨论，先把已经固定下来的 server/runtime 设计真相确认到位，
+然后补齐 `WriteTimeout` / partial-write timeout / backpressure 风险点的 focused proof：
+
+- `WriteTimeout > 0` 时 session 确实会设置 write deadline
+- timeout 发生在首个响应写出前时，不会补写 synthetic `500`
+- timeout 发生在部分字节已写出后时，session 会安全停止，且不再消费同连接后续 pipelined request
 
 ## Checklist
 
 - [x] 读取 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、
   `task_plan.md`、`findings.md`、`progress.md`。
-- [x] 检查 `git status`，确认 shared checkout 里仍有大量无关脏文件，本轮继续只做 path-limited 变更。
-- [x] 审阅 `io.buffer` 与 `h1` session 当前实现，确认 residual 是 zero-progress buffered write 被静默吞掉。
-- [x] 先做 RED：
-  - `test_io`: buffered writer flush/direct-write 的 zero-progress 必须抛 `EIOError`
-  - `test_http_server`: 首个响应写失败后，session 不得继续处理第二个 pipelined request
-- [x] 运行 RED：
-  - `make -C tests/nextpas.core.io/test_io clean test`
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-- [x] 做最小 GREEN 修复：
-  - `src/nextpas.core.io.buffer.pas`
+- [x] 检查 `git status`，确认 shared checkout 仍有大量无关脏文件，本轮继续只做 path-limited 变更。
+- [x] 核对 server/runtime 设计是否已经正式落盘：
+  - `docs/net/ARCHITECTURE.md`
+  - `docs/http/ARCHITECTURE.md`
+  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
+- [x] 审阅 `src/nextpas.core.http.impl.h1.pas`，确认本轮聚焦的是 session-level timeout/backpressure 语义，而不是重开架构。
+- [x] 补 `test_http_server` focused proof：
+  - timeout before any wire bytes: no synthetic `500`
+  - partial-write timeout: safe-stop + no later pipelined request consumption
 - [x] 运行 focused 验证：
-  - `make -C tests/nextpas.core.io/test_io clean test`
   - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `make -C tests/nextpas.core.http/test_http_client clean test`
 - [x] 更新 `docs/http/API_COVERAGE.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- [x] 做 path-limited staging / commit，并输出中文收尾报告。
+- [ ] 做 path-limited staging / commit，并输出中文收尾报告。
 
 ## Current Status
 
-- 本轮是真实生产修复，不是纯 coverage-expansion。
-- zero-progress buffered write seam 已由 `io` + `http server` 两层 focused tests 锁定并修复。
-- 本轮不跑全量测试，不做 benchmark，不碰 HTTP 以外的无关脏文件；只触及为 HTTP correctness 必需的 `io.buffer` 依赖点。
+- 本轮是 coverage-expansion / contract proof，不是生产修复。
+- server/runtime 设计文件已经存在且一致：
+  `docs/net/ARCHITECTURE.md` 是权威源，
+  `docs/http/ARCHITECTURE.md` 是 HTTP 侧架构入口，
+  `docs/plans/2026-06-03-http-server-runtime-foundation.md` 保留原始决策记录。
+- 当前没有证据要求改生产代码；先把 timeout/backpressure 安全语义做成 focused proof。
 
 ## Out of Scope
 
-- 重开 HTTP server / `nextpas.core.net.server` runtime 选型讨论
-- 实现 `kqueue` / `IOCP` / 完整 per-connection evented runtime
-- 做 full benchmark 或 async public API 改造
-- 扩散到 parser/security 以外的无关 HTTP 子模块
+- 重开 `BaseServer` / `IOCP` / `kqueue` / runtime 选型讨论
+- 跑全量测试或 benchmark
+- 把 fake-stream proof 直接扩成慢 peer / 大流量 OS 级性能测试
+- 碰 `nextpas.core.http` 之外的无关模块或共享 worktree 脏文件

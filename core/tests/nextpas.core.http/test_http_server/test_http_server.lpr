@@ -69,6 +69,43 @@ type
     property WriteDeadlineCalls: Int32 read FWriteDeadlineCalls;
   end;
 
+  TTimeoutWriteTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
+  private
+    FInput: string;
+    FInputPos: SizeInt;
+    FOutput: string;
+    FReadCalls: Int32;
+    FWriteCalls: Int32;
+    FReadDeadlineCalls: Int32;
+    FWriteDeadlineCalls: Int32;
+    FBytesBeforeFailure: SizeUInt;
+    FWrittenBeforeFailure: SizeUInt;
+    FFailureTriggered: Boolean;
+    FAllowWritesAfterFailure: Boolean;
+  public
+    constructor Create(const AInput: string; const ABytesBeforeFailure: SizeUInt;
+      const AAllowWritesAfterFailure: Boolean);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    property Output: string read FOutput;
+    property ReadCalls: Int32 read FReadCalls;
+    property WriteCalls: Int32 read FWriteCalls;
+    property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
+    property WriteDeadlineCalls: Int32 read FWriteDeadlineCalls;
+  end;
+
 constructor TZeroProgressTcpStream.Create(const AInput: string);
 begin
   inherited Create;
@@ -156,6 +193,142 @@ end;
 procedure TZeroProgressTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
   Inc(FWriteDeadlineCalls);
+end;
+
+constructor TTimeoutWriteTcpStream.Create(const AInput: string;
+  const ABytesBeforeFailure: SizeUInt; const AAllowWritesAfterFailure: Boolean);
+begin
+  inherited Create;
+  FInput := AInput;
+  FInputPos := 1;
+  FOutput := '';
+  FReadCalls := 0;
+  FWriteCalls := 0;
+  FReadDeadlineCalls := 0;
+  FWriteDeadlineCalls := 0;
+  FBytesBeforeFailure := ABytesBeforeFailure;
+  FWrittenBeforeFailure := 0;
+  FFailureTriggered := False;
+  FAllowWritesAfterFailure := AAllowWritesAfterFailure;
+end;
+
+function TTimeoutWriteTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeUInt;
+begin
+  Inc(FReadCalls);
+  if (ACount = 0) or (FInputPos > Length(FInput)) then
+    Exit(0);
+  LRemaining := SizeUInt(Length(FInput) - FInputPos + 1);
+  Result := ACount;
+  if Result > LRemaining then
+    Result := LRemaining;
+  Move(FInput[FInputPos], ABuf, Result);
+  Inc(FInputPos, SizeInt(Result));
+end;
+
+function TTimeoutWriteTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemainingBeforeFailure: SizeUInt;
+  LOldLen: SizeUInt;
+begin
+  Inc(FWriteCalls);
+
+  if ACount = 0 then
+    Exit(0);
+
+  if not FFailureTriggered then
+  begin
+    if FWrittenBeforeFailure < FBytesBeforeFailure then
+    begin
+      LRemainingBeforeFailure := FBytesBeforeFailure - FWrittenBeforeFailure;
+      Result := ACount;
+      if Result > LRemainingBeforeFailure then
+        Result := LRemainingBeforeFailure;
+      LOldLen := SizeUInt(Length(FOutput));
+      SetLength(FOutput, LOldLen + Result);
+      Move(ABuf, FOutput[LOldLen + 1], Result);
+      Inc(FWrittenBeforeFailure, Result);
+      Exit;
+    end;
+
+    FFailureTriggered := True;
+    raise ETimeoutError.Create('write deadline exceeded');
+  end;
+
+  if not FAllowWritesAfterFailure then
+    raise ETimeoutError.Create('write deadline exceeded');
+
+  LOldLen := SizeUInt(Length(FOutput));
+  SetLength(FOutput, LOldLen + ACount);
+  Move(ABuf, FOutput[LOldLen + 1], ACount);
+  Result := ACount;
+end;
+
+function TTimeoutWriteTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := -1;
+end;
+
+procedure TTimeoutWriteTcpStream.Close;
+begin
+end;
+
+function TTimeoutWriteTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TTimeoutWriteTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TTimeoutWriteTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TTimeoutWriteTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TTimeoutWriteTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TTimeoutWriteTcpStream.Shutdown;
+begin
+end;
+
+procedure TTimeoutWriteTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TTimeoutWriteTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TTimeoutWriteTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+  Inc(FReadDeadlineCalls);
+end;
+
+procedure TTimeoutWriteTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+  Inc(FWriteDeadlineCalls);
+end;
+
+function DefaultH1ServerTransportOptions(
+  const AHttpOptions: THttpServerOptions): TH1ServerTransportOptions;
+begin
+  Result.ReadTimeout := AHttpOptions.ReadTimeout;
+  Result.WriteTimeout := AHttpOptions.WriteTimeout;
+  Result.IdleTimeout := AHttpOptions.IdleTimeout;
+  Result.MaxHeaderSize := AHttpOptions.MaxHeaderSize;
+  Result.MaxBodySize := AHttpOptions.MaxBodySize;
 end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -549,11 +722,7 @@ const
     'Host: localhost'#13#10#13#10;
 begin
   LHttpOpts := THttpServerOptions.Default;
-  LH1Opts.ReadTimeout := LHttpOpts.ReadTimeout;
-  LH1Opts.WriteTimeout := LHttpOpts.WriteTimeout;
-  LH1Opts.IdleTimeout := LHttpOpts.IdleTimeout;
-  LH1Opts.MaxHeaderSize := LHttpOpts.MaxHeaderSize;
-  LH1Opts.MaxBodySize := LHttpOpts.MaxBodySize;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
 
   LTransport := NewH1ServerTransport(LH1Opts);
   Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
@@ -588,6 +757,128 @@ begin
     'second pipelined request remains unprocessed after write failure');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteCalls),
     'single response write attempt reached inner stream before failure');
+end;
+
+procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LSession: ITcpServerSession;
+  LStreamObj: TTimeoutWriteTcpStream;
+  LStream: ITcpStream;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+const
+  REQ =
+    'GET /timeout HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 250;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'h1 transport exposes session factory for timeout proof');
+
+  LStreamObj := TTimeoutWriteTcpStream.Create(REQ, 0, True);
+  LStream := LStreamObj as ITcpStream;
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: string;
+    begin
+      Inc(LHandlerCalls);
+      LBody := 'ok';
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBody[1], 2);
+    end));
+
+  LOwnership := LSession.Run;
+
+  Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER,
+    'server keeps ownership on timeout before any wire bytes');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'timeout before any wire bytes still handles only first request');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadCalls),
+    'timeout before any wire bytes consumes one request read');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteCalls),
+    'timeout before any wire bytes performs only the failing response write');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'write timeout config sets a write deadline before response write');
+  CheckEqual(Int64(0), Int64(Length(LStreamObj.Output)),
+    'timeout before any wire bytes leaves socket without synthetic fallback response');
+  Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
+    'timeout before any wire bytes does not append synthetic 500');
+end;
+
+procedure TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LSession: ITcpServerSession;
+  LStreamObj: TTimeoutWriteTcpStream;
+  LStream: ITcpStream;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+  LSeenFirstPath: string;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /two HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 250;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'h1 transport exposes session factory for partial-timeout proof');
+
+  LStreamObj := TTimeoutWriteTcpStream.Create(REQ, 8, True);
+  LStream := LStreamObj as ITcpStream;
+  LHandlerCalls := 0;
+  LSeenFirstPath := '';
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: string;
+    begin
+      Inc(LHandlerCalls);
+      if LHandlerCalls = 1 then
+        LSeenFirstPath := AReq.Url.Path;
+      LBody := 'ok';
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBody[1], 2);
+    end));
+
+  LOwnership := LSession.Run;
+
+  Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER,
+    'server keeps ownership on partial timeout write failure');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'partial timeout stops pipeline after first request');
+  CheckEqual('/one', LSeenFirstPath,
+    'partial timeout still handled the first request path');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadCalls),
+    'partial timeout leaves second pipelined request unread');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteCalls),
+    'partial timeout hits one partial write and one timeout write');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'partial timeout path sets a write deadline');
+  CheckEqual(Int64(8), Int64(Length(LStreamObj.Output)),
+    'partial timeout preserves only already-written bytes');
+  Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
+    'partial timeout does not append synthetic 500 after partial response bytes');
 end;
 
 { Test 5: Shutdown stops accepting }
@@ -5391,6 +5682,10 @@ begin
     @TestCommittedResponseExceptionDoesNotAppend500);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
+  T.Run('Write timeout before any wire bytes does not append 500',
+    @TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500);
+  T.Run('Write timeout after partial wire bytes stops pipeline without 500',
+    @TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);

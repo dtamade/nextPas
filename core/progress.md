@@ -1,39 +1,41 @@
-# Progress Log: nextpas.core.http zero-progress buffered write boundary
+# Progress Log: nextpas.core.http response-side write-timeout safety proof
 
 ## Session
 
-- **Scope:** 锁定 zero-progress buffered response write 的显式失败语义，避免 HTTP session 在写失败后继续处理同连接后续请求。
+- **Scope:** 在不重开 server/runtime 架构的前提下，补齐 `WriteTimeout` /
+  partial-write timeout / backpressure 风险点的 focused server proof。
 - **Status:** completed
 
 ## Current state
 
-- backend / architecture truth 没变，这轮没有重开 server 模型。
-- 共享 worktree 仍是脏的；本轮继续只碰 HTTP 相关 tests / 控制面，以及为 HTTP correctness 必需的 `io.buffer`。
-- zero-progress buffered write seam 已先 RED、后 GREEN 收口。
+- server/runtime 设计文件已经固定，当前权威链路是：
+  - `docs/net/ARCHITECTURE.md`
+  - `docs/http/ARCHITECTURE.md`
+  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
+- 共享 worktree 仍是脏的；本轮继续只碰 `nextpas.core.http` 相关测试与控制面文件。
+- 本轮没有改生产代码，因为 timeout/backpressure 语义在现有实现中已被证明成立。
 
 ## Completed work
 
-- 新增 focused tests：
-  - `test_io`: buffered writer flush zero-progress raises
-  - `test_io`: buffered writer direct write zero-progress raises
-  - `test_http_server`: session stops after zero-progress response write failure
-- 生产修复：
-  - `TBufferedWriter.FlushBuffer` 现在对 zero-progress 直接抛 `EIOError`
-  - `TBufferedWriter.Write` 的 direct-write 分支同样不再静默吞掉 zero-progress
-  - destructor 中的自动 flush 继续吞异常，避免 destructor 抛错
-- fresh 验证已完成：
-  - `make -C tests/nextpas.core.io/test_io clean test`
-    - `48/48 passed`
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-    - `107/107 passed`
-  - `make -C tests/nextpas.core.http/test_http_client clean test`
-    - `16/16 passed`
-    - heaptrc 均为 `0 unfreed memory blocks`
+- `test_http_server` 新增 timeout/backpressure focused proof：
+  - `Write timeout before any wire bytes does not append 500`
+  - `Write timeout after partial wire bytes stops pipeline without 500`
+- 新增 `TTimeoutWriteTcpStream` fake transport，用来脚本化模拟：
+  - pre-wire timeout
+  - partial-write timeout
+- 顺手提取了 `DefaultH1ServerTransportOptions(...)`，避免 test 内重复映射 HTTP -> H1 transport options。
+- 更新 `docs/http/API_COVERAGE.md`，把 write-timeout safety proof 纳入 `IHttpServer` 覆盖结论。
+- 更新 `task_plan.md`、`findings.md`、`progress.md`，同步这轮真相与下一步方向。
+
+## Verification
+
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `109/109 passed`
+  - heaptrc：`0 unfreed memory blocks`
 
 ## Next step
 
-- 下一轮应继续 response-side transport/session seam，但不要回到已经修好的 zero-progress buffered write 分支。
-- 优先补：
-  - write-timeout focused proof
-  - safe-close / no-double-response 语义在 timeout 场景下的证据
-  - 更现代 runtime 设计讨论继续留在 architecture 线程，不在 correctness 批次里掺杂
+- 若继续沿 response-side correctness 推进，下一步应从 fake-stream proof 进入更真实的 transport/runtime proof：
+  - stalled peer / real socket write-timeout timing
+  - backend runtime 对 backpressure 的真实行为
+- 在没有新的 RED 之前，不建议为了“看起来更完整”去改生产代码。
