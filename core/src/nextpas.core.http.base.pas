@@ -5,7 +5,8 @@ unit nextpas.core.http.base;
 interface
 
 uses
-  nextpas.core.errors;
+  nextpas.core.errors,
+  nextpas.core.net.server.base;
 
 type
   THttpVersion = (hvHttp10, hvHttp11, hvHttp2, hvHttp3);
@@ -16,6 +17,7 @@ type
   );
 
   THttpStatus = UInt16;
+  TTcpServerBackend = nextpas.core.net.server.base.TTcpServerBackend;
 
   EHttpError = class(ENextPasError)
   public
@@ -43,6 +45,7 @@ type
   end;
 
   THttpServerOptions = record
+    Backend: TTcpServerBackend;
     ReadTimeout: Int64;
     WriteTimeout: Int64;
     IdleTimeout: Int64;
@@ -52,6 +55,10 @@ type
   end;
 
 const
+  TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
+  TCP_SERVER_BACKEND_EPOLL = nextpas.core.net.server.base.tsbEpoll;
+  TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
+  TCP_SERVER_BACKEND_IOCP = nextpas.core.net.server.base.tsbIocp;
   HTTP_STATUS_SWITCHING_PROTOCOLS   = THttpStatus(101);
   HTTP_STATUS_OK                    = THttpStatus(200);
   HTTP_STATUS_CREATED               = THttpStatus(201);
@@ -318,6 +325,7 @@ end;
 
 class function THttpServerOptions.Default: THttpServerOptions;
 begin
+  Result.Backend := tsbThreaded;
   Result.ReadTimeout := 0;
   Result.WriteTimeout := 0;
   Result.IdleTimeout := 30000;

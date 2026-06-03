@@ -1,17 +1,19 @@
-# Task Plan: HTTP security chunked raw-wire coverage batch 5
+# Task Plan: HTTP server backend contract surfacing batch 6
 
 ## Goal
 
-继续沿 `HttpServer` correctness/security 路线收口 `test_http_security`，优先补当前
-最高价值但仍缺 raw-wire proof 的 chunked 边界：
+继续收紧 `HttpServer` public contract，让已经下沉到 `nextpas.core.net.server`
+foundation 的 runtime backend seam 真正出现在 HTTP public options 里，并有 focused
+proof 锁住：
 
-- chunked ingress `MaxBodySize` 必须在 terminal chunk 前直接 `413`
-- oversize trailer 必须仍受 `MaxHeaderSize` 约束并返回 `431` 或安全关闭
+- `THttpServerOptions.Default.Backend`
+- `THttpServerOptions.Backend` -> `THttpServer` -> `nextpas.core.net.server`
+  的 forwarding 语义
 
 ## Checklist
 
-- [x] 复核 `test_http_security` 与现有 `test_http_server` 的 chunked/security 缺口。
-- [x] 先写 raw-wire RED：terminal chunk 前 `413` 与 oversize trailer `431`/安全关闭。
-- [x] 跑 `test_http_security` 验证是否需要生产修复。
-- [x] 确认本轮为 coverage-expansion，无需改生产代码。
-- [x] 更新覆盖矩阵与控制文件，准备 path-limited 提交。
+- [x] 审计 `HttpServer` public options 与 runtime foundation 之间的 seam 缺口。
+- [x] 先写 RED，确认 `THttpServerOptions` 还没有 backend public seam。
+- [x] 做最小实现，把 backend 选择纳入 `THttpServerOptions` 并传到 TCP foundation。
+- [x] 跑 changed-surface focused tests 与 heaptrc。
+- [x] 更新覆盖矩阵、README、架构文档与控制文件。

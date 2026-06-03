@@ -189,6 +189,7 @@ var
   LOptions: THttpServerOptions;
 begin
   LOptions := THttpServerOptions.Default;
+  Check(LOptions.Backend = TCP_SERVER_BACKEND_THREADED, 'default backend');
   CheckEqual(Int64(0), LOptions.ReadTimeout, 'default read timeout');
   CheckEqual(Int64(0), LOptions.WriteTimeout, 'default write timeout');
   CheckEqual(Int64(30000), LOptions.IdleTimeout, 'default idle timeout');

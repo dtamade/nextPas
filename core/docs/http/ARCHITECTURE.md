@@ -14,6 +14,7 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 - `http.base` 现在拥有 `THttpClientOptions` / `THttpServerOptions` 这两个公共 options carrier。
 - `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造，server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
+- `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
 - 当前真实源码库存为 24 个 HTTP 单元，测试工程为 21 个；H2/H3 仍未进入实现。
 

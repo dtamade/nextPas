@@ -1,20 +1,25 @@
-# Progress Log: HTTP security chunked raw-wire coverage batch 5
+# Progress Log: HTTP server backend contract surfacing batch 6
 
 ## Session
 
-- **Scope:** 给 `test_http_security` 补 chunked ingress 的 raw-wire security proof。
+- **Scope:** 把 `HttpServer` runtime backend seam 正式公开进 `THttpServerOptions`。
 - **Status:** completed
 
 ## Notes
 
-- `test_http_security` 新增 direct proof：
-  - chunked `MaxBodySize` rejects before terminal chunk
-  - chunked oversize trailer still uses `MaxHeaderSize`
-- 两条新测试首次运行直接通过，说明当前真相是 coverage gap，不是生产 bug。
-- 本轮未改 `src/` 生产代码。
+- `src/nextpas.core.http.base.pas` 现在公开 re-export
+  `TTcpServerBackend` 与 `TCP_SERVER_BACKEND_*` 常量，并为
+  `THttpServerOptions` 新增 `Backend`。
+- `src/nextpas.core.http.server.pas` 现在把 `THttpServerOptions.Backend`
+  下沉到 `nextpas.core.net.server` foundation。
+- `test_http_base` 现在锁定默认 backend。
+- `test_http_contract` 现在直接证明：显式 backend 选择不会被 HTTP facade 静默吞掉。
 
 ## Fresh verification
 
-- `make -C tests/nextpas.core.http/test_http_security clean test`
+- `make -C tests/nextpas.core.http/test_http_base clean test`
+- `make -C tests/nextpas.core.http/test_http_contract clean test`
+- `make -C tests/nextpas.core.http/test_http_registry clean test`
+- `make -C tests/nextpas.core.http/test_http_server clean test`
 
-- 结果：`57/57 passed`，heaptrc `0 unfreed memory blocks`。
+- 上述命令均已通过，且 heaptrc 均为 `0 unfreed memory blocks`。

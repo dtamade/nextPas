@@ -649,6 +649,44 @@ begin
   Check(LRaised, 'NewHttpServer rejects nil handler');
 end;
 
+procedure TestHttpServerHonorsExplicitBackendSelection;
+var
+  LOptions: THttpServerOptions;
+  LRaised: Boolean;
+  LHandler: IHttpHandler;
+  LServer: IHttpServer;
+begin
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+  end);
+  LOptions := THttpServerOptions.Default;
+  {$IFDEF WINDOWS}
+  LOptions.Backend := TCP_SERVER_BACKEND_KQUEUE;
+  {$ELSE}
+  LOptions.Backend := TCP_SERVER_BACKEND_IOCP;
+  {$ENDIF}
+
+  LRaised := False;
+  try
+    THttpServer.Create(LHandler, LOptions).Free;
+  except
+    on E: ENotSupportedError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'THttpServer.Create forwards explicit backend selection');
+
+  LRaised := False;
+  try
+    LServer := NewHttpServer(LHandler, LOptions);
+    LServer := nil;
+  except
+    on E: ENotSupportedError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'NewHttpServer(handler, options) forwards explicit backend selection');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
@@ -674,5 +712,7 @@ begin
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
   T.Run('HttpServer rejects nil handler', @TestHttpServerRejectsNilHandler);
+  T.Run('HttpServer honors explicit backend selection',
+    @TestHttpServerHonorsExplicitBackendSelection);
   T.Summary;
 end.

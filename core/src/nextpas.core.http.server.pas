@@ -87,6 +87,8 @@ end;
 
 constructor THttpServer.Create(const AHandler: IHttpHandler;
   const ATransport: IHttpServerTransport; const AOptions: THttpServerOptions);
+var
+  LTcpOptions: TTcpServerOptions;
 begin
   if AHandler = nil then
     raise EArgumentError.Create('http server handler must not be nil');
@@ -97,7 +99,9 @@ begin
     FTransport := ATransport
   else
     FTransport := ResolveDefaultServerTransport(AOptions);
-  FTcpServer := NewTcpServer;
+  LTcpOptions := TTcpServerOptions.Default;
+  LTcpOptions.Backend := AOptions.Backend;
+  FTcpServer := NewTcpServer(LTcpOptions);
   FConnHandler := THttpConnHandler.Create(FTransport, FHandler);
 end;
 
