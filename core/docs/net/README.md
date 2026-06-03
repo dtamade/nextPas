@@ -70,6 +70,7 @@ Current truth:
 - `nextpas.core.net` provides socket/listener primitives.
 - `nextpas.core.net.server` provides the reusable TCP server runtime seam.
 - `ITcpSocketRuntime` now exposes the native-handle / blocking-control prerequisite seam that future evented backends can consume without relying on concrete `TTcpStream` / `TTcpListener` casts.
+- `nextpas.core.net.server` now also resolves backends through a factory registry seam, so runtime selection is no longer hardcoded inside `NewTcpServer(...)`.
 - `ITcpListenerRuntime.TryAccept` plus `ITcpStreamRuntime.TryRead/TryWrite`
   are already landed as the narrow nonblocking runtime I/O seam.
 - Current shipped backends are `threaded` plus a Linux-only phase-1 `epoll`

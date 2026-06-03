@@ -75,6 +75,10 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   已固定 foundation contract：`ITcpServer` / `ITcpServerHandler`，并已收进
   `ITcpServerSession`、`ITcpServerWorkerHandoff`、`ITcpServerSessionContext`、
   `ITcpServerSessionFactoryWithContext` 这些后续 backend 必需的 seam。
+- [src/nextpas.core.net.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.pas:1)
+  现在已经有 backend factory registry seam：`RegisterTcpServerFactory` /
+  `TryGetTcpServerFactory` / `ResolveTcpServer`；`NewTcpServer(...)` 不再把 backend 选择写死在
+  facade 的 `case` 里。
 - [src/nextpas.core.net.server.runtime.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.runtime.pas:1)
   已把通用的 worker handoff、session context、connection close 语义收成 foundation
   runtime helper，避免 threaded / evented backend 重复复制这层逻辑。
@@ -118,6 +122,7 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 当前需要固定的真相不是“还没开始做 evented backend”，而是：
 
 - nonblocking runtime I/O seam 已经落地
+- backend provider / registry seam 已经落地
 - Linux `epoll` 第一阶段 backend 已经落地
 - 还没落地的是“runtime 直接驱动单连接协议状态对象”的完整版 evented execution
 
@@ -164,7 +169,7 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 所以当前固定的后续顺序是：
 
 1. 守住 threaded 与 `epoll` phase-1 的 public contract parity
-2. 让 future evented backend 直接复用已落地的 session/context/handoff seam
+2. 让 future evented backend 直接复用已落地的 factory/session/context/handoff seam
 3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
 4. 把 `TryRead/TryWrite` 接进真正的 per-connection runtime driver
 5. 然后再扩 `net.server.kqueue` / `iocp`

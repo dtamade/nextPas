@@ -6,6 +6,7 @@ uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.net,
   nextpas.core.net.intf,
@@ -157,8 +158,38 @@ type
     property LastOwnership: TTcpServerConnOwnership read FLastOwnership;
   end;
 
+  TMockServerProvider = class(TInterfacedObject, ITcpServer)
+  private
+    FListenCalled: Boolean;
+    FShutdownCalled: Boolean;
+    FOptionsBackend: TTcpServerBackend;
+  public
+    constructor Create(const AOptions: TTcpServerOptions);
+    procedure ListenAndServe(const AAddr: string; const APort: UInt16;
+      const AHandler: ITcpServerHandler);
+    procedure Shutdown;
+    function LocalAddr: TNetAddress;
+    function IsRunning: Boolean;
+    property ListenCalled: Boolean read FListenCalled;
+    property ShutdownCalled: Boolean read FShutdownCalled;
+    property OptionsBackend: TTcpServerBackend read FOptionsBackend;
+  end;
+
 var
   T: TTestRunner;
+  GProviderFactoryCalls: Int32;
+  GLastMockProvider: TMockServerProvider;
+
+function CreateMockServerProvider(
+  const AOptions: TTcpServerOptions): ITcpServer;
+var
+  LProvider: TMockServerProvider;
+begin
+  Inc(GProviderFactoryCalls);
+  LProvider := TMockServerProvider.Create(AOptions);
+  GLastMockProvider := LProvider;
+  Result := LProvider;
+end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
@@ -354,6 +385,33 @@ begin
   else
     FCapturedHandoff := nil;
   Result := TContextAwareSession.Create(Self, AConn, FCapturedHandoff, FMode);
+end;
+
+constructor TMockServerProvider.Create(const AOptions: TTcpServerOptions);
+begin
+  inherited Create;
+  FOptionsBackend := AOptions.Backend;
+end;
+
+procedure TMockServerProvider.ListenAndServe(const AAddr: string; const APort: UInt16;
+  const AHandler: ITcpServerHandler);
+begin
+  FListenCalled := True;
+end;
+
+procedure TMockServerProvider.Shutdown;
+begin
+  FShutdownCalled := True;
+end;
+
+function TMockServerProvider.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Any(0);
+end;
+
+function TMockServerProvider.IsRunning: Boolean;
+begin
+  Result := False;
 end;
 
 procedure TestDefaultOptions;
@@ -935,6 +993,69 @@ begin
     'shutdown handoff does not call completion');
 end;
 
+procedure TestBuiltInThreadedBackendFactoryExists;
+var
+  LFactory: TTcpServerFactory;
+begin
+  Check(TryGetTcpServerFactory(TCP_SERVER_BACKEND_THREADED, LFactory),
+    'threaded backend factory is registered');
+  Check(Assigned(LFactory), 'threaded backend factory is assigned');
+end;
+
+procedure TestCustomBackendFactoryOverridesSelection;
+var
+  LOldFactory: TTcpServerFactory;
+  LHadFactory: Boolean;
+  LOptions: TTcpServerOptions;
+  LServer: ITcpServer;
+begin
+  LHadFactory := TryGetTcpServerFactory(TCP_SERVER_BACKEND_KQUEUE, LOldFactory);
+  RegisterTcpServerFactory(TCP_SERVER_BACKEND_KQUEUE, @CreateMockServerProvider);
+  GProviderFactoryCalls := 0;
+  GLastMockProvider := nil;
+  try
+    LOptions := TTcpServerOptions.Default;
+    LOptions.Backend := TCP_SERVER_BACKEND_KQUEUE;
+    LServer := NewTcpServer(LOptions);
+    Check(LServer <> nil, 'custom backend factory returns server');
+    Check(GLastMockProvider <> nil, 'custom backend factory is used');
+    CheckEqual(Int64(1), Int64(GProviderFactoryCalls),
+      'custom backend factory called exactly once');
+    CheckEqual(Int64(Ord(TCP_SERVER_BACKEND_KQUEUE)),
+      Int64(Ord(GLastMockProvider.OptionsBackend)),
+      'custom backend factory sees requested backend');
+  finally
+    if LHadFactory then
+      RegisterTcpServerFactory(TCP_SERVER_BACKEND_KQUEUE, LOldFactory)
+    else
+      UnregisterTcpServerFactory(TCP_SERVER_BACKEND_KQUEUE);
+    GLastMockProvider := nil;
+  end;
+end;
+
+procedure TestMissingBackendFactoryRaisesNotSupported;
+var
+  LOldFactory: TTcpServerFactory;
+  LHadFactory: Boolean;
+  LOptions: TTcpServerOptions;
+  LRaised: Boolean;
+begin
+  LHadFactory := TryGetTcpServerFactory(TCP_SERVER_BACKEND_IOCP, LOldFactory);
+  UnregisterTcpServerFactory(TCP_SERVER_BACKEND_IOCP);
+  LRaised := False;
+  try
+    LOptions := TTcpServerOptions.Default;
+    LOptions.Backend := TCP_SERVER_BACKEND_IOCP;
+    NewTcpServer(LOptions);
+  except
+    on E: ENotSupportedError do
+      LRaised := True;
+  end;
+  if LHadFactory then
+    RegisterTcpServerFactory(TCP_SERVER_BACKEND_IOCP, LOldFactory);
+  Check(LRaised, 'missing backend factory raises ENotSupportedError');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestEpollServerEcho;
 var
@@ -1113,6 +1234,12 @@ begin
     @TestThreadedServerFailingHandoffReportsFailedOutcome);
   T.Run('Threaded server rejects handoff after shutdown',
     @TestThreadedServerRejectsHandoffAfterShutdown);
+  T.Run('Built-in threaded backend factory exists',
+    @TestBuiltInThreadedBackendFactoryExists);
+  T.Run('Custom backend factory overrides selection',
+    @TestCustomBackendFactoryOverridesSelection);
+  T.Run('Missing backend factory raises not supported',
+    @TestMissingBackendFactoryRaisesNotSupported);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('Epoll server echo', @TestEpollServerEcho);
   T.Run('Epoll server shutdown without clients',

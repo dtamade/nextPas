@@ -1,73 +1,63 @@
-# Findings: nextpas.core.net/http server runtime design freeze
+# Findings: nextpas.core.net.server backend provider seam
 
 ## Scope
 
-- 这轮只做设计收口，把 server runtime 方案固定到文件。
-- 目标是回答“HTTP server 现在是什么模型、未来怎么演进”，不是重开 correctness 测试批次。
+- 这轮把 `nextpas.core.net.server` 的 backend 解析从 facade 内硬编码 `case`
+  提升成 registry/provider seam。
+- 目标是给 future backend 与 phase-2 driver 打开稳定入口，同时保持当前 HTTP contract 不变。
 
 ## Confirmed truths
 
-### 1. 现在没有 `BaseServer`，抽象已经落在 `nextpas.core.net.server`
+### 1. provider seam 现在已经落地
 
-- 抽象核心在：
-  - `TTcpServerBackend`
-  - `ITcpServer`
-  - `ITcpServerSession`
-  - `ITcpServerSessionFactoryWithContext`
-  - `ITcpServerWorkerHandoff`
-- 当前缺的不是再造一个父类，而是：
-  - backend provider / registry
-  - phase-2 per-connection evented driver
-  - `kqueue` / `IOCP` 具体 backend
+- `src/nextpas.core.net.server.pas` 现在公开：
+  - `TTcpServerFactory`
+  - `RegisterTcpServerFactory`
+  - `UnregisterTcpServerFactory`
+  - `HasTcpServerFactory`
+  - `TryGetTcpServerFactory`
+  - `ResolveTcpServer`
+- `NewTcpServer(...)` 现在只做 facade forward，backend 解析改由 registry 完成。
 
-### 2. 当前 HTTP server 不是“HTTP 自己起线程”，但也还不是完整 event-driven runtime
+### 2. built-in backend 已改成“初始化注册”，不是写死在 facade
 
-- `threaded` backend 是 correctness baseline：
-  `accept` 后由连接 worker 同步执行 session。
-- Linux `epoll` backend 已经落到 phase 1：
-  evented listener + `TryAccept`，但连接执行仍是 worker-driven。
-- H1 侧已经把单连接协议状态收成 `TH1ServerConnectionState`，
-  说明 protocol state 与 runtime entrypoint 的 split 已经成立。
+- builtin `threaded` 始终注册。
+- Linux 下 builtin `epoll` 也在 initialization 里注册。
+- `kqueue` / `IOCP` 仍然没有 concrete backend，但现在已经有统一注册入口，不必再回到大 `case` 扩散。
 
-### 3. 最合理的固定选型是混合模型，不是单范式崇拜
+### 3. HTTP public contract 没有被重开
 
-- Go 风格用于 public model：
-  handler 保持同步、直线型。
-- Tokio / Hyper 风格用于 internal ownership split：
-  runtime 驱动 session，协议层不拥有线程模型。
-- libuv 风格用于 backend discipline：
-  Linux = `epoll`，BSD/macOS = `kqueue`，Windows = `IOCP`。
+- `THttpServer` 仍然只是把 `THttpServerOptions.Backend` 下沉到 `TTcpServerOptions`。
+- `NewHttpServer` / `NewHttpClient` 相关 registry 回归仍通过。
+- 这轮没有改 H1 parser / writer / server session 逻辑。
 
-### 4. “从基类 Server 开始”不是最佳落点
+### 4. 当前真正剩下的技术主线更清晰了
 
-共享问题确实在 server runtime 层，但共享的本体是：
+- shared phase-2 per-connection evented driver
+- `kqueue` concrete backend
+- `IOCP` concrete backend
 
-- listen / accept
-- backend 选择
-- connection ownership
-- shutdown
-- worker handoff
-- cross-platform I/O strategy
+provider seam 落地后，剩余问题已经从“怎么接 future backend”收窄成
+“怎么驱动 session”。
 
-这些职责属于 foundation module，而不是协议特定的大继承树。
+## Verification evidence
 
-### 5. 当前真正缺的下一步很具体
+- `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - `18/18 passed`
+  - 新增 proof：
+    - built-in threaded backend factory exists
+    - custom backend factory overrides selection
+    - missing backend factory raises `ENotSupportedError`
+  - heaptrc：`0 unfreed memory blocks`
+- `make -C tests/nextpas.core.http/test_http_registry clean test`
+  - `4/4 passed`
+  - 证明 HTTP constructor / registry 路径未被 net.server seam 变更误伤
+  - heaptrc：`0 unfreed memory blocks`
+- `git diff --check -- src/nextpas.core.net.server.pas tests/nextpas.core.net.server/test_net_server/test_net_server.lpr`
+  - clean
 
-- 保持 threaded 与 `epoll` phase-1 的 contract parity
-- 设计共享的 phase-2 per-connection evented driver
-- 让 `TryRead/TryWrite` 从“预留 seam”变成“真实调度 seam”
-- 在此基础上扩 `kqueue` / `IOCP`
+## Remaining gaps / risks
 
-## Decisions fixed this round
-
-- `docs/net/ARCHITECTURE.md` 继续作为权威架构文档
-- `docs/http/ARCHITECTURE.md` 负责对 HTTP 层解释 runtime ownership
-- 不引入大而全的 `TBaseServer`
-- 可以存在薄 convenience facade，但不能重新拥有 runtime policy
-- benchmark 仍后置；先把 runtime 设计与 correctness contract 分层守住
-
-## Risks / open items
-
-- backend 选择目前仍是 `NewTcpServer(...)` 里的 hardcoded `case`，后续还需要 provider seam
-- `epoll` 目前只完成 accept-evented phase 1，不能把它误称为完整版 event-driven HTTP server
-- Windows `IOCP` 与 BSD `kqueue` 仍未进入实现，当前只是架构目标，不是已交付能力
+- 目前 provider seam 仍是 facade-level registry，不等于 phase-2 runtime driver 已存在。
+- `kqueue` / `IOCP` 仍无 concrete backend；当前只是“可接入”，不是“已交付”。
+- HTTP 侧目前还没有直接消费 provider capability 的更细抽象；这件事只有在多 backend/多 strategy 真正出现时才值得扩 public seam。

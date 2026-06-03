@@ -66,6 +66,9 @@ This is no longer just a proposal. The foundation split has already landed:
 - [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
   exposes the real server seams: `ITcpServer`, `ITcpServerSession`,
   `ITcpServerSessionFactoryWithContext`, `ITcpServerWorkerHandoff`.
+- [src/nextpas.core.net.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.pas:1)
+  now also exposes the backend factory registry seam:
+  `RegisterTcpServerFactory`, `TryGetTcpServerFactory`, `ResolveTcpServer`.
 - [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:38)
   is the correctness baseline backend.
 - [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:40)
@@ -78,7 +81,6 @@ This is no longer just a proposal. The foundation split has already landed:
 
 What is still missing is narrower and clearer:
 
-- no backend provider/registry yet; backend selection is still hardcoded in `NewTcpServer(...)`
 - no shared phase-2 per-connection evented driver yet
 - no `kqueue` / `IOCP` concrete backend yet
 

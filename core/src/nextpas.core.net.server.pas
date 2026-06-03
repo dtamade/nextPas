@@ -24,6 +24,7 @@ type
   TTcpServerHandoffResult = nextpas.core.net.server.base.TTcpServerHandoffResult;
   TTcpServerWorkOutcome = nextpas.core.net.server.base.TTcpServerWorkOutcome;
   TTcpServerOptions = nextpas.core.net.server.base.TTcpServerOptions;
+  TTcpServerFactory = function(const AOptions: TTcpServerOptions): ITcpServer;
   ITcpServerWork = nextpas.core.net.server.intf.ITcpServerWork;
   ITcpServerWorkCompletion = nextpas.core.net.server.intf.ITcpServerWorkCompletion;
   ITcpServerWorkerHandoff = nextpas.core.net.server.intf.ITcpServerWorkerHandoff;
@@ -47,6 +48,13 @@ const
   TCP_SERVER_WORK_COMPLETED = nextpas.core.net.server.base.tswoCompleted;
   TCP_SERVER_WORK_FAILED = nextpas.core.net.server.base.tswoFailed;
 
+procedure RegisterTcpServerFactory(const ABackend: TTcpServerBackend;
+  const AFactory: TTcpServerFactory);
+procedure UnregisterTcpServerFactory(const ABackend: TTcpServerBackend);
+function HasTcpServerFactory(const ABackend: TTcpServerBackend): Boolean;
+function TryGetTcpServerFactory(const ABackend: TTcpServerBackend;
+  out AFactory: TTcpServerFactory): Boolean;
+function ResolveTcpServer(const AOptions: TTcpServerOptions): ITcpServer;
 function NewTcpServer: ITcpServer; overload; inline;
 function NewTcpServer(const AOptions: TTcpServerOptions): ITcpServer; overload;
 
@@ -55,6 +63,43 @@ implementation
 uses
   nextpas.core.errors;
 
+var
+  GServerFactories: array[TTcpServerBackend] of TTcpServerFactory;
+
+procedure RegisterTcpServerFactory(const ABackend: TTcpServerBackend;
+  const AFactory: TTcpServerFactory);
+begin
+  if not Assigned(AFactory) then
+    raise EArgumentError.Create('tcp server factory must not be nil');
+  GServerFactories[ABackend] := AFactory;
+end;
+
+procedure UnregisterTcpServerFactory(const ABackend: TTcpServerBackend);
+begin
+  GServerFactories[ABackend] := nil;
+end;
+
+function HasTcpServerFactory(const ABackend: TTcpServerBackend): Boolean;
+begin
+  Result := Assigned(GServerFactories[ABackend]);
+end;
+
+function TryGetTcpServerFactory(const ABackend: TTcpServerBackend;
+  out AFactory: TTcpServerFactory): Boolean;
+begin
+  AFactory := GServerFactories[ABackend];
+  Result := Assigned(AFactory);
+end;
+
+function ResolveTcpServer(const AOptions: TTcpServerOptions): ITcpServer;
+var
+  LFactory: TTcpServerFactory;
+begin
+  if not TryGetTcpServerFactory(AOptions.Backend, LFactory) then
+    raise ENotSupportedError.Create('tcp server backend not implemented yet');
+  Result := LFactory(AOptions);
+end;
+
 function NewTcpServer: ITcpServer;
 begin
   Result := NewTcpServer(TTcpServerOptions.Default);
@@ -62,16 +107,20 @@ end;
 
 function NewTcpServer(const AOptions: TTcpServerOptions): ITcpServer;
 begin
-  case AOptions.Backend of
-    tsbThreaded:
-      Result := nextpas.core.net.server.threaded.NewTcpThreadedServer(AOptions);
-    {$IFDEF NEXTPAS_LINUX}
-    tsbEpoll:
-      Result := nextpas.core.net.server.epoll.NewTcpEpollServer(AOptions);
-    {$ENDIF}
-  else
-    raise ENotSupportedError.Create('tcp server backend not implemented yet');
-  end;
+  Result := ResolveTcpServer(AOptions);
 end;
+
+procedure RegisterBuiltins;
+begin
+  RegisterTcpServerFactory(tsbThreaded,
+    @nextpas.core.net.server.threaded.NewTcpThreadedServer);
+  {$IFDEF NEXTPAS_LINUX}
+  RegisterTcpServerFactory(tsbEpoll,
+    @nextpas.core.net.server.epoll.NewTcpEpollServer);
+  {$ENDIF}
+end;
+
+initialization
+  RegisterBuiltins;
 
 end.
