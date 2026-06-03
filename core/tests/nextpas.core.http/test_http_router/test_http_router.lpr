@@ -262,6 +262,18 @@ begin
     begin
       GHandlerCalled := 'delete-d';
     end);
+    LRouter.Head('/e', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'head-e';
+    end);
+    LRouter.Patch('/f', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'patch-f';
+    end);
+    LRouter.Options('/g', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'options-g';
+    end);
 
     LHandler := LRouter.FindRoute(hmGet, '/a', LParams);
     Check(LHandler <> nil, 'Get convenience');
@@ -282,6 +294,21 @@ begin
     Check(LHandler <> nil, 'Delete convenience');
     LHandler(nil, nil);
     CheckEqual('delete-d', GHandlerCalled, 'Delete handler');
+
+    LHandler := LRouter.FindRoute(hmHead, '/e', LParams);
+    Check(LHandler <> nil, 'Head convenience');
+    LHandler(nil, nil);
+    CheckEqual('head-e', GHandlerCalled, 'Head handler');
+
+    LHandler := LRouter.FindRoute(hmPatch, '/f', LParams);
+    Check(LHandler <> nil, 'Patch convenience');
+    LHandler(nil, nil);
+    CheckEqual('patch-f', GHandlerCalled, 'Patch handler');
+
+    LHandler := LRouter.FindRoute(hmOptions, '/g', LParams);
+    Check(LHandler <> nil, 'Options convenience');
+    LHandler(nil, nil);
+    CheckEqual('options-g', GHandlerCalled, 'Options handler');
   finally
     LRouter.Free;
   end;

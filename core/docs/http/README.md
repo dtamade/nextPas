@@ -37,7 +37,7 @@ make -C examples/nextpas.core.http/http_get_client run
 
 - `NewRouter` — create radix-tree router (implements IHttpRouter + IHttpHandler)
 - `Handle(Method, Pattern, Handler)` — register route with path params (`:name`) and wildcards
-- `Get/Post/Put/Delete(Pattern, Handler)` — public convenience methods on `IHttpRouter`
+- `Get/Head/Post/Put/Delete/Patch/Options(Pattern, Handler)` — public convenience methods on `IHttpRouter`
 - `Use(Middleware)` — append middleware to the router chain
 
 ### Headers

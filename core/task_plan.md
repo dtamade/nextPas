@@ -1,16 +1,16 @@
-# Task Plan: HTTP router public convenience methods
+# Task Plan: HTTP router head/patch/options convenience methods
 
 ## Goal
 
-把 router 现有的 `Get/Post/Put/Delete` convenience methods 从 concrete-only
-提升到 `IHttpRouter` 公共契约，让 facade / examples / README 对齐真实可用路径。
+补齐 router public convenience surface 的下一格：把 `Head/Patch/Options`
+从缺失状态提升为 `IHttpRouter` / `THttpRouter` 的正式公开契约。
 
 ## Checklist
 
 - [x] 确认共享 checkout 里无关 dirty/untracked 文件范围，本轮只处理 HTTP 相关路径。
-- [x] 盘点 `IHttpRouter`、`THttpRouter`、contract/router tests 与当前文档表述。
-- [x] 先写 failing contract proof，证明 `IHttpRouter.Get/Post/Put/Delete` 当前不可调用。
-- [x] 做最小生产改动，把 convenience methods 提升到 `IHttpRouter`。
-- [x] 同步 example / README / API coverage 文档。
+- [x] 审计 `IHttpRouter`、`THttpRouter`、README 与 API coverage，确认这三个是当前真实 gap。
+- [x] 先写 failing focused tests，证明 `Head/Patch/Options` 当前不可调用。
+- [x] 做最小生产改动，把这三个 convenience methods 提升为公开契约。
+- [x] 同步 README 与 API coverage。
 - [x] 只跑 changed-surface 验证并确认 heaptrc 无泄漏。
 - [ ] path-limited commit。

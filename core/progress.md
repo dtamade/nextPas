@@ -1,14 +1,15 @@
-# Progress Log: HTTP router public convenience methods
+# Progress Log: HTTP router head/patch/options convenience methods
 
 ## Session
 
-- **Scope:** promote router convenience methods into `IHttpRouter` and align examples/docs with the public facade path.
+- **Scope:** publish `Head/Patch/Options` on `IHttpRouter` / `THttpRouter` and align docs with the public router surface.
 - **Status:** completed
 
 ## Notes
 
-- 生产改动只有一处公开契约调整：`src/nextpas.core.http.intf.pas`
-  为 `IHttpRouter` 新增 `Get/Post/Put/Delete`。
+- 生产改动：
+  - `src/nextpas.core.http.intf.pas`
+  - `src/nextpas.core.http.router.pas`
 - focused changed-surface 验证已完成：
   - `make -C tests/nextpas.core.http/test_http_contract clean test`
   - `make -C tests/nextpas.core.http/test_http_router clean test`

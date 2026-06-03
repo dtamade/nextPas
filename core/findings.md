@@ -1,25 +1,26 @@
-# Findings: HTTP router convenience methods publicized
+# Findings: HTTP router head/patch/options publicized
 
 ## What changed
 
 - `IHttpRouter` 现在正式公开：
-  - `Get`
-  - `Post`
-  - `Put`
-  - `Delete`
-- `http_hello_server` example 已回到更自然的 `Router.Get(...)` 用法。
+  - `Head`
+  - `Patch`
+  - `Options`
+- `THttpRouter` 现在也有同名 convenience wrappers。
 - `docs/http/README.md` 与 `docs/http/API_COVERAGE.md` 已同步 current truth。
 
 ## TDD evidence
 
 - RED 已验证：
-  `test_http_contract` 在 `IHttpRouter` 上直接调用 `Get/Post/Put/Delete` 时，编译报
-  `Identifier idents no member`.
+  - `test_http_contract` 编译报 `Identifier idents no member "Head" / "Patch" / "Options"`
+  - `test_http_router` 编译报同样缺口
 - GREEN 已验证：
-  同一组 contract tests 现在编译通过并运行通过，且新增 focused test
-  `IHttpRouter convenience methods are callable through interface`。
+  - 两套 focused tests 均重新通过
+  - interface 级 `IHttpRouter convenience methods are callable through interface`
+    现在覆盖 `GET/POST/PUT/DELETE/HEAD/PATCH/OPTIONS`
+  - concrete 级 `Convenience methods` 现在也覆盖同一矩阵
 
 ## Scope decision
 
-- 本轮只把已有 concrete capability 升格为 public interface。
-- 不顺手扩到 `Patch/Head/Options`，避免一次把 public router surface 拉大而没有足够契约审计。
+- 本轮只补常用 HTTP method 的 router convenience surface。
+- 暂不顺手扩到 `Connect/Trace`，后续如要公开，再单独做契约审计与 focused proof。

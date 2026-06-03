@@ -215,6 +215,18 @@ begin
   begin
     LHit := 'delete';
   end);
+  LRouter.Head('/iface-head', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'head';
+  end);
+  LRouter.Patch('/iface-patch', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'patch';
+  end);
+  LRouter.Options('/iface-options', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'options';
+  end);
 
   LHit := '';
   LRouter.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/iface-get')), nil);
@@ -231,6 +243,18 @@ begin
   LHit := '';
   LRouter.ServeHTTP(NewRequest(hmDelete, TUrl.Parse('/iface-delete')), nil);
   CheckEqual('delete', LHit, 'IHttpRouter.Delete registers DELETE route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmHead, TUrl.Parse('/iface-head')), nil);
+  CheckEqual('head', LHit, 'IHttpRouter.Head registers HEAD route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmPatch, TUrl.Parse('/iface-patch')), nil);
+  CheckEqual('patch', LHit, 'IHttpRouter.Patch registers PATCH route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmOptions, TUrl.Parse('/iface-options')), nil);
+  CheckEqual('options', LHit, 'IHttpRouter.Options registers OPTIONS route');
 end;
 
 { Test 4: NewRequest — Method/Url/Version accessible }
