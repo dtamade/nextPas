@@ -1,32 +1,34 @@
-# Findings: HTTP server correctness hardening batch 3
+# Findings: HTTP server runtime architecture freeze batch 4
 
 ## Root causes
 
-- `THttpServer.Create` 之前没有像 TCP foundation 一样对 public handler 做 fail-fast
-  校验，`nil` handler 会把错误拖到更深层的 runtime 路径。
-- `TH1ServerConnectionState.Run` 之前只在 parser 完整结束后才检查
-  `MaxBodySize`，意味着 chunked 请求可以先越过阈值、继续占用 worker 并缓冲，
-  最后才被 `413` 拒绝。
-- `IHttpHijacker` 的“接管后 server 不再插手”语义虽然代码里已有专门异常分支，
-  但之前缺少 direct regression proof。
+- runtime 方向虽然已经在讨论里达成一致，也已有 `nextpas.core.net.server`
+  foundation 与 `http.server` facade 化落地，但正式文档入口还不够清晰。
+- 现状是方案主要留在 `docs/plans/2026-06-03-http-server-runtime-foundation.md`，
+  这更像决策记录，不够适合作为长期 canonical architecture。
+- `docs/net/README.md` 与 `docs/http/ARCHITECTURE.md` 也还没有把
+  `nextpas.core.net.server` 作为 runtime owner 讲清楚，后续很容易再次误判
+  “HTTPServer 是否固定只能线程驱动”。
 
 ## Fixed design truth
 
-- `THttpServer.Create` / `NewHttpServer` 现在对 `nil` handler 直接抛
-  `EArgumentError`，和 `nextpas.core.net.server` foundation 保持一致。
-- `TH1` server transport 现在在 parser 读循环中持续检查 `GetBodySize`；
-  一旦 chunked/body ingress 越过 `MaxBodySize`，立即写出 `413` 并终止当前请求，
-  不再等待 terminal chunk。
-- hijack 后如果 handler 再抛异常，server 不会追加 `500`，也不会回收已经移交给
-  handler owner 的连接。
-- `net.server.threaded` 现在也有 focused proof 证明 `0.0.0.0` 与空地址监听下，
-  `Shutdown` 都能稳定 unblock `Accept()`.
+- 正式架构入口现在是 `docs/net/ARCHITECTURE.md`，它固定了三层选型：
+  - public model: Go-like
+  - internal runtime/protocol split: Tokio/Hyper-like
+  - backend strategy: libuv-like (`epoll` / `kqueue` / `IOCP`)
+- `nextpas.core.net.server` 被正式固定为 reusable TCP server runtime foundation；
+  `nextpas.core.http` 只拥有 HTTP protocol semantics，不拥有线程模型或 event loop。
+- `docs/http/ARCHITECTURE.md` 现在明确：
+  - `http.server` 是 facade
+  - `IHttpServerTransport` 是 per-connection protocol seam
+  - ownership 通过 `TTcpServerConnOwnership` 与 TCP foundation 对齐
+- 原 `docs/plans/2026-06-03-http-server-runtime-foundation.md` 保留为决策记录，
+  但已加 canonical pointer，不再作为唯一真相来源。
 
 ## Why this is the right fix
 
-- `nil` handler fail-fast 让 facade contract 与 foundation contract 对齐，避免把 API
-  误用降级成运行期深层崩溃。
-- `MaxBodySize` 越线即拒绝更符合真实防御语义：限制的是正在接收的 body，而不是
-  “完整解析完以后才回头宣告超限”。
-- hijack 异常路径 proof 把 ownership contract 从“通常能用”提升为“异常路径也不
-  会被 server 重新夺回”，这对 WebSocket / raw socket upgrade 很关键。
+- 这次先固定 foundation ownership，比直接争论“线程模型现代不现代”更有效。
+- 先把 public contract、protocol seam、backend target 讲清楚，后续实现
+  `epoll/kqueue/IOCP` 才不会反复推翻 HTTP public API。
+- 让 `net.server` 成为通用运行时 owner，也避免其他 TCP 协议模块未来再次重复造
+  accept/runtime 轮子。

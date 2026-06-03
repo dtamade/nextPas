@@ -1,29 +1,24 @@
-# Progress Log: HTTP server correctness hardening batch 3
+# Progress Log: HTTP server runtime architecture freeze batch 4
 
 ## Session
 
-- **Scope:** 收紧 `HttpServer` public contract 与 body-limit/hijack 边界语义。
+- **Scope:** 把 HTTP/TCP server runtime 方案提升为正式架构文档，并对齐 `http/net`
+  入口文档。
 - **Status:** completed
 
 ## Notes
 
-- `THttpServer` 现在 fail-fast 拒绝 `nil` handler。
-- `TH1` chunked ingress 现在在 body 越过 `MaxBodySize` 时立即 `413`，不再等待
-  terminal chunk。
-- `test_http_server` 现在有 direct proof：
-  - chunked request over limit rejects before terminal chunk
-  - hijack exception does not write 500 or close handler connection
-- `test_http_contract` 现在锁定：
-  - `HttpServer rejects nil handler`
-- `test_net_server` 现在再补两条 foundation proof：
-  - threaded server shutdown with wildcard listen
-  - threaded server shutdown with empty listen addr
+- 新增 `docs/net/ARCHITECTURE.md`，作为 reusable TCP server runtime foundation 的
+  正式架构文档。
+- `docs/net/README.md` 现在把 `nextpas.core.net.server` 明确为 server runtime seam。
+- `docs/http/ARCHITECTURE.md` 现在把 `http.server` 明确为 facade，并把 runtime
+  ownership 指向 `nextpas.core.net.server`。
+- `docs/plans/2026-06-03-http-server-runtime-foundation.md` 现在保留为决策记录，
+  但已指向 canonical architecture 文档。
 
 ## Fresh verification
 
-- `timeout 30s make -C tests/nextpas.core.net.server/test_net_server clean test`
-- `make -C tests/nextpas.core.http/test_http_contract clean test`
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-- `make -C tests/nextpas.core.http/test_http_registry clean test`
+- `prettier --write docs/net/ARCHITECTURE.md docs/net/README.md docs/http/ARCHITECTURE.md docs/plans/2026-06-03-http-server-runtime-foundation.md`
+- `git diff --check -- docs/net/ARCHITECTURE.md docs/net/README.md docs/http/ARCHITECTURE.md docs/plans/2026-06-03-http-server-runtime-foundation.md`
 
-- 上述命令均通过，且 heaptrc 均为 `0 unfreed memory blocks`。
+- 本批只有文档与控制文件改动，没有生产代码或 public API 变更，因此未重复跑测试套件。

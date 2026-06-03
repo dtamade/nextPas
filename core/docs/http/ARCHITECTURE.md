@@ -7,15 +7,20 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 
 消费方只需 `uses nextpas.core.http` 即可获得完整能力；当前默认版本解析对应用层透明，但 H2/H3 仍处于规划阶段。
 
-## 当前落地状态（2026-06-02）
+## 当前落地状态（2026-06-03）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
 - `http.base` 现在拥有 `THttpClientOptions` / `THttpServerOptions` 这两个公共 options carrier。
-- `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造，server 负责 listener/accept/thread。
+- `nextpas.core.http.client.pas` / `nextpas.core.http.server.pas` 现在主要承担编排骨架职责：client 负责重定向/便捷请求构造，server 是建立在 `nextpas.core.net.server` 之上的 HTTP facade。
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
 - 当前真实源码库存为 24 个 HTTP 单元，测试工程为 21 个；H2/H3 仍未进入实现。
+
+HTTP server runtime 的权威方向已经固定在
+[docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
+HTTP 保持同步 public surface，listener/runtime/backend ownership 由
+`nextpas.core.net.server` 统一负责。
 
 ---
 
@@ -28,7 +33,7 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 ├─────────────────────────────────────────────────────────┤
 │  应用层（跨版本共享）                                    │
 │  Request / Response / Headers / Router / Middleware      │
-│  Server 骨架 / Client 骨架                              │
+│  Server facade / Client facade                           │
 ├─────────────────────────────────────────────────────────┤
 │  内部 registry 层                                        │
 │  默认版本解析 + transport factory 注册                   │
@@ -63,7 +68,7 @@ src/
   nextpas.core.http.middleware.logger.pas
   nextpas.core.http.middleware.recovery.pas
   nextpas.core.http.middleware.timeout.pas
-  nextpas.core.http.server.pas           ← Server 骨架（accept loop + transport dispatch）
+  nextpas.core.http.server.pas           ← Server facade（委托 nextpas.core.net.server）
   nextpas.core.http.client.pas           ← Client 骨架（redirect + helper request build）
   nextpas.core.http.static.pas           ← 静态文件/目录服务
   nextpas.core.http.websocket.pas        ← WebSocket upgrade 与 frame IO
@@ -179,9 +184,17 @@ type
   end;
 
   IHttpServerTransport = interface
-    procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
   end;
 ```
+
+### Server runtime ownership
+
+- `nextpas.core.http.server` 不再拥有自己的通用 accept/thread runtime。
+- 真实 listener / accept / shutdown / backend 选择由 `nextpas.core.net.server` 提供。
+- `IHttpServerTransport` 是 per-connection protocol seam，不是整机 runtime seam。
+- hijack / detach 这类 ownership 语义通过 `TTcpServerConnOwnership` 与 TCP foundation 对齐。
 
 ### 版本特有接口（不进 http.intf，留在各自 impl 内部）
 
@@ -201,7 +214,7 @@ http.url        ← http.base, text
 http.message    ← http.intf, http.headers, io
 http.router     ← http.intf, collections
 http.middleware ← http.intf
-http.server     ← http.base, http.intf, net, thread, impl.registry
+http.server     ← http.base, http.intf, net.base, net.intf, net.server, impl.registry
 http.client     ← http.base, http.intf, io, text, impl.registry
 
 impl.registry   ← http.base, http.intf, impl.h1
@@ -242,7 +255,7 @@ http.base + http.intf + http.headers + http.url
 + impl.registry
 ```
 
-依赖：net, io, text, time, thread
+依赖：net, net.server, io, text, time
 测试：完整接口覆盖 + echo server + client round-trip + router dispatch + registry default resolution
 Benchmark：对照 Go net/http、Rust actix-web 的 hello-world QPS
 
@@ -275,5 +288,6 @@ Benchmark：对照 Go net/http、Rust actix-web 的 hello-world QPS
 3. **Body 是 IReader** — 流式读取，不缓冲整个 body
 4. **异常传播** — handler 内部异常在 server 边界捕获，返回 500
 5. **接口驱动** — Server/Client/Transport 全部通过 interface 暴露
-6. **H2/H3 不污染 H1** — 条件编译或独立链接单元
-7. **Router 内建** — 不需要第三方路由库（Radix tree，O(path_length)）
+6. **runtime ownership 下沉** — HTTP 不拥有线程模型、event loop 或 IOCP 策略
+7. **H2/H3 不污染 H1** — 条件编译或独立链接单元
+8. **Router 内建** — 不需要第三方路由库（Radix tree，O(path_length)）

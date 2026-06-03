@@ -2,6 +2,9 @@
 
 Low-level TCP and UDP networking with DNS resolution.
 
+For reusable TCP server runtime architecture, see
+[docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1).
+
 ## API
 
 ```pascal
@@ -55,6 +58,21 @@ Addr := Resolve('example.com');
 - `ITcpListener` — Accept, LocalAddr, Close
 - `IUdpSocket` — SendTo, RecvFrom, LocalAddr, Close
 
+## TCP Server Foundation
+
+Reusable server runtime ownership now lives in `nextpas.core.net.server`, not in
+protocol modules such as HTTP.
+
+Current truth:
+
+- `nextpas.core.net` provides socket/listener primitives.
+- `nextpas.core.net.server` provides the reusable TCP server runtime seam.
+- Current shipped server backend is `threaded`.
+- Planned first-class backends are `epoll`, `kqueue`, and `IOCP`.
+
+The public goal is a stable, synchronous application-facing contract with
+runtime/backend policy hidden underneath the foundation layer.
+
 ## TNetAddress
 
 ```pascal
@@ -66,8 +84,9 @@ TNetAddress.IPv6('::1', 8080)
 
 ## Cross-Platform
 
-- Linux: epoll-based (via platform.net)
-- Windows: IOCP (planned)
-- macOS: kqueue (planned)
+- `nextpas.core.net` socket APIs are the common cross-platform base.
+- `nextpas.core.net.server` currently ships a threaded runtime backend.
+- Evented server backends are planned as `epoll` on Linux, `kqueue` on macOS /
+  FreeBSD, and `IOCP` on Windows.
 
 Deadline support via `nextpas.core.time.deadline.TDeadline`.

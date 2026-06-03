@@ -1,5 +1,10 @@
 # HTTP Server Runtime Foundation Plan
 
+Canonical source now lives at
+[docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1).
+This plan is kept as the original decision record; if wording diverges, the
+formal architecture document wins.
+
 ## Goal
 
 Freeze the runtime direction for `nextpas.core.http` before more protocol work lands.
