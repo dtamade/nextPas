@@ -5,7 +5,7 @@
 - **Scope:** 把 `epoll` 私有的 queued completion / poll worker handoff /
   poll session context wrapper 收回 `nextpas.core.net.server.runtime`，
   继续把 readiness-family glue 从 backend 私有实现里抽离。
-- **Status:** in verification
+- **Status:** committed
 
 ## Current state
 
@@ -35,6 +35,8 @@
 - `make -C tests/nextpas.core.http/test_http_server clean test`
   - `119/119 passed`
   - heaptrc: `0 unfreed memory blocks`
+- path-limited commit:
+  - `eeeb3dfa refactor(net.server): move poll completion bridge into runtime`
 
 ## Next step
 
