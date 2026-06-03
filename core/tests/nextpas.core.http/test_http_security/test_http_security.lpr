@@ -211,6 +211,42 @@ begin
   end;
 end;
 
+{ Test 1a: Unsupported transfer coding before chunked }
+procedure TestUnsupportedTransferCodingBeforeChunked;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 501', LResp) > 0,
+      'Unsupported transfer coding before chunked: explicit 501');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 1b: Chunked must be final transfer coding }
+procedure TestChunkedMustBeFinalTransferCoding;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked, gzip'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Chunked must be final transfer coding: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 2: Malformed chunk extension }
 procedure TestInvalidChunkSize;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1378,6 +1414,10 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.security');
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
+  T.Run('Unsupported transfer coding before chunked -> 501',
+    @TestUnsupportedTransferCodingBeforeChunked);
+  T.Run('Chunked must be final transfer coding -> 400',
+    @TestChunkedMustBeFinalTransferCoding);
   T.Run('Invalid chunk size -> 400', @TestInvalidChunkSize);
   T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
   T.Run('Truncated chunk extension at EOF -> 400', @TestTruncatedChunkExtensionAtEof);

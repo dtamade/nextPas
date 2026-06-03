@@ -73,6 +73,7 @@ const
   HTTP_STATUS_METHOD_NOT_ALLOWED    = THttpStatus(405);
   HTTP_STATUS_PAYLOAD_TOO_LARGE     = THttpStatus(413);
   HTTP_STATUS_INTERNAL_SERVER_ERROR = THttpStatus(500);
+  HTTP_STATUS_NOT_IMPLEMENTED       = THttpStatus(501);
   HTTP_STATUS_BAD_GATEWAY           = THttpStatus(502);
   HTTP_STATUS_SERVICE_UNAVAILABLE   = THttpStatus(503);
   HTTP_STATUS_HEADER_TOO_LARGE      = THttpStatus(431);
@@ -144,6 +145,7 @@ begin
     413: Result := 'Payload Too Large';
     431: Result := 'Request Header Fields Too Large';
     500: Result := 'Internal Server Error';
+    501: Result := 'Not Implemented';
     502: Result := 'Bad Gateway';
     503: Result := 'Service Unavailable';
   else

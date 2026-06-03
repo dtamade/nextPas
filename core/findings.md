@@ -1,26 +1,31 @@
-# Findings: HTTP server lifecycle contract surfacing batch 7
+# Findings: HTTP request transfer-coding contract hardening batch 8
 
 ## Root causes
 
-- `THttpServer` 实际已经提供了 `IsRunning`，测试辅助代码也在直接消费它，
-  但 `IHttpServer` public contract 之前没有这条生命周期状态访问器。
-- 结果是同一个 HTTP server 生命周期语义只能通过具体类消费，不能通过公开接口消费。
-- 这会让 interface-first 使用方式与真实实现能力脱节，也让 `IHttpServer` /
-  `THttpServer` 这条公开契约在文档和测试层面不够自洽。
+- `llhttp` 负责 framing 合法性，但现有 adapter 之前没有把
+  `Transfer-Encoding: gzip, chunked` 这类“framing 可判 chunked、但 coding
+  我们并不会解码”的 request 识别成 unsupported transfer-coding。
+- 结果是 parser 会把它误当成普通 chunked request 完成，server 也会把请求错误地交给 handler。
+- 与此同时，server 之前把 parser error 一律映射成 `400`，无法把
+  unsupported request transfer-coding 与 malformed framing 区分开。
 
 ## Fixed design truth
 
-- `IHttpServer` 现在公开拥有 `IsRunning: Boolean`。
-- 因此调用方可以只依赖 `IHttpServer`，直接读取 pre-listen / post-shutdown 的
-  生命周期状态，而不必向下转成 `THttpServer`。
-- `LocalAddr` 的 pre-listen placeholder 语义与 `Shutdown` 的 pre-listen
-  安全语义也已通过同一条 focused contract test 一起锁定。
+- `TH1Parser` 现在会在 request `Transfer-Encoding` 含有非 `chunked` coding 且
+  最终仍以 `chunked` 收尾时，直接标记为
+  `pekUnsupportedTransferCoding`，不再把该消息当成成功解析。
+- `chunked` 非最终 coding 仍然维持 malformed framing 路径，继续属于 `400`。
+- `TH1ServerConnectionState` 现在只把
+  `pekUnsupportedTransferCoding` 映射为 `501 Not Implemented`；
+  其余 parser error 仍保持 `400 Bad Request`。
+- `http.base` 现在正式公开 `HTTP_STATUS_NOT_IMPLEMENTED = 501`，并锁定状态文本
+  `Not Implemented`。
 
 ## Why this is the right fix
 
-- 这让 `IHttpServer` 与 `THttpServer` 的生命周期公开面重新对齐，避免 public contract
-  和实现真相分叉。
-- `IsRunning` 已经是现有实现的稳定语义，补到 interface 不需要改运行时逻辑，
-  只是把已存在能力正式纳入 API contract。
-- 先用 focused test 锁住 lifecycle shape，后续 evented backend 演进时也能保持
-  HTTP facade 的公开语义稳定。
+- 这把“会不会被当成可解码请求继续进入 handler”这个 correctness 问题收在 parser
+  自身，而不是只在 server 层做脆弱的字符串拦截。
+- server 层只负责把 parser 的错误分类映射到 HTTP status，职责边界更干净，
+  未来别的 runtime/backend 复用同一 H1 parser 时也能继承这条契约。
+- focused parser/security tests 直接证明：`gzip, chunked` 现在被拒绝且返回 `501`，
+  `chunked, gzip` 继续返回 `400`，没有把 malformed framing 与 unsupported coding 混掉。

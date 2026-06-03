@@ -15,6 +15,7 @@ uses
 
 type
   TH1ParserType = (ptRequest, ptResponse);
+  TH1ParserErrorKind = (pekNone, pekMalformed, pekUnsupportedTransferCoding);
 
   IH1Parser = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-500000000001}']
@@ -33,6 +34,7 @@ type
     function GetTrailerBytes: Int64;
     function HasError: Boolean;
     function ErrorMessage: string;
+    function ErrorKind: TH1ParserErrorKind;
     procedure Reset;
   end;
 
@@ -45,7 +47,8 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.http.impl.h1.llhttp,
-  nextpas.core.http.headers;
+  nextpas.core.http.headers,
+  nextpas.core.text;
 
 type
   TSharedBytesReader = class(TInterfacedObject, IReader)
@@ -72,10 +75,15 @@ type
     FComplete: Boolean;
     FError: Boolean;
     FErrorMsg: string;
+    FErrorKind: TH1ParserErrorKind;
     FTrailerBytes: Int64;
     FCurrentField: string;
     FCurrentValue: string;
     function ResponseEndsAtEof: Boolean;
+    function RejectWithUserError(const AReason: string;
+      const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
+    function ValidateRequestTransferEncoding(
+      const AParser: PTLlhttpInternalT): LongInt;
   public
     constructor Create(const AType: TH1ParserType);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
@@ -93,6 +101,7 @@ type
     function GetTrailerBytes: Int64;
     function HasError: Boolean;
     function ErrorMessage: string;
+    function ErrorKind: TH1ParserErrorKind;
     procedure Reset;
   end;
 
@@ -100,6 +109,9 @@ type
 
 const
   UNSUPPORTED_REQUEST_VERSION_REASON = 'Unsupported HTTP request version';
+  INVALID_TRANSFER_ENCODING_REASON = 'Invalid `Transfer-Encoding` header value';
+  UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
+    'Unsupported `Transfer-Encoding` request coding';
 
 function BytesToString(const AData: TBytes): string;
 begin
@@ -231,6 +243,9 @@ begin
     else
       LSelf.FMethod := hmGet;
     end;
+    Result := LSelf.ValidateRequestTransferEncoding(p0);
+    if Result <> 0 then
+      Exit;
   end
   else
     LSelf.FStatusCode := p0^.status_code;
@@ -340,6 +355,8 @@ begin
   begin
     FError := True;
     FComplete := False;
+    if FErrorKind = pekNone then
+      FErrorKind := pekMalformed;
     FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
     Result := 0;
   end
@@ -363,6 +380,8 @@ begin
     else
     begin
       FError := True;
+      if FErrorKind = pekNone then
+        FErrorKind := pekMalformed;
       FErrorMsg := string(AnsiString(llhttp_get_error_reason(@FParser)));
     end;
   end;
@@ -472,6 +491,67 @@ begin
   Result := FTrailerBytes;
 end;
 
+function TH1Parser.RejectWithUserError(const AReason: string;
+  const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
+begin
+  FErrorKind := AKind;
+  FErrorMsg := AReason;
+  llhttp_set_error_reason(AParser, PAnsiChar(FErrorMsg));
+  Result := HPE_USER;
+end;
+
+function TH1Parser.ValidateRequestTransferEncoding(
+  const AParser: PTLlhttpInternalT): LongInt;
+var
+  LValues: TStringArray;
+  LCombined: string;
+  LTokens: TStringArray;
+  LIndex: SizeInt;
+  LLastTokenIndex: SizeInt;
+  LToken: string;
+begin
+  Result := 0;
+  LValues := FHeaders.GetAll('transfer-encoding');
+  if Length(LValues) = 0 then
+    Exit(0);
+
+  LCombined := LValues[0];
+  for LIndex := 1 to High(LValues) do
+    LCombined := LCombined + ',' + LValues[LIndex];
+
+  LTokens := TextSplit(LowerCase(LCombined), ',');
+  LLastTokenIndex := -1;
+  for LIndex := High(LTokens) downto 0 do
+  begin
+    LToken := TextTrim(LTokens[LIndex]);
+    if LToken <> '' then
+    begin
+      LLastTokenIndex := LIndex;
+      Break;
+    end;
+  end;
+
+  if LLastTokenIndex < 0 then
+    Exit(0);
+
+  if LLastTokenIndex <> High(LTokens) then
+    Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
+      pekMalformed, AParser));
+
+  if TextTrim(LTokens[LLastTokenIndex]) <> 'chunked' then
+    Exit(0);
+
+  for LIndex := 0 to LLastTokenIndex - 1 do
+  begin
+    LToken := TextTrim(LTokens[LIndex]);
+    if (LToken = '') or (LToken = 'chunked') then
+      Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
+        pekMalformed, AParser));
+    Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
+      pekUnsupportedTransferCoding, AParser));
+  end;
+end;
+
 function TH1Parser.HasError: Boolean;
 begin
   Result := FError;
@@ -480,6 +560,11 @@ end;
 function TH1Parser.ErrorMessage: string;
 begin
   Result := FErrorMsg;
+end;
+
+function TH1Parser.ErrorKind: TH1ParserErrorKind;
+begin
+  Result := FErrorKind;
 end;
 
 procedure TH1Parser.Reset;
@@ -493,6 +578,7 @@ begin
   FComplete := False;
   FError := False;
   FErrorMsg := '';
+  FErrorKind := pekNone;
   FTrailerBytes := 0;
   FCurrentField := '';
   FCurrentValue := '';

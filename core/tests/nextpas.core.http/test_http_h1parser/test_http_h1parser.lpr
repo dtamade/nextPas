@@ -599,6 +599,27 @@ begin
     'chunked then content-length mentions conflicting framing');
 end;
 
+procedure TestChunkedRequestUnsupportedTransferCodingBeforeChunked;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'unsupported transfer coding before chunked reports parser error');
+  Check(not LP.IsComplete,
+    'unsupported transfer coding before chunked is not complete');
+  Check(LP.ErrorKind = pekUnsupportedTransferCoding,
+    'unsupported transfer coding before chunked reports unsupported coding kind');
+end;
+
 procedure TestChunkedRequestTrailerDoesNotPolluteHeaders;
 var
   LP: IH1Parser;
@@ -1668,6 +1689,8 @@ begin
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
+  T.Run('Chunked request unsupported transfer coding before chunked',
+    @TestChunkedRequestUnsupportedTransferCodingBeforeChunked);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
   T.Run('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);

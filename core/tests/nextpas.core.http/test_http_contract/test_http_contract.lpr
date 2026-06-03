@@ -562,6 +562,7 @@ begin
   CheckEqual('Created', HttpStatusText(HTTP_STATUS_CREATED), '201');
   CheckEqual('Not Found', HttpStatusText(HTTP_STATUS_NOT_FOUND), '404');
   CheckEqual('Internal Server Error', HttpStatusText(HTTP_STATUS_INTERNAL_SERVER_ERROR), '500');
+  CheckEqual('Not Implemented', HttpStatusText(HTTP_STATUS_NOT_IMPLEMENTED), '501');
   CheckEqual('Method Not Allowed', HttpStatusText(HTTP_STATUS_METHOD_NOT_ALLOWED), '405');
   CheckEqual('Bad Request', HttpStatusText(HTTP_STATUS_BAD_REQUEST), '400');
 end;

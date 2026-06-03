@@ -133,6 +133,16 @@ begin
     Result := (LConn <> 'close');
 end;
 
+function ParserErrorStatus(const AParser: IH1Parser): THttpStatus;
+begin
+  case AParser.ErrorKind of
+    pekUnsupportedTransferCoding:
+      Result := HTTP_STATUS_NOT_IMPLEMENTED;
+  else
+    Result := HTTP_STATUS_BAD_REQUEST;
+  end;
+end;
+
 { TPrefixedTcpStream }
 
 constructor TPrefixedTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
@@ -363,7 +373,7 @@ begin
 
       if FParser.HasError then
       begin
-        WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
+        WriteErrorResponse(FConn, ParserErrorStatus(FParser));
         Break;
       end;
 
