@@ -18,8 +18,6 @@ implementation
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.sync.intf,
-  nextpas.core.sync.mutex,
   nextpas.core.thread,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -30,13 +28,6 @@ uses
 
 type
   TTcpEpollServer = class;
-
-  TTcpEpollPendingCompletion = record
-    Target: TTcpServerPollSessionTarget;
-    Completion: ITcpServerWorkCompletion;
-    Outcome: TTcpServerWorkOutcome;
-    Ownership: TTcpServerConnOwnership;
-  end;
 
   TTcpEpollConnTask = class(TInterfacedObject)
   private
@@ -66,11 +57,8 @@ type
     FWorkerHandoff: ITcpServerWorkerHandoff;
     FPoller: TPlatformPoller;
     FPollerReady: Boolean;
-    FCompletionLock: IMutex;
-    FPendingCompletions: array of TTcpEpollPendingCompletion;
-    FPendingCompletionCount: SizeUInt;
-    FPollTargets: array of TTcpServerPollSessionTarget;
-    FPollTargetCount: SizeUInt;
+    FCompletionQueue: TTcpServerPollCompletionQueue;
+    FTargetRegistry: TTcpServerPollTargetRegistry;
     procedure EnsureRuntimeContext;
     function CreateSessionContext: TTcpServerPollSessionContext;
     procedure RegisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
@@ -151,10 +139,8 @@ begin
   FConnWorkers := nil;
   FWorkerHandoff := nil;
   FPollerReady := False;
-  FCompletionLock := nextpas.core.sync.mutex.TMutex.Create;
-  SetLength(FPendingCompletions, 4);
-  FPendingCompletionCount := 0;
-  FPollTargetCount := 0;
+  FCompletionQueue := TTcpServerPollCompletionQueue.Create;
+  FTargetRegistry := TTcpServerPollTargetRegistry.Create;
 end;
 
 destructor TTcpEpollServer.Destroy;
@@ -166,7 +152,10 @@ begin
   FListenerSocketRuntime := nil;
   FListenerRuntime := nil;
   FListener := nil;
-  FCompletionLock := nil;
+  FCompletionQueue.Free;
+  FCompletionQueue := nil;
+  FTargetRegistry.Free;
+  FTargetRegistry := nil;
   inherited;
 end;
 
@@ -190,79 +179,29 @@ end;
 procedure TTcpEpollServer.RegisterPollTarget(
   const ATarget: TTcpServerPollSessionTarget);
 begin
-  if FPollTargetCount >= SizeUInt(Length(FPollTargets)) then
-    SetLength(FPollTargets, FPollTargetCount + 8);
-  FPollTargets[FPollTargetCount] := ATarget;
-  Inc(FPollTargetCount);
+  FTargetRegistry.RegisterTarget(ATarget);
 end;
 
 procedure TTcpEpollServer.UnregisterPollTarget(
   const ATarget: TTcpServerPollSessionTarget);
-var
-  LI: SizeUInt;
 begin
-  if FPollTargetCount = 0 then
-    Exit;
-  for LI := 0 to FPollTargetCount - 1 do
-    if FPollTargets[LI] = ATarget then
-    begin
-      Dec(FPollTargetCount);
-      FPollTargets[LI] := FPollTargets[FPollTargetCount];
-      FPollTargets[FPollTargetCount] := nil;
-      Exit;
-    end;
+  FTargetRegistry.UnregisterTarget(ATarget);
 end;
 
 function TTcpEpollServer.ComputePollTimeoutMs: Int32;
-var
-  LI: SizeUInt;
-  LDeadline: TDeadline;
-  LRemaining: TDuration;
-  LMs: Int64;
 begin
-  Result := -1;
-  if FPollTargetCount = 0 then
-    Exit;
-  for LI := 0 to FPollTargetCount - 1 do
-  begin
-    LDeadline := FPollTargets[LI].WakeDeadline;
-    if LDeadline.IsInfinite then
-      Continue;
-    if LDeadline.IsExpired then
-      Exit(0);
-    LRemaining := LDeadline.Remaining;
-    LMs := LRemaining.AsMilliseconds;
-    if (LMs <= 0) and (LRemaining.AsNanoseconds > 0) then
-      LMs := 1;
-    if LMs > High(Int32) then
-      LMs := High(Int32);
-    if (Result < 0) or (LMs < Result) then
-      Result := Int32(LMs);
-  end;
+  Result := FTargetRegistry.ComputePollTimeoutMs;
 end;
 
 procedure TTcpEpollServer.HandleExpiredPollTargets;
 var
-  LExpired: array of TTcpServerPollSessionTarget;
-  LCount: SizeUInt;
+  LExpired: TTcpServerPollSessionTargetArray;
   LI: SizeUInt;
 begin
-  SetLength(LExpired, 0);
-  LCount := 0;
-  if FPollTargetCount = 0 then
+  LExpired := FTargetRegistry.CollectExpiredTargets;
+  if Length(LExpired) = 0 then
     Exit;
-  for LI := 0 to FPollTargetCount - 1 do
-    if FPollTargets[LI].WakeDeadline.IsExpired then
-    begin
-      if LCount >= SizeUInt(Length(LExpired)) then
-        SetLength(LExpired, LCount + 4);
-      LExpired[LCount] := FPollTargets[LI];
-      Inc(LCount);
-    end;
-
-  if LCount = 0 then
-    Exit;
-  for LI := 0 to LCount - 1 do
+  for LI := 0 to SizeUInt(Length(LExpired)) - 1 do
     HandlePollTarget(LExpired[LI], []);
 end;
 
@@ -371,57 +310,19 @@ procedure TTcpEpollServer.EnqueueCompletion(
   const ACompletion: ITcpServerWorkCompletion;
   const AOutcome: TTcpServerWorkOutcome;
   const AOwnership: TTcpServerConnOwnership);
-var
-  LCapacity: SizeUInt;
 begin
-  if ACompletion = nil then
-    Exit;
-
-  FCompletionLock.Acquire;
-  try
-    LCapacity := SizeUInt(Length(FPendingCompletions));
-    if FPendingCompletionCount >= LCapacity then
-    begin
-      if LCapacity = 0 then
-        LCapacity := 4
-      else
-        LCapacity := LCapacity * 2;
-      SetLength(FPendingCompletions, LCapacity);
-    end;
-    FPendingCompletions[FPendingCompletionCount].Target := ATarget;
-    FPendingCompletions[FPendingCompletionCount].Completion := ACompletion;
-    FPendingCompletions[FPendingCompletionCount].Outcome := AOutcome;
-    FPendingCompletions[FPendingCompletionCount].Ownership := AOwnership;
-    Inc(FPendingCompletionCount);
-  finally
-    FCompletionLock.Release;
-  end;
+  FCompletionQueue.Enqueue(ATarget, ACompletion, AOutcome, AOwnership);
 end;
 
 procedure TTcpEpollServer.DrainPendingCompletions;
 var
-  LItems: array of TTcpEpollPendingCompletion;
-  LCount: SizeUInt;
+  LItems: TTcpServerPollPendingCompletionArray;
   LI: SizeUInt;
 begin
-  FCompletionLock.Acquire;
-  try
-    LCount := FPendingCompletionCount;
-    if LCount = 0 then
-      Exit;
-    SetLength(LItems, LCount);
-    for LI := 0 to LCount - 1 do
-    begin
-      LItems[LI] := FPendingCompletions[LI];
-      FPendingCompletions[LI].Target := nil;
-      FPendingCompletions[LI].Completion := nil;
-    end;
-    FPendingCompletionCount := 0;
-  finally
-    FCompletionLock.Release;
-  end;
-
-  for LI := 0 to LCount - 1 do
+  LItems := FCompletionQueue.Drain;
+  if Length(LItems) = 0 then
+    Exit;
+  for LI := 0 to SizeUInt(Length(LItems)) - 1 do
   begin
     try
       LItems[LI].Completion.Complete(LItems[LI].Outcome, LItems[LI].Ownership);
@@ -599,8 +500,8 @@ begin
         FWorkerHandoff.Shutdown;
       DrainPendingCompletions;
       FWorkerHandoff := nil;
-      FPendingCompletionCount := 0;
-      FPollTargetCount := 0;
+      FCompletionQueue.Clear;
+      FTargetRegistry.Clear;
       if FPollerReady then
       begin
         platform_poller_close(FPoller);

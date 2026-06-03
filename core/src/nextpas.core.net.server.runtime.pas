@@ -8,11 +8,13 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.server.base,
   nextpas.core.net.server.intf,
+  nextpas.core.sync.intf,
   nextpas.core.platform.io.base,
   nextpas.core.time.deadline;
 
 type
   TTcpServerPollSessionTarget = class;
+  TTcpServerPollSessionTargetArray = array of TTcpServerPollSessionTarget;
 
   TTcpServerPollCompletionEnqueueProc = procedure(
     const ATarget: TTcpServerPollSessionTarget;
@@ -20,6 +22,14 @@ type
     const AOutcome: TTcpServerWorkOutcome;
     const AOwnership: TTcpServerConnOwnership) of object;
   TTcpServerPollWakeProc = procedure of object;
+
+  TTcpServerPollPendingCompletion = record
+    Target: TTcpServerPollSessionTarget;
+    Completion: ITcpServerWorkCompletion;
+    Outcome: TTcpServerWorkOutcome;
+    Ownership: TTcpServerConnOwnership;
+  end;
+  TTcpServerPollPendingCompletionArray = array of TTcpServerPollPendingCompletion;
 
   TTcpServerPollSessionTarget = class
   private
@@ -76,6 +86,33 @@ type
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
+  TTcpServerPollCompletionQueue = class
+  private
+    FLock: IMutex;
+    FItems: TTcpServerPollPendingCompletionArray;
+    FCount: SizeUInt;
+  public
+    constructor Create;
+    procedure Enqueue(const ATarget: TTcpServerPollSessionTarget;
+      const ACompletion: ITcpServerWorkCompletion;
+      const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+    function Drain: TTcpServerPollPendingCompletionArray;
+    procedure Clear;
+  end;
+
+  TTcpServerPollTargetRegistry = class
+  private
+    FItems: TTcpServerPollSessionTargetArray;
+    FCount: SizeUInt;
+  public
+    procedure RegisterTarget(const ATarget: TTcpServerPollSessionTarget);
+    procedure UnregisterTarget(const ATarget: TTcpServerPollSessionTarget);
+    function ComputePollTimeoutMs: Int32;
+    function CollectExpiredTargets: TTcpServerPollSessionTargetArray;
+    procedure Clear;
+  end;
+
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
   out ASessionContext: ITcpServerSessionContext);
@@ -96,9 +133,9 @@ implementation
 uses
   SysUtils,
   nextpas.core.errors,
-  nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
-  nextpas.core.thread;
+  nextpas.core.thread,
+  nextpas.core.time.base;
 
 type
   TTcpServerWorkTask = class(TInterfacedObject)
@@ -295,6 +332,157 @@ end;
 function TTcpServerPollSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
 begin
   Result := FWorkerHandoffRef;
+end;
+
+constructor TTcpServerPollCompletionQueue.Create;
+begin
+  inherited Create;
+  FLock := nextpas.core.sync.mutex.TMutex.Create;
+  FCount := 0;
+end;
+
+procedure TTcpServerPollCompletionQueue.Enqueue(
+  const ATarget: TTcpServerPollSessionTarget;
+  const ACompletion: ITcpServerWorkCompletion;
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+var
+  LCapacity: SizeUInt;
+begin
+  if ACompletion = nil then
+    Exit;
+
+  FLock.Acquire;
+  try
+    LCapacity := SizeUInt(Length(FItems));
+    if FCount >= LCapacity then
+    begin
+      if LCapacity = 0 then
+        LCapacity := 4
+      else
+        LCapacity := LCapacity * 2;
+      SetLength(FItems, LCapacity);
+    end;
+    FItems[FCount].Target := ATarget;
+    FItems[FCount].Completion := ACompletion;
+    FItems[FCount].Outcome := AOutcome;
+    FItems[FCount].Ownership := AOwnership;
+    Inc(FCount);
+  finally
+    FLock.Release;
+  end;
+end;
+
+function TTcpServerPollCompletionQueue.Drain: TTcpServerPollPendingCompletionArray;
+var
+  LI: SizeUInt;
+begin
+  Result := nil;
+  FLock.Acquire;
+  try
+    if FCount = 0 then
+      Exit;
+    SetLength(Result, FCount);
+    for LI := 0 to FCount - 1 do
+    begin
+      Result[LI] := FItems[LI];
+      FItems[LI].Target := nil;
+      FItems[LI].Completion := nil;
+    end;
+    FCount := 0;
+  finally
+    FLock.Release;
+  end;
+end;
+
+procedure TTcpServerPollCompletionQueue.Clear;
+begin
+  Drain;
+end;
+
+procedure TTcpServerPollTargetRegistry.RegisterTarget(
+  const ATarget: TTcpServerPollSessionTarget);
+begin
+  if FCount >= SizeUInt(Length(FItems)) then
+    SetLength(FItems, FCount + 8);
+  FItems[FCount] := ATarget;
+  Inc(FCount);
+end;
+
+procedure TTcpServerPollTargetRegistry.UnregisterTarget(
+  const ATarget: TTcpServerPollSessionTarget);
+var
+  LI: SizeUInt;
+begin
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    if FItems[LI] = ATarget then
+    begin
+      Dec(FCount);
+      FItems[LI] := FItems[FCount];
+      FItems[FCount] := nil;
+      Exit;
+    end;
+end;
+
+function TTcpServerPollTargetRegistry.ComputePollTimeoutMs: Int32;
+var
+  LI: SizeUInt;
+  LDeadline: TDeadline;
+  LRemaining: TDuration;
+  LMs: Int64;
+begin
+  Result := -1;
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+  begin
+    LDeadline := FItems[LI].WakeDeadline;
+    if LDeadline.IsInfinite then
+      Continue;
+    if LDeadline.IsExpired then
+      Exit(0);
+    LRemaining := LDeadline.Remaining;
+    LMs := LRemaining.AsMilliseconds;
+    if (LMs <= 0) and (LRemaining.AsNanoseconds > 0) then
+      LMs := 1;
+    if LMs > High(Int32) then
+      LMs := High(Int32);
+    if (Result < 0) or (LMs < Result) then
+      Result := Int32(LMs);
+  end;
+end;
+
+function TTcpServerPollTargetRegistry.CollectExpiredTargets: TTcpServerPollSessionTargetArray;
+var
+  LI: SizeUInt;
+  LCount: SizeUInt;
+begin
+  Result := nil;
+  LCount := 0;
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    if FItems[LI].WakeDeadline.IsExpired then
+    begin
+      if LCount >= SizeUInt(Length(Result)) then
+        SetLength(Result, LCount + 4);
+      Result[LCount] := FItems[LI];
+      Inc(LCount);
+    end;
+  SetLength(Result, LCount);
+end;
+
+procedure TTcpServerPollTargetRegistry.Clear;
+var
+  LI: SizeUInt;
+begin
+  if FCount = 0 then
+    Exit;
+  for LI := 0 to FCount - 1 do
+    FItems[LI] := nil;
+  FCount := 0;
 end;
 
 constructor TTcpServerWorkTask.Create(const AWork: ITcpServerWork;

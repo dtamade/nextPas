@@ -91,7 +91,8 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - [src/nextpas.core.net.server.runtime.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.runtime.pas:1)
   已把通用的 worker handoff、session context、connection close 语义收成 foundation
   runtime helper；现在 poll-driven session target 这层 readiness-family 骨架
-  以及 poll-driven worker completion bridge / session context wrapper
+  、poll-driven worker completion bridge / session context wrapper，
+  以及 pending completion queue / poll target registry 这两块 backend 共用状态管理
   也已经下沉到这里，避免 future `epoll` / `kqueue` backend 重复复制这层逻辑。
 - [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:1)
   是当前 correctness 基线 backend，负责 listen / accept / shutdown / detach ownership，
@@ -190,6 +191,8 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   说明 readiness-family driver 的收口点已经从“文档方向”进入“真实代码边界”
 - epoll backend 现在也开始复用 foundation-owned poll worker-completion bridge /
   session-context wrapper，说明 readiness-family glue 正在继续从 backend 私有实现里抽离
+- epoll backend 现在也开始复用 foundation-owned pending completion queue /
+  poll target registry，说明 poll-driven driver 的状态管理边界也已经进入 runtime owner。
 - `platform.io` poller 现在也有 wake seam；Linux 先用 `eventfd` 落地。
 - `epoll` backend 现在会把 poll-driven session 的 worker completion 先排队回 reactor，
   再在 reactor 线程执行 completion，并用 synthetic re-entry 继续推进该 session。
