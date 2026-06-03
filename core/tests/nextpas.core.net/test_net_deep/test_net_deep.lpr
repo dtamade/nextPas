@@ -16,12 +16,73 @@ uses
   nextpas.core.net.udp,
   nextpas.core.net.resolve,
   nextpas.core.net,
+  nextpas.core.platform.socket,
   nextpas.core.platform.thread;
 
 var
   T: TTestRunner;
 
+const
+{$IFDEF NEXTPAS_LINUX}
+  TEST_SOCKET_SO_RCVBUF = 8;
+  TEST_SOCKET_SO_SNDBUF = 7;
+{$ELSE}
+  {$IFDEF NEXTPAS_DARWIN}
+  TEST_SOCKET_SO_RCVBUF = $1002;
+  TEST_SOCKET_SO_SNDBUF = $1001;
+  {$ELSE}
+    {$IFDEF NEXTPAS_FREEBSD}
+  TEST_SOCKET_SO_RCVBUF = $1002;
+  TEST_SOCKET_SO_SNDBUF = $1001;
+    {$ELSE}
+      {$IFDEF NEXTPAS_WINDOWS}
+  TEST_SOCKET_SO_RCVBUF = $1002;
+  TEST_SOCKET_SO_SNDBUF = $1001;
+      {$ELSE}
+  TEST_SOCKET_SO_RCVBUF = 8;
+  TEST_SOCKET_SO_SNDBUF = 7;
+      {$ENDIF}
+    {$ENDIF}
+  {$ENDIF}
+{$ENDIF}
+
 { --- Helpers --- }
+
+function SocketFromRuntime(const ARuntime: ITcpSocketRuntime): TPlatformSocket;
+begin
+  Result := PLATFORM_INVALID_SOCKET;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result.Value := ARuntime.NativeSocketHandle;
+{$ELSE}
+  Result.Value := Int32(ARuntime.NativeSocketHandle);
+{$ENDIF}
+end;
+
+procedure SetSocketBuffer(const AConn: ITcpStream; const AOptName,
+  ASize: Int32; const ALabel: string);
+var
+  LRuntime: ITcpSocketRuntime;
+  LSocket: TPlatformSocket;
+  LSize: Int32;
+begin
+  Check(Supports(AConn, ITcpSocketRuntime, LRuntime),
+    ALabel + ' exposes runtime socket control');
+  LSocket := SocketFromRuntime(LRuntime);
+  LSize := ASize;
+  CheckEqual(Int64(0), Int64(platform_socket_setsockopt(LSocket,
+    PLATFORM_SOL_SOCKET, AOptName, @LSize, SizeOf(LSize))),
+    ALabel + ' tuning succeeds');
+end;
+
+procedure SetSocketSendBuffer(const AConn: ITcpStream; const ASize: Int32);
+begin
+  SetSocketBuffer(AConn, TEST_SOCKET_SO_SNDBUF, ASize, 'send buffer');
+end;
+
+procedure SetSocketRecvBuffer(const AConn: ITcpStream; const ASize: Int32);
+begin
+  SetSocketBuffer(AConn, TEST_SOCKET_SO_RCVBUF, ASize, 'recv buffer');
+end;
 
 var
   GPort: UInt16 = 0;
@@ -89,6 +150,31 @@ begin
       LClient.Write(LBuf[0], LN);
     LClient.Close;
   end;
+  LListener.Close;
+end;
+
+var
+  GStallPort: UInt16 = 0;
+  GStallReady: Int32 = 0;
+  GStallAcceptedReady: Int32 = 0;
+  GStallRecvBufferBytes: Int32 = 0;
+  GStallSleepNs: Int64 = 0;
+
+function StalledPeerServer(AArg: Pointer): Pointer; cdecl;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+begin
+  Result := nil;
+  LListener := TcpListen('127.0.0.1', 0);
+  GStallPort := LListener.LocalAddr.Port;
+  InterlockedExchange(GStallReady, 1);
+  LClient := LListener.Accept;
+  if GStallRecvBufferBytes > 0 then
+    SetSocketRecvBuffer(LClient, GStallRecvBufferBytes);
+  InterlockedExchange(GStallAcceptedReady, 1);
+  platform_thread_sleep_ns(GStallSleepNs);
+  LClient.Close;
   LListener.Close;
 end;
 
@@ -497,6 +583,62 @@ begin
   LListener.Close;
 end;
 
+procedure TestWriteDeadlineDuringStalledPeerBackpressure;
+const
+  WRITE_DEADLINE_MS = 50;
+  MAX_ALLOWED_MS = 500;
+  SEND_BUFFER_BYTES = 1024;
+  RECV_BUFFER_BYTES = 1024;
+  PEER_SLEEP_NS = 2000000000;
+  PAYLOAD_BYTES = 16 * 1024 * 1024;
+var
+  LHandle: TPlatformThreadHandle;
+  LRetVal: Pointer;
+  LClient: ITcpStream;
+  LPayload: array of Byte;
+  LStart: TInstant;
+  LElapsedMs: Int64;
+  LGot: Boolean;
+begin
+  GStallReady := 0;
+  GStallAcceptedReady := 0;
+  GStallRecvBufferBytes := RECV_BUFFER_BYTES;
+  GStallSleepNs := PEER_SLEEP_NS;
+  platform_thread_create(LHandle, @StalledPeerServer, nil);
+  while InterlockedCompareExchange(GStallReady, 0, 0) = 0 do
+    platform_thread_sleep_ns(1000000);
+
+  LClient := TcpConnect('127.0.0.1', GStallPort);
+  try
+    SetSocketSendBuffer(LClient, SEND_BUFFER_BYTES);
+    while InterlockedCompareExchange(GStallAcceptedReady, 0, 0) = 0 do
+      platform_thread_sleep_ns(1000000);
+
+    SetLength(LPayload, PAYLOAD_BYTES);
+    FillChar(LPayload[0], SizeUInt(Length(LPayload)), $AB);
+
+    LClient.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(
+      WRITE_DEADLINE_MS)));
+    LGot := False;
+    LStart := TInstant.Now;
+    try
+      LClient.Write(LPayload[0], SizeUInt(Length(LPayload)));
+    except
+      on ENetworkError do
+        LGot := True;
+    end;
+    LElapsedMs := LStart.Elapsed.AsMilliseconds;
+
+    Check(LGot, 'stalled peer write raises under write deadline');
+    Check(LElapsedMs < MAX_ALLOWED_MS,
+      'stalled peer write deadline completes before peer close' +
+      ' (elapsedMs=' + IntToStr(LElapsedMs) + ')');
+  finally
+    LClient.Close;
+  end;
+  platform_thread_join(LHandle, LRetVal);
+end;
+
 { --- Main --- }
 
 begin
@@ -516,5 +658,7 @@ begin
   T.Run('Resolve invalid', @TestResolveInvalid);
   T.Run('LocalAddr/RemoteAddr', @TestLocalRemoteAddr);
   T.Run('Write deadline', @TestWriteDeadline);
+  T.Run('Write deadline during stalled peer backpressure',
+    @TestWriteDeadlineDuringStalledPeerBackpressure);
   T.Summary;
 end.

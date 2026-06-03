@@ -10,6 +10,7 @@
 - timeout 发生在首个响应写出前时，不会补写 synthetic `500`
 - timeout 发生在部分字节已写出后时，session 会安全停止，且不再消费同连接后续 pipelined request
 - real socket stalled-peer/backpressure 下，连接会在放宽观察窗口内安全关闭，且不会消费后续 pipelined request
+- Linux `epoll` backend 下同一条 real-socket backpressure 契约也与 threaded 路径保持一致
 
 ## Checklist
 
@@ -28,6 +29,11 @@
   - backpressure 下首个响应开始后会安全停会话
   - 不追加 synthetic `500`
   - 不消费后续 pipelined request
+- [x] 补 `test_http_server` Linux `epoll` backend differential proof：
+  - real-socket stalled-peer/backpressure 契约与 threaded 路径保持一致
+- [x] 下钻 `tests/nextpas.core.net/test_net_deep`：
+  - 补 simplified stalled-peer `SetWriteDeadline` proof
+  - 验证 lower-level `TTcpStream.Write` absolute-deadline RED 是否真实存在
 - [x] 用隔离 worktree 对比当前测试在“带/不带 `src/nextpas.core.net.tcp.pas` patch”两种状态下的结果，确认是否真的需要生产修复。
 - [x] 运行 focused 验证：
   - `make -C tests/nextpas.core.http/test_http_server clean test`
@@ -43,6 +49,8 @@
   `docs/plans/2026-06-03-http-server-runtime-foundation.md` 保留原始决策记录。
 - 当前没有证据要求改生产代码；先把 timeout/backpressure 安全语义做成 focused proof。
 - isolated worktree 对比已经证明：real-socket proof 不要求 `src/nextpas.core.net.tcp.pas` 生产变更，这批应收口为纯测试/控制面提交。
+- Linux `epoll` real-socket proof 也已通过，当前没有暴露 threaded / `epoll` 的契约分叉。
+- `test_net_deep` 的 simplified stalled-peer write-deadline proof 同样通过，当前没有拿到 lower-level `TTcpStream.Write` RED。
 
 ## Out of Scope
 

@@ -1048,7 +1048,8 @@ begin
     'partial timeout does not append synthetic 500 after partial response bytes');
 end;
 
-procedure TestRealSocketWriteTimeoutBackpressureStopsPipeline;
+procedure RunRealSocketWriteTimeoutBackpressureStopsPipeline(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1062,7 +1063,6 @@ var
   LTimedOut: Boolean;
   LFirstCalls: Int32;
   LSecondCalls: Int32;
-  LHttpOpts: THttpServerOptions;
   LBodyChunk: string;
   LTotalBodyLen: Int64;
 const
@@ -1108,13 +1108,11 @@ begin
     AW.Write(LBody[1], 5);
   end);
 
-  LHttpOpts := THttpServerOptions.Default;
-  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
-  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+  LH1Opts := DefaultH1ServerTransportOptions(AHttpOpts);
   LTransport := TSocketTuningServerTransport.Create(
     NewH1ServerTransport(LH1Opts), SEND_BUFFER_BYTES);
   LHandle := StartServerWithTransportAndOptions(LRouter as IHttpHandler,
-    LTransport, LHttpOpts, LServer, LPort);
+    LTransport, AHttpOpts, LServer, LPort);
   try
     LConn := TcpConnect('127.0.0.1', LPort);
     try
@@ -1125,26 +1123,26 @@ begin
       LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
 
       Check(LClosed,
-        'real socket backpressure path closes connection after write timeout' +
+        ABackendName + ' real socket backpressure path closes connection after write timeout' +
         ' (timedOut=' + BoolToStr(LTimedOut) +
         ', respLen=' + IntToStr(Int64(Length(LResp))) +
         ', firstCalls=' + IntToStr(Int64(LFirstCalls)) +
         ', secondCalls=' + IntToStr(Int64(LSecondCalls)) + ')');
       Check(not LTimedOut,
-        'real socket backpressure path does not stay open past the close wait' +
+        ABackendName + ' real socket backpressure path does not stay open past the close wait' +
         ' (respLen=' + IntToStr(Int64(Length(LResp))) +
         ', firstCalls=' + IntToStr(Int64(LFirstCalls)) +
         ', secondCalls=' + IntToStr(Int64(LSecondCalls)) + ')');
       CheckEqual(Int64(1), Int64(LFirstCalls),
-        'real socket backpressure handles the first request once');
+        ABackendName + ' real socket backpressure handles the first request once');
       CheckEqual(Int64(0), Int64(LSecondCalls),
-        'real socket backpressure does not process later pipelined requests');
+        ABackendName + ' real socket backpressure does not process later pipelined requests');
       Check(Pos('HTTP/1.1 500', LResp) = 0,
-        'real socket backpressure does not append synthetic 500');
+        ABackendName + ' real socket backpressure does not append synthetic 500');
       Check(Pos('after', LResp) = 0,
-        'real socket backpressure does not emit the second response body');
+        ABackendName + ' real socket backpressure does not emit the second response body');
       Check(Pos('HTTP/1.1 200', LResp) > 0,
-        'real socket backpressure still begins the first response before timing out');
+        ABackendName + ' real socket backpressure still begins the first response before timing out');
     finally
       LConn.Close;
     end;
@@ -1152,6 +1150,31 @@ begin
     StopServer(LServer, LHandle);
   end;
 end;
+
+procedure TestRealSocketWriteTimeoutBackpressureStopsPipeline;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  RunRealSocketWriteTimeoutBackpressureStopsPipeline('threaded', LHttpOpts);
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRealSocketWriteTimeoutBackpressureStopsPipelineEpollBackend;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketWriteTimeoutBackpressureStopsPipeline('epoll', LHttpOpts);
+end;
+{$ENDIF}
 
 { Test 5: Shutdown stops accepting }
 procedure TestShutdownStopsAccepting;
@@ -5946,6 +5969,8 @@ begin
     @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnectionEpollBackend);
   T.Run('Committed response exception does not append 500 with epoll backend',
     @TestCommittedResponseExceptionDoesNotAppend500EpollBackend);
+  T.Run('Real socket write timeout backpressure stops pipeline with epoll backend',
+    @TestRealSocketWriteTimeoutBackpressureStopsPipelineEpollBackend);
   {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);

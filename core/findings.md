@@ -49,7 +49,7 @@
 - 但之前还没有专门锁定 timeout/backpressure 的 focused tests，
   所以这轮补的是“契约证据”，不是生产修复。
 
-### 3. fake-stream 与 real-socket 两层 proof 现在都已落地
+### 3. fake-stream 与 real-socket proof 现在都已落地，并覆盖 threaded / `epoll`
 
 - 新增 fake stream `TTimeoutWriteTcpStream`，可以脚本化模拟：
   - 首次 inner write 前立刻 timeout
@@ -62,10 +62,27 @@
   - 锁定首个响应启动后仍不会追加 synthetic `500`
   - 锁定后续 pipelined request 不会被继续消费
   - 锁定连接会在放宽观察窗口内关闭
+- Linux `epoll` backend 现在也有同一条 real-socket proof：
+  - 同样不会追加 synthetic `500`
+  - 同样不会消费后续 pipelined request
+  - 同样会在放宽观察窗口内关闭连接
 - 这条 real-socket proof 刻意不把 `WriteTimeout = 50ms` 包装成严格的 wire-close SLA；
   它证明的是 eventual safe-close，而不是 OS 缓冲层面的精确关断时间。
 
-### 4. `src/nextpas.core.net.tcp.pas` 这次生产改动不成立，已回退
+### 4. lower-level `TTcpStream.Write` 根因目前仍未坐实
+
+- 我根据子代理建议下钻到了 `tests/nextpas.core.net/test_net_deep`，补了一个 simplified stalled-peer
+  `SetWriteDeadline` proof：peer 不读、收发 buffer 都缩小、client 直接做大 write。
+- 结果这条 net-level proof 直接通过，说明：
+  - `TTcpStream.Write` 在这个简化 stalled-peer 场景下会在 deadline 窗口内返回错误
+  - 当前还不能把 HTTP 那条“300ms 内未观察到 close”的现象直接归咎为
+    `TTcpStream.Write` 绝对 deadline 语义失效
+- 这让当前最稳妥的结论变成：
+  - lower-level production bug 尚未被证明
+  - HTTP 侧剩余真空更像是 buffered write / response loop / close observation timing characterization
+    还不够细，而不是现在就该改 `net.tcp`
+
+### 5. `src/nextpas.core.net.tcp.pas` 这次生产改动不成立，已回退
 
 - 我额外开了隔离 worktree，对同一 HEAD 做了“只带 `test_http_server` 变更、不带 `net.tcp` patch”的对比验证。
 - 对比结果是：
@@ -79,11 +96,17 @@
 ## Verification evidence
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `110 total, 110 passed, 0 failed`
+  - `111 total, 111 passed, 0 failed`
   - 新增 proof 通过：
     - `Write timeout before any wire bytes does not append 500`
     - `Write timeout after partial wire bytes stops pipeline without 500`
     - `Real socket write timeout backpressure stops pipeline`
+    - `Real socket write timeout backpressure stops pipeline with epoll backend`
+  - heaptrc：`0 unfreed memory blocks`
+- `make -C tests/nextpas.core.net/test_net_deep clean test`
+  - `16 total, 16 passed, 0 failed`
+  - 新增 proof 通过：
+    - `Write deadline during stalled peer backpressure`
   - heaptrc：`0 unfreed memory blocks`
 - detached worktree 对比验证（无 `net.tcp` patch）：
   - `make -C core/tests/nextpas.core.http/test_http_server clean test`
@@ -92,9 +115,11 @@
 
 ## Remaining gaps / risks
 
-- 本轮虽然已经补到 initial real-socket proof，但它还不是 backend-differential timing characterization。
+- 本轮已经锁定 threaded / `epoll` 的 real-socket contract parity，也补了一个 simplified net-level
+  stalled-peer proof，但还没有进入 finer timing characterization。
 - 下一步若继续收口 response-side transport correctness，优先应看：
-  - threaded / epoll 路径在 stalled-peer 下是否存在可区分的 timing / close-observation 差异
+  - HTTP response loop / buffered writer / close observation 在 stalled-peer 下是否存在可重复、可分类的 timing 差异
+  - threaded / `epoll` 路径在更接近真实 response loop 的场景下是否仍完全等价
   - backend runtime (`threaded` / `epoll`) 对 backpressure 的真实行为
   - 是否需要在 `test_http_security` 或更底层 `net.server`/`net.tcp` 增加 transport-level proof
 - 在明确 public contract 之前，不应把 `WriteTimeout` 解读成严格的“多少毫秒内必须在 wire 上看到 EOF/RST”。
