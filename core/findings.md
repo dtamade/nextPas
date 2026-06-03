@@ -1,11 +1,11 @@
-# Findings: HTTP chunked pipelined request isolation proof
+# Findings: HTTP fixed-length keep-alive tail proof
 
 ## Repo / Git Safety
 
-- shared checkout 当前存在大量无关 dirty / untracked 路径，不能做任何广泛 staging 或回滚。
+- shared checkout 当前依然有大量无关 dirty / untracked 路径，不能做广泛 staging、reset 或回滚。
 - 本轮只允许提交：
   - `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
-  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
   - `docs/nextpas.core.http.inbox.md`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
@@ -14,34 +14,41 @@
 
 ## Existing HTTP Truth Before This Batch
 
-- `Content-Length` 首请求的 same-read / same-write pipelining isolation proof 已经存在。
-- keep-alive `Content-Length` garbage tail 与 keep-alive chunked garbage tail 的 server/security
-  current-truth proof 已经存在：首个合法 request 先完成，尾巴随后作为 follow-up malformed request
-  返回 `400`。
-- 当前最有价值的缺口不是再堆 malformed close-only case，而是补齐
-  `chunked first request + next request in same buffer/write` 的正向隔离证明。
+- fixed-length 首请求的 same-read / same-write pipelining isolation 已经有 focused proof。
+- server 层已有 `Content-Length keep-alive garbage tail -> follow-up 400` focused current-truth 证据。
+- chunked 侧已经更完整：parser/server/security 都有 keep-alive garbage-tail proof。
+
+## Gap Confirmed
+
+- `Content-Length keep-alive garbage tail` 还缺 parser focused proof：
+  - parser 是否只消费首个完整 fixed-length request，而不把尾巴污染进 body / method / url。
+- 同时也缺 security raw-wire proof：
+  - 首个请求是否仍先正常完成；
+  - 尾巴是否稳定作为 follow-up malformed request 返回 `400`。
 
 ## New Evidence From This Batch
 
 - parser focused test 证明：
-  - `chunked` 首请求后即使同一缓冲区里紧跟第二个 request，parser 也只消费首个完整 request；
-  - method / url / decoded body 保持为首个 request 的真实值，不会被第二个 request 污染。
-- server focused test 证明：
-  - 同一连接同一 write 中发送 `chunked POST` 后再跟 `GET`，两个 handler 都会依次完成；
-  - 首个 response body 保持 `upload:hello`，第二个 response body 保持 `next`；
-  - 这说明 H1 transport 的 read-ahead tail 在 chunked 首请求场景下也能正确保留与续派发。
+  - fixed-length keep-alive tail 输入下，parser 只消费首个合法 request；
+  - 首个 request 的 method / url / body 保持正确，尾巴不会污染当前请求。
+- security focused test 证明：
+  - raw-wire 下首个 fixed-length request 会先返回 `200`；
+  - handler 仍按 `Content-Length: 5` 看到 `echo:5`；
+  - 同连接上的多余尾巴会稳定触发 follow-up `400`。
 
 ## Batch Truth
 
 - 这轮没有发现新的 HTTP 实现缺陷。
 - 两条新增 focused tests 首轮即 GREEN，因此本轮的真实性质是
   **coverage expansion / current-truth locking**，不是生产修复。
-- 现阶段可以更明确地说：
-  - `same-read pipelined request isolation` 已覆盖 fixed-length 与 chunked 首请求；
-  - `same-write pipelined request isolation` 也已覆盖 fixed-length 与 chunked 首请求。
+- 到当前为止，keep-alive request-tail 讨论所需的证据已经更完整：
+  - fixed-length tail：parser/server/security 都有 focused proof；
+  - chunked tail：parser/server/security 都有 focused proof；
+  - fixed-length/chunked 首请求的 same-read / same-write pipelining isolation 也都已有 proof。
 
 ## Remaining Questions
 
-- 现在已经有 enough proof 支撑 keep-alive request-tail 行为讨论；下一步应决定哪些 tail / overrun
-  case 继续保持“首请求完成，尾巴 follow-up `400`”的 transport truth，哪些要进一步收紧成更早拒绝。
-- raw-wire malformed chunk framing 仍可继续系统性扫尾，但本轮不再需要为了 chunked pipelining 去改生产代码。
+- 下一步可以更明确地做契约决策：
+  - 保留“首请求完成，尾巴 follow-up `400`”为 keep-alive transport truth；
+  - 或进一步设计更早拒绝的 public policy。
+- raw-wire malformed chunk framing 审计仍未结束，本轮只是把 fixed-length tail 这条对称证据补齐。

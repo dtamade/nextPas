@@ -605,6 +605,28 @@ begin
   Check(LP.ErrorMessage <> '', 'extra bytes after content-length close has error message');
 end;
 
+procedure TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LReq := LReq1 + '_extra_bytes_here';
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive content-length tail should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive content-length first request should complete');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive content-length parser consumes only first request');
+  Check(LP.GetMethod = hmPost, 'keep-alive content-length first request preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive content-length first request preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive content-length first request preserves body');
+end;
+
 procedure TestChunkedRequestExtraBytesAfterCloseRejected;
 var
   LP: IH1Parser;
@@ -847,6 +869,7 @@ begin
   T.Run('Negative Content-Length rejected', @TestNegativeContentLengthRejected);
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
+  T.Run('Content-Length keep-alive garbage tail consumes first request only', @TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);

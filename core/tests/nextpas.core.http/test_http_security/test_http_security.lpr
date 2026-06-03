@@ -539,6 +539,26 @@ begin
   end;
 end;
 
+{ Test 14a: Keep-alive Content-Length request with garbage tail }
+procedure TestContentLengthKeepAliveGarbageTailSafeHandling;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10#13#10 +
+            'hello_extra_bytes_here';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'Keep-alive Content-Length tail: first response still completes');
+    Check(Pos('echo:5', LResp) > 0,
+      'Keep-alive Content-Length tail: first request body handled correctly');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Keep-alive Content-Length tail: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 14b: Chunked request with extra bytes after terminal chunk and close }
 procedure TestChunkedExtraBytesAfterClose;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -675,6 +695,7 @@ begin
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
   T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
+  T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
   T.Run('Chunked extra bytes after close -> 400', @TestChunkedExtraBytesAfterClose);
   T.Run('Chunked keep-alive garbage tail safe handling', @TestChunkedKeepAliveGarbageTailSafeHandling);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
