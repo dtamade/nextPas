@@ -9,6 +9,7 @@ unit nextpas.core.http.impl.h1.parser;
 interface
 
 uses
+  nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
@@ -25,6 +26,8 @@ type
     function GetUrl: string;
     function GetHeaders: IHttpHeaders;
     function GetBody: string;
+    function GetBodySize: Int64;
+    function NewBodyReader: IReader;
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
@@ -40,10 +43,21 @@ implementation
 
 uses
   SysUtils,
+  nextpas.core.base,
   nextpas.core.http.impl.h1.llhttp,
   nextpas.core.http.headers;
 
 type
+  TSharedBytesReader = class(TInterfacedObject, IReader)
+  private
+    FData: TBytes;
+    FPosition: SizeUInt;
+    FSize: SizeUInt;
+  public
+    constructor Create(const AData: TBytes);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
   TH1Parser = class(TInterfacedObject, IH1Parser)
   private
     FParser: TLlhttpInternalT;
@@ -54,7 +68,7 @@ type
     FVersion: THttpVersion;
     FUrl: string;
     FHeaders: IHttpHeaders;
-    FBody: string;
+    FBody: TBytes;
     FComplete: Boolean;
     FError: Boolean;
     FErrorMsg: string;
@@ -72,6 +86,8 @@ type
     function GetUrl: string;
     function GetHeaders: IHttpHeaders;
     function GetBody: string;
+    function GetBodySize: Int64;
+    function NewBodyReader: IReader;
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
@@ -84,6 +100,38 @@ type
 
 const
   UNSUPPORTED_REQUEST_VERSION_REASON = 'Unsupported HTTP request version';
+
+function BytesToString(const AData: TBytes): string;
+begin
+  SetLength(Result, Length(AData));
+  if Length(AData) > 0 then
+    Move(AData[0], Result[1], Length(AData));
+end;
+
+{ TSharedBytesReader }
+
+constructor TSharedBytesReader.Create(const AData: TBytes);
+begin
+  inherited Create;
+  FData := AData;
+  FPosition := 0;
+  FSize := SizeUInt(Length(AData));
+end;
+
+function TSharedBytesReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LAvailable: SizeUInt;
+begin
+  if (ACount = 0) or (FPosition >= FSize) then
+    Exit(0);
+  LAvailable := FSize - FPosition;
+  if ACount < LAvailable then
+    Result := ACount
+  else
+    Result := LAvailable;
+  Move(FData[FPosition], ABuf, Result);
+  Inc(FPosition, Result);
+end;
 
 function GetSelf(p0: PTLlhttpInternalT): TH1Parser; inline;
 begin
@@ -192,11 +240,15 @@ end;
 function CbOnBody(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
 var
   LSelf: TH1Parser;
-  LChunk: string;
+  LOldLen: SizeUInt;
 begin
   LSelf := GetSelf(p0);
-  SetString(LChunk, p1, p2);
-  LSelf.FBody := LSelf.FBody + LChunk;
+  if p2 > 0 then
+  begin
+    LOldLen := SizeUInt(Length(LSelf.FBody));
+    SetLength(LSelf.FBody, LOldLen + p2);
+    Move(p1^, LSelf.FBody[LOldLen], p2);
+  end;
   Result := 0;
 end;
 
@@ -366,7 +418,19 @@ end;
 
 function TH1Parser.GetBody: string;
 begin
-  Result := FBody;
+  Result := BytesToString(FBody);
+end;
+
+function TH1Parser.GetBodySize: Int64;
+begin
+  Result := Int64(Length(FBody));
+end;
+
+function TH1Parser.NewBodyReader: IReader;
+begin
+  if Length(FBody) = 0 then
+    Exit(nil);
+  Result := TSharedBytesReader.Create(FBody);
 end;
 
 function TH1Parser.IsComplete: Boolean;
@@ -425,7 +489,7 @@ begin
   FVersion := hvHttp11;
   FUrl := '';
   FHeaders := NewHttpHeaders;
-  FBody := '';
+  FBody := nil;
   FComplete := False;
   FError := False;
   FErrorMsg := '';

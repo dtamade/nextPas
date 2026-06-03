@@ -5,12 +5,31 @@ program test_http_h1parser;
 uses
   nextpas.core.base,
   nextpas.core.testing,
+  nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.impl.h1.parser;
 
 var
   T: TTestRunner;
+
+function ReadReaderStr(const AReader: IReader): string;
+var
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  if AReader = nil then
+    Exit;
+  repeat
+    LN := AReader.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    if LN > 0 then
+    begin
+      SetLength(Result, Length(Result) + Int32(LN));
+      Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+    end;
+  until LN = 0;
+end;
 
 procedure TestSimpleGet;
 var
@@ -235,6 +254,46 @@ begin
   Check(LP.IsComplete, 'chunked request complete');
   Check(LP.GetMethod = hmPost, 'chunked request method POST');
   CheckEqual('hello world', LP.GetBody, 'chunked request body decoded');
+end;
+
+procedure TestRequestBodyReaderView;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LReader1, LReader2: IReader;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Content-Length: 11'#13#10#13#10 +
+          'hello world';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'request complete');
+  CheckEqual(Int64(11), LP.GetBodySize, 'request body size');
+  LReader1 := LP.NewBodyReader;
+  Check(LReader1 <> nil, 'request body reader 1');
+  CheckEqual('hello world', ReadReaderStr(LReader1), 'request body reader 1 contents');
+  LReader2 := LP.NewBodyReader;
+  Check(LReader2 <> nil, 'request body reader 2');
+  CheckEqual('hello world', ReadReaderStr(LReader2), 'request body reader 2 contents');
+end;
+
+procedure TestResponseBodyReaderView;
+var
+  LP: IH1Parser;
+  LResp: string;
+  LReader: IReader;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'response complete');
+  CheckEqual(Int64(5), LP.GetBodySize, 'response body size');
+  LReader := LP.NewBodyReader;
+  Check(LReader <> nil, 'response body reader');
+  CheckEqual('hello', ReadReaderStr(LReader), 'response body reader contents');
 end;
 
 procedure TestChunkedRequestInvalidChunkSize;
@@ -1587,6 +1646,8 @@ begin
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body', @TestChunkedRequestBody);
+  T.Run('Request body reader view', @TestRequestBodyReaderView);
+  T.Run('Response body reader view', @TestResponseBodyReaderView);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
   T.Run('Chunked request malformed chunk extension', @TestChunkedRequestMalformedChunkExtension);
   T.Run('Chunked request truncated chunk extension at EOF', @TestChunkedRequestTruncatedChunkExtensionAtEof);

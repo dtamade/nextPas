@@ -1,16 +1,15 @@
-# Task Plan: HTTP router head/patch/options convenience methods
+# Task Plan: HTTP body reader hot-path copy removal
 
 ## Goal
 
-补齐 router public convenience surface 的下一格：把 `Head/Patch/Options`
-从缺失状态提升为 `IHttpRouter` / `THttpRouter` 的正式公开契约。
+收掉 H1 parser/server/client 热路径里 `body string -> bytes -> stream`
+这层多余复制，为后续 evented runtime 和更现代的 body streaming seam 打基础。
 
 ## Checklist
 
 - [x] 确认共享 checkout 里无关 dirty/untracked 文件范围，本轮只处理 HTTP 相关路径。
-- [x] 审计 `IHttpRouter`、`THttpRouter`、README 与 API coverage，确认这三个是当前真实 gap。
-- [x] 先写 failing focused tests，证明 `Head/Patch/Options` 当前不可调用。
-- [x] 做最小生产改动，把这三个 convenience methods 提升为公开契约。
-- [x] 同步 README 与 API coverage。
+- [x] 接上 RED：`test_http_h1parser` 中 `GetBodySize` / `NewBodyReader` 当前缺失。
+- [x] 做最小生产改动：parser 直接持有 body bytes，并暴露 body size / body reader。
+- [x] 让 H1 server/client 热路径直接消费 parser body reader，去掉额外复制。
 - [x] 只跑 changed-surface 验证并确认 heaptrc 无泄漏。
-- [ ] path-limited commit。
+- [x] path-limited commit。

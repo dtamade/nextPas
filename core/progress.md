@@ -1,20 +1,20 @@
-# Progress Log: HTTP router head/patch/options convenience methods
+# Progress Log: HTTP body reader hot-path copy removal
 
 ## Session
 
-- **Scope:** publish `Head/Patch/Options` on `IHttpRouter` / `THttpRouter` and align docs with the public router surface.
+- **Scope:** remove one full body copy from the H1 parser -> server/client hot path by exposing parser-owned body reader views.
 - **Status:** completed
 
 ## Notes
 
 - 生产改动：
-  - `src/nextpas.core.http.intf.pas`
-  - `src/nextpas.core.http.router.pas`
+  - `src/nextpas.core.http.impl.h1.parser.pas`
+  - `src/nextpas.core.http.impl.h1.pas`
 - focused changed-surface 验证已完成：
-  - `make -C tests/nextpas.core.http/test_http_contract clean test`
-  - `make -C tests/nextpas.core.http/test_http_router clean test`
-  - `make -C examples/nextpas.core.http/http_hello_server clean build`
-  - `make -C examples/nextpas.core.http/http_get_client clean build`
+  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
+  - `make -C tests/nextpas.core.http/test_http_client clean test`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
 - heaptrc 证据：
-  - `test_http_contract`：`0 unfreed memory blocks`
-  - `test_http_router`：`0 unfreed memory blocks`
+  - `test_http_h1parser`：`0 unfreed memory blocks`
+  - `test_http_client`：`0 unfreed memory blocks`
+  - `test_http_server`：`0 unfreed memory blocks`

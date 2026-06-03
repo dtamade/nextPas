@@ -39,7 +39,6 @@ uses
   nextpas.core.errors,
   nextpas.core.io.base,
   nextpas.core.io.buffer,
-  nextpas.core.io.memory,
   nextpas.core.net,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
@@ -101,14 +100,6 @@ type
     constructor Create(const AOptions: TH1ServerTransportOptions);
     procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
   end;
-
-function StrToBytes(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-end;
 
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
 var
@@ -339,8 +330,7 @@ var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
-  LBodyStream: IStream;
-  LBodyStr: string;
+  LBodyReader: IReader;
 begin
   LParser := NewH1ResponseParser;
   repeat
@@ -360,12 +350,11 @@ begin
 
   AKeepAlive := LParser.ShouldKeepAlive;
 
-  LBodyStr := LParser.GetBody;
-  if LBodyStr <> '' then
+  LBodyReader := LParser.NewBodyReader;
+  if LBodyReader <> nil then
   begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyStr));
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders,
-      LBodyStream as IReader);
+      LBodyReader);
   end
   else
     Result := THttpResponse.Create(LParser.GetStatusCode, LParser.GetHeaders, nil);
@@ -458,7 +447,6 @@ var
   LKeepAlive: Boolean;
   LIdleMs: Int64;
   LBufWriter: IWriter;
-  LBodyStr: string;
   LBodyReader: IReader;
   LContentLen: Int64;
   LTotalRead: SizeUInt;
@@ -520,7 +508,7 @@ begin
         begin
           LHeadersDone := True;
           if (FOptions.MaxHeaderSize > 0) and
-             (Int64(LTotalRead) - Int64(Length(LParser.GetBody)) >
+             (Int64(LTotalRead) - LParser.GetBodySize >
               Int64(FOptions.MaxHeaderSize)) then
           begin
             WriteErrorResponse(AConn, HTTP_STATUS_HEADER_TOO_LARGE);
@@ -553,8 +541,7 @@ begin
 
       if FOptions.MaxBodySize > 0 then
       begin
-        LBodyStr := LParser.GetBody;
-        if Int64(Length(LBodyStr)) > FOptions.MaxBodySize then
+        if LParser.GetBodySize > FOptions.MaxBodySize then
         begin
           WriteErrorResponse(AConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
           LKeepAlive := False;
@@ -573,19 +560,19 @@ begin
       end;
 
       LUrl := TUrl.Parse(LParser.GetUrl);
-      LBodyStr := LParser.GetBody;
-      if LBodyStr <> '' then
+      LContentLen := LParser.GetBodySize;
+      LBodyReader := LParser.NewBodyReader;
+      if LBodyReader <> nil then
       begin
-        LBodyReader := CreateBytesStreamFrom(StrToBytes(LBodyStr)) as IReader;
-        LContentLen := Int64(Length(LBodyStr));
+        LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
+          LParser.GetHeaders, LBodyReader, LContentLen);
       end
       else
       begin
-        LBodyReader := nil;
         LContentLen := 0;
+        LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
+          LParser.GetHeaders, nil, LContentLen);
       end;
-      LReq := THttpRequest.Create(LParser.GetMethod, LUrl, LParser.GetHttpVersion,
-        LParser.GetHeaders, LBodyReader, LContentLen);
 
       (LReq as THttpRequest).SetRemoteAddr(AConn.RemoteAddr.ToString);
 
