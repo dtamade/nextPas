@@ -23,6 +23,17 @@ type
     procedure SetBlocking(const ABlocking: Boolean);
   end;
 
+  TTcpStreamIOResult = (
+    tsiorOk,
+    tsiorWouldBlock,
+    tsiorClosed
+  );
+
+  TTcpAcceptResult = (
+    tarAccepted,
+    tarWouldBlock
+  );
+
   ITcpStream = interface(IStream)
     ['{C1D2E3F4-A5B6-7890-ABCD-300000000001}']
     function LocalAddr: TNetAddress;
@@ -39,6 +50,19 @@ type
     function Accept: ITcpStream;
     function LocalAddr: TNetAddress;
     procedure Close;
+  end;
+
+  ITcpStreamRuntime = interface(ITcpSocketRuntime)
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000005}']
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+  end;
+
+  ITcpListenerRuntime = interface(ITcpSocketRuntime)
+    ['{C1D2E3F4-A5B6-7890-ABCD-300000000006}']
+    function TryAccept(out AConn: ITcpStream): TTcpAcceptResult;
   end;
 
   IUdpSocket = interface

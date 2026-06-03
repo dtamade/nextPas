@@ -58,6 +58,7 @@ Addr := Resolve('example.com');
 - `ITcpListener` — Accept, LocalAddr, Close
 - `IUdpSocket` — SendTo, RecvFrom, LocalAddr, Close
 - `ITcpSocketRuntime` — optional advanced-runtime seam that exposes a native socket handle plus blocking/nonblocking control for server backends; ordinary application code usually does not need it
+- `ITcpListenerRuntime` / `ITcpStreamRuntime` — optional runtime-only nonblocking I/O seam for future evented server backends; `TryAccept` / `TryRead` / `TryWrite` report would-block as a normal result instead of an exception
 
 ## TCP Server Foundation
 
@@ -69,6 +70,8 @@ Current truth:
 - `nextpas.core.net` provides socket/listener primitives.
 - `nextpas.core.net.server` provides the reusable TCP server runtime seam.
 - `ITcpSocketRuntime` now exposes the native-handle / blocking-control prerequisite seam that future evented backends can consume without relying on concrete `TTcpStream` / `TTcpListener` casts.
+- The next foundation step is a narrow nonblocking runtime I/O seam:
+  `ITcpListenerRuntime.TryAccept` plus `ITcpStreamRuntime.TryRead/TryWrite`.
 - Current shipped server backend is `threaded`.
 - Planned first-class backends are `epoll`, `kqueue`, and `IOCP`.
 

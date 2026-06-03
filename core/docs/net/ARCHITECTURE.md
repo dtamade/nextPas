@@ -61,6 +61,39 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:104)
   已有 `TH1ServerConnectionState`，说明 HTTP 单连接协议状态与 runtime entrypoint 已开始分离。
 
+## 当前阶段门
+
+在真正落 `epoll` / `kqueue` / `IOCP` backend 之前，foundation 还必须先补齐一层更窄的
+nonblocking runtime I/O seam。
+
+原因很直接：
+
+- evented backend 不能只拿到 native socket handle，然后继续调用会阻塞、或把
+  `EAGAIN` / `WSAEWOULDBLOCK` 当异常抛出的 `Accept` / `Read` / `Write`
+- 如果 would-block 仍表现成异常，reactor / proactor runtime 就无法把“暂时没数据/暂时不能写”
+  当作正常调度分支处理
+- 这会把后续 `epoll` / `kqueue` / `IOCP` 变成“看起来像事件驱动，实质还是阻塞/异常驱动”的伪 backend
+
+所以当前固定的阶段门是：
+
+- blocking public API 继续保留：
+  - `ITcpListener.Accept`
+  - `ITcpStream.Read`
+  - `ITcpStream.Write`
+- 额外增加 runtime-only optional seam：
+  - `ITcpListenerRuntime.TryAccept`
+  - `ITcpStreamRuntime.TryRead`
+  - `ITcpStreamRuntime.TryWrite`
+- would-block 是正常返回值，不是异常路径
+- 真错误仍抛 `ENetworkError`
+
+也就是说，foundation 的演进顺序不是“先写 `net.server.epoll`，再看还缺什么”，而是：
+
+1. 先让 `nextpas.core.net` socket/listener primitive 提供 nonblocking-friendly
+   `TryAccept/TryRead/TryWrite`
+2. 再让 future evented backend 只依赖这些 contract 驱动连接状态
+3. 最后才实现 `net.server.epoll` / `kqueue` / `iocp`
+
 ## 分层边界
 
 ### `nextpas.core.net.server` 负责什么
@@ -99,6 +132,8 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 - `ITcpServerHandler.ServeConn` 返回 ownership，server 与 handler 的连接责任要显式可证明。
 - `ITcpSocketRuntime` 是 lower-level runtime seam：普通业务代码可以忽略它，evented backend 可以通过
   `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
+- `ITcpListenerRuntime` / `ITcpStreamRuntime` 是更窄的 runtime-only I/O seam：
+  would-block 必须作为正常结果返回，不能重新编码成异常。
 - `nextpas.core.http.server` 这类上层 facade 只能做编排，不再重复实现 accept loop。
 - 上层模块可以保留同步 handler surface；evented backend 必须在内部做 worker handoff，不能把任意 handler 直接跑在 reactor 线程。
 
@@ -192,7 +227,8 @@ nextpas.core.net.server.iocp
 
 ### Phase 3
 
-- 增加 `net.server.epoll`
+- 先完成 nonblocking runtime I/O seam proof
+- 再增加 `net.server.epoll`
 - 证明同一 HTTP contract 可由 evented backend 驱动
 
 ### Phase 4

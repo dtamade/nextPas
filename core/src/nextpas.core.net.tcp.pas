@@ -30,7 +30,8 @@ uses
 
 type
   TTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream,
-    ITcpSocketRuntime)
+    ITcpSocketRuntime,
+    ITcpStreamRuntime)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -62,9 +63,14 @@ type
     procedure SetWriteDeadline(const ADeadline: TDeadline);
     function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
   end;
 
-  TTcpListener = class(TInterfacedObject, ITcpListener, ITcpSocketRuntime)
+  TTcpListener = class(TInterfacedObject, ITcpListener, ITcpSocketRuntime,
+    ITcpListenerRuntime)
   private
     FSocket: TPlatformSocket;
     FLocal: TNetAddress;
@@ -77,6 +83,7 @@ type
     procedure Close;
     function NativeSocketHandle: PtrUInt;
     procedure SetBlocking(const ABlocking: Boolean);
+    function TryAccept(out AConn: ITcpStream): TTcpAcceptResult;
   end;
 
 function Htons(AVal: UInt16): UInt16; inline;
@@ -259,6 +266,56 @@ begin
     raise ENetworkError.Create('tcp set blocking failed');
 end;
 
+function TTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+var
+  LRecvd: Int32;
+  LResult: Int32;
+begin
+  ARead := 0;
+  if ACount = 0 then
+    Exit(tsiorOk);
+  if FReadDeadline.IsExpired then
+    raise ENetworkError.Create('read deadline exceeded');
+
+  LResult := platform_socket_recv(FSocket, @ABuf, Int32(ACount), 0, LRecvd);
+  if LResult = 0 then
+  begin
+    ARead := SizeUInt(LRecvd);
+    if LRecvd = 0 then
+      Exit(tsiorClosed);
+    Exit(tsiorOk);
+  end;
+  if platform_socket_error_would_block(LResult) then
+    Exit(tsiorWouldBlock);
+  raise ENetworkError.Create('tcp read failed (' + IntToStr(LResult) + ')');
+end;
+
+function TTcpStream.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+var
+  LSent: Int32;
+  LResult: Int32;
+begin
+  AWritten := 0;
+  if ACount = 0 then
+    Exit(tsiorOk);
+  if FWriteDeadline.IsExpired then
+    raise ENetworkError.Create('write deadline exceeded');
+
+  LResult := platform_socket_send(FSocket, @ABuf, Int32(ACount), 0, LSent);
+  if LResult = 0 then
+  begin
+    AWritten := SizeUInt(LSent);
+    if LSent = 0 then
+      Exit(tsiorClosed);
+    Exit(tsiorOk);
+  end;
+  if platform_socket_error_would_block(LResult) then
+    Exit(tsiorWouldBlock);
+  raise ENetworkError.Create('tcp write failed (' + IntToStr(LResult) + ')');
+end;
+
 procedure TTcpStream.ApplyReadTimeout;
 var
   LMs: UInt32;
@@ -371,6 +428,32 @@ procedure TTcpListener.SetBlocking(const ABlocking: Boolean);
 begin
   if platform_socket_set_nonblocking(FSocket, not ABlocking) <> 0 then
     raise ENetworkError.Create('tcp listener set blocking failed');
+end;
+
+function TTcpListener.TryAccept(out AConn: ITcpStream): TTcpAcceptResult;
+var
+  LClient: TPlatformSocket;
+  LAddr, LLocalAddr: sockaddr_in;
+  LAddrLen: socklen_t;
+  LResult: Int32;
+  LLocal: TNetAddress;
+begin
+  AConn := nil;
+  LAddrLen := SizeOf(LAddr);
+  LResult := platform_socket_accept(FSocket, @LAddr, @LAddrLen, LClient);
+  if LResult = 0 then
+  begin
+    LAddrLen := SizeOf(LLocalAddr);
+    if platform_socket_getsockname(LClient, @LLocalAddr, @LAddrLen) = 0 then
+      LLocal := AddrFromSockAddr(LLocalAddr)
+    else
+      LLocal := FLocal;
+    AConn := TTcpStream.Create(LClient, LLocal, AddrFromSockAddr(LAddr));
+    Exit(tarAccepted);
+  end;
+  if platform_socket_error_would_block(LResult) then
+    Exit(tarWouldBlock);
+  raise ENetworkError.Create('tcp accept failed (' + IntToStr(LResult) + ')');
 end;
 
 { Factory functions }

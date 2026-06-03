@@ -98,6 +98,7 @@ function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
   const ANonBlock: Boolean): Int32;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
   const AOptName: Int32; const AMs: UInt32): Int32;
+function platform_socket_error_would_block(const AError: Int32): Boolean;
 
 implementation
 
@@ -327,6 +328,11 @@ begin
     @LTv, SizeOf(LTv));
 end;
 
+function platform_socket_error_would_block(const AError: Int32): Boolean;
+begin
+  Result := (AError = ESysEAGAIN) or (AError = ESysEWOULDBLOCK);
+end;
+
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -552,8 +558,17 @@ end;
 
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket;
   const ANonBlock: Boolean): Int32;
+var
+  LMode: DWORD;
 begin
-  Result := -1; // TODO: ioctlsocket(FIONBIO)
+  if ANonBlock then
+    LMode := 1
+  else
+    LMode := 0;
+  if ioctlsocket(TSocket(ASocket.Value), FIONBIO, @LMode) = 0 then
+    Result := 0
+  else
+    Result := WSAGetLastError;
 end;
 
 function platform_socket_set_timeout(const ASocket: TPlatformSocket;
@@ -564,6 +579,11 @@ begin
   LMs := Int32(AMs);
   Result := platform_socket_setsockopt(ASocket, PLATFORM_SOL_SOCKET, AOptName,
     @LMs, SizeOf(LMs));
+end;
+
+function platform_socket_error_would_block(const AError: Int32): Boolean;
+begin
+  Result := AError = WSAEWOULDBLOCK;
 end;
 
 var
@@ -593,6 +613,7 @@ function platform_socket_getpeername(const ASocket: TPlatformSocket; AAddr: Poin
 function platform_socket_resolve_ipv4(const AHost: PAnsiChar; out AAddr: UInt32): Int32; begin AAddr := 0; Result := -1; end;
 function platform_socket_set_nonblocking(const ASocket: TPlatformSocket; const ANonBlock: Boolean): Int32; begin Result := -1; end;
 function platform_socket_set_timeout(const ASocket: TPlatformSocket; const AOptName: Int32; const AMs: UInt32): Int32; begin Result := -1; end;
+function platform_socket_error_would_block(const AError: Int32): Boolean; begin Result := False; end;
 {$ENDIF}
 
 end.

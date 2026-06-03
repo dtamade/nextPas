@@ -21,6 +21,10 @@ uses
 var
   T: TTestRunner;
 
+const
+  NONBLOCKING_WAIT_SPINS = 200;
+  NONBLOCKING_WAIT_NS = 1000000;
+
 { TCP echo test — uses port 0 (OS assigns) }
 
 var
@@ -376,6 +380,132 @@ begin
   end;
 end;
 
+function WaitForAcceptedConnection(
+  const ARuntime: nextpas.core.net.ITcpListenerRuntime): ITcpStream;
+var
+  LSpin: Integer;
+  LResult: nextpas.core.net.TTcpAcceptResult;
+begin
+  Result := nil;
+  for LSpin := 1 to NONBLOCKING_WAIT_SPINS do
+  begin
+    LResult := ARuntime.TryAccept(Result);
+    if LResult = tarAccepted then
+      Exit;
+    CheckEqual(Int64(Ord(tarWouldBlock)), Int64(Ord(LResult)),
+      'listener try-accept only reports would-block before connect');
+    platform_thread_sleep_ns(NONBLOCKING_WAIT_NS);
+  end;
+  Fail('listener try-accept did not observe incoming connection');
+end;
+
+function WaitForRuntimeRead(
+  const ARuntime: nextpas.core.net.ITcpStreamRuntime; var ABuf;
+  const ACount: SizeUInt; out ARead: SizeUInt): nextpas.core.net.TTcpStreamIOResult;
+var
+  LSpin: Integer;
+begin
+  ARead := 0;
+  for LSpin := 1 to NONBLOCKING_WAIT_SPINS do
+  begin
+    Result := ARuntime.TryRead(ABuf, ACount, ARead);
+    if Result <> tsiorWouldBlock then
+      Exit;
+    platform_thread_sleep_ns(NONBLOCKING_WAIT_NS);
+  end;
+  Fail('stream try-read did not observe readable bytes');
+end;
+
+procedure TestTcpListenerRuntimeTryAccept;
+var
+  LListener: ITcpListener;
+  LRuntime: nextpas.core.net.ITcpListenerRuntime;
+  LClient: ITcpStream;
+  LAccepted: ITcpStream;
+  LResult: nextpas.core.net.TTcpAcceptResult;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    Check(Supports(LListener, ITcpListenerRuntime, LRuntime),
+      'listener exposes nonblocking runtime accept');
+    LRuntime.SetBlocking(False);
+
+    LAccepted := nil;
+    LResult := LRuntime.TryAccept(LAccepted);
+    CheckEqual(Int64(Ord(tarWouldBlock)), Int64(Ord(LResult)),
+      'empty nonblocking listener would block');
+    Check(LAccepted = nil, 'no connection returned on would-block');
+
+    LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+    try
+      LAccepted := WaitForAcceptedConnection(LRuntime);
+      Check(LAccepted <> nil, 'accepted connection returned');
+      LAccepted.Close;
+    finally
+      LClient.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
+procedure TestTcpStreamRuntimeTryReadAndTryWrite;
+var
+  LListener: ITcpListener;
+  LClient: ITcpStream;
+  LAccepted: ITcpStream;
+  LRuntime: nextpas.core.net.ITcpStreamRuntime;
+  LBuf: array[0..31] of Byte;
+  LRead: SizeUInt;
+  LWritten: SizeUInt;
+  LResult: nextpas.core.net.TTcpStreamIOResult;
+  LN: SizeUInt;
+begin
+  LListener := TcpListen('127.0.0.1', 0);
+  try
+    LClient := TcpConnect('127.0.0.1', LListener.LocalAddr.Port);
+    try
+      LAccepted := LListener.Accept;
+      try
+        Check(Supports(LAccepted, ITcpStreamRuntime, LRuntime),
+          'accepted stream exposes nonblocking runtime I/O');
+        LRuntime.SetBlocking(False);
+
+        LRead := 0;
+        LResult := LRuntime.TryRead(LBuf[0], SizeOf(LBuf), LRead);
+        CheckEqual(Int64(Ord(tsiorWouldBlock)), Int64(Ord(LResult)),
+          'empty nonblocking stream read would block');
+        CheckEqual(Int64(0), Int64(LRead), 'would-block read reports zero bytes');
+
+        LClient.Write(PAnsiChar('ping')^, 4);
+        LResult := WaitForRuntimeRead(LRuntime, LBuf[0], SizeOf(LBuf), LRead);
+        CheckEqual(Int64(Ord(tsiorOk)), Int64(Ord(LResult)),
+          'nonblocking read returns ok once peer writes');
+        CheckEqual(Int64(4), Int64(LRead), 'runtime read byte count');
+        CheckEqual(Int64(Ord('p')), Int64(LBuf[0]), 'runtime read first byte');
+        CheckEqual(Int64(Ord('g')), Int64(LBuf[3]), 'runtime read last byte');
+
+        LWritten := 0;
+        LResult := LRuntime.TryWrite(PAnsiChar('pong')^, 4, LWritten);
+        CheckEqual(Int64(Ord(tsiorOk)), Int64(Ord(LResult)),
+          'runtime write returns ok');
+        CheckEqual(Int64(4), Int64(LWritten), 'runtime write byte count');
+
+        LN := LClient.Read(LBuf[0], SizeOf(LBuf));
+        CheckEqual(Int64(4), Int64(LN), 'client reads runtime-written bytes');
+        CheckEqual(Int64(Ord('p')), Int64(LBuf[0]), 'runtime write first byte');
+        CheckEqual(Int64(Ord('g')), Int64(LBuf[3]), 'runtime write last byte');
+      finally
+        LAccepted.Close;
+      end;
+    finally
+      LClient.Close;
+    end;
+  finally
+    LListener.Close;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net');
   T.Run('TCP echo', @TestTcpEcho);
@@ -395,5 +525,9 @@ begin
     @TestTcpListenerSupportsRuntimeSocketControl);
   T.Run('TCP stream exposes runtime socket control',
     @TestTcpStreamSupportsRuntimeSocketControl);
+  T.Run('TCP listener try-accept reports would-block and accept',
+    @TestTcpListenerRuntimeTryAccept);
+  T.Run('TCP stream try-read and try-write support nonblocking runtime I/O',
+    @TestTcpStreamRuntimeTryReadAndTryWrite);
   T.Summary;
 end.
