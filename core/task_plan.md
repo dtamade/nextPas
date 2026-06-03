@@ -1,12 +1,12 @@
-# Task Plan: HTTP truncated chunk-extension EOF proof
+# Task Plan: HTTP truncated terminal chunk-extension EOF proof
 
 ## Goal
 
-补齐 chunked request 在 chunk-extension line 上因 EOF 截断而失败的 parser/server/security focused proof，
+补齐 terminal `0` chunk 在 extension line 上因 EOF 截断而失败的 parser/server/security focused proof，
 把这两个相邻子类单独锁实：
 
-- `... 5;sig=abc`
-- `... 5;sig=abc\r`
+- `...hello\r\n0;sig=abc`
+- `...hello\r\n0;sig=abc\r`
 
 确认：
 
@@ -17,26 +17,26 @@
 ## Current Phase
 
 `nextpas.core.http` H1 correctness coverage-expansion。当前继续做 malformed chunk framing 审计，把
-`chunk-size line`、`chunk-extension line`、`chunk-data line ending`、`terminal 0 chunk ending`、
-`trailer section` 这些 EOF 边界子类逐个拆开锁实，而不是停留在宽泛的 “truncated chunked EOF”
-表述。
+`chunk-size line`、`chunk-extension line`、`terminal chunk extension line`、`chunk-data line ending`、
+`terminal 0 chunk ending`、`trailer section` 这些 EOF 边界子类逐个拆开锁实，而不是停留在宽泛的
+“truncated chunked EOF” 表述。
 
 ## Active Batch Checklist
 
 - [x] 检查 shared checkout 的无关脏文件，确认本轮只处理 HTTP 相关路径。
 - [x] 复读 `docs/design-conventions.md`、`docs/nextpas.core.http.inbox.md`、
   `docs/http/API_COVERAGE.md` 与现有控制文件。
-- [x] 确认当前缺口是 chunk-extension line 的 EOF 截断，且现有 case 还没单独覆盖
-  `...5;sig=abc` / `...5;sig=abc\r`。
+- [x] 确认当前缺口是 terminal chunk extension line 的 EOF 截断，且现有 case 还没单独覆盖
+  `...0;sig=abc` / `...0;sig=abc\r`。
 - [x] 新增 parser focused tests：
-  `Chunked request truncated chunk extension at EOF`、
-  `Chunked request truncated chunk extension CR at EOF`。
+  `Chunked request truncated terminal chunk extension at EOF`、
+  `Chunked request truncated terminal chunk extension CR at EOF`。
 - [x] 新增 server focused tests：
-  `Malformed chunked request truncated chunk extension at EOF -> 400`、
-  `Malformed chunked request truncated chunk extension CR at EOF -> 400`。
+  `Malformed chunked request truncated terminal chunk extension at EOF -> 400`、
+  `Malformed chunked request truncated terminal chunk extension CR at EOF -> 400`。
 - [x] 新增 security focused tests：
-  `Truncated chunk extension at EOF -> 400`、
-  `Truncated chunk extension CR at EOF -> 400`。
+  `Truncated terminal chunk extension at EOF -> 400`、
+  `Truncated terminal chunk extension CR at EOF -> 400`。
 - [x] 跑 `test_http_h1parser`、`test_http_server`、`test_http_security` 首轮验证，记录是 RED 还是 direct GREEN。
 - [x] 若失败则仅在 HTTP parser/server 内最小修复；若直接通过，则按 coverage-expansion 收口。
 - [x] 同步 inbox、API coverage、`task_plan.md`、`findings.md`、`progress.md`。
@@ -57,8 +57,8 @@
 
 | Decision | Rationale |
 | --- | --- |
-| 本轮优先补 chunk-extension line EOF 子类 | 这是当前 malformed chunk framing 里最自然的剩余边界缺口之一。 |
-| 一次性锁 `...5;sig=abc` 与 `...5;sig=abc\r` 两个相邻子类 | 可以把 chunk-extension line 截断 truth 说清楚，而不必下一轮再补半个 CRLF。 |
+| 本轮优先补 terminal chunk extension line EOF 子类 | 这是当前 malformed chunk framing 里最自然的剩余边界缺口之一。 |
+| 一次性锁 `...0;sig=abc` 与 `...0;sig=abc\r` 两个相邻子类 | 可以把 terminal chunk extension 截断 truth 说清楚，而不必下一轮再补半个 CRLF。 |
 | 若首跑直接 GREEN，则不碰生产代码 | 当前目标是 correctness proof，不制造伪修复。 |
 
 ## Errors Encountered

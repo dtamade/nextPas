@@ -1,16 +1,16 @@
-# Progress Log: HTTP truncated chunk-extension EOF proof
+# Progress Log: HTTP truncated terminal chunk-extension EOF proof
 
-## Session: 2026-06-03 HTTP chunk-extension EOF truncation
+## Session: 2026-06-03 HTTP terminal chunk-extension EOF truncation
 
 - **Status:** completed
-- **Scope:** add parser/server/security focused proof that chunk-extension line truncation is rejected at EOF / peer half-close with explicit `400` semantics.
+- **Scope:** add parser/server/security focused proof that terminal chunk extension line truncation is rejected at EOF / peer half-close with explicit `400` semantics.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
   - [x] Re-read design conventions, HTTP inbox, API coverage matrix, and current control files.
-  - [x] Confirmed the remaining malformed-chunk gap is chunk-extension line EOF truncation.
-  - [x] Added the new parser focused tests for chunk-extension EOF truncation.
-  - [x] Added the new server focused tests for chunk-extension EOF truncation.
-  - [x] Added the new security focused tests for chunk-extension EOF truncation.
+  - [x] Confirmed the remaining malformed-chunk gap is terminal chunk extension line EOF truncation.
+  - [x] Added the new parser focused tests for terminal chunk extension EOF truncation.
+  - [x] Added the new server focused tests for terminal chunk extension EOF truncation.
+  - [x] Added the new security focused tests for terminal chunk extension EOF truncation.
   - [x] Ran the first parser verification and recorded the result.
   - [x] Ran the first server verification and recorded the result.
   - [x] Ran the first security verification and recorded the result.
@@ -22,19 +22,19 @@
 ## Baseline Evidence
 
 - Shared checkout is dirty outside HTTP scope; broad git operations remain unsafe.
-- Existing chunked EOF proof already covered malformed chunk extension, chunk body truncation,
+- Existing chunked EOF proof already covered malformed chunk extension, chunk-extension line truncation,
   chunk-size line truncation, chunk-data line-ending truncation, terminal `0` chunk ending truncation,
   and trailer-field-started truncation.
-- The missing boundary was the chunk-extension line itself: request ending at `...5;sig=abc`
-  or `...5;sig=abc\r`.
+- The missing boundary was the terminal chunk extension line itself: request ending at
+  `...0;sig=abc` or `...0;sig=abc\r`.
 
 ## Verification Evidence 2026-06-03 Focused First Run
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `52/52 passed`, heaptrc `0 unfreed memory blocks` |
-| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `55/55 passed`, heaptrc `0 unfreed memory blocks` |
-| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `31/31 passed`, heaptrc `0 unfreed memory blocks` |
+| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `54/54 passed`, heaptrc `0 unfreed memory blocks` |
+| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `57/57 passed`, heaptrc `0 unfreed memory blocks` |
+| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `33/33 passed`, heaptrc `0 unfreed memory blocks` |
 
 ## Verification Evidence 2026-06-03 HTTP Aggregate
 
