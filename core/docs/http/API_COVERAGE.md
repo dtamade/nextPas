@@ -100,6 +100,8 @@
 - `IHttpServer` 现在也有 fixed-length request body EOF truncation focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 request-line / headers EOF truncation focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
 - `test_http_security` 现在把 `CL+TE` conflict、invalid chunk size、malformed chunk extension、以及 truncated chunked EOF 都锁成 explicit `400` proof。
+- `test_http_security` 现在也把 chunked ingress `MaxBodySize` 越线即 `413` 锁成 raw-wire proof：不必等待 terminal chunk。
+- `test_http_security` 现在也把 oversize trailer 仍受 `MaxHeaderSize` 约束锁成 raw-wire proof：返回 `431` 或安全关闭，且不会落到 handler。
 - `test_http_security` 现在也把 `chunk-size line EOF truncation` 锁成 explicit `400` proof。
 - `test_http_security` 现在也把 `terminal chunk ending CR EOF truncation` 锁成 explicit `400` proof。
 - `test_http_security` 现在也把 `terminal chunk extension EOF truncation` 锁成 explicit `400` proof。

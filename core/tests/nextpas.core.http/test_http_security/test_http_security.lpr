@@ -474,6 +474,72 @@ begin
   end;
 end;
 
+{ Test 2h: Chunked MaxBodySize rejection must happen before terminal chunk }
+procedure TestChunkedMaxBodySizeRejectsBeforeTerminalChunk;
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+  LOpts: THttpServerOptions;
+  LChunk1: string;
+  LChunk2: string;
+  LReq: string;
+  LChunkHex1: string;
+  LChunkHex2: string;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  LHandle := StartSecurityServer(LOpts, LServer, LPort);
+  try
+    SetLength(LChunk1, 700);
+    FillChar(LChunk1[1], 700, Ord('B'));
+    SetLength(LChunk2, 700);
+    FillChar(LChunk2[1], 700, Ord('C'));
+    LChunkHex1 := IntToHex(Length(LChunk1), 1);
+    LChunkHex2 := IntToHex(Length(LChunk2), 1);
+    LReq := 'POST / HTTP/1.1'#13#10 +
+            'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Connection: keep-alive'#13#10#13#10 +
+            LChunkHex1 + #13#10 +
+            LChunk1 + #13#10 +
+            LChunkHex2 + #13#10 +
+            LChunk2 + #13#10;
+
+    LResp := '';
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(2)));
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    finally
+      LConn.Close;
+    end;
+
+    Check(Pos('HTTP/1.1 413', LResp) > 0,
+      'Chunked MaxBodySize: explicit 413 before terminal chunk');
+    Check(Pos('echo:', LResp) = 0,
+      'Chunked MaxBodySize: handler response never written before terminal chunk');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 3: Generic malformed request }
 procedure TestGenericMalformedRequest;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1012,6 +1078,41 @@ begin
   end;
 end;
 
+{ Test 17a: Oversize trailer still uses MaxHeaderSize enforcement }
+procedure TestChunkedOversizeTrailerUsesMaxHeaderSize;
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LOpts: THttpServerOptions;
+  LTrailerValue: string;
+  LReq: string;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  LHandle := StartSecurityServer(LOpts, LServer, LPort);
+  try
+    SetLength(LTrailerValue, 300);
+    FillChar(LTrailerValue[1], 300, Ord('x'));
+    LReq := 'POST / HTTP/1.1'#13#10 +
+            'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Big'#13#10 +
+            'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Big: ' + LTrailerValue + #13#10#13#10;
+    LResp := SendRaw(LPort, LReq);
+    Check((Pos('HTTP/1.1 431', LResp) > 0) or (Length(LResp) = 0),
+      'Oversize trailer: 431 or connection closed');
+    Check(Pos('echo:5', LResp) = 0,
+      'Oversize trailer: handler response not written');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Truncated trailer section at EOF }
 procedure TestTruncatedTrailerAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1294,6 +1395,8 @@ begin
     @TestTruncatedTerminalChunkEndingAfterExtensionCrAtEof);
   T.Run('Truncated chunk-data ending at EOF -> 400', @TestTruncatedChunkDataEndingAtEof);
   T.Run('Truncated chunk-data CR at EOF -> 400', @TestTruncatedChunkDataCrAtEof);
+  T.Run('Chunked MaxBodySize rejects before terminal chunk',
+    @TestChunkedMaxBodySizeRejectsBeforeTerminalChunk);
   T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);
@@ -1327,6 +1430,8 @@ begin
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
   T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
+  T.Run('Chunked oversize trailer uses MaxHeaderSize',
+    @TestChunkedOversizeTrailerUsesMaxHeaderSize);
   T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
   T.Run('Truncated trailer field-name at EOF -> 400', @TestTruncatedTrailerFieldNameAtEof);
   T.Run('Truncated trailer separator at EOF -> 400', @TestTruncatedTrailerSeparatorAtEof);

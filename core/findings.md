@@ -1,34 +1,23 @@
-# Findings: HTTP server runtime architecture freeze batch 4
+# Findings: HTTP security chunked raw-wire coverage batch 5
 
 ## Root causes
 
-- runtime 方向虽然已经在讨论里达成一致，也已有 `nextpas.core.net.server`
-  foundation 与 `http.server` facade 化落地，但正式文档入口还不够清晰。
-- 现状是方案主要留在 `docs/plans/2026-06-03-http-server-runtime-foundation.md`，
-  这更像决策记录，不够适合作为长期 canonical architecture。
-- `docs/net/README.md` 与 `docs/http/ARCHITECTURE.md` 也还没有把
-  `nextpas.core.net.server` 作为 runtime owner 讲清楚，后续很容易再次误判
-  “HTTPServer 是否固定只能线程驱动”。
+- `test_http_server` 已经证明了 chunked `MaxBodySize` 的 live limit 语义，以及
+  oversize trailer 的 `MaxHeaderSize` 约束；但 `test_http_security` 还缺这两条
+  raw-wire safety proof。
+- 没有这两条 security-suite 证据时，`HttpServer` 对恶意分段输入的防御语义虽然真实存在，
+  但缺少“攻击者视角”下的独立证据层。
 
 ## Fixed design truth
 
-- 正式架构入口现在是 `docs/net/ARCHITECTURE.md`，它固定了三层选型：
-  - public model: Go-like
-  - internal runtime/protocol split: Tokio/Hyper-like
-  - backend strategy: libuv-like (`epoll` / `kqueue` / `IOCP`)
-- `nextpas.core.net.server` 被正式固定为 reusable TCP server runtime foundation；
-  `nextpas.core.http` 只拥有 HTTP protocol semantics，不拥有线程模型或 event loop。
-- `docs/http/ARCHITECTURE.md` 现在明确：
-  - `http.server` 是 facade
-  - `IHttpServerTransport` 是 per-connection protocol seam
-  - ownership 通过 `TTcpServerConnOwnership` 与 TCP foundation 对齐
-- 原 `docs/plans/2026-06-03-http-server-runtime-foundation.md` 保留为决策记录，
-  但已加 canonical pointer，不再作为唯一真相来源。
+- `test_http_security` 现在直接证明：chunked body 一旦跨过 `MaxBodySize`，即使
+  terminal chunk 还没到，server 也会先返回 `413`，不会等请求“自然结束”。
+- `test_http_security` 现在也直接证明：oversize trailer 仍然走
+  `MaxHeaderSize` 防线，结果是 `431` 或安全关闭，而不是落到业务 handler。
+- 这两条 proof 这轮直接变绿，说明当前生产代码 truth 已经满足目标，本轮不需要生产修复。
 
 ## Why this is the right fix
 
-- 这次先固定 foundation ownership，比直接争论“线程模型现代不现代”更有效。
-- 先把 public contract、protocol seam、backend target 讲清楚，后续实现
-  `epoll/kqueue/IOCP` 才不会反复推翻 HTTP public API。
-- 让 `net.server` 成为通用运行时 owner，也避免其他 TCP 协议模块未来再次重复造
-  accept/runtime 轮子。
+- security suite 应该验证“攻击流量如何被拒绝”，不只复用普通 server suite 的正确性结论。
+- 把 live `413` 与 trailer `431` 补到 raw-wire 层后，chunked ingress 的防御边界更完整。
+- 这轮不动生产代码，保持批次聚焦，也符合你要求的 coverage-expansion 节奏。
