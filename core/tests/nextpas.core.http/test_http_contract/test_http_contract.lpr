@@ -737,9 +737,17 @@ begin
       nextpas.core.http.HTTP_STATUS_SWITCHING_PROTOCOLS), '101 facade');
   CheckEqual('OK', HttpStatusText(HTTP_STATUS_OK), '200');
   CheckEqual('Created', HttpStatusText(HTTP_STATUS_CREATED), '201');
+  CheckEqual('Payload Too Large',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_PAYLOAD_TOO_LARGE), '413 facade');
   CheckEqual('Not Found', HttpStatusText(HTTP_STATUS_NOT_FOUND), '404');
   CheckEqual('Internal Server Error', HttpStatusText(HTTP_STATUS_INTERNAL_SERVER_ERROR), '500');
-  CheckEqual('Not Implemented', HttpStatusText(HTTP_STATUS_NOT_IMPLEMENTED), '501');
+  CheckEqual('Not Implemented',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_NOT_IMPLEMENTED), '501 facade');
+  CheckEqual('Request Header Fields Too Large',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_HEADER_TOO_LARGE), '431 facade');
   CheckEqual('Method Not Allowed', HttpStatusText(HTTP_STATUS_METHOD_NOT_ALLOWED), '405');
   CheckEqual('Bad Request', HttpStatusText(HTTP_STATUS_BAD_REQUEST), '400');
 end;
