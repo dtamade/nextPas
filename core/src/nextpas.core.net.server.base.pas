@@ -17,6 +17,17 @@ type
     tscoHandler
   );
 
+  TTcpServerHandoffResult = (
+    tshrAccepted,
+    tshrRejected,
+    tshrShuttingDown
+  );
+
+  TTcpServerWorkOutcome = (
+    tswoCompleted,
+    tswoFailed
+  );
+
   TTcpServerOptions = record
     Backend: TTcpServerBackend;
     class function Default: TTcpServerOptions; static;

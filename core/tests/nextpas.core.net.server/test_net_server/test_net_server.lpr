@@ -70,6 +70,93 @@ type
     property RunCount: Int32 read FRunCount;
   end;
 
+  TContextSessionMode = (
+    csmClose,
+    csmSubmitCompleted,
+    csmSubmitFailing
+  );
+
+  TContextAwareHandler = class;
+
+  TClosingSession = class(TInterfacedObject, ITcpServerSession)
+  public
+    function Run: TTcpServerConnOwnership;
+  end;
+
+  THandoffWork = class(TInterfacedObject, ITcpServerWork)
+  private
+    FOwner: TContextAwareHandler;
+    FFailWork: Boolean;
+  public
+    constructor Create(const AOwner: TContextAwareHandler;
+      const AFailWork: Boolean);
+    function Execute: TTcpServerConnOwnership;
+  end;
+
+  THandoffCompletion = class(TInterfacedObject, ITcpServerWorkCompletion)
+  private
+    FOwner: TContextAwareHandler;
+    FConn: ITcpStream;
+  public
+    constructor Create(const AOwner: TContextAwareHandler;
+      const AConn: ITcpStream);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
+  TContextAwareSession = class(TInterfacedObject, ITcpServerSession)
+  private
+    FOwner: TContextAwareHandler;
+    FConn: ITcpStream;
+    FHandoff: ITcpServerWorkerHandoff;
+    FMode: TContextSessionMode;
+  public
+    constructor Create(const AOwner: TContextAwareHandler;
+      const AConn: ITcpStream; const AHandoff: ITcpServerWorkerHandoff;
+      const AMode: TContextSessionMode);
+    function Run: TTcpServerConnOwnership;
+  end;
+
+  TContextAwareHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactory, ITcpServerSessionFactoryWithContext)
+  private
+    FMode: TContextSessionMode;
+    FServeConnCalled: Boolean;
+    FLegacyFactoryCalled: Boolean;
+    FContextFactoryCalled: Boolean;
+    FContextSeen: Boolean;
+    FWorkerHandoffSeen: Boolean;
+    FCapturedHandoff: ITcpServerWorkerHandoff;
+    FSubmitResult: TTcpServerHandoffResult;
+    FWorkExecuteCount: Int32;
+    FCompletionCount: Int32;
+    FRunThreadId: UInt64;
+    FWorkThreadId: UInt64;
+    FCompletionThreadId: UInt64;
+    FLastWorkOutcome: TTcpServerWorkOutcome;
+    FLastOwnership: TTcpServerConnOwnership;
+  public
+    constructor Create(const AMode: TContextSessionMode);
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream): ITcpServerSession; overload;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession; overload;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property LegacyFactoryCalled: Boolean read FLegacyFactoryCalled;
+    property ContextFactoryCalled: Boolean read FContextFactoryCalled;
+    property ContextSeen: Boolean read FContextSeen;
+    property WorkerHandoffSeen: Boolean read FWorkerHandoffSeen;
+    property CapturedHandoff: ITcpServerWorkerHandoff read FCapturedHandoff;
+    property SubmitResult: TTcpServerHandoffResult read FSubmitResult;
+    property WorkExecuteCount: Int32 read FWorkExecuteCount;
+    property CompletionCount: Int32 read FCompletionCount;
+    property RunThreadId: UInt64 read FRunThreadId;
+    property WorkThreadId: UInt64 read FWorkThreadId;
+    property CompletionThreadId: UInt64 read FCompletionThreadId;
+    property LastWorkOutcome: TTcpServerWorkOutcome read FLastWorkOutcome;
+    property LastOwnership: TTcpServerConnOwnership read FLastOwnership;
+  end;
+
 var
   T: TTestRunner;
 
@@ -143,8 +230,8 @@ end;
 function TSessionFactoryHandler.ServeConn(
   const AConn: ITcpStream): TTcpServerConnOwnership;
 begin
-  Fail('session factory path should bypass legacy ServeConn');
   Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('session factory path should bypass legacy ServeConn');
 end;
 
 function TSessionFactoryHandler.NewSession(
@@ -152,6 +239,121 @@ function TSessionFactoryHandler.NewSession(
 begin
   Inc(FCreateCount);
   Result := TCountingSession.Create(AConn, @FRunCount);
+end;
+
+function TClosingSession.Run: TTcpServerConnOwnership;
+begin
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+constructor THandoffWork.Create(const AOwner: TContextAwareHandler;
+  const AFailWork: Boolean);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FFailWork := AFailWork;
+end;
+
+function THandoffWork.Execute: TTcpServerConnOwnership;
+begin
+  InterlockedIncrement(FOwner.FWorkExecuteCount);
+  FOwner.FWorkThreadId := platform_thread_id;
+  if FFailWork then
+    raise Exception.Create('handoff work failed');
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+constructor THandoffCompletion.Create(const AOwner: TContextAwareHandler;
+  const AConn: ITcpStream);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FConn := AConn;
+end;
+
+procedure THandoffCompletion.Complete(const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  InterlockedIncrement(FOwner.FCompletionCount);
+  FOwner.FCompletionThreadId := platform_thread_id;
+  FOwner.FLastWorkOutcome := AOutcome;
+  FOwner.FLastOwnership := AOwnership;
+  if (AOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER) and (FConn <> nil) then
+  begin
+    try
+      FConn.Shutdown;
+      FConn.Close;
+    except
+    end;
+    FConn := nil;
+  end;
+end;
+
+constructor TContextAwareSession.Create(const AOwner: TContextAwareHandler;
+  const AConn: ITcpStream; const AHandoff: ITcpServerWorkerHandoff;
+  const AMode: TContextSessionMode);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FConn := AConn;
+  FHandoff := AHandoff;
+  FMode := AMode;
+end;
+
+function TContextAwareSession.Run: TTcpServerConnOwnership;
+var
+  LWork: ITcpServerWork;
+  LCompletion: ITcpServerWorkCompletion;
+begin
+  FOwner.FRunThreadId := platform_thread_id;
+  case FMode of
+    csmClose:
+      Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+    csmSubmitCompleted, csmSubmitFailing:
+      begin
+        LWork := THandoffWork.Create(FOwner, FMode = csmSubmitFailing);
+        LCompletion := THandoffCompletion.Create(FOwner, FConn);
+        FOwner.FSubmitResult := FHandoff.Submit(LWork, LCompletion);
+        if FOwner.FSubmitResult = TCP_SERVER_HANDOFF_ACCEPTED then
+          Result := TCP_SERVER_CONN_OWNERSHIP_HANDLER
+        else
+          Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+      end;
+  end;
+end;
+
+constructor TContextAwareHandler.Create(const AMode: TContextSessionMode);
+begin
+  inherited Create;
+  FMode := AMode;
+end;
+
+function TContextAwareHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('context-aware session factory path should bypass ServeConn');
+end;
+
+function TContextAwareHandler.NewSession(
+  const AConn: ITcpStream): ITcpServerSession;
+begin
+  FLegacyFactoryCalled := True;
+  Result := TClosingSession.Create;
+end;
+
+function TContextAwareHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextFactoryCalled := True;
+  FContextSeen := AContext <> nil;
+  FWorkerHandoffSeen := (AContext <> nil) and (AContext.WorkerHandoff <> nil);
+  if AContext <> nil then
+    FCapturedHandoff := AContext.WorkerHandoff
+  else
+    FCapturedHandoff := nil;
+  Result := TContextAwareSession.Create(Self, AConn, FCapturedHandoff, FMode);
 end;
 
 procedure TestDefaultOptions;
@@ -473,6 +675,266 @@ begin
   platform_thread_join(LHandle, LRet);
 end;
 
+procedure TestThreadedServerPrefersContextSessionFactoryWhenAvailable;
+var
+  LHandler: TContextAwareHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LRet: Pointer;
+begin
+  LHandler := TContextAwareHandler.Create(csmClose);
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'context-factory server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Close;
+  except
+    LClient.Close;
+    raise;
+  end;
+
+  LWait := 0;
+  while (not LHandler.ContextFactoryCalled) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'context-aware session factory was called');
+  Check(not LHandler.LegacyFactoryCalled,
+    'legacy session factory was bypassed');
+  Check(not LHandler.ServeConnCalled, 'ServeConn was bypassed');
+  Check(LHandler.ContextSeen, 'context-aware factory received context');
+  Check(LHandler.WorkerHandoffSeen,
+    'context-aware factory received worker handoff');
+  Check(LHandler.CapturedHandoff <> nil, 'worker handoff captured');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
+procedure TestThreadedServerAcceptedHandoffCompletesExactlyOnce;
+var
+  LHandler: TContextAwareHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LRet: Pointer;
+begin
+  LHandler := TContextAwareHandler.Create(csmSubmitCompleted);
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'accepted-handoff server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Close;
+  except
+    LClient.Close;
+    raise;
+  end;
+
+  LWait := 0;
+  while (LHandler.CompletionCount = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  CheckEqual(Int64(Ord(TCP_SERVER_HANDOFF_ACCEPTED)),
+    Int64(Ord(LHandler.SubmitResult)), 'handoff was accepted');
+  CheckEqual(Int64(1), Int64(LHandler.WorkExecuteCount),
+    'accepted handoff executed exactly once');
+  CheckEqual(Int64(1), Int64(LHandler.CompletionCount),
+    'accepted handoff completed exactly once');
+  CheckEqual(Int64(Ord(TCP_SERVER_WORK_COMPLETED)),
+    Int64(Ord(LHandler.LastWorkOutcome)),
+    'accepted handoff reports completed outcome');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LHandler.LastOwnership)),
+    'accepted handoff reports server ownership');
+  Check(LHandler.RunThreadId <> 0, 'session run captured thread id');
+  Check(LHandler.WorkThreadId <> 0, 'handoff work captured thread id');
+  Check(LHandler.WorkThreadId <> LHandler.RunThreadId,
+    'handoff work ran off the session thread');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
+procedure TestThreadedServerFailingHandoffReportsFailedOutcome;
+var
+  LHandler: TContextAwareHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LRet: Pointer;
+begin
+  LHandler := TContextAwareHandler.Create(csmSubmitFailing);
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'failing-handoff server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Close;
+  except
+    LClient.Close;
+    raise;
+  end;
+
+  LWait := 0;
+  while (LHandler.CompletionCount = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  CheckEqual(Int64(Ord(TCP_SERVER_HANDOFF_ACCEPTED)),
+    Int64(Ord(LHandler.SubmitResult)), 'failing handoff was accepted');
+  CheckEqual(Int64(1), Int64(LHandler.WorkExecuteCount),
+    'failing handoff executed exactly once');
+  CheckEqual(Int64(1), Int64(LHandler.CompletionCount),
+    'failing handoff completed exactly once');
+  CheckEqual(Int64(Ord(TCP_SERVER_WORK_FAILED)),
+    Int64(Ord(LHandler.LastWorkOutcome)),
+    'failing handoff reports failed outcome');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LHandler.LastOwnership)),
+    'failing handoff falls back to server ownership');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
+procedure TestThreadedServerRejectsHandoffAfterShutdown;
+var
+  LHandler: TContextAwareHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LRet: Pointer;
+  LHandoff: ITcpServerWorkerHandoff;
+  LWork: ITcpServerWork;
+  LCompletion: ITcpServerWorkCompletion;
+  LResult: TTcpServerHandoffResult;
+begin
+  LHandler := TContextAwareHandler.Create(csmClose);
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'handler keepalive installed');
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'shutdown-handoff server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Close;
+  except
+    LClient.Close;
+    raise;
+  end;
+
+  LWait := 0;
+  while ((not LHandler.ContextFactoryCalled) or (LHandler.CapturedHandoff = nil))
+    and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.CapturedHandoff <> nil,
+    'captured handoff before shutdown');
+  LHandoff := LHandler.CapturedHandoff;
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+
+  LWork := THandoffWork.Create(LHandler, False);
+  LCompletion := THandoffCompletion.Create(LHandler, nil);
+  LResult := LHandoff.Submit(LWork, LCompletion);
+  platform_thread_sleep_ns(100000000);
+
+  CheckEqual(Int64(Ord(TCP_SERVER_HANDOFF_SHUTTING_DOWN)),
+    Int64(Ord(LResult)), 'handoff rejects new work after shutdown');
+  CheckEqual(Int64(0), Int64(LHandler.WorkExecuteCount),
+    'shutdown handoff does not execute work');
+  CheckEqual(Int64(0), Int64(LHandler.CompletionCount),
+    'shutdown handoff does not call completion');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net.server');
   T.Run('Default options', @TestDefaultOptions);
@@ -487,5 +949,13 @@ begin
     @TestThreadedServerShutdownWithEmptyListenAddr);
   T.Run('Threaded server prefers session factory when available',
     @TestThreadedServerPrefersSessionFactoryWhenAvailable);
+  T.Run('Threaded server prefers context session factory when available',
+    @TestThreadedServerPrefersContextSessionFactoryWhenAvailable);
+  T.Run('Threaded server accepted handoff completes exactly once',
+    @TestThreadedServerAcceptedHandoffCompletesExactlyOnce);
+  T.Run('Threaded server failing handoff reports failed outcome',
+    @TestThreadedServerFailingHandoffReportsFailedOutcome);
+  T.Run('Threaded server rejects handoff after shutdown',
+    @TestThreadedServerRejectsHandoffAfterShutdown);
   T.Summary;
 end.

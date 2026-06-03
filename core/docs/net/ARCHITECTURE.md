@@ -48,9 +48,12 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 - [src/nextpas.core.net.server.base.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.base.pas:1)
   已固定 backend 枚举：`tsbThreaded`、`tsbEpoll`、`tsbKqueue`、`tsbIocp`。
 - [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
-  已固定 foundation contract：`ITcpServer` / `ITcpServerHandler`。
+  已固定 foundation contract：`ITcpServer` / `ITcpServerHandler`，并已收进
+  `ITcpServerSession`、`ITcpServerWorkerHandoff`、`ITcpServerSessionContext`、
+  `ITcpServerSessionFactoryWithContext` 这些后续 evented backend 必需的 seam。
 - [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:1)
-  是当前唯一已落地 backend，负责 listen / accept / shutdown / detach ownership。
+  是当前唯一已落地 backend，负责 listen / accept / shutdown / detach ownership，
+  并先用 foundation-owned worker handoff 证明 session/context/handoff contract 成立。
 - [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
   现在提供了可选 `ITcpSocketRuntime` seam，用来暴露 native socket handle 与 blocking control，
   供 future evented backend 使用。
@@ -94,23 +97,32 @@ nonblocking runtime I/O seam。
 2. 再让 future evented backend 只依赖这些 contract 驱动连接状态
 3. 最后才实现 `net.server.epoll` / `kqueue` / `iocp`
 
-在 nonblocking socket seam 之后，下一层必须补的不是 backend 文件，而是
-connection session seam。
+在 nonblocking socket seam 之后，foundation 还必须先补 connection session seam，
+再把 worker handoff seam 固定下来。
 
 当前 repo 真相是：
 
-- `ITcpServerHandler.ServeConn(const AConn: ITcpStream)` 仍是“拿到连接后整段跑到底”的阻塞式 seam
-- `IHttpServerTransport.ServeConn(const AConn: ITcpStream; ...)` 也还是同一个模型
-- `TH1ServerConnectionState` 虽然已经存在，但还只是 H1 实现内部对象，没有进入 foundation contract
+- `ITcpServerSession` / `ITcpServerSessionFactory` 已进入 foundation contract，
+  runtime 不必再只依赖整连接阻塞式 `ServeConn`
+- `ITcpServerSessionFactoryWithContext` + `ITcpServerSessionContext` +
+  `ITcpServerWorkerHandoff` 也已进入 foundation contract，用来表达
+  “runtime 提供 handoff，协议 session 自主决定是否把工作转交给 worker”
+- threaded backend 已先消费这条 seam，证明 accepted / failed / shutting-down handoff
+  语义可以被 focused tests 锁定
+- `IHttpServerTransport.ServeConn(const AConn: ITcpStream; ...)` 仍然保留，作为 HTTP public facade
+  继续同步、兼容旧 transport seam 的刻意选择
+- `TH1ServerConnectionState` 现在已经通过 `ITcpServerSession` 接上 foundation，
+  说明 HTTP 单连接协议状态与 runtime entrypoint 的 split 不再只是内部草稿
 
-这意味着 future evented backend 仍然没有一个可以稳定驱动的协议 state object seam。
+这意味着 future evented backend 现在已经有了可稳定驱动的协议 state object seam，
+下一步缺口主要回到 nonblocking runtime I/O，而不是回退去重做 session 抽象。
 
 所以当前固定的后续顺序是：
 
 1. 先补 nonblocking `TryAccept/TryRead/TryWrite`
-2. 再补 connection session seam，让 runtime 可以拿到“单连接状态对象”
-3. threaded backend 先消费这条新 seam，证明 contract 成立
-4. 然后 evented backend 再复用同一条 seam
+2. 让 future evented backend 直接复用已落地的 session/context/handoff seam
+3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
+4. 然后实现 `net.server.epoll` / `kqueue` / `iocp`
 
 ## 分层边界
 
@@ -148,6 +160,12 @@ connection session seam。
 
 - `ITcpServer` 是协议模块消费的统一 runtime seam。
 - `ITcpServerHandler.ServeConn` 返回 ownership，server 与 handler 的连接责任要显式可证明。
+- `ITcpServerSession` 是 foundation-owned “单连接协议状态对象” seam。
+- `ITcpServerSessionFactoryWithContext` 允许 runtime 把 `ITcpServerSessionContext`
+  明确传给 session，而不是让协议层偷看 runtime 实现类。
+- `ITcpServerWorkerHandoff.Submit` 的 accepted / rejected / shutting-down 语义必须稳定；
+  accepted 后由 executor 负责最终调用 completion 一次，failed work 统一回落到
+  `server-owned close` 语义。
 - `ITcpSocketRuntime` 是 lower-level runtime seam：普通业务代码可以忽略它，evented backend 可以通过
   `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
 - `ITcpListenerRuntime` / `ITcpStreamRuntime` 是更窄的 runtime-only I/O seam：
@@ -211,6 +229,8 @@ nextpas.core.net.server.iocp
 
 - 允许单连接 worker inline 执行 handler。
 - 当前 correctness 基线由它提供。
+- 当前也负责 first proof：session context 可见、worker handoff 可用、shutdown 后 handoff
+  会拒绝新任务。
 
 ### evented
 
@@ -249,7 +269,7 @@ nextpas.core.net.server.iocp
 ### Phase 3
 
 - 先完成 nonblocking runtime I/O seam proof
-- 再完成 connection session seam proof
+- 复用已落地的 connection session + worker handoff seam
 - 然后增加 `net.server.epoll`
 - 证明同一 HTTP contract 可由 evented backend 驱动
 
@@ -271,6 +291,7 @@ nextpas.core.net.server.iocp
 截至 2026-06-03，这条架构线已经不是纯讨论状态，而是进入“方向已固定、实现继续收口”的阶段：
 
 - foundation seam 已存在：`base` / `intf` / `threaded`
+- connection session / worker handoff seam 也已经进入 foundation contract
 - HTTP facade 已开始依赖 `ITcpServer`
 - backend 选择与 server lifecycle 已经进入 public contract
 
