@@ -1,19 +1,12 @@
-# Progress Log: HTTP keep-alive tail policy bridge proof
+# Progress Log: HTTP keep-alive tail policy decision
 
 ## Session
 
-- **Scope:** add parser/server bridge proof that a trailer-complete chunked first request
-  may be followed by a partial next request line that later completes successfully.
+- **Scope:** freeze keep-alive request-tail behavior as intentional H1 transport policy.
 - **Status:** completed
-
-## Verification
-
-| Check | Command | Result |
-| --- | --- | --- |
-| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `78/78 passed`, heaptrc `0 unfreed memory blocks` |
-| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `81/81 passed`, heaptrc `0 unfreed memory blocks` |
 
 ## Notes
 
-- 本轮只跑 changed-surface suites，没有跑 HTTP aggregate。
-- 本轮没有生产代码改动。
+- 本轮没有新增生产代码。
+- 本轮没有新增测试；直接复用前几轮已经累计完成的 focused proof 作为决策依据。
+- gap #1 已从控制面移除，后续不再把它当开放问题重复讨论，除非 transport buffering 语义被有意修改。
