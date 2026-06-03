@@ -335,8 +335,20 @@ begin
     Model.SetTypedHirNodeExprId(NodeId, ExprDerefAddressOfX);
 
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := arr[1]',
-      SymY, IntegerTypeId, 'y'#9'int 0'#10);
+      SymY, IntegerTypeId, 'y'#9'int 99'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprArrElement);
+
+    NodeId := Model.AddTypedHirNode('assign-runtime', 'y := nestedArr[1].A.B',
+      SymY, IntegerTypeId, 'y'#9'int 123'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprNestedLeafField);
+
+    NodeId := Model.AddTypedHirNode('assign-runtime', 'y := FItems[1]',
+      SymY, IntegerTypeId, 'y'#9'int 99'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprItemsElement);
+
+    NodeId := Model.AddTypedHirNode('assign-runtime', 'y := FItems[1].A.B',
+      SymY, IntegerTypeId, 'y'#9'int 123'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprItemsLeafField);
 
     NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
       'arr[1] := 5', 0, IntegerTypeId,

@@ -1,5 +1,22 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-L array-backed value loads
+
+- `TestNestedFieldArrayValueExprProducer` 的 shell exit `255` 不是崩溃；用调试器断在
+  `SYSTEM_$$_HALT$LONGINT` 后确认实参是 `261`，只是 FPC 把 `Halt(261)` 截断成 `255`。
+- 真正的红点不是 builder，也不是结构化 `ExprId` 构造失败，而是 producer 根本没发出
+  value-side `assign-runtime` 节点。失败模型只有 `assign-arr-elem-runtime` store，
+  没有 `y := Self.FItems[i].A.B` 对应的 runtime assign。
+- 因果链很直接：`WalkHaltCalls` 的 scalar assign 分支只有在
+  `EncodeRuntimeIntExprFold(Arg, Operand)` 成功时才会调用 `AddScalarAssignRuntimeNode`；
+  current-class field-array value load 缺少旧 blob 编码，所以 node emission 被 gate 掉了。
+- builder 这时已经是“准备好的”：`BuildRuntimeScalarHirExpr` 能把 array-backed value
+  视为 address-backed structured expr；这轮不该再碰 builder，而该让 producer 的 legacy blob
+  与 structured path 重新对齐。
+- 最小正确修复是在 `EncodeRuntimeIntExprFold` 补齐两条旧路径：
+  `Self/FItems[i]` 与 `Self/FItems[i].Field`。这样 direct field-array value load
+  和 nested `Self.FItems[i].A.B` 都能重新发出 `assign-runtime`，同时继续挂上结构化 `ExprId`。
+
 ## 2026-06-03 C5-K nested array-backed field chains
 
 - `arr[i].A.B := rhs` 没有 runtime node 的根因不只是 `TargetExprId` 缺失；`WalkHaltCalls`

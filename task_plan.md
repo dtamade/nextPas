@@ -1,6 +1,38 @@
 # Task Plan: nextPas active work
 
-## Active Session: 2026-06-03 C5-K nested array-backed field chains
+## Active Session: 2026-06-03 C5-L array-backed value loads
+
+### Goal
+
+在 C5-K 已经打通 `arr[i].A.B := rhs` 与 `Self.FItems[i].A.B := rhs`
+结构化 target 之后，把对称的 value-side 收进来：`x := arr[i]`、
+`x := arr[i].A.B`、`y := FItems[i]`、`y := Self.FItems[i].A.B`。目标不是改 builder，
+而是修 producer 的发射门：即使结构化 `ExprId` 已经能建，也必须保留旧 blob fallback，
+不能让 `assign-runtime` 因 blob 编码缺口而直接消失。
+
+### Checklist
+
+- [x] 确认当前 `main` 与 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或并行 toolchain/targets/stage0 lane。
+- [x] 重读 `compiler/docs/compiler-goal-tree.md`、`core/docs/design-conventions.md`、`docs/inbox.md`、memory 与根计划文件。
+- [x] 稳定复现 `TestNestedFieldArrayValueExprProducer` 失败，确认不是 builder 红点，而是 producer 缺 `assign-runtime`。
+- [x] 用调试证据确认 `Halt(261)` 被 FPC 截断为 exit `255`；根因是 `EncodeRuntimeIntExprFold` 对 current-class field-array value load 缺 blob。
+- [x] 在 sema 补齐 `Self/FItems[i]` 与 `Self/FItems[i].Field` 的旧 blob 编码路径，保持 `AddScalarAssignRuntimeNode` 与结构化 `ExprId` 双轨。
+- [x] 清理临时调试痕迹，恢复完整 `test_semantic_hir_expr_producer` main block。
+- [x] 跑 changed tests、完整重编译、137 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md`、`docs/inbox.md`、计划/进度文件，并准备 path-limited commit。
+
+### Constraints
+
+- 只改本轮需要的 `compiler/sema`、`compiler/tests` 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- `ExprId` 只表示 RHS/value；`TargetExprId` 只表示 LHS/address，不混用。
+- 结构化表达式和旧 blob 双轨必须保留；不能靠“只有 structured path”偷过当前 slice。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-K nested array-backed field chains
+
+## Previous Session: 2026-06-03 C5-K nested array-backed field chains
 
 ### Goal
 

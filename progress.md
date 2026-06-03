@@ -1,5 +1,26 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-L array-backed value loads
+
+- **Status:** completed, pending path-limited commit.
+- Branch and safety state:
+  - Branch: `main`.
+  - Unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Colleague lane remains off-limits: compiler/toolchain, compiler/targets, tools/stage0, tests/toolchain, build target/toolchain/profile files, and `build/verify_local.sh`.
+- Current decision:
+  - Keep builder unchanged for this slice; fix the producer gate instead.
+  - Preserve the old blob fallback and make it truthful for current-class field-array value loads.
+  - Reuse the already-landed structured address-backed `ExprId` path rather than inventing a new value expression kind.
+- Evidence:
+  - RED producer test initially showed shell exit `255`; debugger proved this was `Halt(261)` clamped by FPC, meaning `TestNestedFieldArrayValueExprProducer` could not find the expected `assign-runtime` node.
+  - Typed HIR dump for the failing model showed only `assign-arr-elem-runtime` for `Self.FItems[i].A.B := y + 1` and no value-side `assign-runtime` for `y := Self.FItems[i].A.B`.
+  - Root cause: `WalkHaltCalls` only emits scalar `assign-runtime` after `EncodeRuntimeIntExprFold` succeeds; current-class field-array value loads had no legacy blob encoding, so node emission never happened.
+  - GREEN changed tests: `test_semantic_hir_expr_producer` and `test_hir_builder_structured_address` both exit `0`.
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `44115 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_total=137 passed=137 failed=0 build_failed=0 run_failed=0`.
+- Next immediate step:
+  - Path-limited commit, then continue C5-M with remaining class/object RHS and value-side symmetry gaps.
+
 ## Session: 2026-06-03 C5-K nested array-backed field chains
 
 - **Status:** completed, pending path-limited commit.

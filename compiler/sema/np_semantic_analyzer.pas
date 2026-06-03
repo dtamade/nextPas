@@ -344,6 +344,25 @@ type
       const ACondNode: TGreenNode);
     function BuildRuntimeArrayElementAddressHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
+    function FindSymbolByNameAndType(const AName: string;
+      const ATypeId: LongInt): LongInt;
+    function EnsureSelfSymbolId(out ASelfTypeId: LongInt): LongInt;
+    function LookupFieldMetaByTypeName(const ATypeName, AFieldName: string;
+      out AOwnerTypeId: LongInt; out AFieldMeta: TFieldMeta): Boolean;
+    function BuildRecordBaseAddressExpr(const ARecordName,
+      ARecordTypeName: string; out AExprId: LongInt): Boolean;
+    function BuildClassBaseAddressExpr(const ABaseName, AClassName: string;
+      out AExprId: LongInt): Boolean;
+    function BuildClassFieldTargetExpr(const ABaseName, AClassName,
+      AFieldName: string; out AExprId: LongInt): Boolean;
+    function TryCurrentClassFieldArrayAccess(
+      const AArrayAccessNode: TGreenNode; out AFieldName: string): Boolean;
+    function BuildClassFieldArrayElementTargetExpr(
+      const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
+    function ResolveArrayAccessElementTypeId(
+      const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
+    function BuildTargetAddressExpr(const ATargetNode: TGreenNode;
+      out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function EncodeRuntimeIntExprFold(const ANode: TGreenNode;
@@ -6960,6 +6979,40 @@ begin
     end;
   end;
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
+    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkArrayAccess) and
+    (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
+    (FCurrentMethodClass <> '') and
+    TryCurrentClassFieldArrayAccess(ANode.ChildAt(0), FuncName) and
+    FModel.LookupStringConstValue(
+      FCurrentMethodClass + '.' + FuncName + '$arr_elem_type', ArgName) then
+  begin
+    Folded := TypeMetaFieldIndex(ArgName, ANode.ChildAt(1).Text);
+    if (Folded >= 0) and
+      EncodeRuntimeIntExprFold(ANode.ChildAt(0).ChildAt(1), Operand) then
+    begin
+      StrCallIdx := TypeMetaFieldIndex(FCurrentMethodClass, FuncName);
+      if StrCallIdx < 0 then
+        Exit(False);
+      ABlob := 'field self ' + IntToStr(StrCallIdx) + ' p' + #10 +
+        Operand;
+      StrCallIdx := 1;
+      if TypeMetaIsRecord(ArgName) then
+      begin
+        StrCallIdx := TypeMetaSize(ArgName) div 8;
+        if StrCallIdx <= 0 then
+          Exit(False);
+      end;
+      if StrCallIdx > 1 then
+        ABlob := ABlob + 'int ' + IntToStr(StrCallIdx) + #10 + 'mul' + #10;
+      ABlob := ABlob + 'int ' + IntToStr(Folded) + #10 + 'add' + #10;
+      if TypeMetaFieldIsPtr(ArgName, ANode.ChildAt(1).Text) then
+        ABlob := ABlob + 'arr_load_ptr' + #10
+      else
+        ABlob := ABlob + 'arr_load' + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin
@@ -7208,6 +7261,18 @@ begin
     end;
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
+    (FCurrentMethodClass <> '') and
+    TryCurrentClassFieldArrayAccess(ANode, FuncName) then
+  begin
+    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ArgName) then
+    begin
+      Folded := TypeMetaFieldIndex(FCurrentMethodClass, FuncName);
+      ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
+        ArgName + 'arr_load' + #10;
+      Exit(True);
+    end;
+  end;
+  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
     IsRuntimeStrVar(ANode.ChildAt(0).Text) then
   begin
@@ -7287,6 +7352,347 @@ begin
     Exit(False);
   Expr := FModel.HirExprAt(AExprId - 1);
   Result := (Expr.Kind = shekArrayElem) and (Expr.ValueClass = shvcAddress);
+end;
+
+function TSemanticAnalyzer.FindSymbolByNameAndType(const AName: string;
+  const ATypeId: LongInt): LongInt;
+var
+  I: LongInt;
+  Symbol: TSemanticSymbol;
+begin
+  for I := FModel.SymbolCount - 1 downto 0 do
+  begin
+    Symbol := FModel.SymbolAt(I);
+    if SameText(Symbol.Name, AName) and
+      ((ATypeId <= 0) or (Symbol.TypeId = ATypeId)) then
+      Exit(Symbol.SymbolId);
+  end;
+  Result := 0;
+end;
+
+function TSemanticAnalyzer.EnsureSelfSymbolId(out ASelfTypeId: LongInt): LongInt;
+begin
+  ASelfTypeId := 0;
+  if FCurrentMethodClass = '' then
+    Exit(0);
+  ASelfTypeId := FModel.FindTypeByName(FCurrentMethodClass);
+  if ASelfTypeId <= 0 then
+    Exit(0);
+  Result := FindSymbolByNameAndType('self', ASelfTypeId);
+  if Result = 0 then
+    Result := FModel.AddSymbol('self', 'parameter', '', ASelfTypeId, 0);
+end;
+
+function TSemanticAnalyzer.LookupFieldMetaByTypeName(const ATypeName,
+  AFieldName: string; out AOwnerTypeId: LongInt;
+  out AFieldMeta: TFieldMeta): Boolean;
+begin
+  AOwnerTypeId := FModel.FindTypeByName(ATypeName);
+  if AOwnerTypeId <= 0 then
+    Exit(False);
+  Result := FModel.GetFieldMetaByName(AOwnerTypeId, AFieldName, AFieldMeta);
+end;
+
+function TSemanticAnalyzer.BuildRecordBaseAddressExpr(const ARecordName,
+  ARecordTypeName: string; out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  RecordTypeId, RecordSymbolId: LongInt;
+begin
+  AExprId := 0;
+  if (ARecordName = '') or (ARecordTypeName = '') then
+    Exit(False);
+
+  RecordTypeId := FModel.FindTypeByName(ARecordTypeName);
+  if RecordTypeId <= 0 then
+    Exit(False);
+
+  RecordSymbolId := FindSymbolByNameAndType(ARecordName, RecordTypeId);
+  if RecordSymbolId = 0 then
+    RecordSymbolId := FModel.FindSymbolByName(ARecordName);
+  if RecordSymbolId <= 0 then
+    Exit(False);
+
+  SetLength(Children, 0);
+  AExprId := FModel.AddHirExpr(
+    shekSymbolAddress, RecordTypeId, RecordSymbolId, Children,
+    0, '', '', 0, shvcAddress
+  );
+  Result := AExprId > 0;
+end;
+
+function TSemanticAnalyzer.BuildClassBaseAddressExpr(const ABaseName,
+  AClassName: string; out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  BaseTypeId, PointerTypeId, BaseSymbolId, PointerExprId: LongInt;
+  SelfTypeId: LongInt;
+begin
+  AExprId := 0;
+  PointerTypeId := FModel.FindTypeByName('Pointer');
+  if PointerTypeId <= 0 then
+    Exit(False);
+  BaseTypeId := FModel.FindTypeByName(AClassName);
+  if BaseTypeId <= 0 then
+    Exit(False);
+
+  if SameText(ABaseName, 'self') then
+  begin
+    BaseSymbolId := EnsureSelfSymbolId(SelfTypeId);
+    if (BaseSymbolId <= 0) or (SelfTypeId <> BaseTypeId) then
+      Exit(False);
+  end
+  else
+  begin
+    BaseSymbolId := FindSymbolByNameAndType(ABaseName, BaseTypeId);
+    if BaseSymbolId = 0 then
+      BaseSymbolId := FModel.FindSymbolByName(ABaseName);
+    if BaseSymbolId <= 0 then
+      Exit(False);
+  end;
+
+  SetLength(Children, 0);
+  PointerExprId := FModel.AddHirExpr(
+    shekSymbolValue, PointerTypeId, BaseSymbolId, Children,
+    0, '', '', 0, shvcScalar
+  );
+  SetLength(Children, 1);
+  Children[0] := PointerExprId;
+  AExprId := FModel.AddHirExpr(
+    shekDeref, BaseTypeId, 0, Children,
+    0, '', '', 0, shvcAddress
+  );
+  Result := AExprId > 0;
+end;
+
+function TSemanticAnalyzer.BuildClassFieldTargetExpr(const ABaseName,
+  AClassName, AFieldName: string; out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  BaseTypeId, BaseExprId: LongInt;
+  FieldMeta: TFieldMeta;
+begin
+  AExprId := 0;
+  if not LookupFieldMetaByTypeName(AClassName, AFieldName, BaseTypeId,
+    FieldMeta) then
+    Exit(False);
+  if not BuildClassBaseAddressExpr(ABaseName, AClassName, BaseExprId) then
+    Exit(False);
+
+  SetLength(Children, 1);
+  Children[0] := BaseExprId;
+  AExprId := FModel.AddHirExpr(
+    shekField, FieldMeta.TypeId, 0, Children,
+    FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+  );
+  Result := AExprId > 0;
+end;
+
+function TSemanticAnalyzer.TryCurrentClassFieldArrayAccess(
+  const AArrayAccessNode: TGreenNode; out AFieldName: string): Boolean;
+var
+  BaseNode, FieldNode: TGreenNode;
+begin
+  AFieldName := '';
+  if (AArrayAccessNode = nil) or
+    (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
+    (AArrayAccessNode.ChildCount < 2) or
+    (AArrayAccessNode.ChildAt(0) = nil) or
+    (FCurrentMethodClass = '') then
+    Exit(False);
+
+  BaseNode := AArrayAccessNode.ChildAt(0);
+  if BaseNode.NodeKind = gnkIdentifier then
+    AFieldName := BaseNode.Text
+  else if (BaseNode.NodeKind = gnkDotAccess) and
+    (BaseNode.ChildCount >= 2) and
+    (BaseNode.ChildAt(0) <> nil) and
+    (BaseNode.ChildAt(1) <> nil) and
+    (BaseNode.ChildAt(0).NodeKind = gnkIdentifier) and
+    (BaseNode.ChildAt(1).NodeKind = gnkIdentifier) and
+    SameText(BaseNode.ChildAt(0).Text, 'Self') then
+  begin
+    FieldNode := BaseNode.ChildAt(1);
+    AFieldName := FieldNode.Text;
+  end;
+
+  Result := (AFieldName <> '') and (not IsRuntimeArrVar(AFieldName)) and
+    (TypeMetaFieldIndex(FCurrentMethodClass, AFieldName) >= 0);
+end;
+
+function TSemanticAnalyzer.BuildClassFieldArrayElementTargetExpr(
+  const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  ArrayExpr, FieldExpr, IndexExpr: TSemanticHirExpr;
+  ElementTypeId, FieldExprId, IndexExprId, IndexTypeId: LongInt;
+  ElementTypeName, FieldName: string;
+  Fact: TSemanticScalarTypeFact;
+begin
+  AExprId := 0;
+  if not TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) then
+    Exit(False);
+
+  if not FModel.LookupStringConstValue(
+    FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+    ElementTypeName) then
+    Exit(False);
+  ElementTypeId := FModel.FindTypeByName(ElementTypeName);
+  if ElementTypeId <= 0 then
+    Exit(False);
+
+  if not BuildClassFieldTargetExpr('self', FCurrentMethodClass, FieldName,
+    FieldExprId) then
+    Exit(False);
+  if (FieldExprId <= 0) or (FieldExprId > FModel.HirExprCount) then
+    Exit(False);
+  FieldExpr := FModel.HirExprAt(FieldExprId - 1);
+  if (FieldExpr.Kind <> shekField) or
+    (FieldExpr.ValueClass <> shvcAddress) then
+    Exit(False);
+
+  if not BuildRuntimeScalarHirExpr(AArrayAccessNode.ChildAt(1), IndexExprId) then
+    Exit(False);
+  if (IndexExprId <= 0) or (IndexExprId > FModel.HirExprCount) then
+    Exit(False);
+  IndexExpr := FModel.HirExprAt(IndexExprId - 1);
+  IndexTypeId := IndexExpr.TypeId;
+  if (IndexTypeId <= 0) or
+    (not FModel.GetTypeScalarFact(IndexTypeId, Fact)) or
+    (Fact.Kind <> sskInt) then
+    Exit(False);
+
+  SetLength(Children, 2);
+  Children[0] := FieldExprId;
+  Children[1] := IndexExprId;
+  AExprId := FModel.AddHirExpr(
+    shekArrayElem, ElementTypeId, 0, Children,
+    0, '', '', 0, shvcAddress
+  );
+  if (AExprId <= 0) or (AExprId > FModel.HirExprCount) then
+    Exit(False);
+  ArrayExpr := FModel.HirExprAt(AExprId - 1);
+  Result := (ArrayExpr.Kind = shekArrayElem) and
+    (ArrayExpr.ValueClass = shvcAddress);
+end;
+
+function TSemanticAnalyzer.ResolveArrayAccessElementTypeId(
+  const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
+var
+  ArrayName, ElementTypeName, FieldName: string;
+begin
+  AElementTypeId := 0;
+  if (AArrayAccessNode = nil) or
+    (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
+    (AArrayAccessNode.ChildCount < 2) then
+    Exit(False);
+
+  if (AArrayAccessNode.ChildAt(0) <> nil) and
+    (AArrayAccessNode.ChildAt(0).NodeKind = gnkIdentifier) then
+  begin
+    ArrayName := AArrayAccessNode.ChildAt(0).Text;
+    if (ArrayName <> '') and IsRuntimeArrVar(ArrayName) and
+      FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
+        ElementTypeName) then
+    begin
+      AElementTypeId := FModel.FindTypeByName(ElementTypeName);
+      Exit(AElementTypeId > 0);
+    end;
+  end;
+
+  if (FCurrentMethodClass <> '') and
+    TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) and
+    FModel.LookupStringConstValue(
+      FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+      ElementTypeName) then
+  begin
+    AElementTypeId := FModel.FindTypeByName(ElementTypeName);
+    Exit(AElementTypeId > 0);
+  end;
+
+  Result := False;
+end;
+
+function TSemanticAnalyzer.BuildTargetAddressExpr(const ATargetNode: TGreenNode;
+  out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  BaseName, ClassTypeName, FieldName, RecordTypeName: string;
+  BaseExprId, BaseTypeId, ElementTypeId: LongInt;
+  FieldMeta: TFieldMeta;
+begin
+  AExprId := 0;
+  if ATargetNode = nil then
+    Exit(False);
+
+  case ATargetNode.NodeKind of
+    gnkIdentifier:
+      begin
+        BaseName := ATargetNode.Text;
+        if BaseName = '' then
+          Exit(False);
+        if SameText(BaseName, 'Self') and (FCurrentMethodClass <> '') then
+          Exit(BuildClassBaseAddressExpr('self', FCurrentMethodClass, AExprId));
+        if (FCurrentMethodClass <> '') and
+          (TypeMetaFieldIndex(FCurrentMethodClass, BaseName) >= 0) then
+          Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
+            BaseName, AExprId));
+        if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') then
+        begin
+          RecordTypeName := LookupRecordVar(FCurrentRetVarName);
+          if RecordTypeName <> '' then
+            Exit(BuildRecordBaseAddressExpr(FCurrentRetVarName,
+              RecordTypeName, AExprId));
+        end;
+        RecordTypeName := LookupRecordVar(BaseName);
+        if RecordTypeName <> '' then
+          Exit(BuildRecordBaseAddressExpr(BaseName, RecordTypeName, AExprId));
+        ClassTypeName := LookupClassVar(BaseName);
+        if ClassTypeName <> '' then
+          Exit(BuildClassBaseAddressExpr(BaseName, ClassTypeName, AExprId));
+        Result := False;
+      end;
+    gnkArrayAccess:
+      Result := BuildRuntimeArrayElementAddressHirExpr(ATargetNode, AExprId) or
+        BuildClassFieldArrayElementTargetExpr(ATargetNode, AExprId);
+    gnkDotAccess:
+      begin
+        if (ATargetNode.ChildCount < 2) or (ATargetNode.ChildAt(0) = nil) or
+          (ATargetNode.ChildAt(1) = nil) or
+          (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
+          Exit(False);
+
+        FieldName := ATargetNode.ChildAt(1).Text;
+        if not BuildTargetAddressExpr(ATargetNode.ChildAt(0), BaseExprId) then
+          Exit(False);
+        if (BaseExprId <= 0) or (BaseExprId > FModel.HirExprCount) then
+          Exit(False);
+
+        BaseTypeId := FModel.HirExprAt(BaseExprId - 1).TypeId;
+        if (BaseTypeId <= 0) and
+          (ATargetNode.ChildAt(0).NodeKind = gnkArrayAccess) then
+        begin
+          if not ResolveArrayAccessElementTypeId(ATargetNode.ChildAt(0),
+            ElementTypeId) then
+            Exit(False);
+          BaseTypeId := ElementTypeId;
+        end;
+        if BaseTypeId <= 0 then
+          Exit(False);
+        if not FModel.GetFieldMetaByName(BaseTypeId, FieldName, FieldMeta) then
+          Exit(False);
+
+        SetLength(Children, 1);
+        Children[0] := BaseExprId;
+        AExprId := FModel.AddHirExpr(
+          shekField, FieldMeta.TypeId, 0, Children,
+          FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+        );
+        Result := AExprId > 0;
+      end;
+  else
+    Result := False;
+  end;
 end;
 
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
@@ -7531,6 +7937,40 @@ var
     Result := (LocalExpr.TypeId = FModel.FindTypeByName('Pointer')) and
       (LocalExpr.ValueClass = shvcScalar);
   end;
+
+  function HasArrayBackedBase(const ALocalNode: TGreenNode): Boolean;
+  begin
+    if ALocalNode = nil then
+      Exit(False);
+    case ALocalNode.NodeKind of
+      gnkArrayAccess:
+        Exit(True);
+      gnkDotAccess:
+        begin
+          if ALocalNode.ChildCount < 1 then
+            Exit(False);
+          Exit(HasArrayBackedBase(ALocalNode.ChildAt(0)));
+        end;
+    end;
+    Result := False;
+  end;
+
+  function TryBuildStructuredAddressBackedValueExpr(
+    const ALocalNode: TGreenNode; out ALocalExprId: LongInt): Boolean;
+  var
+    LocalTypeId: LongInt;
+  begin
+    ALocalExprId := 0;
+    if not BuildTargetAddressExpr(ALocalNode, ALocalExprId) then
+      Exit(False);
+    LocalTypeId := ExprTypeId(ALocalExprId);
+    if not IsStructuredAddressableScalarType(LocalTypeId) then
+    begin
+      ALocalExprId := 0;
+      Exit(False);
+    end;
+    Result := True;
+  end;
 begin
   AExprId := 0;
   if ANode = nil then
@@ -7592,6 +8032,9 @@ begin
     );
     Exit(True);
   end;
+
+  if ANode.NodeKind = gnkArrayAccess then
+    Exit(TryBuildStructuredAddressBackedValueExpr(ANode, AExprId));
 
   if (ANode.NodeKind = gnkUnaryExpression) and (ANode.ChildCount >= 1) and
     (ANode.Text = '@') then
@@ -7667,6 +8110,9 @@ begin
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) then
   begin
     if BuildRuntimePointerFieldAddressHirExpr(ANode, AExprId) then
+      Exit(True);
+    if HasArrayBackedBase(ANode.ChildAt(0)) and
+      TryBuildStructuredAddressBackedValueExpr(ANode, AExprId) then
       Exit(True);
     Exit(False);
   end;
@@ -7991,427 +8437,6 @@ var
       Exit;
     if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
       FModel.SetTypedHirNodeExprId(AHirNodeId, LocalExprId);
-  end;
-
-  function FindSymbolByNameAndType(const AName: string;
-    const ATypeId: LongInt): LongInt;
-  var
-    I: LongInt;
-    Symbol: TSemanticSymbol;
-  begin
-    for I := FModel.SymbolCount - 1 downto 0 do
-    begin
-      Symbol := FModel.SymbolAt(I);
-      if SameText(Symbol.Name, AName) and
-        ((ATypeId <= 0) or (Symbol.TypeId = ATypeId)) then
-        Exit(Symbol.SymbolId);
-    end;
-    Result := 0;
-  end;
-
-  function EnsureSelfSymbolId(out ASelfTypeId: LongInt): LongInt;
-  begin
-    ASelfTypeId := 0;
-    if FCurrentMethodClass = '' then
-      Exit(0);
-    ASelfTypeId := FModel.FindTypeByName(FCurrentMethodClass);
-    if ASelfTypeId <= 0 then
-      Exit(0);
-    Result := FindSymbolByNameAndType('self', ASelfTypeId);
-    if Result = 0 then
-      Result := FModel.AddSymbol('self', 'parameter', '', ASelfTypeId, 0);
-  end;
-
-  function LookupFieldMetaByTypeName(const ATypeName, AFieldName: string;
-    out AOwnerTypeId: LongInt; out AFieldMeta: TFieldMeta): Boolean;
-  begin
-    AOwnerTypeId := FModel.FindTypeByName(ATypeName);
-    if AOwnerTypeId <= 0 then
-      Exit(False);
-    Result := FModel.GetFieldMetaByName(AOwnerTypeId, AFieldName, AFieldMeta);
-  end;
-
-  function BuildRecordBaseAddressExpr(const ARecordName, ARecordTypeName: string;
-    out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    RecordTypeId, RecordSymbolId: LongInt;
-  begin
-    AExprId := 0;
-    if (ARecordName = '') or (ARecordTypeName = '') then
-      Exit(False);
-
-    RecordTypeId := FModel.FindTypeByName(ARecordTypeName);
-    if RecordTypeId <= 0 then
-      Exit(False);
-
-    RecordSymbolId := FindSymbolByNameAndType(ARecordName, RecordTypeId);
-    if RecordSymbolId = 0 then
-      RecordSymbolId := FModel.FindSymbolByName(ARecordName);
-    if RecordSymbolId <= 0 then
-      Exit(False);
-
-    SetLength(Children, 0);
-    AExprId := FModel.AddHirExpr(
-      shekSymbolAddress, RecordTypeId, RecordSymbolId, Children,
-      0, '', '', 0, shvcAddress
-    );
-    Result := AExprId > 0;
-  end;
-
-  function BuildClassBaseAddressExpr(const ABaseName, AClassName: string;
-    out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    BaseTypeId, PointerTypeId, BaseSymbolId, PointerExprId: LongInt;
-    SelfTypeId: LongInt;
-  begin
-    AExprId := 0;
-    PointerTypeId := FModel.FindTypeByName('Pointer');
-    if PointerTypeId <= 0 then
-      Exit(False);
-    BaseTypeId := FModel.FindTypeByName(AClassName);
-    if BaseTypeId <= 0 then
-      Exit(False);
-
-    if SameText(ABaseName, 'self') then
-    begin
-      BaseSymbolId := EnsureSelfSymbolId(SelfTypeId);
-      if (BaseSymbolId <= 0) or (SelfTypeId <> BaseTypeId) then
-        Exit(False);
-    end
-    else
-    begin
-      BaseSymbolId := FindSymbolByNameAndType(ABaseName, BaseTypeId);
-      if BaseSymbolId = 0 then
-        BaseSymbolId := FModel.FindSymbolByName(ABaseName);
-      if BaseSymbolId <= 0 then
-        Exit(False);
-    end;
-
-    SetLength(Children, 0);
-    PointerExprId := FModel.AddHirExpr(
-      shekSymbolValue, PointerTypeId, BaseSymbolId, Children,
-      0, '', '', 0, shvcScalar
-    );
-    SetLength(Children, 1);
-    Children[0] := PointerExprId;
-    AExprId := FModel.AddHirExpr(
-      shekDeref, BaseTypeId, 0, Children,
-      0, '', '', 0, shvcAddress
-    );
-    Result := AExprId > 0;
-  end;
-
-  function BuildRecordFieldTargetExpr(const ARecordName, ARecordTypeName,
-    AFieldName: string; out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    RecordTypeId, BaseExprId: LongInt;
-    FieldMeta: TFieldMeta;
-  begin
-    AExprId := 0;
-    if not LookupFieldMetaByTypeName(ARecordTypeName, AFieldName, RecordTypeId,
-      FieldMeta) then
-      Exit(False);
-    if not BuildRecordBaseAddressExpr(ARecordName, ARecordTypeName, BaseExprId) then
-      Exit(False);
-
-    SetLength(Children, 1);
-    Children[0] := BaseExprId;
-    AExprId := FModel.AddHirExpr(
-      shekField, FieldMeta.TypeId, 0, Children,
-      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
-    );
-    Result := AExprId > 0;
-  end;
-
-  function BuildClassFieldTargetExpr(const ABaseName, AClassName,
-    AFieldName: string; out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    BaseTypeId, BaseExprId: LongInt;
-    FieldMeta: TFieldMeta;
-  begin
-    AExprId := 0;
-    if not LookupFieldMetaByTypeName(AClassName, AFieldName, BaseTypeId,
-      FieldMeta) then
-      Exit(False);
-    if not BuildClassBaseAddressExpr(ABaseName, AClassName, BaseExprId) then
-      Exit(False);
-
-    SetLength(Children, 1);
-    Children[0] := BaseExprId;
-    AExprId := FModel.AddHirExpr(
-      shekField, FieldMeta.TypeId, 0, Children,
-      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
-    );
-    Result := AExprId > 0;
-  end;
-
-  function TryCurrentClassFieldArrayAccess(const AArrayAccessNode: TGreenNode;
-    out AFieldName: string): Boolean; forward;
-  function BuildClassFieldArrayElementTargetExpr(
-    const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean; forward;
-
-  function ResolveArrayAccessElementTypeId(const AArrayAccessNode: TGreenNode;
-    out AElementTypeId: LongInt): Boolean;
-  var
-    ArrayName, ElementTypeName, FieldName: string;
-  begin
-    AElementTypeId := 0;
-    if (AArrayAccessNode = nil) or
-      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
-      (AArrayAccessNode.ChildCount < 2) then
-      Exit(False);
-
-    if (AArrayAccessNode.ChildAt(0) <> nil) and
-      (AArrayAccessNode.ChildAt(0).NodeKind = gnkIdentifier) then
-    begin
-      ArrayName := AArrayAccessNode.ChildAt(0).Text;
-      if (ArrayName <> '') and IsRuntimeArrVar(ArrayName) and
-        FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
-          ElementTypeName) then
-      begin
-        AElementTypeId := FModel.FindTypeByName(ElementTypeName);
-        Exit(AElementTypeId > 0);
-      end;
-    end;
-
-    if (FCurrentMethodClass <> '') and
-      TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) and
-      FModel.LookupStringConstValue(
-        FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
-        ElementTypeName) then
-    begin
-      AElementTypeId := FModel.FindTypeByName(ElementTypeName);
-      Exit(AElementTypeId > 0);
-    end;
-
-    Result := False;
-  end;
-
-  function BuildTargetAddressExpr(const ATargetNode: TGreenNode;
-    out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    BaseName, ClassTypeName, FieldName, RecordTypeName: string;
-    BaseExprId, BaseTypeId, ElementTypeId: LongInt;
-    FieldMeta: TFieldMeta;
-  begin
-    AExprId := 0;
-    if ATargetNode = nil then
-      Exit(False);
-
-    case ATargetNode.NodeKind of
-      gnkIdentifier:
-        begin
-          BaseName := ATargetNode.Text;
-          if BaseName = '' then
-            Exit(False);
-          if SameText(BaseName, 'Self') and (FCurrentMethodClass <> '') then
-            Exit(BuildClassBaseAddressExpr('self', FCurrentMethodClass,
-              AExprId));
-          if (FCurrentMethodClass <> '') and
-            (TypeMetaFieldIndex(FCurrentMethodClass, BaseName) >= 0) then
-            Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
-              BaseName, AExprId));
-          if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') then
-          begin
-            RecordTypeName := LookupRecordVar(FCurrentRetVarName);
-            if RecordTypeName <> '' then
-              Exit(BuildRecordBaseAddressExpr(FCurrentRetVarName,
-                RecordTypeName, AExprId));
-          end;
-          RecordTypeName := LookupRecordVar(BaseName);
-          if RecordTypeName <> '' then
-            Exit(BuildRecordBaseAddressExpr(BaseName, RecordTypeName, AExprId));
-          ClassTypeName := LookupClassVar(BaseName);
-          if ClassTypeName <> '' then
-            Exit(BuildClassBaseAddressExpr(BaseName, ClassTypeName, AExprId));
-          Result := False;
-        end;
-      gnkArrayAccess:
-        Result := BuildRuntimeArrayElementAddressHirExpr(ATargetNode,
-          AExprId) or BuildClassFieldArrayElementTargetExpr(ATargetNode,
-          AExprId);
-      gnkDotAccess:
-        begin
-          if (ATargetNode.ChildCount < 2) or (ATargetNode.ChildAt(0) = nil) or
-            (ATargetNode.ChildAt(1) = nil) or
-            (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
-            Exit(False);
-
-          FieldName := ATargetNode.ChildAt(1).Text;
-          if not BuildTargetAddressExpr(ATargetNode.ChildAt(0), BaseExprId) then
-            Exit(False);
-          if (BaseExprId <= 0) or (BaseExprId > FModel.HirExprCount) then
-            Exit(False);
-
-          BaseTypeId := FModel.HirExprAt(BaseExprId - 1).TypeId;
-          if (BaseTypeId <= 0) and
-            (ATargetNode.ChildAt(0).NodeKind = gnkArrayAccess) then
-          begin
-            if not ResolveArrayAccessElementTypeId(ATargetNode.ChildAt(0),
-              ElementTypeId) then
-              Exit(False);
-            BaseTypeId := ElementTypeId;
-          end;
-          if BaseTypeId <= 0 then
-            Exit(False);
-          if not FModel.GetFieldMetaByName(BaseTypeId, FieldName, FieldMeta) then
-            Exit(False);
-
-          SetLength(Children, 1);
-          Children[0] := BaseExprId;
-          AExprId := FModel.AddHirExpr(
-            shekField, FieldMeta.TypeId, 0, Children,
-            FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
-          );
-          Result := AExprId > 0;
-        end;
-    else
-      Result := False;
-    end;
-  end;
-
-  function BuildArrayRecordFieldTargetExpr(const AArrayAccessNode: TGreenNode;
-    const AFieldName: string; out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    ArrayExpr, FieldExpr: TSemanticHirExpr;
-    ArrayExprId, ElementTypeId: LongInt;
-    ArrayName, ElementTypeName: string;
-    FieldMeta: TFieldMeta;
-  begin
-    AExprId := 0;
-    if (AArrayAccessNode = nil) or
-      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
-      (AArrayAccessNode.ChildCount < 2) or
-      (AArrayAccessNode.ChildAt(0) = nil) or
-      (AArrayAccessNode.ChildAt(0).NodeKind <> gnkIdentifier) then
-      Exit(False);
-
-    ArrayName := AArrayAccessNode.ChildAt(0).Text;
-    if (ArrayName = '') or
-      (not FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
-        ElementTypeName)) or (ElementTypeName = '') then
-      Exit(False);
-    if not LookupFieldMetaByTypeName(ElementTypeName, AFieldName,
-      ElementTypeId, FieldMeta) then
-      Exit(False);
-    if not BuildRuntimeArrayElementAddressHirExpr(AArrayAccessNode,
-      ArrayExprId) then
-      Exit(False);
-    if (ArrayExprId <= 0) or (ArrayExprId > FModel.HirExprCount) then
-      Exit(False);
-
-    ArrayExpr := FModel.HirExprAt(ArrayExprId - 1);
-    if (ArrayExpr.Kind <> shekArrayElem) or
-      (ArrayExpr.ValueClass <> shvcAddress) or
-      (ArrayExpr.TypeId <> ElementTypeId) then
-      Exit(False);
-
-    SetLength(Children, 1);
-    Children[0] := ArrayExprId;
-    AExprId := FModel.AddHirExpr(
-      shekField, FieldMeta.TypeId, 0, Children,
-      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
-    );
-    if AExprId <= 0 then
-      Exit(False);
-    FieldExpr := FModel.HirExprAt(AExprId - 1);
-    Result := (FieldExpr.Kind = shekField) and
-      (FieldExpr.ValueClass = shvcAddress);
-  end;
-
-  function TryCurrentClassFieldArrayAccess(const AArrayAccessNode: TGreenNode;
-    out AFieldName: string): Boolean;
-  var
-    BaseNode, FieldNode: TGreenNode;
-  begin
-    AFieldName := '';
-    if (AArrayAccessNode = nil) or
-      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
-      (AArrayAccessNode.ChildCount < 2) or
-      (AArrayAccessNode.ChildAt(0) = nil) or
-      (FCurrentMethodClass = '') then
-      Exit(False);
-
-    BaseNode := AArrayAccessNode.ChildAt(0);
-    if BaseNode.NodeKind = gnkIdentifier then
-      AFieldName := BaseNode.Text
-    else if (BaseNode.NodeKind = gnkDotAccess) and
-      (BaseNode.ChildCount >= 2) and
-      (BaseNode.ChildAt(0) <> nil) and
-      (BaseNode.ChildAt(1) <> nil) and
-      (BaseNode.ChildAt(0).NodeKind = gnkIdentifier) and
-      (BaseNode.ChildAt(1).NodeKind = gnkIdentifier) and
-      SameText(BaseNode.ChildAt(0).Text, 'Self') then
-    begin
-      FieldNode := BaseNode.ChildAt(1);
-      AFieldName := FieldNode.Text;
-    end;
-
-    Result := (AFieldName <> '') and (not IsRuntimeArrVar(AFieldName)) and
-      (TypeMetaFieldIndex(FCurrentMethodClass, AFieldName) >= 0);
-  end;
-
-  function BuildClassFieldArrayElementTargetExpr(
-    const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
-  var
-    Children: array of LongInt;
-    ArrayExpr, FieldExpr, IndexExpr: TSemanticHirExpr;
-    ElementTypeId, FieldExprId, IndexExprId, IndexTypeId: LongInt;
-    ElementTypeName, FieldName: string;
-    Fact: TSemanticScalarTypeFact;
-  begin
-    AExprId := 0;
-    if not TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) then
-      Exit(False);
-
-    if not FModel.LookupStringConstValue(
-      FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
-      ElementTypeName) then
-      Exit(False);
-    ElementTypeId := FModel.FindTypeByName(ElementTypeName);
-    if ElementTypeId <= 0 then
-      Exit(False);
-
-    if not BuildClassFieldTargetExpr('self', FCurrentMethodClass, FieldName,
-      FieldExprId) then
-      Exit(False);
-    if (FieldExprId <= 0) or (FieldExprId > FModel.HirExprCount) then
-      Exit(False);
-    FieldExpr := FModel.HirExprAt(FieldExprId - 1);
-    if (FieldExpr.Kind <> shekField) or
-      (FieldExpr.ValueClass <> shvcAddress) then
-      Exit(False);
-
-    if not BuildRuntimeScalarHirExpr(AArrayAccessNode.ChildAt(1),
-      IndexExprId) then
-      Exit(False);
-    if (IndexExprId <= 0) or (IndexExprId > FModel.HirExprCount) then
-      Exit(False);
-    IndexExpr := FModel.HirExprAt(IndexExprId - 1);
-    IndexTypeId := IndexExpr.TypeId;
-    if (IndexTypeId <= 0) or
-      (not FModel.GetTypeScalarFact(IndexTypeId, Fact)) or
-      (Fact.Kind <> sskInt) then
-      Exit(False);
-
-    SetLength(Children, 2);
-    Children[0] := FieldExprId;
-    Children[1] := IndexExprId;
-    AExprId := FModel.AddHirExpr(
-      shekArrayElem, ElementTypeId, 0, Children,
-      0, '', '', 0, shvcAddress
-    );
-    if (AExprId <= 0) or (AExprId > FModel.HirExprCount) then
-      Exit(False);
-    ArrayExpr := FModel.HirExprAt(AExprId - 1);
-    Result := (ArrayExpr.Kind = shekArrayElem) and
-      (ArrayExpr.ValueClass = shvcAddress);
   end;
 
   function BuildFieldStoreTargetExpr(const ATargetNode: TGreenNode;
@@ -9475,10 +9500,7 @@ begin
                 else
                 begin
                   RegisterRuntimeVar(Decoded);
-                  FModel.AddTypedHirNode(
-                    'assign-runtime', Decoded, 0, 0,
-                    Decoded + #9 + Operand
-                  );
+                  AddScalarAssignRuntimeNode(Decoded, Arg, Operand);
                 end;
               end;
             end

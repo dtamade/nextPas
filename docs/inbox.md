@@ -4,30 +4,28 @@
 
 ## 当前在做什么
 
-- `C5-K` 已完成：`arr[i].A.B := rhs` 与 `Self.FItems[i].A.B := rhs`
-  现在都能生成递归结构化 target，形态为
-  `shekField -> shekField -> shekArrayElem`。
-- sema 新增共享 `BuildTargetAddressExpr`，把 direct array、field-array、
-  record/class base 和 nested dot chain 收到一条 address 构造线上。
-- array-backed field store 的旧 blob fallback 还在，但 index 会展平成
-  `index * elem_slots + field_offset`，不是只会认一层 `arr[i].Field`。
-- builder 的 `shekField` 现在允许“聚合中间字段只作为地址存在”：
-  address lowering 放行，value load 仍要求 concrete scalar type。
-- `C5-K0` 的 constructor argument classification 修复仍保持有效：
-  `TRect.Create(P.GetX, P.GetY)` 继续按 `ptr, i64, i64` 发 LLVM call。
+- `C5-L` 已完成：array/field-array 的 value-side 继续向结构化迁移。
+  现在 `x := arr[i]`、`x := arr[i].A.B`、`y := FItems[i]`、
+  `y := Self.FItems[i].A.B` 都能挂上结构化 `ExprId`。
+- 这轮没有改 builder 主合同，修的是 sema 旧 blob gate：
+  current-class field-array 缺少 value load blob，导致 `assign-runtime`
+  节点根本发不出来。
+- sema 继续复用共享 `BuildTargetAddressExpr`；
+  value-side 仍然走“address-backed structured expr + legacy blob fallback”双轨。
+- `C5-K` 的递归 target 与 `C5-K0` 的 constructor arg classification 修复都保持有效。
 - `ExprId` 继续只表示 RHS value；`TargetExprId` 表示 LHS address。
-- 旧 blob fallback 保留：`__field_arr__`、direct `arr$ptr` 路径仍能回退。
-- 最近验证：focused compiler tests `focused_failed=0`；`scripts/rebuild-compiler.sh`
-  输出 `46508 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
+- 旧 blob fallback 保留：`__field_arr__`、direct `arr$ptr`、field-array value load
+  路径都还能回退。
+- 最近验证：changed tests 绿；`scripts/rebuild-compiler.sh`
+  输出 `44115 lines compiled`；LLVM smoke `137/137`，全部 exit=42。
 
 ## 接下来怎么走
 
-1. `C5-L`：array/field-array value load，尤其 `x := arr[i].A.B`、
-   `Result := FItems[i]` 这类 value-side 迁移，继续减少 `arr_load` / `arrload` 暗号。
-2. `C5-M`：class/object RHS 特殊分支和剩余 array/field store producer 收口。
-3. 把 address/value contract 从“store 先硬起来”推进到“load/store 对称”。
-4. `C6`：allocator 和真实释放。
-5. `C7/C8`：多目标、优化、自举探针。
+1. `C5-M`：class/object RHS 特殊分支和剩余 value-side 缺口收口，继续减少
+   `arr_load` / `arrload` / pointer 暗号。
+2. 把 address/value contract 从“主要路径可用”推进到“load/store 对称”。
+3. `C6`：allocator 和真实释放。
+4. `C7/C8`：多目标、优化、自举探针。
 
 ## 重要约束
 
