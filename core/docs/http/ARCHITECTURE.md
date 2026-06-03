@@ -44,14 +44,20 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
   不再写死在 HTTP facade。
 - Linux `epoll` 已经落到 phase 1：evented accept + worker-driven connection execution。
 - `nextpas.core.net.server` 现在也已具备 poll-driven session seam，
-  但 H1 目前还没有迁到这条路径，所以 HTTP 当前运行真相仍以 worker-driven session 为主。
+  而且 H1 session 现在已经开始消费这条 seam；
+  但当前还是 bridge 形态，不是完整 reactor-owned H1 state machine。
 - H1 现在已经能看到 foundation session context；并且 foundation `epoll` runtime
   也已经具备 worker-completion -> reactor wakeup 与 deadline wake 的基础能力。
+- `TH1ServerConnectionState` 现在已经实现 `ITcpServerPollDrivenSession`，
+  但当前 bridge 仍然会在第一次 readability 后通过 `WorkerHandoff`
+  把整连接 `Run` 挂到 worker 执行，以先把 H1 接到 poll-driven foundation，
+  同时守住现有 HTTP contract。
 - H1 server response path 现在已经完成一层关键拆分：
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
 - 因此 H1 剩余的真实阻塞点已经进一步收窄为：
-  resumable drain / writer would-block 语义 / poll-driven session runtime，
+  真正的 reactor-owned read/write state machine / resumable drain /
+  writer would-block 语义，
   不再是 context bridge，也不再是 reactor wakeup 基础设施本身，
   也不应该再把“handler 必须同步阻塞在 socket write 上”当成固定方向。
 - 还没落地的是 phase 2：runtime 直接驱动 connection state 的 read/write 调度。

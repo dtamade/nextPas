@@ -972,6 +972,7 @@ var
   LTransport: IHttpServerTransport;
   LFactory: IHttpServerSessionFactoryWithContext;
   LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
   LStreamObj: TZeroProgressTcpStream;
   LStream: ITcpStream;
   LContext: ITcpServerSessionContext;
@@ -993,6 +994,8 @@ begin
     begin
     end), LContext);
   Check(LSession <> nil, 'context-aware h1 session factory returns session');
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session now exposes poll-driven session seam');
 end;
 
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;

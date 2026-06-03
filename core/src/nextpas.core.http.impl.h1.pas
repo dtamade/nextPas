@@ -14,6 +14,7 @@ uses
   nextpas.core.net.intf,
   nextpas.core.net.server.intf,
   nextpas.core.net.server.base,
+  nextpas.core.platform.io.base,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
@@ -111,19 +112,44 @@ type
       const AContext: ITcpServerSessionContext): ITcpServerSession; overload;
   end;
 
+  TH1ServerConnectionState = class;
+
+  TH1PollRunWork = class(TInterfacedObject, ITcpServerWork)
+  private
+    FState: TH1ServerConnectionState;
+  public
+    constructor Create(const AState: TH1ServerConnectionState);
+    function Execute: TTcpServerConnOwnership;
+  end;
+
+  TH1PollRunCompletion = class(TInterfacedObject, ITcpServerWorkCompletion)
+  private
+    FState: TH1ServerConnectionState;
+  public
+    constructor Create(const AState: TH1ServerConnectionState);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
   // Connection state stays protocol-owned so future runtimes can drive
   // the same H1 logic without keeping it welded to a thread entrypoint.
-  TH1ServerConnectionState = class(TInterfacedObject, ITcpServerSession)
+  TH1ServerConnectionState = class(TInterfacedObject, ITcpServerSession,
+    ITcpServerPollDrivenSession, ITcpServerPollDrivenSessionWithDeadline)
   private
     FOptions: TH1ServerTransportOptions;
     FConn: ITcpStream;
     FHandler: IHttpHandler;
     FSessionContext: ITcpServerSessionContext;
+    FSocketRuntime: ITcpSocketRuntime;
+    FWorkerHandoff: ITcpServerWorkerHandoff;
     FParser: IH1Parser;
     FPending: string;
     FKeepAlive: Boolean;
     FIdleMs: Int64;
     FBuf: array[0..4095] of Byte;
+    FPollSubmitted: Boolean;
+    FPollCompletionReady: Boolean;
+    FPollCompletionOwnership: TTcpServerConnOwnership;
   public
     constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
       const AOptions: TH1ServerTransportOptions); overload;
@@ -131,6 +157,11 @@ type
       const AOptions: TH1ServerTransportOptions;
       const AContext: ITcpServerSessionContext); overload;
     function Run: TTcpServerConnOwnership;
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+    function WakeDeadline: TDeadline;
   end;
 
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
@@ -274,6 +305,41 @@ begin
   end;
 end;
 
+{ TH1PollRunWork }
+
+constructor TH1PollRunWork.Create(const AState: TH1ServerConnectionState);
+begin
+  inherited Create;
+  FState := AState;
+end;
+
+function TH1PollRunWork.Execute: TTcpServerConnOwnership;
+begin
+  Result := FState.Run;
+end;
+
+{ TH1PollRunCompletion }
+
+constructor TH1PollRunCompletion.Create(const AState: TH1ServerConnectionState);
+begin
+  inherited Create;
+  FState := AState;
+end;
+
+procedure TH1PollRunCompletion.Complete(const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  if FState <> nil then
+  begin
+    if AOutcome = tswoCompleted then
+      FState.FPollCompletionOwnership := AOwnership
+    else
+      FState.FPollCompletionOwnership := tscoServer;
+    FState.FPollCompletionReady := True;
+  end;
+  FState := nil;
+end;
+
 { TH1ServerConnectionState }
 
 constructor TH1ServerConnectionState.Create(const AConn: ITcpStream;
@@ -291,6 +357,11 @@ begin
   FConn := AConn;
   FHandler := AHandler;
   FSessionContext := AContext;
+  Supports(AConn, ITcpSocketRuntime, FSocketRuntime);
+  if AContext <> nil then
+    FWorkerHandoff := AContext.WorkerHandoff
+  else
+    FWorkerHandoff := nil;
   FParser := NewH1RequestParser;
   FPending := '';
   FKeepAlive := True;
@@ -298,6 +369,9 @@ begin
     FIdleMs := FOptions.IdleTimeout
   else
     FIdleMs := 30000;
+  FPollSubmitted := False;
+  FPollCompletionReady := False;
+  FPollCompletionOwnership := tscoServer;
 end;
 
 function TH1ServerConnectionState.Run: TTcpServerConnOwnership;
@@ -495,6 +569,69 @@ begin
       end;
     end;
   end;
+end;
+
+function TH1ServerConnectionState.PollEvents: TPlatformPollEvents;
+begin
+  Result := [peReadable];
+end;
+
+function TH1ServerConnectionState.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LWork: ITcpServerWork;
+  LCompletion: ITcpServerWorkCompletion;
+  LHandoffResult: TTcpServerHandoffResult;
+begin
+  AOwnership := tscoServer;
+
+  if not FPollSubmitted then
+  begin
+    if not (peReadable in AEvents) then
+    begin
+      ANextEvents := [peReadable];
+      Exit(tsprWait);
+    end;
+
+    if FWorkerHandoff = nil then
+    begin
+      ANextEvents := [];
+      AOwnership := Run;
+      Exit(tsprDone);
+    end;
+
+    if FSocketRuntime <> nil then
+      FSocketRuntime.SetBlocking(True);
+
+    LWork := TH1PollRunWork.Create(Self);
+    LCompletion := TH1PollRunCompletion.Create(Self);
+    LHandoffResult := FWorkerHandoff.Submit(LWork, LCompletion);
+    if LHandoffResult <> tshrAccepted then
+    begin
+      ANextEvents := [];
+      Exit(tsprDone);
+    end;
+
+    FPollSubmitted := True;
+    ANextEvents := [];
+    Exit(tsprWait);
+  end;
+
+  if not FPollCompletionReady then
+  begin
+    ANextEvents := [];
+    Exit(tsprWait);
+  end;
+
+  ANextEvents := [];
+  AOwnership := FPollCompletionOwnership;
+  Result := tsprDone;
+end;
+
+function TH1ServerConnectionState.WakeDeadline: TDeadline;
+begin
+  Result := TDeadline.Infinite;
 end;
 
 { TH1ClientTransport }
