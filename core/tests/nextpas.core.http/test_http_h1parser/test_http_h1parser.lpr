@@ -271,6 +271,40 @@ begin
   Check(not LP.IsComplete, 'malformed chunk extension is not complete');
 end;
 
+procedure TestChunkedRequestTruncatedChunkExtensionAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5;sig=abc';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated chunk extension is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'truncated chunk extension reports error on finish');
+  Check(not LP.IsComplete, 'truncated chunk extension stays incomplete');
+end;
+
+procedure TestChunkedRequestTruncatedChunkExtensionCrAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5;sig=abc'#13;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated chunk extension CR is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'truncated chunk extension CR reports error on finish');
+  Check(not LP.IsComplete, 'truncated chunk extension CR stays incomplete');
+end;
+
 procedure TestChunkedRequestTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -921,6 +955,8 @@ begin
   T.Run('Chunked request body', @TestChunkedRequestBody);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);
   T.Run('Chunked request malformed chunk extension', @TestChunkedRequestMalformedChunkExtension);
+  T.Run('Chunked request truncated chunk extension at EOF', @TestChunkedRequestTruncatedChunkExtensionAtEof);
+  T.Run('Chunked request truncated chunk extension CR at EOF', @TestChunkedRequestTruncatedChunkExtensionCrAtEof);
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
   T.Run('Chunked request truncated chunk-size line at EOF', @TestChunkedRequestTruncatedChunkSizeLineAtEof);
   T.Run('Chunked request truncated terminal chunk ending at EOF', @TestChunkedRequestTruncatedTerminalChunkEndingAtEof);

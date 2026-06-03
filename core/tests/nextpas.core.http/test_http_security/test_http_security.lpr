@@ -247,6 +247,40 @@ begin
   end;
 end;
 
+{ Test 2aa: Truncated chunk extension at EOF }
+procedure TestTruncatedChunkExtensionAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5;sig=abc';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated chunk extension EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 2ab: Truncated chunk extension CR at EOF }
+procedure TestTruncatedChunkExtensionCrAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5;sig=abc'#13;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated chunk extension CR EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 2b: Missing chunk-data CRLF }
 procedure TestMissingChunkDataCrLf;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -749,6 +783,8 @@ begin
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
   T.Run('Invalid chunk size -> 400', @TestInvalidChunkSize);
   T.Run('Malformed chunk extension', @TestMalformedChunkExtension);
+  T.Run('Truncated chunk extension at EOF -> 400', @TestTruncatedChunkExtensionAtEof);
+  T.Run('Truncated chunk extension CR at EOF -> 400', @TestTruncatedChunkExtensionCrAtEof);
   T.Run('Missing chunk-data CRLF', @TestMissingChunkDataCrLf);
   T.Run('Truncated chunked request at EOF -> 400', @TestTruncatedChunkedRequestAtEof);
   T.Run('Truncated chunk-size line at EOF -> 400', @TestTruncatedChunkSizeLineAtEof);
