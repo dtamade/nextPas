@@ -1,29 +1,30 @@
-# Findings: HTTP body reader hot-path copy removal
+# Findings: HTTP server runtime foundation planning
 
-## What changed
+## Decision
 
-- `IH1Parser` 现在新增：
-  - `GetBodySize`
-  - `NewBodyReader`
-- parser 内部 body 从 `string` 改为 `TBytes` 持有。
-- H1 server/client 不再走：
-  - `GetBody -> string`
-  - `StrToBytes`
-  - `CreateBytesStreamFrom`
-  这条额外复制路径。
+- 公开 HTTP 使用体验继续保持 Go 风格的同步 handler。
+- 内部 server/runtime/protocol 分层改学 Tokio/Hyper。
+- 跨平台 backend 纪律改学 libuv：
+  - Linux `epoll`
+  - macOS / FreeBSD `kqueue`
+  - Windows `IOCP`
+- 通用 server 基座归属冻结为 `nextpas.core.net.server`，而不是继续由
+  `nextpas.core.http.server` 私有化 runtime。
 
-## Performance direction
+## Why this is the right move
 
-- 这轮还没有把 request body 变成真正的 socket-backed streaming body。
-- 但已经先把“解析完成后再做一次整块复制”的热路径成本去掉一层。
-- 这是向更现代 transport-owned body seam 过渡的安全切片，不会先把公开 `IHttpRequest.Body` 契约打碎。
+- 当前真正写死线程模型的是 `http.server` 的 accept loop，而不是 HTTP
+  public facade 本身。
+- `TH1ServerConnectionState` 已经证明协议状态可以开始从线程入口剥离。
+- 如果现在继续只修 HTTP 私有 runtime，后面其他 TCP server 还会重复踩一遍。
+- 现在最该冻结的是 ownership 和 layering，而不是继续在旧线程模型上做局部优化。
 
-## TDD evidence
+## Fixed plan
 
-- RED 已验证：
-  `test_http_h1parser` 编译报 `GetBodySize` / `NewBodyReader` 缺失。
-- GREEN 已验证：
-  新增 focused proof：
-  - `Request body reader view`
-  - `Response body reader view`
-  且 `test_http_h1parser` / `test_http_client` / `test_http_server` 全通过。
+- Phase 1: `nextpas.core.net.server` skeleton
+- Phase 2: threaded backend first
+- Phase 3: HTTP migrate to foundation, behavior unchanged
+- Phase 4: Linux `epoll`
+- Phase 5: `kqueue`
+- Phase 6: Windows `IOCP`
+- Phase 7: body streaming / benchmark / performance work

@@ -1,20 +1,19 @@
-# Progress Log: HTTP body reader hot-path copy removal
+# Progress Log: HTTP server runtime foundation planning
 
 ## Session
 
-- **Scope:** remove one full body copy from the H1 parser -> server/client hot path by exposing parser-owned body reader views.
+- **Scope:** freeze the server runtime direction before the next implementation batch.
 - **Status:** completed
 
 ## Notes
 
-- 生产改动：
-  - `src/nextpas.core.http.impl.h1.parser.pas`
-  - `src/nextpas.core.http.impl.h1.pas`
-- focused changed-surface 验证已完成：
-  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `make -C tests/nextpas.core.http/test_http_client clean test`
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-- heaptrc 证据：
-  - `test_http_h1parser`：`0 unfreed memory blocks`
-  - `test_http_client`：`0 unfreed memory blocks`
-  - `test_http_server`：`0 unfreed memory blocks`
+- 本轮没有生产代码改动，只有设计冻结与固定计划文档。
+- 正式设计文档：
+  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
+- 选型结论：
+  - public surface 学 Go
+  - internal layering 学 Tokio/Hyper
+  - backend policy 学 libuv
+  - foundation owner 定为 `nextpas.core.net.server`
+- 下一实现批次不再继续让 `http.server` 私有化 runtime，而是先落
+  `nextpas.core.net.server` skeleton + threaded backend。
