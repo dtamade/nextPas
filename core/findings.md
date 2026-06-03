@@ -75,3 +75,10 @@
   - `args` / `process` 在设计规范里被列入 L2，但在目标树里被列在 L3。
   - `log` 在设计规范里属于 L3，但目标树里列在 L2。
 - 如果后续要自动化层级审计，必须先统一这份模块注册口径，否则同一个依赖会因“以哪份文档为准”得到不同结论。
+
+## Parallel Batch: crypto/rsa.ct scratch zeroization
+
+- `CTNatAlloc(out ...)` 在 `rsa.ct` 是一个真实的安全坑：同一个 `TCTNat` 变量被反复复用时，旧 heap buffer 会先被释放，再分配新数组，zeroization 根本来不及执行。
+- 旧实现只在 `TryRSACTSignWithCRT` 成功路径尾部清理少量 scratch；一旦中途 `Exit`，包含私钥派生中间态的 heap scratch 会直接绕过清理。
+- `CTMontMul` / `CTMontModExp` 自身也维护动态 scratch；如果不在内部收口清理，调用方 `finally` 只能覆盖最后一层变量，无法覆盖中间重分配。
+- `pkcs8` 的 double-free 修复虽然已在源码里存在，但此前缺少一个“已成功 parse，再走 early-exit” 的 focused regression proof。

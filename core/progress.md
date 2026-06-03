@@ -26,3 +26,13 @@
 - 如果用户要进入修复阶段，应优先从两条主线开批次：
   1. 先收紧 L0 `mem` / `simd` 的越层依赖。
   2. 再分模块治理 `tls` / `simd` 历史测试入口布局。
+
+## Parallel batch: crypto/rsa.ct scratch zeroization
+
+- 已在 [nextpas.core.crypto.rsa.ct.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.crypto.rsa.ct.pas:43) 新增 `CTNatSecureZero` / `CTMontCtxSecureZero`，并把 `CTNatAlloc` 改成“重分配前先 zeroize 旧 buffer”。
+- 已把 `CTMontMul`、`CTMontModExp`、`TryInitCTMontCtx`、`TryRSACTModExpSign`、`TryRSACTSignWithCRT` 全部收紧为成功/失败统一清理。
+- 已在 [test_rsa_ct.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.crypto/test_rsa_ct/test_rsa_ct.lpr:198) 增加 CRT runtime 交叉验证与 scratch-cleanup source contract。
+- 已在 [test_pkcs8.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.crypto/test_pkcs8/test_pkcs8.lpr:119) 增加 unsupported-algorithm early-exit regression，覆盖已 parse 后的 early-exit 路径。
+- 验证：
+  - `make -C tests/nextpas.core.crypto/test_rsa_ct clean test` → `34 passed, 0 failed`，heaptrc `0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.crypto/test_pkcs8 clean test` → `14 passed, 0 failed`，heaptrc `0 unfreed memory blocks`

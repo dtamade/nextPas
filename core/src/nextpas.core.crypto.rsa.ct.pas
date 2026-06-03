@@ -40,11 +40,27 @@ type
 
 // --- CT primitives ---
 
-procedure CTNatAlloc(out A: TCTNat; ALimbs: Integer);
+procedure CTNatSecureZero(var A: TCTNat);
 begin
+  if Length(A) > 0 then
+    SecureZeroMemory(@A[0], Length(A) * SizeOf(UInt32));
+  SetLength(A, 0);
+end;
+
+procedure CTMontCtxSecureZero(var Ctx: TCTMontCtx);
+begin
+  CTNatSecureZero(Ctx.N);
+  CTNatSecureZero(Ctx.RR);
+  Ctx.NPrime := 0;
+  Ctx.Limbs := 0;
+end;
+
+procedure CTNatAlloc(var A: TCTNat; ALimbs: Integer);
+begin
+  CTNatSecureZero(A);
   SetLength(A, ALimbs);
   if ALimbs > 0 then
-    FillChar(A[0], ALimbs * 4, 0);
+    FillChar(A[0], ALimbs * SizeOf(UInt32), 0);
 end;
 
 procedure CTNatCopy(const ASrc: TCTNat; var ADst: TCTNat; ALimbs: Integer);
@@ -138,53 +154,62 @@ var
   LBorrow: UInt32;
   LTemp: TCTNat;
 begin
+  LT := nil;
+  LTemp := nil;
   LN := Ctx.Limbs;
-  SetLength(LT, 2 * LN + 1);
-  FillChar(LT[0], Length(LT) * 8, 0);
+  try
+    SetLength(LT, 2 * LN + 1);
+    FillChar(LT[0], Length(LT) * SizeOf(UInt64), 0);
 
-  for I := 0 to LN - 1 do
-  begin
-    LAI := A[I];
-    LCarry := 0;
-    for J := 0 to LN - 1 do
+    for I := 0 to LN - 1 do
     begin
-      LT[I + J] := LT[I + J] + UInt64(LAI) * UInt64(B[J]) + LCarry;
-      LCarry := LT[I + J] shr LIMB_BITS;
-      LT[I + J] := LT[I + J] and LIMB_MASK;
+      LAI := A[I];
+      LCarry := 0;
+      for J := 0 to LN - 1 do
+      begin
+        LT[I + J] := LT[I + J] + UInt64(LAI) * UInt64(B[J]) + LCarry;
+        LCarry := LT[I + J] shr LIMB_BITS;
+        LT[I + J] := LT[I + J] and LIMB_MASK;
+      end;
+      LT[I + LN] := LT[I + LN] + LCarry;
     end;
-    LT[I + LN] := LT[I + LN] + LCarry;
-  end;
 
-  for I := 0 to LN - 1 do
-  begin
-    LM := UInt32((LT[I] * UInt64(Ctx.NPrime)) and LIMB_MASK);
-    LCarry := 0;
-    for J := 0 to LN - 1 do
+    for I := 0 to LN - 1 do
     begin
-      LT[I + J] := LT[I + J] + UInt64(LM) * UInt64(Ctx.N[J]) + LCarry;
-      LCarry := LT[I + J] shr LIMB_BITS;
-      LT[I + J] := LT[I + J] and LIMB_MASK;
+      LM := UInt32((LT[I] * UInt64(Ctx.NPrime)) and LIMB_MASK);
+      LCarry := 0;
+      for J := 0 to LN - 1 do
+      begin
+        LT[I + J] := LT[I + J] + UInt64(LM) * UInt64(Ctx.N[J]) + LCarry;
+        LCarry := LT[I + J] shr LIMB_BITS;
+        LT[I + J] := LT[I + J] and LIMB_MASK;
+      end;
+      LT[I + LN] := LT[I + LN] + LCarry;
     end;
-    LT[I + LN] := LT[I + LN] + LCarry;
+
+    // Carry propagation through the upper half
+    for I := LN to 2 * LN - 1 do
+    begin
+      LT[I + 1] := LT[I + 1] + (LT[I] shr LIMB_BITS);
+      LT[I] := LT[I] and LIMB_MASK;
+    end;
+
+    for I := 0 to LN - 1 do
+      R[I] := UInt32(LT[I + LN] and LIMB_MASK);
+
+    // If LT[2*LN] is nonzero, result overflows LN limbs — must subtract N
+    // Otherwise, conditionally subtract if R >= N
+    CTNatAlloc(LTemp, LN);
+    CTNatCopy(R, LTemp, LN);
+    LBorrow := CTNatSub(LTemp, Ctx.N, LN);
+    // Subtract if: no borrow (R >= N) OR high limb was set
+    CTNatCondCopy(LTemp, R, LN, (1 - LBorrow) or UInt32(Ord(LT[2 * LN] <> 0)));
+  finally
+    if Length(LT) > 0 then
+      SecureZeroMemory(@LT[0], Length(LT) * SizeOf(UInt64));
+    SetLength(LT, 0);
+    CTNatSecureZero(LTemp);
   end;
-
-  // Carry propagation through the upper half
-  for I := LN to 2 * LN - 1 do
-  begin
-    LT[I + 1] := LT[I + 1] + (LT[I] shr LIMB_BITS);
-    LT[I] := LT[I] and LIMB_MASK;
-  end;
-
-  for I := 0 to LN - 1 do
-    R[I] := UInt32(LT[I + LN] and LIMB_MASK);
-
-  // If LT[2*LN] is nonzero, result overflows LN limbs — must subtract N
-  // Otherwise, conditionally subtract if R >= N
-  CTNatAlloc(LTemp, LN);
-  CTNatCopy(R, LTemp, LN);
-  LBorrow := CTNatSub(LTemp, Ctx.N, LN);
-  // Subtract if: no borrow (R >= N) OR high limb was set
-  CTNatCondCopy(LTemp, R, LN, (1 - LBorrow) or UInt32(Ord(LT[2 * LN] <> 0)));
 end;
 
 // --- CT fixed-window w=4 modexp ---
@@ -197,74 +222,84 @@ var
   LSelected, LTemp: TCTNat;
   LEqMask: UInt32;
 begin
-  LN := Ctx.Limbs;
-
   for I := 0 to 15 do
-    CTNatAlloc(LTable[I], LN);
-  CTNatAlloc(LSelected, LN);
-  CTNatAlloc(LTemp, LN);
+    LTable[I] := nil;
+  LSelected := nil;
+  LTemp := nil;
+  LN := Ctx.Limbs;
+  try
+    for I := 0 to 15 do
+      CTNatAlloc(LTable[I], LN);
+    CTNatAlloc(LSelected, LN);
+    CTNatAlloc(LTemp, LN);
 
-  // table[0] = Montgomery(1) = R mod N = MontMul(1, RR)
-  CTNatAlloc(LTable[0], LN);
-  LTable[0][0] := 1;
-  CTMontMul(LTable[0], Ctx.RR, LTemp, Ctx);
-  CTNatCopy(LTemp, LTable[0], LN);
+    // table[0] = Montgomery(1) = R mod N = MontMul(1, RR)
+    CTNatAlloc(LTable[0], LN);
+    LTable[0][0] := 1;
+    CTMontMul(LTable[0], Ctx.RR, LTemp, Ctx);
+    CTNatCopy(LTemp, LTable[0], LN);
 
-  // table[1] = base in Montgomery form = MontMul(base, RR)
-  CTMontMul(ABase, Ctx.RR, LTable[1], Ctx);
+    // table[1] = base in Montgomery form = MontMul(base, RR)
+    CTMontMul(ABase, Ctx.RR, LTable[1], Ctx);
 
-  // table[i] = table[i-1] * table[1] in Montgomery form
-  for I := 2 to 15 do
-  begin
-    CTMontMul(LTable[I-1], LTable[1], LTemp, Ctx);
-    CTNatCopy(LTemp, LTable[I], LN);
-  end;
-
-  // Start with accumulator = table[0] = Mont(1)
-  CTNatCopy(LTable[0], AResult, LN);
-
-  // Process exponent in 4-bit windows from MSB
-  LWindows := (AExpBitLen + 3) div 4;
-  for I := LWindows - 1 downto 0 do
-  begin
-    // Square 4 times
-    for K := 0 to 3 do
+    // table[i] = table[i-1] * table[1] in Montgomery form
+    for I := 2 to 15 do
     begin
-      CTMontMul(AResult, AResult, LTemp, Ctx);
+      CTMontMul(LTable[I-1], LTable[1], LTemp, Ctx);
+      CTNatCopy(LTemp, LTable[I], LN);
+    end;
+
+    // Start with accumulator = table[0] = Mont(1)
+    CTNatCopy(LTable[0], AResult, LN);
+
+    // Process exponent in 4-bit windows from MSB
+    LWindows := (AExpBitLen + 3) div 4;
+    for I := LWindows - 1 downto 0 do
+    begin
+      // Square 4 times
+      for K := 0 to 3 do
+      begin
+        CTMontMul(AResult, AResult, LTemp, Ctx);
+        CTNatCopy(LTemp, AResult, LN);
+      end;
+
+      // Extract 4-bit window from exponent (big-endian byte array)
+      // Window I contains bits [I*4 .. I*4+3], value = bit3*8 + bit2*4 + bit1*2 + bit0
+      LWinBits := 0;
+      for K := 0 to 3 do
+      begin
+        J := I * 4 + K;
+        if (J < AExpBitLen) and ((J div 8) < Length(AExp)) then
+          LWinBits := LWinBits or (Integer((AExp[Length(AExp) - 1 - (J div 8)] shr (J mod 8)) and 1) shl K);
+      end;
+
+      // CT table lookup
+      FillChar(LSelected[0], LN * SizeOf(UInt32), 0);
+      for J := 0 to 15 do
+      begin
+        // mask = all-ones if J == LWinBits, else 0
+        LEqMask := UInt32(0) - UInt32(Ord(J = LWinBits));
+        for K := 0 to LN - 1 do
+          LSelected[K] := LSelected[K] or (LTable[J][K] and LEqMask);
+      end;
+
+      // Multiply accumulator by selected
+      CTMontMul(AResult, LSelected, LTemp, Ctx);
       CTNatCopy(LTemp, AResult, LN);
     end;
 
-    // Extract 4-bit window from exponent (big-endian byte array)
-    // Window I contains bits [I*4 .. I*4+3], value = bit3*8 + bit2*4 + bit1*2 + bit0
-    LWinBits := 0;
-    for K := 0 to 3 do
-    begin
-      J := I * 4 + K;
-      if (J < AExpBitLen) and ((J div 8) < Length(AExp)) then
-        LWinBits := LWinBits or (Integer((AExp[Length(AExp) - 1 - (J div 8)] shr (J mod 8)) and 1) shl K);
-    end;
-
-    // CT table lookup
-    FillChar(LSelected[0], LN * 4, 0);
-    for J := 0 to 15 do
-    begin
-      // mask = all-ones if J == LWinBits, else 0
-      LEqMask := UInt32(0) - UInt32(Ord(J = LWinBits));
-      for K := 0 to LN - 1 do
-        LSelected[K] := LSelected[K] or (LTable[J][K] and LEqMask);
-    end;
-
-    // Multiply accumulator by selected
-    CTMontMul(AResult, LSelected, LTemp, Ctx);
-    CTNatCopy(LTemp, AResult, LN);
+    // Convert out of Montgomery form: MontMul(result, 1)
+    CTNatAlloc(LTemp, LN);
+    LTemp[0] := 1;
+    CTNatAlloc(LSelected, LN);
+    CTMontMul(AResult, LTemp, LSelected, Ctx);
+    CTNatCopy(LSelected, AResult, LN);
+  finally
+    for I := 0 to 15 do
+      CTNatSecureZero(LTable[I]);
+    CTNatSecureZero(LSelected);
+    CTNatSecureZero(LTemp);
   end;
-
-  // Convert out of Montgomery form: MontMul(result, 1)
-  CTNatAlloc(LTemp, LN);
-  LTemp[0] := 1;
-  CTNatAlloc(LSelected, LN);
-  CTMontMul(AResult, LTemp, LSelected, Ctx);
-  CTNatCopy(LSelected, AResult, LN);
 end;
 
 // --- Init Montgomery context ---
@@ -287,6 +322,12 @@ var
   LOne, LR: TCTNat;
   LBorrow: UInt32;
 begin
+  LOne := nil;
+  LR := nil;
+  Ctx.N := nil;
+  Ctx.RR := nil;
+  Ctx.NPrime := 0;
+  Ctx.Limbs := 0;
   AError := '';
   Result := False;
 
@@ -318,18 +359,23 @@ begin
   // Extend N to LLimbs+1 for subtraction
   CTNatCopy(Ctx.N, LR, LLimbs);
   LR[LLimbs] := 0;
-  Ctx.RR[0] := 1;
-  for I := 0 to LLimbs * LIMB_BITS * 2 - 1 do
-  begin
-    CTNatCopy(Ctx.RR, LOne, LLimbs + 1);
-    CTNatAdd(Ctx.RR, LOne, LLimbs + 1);
-    CTNatCopy(Ctx.RR, LOne, LLimbs + 1);
-    LBorrow := CTNatSub(LOne, LR, LLimbs + 1);
-    CTNatCondCopy(LOne, Ctx.RR, LLimbs + 1, 1 - LBorrow);
-  end;
-  SetLength(Ctx.RR, LLimbs);
+  try
+    Ctx.RR[0] := 1;
+    for I := 0 to LLimbs * LIMB_BITS * 2 - 1 do
+    begin
+      CTNatCopy(Ctx.RR, LOne, LLimbs + 1);
+      CTNatAdd(Ctx.RR, LOne, LLimbs + 1);
+      CTNatCopy(Ctx.RR, LOne, LLimbs + 1);
+      LBorrow := CTNatSub(LOne, LR, LLimbs + 1);
+      CTNatCondCopy(LOne, Ctx.RR, LLimbs + 1, 1 - LBorrow);
+    end;
+    SetLength(Ctx.RR, LLimbs);
 
-  Result := True;
+    Result := True;
+  finally
+    CTNatSecureZero(LOne);
+    CTNatSecureZero(LR);
+  end;
 end;
 
 // --- Public API ---
@@ -343,25 +389,37 @@ var
   LMsg, LResult: TCTNat;
   LExpBitLen: Integer;
 begin
+  LCtx.N := nil;
+  LCtx.RR := nil;
+  LCtx.NPrime := 0;
+  LCtx.Limbs := 0;
+  LMsg := nil;
+  LResult := nil;
   SetLength(ASignature, 0);
   AError := '';
   Result := False;
 
-  if Length(AModulus) = 0 then begin AError := 'RSA CT: empty modulus'; Exit; end;
-  if Length(APrivateExponent) = 0 then begin AError := 'RSA CT: empty exponent'; Exit; end;
+  try
+    if Length(AModulus) = 0 then begin AError := 'RSA CT: empty modulus'; Exit; end;
+    if Length(APrivateExponent) = 0 then begin AError := 'RSA CT: empty exponent'; Exit; end;
 
-  if not TryInitCTMontCtx(AModulus, LCtx, AError) then
-    Exit;
+    if not TryInitCTMontCtx(AModulus, LCtx, AError) then
+      Exit;
 
-  CTNatFromBytes(AEncodedMessage, LMsg, LCtx.Limbs);
-  CTNatAlloc(LResult, LCtx.Limbs);
+    CTNatFromBytes(AEncodedMessage, LMsg, LCtx.Limbs);
+    CTNatAlloc(LResult, LCtx.Limbs);
 
-  // Use modulus bit length as fixed iteration count (not actual exponent length)
-  LExpBitLen := Length(AModulus) * 8;
+    // Use modulus bit length as fixed iteration count (not actual exponent length)
+    LExpBitLen := Length(AModulus) * 8;
 
-  CTMontModExp(LMsg, APrivateExponent, LExpBitLen, LCtx, LResult);
-  CTNatToBytes(LResult, LCtx.Limbs, ASignature, Length(AModulus));
-  Result := True;
+    CTMontModExp(LMsg, APrivateExponent, LExpBitLen, LCtx, LResult);
+    CTNatToBytes(LResult, LCtx.Limbs, ASignature, Length(AModulus));
+    Result := True;
+  finally
+    CTNatSecureZero(LMsg);
+    CTNatSecureZero(LResult);
+    CTMontCtxSecureZero(LCtx);
+  end;
 end;
 
 function TryRSACTSignWithCRT(
@@ -380,146 +438,183 @@ var
   LExpBitLenP, LExpBitLenQ: Integer;
   LMsgNat, LExpNat, LResultNat: TCTNat;
 begin
+  LCtxP.N := nil;
+  LCtxP.RR := nil;
+  LCtxP.NPrime := 0;
+  LCtxP.Limbs := 0;
+  LCtxQ.N := nil;
+  LCtxQ.RR := nil;
+  LCtxQ.NPrime := 0;
+  LCtxQ.Limbs := 0;
+  LCtxN.N := nil;
+  LCtxN.RR := nil;
+  LCtxN.NPrime := 0;
+  LCtxN.Limbs := 0;
+  LMsgP := nil;
+  LMsgQ := nil;
+  LM1 := nil;
+  LM2 := nil;
+  LH := nil;
+  LTemp := nil;
+  LSig := nil;
+  LQNat := nil;
+  LVerify := nil;
+  LMsgNat := nil;
+  LExpNat := nil;
+  LResultNat := nil;
   SetLength(ASignature, 0);
   AError := '';
   Result := False;
 
-  if (Length(AP) = 0) or (Length(AQ) = 0) then
-  begin
-    AError := 'RSA CT CRT: empty p or q';
-    Exit;
-  end;
-
-  if not TryInitCTMontCtx(AP, LCtxP, AError) then Exit;
-  if not TryInitCTMontCtx(AQ, LCtxQ, AError) then Exit;
-  if not TryInitCTMontCtx(AModulus, LCtxN, AError) then Exit;
-
-  LPLimbs := LCtxP.Limbs;
-  LQLimbs := LCtxQ.Limbs;
-  LNLimbs := LCtxN.Limbs;
-
-  // msg mod p
-  CTNatFromBytes(AEncodedMessage, LMsgP, LPLimbs);
-  CTNatAlloc(LTemp, LPLimbs);
-  CTNatCopy(LMsgP, LTemp, LPLimbs);
-  LBorrow := CTNatSub(LTemp, LCtxP.N, LPLimbs);
-  CTNatCondCopy(LTemp, LMsgP, LPLimbs, 1 - LBorrow);
-
-  // msg mod q
-  CTNatFromBytes(AEncodedMessage, LMsgQ, LQLimbs);
-  CTNatAlloc(LTemp, LQLimbs);
-  CTNatCopy(LMsgQ, LTemp, LQLimbs);
-  LBorrow := CTNatSub(LTemp, LCtxQ.N, LQLimbs);
-  CTNatCondCopy(LTemp, LMsgQ, LQLimbs, 1 - LBorrow);
-
-  // m1 = msg^dP mod p
-  CTNatAlloc(LM1, LPLimbs);
-  LExpBitLenP := Length(AP) * 8;
-  CTMontModExp(LMsgP, ADP, LExpBitLenP, LCtxP, LM1);
-
-  // m2 = msg^dQ mod q
-  CTNatAlloc(LM2, LQLimbs);
-  LExpBitLenQ := Length(AQ) * 8;
-  CTMontModExp(LMsgQ, ADQ, LExpBitLenQ, LCtxQ, LM2);
-
-  // h = qInv * (m1 - m2) mod p
-  // First: compute (m1 - m2) mod p in p-sized limbs
-  CTNatAlloc(LH, LPLimbs);
-  CTNatCopy(LM1, LH, LPLimbs);
-  // Extend m2 to p-limbs for subtraction
-  CTNatAlloc(LTemp, LPLimbs);
-  for I := 0 to LQLimbs - 1 do
-    if I < LPLimbs then LTemp[I] := LM2[I];
-  LBorrow := CTNatSub(LH, LTemp, LPLimbs);
-  // If borrow, add p
-  CTNatAlloc(LTemp, LPLimbs);
-  CTNatCopy(LCtxP.N, LTemp, LPLimbs);
-  CTNatCondCopy(LTemp, LH, LPLimbs, 0);
-  // Actually need conditional add:
-  CTNatAlloc(LTemp, LPLimbs);
-  CTNatCopy(LH, LTemp, LPLimbs);
-  CTNatAdd(LTemp, LCtxP.N, LPLimbs);
-  CTNatCondCopy(LTemp, LH, LPLimbs, LBorrow);
-
-  // h = h * qInv mod p (using Montgomery)
-  CTNatAlloc(LTemp, LPLimbs);
-  CTNatFromBytes(AQInv, LTemp, LPLimbs);
-  // Reduce qInv mod p
-  CTNatAlloc(LMsgP, LPLimbs);
-  CTNatCopy(LTemp, LMsgP, LPLimbs);
-  // Mont multiply: need both in Mont form
-  // h_mont = MontMul(h, RR) then result = MontMul(h_mont, qInv_mont)
-  // Simpler: result = MontMul(MontMul(h, RR), MontMul(qInv, RR)) then MontMul(result, 1)
-  // Even simpler: MontMul(h, qInv) gives h*qInv*R^-1, then MontMul(that, RR) gives h*qInv*R
-  // No — just do: tmp = MontMul(h, RR) to get h in Mont form,
-  //               tmp2 = MontMul(qInv, RR) to get qInv in Mont form,
-  //               result = MontMul(tmp, tmp2) to get h*qInv in Mont form,
-  //               final = MontMul(result, 1) to get h*qInv mod p
-  // Actually the simplest correct approach:
-  // MontMul(a, b) = a*b*R^-1 mod N
-  // So MontMul(h, MontMul(qInv, RR)) = MontMul(h, qInv*R) = h*qInv*R*R^-1 = h*qInv mod p
-  CTNatAlloc(LMsgP, LPLimbs);
-  CTMontMul(LTemp, LCtxP.RR, LMsgP, LCtxP); // qInv in Mont form
-  CTMontMul(LH, LMsgP, LTemp, LCtxP); // h * qInv_mont * R^-1 = h * qInv mod p
-  CTNatCopy(LTemp, LH, LPLimbs);
-
-  // sig = m2 + h * q
-  // Work in N-sized limbs
-  CTNatAlloc(LSig, LNLimbs);
-  // Copy m2 into sig (zero-extended)
-  for I := 0 to LQLimbs - 1 do
-    if I < LNLimbs then LSig[I] := LM2[I];
-
-  // Compute h * q and add to sig
-  CTNatFromBytes(AQ, LQNat, LNLimbs);
-  // Schoolbook multiply h (pLimbs) * q (nLimbs) — we only need nLimbs of result
-  for I := 0 to LPLimbs - 1 do
-  begin
-    LCarry := 0;
-    for LBorrow := 0 to LNLimbs - 1 do
+  try
+    if (Length(AP) = 0) or (Length(AQ) = 0) then
     begin
-      if Integer(LBorrow) < LNLimbs then
+      AError := 'RSA CT CRT: empty p or q';
+      Exit;
+    end;
+
+    if not TryInitCTMontCtx(AP, LCtxP, AError) then Exit;
+    if not TryInitCTMontCtx(AQ, LCtxQ, AError) then Exit;
+    if not TryInitCTMontCtx(AModulus, LCtxN, AError) then Exit;
+
+    LPLimbs := LCtxP.Limbs;
+    LQLimbs := LCtxQ.Limbs;
+    LNLimbs := LCtxN.Limbs;
+
+    // msg mod p
+    CTNatFromBytes(AEncodedMessage, LMsgP, LPLimbs);
+    CTNatAlloc(LTemp, LPLimbs);
+    CTNatCopy(LMsgP, LTemp, LPLimbs);
+    LBorrow := CTNatSub(LTemp, LCtxP.N, LPLimbs);
+    CTNatCondCopy(LTemp, LMsgP, LPLimbs, 1 - LBorrow);
+
+    // msg mod q
+    CTNatFromBytes(AEncodedMessage, LMsgQ, LQLimbs);
+    CTNatAlloc(LTemp, LQLimbs);
+    CTNatCopy(LMsgQ, LTemp, LQLimbs);
+    LBorrow := CTNatSub(LTemp, LCtxQ.N, LQLimbs);
+    CTNatCondCopy(LTemp, LMsgQ, LQLimbs, 1 - LBorrow);
+
+    // m1 = msg^dP mod p
+    CTNatAlloc(LM1, LPLimbs);
+    LExpBitLenP := Length(AP) * 8;
+    CTMontModExp(LMsgP, ADP, LExpBitLenP, LCtxP, LM1);
+
+    // m2 = msg^dQ mod q
+    CTNatAlloc(LM2, LQLimbs);
+    LExpBitLenQ := Length(AQ) * 8;
+    CTMontModExp(LMsgQ, ADQ, LExpBitLenQ, LCtxQ, LM2);
+
+    // h = qInv * (m1 - m2) mod p
+    // First: compute (m1 - m2) mod p in p-sized limbs
+    CTNatAlloc(LH, LPLimbs);
+    CTNatCopy(LM1, LH, LPLimbs);
+    // Extend m2 to p-limbs for subtraction
+    CTNatAlloc(LTemp, LPLimbs);
+    for I := 0 to LQLimbs - 1 do
+      if I < LPLimbs then LTemp[I] := LM2[I];
+    LBorrow := CTNatSub(LH, LTemp, LPLimbs);
+    // If borrow, add p
+    CTNatAlloc(LTemp, LPLimbs);
+    CTNatCopy(LCtxP.N, LTemp, LPLimbs);
+    CTNatCondCopy(LTemp, LH, LPLimbs, 0);
+    // Actually need conditional add:
+    CTNatAlloc(LTemp, LPLimbs);
+    CTNatCopy(LH, LTemp, LPLimbs);
+    CTNatAdd(LTemp, LCtxP.N, LPLimbs);
+    CTNatCondCopy(LTemp, LH, LPLimbs, LBorrow);
+
+    // h = h * qInv mod p (using Montgomery)
+    CTNatAlloc(LTemp, LPLimbs);
+    CTNatFromBytes(AQInv, LTemp, LPLimbs);
+    // Reduce qInv mod p
+    CTNatAlloc(LMsgP, LPLimbs);
+    CTNatCopy(LTemp, LMsgP, LPLimbs);
+    // Mont multiply: need both in Mont form
+    // h_mont = MontMul(h, RR) then result = MontMul(h_mont, qInv_mont)
+    // Simpler: result = MontMul(MontMul(h, RR), MontMul(qInv, RR)) then MontMul(result, 1)
+    // Even simpler: MontMul(h, qInv) gives h*qInv*R^-1, then MontMul(that, RR) gives h*qInv*R
+    // No — just do: tmp = MontMul(h, RR) to get h in Mont form,
+    //               tmp2 = MontMul(qInv, RR) to get qInv in Mont form,
+    //               result = MontMul(tmp, tmp2) to get h*qInv in Mont form,
+    //               final = MontMul(result, 1) to get h*qInv mod p
+    // Actually the simplest correct approach:
+    // MontMul(a, b) = a*b*R^-1 mod N
+    // So MontMul(h, MontMul(qInv, RR)) = MontMul(h, qInv*R) = h*qInv*R*R^-1 = h*qInv mod p
+    CTNatAlloc(LMsgP, LPLimbs);
+    CTMontMul(LTemp, LCtxP.RR, LMsgP, LCtxP); // qInv in Mont form
+    CTMontMul(LH, LMsgP, LTemp, LCtxP); // h * qInv_mont * R^-1 = h * qInv mod p
+    CTNatCopy(LTemp, LH, LPLimbs);
+
+    // sig = m2 + h * q
+    // Work in N-sized limbs
+    CTNatAlloc(LSig, LNLimbs);
+    // Copy m2 into sig (zero-extended)
+    for I := 0 to LQLimbs - 1 do
+      if I < LNLimbs then LSig[I] := LM2[I];
+
+    // Compute h * q and add to sig
+    CTNatFromBytes(AQ, LQNat, LNLimbs);
+    // Schoolbook multiply h (pLimbs) * q (nLimbs) — we only need nLimbs of result
+    for I := 0 to LPLimbs - 1 do
+    begin
+      LCarry := 0;
+      for LBorrow := 0 to LNLimbs - 1 do
       begin
-        if (I + Integer(LBorrow)) < LNLimbs then
+        if Integer(LBorrow) < LNLimbs then
         begin
-          LCarry := LCarry + UInt64(LSig[I + Integer(LBorrow)]) + UInt64(LH[I]) * UInt64(LQNat[Integer(LBorrow)]);
-          LSig[I + Integer(LBorrow)] := UInt32(LCarry and LIMB_MASK);
-          LCarry := LCarry shr LIMB_BITS;
+          if (I + Integer(LBorrow)) < LNLimbs then
+          begin
+            LCarry := LCarry + UInt64(LSig[I + Integer(LBorrow)]) + UInt64(LH[I]) * UInt64(LQNat[Integer(LBorrow)]);
+            LSig[I + Integer(LBorrow)] := UInt32(LCarry and LIMB_MASK);
+            LCarry := LCarry shr LIMB_BITS;
+          end;
         end;
       end;
     end;
-  end;
 
-  // Reduce sig mod N (conditional subtract)
-  CTNatAlloc(LTemp, LNLimbs);
-  CTNatCopy(LSig, LTemp, LNLimbs);
-  LBorrow := CTNatSub(LTemp, LCtxN.N, LNLimbs);
-  CTNatCondCopy(LTemp, LSig, LNLimbs, 1 - LBorrow);
+    // Reduce sig mod N (conditional subtract)
+    CTNatAlloc(LTemp, LNLimbs);
+    CTNatCopy(LSig, LTemp, LNLimbs);
+    LBorrow := CTNatSub(LTemp, LCtxN.N, LNLimbs);
+    CTNatCondCopy(LTemp, LSig, LNLimbs, 1 - LBorrow);
 
-  // Verify: sig^e mod n == msg (fault protection)
-  if Length(APublicExponent) > 0 then
-  begin
-    CTNatAlloc(LVerify, LNLimbs);
-    CTMontModExp(LSig, APublicExponent, Length(APublicExponent) * 8, LCtxN, LVerify);
-    CTNatFromBytes(AEncodedMessage, LTemp, LNLimbs);
-    // Compare
-    LBorrow := 0;
-    for I := 0 to LNLimbs - 1 do
-      LBorrow := LBorrow or (LVerify[I] xor LTemp[I]);
-    if LBorrow <> 0 then
+    // Verify: sig^e mod n == msg (fault protection)
+    if Length(APublicExponent) > 0 then
     begin
-      AError := 'RSA CT CRT: verify-after-sign failed (possible fault)';
-      Exit;
+      CTNatAlloc(LVerify, LNLimbs);
+      CTMontModExp(LSig, APublicExponent, Length(APublicExponent) * 8, LCtxN, LVerify);
+      CTNatFromBytes(AEncodedMessage, LTemp, LNLimbs);
+      // Compare
+      LBorrow := 0;
+      for I := 0 to LNLimbs - 1 do
+        LBorrow := LBorrow or (LVerify[I] xor LTemp[I]);
+      if LBorrow <> 0 then
+      begin
+        AError := 'RSA CT CRT: verify-after-sign failed (possible fault)';
+        Exit;
+      end;
     end;
+
+    CTNatToBytes(LSig, LNLimbs, ASignature, Length(AModulus));
+    Result := True;
+  finally
+    CTNatSecureZero(LMsgP);
+    CTNatSecureZero(LMsgQ);
+    CTNatSecureZero(LM1);
+    CTNatSecureZero(LM2);
+    CTNatSecureZero(LH);
+    CTNatSecureZero(LTemp);
+    CTNatSecureZero(LSig);
+    CTNatSecureZero(LQNat);
+    CTNatSecureZero(LVerify);
+    CTNatSecureZero(LMsgNat);
+    CTNatSecureZero(LExpNat);
+    CTNatSecureZero(LResultNat);
+    CTMontCtxSecureZero(LCtxP);
+    CTMontCtxSecureZero(LCtxQ);
+    CTMontCtxSecureZero(LCtxN);
   end;
-
-  CTNatToBytes(LSig, LNLimbs, ASignature, Length(AModulus));
-  Result := True;
-
-  if Length(LM1) > 0 then SecureZeroMemory(@LM1[0], Length(LM1) * SizeOf(UInt32));
-  if Length(LM2) > 0 then SecureZeroMemory(@LM2[0], Length(LM2) * SizeOf(UInt32));
-  if Length(LH) > 0 then SecureZeroMemory(@LH[0], Length(LH) * SizeOf(UInt32));
-  if Length(LTemp) > 0 then SecureZeroMemory(@LTemp[0], Length(LTemp) * SizeOf(UInt32));
 end;
 
 end.

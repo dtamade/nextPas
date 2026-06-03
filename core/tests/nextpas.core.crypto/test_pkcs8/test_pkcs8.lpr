@@ -28,6 +28,7 @@ function HexToBytes(const AHex: string): TBytes;
 var
   I: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(AHex) div 2);
   for I := 0 to High(Result) do
     Result[I] := StrToInt('$' + Copy(AHex, I * 2 + 1, 2));
@@ -116,6 +117,25 @@ begin
   end;
 end;
 
+procedure TestDecryptPKCS8_UnsupportedAlgorithmNoDoubleFree;
+var
+  LBadDER, LDecrypted: TBytes;
+  LError: string;
+  LOk: Boolean;
+  I: Integer;
+begin
+  LBadDER := HexToBytes('300f300d06092a864886f70d01010105000400');
+
+  for I := 1 to 2 do
+  begin
+    SetLength(LDecrypted, 0);
+    LError := '';
+    LOk := TryDecryptPKCS8EncryptedPrivateKey(LBadDER, 'password', LDecrypted, LError);
+    Check('unsupported algorithm rejected run ' + IntToStr(I), not LOk);
+    Check('unsupported algorithm reports reason run ' + IntToStr(I), LError <> '');
+  end;
+end;
+
 procedure TestDecryptTraditional_InvalidAlgo;
 var
   LData, LDecrypted: TBytes;
@@ -143,6 +163,7 @@ begin
   TestPBKDF2_SHA256_MultiIter;
   TestPBKDF2_SHA256_LongOutput;
   TestDecryptPKCS8_InvalidDER;
+  TestDecryptPKCS8_UnsupportedAlgorithmNoDoubleFree;
   TestDecryptTraditional_InvalidAlgo;
 
   WriteLn;

@@ -23,3 +23,10 @@
 
 - 该轮是整仓审计，不是功能开发。
 - 当前共享工作树有无关脏改动，审计阶段只读，先不写业务代码。
+
+## Parallel Batch: crypto/rsa.ct scratch zeroization hardening
+
+- [x] 复核 `rsa.ct` 敏感 scratch 生命周期，确认 `CTNatAlloc(out ...)` 会在重用时先释放旧 buffer，导致 zeroization 丢失。
+- [x] 收紧 `TryRSACTModExpSign` / `TryRSACTSignWithCRT` / `CTMontModExp` / `CTMontMul` 的退出清理路径，保证成功与失败都做清理。
+- [x] 为 `TryRSACTSignWithCRT` 补 runtime focused test，并为非行为可见的 zeroization 收紧源码契约回归。
+- [x] 为 `pkcs8` 已有 malformed DER early-exit fix 补 focused regression，要求 heaptrc `0 unfreed memory blocks`。

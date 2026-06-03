@@ -4,6 +4,7 @@ program test_rsa_ct;
 
 uses
   SysUtils,
+  Classes,
   nextpas.core.crypto.rsa.ct,
   nextpas.core.crypto.bigint;
 
@@ -29,6 +30,7 @@ function HexToBytes(const AHex: string): TBytes;
 var
   I: Integer;
 begin
+  Result := nil;
   SetLength(Result, Length(AHex) div 2);
   for I := 0 to Length(Result) - 1 do
     Result[I] := StrToInt('$' + Copy(AHex, I * 2 + 1, 2));
@@ -41,6 +43,28 @@ begin
   Result := '';
   for I := 0 to Length(AData) - 1 do
     Result := Result + LowerCase(IntToHex(AData[I], 2));
+end;
+
+function LoadTextFile(const APath: string): string;
+var
+  LText: TStringList;
+begin
+  Result := '';
+  LText := TStringList.Create;
+  try
+    LText.LoadFromFile(APath);
+    Result := LText.Text;
+  finally
+    LText.Free;
+  end;
+end;
+
+function SourcePath(const AUnitFile: string): string;
+begin
+  Result := ExpandFileName(
+    ExtractFileDir(ParamStr(0)) + PathDelim +
+    '..' + PathDelim + '..' + PathDelim + '..' + PathDelim + '..' + PathDelim +
+    'src' + PathDelim + AUnitFile);
 end;
 
 procedure TestSmallModExp;
@@ -173,6 +197,68 @@ begin
   Check(BytesToHex(LSigCT) = BytesToHex(LSigOld), 'CT == old for 512-bit');
 end;
 
+procedure TestCRTMatchesModExp;
+var
+  LMsg, LN, LD, LE: TBytes;
+  LP, LQ, LDP, LDQ, LQInv: TBytes;
+  LCRT, LExpected: TBytes;
+  LCRTError, LExpectedError: string;
+begin
+  WriteLn('--- Small CRT cross-validate ---');
+
+  LMsg := TBytes.Create(42);
+  LN := TBytes.Create(0, 143); // 11 * 13
+  LD := TBytes.Create(103);
+  LE := TBytes.Create(7);
+  LP := TBytes.Create(11);
+  LQ := TBytes.Create(13);
+  LDP := TBytes.Create(3);  // 103 mod (11 - 1)
+  LDQ := TBytes.Create(7);  // 103 mod (13 - 1)
+  LQInv := TBytes.Create(6); // 13^-1 mod 11
+
+  Check(TryRSACTModExpSign(LMsg, LN, LD, LExpected, LExpectedError),
+    'modexp oracle for CRT ok');
+  Check(TryRSACTSignWithCRT(LMsg, LN, LE, LP, LQ, LDP, LDQ, LQInv, LCRT, LCRTError),
+    'CRT sign ok');
+  Check(BytesToHex(LCRT) = BytesToHex(LExpected), 'CRT == modexp oracle');
+end;
+
+procedure TestSensitiveScratchCleanupContract;
+var
+  LSource: string;
+begin
+  WriteLn('--- Sensitive scratch cleanup contract ---');
+
+  LSource := LowerCase(LoadTextFile(SourcePath('nextpas.core.crypto.rsa.ct.pas')));
+
+  Check(Pos('procedure ctnatsecurezero(var a: tctnat);', LSource) > 0,
+    'ctnatsecurezero helper exists');
+  Check(Pos('procedure ctmontctxsecurezero(var ctx: tctmontctx);', LSource) > 0,
+    'ctmontctxsecurezero helper exists');
+  Check(Pos('ctnatsecurezero(a);', LSource) > 0,
+    'ctnatalloc zeroizes reused scratch before realloc');
+  Check(Pos('ctnatsecurezero(lmsg);', LSource) > 0,
+    'modexp zeroizes message scratch');
+  Check(Pos('ctnatsecurezero(lresult);', LSource) > 0,
+    'modexp zeroizes result scratch');
+  Check(Pos('ctmontctxsecurezero(lctx);', LSource) > 0,
+    'modexp zeroizes montgomery context');
+  Check(Pos('ctnatsecurezero(lm1);', LSource) > 0,
+    'crt zeroizes m1 scratch');
+  Check(Pos('ctnatsecurezero(lm2);', LSource) > 0,
+    'crt zeroizes m2 scratch');
+  Check(Pos('ctnatsecurezero(lh);', LSource) > 0,
+    'crt zeroizes h scratch');
+  Check(Pos('ctnatsecurezero(lsig);', LSource) > 0,
+    'crt zeroizes signature scratch');
+  Check(Pos('ctmontctxsecurezero(lctxp);', LSource) > 0,
+    'crt zeroizes p montgomery context');
+  Check(Pos('ctmontctxsecurezero(lctxq);', LSource) > 0,
+    'crt zeroizes q montgomery context');
+  Check(Pos('ctmontctxsecurezero(lctxn);', LSource) > 0,
+    'crt zeroizes modulus montgomery context');
+end;
+
 begin
   WriteLn('=== RSA CT (Constant-Time) Tests ===');
   WriteLn;
@@ -183,6 +269,8 @@ begin
   TestCrossValidate128Byte;
   TestErrorCases;
   TestLargerExponent;
+  TestCRTMatchesModExp;
+  TestSensitiveScratchCleanupContract;
 
   WriteLn;
   WriteLn(Format('Results: %d passed, %d failed', [GPassCount, GFailCount]));
