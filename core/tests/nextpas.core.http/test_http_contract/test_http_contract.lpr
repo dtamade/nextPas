@@ -13,7 +13,6 @@ uses
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.intf,
-  nextpas.core.net.server,
   nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.middleware,

@@ -47,6 +47,19 @@ type
     function IsRunning: Boolean;
   end;
 
+function ExecuteConnHandler(const AHandler: ITcpServerHandler;
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  Result := tscoServer;
+  try
+    Result := AHandler.ServeConn(AConn);
+  except
+    { Keep the accept loop and detached workers alive if a single connection
+      handler raises. The runtime falls back to server-owned close semantics. }
+    Result := tscoServer;
+  end;
+end;
+
 function ConnThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
   LCtx: PConnContext;
@@ -56,7 +69,7 @@ begin
   LCtx := PConnContext(AArg);
   LOwnership := tscoServer;
   try
-    LOwnership := LCtx^.Handler.ServeConn(LCtx^.Conn);
+    LOwnership := ExecuteConnHandler(LCtx^.Handler, LCtx^.Conn);
   finally
     if (LCtx^.Conn <> nil) and (LOwnership = tscoServer) then
     begin
@@ -123,7 +136,7 @@ begin
       begin
         LOwnership := tscoServer;
         try
-          LOwnership := AHandler.ServeConn(LConn);
+          LOwnership := ExecuteConnHandler(AHandler, LConn);
         finally
           if LOwnership = tscoServer then
           begin

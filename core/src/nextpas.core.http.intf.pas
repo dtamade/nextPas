@@ -13,6 +13,7 @@ uses
 
 type
   TStringArray = array of string;
+  TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
 
   { Header callback for iteration }
   THeaderIterator = reference to procedure(const AName, AValue: string);
@@ -137,6 +138,10 @@ type
     function ServeConn(const AConn: ITcpStream;
       const AHandler: IHttpHandler): TTcpServerConnOwnership;
   end;
+
+const
+  TCP_SERVER_CONN_OWNERSHIP_SERVER = nextpas.core.net.server.base.tscoServer;
+  TCP_SERVER_CONN_OWNERSHIP_HANDLER = nextpas.core.net.server.base.tscoHandler;
 
 implementation
 

@@ -41,6 +41,7 @@ type
   IHttpTransport = nextpas.core.http.intf.IHttpTransport;
   IHttpServerTransport = nextpas.core.http.intf.IHttpServerTransport;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
+  TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 
   { Re-export callback types }
   THttpHandlerFunc = nextpas.core.http.intf.THttpHandlerFunc;
@@ -74,6 +75,8 @@ const
   HTTP_STATUS_INTERNAL_SERVER_ERROR = nextpas.core.http.base.HTTP_STATUS_INTERNAL_SERVER_ERROR;
   HTTP_STATUS_BAD_GATEWAY = nextpas.core.http.base.HTTP_STATUS_BAD_GATEWAY;
   HTTP_STATUS_SERVICE_UNAVAILABLE = nextpas.core.http.base.HTTP_STATUS_SERVICE_UNAVAILABLE;
+  TCP_SERVER_CONN_OWNERSHIP_SERVER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  TCP_SERVER_CONN_OWNERSHIP_HANDLER = nextpas.core.http.intf.TCP_SERVER_CONN_OWNERSHIP_HANDLER;
 
 { Forwarding functions }
 function HttpMethodToStr(const AMethod: THttpMethod): string; inline;

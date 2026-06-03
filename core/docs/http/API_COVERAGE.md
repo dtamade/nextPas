@@ -14,7 +14,7 @@
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
 - `THttpClientOptions.Default` / `THttpServerOptions.Default` 现在由 `test_http_base` 直接锁定。
 - `IHttpClient.Get/Post/Do_` 原本已覆盖；本轮补齐 `Put/Delete/Patch/Head` focused 覆盖。
-- `IHttpTransport`、`IHttpServerTransport` 现在既有 focused shape 覆盖，也有 facade runtime 注入覆盖；`IHttpServerTransport.ServeConn` 的 post-handler ownership 返回语义也已锁定，internal registry 同样已有 focused proof。
+- `IHttpTransport`、`IHttpServerTransport` 现在既有 focused shape 覆盖，也有 facade runtime 注入覆盖；`IHttpServerTransport.ServeConn` 的 post-handler ownership 返回语义也已锁定，并且 ownership 类型/常量可经由 `nextpas.core.http` facade 直接消费，internal registry 同样已有 focused proof。
 - `IHttpHijacker` 已有 facade alias、writer 行为和 server ownership 覆盖。
 - facade callback aliases 与 server/client overload 现在有直接 focused smoke。
 - `TH1ResponseWriter` 边界覆盖现在包括预设 `Transfer-Encoding`、显式 `Content-Length` flush 路径、以及 chunked finalization 后拒绝继续写入。

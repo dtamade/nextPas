@@ -9,7 +9,6 @@ uses
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
-  nextpas.core.net.server,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,

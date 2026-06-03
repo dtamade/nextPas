@@ -4,6 +4,7 @@ program test_net_server;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.net,
@@ -38,6 +39,14 @@ type
   public
     function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
     property Conn: ITcpStream read FConn;
+  end;
+
+  TFailOnceHandler = class(TInterfacedObject, ITcpServerHandler)
+  private
+    FCalls: Int32;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    property Calls: Int32 read FCalls;
   end;
 
 var
@@ -75,6 +84,20 @@ function TDetachHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwners
 begin
   FConn := AConn;
   Result := TCP_SERVER_CONN_OWNERSHIP_HANDLER;
+end;
+
+function TFailOnceHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+var
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  Inc(FCalls);
+  if FCalls = 1 then
+    raise Exception.Create('fail once');
+  LN := AConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+  if LN > 0 then
+    AConn.Write(LBuf[0], LN);
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
 end;
 
 procedure TestDefaultOptions;
@@ -224,11 +247,73 @@ begin
   platform_thread_join(LHandle, LRet);
 end;
 
+procedure TestThreadedServerHandlerExceptionDoesNotStopAcceptLoop;
+var
+  LHandler: TFailOnceHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+begin
+  LHandler := TFailOnceHandler.Create;
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('boom')^, 4);
+    LClient.Shutdown;
+  finally
+    LClient.Close;
+  end;
+
+  platform_thread_sleep_ns(100000000);
+  Check(LServer.IsRunning, 'server keeps running after handler exception');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('pong')^, 4);
+    LClient.Shutdown;
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(4), LN, 'second connection still echoes');
+    CheckEqual(Byte(Ord('p')), LBuf[0], 'second connection first byte');
+  finally
+    LClient.Close;
+  end;
+
+  CheckEqual(Int64(2), Int64(LHandler.Calls), 'handler saw both connections');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net.server');
   T.Run('Default options', @TestDefaultOptions);
   T.Run('Threaded server echo', @TestThreadedServerEcho);
   T.Run('Threaded server shutdown without clients', @TestThreadedServerShutdownWithoutClients);
   T.Run('Threaded server detach keeps connection open', @TestThreadedServerDetachKeepsConnectionOpen);
+  T.Run('Threaded server handler exception does not stop accept loop',
+    @TestThreadedServerHandlerExceptionDoesNotStopAcceptLoop);
   T.Summary;
 end.

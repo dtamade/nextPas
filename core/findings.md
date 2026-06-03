@@ -1,28 +1,29 @@
-# Findings: HTTP server runtime foundation implementation batch 1
+# Findings: HTTP server runtime foundation implementation batch 2
 
 ## Root cause
 
-- `nextpas.core.http.impl.h1` 原本已经区分“server 继续拥有连接”和“handler
-  已 hijack 接管连接”。
-- 但 `nextpas.core.net.server.threaded` 新落地后，在 handler 返回时仍无条件
-  `Shutdown + Close`，把 hijack 语义踩坏了。
-- 这直接表现为 `test_http_server` 的
-  `Hijack keeps connection open for handler owner` 回归失败。
+- `TTcpThreadedServer` 之前虽然已经支持 handler 接管连接，但仍把
+  `AHandler.ServeConn` 直接跑在 detached worker / inline fallback 路径里。
+- 一旦 generic `ITcpServerHandler` 抛异常，detached worker 会把异常抛到线程外，
+  inline fallback 还会直接逃出 `ListenAndServe`，从而打穿 accept loop。
+- 这在 HTTP H1 默认路径里不明显，因为 H1 transport 自己会兜 handler 异常；但
+  foundation 本身不能把这种稳定性建立在某个具体 protocol transport 的内部防护上。
 
 ## Fixed design truth
 
-- 连接收尾策略必须通过 foundation seam 显式表达，不能再由 threaded runtime
-  和具体 protocol transport 各自隐式决定。
-- `ITcpServerHandler.ServeConn` 现在返回
-  `TTcpServerConnOwnership = (server, handler)`。
-- `IHttpServerTransport.ServeConn` 同样返回 post-handler ownership，`THttpServer`
-  只负责把这个 ownership 透传给 `ITcpServer` runtime。
-- threaded backend 默认仍由 server 收尾；只有 handler 明确接管时才跳过自动关闭。
+- `threaded` runtime 现在通过共享的连接执行路径统一调用 handler。
+- 单连接 handler 异常会被 runtime 吞掉，并回落到 `tscoServer` 语义，由 server
+  负责关闭该连接。
+- 单个连接失败不再影响后续 accept / dispatch；foundation 自身对 generic
+  `ITcpServerHandler` 已具备最小稳定性。
+- `IHttpServerTransport.ServeConn` 的 ownership 返回类型与常量现在也经由
+  `nextpas.core.http.intf` / `nextpas.core.http` 直接 re-export，transport
+  implementer 不必额外依赖 `nextpas.core.net.server`。
 
 ## Why this is the right fix
 
-- 这把 ownership 语义提升到了可复用的 `net.server` 层，而不是把 hijack 继续做成
-  HTTP 私有特例。
-- WebSocket / raw socket hijack / 后续其他 TCP 协议 server 都能复用同一条规则。
-- 这和已冻结的架构方向一致：runtime 拥有 listener/accept/shutdown/close policy，
-  protocol 只返回“当前连接是否已移交”这一事实。
+- 这是 runtime 层应承担的容错边界，不应依赖上层协议 transport 恰好自己兜底。
+- 这样 future `net.server.epoll/kqueue/iocp` 也有明确语义参考：连接级失败只终止
+  当前连接，不终止整个 listener runtime。
+- facade 自包含后，`IHttpServerTransport` 作为 HTTP public contract 更完整，
+  实现者只看 HTTP 模块就能拿到所需类型事实。
