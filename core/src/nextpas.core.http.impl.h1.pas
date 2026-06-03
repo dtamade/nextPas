@@ -452,7 +452,7 @@ begin
       begin
         if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
           Result := tscoHandler
-        else
+        else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
           WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
         FKeepAlive := False;
       end;

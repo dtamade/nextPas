@@ -1,79 +1,78 @@
-# Findings: nextpas.core.http h1 response short-write hardening
+# Findings: nextpas.core.http committed-response exception boundary
 
 ## Scope
 
-- 当前目标是继续收紧 `nextpas.core.http` 的 response write correctness，
-  重点验证 `TH1ResponseWriter` / `TChunkedWriter` 在底层 short-write / zero-progress 时
-  不会静默截断 status/header/chunk/body framing。
-- 本轮主要看 `tests/nextpas.core.http/test_http_h1writer`、
-  `tests/nextpas.core.http/test_http_h1chunked`、`src/nextpas.core.http.impl.h1.*`
-  与最小控制面文件。
+- 当前目标是继续收紧 `nextpas.core.http` 的 response-side correctness，
+  从 writer short-write seam 上移到 server session 异常路径。
+- 本轮主要看 `tests/nextpas.core.http/test_http_server`、
+  `src/nextpas.core.http.impl.h1.pas`、
+  `src/nextpas.core.http.impl.h1.writer.pas`，以及最小控制面文件。
 
 ## Baseline truths
 
-- 当前共享工作树是脏的，存在大量与本轮无关的 modified / untracked 文件；只能做
+- 当前共享工作树仍然是脏的，存在大量与本轮无关的 modified / untracked 文件；只能做
   path-limited 变更与提交。
-- `epoll` phase-1 backend 当前真实语义仍然是：
-  - listener readiness + `TryAccept` 走 `epoll`
-  - accepted connection 仍交给 foundation worker 执行同步 HTTP session / handler
+- HTTP backend truth 已固定：
+  - `threaded` 仍是默认 backend
+  - Linux `epoll` 仍是 phase-1 accept-evented runtime
+  - 本轮不重开 server/IO 模型方案讨论
 
 ## Confirmed decisions
 
-### 1. 这轮不是纯 coverage-expansion，而是用 TDD 拉出了一条真实生产 bug
+### 1. 旧实现确实会在 committed response 后继续补写 `500`
 
-- 旧实现对 short-write 没有防护：
-  - `TH1ResponseWriter` 的 status/header/CRLF framing 直接裸 `Write`
-  - `TChunkedWriter` 的 chunk-size / CRLF / body / terminal chunk 直接裸 `Write`
-  - `TH1ResponseWriter` 的非 chunked body path 直接把 partial count 返给调用方
-- 新增 RED tests 直接证明现状会静默截断响应，而不是完整写出或显式失败。
+- 新增 RED tests 直接证明：
+  - handler 先写 `200` + body 并 `Flush`
+  - 随后抛异常
+  - server 当前会继续在同一连接上追加 synthetic `500`
+- 这个问题同时存在于 threaded / epoll 两条路径，因为两者共享
+  `TH1ServerConnectionState.Run` 的异常处理逻辑。
 
-### 2. 生产修复的最小正确解是 write-all-or-raise，而不是继续容忍 partial count
+### 2. 最小正确解是按 response commit 状态分流异常路径
 
-- 现在 `TChunkedWriter` 与 `TH1ResponseWriter` 都统一成：
-  - 对 framing/body 内部写入循环直到全部写完
-  - 如果底层 writer `0` 进度，则抛 `EIOError`
-  - 因此 public-facing `IHttpResponseWriter.Write` 现在对常见 handler 语义更直线：
-    写完全部字节返回完整 count，否则异常传播
+- hijack 已经有一条 ownership-specific 特例：
+  - hijack 后异常不补写 `500`
+- committed response 本质上也是类似约束：
+  - 响应一旦已经 committed，server 不应再尝试改写成新的错误响应
+- 因此本轮最小修复是：
+  - `TH1ResponseWriter` 暴露内部 committed truth
+  - `TH1ServerConnectionState.Run` 在异常时：
+    - hijacked -> 返回 handler ownership
+    - not committed -> 仍可补写 `500`
+    - already committed -> 只安全关闭连接，不再追加 `500`
 
-### 3. 这轮修复没有破坏现有 server contract
+### 3. 这轮修复把 server contract 收紧了，但没有扩大 public API
 
-- `test_http_server` 全套回归仍然全绿，说明 write-all 修复没有破坏现有
-  keep-alive / chunked request / hijack / epoll differential contract。
+- 没有改 `nextpas.core.http` facade / public interface。
+- 新增的 commit-state 查询只存在于 H1 implementation class 内部协作面。
+- `test_http_h1writer` 回归保持全绿，说明 writer 的现有 framing / short-write
+  contract 没被破坏。
 
 ## Verification evidence
 
 - RED:
-  - `make -C tests/nextpas.core.http/test_http_h1chunked clean test`
-    - 失败点直接命中：
-      - short writer chunk framing 被截断
-      - short writer terminal chunk 被截断
-      - zero-progress writer 没有抛 `EIOError`
-  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
-    - 失败点直接命中：
-      - short writer status/header framing 被截断
-      - `Content-Length` body path 只返回 partial count
-      - chunked body path 通过 writer 集成后同样被截断
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `Committed response exception does not append 500`
+    - `Committed response exception does not append 500 with epoll backend`
+    - 两条新增测试都按预期失败
 - GREEN:
-  - `make -C tests/nextpas.core.http/test_http_h1chunked clean test`
-    - `9 total, 9 passed, 0 failed`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `106 total, 106 passed, 0 failed`
     - heaptrc `0 unfreed memory blocks`
   - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
     - `24 total, 24 passed, 0 failed`
     - heaptrc `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-    - `104 total, 104 passed, 0 failed`
-    - heaptrc `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 现在 unit-level short-write seam 已经封住，但 transport/session 层仍缺少更高层契约证据：
-  - response-side write timeout
-  - server/raw-wire backpressure 行为
-  - 未来 evented write path 下的 pending/drain 语义
+- 当前更上层的 committed-response seam 已封住，但 transport/session 仍有一条更细的 residual：
+  - `TBufferedWriter.FlushBuffer` 在底层 zero-progress 时只标记 `FError`
+  - 这条 silent flush-error 没有被 `TH1ServerConnectionState.Run` 直接感知
+  - 因此 response-side write-timeout / zero-progress flush / backpressure 仍缺 focused proof
 - `kqueue` / `IOCP` 仍未实现；Windows 长期目标仍是 `IOCP`，不是 `WSAPoll` 终态。
-- 当前还没有 benchmark 结论，性能判断必须后置到 correctness 和 backend contract 进一步稳定之后。
+- benchmark 仍后置，先保持 correctness / contract 收口。
 
 ## Commit intent
 
-- 这批改动应该以 HTTP response short-write hardening 提交。
+- 这批改动应该以 committed-response exception hardening 提交。
 - 必须坚持 path-limited staging，不能把共享 worktree 中的其他改动带入本 commit。

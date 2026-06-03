@@ -346,6 +346,65 @@ begin
   end;
 end;
 
+procedure RunCommittedResponseExceptionDoesNotAppend500(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/flush-crash', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'partial';
+    AW.GetHeaders.Set_('content-length', '7');
+    AW.GetHeaders.Set_('connection', 'close');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 7);
+    AW.Flush;
+    raise Exception.Create('crash after committed response');
+  end);
+  {$IFDEF NEXTPAS_LINUX}
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+  {$ENDIF}
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /flush-crash HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) = 1,
+      ALabel + ': committed response keeps original 200');
+    Check(Pos('partial', LResp) > 0,
+      ALabel + ': committed response body stays visible');
+    Check(Pos('HTTP/1.1 500', LResp) = 0,
+      ALabel + ': server does not append 500 after committed response');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestCommittedResponseExceptionDoesNotAppend500;
+begin
+  RunCommittedResponseExceptionDoesNotAppend500(False,
+    'threaded committed response exception');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestCommittedResponseExceptionDoesNotAppend500EpollBackend;
+begin
+  RunCommittedResponseExceptionDoesNotAppend500(True,
+    'epoll committed response exception');
+end;
+{$ENDIF}
+
 { Test 5: Shutdown stops accepting }
 procedure TestShutdownStopsAccepting;
 var
@@ -5137,10 +5196,14 @@ begin
     @TestHijackLeavesConnectionOpenForHandlerOwnerEpollBackend);
   T.Run('Hijack exception does not write 500 or close handler connection with epoll backend',
     @TestHijackExceptionDoesNotWrite500OrCloseHandlerConnectionEpollBackend);
+  T.Run('Committed response exception does not append 500 with epoll backend',
+    @TestCommittedResponseExceptionDoesNotAppend500EpollBackend);
   {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
   T.Run('Handler exception -> 500', @TestHandlerException500);
+  T.Run('Committed response exception does not append 500',
+    @TestCommittedResponseExceptionDoesNotAppend500);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);

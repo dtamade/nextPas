@@ -39,6 +39,7 @@ type
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     procedure Flush;
     function Hijack: ITcpStream;
+    function HasCommitted: Boolean;
     function IsHijacked: Boolean;
     property Headers: IHttpHeaders read GetHeaders;
   end;
@@ -206,6 +207,11 @@ begin
     raise EHttpError.Create('Connection not available for hijack');
   FHijacked := True;
   Result := FConn;
+end;
+
+function TH1ResponseWriter.HasCommitted: Boolean;
+begin
+  Result := FHeadersSent;
 end;
 
 function TH1ResponseWriter.IsHijacked: Boolean;
