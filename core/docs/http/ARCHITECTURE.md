@@ -7,7 +7,7 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 
 消费方只需 `uses nextpas.core.http` 即可获得完整能力；当前默认版本解析对应用层透明，但 H2/H3 仍处于规划阶段。
 
-## 当前落地状态（2026-06-03）
+## 当前落地状态（2026-06-04）
 
 - `nextpas.core.http.impl.h1.pas` 已落地，作为默认 H1 transport owner。
 - `nextpas.core.http.impl.registry.pas` 已落地，统一负责默认版本到 transport factory 的解析。
@@ -22,6 +22,30 @@ HTTP server runtime 的权威方向已经固定在
 [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
 HTTP 保持同步 public surface，listener/runtime/backend ownership 由
 `nextpas.core.net.server` 统一负责。
+
+## 当前 runtime 真相
+
+HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 HTTP server”：
+
+- public layer：
+  `IHttpServer` / `IHttpHandler` 继续保持同步、直线型 contract。
+- foundation runtime layer：
+  backend 选择、listen / accept / shutdown、worker handoff 已经下沉到
+  `nextpas.core.net.server`。
+- protocol layer：
+  `TH1ServerConnectionState` 已经是独立的 per-connection H1 state object。
+
+当前 backend 状态也要说清楚：
+
+- 默认 backend 仍是 `threaded`，它是 correctness baseline。
+- Linux `epoll` 已经落到 phase 1：evented accept + worker-driven connection execution。
+- 还没落地的是 phase 2：runtime 直接驱动 connection state 的 read/write 调度。
+
+因此 HTTP 这层的固定方向不是“自己长出一个更复杂的 `TBaseServer`”，而是：
+
+- 保持 HTTP facade 简单
+- 把 runtime 演进集中在 `nextpas.core.net.server`
+- 让 H1/H2/H3 都接到同一种 session-driven foundation 上
 
 ---
 
@@ -198,6 +222,8 @@ type
 - 真实 listener / accept / shutdown / backend 选择由 `nextpas.core.net.server` 提供。
 - `IHttpServerTransport` 是 per-connection protocol seam，不是整机 runtime seam。
 - hijack / detach 这类 ownership 语义通过 `TTcpServerConnOwnership` 与 TCP foundation 对齐。
+- `IHttpServerTransport.ServeConn` 为兼容仍保留，但 future backend 不应再只依赖这个整连接阻塞入口。
+- `IHttpServerSessionFactory` / `ITcpServerSession` 才是 HTTP 接入 future evented runtime 的主 seam。
 
 ### 版本特有接口（不进 http.intf，留在各自 impl 内部）
 

@@ -1,69 +1,60 @@
-# Progress Log: nextpas.core.http response-side write-timeout safety proof
+# Progress Log: nextpas.core.net/http server runtime design freeze
 
 ## Session
 
-- **Scope:** 在不重开 server/runtime 架构的前提下，补齐 `WriteTimeout` /
-  partial-write timeout / backpressure 风险点的 focused server proof，并把 proof
-  从 fake-stream 推进到 initial real-socket stalled-peer 场景，再补一条 Linux `epoll`
-  backend parity proof。
-- **Status:** completed
+- **Scope:** 把 `nextpas.core.net.server` 到 `nextpas.core.http` 的 server runtime
+  设计固定到正式文档，明确当前执行模型、主流范式选型、以及下一阶段演进路线。
+- **Status:** in_progress
 
 ## Current state
 
-- server/runtime 设计文件已经固定，当前权威链路是：
-  - `docs/net/ARCHITECTURE.md`
-  - `docs/http/ARCHITECTURE.md`
-  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
-- 共享 worktree 仍是脏的；本轮继续只碰 `nextpas.core.http` 相关测试与控制面文件。
-- 本轮没有改生产代码，因为 timeout/backpressure 语义在现有实现中已被证明成立。
-- 额外的 `src/nextpas.core.net.tcp.pas` patch 已通过隔离 worktree 对比判定为“不必要生产改动”，最终未保留。
+- shared checkout 仍有大量无关 modified / untracked 文件；本轮只做 path-limited 文档与控制文件变更。
+- `docs/net/ARCHITECTURE.md` 仍是权威源。
+- 当前 runtime 真相已经重新核对：
+  - `threaded` 是默认 correctness baseline
+  - Linux `epoll` 已经是 phase-1 accept-evented backend
+  - `TH1ServerConnectionState` 已经是 protocol-owned session object
+- 当前没有生产代码改动。
 
 ## Completed work
 
-- `test_http_server` 新增 timeout/backpressure focused proof：
-  - `Write timeout before any wire bytes does not append 500`
-  - `Write timeout after partial wire bytes stops pipeline without 500`
-- `test_http_server` 新增 real-socket stalled-peer proof：
-  - `Real socket write timeout backpressure stops pipeline`
-- `test_http_server` 新增 Linux `epoll` backend real-socket parity proof：
-  - `Real socket write timeout backpressure stops pipeline with epoll backend`
-- strengthened real-socket proof 进一步锁定：
-  - 当前 stalled-peer 异常是在 handler 的 streaming body write 过程中出现
-  - 不是 handler 返回后的 post-handler flush 才首次暴露
-- strengthened fake-stream proof 进一步锁定：
-  - small/fully-buffered response 的 timeout 发生在 handler 返回后的 buffered flush
-- `test_net_deep` 新增 simplified stalled-peer deadline proof：
-  - `Write deadline during stalled peer backpressure`
-- 新增 `TTimeoutWriteTcpStream` fake transport，用来脚本化模拟：
-  - pre-wire timeout
-  - partial-write timeout
-- 新增 real-socket helper：
-  - `TSocketTuningServerTransport`
-  - `StartServerWithTransportAndOptions(...)`
-  - recv/send buffer tuning + `ReadUntilClosedOrDeadline(...)`
-- 顺手提取了 `DefaultH1ServerTransportOptions(...)`，避免 test 内重复映射 HTTP -> H1 transport options。
-- 更新 `docs/http/API_COVERAGE.md`，把 write-timeout safety proof 纳入 `IHttpServer` 覆盖结论。
-- 更新 `task_plan.md`、`findings.md`、`progress.md`，同步这轮真相与下一步方向。
-- 用 detached worktree 做了“带/不带 `net.tcp` patch”对比，证明这批不需要生产修复。
-- 下钻 `test_net_deep` 后确认：lower-level `TTcpStream.Write` simplified stalled-peer proof 已通过，当前还拿不到 net 层 RED。
+- 复读并核对：
+  - `docs/design-conventions.md`
+  - `docs/nextpas.core.http.inbox.md`
+  - `docs/http/API_COVERAGE.md`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+- 检查 `git status`，确认 shared checkout 有大量无关脏文件，继续只做 path-limited 变更。
+- 审阅：
+  - `docs/net/ARCHITECTURE.md`
+  - `docs/http/ARCHITECTURE.md`
+  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
+  - `src/nextpas.core.net.server.*`
+  - `src/nextpas.core.http.server.pas`
+  - `src/nextpas.core.http.impl.h1.pas`
+- 用子代理补做只读核对，确认当前并不存在 `BaseServer` 抽象；抽象已经落在
+  `nextpas.core.net.server` 的 interface / runtime seam。
+- 更新架构文档：
+  - `docs/net/ARCHITECTURE.md`
+  - `docs/http/ARCHITECTURE.md`
+  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
+- 更新控制文件：
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `111/111 passed`
-  - heaptrc：`0 unfreed memory blocks`
-- `make -C tests/nextpas.core.net/test_net_deep clean test`
-  - `16/16 passed`
-  - heaptrc：`0 unfreed memory blocks`
-- `make -C core/tests/nextpas.core.http/test_http_server clean test`
-  - detached worktree / 无 `net.tcp` patch：`110/110 passed`
-  - heaptrc：`0 unfreed memory blocks`
+- `git diff --check -- docs/net/ARCHITECTURE.md docs/http/ARCHITECTURE.md docs/plans/2026-06-03-http-server-runtime-foundation.md task_plan.md findings.md progress.md`
+  - clean
+- `/home/dtamade/node_modules/.bin/prettier --write /home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md /home/dtamade/projects/nextPas/core/docs/http/ARCHITECTURE.md /home/dtamade/projects/nextPas/core/docs/plans/2026-06-03-http-server-runtime-foundation.md`
+  - unchanged
+- `/home/dtamade/node_modules/.bin/prettier --write /home/dtamade/projects/nextPas/core/task_plan.md /home/dtamade/projects/nextPas/core/findings.md /home/dtamade/projects/nextPas/core/progress.md`
+  - `task_plan.md` formatted, other files unchanged
 
 ## Next step
 
-- 若继续沿 response-side correctness 推进，下一步应从“已有 threaded / epoll parity + simplified net proof”进入更细的 characterization：
-  - HTTP response loop / buffered writer 对 stalled-peer close-observation 的差异
-  - large streaming response direct-write path 与 fully-buffered flush path 的差异
-  - threaded / epoll 在该场景下是否仍完全等价
-  - backpressure timing 是否需要更底层 transport/runtime seam 才能稳定分类
-- 在没有新的 RED 之前，不建议为了“看起来更完整”去改生产代码。
+- 做 path-limited commit。
+- 下一批若恢复实现，应直接进入 shared phase-2 per-connection evented driver 设计/落地，
+  而不是重新讨论要不要大一统 `BaseServer`。

@@ -59,26 +59,28 @@ the backend policy should.
 
 ## Current repo truth
 
-The current runtime problem is real and already visible in the code:
+This is no longer just a proposal. The foundation split has already landed:
 
-- [src/nextpas.core.http.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.server.pas:111)
-  owns `Accept -> platform_thread_create -> FTransport.ServeConn`.
-- [src/nextpas.core.http.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.intf.pas:134)
-  still defines `IHttpServerTransport` as a synchronous per-connection transport seam.
-- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:104)
-  now has an internal `TH1ServerConnectionState`, which is the correct direction:
-  protocol state is starting to separate from the thread entrypoint.
-- [src/nextpas.core.platform.io.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.platform.io.pas:10)
-  provides readiness-poller primitives, but Windows is still a stub.
-- [src/nextpas.core.io.reactor.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.io.reactor.epoll.pas:98)
-  has a real Linux evented backend, while
-  [src/nextpas.core.io.reactor.kqueue.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.io.reactor.kqueue.pas:61)
-  and
-  [src/nextpas.core.io.reactor.iocp.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.io.reactor.iocp.pas:58)
-  are still placeholders.
+- [src/nextpas.core.net.server.base.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.base.pas:1)
+  exposes `threaded` / `epoll` / `kqueue` / `iocp` as backend intent.
+- [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
+  exposes the real server seams: `ITcpServer`, `ITcpServerSession`,
+  `ITcpServerSessionFactoryWithContext`, `ITcpServerWorkerHandoff`.
+- [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:38)
+  is the correctness baseline backend.
+- [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:40)
+  is already phase-1 evented: listener readiness and `TryAccept` are event-driven,
+  while connection execution is still worker-driven.
+- [src/nextpas.core.http.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.server.pas:127)
+  no longer owns the runtime loop; it wires HTTP onto `NewTcpServer(...)`.
+- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:113)
+  already has `TH1ServerConnectionState` as a protocol-owned session object.
 
-This means the architecture can evolve, but the current ownership boundaries are still
-wrong for a durable server design.
+What is still missing is narrower and clearer:
+
+- no backend provider/registry yet; backend selection is still hardcoded in `NewTcpServer(...)`
+- no shared phase-2 per-connection evented driver yet
+- no `kqueue` / `IOCP` concrete backend yet
 
 ## Architecture to freeze
 
@@ -144,6 +146,9 @@ HTTP then depends on the server foundation instead of owning its own runtime loo
 
 We should avoid a large inheritance-based `BaseServer` class. A reusable runtime module
 and narrow interfaces are a better fit for `nextPas` than a deep class hierarchy.
+
+If a convenience wrapper is ever added later, it must stay thin and must not become the
+true runtime owner again.
 
 ## Why not start from a `BaseServer`
 
@@ -234,10 +239,14 @@ through a second-rate compatibility path.
 
 ### Phase 0: Freeze the architecture
 
+- Status: done
+
 - Write this document
 - Use it as the source of truth for the runtime direction
 
 ### Phase 1: Create `nextpas.core.net.server` skeleton
+
+- Status: done
 
 - Add foundation base and interface units
 - Add the first ownership seams for listener, connection runtime, shutdown, and
@@ -246,16 +255,22 @@ through a second-rate compatibility path.
 
 ### Phase 2: Implement the threaded backend first
 
+- Status: done
+
 - Recreate today's semantics through the new foundation
 - Migrate HTTP to consume the foundation
 - Keep behavior stable while ownership moves out of HTTP
 
 ### Phase 3: Finish the HTTP protocol split
 
+- Status: mostly done for H1
+
 - Continue reducing `http.server` into facade / composition code
 - Keep moving protocol state into reusable connection-state objects
 
 ### Phase 4: Add Linux `epoll` backend
+
+- Status: phase 1 done, phase 2 pending
 
 - Drive the same HTTP connection-state objects through the new foundation
 - Use worker handoff for handler execution
@@ -263,9 +278,13 @@ through a second-rate compatibility path.
 
 ### Phase 5: Add `kqueue` backend
 
+- Status: pending
+
 - Match the contract already proven by the threaded and epoll backends
 
 ### Phase 6: Add Windows IOCP backend
+
+- Status: pending
 
 - Make Windows a first-class backend
 - Do not route the long-term design through `WSAPoll`
@@ -320,10 +339,10 @@ So the architecture is no longer tentative. Future work should treat this docume
 
 The next implementation batch should do only this:
 
-1. Create the `nextpas.core.net.server` skeleton
-2. Move the threaded server runtime into that foundation
-3. Keep HTTP behavior unchanged
-4. Prove it with focused HTTP server tests and leak checks
+1. keep threaded and `epoll` phase-1 contract parity stable
+2. design and land the shared phase-2 per-connection evented driver seam
+3. make that driver reusable for future `kqueue` / `IOCP`
+4. keep public HTTP behavior unchanged and prove every changed seam with focused tests
 
 That is the smallest move that advances the final architecture without reopening
 unrelated protocol design questions.

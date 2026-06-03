@@ -1,6 +1,6 @@
 # nextpas.core.net server runtime 架构
 
-最近更新：2026-06-03
+最近更新：2026-06-04
 
 这份文档固定 `nextpas.core.net.server` 的长期职责与演进方向。
 如果 `docs/plans/2026-06-03-http-server-runtime-foundation.md` 与这里冲突，以本文为准。
@@ -41,6 +41,30 @@
 `threaded` 是当前已落地的基线后端，不是最终唯一形态。
 Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 
+## 主流范式对照与结论
+
+这轮把“参考谁”也固定下来，避免后续再把不同层的问题混在一起：
+
+- Go `net/http` 值得学的是 public model：
+  handler 简单、同步、直线型；消费方不需要理解 event loop。
+- Tokio / Hyper 值得学的是 internal ownership split：
+  runtime 驱动 connection state object，协议层不拥有线程模型。
+- libuv 值得学的是 backend discipline：
+  Linux 走 `epoll`，BSD/macOS 走 `kqueue`，Windows 走 `IOCP`。
+
+nextPas 不复制其中任何一个的整套实现，而是固定成混合选型：
+
+- public surface：Go-like
+- protocol/runtime split：Tokio / Hyper-like
+- backend policy：libuv-like
+
+这也是对“线程驱动是不是过时”的正式回答：
+
+- 仅有 thread-per-connection，当然不够现代。
+- 但只追求 event loop 外观，同样会把 public API 和协议层一起拖复杂。
+- 正确做法是把“同步 public contract”和“可替换 runtime backend”分层固定，
+  让线程模型、reactor 模型、未来 `IOCP` 模型都能挂到同一 foundation 上。
+
 ## 当前源码真相
 
 截至 2026-06-03，相关源码边界已经收口到下面这个形态：
@@ -71,6 +95,23 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
   现在只是 HTTP facade，真实 runtime ownership 已下沉到 `ITcpServer`。
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:104)
   已有 `TH1ServerConnectionState`，说明 HTTP 单连接协议状态与 runtime entrypoint 已开始分离。
+
+## 当前真实执行模型
+
+当前 repo 不是“纯线程驱动”，但也还不是“完整 event-driven connection runtime”：
+
+- `threaded` backend：
+  `accept` 后由连接 worker 同步执行协议 session；这是 correctness baseline。
+- `epoll` phase 1 backend：
+  只有 listener / accept 是 evented 的；accepted connection 仍交给 worker 执行同步 session。
+- HTTP H1：
+  `TH1ServerConnectionState` 已经是独立的 per-connection protocol state object，
+  只是当前仍由 threaded worker 或 `epoll` handoff worker 去跑它的 `Run`。
+
+所以今天的真实结论必须分两句说：
+
+- 并发模型已经不是“HTTP 自己起线程”，而是 `net.server` foundation 统一拥有 runtime。
+- 但高连接数场景下最关键的“per-connection read/write 调度”还没进入 phase-2 evented driver。
 
 ## 当前阶段门
 
@@ -127,6 +168,26 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
 4. 把 `TryRead/TryWrite` 接进真正的 per-connection runtime driver
 5. 然后再扩 `net.server.kqueue` / `iocp`
+
+## 性能与并发 posture
+
+这部分也需要固定，不然后续容易把“现在可用”和“最终目标”说混：
+
+- 当前 `threaded` 默认后端：
+  适合先把 correctness、ownership、shutdown、hijack、backpressure 契约做实；
+  对中低到中等并发是可用的，但不是最终高连接密度路线。
+- 当前 `epoll` phase 1：
+  已经降低了 listener / accept 侧的阻塞与 wakeup 粗糙度，也证明了 foundation seam
+  可以承载 evented backend；但它还没有解决“每个连接都靠同步 worker 驱动”的最终扩展性问题。
+- 目标 evented phase 2：
+  真正提升大规模 keep-alive、慢连接、backpressure、空闲连接密度的上限，
+  依赖的是 runtime 直接驱动 protocol state object，而不是只把 accept 做成 evented。
+
+因此这里不把“性能好吗”写成空泛口号，而是固定成工程判断：
+
+- 现在：correctness-first，可用，但不是终局性能形态。
+- 目标：foundation 不变，backend 从 threaded / accept-evented 演进到 per-connection evented。
+- 原则：任何性能演进都不能倒逼 public HTTP contract 改成 callback-first。
 
 ## 分层边界
 
@@ -224,6 +285,12 @@ nextpas.core.net.server.iocp
 - 协议差异走组合：protocol handler + per-connection state object。
 - “基类”概念只保留在模块层和 contract 层，不引入一个主导一切的大继承树。
 
+如果以后为了复用配置或默认装配想引入某种“server convenience class”，也只能是薄 facade：
+
+- 可以包装 `ITcpServer` / options / default wiring
+- 不能重新拥有 accept loop / backend policy / reactor policy
+- 不能把协议特有语义重新吸回一个共享父类
+
 这同样适用于未来别的 TCP server，不只是 HTTP。
 后续 `redis`、`smtp`、自定义 RPC 等 server 都应该复用同一 foundation，而不是各自再造
 一棵 `BaseServer` 派生树。
@@ -252,11 +319,15 @@ nextpas.core.net.server.iocp
 - runtime 直接驱动协议 state object。
 - 不能在 reactor 线程直接执行无界 handler 逻辑。
 - 必须有明确 worker handoff 或 bounded execution 策略。
+- `TryRead/TryWrite` 会成为真正的调度 seam，而不再只是 lower-level 预留接口。
+- 这一步完成后，`threaded` / `epoll` / `kqueue` / `IOCP` 才能算真正共享同一条 session driver 设计。
 
 ### Windows
 
 - 长期目标是 `IOCP`。
 - 不能把 `WSAPoll` 作为最终设计终点。
+- Windows backend 的语义目标是与其他 backend 保持同一 public contract，
+  不是强行伪装成 readiness-only 模型。
 
 ## 非目标
 
