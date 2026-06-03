@@ -10,6 +10,16 @@ uses
   nextpas.core.net.server.base;
 
 type
+  ITcpServerSession = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000003}']
+    function Run: TTcpServerConnOwnership;
+  end;
+
+  ITcpServerSessionFactory = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000004}']
+    function NewSession(const AConn: ITcpStream): ITcpServerSession;
+  end;
+
   ITcpServerHandler = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000001}']
     function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;

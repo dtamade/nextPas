@@ -21,6 +21,7 @@ function NewTcpThreadedServer(
 implementation
 
 uses
+  SysUtils,
   nextpas.core.errors,
   nextpas.core.net.tcp,
   nextpas.core.platform.thread;
@@ -49,10 +50,21 @@ type
 
 function ExecuteConnHandler(const AHandler: ITcpServerHandler;
   const AConn: ITcpStream): TTcpServerConnOwnership;
+var
+  LSessionFactory: ITcpServerSessionFactory;
+  LSession: ITcpServerSession;
 begin
   Result := tscoServer;
   try
-    Result := AHandler.ServeConn(AConn);
+    if Supports(AHandler, ITcpServerSessionFactory, LSessionFactory) then
+    begin
+      LSession := LSessionFactory.NewSession(AConn);
+      if LSession = nil then
+        raise EArgumentError.Create('tcp server session factory returned nil');
+      Result := LSession.Run;
+    end
+    else
+      Result := AHandler.ServeConn(AConn);
   except
     { Keep the accept loop and detached workers alive if a single connection
       handler raises. The runtime falls back to server-owned close semantics. }

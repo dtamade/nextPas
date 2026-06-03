@@ -49,6 +49,27 @@ type
     property Calls: Int32 read FCalls;
   end;
 
+  TCountingSession = class(TInterfacedObject, ITcpServerSession)
+  private
+    FConn: ITcpStream;
+    FRunCount: PInt32;
+  public
+    constructor Create(const AConn: ITcpStream; const ARunCount: PInt32);
+    function Run: TTcpServerConnOwnership;
+  end;
+
+  TSessionFactoryHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactory)
+  private
+    FCreateCount: Int32;
+    FRunCount: Int32;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream): ITcpServerSession;
+    property CreateCount: Int32 read FCreateCount;
+    property RunCount: Int32 read FRunCount;
+  end;
+
 var
   T: TTestRunner;
 
@@ -98,6 +119,39 @@ begin
   if LN > 0 then
     AConn.Write(LBuf[0], LN);
   Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+constructor TCountingSession.Create(const AConn: ITcpStream; const ARunCount: PInt32);
+begin
+  inherited Create;
+  FConn := AConn;
+  FRunCount := ARunCount;
+end;
+
+function TCountingSession.Run: TTcpServerConnOwnership;
+var
+  LBuf: array[0..255] of Byte;
+  LN: SizeUInt;
+begin
+  Inc(FRunCount^);
+  LN := FConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+  if LN > 0 then
+    FConn.Write(LBuf[0], LN);
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TSessionFactoryHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  Fail('session factory path should bypass legacy ServeConn');
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TSessionFactoryHandler.NewSession(
+  const AConn: ITcpStream): ITcpServerSession;
+begin
+  Inc(FCreateCount);
+  Result := TCountingSession.Create(AConn, @FRunCount);
 end;
 
 procedure TestDefaultOptions;
@@ -367,6 +421,58 @@ begin
   Check(not LServer.IsRunning, 'empty-addr listener stopped after shutdown');
 end;
 
+procedure TestThreadedServerPrefersSessionFactoryWhenAvailable;
+var
+  LHandler: TSessionFactoryHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+begin
+  LHandler := TSessionFactoryHandler.Create;
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'session-factory server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('ping')^, 4);
+    LClient.Shutdown;
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(4), LN, 'session path echo size');
+    CheckEqual(Byte(Ord('p')), LBuf[0], 'session path first byte');
+  finally
+    LClient.Close;
+  end;
+
+  CheckEqual(Int64(1), Int64(LHandler.CreateCount),
+    'threaded runtime created one session');
+  CheckEqual(Int64(1), Int64(LHandler.RunCount),
+    'threaded runtime ran session once');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.net.server');
   T.Run('Default options', @TestDefaultOptions);
@@ -379,5 +485,7 @@ begin
     @TestThreadedServerShutdownWithWildcardListen);
   T.Run('Threaded server shutdown with empty listen addr',
     @TestThreadedServerShutdownWithEmptyListenAddr);
+  T.Run('Threaded server prefers session factory when available',
+    @TestThreadedServerPrefersSessionFactoryWhenAvailable);
   T.Summary;
 end.

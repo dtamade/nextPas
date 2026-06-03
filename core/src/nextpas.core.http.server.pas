@@ -50,11 +50,13 @@ function NewHttpServer(const AHandler: IHttpHandler;
 implementation
 
 uses
+  SysUtils,
   nextpas.core.errors,
   nextpas.core.http.impl.registry;
 
 type
-  THttpConnHandler = class(TInterfacedObject, ITcpServerHandler)
+  THttpConnHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactory)
   private
     Transport: IHttpServerTransport;
     Handler: IHttpHandler;
@@ -62,6 +64,18 @@ type
     constructor Create(const ATransport: IHttpServerTransport;
       const AHandler: IHttpHandler);
     function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream): ITcpServerSession;
+  end;
+
+  THttpConnSession = class(TInterfacedObject, ITcpServerSession)
+  private
+    Transport: IHttpServerTransport;
+    Handler: IHttpHandler;
+    Conn: ITcpStream;
+  public
+    constructor Create(const ATransport: IHttpServerTransport;
+      const AHandler: IHttpHandler; const AConn: ITcpStream);
+    function Run: TTcpServerConnOwnership;
   end;
 
 constructor THttpConnHandler.Create(const ATransport: IHttpServerTransport;
@@ -75,6 +89,31 @@ end;
 function THttpConnHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
 begin
   Result := Transport.ServeConn(AConn, Handler);
+end;
+
+function THttpConnHandler.NewSession(
+  const AConn: ITcpStream): ITcpServerSession;
+var
+  LFactory: IHttpServerSessionFactory;
+begin
+  if Supports(Transport, IHttpServerSessionFactory, LFactory) then
+    Result := LFactory.NewSession(AConn, Handler)
+  else
+    Result := THttpConnSession.Create(Transport, Handler, AConn);
+end;
+
+constructor THttpConnSession.Create(const ATransport: IHttpServerTransport;
+  const AHandler: IHttpHandler; const AConn: ITcpStream);
+begin
+  inherited Create;
+  Transport := ATransport;
+  Handler := AHandler;
+  Conn := AConn;
+end;
+
+function THttpConnSession.Run: TTcpServerConnOwnership;
+begin
+  Result := Transport.ServeConn(Conn, Handler);
 end;
 
 { THttpServer }

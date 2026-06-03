@@ -18,6 +18,8 @@ type
   TTcpServerBackend = nextpas.core.net.server.base.TTcpServerBackend;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   TTcpServerOptions = nextpas.core.net.server.base.TTcpServerOptions;
+  ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
+  ITcpServerSessionFactory = nextpas.core.net.server.intf.ITcpServerSessionFactory;
   ITcpServerHandler = nextpas.core.net.server.intf.ITcpServerHandler;
   ITcpServer = nextpas.core.net.server.intf.ITcpServer;
 

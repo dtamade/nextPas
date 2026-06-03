@@ -55,6 +55,33 @@ type
     property ServeConnCalled: Boolean read FServeConnCalled;
   end;
 
+  TMockServerSession = class(TInterfacedObject, ITcpServerSession)
+  private
+    FRunCalled: PBoolean;
+    FHandlerCalled: PBoolean;
+  public
+    constructor Create(const ARunCalled, AHandlerCalled: PBoolean);
+    function Run: TTcpServerConnOwnership;
+  end;
+
+  TMockSessionServerTransport = class(TInterfacedObject, IHttpServerTransport,
+    IHttpServerSessionFactory)
+  private
+    FServeConnCalled: Boolean;
+    FSessionFactoryCalled: Boolean;
+    FSessionRunCalled: Boolean;
+    FHandlerCalled: Boolean;
+  public
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property SessionFactoryCalled: Boolean read FSessionFactoryCalled;
+    property SessionRunCalled: Boolean read FSessionRunCalled;
+    property HandlerCalled: Boolean read FHandlerCalled;
+  end;
+
   TMethodHandlerTarget = class
   private
     FCalled: Boolean;
@@ -142,6 +169,34 @@ begin
   if AHandler <> nil then
     AHandler.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/transport')), nil);
   Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+constructor TMockServerSession.Create(const ARunCalled, AHandlerCalled: PBoolean);
+begin
+  inherited Create;
+  FRunCalled := ARunCalled;
+  FHandlerCalled := AHandlerCalled;
+end;
+
+function TMockServerSession.Run: TTcpServerConnOwnership;
+begin
+  FRunCalled^ := True;
+  FHandlerCalled^ := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TMockSessionServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TMockSessionServerTransport.NewSession(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): ITcpServerSession;
+begin
+  FSessionFactoryCalled := True;
+  Result := TMockServerSession.Create(@FSessionRunCalled, @FHandlerCalled);
 end;
 
 { TMethodHandlerTarget }
@@ -479,6 +534,46 @@ begin
   end;
 end;
 
+procedure TestHttpServerTransportInjectionPrefersSessionFactory;
+var
+  LObj: TMockSessionServerTransport;
+  LTransport: IHttpServerTransport;
+  LHandler: IHttpHandler;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LWait: Int32;
+begin
+  LObj := TMockSessionServerTransport.Create;
+  LTransport := LObj;
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+  end);
+
+  LHandle := StartServerWithTransport(LHandler, LTransport, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.Close;
+
+    LWait := 0;
+    while (not LObj.SessionRunCalled) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    Check(LObj.SessionFactoryCalled,
+      'Injected server transport session factory was called');
+    Check(LObj.SessionRunCalled,
+      'Injected server transport session was run');
+    Check(not LObj.ServeConnCalled,
+      'legacy ServeConn is bypassed when session factory is available');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: UrlEncode/UrlDecode round-trip }
 procedure TestUrlEncodeDecodeRoundTrip;
 var
@@ -730,6 +825,8 @@ begin
   T.Run('NewHttpClient overloads are available through facade', @TestHttpClientFacadeOverloads);
   T.Run('Injected client transport is used through facade client', @TestHttpClientTransportInjection);
   T.Run('Injected server transport is used through facade server', @TestHttpServerTransportInjection);
+  T.Run('Injected server transport session factory is preferred',
+    @TestHttpServerTransportInjectionPrefersSessionFactory);
   T.Run('UrlEncode/UrlDecode round-trip', @TestUrlEncodeDecodeRoundTrip);
   T.Run('ParseQueryString basic', @TestParseQueryString);
   T.Run('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);

@@ -41,6 +41,8 @@ type
   IHttpClient = nextpas.core.http.intf.IHttpClient;
   IHttpTransport = nextpas.core.http.intf.IHttpTransport;
   IHttpServerTransport = nextpas.core.http.intf.IHttpServerTransport;
+  ITcpServerSession = nextpas.core.http.intf.ITcpServerSession;
+  IHttpServerSessionFactory = nextpas.core.http.intf.IHttpServerSessionFactory;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 

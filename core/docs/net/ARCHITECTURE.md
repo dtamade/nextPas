@@ -94,6 +94,24 @@ nonblocking runtime I/O seam。
 2. 再让 future evented backend 只依赖这些 contract 驱动连接状态
 3. 最后才实现 `net.server.epoll` / `kqueue` / `iocp`
 
+在 nonblocking socket seam 之后，下一层必须补的不是 backend 文件，而是
+connection session seam。
+
+当前 repo 真相是：
+
+- `ITcpServerHandler.ServeConn(const AConn: ITcpStream)` 仍是“拿到连接后整段跑到底”的阻塞式 seam
+- `IHttpServerTransport.ServeConn(const AConn: ITcpStream; ...)` 也还是同一个模型
+- `TH1ServerConnectionState` 虽然已经存在，但还只是 H1 实现内部对象，没有进入 foundation contract
+
+这意味着 future evented backend 仍然没有一个可以稳定驱动的协议 state object seam。
+
+所以当前固定的后续顺序是：
+
+1. 先补 nonblocking `TryAccept/TryRead/TryWrite`
+2. 再补 connection session seam，让 runtime 可以拿到“单连接状态对象”
+3. threaded backend 先消费这条新 seam，证明 contract 成立
+4. 然后 evented backend 再复用同一条 seam
+
 ## 分层边界
 
 ### `nextpas.core.net.server` 负责什么
@@ -134,6 +152,9 @@ nonblocking runtime I/O seam。
   `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
 - `ITcpListenerRuntime` / `ITcpStreamRuntime` 是更窄的 runtime-only I/O seam：
   would-block 必须作为正常结果返回，不能重新编码成异常。
+- “一个连接 = 一个协议 state object” 必须进入 foundation seam，而不是长期停留在
+  `http.impl.h1` 这种实现细节里。
+- 旧的 `ServeConn` 可以为了兼容继续保留，但新 backend 不应再只依赖整连接阻塞 entrypoint。
 - `nextpas.core.http.server` 这类上层 facade 只能做编排，不再重复实现 accept loop。
 - 上层模块可以保留同步 handler surface；evented backend 必须在内部做 worker handoff，不能把任意 handler 直接跑在 reactor 线程。
 
@@ -228,7 +249,8 @@ nextpas.core.net.server.iocp
 ### Phase 3
 
 - 先完成 nonblocking runtime I/O seam proof
-- 再增加 `net.server.epoll`
+- 再完成 connection session seam proof
+- 然后增加 `net.server.epoll`
 - 证明同一 HTTP contract 可由 evented backend 驱动
 
 ### Phase 4

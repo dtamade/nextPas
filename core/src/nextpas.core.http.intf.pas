@@ -9,11 +9,13 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.server.base,
+  nextpas.core.net.server.intf,
   nextpas.core.http.base;
 
 type
   TStringArray = array of string;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
+  ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
 
   { Header callback for iteration }
   THeaderIterator = reference to procedure(const AName, AValue: string);
@@ -138,6 +140,12 @@ type
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000B}']
     function ServeConn(const AConn: ITcpStream;
       const AHandler: IHttpHandler): TTcpServerConnOwnership;
+  end;
+
+  IHttpServerSessionFactory = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000000D}']
+    function NewSession(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): ITcpServerSession;
   end;
 
 const

@@ -12,6 +12,7 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
+  nextpas.core.net.server.intf,
   nextpas.core.net.server.base,
   nextpas.core.http.base,
   nextpas.core.http.intf;
@@ -94,7 +95,8 @@ type
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
   end;
 
-  TH1ServerTransport = class(TInterfacedObject, IHttpServerTransport)
+  TH1ServerTransport = class(TInterfacedObject, IHttpServerTransport,
+    IHttpServerSessionFactory)
   private
     FOptions: TH1ServerTransportOptions;
     function HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler): Boolean;
@@ -102,11 +104,13 @@ type
     constructor Create(const AOptions: TH1ServerTransportOptions);
     function ServeConn(const AConn: ITcpStream;
       const AHandler: IHttpHandler): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): ITcpServerSession;
   end;
 
   // Connection state stays protocol-owned so future runtimes can drive
   // the same H1 logic without keeping it welded to a thread entrypoint.
-  TH1ServerConnectionState = class
+  TH1ServerConnectionState = class(TInterfacedObject, ITcpServerSession)
   private
     FOptions: TH1ServerTransportOptions;
     FConn: ITcpStream;
@@ -120,7 +124,7 @@ type
   public
     constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
       const AOptions: TH1ServerTransportOptions);
-    function Run: Boolean;
+    function Run: TTcpServerConnOwnership;
   end;
 
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
@@ -283,7 +287,7 @@ begin
     FIdleMs := 30000;
 end;
 
-function TH1ServerConnectionState.Run: Boolean;
+function TH1ServerConnectionState.Run: TTcpServerConnOwnership;
 var
   LN: SizeUInt;
   LConsumed: SizeUInt;
@@ -297,7 +301,7 @@ var
   LRejected: Boolean;
   LHijackConn: ITcpStream;
 begin
-  Result := True;
+  Result := tscoServer;
   while FKeepAlive do
   begin
     try
@@ -433,7 +437,7 @@ begin
 
       if (LW as TH1ResponseWriter).IsHijacked then
       begin
-        Result := False;
+        Result := tscoHandler;
         FKeepAlive := False;
         Continue;
       end;
@@ -447,7 +451,7 @@ begin
       on E: Exception do
       begin
         if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
-          Result := False
+          Result := tscoHandler
         else
           WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
         FKeepAlive := False;
@@ -665,7 +669,7 @@ var
 begin
   LState := TH1ServerConnectionState.Create(AConn, AHandler, FOptions);
   try
-    Result := LState.Run;
+    Result := LState.Run = tscoServer;
   finally
     LState.Free;
   end;
@@ -678,6 +682,12 @@ begin
     Result := tscoServer
   else
     Result := tscoHandler;
+end;
+
+function TH1ServerTransport.NewSession(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): ITcpServerSession;
+begin
+  Result := TH1ServerConnectionState.Create(AConn, AHandler, FOptions);
 end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;
