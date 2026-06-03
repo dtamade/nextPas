@@ -520,6 +520,53 @@ begin
   LRW.Free;
 end;
 
+procedure TestSwitchingProtocolsResponseDoesNotInjectChunkedEncoding;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.WriteHeader(HTTP_STATUS_SWITCHING_PROTOCOLS);
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('HTTP/1.1 101 Switching Protocols'#13#10, LOut) = 1,
+    'status 101 written');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0,
+    '101 does not inject chunked header');
+  Check(Pos('content-length:', LOut) = 0,
+    '101 does not force content-length');
+  Check(Pos('0'#13#10#13#10, LOut) = 0,
+    '101 does not write final chunk');
+  LRW.Free;
+end;
+
+procedure TestSwitchingProtocolsResponseRejectsBodyWrite;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LBefore: string;
+  LRaised: Boolean;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.WriteHeader(HTTP_STATUS_SWITCHING_PROTOCOLS);
+  LBefore := LW.GetOutput;
+  LBody := 'hello';
+  LRaised := False;
+  try
+    LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, '101 response rejects body write');
+  CheckEqual(LBefore, LW.GetOutput, '101 body write does not append bytes');
+  LRW.Free;
+end;
+
 procedure TestNoContentResponseRejectsBodyWrite;
 var
   LW: TBytesWriter;
@@ -843,6 +890,10 @@ begin
     @TestNotModifiedResponseDoesNotInjectChunkedEncoding);
   T.Run('100 response does not inject chunked encoding',
     @TestInformationalResponseDoesNotInjectChunkedEncoding);
+  T.Run('101 response does not inject chunked encoding',
+    @TestSwitchingProtocolsResponseDoesNotInjectChunkedEncoding);
+  T.Run('101 response rejects body write',
+    @TestSwitchingProtocolsResponseRejectsBodyWrite);
   T.Run('204 response rejects body write',
     @TestNoContentResponseRejectsBodyWrite);
   T.Run('Suppressed-body write does not emit body or chunked encoding',
