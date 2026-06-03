@@ -349,3 +349,20 @@
   全绿 + 完整重编译（44591 lines compiled）+ 137/137 LLVM smoke 全绿。C5 下一步建议
   进入 `shekVirtualCall` / `shekInterfaceCall`，再回头清理 constructor-like /
   raw object-dot / pointer-return helper 的散落 special-case。
+- 2026-06-03 C5-P：structured dispatched call + call-shape guard：`shekVirtualCall`
+  / `shekInterfaceCall` 现在也能 end-to-end lower，builder 直接走结构化 receiver
+  address + slot dispatch，不再只靠 `vcall` / `ivcall` blob 文本回放。随后暴露出一条
+  producer 回归：method body 中 implicit-self bare-call 判定过宽，连普通
+  `gnkBinaryExpression` 也会被当成 bare method call 吞掉，典型症状是
+  `Result := Sum div Count;` 被结构化成只剩 `shekVirtualCall(Sum)`。修复后新增
+  `IsImplicitSelfCallNode`，把 implicit-self call 识别收紧到真实 call shape
+  （identifier / functioncall / procedurecallstatement），并同时用于
+  dispatched/ordinary member-call contract。诊断 RED：隔离后的
+  `test_semantic_hir_expr_producer` case 显示 `ExprId=9`、root kind=`shekVirtualCall`、
+  children=1；GREEN 后 focused tests
+  `test_semantic_hir_expr_producer`、`test_hir_builder_expr_fallback`、
+  `test_hir_builder_structured_address`、`test_hir_builder_structured_expr` 全绿 +
+  完整重编译（45139 lines compiled）+ `llvm_full_oop` exit=42 +
+  137/137 LLVM smoke 全绿。C5 下一步建议优先收口 `WalkHaltCalls` 剩余
+  constructor-like / raw object-dot / pointer-return helper call special-case，
+  再设计更显式的 receiver/address call contract。

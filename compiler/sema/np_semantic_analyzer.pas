@@ -72,6 +72,7 @@ type
     FPtrReturnFuncs: array of string;
     FPtrReturnTypes: array of string;
     FImportedUnitTrees: array of TGreenTree;
+    FImportedUnitOwners: array of string;
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
@@ -80,7 +81,8 @@ type
     procedure RegisterPointerVar(const AName, APointeeTypeName: string);
     procedure RegisterVarParam(const AName: string);
     procedure RegisterPtrReturnFunc(const AName, AClassName: string);
-    procedure RegisterImportedUnitTree(const ATree: TGreenTree);
+    procedure RegisterImportedUnitTree(const ATree: TGreenTree;
+      const AOwnerUnitId: string);
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
@@ -142,6 +144,7 @@ type
       const AParent: TGreenNode;
       const AChild: TGreenNode
     ): Boolean;
+    function IsImplicitSelfCallNode(const ACallNode: TGreenNode): Boolean;
     function IsQualifiedCallNode(const ACallNode: TGreenNode): Boolean;
     function ExtractDirectMemberCall(
       const ACallNode: TGreenNode;
@@ -365,6 +368,9 @@ type
       const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
     function ResolveArrayAccessElementTypeId(
       const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
+    function TryBuildLegacyParamKindsFromSignature(
+      const AArgSignature: string; const AParamCount: LongInt;
+      out AParamKinds: string): Boolean;
     function TryBuildLegacyParamKindsForDecl(const ADeclNode: TGreenNode;
       const AParamCount: LongInt; out AParamKinds: string): Boolean;
     function TryGetDirectCallContract(const ACallNode: TGreenNode;
@@ -372,6 +378,19 @@ type
     function TryGetOrdinaryMemberCallContract(const ACallNode: TGreenNode;
       out AReceiverVarName, ACalleeName, AParamKinds: string;
       out AReturnTypeId: LongInt): Boolean;
+    function FindTypeDeclNodeInRoot(const ARootNode: TGreenNode;
+      const ATypeName: string; out ATypeDeclNode,
+      ATypeBodyNode: TGreenNode): Boolean;
+    function FindTypeDeclNode(const ATypeName, AOwnerUnitId: string;
+      out ATypeDeclNode, ATypeBodyNode: TGreenNode): Boolean;
+    function FindTypeMethodDecl(const ATypeName, AOwnerUnitId,
+      AMethodName: string; const AArgCount: LongInt;
+      const AArgSignature: string; const AHasArgSignature: Boolean;
+      out ADeclNode: TGreenNode): Boolean;
+    function TryGetDispatchedMemberCallContract(const ACallNode: TGreenNode;
+      out AExprKind: TSemanticHirExprKind;
+      out AReceiverVarName, ACalleeName, AParamKinds: string;
+      out ASlotIndex, AReturnTypeId: LongInt): Boolean;
     function BuildTargetAddressExpr(const ATargetNode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
@@ -734,7 +753,8 @@ begin
   FPtrReturnTypes[NextIndex] := AClassName;
 end;
 
-procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree);
+procedure TSemanticAnalyzer.RegisterImportedUnitTree(const ATree: TGreenTree;
+  const AOwnerUnitId: string);
 var
   NextIndex: SizeInt;
 begin
@@ -742,7 +762,9 @@ begin
     Exit;
   NextIndex := Length(FImportedUnitTrees);
   SetLength(FImportedUnitTrees, NextIndex + 1);
+  SetLength(FImportedUnitOwners, NextIndex + 1);
   FImportedUnitTrees[NextIndex] := ATree;
+  FImportedUnitOwners[NextIndex] := AOwnerUnitId;
 end;
 
 function TSemanticAnalyzer.LookupPtrReturnFunc(const AName: string): string;
@@ -1695,6 +1717,44 @@ begin
     (AChild.NodeKind = gnkFunctionCall) and
     (AParent.ByteOffset = AChild.ByteOffset) and
     SameText(AParent.Text, AChild.Text);
+end;
+
+function TSemanticAnalyzer.IsImplicitSelfCallNode(
+  const ACallNode: TGreenNode
+): Boolean;
+var
+  CalleeNode: TGreenNode;
+begin
+  Result := False;
+  if ACallNode = nil then
+    Exit;
+
+  case ACallNode.NodeKind of
+    gnkIdentifier:
+      Exit(ACallNode.Text <> '');
+    gnkFunctionCall:
+      begin
+        if ACallNode.ChildCount <= 0 then
+          Exit(False);
+        CalleeNode := ACallNode.ChildAt(0);
+        Exit((CalleeNode <> nil) and (CalleeNode.NodeKind = gnkIdentifier));
+      end;
+    gnkProcedureCallStatement:
+      begin
+        if ACallNode.ChildCount = 0 then
+          Exit(ACallNode.Text <> '');
+        CalleeNode := ACallNode.ChildAt(0);
+        if CalleeNode = nil then
+          Exit(False);
+        if CalleeNode.NodeKind = gnkIdentifier then
+          Exit(True);
+        if (CalleeNode.NodeKind = gnkFunctionCall) and
+          (CalleeNode.ChildCount > 0) and (CalleeNode.ChildAt(0) <> nil) and
+          (CalleeNode.ChildAt(0).NodeKind = gnkIdentifier) then
+          Exit(True);
+        Exit(False);
+      end;
+  end;
 end;
 
 function TSemanticAnalyzer.IsQualifiedCallNode(
@@ -7701,6 +7761,27 @@ begin
   Result := False;
 end;
 
+function TSemanticAnalyzer.TryBuildLegacyParamKindsFromSignature(
+  const AArgSignature: string; const AParamCount: LongInt;
+  out AParamKinds: string): Boolean;
+var
+  I: LongInt;
+begin
+  AParamKinds := '';
+  if Length(AArgSignature) < AParamCount then
+    Exit(False);
+  for I := 1 to AParamCount do
+    case AArgSignature[I] of
+      'b', 'i':
+        AParamKinds := AParamKinds + 'i';
+      'p':
+        AParamKinds := AParamKinds + 'p';
+    else
+      Exit(False);
+    end;
+  Result := True;
+end;
+
 function TSemanticAnalyzer.TryBuildLegacyParamKindsForDecl(
   const ADeclNode: TGreenNode; const AParamCount: LongInt;
   out AParamKinds: string): Boolean;
@@ -7758,6 +7839,285 @@ begin
   end;
 
   Result := ParamIndex = AParamCount;
+end;
+
+function TSemanticAnalyzer.FindTypeDeclNodeInRoot(const ARootNode: TGreenNode;
+  const ATypeName: string; out ATypeDeclNode,
+  ATypeBodyNode: TGreenNode): Boolean;
+var
+  I, J, K: LongInt;
+  SectionNode, TypeDeclNode, TypeBodyNode: TGreenNode;
+begin
+  ATypeDeclNode := nil;
+  ATypeBodyNode := nil;
+  if (ARootNode = nil) or (ATypeName = '') then
+    Exit(False);
+
+  for I := 0 to ARootNode.ChildCount - 1 do
+  begin
+    SectionNode := ARootNode.ChildAt(I);
+    if (SectionNode = nil) or (SectionNode.NodeKind <> gnkTypeSection) then
+      Continue;
+    for J := 0 to SectionNode.ChildCount - 1 do
+    begin
+      TypeDeclNode := SectionNode.ChildAt(J);
+      if (TypeDeclNode = nil) or (TypeDeclNode.NodeKind <> gnkTypeDecl) or
+        (not SameText(TypeDeclNode.Text, ATypeName)) then
+        Continue;
+      ATypeDeclNode := TypeDeclNode;
+      for K := 0 to TypeDeclNode.ChildCount - 1 do
+      begin
+        TypeBodyNode := TypeDeclNode.ChildAt(K);
+        if (TypeBodyNode <> nil) and (TypeBodyNode.NodeKind = gnkClassType) then
+        begin
+          ATypeBodyNode := TypeBodyNode;
+          Exit(True);
+        end;
+      end;
+      Exit(False);
+    end;
+  end;
+  Result := False;
+end;
+
+function TSemanticAnalyzer.FindTypeDeclNode(const ATypeName,
+  AOwnerUnitId: string; out ATypeDeclNode, ATypeBodyNode: TGreenNode): Boolean;
+var
+  Index: LongInt;
+  RootOwnerUnitId: string;
+begin
+  ATypeDeclNode := nil;
+  ATypeBodyNode := nil;
+  RootOwnerUnitId := NormalizeUnitIdentity(FUnitGraph.RootName);
+
+  if (FRootAst <> nil) and
+    ((AOwnerUnitId = '') or SameText(AOwnerUnitId, RootOwnerUnitId)) and
+    FindTypeDeclNodeInRoot(FRootAst.RootNode, ATypeName, ATypeDeclNode,
+      ATypeBodyNode) then
+    Exit(True);
+
+  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+  begin
+    if (AOwnerUnitId <> '') and
+      (not SameText(FImportedUnitOwners[Index], AOwnerUnitId)) then
+      Continue;
+    if FindTypeDeclNodeInRoot(FImportedUnitTrees[Index].RootNode, ATypeName,
+      ATypeDeclNode, ATypeBodyNode) then
+      Exit(True);
+  end;
+
+  if AOwnerUnitId <> '' then
+    for Index := 0 to Length(FImportedUnitTrees) - 1 do
+      if FindTypeDeclNodeInRoot(FImportedUnitTrees[Index].RootNode, ATypeName,
+        ATypeDeclNode, ATypeBodyNode) then
+        Exit(True);
+  Result := False;
+end;
+
+function TSemanticAnalyzer.FindTypeMethodDecl(const ATypeName, AOwnerUnitId,
+  AMethodName: string; const AArgCount: LongInt; const AArgSignature: string;
+  const AHasArgSignature: Boolean; out ADeclNode: TGreenNode): Boolean;
+var
+  CandidateNode, ChildNode, NameNode, SignatureNode, TypeBodyNode,
+    TypeDeclNode: TGreenNode;
+  CurrentTypeId, Depth, I, MatchCount, SignatureMatchCount: LongInt;
+  TypeSymbol: TSemanticSymbol;
+begin
+  ADeclNode := nil;
+  CurrentTypeId := ResolveTypeIdForOwner(ATypeName, AOwnerUnitId);
+  Depth := 0;
+  while (CurrentTypeId > 0) and (Depth < 32) do
+  begin
+    if not TypeSymbolForTypeId(CurrentTypeId, TypeSymbol) then
+      Exit(False);
+    if FindTypeDeclNode(TypeSymbol.Name, TypeSymbol.OwnerUnitId, TypeDeclNode,
+      TypeBodyNode) then
+    begin
+      CandidateNode := nil;
+      SignatureNode := nil;
+      MatchCount := 0;
+      SignatureMatchCount := 0;
+      for I := 0 to TypeBodyNode.ChildCount - 1 do
+      begin
+        ChildNode := TypeBodyNode.ChildAt(I);
+        if (ChildNode = nil) or (ChildNode.NodeKind <> gnkClassMethod) or
+          (ChildNode.ChildCount = 0) then
+          Continue;
+        NameNode := ChildNode.ChildAt(0);
+        if (NameNode = nil) or (NameNode.NodeKind <> gnkIdentifier) or
+          (not SameText(NameNode.Text, AMethodName)) or
+          (not DeclAcceptsArgCount(ChildNode, AArgCount)) then
+          Continue;
+        Inc(MatchCount);
+        CandidateNode := ChildNode;
+        if (not AHasArgSignature) or
+          DeclParamSignatureMatchesArgs(ChildNode, AArgSignature, AArgCount) then
+        begin
+          Inc(SignatureMatchCount);
+          SignatureNode := ChildNode;
+        end;
+      end;
+      if SignatureMatchCount = 1 then
+      begin
+        ADeclNode := SignatureNode;
+        Exit(True);
+      end;
+      if (SignatureMatchCount = 0) and (MatchCount = 1) then
+      begin
+        ADeclNode := CandidateNode;
+        Exit(True);
+      end;
+    end;
+    if (CurrentTypeId <= 0) or (CurrentTypeId > FModel.TypeCount) then
+      Break;
+    CurrentTypeId := FModel.TypeAt(CurrentTypeId - 1).ParentTypeId;
+    Inc(Depth);
+  end;
+  Result := False;
+end;
+
+function TSemanticAnalyzer.TryGetDispatchedMemberCallContract(
+  const ACallNode: TGreenNode; out AExprKind: TSemanticHirExprKind;
+  out AReceiverVarName, ACalleeName, AParamKinds: string;
+  out ASlotIndex, AReturnTypeId: LongInt): Boolean;
+var
+  Candidates: TOverloadCandidateArray;
+  DeclNode, MemberNode, ReceiverNode: TGreenNode;
+  HasArgSignature, HasTypeMismatchEvidence: Boolean;
+  MemberName, ReceiverName, ResolutionFailureKind, ArgSignature,
+    ReceiverTypeName, DeclaringTypeName: string;
+  ArgCount, DotPos, MemberOffset, ReceiverTypeId, TargetSymbolId: LongInt;
+  TargetSymbol: TSemanticSymbol;
+begin
+  AExprKind := shekInvalid;
+  AReceiverVarName := '';
+  ACalleeName := '';
+  AParamKinds := '';
+  ASlotIndex := -1;
+  AReturnTypeId := 0;
+  ReceiverName := '';
+  MemberName := '';
+  MemberOffset := 0;
+  ArgCount := 0;
+
+  if ExtractDirectMemberCall(ACallNode, ReceiverName, MemberName,
+    MemberOffset, ArgCount) then
+  begin
+    if SameText(ReceiverName, 'Self') then
+      AReceiverVarName := 'self'
+    else
+      AReceiverVarName := ReceiverName;
+    ReceiverTypeId := TypeIdForMemberReceiver(ReceiverName, FCurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+  end
+  else if (ACallNode <> nil) and (ACallNode.NodeKind = gnkDotAccess) and
+    (ACallNode.ChildCount >= 2) then
+  begin
+    ReceiverNode := ACallNode.ChildAt(0);
+    MemberNode := ACallNode.ChildAt(1);
+    if (ReceiverNode = nil) or (MemberNode = nil) or
+      (ReceiverNode.NodeKind <> gnkIdentifier) or
+      (MemberNode.NodeKind <> gnkIdentifier) then
+      Exit(False);
+    ReceiverName := ReceiverNode.Text;
+    MemberName := MemberNode.Text;
+    MemberOffset := MemberNode.ByteOffset;
+    if SameText(ReceiverName, 'Self') then
+      AReceiverVarName := 'self'
+    else
+      AReceiverVarName := ReceiverName;
+    ReceiverTypeId := TypeIdForMemberReceiver(ReceiverName, FCurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+  end
+  else if (FCurrentMethodClass <> '') and
+    IsImplicitSelfCallNode(ACallNode) and
+    (not IsQualifiedCallNode(ACallNode)) then
+  begin
+    MemberName := BareCallCalleeName(ACallNode);
+    if MemberName = '' then
+      Exit(False);
+    AReceiverVarName := 'self';
+    ReceiverTypeId := TypeIdForMemberReceiver('Self', FCurrentMethodClass,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+    ArgCount := CallArgumentCount(ACallNode);
+  end
+  else
+    Exit(False);
+
+  if (AReceiverVarName = '') or (ReceiverTypeId <= 0) or
+    (ReceiverTypeId > FModel.TypeCount) or (not IsRuntimeVar(AReceiverVarName)) then
+    Exit(False);
+
+  HasArgSignature := (ACallNode <> nil) and
+    (ACallNode.NodeKind in [gnkFunctionCall, gnkProcedureCallStatement, gnkDotAccess]) and
+    CallArgumentSignature(ACallNode, ArgSignature);
+  HasTypeMismatchEvidence := HasArgSignature and
+    CallArgumentSignatureIsStable(ACallNode,
+      NormalizeUnitIdentity(FUnitGraph.RootName));
+  ResolutionFailureKind := '';
+  SetLength(Candidates, 0);
+  TargetSymbolId := MethodSymbolIdForClassTypeMember(
+    ReceiverTypeId,
+    MemberName,
+    ArgCount,
+    ArgSignature,
+    HasArgSignature,
+    HasTypeMismatchEvidence,
+    ResolutionFailureKind,
+    Candidates
+  );
+  if TargetSymbolId <= 0 then
+    Exit(False);
+
+  ReceiverTypeName := FModel.TypeAt(ReceiverTypeId - 1).Name;
+  if ReceiverTypeName = '' then
+    Exit(False);
+  ASlotIndex := TypeMetaVmtSlot(ReceiverTypeName, MemberName);
+  if ASlotIndex < 0 then
+    Exit(False);
+  if TypeMetaIsInterface(ReceiverTypeName) then
+    AExprKind := shekInterfaceCall
+  else
+    AExprKind := shekVirtualCall;
+
+  TargetSymbol := FModel.SymbolAt(TargetSymbolId - 1);
+  ACalleeName := TargetSymbol.Name;
+  if ACalleeName = '' then
+    Exit(False);
+
+  DotPos := Pos('.', ACalleeName);
+  if DotPos > 0 then
+    DeclaringTypeName := Copy(ACalleeName, 1, DotPos - 1)
+  else
+    DeclaringTypeName := ReceiverTypeName;
+  DeclNode := nil;
+  FindTypeMethodDecl(
+    DeclaringTypeName,
+    TargetSymbol.OwnerUnitId,
+    MemberName,
+    ArgCount,
+    ArgSignature,
+    HasArgSignature,
+    DeclNode
+  );
+
+  if ((DeclNode = nil) or
+    (not TryBuildLegacyParamKindsForDecl(DeclNode, ArgCount, AParamKinds))) and
+    (not TryBuildLegacyParamKindsFromSignature(ArgSignature, ArgCount,
+      AParamKinds)) then
+    Exit(False);
+  AParamKinds := 'p' + AParamKinds;
+
+  if DeclNode <> nil then
+    AReturnTypeId := DeclReturnTypeId(DeclNode, TargetSymbol.OwnerUnitId);
+  if AReturnTypeId <= 0 then
+    AReturnTypeId := InferExpressionType(ACallNode);
+  if AReturnTypeId <= 0 then
+    Exit(False);
+  if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
+    AReturnTypeId := FModel.FindTypeByName('Pointer');
+
+  Result := AReturnTypeId > 0;
 end;
 
 function TSemanticAnalyzer.TryGetDirectCallContract(
@@ -7848,6 +8208,7 @@ begin
       NormalizeUnitIdentity(FUnitGraph.RootName));
   end
   else if (FCurrentMethodClass <> '') and
+    IsImplicitSelfCallNode(ACallNode) and
     (not IsQualifiedCallNode(ACallNode)) then
   begin
     MemberName := BareCallCalleeName(ACallNode);
@@ -8007,10 +8368,11 @@ var
   Children: array of LongInt;
   LeftExprId, RightExprId, SymbolId: LongInt;
   LeftTypeId, RightTypeId, ResultTypeId, BoolTypeId: LongInt;
-  ArgExprId, ArgIndex: LongInt;
+  ArgExprId, ArgIndex, SlotIndex: LongInt;
   Value: Int64;
   ParseCode: Word;
   Op, Pred, CalleeName, ParamKinds, ReceiverVarName: string;
+  DispatchExprKind: TSemanticHirExprKind;
 
   function ExprTypeId(const ALocalExprId: LongInt): LongInt;
   var
@@ -8360,6 +8722,42 @@ begin
       0, '', '', 0, shvcScalar
     );
     Exit(True);
+  end;
+
+  if TryGetDispatchedMemberCallContract(ANode, DispatchExprKind,
+    ReceiverVarName, CalleeName, ParamKinds, SlotIndex, ResultTypeId) then
+  begin
+    if not IsStructuredAddressableScalarType(ResultTypeId) then
+      Exit(False);
+    SetLength(Children, Length(ParamKinds));
+    if not BuildRuntimeMemberReceiverExpr(ReceiverVarName, ArgExprId) then
+      Exit(False);
+    Children[0] := ArgExprId;
+    for ArgIndex := 2 to Length(ParamKinds) do
+    begin
+      case ParamKinds[ArgIndex] of
+        'p':
+          begin
+            if not BuildRuntimePointerHirExpr(ANode.ChildAt(ArgIndex - 1),
+              ArgExprId) then
+              Exit(False);
+          end;
+        'i':
+          begin
+            if not BuildRuntimeScalarHirExpr(ANode.ChildAt(ArgIndex - 1),
+              ArgExprId) then
+              Exit(False);
+          end;
+      else
+        Exit(False);
+      end;
+      Children[ArgIndex - 1] := ArgExprId;
+    end;
+    AExprId := FModel.AddHirExpr(
+      DispatchExprKind, ResultTypeId, 0, Children, SlotIndex, CalleeName,
+      ParamKinds, ANode.ByteOffset, shvcScalar
+    );
+    Exit(AExprId > 0);
   end;
 
   if TryGetOrdinaryMemberCallContract(ANode, ReceiverVarName, CalleeName,
@@ -11785,7 +12183,7 @@ begin
       UnitTree := ParseGreenTree(UnitLexer, TmpDiag, 0);
       if (UnitTree <> nil) and (UnitTree.RootNode <> nil) then
       begin
-        RegisterImportedUnitTree(UnitTree);
+        RegisterImportedUnitTree(UnitTree, OwnerUnitId);
         RegisterBodiesInNode(UnitTree.RootNode, OwnerUnitId);
       end
       else if UnitTree <> nil then

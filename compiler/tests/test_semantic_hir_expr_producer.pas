@@ -2879,6 +2879,197 @@ begin
   end;
 end;
 
+procedure TestDispatchedMemberCallExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr, ReceiverExpr, ArgExpr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TCalc = class'#10 +
+    '    FBase: Integer;'#10 +
+    '    constructor Create(ABase: Integer);'#10 +
+    '    function Add(X: Integer): Integer; virtual;'#10 +
+    '  end;'#10 +
+    '  TDoubleCalc = class(TCalc)'#10 +
+    '    function Add(X: Integer): Integer; override;'#10 +
+    '  end;'#10 +
+    'constructor TCalc.Create(ABase: Integer);'#10 +
+    'begin'#10 +
+    '  FBase := ABase;'#10 +
+    'end;'#10 +
+    'function TCalc.Add(X: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Add := FBase + X;'#10 +
+    'end;'#10 +
+    'function TDoubleCalc.Add(X: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Add := FBase + X * 2;'#10 +
+    'end;'#10 +
+    'var Base: TCalc; X: Integer;'#10 +
+    'begin'#10 +
+    '  Base := TDoubleCalc.Create(10);'#10 +
+    '  X := Base.Add(16);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(380);
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'X',
+      'vcall ', Node) then
+      Halt(381);
+    if Node.ExprId = 0 then
+      Halt(382);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekVirtualCall then
+      Halt(383);
+    if Expr.LiteralStr <> 'TCalc.Add' then
+      Halt(384);
+    if Expr.LiteralInt <> 0 then
+      Halt(385);
+    if Expr.Op <> 'pi' then
+      Halt(386);
+    AssertExprTypeName(Model, Expr, 'Integer', 387);
+    if Length(Expr.Children) <> 2 then
+      Halt(388);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Base', 389);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    if ArgExpr.Kind <> shekIntLiteral then
+      Halt(395);
+    if ArgExpr.LiteralInt <> 16 then
+      Halt(396);
+  finally
+    Model.Free;
+  end;
+
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  ICounter = interface'#10 +
+    '    function Count: Integer;'#10 +
+    '  end;'#10 +
+    '  TImpl = class(TInterfacedObject, ICounter)'#10 +
+    '    function Count: Integer;'#10 +
+    '  end;'#10 +
+    'function TImpl.Count: Integer;'#10 +
+    'begin'#10 +
+    '  Count := 42;'#10 +
+    'end;'#10 +
+    'var Counter: ICounter; Y: Integer;'#10 +
+    'begin'#10 +
+    '  Counter := TImpl.Create;'#10 +
+    '  Y := Counter.Count;'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(400);
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'Y',
+      'ivcall ', Node) then
+      Halt(401);
+    if Node.ExprId = 0 then
+      Halt(402);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekInterfaceCall then
+      Halt(403);
+    if Expr.LiteralStr <> 'ICounter.Count' then
+      Halt(404);
+    if Expr.LiteralInt <> 0 then
+      Halt(405);
+    if Expr.Op <> 'p' then
+      Halt(406);
+    AssertExprTypeName(Model, Expr, 'Integer', 407);
+    if Length(Expr.Children) <> 1 then
+      Halt(408);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Counter', 409);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestDispatchedMemberCallBinaryExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr, LeftExpr, RightExpr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TNode = class'#10 +
+    '    FVal: Integer;'#10 +
+    '    constructor Create(V: Integer);'#10 +
+    '  end;'#10 +
+    '  TCollection = class'#10 +
+    '    FHead: TNode;'#10 +
+    '    FSize: Integer;'#10 +
+    '    function Sum: Integer; virtual;'#10 +
+    '    function Count: Integer; virtual;'#10 +
+    '    function Average: Integer; virtual;'#10 +
+    '  end;'#10 +
+    'constructor TNode.Create(V: Integer);'#10 +
+    'begin'#10 +
+    '  FVal := V;'#10 +
+    'end;'#10 +
+    'function TCollection.Sum: Integer;'#10 +
+    'begin'#10 +
+    '  Sum := 84;'#10 +
+    'end;'#10 +
+    'function TCollection.Count: Integer;'#10 +
+    'begin'#10 +
+    '  Count := 2;'#10 +
+    'end;'#10 +
+    'function TCollection.Average: Integer;'#10 +
+    'begin'#10 +
+    '  Result := Sum div Count;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(410);
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'Average',
+      'div', Node) then
+      Halt(411);
+    if Node.ExprId = 0 then
+      Halt(412);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekBinaryOp then
+      Halt(413);
+    if not SameText(Expr.Op, 'div') then
+      Halt(414);
+    if Length(Expr.Children) <> 2 then
+      Halt(415);
+
+    LeftExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    if LeftExpr.Kind <> shekVirtualCall then
+      Halt(416);
+    if LeftExpr.LiteralStr <> 'TCollection.Sum' then
+      Halt(417);
+    if LeftExpr.Op <> 'p' then
+      Halt(418);
+    if Length(LeftExpr.Children) <> 1 then
+      Halt(419);
+
+    RightExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    if RightExpr.Kind <> shekVirtualCall then
+      Halt(420);
+    if RightExpr.LiteralStr <> 'TCollection.Count' then
+      Halt(421);
+    if RightExpr.Op <> 'p' then
+      Halt(422);
+    if Length(RightExpr.Children) <> 1 then
+      Halt(423);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestConstructorNestedMethodIntegerArgs;
 var
   Model: TSemanticModel;
@@ -3091,6 +3282,8 @@ begin
   TestDirectCallExprProducer;
   TestDirectPointerCallExprProducer;
   TestOrdinaryMemberCallExprProducer;
+  TestDispatchedMemberCallExprProducer;
+  TestDispatchedMemberCallBinaryExprProducer;
   TestConstructorNestedMethodIntegerArgs;
   TestConstructorNestedMethodPointerArgs;
 end.

@@ -162,6 +162,8 @@ type
       out AResult: THIRExprResult): Boolean;
     function LowerCallExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
+    function LowerDispatchedCallExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
     procedure InitExprResult(out AResult: THIRExprResult);
     procedure SetExprValue(out AResult: THIRExprResult;
       const AValueId: THIRValueId; const ATypeId: THIRTypeId;
@@ -587,6 +589,28 @@ begin
         if not Result then
           Exit(False);
         for I := 0 to High(AExpr.Children) do
+        begin
+          if not (AExpr.Op[I + 1] in ['i', 'p']) then
+            Exit(False);
+          if not CanLowerExpr(AExpr.Children[I]) then
+            Exit(False);
+        end;
+      end;
+    shekVirtualCall, shekInterfaceCall:
+      begin
+        ResultType := ExprHirTypeId(AExpr);
+        Result := (AExpr.ValueClass = shvcScalar) and
+          (AExpr.LiteralStr <> '') and
+          (AExpr.LiteralInt >= 0) and
+          (Length(AExpr.Children) = Length(AExpr.Op)) and
+          (Length(AExpr.Children) >= 1) and
+          (AExpr.Op <> '') and (AExpr.Op[1] = 'p') and
+          (HirTypeIsInt(ResultType) or
+           (FModule.Types.GetType(ResultType).Kind = htkPointer)) and
+          CanLowerExprAsAddress(AExpr.Children[0]);
+        if not Result then
+          Exit(False);
+        for I := 1 to High(AExpr.Children) do
         begin
           if not (AExpr.Op[I + 1] in ['i', 'p']) then
             Exit(False);
@@ -1275,6 +1299,8 @@ begin
       Result := LowerCompareExpr(AExpr, AResult);
     shekCall:
       Result := LowerCallExpr(AExpr, AResult);
+    shekVirtualCall, shekInterfaceCall:
+      Result := LowerDispatchedCallExpr(AExpr, AResult);
   else
     Result := False;
   end;
@@ -1285,8 +1311,8 @@ function THIRBuilder.LowerCallExpr(const AExpr: TSemanticHirExpr;
 var
   Instr: THIRInstr;
   ChildResult: THIRExprResult;
-  ExpectedType, ResultType, SourceType: THIRTypeId;
-  ArgValueId: THIRValueId;
+  AbiResultType, ExpectedType, ResultType, SourceType: THIRTypeId;
+  ArgValueId, CallValueId: THIRValueId;
   I: LongInt;
 begin
   InitExprResult(AResult);
@@ -1296,16 +1322,16 @@ begin
     (ResultType = 0) then
     Exit(False);
   if HirTypeIsInt(ResultType) then
-    ResultType := GetIntType
+    AbiResultType := GetIntType
   else if FModule.Types.GetType(ResultType).Kind = htkPointer then
-    ResultType := GetPtrType
+    AbiResultType := GetPtrType
   else
     Exit(False);
 
   FillChar(Instr, SizeOf(Instr), 0);
   Instr.ResultId := FModule.NewValue;
   Instr.Kind := hikCall;
-  Instr.TypeId := ResultType;
+  Instr.TypeId := AbiResultType;
   Instr.CallTarget := AExpr.LiteralStr;
   SetLength(Instr.Operands, Length(AExpr.Children));
   for I := 0 to High(AExpr.Children) do
@@ -1330,7 +1356,131 @@ begin
     Instr.Operands[I] := MakeTypedOperand(ArgValueId, ExpectedType);
   end;
   EmitInstr(Instr);
-  SetExprValue(AResult, Instr.ResultId, ResultType, shvcScalar);
+  CallValueId := Instr.ResultId;
+  if AbiResultType <> ResultType then
+  begin
+    CallValueId := NormalizeScalarValueToType(CallValueId, AbiResultType,
+      ResultType);
+    if CallValueId = 0 then
+      Exit(False);
+  end;
+  SetExprValue(AResult, CallValueId, ResultType, shvcScalar);
+  Result := True;
+end;
+
+function THIRBuilder.LowerDispatchedCallExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  FnPtr, ReceiverPtr, SlotValue, TablePtr, TableSlotPtr: THIRValueId;
+  Instr: THIRInstr;
+  ChildResult, ReceiverResult: THIRExprResult;
+  AbiResultType, ExpectedType, ResultType, SourceType: THIRTypeId;
+  ArgValueId, CallValueId: THIRValueId;
+  I: LongInt;
+begin
+  InitExprResult(AResult);
+  ResultType := ExprHirTypeId(AExpr);
+  if (AExpr.LiteralStr = '') or (AExpr.LiteralInt < 0) or
+    (Length(AExpr.Children) <> Length(AExpr.Op)) or
+    (Length(AExpr.Children) < 1) or (ResultType = 0) or
+    (AExpr.Op = '') or (AExpr.Op[1] <> 'p') then
+    Exit(False);
+
+  if HirTypeIsInt(ResultType) then
+    AbiResultType := GetIntType
+  else if FModule.Types.GetType(ResultType).Kind = htkPointer then
+    AbiResultType := GetPtrType
+  else
+    Exit(False);
+
+  if not LowerExprAddress(AExpr.Children[0], ReceiverResult) then
+    Exit(False);
+  ReceiverPtr := ReceiverResult.AddressValueId;
+  if ReceiverPtr = 0 then
+    Exit(False);
+
+  if AExpr.Kind = shekVirtualCall then
+  begin
+    SlotValue := EmitConstIntOfType(0, GetIntType);
+    if SlotValue = 0 then
+      Exit(False);
+
+    FillChar(Instr, SizeOf(Instr), 0);
+    Instr.ResultId := FModule.NewValue;
+    Instr.Kind := hikIntrinsic;
+    Instr.TypeId := GetPtrType;
+    Instr.IntrinsicName := 'gep_i64';
+    SetLength(Instr.Operands, 2);
+    Instr.Operands[0] := MakeTypedOperand(ReceiverPtr, GetPtrType);
+    Instr.Operands[1] := MakeTypedOperand(SlotValue, GetIntType);
+    EmitInstr(Instr);
+    TablePtr := EmitLoad(GetPtrType, Instr.ResultId);
+
+    SlotValue := EmitConstIntOfType(AExpr.LiteralInt + 1, GetIntType);
+    if SlotValue = 0 then
+      Exit(False);
+  end
+  else
+  begin
+    TablePtr := EmitLoad(GetPtrType, ReceiverPtr);
+    SlotValue := EmitConstIntOfType(AExpr.LiteralInt, GetIntType);
+    if (TablePtr = 0) or (SlotValue = 0) then
+      Exit(False);
+  end;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'gep_i64';
+  SetLength(Instr.Operands, 2);
+  Instr.Operands[0] := MakeTypedOperand(TablePtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(SlotValue, GetIntType);
+  EmitInstr(Instr);
+  TableSlotPtr := Instr.ResultId;
+  FnPtr := EmitLoad(GetPtrType, TableSlotPtr);
+  if FnPtr = 0 then
+    Exit(False);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := AbiResultType;
+  Instr.IntrinsicName := 'vcall';
+  SetLength(Instr.Operands, Length(AExpr.Children) + 1);
+  Instr.Operands[0] := MakeTypedOperand(FnPtr, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(ReceiverPtr, GetPtrType);
+  for I := 1 to High(AExpr.Children) do
+  begin
+    if not LowerExprValue(AExpr.Children[I], ChildResult) then
+      Exit(False);
+    case AExpr.Op[I + 1] of
+      'i':
+        ExpectedType := GetIntType;
+      'p':
+        ExpectedType := GetPtrType;
+    else
+      Exit(False);
+    end;
+    SourceType := ChildResult.TypeId;
+    if (ChildResult.ValueId = 0) or (SourceType = 0) then
+      Exit(False);
+    ArgValueId := NormalizeScalarValueToType(ChildResult.ValueId, SourceType,
+      ExpectedType);
+    if ArgValueId = 0 then
+      Exit(False);
+    Instr.Operands[I + 1] := MakeTypedOperand(ArgValueId, ExpectedType);
+  end;
+  EmitInstr(Instr);
+  CallValueId := Instr.ResultId;
+  if AbiResultType <> ResultType then
+  begin
+    CallValueId := NormalizeScalarValueToType(CallValueId, AbiResultType,
+      ResultType);
+    if CallValueId = 0 then
+      Exit(False);
+  end;
+  SetExprValue(AResult, CallValueId, ResultType, shvcScalar);
   Result := True;
 end;
 

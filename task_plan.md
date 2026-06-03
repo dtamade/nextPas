@@ -1,5 +1,31 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-03 C5-P structured dispatched-call stabilization
+
+### Goal
+
+把 `shekVirtualCall` / `shekInterfaceCall` 接通之后出现的唯一 live red 一次收掉：
+`llvm_full_oop` 里的 `Result := Sum div Count;` 不能再被 implicit-self bare-call
+误判吞成单个 `Sum`。这轮不扩 scope，不加新 lowering kind，只修 call-shape 合同并保住
+dual-track。
+
+### Checklist
+
+- [x] 确认当前 `main` 与 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或并行 toolchain/targets/stage0 lane。
+- [x] 写 RED：给 `Result := Sum div Count;` 增加 producer 用例，并用隔离入口确认不是别的历史测试干扰。
+- [x] 定位根因：证明不是 builder/ABI 宽度，而是 implicit-self bare-call 误吞 `gnkBinaryExpression`。
+- [x] 实现 GREEN：收紧 implicit-self call shape，并同时作用于 ordinary/dispatched member-call contract。
+- [x] 跑 focused tests、完整重编译、`llvm_full_oop`、137 LLVM smoke。
+- [x] 更新 `docs/inbox.md`、`compiler/docs/compiler-goal-tree.md`、`progress.md`，并准备 path-limited commit。
+
+### Constraints
+
+- 只改本轮需要的 `compiler/sema`、`compiler/tests` 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- 结构化表达式和旧 blob fallback 双轨必须保留；不能用局部特判掩盖 call-shape 根因。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
 ## Active Session: 2026-06-03 C5-N structured direct-call lowering
 
 ### Goal

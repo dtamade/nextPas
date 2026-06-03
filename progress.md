@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-P structured dispatched-call stabilization
+
+- **Status:** completed, pending path-limited commit.
+- Branch and safety state:
+  - Branch: `main`.
+  - Unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Colleague lane remains off-limits: compiler/toolchain, compiler/targets, tools/stage0, tests/toolchain, build target/toolchain/profile files, and `build/verify_local.sh`.
+- Current decision:
+  - Keep the newly landed structured dispatched-call path.
+  - Fix the producer root cause instead of patching `llvm_full_oop` at the blob or builder symptom layer.
+  - Reuse one call-shape guard for both ordinary and dispatched implicit-self member-call contracts.
+- Evidence:
+  - Remaining live red had shrunk to `examples/smoke/llvm_full_oop.pas` exit `170`; generated IR for `TCollection.Average` emitted only `Sum`, missing `Count` and `div`.
+  - Isolated RED diagnostics on `test_semantic_hir_expr_producer` showed `Result := Sum div Count;` still attached `ExprId=9` with root kind `shekVirtualCall` and `children=1`, proving the producer swallowed a binary expression as an implicit-self bare call.
+  - Root cause: `TryGetDispatchedMemberCallContract` / `TryGetOrdinaryMemberCallContract` accepted any non-qualified node in method scope; `BareCallCalleeName` then read the left child of `gnkBinaryExpression` as `Sum`.
+  - GREEN focused tests:
+    - `tests/test_semantic_hir_expr_producer.pas` -> `exit=0`
+    - `tests/test_hir_builder_expr_fallback.pas` -> `exit=0`
+    - `tests/test_hir_builder_structured_address.pas` -> `exit=0`
+    - `tests/test_hir_builder_structured_expr.pas` -> `exit=0`
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `45139 lines compiled`, exit `0`.
+  - Targeted smoke: `examples/smoke/llvm_full_oop.pas` -> `exit=42`.
+  - Full LLVM smoke: `smoke_total=137 passed=137 build_failed=0 run_failed=0`.
+- Next immediate step:
+  - Path-limited commit, then continue reducing `WalkHaltCalls` call special-cases and design the next explicit receiver/address call contract step.
+
 ## Session: 2026-06-03 C5-N structured direct-call lowering
 
 - **Status:** completed, pending path-limited commit.
