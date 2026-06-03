@@ -5,7 +5,7 @@
 - **Scope:** 把 `epoll` 私有的 poll-driven session target/helper 收回
   `nextpas.core.net.server.runtime`，让 readiness-family foundation 真正开始服务
   future `kqueue` 复用。
-- **Status:** in verification
+- **Status:** committed
 
 ## Current state
 
@@ -31,6 +31,8 @@
 - `make -C tests/nextpas.core.http/test_http_server clean test`
   - `119/119 passed`
   - heaptrc: `0 unfreed memory blocks`
+- path-limited commit:
+  - `b6e9dbd0 refactor(net.server): move poll session target into runtime`
 
 ## Next step
 

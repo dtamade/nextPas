@@ -19,7 +19,7 @@ readiness-family poll-driven session target 骨架，下沉到 foundation runtim
 - [x] 跑 focused `test_net_server`
 - [x] 跑模块 gate `test_http_server`
 - [x] 更新文档与控制文件
-- [ ] path-limited commit
+- [x] path-limited commit
 
 ## Scope
 
