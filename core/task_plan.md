@@ -21,12 +21,13 @@
 - [x] 运行 focused 验证：
   - `make -C tests/nextpas.core.http/test_http_server clean test`
 - [x] 更新 `docs/http/API_COVERAGE.md`、`task_plan.md`、`findings.md`、`progress.md`。
-- [ ] 做 path-limited staging / commit，并输出中文收尾报告。
+- [x] 做 path-limited staging / commit，并输出中文收尾报告。
 
 ## Current Status
 
 - 本轮是 coverage-expansion，不是生产修复。
 - 新增 `epoll` plain follow-up tail focused tests 直接绿，说明 current truth 已满足这批 backend-differential contract。
+- 本轮 path-limited commit 已完成。
 - 本轮不跑全量测试，不做 benchmark，不碰 HTTP 以外的无关脏文件。
 
 ## Out of Scope

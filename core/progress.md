@@ -29,7 +29,6 @@
 
 ## Next step
 
-- path-limited staging / commit。
 - 中文收尾报告里明确：
   - 当前 `epoll` 仍是 phase-1 accept-evented backend
   - 这轮新增的是 plain `Content-Length` / plain chunked malformed follow-up differential proof
