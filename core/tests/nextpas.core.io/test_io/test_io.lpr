@@ -18,6 +18,36 @@ uses
 var
   T: TTestRunner;
 
+type
+  TZeroProgressWriter = class(TInterfacedObject, IWriter)
+  private
+    FCalls: Int32;
+    FBytesAcceptedBeforeZero: SizeUInt;
+    FZeroOnCall: Int32;
+  public
+    constructor Create(const AZeroOnCall: Int32);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    property Calls: Int32 read FCalls;
+    property BytesAcceptedBeforeZero: SizeUInt read FBytesAcceptedBeforeZero;
+  end;
+
+constructor TZeroProgressWriter.Create(const AZeroOnCall: Int32);
+begin
+  inherited Create;
+  FCalls := 0;
+  FBytesAcceptedBeforeZero := 0;
+  FZeroOnCall := AZeroOnCall;
+end;
+
+function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Inc(FCalls);
+  if FCalls >= FZeroOnCall then
+    Exit(0);
+  Inc(FBytesAcceptedBeforeZero, ACount);
+  Result := ACount;
+end;
+
 { BytesStream tests }
 
 procedure TestStreamWrite;
@@ -179,6 +209,65 @@ begin
   CheckEqual(SizeUInt(512), LW.Write(LData[0], 512), 'write 512');
   (LW as IFlusher).Flush;
   CheckEqual(Int64(512), LS.Size, 'all written');
+end;
+
+procedure TestBufWriterFlushZeroProgressRaises;
+var
+  LInnerObj: TZeroProgressWriter;
+  LInner: IWriter;
+  LW: IWriter;
+  LData: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LInnerObj := TZeroProgressWriter.Create(1);
+  LInner := LInnerObj;
+  LW := BufferedWriter(LInner, 32);
+  LData[0] := $AA;
+  LData[1] := $BB;
+  LData[2] := $CC;
+  LW.Write(LData[0], 3);
+
+  LRaised := False;
+  try
+    (LW as IFlusher).Flush;
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress flush raises EIOError');
+  CheckEqual(Int64(1), Int64(LInnerObj.Calls), 'flush attempted one inner write');
+end;
+
+procedure TestBufWriterDirectWriteZeroProgressRaises;
+var
+  LInnerObj: TZeroProgressWriter;
+  LInner: IWriter;
+  LW: IWriter;
+  LData: array[0..63] of Byte;
+  LI: Integer;
+  LRaised: Boolean;
+begin
+  for LI := 0 to High(LData) do
+    LData[LI] := Byte(LI);
+
+  LInnerObj := TZeroProgressWriter.Create(2);
+  LInner := LInnerObj;
+  LW := BufferedWriter(LInner, 32);
+
+  LRaised := False;
+  try
+    LW.Write(LData[0], SizeUInt(Length(LData)));
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress direct write raises EIOError');
+  CheckEqual(Int64(2), Int64(LInnerObj.Calls),
+    'write attempted buffered flush and direct write');
+  CheckEqual(Int64(32), Int64(LInnerObj.BytesAcceptedBeforeZero),
+    'first buffered flush fully reached inner writer before failure');
 end;
 
 { Util: Copy }
@@ -786,6 +875,8 @@ begin
   T.Run('BufReader large', @TestBufReaderLarge);
   T.Run('BufWriter flush', @TestBufWriterFlush);
   T.Run('BufWriter large', @TestBufWriterLarge);
+  T.Run('BufWriter flush zero-progress raises', @TestBufWriterFlushZeroProgressRaises);
+  T.Run('BufWriter direct write zero-progress raises', @TestBufWriterDirectWriteZeroProgressRaises);
 
   T.Run('Copy', @TestCopy);
   T.Run('CopyN', @TestCopyN);

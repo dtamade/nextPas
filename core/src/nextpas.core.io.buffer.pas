@@ -16,6 +16,11 @@ function CreateBufferedWriter(const AInner: IWriter; const ABufSize: SizeUInt = 
 
 implementation
 
+procedure RaiseBufferedWriteFailure;
+begin
+  raise EIOError.Create('TBufferedWriter: write failed (zero progress)');
+end;
+
 type
   TBufferedReader = class(TInterfacedObject, IReader, IByteReader, IByteScanner)
   private
@@ -177,7 +182,11 @@ end;
 destructor TBufferedWriter.Destroy;
 begin
   if FBufPos > 0 then
-    FlushBuffer;
+    try
+      FlushBuffer;
+    except
+      { Destructors cannot reliably surface flush failures. }
+    end;
   inherited;
 end;
 
@@ -195,7 +204,7 @@ begin
         Move(FBuf[LTotal], FBuf[0], FBufPos - LTotal);
       FBufPos := FBufPos - LTotal;
       FError := True;
-      Exit;
+      RaiseBufferedWriteFailure;
     end;
     Inc(LTotal, LWritten);
   end;
@@ -238,7 +247,10 @@ begin
       begin
         LCopy := FInner.Write(LSrc^, LRemaining);
         if LCopy = 0 then
-          Exit;
+        begin
+          FError := True;
+          RaiseBufferedWriteFailure;
+        end;
         Inc(LSrc, LCopy);
         Dec(LRemaining, LCopy);
         Inc(Result, LCopy);

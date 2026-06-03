@@ -9,13 +9,16 @@ uses
   nextpas.core.testing,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.io.base,
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http.impl.h1,
   nextpas.core.http.message,
   nextpas.core.http.router,
   nextpas.core.http.server,
@@ -33,6 +36,127 @@ type
     Addr: string;
     Port: UInt16;
   end;
+
+  TZeroProgressTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
+  private
+    FInput: string;
+    FInputPos: SizeInt;
+    FOutput: string;
+    FReadCalls: Int32;
+    FWriteCalls: Int32;
+    FReadDeadlineCalls: Int32;
+    FWriteDeadlineCalls: Int32;
+  public
+    constructor Create(const AInput: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    property Output: string read FOutput;
+    property ReadCalls: Int32 read FReadCalls;
+    property WriteCalls: Int32 read FWriteCalls;
+    property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
+    property WriteDeadlineCalls: Int32 read FWriteDeadlineCalls;
+  end;
+
+constructor TZeroProgressTcpStream.Create(const AInput: string);
+begin
+  inherited Create;
+  FInput := AInput;
+  FInputPos := 1;
+  FOutput := '';
+  FReadCalls := 0;
+  FWriteCalls := 0;
+  FReadDeadlineCalls := 0;
+  FWriteDeadlineCalls := 0;
+end;
+
+function TZeroProgressTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeUInt;
+begin
+  Inc(FReadCalls);
+  if (ACount = 0) or (FInputPos > Length(FInput)) then
+    Exit(0);
+  LRemaining := SizeUInt(Length(FInput) - FInputPos + 1);
+  Result := ACount;
+  if Result > LRemaining then
+    Result := LRemaining;
+  Move(FInput[FInputPos], ABuf, Result);
+  Inc(FInputPos, SizeInt(Result));
+end;
+
+function TZeroProgressTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Inc(FWriteCalls);
+  Result := 0;
+end;
+
+function TZeroProgressTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := -1;
+end;
+
+procedure TZeroProgressTcpStream.Close;
+begin
+end;
+
+function TZeroProgressTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TZeroProgressTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TZeroProgressTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TZeroProgressTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TZeroProgressTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TZeroProgressTcpStream.Shutdown;
+begin
+end;
+
+procedure TZeroProgressTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TZeroProgressTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TZeroProgressTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+  Inc(FReadDeadlineCalls);
+end;
+
+procedure TZeroProgressTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+  Inc(FWriteDeadlineCalls);
+end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
@@ -404,6 +528,67 @@ begin
     'epoll committed response exception');
 end;
 {$ENDIF}
+
+procedure TestSessionStopsAfterZeroProgressWriteFailure;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LSession: ITcpServerSession;
+  LStreamObj: TZeroProgressTcpStream;
+  LStream: ITcpStream;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+  LSeenFirstPath: string;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /two HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH1Opts.ReadTimeout := LHttpOpts.ReadTimeout;
+  LH1Opts.WriteTimeout := LHttpOpts.WriteTimeout;
+  LH1Opts.IdleTimeout := LHttpOpts.IdleTimeout;
+  LH1Opts.MaxHeaderSize := LHttpOpts.MaxHeaderSize;
+  LH1Opts.MaxBodySize := LHttpOpts.MaxBodySize;
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'h1 transport exposes session factory');
+
+  LStreamObj := TZeroProgressTcpStream.Create(REQ);
+  LStream := LStreamObj as ITcpStream;
+  LHandlerCalls := 0;
+  LSeenFirstPath := '';
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    var
+      LBody: string;
+    begin
+      Inc(LHandlerCalls);
+      if LHandlerCalls = 1 then
+        LSeenFirstPath := AReq.Url.Path;
+      LBody := 'ok';
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBody[1], 2);
+    end));
+
+  LOwnership := LSession.Run;
+
+  Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER,
+    'server keeps ownership on write failure');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'session stops after first zero-progress response write failure');
+  CheckEqual('/one', LSeenFirstPath, 'first pipelined request handled before failure');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadCalls),
+    'second pipelined request remains unprocessed after write failure');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteCalls),
+    'single response write attempt reached inner stream before failure');
+end;
 
 { Test 5: Shutdown stops accepting }
 procedure TestShutdownStopsAccepting;
@@ -5204,6 +5389,8 @@ begin
   T.Run('Handler exception -> 500', @TestHandlerException500);
   T.Run('Committed response exception does not append 500',
     @TestCommittedResponseExceptionDoesNotAppend500);
+  T.Run('Session stops after zero-progress response write failure',
+    @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
