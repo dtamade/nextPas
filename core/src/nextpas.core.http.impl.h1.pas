@@ -87,7 +87,8 @@ type
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
-    function ReadResponse(const AReader: IReader; out AKeepAlive: Boolean): IHttpResponse;
+    function ReadResponse(const AReader: IReader;
+      const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -548,14 +549,14 @@ begin
 end;
 
 function TH1ClientTransport.ReadResponse(const AReader: IReader;
-  out AKeepAlive: Boolean): IHttpResponse;
+  const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
 var
   LParser: IH1Parser;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LBodyReader: IReader;
 begin
-  LParser := NewH1ResponseParser;
+  LParser := NewH1ResponseParser(ARequestMethod = hmHead);
   repeat
     LN := AReader.Read(LBuf[0], 4096);
     if LN = 0 then
@@ -620,7 +621,7 @@ begin
 
   try
     WriteRequest(LConn as IWriter, AReq);
-    LResp := ReadResponse(LConn as IReader, LKeepAlive);
+    LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive);
   except
     if LPooled then
     begin
@@ -632,7 +633,7 @@ begin
         LConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.Timeout)));
       end;
       WriteRequest(LConn as IWriter, AReq);
-      LResp := ReadResponse(LConn as IReader, LKeepAlive);
+      LResp := ReadResponse(LConn as IReader, AReq.Method, LKeepAlive);
     end
     else
     begin

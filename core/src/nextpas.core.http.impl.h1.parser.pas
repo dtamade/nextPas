@@ -39,7 +39,8 @@ type
   end;
 
 function NewH1RequestParser: IH1Parser;
-function NewH1ResponseParser: IH1Parser;
+function NewH1ResponseParser: IH1Parser; overload;
+function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser; overload;
 
 implementation
 
@@ -66,6 +67,7 @@ type
     FParser: TLlhttpInternalT;
     FSettings: TLlhttpSettingsT;
     FParserType: TH1ParserType;
+    FSkipBody: Boolean;
     FMethod: THttpMethod;
     FStatusCode: THttpStatus;
     FVersion: THttpVersion;
@@ -80,12 +82,14 @@ type
     FCurrentField: string;
     FCurrentValue: string;
     function ResponseEndsAtEof: Boolean;
+    procedure ApplyResponseSkipBodyHint;
     function RejectWithUserError(const AReason: string;
       const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
     function ValidateRequestTransferEncoding(
       const AParser: PTLlhttpInternalT): LongInt;
   public
-    constructor Create(const AType: TH1ParserType);
+    constructor Create(const AType: TH1ParserType;
+      const ASkipBody: Boolean = False);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
     procedure Finish;
     function GetMethod: THttpMethod;
@@ -287,12 +291,14 @@ end;
 
 { TH1Parser }
 
-constructor TH1Parser.Create(const AType: TH1ParserType);
+constructor TH1Parser.Create(const AType: TH1ParserType;
+  const ASkipBody: Boolean);
 var
   LType: TLlhttpTypeT;
 begin
   inherited Create;
   FParserType := AType;
+  FSkipBody := ASkipBody and (AType = ptResponse);
   FHeaders := NewHttpHeaders;
   FComplete := False;
   FError := False;
@@ -316,6 +322,7 @@ begin
 
   llhttp_init(@FParser, LType, @FSettings);
   FParser.data := Pointer(Self);
+  ApplyResponseSkipBodyHint;
 end;
 
 function TH1Parser.Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
@@ -395,6 +402,9 @@ begin
   if FStatusCode = 0 then
     Exit(False);
 
+  if FSkipBody then
+    Exit(True);
+
   if ((FStatusCode div 100) = 1) or
      (FStatusCode = 204) or
      (FStatusCode = 304) then
@@ -408,6 +418,14 @@ begin
     Exit(False);
 
   Result := True;
+end;
+
+procedure TH1Parser.ApplyResponseSkipBodyHint;
+begin
+  if not FSkipBody then
+    Exit;
+  FParser.method := HTTP_HEAD;
+  FParser.flags := FParser.flags or F_SKIPBODY;
 end;
 
 function TH1Parser.GetMethod: THttpMethod;
@@ -462,7 +480,8 @@ var
   LConn: string;
   LTransferEncoding: string;
 begin
-  if ((FStatusCode div 100) <> 1) and
+  if (not FSkipBody) and
+     ((FStatusCode div 100) <> 1) and
      (FStatusCode <> 204) and
      (FStatusCode <> 304) then
   begin
@@ -584,6 +603,7 @@ begin
   FCurrentValue := '';
   llhttp_reset(@FParser);
   FParser.data := Pointer(Self);
+  ApplyResponseSkipBodyHint;
 end;
 
 { Factory functions }
@@ -595,7 +615,12 @@ end;
 
 function NewH1ResponseParser: IH1Parser;
 begin
-  Result := TH1Parser.Create(ptResponse);
+  Result := NewH1ResponseParser(False);
+end;
+
+function NewH1ResponseParser(const ASkipBody: Boolean): IH1Parser;
+begin
+  Result := TH1Parser.Create(ptResponse, ASkipBody);
 end;
 
 end.

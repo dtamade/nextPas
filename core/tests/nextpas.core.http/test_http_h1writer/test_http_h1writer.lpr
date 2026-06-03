@@ -463,6 +463,32 @@ begin
   LRW.Free;
 end;
 
+procedure TestSuppressBodyPreservesExplicitContentLength;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LBody: string;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter, nil, True);
+  LRW.GetHeaders.Set_('content-length', '5');
+  LRW.WriteHeader(HTTP_STATUS_OK);
+  LBody := 'hello';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  Check(Pos('content-length: 5'#13#10, LOut) > 0,
+    'suppressed-body path preserves explicit content-length');
+  Check(Pos('transfer-encoding: chunked', LOut) = 0,
+    'suppressed-body content-length path does not inject chunked header');
+  Check(Pos('hello', LOut) = 0,
+    'suppressed-body content-length path does not emit body bytes');
+  Check(Pos('0'#13#10#13#10, LOut) = 0,
+    'suppressed-body content-length path does not write final chunk');
+  LRW.Free;
+end;
+
 procedure TestWriteAfterChunkedFlushRaises;
 var
   LW: TBytesWriter;
@@ -569,6 +595,8 @@ begin
     @TestNoContentResponseRejectsBodyWrite);
   T.Run('Suppressed-body write does not emit body or chunked encoding',
     @TestSuppressBodyWriteDoesNotEmitBodyOrChunkedEncoding);
+  T.Run('Suppressed-body preserves explicit content-length',
+    @TestSuppressBodyPreservesExplicitContentLength);
   T.Run('Write after chunked flush raises', @TestWriteAfterChunkedFlushRaises);
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);

@@ -429,15 +429,20 @@ var
   LClient: IHttpClient;
   LResp: IHttpResponse;
   LGotMethod: THttpMethod;
+  LBody: string;
 begin
   LGotMethod := hmGet;
   LRouter := THttpRouter.Create;
   LRouter.Handle(hmHead, '/resource', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
   begin
     LGotMethod := AReq.Method;
-    AW.GetHeaders.Set_('content-length', '0');
+    LReply := 'hello';
+    AW.GetHeaders.Set_('content-length', '5');
     AW.GetHeaders.Set_('x-head-ok', 'yes');
     AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], SizeUInt(Length(LReply)));
   end);
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
@@ -446,7 +451,10 @@ begin
     CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
     Check(LGotMethod = hmHead, 'server received HEAD');
     CheckEqual('yes', LResp.Headers.Get('x-head-ok'), 'response headers are available');
-    CheckEqual('', ReadBodyStr(LResp), 'head response body is empty');
+    CheckEqual('5', LResp.Headers.Get('content-length'),
+      'head response preserves content-length header');
+    LBody := ReadBodyStr(LResp);
+    CheckEqual('', LBody, 'head response body is empty');
   finally
     StopServer(LServer, LHandle);
   end;

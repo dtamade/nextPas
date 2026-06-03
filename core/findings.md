@@ -1,48 +1,40 @@
-# Findings: process PATH resolution contract and child wait warning batch 11
+# Findings: http HEAD explicit Content-Length no-body contract batch
 
 ## Current state
 
-- 当前共享工作树是脏的，但 `process` 相关未提交改动只直接落在
-  `tests/nextpas.core.platform.process/test_platform_process/test_platform_process.lpr`。
-- `src/nextpas.core.process.*` 当前 Linux focused tests 已经是绿的：
-  功能表面没有红，但存在一个编译 warning，且 PATH 解析还有 contract 级别设计债。
-- 相关历史 worktree 已确认：
-  `platform-pty-clean-merge`、`platform-pty-integration`、
-  `platform-pty-main-merge`、`.claude/worktrees/platform-pty`。
-  其中 `codex/platform-pty-clean-merge` 已经是当前 `HEAD` 的祖先，
-  说明那条 `process/pty` 清理线已经合进当前主线；其余几条不是当前祖先，
-  但多出的提交仍主要围绕 `platform.pty`，不是新的 `process` 基础分叉。
+- 当前 `HEAD` 是 `e43d99b5` `fix(process): harden path resolution contract`；共享工作树仍然是脏的，
+  但本轮 HTTP 未提交改动只落在 `tests/nextpas.core.http/*` 相关文件以及后续最小生产修复上。
+- `docs/net/ARCHITECTURE.md` 与
+  `docs/plans/2026-06-03-http-server-runtime-foundation.md` 已经把 server runtime
+  的长期方向固定到 `nextpas.core.net.server` foundation，本轮不再重开线程 / evented / IOCP 选型。
+- `2e95cf64` 已经修掉 server-side `HEAD` raw-wire body 泄漏问题，但当前批次新增的 focused tests
+  进一步暴露出 client / response parser 的契约缺口。
 
 ## Root causes
 
-- `src/nextpas.core.process.pathresolve.pas` 当前用 `nextpas.core.fs.Exists` 判断候选路径，
-  这只能证明“路径存在”，不能证明“这是可执行文件”。
-- 结果是当 PATH 前面出现同名但不可执行的文件时，`ResolveExecutablePath` 会提前命中坏路径，
-  然后 `execve` 直接失败，而不是像 `execvp` / `which` 一样继续搜索后续目录。
-- 仓库里已经有 `src/nextpas.core.platform.which.pas`，它的判断更接近系统语义：
-  Unix 下用 `access(..., X_OK)`，Windows 下至少要求是普通文件。`process.pathresolve`
-  当前与这条语义重复但更弱。
-- `src/nextpas.core.process.child.pas` 的 `TChild.Wait` 会在 `FillChar(Result, ...)` 后才分支填充
-  managed record，FPC 因此给出 “Function result variable of a managed type does not seem to be initialized”
-  warning。
+- 现有 `TH1ResponseWriter` 已经能在 suppress-body 路径下：
+  - 不注入 `Transfer-Encoding: chunked`
+  - 不写 chunk trailer
+  - 不发 body bytes
+- 但 `TH1ClientTransport.ReadResponse` 仍然无条件使用普通 `NewH1ResponseParser`。
+- 对 `HEAD 200 OK` 且显式带 `Content-Length: 5`、实际没有 body bytes 的响应，client-side parser
+  仍会按普通 fixed-length response 理解，从而要求读取 5 个 body 字节；这会让 focused contract proof
+  卡在 parser/client 层，而不是 server/writer 层。
 
 ## Design direction for this batch
 
-- `process` 高层 builder contract 应该在 `tests/nextpas.core.process/test_process/test_process.lpr`
-  里锁定，而不是主要漂在 `platform.process` suite。
-- PATH 解析应提升到“只接受真正可执行候选”的语义，并优先复用现有平台能力，
-  避免 `process` 模块自带一份较弱的 PATH 搜索实现。
-- warning 清理不能靠压制编译器，而要让 `TProcessOutput` 的初始化路径对编译器也清晰可证。
-- 既然 `platform-pty-clean-merge` 的核心历史已经入主线，本轮应直接在当前工作树做
-  path-limited 收口，而不是切回旧 worktree 重复劳动。
+- 不扩 public HTTP surface，只在 H1 internal seam 补齐 skip-body 语义。
+- 利用 llhttp 现成的 `HTTP_HEAD` / `F_SKIPBODY` seam，让 response parser 在 headers 完成后就按
+  no-body response 结束。
+- `TH1ClientTransport` 按原始 request method 把 `hmHead` 传入 response parser；
+  server / writer 保持既有 suppress-body 设计，不做额外分支扩张。
 
 ## Fixed design truth
 
-- `ResolveExecutablePath` 现在不再把“存在的同名文件”当成命中，而是只接受真正可执行的候选；
-  这样 PATH 前置的不可执行 shadow 文件不会再截断解析。
-- `ExtractPathFromEnv` 现在采用最后一次出现的 `PATH=` 视图，
-  与 final env view 的“后写覆盖前写”语义保持一致。
-- duplicate `EnvAdd('PATH', ...)` contract 已经在高层 `test_process` 固化，
-  不再只靠 `platform.process` suite 间接证明。
-- `TChild.Wait` 通过显式字段初始化消除了 managed-result warning，
-  不再依赖 `FillChar` 触发编译器疑虑。
+- `NewH1ResponseParser` 现在支持 internal `ASkipBody` overload；`HEAD` response 可在显式
+  `Content-Length` 下直接完成，body 仍为空。
+- parser `Reset` 会重新应用 skip-body hint，wrapper 层 `ResponseEndsAtEof` /
+  `ShouldKeepAlive` 也与这条 no-body 语义保持一致。
+- `TH1ClientTransport.ReadResponse` 现在会按 request method 传入 `hmHead`，
+  因而保留 `Content-Length` header、返回空 body，并继续维持 keep-alive 可复用语义。
+- 本轮没有 public API 变更；收口的是 H1 internal contract 与对应 focused proof。

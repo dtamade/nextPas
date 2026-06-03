@@ -145,6 +145,21 @@ begin
   CheckEqual('', LP.GetBody, 'empty body');
 end;
 
+procedure TestResponseHeadSkipBodyWithContentLength;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser(True);
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Content-Length: 5'#13#10#13#10;
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'head-like response completes without body bytes');
+  Check(LP.ShouldKeepAlive, 'head-like content-length response is reusable');
+  CheckEqual(Int64(200), Int64(LP.GetStatusCode), 'status 200');
+  CheckEqual('', LP.GetBody, 'head-like response stores no body');
+end;
+
 procedure TestResponseCloseDelimitedNeedsConnectionClose;
 var
   LP: IH1Parser;
@@ -1660,6 +1675,7 @@ begin
   T.Run('Response 200', @TestResponse200);
   T.Run('Response 404', @TestResponse404);
   T.Run('Response 204 no body', @TestResponse204NoBody);
+  T.Run('Response HEAD skip-body with content-length', @TestResponseHeadSkipBodyWithContentLength);
   T.Run('Response close-delimited needs connection close', @TestResponseCloseDelimitedNeedsConnectionClose);
   T.Run('Response content-length keeps alive', @TestResponseContentLengthKeepsAlive);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);

@@ -3719,6 +3719,46 @@ begin
   end;
 end;
 
+{ Test 18d: HEAD response preserves explicit content-length but stays bodyless }
+procedure TestHeadResponsePreservesContentLengthWithoutBodyBytes;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmHead, '/head-content-length', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LBody := 'hello';
+    AW.GetHeaders.Set_('content-length', '5');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'HEAD /head-content-length HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200 OK', LResp) = 1,
+      'HEAD-CL: status line present');
+    Check(Pos('content-length: 5'#13#10, LResp) > 0,
+      'HEAD-CL: explicit content-length preserved');
+    Check(Pos('transfer-encoding: chunked', LResp) = 0,
+      'HEAD-CL: no chunked header');
+    Check(Pos('0'#13#10#13#10, LResp) = 0,
+      'HEAD-CL: no chunk trailer');
+    Check(Pos('hello', LResp) = 0,
+      'HEAD-CL: no body bytes on wire');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 19: Chunked response preserves keep-alive }
 procedure TestChunkedKeepAlive;
 var
@@ -4032,6 +4072,8 @@ begin
     @TestNotModifiedResponseDoesNotUseChunkedEncoding);
   T.Run('HEAD response does not use chunked encoding or write body',
     @TestHeadResponseDoesNotUseChunkedEncodingOrWriteBody);
+  T.Run('HEAD response preserves explicit content-length without body bytes',
+    @TestHeadResponsePreservesContentLengthWithoutBodyBytes);
   T.Run('Chunked response preserves keep-alive', @TestChunkedKeepAlive);
   T.Run('Hijack keeps connection open for handler owner', @TestHijackLeavesConnectionOpenForHandlerOwner);
   T.Run('Hijack exception does not write 500 or close handler connection',
