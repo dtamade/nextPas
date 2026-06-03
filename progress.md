@@ -1,5 +1,26 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-K nested array-backed field chains
+
+- **Status:** completed, pending path-limited commit.
+- Branch and safety state:
+  - Branch: `main`.
+  - Unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Colleague lane remains off-limits: compiler/toolchain, compiler/targets, tools/stage0, tests/toolchain, build target/toolchain/profile files, and `build/verify_local.sh`.
+- Current decision:
+  - Batch both `arr[i].A.B := rhs` and `Self.FItems[i].A.B := rhs` in one slice instead of splitting per function.
+  - Reuse repeated `shekField` over an address-producing base; do not invent a new expression kind.
+  - Keep `assign-arr-elem-runtime` as the runtime node kind for array-backed field stores; preserve fallback by flattening slot offsets into the old blob index.
+- Evidence:
+  - RED builder test: `test_hir_builder_structured_address` exited `6`, proving aggregate intermediate field targets still fell through to legacy `const:99/123`.
+  - RED producer test: `test_semantic_hir_expr_producer` exited `222`, proving `arr[i].A.B := y + 1` did not yet build the expected `assign-arr-elem-runtime` node.
+  - GREEN changed tests: `test_hir_builder_structured_address` and `test_semantic_hir_expr_producer` both exit `0`.
+  - Focused suite: 9 compiler tests ran with `focused_failed=0`.
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `46508 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_total=137 passed=137 failed=0 build_failed=0 run_failed=0`.
+- Next immediate step:
+  - Commit compiler-only slice, then continue C5 with array/field-array value loads and remaining class/object RHS paths.
+
 ## Session: 2026-06-03 C5-J field array target
 
 - **Status:** active.

@@ -8031,18 +8031,18 @@ var
     Result := FModel.GetFieldMetaByName(AOwnerTypeId, AFieldName, AFieldMeta);
   end;
 
-  function BuildRecordFieldTargetExpr(const ARecordName, ARecordTypeName,
-    AFieldName: string; out AExprId: LongInt): Boolean;
+  function BuildRecordBaseAddressExpr(const ARecordName, ARecordTypeName: string;
+    out AExprId: LongInt): Boolean;
   var
     Children: array of LongInt;
-    RecordTypeId, RecordSymbolId, BaseExprId: LongInt;
-    FieldMeta: TFieldMeta;
+    RecordTypeId, RecordSymbolId: LongInt;
   begin
     AExprId := 0;
     if (ARecordName = '') or (ARecordTypeName = '') then
       Exit(False);
-    if not LookupFieldMetaByTypeName(ARecordTypeName, AFieldName, RecordTypeId,
-      FieldMeta) then
+
+    RecordTypeId := FModel.FindTypeByName(ARecordTypeName);
+    if RecordTypeId <= 0 then
       Exit(False);
 
     RecordSymbolId := FindSymbolByNameAndType(ARecordName, RecordTypeId);
@@ -8052,33 +8052,26 @@ var
       Exit(False);
 
     SetLength(Children, 0);
-    BaseExprId := FModel.AddHirExpr(
+    AExprId := FModel.AddHirExpr(
       shekSymbolAddress, RecordTypeId, RecordSymbolId, Children,
       0, '', '', 0, shvcAddress
-    );
-    SetLength(Children, 1);
-    Children[0] := BaseExprId;
-    AExprId := FModel.AddHirExpr(
-      shekField, FieldMeta.TypeId, 0, Children,
-      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
     );
     Result := AExprId > 0;
   end;
 
-  function BuildClassFieldTargetExpr(const ABaseName, AClassName,
-    AFieldName: string; out AExprId: LongInt): Boolean;
+  function BuildClassBaseAddressExpr(const ABaseName, AClassName: string;
+    out AExprId: LongInt): Boolean;
   var
     Children: array of LongInt;
-    BaseTypeId, PointerTypeId, BaseSymbolId, PointerExprId, DerefExprId: LongInt;
-    FieldMeta: TFieldMeta;
+    BaseTypeId, PointerTypeId, BaseSymbolId, PointerExprId: LongInt;
     SelfTypeId: LongInt;
   begin
     AExprId := 0;
     PointerTypeId := FModel.FindTypeByName('Pointer');
     if PointerTypeId <= 0 then
       Exit(False);
-    if not LookupFieldMetaByTypeName(AClassName, AFieldName, BaseTypeId,
-      FieldMeta) then
+    BaseTypeId := FModel.FindTypeByName(AClassName);
+    if BaseTypeId <= 0 then
       Exit(False);
 
     if SameText(ABaseName, 'self') then
@@ -8103,17 +8096,183 @@ var
     );
     SetLength(Children, 1);
     Children[0] := PointerExprId;
-    DerefExprId := FModel.AddHirExpr(
+    AExprId := FModel.AddHirExpr(
       shekDeref, BaseTypeId, 0, Children,
       0, '', '', 0, shvcAddress
     );
+    Result := AExprId > 0;
+  end;
+
+  function BuildRecordFieldTargetExpr(const ARecordName, ARecordTypeName,
+    AFieldName: string; out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    RecordTypeId, BaseExprId: LongInt;
+    FieldMeta: TFieldMeta;
+  begin
+    AExprId := 0;
+    if not LookupFieldMetaByTypeName(ARecordTypeName, AFieldName, RecordTypeId,
+      FieldMeta) then
+      Exit(False);
+    if not BuildRecordBaseAddressExpr(ARecordName, ARecordTypeName, BaseExprId) then
+      Exit(False);
+
     SetLength(Children, 1);
-    Children[0] := DerefExprId;
+    Children[0] := BaseExprId;
     AExprId := FModel.AddHirExpr(
       shekField, FieldMeta.TypeId, 0, Children,
       FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
     );
     Result := AExprId > 0;
+  end;
+
+  function BuildClassFieldTargetExpr(const ABaseName, AClassName,
+    AFieldName: string; out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    BaseTypeId, BaseExprId: LongInt;
+    FieldMeta: TFieldMeta;
+  begin
+    AExprId := 0;
+    if not LookupFieldMetaByTypeName(AClassName, AFieldName, BaseTypeId,
+      FieldMeta) then
+      Exit(False);
+    if not BuildClassBaseAddressExpr(ABaseName, AClassName, BaseExprId) then
+      Exit(False);
+
+    SetLength(Children, 1);
+    Children[0] := BaseExprId;
+    AExprId := FModel.AddHirExpr(
+      shekField, FieldMeta.TypeId, 0, Children,
+      FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+    );
+    Result := AExprId > 0;
+  end;
+
+  function TryCurrentClassFieldArrayAccess(const AArrayAccessNode: TGreenNode;
+    out AFieldName: string): Boolean; forward;
+  function BuildClassFieldArrayElementTargetExpr(
+    const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean; forward;
+
+  function ResolveArrayAccessElementTypeId(const AArrayAccessNode: TGreenNode;
+    out AElementTypeId: LongInt): Boolean;
+  var
+    ArrayName, ElementTypeName, FieldName: string;
+  begin
+    AElementTypeId := 0;
+    if (AArrayAccessNode = nil) or
+      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
+      (AArrayAccessNode.ChildCount < 2) then
+      Exit(False);
+
+    if (AArrayAccessNode.ChildAt(0) <> nil) and
+      (AArrayAccessNode.ChildAt(0).NodeKind = gnkIdentifier) then
+    begin
+      ArrayName := AArrayAccessNode.ChildAt(0).Text;
+      if (ArrayName <> '') and IsRuntimeArrVar(ArrayName) and
+        FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
+          ElementTypeName) then
+      begin
+        AElementTypeId := FModel.FindTypeByName(ElementTypeName);
+        Exit(AElementTypeId > 0);
+      end;
+    end;
+
+    if (FCurrentMethodClass <> '') and
+      TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) and
+      FModel.LookupStringConstValue(
+        FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+        ElementTypeName) then
+    begin
+      AElementTypeId := FModel.FindTypeByName(ElementTypeName);
+      Exit(AElementTypeId > 0);
+    end;
+
+    Result := False;
+  end;
+
+  function BuildTargetAddressExpr(const ATargetNode: TGreenNode;
+    out AExprId: LongInt): Boolean;
+  var
+    Children: array of LongInt;
+    BaseName, ClassTypeName, FieldName, RecordTypeName: string;
+    BaseExprId, BaseTypeId, ElementTypeId: LongInt;
+    FieldMeta: TFieldMeta;
+  begin
+    AExprId := 0;
+    if ATargetNode = nil then
+      Exit(False);
+
+    case ATargetNode.NodeKind of
+      gnkIdentifier:
+        begin
+          BaseName := ATargetNode.Text;
+          if BaseName = '' then
+            Exit(False);
+          if SameText(BaseName, 'Self') and (FCurrentMethodClass <> '') then
+            Exit(BuildClassBaseAddressExpr('self', FCurrentMethodClass,
+              AExprId));
+          if (FCurrentMethodClass <> '') and
+            (TypeMetaFieldIndex(FCurrentMethodClass, BaseName) >= 0) then
+            Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
+              BaseName, AExprId));
+          if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') then
+          begin
+            RecordTypeName := LookupRecordVar(FCurrentRetVarName);
+            if RecordTypeName <> '' then
+              Exit(BuildRecordBaseAddressExpr(FCurrentRetVarName,
+                RecordTypeName, AExprId));
+          end;
+          RecordTypeName := LookupRecordVar(BaseName);
+          if RecordTypeName <> '' then
+            Exit(BuildRecordBaseAddressExpr(BaseName, RecordTypeName, AExprId));
+          ClassTypeName := LookupClassVar(BaseName);
+          if ClassTypeName <> '' then
+            Exit(BuildClassBaseAddressExpr(BaseName, ClassTypeName, AExprId));
+          Result := False;
+        end;
+      gnkArrayAccess:
+        Result := BuildRuntimeArrayElementAddressHirExpr(ATargetNode,
+          AExprId) or BuildClassFieldArrayElementTargetExpr(ATargetNode,
+          AExprId);
+      gnkDotAccess:
+        begin
+          if (ATargetNode.ChildCount < 2) or (ATargetNode.ChildAt(0) = nil) or
+            (ATargetNode.ChildAt(1) = nil) or
+            (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
+            Exit(False);
+
+          FieldName := ATargetNode.ChildAt(1).Text;
+          if not BuildTargetAddressExpr(ATargetNode.ChildAt(0), BaseExprId) then
+            Exit(False);
+          if (BaseExprId <= 0) or (BaseExprId > FModel.HirExprCount) then
+            Exit(False);
+
+          BaseTypeId := FModel.HirExprAt(BaseExprId - 1).TypeId;
+          if (BaseTypeId <= 0) and
+            (ATargetNode.ChildAt(0).NodeKind = gnkArrayAccess) then
+          begin
+            if not ResolveArrayAccessElementTypeId(ATargetNode.ChildAt(0),
+              ElementTypeId) then
+              Exit(False);
+            BaseTypeId := ElementTypeId;
+          end;
+          if BaseTypeId <= 0 then
+            Exit(False);
+          if not FModel.GetFieldMetaByName(BaseTypeId, FieldName, FieldMeta) then
+            Exit(False);
+
+          SetLength(Children, 1);
+          Children[0] := BaseExprId;
+          AExprId := FModel.AddHirExpr(
+            shekField, FieldMeta.TypeId, 0, Children,
+            FieldMeta.Index, FieldMeta.Name, '', 0, shvcAddress
+          );
+          Result := AExprId > 0;
+        end;
+    else
+      Result := False;
+    end;
   end;
 
   function BuildArrayRecordFieldTargetExpr(const AArrayAccessNode: TGreenNode;
@@ -8257,56 +8416,8 @@ var
 
   function BuildFieldStoreTargetExpr(const ATargetNode: TGreenNode;
     out AExprId: LongInt): Boolean;
-  var
-    BaseName, FieldName, RecordTypeName, ClassTypeName: string;
   begin
-    AExprId := 0;
-    if ATargetNode = nil then
-      Exit(False);
-
-    if (ATargetNode.NodeKind = gnkIdentifier) and
-      (FCurrentMethodClass <> '') and
-      (TypeMetaFieldIndex(FCurrentMethodClass, ATargetNode.Text) >= 0) then
-      Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
-        ATargetNode.Text, AExprId));
-
-    if (ATargetNode.NodeKind <> gnkDotAccess) or
-      (ATargetNode.ChildCount < 2) or
-      (ATargetNode.ChildAt(0) = nil) or
-      (ATargetNode.ChildAt(1) = nil) or
-      (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
-      Exit(False);
-
-    if ATargetNode.ChildAt(0).NodeKind = gnkArrayAccess then
-      Exit(BuildArrayRecordFieldTargetExpr(ATargetNode.ChildAt(0),
-        ATargetNode.ChildAt(1).Text, AExprId));
-
-    if ATargetNode.ChildAt(0).NodeKind <> gnkIdentifier then
-      Exit(False);
-
-    BaseName := ATargetNode.ChildAt(0).Text;
-    FieldName := ATargetNode.ChildAt(1).Text;
-
-    if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') and
-      IsRecordVar(FCurrentRetVarName) then
-      Exit(BuildRecordFieldTargetExpr(FCurrentRetVarName,
-        LookupRecordVar(FCurrentRetVarName), FieldName, AExprId));
-
-    if SameText(BaseName, 'Self') and (FCurrentMethodClass <> '') then
-      Exit(BuildClassFieldTargetExpr('self', FCurrentMethodClass,
-        FieldName, AExprId));
-
-    RecordTypeName := LookupRecordVar(BaseName);
-    if RecordTypeName <> '' then
-      Exit(BuildRecordFieldTargetExpr(BaseName, RecordTypeName, FieldName,
-        AExprId));
-
-    ClassTypeName := LookupClassVar(BaseName);
-    if ClassTypeName <> '' then
-      Exit(BuildClassFieldTargetExpr(BaseName, ClassTypeName, FieldName,
-        AExprId));
-
-    Result := False;
+    Result := BuildTargetAddressExpr(ATargetNode, AExprId);
   end;
 
   procedure AttachFieldStoreTargetExpr(const AHirNodeId: LongInt;
@@ -8351,8 +8462,7 @@ var
   begin
     if (AHirNodeId <= 0) or (ATargetNode = nil) then
       Exit;
-    if BuildRuntimeArrayElementAddressHirExpr(ATargetNode, LocalExprId) or
-      BuildClassFieldArrayElementTargetExpr(ATargetNode, LocalExprId) then
+    if BuildTargetAddressExpr(ATargetNode, LocalExprId) then
       FModel.SetTypedHirNodeTargetExprId(AHirNodeId, LocalExprId);
   end;
 
@@ -8378,6 +8488,142 @@ var
     );
     AttachRuntimeScalarExpr(LocalNodeId, AExprNode);
     AttachFieldStoreTargetExpr(LocalNodeId, ATargetNode);
+  end;
+
+  function ResolveArrayStoreRootInfo(const AArrayAccessNode: TGreenNode;
+    out ADisplayName, AOperandPrefix: string; out AElementTypeId: LongInt;
+    out AElementSlotCount: Int64): Boolean;
+  var
+    ArrayName, ElementTypeName, FieldName: string;
+    FieldIndex: Int64;
+  begin
+    ADisplayName := '';
+    AOperandPrefix := '';
+    AElementTypeId := 0;
+    AElementSlotCount := 1;
+    if (AArrayAccessNode = nil) or
+      (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
+      (AArrayAccessNode.ChildCount < 2) then
+      Exit(False);
+
+    if (AArrayAccessNode.ChildAt(0) <> nil) and
+      (AArrayAccessNode.ChildAt(0).NodeKind = gnkIdentifier) then
+    begin
+      ArrayName := AArrayAccessNode.ChildAt(0).Text;
+      if (ArrayName <> '') and IsRuntimeArrVar(ArrayName) and
+        FModel.LookupStringConstValue(ArrayName + '$arr_elem_type',
+          ElementTypeName) then
+      begin
+        ADisplayName := ArrayName;
+        AOperandPrefix := ArrayName;
+      end;
+    end;
+
+    if (ADisplayName = '') and (FCurrentMethodClass <> '') and
+      TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) and
+      FModel.LookupStringConstValue(
+        FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+        ElementTypeName) then
+    begin
+      FieldIndex := TypeMetaFieldIndex(FCurrentMethodClass, FieldName);
+      if FieldIndex < 0 then
+        Exit(False);
+      ADisplayName := '__field_arr__';
+      AOperandPrefix := 'self' + #9 + IntToStr(FieldIndex);
+    end;
+
+    if (ADisplayName = '') or (ElementTypeName = '') then
+      Exit(False);
+
+    AElementTypeId := FModel.FindTypeByName(ElementTypeName);
+    if AElementTypeId <= 0 then
+      Exit(False);
+    if TypeMetaIsRecord(ElementTypeName) then
+    begin
+      AElementSlotCount := TypeMetaSize(ElementTypeName) div 8;
+      if AElementSlotCount <= 0 then
+        Exit(False);
+    end;
+    Result := True;
+  end;
+
+  function ResolveArrayBackedFieldTarget(const ATargetNode: TGreenNode;
+    out AArrayAccessNode: TGreenNode; out ALeafTypeId: LongInt;
+    out AFieldOffset: Int64): Boolean;
+  var
+    DummyDisplayName, DummyOperandPrefix: string;
+    BaseTypeId: LongInt;
+    ElementSlotCount: Int64;
+    FieldMeta: TFieldMeta;
+  begin
+    AArrayAccessNode := nil;
+    ALeafTypeId := 0;
+    AFieldOffset := 0;
+    if (ATargetNode = nil) or (ATargetNode.NodeKind <> gnkDotAccess) or
+      (ATargetNode.ChildCount < 2) or (ATargetNode.ChildAt(0) = nil) or
+      (ATargetNode.ChildAt(1) = nil) or
+      (ATargetNode.ChildAt(1).NodeKind <> gnkIdentifier) then
+      Exit(False);
+
+    if ATargetNode.ChildAt(0).NodeKind = gnkArrayAccess then
+    begin
+      AArrayAccessNode := ATargetNode.ChildAt(0);
+      if not ResolveArrayStoreRootInfo(AArrayAccessNode, DummyDisplayName,
+        DummyOperandPrefix, BaseTypeId, ElementSlotCount) then
+        Exit(False);
+      AFieldOffset := 0;
+    end
+    else
+    begin
+      if not ResolveArrayBackedFieldTarget(ATargetNode.ChildAt(0),
+        AArrayAccessNode, BaseTypeId, AFieldOffset) then
+        Exit(False);
+    end;
+
+    if not FModel.GetFieldMetaByName(BaseTypeId, ATargetNode.ChildAt(1).Text,
+      FieldMeta) then
+      Exit(False);
+    Inc(AFieldOffset, FieldMeta.Index);
+    ALeafTypeId := FieldMeta.TypeId;
+    Result := ALeafTypeId > 0;
+  end;
+
+  function TryAddArrayBackedFieldStoreRuntimeNode(
+    const ATargetNode, AExprNode: TGreenNode): Boolean;
+  var
+    ArrayAccessNode: TGreenNode;
+    DisplayName, OperandPrefix, IndexBlob, ValueBlob: string;
+    ElementTypeId, LeafTypeId: LongInt;
+    ElementSlotCount, FieldOffset: Int64;
+  begin
+    Result := False;
+    if not FNoFold or (ATargetNode = nil) or (AExprNode = nil) then
+      Exit(False);
+    if not ResolveArrayBackedFieldTarget(ATargetNode, ArrayAccessNode,
+      LeafTypeId, FieldOffset) then
+      Exit(False);
+    if not ResolveArrayStoreRootInfo(ArrayAccessNode, DisplayName,
+      OperandPrefix, ElementTypeId, ElementSlotCount) then
+      Exit(False);
+    if (ArrayAccessNode.ChildCount < 2) or
+      (not EncodeRuntimeIntExprFold(ArrayAccessNode.ChildAt(1), IndexBlob)) or
+      (not EncodeRuntimeIntExprFold(AExprNode, ValueBlob)) then
+      Exit(False);
+
+    if ElementSlotCount > 1 then
+      IndexBlob := IndexBlob + 'int ' + IntToStr(ElementSlotCount) + #10 +
+        'mul' + #10;
+    if FieldOffset > 0 then
+      IndexBlob := IndexBlob + 'int ' + IntToStr(FieldOffset) + #10 +
+        'add' + #10;
+
+    AddArrayElementStoreRuntimeNode(
+      DisplayName,
+      OperandPrefix + #9 + IndexBlob + #9 + ValueBlob,
+      ATargetNode,
+      AExprNode
+    );
+    Result := True;
   end;
 
   procedure AddWriteIntRuntimeNode(const AExprNode: TGreenNode;
@@ -8604,6 +8850,12 @@ begin
         (Child.ChildAt(0).NodeKind = gnkDotAccess) and
         (Child.ChildAt(0).ChildCount >= 2) then
       begin
+        Arg := nil;
+        if Child.ChildCount >= 2 then
+          Arg := Child.ChildAt(1);
+        if TryAddArrayBackedFieldStoreRuntimeNode(Child.ChildAt(0), Arg) then
+          Continue;
+
         Decoded := Child.ChildAt(0).ChildAt(0).Text + '.' +
           Child.ChildAt(0).ChildAt(1).Text;
         if FNoFold and (IsRecordVar(Child.ChildAt(0).ChildAt(0).Text) or

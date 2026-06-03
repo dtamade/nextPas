@@ -1,6 +1,39 @@
 # Task Plan: nextPas active work
 
-## Active Session: 2026-06-03 C5-K0 constructor arg classification redpoint
+## Active Session: 2026-06-03 C5-K nested array-backed field chains
+
+### Goal
+
+在 C5-I/C5-J 已分别打通 `arr[i].Field := rhs` 与 `self.FItems[i] := rhs`
+之后，把更深一层的 array-backed field chain 一次收口：
+`arr[i].A.B := rhs` 与 `Self.FItems[i].A.B := rhs`。目标是统一 sema target
+递归构造与 builder aggregate intermediate field address lowering，同时保留旧 blob
+fallback，不碰同事的 toolchain/targets/stage0/verify truth lane。
+
+### Checklist
+
+- [x] 确认当前 `main` 与 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或并行 toolchain/targets/stage0 lane。
+- [x] 重读 `compiler/docs/compiler-goal-tree.md`、`core/docs/design-conventions.md`、`docs/inbox.md`、memory 与根计划文件。
+- [x] 写 RED：producer 覆盖 `arr[i].A.B := y + 1` 与 `Self.FItems[i].A.B := y + 1`。
+- [x] 写 RED：builder 覆盖 aggregate intermediate `shekField` address，不允许掉回 legacy `const:99/123`。
+- [x] 在 sema 增加共享 `BuildTargetAddressExpr`，统一 nested array/field-array/record/class address tree。
+- [x] 把 array-backed field store producer 收口成统一分流，fallback index 展平成 `index * elem_slots + field_offset`。
+- [x] 在 builder 放行 aggregate intermediate `shekField` 的 address lowering，同时保留 value-load guard。
+- [x] 跑 changed tests、9 个 focused compiler tests、完整重编译、137 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md`、`docs/inbox.md`、计划/进度文件，并准备 path-limited commit。
+
+### Constraints
+
+- 只改本轮需要的 `compiler/sema`、`compiler/ir`、`compiler/tests` 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- `ExprId` 只表示 RHS/value；`TargetExprId` 只表示 LHS/address，不混用。
+- 结构化表达式和旧 blob 双轨必须保留；失败时 builder 仍回落旧 operand/blob。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-K0 constructor arg classification redpoint
+
+## Previous Session: 2026-06-03 C5-K0 constructor arg classification redpoint
 
 ### Goal
 

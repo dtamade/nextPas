@@ -237,13 +237,16 @@ begin
 end;
 
 var
-  IntegerTypeId, PointerTypeId, RecordTypeId: LongInt;
-  SymArr, SymP, SymRec, SymRecArr, SymSelf, SymStaticArr, SymX, SymY: LongInt;
+  IntegerTypeId, PointerTypeId, RecordTypeId, InnerTypeId, OuterTypeId: LongInt;
+  SymArr, SymNestedArr, SymP, SymRec, SymRecArr, SymSelf, SymStaticArr, SymX,
+    SymY: LongInt;
   ExprFive, ExprOne, ExprXAddress, ExprAddressOfX, ExprDerefAddressOfX: LongInt;
-  ExprArrElement, ExprRecArrElement, ExprRecArrField, ExprStaticArrElement,
-    ExprPValue, ExprDerefPRecord, ExprPField: LongInt;
+  ExprArrElement, ExprNestedArrElement, ExprNestedOuterField,
+    ExprNestedLeafField, ExprRecArrElement, ExprRecArrField,
+    ExprStaticArrElement, ExprPValue, ExprDerefPRecord, ExprPField: LongInt;
   ExprRecAddress, ExprRecField, ExprSelfValue, ExprDerefSelf, ExprItemsField,
-    ExprItemsElement: LongInt;
+    ExprItemsElement, ExprItemsOuterElement, ExprItemsOuterField,
+    ExprItemsLeafField: LongInt;
   NodeId: LongInt;
   Builder: THIRBuilder;
   Func: THIRFunction;
@@ -253,10 +256,13 @@ begin
     IntegerTypeId := AddTypeWithFact('Integer', sskInt, 32, True);
     PointerTypeId := AddTypeWithFact('Pointer', sskPointer, 64, False);
     RecordTypeId := Model.AddType('TNode', 'declared');
+    InnerTypeId := Model.AddType('TInner', 'declared');
+    OuterTypeId := Model.AddType('TOuter', 'declared');
 
     SymX := Model.AddSymbol('x', 'variable', '', IntegerTypeId, 0);
     SymY := Model.AddSymbol('y', 'variable', '', IntegerTypeId, 0);
     SymArr := Model.AddSymbol('arr', 'variable', '', 0, 0);
+    SymNestedArr := Model.AddSymbol('nestedArr', 'variable', '', 0, 0);
     SymRecArr := Model.AddSymbol('recArr', 'variable', '', 0, 0);
     SymStaticArr := Model.AddSymbol('staticArr', 'variable', '', 0, 0);
     SymSelf := Model.AddSymbol('self', 'parameter', '', RecordTypeId, 0);
@@ -269,6 +275,12 @@ begin
     ExprAddressOfX := AddAddressOf(ExprXAddress, PointerTypeId);
     ExprDerefAddressOfX := AddDeref(ExprAddressOfX, IntegerTypeId);
     ExprArrElement := AddArrayElemAddress(SymArr, ExprOne, IntegerTypeId);
+    ExprNestedArrElement := AddArrayElemAddress(SymNestedArr, ExprOne,
+      OuterTypeId);
+    ExprNestedOuterField := AddFieldAddress(ExprNestedArrElement, InnerTypeId,
+      0, 'A');
+    ExprNestedLeafField := AddFieldAddress(ExprNestedOuterField, IntegerTypeId,
+      0, 'B');
     ExprRecArrElement := AddArrayElemAddress(SymRecArr, ExprOne,
       RecordTypeId);
     ExprRecArrField := AddFieldAddress(ExprRecArrElement, IntegerTypeId, 1,
@@ -287,10 +299,18 @@ begin
       'FItems');
     ExprItemsElement := AddArrayElemAddressFromBase(ExprItemsField, ExprOne,
       IntegerTypeId);
+    ExprItemsOuterElement := AddArrayElemAddressFromBase(ExprItemsField,
+      ExprOne, OuterTypeId);
+    ExprItemsOuterField := AddFieldAddress(ExprItemsOuterElement, InnerTypeId,
+      0, 'A');
+    ExprItemsLeafField := AddFieldAddress(ExprItemsOuterField, IntegerTypeId,
+      0, 'B');
 
     Model.AddTypedHirNode('method-body-begin', 'TestAddress', 0,
       IntegerTypeId, '0::i');
     Model.AddTypedHirNode('var-decl-arr-runtime', 'arr', SymArr, 0, 'arr');
+    Model.AddTypedHirNode('var-decl-arr-runtime', 'nestedArr', SymNestedArr, 0,
+      'nestedArr');
     Model.AddTypedHirNode('var-decl-arr-runtime', 'recArr', SymRecArr, 0,
       'recArr');
     Model.AddConstValue('staticArr$arr_static', 1);
@@ -337,10 +357,22 @@ begin
     Model.SetTypedHirNodeTargetExprId(NodeId, ExprRecArrField);
 
     NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
+      'nestedArr[1].A.B := 5', 0, IntegerTypeId,
+      'nestedArr'#9'int 99'#10#9'int 123'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprNestedLeafField);
+
+    NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
       'FItems[1] := 5', 0, IntegerTypeId,
       'self'#9'1'#9'int 99'#10#9'int 123'#10);
     Model.SetTypedHirNodeExprId(NodeId, ExprFive);
     Model.SetTypedHirNodeTargetExprId(NodeId, ExprItemsElement);
+
+    NodeId := Model.AddTypedHirNode('assign-arr-elem-runtime',
+      'FItems[1].A.B := 5', 0, IntegerTypeId,
+      'self'#9'1'#9'int 99'#10#9'int 123'#10);
+    Model.SetTypedHirNodeExprId(NodeId, ExprFive);
+    Model.SetTypedHirNodeTargetExprId(NodeId, ExprItemsLeafField);
 
     NodeId := Model.AddTypedHirNode('assign-runtime', 'y := p^.Value',
       SymY, IntegerTypeId, 'y'#9'int 0'#10);

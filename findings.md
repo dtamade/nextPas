@@ -1,5 +1,23 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-K nested array-backed field chains
+
+- `arr[i].A.B := rhs` 没有 runtime node 的根因不只是 `TargetExprId` 缺失；`WalkHaltCalls`
+  里 assignment routing 本身只认一层 shape，所以 deeper chain 需要同时收口“node 分流”和
+  “target address 构造”两层逻辑。
+- `shekField` 不需要新 kind；更深 field chain 的正确结构仍然是 repeated
+  `shekField` over an address-producing base。
+- 对 array-backed nested field store，legacy fallback 仍可保留而不必作废：
+  只要把 field path offset 展平成 `index * elem_slots + field_offset`，现有
+  `assign-arr-elem-runtime` fallback 就还能表达 deeper chain 的槽位寻址。
+- builder 当前真正的阻塞点是 `shekField` 把 `ExprHirTypeId(AExpr) <> 0`
+  当成 address lowering 前提；这会错误拒绝像 `.A` 这样的 aggregate intermediate field。
+  放开 address lowering 后，value load 仍必须继续要求 concrete scalar HIR type，
+  这样不会把 aggregate address 偷偷当标量值读走。
+- `BuildTargetAddressExpr` 适合作为 C5 期间的共享 sema seam：同一条递归路径可以覆盖
+  direct array、field-array、record/class base、implicit self field 和 deeper dot chain，
+  比继续堆叠 one-off producer helper 更稳。
+
 ## 2026-06-03 C5-J field array target
 
 - Current HEAD is `7a62f257 feat(compiler): C5I lower array record field targets`.

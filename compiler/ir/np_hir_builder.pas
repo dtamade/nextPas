@@ -476,8 +476,8 @@ begin
       end;
     shekField:
       Result := (Length(AExpr.Children) >= 1) and
-        (AExpr.ValueClass = shvcAddress) and (AExpr.LiteralInt >= 0) and
-        (ExprHirTypeId(AExpr) <> 0) and
+        (AExpr.TypeId > 0) and (AExpr.ValueClass = shvcAddress) and
+        (AExpr.LiteralInt >= 0) and
         CanLowerExprAsAddress(AExpr.Children[0]);
     shekArrayElem:
       begin
@@ -927,8 +927,6 @@ begin
     Exit(False);
 
   HirType := ExprHirTypeId(AExpr);
-  if HirType = 0 then
-    Exit(False);
   FieldIndexValue := EmitConstIntOfType(AExpr.LiteralInt, GetIntType);
   if FieldIndexValue = 0 then
     Exit(False);
