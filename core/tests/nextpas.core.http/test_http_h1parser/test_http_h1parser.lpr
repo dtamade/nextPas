@@ -1344,6 +1344,36 @@ begin
   Check(LP.HasError, 'chunked trailer partial follow-up headers report parser error on finish');
 end;
 
+procedure TestChunkedTrailerPipelinedNextRequestDoesNotPolluteCurrentRequest;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq2: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10 +
+           'Trailer: X-Test'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LReq2 := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10#13#10;
+  LReq := LReq1 + LReq2;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'pipelined chunked trailer second request should not corrupt first request');
+  Check(LP.IsComplete, 'first pipelined chunked trailer request should complete');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'chunked trailer parser should consume only the first request');
+  Check(LP.GetMethod = hmPost, 'first pipelined chunked trailer request preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'first pipelined chunked trailer request preserves url');
+  CheckEqual('hello', LP.GetBody, 'first pipelined chunked trailer request preserves decoded body');
+  CheckEqual('X-Test', LP.GetHeaders.Get('Trailer'), 'first pipelined chunked trailer request preserves trailer declaration');
+  CheckEqual('', LP.GetHeaders.Get('X-Test'), 'first pipelined chunked trailer request keeps trailer field out of regular headers');
+end;
+
 procedure TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest;
 var
   LP: IH1Parser;
@@ -1585,6 +1615,8 @@ begin
     @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
   T.Run('Chunked trailer keep-alive truncated follow-up headers consumes first request only',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
+  T.Run('Chunked trailer pipelined next request does not pollute current request',
+    @TestChunkedTrailerPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
