@@ -189,6 +189,7 @@ var
 begin
   LCfg := TConfig.Create;
   try
+    LCfg.LoadFromFile('app.toml', cfToml);
     LCfg.LoadFromIni('[server]' + #10 + 'host=127.0.0.1' + #10);
     LCfg.LoadFromJson('{"server":{"port":8080},"tags":["api","prod"]}');
     LCfg.LoadFromEnv('APP_');
@@ -200,11 +201,102 @@ end;
 
 Supported direct loaders:
 
+- `LoadFromFile`
 - `LoadFromIni`
 - `LoadFromJson`
 - `LoadFromYaml`
 - `LoadFromToml`
 - `LoadFromEnv`
+
+## Mutate config in memory
+
+`TConfig` now supports direct in-memory mutation when the application needs to
+build or adjust config values programmatically:
+
+- `SetString`
+- `SetInt`
+- `SetBool`
+- `SetFloat`
+- `SetStringArray`
+- `DeleteKey`
+- `DeleteSection`
+- `Clear`
+
+Example:
+
+```pascal
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('server.host', '127.0.0.1');
+    LCfg.SetInt('server.port', 8080);
+    LCfg.SetString('service.url', 'http://${server.host}:${server.port}');
+    LCfg.SetStringArray('tags', ['api', 'prod']);
+
+    LCfg.DeleteKey('tags.1');
+    LCfg.DeleteSection('legacy');
+  finally
+    LCfg.Free;
+  end;
+end;
+```
+
+Mutation stays aligned with the existing flat dot-path storage model:
+
+- `SetString` stores the raw string value. `GetRawString` returns that raw
+  value, while `GetString` still applies normal interpolation.
+- `SetStringArray('tags', ...)` writes `tags.0`, `tags.1`, and so on.
+- `DeleteKey` removes one exact key.
+- `DeleteSection` removes one exact prefix root plus all `prefix.*`
+  descendants.
+- `Clear` resets the full config snapshot.
+
+## Export config as JSON
+
+Both `IConfig` snapshots and mutable `TConfig` instances can now export their
+current config table as compact JSON through `ToJson`. Mutable `TConfig`
+instances also add `SaveToJson` for writing that JSON to disk.
+
+Example:
+
+```pascal
+var
+  Live: TConfig;
+  Snapshot: IConfig;
+begin
+  Live := TConfig.Create;
+  try
+    Live.SetString('server.host', '127.0.0.1');
+    Live.SetInt('server.port', 8080);
+    WriteLn(Live.ToJson);
+    Live.SaveToJson('app.snapshot.json');
+  finally
+    Live.Free;
+  end;
+
+  Snapshot := ConfigBuilder
+    .AddDefault('app.name', 'nextpas')
+    .AddJson('{"app":{"port":8080}}')
+    .Build;
+  WriteLn(Snapshot.ToJson);
+end;
+```
+
+Export semantics stay faithful to the config module's flat storage model:
+
+- leaf values are exported as JSON strings, because the flat config store keeps
+  canonical string values rather than original source scalar types
+- dense zero-based numeric children like `tags.0`, `tags.1` export as JSON
+  arrays
+- sparse or mixed numeric children export as JSON objects so keys round-trip
+  without reindexing
+- scalar/subtree conflicts such as `db` plus `db.host` raise `EConfigError`
+  instead of silently dropping data
+
+This batch only adds JSON export/save. `ToToml`, `SaveToYaml`, `SaveToIni`, and
+other persisted format writers are not part of the current public surface yet.
 
 `ConfigLoad(APath, AFormat)` is a convenience wrapper for:
 
@@ -222,16 +314,23 @@ underlying parser reports invalid input. The message includes parser details and
 position context. JSON reports line, column, and byte offset. YAML and TOML
 report line and column.
 
-Use `TryLoadJson`, `TryLoadYaml`, or `TryLoadToml` when the caller needs an
-explicit success/failure branch:
+Use `TryLoadFromFile`, `TryLoadJson`, `TryLoadYaml`, or `TryLoadToml` when the
+caller needs an explicit success/failure branch:
 
 ```pascal
+if not LCfg.TryLoadFromFile('app.toml', cfToml, LError) then
+  WriteLn(LError);
+
 if not LCfg.TryLoadJson(AInput, LError) then
   WriteLn(LError);
 ```
 
 The longer `TryLoadFromJson`, `TryLoadFromYaml`, and `TryLoadFromToml` names are
 kept for compatibility.
+
+`LoadFromFile` and `TryLoadFromFile` use the same format dispatch as
+`ConfigBuilder.AddFile` and `ConfigLoad`, but load into an existing mutable
+`TConfig` instance.
 
 `AddFile` and `ConfigLoad` wrap file-path context around the underlying error,
 so missing files and malformed file content report which config file failed.

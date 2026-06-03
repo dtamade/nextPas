@@ -44,6 +44,7 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function ToJson: string;
     property Count: Integer read GetCount;
   end;
 
@@ -72,6 +73,10 @@ type
     FLock: IRWLock;
     FEntries: array of TConfigEntry;
     FCount: Integer;
+    procedure ClearUnlocked;
+    procedure DeleteIndexUnlocked(AIndex: Integer);
+    procedure DeleteKeyUnlocked(const AKey: string);
+    procedure DeleteSectionUnlocked(const APrefix: string);
     procedure SetValue(const AKey, AValue: string);
     procedure SetValueUnlocked(const AKey, AValue: string);
     function FindIndex(const AKey: string): Integer;
@@ -84,15 +89,28 @@ type
     procedure LoadFromJson(const AContent: string);
     procedure LoadFromYaml(const AContent: string);
     procedure LoadFromToml(const AContent: string);
+    procedure LoadFromFile(const APath: string; AFormat: TConfigFormat);
     function TryLoadFromIni(const AContent: string; out AError: string): Boolean;
     function TryLoadFromJson(const AContent: string; out AError: string): Boolean;
     function TryLoadFromYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadFromToml(const AContent: string; out AError: string): Boolean;
+    function TryLoadFromFile(const APath: string; AFormat: TConfigFormat;
+      out AError: string): Boolean;
     function TryLoadJson(const AContent: string; out AError: string): Boolean;
     function TryLoadYaml(const AContent: string; out AError: string): Boolean;
     function TryLoadToml(const AContent: string; out AError: string): Boolean;
     procedure LoadFromEnv(const APrefix: string);
+    procedure SetString(const AKey, AValue: string);
+    procedure SetInt(const AKey: string; AValue: Int64);
+    procedure SetBool(const AKey: string; AValue: Boolean);
+    procedure SetFloat(const AKey: string; AValue: Double);
+    procedure SetStringArray(const AKey: string; const AValues: array of string);
     procedure SetDefault(const AKey, AValue: string);
+    procedure DeleteKey(const AKey: string);
+    procedure DeleteSection(const APrefix: string);
+    procedure Clear;
+    function ToJson: string;
+    procedure SaveToJson(const APath: string);
 
     function GetString(const AKey: string; const ADefault: string = ''): string;
     function GetRawString(const AKey: string; const ADefault: string = ''): string;
@@ -143,8 +161,10 @@ implementation
 
 uses
   nextpas.core.fs,
+  nextpas.core.json.writer,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
+  nextpas.core.text.builder,
   nextpas.core.yaml,
   nextpas.core.yaml.value,
   nextpas.core.yaml.types,
@@ -178,6 +198,29 @@ type
 
   TIndexedConfigValueArray = array of TIndexedConfigValue;
 
+  TConfigJsonNode = class;
+
+  TConfigJsonChild = record
+    Name: string;
+    Node: TConfigJsonNode;
+  end;
+
+  TConfigJsonNode = class
+  private
+    FHasScalar: Boolean;
+    FScalarValue: string;
+    FChildren: array of TConfigJsonChild;
+    FChildCount: Integer;
+    function FindChildIndex(const AName: string): Integer;
+    function RequireChild(const AName: string): TConfigJsonNode;
+    function IsDenseArray(out ACount: Integer): Boolean;
+  public
+    destructor Destroy; override;
+    procedure SetScalar(const AValue: string);
+    procedure AddPath(const AKey, AValue: string);
+    procedure WriteJson(var AWriter: TJsonWriter; const APath: string);
+  end;
+
   TOwnedConfig = class(TInterfacedObject, IConfig)
   private
     FConfig: TConfig;
@@ -200,6 +243,7 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function ToJson: string;
   end;
 
   TConfigBuilderImpl = class(TInterfacedObject, IConfigBuilder)
@@ -316,6 +360,35 @@ begin
   Result := False;
 end;
 
+procedure RequireConfigKey(const AKey: string);
+begin
+  if AKey = '' then
+    raise EConfigError.Create('config key must not be empty');
+end;
+
+procedure RequireConfigPrefix(const APrefix: string);
+begin
+  if APrefix = '' then
+    raise EConfigError.Create('config section prefix must not be empty');
+end;
+
+function KeyMatchesSection(const AKey, APrefix: string): Boolean;
+var
+  LLowerKey: string;
+  LLowerPrefix: string;
+  LPrefixLen: Integer;
+begin
+  LLowerKey := LowerCase(AKey);
+  LLowerPrefix := LowerCase(APrefix);
+  if LLowerKey = LLowerPrefix then
+    Exit(True);
+
+  LPrefixLen := Length(APrefix);
+  Result := (Length(AKey) > LPrefixLen) and
+    (AKey[LPrefixLen + 1] = '.') and
+    (Copy(LLowerKey, 1, LPrefixLen) = LLowerPrefix);
+end;
+
 procedure AddUniqueString(var AItems: TStringArray; var ACount: Integer;
   const AValue: string);
 begin
@@ -422,6 +495,188 @@ begin
       AEntries[LI] := ACfg.FEntries[LI];
   finally
     ACfg.FLock.ReleaseRead;
+  end;
+end;
+
+function NextConfigPathSegment(const AKey: string; var APos: Integer;
+  out ASegment: string): Boolean;
+var
+  LStart: Integer;
+begin
+  if APos > Length(AKey) then
+    Exit(False);
+
+  LStart := APos;
+  while (APos <= Length(AKey)) and (AKey[APos] <> '.') do
+    Inc(APos);
+  ASegment := Copy(AKey, LStart, APos - LStart);
+  if APos <= Length(AKey) then
+    Inc(APos);
+  Result := True;
+end;
+
+function DisplayConfigPath(const APath: string): string;
+begin
+  if APath = '' then
+    Result := '(root)'
+  else
+    Result := APath;
+end;
+
+{ TConfigJsonNode }
+
+destructor TConfigJsonNode.Destroy;
+var
+  LI: Integer;
+begin
+  for LI := 0 to FChildCount - 1 do
+    FChildren[LI].Node.Free;
+  FChildren := nil;
+  inherited Destroy;
+end;
+
+function TConfigJsonNode.FindChildIndex(const AName: string): Integer;
+var
+  LI: Integer;
+  LLower: string;
+begin
+  LLower := LowerCase(AName);
+  for LI := 0 to FChildCount - 1 do
+    if LowerCase(FChildren[LI].Name) = LLower then
+      Exit(LI);
+  Result := -1;
+end;
+
+function TConfigJsonNode.RequireChild(const AName: string): TConfigJsonNode;
+var
+  LIdx: Integer;
+begin
+  LIdx := FindChildIndex(AName);
+  if LIdx >= 0 then
+    Exit(FChildren[LIdx].Node);
+
+  if FChildCount >= Length(FChildren) then
+    SetLength(FChildren, FChildCount + 8);
+
+  FChildren[FChildCount].Name := AName;
+  FChildren[FChildCount].Node := TConfigJsonNode.Create;
+  Result := FChildren[FChildCount].Node;
+  Inc(FChildCount);
+end;
+
+function TConfigJsonNode.IsDenseArray(out ACount: Integer): Boolean;
+var
+  LI: Integer;
+  LIdx: Int64;
+  LMax: Int64;
+begin
+  ACount := 0;
+  if FChildCount = 0 then
+    Exit(False);
+
+  LMax := -1;
+  for LI := 0 to FChildCount - 1 do
+  begin
+    if not TryParseArrayIndex(FChildren[LI].Name, LIdx) then
+      Exit(False);
+    if LIdx > LMax then
+      LMax := LIdx;
+  end;
+
+  if LMax <> FChildCount - 1 then
+    Exit(False);
+
+  for LI := 0 to FChildCount - 1 do
+    if FindChildIndex(IntToStr(LI)) < 0 then
+      Exit(False);
+
+  ACount := FChildCount;
+  Result := True;
+end;
+
+procedure TConfigJsonNode.SetScalar(const AValue: string);
+begin
+  FHasScalar := True;
+  FScalarValue := AValue;
+end;
+
+procedure TConfigJsonNode.AddPath(const AKey, AValue: string);
+var
+  LNode: TConfigJsonNode;
+  LPos: Integer;
+  LSegment: string;
+begin
+  LNode := Self;
+  LPos := 1;
+  while NextConfigPathSegment(AKey, LPos, LSegment) do
+  begin
+    if LPos > Length(AKey) then
+    begin
+      LNode.RequireChild(LSegment).SetScalar(AValue);
+      Exit;
+    end;
+    LNode := LNode.RequireChild(LSegment);
+  end;
+end;
+
+procedure TConfigJsonNode.WriteJson(var AWriter: TJsonWriter; const APath: string);
+var
+  LI: Integer;
+  LCount: Integer;
+  LChildPath: string;
+begin
+  if FHasScalar then
+  begin
+    if FChildCount > 0 then
+      raise EConfigError.Create('config export conflict at "' +
+        DisplayConfigPath(APath) + '": scalar and subtree cannot both be represented as JSON');
+    AWriter.Str(FScalarValue);
+    Exit;
+  end;
+
+  if IsDenseArray(LCount) then
+  begin
+    AWriter.BeginArray;
+    for LI := 0 to LCount - 1 do
+      FChildren[FindChildIndex(IntToStr(LI))].Node.WriteJson(AWriter,
+        JoinKey(APath, IntToStr(LI)));
+    AWriter.EndArray;
+    Exit;
+  end;
+
+  AWriter.BeginObject;
+  for LI := 0 to FChildCount - 1 do
+  begin
+    AWriter.Key(FChildren[LI].Name);
+    LChildPath := JoinKey(APath, FChildren[LI].Name);
+    FChildren[LI].Node.WriteJson(AWriter, LChildPath);
+  end;
+  AWriter.EndObject;
+end;
+
+function ConfigEntriesToJson(const AEntries: TConfigEntryArray;
+  const ACount: Integer): string;
+var
+  LRoot: TConfigJsonNode;
+  LBuilder: TStringBuilder;
+  LWriter: TJsonWriter;
+  LI: Integer;
+begin
+  LRoot := TConfigJsonNode.Create;
+  try
+    for LI := 0 to ACount - 1 do
+      LRoot.AddPath(AEntries[LI].Key, AEntries[LI].Value);
+
+    LBuilder.Init(ACount * 32 + 2);
+    try
+      LWriter.Init(LBuilder);
+      LRoot.WriteJson(LWriter, '');
+      Result := LBuilder.ToString;
+    finally
+      LBuilder.Done;
+    end;
+  finally
+    LRoot.Free;
   end;
 end;
 
@@ -829,6 +1084,31 @@ begin
   end;
 end;
 
+procedure LoadConfigFileByFormat(ACfg: TConfig; const APath: string;
+  AFormat: TConfigFormat);
+var
+  LContent: string;
+begin
+  if not IsSupportedConfigFormat(AFormat) then
+    raise EConfigError.Create(FormatConfigFileLoadError(APath,
+      'unsupported config format'));
+
+  try
+    LContent := ReadFileText(APath);
+    try
+      LoadConfigTextByFormat(ACfg, LContent, AFormat);
+    except
+      on E: Exception do
+        raise EConfigError.Create(FormatConfigFileLoadError(APath, E.Message));
+    end;
+  except
+    on E: EConfigError do
+      raise;
+    on E: Exception do
+      raise EConfigError.Create(FormatConfigFileLoadError(APath, E.Message));
+  end;
+end;
+
 procedure LoadConfigFromIniFile(ACfg: TConfig; AIni: TIniFile);
 var
   LSections: nextpas.core.ini.TStringArray;
@@ -940,6 +1220,45 @@ begin
   Result := -1;
 end;
 
+procedure TConfig.ClearUnlocked;
+begin
+  SetLength(FEntries, 0);
+  FCount := 0;
+end;
+
+procedure TConfig.DeleteIndexUnlocked(AIndex: Integer);
+var
+  LI: Integer;
+begin
+  if (AIndex < 0) or (AIndex >= FCount) then
+    Exit;
+
+  for LI := AIndex to FCount - 2 do
+    FEntries[LI] := FEntries[LI + 1];
+
+  Dec(FCount);
+  FEntries[FCount].Key := '';
+  FEntries[FCount].Value := '';
+end;
+
+procedure TConfig.DeleteKeyUnlocked(const AKey: string);
+var
+  LIdx: Integer;
+begin
+  LIdx := FindIndex(AKey);
+  if LIdx >= 0 then
+    DeleteIndexUnlocked(LIdx);
+end;
+
+procedure TConfig.DeleteSectionUnlocked(const APrefix: string);
+var
+  LI: Integer;
+begin
+  for LI := FCount - 1 downto 0 do
+    if KeyMatchesSection(FEntries[LI].Key, APrefix) then
+      DeleteIndexUnlocked(LI);
+end;
+
 procedure TConfig.SetValue(const AKey, AValue: string);
 begin
   FLock.AcquireWrite;
@@ -964,6 +1283,42 @@ begin
     FEntries[FCount].Key := AKey;
     FEntries[FCount].Value := AValue;
     Inc(FCount);
+  end;
+end;
+
+procedure TConfig.SetString(const AKey, AValue: string);
+begin
+  RequireConfigKey(AKey);
+  SetValue(AKey, AValue);
+end;
+
+procedure TConfig.SetInt(const AKey: string; AValue: Int64);
+begin
+  SetString(AKey, IntToStr(AValue));
+end;
+
+procedure TConfig.SetBool(const AKey: string; AValue: Boolean);
+begin
+  SetString(AKey, BoolToStr(AValue));
+end;
+
+procedure TConfig.SetFloat(const AKey: string; AValue: Double);
+begin
+  SetString(AKey, FloatToStr(AValue));
+end;
+
+procedure TConfig.SetStringArray(const AKey: string; const AValues: array of string);
+var
+  LI: Integer;
+begin
+  RequireConfigKey(AKey);
+  FLock.AcquireWrite;
+  try
+    DeleteSectionUnlocked(AKey);
+    for LI := Low(AValues) to High(AValues) do
+      SetValueUnlocked(AKey + '.' + IntToStr(LI), AValues[LI]);
+  finally
+    FLock.ReleaseWrite;
   end;
 end;
 
@@ -1008,6 +1363,11 @@ begin
   if LDoc.HasError then
     raise EConfigError.Create(FormatTomlLoadError(LDoc.Error));
   LoadConfigFromTomlDocument(Self, LDoc);
+end;
+
+procedure TConfig.LoadFromFile(const APath: string; AFormat: TConfigFormat);
+begin
+  LoadConfigFileByFormat(Self, APath, AFormat);
 end;
 
 function TConfig.TryLoadFromIni(const AContent: string; out AError: string): Boolean;
@@ -1094,6 +1454,22 @@ begin
       Exit(False);
     end;
     LoadConfigFromTomlDocument(Self, LDoc);
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      AError := E.Message;
+      Result := False;
+    end;
+  end;
+end;
+
+function TConfig.TryLoadFromFile(const APath: string; AFormat: TConfigFormat;
+  out AError: string): Boolean;
+begin
+  AError := '';
+  try
+    LoadConfigFileByFormat(Self, APath, AFormat);
     Result := True;
   except
     on E: Exception do
@@ -1201,6 +1577,52 @@ begin
   finally
     FLock.ReleaseWrite;
   end;
+end;
+
+procedure TConfig.DeleteKey(const AKey: string);
+begin
+  RequireConfigKey(AKey);
+  FLock.AcquireWrite;
+  try
+    DeleteKeyUnlocked(AKey);
+  finally
+    FLock.ReleaseWrite;
+  end;
+end;
+
+procedure TConfig.DeleteSection(const APrefix: string);
+begin
+  RequireConfigPrefix(APrefix);
+  FLock.AcquireWrite;
+  try
+    DeleteSectionUnlocked(APrefix);
+  finally
+    FLock.ReleaseWrite;
+  end;
+end;
+
+procedure TConfig.Clear;
+begin
+  FLock.AcquireWrite;
+  try
+    ClearUnlocked;
+  finally
+    FLock.ReleaseWrite;
+  end;
+end;
+
+function TConfig.ToJson: string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  Result := ConfigEntriesToJson(LEntries, LCount);
+end;
+
+procedure TConfig.SaveToJson(const APath: string);
+begin
+  WriteFileText(APath, ToJson);
 end;
 
 function TConfig.GetString(const AKey: string; const ADefault: string): string;
@@ -1559,6 +1981,11 @@ begin
   Result := FConfig.GetSection(APrefix);
 end;
 
+function TOwnedConfig.ToJson: string;
+begin
+  Result := FConfig.ToJson;
+end;
+
 { TConfigBuilderImpl }
 
 function TConfigBuilderImpl.DefaultIndexOf(const AKey: string): Integer;
@@ -1603,8 +2030,6 @@ begin
 end;
 
 procedure TConfigBuilderImpl.ApplySource(ACfg: TConfig; const ASource: TConfigSource);
-var
-  LContent: string;
 begin
   case ASource.Kind of
     cskIni:
@@ -1618,27 +2043,7 @@ begin
     cskEnv:
       ACfg.LoadFromEnv(ASource.Value);
     cskFile:
-      begin
-        if not IsSupportedConfigFormat(ASource.Format) then
-          raise EConfigError.Create(FormatConfigFileLoadError(ASource.Value,
-            'unsupported config format'));
-        try
-          LContent := ReadFileText(ASource.Value);
-          try
-            LoadConfigTextByFormat(ACfg, LContent, ASource.Format);
-          except
-            on E: Exception do
-              raise EConfigError.Create(FormatConfigFileLoadError(ASource.Value,
-                E.Message));
-          end;
-        except
-          on E: EConfigError do
-            raise;
-          on E: Exception do
-            raise EConfigError.Create(FormatConfigFileLoadError(ASource.Value,
-              E.Message));
-        end;
-      end;
+      LoadConfigFileByFormat(ACfg, ASource.Value, ASource.Format);
   end;
 end;
 

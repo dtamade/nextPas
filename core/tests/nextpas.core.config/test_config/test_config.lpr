@@ -1175,6 +1175,74 @@ begin
   end;
 end;
 
+procedure TestLoadFromFileBasic;
+var
+  LCfg: TConfig;
+  LPath: string;
+begin
+  LPath := '/tmp/test_nextpas_config_load_from_file.json';
+  Remove(LPath);
+  WriteFileText(LPath, '{"server":{"host":"file-host","port":8080},"debug":true}');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromFile(LPath, cfJson);
+    CheckEqual('file-host', LCfg.GetString('server.host'), 'file host');
+    CheckEqual(Int64(8080), LCfg.GetInt('server.port'), 'file port');
+    CheckEqual(True, LCfg.GetBool('debug'), 'file bool');
+  finally
+    LCfg.Free;
+    Remove(LPath);
+  end;
+end;
+
+procedure TestTryLoadFromFileSuccessAndErrorsPreserveExisting;
+var
+  LCfg: TConfig;
+  LError: string;
+  LValidPath: string;
+  LMissingPath: string;
+  LBadPath: string;
+begin
+  LValidPath := '/tmp/test_nextpas_config_try_load_valid.toml';
+  LMissingPath := '/tmp/test_nextpas_config_try_load_missing.toml';
+  LBadPath := '/tmp/test_nextpas_config_try_load_bad.toml';
+  Remove(LValidPath);
+  Remove(LMissingPath);
+  Remove(LBadPath);
+  WriteFileText(LValidPath, '[server]' + #10 + 'host = "valid-host"' + #10);
+  WriteFileText(LBadPath, 'server = ');
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('keep=value' + #10);
+
+    LError := 'stale';
+    CheckEqual(True, LCfg.TryLoadFromFile(LValidPath, cfToml, LError),
+      'valid file returns true');
+    CheckEqual('', LError, 'valid file clears error');
+    CheckEqual('valid-host', LCfg.GetString('server.host'), 'valid file loads host');
+
+    LError := 'stale';
+    CheckEqual(False, LCfg.TryLoadFromFile(LMissingPath, cfToml, LError),
+      'missing file returns false');
+    Check(Pos(LMissingPath, LError) > 0, 'missing file path included');
+    CheckEqual('value', LCfg.GetString('keep'), 'missing file preserves keep');
+    CheckEqual('valid-host', LCfg.GetString('server.host'),
+      'missing file preserves loaded host');
+
+    LError := '';
+    CheckEqual(False, LCfg.TryLoadFromFile(LBadPath, cfToml, LError),
+      'bad file returns false');
+    Check(Pos(LBadPath, LError) > 0, 'bad file path included');
+    CheckEqual('value', LCfg.GetString('keep'), 'bad file preserves keep');
+    CheckEqual('valid-host', LCfg.GetString('server.host'),
+      'bad file preserves loaded host');
+  finally
+    LCfg.Free;
+    Remove(LValidPath);
+    Remove(LBadPath);
+  end;
+end;
+
 { === Hot Reload Tests === }
 
 procedure TestConfigWatcherHotReloadIni;
@@ -1399,6 +1467,9 @@ begin
   T.Run('LoadFromToml.Section', @TestLoadFromTomlSection);
   T.Run('MultiSource.Override', @TestMultiSourceOverride);
   T.Run('ReplaceFrom', @TestReplaceFrom);
+  T.Run('LoadFromFile.Basic', @TestLoadFromFileBasic);
+  T.Run('TryLoadFromFile.SuccessAndErrorsPreserveExisting',
+    @TestTryLoadFromFileSuccessAndErrorsPreserveExisting);
   T.Run('ConfigWatcher.HotReloadIni', @TestConfigWatcherHotReloadIni);
   T.Run('ConfigWatcher.BadJsonRaises', @TestConfigWatcherBadJsonRaisesAndPreservesOldConfig);
   T.Run('ConfigWatcher.BadYamlRaises', @TestConfigWatcherBadYamlRaisesAndPreservesOldConfig);

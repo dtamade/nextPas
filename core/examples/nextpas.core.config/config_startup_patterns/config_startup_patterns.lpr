@@ -17,6 +17,7 @@ var
   LLoaded: IConfig;
   LTryConfig: IConfig;
   LMutable: TConfig;
+  LDirect: TConfig;
   LError: string;
 
 begin
@@ -42,6 +43,16 @@ begin
   if LLoaded.GetStringRequired('server.host') <> '127.0.0.1' then
     Fail('ConfigLoad host mismatch');
   WriteLn('configload-host=', LLoaded.GetStringRequired('server.host'));
+
+  LDirect := TConfig.Create;
+  try
+    LDirect.LoadFromFile('app.toml', cfToml);
+    if LDirect.GetStringRequired('server.host') <> '127.0.0.1' then
+      Fail('LoadFromFile host mismatch');
+    WriteLn('loadfromfile-host=', LDirect.GetStringRequired('server.host'));
+  finally
+    LDirect.Free;
+  end;
 
   LError := '';
   if not ConfigBuilder
