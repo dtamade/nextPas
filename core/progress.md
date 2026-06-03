@@ -27,6 +27,9 @@
   - `Real socket write timeout backpressure stops pipeline`
 - `test_http_server` 新增 Linux `epoll` backend real-socket parity proof：
   - `Real socket write timeout backpressure stops pipeline with epoll backend`
+- strengthened real-socket proof 进一步锁定：
+  - 当前 stalled-peer 异常是在 handler 的 streaming body write 过程中出现
+  - 不是 handler 返回后的 post-handler flush 才首次暴露
 - `test_net_deep` 新增 simplified stalled-peer deadline proof：
   - `Write deadline during stalled peer backpressure`
 - 新增 `TTimeoutWriteTcpStream` fake transport，用来脚本化模拟：
@@ -58,6 +61,7 @@
 
 - 若继续沿 response-side correctness 推进，下一步应从“已有 threaded / epoll parity + simplified net proof”进入更细的 characterization：
   - HTTP response loop / buffered writer 对 stalled-peer close-observation 的差异
+  - large streaming response direct-write path 与 fully-buffered flush path 的差异
   - threaded / epoll 在该场景下是否仍完全等价
   - backpressure timing 是否需要更底层 transport/runtime seam 才能稳定分类
 - 在没有新的 RED 之前，不建议为了“看起来更完整”去改生产代码。
