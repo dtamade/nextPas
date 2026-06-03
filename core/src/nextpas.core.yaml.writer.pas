@@ -68,7 +68,9 @@ begin
   begin
     LCh := Byte(AView.Data[LI]);
     if (LCh = Byte(':')) or (LCh = Byte('#')) or (LCh = Byte('"')) or
-       (LCh = Byte('\')) or (LCh < 32) then
+       (LCh = Byte('\')) or (LCh = Byte(',')) or (LCh = Byte('[')) or
+       (LCh = Byte(']')) or (LCh = Byte('{')) or (LCh = Byte('}')) or
+       (LCh < 32) then
     begin
       Result := True;
       Exit;
@@ -83,25 +85,26 @@ var
   LCh: Byte;
 begin
   AW.AppendChar('"');
-  for LI := 0 to AView.Len - 1 do
-  begin
-    LCh := Byte(AView.Data[LI]);
-    case LCh of
-      Byte('\'): begin AW.AppendChar('\'); AW.AppendChar('\'); end;
-      Byte('"'): begin AW.AppendChar('\'); AW.AppendChar('"'); end;
-      10: begin AW.AppendChar('\'); AW.AppendChar('n'); end;
-      13: begin AW.AppendChar('\'); AW.AppendChar('r'); end;
-      9: begin AW.AppendChar('\'); AW.AppendChar('t'); end;
-      0..8, 11, 12, 14..31:
-        begin
-          AW.AppendChar('\'); AW.AppendChar('x');
-          AW.AppendChar(AnsiChar(HEX_CHARS[LCh shr 4]));
-          AW.AppendChar(AnsiChar(HEX_CHARS[LCh and $F]));
-        end;
-    else
-      AW.AppendByte(LCh);
+  if AView.Len > 0 then
+    for LI := 0 to AView.Len - 1 do
+    begin
+      LCh := Byte(AView.Data[LI]);
+      case LCh of
+        Byte('\'): begin AW.AppendChar('\'); AW.AppendChar('\'); end;
+        Byte('"'): begin AW.AppendChar('\'); AW.AppendChar('"'); end;
+        10: begin AW.AppendChar('\'); AW.AppendChar('n'); end;
+        13: begin AW.AppendChar('\'); AW.AppendChar('r'); end;
+        9: begin AW.AppendChar('\'); AW.AppendChar('t'); end;
+        0..8, 11, 12, 14..31:
+          begin
+            AW.AppendChar('\'); AW.AppendChar('x');
+            AW.AppendChar(AnsiChar(HEX_CHARS[LCh shr 4]));
+            AW.AppendChar(AnsiChar(HEX_CHARS[LCh and $F]));
+          end;
+      else
+        AW.AppendByte(LCh);
+      end;
     end;
-  end;
   AW.AppendChar('"');
 end;
 

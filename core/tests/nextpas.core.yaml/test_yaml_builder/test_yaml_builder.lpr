@@ -345,6 +345,33 @@ begin
   Check(Length(LOut) > 0, 'zero indent output not empty');
 end;
 
+procedure TestBuildOwnsQuotedSpecialStrings;
+var
+  LB: TYamlBuilder;
+  LOut: string;
+  LDoc: IYamlDocument;
+begin
+  LB.Init;
+  LB.BeginMap;
+  LB.PutKey('special');
+  LB.BeginMap;
+  LB.PutKey('value');
+  LB.PutStr('a,b]}');
+  LB.PutKey('empty');
+  LB.PutStr('');
+  LB.EndMap;
+  LB.EndMap;
+  LOut := LB.Stringify;
+  LB.Done;
+
+  LDoc := YamlParse(LOut);
+  Check(not LDoc.HasError, 'quoted specials stringify to valid yaml');
+  CheckEqual('a,b]}', LDoc.Root.MapGet('special').MapGet('value').AsStr.ToString,
+    'flow-special scalar survives');
+  CheckEqual('', LDoc.Root.MapGet('special').MapGet('empty').AsStr.ToString,
+    'empty scalar survives');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.yaml.builder');
   T.Run('Build scalar', @TestBuildScalar);
@@ -367,5 +394,6 @@ begin
   T.Run('PutStrView', @TestPutStrView);
   T.Run('StringifyPretty custom indent', @TestStringifyPrettyCustomIndent);
   T.Run('StringifyPretty zero indent', @TestStringifyPrettyZeroIndent);
+  T.Run('Build owns quoted special strings', @TestBuildOwnsQuotedSpecialStrings);
   T.Summary;
 end.

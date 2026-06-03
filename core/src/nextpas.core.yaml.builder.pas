@@ -16,8 +16,11 @@ type
     FDoc: TYamlDocument;
     FStack: array[0..31] of UInt32;
     FStackTop: Int32;
+    FOwnedStrings: array of string;
+    FOwnedCount: SizeUInt;
     function CurrentContainer: UInt32; inline;
     procedure AppendToContainer(ANodeIdx: UInt32);
+    function RetainString(const AValue: string): TStringView;
   public
     procedure Init;
     procedure Done;
@@ -42,12 +45,16 @@ procedure TYamlBuilder.Init;
 begin
   YamlDocInit(FDoc);
   FStackTop := -1;
+  SetLength(FOwnedStrings, 16);
+  FOwnedCount := 0;
 end;
 
 procedure TYamlBuilder.Done;
 begin
   SetLength(FDoc.Nodes, 0);
   SetLength(FDoc.Anchors, 0);
+  SetLength(FOwnedStrings, 0);
+  FOwnedCount := 0;
 end;
 
 function TYamlBuilder.CurrentContainer: UInt32;
@@ -80,6 +87,25 @@ begin
       LCur := FDoc.Nodes[LCur].Next;
     FDoc.Nodes[LCur].Next := ANodeIdx;
   end;
+end;
+
+function TYamlBuilder.RetainString(const AValue: string): TStringView;
+var
+  LIndex: SizeUInt;
+  LCapacity: SizeUInt;
+begin
+  LIndex := FOwnedCount;
+  LCapacity := SizeUInt(Length(FOwnedStrings));
+  if LIndex >= LCapacity then
+  begin
+    if LCapacity = 0 then
+      SetLength(FOwnedStrings, 16)
+    else
+      SetLength(FOwnedStrings, LCapacity * 2);
+  end;
+  FOwnedStrings[LIndex] := AValue;
+  Inc(FOwnedCount);
+  Result := TStringView.FromStr(FOwnedStrings[LIndex]);
 end;
 
 function AddBuilderNode(var ADoc: TYamlDocument): UInt32;
@@ -144,7 +170,7 @@ var LIdx, LCont: UInt32;
 begin
   LIdx := AddBuilderNode(FDoc);
   FDoc.Nodes[LIdx].Kind := ynkString;
-  FDoc.Nodes[LIdx].Str := TStringView.FromStr(AValue);
+  FDoc.Nodes[LIdx].Str := RetainString(AValue);
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
   if LCont <> YAML_NODE_NONE then
@@ -156,7 +182,7 @@ var LIdx, LCont: UInt32;
 begin
   LIdx := AddBuilderNode(FDoc);
   FDoc.Nodes[LIdx].Kind := ynkString;
-  FDoc.Nodes[LIdx].Str := AValue;
+  FDoc.Nodes[LIdx].Str := RetainString(AValue.ToString);
   AppendToContainer(LIdx);
   LCont := CurrentContainer;
   if LCont <> YAML_NODE_NONE then
@@ -216,7 +242,7 @@ var LIdx: UInt32;
 begin
   LIdx := AddBuilderNode(FDoc);
   FDoc.Nodes[LIdx].Kind := ynkString;
-  FDoc.Nodes[LIdx].Str := TStringView.FromStr(AKey);
+  FDoc.Nodes[LIdx].Str := RetainString(AKey);
   AppendToContainer(LIdx);
 end;
 
