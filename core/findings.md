@@ -1,10 +1,10 @@
-# Findings: nextpas.core.http epoll trailer-complete differential proof
+# Findings: nextpas.core.http epoll follow-up tail differential proof
 
 ## Scope
 
 - 当前目标是继续收紧 `nextpas.core.http` 在 Linux `epoll` backend 下的契约证据，
-  重点验证 phase-1 backend 不会破坏 chunked trailer-complete follow-up 这类最复杂的
-  keep-alive / pipelining 语义。
+  重点验证 phase-1 backend 不会破坏 plain `Content-Length` / plain chunked follow-up tail
+  这类 keep-alive 边界语义。
 - 本轮只看 `tests/nextpas.core.http/test_http_server` 与最小控制面文件。
 
 ## Baseline truths
@@ -22,12 +22,16 @@
 - 新增 `epoll` differential tests 直接通过，没有暴露新的 runtime bug。
 - 本轮不需要改 `src/nextpas.core.http.*` 或 `src/nextpas.core.net.server.*` 生产代码。
 
-### 2. `epoll` phase-1 的 differential proof 已经推进到 trailer-complete follow-up 语义
+### 2. `epoll` phase-1 的 differential proof 已经补齐 plain follow-up tail 语义
 
 - 现在 `test_http_server` 已直接证明 `epoll` backend 下这些 contract 与 threaded 保持一致：
   - keep-alive 两次复用
   - fixed-length same-write pipelining
   - chunked first-request same-write pipelining
+  - keep-alive `Content-Length` garbage tail -> follow-up `400`
+  - keep-alive `Content-Length` truncated follow-up request line / headers -> follow-up `400`
+  - keep-alive plain chunked garbage tail -> follow-up `400`
+  - keep-alive plain chunked truncated follow-up request line / headers -> follow-up `400`
   - chunked trailer-complete keep-alive garbage tail -> follow-up `400`
   - chunked trailer-complete keep-alive truncated follow-up request line / headers -> follow-up `400`
   - chunked trailer-complete same-write pipelined next-request
@@ -37,29 +41,31 @@
 
 ### 3. 这轮仍然是 coverage-expansion，不需要生产修复
 
-- 新增 `epoll` trailer-complete tests 直接通过，没有暴露新的 runtime bug。
+- 新增 `epoll` plain follow-up tail tests 直接通过，没有暴露新的 runtime bug。
 - 因此本轮不改 `src/nextpas.core.http.*` 或 `src/nextpas.core.net.server.*` 生产代码。
 
 ## Verification evidence
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `98 total, 98 passed, 0 failed`
+  - `104 total, 104 passed, 0 failed`
   - 新增通过：
-    - `Chunked trailer keep-alive garbage tail -> follow-up 400 with epoll backend`
-    - `Chunked trailer keep-alive truncated follow-up request line -> follow-up 400 with epoll backend`
-    - `Chunked trailer keep-alive truncated follow-up headers -> follow-up 400 with epoll backend`
-    - `Chunked trailer pipelined requests in single write with epoll backend`
-    - `Chunked trailer partial follow-up request line can complete later with epoll backend`
+    - `Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend`
+    - `Content-Length keep-alive truncated follow-up request line -> follow-up 400 with epoll backend`
+    - `Content-Length keep-alive truncated follow-up headers -> follow-up 400 with epoll backend`
+    - `Chunked keep-alive garbage tail -> follow-up 400 with epoll backend`
+    - `Chunked keep-alive truncated follow-up request line -> follow-up 400 with epoll backend`
+    - `Chunked keep-alive truncated follow-up headers -> follow-up 400 with epoll backend`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- Linux `epoll` 当前已把最复杂的 trailer-complete follow-up 路径补进 differential proof，
-  但如果要把矩阵做满，plain `Content-Length` / plain chunked 的 follow-up tail 仍可继续单独补 `epoll` focused variants。
+- Linux `epoll` 现在已经把 plain `Content-Length` / plain chunked / trailer-complete
+  follow-up tail 路径都补进 differential proof；后续更值钱的差距更偏向 backpressure、
+  per-connection evented runtime、以及未来 `IOCP` / `kqueue` 家族实现，而不是继续横向复制同类 H1 tail 用例。
 - `kqueue` / `IOCP` 仍未实现；Windows 长期目标仍是 `IOCP`，不是 `WSAPoll` 终态。
 - 当前还没有 benchmark 结论，性能判断必须后置到 correctness 和 backend contract 进一步稳定之后。
 
 ## Commit intent
 
-- 这批改动应该以 HTTP epoll trailer-complete differential coverage-expansion 提交。
+- 这批改动应该以 HTTP epoll follow-up-tail differential coverage-expansion 提交。
 - 必须坚持 path-limited staging，不能把共享 worktree 中的其他改动带入本 commit。

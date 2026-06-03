@@ -1433,6 +1433,183 @@ begin
   end;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestContentLengthKeepAliveGarbageTailBecomesFollowUp400EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10#13#10 +
+        'hello_extra_bytes_here';
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'epoll keep-alive tail: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'epoll keep-alive tail: first body preserved');
+      Check(LSeenUpload, 'epoll keep-alive tail: first handler called');
+      CheckEqual('hello', LGotBody, 'epoll keep-alive tail: handler sees declared body only');
+      Check(Pos('HTTP/1.1 400', LResp2) > 0, 'epoll keep-alive tail: malformed follow-up gets 400');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10#13#10 +
+        'hello' +
+        'GET /next HTTP/1.1';
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'epoll keep-alive partial follow-up line: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'epoll keep-alive partial follow-up line: first body preserved');
+    Check(LSeenUpload, 'epoll keep-alive partial follow-up line: first handler called');
+    CheckEqual('hello', LGotBody, 'epoll keep-alive partial follow-up line: handler sees declared body only');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'epoll keep-alive partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10#13#10 +
+        'hello' +
+        'GET /next HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10;
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'epoll keep-alive partial follow-up headers: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'epoll keep-alive partial follow-up headers: first body preserved');
+    Check(LSeenUpload, 'epoll keep-alive partial follow-up headers: first handler called');
+    CheckEqual('hello', LGotBody, 'epoll keep-alive partial follow-up headers: handler sees declared body only');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'epoll keep-alive partial follow-up headers: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 procedure TestChunkedRequestExtraBytesAfterCloseRejected;
 var
   LRouter: THttpRouter;
@@ -1645,6 +1822,187 @@ begin
     StopServer(LServer, LHandle);
   end;
 end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestChunkedKeepAliveGarbageTailBecomesFollowUp400EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10 +
+        'garbage';
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'epoll keep-alive chunked tail: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'epoll keep-alive chunked tail: first body preserved');
+      Check(LSeenUpload, 'epoll keep-alive chunked tail: first handler called');
+      CheckEqual('hello', LGotBody, 'epoll keep-alive chunked tail: handler sees decoded body only');
+      Check(Pos('HTTP/1.1 400', LResp2) > 0, 'epoll keep-alive chunked tail: malformed follow-up gets 400');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10 +
+        'GET /next HTTP/1.1';
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'epoll keep-alive chunked partial follow-up line: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'epoll keep-alive chunked partial follow-up line: first body preserved');
+    Check(LSeenUpload, 'epoll keep-alive chunked partial follow-up line: first handler called');
+    CheckEqual('hello', LGotBody, 'epoll keep-alive chunked partial follow-up line: handler sees decoded body only');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'epoll keep-alive chunked partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10 +
+        'GET /next HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10;
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'epoll keep-alive chunked partial follow-up headers: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'epoll keep-alive chunked partial follow-up headers: first body preserved');
+    Check(LSeenUpload, 'epoll keep-alive chunked partial follow-up headers: first handler called');
+    CheckEqual('hello', LGotBody, 'epoll keep-alive chunked partial follow-up headers: handler sees decoded body only');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'epoll keep-alive chunked partial follow-up headers: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
 
 procedure TestChunkedTrailerKeepAliveGarbageTailBecomesFollowUp400;
 var
@@ -4751,8 +5109,20 @@ begin
     @TestKeepAliveEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
+  T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
+    @TestContentLengthKeepAliveGarbageTailBecomesFollowUp400EpollBackend);
+  T.Run('Content-Length keep-alive truncated follow-up request line -> follow-up 400 with epoll backend',
+    @TestContentLengthKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400EpollBackend);
+  T.Run('Content-Length keep-alive truncated follow-up headers -> follow-up 400 with epoll backend',
+    @TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400EpollBackend);
   T.Run('Chunked pipelined requests in single write with epoll backend',
     @TestChunkedPipelinedRequestsInSingleWriteEpollBackend);
+  T.Run('Chunked keep-alive garbage tail -> follow-up 400 with epoll backend',
+    @TestChunkedKeepAliveGarbageTailBecomesFollowUp400EpollBackend);
+  T.Run('Chunked keep-alive truncated follow-up request line -> follow-up 400 with epoll backend',
+    @TestChunkedKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400EpollBackend);
+  T.Run('Chunked keep-alive truncated follow-up headers -> follow-up 400 with epoll backend',
+    @TestChunkedKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400EpollBackend);
   T.Run('Chunked trailer keep-alive garbage tail -> follow-up 400 with epoll backend',
     @TestChunkedTrailerKeepAliveGarbageTailBecomesFollowUp400EpollBackend);
   T.Run('Chunked trailer keep-alive truncated follow-up request line -> follow-up 400 with epoll backend',
