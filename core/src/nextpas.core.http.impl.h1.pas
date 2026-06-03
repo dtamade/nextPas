@@ -198,6 +198,7 @@ type
     function QueuePollErrorResponse(const AStatus: THttpStatus): Boolean;
     procedure ApplyPollRequestResult(const AWork: TH1PollRequestWork);
     procedure ArmPollWriteDeadline;
+    procedure ArmDirectWriteDeadline;
     function UsePollOwnedResponseDrain: Boolean;
     function ExecuteCurrentRequest: TTcpServerConnOwnership;
     function ExecuteCurrentPollRequest(out AOutbound: IH1OutboundBuffer;
@@ -631,6 +632,13 @@ begin
     FPollWriteDeadline := TDeadline.Infinite;
 end;
 
+procedure TH1ServerConnectionState.ArmDirectWriteDeadline;
+begin
+  if FOptions.WriteTimeout > 0 then
+    FConn.SetWriteDeadline(TDeadline.After(
+      TDuration.FromMilliseconds(FOptions.WriteTimeout)));
+end;
+
 function TH1ServerConnectionState.UsePollOwnedResponseDrain: Boolean;
 begin
   Result := FStreamRuntime <> nil;
@@ -655,10 +663,6 @@ begin
   LResponseWriter := nil;
   LDrainStarted := False;
   try
-    if FOptions.WriteTimeout > 0 then
-      FConn.SetWriteDeadline(TDeadline.After(
-        TDuration.FromMilliseconds(FOptions.WriteTimeout)));
-
     FKeepAlive := ShouldKeepAlive(FParser);
 
     if (FParser.GetHttpVersion = hvHttp11) and
@@ -712,6 +716,7 @@ begin
     if Supports(LResponseWriter, IFlusher, LFlusher) then
       LFlusher.Flush;
     LDrainStarted := True;
+    ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
 
     if LW.GetHeaders.Get('connection') = 'close' then
@@ -730,7 +735,10 @@ begin
           if Supports(LResponseWriter, IFlusher, LFlusher) then
             LFlusher.Flush;
           if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
+          begin
+            ArmDirectWriteDeadline;
             LOutbound.DrainAllTo(FConn as IWriter);
+          end;
         except
         end;
       end;

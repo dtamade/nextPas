@@ -2426,6 +2426,96 @@ begin
     'partial timeout does not append synthetic 500 after partial response bytes');
 end;
 
+procedure RunRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandler(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+  LHandlerCalls: Int32;
+const
+  WRITE_TIMEOUT_MS = 50;
+  HANDLER_SLEEP_NS = 150000000;
+  READ_WAIT_MS = 2000;
+  REQ =
+    'GET /slow HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10;
+  BODY = 'slow-ok';
+begin
+  CheckEqual(Int64(WRITE_TIMEOUT_MS), AHttpOpts.WriteTimeout,
+    ABackendName + ' slow buffered handler proof expects the configured write timeout');
+  LHandlerCalls := 0;
+
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/slow', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    Inc(LHandlerCalls);
+    platform_thread_sleep_ns(HANDLER_SLEEP_NS);
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(BODY))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(BODY[1], SizeUInt(Length(BODY)));
+  end);
+
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, AHttpOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadUntilClosedOrDeadline(LConn, READ_WAIT_MS, LClosed, LTimedOut);
+
+      CheckEqual(Int64(1), Int64(LHandlerCalls),
+        ABackendName + ' slow buffered handler still runs exactly once');
+      Check(LClosed,
+        ABackendName + ' slow buffered handler response closes cleanly on Connection: close');
+      Check(not LTimedOut,
+        ABackendName + ' slow buffered handler response arrives before read deadline');
+      Check(Pos('HTTP/1.1 200 OK', LResp) > 0,
+        ABackendName + ' slow buffered handler still emits 200 response');
+      Check(Pos(BODY, LResp) > 0,
+        ABackendName + ' slow buffered handler body reaches the client');
+      Check(Pos('HTTP/1.1 500', LResp) = 0,
+        ABackendName + ' slow buffered handler path does not append synthetic 500');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandler;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  RunRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandler(
+    'threaded', LHttpOpts);
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandlerEpollBackend;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandler(
+    'epoll', LHttpOpts);
+end;
+{$ENDIF}
+
 procedure RunRealSocketWriteTimeoutBackpressureStopsPipeline(
   const ABackendName: string; const AHttpOpts: THttpServerOptions);
 var
@@ -7705,6 +7795,8 @@ begin
     @TestRealSocketWriteTimeoutBackpressureStopsPipelineEpollBackend);
   T.Run('Real socket write timeout backpressure does not emit follow-up 400 with epoll backend',
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400EpollBackend);
+  T.Run('Real socket write timeout ignores slow buffered handler with epoll backend',
+    @TestRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandlerEpollBackend);
   T.Run('Real socket queued follow-up 400 preserves wire order with epoll backend',
     @TestEpollRealSocketQueuedFollowUp400PreservesWireOrder);
   T.Run('Real socket queued follow-up 413 preserves wire order with epoll backend',
@@ -7749,6 +7841,8 @@ begin
     @TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500);
   T.Run('Write timeout after partial wire bytes stops pipeline without 500',
     @TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500);
+  T.Run('Real socket write timeout ignores slow buffered handler',
+    @TestRealSocketWriteTimeoutDoesNotExpireDuringSlowBufferedHandler);
   T.Run('Real socket write timeout backpressure stops pipeline',
     @TestRealSocketWriteTimeoutBackpressureStopsPipeline);
   T.Run('Real socket write timeout backpressure does not emit follow-up 400',
