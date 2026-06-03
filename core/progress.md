@@ -1,66 +1,28 @@
-# Progress Log: http HEAD explicit Content-Length no-body contract batch
+# Progress Log: whole-repo nextPas/core convention audit
 
 ## Session
 
-- **Scope:** 收紧 `nextpas.core.http` 的 `HEAD + explicit Content-Length + no body` 契约。
-- **Status:** complete
+- **Scope:** 整仓规范审计。
+- **Status:** in_progress
 
-## Baseline audit
+## Current state
 
-- 读过 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、`docs/http/ARCHITECTURE.md`、
-  `docs/net/ARCHITECTURE.md` 与 `docs/plans/2026-06-03-http-server-runtime-foundation.md`，
-  确认 server runtime 方向已固定到 `nextpas.core.net.server`，本轮不再讨论选型。
-- 核对 `git status --short`：
-  仓库存在多处非 HTTP 脏改动，包括 `../.claude/*`、`../.worktrees/*`、
-  `tests/nextpas.core.async/test_async_stress/test_async_stress.lpr` 等；本轮严格 path-limited。
-- 接续时 HTTP 未提交改动主要在 4 个 test 文件：
-  `test_http_h1parser`、`test_http_h1writer`、`test_http_server`、`test_http_client`。
-
-## RED proof
-
-- `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - 编译失败
-  - 直接原因：`NewH1ResponseParser(True)` overload 尚不存在
-  - 这条 RED 证明当前 parser/client 还拿不到 `HEAD` skip-body hint
+- 已确认本轮不是接着 `process` 功能线继续做，而是要检查全仓规范符合度。
+- 已把控制文件切换到审计主题。
+- 已完成第一轮静态审计：命名、文件布局、层级依赖、测试目录形态。
 
 ## Completed work
 
-- `src/nextpas.core.http.impl.h1.parser.pas`
-  - 新增 `NewH1ResponseParser(const ASkipBody: Boolean)` internal overload
-  - 给 `TH1Parser` 增加 `FSkipBody`
-  - 在 init/reset 后重施 `HTTP_HEAD` / `F_SKIPBODY` hint
-  - 让 `ResponseEndsAtEof` / `ShouldKeepAlive` 与 skip-body 语义保持一致
-- `src/nextpas.core.http.impl.h1.pas`
-  - `TH1ClientTransport.ReadResponse` 现在接收原始 request method
-  - `RoundTrip` 在 `HEAD` 时把 skip-body hint 传给 response parser
-- `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
-  - 新增 `HEAD`-style response parser proof：显式 `Content-Length` 下无 body bytes 也能完成并保持 keep-alive
-- `tests/nextpas.core.http/test_http_h1writer/test_http_h1writer.lpr`
-  - 新增 suppress-body 保留显式 `Content-Length` 的 focused proof
-- `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
-  - 新增 raw-wire `HEAD` response 保留显式 `Content-Length` 且不写 body 的 proof
-- `tests/nextpas.core.http/test_http_client/test_http_client.lpr`
-  - 把 `HEAD` client contract 收紧到“保留 `Content-Length` header、body 仍为空”
-- `docs/http/API_COVERAGE.md`
-  - 记录本轮 parser/client/server/writer 的新 proof，并移除该项最高优先 gap
+- 重读 `docs/design-conventions.md`、`docs/l1-goal-tree.md`、`docs/platform-goal-tree.md`。
+- 审计了 `src/*.pas` 命名单元与文件名一致性。
+- 审计了 `src/` 目录结构，并确认 `src/generated/` 是架构文档明确登记的 generated include 例外。
+- 抽查并确认了 L0 `mem` / `simd` 的越层依赖问题。
+- 统计了 `tests/` 中不符合 `test_xxx/test_xxx.lpr` 目录形态的程序入口分布，确认 `tls` / `simd` 存在系统性历史偏差。
+- 检查了顶层模块家族与测试目录映射，发现 `nextpas.core.contracts` 缺少直属测试目录。
 
-## Verification
+## Next step
 
-- `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `82 total, 82 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_client clean test`
-  - `16 total, 16 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_h1writer clean test`
-  - `21 total, 21 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `87 total, 87 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-
-## Outcome
-
-- `HEAD` response 的 server-side no-body wire contract 现在不仅不写 body，也能保留显式 `Content-Length`。
-- client-side H1 parser 现在能正确理解这类 response，不再把 `Content-Length` 当成必须读取的 body。
-- public HTTP surface 未变化；收口的是 H1 internal seam 与 focused proof。
+- 输出本轮整仓规范审计结论，按“已合规 / 已知例外 / 确认违规 / 文档漂移”四类汇总。
+- 如果用户要进入修复阶段，应优先从两条主线开批次：
+  1. 先收紧 L0 `mem` / `simd` 的越层依赖。
+  2. 再分模块治理 `tls` / `simd` 历史测试入口布局。

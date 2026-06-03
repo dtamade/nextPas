@@ -1,17 +1,25 @@
-# Task Plan: http HEAD explicit Content-Length no-body contract batch
+# Task Plan: whole-repo nextPas/core convention audit
 
 ## Goal
 
-继续把 `nextpas.core.http` 的 HEAD response contract 收紧到更可证的状态：
+检查 `nextPas/core` 整仓是否遵守 `docs/design-conventions.md`，重点覆盖：
 
-- 共享 GET/HEAD handler 即使显式设置 `Content-Length` 并调用 `Write`，wire body 仍必须为空
-- client 读取 HEAD response 时必须保留 header、保持空 body、且不能因为 `Content-Length` 误等 body
-- 本轮只处理 HTTP changed surface 与控制文件，不碰共享 checkout 里的无关脏文件
+- 单元命名、文件组织、模块归属是否符合规范
+- 分层依赖是否越层
+- `base/intf/ffi/impl` 结构是否职责正确
+- 公共 API 是否有对应测试
+- 重点模块是否存在明显的命名、依赖、体积、平台抽象问题
 
 ## Checklist
 
-- [x] 审计 `docs/design-conventions.md`、HTTP 架构文档、`docs/http/API_COVERAGE.md` 与共享 `git status`，确认 runtime 设计已经固定在 `net.server`，本轮不重开选型。
-- [x] 接续已有 RED tests，确认当前批次聚焦 `HEAD + explicit Content-Length + no body` 的 parser/client/server/writer 契约。
-- [x] 最小实现：给 H1 response parser 增加 internal skip-body seam，并让 H1 client transport 按 request method 传入。
-- [x] 跑 changed-surface focused tests：`test_http_h1parser`、`test_http_h1writer`、`test_http_server`、`test_http_client`，要求 heaptrc `0 unfreed memory blocks`。
-- [x] 更新覆盖矩阵与控制文件，最后 path-limited 提交 HTTP 本轮文件。
+- [x] 建立整仓模块清单和审计维度清单。
+- [x] 读取设计规范、目标树和现有计划文件，确认审计口径。
+- [x] 自动扫描 `src/` 和 `tests/`，提取模块、层级、四件套、异常命名、潜在越层依赖。
+- [x] 对高风险模块做人工抽查，记录具体文件与问题。
+- [x] 汇总为 findings，给出合规/不合规分类和优先级。
+- [ ] 仅在用户确认或存在明确修复范围时再进入改动阶段。
+
+## Current Status
+
+- 该轮是整仓审计，不是功能开发。
+- 当前共享工作树有无关脏改动，审计阶段只读，先不写业务代码。
