@@ -96,6 +96,20 @@ begin
   end;
 end;
 
+procedure TestGetRawStringCaseInsensitive;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[DB]' + #10 + 'Host=myhost' + #10);
+    CheckEqual('myhost', LCfg.GetRawString('db.host'), 'lower lookup');
+    CheckEqual('myhost', LCfg.GetRawString('DB.HOST'), 'upper lookup');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === Interpolation Tests === }
 
 procedure TestInterpolationConfigKeys;
@@ -113,6 +127,95 @@ begin
       'config key placeholders');
   finally
     LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationExactPlaceholderChain;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[app]' + #10 +
+      'name=nextpas' + #10 +
+      'message=${app.name}' + #10 +
+      'chain=${app.message}' + #10);
+    CheckEqual('nextpas', LCfg.GetString('app.message'),
+      'exact placeholder resolves direct config key');
+    CheckEqual('nextpas', LCfg.GetString('app.chain'),
+      'exact placeholder chain resolves transitively');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationCacheInvalidatesOnConfigWrite;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[app]' + #10 +
+      'name=nextpas' + #10 +
+      'message=${app.name}' + #10);
+    CheckEqual('nextpas', LCfg.GetString('app.message'),
+      'initial interpolated value');
+
+    LCfg.SetString('app.name', 'updated');
+    CheckEqual('updated', LCfg.GetString('app.message'),
+      'config write invalidates cached interpolation');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationEnvFallbackIsNotCached;
+var
+  LCfg: TConfig;
+begin
+  SetEnv('NEXTPAS_CFG_INTERP_ENV_DYNAMIC', 'ap-east');
+  try
+    LCfg := TConfig.Create;
+    try
+      LCfg.LoadFromIni('region=${NEXTPAS_CFG_INTERP_ENV_DYNAMIC}' + #10);
+      CheckEqual('ap-east', LCfg.GetString('region'),
+        'initial env interpolation');
+
+      SetEnv('NEXTPAS_CFG_INTERP_ENV_DYNAMIC', 'ap-south');
+      CheckEqual('ap-south', LCfg.GetString('region'),
+        'env-backed interpolation stays dynamic');
+    finally
+      LCfg.Free;
+    end;
+  finally
+    UnsetEnv('NEXTPAS_CFG_INTERP_ENV_DYNAMIC');
+  end;
+end;
+
+procedure TestInterpolationReplaceFromInvalidatesCache;
+var
+  LTarget: TConfig;
+  LSource: TConfig;
+begin
+  LTarget := TConfig.Create;
+  LSource := TConfig.Create;
+  try
+    LTarget.LoadFromIni('[app]' + #10 +
+      'name=nextpas' + #10 +
+      'message=${app.name}' + #10);
+    LSource.LoadFromIni('[app]' + #10 +
+      'name=replaced' + #10 +
+      'message=${app.name}' + #10);
+
+    CheckEqual('nextpas', LTarget.GetString('app.message'),
+      'initial target interpolation');
+
+    LTarget.ReplaceFrom(LSource);
+    CheckEqual('replaced', LTarget.GetString('app.message'),
+      'ReplaceFrom invalidates cached interpolation');
+  finally
+    LSource.Free;
+    LTarget.Free;
   end;
 end;
 
@@ -426,6 +529,25 @@ begin
   end;
 end;
 
+procedure TestRequiredTypedWhitespaceAndSign;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('required.port', ' 8080 ');
+    LCfg.SetString('required.ratio', ' -2.5 ');
+    CheckEqual(Int64(8080), LCfg.GetIntRequired('required.port'),
+      'required int keeps whitespace support');
+    LVal := LCfg.GetFloatRequired('required.ratio');
+    Check((LVal < -2.4) and (LVal > -2.6),
+      'required float keeps whitespace support');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestRequiredTypedInvalidRaises;
 var
   LCfg: TConfig;
@@ -464,6 +586,20 @@ begin
         LRaised := True;
     end;
     CheckEqual(True, LRaised, 'invalid required float raises');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestRequiredBoolWhitespaceAndCase;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[flags]' + #10 + 'enabled=  TrUe  ' + #10);
+    CheckEqual(True, LCfg.GetBoolRequired('flags.enabled'),
+      'required bool trims and ignores case');
   finally
     LCfg.Free;
   end;
@@ -575,6 +711,23 @@ begin
   end;
 end;
 
+procedure TestGetIntWhitespaceAndSign;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('num.spaced', ' 42 ');
+    LCfg.SetString('num.plus', '+17');
+    LCfg.SetString('num.neg', ' -5 ');
+    CheckEqual(Int64(42), LCfg.GetInt('num.spaced'), 'spaced int');
+    CheckEqual(Int64(17), LCfg.GetInt('num.plus'), 'plus int');
+    CheckEqual(Int64(-5), LCfg.GetInt('num.neg'), 'negative int');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 { === GetBool Tests === }
 
 procedure TestGetBoolBasic;
@@ -609,6 +762,38 @@ begin
   try
     CheckEqual(True, LCfg.GetBool('missing', True), 'default true');
     CheckEqual(False, LCfg.GetBool('missing', False), 'default false');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetBoolWhitespaceAndCase;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[flags]' + #10 +
+      'spaced_true=  YeS  ' + #10 +
+      'spaced_false=  Off  ' + #10);
+    CheckEqual(True, LCfg.GetBool('flags.spaced_true'), 'trimmed mixed-case true');
+    CheckEqual(False, LCfg.GetBool('flags.spaced_false', True), 'trimmed mixed-case false');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetBoolShortTokenWhitespaceAndCase;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[flags]' + #10 +
+      'spaced_on=  On  ' + #10 +
+      'spaced_no=  nO  ' + #10);
+    CheckEqual(True, LCfg.GetBool('flags.spaced_on'), 'trimmed mixed-case on');
+    CheckEqual(False, LCfg.GetBool('flags.spaced_no', True), 'trimmed mixed-case no');
   finally
     LCfg.Free;
   end;
@@ -666,6 +851,28 @@ begin
   try
     LCfg.LoadFromIni('[x]' + #10 + 'bad=hello' + #10);
     Check(LCfg.GetFloat('x.bad', 7.7) > 7.6, 'invalid returns default');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestGetFloatWhitespaceAndSign;
+var
+  LCfg: TConfig;
+  LVal: Double;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('num.spaced', ' 3.5 ');
+    LCfg.SetString('num.plus', '+2.25');
+    LCfg.SetString('num.neg', ' -0.5 ');
+
+    LVal := LCfg.GetFloat('num.spaced');
+    Check((LVal > 3.4) and (LVal < 3.6), 'spaced float');
+    LVal := LCfg.GetFloat('num.plus');
+    Check((LVal > 2.2) and (LVal < 2.3), 'plus float');
+    LVal := LCfg.GetFloat('num.neg');
+    Check((LVal < -0.4) and (LVal > -0.6), 'negative float');
   finally
     LCfg.Free;
   end;
@@ -920,6 +1127,21 @@ begin
   end;
 end;
 
+procedure TestHasCaseInsensitive;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('[S]' + #10 + 'Key=val' + #10);
+    CheckEqual(True, LCfg.Has('s.key'), 'lower lookup');
+    CheckEqual(True, LCfg.Has('S.KEY'), 'upper lookup');
+    CheckEqual(False, LCfg.Has('S.MISSING'), 'upper missing');
+  finally
+    LCfg.Free;
+  end;
+end;
+
 procedure TestGetKeys;
 var
   LCfg: TConfig;
@@ -1156,19 +1378,36 @@ procedure TestReplaceFrom;
 var
   LTarget: TConfig;
   LSource: TConfig;
+  LTags: TStringArray;
 begin
   LTarget := TConfig.Create;
   LSource := TConfig.Create;
   try
     LTarget.LoadFromIni('[server]' + #10 + 'host=old' + #10 + 'port=1000' + #10);
+    LTarget.SetStringArray('tags', ['stale']);
+    LTags := LTarget.GetStringArray('tags');
+    CheckEqual(Int64(1), Int64(Length(LTags)), 'pre-replace cached array count');
+    CheckEqual('stale', LTags[0], 'pre-replace cached array item');
     LSource.LoadFromIni('[server]' + #10 + 'host=new' + #10 + 'debug=true' + #10);
+    LSource.SetString('Server.Name', 'nextpas');
+    LSource.SetStringArray('Tags', ['alpha', 'beta']);
 
     LTarget.ReplaceFrom(LSource);
 
     CheckEqual('new', LTarget.GetString('server.host'), 'replaced value');
+    CheckEqual('nextpas', LTarget.GetString('SERVER.NAME'),
+      'mixed-case key remains readable after replace');
     CheckEqual(False, LTarget.Has('server.port'), 'old key removed');
     CheckEqual(True, LTarget.GetBool('server.debug'), 'new key copied');
-    CheckEqual(Int64(2), Int64(LTarget.Count), 'replacement count');
+    LTags := LTarget.GetStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LTags)), 'replaced array count');
+    CheckEqual('alpha', LTags[0], 'replaced array item 0');
+    CheckEqual('beta', LTags[1], 'replaced array item 1');
+    LTags := LTarget.GetRawStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LTags)), 'replaced raw array count');
+    CheckEqual('alpha', LTags[0], 'replaced raw array item 0');
+    CheckEqual('beta', LTags[1], 'replaced raw array item 1');
+    CheckEqual(Int64(5), Int64(LTarget.Count), 'replacement count');
   finally
     LSource.Free;
     LTarget.Free;
@@ -1415,7 +1654,12 @@ begin
   T.Run('GetString.Default', @TestGetStringDefault);
   T.Run('GetString.CaseInsensitive', @TestGetStringCaseInsensitive);
   T.Run('GetRawString.PreservesPlaceholders', @TestGetRawStringPreservesPlaceholders);
+  T.Run('GetRawString.CaseInsensitive', @TestGetRawStringCaseInsensitive);
   T.Run('Interpolation.ConfigKeys', @TestInterpolationConfigKeys);
+  T.Run('Interpolation.ExactPlaceholderChain', @TestInterpolationExactPlaceholderChain);
+  T.Run('Interpolation.CacheInvalidatesOnConfigWrite', @TestInterpolationCacheInvalidatesOnConfigWrite);
+  T.Run('Interpolation.EnvFallbackIsNotCached', @TestInterpolationEnvFallbackIsNotCached);
+  T.Run('Interpolation.ReplaceFromInvalidatesCache', @TestInterpolationReplaceFromInvalidatesCache);
   T.Run('Interpolation.EnvFallback', @TestInterpolationEnvFallback);
   T.Run('Interpolation.DefaultValue', @TestInterpolationDefaultValue);
   T.Run('Interpolation.ConfigWinsOverEnv', @TestInterpolationConfigWinsOverEnv);
@@ -1428,18 +1672,24 @@ begin
   T.Run('Required.MissingRaises', @TestRequiredMissingRaises);
   T.Run('Required.EmptyRaises', @TestRequiredEmptyRaises);
   T.Run('Required.TypedValues', @TestRequiredTypedValues);
+  T.Run('Required.TypedWhitespaceAndSign', @TestRequiredTypedWhitespaceAndSign);
   T.Run('Required.TypedInvalidRaises', @TestRequiredTypedInvalidRaises);
+  T.Run('Required.BoolWhitespaceAndCase', @TestRequiredBoolWhitespaceAndCase);
   T.Run('Required.UnresolvedPlaceholderRaises', @TestRequiredUnresolvedPlaceholderRaises);
   T.Run('Required.WhitespaceRaises', @TestRequiredWhitespaceRaises);
   T.Run('GetInt.Basic', @TestGetIntBasic);
   T.Run('GetInt.Default', @TestGetIntDefault);
   T.Run('GetInt.Invalid', @TestGetIntInvalid);
+  T.Run('GetInt.WhitespaceAndSign', @TestGetIntWhitespaceAndSign);
   T.Run('GetBool.Basic', @TestGetBoolBasic);
   T.Run('GetBool.Default', @TestGetBoolDefault);
+  T.Run('GetBool.WhitespaceAndCase', @TestGetBoolWhitespaceAndCase);
+  T.Run('GetBool.ShortTokenWhitespaceAndCase', @TestGetBoolShortTokenWhitespaceAndCase);
   T.Run('GetBool.Invalid', @TestGetBoolInvalid);
   T.Run('GetFloat.Basic', @TestGetFloatBasic);
   T.Run('GetFloat.Default', @TestGetFloatDefault);
   T.Run('GetFloat.Invalid', @TestGetFloatInvalid);
+  T.Run('GetFloat.WhitespaceAndSign', @TestGetFloatWhitespaceAndSign);
   T.Run('SetDefault', @TestSetDefault);
   T.Run('LoadFromIni.Sections', @TestLoadFromIniSections);
   T.Run('LoadFromIni.GlobalKeys', @TestLoadFromIniGlobalKeys);
@@ -1453,6 +1703,7 @@ begin
   T.Run('LoadFromEnv.Basic', @TestLoadFromEnvBasic);
   T.Run('LoadFromEnv.Override', @TestLoadFromEnvOverride);
   T.Run('Has', @TestHas);
+  T.Run('Has.CaseInsensitive', @TestHasCaseInsensitive);
   T.Run('GetKeys', @TestGetKeys);
   T.Run('EmptyConfig', @TestEmptyConfig);
   T.Run('Override.Priority', @TestOverridePriority);

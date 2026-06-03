@@ -94,6 +94,17 @@ and its [Makefile](../../examples/nextpas.core.config/config_startup_patterns/Ma
 It exercises `Build`, `ConfigLoad`, `TryBuild`, and `BuildConfig` with the
 same public API shown below.
 
+For export/save flows, see the [runnable export demo](../../examples/nextpas.core.config/config_export_patterns/config_export_patterns.lpr)
+and its [Makefile](../../examples/nextpas.core.config/config_export_patterns/Makefile).
+It exercises `ToIni` / `ToJson` / `ToYaml` / `ToToml`, all four `SaveTo...`
+helpers, reload through `ConfigLoad`, and the current INI representability
+guard for lossy values.
+
+For in-memory mutation flows, see the [runnable mutation demo](../../examples/nextpas.core.config/config_mutation_patterns/config_mutation_patterns.lpr)
+and its [Makefile](../../examples/nextpas.core.config/config_mutation_patterns/Makefile).
+It exercises `SetString` / `SetInt` / `SetBool` / `SetFloat` /
+`SetStringArray`, `DeleteKey`, `DeleteSection`, `ReplaceFrom`, and `Clear`.
+
 ### Pass a read-only snapshot into modules
 
 Use `Build` when a module should depend on `IConfig` and not on mutable config
@@ -243,6 +254,10 @@ begin
 end;
 ```
 
+See the [runnable mutation demo](../../examples/nextpas.core.config/config_mutation_patterns/config_mutation_patterns.lpr)
+for a complete write/update/reset flow with output markers that are also
+checked by `test_config_examples`.
+
 Mutation stays aligned with the existing flat dot-path storage model:
 
 - `SetString` stores the raw string value. `GetRawString` returns that raw
@@ -253,19 +268,21 @@ Mutation stays aligned with the existing flat dot-path storage model:
   descendants.
 - `Clear` resets the full config snapshot.
 
-## Export config as INI, JSON, or TOML
+## Export config as INI, JSON, YAML, or TOML
 
 Both `IConfig` snapshots and mutable `TConfig` instances can now export their
 current config table through:
 
-- `ToIni`
 - `ToJson`
+- `ToIni`
+- `ToYaml`
 - `ToToml`
 
 Mutable `TConfig` instances also add:
 
 - `SaveToIni`
 - `SaveToJson`
+- `SaveToYaml`
 - `SaveToToml`
 
 Example:
@@ -281,9 +298,11 @@ begin
     Live.SetInt('server.port', 8080);
     WriteLn(Live.ToIni);
     WriteLn(Live.ToJson);
+    WriteLn(Live.ToYaml);
     WriteLn(Live.ToToml);
     Live.SaveToIni('app.snapshot.ini');
     Live.SaveToJson('app.snapshot.json');
+    Live.SaveToYaml('app.snapshot.yaml');
     Live.SaveToToml('app.snapshot.toml');
   finally
     Live.Free;
@@ -295,6 +314,7 @@ begin
     .Build;
   WriteLn(Snapshot.ToIni);
   WriteLn(Snapshot.ToJson);
+  WriteLn(Snapshot.ToYaml);
   WriteLn(Snapshot.ToToml);
 end;
 ```
@@ -305,21 +325,30 @@ Export semantics stay faithful to the config module's flat storage model:
   keeps canonical string values rather than original source scalar types
 - INI uses a hybrid mapping:
   - common nested keys use the deepest safe `section + leaf key` split
-  - split failures fall back to one global dotted-key line
+  - split failures fall back to one global dotted key line
   - scalar/subtree coexistence such as `db` plus `db.host` is preserved as a
     global key plus a named section
   - values with leading whitespace or line breaks raise `EConfigError`, because
     the current INI parser would trim or split them lossily
-- JSON rebuilds a nested export view:
-  - dense zero-based numeric children like `tags.0`, `tags.1` export as arrays
-  - sparse or mixed numeric children export as objects so keys round-trip
-    without reindexing
+- JSON and YAML rebuild a nested export view:
+  - dense zero-based numeric children like `tags.0`, `tags.1` export as JSON
+    arrays or YAML sequences
+  - sparse or mixed numeric children export as JSON objects or YAML mappings so
+    keys round-trip without reindexing
   - scalar/subtree conflicts such as `db` plus `db.host` raise `EConfigError`
     instead of silently dropping data
-- TOML intentionally does not rebuild tables or dotted-key structure. It writes
-  one TOML entry per stored config key, such as `"server.host" = "127.0.0.1"`
-  and `"tags.0" = "api"`, so scalar/subtree coexistence round-trips without
-  ambiguity
+- TOML intentionally does **not** rebuild tables or dotted-key structure.
+  Instead it writes one TOML entry per stored config key:
+  - `server.host` becomes `"server.host" = "127.0.0.1"`
+  - `tags.0` becomes `"tags.0" = "api"`
+  - top-level numeric keys like `0`, `1` remain literal numeric keys
+- TOML uses literal keys because the config store is flat and TOML table/dotted
+  key syntax cannot losslessly preserve scalar/subtree coexistence such as `db`
+  together with `db.host`
+- raw placeholder strings like `${host}` stay raw on export; reload still keeps
+  `GetRawString` and typed getters working
+- YAML export quotes empty strings and ambiguous/special scalars so the emitted
+  YAML reparses to the same stored canonical values
 
 `ConfigLoad(APath, AFormat)` is a convenience wrapper for:
 

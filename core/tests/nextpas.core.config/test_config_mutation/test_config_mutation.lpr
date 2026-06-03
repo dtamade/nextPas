@@ -5,6 +5,7 @@ program test_config_mutation;
 uses
   nextpas.core.config,
   nextpas.core.errors,
+  nextpas.core.os.env,
   nextpas.core.testing;
 
 var
@@ -172,6 +173,87 @@ begin
       'section delete remains case-insensitive');
     CheckEqual(False, LCfg.Has('FEATURE.NAME'),
       'section delete removes sibling keys');
+
+    LCfg.SetString('naïve.Host', 'edge');
+    CheckEqual('edge', LCfg.GetString('naïve.host'),
+      'ascii suffix stays case-insensitive when key has non-ascii prefix');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestArrayReadsRemainCaseInsensitive;
+var
+  LCfg: TConfig;
+  LTags: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetStringArray('Tags', ['${item}', 'beta']);
+    LCfg.SetString('ITEM', 'alpha');
+
+    LTags := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LTags)), 'lowercase array read count');
+    CheckEqual('alpha', LTags[0], 'lowercase array read interpolates');
+    CheckEqual('beta', LTags[1], 'lowercase array read second item');
+
+    LTags := LCfg.GetRawStringArray('TAGS');
+    CheckEqual(Int64(2), Int64(Length(LTags)), 'uppercase raw array read count');
+    CheckEqual('${item}', LTags[0], 'uppercase raw array read keeps placeholder');
+    CheckEqual('beta', LTags[1], 'uppercase raw array read second item');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestMixedCaseOverwriteDoesNotDuplicateKey;
+var
+  LCfg: TConfig;
+  LKeys: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('Server.Host', 'first');
+    LCfg.SetString('server.host', 'second');
+    LCfg.SetString('SERVER.HOST', 'third');
+
+    CheckEqual(Int64(1), Int64(LCfg.Count), 'overwrite keeps single logical key');
+    CheckEqual('third', LCfg.GetString('server.host'), 'latest value wins');
+
+    LKeys := LCfg.GetKeys;
+    CheckEqual(Int64(1), Int64(Length(LKeys)), 'single stored key remains');
+
+    LCfg.DeleteKey('server.host');
+    CheckEqual(Int64(0), Int64(LCfg.Count), 'delete removes overwritten key');
+    CheckEqual(False, LCfg.Has('SERVER.HOST'), 'deleted key no longer readable');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestWarmLookupRemainsCorrectAfterMutation;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('Server.Host', 'first');
+    CheckEqual('first', LCfg.GetString('server.host'),
+      'warm string lookup cache');
+    CheckEqual(True, LCfg.Has('SERVER.HOST'),
+      'warm has lookup cache');
+
+    LCfg.SetString('server.host', 'second');
+    CheckEqual('second', LCfg.GetString('SERVER.HOST'),
+      'updated value after warm cache');
+    CheckEqual(True, LCfg.Has('server.host'),
+      'updated key still visible');
+
+    LCfg.DeleteKey('server.host');
+    CheckEqual(False, LCfg.Has('Server.Host'),
+      'delete still visible after warm cache');
+    CheckEqual('fallback', LCfg.GetString('server.host', 'fallback'),
+      'default after delete with warm cache');
   finally
     LCfg.Free;
   end;
@@ -195,6 +277,155 @@ begin
     CheckEqual(False, LCfg.Has('tags.1'), 'second array item removed');
   finally
     LCfg.Free;
+  end;
+end;
+
+procedure TestArrayReadsRefreshAfterSetStringArray;
+var
+  LCfg: TConfig;
+  LItems: TStringArray;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetStringArray('tags', ['alpha', 'beta']);
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LItems)), 'initial string array count');
+    LItems := LCfg.GetRawStringArray('tags');
+    CheckEqual(Int64(2), Int64(Length(LItems)), 'initial raw array count');
+
+    LCfg.SetStringArray('tags', ['gamma']);
+
+    LItems := LCfg.GetStringArray('tags');
+    CheckEqual(Int64(1), Int64(Length(LItems)), 'updated string array count');
+    CheckEqual('gamma', LItems[0], 'updated string array item');
+
+    LItems := LCfg.GetRawStringArray('tags');
+    CheckEqual(Int64(1), Int64(Length(LItems)), 'updated raw array count');
+    CheckEqual('gamma', LItems[0], 'updated raw array item');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestOverwriteTracksLiteralAndInterpolatedModes;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('service.host', 'alpha');
+    LCfg.SetString('service.url', 'http://${service.host}');
+    CheckEqual('http://alpha', LCfg.GetString('service.url'),
+      'initial placeholder read');
+
+    LCfg.SetString('service.url', 'http://literal');
+    CheckEqual('http://literal', LCfg.GetString('service.url'),
+      'literal overwrite clears interpolation mode');
+
+    LCfg.SetString('service.url', 'http://${service.host}');
+    LCfg.SetString('service.host', 'beta');
+    CheckEqual('http://beta', LCfg.GetString('service.url'),
+      'placeholder overwrite restores interpolation mode');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationRefreshesAfterSetDefault;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('service.url', 'http://${service.host}');
+    CheckEqual('http://${service.host}', LCfg.GetString('service.url'),
+      'initial unresolved interpolation');
+
+    LCfg.SetDefault('service.host', 'late-bound');
+    CheckEqual('http://late-bound', LCfg.GetString('service.url'),
+      'SetDefault invalidates unresolved interpolation cache');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationRefreshesAfterDeleteKey;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('service.host', 'alpha');
+    LCfg.SetString('service.url', 'http://${service.host}');
+    CheckEqual('http://alpha', LCfg.GetString('service.url'),
+      'initial resolved interpolation');
+
+    LCfg.DeleteKey('service.host');
+    CheckEqual('http://${service.host}', LCfg.GetString('service.url'),
+      'DeleteKey invalidates cached interpolation');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationRefreshesAfterDeleteSection;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('service.host', 'alpha');
+    LCfg.SetString('service.url', 'http://${service.host}');
+    CheckEqual('http://alpha', LCfg.GetString('service.url'),
+      'initial section interpolation');
+
+    LCfg.DeleteSection('service');
+    LCfg.SetString('service.host', 'beta');
+    LCfg.SetString('service.url', 'http://${service.host}');
+    CheckEqual('http://beta', LCfg.GetString('service.url'),
+      'DeleteSection clears stale interpolation cache');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationRefreshesAfterLoadFromIni;
+var
+  LCfg: TConfig;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.LoadFromIni('service.host=alpha' + #10 +
+      'service.url=http://${service.host}' + #10);
+    CheckEqual('http://alpha', LCfg.GetString('service.url'),
+      'initial loaded interpolation');
+
+    LCfg.LoadFromIni('service.host=beta' + #10);
+    CheckEqual('http://beta', LCfg.GetString('service.url'),
+      'LoadFromIni invalidates cached interpolation');
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestInterpolationRefreshesAfterLateEnvBinding;
+var
+  LCfg: TConfig;
+begin
+  UnsetEnv('NEXTPAS_CFG_MUTATION_REGION');
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString('service.region', '${NEXTPAS_CFG_MUTATION_REGION}');
+    CheckEqual('${NEXTPAS_CFG_MUTATION_REGION}',
+      LCfg.GetString('service.region'),
+      'initial unresolved env interpolation');
+
+    SetEnv('NEXTPAS_CFG_MUTATION_REGION', 'ap-northeast');
+    CheckEqual('ap-northeast', LCfg.GetString('service.region'),
+      'late env binding is not hidden by cache');
+  finally
+    LCfg.Free;
+    UnsetEnv('NEXTPAS_CFG_MUTATION_REGION');
   end;
 end;
 
@@ -252,8 +483,28 @@ begin
     @TestClearRemovesAllEntries);
   T.Run('Mutation.RemainsCaseInsensitive',
     @TestMutationRemainsCaseInsensitive);
+  T.Run('Mutation.ArrayReadsRemainCaseInsensitive',
+    @TestArrayReadsRemainCaseInsensitive);
+  T.Run('Mutation.MixedCaseOverwriteDoesNotDuplicateKey',
+    @TestMixedCaseOverwriteDoesNotDuplicateKey);
+  T.Run('Mutation.WarmLookupRemainsCorrectAfterMutation',
+    @TestWarmLookupRemainsCorrectAfterMutation);
   T.Run('Mutation.SetStringArrayEmptyClearsPrefix',
     @TestSetStringArrayEmptyClearsPrefix);
+  T.Run('Mutation.ArrayReadsRefreshAfterSetStringArray',
+    @TestArrayReadsRefreshAfterSetStringArray);
+  T.Run('Mutation.OverwriteTracksLiteralAndInterpolatedModes',
+    @TestOverwriteTracksLiteralAndInterpolatedModes);
+  T.Run('Mutation.InterpolationRefreshesAfterSetDefault',
+    @TestInterpolationRefreshesAfterSetDefault);
+  T.Run('Mutation.InterpolationRefreshesAfterDeleteKey',
+    @TestInterpolationRefreshesAfterDeleteKey);
+  T.Run('Mutation.InterpolationRefreshesAfterDeleteSection',
+    @TestInterpolationRefreshesAfterDeleteSection);
+  T.Run('Mutation.InterpolationRefreshesAfterLoadFromIni',
+    @TestInterpolationRefreshesAfterLoadFromIni);
+  T.Run('Mutation.InterpolationRefreshesAfterLateEnvBinding',
+    @TestInterpolationRefreshesAfterLateEnvBinding);
   T.Run('Mutation.RejectsEmptyKeysAndPrefixes',
     @TestMutationRejectsEmptyKeysAndPrefixes);
   T.Summary;
