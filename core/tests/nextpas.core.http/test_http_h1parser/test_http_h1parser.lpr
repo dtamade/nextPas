@@ -1179,6 +1179,71 @@ begin
   CheckEqual('hello', LP.GetBody, 'keep-alive chunked first request preserves body');
 end;
 
+procedure TestChunkedKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+  LTail := 'GET /next HTTP/1.1';
+  LReq := LReq1 + LTail;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive chunked partial follow-up line should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive chunked first request should complete before partial follow-up line');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive chunked parser consumes only first request before partial follow-up line');
+  Check(LP.GetMethod = hmPost, 'keep-alive chunked partial follow-up line preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive chunked partial follow-up line preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive chunked partial follow-up line preserves decoded body');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail), Length(LTail));
+  Check(not LP.IsComplete, 'chunked partial follow-up request line alone is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'chunked partial follow-up request line reports parser error on finish');
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+  LTail := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10;
+  LReq := LReq1 + LTail;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive chunked partial follow-up headers should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive chunked first request should complete before partial follow-up headers');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive chunked parser consumes only first request before partial follow-up headers');
+  Check(LP.GetMethod = hmPost, 'keep-alive chunked partial follow-up headers preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive chunked partial follow-up headers preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive chunked partial follow-up headers preserves decoded body');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail), Length(LTail));
+  Check(not LP.IsComplete, 'chunked partial follow-up headers alone are not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'chunked partial follow-up headers report parser error on finish');
+end;
+
 procedure TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest;
 var
   LP: IH1Parser;
@@ -1410,6 +1475,10 @@ begin
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
   T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
+  T.Run('Chunked keep-alive truncated follow-up request line consumes first request only',
+    @TestChunkedKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
+  T.Run('Chunked keep-alive truncated follow-up headers consumes first request only',
+    @TestChunkedKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);
