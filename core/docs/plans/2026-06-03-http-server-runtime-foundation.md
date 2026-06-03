@@ -145,6 +145,37 @@ HTTP then depends on the server foundation instead of owning its own runtime loo
 We should avoid a large inheritance-based `BaseServer` class. A reusable runtime module
 and narrow interfaces are a better fit for `nextPas` than a deep class hierarchy.
 
+## Why not start from a `BaseServer`
+
+This decision is now fixed.
+
+The reusable part across protocol servers is the runtime foundation:
+
+- listen / accept
+- backend selection
+- connection ownership and shutdown
+- worker handoff
+- platform-specific I/O strategy
+
+Those concerns belong in `nextpas.core.net.server`, not in an inheritance-heavy
+protocol server base class.
+
+A `BaseServer` approach would likely decay in three ways:
+
+1. Protocol hooks would accumulate in the base class until runtime and protocol
+   responsibilities were mixed together.
+2. Evented backends and Windows `IOCP` would be forced into a shape designed around
+   thread-oriented control flow.
+3. Protocol-specific behavior such as hijack, pipelining, and half-close handling
+   would leak into the base layer and become harder to reason about.
+
+The selected model is therefore:
+
+- shared runtime as a foundation module
+- protocol behavior via composition
+- one connection = one protocol state object
+- backend-specific execution hidden behind narrow runtime contracts
+
 ## Runtime rules
 
 These rules are fixed unless a later architecture review replaces them explicitly.
@@ -247,6 +278,20 @@ through a second-rate compatibility path.
 - write coalescing
 - `io_uring` evaluation as an advanced Linux backend
 - benchmark against Go, Rust, and FPC RTL baselines
+
+## Current implementation truth
+
+By the time this record is updated, the direction has already started landing:
+
+- `nextpas.core.net.server.base` exposes backend selection, including `threaded`,
+  `epoll`, `kqueue`, and `iocp`.
+- `nextpas.core.net.server.intf` exposes the reusable runtime seam.
+- `nextpas.core.net.server.threaded` provides the first concrete backend.
+- `nextpas.core.http` has already begun moving runtime ownership out of
+  `http.server`.
+
+So the architecture is no longer tentative. Future work should treat this document and
+`docs/net/ARCHITECTURE.md` as a frozen decision and focus on incremental delivery.
 
 ## Acceptance gates by phase
 

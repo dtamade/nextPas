@@ -111,6 +111,37 @@ nextpas.core.net.server.iocp
 这里不走深继承 `BaseServer` 大类路线。
 `nextPas` 更适合窄接口 + 可替换 backend 单元，而不是一个不断膨胀的基类层次。
 
+## 为什么不是 `TBaseServer`
+
+这个问题必须在 foundation 层一次答清楚，否则后续每个 TCP server 都会重复争论。
+
+共享问题确实在 server runtime 层，但共享的不是“一个越来越大的公共父类”，而是下面这些职责：
+
+- listener / accept loop
+- backend 选择与运行时驱动
+- 连接 ownership / detach / shutdown
+- worker handoff
+- cross-platform I/O strategy
+
+这些职责天然属于 `nextpas.core.net.server` 这个 foundation 模块，而不属于某个协议特定的
+`TBaseServer` 对象模型。
+
+如果走深继承路线，通常会出现三类退化：
+
+- 基类开始吸收协议差异，最后把 HTTP/SMTP/WebSocket/自定义二进制协议的语义都做成 hook。
+- evented backend 与 `IOCP` 这类运行时语义会把“线程驱动父类”扭曲成条件分支堆。
+- hijack、pipeline、半关闭、backpressure 这类协议相关行为会被错误地下沉到基类，破坏职责边界。
+
+这里固定的结论是：
+
+- 共享 runtime 走模块化 foundation：`ITcpServer` + backend units。
+- 协议差异走组合：protocol handler + per-connection state object。
+- “基类”概念只保留在模块层和 contract 层，不引入一个主导一切的大继承树。
+
+这同样适用于未来别的 TCP server，不只是 HTTP。
+后续 `redis`、`smtp`、自定义 RPC 等 server 都应该复用同一 foundation，而不是各自再造
+一棵 `BaseServer` 派生树。
+
 ## backend 语义规则
 
 ### threaded
@@ -169,6 +200,20 @@ nextpas.core.net.server.iocp
 
 - 再进入 buffer pool、streaming body、spill / spool、write coalescing、
   `io_uring` 评估、基准对照这些性能阶段
+
+## 当前阶段判断
+
+截至 2026-06-03，这条架构线已经不是纯讨论状态，而是进入“方向已固定、实现继续收口”的阶段：
+
+- foundation seam 已存在：`base` / `intf` / `threaded`
+- HTTP facade 已开始依赖 `ITcpServer`
+- backend 选择与 server lifecycle 已经进入 public contract
+
+因此后续工作重点不是再反复选型，而是沿这条线继续把职责收干净：
+
+- `http.server` 继续收成 facade / composition
+- 协议状态继续收进 connection state object
+- correctness proof 先补齐，再扩 evented backend
 
 ## 验收门槛
 
