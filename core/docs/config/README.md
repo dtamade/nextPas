@@ -253,11 +253,20 @@ Mutation stays aligned with the existing flat dot-path storage model:
   descendants.
 - `Clear` resets the full config snapshot.
 
-## Export config as JSON
+## Export config as INI, JSON, or TOML
 
 Both `IConfig` snapshots and mutable `TConfig` instances can now export their
-current config table as compact JSON through `ToJson`. Mutable `TConfig`
-instances also add `SaveToJson` for writing that JSON to disk.
+current config table through:
+
+- `ToIni`
+- `ToJson`
+- `ToToml`
+
+Mutable `TConfig` instances also add:
+
+- `SaveToIni`
+- `SaveToJson`
+- `SaveToToml`
 
 Example:
 
@@ -270,8 +279,12 @@ begin
   try
     Live.SetString('server.host', '127.0.0.1');
     Live.SetInt('server.port', 8080);
+    WriteLn(Live.ToIni);
     WriteLn(Live.ToJson);
+    WriteLn(Live.ToToml);
+    Live.SaveToIni('app.snapshot.ini');
     Live.SaveToJson('app.snapshot.json');
+    Live.SaveToToml('app.snapshot.toml');
   finally
     Live.Free;
   end;
@@ -280,23 +293,33 @@ begin
     .AddDefault('app.name', 'nextpas')
     .AddJson('{"app":{"port":8080}}')
     .Build;
+  WriteLn(Snapshot.ToIni);
   WriteLn(Snapshot.ToJson);
+  WriteLn(Snapshot.ToToml);
 end;
 ```
 
 Export semantics stay faithful to the config module's flat storage model:
 
-- leaf values are exported as JSON strings, because the flat config store keeps
-  canonical string values rather than original source scalar types
-- dense zero-based numeric children like `tags.0`, `tags.1` export as JSON
-  arrays
-- sparse or mixed numeric children export as JSON objects so keys round-trip
-  without reindexing
-- scalar/subtree conflicts such as `db` plus `db.host` raise `EConfigError`
-  instead of silently dropping data
-
-This batch only adds JSON export/save. `ToToml`, `SaveToYaml`, `SaveToIni`, and
-other persisted format writers are not part of the current public surface yet.
+- leaf values are exported as canonical strings, because the flat config store
+  keeps canonical string values rather than original source scalar types
+- INI uses a hybrid mapping:
+  - common nested keys use the deepest safe `section + leaf key` split
+  - split failures fall back to one global dotted-key line
+  - scalar/subtree coexistence such as `db` plus `db.host` is preserved as a
+    global key plus a named section
+  - values with leading whitespace or line breaks raise `EConfigError`, because
+    the current INI parser would trim or split them lossily
+- JSON rebuilds a nested export view:
+  - dense zero-based numeric children like `tags.0`, `tags.1` export as arrays
+  - sparse or mixed numeric children export as objects so keys round-trip
+    without reindexing
+  - scalar/subtree conflicts such as `db` plus `db.host` raise `EConfigError`
+    instead of silently dropping data
+- TOML intentionally does not rebuild tables or dotted-key structure. It writes
+  one TOML entry per stored config key, such as `"server.host" = "127.0.0.1"`
+  and `"tags.0" = "api"`, so scalar/subtree coexistence round-trips without
+  ambiguity
 
 `ConfigLoad(APath, AFormat)` is a convenience wrapper for:
 

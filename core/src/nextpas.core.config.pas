@@ -44,7 +44,9 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function ToIni: string;
     function ToJson: string;
+    function ToToml: string;
     property Count: Integer read GetCount;
   end;
 
@@ -109,8 +111,12 @@ type
     procedure DeleteKey(const AKey: string);
     procedure DeleteSection(const APrefix: string);
     procedure Clear;
+    function ToIni: string;
+    procedure SaveToIni(const APath: string);
     function ToJson: string;
     procedure SaveToJson(const APath: string);
+    function ToToml: string;
+    procedure SaveToToml(const APath: string);
 
     function GetString(const AKey: string; const ADefault: string = ''): string;
     function GetRawString(const AKey: string; const ADefault: string = ''): string;
@@ -169,6 +175,7 @@ uses
   nextpas.core.yaml.value,
   nextpas.core.yaml.types,
   nextpas.core.toml,
+  nextpas.core.toml.writer,
   nextpas.core.toml.value,
   nextpas.core.toml.base;
 
@@ -243,7 +250,9 @@ type
     function Has(const AKey: string): Boolean;
     function GetKeys: TStringArray;
     function GetSection(const APrefix: string): TStringArray;
+    function ToIni: string;
     function ToJson: string;
+    function ToToml: string;
   end;
 
   TConfigBuilderImpl = class(TInterfacedObject, IConfigBuilder)
@@ -677,6 +686,126 @@ begin
     end;
   finally
     LRoot.Free;
+  end;
+end;
+
+function ContainsIniLineBreak(const AValue: string): Boolean;
+var
+  LI: Integer;
+begin
+  for LI := 1 to Length(AValue) do
+    if (AValue[LI] = #10) or (AValue[LI] = #13) then
+      Exit(True);
+  Result := False;
+end;
+
+function HasIniTrimmedEdgeWhitespace(const AValue: string): Boolean;
+begin
+  Result := (AValue <> '') and
+    (((AValue[1] = ' ') or (AValue[1] = #9)) or
+     ((AValue[Length(AValue)] = ' ') or (AValue[Length(AValue)] = #9)));
+end;
+
+function IsIniSectionNameRepresentable(const ASection: string): Boolean;
+begin
+  Result := (ASection <> '') and
+    (not ContainsIniLineBreak(ASection)) and
+    (not HasIniTrimmedEdgeWhitespace(ASection)) and
+    (Pos(']', ASection) = 0);
+end;
+
+function IsIniKeyNameRepresentable(const AKey: string): Boolean;
+begin
+  Result := (AKey <> '') and
+    (not ContainsIniLineBreak(AKey)) and
+    (not HasIniTrimmedEdgeWhitespace(AKey)) and
+    (Pos('=', AKey) = 0) and
+    (AKey[1] <> '[') and
+    (AKey[1] <> ';') and
+    (AKey[1] <> '#');
+end;
+
+function TryMapConfigKeyToIniPath(const AConfigKey: string; out ASection,
+  AKey: string): Boolean;
+var
+  LDotPos: Integer;
+  LSection: string;
+  LKey: string;
+begin
+  for LDotPos := Length(AConfigKey) downto 1 do
+    if AConfigKey[LDotPos] = '.' then
+    begin
+      LSection := Copy(AConfigKey, 1, LDotPos - 1);
+      LKey := Copy(AConfigKey, LDotPos + 1, Length(AConfigKey) - LDotPos);
+      if IsIniSectionNameRepresentable(LSection) and
+         IsIniKeyNameRepresentable(LKey) then
+      begin
+        ASection := LSection;
+        AKey := LKey;
+        Exit(True);
+      end;
+    end;
+
+  if IsIniKeyNameRepresentable(AConfigKey) then
+  begin
+    ASection := '';
+    AKey := AConfigKey;
+    Exit(True);
+  end;
+
+  ASection := '';
+  AKey := '';
+  Result := False;
+end;
+
+function ConfigEntriesToIni(const AEntries: TConfigEntryArray;
+  const ACount: Integer): string;
+var
+  LIni: TIniFile;
+  LI: Integer;
+  LSection: string;
+  LKey: string;
+begin
+  LIni := TIniFile.Create;
+  try
+    for LI := 0 to ACount - 1 do
+    begin
+      if ContainsIniLineBreak(AEntries[LI].Value) then
+        raise EConfigError.Create('config key "' + AEntries[LI].Key +
+          '" cannot be exported to ini: value contains line breaks');
+      if (AEntries[LI].Value <> '') and
+         ((AEntries[LI].Value[1] = ' ') or (AEntries[LI].Value[1] = #9)) then
+        raise EConfigError.Create('config key "' + AEntries[LI].Key +
+          '" cannot be exported to ini: value has leading whitespace');
+      if not TryMapConfigKeyToIniPath(AEntries[LI].Key, LSection, LKey) then
+        raise EConfigError.Create('config key "' + AEntries[LI].Key +
+          '" cannot be exported to ini: key is not representable');
+      LIni.WriteString(LSection, LKey, AEntries[LI].Value);
+    end;
+    Result := LIni.ToString;
+  finally
+    LIni.Free;
+  end;
+end;
+
+function ConfigEntriesToToml(const AEntries: TConfigEntryArray;
+  const ACount: Integer): string;
+var
+  LBuilder: TStringBuilder;
+  LWriter: TTomlWriter;
+  LI: Integer;
+begin
+  LBuilder.Init(256);
+  try
+    LWriter.Init(LBuilder);
+    for LI := 0 to ACount - 1 do
+    begin
+      LWriter.Key(AEntries[LI].Key);
+      LWriter.Str(AEntries[LI].Value);
+    end;
+    Result := LBuilder.ToString;
+  finally
+    LBuilder.Done;
   end;
 end;
 
@@ -1611,6 +1740,20 @@ begin
   end;
 end;
 
+function TConfig.ToIni: string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  Result := ConfigEntriesToIni(LEntries, LCount);
+end;
+
+procedure TConfig.SaveToIni(const APath: string);
+begin
+  WriteFileText(APath, ToIni);
+end;
+
 function TConfig.ToJson: string;
 var
   LEntries: TConfigEntryArray;
@@ -1623,6 +1766,20 @@ end;
 procedure TConfig.SaveToJson(const APath: string);
 begin
   WriteFileText(APath, ToJson);
+end;
+
+function TConfig.ToToml: string;
+var
+  LEntries: TConfigEntryArray;
+  LCount: Integer;
+begin
+  SnapshotConfigEntries(Self, LEntries, LCount);
+  Result := ConfigEntriesToToml(LEntries, LCount);
+end;
+
+procedure TConfig.SaveToToml(const APath: string);
+begin
+  WriteFileText(APath, ToToml);
 end;
 
 function TConfig.GetString(const AKey: string; const ADefault: string): string;
@@ -1981,9 +2138,19 @@ begin
   Result := FConfig.GetSection(APrefix);
 end;
 
+function TOwnedConfig.ToIni: string;
+begin
+  Result := FConfig.ToIni;
+end;
+
 function TOwnedConfig.ToJson: string;
 begin
   Result := FConfig.ToJson;
+end;
+
+function TOwnedConfig.ToToml: string;
+begin
+  Result := FConfig.ToToml;
 end;
 
 { TConfigBuilderImpl }
