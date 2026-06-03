@@ -14,6 +14,7 @@
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
 - `THttpClientOptions.Default` / `THttpServerOptions.Default` 现在由 `test_http_base` 直接锁定，其中 `THttpServerOptions.Default.Backend = TCP_SERVER_BACKEND_THREADED` 也已有 focused proof。
 - `IHttpServer` 现在也有 focused 生命周期 contract shape 覆盖：public interface 可直接读取 `IsRunning`，pre-listen `LocalAddr` 稳定返回 `0.0.0.0:0` placeholder，`Shutdown` 在未监听前仍保持安全。
+- `IHttpServer` 现在也有 Linux `epoll` backend focused smoke：`THttpServerOptions.Backend := TCP_SERVER_BACKEND_EPOLL` 时，simple GET 200 contract 与 threaded 路径保持一致。
 - `http.base` 现在也有 `HTTP_STATUS_CONTINUE = 100 / "Continue"` 与 `HTTP_STATUS_NOT_IMPLEMENTED = 501 / "Not Implemented"` 的 focused proof。
 - `IHttpClient.Get/Post/Do_` 原本已覆盖；本轮补齐 `Put/Delete/Patch/Head` focused 覆盖。
 - `IHttpTransport`、`IHttpServerTransport` 现在既有 focused shape 覆盖，也有 facade runtime 注入覆盖；`IHttpServerTransport.ServeConn` 的 post-handler ownership 返回语义也已锁定，并且 ownership 类型/常量可经由 `nextpas.core.http` facade 直接消费，internal registry 同样已有 focused proof。

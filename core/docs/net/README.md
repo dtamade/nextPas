@@ -70,10 +70,14 @@ Current truth:
 - `nextpas.core.net` provides socket/listener primitives.
 - `nextpas.core.net.server` provides the reusable TCP server runtime seam.
 - `ITcpSocketRuntime` now exposes the native-handle / blocking-control prerequisite seam that future evented backends can consume without relying on concrete `TTcpStream` / `TTcpListener` casts.
-- The next foundation step is a narrow nonblocking runtime I/O seam:
-  `ITcpListenerRuntime.TryAccept` plus `ITcpStreamRuntime.TryRead/TryWrite`.
-- Current shipped server backend is `threaded`.
-- Planned first-class backends are `epoll`, `kqueue`, and `IOCP`.
+- `ITcpListenerRuntime.TryAccept` plus `ITcpStreamRuntime.TryRead/TryWrite`
+  are already landed as the narrow nonblocking runtime I/O seam.
+- Current shipped backends are `threaded` plus a Linux-only phase-1 `epoll`
+  backend that uses readiness-driven accept and then hands accepted connections
+  to foundation workers.
+- Planned next backends are `kqueue` and `IOCP`, and Linux `epoll` still has a
+  later phase where runtime directly drives per-connection state with
+  `TryRead/TryWrite`.
 
 The public goal is a stable, synchronous application-facing contract with
 runtime/backend policy hidden underneath the foundation layer.
@@ -90,8 +94,9 @@ TNetAddress.IPv6('::1', 8080)
 ## Cross-Platform
 
 - `nextpas.core.net` socket APIs are the common cross-platform base.
-- `nextpas.core.net.server` currently ships a threaded runtime backend.
-- Evented server backends are planned as `epoll` on Linux, `kqueue` on macOS /
-  FreeBSD, and `IOCP` on Windows.
+- `nextpas.core.net.server` currently ships a threaded runtime backend and a
+  Linux-only phase-1 `epoll` backend.
+- Planned cross-platform evented backends remain `kqueue` on macOS / FreeBSD
+  and `IOCP` on Windows.
 
 Deadline support via `nextpas.core.time.deadline.TDeadline`.

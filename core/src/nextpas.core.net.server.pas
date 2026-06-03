@@ -12,6 +12,10 @@ interface
 uses
   nextpas.core.net.server.base,
   nextpas.core.net.server.intf,
+  nextpas.core.net.server.runtime,
+  {$IFDEF NEXTPAS_LINUX}
+  nextpas.core.net.server.epoll,
+  {$ENDIF}
   nextpas.core.net.server.threaded;
 
 type
@@ -61,6 +65,10 @@ begin
   case AOptions.Backend of
     tsbThreaded:
       Result := nextpas.core.net.server.threaded.NewTcpThreadedServer(AOptions);
+    {$IFDEF NEXTPAS_LINUX}
+    tsbEpoll:
+      Result := nextpas.core.net.server.epoll.NewTcpEpollServer(AOptions);
+    {$ENDIF}
   else
     raise ENotSupportedError.Create('tcp server backend not implemented yet');
   end;

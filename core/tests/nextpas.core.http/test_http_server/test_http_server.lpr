@@ -249,6 +249,39 @@ begin
   end;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestSimpleGet200EpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LOpts: THttpServerOptions;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ping', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBody: string;
+  begin
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /ping HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'epoll status 200 in response');
+    Check(Pos('pong', LResp) > 0, 'epoll body pong in response');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+{$ENDIF}
+
 { Test 3: Server responds 404 for unmatched route }
 procedure TestNotFound404;
 var
@@ -3962,6 +3995,9 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.server');
   T.Run('Simple GET 200', @TestSimpleGet200);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
+  {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
   T.Run('Handler exception -> 500', @TestHandlerException500);

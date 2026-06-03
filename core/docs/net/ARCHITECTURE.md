@@ -50,15 +50,23 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 - [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
   已固定 foundation contract：`ITcpServer` / `ITcpServerHandler`，并已收进
   `ITcpServerSession`、`ITcpServerWorkerHandoff`、`ITcpServerSessionContext`、
-  `ITcpServerSessionFactoryWithContext` 这些后续 evented backend 必需的 seam。
+  `ITcpServerSessionFactoryWithContext` 这些后续 backend 必需的 seam。
+- [src/nextpas.core.net.server.runtime.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.runtime.pas:1)
+  已把通用的 worker handoff、session context、connection close 语义收成 foundation
+  runtime helper，避免 threaded / evented backend 重复复制这层逻辑。
 - [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:1)
-  是当前唯一已落地 backend，负责 listen / accept / shutdown / detach ownership，
+  是当前 correctness 基线 backend，负责 listen / accept / shutdown / detach ownership，
   并先用 foundation-owned worker handoff 证明 session/context/handoff contract 成立。
+- [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:1)
+  已落 Linux `epoll` 第一阶段 backend：`epoll` 负责 listener readiness 与 nonblocking
+  `TryAccept`，accepted connection 再交给 foundation worker 执行同步协议 handler。
 - [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
-  现在提供了可选 `ITcpSocketRuntime` seam，用来暴露 native socket handle 与 blocking control，
-  供 future evented backend 使用。
+  现在提供了 `ITcpSocketRuntime`、`ITcpListenerRuntime.TryAccept`、
+  `ITcpStreamRuntime.TryRead/TryWrite` 这组 runtime-only seam，用来暴露 native socket
+  handle、blocking control 与 nonblocking I/O 结果。
 - [src/nextpas.core.net.tcp.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.tcp.pas:1)
-  已让 `TTcpStream` / `TTcpListener` 实现 `ITcpSocketRuntime`，把 runtime access 前置条件收进 foundation。
+  已让 `TTcpStream` / `TTcpListener` 实现上面这组 runtime seam，把 evented backend 的前置条件
+  收进 foundation，而不是继续依赖具体实现类强转。
 - [src/nextpas.core.http.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.server.pas:1)
   现在只是 HTTP facade，真实 runtime ownership 已下沉到 `ITcpServer`。
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:104)
@@ -66,16 +74,19 @@ Windows 长期目标明确是 `IOCP`，不是 `WSAPoll` 兼容路线。
 
 ## 当前阶段门
 
-在真正落 `epoll` / `kqueue` / `IOCP` backend 之前，foundation 还必须先补齐一层更窄的
-nonblocking runtime I/O seam。
+当前需要固定的真相不是“还没开始做 evented backend”，而是：
+
+- nonblocking runtime I/O seam 已经落地
+- Linux `epoll` 第一阶段 backend 已经落地
+- 还没落地的是“runtime 直接驱动单连接协议状态对象”的完整版 evented execution
 
 原因很直接：
 
-- evented backend 不能只拿到 native socket handle，然后继续调用会阻塞、或把
-  `EAGAIN` / `WSAEWOULDBLOCK` 当异常抛出的 `Accept` / `Read` / `Write`
-- 如果 would-block 仍表现成异常，reactor / proactor runtime 就无法把“暂时没数据/暂时不能写”
-  当作正常调度分支处理
-- 这会把后续 `epoll` / `kqueue` / `IOCP` 变成“看起来像事件驱动，实质还是阻塞/异常驱动”的伪 backend
+- 只有 `TryAccept/TryRead/TryWrite` 这类 would-block-friendly seam 先稳定，reactor / proactor
+  runtime 才能把“暂时没数据/暂时不能写”当作正常调度分支处理。
+- 但如果 backend 只是拿这条 seam 做 accept，再把整连接继续交给阻塞式 handler，
+  那它仍然只是“accept 侧 evented”，还不是“connection state 侧 evented”。
+- 所以后续仍然要把 `TryRead/TryWrite` 真正接入 per-connection runtime driver。
 
 所以当前固定的阶段门是：
 
@@ -83,24 +94,17 @@ nonblocking runtime I/O seam。
   - `ITcpListener.Accept`
   - `ITcpStream.Read`
   - `ITcpStream.Write`
-- 额外增加 runtime-only optional seam：
+- runtime-only seam 同时保留并持续扩用：
   - `ITcpListenerRuntime.TryAccept`
   - `ITcpStreamRuntime.TryRead`
   - `ITcpStreamRuntime.TryWrite`
 - would-block 是正常返回值，不是异常路径
 - 真错误仍抛 `ENetworkError`
+- Linux `epoll` 第一阶段 backend 可以先只消费 `TryAccept`
+- 真正的 reactor / proactor per-connection backend 必须进一步消费 `TryRead/TryWrite`
+  来驱动协议 state object
 
-也就是说，foundation 的演进顺序不是“先写 `net.server.epoll`，再看还缺什么”，而是：
-
-1. 先让 `nextpas.core.net` socket/listener primitive 提供 nonblocking-friendly
-   `TryAccept/TryRead/TryWrite`
-2. 再让 future evented backend 只依赖这些 contract 驱动连接状态
-3. 最后才实现 `net.server.epoll` / `kqueue` / `iocp`
-
-在 nonblocking socket seam 之后，foundation 还必须先补 connection session seam，
-再把 worker handoff seam 固定下来。
-
-当前 repo 真相是：
+当前 repo 真相进一步收口为：
 
 - `ITcpServerSession` / `ITcpServerSessionFactory` 已进入 foundation contract，
   runtime 不必再只依赖整连接阻塞式 `ServeConn`
@@ -109,20 +113,20 @@ nonblocking runtime I/O seam。
   “runtime 提供 handoff，协议 session 自主决定是否把工作转交给 worker”
 - threaded backend 已先消费这条 seam，证明 accepted / failed / shutting-down handoff
   语义可以被 focused tests 锁定
+- epoll backend 也已经复用同一条 seam，证明 evented listener 侧不需要再复制一套独立
+  session/context/handoff 模型
 - `IHttpServerTransport.ServeConn(const AConn: ITcpStream; ...)` 仍然保留，作为 HTTP public facade
   继续同步、兼容旧 transport seam 的刻意选择
 - `TH1ServerConnectionState` 现在已经通过 `ITcpServerSession` 接上 foundation，
   说明 HTTP 单连接协议状态与 runtime entrypoint 的 split 不再只是内部草稿
 
-这意味着 future evented backend 现在已经有了可稳定驱动的协议 state object seam，
-下一步缺口主要回到 nonblocking runtime I/O，而不是回退去重做 session 抽象。
-
 所以当前固定的后续顺序是：
 
-1. 先补 nonblocking `TryAccept/TryRead/TryWrite`
+1. 守住 threaded 与 `epoll` phase-1 的 public contract parity
 2. 让 future evented backend 直接复用已落地的 session/context/handoff seam
 3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
-4. 然后实现 `net.server.epoll` / `kqueue` / `iocp`
+4. 把 `TryRead/TryWrite` 接进真正的 per-connection runtime driver
+5. 然后再扩 `net.server.kqueue` / `iocp`
 
 ## 分层边界
 
@@ -183,6 +187,7 @@ nonblocking runtime I/O seam。
 ```text
 nextpas.core.net.server.base
 nextpas.core.net.server.intf
+nextpas.core.net.server.runtime
 nextpas.core.net.server.threaded
 nextpas.core.net.server.epoll
 nextpas.core.net.server.kqueue
@@ -232,9 +237,19 @@ nextpas.core.net.server.iocp
 - 当前也负责 first proof：session context 可见、worker handoff 可用、shutdown 后 handoff
   会拒绝新任务。
 
-### evented
+### epoll phase 1
 
-- runtime 驱动协议 state object。
+- 这是“evented accept + threaded connection execution”，不是最终完整版 evented runtime。
+- `epoll` 线程负责 listener readiness 与 `TryAccept`。
+- accepted connection 会被交给 foundation worker，再按同步协议 contract 执行 handler / session。
+- 当前 focused proof 主要锁定：
+  - backend 选择有效
+  - simple request contract 与 threaded 一致
+  - session context / worker handoff seam 可复用
+
+### evented phase 2
+
+- runtime 直接驱动协议 state object。
 - 不能在 reactor 线程直接执行无界 handler 逻辑。
 - 必须有明确 worker handoff 或 bounded execution 策略。
 
@@ -265,23 +280,29 @@ nextpas.core.net.server.iocp
 
 - 继续把 `http.server` 收到 facade / composition 角色
 - 让协议状态对象边界更清晰
+- 收口 foundation runtime helper 与 session/context/handoff seam
 
 ### Phase 3
 
-- 先完成 nonblocking runtime I/O seam proof
+- 完成 nonblocking runtime I/O seam proof
 - 复用已落地的 connection session + worker handoff seam
-- 然后增加 `net.server.epoll`
-- 证明同一 HTTP contract 可由 evented backend 驱动
+- 落地 Linux `epoll` 第一阶段 backend
+- 证明同一 HTTP contract 可由非 threaded backend 驱动
 
 ### Phase 4
 
-- 增加 `net.server.kqueue`
+- 把 `TryRead/TryWrite` 接进 per-connection runtime driver
+- 让 Linux evented backend 从 phase 1 升级到真正的 connection-state-driven backend
 
 ### Phase 5
 
-- 增加 `net.server.iocp`
+- 增加 `net.server.kqueue`
 
 ### Phase 6
+
+- 增加 `net.server.iocp`
+
+### Phase 7
 
 - 再进入 buffer pool、streaming body、spill / spool、write coalescing、
   `io_uring` 评估、基准对照这些性能阶段
@@ -290,8 +311,9 @@ nextpas.core.net.server.iocp
 
 截至 2026-06-03，这条架构线已经不是纯讨论状态，而是进入“方向已固定、实现继续收口”的阶段：
 
-- foundation seam 已存在：`base` / `intf` / `threaded`
-- connection session / worker handoff seam 也已经进入 foundation contract
+- foundation seam 已存在：`base` / `intf` / `runtime` / `threaded`
+- connection session / worker handoff seam 已经进入 foundation contract
+- Linux `epoll` phase-1 backend 已经存在，并有 focused tests 证明它能跑通 foundation + HTTP 基线
 - HTTP facade 已开始依赖 `ITcpServer`
 - backend 选择与 server lifecycle 已经进入 public contract
 
@@ -299,7 +321,8 @@ nextpas.core.net.server.iocp
 
 - `http.server` 继续收成 facade / composition
 - 协议状态继续收进 connection state object
-- correctness proof 先补齐，再扩 evented backend
+- correctness proof 先补齐，再把 Linux backend 从 accept-evented 升到 connection-evented
+- 然后再扩 `kqueue` / `IOCP`
 
 ## 验收门槛
 

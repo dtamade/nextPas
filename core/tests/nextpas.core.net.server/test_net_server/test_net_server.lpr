@@ -935,6 +935,162 @@ begin
     'shutdown handoff does not call completion');
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestEpollServerEcho;
+var
+  LHandler: TEchoHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TEchoHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'epoll echo handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'epoll server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('ping')^, 4);
+    LClient.Shutdown;
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(4), LN, 'epoll echo size');
+    CheckEqual(Byte(Ord('p')), LBuf[0], 'epoll echo first byte');
+  finally
+    LClient.Close;
+  end;
+
+  Check(LHandler.Called, 'epoll handler called');
+  Check(Pos('127.0.0.1', LHandler.SeenRemoteAddr) > 0,
+    'epoll handler sees remote addr');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
+procedure TestEpollServerShutdownWithoutClients;
+var
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := TEchoHandler.Create;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LServer.IsRunning, 'epoll server started');
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+  Check(not LServer.IsRunning, 'epoll server stopped after shutdown');
+end;
+
+procedure TestEpollServerPrefersContextSessionFactoryWhenAvailable;
+var
+  LHandler: TContextAwareHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TContextAwareHandler.Create(csmClose);
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'epoll context handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'epoll context server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Close;
+  except
+    LClient.Close;
+    raise;
+  end;
+
+  LWait := 0;
+  while (not LHandler.ContextFactoryCalled) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'epoll context-aware session factory was called');
+  Check(not LHandler.LegacyFactoryCalled,
+    'epoll legacy session factory was bypassed');
+  Check(not LHandler.ServeConnCalled, 'epoll ServeConn was bypassed');
+  Check(LHandler.ContextSeen, 'epoll context-aware factory received context');
+  Check(LHandler.WorkerHandoffSeen,
+    'epoll context-aware factory received worker handoff');
+  Check(LHandler.CapturedHandoff <> nil, 'epoll worker handoff captured');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+{$ENDIF}
+
 begin
   T := TTestRunner.Create('nextpas.core.net.server');
   T.Run('Default options', @TestDefaultOptions);
@@ -957,5 +1113,12 @@ begin
     @TestThreadedServerFailingHandoffReportsFailedOutcome);
   T.Run('Threaded server rejects handoff after shutdown',
     @TestThreadedServerRejectsHandoffAfterShutdown);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Run('Epoll server echo', @TestEpollServerEcho);
+  T.Run('Epoll server shutdown without clients',
+    @TestEpollServerShutdownWithoutClients);
+  T.Run('Epoll server prefers context session factory when available',
+    @TestEpollServerPrefersContextSessionFactoryWhenAvailable);
+  {$ENDIF}
   T.Summary;
 end.

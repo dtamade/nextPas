@@ -24,9 +24,7 @@ uses
   SysUtils,
   nextpas.core.errors,
   nextpas.core.net.tcp,
-  nextpas.core.sync.intf,
-  nextpas.core.sync.mutex,
-  nextpas.core.thread,
+  nextpas.core.net.server.runtime,
   nextpas.core.platform.thread;
 
 type
@@ -35,36 +33,6 @@ type
     Conn: ITcpStream;
     Handler: ITcpServerHandler;
     SessionContext: ITcpServerSessionContext;
-  end;
-
-  TTcpThreadedWorkTask = class(TInterfacedObject)
-  private
-    FWork: ITcpServerWork;
-    FCompletion: ITcpServerWorkCompletion;
-  public
-    constructor Create(const AWork: ITcpServerWork;
-      const ACompletion: ITcpServerWorkCompletion);
-    procedure Run;
-  end;
-
-  TTcpThreadedWorkerHandoff = class(TInterfacedObject, ITcpServerWorkerHandoff)
-  private
-    FPool: IThreadPool;
-    FMutex: IMutex;
-    FShuttingDown: Boolean;
-  public
-    constructor Create;
-    procedure Shutdown;
-    function Submit(const AWork: ITcpServerWork;
-      const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
-  end;
-
-  TTcpThreadedSessionContext = class(TInterfacedObject, ITcpServerSessionContext)
-  private
-    FWorkerHandoff: ITcpServerWorkerHandoff;
-  public
-    constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
-    function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
   TTcpThreadedServer = class(TInterfacedObject, ITcpServer)
@@ -83,38 +51,6 @@ type
     procedure Shutdown;
     function LocalAddr: TNetAddress;
     function IsRunning: Boolean;
-  end;
-
-function ExecuteConnHandler(const AHandler: ITcpServerHandler;
-  const AConn: ITcpStream; const AContext: ITcpServerSessionContext): TTcpServerConnOwnership;
-var
-  LContextFactory: ITcpServerSessionFactoryWithContext;
-  LSessionFactory: ITcpServerSessionFactory;
-  LSession: ITcpServerSession;
-begin
-  Result := tscoServer;
-  try
-    if Supports(AHandler, ITcpServerSessionFactoryWithContext, LContextFactory) then
-    begin
-      LSession := LContextFactory.NewSession(AConn, AContext);
-      if LSession = nil then
-        raise EArgumentError.Create('tcp server session factory returned nil');
-      Result := LSession.Run;
-    end
-    else if Supports(AHandler, ITcpServerSessionFactory, LSessionFactory) then
-    begin
-      LSession := LSessionFactory.NewSession(AConn);
-      if LSession = nil then
-        raise EArgumentError.Create('tcp server session factory returned nil');
-      Result := LSession.Run;
-    end
-    else
-      Result := AHandler.ServeConn(AConn);
-  except
-    { Keep the accept loop and detached workers alive if a single connection
-      handler raises. The runtime falls back to server-owned close semantics. }
-    Result := tscoServer;
-  end;
 end;
 
 function ConnThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -126,126 +62,16 @@ begin
   LCtx := PConnContext(AArg);
   LOwnership := tscoServer;
   try
-    LOwnership := ExecuteConnHandler(LCtx^.Handler, LCtx^.Conn,
+    LOwnership := ExecuteTcpServerConnHandler(LCtx^.Handler, LCtx^.Conn,
       LCtx^.SessionContext);
   finally
     if (LCtx^.Conn <> nil) and (LOwnership = tscoServer) then
-    begin
-      LCtx^.Conn.Shutdown;
-      LCtx^.Conn.Close;
-    end;
+      CloseServerOwnedTcpConn(LCtx^.Conn);
     LCtx^.Conn := nil;
     LCtx^.Handler := nil;
     LCtx^.SessionContext := nil;
     Dispose(LCtx);
   end;
-end;
-
-{ TTcpThreadedWorkTask }
-
-constructor TTcpThreadedWorkTask.Create(const AWork: ITcpServerWork;
-  const ACompletion: ITcpServerWorkCompletion);
-begin
-  inherited Create;
-  FWork := AWork;
-  FCompletion := ACompletion;
-end;
-
-procedure TTcpThreadedWorkTask.Run;
-var
-  LOutcome: TTcpServerWorkOutcome;
-  LOwnership: TTcpServerConnOwnership;
-begin
-  LOutcome := tswoCompleted;
-  LOwnership := tscoServer;
-  try
-    LOwnership := FWork.Execute;
-  except
-    LOutcome := tswoFailed;
-    LOwnership := tscoServer;
-  end;
-  try
-    FCompletion.Complete(LOutcome, LOwnership);
-  except
-  end;
-  FCompletion := nil;
-  FWork := nil;
-end;
-
-{ TTcpThreadedWorkerHandoff }
-
-constructor TTcpThreadedWorkerHandoff.Create;
-begin
-  inherited Create;
-  FPool := ThreadPool(0);
-  FMutex := nextpas.core.sync.mutex.TMutex.Create;
-  FShuttingDown := False;
-end;
-
-procedure TTcpThreadedWorkerHandoff.Shutdown;
-var
-  LPool: IThreadPool;
-begin
-  FMutex.Acquire;
-  try
-    if FShuttingDown then
-      Exit;
-    FShuttingDown := True;
-    LPool := FPool;
-    FPool := nil;
-  finally
-    FMutex.Release;
-  end;
-  if LPool <> nil then
-    LPool.Shutdown;
-end;
-
-function TTcpThreadedWorkerHandoff.Submit(const AWork: ITcpServerWork;
-  const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
-var
-  LTask: TTcpThreadedWorkTask;
-begin
-  if AWork = nil then
-    raise EArgumentError.Create('tcp server handoff work must not be nil');
-  if ACompletion = nil then
-    raise EArgumentError.Create('tcp server handoff completion must not be nil');
-
-  FMutex.Acquire;
-  try
-    if FShuttingDown or (FPool = nil) then
-      Exit(tshrShuttingDown);
-    LTask := TTcpThreadedWorkTask.Create(AWork, ACompletion);
-    try
-      FPool.Submit(procedure
-      begin
-        try
-          LTask.Run;
-        finally
-          LTask.Free;
-        end;
-      end);
-    except
-      LTask.Free;
-      raise;
-    end;
-    Result := tshrAccepted;
-  finally
-    FMutex.Release;
-  end;
-end;
-
-{ TTcpThreadedSessionContext }
-
-constructor TTcpThreadedSessionContext.Create(
-  const AWorkerHandoff: ITcpServerWorkerHandoff);
-begin
-  inherited Create;
-  FWorkerHandoff := AWorkerHandoff;
-end;
-
-function TTcpThreadedSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
-begin
-  Result := FWorkerHandoff;
 end;
 
 { TTcpThreadedServer }
@@ -271,10 +97,7 @@ end;
 procedure TTcpThreadedServer.EnsureRuntimeContext;
 begin
   if FWorkerHandoff = nil then
-  begin
-    FWorkerHandoff := TTcpThreadedWorkerHandoff.Create;
-    FSessionContext := TTcpThreadedSessionContext.Create(FWorkerHandoff);
-  end;
+    CreateTcpServerRuntimeContext(FWorkerHandoff, FSessionContext);
 end;
 
 procedure TTcpThreadedServer.ListenAndServe(const AAddr: string;
@@ -316,13 +139,11 @@ begin
         begin
           LOwnership := tscoServer;
           try
-            LOwnership := ExecuteConnHandler(AHandler, LConn, FSessionContext);
+            LOwnership := ExecuteTcpServerConnHandler(AHandler, LConn,
+              FSessionContext);
           finally
             if LOwnership = tscoServer then
-            begin
-              LConn.Shutdown;
-              LConn.Close;
-            end;
+              CloseServerOwnedTcpConn(LConn);
             Dispose(LCtx);
           end;
         end;

@@ -69,8 +69,11 @@ make -C examples/nextpas.core.http/http_get_client run
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
 
 `THttpServerOptions.Backend` 会下沉到 `nextpas.core.net.server` foundation。
-当前默认值是 `TCP_SERVER_BACKEND_THREADED`；`epoll` / `kqueue` / `IOCP`
-backend 还未实现时，显式选择它们会得到 `ENotSupportedError`。
+当前默认值是 `TCP_SERVER_BACKEND_THREADED`。在 Linux 上，
+`TCP_SERVER_BACKEND_EPOLL` 已有第一阶段 backend：`epoll` 负责 listener
+readiness 与 accept，accepted connection 仍交给 foundation worker 执行同步
+HTTP handler，所以 public HTTP contract 保持不变。`kqueue` / `IOCP` 仍未实现；
+非 Linux 平台显式选择 `epoll` 也仍会得到 `ENotSupportedError`。
 
 ## Cross-Platform
 
