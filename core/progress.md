@@ -1,58 +1,63 @@
-# Progress Log: net.server epoll reactor wakeup seam
+# Progress Log: http h1 outbound production/drain split
 
 ## Session
 
-- **Scope:** 给 `nextpas.core.net.server` 的 poll-driven foundation 补上
-  worker-completion -> reactor wakeup 基础能力，为 H1 poll-driven runtime 铺路，
-  但不在本轮直接改 H1 response writer。
+- **Scope:** 给 `nextpas.core.http` 的 H1 server runtime 补上
+  response production / socket drain split，
+  为 future poll-driven H1 铺 internal outbound seam，
+  但本轮不直接迁 session runtime。
 - **Status:** ready-to-commit
 
 ## Current state
 
 - shared checkout 仍有大量无关 modified / untracked 文件；本轮继续只做 path-limited 变更。
-- `platform.io` 现在已经有 Linux `eventfd` wake seam。
-- `net.server.epoll` 现在已经能把 worker completion 送回 reactor，再继续推进 poll-driven session。
-- H1 poll-driven runtime 仍未落地，但当前缺口已经从“context/wakeup 基础设施”收窄到
-  “outbound drain / writer would-block 语义”。
+- H1 现在已经不再把 handler output 直接写到 socket；
+  当前 connection state 会先收集响应，再统一 drain。
+- real-socket stalled-peer/backpressure 的 focused proof 仍然成立，
+  但 handler-return timing 不再被当成 public contract。
 
 ## Completed work
 
 - 审阅并确认当前缺口：
-  - foundation context bridge 上一批已打通
-  - 当前缺的是 reactor self-wakeup 与 completion 回 reactor
-  - 这批不需要扩 HTTP public API
-- 先写 RED：
-  - `test_platform_io`：wake/drain readiness
-  - `test_net_server`：worker completion 唤醒 reactor 并重入 poll-driven session
-- 在 `src/nextpas.core.platform.io.base.pas` /
-  `src/nextpas.core.platform.io.pas` 落地：
-  - Linux `WakeFd`
-  - `platform_poller_enable_wake / wake / drain_wake`
-- 在 `src/nextpas.core.net.server.epoll.pas` 落地：
-  - per-connection `TTcpEpollSessionContext`
-  - wrapped `TTcpEpollWorkerHandoff`
-  - queued completion + reactor drain
-  - empty socket interest 等待语义
-  - shutdown 优先走 poller wake，self-connect 仅保留 fallback
-- 在 focused tests 落地：
-  - `tests/nextpas.core.platform.io/test_platform_io`
-  - `tests/nextpas.core.net.server/test_net_server`
-- 在架构文档落地：
-  - `docs/net/ARCHITECTURE.md`
+  - malformed chunked ingress 这一侧已足够强
+  - 当前关键缺口已经转到 H1 outbound path
+  - 这批不需要扩 public HTTP API
+- 先承接 RED：
+  - `test_http_h1writer` 先证明 outbound buffer seam 缺失
+  - `test_http_server` 暴露 real-socket backpressure 与旧 direct-write timing 断言冲突
+- 在 `src/nextpas.core.http.impl.h1.outbound.pas` 落地：
+  - `IH1OutboundBuffer`
+  - `DrainAllTo`
+  - `TryDrainTo`
+  - pending / reset helper
+- 在 `src/nextpas.core.http.impl.h1.pas` 落地：
+  - 移除 per-connection socket buffered writer 常驻字段
+  - 改为 per-response outbound buffer + buffered response writer
+  - handler 返回后统一 flush + drain
+  - committed response exception 路径保留 best-effort flush/drain
+- 在 focused tests 落地 / 校正：
+  - `tests/nextpas.core.http/test_http_h1writer`
+    - short writer drain-all
+    - would-block resumable drain
+  - `tests/nextpas.core.http/test_http_server`
+    - real-socket backpressure proof 改为锁 safe-close / no-follow-up-consume，
+      不再锁 direct-write 时代的 handler-return timing
+- 在文档落地：
   - `docs/http/ARCHITECTURE.md`
+  - `docs/http/API_COVERAGE.md`
 
 ## Verification
 
-- `make -C tests/nextpas.core.platform.io/test_platform_io clean test`
-  - `8/8 passed`
+- `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+  - `26/26 passed`
   - heaptrc：`0 unfreed memory blocks`
-- `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - `21/21 passed`
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `112/112 passed`
   - heaptrc：`0 unfreed memory blocks`
 
 ## Next step
 
-- 直接进入 H1 poll-driven runtime 的剩余硬骨头：
-  - response writer 改成 outbound queue / resumable drain model
-  - chunked writer / buffered writer 引入 would-block 友好语义
-  - `TH1ServerConnectionState` 真正实现 `ITcpServerPollDrivenSession`
+- 直接进入 H1 outbound path 的剩余硬骨头：
+  - 给 outbound queue 加容量治理，不再长期停在 whole-response buffering
+  - 把 `TryDrainTo` 接进真实 runtime
+  - 让 `TH1ServerConnectionState` 真正迁到 poll-driven session path

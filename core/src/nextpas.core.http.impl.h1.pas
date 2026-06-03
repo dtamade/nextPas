@@ -47,6 +47,7 @@ uses
   nextpas.core.text.conv,
   nextpas.core.http.headers,
   nextpas.core.http.message,
+  nextpas.core.http.impl.h1.outbound,
   nextpas.core.http.impl.h1.parser,
   nextpas.core.http.impl.h1.writer;
 
@@ -119,7 +120,6 @@ type
     FHandler: IHttpHandler;
     FSessionContext: ITcpServerSessionContext;
     FParser: IH1Parser;
-    FBufWriter: IWriter;
     FPending: string;
     FKeepAlive: Boolean;
     FIdleMs: Int64;
@@ -292,7 +292,6 @@ begin
   FHandler := AHandler;
   FSessionContext := AContext;
   FParser := NewH1RequestParser;
-  FBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
   FPending := '';
   FKeepAlive := True;
   if FOptions.IdleTimeout > 0 then
@@ -314,10 +313,18 @@ var
   LHeadersDone: Boolean;
   LRejected: Boolean;
   LHijackConn: ITcpStream;
+  LOutbound: IH1OutboundBuffer;
+  LResponseWriter: IWriter;
+  LFlusher: IFlusher;
+  LDrainStarted: Boolean;
 begin
   Result := tscoServer;
   while FKeepAlive do
   begin
+    LW := nil;
+    LOutbound := nil;
+    LResponseWriter := nil;
+    LDrainStarted := False;
     try
       FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)));
       if FOptions.WriteTimeout > 0 then
@@ -440,7 +447,9 @@ begin
         LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
       else
         LHijackConn := FConn;
-      LW := TH1ResponseWriter.Create(FBufWriter, LHijackConn,
+      LOutbound := NewH1OutboundBuffer;
+      LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+      LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
         LReq.Method = hmHead);
       if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
         LW.GetHeaders.Set_('connection', 'keep-alive');
@@ -457,7 +466,10 @@ begin
       end;
 
       LW.Flush;
-      (FBufWriter as IFlusher).Flush;
+      if Supports(LResponseWriter, IFlusher, LFlusher) then
+        LFlusher.Flush;
+      LDrainStarted := True;
+      LOutbound.DrainAllTo(FConn as IWriter);
 
       if LW.GetHeaders.Get('connection') = 'close' then
         FKeepAlive := False;
@@ -468,6 +480,17 @@ begin
           Result := tscoHandler
         else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
           WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        if (LW <> nil) and (not (LW as TH1ResponseWriter).IsHijacked) and
+           (LW as TH1ResponseWriter).HasCommitted and (not LDrainStarted) then
+        begin
+          try
+            if Supports(LResponseWriter, IFlusher, LFlusher) then
+              LFlusher.Flush;
+            if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
+              LOutbound.DrainAllTo(FConn as IWriter);
+          except
+          end;
+        end;
         FKeepAlive := False;
       end;
     end;

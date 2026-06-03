@@ -14,6 +14,7 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http.impl.h1.outbound,
   nextpas.core.http.impl.h1.writer;
 
 type
@@ -51,6 +52,24 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+  end;
+
+  TMockDrainStreamRuntime = class(TInterfacedObject, ITcpStreamRuntime)
+  private
+    FOutput: string;
+    FMaxPerWrite: SizeUInt;
+    FWouldBlockCall: Int32;
+    FWriteCalls: Int32;
+  public
+    constructor Create(const AMaxPerWrite: SizeUInt;
+      const AWouldBlockCall: Int32);
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+    function GetOutput: string;
   end;
 
 function TBytesWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -156,6 +175,60 @@ end;
 
 procedure TMockTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
 begin
+end;
+
+constructor TMockDrainStreamRuntime.Create(const AMaxPerWrite: SizeUInt;
+  const AWouldBlockCall: Int32);
+begin
+  inherited Create;
+  FMaxPerWrite := AMaxPerWrite;
+  FWouldBlockCall := AWouldBlockCall;
+  FWriteCalls := 0;
+end;
+
+function TMockDrainStreamRuntime.NativeSocketHandle: PtrUInt;
+begin
+  Result := 0;
+end;
+
+procedure TMockDrainStreamRuntime.SetBlocking(const ABlocking: Boolean);
+begin
+end;
+
+function TMockDrainStreamRuntime.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+begin
+  ARead := 0;
+  Result := tsiorClosed;
+end;
+
+function TMockDrainStreamRuntime.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+var
+  LOld: SizeUInt;
+begin
+  Inc(FWriteCalls);
+  if FWriteCalls = FWouldBlockCall then
+  begin
+    AWritten := 0;
+    Exit(tsiorWouldBlock);
+  end;
+
+  AWritten := ACount;
+  if (FMaxPerWrite > 0) and (AWritten > FMaxPerWrite) then
+    AWritten := FMaxPerWrite;
+  if AWritten > 0 then
+  begin
+    LOld := SizeUInt(Length(FOutput));
+    SetLength(FOutput, LOld + AWritten);
+    Move(ABuf, FOutput[LOld + 1], AWritten);
+  end;
+  Result := tsiorOk;
+end;
+
+function TMockDrainStreamRuntime.GetOutput: string;
+begin
+  Result := FOutput;
 end;
 
 var
@@ -674,6 +747,81 @@ begin
   LRW.Free;
 end;
 
+procedure TestOutboundBufferDrainAllHandlesShortWriter;
+var
+  LBuffer: IH1OutboundBuffer;
+  LW: TShortWriter;
+  LIW: IWriter;
+  LData: string;
+begin
+  LBuffer := NewH1OutboundBuffer;
+  LData := 'hello';
+  CheckEqual(Int64(Length(LData)),
+    Int64(LBuffer.Write(LData[1], SizeUInt(Length(LData)))),
+    'outbound buffer accepts full write');
+  CheckEqual(Int64(Length(LData)), Int64(LBuffer.PendingBytes),
+    'outbound buffer tracks pending bytes');
+
+  LW := TShortWriter.Create(1);
+  LIW := LW as IWriter;
+  try
+    CheckEqual(Int64(Length(LData)),
+      Int64(LBuffer.DrainAllTo(LIW)),
+      'outbound buffer drains all bytes through short writer');
+    CheckEqual('hello', LW.GetOutput,
+      'outbound buffer preserves bytes across short writes');
+    Check(LBuffer.IsEmpty, 'outbound buffer empties after drain');
+  finally
+    LIW := nil;
+  end;
+end;
+
+procedure TestOutboundBufferTryDrainResumesAfterWouldBlock;
+var
+  LBuffer: IH1OutboundBuffer;
+  LRuntime: TMockDrainStreamRuntime;
+  LRuntimeIntf: ITcpStreamRuntime;
+  LData: string;
+  LWritten: SizeUInt;
+  LResult: TTcpStreamIOResult;
+begin
+  LBuffer := NewH1OutboundBuffer;
+  LData := 'hello';
+  LBuffer.Write(LData[1], SizeUInt(Length(LData)));
+
+  LRuntime := TMockDrainStreamRuntime.Create(2, 2);
+  LRuntimeIntf := LRuntime as ITcpStreamRuntime;
+  try
+    LResult := LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+    Check(LResult = tsiorOk, 'first drain writes available bytes');
+    CheckEqual(Int64(2), Int64(LWritten), 'first drain writes short slice');
+    CheckEqual(Int64(3), Int64(LBuffer.PendingBytes),
+      'pending bytes shrink after first drain');
+    CheckEqual('he', LRuntime.GetOutput, 'first drain preserves prefix');
+
+    LResult := LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+    Check(LResult = tsiorWouldBlock, 'second drain reports would-block');
+    CheckEqual(Int64(0), Int64(LWritten), 'would-block reports zero progress');
+    CheckEqual(Int64(3), Int64(LBuffer.PendingBytes),
+      'would-block keeps remaining bytes queued');
+
+    LResult := LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+    Check(LResult = tsiorOk, 'third drain resumes after would-block');
+    CheckEqual(Int64(2), Int64(LWritten), 'third drain writes next slice');
+    CheckEqual(Int64(1), Int64(LBuffer.PendingBytes),
+      'pending bytes continue shrinking after resume');
+
+    LResult := LBuffer.TryDrainTo(LRuntimeIntf, LWritten);
+    Check(LResult = tsiorOk, 'final drain completes buffer');
+    CheckEqual(Int64(1), Int64(LWritten), 'final drain writes last byte');
+    Check(LBuffer.IsEmpty, 'outbound buffer empty after resumable drains');
+    CheckEqual('hello', LRuntime.GetOutput,
+      'resumable drain preserves full byte stream');
+  finally
+    LRuntimeIntf := nil;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.writer');
   T.Run('WriteHeader writes status line', @TestWriteHeaderStatusLine);
@@ -711,5 +859,9 @@ begin
     @TestContentLengthBodyWithShortWriterWritesAllBytes);
   T.Run('Chunked body with short writer writes complete chunk',
     @TestChunkedBodyWithShortWriterWritesCompleteChunk);
+  T.Run('Outbound buffer drains all bytes through short writer',
+    @TestOutboundBufferDrainAllHandlesShortWriter);
+  T.Run('Outbound buffer resumable drain survives would-block',
+    @TestOutboundBufferTryDrainResumesAfterWouldBlock);
   T.Summary;
 end.

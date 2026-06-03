@@ -1142,7 +1142,6 @@ var
   LTimedOut: Boolean;
   LFirstCalls: Int32;
   LSecondCalls: Int32;
-  LHandlerReturned: Boolean;
   LCompletedBodyWrites: Int32;
   LBodyChunk: string;
   LTotalBodyLen: Int64;
@@ -1163,7 +1162,6 @@ const
 begin
   LFirstCalls := 0;
   LSecondCalls := 0;
-  LHandlerReturned := False;
   LCompletedBodyWrites := 0;
   SetLength(LBodyChunk, BODY_CHUNK_LEN);
   FillChar(LBodyChunk[1], BODY_CHUNK_LEN, Ord('a'));
@@ -1182,7 +1180,6 @@ begin
       AW.Write(LBodyChunk[1], SizeUInt(Length(LBodyChunk)));
       Inc(LCompletedBodyWrites);
     end;
-    LHandlerReturned := True;
   end);
   LRouter.Get('/after', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var
@@ -1224,9 +1221,6 @@ begin
         ABackendName + ' real socket backpressure handles the first request once');
       CheckEqual(Int64(0), Int64(LSecondCalls),
         ABackendName + ' real socket backpressure does not process later pipelined requests');
-      Check(not LHandlerReturned,
-        ABackendName + ' real socket backpressure interrupts the streaming handler before it returns' +
-        ' (completedBodyWrites=' + IntToStr(Int64(LCompletedBodyWrites)) + ')');
       Check(Pos('HTTP/1.1 500', LResp) = 0,
         ABackendName + ' real socket backpressure does not append synthetic 500');
       Check(Pos('after', LResp) = 0,

@@ -1,81 +1,83 @@
-# Findings: net.server epoll reactor wakeup seam
+# Findings: http h1 outbound production/drain split
 
 ## Scope
 
-- 这轮不是直接改 H1 response writer / outbound queue。
-- 这轮先把 `nextpas.core.net.server` 缺失的 reactor self-wakeup foundation 补齐，
-  让 future H1 poll-driven session 真正能安全等待 worker completion，
-  再回 reactor 线程继续推进协议状态机。
+- 这轮不是再扩 malformed chunked ingress coverage。
+- 这轮先把 H1 server response path 的“生成响应”与“写 socket”拆开，
+  为 future poll-driven H1 铺 internal seam。
 
 ## Confirmed truths
 
-### 1. 当前真正需要固定的不是新的 HTTP 接口，而是 runtime wakeup 基础能力
+### 1. 这轮正确落点不是 public HTTP contract 扩张，而是 H1 internal outbound seam
 
-- H1 context bridge 上一批已经打通；本轮不需要再扩 HTTP contract。
-- 真正阻塞 H1 poll-driven runtime 的，是：
-  worker completion 现在没有可靠的 reactor wakeup / re-entry 路径。
-- 因此本轮正确落点是 `platform.io` + `net.server.epoll`，
-  不是再给 HTTP 层加一个临时 public seam。
+- `nextpas.core.net.server` 的 context / worker handoff / reactor wakeup 基础已经有了。
+- 真正阻塞 H1 继续迁向 poll-driven 的，已经收敛到 response production /
+  outbound queue / drain 这条链路。
+- 因此这轮正确动作是改 `nextpas.core.http.impl.h1.*`，
+  不是再给 facade 加新的 transport/runtime API。
 
-### 2. `platform.io` 现在正式拥有 poller wake seam
+### 2. H1 现在已经落地 internal outbound buffer
 
-- [src/nextpas.core.platform.io.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.platform.io.pas:1)
-  现在新增：
-  - `platform_poller_enable_wake`
-  - `platform_poller_wake`
-  - `platform_poller_drain_wake`
-- Linux 实现选型固定为 `eventfd`，不走 self-pipe。
-- 这条 seam 是 reusable foundation，不是 HTTP 特例。
+- [src/nextpas.core.http.impl.h1.outbound.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.outbound.pas:1)
+  新增 `IH1OutboundBuffer` / `TH1OutboundBuffer`：
+  - `PendingBytes`
+  - `IsEmpty`
+  - `DrainAllTo`
+  - `TryDrainTo`
+  - `Reset`
+- 当前 proof 已经锁住：
+  - short writer 下 drain-all 仍能完整写完
+  - `would-block` 后可以从剩余 offset 继续 drain
 
-### 3. `epoll` backend 现在会把 worker completion 拉回 reactor 线程
+### 3. `TH1ServerConnectionState` 现在先生成响应，再统一 drain 到连接
 
-- [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:1)
-  现在引入：
-  - per-connection session context wrapper
-  - wrapped worker handoff
-  - queued completion drain
-  - wake-driven synthetic re-entry
-- worker 线程执行 `ITcpServerWork.Execute`；
-  `ITcpServerWorkCompletion.Complete` 不再直接在 worker 线程推进 poll-driven session。
-- completion 会先排队，再唤醒 reactor，由 reactor 线程调用 completion 并继续推进 session。
+- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:447)
+  现在改成：
+  - per-response 新建 outbound buffer
+  - `TH1ResponseWriter` 先写到 buffered writer -> outbound buffer
+  - handler 返回后 `Flush`
+  - 再由 connection state 把 buffer drain 到 `FConn`
+- 这条拆分保住了同步 handler surface，
+  同时把真正的 socket write ownership 收回到 connection state。
 
-### 4. poll-driven session 现在可以合法暂时没有 socket interest
+### 4. real-socket backpressure 的 handler-return timing 不该冻结成 public contract
 
-- 之前 `epoll` runtime 会把 `ANextEvents = []` 当成错误。
-- 现在这条约束已收紧成更准确的 foundation contract：
-  当 session 在等待 worker completion 等 foundation-owned wake source 时，
-  可以临时返回空 socket interest。
-- backend 负责移除 fd 关注，并在 wake 后 synthetic re-entry。
+- 原测试假定 stalled peer 必须在 handler 返回前打断 large streaming response。
+- 这在 direct-write 时代成立，但在 response production / drain split 后，
+  backpressure 可以发生在 handler 返回之后的 drain 阶段。
+- 当前文档里真正要锁的是：
+  - safe-close
+  - no synthetic `500`
+  - no later pipelined request consumption
+  - relaxed close-observation truth
+- 因此这轮正确修正是调测试契约，不是为了保留旧 timing 断言回退实现。
 
-### 5. H1 剩余阻塞点进一步收窄了
+### 5. 这轮 still-incomplete 的地方也更清楚了
 
-- H1 现在不再缺 context bridge，也不再缺 foundation wakeup。
-- 下一步真正困难的只剩：
-  - `TH1ResponseWriter` / `TChunkedWriter` / `TBufferedWriter.Flush`
-    的 blocking write 语义
-  - outbound queue / resumable drain state machine
-  - `TH1ServerConnectionState` 真正实现 poll-driven connection driver
+- 当前 outbound buffer 还是 whole-response buffering 中间态。
+- 真正高标准终态不应长期停在“无界内存缓冲 + drain all”：
+  下一步应收敛到 bounded outbound queue + resumable drain。
+- poll-driven H1 需要消费 `TryDrainTo`，而不是把 direct blocking socket write 再塞回 handler。
 
 ## Verification evidence
 
-- `make -C tests/nextpas.core.platform.io/test_platform_io clean test`
-  - `8/8 passed`
+- `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+  - `26/26 passed`
   - 新增 proof：
-    - wake event 会唤醒 poller
-    - wake userdata 会保留
-    - `drain_wake` 后 readiness 会被清空
+    - outbound buffer 在 short writer 下完整 drain
+    - outbound buffer 在 `would-block` 后可恢复 drain
   - heaptrc：`0 unfreed memory blocks`
-- `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - `21/21 passed`
-  - 新增 proof：
-    - epoll poll-driven session 可提交 worker work
-    - session 可在等待 worker completion 时返回空 socket interest
-    - worker completion 会回 reactor 线程
-    - reactor 会被 wake 并继续推进同一 session
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `112/112 passed`
+  - 验证：
+    - threaded / epoll real-socket backpressure proof 仍保 safe-close
+    - 不追加 synthetic `500`
+    - 不消费后续 pipelined request
+    - committed response exception / hijack / ingress chunked proofs 未回归
   - heaptrc：`0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- `TH1ServerConnectionState` 还没有真正迁到 `ITcpServerPollDrivenSession`。
-- `TH1ResponseWriter` / chunked writer / buffered flush 仍是假定 blocking socket。
-- 这轮只先把 Linux `eventfd` 路径做实；`kqueue` / `IOCP` 还要各自接上等价 wake 机制。
+- outbound buffer 目前没有 backpressure-aware 的容量上界。
+- `TH1ServerConnectionState` 还没有真正迁到 poll-driven session runtime。
+- `TryDrainTo` 虽已具备 focused proof，但还没被生产路径消费。
