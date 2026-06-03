@@ -1,12 +1,12 @@
-# Task Plan: HTTP truncated trailer whitespace EOF proof
+# Task Plan: HTTP truncated trailer empty-value EOF proof
 
 ## Goal
 
-补齐 terminal `0` chunk 后 trailer separator 已到达、但只收到单个空格 OWS 的两个相邻 EOF 子类的
+补齐 terminal `0` chunk 后 empty-value trailer line 的两个相邻 EOF 子类的
 parser/server/security focused proof，把这两个 grammar 边界单独锁实：
 
-- `...hello\r\n0\r\nX-Test: `
-- `...hello\r\n0\r\nX-Test: \r`
+- `...hello\r\n0\r\nX-Test:\r`
+- `...hello\r\n0\r\nX-Test:\r\n`
 
 确认：
 
@@ -18,22 +18,22 @@ parser/server/security focused proof，把这两个 grammar 边界单独锁实�
 
 `nextpas.core.http` H1 correctness coverage-expansion。当前继续做 malformed chunk framing 审计，把
 `chunk-size line`、`chunk-extension line`、`terminal chunk extension line`、`chunk-data line ending`、
-`terminal 0 chunk ending`、`terminal chunk ending CR`、`terminal chunk ending after extension`、`terminal chunk ending after extension CR`、`trailer field-name`、`trailer separator`、`trailer whitespace`、`trailer whitespace CR`、`trailer field line`、`trailer field CR`、`trailer section`、`trailer section CR` 这些 EOF 边界子类逐个拆开锁实，而不是停留在宽泛的
+`terminal 0 chunk ending`、`terminal chunk ending CR`、`terminal chunk ending after extension`、`terminal chunk ending after extension CR`、`trailer field-name`、`trailer separator`、`trailer empty-value CR`、`trailer empty-value`、`trailer whitespace`、`trailer whitespace CR`、`trailer field line`、`trailer field CR`、`trailer section`、`trailer section CR` 这些 EOF 边界子类逐个拆开锁实，而不是停留在宽泛的
 “truncated chunked EOF” 表述。
 
 ## Active Batch Checklist
 
 - [x] 检查 shared checkout 的无关脏文件，确认本轮只处理 HTTP 相关路径。
 - [x] 复读 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md` 与现有控制文件。
-- [x] 确认当前缺口是 trailer separator 后单个空格 OWS 的两个 EOF 子类，
-  且现有 case 还没单独覆盖 `...0\r\nX-Test: ` 与 `...0\r\nX-Test: \r`。
+- [x] 确认当前缺口是 empty-value trailer line 的两个 EOF 子类，
+  且现有 case 还没单独覆盖 `...0\r\nX-Test:\r` 与 `...0\r\nX-Test:\r\n`。
 - [x] 新增 parser focused test：
-  `Chunked request truncated trailer whitespace at EOF`。
+  `Chunked request truncated trailer empty-value CR at EOF`。
 - [x] 新增 server focused test：
-  `Malformed chunked request truncated trailer whitespace at EOF -> 400`。
+  `Malformed chunked request truncated trailer empty-value CR at EOF -> 400`。
 - [x] 新增 security focused test：
-  `Truncated trailer whitespace at EOF -> 400`。
-- [x] 新增 parser/server/security 对应的 `...X-Test: \r` 相邻 CR-only 子类 focused tests。
+  `Truncated trailer empty-value CR at EOF -> 400`。
+- [x] 新增 parser/server/security 对应的 `...X-Test:\r\n` 相邻 empty-value 子类 focused tests。
 - [x] 跑 `test_http_h1parser`、`test_http_server`、`test_http_security` 首轮验证，记录是 RED 还是 direct GREEN。
 - [x] 若失败则仅在 HTTP parser/server 内最小修复；若直接通过，则按 coverage-expansion 收口。
 - [x] 同步 API coverage、`task_plan.md`、`findings.md`、`progress.md`。
@@ -54,8 +54,8 @@ parser/server/security focused proof，把这两个 grammar 边界单独锁实�
 
 | Decision | Rationale |
 | --- | --- |
-| 本轮优先补 trailer separator 后单个空格 OWS 的 EOF 截断子类 | 这是紧邻既有 `...X-Test:` 与 `...X-Test: value` 之间的自然相邻边界。 |
-| 分开锁 `...0\r\nX-Test: ` 与 `...0\r\nX-Test: \r` | 它们分别代表 whitespace-only value-start 未闭合，以及 whitespace-only 行尾只收到半个 `CR` 的不同 grammar 边界。 |
+| 本轮优先补 empty-value trailer line 的 EOF 截断子类 | 这是紧邻既有 `...X-Test:` 与 `...X-Test: value` 之间另一条无 OWS 分支的自然相邻边界。 |
+| 分开锁 `...0\r\nX-Test:\r` 与 `...0\r\nX-Test:\r\n` | 它们分别代表 empty-value 行尾只收到半个 `CR`，以及空值 trailer field 已完整结束但最终空 trailer section 缺失的不同 grammar 边界。 |
 | 若首跑直接 GREEN，则不碰生产代码 | 当前目标是 correctness proof，不制造伪修复。 |
 
 ## Errors Encountered

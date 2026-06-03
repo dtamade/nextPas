@@ -682,6 +682,48 @@ begin
   Check(not LP.IsComplete, 'truncated trailer separator request stays incomplete');
 end;
 
+procedure TestChunkedRequestTruncatedTrailerEmptyValueCrAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Test'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'X-Test:'#13;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated trailer empty-value CR request is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'truncated trailer empty-value CR request reports parser error');
+  Check(not LP.IsComplete, 'truncated trailer empty-value CR request stays incomplete');
+end;
+
+procedure TestChunkedRequestTruncatedTrailerEmptyValueAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Test'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'X-Test:'#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated trailer empty-value request is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'truncated trailer empty-value request reports parser error');
+  Check(not LP.IsComplete, 'truncated trailer empty-value request stays incomplete');
+end;
+
 procedure TestChunkedRequestTruncatedTrailerWhitespaceAtEof;
 var
   LP: IH1Parser;
@@ -1216,6 +1258,8 @@ begin
   T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
   T.Run('Chunked request truncated trailer field-name at EOF', @TestChunkedRequestTruncatedTrailerFieldNameAtEof);
   T.Run('Chunked request truncated trailer separator at EOF', @TestChunkedRequestTruncatedTrailerSeparatorAtEof);
+  T.Run('Chunked request truncated trailer empty-value CR at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueCrAtEof);
+  T.Run('Chunked request truncated trailer empty-value at EOF', @TestChunkedRequestTruncatedTrailerEmptyValueAtEof);
   T.Run('Chunked request truncated trailer whitespace at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceAtEof);
   T.Run('Chunked request truncated trailer whitespace CR at EOF', @TestChunkedRequestTruncatedTrailerWhitespaceCrAtEof);
   T.Run('Chunked request truncated trailer field line at EOF', @TestChunkedRequestTruncatedTrailerFieldLineAtEof);

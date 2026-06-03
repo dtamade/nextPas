@@ -1,4 +1,4 @@
-# Findings: HTTP truncated trailer whitespace EOF proof
+# Findings: HTTP truncated trailer empty-value EOF proof
 
 ## Repo / Git Safety
 
@@ -27,19 +27,21 @@
   也已覆盖 `...0\r\nX-Test: value` 与 `...0\r\nX-Test: value\r`。
 - `truncated trailer field-name EOF truncation` 与 `truncated trailer separator EOF truncation`
   也已覆盖 `...0\r\nX-Test` 与 `...0\r\nX-Test:`。
-- 但 separator 后如果只到达一个空格 OWS 就 EOF，仍没有把
-  `...0\r\nX-Test: ` 与 `...0\r\nX-Test: \r` 这两类输入单独锁住。
+- `truncated trailer whitespace EOF truncation` 与 `truncated trailer whitespace CR EOF truncation`
+  也已覆盖 `...0\r\nX-Test: ` 与 `...0\r\nX-Test: \r`。
+- 但 empty-value trailer line 自己若只收到 `CR`，或者空值 field line 已结束但最终空 trailer section 缺失，仍没有把
+  `...0\r\nX-Test:\r` 与 `...0\r\nX-Test:\r\n` 这两类输入单独锁住。
 
 ## New Evidence From This Batch
 
 - parser focused tests 证明：
-  - 当输入结束在 `...0\r\nX-Test: ` 或 `...0\r\nX-Test: \r` 时，`Finish` 后都会进入 parser error；
+  - 当输入结束在 `...0\r\nX-Test:\r` 或 `...0\r\nX-Test:\r\n` 时，`Finish` 后都会进入 parser error；
   - 这两类输入都保持 not-complete，不会被误判成合法完成。
 - server focused tests 证明：
-  - peer half-close 暴露出 truncated trailer whitespace EOF / truncated trailer whitespace CR EOF 时，server 都返回显式 `400`；
+  - peer half-close 暴露出 truncated trailer empty-value CR EOF / truncated trailer empty-value EOF 时，server 都返回显式 `400`；
   - 两类输入下 handler 都不会被调用。
 - security focused tests 证明：
-  - raw-wire 下这两个 whitespace-only trailer grammar 子类都稳定落到显式 `400`，没有静默关闭或 handler 落地。
+  - raw-wire 下这两个 empty-value trailer grammar 子类都稳定落到显式 `400`，没有静默关闭或 handler 落地。
 
 ## Batch Truth
 
@@ -55,6 +57,8 @@
   - terminal chunk ending after extension CR EOF 截断也已单独证明；
   - truncated trailer field-name EOF 截断也已单独证明；
   - truncated trailer separator EOF 截断也已单独证明；
+  - truncated trailer empty-value CR EOF 截断也已单独证明；
+  - truncated trailer empty-value EOF 截断也已单独证明；
   - truncated trailer whitespace EOF 截断也已单独证明；
   - truncated trailer whitespace CR EOF 截断也已单独证明；
   - truncated trailer field line EOF 截断也已单独证明；
@@ -68,5 +72,5 @@
 ## Remaining Questions
 
 - malformed chunk framing 审计仍可继续细化其他 terminal/trailer grammar 子类，但这轮已经把
-  trailer separator 后单个空格 OWS 的 truth 锁实。
+  empty-value trailer line 的两类相邻 truth 锁实。
 - keep-alive request-tail 契约决策仍然存在，不过不阻塞继续把 H1 grammar truth 做扎实。
