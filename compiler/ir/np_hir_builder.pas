@@ -160,6 +160,8 @@ type
       out AResult: THIRExprResult): Boolean;
     function LowerCompareExpr(const AExpr: TSemanticHirExpr;
       out AResult: THIRExprResult): Boolean;
+    function LowerCallExpr(const AExpr: TSemanticHirExpr;
+      out AResult: THIRExprResult): Boolean;
     procedure InitExprResult(out AResult: THIRExprResult);
     procedure SetExprValue(out AResult: THIRExprResult;
       const AValueId: THIRValueId; const ATypeId: THIRTypeId;
@@ -572,6 +574,24 @@ begin
           Result := (LeftType <> 0) and (LeftType = RightType) and
             (HirTypeIsInt(LeftType) or HirTypeIsBool(LeftType) or
              (FModule.Types.GetType(LeftType).Kind = htkPointer));
+        end;
+      end;
+    shekCall:
+      begin
+        ResultType := ExprHirTypeId(AExpr);
+        Result := (AExpr.ValueClass = shvcScalar) and
+          (AExpr.LiteralStr <> '') and
+          (Length(AExpr.Children) = Length(AExpr.Op)) and
+          (HirTypeIsInt(ResultType) or
+           (FModule.Types.GetType(ResultType).Kind = htkPointer));
+        if not Result then
+          Exit(False);
+        for I := 0 to High(AExpr.Children) do
+        begin
+          if not (AExpr.Op[I + 1] in ['i', 'p']) then
+            Exit(False);
+          if not CanLowerExpr(AExpr.Children[I]) then
+            Exit(False);
         end;
       end;
   else
@@ -1253,9 +1273,65 @@ begin
       Result := LowerBinaryExpr(AExpr, AResult);
     shekCompareOp:
       Result := LowerCompareExpr(AExpr, AResult);
+    shekCall:
+      Result := LowerCallExpr(AExpr, AResult);
   else
     Result := False;
   end;
+end;
+
+function THIRBuilder.LowerCallExpr(const AExpr: TSemanticHirExpr;
+  out AResult: THIRExprResult): Boolean;
+var
+  Instr: THIRInstr;
+  ChildResult: THIRExprResult;
+  ExpectedType, ResultType, SourceType: THIRTypeId;
+  ArgValueId: THIRValueId;
+  I: LongInt;
+begin
+  InitExprResult(AResult);
+  ResultType := ExprHirTypeId(AExpr);
+  if (AExpr.LiteralStr = '') or
+    (Length(AExpr.Children) <> Length(AExpr.Op)) or
+    (ResultType = 0) then
+    Exit(False);
+  if HirTypeIsInt(ResultType) then
+    ResultType := GetIntType
+  else if FModule.Types.GetType(ResultType).Kind = htkPointer then
+    ResultType := GetPtrType
+  else
+    Exit(False);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikCall;
+  Instr.TypeId := ResultType;
+  Instr.CallTarget := AExpr.LiteralStr;
+  SetLength(Instr.Operands, Length(AExpr.Children));
+  for I := 0 to High(AExpr.Children) do
+  begin
+    if not LowerExprValue(AExpr.Children[I], ChildResult) then
+      Exit(False);
+    case AExpr.Op[I + 1] of
+      'i':
+        ExpectedType := GetIntType;
+      'p':
+        ExpectedType := GetPtrType;
+    else
+      Exit(False);
+    end;
+    SourceType := ChildResult.TypeId;
+    if (ChildResult.ValueId = 0) or (SourceType = 0) then
+      Exit(False);
+    ArgValueId := NormalizeScalarValueToType(ChildResult.ValueId, SourceType,
+      ExpectedType);
+    if ArgValueId = 0 then
+      Exit(False);
+    Instr.Operands[I] := MakeTypedOperand(ArgValueId, ExpectedType);
+  end;
+  EmitInstr(Instr);
+  SetExprValue(AResult, Instr.ResultId, ResultType, shvcScalar);
+  Result := True;
 end;
 
 function THIRBuilder.LowerExprValue(const AExprId: LongInt;

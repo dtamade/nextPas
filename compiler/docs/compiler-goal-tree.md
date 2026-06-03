@@ -27,12 +27,12 @@
 
 ## 四个架构债务（2026-06-01 与 Codex 深度研究，已验证到代码行）
 
-| # | 债务 | 根因（代码坐标） | 严重度 |
-|---|------|------------------|--------|
-| 1 | sema→HIR 字符串 blob 传表达式，类型信息被压扁 | `np_semantic_analyzer.pas:6033 EncodeRuntimeIntExprFold` / `np_hir_builder.pas:1310 ParseIntBlob` / `TTypedHirNode.Operand:string` | 最高 |
-| 2 | 类型宽度只有 i64 | `np_hir_builder.pas:315 GetIntType` 写死 `AddIntType(64,True)` 全局单例；emitter `TypeToLlvm` else→i64 | 高 |
-| 3 | 单后端单目标硬编码 | `np_hir_llvm_emitter.pas:822-823` triple/datalayout 硬编码；`np_backend_plan.pas:607` 构造 emitter 未传已持有的 `FTargetFacts` | 中（第一步极低成本） |
-| 4 | 零优化 pass + bump allocator 无 free | `np_hir_llvm_emitter.pas:1052 np_alloc` brk bump；`np_toolchain_plan.pas:1335` opt 未传 -O 级别 | 中（可延后） |
+| #   | 债务                                          | 根因（代码坐标）                                                                                                                   | 严重度               |
+| --- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------- |
+| 1   | sema→HIR 字符串 blob 传表达式，类型信息被压扁 | `np_semantic_analyzer.pas:6033 EncodeRuntimeIntExprFold` / `np_hir_builder.pas:1310 ParseIntBlob` / `TTypedHirNode.Operand:string` | 最高                 |
+| 2   | 类型宽度只有 i64                              | `np_hir_builder.pas:315 GetIntType` 写死 `AddIntType(64,True)` 全局单例；emitter `TypeToLlvm` else→i64                             | 高                   |
+| 3   | 单后端单目标硬编码                            | `np_hir_llvm_emitter.pas:822-823` triple/datalayout 硬编码；`np_backend_plan.pas:607` 构造 emitter 未传已持有的 `FTargetFacts`     | 中（第一步极低成本） |
+| 4   | 零优化 pass + bump allocator 无 free          | `np_hir_llvm_emitter.pas:1052 np_alloc` brk bump；`np_toolchain_plan.pas:1335` opt 未传 -O 级别                                    | 中（可延后）         |
 
 **因果链**：债务1（结构化带类型表达式契约）→ 债务2（宽度传播）→ 债务4 allocator。
 债务3 第一步独立且零风险，应最早做以防继续把 x86_64/Linux 假设写进新结构。
@@ -41,17 +41,17 @@
 
 ## 目标树节点
 
-| 节点 | 内容 | 依赖 | 状态 |
-|------|------|------|------|
-| **C0** | 137 smoke 基线冻结 + 本目标树固化 | — | ✅ 2026-06-01 |
-| **C1** | 债务3 第一刀：target facts 接入 emitter，去硬编码 triple/datalayout | C0 | ✅ 2026-06-01 |
-| **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback） | C1 | ✅ 2026-06-01 |
-| **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int | C2 | ✅ 2026-06-02 |
-| **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u*）；提升/截断规则放 sema | C3 | ✅ 2026-06-02 |
-| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field | C4 | 🚧 2026-06-03 C5-M |
-| **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放 | C5 | ⬜ |
-| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置） | C5,C6 | ⬜ |
-| **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单" | C5,C6 | 🏁 里程碑 |
+| 节点   | 内容                                                                                                                            | 依赖  | 状态               |
+| ------ | ------------------------------------------------------------------------------------------------------------------------------- | ----- | ------------------ |
+| **C0** | 137 smoke 基线冻结 + 本目标树固化                                                                                               | —     | ✅ 2026-06-01      |
+| **C1** | 债务3 第一刀：target facts 接入 emitter，去硬编码 triple/datalayout                                                             | C0    | ✅ 2026-06-01      |
+| **C2** | 债务1 骨架：结构化表达式表 `TSemanticHirExpr` + `TTypedHirNode.ExprId` + builder `LowerExpr` 双轨入口（blob fallback）          | C1    | ✅ 2026-06-01      |
+| **C3** | 债务1 第一批迁移：常量/变量/算术/比较/not-and-or/cond-br/ret/halt/write-int                                                     | C2    | ✅ 2026-06-02      |
+| **C4** | 债务2 核心：真实 scalar 宽度（i8/16/32/64/u*/f32/f64/i1）+ cast 指令 + signedness（sdiv/udiv/icmp s*u\*）；提升/截断规则放 sema | C3    | ✅ 2026-06-02      |
+| **C5** | 债务1 第二批：lvalue/address 模型（EmitAddress vs EmitValue）→ 修 `P^.Field`、`@Arr[i]`、array/record/class field               | C4    | 🚧 2026-06-03 C5-M |
+| **C6** | 债务4 allocator：freestanding malloc/free（mmap + free list + coalesce），object/string/dynarray 真实释放                       | C5    | ⬜                 |
+| **C7** | 债务3 深化（target runtime profile/callconv/layout、多目标 IR smoke）+ 债务4 优化（LLVM O2/LTO 可配置）                         | C5,C6 | ⬜                 |
+| **C8** | 自举探针：用 nextPas 编译 `core/` 一个真实中等模块，产出"自举差距清单"                                                          | C5,C6 | 🏁 里程碑          |
 
 **关键路径** = C2 + C3 + C4 + C5 + C6（allocator）。优化与多目标可延后。
 
@@ -323,3 +323,14 @@
   完整重编译（44145 lines compiled）+ 137/137 LLVM smoke 全绿。C5 下一步继续
   `WalkHaltCalls` 剩余 class/object RHS 特殊分支（constructor-like、raw object-dot、
   pointer-return helper）。
+- 2026-06-03 C5-N：structured direct-call expr lowering：第一条真正 end-to-end 的
+  call expr 已落地。sema 现在可为 direct free-function call 生成 `shekCall`，
+  其中 `LiteralStr` 保存 callee、`Op` 保存 legacy ABI 参数种类、`Children`
+  保存参数 expr；pointer/class-return helper assignment 也开始挂 `ExprId`。builder
+  新增 `shekCall` lowering，但刻意只接受 legacy ABI 兼容子集：`i` / `p` 参数，
+  `i64` / `ptr` 返回；不兼容 call 继续整条回落旧 blob。TDD RED=
+  `test_hir_builder_expr_fallback` 退出 12 /
+  `test_semantic_hir_expr_producer` 退出 166；GREEN 后 changed tests +
+  完整重编译（44341 lines compiled）+ 137/137 LLVM smoke 全绿。C5 下一步建议把同一
+  contract 推进到 ordinary member call，再进入 `shekVirtualCall` /
+  `shekInterfaceCall`，而不是回到 scattered call special-case。

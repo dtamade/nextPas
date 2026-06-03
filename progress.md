@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-N structured direct-call lowering
+
+- **Status:** completed, pending path-limited commit.
+- Branch and safety state:
+  - Branch: `main`.
+  - Unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Colleague lane remains off-limits: compiler/toolchain, compiler/targets, tools/stage0, tests/toolchain, build target/toolchain/profile files, and `build/verify_local.sh`.
+- Current decision:
+  - Stop doing one RHS special-case at a time; land the first end-to-end structured call expr path instead.
+  - Keep the expr self-contained: callee in `LiteralStr`, legacy ABI arg kinds in `Op`, args in `Children`.
+  - Lower only the legacy ABI-compatible subset in builder, and keep full blob fallback for the rest.
+- Evidence:
+  - First RED from builder-focused coverage: `test_hir_builder_expr_fallback` exited `12`, proving `shekCall` still fell back to the poisoned blob path.
+  - First RED from producer coverage: `test_semantic_hir_expr_producer` exited `166`, proving pointer/class-return helper assignment still emitted `assign-runtime` with no `ExprId`.
+  - Root causes:
+    - builder originally gated `shekCall` on exact `TypeId = GetIntType`, but structured semantic `Integer` came through `GetIntTypeByWidth(64, True)`;
+    - sema pointer-return helper assignment bypassed `AddScalarAssignRuntimeNode`, so class targets never attached structured RHS.
+  - GREEN changed tests:
+    - `test_hir_builder_expr_fallback` -> `exit=0`
+    - `test_semantic_hir_expr_producer` -> `exit=0`
+    - `test_hir_builder_structured_address` -> `exit=0`
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `44341 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_total=137 passed=137 failed=0 build_failed=0 run_failed=0`.
+- Next immediate step:
+  - Path-limited commit, then continue the same structured call contract into ordinary member call / virtual call slices instead of returning to scattered `WalkHaltCalls` call special-cases.
+
 ## Session: 2026-06-03 C5-M object-backed field-array value loads
 
 - **Status:** completed, pending path-limited commit.
@@ -1102,7 +1128,7 @@ platform/core 工作流保留下来的已完成记录。
 - RED:
   - 扩 `test_platform_thread_host_ffi_surface`，初始失败在
     `platform.thread must have a base unit for public carrier types:
-    ../../../src/nextpas.core.platform.thread.base.pas`。
+../../../src/nextpas.core.platform.thread.base.pas`。
   - 扩 `test_platform_ffi_owner_boundary`，初始失败在
     `platform source audit must see the core non-ffi units, host base units, feature base units, and helper-only math units`。
   - 扩 `test_platform_thread_no_fpc_units`，初始失败在
@@ -1384,7 +1410,7 @@ platform/core 工作流保留下来的已完成记录。
     `platform_sync_validate_wait_address`，且 Linux/POSIX fallback/Windows wait path 都在 host wait
     helper 前复用这层 public precheck。初始失败在
     `platform.sync must own public wait-address nil/mismatch validation before host wait helpers:
-    platform_sync_validate_wait_address`。
+platform_sync_validate_wait_address`。
   - GREEN：`platform.sync` 新增 `platform_sync_validate_wait_address`，统一 nil -> invalid、
     mismatch -> again；Linux futex、POSIX fallback、Windows `WaitOnAddress` path 都改为先走该 helper。
   - `core/docs/design-conventions.md` 写入该 owner boundary：mismatch 归 `platform.sync` public
@@ -1445,7 +1471,7 @@ platform/core 工作流保留下来的已完成记录。
     `test_platform_sync_posix_surface` 1/1 pass。
   - RED：扩 `test_platform_sync_posix_surface`，初始有效失败在
     `platform.sync must own the wait-bucket release predicate instead of hiding policy inside host ffi:
-    platform_posix_wait_address_released`。
+platform_posix_wait_address_released`。
   - GREEN：`platform.sync` 新增内部 `platform_posix_wait_address_released` helper，明确承载
     generation/value mismatch release policy；host ffi 不新增 wait-bucket token。
   - 扩 `test_platform_sync` 的 `Address wait` 用例，覆盖 nil wait/wake public API：
@@ -1453,7 +1479,7 @@ platform/core 工作流保留下来的已完成记录。
     `platform_wake_address_all(nil)` 均期望 `PLATFORM_ERR_INVALID`。
   - RED：扩 `test_platform_sync_host_ffi_surface`，初始失败在
     `platform.sync must validate public wait-address pointers before host wait/wake helpers:
-    platform_sync_validate_address`。
+platform_sync_validate_address`。
   - GREEN：`platform.sync` 新增 `platform_sync_validate_address`，Linux futex、POSIX fallback 与 Windows
     wait/wake wrapper 都先执行 public nil guard。
 - Verification:
@@ -1473,7 +1499,7 @@ platform/core 工作流保留下来的已完成记录。
     - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units clean test`
     - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
     - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
-    全部通过，matrix 输出 `simulated-host-compile-matrix-status=pass`。
+      全部通过，matrix 输出 `simulated-host-compile-matrix-status=pass`。
   - Full:
     - `make -C core test` 输出 `All tests passed.`。
     - `make -C core examples` 输出 `All examples compiled.`。
@@ -1925,7 +1951,7 @@ platform/core 工作流保留下来的已完成记录。
     - `platform_mutex_destroy`
     - `platform_rwlock_destroy`
     - `platform_condvar_destroy`
-    三个 `Result := 0` body。
+      三个 `Result := 0` body。
   - 这些实现虽然简单，但语义是 Windows `SRWLOCK` / `CONDITION_VARIABLE` 无需显式销毁，owner
     仍应属于 host ffi，而不是 consumer。
 - Actions taken:
@@ -1978,7 +2004,7 @@ platform/core 工作流保留下来的已完成记录。
     - `result := platform_clock_monotonic_ns_u64;`
     - `result := platform_clock_realtime_ns_u64;`
     - `result := platform_clock_monotonic_resolution_ns_u64;`
-    在 `platform.time` 中各只出现一次。
+      在 `platform.time` 中各只出现一次。
   - `core/src/nextpas.core.platform.time.pas` 收成单层 `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate：
     `NEXTPAS_UNIX` 与 `NEXTPAS_WINDOWS` 共享同一组 public façade body，unsupported target 继续 `{$FATAL ...}`。
   - 保持 `nextpas.core.platform.windows.math` 边界不变：它仍是纯数学 sibling helper，不伪装成 ffi owner。
@@ -2446,7 +2472,7 @@ platform/core 工作流保留下来的已完成记录。
     - `windows_wait_error_timeout_result`
     - `windows_condvar_timedwait_timeout_result`
     - `windows_wait_address_i32_timeout_result`
-    让 timeout classifier 与 caller-supplied timeout result 投影继续留在 host ffi owner。
+      让 timeout classifier 与 caller-supplied timeout result 投影继续留在 host ffi owner。
   - `core/src/nextpas.core.platform.sync.pas` 的 Windows `platform_condvar_timedwait` /
     `platform_wait_address32` 改为直接消费上述 helper，只保留 `PLATFORM_ERR_TIMEOUT` public contract。
   - `core/docs/design-conventions.md` 追加规则：优先用 caller-supplied timeout result helper，而不是让
@@ -2491,7 +2517,7 @@ platform/core 工作流保留下来的已完成记录。
   - `core/src/nextpas.core.platform.posix.ffi.pas` 新增：
     - `platform_posix_timespec_add_ns`
     - `platform_posix_timespec_remaining_ns_u64`
-    让 shared POSIX `timespec` 算术继续留在 shared owner，而不是由 consumer 各自复制。
+      让 shared POSIX `timespec` 算术继续留在 shared owner，而不是由 consumer 各自复制。
   - `core/src/nextpas.core.platform.linux.ffi.pas`、
     `android.ffi`、`darwin.ffi`、`freebsd.ffi`、`unix.ffi` 统一新增
     `platform_pthread_mutex_init_platform_kind`，承载 public mutex kind 到宿主 pthread 编号的映射。
@@ -2500,9 +2526,9 @@ platform/core 工作流保留下来的已完成记录。
     - `platform_posix_timespec_to_ns`
     - `platform_posix_remaining_ns`
     - `platform_posix_mutex_kind`
-    改为消费 `platform_posix_timespec_add_ns`、
-    `platform_posix_timespec_remaining_ns_u64` 与
-    `platform_pthread_mutex_init_platform_kind`。
+      改为消费 `platform_posix_timespec_add_ns`、
+      `platform_posix_timespec_remaining_ns_u64` 与
+      `platform_pthread_mutex_init_platform_kind`。
   - `test_platform_posix_ffi_surface` 与 `test_platform_sync_host_ffi_surface` 扩成 focused gate，继续冻结：
     - shared `posix.ffi` 必须拥有 shared `timespec` arithmetic helper
     - POSIX host ffi owner 必须拥有 public mutex kind init helper
@@ -5637,6 +5663,7 @@ platform/core 工作流保留下来的已完成记录。
     - 修复 TAstFacade 计数方法：递归搜索解决 unit 场景下返回 0 的问题
 
 **Commits created (Phase 4):**
+
 - `cb2794f` feat: introduce TGreenNodeKind + TGreenNode class + dual-track parse output
 - `57b37a8` feat: add statement-level parsing and error recovery to GreenCST parser
 - `1c30a96` feat: add declaration-level parsing, AST facade navigation, and parser test group
@@ -5659,7 +5686,7 @@ platform/core 工作流保留下来的已完成记录。
     - ProcessProcedureDecl：创建 procedure 符号 + HIR 节点
     - ProcessFunctionDecl：解析返回类型，创建 function 符号 + 带 TypeId 的 HIR 节点
     - WalkDeclarations：递归遍历 var/const/procedure/function 节点
-      + 递归进入 gnkInterfaceSection/gnkImplementationSection
+      - 递归进入 gnkInterfaceSection/gnkImplementationSection
     - SeedDeclarations：从 RootNode 开始遍历声明子树
   - **5.4 赋值语句基本类型检查**：
     - CheckAssignmentTypes + WalkAssignmentStatements 递归遍历赋值语句
@@ -5680,6 +5707,7 @@ platform/core 工作流保留下来的已完成记录。
     - 移除 ResolveTypeId 无意义的 Normalized 赋值
 
 **Commits created (Phase 5):**
+
 - `a81eaa9` feat: extend semantic analysis with declaration processing and type checking
 - `80fc0ca` fix: address codex review findings in semantic analyzer
 
@@ -5701,8 +5729,8 @@ platform/core 工作流保留下来的已完成记录。
   - **Fix DeleteFile**：改用 FpUnlink（之前用 Erase）
   - **Fix ForceDirectories**：改用 FpMkdir（之前用 MkDir + IOResult hack）
   - **Implement FindFirst/FindNext/FindClose**：使用 FpOpenDir/FpReadDir/FpCloseDir
-    + GlobMatch 通配符匹配（支持 * 和 ? 模式）
-    （之前全是 stub，始终返回 -1）
+    - GlobMatch 通配符匹配（支持 \* 和 ? 模式）
+      （之前全是 stub，始终返回 -1）
   - **Fix GetEnvironmentVariable**：改用 FpGetEnv（之前用 C extern getenv，两者等价但 FpGetEnv 更 idiomatic）
   - **Implement Now**：使用 C gettimeofday 系统调用
     （之前返回固定 0.0）
@@ -5714,16 +5742,18 @@ platform/core 工作流保留下来的已完成记录。
   - **Fix IncludeTrailingPathDelimiter**：空字符串返回 '/'（匹配 FPC 行为）
   - **扩展测试套件**：从 38 测试扩展到 54 测试
     （新增 FileExists, DirectoryExists, ExpandFileName, GetEnvironmentVariable,
-     ChangeFileExt, Now, FindFirst 测试）
+    ChangeFileExt, Now, FindFirst 测试）
   - **添加 rtl-sysutils-check 门**到 verify_local.sh
 
 **关键架构决策**：
+
 - SysUtils 使用 BaseUnix 而非 Unix 单元（Unix 单元依赖 SysUtils，会造成循环引用）
 - 时间函数使用直接 C 库调用（gettimeofday/localtime）避免依赖 Unix 单元
 - FindFirst 使用自定义 GlobMatch 而非 FpFnMatch（后者在 Unix 单元中不可用）
-- np_sysutils.pas 文件名遵循项目 np_ 前缀约定，但需复制为 SysUtils.pas 供 FPC 查找
+- np*sysutils.pas 文件名遵循项目 np* 前缀约定，但需复制为 SysUtils.pas 供 FPC 查找
 
 **Commits created (Phase 6):**
+
 - `f124cd2` feat: harden RTL SysUtils with stat-based file ops, glob matching, and verification gate
 
 **Verification:** `bash build/verify_local.sh` → verify-local=pass (含 rtl-sysutils-check=pass)
@@ -5740,8 +5770,8 @@ platform/core 工作流保留下来的已完成记录。
     把 `tools/stage0/nextpas.pas` 从 4140 行单体驱动拆分为纯 CLI 解析 + 命令分发（372 行）。
   - 提取 `nextpas_projection_types.pas`（237 行）：12 个投影 record 类型 + TNextPasState。
   - 提取 `nextpas_json_helpers.pas`（142 行）：JsonEscape, JsonString, AppendJsonField 等。
-  - 提取 `nextpas_projection_json.pas`（825 行）：~20 个 Append*ProjectionJsonFields + BuildCommandEnvelopeJson。
-  - 提取 `nextpas_projection_text.pas`（999 行）：WriteProjectionLine + ~20 个 Print*Projection。
+  - 提取 `nextpas_projection_json.pas`（825 行）：~20 个 Append\*ProjectionJsonFields + BuildCommandEnvelopeJson。
+  - 提取 `nextpas_projection_text.pas`（999 行）：WriteProjectionLine + ~20 个 Print\*Projection。
   - 提取 `nextpas_projection_context.pas`（~796 行）：~30 个 Clear*/Capture* 过程。
   - 提取 `nextpas_command_envelope.pas`（~321 行）：EnvelopeSelectorName, PrintUsage, Fail 等。
   - 提取 `nextpas_command_build.pas`（~335 行）：RunBuild + TargetFactsFromConfig + 路径工具函数。
@@ -5750,7 +5780,7 @@ platform/core 工作流保留下来的已完成记录。
   - 提取 `nextpas_command_doctor.pas`（~85 行）：RunDoctor。
   - 提取 `nextpas_command_query.pas`（~108 行）：RunQuerySymbols。
   - 提取 `nextpas_command_pkg.pas`（~83 行）：RunPkgInspect。
-  - 消除所有 Active* 全局变量，改为 TNextPasState 参数传入。
+  - 消除所有 Active\* 全局变量，改为 TNextPasState 参数传入。
   - 消除 4 处重复 JSON helper 实现（np_compilation_session, np_backend_plan,
     np_toolchain_plan, np_diagnostics_sink），统一到 nextpas_json_helpers。
   - 全部 verify-local=pass 通过，所有命令表面输出不变。
@@ -5773,6 +5803,7 @@ platform/core 工作流保留下来的已完成记录。
   - **2.5 Document synchronization**：进行中。
 
 **Commits created (Phase 1 + Phase 2):**
+
 - `467a960` refactor: extract command envelope + Fail into separate unit
 - `f1c24a9` refactor: reduce command_envelope interface to public API only
 - `23013f9` refactor: extract RunBuild + path utilities into command_build unit
@@ -5798,9 +5829,9 @@ platform/core 工作流保留下来的已完成记录。
     - 调用约定关键字 12 个（stdcall/safecall/register/pascal/far/near/cppdecl/varargs/out/absolute/asm）
     - 表达式运算符关键字 21 个（and/or/not/xor/shl/shr/div/mod/in/is/as/nil/true/false/raise/try/except/finally/on/inherited/self）
     - 额外 objfpc 关键字 10 个（file/resourcestring/strict/operator/generic/specialize/reference/packed/contains/requires）
-  - **3.2 运算符/标点扩展**：多字符运算符（..,<>,<=,>=,+=,-=,*=,/=）、单字符运算符（+,-,*,/,=,<,>,@,^,[,]）、赋值运算符（:=）
+  - **3.2 运算符/标点扩展**：多字符运算符（..,<>,<=,>=,+=,-=,_=,/=）、单字符运算符（+,-,_,/,=,<,>,@,^,[,]）、赋值运算符（:=）
   - **3.3 数字/字符字面量**：十进制/十六进制($FF)整数、实数(3.14, 1.0e-5)、字符字面量(#65, #$FF)
-  - **3.4 编译器指令**：{$...} 和 (*$...*) 作为 tkCompilerDirective 单 token，保留指令文本
+  - **3.4 编译器指令**：{$...} 和 (*$...\*) 作为 tkCompilerDirective 单 token，保留指令文本
   - **Codex 审查修复**：
     - 编译器指令 lexeme 为空 → 捕获指令文本 + 正确 ByteOffset
     - 实数字面量拒绝无效 3. 形式 → 仅当小数点后有数字才包含点号
@@ -5815,6 +5846,7 @@ platform/core 工作流保留下来的已完成记录。
     - smoke-group=lexer result=pass fixtures=5 executed=5
 
 **Commits created (Phase 3):**
+
 - `af1f1fc` feat: expand lexer with full keyword/operator/literal support and fix review issues
 - `cd31e27` feat: add lexer test group to harness with 5 fixtures
 - `d92eb5a` fix: correct real literal rollback for 3.eX edge case
@@ -5838,12 +5870,14 @@ lexer token count: 从 ~35 上升到 ~153
 **关键实现**：
 
 **1. GetEnvironmentVariable**：
+
 - 使用 libc `getenv()` 外部函数
 - 正确处理空指针
 - 不存在的变量返回空字符串
 - ✅ 3/3 测试通过
 
 **2. ForceDirectories**：
+
 - 使用 `MkDir` 递归创建目录
 - 检查目录是否已存在
 - 先创建父目录
@@ -5851,6 +5885,7 @@ lexer token count: 从 ~35 上升到 ~153
 - ✅ 4/4 测试通过
 
 **3. DirectoryExists（修复）**：
+
 - 替换不可靠的 hack 实现
 - 使用 GetDir/ChDir/IOResult 模式
 - 检查后恢复原始目录
@@ -5858,6 +5893,7 @@ lexer token count: 从 ~35 上升到 ~153
 - ✅ 3/3 测试通过
 
 **4. TProcess.Execute（实现！）**：
+
 - 使用 libc `system()` 执行命令
 - 正确构建带引号参数的命令行
 - 支持工作目录切换
@@ -5868,21 +5904,25 @@ lexer token count: 从 ~35 上升到 ~153
 **技术细节**：
 
 **外部 C 函数**：
+
 ```pascal
 function getenv(name: PChar): PChar; cdecl; external 'c' name 'getenv';
 function system(command: PChar): LongInt; cdecl; external 'c' name 'system';
 ```
 
 **退出码处理**：
+
 - `system()` 返回格式：(exit_code << 8) | signal
 - 提取退出码：`status shr 8`
 
 **测试套件**：
+
 - 创建 `tests/rtl/test_critical_rtl.pas`
 - 15 个测试覆盖所有关键函数
 - ✅ **15/15 测试全部通过**
 
 **真实世界验证**：
+
 ```bash
 # nextPas 成功编译 hello_world.pas
 $ ./.sisyphus/tmp/stage0-bootstrap-debug/nextpas build /tmp/hello_world.pas
@@ -5895,6 +5935,7 @@ Hello from nextPas!
 ```
 
 **验证状态**：
+
 - ✅ 所有 19 个 compiler modules 仍然编译成功
 - ✅ verify-local=pass
 - ✅ 所有关键 RTL 测试通过
@@ -5902,12 +5943,14 @@ Hello from nextPas!
 - ✅ 编译的程序正确执行
 
 **影响**：
+
 - **Stage2 就绪度：60% → 85%** 🚀
 - 所有关键 stubs 已实现
 - nextPas 现在可以运行真实的编译工作流
 - Toolchain runner 完全功能正常
 
 **剩余 Stubs（非关键）**：
+
 - FindFirst/FindNext/FindClose（文件搜索）
 - Now/FormatDateTime（日期时间）
 - Format（字符串格式化）
@@ -5915,12 +5958,14 @@ Hello from nextPas!
 这些可以按需实现。通往 Stage2 self-hosting 的关键路径现在已经清晰！
 
 **里程碑**：
+
 - ✅ 从 stub 到真实实现
 - ✅ 从"可能可行"到"确实可行"
 - ✅ 从理论到实践
 - ✅ nextPas 可以编译并运行真实程序
 
 **下一步**：
+
 1. 尝试用 nextPas 编译更复杂的程序
 2. 测试 compiler modules 的实际执行
 3. 识别并修复运行时问题
@@ -5943,6 +5988,7 @@ Hello from nextPas!
 **成功编译的 Compiler Modules (19/19)**：
 
 **Frontend (7)**：
+
 1. `np_source_database` - 源码数据库
 2. `np_unit_graph` - 单元依赖图
 3. `np_workspace_model` - 工作区模型
@@ -5951,35 +5997,24 @@ Hello from nextPas!
 6. `np_unit_resolver` - 单元解析器
 7. `np_compilation_session` - 编译会话编排
 
-**Syntax (3)**：
-8. `np_lexer` - 词法分析器
-9. `np_green_tree` - 绿树（CST + Parser）
-10. `np_ast_facade` - AST 门面
+**Syntax (3)**：8. `np_lexer` - 词法分析器 9. `np_green_tree` - 绿树（CST + Parser）10. `np_ast_facade` - AST 门面
 
-**Sema (2)**：
-11. `np_semantic_model` - 语义模型
-12. `np_semantic_analyzer` - 语义分析器
+**Sema (2)**：11. `np_semantic_model` - 语义模型 12. `np_semantic_analyzer` - 语义分析器
 
-**Targets (1)**：
-13. `np_target_facts` - 目标平台信息
+**Targets (1)**：13. `np_target_facts` - 目标平台信息
 
-**Toolchain (3)**：
-14. `np_toolchain_profiles` - 工具链配置
-15. `np_toolchain_plan` - 工具链规划
-16. `np_toolchain_runner` - 工具链执行
+**Toolchain (3)**：14. `np_toolchain_profiles` - 工具链配置 15. `np_toolchain_plan` - 工具链规划 16. `np_toolchain_runner` - 工具链执行
 
-**IR (1)**：
-17. `np_mir_model` - 中级 IR 模型
+**IR (1)**：17. `np_mir_model` - 中级 IR 模型
 
-**Backend (1)**：
-18. `np_backend_plan` - 后端规划
+**Backend (1)**：18. `np_backend_plan` - 后端规划
 
-**Diagnostics (1)**：
-19. `np_diagnostics_sink` - 诊断系统
+**Diagnostics (1)**：19. `np_diagnostics_sink` - 诊断系统
 
 **RTL 最终实现总结**：
 
 **SysUtils 功能（完整）**：
+
 - String: Trim, LowerCase, UpperCase, SameText, Delete, Insert
 - File: FileExists, DirectoryExists, DeleteFile, FileSearch, ForceDirectories, ExpandFileName, ExtractFileDir, ExtractFileName, ChangeFileExt
 - Path: IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter
@@ -5993,17 +6028,20 @@ Hello from nextPas!
 - Types: TStringArray, TSearchRec
 
 **Classes 功能（完整）**：
+
 - TStringList: Add, Clear, IndexOf, Delete, LoadFromFile, SaveToFile, Count, Strings[]
 - TFileStream: Create, Read, Write, ReadBuffer, WriteBuffer, Seek, Size
 - Constants: fmOpenRead, fmOpenWrite, fmOpenReadWrite, fmCreate, fmShareDenyNone
 
 **Process 功能（新增）**：
+
 - TProcess: Execute (stub), Executable, CurrentDirectory, Parameters, Options, ExitStatus
 - TComponent: 基础组件类
 
 **静态审查发现**：
 
 **关键问题（15 个 stubs）**：
+
 1. Process.Execute - 完全 stub，不执行任何进程
 2. FindFirst/FindNext/FindClose - stub 实现
 3. GetEnvironmentVariable - 返回空字符串
@@ -6014,12 +6052,14 @@ Hello from nextPas!
 8. DirectoryExists - 使用不可靠的 hack 实现
 
 **性能问题**：
+
 1. TStringList.Add - O(n²) 增长策略
 2. LoadFromFile - 逐字符读取
 3. FileExists - 打开/关闭文件而非 stat()
 4. DirectoryExists - 复杂的文件操作
 
 **代码质量**：
+
 - ✅ 内存管理安全
 - ✅ 异常处理一致
 - ✅ 代码风格统一
@@ -6028,12 +6068,14 @@ Hello from nextPas!
 - ⚠️ 缺少输入验证
 
 **测试覆盖**：
+
 - ✅ SysUtils: 38/38 测试通过
 - ❌ Classes: 无测试
 - ❌ Process: 无测试
 - ❌ Compiler modules: 未知
 
 **整体评估**：
+
 - 编译风险：低
 - 运行时风险：中高（因为 stubs）
 - 性能风险：中
@@ -6043,6 +6085,7 @@ Hello from nextPas!
 **下一步优先级**：
 
 **Critical（本周）**：
+
 1. 实现 Process.Execute（使用 FPC Process 或系统调用）
 2. 实现 ForceDirectories（使用 MkDir）
 3. 实现 GetEnvironmentVariable（使用 GetEnv）
@@ -6050,6 +6093,7 @@ Hello from nextPas!
 5. 测试实际编译器执行
 
 **High（下周）**：
+
 1. 优化 TStringList 增长策略
 2. 优化 LoadFromFile/SaveToFile
 3. 实现 FindFirst/FindNext/FindClose
@@ -6057,6 +6101,7 @@ Hello from nextPas!
 5. 添加 Classes 单元测试
 
 **Medium（下月）**：
+
 1. 添加输入验证
 2. 文档化 ASCII-only 限制
 3. 添加 API 文档
@@ -6064,6 +6109,7 @@ Hello from nextPas!
 5. 添加 Unicode 支持（如需要）
 
 **关键成就**：
+
 - ✅ 100% compiler modules 编译成功（19/19）
 - ✅ 覆盖所有编译器层：frontend, syntax, sema, IR, backend, targets, toolchain, diagnostics
 - ✅ 21 个 compiler units 安装到 runtime SDK
@@ -6073,18 +6119,21 @@ Hello from nextPas!
 - ✅ 识别所有关键问题和优化机会
 
 **技术亮点**：
+
 - 渐进式依赖发现：编译 → 发现缺失 → 实现 → 重试
 - 最小化实现：只实现实际需要的功能
 - Stub 实现：足够通过编译，标记为 TODO
 - 全面审查：从代码质量、性能、安全、测试等多维度审查
 
 **统计数据**：
+
 - RTL 代码：756 行（SysUtils 406, Classes 250, Process 100）
 - Compiler modules：11,452 行，平均 545 行/模块
 - Stubs/TODOs：15 个
 - 测试：38 个 SysUtils 测试通过
 
 **验证**：
+
 - ✅ 所有 19 个模块用 nextPas 编译成功
 - ✅ 批量编译脚本运行正常
 - ✅ verify-local=pass
@@ -6108,6 +6157,7 @@ Hello from nextPas!
   - 所有 13 个 compiler modules 编译成功！
 
 **成功编译的 Compiler Modules (13)**：
+
 1. `np_diagnostics_sink` - 诊断系统
 2. `np_source_database` - 源码数据库
 3. `np_semantic_model` - 语义模型
@@ -6125,6 +6175,7 @@ Hello from nextPas!
 **RTL 实现总结**：
 
 **SysUtils 功能**：
+
 - String: Trim, LowerCase, UpperCase, SameText, Delete, Insert
 - File: FileExists, DirectoryExists, ExpandFileName, ExtractFileDir, ExtractFileName, ChangeFileExt
 - Path: IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter
@@ -6134,22 +6185,26 @@ Hello from nextPas!
 - Types: TStringArray, TSearchRec
 
 **Classes 功能**：
+
 - TStringList: Add, Clear, IndexOf, Delete, LoadFromFile, SaveToFile, Count, Strings[]
 - TFileStream: Create, Read, Write, ReadBuffer, WriteBuffer, Seek, Size
 - Constants: fmOpenRead, fmOpenWrite, fmOpenReadWrite, fmShareDenyNone
 
 **关键成就**：
+
 - ✅ 13/13 compiler modules 编译成功
 - ✅ 覆盖了 frontend, syntax, sema, targets, toolchain 等核心模块
 - ✅ RTL 实现足够支持大部分 compiler 代码
 - ✅ 批量编译脚本可重复使用
 
 **技术亮点**：
+
 - 渐进式依赖发现：编译 → 发现缺失 → 实现 → 重试
 - 最小化实现：只实现实际需要的功能
 - Stub 实现：FindFirst/FindNext/FindClose 使用 stub，足够通过编译
 
 **下一步**：
+
 - 尝试编译更多 compiler modules（IR, backend）
 - 实现 FindFirst/FindNext/FindClose 的真实版本（如果需要）
 - 尝试编译完整的 compiler 可执行文件
@@ -6163,7 +6218,7 @@ Hello from nextPas!
   - 实现了 `SysUtils` 子集，包含 compiler modules 需要的核心功能。
   - 创建 `rtl/core/sysutils/np_sysutils.pas` 和单元测试。
   - 实现了字符串操作（Trim, LowerCase, UpperCase, Delete, Insert）。
-  - 实现了文件操作（FileExists, DirectoryExists, ExtractFileDir, ExtractFileName, 
+  - 实现了文件操作（FileExists, DirectoryExists, ExtractFileDir, ExtractFileName,
     IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter, ExpandFileName）。
   - 实现了异常支持（Exception, EConvertError）。
   - 实现了类型转换（IntToStr, StrToInt, StrToIntDef）。
@@ -6173,12 +6228,14 @@ Hello from nextPas!
   - **成功用 nextPas 编译了第一个 compiler module**：`np_diagnostics_sink.pas`！
 
 **关键成就**：
+
 - ✅ `nextpas build compiler/diagnostics/np_diagnostics_sink.pas` 成功
 - ✅ `status=success`, `result=success`, `command-outcome=success`
 - ✅ Resolution, semantic analysis, MIR, backend 全部通过
 - ✅ 这是 Stage2 self-hosting 的第一步！
 
 **实现的 SysUtils 功能**：
+
 - String: Trim, LowerCase, UpperCase, Delete, Insert
 - File: FileExists, DirectoryExists, ExpandFileName, ExtractFileDir, ExtractFileName
 - Path: IncludeTrailingPathDelimiter, ExcludeTrailingPathDelimiter
@@ -6186,6 +6243,7 @@ Hello from nextPas!
 - Conversion: IntToStr, StrToInt, StrToIntDef
 
 **下一步**：
+
 - 尝试编译更多 compiler modules
 - 识别并实现缺失的 RTL 功能
 - 渐进式扩大到整个 compiler
@@ -6204,6 +6262,7 @@ Hello from nextPas!
   - 创建 `docs/plans/2026-05-02-stage2-feasibility-assessment.md` 记录详细评估结果。
 
 **关键发现**：
+
 - ❌ Stage2 当前**不可行**，主要阻塞因素是 RTL 不完整
 - 🔴 Critical: 缺少 `SysUtils`（字符串、文件、路径操作）
 - 🔴 Critical: 缺少 `Classes`（TStringList 等容器，或可用 dynamic arrays 替代）
@@ -6211,12 +6270,14 @@ Hello from nextPas!
 - 🟡 Medium: 需要设计 bootstrap 循环和一致性验证策略
 
 **工作量估算**：
+
 - Phase 1 (RTL 基础设施): ~1000-1800 LOC, 2-3 周
 - Phase 2 (渐进式验证): 1-2 周
 - Phase 3 (完整 Self-hosting): 1-2 周
 - **总计**: ~4-7 周
 
 **推荐路径**：
+
 1. 实现 `SysUtils` 子集（compiler modules 实际使用的功能）
 2. 实现 `Classes` 子集（如果需要）
 3. 渐进式验证：从最简单的 module 开始，逐步扩大
@@ -6242,6 +6303,7 @@ Hello from nextPas!
   - 保留回退到 stage0 的能力（可以移除 compiler modules，回到纯 FPC）。
 
 **Stage1 核心能力：**
+
 - ✅ Syntax: lexer, parser, AST
 - ✅ Sema: semantic analysis, type checking
 - ✅ Frontend: unit resolution, workspace discovery, package manifest
@@ -7235,12 +7297,12 @@ Hello from nextPas!
 
 ## 5-Question Reboot Check
 
-| Question             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Where am I?          | `P0/P1` 收口已完成；当前 shared workspace model、backend intermediate artifact truth、`bootstrap-native-assemble-link` production path、later-step failure attribution、success-path full transcript、最小 `test` / `env status` / `doctor` / `query symbols` command surface，以及 package workflow truth skeleton 都已经进入 verify gate，并 fresh rerun 拿到 `verify-local=pass`                                                                                                                                                           |
-| Where am I going?    | 下一步应从已收口的最小 developer tooling surface 继续把 package workflow skeleton 接成只读 `pkg inspect`，再考虑 richer `env` actions 或 richer semantic query；同时不要提前伪装 GUI / IDE、完整 language service、resolver graph 或 package manager 已进入默认实现路径                                                                                                                                                                                                                                                  |
-| What's the goal?     | 让 nextPas 的“当前能力”先真实可信，再继续往现代化、高性能、优雅的全栈工具链推进                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| What have I learned? | 假绿、模糊 provenance 和没投影出来的真实 command truth 都会拖慢后续架构推进；不管是 failure attribution 还是 success transcript，只要 trace/status 没跟真实 executed step 对齐，就会同时污染 CLI、diagnostic 与 replay surface                                                                                                                                                                                                                                                                                                        |
+| Question             | Answer                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Where am I?          | `P0/P1` 收口已完成；当前 shared workspace model、backend intermediate artifact truth、`bootstrap-native-assemble-link` production path、later-step failure attribution、success-path full transcript、最小 `test` / `env status` / `doctor` / `query symbols` command surface，以及 package workflow truth skeleton 都已经进入 verify gate，并 fresh rerun 拿到 `verify-local=pass`                                                                                                                                                                                                                                                                                   |
+| Where am I going?    | 下一步应从已收口的最小 developer tooling surface 继续把 package workflow skeleton 接成只读 `pkg inspect`，再考虑 richer `env` actions 或 richer semantic query；同时不要提前伪装 GUI / IDE、完整 language service、resolver graph 或 package manager 已进入默认实现路径                                                                                                                                                                                                                                                                                                                                                                                               |
+| What's the goal?     | 让 nextPas 的“当前能力”先真实可信，再继续往现代化、高性能、优雅的全栈工具链推进                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| What have I learned? | 假绿、模糊 provenance 和没投影出来的真实 command truth 都会拖慢后续架构推进；不管是 failure attribution 还是 success transcript，只要 trace/status 没跟真实 executed step 对齐，就会同时污染 CLI、diagnostic 与 replay surface                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | What have I done?    | 已收紧 harness、修正 resolver、把 shared workspace model 收口成 compiler-owned truth，补上 typed `TToolchainPlan` 的真实 execution runner 与 `native-run-*` contract gate，把 backend intermediate artifact truth 与 logical object input 接进 session/stage0/verify，再把 production path 真正切到 `bootstrap-native-assemble-link`，补齐 later-step failure attribution 与 success-path full transcript，新增最小 `nextpas test`、`env status`、`doctor`、`query symbols` surface，并把 package workflow 的 manifest/lock/install truth skeleton 接进 compiler/frontend/toolchain contract；fresh `bash build/verify_local.sh` 已再次确认整套 verify-local 继续全绿 |
 
 ## Session: 2026-05-27
@@ -7411,7 +7473,7 @@ Hello from nextPas!
     - `linux_futex_wait_i32`
     - `linux_futex_wake_one_i32`
     - `linux_futex_wake_all_i32`
-    把 futex syscall number、opcode 组合、`timespec` timeout 组装和 errno read 收回 host ffi owner。
+      把 futex syscall number、opcode 组合、`timespec` timeout 组装和 errno read 收回 host ffi owner。
   - `core/src/nextpas.core.platform.sync.pas` 的 Linux futex path 改为消费上述 helper；
     consumer 继续保留 nil/value mismatch 这类 nextPas contract 检查，以及
     `platform_posix_map_error` 映射，不再直接拼 raw futex syscall。
@@ -8004,6 +8066,7 @@ Hello from nextPas!
     - `make -C core benchmarks` 输出 `All benchmarks passed.`。
     - `bash build/verify_local.sh` 输出 `verify-local=pass` 与
       `human-summary=local verification passed`。
+
 ## 2026-06-03 07:09 CST - C5-K0 constructor arg classification redpoint
 
 - Started from `main@32a555d1`.

@@ -363,6 +363,8 @@ type
       const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
     function ResolveArrayAccessElementTypeId(
       const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
+    function TryGetDirectCallContract(const ACallNode: TGreenNode;
+      out ACalleeName, AParamKinds: string; out AReturnTypeId: LongInt): Boolean;
     function BuildTargetAddressExpr(const ATargetNode: TGreenNode;
       out AExprId: LongInt): Boolean;
     function BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
@@ -7643,6 +7645,88 @@ begin
   Result := False;
 end;
 
+function TSemanticAnalyzer.TryGetDirectCallContract(
+  const ACallNode: TGreenNode; out ACalleeName, AParamKinds: string;
+  out AReturnTypeId: LongInt): Boolean;
+var
+  BodyNode, DeclNode, Child, ParamNode, TypeNode: TGreenNode;
+  I, J, ParamCount: LongInt;
+  TypeName: string;
+begin
+  ACalleeName := '';
+  AParamKinds := '';
+  AReturnTypeId := 0;
+  if (ACallNode = nil) or (ACallNode.NodeKind <> gnkFunctionCall) or
+    (ACallNode.ChildCount < 1) or (ACallNode.ChildAt(0) = nil) or
+    (ACallNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+    Exit(False);
+
+  ACalleeName := ACallNode.ChildAt(0).Text;
+  if (ACalleeName = '') or HasOverload(ACalleeName) or
+    (Pos('specialize ', ACalleeName) = 1) or
+    (Pos('.', ACalleeName) <> 0) or IsBuiltinProcedure(ACalleeName) or
+    (not LookupProcedureBody(ACalleeName, BodyNode, DeclNode)) or
+    (DeclNode = nil) then
+    Exit(False);
+
+  ParamCount := 0;
+  AParamKinds := '';
+  for I := 0 to DeclNode.ChildCount - 1 do
+  begin
+    Child := DeclNode.ChildAt(I);
+    if (Child = nil) or (Child.NodeKind <> gnkParameterList) then
+      Continue;
+    for J := 0 to Child.ChildCount - 1 do
+    begin
+      ParamNode := Child.ChildAt(J);
+      if (ParamNode = nil) or (ParamNode.NodeKind <> gnkParameterDecl) then
+        Continue;
+      Inc(ParamCount);
+      if Pos('var:', ParamNode.Text) = 1 then
+        Exit(False);
+      if ParamNode.ChildCount <= 0 then
+      begin
+        AParamKinds := AParamKinds + 'i';
+        Continue;
+      end;
+      TypeNode := ParamNode.ChildAt(0);
+      if TypeNode = nil then
+      begin
+        AParamKinds := AParamKinds + 'i';
+        Continue;
+      end;
+      TypeName := TypeNode.Text;
+      if SameText(TypeName, 'String') or SameText(TypeName, 'AnsiString') then
+        Exit(False);
+      if TypeNode.NodeKind = gnkArrayType then
+        Exit(False);
+      if (Length(TypeName) > 1) and (TypeName[1] = '^') then
+        AParamKinds := AParamKinds + 'p'
+      else if TypeMetaSize(TypeName) > 0 then
+      begin
+        if TypeMetaIsRecord(TypeName) then
+          Exit(False)
+        else
+          AParamKinds := AParamKinds + 'p';
+      end
+      else
+        AParamKinds := AParamKinds + 'i';
+    end;
+    Break;
+  end;
+
+  if ParamCount <> (ACallNode.ChildCount - 1) then
+    Exit(False);
+
+  AReturnTypeId := InferExpressionType(ACallNode);
+  if AReturnTypeId <= 0 then
+    Exit(False);
+  if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
+    AReturnTypeId := FModel.FindTypeByName('Pointer');
+
+  Result := AReturnTypeId > 0;
+end;
+
 function TSemanticAnalyzer.BuildTargetAddressExpr(const ATargetNode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
@@ -7731,9 +7815,10 @@ var
   Children: array of LongInt;
   LeftExprId, RightExprId, SymbolId: LongInt;
   LeftTypeId, RightTypeId, ResultTypeId, BoolTypeId: LongInt;
+  ArgExprId, ArgIndex: LongInt;
   Value: Int64;
   ParseCode: Word;
-  Op, Pred: string;
+  Op, Pred, CalleeName, ParamKinds: string;
 
   function ExprTypeId(const ALocalExprId: LongInt): LongInt;
   var
@@ -8061,6 +8146,39 @@ begin
       0, '', '', 0, shvcScalar
     );
     Exit(True);
+  end;
+
+  if (ANode.NodeKind = gnkFunctionCall) and
+    TryGetDirectCallContract(ANode, CalleeName, ParamKinds, ResultTypeId) then
+  begin
+    if not IsStructuredAddressableScalarType(ResultTypeId) then
+      Exit(False);
+    SetLength(Children, Length(ParamKinds));
+    for ArgIndex := 1 to ANode.ChildCount - 1 do
+    begin
+      case ParamKinds[ArgIndex] of
+        'p':
+          begin
+            if not BuildRuntimePointerHirExpr(ANode.ChildAt(ArgIndex),
+              ArgExprId) then
+              Exit(False);
+          end;
+        'i':
+          begin
+            if not BuildRuntimeScalarHirExpr(ANode.ChildAt(ArgIndex),
+              ArgExprId) then
+              Exit(False);
+          end;
+      else
+        Exit(False);
+      end;
+      Children[ArgIndex - 1] := ArgExprId;
+    end;
+    AExprId := FModel.AddHirExpr(
+      shekCall, ResultTypeId, 0, Children, 0, CalleeName, ParamKinds,
+      ANode.ByteOffset, shvcScalar
+    );
+    Exit(AExprId > 0);
   end;
 
   if ANode.NodeKind = gnkArrayAccess then
@@ -8704,7 +8822,7 @@ var
     if Pos('.', ADestVar) <> 0 then
       Exit;
     if IsRuntimeStrVar(ADestVar) or IsRuntimeArrVar(ADestVar) or
-      IsRecordVar(ADestVar) or (LookupClassVar(ADestVar) <> '') then
+      IsRecordVar(ADestVar) then
       Exit;
     if BuildRuntimeScalarHirExpr(AExprNode, LocalExprId) then
       FModel.SetTypedHirNodeExprId(LocalNodeId, LocalExprId);
@@ -9410,10 +9528,12 @@ begin
             RegisterClassVar(Decoded, LookupPtrReturnFunc(Arg.ChildAt(0).Text));
             FModel.AddTypedHirNode(
               'var-decl-ptr-runtime', Decoded, 0, 0, Decoded);
-            FModel.AddTypedHirNode(
+            NodeId := FModel.AddTypedHirNode(
               'assign-runtime', Decoded, 0, 0,
               Decoded + #9 + Operand
             );
+            if BuildRuntimeScalarHirExpr(Arg, ExprId) then
+              FModel.SetTypedHirNodeExprId(NodeId, ExprId);
           end;
         end
         else if FNoFold and IsRecordVar(Decoded) and

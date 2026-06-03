@@ -1,5 +1,35 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-03 C5-N structured direct-call lowering
+
+### Goal
+
+把第一条真正 end-to-end 的结构化 call expr 接起来，停止继续按 RHS 特判堆分支。
+这轮只做 direct free-function call，范围限定在 legacy ABI 兼容子集：
+`i` / `p` 参数，`i64` / `ptr` 返回；旧 blob fallback 必须完整保留。
+
+### Checklist
+
+- [x] 确认当前 `main` 与 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或并行 toolchain/targets/stage0 lane。
+- [x] 收口 `shekCall` 合同：callee、paramKinds、arg children、return type、value class。
+- [x] 在 sema 让 direct free-function call 产出 `ExprId`，同时保留旧 blob。
+- [x] 让 pointer/class-return helper assignment 不再绕过 `ExprId` 挂接。
+- [x] 在 builder 增加 `shekCall` lowering，只接受 legacy ABI 兼容子集；不兼容时回落 blob。
+- [x] 跑 changed tests、完整重编译、137 LLVM smoke。
+- [x] 更新目标树、`docs/inbox.md`、计划/进度文件，并准备 path-limited commit。
+
+### Constraints
+
+- 只改本轮需要的 `compiler/sema`、`compiler/ir`、`compiler/tests` 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- 这轮不进入 overload、member call、virtual/interface call、string/record/var-param call lowering。
+- `ExprId` 只表示 RHS/value；`TargetExprId` 只表示 LHS/address，不混用。
+- 结构化表达式和旧 blob fallback 双轨必须保留；不能把“不支持”偷偷变成“没有 fallback”。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-M object-backed field-array value loads
+
 ## Active Session: 2026-06-03 C5-M object-backed field-array value loads
 
 ### Goal
@@ -391,7 +421,7 @@ then needs integration into the latest safe `main` window.
 
 - [x] 从最新 `main@b14bd5a` 创建 `codex/platform-host-abi-wave6-process` isolated worktree
 - [x] 读取 workflow、host gap matrix、source evidence index、Wave 5 test pattern 与现有 host
-  base/ffi owner
+      base/ffi owner
 - [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows process-control ABI
 - [x] RED：新增 Wave 6 integration guard，要求 source-authority docs、owner/命名边界和 verify route
 - [x] GREEN：更新 source-authority index、gap matrix、host ffi/base raw declarations
@@ -406,7 +436,7 @@ then needs integration into the latest safe `main` window.
 - [x] 不新增 `platform.process` public API，也不新增 feature-specific `platform.process.ffi`
 - [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw process-control ABI
 - [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
-  `Windows`
+      `Windows`
 - [x] raw OS API 接受 FPC source authority，不写 runtime unit test；nextPas 只守 integration/compile gate
 - [x] POSIX 与 Windows process-control family 分别归 host owner，不混成伪 POSIX
 - [x] POSIX host `.ffi` 本轮不新增 `platform_process_*` unified-looking helper
@@ -498,7 +528,7 @@ Completed; merged to `main`, post-merge verified, and temporary worktree/branch 
 
 - [x] 从最新 `main@46acefb` 创建 `codex/platform-host-abi-wave5-env` isolated worktree
 - [x] 读取 workflow、host gap matrix、source evidence index、Wave 4 test pattern 与现有 host
-  base/ffi owner
+      base/ffi owner
 - [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows environment ABI
 - [x] RED：新增 Wave 5 source-surface gate，要求 evidence、host owner tokens 和 verify route
 - [x] GREEN：更新 evidence index、gap matrix、host ffi declarations/helpers
@@ -510,10 +540,10 @@ Completed; merged to `main`, post-merge verified, and temporary worktree/branch 
 ### Audit Checklist
 
 - [x] 不新增 `platform.env` / `platform.process` public API，也不新增 feature-specific
-  `platform.env.ffi` / `platform.process.ffi`
+      `platform.env.ffi` / `platform.process.ffi`
 - [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw environment ABI
 - [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
-  `Windows`
+      `Windows`
 - [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
 - [x] POSIX 与 Windows environment family 分别归 host owner，不混成伪 POSIX
 
@@ -616,7 +646,7 @@ Completed and merged.
 
 - [x] 从最新 `main@27d57f2` 创建 `codex/platform-host-abi-wave4-paths` isolated worktree
 - [x] 读取 workflow、host gap matrix、source evidence index、Wave 2/3 tests 与现有 host
-  base/ffi owner
+      base/ffi owner
 - [x] 从 `/home/dtamade/projects/fpc` 初步取证 POSIX / Windows 目录路径 ABI
 - [x] RED：新增 Wave 4 source-surface gate，要求 evidence、host owner tokens 和 verify route
 - [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
@@ -630,7 +660,7 @@ Completed and merged.
 - [x] 不新增 `platform.file` public API，也不新增 `platform.file.ffi`
 - [x] `platform.time` / `platform.sync` / `platform.thread` 不消费本轮 raw path ABI
 - [x] production platform units 不 `uses Linux` / `UnixType` / `BaseUnix` / `PThreads` /
-  `Windows`
+      `Windows`
 - [x] raw OS API 只通过 source-surface / compile gates 取证，不写 runtime unit test
 - [x] POSIX 与 Windows path/directory family 分别归 host owner，不混成伪 POSIX
 
@@ -731,7 +761,7 @@ on `main` as `f43cfbd`, `2e6b181`, and `ed25455`; `main` later advanced to
 - [x] investigate rebase full-test hang and fix high-level condvar lost-wake regression
 - [x] rerun full verification after condvar fix
 - [x] sync `build/verify_local.sh` forced POSIX fallback summary to the new
-  11-test `nextpas.core.sync` contract
+      11-test `nextpas.core.sync` contract
 - [x] commit final feature branch and rebase over latest local `main@c09bc58`
 - [x] merge, post-merge verification, cleanup
 
@@ -976,7 +1006,7 @@ worktree/branch has been cleaned up.
 - [x] 从最新 `main@8a12bf9` 创建 `codex/platform-host-abi-wave1` isolated worktree
 - [x] 读取 workflow、host gap matrix、source evidence index、现有 host base/ffi owner
 - [x] 从 `/home/dtamade/projects/fpc` 取证，确定 Wave 1 最小可审查 ABI 子集：
-  process id、`timeval`、mmap、dynamic loader；`stat/open/fcntl` 延后
+      process id、`timeval`、mmap、dynamic loader；`stat/open/fcntl` 延后
 - [x] RED：新增 source-surface gate，要求 Wave 1 evidence、host owner tokens 和 verify route
 - [x] GREEN：更新 evidence index、gap matrix、host base/ffi declarations/helpers
 - [x] GREEN：接入 `build/verify_local.sh` focused gate 与 final envelope
@@ -1261,7 +1291,7 @@ Completed, committed, fast-forward merged to `main@253a3fa`, follow-up docs comm
   - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
 - [x] RED：新增 `test_platform_host_gap_matrix`，先要求不存在的
-  `core/docs/platform-host-ffi-gap-matrix.md`，确认失败边界正确
+      `core/docs/platform-host-ffi-gap-matrix.md`，确认失败边界正确
 - [x] GREEN：补 `core/docs/platform-host-ffi-gap-matrix.md`，记录 host/domain/gap matrix 与证据边界
 - [x] GREEN：扩 source-surface 检查，校验 host rows、domain tokens、known gaps、no feature ffi
 - [x] 接入 `build/verify_local.sh` 的 mktemp/build dir/cleanup/required path/focused gate/final envelope
@@ -1286,8 +1316,8 @@ Completed, committed, fast-forward merged to `main@253a3fa`, follow-up docs comm
 - [x] 文档明确 host base/ffi 是 raw ABI owner，feature modules 是统一 contract
 - [x] Linux/Android/Darwin/FreeBSD/generic Unix/Windows 都有矩阵行
 - [x] known gaps 写清楚：Darwin condattr setclock unsupported、Darwin mutex timedlock unsupported、
-  generic Unix native thread id fallback、generic Unix `_SC_NPROCESSORS_ONLN = -1`、
-  generic Unix mutex timedlock unsupported、Windows 是 kernel32/SRW/QPC/FILETIME 路径
+      generic Unix native thread id fallback、generic Unix `_SC_NPROCESSORS_ONLN = -1`、
+      generic Unix mutex timedlock unsupported、Windows 是 kernel32/SRW/QPC/FILETIME 路径
 - [x] gate 检查 host base/ffi 中对应 token 仍存在
 - [x] gate 禁止 `platform.time.ffi`、`platform.sync.ffi`、`platform.thread.ffi` 回归
 - [x] final envelope 出现 `corePlatformHostGapMatrixCheck`
@@ -1368,13 +1398,13 @@ Completed, committed, merged to `main@9312764`, and worktree/branch cleanup done
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary clean test`
 - [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `platform.sync.base` 存在并拥有
-  public carrier types/constants，且 `platform.sync` re-export 而不是直接声明 raw shapes
+      public carrier types/constants，且 `platform.sync` re-export 而不是直接声明 raw shapes
 - [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.sync.base.pas` 纳入
-  platform source owner audit
+      platform source owner audit
 - [x] RED：扩 `test_platform_sync_no_fpc_units` 与 `test_platform_sync_l0_boundary`，把
-  `platform.sync.base` 纳入 hard boundary
+      `platform.sync.base` 纳入 hard boundary
 - [x] GREEN：新增 `core/src/nextpas.core.platform.sync.base.pas`，并让
-  `platform.sync` re-export base types/constants
+      `platform.sync` re-export base types/constants
 - [x] 更新 `build/verify_local.sh` required path 与 focused gate summary expectation
 - [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates：
@@ -1476,17 +1506,17 @@ Completed, committed, merged to `main@2417233`, and worktree/branch cleanup done
 ### Planned Steps
 
 - [x] 从 `main@9312764` 开 isolated worktree：
-  `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info`
+      `/home/dtamade/.config/superpowers/worktrees/nextPas/platform-facade-info`
 - [x] 校准当前主 checkout：存在 unrelated collections WIP，本轮不触碰
 - [x] 更新本文件中上一轮 sync-base 的 merged/cleanup 状态，消除滞后计划记录
 - [x] RED：新增 `test_platform_facade_surface`，要求 `platform.info` 存在并拥有 info API 逻辑，
-  `platform.pas` 只转发，不再包含 OS/CPU name `case` 逻辑
+      `platform.pas` 只转发，不再包含 OS/CPU name `case` 逻辑
 - [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.info.pas` 纳入
-  non-ffi owner audit
+      non-ffi owner audit
 - [x] GREEN：新增 `core/src/nextpas.core.platform.info.pas`，并修改
-  `core/src/nextpas.core.platform.pas` 只 re-export/forward
+      `core/src/nextpas.core.platform.pas` 只 re-export/forward
 - [x] 扩 `test_platform_simulated_host_compile_matrix`，让顶层 platform facade/info 也进入
-  simulated host compile proof
+      simulated host compile proof
 - [x] 更新 `build/verify_local.sh` required path、focused gate 与 final envelope
 - [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates：
@@ -1510,9 +1540,9 @@ Completed, committed, merged to `main@2417233`, and worktree/branch cleanup done
 - [x] `platform.info` 不含 `external`、host FFI import 或 FPC 平台单元 import
 - [x] `platform.pas` 不再包含 `case CurrentOS` / `case CurrentCPU` 逻辑
 - [x] `platform.pas` 继续兼容 `CurrentOS`、`CurrentCPU`、`CurrentEndian`、`OSName`、`CPUName`
-  与 time public API
+      与 time public API
 - [x] 顶层 facade/info 进入 owner-boundary、facade-surface、simulated-host compile 与 official
-  local verification
+      local verification
 
 ### Implementation Notes
 
@@ -1594,13 +1624,13 @@ Completed; merged to `main@de7efaa`, cleanup done.
 
 - [x] 从最新 `main@c40ea69` 更新 `codex/platform-thread-base` isolated worktree
 - [x] RED：扩 `test_platform_thread_host_ffi_surface`，要求 `platform.thread.base` 存在并拥有
-  public carrier types，且 `platform.thread` re-export 而不是直接声明 raw shapes
+      public carrier types，且 `platform.thread` re-export 而不是直接声明 raw shapes
 - [x] RED：扩 `test_platform_ffi_owner_boundary`，把 `nextpas.core.platform.thread.base.pas` 纳入
-  platform source owner audit
+      platform source owner audit
 - [x] RED：扩 `test_platform_thread_no_fpc_units` 与 `test_platform_thread_l0_boundary`，把
-  `platform.thread.base` 纳入 hard boundary
+      `platform.thread.base` 纳入 hard boundary
 - [x] GREEN：新增 `core/src/nextpas.core.platform.thread.base.pas`，并让
-  `platform.thread` re-export base types
+      `platform.thread` re-export base types
 - [x] 更新 `build/verify_local.sh` required path 与 focused gate summary expectation
 - [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates：
@@ -1703,9 +1733,9 @@ Completed; merged to `main@1c18f86` and cleanup done.
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
   - `make -C core/tests/nextpas.core.platform/test_platform_simulated_host_compile_matrix clean test`
 - [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 Windows wait-address branch 先消费
-  `platform_sync_validate_wait_address` 再调用 `windows_wait_address_i32_timeout_result`
+      `platform_sync_validate_wait_address` 再调用 `windows_wait_address_i32_timeout_result`
 - [x] GREEN：在 `platform.sync` 提取 wait-address nil/mismatch public precheck，并让 Linux、
-  POSIX fallback 与 Windows wait path 统一消费
+      POSIX fallback 与 Windows wait path 统一消费
 - [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates：
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
@@ -1735,7 +1765,7 @@ Completed; merged to `main@1c18f86` and cleanup done.
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
     初始失败在
     `platform.sync must own public wait-address nil/mismatch validation before host wait helpers:
-    platform_sync_validate_wait_address`。
+platform_sync_validate_wait_address`。
 - GREEN:
   - `platform.sync` 新增 `platform_sync_validate_wait_address`，复用
     `platform_sync_validate_address`，再统一处理 `AAddr^ <> AExpected` -> `PLATFORM_ERR_AGAIN`。
@@ -1807,12 +1837,12 @@ Completed; verification passed.
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_fallback clean test`
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
 - [x] RED：扩 `test_platform_sync_posix_surface`，冻结 wait-bucket policy owner 留在 `platform.sync`
-  而不是 host ffi
+      而不是 host ffi
 - [x] RED：扩 `test_platform_sync`，补 address-wait nil address public API 覆盖
 - [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 public wait/wake 入口统一地址校验
 - [x] GREEN：在 `platform.sync` 内提取 wait-bucket release predicate helper，并保持 public API 语义不变
 - [x] GREEN：在 `platform.sync` 增加 `platform_sync_validate_address`，让 Linux/fallback/Windows wait/wake
-  都先处理 nil address
+      都先处理 nil address
 - [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates：
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
@@ -1849,11 +1879,11 @@ Completed; verification passed.
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface clean test`
     第一版测试先失败在路径解析，修正 sibling path 后有效失败在
     `platform.sync must own the wait-bucket release predicate instead of hiding policy inside host ffi:
-    platform_posix_wait_address_released`。
+platform_posix_wait_address_released`。
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
     初始失败在
     `platform.sync must validate public wait-address pointers before host wait/wake helpers:
-    platform_sync_validate_address`。
+platform_sync_validate_address`。
 - GREEN so far:
   - `platform_posix_wait_address_released` 提取 generation/value mismatch release predicate。
   - `platform_sync_validate_address` 统一 Linux futex、POSIX fallback、Windows wait/wake public nil guard。
@@ -1923,7 +1953,7 @@ Completed; verification passed.
 ### Planned Steps
 
 - [x] RED：扩 `test_platform_ffi_owner_boundary`，禁止 platform behavior tests import host FFI 或直接调
-  raw pthread/gettid
+      raw pthread/gettid
 - [x] `test_platform_sync` 改为用 `platform.thread` 创建/join worker
 - [x] `test_platform_thread` 移除 Linux FFI oracle 和 raw `gettid` 断言
 - [x] 更新 `docs/design-conventions.md`、`findings.md`、`progress.md`
@@ -1989,10 +2019,10 @@ Completed; verification passed.
 - [x] 删除 `platform.time.intf`，从 facade 移除 `IPlatformTimeSource`
 - [x] 保留 `platform.time.base` 的 public carrier types
 - [x] 更新 `test_platform_time_l0_boundary` / `test_platform_ffi_owner_boundary` /
-  `build/verify_local.sh`
+      `build/verify_local.sh`
 - [x] focused：`test_platform_time_host_ffi_surface` / `test_platform_time_l0_boundary` /
-  `test_platform_time_no_fpc_units` / `test_platform_time_helpers` /
-  `test_platform_ffi_owner_boundary` / `test_platform` / `nextpas.core.time/test_time` 通过
+      `test_platform_time_no_fpc_units` / `test_platform_time_helpers` /
+      `test_platform_ffi_owner_boundary` / `test_platform` / `nextpas.core.time/test_time` 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2053,7 +2083,7 @@ Completed; verification passed.
 ### Planned Steps
 
 - [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 暴露 trylock busy-result helper，
-  且 `platform.sync` 消费这些 helper
+      且 `platform.sync` 消费这些 helper
 - [x] RED：禁止 `platform.sync` 继续保留三处本地 Windows trylock busy mapping
 - [x] 在 `windows.ffi` 增加 busy-result helper
 - [x] 让 `platform.sync` Windows trylock 分支改为 delegation
@@ -2110,7 +2140,7 @@ Completed; verification passed.
 ### Planned Steps
 
 - [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 `windows.ffi` 暴露 destroy helper，且
-  `platform.sync` Windows 分支消费这些 helper
+      `platform.sync` Windows 分支消费这些 helper
 - [x] 在 `windows.ffi` 增加 mutex/rwlock/condvar destroy helper
 - [x] 让 `platform.sync` Windows destroy 分支改为 delegation
 - [x] 更新 design/tracking 文档
@@ -2173,8 +2203,8 @@ Completed; verification passed.
 - [x] 用统一 `NEXTPAS_PLATFORM_TIME_HOST_FFI` gate 表达受支持宿主
 - [x] 保持 public API 与 `windows.math` 边界不变
 - [x] focused：`test_platform_time_host_ffi_surface` /
-  `test_platform_time_helpers` /
-  `test_platform_simulated_host_compile_matrix` / Win64 compile-only 通过
+      `test_platform_time_helpers` /
+      `test_platform_simulated_host_compile_matrix` / Win64 compile-only 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2238,11 +2268,11 @@ Completed; verification passed.
 - [x] 在 `linux/android/darwin/freebsd/unix.ffi` 暴露 host-owned pthread timeout deadline / remaining helper
 - [x] 让 `platform.sync` 改为消费 host-owned pthread timeout deadline / remaining helper
 - [x] focused：`test_platform_posix_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` /
-  `test_platform_sync` /
-  `test_platform_thread_host_ffi_surface` /
-  `test_platform_time_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
+      `test_platform_sync_host_ffi_surface` /
+      `test_platform_sync` /
+      `test_platform_thread_host_ffi_surface` /
+      `test_platform_time_host_ffi_surface` /
+      `test_platform_simulated_host_compile_matrix` 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2318,12 +2348,12 @@ Completed; verification passed.
 - [x] 在 `posix.ffi` 实现 shared errno/mutex projection helper
 - [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared projection helper
 - [x] focused：`test_platform_posix_ffi_surface` /
-  `test_platform_thread_host_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` /
-  `test_platform_thread` /
-  `test_platform_sync` /
-  `test_platform_time_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
+      `test_platform_thread_host_ffi_surface` /
+      `test_platform_sync_host_ffi_surface` /
+      `test_platform_thread` /
+      `test_platform_sync` /
+      `test_platform_time_host_ffi_surface` /
+      `test_platform_simulated_host_compile_matrix` 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2388,12 +2418,12 @@ Completed; verification passed.
 ### Planned Steps
 
 - [x] RED：扩 `test_abstract`，要求 `ICollection` / `IGenericCollection<T>` 定义位于
-  `collections.intf` 且不在 `collections.base`
+      `collections.intf` 且不在 `collections.base`
 - [x] 把 `ICollection` / `IGenericCollection<T>` 从 `base` 迁入 `intf`
 - [x] `TCollection` / `TGenericCollection<T>` 暂时取消直接 `implements` 迁出的接口，保持 base 无
-  `intf` 依赖
+      `intf` 依赖
 - [x] 为 `bitset`、`circularbuffer`、`forward_list`、`list`、`priorityqueue`、`stack`、
-  `tree_set`、`treemap` 补显式 `collections.intf` 依赖
+      `tree_set`、`treemap` 补显式 `collections.intf` 依赖
 - [x] focused collections tests 通过
 - [x] fresh `make -C core test`
 
@@ -2462,11 +2492,11 @@ Completed; verification passed.
 - [x] 在 `posix.ffi` 实现 shared pthread attr-init helper
 - [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared attr-init helper
 - [x] focused：`test_platform_posix_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` /
-  `test_platform_sync` /
-  `test_platform_thread_host_ffi_surface` /
-  `test_platform_time_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
+      `test_platform_sync_host_ffi_surface` /
+      `test_platform_sync` /
+      `test_platform_thread_host_ffi_surface` /
+      `test_platform_time_host_ffi_surface` /
+      `test_platform_simulated_host_compile_matrix` 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2546,9 +2576,9 @@ Completed; verification passed.
 - [x] 在 `posix.ffi` 实现 shared clock/sync helper
 - [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared helper
 - [x] focused：`test_platform_posix_ffi_surface` / `test_platform_time_host_ffi_surface` /
-  `test_platform_sync_host_ffi_surface` / `test_platform_time_helpers` /
-  `test_platform_sync` / `test_platform_thread_host_ffi_surface` /
-  `test_platform_simulated_host_compile_matrix` 通过
+      `test_platform_sync_host_ffi_surface` / `test_platform_time_helpers` /
+      `test_platform_sync` / `test_platform_thread_host_ffi_surface` /
+      `test_platform_simulated_host_compile_matrix` 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2629,8 +2659,8 @@ Completed; verification passed.
 - [x] 在 `posix.ffi` 实现 shared pthread/thread helper
 - [x] 让 `linux/android/darwin/freebsd/unix.ffi` 委托 shared helper
 - [x] focused：`test_platform_posix_ffi_surface` / `test_platform_thread_host_ffi_surface` /
-  `test_platform_thread` / `test_platform_sync_host_ffi_surface` /
-  `test_platform_sync` / `test_platform_simulated_host_compile_matrix` 通过
+      `test_platform_thread` / `test_platform_sync_host_ffi_surface` /
+      `test_platform_sync` / `test_platform_simulated_host_compile_matrix` 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -2703,7 +2733,7 @@ Completed; verification passed.
 - [x] 让 `platform.time` 在非 Windows 目标复用 `windows.math`
 - [x] 修正 helper unit 命名，避免把纯 helper 伪装成 `*.ffi.pas`
 - [x] focused：`test_platform_time_helpers` / `test_platform_time_host_ffi_surface` /
-  `test_platform_ffi_owner_boundary` / Win64 compile-only 通过
+      `test_platform_ffi_owner_boundary` / Win64 compile-only 通过
 - [x] fresh `make -C core test`
 - [x] fresh `make -C core examples`
 - [x] fresh `make -C core benchmarks`
@@ -3273,7 +3303,7 @@ Completed; verification passed.
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_host_ffi_surface clean test`
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_no_fpc_units clean test`
   - `make -C core/tests/nextpas.core.platform.thread/test_platform_thread_l0_boundary clean test`
-  通过。
+    通过。
 - Aggregate: fresh `make -C core test`、`make -C core examples`、`make -C core benchmarks`
   通过。
 - Full: fresh `bash build/verify_local.sh` 输出
@@ -3962,7 +3992,6 @@ Completed; verification passed.
 - 不修改 `nextpas.core.thread` 的 L1 public API。
 - 不声明 Windows/macOS/Android runtime 行为已在真实设备运行验证；本轮保留 Win64 compile-only gate。
 - 不修改 `platform.sync` 或 `platform.time` 语义。
-
 
 ## Addendum: 2026-05-26 Batch 101 Object Release Poison Contract
 
@@ -7638,12 +7667,12 @@ Completed
 
 ### Decisions Made
 
-| Decision | Rationale |
-| --- | --- |
-| const 表用大小写不敏感名称比对 | Pascal 标识符传统大小写不敏感；与 `WalkHaltCalls` 的 `SameText('Halt')` 一致 |
+| Decision                                                     | Rationale                                                                                                                                           |
+| ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| const 表用大小写不敏感名称比对                               | Pascal 标识符传统大小写不敏感；与 `WalkHaltCalls` 的 `SameText('Halt')` 一致                                                                        |
 | ProcessConstSection 折叠失败时只跳过 AddConstValue，不报诊断 | const 声明可能是非整数（字符串、记录），折叠失败不代表错；当前批次只关心整数常量；非整数 const 引用在 EvaluateIntegerConstant 自动失败回到 fallback |
-| const 表挂在 `TSemanticModel` 而不是 `TSemanticAnalyzer` | 与现有 `FSymbols` / `FTypes` 等 model-owned 数据保持一致；分析器只负责填充，model 持有真实数据 |
-| 重复名称覆盖而不是报错 | 当前 sema 还没有完整 redeclaration 检查；先静默覆盖避免假诊断，等真正的 symbol-redecl 检查批次再加 |
+| const 表挂在 `TSemanticModel` 而不是 `TSemanticAnalyzer`     | 与现有 `FSymbols` / `FTypes` 等 model-owned 数据保持一致；分析器只负责填充，model 持有真实数据                                                      |
+| 重复名称覆盖而不是报错                                       | 当前 sema 还没有完整 redeclaration 检查；先静默覆盖避免假诊断，等真正的 symbol-redecl 检查批次再加                                                  |
 
 ### Notes
 
@@ -7664,7 +7693,7 @@ Completed
 
 - 扩展 `compiler/sema/np_semantic_analyzer.pas` 新增 `EvaluateIntegerConstant(Node, out Value)`：
   递归折叠 `gnkIntegerLiteral` / `gnkUnaryExpression`(+/-) /
-  `gnkBinaryExpression`(+/-/*/div/mod)；除零返回 false；非整数节点或未识别 op 返回 false
+  `gnkBinaryExpression`(+/-/\*/div/mod)；除零返回 false；非整数节点或未识别 op 返回 false
 - 改造 `WalkHaltCalls`：把"只匹配 `gnkIntegerLiteral`"换成 `EvaluateIntegerConstant`，
   折叠成功才发射 `halt-call` HIR 节点；失败时 operand 默认 `0`
 - 新增 `examples/smoke/halt_expr.pas`：`program HaltExpr; begin Halt(40 + 2); end.`
@@ -7677,7 +7706,7 @@ Completed
 
 ### Completed Steps
 
-- [x] sema 加 `EvaluateIntegerConstant` 折叠器（unary +/-、binary +/-/*/div/mod、字面量）
+- [x] sema 加 `EvaluateIntegerConstant` 折叠器（unary +/-、binary +/-/\*/div/mod、字面量）
 - [x] `WalkHaltCalls` 改用 `EvaluateIntegerConstant` 替代直接 `gnkIntegerLiteral` 匹配
 - [x] 新增 `examples/smoke/halt_expr.pas` fixture
 - [x] `build/verify_local.sh` 加 `LLVM_HALT_EXPR_PROGRAM_OUTPUT` /
@@ -7687,12 +7716,12 @@ Completed
 
 ### Decisions Made
 
-| Decision | Rationale |
-| --- | --- |
-| 折叠器在 sema 层而非 MIR lowerer | 折叠产生的整数常量需要进 HIR 的 `Operand` 字段以传给 MIR；MIR lowerer 只读 HIR 操作数；当前没有 typed value system，sema 是唯一能消费 AST 表达式形态的层 |
-| 用 `Int64` 内部计算 | 避免 Pascal 整数子集分歧；Halt 退出码最终被截到 8 位（POSIX `_exit` 语义），但中间表达式可以触及 64 位范围 |
-| 折叠失败默认 0，不发诊断 | 当前批次专注 Halt 表达式折叠路径；非常量表达式（变量、未支持运算）应进入下一批的真实 codegen，不该在此批次假装"已支持但 silently 错"。先静默 fallback、保留 0 行为，等 typed expression codegen 落地再加诊断 |
-| 折叠器涵盖 +/-/*/div/mod 而非仅 +/- | 这五个 op 是 Pascal 整数常量表达式核心子集；新增成本 ~每 op 5 行，但避免下次再来一批 "MUL 折叠" |
+| Decision                             | Rationale                                                                                                                                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 折叠器在 sema 层而非 MIR lowerer     | 折叠产生的整数常量需要进 HIR 的 `Operand` 字段以传给 MIR；MIR lowerer 只读 HIR 操作数；当前没有 typed value system，sema 是唯一能消费 AST 表达式形态的层                                                     |
+| 用 `Int64` 内部计算                  | 避免 Pascal 整数子集分歧；Halt 退出码最终被截到 8 位（POSIX `_exit` 语义），但中间表达式可以触及 64 位范围                                                                                                   |
+| 折叠失败默认 0，不发诊断             | 当前批次专注 Halt 表达式折叠路径；非常量表达式（变量、未支持运算）应进入下一批的真实 codegen，不该在此批次假装"已支持但 silently 错"。先静默 fallback、保留 0 行为，等 typed expression codegen 落地再加诊断 |
+| 折叠器涵盖 +/-/\*/div/mod 而非仅 +/- | 这五个 op 是 Pascal 整数常量表达式核心子集；新增成本 ~每 op 5 行，但避免下次再来一批 "MUL 折叠"                                                                                                              |
 
 ### Notes
 
@@ -7752,12 +7781,12 @@ Completed
 
 ### Decisions Made
 
-| Decision | Rationale |
-| --- | --- |
-| 用 `string` 字段载 operand，而不是引入 typed `TMirValue` 联合体 | 当前只需透传字面量给 emitter；引入 value system 会牵动 MIR/HIR/sema/emitter 四层，扩展面太大；string 可后续被 typed value 替换而不破坏调用接口 |
-| `halt-call` HIR 节点直接挂在 typed-hir 序列尾部，不进 block-structured CFG | 当前 MIR 仍是平铺 op 序列、单 entry block；引入 control-flow 应单独批次 |
-| emitter `ResolveExitCode` 解析失败默认 0，不报 diagnostic | sema 已经只在捕获到 `gnkIntegerLiteral` 时才发 operand，emitter 收到非数字 operand 是内部 bug 不是用户错误；先静默 fallback，等 typed value 再加诊断 |
-| `WalkHaltCalls` 做大小写不敏感比对（`SameText`） | Pascal 标识符传统大小写不敏感；与 `gnkProcedureCallStatement.Text` 保留原 lexeme 一致 |
+| Decision                                                                   | Rationale                                                                                                                                            |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 用 `string` 字段载 operand，而不是引入 typed `TMirValue` 联合体            | 当前只需透传字面量给 emitter；引入 value system 会牵动 MIR/HIR/sema/emitter 四层，扩展面太大；string 可后续被 typed value 替换而不破坏调用接口       |
+| `halt-call` HIR 节点直接挂在 typed-hir 序列尾部，不进 block-structured CFG | 当前 MIR 仍是平铺 op 序列、单 entry block；引入 control-flow 应单独批次                                                                              |
+| emitter `ResolveExitCode` 解析失败默认 0，不报 diagnostic                  | sema 已经只在捕获到 `gnkIntegerLiteral` 时才发 operand，emitter 收到非数字 operand 是内部 bug 不是用户错误；先静默 fallback，等 typed value 再加诊断 |
+| `WalkHaltCalls` 做大小写不敏感比对（`SameText`）                           | Pascal 标识符传统大小写不敏感；与 `gnkProcedureCallStatement.Text` 保留原 lexeme 一致                                                                |
 
 ### Notes
 
@@ -7821,12 +7850,12 @@ Completed
 
 ### Decisions Made
 
-| Decision | Rationale |
-| --- | --- |
-| LLVM linker 切到系统 `ld`（gnu-ld），不装 `ld.lld` | 与 native binding 对称、零新依赖；后续如果引入 `ld.lld` 可独立切回 |
-| Empty program 自写 `_start` + inline syscall exit(0)，不依赖 libc/_start | 当前 distribution runtime SDK 缺 `lib/nextpas/runtime/linux-x86_64/libc.so`；自写 `_start` 顺带让 nextPas 拥有 entry point ownership，与"独立 RTL"长期方向一致 |
-| 默认 backend 保持 `bootstrap-native-assemble-link`，LLVM 通过 `--toolchain-binding` 显式选择 | 现有 40+ verify gate 全围绕 native 默认路径；一次性切默认会大面积翻车，不该和 codegen 引入混在一批 |
-| 这一批 emitter 只发射 empty-program shell，不消费 MIR operations | 当前 MIR 是字符串占位符（`Kind: string` + `DisplayName`），还没有 value semantics；先把"自有 codegen 链路"打通，再分批扩 IR 表达力 |
+| Decision                                                                                     | Rationale                                                                                                                                                      |
+| -------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| LLVM linker 切到系统 `ld`（gnu-ld），不装 `ld.lld`                                           | 与 native binding 对称、零新依赖；后续如果引入 `ld.lld` 可独立切回                                                                                             |
+| Empty program 自写 `_start` + inline syscall exit(0)，不依赖 libc/\_start                    | 当前 distribution runtime SDK 缺 `lib/nextpas/runtime/linux-x86_64/libc.so`；自写 `_start` 顺带让 nextPas 拥有 entry point ownership，与"独立 RTL"长期方向一致 |
+| 默认 backend 保持 `bootstrap-native-assemble-link`，LLVM 通过 `--toolchain-binding` 显式选择 | 现有 40+ verify gate 全围绕 native 默认路径；一次性切默认会大面积翻车，不该和 codegen 引入混在一批                                                             |
+| 这一批 emitter 只发射 empty-program shell，不消费 MIR operations                             | 当前 MIR 是字符串占位符（`Kind: string` + `DisplayName`），还没有 value semantics；先把"自有 codegen 链路"打通，再分批扩 IR 表达力                             |
 
 ### Notes
 
@@ -7881,11 +7910,11 @@ Completed
 
 ### Decisions Made
 
-| Decision                                                                        | Rationale                                                                                                |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Classes 收敛到 `np_classes.pas` 唯一源 + ignore 派生 `Classes.{pas,o,ppu}`      | 与 `rtl/core/sysutils/` 已建立的模式一致；checked-in 重复源会让 source-of-truth 漂移并误导下游 contributor |
-| 工作树污染统一通过 `.gitignore` 模式封堵，不靠每次手动清理                      | FPC 崩溃 core dump、`ppas.sh` 中断脚本、`tools/stage0/*.s` 汇编中间产物都是已知会复现的工件             |
-| 这一批不动 `np_classes.pas` 内容，也不实现 Classes 容器                         | 先把 source-of-truth 边界定清楚，再进入 RTL Classes 实现批次；避免一次混入两个方向                       |
+| Decision                                                                   | Rationale                                                                                                  |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Classes 收敛到 `np_classes.pas` 唯一源 + ignore 派生 `Classes.{pas,o,ppu}` | 与 `rtl/core/sysutils/` 已建立的模式一致；checked-in 重复源会让 source-of-truth 漂移并误导下游 contributor |
+| 工作树污染统一通过 `.gitignore` 模式封堵，不靠每次手动清理                 | FPC 崩溃 core dump、`ppas.sh` 中断脚本、`tools/stage0/*.s` 汇编中间产物都是已知会复现的工件                |
+| 这一批不动 `np_classes.pas` 内容，也不实现 Classes 容器                    | 先把 source-of-truth 边界定清楚，再进入 RTL Classes 实现批次；避免一次混入两个方向                         |
 
 ### Notes
 
@@ -8130,7 +8159,9 @@ Completed
       `stage0EnvInvalidArgumentsCheck` 与整套 `verify-local=pass`
 
 ## Addendum: 2026-04-05 Workspace Model Shared Truth Convergence
+
 asd
+
 ### Goal
 
 把当前已经存在但仍散落在 `tools/stage0/nextpas.pas` driver helper 与 session 选项字段里的
@@ -10275,9 +10306,9 @@ source-surface gate 和 full verification 吸收。
 - [x] `platform.thread` consumer 不保留 raw POSIX `pthread_t` / `pthread_key_t` / `nanosleep` ABI 细节
 - [x] host size / align / capability token 只由 host `.base` 暴露
 - [x] host ABI wrapper、errno binding、native thread id、TLS key glue 只由 host `.ffi` / shared `posix.ffi`
-  暴露
+      暴露
 - [x] POSIX thread state carrier 与分配/释放归 host `.base` / `.ffi`，`platform.thread` 只消费
-  `platform_pthread_state_create/join/detach`
+      `platform_pthread_state_create/join/detach`
 - [x] runtime tests 只覆盖 `platform.thread` public contract，不直接测试 raw OS API
 
 ### Verification Plan
@@ -10390,11 +10421,11 @@ source-surface gate 和 full verification 吸收。
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync clean test`
 - [x] RED：扩 `test_platform_sync_host_ffi_surface`，要求 POSIX host ffi 暴露
-  `platform_pthread_sync_result`，并禁止 `platform.sync` 继续引用 `PLATFORM_POSIX_E*`
+      `platform_pthread_sync_result`，并禁止 `platform.sync` 继续引用 `PLATFORM_POSIX_E*`
 - [x] 在 shared `posix.ffi` 增加 caller-supplied errno classifier skeleton helper
 - [x] 在 `linux/android/darwin/freebsd/unix.ffi` 增加 host-owned sync-result wrapper
 - [x] 修改 `platform.sync` POSIX 路径，让所有 pthread/futex 返回码走 host helper 映射到
-  `PLATFORM_ERR_*`
+      `PLATFORM_ERR_*`
 - [x] 更新 `core/docs/design-conventions.md`、`task_plan.md`、`findings.md`、`progress.md`
 - [x] 跑 focused gates：
   - `make -C core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface clean test`
@@ -10412,11 +10443,11 @@ source-surface gate 和 full verification 吸收。
 ### Audit Checklist
 
 - [x] `platform.sync` 不直接引用 `PLATFORM_POSIX_EAGAIN` / `PLATFORM_POSIX_EBUSY` /
-  `PLATFORM_POSIX_EINVAL` / `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT`
+      `PLATFORM_POSIX_EINVAL` / `PLATFORM_POSIX_ENOTSUP` / `PLATFORM_POSIX_ETIMEDOUT`
 - [x] `platform.sync` 不新增 raw `external` 声明，不 uses FPC platform/RTL binding unit
 - [x] `platform.sync` 不创建 feature-specific `platform.sync.ffi`
 - [x] POSIX host `.ffi` helper 接收 caller-supplied public result，避免 host ffi 硬编码
-  `PLATFORM_ERR_*`
+      `PLATFORM_ERR_*`
 - [x] Windows sync helper ownership 不被本轮回退
 
 ### Implementation Notes

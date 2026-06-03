@@ -2650,6 +2650,94 @@ begin
   end;
 end;
 
+procedure TestDirectCallExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr, ArgExpr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'function AddOne(v: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  AddOne := v + 1;'#10 +
+    'end;'#10 +
+    'var x: Integer;'#10 +
+    'begin'#10 +
+    '  x := AddOne(41);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(155);
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'x',
+      'call AddOne', Node) then
+      Halt(156);
+    if Node.ExprId = 0 then
+      Halt(157);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(158);
+    if (Expr.LiteralStr <> 'AddOne') or (Expr.Op <> 'i') then
+      Halt(159);
+    AssertExprTypeName(Model, Expr, 'Integer', 160);
+    if Length(Expr.Children) <> 1 then
+      Halt(161);
+    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    if ArgExpr.Kind <> shekIntLiteral then
+      Halt(162);
+    if Expr.ValueClass <> shvcScalar then
+      Halt(163);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestDirectPointerCallExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TNode = class'#10 +
+    '  end;'#10 +
+    'function MakeNode: TNode;'#10 +
+    'begin'#10 +
+    '  MakeNode := nil;'#10 +
+    'end;'#10 +
+    'var Chosen: TNode;'#10 +
+    'begin'#10 +
+    '  Chosen := MakeNode();'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(164);
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'Chosen',
+      'call MakeNode', Node) then
+      Halt(165);
+    if Node.ExprId = 0 then
+      Halt(166);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(167);
+    if Expr.LiteralStr <> 'MakeNode' then
+      Halt(168);
+    if Expr.Op <> '' then
+      Halt(169);
+    AssertExprTypeName(Model, Expr, 'Pointer', 170);
+    if Length(Expr.Children) <> 0 then
+      Halt(171);
+    if Expr.ValueClass <> shvcScalar then
+      Halt(172);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestConstructorNestedMethodIntegerArgs;
 var
   Model: TSemanticModel;
@@ -2859,6 +2947,8 @@ begin
   TestTypedHaltArgumentWidening;
   TestTypedWriteIntArgumentWidening;
   TestTypedStoreIntoLegacyAllocaWidening;
+  TestDirectCallExprProducer;
+  TestDirectPointerCallExprProducer;
   TestConstructorNestedMethodIntegerArgs;
   TestConstructorNestedMethodPointerArgs;
 end.

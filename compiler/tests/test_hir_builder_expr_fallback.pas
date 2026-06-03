@@ -5,6 +5,14 @@ program test_hir_builder_expr_fallback;
 uses
   SysUtils, np_semantic_model, np_hir_builder, np_hir_model, np_hir_types;
 
+function AddTypeWithFact(const AModel: TSemanticModel; const AName: string;
+  const AKind: TSemanticScalarKind; const ABitWidth: LongInt;
+  const ASigned: Boolean): LongInt;
+begin
+  Result := AModel.AddType(AName, 'builtin');
+  AModel.SetTypeScalarFact(Result, AKind, ABitWidth, ASigned);
+end;
+
 function HasConstLoad(const AFunc: THIRFunction; const AName: string): Boolean;
 var
   BlockIndex, InstrIndex: LongInt;
@@ -49,6 +57,22 @@ begin
       if (Instr.Kind = hikStore) and (TypeRec.Kind = htkInt) and
         (TypeRec.BitWidth = ABitWidth) then
         Exit(True);
+  end;
+  Result := False;
+end;
+
+function HasCallTarget(const AFunc: THIRFunction;
+  const ATarget: string): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+  Instr: THIRInstr;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) then
+        Exit(True);
     end;
   Result := False;
 end;
@@ -58,7 +82,7 @@ var
   Builder: THIRBuilder;
   ExprResult: THIRExprResult;
   ExprId, LiteralExprId, UnsupportedExprId, BadSymbolExprId, PartialExprId,
-    NodeId: LongInt;
+    CallExprId, IntTypeId, PtrTypeId, NodeId: LongInt;
   Children: array of LongInt;
   Func: THIRFunction;
 begin
@@ -105,7 +129,7 @@ begin
       shvcScalar
     );
     UnsupportedExprId := Model.AddHirExpr(
-      shekCall,
+      shekVirtualCall,
       0,
       0,
       Children,
@@ -237,6 +261,102 @@ begin
         Halt(10);
       if not HasIntStore(Builder.Module, Func, 64) then
         Halt(11);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    IntTypeId := AddTypeWithFact(Model, 'Integer', sskInt, 64, True);
+    PtrTypeId := AddTypeWithFact(Model, 'Pointer', sskPointer, 64, False);
+    SetLength(Children, 0);
+    LiteralExprId := Model.AddHirExpr(
+      shekIntLiteral,
+      IntTypeId,
+      0,
+      Children,
+      41,
+      '',
+      '',
+      0,
+      shvcScalar
+    );
+    SetLength(Children, 1);
+    Children[0] := LiteralExprId;
+    CallExprId := Model.AddHirExpr(
+      shekCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'AddOne',
+      'i',
+      0,
+      shvcScalar
+    );
+    Model.AddTypedHirNode('function-body-begin', 'AddOne', 0, 0, '1:i');
+    Model.AddTypedHirNode('ret-runtime', 'AddOne', 0, 0, 'int 42'#10);
+    Model.AddTypedHirNode('function-body-end', 'AddOne', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-runtime', 'x', 0, 0, 'x');
+    NodeId := Model.AddTypedHirNode(
+      'assign-runtime', 'x := structured call', 0, 0,
+      'x'#9'int 0'#10'call WrongAddOne 1'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, CallExprId);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasCallTarget(Func, 'AddOne') then
+        Halt(12);
+      if HasCallTarget(Func, 'WrongAddOne') then
+        Halt(13);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    PtrTypeId := AddTypeWithFact(Model, 'Pointer', sskPointer, 64, False);
+    SetLength(Children, 0);
+    CallExprId := Model.AddHirExpr(
+      shekCall,
+      PtrTypeId,
+      0,
+      Children,
+      0,
+      'MakeNode',
+      '',
+      0,
+      shvcScalar
+    );
+    Model.AddTypedHirNode('function-body-begin', 'MakeNode', 0, 0, '0::p');
+    Model.AddTypedHirNode('ret-runtime', 'MakeNode', 0, 0, 'null'#10);
+    Model.AddTypedHirNode('function-body-end', 'MakeNode', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'chosen', 0, 0, 'chosen');
+    NodeId := Model.AddTypedHirNode(
+      'assign-runtime', 'chosen := structured ptr call', 0, 0,
+      'chosen'#9'call WrongMakeNode 0'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, CallExprId);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasCallTarget(Func, 'MakeNode') then
+        Halt(14);
+      if HasCallTarget(Func, 'WrongMakeNode') then
+        Halt(15);
+      if not HasPointerStore(Builder.Module, Func) then
+        Halt(16);
     finally
       Builder.Free;
     end;
