@@ -1820,10 +1820,10 @@ begin
     'completion wake still avoids sync write path');
   CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
     'completion wake attempts timed nonblocking drain once');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'timed stalled drain arms write deadline once before zero-progress stall');
   Check(LNextEvents = [peWritable],
     'timed would-block drain subscribes writable wake');
-  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
-    'timed drain arms write deadline');
   Check(not LDeadlineSession.WakeDeadline.IsInfinite,
     'timed drain exposes finite wake deadline');
 
@@ -1842,6 +1842,8 @@ begin
     'timed stalled drain does not hand off follow-up request');
   CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
     'deadline wake closes without extra write retry');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'deadline wake does not rearm timed drain without write progress');
 end;
 
 procedure TestH1PollDrivenSessionClearsWakeDeadlineAfterSuccessfulTimedDrain;
@@ -2005,6 +2007,8 @@ begin
     'completion wake begins partial timed reactor-owned drain');
   CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
     'completion wake attempts first partial timed drain write');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteDeadlineCalls),
+    'partial timed drain rearms write deadline after partial progress');
   CheckEqual(Int64(FIRST_WRITE_BYTES), Int64(Length(LStreamObj.Output)),
     'partial timed drain preserves first already-written bytes');
   CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
@@ -2019,6 +2023,8 @@ begin
     'writable wake before deadline keeps partial timed drain waiting');
   CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
     'writable wake retries partial timed drain exactly once before timeout');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteDeadlineCalls),
+    'would-block retry without new bytes keeps prior timed drain deadline');
   CheckEqual(Int64(1), Int64(LHandlerCalls),
     'partial timed drain does not hand off buffered follow-up request');
   CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
@@ -2038,6 +2044,8 @@ begin
     'partial timed drain keeps server ownership on timeout close');
   CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
     'deadline wake closes partial timed drain without extra write retry');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteDeadlineCalls),
+    'timeout close preserves last rearmed deadline without further reset');
   CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
     'timeout close still leaves only one response status line on wire');
 end;
