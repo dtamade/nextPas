@@ -26,6 +26,7 @@ uses
   nextpas.core.http.server,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.platform.io.base,
   nextpas.core.platform.socket,
   nextpas.core.platform.thread;
 
@@ -62,6 +63,41 @@ type
     Server: THttpServer;
     Addr: string;
     Port: UInt16;
+  end;
+
+  TInlineRuntimeTcpStream = class(TInterfacedObject, IReader, IWriter, IStream,
+    ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime)
+  private
+    FInput: string;
+    FInputPos: SizeInt;
+    FOutput: string;
+    FBlocking: Boolean;
+    FSetBlockingCalls: Int32;
+  public
+    constructor Create(const AInput: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+    property Output: string read FOutput;
+    property SetBlockingCalls: Int32 read FSetBlockingCalls;
+    property Blocking: Boolean read FBlocking;
   end;
 
   TZeroProgressTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
@@ -155,6 +191,16 @@ type
     procedure Shutdown;
   end;
 
+  TInlineWorkerHandoff = class(TInterfacedObject, ITcpServerWorkerHandoff)
+  private
+    FSubmitCount: Int32;
+  public
+    function Submit(const AWork: ITcpServerWork;
+      const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
+    procedure Shutdown;
+    property SubmitCount: Int32 read FSubmitCount;
+  end;
+
   TMockSessionContext = class(TInterfacedObject, ITcpServerSessionContext)
   private
     FWorkerHandoff: ITcpServerWorkerHandoff;
@@ -162,6 +208,123 @@ type
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
     function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
+
+constructor TInlineRuntimeTcpStream.Create(const AInput: string);
+begin
+  inherited Create;
+  FInput := AInput;
+  FInputPos := 1;
+  FOutput := '';
+  FBlocking := False;
+  FSetBlockingCalls := 0;
+end;
+
+function TInlineRuntimeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeUInt;
+begin
+  if (ACount = 0) or (FInputPos > Length(FInput)) then
+    Exit(0);
+  LRemaining := SizeUInt(Length(FInput) - FInputPos + 1);
+  Result := ACount;
+  if Result > LRemaining then
+    Result := LRemaining;
+  Move(FInput[FInputPos], ABuf, Result);
+  Inc(FInputPos, SizeInt(Result));
+end;
+
+function TInlineRuntimeTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOldLen: SizeUInt;
+begin
+  if ACount = 0 then
+    Exit(0);
+  LOldLen := SizeUInt(Length(FOutput));
+  SetLength(FOutput, LOldLen + ACount);
+  Move(ABuf, FOutput[LOldLen + 1], ACount);
+  Result := ACount;
+end;
+
+function TInlineRuntimeTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := -1;
+end;
+
+procedure TInlineRuntimeTcpStream.Close;
+begin
+end;
+
+function TInlineRuntimeTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TInlineRuntimeTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TInlineRuntimeTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TInlineRuntimeTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TInlineRuntimeTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TInlineRuntimeTcpStream.Shutdown;
+begin
+end;
+
+procedure TInlineRuntimeTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TInlineRuntimeTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TInlineRuntimeTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+procedure TInlineRuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+function TInlineRuntimeTcpStream.NativeSocketHandle: PtrUInt;
+begin
+  Result := 42;
+end;
+
+procedure TInlineRuntimeTcpStream.SetBlocking(const ABlocking: Boolean);
+begin
+  FBlocking := ABlocking;
+  Inc(FSetBlockingCalls);
+end;
+
+function TInlineRuntimeTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+begin
+  ARead := Read(ABuf, ACount);
+  if ARead = 0 then
+    Exit(tsiorClosed);
+  Result := tsiorOk;
+end;
+
+function TInlineRuntimeTcpStream.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+begin
+  AWritten := Write(ABuf, ACount);
+  Result := tsiorOk;
+end;
 
 constructor TZeroProgressTcpStream.Create(const AInput: string);
 begin
@@ -433,6 +596,22 @@ begin
 end;
 
 procedure TMockWorkerHandoff.Shutdown;
+begin
+end;
+
+function TInlineWorkerHandoff.Submit(const AWork: ITcpServerWork;
+  const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
+var
+  LOwnership: TTcpServerConnOwnership;
+begin
+  Inc(FSubmitCount);
+  Result := TCP_SERVER_HANDOFF_ACCEPTED;
+  LOwnership := AWork.Execute;
+  if ACompletion <> nil then
+    ACompletion.Complete(TCP_SERVER_WORK_COMPLETED, LOwnership);
+end;
+
+procedure TInlineWorkerHandoff.Shutdown;
 begin
 end;
 
@@ -996,6 +1175,90 @@ begin
   Check(LSession <> nil, 'context-aware h1 session factory returns session');
   Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
     'context-aware h1 session now exposes poll-driven session seam');
+end;
+
+procedure TestH1PollDrivenSessionHandsOffPerCompletedRequest;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LStreamObj: TInlineRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+  LFirstPath: string;
+  LSecondPath: string;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /two HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for poll-driven request handoff test');
+
+  LStreamObj := TInlineRuntimeTcpStream.Create(REQ);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LFirstPath := '';
+  LSecondPath := '';
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+      if LHandlerCalls = 1 then
+        LFirstPath := AReq.Url.Path
+      else if LHandlerCalls = 2 then
+        LSecondPath := AReq.Url.Path;
+      AW.WriteHeader(HTTP_STATUS_OK);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for per-request handoff test');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'first readable advance stays active while first request work completes');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'first request is handed off once');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'first advance only handles first parsed request');
+  CheckEqual('/one', LFirstPath, 'first advance handles /one');
+  Check(LNextEvents = [], 'first request handoff waits on completion wake');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'completion wake with buffered follow-up stays active');
+  CheckEqual(Int64(2), Int64(LHandoffObj.SubmitCount),
+    'buffered second request is handed off separately');
+  CheckEqual(Int64(2), Int64(LHandlerCalls),
+    'completion wake handles second parsed request');
+  CheckEqual('/two', LSecondPath, 'completion wake handles /two');
+  Check(LNextEvents = [], 'second request handoff again waits on completion wake');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    'second completion ends the poll-driven session');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), 'session remains server-owned after second completion');
+  Check(Pos('HTTP/1.1 200 OK', LStreamObj.Output) > 0,
+    'responses were written to stream output');
 end;
 
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
@@ -6101,6 +6364,8 @@ begin
     @TestCommittedResponseExceptionDoesNotAppend500);
   T.Run('H1 transport exposes context-aware session factory',
     @TestH1TransportExposesContextSessionFactory);
+  T.Run('H1 poll-driven session hands off per completed request',
+    @TestH1PollDrivenSessionHandsOffPerCompletedRequest);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Write timeout before any wire bytes does not append 500',

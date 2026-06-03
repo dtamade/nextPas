@@ -122,6 +122,14 @@ type
     function Execute: TTcpServerConnOwnership;
   end;
 
+  TH1PollRequestWork = class(TInterfacedObject, ITcpServerWork)
+  private
+    FState: TH1ServerConnectionState;
+  public
+    constructor Create(const AState: TH1ServerConnectionState);
+    function Execute: TTcpServerConnOwnership;
+  end;
+
   TH1PollRunCompletion = class(TInterfacedObject, ITcpServerWorkCompletion)
   private
     FState: TH1ServerConnectionState;
@@ -141,6 +149,7 @@ type
     FHandler: IHttpHandler;
     FSessionContext: ITcpServerSessionContext;
     FSocketRuntime: ITcpSocketRuntime;
+    FStreamRuntime: ITcpStreamRuntime;
     FWorkerHandoff: ITcpServerWorkerHandoff;
     FParser: IH1Parser;
     FPending: string;
@@ -148,8 +157,23 @@ type
     FIdleMs: Int64;
     FBuf: array[0..4095] of Byte;
     FPollSubmitted: Boolean;
+    FPollWorkerPending: Boolean;
     FPollCompletionReady: Boolean;
     FPollCompletionOwnership: TTcpServerConnOwnership;
+    FParseTotalRead: SizeUInt;
+    FParseHeadersDone: Boolean;
+    procedure ResetPollRequestState;
+    function ExecuteCurrentRequest: TTcpServerConnOwnership;
+    function AdvanceWholeRunBridge(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+    function SubmitCurrentPollRequest(out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+    function ContinueAfterPollCompletion(out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+    function AdvancePollRequestParse(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
   public
     constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
       const AOptions: TH1ServerTransportOptions); overload;
@@ -318,6 +342,19 @@ begin
   Result := FState.Run;
 end;
 
+{ TH1PollRequestWork }
+
+constructor TH1PollRequestWork.Create(const AState: TH1ServerConnectionState);
+begin
+  inherited Create;
+  FState := AState;
+end;
+
+function TH1PollRequestWork.Execute: TTcpServerConnOwnership;
+begin
+  Result := FState.ExecuteCurrentRequest;
+end;
+
 { TH1PollRunCompletion }
 
 constructor TH1PollRunCompletion.Create(const AState: TH1ServerConnectionState);
@@ -334,7 +371,10 @@ begin
     if AOutcome = tswoCompleted then
       FState.FPollCompletionOwnership := AOwnership
     else
+    begin
       FState.FPollCompletionOwnership := tscoServer;
+      FState.FKeepAlive := False;
+    end;
     FState.FPollCompletionReady := True;
   end;
   FState := nil;
@@ -358,6 +398,7 @@ begin
   FHandler := AHandler;
   FSessionContext := AContext;
   Supports(AConn, ITcpSocketRuntime, FSocketRuntime);
+  Supports(AConn, ITcpStreamRuntime, FStreamRuntime);
   if AContext <> nil then
     FWorkerHandoff := AContext.WorkerHandoff
   else
@@ -370,22 +411,27 @@ begin
   else
     FIdleMs := 30000;
   FPollSubmitted := False;
+  FPollWorkerPending := False;
   FPollCompletionReady := False;
   FPollCompletionOwnership := tscoServer;
+  FParseTotalRead := 0;
+  FParseHeadersDone := False;
 end;
 
-function TH1ServerConnectionState.Run: TTcpServerConnOwnership;
+procedure TH1ServerConnectionState.ResetPollRequestState;
+begin
+  FParser.Reset;
+  FParseTotalRead := 0;
+  FParseHeadersDone := False;
+end;
+
+function TH1ServerConnectionState.ExecuteCurrentRequest: TTcpServerConnOwnership;
 var
-  LN: SizeUInt;
-  LConsumed: SizeUInt;
   LUrl: TUrl;
   LReq: IHttpRequest;
   LW: IHttpResponseWriter;
   LBodyReader: IReader;
   LContentLen: Int64;
-  LTotalRead: SizeUInt;
-  LHeadersDone: Boolean;
-  LRejected: Boolean;
   LHijackConn: ITcpStream;
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
@@ -393,16 +439,108 @@ var
   LDrainStarted: Boolean;
 begin
   Result := tscoServer;
+  LW := nil;
+  LOutbound := nil;
+  LResponseWriter := nil;
+  LDrainStarted := False;
+  try
+    if FOptions.WriteTimeout > 0 then
+      FConn.SetWriteDeadline(TDeadline.After(
+        TDuration.FromMilliseconds(FOptions.WriteTimeout)));
+
+    FKeepAlive := ShouldKeepAlive(FParser);
+
+    if (FParser.GetHttpVersion = hvHttp11) and
+       (FParser.GetHeaders.Get('host') = '') then
+    begin
+      WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
+      FKeepAlive := False;
+      Exit(tscoServer);
+    end;
+
+    LUrl := TUrl.Parse(FParser.GetUrl);
+    LContentLen := FParser.GetBodySize;
+    LBodyReader := FParser.NewBodyReader;
+    if LBodyReader <> nil then
+    begin
+      LReq := THttpRequest.Create(FParser.GetMethod, LUrl,
+        FParser.GetHttpVersion, FParser.GetHeaders, LBodyReader, LContentLen);
+    end
+    else
+    begin
+      LContentLen := 0;
+      LReq := THttpRequest.Create(FParser.GetMethod, LUrl,
+        FParser.GetHttpVersion, FParser.GetHeaders, nil, LContentLen);
+    end;
+
+    (LReq as THttpRequest).SetRemoteAddr(FConn.RemoteAddr.ToString);
+
+    if FPending <> '' then
+      LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
+    else
+      LHijackConn := FConn;
+    LOutbound := NewH1OutboundBuffer;
+    LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+    LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
+      LReq.Method = hmHead);
+    if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
+      LW.GetHeaders.Set_('connection', 'keep-alive');
+    if not FKeepAlive then
+      LW.GetHeaders.Set_('connection', 'close');
+
+    FHandler.ServeHTTP(LReq, LW);
+
+    if (LW as TH1ResponseWriter).IsHijacked then
+    begin
+      Result := tscoHandler;
+      FKeepAlive := False;
+      Exit;
+    end;
+
+    LW.Flush;
+    if Supports(LResponseWriter, IFlusher, LFlusher) then
+      LFlusher.Flush;
+    LDrainStarted := True;
+    LOutbound.DrainAllTo(FConn as IWriter);
+
+    if LW.GetHeaders.Get('connection') = 'close' then
+      FKeepAlive := False;
+  except
+    on E: Exception do
+    begin
+      if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
+        Result := tscoHandler
+      else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
+        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+      if (LW <> nil) and (not (LW as TH1ResponseWriter).IsHijacked) and
+         (LW as TH1ResponseWriter).HasCommitted and (not LDrainStarted) then
+      begin
+        try
+          if Supports(LResponseWriter, IFlusher, LFlusher) then
+            LFlusher.Flush;
+          if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
+            LOutbound.DrainAllTo(FConn as IWriter);
+        except
+        end;
+      end;
+      FKeepAlive := False;
+    end;
+  end;
+end;
+
+function TH1ServerConnectionState.Run: TTcpServerConnOwnership;
+var
+  LN: SizeUInt;
+  LConsumed: SizeUInt;
+  LTotalRead: SizeUInt;
+  LHeadersDone: Boolean;
+  LRejected: Boolean;
+begin
+  Result := tscoServer;
   while FKeepAlive do
   begin
-    LW := nil;
-    LOutbound := nil;
-    LResponseWriter := nil;
-    LDrainStarted := False;
     try
       FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)));
-      if FOptions.WriteTimeout > 0 then
-        FConn.SetWriteDeadline(TDeadline.After(TDuration.FromMilliseconds(FOptions.WriteTimeout)));
 
       FParser.Reset;
       LTotalRead := 0;
@@ -490,94 +628,23 @@ begin
         end;
       end;
 
-      FKeepAlive := ShouldKeepAlive(FParser);
-
-      if (FParser.GetHttpVersion = hvHttp11) and
-         (FParser.GetHeaders.Get('host') = '') then
-      begin
-        WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
-        FKeepAlive := False;
+      Result := ExecuteCurrentRequest;
+      if Result <> tscoServer then
         Continue;
-      end;
-
-      LUrl := TUrl.Parse(FParser.GetUrl);
-      LContentLen := FParser.GetBodySize;
-      LBodyReader := FParser.NewBodyReader;
-      if LBodyReader <> nil then
-      begin
-        LReq := THttpRequest.Create(FParser.GetMethod, LUrl, FParser.GetHttpVersion,
-          FParser.GetHeaders, LBodyReader, LContentLen);
-      end
-      else
-      begin
-        LContentLen := 0;
-        LReq := THttpRequest.Create(FParser.GetMethod, LUrl, FParser.GetHttpVersion,
-          FParser.GetHeaders, nil, LContentLen);
-      end;
-
-      (LReq as THttpRequest).SetRemoteAddr(FConn.RemoteAddr.ToString);
-
-      if FPending <> '' then
-        LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
-      else
-        LHijackConn := FConn;
-      LOutbound := NewH1OutboundBuffer;
-      LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
-      LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
-        LReq.Method = hmHead);
-      if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
-        LW.GetHeaders.Set_('connection', 'keep-alive');
       if not FKeepAlive then
-        LW.GetHeaders.Set_('connection', 'close');
-
-      FHandler.ServeHTTP(LReq, LW);
-
-      if (LW as TH1ResponseWriter).IsHijacked then
-      begin
-        Result := tscoHandler;
-        FKeepAlive := False;
-        Continue;
-      end;
-
-      LW.Flush;
-      if Supports(LResponseWriter, IFlusher, LFlusher) then
-        LFlusher.Flush;
-      LDrainStarted := True;
-      LOutbound.DrainAllTo(FConn as IWriter);
-
-      if LW.GetHeaders.Get('connection') = 'close' then
         FKeepAlive := False;
     except
       on E: Exception do
       begin
-        if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
-          Result := tscoHandler
-        else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
-          WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
-        if (LW <> nil) and (not (LW as TH1ResponseWriter).IsHijacked) and
-           (LW as TH1ResponseWriter).HasCommitted and (not LDrainStarted) then
-        begin
-          try
-            if Supports(LResponseWriter, IFlusher, LFlusher) then
-              LFlusher.Flush;
-            if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
-              LOutbound.DrainAllTo(FConn as IWriter);
-          except
-          end;
-        end;
+        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
         FKeepAlive := False;
       end;
     end;
   end;
 end;
 
-function TH1ServerConnectionState.PollEvents: TPlatformPollEvents;
-begin
-  Result := [peReadable];
-end;
-
-function TH1ServerConnectionState.Advance(const AEvents: TPlatformPollEvents;
-  out ANextEvents: TPlatformPollEvents;
+function TH1ServerConnectionState.AdvanceWholeRunBridge(
+  const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 var
   LWork: ITcpServerWork;
@@ -627,6 +694,209 @@ begin
   ANextEvents := [];
   AOwnership := FPollCompletionOwnership;
   Result := tsprDone;
+end;
+
+function TH1ServerConnectionState.SubmitCurrentPollRequest(
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LWork: ITcpServerWork;
+  LCompletion: ITcpServerWorkCompletion;
+  LHandoffResult: TTcpServerHandoffResult;
+begin
+  AOwnership := tscoServer;
+
+  if FWorkerHandoff = nil then
+  begin
+    if FSocketRuntime <> nil then
+      FSocketRuntime.SetBlocking(True);
+    AOwnership := ExecuteCurrentRequest;
+    if (AOwnership <> tscoServer) or (not FKeepAlive) then
+    begin
+      ANextEvents := [];
+      Exit(tsprDone);
+    end;
+    if FSocketRuntime <> nil then
+      FSocketRuntime.SetBlocking(False);
+    ResetPollRequestState;
+    Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
+  end;
+
+  if FSocketRuntime <> nil then
+    FSocketRuntime.SetBlocking(True);
+
+  FPollWorkerPending := True;
+  FPollCompletionReady := False;
+  LWork := TH1PollRequestWork.Create(Self);
+  LCompletion := TH1PollRunCompletion.Create(Self);
+  LHandoffResult := FWorkerHandoff.Submit(LWork, LCompletion);
+  if LHandoffResult <> tshrAccepted then
+  begin
+    FPollWorkerPending := False;
+    ANextEvents := [];
+    Exit(tsprDone);
+  end;
+
+  ANextEvents := [];
+  Result := tsprWait;
+end;
+
+function TH1ServerConnectionState.ContinueAfterPollCompletion(
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+begin
+  FPollWorkerPending := False;
+  FPollCompletionReady := False;
+  AOwnership := FPollCompletionOwnership;
+
+  if (AOwnership <> tscoServer) or (not FKeepAlive) then
+  begin
+    ANextEvents := [];
+    Exit(tsprDone);
+  end;
+
+  if FSocketRuntime <> nil then
+    FSocketRuntime.SetBlocking(False);
+  ResetPollRequestState;
+  Result := AdvancePollRequestParse([], ANextEvents, AOwnership);
+end;
+
+function TH1ServerConnectionState.AdvancePollRequestParse(
+  const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LN: SizeUInt;
+  LConsumed: SizeUInt;
+  LReadResult: TTcpStreamIOResult;
+begin
+  AOwnership := tscoServer;
+
+  while True do
+  begin
+    if FPending <> '' then
+    begin
+      LN := SizeUInt(Length(FPending));
+      LConsumed := FParser.Execute(PAnsiChar(FPending), LN);
+      if LConsumed < LN then
+        FPending := Copy(FPending, Int32(LConsumed) + 1, Int32(LN - LConsumed))
+      else
+        FPending := '';
+    end
+    else
+    begin
+      if FStreamRuntime = nil then
+        Exit(AdvanceWholeRunBridge(AEvents, ANextEvents, AOwnership));
+      if not (peReadable in AEvents) then
+      begin
+        ANextEvents := [peReadable];
+        Exit(tsprWait);
+      end;
+
+      LReadResult := FStreamRuntime.TryRead(FBuf[0], SizeUInt(SizeOf(FBuf)), LN);
+      case LReadResult of
+        tsiorWouldBlock:
+          begin
+            ANextEvents := [peReadable];
+            Exit(tsprWait);
+          end;
+        tsiorClosed:
+          begin
+            FKeepAlive := False;
+            if (FParseTotalRead > 0) and (not FParser.IsComplete) and
+               (not FParser.HasError) then
+              FParser.Finish;
+            if FParser.HasError then
+            begin
+              WriteErrorResponse(FConn, ParserErrorStatus(FParser));
+              ANextEvents := [];
+              Exit(tsprDone);
+            end;
+            ANextEvents := [];
+            Exit(tsprDone);
+          end;
+      else
+        begin
+          LConsumed := FParser.Execute(@FBuf[0], LN);
+          if LConsumed < LN then
+          begin
+            SetLength(FPending, Int32(LN - LConsumed));
+            Move(FBuf[LConsumed], FPending[1], LN - LConsumed);
+          end;
+        end;
+      end;
+    end;
+
+    Inc(FParseTotalRead, LConsumed);
+    if (not FParseHeadersDone) and ((FParser.GetUrl <> '') or FParser.IsComplete) then
+    begin
+      FParseHeadersDone := True;
+      if (FOptions.MaxHeaderSize > 0) and
+         (Int64(FParseTotalRead) - FParser.GetBodySize >
+          Int64(FOptions.MaxHeaderSize)) then
+      begin
+        WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+        FKeepAlive := False;
+        ANextEvents := [];
+        Exit(tsprDone);
+      end;
+    end;
+
+    if FParseHeadersDone and (FOptions.MaxHeaderSize > 0) and
+       (FParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
+    begin
+      WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+      FKeepAlive := False;
+      ANextEvents := [];
+      Exit(tsprDone);
+    end;
+
+    if (FOptions.MaxBodySize > 0) and
+       (FParser.GetBodySize > FOptions.MaxBodySize) then
+    begin
+      WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+      FKeepAlive := False;
+      ANextEvents := [];
+      Exit(tsprDone);
+    end;
+
+    if FParser.HasError then
+    begin
+      WriteErrorResponse(FConn, ParserErrorStatus(FParser));
+      FKeepAlive := False;
+      ANextEvents := [];
+      Exit(tsprDone);
+    end;
+
+    if FParser.IsComplete then
+      Exit(SubmitCurrentPollRequest(ANextEvents, AOwnership));
+  end;
+end;
+
+function TH1ServerConnectionState.PollEvents: TPlatformPollEvents;
+begin
+  Result := [peReadable];
+end;
+
+function TH1ServerConnectionState.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+begin
+  AOwnership := tscoServer;
+
+  if FStreamRuntime = nil then
+    Exit(AdvanceWholeRunBridge(AEvents, ANextEvents, AOwnership));
+
+  if FPollWorkerPending then
+  begin
+    if not FPollCompletionReady then
+    begin
+      ANextEvents := [];
+      Exit(tsprWait);
+    end;
+    Exit(ContinueAfterPollCompletion(ANextEvents, AOwnership));
+  end;
+
+  Result := AdvancePollRequestParse(AEvents, ANextEvents, AOwnership);
 end;
 
 function TH1ServerConnectionState.WakeDeadline: TDeadline;

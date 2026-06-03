@@ -1,51 +1,74 @@
-# Findings: http malformed transfer-coding focused expansion
+# Findings: http h1 poll-driven phase2 step1
 
 ## Scope
 
-- 这轮继续留在 malformed chunked request correctness / security 主线。
-- 不做生产修复预设，先用 focused tests 看 `chunked, gzip` 是否真有契约缺口。
+- 这轮不再继续补碎片化 malformed case。
+- 这轮直接推进 H1 poll-driven runtime：先把 request-side read/parse 拉回 reactor，
+  再把 worker handoff 粒度从“整连接”收窄到“单 request”。
 
 ## Confirmed truths
 
-### 1. `chunked, gzip` 的 raw-wire security proof 早已有了，但 focused parser/server 证明不完整
+### 1. 上一轮的 H1 poll-driven 实现确实还是 whole-connection bridge
 
-- `test_http_security` 已经锁定：
-  - `Transfer-Encoding: chunked, gzip` -> explicit `400`
-- 但在这轮之前：
-  - `test_http_h1parser` 没有直接锁这条 parser 语义
-  - `test_http_server` 也没有直接锁 handler-not-called 语义
+- 新增 RED 前，context-aware H1 session 虽然已经暴露
+  `ITcpServerPollDrivenSession`，
+  但同连接里两个已完成请求仍会在第一次 handoff 里一起跑完。
+- focused RED 明确抓到这一点：
+  - 第一次 `Advance([peReadable])`
+  - handler 已经被调用两次
+  - 说明还是整连接一次 worker `Run`
 
-### 2. 当前实现已经满足契约，这轮不需要生产修复
+### 2. 这轮已把 request-side ownership 真正拉回 reactor
 
-- 新增 parser focused proof 后，`test_http_h1parser` 直接通过：
-  - `Transfer-Encoding: chunked, gzip`
-  - `HasError = true`
-  - `IsComplete = false`
-  - `ErrorKind = pekMalformed`
-- 新增 server focused proof 后，`test_http_server` 直接通过：
-  - raw-wire 返回 explicit `400`
-  - handler 不会被调用
+- `TH1ServerConnectionState` 现在新增了 poll-path 自己的 request parse 状态：
+  - `FStreamRuntime`
+  - `FParseTotalRead`
+  - `FParseHeadersDone`
+  - `FPollWorkerPending`
+- poll-driven 路径现在会：
+  - 直接用 `ITcpStreamRuntime.TryRead` 读 socket
+  - 直接驱动 `IH1Parser`
+  - parser 完成一个 request 后只 handoff 这一个 request
+  - worker completion 回到 reactor 后，如果 `FPending` 已经有 follow-up request，
+    会立刻继续 parse / submit，不等下一次 readability
 
-### 3. 这轮新增的是“契约可见性”，不是行为变更
+### 3. 当前 phase 2 还没完成，剩余缺口已经更清楚
 
-- `gzip, chunked` 与 `chunked, gzip` 现在在测试矩阵里的语义边界更清楚：
-  - 前者是 unsupported transfer-coding
-  - 后者是 malformed transfer-coding，因为 `chunked` 不是 final coding
-- 生产代码未改，当前 truth 只是被补成更窄的 focused proof。
+- 这轮仍然保留 worker-owned blocking drain：
+  - request handler 执行
+  - `TH1ResponseWriter` flush
+  - outbound buffer drain 到 socket
+- `WakeDeadline` 仍然是 `Infinite`。
+- 所以 H1 现在的真实状态是：
+  - read/parse 已经 reactor-owned
+  - write/drain / deadline 还不是
+
+### 4. 兼容性关键点目前守住了
+
+- 无 `ITcpStreamRuntime` 时仍保留旧的 whole-run fallback。
+- worker 执行单 request 前仍会把 socket 设回 blocking，
+  这样 hijack / WebSocket 这类 worker-owned 路径不被 nonblocking 语义打坏。
+- request 完成且连接仍归 server 持有时，reactor 会把 socket 再设回 nonblocking，
+  继续 keep-alive follow-up request。
 
 ## Verification evidence
 
-- `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `83/83 passed`
-  - heaptrc：`0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `113/113 passed`
+  - `114/114 passed`
+  - 新增 proof：
+    - H1 poll-driven session hands off per completed request
+  - threaded / epoll 既有 contract 未回归：
+    - keep-alive / pipelining
+    - malformed ingress / trailer / size-limit rejection
+    - committed response / hijack / write-timeout / backpressure safety
   - heaptrc：`0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- malformed chunk/trailer EOF 子类的 correctness 主线已经很密，后续再扩时要继续防止“重复加已存在证明”的低效动作。
-- 下一批更值得做的是：
-  - 再找 parser/server/security 三层之间真正不对称的边角 case
-  - 或者回到 keep-alive request-tail 契约决策
-  - 而不是继续机械复制相邻 EOF 用例
+- 当前 request-side per-request handoff 已经落地，但 outbound drain 还没有进入 reactor；
+  这意味着性能形态还不是目标终态。
+- `WakeDeadline` 还没有接进 H1 生产路径，`IdleTimeout` / `WriteTimeout` 在 poll-driven phase 2 下仍不是最终设计。
+- 下一批最值得做的是：
+  - 把 `IH1OutboundBuffer.TryDrainTo` 接进 poll-driven H1
+  - 让 `peWritable` / would-block / write deadline 真正进入状态机
+  - 再决定 bounded outbound queue 与 backpressure contract

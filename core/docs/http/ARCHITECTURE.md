@@ -45,22 +45,23 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
 - Linux `epoll` 已经落到 phase 1：evented accept + worker-driven connection execution。
 - `nextpas.core.net.server` 现在也已具备 poll-driven session seam，
   而且 H1 session 现在已经开始消费这条 seam；
-  但当前还是 bridge 形态，不是完整 reactor-owned H1 state machine。
+  但当前还不是完整 reactor-owned H1 state machine。
 - H1 现在已经能看到 foundation session context；并且 foundation `epoll` runtime
   也已经具备 worker-completion -> reactor wakeup 与 deadline wake 的基础能力。
 - `TH1ServerConnectionState` 现在已经实现 `ITcpServerPollDrivenSession`，
-  但当前 bridge 仍然会在第一次 readability 后通过 `WorkerHandoff`
-  把整连接 `Run` 挂到 worker 执行，以先把 H1 接到 poll-driven foundation，
-  同时守住现有 HTTP contract。
+  reactor 现在已经直接负责 request-side read/parse，
+  并且会把每个已完成 request 单独通过 `WorkerHandoff` 提交，
+  同连接里已经缓冲好的 follow-up request 不必再等待新的 readability 才能继续。
 - H1 server response path 现在已经完成一层关键拆分：
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
 - 因此 H1 剩余的真实阻塞点已经进一步收窄为：
-  真正的 reactor-owned read/write state machine / resumable drain /
-  writer would-block 语义，
-  不再是 context bridge，也不再是 reactor wakeup 基础设施本身，
+  reactor-owned write/drain state machine / resumable drain /
+  writer would-block / deadline 语义，
+  不再是 request-side read/parse，也不再是 context bridge / reactor wakeup 基础设施本身，
   也不应该再把“handler 必须同步阻塞在 socket write 上”当成固定方向。
-- 还没落地的是 phase 2：runtime 直接驱动 connection state 的 read/write 调度。
+- 当前 phase 2 已经落地到一半：runtime 直接驱动了 connection state 的 read/parse 与 per-request handoff；
+  还没落地的是 outbound drain 与 deadline 的 reactor-owned 调度。
 
 因此 HTTP 这层的固定方向不是“自己长出一个更复杂的 `TBaseServer`”，而是：
 
