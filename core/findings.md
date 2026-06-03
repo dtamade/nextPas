@@ -1,81 +1,51 @@
-# Findings: http h1 initial poll-driven bridge
+# Findings: http malformed transfer-coding focused expansion
 
 ## Scope
 
-- 这轮不是直接做完整 reactor-owned H1 state machine。
-- 这轮先让 `TH1ServerConnectionState` 真正实现 `ITcpServerPollDrivenSession`，
-  用一条 worker-bridged 路径把 H1 接到 poll-driven foundation 上。
+- 这轮继续留在 malformed chunked request correctness / security 主线。
+- 不做生产修复预设，先用 focused tests 看 `chunked, gzip` 是否真有契约缺口。
 
 ## Confirmed truths
 
-### 1. foundation 已经准备好，但 H1 之前还没真正消费 poll-driven session seam
+### 1. `chunked, gzip` 的 raw-wire security proof 早已有了，但 focused parser/server 证明不完整
 
-- `nextpas.core.net.server` 已经具备：
-  - poll-driven session seam
-  - worker-completion wake
-  - deadline wake
-- 但 H1 上一轮结束时仍然只有 `ITcpServerSession.Run`，
-  还没有真正实现 `ITcpServerPollDrivenSession`。
+- `test_http_security` 已经锁定：
+  - `Transfer-Encoding: chunked, gzip` -> explicit `400`
+- 但在这轮之前：
+  - `test_http_h1parser` 没有直接锁这条 parser 语义
+  - `test_http_server` 也没有直接锁 handler-not-called 语义
 
-### 2. 这轮先做 bridge，比直接硬上完整 reactor-owned H1 更稳
+### 2. 当前实现已经满足契约，这轮不需要生产修复
 
-- 如果这轮直接把 parser / handler / drain 全部细化成 reactor-owned state machine，
-  风险会同时落在：
-  - request parse state
-  - handler handoff
-  - response drain
-  - hijack / keep-alive / write-timeout 兼容
-- 当前更稳的推进方式是：
-  先让 H1 具备 poll-driven session shape，
-  并通过 `WorkerHandoff` 把现有整连接 `Run` 安全挂到 worker，
-  这样 H1 已经接上正确 foundation seam，同时不破坏现有 HTTP contract。
+- 新增 parser focused proof 后，`test_http_h1parser` 直接通过：
+  - `Transfer-Encoding: chunked, gzip`
+  - `HasError = true`
+  - `IsComplete = false`
+  - `ErrorKind = pekMalformed`
+- 新增 server focused proof 后，`test_http_server` 直接通过：
+  - raw-wire 返回 explicit `400`
+  - handler 不会被调用
 
-### 3. H1 session 现在已经暴露 initial poll-driven bridge seam
+### 3. 这轮新增的是“契约可见性”，不是行为变更
 
-- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:114)
-  现在 `TH1ServerConnectionState` 已实现：
-  - `ITcpServerSession`
-  - `ITcpServerPollDrivenSession`
-  - `ITcpServerPollDrivenSessionWithDeadline`
-- 当前 bridge 语义是：
-  - 初始 `PollEvents = [peReadable]`
-  - 第一次 readability 到达后，通过 `WorkerHandoff` 提交整连接 `Run`
-  - reactor 侧等待 completion synthetic re-entry
-  - completion 后按 ownership 返回结果
-
-### 4. 这轮没有假装“完整 poll-driven H1 已完成”
-
-- 当前 `WakeDeadline` 仍返回 `Infinite`。
-- `IH1OutboundBuffer.TryDrainTo` 还没有进入生产路径。
-- request parse / response drain / keep-alive loop 仍然由既有 `Run` 负责，
-  只是现在它被挂到了 H1 自己暴露的 poll-driven bridge seam 上。
-
-### 5. 这轮对后续真正 H1 phase 2 的价值是真实的
-
-- 现在 epoll backend 已经不再把 H1 视为“只有 blocking session”的黑盒。
-- 下一步可以直接在 `TH1ServerConnectionState` 内部逐段替换：
-  - 先拆 read/parse
-  - 再拆 handler handoff
-  - 再拆 outbound drain
-- 不需要再回头改 transport factory / foundation session shape。
+- `gzip, chunked` 与 `chunked, gzip` 现在在测试矩阵里的语义边界更清楚：
+  - 前者是 unsupported transfer-coding
+  - 后者是 malformed transfer-coding，因为 `chunked` 不是 final coding
+- 生产代码未改，当前 truth 只是被补成更窄的 focused proof。
 
 ## Verification evidence
 
+- `make -C tests/nextpas.core.http/test_http_h1parser clean test`
+  - `83/83 passed`
+  - heaptrc：`0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `112/112 passed`
-  - 新增 proof：
-    - context-aware H1 session 现在暴露 `ITcpServerPollDrivenSession`
-  - 现有 epoll HTTP contract proof 未回归：
-    - simple GET / keep-alive / pipelining
-    - hijack ownership
-    - committed-response exception
-    - write-timeout / backpressure safe-close
-    - malformed chunked ingress / trailers / limits
+  - `113/113 passed`
   - heaptrc：`0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 当前 bridge 还不是 reactor-owned H1 state machine。
-- `WakeDeadline` 还没有进入 H1 生产语义。
-- `IH1OutboundBuffer.TryDrainTo` 还没被 H1 生产路径消费。
-- 整连接 `Run` 仍然是 whole-connection worker execution，性能形态还不是目标终态。
+- malformed chunk/trailer EOF 子类的 correctness 主线已经很密，后续再扩时要继续防止“重复加已存在证明”的低效动作。
+- 下一批更值得做的是：
+  - 再找 parser/server/security 三层之间真正不对称的边角 case
+  - 或者回到 keep-alive request-tail 契约决策
+  - 而不是继续机械复制相邻 EOF 用例

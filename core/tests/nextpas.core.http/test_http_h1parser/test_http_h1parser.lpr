@@ -635,6 +635,27 @@ begin
     'unsupported transfer coding before chunked reports unsupported coding kind');
 end;
 
+procedure TestChunkedRequestChunkedMustBeFinalTransferCoding;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked, gzip'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'chunked must be final transfer coding reports parser error');
+  Check(not LP.IsComplete,
+    'chunked must be final transfer coding is not complete');
+  Check(LP.ErrorKind = pekMalformed,
+    'chunked must be final transfer coding reports malformed kind');
+end;
+
 procedure TestChunkedRequestTrailerDoesNotPolluteHeaders;
 var
   LP: IH1Parser;
@@ -1707,6 +1728,8 @@ begin
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);
   T.Run('Chunked request unsupported transfer coding before chunked',
     @TestChunkedRequestUnsupportedTransferCodingBeforeChunked);
+  T.Run('Chunked request chunked must be final transfer coding',
+    @TestChunkedRequestChunkedMustBeFinalTransferCoding);
   T.Run('Chunked request trailer does not pollute headers', @TestChunkedRequestTrailerDoesNotPolluteHeaders);
   T.Run('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
   T.Run('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);

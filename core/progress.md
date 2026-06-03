@@ -1,51 +1,43 @@
-# Progress Log: http h1 initial poll-driven bridge
+# Progress Log: http malformed transfer-coding focused expansion
 
 ## Session
 
-- **Scope:** 让 `TH1ServerConnectionState` 真正实现 `ITcpServerPollDrivenSession`，
-  先把 H1 接到 poll-driven foundation / `WorkerHandoff` 主干上，
-  但本轮不直接做完整 reactor-owned H1 state machine。
+- **Scope:** 补齐 `Transfer-Encoding: chunked, gzip` 这条
+  malformed transfer-coding 在 parser / server 两层的 focused proof，
+  继续收口 malformed chunked request security 矩阵。
 - **Status:** ready-to-commit
 
 ## Current state
 
 - shared checkout 仍有大量无关 modified / untracked 文件；本轮继续只做 path-limited 变更。
-- H1 现在已经暴露 poll-driven session seam，不再只是 blocking `Run` 黑盒。
-- 但当前还是 bridge 形态：
-  首次 readability 后把整连接 `Run` 提交给 worker，
-  还没有把 parser / drain 拆到 reactor-owned state machine。
+- 当前 batch 没有生产代码改动；这是一轮 focused coverage expansion。
 
 ## Completed work
 
-- 审阅并确认当前缺口：
-  - foundation 已有 poll-driven wake / deadline wake
-  - H1 仍缺真正的 poll-driven session shape
-  - 这批先做 H1 bridge，不先强上完整 state machine
-- 先承接 RED：
-  - `test_http_server` 锁 context-aware H1 session 现在必须暴露 `ITcpServerPollDrivenSession`
-- 在 `src/nextpas.core.http.impl.h1.pas` 落地：
-  - `TH1ServerConnectionState` 实现 `ITcpServerPollDrivenSession`
-  - 初始 `PollEvents = [peReadable]`
-  - 首次 readability 后通过 `WorkerHandoff` 提交整连接 `Run`
-  - completion synthetic re-entry 后返回最终 ownership
-  - `WakeDeadline` 先保守返回 `Infinite`
-- 在 focused tests 落地：
-  - `tests/nextpas.core.http/test_http_server`
-    - context-aware H1 session 现在暴露 poll-driven seam
-- 在文档落地：
-  - `docs/http/ARCHITECTURE.md`
-  - `docs/http/API_COVERAGE.md`
+- 审阅现有控制文件与 coverage 矩阵，确认 `chunked, gzip` 这条仍缺 focused parser/server 证据。
+- 在 `tests/nextpas.core.http/test_http_h1parser` 落地：
+  - `Transfer-Encoding: chunked, gzip` -> parser error
+  - `ErrorKind = pekMalformed`
+- 在 `tests/nextpas.core.http/test_http_server` 落地：
+  - `Transfer-Encoding: chunked, gzip` -> explicit `400`
+  - handler 不落地
+- 在 `docs/http/API_COVERAGE.md` 固定这条契约证据。
+- 同步刷新：
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
 
 ## Verification
 
+- `make -C tests/nextpas.core.http/test_http_h1parser clean test`
+  - `83/83 passed`
+  - heaptrc：`0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `112/112 passed`
+  - `113/113 passed`
   - heaptrc：`0 unfreed memory blocks`
 
 ## Next step
 
-- 直接进入真正的 H1 poll-driven phase 2：
-  - 把整连接 `Run` bridge 拆成 reactor-owned request parse / handler handoff / outbound drain
-  - 把 `IH1OutboundBuffer.TryDrainTo` 接进生产路径
-  - 把 `WakeDeadline` 接进 H1 的 read/write timeout 语义
-  - 再收敛 bounded outbound queue / backpressure 策略
+- 不再继续机械堆相邻 malformed EOF 用例。
+- 下一批先重新审一遍 parser / server / security 三层差集，只挑真正还没对齐的 case。
+- 如果 chunk correctness 主线暂时没有真实缺口，就转回 keep-alive request-tail 契约决策，或者继续 H1 poll-driven phase 2 的设计收口。
