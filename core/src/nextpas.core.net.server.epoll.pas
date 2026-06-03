@@ -53,45 +53,6 @@ type
     procedure Run;
   end;
 
-  TTcpEpollQueuedCompletion = class(TInterfacedObject,
-    ITcpServerWorkCompletion)
-  private
-    FServer: TTcpEpollServer;
-    FTarget: TTcpServerPollSessionTarget;
-    FInner: ITcpServerWorkCompletion;
-  public
-    constructor Create(const AServer: TTcpEpollServer;
-      const ATarget: TTcpServerPollSessionTarget;
-      const AInner: ITcpServerWorkCompletion);
-    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
-      const AOwnership: TTcpServerConnOwnership);
-  end;
-
-  TTcpEpollWorkerHandoff = class(TInterfacedObject, ITcpServerWorkerHandoff)
-  private
-    FServer: TTcpEpollServer;
-    FBaseHandoff: ITcpServerWorkerHandoff;
-    FTarget: TTcpServerPollSessionTarget;
-  public
-    constructor Create(const AServer: TTcpEpollServer;
-      const ABaseHandoff: ITcpServerWorkerHandoff);
-    procedure BindTarget(const ATarget: TTcpServerPollSessionTarget);
-    function Submit(const AWork: ITcpServerWork;
-      const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
-    procedure Shutdown;
-  end;
-
-  TTcpEpollSessionContext = class(TInterfacedObject, ITcpServerSessionContext)
-  private
-    FWorkerHandoffRef: ITcpServerWorkerHandoff;
-    FWorkerHandoff: TTcpEpollWorkerHandoff;
-  public
-    constructor Create(const AServer: TTcpEpollServer;
-      const ABaseHandoff: ITcpServerWorkerHandoff);
-    procedure BindTarget(const ATarget: TTcpServerPollSessionTarget);
-    function WorkerHandoff: ITcpServerWorkerHandoff;
-  end;
-
   TTcpEpollServer = class(TInterfacedObject, ITcpServer)
   private
     const WAKE_USERDATA = Pointer(PtrUInt(1));
@@ -111,7 +72,7 @@ type
     FPollTargets: array of TTcpServerPollSessionTarget;
     FPollTargetCount: SizeUInt;
     procedure EnsureRuntimeContext;
-    function CreateSessionContext: TTcpEpollSessionContext;
+    function CreateSessionContext: TTcpServerPollSessionContext;
     procedure RegisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     procedure UnregisterPollTarget(const ATarget: TTcpServerPollSessionTarget);
     function ComputePollTimeoutMs: Int32;
@@ -122,7 +83,7 @@ type
       const AConn: ITcpStream);
     function TryRegisterPollDrivenSession(const AConn: ITcpStream;
       const ASession: ITcpServerSession;
-      const AContext: TTcpEpollSessionContext): Boolean;
+      const AContext: TTcpServerPollSessionContext): Boolean;
     procedure EnqueueCompletion(const ATarget: TTcpServerPollSessionTarget;
       const ACompletion: ITcpServerWorkCompletion;
       const AOutcome: TTcpServerWorkOutcome;
@@ -179,81 +140,6 @@ begin
   FSession := nil;
 end;
 
-constructor TTcpEpollQueuedCompletion.Create(const AServer: TTcpEpollServer;
-  const ATarget: TTcpServerPollSessionTarget;
-  const AInner: ITcpServerWorkCompletion);
-begin
-  inherited Create;
-  FServer := AServer;
-  FTarget := ATarget;
-  FInner := AInner;
-end;
-
-procedure TTcpEpollQueuedCompletion.Complete(
-  const AOutcome: TTcpServerWorkOutcome;
-  const AOwnership: TTcpServerConnOwnership);
-begin
-  if FServer <> nil then
-  begin
-    FServer.EnqueueCompletion(FTarget, FInner, AOutcome, AOwnership);
-    FServer.WakeReactor;
-  end;
-  FInner := nil;
-  FTarget := nil;
-  FServer := nil;
-end;
-
-constructor TTcpEpollWorkerHandoff.Create(const AServer: TTcpEpollServer;
-  const ABaseHandoff: ITcpServerWorkerHandoff);
-begin
-  inherited Create;
-  FServer := AServer;
-  FBaseHandoff := ABaseHandoff;
-  FTarget := nil;
-end;
-
-procedure TTcpEpollWorkerHandoff.BindTarget(
-  const ATarget: TTcpServerPollSessionTarget);
-begin
-  FTarget := ATarget;
-end;
-
-function TTcpEpollWorkerHandoff.Submit(const AWork: ITcpServerWork;
-  const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
-var
-  LCompletion: ITcpServerWorkCompletion;
-begin
-  if FTarget <> nil then
-    LCompletion := TTcpEpollQueuedCompletion.Create(FServer, FTarget, ACompletion)
-  else
-    LCompletion := ACompletion;
-  Result := FBaseHandoff.Submit(AWork, LCompletion);
-end;
-
-procedure TTcpEpollWorkerHandoff.Shutdown;
-begin
-  FBaseHandoff.Shutdown;
-end;
-
-constructor TTcpEpollSessionContext.Create(const AServer: TTcpEpollServer;
-  const ABaseHandoff: ITcpServerWorkerHandoff);
-begin
-  inherited Create;
-  FWorkerHandoff := TTcpEpollWorkerHandoff.Create(AServer, ABaseHandoff);
-  FWorkerHandoffRef := FWorkerHandoff;
-end;
-
-procedure TTcpEpollSessionContext.BindTarget(
-  const ATarget: TTcpServerPollSessionTarget);
-begin
-  FWorkerHandoff.BindTarget(ATarget);
-end;
-
-function TTcpEpollSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
-begin
-  Result := FWorkerHandoffRef;
-end;
-
 constructor TTcpEpollServer.Create(const AOptions: TTcpServerOptions);
 begin
   inherited Create;
@@ -295,9 +181,10 @@ begin
   end;
 end;
 
-function TTcpEpollServer.CreateSessionContext: TTcpEpollSessionContext;
+function TTcpEpollServer.CreateSessionContext: TTcpServerPollSessionContext;
 begin
-  Result := TTcpEpollSessionContext.Create(Self, FWorkerHandoff);
+  Result := TTcpServerPollSessionContext.Create(FWorkerHandoff,
+    @EnqueueCompletion, @WakeReactor);
 end;
 
 procedure TTcpEpollServer.RegisterPollTarget(
@@ -415,7 +302,7 @@ var
   LTask: TTcpEpollConnTask;
   LSession: ITcpServerSession;
   LContext: ITcpServerSessionContext;
-  LPollContext: TTcpEpollSessionContext;
+  LPollContext: TTcpServerPollSessionContext;
 begin
   if AConn = nil then
     Exit;
@@ -453,7 +340,7 @@ begin
 end;
 
 function TTcpEpollServer.TryRegisterPollDrivenSession(const AConn: ITcpStream;
-  const ASession: ITcpServerSession; const AContext: TTcpEpollSessionContext): Boolean;
+  const ASession: ITcpServerSession; const AContext: TTcpServerPollSessionContext): Boolean;
 var
   LTarget: TTcpServerPollSessionTarget;
   LErr: Int32;

@@ -1,25 +1,30 @@
-# Task Plan: net.server readiness driver extraction step1
+# Task Plan: net.server readiness driver extraction step2
 
 ## Goal
 
-把 `nextpas.core.net.server` 当前只存在于 `epoll` backend 里的
-readiness-family poll-driven session target 骨架，下沉到 foundation runtime helper，
-让这条 seam 真正开始服务 future `kqueue` 复用，而不是继续挂在 `epoll` 私有实现里。
+继续把 readiness-family runtime glue 从 `nextpas.core.net.server.epoll`
+收回到 foundation：
+
+- poll-driven worker completion bridge
+- poll-driven session context wrapper
+
+让 future `kqueue` 在接入时不需要复制这三层 glue。
 
 ## Checklist
 
 - [x] 重新检查 shared checkout / worktree 状态，只处理 `net.server` / `http` 相关路径
 - [x] 审阅 `nextpas.core.net.server.runtime`、`nextpas.core.net.server.epoll`、
       `test_net_server`、`test_http_server`
-- [x] 设计最小切口：只抽 readiness-family poll-session target/helper，
-      不碰 public HTTP facade，不预先发散到 `IOCP`
-- [x] 在 `nextpas.core.net.server.runtime.pas` 落地 foundation-owned
-      poll session target + create helper
-- [x] 让 `nextpas.core.net.server.epoll.pas` 改为消费 foundation helper
+- [x] 确认切口：不动 completion queue 存储本身，只抽 bridge/context glue
+- [x] 在 `nextpas.core.net.server.runtime.pas` 落地：
+  - `TTcpServerPollWorkerHandoff`
+  - `TTcpServerPollSessionContext`
+  - `TTcpServerPollQueuedCompletion`
+- [x] 让 `nextpas.core.net.server.epoll.pas` 改为消费 foundation bridge/context helper
 - [x] 跑 focused `test_net_server`
 - [x] 跑模块 gate `test_http_server`
 - [x] 更新文档与控制文件
-- [x] path-limited commit
+- [ ] path-limited commit
 
 ## Scope
 
@@ -37,6 +42,9 @@ readiness-family poll-driven session target 骨架，下沉到 foundation runtim
 
 ## Intended outcome
 
-- readiness-family driver 的最小公共骨架开始属于 foundation，而不是 `epoll` 私有代码
-- future `kqueue` 可以复用同一条 poll-session target/helper 起步
+- readiness-family foundation 继续成型，不再只有 poll-session target 被收口
+- future `kqueue` 至少可以直接复用：
+  - poll session target
+  - worker completion bridge
+  - session context wrapper
 - `HttpServer` 现有 threaded / epoll 契约保持不变，并有 focused tests + heaptrc 证据

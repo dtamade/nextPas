@@ -1,44 +1,47 @@
-# Findings: net.server readiness driver extraction step1
+# Findings: net.server readiness driver extraction step2
 
 ## Scope
 
-- 这轮不是继续扩 HTTP 语义覆盖。
-- 目标是把 readiness-family runtime driver 的最小公共骨架，从
-  `nextpas.core.net.server.epoll` 收回到 `nextpas.core.net.server.runtime`。
+- 这轮继续留在 `nextpas.core.net.server` foundation。
+- 目标是把 poll-driven worker completion bridge / session context wrapper
+  从 `epoll` backend 抽回 runtime helper。
 
 ## Confirmed truths
 
-### 1. 当前最适合先收口的是 readiness-family foundation，不是先空转 `IOCP`
+### 1. 上一轮只收了 target，还没收 bridge/context glue
 
-- `platform.io` 已经有 Linux `epoll` 与 BSD/macOS `kqueue` 的 poller 形态。
-- 现阶段真正重复风险最高的是：
-  - poll-driven session target
-  - current-events / wake-deadline bookkeeping
-  - runtime seam 检查与 nonblocking 切换
-- 所以先把这层收进 foundation，比先空造 Windows-only seam 更稳。
+- `TTcpServerPollSessionTarget` 已经进入 foundation。
+- 但 `epoll` 里仍保留：
+  - queued completion wrapper
+  - poll worker handoff wrapper
+  - poll session context wrapper
 
-### 2. `epoll` 原先仍保留一块 readiness driver 私有骨架
+### 2. 这三层本质上也是 readiness-family foundation，不是 Linux 专属
 
-- `TTcpEpollPollSessionTarget` 原先仍定义在 `nextpas.core.net.server.epoll.pas`。
-- 这会让 future `kqueue` 很容易复制一份同构状态壳，而不是复用 foundation helper。
+- 它们表达的是：
+  - worker completion 如何排队回 runtime
+  - reactor 如何被唤醒
+  - poll-driven session 如何看到 wrapped handoff
+- 这些语义 future `kqueue` 同样需要。
 
-### 3. 这轮下沉后，代码边界更符合已固定的架构文档
+### 3. 这轮下沉后，`epoll` 代码边界更干净
 
 - `nextpas.core.net.server.runtime.pas` 现在拥有：
-  - `TTcpServerPollSessionTarget`
-  - `TryCreateTcpServerPollSessionTarget`
-- `nextpas.core.net.server.epoll.pas` 只保留 backend-specific 的：
+  - `TTcpServerPollQueuedCompletion`
+  - `TTcpServerPollWorkerHandoff`
+  - `TTcpServerPollSessionContext`
+- `nextpas.core.net.server.epoll.pas` 继续只保留 backend-specific 的：
+  - pending completion queue 存储
+  - wake 调用
   - poller wait / add / modify / remove
-  - completion queue
-  - reactor wake
   - accept loop
 
-### 4. 现有 HTTP contract 没被改动
+### 4. 现有 HTTP / H1 契约仍保持稳定
 
-- 这轮没有改 `IHttpServer`、`IHttpHandler`、H1 parser/writer contract。
-- `test_http_server` 全绿证明：
-  - epoll backend 行为没回退
-  - H1 poll-driven request handoff / drain / deadline wake / bounded queue 语义保持不变
+- 这轮没有改 public HTTP API，也没有改 H1 行为语义。
+- focused tests 证明：
+  - epoll poll-driven wakeup 行为未回退
+  - H1 poll-driven request handoff / drain / deadline wake / bounded queue 仍成立
 
 ## Verification evidence
 
@@ -51,8 +54,8 @@
 
 ## Remaining gaps / risks
 
-- 这轮只抽出了 readiness-family poll-session target/helper，还没继续抽：
-  - completion queue/wake wrapper
-  - poll-driven session context wrapper
-- `kqueue` backend 还没落地到 `net.server`
+- readiness-family 还没继续抽：
+  - pending completion queue storage/driver helper
+  - poll target registry helper
+- `kqueue` backend 还没真正落地到 `net.server`
 - `IOCP` completion-aware driver 仍是后续 foundation 任务，不在本轮范围

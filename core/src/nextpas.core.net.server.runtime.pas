@@ -12,6 +12,15 @@ uses
   nextpas.core.time.deadline;
 
 type
+  TTcpServerPollSessionTarget = class;
+
+  TTcpServerPollCompletionEnqueueProc = procedure(
+    const ATarget: TTcpServerPollSessionTarget;
+    const ACompletion: ITcpServerWorkCompletion;
+    const AOutcome: TTcpServerWorkOutcome;
+    const AOwnership: TTcpServerConnOwnership) of object;
+  TTcpServerPollWakeProc = procedure of object;
+
   TTcpServerPollSessionTarget = class
   private
     FConn: ITcpStream;
@@ -35,6 +44,36 @@ type
     function HandleEvents(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
+
+  TTcpServerPollWorkerHandoff = class(TInterfacedObject,
+    ITcpServerWorkerHandoff)
+  private
+    FBaseHandoff: ITcpServerWorkerHandoff;
+    FTarget: TTcpServerPollSessionTarget;
+    FEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+    FWake: TTcpServerPollWakeProc;
+  public
+    constructor Create(const ABaseHandoff: ITcpServerWorkerHandoff;
+      const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+      const AWake: TTcpServerPollWakeProc);
+    procedure BindTarget(const ATarget: TTcpServerPollSessionTarget);
+    function Submit(const AWork: ITcpServerWork;
+      const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
+    procedure Shutdown;
+  end;
+
+  TTcpServerPollSessionContext = class(TInterfacedObject,
+    ITcpServerSessionContext)
+  private
+    FWorkerHandoffRef: ITcpServerWorkerHandoff;
+    FWorkerHandoff: TTcpServerPollWorkerHandoff;
+  public
+    constructor Create(const ABaseHandoff: ITcpServerWorkerHandoff;
+      const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+      const AWake: TTcpServerPollWakeProc);
+    procedure BindTarget(const ATarget: TTcpServerPollSessionTarget);
+    function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
 procedure CreateTcpServerRuntimeContext(
@@ -92,6 +131,22 @@ type
   public
     constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
     function WorkerHandoff: ITcpServerWorkerHandoff;
+  end;
+
+  TTcpServerPollQueuedCompletion = class(TInterfacedObject,
+    ITcpServerWorkCompletion)
+  private
+    FTarget: TTcpServerPollSessionTarget;
+    FInner: ITcpServerWorkCompletion;
+    FEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+    FWake: TTcpServerPollWakeProc;
+  public
+    constructor Create(const ATarget: TTcpServerPollSessionTarget;
+      const AInner: ITcpServerWorkCompletion;
+      const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+      const AWake: TTcpServerPollWakeProc);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
   end;
 
 constructor TTcpServerPollSessionTarget.Create(const AConn: ITcpStream;
@@ -153,6 +208,93 @@ function TTcpServerPollSessionTarget.HandleEvents(
 begin
   Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
   RefreshWakeDeadline;
+end;
+
+constructor TTcpServerPollQueuedCompletion.Create(
+  const ATarget: TTcpServerPollSessionTarget;
+  const AInner: ITcpServerWorkCompletion;
+  const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+  const AWake: TTcpServerPollWakeProc);
+begin
+  inherited Create;
+  FTarget := ATarget;
+  FInner := AInner;
+  FEnqueueCompletion := AEnqueueCompletion;
+  FWake := AWake;
+end;
+
+procedure TTcpServerPollQueuedCompletion.Complete(
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  if Assigned(FEnqueueCompletion) then
+  begin
+    FEnqueueCompletion(FTarget, FInner, AOutcome, AOwnership);
+    if Assigned(FWake) then
+      FWake();
+  end
+  else if FInner <> nil then
+    FInner.Complete(AOutcome, AOwnership);
+  FInner := nil;
+  FTarget := nil;
+end;
+
+constructor TTcpServerPollWorkerHandoff.Create(
+  const ABaseHandoff: ITcpServerWorkerHandoff;
+  const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+  const AWake: TTcpServerPollWakeProc);
+begin
+  inherited Create;
+  FBaseHandoff := ABaseHandoff;
+  FTarget := nil;
+  FEnqueueCompletion := AEnqueueCompletion;
+  FWake := AWake;
+end;
+
+procedure TTcpServerPollWorkerHandoff.BindTarget(
+  const ATarget: TTcpServerPollSessionTarget);
+begin
+  FTarget := ATarget;
+end;
+
+function TTcpServerPollWorkerHandoff.Submit(const AWork: ITcpServerWork;
+  const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
+var
+  LCompletion: ITcpServerWorkCompletion;
+begin
+  if (FTarget <> nil) and Assigned(FEnqueueCompletion) then
+    LCompletion := TTcpServerPollQueuedCompletion.Create(FTarget, ACompletion,
+      FEnqueueCompletion, FWake)
+  else
+    LCompletion := ACompletion;
+  Result := FBaseHandoff.Submit(AWork, LCompletion);
+end;
+
+procedure TTcpServerPollWorkerHandoff.Shutdown;
+begin
+  FBaseHandoff.Shutdown;
+end;
+
+constructor TTcpServerPollSessionContext.Create(
+  const ABaseHandoff: ITcpServerWorkerHandoff;
+  const AEnqueueCompletion: TTcpServerPollCompletionEnqueueProc;
+  const AWake: TTcpServerPollWakeProc);
+begin
+  inherited Create;
+  FWorkerHandoff := TTcpServerPollWorkerHandoff.Create(ABaseHandoff,
+    AEnqueueCompletion, AWake);
+  FWorkerHandoffRef := FWorkerHandoff;
+end;
+
+procedure TTcpServerPollSessionContext.BindTarget(
+  const ATarget: TTcpServerPollSessionTarget);
+begin
+  FWorkerHandoff.BindTarget(ATarget);
+end;
+
+function TTcpServerPollSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
+begin
+  Result := FWorkerHandoffRef;
 end;
 
 constructor TTcpServerWorkTask.Create(const AWork: ITcpServerWork;
