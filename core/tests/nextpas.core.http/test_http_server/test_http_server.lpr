@@ -154,8 +154,11 @@ type
     FTryWriteCalls: Int32;
     FWriteDeadlineCalls: Int32;
     FLastWriteDeadline: TDeadline;
+    FBytesBeforeWouldBlock: SizeUInt;
+    FWrittenBeforeWouldBlock: SizeUInt;
   public
-    constructor Create(const AInput: string);
+    constructor Create(const AInput: string;
+      const ABytesBeforeWouldBlock: SizeUInt = 0);
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -548,7 +551,8 @@ begin
   Result := tsiorOk;
 end;
 
-constructor TTimedDrainRuntimeTcpStream.Create(const AInput: string);
+constructor TTimedDrainRuntimeTcpStream.Create(const AInput: string;
+  const ABytesBeforeWouldBlock: SizeUInt);
 begin
   inherited Create;
   FInput := AInput;
@@ -560,6 +564,8 @@ begin
   FTryWriteCalls := 0;
   FWriteDeadlineCalls := 0;
   FLastWriteDeadline := TDeadline.Infinite;
+  FBytesBeforeWouldBlock := ABytesBeforeWouldBlock;
+  FWrittenBeforeWouldBlock := 0;
 end;
 
 function TTimedDrainRuntimeTcpStream.Read(var ABuf;
@@ -664,10 +670,35 @@ end;
 
 function TTimedDrainRuntimeTcpStream.TryWrite(const ABuf;
   const ACount: SizeUInt; out AWritten: SizeUInt): TTcpStreamIOResult;
+var
+  LRemaining: SizeUInt;
+  LOldLen: SizeUInt;
 begin
   Inc(FTryWriteCalls);
-  AWritten := 0;
-  Result := tsiorWouldBlock;
+  if FBytesBeforeWouldBlock = 0 then
+  begin
+    AWritten := 0;
+    Exit(tsiorWouldBlock);
+  end;
+
+  if FWrittenBeforeWouldBlock >= FBytesBeforeWouldBlock then
+  begin
+    AWritten := 0;
+    Exit(tsiorWouldBlock);
+  end;
+
+  LRemaining := FBytesBeforeWouldBlock - FWrittenBeforeWouldBlock;
+  AWritten := ACount;
+  if AWritten > LRemaining then
+    AWritten := LRemaining;
+  if AWritten > 0 then
+  begin
+    LOldLen := SizeUInt(Length(FOutput));
+    SetLength(FOutput, LOldLen + AWritten);
+    Move(ABuf, FOutput[LOldLen + 1], AWritten);
+    Inc(FWrittenBeforeWouldBlock, AWritten);
+  end;
+  Result := tsiorOk;
 end;
 
 constructor TZeroProgressTcpStream.Create(const AInput: string);
@@ -1805,6 +1836,117 @@ begin
     'deadline wake closes without extra write retry');
 end;
 
+procedure TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TTimedDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+  LFirstPath: string;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /two HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10;
+  BODY = 'ok';
+  FIRST_WRITE_BYTES = 32;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for partial timed drain test');
+
+  LStreamObj := TTimedDrainRuntimeTcpStream.Create(REQ, FIRST_WRITE_BYTES);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LFirstPath := '';
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+      if LHandlerCalls = 1 then
+        LFirstPath := AReq.Url.Path;
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(BODY[1], SizeUInt(Length(BODY)));
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for partial timed drain test');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    'partial timed drain session exposes deadline seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'first readable advance stays active while partial timed request work completes');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'partial timed request is handed off once');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'partial timed handler runs once for first request');
+  CheckEqual('/one', LFirstPath, 'partial timed test handles only first request path');
+  Check(LNextEvents = [], 'partial timed request handoff waits on completion wake');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'completion wake begins partial timed reactor-owned drain');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    'completion wake attempts first partial timed drain write');
+  CheckEqual(Int64(FIRST_WRITE_BYTES), Int64(Length(LStreamObj.Output)),
+    'partial timed drain preserves first already-written bytes');
+  CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
+    'partial timed drain emits only the first response status line');
+  Check(LNextEvents = [peWritable],
+    'partial timed drain still waits on writable after first partial write');
+  Check(not LDeadlineSession.WakeDeadline.IsInfinite,
+    'partial timed drain exposes finite wake deadline after partial write');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'writable wake before deadline keeps partial timed drain waiting');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    'writable wake retries partial timed drain exactly once before timeout');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'partial timed drain does not hand off buffered follow-up request');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'partial timed drain keeps buffered follow-up unsubmitted');
+  Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
+    'partial timed drain does not append synthetic 500 while stalled');
+
+  platform_thread_sleep_ns(50000000);
+  Check(LDeadlineSession.WakeDeadline.IsExpired,
+    'partial timed drain deadline eventually expires after partial write');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    'deadline wake closes partial timed drain with buffered follow-up');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)),
+    'partial timed drain keeps server ownership on timeout close');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    'deadline wake closes partial timed drain without extra write retry');
+  CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
+    'timeout close still leaves only one response status line on wire');
+end;
+
 procedure TestH1PollDrivenSessionQueuesBoundedResponsesWhileDraining;
 var
   LHttpOpts: THttpServerOptions;
@@ -2062,7 +2204,7 @@ const
   SEND_BUFFER_BYTES = 1024;
   BACKPRESSURE_WAIT_NS = 500000000;
   { Real TCP buffering can outlive the 50ms deadline; this window only proves eventual safe-close. }
-  CLOSE_WAIT_MS = 2000;
+  CLOSE_WAIT_MS = 5000;
   BODY_CHUNK_LEN = 8192;
   BODY_CHUNK_COUNT = 2048; { 16 MiB total payload intent }
   PIPELINED_REQ =
@@ -2192,7 +2334,7 @@ const
   RECV_BUFFER_BYTES = 1024;
   SEND_BUFFER_BYTES = 1024;
   BACKPRESSURE_WAIT_NS = 500000000;
-  CLOSE_WAIT_MS = 2000;
+  CLOSE_WAIT_MS = 5000;
   BODY_CHUNK_LEN = 8192;
   BODY_CHUNK_COUNT = 2048;
   PIPELINED_REQ =
@@ -7123,6 +7265,8 @@ begin
     @TestH1PollDrivenSessionDrainsResponseViaWritableEvents);
   T.Run('H1 poll-driven session times out stalled drain on deadline wake',
     @TestH1PollDrivenSessionTimesOutStalledDrainOnDeadlineWake);
+  T.Run('H1 poll-driven session partial timed drain stops buffered follow-up',
+    @TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp);
   T.Run('H1 poll-driven session queues bounded responses while draining',
     @TestH1PollDrivenSessionQueuesBoundedResponsesWhileDraining);
   T.Run('Session stops after zero-progress response write failure',
