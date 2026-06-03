@@ -8,6 +8,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.server.base,
   nextpas.core.http.base;
 
 type
@@ -133,7 +134,8 @@ type
 
   IHttpServerTransport = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000B}']
-    procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
   end;
 
 implementation

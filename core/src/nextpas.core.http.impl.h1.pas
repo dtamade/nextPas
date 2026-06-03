@@ -12,6 +12,7 @@ interface
 uses
   nextpas.core.io.intf,
   nextpas.core.net.intf,
+  nextpas.core.net.server.base,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
@@ -98,7 +99,8 @@ type
     function HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler): Boolean;
   public
     constructor Create(const AOptions: TH1ServerTransportOptions);
-    procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
   end;
 
   // Connection state stays protocol-owned so future runtimes can drive
@@ -649,21 +651,13 @@ begin
   end;
 end;
 
-procedure TH1ServerTransport.ServeConn(const AConn: ITcpStream;
-  const AHandler: IHttpHandler);
-var
-  LServerOwnsConn: Boolean;
+function TH1ServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
 begin
-  LServerOwnsConn := True;
-  try
-    LServerOwnsConn := HandleConnection(AConn, AHandler);
-  finally
-    if LServerOwnsConn then
-    begin
-      AConn.Shutdown;
-      AConn.Close;
-    end;
-  end;
+  if HandleConnection(AConn, AHandler) then
+    Result := tscoServer
+  else
+    Result := tscoHandler;
 end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;

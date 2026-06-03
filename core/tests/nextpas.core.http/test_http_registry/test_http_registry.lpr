@@ -9,6 +9,7 @@ uses
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.server,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -43,7 +44,8 @@ type
   private
     FServeConnCalled: Boolean;
   public
-    procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
     property ServeConnCalled: Boolean read FServeConnCalled;
   end;
 
@@ -123,8 +125,8 @@ begin
   Result := THttpResponse.Create(HTTP_STATUS_OK, LHeaders, nil);
 end;
 
-procedure TMockServerTransport.ServeConn(const AConn: ITcpStream;
-  const AHandler: IHttpHandler);
+function TMockServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
 var
   LReq: IHttpRequest;
 begin
@@ -135,6 +137,7 @@ begin
       hvHttp11, NewHttpHeaders, nil, 0);
     AHandler.ServeHTTP(LReq, nil);
   end;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
 end;
 
 procedure RestoreClientFactory(const AFactory: THttpClientTransportFactory;

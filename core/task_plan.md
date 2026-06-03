@@ -1,15 +1,18 @@
-# Task Plan: HTTP server runtime foundation planning
+# Task Plan: HTTP server runtime foundation implementation batch 1
 
 ## Goal
 
-把 HTTP server runtime 的方向冻结到仓库文档里，明确后续从
-`nextpas.core.net.server` 通用基座推进，而不是继续让 `http.server`
-私有化线程/事件模型。
+按已冻结的 runtime 方案落地第一实现批：
+
+- 新增 `nextpas.core.net.server` 通用 skeleton
+- 先提供 threaded backend
+- 让 `nextpas.core.http.server` 迁移到通用 foundation
+- 补齐 hijack / detached connection 的 ownership seam
 
 ## Checklist
 
-- [x] 确认共享 checkout 里无关 dirty/untracked 文件范围，本轮只处理 HTTP 相关路径。
-- [x] 研究 Go / Tokio-Hyper / libuv 的主流 server/runtime 范式并做选型。
-- [x] 结合当前 `http/net/io` 源码现状做可行性判断。
-- [x] 把固定架构方案与分阶段计划落到仓库文档。
-- [x] path-limited commit。
+- [x] 新增 `nextpas.core.net.server.base` / `intf` / `threaded` / facade。
+- [x] 让 `THttpServer` 改为组合 `ITcpServer`，不再私有 accept/thread loop。
+- [x] 先用 focused RED 锁定 detached connection 语义。
+- [x] 修复 foundation 与 HTTP transport 间的 ownership 交接。
+- [x] 运行 changed-surface focused tests，并确认 heaptrc 无泄漏。

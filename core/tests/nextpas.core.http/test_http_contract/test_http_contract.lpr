@@ -13,6 +13,7 @@ uses
   nextpas.core.io.intf,
   nextpas.core.net,
   nextpas.core.net.intf,
+  nextpas.core.net.server,
   nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.middleware,
@@ -49,7 +50,8 @@ type
   private
     FServeConnCalled: Boolean;
   public
-    procedure ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
     property ServeConnCalled: Boolean read FServeConnCalled;
   end;
 
@@ -133,11 +135,13 @@ end;
 
 { TMockServerTransport }
 
-procedure TMockServerTransport.ServeConn(const AConn: ITcpStream; const AHandler: IHttpHandler);
+function TMockServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
 begin
   FServeConnCalled := True;
   if AHandler <> nil then
     AHandler.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/transport')), nil);
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
 end;
 
 { TMethodHandlerTarget }
@@ -588,6 +592,7 @@ var
   LTransport: IHttpServerTransport;
   LHandler: IHttpHandler;
   LHandlerCalled: Boolean;
+  LOwnership: TTcpServerConnOwnership;
 begin
   LObj := TMockServerTransport.Create;
   LTransport := LObj;
@@ -598,9 +603,11 @@ begin
     Check(AReq.Method = hmGet, 'ServeConn passes request method');
     CheckEqual('/transport', AReq.Url.Path, 'ServeConn passes request path');
   end);
-  LTransport.ServeConn(nil, LHandler);
+  LOwnership := LTransport.ServeConn(nil, LHandler);
   Check(LObj.ServeConnCalled, 'ServeConn was called');
   Check(LHandlerCalled, 'ServeConn can dispatch handler');
+  Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER,
+    'ServeConn returns server ownership when handler does not detach');
 end;
 
 { Test 21: IHttpHijacker is exported by facade }

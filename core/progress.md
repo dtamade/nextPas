@@ -1,19 +1,28 @@
-# Progress Log: HTTP server runtime foundation planning
+# Progress Log: HTTP server runtime foundation implementation batch 1
 
 ## Session
 
-- **Scope:** freeze the server runtime direction before the next implementation batch.
+- **Scope:** 落地 `nextpas.core.net.server` 第一批实现，并完成 HTTP server 迁移。
 - **Status:** completed
 
 ## Notes
 
-- 本轮没有生产代码改动，只有设计冻结与固定计划文档。
-- 正式设计文档：
-  - `docs/plans/2026-06-03-http-server-runtime-foundation.md`
-- 选型结论：
-  - public surface 学 Go
-  - internal layering 学 Tokio/Hyper
-  - backend policy 学 libuv
-  - foundation owner 定为 `nextpas.core.net.server`
-- 下一实现批次不再继续让 `http.server` 私有化 runtime，而是先落
-  `nextpas.core.net.server` skeleton + threaded backend。
+- 新增 `nextpas.core.net.server` skeleton 与 threaded backend。
+- `THttpServer` 现在通过 `ITcpServer` 运行；HTTP transport 不再私有 accept loop。
+- 补上 detached / hijack ownership seam，修复 handler 接管连接后仍被 runtime
+  自动关闭的回归。
+- focused coverage 现在包含：
+  - `test_net_server` 的 detached connection proof
+  - `test_http_contract` 的 `IHttpServerTransport.ServeConn` ownership shape
+  - `test_http_server` 的 hijack ownership regression
+  - `test_http_websocket` 的 coalesced first-frame hijack proof
+
+## Fresh verification
+
+- `make -C tests/nextpas.core.net.server/test_net_server clean test`
+- `make -C tests/nextpas.core.http/test_http_contract clean test`
+- `make -C tests/nextpas.core.http/test_http_registry clean test`
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+- `make -C tests/nextpas.core.http/test_http_websocket clean test`
+
+- 上述命令均通过，且 heaptrc 均为 `0 unfreed memory blocks`。

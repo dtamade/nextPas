@@ -1,7 +1,8 @@
 unit nextpas.core.http.server;
 {**
- * @desc Thread-per-connection HTTP/1.1 server with keep-alive support.
- *       Loops on each connection handling multiple requests until close.
+ * @desc HTTP server facade built on the shared TCP server foundation.
+ *       Keeps the public HTTP contract stable while runtime ownership lives
+ *       under nextpas.core.net.server.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -11,6 +12,7 @@ interface
 uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.server,
   nextpas.core.http.base,
   nextpas.core.http.intf;
 
@@ -22,8 +24,8 @@ type
     FHandler: IHttpHandler;
     FOptions: THttpServerOptions;
     FTransport: IHttpServerTransport;
-    FRunning: Boolean;
-    FListener: ITcpListener;
+    FTcpServer: ITcpServer;
+    FConnHandler: ITcpServerHandler;
   public
     constructor Create(const AHandler: IHttpHandler;
       const AOptions: THttpServerOptions); overload;
@@ -48,32 +50,30 @@ function NewHttpServer(const AHandler: IHttpHandler;
 implementation
 
 uses
-  nextpas.core.net.tcp,
-  nextpas.core.http.impl.registry,
-  nextpas.core.platform.thread;
+  nextpas.core.http.impl.registry;
 
 type
-  PConnContext = ^TConnContext;
-  TConnContext = record
-    Conn: ITcpStream;
-    Handler: IHttpHandler;
+  THttpConnHandler = class(TInterfacedObject, ITcpServerHandler)
+  private
     Transport: IHttpServerTransport;
+    Handler: IHttpHandler;
+  public
+    constructor Create(const ATransport: IHttpServerTransport;
+      const AHandler: IHttpHandler);
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
   end;
 
-function ConnThreadFunc(AArg: Pointer): Pointer; cdecl;
-var
-  LCtx: PConnContext;
+constructor THttpConnHandler.Create(const ATransport: IHttpServerTransport;
+  const AHandler: IHttpHandler);
 begin
-  Result := nil;
-  LCtx := PConnContext(AArg);
-  try
-    LCtx^.Transport.ServeConn(LCtx^.Conn, LCtx^.Handler);
-  finally
-    LCtx^.Conn := nil;
-    LCtx^.Handler := nil;
-    LCtx^.Transport := nil;
-    Dispose(LCtx);
-  end;
+  inherited Create;
+  Transport := ATransport;
+  Handler := AHandler;
+end;
+
+function THttpConnHandler.ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  Result := Transport.ServeConn(AConn, Handler);
 end;
 
 { THttpServer }
@@ -94,88 +94,39 @@ begin
     FTransport := ATransport
   else
     FTransport := ResolveDefaultServerTransport(AOptions);
-  FRunning := False;
-  FListener := nil;
+  FTcpServer := NewTcpServer;
+  FConnHandler := THttpConnHandler.Create(FTransport, FHandler);
 end;
 
 destructor THttpServer.Destroy;
 begin
-  if FRunning then
+  if IsRunning then
     Shutdown;
+  FConnHandler := nil;
+  FTcpServer := nil;
   FTransport := nil;
   FHandler := nil;
-  FListener := nil;
   inherited;
 end;
 
 procedure THttpServer.ListenAndServe(const AAddr: string; const APort: UInt16);
-var
-  LConn: ITcpStream;
-  LCtx: PConnContext;
-  LHandle: TPlatformThreadHandle;
 begin
-  FListener := NetTcpListen(AAddr, APort);
-  FRunning := True;
-  while FRunning do
-  begin
-    try
-      LConn := FListener.Accept;
-    except
-      { Accept fails when listener is closed during Shutdown }
-      Break;
-    end;
-    if (LConn = nil) or (not FRunning) then
-      Break;
-    New(LCtx);
-    LCtx^.Conn := LConn;
-    LCtx^.Handler := FHandler;
-    LCtx^.Transport := FTransport;
-    if platform_thread_create(LHandle, @ConnThreadFunc, LCtx) = 0 then
-      platform_thread_detach(LHandle)
-    else
-    begin
-      { Thread creation failed — handle inline }
-      try
-        FTransport.ServeConn(LConn, FHandler);
-      finally
-        Dispose(LCtx);
-      end;
-    end;
-  end;
+  FTcpServer.ListenAndServe(AAddr, APort, FConnHandler);
 end;
 
 procedure THttpServer.Shutdown;
-var
-  LAddr: TNetAddress;
-  LWake: ITcpStream;
 begin
-  FRunning := False;
-  if FListener <> nil then
-  begin
-    { Connect to self to unblock Accept() — closing the listener socket
-      does not reliably unblock accept() on Linux }
-    LAddr := FListener.LocalAddr;
-    try
-      LWake := NetTcpConnect(LAddr.IP, LAddr.Port);
-      LWake.Close;
-    except
-      { Ignore — listener may already be closed }
-    end;
-    FListener.Close;
-  end;
+  FTcpServer.Shutdown;
 end;
 
 function THttpServer.LocalAddr: TNetAddress;
 begin
-  if FListener <> nil then
-    Result := FListener.LocalAddr
-  else
-    Result := TNetAddress.Any(0);
+  Result := FTcpServer.LocalAddr;
 end;
 
 function THttpServer.IsRunning: Boolean;
 begin
-  Result := FRunning;
+  Result := FTcpServer.IsRunning;
 end;
 
 { Factory functions }
