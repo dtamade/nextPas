@@ -1,5 +1,26 @@
 # Progress Log
 
+## Session: 2026-06-03 C5-M object-backed field-array value loads
+
+- **Status:** completed, pending path-limited commit.
+- Branch and safety state:
+  - Branch: `main`.
+  - Unrelated dirty work remains in `.claude/`, `.worktrees/`, and `core/`; do not stage or edit it.
+  - Colleague lane remains off-limits: compiler/toolchain, compiler/targets, tools/stage0, tests/toolchain, build target/toolchain/profile files, and `build/verify_local.sh`.
+- Current decision:
+  - Keep builder unchanged for this slice; generalize the sema seam instead.
+  - Replace self-only field-array recognition with a shared object-backed recognizer that still lets self/current-class wrappers stay honest.
+  - Cover both local assign and `Result` assign so this round does not stop at one syntactic path.
+- Evidence:
+  - First RED: `test_semantic_hir_expr_producer` failed with `exit=83`, proving `Result := Other.FItems[i]` emitted no `assign-runtime` node at all.
+  - Root cause: `TryCurrentClassFieldArrayAccess`, `BuildClassFieldArrayElementTargetExpr`, `ResolveArrayAccessElementTypeId`, and `EncodeRuntimeIntExprFold` only recognized implicit/self field arrays, so object-backed field arrays missed both legacy blob encoding and structured address-backed `ExprId`.
+  - GREEN producer coverage now includes direct/nested + local/result object-backed field-array value loads; `test_semantic_hir_expr_producer` exits `0`.
+  - GREEN builder guard: `test_hir_builder_structured_address` exits `0`, confirming existing address/value lowering still holds after the sema generalization.
+  - Full rebuild: `bash scripts/rebuild-compiler.sh` -> `44145 lines compiled`, exit `0`.
+  - Full LLVM smoke: `smoke_total=137 passed=137 failed=0 build_failed=0 run_failed=0`.
+- Next immediate step:
+  - Path-limited commit, then continue remaining `WalkHaltCalls` class/object RHS special branches: constructor-like RHS, raw object-dot RHS, and pointer-return helper assignments that still bypass the structured attach helpers.
+
 ## Session: 2026-06-03 C5-L array-backed value loads
 
 - **Status:** completed, pending path-limited commit.

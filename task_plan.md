@@ -1,5 +1,37 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-03 C5-M object-backed field-array value loads
+
+### Goal
+
+在 C5-L 已经把 `FItems[i]` / `Self.FItems[i].A.B` 这类 current-class value-side
+接上之后，把 object-backed 对称面补齐：`Other.FItems[i]`、
+`Other.FItems[i].A.B`，并同时覆盖 local assign 与 `Result` assign。
+这轮仍然不改 builder，只让 sema 对 object receiver 的 field-array 识别
+同时服务 legacy blob 与 structured `ExprId`。
+
+### Checklist
+
+- [x] 确认当前 `main` 与 dirty 边界：本轮不碰 `.claude/`、`.worktrees/`、`core/` 或并行 toolchain/targets/stage0 lane。
+- [x] 重读 `compiler/docs/compiler-goal-tree.md`、`core/docs/design-conventions.md`、`docs/inbox.md`、memory 与根计划文件。
+- [x] 写 RED：`Result := Other.FItems[i]`，确认 producer 因缺 `assign-runtime` 节点而失败（`exit=83`）。
+- [x] 扩 focused coverage：补 direct/nested + local/result 四条 object-backed field-array value load producer 用例。
+- [x] 在 sema 引入共享的 object-backed field-array 识别，并让 `BuildClassFieldArrayElementTargetExpr`、`ResolveArrayAccessElementTypeId`、`EncodeRuntimeIntExprFold` 复用。
+- [x] 保持 builder 不改，只验证 address/value lowering 现有合同没有被带偏。
+- [x] 跑 changed tests、完整重编译、137 LLVM smoke。
+- [x] 更新 `compiler/docs/compiler-goal-tree.md`、`docs/inbox.md`、计划/进度文件，并准备 path-limited commit。
+
+### Constraints
+
+- 只改本轮需要的 `compiler/sema`、`compiler/tests` 与状态文档。
+- 不碰同事并行 lane：toolchain、targets、stage0、build/toolchain/target/profile、`build/verify_local.sh`。
+- `ExprId` 只表示 RHS/value；`TargetExprId` 只表示 LHS/address，不混用。
+- 结构化表达式和旧 blob 双轨必须保留；不能靠“只有 structured path”偷过当前 slice。
+- 改编译器后必须跑 `scripts/rebuild-compiler.sh`，确认 `40000+ lines compiled`。
+- 全量 LLVM smoke 仍以 `examples/smoke/llvm_*.pas` 为准，全部 exit code 必须为 `42`。
+
+### Previous Session: 2026-06-03 C5-L array-backed value loads
+
 ## Active Session: 2026-06-03 C5-L array-backed value loads
 
 ### Goal

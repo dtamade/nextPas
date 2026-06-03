@@ -355,6 +355,8 @@ type
       out AExprId: LongInt): Boolean;
     function BuildClassFieldTargetExpr(const ABaseName, AClassName,
       AFieldName: string; out AExprId: LongInt): Boolean;
+    function TryClassFieldArrayAccess(const AArrayAccessNode: TGreenNode;
+      out ABaseName, AClassName, AFieldName: string): Boolean;
     function TryCurrentClassFieldArrayAccess(
       const AArrayAccessNode: TGreenNode; out AFieldName: string): Boolean;
     function BuildClassFieldArrayElementTargetExpr(
@@ -6326,7 +6328,7 @@ function TSemanticAnalyzer.EncodeRuntimeIntExprFold(
 
 var
   Folded: Int64;
-  FuncName, ArgName: string;
+  BaseName, OwnerClassName, FieldName, FuncName, ArgName: string;
   StrCallIdx, StrCallArgCount, K, ArgIndex, DotPos: LongInt;
   BranchNode, DeclNode, RhsNode: TGreenNode;
   Operand: string;
@@ -6981,20 +6983,20 @@ begin
   if (ANode.NodeKind = gnkDotAccess) and (ANode.ChildCount >= 2) and
     (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkArrayAccess) and
     (ANode.ChildAt(1) <> nil) and (ANode.ChildAt(1).NodeKind = gnkIdentifier) and
-    (FCurrentMethodClass <> '') and
-    TryCurrentClassFieldArrayAccess(ANode.ChildAt(0), FuncName) and
+    TryClassFieldArrayAccess(ANode.ChildAt(0), BaseName, OwnerClassName,
+      FieldName) and
     FModel.LookupStringConstValue(
-      FCurrentMethodClass + '.' + FuncName + '$arr_elem_type', ArgName) then
+      OwnerClassName + '.' + FieldName + '$arr_elem_type', ArgName) then
   begin
     Folded := TypeMetaFieldIndex(ArgName, ANode.ChildAt(1).Text);
     if (Folded >= 0) and
       EncodeRuntimeIntExprFold(ANode.ChildAt(0).ChildAt(1), Operand) then
     begin
-      StrCallIdx := TypeMetaFieldIndex(FCurrentMethodClass, FuncName);
+      StrCallIdx := TypeMetaFieldIndex(OwnerClassName, FieldName);
       if StrCallIdx < 0 then
         Exit(False);
-      ABlob := 'field self ' + IntToStr(StrCallIdx) + ' p' + #10 +
-        Operand;
+      ABlob := 'field ' + BaseName + ' ' + IntToStr(StrCallIdx) +
+        ' p' + #10 + Operand;
       StrCallIdx := 1;
       if TypeMetaIsRecord(ArgName) then
       begin
@@ -7246,29 +7248,13 @@ begin
     end;
   end;
   if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
-    (ANode.ChildAt(0) <> nil) and (ANode.ChildAt(0).NodeKind = gnkIdentifier) and
-    (FCurrentMethodClass <> '') and
-    (not IsRuntimeArrVar(ANode.ChildAt(0).Text)) and
-    (not IsRuntimeStrVar(ANode.ChildAt(0).Text)) and
-    (TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text) >= 0) then
+    TryClassFieldArrayAccess(ANode, BaseName, OwnerClassName, FieldName) then
   begin
     if EncodeRuntimeIntExprFold(ANode.ChildAt(1), FuncName) then
     begin
-      Folded := TypeMetaFieldIndex(FCurrentMethodClass, ANode.ChildAt(0).Text);
-      ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
+      Folded := TypeMetaFieldIndex(OwnerClassName, FieldName);
+      ABlob := 'field ' + BaseName + ' ' + IntToStr(Folded) + ' p' + #10 +
         FuncName + 'arr_load' + #10;
-      Exit(True);
-    end;
-  end;
-  if (ANode.NodeKind = gnkArrayAccess) and (ANode.ChildCount >= 2) and
-    (FCurrentMethodClass <> '') and
-    TryCurrentClassFieldArrayAccess(ANode, FuncName) then
-  begin
-    if EncodeRuntimeIntExprFold(ANode.ChildAt(1), ArgName) then
-    begin
-      Folded := TypeMetaFieldIndex(FCurrentMethodClass, FuncName);
-      ABlob := 'field self ' + IntToStr(Folded) + ' p' + #10 +
-        ArgName + 'arr_load' + #10;
       Exit(True);
     end;
   end;
@@ -7491,33 +7477,75 @@ end;
 function TSemanticAnalyzer.TryCurrentClassFieldArrayAccess(
   const AArrayAccessNode: TGreenNode; out AFieldName: string): Boolean;
 var
-  BaseNode, FieldNode: TGreenNode;
+  BaseName, OwnerClassName: string;
 begin
+  Result := TryClassFieldArrayAccess(AArrayAccessNode, BaseName, OwnerClassName,
+    AFieldName) and SameText(BaseName, 'self') and
+    SameText(OwnerClassName, FCurrentMethodClass);
+end;
+
+function TSemanticAnalyzer.TryClassFieldArrayAccess(
+  const AArrayAccessNode: TGreenNode; out ABaseName, AClassName,
+  AFieldName: string): Boolean;
+var
+  BaseNode, FieldNode, ReceiverNode: TGreenNode;
+begin
+  ABaseName := '';
+  AClassName := '';
   AFieldName := '';
   if (AArrayAccessNode = nil) or
     (AArrayAccessNode.NodeKind <> gnkArrayAccess) or
     (AArrayAccessNode.ChildCount < 2) or
-    (AArrayAccessNode.ChildAt(0) = nil) or
-    (FCurrentMethodClass = '') then
+    (AArrayAccessNode.ChildAt(0) = nil) then
     Exit(False);
 
   BaseNode := AArrayAccessNode.ChildAt(0);
-  if BaseNode.NodeKind = gnkIdentifier then
-    AFieldName := BaseNode.Text
+  if (BaseNode.NodeKind = gnkIdentifier) and (FCurrentMethodClass <> '') then
+  begin
+    AFieldName := BaseNode.Text;
+    if (AFieldName <> '') and
+      (not IsRuntimeArrVar(AFieldName)) and
+      (not IsRuntimeStrVar(AFieldName)) and
+      (TypeMetaFieldIndex(FCurrentMethodClass, AFieldName) >= 0) then
+    begin
+      ABaseName := 'self';
+      AClassName := FCurrentMethodClass;
+    end
+    else
+      AFieldName := '';
+  end
   else if (BaseNode.NodeKind = gnkDotAccess) and
     (BaseNode.ChildCount >= 2) and
     (BaseNode.ChildAt(0) <> nil) and
     (BaseNode.ChildAt(1) <> nil) and
     (BaseNode.ChildAt(0).NodeKind = gnkIdentifier) and
-    (BaseNode.ChildAt(1).NodeKind = gnkIdentifier) and
-    SameText(BaseNode.ChildAt(0).Text, 'Self') then
+    (BaseNode.ChildAt(1).NodeKind = gnkIdentifier) then
   begin
+    ReceiverNode := BaseNode.ChildAt(0);
     FieldNode := BaseNode.ChildAt(1);
     AFieldName := FieldNode.Text;
+    if SameText(ReceiverNode.Text, 'Self') and (FCurrentMethodClass <> '') and
+      (TypeMetaFieldIndex(FCurrentMethodClass, AFieldName) >= 0) then
+    begin
+      ABaseName := 'self';
+      AClassName := FCurrentMethodClass;
+    end
+    else
+    begin
+      AClassName := LookupClassVar(ReceiverNode.Text);
+      if (AClassName <> '') and
+        (TypeMetaFieldIndex(AClassName, AFieldName) >= 0) then
+        ABaseName := ReceiverNode.Text
+      else
+      begin
+        AClassName := '';
+        AFieldName := '';
+      end;
+    end;
   end;
 
-  Result := (AFieldName <> '') and (not IsRuntimeArrVar(AFieldName)) and
-    (TypeMetaFieldIndex(FCurrentMethodClass, AFieldName) >= 0);
+  Result := (ABaseName <> '') and (AClassName <> '') and
+    (AFieldName <> '');
 end;
 
 function TSemanticAnalyzer.BuildClassFieldArrayElementTargetExpr(
@@ -7526,22 +7554,24 @@ var
   Children: array of LongInt;
   ArrayExpr, FieldExpr, IndexExpr: TSemanticHirExpr;
   ElementTypeId, FieldExprId, IndexExprId, IndexTypeId: LongInt;
-  ElementTypeName, FieldName: string;
+  BaseName, OwnerClassName, ElementTypeName, FieldName: string;
   Fact: TSemanticScalarTypeFact;
 begin
   AExprId := 0;
-  if not TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) then
+  if not TryClassFieldArrayAccess(AArrayAccessNode, BaseName,
+    OwnerClassName,
+    FieldName) then
     Exit(False);
 
   if not FModel.LookupStringConstValue(
-    FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+    OwnerClassName + '.' + FieldName + '$arr_elem_type',
     ElementTypeName) then
     Exit(False);
   ElementTypeId := FModel.FindTypeByName(ElementTypeName);
   if ElementTypeId <= 0 then
     Exit(False);
 
-  if not BuildClassFieldTargetExpr('self', FCurrentMethodClass, FieldName,
+  if not BuildClassFieldTargetExpr(BaseName, OwnerClassName, FieldName,
     FieldExprId) then
     Exit(False);
   if (FieldExprId <= 0) or (FieldExprId > FModel.HirExprCount) then
@@ -7579,7 +7609,7 @@ end;
 function TSemanticAnalyzer.ResolveArrayAccessElementTypeId(
   const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
 var
-  ArrayName, ElementTypeName, FieldName: string;
+  ArrayName, BaseName, OwnerClassName, ElementTypeName, FieldName: string;
 begin
   AElementTypeId := 0;
   if (AArrayAccessNode = nil) or
@@ -7600,10 +7630,10 @@ begin
     end;
   end;
 
-  if (FCurrentMethodClass <> '') and
-    TryCurrentClassFieldArrayAccess(AArrayAccessNode, FieldName) and
+  if TryClassFieldArrayAccess(AArrayAccessNode, BaseName, OwnerClassName,
+    FieldName) and
     FModel.LookupStringConstValue(
-      FCurrentMethodClass + '.' + FieldName + '$arr_elem_type',
+      OwnerClassName + '.' + FieldName + '$arr_elem_type',
       ElementTypeName) then
   begin
     AElementTypeId := FModel.FindTypeByName(ElementTypeName);

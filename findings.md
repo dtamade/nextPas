@@ -1,5 +1,23 @@
 # Findings & Decisions
 
+## 2026-06-03 C5-M object-backed field-array value loads
+
+- `Result := FItems[i]` 和 `Result := Self.FItems[i].A.B` 的新探针已经证明：它们不是下一个红点；current-class return-side 在 C5-L 后已经是通的。
+- 真正的下一处缺口是 object-backed field-array value load：`Result := Other.FItems[i]`。
+  RED `exit=83` 直接证明 producer 没有发出 `assign-runtime`，问题仍在 sema 旧 blob gate，而不是 builder。
+- 根因是四个地方都只认 implicit/self field-array：
+  `TryCurrentClassFieldArrayAccess`、`BuildClassFieldArrayElementTargetExpr`、
+  `ResolveArrayAccessElementTypeId`、`EncodeRuntimeIntExprFold`。因此
+  `Other.FItems[i]` 同时失去 legacy blob 和 structured address-backed `ExprId`。
+- 最小正确修复不是再堆 one-off 分支，而是引入共享 `TryClassFieldArrayAccess(base,class,field)`：
+  它统一识别 implicit self、explicit self 和 object variable receiver，然后让
+  self-only helper 退化成 wrapper。
+- 这样 direct/nested + local/result 四条 object-backed field-array value load
+  都复用了同一条结构：`shekArrayElem -> shekField -> shekDeref -> shekSymbolValue`；
+  legacy fallback 也同步变成 `field <receiver> <index> p` + `arr_load`。
+- builder 这轮不需要动；只要 sema 把对象接收者的 address-backed value expr 和 blob 都讲清楚，
+  现有 lowering 就能工作。
+
 ## 2026-06-03 C5-L array-backed value loads
 
 - `TestNestedFieldArrayValueExprProducer` 的 shell exit `255` 不是崩溃；用调试器断在

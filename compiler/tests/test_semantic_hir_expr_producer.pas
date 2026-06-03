@@ -722,10 +722,11 @@ begin
     Halt(ABaseExitCode + 23);
 end;
 
-procedure AssertFieldArrayElementValueExpr(const AModel: TSemanticModel;
-  const ANode: TTypedHirNode; const AExpectedFieldName,
-  AExpectedIndexName, AExpectedElementTypeName: string;
-  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+procedure AssertFieldArrayElementValueExprWithBase(
+  const AModel: TSemanticModel; const ANode: TTypedHirNode;
+  const AExpectedBaseName, AExpectedFieldName, AExpectedIndexName,
+  AExpectedElementTypeName: string; const AExpectedFieldIndex: Int64;
+  const ABaseExitCode: LongInt);
 var
   ArrayExpr, FieldExpr, DerefExpr, PointerExpr, IndexExpr: TSemanticHirExpr;
   Symbol: TSemanticSymbol;
@@ -775,7 +776,7 @@ begin
   if PointerExpr.SymbolId <= 0 then
     Halt(ABaseExitCode + 18);
   Symbol := AModel.SymbolAt(PointerExpr.SymbolId - 1);
-  if Symbol.Name <> 'self' then
+  if Symbol.Name <> AExpectedBaseName then
     Halt(ABaseExitCode + 19);
 
   IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
@@ -787,6 +788,26 @@ begin
   Symbol := AModel.SymbolAt(IndexExpr.SymbolId - 1);
   if Symbol.Name <> AExpectedIndexName then
     Halt(ABaseExitCode + 23);
+end;
+
+procedure AssertFieldArrayElementValueExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedFieldName,
+  AExpectedIndexName, AExpectedElementTypeName: string;
+  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+begin
+  AssertFieldArrayElementValueExprWithBase(AModel, ANode, 'self',
+    AExpectedFieldName, AExpectedIndexName, AExpectedElementTypeName,
+    AExpectedFieldIndex, ABaseExitCode);
+end;
+
+procedure AssertObjectFieldArrayElementValueExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedBaseName, AExpectedFieldName,
+  AExpectedIndexName, AExpectedElementTypeName: string;
+  const AExpectedFieldIndex: Int64; const ABaseExitCode: LongInt);
+begin
+  AssertFieldArrayElementValueExprWithBase(AModel, ANode, AExpectedBaseName,
+    AExpectedFieldName, AExpectedIndexName, AExpectedElementTypeName,
+    AExpectedFieldIndex, ABaseExitCode);
 end;
 
 procedure AssertNestedFieldArrayStoreTargetExpr(const AModel: TSemanticModel;
@@ -888,9 +909,10 @@ begin
     Halt(ABaseExitCode + 35);
 end;
 
-procedure AssertNestedFieldArrayValueExpr(const AModel: TSemanticModel;
-  const ANode: TTypedHirNode; const AExpectedFieldName,
-  AExpectedIndexName, AExpectedElementTypeName, AExpectedOuterFieldTypeName,
+procedure AssertNestedFieldArrayValueExprWithBase(
+  const AModel: TSemanticModel; const ANode: TTypedHirNode;
+  const AExpectedBaseName, AExpectedFieldName, AExpectedIndexName,
+  AExpectedElementTypeName, AExpectedOuterFieldTypeName,
   AExpectedLeafFieldTypeName, AExpectedOuterFieldName,
   AExpectedLeafFieldName: string; const AExpectedArrayFieldIndex,
   AExpectedOuterFieldIndex, AExpectedLeafFieldIndex: Int64;
@@ -973,7 +995,7 @@ begin
   if PointerExpr.SymbolId <= 0 then
     Halt(ABaseExitCode + 30);
   Symbol := AModel.SymbolAt(PointerExpr.SymbolId - 1);
-  if Symbol.Name <> 'self' then
+  if Symbol.Name <> AExpectedBaseName then
     Halt(ABaseExitCode + 31);
 
   IndexExpr := AModel.HirExprAt(ArrayExpr.Children[1] - 1);
@@ -985,6 +1007,39 @@ begin
   Symbol := AModel.SymbolAt(IndexExpr.SymbolId - 1);
   if Symbol.Name <> AExpectedIndexName then
     Halt(ABaseExitCode + 35);
+end;
+
+procedure AssertNestedFieldArrayValueExpr(const AModel: TSemanticModel;
+  const ANode: TTypedHirNode; const AExpectedFieldName,
+  AExpectedIndexName, AExpectedElementTypeName, AExpectedOuterFieldTypeName,
+  AExpectedLeafFieldTypeName, AExpectedOuterFieldName,
+  AExpectedLeafFieldName: string; const AExpectedArrayFieldIndex,
+  AExpectedOuterFieldIndex, AExpectedLeafFieldIndex: Int64;
+  const ABaseExitCode: LongInt);
+begin
+  AssertNestedFieldArrayValueExprWithBase(AModel, ANode, 'self',
+    AExpectedFieldName, AExpectedIndexName, AExpectedElementTypeName,
+    AExpectedOuterFieldTypeName, AExpectedLeafFieldTypeName,
+    AExpectedOuterFieldName, AExpectedLeafFieldName,
+    AExpectedArrayFieldIndex, AExpectedOuterFieldIndex,
+    AExpectedLeafFieldIndex, ABaseExitCode);
+end;
+
+procedure AssertNestedObjectFieldArrayValueExpr(
+  const AModel: TSemanticModel; const ANode: TTypedHirNode;
+  const AExpectedBaseName, AExpectedFieldName, AExpectedIndexName,
+  AExpectedElementTypeName, AExpectedOuterFieldTypeName,
+  AExpectedLeafFieldTypeName, AExpectedOuterFieldName,
+  AExpectedLeafFieldName: string; const AExpectedArrayFieldIndex,
+  AExpectedOuterFieldIndex, AExpectedLeafFieldIndex: Int64;
+  const ABaseExitCode: LongInt);
+begin
+  AssertNestedFieldArrayValueExprWithBase(AModel, ANode, AExpectedBaseName,
+    AExpectedFieldName, AExpectedIndexName, AExpectedElementTypeName,
+    AExpectedOuterFieldTypeName, AExpectedLeafFieldTypeName,
+    AExpectedOuterFieldName, AExpectedLeafFieldName,
+    AExpectedArrayFieldIndex, AExpectedOuterFieldIndex,
+    AExpectedLeafFieldIndex, ABaseExitCode);
 end;
 
 procedure AssertFieldAddressOfRuntimeExpr(const AModel: TSemanticModel;
@@ -1685,6 +1740,76 @@ begin
   end;
 end;
 
+procedure TestObjectFieldArrayValueExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of Integer;'#10 +
+    '  function CopyItem(Other: TStack; i: Integer): Integer;'#10 +
+    'end;'#10 +
+    'function TStack.CopyItem(Other: TStack; i: Integer): Integer;'#10 +
+    'var y: Integer;'#10 +
+    'begin'#10 +
+    '  y := Other.FItems[i];'#10 +
+    '  Result := y;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(71);
+    if Model.Status <> 'ready' then
+      Halt(72);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'y',
+      'arr_load', Node) then
+      Halt(73);
+    AssertObjectFieldArrayElementValueExpr(Model, Node, 'Other', 'FItems', 'i',
+      'Integer', 1, 74);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestFieldArrayResultValueExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of Integer;'#10 +
+    '  function GetItem(i: Integer): Integer;'#10 +
+    'end;'#10 +
+    'function TStack.GetItem(i: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Result := FItems[i];'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(263);
+    if Model.Status <> 'ready' then
+      Halt(264);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'GetItem',
+      'arr_load', Node) then
+      Halt(265);
+    AssertFieldArrayElementValueExpr(Model, Node, 'FItems', 'i', 'Integer',
+      1, 266);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestFieldArrayStoreTargetExprProducer;
 var
   Model: TSemanticModel;
@@ -1758,6 +1883,162 @@ begin
       Halt(261);
     AssertNestedFieldArrayValueExpr(Model, Node, 'FItems', 'i', 'TOuter',
       'TInner', 'Integer', 'A', 'B', 1, 0, 0, 262);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestNestedFieldArrayResultValueExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TInner = record'#10 +
+    '  B: Integer;'#10 +
+    'end;'#10 +
+    'type TOuter = record'#10 +
+    '  A: TInner;'#10 +
+    'end;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of TOuter;'#10 +
+    '  function GetLeaf(i: Integer): Integer;'#10 +
+    'end;'#10 +
+    'function TStack.GetLeaf(i: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Result := Self.FItems[i].A.B;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(267);
+    if Model.Status <> 'ready' then
+      Halt(268);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'GetLeaf',
+      'arr_load', Node) then
+      Halt(269);
+    AssertNestedFieldArrayValueExpr(Model, Node, 'FItems', 'i', 'TOuter',
+      'TInner', 'Integer', 'A', 'B', 1, 0, 0, 270);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestNestedObjectFieldArrayValueExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TInner = record'#10 +
+    '  B: Integer;'#10 +
+    'end;'#10 +
+    'type TOuter = record'#10 +
+    '  A: TInner;'#10 +
+    'end;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of TOuter;'#10 +
+    '  function CopyLeaf(Other: TStack; i: Integer): Integer;'#10 +
+    'end;'#10 +
+    'function TStack.CopyLeaf(Other: TStack; i: Integer): Integer;'#10 +
+    'var y: Integer;'#10 +
+    'begin'#10 +
+    '  y := Other.FItems[i].A.B;'#10 +
+    '  Result := y;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(75);
+    if Model.Status <> 'ready' then
+      Halt(76);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'y',
+      'arr_load', Node) then
+      Halt(77);
+    AssertNestedObjectFieldArrayValueExpr(Model, Node, 'Other', 'FItems', 'i',
+      'TOuter', 'TInner', 'Integer', 'A', 'B', 1, 0, 0, 78);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestObjectFieldArrayResultValueExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of Integer;'#10 +
+    '  function CopyItem(Other: TStack; i: Integer): Integer;'#10 +
+    'end;'#10 +
+    'function TStack.CopyItem(Other: TStack; i: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Result := Other.FItems[i];'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(81);
+    if Model.Status <> 'ready' then
+      Halt(82);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'CopyItem',
+      'arr_load', Node) then
+      Halt(83);
+    AssertObjectFieldArrayElementValueExpr(Model, Node, 'Other', 'FItems', 'i',
+      'Integer', 1, 84);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestNestedObjectFieldArrayResultValueExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type TInner = record'#10 +
+    '  B: Integer;'#10 +
+    'end;'#10 +
+    'type TOuter = record'#10 +
+    '  A: TInner;'#10 +
+    'end;'#10 +
+    'type TStack = class'#10 +
+    '  FItems: array of TOuter;'#10 +
+    '  function CopyLeaf(Other: TStack; i: Integer): Integer;'#10 +
+    'end;'#10 +
+    'function TStack.CopyLeaf(Other: TStack; i: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  Result := Other.FItems[i].A.B;'#10 +
+    'end;'#10 +
+    'begin'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(85);
+    if Model.Status <> 'ready' then
+      Halt(86);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'CopyLeaf',
+      'arr_load', Node) then
+      Halt(87);
+    AssertNestedObjectFieldArrayValueExpr(Model, Node, 'Other', 'FItems', 'i',
+      'TOuter', 'TInner', 'Integer', 'A', 'B', 1, 0, 0, 88);
   finally
     Model.Free;
   end;
@@ -2558,8 +2839,14 @@ begin
   TestStaticArrayGlobalDeclMetadata;
   TestStaticArrayLocalDeclMetadata;
   TestFieldArrayValueExprProducer;
+  TestObjectFieldArrayValueExprProducer;
+  TestFieldArrayResultValueExprProducer;
   TestFieldArrayStoreTargetExprProducer;
   TestNestedFieldArrayValueExprProducer;
+  TestNestedObjectFieldArrayValueExprProducer;
+  TestNestedFieldArrayResultValueExprProducer;
+  TestObjectFieldArrayResultValueExprProducer;
+  TestNestedObjectFieldArrayResultValueExprProducer;
   TestNestedFieldArrayStoreTargetExprProducer;
   TestExplicitSelfFieldArrayStoreTargetExprProducer;
   TestCommaFieldArrayStoreTargetExprProducer;
