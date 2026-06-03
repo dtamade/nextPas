@@ -1195,7 +1195,7 @@ begin
           if FPollQueuedResponsePending then
           begin
             PromoteQueuedPollResponse;
-            if FPending <> '' then
+            if (FPending <> '') and (not FPollCloseAfterDrain) then
             begin
               ANextEvents := [peWritable];
               Exit(tsprWait);

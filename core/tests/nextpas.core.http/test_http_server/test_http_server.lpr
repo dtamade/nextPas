@@ -2151,6 +2151,149 @@ begin
   CheckEqual('/three', LThirdPath, 'third request path captured');
 end;
 
+procedure RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
+  const ALabel, AInput, AExpectedStatusLine: string;
+  const AMaxHeaderSize: Int32; const AMaxBodySize: Int64);
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LStreamObj: TWritableDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+  LFirstPath: string;
+  LFirstStatusPos: SizeInt;
+  LFollowStatusPos: SizeInt;
+const
+  BODY = 'ok';
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.MaxHeaderSize := AMaxHeaderSize;
+  LHttpOpts.MaxBodySize := AMaxBodySize;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    ALabel + ': h1 transport exposes context-aware session factory');
+
+  LStreamObj := TWritableDrainRuntimeTcpStream.Create(AInput, 1, 0);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LFirstPath := '';
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+      if LHandlerCalls = 1 then
+        LFirstPath := AReq.Url.Path;
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(BODY[1], SizeUInt(Length(BODY)));
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    ALabel + ': context-aware h1 session exposes poll-driven seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    ALabel + ': first readable advance stays active while first request completes');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    ALabel + ': first request is handed off once');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    ALabel + ': only the first request reaches the handler');
+  CheckEqual('/one', LFirstPath, ALabel + ': first request path captured');
+  Check(LNextEvents = [], ALabel + ': first request handoff waits on completion wake');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    ALabel + ': completion wake queues follow-up error behind stalled drain');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    ALabel + ': follow-up error stays reactor-local without second worker handoff');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    ALabel + ': follow-up error does not enter the handler');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': completion wake attempts exactly one stalled drain write');
+  Check(LNextEvents = [peWritable],
+    ALabel + ': stalled drain waits for writable wake');
+  CheckEqual('', LStreamObj.Output,
+    ALabel + ': stalled first drain writes no wire bytes');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    ALabel + ': writable wake drains original response then queued follow-up error');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), ALabel + ': session remains server-owned on close');
+  CheckEqual(Int64(3), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': writable wake performs one drain for 200 and one for queued error');
+  CheckEqual(Int64(2), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
+    ALabel + ': wire emits exactly two status lines');
+
+  LFirstStatusPos := Pos('HTTP/1.1 200 OK', LStreamObj.Output);
+  LFollowStatusPos := Pos(AExpectedStatusLine, LStreamObj.Output);
+  Check(LFirstStatusPos > 0,
+    ALabel + ': first response status line is present');
+  Check(LFollowStatusPos > LFirstStatusPos,
+    ALabel + ': queued follow-up error stays behind the first response on wire');
+  Check(Pos(BODY, LStreamObj.Output) > LFirstStatusPos,
+    ALabel + ': first response body is still written before queued error');
+end;
+
+procedure TestH1PollDrivenSessionQueuesFollowUpBadRequestBehindActiveDrain;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /bad HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
+    'queued follow-up 400', REQ, 'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenSessionQueuesFollowUpPayloadTooLargeBehindActiveDrain;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
+    'queued follow-up 413', REQ, 'HTTP/1.1 413 Payload Too Large', 0, 2);
+end;
+
+procedure TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /too-many-headers HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'X-Long: 0123456789012345678901234567890123456789'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
+    'queued follow-up 431', REQ,
+    'HTTP/1.1 431 Request Header Fields Too Large', 64, 0);
+end;
+
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
 var
   LHttpOpts: THttpServerOptions;
@@ -7381,6 +7524,12 @@ begin
     @TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp);
   T.Run('H1 poll-driven session queues bounded responses while draining',
     @TestH1PollDrivenSessionQueuesBoundedResponsesWhileDraining);
+  T.Run('H1 poll-driven session queues follow-up 400 behind active drain',
+    @TestH1PollDrivenSessionQueuesFollowUpBadRequestBehindActiveDrain);
+  T.Run('H1 poll-driven session queues follow-up 413 behind active drain',
+    @TestH1PollDrivenSessionQueuesFollowUpPayloadTooLargeBehindActiveDrain);
+  T.Run('H1 poll-driven session queues follow-up 431 behind active drain',
+    @TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Write timeout before any wire bytes does not append 500',
