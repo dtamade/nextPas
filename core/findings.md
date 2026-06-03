@@ -94,7 +94,16 @@
   - 重点应看 large streaming response 的 write loop / buffered-writer direct-write path / close observation timing
   - 而不是先假设 post-handler flush 是主因
 
-### 6. `src/nextpas.core.net.tcp.pas` 这次生产改动不成立，已回退
+### 6. small/fully-buffered response 的 timeout 真相已经与 large streaming path 分开
+
+- 我继续强化了 session-local fake-stream timeout proofs，直接记录 small response handler 是否已经返回。
+- 现在可以把两条路径分开说清楚：
+  - small/fully-buffered response：handler 已返回，失败发生在 buffered flush
+  - large streaming response：handler 未返回，失败发生在 body write loop 中
+- 这说明当前 stalled-peer 行为不是单一机制；后续若要继续下钻，应该按这两类路径分别证明，
+  而不是把它们混成一个“write timeout”现象。
+
+### 7. `src/nextpas.core.net.tcp.pas` 这次生产改动不成立，已回退
 
 - 我额外开了隔离 worktree，对同一 HEAD 做了“只带 `test_http_server` 变更、不带 `net.tcp` patch”的对比验证。
 - 对比结果是：
@@ -115,6 +124,7 @@
     - `Real socket write timeout backpressure stops pipeline`
     - `Real socket write timeout backpressure stops pipeline with epoll backend`
     - strengthened truth: stalled-peer exception is observed before the streaming handler returns
+    - strengthened truth: small buffered timeout is observed after the handler returns
   - heaptrc：`0 unfreed memory blocks`
 - `make -C tests/nextpas.core.net/test_net_deep clean test`
   - `16 total, 16 passed, 0 failed`
@@ -132,7 +142,7 @@
   stalled-peer proof，但还没有进入 finer timing characterization。
 - 下一步若继续收口 response-side transport correctness，优先应看：
   - HTTP response loop / buffered writer / close observation 在 stalled-peer 下是否存在可重复、可分类的 timing 差异
-  - large streaming response 的 direct-write path 与 small/fully-buffered response 的 flush path 是否需要分开证明
+  - large streaming response 的 direct-write path 与 small/fully-buffered response 的 flush path 继续分开证明
   - threaded / `epoll` 路径在更接近真实 response loop 的场景下是否仍完全等价
   - backend runtime (`threaded` / `epoll`) 对 backpressure 的真实行为
   - 是否需要在 `test_http_security` 或更底层 `net.server`/`net.tcp` 增加 transport-level proof

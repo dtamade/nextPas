@@ -30,6 +30,8 @@
 - strengthened real-socket proof 进一步锁定：
   - 当前 stalled-peer 异常是在 handler 的 streaming body write 过程中出现
   - 不是 handler 返回后的 post-handler flush 才首次暴露
+- strengthened fake-stream proof 进一步锁定：
+  - small/fully-buffered response 的 timeout 发生在 handler 返回后的 buffered flush
 - `test_net_deep` 新增 simplified stalled-peer deadline proof：
   - `Write deadline during stalled peer backpressure`
 - 新增 `TTimeoutWriteTcpStream` fake transport，用来脚本化模拟：

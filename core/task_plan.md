@@ -12,6 +12,7 @@
 - real socket stalled-peer/backpressure 下，连接会在放宽观察窗口内安全关闭，且不会消费后续 pipelined request
 - Linux `epoll` backend 下同一条 real-socket backpressure 契约也与 threaded 路径保持一致
 - 对大 streaming response，stalled-peer 异常是在 handler 的 body write 过程中出现，而不是等 handler 返回后的 post-flush 才暴露
+- 对 small/fully-buffered response，timeout 发生在 handler 返回后的 buffered flush 路径
 
 ## Checklist
 
@@ -37,6 +38,8 @@
   - 验证 lower-level `TTcpStream.Write` absolute-deadline RED 是否真实存在
 - [x] 强化 real-socket stalled-peer proof：
   - 区分异常发生在 streaming handler 内，还是 handler 返回后的 post-handler flush
+- [x] 强化 session-local buffered timeout proof：
+  - small response 路径确认 handler 已返回，失败发生在 buffered flush
 - [x] 用隔离 worktree 对比当前测试在“带/不带 `src/nextpas.core.net.tcp.pas` patch”两种状态下的结果，确认是否真的需要生产修复。
 - [x] 运行 focused 验证：
   - `make -C tests/nextpas.core.http/test_http_server clean test`
@@ -55,6 +58,7 @@
 - Linux `epoll` real-socket proof 也已通过，当前没有暴露 threaded / `epoll` 的契约分叉。
 - `test_net_deep` 的 simplified stalled-peer write-deadline proof 同样通过，当前没有拿到 lower-level `TTcpStream.Write` RED。
 - strengthened real-socket proof 表明：当前 stalled-peer 异常已在 handler 的 streaming write 过程中出现，不是等 handler 返回后的额外 flush 才暴露。
+- strengthened fake-stream proof 表明：small/fully-buffered response 的 timeout 则是在 handler 返回后的 buffered flush 路径出现。
 
 ## Out of Scope
 

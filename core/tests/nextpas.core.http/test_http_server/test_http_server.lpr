@@ -937,6 +937,7 @@ var
   LStream: ITcpStream;
   LOwnership: TTcpServerConnOwnership;
   LHandlerCalls: Int32;
+  LHandlerReturned: Boolean;
 const
   REQ =
     'GET /timeout HTTP/1.1'#13#10 +
@@ -953,6 +954,7 @@ begin
   LStreamObj := TTimeoutWriteTcpStream.Create(REQ, 0, True);
   LStream := LStreamObj as ITcpStream;
   LHandlerCalls := 0;
+  LHandlerReturned := False;
   LSession := LFactory.NewSession(LStream, HandlerFunc(
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
@@ -963,6 +965,7 @@ begin
       AW.GetHeaders.Set_('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
+      LHandlerReturned := True;
     end));
 
   LOwnership := LSession.Run;
@@ -975,6 +978,8 @@ begin
     'timeout before any wire bytes consumes one request read');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteCalls),
     'timeout before any wire bytes performs only the failing response write');
+  Check(LHandlerReturned,
+    'timeout before any wire bytes happens after the buffered handler returns');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
     'write timeout config sets a write deadline before response write');
   CheckEqual(Int64(0), Int64(Length(LStreamObj.Output)),
@@ -995,6 +1000,7 @@ var
   LOwnership: TTcpServerConnOwnership;
   LHandlerCalls: Int32;
   LSeenFirstPath: string;
+  LHandlerReturned: Boolean;
 const
   REQ =
     'GET /one HTTP/1.1'#13#10 +
@@ -1014,6 +1020,7 @@ begin
   LStream := LStreamObj as ITcpStream;
   LHandlerCalls := 0;
   LSeenFirstPath := '';
+  LHandlerReturned := False;
   LSession := LFactory.NewSession(LStream, HandlerFunc(
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     var
@@ -1026,6 +1033,7 @@ begin
       AW.GetHeaders.Set_('content-length', '2');
       AW.WriteHeader(HTTP_STATUS_OK);
       AW.Write(LBody[1], 2);
+      LHandlerReturned := True;
     end));
 
   LOwnership := LSession.Run;
@@ -1040,6 +1048,8 @@ begin
     'partial timeout leaves second pipelined request unread');
   CheckEqual(Int64(2), Int64(LStreamObj.WriteCalls),
     'partial timeout hits one partial write and one timeout write');
+  Check(LHandlerReturned,
+    'partial timeout on small response happens after the buffered handler returns');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
     'partial timeout path sets a write deadline');
   CheckEqual(Int64(8), Int64(Length(LStreamObj.Output)),
