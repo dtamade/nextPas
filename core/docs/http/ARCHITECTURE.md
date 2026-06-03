@@ -53,10 +53,12 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
   并且会把每个已完成 request 单独通过 `WorkerHandoff` 提交，
   同连接里已经缓冲好的 follow-up request 不必再等待新的 readability 才能继续。
 - H1 poll path 现在又向前推进了一格：
-  在 `WriteTimeout = 0` 的 successful response 路径上，
+  successful response 现在统一走 reactor-owned drain：
   worker 只负责 response production，
   completion wake 回到 reactor 后会立即尝试一次 nonblocking drain，
-  若 socket `would-block` 则转成 `peWritable` 继续 drain。
+  若 socket `would-block` 则转成 `peWritable` 继续 drain；
+  当 `WriteTimeout > 0` 时，这条 drain 还会暴露有限 `WakeDeadline`，
+  deadline 到期则安全关闭 stalled session。
 - H1 server response path 现在已经完成一层关键拆分：
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
@@ -68,8 +70,9 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
 - 当前 phase 2 的真实状态应精确表述为：
   - read/parse 已 reactor-owned
   - per-request handoff 已 reactor-owned
-  - `WriteTimeout = 0` 的 successful response drain 已 reactor-owned
-  - `WriteTimeout > 0` 的 timed drain 还保留在旧的 worker-owned path，等待 deadline 语义一起落地
+  - successful response drain 已 reactor-owned
+  - timed drain / `WakeDeadline` 也已进入同一条 response state machine
+  - 当前剩余缺口已收窄为队列策略、timing characterization 与性能优化，而不是 H1 poll foundation 本身
 
 因此 HTTP 这层的固定方向不是“自己长出一个更复杂的 `TBaseServer`”，而是：
 

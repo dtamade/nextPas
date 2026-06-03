@@ -142,6 +142,49 @@ type
     property TryWriteCalls: Int32 read FTryWriteCalls;
   end;
 
+  TTimedDrainRuntimeTcpStream = class(TInterfacedObject, IReader, IWriter,
+    IStream, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime)
+  private
+    FInput: string;
+    FInputPos: SizeInt;
+    FOutput: string;
+    FBlocking: Boolean;
+    FSetBlockingCalls: Int32;
+    FSyncWriteCalls: Int32;
+    FTryWriteCalls: Int32;
+    FWriteDeadlineCalls: Int32;
+    FLastWriteDeadline: TDeadline;
+  public
+    constructor Create(const AInput: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+    property Output: string read FOutput;
+    property SetBlockingCalls: Int32 read FSetBlockingCalls;
+    property Blocking: Boolean read FBlocking;
+    property SyncWriteCalls: Int32 read FSyncWriteCalls;
+    property TryWriteCalls: Int32 read FTryWriteCalls;
+    property WriteDeadlineCalls: Int32 read FWriteDeadlineCalls;
+    property LastWriteDeadline: TDeadline read FLastWriteDeadline;
+  end;
+
   TZeroProgressTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
   private
     FInput: string;
@@ -503,6 +546,128 @@ begin
     Move(ABuf, FOutput[LOldLen + 1], AWritten);
   end;
   Result := tsiorOk;
+end;
+
+constructor TTimedDrainRuntimeTcpStream.Create(const AInput: string);
+begin
+  inherited Create;
+  FInput := AInput;
+  FInputPos := 1;
+  FOutput := '';
+  FBlocking := False;
+  FSetBlockingCalls := 0;
+  FSyncWriteCalls := 0;
+  FTryWriteCalls := 0;
+  FWriteDeadlineCalls := 0;
+  FLastWriteDeadline := TDeadline.Infinite;
+end;
+
+function TTimedDrainRuntimeTcpStream.Read(var ABuf;
+  const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeUInt;
+begin
+  if (ACount = 0) or (FInputPos > Length(FInput)) then
+    Exit(0);
+  LRemaining := SizeUInt(Length(FInput) - FInputPos + 1);
+  Result := ACount;
+  if Result > LRemaining then
+    Result := LRemaining;
+  Move(FInput[FInputPos], ABuf, Result);
+  Inc(FInputPos, SizeInt(Result));
+end;
+
+function TTimedDrainRuntimeTcpStream.Write(const ABuf;
+  const ACount: SizeUInt): SizeUInt;
+begin
+  Inc(FSyncWriteCalls);
+  raise EIOError.Create('timed poll-driven response must not use sync write path');
+end;
+
+function TTimedDrainRuntimeTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := -1;
+end;
+
+procedure TTimedDrainRuntimeTcpStream.Close;
+begin
+end;
+
+function TTimedDrainRuntimeTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TTimedDrainRuntimeTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TTimedDrainRuntimeTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TTimedDrainRuntimeTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TTimedDrainRuntimeTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TTimedDrainRuntimeTcpStream.Shutdown;
+begin
+end;
+
+procedure TTimedDrainRuntimeTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TTimedDrainRuntimeTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TTimedDrainRuntimeTcpStream.SetReadDeadline(
+  const ADeadline: TDeadline);
+begin
+end;
+
+procedure TTimedDrainRuntimeTcpStream.SetWriteDeadline(
+  const ADeadline: TDeadline);
+begin
+  Inc(FWriteDeadlineCalls);
+  FLastWriteDeadline := ADeadline;
+end;
+
+function TTimedDrainRuntimeTcpStream.NativeSocketHandle: PtrUInt;
+begin
+  Result := 44;
+end;
+
+procedure TTimedDrainRuntimeTcpStream.SetBlocking(const ABlocking: Boolean);
+begin
+  FBlocking := ABlocking;
+  Inc(FSetBlockingCalls);
+end;
+
+function TTimedDrainRuntimeTcpStream.TryRead(var ABuf;
+  const ACount: SizeUInt; out ARead: SizeUInt): TTcpStreamIOResult;
+begin
+  ARead := Read(ABuf, ACount);
+  if ARead = 0 then
+    Exit(tsiorClosed);
+  Result := tsiorOk;
+end;
+
+function TTimedDrainRuntimeTcpStream.TryWrite(const ABuf;
+  const ACount: SizeUInt; out AWritten: SizeUInt): TTcpStreamIOResult;
+begin
+  Inc(FTryWriteCalls);
+  AWritten := 0;
+  Result := tsiorWouldBlock;
 end;
 
 constructor TZeroProgressTcpStream.Create(const AInput: string);
@@ -1524,6 +1689,102 @@ begin
     'drained output contains response status line');
   Check(Pos(BODY, LStreamObj.Output) > 0,
     'drained output contains response body');
+end;
+
+procedure TestH1PollDrivenSessionTimesOutStalledDrainOnDeadlineWake;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TTimedDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /two HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10;
+  BODY = 'ok';
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for timed drain test');
+
+  LStreamObj := TTimedDrainRuntimeTcpStream.Create(REQ);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(BODY[1], SizeUInt(Length(BODY)));
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for timed drain test');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    'timed drain session exposes deadline seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'first readable advance stays active while timed request work completes');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'timed request is handed off once');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'timed handler runs once for first request');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    'timed worker path must not sync-write socket');
+  Check(LNextEvents = [], 'timed request handoff waits on completion wake');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'completion wake enters timed reactor-owned drain');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    'completion wake still avoids sync write path');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    'completion wake attempts timed nonblocking drain once');
+  Check(LNextEvents = [peWritable],
+    'timed would-block drain subscribes writable wake');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'timed drain arms write deadline');
+  Check(not LDeadlineSession.WakeDeadline.IsInfinite,
+    'timed drain exposes finite wake deadline');
+
+  platform_thread_sleep_ns(50000000);
+  Check(LDeadlineSession.WakeDeadline.IsExpired,
+    'timed drain deadline eventually expires');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    'deadline wake closes stalled timed drain');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), 'timed stalled drain keeps server ownership on close');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'timed stalled drain does not advance to follow-up request');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'timed stalled drain does not hand off follow-up request');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    'deadline wake closes without extra write retry');
 end;
 
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
@@ -6633,6 +6894,8 @@ begin
     @TestH1PollDrivenSessionHandsOffPerCompletedRequest);
   T.Run('H1 poll-driven session drains response via writable events',
     @TestH1PollDrivenSessionDrainsResponseViaWritableEvents);
+  T.Run('H1 poll-driven session times out stalled drain on deadline wake',
+    @TestH1PollDrivenSessionTimesOutStalledDrainOnDeadlineWake);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Write timeout before any wire bytes does not append 500',

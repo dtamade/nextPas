@@ -164,8 +164,10 @@ type
     FParseHeadersDone: Boolean;
     FPollOutbound: IH1OutboundBuffer;
     FPollResponsePending: Boolean;
+    FPollWriteDeadline: TDeadline;
     procedure ResetPollRequestState;
     procedure ResetPollResponseState;
+    procedure ArmPollWriteDeadline;
     function UsePollOwnedResponseDrain: Boolean;
     function ExecuteCurrentRequest: TTcpServerConnOwnership;
     function ExecuteCurrentPollRequest: TTcpServerConnOwnership;
@@ -444,6 +446,7 @@ begin
   FParseHeadersDone := False;
   FPollOutbound := nil;
   FPollResponsePending := False;
+  FPollWriteDeadline := TDeadline.Infinite;
 end;
 
 procedure TH1ServerConnectionState.ResetPollRequestState;
@@ -457,11 +460,24 @@ procedure TH1ServerConnectionState.ResetPollResponseState;
 begin
   FPollOutbound := nil;
   FPollResponsePending := False;
+  FPollWriteDeadline := TDeadline.Infinite;
+end;
+
+procedure TH1ServerConnectionState.ArmPollWriteDeadline;
+begin
+  if FOptions.WriteTimeout > 0 then
+  begin
+    FPollWriteDeadline := TDeadline.After(
+      TDuration.FromMilliseconds(FOptions.WriteTimeout));
+    FConn.SetWriteDeadline(FPollWriteDeadline);
+  end
+  else
+    FPollWriteDeadline := TDeadline.Infinite;
 end;
 
 function TH1ServerConnectionState.UsePollOwnedResponseDrain: Boolean;
 begin
-  Result := (FStreamRuntime <> nil) and (FOptions.WriteTimeout <= 0);
+  Result := FStreamRuntime <> nil;
 end;
 
 function TH1ServerConnectionState.ExecuteCurrentRequest: TTcpServerConnOwnership;
@@ -957,6 +973,17 @@ begin
     Exit(AdvancePollRequestParse(AEvents, ANextEvents, AOwnership));
   end;
 
+  if (not FPollWriteDeadline.IsInfinite) and FPollWriteDeadline.IsExpired then
+  begin
+    ResetPollResponseState;
+    FKeepAlive := False;
+    ANextEvents := [];
+    Exit(tsprDone);
+  end;
+
+  if FPollWriteDeadline.IsInfinite then
+    ArmPollWriteDeadline;
+
   LWriteResult := FPollOutbound.TryDrainTo(FStreamRuntime, LWritten);
   case LWriteResult of
     tsiorOk:
@@ -972,6 +999,8 @@ begin
           ResetPollRequestState;
           Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
         end;
+        if LWritten > 0 then
+          ArmPollWriteDeadline;
         ANextEvents := [peWritable];
         Exit(tsprWait);
       end;
@@ -1133,7 +1162,7 @@ end;
 
 function TH1ServerConnectionState.WakeDeadline: TDeadline;
 begin
-  Result := TDeadline.Infinite;
+  Result := FPollWriteDeadline;
 end;
 
 { TH1ClientTransport }
