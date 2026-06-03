@@ -752,6 +752,49 @@ begin
   end;
 end;
 
+{ Test 14aa: Keep-alive Content-Length request with truncated follow-up request line }
+procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10#13#10 +
+            'hello' +
+            'GET /next HTTP/1.1';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'Keep-alive Content-Length partial follow-up line: first response still completes');
+    Check(Pos('echo:5', LResp) > 0,
+      'Keep-alive Content-Length partial follow-up line: first request body handled correctly');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Keep-alive Content-Length partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 14ab: Keep-alive Content-Length request with truncated follow-up headers }
+procedure TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandling;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10#13#10 +
+            'hello' +
+            'GET /next HTTP/1.1'#13#10 +
+            'Host: x'#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'Keep-alive Content-Length partial follow-up headers: first response still completes');
+    Check(Pos('echo:5', LResp) > 0,
+      'Keep-alive Content-Length partial follow-up headers: first request body handled correctly');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Keep-alive Content-Length partial follow-up headers: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 14b: Chunked request with extra bytes after terminal chunk and close }
 procedure TestChunkedExtraBytesAfterClose;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1142,6 +1185,10 @@ begin
   T.Run('Very long method name -> 400', @TestLongMethodName);
   T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
+  T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
+    @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
+  T.Run('Content-Length keep-alive truncated follow-up headers safe handling',
+    @TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandling);
   T.Run('Chunked extra bytes after close -> 400', @TestChunkedExtraBytesAfterClose);
   T.Run('Chunked keep-alive garbage tail safe handling', @TestChunkedKeepAliveGarbageTailSafeHandling);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);

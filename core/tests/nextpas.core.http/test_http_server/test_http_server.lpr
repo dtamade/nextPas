@@ -1152,6 +1152,117 @@ begin
   end;
 end;
 
+procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10#13#10 +
+        'hello' +
+        'GET /next HTTP/1.1';
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'keep-alive partial follow-up line: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'keep-alive partial follow-up line: first body preserved');
+    Check(LSeenUpload, 'keep-alive partial follow-up line: first handler called');
+    CheckEqual('hello', LGotBody, 'keep-alive partial follow-up line: handler sees declared body only');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'keep-alive partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10#13#10 +
+        'hello' +
+        'GET /next HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10;
+begin
+  LGotBody := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'keep-alive partial follow-up headers: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'keep-alive partial follow-up headers: first body preserved');
+    Check(LSeenUpload, 'keep-alive partial follow-up headers: first handler called');
+    CheckEqual('hello', LGotBody, 'keep-alive partial follow-up headers: handler sees declared body only');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'keep-alive partial follow-up headers: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestChunkedRequestExtraBytesAfterCloseRejected;
 var
   LRouter: THttpRouter;
@@ -3091,6 +3202,10 @@ begin
   T.Run('Very long method -> 400', @TestVeryLongMethodRejected);
   T.Run('Content-Length extra bytes after close -> 400', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400', @TestContentLengthKeepAliveGarbageTailBecomesFollowUp400);
+  T.Run('Content-Length keep-alive truncated follow-up request line -> follow-up 400',
+    @TestContentLengthKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400);
+  T.Run('Content-Length keep-alive truncated follow-up headers -> follow-up 400',
+    @TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400);
   T.Run('Chunked extra bytes after close -> 400', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked keep-alive garbage tail -> follow-up 400', @TestChunkedKeepAliveGarbageTailBecomesFollowUp400);
   T.Run('Chunked pipelined requests in single write', @TestChunkedPipelinedRequestsInSingleWrite);

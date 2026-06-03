@@ -1072,6 +1072,69 @@ begin
   CheckEqual('hello', LP.GetBody, 'keep-alive content-length first request preserves body');
 end;
 
+procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LTail := 'GET /next HTTP/1.1';
+  LReq := LReq1 + LTail;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive content-length partial follow-up line should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive content-length first request should complete before partial follow-up line');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive content-length parser consumes only first request before partial follow-up line');
+  Check(LP.GetMethod = hmPost, 'keep-alive content-length partial follow-up line preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive content-length partial follow-up line preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive content-length partial follow-up line preserves body');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail), Length(LTail));
+  Check(not LP.IsComplete, 'partial follow-up request line alone is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'partial follow-up request line reports parser error on finish');
+end;
+
+procedure TestContentLengthKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LTail := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10;
+  LReq := LReq1 + LTail;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive content-length partial follow-up headers should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive content-length first request should complete before partial follow-up headers');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive content-length parser consumes only first request before partial follow-up headers');
+  Check(LP.GetMethod = hmPost, 'keep-alive content-length partial follow-up headers preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive content-length partial follow-up headers preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive content-length partial follow-up headers preserves body');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail), Length(LTail));
+  Check(not LP.IsComplete, 'partial follow-up headers alone are not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'partial follow-up headers report parser error on finish');
+end;
+
 procedure TestChunkedRequestExtraBytesAfterCloseRejected;
 var
   LP: IH1Parser;
@@ -1341,6 +1404,10 @@ begin
   T.Run('Very long method rejected', @TestVeryLongMethodRejected);
   T.Run('Content-Length request extra bytes after close rejected', @TestContentLengthRequestExtraBytesAfterCloseRejected);
   T.Run('Content-Length keep-alive garbage tail consumes first request only', @TestContentLengthKeepAliveGarbageTailConsumesFirstRequestOnly);
+  T.Run('Content-Length keep-alive truncated follow-up request line consumes first request only',
+    @TestContentLengthKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
+  T.Run('Content-Length keep-alive truncated follow-up headers consumes first request only',
+    @TestContentLengthKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
   T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);

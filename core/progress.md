@@ -1,18 +1,18 @@
-# Progress Log: HTTP completed trailer-line final blank-line EOF proof
+# Progress Log: HTTP keep-alive Content-Length partial follow-up proof
 
-## Session: 2026-06-03 HTTP completed trailer-line final blank-line EOF truncation
+## Session: 2026-06-03 HTTP keep-alive Content-Length partial follow-up
 
 - **Status:** completed
-- **Scope:** add parser/server/security focused proof that completed trailer lines ending at
-  `...0\r\nX-Test:\r\n\r`、`...0\r\nX-Test: \r\n`、`...0\r\nX-Test: \r\n\r`
-  are rejected at EOF / peer half-close with explicit `400` semantics.
+- **Scope:** add parser/server/security focused proof that fixed-length keep-alive requests with
+  partial follow-up request line / partial follow-up headers still complete the first request,
+  then reject the follow-up with explicit `400` after peer half-close.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
   - [x] Re-read design conventions, API coverage matrix, and current control files.
-  - [x] Confirmed the remaining malformed-chunk gap is completed trailer-line final blank-line EOF truncation.
-  - [x] Added the new parser focused tests for trailer empty-value section CR EOF, trailer whitespace section EOF, and trailer whitespace section CR EOF truncation.
-  - [x] Added the new server focused tests for the same three trailer final-blank-line variants.
-  - [x] Added the new security focused tests for the same three trailer final-blank-line variants.
+  - [x] Confirmed the next keep-alive fixed-length gap is partial follow-up request line / headers truth.
+  - [x] Added the new parser focused tests for partial follow-up request line and partial follow-up headers.
+  - [x] Added the new server focused tests for the same two keep-alive follow-up variants.
+  - [x] Added the new security focused tests for the same two keep-alive follow-up variants.
   - [x] Ran the first parser verification and recorded the result.
   - [x] Ran the first server verification and recorded the result.
   - [x] Ran the first security verification and recorded the result.
@@ -24,21 +24,22 @@
 ## Baseline Evidence
 
 - Shared checkout is dirty outside HTTP scope; broad git operations remain unsafe.
-- Existing chunked EOF proof already covered malformed chunk extension, chunk-extension line truncation,
-  terminal chunk extension line truncation, chunk-size line truncation, chunk-data line-ending truncation,
-  terminal `0` chunk ending truncation, terminal chunk ending-after-extension truncation, trailer-section truncation,
-  trailer-section CR truncation, trailer-field-name truncation, trailer-separator truncation, trailer-empty-value truncation,
-  trailer-whitespace truncation, and trailer-field-line truncation.
-- The missing boundary was completed trailer-line grammar followed by an incomplete final blank-line:
-  `...0\r\nX-Test:\r\n\r`, `...0\r\nX-Test: \r\n`, and `...0\r\nX-Test: \r\n\r`.
+- Existing fixed-length keep-alive truth already covered:
+  `Connection: close` extra bytes -> explicit `400`,
+  keep-alive garbage tail -> first request completes then follow-up `400`,
+  valid pipelined next request -> first request isolation.
+- The missing boundaries were the two in-between keep-alive follow-up subclasses:
+  `...helloGET /next HTTP/1.1`
+  and
+  `...helloGET /next HTTP/1.1\r\nHost: localhost\r\n`.
 
 ## Verification Evidence 2026-06-03 Focused First Run
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `69/69 passed`, heaptrc `0 unfreed memory blocks` |
-| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `72/72 passed`, heaptrc `0 unfreed memory blocks` |
-| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `48/48 passed`, heaptrc `0 unfreed memory blocks` |
+| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `71/71 passed`, heaptrc `0 unfreed memory blocks` |
+| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `74/74 passed`, heaptrc `0 unfreed memory blocks` |
+| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `50/50 passed`, heaptrc `0 unfreed memory blocks` |
 
 ## Verification Evidence 2026-06-03 HTTP Aggregate
 
@@ -50,4 +51,4 @@
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
 - `git diff --check` 已对本批路径通过。
-- 本批已按 path-limited 提交。
+- 当前待完成项只剩 HTTP aggregate、path-limited commit 与中文收尾报告。
