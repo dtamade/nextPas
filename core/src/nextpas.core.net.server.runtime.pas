@@ -12,6 +12,11 @@ uses
 procedure CreateTcpServerRuntimeContext(
   out AWorkerHandoff: ITcpServerWorkerHandoff;
   out ASessionContext: ITcpServerSessionContext);
+function TryCreateTcpServerSession(const AHandler: ITcpServerHandler;
+  const AConn: ITcpStream; const AContext: ITcpServerSessionContext;
+  out ASession: ITcpServerSession): Boolean;
+function ExecuteTcpServerSession(
+  const ASession: ITcpServerSession): TTcpServerConnOwnership;
 function ExecuteTcpServerConnHandler(const AHandler: ITcpServerHandler;
   const AConn: ITcpStream; const AContext: ITcpServerSessionContext): TTcpServerConnOwnership;
 procedure CloseServerOwnedTcpConn(const AConn: ITcpStream);
@@ -167,29 +172,48 @@ begin
   ASessionContext := TTcpServerDefaultSessionContext.Create(AWorkerHandoff);
 end;
 
-function ExecuteTcpServerConnHandler(const AHandler: ITcpServerHandler;
-  const AConn: ITcpStream; const AContext: ITcpServerSessionContext): TTcpServerConnOwnership;
+function TryCreateTcpServerSession(const AHandler: ITcpServerHandler;
+  const AConn: ITcpStream; const AContext: ITcpServerSessionContext;
+  out ASession: ITcpServerSession): Boolean;
 var
   LContextFactory: ITcpServerSessionFactoryWithContext;
   LSessionFactory: ITcpServerSessionFactory;
+begin
+  ASession := nil;
+  if Supports(AHandler, ITcpServerSessionFactoryWithContext, LContextFactory) then
+  begin
+    ASession := LContextFactory.NewSession(AConn, AContext);
+    if ASession = nil then
+      raise EArgumentError.Create('tcp server session factory returned nil');
+    Exit(True);
+  end;
+  if Supports(AHandler, ITcpServerSessionFactory, LSessionFactory) then
+  begin
+    ASession := LSessionFactory.NewSession(AConn);
+    if ASession = nil then
+      raise EArgumentError.Create('tcp server session factory returned nil');
+    Exit(True);
+  end;
+  Result := False;
+end;
+
+function ExecuteTcpServerSession(
+  const ASession: ITcpServerSession): TTcpServerConnOwnership;
+begin
+  if ASession = nil then
+    raise EArgumentError.Create('tcp server session must not be nil');
+  Result := ASession.Run;
+end;
+
+function ExecuteTcpServerConnHandler(const AHandler: ITcpServerHandler;
+  const AConn: ITcpStream; const AContext: ITcpServerSessionContext): TTcpServerConnOwnership;
+var
   LSession: ITcpServerSession;
 begin
   Result := tscoServer;
   try
-    if Supports(AHandler, ITcpServerSessionFactoryWithContext, LContextFactory) then
-    begin
-      LSession := LContextFactory.NewSession(AConn, AContext);
-      if LSession = nil then
-        raise EArgumentError.Create('tcp server session factory returned nil');
-      Result := LSession.Run;
-    end
-    else if Supports(AHandler, ITcpServerSessionFactory, LSessionFactory) then
-    begin
-      LSession := LSessionFactory.NewSession(AConn);
-      if LSession = nil then
-        raise EArgumentError.Create('tcp server session factory returned nil');
-      Result := LSession.Run;
-    end
+    if TryCreateTcpServerSession(AHandler, AConn, AContext, LSession) then
+      Result := ExecuteTcpServerSession(LSession)
     else
       Result := AHandler.ServeConn(AConn);
   except

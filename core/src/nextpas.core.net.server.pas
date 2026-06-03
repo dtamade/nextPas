@@ -23,6 +23,7 @@ type
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   TTcpServerHandoffResult = nextpas.core.net.server.base.TTcpServerHandoffResult;
   TTcpServerWorkOutcome = nextpas.core.net.server.base.TTcpServerWorkOutcome;
+  TTcpServerPollResult = nextpas.core.net.server.intf.TTcpServerPollResult;
   TTcpServerOptions = nextpas.core.net.server.base.TTcpServerOptions;
   TTcpServerFactory = function(const AOptions: TTcpServerOptions): ITcpServer;
   ITcpServerWork = nextpas.core.net.server.intf.ITcpServerWork;
@@ -30,6 +31,7 @@ type
   ITcpServerWorkerHandoff = nextpas.core.net.server.intf.ITcpServerWorkerHandoff;
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
+  ITcpServerPollDrivenSession = nextpas.core.net.server.intf.ITcpServerPollDrivenSession;
   ITcpServerSessionFactory = nextpas.core.net.server.intf.ITcpServerSessionFactory;
   ITcpServerSessionFactoryWithContext = nextpas.core.net.server.intf.ITcpServerSessionFactoryWithContext;
   ITcpServerHandler = nextpas.core.net.server.intf.ITcpServerHandler;
@@ -47,6 +49,8 @@ const
   TCP_SERVER_HANDOFF_SHUTTING_DOWN = nextpas.core.net.server.base.tshrShuttingDown;
   TCP_SERVER_WORK_COMPLETED = nextpas.core.net.server.base.tswoCompleted;
   TCP_SERVER_WORK_FAILED = nextpas.core.net.server.base.tswoFailed;
+  TCP_SERVER_POLL_WAIT = nextpas.core.net.server.intf.tsprWait;
+  TCP_SERVER_POLL_DONE = nextpas.core.net.server.intf.tsprDone;
 
 procedure RegisterTcpServerFactory(const ABackend: TTcpServerBackend;
   const AFactory: TTcpServerFactory);

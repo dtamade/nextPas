@@ -74,7 +74,8 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
   已固定 foundation contract：`ITcpServer` / `ITcpServerHandler`，并已收进
   `ITcpServerSession`、`ITcpServerWorkerHandoff`、`ITcpServerSessionContext`、
-  `ITcpServerSessionFactoryWithContext` 这些后续 backend 必需的 seam。
+  `ITcpServerSessionFactoryWithContext`、`ITcpServerPollDrivenSession`
+  这些后续 backend 必需的 seam。
 - [src/nextpas.core.net.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.pas:1)
   现在已经有 backend factory registry seam：`RegisterTcpServerFactory` /
   `TryGetTcpServerFactory` / `ResolveTcpServer`；`NewTcpServer(...)` 不再把 backend 选择写死在
@@ -86,8 +87,11 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   是当前 correctness 基线 backend，负责 listen / accept / shutdown / detach ownership，
   并先用 foundation-owned worker handoff 证明 session/context/handoff contract 成立。
 - [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:1)
-  已落 Linux `epoll` 第一阶段 backend：`epoll` 负责 listener readiness 与 nonblocking
-  `TryAccept`，accepted connection 再交给 foundation worker 执行同步协议 handler。
+  现在同时承载两条路径：
+  - phase-1：`epoll` 负责 listener readiness 与 nonblocking `TryAccept`，
+    blocking session 继续交给 foundation worker 执行
+  - phase-2 seam：若 session 同时实现 `ITcpServerPollDrivenSession`，
+    `epoll` 可直接驱动该 per-connection session
 - [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
   现在提供了 `ITcpSocketRuntime`、`ITcpListenerRuntime.TryAccept`、
   `ITcpStreamRuntime.TryRead/TryWrite` 这组 runtime-only seam，用来暴露 native socket
@@ -107,7 +111,10 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - `threaded` backend：
   `accept` 后由连接 worker 同步执行协议 session；这是 correctness baseline。
 - `epoll` phase 1 backend：
-  只有 listener / accept 是 evented 的；accepted connection 仍交给 worker 执行同步 session。
+  只有 listener / accept 一定是 evented 的；blocking session 仍交给 worker 执行同步 session。
+- `epoll` poll-driven session path：
+  foundation 已能直接驱动实现 `ITcpServerPollDrivenSession` 的 session，
+  但这条能力目前还只是 runtime seam，尚未被 H1 server 消费为默认路径。
 - HTTP H1：
   `TH1ServerConnectionState` 已经是独立的 per-connection protocol state object，
   只是当前仍由 threaded worker 或 `epoll` handoff worker 去跑它的 `Run`。
@@ -124,7 +131,8 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - nonblocking runtime I/O seam 已经落地
 - backend provider / registry seam 已经落地
 - Linux `epoll` 第一阶段 backend 已经落地
-- 还没落地的是“runtime 直接驱动单连接协议状态对象”的完整版 evented execution
+- Linux `epoll` 的 poll-driven session seam 已经落地
+- 还没落地的是“HTTP H1 等真实协议 state object 全量迁入这条 evented driver”的完整版执行
 
 原因很直接：
 
@@ -171,7 +179,7 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 1. 守住 threaded 与 `epoll` phase-1 的 public contract parity
 2. 让 future evented backend 直接复用已落地的 factory/session/context/handoff seam
 3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
-4. 把 `TryRead/TryWrite` 接进真正的 per-connection runtime driver
+4. 把 H1 等真实协议 session 迁到 poll-driven driver
 5. 然后再扩 `net.server.kqueue` / `iocp`
 
 ## 性能与并发 posture

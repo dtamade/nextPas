@@ -73,12 +73,15 @@ Current truth:
 - `nextpas.core.net.server` now also resolves backends through a factory registry seam, so runtime selection is no longer hardcoded inside `NewTcpServer(...)`.
 - `ITcpListenerRuntime.TryAccept` plus `ITcpStreamRuntime.TryRead/TryWrite`
   are already landed as the narrow nonblocking runtime I/O seam.
+- `ITcpServerPollDrivenSession` is now the first per-connection evented driver seam;
+  Linux `epoll` can already drive sessions that opt into it, while blocking sessions
+  still fall back to worker execution.
 - Current shipped backends are `threaded` plus a Linux-only phase-1 `epoll`
   backend that uses readiness-driven accept and then hands accepted connections
   to foundation workers.
 - Planned next backends are `kqueue` and `IOCP`, and Linux `epoll` still has a
-  later phase where runtime directly drives per-connection state with
-  `TryRead/TryWrite`.
+  later phase where real protocol sessions such as HTTP H1 migrate onto the
+  poll-driven path backed by `TryRead/TryWrite`.
 
 The public goal is a stable, synchronous application-facing contract with
 runtime/backend policy hidden underneath the foundation layer.

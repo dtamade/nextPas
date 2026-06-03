@@ -65,7 +65,8 @@ This is no longer just a proposal. The foundation split has already landed:
   exposes `threaded` / `epoll` / `kqueue` / `iocp` as backend intent.
 - [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
   exposes the real server seams: `ITcpServer`, `ITcpServerSession`,
-  `ITcpServerSessionFactoryWithContext`, `ITcpServerWorkerHandoff`.
+  `ITcpServerSessionFactoryWithContext`, `ITcpServerWorkerHandoff`,
+  `ITcpServerPollDrivenSession`.
 - [src/nextpas.core.net.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.pas:1)
   now also exposes the backend factory registry seam:
   `RegisterTcpServerFactory`, `TryGetTcpServerFactory`, `ResolveTcpServer`.
@@ -73,7 +74,8 @@ This is no longer just a proposal. The foundation split has already landed:
   is the correctness baseline backend.
 - [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:40)
   is already phase-1 evented: listener readiness and `TryAccept` are event-driven,
-  while connection execution is still worker-driven.
+  while blocking connection execution is still worker-driven; poll-driven sessions
+  can now be driven directly by the epoll runtime.
 - [src/nextpas.core.http.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.server.pas:127)
   no longer owns the runtime loop; it wires HTTP onto `NewTcpServer(...)`.
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:113)
@@ -81,7 +83,7 @@ This is no longer just a proposal. The foundation split has already landed:
 
 What is still missing is narrower and clearer:
 
-- no shared phase-2 per-connection evented driver yet
+- HTTP H1 and other real protocol sessions have not yet migrated onto the poll-driven driver
 - no `kqueue` / `IOCP` concrete backend yet
 
 ## Architecture to freeze
@@ -272,7 +274,7 @@ through a second-rate compatibility path.
 
 ### Phase 4: Add Linux `epoll` backend
 
-- Status: phase 1 done, phase 2 pending
+- Status: phase 1 done, phase-2 seam landed, protocol migration pending
 
 - Drive the same HTTP connection-state objects through the new foundation
 - Use worker handoff for handler execution

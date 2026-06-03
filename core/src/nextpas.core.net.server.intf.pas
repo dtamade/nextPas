@@ -7,9 +7,15 @@ interface
 uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
-  nextpas.core.net.server.base;
+  nextpas.core.net.server.base,
+  nextpas.core.platform.io.base;
 
 type
+  TTcpServerPollResult = (
+    tsprWait,
+    tsprDone
+  );
+
   ITcpServerWork = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000005}']
     function Execute: TTcpServerConnOwnership;
@@ -36,6 +42,14 @@ type
   ITcpServerSession = interface
     ['{6F1D6F1D-4D7C-4E31-9100-410000000003}']
     function Run: TTcpServerConnOwnership;
+  end;
+
+  ITcpServerPollDrivenSession = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000010}']
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
   end;
 
   ITcpServerSessionFactory = interface

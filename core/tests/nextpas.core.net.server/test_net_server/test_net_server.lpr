@@ -11,6 +11,7 @@ uses
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.net.server,
+  nextpas.core.platform.io.base,
   nextpas.core.platform.thread,
   nextpas.core.time.base,
   nextpas.core.time.deadline;
@@ -156,6 +157,43 @@ type
     property CompletionThreadId: UInt64 read FCompletionThreadId;
     property LastWorkOutcome: TTcpServerWorkOutcome read FLastWorkOutcome;
     property LastOwnership: TTcpServerConnOwnership read FLastOwnership;
+  end;
+
+  TPollDrivenHandler = class;
+
+  TPollDrivenEchoSession = class(TInterfacedObject, ITcpServerSession,
+    ITcpServerPollDrivenSession)
+  private
+    FOwner: TPollDrivenHandler;
+    FConn: ITcpStream;
+    FConnRuntime: ITcpStreamRuntime;
+    FBuf: array[0..31] of Byte;
+    FReadCount: SizeUInt;
+    FWritePos: SizeUInt;
+  public
+    constructor Create(const AOwner: TPollDrivenHandler; const AConn: ITcpStream);
+    function Run: TTcpServerConnOwnership;
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
+
+  TPollDrivenHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactoryWithContext)
+  private
+    FServeConnCalled: Boolean;
+    FContextFactoryCalled: Boolean;
+    FRunCount: Int32;
+    FAdvanceCount: Int32;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property ContextFactoryCalled: Boolean read FContextFactoryCalled;
+    property RunCount: Int32 read FRunCount;
+    property AdvanceCount: Int32 read FAdvanceCount;
   end;
 
   TMockServerProvider = class(TInterfacedObject, ITcpServer)
@@ -385,6 +423,119 @@ begin
   else
     FCapturedHandoff := nil;
   Result := TContextAwareSession.Create(Self, AConn, FCapturedHandoff, FMode);
+end;
+
+constructor TPollDrivenEchoSession.Create(const AOwner: TPollDrivenHandler;
+  const AConn: ITcpStream);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FConn := AConn;
+  if not Supports(AConn, ITcpStreamRuntime, FConnRuntime) then
+    raise Exception.Create('poll-driven session requires stream runtime seam');
+  FReadCount := 0;
+  FWritePos := 0;
+end;
+
+function TPollDrivenEchoSession.Run: TTcpServerConnOwnership;
+var
+  LN: SizeUInt;
+begin
+  InterlockedIncrement(FOwner.FRunCount);
+  LN := FConn.Read(FBuf[0], SizeUInt(SizeOf(FBuf)));
+  if LN > 0 then
+    FConn.Write(FBuf[0], LN);
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TPollDrivenEchoSession.PollEvents: TPlatformPollEvents;
+begin
+  if FWritePos < FReadCount then
+    Result := [peWritable]
+  else
+    Result := [peReadable];
+end;
+
+function TPollDrivenEchoSession.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+var
+  LN: SizeUInt;
+  LResult: TTcpStreamIOResult;
+begin
+  InterlockedIncrement(FOwner.FAdvanceCount);
+  AOwnership := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+
+  if FWritePos < FReadCount then
+  begin
+    LResult := FConnRuntime.TryWrite(FBuf[FWritePos], FReadCount - FWritePos, LN);
+    case LResult of
+      tsiorOk:
+        begin
+          Inc(FWritePos, LN);
+          if FWritePos >= FReadCount then
+          begin
+            ANextEvents := [];
+            Exit(TCP_SERVER_POLL_DONE);
+          end;
+          ANextEvents := [peWritable];
+          Exit(TCP_SERVER_POLL_WAIT);
+        end;
+      tsiorWouldBlock:
+        begin
+          ANextEvents := [peWritable];
+          Exit(TCP_SERVER_POLL_WAIT);
+        end;
+    else
+      ANextEvents := [];
+      Exit(TCP_SERVER_POLL_DONE);
+    end;
+  end;
+
+  if not (peReadable in AEvents) then
+  begin
+    ANextEvents := [peReadable];
+    Exit(TCP_SERVER_POLL_WAIT);
+  end;
+
+  LResult := FConnRuntime.TryRead(FBuf[0], SizeUInt(SizeOf(FBuf)), LN);
+  case LResult of
+    tsiorOk:
+      begin
+        if LN = 0 then
+        begin
+          ANextEvents := [];
+          Exit(TCP_SERVER_POLL_DONE);
+        end;
+        FReadCount := LN;
+        FWritePos := 0;
+        ANextEvents := [peWritable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+    tsiorWouldBlock:
+      begin
+        ANextEvents := [peReadable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+  else
+    ANextEvents := [];
+    Exit(TCP_SERVER_POLL_DONE);
+  end;
+end;
+
+function TPollDrivenHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('poll-driven handler should bypass legacy ServeConn');
+end;
+
+function TPollDrivenHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextFactoryCalled := True;
+  Result := TPollDrivenEchoSession.Create(Self, AConn);
 end;
 
 constructor TMockServerProvider.Create(const AOptions: TTcpServerOptions);
@@ -993,6 +1144,65 @@ begin
     'shutdown handoff does not call completion');
 end;
 
+procedure TestThreadedServerPollDrivenSessionFallsBackToRun;
+var
+  LHandler: TPollDrivenHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+begin
+  LHandler := TPollDrivenHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'poll-driven threaded handler keepalive installed');
+  LServer := NewTcpServer;
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'poll-driven threaded server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('ping')^, 4);
+    LClient.Shutdown;
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(4), LN, 'poll-driven threaded echo size');
+    CheckEqual(Byte(Ord('p')), LBuf[0], 'poll-driven threaded first byte');
+  finally
+    LClient.Close;
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'threaded runtime still uses context-aware session factory');
+  Check(not LHandler.ServeConnCalled,
+    'threaded poll-driven handler bypasses ServeConn');
+  CheckEqual(Int64(1), Int64(LHandler.RunCount),
+    'threaded backend falls back to blocking Run');
+  CheckEqual(Int64(0), Int64(LHandler.AdvanceCount),
+    'threaded backend does not drive poll session');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
 procedure TestBuiltInThreadedBackendFactoryExists;
 var
   LFactory: TTcpServerFactory;
@@ -1210,6 +1420,75 @@ begin
   LServer.Shutdown;
   platform_thread_join(LHandle, LRet);
 end;
+
+procedure TestEpollServerUsesPollDrivenSessionWhenAvailable;
+var
+  LHandler: TPollDrivenHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TPollDrivenHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'poll-driven epoll handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'poll-driven epoll server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('ping')^, 4);
+    LClient.Shutdown;
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(4), LN, 'poll-driven epoll echo size');
+    CheckEqual(Byte(Ord('p')), LBuf[0], 'poll-driven epoll first byte');
+  finally
+    LClient.Close;
+  end;
+
+  LWait := 0;
+  while (LHandler.AdvanceCount = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'epoll runtime uses context-aware session factory for poll-driven session');
+  Check(not LHandler.ServeConnCalled,
+    'epoll poll-driven handler bypasses ServeConn');
+  CheckEqual(Int64(0), Int64(LHandler.RunCount),
+    'epoll backend does not fall back to blocking Run');
+  Check(LHandler.AdvanceCount > 0,
+    'epoll backend drives poll session via Advance');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
 {$ENDIF}
 
 begin
@@ -1234,6 +1513,8 @@ begin
     @TestThreadedServerFailingHandoffReportsFailedOutcome);
   T.Run('Threaded server rejects handoff after shutdown',
     @TestThreadedServerRejectsHandoffAfterShutdown);
+  T.Run('Threaded server poll-driven session falls back to Run',
+    @TestThreadedServerPollDrivenSessionFallsBackToRun);
   T.Run('Built-in threaded backend factory exists',
     @TestBuiltInThreadedBackendFactoryExists);
   T.Run('Custom backend factory overrides selection',
@@ -1246,6 +1527,8 @@ begin
     @TestEpollServerShutdownWithoutClients);
   T.Run('Epoll server prefers context session factory when available',
     @TestEpollServerPrefersContextSessionFactoryWhenAvailable);
+  T.Run('Epoll server uses poll-driven session when available',
+    @TestEpollServerUsesPollDrivenSessionWhenAvailable);
   {$ENDIF}
   T.Summary;
 end.

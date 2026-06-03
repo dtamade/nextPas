@@ -30,11 +30,35 @@ type
     FConn: ITcpStream;
     FHandler: ITcpServerHandler;
     FSessionContext: ITcpServerSessionContext;
+    FSession: ITcpServerSession;
   public
-    constructor Create(const AConn: ITcpStream;
+    constructor CreateForHandler(const AConn: ITcpStream;
       const AHandler: ITcpServerHandler;
       const ASessionContext: ITcpServerSessionContext);
+    constructor CreateForSession(const AConn: ITcpStream;
+      const ASession: ITcpServerSession);
     procedure Run;
+  end;
+
+  TTcpEpollPollSessionTarget = class
+  private
+    FConn: ITcpStream;
+    FSocketRuntime: ITcpSocketRuntime;
+    FSession: ITcpServerSession;
+    FPollSession: ITcpServerPollDrivenSession;
+    FEvents: TPlatformPollEvents;
+  public
+    constructor Create(const AConn: ITcpStream;
+      const ASocketRuntime: ITcpSocketRuntime;
+      const ASession: ITcpServerSession;
+      const APollSession: ITcpServerPollDrivenSession);
+    function SocketFd: Int32;
+    function CurrentEvents: TPlatformPollEvents;
+    procedure SetCurrentEvents(const AEvents: TPlatformPollEvents);
+    function Connection: ITcpStream;
+    function HandleEvents(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
   end;
 
   TTcpEpollServer = class(TInterfacedObject, ITcpServer)
@@ -50,8 +74,15 @@ type
     FPoller: TPlatformPoller;
     FPollerReady: Boolean;
     procedure EnsureRuntimeContext;
+    procedure DispatchAcceptedSession(const AConn: ITcpStream;
+      const ASession: ITcpServerSession);
     procedure DispatchAcceptedConn(const AHandler: ITcpServerHandler;
       const AConn: ITcpStream);
+    function TryRegisterPollDrivenSession(const AConn: ITcpStream;
+      const ASession: ITcpServerSession): Boolean;
+    procedure HandlePollTarget(const ATarget: TTcpEpollPollSessionTarget;
+      const AEvents: TPlatformPollEvents);
+    procedure HandleListenerReady(const AHandler: ITcpServerHandler);
   public
     constructor Create(const AOptions: TTcpServerOptions);
     destructor Destroy; override;
@@ -62,7 +93,7 @@ type
     function IsRunning: Boolean;
   end;
 
-constructor TTcpEpollConnTask.Create(const AConn: ITcpStream;
+constructor TTcpEpollConnTask.CreateForHandler(const AConn: ITcpStream;
   const AHandler: ITcpServerHandler;
   const ASessionContext: ITcpServerSessionContext);
 begin
@@ -70,18 +101,75 @@ begin
   FConn := AConn;
   FHandler := AHandler;
   FSessionContext := ASessionContext;
+  FSession := nil;
+end;
+
+constructor TTcpEpollConnTask.CreateForSession(const AConn: ITcpStream;
+  const ASession: ITcpServerSession);
+begin
+  inherited Create;
+  FConn := AConn;
+  FHandler := nil;
+  FSessionContext := nil;
+  FSession := ASession;
 end;
 
 procedure TTcpEpollConnTask.Run;
 var
   LOwnership: TTcpServerConnOwnership;
 begin
-  LOwnership := ExecuteTcpServerConnHandler(FHandler, FConn, FSessionContext);
+  if FSession <> nil then
+    LOwnership := ExecuteTcpServerSession(FSession)
+  else
+    LOwnership := ExecuteTcpServerConnHandler(FHandler, FConn, FSessionContext);
   if LOwnership = tscoServer then
     CloseServerOwnedTcpConn(FConn);
   FConn := nil;
   FHandler := nil;
   FSessionContext := nil;
+  FSession := nil;
+end;
+
+constructor TTcpEpollPollSessionTarget.Create(const AConn: ITcpStream;
+  const ASocketRuntime: ITcpSocketRuntime; const ASession: ITcpServerSession;
+  const APollSession: ITcpServerPollDrivenSession);
+begin
+  inherited Create;
+  FConn := AConn;
+  FSocketRuntime := ASocketRuntime;
+  FSession := ASession;
+  FPollSession := APollSession;
+  FEvents := FPollSession.PollEvents;
+  if FEvents = [] then
+    raise EArgumentError.Create('poll-driven session must expose poll events');
+end;
+
+function TTcpEpollPollSessionTarget.SocketFd: Int32;
+begin
+  Result := Int32(FSocketRuntime.NativeSocketHandle);
+end;
+
+function TTcpEpollPollSessionTarget.CurrentEvents: TPlatformPollEvents;
+begin
+  Result := FEvents;
+end;
+
+procedure TTcpEpollPollSessionTarget.SetCurrentEvents(
+  const AEvents: TPlatformPollEvents);
+begin
+  FEvents := AEvents;
+end;
+
+function TTcpEpollPollSessionTarget.Connection: ITcpStream;
+begin
+  Result := FConn;
+end;
+
+function TTcpEpollPollSessionTarget.HandleEvents(
+  const AEvents: TPlatformPollEvents; out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+begin
+  Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
 end;
 
 constructor TTcpEpollServer.Create(const AOptions: TTcpServerOptions);
@@ -120,8 +208,8 @@ begin
   end;
 end;
 
-procedure TTcpEpollServer.DispatchAcceptedConn(const AHandler: ITcpServerHandler;
-  const AConn: ITcpStream);
+procedure TTcpEpollServer.DispatchAcceptedSession(const AConn: ITcpStream;
+  const ASession: ITcpServerSession);
 var
   LTask: TTcpEpollConnTask;
 begin
@@ -133,7 +221,7 @@ begin
     Exit;
   end;
 
-  LTask := TTcpEpollConnTask.Create(AConn, AHandler, FSessionContext);
+  LTask := TTcpEpollConnTask.CreateForSession(AConn, ASession);
   try
     FConnWorkers.Submit(procedure
     begin
@@ -150,14 +238,140 @@ begin
   end;
 end;
 
+procedure TTcpEpollServer.DispatchAcceptedConn(const AHandler: ITcpServerHandler;
+  const AConn: ITcpStream);
+var
+  LTask: TTcpEpollConnTask;
+  LSession: ITcpServerSession;
+begin
+  if AConn = nil then
+    Exit;
+  if not FRunning then
+  begin
+    CloseServerOwnedTcpConn(AConn);
+    Exit;
+  end;
+
+  if TryCreateTcpServerSession(AHandler, AConn, FSessionContext, LSession) then
+  begin
+    if TryRegisterPollDrivenSession(AConn, LSession) then
+      Exit;
+    DispatchAcceptedSession(AConn, LSession);
+    Exit;
+  end;
+
+  LTask := TTcpEpollConnTask.CreateForHandler(AConn, AHandler, FSessionContext);
+  try
+    FConnWorkers.Submit(procedure
+    begin
+      try
+        LTask.Run;
+      finally
+        LTask.Free;
+      end;
+    end);
+  except
+    LTask.Free;
+    CloseServerOwnedTcpConn(AConn);
+    raise;
+  end;
+end;
+
+function TTcpEpollServer.TryRegisterPollDrivenSession(const AConn: ITcpStream;
+  const ASession: ITcpServerSession): Boolean;
+var
+  LPollSession: ITcpServerPollDrivenSession;
+  LSocketRuntime: ITcpSocketRuntime;
+  LTarget: TTcpEpollPollSessionTarget;
+  LErr: Int32;
+begin
+  Result := False;
+  if not Supports(ASession, ITcpServerPollDrivenSession, LPollSession) then
+    Exit(False);
+  if not Supports(AConn, ITcpSocketRuntime, LSocketRuntime) then
+    Exit(False);
+
+  LSocketRuntime.SetBlocking(False);
+  LTarget := TTcpEpollPollSessionTarget.Create(AConn, LSocketRuntime,
+    ASession, LPollSession);
+  try
+    LErr := platform_poller_add(FPoller, LTarget.SocketFd,
+      LTarget.CurrentEvents, LTarget);
+    if LErr <> 0 then
+      raise ENetworkError.Create('tcp epoll poller add conn failed (' +
+        IntToStr(LErr) + ')');
+    Result := True;
+  except
+    LTarget.Free;
+    raise;
+  end;
+end;
+
+procedure TTcpEpollServer.HandlePollTarget(
+  const ATarget: TTcpEpollPollSessionTarget; const AEvents: TPlatformPollEvents);
+var
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LErr: Int32;
+begin
+  LOwnership := tscoServer;
+  try
+    LResult := ATarget.HandleEvents(AEvents, LNextEvents, LOwnership);
+    if LResult = tsprDone then
+    begin
+      platform_poller_remove(FPoller, ATarget.SocketFd);
+      if LOwnership = tscoServer then
+        CloseServerOwnedTcpConn(ATarget.Connection);
+      ATarget.Free;
+      Exit;
+    end;
+
+    if LNextEvents = [] then
+      raise EArgumentError.Create('poll-driven session returned empty wait events');
+
+    if LNextEvents <> ATarget.CurrentEvents then
+    begin
+      ATarget.SetCurrentEvents(LNextEvents);
+      LErr := platform_poller_modify(FPoller, ATarget.SocketFd,
+        ATarget.CurrentEvents, ATarget);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp epoll poller modify conn failed (' +
+          IntToStr(LErr) + ')');
+    end;
+  except
+    platform_poller_remove(FPoller, ATarget.SocketFd);
+    CloseServerOwnedTcpConn(ATarget.Connection);
+    ATarget.Free;
+  end;
+end;
+
+procedure TTcpEpollServer.HandleListenerReady(const AHandler: ITcpServerHandler);
+var
+  LConn: ITcpStream;
+  LAcceptResult: TTcpAcceptResult;
+begin
+  while FRunning do
+  begin
+    LConn := nil;
+    LAcceptResult := FListenerRuntime.TryAccept(LConn);
+    if LAcceptResult = tarAccepted then
+    begin
+      DispatchAcceptedConn(AHandler, LConn);
+      Continue;
+    end;
+    Break;
+  end;
+end;
+
 procedure TTcpEpollServer.ListenAndServe(const AAddr: string;
   const APort: UInt16; const AHandler: ITcpServerHandler);
 var
   LEntries: array[0..7] of TPlatformPollEntry;
   LCount: Int32;
   LErr: Int32;
-  LConn: ITcpStream;
-  LAcceptResult: TTcpAcceptResult;
+  LI: Int32;
+  LTarget: TTcpEpollPollSessionTarget;
 begin
   if AHandler = nil then
     raise EArgumentError.Create('tcp server handler must not be nil');
@@ -197,16 +411,15 @@ begin
         if LCount <= 0 then
           Continue;
 
-        while FRunning do
+        for LI := 0 to LCount - 1 do
         begin
-          LConn := nil;
-          LAcceptResult := FListenerRuntime.TryAccept(LConn);
-          if LAcceptResult = tarAccepted then
+          if LEntries[LI].UserData = nil then
           begin
-            DispatchAcceptedConn(AHandler, LConn);
+            HandleListenerReady(AHandler);
             Continue;
           end;
-          Break;
+          LTarget := TTcpEpollPollSessionTarget(LEntries[LI].UserData);
+          HandlePollTarget(LTarget, LEntries[LI].REvents);
         end;
       end;
     finally

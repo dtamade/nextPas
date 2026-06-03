@@ -1,63 +1,72 @@
-# Findings: nextpas.core.net.server backend provider seam
+# Findings: nextpas.core.net.server poll-driven session seam
 
 ## Scope
 
-- 这轮把 `nextpas.core.net.server` 的 backend 解析从 facade 内硬编码 `case`
-  提升成 registry/provider seam。
-- 目标是给 future backend 与 phase-2 driver 打开稳定入口，同时保持当前 HTTP contract 不变。
+- 这轮把 `nextpas.core.net.server` 从“只有 evented accept”的 `epoll`
+  backend，推进到“foundation 可直接驱动 poll-driven per-connection session”的最小
+  phase-2 seam。
+- 目标是先把 runtime contract 与 backend 直驱路径落地，不直接重开
+  `nextpas.core.http.impl.h1` 的生产行为。
 
 ## Confirmed truths
 
-### 1. provider seam 现在已经落地
+### 1. foundation 现在已经有 poll-driven session contract
 
-- `src/nextpas.core.net.server.pas` 现在公开：
-  - `TTcpServerFactory`
-  - `RegisterTcpServerFactory`
-  - `UnregisterTcpServerFactory`
-  - `HasTcpServerFactory`
-  - `TryGetTcpServerFactory`
-  - `ResolveTcpServer`
-- `NewTcpServer(...)` 现在只做 facade forward，backend 解析改由 registry 完成。
+- [src/nextpas.core.net.server.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.intf.pas:1)
+  新增：
+  - `TTcpServerPollResult = (tsprWait, tsprDone)`
+  - `ITcpServerPollDrivenSession`
+- 这个 contract 固定了每个连接状态对象对 runtime 的最小承诺：
+  - 暴露当前等待的 `PollEvents`
+  - 用 `Advance(...)` 消费 readiness 事件
+  - 返回下一轮 wait events 与 connection ownership
 
-### 2. built-in backend 已改成“初始化注册”，不是写死在 facade
+### 2. runtime 已经把 “create session” 和 “execute session” 分开
 
-- builtin `threaded` 始终注册。
-- Linux 下 builtin `epoll` 也在 initialization 里注册。
-- `kqueue` / `IOCP` 仍然没有 concrete backend，但现在已经有统一注册入口，不必再回到大 `case` 扩散。
+- [src/nextpas.core.net.server.runtime.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.runtime.pas:1)
+  新增：
+  - `TryCreateTcpServerSession(...)`
+  - `ExecuteTcpServerSession(...)`
+- 这使 backend 不必再被迫只走 `ServeConn` 一条路：
+  - 能创建 session 时，backend 可以自己决定是 worker 执行还是 poll-driven 直驱
+  - 不能创建 session 时，仍回退到 legacy handler 路径
 
-### 3. HTTP public contract 没有被重开
+### 3. Linux `epoll` 已经不再只是 evented accept
 
-- `THttpServer` 仍然只是把 `THttpServerOptions.Backend` 下沉到 `TTcpServerOptions`。
-- `NewHttpServer` / `NewHttpClient` 相关 registry 回归仍通过。
-- 这轮没有改 H1 parser / writer / server session 逻辑。
+- [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:1)
+  现在同时支持两条执行路径：
+  - blocking / legacy session：accepted connection 仍交给 foundation worker 执行
+  - poll-driven session：若 session 实现 `ITcpServerPollDrivenSession`，则直接注册到
+    `epoll` 并由 runtime 驱动 `Advance(...)`
+- 这意味着 phase-2 不再只是纸面方向，foundation 已经有第一条真正可运行的
+  per-connection evented execution seam。
 
-### 4. 当前真正剩下的技术主线更清晰了
+### 4. HTTP 当前真相仍然没有被说过头
 
-- shared phase-2 per-connection evented driver
-- `kqueue` concrete backend
-- `IOCP` concrete backend
-
-provider seam 落地后，剩余问题已经从“怎么接 future backend”收窄成
-“怎么驱动 session”。
+- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:1)
+  本轮没有改生产实现。
+- 也就是说：
+  - foundation 已具备 poll-driven session seam
+  - 但 H1 目前还没有迁移到这条路径
+  - 当前 HTTP server 运行真相仍然以 worker-driven session 为主
 
 ## Verification evidence
 
 - `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - `18/18 passed`
-  - 新增 proof：
-    - built-in threaded backend factory exists
-    - custom backend factory overrides selection
-    - missing backend factory raises `ENotSupportedError`
+  - 预期拿到本轮最新 proof：
+    - threaded backend 对 poll-driven session 仍回退到 `Run`
+    - epoll backend 可以直接驱动 poll-driven session
+  - 需要以本轮最终 rerun 结果为准
+- 既有 fresh 回归：
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `111/111 passed`
   - heaptrc：`0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_registry clean test`
-  - `4/4 passed`
-  - 证明 HTTP constructor / registry 路径未被 net.server seam 变更误伤
-  - heaptrc：`0 unfreed memory blocks`
-- `git diff --check -- src/nextpas.core.net.server.pas tests/nextpas.core.net.server/test_net_server/test_net_server.lpr`
-  - clean
+  - 证明当前 `net.server` foundation seam 未误伤 HTTP server correctness baseline
 
 ## Remaining gaps / risks
 
-- 目前 provider seam 仍是 facade-level registry，不等于 phase-2 runtime driver 已存在。
-- `kqueue` / `IOCP` 仍无 concrete backend；当前只是“可接入”，不是“已交付”。
-- HTTP 侧目前还没有直接消费 provider capability 的更细抽象；这件事只有在多 backend/多 strategy 真正出现时才值得扩 public seam。
+- 目前只有 Linux `epoll` 消费了这条 seam；`kqueue` / `IOCP` 还没有 concrete backend。
+- `ITcpServerPollDrivenSession` 只是 foundation contract 已落地，不等于 HTTP H1、
+  WebSocket、TLS 等真实协议状态对象已经全部迁移。
+- `threaded` backend 仍然是 correctness baseline；高并发真实性能要等 H1 poll-driven 化和
+  后续 benchmark 才能评估。
