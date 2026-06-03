@@ -1,62 +1,56 @@
-# Findings: http h1 poll-driven phase2 step1
+# Findings: http h1 poll-driven phase2 step2
 
 ## Scope
 
-- 这轮不再继续补碎片化 malformed case。
-- 这轮直接推进 H1 poll-driven runtime：先把 request-side read/parse 拉回 reactor，
-  再把 worker handoff 粒度从“整连接”收窄到“单 request”。
+- 这轮继续停留在 H1 poll-driven phase 2 主线，不回去补碎片化 malformed case。
+- 目标是把 successful response drain 从 worker 内同步 socket write，
+  收窄到 reactor-owned nonblocking drain。
 
 ## Confirmed truths
 
-### 1. 上一轮的 H1 poll-driven 实现确实还是 whole-connection bridge
+### 1. 上一轮的 poll path 仍然把 successful response drain 留在 worker 内同步 `Write`
 
-- 新增 RED 前，context-aware H1 session 虽然已经暴露
-  `ITcpServerPollDrivenSession`，
-  但同连接里两个已完成请求仍会在第一次 handoff 里一起跑完。
-- focused RED 明确抓到这一点：
-  - 第一次 `Advance([peReadable])`
-  - handler 已经被调用两次
-  - 说明还是整连接一次 worker `Run`
+- 新增 RED 用 runtime-only stream 直接卡死同步 `Write` 路径：
+  - request handler 仍然会被 handoff 执行
+  - 但第一次请求完成后，worker 内已经发生了 `SyncWriteCalls = 1`
+  - 说明 poll path 还没有把 successful response 保留到 reactor drain
 
-### 2. 这轮已把 request-side ownership 真正拉回 reactor
+### 2. `WriteTimeout = 0` 的 poll path 现在已经能 produce-then-drain
 
-- `TH1ServerConnectionState` 现在新增了 poll-path 自己的 request parse 状态：
-  - `FStreamRuntime`
-  - `FParseTotalRead`
-  - `FParseHeadersDone`
-  - `FPollWorkerPending`
+- `TH1ServerConnectionState` 现在新增 poll response state：
+  - `FPollOutbound`
+  - `FPollResponsePending`
 - poll-driven 路径现在会：
-  - 直接用 `ITcpStreamRuntime.TryRead` 读 socket
-  - 直接驱动 `IH1Parser`
-  - parser 完成一个 request 后只 handoff 这一个 request
-  - worker completion 回到 reactor 后，如果 `FPending` 已经有 follow-up request，
-    会立刻继续 parse / submit，不等下一次 readability
+  - worker 只负责把 response 生产到 `IH1OutboundBuffer`
+  - completion wake 回到 reactor 后先尝试一次 `TryDrainTo`
+  - 若 `would-block`，则注册 `peWritable`
+  - writable wake 到来后继续 drain
+  - drain 完成后，若 keep-alive 且 `FPending` 已有 follow-up request，
+    会继续 parse / submit，不等新的 readability
 
-### 3. 当前 phase 2 还没完成，剩余缺口已经更清楚
+### 3. 为了不把 deadline 语义做成半成品，这轮只切了 `WriteTimeout = 0` 的 drain
 
-- 这轮仍然保留 worker-owned blocking drain：
-  - request handler 执行
-  - `TH1ResponseWriter` flush
-  - outbound buffer drain 到 socket
-- `WakeDeadline` 仍然是 `Infinite`。
+- `WriteTimeout > 0` 的 poll path 目前仍保留旧的 worker-owned blocking drain。
+- 这样现有 real-socket stalled-peer / backpressure / safe-close proof 不会被这轮半途打坏。
 - 所以 H1 现在的真实状态是：
   - read/parse 已经 reactor-owned
-  - write/drain / deadline 还不是
+  - `WriteTimeout = 0` 的 successful response drain 也已经 reactor-owned
+  - timed drain / `WakeDeadline` 还没有
 
-### 4. 兼容性关键点目前守住了
+### 4. 现有兼容性和既有快路径都守住了
 
+- per-request handoff proof 仍保持成立。
+- `epoll` backend 现有 stalled-peer / write-timeout regression 没回归。
 - 无 `ITcpStreamRuntime` 时仍保留旧的 whole-run fallback。
-- worker 执行单 request 前仍会把 socket 设回 blocking，
-  这样 hijack / WebSocket 这类 worker-owned 路径不被 nonblocking 语义打坏。
-- request 完成且连接仍归 server 持有时，reactor 会把 socket 再设回 nonblocking，
-  继续 keep-alive follow-up request。
+- worker 执行 request 前仍会把 socket 设回 blocking，
+  这样 hijack / WebSocket / timed drain 老路径不被破坏。
 
 ## Verification evidence
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `114/114 passed`
+  - `115/115 passed`
   - 新增 proof：
-    - H1 poll-driven session hands off per completed request
+    - H1 poll-driven session drains response via writable events
   - threaded / epoll 既有 contract 未回归：
     - keep-alive / pipelining
     - malformed ingress / trailer / size-limit rejection
@@ -65,10 +59,11 @@
 
 ## Remaining gaps / risks
 
-- 当前 request-side per-request handoff 已经落地，但 outbound drain 还没有进入 reactor；
-  这意味着性能形态还不是目标终态。
-- `WakeDeadline` 还没有接进 H1 生产路径，`IdleTimeout` / `WriteTimeout` 在 poll-driven phase 2 下仍不是最终设计。
+- 当前 successful response drain 只在 `WriteTimeout = 0` 时进入 reactor；
+  timed drain 仍不是最终形态。
+- `WakeDeadline` 还没有接进 H1 生产路径，
+  `WriteTimeout` 在 poll-driven phase 2 下仍不是最终设计。
 - 下一批最值得做的是：
-  - 把 `IH1OutboundBuffer.TryDrainTo` 接进 poll-driven H1
-  - 让 `peWritable` / would-block / write deadline 真正进入状态机
-  - 再决定 bounded outbound queue 与 backpressure contract
+  - 把 `WakeDeadline` / `WriteTimeout` 接进 poll-driven drain
+  - 决定 deadline 到期时的 safe-close / no-follow-up-consume 语义
+  - 再决定 bounded outbound queue / multi-response ordering contract
