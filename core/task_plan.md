@@ -40,7 +40,7 @@
 - [x] 若失败则仅在 HTTP parser/server 内最小修复；若直接通过，则按 coverage-expansion 收口。
 - [x] 同步 inbox、API coverage、`task_plan.md`、`findings.md`、`progress.md`。
 - [x] 跑 HTTP 聚合验证、`git diff --check` 与 path-limited git hygiene。
-- [ ] path-limited commit，并输出中文收尾报告。
+- [x] path-limited commit，并输出中文收尾报告。
 
 ## Quality Gates
 

@@ -2,7 +2,7 @@
 
 ## Session: 2026-06-03 HTTP chunk-data CRLF EOF truncation
 
-- **Status:** ready_to_commit
+- **Status:** completed
 - **Scope:** add parser/server/security focused proof that chunked request line-ending truncation after chunk-data is rejected at EOF / peer half-close with explicit `400` semantics.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
@@ -17,7 +17,7 @@
   - [x] Determined this batch is direct GREEN coverage expansion, not a production bugfix.
   - [x] Updated HTTP route-tracking docs and batch control files.
   - [x] Run HTTP aggregate verification and diff hygiene.
-  - [ ] Commit this batch with path-limited staging only.
+  - [x] Commit this batch with path-limited staging only.
 
 ## Baseline Evidence
 
@@ -44,4 +44,4 @@
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
 - `git diff --check` 已对本批 HTTP 相关路径通过。
-- 当前只剩 path-limited staging/commit 与中文收尾报告。
+- path-limited commit 已完成；剩余工作仅是聊天层中文收尾报告。
