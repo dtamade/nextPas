@@ -2671,9 +2671,9 @@ begin
   RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400('epoll', LHttpOpts);
 end;
 
-procedure RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
+procedure RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
   const ALabel, ARequest, AExpectedStatusLine: string;
-  const AMaxHeaderSize: Int32; const AMaxBodySize: Int64);
+  const AHttpOpts: THttpServerOptions);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -2701,10 +2701,7 @@ const
   BODY_CHUNK_LEN = 8192;
   BODY_CHUNK_COUNT = 8;
 begin
-  LHttpOpts := THttpServerOptions.Default;
-  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
-  LHttpOpts.MaxHeaderSize := AMaxHeaderSize;
-  LHttpOpts.MaxBodySize := AMaxBodySize;
+  LHttpOpts := AHttpOpts;
   LFirstCalls := 0;
   LBodyPrefix := 'queued-order-prefix:';
   SetLength(LBodyChunk, BODY_CHUNK_LEN);
@@ -2770,7 +2767,8 @@ begin
   end;
 end;
 
-procedure RunEpollRealSocketQueuedFollowUp400PreservesWireOrder;
+procedure RunRealSocketQueuedFollowUp400PreservesWireOrder(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
 const
   REQ =
     'GET /block HTTP/1.1'#13#10 +
@@ -2781,12 +2779,13 @@ const
     'Content-Length: 1'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
-  RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
-    'epoll queued follow-up 400 live path', REQ,
-    'HTTP/1.1 400 Bad Request', 0, 0);
+  RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    ABackendName + ' queued follow-up 400 live path', REQ,
+    'HTTP/1.1 400 Bad Request', AHttpOpts);
 end;
 
-procedure RunEpollRealSocketQueuedFollowUp413PreservesWireOrder;
+procedure RunRealSocketQueuedFollowUp413PreservesWireOrder(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
 const
   REQ =
     'GET /block HTTP/1.1'#13#10 +
@@ -2797,12 +2796,13 @@ const
     'Connection: close'#13#10#13#10 +
     'abc';
 begin
-  RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
-    'epoll queued follow-up 413 live path', REQ,
-    'HTTP/1.1 413 Payload Too Large', 0, 2);
+  RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    ABackendName + ' queued follow-up 413 live path', REQ,
+    'HTTP/1.1 413 Payload Too Large', AHttpOpts);
 end;
 
-procedure RunEpollRealSocketQueuedFollowUp431PreservesWireOrder;
+procedure RunRealSocketQueuedFollowUp431PreservesWireOrder(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
 const
   REQ =
     'GET /block HTTP/1.1'#13#10 +
@@ -2812,24 +2812,64 @@ const
     'X-Long: 0123456789012345678901234567890123456789'#13#10 +
     'Connection: close'#13#10#13#10;
 begin
-  RunEpollRealSocketQueuedFollowUpErrorPreservesWireOrder(
-    'epoll queued follow-up 431 live path', REQ,
-    'HTTP/1.1 431 Request Header Fields Too Large', 64, 0);
+  RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    ABackendName + ' queued follow-up 431 live path', REQ,
+    'HTTP/1.1 431 Request Header Fields Too Large', AHttpOpts);
+end;
+
+procedure TestRealSocketQueuedFollowUp400PreservesWireOrderThreadedBackend;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  RunRealSocketQueuedFollowUp400PreservesWireOrder('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketQueuedFollowUp413PreservesWireOrderThreadedBackend;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.MaxBodySize := 2;
+  RunRealSocketQueuedFollowUp413PreservesWireOrder('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketQueuedFollowUp431PreservesWireOrderThreadedBackend;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.MaxHeaderSize := 64;
+  RunRealSocketQueuedFollowUp431PreservesWireOrder('threaded', LHttpOpts);
 end;
 
 procedure TestEpollRealSocketQueuedFollowUp400PreservesWireOrder;
+var
+  LHttpOpts: THttpServerOptions;
 begin
-  RunEpollRealSocketQueuedFollowUp400PreservesWireOrder;
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketQueuedFollowUp400PreservesWireOrder('epoll', LHttpOpts);
 end;
 
 procedure TestEpollRealSocketQueuedFollowUp413PreservesWireOrder;
+var
+  LHttpOpts: THttpServerOptions;
 begin
-  RunEpollRealSocketQueuedFollowUp413PreservesWireOrder;
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHttpOpts.MaxBodySize := 2;
+  RunRealSocketQueuedFollowUp413PreservesWireOrder('epoll', LHttpOpts);
 end;
 
 procedure TestEpollRealSocketQueuedFollowUp431PreservesWireOrder;
+var
+  LHttpOpts: THttpServerOptions;
 begin
-  RunEpollRealSocketQueuedFollowUp431PreservesWireOrder;
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHttpOpts.MaxHeaderSize := 64;
+  RunRealSocketQueuedFollowUp431PreservesWireOrder('epoll', LHttpOpts);
 end;
 {$ENDIF}
 
@@ -7671,6 +7711,12 @@ begin
     @TestEpollRealSocketQueuedFollowUp413PreservesWireOrder);
   T.Run('Real socket queued follow-up 431 preserves wire order with epoll backend',
     @TestEpollRealSocketQueuedFollowUp431PreservesWireOrder);
+  T.Run('Real socket queued follow-up 400 preserves wire order with threaded backend',
+    @TestRealSocketQueuedFollowUp400PreservesWireOrderThreadedBackend);
+  T.Run('Real socket queued follow-up 413 preserves wire order with threaded backend',
+    @TestRealSocketQueuedFollowUp413PreservesWireOrderThreadedBackend);
+  T.Run('Real socket queued follow-up 431 preserves wire order with threaded backend',
+    @TestRealSocketQueuedFollowUp431PreservesWireOrderThreadedBackend);
 {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
