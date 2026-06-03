@@ -1,4 +1,4 @@
-# Findings: HTTP truncated trailer CR EOF proof
+# Findings: HTTP truncated trailer field EOF proof
 
 ## Repo / Git Safety
 
@@ -23,19 +23,20 @@
 - `terminal chunk ending after extension EOF truncation` 已覆盖 `0;sig=abc\r\n` 这类最终空 trailer section 整段缺失。
 - `chunk-size line EOF truncation`、`chunk-data CRLF EOF truncation`、
   `truncated trailer section at EOF` 都已有单独 focused proof。
-- 但 trailer field 如果已经完整结束、只是最终空 trailer section
-  只收到单个 `CR` 后 EOF，仍没有把 `...0\r\nX-Test: value\r\n\r` 这类输入单独锁住。
+- `truncated trailer section CR EOF truncation` 也已覆盖 `...0\r\nX-Test: value\r\n\r`。
+- 但 trailer field 行本体自己如果缺失结尾 `LF` 或整个 `CRLF`，仍没有把
+  `...0\r\nX-Test: value` 与 `...0\r\nX-Test: value\r` 这两类输入单独锁住。
 
 ## New Evidence From This Batch
 
 - parser focused tests 证明：
-  - 当输入结束在 `...0\r\nX-Test: value\r\n\r` 时，`Finish` 后会进入 parser error；
-  - 该输入保持 not-complete，不会被误判成合法完成。
+  - 当输入结束在 `...0\r\nX-Test: value` 或 `...0\r\nX-Test: value\r` 时，`Finish` 后都会进入 parser error；
+  - 这两类输入都保持 not-complete，不会被误判成合法完成。
 - server focused tests 证明：
-  - peer half-close 暴露出 truncated trailer section CR EOF 截断时，server 返回显式 `400`；
-  - handler 不会被调用。
+  - peer half-close 暴露出 truncated trailer field line EOF / truncated trailer field CR EOF 时，server 都返回显式 `400`；
+  - 两类输入下 handler 都不会被调用。
 - security focused tests 证明：
-  - raw-wire 下该子类稳定落到显式 `400`，没有静默关闭或 handler 落地。
+  - raw-wire 下这两个 trailer field-line 子类都稳定落到显式 `400`，没有静默关闭或 handler 落地。
 
 ## Batch Truth
 
@@ -49,6 +50,8 @@
   - terminal chunk extension line EOF 截断也已单独证明；
   - terminal chunk ending after extension EOF 截断也已单独证明；
   - terminal chunk ending after extension CR EOF 截断也已单独证明；
+  - truncated trailer field line EOF 截断也已单独证明；
+  - truncated trailer field CR EOF 截断也已单独证明；
   - truncated trailer section CR EOF 截断也已单独证明；
   - chunk-size line 截断已证明；
   - chunk-data line ending 截断已证明；
@@ -58,5 +61,5 @@
 ## Remaining Questions
 
 - malformed chunk framing 审计仍可继续细化其他 terminal/trailer grammar 子类，但这轮已经把
-  trailer field 完整结束后空 trailer section 的 CR-only EOF truth 锁实。
+  trailer field 行本体自己缺 `LF` / 缺 `CRLF` 的 truth 锁实。
 - keep-alive request-tail 契约决策仍然存在，不过不阻塞继续把 H1 grammar truth 做扎实。

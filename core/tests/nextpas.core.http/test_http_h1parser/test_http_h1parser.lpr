@@ -640,6 +640,48 @@ begin
   Check(not LP.IsComplete, 'truncated trailer request stays incomplete');
 end;
 
+procedure TestChunkedRequestTruncatedTrailerFieldLineAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Test'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'X-Test: value';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated trailer field line request is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'truncated trailer field line request reports parser error');
+  Check(not LP.IsComplete, 'truncated trailer field line request stays incomplete');
+end;
+
+procedure TestChunkedRequestTruncatedTrailerFieldCrAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: X-Test'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'X-Test: value'#13;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated trailer field CR request is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'truncated trailer field CR request reports parser error');
+  Check(not LP.IsComplete, 'truncated trailer field CR request stays incomplete');
+end;
+
 procedure TestChunkedRequestTruncatedTrailerCrAtEof;
 var
   LP: IH1Parser;
@@ -1088,6 +1130,8 @@ begin
   T.Run('Chunked request trailer bytes track late trailer', @TestChunkedRequestTrailerBytesTrackLateTrailer);
   T.Run('Chunked request invalid trailer field', @TestChunkedRequestInvalidTrailerField);
   T.Run('Chunked request truncated trailer at EOF', @TestChunkedRequestTruncatedTrailerAtEof);
+  T.Run('Chunked request truncated trailer field line at EOF', @TestChunkedRequestTruncatedTrailerFieldLineAtEof);
+  T.Run('Chunked request truncated trailer field CR at EOF', @TestChunkedRequestTruncatedTrailerFieldCrAtEof);
   T.Run('Chunked request truncated trailer CR at EOF', @TestChunkedRequestTruncatedTrailerCrAtEof);
   T.Run('HEAD request', @TestHeadRequest);
   T.Run('Generic malformed request', @TestInvalidRequest);
