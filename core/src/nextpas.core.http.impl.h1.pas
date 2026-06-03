@@ -125,9 +125,13 @@ type
   TH1PollRequestWork = class(TInterfacedObject, ITcpServerWork)
   private
     FState: TH1ServerConnectionState;
+    FOutbound: IH1OutboundBuffer;
+    FCloseAfterDrain: Boolean;
   public
     constructor Create(const AState: TH1ServerConnectionState);
     function Execute: TTcpServerConnOwnership;
+    property Outbound: IH1OutboundBuffer read FOutbound;
+    property CloseAfterDrain: Boolean read FCloseAfterDrain;
   end;
 
   TH1PollRunCompletion = class(TInterfacedObject, ITcpServerWorkCompletion)
@@ -135,6 +139,18 @@ type
     FState: TH1ServerConnectionState;
   public
     constructor Create(const AState: TH1ServerConnectionState);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
+  TH1PollRequestCompletion = class(TInterfacedObject, ITcpServerWorkCompletion)
+  private
+    FState: TH1ServerConnectionState;
+    FWorkRef: ITcpServerWork;
+    FWork: TH1PollRequestWork;
+  public
+    constructor Create(const AState: TH1ServerConnectionState;
+      const AWork: TH1PollRequestWork);
     procedure Complete(const AOutcome: TTcpServerWorkOutcome;
       const AOwnership: TTcpServerConnOwnership);
   end;
@@ -160,23 +176,39 @@ type
     FPollWorkerPending: Boolean;
     FPollCompletionReady: Boolean;
     FPollCompletionOwnership: TTcpServerConnOwnership;
+    FPollNeedRequestReset: Boolean;
     FParseTotalRead: SizeUInt;
     FParseHeadersDone: Boolean;
     FPollOutbound: IH1OutboundBuffer;
     FPollResponsePending: Boolean;
+    FPollCloseAfterDrain: Boolean;
+    FPollQueuedOutbound: IH1OutboundBuffer;
+    FPollQueuedResponsePending: Boolean;
+    FPollQueuedCloseAfterDrain: Boolean;
     FPollWriteDeadline: TDeadline;
     procedure ResetPollRequestState;
+    procedure PreparePollRequestParse;
     procedure ResetPollResponseState;
+    procedure PromoteQueuedPollResponse;
+    function EnqueuePollResponse(const AOutbound: IH1OutboundBuffer;
+      const ACloseAfterDrain: Boolean): Boolean;
+    function CanParseBufferedPollRequestWhileDraining: Boolean;
+    function ShouldWaitForWritableInsteadOfEagerDrain(
+      const AEvents: TPlatformPollEvents): Boolean;
+    function QueuePollErrorResponse(const AStatus: THttpStatus): Boolean;
+    procedure ApplyPollRequestResult(const AWork: TH1PollRequestWork);
     procedure ArmPollWriteDeadline;
     function UsePollOwnedResponseDrain: Boolean;
     function ExecuteCurrentRequest: TTcpServerConnOwnership;
-    function ExecuteCurrentPollRequest: TTcpServerConnOwnership;
+    function ExecuteCurrentPollRequest(out AOutbound: IH1OutboundBuffer;
+      out ACloseAfterDrain: Boolean): TTcpServerConnOwnership;
     function AdvanceWholeRunBridge(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
     function SubmitCurrentPollRequest(out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
-    function ContinueAfterPollCompletion(out ANextEvents: TPlatformPollEvents;
+    function ContinueAfterPollCompletion(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
     function AdvancePollResponseDrain(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
@@ -378,7 +410,7 @@ end;
 function TH1PollRequestWork.Execute: TTcpServerConnOwnership;
 begin
   if FState.UsePollOwnedResponseDrain then
-    Result := FState.ExecuteCurrentPollRequest
+    Result := FState.ExecuteCurrentPollRequest(FOutbound, FCloseAfterDrain)
   else
     Result := FState.ExecuteCurrentRequest;
 end;
@@ -405,6 +437,41 @@ begin
     end;
     FState.FPollCompletionReady := True;
   end;
+  FState := nil;
+end;
+
+{ TH1PollRequestCompletion }
+
+constructor TH1PollRequestCompletion.Create(const AState: TH1ServerConnectionState;
+  const AWork: TH1PollRequestWork);
+begin
+  inherited Create;
+  FState := AState;
+  FWorkRef := AWork as ITcpServerWork;
+  FWork := AWork;
+end;
+
+procedure TH1PollRequestCompletion.Complete(
+  const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  if FState <> nil then
+  begin
+    if AOutcome = tswoCompleted then
+    begin
+      if AOwnership = tscoServer then
+        FState.ApplyPollRequestResult(FWork);
+      FState.FPollCompletionOwnership := AOwnership;
+    end
+    else
+    begin
+      FState.FPollCompletionOwnership := tscoServer;
+      FState.FKeepAlive := False;
+    end;
+    FState.FPollCompletionReady := True;
+  end;
+  FWorkRef := nil;
+  FWork := nil;
   FState := nil;
 end;
 
@@ -442,10 +509,15 @@ begin
   FPollWorkerPending := False;
   FPollCompletionReady := False;
   FPollCompletionOwnership := tscoServer;
+  FPollNeedRequestReset := False;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
   FPollOutbound := nil;
   FPollResponsePending := False;
+  FPollCloseAfterDrain := False;
+  FPollQueuedOutbound := nil;
+  FPollQueuedResponsePending := False;
+  FPollQueuedCloseAfterDrain := False;
   FPollWriteDeadline := TDeadline.Infinite;
 end;
 
@@ -454,13 +526,97 @@ begin
   FParser.Reset;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
+  FPollNeedRequestReset := False;
+end;
+
+procedure TH1ServerConnectionState.PreparePollRequestParse;
+begin
+  if FPollNeedRequestReset then
+    ResetPollRequestState;
 end;
 
 procedure TH1ServerConnectionState.ResetPollResponseState;
 begin
   FPollOutbound := nil;
   FPollResponsePending := False;
+  FPollCloseAfterDrain := False;
+  FPollQueuedOutbound := nil;
+  FPollQueuedResponsePending := False;
+  FPollQueuedCloseAfterDrain := False;
   FPollWriteDeadline := TDeadline.Infinite;
+end;
+
+procedure TH1ServerConnectionState.PromoteQueuedPollResponse;
+begin
+  if not FPollQueuedResponsePending then
+    Exit;
+
+  FPollOutbound := FPollQueuedOutbound;
+  FPollResponsePending := (FPollOutbound <> nil) and (not FPollOutbound.IsEmpty);
+  FPollCloseAfterDrain := FPollQueuedCloseAfterDrain;
+  FPollQueuedOutbound := nil;
+  FPollQueuedResponsePending := False;
+  FPollQueuedCloseAfterDrain := False;
+  FPollWriteDeadline := TDeadline.Infinite;
+end;
+
+function TH1ServerConnectionState.EnqueuePollResponse(
+  const AOutbound: IH1OutboundBuffer; const ACloseAfterDrain: Boolean): Boolean;
+begin
+  if (AOutbound = nil) or AOutbound.IsEmpty then
+    Exit(True);
+
+  if not FPollResponsePending then
+  begin
+    FPollOutbound := AOutbound;
+    FPollResponsePending := True;
+    FPollCloseAfterDrain := ACloseAfterDrain;
+    Exit(True);
+  end;
+
+  if not FPollQueuedResponsePending then
+  begin
+    FPollQueuedOutbound := AOutbound;
+    FPollQueuedResponsePending := True;
+    FPollQueuedCloseAfterDrain := ACloseAfterDrain;
+    Exit(True);
+  end;
+
+  Result := False;
+end;
+
+function TH1ServerConnectionState.CanParseBufferedPollRequestWhileDraining: Boolean;
+begin
+  Result := (FOptions.WriteTimeout <= 0) and FKeepAlive and (FPending <> '') and
+    FPollResponsePending and
+    (not FPollCloseAfterDrain) and (not FPollQueuedResponsePending);
+end;
+
+function TH1ServerConnectionState.ShouldWaitForWritableInsteadOfEagerDrain(
+  const AEvents: TPlatformPollEvents): Boolean;
+begin
+  Result := (FPending <> '') and FPollResponsePending and
+    FPollQueuedResponsePending and (not (peWritable in AEvents));
+end;
+
+function TH1ServerConnectionState.QueuePollErrorResponse(
+  const AStatus: THttpStatus): Boolean;
+var
+  LOutbound: IH1OutboundBuffer;
+begin
+  LOutbound := NewH1OutboundBuffer;
+  WriteErrorResponseToWriter(LOutbound as IWriter, AStatus);
+  Result := EnqueuePollResponse(LOutbound, True);
+end;
+
+procedure TH1ServerConnectionState.ApplyPollRequestResult(
+  const AWork: TH1PollRequestWork);
+begin
+  if (AWork = nil) then
+    Exit;
+
+  if not EnqueuePollResponse(AWork.Outbound, AWork.CloseAfterDrain) then
+    FKeepAlive := False;
 end;
 
 procedure TH1ServerConnectionState.ArmPollWriteDeadline;
@@ -583,7 +739,8 @@ begin
   end;
 end;
 
-function TH1ServerConnectionState.ExecuteCurrentPollRequest: TTcpServerConnOwnership;
+function TH1ServerConnectionState.ExecuteCurrentPollRequest(
+  out AOutbound: IH1OutboundBuffer; out ACloseAfterDrain: Boolean): TTcpServerConnOwnership;
 var
   LUrl: TUrl;
   LReq: IHttpRequest;
@@ -594,20 +751,24 @@ var
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
   LFlusher: IFlusher;
+  LKeepAlive: Boolean;
 begin
   Result := tscoServer;
+  AOutbound := nil;
+  ACloseAfterDrain := False;
   LW := nil;
   LOutbound := nil;
   LResponseWriter := nil;
-  ResetPollResponseState;
   try
-    FKeepAlive := ShouldKeepAlive(FParser);
+    LKeepAlive := ShouldKeepAlive(FParser);
 
     if (FParser.GetHttpVersion = hvHttp11) and
        (FParser.GetHeaders.Get('host') = '') then
     begin
-      WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
-      FKeepAlive := False;
+      LOutbound := NewH1OutboundBuffer;
+      WriteErrorResponseToWriter(LOutbound as IWriter, HTTP_STATUS_BAD_REQUEST);
+      AOutbound := LOutbound;
+      ACloseAfterDrain := True;
       Exit(tscoServer);
     end;
 
@@ -636,9 +797,9 @@ begin
     LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
-    if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
+    if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
       LW.GetHeaders.Set_('connection', 'keep-alive');
-    if not FKeepAlive then
+    if not LKeepAlive then
       LW.GetHeaders.Set_('connection', 'close');
 
     FHandler.ServeHTTP(LReq, LW);
@@ -654,12 +815,10 @@ begin
     if Supports(LResponseWriter, IFlusher, LFlusher) then
       LFlusher.Flush;
 
-    FPollOutbound := LOutbound;
-    FPollResponsePending := (FPollOutbound <> nil) and
-      (not FPollOutbound.IsEmpty);
-
     if LW.GetHeaders.Get('connection') = 'close' then
-      FKeepAlive := False;
+      LKeepAlive := False;
+    AOutbound := LOutbound;
+    ACloseAfterDrain := not LKeepAlive;
   except
     on E: Exception do
     begin
@@ -675,10 +834,11 @@ begin
         try
           WriteErrorResponseToWriter(LOutbound as IWriter,
             HTTP_STATUS_INTERNAL_SERVER_ERROR);
-          FPollOutbound := LOutbound;
-          FPollResponsePending := not LOutbound.IsEmpty;
+          AOutbound := LOutbound;
+          ACloseAfterDrain := True;
         except
-          ResetPollResponseState;
+          AOutbound := nil;
+          ACloseAfterDrain := False;
         end;
       end
       else
@@ -690,13 +850,10 @@ begin
         end;
         if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
         begin
-          FPollOutbound := LOutbound;
-          FPollResponsePending := True;
+          AOutbound := LOutbound;
+          ACloseAfterDrain := True;
         end
-        else
-          ResetPollResponseState;
       end;
-      FKeepAlive := False;
     end;
   end;
 end;
@@ -873,9 +1030,12 @@ function TH1ServerConnectionState.SubmitCurrentPollRequest(
   out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 var
+  LWorkRef: TH1PollRequestWork;
   LWork: ITcpServerWork;
   LCompletion: ITcpServerWorkCompletion;
   LHandoffResult: TTcpServerHandoffResult;
+  LOutbound: IH1OutboundBuffer;
+  LCloseAfterDrain: Boolean;
 begin
   AOwnership := tscoServer;
 
@@ -883,8 +1043,9 @@ begin
   begin
     if FSocketRuntime <> nil then
       FSocketRuntime.SetBlocking(True);
+    FPollNeedRequestReset := True;
     if UsePollOwnedResponseDrain then
-      AOwnership := ExecuteCurrentPollRequest
+      AOwnership := ExecuteCurrentPollRequest(LOutbound, LCloseAfterDrain)
     else
       AOwnership := ExecuteCurrentRequest;
     if AOwnership <> tscoServer then
@@ -892,26 +1053,42 @@ begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
+    if UsePollOwnedResponseDrain then
+      EnqueuePollResponse(LOutbound, LCloseAfterDrain);
     if FSocketRuntime <> nil then
       FSocketRuntime.SetBlocking(False);
+    if CanParseBufferedPollRequestWhileDraining then
+    begin
+      PreparePollRequestParse;
+      Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
+    end;
     if FPollResponsePending then
+    begin
+      if ShouldWaitForWritableInsteadOfEagerDrain([]) then
+      begin
+        ANextEvents := [peWritable];
+        Exit(tsprWait);
+      end;
       Exit(AdvancePollResponseDrain([], ANextEvents, AOwnership));
+    end;
     if not FKeepAlive then
     begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    ResetPollRequestState;
+    PreparePollRequestParse;
     Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
   end;
 
   if FSocketRuntime <> nil then
     FSocketRuntime.SetBlocking(True);
 
+  FPollNeedRequestReset := True;
   FPollWorkerPending := True;
   FPollCompletionReady := False;
-  LWork := TH1PollRequestWork.Create(Self);
-  LCompletion := TH1PollRunCompletion.Create(Self);
+  LWorkRef := TH1PollRequestWork.Create(Self);
+  LWork := LWorkRef;
+  LCompletion := TH1PollRequestCompletion.Create(Self, LWorkRef);
   LHandoffResult := FWorkerHandoff.Submit(LWork, LCompletion);
   if LHandoffResult <> tshrAccepted then
   begin
@@ -925,6 +1102,7 @@ begin
 end;
 
 function TH1ServerConnectionState.ContinueAfterPollCompletion(
+  const AEvents: TPlatformPollEvents;
   out ANextEvents: TPlatformPollEvents;
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 begin
@@ -932,23 +1110,34 @@ begin
   FPollCompletionReady := False;
   AOwnership := FPollCompletionOwnership;
 
-  if (AOwnership <> tscoServer) or (not FKeepAlive) then
+  if AOwnership <> tscoServer then
   begin
-    if (AOwnership = tscoServer) and FPollResponsePending then
-    begin
-      if FSocketRuntime <> nil then
-        FSocketRuntime.SetBlocking(False);
-      Exit(AdvancePollResponseDrain([], ANextEvents, AOwnership));
-    end;
     ANextEvents := [];
     Exit(tsprDone);
   end;
 
   if FSocketRuntime <> nil then
     FSocketRuntime.SetBlocking(False);
+  if CanParseBufferedPollRequestWhileDraining then
+  begin
+    PreparePollRequestParse;
+    Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
+  end;
   if FPollResponsePending then
-    Exit(AdvancePollResponseDrain([], ANextEvents, AOwnership));
-  ResetPollRequestState;
+  begin
+    if ShouldWaitForWritableInsteadOfEagerDrain(AEvents) then
+    begin
+      ANextEvents := [peWritable];
+      Exit(tsprWait);
+    end;
+    Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+  end;
+  if not FKeepAlive then
+  begin
+    ANextEvents := [];
+    Exit(tsprDone);
+  end;
+  PreparePollRequestParse;
   Result := AdvancePollRequestParse([], ANextEvents, AOwnership);
 end;
 
@@ -958,18 +1147,21 @@ function TH1ServerConnectionState.AdvancePollResponseDrain(
 var
   LWritten: SizeUInt;
   LWriteResult: TTcpStreamIOResult;
+  LCloseAfterDrain: Boolean;
 begin
   AOwnership := tscoServer;
 
   if (not FPollResponsePending) or (FPollOutbound = nil) or FPollOutbound.IsEmpty then
   begin
-    ResetPollResponseState;
+    PromoteQueuedPollResponse;
+    if (not FPollResponsePending) or (FPollOutbound = nil) or FPollOutbound.IsEmpty then
+      ResetPollResponseState;
     if not FKeepAlive then
     begin
       ANextEvents := [];
       Exit(tsprDone);
     end;
-    ResetPollRequestState;
+    PreparePollRequestParse;
     Exit(AdvancePollRequestParse(AEvents, ANextEvents, AOwnership));
   end;
 
@@ -990,13 +1182,32 @@ begin
       begin
         if FPollOutbound.IsEmpty then
         begin
-          ResetPollResponseState;
+          LCloseAfterDrain := FPollCloseAfterDrain;
+          FPollOutbound := nil;
+          FPollResponsePending := False;
+          FPollCloseAfterDrain := False;
+          FPollWriteDeadline := TDeadline.Infinite;
+          if LCloseAfterDrain then
+          begin
+            ANextEvents := [];
+            Exit(tsprDone);
+          end;
+          if FPollQueuedResponsePending then
+          begin
+            PromoteQueuedPollResponse;
+            if FPending <> '' then
+            begin
+              ANextEvents := [peWritable];
+              Exit(tsprWait);
+            end;
+            Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+          end;
           if not FKeepAlive then
           begin
             ANextEvents := [];
             Exit(tsprDone);
           end;
-          ResetPollRequestState;
+          PreparePollRequestParse;
           Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
         end;
         if LWritten > 0 then
@@ -1046,6 +1257,8 @@ begin
         Exit(AdvanceWholeRunBridge(AEvents, ANextEvents, AOwnership));
       if not (peReadable in AEvents) then
       begin
+        if FPollResponsePending then
+          Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
         ANextEvents := [peReadable];
         Exit(tsprWait);
       end;
@@ -1065,6 +1278,12 @@ begin
               FParser.Finish;
             if FParser.HasError then
             begin
+              if FPollResponsePending and
+                 QueuePollErrorResponse(ParserErrorStatus(FParser)) then
+              begin
+                FKeepAlive := False;
+                Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+              end;
               WriteErrorResponse(FConn, ParserErrorStatus(FParser));
               ANextEvents := [];
               Exit(tsprDone);
@@ -1092,6 +1311,12 @@ begin
          (Int64(FParseTotalRead) - FParser.GetBodySize >
           Int64(FOptions.MaxHeaderSize)) then
       begin
+        if FPollResponsePending and
+           QueuePollErrorResponse(HTTP_STATUS_HEADER_TOO_LARGE) then
+        begin
+          FKeepAlive := False;
+          Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+        end;
         WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
         FKeepAlive := False;
         ANextEvents := [];
@@ -1102,6 +1327,12 @@ begin
     if FParseHeadersDone and (FOptions.MaxHeaderSize > 0) and
        (FParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
     begin
+      if FPollResponsePending and
+         QueuePollErrorResponse(HTTP_STATUS_HEADER_TOO_LARGE) then
+      begin
+        FKeepAlive := False;
+        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+      end;
       WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
       FKeepAlive := False;
       ANextEvents := [];
@@ -1111,6 +1342,12 @@ begin
     if (FOptions.MaxBodySize > 0) and
        (FParser.GetBodySize > FOptions.MaxBodySize) then
     begin
+      if FPollResponsePending and
+         QueuePollErrorResponse(HTTP_STATUS_PAYLOAD_TOO_LARGE) then
+      begin
+        FKeepAlive := False;
+        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+      end;
       WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
       FKeepAlive := False;
       ANextEvents := [];
@@ -1119,6 +1356,12 @@ begin
 
     if FParser.HasError then
     begin
+      if FPollResponsePending and
+         QueuePollErrorResponse(ParserErrorStatus(FParser)) then
+      begin
+        FKeepAlive := False;
+        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+      end;
       WriteErrorResponse(FConn, ParserErrorStatus(FParser));
       FKeepAlive := False;
       ANextEvents := [];
@@ -1151,11 +1394,23 @@ begin
       ANextEvents := [];
       Exit(tsprWait);
     end;
-    Exit(ContinueAfterPollCompletion(ANextEvents, AOwnership));
+    Exit(ContinueAfterPollCompletion(AEvents, ANextEvents, AOwnership));
   end;
 
+  if CanParseBufferedPollRequestWhileDraining then
+  begin
+    PreparePollRequestParse;
+    Exit(AdvancePollRequestParse([], ANextEvents, AOwnership));
+  end;
   if FPollResponsePending then
+  begin
+    if ShouldWaitForWritableInsteadOfEagerDrain(AEvents) then
+    begin
+      ANextEvents := [peWritable];
+      Exit(tsprWait);
+    end;
     Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+  end;
 
   Result := AdvancePollRequestParse(AEvents, ANextEvents, AOwnership);
 end;

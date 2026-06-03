@@ -1787,6 +1787,107 @@ begin
     'deadline wake closes without extra write retry');
 end;
 
+procedure TestH1PollDrivenSessionQueuesBoundedResponsesWhileDraining;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LStreamObj: TWritableDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+  LFirstPath: string;
+  LSecondPath: string;
+  LThirdPath: string;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /two HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /three HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10#13#10;
+  BODY = 'ok';
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for response queue test');
+
+  LStreamObj := TWritableDrainRuntimeTcpStream.Create(REQ, 2, 0);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LFirstPath := '';
+  LSecondPath := '';
+  LThirdPath := '';
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+      case LHandlerCalls of
+        1: LFirstPath := AReq.Url.Path;
+        2: LSecondPath := AReq.Url.Path;
+        3: LThirdPath := AReq.Url.Path;
+      end;
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(BODY[1], SizeUInt(Length(BODY)));
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for response queue test');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'first readable advance stays active while first request work completes');
+  CheckEqual(Int64(1), Int64(LHandoffObj.SubmitCount),
+    'first request is handed off once');
+  CheckEqual(Int64(1), Int64(LHandlerCalls),
+    'first advance handles only first request');
+  CheckEqual('/one', LFirstPath, 'first request path captured');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'completion wake may queue one extra response while first drain is pending');
+  CheckEqual(Int64(2), Int64(LHandoffObj.SubmitCount),
+    'second request is handed off while first response is still pending');
+  CheckEqual(Int64(2), Int64(LHandlerCalls),
+    'second request is handled before first response drain completes');
+  CheckEqual('/two', LSecondPath, 'second request path captured');
+  CheckEqual(Int64(0), Int64(LStreamObj.TryWriteCalls),
+    'queue growth from buffered input does not require an immediate socket write');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'writable wake drains first response and frees one queue slot');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    'first writable wake performs the first socket drain attempt');
+  Check(Pos('HTTP/1.1 200 OK', LStreamObj.Output) > 0,
+    'first response begins draining to the socket');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'after one slot frees, buffered third request can continue');
+  CheckEqual(Int64(3), Int64(LHandoffObj.SubmitCount),
+    'third request is handed off only after a queue slot frees');
+  CheckEqual(Int64(3), Int64(LHandlerCalls),
+    'third request is eventually handled');
+  CheckEqual('/three', LThirdPath, 'third request path captured');
+end;
+
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
 var
   LHttpOpts: THttpServerOptions;
@@ -6896,6 +6997,8 @@ begin
     @TestH1PollDrivenSessionDrainsResponseViaWritableEvents);
   T.Run('H1 poll-driven session times out stalled drain on deadline wake',
     @TestH1PollDrivenSessionTimesOutStalledDrainOnDeadlineWake);
+  T.Run('H1 poll-driven session queues bounded responses while draining',
+    @TestH1PollDrivenSessionQueuesBoundedResponsesWhileDraining);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Write timeout before any wire bytes does not append 500',

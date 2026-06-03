@@ -1,67 +1,61 @@
-# Findings: http h1 poll-driven phase2 step3
+# Findings: http h1 poll-driven phase2 step4
 
 ## Scope
 
-- 这轮继续停留在 H1 poll-driven phase 2 主线，不回去补碎片化 malformed case。
-- 目标是把 `WriteTimeout` / `WakeDeadline` 真正接进 poll-driven response drain。
+- 这轮继续停留在 H1 poll-driven phase 2 主线。
+- 目标不是继续补 malformed grammar 碎片，而是把 bounded outbound queue / ordering 这条 runtime contract 真正落下去。
 
 ## Confirmed truths
 
-### 1. 上一轮只收了 `WriteTimeout = 0` 的 response drain，timed drain 仍留在旧路径
+### 1. 最小 queue 语义不是“多加一个 buffer”那么简单
 
-- 新增 RED 继续用 runtime-only stream 直接卡死同步 `Write` 路径：
-  - request handler 仍然会被 handoff 执行
-  - 但 `WriteTimeout > 0` 时第一次请求完成后，worker 内仍会发生 `SyncWriteCalls = 1`
-  - 说明 timed drain 还没真正进 poll state machine
+- 直接把第二个 response 塞进队列还不够。
+- 如果 worker 仍直接改 `FPollOutbound` / `FPollResponsePending` / close 语义，
+  poll state 会继续跨线程散落，设计不稳。
+- 这轮先把 worker result 改成 completion-applied handoff：
+  worker 只生成本次 request 的 outbound/result，
+  reactor completion 再统一应用到 poll state machine。
 
-### 2. 现在所有 poll-path response drain 都已经进入 reactor-owned state
+### 2. 有界 queue 的最小可行形状已经成立
 
-- `TH1ServerConnectionState` 现在新增 poll response state：
-  - `FPollOutbound`
-  - `FPollResponsePending`
-- `FPollWriteDeadline`
-- poll-driven 路径现在会：
-  - worker 只负责把 response 生产到 `IH1OutboundBuffer`
-  - completion wake 回到 reactor 后先尝试一次 `TryDrainTo`
-  - 若 `would-block`，则注册 `peWritable`
-  - writable wake 到来后继续 drain
-  - `WriteTimeout > 0` 时会暴露有限 `WakeDeadline`
-  - deadline 到期时会安全结束 session，不做额外写重试
-  - drain 完成后，若 keep-alive 且 `FPending` 已有 follow-up request，会继续 parse / submit，不等新的 readability
+- 当前落地的是：
+  - `active drain`
+  - `+ 1 queued response`
+- 在 untimed poll path 下：
+  - 首个 response 未开始 socket drain 前
+  - 一个 buffered follow-up request 可以继续完成
+  - 第三个 request 必须等 slot 释放后才能继续
 
-### 3. epoll deadline wake 的真实触发模型已经被锁进 H1
+### 3. 只有 queue 还不够，follow-up parse error 也必须按 wire 顺序排队
 
-- foundation 的 deadline wake 是 `Advance([], ...)`，不是带 `peWritable` 的 readiness。
-- 这轮 H1 timed-drain RED/GREEN 直接按这个真实模型建立，
-  避免把 timeout 收口写成错误的事件驱动假设。
+- 新一轮实现里实际踩到的关键坑是：
+  若首个合法 response 还 pending，就把 follow-up malformed request 的 `400`
+  直接写回 socket，会打乱 wire 顺序。
+- 现在这条已收口：
+  - response pending 时的 follow-up `400` / `413` / `431`
+    也会排到前一个 response 后面
+  - partial follow-up parser state 也能跨 response drain 保留
 
-### 4. 现有兼容性和既有回归都守住了
+### 4. timed/backpressure safety boundary 仍然守住
 
-- per-request handoff proof 仍保持成立。
-- writable-drain proof 仍保持成立。
-- `epoll` backend 现有 stalled-peer / write-timeout regression 没回归。
-- 无 `ITcpStreamRuntime` 时仍保留旧的 whole-run fallback。
-- worker 执行 request 前仍会把 socket 设回 blocking，
-  这样 hijack / WebSocket 路径不被破坏。
+- `WriteTimeout > 0` 时，completion wake 仍先尝试第一次 nonblocking drain。
+- 一旦进入 stalled timed drain，就不会继续消费 later pipelined request。
+- 这条保持了前几轮已经锁住的 real-socket backpressure contract。
 
 ## Verification evidence
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `116/116 passed`
+  - `117/117 passed`
   - 新增 proof：
-    - H1 poll-driven session times out stalled drain on deadline wake
-  - threaded / epoll 既有 contract 未回归：
-    - keep-alive / pipelining
-    - malformed ingress / trailer / size-limit rejection
-    - committed response / hijack / write-timeout / backpressure safety
+    - `H1 poll-driven session queues bounded responses while draining`
+  - 既有 proof 未回归：
+    - epoll keep-alive / pipelining
+    - follow-up malformed `400` ordering
+    - timed drain / write-timeout / backpressure safety
   - heaptrc：`0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- timed drain 已经进了 poll-driven state machine，
-  但还没有做 bounded outbound queue / multi-response fairness。
-- 当前 close semantics 仍然偏 correctness-first，性能和队列策略还没进入最终优化阶段。
-- 下一批最值得做的是：
-  - 设计 bounded outbound queue / multi-response ordering contract
-  - 细化 stalled-peer timing / close-observation characterization
-  - 再进入 benchmark / Go-Rust 对标
+- 当前 queue 仍是 correctness-first 的最小形状，不是最终吞吐/公平性终版。
+- 还没有细化 stalled-peer timing / close-observation characterization。
+- 还没有做 benchmark / Go-Rust 对标。
