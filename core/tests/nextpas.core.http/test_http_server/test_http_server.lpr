@@ -1229,6 +1229,24 @@ begin
   end;
 end;
 
+function CountSubstring(const AText, APattern: string): Int32;
+var
+  LSearchStart: Int32;
+  LFoundAt: Int32;
+begin
+  Result := 0;
+  if (AText = '') or (APattern = '') then
+    Exit(0);
+  LSearchStart := 1;
+  repeat
+    LFoundAt := Pos(APattern, Copy(AText, LSearchStart, MaxInt));
+    if LFoundAt <= 0 then
+      Exit;
+    Inc(Result);
+    Inc(LSearchStart, LFoundAt + Length(APattern) - 1);
+  until False;
+end;
+
 { Test 1: Server responds 200 to simple GET }
 procedure TestSimpleGet200;
 var
@@ -2150,6 +2168,112 @@ begin
   LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
   LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   RunRealSocketWriteTimeoutBackpressureStopsPipeline('epoll', LHttpOpts);
+end;
+{$ENDIF}
+
+procedure RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LTransport: IHttpServerTransport;
+  LH1Opts: TH1ServerTransportOptions;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+  LFirstCalls: Int32;
+  LTotalBodyLen: Int64;
+  LBodyChunk: string;
+const
+  WRITE_TIMEOUT_MS = 50;
+  RECV_BUFFER_BYTES = 1024;
+  SEND_BUFFER_BYTES = 1024;
+  BACKPRESSURE_WAIT_NS = 500000000;
+  CLOSE_WAIT_MS = 2000;
+  BODY_CHUNK_LEN = 8192;
+  BODY_CHUNK_COUNT = 2048;
+  PIPELINED_REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'BROKEN /after HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10;
+begin
+  LFirstCalls := 0;
+  SetLength(LBodyChunk, BODY_CHUNK_LEN);
+  FillChar(LBodyChunk[1], BODY_CHUNK_LEN, Ord('b'));
+  LTotalBodyLen := Int64(BODY_CHUNK_LEN) * BODY_CHUNK_COUNT;
+
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/block', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LI: Int32;
+  begin
+    Inc(LFirstCalls);
+    AW.GetHeaders.Set_('content-length', IntToStr(LTotalBodyLen));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    for LI := 1 to BODY_CHUNK_COUNT do
+      AW.Write(LBodyChunk[1], SizeUInt(Length(LBodyChunk)));
+  end);
+
+  LH1Opts := DefaultH1ServerTransportOptions(AHttpOpts);
+  LTransport := TSocketTuningServerTransport.Create(
+    NewH1ServerTransport(LH1Opts), SEND_BUFFER_BYTES);
+  LHandle := StartServerWithTransportAndOptions(LRouter as IHttpHandler,
+    LTransport, AHttpOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      SetSocketRecvBuffer(LConn, RECV_BUFFER_BYTES);
+      LConn.Write(PIPELINED_REQ[1], SizeUInt(Length(PIPELINED_REQ)));
+      platform_thread_sleep_ns(BACKPRESSURE_WAIT_NS);
+
+      LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
+
+      Check(LClosed,
+        ABackendName + ' malformed follow-up backpressure still closes the connection');
+      Check(not LTimedOut,
+        ABackendName + ' malformed follow-up backpressure does not outlive close window');
+      CheckEqual(Int64(1), Int64(LFirstCalls),
+        ABackendName + ' malformed follow-up backpressure still handles the first request once');
+      Check(Pos('HTTP/1.1 200', LResp) > 0,
+        ABackendName + ' malformed follow-up backpressure still begins the first response');
+      Check(Pos('HTTP/1.1 400', LResp) = 0,
+        ABackendName + ' malformed follow-up backpressure does not emit follow-up 400');
+      CheckEqual(Int64(1), Int64(CountSubstring(LResp, 'HTTP/1.1 ')),
+        ABackendName + ' malformed follow-up backpressure emits only one status line');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400('threaded', LHttpOpts);
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400EpollBackend;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400('epoll', LHttpOpts);
 end;
 {$ENDIF}
 
@@ -6983,7 +7107,9 @@ begin
     @TestCommittedResponseExceptionDoesNotAppend500EpollBackend);
   T.Run('Real socket write timeout backpressure stops pipeline with epoll backend',
     @TestRealSocketWriteTimeoutBackpressureStopsPipelineEpollBackend);
-  {$ENDIF}
+  T.Run('Real socket write timeout backpressure does not emit follow-up 400 with epoll backend',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400EpollBackend);
+{$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
   T.Run('Handler exception -> 500', @TestHandlerException500);
@@ -7007,6 +7133,8 @@ begin
     @TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500);
   T.Run('Real socket write timeout backpressure stops pipeline',
     @TestRealSocketWriteTimeoutBackpressureStopsPipeline);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 400',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);

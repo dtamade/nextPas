@@ -1,61 +1,49 @@
-# Findings: http h1 poll-driven phase2 step4
+# Findings: http h1 poll-driven phase2 step5
 
 ## Scope
 
-- 这轮继续停留在 H1 poll-driven phase 2 主线。
-- 目标不是继续补 malformed grammar 碎片，而是把 bounded outbound queue / ordering 这条 runtime contract 真正落下去。
+- 这轮继续留在 H1 poll-driven / backpressure 主线。
+- 目标是把 stalled-peer close-observation 从“eventual safe-close”再收紧到更具体的 wire truth，
+  但仍不冻结严格 `WriteTimeout` SLA。
 
 ## Confirmed truths
 
-### 1. 最小 queue 语义不是“多加一个 buffer”那么简单
+### 1. 现有 live backpressure proof 还缺一条 malformed follow-up truth
 
-- 直接把第二个 response 塞进队列还不够。
-- 如果 worker 仍直接改 `FPollOutbound` / `FPollResponsePending` / close 语义，
-  poll state 会继续跨线程散落，设计不稳。
-- 这轮先把 worker result 改成 completion-applied handoff：
-  worker 只生成本次 request 的 outbound/result，
-  reactor completion 再统一应用到 poll state machine。
+- 上一轮已经锁住：
+  - 连接最终会关闭
+  - 不会继续进入后续合法 handler
+  - 不会补写 synthetic `500`
+- 但还没有直接证明：
+  - 若 follow-up request 本身是 malformed，
+    timed stalled drain 下也不会额外漏出 follow-up `400`
 
-### 2. 有界 queue 的最小可行形状已经成立
+### 2. 当前实现已经满足更细的 close-observation truth
 
-- 当前落地的是：
-  - `active drain`
-  - `+ 1 queued response`
-- 在 untimed poll path 下：
-  - 首个 response 未开始 socket drain 前
-  - 一个 buffered follow-up request 可以继续完成
-  - 第三个 request 必须等 slot 释放后才能继续
+- 新增 real-socket characterization 后确认：
+  - threaded 与 Linux `epoll` 两条 backend
+  - 在 stalled-peer / write-timeout 场景下
+  - malformed follow-up 同样不会被继续消费成 follow-up `400`
+  - wire 上也只会看到首个 response status line
 
-### 3. 只有 queue 还不够，follow-up parse error 也必须按 wire 顺序排队
+### 3. 这轮仍然不应误冻两条暂不稳定的东西
 
-- 新一轮实现里实际踩到的关键坑是：
-  若首个合法 response 还 pending，就把 follow-up malformed request 的 `400`
-  直接写回 socket，会打乱 wire 顺序。
-- 现在这条已收口：
-  - response pending 时的 follow-up `400` / `413` / `431`
-    也会排到前一个 response 后面
-  - partial follow-up parser state 也能跨 response drain 保留
-
-### 4. timed/backpressure safety boundary 仍然守住
-
-- `WriteTimeout > 0` 时，completion wake 仍先尝试第一次 nonblocking drain。
-- 一旦进入 stalled timed drain，就不会继续消费 later pipelined request。
-- 这条保持了前几轮已经锁住的 real-socket backpressure contract。
+- 不应把 `WriteTimeout = 50ms` 固定成严格 close-time SLA。
+- 不应把 handler-return timing 当成 public contract。
 
 ## Verification evidence
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `117/117 passed`
+  - `119/119 passed`
   - 新增 proof：
-    - `H1 poll-driven session queues bounded responses while draining`
-  - 既有 proof 未回归：
-    - epoll keep-alive / pipelining
-    - follow-up malformed `400` ordering
-    - timed drain / write-timeout / backpressure safety
+    - `Real socket write timeout backpressure does not emit follow-up 400`
+    - `Real socket write timeout backpressure does not emit follow-up 400 with epoll backend`
   - heaptrc：`0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 当前 queue 仍是 correctness-first 的最小形状，不是最终吞吐/公平性终版。
-- 还没有细化 stalled-peer timing / close-observation characterization。
-- 还没有做 benchmark / Go-Rust 对标。
+- 当前 stalled-peer characterization 仍是 correctness-first，不是性能终版。
+- benchmark / Go-Rust 对标还没开始。
+- 若下一轮继续 runtime 主线，最合理的是：
+  - 开始 benchmark 基线与对照，
+  - 或者只在发现新的 live timing truth 空档时再回补 correctness proof。
