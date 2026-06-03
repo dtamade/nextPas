@@ -51,4 +51,4 @@
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
 - `git diff --check` 已对本批路径通过。
-- 当前待完成项只剩 HTTP aggregate、path-limited commit 与中文收尾报告。
+- 本批已按 path-limited 提交。
