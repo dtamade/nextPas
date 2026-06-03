@@ -1779,6 +1779,101 @@ begin
   end;
 end;
 
+procedure TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LSeenUpload: Boolean;
+  LSeenNext: Boolean;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+const
+  REQ1 = 'POST /upload HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Transfer-Encoding: chunked'#13#10 +
+         'Trailer: X-Test'#13#10#13#10 +
+         '5'#13#10'hello'#13#10 +
+         '0'#13#10 +
+         'X-Test: value'#13#10#13#10 +
+         'GET /next HTTP/1.1';
+  REQ2_REST = #13#10 +
+              'Host: localhost'#13#10 +
+              'Connection: close'#13#10#13#10;
+begin
+  LSeenUpload := False;
+  LSeenNext := False;
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Test');
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/next', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LSeenNext := True;
+    LBody := 'next';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'chunked trailer partial-next-line: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'chunked trailer partial-next-line: first body preserved');
+      Check(LSeenUpload, 'chunked trailer partial-next-line: first handler called');
+      CheckEqual('hello', LGotBody, 'chunked trailer partial-next-line: handler sees decoded body only');
+      CheckEqual('X-Test', LGotTrailerDecl, 'chunked trailer partial-next-line: trailer declaration preserved');
+      CheckEqual('', LGotTrailerValue, 'chunked trailer partial-next-line: trailer field not exposed as regular header');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0, 'chunked trailer partial-next-line: second response 200');
+      Check(Pos('next', LResp2) > 0, 'chunked trailer partial-next-line: second body preserved');
+      Check(LSeenNext, 'chunked trailer partial-next-line: second handler called');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestChunkedPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -3636,6 +3731,8 @@ begin
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400);
   T.Run('Chunked trailer pipelined requests in single write',
     @TestChunkedTrailerPipelinedRequestsInSingleWrite);
+  T.Run('Chunked trailer partial follow-up request line can complete later',
+    @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater);
   T.Run('Chunked pipelined requests in single write', @TestChunkedPipelinedRequestsInSingleWrite);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
