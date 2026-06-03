@@ -176,6 +176,9 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - `platform.io` poller 现在也有 wake seam；Linux 先用 `eventfd` 落地。
 - `epoll` backend 现在会把 poll-driven session 的 worker completion 先排队回 reactor，
   再在 reactor 线程执行 completion，并用 synthetic re-entry 继续推进该 session。
+- `epoll` backend 现在也已具备 poll-driven session deadline wake seam：
+  session 可选暴露 wake deadline，reactor 会按最近 deadline 缩短 `poller_wait`，
+  并在到期时以 `Advance([])` synthetic re-entry 再次推进该 session。
 - `IHttpServerTransport.ServeConn(const AConn: ITcpStream; ...)` 仍然保留，作为 HTTP public facade
   继续同步、兼容旧 transport seam 的刻意选择
 - `TH1ServerConnectionState` 现在已经通过 `ITcpServerSession` 接上 foundation，
@@ -256,6 +259,9 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - `ITcpServerPollDrivenSession.Advance(...)` 可以合法返回 `ANextEvents := []`，
   表示“当前没有 socket interest，等待 foundation-owned wake source”，
   backend 负责在 wake 后以 synthetic re-entry 再次推进该 session。
+- `ITcpServerPollDrivenSessionWithDeadline.WakeDeadline(...)` 是可选 opt-in seam：
+  返回 `Infinite` 表示当前不需要 timer wake；返回 finite deadline 时，
+  backend 必须把它纳入 wait timeout 计算，并在到期后以 `Advance([])` 重入该 session。
 - `ITcpSocketRuntime` 是 lower-level runtime seam：普通业务代码可以忽略它，evented backend 可以通过
   `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
 - `ITcpListenerRuntime` / `ITcpStreamRuntime` 是更窄的 runtime-only I/O seam：
@@ -391,6 +397,7 @@ nextpas.core.net.server.iocp
 
 - 落地 reactor self-wakeup / completion re-entry foundation
 - 让 poll-driven session 可以在等待 worker completion 时暂时没有 socket interest
+- 让 poll-driven session 可以在等待 deadline 时不依赖 socket readiness 被主动重入
 - 把 `TryRead/TryWrite` 接进 per-connection runtime driver
 - 让 Linux evented backend 从 phase 1 升级到真正的 connection-state-driven backend
 

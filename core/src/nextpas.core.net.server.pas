@@ -32,6 +32,7 @@ type
   ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
   ITcpServerPollDrivenSession = nextpas.core.net.server.intf.ITcpServerPollDrivenSession;
+  ITcpServerPollDrivenSessionWithDeadline = nextpas.core.net.server.intf.ITcpServerPollDrivenSessionWithDeadline;
   ITcpServerSessionFactory = nextpas.core.net.server.intf.ITcpServerSessionFactory;
   ITcpServerSessionFactoryWithContext = nextpas.core.net.server.intf.ITcpServerSessionFactoryWithContext;
   ITcpServerHandler = nextpas.core.net.server.intf.ITcpServerHandler;

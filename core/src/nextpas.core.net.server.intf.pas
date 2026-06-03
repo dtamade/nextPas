@@ -8,7 +8,8 @@ uses
   nextpas.core.net.base,
   nextpas.core.net.intf,
   nextpas.core.net.server.base,
-  nextpas.core.platform.io.base;
+  nextpas.core.platform.io.base,
+  nextpas.core.time.deadline;
 
 type
   TTcpServerPollResult = (
@@ -50,6 +51,11 @@ type
     function Advance(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
       out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
+
+  ITcpServerPollDrivenSessionWithDeadline = interface
+    ['{6F1D6F1D-4D7C-4E31-9100-410000000011}']
+    function WakeDeadline: TDeadline;
   end;
 
   ITcpServerSessionFactory = interface

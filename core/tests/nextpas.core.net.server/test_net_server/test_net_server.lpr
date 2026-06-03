@@ -264,6 +264,45 @@ type
     property ObservedEmptyAdvance: Boolean read FObservedEmptyAdvance;
   end;
 
+  TDeadlinePollDrivenHandler = class;
+
+  TDeadlinePollDrivenSession = class(TInterfacedObject, ITcpServerSession,
+    ITcpServerPollDrivenSession, ITcpServerPollDrivenSessionWithDeadline)
+  private
+    FOwner: TDeadlinePollDrivenHandler;
+    FConn: ITcpStream;
+    FConnRuntime: ITcpStreamRuntime;
+    FDeadline: TDeadline;
+    FTimerArmed: Boolean;
+    FWritePos: SizeUInt;
+  public
+    constructor Create(const AOwner: TDeadlinePollDrivenHandler;
+      const AConn: ITcpStream);
+    function Run: TTcpServerConnOwnership;
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+    function WakeDeadline: TDeadline;
+  end;
+
+  TDeadlinePollDrivenHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactoryWithContext)
+  private
+    FServeConnCalled: Boolean;
+    FContextFactoryCalled: Boolean;
+    FAdvanceCount: Int32;
+    FObservedDeadlineWake: Boolean;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property ContextFactoryCalled: Boolean read FContextFactoryCalled;
+    property AdvanceCount: Int32 read FAdvanceCount;
+    property ObservedDeadlineWake: Boolean read FObservedDeadlineWake;
+  end;
+
   TMockServerProvider = class(TInterfacedObject, ITcpServer)
   private
     FListenCalled: Boolean;
@@ -767,6 +806,127 @@ begin
   if AContext = nil then
     raise Exception.Create('wakeup poll-driven handler requires session context');
   Result := TWakeupPollDrivenSession.Create(Self, AConn, AContext.WorkerHandoff);
+end;
+
+constructor TDeadlinePollDrivenSession.Create(
+  const AOwner: TDeadlinePollDrivenHandler; const AConn: ITcpStream);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FConn := AConn;
+  if not Supports(AConn, ITcpStreamRuntime, FConnRuntime) then
+    raise Exception.Create('deadline poll-driven session requires stream runtime seam');
+  FDeadline := TDeadline.Infinite;
+  FTimerArmed := False;
+  FWritePos := 0;
+end;
+
+function TDeadlinePollDrivenSession.Run: TTcpServerConnOwnership;
+begin
+  Fail('deadline poll-driven session should not fall back to Run');
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TDeadlinePollDrivenSession.PollEvents: TPlatformPollEvents;
+begin
+  Result := [peReadable];
+end;
+
+function TDeadlinePollDrivenSession.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+const
+  RESPONSE_BYTES: array[0..1] of Byte = (111, 107); { 'o', 'k' }
+var
+  LByte: Byte;
+  LN: SizeUInt;
+  LResult: TTcpStreamIOResult;
+begin
+  InterlockedIncrement(FOwner.FAdvanceCount);
+  AOwnership := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+
+  if not FTimerArmed then
+  begin
+    if not (peReadable in AEvents) then
+    begin
+      ANextEvents := [peReadable];
+      Exit(TCP_SERVER_POLL_WAIT);
+    end;
+
+    LResult := FConnRuntime.TryRead(LByte, 1, LN);
+    case LResult of
+      tsiorOk:
+        begin
+          if LN = 0 then
+          begin
+            ANextEvents := [];
+            Exit(TCP_SERVER_POLL_DONE);
+          end;
+          FTimerArmed := True;
+          FDeadline := TDeadline.After(TDuration.FromMilliseconds(50));
+          ANextEvents := [];
+          Exit(TCP_SERVER_POLL_WAIT);
+        end;
+      tsiorWouldBlock:
+        begin
+          ANextEvents := [peReadable];
+          Exit(TCP_SERVER_POLL_WAIT);
+        end;
+    else
+      ANextEvents := [];
+      Exit(TCP_SERVER_POLL_DONE);
+    end;
+  end;
+
+  if AEvents = [] then
+    FOwner.FObservedDeadlineWake := True;
+
+  LResult := FConnRuntime.TryWrite(RESPONSE_BYTES[FWritePos],
+    SizeUInt(Length(RESPONSE_BYTES)) - FWritePos, LN);
+  case LResult of
+    tsiorOk:
+      begin
+        Inc(FWritePos, LN);
+        if FWritePos >= SizeUInt(Length(RESPONSE_BYTES)) then
+        begin
+          FDeadline := TDeadline.Infinite;
+          ANextEvents := [];
+          Exit(TCP_SERVER_POLL_DONE);
+        end;
+        ANextEvents := [peWritable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+    tsiorWouldBlock:
+      begin
+        ANextEvents := [peWritable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+  else
+    ANextEvents := [];
+    Exit(TCP_SERVER_POLL_DONE);
+  end;
+end;
+
+function TDeadlinePollDrivenSession.WakeDeadline: TDeadline;
+begin
+  Result := FDeadline;
+end;
+
+function TDeadlinePollDrivenHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('deadline poll-driven handler should bypass ServeConn');
+end;
+
+function TDeadlinePollDrivenHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextFactoryCalled := True;
+  if AContext = nil then
+    raise Exception.Create('deadline poll-driven handler requires session context');
+  Result := TDeadlinePollDrivenSession.Create(Self, AConn);
 end;
 
 constructor TMockServerProvider.Create(const AOptions: TTcpServerOptions);
@@ -1803,6 +1963,75 @@ begin
   LServer.Shutdown;
   platform_thread_join(LHandle, LRet);
 end;
+
+procedure TestEpollServerWakesPollDrivenSessionOnDeadline;
+var
+  LHandler: TDeadlinePollDrivenHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..7] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TDeadlinePollDrivenHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'deadline epoll handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'deadline epoll server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('d')^, 1);
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(2), LN, 'deadline epoll response size');
+    CheckEqual(Byte(Ord('o')), LBuf[0], 'deadline epoll first byte');
+    CheckEqual(Byte(Ord('k')), LBuf[1], 'deadline epoll second byte');
+  finally
+    LClient.Close;
+  end;
+
+  LWait := 0;
+  while (LHandler.AdvanceCount < 2) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'epoll deadline path uses context-aware session factory');
+  Check(not LHandler.ServeConnCalled,
+    'epoll deadline path bypasses ServeConn');
+  Check(LHandler.AdvanceCount > 1,
+    'epoll deadline path re-enters poll-driven session');
+  Check(LHandler.ObservedDeadlineWake,
+    'epoll deadline path re-enters session without socket readiness');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
 {$ENDIF}
 
 begin
@@ -1845,6 +2074,8 @@ begin
     @TestEpollServerUsesPollDrivenSessionWhenAvailable);
   T.Run('Epoll server wakes poll-driven session after worker completion',
     @TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion);
+  T.Run('Epoll server wakes poll-driven session on deadline',
+    @TestEpollServerWakesPollDrivenSessionOnDeadline);
   {$ENDIF}
   T.Summary;
 end.

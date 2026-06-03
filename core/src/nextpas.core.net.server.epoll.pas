@@ -21,6 +21,8 @@ uses
   nextpas.core.sync.intf,
   nextpas.core.sync.mutex,
   nextpas.core.thread,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,
   nextpas.core.net.tcp,
@@ -58,7 +60,10 @@ type
     FSocketRuntime: ITcpSocketRuntime;
     FSession: ITcpServerSession;
     FPollSession: ITcpServerPollDrivenSession;
+    FDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
     FEvents: TPlatformPollEvents;
+    FWakeDeadline: TDeadline;
+    procedure RefreshWakeDeadline;
   public
     constructor Create(const AConn: ITcpStream;
       const ASocketRuntime: ITcpSocketRuntime;
@@ -67,6 +72,7 @@ type
     function SocketFd: Int32;
     function CurrentEvents: TPlatformPollEvents;
     procedure SetCurrentEvents(const AEvents: TPlatformPollEvents);
+    function WakeDeadline: TDeadline;
     function Connection: ITcpStream;
     function HandleEvents(const AEvents: TPlatformPollEvents;
       out ANextEvents: TPlatformPollEvents;
@@ -128,8 +134,14 @@ type
     FCompletionLock: IMutex;
     FPendingCompletions: array of TTcpEpollPendingCompletion;
     FPendingCompletionCount: SizeUInt;
+    FPollTargets: array of TTcpEpollPollSessionTarget;
+    FPollTargetCount: SizeUInt;
     procedure EnsureRuntimeContext;
     function CreateSessionContext: TTcpEpollSessionContext;
+    procedure RegisterPollTarget(const ATarget: TTcpEpollPollSessionTarget);
+    procedure UnregisterPollTarget(const ATarget: TTcpEpollPollSessionTarget);
+    function ComputePollTimeoutMs: Int32;
+    procedure HandleExpiredPollTargets;
     procedure DispatchAcceptedSession(const AConn: ITcpStream;
       const ASession: ITcpServerSession);
     procedure DispatchAcceptedConn(const AHandler: ITcpServerHandler;
@@ -203,7 +215,12 @@ begin
   FSession := ASession;
   FPollSession := APollSession;
   FEvents := FPollSession.PollEvents;
-  if FEvents = [] then
+  if Supports(ASession, ITcpServerPollDrivenSessionWithDeadline,
+    FDeadlineSession) then
+    RefreshWakeDeadline
+  else
+    FWakeDeadline := TDeadline.Infinite;
+  if (FEvents = []) and FWakeDeadline.IsInfinite then
     raise EArgumentError.Create('poll-driven session must expose poll events');
 end;
 
@@ -223,6 +240,19 @@ begin
   FEvents := AEvents;
 end;
 
+procedure TTcpEpollPollSessionTarget.RefreshWakeDeadline;
+begin
+  if FDeadlineSession <> nil then
+    FWakeDeadline := FDeadlineSession.WakeDeadline
+  else
+    FWakeDeadline := TDeadline.Infinite;
+end;
+
+function TTcpEpollPollSessionTarget.WakeDeadline: TDeadline;
+begin
+  Result := FWakeDeadline;
+end;
+
 function TTcpEpollPollSessionTarget.Connection: ITcpStream;
 begin
   Result := FConn;
@@ -233,6 +263,7 @@ function TTcpEpollPollSessionTarget.HandleEvents(
   out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
 begin
   Result := FPollSession.Advance(AEvents, ANextEvents, AOwnership);
+  RefreshWakeDeadline;
 end;
 
 constructor TTcpEpollQueuedCompletion.Create(const AServer: TTcpEpollServer;
@@ -324,6 +355,7 @@ begin
   FCompletionLock := nextpas.core.sync.mutex.TMutex.Create;
   SetLength(FPendingCompletions, 4);
   FPendingCompletionCount := 0;
+  FPollTargetCount := 0;
 end;
 
 destructor TTcpEpollServer.Destroy;
@@ -353,6 +385,85 @@ end;
 function TTcpEpollServer.CreateSessionContext: TTcpEpollSessionContext;
 begin
   Result := TTcpEpollSessionContext.Create(Self, FWorkerHandoff);
+end;
+
+procedure TTcpEpollServer.RegisterPollTarget(
+  const ATarget: TTcpEpollPollSessionTarget);
+begin
+  if FPollTargetCount >= SizeUInt(Length(FPollTargets)) then
+    SetLength(FPollTargets, FPollTargetCount + 8);
+  FPollTargets[FPollTargetCount] := ATarget;
+  Inc(FPollTargetCount);
+end;
+
+procedure TTcpEpollServer.UnregisterPollTarget(
+  const ATarget: TTcpEpollPollSessionTarget);
+var
+  LI: SizeUInt;
+begin
+  if FPollTargetCount = 0 then
+    Exit;
+  for LI := 0 to FPollTargetCount - 1 do
+    if FPollTargets[LI] = ATarget then
+    begin
+      Dec(FPollTargetCount);
+      FPollTargets[LI] := FPollTargets[FPollTargetCount];
+      FPollTargets[FPollTargetCount] := nil;
+      Exit;
+    end;
+end;
+
+function TTcpEpollServer.ComputePollTimeoutMs: Int32;
+var
+  LI: SizeUInt;
+  LDeadline: TDeadline;
+  LRemaining: TDuration;
+  LMs: Int64;
+begin
+  Result := -1;
+  if FPollTargetCount = 0 then
+    Exit;
+  for LI := 0 to FPollTargetCount - 1 do
+  begin
+    LDeadline := FPollTargets[LI].WakeDeadline;
+    if LDeadline.IsInfinite then
+      Continue;
+    if LDeadline.IsExpired then
+      Exit(0);
+    LRemaining := LDeadline.Remaining;
+    LMs := LRemaining.AsMilliseconds;
+    if (LMs <= 0) and (LRemaining.AsNanoseconds > 0) then
+      LMs := 1;
+    if LMs > High(Int32) then
+      LMs := High(Int32);
+    if (Result < 0) or (LMs < Result) then
+      Result := Int32(LMs);
+  end;
+end;
+
+procedure TTcpEpollServer.HandleExpiredPollTargets;
+var
+  LExpired: array of TTcpEpollPollSessionTarget;
+  LCount: SizeUInt;
+  LI: SizeUInt;
+begin
+  SetLength(LExpired, 0);
+  LCount := 0;
+  if FPollTargetCount = 0 then
+    Exit;
+  for LI := 0 to FPollTargetCount - 1 do
+    if FPollTargets[LI].WakeDeadline.IsExpired then
+    begin
+      if LCount >= SizeUInt(Length(LExpired)) then
+        SetLength(LExpired, LCount + 4);
+      LExpired[LCount] := FPollTargets[LI];
+      Inc(LCount);
+    end;
+
+  if LCount = 0 then
+    Exit;
+  for LI := 0 to LCount - 1 do
+    HandlePollTarget(LExpired[LI], []);
 end;
 
 procedure TTcpEpollServer.DispatchAcceptedSession(const AConn: ITcpStream;
@@ -446,12 +557,16 @@ begin
   LTarget := TTcpEpollPollSessionTarget.Create(AConn, LSocketRuntime,
     ASession, LPollSession);
   try
-    LErr := platform_poller_add(FPoller, LTarget.SocketFd,
-      LTarget.CurrentEvents, LTarget);
-    if LErr <> 0 then
-      raise ENetworkError.Create('tcp epoll poller add conn failed (' +
-        IntToStr(LErr) + ')');
+    if LTarget.CurrentEvents <> [] then
+    begin
+      LErr := platform_poller_add(FPoller, LTarget.SocketFd,
+        LTarget.CurrentEvents, LTarget);
+      if LErr <> 0 then
+        raise ENetworkError.Create('tcp epoll poller add conn failed (' +
+          IntToStr(LErr) + ')');
+    end;
     AContext.BindTarget(LTarget);
+    RegisterPollTarget(LTarget);
     Result := True;
   except
     LTarget.Free;
@@ -546,6 +661,7 @@ begin
     begin
       if ATarget.CurrentEvents <> [] then
         platform_poller_remove(FPoller, ATarget.SocketFd);
+      UnregisterPollTarget(ATarget);
       if LOwnership = tscoServer then
         CloseServerOwnedTcpConn(ATarget.Connection);
       ATarget.Free;
@@ -585,6 +701,7 @@ begin
   except
     if ATarget.CurrentEvents <> [] then
       platform_poller_remove(FPoller, ATarget.SocketFd);
+    UnregisterPollTarget(ATarget);
     CloseServerOwnedTcpConn(ATarget.Connection);
     ATarget.Free;
   end;
@@ -613,6 +730,7 @@ procedure TTcpEpollServer.ListenAndServe(const AAddr: string;
 var
   LEntries: array[0..7] of TPlatformPollEntry;
   LCount: Int32;
+  LTimeoutMs: Int32;
   LErr: Int32;
   LI: Int32;
   LTarget: TTcpEpollPollSessionTarget;
@@ -649,7 +767,9 @@ begin
     try
       while FRunning do
       begin
-        LErr := platform_poller_wait(FPoller, @LEntries[0], SizeOf(LEntries), -1,
+        LTimeoutMs := ComputePollTimeoutMs;
+        LErr := platform_poller_wait(FPoller, @LEntries[0], SizeOf(LEntries),
+          LTimeoutMs,
           LCount);
         if LErr <> 0 then
         begin
@@ -658,7 +778,10 @@ begin
           raise ENetworkError.Create('tcp epoll poller wait failed (' + IntToStr(LErr) + ')');
         end;
         if LCount <= 0 then
+        begin
+          HandleExpiredPollTargets;
           Continue;
+        end;
 
         for LI := 0 to LCount - 1 do
         begin
@@ -676,6 +799,7 @@ begin
           LTarget := TTcpEpollPollSessionTarget(LEntries[LI].UserData);
           HandlePollTarget(LTarget, LEntries[LI].REvents);
         end;
+        HandleExpiredPollTargets;
       end;
     finally
       FRunning := False;
@@ -684,6 +808,7 @@ begin
       DrainPendingCompletions;
       FWorkerHandoff := nil;
       FPendingCompletionCount := 0;
+      FPollTargetCount := 0;
       if FPollerReady then
       begin
         platform_poller_close(FPoller);

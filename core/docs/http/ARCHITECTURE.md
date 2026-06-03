@@ -46,7 +46,7 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
 - `nextpas.core.net.server` 现在也已具备 poll-driven session seam，
   但 H1 目前还没有迁到这条路径，所以 HTTP 当前运行真相仍以 worker-driven session 为主。
 - H1 现在已经能看到 foundation session context；并且 foundation `epoll` runtime
-  也已经具备 worker-completion -> reactor wakeup 的基础能力。
+  也已经具备 worker-completion -> reactor wakeup 与 deadline wake 的基础能力。
 - H1 server response path 现在已经完成一层关键拆分：
   handler 先把响应写入 internal outbound buffer，
   `TH1ServerConnectionState` 再在 handler 返回后统一 drain 到 socket。
