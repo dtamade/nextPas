@@ -906,6 +906,46 @@ begin
   end;
 end;
 
+{ Test 18c: Truncated trailer whitespace at EOF }
+procedure TestTruncatedTrailerWhitespaceAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: ';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated trailer whitespace EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 18d: Truncated trailer whitespace CR at EOF }
+procedure TestTruncatedTrailerWhitespaceCrAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: '#13;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated trailer whitespace CR EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18a: Truncated trailer field line at EOF }
 procedure TestTruncatedTrailerFieldLineAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1010,6 +1050,8 @@ begin
   T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
   T.Run('Truncated trailer field-name at EOF -> 400', @TestTruncatedTrailerFieldNameAtEof);
   T.Run('Truncated trailer separator at EOF -> 400', @TestTruncatedTrailerSeparatorAtEof);
+  T.Run('Truncated trailer whitespace at EOF -> 400', @TestTruncatedTrailerWhitespaceAtEof);
+  T.Run('Truncated trailer whitespace CR at EOF -> 400', @TestTruncatedTrailerWhitespaceCrAtEof);
   T.Run('Truncated trailer field line at EOF -> 400', @TestTruncatedTrailerFieldLineAtEof);
   T.Run('Truncated trailer field CR at EOF -> 400', @TestTruncatedTrailerFieldCrAtEof);
   T.Run('Truncated trailer section CR at EOF -> 400', @TestTruncatedTrailerCrAtEof);

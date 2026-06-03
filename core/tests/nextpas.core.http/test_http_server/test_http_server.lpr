@@ -2537,6 +2537,78 @@ begin
   end;
 end;
 
+procedure TestMalformedChunkedRequestTruncatedTrailerWhitespaceAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: ';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated trailer whitespace at eof: status 400');
+    Check(not LHandlerCalled, 'truncated trailer whitespace at eof: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestMalformedChunkedRequestTruncatedTrailerWhitespaceCrAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: '#13;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated trailer whitespace CR at eof: status 400');
+    Check(not LHandlerCalled, 'truncated trailer whitespace CR at eof: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestMalformedChunkedRequestTruncatedTrailerFieldLineAtEof;
 var
   LRouter: THttpRouter;
@@ -2878,6 +2950,10 @@ begin
     @TestMalformedChunkedRequestTruncatedTrailerFieldNameAtEof);
   T.Run('Malformed chunked request truncated trailer separator at EOF -> 400',
     @TestMalformedChunkedRequestTruncatedTrailerSeparatorAtEof);
+  T.Run('Malformed chunked request truncated trailer whitespace at EOF -> 400',
+    @TestMalformedChunkedRequestTruncatedTrailerWhitespaceAtEof);
+  T.Run('Malformed chunked request truncated trailer whitespace CR at EOF -> 400',
+    @TestMalformedChunkedRequestTruncatedTrailerWhitespaceCrAtEof);
   T.Run('Malformed chunked request truncated trailer field line at EOF -> 400',
     @TestMalformedChunkedRequestTruncatedTrailerFieldLineAtEof);
   T.Run('Malformed chunked request truncated trailer field CR at EOF -> 400',

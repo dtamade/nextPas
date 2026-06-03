@@ -1,16 +1,16 @@
-# Progress Log: HTTP truncated trailer field-name/separator EOF proof
+# Progress Log: HTTP truncated trailer whitespace EOF proof
 
-## Session: 2026-06-03 HTTP truncated trailer field-name/separator EOF truncation
+## Session: 2026-06-03 HTTP truncated trailer whitespace EOF truncation
 
 - **Status:** completed
-- **Scope:** add parser/server/security focused proof that trailer field grammar ending at `...0\r\nX-Test` and `...0\r\nX-Test:` is rejected at EOF / peer half-close with explicit `400` semantics.
+- **Scope:** add parser/server/security focused proof that trailer grammar ending at `...0\r\nX-Test: ` and `...0\r\nX-Test: \r` is rejected at EOF / peer half-close with explicit `400` semantics.
 - **Checklist:**
   - [x] Checked shared checkout dirtiness and limited this batch to HTTP paths.
   - [x] Re-read design conventions, API coverage matrix, and current control files.
-  - [x] Confirmed the remaining malformed-chunk gap is trailer field-name/separator EOF truncation.
-  - [x] Added the new parser focused tests for trailer field-name EOF and trailer separator EOF truncation.
-  - [x] Added the new server focused tests for trailer field-name EOF and trailer separator EOF truncation.
-  - [x] Added the new security focused tests for trailer field-name EOF and trailer separator EOF truncation.
+  - [x] Confirmed the remaining malformed-chunk gap is trailer whitespace EOF truncation.
+  - [x] Added the new parser focused tests for trailer whitespace EOF and trailer whitespace CR EOF truncation.
+  - [x] Added the new server focused tests for trailer whitespace EOF and trailer whitespace CR EOF truncation.
+  - [x] Added the new security focused tests for trailer whitespace EOF and trailer whitespace CR EOF truncation.
   - [x] Ran the first parser verification and recorded the result.
   - [x] Ran the first server verification and recorded the result.
   - [x] Ran the first security verification and recorded the result.
@@ -25,17 +25,17 @@
 - Existing chunked EOF proof already covered malformed chunk extension, chunk-extension line truncation,
   terminal chunk extension line truncation, chunk-size line truncation, chunk-data line-ending truncation,
   terminal `0` chunk ending truncation, terminal chunk ending-after-extension truncation, trailer-section truncation,
-  trailer-section CR truncation, and trailer-field-line truncation.
-- The missing boundary was trailer field grammar even earlier in the line:
-  requests ending at `...0\r\nX-Test` and `...0\r\nX-Test:`.
+  trailer-section CR truncation, trailer-field-name truncation, trailer-separator truncation, and trailer-field-line truncation.
+- The missing boundary was trailer grammar at the single-space OWS step:
+  requests ending at `...0\r\nX-Test: ` and `...0\r\nX-Test: \r`.
 
 ## Verification Evidence 2026-06-03 Focused First Run
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `62/62 passed`, heaptrc `0 unfreed memory blocks` |
-| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `65/65 passed`, heaptrc `0 unfreed memory blocks` |
-| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `41/41 passed`, heaptrc `0 unfreed memory blocks` |
+| Parser focused suite | `make -C tests/nextpas.core.http/test_http_h1parser clean test` | `64/64 passed`, heaptrc `0 unfreed memory blocks` |
+| Server focused suite | `make -C tests/nextpas.core.http/test_http_server clean test` | `67/67 passed`, heaptrc `0 unfreed memory blocks` |
+| Security focused suite | `make -C tests/nextpas.core.http/test_http_security clean test` | `43/43 passed`, heaptrc `0 unfreed memory blocks` |
 
 ## Verification Evidence 2026-06-03 HTTP Aggregate
 
@@ -46,5 +46,5 @@
 ## Notes
 
 - Because the first runs were already GREEN, no production files were edited in this batch.
-- `git diff --check` 已对本批路径通过，控制文件里对 inbox 的旧引用也已清掉。
+- `git diff --check` 已对本批路径通过。
 - 当前待完成项只剩中文收尾报告。
