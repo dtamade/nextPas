@@ -82,6 +82,11 @@ Current truth:
 - Planned next backends are `kqueue` and `IOCP`, and Linux `epoll` still has a
   later phase where real protocol sessions such as HTTP H1 migrate onto the
   poll-driven path backed by `TryRead/TryWrite`.
+- `kqueue` is expected to reuse the same readiness-family driver shape as `epoll`.
+- Windows `IOCP` remains a first-class target, but it is a completion/proactor
+  family backend, so it must plug into the same ownership/session public contract
+  through a completion-aware foundation driver instead of pretending to be
+  readiness-only.
 
 The public goal is a stable, synchronous application-facing contract with
 runtime/backend policy hidden underneath the foundation layer.

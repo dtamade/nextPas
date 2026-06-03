@@ -57,6 +57,16 @@ libuv's backend strategy is the right cross-platform posture:
 That is the standard we should follow. The public API should not look like libuv, but
 the backend policy should.
 
+One more implementation rule needs to be explicit so future work does not blur two
+different I/O families:
+
+- `epoll` and `kqueue` are readiness-family backends and can share the same
+  poll-driven session line.
+- `IOCP` is a completion/proactor-family backend and must not be forced through a
+  fake readable/writable readiness adapter.
+- Windows should share the same foundation ownership/session/handoff contract, not
+  necessarily the exact same low-level `PollEvents + Advance(...)` driver shape.
+
 ## Current repo truth
 
 This is no longer just a proposal. The foundation split has already landed:
@@ -88,6 +98,8 @@ What is still missing is narrower and clearer:
 - H1 still lacks a poll-driven response drain model (`writer` / `chunked` / buffered
   flush are still blocking-write oriented)
 - no `kqueue` / `IOCP` concrete backend yet
+- the completion-aware runtime-driver rules needed by `IOCP` are not yet split out
+  clearly from today's readiness-oriented poll seam
 
 ## Architecture to freeze
 
@@ -213,6 +225,9 @@ These rules are fixed unless a later architecture review replaces them explicitl
 
 - Windows target is IOCP.
 - `WSAPoll` is not an acceptable final architecture.
+- Windows must preserve the same public/foundation ownership boundaries, but it must
+  be allowed to use completion-driven runtime semantics instead of a fake readiness
+  backend.
 
 ### Body model
 
@@ -289,14 +304,22 @@ through a second-rate compatibility path.
 
 - Match the contract already proven by the threaded and epoll backends
 
-### Phase 6: Add Windows IOCP backend
+### Phase 6: Extract completion-aware foundation driver rules
+
+- Status: pending
+
+- Keep `ITcpServer`, session, ownership, and worker-handoff boundaries stable
+- Make the runtime seam explicit enough for IOCP without forcing Windows through a
+  readiness-only abstraction
+
+### Phase 7: Add Windows IOCP backend
 
 - Status: pending
 
 - Make Windows a first-class backend
 - Do not route the long-term design through `WSAPoll`
 
-### Phase 7: Performance phase
+### Phase 8: Performance phase
 
 - request-body streaming seam
 - spill / spool
@@ -348,8 +371,10 @@ The next implementation batch should do only this:
 
 1. keep threaded and `epoll` phase-1 contract parity stable
 2. design and land the shared phase-2 per-connection evented driver seam
-3. make that driver reusable for future `kqueue` / `IOCP`
-4. keep public HTTP behavior unchanged and prove every changed seam with focused tests
+3. make the readiness-family driver reusable for future `kqueue`
+4. split the completion-aware driver rules needed by `IOCP` without changing the
+   public HTTP contract
+5. keep public HTTP behavior unchanged and prove every changed seam with focused tests
 
 That is the smallest move that advances the final architecture without reopening
 unrelated protocol design questions.

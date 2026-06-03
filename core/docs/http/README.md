@@ -73,7 +73,10 @@ make -C examples/nextpas.core.http/http_get_client run
 `TCP_SERVER_BACKEND_EPOLL` 已有第一阶段 backend：`epoll` 负责 listener
 readiness 与 accept，accepted connection 仍交给 foundation worker 执行同步
 HTTP handler，所以 public HTTP contract 保持不变。`kqueue` / `IOCP` 仍未实现；
-非 Linux 平台显式选择 `epoll` 也仍会得到 `ENotSupportedError`。
+非 Linux 平台显式选择 `epoll` 也仍会得到 `ENotSupportedError`。后续 `kqueue`
+会继续沿用当前 readiness-family session seam；Windows `IOCP` 则会保持相同
+public HTTP contract，但通过 foundation 的 completion-aware runtime path 接入，
+而不是把 HTTP facade 改成 event-loop-first API。
 
 ## Cross-Platform
 

@@ -65,6 +65,14 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - 正确做法是把“同步 public contract”和“可替换 runtime backend”分层固定，
   让线程模型、reactor 模型、未来 `IOCP` 模型都能挂到同一 foundation 上。
 
+这里还要再固定一条实现纪律，避免后面把不同 I/O 家族混成一锅：
+
+- `epoll` / `kqueue` 属于 readiness family，可以共享同一条 poll-driven session 设计。
+- `IOCP` 属于 completion / proactor family，不能靠“伪造 readable / writable 事件”硬塞进
+  readiness-only driver。
+- 因此 future Windows backend 要共享的是 foundation ownership / session / handoff contract，
+  不一定是逐字复用今天的 `PollEvents + Advance(...)` 低层 driver 形状。
+
 ## 当前源码真相
 
 截至 2026-06-03，相关源码边界已经收口到下面这个形态：
@@ -161,6 +169,9 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - Linux `epoll` 第一阶段 backend 可以先只消费 `TryAccept`
 - 真正的 reactor / proactor per-connection backend 必须进一步消费 `TryRead/TryWrite`
   来驱动协议 state object
+- 对 BSD/macOS 的 `kqueue`，这条 readiness seam 可以直接复用。
+- 对 Windows `IOCP`，必须在同一 public contract 下补 completion-aware driver 语义，
+  而不是把 overlapped completion 假装成普通 readiness edge。
 
 当前 repo 真相进一步收口为：
 
@@ -254,6 +265,9 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - `ITcpServerWorkerHandoff.Submit` 的 accepted / rejected / shutting-down 语义必须稳定；
   accepted 后由 executor 负责最终调用 completion 一次，failed work 统一回落到
   `server-owned close` 语义。
+- `ITcpServerPollDrivenSession` 当前是 readiness-family driver seam：
+  它服务于 `threaded` fallback、Linux `epoll` 与 future `kqueue` 这条线路；
+  不能把它误解成“所有 backend 必须伪装成 poll events”。
 - 对 poll-driven session，worker completion 不应直接在 worker 线程里推进协议状态机；
   foundation backend 必须把 completion 送回 reactor / owning runtime thread。
 - `ITcpServerPollDrivenSession.Advance(...)` 可以合法返回 `ANextEvents := []`，
@@ -266,6 +280,12 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
 - `ITcpListenerRuntime` / `ITcpStreamRuntime` 是更窄的 runtime-only I/O seam：
   would-block 必须作为正常结果返回，不能重新编码成异常。
+- future `IOCP` backend 若需要 sibling completion-driven driver 或 generalized runtime-driver
+  contract，允许在 foundation 层新增；但必须保持 `ITcpServer` / `ITcpServerSession` /
+  `ITcpServerSessionContext` / `ITcpServerWorkerHandoff` 这组 ownership 边界不变。
+- completion-based backend 必须按“操作完成”而不是“socket 就绪”推进状态机；
+  per-connection state object 必须自己关联 outstanding accept/read/write operation 与 buffer
+  生命周期，不能假设 completion dequeue 顺序天然等于 submit 顺序。
 - “一个连接 = 一个协议 state object” 必须进入 foundation seam，而不是长期停留在
   `http.impl.h1` 这种实现细节里。
 - 旧的 `ServeConn` 可以为了兼容继续保留，但新 backend 不应再只依赖整连接阻塞 entrypoint。
@@ -361,6 +381,10 @@ nextpas.core.net.server.iocp
 - 不能把 `WSAPoll` 作为最终设计终点。
 - Windows backend 的语义目标是与其他 backend 保持同一 public contract，
   不是强行伪装成 readiness-only 模型。
+- IOCP completion packet 是 completion queue 语义，不是 `epoll` 式 readiness 边沿；
+  foundation 设计必须显式承认这一点。
+- IOCP packet queue / runnable thread release 也有自己的调度语义；
+  协议顺序必须由 connection state object 维护，不能偷懒依赖 runtime dequeue 顺序。
 
 ## 非目标
 
@@ -407,9 +431,14 @@ nextpas.core.net.server.iocp
 
 ### Phase 6
 
-- 增加 `net.server.iocp`
+- 在 foundation 层抽出 completion-aware runtime driver 语义，
+  但不改变 `ITcpServer` / session / handoff public boundary
 
 ### Phase 7
+
+- 增加 `net.server.iocp`
+
+### Phase 8
 
 - 再进入 buffer pool、streaming body、spill / spool、write coalescing、
   `io_uring` 评估、基准对照这些性能阶段

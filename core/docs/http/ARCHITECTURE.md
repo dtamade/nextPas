@@ -87,12 +87,19 @@ HTTP server 现在要分三层理解，不能再笼统地说成“线程驱动 H
   - timed drain / `WakeDeadline` 也已进入同一条 response state machine
   - active + 1 queued response 已落地，并已锁定有序 follow-up error response
   - 当前剩余缺口已收窄为 stalled-peer timing characterization、close-observation 与性能优化，而不是 H1 poll foundation 本身
+- 但这里还有一条必须写死的边界：
+  当前 `TH1ServerConnectionState + ITcpServerPollDrivenSession` 是 readiness-family
+  driver seam，适配 Linux `epoll` 与 future `kqueue` 没问题；
+  future Windows `IOCP` 要共享的是同一个 H1 state object ownership，
+  不是让 HTTP 自己长出一套 Windows-specific readable / writable 分支。
 
 因此 HTTP 这层的固定方向不是“自己长出一个更复杂的 `TBaseServer`”，而是：
 
 - 保持 HTTP facade 简单
 - 把 runtime 演进集中在 `nextpas.core.net.server`
 - 让 H1/H2/H3 都接到同一种 session-driven foundation 上
+- 允许 foundation 为 `IOCP` 补 completion-aware driver，而不是要求 HTTP 协议层伪装它
+  和 `epoll` 完全同形
 
 ---
 
@@ -272,6 +279,12 @@ type
 - hijack / detach 这类 ownership 语义通过 `TTcpServerConnOwnership` 与 TCP foundation 对齐。
 - `IHttpServerTransport.ServeConn` 为兼容仍保留，但 future backend 不应再只依赖这个整连接阻塞入口。
 - `IHttpServerSessionFactory` / `ITcpServerSession` 才是 HTTP 接入 future evented runtime 的主 seam。
+- `TH1ServerConnectionState` 必须继续保持“协议状态对象”身份；
+  `epoll` / `kqueue` / `IOCP` 差异只能落在 foundation runtime driver，不应把 socket
+  调度策略重新拉回 HTTP 层。
+- `IOCP` 若最终需要 completion-aware foundation driver，也应该通过 `net.server`
+  seam 接入；HTTP 不应为此暴露新的 public callback-first API，也不应引入
+  Windows-only handler contract。
 
 ### 版本特有接口（不进 http.intf，留在各自 impl 内部）
 
