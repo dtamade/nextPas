@@ -449,6 +449,117 @@ begin
   end;
 end;
 
+{ Test 4c: Upgrade exception does not append 500 or close owned websocket }
+procedure TestUpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LServerSideWs: IWebSocket;
+  LKey, LReq, LFrame: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrameResp: string;
+  LPayloadLen: Byte;
+  LPayloadStart: Integer;
+  LReceived: TWebSocketFrame;
+begin
+  LServerSideWs := nil;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws-crash', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LServerSideWs := UpgradeWebSocket(AReq, AW);
+    raise Exception.Create('crash after websocket upgrade');
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws-crash HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101 Switching Protocols', LResp) = 1,
+        'upgrade-crash: got 101 status');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(200)));
+      try
+        LN := LConn.Read(LBuf[0], 1);
+      except
+        LN := 0;
+      end;
+      CheckEqual(Int64(0), Int64(LN),
+        'upgrade-crash: server does not append 500 after handler exception');
+
+      platform_thread_sleep_ns(100000000);
+      Check(LServerSideWs <> nil,
+        'upgrade-crash: handler retained owned websocket after exception');
+
+      LFrame := BuildMaskedFrame($01, 'probe');
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+      LReceived := LServerSideWs.ReadFrame;
+      Check(LReceived.Opcode = wsOpText,
+        'upgrade-crash: server-owned websocket still reads text frame');
+      CheckEqual('probe', LReceived.Payload,
+        'upgrade-crash: server-owned websocket reads probe payload');
+      LServerSideWs.WriteText(LReceived.Payload);
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+      LFrameResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LFrameResp, Length(LFrameResp) + Int32(LN));
+          Move(LBuf[0], LFrameResp[Length(LFrameResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LFrameResp) >= 7) or (LN = 0);
+
+      Check(Length(LFrameResp) >= 7,
+        'upgrade-crash: client receives websocket frame after exception');
+      LPayloadStart := 1;
+      Check(Ord(LFrameResp[LPayloadStart]) = $81,
+        'upgrade-crash: reply frame keeps text opcode');
+      LPayloadLen := Ord(LFrameResp[LPayloadStart + 1]) and $7F;
+      CheckEqual(Int64(5), Int64(LPayloadLen),
+        'upgrade-crash: reply payload len = 5');
+      CheckEqual('probe', Copy(LFrameResp, LPayloadStart + 2, LPayloadLen),
+        'upgrade-crash: reply payload matches');
+
+      LServerSideWs.Close(1000, '');
+    finally
+      LConn.Close;
+      LServerSideWs := nil;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -628,6 +739,8 @@ begin
   T.Run('HandshakeNoKey', @TestHandshakeNoKey);
   T.Run('TextFrameEcho', @TestTextFrameEcho);
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
+  T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',
+    @TestUpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;
