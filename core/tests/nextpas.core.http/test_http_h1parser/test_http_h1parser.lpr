@@ -1244,6 +1244,106 @@ begin
   Check(LP.HasError, 'chunked partial follow-up headers report parser error on finish');
 end;
 
+procedure TestChunkedTrailerKeepAliveGarbageTailConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10 +
+           'Trailer: X-Test'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LReq := LReq1 + 'garbage';
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive chunked trailer tail should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive chunked trailer first request should complete');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive chunked trailer parser consumes only first request');
+  Check(LP.GetMethod = hmPost, 'keep-alive chunked trailer first request preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive chunked trailer first request preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive chunked trailer first request preserves decoded body');
+  CheckEqual('X-Test', LP.GetHeaders.Get('Trailer'), 'keep-alive chunked trailer declaration header preserved');
+  CheckEqual('', LP.GetHeaders.Get('X-Test'), 'keep-alive chunked trailer field stays out of regular headers');
+end;
+
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10 +
+           'Trailer: X-Test'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LTail := 'GET /next HTTP/1.1';
+  LReq := LReq1 + LTail;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive chunked trailer partial follow-up line should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive chunked trailer first request should complete before partial follow-up line');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive chunked trailer parser consumes only first request before partial follow-up line');
+  Check(LP.GetMethod = hmPost, 'keep-alive chunked trailer partial follow-up line preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive chunked trailer partial follow-up line preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive chunked trailer partial follow-up line preserves decoded body');
+  CheckEqual('X-Test', LP.GetHeaders.Get('Trailer'), 'keep-alive chunked trailer partial follow-up line preserves trailer declaration');
+  CheckEqual('', LP.GetHeaders.Get('X-Test'), 'keep-alive chunked trailer partial follow-up line keeps trailer field out of regular headers');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail), Length(LTail));
+  Check(not LP.IsComplete, 'chunked trailer partial follow-up request line alone is not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'chunked trailer partial follow-up request line reports parser error on finish');
+end;
+
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail: string;
+  LReq: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10 +
+           'Trailer: X-Test'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LTail := 'GET /next HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10;
+  LReq := LReq1 + LTail;
+  LConsumed := LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.HasError, 'keep-alive chunked trailer partial follow-up headers should not corrupt first request');
+  Check(LP.IsComplete, 'keep-alive chunked trailer first request should complete before partial follow-up headers');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'keep-alive chunked trailer parser consumes only first request before partial follow-up headers');
+  Check(LP.GetMethod = hmPost, 'keep-alive chunked trailer partial follow-up headers preserves POST method');
+  CheckEqual('/upload', LP.GetUrl, 'keep-alive chunked trailer partial follow-up headers preserves url');
+  CheckEqual('hello', LP.GetBody, 'keep-alive chunked trailer partial follow-up headers preserves decoded body');
+  CheckEqual('X-Test', LP.GetHeaders.Get('Trailer'), 'keep-alive chunked trailer partial follow-up headers preserves trailer declaration');
+  CheckEqual('', LP.GetHeaders.Get('X-Test'), 'keep-alive chunked trailer partial follow-up headers keep trailer field out of regular headers');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail), Length(LTail));
+  Check(not LP.IsComplete, 'chunked trailer partial follow-up headers alone are not complete');
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+  Check(LP.HasError, 'chunked trailer partial follow-up headers report parser error on finish');
+end;
+
 procedure TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest;
 var
   LP: IH1Parser;
@@ -1479,6 +1579,12 @@ begin
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
   T.Run('Chunked keep-alive truncated follow-up headers consumes first request only',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
+  T.Run('Chunked trailer keep-alive garbage tail consumes first request only',
+    @TestChunkedTrailerKeepAliveGarbageTailConsumesFirstRequestOnly);
+  T.Run('Chunked trailer keep-alive truncated follow-up request line consumes first request only',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
+  T.Run('Chunked trailer keep-alive truncated follow-up headers consumes first request only',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
   T.Run('Chunked pipelined next request does not pollute current request', @TestChunkedPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Upgrade request completes without parser error', @TestUpgradeRequestCompletesWithoutParserError);
   T.Run('Pipelined next request does not pollute current request', @TestPipelinedNextRequestDoesNotPolluteCurrentRequest);

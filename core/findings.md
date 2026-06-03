@@ -1,4 +1,4 @@
-# Findings: HTTP keep-alive chunked partial follow-up proof
+# Findings: HTTP chunked trailer keep-alive tail proof
 
 ## Repo / Git Safety
 
@@ -14,45 +14,48 @@
 
 ## Existing HTTP Truth Before This Batch
 
-- `chunked + Connection: close + extra bytes after terminal chunk` 已经在 parser/server/security
-  三层锁成显式 `400`。
-- keep-alive chunked garbage tail 也已有 current-truth proof：
-  首个合法请求先完成，尾巴随后作为 follow-up malformed request 返回 `400`。
-- 合法 chunked pipelined next request 也已覆盖：chunked 首请求不会被同包第二请求污染。
-- 但 `garbage tail` 与“完整合法下一请求”之间还缺两类相邻 truth：
-  - decoded body 后只到下一请求行中途 EOF
-  - decoded body 后到下一请求头中途 EOF
+- 无 trailer 的 keep-alive chunked tail truth 已完整覆盖：
+  - garbage tail
+  - partial follow-up request line
+  - partial follow-up headers
+- chunked trailer 本身也已有 focused truth：
+  - trailer declaration 保留
+  - trailer field 不污染普通请求头
+  - 多类 malformed trailer / EOF truncation 都会被拒绝
+- 但“完整 trailer section 结束后再出现 keep-alive tail”的交汇边界还没被单独锁实。
 
 ## New Evidence From This Batch
 
 - parser focused tests 证明：
-  - 当输入是 `Req1 + partial follow-up request line` 或 `Req1 + partial follow-up headers` 时，
+  - 当输入是 `Trailer-complete Req1 + garbage tail / partial follow-up line / partial follow-up headers` 时，
     parser 都只消费首个合法 chunked request；
-  - leftover 单独 `Finish` 后都会进入 parser error，不会被误判成合法完成。
+  - 首个请求的 method / url / decoded body 不会被尾巴污染；
+  - `Trailer: X-Test` 声明头仍保留，而实际 `X-Test: value` trailer field 仍不进入普通请求头；
+  - leftover 单独 `Finish` 后仍会落成 parser error，不会误判成合法完成。
 - server focused tests 证明：
-  - 首个 chunked request 会先正常进入 handler 并完成 `200`；
-  - peer half-close 暴露出 partial follow-up request line / headers 时，
-    server 会在后续稳定返回 follow-up `400`。
+  - 首个 chunked trailer request 会先正常进入 handler 并完成 `200`；
+  - handler 看到的 body 仍是解码后的 `hello`，且 `Trailer` 声明头保留、实际 trailer field 不暴露为普通 header；
+  - 完整 trailer section 之后的 garbage tail / partial follow-up line / headers 都会在同连接后续稳定返回 follow-up `400`。
 - security focused tests 证明：
-  - raw-wire 下这两类 keep-alive chunked partial follow-up 子类都稳定落到
-    “首个请求完成 + follow-up `400`” 语义，没有污染首个请求体。
+  - raw-wire 下这三类 `chunked + trailer + keep-alive tail` 输入都稳定落到
+    “首个请求完成 + follow-up `400`” 语义，没有污染首个请求的已解码 body。
 
 ## Batch Truth
 
 - 这轮没有发现新的 HTTP 实现缺陷。
-- 六条新增 focused tests 首轮即 GREEN，因此本轮仍然是
+- 九条新增 focused tests 首轮即 GREEN，因此本轮仍然是
   **coverage expansion / current-truth locking**，不是生产修复。
-- chunked keep-alive request-tail 的 current truth 现在也细到与 fixed-length 对称：
-  - `Connection: close` extra bytes -> 显式 `400`；
-  - keep-alive garbage tail -> 首请求完成，follow-up `400`；
-  - keep-alive partial follow-up request line -> 首请求完成，follow-up `400`；
-  - keep-alive partial follow-up headers -> 首请求完成，follow-up `400`；
-  - keep-alive valid pipelined next request -> 两个请求都能各自独立完成。
+- chunked keep-alive request-tail truth 现在进一步覆盖到
+  **trailer-complete** 路径：
+  - 完整 trailer section 后的 garbage tail -> 首请求完成，follow-up `400`
+  - 完整 trailer section 后的 partial follow-up request line -> 首请求完成，follow-up `400`
+  - 完整 trailer section 后的 partial follow-up headers -> 首请求完成，follow-up `400`
 
 ## Remaining Questions
 
-- keep-alive request-tail 契约决策仍然存在：
-  当前 fixed-length 与 chunked 两条路径的 current truth 都已较完整，但是否把 follow-up `400`
-  冻结成公开契约，还是继续系统性收紧成更早拒绝，仍需判断。
-- keep-alive tail 这条线下一步最自然不是再补相邻 grammar，而是开始做
-  transport truth 与最终 public policy 的决策收口。
+- keep-alive request-tail 契约决策仍在：
+  当前 fixed-length、plain chunked、以及 trailer-complete chunked 三条路径的 current truth
+  都已较完整，但是否把 follow-up `400` 冻结成公开契约，还是继续系统性收紧成更早拒绝，仍需判断。
+- 如果继续做 correctness proof 而不是 policy tightening，下一步最自然的是：
+  - `chunked + trailer + valid pipelined next request` 的 first-request isolation / second-request completion proof；
+  - 或回到 `API_COVERAGE` 中仍挂着的 keep-alive policy decision。

@@ -884,6 +884,82 @@ begin
   end;
 end;
 
+{ Test 14cc: Keep-alive chunked trailer-complete request with garbage tail }
+procedure TestChunkedTrailerKeepAliveGarbageTailSafeHandling;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13#10#13#10 +
+            'garbage';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'Keep-alive chunked trailer tail: first response still completes');
+    Check(Pos('echo:5', LResp) > 0,
+      'Keep-alive chunked trailer tail: first request body handled correctly');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Keep-alive chunked trailer tail: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 14cd: Keep-alive chunked trailer-complete request with truncated follow-up request line }
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13#10#13#10 +
+            'GET /next HTTP/1.1';
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'Keep-alive chunked trailer partial follow-up line: first response still completes');
+    Check(Pos('echo:5', LResp) > 0,
+      'Keep-alive chunked trailer partial follow-up line: first request body handled correctly');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Keep-alive chunked trailer partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 14ce: Keep-alive chunked trailer-complete request with truncated follow-up headers }
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13#10#13#10 +
+            'GET /next HTTP/1.1'#13#10 +
+            'Host: x'#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 200', LResp) > 0,
+      'Keep-alive chunked trailer partial follow-up headers: first response still completes');
+    Check(Pos('echo:5', LResp) > 0,
+      'Keep-alive chunked trailer partial follow-up headers: first request body handled correctly');
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Keep-alive chunked trailer partial follow-up headers: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 15: Negative Content-Length }
 procedure TestNegativeContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1242,6 +1318,12 @@ begin
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling);
   T.Run('Chunked keep-alive truncated follow-up headers safe handling',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling);
+  T.Run('Chunked trailer keep-alive garbage tail safe handling',
+    @TestChunkedTrailerKeepAliveGarbageTailSafeHandling);
+  T.Run('Chunked trailer keep-alive truncated follow-up request line safe handling',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling);
+  T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
   T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);

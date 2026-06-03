@@ -1476,6 +1476,215 @@ begin
   end;
 end;
 
+procedure TestChunkedTrailerKeepAliveGarbageTailBecomesFollowUp400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: value'#13#10#13#10 +
+        'garbage';
+begin
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Test');
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'keep-alive chunked trailer tail: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'keep-alive chunked trailer tail: first body preserved');
+      Check(LSeenUpload, 'keep-alive chunked trailer tail: first handler called');
+      CheckEqual('hello', LGotBody, 'keep-alive chunked trailer tail: handler sees decoded body only');
+      CheckEqual('X-Test', LGotTrailerDecl, 'keep-alive chunked trailer tail: trailer declaration preserved');
+      CheckEqual('', LGotTrailerValue, 'keep-alive chunked trailer tail: trailer field not exposed as regular header');
+      Check(Pos('HTTP/1.1 400', LResp2) > 0, 'keep-alive chunked trailer tail: malformed follow-up gets 400');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: value'#13#10#13#10 +
+        'GET /next HTTP/1.1';
+begin
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Test');
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'keep-alive chunked trailer partial follow-up line: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'keep-alive chunked trailer partial follow-up line: first body preserved');
+    Check(LSeenUpload, 'keep-alive chunked trailer partial follow-up line: first handler called');
+    CheckEqual('hello', LGotBody, 'keep-alive chunked trailer partial follow-up line: handler sees decoded body only');
+    CheckEqual('X-Test', LGotTrailerDecl, 'keep-alive chunked trailer partial follow-up line: trailer declaration preserved');
+    CheckEqual('', LGotTrailerValue, 'keep-alive chunked trailer partial follow-up line: trailer field not exposed as regular header');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'keep-alive chunked trailer partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+  LSeenUpload: Boolean;
+const
+  REQ = 'POST /upload HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: value'#13#10#13#10 +
+        'GET /next HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10;
+begin
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LSeenUpload := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Test');
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0, 'keep-alive chunked trailer partial follow-up headers: first response 200');
+    Check(Pos('upload:hello', LResp) > 0, 'keep-alive chunked trailer partial follow-up headers: first body preserved');
+    Check(LSeenUpload, 'keep-alive chunked trailer partial follow-up headers: first handler called');
+    CheckEqual('hello', LGotBody, 'keep-alive chunked trailer partial follow-up headers: handler sees decoded body only');
+    CheckEqual('X-Test', LGotTrailerDecl, 'keep-alive chunked trailer partial follow-up headers: trailer declaration preserved');
+    CheckEqual('', LGotTrailerValue, 'keep-alive chunked trailer partial follow-up headers: trailer field not exposed as regular header');
+    Check(Pos('HTTP/1.1 400', LResp) > 0, 'keep-alive chunked trailer partial follow-up headers: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestChunkedPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -3325,6 +3534,12 @@ begin
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400);
   T.Run('Chunked keep-alive truncated follow-up headers -> follow-up 400',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400);
+  T.Run('Chunked trailer keep-alive garbage tail -> follow-up 400',
+    @TestChunkedTrailerKeepAliveGarbageTailBecomesFollowUp400);
+  T.Run('Chunked trailer keep-alive truncated follow-up request line -> follow-up 400',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400);
+  T.Run('Chunked trailer keep-alive truncated follow-up headers -> follow-up 400',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400);
   T.Run('Chunked pipelined requests in single write', @TestChunkedPipelinedRequestsInSingleWrite);
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);

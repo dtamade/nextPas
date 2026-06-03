@@ -1,52 +1,56 @@
-# Task Plan: HTTP keep-alive chunked partial follow-up proof
+# Task Plan: HTTP chunked trailer keep-alive tail proof
 
 ## Goal
 
-补齐 chunked keep-alive request-tail 的两个相邻 partial follow-up request
-子类，把 decoded body 正常结束后剩余半截下一请求的 current truth 单独锁实：
+补齐 `chunked + trailer + keep-alive tail` 的三个相邻 current-truth 子类：
 
-- `...0\r\n\r\nGET /next HTTP/1.1`
-- `...0\r\n\r\nGET /next HTTP/1.1\r\nHost: localhost\r\n`
+- `...0\r\nX-Test: value\r\n\r\ngarbage`
+- `...0\r\nX-Test: value\r\n\r\nGET /next HTTP/1.1`
+- `...0\r\nX-Test: value\r\n\r\nGET /next HTTP/1.1\r\nHost: localhost\r\n`
 
 确认：
 
-- parser 只消费首个合法 chunked request，不会被半截 follow-up line / headers 污染；
-- server 首个请求仍然正常完成，随后在 peer half-close 后把半截 follow-up 稳定落成 follow-up `400`；
+- parser 在完整 trailer section 结束后只消费首个合法 chunked request，不会被后续垃圾尾巴或半截 follow-up request 污染；
+- trailer 声明头仍保留，实际 trailer field 仍不进入普通请求头；
+- server 首个请求仍然正常完成，随后在同连接上把尾巴稳定落成 follow-up `400`；
 - security raw-wire 语义也稳定锁成“首个请求完成 + follow-up `400`”。
 
 ## Current Phase
 
-`nextpas.core.http` H1 correctness coverage-expansion。当前继续细化 keep-alive request-tail
-契约，把 chunked 路径补齐到与 fixed-length 对称的 partial follow-up request line / headers
-truth。
+`nextpas.core.http` H1 correctness coverage-expansion。当前继续沿 malformed
+chunked request / trailer contract boundary 做 coverage 收口，重点补完整 trailer
+section 之后的 keep-alive tail isolation truth。
 
 ## Active Batch Checklist
 
 - [x] 检查 shared checkout 的无关脏文件，确认本轮只处理 HTTP 相关路径。
 - [x] 复读 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md` 与现有控制文件。
-- [x] 确认当前缺口是 keep-alive chunked decoded body 后紧跟半截 follow-up request line / headers。
+- [x] 审阅现有 parser/server/security 布局，确认 gap 是“完整 trailer section 结束后的 keep-alive tail isolation”。
 - [x] 新增 parser focused tests：
-  `Chunked keep-alive truncated follow-up request line consumes first request only`、
-  `Chunked keep-alive truncated follow-up headers consumes first request only`。
+  `Chunked trailer keep-alive garbage tail consumes first request only`、
+  `Chunked trailer keep-alive truncated follow-up request line consumes first request only`、
+  `Chunked trailer keep-alive truncated follow-up headers consumes first request only`。
 - [x] 新增 server focused tests：
-  `Chunked keep-alive truncated follow-up request line -> follow-up 400`、
-  `Chunked keep-alive truncated follow-up headers -> follow-up 400`。
+  `Chunked trailer keep-alive garbage tail -> follow-up 400`、
+  `Chunked trailer keep-alive truncated follow-up request line -> follow-up 400`、
+  `Chunked trailer keep-alive truncated follow-up headers -> follow-up 400`。
 - [x] 新增 security focused tests：
-  `Chunked keep-alive truncated follow-up request line safe handling`、
-  `Chunked keep-alive truncated follow-up headers safe handling`。
+  `Chunked trailer keep-alive garbage tail safe handling`、
+  `Chunked trailer keep-alive truncated follow-up request line safe handling`、
+  `Chunked trailer keep-alive truncated follow-up headers safe handling`。
 - [x] 跑 `test_http_h1parser`、`test_http_server`、`test_http_security` 首轮验证，记录是 RED 还是 direct GREEN。
-- [x] 若失败则仅在 HTTP parser/server 内最小修复；若直接通过，则按 coverage-expansion 收口。
+- [x] 根据首轮结果判断是否需要生产修复。
 - [x] 同步 API coverage、`task_plan.md`、`findings.md`、`progress.md`。
 - [x] 跑 HTTP 聚合验证、`git diff --check` 与 path-limited git hygiene。
-- [x] path-limited commit，并输出中文收尾报告。
+- [ ] path-limited commit，并输出中文收尾报告。
 
 ## Quality Gates
 
 | Gate | Rule |
 | --- | --- |
 | Scope discipline | 只处理 `nextpas.core.http` 相关测试与控制文档，不触碰无关脏文件。 |
-| TDD truthfulness | 新增 focused tests 必须先首跑，诚实记录 RED 或 direct GREEN。 |
-| API gate | 如果 keep-alive request-tail 行为写进覆盖矩阵，必须有 parser/server/security 三层证据。 |
+| TDD truthfulness | 新增 focused tests 已首跑；必须诚实记录 RED 或 direct GREEN。 |
+| API gate | 如果 trailer-complete keep-alive tail 行为写进覆盖矩阵，必须有 parser/server/security 三层证据。 |
 | Leak gate | changed-surface focused suites 与 HTTP aggregate 都必须给出 heaptrc `0 unfreed memory blocks`。 |
 | Git safety | 只允许 path-limited staging/commit；禁止 `git add .`、reset、覆盖无关文件。 |
 
@@ -54,12 +58,12 @@ truth。
 
 | Decision | Rationale |
 | --- | --- |
-| 本轮优先补 chunked keep-alive partial follow-up line / headers | 这是 chunked `garbage tail` 与“完整合法 pipelined next request”之间最自然、最关键的契约中间态。 |
-| parser 层除了首请求隔离，还额外对 leftover 单独 `Finish` 验证 | 这样可以把“首请求不污染”和“半截下一请求最终报错”同时锁实。 |
-| 若首跑直接 GREEN，则不碰生产代码 | 当前目标是 correctness proof，不制造伪修复。 |
+| 本轮选 `chunked + trailer + keep-alive tail` | 这是“chunked keep-alive tail isolation”与“trailer isolation”两条线的交汇边界，现有矩阵尚未单独锁实。 |
+| parser 额外断言 trailer 声明头保留且 trailer field 不进普通请求头 | 这样可以确认 keep-alive tail proof 没有绕开既有 trailer isolation 契约。 |
+| 首轮 direct GREEN 就不碰生产代码 | 当前目标仍是 correctness proof，不制造伪修复。 |
 
 ## Errors Encountered
 
 | Error | Attempt | Resolution |
 | --- | --- | --- |
-| 暂无实现错误；六条新增 focused tests 首轮 direct GREEN，HTTP aggregate 复跑也通过 | 1 | 按 coverage expansion 收口，无需生产修复。 |
+| 暂无实现错误；九条新增 focused tests 首轮 direct GREEN | 1 | 保持 coverage expansion 路线，不改生产代码。 |
