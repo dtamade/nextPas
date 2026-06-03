@@ -1992,6 +1992,40 @@ begin
   end;
 end;
 
+procedure TestMalformedChunkedRequestTruncatedTerminalChunkEndingAfterExtensionAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0;sig=abc'#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated terminal chunk ending after extension: status 400');
+    Check(not LHandlerCalled, 'truncated terminal chunk ending after extension: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestMalformedChunkedRequestTruncatedChunkDataEndingAtEof;
 var
   LRouter: THttpRouter;
@@ -2577,6 +2611,8 @@ begin
   T.Run('Malformed chunked request truncated terminal chunk ending at EOF -> 400', @TestMalformedChunkedRequestTruncatedTerminalChunkEndingAtEof);
   T.Run('Malformed chunked request truncated terminal chunk extension at EOF -> 400', @TestMalformedChunkedRequestTruncatedTerminalChunkExtensionAtEof);
   T.Run('Malformed chunked request truncated terminal chunk extension CR at EOF -> 400', @TestMalformedChunkedRequestTruncatedTerminalChunkExtensionCrAtEof);
+  T.Run('Malformed chunked request truncated terminal chunk ending after extension at EOF -> 400',
+    @TestMalformedChunkedRequestTruncatedTerminalChunkEndingAfterExtensionAtEof);
   T.Run('Malformed chunked request truncated chunk-data ending at EOF -> 400', @TestMalformedChunkedRequestTruncatedChunkDataEndingAtEof);
   T.Run('Malformed chunked request truncated chunk-data CR at EOF -> 400', @TestMalformedChunkedRequestTruncatedChunkDataCrAtEof);
   T.Run('Malformed chunked request missing chunk-data CRLF -> 400', @TestMalformedChunkedRequestMissingChunkDataCrLf);

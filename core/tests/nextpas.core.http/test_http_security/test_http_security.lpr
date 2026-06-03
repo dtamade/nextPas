@@ -386,6 +386,24 @@ begin
   end;
 end;
 
+{ Test 2ec: Truncated terminal chunk ending after extension at EOF }
+procedure TestTruncatedTerminalChunkEndingAfterExtensionAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0;sig=abc'#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated terminal chunk ending after extension EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 2f: Truncated chunk-data ending at EOF }
 procedure TestTruncatedChunkDataEndingAtEof;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -827,6 +845,8 @@ begin
   T.Run('Truncated terminal chunk ending at EOF -> 400', @TestTruncatedTerminalChunkEndingAtEof);
   T.Run('Truncated terminal chunk extension at EOF -> 400', @TestTruncatedTerminalChunkExtensionAtEof);
   T.Run('Truncated terminal chunk extension CR at EOF -> 400', @TestTruncatedTerminalChunkExtensionCrAtEof);
+  T.Run('Truncated terminal chunk ending after extension at EOF -> 400',
+    @TestTruncatedTerminalChunkEndingAfterExtensionAtEof);
   T.Run('Truncated chunk-data ending at EOF -> 400', @TestTruncatedChunkDataEndingAtEof);
   T.Run('Truncated chunk-data CR at EOF -> 400', @TestTruncatedChunkDataCrAtEof);
   T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
