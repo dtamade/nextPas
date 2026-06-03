@@ -1858,6 +1858,72 @@ begin
   end;
 end;
 
+procedure TestMalformedChunkedRequestTruncatedChunkDataEndingAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello';
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated chunk-data ending: status 400');
+    Check(not LHandlerCalled, 'truncated chunk-data ending: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestMalformedChunkedRequestTruncatedChunkDataCrAtEof;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'truncated chunk-data CR: status 400');
+    Check(not LHandlerCalled, 'truncated chunk-data CR: handler not called');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestMalformedChunkedRequestMissingChunkDataCrLf;
 var
   LRouter: THttpRouter;
@@ -2373,6 +2439,8 @@ begin
   T.Run('Malformed chunked request truncated at EOF -> 400', @TestMalformedChunkedRequestTruncatedAtEof);
   T.Run('Malformed chunked request truncated chunk-size line at EOF -> 400', @TestMalformedChunkedRequestTruncatedChunkSizeLineAtEof);
   T.Run('Malformed chunked request truncated terminal chunk ending at EOF -> 400', @TestMalformedChunkedRequestTruncatedTerminalChunkEndingAtEof);
+  T.Run('Malformed chunked request truncated chunk-data ending at EOF -> 400', @TestMalformedChunkedRequestTruncatedChunkDataEndingAtEof);
+  T.Run('Malformed chunked request truncated chunk-data CR at EOF -> 400', @TestMalformedChunkedRequestTruncatedChunkDataCrAtEof);
   T.Run('Malformed chunked request missing chunk-data CRLF -> 400', @TestMalformedChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict -> 400', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order -> 400', @TestChunkedRequestContentLengthConflictReverseOrder);
