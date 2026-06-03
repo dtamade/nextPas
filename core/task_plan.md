@@ -1,43 +1,44 @@
-# Task Plan: nextpas.core.http H1 session context bridge
+# Task Plan: net.server epoll reactor wakeup seam
 
 ## Goal
 
-把 `nextpas.core.net.server` 已有的 `ITcpServerSessionContext` /
-`ITcpServerWorkerHandoff` 真正桥接到 HTTP H1 session 创建链路：
+把 `nextpas.core.net.server` 的 poll-driven foundation 再往前推进一格：
 
-- `http.server` bridge 不再丢掉 foundation context
-- H1 transport/session 可以拿到 context，为下一批 poll-driven handler handoff
-  和 response drain state machine 铺路
+- 给 `platform.io` poller 增加可复用的 wake/drain seam
+- 让 Linux `epoll` backend 能把 worker completion 安全送回 reactor 线程
+- 允许 poll-driven session 在等待 worker 完成时暂时没有 socket interest
+- 为下一批 H1 poll-driven outbound drain / response writer state machine 铺路
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 http/net 相关文件
-- [x] 审阅 `http.server` / `http.intf` / `http.impl.h1` 与当前 H1 runtime 真相
+- [x] 审阅 `docs/net/ARCHITECTURE.md` / `docs/http/ARCHITECTURE.md` 与
+  `net.server.epoll` / `platform.io` / `test_net_server` 当前真相
 - [x] 先补 RED / proof：
-  - injected HTTP transport 的 context-aware session factory 优先于 legacy path
-  - H1 transport 暴露 context-aware session factory
+  - `test_platform_io` 锁 `platform_poller_enable_wake / wake / drain_wake`
+  - `test_net_server` 锁
+    `worker completion -> reactor wakeup -> poll-driven session re-entry`
 - [x] GREEN：
-  - 在 `http.intf` / facade 落地 `ITcpServerSessionContext` alias 与
-    `IHttpServerSessionFactoryWithContext`
-  - 在 `http.server` 让 `THttpConnHandler` 实现 TCP 层
-    `ITcpServerSessionFactoryWithContext`
-  - 在 `http.impl.h1` 让 H1 transport/session 创建链路接收并保留 context
-- [x] 跑 focused `test_http_contract` + `test_http_server` 验证与 heaptrc
-- [ ] 更新控制文件 / 文档并 path-limited commit
+  - 在 `platform.io` 落地 Linux `eventfd` wake seam
+  - 在 `net.server.epoll` 落地 per-connection context wrapper、
+    queued completion、synthetic re-entry
+  - 放开 poll-driven session 暂时返回空 socket interest 的合法语义
+- [x] 跑 focused `test_platform_io` + `test_net_server` 验证与 heaptrc
 
 ## Scope
 
-- 这轮只打通 context / worker-handoff bridge，不直接完成 H1 poll-driven runtime。
-- 不改 public `IHttpServer` / handler 同步编程模型。
-- 不在这批重开 response writer / outbound queue / wakeup path 的生产实现。
+- 这轮只做 foundation wakeup 基础能力，不直接改 H1 response writer。
+- 不改 public `IHttpServer` / `IHttpHandler` 同步编程模型。
+- 不扩 HTTP public API，也不引入新的 `BaseServer` 继承层。
 - 不跑全量测试，不做 benchmark。
 - 不碰 shared checkout 里的无关脏文件。
 
 ## Intended outcome
 
-- foundation session context 可以到达 H1 session object
-- 下一批可以直接在 H1 内消费 `WorkerHandoff`
+- foundation runtime 现在可以安全表达：
+  “worker 线程做事，reactor 线程完成协议推进”
+- H1 下一批可以直接复用这条 wakeup foundation
 - 当前未完成主线被进一步收窄为：
-  - poll-driven response writer / outbound queue
-  - reactor <-> worker completion wakeup
-  - `TH1ServerConnectionState` 真正实现 `ITcpServerPollDrivenSession`
+  - H1 outbound queue / resumable drain
+  - blocking writer / chunked writer 的 would-block 改造
+  - `TH1ServerConnectionState` 真正迁入 poll-driven runtime

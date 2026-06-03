@@ -1,54 +1,58 @@
-# Progress Log: nextpas.core.http H1 session context bridge
+# Progress Log: net.server epoll reactor wakeup seam
 
 ## Session
 
-- **Scope:** 把 foundation session context / worker handoff 从
-  `nextpas.core.net.server` 真正桥接到 H1 session 创建链路，但不在本轮直接完成
-  poll-driven response drain。
-- **Status:** in doc-sync / commit-prep
+- **Scope:** 给 `nextpas.core.net.server` 的 poll-driven foundation 补上
+  worker-completion -> reactor wakeup 基础能力，为 H1 poll-driven runtime 铺路，
+  但不在本轮直接改 H1 response writer。
+- **Status:** ready-to-commit
 
 ## Current state
 
 - shared checkout 仍有大量无关 modified / untracked 文件；本轮继续只做 path-limited 变更。
-- HTTP bridge 现在已经不再丢掉 `ITcpServerSessionContext`。
-- H1 transport / session 现在可以接住 foundation context。
-- H1 poll-driven runtime 仍未落地，当前 worker-driven truth 没有被说过头。
+- `platform.io` 现在已经有 Linux `eventfd` wake seam。
+- `net.server.epoll` 现在已经能把 worker completion 送回 reactor，再继续推进 poll-driven session。
+- H1 poll-driven runtime 仍未落地，但当前缺口已经从“context/wakeup 基础设施”收窄到
+  “outbound drain / writer would-block 语义”。
 
 ## Completed work
 
 - 审阅并确认当前缺口：
-  - TCP runtime 已能传 context
-  - HTTP bridge 之前只走 legacy session factory
-  - H1 transport 之前没有 context-aware session 创建接口
+  - foundation context bridge 上一批已打通
+  - 当前缺的是 reactor self-wakeup 与 completion 回 reactor
+  - 这批不需要扩 HTTP public API
 - 先写 RED：
-  - contract proof：context-aware session factory 优先于 legacy path，且可见 worker handoff
-  - server proof：H1 transport 暴露 context-aware session factory
-- 在 `src/nextpas.core.http.intf.pas` / `src/nextpas.core.http.pas` 落地：
-  - `ITcpServerSessionContext` alias
-  - `IHttpServerSessionFactoryWithContext`
-- 在 `src/nextpas.core.http.server.pas` 落地：
-  - `THttpConnHandler` 同时实现
-    `ITcpServerSessionFactory` + `ITcpServerSessionFactoryWithContext`
-  - 优先转发 transport 的 context-aware session factory
-- 在 `src/nextpas.core.http.impl.h1.pas` 落地：
-  - `TH1ServerTransport` 实现 `IHttpServerSessionFactoryWithContext`
-  - `TH1ServerConnectionState` 保存 `FSessionContext`
+  - `test_platform_io`：wake/drain readiness
+  - `test_net_server`：worker completion 唤醒 reactor 并重入 poll-driven session
+- 在 `src/nextpas.core.platform.io.base.pas` /
+  `src/nextpas.core.platform.io.pas` 落地：
+  - Linux `WakeFd`
+  - `platform_poller_enable_wake / wake / drain_wake`
+- 在 `src/nextpas.core.net.server.epoll.pas` 落地：
+  - per-connection `TTcpEpollSessionContext`
+  - wrapped `TTcpEpollWorkerHandoff`
+  - queued completion + reactor drain
+  - empty socket interest 等待语义
+  - shutdown 优先走 poller wake，self-connect 仅保留 fallback
 - 在 focused tests 落地：
-  - `test_http_contract`
-  - `test_http_server`
+  - `tests/nextpas.core.platform.io/test_platform_io`
+  - `tests/nextpas.core.net.server/test_net_server`
+- 在架构文档落地：
+  - `docs/net/ARCHITECTURE.md`
+  - `docs/http/ARCHITECTURE.md`
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_contract clean test`
-  - `27/27 passed`
+- `make -C tests/nextpas.core.platform.io/test_platform_io clean test`
+  - `8/8 passed`
   - heaptrc：`0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `112/112 passed`
+- `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - `21/21 passed`
   - heaptrc：`0 unfreed memory blocks`
 
 ## Next step
 
-- 直接进入 H1 poll-driven runtime 真正难点：
-  - response writer 改成 outbound queue / drain model
-  - handler completion 与 reactor 之间的 wakeup 机制
-  - `TH1ServerConnectionState` 实现 `ITcpServerPollDrivenSession`
+- 直接进入 H1 poll-driven runtime 的剩余硬骨头：
+  - response writer 改成 outbound queue / resumable drain model
+  - chunked writer / buffered writer 引入 would-block 友好语义
+  - `TH1ServerConnectionState` 真正实现 `ITcpServerPollDrivenSession`

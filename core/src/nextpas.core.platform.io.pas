@@ -14,6 +14,10 @@ function platform_poller_add(var APoller: TPlatformPoller; AFd: Int32;
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: Int32;
   AEvents: TPlatformPollEvents; AUserData: Pointer): Int32;
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: Int32): Int32;
+function platform_poller_enable_wake(var APoller: TPlatformPoller;
+  AUserData: Pointer): Int32;
+function platform_poller_wake(var APoller: TPlatformPoller): Int32;
+function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
 function platform_poller_wait(var APoller: TPlatformPoller;
   AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
   out ACount: Int32): Int32;
@@ -48,6 +52,8 @@ end;
 function platform_poller_create(out APoller: TPlatformPoller): Int32;
 begin
   FillChar(APoller, SizeOf(APoller), 0);
+  APoller.EpollFd := -1;
+  APoller.WakeFd := -1;
   APoller.EpollFd := epoll_create1(EPOLL_CLOEXEC);
   if APoller.EpollFd < 0 then
     Result := platform_get_errno
@@ -57,6 +63,11 @@ end;
 
 function platform_poller_close(var APoller: TPlatformPoller): Int32;
 begin
+  if APoller.WakeFd >= 0 then
+  begin
+    close(APoller.WakeFd);
+    APoller.WakeFd := -1;
+  end;
   if APoller.EpollFd >= 0 then
   begin
     close(APoller.EpollFd);
@@ -103,6 +114,56 @@ begin
     Result := platform_get_errno;
 end;
 
+function platform_poller_enable_wake(var APoller: TPlatformPoller;
+  AUserData: Pointer): Int32;
+var
+  LEv: epoll_event;
+begin
+  if APoller.WakeFd >= 0 then
+    Exit(0);
+  APoller.WakeFd := eventfd(0, EFD_NONBLOCK or EFD_CLOEXEC);
+  if APoller.WakeFd < 0 then
+    Exit(platform_get_errno);
+
+  FillChar(LEv, SizeOf(LEv), 0);
+  LEv.events := EPOLLIN;
+  LEv.data.ptr := AUserData;
+  if epoll_ctl(APoller.EpollFd, EPOLL_CTL_ADD, APoller.WakeFd, @LEv) = 0 then
+    Exit(0);
+
+  Result := platform_get_errno;
+  close(APoller.WakeFd);
+  APoller.WakeFd := -1;
+end;
+
+function platform_poller_wake(var APoller: TPlatformPoller): Int32;
+var
+  LValue: UInt64;
+begin
+  if APoller.WakeFd < 0 then
+    Exit(ESysEOPNOTSUPP);
+  LValue := 1;
+  if write(APoller.WakeFd, @LValue, SizeOf(LValue)) = SizeOf(LValue) then
+    Result := 0
+  else
+    Result := platform_get_errno;
+end;
+
+function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
+var
+  LValue: UInt64;
+  LRead: ssize_t;
+begin
+  if APoller.WakeFd < 0 then
+    Exit(ESysEOPNOTSUPP);
+  LRead := read(APoller.WakeFd, @LValue, SizeOf(LValue));
+  if LRead = SizeOf(LValue) then
+    Exit(0);
+  if (LRead < 0) and (platform_get_errno = ESysEAGAIN) then
+    Exit(0);
+  Result := platform_get_errno;
+end;
+
 function platform_poller_wait(var APoller: TPlatformPoller;
   AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
   out ACount: Int32): Int32;
@@ -142,6 +203,7 @@ uses
 function platform_poller_create(out APoller: TPlatformPoller): Int32;
 begin
   FillChar(APoller, SizeOf(APoller), 0);
+  APoller.KqueueFd := -1;
   APoller.KqueueFd := kqueue;
   if APoller.KqueueFd < 0 then
     Result := platform_get_errno
@@ -255,6 +317,22 @@ begin
   ACount := LN;
   Result := 0;
 end;
+
+function platform_poller_enable_wake(var APoller: TPlatformPoller;
+  AUserData: Pointer): Int32;
+begin
+  Result := -1;
+end;
+
+function platform_poller_wake(var APoller: TPlatformPoller): Int32;
+begin
+  Result := -1;
+end;
+
+function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
+begin
+  Result := -1;
+end;
 {$ENDIF}
 
 {$IFDEF NEXTPAS_WINDOWS}
@@ -293,6 +371,22 @@ begin
   Result := -1;
 end;
 
+function platform_poller_enable_wake(var APoller: TPlatformPoller;
+  AUserData: Pointer): Int32;
+begin
+  Result := -1;
+end;
+
+function platform_poller_wake(var APoller: TPlatformPoller): Int32;
+begin
+  Result := -1;
+end;
+
+function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
+begin
+  Result := -1;
+end;
+
 function platform_poller_wait(var APoller: TPlatformPoller;
   AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32;
   out ACount: Int32): Int32;
@@ -308,6 +402,9 @@ function platform_poller_close(var APoller: TPlatformPoller): Int32; begin Resul
 function platform_poller_add(var APoller: TPlatformPoller; AFd: Int32; AEvents: TPlatformPollEvents; AUserData: Pointer): Int32; begin Result := -1; end;
 function platform_poller_modify(var APoller: TPlatformPoller; AFd: Int32; AEvents: TPlatformPollEvents; AUserData: Pointer): Int32; begin Result := -1; end;
 function platform_poller_remove(var APoller: TPlatformPoller; AFd: Int32): Int32; begin Result := -1; end;
+function platform_poller_enable_wake(var APoller: TPlatformPoller; AUserData: Pointer): Int32; begin Result := -1; end;
+function platform_poller_wake(var APoller: TPlatformPoller): Int32; begin Result := -1; end;
+function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32; begin Result := -1; end;
 function platform_poller_wait(var APoller: TPlatformPoller; AEntries: PPlatformPollEntry; AMaxEntries: Int32; ATimeoutMs: Int32; out ACount: Int32): Int32; begin ACount := 0; Result := -1; end;
 {$ENDIF}
 

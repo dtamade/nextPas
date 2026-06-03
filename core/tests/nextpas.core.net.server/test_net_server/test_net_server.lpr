@@ -196,6 +196,74 @@ type
     property AdvanceCount: Int32 read FAdvanceCount;
   end;
 
+  TWakeupPollDrivenHandler = class;
+
+  TWakeupWork = class(TInterfacedObject, ITcpServerWork)
+  private
+    FOwner: TWakeupPollDrivenHandler;
+  public
+    constructor Create(const AOwner: TWakeupPollDrivenHandler);
+    function Execute: TTcpServerConnOwnership;
+  end;
+
+  TWakeupCompletion = class(TInterfacedObject, ITcpServerWorkCompletion)
+  private
+    FOwner: TWakeupPollDrivenHandler;
+  public
+    constructor Create(const AOwner: TWakeupPollDrivenHandler);
+    procedure Complete(const AOutcome: TTcpServerWorkOutcome;
+      const AOwnership: TTcpServerConnOwnership);
+  end;
+
+  TWakeupPollDrivenSession = class(TInterfacedObject, ITcpServerSession,
+    ITcpServerPollDrivenSession)
+  private
+    FOwner: TWakeupPollDrivenHandler;
+    FConn: ITcpStream;
+    FConnRuntime: ITcpStreamRuntime;
+    FHandoff: ITcpServerWorkerHandoff;
+    FSubmitted: Boolean;
+    FWritePos: SizeUInt;
+  public
+    constructor Create(const AOwner: TWakeupPollDrivenHandler;
+      const AConn: ITcpStream; const AHandoff: ITcpServerWorkerHandoff);
+    function Run: TTcpServerConnOwnership;
+    function PollEvents: TPlatformPollEvents;
+    function Advance(const AEvents: TPlatformPollEvents;
+      out ANextEvents: TPlatformPollEvents;
+      out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+  end;
+
+  TWakeupPollDrivenHandler = class(TInterfacedObject, ITcpServerHandler,
+    ITcpServerSessionFactoryWithContext)
+  private
+    FServeConnCalled: Boolean;
+    FContextFactoryCalled: Boolean;
+    FSubmitResult: TTcpServerHandoffResult;
+    FAdvanceCount: Int32;
+    FWorkExecuteCount: Int32;
+    FCompletionCount: Int32;
+    FReactorThreadId: UInt64;
+    FWorkThreadId: UInt64;
+    FCompletionThreadId: UInt64;
+    FCompletionReady: Boolean;
+    FObservedEmptyAdvance: Boolean;
+  public
+    function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property ContextFactoryCalled: Boolean read FContextFactoryCalled;
+    property SubmitResult: TTcpServerHandoffResult read FSubmitResult;
+    property AdvanceCount: Int32 read FAdvanceCount;
+    property WorkExecuteCount: Int32 read FWorkExecuteCount;
+    property CompletionCount: Int32 read FCompletionCount;
+    property ReactorThreadId: UInt64 read FReactorThreadId;
+    property WorkThreadId: UInt64 read FWorkThreadId;
+    property CompletionThreadId: UInt64 read FCompletionThreadId;
+    property ObservedEmptyAdvance: Boolean read FObservedEmptyAdvance;
+  end;
+
   TMockServerProvider = class(TInterfacedObject, ITcpServer)
   private
     FListenCalled: Boolean;
@@ -536,6 +604,169 @@ function TPollDrivenHandler.NewSession(const AConn: ITcpStream;
 begin
   FContextFactoryCalled := True;
   Result := TPollDrivenEchoSession.Create(Self, AConn);
+end;
+
+constructor TWakeupWork.Create(const AOwner: TWakeupPollDrivenHandler);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+function TWakeupWork.Execute: TTcpServerConnOwnership;
+begin
+  InterlockedIncrement(FOwner.FWorkExecuteCount);
+  FOwner.FWorkThreadId := platform_thread_id;
+  platform_thread_sleep_ns(50000000);
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+constructor TWakeupCompletion.Create(const AOwner: TWakeupPollDrivenHandler);
+begin
+  inherited Create;
+  FOwner := AOwner;
+end;
+
+procedure TWakeupCompletion.Complete(const AOutcome: TTcpServerWorkOutcome;
+  const AOwnership: TTcpServerConnOwnership);
+begin
+  InterlockedIncrement(FOwner.FCompletionCount);
+  FOwner.FCompletionThreadId := platform_thread_id;
+  FOwner.FCompletionReady := (AOutcome = TCP_SERVER_WORK_COMPLETED) and
+    (AOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER);
+end;
+
+constructor TWakeupPollDrivenSession.Create(
+  const AOwner: TWakeupPollDrivenHandler; const AConn: ITcpStream;
+  const AHandoff: ITcpServerWorkerHandoff);
+begin
+  inherited Create;
+  FOwner := AOwner;
+  FConn := AConn;
+  FHandoff := AHandoff;
+  if not Supports(AConn, ITcpStreamRuntime, FConnRuntime) then
+    raise Exception.Create('wakeup poll-driven session requires stream runtime seam');
+  if FHandoff = nil then
+    raise Exception.Create('wakeup poll-driven session requires worker handoff');
+  FSubmitted := False;
+  FWritePos := 0;
+end;
+
+function TWakeupPollDrivenSession.Run: TTcpServerConnOwnership;
+begin
+  Fail('epoll wakeup poll-driven session should not fall back to Run');
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TWakeupPollDrivenSession.PollEvents: TPlatformPollEvents;
+begin
+  Result := [peReadable];
+end;
+
+function TWakeupPollDrivenSession.Advance(const AEvents: TPlatformPollEvents;
+  out ANextEvents: TPlatformPollEvents;
+  out AOwnership: TTcpServerConnOwnership): TTcpServerPollResult;
+const
+  RESPONSE_BYTES: array[0..1] of Byte = (111, 107); { 'o', 'k' }
+var
+  LByte: Byte;
+  LN: SizeUInt;
+  LResult: TTcpStreamIOResult;
+  LWork: ITcpServerWork;
+  LCompletion: ITcpServerWorkCompletion;
+begin
+  InterlockedIncrement(FOwner.FAdvanceCount);
+  FOwner.FReactorThreadId := platform_thread_id;
+  AOwnership := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+
+  if not FSubmitted then
+  begin
+    if not (peReadable in AEvents) then
+    begin
+      ANextEvents := [peReadable];
+      Exit(TCP_SERVER_POLL_WAIT);
+    end;
+
+    LResult := FConnRuntime.TryRead(LByte, 1, LN);
+    case LResult of
+      tsiorOk:
+        begin
+          if LN = 0 then
+          begin
+            ANextEvents := [];
+            Exit(TCP_SERVER_POLL_DONE);
+          end;
+          LWork := TWakeupWork.Create(FOwner);
+          LCompletion := TWakeupCompletion.Create(FOwner);
+          FOwner.FSubmitResult := FHandoff.Submit(LWork, LCompletion);
+          if FOwner.FSubmitResult <> TCP_SERVER_HANDOFF_ACCEPTED then
+          begin
+            ANextEvents := [];
+            Exit(TCP_SERVER_POLL_DONE);
+          end;
+          FSubmitted := True;
+          ANextEvents := [];
+          Exit(TCP_SERVER_POLL_WAIT);
+        end;
+      tsiorWouldBlock:
+        begin
+          ANextEvents := [peReadable];
+          Exit(TCP_SERVER_POLL_WAIT);
+        end;
+    else
+      ANextEvents := [];
+      Exit(TCP_SERVER_POLL_DONE);
+    end;
+  end;
+
+  if AEvents = [] then
+    FOwner.FObservedEmptyAdvance := True;
+
+  if not FOwner.FCompletionReady then
+  begin
+    ANextEvents := [];
+    Exit(TCP_SERVER_POLL_WAIT);
+  end;
+
+  LResult := FConnRuntime.TryWrite(RESPONSE_BYTES[FWritePos],
+    SizeUInt(Length(RESPONSE_BYTES)) - FWritePos, LN);
+  case LResult of
+    tsiorOk:
+      begin
+        Inc(FWritePos, LN);
+        if FWritePos >= SizeUInt(Length(RESPONSE_BYTES)) then
+        begin
+          ANextEvents := [];
+          Exit(TCP_SERVER_POLL_DONE);
+        end;
+        ANextEvents := [peWritable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+    tsiorWouldBlock:
+      begin
+        ANextEvents := [peWritable];
+        Exit(TCP_SERVER_POLL_WAIT);
+      end;
+  else
+    ANextEvents := [];
+    Exit(TCP_SERVER_POLL_DONE);
+  end;
+end;
+
+function TWakeupPollDrivenHandler.ServeConn(
+  const AConn: ITcpStream): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+  Fail('wakeup poll-driven handler should bypass ServeConn');
+end;
+
+function TWakeupPollDrivenHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextFactoryCalled := True;
+  if AContext = nil then
+    raise Exception.Create('wakeup poll-driven handler requires session context');
+  Result := TWakeupPollDrivenSession.Create(Self, AConn, AContext.WorkerHandoff);
 end;
 
 constructor TMockServerProvider.Create(const AOptions: TTcpServerOptions);
@@ -1489,6 +1720,89 @@ begin
   LServer.Shutdown;
   platform_thread_join(LHandle, LRet);
 end;
+
+procedure TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion;
+var
+  LHandler: TWakeupPollDrivenHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..7] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+  LOptions: TTcpServerOptions;
+begin
+  LHandler := TWakeupPollDrivenHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'wakeup epoll handler keepalive installed');
+  LOptions := TTcpServerOptions.Default;
+  LOptions.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LServer := NewTcpServer(LOptions);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'wakeup epoll server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('x')^, 1);
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(2), LN, 'wakeup epoll response size');
+    CheckEqual(Byte(Ord('o')), LBuf[0], 'wakeup epoll first byte');
+    CheckEqual(Byte(Ord('k')), LBuf[1], 'wakeup epoll second byte');
+  finally
+    LClient.Close;
+  end;
+
+  LWait := 0;
+  while (LHandler.CompletionCount = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'epoll wakeup path uses context-aware session factory');
+  Check(not LHandler.ServeConnCalled,
+    'epoll wakeup path bypasses ServeConn');
+  CheckEqual(Int64(Ord(TCP_SERVER_HANDOFF_ACCEPTED)),
+    Int64(Ord(LHandler.SubmitResult)), 'epoll wakeup handoff accepted');
+  CheckEqual(Int64(1), Int64(LHandler.WorkExecuteCount),
+    'epoll wakeup work executed once');
+  CheckEqual(Int64(1), Int64(LHandler.CompletionCount),
+    'epoll wakeup completion executed once');
+  Check(LHandler.AdvanceCount > 1,
+    'epoll wakeup path re-enters poll-driven session after completion');
+  Check(LHandler.ObservedEmptyAdvance,
+    'epoll wakeup path re-enters session without socket readiness');
+  Check(LHandler.ReactorThreadId <> 0, 'epoll wakeup captured reactor thread');
+  Check(LHandler.WorkThreadId <> 0, 'epoll wakeup captured worker thread');
+  Check(LHandler.CompletionThreadId <> 0,
+    'epoll wakeup captured completion thread');
+  Check(LHandler.WorkThreadId <> LHandler.ReactorThreadId,
+    'epoll wakeup worker runs off reactor thread');
+  CheckEqual(Int64(LHandler.ReactorThreadId), Int64(LHandler.CompletionThreadId),
+    'epoll wakeup completion returns to reactor thread');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
 {$ENDIF}
 
 begin
@@ -1529,6 +1843,8 @@ begin
     @TestEpollServerPrefersContextSessionFactoryWhenAvailable);
   T.Run('Epoll server uses poll-driven session when available',
     @TestEpollServerUsesPollDrivenSessionWhenAvailable);
+  T.Run('Epoll server wakes poll-driven session after worker completion',
+    @TestEpollServerWakesPollDrivenSessionAfterWorkerCompletion);
   {$ENDIF}
   T.Summary;
 end.

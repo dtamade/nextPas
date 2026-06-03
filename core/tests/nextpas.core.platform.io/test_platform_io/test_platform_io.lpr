@@ -149,6 +149,34 @@ begin
   platform_poller_close(P);
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+procedure TestWakeDrain;
+var
+  P: TPlatformPoller;
+  LEntries: array[0..3] of TPlatformPollEntry;
+  LCount: Int32;
+  LWakeTag: PtrUInt;
+begin
+  LWakeTag := $A11CE;
+  Check(platform_poller_create(P) = 0, 'create');
+  Check(platform_poller_enable_wake(P, Pointer(LWakeTag)) = 0,
+    'enable wake');
+  Check(platform_poller_wake(P) = 0, 'wake');
+
+  Check(platform_poller_wait(P, @LEntries[0], 4, 1000, LCount) = 0, 'wait');
+  Check(LCount = 1, 'got 1 wake event');
+  Check(peReadable in LEntries[0].REvents, 'wake event is readable');
+  Check(PtrUInt(LEntries[0].UserData) = LWakeTag, 'wake userdata preserved');
+
+  Check(platform_poller_drain_wake(P) = 0, 'drain wake');
+  Check(platform_poller_wait(P, @LEntries[0], 4, 0, LCount) = 0,
+    'wait after drain');
+  Check(LCount = 0, 'wake drain clears readiness');
+
+  platform_poller_close(P);
+end;
+{$ENDIF}
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.io');
   T.Run('create/close', @TestCreateClose);
@@ -158,5 +186,8 @@ begin
   T.Run('remove stops events', @TestRemove);
   T.Run('userdata preserved', @TestUserData);
   T.Run('multiple fds', @TestMultipleFds);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Run('wake drain', @TestWakeDrain);
+  {$ENDIF}
   T.Summary;
 end.

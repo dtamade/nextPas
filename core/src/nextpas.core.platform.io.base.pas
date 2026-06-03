@@ -25,6 +25,7 @@ type
   TPlatformPoller = record
   {$IFDEF NEXTPAS_LINUX}
     EpollFd: Int32;
+    WakeFd: Int32;
   {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
     KqueueFd: Int32;
   {$ELSEIF defined(NEXTPAS_WINDOWS)}

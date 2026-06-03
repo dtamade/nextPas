@@ -114,7 +114,8 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   只有 listener / accept 一定是 evented 的；blocking session 仍交给 worker 执行同步 session。
 - `epoll` poll-driven session path：
   foundation 已能直接驱动实现 `ITcpServerPollDrivenSession` 的 session，
-  但这条能力目前还只是 runtime seam，尚未被 H1 server 消费为默认路径。
+  并且现在已经具备 worker-completion -> reactor 的 wakeup / re-entry 基础能力；
+  但这条能力目前还只是 foundation runtime seam，尚未被 H1 server 消费为默认路径。
 - HTTP H1：
   `TH1ServerConnectionState` 已经是独立的 per-connection protocol state object，
   只是当前仍由 threaded worker 或 `epoll` handoff worker 去跑它的 `Run`。
@@ -132,6 +133,9 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - backend provider / registry seam 已经落地
 - Linux `epoll` 第一阶段 backend 已经落地
 - Linux `epoll` 的 poll-driven session seam 已经落地
+- Linux `epoll` 的 reactor self-wakeup seam 也已落地：
+  session 可以在等待 foundation-owned wake source 时暂时没有 socket interest，
+  backend 再把 completion/wake 拉回 reactor 继续推进同一 state object
 - 还没落地的是“HTTP H1 等真实协议 state object 全量迁入这条 evented driver”的完整版执行
 
 原因很直接：
@@ -169,6 +173,9 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   语义可以被 focused tests 锁定
 - epoll backend 也已经复用同一条 seam，证明 evented listener 侧不需要再复制一套独立
   session/context/handoff 模型
+- `platform.io` poller 现在也有 wake seam；Linux 先用 `eventfd` 落地。
+- `epoll` backend 现在会把 poll-driven session 的 worker completion 先排队回 reactor，
+  再在 reactor 线程执行 completion，并用 synthetic re-entry 继续推进该 session。
 - `IHttpServerTransport.ServeConn(const AConn: ITcpStream; ...)` 仍然保留，作为 HTTP public facade
   继续同步、兼容旧 transport seam 的刻意选择
 - `TH1ServerConnectionState` 现在已经通过 `ITcpServerSession` 接上 foundation，
@@ -179,7 +186,7 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 1. 守住 threaded 与 `epoll` phase-1 的 public contract parity
 2. 让 future evented backend 直接复用已落地的 factory/session/context/handoff seam
 3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
-4. 把 H1 等真实协议 session 迁到 poll-driven driver
+4. 让 H1 等真实协议 session 消费这条带 wakeup 的 poll-driven driver
 5. 然后再扩 `net.server.kqueue` / `iocp`
 
 ## 性能与并发 posture
@@ -244,6 +251,11 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - `ITcpServerWorkerHandoff.Submit` 的 accepted / rejected / shutting-down 语义必须稳定；
   accepted 后由 executor 负责最终调用 completion 一次，failed work 统一回落到
   `server-owned close` 语义。
+- 对 poll-driven session，worker completion 不应直接在 worker 线程里推进协议状态机；
+  foundation backend 必须把 completion 送回 reactor / owning runtime thread。
+- `ITcpServerPollDrivenSession.Advance(...)` 可以合法返回 `ANextEvents := []`，
+  表示“当前没有 socket interest，等待 foundation-owned wake source”，
+  backend 负责在 wake 后以 synthetic re-entry 再次推进该 session。
 - `ITcpSocketRuntime` 是 lower-level runtime seam：普通业务代码可以忽略它，evented backend 可以通过
   `Supports(...)` 取得 native handle 与 blocking control，而不需要偷看具体实现类。
 - `ITcpListenerRuntime` / `ITcpStreamRuntime` 是更窄的 runtime-only I/O seam：
@@ -332,6 +344,8 @@ nextpas.core.net.server.iocp
 - runtime 直接驱动协议 state object。
 - 不能在 reactor 线程直接执行无界 handler 逻辑。
 - 必须有明确 worker handoff 或 bounded execution 策略。
+- reactor 必须具备 self-wakeup 能力，worker completion 需要先回 reactor，
+  再继续推进 poll-driven session。
 - `TryRead/TryWrite` 会成为真正的调度 seam，而不再只是 lower-level 预留接口。
 - 这一步完成后，`threaded` / `epoll` / `kqueue` / `IOCP` 才能算真正共享同一条 session driver 设计。
 
@@ -375,6 +389,8 @@ nextpas.core.net.server.iocp
 
 ### Phase 4
 
+- 落地 reactor self-wakeup / completion re-entry foundation
+- 让 poll-driven session 可以在等待 worker completion 时暂时没有 socket interest
 - 把 `TryRead/TryWrite` 接进 per-connection runtime driver
 - 让 Linux evented backend 从 phase 1 升级到真正的 connection-state-driven backend
 
