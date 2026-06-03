@@ -82,6 +82,26 @@ type
     property HandlerCalled: Boolean read FHandlerCalled;
   end;
 
+  TMockContextSessionServerTransport = class(TInterfacedObject, IHttpServerTransport,
+    IHttpServerSessionFactoryWithContext)
+  private
+    FServeConnCalled: Boolean;
+    FContextSessionFactoryCalled: Boolean;
+    FWorkerHandoffSeen: Boolean;
+    FSessionRunCalled: Boolean;
+    FHandlerCalled: Boolean;
+  public
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream; const AHandler: IHttpHandler;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
+    property ServeConnCalled: Boolean read FServeConnCalled;
+    property ContextSessionFactoryCalled: Boolean read FContextSessionFactoryCalled;
+    property WorkerHandoffSeen: Boolean read FWorkerHandoffSeen;
+    property SessionRunCalled: Boolean read FSessionRunCalled;
+    property HandlerCalled: Boolean read FHandlerCalled;
+  end;
+
   TMethodHandlerTarget = class
   private
     FCalled: Boolean;
@@ -196,6 +216,22 @@ function TMockSessionServerTransport.NewSession(const AConn: ITcpStream;
   const AHandler: IHttpHandler): ITcpServerSession;
 begin
   FSessionFactoryCalled := True;
+  Result := TMockServerSession.Create(@FSessionRunCalled, @FHandlerCalled);
+end;
+
+function TMockContextSessionServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
+begin
+  FServeConnCalled := True;
+  Result := TCP_SERVER_CONN_OWNERSHIP_SERVER;
+end;
+
+function TMockContextSessionServerTransport.NewSession(const AConn: ITcpStream;
+  const AHandler: IHttpHandler;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  FContextSessionFactoryCalled := True;
+  FWorkerHandoffSeen := (AContext <> nil) and (AContext.WorkerHandoff <> nil);
   Result := TMockServerSession.Create(@FSessionRunCalled, @FHandlerCalled);
 end;
 
@@ -574,6 +610,48 @@ begin
   end;
 end;
 
+procedure TestHttpServerTransportInjectionPrefersContextSessionFactory;
+var
+  LObj: TMockContextSessionServerTransport;
+  LTransport: IHttpServerTransport;
+  LHandler: IHttpHandler;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LWait: Int32;
+begin
+  LObj := TMockContextSessionServerTransport.Create;
+  LTransport := LObj;
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+  end);
+
+  LHandle := StartServerWithTransport(LHandler, LTransport, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.Close;
+
+    LWait := 0;
+    while (not LObj.SessionRunCalled) and (LWait < 200) do
+    begin
+      platform_thread_sleep_ns(5000000);
+      Inc(LWait);
+    end;
+
+    Check(LObj.ContextSessionFactoryCalled,
+      'Injected server transport context session factory was called');
+    Check(LObj.WorkerHandoffSeen,
+      'Injected server transport context session factory sees worker handoff');
+    Check(LObj.SessionRunCalled,
+      'Injected server transport context session was run');
+    Check(not LObj.ServeConnCalled,
+      'legacy ServeConn is bypassed when context session factory is available');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 13: UrlEncode/UrlDecode round-trip }
 procedure TestUrlEncodeDecodeRoundTrip;
 var
@@ -827,6 +905,8 @@ begin
   T.Run('Injected server transport is used through facade server', @TestHttpServerTransportInjection);
   T.Run('Injected server transport session factory is preferred',
     @TestHttpServerTransportInjectionPrefersSessionFactory);
+  T.Run('Injected server transport context session factory is preferred',
+    @TestHttpServerTransportInjectionPrefersContextSessionFactory);
   T.Run('UrlEncode/UrlDecode round-trip', @TestUrlEncodeDecodeRoundTrip);
   T.Run('ParseQueryString basic', @TestParseQueryString);
   T.Run('EncodeQueryString round-trip', @TestEncodeQueryStringRoundTrip);

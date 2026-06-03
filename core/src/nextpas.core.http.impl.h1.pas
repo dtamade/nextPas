@@ -96,7 +96,7 @@ type
   end;
 
   TH1ServerTransport = class(TInterfacedObject, IHttpServerTransport,
-    IHttpServerSessionFactory)
+    IHttpServerSessionFactory, IHttpServerSessionFactoryWithContext)
   private
     FOptions: TH1ServerTransportOptions;
     function HandleConnection(const AConn: ITcpStream; const AHandler: IHttpHandler): Boolean;
@@ -105,7 +105,9 @@ type
     function ServeConn(const AConn: ITcpStream;
       const AHandler: IHttpHandler): TTcpServerConnOwnership;
     function NewSession(const AConn: ITcpStream;
-      const AHandler: IHttpHandler): ITcpServerSession;
+      const AHandler: IHttpHandler): ITcpServerSession; overload;
+    function NewSession(const AConn: ITcpStream; const AHandler: IHttpHandler;
+      const AContext: ITcpServerSessionContext): ITcpServerSession; overload;
   end;
 
   // Connection state stays protocol-owned so future runtimes can drive
@@ -115,6 +117,7 @@ type
     FOptions: TH1ServerTransportOptions;
     FConn: ITcpStream;
     FHandler: IHttpHandler;
+    FSessionContext: ITcpServerSessionContext;
     FParser: IH1Parser;
     FBufWriter: IWriter;
     FPending: string;
@@ -123,7 +126,10 @@ type
     FBuf: array[0..4095] of Byte;
   public
     constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
-      const AOptions: TH1ServerTransportOptions);
+      const AOptions: TH1ServerTransportOptions); overload;
+    constructor Create(const AConn: ITcpStream; const AHandler: IHttpHandler;
+      const AOptions: TH1ServerTransportOptions;
+      const AContext: ITcpServerSessionContext); overload;
     function Run: TTcpServerConnOwnership;
   end;
 
@@ -273,10 +279,18 @@ end;
 constructor TH1ServerConnectionState.Create(const AConn: ITcpStream;
   const AHandler: IHttpHandler; const AOptions: TH1ServerTransportOptions);
 begin
+  Create(AConn, AHandler, AOptions, nil);
+end;
+
+constructor TH1ServerConnectionState.Create(const AConn: ITcpStream;
+  const AHandler: IHttpHandler; const AOptions: TH1ServerTransportOptions;
+  const AContext: ITcpServerSessionContext);
+begin
   inherited Create;
   FOptions := AOptions;
   FConn := AConn;
   FHandler := AHandler;
+  FSessionContext := AContext;
   FParser := NewH1RequestParser;
   FBufWriter := CreateBufferedWriter(AConn as IWriter, 4096);
   FPending := '';
@@ -688,6 +702,13 @@ function TH1ServerTransport.NewSession(const AConn: ITcpStream;
   const AHandler: IHttpHandler): ITcpServerSession;
 begin
   Result := TH1ServerConnectionState.Create(AConn, AHandler, FOptions);
+end;
+
+function TH1ServerTransport.NewSession(const AConn: ITcpStream;
+  const AHandler: IHttpHandler;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+begin
+  Result := TH1ServerConnectionState.Create(AConn, AHandler, FOptions, AContext);
 end;
 
 function NewH1ClientTransport(const AOptions: TH1ClientTransportOptions): IHttpTransport;

@@ -14,6 +14,8 @@ uses
   nextpas.core.net,
   nextpas.core.net.base,
   nextpas.core.net.intf,
+  nextpas.core.net.server,
+  nextpas.core.net.server.intf,
   nextpas.core.http,
   nextpas.core.http.base,
   nextpas.core.http.intf,
@@ -144,6 +146,21 @@ type
       const AHandler: IHttpHandler): TTcpServerConnOwnership;
     function NewSession(const AConn: ITcpStream;
       const AHandler: IHttpHandler): ITcpServerSession;
+  end;
+
+  TMockWorkerHandoff = class(TInterfacedObject, ITcpServerWorkerHandoff)
+  public
+    function Submit(const AWork: ITcpServerWork;
+      const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
+    procedure Shutdown;
+  end;
+
+  TMockSessionContext = class(TInterfacedObject, ITcpServerSessionContext)
+  private
+    FWorkerHandoff: ITcpServerWorkerHandoff;
+  public
+    constructor Create(const AWorkerHandoff: ITcpServerWorkerHandoff);
+    function WorkerHandoff: ITcpServerWorkerHandoff;
   end;
 
 constructor TZeroProgressTcpStream.Create(const AInput: string);
@@ -407,6 +424,28 @@ begin
   if not Supports(FInner, IHttpServerSessionFactory, LFactory) then
     raise EInvalidOperationError.Create('inner transport does not expose session factory');
   Result := LFactory.NewSession(AConn, AHandler);
+end;
+
+function TMockWorkerHandoff.Submit(const AWork: ITcpServerWork;
+  const ACompletion: ITcpServerWorkCompletion): TTcpServerHandoffResult;
+begin
+  Result := TCP_SERVER_HANDOFF_ACCEPTED;
+end;
+
+procedure TMockWorkerHandoff.Shutdown;
+begin
+end;
+
+constructor TMockSessionContext.Create(
+  const AWorkerHandoff: ITcpServerWorkerHandoff);
+begin
+  inherited Create;
+  FWorkerHandoff := AWorkerHandoff;
+end;
+
+function TMockSessionContext.WorkerHandoff: ITcpServerWorkerHandoff;
+begin
+  Result := FWorkerHandoff;
 end;
 
 function DefaultH1ServerTransportOptions(
@@ -924,6 +963,36 @@ begin
     'second pipelined request remains unprocessed after write failure');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteCalls),
     'single response write attempt reached inner stream before failure');
+end;
+
+procedure TestH1TransportExposesContextSessionFactory;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LStreamObj: TZeroProgressTcpStream;
+  LStream: ITcpStream;
+  LContext: ITcpServerSessionContext;
+  LHandoff: ITcpServerWorkerHandoff;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory');
+
+  LStreamObj := TZeroProgressTcpStream.Create('');
+  LStream := LStreamObj as ITcpStream;
+  LHandoff := TMockWorkerHandoff.Create;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+    end), LContext);
+  Check(LSession <> nil, 'context-aware h1 session factory returns session');
 end;
 
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
@@ -5998,6 +6067,8 @@ begin
   T.Run('Handler exception -> 500', @TestHandlerException500);
   T.Run('Committed response exception does not append 500',
     @TestCommittedResponseExceptionDoesNotAppend500);
+  T.Run('H1 transport exposes context-aware session factory',
+    @TestH1TransportExposesContextSessionFactory);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Write timeout before any wire bytes does not append 500',

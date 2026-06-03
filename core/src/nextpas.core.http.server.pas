@@ -56,7 +56,7 @@ uses
 
 type
   THttpConnHandler = class(TInterfacedObject, ITcpServerHandler,
-    ITcpServerSessionFactory)
+    ITcpServerSessionFactory, ITcpServerSessionFactoryWithContext)
   private
     Transport: IHttpServerTransport;
     Handler: IHttpHandler;
@@ -64,7 +64,9 @@ type
     constructor Create(const ATransport: IHttpServerTransport;
       const AHandler: IHttpHandler);
     function ServeConn(const AConn: ITcpStream): TTcpServerConnOwnership;
-    function NewSession(const AConn: ITcpStream): ITcpServerSession;
+    function NewSession(const AConn: ITcpStream): ITcpServerSession; overload;
+    function NewSession(const AConn: ITcpStream;
+      const AContext: ITcpServerSessionContext): ITcpServerSession; overload;
   end;
 
   THttpConnSession = class(TInterfacedObject, ITcpServerSession)
@@ -100,6 +102,17 @@ begin
     Result := LFactory.NewSession(AConn, Handler)
   else
     Result := THttpConnSession.Create(Transport, Handler, AConn);
+end;
+
+function THttpConnHandler.NewSession(const AConn: ITcpStream;
+  const AContext: ITcpServerSessionContext): ITcpServerSession;
+var
+  LContextFactory: IHttpServerSessionFactoryWithContext;
+begin
+  if Supports(Transport, IHttpServerSessionFactoryWithContext, LContextFactory) then
+    Result := LContextFactory.NewSession(AConn, Handler, AContext)
+  else
+    Result := NewSession(AConn);
 end;
 
 constructor THttpConnSession.Create(const ATransport: IHttpServerTransport;

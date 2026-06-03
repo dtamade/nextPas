@@ -42,7 +42,9 @@ type
   IHttpTransport = nextpas.core.http.intf.IHttpTransport;
   IHttpServerTransport = nextpas.core.http.intf.IHttpServerTransport;
   ITcpServerSession = nextpas.core.http.intf.ITcpServerSession;
+  ITcpServerSessionContext = nextpas.core.http.intf.ITcpServerSessionContext;
   IHttpServerSessionFactory = nextpas.core.http.intf.IHttpServerSessionFactory;
+  IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 

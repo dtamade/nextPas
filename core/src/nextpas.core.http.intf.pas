@@ -16,6 +16,7 @@ type
   TStringArray = array of string;
   TTcpServerConnOwnership = nextpas.core.net.server.base.TTcpServerConnOwnership;
   ITcpServerSession = nextpas.core.net.server.intf.ITcpServerSession;
+  ITcpServerSessionContext = nextpas.core.net.server.intf.ITcpServerSessionContext;
 
   { Header callback for iteration }
   THeaderIterator = reference to procedure(const AName, AValue: string);
@@ -146,6 +147,12 @@ type
     ['{A1B2C3D4-E5F6-7890-ABCD-40000000000D}']
     function NewSession(const AConn: ITcpStream;
       const AHandler: IHttpHandler): ITcpServerSession;
+  end;
+
+  IHttpServerSessionFactoryWithContext = interface
+    ['{A1B2C3D4-E5F6-7890-ABCD-40000000000E}']
+    function NewSession(const AConn: ITcpStream; const AHandler: IHttpHandler;
+      const AContext: ITcpServerSessionContext): ITcpServerSession;
   end;
 
 const

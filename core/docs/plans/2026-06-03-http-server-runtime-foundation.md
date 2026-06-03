@@ -79,11 +79,14 @@ This is no longer just a proposal. The foundation split has already landed:
 - [src/nextpas.core.http.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.server.pas:127)
   no longer owns the runtime loop; it wires HTTP onto `NewTcpServer(...)`.
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:113)
-  already has `TH1ServerConnectionState` as a protocol-owned session object.
+  already has `TH1ServerConnectionState` as a protocol-owned session object, and
+  it can now receive `ITcpServerSessionContext` from the foundation path.
 
 What is still missing is narrower and clearer:
 
 - HTTP H1 and other real protocol sessions have not yet migrated onto the poll-driven driver
+- H1 still lacks a poll-driven response drain model (`writer` / `chunked` / buffered
+  flush are still blocking-write oriented)
 - no `kqueue` / `IOCP` concrete backend yet
 
 ## Architecture to freeze
