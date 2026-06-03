@@ -298,6 +298,24 @@ begin
   end;
 end;
 
+{ Test 2e: Truncated terminal chunk ending at EOF }
+procedure TestTruncatedTerminalChunkEndingAtEof;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'Truncated terminal chunk ending EOF: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 3: Generic malformed request }
 procedure TestGenericMalformedRequest;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -700,6 +718,7 @@ begin
   T.Run('Missing chunk-data CRLF', @TestMissingChunkDataCrLf);
   T.Run('Truncated chunked request at EOF -> 400', @TestTruncatedChunkedRequestAtEof);
   T.Run('Truncated chunk-size line at EOF -> 400', @TestTruncatedChunkSizeLineAtEof);
+  T.Run('Truncated terminal chunk ending at EOF -> 400', @TestTruncatedTerminalChunkEndingAtEof);
   T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);

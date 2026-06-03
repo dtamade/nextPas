@@ -305,6 +305,24 @@ begin
   Check(not LP.IsComplete, 'truncated chunk-size line stays incomplete');
 end;
 
+procedure TestChunkedRequestTruncatedTerminalChunkEndingAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated terminal chunk ending is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'truncated terminal chunk ending reports error on finish');
+  Check(not LP.IsComplete, 'truncated terminal chunk ending stays incomplete');
+end;
+
 procedure TestChunkedRequestMissingChunkDataCrLf;
 var
   LP: IH1Parser;
@@ -871,6 +889,7 @@ begin
   T.Run('Chunked request malformed chunk extension', @TestChunkedRequestMalformedChunkExtension);
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
   T.Run('Chunked request truncated chunk-size line at EOF', @TestChunkedRequestTruncatedChunkSizeLineAtEof);
+  T.Run('Chunked request truncated terminal chunk ending at EOF', @TestChunkedRequestTruncatedTerminalChunkEndingAtEof);
   T.Run('Chunked request missing chunk-data CRLF', @TestChunkedRequestMissingChunkDataCrLf);
   T.Run('Chunked request content-length conflict', @TestChunkedRequestContentLengthConflict);
   T.Run('Chunked request content-length conflict reverse order', @TestChunkedRequestContentLengthConflictReverseOrder);

@@ -1,8 +1,9 @@
-# Task Plan: HTTP truncated chunk-size line proof
+# Task Plan: HTTP truncated terminal chunk ending proof
 
 ## Goal
 
-补齐 `chunk-size line EOF truncation` 的 parser/server/security focused proof，确认：
+补齐 `terminal 0 chunk` 后空 trailer section 最终 CRLF 缺失的 parser/server/security focused proof，
+确认：
 
 - parser 在 `Finish` 后把该输入判成 error/not-complete；
 - server 在 peer half-close 后返回显式 `400` 且 handler 不落地；
@@ -11,22 +12,23 @@
 ## Current Phase
 
 `nextpas.core.http` H1 correctness coverage-expansion。当前继续做 malformed chunk framing 审计，把
-“chunked request truncated at EOF” 从单一 chunk-data 截断扩展成更细粒度的 framing grammar truth。
+terminal chunk / trailer boundary 的 EOF 截断子类逐个锁实，而不是停留在宽泛的 “truncated chunked EOF”
+表述。
 
 ## Active Batch Checklist
 
 - [x] 检查 shared checkout 的无关脏文件，确认本轮只处理 HTTP 相关路径。
 - [x] 复读 `docs/design-conventions.md`、`docs/nextpas.core.http.inbox.md`、
   `docs/http/API_COVERAGE.md` 与现有控制文件。
-- [x] 确认当前缺口是 `chunk-size line` 自身在 EOF/half-close 截断时缺少 focused proof。
-- [x] 新增 parser focused test：`Chunked request truncated chunk-size line at EOF`。
-- [x] 新增 server focused test：`Malformed chunked request truncated chunk-size line at EOF -> 400`。
-- [x] 新增 security focused test：`Truncated chunk-size line at EOF -> 400`。
+- [x] 确认当前缺口是 `terminal 0 chunk` 后空 trailer section 最终 CRLF 缺失。
+- [x] 新增 parser focused test：`Chunked request truncated terminal chunk ending at EOF`。
+- [x] 新增 server focused test：`Malformed chunked request truncated terminal chunk ending at EOF -> 400`。
+- [x] 新增 security focused test：`Truncated terminal chunk ending at EOF -> 400`。
 - [x] 跑 `test_http_h1parser`、`test_http_server`、`test_http_security` 首轮验证，记录是 RED 还是 direct GREEN。
 - [x] 若失败则仅在 HTTP parser/server 内最小修复；若直接通过，则按 coverage-expansion 收口。
 - [x] 同步 inbox、API coverage、`task_plan.md`、`findings.md`、`progress.md`。
 - [x] 跑 HTTP 聚合验证、`git diff --check` 与 path-limited git hygiene。
-- [x] path-limited commit，并输出中文收尾报告。
+- [ ] path-limited commit，并输出中文收尾报告。
 
 ## Quality Gates
 
@@ -42,12 +44,12 @@
 
 | Decision | Rationale |
 | --- | --- |
-| 本轮优先补 chunk-size line EOF 截断 | 这是 malformed chunk framing 审计里明确且未被 chunk-data 截断 proof 覆盖的子类。 |
-| parser/server/security 三层一起补 | 这样能一次性把 grammar truth 锁实，而不是只在单层留推断。 |
+| 本轮优先补 terminal chunk ending EOF 截断 | 这是 terminal chunk / trailer boundary 上未单独锁住的 grammar 子类。 |
+| parser/server/security 三层一起补 | 这样能一次性把 boundary truth 锁实。 |
 | 若首跑直接 GREEN，则不碰生产代码 | 当前目标是 correctness proof，不制造伪修复。 |
 
 ## Errors Encountered
 
 | Error | Attempt | Resolution |
 | --- | --- | --- |
-| 暂无实现错误；focused 首轮直接 GREEN | 1 | 按 coverage expansion 收口，并继续做聚合验证与文档同步。 |
+| 暂无实现错误；focused 首轮 direct GREEN，HTTP aggregate 也已通过 | 1 | 按 coverage expansion 收口，无需生产修复。 |
