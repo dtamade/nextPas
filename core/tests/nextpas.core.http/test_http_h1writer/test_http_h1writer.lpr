@@ -25,6 +25,16 @@ type
     function GetOutput: string;
   end;
 
+  TShortWriter = class(TInterfacedObject, IWriter)
+  private
+    FBuf: string;
+    FMaxPerCall: SizeUInt;
+  public
+    constructor Create(const AMaxPerCall: SizeUInt);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function GetOutput: string;
+  end;
+
   TMockTcpStream = class(TInterfacedObject, ITcpStream)
   public
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -56,6 +66,31 @@ begin
 end;
 
 function TBytesWriter.GetOutput: string;
+begin
+  Result := FBuf;
+end;
+
+constructor TShortWriter.Create(const AMaxPerCall: SizeUInt);
+begin
+  inherited Create;
+  FMaxPerCall := AMaxPerCall;
+end;
+
+function TShortWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOld: SizeUInt;
+begin
+  if (ACount = 0) or (FMaxPerCall = 0) then
+    Exit(0);
+  Result := ACount;
+  if Result > FMaxPerCall then
+    Result := FMaxPerCall;
+  LOld := SizeUInt(Length(FBuf));
+  SetLength(FBuf, LOld + Result);
+  Move(ABuf, FBuf[LOld + 1], Result);
+end;
+
+function TShortWriter.GetOutput: string;
 begin
   Result := FBuf;
 end;
@@ -570,6 +605,75 @@ begin
   end;
 end;
 
+procedure TestWriteHeaderWithShortWriterStillWritesFullHeaders;
+var
+  LW: TShortWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TShortWriter.Create(1);
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.GetHeaders.Set_('Content-Length', '0');
+  LRW.GetHeaders.Set_('X-Test', 'ok');
+  LRW.WriteHeader(HTTP_STATUS_OK);
+  LOut := LW.GetOutput;
+  CheckEqual('HTTP/1.1 200 OK'#13#10 +
+    'content-length: 0'#13#10 +
+    'x-test: ok'#13#10 +
+    #13#10, LOut,
+    'short writer still receives full status/header framing');
+  LRW.Free;
+end;
+
+procedure TestContentLengthBodyWithShortWriterWritesAllBytes;
+var
+  LW: TShortWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+  LWritten: SizeUInt;
+begin
+  LW := TShortWriter.Create(1);
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.GetHeaders.Set_('Content-Length', '5');
+  LRW.WriteHeader(HTTP_STATUS_OK);
+  LBody := 'hello';
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LOut := LW.GetOutput;
+  CheckEqual(Int64(5), Int64(LWritten), 'content-length body reports full bytes');
+  CheckEqual('HTTP/1.1 200 OK'#13#10 +
+    'content-length: 5'#13#10 +
+    #13#10 +
+    'hello', LOut,
+    'short writer still receives full content-length response body');
+  LRW.Free;
+end;
+
+procedure TestChunkedBodyWithShortWriterWritesCompleteChunk;
+var
+  LW: TShortWriter;
+  LRW: TH1ResponseWriter;
+  LBody: string;
+  LOut: string;
+  LWritten: SizeUInt;
+begin
+  LW := TShortWriter.Create(1);
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LBody := 'hello';
+  LWritten := LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  CheckEqual(Int64(5), Int64(LWritten), 'chunked body reports full bytes');
+  CheckEqual('HTTP/1.1 200 OK'#13#10 +
+    'transfer-encoding: chunked'#13#10 +
+    #13#10 +
+    '5'#13#10 +
+    'hello'#13#10 +
+    '0'#13#10#13#10, LOut,
+    'short writer still receives full chunked response');
+  LRW.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.writer');
   T.Run('WriteHeader writes status line', @TestWriteHeaderStatusLine);
@@ -601,5 +705,11 @@ begin
   T.Run('Flush no-op without IFlusher', @TestFlushNoOpWithoutFlusher);
   T.Run('Hijack without connection raises', @TestHijackWithoutConnectionRaises);
   T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
+  T.Run('WriteHeader with short writer still writes full headers',
+    @TestWriteHeaderWithShortWriterStillWritesFullHeaders);
+  T.Run('Content-Length body with short writer writes all bytes',
+    @TestContentLengthBodyWithShortWriterWritesAllBytes);
+  T.Run('Chunked body with short writer writes complete chunk',
+    @TestChunkedBodyWithShortWriterWritesCompleteChunk);
   T.Summary;
 end.

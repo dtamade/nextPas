@@ -1,11 +1,13 @@
-# Findings: nextpas.core.http epoll follow-up tail differential proof
+# Findings: nextpas.core.http h1 response short-write hardening
 
 ## Scope
 
-- 当前目标是继续收紧 `nextpas.core.http` 在 Linux `epoll` backend 下的契约证据，
-  重点验证 phase-1 backend 不会破坏 plain `Content-Length` / plain chunked follow-up tail
-  这类 keep-alive 边界语义。
-- 本轮只看 `tests/nextpas.core.http/test_http_server` 与最小控制面文件。
+- 当前目标是继续收紧 `nextpas.core.http` 的 response write correctness，
+  重点验证 `TH1ResponseWriter` / `TChunkedWriter` 在底层 short-write / zero-progress 时
+  不会静默截断 status/header/chunk/body framing。
+- 本轮主要看 `tests/nextpas.core.http/test_http_h1writer`、
+  `tests/nextpas.core.http/test_http_h1chunked`、`src/nextpas.core.http.impl.h1.*`
+  与最小控制面文件。
 
 ## Baseline truths
 
@@ -17,55 +19,61 @@
 
 ## Confirmed decisions
 
-### 1. 当前这批工作是 coverage-expansion，不是生产修复
+### 1. 这轮不是纯 coverage-expansion，而是用 TDD 拉出了一条真实生产 bug
 
-- 新增 `epoll` differential tests 直接通过，没有暴露新的 runtime bug。
-- 本轮不需要改 `src/nextpas.core.http.*` 或 `src/nextpas.core.net.server.*` 生产代码。
+- 旧实现对 short-write 没有防护：
+  - `TH1ResponseWriter` 的 status/header/CRLF framing 直接裸 `Write`
+  - `TChunkedWriter` 的 chunk-size / CRLF / body / terminal chunk 直接裸 `Write`
+  - `TH1ResponseWriter` 的非 chunked body path 直接把 partial count 返给调用方
+- 新增 RED tests 直接证明现状会静默截断响应，而不是完整写出或显式失败。
 
-### 2. `epoll` phase-1 的 differential proof 已经补齐 plain follow-up tail 语义
+### 2. 生产修复的最小正确解是 write-all-or-raise，而不是继续容忍 partial count
 
-- 现在 `test_http_server` 已直接证明 `epoll` backend 下这些 contract 与 threaded 保持一致：
-  - keep-alive 两次复用
-  - fixed-length same-write pipelining
-  - chunked first-request same-write pipelining
-  - keep-alive `Content-Length` garbage tail -> follow-up `400`
-  - keep-alive `Content-Length` truncated follow-up request line / headers -> follow-up `400`
-  - keep-alive plain chunked garbage tail -> follow-up `400`
-  - keep-alive plain chunked truncated follow-up request line / headers -> follow-up `400`
-  - chunked trailer-complete keep-alive garbage tail -> follow-up `400`
-  - chunked trailer-complete keep-alive truncated follow-up request line / headers -> follow-up `400`
-  - chunked trailer-complete same-write pipelined next-request
-  - chunked trailer-complete partial follow-up request line 在后续字节到达后可完成为合法第二请求
-  - hijack ownership
-  - hijack 后异常路径不补写 `500`、不回收 handler-owned connection
+- 现在 `TChunkedWriter` 与 `TH1ResponseWriter` 都统一成：
+  - 对 framing/body 内部写入循环直到全部写完
+  - 如果底层 writer `0` 进度，则抛 `EIOError`
+  - 因此 public-facing `IHttpResponseWriter.Write` 现在对常见 handler 语义更直线：
+    写完全部字节返回完整 count，否则异常传播
 
-### 3. 这轮仍然是 coverage-expansion，不需要生产修复
+### 3. 这轮修复没有破坏现有 server contract
 
-- 新增 `epoll` plain follow-up tail tests 直接通过，没有暴露新的 runtime bug。
-- 因此本轮不改 `src/nextpas.core.http.*` 或 `src/nextpas.core.net.server.*` 生产代码。
+- `test_http_server` 全套回归仍然全绿，说明 write-all 修复没有破坏现有
+  keep-alive / chunked request / hijack / epoll differential contract。
 
 ## Verification evidence
 
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `104 total, 104 passed, 0 failed`
-  - 新增通过：
-    - `Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend`
-    - `Content-Length keep-alive truncated follow-up request line -> follow-up 400 with epoll backend`
-    - `Content-Length keep-alive truncated follow-up headers -> follow-up 400 with epoll backend`
-    - `Chunked keep-alive garbage tail -> follow-up 400 with epoll backend`
-    - `Chunked keep-alive truncated follow-up request line -> follow-up 400 with epoll backend`
-    - `Chunked keep-alive truncated follow-up headers -> follow-up 400 with epoll backend`
-  - heaptrc: `0 unfreed memory blocks`
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_h1chunked clean test`
+    - 失败点直接命中：
+      - short writer chunk framing 被截断
+      - short writer terminal chunk 被截断
+      - zero-progress writer 没有抛 `EIOError`
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - 失败点直接命中：
+      - short writer status/header framing 被截断
+      - `Content-Length` body path 只返回 partial count
+      - chunked body path 通过 writer 集成后同样被截断
+- GREEN:
+  - `make -C tests/nextpas.core.http/test_http_h1chunked clean test`
+    - `9 total, 9 passed, 0 failed`
+    - heaptrc `0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - `24 total, 24 passed, 0 failed`
+    - heaptrc `0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `104 total, 104 passed, 0 failed`
+    - heaptrc `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- Linux `epoll` 现在已经把 plain `Content-Length` / plain chunked / trailer-complete
-  follow-up tail 路径都补进 differential proof；后续更值钱的差距更偏向 backpressure、
-  per-connection evented runtime、以及未来 `IOCP` / `kqueue` 家族实现，而不是继续横向复制同类 H1 tail 用例。
+- 现在 unit-level short-write seam 已经封住，但 transport/session 层仍缺少更高层契约证据：
+  - response-side write timeout
+  - server/raw-wire backpressure 行为
+  - 未来 evented write path 下的 pending/drain 语义
 - `kqueue` / `IOCP` 仍未实现；Windows 长期目标仍是 `IOCP`，不是 `WSAPoll` 终态。
 - 当前还没有 benchmark 结论，性能判断必须后置到 correctness 和 backend contract 进一步稳定之后。
 
 ## Commit intent
 
-- 这批改动应该以 HTTP epoll follow-up-tail differential coverage-expansion 提交。
+- 这批改动应该以 HTTP response short-write hardening 提交。
 - 必须坚持 path-limited staging，不能把共享 worktree 中的其他改动带入本 commit。

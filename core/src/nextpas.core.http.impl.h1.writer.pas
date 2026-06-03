@@ -47,9 +47,30 @@ implementation
 
 uses
   nextpas.core.base.utils,
+  nextpas.core.errors,
   nextpas.core.text.conv,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.chunked;
+
+procedure WriteAllOrRaise(const AWriter: IWriter; const ABuf;
+  const ACount: SizeUInt);
+var
+  LWritten: SizeUInt;
+  LTotal: SizeUInt;
+  LPtr: PByte;
+begin
+  if ACount = 0 then
+    Exit;
+  LPtr := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := AWriter.Write(LPtr[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create('h1 response writer: write failed (zero progress)');
+    Inc(LTotal, LWritten);
+  end;
+end;
 
 { TH1ResponseWriter }
 
@@ -81,14 +102,14 @@ end;
 procedure TH1ResponseWriter.WriteStr(const AStr: string);
 begin
   if Length(AStr) > 0 then
-    FWriter.Write(AStr[1], SizeUInt(Length(AStr)));
+    WriteAllOrRaise(FWriter, AStr[1], SizeUInt(Length(AStr)));
 end;
 
 procedure TH1ResponseWriter.WriteCRLF;
 const
   CRLF: array[0..1] of Byte = (13, 10);
 begin
-  FWriter.Write(CRLF[0], 2);
+  WriteAllOrRaise(FWriter, CRLF[0], 2);
 end;
 
 procedure TH1ResponseWriter.WriteStatusLine;
@@ -160,7 +181,10 @@ begin
   if FChunkedWriter <> nil then
     Result := FChunkedWriter.Write(ABuf, ACount)
   else
-    Result := FWriter.Write(ABuf, ACount);
+  begin
+    WriteAllOrRaise(FWriter, ABuf, ACount);
+    Result := ACount;
+  end;
 end;
 
 procedure TH1ResponseWriter.Flush;

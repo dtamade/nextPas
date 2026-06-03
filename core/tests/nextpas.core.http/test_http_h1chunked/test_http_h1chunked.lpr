@@ -4,6 +4,7 @@ program test_http_h1chunked;
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.http.base,
   nextpas.core.http.impl.h1.chunked,
@@ -16,6 +17,21 @@ type
   public
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function GetOutput: string;
+  end;
+
+  TShortWriter = class(TInterfacedObject, IWriter)
+  private
+    FBuf: string;
+    FMaxPerCall: SizeUInt;
+  public
+    constructor Create(const AMaxPerCall: SizeUInt);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function GetOutput: string;
+  end;
+
+  TZeroWriter = class(TInterfacedObject, IWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
   end;
 
 function TBytesWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -33,6 +49,36 @@ end;
 function TBytesWriter.GetOutput: string;
 begin
   Result := FBuf;
+end;
+
+constructor TShortWriter.Create(const AMaxPerCall: SizeUInt);
+begin
+  inherited Create;
+  FMaxPerCall := AMaxPerCall;
+end;
+
+function TShortWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOld: SizeUInt;
+begin
+  if (ACount = 0) or (FMaxPerCall = 0) then
+    Exit(0);
+  Result := ACount;
+  if Result > FMaxPerCall then
+    Result := FMaxPerCall;
+  LOld := SizeUInt(Length(FBuf));
+  SetLength(FBuf, LOld + Result);
+  Move(ABuf, FBuf[LOld + 1], Result);
+end;
+
+function TShortWriter.GetOutput: string;
+begin
+  Result := FBuf;
+end;
+
+function TZeroWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
 end;
 
 var
@@ -132,6 +178,56 @@ begin
   LChunked.Free;
 end;
 
+procedure TestShortWriterStillFramesCompleteChunk;
+var
+  LInner: TShortWriter;
+  LChunked: TChunkedWriter;
+  LBody: string;
+begin
+  LInner := TShortWriter.Create(1);
+  LChunked := TChunkedWriter.Create(LInner as IWriter);
+  LBody := 'hello';
+  CheckEqual(Int64(5), Int64(LChunked.Write(LBody[1], SizeUInt(Length(LBody)))),
+    'short writer still reports full body bytes');
+  CheckEqual('5'#13#10'hello'#13#10, LInner.GetOutput,
+    'short writer still receives complete chunk framing');
+  LChunked.Free;
+end;
+
+procedure TestShortWriterFlushStillWritesTerminalChunk;
+var
+  LInner: TShortWriter;
+  LChunked: TChunkedWriter;
+begin
+  LInner := TShortWriter.Create(1);
+  LChunked := TChunkedWriter.Create(LInner as IWriter);
+  LChunked.Flush;
+  CheckEqual('0'#13#10#13#10, LInner.GetOutput,
+    'short writer still receives full terminal chunk');
+  LChunked.Free;
+end;
+
+procedure TestZeroProgressWriterRaises;
+var
+  LInner: TZeroWriter;
+  LChunked: TChunkedWriter;
+  LBody: string;
+  LRaised: Boolean;
+begin
+  LInner := TZeroWriter.Create;
+  LChunked := TChunkedWriter.Create(LInner as IWriter);
+  LBody := 'hello';
+  LRaised := False;
+  try
+    LChunked.Write(LBody[1], SizeUInt(Length(LBody)));
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'zero-progress writer raises EIOError');
+  LChunked.Free;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.chunked');
   T.Run('Single Write frames one chunk', @TestSingleWriteFramesOneChunk);
@@ -140,5 +236,8 @@ begin
   T.Run('Flush writes terminal chunk once', @TestFlushWritesTerminalChunkOnce);
   T.Run('Sixteen-byte chunk uses hex length', @TestSixteenByteChunkUsesHexLength);
   T.Run('Write after Flush raises', @TestWriteAfterFlushRaises);
+  T.Run('Short writer still frames complete chunk', @TestShortWriterStillFramesCompleteChunk);
+  T.Run('Short writer Flush still writes terminal chunk', @TestShortWriterFlushStillWritesTerminalChunk);
+  T.Run('Zero-progress writer raises', @TestZeroProgressWriterRaises);
   T.Summary;
 end.
