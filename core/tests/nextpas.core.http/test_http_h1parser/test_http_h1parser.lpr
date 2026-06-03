@@ -357,6 +357,24 @@ begin
   Check(not LP.IsComplete, 'truncated terminal chunk ending stays incomplete');
 end;
 
+procedure TestChunkedRequestTruncatedTerminalChunkEndingCrAtEof;
+var
+  LP: IH1Parser;
+  LReq: string;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10#13;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(not LP.IsComplete, 'truncated terminal chunk ending CR is not complete');
+  LP.Finish;
+  Check(LP.HasError, 'truncated terminal chunk ending CR reports error on finish');
+  Check(not LP.IsComplete, 'truncated terminal chunk ending CR stays incomplete');
+end;
+
 procedure TestChunkedRequestTruncatedTerminalChunkExtensionAtEof;
 var
   LP: IH1Parser;
@@ -1032,6 +1050,8 @@ begin
   T.Run('Chunked request truncated at EOF', @TestChunkedRequestTruncatedAtEof);
   T.Run('Chunked request truncated chunk-size line at EOF', @TestChunkedRequestTruncatedChunkSizeLineAtEof);
   T.Run('Chunked request truncated terminal chunk ending at EOF', @TestChunkedRequestTruncatedTerminalChunkEndingAtEof);
+  T.Run('Chunked request truncated terminal chunk ending CR at EOF',
+    @TestChunkedRequestTruncatedTerminalChunkEndingCrAtEof);
   T.Run('Chunked request truncated terminal chunk extension at EOF', @TestChunkedRequestTruncatedTerminalChunkExtensionAtEof);
   T.Run('Chunked request truncated terminal chunk extension CR at EOF', @TestChunkedRequestTruncatedTerminalChunkExtensionCrAtEof);
   T.Run('Chunked request truncated terminal chunk ending after extension at EOF',
