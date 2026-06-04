@@ -1,64 +1,50 @@
-# Findings: HTTP server benchmark snapshot capture
+# Findings: HTTP server benchmark result snapshot
 
 ## Scope
 
-本轮补齐 `benchmarks/nextpas.core.http` 的 Markdown benchmark snapshot capture。目标是把
-comparison runner 的 raw output 和当前环境元数据放进同一份可归档报告，为后续正式性能对照
-提供稳定证据入口。
+本轮把 `capture_server_comparison_snapshot.sh` 的实际输出转成文档化 benchmark 证据。
+目标不是宣称 nextPas 已经全面胜过 Go/Rust，而是先让 HTTP server keep-alive 对照有可重复
+方法、环境元数据和本机结果。
 
 ## Confirmed truths
 
-### 1. RED 证明 snapshot capture 缺口
+### 1. Snapshot command
 
-首次扩展 `test_http_benchmarks` 后 focused gate 失败：
+运行：
 
-- `5 total, 4 passed, 1 failed`
-- failure: `server comparison snapshot runner exists`
-- heaptrc: `0 unfreed memory blocks`
+```sh
+benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
+  --requests 20000 --threads 4 \
+  --output build/projects/nextpas.core.http/server_comparison/snapshot-2026-06-05.md
+```
 
-这证明仓库还缺少 Markdown snapshot capture 入口。
+### 2. Environment
 
-### 2. RED 证明 benchmark build 噪音
+- `captured_at=2026-06-04T21:50:49Z`
+- `git_head=f62d2a28dae20ab403a9f75bd2af8e7fa2d6aff7`
+- `fpc_version=3.3.1`
+- `go_version=go version go1.23.5 linux/amd64`
+- `rustc_version=rustc 1.94.0 (4a4ef493e 2026-03-02)`
+- `requests=20000`
+- `threads=4`
 
-新增 snapshot quality gate 后 focused gate 再次失败：
+### 3. Local result
 
-- `5 total, 4 passed, 1 failed`
-- failure: snapshot 内出现 FPC `Warning:`
-- 同一 raw output 还暴露 `GReady`、`LThreadCount` unused notes
-- heaptrc: `0 unfreed memory blocks`
+| impl | completed | elapsed_ns | ns/op | req/s |
+| --- | ---: | ---: | ---: | ---: |
+| nextPas | 20000 | 247938762 | 12396 | 80665 |
+| Go `net/http` | 20000 | 981937616 | 49096 | 20367 |
+| Rust std-only | 20000 | 197099848 | 9854 | 101471 |
 
-这证明 benchmark 证据会把编译 warning/note 固化进报告，需要清理。
+### 4. Interpretation boundary
 
-### 3. 最小实现
-
-`capture_server_comparison_snapshot.sh` 现在支持：
-
-- `--requests <n>`
-- `--threads <n>`
-- `--output <path>`
-
-snapshot 会包含：
-
-- `captured_at`
-- `git_head`
-- `git_status`
-- `os`
-- `fpc_version`
-- `go_version`
-- `rustc_version`
-- `requests`
-- `threads`
-- raw comparison output
-
-`bench_http_server` 同步清理：
-
-- 删除未使用的 `GReady`
-- 删除未使用的 `LThreadCount`
-- 将线程参数读取从 signed pointer cast 改为 `PtrUInt`
+- 这是本机一次 run 的 evidence，不是永久性能排名。
+- Rust 当前是 std-only comparator，不代表 Hyper/Tokio ecosystem server。
+- workload 是 HTTP/1.1 keep-alive hello-world，不覆盖 TLS、request body、WebSocket、
+  router/middleware full-chain 或 epoll backend。
 
 ## Remaining gaps / risks
 
-- 当前提供的是 snapshot capture 工具，不提交固定性能排名。
-- Rust comparator 当前仍是 std-only microbaseline，不是 Hyper/Tokio 生态 server。
-- 当前 benchmark 仍是 HTTP/1.1 keep-alive hello-world QPS 基线，不覆盖 TLS、WebSocket、request body、
-  router/middleware full-chain 或 epoll backend。
+- 还需要 Hyper/Tokio comparator 才能更合理对标现代 Rust async server。
+- 还需要 full-chain / router / request-body / epoll backend benchmark snapshot。
+- 如果要形成正式性能报告，应至少多轮运行并记录 variance，而不是只用单次 snapshot。

@@ -152,3 +152,6 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
 The snapshot includes `git_head`, OS, FPC, Go, and Rust versions, the benchmark
 parameters, and the raw comparison output. Treat snapshots as local evidence,
 not as a permanent ranking across machines.
+
+See [BENCHMARKS.md](BENCHMARKS.md) for the current harness details and the
+latest committed local snapshot.
