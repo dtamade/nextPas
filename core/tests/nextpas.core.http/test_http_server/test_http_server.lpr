@@ -5117,10 +5117,85 @@ begin
   end;
 end;
 
+procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(
+  const AUseEpoll: Boolean; const AReqBody, AExpectedStatusLine,
+  ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+  LHandlerCalled: Boolean;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
+        ALabel + ': interim 100 continue returned');
+      Check(Pos('HTTP/1.1 200', LResp1) = 0,
+        ALabel + ': no final response before malformed chunked body');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called before malformed chunked body send');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(AReqBody[1], SizeUInt(Length(AReqBody)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos(AExpectedStatusLine, LResp2) > 0,
+        ALabel + ': malformed chunked body rejected after interim 100');
+      Check(Pos('HTTP/1.1 100 Continue', LResp2) = 0,
+        ALabel + ': final response does not repeat interim 100');
+      Check(Pos('HTTP/1.1 200', LResp2) = 0,
+        ALabel + ': malformed chunked body never reaches success response');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called for malformed chunked body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim;
 begin
   RunExpectContinueChunkedMaxBodySizeRejectsAfterInterim(False,
     'expect-continue chunked max-body threaded');
+end;
+
+procedure TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterim;
+const
+  REQ_BODY =
+    'Z'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(False,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked invalid chunk-size threaded');
 end;
 
 {$IFDEF NEXTPAS_LINUX}
@@ -5128,6 +5203,18 @@ procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend;
 begin
   RunExpectContinueChunkedMaxBodySizeRejectsAfterInterim(True,
     'expect-continue chunked max-body epoll');
+end;
+
+procedure TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterimEpollBackend;
+const
+  REQ_BODY =
+    'Z'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(True,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked invalid chunk-size epoll');
 end;
 {$ENDIF}
 
@@ -11178,6 +11265,8 @@ begin
     @TestExpectContinueChunkedBodyReadableEpollBackend);
   T.Run('Expect: chunked MaxBodySize rejects after interim response with epoll backend',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked invalid chunk-size rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterimEpollBackend);
   T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend);
   T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response with epoll backend',
@@ -11433,6 +11522,8 @@ begin
     @TestExpectContinueChunkedBodyReadable);
   T.Run('Expect: chunked MaxBodySize rejects after interim response',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
+  T.Run('Expect: chunked invalid chunk-size rejects after interim response',
+    @TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterim);
   T.Run('Expect: fixed-length body stall closes safely after interim response',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafely);
   T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response',

@@ -1,12 +1,13 @@
-# Progress Log: expect interim-100 zero-progress idle-timeout proof
+# Progress Log: expect interim-100 malformed chunk-size proof
 
 ## Session
 
-- **Scope:** 承接上一刀的 `Expect: 100-continue` partial-body stall coverage，
-  补齐 `interim 100` 已发出后 body 完全零进展的 idle-timeout 相邻 truth，
-  用 `test_http_security` + `test_http_server` 双层 focused proof 收口。
+- **Scope:** 承接上一刀的 `Expect: 100-continue` timeout 邻接 coverage，
+  补齐 `Expect + Transfer-Encoding: chunked` 在 interim `100` 已发出后收到
+  invalid chunk-size 的 malformed-after-interim truth，用
+  `test_http_security` + `test_http_server` 双层 focused proof 收口。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 zero-progress idle-timeout`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 malformed chunk-size`
 
 ## Current state
 
@@ -23,26 +24,22 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增 4 条 raw-wire focused proofs：
-  - threaded `Expect: fixed-length zero body progress idle-timeout`
-  - threaded `Expect: chunked zero body progress idle-timeout`
-  - epoll `Expect: fixed-length zero body progress idle-timeout`
-  - epoll `Expect: chunked zero body progress idle-timeout`
+  新增 2 条 raw-wire focused proofs：
+  - threaded `Expect: chunked invalid chunk-size rejects after interim 100`
+  - epoll `Expect: chunked invalid chunk-size rejects after interim 100`
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 4 条 focused public-contract proofs：
-  - threaded `Expect: fixed-length zero body progress idle-timeout closes after interim response`
-  - threaded `Expect: chunked zero body progress idle-timeout closes after interim response`
-  - epoll `Expect: fixed-length zero body progress idle-timeout closes after interim response`
-  - epoll `Expect: chunked zero body progress idle-timeout closes after interim response`
+  新增 2 条 focused public-contract proofs：
+  - threaded `Expect: chunked invalid chunk-size rejects after interim response`
+  - epoll `Expect: chunked invalid chunk-size rejects after interim response`
 - 这些 tests 直接锁住：
   - interim `100` 先发出
-  - zero-progress stall 后连接安全关闭
+  - invalid chunk-size 到达后返回 final `400 Bad Request`
   - handler 不进入
   - 不重复 `100`
   - 不追加 synthetic `500`
-  - 不再发 final status line
+  - 不误回成功响应
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步把 `Expect after interim 100 + zero-progress idle-timeout`
+  已同步把 `Expect after interim 100 + invalid chunk-size -> final 400`
   纳入 `test_http_server` + `test_http_security` 双层证据。
 - 本轮没有生产代码变更；focused gate 直接 GREEN，说明上一刀修复已在
   当前生产代码上自然成立，这轮只是 coverage-expansion。
@@ -50,15 +47,15 @@
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `206/206 passed`
+  - `208/208 passed`
   - heaptrc: `0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `236/236 passed`
+  - `238/238 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 下一刀继续优先 request-side runtime / malformed 的真实小缺口。
 - 更自然的后续候选：
-  - 继续找 still-open 的 raw-wire malformed / timeout 邻接缺口
-  - 暂不继续机械平铺 `Expect` 同型 case
+  - 继续找 still-open 的 raw-wire malformed / runtime 邻接缺口
+  - 优先挑 after-interim malformed chunk/trailer 的代表性小缺口，而不是宽铺 parity
