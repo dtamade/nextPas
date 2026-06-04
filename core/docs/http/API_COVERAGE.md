@@ -158,9 +158,9 @@
 - `test_http_security` 现在也有 keep-alive chunked partial follow-up request-line safe-handling proof：首个请求先完成，半截下一请求行随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求行补全，第二个请求也会继续合法完成；Linux `epoll` backend 现在也有相同 raw-wire live proof。
 - `test_http_security` 现在也有 keep-alive chunked partial follow-up headers safe-handling proof：首个请求先完成，半截下一请求头随后作为 follow-up malformed request 返回 `400`；Linux `epoll` backend 现在也有相同 raw-wire live proof。
-- `test_http_security` 现在也有 keep-alive chunked trailer-complete garbage tail / partial follow-up request-line / partial follow-up headers safe-handling proof：完整 trailer section 结束后首个请求仍先完成，尾巴随后作为 follow-up malformed request 返回 `400`。
-- `test_http_security` 现在也有 keep-alive chunked trailer-complete partial follow-up headers 的 epoll raw-wire live proof：首个 trailer-complete chunked request 的 `200 / echo:5` 会先正常返回，而 follow-up 半截请求头在 peer half-close 后仍稳定落为 `400`。
+- `test_http_security` 现在也有 keep-alive chunked trailer-complete garbage tail / truncated follow-up request-line / truncated follow-up headers safe-handling proof：完整 trailer section 结束后首个请求仍先完成，尾巴随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete partial follow-up request-line bridge proof：首个 trailer-complete chunked request 的 `200 / echo:5` 会先正常返回，后续把半截下一请求行补全后，第二个 request 仍可继续合法返回 `200 / ok`；Linux `epoll` backend 现在也有相同 raw-wire live proof。
+- `test_http_security` 现在也有 keep-alive chunked trailer-complete partial follow-up headers bridge proof：首个 trailer-complete chunked request 的 `200 / upload:hello` 会先正常返回，后续把半截下一请求头补全后，第二个 request 仍可继续合法返回 `200 / next`，且首请求的 trailer declaration / trailer isolation 契约保持不变；Linux `epoll` backend 现在也有相同 raw-wire live proof。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete same-write pipelining raw-wire proof：首个 trailer-complete chunked request 与同包第二个 request 都会稳定返回各自的 `200` 响应，首请求 body 仍保持 `echo:5`；Linux `epoll` backend 现在也有相同 live proof。
 - `TChunkedWriter` 现在有独立 focused 覆盖，并且 helper 自身会在 terminal chunk 后拒绝继续写入。
 - `WebSocket` 现在也有 upgrade read-ahead focused 覆盖：握手请求和首帧同包写入时，hijack 后依然能正确读到首帧。

@@ -1770,6 +1770,117 @@ begin
     'Keep-alive chunked trailer partial-next-line');
 end;
 
+procedure RunChunkedTrailerPartialFollowUpHeadersCanCompleteLater(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LSeenUpload: Boolean;
+  LSeenNext: Boolean;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+const
+  REQ1 = 'POST /upload HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Transfer-Encoding: chunked'#13#10 +
+         'Trailer: X-Test'#13#10#13#10 +
+         '5'#13#10'hello'#13#10 +
+         '0'#13#10 +
+         'X-Test: value'#13#10#13#10 +
+         'GET /next HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10;
+  REQ2_REST = 'Connection: close'#13#10#13#10;
+begin
+  LSeenUpload := False;
+  LSeenNext := False;
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Test');
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/next', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LSeenNext := True;
+    LBody := 'next';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    LRouter as IHttpHandler, nil, AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp1) > 0,
+        ALabel + ': first response still completes');
+      Check(Pos('upload:hello', LResp1) > 0,
+        ALabel + ': first request body handled correctly');
+      Check(LSeenUpload, ALabel + ': first handler called');
+      CheckEqual('hello', LGotBody, ALabel + ': handler sees decoded body only');
+      CheckEqual('X-Test', LGotTrailerDecl,
+        ALabel + ': trailer declaration preserved');
+      CheckEqual('', LGotTrailerValue,
+        ALabel + ': trailer field not exposed as regular header');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp2) > 0,
+        ALabel + ': completed follow-up request returns 200');
+      Check(Pos('next', LResp2) > 0,
+        ALabel + ': second request body preserved');
+      Check(LSeenNext, ALabel + ': second handler called');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedTrailerPartialFollowUpHeadersCanCompleteLater;
+begin
+  RunChunkedTrailerPartialFollowUpHeadersCanCompleteLater(
+    THttpServerOptions.Default,
+    'Keep-alive chunked trailer partial-next-headers');
+end;
+
 procedure RunChunkedTrailerPipelinedNextRequestInSingleWrite(
   const AOpts: THttpServerOptions; const ALabel: string);
 var
@@ -1833,6 +1944,17 @@ begin
   RunChunkedTrailerPartialFollowUpRequestLineCanCompleteLater(
     LOpts,
     'epoll keep-alive chunked trailer partial-next-line');
+end;
+
+procedure TestChunkedTrailerPartialFollowUpHeadersCanCompleteLaterEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedTrailerPartialFollowUpHeadersCanCompleteLater(
+    LOpts,
+    'epoll keep-alive chunked trailer partial-next-headers');
 end;
 
 procedure TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend;
@@ -2853,6 +2975,8 @@ begin
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling);
   T.Run('Chunked trailer keep-alive partial follow-up request line can complete later',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater);
+  T.Run('Chunked trailer keep-alive partial follow-up headers can complete later',
+    @TestChunkedTrailerPartialFollowUpHeadersCanCompleteLater);
   T.Run('Chunked trailer pipelined next request in single write',
     @TestChunkedTrailerPipelinedNextRequestInSingleWrite);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
@@ -2976,6 +3100,8 @@ begin
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
   T.Run('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend);
+  T.Run('Chunked trailer keep-alive partial follow-up headers can complete later with epoll backend',
+    @TestChunkedTrailerPartialFollowUpHeadersCanCompleteLaterEpollBackend);
   T.Run('Chunked trailer pipelined next request in single write with epoll backend',
     @TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend);
   T.Run('Malformed trailer field -> 400 with epoll backend',
