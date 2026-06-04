@@ -8195,6 +8195,68 @@ begin
   end;
 end;
 
+procedure RunRequestTargetOverMaxHeaderSizeRejected(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LOpts: THttpServerOptions;
+  LReq: string;
+  LPath: string;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LHandlerCalled := True;
+    LBody := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 2);
+  end);
+
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    SetLength(LPath, 400);
+    FillChar(LPath[1], 400, Ord('a'));
+    LReq := 'GET /' + LPath + ' HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10;
+    LResp := SendRawRequest(LPort, LReq);
+    Check(Pos('HTTP/1.1 431', LResp) > 0,
+      ALabel + ': request-target over MaxHeaderSize returns 431');
+    Check(not LHandlerCalled,
+      ALabel + ': handler not called for oversized request-target');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRequestTargetOverMaxHeaderSizeRejected;
+begin
+  RunRequestTargetOverMaxHeaderSizeRejected(False,
+    'request-target over max-header threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRequestTargetOverMaxHeaderSizeRejectedEpollBackend;
+begin
+  RunRequestTargetOverMaxHeaderSizeRejected(True,
+    'request-target over max-header epoll');
+end;
+{$ENDIF}
+
 { Test 17: MaxBodySize enforcement — 413 }
 procedure TestMaxBodySize;
 var
@@ -10210,6 +10272,8 @@ begin
     @TestUnsupportedExpectRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early with epoll backend',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
+  T.Run('Request-target over MaxHeaderSize -> 431 with epoll backend',
+    @TestRequestTargetOverMaxHeaderSizeRejectedEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
@@ -10476,6 +10540,8 @@ begin
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
   T.Run('MaxHeaderSize enforcement -> 431', @TestMaxHeaderSize);
+  T.Run('Request-target over MaxHeaderSize -> 431',
+    @TestRequestTargetOverMaxHeaderSizeRejected);
   T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);
   T.Run('Content-Length request truncated at EOF -> 400', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body readable', @TestChunkedRequestBodyReadable);

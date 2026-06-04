@@ -1,10 +1,10 @@
-# Progress Log: http server expect plus transfer-coding rejection ordering
+# Progress Log: http server request-target over MaxHeaderSize contract
 
 ## Session
 
-- **Scope:** 给 `Expect` request-side contract 补齐 transfer-coding error ordering：异常编码必须先拒绝，不能误发 interim `100`。
+- **Scope:** 把 long-request-line 的 broad safe-handling 收成更具体的 server-layer `MaxHeaderSize` 契约：oversized request-target 直接 `431`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `expect plus transfer-coding rejection ordering`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-line/header budget enforcement` -> `request-target over MaxHeaderSize`
 
 ## Current state
 
@@ -20,24 +20,20 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增四条 focused proofs：
-  - threaded / epoll `Expect + Transfer-Encoding: gzip, chunked`
-  - threaded / epoll `Expect + Transfer-Encoding: chunked, gzip`
-  - 两组都直接返回最终 `501/400`
-  - wire 上不出现 interim `100`
+  新增两条 focused proofs：
+  - threaded / epoll request-target over `MaxHeaderSize`
+  - 两条路径都直接返回 `431`
   - handler 不会被调用
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 `Expect + transfer-coding` current truth。
+  已同步 request-target over `MaxHeaderSize` current truth。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `210/210 passed`
+  - `212/212 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 下一刀仍应优先真实协议缺口，不要回到大面积 parity 平铺。
-- 更合理的两个方向是：
-  - 继续把 `Expect` 做成更完整的 request-side characterization
-  - 或回到 malformed/runtime 边角，再挑一个独立状态分支收口
+- 更合理的方向是继续把其余 runtime / malformed current truth 收成更窄、更可依赖的 server contract。

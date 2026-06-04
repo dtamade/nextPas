@@ -1,68 +1,58 @@
-# Findings: http server expect plus transfer-coding rejection ordering
+# Findings: http server request-target over MaxHeaderSize contract
 
 ## Scope
 
-- 本轮继续 request-side protocol completeness，不扩散成更大的 `Expect`
-  矩阵，只把 `Expect: 100-continue` 与异常 transfer-coding 的优先级次序
-  直接锁下来。
+- 本轮继续 request-side protocol completeness，不扩散成更大的 malformed
+  输入矩阵，只把 long-request-line 的 broad safe-handling 收成更具体的
+  server-layer `MaxHeaderSize` 契约。
 
 ## Confirmed truths
 
-### 1. `Expect` 与 transfer-coding error 的先后次序先前只靠实现顺序推断
+### 1. long-request-line 先前只有 security current truth，还缺 server-layer focused contract
+
+- [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
+  之前只把 long-request-line 记成 security current truth：
+  - 可能落到 `431/414/400/...`
+  - 关键只是 runtime stays safe
+- 这对 security 足够，但对 `IHttpServer.MaxHeaderSize` 公开契约来说太宽了。
+
+### 2. 现有实现其实已经把 request-line bytes 算进 `MaxHeaderSize` 预算
 
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-  里，whole-run 与 poll-driven 两条路径当前都是先判：
-  - parser error / parser error status
-  - unsupported expectations
-  - declared oversize content-length
-  - 然后才看 `ShouldSendContinueResponse`
-- 也就是说，代码本来就打算在 transfer-coding 已经落成 `501/400`
-  的情况下，直接拒绝而不是先发 interim `100 Continue`。
-- 但这条顺序先前没有 direct live proof。
+  在 whole-run / poll-driven 两条路径上，headers complete 后都会先检查：
+  - `total_read - body_size > MaxHeaderSize`
+- 这意味着 request-line 与 header fields 共用同一条 header budget。
+- 因而完全可以在 server 层直接锁一个更具体的契约：
+  - request-target 把 request-line 顶过 budget 时 -> `431`
 
-### 2. `Expect + unsupported/malformed transfer-coding` 是更值钱的 live characterization
-
-- 这轮只锁两个最小但高价值分支：
-  - `Transfer-Encoding: gzip, chunked` -> unsupported request transfer-coding -> `501`
-  - `Transfer-Encoding: chunked, gzip` -> `chunked` not final -> malformed -> `400`
-- 两条都带 `Expect: 100-continue`，直接验证：
-  - server 会不会先误发 interim `100`
-  - 还是先按 transfer-coding error 直接拒绝
-
-### 3. 现有生产行为直接 GREEN，说明 error-first ordering 已成立
+### 3. 现有生产行为直接 GREEN，说明这条 `431` contract 已成立
 
 - 在 [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 threaded / epoll 四条 live proofs：
-  - `Expect + Transfer-Encoding: gzip, chunked` -> 直接 final `501 Not Implemented`
-  - `Expect + Transfer-Encoding: chunked, gzip` -> 直接 final `400 Bad Request`
-  - 两条响应里都不出现 interim `100 Continue`
-  - handler 都不会被调用
+  新增 threaded / epoll 两条 live proofs：
+  - 小 `MaxHeaderSize` 下，oversized request-target -> 直接 `HTTP/1.1 431`
+  - handler 不会被调用
 - focused gate 直接 GREEN，说明当前生产代码已经满足这条契约，本轮不需要生产修复。
 
-### 4. 现在 `Expect` request-side live contract 的“什么时候绝不能先发 100”边界更完整了
+### 4. long-request-line 现在不只剩 broad safe-handling，而是多了一条可依赖的 server-layer budget truth
 
 - 已有 direct live truth：
-  - fixed-length body -> interim `100`
-  - chunked body -> interim `100`
-  - chunked after-interim overflow -> final `413`
-  - declared oversize body -> early `413`, no interim `100`
-  - unsupported `Expect` -> early `417`, no interim `100`
-  - bodyless `Content-Length: 0` -> final `200`, no interim `100`
-  - bodyless no-length request -> final `200`, no interim `100`
-  - `Expect + Transfer-Encoding: gzip, chunked` -> final `501`, no interim `100`
-  - `Expect + Transfer-Encoding: chunked, gzip` -> final `400`, no interim `100`
+- `test_http_security`
+  - 仍保留 broad safe-handling truth：long request-line 不会让 runtime 崩溃或误入 handler
+- `test_http_server`
+  - 现在进一步锁住主分支：在受控小 `MaxHeaderSize` 下，oversized request-target
+    会直接返回显式 `431`
 - 因此这轮仍然是 coverage-expansion，不是生产修复。
 
 ## Verification evidence
 
 - focused:
   - `make -C tests/nextpas.core.http/test_http_server test`
-    - `210/210 passed`
+    - `212/212 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮把 transfer-coding error ordering 接进来了，但还没系统铺开：
-  - `Expect` 与其他 parser-stage rejection 的相对优先级 characterization
-  - 更复杂的 `Expect` 组合 / OWS / repeated header-line characterization
-- 下一刀如果继续做 `Expect`，应该仍保持“小而真”，不要一次扩成大矩阵。
+- 这轮把 long-request-line 的 server 主分支锁住了，但还没系统铺开：
+  - `414 URI Too Long` 是否值得未来单独做成独立 contract
+  - 其他 current-truth keep-alive tail policy 是否要继续从 characterization 提升到更硬契约
+- 下一刀更适合继续挑 runtime / malformed 邻接 current truth 收口，而不是回去铺 `Expect` 矩阵。

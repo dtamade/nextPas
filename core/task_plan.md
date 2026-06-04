@@ -1,31 +1,30 @@
-# Task Plan: http server expect plus transfer-coding rejection ordering
+# Task Plan: http server request-target over MaxHeaderSize contract
 
 ## Goal
 
 继续留在 `3/6 H1 正确性加固` 主线，这一刀继续 request-side protocol
-completeness，补齐 `Expect: 100-continue` 与异常 `Transfer-Encoding`
-的优先级次序：
+completeness，把 long-request-line 的 broad safe-handling 收紧成更具体的
+server-layer `MaxHeaderSize` 契约：
 
-- 当 transfer-coding 本身已经非法或不支持时，应先直接拒绝
-- 这次只锁：
-  - `Expect + Transfer-Encoding: gzip, chunked` -> final `501`
-  - `Expect + Transfer-Encoding: chunked, gzip` -> final `400`
-- 两条路径都不应先发 interim `100 Continue`
+- 当 request-target 本身把 request-line 顶过 `MaxHeaderSize` 预算时，
+  server 应直接返回 `431`
+- 这次只锁 request-target / request-line 这一条预算分支
+- 同时证明 handler 不会被调度
 
 要求：
 
-- 优先复用现有 `Expect` / raw-wire helper 风格
+- 优先复用现有 `MaxHeaderSize` / raw-wire helper 风格
 - 先用 focused tests 取真值；如果直接 GREEN，本轮不改生产代码
 - 只跑 `test_http_server` focused gate
-- 不扩成大面积 `Expect` / transfer-coding 组合矩阵
+- 不扩成大面积 long-URL / parser 安全矩阵
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
-- [x] 审阅实现里的 parser error / unsupported-expect / continue 触发顺序
-- [x] 缩小剩余高价值缺口，选定 `Expect + transfer-coding` error ordering
+- [x] 审阅 long-request-line 现有 security current truth 与 `MaxHeaderSize` 实现路径
+- [x] 缩小剩余高价值缺口，选定 request-target over `MaxHeaderSize`
 - [x] 在 `test_http_server` 补 threaded / epoll focused live tests
-- [x] focused gate 直接 GREEN，证明现有 error-first ordering 已成立
+- [x] focused gate 直接 GREEN，证明现有 `431` contract 已成立
 - [x] 跑 focused：
   - `make -C tests/nextpas.core.http/test_http_server test`
 - [x] 更新 coverage 文档与控制文件
@@ -44,13 +43,11 @@ completeness，补齐 `Expect: 100-continue` 与异常 `Transfer-Encoding`
 
 ## Intended outcome
 
-- `Expect` 与 transfer-coding error 的先后顺序不再只靠实现阅读，而是有 direct live proof
+- request-target over `MaxHeaderSize` 不再只停留在 broad safe-handling，而是有 direct live proof
 - threaded / epoll 两条 live 路径都锁住：
-  - unsupported transfer-coding 直接返回 `501`
-  - chunked-not-final malformed 直接返回 `400`
-  - 两条路径都不先发 interim `100 Continue`
-  - handler 都不会被调度
+  - request-target over budget 直接返回 `431`
+  - handler 不会被调度
 - 证据要求：
-  - 新增 `Expect + transfer-coding` tests GREEN
+  - 新增 request-target over `MaxHeaderSize` tests GREEN
   - focused server suite 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`
