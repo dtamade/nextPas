@@ -202,3 +202,34 @@ command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 
 `test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
 with heaptrc reporting `0 unfreed memory blocks`.
+
+## Diagnostic Evidence: Raw Translated llhttp vs Adapter
+
+On 2026-06-05 local time, `bench_h1parser` gained raw translated llhttp
+no-callback rows. These rows measure the Pascal-translated state machine without
+the high-level `IH1Parser` adapter building URL strings, header objects, or body
+buffers.
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| workload | raw llhttp ns/op | adapter ns/op | adapter/raw |
+| --- | ---: | ---: | ---: |
+| simple GET | 425.3 | 1138.6 | 2.68x |
+| 10 headers | 822.1 | 3813.1 | 4.64x |
+| POST 1KB body | 456.2 | 1853.6 | 4.06x |
+
+The same run showed the current conservative fast path at `843.0 ns/op` for
+simple GET, `3467.6 ns/op` for 10 headers, `1474.5 ns/op` for POST 1KB, and
+`8464.3 ns/op` for a 10-request pipeline.
+
+This does not prove parity with C llhttp; there is no in-repo C llhttp
+comparator yet. It does show that, inside the current nextPas H1 parser stack,
+the dominant cost is adapter materialization rather than the Pascal-translated
+llhttp state machine itself.
+
+The raw simple-GET row is especially sensitive to the current benchmark
+runner's `MAX_ITERS = 1000` cap, so these numbers are directional. The
+classification remains stable: complete adapter parsing is materially slower
+than raw state-machine execution.

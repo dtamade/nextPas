@@ -5,7 +5,8 @@ program bench_h1parser;
 uses
   nextpas.core.bench,
   nextpas.core.http.impl.h1.parser,
-  nextpas.core.http.impl.h1.fast;
+  nextpas.core.http.impl.h1.fast,
+  nextpas.core.http.impl.h1.llhttp;
 
 var
   B: TBenchRunner;
@@ -114,6 +115,42 @@ begin
   GSink := LPos;
 end;
 
+{ === Raw translated llhttp benchmarks === }
+
+procedure BenchRawLlhttpRequest(const ARequest: AnsiString; aIters: Int64);
+var
+  LIt: Int64;
+  LParser: TLlhttpInternalT;
+  LSettings: TLlhttpSettingsT;
+  LErr: TLlhttpErrnoT;
+begin
+  llhttp_settings_init(@LSettings);
+  llhttp_init(@LParser, HTTP_REQUEST, @LSettings);
+  for LIt := 1 to aIters do
+  begin
+    llhttp_reset(@LParser);
+    LErr := llhttp_execute(@LParser, PAnsiChar(ARequest), Length(ARequest));
+    if LErr <> HPE_OK then
+      Inc(GSink);
+  end;
+  GSink := GSink + LParser.http_major + LParser.http_minor + LParser.method;
+end;
+
+procedure BenchRawLlhttpSimpleGET(aIters: Int64);
+begin
+  BenchRawLlhttpRequest(REQ_SIMPLE, aIters);
+end;
+
+procedure BenchRawLlhttp10Headers(aIters: Int64);
+begin
+  BenchRawLlhttpRequest(REQ_10HEADERS, aIters);
+end;
+
+procedure BenchRawLlhttpPost1K(aIters: Int64);
+begin
+  BenchRawLlhttpRequest(GReqPost1K, aIters);
+end;
+
 { === Fast path benchmarks === }
 
 procedure BenchFastParseSimpleGET(aIters: Int64);
@@ -173,6 +210,11 @@ begin
   WriteLn('  10 headers: ', Length(REQ_10HEADERS), ' bytes');
   WriteLn('  POST 1KB:   ', Length(GReqPost1K), ' bytes');
   WriteLn('  Pipeline:   ', Length(GPipeline), ' bytes (10 requests)');
+  WriteLn;
+  WriteLn('--- raw translated llhttp (no callbacks) ---');
+  B.Run('raw llhttp: simple GET (~60B)', @BenchRawLlhttpSimpleGET);
+  B.Run('raw llhttp: 10 headers (~400B)', @BenchRawLlhttp10Headers);
+  B.Run('raw llhttp: POST 1KB body', @BenchRawLlhttpPost1K);
   WriteLn;
   WriteLn('--- llhttp ---');
   B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);
