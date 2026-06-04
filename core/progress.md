@@ -1,15 +1,12 @@
-# Progress Log: expect interim-100 truncated trailer whitespace CR EOF proof
+# Progress Log: after-interim trailer EOF chain closure audit
 
 ## Session
 
-- **Scope:** 承接上一刀的 `Expect: 100-continue` trailer empty-value CR EOF
-  after-interim coverage，继续补齐 `Expect + Transfer-Encoding: chunked`
-  在 interim `100` 已发出后 trailer field 已进入 whitespace 值、
-  但 whitespace 值之后只收到单个 `CR` 就直接 EOF 截断时的
-  after-interim truth，用 `test_http_security` + `test_http_server`
-  双层 focused proof 收口。
+- **Scope:** 审计 `Expect: 100-continue` + chunked trailer EOF after-interim
+  coverage 是否已完整闭合，避免继续添加重复同型 tests。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 truncated trailer whitespace CR EOF`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth`
+  -> `after-interim trailer EOF chain closed` -> next `keep-alive request-tail contract`
 
 ## Current state
 
@@ -25,40 +22,31 @@
 
 ## Completed work
 
-- [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  复用了上一刀的 `shutdown-after-body` after-interim helper，
-  新增 2 条 raw-wire focused proofs：
-  - threaded `Expect chunked truncated trailer whitespace CR EOF rejects after interim 100`
-  - epoll `Expect chunked truncated trailer whitespace CR EOF rejects after interim 100`
-- [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  对称新增 2 条 focused public-contract proofs：
-  - threaded `Expect: chunked truncated trailer whitespace CR EOF rejects after interim response`
-  - epoll `Expect: chunked truncated trailer whitespace CR EOF rejects after interim response`
-- 这 4 条 tests 直接锁住：
-  - interim `100` 先发出
-  - partial trailer whitespace CR EOF + peer write-half-close 后返回 final `400 Bad Request`
-  - 不重复 `100`
-  - 不误回 `200`
-  - handler 不进入
-- [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步把 `Expect after interim 100 + truncated trailer whitespace CR EOF -> final 400`
-  纳入 `test_http_server` + `test_http_security` 双层证据。
-- 本轮没有生产代码变更；focused gate 直接 GREEN，说明当前生产代码已经自然满足这条契约，这轮仍是 coverage-expansion。
+- 已复读设计规范、HTTP API 覆盖地图、`task_plan.md`、`findings.md`、
+  `progress.md`。
+- 已检查 `git status --short --branch`；确认本轮必须继续 path-limited 操作，
+  不能使用 `git add .`。
+- 已审计 `test_http_security` 与 `test_http_server`：
+  - after-interim trailer EOF family 在 threaded / epoll 两边均有注册。
+  - malformed trailer field、field-name EOF、separator EOF、empty-value 系列、
+    whitespace 系列、field-line EOF、field-CR EOF、section EOF、section-CR EOF、
+    oversize trailer 均已覆盖。
+- 已决定不再新增重复 malformed trailer EOF tests。
+- 已把下一阶段路线固定到 keep-alive request-tail contract 决策。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_security test`
-  - `242/242 passed`
-  - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_server test`
-  - `272/272 passed`
-  - heaptrc: `0 unfreed memory blocks`
+- 本轮未改生产代码或测试代码，未新增 API surface。
+- `git diff --check -- docs/http/API_COVERAGE.md task_plan.md findings.md progress.md`
+  - exit code: `0`
+- 未运行 focused unit tests：本轮是文档/路线图-only 收口；下一批一旦改测试 /
+  行为 / API，会恢复对应 focused gate 与 heaptrc 证据。
 
 ## Next step
 
-- 下一刀继续优先 request-side runtime / malformed 的真实小缺口。
-- 更自然的后续候选：
-  - 先审计 after-interim trailer EOF 邻接链是否已经闭合
-  - 若链条已闭合，则转向 keep-alive request-tail contract 决策
-  - 或继续收口更稀疏的 request-side runtime seam
-- 继续保持单刀推进，不宽铺同型 parity。
+- 本轮提交后，下一批进入 keep-alive request-tail contract：
+  - 先审计现有 fixed-length / plain chunked / trailer-complete chunked request-tail
+    tests。
+  - 区分“合法 partial follow-up 可补全”和“malformed / EOF-truncated follow-up
+    返回 follow-up `400`”。
+  - 只在发现 contract 缺口时补最小 focused tests。

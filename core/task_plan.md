@@ -1,70 +1,45 @@
-# Task Plan: expect interim-100 truncated trailer whitespace CR EOF proof
+# Task Plan: after-interim trailer EOF chain closure audit
 
 ## Goal
 
-继续停留在 `3/6 H1 正确性加固` 主线，承接上一刀已经完成的
-`Expect: 100-continue` trailer empty-value CR EOF after-interim proof，继续补
-相邻的小缺口：`Expect + Transfer-Encoding: chunked`
-在 interim `100` 发出后，如果 trailer field 已进入 whitespace 值，
-但 whitespace 值之后只收到单个 `CR` 就 EOF 截断，
-应返回 final `400 Bad Request`。
-
-- 补 `test_http_security` 与 `test_http_server` 的
-  after-interim trailer whitespace CR EOF focused proof
-- 锁住 `interim 100` 已发出后：
-  - partial trailer whitespace CR EOF + write-half-close 会返回 explicit `400 Bad Request`
-  - 不会重复发 `100 Continue`
-  - 不会误回 `200`
-  - handler 不会进入
-- 要求 threaded / Linux `epoll` 两条 live path 都给出 raw-wire + server 双层证据
-- 只跑 `test_http_security`、`test_http_server` 两个 focused gate
+继续停留在 `3/6 H1 正确性加固` 主线，但不再机械复制同型 malformed
+case。本轮先审计上一组 `Expect: 100-continue` + chunked trailer EOF
+after-interim proof 是否已经覆盖完整邻接链；若链条闭合，则把路线推进到
+keep-alive request-tail contract 决策，而不是继续加重复测试。
 
 要求：
 
-- 只动 HTTP 相关路径
-- 不扩散到 benchmark / server 基类设计 / 大面积 malformed parity 平铺
-- 不改生产代码，除非 RED 证明必须修
+- 只动 HTTP 相关控制文件和覆盖文档。
+- 不写 `docs/nextpas.core.http.inbox.md`。
+- 不改生产代码；没有明确 RED 缺口就不新增测试。
+- 不跑全量测试；文档/路线图-only 变更只做 diff 级验证。
 
 ## Checklist
 
-- [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
-- [x] 审阅 `test_http_security` / `test_http_server` 现有 `Expect` / malformed
-  trailer EOF 覆盖，确认 after-interim `truncated trailer whitespace CR EOF`
-  仍是空缺
-- [x] 复用现有 `shutdown-after-body` helper，不再扩新 helper 形状
-- [x] 在 `test_http_security` 与 `test_http_server` 新增 threaded / epoll
-  两组 `Expect + chunked truncated trailer whitespace CR EOF after interim 100`
-  focused proof
-- [x] focused gate 直接 GREEN，证明这轮只是 coverage-expansion，不需要生产修复
-- [x] 跑 focused：
-  - `make -C tests/nextpas.core.http/test_http_security test`
-  - `make -C tests/nextpas.core.http/test_http_server test`
-- [x] 更新 coverage 文档与控制文件
-- [x] path-limited commit
+- [x] 阅读 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、
+  `task_plan.md`、`findings.md`、`progress.md`。
+- [x] 检查 `git status --short --branch`，确认 shared checkout 仍有大量无关脏文件。
+- [x] 审计 `test_http_security` after-interim trailer EOF threaded / epoll 用例注册。
+- [x] 审计 `test_http_server` after-interim trailer EOF threaded / epoll 用例注册。
+- [x] 对照 parser / security / server 的 trailer EOF 家族，确认 after-interim
+  trailer EOF 邻接链已经闭合。
+- [x] 更新 `docs/http/API_COVERAGE.md`、`task_plan.md`、`findings.md`、`progress.md`。
+- [x] 运行 diff 级验证。
+- [x] path-limited commit。
 
 ## Scope
 
-- 本轮只动：
-  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
-  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
-  - `docs/http/API_COVERAGE.md`
-  - `task_plan.md`
-  - `findings.md`
-  - `progress.md`
-- 不跑全量 HTTP suite
-- 不改生产代码
+本轮只允许修改：
+
+- `docs/http/API_COVERAGE.md`
+- `task_plan.md`
+- `findings.md`
+- `progress.md`
 
 ## Intended outcome
 
-- `Expect: 100-continue` 的 trailer EOF 邻接 truth 在 security/server 两层收口：
-  - interim `100` 先发出
-  - partial trailer whitespace CR EOF 后 peer write-half-close 会返回 final `400 Bad Request`
-  - threaded / epoll 都不会重复 interim `100`
-  - threaded / epoll 都不会误回 `200`
-  - threaded / epoll 都不会进入 handler
-- 证据要求：
-  - 两条 security focused-after-interim tests GREEN
-  - 两条 server focused-after-interim tests GREEN
-  - `make -C tests/nextpas.core.http/test_http_security test` 全绿
-  - `make -C tests/nextpas.core.http/test_http_server test` 全绿
-  - `heaptrc` 为 `0 unfreed memory blocks`
+- 明确记录 after-interim trailer EOF 邻接链已闭合，不再继续铺同型 parity。
+- 下一阶段固定为 keep-alive request-tail contract 决策：
+  - 先区分“当前 transport truth”和“需要公开固定的 API contract”。
+  - 只在发现 contract 缺口时补 focused tests。
+  - 仍然优先 threaded / epoll parity，但不为 parity 而复制无价值 case。

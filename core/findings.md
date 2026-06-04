@@ -1,76 +1,66 @@
-# Findings: expect interim-100 truncated trailer whitespace CR EOF proof
+# Findings: after-interim trailer EOF chain closure audit
 
 ## Scope
 
-- 上一刀已经锁住了 `Expect: 100-continue` 在 interim `100` 发出后，
-  truncated trailer empty-value CR EOF 的 after-interim truth。
-- 本轮继续补更贴近 EOF 邻接的小缺口：
-  interim `100` 发出后，如果 chunked trailer field 已经进入 whitespace 值，
-  但 whitespace 值之后只收到单个 `CR` 就直接 EOF 截断，
-  server 仍应返回 final `400 Bad Request`，且不应进入 handler，
-  也不应误补 synthetic `500`。
+本轮不新增测试，先审计上一阶段 `Expect: 100-continue` + chunked trailer EOF
+after-interim proof 是否已经形成完整邻接链。若已经闭合，就停止同型补证，
+把下一刀切到 keep-alive request-tail contract。
 
 ## Confirmed truths
 
-### 1. 现有 after-interim helper 已足够表达 whitespace CR EOF 截断
+### 1. after-interim trailer EOF 邻接链已经闭合
 
-- 上一刀已经给
-  `RunExpectContinueChunkedMalformedBodyRejectedAfterInterim...`
-  helper 增加了可选 `shutdown-after-body` 路径。
-- 因此这轮不需要再改 helper 形状，只要复用同一路径，把请求体切成：
-  - `5\r\nhello\r\n`
-  - `0\r\n`
-  - partial trailer whitespace CR EOF `X-Test: \r`
-  - 然后客户端 write-half-close
-- 这使得本轮真正保持为纯测试补证，而不是再做测试基础设施扩展。
+`test_http_security` 与 `test_http_server` 当前都已在 threaded / Linux `epoll`
+两条路径注册 after-interim proof，覆盖：
 
-### 2. after-interim trailer whitespace CR EOF focused tests 直接 GREEN
+- malformed trailer field
+- truncated trailer field-name EOF
+- truncated trailer separator EOF
+- truncated trailer empty-value CR EOF
+- truncated trailer empty-value EOF
+- truncated trailer empty-value section CR EOF
+- truncated trailer whitespace CR EOF
+- truncated trailer whitespace EOF
+- truncated trailer whitespace section EOF
+- truncated trailer whitespace section CR EOF
+- truncated trailer field line EOF
+- truncated trailer field CR EOF
+- truncated trailer section CR EOF
+- truncated trailer section EOF
+- oversize trailer -> `431`
 
-- 在
-  [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增了 2 条 raw-wire focused tests：
-  - threaded `Expect chunked truncated trailer whitespace CR EOF rejects after interim 100`
-  - epoll `Expect chunked truncated trailer whitespace CR EOF rejects after interim 100`
-- 在
-  [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增了 2 条 public-contract focused tests：
-  - threaded `Expect: chunked truncated trailer whitespace CR EOF rejects after interim response`
-  - epoll `Expect: chunked truncated trailer whitespace CR EOF rejects after interim response`
-- 这 4 条 tests 直接锁住：
-  - 先收到单条 `HTTP/1.1 100 Continue`
-  - partial trailer whitespace section + peer write-half-close 后最终返回 `400 Bad Request`
-  - final response 不重复 interim `100`
-  - final response 不误回 `200`
-  - handler 永远不会进入
-- focused gate 直接 GREEN，说明当前生产代码已经自然满足这条契约，
-  本轮不需要生产修复。
+这些用例共同锁住：
 
-### 3. `Expect` request-side contract 的 trailer EOF 邻接 truth 再补一格
+- `HTTP/1.1 100 Continue` 已经先发出。
+- malformed / EOF-truncated trailer 后返回 final `400 Bad Request`，oversize trailer
+  返回 final `431 Request Header Fields Too Large`。
+- final response 不重复 interim `100`。
+- 不误回 final `200`。
+- handler 不进入。
 
-- 非 `Expect` 路径此前已经有 parser / security / server 三层
-  `truncated trailer whitespace section at EOF -> 400` 证据。
-- 本轮把同一 truth 延伸到 after-interim `100 Continue` 路径后，
-  request-side runtime truth 再补一格：
-  - 请求已进入 `Expect` body phase 也不会放松 trailer section EOF 校验
-  - threaded / epoll 两条 live path 都稳定落到 final `400`
-  - handler 不会因为 interim `100` 已发出而被误放行
+### 2. 没有必要继续加同型 trailer EOF 测试
 
-## Verification evidence
+parser / standalone server / security / after-interim server 四层现有覆盖已经把 trailer
+EOF grammar 的相邻截断形态串起来。继续追加同型 case 只会增加测试维护成本，
+不会提高公开契约可信度。
 
-- focused:
-  - `make -C tests/nextpas.core.http/test_http_security test`
-    - `242/242 passed`
-    - heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_server test`
-    - `272/272 passed`
-    - heaptrc: `0 unfreed memory blocks`
+### 3. 下一条主线应转向 keep-alive request-tail contract
+
+当前文档和测试已经记录的 transport truth 是：
+
+- fixed-length / plain chunked / trailer-complete chunked 请求在当前 request framing
+  完成时即完成。
+- unread tail bytes 会留给下一次 request parse。
+- partial follow-up request-line / headers 可以继续补全为合法第二请求。
+- conclusively malformed 或 EOF-truncated follow-up request 会作为 follow-up `400`。
+
+下一批应先判断这些行为哪些需要固定为公开 contract，哪些只是当前 transport
+truth；只对缺口补 focused tests。
 
 ## Remaining gaps / risks
 
-- 这轮是 `Expect` request-side 契约的 EOF 邻接补证，不是行为修改。
-- 现有 helper 现在已经能表达 `field-name` / `separator` / `empty-value CR` / `empty-value` / `empty-value section CR` / `whitespace CR` / `whitespace` / `whitespace section` / `whitespace section CR` / `field line` / `field CR` / `section` / `section CR` 十三个 after-interim
-  trailer EOF 邻接形状，后续可以继续复用。
-- 下一刀更自然的是继续挑一个 after-interim trailer EOF 邻接 case：
-  - 可先审计 after-interim trailer EOF 邻接链是否已覆盖完，再决定是否转向 keep-alive request-tail contract 决策
-  - 或 `truncated trailer field line EOF` 之后的其他未归类 runtime seam
-- 继续保持单刀推进，不宽铺同型 parity。
+- 本轮是路线图收口，不是行为修改。
+- 没有生产代码或测试代码变更，因此不跑 focused 单元测试；后续一旦改 API / 行为 /
+  test surface，仍必须跑对应 focused gate 和 heaptrc。
+- keep-alive request-tail contract 需要避免误收紧：如果把“可补全的 partial
+  follow-up”过早定义成错误，可能破坏 pipelining / TCP 分段下的合法行为。
