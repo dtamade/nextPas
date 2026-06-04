@@ -2061,6 +2061,26 @@ begin
     'Unsupported Expect direct error backpressure');
 end;
 
+procedure TestPayloadTooLargeBackpressureSafeHandling;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 2;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'Payload-too-large direct error backpressure');
+end;
+
 procedure TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling;
 const
   REQ =
@@ -2294,6 +2314,27 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll unsupported Expect direct error backpressure');
+end;
+
+procedure TestPayloadTooLargeBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LOpts.MaxBodySize := 2;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'epoll payload-too-large direct error backpressure');
 end;
 
 procedure TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend;
@@ -4655,6 +4696,8 @@ begin
     @TestUnsupportedTransferCodingBackpressureSafeHandling);
   T.Run('Unsupported Expect direct error backpressure safe handling',
     @TestUnsupportedExpectBackpressureSafeHandling);
+  T.Run('Payload-too-large direct error backpressure safe handling',
+    @TestPayloadTooLargeBackpressureSafeHandling);
   T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling',
     @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling);
   T.Run('Invalid chunk-size direct error backpressure safe handling',
@@ -4857,6 +4900,8 @@ begin
     @TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend);
   T.Run('Unsupported Expect direct error backpressure safe handling with epoll backend',
     @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
+  T.Run('Payload-too-large direct error backpressure safe handling with epoll backend',
+    @TestPayloadTooLargeBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling with epoll backend',
     @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend);
   T.Run('Invalid chunk-size direct error backpressure safe handling with epoll backend',

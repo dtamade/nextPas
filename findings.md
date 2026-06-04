@@ -1,5 +1,21 @@
 # Findings & Decisions
 
+## 2026-06-04 http standalone 413 direct-error backpressure proof
+
+- `payload-too-large direct 413` 之前在 `test_http_server` 已有 poll-driven
+  direct-error timed drain proof，也已有 queued follow-up `413` 的
+  real-socket wire-order proof，但 `test_http_security` 还缺 standalone direct
+  raw-wire/backpressure 直接证据。
+- 本轮新增 threaded / Linux `epoll` 两条 security proof，直接锁定：
+  - fixed-length body 超过 `MaxBodySize` 时会直接返回 final
+    `413 Payload Too Large`
+  - 在 backpressure 尝试下，连接仍会安全关闭
+  - wire 上至多暴露一条原始 `413` status-line 前缀，不会追加 synthetic `500`
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test`
+  结果为 `192/192 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：standalone direct `413`
+  路径在 security 层也已有 direct raw-wire/backpressure proof。
+
 ## 2026-06-04 http partial chunked body idle-timeout proof
 
 - request-side `IdleTimeout` 之前已经覆盖了 slowloris、partial fixed-length body、

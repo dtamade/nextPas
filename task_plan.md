@@ -1,5 +1,23 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http standalone 413 direct-error backpressure proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 direct-error raw-wire security proof，
+把 `payload-too-large direct 413 backpressure safe-close`
+补进 `test_http_security`，覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server`、`test_http_security` 与 `API_COVERAGE`，确认
+  security 层仍缺 standalone direct `413` 的 raw-wire/backpressure 证据，
+  且不是重复已有 queued follow-up `413`。
+- [x] 新增 threaded / `epoll` 两条
+  `payload-too-large direct error backpressure safe handling` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http partial chunked body idle-timeout proof
 
 ### Goal

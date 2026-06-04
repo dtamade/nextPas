@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-06-04 http standalone 413 direct-error backpressure proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining standalone direct `413` raw-wire gap in `test_http_security`
+  - directly prove backpressure safe-close behavior on both threaded and Linux `epoll`
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestPayloadTooLargeBackpressureSafeHandling`
+  - added `TestPayloadTooLargeBackpressureSafeHandlingEpollBackend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `192/192 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `direct-error raw-wire security proof`
+  - this batch:
+    `standalone payload-too-large 413 backpressure`
+
 ## Session: 2026-06-04 http partial chunked body idle-timeout proof
 
 - **Status:** completed.
