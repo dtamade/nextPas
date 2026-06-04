@@ -1392,7 +1392,96 @@ begin
   end;
 end;
 
+procedure RunExpectContinuePositiveSecurityCase(const AOpts: THttpServerOptions;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LSeenUpload: Boolean;
+  LGotBody: string;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  REQ_BODY = 'hello';
+begin
+  LSeenUpload := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+    LReply: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LReply := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], SizeUInt(Length(LReply)));
+  end);
+
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    LRouter as IHttpHandler, nil, AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) = 1,
+        ALabel + ': interim 100 returned first');
+      Check(Pos('HTTP/1.1 200', LResp1) = 0,
+        ALabel + ': no final response before request body');
+      Check(not LSeenUpload,
+        ALabel + ': handler not entered before request body arrives');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ_BODY[1], SizeUInt(Length(REQ_BODY)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200 OK', LResp2) > 0,
+        ALabel + ': final 200 returned after request body');
+      Check(Pos('upload:hello', LResp2) > 0,
+        ALabel + ': final response preserves echoed body');
+      Check(LSeenUpload, ALabel + ': handler entered after body send');
+      CheckEqual('hello', LGotBody, ALabel + ': handler sees full request body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 function BuildChunkedOversizeTrailerRequest: string; forward;
+
+procedure TestExpectContinuePositiveFlow;
+begin
+  RunExpectContinuePositiveSecurityCase(
+    THttpServerOptions.Default,
+    'Expect positive 100-continue flow');
+end;
 
 procedure TestExpectDeclaredOversizeRejectsEarly;
 var
@@ -1555,6 +1644,17 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll unsupported Expect direct error backpressure');
+end;
+
+procedure TestExpectContinuePositiveFlowEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinuePositiveSecurityCase(
+    LOpts,
+    'epoll Expect positive 100-continue flow');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarlyEpollBackend;
@@ -3579,6 +3679,8 @@ begin
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
   T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
+  T.Run('Expect positive flow sends interim 100 before final 200',
+    @TestExpectContinuePositiveFlow);
   T.Run('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
@@ -3739,6 +3841,8 @@ begin
     @TestTruncatedTrailerCrAtEofEpollBackend);
   T.Run('Truncated Content-Length request body at EOF -> 400 with epoll backend',
     @TestTruncatedContentLengthRequestAtEofEpollBackend);
+  T.Run('Expect positive flow sends interim 100 before final 200 with epoll backend',
+    @TestExpectContinuePositiveFlowEpollBackend);
   T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',

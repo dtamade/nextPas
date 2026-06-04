@@ -1,5 +1,32 @@
 # Progress Log
 
+## Session: 2026-06-04 http expect positive-flow security proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining `Expect: 100-continue` positive-flow raw-wire gap in `test_http_security`
+  - directly prove `100 Continue -> final 200` ordering and handler-entry timing
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `RunExpectContinuePositiveSecurityCase`
+  - added `TestExpectContinuePositiveFlow`
+  - added `TestExpectContinuePositiveFlowEpollBackend`
+  - registered both threaded / `epoll` `Expect positive flow sends interim 100 before final 200` entries
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `158/158 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `Expect positive-flow raw-wire security proof`
+    - this batch:
+      `interim 100 -> final 200 ordering + handler entry only after body`
+
 ## Session: 2026-06-04 http expect early-reject security proof
 
 - **Status:** completed.

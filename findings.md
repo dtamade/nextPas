@@ -1,5 +1,18 @@
 # Findings & Decisions
 
+## 2026-06-04 http expect positive-flow security proof
+
+- `Expect: 100-continue` 的正向 live contract 之前在 `test_http_server` 已有 focused 证明，
+  但 `test_http_security` 还缺 raw-wire 直接证据。
+- 本轮新增 threaded / Linux `epoll` 两条 security proof，直接锁定：
+  - 先返回单条 interim `HTTP/1.1 100 Continue`
+  - 在 body 送达前不会误进入 handler，也不会提前返回 final `200`
+  - body 送达后再返回 final `200`，且 handler 能看到完整 request body
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `158/158 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：当前 runtime truth 与 server 套件一致，
+  `Expect` 正向路径在 security 层也已有 direct raw-wire proof。
+
 ## 2026-06-04 http expect early-reject security proof
 
 - `Expect` 相关 early-reject contract 在 server 层已有 focused live proof，但 security 层此前还缺两条高价值 raw-wire 直接证据：

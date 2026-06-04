@@ -1,5 +1,20 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http expect positive-flow security proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 `Expect: 100-continue` request-side 正向 raw-wire security proof，
+把 `interim 100 -> final 200`、`handler 只在 body 到达后进入`、以及 threaded / Linux `epoll`
+两条 live 路径补进 `test_http_security`。
+
+### Checklist
+
+- [x] 对比 `test_http_server` 与 `test_http_security`，确认正向 `Expect` flow 仍缺 security 层 direct raw-wire 证据。
+- [x] 新增 threaded / `epoll` 两条 `Expect positive flow sends interim 100 before final 200` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http expect early-reject security proof
 
 ### Goal
