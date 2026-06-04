@@ -67,6 +67,18 @@ begin
   CheckEqual('', LReq.PathParam('missing'), 'missing param is empty');
 end;
 
+procedure TestRemoteAddrDefaultAndSet;
+var
+  LReq: IHttpRequest;
+  LObj: THttpRequest;
+begin
+  LReq := NewGetRequest('/remote');
+  CheckEqual('', LReq.RemoteAddr, 'default remote addr is empty');
+  LObj := THttpRequest(LReq as TObject);
+  LObj.SetRemoteAddr('127.0.0.1:54321');
+  CheckEqual('127.0.0.1:54321', LReq.RemoteAddr, 'remote addr is stored');
+end;
+
 procedure TestNewGetRequestConvenience;
 var
   LReq: IHttpRequest;
@@ -164,6 +176,7 @@ begin
   T.Run('Request body nil is ok', @TestRequestBodyNilIsOk);
   T.Run('PathParam set and get', @TestPathParamSetAndGet);
   T.Run('PathParam not found returns empty', @TestPathParamNotFoundReturnsEmpty);
+  T.Run('RemoteAddr default and set', @TestRemoteAddrDefaultAndSet);
   T.Run('NewGetRequest convenience', @TestNewGetRequestConvenience);
   T.Run('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
   T.Run('Response headers accessible', @TestResponseHeadersAccessible);

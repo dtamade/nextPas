@@ -1,12 +1,12 @@
-# Progress Log: EHttpError public category proof
+# Progress Log: request RemoteAddr direct proof
 
 ## Session
 
-- **Scope:** 补齐 `http.base` 中 `EHttpError` 的 public error category focused
-  proof。
+- **Scope:** 补齐 `IHttpRequest.RemoteAddr` / `THttpRequest.SetRemoteAddr`
+  direct focused proof。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1 正确性加固` -> `public interface completeness`
-  -> `EHttpError category contract`
+  -> `request RemoteAddr object contract`
 
 ## Current state
 
@@ -22,18 +22,16 @@
 
 ## Completed work
 
-- `test_http_base` 新增 `EHttpError category` focused proof。
-- 直接构造的 `EHttpError` 现在被测试锁住为：
-  - 继承 `ENextPasError`
-  - 保留 message
-  - `Category = ecNetwork`
-- `HttpStrToMethod('INVALID')` 抛出的 `EHttpError` 同样锁住 `ecNetwork`。
-- `docs/http/API_COVERAGE.md` 已移除 `EHttpError` category next-action。
+- `test_http_message` 新增 `RemoteAddr default and set` focused proof。
+- `NewGetRequest` 创建的 request 默认 `RemoteAddr = ''`。
+- concrete `THttpRequest.SetRemoteAddr` 设置后，interface 侧 `IHttpRequest.RemoteAddr`
+  能读回同一值。
+- `docs/http/API_COVERAGE.md` 已移除 RemoteAddr direct proof next-action。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_base test`
-  - `15/15 passed`
+- `make -C tests/nextpas.core.http/test_http_message test`
+  - `13/13 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
