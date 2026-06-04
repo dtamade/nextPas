@@ -1,64 +1,54 @@
-# Findings: http facade helper boundary audit
+# Findings: http idle-timeout chunk-size-line characterization
 
 ## Scope
 
-- 本轮目标不是再补一层 malformed/runtime parity，而是校正 `nextpas.core.http`
-  的 facade public surface。
-- 只审 static / websocket 这两个已经公开、且文档明显暗示应可从 facade 进入的 helper。
+- 本轮不碰生产逻辑，只继续收口 `HttpServer` correctness。
+- 目标是确认 request-side `IdleTimeout` 是否已经覆盖到
+  `partial chunk-size-line stall` 这类真实 chunk framing 中间态。
 
 ## Confirmed truths
 
-### 1. facade 之前确实缺 static / websocket helper 转发
+### 1. request-side timeout contract 之前还缺一个明确的 chunk framing 中间态证据
 
-- `test_http_static` 切到 `uses nextpas.core.http` 后，RED 直接报：
-  - `ServeFile`
-  - `ServeDir`
-- `test_http_websocket` 切到 `uses nextpas.core.http` 后，RED 直接报：
-  - `UpgradeWebSocket`
-  - `IWebSocket`
-  - `TWebSocketFrame`
-  - `wsOpText/wsOpBinary/wsOpClose`
+- 之前 focused / live 证据已经覆盖：
+  - first-byte slowloris
+  - partial fixed-length body stall
+  - partial chunked trailer stall
+- 但 `chunk-size-line` 仍是另一类 parser wait state：
+  - 请求头已完成
+  - chunked body 已进入 framing
+  - 还没进入完整 chunk data / trailer
 
-这说明文档里的“single uses entry point”在这两个 helper 族上原先并不成立。
+这一态如果没有专门 proof，就还不能说 request-side timeout 已完整扫到主要 chunk ingress 中间态。
 
-### 2. 最小修复点只需要落在 facade
+### 2. 当前实现对 chunk-size-line stall 的 request-side timeout truth 是成立的
 
-- `src/nextpas.core.http.pas` 新增对：
-  - `nextpas.core.http.static`
-  - `nextpas.core.http.websocket`
-  的依赖与 inline forward。
-- 同时补齐 facade re-export：
-  - `IWebSocket`
-  - `TWebSocketOpcode`
-  - `TWebSocketFrame`
-  - `wsOpContinuation/wsOpText/wsOpBinary/wsOpClose/wsOpPing/wsOpPong`
+- `test_http_server` 新增 poll-driven seam proof：
+  - `H1 poll-driven session times out partial chunk-size line read wait`
+- `test_http_security` 新增 live-socket proof：
+  - threaded：`Partial chunk-size line idle-timeout closes connection`
+  - epoll：`Partial chunk-size line idle-timeout closes connection with epoll backend`
 
-static / websocket 子模块自身没有缺陷，因此不需要改生产实现。
+三条新增证据都直接通过，说明当前 runtime 已经把这类 stall 沿用同一条 request-parse deadline 收口。
 
-### 3. focused suite 现在已成为 facade helper 的直接证据
+### 3. 本轮仍是 coverage-expansion，不需要生产修复
 
-- `test_http_static` 现在通过 facade 直接消费 `ServeFile/ServeDir`
-- `test_http_websocket` 现在通过 facade 直接消费
-  `UpgradeWebSocket/IWebSocket/TWebSocket*` 与 `wsOp*`
-- 这不是 compile-only proof：两组 suite 都完整跑到了真实行为与 heaptrc
+- 没有新增服务器实现改动。
+- 新测试直接通过，说明已有 runtime 行为与我们要锁定的 contract 一致。
 
 ## Verification evidence
 
-- RED:
-  - `make -C tests/nextpas.core.http/test_http_static test`
-  - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - 预期失败，直接暴露 facade 缺口
-- GREEN:
-  - `make -C tests/nextpas.core.http/test_http_static clean test`
-    - `9/9 passed`
+- focused:
+  - `make -C tests/nextpas.core.http/test_http_server test`
+    - `177/177 passed`
     - heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_websocket clean test`
-    - `8/8 passed`
+  - `make -C tests/nextpas.core.http/test_http_security test`
+    - `117/117 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮只收口了 helper surface，不代表所有 concrete type 都该进 facade。
-- 下一步应回到 correctness 主线，先判断：
-  - 还剩哪些真正高价值的 malformed/runtime/security 边角
-  - 或 H1 correctness 是否已接近本阶段收口线
+- request-side timeout 的代表性 parser wait state 现在更完整了，但 correctness 主线还没自然结束。
+- 下一步更值的方向仍应二选一：
+  - 再挑一个真正还没分类完的 malformed/runtime/security 边角
+  - 或判断 `3/6 H1 正确性加固` 是否已经接近收口线，避免继续机械横向补 case

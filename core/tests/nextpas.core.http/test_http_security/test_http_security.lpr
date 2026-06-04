@@ -1004,6 +1004,25 @@ begin
     'Partial fixed-length body idle-timeout');
 end;
 
+procedure TestPartialChunkSizeLineIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  PARTIAL =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'A';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'Partial chunk-size line idle-timeout');
+end;
+
 procedure TestPartialChunkedTrailerIdleTimeout;
 var
   LOpts: THttpServerOptions;
@@ -2637,6 +2656,25 @@ begin
     'epoll partial fixed-length body idle-timeout');
 end;
 
+procedure TestPartialChunkSizeLineIdleTimeoutEpollBackend;
+const
+  PARTIAL =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'A';
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.IdleTimeout := 200;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'epoll partial chunk-size line idle-timeout');
+end;
+
 procedure TestPartialChunkedTrailerIdleTimeoutEpollBackend;
 const
   PARTIAL =
@@ -2698,6 +2736,8 @@ begin
   T.Run('Slowloris partial request', @TestSlowloris);
   T.Run('Partial fixed-length body idle-timeout closes connection',
     @TestPartialFixedLengthBodyIdleTimeout);
+  T.Run('Partial chunk-size line idle-timeout closes connection',
+    @TestPartialChunkSizeLineIdleTimeout);
   T.Run('Partial chunked trailer idle-timeout closes connection',
     @TestPartialChunkedTrailerIdleTimeout);
   T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
@@ -2819,6 +2859,8 @@ begin
     @TestSlowlorisEpollBackend);
   T.Run('Partial fixed-length body idle-timeout closes connection with epoll backend',
     @TestPartialFixedLengthBodyIdleTimeoutEpollBackend);
+  T.Run('Partial chunk-size line idle-timeout closes connection with epoll backend',
+    @TestPartialChunkSizeLineIdleTimeoutEpollBackend);
   T.Run('Partial chunked trailer idle-timeout closes connection with epoll backend',
     @TestPartialChunkedTrailerIdleTimeoutEpollBackend);
   T.Run('Malformed direct error backpressure safe handling with epoll backend',
