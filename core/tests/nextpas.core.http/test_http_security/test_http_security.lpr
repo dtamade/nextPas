@@ -1092,7 +1092,8 @@ begin
   end;
 end;
 
-procedure TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater;
+procedure RunChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var
   LServer: THttpServer;
   LPort: UInt16;
@@ -1110,7 +1111,7 @@ const
               'Host: x'#13#10 +
               'Connection: close'#13#10#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LConn := TcpConnect('127.0.0.1', LPort);
     try
@@ -1118,22 +1119,29 @@ begin
       LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
       LResp1 := ReadOneResponse(LConn);
       Check(Pos('HTTP/1.1 200', LResp1) > 0,
-        'Keep-alive chunked partial-next-line: first response still completes');
+        ALabel + ': first response still completes');
       Check(Pos('echo:5', LResp1) > 0,
-        'Keep-alive chunked partial-next-line: first request body handled correctly');
+        ALabel + ': first request body handled correctly');
 
       LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
       LResp2 := ReadOneResponse(LConn);
       Check(Pos('HTTP/1.1 200', LResp2) > 0,
-        'Keep-alive chunked partial-next-line: completed follow-up request returns 200');
+        ALabel + ': completed follow-up request returns 200');
       Check(Pos('ok', LResp2) > 0,
-        'Keep-alive chunked partial-next-line: second request body preserved');
+        ALabel + ': second request body preserved');
     finally
       LConn.Close;
     end;
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater;
+begin
+  RunChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater(
+    THttpServerOptions.Default,
+    'Keep-alive chunked partial-next-line');
 end;
 
 { Test 14cb: Keep-alive chunked request with truncated follow-up headers }
@@ -1402,6 +1410,17 @@ begin
   RunChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling(
     LOpts,
     'epoll keep-alive chunked partial follow-up headers');
+end;
+
+procedure TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater(
+    LOpts,
+    'epoll keep-alive chunked partial-next-line');
 end;
 {$ENDIF}
 
@@ -1931,6 +1950,8 @@ begin
     @TestMissingChunkDataCrLfEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
+  T.Run('Chunked keep-alive partial follow-up request line can complete later with epoll backend',
+    @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   T.Run('Chunked keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
   T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling with epoll backend',

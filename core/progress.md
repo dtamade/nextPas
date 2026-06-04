@@ -1,10 +1,10 @@
-# Progress Log: http chunked truncated follow-up headers epoll raw-wire proof
+# Progress Log: http chunked partial follow-up request-line epoll bridge proof
 
 ## Session
 
-- **Scope:** 做一次 parser/server/security 矩阵筛查，然后给 `test_http_security` 补 plain chunked truncated follow-up headers 的 epoll raw-wire proof。
+- **Scope:** 做一次 parser/server/security 矩阵筛查，然后给 `test_http_security` 补 plain chunked partial follow-up request-line can-complete-later 的 epoll raw-wire bridge proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `chunked truncated follow-up headers epoll proof`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `chunked partial-next-line epoll bridge proof`
 
 ## Current state
 
@@ -17,17 +17,17 @@
 
 ## Completed work
 
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1140)
-  把 plain chunked truncated follow-up headers 的 threaded 断言抽成可复用 helper，避免 epoll 版本再拷一份分叉逻辑。
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1396)
-  新增 `Chunked keep-alive truncated follow-up headers safe handling with epoll backend` raw-wire proof，锁定 `200 / echo:5` 之后 follow-up EOF truncation 仍回 `400`。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1095)
+  把 plain chunked partial-next-line can-complete-later 的 threaded 断言抽成可复用 helper，避免 epoll 版本再拷一份 bridge 逻辑。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1415)
+  新增 `Chunked keep-alive partial follow-up request line can complete later with epoll backend` raw-wire proof，锁定首个 `200 / echo:5` 之后，补齐半截下一请求行仍会得到第二个 `200 / ok`。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md:18)
   已同步 security 层新的 epoll request-tail truth，并把下一步路线收敛为“只挑剩余真实 gap”，不再做整片同型 parity 搬运。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `73/73 passed`
+  - `74/74 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
