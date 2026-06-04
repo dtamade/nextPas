@@ -211,6 +211,23 @@ begin
   end;
 end;
 
+{ Test 1aa: Transfer-Encoding + Content-Length conflict reverse order }
+procedure TestTransferEncodingContentLengthConflictReverseOrder;
+var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Content-Length: 5'#13#10#13#10'0'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, REQ);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      'TE+CL reverse-order conflict: explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 1a: Unsupported transfer coding before chunked }
 procedure TestUnsupportedTransferCodingBeforeChunked;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1414,6 +1431,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.security');
   T.Run('CL + TE conflict', @TestContentLengthTransferEncodingConflict);
+  T.Run('TE + CL conflict reverse order', @TestTransferEncodingContentLengthConflictReverseOrder);
   T.Run('Unsupported transfer coding before chunked -> 501',
     @TestUnsupportedTransferCodingBeforeChunked);
   T.Run('Chunked must be final transfer coding -> 400',
