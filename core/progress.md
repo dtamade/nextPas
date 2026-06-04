@@ -1,10 +1,10 @@
-# Progress Log: http server head expect-continue no-body guard proof
+# Progress Log: http server expect plus transfer-coding rejection ordering
 
 ## Session
 
-- **Scope:** 给 `Expect` request-side contract 补齐 HEAD no-body 分支：no-length `HEAD + Expect` 不应误发 interim `100`。
+- **Scope:** 给 `Expect` request-side contract 补齐 transfer-coding error ordering：异常编码必须先拒绝，不能误发 interim `100`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `head expect no-body guard`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `expect plus transfer-coding rejection ordering`
 
 ## Current state
 
@@ -20,17 +20,19 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增两条 focused proofs：
-  - threaded / epoll no-length `HEAD + Expect: 100-continue`
-  - 直接 final `200`，且 wire 上不出现 interim `100`
-  - handler 正常被调用，HEAD response 仍保持 bodyless
+  新增四条 focused proofs：
+  - threaded / epoll `Expect + Transfer-Encoding: gzip, chunked`
+  - threaded / epoll `Expect + Transfer-Encoding: chunked, gzip`
+  - 两组都直接返回最终 `501/400`
+  - wire 上不出现 interim `100`
+  - handler 不会被调用
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 HEAD no-body `Expect` current truth。
+  已同步 `Expect + transfer-coding` current truth。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `206/206 passed`
+  - `210/210 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

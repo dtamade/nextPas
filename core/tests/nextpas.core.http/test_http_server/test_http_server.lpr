@@ -5166,6 +5166,102 @@ begin
 end;
 {$ENDIF}
 
+procedure RunExpectContinueMalformedTransferCodingRejectsEarly(
+  const AUseEpoll: Boolean; const ALabel, ARequest,
+  AExpectedStatusLine: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequestAndShutdownWrite(LPort, ARequest);
+    Check(Pos(AExpectedStatusLine, LResp) = 1,
+      ALabel + ': final error response returned directly');
+    Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+      ALabel + ': no interim 100 before transfer-coding rejection');
+    Check(not LHandlerCalled,
+      ALabel + ': handler not called before transfer-coding rejection');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueUnsupportedTransferCodingRejectsEarly;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueMalformedTransferCodingRejectsEarly(False,
+    'expect unsupported transfer-coding threaded', REQ,
+    'HTTP/1.1 501 Not Implemented');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueUnsupportedTransferCodingRejectsEarlyEpollBackend;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueMalformedTransferCodingRejectsEarly(True,
+    'expect unsupported transfer-coding epoll', REQ,
+    'HTTP/1.1 501 Not Implemented');
+end;
+{$ENDIF}
+
+procedure TestExpectContinueChunkedMustBeFinalTransferCodingRejectsEarly;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked, gzip'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueMalformedTransferCodingRejectsEarly(False,
+    'expect chunked-not-final threaded', REQ,
+    'HTTP/1.1 400 Bad Request');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueChunkedMustBeFinalTransferCodingRejectsEarlyEpollBackend;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked, gzip'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueMalformedTransferCodingRejectsEarly(True,
+    'expect chunked-not-final epoll', REQ,
+    'HTTP/1.1 400 Bad Request');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -10104,6 +10200,10 @@ begin
     @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
   T.Run('HEAD Expect: no declared body does not emit interim response with epoll backend',
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
+  T.Run('Expect: unsupported transfer-coding rejects before interim response with epoll backend',
+    @TestExpectContinueUnsupportedTransferCodingRejectsEarlyEpollBackend);
+  T.Run('Expect: chunked-not-final transfer-coding rejects before interim response with epoll backend',
+    @TestExpectContinueChunkedMustBeFinalTransferCodingRejectsEarlyEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
@@ -10319,6 +10419,10 @@ begin
     @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim);
   T.Run('HEAD Expect: no declared body does not emit interim response',
     @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim);
+  T.Run('Expect: unsupported transfer-coding rejects before interim response',
+    @TestExpectContinueUnsupportedTransferCodingRejectsEarly);
+  T.Run('Expect: chunked-not-final transfer-coding rejects before interim response',
+    @TestExpectContinueChunkedMustBeFinalTransferCodingRejectsEarly);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',
