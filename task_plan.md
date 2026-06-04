@@ -1,5 +1,21 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http expect early-reject security proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 `Expect` request-side early-reject raw-wire security proof，
+把 `declared oversize -> final 413 without interim 100` 与
+`repeated Expect headers + unsupported member -> final 417 without interim 100`
+补进 `test_http_security`，覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server` 与 `test_http_security`，确认 `Expect` 早拒绝 contract 在 security 层仍缺 direct raw-wire 证据。
+- [x] 新增 declared oversize 与 repeated-Expect unsupported-member 两组 threaded / `epoll` security proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http unsupported-expect backpressure proof
 
 ### Goal

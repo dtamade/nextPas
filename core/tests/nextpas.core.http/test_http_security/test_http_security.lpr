@@ -1368,7 +1368,68 @@ begin
   end;
 end;
 
+procedure RunExpectEarlyRejectSecurityCase(const AOpts: THttpServerOptions;
+  const AReq, AExpectedStatusLine, ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, AReq);
+    Check(Pos(AExpectedStatusLine, LResp) = 1,
+      ALabel + ': final early-reject status line returned directly');
+    Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+      ALabel + ': no interim 100 before early reject');
+    Check(Pos('HTTP/1.1 200', LResp) = 0,
+      ALabel + ': early reject never reaches success response');
+    Check(CountSubstring(LResp, 'HTTP/1.1 ') = 1,
+      ALabel + ': wire exposes exactly one final status line');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 function BuildChunkedOversizeTrailerRequest: string; forward;
+
+procedure TestExpectDeclaredOversizeRejectsEarly;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 2048'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'Expect declared oversize early reject');
+end;
+
+procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Expect: fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectEarlyRejectSecurityCase(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 417 Expectation Failed',
+    'Repeated Expect header unsupported member early reject');
+end;
 
 procedure TestMalformedRequestBackpressureSafeHandling;
 const
@@ -1494,6 +1555,48 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll unsupported Expect direct error backpressure');
+end;
+
+procedure TestExpectDeclaredOversizeRejectsEarlyEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 2048'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LOpts.MaxBodySize := 1024;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 413 Payload Too Large',
+    'epoll Expect declared oversize early reject');
+end;
+
+procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Expect: fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectEarlyRejectSecurityCase(
+    LOpts,
+    REQ,
+    'HTTP/1.1 417 Expectation Failed',
+    'epoll repeated Expect header unsupported member early reject');
 end;
 {$ENDIF}
 
@@ -3476,6 +3579,10 @@ begin
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
   T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
+  T.Run('Expect declared oversize rejects early without interim 100',
+    @TestExpectDeclaredOversizeRejectsEarly);
+  T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
+    @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
   T.Run('Malformed direct error backpressure safe handling',
     @TestMalformedRequestBackpressureSafeHandling);
   T.Run('Unsupported transfer-coding direct error backpressure safe handling',
@@ -3632,6 +3739,10 @@ begin
     @TestTruncatedTrailerCrAtEofEpollBackend);
   T.Run('Truncated Content-Length request body at EOF -> 400 with epoll backend',
     @TestTruncatedContentLengthRequestAtEofEpollBackend);
+  T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
+    @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
+  T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
+    @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
   T.Run('Slowloris partial request with epoll backend',
     @TestSlowlorisEpollBackend);
   T.Run('Partial fixed-length body idle-timeout closes connection with epoll backend',

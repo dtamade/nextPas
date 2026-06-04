@@ -1,5 +1,34 @@
 # Progress Log
 
+## Session: 2026-06-04 http expect early-reject security proof
+
+- **Status:** completed.
+- Objective:
+  - keep shrinking `Expect` request-side early-reject raw-wire gaps
+  - add security-layer proof for final `413/417` without interim `100 Continue`
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `RunExpectEarlyRejectSecurityCase`
+  - added `TestExpectDeclaredOversizeRejectsEarly`
+  - added `TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly`
+  - added `TestExpectDeclaredOversizeRejectsEarlyEpollBackend`
+  - added `TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend`
+  - registered all four matching security entries
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `156/156 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `Expect early-reject raw-wire security proof`
+    - this batch:
+      `declared oversize 413 / repeated-Expect unsupported-member 417 without interim 100`
+
 ## Session: 2026-06-04 http unsupported-expect backpressure proof
 
 - **Status:** completed.

@@ -1,5 +1,16 @@
 # Findings & Decisions
 
+## 2026-06-04 http expect early-reject security proof
+
+- `Expect` 相关 early-reject contract 在 server 层已有 focused live proof，但 security 层此前还缺两条高价值 raw-wire 直接证据：
+  - `Expect: 100-continue + declared oversize Content-Length -> final 413 without interim 100`
+  - `repeated Expect headers + unsupported member -> final 417 without interim 100`
+- 本轮把 threaded / Linux `epoll` 两条 live 路径都补进 `test_http_security` 后，focused gate
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `156/156 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：这两条 `Expect` early-reject 路径都会直接返回单一 final status-line，
+  不会误发 interim `100 Continue`，也不会误落到 `200` 成功响应。
+
 ## 2026-06-04 http unsupported-expect backpressure proof
 
 - `unsupported Expect -> 417` 属于 request-side early-reject / direct-error contract，server 层已有 focused proof，
