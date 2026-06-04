@@ -1,30 +1,30 @@
-# Task Plan: http multiple trailer declaration contract
+# Task Plan: http epoll chunked-not-final security parity
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，这一刀只补 chunked trailer
-公共契约的窄缺口：
+继续留在 `3/6 H1 正确性加固` 主线，这一刀只补一条
+malformed chunked raw-wire security 缺口：
 
-- 不扩散到新的 malformed/runtime 家族
-- 只把已有单个 trailer 声明契约扩成 single / multiple declaration 都有直接 proof
-- 锁定“保留 `Trailer` 声明头，但真实 trailer fields 不泄漏到普通 headers”
+- 不扩散到新的接口面或 runtime 家族
+- 只补 `Transfer-Encoding: chunked, gzip` 在 `epoll` backend 下的 live parity
+- 锁定这条 malformed transfer-coding order 仍返回显式 `400`
 - 如果只是既有 truth 缺测试，本轮保持 coverage-expansion，不改生产代码
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 缩小剩余高价值缺口，选定 trailer multiple declaration contract
-- [x] 在 `test_http_contract` 新增多 trailer 声明 focused proof
+- [x] 缩小剩余高价值缺口，选定 epoll chunked-not-final live parity
+- [x] 在 `test_http_security` 新增 epoll malformed chunked focused proof
 - [x] 跑 focused：
-  - `make -C tests/nextpas.core.http/test_http_contract test`
+  - `make -C tests/nextpas.core.http/test_http_security test`
 - [x] 更新 coverage 文档与控制文件
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `tests/nextpas.core.http/test_http_contract/test_http_contract.lpr`
+  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
   - `findings.md`
@@ -35,12 +35,11 @@
 
 ## Intended outcome
 
-- chunked trailer 公共契约不只覆盖：
-  - 单个 trailer 声明
+- malformed chunked transfer-coding order 不只覆盖：
+  - threaded / generic raw-wire `400`
 - 还要直接覆盖：
-  - 多个 trailer 声明放在同一个 `Trailer` header value
+  - `epoll` backend live raw-wire `400`
 - 证据要求：
-  - handler 仍可读到解码后的 body
-  - `Trailer` 声明头原文保留
-  - trailer field 不出现在普通 header 查询面
+  - `Transfer-Encoding: chunked, gzip` 返回显式 `400`
+  - 不进入 handler success path
   - heaptrc `0 unfreed memory blocks`

@@ -2276,6 +2276,19 @@ begin
     'epoll unsupported transfer coding before chunked: explicit 501');
 end;
 
+procedure TestChunkedMustBeFinalTransferCodingEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked, gzip'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll chunked must be final transfer coding: explicit 400');
+end;
+
 procedure TestInvalidChunkSizeEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
@@ -2801,6 +2814,8 @@ begin
   {$IFDEF NEXTPAS_LINUX}
   T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
+  T.Run('Chunked must be final transfer coding -> 400 with epoll backend',
+    @TestChunkedMustBeFinalTransferCodingEpollBackend);
   T.Run('Invalid chunk size -> 400 with epoll backend',
     @TestInvalidChunkSizeEpollBackend);
   T.Run('Truncated chunk extension at EOF -> 400 with epoll backend',
