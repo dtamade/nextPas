@@ -1,5 +1,21 @@
 # Findings & Decisions
 
+## 2026-06-04 http expect chunked security proof
+
+- `Expect + Transfer-Encoding: chunked` 的正向与 after-interim size-limit live contract 之前在
+  `test_http_server` 已有 focused 证明，但 `test_http_security` 还缺 raw-wire 直接证据。
+- 本轮新增 threaded / Linux `epoll` 两组 security proof，直接锁定：
+  - `Expect + chunked` 会先返回单条 interim `HTTP/1.1 100 Continue`
+  - chunked body 到达前不会误进入 handler，也不会提前返回 final `200`
+  - 完整 chunked body 送达后才返回 final `200`，且 handler 看到的是解码后的 body
+  - 如果在收到 interim `100` 后 chunked ingress 跨 chunk 超过 `MaxBodySize`，最终会返回 final
+    `413 Payload Too Large`，且不会进入 handler
+- 初次 RED 来自新测试自身的 header 写入长度硬编码，不是生产实现缺陷；修正测试 helper 后，focused gate
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `162/162 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：当前 runtime truth 与 server 套件一致，
+  `Expect + chunked` 正向/after-interim `413` 在 security 层也已有 direct raw-wire proof。
+
 ## 2026-06-04 http expect positive-flow security proof
 
 - `Expect: 100-continue` 的正向 live contract 之前在 `test_http_server` 已有 focused 证明，

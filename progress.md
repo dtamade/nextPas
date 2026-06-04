@@ -1,5 +1,33 @@
 # Progress Log
 
+## Session: 2026-06-04 http expect chunked security proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining `Expect + Transfer-Encoding: chunked` raw-wire gap in `test_http_security`
+  - directly prove `interim 100 -> final 200` and `interim 100 -> final 413` after chunked oversize
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `RunExpectContinueChunkedPositiveSecurityCase`
+  - added `RunExpectContinueChunkedMaxBodySizeRejectsAfterInterimSecurityCase`
+  - added threaded / `epoll` positive-flow tests
+  - added threaded / `epoll` after-interim `413` tests
+- Focused verification:
+  - first RED was a test-only bug: hardcoded request-header write length truncated the request
+  - after fixing the helper, `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `162/162 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `Expect + chunked raw-wire security proof`
+    - this batch:
+      `chunked interim 100 -> final 200` and `after-interim oversize -> final 413`
+
 ## Session: 2026-06-04 http expect positive-flow security proof
 
 - **Status:** completed.
