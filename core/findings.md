@@ -1,65 +1,54 @@
-# Findings: http H1 poll-driven IdleTimeout parity
+# Findings: http H1 poll-driven mid-request IdleTimeout proof
 
 ## Scope
 
-- 本轮回到 `nextpas.core.http` 主线。
-- 目标不是继续扩 malformed chunk grammar 覆盖，而是先补一个更靠近真实 backend
-  正确性的缺口：poll-driven request-side `IdleTimeout` parity。
+- 本轮继续留在 `nextpas.core.http` 的 poll-driven request-side timeout 主线。
+- 目标不是继续写生产修复，而是先确认 mid-request stall 的 current truth 到底是不是
+  还缺契约。
 
 ## Confirmed truths
 
-### 1. 现有 poll-driven H1 只对 write-side stalled drain 暴露 `WakeDeadline`
+### 1. 现有实现已经覆盖 partial mid-request stall，不需要再补生产代码
 
-- `TH1ServerConnectionState.WakeDeadline` 之前只返回 `FPollWriteDeadline`。
-- `AdvancePollRequestParse(...)` 在等待 `peReadable` 时只会返回 `tsprWait` +
-  `[peReadable]`，没有任何 read-side timeout 收口。
-- readiness runtime 虽然已经支持 synthetic deadline wake，但 H1 request parse
-  路径之前没有把这个机制接上。
+- 新增 focused tests 后：
+  - partial `Content-Length` body stall
+  - partial chunked trailer stall
+- 两条都直接通过，说明上轮补进去的 `FPollReadDeadline` 生命周期已经自然覆盖到这些
+  mid-request parse 场景。
 
-### 2. 这不是“测试缺一条”的问题，而是真实行为缺口
+### 2. request-side timeout 语义现在更像“request parse 周期 deadline”，而不是 per-chunk idle timer
 
-- RED 新增 focused test 后，初次失败点就是：
-  - `idle read timeout arms initial read deadline before first poll event: expected 1, got 0`
-- 这说明 poll-driven session 在第一个 request byte 到来前，确实没有 arm
-  read deadline，也就谈不上 timeout close。
+- session 创建时会 arm 一次 read deadline。
+- 进入下一次 request parse reset 时才会重新 arm。
+- partial request progress 本身不会 re-arm deadline。
+- 这和 blocking `Run` 路径更接近：它也是在 request parse 周期开始时设一次
+  `SetReadDeadline(now + IdleTimeout)`，而不是每读到一点数据就续期。
 
-### 3. blocking `Run` 的更接近真相的 parity 是“每个 request parse 周期一条 read deadline”
+### 3. 这条 current truth 同时也是更好的性能路径
 
-- `Run` 会在每个 request parse 开始前执行一次
-  `SetReadDeadline(now + IdleTimeout)`。
-- 它不是 write-side timeout，也不是 facade 级 SLA，而是 request parse 生命周期里的
-  read deadline。
-- 本轮最小实现也因此采用 request-parse state 的 read deadline，而不是扩 public API。
+- 如果每次 partial body/trailer progress 都重置 deadline，会引入额外 deadline churn。
+- 当前实现与新增测试一起锁定了：
+  - partial progress 不会偷改 read deadline
+  - timeout close 只在真正超时后发生
+  - timeout close 后 `WakeDeadline` 会清回 infinite
 
-### 4. 最小修复已经落地
+### 4. reactor/readiness 调度顺序没有暴露额外生产缺口
 
-- `TH1ServerConnectionState` 新增了 `FPollReadDeadline`。
-- 构造 poll-driven session 时会为初始 request parse arm read deadline。
-- `ResetPollRequestState` 在进入下一次 request parse 前会重新 arm read deadline。
-- `SubmitCurrentPollRequest(...)` 与 parse-error / timeout-close 路径会 clear
-  read deadline，避免和 response drain/write deadline 生命周期混淆。
-- `WakeDeadline` 现在返回 read/write 两侧 deadline 的 `Min(...)`。
+- readiness runtime 在 poll loop 每轮末尾仍会处理 expired targets。
+- 本轮 focused 测试也已经直接证明：在 synthetic deadline wake 下，
+  mid-request stall 会稳定 timeout close。
+- 当前没有额外证据表明还需要为这条 synthetic path 再扩一次生产状态机。
 
 ## Verification evidence
 
-- RED:
+- focused:
   - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - 初次失败点：
-    - `FAIL: H1 poll-driven session times out idle read wait before first request - idle read timeout arms initial read deadline before first poll event: expected 1, got 0`
-- GREEN:
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `174/174 passed`
-  - heaptrc: `0 unfreed memory blocks`
-- light HTTP module gate:
-  - `make -C tests/nextpas.core.http/test_http_contract clean test`
-  - `27/27 passed`
+  - `176/176 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 本轮只锁定了 “pre-first-byte idle wait” 的 poll-driven parity，还没有锁定
-  partial mid-request body / trailer stall 的 timing truth。
-- 目前 read deadline 语义已经能通过 readiness synthetic wake 收口，但还没把这条
-  request-side timeout 进一步做成更细的 live socket characterization。
-- malformed raw-wire chunked security proof 仍是 HTTP correctness 路线上的后续目标，
-  只是这轮先让 evented runtime 的 request-side timeout 契约不再空着。
+- 这轮补的是 synthetic poll-driven focused truth，不是 live socket close-time characterization。
+- raw-wire malformed chunked request security proof 仍然是更应该回去推进的 correctness 主线。
+- 如果后续出现 threaded / epoll live slowloris parity 问题，再回头扩 request-side
+  timeout coverage会更值；现在继续在 synthetic timeout 上空转收益不高。

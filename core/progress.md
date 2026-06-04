@@ -1,9 +1,9 @@
-# Progress Log: http H1 poll-driven IdleTimeout parity
+# Progress Log: http H1 poll-driven mid-request IdleTimeout proof
 
 ## Session
 
-- **Scope:** 给 `TH1ServerConnectionState` 的 poll-driven request parse 路径补上
-  read-side `IdleTimeout` / `WakeDeadline` parity。
+- **Scope:** 把 poll-driven request-side `IdleTimeout` focused proof 从
+  “pre-first-byte idle wait” 扩到 mid-request stalls。
 - **Status:** verified
 
 ## Current state
@@ -18,36 +18,26 @@
 
 ## Completed work
 
-- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas:1)
-  现在为 poll-driven H1 request parse 增加了 read-side deadline 生命周期：
-  - 新增 `FPollReadDeadline`
-  - 初始 request parse 会 arm read deadline
-  - request reset 进入下一次 parse 时会重新 arm
-  - request handoff / parse error / timeout close 会 clear
-  - `WakeDeadline` 现在返回 read/write deadline 的最小值
 - [test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr:1)
-  新增了 `h1 poll-driven session times out idle read wait before first request`
-  focused test，直接锁定：
-  - 第一个 request byte 到来前就会 arm read deadline
-  - `WakeDeadline` 不是 infinite
-  - 超时后 session 安全关闭
+  现在补了两条新的 request-side timeout focused proof：
+  - partial fixed-length body stall
+  - partial chunked trailer stall
+- 同一批 focused tests 还直接锁定了一个更细的 current truth：
+  - partial request progress 不会 re-arm read deadline
   - timeout close 后 `WakeDeadline` 会清回 infinite
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md:1)
-  已同步这条新的 request-side poll-driven `IdleTimeout` focused proof，并把下一步缺口收敛到
-  mid-request stall characterization。
+  已同步这条 request-side `IdleTimeout` mid-request proof，并把下一步路线图切回
+  malformed raw-wire security 主线。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `174/174 passed`
-  - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_contract clean test`
-  - `27/27 passed`
+  - `176/176 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 继续把 request-side timeout proof 从 “pre-first-byte idle wait” 扩到
-  partial mid-request body / trailer stalls
-- 然后回到 malformed raw-wire chunked request security proof，把 server-side
-  `400` / safe-close 语义再压紧一轮
+- 回到 malformed raw-wire chunked request security proof
+- 优先找还没有被 server/security 两层一起锁死的异常 chunk framing / safe-close 分支
+- 只有当 live socket 或 backend parity 再暴露 request-side timeout 真缺口时，
+  才重新扩这条 synthetic timeout coverage

@@ -195,13 +195,15 @@ type
   TIdleReadRuntimeTcpStream = class(TInterfacedObject, IReader, IWriter,
     IStream, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime)
   private
+    FInput: string;
+    FInputPos: SizeInt;
     FBlocking: Boolean;
     FSetBlockingCalls: Int32;
     FTryReadCalls: Int32;
     FReadDeadlineCalls: Int32;
     FLastReadDeadline: TDeadline;
   public
-    constructor Create;
+    constructor Create(const AInput: string = '');
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
     function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
@@ -746,9 +748,11 @@ begin
   Result := tsiorOk;
 end;
 
-constructor TIdleReadRuntimeTcpStream.Create;
+constructor TIdleReadRuntimeTcpStream.Create(const AInput: string);
 begin
   inherited Create;
+  FInput := AInput;
+  FInputPos := 1;
   FBlocking := False;
   FSetBlockingCalls := 0;
   FTryReadCalls := 0;
@@ -757,8 +761,17 @@ begin
 end;
 
 function TIdleReadRuntimeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeUInt;
 begin
-  Result := 0;
+  if (ACount = 0) or (FInputPos > Length(FInput)) then
+    Exit(0);
+  LRemaining := SizeUInt(Length(FInput) - FInputPos + 1);
+  Result := ACount;
+  if Result > LRemaining then
+    Result := LRemaining;
+  Move(FInput[FInputPos], ABuf, Result);
+  Inc(FInputPos, SizeInt(Result));
 end;
 
 function TIdleReadRuntimeTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
@@ -837,8 +850,10 @@ function TIdleReadRuntimeTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
   out ARead: SizeUInt): TTcpStreamIOResult;
 begin
   Inc(FTryReadCalls);
-  ARead := 0;
-  Result := tsiorWouldBlock;
+  ARead := Read(ABuf, ACount);
+  if ARead = 0 then
+    Exit(tsiorWouldBlock);
+  Result := tsiorOk;
 end;
 
 function TIdleReadRuntimeTcpStream.TryWrite(const ABuf; const ACount: SizeUInt;
@@ -2148,6 +2163,115 @@ begin
     'idle read timeout still does not submit worker work on timeout close');
   Check(LDeadlineSession.WakeDeadline.IsInfinite,
     'idle read timeout clears wake deadline after timeout close');
+end;
+
+procedure RunPollDrivenMidRequestReadTimeout(
+  const ALabel, AInput: string);
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TIdleReadRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.IdleTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    ALabel + ': h1 transport exposes context-aware session factory');
+
+  LStreamObj := TIdleReadRuntimeTcpStream.Create(AInput);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    ALabel + ': context-aware h1 session exposes poll-driven seam');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    ALabel + ': mid-request timeout session exposes deadline seam');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadDeadlineCalls),
+    ALabel + ': request parse arms exactly one read deadline before first readable event');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    ALabel + ': partial request bytes keep the session active');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    ALabel + ': partial request bytes do not reach the handler');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    ALabel + ': partial request bytes do not submit worker work');
+  Check(LNextEvents = [peReadable],
+    ALabel + ': partial request bytes keep waiting for readable events');
+  Check(not LDeadlineSession.WakeDeadline.IsInfinite,
+    ALabel + ': partial request bytes preserve a finite wake deadline');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadDeadlineCalls),
+    ALabel + ': partial request progress does not re-arm the request deadline');
+
+  platform_thread_sleep_ns(50000000);
+  Check(LDeadlineSession.WakeDeadline.IsExpired,
+    ALabel + ': request-side wake deadline eventually expires while stalled');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    ALabel + ': stalled partial request closes after idle timeout');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), ALabel + ': timeout close keeps server ownership');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    ALabel + ': timeout close still does not call handler');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    ALabel + ': timeout close still does not submit worker work');
+  CheckEqual(Int64(2), Int64(LStreamObj.ReadDeadlineCalls),
+    ALabel + ': timeout close clears the request read deadline exactly once');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    ALabel + ': timeout close clears wake deadline');
+end;
+
+procedure TestH1PollDrivenSessionTimesOutPartialFixedLengthBodyReadWait;
+const
+  REQ =
+    'POST /body HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'ab';
+begin
+  RunPollDrivenMidRequestReadTimeout(
+    'poll-driven partial fixed-length body timeout', REQ);
+end;
+
+procedure TestH1PollDrivenSessionTimesOutPartialChunkedTrailerReadWait;
+const
+  REQ =
+    'POST /trailer HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Test'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '3'#13#10 +
+    'abc'#13#10 +
+    '0'#13#10 +
+    'X-Test: value'#13#10;
+begin
+  RunPollDrivenMidRequestReadTimeout(
+    'poll-driven partial chunked trailer timeout', REQ);
 end;
 
 procedure TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp;
@@ -9215,6 +9339,10 @@ begin
     @TestH1PollDrivenSessionClearsWakeDeadlineAfterSuccessfulTimedDrain);
   T.Run('H1 poll-driven session times out idle read wait before first request',
     @TestH1PollDrivenSessionTimesOutIdleReadWaitBeforeFirstRequest);
+  T.Run('H1 poll-driven session times out partial fixed-length body read wait',
+    @TestH1PollDrivenSessionTimesOutPartialFixedLengthBodyReadWait);
+  T.Run('H1 poll-driven session times out partial chunked trailer read wait',
+    @TestH1PollDrivenSessionTimesOutPartialChunkedTrailerReadWait);
   T.Run('H1 poll-driven session partial timed drain stops buffered follow-up',
     @TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp);
   T.Run('H1 poll-driven session queues bounded responses while draining',
