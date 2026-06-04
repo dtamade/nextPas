@@ -1,11 +1,11 @@
-# Progress Log: WebSocket bounded frame/message size options
+# Progress Log: WebSocket outgoing control-frame payload limits
 
 ## Session
 
-- **Scope:** 补齐 WebSocket `TWebSocketOptions` 与 bounded frame/message size enforcement。
+- **Scope:** 补齐 WebSocket outgoing `Ping` / `Close` control-frame payload limit。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket API/safety boundary`
-  -> `bounded frame/message size policy`
+- **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket public API safety`
+  -> `outgoing control-frame payload limits`
 
 ## Current state
 
@@ -20,27 +20,28 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `WebSocketMaxFrameSizeRejectsDeclaredOversizeFrame` focused proof。
-- `test_http_websocket` 新增 `WebSocketMaxMessageSizeRejectsFragmentedMessage` focused proof。
-- `nextpas.core.http.websocket` 新增 `TWebSocketOptions`、默认 frame/message limits、三参数 upgrade overload。
-- `nextpas.core.http` facade re-export 新 options/default constants/overload。
+- `test_http_websocket` 新增 `OutgoingPingPayloadTooLargeRejected` focused proof。
+- `test_http_websocket` 新增 `OutgoingClosePayloadTooLargeRejected` focused proof。
+- `nextpas.core.http.websocket` 新增 write-side control payload guard。
 - `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录新公开契约。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - compile failed as expected
-  - `Identifier not found "TWebSocketOptions"`
-  - `Wrong number of parameters specified for call to "UpgradeWebSocket"`
+  - `25 total, 23 passed, 2 failed`
+  - failures:
+    - `outgoing-ping-oversize: server sends close frame`
+    - `outgoing-close-oversize: server sends text frame`
+  - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `23 total, 23 passed, 0 failed`
+  - `25 total, 25 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先做 WebSocket negative coverage 中仍有价值的边界：invalid fragmented final UTF-8
-  或 binary fragmented size parity；如果继续 API completeness，则评估 streaming frame/message reader
-  是否需要进入路线图。
+- 下一刀建议优先复查 WebSocket 是否还存在真实 RED 的 public API gap；候选是 `Pong(126 bytes)`
+  parity 或 invalid fragmented final UTF-8。如果都只是同路径 PASS，应转回 HttpServer examples/docs
+  或 H1/server remaining public gaps。

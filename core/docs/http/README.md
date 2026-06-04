@@ -82,6 +82,7 @@ make -C examples/nextpas.core.http/http_server_options_demo run
 
 `MaxFrameSize` 在 payload 分配/读取前检查 declared frame length；`MaxMessageSize`
 会累计 fragmented message，超过限制时由 `ReadFrame` 抛出 `EHttpError`。
+`Ping`、`Pong` 与 `Close` 也会在写出前拒绝超过 125 bytes 的 control-frame payload。
 
 `THttpServerOptions.Backend` 会下沉到 `nextpas.core.net.server` foundation。
 当前默认值是 `TCP_SERVER_BACKEND_THREADED`。在 Linux 上，

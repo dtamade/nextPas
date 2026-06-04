@@ -197,6 +197,12 @@ begin
   Result := False;
 end;
 
+procedure ValidateControlPayloadSize(const APayload: string);
+begin
+  if Length(APayload) > 125 then
+    raise EHttpError.Create('WebSocket: control frame payload too large');
+end;
+
 { UpgradeWebSocket }
 
 function UpgradeWebSocket(const AReq: IHttpRequest;
@@ -449,6 +455,8 @@ procedure TWebSocketImpl.WriteFrame(AOpcode: TWebSocketOpcode; const APayload: s
 begin
   if not FOpen then
     raise EHttpError.Create('WebSocket: connection closed');
+  if AOpcode in [wsOpClose, wsOpPing, wsOpPong] then
+    ValidateControlPayloadSize(APayload);
   WriteFrameRaw(AOpcode, APayload);
 end;
 
@@ -483,6 +491,7 @@ begin
   LPayload[2] := Chr(ACode and $FF);
   if Length(AReason) > 0 then
     Move(AReason[1], LPayload[3], Length(AReason));
+  ValidateControlPayloadSize(LPayload);
   FCloseSent := True;
   FOpen := False;
   WriteFrameRaw(wsOpClose, LPayload);

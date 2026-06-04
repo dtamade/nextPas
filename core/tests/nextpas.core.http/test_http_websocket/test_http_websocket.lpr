@@ -81,6 +81,15 @@ begin
   AServer := nil;
 end;
 
+function RepeatChar(const ACh: Char; const ACount: SizeUInt): string;
+var
+  I: SizeUInt;
+begin
+  SetLength(Result, ACount);
+  for I := 1 to ACount do
+    Result[I] := ACh;
+end;
+
 { Build a masked WebSocket frame (client → server) }
 function BuildMaskedFrame(AOpcode: Byte; const AData: string): string;
 var
@@ -2093,6 +2102,174 @@ begin
   end;
 end;
 
+{ Test 4r: server Ping must not generate oversize control frames }
+procedure TestOutgoingPingPayloadTooLargeRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+  LReason: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LWs.Ping(RepeatChar('x', 126));
+      LWs.WriteText('bad');
+    except
+      on E: EHttpError do
+        LWs.Close(1002, E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'outgoing-ping-oversize: got 101');
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'outgoing-ping-oversize: got response');
+      Check(Ord(LResp[1]) = $88, 'outgoing-ping-oversize: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'outgoing-ping-oversize: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1002), Int64(LCode),
+        'outgoing-ping-oversize: close code protocol error');
+      LReason := Copy(LResp, 5, LPayloadLen - 2);
+      CheckEqual('WebSocket: control frame payload too large', LReason,
+        'outgoing-ping-oversize: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4s: server Close must reject reasons that exceed control-frame size }
+procedure TestOutgoingClosePayloadTooLargeRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LWs.Close(1000, RepeatChar('x', 124));
+    except
+      on E: EHttpError do
+        LWs.WriteText(E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'outgoing-close-oversize: got 101');
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'outgoing-close-oversize: got response');
+      Check(Ord(LResp[1]) = $81, 'outgoing-close-oversize: server sends text frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      CheckEqual('WebSocket: control frame payload too large',
+        Copy(LResp, 3, LPayloadLen), 'outgoing-close-oversize: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -2291,6 +2468,8 @@ begin
     @TestWebSocketMaxFrameSizeRejectsDeclaredOversizeFrame);
   T.Run('WebSocketMaxMessageSizeRejectsFragmentedMessage',
     @TestWebSocketMaxMessageSizeRejectsFragmentedMessage);
+  T.Run('OutgoingPingPayloadTooLargeRejected', @TestOutgoingPingPayloadTooLargeRejected);
+  T.Run('OutgoingClosePayloadTooLargeRejected', @TestOutgoingClosePayloadTooLargeRejected);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

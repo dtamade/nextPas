@@ -1,57 +1,51 @@
-# Findings: WebSocket bounded frame/message size options
+# Findings: WebSocket outgoing control-frame payload limits
 
 ## Scope
 
-本轮补齐 WebSocket bounded size policy。`ReadFrame` 不能只验证 RFC framing；
-它还需要 framework-level resource boundary，避免合法但超大的 declared length 导致
-无界分配、长时间阻塞读取或 fragmented message 累计增长。
+本轮补齐 outgoing WebSocket control-frame payload boundary。RFC 6455 要求所有
+control frame payload 长度不超过 125 bytes；此前 inbound `ReadFrame` 已有该校验，
+但 public write-side API 仍可通过 `Ping` / `Pong` / `Close` 写出非法 extended-length
+control frame。
 
 ## Confirmed truths
 
-### 1. RED 证明公开 API 缺口
+### 1. RED 证明真实缺口
 
-`test_http_websocket` 新增两个 focused 用例后首次 focused gate 编译失败：
+`test_http_websocket` 新增两个 focused 用例后首次 focused gate 失败：
 
-- `Identifier not found "TWebSocketOptions"`
-- `Wrong number of parameters specified for call to "UpgradeWebSocket"`
-- 失败位置覆盖 `MaxFrameSize` declared-length case 与 `MaxMessageSize` fragmented case
+- `25 total, 23 passed, 2 failed`
+- failure: `outgoing-ping-oversize: server sends close frame`
+- failure: `outgoing-close-oversize: server sends text frame`
+- heaptrc: `0 unfreed memory blocks`
 
-这证明当前 facade 没有 endpoint-level WebSocket size policy carrier，也没有带 options
-的 `UpgradeWebSocket` overload。
+这证明旧实现没有在 write-side API 边界拒绝 oversize control payload：
 
-### 2. 最小设计
+- `Ping(126 bytes)` 写出了非法 ping frame。
+- `Close(1000, 124-byte reason)` 写出了非法 close frame。
 
-新增 `TWebSocketOptions`：
+### 2. 最小修复
 
-- `MaxFrameSize`
-- `MaxMessageSize`
-- `Default`
+新增 `ValidateControlPayloadSize`，在 write-side control frame 出口复用：
 
-默认值：
+- `WriteFrame(wsOpPing/wsOpPong/wsOpClose, Payload)` 写出前检查 `Length(Payload) <= 125`。
+- `Close` 在设置 `FCloseSent` / `FOpen := False` 前先校验完整 close payload
+  `2-byte code + reason`。
 
-- `WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = 16777216`，即 16 MiB。
-- `WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = 67108864`，即 64 MiB。
+失败统一抛：
 
-`nextpas.core.http` facade 现在 re-export：
+- `EHttpError('WebSocket: control frame payload too large')`
 
-- `TWebSocketOptions`
-- `WEBSOCKET_DEFAULT_MAX_FRAME_SIZE`
-- `WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE`
-- `UpgradeWebSocket(AReq, AW, AOptions)`
+### 3. Focused proof
 
-### 3. Runtime behavior
+`test_http_websocket` 现在覆盖：
 
-`TWebSocketImpl.ReadFrame` 现在在 payload 分配/读取前检查 declared payload length：
-
-- `LPayloadLen > MaxFrameSize` -> `EHttpError('WebSocket: frame too large')`
-- 非 fragmented text/binary message 超过 `MaxMessageSize` -> `EHttpError('WebSocket: message too large')`
-- continuation 累计超过 `MaxMessageSize` -> `EHttpError('WebSocket: message too large')`
-
-测试 handler 将 size-limit error 映射为 WebSocket close code `1009`。
+- outgoing `Ping(126 bytes)` fail-fast，handler 可转 close `1002`，wire 上不会出现非法 ping。
+- outgoing `Close(1000, 124-byte reason)` fail-fast，handler 仍可写 text fallback，证明状态未提前关闭。
+- 既有 23 条 WebSocket focused case 保持通过。
 
 ## Remaining gaps / risks
 
-- 当前 focused proof 直接覆盖 text frame declared oversize 与 fragmented text cumulative oversize。
-  binary fragmented message 走同一个 `FFragmentPayloadSize` 累计路径，但尚未单独铺 wire case。
-- 后续如果 WebSocket 子协议/API 扩展到 streaming message reader，应重新审视是否仍适合
-  `string` payload 一次性返回，避免 API 形态和大消息处理目标冲突。
+- `Pong` 走同一个 `WriteFrame` guard，但本轮没有单独铺 wire case；如果后续需要更细 API coverage，
+  可以补一条 `Pong(126 bytes)` parity。
+- write-side text/binary 仍是一次性 string payload API；大 payload 行为由调用方内存决定，后续如要支持
+  大消息，应考虑 streaming writer/reader，而不是继续扩大 string API。
