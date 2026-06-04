@@ -1,5 +1,101 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http fixed-length 413 proof tightening
+
+### Goal
+
+在 `nextpas.core.http` 继续做 correctness / coverage 收口，不改生产代码，先把
+fixed-length request body 的 `MaxBodySize` runtime contract 从“`413` 或安全关闭”收紧成
+explicit `413 Payload Too Large`，并补齐 threaded / Linux `epoll` 两条路径的 focused proof。
+
+### Checklist
+
+- [x] 重读 HTTP 规范/覆盖矩阵与 shared checkout 脏状态，确认只碰 `nextpas.core.http` 相关文件。
+- [x] 复核上一刀未提交的 `test_http_server` / `test_http_security` diff。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 在覆盖矩阵与控制文件中记录 fixed-length `MaxBodySize -> explicit 413` 的 current truth。
+- [x] path-limited stage / commit，不带入无关 dirty 文件。
+
+### Exit Criteria
+
+- `test_http_server` 与 `test_http_security` 都保留 focused 证明：
+  - fixed-length oversize body 返回 explicit `HTTP/1.1 413`
+  - handler 不会被误调用
+  - Linux `epoll` backend 语义与 threaded 一致
+- 本轮不跑全量；只要 focused gate 绿且 `heaptrc = 0 unfreed memory blocks`，就按 current truth 收口。
+
+## Active Session: 2026-06-04 compiler worktree/branch cleanup classification
+
+### Goal
+
+按用户要求接手编译器相关 branch/worktree 清理，但先只做安全分类，不合并、不删除、不改源码：
+
+- 一个分支一个分支审查相对 `main` 的提交、diff、涉及文件和 worktree dirty 状态
+- 识别哪些已经被 `main` 吸收、哪些有价值但需要整理后合并、哪些应 archive、哪些还不确定
+- 保护当前 `main` 工作区已有脏改动，后续合并必须走隔离候选路径和编译器验证
+
+### Checklist
+
+- [x] 读取现有 `/plan`、`findings.md`、`progress.md` 与 compiler goal tree，确认当前路线图语境。
+- [x] 复核 `main` 工作区 dirty 状态和目标 worktree 是否仍存在。
+- [x] 逐分支采集 `main...branch`、提交列表、diff 文件范围和 worktree status。
+- [x] 输出四类分类表：已合并可删 / 有价值需整理 / 实验需 archive / 不确定需继续审查。
+- [x] 将本轮分类依据、风险和下一步写回 `findings.md` / `progress.md`。
+
+### Initial classification
+
+- 已合并可删：当前 6 条里暂无。没有任何目标 branch 的 tip 已进入 `main`，也没有任何一条对 `main`
+  全部 patch-equivalent。
+- 有价值但需要整理后合并：
+  - `codex/compiler-c8-np-allocator-20260604`
+  - `codex/compiler-truth-audit-main-20260603`
+  - `codex/compiler-truth-integration-20260604-main0915`
+- 实验/不建议合并但要 archive：
+  - `backup/accidental-mixed-commit-20260603`
+  - `backup/sema-no-matching-overload-before-rebase`
+- 不确定，需要继续审查：
+  - `fix/sema-include-resolver`
+
+### Evidence summary
+
+- `codex/compiler-c8-np-allocator-20260604`
+  - `main...branch = 54:12`
+  - worktree dirty，另有 target unit facade 与 compiler tests untracked
+  - 包含 `compiler-truth-integration` 的 4 个 committed commits，并继续推进到 `C6-A / C8-F`
+- `codex/compiler-truth-audit-main-20260603`
+  - `main...branch = 172:18`
+  - worktree clean
+  - 计划记录证明它是 stage0/toolchain truth audit 的 canonical lane，但尚未被 `main` 或 C8 吸收
+- `codex/compiler-truth-integration-20260604-main0915`
+  - `main...branch = 54:4`
+  - committed HEAD 是 `compiler-c8-np-allocator` 的祖先
+  - worktree dirty/staged，包含 audit absorption 草稿与 `compiler/ir/np_hir_builder.pas` WIP
+- `fix/sema-include-resolver`
+  - `main...branch = 1540:1`
+  - worktree clean
+  - 单提交很旧，包含 include resolver 与 imported-source interface-only parsing；需要确认是否仍适合当前 imported-unit body/sema truth
+- `backup/accidental-mixed-commit-20260603`
+  - `main...branch = 148:1`
+  - 无 worktree
+  - 单提交跨 compiler 与 core HTTP/net server，属于 accidental mixed commit，不应整合
+- `backup/sema-no-matching-overload-before-rebase`
+  - `main...branch = 2249:2`
+  - 无 worktree
+  - 当前 `main`/C8 已有大量 no-matching/ambiguous/wrong-argument semantic coverage；保留作历史备份，不建议合并
+
+### Errors encountered
+
+| Error | Attempt | Resolution |
+|-------|---------|------------|
+| branch relationship script passed a pair string as one Git revision | first relationship matrix run | discarded output and rewrote the check with explicit branch variables |
+| zsh rejected Bash array index syntax | second relationship matrix run | reran the read-only relationship check under Bash |
+
+### Constraints
+
+- 本阶段不移动 `main`，不合并、不删除 worktree/branch，不创建 archive tag。
+- 后续任何真正合并都必须先在隔离候选 worktree 整理干净提交，再跑 focused compiler tests、`scripts/rebuild-compiler.sh`、相关 smoke；语义/LLVM 路径变化需完整 LLVM smoke。
+- 当前 `main` 工作区已有无关 dirty 改动，本轮只读审查不得覆盖或 stage 这些改动。
+
 ## Active Session: 2026-06-04 local branch cleanup
 
 ### Goal

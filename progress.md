@@ -1,5 +1,119 @@
 # Progress Log
 
+## Session: 2026-06-04 http fixed-length 413 proof tightening
+
+- **Status:** completed.
+- Objective:
+  - keep working inside `nextpas.core.http`
+  - tighten fixed-length request-body `MaxBodySize` proof from permissive
+    "`413` or safe close" to explicit `413`
+  - prove threaded and Linux `epoll` parity without touching production code
+- Scope and safety:
+  - reread `docs/design-conventions.md`, `docs/http/API_COVERAGE.md`, and the shared checkout dirty state first
+  - confirmed unrelated dirty files still exist in async/client/control-doc/compiler areas
+  - this batch stayed path-limited to HTTP tests plus documentation/control files
+- Landed test truth already present in the worktree:
+  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+    - extracted helper `RunFixedLengthMaxBodySizeRejected`
+    - `TestMaxBodySize` now requires explicit `HTTP/1.1 413`
+    - added handler-not-called assertion
+    - added Linux `epoll` parity case
+  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    - added raw-wire fixed-length `MaxBodySize -> 413`
+    - added Linux `epoll` parity case
+    - explicitly rejects any success `200`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `221/221 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `134/134 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - current runtime truth is now documented as explicit fixed-length `413` rejection with no handler entry
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `runtime/limit contract closing`
+    - this batch: `fixed-length MaxBodySize -> explicit 413`
+
+## Session: 2026-06-04 compiler worktree/branch cleanup classification
+
+- **Status:** completed as a read-only classification pass; no merges, deletions, or branch mutations were performed.
+- Objective:
+  - Take over compiler-related worktree/branch cleanup safely.
+  - Reclassify each requested line against live `main`, not stale notes.
+  - Produce an initial four-bucket table before any merge/archive/delete action.
+- Safety baseline:
+  - root repo is on `main` with unrelated dirty changes in `core/`, `.claude/`, and `.worktrees/`
+  - this round therefore did not move `main`, did not merge, and did not delete any worktree/branch
+  - every target line was audited with branch-local `git status`, `main...branch`, commit lists, and diff surface
+- Branch-by-branch evidence gathered:
+  - `codex/compiler-c8-np-allocator-20260604`
+    - worktree dirty
+    - `main...branch = 54:12`
+    - contains committed `C6-A / C8-F` route updates plus extra unstaged compiler/toolchain/test/unit work
+    - current worktree dirt includes:
+      - `compiler/sema/np_semantic_analyzer.pas`
+      - `compiler/syntax/np_green_tree.pas`
+      - `compiler/tests/test_semantic_reexported_type_member_call.pas`
+      - `compiler/toolchain/np_toolchain_plan.pas`
+      - `compiler/toolchain/np_toolchain_runner.pas`
+      - `tests/semantic/test_semantic_call_bindings.pas`
+      - untracked installed-target contract tests and target facades
+  - `codex/compiler-truth-audit-main-20260603`
+    - worktree clean
+    - `main...branch = 172:18`
+    - canonical committed truth lane for stage0/toolchain GNU-vs-LLVM comparison and verify-local route truth
+  - `codex/compiler-truth-integration-20260604-main0915`
+    - worktree dirty and partially staged
+    - `main...branch = 54:4`
+    - committed HEAD is fully contained in `codex/compiler-c8-np-allocator-20260604`
+    - staged audit/toolchain truth files remain, plus unstaged `build/verify_local.sh` and `compiler/ir/np_hir_builder.pas`
+  - `fix/sema-include-resolver`
+    - worktree clean
+    - `main...branch = 1540:1`
+    - single old commit adds include resolver wiring and truncates imported units to interface-only parsing
+    - not patch-equivalent to current `main` or to the C8 lane
+  - `backup/accidental-mixed-commit-20260603`
+    - no worktree
+    - `main...branch = 148:1`
+    - single mixed commit touches both compiler ordinary member calls and unrelated core HTTP/net server work
+  - `backup/sema-no-matching-overload-before-rebase`
+    - no worktree
+    - `main...branch = 2249:2`
+    - old semantic backup focused on imported/no-matching-overload diagnostics before later rebases
+- Cross-branch relationship proof:
+  - `codex/compiler-truth-integration-20260604-main0915` tip is an ancestor of
+    `codex/compiler-c8-np-allocator-20260604`
+  - `codex/compiler-truth-audit-main-20260603` is not contained by either integration or C8
+  - `fix/sema-include-resolver` is not contained by integration or C8
+  - both backup branches are not contained by C8 as branch ancestry or patch-equivalent history
+- Initial classification:
+  - already merged and deletable:
+    - none
+  - valuable but needs cleanup/integration before merge:
+    - `codex/compiler-c8-np-allocator-20260604`
+    - `codex/compiler-truth-audit-main-20260603`
+    - `codex/compiler-truth-integration-20260604-main0915`
+  - experimental / should archive instead of merge:
+    - `backup/accidental-mixed-commit-20260603`
+    - `backup/sema-no-matching-overload-before-rebase`
+  - uncertain / needs deeper review:
+    - `fix/sema-include-resolver`
+- Current route position:
+  - root `main` goal-tree document still lags behind and documents compiler status at `C5-P`
+  - latest committed+worktree compiler reality on the active C8 lane is `C6-A / C8-F`
+  - the most advanced live probe recorded there is:
+    - `time.pas` object-file green
+    - `vecdeque` advanced from `357` diagnostics to `24`
+- Next recommended order:
+  - 1. audit `codex/compiler-truth-integration-20260604-main0915` staged vs unstaged contents and decide what survives into the single upgrade lane
+  - 2. absorb committed truth batches from `codex/compiler-truth-audit-main-20260603` into that same upgrade lane with compiler verification
+  - 3. normalize `codex/compiler-c8-np-allocator-20260604` into clean commits and rerun focused compiler tests + rebuild + relevant smoke
+  - 4. only then decide whether `fix/sema-include-resolver` still contributes value or should be archived
+  - 5. archive the two backup branches rather than merging them
+
 ## Session: 2026-06-04 local branch cleanup
 
 - **Status:** completed for safe-delete pass.

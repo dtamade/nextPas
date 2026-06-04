@@ -763,6 +763,46 @@ begin
     'Truncated chunk-data CR EOF');
 end;
 
+procedure RunFixedLengthMaxBodySizeRejected(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBody: string;
+  LReq: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    SetLength(LBody, 2048);
+    FillChar(LBody[1], 2048, Ord('A'));
+    LReq := 'POST / HTTP/1.1'#13#10 +
+            'Host: x'#13#10 +
+            'Content-Length: 2048'#13#10 +
+            'Connection: close'#13#10#13#10 +
+            LBody;
+    LResp := SendRaw(LPort, LReq);
+    Check(Pos('HTTP/1.1 413', LResp) > 0,
+      ALabel + ': explicit 413');
+    Check(Pos('HTTP/1.1 200', LResp) = 0,
+      ALabel + ': no success response');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestFixedLengthMaxBodySizeRejected;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  RunFixedLengthMaxBodySizeRejected(
+    LOpts,
+    'Fixed-length MaxBodySize');
+end;
+
 { Test 2h: Chunked MaxBodySize rejection must happen before terminal chunk }
 procedure TestChunkedMaxBodySizeRejectsBeforeTerminalChunk;
 var
@@ -2615,6 +2655,17 @@ begin
   Result.Backend := TCP_SERVER_BACKEND_EPOLL;
 end;
 
+procedure TestFixedLengthMaxBodySizeRejectedEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.MaxBodySize := 1024;
+  RunFixedLengthMaxBodySizeRejected(
+    LOpts,
+    'epoll fixed-length MaxBodySize');
+end;
+
 procedure TestHeaderFieldOverMaxHeaderSizeUsesExplicit431EpollBackend;
 var
   LOpts: THttpServerOptions;
@@ -3142,6 +3193,7 @@ begin
     @TestTruncatedTerminalChunkEndingAfterExtensionCrAtEof);
   T.Run('Truncated chunk-data ending at EOF -> 400', @TestTruncatedChunkDataEndingAtEof);
   T.Run('Truncated chunk-data CR at EOF -> 400', @TestTruncatedChunkDataCrAtEof);
+  T.Run('Fixed-length MaxBodySize -> 413', @TestFixedLengthMaxBodySizeRejected);
   T.Run('Chunked MaxBodySize rejects before terminal chunk',
     @TestChunkedMaxBodySizeRejectsBeforeTerminalChunk);
   T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
@@ -3261,6 +3313,8 @@ begin
     @TestTruncatedChunkDataEndingAtEofEpollBackend);
   T.Run('Truncated chunk-data CR at EOF -> 400 with epoll backend',
     @TestTruncatedChunkDataCrAtEofEpollBackend);
+  T.Run('Fixed-length MaxBodySize -> 413 with epoll backend',
+    @TestFixedLengthMaxBodySizeRejectedEpollBackend);
   T.Run('Truncated trailer section at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerAtEofEpollBackend);
   T.Run('Truncated trailer field-name at EOF -> 400 with epoll backend',

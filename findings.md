@@ -1,5 +1,68 @@
 # Findings & Decisions
 
+## 2026-06-04 http fixed-length 413 proof tightening
+
+- 这轮 fixed-length `MaxBodySize` 更像 public runtime contract 收口，而不是生产修复：
+  上一刀 `test_http_server` 已经把 server 侧 truth 收紧为 explicit `413`，这轮补跑
+  `test_http_security` 后也证明 raw-wire / security 侧 current truth 一致。
+- fixed-length oversize body 现在有两层 focused 证据：
+  - `test_http_server`
+    - threaded 路径直接断言 `HTTP/1.1 413`
+    - 新增 handler-not-called 断言
+    - Linux `epoll` backend 同步锁定同一契约
+  - `test_http_security`
+    - raw-wire request 直接断言 `HTTP/1.1 413`
+    - 明确排除 `HTTP/1.1 200`
+    - Linux `epoll` backend 同步锁定同一契约
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `134/134 passed`，`heaptrc: 0 unfreed memory blocks`；因此这刀没有暴露需要落生产修复的新缺口。
+- 这轮之后，`MaxBodySize` 对外契约可以更明确地表述为：
+  - fixed-length body：超限时 explicit `413`，且不进入 handler
+  - chunked body：跨 chunk 累加一旦越限，立即 final `413`
+- 下一刀应回到 malformed chunked request security 的剩余 raw-wire 边角，而不是继续复制
+  fixed-length / chunked 的同型 parity case。
+
+## 2026-06-04 compiler worktree/branch cleanup classification
+
+- 当前 6 条目标里没有“已合并可删”的分支：全部都不是 `tip ∈ main`，`git cherry -v main <branch>`
+  也没有显示为全部 patch-equivalent。
+- 当前主升级线应收敛到 `codex/compiler-c8-np-allocator-20260604`，因为它包含
+  `codex/compiler-truth-integration-20260604-main0915` 的 4 个已提交 C6-A/C8 控制提交，并且
+  worktree 内路线已推进到 `C6-A / C8-F`。
+- 但 `codex/compiler-c8-np-allocator-20260604` 现在不是可直接合并状态：
+  - `main...branch = 54:12`
+  - worktree 有未提交 compiler/sema/parser/toolchain/test/control-doc 改动
+  - 还有 `compiler/tests/test_dynlibs_contract.pas`、`test_typinfo_contract.pas`、
+    `test_variants_contract.pas`、target `Dynlibs/TypInfo/Variants` facade 等 untracked 文件
+  - 已有计划记录显示 latest live gate 是 `vecdeque` 从 `357` diagnostics 收敛到 `24` diagnostics，
+    但这些结论还没有作为干净 commit 进入 `main`
+- `codex/compiler-truth-audit-main-20260603` 仍是有价值的 committed truth lane：
+  - `main...branch = 172:18`
+  - worktree clean
+  - 其内容集中在 `build/verify_local.sh`、stage0/toolchain route truth、GNU/LLVM comparison 与 docs
+  - 它不是可删 side lane；后续应把其有效 committed commits 吸收到单一升级线，而不是整条盲 merge
+- `codex/compiler-truth-integration-20260604-main0915` 是有价值但混乱的中间集成草稿：
+  - `main...branch = 54:4`
+  - committed HEAD 已被 C8 allocator 分支包含
+  - worktree 仍有 staged audit/toolchain absorption 与 unstaged `build/verify_local.sh` /
+    `compiler/ir/np_hir_builder.pas`
+  - 后续不能直接删除，必须先确认 staged 草稿是否已进入 C8 或应转成干净提交
+- `fix/sema-include-resolver` 暂列“不确定”：
+  - `main...branch = 1540:1`
+  - 单提交很旧，但 patch 没被 C8 patch-equivalent 吸收
+  - 它硬编码 include search paths，并把 imported source 截到 interface section；这可能与当前 C8 的
+    imported-unit body / implicit-self 语义 truth 冲突，也可能仍有 include resolver 价值
+  - 正确动作是针对当前 C8 imported-source path 做 focused review，不整支 merge
+- `backup/accidental-mixed-commit-20260603` 应 archive：
+  - 单提交同时包含 compiler structured ordinary member calls 与 core HTTP/net server 代码
+  - compiler ordinary/dispatched call work 在当前路线图已有 C5-N/O/P 记录；core HTTP/net server 不属于本轮 compiler cleanup
+  - 不应拆都不拆就进入 main
+- `backup/sema-no-matching-overload-before-rebase` 应 archive：
+  - 该线是旧 rebase 前 semantic backup
+  - 当前 `main` 与 C8 worktree 已有大量 `no matching overload` / `wrong-argument-count` /
+    `ambiguous-overload` coverage 与 diagnostics code
+  - 保留 archive 价值即可，不建议合并旧分支
+
 ## 2026-06-04 local branch cleanup
 
 - VSCode 当前让人感觉“分支还很多”，主要原因不是 worktree 没清掉，而是本地 branch ref 还保留了很多。worktree cleanup 和 branch cleanup 是两件事。

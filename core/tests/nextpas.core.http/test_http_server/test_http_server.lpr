@@ -8799,8 +8799,8 @@ begin
 end;
 {$ENDIF}
 
-{ Test 17: MaxBodySize enforcement — 413 }
-procedure TestMaxBodySize;
+procedure RunFixedLengthMaxBodySizeRejected(const AUseEpoll: Boolean;
+  const ALabel: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -8810,11 +8810,14 @@ var
   LOpts: THttpServerOptions;
   LBody: string;
   LReq: string;
+  LHandlerCalled: Boolean;
 begin
+  LHandlerCalled := False;
   LRouter := THttpRouter.Create;
   LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var LReply: string;
   begin
+    LHandlerCalled := True;
     LReply := 'ok';
     AW.GetHeaders.Set_('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
@@ -8822,6 +8825,8 @@ begin
   end);
   LOpts := THttpServerOptions.Default;
   LOpts.MaxBodySize := 1024; { 1KB limit }
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
   try
     { Send body > 1KB }
@@ -8833,12 +8838,28 @@ begin
       'Connection: close'#13#10#13#10 +
       LBody;
     LResp := SendRawRequest(LPort, LReq);
-    Check((Pos('413', LResp) > 0) or (Length(LResp) = 0),
-      'max body size: 413 or connection closed');
+    Check(Pos('HTTP/1.1 413', LResp) > 0,
+      ALabel + ': fixed-length oversize body returns explicit 413');
+    Check(not LHandlerCalled,
+      ALabel + ': handler not called for fixed-length oversize body');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
+
+procedure TestMaxBodySize;
+begin
+  RunFixedLengthMaxBodySizeRejected(False,
+    'fixed-length max body size threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestMaxBodySizeEpollBackend;
+begin
+  RunFixedLengthMaxBodySizeRejected(True,
+    'fixed-length max body size epoll');
+end;
+{$ENDIF}
 
 procedure TestContentLengthRequestTruncatedAtEof;
 var
@@ -10835,6 +10856,8 @@ begin
     @TestRequestTargetOverMaxHeaderSizeRejectedEpollBackend);
   T.Run('Header field over MaxHeaderSize -> explicit 431 with epoll backend',
     @TestHeaderFieldOverMaxHeaderSizeRejectedEpollBackend);
+  T.Run('MaxBodySize enforcement -> 413 with epoll backend',
+    @TestMaxBodySizeEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
