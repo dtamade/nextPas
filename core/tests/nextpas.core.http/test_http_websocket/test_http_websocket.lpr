@@ -162,6 +162,28 @@ begin
     Result := Result + Chr(Ord(AData[I]) xor LMaskKey[(I - 1) mod 4]);
 end;
 
+function BuildMaskedFrameWithFirstByte(AFirstByte: Byte; const AData: string): string;
+var
+  LMaskKey: array[0..3] of Byte;
+  LPayloadLen: SizeUInt;
+  I: SizeUInt;
+begin
+  LMaskKey[0] := $12; LMaskKey[1] := $34;
+  LMaskKey[2] := $56; LMaskKey[3] := $78;
+
+  LPayloadLen := SizeUInt(Length(AData));
+  SetLength(Result, 6);
+  Result[1] := Chr(AFirstByte);
+  Result[2] := Chr($80 or LPayloadLen);
+  Result[3] := Chr(LMaskKey[0]);
+  Result[4] := Chr(LMaskKey[1]);
+  Result[5] := Chr(LMaskKey[2]);
+  Result[6] := Chr(LMaskKey[3]);
+
+  for I := 1 to LPayloadLen do
+    Result := Result + Chr(Ord(AData[I]) xor LMaskKey[(I - 1) mod 4]);
+end;
+
 function BuildMaskedFrameWithLength16(AOpcode: Byte; const AData: string): string;
 var
   LMaskKey: array[0..3] of Byte;
@@ -914,6 +936,95 @@ begin
       Check(LPayloadLen >= 2, 'reserved-opcode: close frame includes code');
       LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
       CheckEqual(Int64(1002), Int64(LCode), 'reserved-opcode: close code protocol error');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4g: RSV bits are rejected unless an extension negotiated them }
+procedure TestReservedBitsRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpText then
+        LWs.WriteText(LF.Payload);
+    except
+      on E: EHttpError do
+        LWs.Close(1002, 'protocol');
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'reserved-bits: got 101');
+
+      LFrame := BuildMaskedFrameWithFirstByte($C1, 'bad');
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'reserved-bits: got close response');
+      Check(Ord(LResp[1]) = $88, 'reserved-bits: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'reserved-bits: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1002), Int64(LCode), 'reserved-bits: close code protocol error');
     finally
       LConn.Close;
     end;
@@ -1827,6 +1938,7 @@ begin
   T.Run('UnmaskedClientFrameRejected', @TestUnmaskedClientFrameRejected);
   T.Run('ControlFramePayloadTooLargeRejected', @TestControlFramePayloadTooLargeRejected);
   T.Run('ReservedOpcodeRejected', @TestReservedOpcodeRejected);
+  T.Run('ReservedBitsRejected', @TestReservedBitsRejected);
   T.Run('FragmentedControlFrameRejected', @TestFragmentedControlFrameRejected);
   T.Run('InvalidCloseCodeRejected', @TestInvalidCloseCodeRejected);
   T.Run('InvalidUtf8TextFrameRejected', @TestInvalidUtf8TextFrameRejected);

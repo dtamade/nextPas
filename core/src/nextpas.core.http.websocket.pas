@@ -249,6 +249,8 @@ begin
 
   ReadExact(LHdr[0], 2);
   Result.Fin := (LHdr[0] and $80) <> 0;
+  if (LHdr[0] and $70) <> 0 then
+    raise EHttpError.Create('WebSocket: reserved bits set');
   LOpcode := LHdr[0] and $0F;
   if not IsValidOpcode(LOpcode) then
     raise EHttpError.Create('WebSocket: reserved or invalid opcode');
