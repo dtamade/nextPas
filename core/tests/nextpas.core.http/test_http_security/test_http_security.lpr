@@ -2730,6 +2730,28 @@ begin
     'epoll TE+CL reverse-order conflict: explicit 400');
 end;
 
+procedure TestDuplicateContentLengthEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
+            'Content-Length: 10'#13#10'Connection: close'#13#10#13#10'hello';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll duplicate Content-Length: explicit 400');
+end;
+
+procedure TestNegativeContentLengthEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: -1'#13#10 +
+            'Connection: close'#13#10#13#10'hello';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll negative Content-Length: explicit 400');
+end;
+
 procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
@@ -3338,6 +3360,10 @@ begin
     @TestContentLengthTransferEncodingConflictEpollBackend);
   T.Run('TE + CL conflict reverse order with epoll backend',
     @TestTransferEncodingContentLengthConflictReverseOrderEpollBackend);
+  T.Run('Duplicate Content-Length -> 400 with epoll backend',
+    @TestDuplicateContentLengthEpollBackend);
+  T.Run('Negative Content-Length -> 400 with epoll backend',
+    @TestNegativeContentLengthEpollBackend);
   T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
   T.Run('Chunked must be final transfer coding -> 400 with epoll backend',

@@ -1,5 +1,19 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http content-length validation epoll parity
+
+### Goal
+
+继续补 `nextpas.core.http` request-side header validation 的 Linux `epoll` raw-wire proof，
+本轮只收 `duplicate Content-Length` 与 `negative Content-Length` 这两个高价值验证契约。
+
+### Checklist
+
+- [x] 过滤 security parity 假 gap，确认这两条仍缺 `epoll` live proof。
+- [x] 新增 `Duplicate Content-Length` 与 `Negative Content-Length` 的 `epoll` 用例。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 只记录 current truth，并做 path-limited commit。
+
 ## Active Session: 2026-06-04 http cl-te epoll smuggling proof
 
 ### Goal

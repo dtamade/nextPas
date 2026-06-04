@@ -1,5 +1,15 @@
 # Findings & Decisions
 
+## 2026-06-04 http content-length validation epoll parity
+
+- `duplicate Content-Length` 与 `negative Content-Length` 属于 request header validation /
+  request smuggling 邻接安全边界，不应只停留在默认 backend live proof。
+- 这轮把两条 `epoll` raw-wire proof 补进 `test_http_security` 后，
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `140/140 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：threaded / Linux `epoll` 两条 ingress 路径
+  都会把 duplicate/negative `Content-Length` 直接判成 explicit `400`。
+
 ## 2026-06-04 http cl-te epoll smuggling proof
 
 - `Content-Length + Transfer-Encoding: chunked` 是 request smuggling 边界，不能只停留在默认 backend
