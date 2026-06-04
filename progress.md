@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-06-04 http chunked-not-final backpressure security proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining malformed chunked `chunked, gzip -> 400` direct-error raw-wire gap in `test_http_security`
+  - directly prove backpressure safe-close behavior on both threaded and Linux `epoll`
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling`
+  - added `TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `182/182 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `malformed chunked raw-wire security proof`
+  - this batch:
+    `chunked-not-final transfer-coding direct-error backpressure`
+
 ## Session: 2026-06-04 http expect bodyless and duplicate-member security proof
 
 - **Status:** completed.

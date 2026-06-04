@@ -2041,6 +2041,21 @@ begin
     'Unsupported Expect direct error backpressure');
 end;
 
+procedure TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked, gzip'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Chunked-not-final transfer-coding direct error backpressure');
+end;
+
 procedure TestQueuedFollowUp400PreservesWireOrder;
 const
   REQ =
@@ -2207,6 +2222,25 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll unsupported Expect direct error backpressure');
+end;
+
+procedure TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked, gzip'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll chunked-not-final transfer-coding direct error backpressure');
 end;
 
 procedure TestQueuedFollowUp400PreservesWireOrderEpollBackend;
@@ -4463,6 +4497,8 @@ begin
     @TestUnsupportedTransferCodingBackpressureSafeHandling);
   T.Run('Unsupported Expect direct error backpressure safe handling',
     @TestUnsupportedExpectBackpressureSafeHandling);
+  T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling',
+    @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
   T.Run('Queued follow-up 400 preserves wire order',
@@ -4655,6 +4691,8 @@ begin
     @TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend);
   T.Run('Unsupported Expect direct error backpressure safe handling with epoll backend',
     @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
+  T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling with epoll backend',
+    @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
   T.Run('Queued follow-up 400 preserves wire order with epoll backend',

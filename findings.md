@@ -1,5 +1,20 @@
 # Findings & Decisions
 
+## 2026-06-04 http chunked-not-final backpressure security proof
+
+- `Transfer-Encoding: chunked, gzip` 这条 malformed chunked framing 之前已有
+  parser focused proof、server focused live proof、以及 poll-driven writable-drain proof，
+  但 `test_http_security` 还缺 threaded / Linux `epoll` real-socket direct-error/backpressure
+  直接证据。
+- 本轮新增 threaded / Linux `epoll` 两条 security proof，直接锁定：
+  - `Transfer-Encoding: chunked, gzip` 会直接返回 final `400 Bad Request`
+  - 在 backpressure 尝试下，连接仍会安全关闭
+  - wire 上至多暴露一条原始 `400` status-line 前缀，不会追加 synthetic `500`
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `182/182 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：`chunked`-must-be-final malformed framing
+  在 security 层也已有 direct raw-wire/backpressure proof。
+
 ## 2026-06-04 http expect bodyless and duplicate-member security proof
 
 - `Expect: 100-continue` 的 duplicate-member 正向 interim 行为，以及 bodyless / no-length

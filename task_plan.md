@@ -1,5 +1,22 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http chunked-not-final backpressure security proof
+
+### Goal
+
+继续补 `nextpas.core.http` malformed chunked request 的 raw-wire security proof，
+把 `Transfer-Encoding: chunked, gzip -> 400` 的 direct-error / backpressure safe-close
+语义补进 `test_http_security`，覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server`、`test_http_security` 与 `test_http_h1parser`，确认
+  `chunked-not-final transfer-coding -> 400` 仍缺 security 层 direct raw-wire/backpressure 证据。
+- [x] 新增 threaded / `epoll` 两条
+  `chunked-not-final transfer-coding direct error backpressure safe handling` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http expect bodyless and duplicate-member security proof
 
 ### Goal
