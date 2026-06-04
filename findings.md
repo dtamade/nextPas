@@ -1,5 +1,15 @@
 # Findings & Decisions
 
+## 2026-06-04 http malformed chunk extension epoll parity
+
+- `Malformed chunk extension -> 400` 原先在 parser focused coverage 与 threaded live coverage 都有证据，
+  但 `test_http_security` 少了一条 Linux `epoll` raw-wire parity proof。
+- 这条缺口补上后，没有暴露新的实现问题：focused gate
+  `make -C tests/nextpas.core.http/test_http_security clean test` 为 `135/135 passed`，
+  `heaptrc: 0 unfreed memory blocks`。
+- 因此本轮仍然是 coverage-expansion，不是生产修复；当前 truth 可明确为：
+  malformed chunk extension 在 threaded / Linux `epoll` raw-wire ingress 上都返回 explicit `400`。
+
 ## 2026-06-04 http fixed-length 413 proof tightening
 
 - 这轮 fixed-length `MaxBodySize` 更像 public runtime contract 收口，而不是生产修复：

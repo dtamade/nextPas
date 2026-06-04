@@ -1,5 +1,19 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http malformed chunk extension epoll parity
+
+### Goal
+
+继续收口 `nextpas.core.http` 的 malformed chunked raw-wire security proof，
+只补 `Malformed chunk extension -> 400` 的 Linux `epoll` live parity，不扩散到无关模块。
+
+### Checklist
+
+- [x] 对比 parser / server / security 三侧 case 清单，确认这条是还没被 `test_http_security` 锁住的 raw-wire gap。
+- [x] 补 `test_http_security` 的 `epoll` case。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 记录这条 proof 已补齐；若 runtime 已经正确，则不改生产代码。
+
 ## Active Session: 2026-06-04 http fixed-length 413 proof tightening
 
 ### Goal

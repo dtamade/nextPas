@@ -2727,6 +2727,19 @@ begin
     'epoll invalid chunk size: explicit 400');
 end;
 
+procedure TestMalformedChunkExtensionEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5;'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll malformed chunk extension: explicit 400');
+end;
+
 procedure TestMissingChunkDataCrLfEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
@@ -3285,6 +3298,8 @@ begin
     @TestChunkedMustBeFinalTransferCodingEpollBackend);
   T.Run('Invalid chunk size -> 400 with epoll backend',
     @TestInvalidChunkSizeEpollBackend);
+  T.Run('Malformed chunk extension -> 400 with epoll backend',
+    @TestMalformedChunkExtensionEpollBackend);
   T.Run('Truncated chunk extension at EOF -> 400 with epoll backend',
     @TestTruncatedChunkExtensionAtEofEpollBackend);
   T.Run('Truncated chunk extension CR at EOF -> 400 with epoll backend',

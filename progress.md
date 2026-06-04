@@ -1,5 +1,29 @@
 # Progress Log
 
+## Session: 2026-06-04 http malformed chunk extension epoll parity
+
+- **Status:** completed.
+- Objective:
+  - keep shrinking remaining malformed chunked raw-wire gaps
+  - add Linux `epoll` parity for `Malformed chunk extension -> 400`
+- Scope and safety:
+  - touched only `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates
+  - left unrelated dirty files in async/client/compiler/plans untouched
+- Landed proof:
+  - added `TestMalformedChunkExtensionEpollBackend`
+  - registered `Malformed chunk extension -> 400 with epoll backend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `135/135 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `malformed chunked raw-wire security proof`
+    - this batch: `malformed chunk extension -> 400 with epoll backend`
+
 ## Session: 2026-06-04 http fixed-length 413 proof tightening
 
 - **Status:** completed.
