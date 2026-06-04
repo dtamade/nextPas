@@ -8677,8 +8677,8 @@ begin
   end;
 end;
 
-{ Test 16: MaxHeaderSize enforcement — 431 }
-procedure TestMaxHeaderSize;
+procedure RunHeaderFieldOverMaxHeaderSizeRejected(const AUseEpoll: Boolean;
+  const ALabel: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -8688,21 +8688,25 @@ var
   LOpts: THttpServerOptions;
   LReq: string;
   LBigHeader: string;
+  LHandlerCalled: Boolean;
 begin
+  LHandlerCalled := False;
   LRouter := THttpRouter.Create;
   LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var LBody: string;
   begin
+    LHandlerCalled := True;
     LBody := 'ok';
     AW.GetHeaders.Set_('content-length', '2');
     AW.WriteHeader(HTTP_STATUS_OK);
     AW.Write(LBody[1], 2);
   end);
   LOpts := THttpServerOptions.Default;
-  LOpts.MaxHeaderSize := 256; { Very small limit for testing }
+  LOpts.MaxHeaderSize := 256;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
   try
-    { Build a request with headers > 256 bytes }
     SetLength(LBigHeader, 300);
     FillChar(LBigHeader[1], 300, Ord('x'));
     LReq := 'GET / HTTP/1.1'#13#10 +
@@ -8710,12 +8714,28 @@ begin
       'X-Big: ' + LBigHeader + #13#10 +
       'Connection: close'#13#10#13#10;
     LResp := SendRawRequest(LPort, LReq);
-    Check((Pos('431', LResp) > 0) or (Length(LResp) = 0),
-      'max header size: 431 or connection closed');
+    Check(Pos('HTTP/1.1 431', LResp) > 0,
+      ALabel + ': oversized header field returns explicit 431');
+    Check(not LHandlerCalled,
+      ALabel + ': handler not called for oversized header field');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
+
+procedure TestHeaderFieldOverMaxHeaderSizeRejected;
+begin
+  RunHeaderFieldOverMaxHeaderSizeRejected(False,
+    'header field over max-header threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestHeaderFieldOverMaxHeaderSizeRejectedEpollBackend;
+begin
+  RunHeaderFieldOverMaxHeaderSizeRejected(True,
+    'header field over max-header epoll');
+end;
+{$ENDIF}
 
 procedure RunRequestTargetOverMaxHeaderSizeRejected(const AUseEpoll: Boolean;
   const ALabel: string);
@@ -10796,6 +10816,8 @@ begin
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
   T.Run('Request-target over MaxHeaderSize -> 431 with epoll backend',
     @TestRequestTargetOverMaxHeaderSizeRejectedEpollBackend);
+  T.Run('Header field over MaxHeaderSize -> explicit 431 with epoll backend',
+    @TestHeaderFieldOverMaxHeaderSizeRejectedEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
@@ -11073,7 +11095,8 @@ begin
   T.Run('Query parameters', @TestQueryParam);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
-  T.Run('MaxHeaderSize enforcement -> 431', @TestMaxHeaderSize);
+  T.Run('Header field over MaxHeaderSize -> explicit 431',
+    @TestHeaderFieldOverMaxHeaderSizeRejected);
   T.Run('Request-target over MaxHeaderSize -> 431',
     @TestRequestTargetOverMaxHeaderSizeRejected);
   T.Run('MaxBodySize enforcement -> 413', @TestMaxBodySize);

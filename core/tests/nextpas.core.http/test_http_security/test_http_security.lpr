@@ -882,6 +882,43 @@ begin
   end;
 end;
 
+procedure RunHeaderFieldOverMaxHeaderSizeUsesExplicit431(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LReq: string;
+  LBig: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    SetLength(LBig, 300);
+    FillChar(LBig[1], 300, Ord('A'));
+    LReq := 'GET / HTTP/1.1'#13#10 +
+            'Host: x'#13#10 +
+            'X-Big: ' + LBig + #13#10 +
+            'Connection: close'#13#10#13#10;
+    LResp := SendRaw(LPort, LReq);
+    Check(Pos('HTTP/1.1 431', LResp) > 0,
+      ALabel + ': explicit 431 for oversized header field');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHeaderFieldOverMaxHeaderSizeUsesExplicit431;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  RunHeaderFieldOverMaxHeaderSizeUsesExplicit431(
+    LOpts,
+    'threaded header field over max-header');
+end;
+
 { Test 5: Header with null byte }
 procedure TestHeaderNullByte;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
@@ -2578,6 +2615,17 @@ begin
   Result.Backend := TCP_SERVER_BACKEND_EPOLL;
 end;
 
+procedure TestHeaderFieldOverMaxHeaderSizeUsesExplicit431EpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.MaxHeaderSize := 256;
+  RunHeaderFieldOverMaxHeaderSizeUsesExplicit431(
+    LOpts,
+    'epoll header field over max-header');
+end;
+
 procedure TestRequestTargetOverMaxHeaderSizeUsesExplicit431EpollBackend;
 var
   LOpts: THttpServerOptions;
@@ -3099,6 +3147,8 @@ begin
   T.Run('Generic malformed request -> 400', @TestGenericMalformedRequest);
   T.Run('Duplicate Content-Length -> 400', @TestDuplicateContentLength);
   T.Run('Oversized header >8KB', @TestOversizedHeader);
+  T.Run('Header field over MaxHeaderSize -> explicit 431',
+    @TestHeaderFieldOverMaxHeaderSizeUsesExplicit431);
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Request-target over MaxHeaderSize -> explicit 431',
@@ -3285,6 +3335,8 @@ begin
     @TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend);
   T.Run('Malformed trailer field -> 400 with epoll backend',
     @TestMalformedTrailerFieldEpollBackend);
+  T.Run('Header field over MaxHeaderSize -> explicit 431 with epoll backend',
+    @TestHeaderFieldOverMaxHeaderSizeUsesExplicit431EpollBackend);
   T.Run('Request-target over MaxHeaderSize -> explicit 431 with epoll backend',
     @TestRequestTargetOverMaxHeaderSizeUsesExplicit431EpollBackend);
   {$ENDIF}
