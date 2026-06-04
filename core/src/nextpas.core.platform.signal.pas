@@ -11,6 +11,7 @@ const
   PLATFORM_SIGINT  = 2;
   PLATFORM_SIGTERM = 15;
   PLATFORM_SIGHUP  = 1;
+  PLATFORM_SIGPIPE = 13;
 {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
   PLATFORM_SIGUSR1 = 30;
   PLATFORM_SIGUSR2 = 31;
@@ -26,6 +27,7 @@ const
 
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
+function platform_signal_ignore(ASignal: Int32): Int32;
 function platform_signal_reset(ASignal: Int32): Int32;
 function platform_signal_block(ASignal: Int32): Int32;
 function platform_signal_unblock(ASignal: Int32): Int32;
@@ -78,6 +80,20 @@ begin
   FillChar(LAct, SizeOf(LAct), 0);
   LAct.sa_handler := Pointer(AHandler);
   LAct.sa_flags := SA_RESTART;
+  SigSetEmpty(LAct.sa_mask);
+  if sigaction(ASignal, @LAct, nil) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
+end;
+
+function platform_signal_ignore(ASignal: Int32): Int32;
+var
+  LAct: TLibcSigAction;
+begin
+  FillChar(LAct, SizeOf(LAct), 0);
+  LAct.sa_handler := Pointer(1);
+  LAct.sa_flags := 0;
   SigSetEmpty(LAct.sa_mask);
   if sigaction(ASignal, @LAct, nil) <> 0 then
     Result := platform_get_errno
@@ -147,6 +163,19 @@ begin
     Result := 0;
 end;
 
+function platform_signal_ignore(ASignal: Int32): Int32;
+var
+  LAct: TPlatformDarwinSigAction;
+begin
+  FillChar(LAct, SizeOf(LAct), 0);
+  LAct.sa_handler := TPlatformDarwinSigActionHandler(Pointer(1));
+  LAct.sa_flags := 0;
+  if sigaction(ASignal, @LAct, nil) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
+end;
+
 function platform_signal_reset(ASignal: Int32): Int32;
 var
   LAct: TPlatformDarwinSigAction;
@@ -200,6 +229,19 @@ begin
   FillChar(LAct, SizeOf(LAct), 0);
   LAct.sa_handler := TPlatformFreeBSDSigActionHandler(AHandler);
   LAct.sa_flags := SA_RESTART;
+  if sigaction(ASignal, @LAct, nil) <> 0 then
+    Result := platform_get_errno
+  else
+    Result := 0;
+end;
+
+function platform_signal_ignore(ASignal: Int32): Int32;
+var
+  LAct: TPlatformFreeBSDSigAction;
+begin
+  FillChar(LAct, SizeOf(LAct), 0);
+  LAct.sa_handler := TPlatformFreeBSDSigActionHandler(Pointer(1));
+  LAct.sa_flags := 0;
   if sigaction(ASignal, @LAct, nil) <> 0 then
     Result := platform_get_errno
   else
@@ -264,6 +306,11 @@ begin
   Result := -1;
 end;
 
+function platform_signal_ignore(ASignal: Int32): Int32;
+begin
+  Result := -1;
+end;
+
 function platform_signal_block(ASignal: Int32): Int32;
 begin
   Result := -1;
@@ -278,6 +325,8 @@ end;
 {$IF not defined(NEXTPAS_LINUX) and not defined(NEXTPAS_MACOS) and not defined(NEXTPAS_FREEBSD) and not defined(NEXTPAS_WINDOWS)}
 function platform_signal_set(ASignal: Int32;
   AHandler: TPlatformSignalHandler): Int32;
+begin Result := -1; end;
+function platform_signal_ignore(ASignal: Int32): Int32;
 begin Result := -1; end;
 function platform_signal_reset(ASignal: Int32): Int32;
 begin Result := -1; end;
