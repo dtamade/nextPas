@@ -354,12 +354,16 @@ begin
   FInner.SetWriteDeadline(ADeadline);
 end;
 
-procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus);
+procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus;
+  const AWriteTimeoutMs: Int64 = 0);
 var
   LW: IHttpResponseWriter;
   LBody: string;
 begin
   try
+    if AWriteTimeoutMs > 0 then
+      AConn.SetWriteDeadline(TDeadline.After(
+        TDuration.FromMilliseconds(AWriteTimeoutMs)));
     LW := TH1ResponseWriter.Create(AConn as IWriter);
     LBody := HttpStatusText(AStatus);
     LW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
@@ -668,7 +672,7 @@ begin
     if (FParser.GetHttpVersion = hvHttp11) and
        (FParser.GetHeaders.Get('host') = '') then
     begin
-      WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST);
+      WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
       FKeepAlive := False;
       Exit(tscoServer);
     end;
@@ -727,7 +731,8 @@ begin
       if (LW <> nil) and (LW as TH1ResponseWriter).IsHijacked then
         Result := tscoHandler
       else if (LW = nil) or (not (LW as TH1ResponseWriter).HasCommitted) then
-        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+          FOptions.WriteTimeout);
       if (LW <> nil) and (not (LW as TH1ResponseWriter).IsHijacked) and
          (LW as TH1ResponseWriter).HasCommitted and (not LDrainStarted) then
       begin
@@ -920,7 +925,8 @@ begin
              (Int64(LTotalRead) - FParser.GetBodySize >
               Int64(FOptions.MaxHeaderSize)) then
           begin
-            WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+            WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
+              FOptions.WriteTimeout);
             LRejected := True;
             FKeepAlive := False;
             Break;
@@ -929,7 +935,8 @@ begin
         if LHeadersDone and (FOptions.MaxHeaderSize > 0) and
            (FParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
         begin
-          WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+          WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
+            FOptions.WriteTimeout);
           LRejected := True;
           FKeepAlive := False;
           Break;
@@ -937,7 +944,8 @@ begin
         if (FOptions.MaxBodySize > 0) and
            (FParser.GetBodySize > FOptions.MaxBodySize) then
         begin
-          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE,
+            FOptions.WriteTimeout);
           LRejected := True;
           FKeepAlive := False;
           Break;
@@ -949,7 +957,8 @@ begin
 
       if FParser.HasError then
       begin
-        WriteErrorResponse(FConn, ParserErrorStatus(FParser));
+        WriteErrorResponse(FConn, ParserErrorStatus(FParser),
+          FOptions.WriteTimeout);
         Break;
       end;
 
@@ -960,7 +969,8 @@ begin
       begin
         if FParser.GetBodySize > FOptions.MaxBodySize then
         begin
-          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE,
+            FOptions.WriteTimeout);
           FKeepAlive := False;
           Continue;
         end;
@@ -974,7 +984,8 @@ begin
     except
       on E: Exception do
       begin
-        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR);
+        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+          FOptions.WriteTimeout);
         FKeepAlive := False;
       end;
     end;
@@ -1292,7 +1303,8 @@ begin
                 FKeepAlive := False;
                 Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
               end;
-              WriteErrorResponse(FConn, ParserErrorStatus(FParser));
+              WriteErrorResponse(FConn, ParserErrorStatus(FParser),
+                FOptions.WriteTimeout);
               ANextEvents := [];
               Exit(tsprDone);
             end;
@@ -1325,7 +1337,8 @@ begin
           FKeepAlive := False;
           Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
         end;
-        WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+        WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
+          FOptions.WriteTimeout);
         FKeepAlive := False;
         ANextEvents := [];
         Exit(tsprDone);
@@ -1341,7 +1354,8 @@ begin
         FKeepAlive := False;
         Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
       end;
-      WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE);
+      WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
+        FOptions.WriteTimeout);
       FKeepAlive := False;
       ANextEvents := [];
       Exit(tsprDone);
@@ -1356,7 +1370,8 @@ begin
         FKeepAlive := False;
         Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
       end;
-      WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE);
+      WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE,
+        FOptions.WriteTimeout);
       FKeepAlive := False;
       ANextEvents := [];
       Exit(tsprDone);
@@ -1370,7 +1385,8 @@ begin
         FKeepAlive := False;
         Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
       end;
-      WriteErrorResponse(FConn, ParserErrorStatus(FParser));
+      WriteErrorResponse(FConn, ParserErrorStatus(FParser),
+        FOptions.WriteTimeout);
       FKeepAlive := False;
       ANextEvents := [];
       Exit(tsprDone);

@@ -2356,6 +2356,55 @@ begin
     'timeout before any wire bytes does not append synthetic 500');
 end;
 
+procedure TestDirectErrorResponseArmsWriteTimeoutOnMalformedRequest;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactory;
+  LSession: ITcpServerSession;
+  LStreamObj: TTimeoutWriteTcpStream;
+  LStream: ITcpStream;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 250;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
+    'h1 transport exposes session factory for direct error write-timeout proof');
+
+  LStreamObj := TTimeoutWriteTcpStream.Create(REQ, 0, True);
+  LStream := LStreamObj as ITcpStream;
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end));
+
+  LOwnership := LSession.Run;
+
+  Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER,
+    'server keeps ownership when malformed request error write times out');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    'malformed request direct 400 does not enter handler');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadCalls),
+    'malformed request direct 400 consumes one request read');
+  Check(LStreamObj.WriteCalls > 0,
+    'malformed request direct 400 still attempts to write an error response');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'malformed request direct 400 arms write deadline before direct error response');
+  CheckEqual(Int64(0), Int64(Length(LStreamObj.Output)),
+    'malformed request direct 400 leaves no partial bytes when first error write times out');
+  Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
+    'malformed request direct 400 timeout does not append synthetic 500');
+end;
+
 procedure TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500;
 var
   LHttpOpts: THttpServerOptions;
@@ -7837,6 +7886,8 @@ begin
     @TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
+  T.Run('Direct error response arms write timeout on malformed request',
+    @TestDirectErrorResponseArmsWriteTimeoutOnMalformedRequest);
   T.Run('Write timeout before any wire bytes does not append 500',
     @TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500);
   T.Run('Write timeout after partial wire bytes stops pipeline without 500',
