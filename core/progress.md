@@ -1,10 +1,10 @@
-# Progress Log: http server expect-417 error-path coverage
+# Progress Log: http security oversize-trailer backpressure proof
 
 ## Session
 
-- **Scope:** 给 `HttpServer` 补齐 `417 Expectation Failed` 在 generic error-path 上的 focused proof。
+- **Scope:** 给 malformed chunked raw-wire security 补齐 `oversize trailer -> 431` 的 live direct-error backpressure focused proof，并校正一处旧测试 truth。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `expect-417 error-path coverage`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `malformed chunked live hardening` -> `oversize-trailer backpressure 431`
 
 ## Current state
 
@@ -19,25 +19,24 @@
 
 ## Completed work
 
-- [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增一组 `417` focused proofs，覆盖：
-  - poll-driven queued follow-up wire order
-  - poll-driven standalone writable-drain
-  - poll-driven standalone partial-timeout preserve-status
-  - threaded direct error write-timeout / partial-timeout
-  - threaded / epoll real-socket queued follow-up wire order
+- [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  新增两条 `chunked oversize trailer -> 431` live direct-error backpressure proof：
+  - threaded backend
+  - epoll backend
+- 同文件还把既有 `Request line too long` 断言校正到当前真实语义：
+  - 超长 request-line 现在允许命中 `MaxHeaderSize` 共用的 `431` 路径
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 `417` generic error-path coverage 说明。
+  已同步 `431` live direct-error backpressure 与 long-request-line current truth。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_server test`
-  - `192/192 passed`
+- `make -C tests/nextpas.core.http/test_http_security test`
+  - `122/122 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀优先继续补真正的 request-side protocol completeness，不要回到低价值 parity 平铺。
+- 下一刀仍应优先真实协议缺口，不要回到大面积 parity 平铺。
 - 更合理的两个方向是：
-  - 继续收紧 `Expect` 组合/优先级语义
-  - 或审视 `3/6 H1 正确性加固` 的阶段收口条件，准备衔接更高层的 server/base 架构演进
+  - 再挑一个仍未分类完的 malformed/runtime 边角收口
+  - 或回到 `Expect` 组合/优先级语义，补 request-side characterization

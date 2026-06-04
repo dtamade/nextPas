@@ -904,7 +904,8 @@ begin
   end;
 end;
 
-{ Test 6: Request line too long (>8KB URL) — llhttp parses it; server doesn't crash }
+{ Test 6: Request line too long (>8KB URL) — server stays safe even if
+  request-line bytes trip the same MaxHeaderSize/431 budget path }
 procedure TestRequestLineTooLong;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
     LResp, LReq, LPath: string;
@@ -915,10 +916,11 @@ begin
     FillChar(LPath[1], 9000, Ord('a'));
     LReq := 'GET /' + LPath + ' HTTP/1.1'#13#10'Host: x'#13#10'Connection: close'#13#10#13#10;
     LResp := SendRaw(LPort, LReq);
-    { llhttp has no URL length limit — server may respond 404 (no route) or 200.
-      Key: server doesn't crash. }
-    Check((Pos('414', LResp) > 0) or (Pos('400', LResp) > 0) or
-          (Pos('404', LResp) > 0) or (Pos('200', LResp) > 0) or (Length(LResp) = 0),
+    { llhttp has no URL length limit, but transport-side MaxHeaderSize accounting
+      may still reject the request-line with 431 before routing. Key: server stays safe. }
+    Check((Pos('431', LResp) > 0) or (Pos('414', LResp) > 0) or
+          (Pos('400', LResp) > 0) or (Pos('404', LResp) > 0) or
+          (Pos('200', LResp) > 0) or (Length(LResp) = 0),
       'Long URL: server handled safely');
   finally
     StopServer(LServer, LHandle);
@@ -1217,6 +1219,8 @@ begin
   end;
 end;
 
+function BuildChunkedOversizeTrailerRequest: string; forward;
+
 procedure TestMalformedRequestBackpressureSafeHandling;
 const
   REQ = 'GARBAGE DATA HERE'#13#10#13#10;
@@ -1243,6 +1247,19 @@ begin
     REQ,
     'HTTP/1.1 501 Not Implemented',
     'Unsupported transfer-coding direct error backpressure');
+end;
+
+procedure TestChunkedOversizeTrailerBackpressureSafeHandling;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    BuildChunkedOversizeTrailerRequest,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'Oversize trailer direct error backpressure');
 end;
 
 {$IFDEF NEXTPAS_LINUX}
@@ -1280,6 +1297,20 @@ begin
     REQ,
     'HTTP/1.1 501 Not Implemented',
     'epoll unsupported transfer-coding direct error backpressure');
+end;
+
+procedure TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    BuildChunkedOversizeTrailerRequest,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'epoll oversize trailer direct error backpressure');
 end;
 {$ENDIF}
 
@@ -1989,21 +2020,13 @@ begin
   end;
 end;
 
-procedure RunChunkedOversizeTrailerUsesMaxHeaderSize(
-  const AOpts: THttpServerOptions; const ALabel: string);
+function BuildChunkedOversizeTrailerRequest: string;
 var
-  LServer: THttpServer;
-  LPort: UInt16;
-  LHandle: TPlatformThreadHandle;
-  LResp: string;
   LTrailerValue: string;
-  LReq: string;
 begin
-  LHandle := StartSecurityServer(AOpts, LServer, LPort);
-  try
-    SetLength(LTrailerValue, 300);
-    FillChar(LTrailerValue[1], 300, Ord('x'));
-    LReq := 'POST / HTTP/1.1'#13#10 +
+  SetLength(LTrailerValue, 300);
+  FillChar(LTrailerValue[1], 300, Ord('x'));
+  Result := 'POST / HTTP/1.1'#13#10 +
             'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Big'#13#10 +
@@ -2011,7 +2034,19 @@ begin
             '5'#13#10'hello'#13#10 +
             '0'#13#10 +
             'X-Big: ' + LTrailerValue + #13#10#13#10;
-    LResp := SendRaw(LPort, LReq);
+end;
+
+procedure RunChunkedOversizeTrailerUsesMaxHeaderSize(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    LResp := SendRaw(LPort, BuildChunkedOversizeTrailerRequest);
     Check((Pos('HTTP/1.1 431', LResp) > 0) or (Length(LResp) = 0),
       ALabel + ': 431 or connection closed');
     Check(Pos('echo:5', LResp) = 0,
@@ -2793,6 +2828,8 @@ begin
     @TestMalformedRequestBackpressureSafeHandling);
   T.Run('Unsupported transfer-coding direct error backpressure safe handling',
     @TestUnsupportedTransferCodingBackpressureSafeHandling);
+  T.Run('Chunked oversize trailer direct error backpressure safe handling',
+    @TestChunkedOversizeTrailerBackpressureSafeHandling);
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
@@ -2913,6 +2950,8 @@ begin
     @TestMalformedRequestBackpressureSafeHandlingEpollBackend);
   T.Run('Unsupported transfer-coding direct error backpressure safe handling with epoll backend',
     @TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend);
+  T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
+    @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
     @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',
