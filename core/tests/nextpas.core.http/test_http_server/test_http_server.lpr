@@ -2369,6 +2369,22 @@ begin
     'HTTP/1.1 431 Request Header Fields Too Large', 64, 0);
 end;
 
+procedure TestH1PollDrivenSessionQueuesFollowUpNotImplementedBehindActiveDrain;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
+    'queued follow-up 501', REQ, 'HTTP/1.1 501 Not Implemented', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents;
 const
   REQ = 'GARBAGE DATA HERE'#13#10#13#10;
@@ -3102,6 +3118,24 @@ begin
     'HTTP/1.1 431 Request Header Fields Too Large', AHttpOpts);
 end;
 
+procedure RunRealSocketQueuedFollowUp501PreservesWireOrder(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    ABackendName + ' queued follow-up 501 live path', REQ,
+    'HTTP/1.1 501 Not Implemented', AHttpOpts);
+end;
+
 procedure TestRealSocketQueuedFollowUp400PreservesWireOrderThreadedBackend;
 var
   LHttpOpts: THttpServerOptions;
@@ -3126,6 +3160,14 @@ begin
   LHttpOpts := THttpServerOptions.Default;
   LHttpOpts.MaxHeaderSize := 64;
   RunRealSocketQueuedFollowUp431PreservesWireOrder('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketQueuedFollowUp501PreservesWireOrderThreadedBackend;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  RunRealSocketQueuedFollowUp501PreservesWireOrder('threaded', LHttpOpts);
 end;
 
 procedure TestEpollRealSocketQueuedFollowUp400PreservesWireOrder;
@@ -3155,6 +3197,15 @@ begin
   LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   LHttpOpts.MaxHeaderSize := 64;
   RunRealSocketQueuedFollowUp431PreservesWireOrder('epoll', LHttpOpts);
+end;
+
+procedure TestEpollRealSocketQueuedFollowUp501PreservesWireOrder;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketQueuedFollowUp501PreservesWireOrder('epoll', LHttpOpts);
 end;
 {$ENDIF}
 
@@ -7998,12 +8049,16 @@ begin
     @TestEpollRealSocketQueuedFollowUp413PreservesWireOrder);
   T.Run('Real socket queued follow-up 431 preserves wire order with epoll backend',
     @TestEpollRealSocketQueuedFollowUp431PreservesWireOrder);
+  T.Run('Real socket queued follow-up 501 preserves wire order with epoll backend',
+    @TestEpollRealSocketQueuedFollowUp501PreservesWireOrder);
   T.Run('Real socket queued follow-up 400 preserves wire order with threaded backend',
     @TestRealSocketQueuedFollowUp400PreservesWireOrderThreadedBackend);
   T.Run('Real socket queued follow-up 413 preserves wire order with threaded backend',
     @TestRealSocketQueuedFollowUp413PreservesWireOrderThreadedBackend);
   T.Run('Real socket queued follow-up 431 preserves wire order with threaded backend',
     @TestRealSocketQueuedFollowUp431PreservesWireOrderThreadedBackend);
+  T.Run('Real socket queued follow-up 501 preserves wire order with threaded backend',
+    @TestRealSocketQueuedFollowUp501PreservesWireOrderThreadedBackend);
 {$ENDIF}
   T.Run('Custom body response', @TestCustomBody);
   T.Run('404 for unmatched route', @TestNotFound404);
@@ -8030,6 +8085,8 @@ begin
     @TestH1PollDrivenSessionQueuesFollowUpPayloadTooLargeBehindActiveDrain);
   T.Run('H1 poll-driven session queues follow-up 431 behind active drain',
     @TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain);
+  T.Run('H1 poll-driven session queues follow-up 501 behind active drain',
+    @TestH1PollDrivenSessionQueuesFollowUpNotImplementedBehindActiveDrain);
   T.Run('H1 poll-driven standalone bad request drains via writable events',
     @TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone malformed chunked request drains via writable events',
