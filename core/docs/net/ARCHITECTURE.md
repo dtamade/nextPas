@@ -105,6 +105,10 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   现在是 Linux 命名 backend 入口；真实实现 owner 已下沉到
   `nextpas.core.net.server.readiness`，因此 `epoll` backend 不再自己复制
   readiness 主循环，只负责保留 Linux backend 的工厂/命名边界。
+- [src/nextpas.core.net.server.kqueue.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.kqueue.pas:1)
+  现在也已落成 BSD/macOS 命名 backend 入口；和 `epoll` 一样先复用
+  `nextpas.core.net.server.readiness`，把 `kqueue` 的差异收口在
+  host poller 与 facade 注册边界，而不是再复制一份 runtime owner。
 - [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
   现在提供了 `ITcpSocketRuntime`、`ITcpListenerRuntime.TryAccept`、
   `ITcpStreamRuntime.TryRead/TryWrite` 这组 runtime-only seam，用来暴露 native socket
@@ -198,7 +202,7 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - readiness-family runtime owner 现在已经独立成
   `nextpas.core.net.server.readiness`，说明 future `kqueue` 不必再复制整套
   listener/poll/completion/deadline 驱动骨架；剩余缺口已进一步收窄到
-  backend registration 与 BSD/macOS live proof。
+  BSD/macOS live proof 与后续 protocol-level evented widening。
 - `platform.io` poller 现在也有 wake seam：
   Linux 用 `eventfd`，BSD/macOS `kqueue` 分支也已用 nonblocking self-pipe
   落地 `enable_wake / wake / drain_wake`。
@@ -218,7 +222,7 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 2. 让 future evented backend 直接复用已落地的 factory/session/context/handoff seam
 3. 用同一条 worker handoff contract 保证业务 handler 不落到 reactor 线程
 4. 让 H1 等真实协议 session 消费这条带 wakeup 的 poll-driven driver
-5. 然后再扩 `net.server.kqueue` / `iocp`
+5. 在真实 BSD/macOS 宿主补 `kqueue` compile/runtime proof，然后再扩 `iocp`
 
 ## 性能与并发 posture
 
@@ -444,7 +448,7 @@ nextpas.core.net.server.iocp
 
 ### Phase 5
 
-- 增加 `net.server.kqueue`
+- 完成 `net.server.kqueue` wiring，并在真实 BSD/macOS 宿主补 compile/runtime proof
 
 ### Phase 6
 

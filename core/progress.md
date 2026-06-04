@@ -1,9 +1,8 @@
-# Progress Log: platform.io kqueue wake seam
+# Progress Log: net.server kqueue backend wiring
 
 ## Session
 
-- **Scope:** 补齐 BSD/macOS `kqueue` poller wake seam，继续推进
-  `nextpas.core.net.server` readiness-family foundation。
+- **Scope:** 把 `kqueue` 从“底层 wake seam 已就绪”推进到“backend 单元与 facade 注册都已落地”。
 - **Status:** verified
 
 ## Current state
@@ -16,34 +15,32 @@
 
 ## Completed work
 
-- [src/nextpas.core.platform.io.base.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.platform.io.base.pas:1)
-  为 BSD/macOS poller 增加了 `WakeReadFd` / `WakeWriteFd`。
-- [src/nextpas.core.platform.io.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.platform.io.pas:1)
-  在 `kqueue` 分支落地了：
-  - self-pipe wake source
-  - nonblocking / close-on-exec fd 初始化
-  - `platform_poller_close` 的 wake fd 释放
-  - `platform_poller_enable_wake`
-  - `platform_poller_wake`
-  - `platform_poller_drain_wake`
-- [test_platform_io.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.platform.io/test_platform_io/test_platform_io.lpr:1)
-  新增了 `kqueue wake source contract` focused test，直接锁定 BSD/macOS
-  wake seam 不再是 stub，并要求 helper/close path 真实存在。
+- 新增 [src/nextpas.core.net.server.kqueue.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.kqueue.pas:1)。
+- [src/nextpas.core.net.server.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.pas:1)
+  现在会在 BSD/macOS 条件下：
+  - 引入 `nextpas.core.net.server.kqueue`
+  - 注册 `tsbKqueue` builtin factory
+- [test_net_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.net.server/test_net_server/test_net_server.lpr:1)
+  新增了 `kqueue backend source contract` focused test，直接锁定：
+  - `nextpas.core.net.server.kqueue` 文件存在
+  - `kqueue` backend 复用 shared readiness owner
+  - facade 有 `kqueue` 注册边界
+  - Linux 上不会误注册 builtin `kqueue`
 - [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)
-  已同步真实阶段门：host wake seam 已补齐，下一步主目标转为
-  `net.server.kqueue` backend wiring + BSD/macOS live proof。
+  已同步真实阶段门：`kqueue` wiring 已落地，下一步主目标转为
+  BSD/macOS live proof + H1 poll-driven widening。
 
 ## Verification
 
-- `make -C tests/nextpas.core.platform.io/test_platform_io clean test`
-  - `9/9 passed`
-  - heaptrc: `0 unfreed memory blocks`
 - `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - `23/23 passed`
+  - `24/24 passed`
+  - heaptrc: `0 unfreed memory blocks`
+- `make -C tests/nextpas.core.http/test_http_contract clean test`
+  - `27/27 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 让 `net.server.kqueue` 真正包装 `nextpas.core.net.server.readiness`
-  并接上 backend factory / registration seam
-- 在真实 BSD/macOS 宿主补 compile/runtime proof，而不是停留在 source-contract
+- 在真实 BSD/macOS 宿主补 `kqueue` compile/runtime proof
+- 继续把 HTTP H1 session 往 poll-driven evented runtime 迁，减少“仅 accept evented”
+  的剩余形态

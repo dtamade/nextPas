@@ -4,6 +4,7 @@ program test_net_server;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  Classes,
   SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
@@ -320,6 +321,27 @@ type
     property ShutdownCalled: Boolean read FShutdownCalled;
     property OptionsBackend: TTcpServerBackend read FOptionsBackend;
   end;
+
+function ExpandRepoPath(const ARelativePath: string): string;
+begin
+  Result := ExpandFileName('../../../' + ARelativePath);
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandRepoPath(ARelativePath);
+  Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
 
 var
   T: TTestRunner;
@@ -1604,6 +1626,30 @@ begin
   Check(Assigned(LFactory), 'threaded backend factory is assigned');
 end;
 
+procedure TestKqueueBackendSourceContract;
+var
+  LKqueueSource: string;
+  LFacadeSource: string;
+begin
+  LKqueueSource := LoadSourceText('src/nextpas.core.net.server.kqueue.pas');
+  Check(Pos('function newtcpkqueueserver', LKqueueSource) > 0,
+    'kqueue unit should expose a named backend constructor');
+  Check(Pos('nextpas.core.net.server.readiness', LKqueueSource) > 0,
+    'kqueue unit should depend on shared readiness owner');
+  Check(Pos('result := newtcpreadinessserver(aoptions);', LKqueueSource) > 0,
+    'kqueue unit should forward directly to shared readiness owner');
+
+  LFacadeSource := LoadSourceText('src/nextpas.core.net.server.pas');
+  Check(Pos('nextpas.core.net.server.kqueue', LFacadeSource) > 0,
+    'facade should include the kqueue backend unit');
+  Check(Pos('@nextpas.core.net.server.kqueue.newtcpkqueueserver', LFacadeSource) > 0,
+    'facade should register the kqueue backend factory');
+  {$IFDEF NEXTPAS_LINUX}
+  Check(not HasTcpServerFactory(TCP_SERVER_BACKEND_KQUEUE),
+    'linux should not expose built-in kqueue backend registration');
+  {$ENDIF}
+end;
+
 procedure TestCustomBackendFactoryOverridesSelection;
 var
   LOldFactory: TTcpServerFactory;
@@ -2141,6 +2187,8 @@ begin
     @TestThreadedServerPollDrivenSessionFallsBackToRun);
   T.Run('Built-in threaded backend factory exists',
     @TestBuiltInThreadedBackendFactoryExists);
+  T.Run('Kqueue backend source contract',
+    @TestKqueueBackendSourceContract);
   T.Run('Custom backend factory overrides selection',
     @TestCustomBackendFactoryOverridesSelection);
   T.Run('Missing backend factory raises not supported',

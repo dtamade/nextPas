@@ -16,6 +16,9 @@ uses
   {$IFDEF NEXTPAS_LINUX}
   nextpas.core.net.server.epoll,
   {$ENDIF}
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  nextpas.core.net.server.kqueue,
+  {$ENDIF}
   nextpas.core.net.server.threaded;
 
 type
@@ -122,6 +125,10 @@ begin
   {$IFDEF NEXTPAS_LINUX}
   RegisterTcpServerFactory(tsbEpoll,
     @nextpas.core.net.server.epoll.NewTcpEpollServer);
+  {$ENDIF}
+  {$IF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  RegisterTcpServerFactory(tsbKqueue,
+    @nextpas.core.net.server.kqueue.NewTcpKqueueServer);
   {$ENDIF}
 end;
 
