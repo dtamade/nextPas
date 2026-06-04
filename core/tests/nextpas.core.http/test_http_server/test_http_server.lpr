@@ -5117,9 +5117,9 @@ begin
   end;
 end;
 
-procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(
-  const AUseEpoll: Boolean; const AReqBody, AExpectedStatusLine,
-  ALabel: string);
+procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+  const AOpts: THttpServerOptions; const AExtraHeaders, AReqBody,
+  AExpectedStatusLine, ALabel: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -5128,14 +5128,15 @@ var
   LConn: ITcpStream;
   LResp1, LResp2: string;
   LHandlerCalled: Boolean;
-const
-  REQ_HEADERS =
+  LReqHeaders: string;
+begin
+  LHandlerCalled := False;
+  LReqHeaders :=
     'POST /upload HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
     'Transfer-Encoding: chunked'#13#10 +
+    AExtraHeaders +
     'Expect: 100-continue'#13#10#13#10;
-begin
-  LHandlerCalled := False;
   LRouter := THttpRouter.Create;
   LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
     const AW: IHttpResponseWriter)
@@ -5144,15 +5145,12 @@ begin
     AW.WriteHeader(HTTP_STATUS_OK);
   end);
 
-  if AUseEpoll then
-    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
-  else
-    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, AOpts, LServer, LPort);
   try
     LConn := TcpConnect('127.0.0.1', LPort);
     try
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
-      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LConn.Write(LReqHeaders[1], SizeUInt(Length(LReqHeaders)));
       LResp1 := ReadOneResponse(LConn);
       Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
         ALabel + ': interim 100 continue returned');
@@ -5178,6 +5176,19 @@ begin
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(
+  const AUseEpoll: Boolean; const AReqBody, AExpectedStatusLine,
+  ALabel: string);
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts, '', AReqBody, AExpectedStatusLine, ALabel);
 end;
 
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim;
@@ -5221,6 +5232,49 @@ begin
     'expect-continue chunked missing chunk-data CRLF threaded');
 end;
 
+procedure TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterim;
+const
+  EXTRA_HEADERS = 'Trailer: X-Bad'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'Bad Header: value'#13#10#13#10;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked malformed trailer field threaded');
+end;
+
+procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim;
+const
+  EXTRA_HEADERS = 'Trailer: X-Big'#13#10;
+var
+  LOpts: THttpServerOptions;
+  LTrailerValue: string;
+  LReqBody: string;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  SetLength(LTrailerValue, 300);
+  FillChar(LTrailerValue[1], 300, Ord('x'));
+  LReqBody :=
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Big: ' + LTrailerValue + #13#10#13#10;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    LReqBody,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'expect-continue chunked oversize trailer threaded');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend;
 begin
@@ -5261,6 +5315,51 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'expect-continue chunked missing chunk-data CRLF epoll');
+end;
+
+procedure TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterimEpollBackend;
+const
+  EXTRA_HEADERS = 'Trailer: X-Bad'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'Bad Header: value'#13#10#13#10;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked malformed trailer field epoll');
+end;
+
+procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend;
+const
+  EXTRA_HEADERS = 'Trailer: X-Big'#13#10;
+var
+  LOpts: THttpServerOptions;
+  LTrailerValue: string;
+  LReqBody: string;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LOpts.MaxHeaderSize := 256;
+  SetLength(LTrailerValue, 300);
+  FillChar(LTrailerValue[1], 300, Ord('x'));
+  LReqBody :=
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Big: ' + LTrailerValue + #13#10#13#10;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    LReqBody,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'expect-continue chunked oversize trailer epoll');
 end;
 {$ENDIF}
 
@@ -11317,6 +11416,10 @@ begin
     @TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterimEpollBackend);
   T.Run('Expect: chunked missing chunk-data CRLF rejects after interim response with epoll backend',
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked malformed trailer field rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked oversize trailer rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend);
   T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend);
   T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response with epoll backend',
@@ -11578,6 +11681,10 @@ begin
     @TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterim);
   T.Run('Expect: chunked missing chunk-data CRLF rejects after interim response',
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterim);
+  T.Run('Expect: chunked malformed trailer field rejects after interim response',
+    @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterim);
+  T.Run('Expect: chunked oversize trailer rejects after interim response',
+    @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim);
   T.Run('Expect: fixed-length body stall closes safely after interim response',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafely);
   T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response',
