@@ -2759,7 +2759,8 @@ begin
     'timeout before any wire bytes does not append synthetic 500');
 end;
 
-procedure TestDirectErrorResponseArmsWriteTimeoutOnMalformedRequest;
+procedure RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+  const ALabel, AReq: string; const AMaxBodySize, AMaxHeaderSize: Int64);
 var
   LHttpOpts: THttpServerOptions;
   LH1Opts: TH1ServerTransportOptions;
@@ -2775,13 +2776,17 @@ const
 begin
   LHttpOpts := THttpServerOptions.Default;
   LHttpOpts.WriteTimeout := 250;
+  if AMaxBodySize > 0 then
+    LHttpOpts.MaxBodySize := AMaxBodySize;
+  if AMaxHeaderSize > 0 then
+    LHttpOpts.MaxHeaderSize := AMaxHeaderSize;
   LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
 
   LTransport := NewH1ServerTransport(LH1Opts);
   Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
-    'h1 transport exposes session factory for direct error write-timeout proof');
+    ALabel + ': h1 transport exposes session factory for direct error write-timeout proof');
 
-  LStreamObj := TTimeoutWriteTcpStream.Create(REQ, 0, True);
+  LStreamObj := TTimeoutWriteTcpStream.Create(AReq, 0, True);
   LStream := LStreamObj as ITcpStream;
   LHandlerCalls := 0;
   LSession := LFactory.NewSession(LStream, HandlerFunc(
@@ -2793,19 +2798,66 @@ begin
   LOwnership := LSession.Run;
 
   Check(LOwnership = TCP_SERVER_CONN_OWNERSHIP_SERVER,
-    'server keeps ownership when malformed request error write times out');
+    ALabel + ': server keeps ownership when direct error write times out');
   CheckEqual(Int64(0), Int64(LHandlerCalls),
-    'malformed request direct 400 does not enter handler');
+    ALabel + ': direct error does not enter handler');
   CheckEqual(Int64(1), Int64(LStreamObj.ReadCalls),
-    'malformed request direct 400 consumes one request read');
+    ALabel + ': direct error consumes one request read');
   Check(LStreamObj.WriteCalls > 0,
-    'malformed request direct 400 still attempts to write an error response');
+    ALabel + ': direct error still attempts to write an error response');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
-    'malformed request direct 400 arms write deadline before direct error response');
+    ALabel + ': direct error arms write deadline before direct error response');
   CheckEqual(Int64(0), Int64(Length(LStreamObj.Output)),
-    'malformed request direct 400 leaves no partial bytes when first error write times out');
+    ALabel + ': direct error leaves no partial bytes when first error write times out');
   Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
-    'malformed request direct 400 timeout does not append synthetic 500');
+    ALabel + ': direct error timeout does not append synthetic 500');
+end;
+
+procedure TestDirectErrorResponseArmsWriteTimeoutOnMalformedRequest;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+    'malformed request direct 400', REQ, 0, 0);
+end;
+
+procedure TestDirectErrorResponseArmsWriteTimeoutOnPayloadTooLargeRequest;
+const
+  REQ =
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+    'payload-too-large direct 413', REQ, 2, 0);
+end;
+
+procedure TestDirectErrorResponseArmsWriteTimeoutOnHeaderTooLargeRequest;
+const
+  REQ =
+    'GET /too-many-headers HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'X-Long: 0123456789012345678901234567890123456789'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+    'header-too-large direct 431', REQ, 0, 32);
+end;
+
+procedure TestDirectErrorResponseArmsWriteTimeoutOnUnsupportedTransferCodingRequest;
+const
+  REQ =
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+    'unsupported transfer-coding direct 501', REQ, 0, 0);
 end;
 
 procedure TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500;
@@ -8773,6 +8825,12 @@ begin
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Direct error response arms write timeout on malformed request',
     @TestDirectErrorResponseArmsWriteTimeoutOnMalformedRequest);
+  T.Run('Direct error response arms write timeout on payload-too-large request',
+    @TestDirectErrorResponseArmsWriteTimeoutOnPayloadTooLargeRequest);
+  T.Run('Direct error response arms write timeout on header-too-large request',
+    @TestDirectErrorResponseArmsWriteTimeoutOnHeaderTooLargeRequest);
+  T.Run('Direct error response arms write timeout on unsupported transfer-coding request',
+    @TestDirectErrorResponseArmsWriteTimeoutOnUnsupportedTransferCodingRequest);
   T.Run('Write timeout before any wire bytes does not append 500',
     @TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500);
   T.Run('Write timeout after partial wire bytes stops pipeline without 500',
