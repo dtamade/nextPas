@@ -8,6 +8,7 @@ program test_http_contract;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.testing,
@@ -19,6 +20,8 @@ uses
   nextpas.core.http.middleware,
   nextpas.core.http.server,
   nextpas.core.http.client,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline,
   nextpas.core.platform.thread;
 
 var
@@ -157,6 +160,37 @@ begin
   platform_thread_join(AHandle, LRet);
   AServer.Free;
   AServer := nil;
+end;
+
+function SendRawRequestAndReadAll(const APort: UInt16;
+  const ARequest: string): string;
+var
+  LConn: ITcpStream;
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  LConn := TcpConnect('127.0.0.1', APort);
+  try
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+    if Length(ARequest) > 0 then
+      LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
+    LConn.Shutdown;
+    repeat
+      try
+        LN := LConn.Read(LBuf[0], SizeUInt(Length(LBuf)));
+      except
+        LN := 0;
+      end;
+      if LN > 0 then
+      begin
+        SetLength(Result, Length(Result) + Int32(LN));
+        Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+      end;
+    until LN = 0;
+  finally
+    LConn.Close;
+  end;
 end;
 
 procedure PlainHandlerProc(const AReq: IHttpRequest; const AW: IHttpResponseWriter);
@@ -899,6 +933,77 @@ begin
   Check(LRaised, 'NewHttpServer(handler, options) forwards explicit backend selection');
 end;
 
+procedure TestChunkedRequestTrailerContract;
+var
+  LRouter: IHttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerValue: string;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Test'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: value'#13#10#13#10;
+begin
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  LGotTrailerValue := '';
+  LRouter := NewRouter;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+    LRespBody: string;
+  begin
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerValue := AReq.Headers.Get('X-Test');
+
+    LRespBody := 'ok';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LRespBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LRespBody[1], SizeUInt(Length(LRespBody)));
+  end);
+
+  LHandle := StartServerWithTransport(LRouter as IHttpHandler, nil, LServer, LPort);
+  try
+    LResp := SendRawRequestAndReadAll(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0,
+      'Chunked trailer contract returns 200');
+    Check(Pos('ok', LResp) > 0,
+      'Chunked trailer contract preserves response body');
+    CheckEqual('hello', LGotBody,
+      'Chunked trailer contract decodes chunked body');
+    CheckEqual('X-Test', LGotTrailerDecl,
+      'Chunked trailer contract preserves declaration header');
+    CheckEqual('', LGotTrailerValue,
+      'Chunked trailer contract hides trailer field from ordinary headers');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
@@ -931,5 +1036,7 @@ begin
   T.Run('IHttpServer lifecycle contract shape', @TestHttpServerLifecycleContractOnInterface);
   T.Run('HttpServer honors explicit backend selection',
     @TestHttpServerHonorsExplicitBackendSelection);
+  T.Run('Chunked request trailer contract',
+    @TestChunkedRequestTrailerContract);
   T.Summary;
 end.

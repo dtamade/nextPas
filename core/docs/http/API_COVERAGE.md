@@ -19,6 +19,7 @@
 - `http.base` 现在也有 `HTTP_STATUS_CONTINUE = 100 / "Continue"` 与 `HTTP_STATUS_NOT_IMPLEMENTED = 501 / "Not Implemented"` 的 focused proof。
 - `IHttpClient.Get/Post/Do_` 原本已覆盖；本轮补齐 `Put/Delete/Patch/Head` focused 覆盖。
 - `IHttpTransport`、`IHttpServerTransport` 现在既有 focused shape 覆盖，也有 facade runtime 注入覆盖；`IHttpServerTransport.ServeConn` 的 post-handler ownership 返回语义也已锁定，并且 ownership 类型/常量可经由 `nextpas.core.http` facade 直接消费，internal registry 同样已有 focused proof。
+- `test_http_contract` 现在也直接锁定了当前 chunked trailer 公共契约：handler 仍能读到解码后的 body，`Trailer` 声明头会保留，但实际 trailer field 不会泄漏进普通请求头。
 - `IHttpServerSessionFactoryWithContext` 与 `ITcpServerSessionContext` alias 现在也有 focused proof：HTTP transport 会优先走 context-aware session factory，transport 侧可以看到 foundation 提供的 `WorkerHandoff`，而且 context-aware H1 session 现在已经直接暴露 `ITcpServerPollDrivenSession` seam，并且同连接上两个已完成请求会分成两次独立 handoff，而不是整连接一次 worker `Run`；request-side `IdleTimeout` 现在也有 poll-driven focused parity proof：不仅第一个 request byte 到达前会暴露有限 read-side `WakeDeadline`，partial fixed-length body stall 与 partial chunked trailer stall 也会沿用同一个 request-parse deadline 收口，超时后安全关闭并把 `WakeDeadline` 清回 infinite；partial request progress 不会偷重置 read deadline。successful response 也已经能在 completion wake / `peWritable` 上做 reactor-owned drain，`WriteTimeout > 0` 时还会通过 `WakeDeadline` 收口 stalled drain，successful timed drain 结束后会把 `WakeDeadline` 清回 infinite，而 stalled/partial timed drain 的 timeout-close 路径同样会把 `WakeDeadline` 清回 infinite，不会留下过期 deadline；partial-write timed drain 现在也有 focused proof：只有真正写出新字节时才会 re-arm write deadline，而纯 would-block / deadline-close 不会偷改 deadline，也不会偷跑 buffered follow-up request；untimed path 还新增了 active+1 queued 的有界有序 response queue proof，并直接锁定 queued follow-up `400/413/431/501` 都会保持在前一个响应之后按 wire order 排出，standalone direct `400/413/431/501` 也都会先进入 reactor-owned nonblocking drain，再由后续 `peWritable` 完成，不再回退 sync socket write，其中 queued follow-up `400/413/431/501` 也已在 Linux `threaded/epoll` real-socket/backpressure 路径得到 live 证明。
 - `IHttpHijacker` 已有 facade alias、writer 行为、server ownership 覆盖，以及 hijack 后异常路径下 server 不再补写 `500` / 不再回收连接的 focused proof；WebSocket upgrade 后 handler 抛异常时，server 同样不会追加 synthetic `500`，且 handler-owned websocket 仍可继续收发 frame。
 - facade callback aliases 与 server/client overload 现在有直接 focused smoke。
@@ -190,7 +191,7 @@
 
 ## Highest-Priority Gaps
 
-1. decide whether a public trailer API is warranted; the current narrow contract is to preserve the `Trailer` declaration header but ignore trailer fields in ordinary headers.
+1. decide whether to widen beyond the current focused trailer contract; today’s public contract is explicitly locked to preserve the `Trailer` declaration header while keeping trailer fields out of ordinary headers.
 2. facade helper boundary audit to decide which non-forwarded helpers should stay unit-local versus move into `nextpas.core.http`.
 3. future H2/H3 transport registration coverage on the landed internal registry.
 4. add broader informational response proof only if runtime later needs multi-stage non-`101` response handling.
