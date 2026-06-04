@@ -1,65 +1,53 @@
-# Findings: http server unsupported expect early 417
+# Findings: http server expect-417 error-path coverage
 
 ## Scope
 
-- 本轮继续补 `HttpServer` request-side protocol completeness：
-  当 `Expect` 含有 unsupported member 时，server 必须在 headers-stage
-  直接回 final `417 Expectation Failed`，而不是静默忽略或错误进入
-  `100 Continue` / body-wait 路径。
+- 本轮不是再补一个新协议分支，而是把上一刀刚引入的 `417 Expectation Failed`
+  接到既有 error-path 证据链上，避免文档提前说满而测试还没锁住。
 
 ## Confirmed truths
 
-### 1. 当前实现需要一条明确的 unsupported `Expect` final-rejection contract
+### 1. `417` 契约本身已经落地，但 direct-error / queued-follow-up 证据还不完整
 
-- 新增 `test_http_server` focused live case：
-  - `Unsupported Expect rejects early`
-  - `Unsupported Expect rejects early with epoll backend`
-- 这些 case 现在把目标契约锁定为：
-  - unsupported `Expect` 必须被明确收口成 final `417`
-  - server 不能静默忽略，也不能错误落入后续 body/read 路径
+- `API_COVERAGE.md` 已经把 `417` 写进：
+  - queued follow-up wire-order contract
+  - poll-driven standalone direct-error drain
+  - timed partial-timeout preserve-status
+  - real-socket queued follow-up wire-order
+- 但上一轮 focused proof 只锁住了“unsupported `Expect` -> early `417`”本身，
+  还没有把这些 downstream error-path 全部接上。
 
-### 2. 最小生产修复仍然应落在 H1 parse 阶段，并补齐公开状态常量
+### 2. 现有 generic error-path 已经天然支持 `417`，这轮不需要生产修复
 
-- `src/nextpas.core.http.base.pas` / `src/nextpas.core.http.pas`
-  - 新增 `HTTP_STATUS_EXPECTATION_FAILED = 417`
-  - `HttpStatusText(417) = "Expectation Failed"`
-- `src/nextpas.core.http.impl.h1.pas`
-  - 新增 unsupported `Expect` 检测 helper
-  - threaded `Run` 路径：headers 完整后、`100 Continue` 之前先 short-circuit
-    到 `417`
-  - poll-driven `AdvancePollRequestParse` 路径：同样在 parse 阶段直接
-    short-circuit 到 `417`
+- 在 [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
+  新增一组 focused tests 后，全部直接 GREEN：
+  - poll-driven queued follow-up `417`
+  - poll-driven standalone direct `417` writable-drain
+  - poll-driven standalone direct `417` partial-timeout preserve-status
+  - threaded direct error write-timeout / partial-timeout `417`
+  - threaded / epoll real-socket queued follow-up `417` wire-order
+- 这直接证明当前 generic error-path 并没有把 `417` 当成特殊漏网状态。
 
-这保证 `Expect` 的 final/interim 判定仍由 parse 阶段统一裁决，而不是等到
-handler 或 body 累积阶段才被动发现。
+因此这轮是 coverage-expansion，不是生产修复。
 
-### 3. 修复后的契约是“unsupported member 直接失败，不再误发 interim response”
+### 3. 现在 `417` 已经接上完整的 direct-error 证据链
 
-- positive path 仍保持：
-  - 正常 `Expect: 100-continue` 会先收到单条 `100 Continue`
-- 已有 negative path 仍保持：
-  - declared oversize `Content-Length` 会直接收到 final `413`
-- 新增 negative path：
-  - unsupported `Expect` 会直接收到 final `417`
-  - wire 上不会再出现 `100 Continue`
-  - handler 在任何 body byte 到达前不会被调用
+- `417` 现在不只证明“headers-stage early rejection”：
+  - queued follow-up `417` 会排在首个 `200` 之后
+  - poll-driven standalone direct `417` 会走 reactor-owned writable drain
+  - `417` partial-timeout 仍只暴露单一原始 status line
+  - real-socket queued follow-up `417` 在线程与 `epoll` 两条 live 路径上都保持 wire order
 
 ## Verification evidence
 
 - focused:
   - `make -C tests/nextpas.core.http/test_http_server test`
-    - `185/185 passed`
-    - heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_base test`
-    - `14/14 passed`
-    - heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_contract test`
-    - `29/29 passed`
+    - `192/192 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮把 unsupported `Expect` 的显式 `417` 收口补上了，但仍未覆盖：
+- 这轮把 `417` 接进 generic error-path 证据链了，但仍未覆盖：
   - `Expect` 组合场景的更广泛 differential characterization
   - 其他可在 headers 阶段直接裁决的 request-side final status
 - 下一步仍应优先剩余真实协议缺口，而不是继续做低价值 parity 平铺。

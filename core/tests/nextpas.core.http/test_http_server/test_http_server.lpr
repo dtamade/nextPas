@@ -2847,6 +2847,21 @@ begin
     'queued follow-up 501', REQ, 'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
+procedure TestH1PollDrivenSessionQueuesFollowUpExpectationFailedBehindActiveDrain;
+const
+  REQ =
+    'GET /one HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunPollDrivenQueuedFollowUpErrorPreservesWireOrder(
+    'queued follow-up 417', REQ, 'HTTP/1.1 417 Expectation Failed', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents;
 const
   REQ = 'GARBAGE DATA HERE'#13#10#13#10;
@@ -3155,6 +3170,19 @@ begin
     'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneUnsupportedExpectDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10 +
+        'Expect: 100-continue, fancy'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll unsupported expect rejection', REQ,
+    'HTTP/1.1 417 Expectation Failed', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingDrainsViaWritableEvents;
 const
   REQ = 'POST / HTTP/1.1'#13#10 +
@@ -3215,6 +3243,19 @@ begin
   RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
     'standalone poll unsupported transfer-coding partial-timeout', REQ,
     'HTTP/1.1 501 Not Implemented', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneUnsupportedExpectPartialTimeoutPreservesStatus;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 5'#13#10 +
+        'Expect: 100-continue, fancy'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+    'standalone poll unsupported expect partial-timeout', REQ,
+    'HTTP/1.1 417 Expectation Failed', 0, 0);
 end;
 
 procedure TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingPartialTimeoutPreservesStatus;
@@ -3408,6 +3449,19 @@ begin
     'unsupported transfer-coding direct 501', REQ, 0, 0);
 end;
 
+procedure TestDirectErrorResponseArmsWriteTimeoutOnUnsupportedExpectRequest;
+const
+  REQ =
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+    'unsupported expect direct 417', REQ, 0, 0);
+end;
+
 procedure RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
   const ALabel, AReq, AExpectedStatusLine: string;
   const AMaxBodySize, AMaxHeaderSize: Int64);
@@ -3467,6 +3521,20 @@ begin
   RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
     'unsupported transfer-coding direct 501 partial-timeout', REQ,
     'HTTP/1.1 501 Not Implemented', 0, 0);
+end;
+
+procedure TestDirectErrorResponsePartialWriteTimeoutOnUnsupportedExpectRequest;
+const
+  REQ =
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
+    'unsupported expect direct 417 partial-timeout', REQ,
+    'HTTP/1.1 417 Expectation Failed', 0, 0);
 end;
 
 procedure TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500;
@@ -4095,6 +4163,23 @@ begin
     'HTTP/1.1 501 Not Implemented', AHttpOpts);
 end;
 
+procedure RunRealSocketQueuedFollowUp417PreservesWireOrder(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
+    ABackendName + ' queued follow-up 417 live path', REQ,
+    'HTTP/1.1 417 Expectation Failed', AHttpOpts);
+end;
+
 procedure TestRealSocketQueuedFollowUp400PreservesWireOrderThreadedBackend;
 var
   LHttpOpts: THttpServerOptions;
@@ -4127,6 +4212,14 @@ var
 begin
   LHttpOpts := THttpServerOptions.Default;
   RunRealSocketQueuedFollowUp501PreservesWireOrder('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketQueuedFollowUp417PreservesWireOrderThreadedBackend;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  RunRealSocketQueuedFollowUp417PreservesWireOrder('threaded', LHttpOpts);
 end;
 
 procedure TestEpollRealSocketQueuedFollowUp400PreservesWireOrder;
@@ -4165,6 +4258,15 @@ begin
   LHttpOpts := THttpServerOptions.Default;
   LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   RunRealSocketQueuedFollowUp501PreservesWireOrder('epoll', LHttpOpts);
+end;
+
+procedure TestEpollRealSocketQueuedFollowUp417PreservesWireOrder;
+var
+  LHttpOpts: THttpServerOptions;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketQueuedFollowUp417PreservesWireOrder('epoll', LHttpOpts);
 end;
 {$ENDIF}
 
@@ -9586,6 +9688,8 @@ begin
     @TestEpollRealSocketQueuedFollowUp413PreservesWireOrder);
   T.Run('Real socket queued follow-up 431 preserves wire order with epoll backend',
     @TestEpollRealSocketQueuedFollowUp431PreservesWireOrder);
+  T.Run('Real socket queued follow-up 417 preserves wire order with epoll backend',
+    @TestEpollRealSocketQueuedFollowUp417PreservesWireOrder);
   T.Run('Real socket queued follow-up 501 preserves wire order with epoll backend',
     @TestEpollRealSocketQueuedFollowUp501PreservesWireOrder);
   T.Run('Real socket queued follow-up 400 preserves wire order with threaded backend',
@@ -9594,6 +9698,8 @@ begin
     @TestRealSocketQueuedFollowUp413PreservesWireOrderThreadedBackend);
   T.Run('Real socket queued follow-up 431 preserves wire order with threaded backend',
     @TestRealSocketQueuedFollowUp431PreservesWireOrderThreadedBackend);
+  T.Run('Real socket queued follow-up 417 preserves wire order with threaded backend',
+    @TestRealSocketQueuedFollowUp417PreservesWireOrderThreadedBackend);
   T.Run('Real socket queued follow-up 501 preserves wire order with threaded backend',
     @TestRealSocketQueuedFollowUp501PreservesWireOrderThreadedBackend);
 {$ENDIF}
@@ -9630,6 +9736,8 @@ begin
     @TestH1PollDrivenSessionQueuesFollowUpPayloadTooLargeBehindActiveDrain);
   T.Run('H1 poll-driven session queues follow-up 431 behind active drain',
     @TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain);
+  T.Run('H1 poll-driven session queues follow-up 417 behind active drain',
+    @TestH1PollDrivenSessionQueuesFollowUpExpectationFailedBehindActiveDrain);
   T.Run('H1 poll-driven session queues follow-up 501 behind active drain',
     @TestH1PollDrivenSessionQueuesFollowUpNotImplementedBehindActiveDrain);
   T.Run('H1 poll-driven standalone bad request drains via writable events',
@@ -9672,6 +9780,8 @@ begin
     @TestH1PollDrivenStandaloneTruncatedTrailerCrAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone unsupported transfer-coding drains via writable events',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone unsupported Expect drains via writable events',
+    @TestH1PollDrivenStandaloneUnsupportedExpectDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone chunked-not-final transfer-coding drains via writable events',
     @TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone bad request partial-timeout preserves status',
@@ -9680,6 +9790,8 @@ begin
     @TestH1PollDrivenStandalonePayloadTooLargePartialTimeoutPreservesStatus);
   T.Run('H1 poll-driven standalone header-too-large partial-timeout preserves status',
     @TestH1PollDrivenStandaloneHeaderTooLargePartialTimeoutPreservesStatus);
+  T.Run('H1 poll-driven standalone unsupported Expect partial-timeout preserves status',
+    @TestH1PollDrivenStandaloneUnsupportedExpectPartialTimeoutPreservesStatus);
   T.Run('H1 poll-driven standalone unsupported transfer-coding partial-timeout preserves status',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingPartialTimeoutPreservesStatus);
   T.Run('H1 poll-driven standalone chunked-not-final transfer-coding partial-timeout preserves status',
@@ -9692,6 +9804,8 @@ begin
     @TestDirectErrorResponseArmsWriteTimeoutOnPayloadTooLargeRequest);
   T.Run('Direct error response arms write timeout on header-too-large request',
     @TestDirectErrorResponseArmsWriteTimeoutOnHeaderTooLargeRequest);
+  T.Run('Direct error response arms write timeout on unsupported Expect request',
+    @TestDirectErrorResponseArmsWriteTimeoutOnUnsupportedExpectRequest);
   T.Run('Direct error response arms write timeout on unsupported transfer-coding request',
     @TestDirectErrorResponseArmsWriteTimeoutOnUnsupportedTransferCodingRequest);
   T.Run('Direct error response partial-timeout on malformed request preserves status',
@@ -9700,6 +9814,8 @@ begin
     @TestDirectErrorResponsePartialWriteTimeoutOnPayloadTooLargeRequest);
   T.Run('Direct error response partial-timeout on header-too-large request preserves status',
     @TestDirectErrorResponsePartialWriteTimeoutOnHeaderTooLargeRequest);
+  T.Run('Direct error response partial-timeout on unsupported Expect request preserves status',
+    @TestDirectErrorResponsePartialWriteTimeoutOnUnsupportedExpectRequest);
   T.Run('Direct error response partial-timeout on unsupported transfer-coding request preserves status',
     @TestDirectErrorResponsePartialWriteTimeoutOnUnsupportedTransferCodingRequest);
   T.Run('Write timeout before any wire bytes does not append 500',
