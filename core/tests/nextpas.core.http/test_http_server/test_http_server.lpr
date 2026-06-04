@@ -2459,6 +2459,22 @@ begin
     'HTTP/1.1 431 Request Header Fields Too Large', 128, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneInvalidTrailerFieldDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Bad'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'Bad Header: value'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll invalid trailer field request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents;
 const
   REQ = 'POST / HTTP/1.1'#13#10 +
@@ -8173,6 +8189,8 @@ begin
     @TestH1PollDrivenStandaloneChunkedMaxBodySizeDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone oversize trailer drains via writable events',
     @TestH1PollDrivenStandaloneOversizeTrailerDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone invalid trailer field drains via writable events',
+    @TestH1PollDrivenStandaloneInvalidTrailerFieldDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone unsupported transfer-coding drains via writable events',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents);
   T.Run('Session stops after zero-progress response write failure',
