@@ -4985,6 +4985,91 @@ begin
 end;
 {$ENDIF}
 
+procedure RunExpectContinueZeroContentLengthDoesNotEmitInterim(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LSeenEcho: Boolean;
+  LGotBody: string;
+const
+  REQ =
+    'POST /echo HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 0'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+begin
+  LSeenEcho := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/echo', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenEcho := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'echo:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200 OK', LResp) > 0,
+        ALabel + ': final response 200 without interim 100');
+      Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+        ALabel + ': zero content-length does not emit interim 100');
+      Check(Pos('echo:', LResp) > 0,
+        ALabel + ': final body still emitted');
+      Check(LSeenEcho, ALabel + ': handler called immediately');
+      CheckEqual('', LGotBody, ALabel + ': handler sees empty request body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueZeroContentLengthDoesNotEmitInterim;
+begin
+  RunExpectContinueZeroContentLengthDoesNotEmitInterim(False,
+    'expect-continue zero-length threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend;
+begin
+  RunExpectContinueZeroContentLengthDoesNotEmitInterim(True,
+    'expect-continue zero-length epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -9917,6 +10002,8 @@ begin
     @TestExpectContinueChunkedBodyReadableEpollBackend);
   T.Run('Expect: chunked MaxBodySize rejects after interim response with epoll backend',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
+  T.Run('Expect: zero content-length does not emit interim response with epoll backend',
+    @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
@@ -10126,6 +10213,8 @@ begin
     @TestExpectContinueChunkedBodyReadable);
   T.Run('Expect: chunked MaxBodySize rejects after interim response',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
+  T.Run('Expect: zero content-length does not emit interim response',
+    @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',

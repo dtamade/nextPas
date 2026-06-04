@@ -1,31 +1,28 @@
-# Task Plan: http server expect-continue chunked ingress coverage
+# Task Plan: http server bodyless expect-continue guard proof
 
 ## Goal
 
 继续留在 `3/6 H1 正确性加固` 主线，这一刀继续 request-side protocol
-completeness，补齐 `Expect: 100-continue` 和 chunked ingress 的 live 契约：
+completeness，补齐 `Expect: 100-continue` 的 no-body 守卫 live 契约：
 
-- chunked request body 也应先收到单条 interim `100 Continue`
-- handler 应读到解码后的 chunked body
-- 如果 chunked ingress 在收到 `100` 之后跨 chunk 越过 `MaxBodySize`，
-  最终仍应返回 `413`
+- 当请求没有真正声明 body 时，不应误发 interim `100 Continue`
+- 先锁 `Content-Length: 0 + Expect: 100-continue`
+- 最终应直接进入 handler/final response 路径
 
 要求：
 
-- 优先复用现有 `Expect` helper 风格
+- 优先复用现有 `Expect` live helper 风格
 - 先用 focused tests 取真值；如果直接 GREEN，本轮不改生产代码
 - 只跑 `test_http_server` focused gate
-- 不扩成大面积 `Expect` / chunked 组合矩阵
+- 不扩成大面积 `Expect` 无-body 组合矩阵
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
-- [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 缩小剩余高价值缺口，选定 `Expect + chunked` live contract
-- [x] 在 `test_http_server` 补 chunked body readable / chunked MaxBodySize after-interim focused tests
-- [x] 首轮 failed case 追到测试体自身 chunk-size literal 错误，而不是生产缺口
-- [x] 把 oversize case 改成动态构造真实 700-byte chunks
-- [x] 校正后 focused gate 直接 GREEN，本轮无需生产修复
+- [x] 审阅实现里的 `ShouldSendContinueResponse` / `RequestDeclaresBody`
+- [x] 缩小剩余高价值缺口，选定 `Content-Length: 0 + Expect: 100-continue`
+- [x] 在 `test_http_server` 补 threaded / epoll focused live tests
+- [x] focused gate 直接 GREEN，证明现有 no-body guard 已成立
 - [x] 跑 focused：
   - `make -C tests/nextpas.core.http/test_http_server test`
 - [x] 更新 coverage 文档与控制文件
@@ -44,12 +41,12 @@ completeness，补齐 `Expect: 100-continue` 和 chunked ingress 的 live 契约
 
 ## Intended outcome
 
-- `Expect: 100-continue` + chunked ingress 不再只靠推断，而是有 direct live proof
+- `Expect: 100-continue` 在 no-body 请求上不再只靠实现阅读，而是有 direct live proof
 - threaded / epoll 两条 live 路径都锁住：
-  - 先返回单条 `HTTP/1.1 100 Continue`
-  - chunked body 仍能被正常解码交给 handler
-  - chunked ingress 跨 chunk 越过 `MaxBodySize` 后最终返回 `413`
+  - `Content-Length: 0` 时不发 interim `100 Continue`
+  - handler 仍会被正常调度
+  - final response 直接返回 `200`
 - 证据要求：
-  - 新增 `Expect + chunked` tests GREEN
+  - 新增 no-body `Expect` tests GREEN
   - focused server suite 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`

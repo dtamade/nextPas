@@ -1,10 +1,10 @@
-# Progress Log: http server expect-continue chunked ingress coverage
+# Progress Log: http server bodyless expect-continue guard proof
 
 ## Session
 
-- **Scope:** 给 `Expect` request-side contract 补齐 chunked ingress live proof：interim `100`、decoded body、以及 after-interim `413`。
+- **Scope:** 给 `Expect` request-side contract 补齐 no-body guard live proof：`Content-Length: 0` 时不应误发 interim `100`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `expect-continue chunked ingress`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `bodyless expect-continue guard`
 
 ## Current state
 
@@ -20,17 +20,17 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增四条 `Expect + chunked` focused proofs：
-  - threaded / epoll `Expect + chunked` interim `100` + decoded body
-  - threaded / epoll `Expect + chunked` cross-chunk `MaxBodySize` after-interim `413`
-  同时把 oversize case 从错误的固定 literal 改成动态构造真实 700-byte chunks。
+  新增两条 no-body `Expect` focused proofs：
+  - threaded / epoll `Content-Length: 0 + Expect: 100-continue`
+  - 直接 final `200`，且 wire 上不出现 interim `100`
+  - handler 正常被调用，并读到空 body
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 `Expect + chunked` current truth。
+  已同步 no-body `Expect` current truth。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `200/200 passed`
+  - `202/202 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
