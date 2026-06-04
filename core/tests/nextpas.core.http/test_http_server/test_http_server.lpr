@@ -5354,6 +5354,26 @@ begin
     True);
 end;
 
+procedure TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterim;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: value'#13#10;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked truncated trailer section eof threaded',
+    True);
+end;
+
 procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim;
 const
   EXTRA_HEADERS = 'Trailer: X-Big'#13#10;
@@ -5542,6 +5562,27 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'expect-continue chunked truncated trailer section cr eof epoll',
+    True);
+end;
+
+procedure TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterimEpollBackend;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: value'#13#10;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked truncated trailer section eof epoll',
     True);
 end;
 
@@ -11636,6 +11677,8 @@ begin
     @TestExpectContinueChunkedTruncatedTrailerFieldCrAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect: chunked truncated trailer section CR EOF rejects after interim response with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerSectionCrAtEofRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked truncated trailer section EOF rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect: chunked oversize trailer rejects after interim response with epoll backend',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend);
   T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
@@ -11911,6 +11954,8 @@ begin
     @TestExpectContinueChunkedTruncatedTrailerFieldCrAtEofRejectsAfterInterim);
   T.Run('Expect: chunked truncated trailer section CR EOF rejects after interim response',
     @TestExpectContinueChunkedTruncatedTrailerSectionCrAtEofRejectsAfterInterim);
+  T.Run('Expect: chunked truncated trailer section EOF rejects after interim response',
+    @TestExpectContinueChunkedTruncatedTrailerSectionAtEofRejectsAfterInterim);
   T.Run('Expect: chunked oversize trailer rejects after interim response',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim);
   T.Run('Expect: fixed-length body stall closes safely after interim response',
