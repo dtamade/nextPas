@@ -1,5 +1,19 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http cl-te epoll smuggling proof
+
+### Goal
+
+继续收口 `nextpas.core.http` raw-wire security proof，把 request smuggling 核心防线
+`Content-Length + Transfer-Encoding` conflict 两种 header 顺序补到 Linux `epoll` live parity。
+
+### Checklist
+
+- [x] 机器比对 `test_http_security` default / `epoll` 注册项，筛出高价值 parity gap。
+- [x] 新增 `CL+TE` 与 `TE+CL` 两个 `epoll` raw-wire proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 不改生产代码，只记录 current truth 并 path-limited commit。
+
 ## Active Session: 2026-06-04 http chunked max-body epoll parity
 
 ### Goal

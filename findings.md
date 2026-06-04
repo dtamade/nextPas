@@ -1,5 +1,15 @@
 # Findings & Decisions
 
+## 2026-06-04 http cl-te epoll smuggling proof
+
+- `Content-Length + Transfer-Encoding: chunked` 是 request smuggling 边界，不能只停留在默认 backend
+  live proof；Linux `epoll` 也需要 raw-wire 直接证据。
+- 本轮新增 `CL+TE` 与 `TE+CL` 两种 header 顺序的 `epoll` proof 后，
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `138/138 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 这仍是 coverage-expansion，不是生产修复；当前 truth 是 threaded / Linux `epoll` 两条
+  raw-wire ingress 路径都会把 CL/TE conflict 判为 explicit `400`。
+
 ## 2026-06-04 http chunked max-body epoll parity
 
 - `Chunked MaxBodySize rejects before terminal chunk` 原先在 `test_http_security` 只有默认 backend

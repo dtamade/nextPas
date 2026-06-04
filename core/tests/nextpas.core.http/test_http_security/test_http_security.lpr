@@ -2707,6 +2707,29 @@ begin
     'epoll request-target over max-header');
 end;
 
+procedure TestContentLengthTransferEncodingConflictEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
+            'Transfer-Encoding: chunked'#13#10#13#10'0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll CL+TE conflict: explicit 400');
+end;
+
+procedure TestTransferEncodingContentLengthConflictReverseOrderEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Content-Length: 5'#13#10#13#10'0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll TE+CL reverse-order conflict: explicit 400');
+end;
+
 procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
@@ -3311,6 +3334,10 @@ begin
   T.Run('Truncated trailer field CR at EOF -> 400', @TestTruncatedTrailerFieldCrAtEof);
   T.Run('Truncated trailer section CR at EOF -> 400', @TestTruncatedTrailerCrAtEof);
   {$IFDEF NEXTPAS_LINUX}
+  T.Run('CL + TE conflict with epoll backend',
+    @TestContentLengthTransferEncodingConflictEpollBackend);
+  T.Run('TE + CL conflict reverse order with epoll backend',
+    @TestTransferEncodingContentLengthConflictReverseOrderEpollBackend);
   T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
   T.Run('Chunked must be final transfer coding -> 400 with epoll backend',

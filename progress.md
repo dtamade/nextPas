@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-06-04 http cl-te epoll smuggling proof
+
+- **Status:** completed.
+- Objective:
+  - tighten request-smuggling raw-wire security proof for `nextpas.core.http`
+  - add Linux `epoll` parity for `Content-Length + Transfer-Encoding: chunked`
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `TestContentLengthTransferEncodingConflictEpollBackend`
+  - added `TestTransferEncodingContentLengthConflictReverseOrderEpollBackend`
+  - registered both `CL + TE conflict with epoll backend` and `TE + CL conflict reverse order with epoll backend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `138/138 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `malformed chunked raw-wire security proof`
+    - this batch: `CL/TE smuggling conflict -> explicit 400 with epoll parity`
+
 ## Session: 2026-06-04 http chunked max-body epoll parity
 
 - **Status:** completed.
