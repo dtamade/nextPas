@@ -69,6 +69,7 @@ type
     FOpen: Boolean;
     FCloseReceived: Boolean;
     FCloseSent: Boolean;
+    FFragmentOpen: Boolean;
     procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: string);
     procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);
     procedure ReadExact(var ABuf; ACount: SizeUInt);
@@ -208,6 +209,7 @@ begin
   FOpen := True;
   FCloseReceived := False;
   FCloseSent := False;
+  FFragmentOpen := False;
 end;
 
 procedure TWebSocketImpl.ReadExact(var ABuf; ACount: SizeUInt);
@@ -248,6 +250,10 @@ begin
     raise EHttpError.Create('WebSocket: reserved or invalid opcode');
   if (LOpcode >= $08) and (not Result.Fin) then
     raise EHttpError.Create('WebSocket: control frames must not be fragmented');
+  if (LOpcode = Byte(wsOpContinuation)) and (not FFragmentOpen) then
+    raise EHttpError.Create('WebSocket: unexpected continuation frame');
+  if (LOpcode in [Byte(wsOpText), Byte(wsOpBinary)]) and FFragmentOpen then
+    raise EHttpError.Create('WebSocket: data frame interrupts fragmented message');
   Result.Opcode := TWebSocketOpcode(LOpcode);
   LMasked := (LHdr[1] and $80) <> 0;
   LPayloadLen := LHdr[1] and $7F;
@@ -293,6 +299,14 @@ begin
     ValidateClosePayload(Result.Payload);
     FCloseReceived := True;
   end;
+
+  if Result.Opcode = wsOpContinuation then
+  begin
+    if Result.Fin then
+      FFragmentOpen := False;
+  end
+  else if (Result.Opcode in [wsOpText, wsOpBinary]) and (not Result.Fin) then
+    FFragmentOpen := True;
 end;
 
 procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);

@@ -1,11 +1,11 @@
-# Progress Log: WebSocket invalid UTF-8 close-reason rejection
+# Progress Log: WebSocket standalone continuation rejection
 
 ## Session
 
-- **Scope:** 补齐 WebSocket invalid UTF-8 close-reason rejection。
+- **Scope:** 补齐 WebSocket standalone continuation rejection。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket negative frame coverage`
-  -> `invalid UTF-8 close-reason rejection`
+  -> `fragmented data-frame policy` -> `standalone continuation rejection`
 
 ## Current state
 
@@ -21,23 +21,23 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `InvalidUtf8CloseReasonRejected` focused proof。
-- `nextpas.core.http.websocket.ReadFrame` 增加 close reason UTF-8 guard。
-- `docs/http/API_COVERAGE.md` 已记录 WebSocket invalid UTF-8 close-reason rejection contract。
+- `test_http_websocket` 新增 `StandaloneContinuationFrameRejected` focused proof。
+- `nextpas.core.http.websocket.ReadFrame` 增加 continuation state guard。
+- `docs/http/API_COVERAGE.md` 已记录 WebSocket standalone continuation rejection contract。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `15 total, 14 passed, 1 failed`
-  - failure: `invalid-utf8-close-reason: close code protocol error: expected 1002, got 1000`
+  - `16 total, 15 passed, 1 failed`
+  - failure: `standalone-continuation: server sends close frame`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `15 total, 15 passed, 0 failed`
+  - `16 total, 16 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先继续 WebSocket negative coverage：fragmented data-frame policy；benchmark 仍后置，不跑全量。
+- 下一刀优先继续 WebSocket fragmented data-frame policy：interleaved data-frame rejection 或 valid fragmented sequence state proof；benchmark 仍后置，不跑全量。
