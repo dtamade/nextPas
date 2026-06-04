@@ -1875,6 +1875,24 @@ begin
     'Queued follow-up 501 preserves wire order');
 end;
 
+procedure TestQueuedFollowUp417PreservesWireOrder;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunQueuedFollowUpErrorPreservesWireOrder(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 417 Expectation Failed',
+    'Queued follow-up 417 preserves wire order');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestMalformedRequestBackpressureSafeHandlingEpollBackend;
 var
@@ -1966,6 +1984,28 @@ begin
     REQ,
     'HTTP/1.1 501 Not Implemented',
     'epoll queued follow-up 501 preserves wire order');
+end;
+
+procedure TestQueuedFollowUp417PreservesWireOrderEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunQueuedFollowUpErrorPreservesWireOrder(
+    LOpts,
+    REQ,
+    'HTTP/1.1 417 Expectation Failed',
+    'epoll queued follow-up 417 preserves wire order');
 end;
 
 procedure TestExpectContinuePositiveFlowEpollBackend;
@@ -4044,6 +4084,8 @@ begin
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
   T.Run('Queued follow-up 501 preserves wire order',
     @TestQueuedFollowUp501PreservesWireOrder);
+  T.Run('Queued follow-up 417 preserves wire order',
+    @TestQueuedFollowUp417PreservesWireOrder);
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
@@ -4220,6 +4262,8 @@ begin
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
   T.Run('Queued follow-up 501 preserves wire order with epoll backend',
     @TestQueuedFollowUp501PreservesWireOrderEpollBackend);
+  T.Run('Queued follow-up 417 preserves wire order with epoll backend',
+    @TestQueuedFollowUp417PreservesWireOrderEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
     @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',

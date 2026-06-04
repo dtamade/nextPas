@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-06-04 http queued follow-up 417 security proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining queued follow-up `417` raw-wire gap in `test_http_security`
+  - directly prove follow-up `417` stays behind the first response body on wire
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestQueuedFollowUp417PreservesWireOrder`
+  - added `TestQueuedFollowUp417PreservesWireOrderEpollBackend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `166/166 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `queued follow-up raw-wire security proof`
+  - this batch:
+    `unsupported Expect follow-up 417 preserves wire order`
+
 ## Session: 2026-06-04 http queued follow-up 501 security proof
 
 - **Status:** completed.
