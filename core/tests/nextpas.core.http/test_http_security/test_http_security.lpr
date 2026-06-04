@@ -195,6 +195,26 @@ begin
   end;
 end;
 
+procedure RunSecurityRequestExpectStatus(const AOpts: THttpServerOptions;
+  const AReq, AExpectedStatus, ALabel: string; const AShutdownWrite: Boolean = False);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    if AShutdownWrite then
+      LResp := SendRawAndShutdownWrite(LPort, AReq)
+    else
+      LResp := SendRaw(LPort, AReq);
+    Check(Pos(AExpectedStatus, LResp) > 0, ALabel);
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 function ReadOneResponse(const AConn: ITcpStream): string;
 var
   LBuf: array[0..0] of Byte;
@@ -1563,6 +1583,68 @@ begin
   end;
 end;
 
+{$IFDEF NEXTPAS_LINUX}
+function EpollSecurityServerOptions: THttpServerOptions;
+begin
+  Result := THttpServerOptions.Default;
+  Result.Backend := TCP_SERVER_BACKEND_EPOLL;
+end;
+
+procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 501',
+    'epoll unsupported transfer coding before chunked: explicit 501');
+end;
+
+procedure TestInvalidChunkSizeEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            'Z'#13#10'hello'#13#10 +
+            '0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll invalid chunk size: explicit 400');
+end;
+
+procedure TestMissingChunkDataCrLfEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello0'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll missing chunk-data CRLF: explicit 400');
+end;
+
+procedure TestTruncatedTrailerCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13#10#13;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll truncated trailer CR EOF: explicit 400',
+    True);
+end;
+{$ENDIF}
+
 { Main }
 
 begin
@@ -1644,5 +1726,15 @@ begin
   T.Run('Truncated trailer field line at EOF -> 400', @TestTruncatedTrailerFieldLineAtEof);
   T.Run('Truncated trailer field CR at EOF -> 400', @TestTruncatedTrailerFieldCrAtEof);
   T.Run('Truncated trailer section CR at EOF -> 400', @TestTruncatedTrailerCrAtEof);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
+    @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
+  T.Run('Invalid chunk size -> 400 with epoll backend',
+    @TestInvalidChunkSizeEpollBackend);
+  T.Run('Missing chunk-data CRLF -> 400 with epoll backend',
+    @TestMissingChunkDataCrLfEpollBackend);
+  T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerCrAtEofEpollBackend);
+  {$ENDIF}
   T.Summary;
 end.
