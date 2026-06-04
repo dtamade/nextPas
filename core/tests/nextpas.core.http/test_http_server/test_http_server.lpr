@@ -4538,6 +4538,74 @@ begin
 end;
 {$ENDIF}
 
+procedure RunUnsupportedExpectRejectsEarly(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LHandlerCalled := True;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 417 Expectation Failed', LResp) > 0,
+        ALabel + ': unsupported expect rejected with final 417');
+      Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+        ALabel + ': unsupported expect does not emit interim 100');
+      Check(Pos('connection: close', LResp) > 0,
+        ALabel + ': unsupported expect closes connection');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called before any body bytes arrive');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestUnsupportedExpectRejectsEarly;
+begin
+  RunUnsupportedExpectRejectsEarly(False, 'unsupported expect threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestUnsupportedExpectRejectsEarlyEpollBackend;
+begin
+  RunUnsupportedExpectRejectsEarly(True, 'unsupported expect epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -9466,6 +9534,8 @@ begin
     @TestExpectContinueSendsInterimResponseEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
+  T.Run('Unsupported Expect rejects early with epoll backend',
+    @TestUnsupportedExpectRejectsEarlyEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
@@ -9651,6 +9721,8 @@ begin
     @TestExpectContinueSendsInterimResponse);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
+  T.Run('Unsupported Expect rejects early',
+    @TestUnsupportedExpectRejectsEarly);
   T.Run('Pipelined requests in single write', @TestPipelinedRequestsInSingleWrite);
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);

@@ -293,6 +293,34 @@ begin
     (LowerCase(Trim(AParser.GetHeaders.Get('expect'))) = '100-continue');
 end;
 
+function RequestHasUnsupportedExpectations(const AParser: IH1Parser): Boolean;
+var
+  LExpect: string;
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
+begin
+  Result := False;
+  if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
+    Exit(False);
+
+  LExpect := Trim(AParser.GetHeaders.Get('expect'));
+  if LExpect = '' then
+    Exit(False);
+
+  LStart := 1;
+  while LStart <= Length(LExpect) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
+      Inc(LPos);
+    LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
+    if (LToken <> '') and (LToken <> '100-continue') then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
+end;
+
 function ShouldSendContinueResponse(const AParser: IH1Parser;
   const AHeadersDone, AContinueSent: Boolean): Boolean;
 begin
@@ -1074,6 +1102,14 @@ begin
           FKeepAlive := False;
           Break;
         end;
+        if LHeadersDone and RequestHasUnsupportedExpectations(FParser) then
+        begin
+          WriteErrorResponse(FConn, HTTP_STATUS_EXPECTATION_FAILED,
+            FOptions.WriteTimeout);
+          LRejected := True;
+          FKeepAlive := False;
+          Break;
+        end;
         if LHeadersDone and
            DeclaredContentLengthExceedsLimit(FParser, FOptions.MaxBodySize) then
         begin
@@ -1502,6 +1538,9 @@ begin
     if FParseHeadersDone and (FParser.GetHttpVersion = hvHttp11) and
        (FParser.GetHeaders.Get('host') = '') then
       Exit(FinishPollParseError(HTTP_STATUS_BAD_REQUEST));
+
+    if FParseHeadersDone and RequestHasUnsupportedExpectations(FParser) then
+      Exit(FinishPollParseError(HTTP_STATUS_EXPECTATION_FAILED));
 
     if FParseHeadersDone and
        DeclaredContentLengthExceedsLimit(FParser, FOptions.MaxBodySize) then

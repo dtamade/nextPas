@@ -774,6 +774,9 @@ begin
   CheckEqual('Payload Too Large',
     nextpas.core.http.HttpStatusText(
       nextpas.core.http.HTTP_STATUS_PAYLOAD_TOO_LARGE), '413 facade');
+  CheckEqual('Expectation Failed',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_EXPECTATION_FAILED), '417 facade');
   CheckEqual('Not Found', HttpStatusText(HTTP_STATUS_NOT_FOUND), '404');
   CheckEqual('Internal Server Error', HttpStatusText(HTTP_STATUS_INTERNAL_SERVER_ERROR), '500');
   CheckEqual('Not Implemented',

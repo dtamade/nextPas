@@ -73,6 +73,7 @@ const
   HTTP_STATUS_NOT_FOUND             = THttpStatus(404);
   HTTP_STATUS_METHOD_NOT_ALLOWED    = THttpStatus(405);
   HTTP_STATUS_PAYLOAD_TOO_LARGE     = THttpStatus(413);
+  HTTP_STATUS_EXPECTATION_FAILED    = THttpStatus(417);
   HTTP_STATUS_INTERNAL_SERVER_ERROR = THttpStatus(500);
   HTTP_STATUS_NOT_IMPLEMENTED       = THttpStatus(501);
   HTTP_STATUS_BAD_GATEWAY           = THttpStatus(502);
@@ -145,6 +146,7 @@ begin
     404: Result := 'Not Found';
     405: Result := 'Method Not Allowed';
     413: Result := 'Payload Too Large';
+    417: Result := 'Expectation Failed';
     431: Result := 'Request Header Fields Too Large';
     500: Result := 'Internal Server Error';
     501: Result := 'Not Implemented';
