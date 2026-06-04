@@ -6167,6 +6167,89 @@ begin
   end;
 end;
 
+procedure TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLater;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LSeenUpload: Boolean;
+  LSeenNext: Boolean;
+  LGotBody: string;
+const
+  REQ1 = 'POST /upload HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Content-Length: 5'#13#10#13#10 +
+         'hello' +
+         'GET /next HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10;
+  REQ2_REST = 'Connection: close'#13#10#13#10;
+begin
+  LSeenUpload := False;
+  LSeenNext := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/next', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LSeenNext := True;
+    LBody := 'next';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'keep-alive partial-next-headers: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'keep-alive partial-next-headers: first body preserved');
+      Check(LSeenUpload, 'keep-alive partial-next-headers: first handler called');
+      CheckEqual('hello', LGotBody, 'keep-alive partial-next-headers: handler sees declared body only');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0, 'keep-alive partial-next-headers: second response 200');
+      Check(Pos('next', LResp2) > 0, 'keep-alive partial-next-headers: second body preserved');
+      Check(LSeenNext, 'keep-alive partial-next-headers: second handler called');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400;
 var
   LRouter: THttpRouter;
@@ -6419,6 +6502,89 @@ begin
       Check(Pos('200 OK', LResp2) > 0, 'epoll keep-alive partial-next-line: second response 200');
       Check(Pos('next', LResp2) > 0, 'epoll keep-alive partial-next-line: second body preserved');
       Check(LSeenNext, 'epoll keep-alive partial-next-line: second handler called');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLaterEpollBackend;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LSeenUpload: Boolean;
+  LSeenNext: Boolean;
+  LGotBody: string;
+const
+  REQ1 = 'POST /upload HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10 +
+         'Content-Length: 5'#13#10#13#10 +
+         'hello' +
+         'GET /next HTTP/1.1'#13#10 +
+         'Host: localhost'#13#10;
+  REQ2_REST = 'Connection: close'#13#10#13#10;
+begin
+  LSeenUpload := False;
+  LSeenNext := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LRouter.Get('/next', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LSeenNext := True;
+    LBody := 'next';
+    AW.GetHeaders.Set_('content-length', '4');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], 4);
+  end);
+  LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp1) > 0, 'epoll keep-alive partial-next-headers: first response 200');
+      Check(Pos('upload:hello', LResp1) > 0, 'epoll keep-alive partial-next-headers: first body preserved');
+      Check(LSeenUpload, 'epoll keep-alive partial-next-headers: first handler called');
+      CheckEqual('hello', LGotBody, 'epoll keep-alive partial-next-headers: handler sees declared body only');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('200 OK', LResp2) > 0, 'epoll keep-alive partial-next-headers: second response 200');
+      Check(Pos('next', LResp2) > 0, 'epoll keep-alive partial-next-headers: second body preserved');
+      Check(LSeenNext, 'epoll keep-alive partial-next-headers: second handler called');
     finally
       LConn.Close;
     end;
@@ -10282,6 +10448,8 @@ begin
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400EpollBackend);
   T.Run('Content-Length keep-alive partial follow-up request line can complete later with epoll backend',
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
+  T.Run('Content-Length keep-alive partial follow-up headers can complete later with epoll backend',
+    @TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLaterEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up headers -> follow-up 400 with epoll backend',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400EpollBackend);
   T.Run('Chunked pipelined requests in single write with epoll backend',
@@ -10515,6 +10683,8 @@ begin
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineBecomesFollowUp400);
   T.Run('Content-Length keep-alive partial follow-up request line can complete later',
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater);
+  T.Run('Content-Length keep-alive partial follow-up headers can complete later',
+    @TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLater);
   T.Run('Content-Length keep-alive truncated follow-up headers -> follow-up 400',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersBecomesFollowUp400);
   T.Run('Chunked extra bytes after close -> 400', @TestChunkedRequestExtraBytesAfterCloseRejected);

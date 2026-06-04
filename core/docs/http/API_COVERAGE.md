@@ -110,7 +110,7 @@
 - `IHttpServer` 现在也有一条 server-layer current-truth proof：非 `Connection: close` `Content-Length` garbage tail 会先完成首个合法 request，再把尾巴作为 follow-up malformed request 返回 `400`；这条证据用于后续契约决策，尚未当作最终 public policy 冻结。
 - `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up request-line current-truth proof：首个合法 fixed-length request 会先完成并进入 handler，半截下一请求行在 peer half-close 后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
-- `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up headers current-truth proof：首个合法 fixed-length request 会先完成并进入 handler，半截下一请求头在 peer half-close 后作为 follow-up malformed request 返回 `400`。
+- `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up headers bridge proof：首个合法 fixed-length request 会先完成并进入 handler，半截下一请求头在后续字节补齐后仍可继续完成为合法第二请求，因此不会被过早判成 malformed follow-up。
 - `IHttpServer` 现在也有 keep-alive chunked garbage tail current-truth proof：首个合法 chunked request 会先完成并进入 handler，尾巴随后作为 follow-up malformed request 返回 `400`；这条证据同样用于后续契约决策，尚未当作最终 public policy 冻结。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up request-line current-truth proof：首个合法 chunked request 会先完成并进入 handler，半截下一请求行在 peer half-close 后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
