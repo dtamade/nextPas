@@ -51,6 +51,8 @@ type
     procedure Delete(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Patch(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Options(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Connect(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Trace(const APattern: string; const AHandler: THttpHandlerFunc);
     { Test helper — public route lookup }
     function FindRoute(const AMethod: THttpMethod; const APath: string; out AParams: TRouteParams): THttpHandlerFunc;
   end;
@@ -505,6 +507,16 @@ end;
 procedure THttpRouter.Options(const APattern: string; const AHandler: THttpHandlerFunc);
 begin
   Handle(hmOptions, APattern, AHandler);
+end;
+
+procedure THttpRouter.Connect(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  Handle(hmConnect, APattern, AHandler);
+end;
+
+procedure THttpRouter.Trace(const APattern: string; const AHandler: THttpHandlerFunc);
+begin
+  Handle(hmTrace, APattern, AHandler);
 end;
 
 function THttpRouter.FindRoute(const AMethod: THttpMethod; const APath: string; out AParams: TRouteParams): THttpHandlerFunc;

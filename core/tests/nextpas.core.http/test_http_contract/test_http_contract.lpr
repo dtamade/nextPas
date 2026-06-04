@@ -356,6 +356,14 @@ begin
   begin
     LHit := 'options';
   end);
+  LRouter.Connect('/iface-connect', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'connect';
+  end);
+  LRouter.Trace('/iface-trace', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    LHit := 'trace';
+  end);
 
   LHit := '';
   LRouter.ServeHTTP(NewRequest(hmGet, TUrl.Parse('/iface-get')), nil);
@@ -384,6 +392,14 @@ begin
   LHit := '';
   LRouter.ServeHTTP(NewRequest(hmOptions, TUrl.Parse('/iface-options')), nil);
   CheckEqual('options', LHit, 'IHttpRouter.Options registers OPTIONS route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmConnect, TUrl.Parse('/iface-connect')), nil);
+  CheckEqual('connect', LHit, 'IHttpRouter.Connect registers CONNECT route');
+
+  LHit := '';
+  LRouter.ServeHTTP(NewRequest(hmTrace, TUrl.Parse('/iface-trace')), nil);
+  CheckEqual('trace', LHit, 'IHttpRouter.Trace registers TRACE route');
 end;
 
 { Test 4: NewRequest — Method/Url/Version accessible }

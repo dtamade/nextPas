@@ -274,6 +274,14 @@ begin
     begin
       GHandlerCalled := 'options-g';
     end);
+    LRouter.Connect('/h', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'connect-h';
+    end);
+    LRouter.Trace('/i', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      GHandlerCalled := 'trace-i';
+    end);
 
     LHandler := LRouter.FindRoute(hmGet, '/a', LParams);
     Check(LHandler <> nil, 'Get convenience');
@@ -309,6 +317,16 @@ begin
     Check(LHandler <> nil, 'Options convenience');
     LHandler(nil, nil);
     CheckEqual('options-g', GHandlerCalled, 'Options handler');
+
+    LHandler := LRouter.FindRoute(hmConnect, '/h', LParams);
+    Check(LHandler <> nil, 'Connect convenience');
+    LHandler(nil, nil);
+    CheckEqual('connect-h', GHandlerCalled, 'Connect handler');
+
+    LHandler := LRouter.FindRoute(hmTrace, '/i', LParams);
+    Check(LHandler <> nil, 'Trace convenience');
+    LHandler(nil, nil);
+    CheckEqual('trace-i', GHandlerCalled, 'Trace handler');
   finally
     LRouter.Free;
   end;

@@ -1,61 +1,50 @@
-# Findings: non-101 informational response contract
+# Findings: router CONNECT / TRACE convenience surface
 
 ## Scope
 
-本轮补齐 H1 response-side informational response contract。目标是接近 Go
-`net/http` 的主流语义：非 `101` 的 `1xx` 可以作为 interim response 先写出，
-但不提交 final response；handler 后续仍可发送 final status 和 body。
+本轮补齐 `IHttpRouter` / `THttpRouter` 的 public convenience surface：
+既然 `THttpMethod` 已公开 `hmConnect` / `hmTrace`，router interface 也应提供
+对应的 `Connect` / `Trace` 方法，而不是让用户回退到 generic `Handle`。
 
 ## Confirmed truths
 
-### 1. RED 证明了真实缺口
+### 1. RED 证明了接口缺口
 
-`test_http_h1writer` 新增
-`non-101 informational response allows later final response` 后，首次 focused
-gate 失败：
+`test_http_contract` 在 `IHttpRouter` interface 上调用 `Connect` / `Trace`
+后首次 focused gate 编译失败：
 
-- `28/29 passed, 1 failed`
-- failure: `response status must not include a body`
-- heaptrc 有 6 个 unfreed blocks，原因是 RED 用例抛异常后提前中断。
+- `Identifier idents no member "Connect"`
+- `Identifier idents no member "Trace"`
 
-这证明旧状态机会把 `103` 当成最终 no-body response 提交，后续 final `200`
-与 body 被阻断。
+这证明缺口在 public interface surface，而不是测试拼写或实现细节。
 
 ### 2. 最小修复
 
-`TH1ResponseWriter.WriteHeader` 现在对非 `101` 的 `1xx` 走 informational path：
+`IHttpRouter` 和 `THttpRouter` 现在都新增：
 
-- 写出 status line / 当前 headers / CRLF。
-- 不设置 `FHeadersSent`。
-- 不设置 `FNoBodyAllowed`。
-- 不创建 chunked writer。
-- 保留原 final status，等待后续 final `WriteHeader` 或 body write。
+- `Connect(const APattern: string; const AHandler: THttpHandlerFunc)`
+- `Trace(const APattern: string; const AHandler: THttpHandlerFunc)`
 
-`101 Switching Protocols` 不走该 path，仍然是 committed no-body / upgrade-like
-边界。
+两者只转发到 `Handle(hmConnect, ...)` / `Handle(hmTrace, ...)`，没有改变
+router 匹配算法、middleware、405 或 server runtime 语义。
 
-### 3. Public API 补齐
+### 3. Focused proof
 
-新增 public status carrier：
+`test_http_contract` 证明：
 
-- `HTTP_STATUS_EARLY_HINTS = 103`
-- `HttpStatusText(103) = 'Early Hints'`
-- `nextpas.core.http` facade re-export
+- 经由 `nextpas.core.http` facade 获得的 `IHttpRouter` interface 可以直接调用
+  `Connect` / `Trace`。
+- 两个方法能注册并 dispatch 到对应 handler。
 
-`test_http_contract` 已直接锁住 facade 常量和 status text。
+`test_http_router` 证明：
 
-### 4. Server live proof
-
-`test_http_server` 新增 threaded / Linux `epoll` live proof：
-
-- handler 写 `103 Early Hints`
-- 随后写 final `200 OK`
-- final response 保持 chunked body framing
-- wire order 为 `103 -> 200 -> body`
+- concrete `THttpRouter.Connect` / `Trace` 注册后，可通过 `FindRoute` 在
+  `hmConnect` / `hmTrace` 树上找到并执行 handler。
 
 ## Remaining gaps / risks
 
-- 本轮没有扩展更多 1xx 常量；只补当前最有价值的 `103 Early Hints`。
-- informational response 会发送当前 header map；这与现有 writer 设计一致。
-- 后续若要支持更复杂的 header 生命周期（例如 interim-only headers），需要单独设计，
-  不应混进本轮。
+- `CONNECT` 的 tunnel / proxy 语义不是本轮范围；本轮只补 route registration
+  surface。
+- `TRACE` 是否在生产应用中启用由用户 handler 决定；框架只提供 method dispatch。
+- 这轮不跑 server live gate，因为 router dispatch 已在 unit/contract 层直接证明，
+  server runtime 不受影响。

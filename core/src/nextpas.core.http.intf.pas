@@ -109,6 +109,8 @@ type
     procedure Delete(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Patch(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Options(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Connect(const APattern: string; const AHandler: THttpHandlerFunc);
+    procedure Trace(const APattern: string; const AHandler: THttpHandlerFunc);
     procedure Use(const AMiddleware: IHttpMiddleware);
   end;
 
