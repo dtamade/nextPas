@@ -1,5 +1,20 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http queued follow-up 501 security proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 queued follow-up raw-wire security proof，
+把 `unsupported transfer-coding follow-up 501 preserves wire order`
+补进 `test_http_security`，覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server` 与 `test_http_security`，确认 queued follow-up `501` 仍缺 security 层 direct raw-wire 证据。
+- [x] 新增 threaded / `epoll` 两条 `queued follow-up 501 preserves wire order` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http expect chunked security proof
 
 ### Goal

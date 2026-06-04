@@ -1368,6 +1368,98 @@ begin
   end;
 end;
 
+procedure RunQueuedFollowUpErrorPreservesWireOrder(
+  const AOpts: THttpServerOptions; const AReq, AExpectedStatusLine,
+  ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LTransport: IHttpServerTransport;
+  LH1Opts: TH1ServerTransportOptions;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+  LFirstCalls: Int32;
+  LBodyChunk: string;
+  LBodyPrefix: string;
+  LBodyLen: Int64;
+  LFirstStatusPos: SizeInt;
+  LFirstBodyPos: SizeInt;
+  LFollowStatusPos: SizeInt;
+const
+  RECV_BUFFER_BYTES = 1024;
+  SEND_BUFFER_BYTES = 1024;
+  BACKPRESSURE_WAIT_NS = 500000000;
+  CLOSE_WAIT_MS = 5000;
+  BODY_CHUNK_LEN = 8192;
+  BODY_CHUNK_COUNT = 8;
+begin
+  LFirstCalls := 0;
+  LBodyPrefix := 'queued-order-prefix:';
+  SetLength(LBodyChunk, BODY_CHUNK_LEN);
+  FillChar(LBodyChunk[1], BODY_CHUNK_LEN, Ord('q'));
+  LBodyLen := Int64(Length(LBodyPrefix)) +
+    (Int64(BODY_CHUNK_LEN) * BODY_CHUNK_COUNT);
+
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/block', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LI: Int32;
+  begin
+    Inc(LFirstCalls);
+    AW.GetHeaders.Set_('content-length', IntToStr(LBodyLen));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBodyPrefix[1], SizeUInt(Length(LBodyPrefix)));
+    for LI := 1 to BODY_CHUNK_COUNT do
+      AW.Write(LBodyChunk[1], SizeUInt(Length(LBodyChunk)));
+  end);
+
+  LH1Opts := DefaultH1ServerTransportOptions(AOpts);
+  LTransport := TSocketTuningServerTransport.Create(
+    NewH1ServerTransport(LH1Opts), SEND_BUFFER_BYTES);
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    LRouter as IHttpHandler, LTransport, AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      SetSocketRecvBuffer(LConn, RECV_BUFFER_BYTES);
+      LConn.Write(AReq[1], SizeUInt(Length(AReq)));
+      platform_thread_sleep_ns(BACKPRESSURE_WAIT_NS);
+
+      LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
+
+      Check(LClosed,
+        ALabel + ': connection closes within observation window');
+      Check(not LTimedOut,
+        ALabel + ': close does not overrun read deadline');
+      CheckEqual(Int64(1), Int64(LFirstCalls),
+        ALabel + ': first request handled once');
+      Check(Pos('HTTP/1.1 500', LResp) = 0,
+        ALabel + ': does not append synthetic 500');
+      CheckEqual(Int64(2), Int64(CountSubstring(LResp, 'HTTP/1.1 ')),
+        ALabel + ': exposes exactly two status lines');
+
+      LFirstStatusPos := Pos('HTTP/1.1 200 OK', LResp);
+      LFirstBodyPos := Pos(LBodyPrefix, LResp);
+      LFollowStatusPos := Pos(AExpectedStatusLine, LResp);
+      Check(LFirstStatusPos > 0,
+        ALabel + ': emits the first 200 status line');
+      Check(LFirstBodyPos > LFirstStatusPos,
+        ALabel + ': emits first response body bytes');
+      Check(LFollowStatusPos > LFirstBodyPos,
+        ALabel + ': keeps follow-up error behind the first response body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure RunExpectEarlyRejectSecurityCase(const AOpts: THttpServerOptions;
   const AReq, AExpectedStatusLine, ALabel: string);
 var
@@ -1764,6 +1856,25 @@ begin
     'Unsupported Expect direct error backpressure');
 end;
 
+procedure TestQueuedFollowUp501PreservesWireOrder;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunQueuedFollowUpErrorPreservesWireOrder(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 501 Not Implemented',
+    'Queued follow-up 501 preserves wire order');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestMalformedRequestBackpressureSafeHandlingEpollBackend;
 var
@@ -1832,6 +1943,29 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll unsupported Expect direct error backpressure');
+end;
+
+procedure TestQueuedFollowUp501PreservesWireOrderEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunQueuedFollowUpErrorPreservesWireOrder(
+    LOpts,
+    REQ,
+    'HTTP/1.1 501 Not Implemented',
+    'epoll queued follow-up 501 preserves wire order');
 end;
 
 procedure TestExpectContinuePositiveFlowEpollBackend;
@@ -3908,6 +4042,8 @@ begin
     @TestUnsupportedExpectBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
+  T.Run('Queued follow-up 501 preserves wire order',
+    @TestQueuedFollowUp501PreservesWireOrder);
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
@@ -4082,6 +4218,8 @@ begin
     @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
+  T.Run('Queued follow-up 501 preserves wire order with epoll backend',
+    @TestQueuedFollowUp501PreservesWireOrderEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
     @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',
