@@ -661,6 +661,97 @@ begin
   end;
 end;
 
+{ Test 4e: control frames with payload > 125 are rejected as protocol errors }
+procedure TestControlFramePayloadTooLargeRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayload: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpPing then
+        LWs.Pong(LF.Payload);
+    except
+      on E: EHttpError do
+        LWs.Close(1002, 'protocol');
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'control-oversize: got 101');
+
+      LPayload := TextOfChar('x', 126);
+      LFrame := BuildMaskedFrame($09, LPayload);
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'control-oversize: got close response');
+      Check(Ord(LResp[1]) = $88, 'control-oversize: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'control-oversize: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1002), Int64(LCode), 'control-oversize: close code protocol error');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -843,6 +934,7 @@ begin
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',
     @TestUpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket);
   T.Run('UnmaskedClientFrameRejected', @TestUnmaskedClientFrameRejected);
+  T.Run('ControlFramePayloadTooLargeRejected', @TestControlFramePayloadTooLargeRejected);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

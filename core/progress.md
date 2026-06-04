@@ -1,11 +1,11 @@
-# Progress Log: WebSocket unmasked client-frame rejection
+# Progress Log: WebSocket control-frame payload limit
 
 ## Session
 
-- **Scope:** 补齐 WebSocket unmasked client frame rejection。
+- **Scope:** 补齐 WebSocket control-frame payload length > 125 rejection。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket negative frame coverage`
-  -> `client mask-required contract`
+  -> `control-frame payload limit`
 
 ## Current state
 
@@ -21,25 +21,24 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `BuildUnmaskedFrame` helper。
-- `test_http_websocket` 新增 `UnmaskedClientFrameRejected` focused proof。
-- `nextpas.core.http.websocket.ReadFrame` 增加 client frame MASK bit guard。
-- `docs/http/API_COVERAGE.md` 已记录 WebSocket negative frame mask contract。
+- `test_http_websocket` 新增 `ControlFramePayloadTooLargeRejected` focused proof。
+- `nextpas.core.http.websocket.ReadFrame` 增加 control-frame payload length guard。
+- `docs/http/API_COVERAGE.md` 已记录 WebSocket control-frame payload limit contract。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `9 total, 8 passed, 1 failed`
-  - failure: `unmasked: server sends close frame`
+  - `10 total, 9 passed, 1 failed`
+  - failure: `control-oversize: server sends close frame`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `9 total, 9 passed, 0 failed`
+  - `10 total, 10 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先继续 WebSocket negative coverage：control-frame payload > 125 或 reserved opcode；
-  仍保持一刀一个 contract，不跑全量。
+- 下一刀优先继续 WebSocket negative coverage：reserved opcode 或 fragmented control frame；
+  benchmark 仍后置，不跑全量。

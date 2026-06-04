@@ -186,6 +186,7 @@ var
   LExtLen: array[0..7] of Byte;
   LMaskKey: array[0..3] of Byte;
   LMasked: Boolean;
+  LOpcode: Byte;
   LBuf: string;
   I: SizeUInt;
 begin
@@ -195,7 +196,8 @@ begin
 
   ReadExact(LHdr[0], 2);
   Result.Fin := (LHdr[0] and $80) <> 0;
-  Result.Opcode := TWebSocketOpcode(LHdr[0] and $0F);
+  LOpcode := LHdr[0] and $0F;
+  Result.Opcode := TWebSocketOpcode(LOpcode);
   LMasked := (LHdr[1] and $80) <> 0;
   LPayloadLen := LHdr[1] and $7F;
 
@@ -214,6 +216,9 @@ begin
     for I := 0 to 7 do
       LPayloadLen := (LPayloadLen shl 8) or UInt64(LExtLen[I]);
   end;
+
+  if (LOpcode >= $08) and (LPayloadLen > 125) then
+    raise EHttpError.Create('WebSocket: control frame payload too large');
 
   if LMasked then
     ReadExact(LMaskKey[0], 4);
