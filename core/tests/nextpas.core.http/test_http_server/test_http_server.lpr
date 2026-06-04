@@ -5218,6 +5218,20 @@ begin
     REQ_HEADERS, PARTIAL_BODY);
 end;
 
+procedure TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutClosesSafely;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(False,
+    'expect-continue fixed-length zero progress threaded',
+    REQ_HEADERS, '');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend;
 const
@@ -5232,6 +5246,20 @@ begin
   RunExpectContinueBodyStallIdleTimeoutClosesSafely(True,
     'expect-continue fixed-length body stall epoll',
     REQ_HEADERS, PARTIAL_BODY);
+end;
+
+procedure TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutClosesSafelyEpollBackend;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(True,
+    'expect-continue fixed-length zero progress epoll',
+    REQ_HEADERS, '');
 end;
 {$ENDIF}
 
@@ -5252,6 +5280,20 @@ begin
     REQ_HEADERS, PARTIAL_BODY);
 end;
 
+procedure TestExpectContinueZeroProgressChunkedBodyIdleTimeoutClosesSafely;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(False,
+    'expect-continue chunked zero progress threaded',
+    REQ_HEADERS, '');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafelyEpollBackend;
 const
@@ -5268,6 +5310,20 @@ begin
   RunExpectContinueBodyStallIdleTimeoutClosesSafely(True,
     'expect-continue chunked body stall epoll',
     REQ_HEADERS, PARTIAL_BODY);
+end;
+
+procedure TestExpectContinueZeroProgressChunkedBodyIdleTimeoutClosesSafelyEpollBackend;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(True,
+    'expect-continue chunked zero progress epoll',
+    REQ_HEADERS, '');
 end;
 {$ENDIF}
 
@@ -11124,8 +11180,12 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
   T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend);
+  T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response with epoll backend',
+    @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutClosesSafelyEpollBackend);
   T.Run('Expect: chunked body stall closes safely after interim response with epoll backend',
     @TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafelyEpollBackend);
+  T.Run('Expect: chunked zero body progress idle-timeout closes after interim response with epoll backend',
+    @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutClosesSafelyEpollBackend);
   T.Run('Expect: zero content-length does not emit interim response with epoll backend',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
   T.Run('Expect: no declared body does not emit interim response with epoll backend',
@@ -11375,8 +11435,12 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
   T.Run('Expect: fixed-length body stall closes safely after interim response',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafely);
+  T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response',
+    @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutClosesSafely);
   T.Run('Expect: chunked body stall closes safely after interim response',
     @TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafely);
+  T.Run('Expect: chunked zero body progress idle-timeout closes after interim response',
+    @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutClosesSafely);
   T.Run('Expect: zero content-length does not emit interim response',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
   T.Run('Expect: no declared body does not emit interim response',

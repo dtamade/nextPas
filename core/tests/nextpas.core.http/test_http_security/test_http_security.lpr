@@ -2025,6 +2025,26 @@ begin
     'Expect fixed-length partial body idle-timeout');
 end;
 
+procedure TestExpectContinueZeroProgressFixedLengthBodyIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    '',
+    'Expect fixed-length zero body progress idle-timeout');
+end;
+
 procedure TestExpectContinuePartialChunkedBodyIdleTimeout;
 var
   LOpts: THttpServerOptions;
@@ -2046,6 +2066,26 @@ begin
     REQ_HEADERS,
     PARTIAL_BODY,
     'Expect chunked partial body idle-timeout');
+end;
+
+procedure TestExpectContinueZeroProgressChunkedBodyIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    '',
+    'Expect chunked zero body progress idle-timeout');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarly;
@@ -2816,6 +2856,27 @@ begin
     'epoll Expect fixed-length partial body idle-timeout');
 end;
 
+procedure TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    '',
+    'epoll Expect fixed-length zero body progress idle-timeout');
+end;
+
 procedure TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend;
 var
   LOpts: THttpServerOptions;
@@ -2838,6 +2899,27 @@ begin
     REQ_HEADERS,
     PARTIAL_BODY,
     'epoll Expect chunked partial body idle-timeout');
+end;
+
+procedure TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    '',
+    'epoll Expect chunked zero body progress idle-timeout');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarlyEpollBackend;
@@ -4967,8 +5049,12 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
   T.Run('Expect fixed-length partial body idle-timeout closes after interim 100',
     @TestExpectContinuePartialFixedLengthBodyIdleTimeout);
+  T.Run('Expect fixed-length zero body progress idle-timeout closes after interim 100',
+    @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeout);
   T.Run('Expect chunked partial body idle-timeout closes after interim 100',
     @TestExpectContinuePartialChunkedBodyIdleTimeout);
+  T.Run('Expect chunked zero body progress idle-timeout closes after interim 100',
+    @TestExpectContinueZeroProgressChunkedBodyIdleTimeout);
   T.Run('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
@@ -5171,8 +5257,12 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
   T.Run('Expect fixed-length partial body idle-timeout closes after interim 100 with epoll backend',
     @TestExpectContinuePartialFixedLengthBodyIdleTimeoutEpollBackend);
+  T.Run('Expect fixed-length zero body progress idle-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinueZeroProgressFixedLengthBodyIdleTimeoutEpollBackend);
   T.Run('Expect chunked partial body idle-timeout closes after interim 100 with epoll backend',
     @TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend);
+  T.Run('Expect chunked zero body progress idle-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinueZeroProgressChunkedBodyIdleTimeoutEpollBackend);
   T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
