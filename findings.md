@@ -1,5 +1,23 @@
 # Findings & Decisions
 
+## 2026-06-04 http partial chunked body idle-timeout proof
+
+- request-side `IdleTimeout` 之前已经覆盖了 slowloris、partial fixed-length body、
+  partial chunk-size line、partial chunked trailer，但还缺 `chunked body`
+  数据段本身半包 stall 的 live truth。
+- 本轮新增 security + server 两层 focused proof，直接锁定：
+  - `chunked body` 在 chunk-size 已完成、chunk-data 尚未收齐时发生 stall，
+    最终也会沿用同一 request-side deadline 安全关闭
+  - 连接关闭前不会误进入成功 handler，也不会返回成功响应
+  - poll-driven seam 同样保持 `WakeDeadline` 收口与 timeout-close 语义一致
+- focused gates 结果为：
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    -> `190/190 passed`, `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    -> `222/222 passed`, `heaptrc: 0 unfreed memory blocks`
+- 结论仍然是 coverage-expansion，不是生产修复：`partial chunked body stall`
+  的 request-side timeout contract 与现有 runtime truth 一致。
+
 ## 2026-06-04 http malformed chunked direct-error backpressure trio
 
 - `invalid chunk-size`、`missing chunk-data CRLF`、`malformed trailer field`

@@ -2270,6 +2270,20 @@ begin
     'poll-driven partial chunk-size line timeout', REQ);
 end;
 
+procedure TestH1PollDrivenSessionTimesOutPartialChunkedBodyReadWait;
+const
+  REQ =
+    'POST /chunk-body HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '3'#13#10 +
+    'ab';
+begin
+  RunPollDrivenMidRequestReadTimeout(
+    'poll-driven partial chunked body timeout', REQ);
+end;
+
 procedure TestH1PollDrivenSessionTimesOutPartialChunkedTrailerReadWait;
 const
   REQ =
@@ -10952,6 +10966,8 @@ begin
     @TestH1PollDrivenSessionTimesOutPartialFixedLengthBodyReadWait);
   T.Run('H1 poll-driven session times out partial chunk-size line read wait',
     @TestH1PollDrivenSessionTimesOutPartialChunkSizeLineReadWait);
+  T.Run('H1 poll-driven session times out partial chunked body read wait',
+    @TestH1PollDrivenSessionTimesOutPartialChunkedBodyReadWait);
   T.Run('H1 poll-driven session times out partial chunked trailer read wait',
     @TestH1PollDrivenSessionTimesOutPartialChunkedTrailerReadWait);
   T.Run('H1 poll-driven session partial timed drain stops buffered follow-up',

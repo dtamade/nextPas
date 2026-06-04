@@ -1,5 +1,35 @@
 # Progress Log
 
+## Session: 2026-06-04 http partial chunked body idle-timeout proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining request-side `IdleTimeout` proof gap for partial chunked body stall
+  - directly prove the same timeout-close contract in both real-socket security and poll-driven server seams
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    and `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestPartialChunkedBodyIdleTimeout`
+  - added `TestPartialChunkedBodyIdleTimeoutEpollBackend`
+  - added `TestH1PollDrivenSessionTimesOutPartialChunkedBodyReadWait`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `190/190 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `222/222 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `request-side IdleTimeout runtime truth`
+  - this batch:
+    `partial chunked body stall`
+
 ## Session: 2026-06-04 http malformed chunked direct-error backpressure trio
 
 - **Status:** completed.

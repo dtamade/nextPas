@@ -1,5 +1,28 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http partial chunked body idle-timeout proof
+
+### Goal
+
+继续补 `nextpas.core.http` request-side `IdleTimeout` 的 runtime contract，
+把 `chunked body` 数据段半包 stall 的 live close truth 补进
+`test_http_security` 与 `test_http_server`，覆盖 threaded / Linux `epoll`
+real-socket 与 poll-driven 两层证据。
+
+### Checklist
+
+- [x] 对比 `test_http_security`、`test_http_server` 与 `API_COVERAGE`，确认
+  `partial chunked body stall` 仍缺 live / poll-driven focused 证据。
+- [x] 新增 `test_http_security` threaded / `epoll`
+  `partial chunked body idle-timeout closes connection` proof。
+- [x] 新增 `test_http_server`
+  `H1 poll-driven session times out partial chunked body read wait` proof。
+- [x] 跑 focused gates：
+  `make -C tests/nextpas.core.http/test_http_security clean test`
+  与
+  `make -C tests/nextpas.core.http/test_http_server clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http malformed chunked direct-error backpressure trio
 
 ### Goal
