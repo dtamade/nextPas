@@ -1236,6 +1236,73 @@ begin
   end;
 end;
 
+procedure RunChunkedTrailerPartialFollowUpRequestLineCanCompleteLater(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+const
+  REQ1 = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+         'Transfer-Encoding: chunked'#13#10 +
+         'Trailer: X-Test'#13#10#13#10 +
+         '5'#13#10'hello'#13#10 +
+         '0'#13#10 +
+         'X-Test: value'#13#10#13#10 +
+         'GET / HTTP/1.1';
+  REQ2_REST = #13#10 +
+              'Host: x'#13#10 +
+              'Connection: close'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp1) > 0,
+        ALabel + ': first response still completes');
+      Check(Pos('echo:5', LResp1) > 0,
+        ALabel + ': first request body handled correctly');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp2) > 0,
+        ALabel + ': completed follow-up request returns 200');
+      Check(Pos('ok', LResp2) > 0,
+        ALabel + ': second request body preserved');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater;
+begin
+  RunChunkedTrailerPartialFollowUpRequestLineCanCompleteLater(
+    THttpServerOptions.Default,
+    'Keep-alive chunked trailer partial-next-line');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedTrailerPartialFollowUpRequestLineCanCompleteLater(
+    LOpts,
+    'epoll keep-alive chunked trailer partial-next-line');
+end;
+{$ENDIF}
+
 { Test 15: Negative Content-Length }
 procedure TestNegativeContentLength;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -1727,6 +1794,8 @@ begin
     @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling);
   T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling);
+  T.Run('Chunked trailer keep-alive partial follow-up request line can complete later',
+    @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
   T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
@@ -1758,6 +1827,8 @@ begin
     @TestMissingChunkDataCrLfEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
+  T.Run('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
+    @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   {$ENDIF}
   T.Summary;
 end.

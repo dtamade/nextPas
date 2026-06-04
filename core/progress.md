@@ -1,10 +1,10 @@
-# Progress Log: http live epoll oversize trailer parity
+# Progress Log: http trailer-complete partial-next-line raw-wire bridge proof
 
 ## Session
 
-- **Scope:** 给 `test_http_security` 补 Linux `epoll` 下 oversize trailer 的 live `431 / safe-close` parity proof。
+- **Scope:** 给 `test_http_security` 补 chunked trailer-complete partial follow-up request-line bridge truth，并补 Linux `epoll` live variant。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `raw-wire malformed chunked request security` -> `epoll live trailer-budget parity`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `chunked trailer-complete partial-next-line bridge proof`
 
 ## Current state
 
@@ -17,22 +17,22 @@
 
 ## Completed work
 
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1291)
-  把 oversize trailer 测试提成了一个窄 helper，复用到不同 backend。
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1334)
-  现在新增了 Linux `epoll` backend 的 oversize trailer live parity proof：
-  - oversize trailer -> `431 or safe-close`
-  - handler response not written
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1239)
+  新增了一个窄 helper，用来证明 trailer-complete chunked request 后的半截 follow-up request line 可以在后续字节补全后继续合法完成。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1288)
+  现在新增两条 security raw-wire proof：
+  - threaded: chunked trailer partial-next-line can complete later
+  - epoll: chunked trailer partial-next-line can complete later
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md:18)
-  已同步 epoll live trailer-budget parity 结论，并把下一步路线重新收敛到更高信息增益的 malformed trailer/chunk 边角。
+  已同步 trailer-complete partial-next-line bridge truth，并把下一步路线收敛到 trailer same-write pipelining 或剩余 malformed grammar 边角。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `67/67 passed`
+  - `69/69 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀优先回到仍缺分类的 malformed trailer/chunk truncation 相邻子类
-- 除非 live socket 再暴露 backend 分歧，否则不再继续机械复制同型 epoll status parity
+- 下一刀优先看 trailer-complete same-write pipelined next request 的 security raw-wire proof
+- 如果不走 request-tail contract，就回到仍缺分类的 malformed trailer/chunk truncation 相邻子类
