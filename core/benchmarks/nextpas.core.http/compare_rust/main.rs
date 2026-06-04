@@ -1,0 +1,212 @@
+use std::env;
+use std::io::{ErrorKind, Read, Write};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+const REQUEST: &[u8] = b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n";
+const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: keep-alive\r\n\r\nHello, World!";
+const RESPONSE_BODY_LEN: usize = 13;
+
+fn parse_options() -> (usize, usize) {
+    let mut requests = 20_000usize;
+    let mut threads = 4usize;
+    let args: Vec<String> = env::args().collect();
+    let mut index = 1usize;
+
+    while index < args.len() {
+        if args[index] == "--requests" && index + 1 < args.len() {
+            if let Ok(value) = args[index + 1].parse::<usize>() {
+                if value > 0 {
+                    requests = value;
+                }
+            }
+            index += 2;
+        } else if args[index] == "--threads" && index + 1 < args.len() {
+            if let Ok(value) = args[index + 1].parse::<usize>() {
+                if value > 0 {
+                    threads = value;
+                }
+            }
+            index += 2;
+        } else {
+            index += 1;
+        }
+    }
+
+    if threads > requests {
+        threads = requests;
+    }
+
+    (requests, threads)
+}
+
+fn requests_for_thread(index: usize, total_requests: usize, threads: usize) -> usize {
+    let mut count = total_requests / threads;
+    if index < total_requests % threads {
+        count += 1;
+    }
+    count
+}
+
+fn find_bytes(haystack: &[u8], needle: &[u8]) -> Option<usize> {
+    haystack
+        .windows(needle.len())
+        .position(|window| window == needle)
+}
+
+fn read_from_stream(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
+    let mut chunk = [0u8; 1024];
+    match stream.read(&mut chunk) {
+        Ok(0) => false,
+        Ok(read) => {
+            buffer.extend_from_slice(&chunk[..read]);
+            true
+        }
+        Err(ref err) if err.kind() == ErrorKind::WouldBlock => true,
+        Err(ref err) if err.kind() == ErrorKind::TimedOut => false,
+        Err(_) => false,
+    }
+}
+
+fn read_one_request(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
+    loop {
+        if let Some(end) = find_bytes(buffer, b"\r\n\r\n") {
+            buffer.drain(..end + 4);
+            return true;
+        }
+        if !read_from_stream(stream, buffer) {
+            return false;
+        }
+    }
+}
+
+fn read_one_response(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
+    loop {
+        if let Some(header_end) = find_bytes(buffer, b"\r\n\r\n") {
+            let required = header_end + 4 + RESPONSE_BODY_LEN;
+            if buffer.len() >= required {
+                buffer.drain(..required);
+                return true;
+            }
+        }
+        if !read_from_stream(stream, buffer) {
+            return false;
+        }
+    }
+}
+
+fn handle_connection(mut stream: TcpStream) {
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
+    let mut buffer = Vec::with_capacity(1024);
+    while read_one_request(&mut stream, &mut buffer) {
+        if stream.write_all(RESPONSE).is_err() {
+            break;
+        }
+    }
+}
+
+fn run_accept_loop(listener: TcpListener, stopping: Arc<AtomicBool>) {
+    let mut workers = Vec::new();
+
+    while !stopping.load(Ordering::Relaxed) {
+        match listener.accept() {
+            Ok((stream, _)) => workers.push(thread::spawn(move || handle_connection(stream))),
+            Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
+                thread::sleep(Duration::from_millis(1));
+            }
+            Err(_) => break,
+        }
+    }
+
+    for worker in workers {
+        let _ = worker.join();
+    }
+}
+
+fn run_client(addr: SocketAddr, requests: usize, completed: Arc<AtomicUsize>) {
+    let mut stream = match TcpStream::connect(addr) {
+        Ok(stream) => stream,
+        Err(_) => return,
+    };
+    let _ = stream.set_nodelay(true);
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
+
+    let mut buffer = Vec::with_capacity(1024);
+    for _ in 0..requests {
+        if stream.write_all(REQUEST).is_err() {
+            break;
+        }
+        if !read_one_response(&mut stream, &mut buffer) {
+            break;
+        }
+        completed.fetch_add(1, Ordering::Relaxed);
+    }
+    let _ = stream.shutdown(Shutdown::Both);
+}
+
+fn print_results(requests: usize, threads: usize, completed: usize, elapsed: Duration) {
+    let elapsed_ns = elapsed.as_nanos() as u128;
+    let ns_per_op = if completed > 0 {
+        elapsed_ns / completed as u128
+    } else {
+        0
+    };
+    let req_per_sec = if elapsed_ns > 0 {
+        completed as u128 * 1_000_000_000u128 / elapsed_ns
+    } else {
+        0
+    };
+
+    println!("operation=http.server.keepalive");
+    println!("impl=rust");
+    println!("iterations={}", requests);
+    println!("threads={}", threads);
+    println!("completed={}", completed);
+    println!("elapsed_ns={}", elapsed_ns);
+    println!("ns/op={}", ns_per_op);
+    println!("req/s={}", req_per_sec);
+}
+
+fn main() {
+    let (requests, threads) = parse_options();
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
+    listener.set_nonblocking(true).expect("set nonblocking");
+    let addr = listener.local_addr().expect("local addr");
+    let stopping = Arc::new(AtomicBool::new(false));
+    let accept_stopping = Arc::clone(&stopping);
+
+    let accept_handle = thread::spawn(move || run_accept_loop(listener, accept_stopping));
+    let completed = Arc::new(AtomicUsize::new(0));
+    let mut clients = Vec::new();
+
+    let start = Instant::now();
+    for index in 0..threads {
+        let client_completed = Arc::clone(&completed);
+        let client_requests = requests_for_thread(index, requests, threads);
+        clients.push(thread::spawn(move || {
+            run_client(addr, client_requests, client_completed)
+        }));
+    }
+
+    for client in clients {
+        let _ = client.join();
+    }
+    let elapsed = start.elapsed();
+
+    stopping.store(true, Ordering::Relaxed);
+    let _ = TcpStream::connect(addr);
+    let _ = accept_handle.join();
+
+    print_results(
+        requests,
+        threads,
+        completed.load(Ordering::Relaxed),
+        elapsed,
+    );
+}

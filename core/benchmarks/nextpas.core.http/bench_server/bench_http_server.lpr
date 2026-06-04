@@ -174,6 +174,7 @@ begin
   WriteLn('  Req/s:     ', Trunc(LReqPerSec));
   WriteLn;
   WriteLn('operation=http.server.keepalive');
+  WriteLn('impl=nextpas');
   WriteLn('iterations=', GRequests);
   WriteLn('threads=', GThreads);
   WriteLn('completed=', GSuccess);

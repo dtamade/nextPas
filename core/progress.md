@@ -1,17 +1,20 @@
-# Progress Log: HTTP server benchmark smoke
+# Progress Log: HTTP server benchmark comparators
 
 ## Session
 
-- **Scope:** 收紧 HTTP server benchmark 的小规模 smoke 与标准化输出。
+- **Scope:** 补齐 HTTP server keep-alive benchmark 的 Go/Rust comparator smoke。
 - **Status:** verified
-- **Roadmap Position:** `6/6 benchmark/performance` -> `HTTP server keep-alive benchmark smoke`
+- **Roadmap Position:** `6/6 benchmark/performance` -> `HTTP server keep-alive comparator harness`
 
 ## Current state
 
-- shared checkout 仍有大量无关 modified / untracked 文件；本轮继续只做 path-limited 变更。
+- shared checkout 仍有大量无关 modified / untracked 文件；本轮只做 path-limited HTTP benchmark 变更。
 - 与本轮无关但仍然脏的典型路径包括：
   - `tests/nextpas.core.async/test_async_stress/test_async_stress.lpr`
   - `tests/nextpas.core.http/test_http_client/test_http_client.lpr`
+  - `../findings.md`
+  - `../progress.md`
+  - `../task_plan.md`
   - `docs/plans/*.md`
   - `../.claude/worktrees/*`
   - `../.worktrees/*`
@@ -19,25 +22,29 @@
 
 ## Completed work
 
-- 新增 `test_http_benchmarks` focused benchmark smoke。
-- `bench_http_server` 现在支持 `--requests` / `--threads`。
-- `bench_http_server` 现在输出 `operation`、`iterations`、`threads`、`ns/op`、`req/s` 等稳定字段。
-- `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录 benchmark smoke。
+- `test_http_benchmarks` 现在 smoke nextPas / Go / Rust 三条 server benchmark。
+- `bench_http_server` 新增 `impl=nextpas`，和 comparator 输出对齐。
+- 新增 Go `net/http` keep-alive comparator。
+- 新增 Rust std-only HTTP/1.1 keep-alive comparator。
+- `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录 comparator harness。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_benchmarks test`
-  - `1 total, 0 passed, 1 failed`
-  - failure:
-    - `operation marker missing from output: operation=http.server.keepalive`
+  - `3 total, 0 passed, 3 failed`
+  - failures:
+    - `impl=nextpas` missing
+    - Go comparator path missing
+    - Rust comparator path missing
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_benchmarks test`
-  - `1 total, 1 passed, 0 failed`
+  - `3 total, 3 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀建议补 Go/Rust/FPC RTL 对照 runner 或结果文档，沿用当前 `operation/iterations/ns/op/req/s` 字段。
-- 如果回到 correctness，应先找真实 runtime RED，不再铺低价值 parity 覆盖。
+- 下一刀建议补正式 benchmark runner / result capture，把 nextPas、Go、Rust 的同字段输出写成可重复采集报告。
+- 如果继续提高 Rust 对照质量，应新增 Hyper/Tokio comparator，并把当前 std-only comparator 明确保留为零依赖 microbaseline。
+- correctness 方向若重启，应先找真实 runtime RED，不再铺低价值 parity 覆盖。

@@ -119,6 +119,13 @@ For smoke-sized runs, pass explicit scale knobs:
 build/projects/nextpas.core.http/bench_server/bench_http_server --requests 1000 --threads 4
 ```
 
-`bench_http_server` reports `operation`, `iterations`, `threads`, `ns/op`, and
-`req/s`, so results can be captured and compared against later Go/Rust runs
-without changing the benchmark format.
+Run the focused comparator smoke from the test harness:
+
+```sh
+make -C tests/nextpas.core.http/test_http_benchmarks test
+```
+
+The harness builds and runs nextPas, Go, and Rust keep-alive server benchmarks at
+smoke scale. Each implementation reports `operation`, `impl`, `iterations`,
+`threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so later benchmark
+result capture can use one stable format.

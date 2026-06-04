@@ -13,6 +13,8 @@ var
 
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
+  CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
+  CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
 
 procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
@@ -130,6 +132,34 @@ begin
     'build/projects/nextpas.core.http/bench_server/bench_http_server');
 end;
 
+function ResolveBenchmarkTestBuildDir(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/test_http_benchmarks');
+end;
+
+function ResolveGoComparatorBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ResolveBenchmarkTestBuildDir(ARootDir),
+    'bench_http_server_go');
+end;
+
+function ResolveRustComparatorBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ResolveBenchmarkTestBuildDir(ARootDir),
+    'bench_http_server_rust');
+end;
+
+procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string);
+begin
+  CheckContains(AOutput, 'operation=http.server.keepalive', 'operation marker');
+  CheckContains(AOutput, 'impl=' + AImplementation, 'implementation marker');
+  CheckContains(AOutput, 'iterations=32', 'iterations marker');
+  CheckContains(AOutput, 'threads=2', 'threads marker');
+  CheckContains(AOutput, 'ns/op=', 'ns/op marker');
+  CheckContains(AOutput, 'req/s=', 'req/s marker');
+end;
+
 procedure TestBenchServerSmallSmoke;
 var
   LRootDir: string;
@@ -151,16 +181,66 @@ begin
   RunProcessAndCapture(LBinaryPath, ['--requests', '32', '--threads', '2'],
     LBenchDir, LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode), 'bench_server smoke exit code: ' + LOutput);
-  CheckContains(LOutput, 'operation=http.server.keepalive', 'operation marker');
-  CheckContains(LOutput, 'iterations=32', 'iterations marker');
-  CheckContains(LOutput, 'threads=2', 'threads marker');
-  CheckContains(LOutput, 'ns/op=', 'ns/op marker');
-  CheckContains(LOutput, 'req/s=', 'req/s marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas');
+end;
+
+procedure TestGoServerComparatorSmallSmoke;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareGoRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  ForceDirectories(LBuildDir);
+  LBinaryPath := ResolveGoComparatorBinaryPath(LRootDir);
+
+  RunProcessAndCapture('go', ['build', '-o', LBinaryPath, 'main.go'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode), 'go comparator build exit code: ' + LOutput);
+  Check(FileExists(LBinaryPath), 'go comparator binary exists');
+
+  RunProcessAndCapture(LBinaryPath, ['--requests', '32', '--threads', '2'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode), 'go comparator smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'go');
+end;
+
+procedure TestRustServerComparatorSmallSmoke;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareRustRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  ForceDirectories(LBuildDir);
+  LBinaryPath := ResolveRustComparatorBinaryPath(LRootDir);
+
+  RunProcessAndCapture('rustc', ['-O', '-o', LBinaryPath, 'main.rs'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode), 'rust comparator build exit code: ' + LOutput);
+  Check(FileExists(LBinaryPath), 'rust comparator binary exists');
+
+  RunProcessAndCapture(LBinaryPath, ['--requests', '32', '--threads', '2'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode), 'rust comparator smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'rust');
 end;
 
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
+  T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
+  T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
