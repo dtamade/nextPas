@@ -1844,6 +1844,8 @@ begin
     'deadline wake closes without extra write retry');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
     'deadline wake does not rearm timed drain without write progress');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    'deadline wake clears stalled timed drain wake deadline after timeout close');
 end;
 
 procedure TestH1PollDrivenSessionClearsWakeDeadlineAfterSuccessfulTimedDrain;
@@ -2048,6 +2050,8 @@ begin
     'timeout close preserves last rearmed deadline without further reset');
   CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
     'timeout close still leaves only one response status line on wire');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    'timeout close clears partial timed drain wake deadline');
 end;
 
 procedure TestH1PollDrivenSessionQueuesBoundedResponsesWhileDraining;
