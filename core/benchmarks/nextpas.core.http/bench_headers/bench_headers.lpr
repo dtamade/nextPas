@@ -83,6 +83,24 @@ begin
     GSink := LH.Get('x-nonexistent');
 end;
 
+procedure BenchGetAll_Miss(aIters: Int64);
+var
+  LIt: Int64;
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+begin
+  LH := NewHttpHeaders;
+  LH.Set_('content-type', 'text/html');
+  LH.Set_('content-length', '1024');
+  LH.Set_('server', 'nextpas');
+  LH.Set_('date', 'Sat, 31 May 2026');
+  LH.Set_('connection', 'keep-alive');
+  for LIt := 1 to aIters do
+    LAll := LH.GetAll('expect');
+  if Length(LAll) > 0 then
+    GSink := LAll[0];
+end;
+
 procedure BenchGet_Hit(aIters: Int64);
 var
   LIt: Int64;
@@ -150,6 +168,7 @@ begin
   B.Run('Set+Get 15 headers', @BenchSetGet_15Headers);
   B.Run('Add 15 headers', @BenchAdd_15Headers);
   B.Run('Get miss (3 headers)', @BenchGet_Miss);
+  B.Run('GetAll miss (5 headers)', @BenchGetAll_Miss);
   B.Run('Get hit (5 headers, last)', @BenchGet_Hit);
   B.Run('Get hit uppercase (5 headers, last)', @BenchGet_HitUppercase);
   B.Run('Has (3 headers)', @BenchHas);

@@ -199,18 +199,43 @@ function THttpHeaders.GetAll(const AName: string): TStringArray;
 var
   LNorm: string;
   LI, LCount: Int32;
+  LUseNormalized: Boolean;
 begin
   Result := nil;
-  LNorm := Normalize(AName);
   LCount := 0;
-  SetLength(Result, FCount);
+  LUseNormalized := False;
+
   for LI := 0 to FCount - 1 do
-    if FEntries[LI].Name = LNorm then
+    if FEntries[LI].Name = AName then
+      Inc(LCount);
+
+  if (LCount = 0) and NeedsNormalize(AName) then
+  begin
+    LNorm := Normalize(AName);
+    LUseNormalized := True;
+    for LI := 0 to FCount - 1 do
+      if FEntries[LI].Name = LNorm then
+        Inc(LCount);
+  end;
+
+  if LCount = 0 then
+    Exit(nil);
+
+  SetLength(Result, LCount);
+  LCount := 0;
+  for LI := 0 to FCount - 1 do
+  begin
+    if (not LUseNormalized) and (FEntries[LI].Name = AName) then
     begin
       Result[LCount] := FEntries[LI].Value;
       Inc(LCount);
     end;
-  SetLength(Result, LCount);
+    if LUseNormalized and (FEntries[LI].Name = LNorm) then
+    begin
+      Result[LCount] := FEntries[LI].Value;
+      Inc(LCount);
+    end;
+  end;
 end;
 
 function THttpHeaders.Has(const AName: string): Boolean;

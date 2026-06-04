@@ -1,29 +1,42 @@
-# Findings: HTTP header lookup exact fast path
+# Findings: HTTP header GetAll miss fast path
 
 ## Scope
 
-本轮继续服务 `HttpServer 完成` 的性能路线，聚焦 `THttpHeaders.Get/Has`。server ingress 和
-parser adapter 常用 lookup key 已经是小写形式，例如 `host`、`content-length`、`connection`。
-旧实现每次 `Get/Has` 都先 normalize 查询名，再扫描 entries。
+本轮继续服务 `HttpServer 完成` 的性能路线，聚焦 `THttpHeaders.GetAll` missing path。server
+和 parser 在常规请求上会查询 `Expect` / `Transfer-Encoding` 这类可重复 header；大多数普通
+请求没有这些 header，因此 miss path 是热路径。
 
 ## Confirmed truths
 
-### 1. Lowercase lookup is the hot path
+### 1. Previous lookup optimization projects to parser
 
-HTTP server 侧典型调用包括：
+在本轮开始时运行：
 
-- `AParser.GetHeaders.Get('content-length')`
-- `AParser.GetHeaders.Get('transfer-encoding')`
-- `AParser.GetHeaders.GetAll('expect')`
-- `FParser.GetHeaders.Get('host')`
-- fast path gating 里的 `host`、`connection`、`expect`、`transfer-encoding`
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
 
-这些 key 都是小写。public API 仍要求大小写不敏感，因此 uppercase fallback 不能移除。
+相对上一轮记录，llhttp rows 保持正向：
 
-### 2. Behavior guard
+| workload | previous ns/op | current ns/op |
+| --- | ---: | ---: |
+| simple GET | 1208.7 | 1203.7 |
+| 10 headers | 3952.9 | 4061.6 |
+| POST 1KB body | 1926.7 | 1922.5 |
+| pipeline 10 reqs | 10668.5 | 10602.0 |
 
-`test_http_headers` 的 `Has returns true/false` 现在额外覆盖 `LH.Has('X-PRESENT')`，继续锁住
-uppercase public lookup 语义。
+微基准有噪声，但没有发现上一轮 header lookup fast path 带来 parser 层回退。
+
+### 2. Existing `GetAll` miss allocated unnecessarily
+
+旧 `GetAll` 会先：
+
+```pascal
+SetLength(Result, FCount);
+```
+
+即使没有任何匹配 header，也会分配 result array，再 `SetLength(Result, 0)`。normal no-Expect
+request 会反复走到这种路径。
 
 ### 3. Header benchmark evidence
 
@@ -37,37 +50,41 @@ make -C benchmarks/nextpas.core.http/bench_headers clean run
 
 | workload | before ns/op |
 | --- | ---: |
-| Set+Get 5 headers | 1404.5 |
-| Set+Get 15 headers | 3420.0 |
-| Add 15 headers | 2064.0 |
-| Get miss (3 headers) | 58.8 |
-| Get hit (5 headers, last) | 68.6 |
-| Get hit uppercase (5 headers, last) | 122.8 |
-| Has (3 headers) | 53.3 |
-| Clone 10 headers | 752.3 |
+| GetAll miss (5 headers) | 136.9 |
 
 修改后 confirmation run：
 
 | workload | before ns/op | after ns/op |
 | --- | ---: | ---: |
-| Set+Get 5 headers | 1404.5 | 928.0 |
-| Set+Get 15 headers | 3420.0 | 2665.6 |
-| Add 15 headers | 2064.0 | 1775.8 |
-| Get miss (3 headers) | 58.8 | 55.6 |
-| Get hit (5 headers, last) | 68.6 | 46.6 |
-| Get hit uppercase (5 headers, last) | 122.8 | 149.7 |
-| Has (3 headers) | 53.3 | 25.1 |
-| Clone 10 headers | 752.3 | 723.9 |
+| GetAll miss (5 headers) | 136.9 | 60.6 |
+| Get miss (3 headers) | 55.5 | 54.5 |
+| Get hit (5 headers, last) | 47.0 | 45.5 |
 
-小写 lookup hot path 改善明显；uppercase public lookup 变慢，这是本轮有意接受的 tradeoff，因为
-server/adapter 内部热路径走小写 key。若后续发现外部 uppercase-heavy workload 是真实瓶颈，可再
-用单独策略优化 fallback。
+`GetAll` missing path 下降约 56%。`Has` 单次 confirmation 有噪声，本轮不把它作为结论。
+
+### 4. Parser projection evidence
+
+修改后运行：
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+相对本轮开始的 parser check：
+
+| llhttp workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 1203.7 | 1094.1 |
+| 10 headers | 4061.6 | 3905.8 |
+| POST 1KB body | 1922.5 | 1867.3 |
+| pipeline 10 reqs | 10602.0 | 10096.6 |
+
+这说明 no-TE / no-Expect 的 missing `GetAll` 优化确实投射到 parser benchmark。
 
 ## Remaining gaps / risks
 
-- `GetAll` 仍总是 normalize 并分配 result array；`Expect` 和 `Transfer-Encoding` 相关路径仍有
-  `GetAll + split/lowercase` 成本。
-- server ingress 仍在多个阶段重复查询同一批 headers；下一步更高收益可能是 request metadata
-  cache，而不是继续微调 `FindFirst`。
-- uppercase fallback 性能下降已记录；这不是 correctness 风险，但需要在后续公开 API benchmark
-  中持续观察。
+- `GetAll` hit path 现在是两遍扫描；这对 rare repeated headers 可以接受。若后续 `Expect`
+  或 `Transfer-Encoding` hit-heavy workload 重要，再单独 benchmark。
+- server ingress 仍会重复解析 `Expect` token；下一步可考虑 request metadata cache，但要先用
+  focused tests 锁住 duplicate/unsupported `Expect` 语义。
+- uppercase fallback 仍比 lowercase hot path 慢；这是上一轮已记录 tradeoff。

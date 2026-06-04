@@ -169,3 +169,36 @@ command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 The uppercase lookup row is intentionally tracked because public header APIs
 remain case-insensitive. This slice trades a slower uppercase fallback for a
 faster lowercase hot path, which matches current server internals.
+
+## Optimization Evidence: Header GetAll Miss Fast Path
+
+On 2026-06-05 local time, `THttpHeaders.GetAll` stopped allocating a full
+temporary result array for lowercase miss lookups. This targets normal requests
+that do not carry `Expect` or `Transfer-Encoding`, while server code still
+checks those header collections.
+
+Header microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| GetAll miss (5 headers) | 136.9 | 60.6 |
+
+Parser projection:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| llhttp workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 1203.7 | 1094.1 |
+| 10 headers | 4061.6 | 3905.8 |
+| POST 1KB body | 1922.5 | 1867.3 |
+| pipeline 10 reqs | 10602.0 | 10096.6 |
+
+`test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
+with heaptrc reporting `0 unfreed memory blocks`.

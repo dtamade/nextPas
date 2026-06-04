@@ -1,8 +1,8 @@
-# Progress Log: HTTP header lookup exact fast path
+# Progress Log: HTTP header GetAll miss fast path
 
 ## Session
 
-- **Scope:** `THttpHeaders.Get/Has` lowercase exact-match fast path + lookup benchmark evidence。
+- **Scope:** `THttpHeaders.GetAll` missing-path allocation reduction + parser projection evidence。
 - **Status:** verified
 - **Roadmap Position:** `6/6 benchmark/performance` -> `server ingress/header lookup reduction`
 
@@ -22,10 +22,9 @@
 
 ## Completed work
 
-- `test_http_headers` 增加 uppercase `Has` 语义护栏，确保 public case-insensitive lookup 不回退。
-- `bench_headers` 增加 `Get hit uppercase (5 headers, last)`，用于记录 fallback tradeoff。
-- `THttpHeaders.FindFirst` 现在先扫描 exact key；只有 exact 未命中且查询名包含大写时才
-  normalize 后重扫。
+- `bench_headers` 增加 `GetAll miss (5 headers)`，直接覆盖 normal request 缺失 `Expect` 的查询模式。
+- `THttpHeaders.GetAll` 现在先 exact count；lowercase exact miss 直接返回 nil，不再分配 result array。
+- 只有查询名含大写时才进入 normalize fallback，保留 public case-insensitive `GetAll` 语义。
 
 ## Verification
 
@@ -41,22 +40,19 @@
   - `18 total, 18 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 - Benchmark evidence:
-  - baseline: `make -C benchmarks/nextpas.core.http/bench_headers clean run`
-  - after: `make -C benchmarks/nextpas.core.http/bench_headers clean run`
-  - confirmation: `make -C benchmarks/nextpas.core.http/bench_headers run`
-  - before / confirmation-after:
-    - `Set+Get 5 headers`: `1404.5` -> `928.0 ns/op`
-    - `Set+Get 15 headers`: `3420.0` -> `2665.6 ns/op`
-    - `Add 15 headers`: `2064.0` -> `1775.8 ns/op`
-    - `Get miss (3 headers)`: `58.8` -> `55.6 ns/op`
-    - `Get hit (5 headers, last)`: `68.6` -> `46.6 ns/op`
-    - `Get hit uppercase (5 headers, last)`: `122.8` -> `149.7 ns/op`
-    - `Has (3 headers)`: `53.3` -> `25.1 ns/op`
-    - `Clone 10 headers`: `752.3` -> `723.9 ns/op`
+  - `make -C benchmarks/nextpas.core.http/bench_headers clean run`
+  - `make -C benchmarks/nextpas.core.http/bench_headers run`
+  - `GetAll miss (5 headers)`: `136.9` -> `60.6 ns/op`
+  - `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+  - llhttp projection:
+    - `simple GET`: `1203.7` -> `1094.1 ns/op`
+    - `10 headers`: `4061.6` -> `3905.8 ns/op`
+    - `POST 1KB body`: `1922.5` -> `1867.3 ns/op`
+    - `pipeline 10 reqs`: `10602.0` -> `10096.6 ns/op`
 
 ## Next step
 
-- 继续减少 server ingress 重复 header work：优先考虑 request metadata cache 或 `GetAll`/Expect
-  parsing 的 targeted optimization。
-- 如果要继续扩 benchmark，下一步应把 header lookup 变化投射到 `bench_h1parser` 或 server
-  comparison，而不是只看 header microbench。
+- 下一刀不要继续微调 `THttpHeaders` 基础 scan；更高收益应转向 request metadata cache 或
+  `Expect` token parsing 的 targeted optimization。
+- 做 metadata cache 前，先加 focused tests 锁住 duplicate `Expect`、unsupported `Expect`、no-body
+  no-`100 Continue`、declared oversize under `Expect` 等语义，避免性能缓存破坏 security contract。
