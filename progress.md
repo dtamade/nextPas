@@ -1,5 +1,286 @@
 # Progress Log
 
+## Session: 2026-06-04 local branch cleanup
+
+- **Status:** completed for safe-delete pass.
+- Objective:
+  - Shrink the local branch list shown in VSCode without dropping code-bearing refs.
+  - Restrict deletion to refs already protected by `main` or by another preserved branch.
+- Fresh state before deletion:
+  - local branches: `96`
+  - live worktrees: `4`
+    - `/home/dtamade/projects/nextPas` on `main`
+    - `/home/dtamade/.config/superpowers/worktrees/nextPas/compiler-truth-audit-main-20260603`
+    - `/home/dtamade/.config/superpowers/worktrees/nextPas/window-sdl2-backend-20260602`
+    - `/home/dtamade/projects/nextPas/.claude/worktrees/fix-include-resolve`
+- Safe cleanup completed:
+  - deleted `43` local branches whose tips were already merged into `main` and not checked out in any live worktree
+  - deleted `feat/platform-pty` after explicit ancestor proof showed it is fully contained in `codex/platform-pty-integration`
+  - deleted `28` additional local branches after `git cherry -v main <branch>` showed all commits were patch-equivalent to `main`
+  - deleted `docs/cross-module-workflow` because it was a docs-only risky guidance branch
+  - deleted `codex/io-cursor-csv-streaming` because its code had been subsumed by `codex/data-format-streaming-ini`, leaving only one docs-only residual commit
+- Verification after cleanup:
+  - local branches now: `22`
+  - branches merged into `main`: `1` (`main`)
+  - branches not merged into `main`: `21`
+- Current conclusion:
+  - the easy/safe bulk-delete phase is effectively exhausted
+  - every remaining non-`main` branch is now a real preserve line, live lane, or archive candidate that needs branch-by-branch review
+  - VSCode branch noise should be materially lower because this slice removed `74` local refs in total
+
+## Session: 2026-06-04 worktree merge audit batch 1
+
+- **Status:** completed.
+- Scope:
+  - Audit first batch of 5 clean worktrees:
+    - `perf/chacha20poly1305-fused-scout`
+    - `codex/collections-refactor`
+    - `codex/compiler-truth-audit-main-20260603`
+    - `codex/config-branch-triage-20260604`
+    - `codex/core-strict-review-20260601`
+- Current decision:
+  - Do not delete or merge yet.
+  - First establish per-branch unique commits, changed paths, and containment/duplication evidence relative to `main` and sibling branches.
+- Evidence so far:
+  - `git worktree list --porcelain` reports 30 registered worktrees for this repo.
+  - The 5 requested worktrees are all `clean`, but all 5 are also `merged_into_main=no` under the initial ancestry check, so each needs commit-level review instead of blanket deletion.
+  - `git worktree prune --dry-run -v` returned no stale registrations.
+- Final audit outcome:
+  - `perf/chacha20poly1305-fused-scout`: archive/scout; no urgent mainline merge.
+  - `codex/collections-refactor`: small merge candidate, but split `skeleton types` from `iterator facade export` before landing.
+  - `codex/compiler-truth-audit-main-20260603`: real canonical lane; keep and schedule dedicated merge/integration.
+  - `codex/config-branch-triage-20260604`: live worktree/ref already gone; only dangling docs-only commit remains.
+  - `codex/core-strict-review-20260601`: keep branch, do not wholesale merge; extract by validated module slice.
+
+## Session: 2026-06-04 full worktree triage and selective merge
+
+- **Status:** in progress.
+- Objective:
+  - Review every active worktree / branch and only land code that survives commit-level scrutiny.
+  - After safe absorption, remove redundant worktrees to reduce ongoing noise.
+- Scope correction after user feedback:
+  - compiler-related worktrees are now explicitly out of scope for this lane
+  - do not touch `codex/compiler-truth-audit-main-20260603`
+  - do not touch `fix/sema-include-resolver`
+  - continue only on non-compiler worktrees
+- Current decision:
+  - Expand from batch-1 sampling to full inventory.
+  - Use commit-level selection instead of branch-level trust.
+  - Defer destructive cleanup until each branch has an explicit `merge/archive/discard` verdict.
+- Fresh inventory:
+  - Current registered worktrees: `26`
+  - Immediately removable once rechecked clean/merged policy is satisfied:
+    - `feat/crypto-migrate`
+    - `feat/fix-remaining`
+  - Immediate archive/discard lines:
+    - `perf/chacha20poly1305-fused-scout`
+    - `perf/aesgcm-fused-debug`
+    - `docs/cross-module-workflow`
+    - `codex/compiler-truth-audit-20260603`
+    - `codex/platform-pty-main-merge`
+  - First reviewed merge candidates:
+    - `codex/collections-refactor` (split commits)
+    - `codex/datetime-now` (committed slice only)
+    - `fpdev-core-copydir`
+    - `codex/compiler-truth-audit-main-20260603`
+  - Needs deeper review before action:
+    - PTY integration line
+    - TLS cluster
+    - data-format / io-cursor upgrade pair
+    - window SDL2 backend
+    - math SIMD harmonize
+    - core strict review
+    - db clients
+    - platform host wave15 uncommitted rename work
+- Integration progress landed on `codex/worktree-triage-integration-20260604`:
+  - `9c96305b refactor(core): export collections skeleton types from facade`
+    - retained only the missing facade test; current `main` already had the exports
+    - verification: `make -C core/tests/nextpas.core.collections/test_facade clean test`
+      -> `3 total, 3 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - `83c6a83b feat(fs): add recursive CopyDir`
+    - verification: `make -C core/tests/nextpas.core.fs/test_fs clean test`
+      -> `40 total, 40 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - `1e2bea56 feat(os): add GetHomeDir`
+    - verification: `make -C core/tests/nextpas.core.os.env/test_os_env clean test`
+      -> `12 total, 12 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - `89b9944f test(crypto): guard x509verify UTC time source`
+    - verification:
+      `make -C core/tests/nextpas.core.crypto/test_x509verify_source_guard clean test`
+      -> `1 total, 1 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - `bc046e86 test(crypto): cover x509 validity windows`
+    - verification:
+      `make -C core/tests/nextpas.core.crypto/test_x509verify clean test`
+      -> `24 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+- `fpdev-core-copydir` final hash-helper commit was audited during a live empty cherry-pick:
+  - `git show 90306fd6` proved the intended files/tests
+  - `git log --all -- core/src/nextpas.core.hash.files.pas ...` revealed equivalent mainline commit
+    `1fbef90c feat(hash): add file hex helpers`
+  - conclusion: skip the empty cherry-pick; do not duplicate the patch
+- Cleanup completed in this slice:
+  - removed worktree + branch:
+    `fpdev-core-copydir`,
+    `codex/collections-refactor`,
+    `codex/datetime-now`,
+    `feat/crypto-migrate`,
+    `feat/fix-remaining`,
+    `codex/platform-pty-main-merge`,
+    `codex/compiler-truth-audit-20260603`
+  - `codex/datetime-now` needed force removal only after manual dirty-state audit confirmed:
+    its uncommitted high-value tests had been absorbed, while the remaining diff was planning/doc drift
+    plus a misleading `DateTimeNow` UTC comment
+  - `codex/compiler-truth-audit-20260603` also needed force removal, but Git ancestry confirmed it was
+    already absorbed by `codex/compiler-truth-audit-main-20260603`; remaining dirt was planning-only
+- Additional noise reduction completed without dropping branch history:
+  - removed worktree checkout only:
+    `perf/chacha20poly1305-fused-scout`,
+    `perf/aesgcm-fused-debug`,
+    `docs/cross-module-workflow`,
+    `feat/crypto-polish`,
+    `codex/io-cursor-csv-streaming`
+  - reason: these lanes are archive/reference material, not current mainline merge targets
+  - `feat/crypto-polish` was force-removed only after reconfirming its dirty state was planning files
+    plus compiled test binaries, with no source diff
+- Worktree inventory after cleanup:
+  - first broad cleanup pass: `15`
+  - after TLS cluster consolidation and removing redundant `base/refresh`: `13`
+  - after parking clean committed lanes and removing redundant PTY base checkout: `5`
+  - after validating/committing Wave 15 host-ffi rename draft and parking that checkout: `4`
+  - after dedicated PTY integration audit and checkout removal: `3`
+- Single-worktree TLS audit completed: `codex/core-tls-rtl-main-20260603-final`
+  - consolidated `final` by absorbing the 5 follow-up commits that were still only present on `base/refresh`
+  - cherry-pick results on the surviving lane:
+    - `86afb4a9` from `4c812194 refactor(tls.winssl): route session time checks through nextpas time`
+    - `959b1bee` from `060498e6 fix(tls): use UTC for backend days-until-expiry helpers`
+    - `98a475d0` from `2e6362a6 refactor(tls): route operational timestamps through nextpas time`
+    - `162d920d` from `8fc77c8d fix(tls): avoid premature expiry rotation events`
+    - `493a9b43` from `6882e821 refactor(tls): route capability helpers through nextpas text`
+    - follow-up cleanup commit: `3f940bea fix(tls): drop duplicate time import from logging`
+  - focused verification on the consolidated `final` lane:
+    - `make -C core/tests/nextpas.core.tls/test_certificate_validity_utc_contract clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.tls/test_mbedtls_certificate_text_conv_contract clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `bash core/tests/nextpas.core.tls/scripts/scripts/test_session_time_wrapper_adoption_contract.sh`
+      -> PASS
+    - manual compile/run `test_backend_certificate_days_until_expiry_utc_contract.pas`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - manual compile/run `test_winssl_session_time_wrapper_contract.pas`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - manual compile/run `winssl/test_winssl_certificate_days_until_expiry_utc.pas`
+      -> compile PASS, runtime `[SKIP]` on non-Windows host, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.tls/test_operational_time_wrapper_adoption_contract clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.tls/test_capability_rtl_escape_contract clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.tls/test_http2_alpn_time_contract clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.tls/test_verify_custom_rtl_escape_contract clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+  - dirty replay audit outcome:
+    - `base` 的 `verify.custom` replay 与 `final` 已吸收源码一致；测试副本没有更强价值
+    - `refresh` 的 `verify.custom` replay 与 `final` 相同；`http2.alpn` replay 反而旧于 `final`
+  - cleanup completed:
+    - removed worktree + branch:
+      `codex/core-tls-rtl-main-20260603`,
+      `codex/core-tls-rtl-main-20260603-refresh`
+    - surviving TLS lane:
+      `codex/core-tls-rtl-main-20260603-final @ 3f940bea`
+  - current blocker to landing on `main`:
+    - root `main` checkout is dirty with out-of-scope compiler/planning changes
+    - no direct fast-forward was attempted, to avoid touching the user’s protected compiler work
+- Additional parking completed to shrink live checkout count without dropping branch history:
+  - removed clean worktree checkout only, branch kept:
+    `codex/core-strict-review-20260601`,
+    `codex/core-tls-rtl-main-20260603-final`,
+    `codex/data-format-streaming-ini`,
+    `codex/math-simd-harmonize-20260601`,
+    `codex/worktree-triage-integration-20260604`,
+    `worktree-db-clients`
+  - removed clean redundant PTY base checkout only, branch kept:
+    `feat/platform-pty`
+    - reason: branch is fully contained in `codex/platform-pty-integration`
+- `codex/platform-host-ffi-wave15-helper-names` recovery/parking completed:
+  - validated:
+    - `test_platform_host_abi_wave1`
+    - `test_platform_host_abi_wave2_files`
+    - `test_platform_host_abi_wave4_paths`
+    - `test_platform_host_abi_wave5_env`
+    - `test_platform_host_abi_wave8_file_io`
+    - all PASS
+  - committed preserved progress:
+    - `b7df674f platform: host-own remaining ffi helper names`
+  - removed worktree checkout after commit; branch remains available for later merge review
+- `codex/platform-pty-integration` dedicated audit completed:
+  - preserved commit:
+    `231ad0a6 test(core): add missing Makefiles for marshal/template/validation`
+  - discarded dirty tracked changes after file-by-file comparison with `main`:
+    - 5 files were patch-equivalent to current `main`
+    - 11 files were regressive relative to `main` and therefore intentionally not preserved
+  - post-commit focused verification:
+    - `make -C core/tests/nextpas.core.reflect/test_marshal clean test`
+      -> `5 total, 5 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.template/test_template clean test`
+      -> `54 total, 54 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.validation/test_validation clean test`
+      -> `70 total, 70 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - removed worktree checkout after validation; branch ref remains available
+- `codex/window-sdl2-backend-20260602` dedicated audit completed:
+  - temporary safe-absorption worktree:
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/worktree-triage-integration-window-20260604`
+    on `codex/worktree-triage-integration-20260604`
+  - preserved commits on the integration lane:
+    - `904c7b8b feat(core.window): add SDL2 window backend and OpenGL smoke tests`
+    - `3aa1d952 feat(core.gpu.gl): add minimal OpenGL facade and smoke tests`
+    - `4c0a155b feat(core.gpu): add atlas page and GL sync layer`
+    - `34dfaade feat(text): add bitmap font and fixed shaper seam`
+    - `7ce965bf feat(core.gpu.cell): add cell surface and OpenGL renderer`
+  - cherry-pick conflict policy:
+    - every conflict was only in `docs/inbox.md`
+    - kept the integration copy because the window branch version was a lane-local graphics workboard, not shared code or contract documentation
+  - focused verification rerun on the preserved integration commits:
+    - `make -C core/tests/nextpas.core.window/test_window_surface clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.window.sdl2/test_window_sdl2_loader clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.window.sdl2/test_window_sdl2_smoke clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.gpu.gl/test_gpu_gl_smoke clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.gpu.atlas/test_gpu_atlas_surface clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.gpu.gl.atlas/test_gpu_gl_atlas_smoke clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.text.font.bitmap/test_text_font_bitmap clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.text.shaper.fixed/test_text_shaper_fixed clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.text.glyph.atlas/test_text_glyph_atlas_surface clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.gpu.cell/test_gpu_cell_surface clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+    - `make -C core/tests/nextpas.core.gpu.gl.cell/test_gpu_gl_cell_smoke clean test`
+      -> PASS, heaptrc `0 unfreed memory blocks`
+  - preservation proof:
+    - compared the `40` code/test paths touched by the original 5 commits between
+      `codex/window-sdl2-backend-20260602` and `codex/worktree-triage-integration-20260604`
+    - result: tree-identical for all code/test paths; only `docs/inbox.md` intentionally differs
+  - cleanup completed:
+    - removed worktree + branch:
+      `codex/window-sdl2-backend-20260602`
+    - removed temporary integration worktree:
+      `worktree-triage-integration-window-20260604`
+  - state correction:
+    - this audit temporarily raised live worktrees back to `5`
+      (original window lane + temp integration lane)
+    - final verified state after cleanup returned to `3`
+- Remaining live worktrees after this slice:
+  - `/home/dtamade/projects/nextPas` on `main`
+  - `/home/dtamade/.config/superpowers/worktrees/nextPas/compiler-truth-audit-main-20260603`
+  - `/home/dtamade/projects/nextPas/.claude/worktrees/fix-include-resolve`
+  - verified counts after cleanup:
+    - local branches: `16`
+    - live worktrees: `3`
+
 ## Session: 2026-06-03 C5-P structured dispatched-call stabilization
 
 - **Status:** completed, pending path-limited commit.
@@ -8107,3 +8388,120 @@ Hello from nextPas!
 - Full rebuild: `bash scripts/rebuild-compiler.sh` output `46258 lines compiled`.
 - Redpoint check: `test_obj_compose` now emits `call i64 @TRect.Create(ptr ..., i64 ..., i64 ...)`; `test_nested_method` still emits `call i64 @TCalc.AddTo(ptr ..., i64 ...)`.
 - LLVM smoke: `smoke_total=137 passed=137 failed=0 build_failed=0 run_failed=0`.
+
+## Session: 2026-06-04 branch cleanup tranche 2
+
+- **Status:** completed for this 3-branch batch.
+- Objective:
+  - Continue branch-by-branch cleanup after the easy bulk-delete phase.
+  - Re-evaluate small residual branches against current `main`, not against stale branch-era assumptions.
+  - Preserve only code with real net value; discard stale or superseded lines.
+- Reviewed branches:
+  - `codex/platform-host-ffi-wave15-helper-names`
+  - `worktree-json-yaml-coverage`
+  - `codex/platform-pty-integration`
+- Current decisions:
+  - `codex/platform-host-ffi-wave15-helper-names`
+    - discard branch
+    - reason: Wave 15 docs now explicitly supersede the helper-name direction; current `.ffi` owner rule is raw externals only
+  - `worktree-json-yaml-coverage`
+    - discard branch
+    - reason: current `main` already absorbed the JSON/YAML coverage and has moved ahead with an extra YAML builder test
+  - `codex/platform-pty-integration`
+    - preserve only `231ad0a6 test(core): add missing Makefiles for marshal/template/validation`
+    - discard `1cf558e2 test(regex): avoid duplicate split edge case test name` as naming-only churn
+- Preservation action:
+  - created temporary worktree
+    `/home/dtamade/.config/superpowers/worktrees/nextPas/worktree-triage-integration-refresh-20260604`
+    on `codex/worktree-triage-integration-20260604`
+  - merged current `main` into the queue branch as `ab1813a1`
+  - cherry-picked `231ad0a6` onto the queue branch as `e1444c77`
+  - removed the temporary refresh worktree after verification
+- Focused verification on preserved Makefiles:
+  - `make -C core/tests/nextpas.core.reflect/test_marshal clean test`
+    -> `5 total, 5 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.template/test_template clean test`
+    -> `54 total, 54 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.validation/test_validation clean test`
+    -> `70 total, 70 passed, 0 failed`, heaptrc `0 unfreed memory blocks`
+- Cleanup completed:
+  - deleted branch:
+    `codex/platform-host-ffi-wave15-helper-names`
+  - deleted branch:
+    `worktree-json-yaml-coverage`
+  - deleted branch:
+    `codex/platform-pty-integration`
+- Current preserved queue relative to `main`:
+  - `9c96305b refactor(core): export collections skeleton types from facade`
+  - `83c6a83b feat(fs): add recursive CopyDir`
+  - `1e2bea56 feat(os): add GetHomeDir`
+  - `89b9944f test(crypto): guard x509verify UTC time source`
+  - `bc046e86 test(crypto): cover x509 validity windows`
+  - `ab1813a1 Merge branch 'main' into codex/worktree-triage-integration-20260604`
+  - `e1444c77 test(core): add missing Makefiles for marshal/template/validation`
+- Repository state after this batch:
+  - live worktrees: `4`
+    - `main`
+    - `codex/compiler-truth-audit-main-20260603`
+    - `codex/window-sdl2-backend-20260602`
+    - `fix/sema-include-resolver`
+  - local branches: `19`
+  - remaining non-`main` branches: `18`
+- Current blocker to landing the queue directly onto `main`:
+  - root `main` worktree still contains out-of-scope dirty compiler/planning changes
+  - advancing `main` now would touch a protected lane, so the safe preserve point remains
+    `codex/worktree-triage-integration-20260604`
+
+## Session: 2026-06-04 C5 var-param call validation closeout
+
+- **Status:** completed for the current C5 by-ref structured-call slice; no new production fix was required in this session.
+- Objective:
+  - Re-validate the current `C5` ordinary member / dispatched `var`-param call work against the live repo state.
+  - Prove whether `examples/smoke/llvm_var_param.pas` still exposes a real compiler bug, or whether the failure came from stale bootstrap state.
+- Context gathered before acting:
+  - Re-read `core/docs/design-conventions.md`.
+  - Reconfirmed the goal-tree position: `C5-P` is documented green, while `C6/C7/C8` are still pending.
+  - Reconfirmed that current compiler WIP lives on root `main`; no new worktree was created.
+- Verification work:
+  - Corrected the local repro commands first:
+    - manual `fpc` invocations needed `-Fucompiler/diagnostics` so `nextpas_json_helpers` resolves
+    - the stage0 smoke build must use the real binding id
+      `linux-x86_64-to-linux-x86_64-llvm`
+  - Focused tests after command correction:
+    - `compiler/tests/test_hir_builder_expr_fallback` -> `EXIT:0`
+    - `compiler/tests/test_semantic_hir_expr_producer` -> `EXIT:0`
+  - Producer-side debug harness evidence:
+    - `debug_var_param_call_expr_producer` proved the semantic model already attaches structured `ExprId` for:
+      - direct `var` class param statement call: `op='r'`
+      - ordinary member statement call: `LiteralStr='TNodeHelper.ClearNode'`, `op='pr'`
+      - virtual/interface statement calls: `LiteralStr='TVirtualNodeUser.ClearNode'` /
+        `LiteralStr='INodeResetter.ClearNode'`, both `op='pr'`
+  - Builder-side synthetic evidence:
+    - `debug_builder_member_var_param` still lowers the ordinary member `var` argument from an address producer (`hikAlloca`), not from a `hikLoad`.
+- Stale-stage0 discovery:
+  - Running the existing bootstrap compiler against `examples/smoke/llvm_var_param.pas` still reproduced the old runtime failure:
+    - old stage0 build succeeded
+    - old executable exited `102`
+    - old IR still showed:
+      `call i64 @TNodeHelper.ClearNode(ptr %v58, ptr %v59)`
+      where `%v59` was the loaded `Node` value instead of the caller slot address
+  - This contradicted the fresh focused tests and the synthetic builder evidence, so the next hypothesis was stale bootstrap state rather than a new semantic bug.
+- Fresh compiler rebuild:
+  - Ran `bash scripts/rebuild-compiler.sh`
+  - Output: `45315 lines compiled`
+- Fresh stage0 result:
+  - rebuilt `.sisyphus/tmp/stage0-bootstrap/nextpas`
+  - rebuilt `examples/smoke/llvm_var_param.pas`
+  - runtime result:
+    - `/tmp/llvm_var_param_stage0_fresh/llvm_var_param` -> `EXIT:7`
+  - fresh IR now shows the correct ordinary member by-ref lowering:
+    - `call i64 @TNodeHelper.ClearNode(ptr %v58, ptr %v2)`
+    - second argument is the caller slot address `%v2`, no longer the loaded node value
+- Current conclusion:
+  - The previously observed `EXIT:102` was a stale bootstrap compiler artifact, not a live compiler-source bug.
+  - The current `compiler/` changes already cover the `llvm_var_param` smoke expansion once stage0 is rebuilt.
+  - This round therefore closes validation debt rather than adding another semantic patch.
+- Remaining work after this closeout:
+  - remove temporary debug harnesses before committing this compiler slice
+  - update findings/plan docs
+  - identify the next real `C5 -> C6/C8` blocker from a fresh gate, not from the stale `llvm_var_param` report

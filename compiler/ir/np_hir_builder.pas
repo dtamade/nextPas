@@ -590,9 +590,14 @@ begin
           Exit(False);
         for I := 0 to High(AExpr.Children) do
         begin
-          if not (AExpr.Op[I + 1] in ['i', 'p']) then
+          if not (AExpr.Op[I + 1] in ['i', 'p', 'r']) then
             Exit(False);
-          if not CanLowerExpr(AExpr.Children[I]) then
+          if AExpr.Op[I + 1] = 'r' then
+          begin
+            if not CanLowerExprAsAddress(AExpr.Children[I]) then
+              Exit(False);
+          end
+          else if not CanLowerExpr(AExpr.Children[I]) then
             Exit(False);
         end;
       end;
@@ -612,9 +617,14 @@ begin
           Exit(False);
         for I := 1 to High(AExpr.Children) do
         begin
-          if not (AExpr.Op[I + 1] in ['i', 'p']) then
+          if not (AExpr.Op[I + 1] in ['i', 'p', 'r']) then
             Exit(False);
-          if not CanLowerExpr(AExpr.Children[I]) then
+          if AExpr.Op[I + 1] = 'r' then
+          begin
+            if not CanLowerExprAsAddress(AExpr.Children[I]) then
+              Exit(False);
+          end
+          else if not CanLowerExpr(AExpr.Children[I]) then
             Exit(False);
         end;
       end;
@@ -1310,7 +1320,7 @@ function THIRBuilder.LowerCallExpr(const AExpr: TSemanticHirExpr;
   out AResult: THIRExprResult): Boolean;
 var
   Instr: THIRInstr;
-  ChildResult: THIRExprResult;
+  ChildResult, AddressResult: THIRExprResult;
   AbiResultType, ExpectedType, ResultType, SourceType: THIRTypeId;
   ArgValueId, CallValueId: THIRValueId;
   I: LongInt;
@@ -1336,13 +1346,37 @@ begin
   SetLength(Instr.Operands, Length(AExpr.Children));
   for I := 0 to High(AExpr.Children) do
   begin
-    if not LowerExprValue(AExpr.Children[I], ChildResult) then
-      Exit(False);
     case AExpr.Op[I + 1] of
       'i':
-        ExpectedType := GetIntType;
+        begin
+          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+            Exit(False);
+          ExpectedType := GetIntType;
+        end;
       'p':
-        ExpectedType := GetPtrType;
+        begin
+          ExpectedType := GetPtrType;
+          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+          begin
+            if not LowerExprAddress(AExpr.Children[I], AddressResult) then
+              Exit(False);
+            if AddressResult.AddressValueId = 0 then
+              Exit(False);
+            Instr.Operands[I] := MakeTypedOperand(AddressResult.AddressValueId,
+              ExpectedType);
+            Continue;
+          end;
+        end;
+      'r':
+        begin
+          if not LowerExprAddress(AExpr.Children[I], AddressResult) then
+            Exit(False);
+          if AddressResult.AddressValueId = 0 then
+            Exit(False);
+          Instr.Operands[I] := MakeTypedOperand(AddressResult.AddressValueId,
+            GetPtrType);
+          Continue;
+        end;
     else
       Exit(False);
     end;
@@ -1373,7 +1407,7 @@ function THIRBuilder.LowerDispatchedCallExpr(const AExpr: TSemanticHirExpr;
 var
   FnPtr, ReceiverPtr, SlotValue, TablePtr, TableSlotPtr: THIRValueId;
   Instr: THIRInstr;
-  ChildResult, ReceiverResult: THIRExprResult;
+  ChildResult, ReceiverResult, AddressResult: THIRExprResult;
   AbiResultType, ExpectedType, ResultType, SourceType: THIRTypeId;
   ArgValueId, CallValueId: THIRValueId;
   I: LongInt;
@@ -1452,13 +1486,29 @@ begin
   Instr.Operands[1] := MakeTypedOperand(ReceiverPtr, GetPtrType);
   for I := 1 to High(AExpr.Children) do
   begin
-    if not LowerExprValue(AExpr.Children[I], ChildResult) then
-      Exit(False);
     case AExpr.Op[I + 1] of
       'i':
-        ExpectedType := GetIntType;
+        begin
+          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+            Exit(False);
+          ExpectedType := GetIntType;
+        end;
       'p':
-        ExpectedType := GetPtrType;
+        begin
+          if not LowerExprValue(AExpr.Children[I], ChildResult) then
+            Exit(False);
+          ExpectedType := GetPtrType;
+        end;
+      'r':
+        begin
+          if not LowerExprAddress(AExpr.Children[I], AddressResult) then
+            Exit(False);
+          if AddressResult.AddressValueId = 0 then
+            Exit(False);
+          Instr.Operands[I + 1] := MakeTypedOperand(
+            AddressResult.AddressValueId, GetPtrType);
+          Continue;
+        end;
     else
       Exit(False);
     end;
@@ -1553,7 +1603,7 @@ begin
     ATypeId := ExprResult.TypeId;
     Exit(ExprResult.ValueId);
   end;
-  Result := ParseIntBlob(ABlob);
+  Result := ParseIntBlobTyped(ABlob, ATypeId);
 end;
 
 function THIRBuilder.LowerNodeTargetExprAddress(const ANode: TTypedHirNode;
@@ -3678,6 +3728,7 @@ var
   ArgOps: array of THIROperand;
   ArgCount: LongInt;
   OwnsObjectFreeDestroy, OwnsObjectFreeHeapRelease: Boolean;
+  ExprResult: THIRExprResult;
 begin
   TabPos := Pos(#9, ANode.Operand);
   if TabPos > 0 then
@@ -3715,6 +3766,10 @@ begin
     FPendingObjectFreeReceiverValue := 0;
     FPendingObjectFreeHeapRelease := False;
   end;
+
+  if (ANode.ExprId > 0) and (not OwnsObjectFreeDestroy) and
+    LowerExprValue(ANode.ExprId, ExprResult) then
+    Exit;
 
   ArgCount := 0;
   SetLength(ArgOps, 0);
@@ -4766,6 +4821,8 @@ begin
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_ptr', GetPtrType, False, False);
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1) + '_len', GetIntType, False, False);
     end
+    else if (I < Length(ParamTypes)) and (ParamTypes[I + 1] = 'v') then
+      FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetPtrType, True, False)
     else if (I < Length(ParamTypes)) and
       ((ParamTypes[I + 1] = 'p') or (ParamTypes[I + 1] = 'r')) then
       FModule.AddFunctionParam(FCurrentFuncId, 'p' + IntToStr(I - 1), GetPtrType, False, False)

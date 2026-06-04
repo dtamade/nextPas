@@ -1,5 +1,182 @@
 # Findings & Decisions
 
+## 2026-06-04 local branch cleanup
+
+- VSCode 当前让人感觉“分支还很多”，主要原因不是 worktree 没清掉，而是本地 branch ref 还保留了很多。worktree cleanup 和 branch cleanup 是两件事。
+- 本轮开始前的真实状态是：
+  - live worktree `4` 个
+  - 本地分支 `96` 个
+- 这里再次暴露出一个实时状态变化点：earlier notes 里记录的是 3 个 live worktree，但重新执行 `git worktree list --porcelain` 后发现
+  `codex/window-sdl2-backend-20260602` 当前也在 live worktree 上，因此后续任何清理都必须以 fresh Git state 为准。
+- 安全删除本地分支的第一条规则是：只删 `tip` 已在 `main` 里的 branch ref。按这个标准，本轮一次性删掉了 `43` 个 merged local branches。
+- 删除这些 merged branches 不会丢代码；删掉的只是本地引用名，提交已经被 `main` 保住。
+- 第二条安全压缩规则是：虽然 branch 还没进 `main`，但如果它已被另一个保留分支完整包含，也可以删除 branch ref 而不丢代码。
+- 本轮唯一满足“被别的保留分支完整包含”的是 `feat/platform-pty`：
+  - `git merge-base --is-ancestor feat/platform-pty codex/platform-pty-integration` 为真
+  - 反向不成立
+  - 因此 `feat/platform-pty` 只是 PTY integration 线的冗余基线 ref，可安全删除
+- `git branch -d feat/platform-pty` 被 Git 拒绝不是因为不安全，而是因为 `-d` 只认“是否已并入当前 HEAD/main”；对这种“已被另一条未合并分支完整包含”的情况，需要在祖先关系取证后用 `-D` 删除 ref。
+- `git cherry -v main <branch>` 进一步筛出了第二类安全删除对象：输出全为 `-` 的 branch 虽然不满足“ancestor merged into main”，但其提交补丁已被 `main` 等价吸收。
+- 按这个标准，本轮又删除了 `28` 个 patch-equivalent branches，包括：
+  - `fix/resolver-diagnostic-isolation`
+  - 一整批 `worktree-*` 临时分支
+  - `worktree-sysutils-*` 三条阶段分支
+- 对这种 patch-equivalent 分支，`git branch -d` 同样可能误报“not fully merged”；因为 Git 看的仍是祖先关系，不是 patch-id 等价。这里删除 ref 的安全证据来自 `git cherry`，不是 `git branch --merged`。
+- `docs/cross-module-workflow` 后续也已删除：
+  - 相对 `main` 只有一个 docs commit
+  - earlier audit 已确认这条文档包含危险的 `git reset --hard` 回退建议，不是应保留资产
+- `codex/io-cursor-csv-streaming` 后续也已删除：
+  - 相对 `codex/data-format-streaming-ini` 只剩一条 docs commit `docs(http): plan phase 2 runtime hardening`
+  - 其余实质代码已被 `codex/data-format-streaming-ini` 吸收，因此保留两个 branch ref 只会制造列表噪音
+- 本轮 branch cleanup 后，本地分支数从 `96` 降到 `22`。
+- 剩余 `22` 个分支里：
+  - `main` 是唯一已 merged branch
+  - 其余 `21` 个都还没并进 `main`
+  - 这意味着 easy/safe bulk delete 已基本做尽，接下来必须回到逐条价值判断
+- 当前仍保留的非主线分支里，至少这几条因为 live worktree 或用户约束而不能碰：
+  - `codex/compiler-truth-audit-main-20260603`
+  - `codex/window-sdl2-backend-20260602`
+  - `fix/sema-include-resolver`
+
+## 2026-06-04 worktree merge audit batch 1
+
+- 本轮目标不是看 worktree 是否 `clean`，而是确认相对 `main` 是否还有独有提交值得合并。
+- `clean` 只表示 worktree 没有未提交改动；它不说明分支是否已并入 `main`，也不说明提交是否已被别的 lane 吸收。
+- root checkout 的 `git status` 受到 repo 内 `.claude/worktrees/`、`.worktrees/` 和 `core-tui-migration/` 目录影响；审查时必须按 worktree 路径逐个取证，不能直接把 root 脏状态当成某个待合并 lane 的证据。
+- `perf/chacha20poly1305-fused-scout` 的 planning files 已明确把该线定义成 scout/probe：internal streaming scout 可保留，但 benchmark 没显示正收益，因此 production 继续 default-off。它属于“已验证的研究脚手架”，不是“主线缺失的功能”。
+- `codex/collections-refactor` 只有 2 个独有提交，主体是 facade re-export 与 focused test；但第二个提交把 iterator aliases 也公开到 facade，这扩大了 public surface，价值高于体量，因此不能不审就整支 merge。
+- `codex/compiler-truth-audit-main-20260603` 自证为 canonical compiler truth lane：它不是旧 side lane 的重复物，而是吸收 side lane 后继续推进的主线，仍有 17 个未进 `main` 的独有提交，涉及 `build/verify_local.sh`、`tools/stage0`、HIR/tests 与 route truth docs。
+- `codex/config-branch-triage-20260604` 在本轮审查中发现 live state 已变化：最初 worktree 清单里有它，但复查时 worktree 和 branch ref 都已消失，只剩一个 dangling docs-only commit。这说明整理 worktree 时必须以“重新查询当前 Git 状态”为准，不能只靠上一次列表截图。
+- `codex/core-strict-review-20260601` 不是单一功能分支，而是 125 commit 的长期 strict-review 汇流线；最新 tip 虽然是 Process final proof closeout，但整线仍覆盖 log/async/io/process/platform/fs 等多个主题。整体 merge 风险远高于逐批摘取。
+
+## 2026-06-04 full worktree triage
+
+- 用户在本轮后续明确收紧范围：编译器 worktree 交给同事处理，因此后续 triage 只继续覆盖非编译器线。
+- 用户当前目标不是“把 worktree 删干净”，而是“先把值得保留的代码审过并安全合回主线，再清理 worktree”。因此清理动作必须从属于代码审计结论，而不是反过来为了目录干净牺牲代码判断。
+- 这轮的安全标准不是 branch 名字或提交新旧，而是：
+  - 改动范围是否清晰
+  - branch 自身是否有 focused verification 证据
+  - public surface 是否被无意扩大
+  - 是否只是默认关闭的实验/scout 代码
+  - 是否已经被别的 canonical lane 吸收
+- `codex/data-format-streaming-ini` 基本吸收了 `codex/io-cursor-csv-streaming` 的实质代码：反向 `git cherry` 只剩 `docs(http): plan phase 2 runtime hardening` 这一条 `io-cursor` 独有提交。后续应把它们当“升级线 + 残余 docs commit”处理，而不是两条并列功能线。
+- 基于上面的关系，`codex/io-cursor-csv-streaming` 没必要继续占一个 live worktree；保留 branch ref 供后续决定那条 docs commit 的去留就够了。
+- PTY 现在至少有三条线：
+  - `feat/platform-pty`：干净的基础功能线；
+  - `codex/platform-pty-main-merge`：对 `feat/platform-pty` patch-equivalent 的重复线；
+  - `codex/platform-pty-integration`：在基础 PTY 之上继续叠加 main refresh 和额外改动的 dirty 线。
+  因此后续清理时不应同时保留前两条 clean 线。
+- TLS 组并不是简单的“final 完全覆盖 base/refresh”。反向 `git cherry` 证明 base/refresh 还各自带着 5 个 final 没有的 TLS/time/helper 命名相关提交，所以不能只因为有 `final` 就把另外两条直接删掉。
+- `docs/cross-module-workflow` 虽然只是文档，但它引导了危险的临时回退方式（`git reset --hard`），不适合未经修订直接进主线。
+- `crypto-polish` 的工作树脏状态不是新源码，而是 planning files 和测试产物；这类 worktree 清理优先级高，因为继续保留只会污染根 checkout 观察结果。
+- `crypto-polish` 的 live 复核再次确认了上面的判断：dirty files 只有 planning markdown 与一串已编译测试二进制，没有任何 `.pas` 源码差异，因此可以 force remove worktree checkout 而不必担心漏掉代码。
+- `fpdev-core-copydir` 的第三个提交 `90306fd6 feat(hash): add file hex helpers` 不是“冲突没处理完”，而是当前主线早已通过等价提交 `1fbef90c feat(hash): add file hex helpers` 吸收了相同源码/测试；因此在 integration branch 上 cherry-pick 变空是正确结果。
+- `codex/collections-refactor` 剩余真正有价值的部分不是再导出一遍 facade public types，而是补一个 focused facade test，证明 `TCollectionClass` / `TPtrIter` 这些当前已在 `main` 的导出确实可从 facade 解析。
+- `codex/datetime-now` 的 committed 实现线已经过时：
+  - current `main` 已同时提供 `DateTimeNow` 和 `DateTimeUtcNow`
+  - `x509verify` 当前使用 `nextpas.core.time.DateTimeUtcNow`
+  - dirty worktree 中那句 “DateTimeNow - UTC-shaped wall clock time” 注释与 current main 语义不符，因为 current `DateTimeNow` 已带本地 UTC offset
+  因此这条线只能摘测试，不能再回收它的实现/注释口径。
+- `codex/datetime-now` 的 dirty worktree 里确实藏着值得保留的未提交代码：`x509verify` 的
+  expired / not-yet-valid behavior tests。它们已经在 integration branch 上改写为基于
+  `TCertificateUtils.GenerateSelfSigned` 的版本，避免把 openssl 固定窗口参数细节带回主线。
+- `codex/compiler-truth-audit-20260603` 可以删的前提不是“看起来旧”，而是 Git 祖先关系已证明确实被
+  `codex/compiler-truth-audit-main-20260603` 吸收；剩余 dirty state 只是 lane-local planning files，
+  不是未提交源码。
+- `codex/core-tls-rtl-main-20260603-final` 当前是 clean，且自身相对 `main` 有 18 个 TLS/time/text 收敛提交，适合作为 TLS review anchor。
+- 但 `codex/core-tls-rtl-main-20260603-final` 不是 TLS 组的完整 superset。`git cherry -v codex/core-tls-rtl-main-20260603-final codex/core-tls-rtl-main-20260603` 与对 `refresh` 的同样检查都给出同一组 5 个 `final` 未吸收的已提交 TLS commits：
+  - `4c812194 refactor(tls.winssl): route session time checks through nextpas time`
+  - `060498e6 fix(tls): use UTC for backend days-until-expiry helpers`
+  - `2e6362a6 refactor(tls): route operational timestamps through nextpas time`
+  - `8fc77c8d fix(tls): avoid premature expiry rotation events`
+  - `6882e821 refactor(tls): route capability helpers through nextpas text`
+- 这 5 个缺口里，有些是“代码 + 覆盖都缺”，有些是“核心代码大体已被 final 后续提交吸收，但 focused coverage 仍缺”：
+  - `060498e6` 的 UTC days-until-expiry 代码在 current `final` 上已基本存在：各 backend 当前都用 `DateTimeUtcNow`；但 `test_backend_certificate_days_until_expiry_utc_contract.pas` 与 `winssl/test_winssl_certificate_days_until_expiry_utc.pas` 这两条 coverage 还不在 `final`。
+  - `2e6362a6` 与 `8fc77c8d` 没有被 `final` 的 `64d94f95` 同主题提交完全覆盖；`cert.rotation` / `ct.log` 这一面仍需单独看。
+  - `6882e821` 对 `capability.serializer/diff` 的 text routing 与 `test_capability_rtl_escape_contract` 仍不在 `final`。
+  - `4c812194` 的 `winssl.connection` session time wrapper adoption test 也还不在 `final`。
+- `base/refresh` 的 live dirty state 当前没有呈现额外的新 merge 价值：
+  - `base` 未提交的是 `verify.custom` + `test_verify_custom_rtl_escape_contract`
+  - `refresh` 未提交的是 `http2.alpn` / `verify.custom` + 相关 tests
+  - 这些都对应 `final` 已有的早期提交 `387b38fb` / `fdc28d0e`，更像未提交 replay，不应误判成 `final` 之外的新代码。
+- 对 `final` 这条线做的两条 focused verification 在本轮为绿：
+  - `make -C core/tests/nextpas.core.tls/test_certificate_validity_utc_contract clean test`
+  - `make -C core/tests/nextpas.core.tls/test_mbedtls_certificate_text_conv_contract clean test`
+  两条都通过，且 heaptrc 为 `0 unfreed memory blocks`。
+- 后续按 commit-by-commit 吸收后，`final` 已不再缺那 5 个 follow-up：
+  - `86afb4a9` / `959b1bee` / `98a475d0` / `162d920d` / `493a9b43`
+    分别以当前 `final` 代码为准解冲突，保留更强实现并补齐缺失测试覆盖。
+- `test_capability_rtl_escape_contract` 的首次编译还揭出一个真实回归，不是测试噪音：
+  `nextpas.core.tls.logging.pas` 被重复引入 `nextpas.core.time`。这说明 TLS 收口不能只看
+  source diff，必须让更宽依赖图至少编译一次。该问题已用 `3f940bea` 修正。
+- `base` / `refresh` 剩余的 dirty state 没有留下任何 `final` 没有的代码价值：
+  - `verify.custom` replay 与 `final` 当前源码一致，且 `final` 上的 contract test 更强或等价
+  - `refresh` 的 `http2.alpn` replay 还停留在 `DateUtils.SecondsBetween`，弱于 `final`
+    当前的 `DateTimeSecondsBetween`
+  - `final` 上再次跑过 `test_http2_alpn_time_contract` 与 `test_verify_custom_rtl_escape_contract`，均通过
+- 因此 TLS 组三棵 worktree 的安全结论已经变化：
+  - `codex/core-tls-rtl-main-20260603-final` 保留，作为唯一 consolidated TLS lane
+  - `codex/core-tls-rtl-main-20260603` 与 `codex/core-tls-rtl-main-20260603-refresh`
+    已可安全删除，且已删除
+- 当前真正阻塞把 TLS consolidated lane 落到 `main` 的不是代码质量，而是 live root `main`
+  checkout 带着 out-of-scope 编译器/planning 脏改动；在这种状态下移动 `main` 会碰到用户明确隔离的工作面。
+- `feat/platform-pty` 这条 clean 基础线没有必要继续占 live checkout：
+  - `git merge-base --is-ancestor feat/platform-pty codex/platform-pty-integration` 为真
+  - 反向不成立，说明 integration 线完整包含基础 PTY 线
+  - 因此保留 branch ref 即可，live worktree 已移除
+- `codex/platform-host-ffi-wave15-helper-names` 原本属于“branch tip 已进 main，但 worktree 里还挂着真实未提交源码”的危险状态；
+  这轮先跑通它自己改到的 5 组 platform host ABI contract tests，再把改动提交为
+  `b7df674f platform: host-own remaining ffi helper names`，然后移除 live worktree。
+- 经过上面两步，再加上 earlier archive/parking，本轮现在只剩 4 个 live worktree：
+  - `main`
+  - `codex/compiler-truth-audit-main-20260603`（用户明确不让我碰）
+  - `fix/sema-include-resolver`（用户明确不让我碰）
+  - `codex/platform-pty-integration`（仍有真实未提交源码，不能擅自删）
+- `codex/platform-pty-integration` 的最终 dedicated audit 证明它不是“还有一批漏合主线的 PTY 价值代码”，而是混着三类东西：
+  - 5 个 tracked dirty files 只是把 worktree 局部追平到 current `main`，没有独有价值
+  - 11 个 tracked dirty files 相对 current `main` 是明显退化：
+    - `constant_time/hash/pkcs8/tls12prf` 等重新引入 `SysUtils` / `TEncoding`
+    - `x509verify` 把 UTC validity 路径退回 `Now`
+    - `test_http_h1writer` / `test_http_integration` 删掉了大量现有覆盖或减弱断言
+  - 3 个 untracked Makefile 是真实可保留的小进度
+- 因此这条线的安全结论是：
+  - 只保留 Makefile，小批量提交为 `231ad0a6 test(core): add missing Makefiles for marshal/template/validation`
+  - focused verification 只围绕这 3 个 Makefile 对应测试重跑：
+    `test_marshal`、`test_template`、`test_validation` 全部通过，heaptrc 为 `0 unfreed memory blocks`
+  - 其余 dirty diff 作为“已被 main 覆盖的重复”或“回退 main 质量的差异”明确丢弃
+  - live checkout 已移除，branch ref `codex/platform-pty-integration` 保留供后续 branch-level review
+- `codex/window-sdl2-backend-20260602` 这条线不能用 naive `git diff main..branch` 代表“本 lane 的有效改动”；
+  它的祖先链会把更早的 unrelated history 一起带出来。对这种 stacked lane，正确边界是先锁定 graph tip 上那
+  5 个图形栈 commits，再按这些 commits 触达的路径逐文件取证。
+- 这 5 个图形栈 commits 的真实代码面是清晰的：`40` 个新增/修改的 code/test 路径，外加
+  `docs/inbox.md` 这一份 lane-local 看板文档。
+- 把这 5 个 commits 转存到 `codex/worktree-triage-integration-20260604` 时，所有冲突都只发生在
+  `docs/inbox.md`。integration 保留的是 repo 当前共享工作看板；window branch 那份是 SDL2/OpenGL/atlas/cell
+  路线板，不属于必须跟着代码进入主线的共享事实源。
+- focused verification 已完整覆盖这条图形栈 lane：
+  `test_window_surface`、
+  `test_window_sdl2_loader`、
+  `test_window_sdl2_smoke`、
+  `test_gpu_gl_smoke`、
+  `test_gpu_atlas_surface`、
+  `test_gpu_gl_atlas_smoke`、
+  `test_text_font_bitmap`、
+  `test_text_shaper_fixed`、
+  `test_text_glyph_atlas_surface`、
+  `test_gpu_cell_surface`、
+  `test_gpu_gl_cell_smoke`
+  全部通过，且 heaptrc 均为 `0 unfreed memory blocks`。
+- 对 original window branch tip 与 integration tip 的逐文件比对证明：这 5 个 commits 触达的 `40` 个
+  code/test 路径内容完全一致；唯一故意不保留的是 `docs/inbox.md` 的 lane-local 看板文本。
+- 这轮 `window-sdl2` dedicated audit 还再次暴露出一个会话内实时状态点：为安全转存它，新建了临时 integration
+  worktree，因此 live worktree 数在同一轮里会从 `3` 短暂回到 `5`。最终在删除 original
+  `codex/window-sdl2-backend-20260602` worktree/branch 与临时 integration worktree 后，verified live
+  worktree 状态又回到 `3`。
+- 经过这一步后，本轮我负责范围内已没有剩余 non-compiler live worktree；当前 live worktree 只剩 3 个：
+  - `main`
+  - `codex/compiler-truth-audit-main-20260603`
+  - `fix/sema-include-resolver`
+
 ## 2026-06-03 C5-N structured direct-call lowering
 
 - 继续按 `WalkHaltCalls` 的 raw assign 分支补 call 特判，收益已经开始变差；更值钱的切片是把第一条真正的 structured call expr 收起来，让 builder 能直接 lower call，而不是再把表达式压回 blob。
@@ -2589,3 +2766,86 @@
   也继续保留 `ptr`。
 - GREEN focused：`test_semantic_hir_expr_producer` 重新编译运行后退出 `0`，并新增
   pointer-return constructor arg regression 覆盖。
+
+## 2026-06-04 branch cleanup tranche 2
+
+- `codex/platform-host-ffi-wave15-helper-names` 不能按“它有 focused tests 就该合”处理，因为
+  current `main` 的平台 FFI 边界已经前进了：
+  - `core/docs/platform-host-ffi-gap-matrix.md` 明写 “Wave 15 corrects the FFI boundary”
+    且 “earlier Wave 13/14 helper-name direction is superseded”
+  - 当前 host/shared `.ffi` 的规则是 raw `external` declaration only，不再承载 helper /
+    wrapper / projection 逻辑
+  - 该 branch 的 `b7df674f` 反而会把 host helper 名字重新塞回 `.ffi` units，因此现在属于
+    过时实现，不是漏合资产
+- `worktree-json-yaml-coverage` 的 commit message 写着“full API coverage”，但用 current
+  `main` 重新比对后不能直接相信旧结论：
+  - `test_json_builder.lpr` 与 `test_yaml_block.lpr` 的大部分覆盖当前主线已经具备
+  - 相对 current `main` 的唯一净差异反而是 branch 少了
+    `TestBuildOwnsQuotedSpecialStrings` 这一条 YAML builder 覆盖
+  - 因此这条 branch 现在不是“主线缺覆盖”，而是“旧分支已经落后主线”
+- `codex/platform-pty-integration` 剩余的两个独有提交必须拆开看：
+  - `1cf558e2` 只是把 `TestSplitEdgeCases2` 改名成 `TestSplitEdgeCasesP4`，行为和覆盖都没增加；
+    current `main` 已通过 `2` 后缀解决命名冲突，不值得再摘
+  - `231ad0a6` 给 `test_marshal` / `test_template` / `test_validation` 补了标准 `Makefile`，
+    这三处 current `main` 仍然缺失，且符合用户一贯偏好的 `Makefile` 入口
+- 对 integration queue 的正确处理不是重建新分支，而是 refresh 现有
+  `codex/worktree-triage-integration-20260604`：
+  - merge current `main` 进入 queue 后，`main...queue` 变成 `0 7`
+  - 这说明 queue 现在是“包含 current `main` 的主线保全分支”，后续如果 root `main`
+    变干净，可以从这个锚点继续安全落地主线
+- 删除 branch ref 的最终理由必须区分清楚：
+  - `codex/platform-host-ffi-wave15-helper-names`：架构方向已过时，主动丢弃
+  - `worktree-json-yaml-coverage`：已被 current `main` 吸收并部分超越，删除噪音 ref
+  - `codex/platform-pty-integration`：真实保留值 `231ad0a6` 已转存到 integration queue，
+    其余独有提交无净价值
+
+## 2026-06-04 C5 var-param validation findings 1
+
+- 当前 `llvm_var_param` 的表面红点必须区分“源码行为”与“bootstrap 编译器年龄”。
+- fresh focused tests 与 synthetic builder probe 同时为绿时，直接继续修生产代码是错误方向；先排除 stale stage0 才是最低成本、最高确定性的下一步。
+- 本轮一开始的 `EXIT:102` 不是当前源码的直接证据，因为执行它的是 rebuild 之前的
+  `.sisyphus/tmp/stage0-bootstrap/nextpas`。
+
+## 2026-06-04 C5 var-param validation findings 2
+
+- producer 侧没有缺 contract：
+  - `debug_var_param_call_expr_producer` 已明确证明
+    `Helper.ClearNode(Node)` statement call 挂上了 `ExprId`
+  - root expr 是 `shekCall`
+  - `LiteralStr='TNodeHelper.ClearNode'`
+  - `Op='pr'`
+  - receiver child 是 address-backed class receiver
+  - arg child 是 `shekSymbolAddress` for `Node`
+- 因此普通成员 `var` 参数 statement call 并不是“sema 没迁移到 structured call”。
+
+## 2026-06-04 C5 var-param validation findings 3
+
+- builder 侧当前源码也没有缺普通成员 `var` 参数 lowering：
+  - `LowerCallExpr` 已支持 `'r'` 参数，直接走 `LowerExprAddress`
+  - `ProcessCallRuntime` 在 `ANode.ExprId > 0` 时会优先 `LowerExprValue(ANode.ExprId, ...)`
+    并整条提前退出，不再落回 blob path
+  - synthetic probe `debug_builder_member_var_param` 证明 ordinary member call 的 by-ref arg
+    来源是 `hikAlloca`，不是 `hikLoad`
+- 因此“当前源码仍会把 ordinary member `var` 参数按值传入”这个判断已被当前工作树证伪。
+
+## 2026-06-04 C5 var-param validation findings 4
+
+- 旧 bootstrap 二进制确实会把 `llvm_var_param` 编坏：
+  - old IR 仍有
+    `call i64 @TNodeHelper.ClearNode(ptr %v58, ptr %v59)`
+  - `%v59` 来源是 `load ptr, ptr %v2`
+  - 所以 old executable 触发 `Halt(102)`
+- fresh rebuild 之后同一 smoke 变绿：
+  - `bash scripts/rebuild-compiler.sh` 输出 `45315 lines compiled`
+  - fresh `llvm_var_param` executable 退出 `7`
+  - fresh IR 改成
+    `call i64 @TNodeHelper.ClearNode(ptr %v58, ptr %v2)`
+- 结论：这轮最重要的真实发现不是新的编译器修复点，而是“旧 `EXIT:102` 已经过期，属于 stale stage0 假红点”。
+
+## 2026-06-04 C5 var-param validation findings 5
+
+- 这也说明当前 `C5` closeout 不能只看源码 diff 或 focused tests；必须至少做一次 fresh compiler rebuild，才能把 structured-call 变更真正带入 stage0 运行面。
+- 对接下来通往 `C6/C8` 的工作，最优策略不是继续围绕 `llvm_var_param` 做额外补丁，而是：
+  - 清理这轮临时 debug harness
+  - 固化 `llvm_var_param` 已绿的验证事实
+  - 用 fresh gate 去找下一个真实 blocker

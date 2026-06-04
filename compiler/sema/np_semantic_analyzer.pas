@@ -179,6 +179,7 @@ type
     function TypeMetaVmtSlot(const ATypeName, AMethodName: string): Int64;
     function TypeMetaRetPtr(const ATypeName, AMethodName: string): Boolean;
     function TypeMetaParentClass(const ATypeName: string): string;
+    function NextClassAncestorName(const ATypeName: string): string;
     function TypeMetaVmtCount(const ATypeName: string): Int64;
     function TypeMetaInterfaces(const ATypeName: string): string;
     function TypeSignatureForTypeId(const ATypeId: LongInt): string;
@@ -368,6 +369,10 @@ type
       const AArrayAccessNode: TGreenNode; out AExprId: LongInt): Boolean;
     function ResolveArrayAccessElementTypeId(
       const AArrayAccessNode: TGreenNode; out AElementTypeId: LongInt): Boolean;
+    function BuildByRefArgumentAddressExpr(const ATargetNode: TGreenNode;
+      out AExprId: LongInt): Boolean;
+    procedure AttachStatementCallExpr(const AHirNodeId: LongInt;
+      const ACallNode: TGreenNode);
     function TryBuildLegacyParamKindsFromSignature(
       const AArgSignature: string; const AParamCount: LongInt;
       out AParamKinds: string): Boolean;
@@ -2079,6 +2084,24 @@ begin
   if FModel.GetTypeMetaByName(ATypeName, Meta) and (Meta.ParentClassName <> '') then
     Exit(Meta.ParentClassName);
   if not FModel.LookupStringConstValue(ATypeName + '$parent_class', Result) then
+    Result := '';
+end;
+
+function TSemanticAnalyzer.NextClassAncestorName(const ATypeName: string): string;
+var
+  TypeId: LongInt;
+begin
+  Result := '';
+  if ATypeName = '' then
+    Exit;
+
+  TypeId := FModel.FindTypeByName(ATypeName);
+  if (TypeId > 0) and (FModel.TypeAt(TypeId - 1).ParentTypeId > 0) then
+    Result := FModel.TypeAt(
+      FModel.TypeAt(TypeId - 1).ParentTypeId - 1).Name;
+  if Result = '' then
+    Result := TypeMetaParentClass(ATypeName);
+  if SameText(Result, ATypeName) then
     Result := '';
 end;
 
@@ -4969,6 +4992,8 @@ begin
     if (ParentTypeId > 0) and (ParentTypeId <= FModel.TypeCount) then
       ParentName := FModel.TypeAt(ParentTypeId - 1).Name;
   end;
+  if (ParentName = '') and (not SameText(ClsName, 'TObject')) then
+    ParentName := 'TObject';
   VmtCount := 0;
   SetLength(Meta.Fields, 0);
   SetLength(Meta.VmtSlots, 0);
@@ -5341,6 +5366,8 @@ begin
       else if TypeChild.NodeKind = gnkClassType then
       begin
         ParentTypeId := 0;
+        if not SameText(TypeChild.Text, 'interface') then
+          ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
         if TypeChild.ChildCount > 0 then
         begin
           if TypeChild.ChildAt(0).NodeKind = gnkIdentifier then
@@ -5362,7 +5389,7 @@ begin
             end;
           end;
         end
-        else
+        else if not SameText(TypeChild.Text, 'interface') then
           ParentTypeId := ImplicitSystemObjectParentTypeId(Child.Text);
         if ParentTypeId > 0 then
           FModel.SetTypeParent(TypeId, ParentTypeId);
@@ -6720,14 +6747,7 @@ begin
       (Pos('inherited ', ANode.ChildAt(0).Text) = 1) then
     begin
       ArgName := Copy(ANode.ChildAt(0).Text, 12, Length(ANode.ChildAt(0).Text) - 11);
-      Folded := FModel.FindTypeByName(FCurrentMethodClass);
-      FuncName := '';
-      if Folded > 0 then
-      begin
-        DotPos := FModel.TypeAt(Folded - 1).ParentTypeId;
-        if DotPos > 0 then
-          FuncName := FModel.TypeAt(DotPos - 1).Name;
-      end;
+      FuncName := NextClassAncestorName(FCurrentMethodClass);
       if FuncName <> '' then
         ABlob := 'var self' + #10 + ABlob +
           'call ' + FuncName + '.' + ArgName +
@@ -6741,14 +6761,7 @@ begin
       FuncName := FCurrentMethodClass;
       while (FuncName <> '') and
         (FModel.FindSymbolByName(FuncName + '.' + ANode.ChildAt(0).Text) = 0) do
-      begin
-        Folded := FModel.FindTypeByName(FuncName);
-        if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
-          FuncName := FModel.TypeAt(
-            FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
-        else
-          FuncName := '';
-      end;
+        FuncName := NextClassAncestorName(FuncName);
       if FuncName <> '' then
       begin
         Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.ChildAt(0).Text);
@@ -6874,14 +6887,7 @@ begin
         while (ArgName <> '') and
           (FModel.FindSymbolByName(ArgName + '.' +
             ANode.ChildAt(0).ChildAt(1).Text) = 0) do
-        begin
-          Folded := FModel.FindTypeByName(ArgName);
-          if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
-            ArgName := FModel.TypeAt(
-              FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
-          else
-            ArgName := '';
-        end;
+          ArgName := NextClassAncestorName(ArgName);
         if ArgName = '' then ArgName := FuncName;
         ABlob := 'var ' + ReceiverVarName + #10 +
           ABlob + 'call ' + ArgName + '.' +
@@ -6963,14 +6969,7 @@ begin
     (Pos('inherited ', ANode.Text) = 1) then
   begin
     ArgName := Copy(ANode.Text, 11, Length(ANode.Text));
-    Folded := FModel.FindTypeByName(FCurrentMethodClass);
-    FuncName := '';
-    if Folded > 0 then
-    begin
-      DotPos := FModel.TypeAt(Folded - 1).ParentTypeId;
-      if DotPos > 0 then
-        FuncName := FModel.TypeAt(DotPos - 1).Name;
-    end;
+    FuncName := NextClassAncestorName(FCurrentMethodClass);
     if FuncName <> '' then
     begin
       ABlob := 'var self' + #10 +
@@ -6984,14 +6983,7 @@ begin
     FuncName := FCurrentMethodClass;
     while (FuncName <> '') and
       (FModel.FindSymbolByName(FuncName + '.' + ANode.Text) = 0) do
-    begin
-      Folded := FModel.FindTypeByName(FuncName);
-      if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
-        FuncName := FModel.TypeAt(
-          FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
-      else
-        FuncName := '';
-    end;
+      FuncName := NextClassAncestorName(FuncName);
     if FuncName <> '' then
     begin
       Folded := TypeMetaVmtSlot(FCurrentMethodClass, ANode.Text);
@@ -7209,14 +7201,7 @@ begin
             ArgName := FuncName;
             while (ArgName <> '') and
               (FModel.FindSymbolByName(ArgName + '.' + ANode.ChildAt(1).Text) = 0) do
-            begin
-              Folded := FModel.FindTypeByName(ArgName);
-              if (Folded > 0) and (FModel.TypeAt(Folded - 1).ParentTypeId > 0) then
-                ArgName := FModel.TypeAt(
-                  FModel.TypeAt(Folded - 1).ParentTypeId - 1).Name
-              else
-                ArgName := '';
-            end;
+              ArgName := NextClassAncestorName(ArgName);
             if ArgName = '' then ArgName := FuncName;
             ABlob := 'var ' + ReceiverVarName + #10 +
               'call ' + ArgName + '.' + ANode.ChildAt(1).Text + ' 1' + #10;
@@ -7789,6 +7774,7 @@ var
   Child, ParamNode, TypeNode: TGreenNode;
   I, J, ParamIndex: LongInt;
   TypeName: string;
+  IsVarByRef: Boolean;
 begin
   AParamKinds := '';
   ParamIndex := 0;
@@ -7806,16 +7792,19 @@ begin
       if (ParamNode = nil) or (ParamNode.NodeKind <> gnkParameterDecl) then
         Continue;
       Inc(ParamIndex);
-      if Pos('var:', ParamNode.Text) = 1 then
-        Exit(False);
+      IsVarByRef := Pos('var:', ParamNode.Text) = 1;
       if ParamNode.ChildCount <= 0 then
       begin
+        if IsVarByRef then
+          Exit(False);
         AParamKinds := AParamKinds + 'i';
         Continue;
       end;
       TypeNode := ParamNode.ChildAt(0);
       if TypeNode = nil then
       begin
+        if IsVarByRef then
+          Exit(False);
         AParamKinds := AParamKinds + 'i';
         Continue;
       end;
@@ -7824,7 +7813,20 @@ begin
         Exit(False);
       if TypeNode.NodeKind = gnkArrayType then
         Exit(False);
-      if (Length(TypeName) > 1) and (TypeName[1] = '^') then
+      if IsVarByRef then
+      begin
+        if (Length(TypeName) > 1) and (TypeName[1] = '^') then
+          AParamKinds := AParamKinds + 'r'
+        else if TypeMetaSize(TypeName) > 0 then
+        begin
+          if TypeMetaIsRecord(TypeName) then
+            Exit(False);
+          AParamKinds := AParamKinds + 'r';
+        end
+        else
+          AParamKinds := AParamKinds + 'r';
+      end
+      else if (Length(TypeName) > 1) and (TypeName[1] = '^') then
         AParamKinds := AParamKinds + 'p'
       else if TypeMetaSize(TypeName) > 0 then
       begin
@@ -8113,6 +8115,8 @@ begin
   if AReturnTypeId <= 0 then
     AReturnTypeId := InferExpressionType(ACallNode);
   if AReturnTypeId <= 0 then
+    AReturnTypeId := FModel.FindTypeByName('Integer');
+  if AReturnTypeId <= 0 then
     Exit(False);
   if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
     AReturnTypeId := FModel.FindTypeByName('Pointer');
@@ -8124,18 +8128,28 @@ function TSemanticAnalyzer.TryGetDirectCallContract(
   const ACallNode: TGreenNode; out ACalleeName, AParamKinds: string;
   out AReturnTypeId: LongInt): Boolean;
 var
-  BodyNode, DeclNode: TGreenNode;
+  BodyNode, DeclNode, EffectiveCallNode: TGreenNode;
   ParamCount: LongInt;
 begin
   ACalleeName := '';
   AParamKinds := '';
   AReturnTypeId := 0;
-  if (ACallNode = nil) or (ACallNode.NodeKind <> gnkFunctionCall) or
-    (ACallNode.ChildCount < 1) or (ACallNode.ChildAt(0) = nil) or
-    (ACallNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+  if ACallNode = nil then
     Exit(False);
 
-  ACalleeName := ACallNode.ChildAt(0).Text;
+  EffectiveCallNode := ACallNode;
+  if (ACallNode.NodeKind = gnkProcedureCallStatement) and
+    (ACallNode.ChildCount >= 1) and (ACallNode.ChildAt(0) <> nil) and
+    (ACallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
+    EffectiveCallNode := ACallNode.ChildAt(0);
+
+  if (EffectiveCallNode = nil) or
+    (EffectiveCallNode.NodeKind <> gnkFunctionCall) or
+    (EffectiveCallNode.ChildCount < 1) or (EffectiveCallNode.ChildAt(0) = nil) or
+    (EffectiveCallNode.ChildAt(0).NodeKind <> gnkIdentifier) then
+    Exit(False);
+
+  ACalleeName := EffectiveCallNode.ChildAt(0).Text;
   if (ACalleeName = '') or HasOverload(ACalleeName) or
     (Pos('specialize ', ACalleeName) = 1) or
     (Pos('.', ACalleeName) <> 0) or IsBuiltinProcedure(ACalleeName) or
@@ -8143,11 +8157,13 @@ begin
     (DeclNode = nil) then
     Exit(False);
 
-  ParamCount := ACallNode.ChildCount - 1;
+  ParamCount := EffectiveCallNode.ChildCount - 1;
   if not TryBuildLegacyParamKindsForDecl(DeclNode, ParamCount, AParamKinds) then
     Exit(False);
 
-  AReturnTypeId := InferExpressionType(ACallNode);
+  AReturnTypeId := InferExpressionType(EffectiveCallNode);
+  if AReturnTypeId <= 0 then
+    AReturnTypeId := FModel.FindTypeByName('Integer');
   if AReturnTypeId <= 0 then
     Exit(False);
   if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
@@ -8273,6 +8289,10 @@ begin
 
   AReturnTypeId := DeclReturnTypeId(DeclNode, OwnerUnitId);
   if AReturnTypeId <= 0 then
+    AReturnTypeId := InferExpressionType(ACallNode);
+  if AReturnTypeId <= 0 then
+    AReturnTypeId := FModel.FindTypeByName('Integer');
+  if AReturnTypeId <= 0 then
     Exit(False);
   if TypeMetaIsClass(FModel.TypeAt(AReturnTypeId - 1).Name) then
     AReturnTypeId := FModel.FindTypeByName('Pointer');
@@ -8285,7 +8305,8 @@ function TSemanticAnalyzer.BuildTargetAddressExpr(const ATargetNode: TGreenNode;
 var
   Children: array of LongInt;
   BaseName, ClassTypeName, FieldName, RecordTypeName: string;
-  BaseExprId, BaseTypeId, ElementTypeId: LongInt;
+  BaseExprId, BaseTypeId, ElementTypeId, ScalarSymbolId, ScalarTypeId: LongInt;
+  Fact: TSemanticScalarTypeFact;
   FieldMeta: TFieldMeta;
 begin
   AExprId := 0;
@@ -8317,6 +8338,25 @@ begin
         ClassTypeName := LookupClassVar(BaseName);
         if ClassTypeName <> '' then
           Exit(BuildClassBaseAddressExpr(BaseName, ClassTypeName, AExprId));
+        if IsRuntimeVar(BaseName) and
+          (not IsRuntimeStrVar(BaseName)) and
+          (not IsRuntimeArrVar(BaseName)) then
+        begin
+          ScalarSymbolId := FModel.FindSymbolByName(BaseName);
+          if ScalarSymbolId <= 0 then
+            Exit(False);
+          ScalarTypeId := FModel.SymbolTypeId(ScalarSymbolId);
+          if (ScalarTypeId <= 0) or
+            (not FModel.GetTypeScalarFact(ScalarTypeId, Fact)) or
+            not (Fact.Kind in [sskBool, sskInt, sskPointer]) then
+            Exit(False);
+          SetLength(Children, 0);
+          AExprId := FModel.AddHirExpr(
+            shekSymbolAddress, ScalarTypeId, ScalarSymbolId, Children,
+            0, '', '', 0, shvcAddress
+          );
+          Exit(AExprId > 0);
+        end;
         Result := False;
       end;
     gnkArrayAccess:
@@ -8362,6 +8402,65 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.BuildByRefArgumentAddressExpr(
+  const ATargetNode: TGreenNode; out AExprId: LongInt): Boolean;
+var
+  Children: array of LongInt;
+  BaseName: string;
+  SelfTypeId, SymbolId, TypeId: LongInt;
+begin
+  AExprId := 0;
+  if ATargetNode = nil then
+    Exit(False);
+
+  if ATargetNode.NodeKind = gnkIdentifier then
+  begin
+    BaseName := ATargetNode.Text;
+    if SameText(BaseName, 'Result') and (FCurrentRetVarName <> '') then
+      BaseName := FCurrentRetVarName;
+
+    if SameText(BaseName, 'Self') then
+    begin
+      SymbolId := EnsureSelfSymbolId(SelfTypeId);
+      TypeId := SelfTypeId;
+    end
+    else if (BaseName <> '') and IsRuntimeVar(BaseName) and
+      (not IsRuntimeStrVar(BaseName)) and (not IsRuntimeArrVar(BaseName)) then
+    begin
+      SymbolId := FModel.FindSymbolByName(BaseName);
+      TypeId := FModel.SymbolTypeId(SymbolId);
+    end
+    else
+    begin
+      SymbolId := 0;
+      TypeId := 0;
+    end;
+
+    if (SymbolId > 0) and (TypeId > 0) then
+    begin
+      SetLength(Children, 0);
+      AExprId := FModel.AddHirExpr(
+        shekSymbolAddress, TypeId, SymbolId, Children,
+        0, '', '', 0, shvcAddress
+      );
+      Exit(AExprId > 0);
+    end;
+  end;
+
+  Result := BuildTargetAddressExpr(ATargetNode, AExprId);
+end;
+
+procedure TSemanticAnalyzer.AttachStatementCallExpr(const AHirNodeId: LongInt;
+  const ACallNode: TGreenNode);
+var
+  ExprId: LongInt;
+begin
+  if (AHirNodeId <= 0) or (ACallNode = nil) then
+    Exit;
+  if BuildRuntimeScalarHirExpr(ACallNode, ExprId) then
+    FModel.SetTypedHirNodeExprId(AHirNodeId, ExprId);
+end;
+
 function TSemanticAnalyzer.BuildRuntimeScalarHirExpr(const ANode: TGreenNode;
   out AExprId: LongInt): Boolean;
 var
@@ -8373,6 +8472,7 @@ var
   ParseCode: Word;
   Op, Pred, CalleeName, ParamKinds, ReceiverVarName: string;
   DispatchExprKind: TSemanticHirExprKind;
+  CallNode: TGreenNode;
 
   function ExprTypeId(const ALocalExprId: LongInt): LongInt;
   var
@@ -8667,6 +8767,12 @@ begin
   if ANode = nil then
     Exit(False);
 
+  CallNode := ANode;
+  if (CallNode.NodeKind = gnkProcedureCallStatement) and
+    (CallNode.ChildCount >= 1) and (CallNode.ChildAt(0) <> nil) and
+    (CallNode.ChildAt(0).NodeKind = gnkFunctionCall) then
+    CallNode := CallNode.ChildAt(0);
+
   if ANode.NodeKind = gnkIntegerLiteral then
   begin
     Val(ANode.Text, Value, ParseCode);
@@ -8742,9 +8848,15 @@ begin
               ArgExprId) then
               Exit(False);
           end;
+        'r':
+          begin
+            if not BuildByRefArgumentAddressExpr(CallNode.ChildAt(ArgIndex - 1),
+              ArgExprId) then
+              Exit(False);
+          end;
         'i':
           begin
-            if not BuildRuntimeScalarHirExpr(ANode.ChildAt(ArgIndex - 1),
+            if not BuildRuntimeScalarHirExpr(CallNode.ChildAt(ArgIndex - 1),
               ArgExprId) then
               Exit(False);
           end;
@@ -8778,9 +8890,15 @@ begin
               ArgExprId) then
               Exit(False);
           end;
+        'r':
+          begin
+            if not BuildByRefArgumentAddressExpr(CallNode.ChildAt(ArgIndex - 1),
+              ArgExprId) then
+              Exit(False);
+          end;
         'i':
           begin
-            if not BuildRuntimeScalarHirExpr(ANode.ChildAt(ArgIndex - 1),
+            if not BuildRuntimeScalarHirExpr(CallNode.ChildAt(ArgIndex - 1),
               ArgExprId) then
               Exit(False);
           end;
@@ -8796,24 +8914,30 @@ begin
     Exit(AExprId > 0);
   end;
 
-  if (ANode.NodeKind = gnkFunctionCall) and
+  if (CallNode.NodeKind = gnkFunctionCall) and
     TryGetDirectCallContract(ANode, CalleeName, ParamKinds, ResultTypeId) then
   begin
     if not IsStructuredAddressableScalarType(ResultTypeId) then
       Exit(False);
     SetLength(Children, Length(ParamKinds));
-    for ArgIndex := 1 to ANode.ChildCount - 1 do
+    for ArgIndex := 1 to CallNode.ChildCount - 1 do
     begin
       case ParamKinds[ArgIndex] of
         'p':
           begin
-            if not BuildRuntimePointerHirExpr(ANode.ChildAt(ArgIndex),
+            if not BuildRuntimePointerHirExpr(CallNode.ChildAt(ArgIndex),
+              ArgExprId) then
+              Exit(False);
+          end;
+        'r':
+          begin
+            if not BuildByRefArgumentAddressExpr(CallNode.ChildAt(ArgIndex),
               ArgExprId) then
               Exit(False);
           end;
         'i':
           begin
-            if not BuildRuntimeScalarHirExpr(ANode.ChildAt(ArgIndex),
+            if not BuildRuntimeScalarHirExpr(CallNode.ChildAt(ArgIndex),
               ArgExprId) then
               Exit(False);
           end;
@@ -9855,14 +9979,10 @@ begin
               (FModel.FindSymbolByName(InhParentName + '.' +
                 Arg.ChildAt(0).ChildAt(1).Text) = 0) do
             begin
-              if FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0 then
-              begin
-                InhParentName := FModel.TypeAt(
-                  FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name;
-                InhTypeId := FModel.FindTypeByName(InhParentName);
-              end
-              else
+              InhParentName := NextClassAncestorName(InhParentName);
+              if InhParentName = '' then
                 Break;
+              InhTypeId := FModel.FindTypeByName(InhParentName);
             end;
             StringValue := InhParentName + '.' +
               Arg.ChildAt(0).ChildAt(1).Text;
@@ -9983,14 +10103,10 @@ begin
               (FModel.FindSymbolByName(InhParentName + '.' +
                 Arg.ChildAt(1).Text) = 0) do
             begin
-              if FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0 then
-              begin
-                InhParentName := FModel.TypeAt(
-                  FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name;
-                InhTypeId := FModel.FindTypeByName(InhParentName);
-              end
-              else
+              InhParentName := NextClassAncestorName(InhParentName);
+              if InhParentName = '' then
                 Break;
+              InhTypeId := FModel.FindTypeByName(InhParentName);
             end;
             StringValue := InhParentName + '.' + Arg.ChildAt(1).Text;
           end;
@@ -10668,8 +10784,9 @@ begin
               if (RhsNode <> nil) and EncodeRuntimeIntExprFold(RhsNode, Decoded) then
                 Operand := Operand + #9 + Decoded;
             end;
-            FModel.AddTypedHirNode('call-runtime',
+            NodeId := FModel.AddTypedHirNode('call-runtime',
               InhParentName + '.' + InhMethodName, 0, 0, Operand);
+            AttachStatementCallExpr(NodeId, Child);
             Continue;
           end;
         end;
@@ -10692,15 +10809,7 @@ begin
           while (InhParentName <> '') and
             (FModel.FindSymbolByName(InhParentName + '.' +
               Child.ChildAt(0).ChildAt(0).ChildAt(1).Text) = 0) do
-          begin
-            InhTypeId := FModel.FindTypeByName(InhParentName);
-            if (InhTypeId > 0) and
-              (FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0) then
-              InhParentName := FModel.TypeAt(
-                FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name
-            else
-              InhParentName := '';
-          end;
+            InhParentName := NextClassAncestorName(InhParentName);
           if InhParentName = '' then InhParentName := StringValue;
           if TypeMetaIsInterface(StringValue) then
           begin
@@ -10717,7 +10826,8 @@ begin
               end;
               Operand := Operand + 'ivcall ' + IntToStr(Value) + ' ' +
                 IntToStr(Child.ChildAt(0).ChildCount - 1) + #10;
-              FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+              NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+              AttachStatementCallExpr(NodeId, Child.ChildAt(0));
               Continue;
             end;
           end;
@@ -10760,10 +10870,11 @@ begin
             else if EncodeRuntimeIntExprFold(RhsNode, Decoded) then
               Operand := Operand + #9 + Decoded;
           end;
-          FModel.AddTypedHirNode('call-runtime',
+          NodeId := FModel.AddTypedHirNode('call-runtime',
             InhParentName + '.' +
             Child.ChildAt(0).ChildAt(0).ChildAt(1).Text,
             0, 0, Operand);
+          AttachStatementCallExpr(NodeId, Child.ChildAt(0));
           Continue;
         end;
       end;
@@ -10824,7 +10935,8 @@ begin
             begin
               Operand := 'var ' + Child.ChildAt(0).ChildAt(0).Text + #10 +
                 'ivcall ' + IntToStr(Value) + ' 0' + #10;
-              FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+              NodeId := FModel.AddTypedHirNode('halt-call-runtime', '__discard__', 0, 0, Operand);
+              AttachStatementCallExpr(NodeId, Child.ChildAt(0));
               Continue;
             end;
           end;
@@ -10832,15 +10944,7 @@ begin
           while (InhParentName <> '') and
             (FModel.FindSymbolByName(InhParentName + '.' +
               Child.ChildAt(0).ChildAt(1).Text) = 0) do
-          begin
-            InhTypeId := FModel.FindTypeByName(InhParentName);
-            if (InhTypeId > 0) and
-              (FModel.TypeAt(InhTypeId - 1).ParentTypeId > 0) then
-              InhParentName := FModel.TypeAt(
-                FModel.TypeAt(InhTypeId - 1).ParentTypeId - 1).Name
-            else
-              InhParentName := '';
-          end;
+            InhParentName := NextClassAncestorName(InhParentName);
           if InhParentName = '' then InhParentName := StringValue;
           Operand := InhParentName + '.' + Child.ChildAt(0).ChildAt(1).Text +
             #9 + 'var ' + Child.ChildAt(0).ChildAt(0).Text + #10;
@@ -10860,9 +10964,10 @@ begin
                 Operand := Operand + #9 + Decoded;
             end;
           end;
-          FModel.AddTypedHirNode('call-runtime',
+          NodeId := FModel.AddTypedHirNode('call-runtime',
             InhParentName + '.' + Child.ChildAt(0).ChildAt(1).Text,
             0, 0, Operand);
+          AttachStatementCallExpr(NodeId, Child);
           Continue;
         end;
       end;
@@ -10913,8 +11018,9 @@ begin
             Inc(ArgIndex);
           end;
         end;
-        FModel.AddTypedHirNode('call-runtime',
+        NodeId := FModel.AddTypedHirNode('call-runtime',
           FCurrentMethodClass + '.' + Child.Text, 0, 0, Operand);
+        AttachStatementCallExpr(NodeId, Child);
         Continue;
       end;
       if FNoFold and LookupProcedureBody(Child.Text, BranchNode, DeclNode) then
@@ -11012,7 +11118,8 @@ begin
             end;
           end;
         end;
-        FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);
+        NodeId := FModel.AddTypedHirNode('call-runtime', Child.Text, 0, 0, Operand);
+        AttachStatementCallExpr(NodeId, Child);
         Continue;
       end;
     end;

@@ -90,6 +90,82 @@ begin
       if (Instr.Kind = hikIntrinsic) and
         (Instr.IntrinsicName = AIntrinsicName) then
         Exit(True);
+  end;
+  Result := False;
+end;
+
+function HasCallWithPointerArg(const AModule: THIRModule;
+  const AFunc: THIRFunction; const ATarget: string;
+  const AArgIndex: LongInt): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+  Instr: THIRInstr;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) and
+        (AArgIndex >= 0) and (AArgIndex <= High(Instr.Operands)) and
+        (Instr.Operands[AArgIndex].TypeId <> 0) and
+        (AModule.Types.GetType(Instr.Operands[AArgIndex].TypeId).Kind = htkPointer) then
+        Exit(True);
+    end;
+  Result := False;
+end;
+
+function TryFindInstrByResultId(const AFunc: THIRFunction;
+  const AValueId: THIRValueId; out AInstr: THIRInstr): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      AInstr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      if AInstr.ResultId = AValueId then
+        Exit(True);
+    end;
+  Result := False;
+end;
+
+function HasCallArgProducedByKind(const AFunc: THIRFunction;
+  const ATarget: string; const AArgIndex: LongInt;
+  const AExpectedKind: THIRInstrKind): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+  Instr, SourceInstr: THIRInstr;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      if (Instr.Kind = hikCall) and (Instr.CallTarget = ATarget) and
+        (AArgIndex >= 0) and (AArgIndex <= High(Instr.Operands)) and
+        TryFindInstrByResultId(AFunc, Instr.Operands[AArgIndex].ValueId,
+          SourceInstr) and (SourceInstr.Kind = AExpectedKind) then
+        Exit(True);
+    end;
+  Result := False;
+end;
+
+function HasIntrinsicArgProducedByKind(const AFunc: THIRFunction;
+  const AIntrinsicName: string; const AArgIndex: LongInt;
+  const AExpectedKind: THIRInstrKind): Boolean;
+var
+  BlockIndex, InstrIndex: LongInt;
+  Instr, SourceInstr: THIRInstr;
+begin
+  for BlockIndex := 0 to High(AFunc.Blocks) do
+    for InstrIndex := 0 to High(AFunc.Blocks[BlockIndex].Instrs) do
+    begin
+      Instr := AFunc.Blocks[BlockIndex].Instrs[InstrIndex];
+      if (Instr.Kind = hikIntrinsic) and
+        (Instr.IntrinsicName = AIntrinsicName) and
+        (AArgIndex >= 0) and (AArgIndex <= High(Instr.Operands)) and
+        TryFindInstrByResultId(AFunc, Instr.Operands[AArgIndex].ValueId,
+          SourceInstr) and (SourceInstr.Kind = AExpectedKind) then
+        Exit(True);
     end;
   Result := False;
 end;
@@ -100,7 +176,7 @@ var
   ExprResult: THIRExprResult;
   ExprId, LiteralExprId, UnsupportedExprId, BadSymbolExprId, PartialExprId,
     CallExprId, IntTypeId, PtrTypeId, NodeId, ReceiverSymbolId,
-    ReceiverBaseExprId, ReceiverExprId, ArgExprId: LongInt;
+    ReceiverBaseExprId, ReceiverExprId, ArgExprId, ClassTypeId: LongInt;
   Children: array of LongInt;
   Func: THIRFunction;
 begin
@@ -250,6 +326,194 @@ begin
         Halt(7);
       if HasConstLoad(Func, 'const:123') then
         Halt(8);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    IntTypeId := AddTypeWithFact(Model, 'Integer', sskInt, 64, True);
+    PtrTypeId := AddTypeWithFact(Model, 'Pointer', sskPointer, 64, False);
+    ClassTypeId := Model.AddType('TNode', 'declared');
+    ReceiverSymbolId := Model.AddSymbol('counter', 'var', 'test', PtrTypeId, 0);
+    ExprId := Model.AddSymbol('value', 'var', 'test', IntTypeId, 0);
+    BadSymbolExprId := Model.AddSymbol('base', 'var', 'test', PtrTypeId, 0);
+    NodeId := Model.AddSymbol('node', 'var', 'test', ClassTypeId, 0);
+
+    SetLength(Children, 0);
+    ArgExprId := Model.AddHirExpr(
+      shekSymbolAddress,
+      IntTypeId,
+      ExprId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 1);
+    Children[0] := ArgExprId;
+    CallExprId := Model.AddHirExpr(
+      shekCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'Bump',
+      'r',
+      0,
+      shvcScalar
+    );
+
+    SetLength(Children, 0);
+    ReceiverBaseExprId := Model.AddHirExpr(
+      shekSymbolValue,
+      PtrTypeId,
+      ReceiverSymbolId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcScalar
+    );
+    SetLength(Children, 1);
+    Children[0] := ReceiverBaseExprId;
+    ReceiverExprId := Model.AddHirExpr(
+      shekDeref,
+      PtrTypeId,
+      0,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 2);
+    Children[0] := ReceiverExprId;
+    Children[1] := ArgExprId;
+    PartialExprId := Model.AddHirExpr(
+      shekCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'TCounter.Touch',
+      'pr',
+      0,
+      shvcScalar
+    );
+
+    SetLength(Children, 0);
+    LiteralExprId := Model.AddHirExpr(
+      shekSymbolAddress,
+      ClassTypeId,
+      NodeId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 0);
+    UnsupportedExprId := Model.AddHirExpr(
+      shekSymbolValue,
+      PtrTypeId,
+      BadSymbolExprId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcScalar
+    );
+    SetLength(Children, 1);
+    Children[0] := UnsupportedExprId;
+    BadSymbolExprId := Model.AddHirExpr(
+      shekDeref,
+      PtrTypeId,
+      0,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 2);
+    Children[0] := BadSymbolExprId;
+    Children[1] := LiteralExprId;
+    UnsupportedExprId := Model.AddHirExpr(
+      shekVirtualCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'TVirtualNodeUser.TouchNode',
+      'pr',
+      0,
+      shvcScalar
+    );
+
+    Model.AddTypedHirNode('function-body-begin', 'Bump', 0, 0, '1:r:i');
+    Model.AddTypedHirNode('ret-runtime', 'Bump', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'Bump', 0, 0, '');
+    Model.AddTypedHirNode('method-body-begin', 'TCounter.Touch', 0, 0, '2:pr:i');
+    Model.AddTypedHirNode('ret-runtime', 'TCounter.Touch', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'TCounter.Touch', 0, 0, '');
+    Model.AddTypedHirNode('method-body-begin', 'TVirtualNodeUser.TouchNode', 0, 0, '2:pr:i');
+    Model.AddTypedHirNode('ret-runtime', 'TVirtualNodeUser.TouchNode', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'TVirtualNodeUser.TouchNode', 0, 0, '');
+
+    Model.AddTypedHirNode('var-decl-runtime', 'value', 0, 0, 'value');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'counter', 0, 0, 'counter');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'base', 0, 0, 'base');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'node', 0, 0, 'node');
+
+    NodeId := Model.AddTypedHirNode(
+      'call-runtime', 'Bump', 0, 0,
+      'WrongBump'#9'varref value'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, CallExprId);
+    NodeId := Model.AddTypedHirNode(
+      'call-runtime', 'TCounter.Touch', 0, 0,
+      'WrongTouch'#9'var counter'#10#9'varref value'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, PartialExprId);
+    NodeId := Model.AddTypedHirNode(
+      'call-runtime', 'TVirtualNodeUser.TouchNode', 0, 0,
+      'WrongTouchNode'#9'var base'#10#9'varref node'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, UnsupportedExprId);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasCallTarget(Func, 'Bump') then
+        Halt(38);
+      if HasCallTarget(Func, 'WrongBump') then
+        Halt(39);
+      if not HasCallWithPointerArg(Builder.Module, Func, 'Bump', 0) then
+        Halt(40);
+      if not HasCallTarget(Func, 'TCounter.Touch') then
+        Halt(41);
+      if HasCallTarget(Func, 'WrongTouch') then
+        Halt(42);
+      if not HasCallArgProducedByKind(Func, 'TCounter.Touch', 1, hikAlloca) then
+        Halt(43);
+      if not HasIntrinsic(Func, 'vcall') then
+        Halt(44);
+      if HasCallTarget(Func, 'WrongTouchNode') then
+        Halt(45);
+      if not HasIntrinsicArgProducedByKind(Func, 'vcall', 2, hikAlloca) then
+        Halt(46);
     finally
       Builder.Free;
     end;
@@ -520,6 +784,318 @@ begin
         Halt(15);
       if not HasPointerStore(Builder.Module, Func) then
         Halt(16);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    IntTypeId := AddTypeWithFact(Model, 'Integer', sskInt, 64, True);
+    PtrTypeId := AddTypeWithFact(Model, 'Pointer', sskPointer, 64, False);
+    ClassTypeId := Model.AddType('TCounter', 'declared');
+    ReceiverSymbolId := Model.AddSymbol('counter', 'var', 'test', ClassTypeId, 0);
+    ExprId := Model.AddSymbol('value', 'var', 'test', IntTypeId, 0);
+
+    SetLength(Children, 0);
+    ArgExprId := Model.AddHirExpr(
+      shekSymbolAddress,
+      IntTypeId,
+      ExprId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 1);
+    Children[0] := ArgExprId;
+    CallExprId := Model.AddHirExpr(
+      shekCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'Bump',
+      'r',
+      0,
+      shvcScalar
+    );
+    Model.AddTypedHirNode('function-body-begin', 'Bump', 0, 0, '1:r:i');
+    Model.AddTypedHirNode('ret-runtime', 'Bump', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'Bump', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-runtime', 'value', 0, 0, 'value');
+    Model.AddTypedHirNode('var-decl-runtime', 'a', 0, 0, 'a');
+    NodeId := Model.AddTypedHirNode(
+      'assign-runtime', 'a := structured var call', 0, 0,
+      'a'#9'int 0'#10'call WrongBump 1'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, CallExprId);
+
+    SetLength(Children, 0);
+    ReceiverBaseExprId := Model.AddHirExpr(
+      shekSymbolValue,
+      PtrTypeId,
+      ReceiverSymbolId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcScalar
+    );
+    SetLength(Children, 1);
+    Children[0] := ReceiverBaseExprId;
+    ReceiverExprId := Model.AddHirExpr(
+      shekDeref,
+      ClassTypeId,
+      0,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 2);
+    Children[0] := ReceiverExprId;
+    Children[1] := ArgExprId;
+    PartialExprId := Model.AddHirExpr(
+      shekCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'TCounter.Touch',
+      'pr',
+      0,
+      shvcScalar
+    );
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'counter', 0, 0, 'counter');
+    Model.AddTypedHirNode('var-decl-runtime', 'b', 0, 0, 'b');
+    NodeId := Model.AddTypedHirNode(
+      'assign-runtime', 'b := structured var member call', 0, 0,
+      'b'#9'int 0'#10'call WrongTouch 2'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, PartialExprId);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasCallWithPointerArg(Builder.Module, Func, 'Bump', 0) then
+        Halt(21);
+      if not HasCallTarget(Func, 'Bump') then
+        Halt(22);
+      if not HasCallTarget(Func, 'TCounter.Touch') then
+        Halt(23);
+      if not HasCallArgProducedByKind(Func, 'TCounter.Touch', 1, hikAlloca) then
+        Halt(24);
+      if HasCallArgProducedByKind(Func, 'TCounter.Touch', 1, hikLoad) then
+        Halt(25);
+      if HasCallTarget(Func, 'WrongTouch') then
+        Halt(26);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    IntTypeId := AddTypeWithFact(Model, 'Integer', sskInt, 64, True);
+    ClassTypeId := Model.AddType('TNode', 'declared');
+    ExprId := Model.AddSymbol('node', 'var', 'test', ClassTypeId, 0);
+
+    SetLength(Children, 0);
+    ArgExprId := Model.AddHirExpr(
+      shekSymbolAddress,
+      ClassTypeId,
+      ExprId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 1);
+    Children[0] := ArgExprId;
+    CallExprId := Model.AddHirExpr(
+      shekCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'UseNode',
+      'r',
+      0,
+      shvcScalar
+    );
+    Model.AddTypedHirNode('function-body-begin', 'UseNode', 0, 0, '1:r:i');
+    Model.AddTypedHirNode('ret-runtime', 'UseNode', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'UseNode', 0, 0, '');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'node', 0, 0, 'node');
+    Model.AddTypedHirNode('var-decl-runtime', 'x', 0, 0, 'x');
+    NodeId := Model.AddTypedHirNode(
+      'assign-runtime', 'x := structured class var call', 0, 0,
+      'x'#9'int 0'#10'call WrongUseNode 1'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, CallExprId);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasCallTarget(Func, 'UseNode') then
+        Halt(25);
+      if HasCallTarget(Func, 'WrongUseNode') then
+        Halt(26);
+      if not HasCallArgProducedByKind(Func, 'UseNode', 0, hikAlloca) then
+        Halt(27);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    IntTypeId := AddTypeWithFact(Model, 'Integer', sskInt, 64, True);
+    PtrTypeId := AddTypeWithFact(Model, 'Pointer', sskPointer, 64, False);
+    ClassTypeId := Model.AddType('TNode', 'declared');
+    ReceiverSymbolId := Model.AddSymbol('base', 'var', 'test', PtrTypeId, 0);
+    ExprId := Model.AddSymbol('node', 'var', 'test', ClassTypeId, 0);
+
+    SetLength(Children, 0);
+    ReceiverBaseExprId := Model.AddHirExpr(
+      shekSymbolValue,
+      PtrTypeId,
+      ReceiverSymbolId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcScalar
+    );
+    SetLength(Children, 1);
+    Children[0] := ReceiverBaseExprId;
+    ReceiverExprId := Model.AddHirExpr(
+      shekDeref,
+      PtrTypeId,
+      0,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 0);
+    ArgExprId := Model.AddHirExpr(
+      shekSymbolAddress,
+      ClassTypeId,
+      ExprId,
+      Children,
+      0,
+      '',
+      '',
+      0,
+      shvcAddress
+    );
+    SetLength(Children, 2);
+    Children[0] := ReceiverExprId;
+    Children[1] := ArgExprId;
+    CallExprId := Model.AddHirExpr(
+      shekVirtualCall,
+      IntTypeId,
+      0,
+      Children,
+      0,
+      'TVirtualNodeUser.UseNode',
+      'pr',
+      0,
+      shvcScalar
+    );
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'base', 0, 0, 'base');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'node', 0, 0, 'node');
+    Model.AddTypedHirNode('var-decl-runtime', 'y', 0, 0, 'y');
+    NodeId := Model.AddTypedHirNode(
+      'assign-runtime', 'y := structured virtual class var call', 0, 0,
+      'y'#9'var base'#10'varref node'#10'call WrongVirtNode 2'#10
+    );
+    Model.SetTypedHirNodeExprId(NodeId, CallExprId);
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasIntrinsic(Func, 'vcall') then
+        Halt(28);
+      if HasCallTarget(Func, 'WrongVirtNode') then
+        Halt(29);
+      if not HasIntrinsicArgProducedByKind(Func, 'vcall', 2, hikAlloca) then
+        Halt(30);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('function-body-begin', 'ClearNode', 0, 0, '1:v:i');
+    Model.AddTypedHirNode('var-decl-varref-runtime', 'node', 0, 0, 'node');
+    Model.AddTypedHirNode(
+      'assign-runtime', 'node := nil', 0, 0,
+      'node'#9'null'#10
+    );
+    Model.AddTypedHirNode('ret-runtime', 'ClearNode', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'ClearNode', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(1);
+      if Func.Name <> 'ClearNode' then
+        Halt(31);
+      if not HasPointerStore(Builder.Module, Func) then
+        Halt(32);
+      if HasIntStore(Builder.Module, Func, 64) then
+        Halt(33);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
+    Model.AddTypedHirNode('method-body-begin', 'TNodeUser.UseNode', 0, 0, '2:pv:i');
+    Model.AddTypedHirNode('var-decl-varref-runtime', 'node', 0, 0, 'node');
+    Model.AddTypedHirNode('ret-runtime', 'TNodeUser.UseNode', 0, 0, 'int 0'#10);
+    Model.AddTypedHirNode('function-body-end', 'TNodeUser.UseNode', 0, 0, '');
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(1);
+      if Func.Name <> 'TNodeUser.UseNode' then
+        Halt(34);
+      if Length(Func.Params) <> 2 then
+        Halt(35);
+      if not Func.Params[1].IsVar then
+        Halt(36);
+      if Builder.Module.Types.GetType(Func.Params[1].TypeId).Kind <> htkPointer then
+        Halt(37);
     finally
       Builder.Free;
     end;

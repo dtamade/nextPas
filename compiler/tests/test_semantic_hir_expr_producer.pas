@@ -222,6 +222,26 @@ begin
     Halt(AExitCode);
 end;
 
+procedure AssertSymbolAddressExpr(const AModel: TSemanticModel;
+  const AExpr: TSemanticHirExpr; const AExpectedSymbolName,
+  AExpectedTypeName: string; const ABaseExitCode: LongInt);
+var
+  Symbol: TSemanticSymbol;
+begin
+  if AExpr.Kind <> shekSymbolAddress then
+    Halt(ABaseExitCode);
+  if AExpr.ValueClass <> shvcAddress then
+    Halt(ABaseExitCode + 1);
+  AssertExprTypeName(AModel, AExpr, AExpectedTypeName, ABaseExitCode + 2);
+  if AExpr.SymbolId <= 0 then
+    Halt(ABaseExitCode + 3);
+  Symbol := AModel.SymbolAt(AExpr.SymbolId - 1);
+  if Symbol.Name <> AExpectedSymbolName then
+    Halt(ABaseExitCode + 4);
+  if Length(AExpr.Children) <> 0 then
+    Halt(ABaseExitCode + 5);
+end;
+
 procedure AssertClassReceiverAddressExpr(const AModel: TSemanticModel;
   const AExpr: TSemanticHirExpr; const ASymbolName: string;
   const ABaseExitCode: LongInt);
@@ -3070,6 +3090,331 @@ begin
   end;
 end;
 
+procedure TestVarParamCallExprProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr, ReceiverExpr, ArgExpr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'function Bump(var X: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  X := X + 1;'#10 +
+    '  Bump := X;'#10 +
+    'end;'#10 +
+    'type'#10 +
+    '  TNode = class'#10 +
+    '  end;'#10 +
+    'function BumpNode(var Node: TNode): Integer;'#10 +
+    'begin'#10 +
+    '  if Node = nil then'#10 +
+    '    BumpNode := 1'#10 +
+    '  else'#10 +
+    '    BumpNode := 2;'#10 +
+    'end;'#10 +
+    'type'#10 +
+    '  INodeUser = interface'#10 +
+    '    function UseNode(var Node: TNode): Integer;'#10 +
+    '  end;'#10 +
+    '  TVirtualNodeUser = class'#10 +
+    '    function UseNode(var Node: TNode): Integer; virtual;'#10 +
+    '  end;'#10 +
+    '  TDoubleNodeUser = class(TVirtualNodeUser)'#10 +
+    '    function UseNode(var Node: TNode): Integer; override;'#10 +
+    '  end;'#10 +
+    '  TCounter = class'#10 +
+      '    FValue: Integer;'#10 +
+    '    function Touch(var X: Integer): Integer;'#10 +
+    '    function TouchNode(var Node: TNode): Integer;'#10 +
+    '  end;'#10 +
+    '  TNodeUserImpl = class(TInterfacedObject, INodeUser)'#10 +
+    '    function UseNode(var Node: TNode): Integer;'#10 +
+    '  end;'#10 +
+    'function TVirtualNodeUser.UseNode(var Node: TNode): Integer;'#10 +
+    'begin'#10 +
+    '  if Node = nil then'#10 +
+    '    UseNode := 3'#10 +
+    '  else'#10 +
+    '    UseNode := 4;'#10 +
+    'end;'#10 +
+    'function TDoubleNodeUser.UseNode(var Node: TNode): Integer;'#10 +
+    'begin'#10 +
+    '  if Node = nil then'#10 +
+    '    UseNode := 5'#10 +
+    '  else'#10 +
+    '    UseNode := 6;'#10 +
+    'end;'#10 +
+    'function TCounter.Touch(var X: Integer): Integer;'#10 +
+    'begin'#10 +
+    '  X := X + FValue;'#10 +
+    '  Touch := X;'#10 +
+    'end;'#10 +
+    'function TCounter.TouchNode(var Node: TNode): Integer;'#10 +
+    'begin'#10 +
+    '  if Node = nil then'#10 +
+    '    TouchNode := 7'#10 +
+    '  else'#10 +
+    '    TouchNode := 8;'#10 +
+    'end;'#10 +
+    'function TNodeUserImpl.UseNode(var Node: TNode): Integer;'#10 +
+    'begin'#10 +
+    '  if Node = nil then'#10 +
+    '    UseNode := 9'#10 +
+    '  else'#10 +
+    '    UseNode := 10;'#10 +
+    'end;'#10 +
+    'var Value: Integer; Counter: TCounter; Node: TNode; Base: TVirtualNodeUser;'#10 +
+    '  User: INodeUser; A, B, C, D, E: Integer;'#10 +
+    'begin'#10 +
+    '  A := Bump(Value);'#10 +
+    '  B := Counter.Touch(Value);'#10 +
+    '  C := BumpNode(Node);'#10 +
+    '  D := Counter.TouchNode(Node);'#10 +
+    '  Base := TDoubleNodeUser.Create;'#10 +
+    '  E := Base.UseNode(Node);'#10 +
+    '  User := TNodeUserImpl.Create;'#10 +
+    '  E := User.UseNode(Node);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(430);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'A',
+      'Bump', Node) then
+      Halt(431);
+    if Node.ExprId = 0 then
+      Halt(432);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(33);
+    if (Expr.LiteralStr <> 'Bump') or (Expr.Op <> 'r') then
+      Halt(34);
+    if Length(Expr.Children) <> 1 then
+      Halt(35);
+    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Value', 'Integer', 36);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'B',
+      'TCounter.Touch', Node) then
+      Halt(438);
+    if Node.ExprId = 0 then
+      Halt(439);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(40);
+    if (Expr.LiteralStr <> 'TCounter.Touch') or (Expr.Op <> 'pr') then
+      Halt(41);
+    if Length(Expr.Children) <> 2 then
+      Halt(42);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Counter', 43);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Value', 'Integer', 44);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'C',
+      'BumpNode', Node) then
+      Halt(446);
+    if Node.ExprId = 0 then
+      Halt(447);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(448);
+    if (Expr.LiteralStr <> 'BumpNode') or (Expr.Op <> 'r') then
+      Halt(449);
+    if Length(Expr.Children) <> 1 then
+      Halt(450);
+    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 451);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'D',
+      'TCounter.TouchNode', Node) then
+      Halt(457);
+    if Node.ExprId = 0 then
+      Halt(458);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(459);
+    if (Expr.LiteralStr <> 'TCounter.TouchNode') or (Expr.Op <> 'pr') then
+      Halt(460);
+    if Length(Expr.Children) <> 2 then
+      Halt(461);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Counter', 462);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 463);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'E',
+      'vcall ', Node) then
+      Halt(469);
+    if Node.ExprId = 0 then
+      Halt(470);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekVirtualCall then
+      Halt(471);
+    if (Expr.LiteralStr <> 'TVirtualNodeUser.UseNode') or
+      (Expr.Op <> 'pr') then
+      Halt(472);
+    if Length(Expr.Children) <> 2 then
+      Halt(473);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Base', 474);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 475);
+
+    if not FindAssignRuntimeNodeForDestAndOperandText(Model, 'E',
+      'ivcall ', Node) then
+      Halt(481);
+    if Node.ExprId = 0 then
+      Halt(482);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekInterfaceCall then
+      Halt(483);
+    if (Expr.LiteralStr <> 'INodeUser.UseNode') or (Expr.Op <> 'pr') then
+      Halt(484);
+    if Length(Expr.Children) <> 2 then
+      Halt(485);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'User', 486);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 487);
+  finally
+    Model.Free;
+  end;
+end;
+
+procedure TestVarParamStatementCallProducer;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  Expr, ReceiverExpr, ArgExpr: TSemanticHirExpr;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TNode = class'#10 +
+    '  end;'#10 +
+    'procedure ClearNodeDirect(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'type'#10 +
+    '  TNodeHelper = class'#10 +
+    '    procedure ClearNode(var Node: TNode);'#10 +
+    '  end;'#10 +
+    '  TVirtualNodeUser = class'#10 +
+    '    procedure ClearNode(var Node: TNode); virtual;'#10 +
+    '  end;'#10 +
+    '  TDerivedNodeUser = class(TVirtualNodeUser)'#10 +
+    '    procedure ClearNode(var Node: TNode); override;'#10 +
+    '  end;'#10 +
+    '  INodeResetter = interface'#10 +
+    '    procedure ClearNode(var Node: TNode);'#10 +
+    '  end;'#10 +
+    '  TInterfaceNodeUser = class(TInterfacedObject, INodeResetter)'#10 +
+    '    procedure ClearNode(var Node: TNode);'#10 +
+    '  end;'#10 +
+    'procedure TNodeHelper.ClearNode(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'procedure TVirtualNodeUser.ClearNode(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'procedure TDerivedNodeUser.ClearNode(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'procedure TInterfaceNodeUser.ClearNode(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'var Node: TNode; Helper: TNodeHelper; Base: TVirtualNodeUser; Resetter: INodeResetter;'#10 +
+    'begin'#10 +
+    '  ClearNodeDirect(Node);'#10 +
+    '  Helper.ClearNode(Node);'#10 +
+    '  Base := TDerivedNodeUser.Create;'#10 +
+    '  Base.ClearNode(Node);'#10 +
+    '  Resetter := TInterfaceNodeUser.Create;'#10 +
+    '  Resetter.ClearNode(Node);'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(488);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'call-runtime',
+      'ClearNodeDirect', Node) then
+      Halt(489);
+    if Node.ExprId = 0 then
+      Halt(490);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(491);
+    if (Expr.LiteralStr <> 'ClearNodeDirect') or (Expr.Op <> 'r') then
+      Halt(492);
+    if Length(Expr.Children) <> 1 then
+      Halt(493);
+    ArgExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 494);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'call-runtime',
+      'TNodeHelper.ClearNode', Node) then
+      Halt(495);
+    if Node.ExprId = 0 then
+      Halt(496);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekCall then
+      Halt(497);
+    if (Expr.LiteralStr <> 'TNodeHelper.ClearNode') or (Expr.Op <> 'pr') then
+      Halt(498);
+    if Length(Expr.Children) <> 2 then
+      Halt(499);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Helper', 500);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 501);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'call-runtime',
+      'TDerivedNodeUser.ClearNode', Node) then
+      Halt(502);
+    if Node.ExprId = 0 then
+      Halt(503);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekVirtualCall then
+      Halt(504);
+    if (Expr.LiteralStr <> 'TVirtualNodeUser.ClearNode') or (Expr.Op <> 'pr') then
+      Halt(505);
+    if Length(Expr.Children) <> 2 then
+      Halt(506);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Base', 507);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 508);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'halt-call-runtime',
+      'ivcall ', Node) then
+      Halt(509);
+    if Node.ExprId = 0 then
+      Halt(510);
+    Expr := Model.HirExprAt(Node.ExprId - 1);
+    if Expr.Kind <> shekInterfaceCall then
+      Halt(511);
+    if (Expr.LiteralStr <> 'INodeResetter.ClearNode') or (Expr.Op <> 'pr') then
+      Halt(512);
+    if Length(Expr.Children) <> 2 then
+      Halt(513);
+    ReceiverExpr := Model.HirExprAt(Expr.Children[0] - 1);
+    AssertClassReceiverAddressExpr(Model, ReceiverExpr, 'Resetter', 514);
+    ArgExpr := Model.HirExprAt(Expr.Children[1] - 1);
+    AssertSymbolAddressExpr(Model, ArgExpr, 'Node', 'TNode', 515);
+  finally
+    Model.Free;
+  end;
+end;
+
 procedure TestConstructorNestedMethodIntegerArgs;
 var
   Model: TSemanticModel;
@@ -3238,6 +3583,62 @@ begin
   end;
 end;
 
+procedure TestImplicitTObjectParentConstructorFallback;
+var
+  Model: TSemanticModel;
+  Node: TTypedHirNode;
+  ParentName: string;
+begin
+  Model := BuildModel(
+    'program test;'#10 +
+    'type'#10 +
+    '  TNode = class end;'#10 +
+    '  TNodeHelper = class'#10 +
+    '    procedure ClearNode(var Node: TNode);'#10 +
+    '  end;'#10 +
+    '  TVirtualNodeUser = class'#10 +
+    '    procedure ClearNode(var Node: TNode); virtual;'#10 +
+    '  end;'#10 +
+    '  TDerivedNodeUser = class(TVirtualNodeUser)'#10 +
+    '  end;'#10 +
+    'procedure TNodeHelper.ClearNode(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'procedure TVirtualNodeUser.ClearNode(var Node: TNode);'#10 +
+    'begin'#10 +
+    '  Node := nil;'#10 +
+    'end;'#10 +
+    'var Helper: TNodeHelper; Base: TVirtualNodeUser;'#10 +
+    'begin'#10 +
+    '  Helper := TNodeHelper.Create;'#10 +
+    '  Base := TDerivedNodeUser.Create;'#10 +
+    'end.'#10
+  );
+  try
+    if Model = nil then
+      Halt(161);
+    if Model.Status <> 'ready' then
+      Halt(162);
+
+    if (not Model.LookupStringConstValue('TNodeHelper$parent_class', ParentName)) or
+      (not SameText(ParentName, 'TObject')) then
+      Halt(163);
+    if (not Model.LookupStringConstValue('TVirtualNodeUser$parent_class', ParentName)) or
+      (not SameText(ParentName, 'TObject')) then
+      Halt(164);
+
+    if not FindFirstNodeByKindAndOperandText(Model, 'class-new-runtime',
+      'Helper'#9'TObject.Create', Node) then
+      Halt(165);
+    if not FindFirstNodeByKindAndOperandText(Model, 'class-new-runtime',
+      'Base'#9'TObject.Create', Node) then
+      Halt(166);
+  finally
+    Model.Free;
+  end;
+end;
+
 begin
   TestHaltRuntimeExprProducer;
   TestWriteIntRuntimeExprProducer;
@@ -3284,6 +3685,9 @@ begin
   TestOrdinaryMemberCallExprProducer;
   TestDispatchedMemberCallExprProducer;
   TestDispatchedMemberCallBinaryExprProducer;
+  TestVarParamCallExprProducer;
+  TestVarParamStatementCallProducer;
   TestConstructorNestedMethodIntegerArgs;
   TestConstructorNestedMethodPointerArgs;
+  TestImplicitTObjectParentConstructorFallback;
 end.
