@@ -1,74 +1,91 @@
-# Findings: HTTP llhttp raw translation performance triage
+# Findings: HTTP parser header reuse fast path
 
 ## Scope
 
-本轮验证用户提出的风险：`llhttp` 的 Pascal 翻译移植是否本身就是主要性能问题。做法是把
-`bench_h1parser` 拆出 raw translated llhttp no-callback rows，与现有 `IH1Parser` adapter 和
-fast path rows 对比。
+本轮继续压低 `IH1Parser` adapter materialization 成本。上一批 raw llhttp triage 已证明状态机本体
+不是主要瓶颈；本轮针对 `TH1Parser.Reset` 每次重建 `IHttpHeaders` 的分配路径。
 
 ## Confirmed truths
 
-### 1. Raw translated llhttp is not the current dominant cost
+### 1. Existing public headers API lacked an explicit reuse contract
 
-运行：
+`IHttpHeaders` 旧接口有 `Set_ / Add / Get / GetAll / Has / Del / Count / ForEach / Clone`，但没有
+`Clear`。如果 parser 想复用 header container，只能依赖实现细节或继续分配新对象。
+
+RED proof：
+
+```sh
+make -C tests/nextpas.core.http/test_http_headers clean test
+```
+
+失败点：
+
+```text
+test_http_headers.lpr(207,6) Error: Identifier idents no member "Clear"
+```
+
+### 2. Header Clear contract is now direct and reusable
+
+新增 focused test 覆盖：
+
+- `Clear` 后 `Count = 0`。
+- `Get / GetAll / Has / ForEach` 不暴露 stale entries。
+- 同一个 `IHttpHeaders` 实例 Clear 后可以继续 `Add / Set_ / GetAll`。
+
+这比只在 parser 内部写 private reset 更好：它把 reusable mutable headers container 变成明确 API，
+后续 response writer / request metadata cache 也能使用同一契约。
+
+### 3. Parser Reset can reuse headers without stale header leakage
+
+`TH1Parser.Reset` 现在调用 `FHeaders.Clear`，而不是 `FHeaders := NewHttpHeaders`。`test_http_h1parser`
+的 `Reset and reparse` 现在额外锁住第二次 parse 的 `Host` 会替换第一次请求 header，不会串旧值。
+
+这是一项性能取舍：`IH1Parser` 是实现层接口，不是 HTTP facade 的 request snapshot contract。Reset
+后继续持有旧 `LP.GetHeaders` 引用不再应被视为稳定快照；调用方需要保留快照时应显式 `Clone`。
+
+### 4. Benchmark projection
+
+修改前 baseline：
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-当前 raw translated llhttp no-callback rows：
-
-| workload | raw translated llhttp ns/op |
+| llhttp adapter workload | before ns/op |
 | --- | ---: |
-| simple GET | 425.3 |
-| 10 headers | 822.1 |
-| POST 1KB body | 456.2 |
+| simple GET | 1101.7 |
+| 10 headers | 3808.5 |
+| POST 1KB body | 1848.6 |
+| pipeline 10 reqs | 11253.6 |
 
-对应 `IH1Parser` adapter rows：
+修改后 confirmation：
 
-| workload | raw ns/op | adapter ns/op | adapter/raw |
-| --- | ---: | ---: | ---: |
-| simple GET | 425.3 | 1138.6 | 2.68x |
-| 10 headers | 822.1 | 3813.1 | 4.64x |
-| POST 1KB body | 456.2 | 1853.6 | 4.06x |
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser run
+```
 
-结论：当前证据不支持“主要慢在 Pascal 翻译状态机本体”。更大的成本在 `IH1Parser` adapter
-materialization：URL/header/body 字符串组装、`IHttpHeaders` 对象分配/填充、以及 headers-complete
-后的语义校验。
+| llhttp adapter workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 1101.7 | 641.8 |
+| 10 headers | 3808.5 | 3284.4 |
+| POST 1KB body | 1848.6 | 1457.6 |
+| pipeline 10 reqs | 11253.6 | 6201.2 |
 
-### 2. Fast path still only partially bypasses adapter cost
-
-同一次 benchmark：
-
-| workload | adapter ns/op | fast path ns/op | delta |
-| --- | ---: | ---: | ---: |
-| simple GET | 1138.6 | 843.0 | -26.0% |
-| 10 headers | 3813.1 | 3467.6 | -9.1% |
-| POST 1KB body | 1853.6 | 1474.5 | -20.4% |
-| pipeline 10 reqs | 9924.9 | 8464.3 | -14.5% |
-
-fast path 有收益，但仍会创建 high-level headers/path 等对象；它不是零拷贝 parser，也不是最终
-Go/Rust 级 server 性能方案。
-
-### 3. No in-repo C llhttp comparator exists yet
-
-仓库里只有 `src/nextpas.core.http.impl.h1.llhttp.pas`，没有 C llhttp 或 native comparator。
-因此本轮不能声明 Pascal translation 与 C llhttp 已经持平，只能确认：在当前 nextPas H1 parser
-栈里，adapter 层成本明显大于 raw translated state machine 成本。
+pipeline row 改善最大，符合 repeated parser reset / keep-alive 场景减少 per-request headers object
+allocation 的预期。
 
 ## Remaining gaps / risks
 
-- `TBenchRunner` 当前 `MAX_ITERS = 1000`，parser rows 是小样本本机微基准；趋势足以指导下一刀，
-  但正式 benchmark 轮应提高采样质量。
-- raw no-callback 只证明状态机执行成本，不覆盖真实 callback cost；真实 server 仍必须保留完整
-  malformed framing / transfer-coding correctness。
-- 下一批如果优化 adapter，不能牺牲现有 `test_http_h1parser` / `test_http_security` malformed 语义。
+- `IHttpHeaders.Clear` 是 public API 扩展；本轮已有 focused unit test 和 heaptrc，但需要在
+  API coverage matrix 记录。
+- parser `GetHeaders` 返回的是 parser-owned mutable container，不是 immutable snapshot。后续如果要公开
+  H1 parser 作为稳定用户 API，需文档化 Reset 生命周期或提供 snapshot helper。
+- benchmark runner 仍是小样本本机微基准；本轮只作为方向性证据，不声明最终 Go/Rust parity。
 
 ## Next optimization target
 
-优先级应从“重写/怀疑 llhttp Pascal 翻译”转向：
+继续沿 adapter materialization 降本路线：
 
-1. `IH1Parser.Reset` / per-request `NewHttpHeaders` allocation reduction。
-2. header materialization 的 span/capacity 策略，减少 URL/header value string reallocation。
-3. server ingress metadata cache，让 `Expect` / `Transfer-Encoding` / `Content-Length` 等语义只解析一次。
-4. 等 adapter 物化成本压低后，再补 C llhttp comparator 或 generator-level translation tuning。
+1. 考虑复用 `FBody` buffer 或改成 body span/reader ownership，避免请求 body copy。
+2. 针对 header field/value callback 做 span/capacity 优化，减少字符串 realloc。
+3. server ingress metadata cache：把 `Content-Length` / `Transfer-Encoding` / `Expect` 语义解析结果缓存到 request context。

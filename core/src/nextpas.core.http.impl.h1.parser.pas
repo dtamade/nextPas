@@ -612,7 +612,7 @@ begin
   FStatusCode := 0;
   FVersion := hvHttp11;
   FUrl := '';
-  FHeaders := NewHttpHeaders;
+  FHeaders.Clear;
   FBody := nil;
   FHeadersComplete := False;
   FComplete := False;

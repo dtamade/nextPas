@@ -233,3 +233,34 @@ The raw simple-GET row is especially sensitive to the current benchmark
 runner's `MAX_ITERS = 1000` cap, so these numbers are directional. The
 classification remains stable: complete adapter parsing is materially slower
 than raw state-machine execution.
+
+## Optimization Evidence: Parser Header Container Reuse
+
+On 2026-06-05 local time, `IHttpHeaders` gained a focused `Clear` contract and
+`TH1Parser.Reset` started reusing its parser-owned header container instead of
+allocating a new `IHttpHeaders` object per reset. This targets repeated parse,
+keep-alive, and pipelined request paths.
+
+Baseline:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+Confirmation:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser run
+```
+
+| llhttp adapter workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 1101.7 | 641.8 |
+| 10 headers | 3808.5 | 3284.4 |
+| POST 1KB body | 1848.6 | 1457.6 |
+| pipeline 10 reqs | 11253.6 | 6201.2 |
+
+`test_http_headers`, `test_http_h1parser`, and `test_http_h1fast` all passed
+with heaptrc reporting `0 unfreed memory blocks`. The H1 parser heaptrc
+allocation count dropped from the previous `1423` blocks to `1404` blocks in
+the focused parser gate.

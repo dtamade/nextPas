@@ -193,6 +193,47 @@ begin
   Check(not LClone.Has('X-B'), 'clone omits deleted entry');
 end;
 
+procedure TestClearResetsAndAllowsReuse;
+var
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+  LSeen: string;
+begin
+  LH := NewHttpHeaders;
+  LH.Add('X-A', 'a1');
+  LH.Add('X-A', 'a2');
+  LH.Set_('X-B', 'b1');
+
+  LH.Clear;
+
+  CheckEqual(Int64(0), Int64(LH.Count), 'clear resets count');
+  CheckEqual('', LH.Get('X-A'), 'clear removes first value lookup');
+  LAll := LH.GetAll('X-A');
+  CheckEqual(Int64(0), Int64(Length(LAll)), 'clear removes all values');
+  Check(not LH.Has('X-B'), 'clear removes has state');
+
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('', LSeen, 'clear hides stale entries from iteration');
+
+  LH.Add('X-C', 'c1');
+  LH.Add('X-C', 'c2');
+  LH.Set_('X-D', 'd1');
+
+  CheckEqual(Int64(3), Int64(LH.Count), 'reused count');
+  LAll := LH.GetAll('X-C');
+  CheckEqual(Int64(2), Int64(Length(LAll)), 'reused getall length');
+  CheckEqual('c1', LAll[0], 'reused first');
+  CheckEqual('c2', LAll[1], 'reused second');
+  CheckEqual('d1', LH.Get('X-D'), 'reused set/get');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Set and Get basic', @TestSetAndGetBasic);
@@ -208,5 +249,6 @@ begin
   T.Run('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
   T.Run('Del non-existent is no-op', @TestDelNonExistentIsNoOp);
   T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
+  T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
   T.Summary;
 end.

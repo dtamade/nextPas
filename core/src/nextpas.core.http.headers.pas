@@ -33,6 +33,7 @@ type
     function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
     procedure Del(const AName: string);
+    procedure Clear;
     function Count: Int32;
     procedure ForEach(const ACallback: THeaderIterator);
     function Clone: IHttpHeaders;
@@ -261,6 +262,12 @@ begin
   end;
   ClearEntries(LDst, FCount);
   FCount := LDst;
+end;
+
+procedure THttpHeaders.Clear;
+begin
+  ClearEntries(0, FCount);
+  FCount := 0;
 end;
 
 function THttpHeaders.Count: Int32;
