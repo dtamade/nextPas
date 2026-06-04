@@ -49,6 +49,27 @@ begin
   end;
 end;
 
+procedure BenchAdd_15Headers(aIters: Int64);
+var
+  LIt: Int64;
+  LI: Int32;
+  LH: IHttpHeaders;
+const
+  NAMES: array[0..14] of string = (
+    'content-type', 'content-length', 'server', 'date', 'connection',
+    'cache-control', 'etag', 'last-modified', 'accept-encoding',
+    'x-request-id', 'x-forwarded-for', 'x-real-ip', 'vary',
+    'access-control-allow-origin', 'strict-transport-security');
+begin
+  for LIt := 1 to aIters do
+  begin
+    LH := NewHttpHeaders;
+    for LI := 0 to 14 do
+      LH.Add(NAMES[LI], 'value');
+    GSink := LH.Get('x-request-id');
+  end;
+end;
+
 procedure BenchGet_Miss(aIters: Int64);
 var
   LIt: Int64;
@@ -112,6 +133,7 @@ begin
   WriteLn;
   B.Run('Set+Get 5 headers', @BenchSetGet_5Headers);
   B.Run('Set+Get 15 headers', @BenchSetGet_15Headers);
+  B.Run('Add 15 headers', @BenchAdd_15Headers);
   B.Run('Get miss (3 headers)', @BenchGet_Miss);
   B.Run('Get hit (5 headers, last)', @BenchGet_Hit);
   B.Run('Has (3 headers)', @BenchHas);

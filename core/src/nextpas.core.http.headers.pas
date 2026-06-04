@@ -18,6 +18,9 @@ type
       end;
     var
       FEntries: array of THeaderEntry;
+      FCount: Int32;
+    procedure ClearEntries(const AFrom, AToExclusive: Int32);
+    procedure EnsureCapacity(const ARequired: Int32);
     function FindFirst(const AName: string): Int32;
     class function Normalize(const AName: string): string; static;
     class procedure ValidateName(const AName: string); static;
@@ -39,6 +42,32 @@ function NewHttpHeaders: IHttpHeaders;
 implementation
 
 { THttpHeaders }
+
+procedure THttpHeaders.ClearEntries(const AFrom, AToExclusive: Int32);
+var
+  LI: Int32;
+begin
+  for LI := AFrom to AToExclusive - 1 do
+  begin
+    FEntries[LI].Name := '';
+    FEntries[LI].Value := '';
+  end;
+end;
+
+procedure THttpHeaders.EnsureCapacity(const ARequired: Int32);
+var
+  LNewCapacity: Int32;
+begin
+  if Length(FEntries) >= ARequired then
+    Exit;
+
+  LNewCapacity := Length(FEntries);
+  if LNewCapacity < 8 then
+    LNewCapacity := 8;
+  while LNewCapacity < ARequired do
+    LNewCapacity := LNewCapacity * 2;
+  SetLength(FEntries, LNewCapacity);
+end;
 
 class function THttpHeaders.Normalize(const AName: string): string;
 var
@@ -76,7 +105,7 @@ var
   LI: Int32;
 begin
   LNorm := Normalize(AName);
-  for LI := 0 to High(FEntries) do
+  for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = LNorm then
       Exit(LI);
   Result := -1;
@@ -93,7 +122,7 @@ begin
   LNorm := Normalize(AName);
   LFound := False;
   LDst := 0;
-  for LI := 0 to High(FEntries) do
+  for LI := 0 to FCount - 1 do
   begin
     if FEntries[LI].Name = LNorm then
     begin
@@ -114,25 +143,27 @@ begin
     end;
   end;
   if LFound then
-    SetLength(FEntries, LDst)
+  begin
+    ClearEntries(LDst, FCount);
+    FCount := LDst;
+  end
   else
   begin
-    SetLength(FEntries, Length(FEntries) + 1);
-    FEntries[High(FEntries)].Name := LNorm;
-    FEntries[High(FEntries)].Value := AValue;
+    EnsureCapacity(FCount + 1);
+    FEntries[FCount].Name := LNorm;
+    FEntries[FCount].Value := AValue;
+    Inc(FCount);
   end;
 end;
 
 procedure THttpHeaders.Add(const AName, AValue: string);
-var
-  LLen: Int32;
 begin
   ValidateName(AName);
   ValidateValue(AValue);
-  LLen := Length(FEntries);
-  SetLength(FEntries, LLen + 1);
-  FEntries[LLen].Name := Normalize(AName);
-  FEntries[LLen].Value := AValue;
+  EnsureCapacity(FCount + 1);
+  FEntries[FCount].Name := Normalize(AName);
+  FEntries[FCount].Value := AValue;
+  Inc(FCount);
 end;
 
 function THttpHeaders.Get(const AName: string): string;
@@ -154,8 +185,8 @@ begin
   Result := nil;
   LNorm := Normalize(AName);
   LCount := 0;
-  SetLength(Result, Length(FEntries));
-  for LI := 0 to High(FEntries) do
+  SetLength(Result, FCount);
+  for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = LNorm then
     begin
       Result[LCount] := FEntries[LI].Value;
@@ -176,7 +207,7 @@ var
 begin
   LNorm := Normalize(AName);
   LDst := 0;
-  for LI := 0 to High(FEntries) do
+  for LI := 0 to FCount - 1 do
   begin
     if FEntries[LI].Name <> LNorm then
     begin
@@ -185,19 +216,20 @@ begin
       Inc(LDst);
     end;
   end;
-  SetLength(FEntries, LDst);
+  ClearEntries(LDst, FCount);
+  FCount := LDst;
 end;
 
 function THttpHeaders.Count: Int32;
 begin
-  Result := Length(FEntries);
+  Result := FCount;
 end;
 
 procedure THttpHeaders.ForEach(const ACallback: THeaderIterator);
 var
   LI: Int32;
 begin
-  for LI := 0 to High(FEntries) do
+  for LI := 0 to FCount - 1 do
     ACallback(FEntries[LI].Name, FEntries[LI].Value);
 end;
 
@@ -207,8 +239,9 @@ var
   LI: Int32;
 begin
   LNew := THttpHeaders.Create;
-  SetLength(LNew.FEntries, Length(FEntries));
-  for LI := 0 to High(FEntries) do
+  SetLength(LNew.FEntries, FCount);
+  LNew.FCount := FCount;
+  for LI := 0 to FCount - 1 do
     LNew.FEntries[LI] := FEntries[LI];
   Result := LNew;
 end;

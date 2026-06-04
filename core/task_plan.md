@@ -1,42 +1,39 @@
-# Task Plan: HTTP server performance fast path
+# Task Plan: HTTP headers allocation fast path
 
 ## Goal
 
-继续推进 `HttpServer 完成` 主线中的 benchmark/performance 阶段。用户要求性能追平
-Go/Rust，并指出 Pascal llhttp 翻译可能存在 hot-path 性能问题。本轮先做一刀有证据的
-server ingress 优化：把已有 H1 fast parser 安全接入普通 HTTP/1.1 no-body 请求路径，
-同时保持 malformed / chunked / Expect / body / connection-policy 请求回退 llhttp。
+继续推进 `HttpServer 完成` 主线中的 benchmark/performance 阶段。用户指出 Pascal
+llhttp 翻译可能存在 hot-path 性能问题；本轮不直接假设状态机本体有问题，而是先优化
+已有证据指向的 `TH1Parser` adapter / `THttpHeaders` 分配路径。
+
+本轮目标是把 `THttpHeaders` 从每次追加/删除都调整动态数组，改成 count + capacity
+模型，减少 llhttp adapter 逐 header `Add` 时的分配抖动，同时保持公开 API 语义不变。
 
 要求：
 
 - 不写 `docs/nextpas.core.http.inbox.md`。
-- 不跑全量测试；只跑 fast/parser/server/benchmark focused gates。
-- 先证明 correctness 和 heaptrc，再记录性能结果。
+- 不跑全量测试；只跑 headers/parser/fast/benchmark focused gates。
+- 先证明 correctness 和 heaptrc，再记录性能结果；不使用脆弱的耗时阈值单测。
 
 ## Checklist
 
 - [x] 检查 `git status --short --branch`，确认 shared checkout 无关脏文件边界。
 - [x] 读取 `docs/design-conventions.md`、HTTP docs、coverage、`task_plan.md`、`findings.md`、`progress.md`。
-- [x] 用 `bench_h1parser` 证明 llhttp adapter 与 fast path 存在约 1.4x 差距。
-- [x] 加固 `h1.fast` 的 fallback 边界：非法同长度 method、任意 transfer-coding、重复 Content-Length、body 不完整。
-- [x] 接入保守 server ingress fast path：只命中 HTTP/1.1、Host 存在、无 Connection/Expect/TE、无 body 的完整请求。
-- [x] `RemoteAddr` 改为 lazy string rendering，避免 handler 不读时每请求字符串化。
-- [x] 运行 focused 验证与 benchmark 对照。
-- [x] 更新控制文件与 HTTP benchmark / architecture / coverage 文档。
-- [ ] path-limited commit。
+- [x] 增加 `Add 15 headers` benchmark，覆盖 llhttp adapter 常用追加路径。
+- [x] 增加 headers compaction focused 语义护栏测试。
+- [x] 将 `THttpHeaders` 改成 `FCount + EnsureCapacity`，删除/Set 去重仅清理可见尾部。
+- [x] 运行 headers / H1 parser / H1 fast focused 验证与 heaptrc。
+- [x] 运行 `bench_headers` before/after 对照。
+- [x] 更新控制文件与 HTTP benchmark 文档。
+- [x] path-limited commit。
 
 ## Scope
 
 本轮只允许修改：
 
-- `src/nextpas.core.http.impl.h1.pas`
-- `src/nextpas.core.http.impl.h1.fast.pas`
-- `src/nextpas.core.http.impl.h1.writer.pas`
-- `src/nextpas.core.http.message.pas`
-- `tests/nextpas.core.http/test_http_h1fast/test_http_h1fast.lpr`
-- `tests/nextpas.core.http/test_http_message/test_http_message.lpr`
-- `docs/http/API_COVERAGE.md`
-- `docs/http/ARCHITECTURE.md`
+- `src/nextpas.core.http.headers.pas`
+- `tests/nextpas.core.http/test_http_headers/test_http_headers.lpr`
+- `benchmarks/nextpas.core.http/bench_headers/bench_headers.lpr`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
@@ -44,6 +41,7 @@ server ingress 优化：把已有 H1 fast parser 安全接入普通 HTTP/1.1 no-
 
 ## Intended outcome
 
-- 普通 keep-alive GET ingress 不再默认走 llhttp adapter 分配路径。
-- H1 malformed/chunked/body/Expect/connection 边界仍由 llhttp 与既有 server safety contract 兜底。
-- nextPas server keep-alive QPS 明显缩小与 Rust std-only comparator 的差距。
+- `THttpHeaders.Add` 不再每个 header 触发动态数组重新分配。
+- 删除/Set 去重后保留容量，但 `Count`、`GetAll`、`ForEach`、`Clone` 只暴露有效条目。
+- 为后续继续优化 `TH1Parser` span/string 分配、headers-complete 缓存 Host/Expect/Content-Length
+  判定提供更稳的基础。

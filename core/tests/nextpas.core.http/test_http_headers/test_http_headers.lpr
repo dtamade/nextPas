@@ -155,6 +155,43 @@ begin
   CheckEqual('val', LH.Get('X-Keep'), 'existing preserved');
 end;
 
+procedure TestCompactionPreservesVisibleOrder;
+var
+  LH, LClone: IHttpHeaders;
+  LAll: TStringArray;
+  LSeen: string;
+begin
+  LH := NewHttpHeaders;
+  LH.Add('X-A', 'a1');
+  LH.Add('X-B', 'b1');
+  LH.Add('X-A', 'a2');
+  LH.Add('X-C', 'c1');
+
+  LH.Del('X-B');
+  LH.Set_('X-A', 'a3');
+  LH.Add('X-D', 'd1');
+
+  CheckEqual(Int64(3), Int64(LH.Count), 'count after del/set/add');
+  LAll := LH.GetAll('X-A');
+  CheckEqual(Int64(1), Int64(Length(LAll)), 'x-a duplicates collapsed');
+  CheckEqual('a3', LAll[0], 'x-a replacement value');
+
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('x-a=a3|x-c=c1|x-d=d1', LSeen, 'foreach sees compacted order only');
+
+  LClone := LH.Clone;
+  CheckEqual(Int64(3), Int64(LClone.Count), 'clone count after compaction');
+  CheckEqual('d1', LClone.Get('X-D'), 'clone includes appended entry');
+  Check(not LClone.Has('X-B'), 'clone omits deleted entry');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Set and Get basic', @TestSetAndGetBasic);
@@ -169,5 +206,6 @@ begin
   T.Run('Get returns empty for missing', @TestGetReturnEmptyForMissing);
   T.Run('GetAll returns empty for missing', @TestGetAllReturnEmptyForMissing);
   T.Run('Del non-existent is no-op', @TestDelNonExistentIsNoOp);
+  T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
   T.Summary;
 end.

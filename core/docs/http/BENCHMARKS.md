@@ -88,3 +88,30 @@ command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 -
 The same local 50k/4 comparison before the fast path measured nextPas at
 `14736 ns/op` / `67857 req/s`, so this slice narrows the gap to the Rust
 std-only comparator without changing public HTTP APIs.
+
+## Optimization Evidence: Header Allocation Fast Path
+
+On 2026-06-05 local time, `THttpHeaders` switched from per-entry dynamic array
+resizing to a count + capacity model. This targets the llhttp adapter path that
+adds one parsed header at a time.
+
+Header microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| Set+Get 5 headers | 1235.6 | 924.2 |
+| Set+Get 15 headers | 3233.0 | 2712.2 |
+| Add 15 headers | 2424.4 | 1832.8 |
+| Get miss (3 headers) | 58.1 | 53.9 |
+| Get hit (5 headers, last) | 64.7 | 61.6 |
+| Has (3 headers) | 49.7 | 46.0 |
+| Clone 10 headers | 725.9 | 732.4 |
+
+`Add 15 headers` is the most relevant row for the current H1 parser adapter,
+because parsed header callbacks append entries as they arrive. The change keeps
+the public header API unchanged; `test_http_headers`, `test_http_h1parser`, and
+`test_http_h1fast` all passed with heaptrc reporting `0 unfreed memory blocks`.

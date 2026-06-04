@@ -1,22 +1,19 @@
-# Findings: HTTP server performance fast path
+# Findings: HTTP headers allocation fast path
 
 ## Scope
 
-本轮从性能追平目标出发，聚焦 HTTP/1.1 server keep-alive ingress hot path。目标不是做
-大范围 runtime 重构，而是先用现有 fast parser 把普通 no-body HTTP/1.1 请求从 llhttp
-adapter 分配路径中移出，并保留安全 fallback。
+本轮继续服务 `HttpServer 完成` 的性能路线。用户怀疑 Pascal llhttp 翻译本体可能有性能
+问题；当前证据还不能直接证明状态机本体慢，上一轮子代理审计和本轮 microbenchmark 更
+指向 `TH1Parser` adapter / `THttpHeaders` 的 managed allocation 成本。
+
+因此本轮先做基础件优化：让 `THttpHeaders` 使用 `FCount + EnsureCapacity`，避免每次
+`Add` 或删除都调整动态数组长度。
 
 ## Confirmed truths
 
-### 1. Parser micro evidence
+### 1. llhttp vs adapter 判断
 
-运行：
-
-```sh
-make -C benchmarks/nextpas.core.http/bench_h1parser clean run
-```
-
-结果显示 fast path 明显快于当前 llhttp adapter：
+上一轮 `bench_h1parser` 已证明 fast path 快于当前 llhttp adapter：
 
 | workload | llhttp ns/op | fast ns/op |
 | --- | ---: | ---: |
@@ -25,36 +22,54 @@ make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 | POST 1KB body | 2167.2 | 1442.8 |
 | pipeline 10 requests | 9810.0 | 6973.5 |
 
-### 2. Subagent review
+Peirce 子代理只读审计结论仍成立：最高概率瓶颈不是 llhttp 状态机本体，而是 URL/header/body
+span 进入 Pascal managed string / bytes 的 adapter 分配路径。
 
-Peirce 子代理只读审计结论：
+### 2. Headers baseline evidence
 
-- 最高概率瓶颈不是 llhttp 状态机本体，而是 `TH1Parser` adapter 每个 URL/header/body
-  span 的 managed string / TBytes 分配。
-- `h1.fast` 已存在，但 server 此前没有使用。
-- fast path 接入前必须先修非法同长度 method、Transfer-Encoding 大小写/任意 TE、
-  `Content-Length` body 不完整、重复 `Content-Length` 等 fallback 缺口。
+生产代码修改前，加入 `Add 15 headers` 场景后运行：
 
-### 3. Local server benchmark evidence
+```sh
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
 
-本轮前的 50k/4 对照：
+基线结果：
 
-- nextPas: `completed=50000`, `ns/op=14736`, `req/s=67857`
-- Rust std-only: `completed=50000`, `ns/op=9048`, `req/s=110518`
+| workload | before ns/op |
+| --- | ---: |
+| Set+Get 5 headers | 1235.6 |
+| Set+Get 15 headers | 3233.0 |
+| Add 15 headers | 2424.4 |
+| Get miss (3 headers) | 58.1 |
+| Get hit (5 headers, last) | 64.7 |
+| Has (3 headers) | 49.7 |
+| Clone 10 headers | 725.9 |
 
-本轮 fast path 后的 50k/4 对照：
+### 3. Headers optimization evidence
 
-- nextPas: `completed=50000`, `ns/op=12397`, `req/s=80660`
-- Go `net/http`: `completed=50000`, `ns/op=53709`, `req/s=18618`
-- Rust std-only: `completed=50000`, `ns/op=10067`, `req/s=99324`
+`THttpHeaders` 现在保留动态数组容量，并用 `FCount` 标记有效条目。删除和 `Set_` 去重后
+清理尾部 managed strings，避免 stale entries 外泄或长期持有已删除值。
 
-同机单次对照下，nextPas 从约 `67.9k req/s` 提升到约 `80.7k req/s`，与 Rust std-only
-差距收敛到约 19%。该数字仍是本机单次证据，不是正式排名。
+同一 benchmark 修改后结果：
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| Set+Get 5 headers | 1235.6 | 924.2 |
+| Set+Get 15 headers | 3233.0 | 2712.2 |
+| Add 15 headers | 2424.4 | 1832.8 |
+| Get miss (3 headers) | 58.1 | 53.9 |
+| Get hit (5 headers, last) | 64.7 | 61.6 |
+| Has (3 headers) | 49.7 | 46.0 |
+| Clone 10 headers | 725.9 | 732.4 |
+
+`Add 15 headers` 下降约 24%，直接覆盖 llhttp adapter 逐 header `Add` 路径。`Clone` 本轮不优化，
+轻微波动不作为结论。
 
 ## Remaining gaps / risks
 
-- fast path 当前只命中最保守普通请求；body / Expect / chunked / transfer-coding /
-  connection-policy 仍回退 llhttp，后续需要逐步扩大而不是一次性放开。
-- 下一个高收益点是减少 `TH1Parser` adapter 与 `THttpHeaders` 的分配：header capacity/count、
-  headers-complete 时缓存 Host/Expect/Content-Length/keep-alive 判定。
-- Rust 当前仍是 std-only comparator；正式性能路线后续仍需要 Hyper/Tokio 对照和 full-chain workload。
+- 仍不能把性能问题归因到 llhttp Pascal 状态机本体；下一步应继续减少 adapter span copy /
+  normalization / lookup，而不是先重写状态机。
+- `Get/Has/GetAll` 仍会 Normalize 并线性扫描。后续可在 headers-complete 阶段缓存 Host、
+  Expect、Content-Length、keep-alive 等 server ingress 常用判定，避免同一请求重复扫描。
+- 正式追平 Go/Rust 仍需要全链 benchmark 轮次：更稳定的多轮采样、Hyper/Tokio comparator、
+  body/chunked/router/middleware/TLS 负载，以及 threaded/epoll/backend 对照。
