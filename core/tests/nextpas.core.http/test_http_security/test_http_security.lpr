@@ -1682,9 +1682,26 @@ begin
 end;
 {$ENDIF}
 
+procedure RunTruncatedTrailerAtEofCase(
+  const AOpts: THttpServerOptions; const AReq: string; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    LResp := SendRawAndShutdownWrite(LPort, AReq);
+    Check(Pos('HTTP/1.1 400', LResp) > 0,
+      ALabel + ': explicit 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 18: Truncated trailer section at EOF }
 procedure TestTruncatedTrailerAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1692,19 +1709,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: value'#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer EOF');
 end;
 
 { Test 18a: Truncated trailer field-name at EOF }
 procedure TestTruncatedTrailerFieldNameAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1712,19 +1724,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer field-name EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer field-name EOF');
 end;
 
 { Test 18b: Truncated trailer separator at EOF }
 procedure TestTruncatedTrailerSeparatorAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1732,19 +1739,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test:';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer separator EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer separator EOF');
 end;
 
 { Test 18c: Truncated trailer empty-value CR at EOF }
 procedure TestTruncatedTrailerEmptyValueCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1752,19 +1754,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test:'#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer empty-value CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer empty-value CR EOF');
 end;
 
 { Test 18d: Truncated trailer empty-value at EOF }
 procedure TestTruncatedTrailerEmptyValueAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1772,19 +1769,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test:'#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer empty-value EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer empty-value EOF');
 end;
 
 { Test 18e: Truncated trailer empty-value section CR at EOF }
 procedure TestTruncatedTrailerEmptyValueSectionCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1792,19 +1784,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test:'#13#10#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer empty-value section CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer empty-value section CR EOF');
 end;
 
 { Test 18c: Truncated trailer whitespace at EOF }
 procedure TestTruncatedTrailerWhitespaceAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1812,19 +1799,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: ';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer whitespace EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer whitespace EOF');
 end;
 
 { Test 18d: Truncated trailer whitespace CR at EOF }
 procedure TestTruncatedTrailerWhitespaceCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1832,19 +1814,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: '#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer whitespace CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer whitespace CR EOF');
 end;
 
 { Test 18e: Truncated trailer whitespace section at EOF }
 procedure TestTruncatedTrailerWhitespaceSectionAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1852,19 +1829,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: '#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer whitespace section EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer whitespace section EOF');
 end;
 
 { Test 18f: Truncated trailer whitespace section CR at EOF }
 procedure TestTruncatedTrailerWhitespaceSectionCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1872,19 +1844,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: '#13#10#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer whitespace section CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer whitespace section CR EOF');
 end;
 
 { Test 18a: Truncated trailer field line at EOF }
 procedure TestTruncatedTrailerFieldLineAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1892,19 +1859,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: value';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer field line EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer field line EOF');
 end;
 
 { Test 18b: Truncated trailer field CR at EOF }
 procedure TestTruncatedTrailerFieldCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1912,19 +1874,14 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: value'#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer field CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer field CR EOF');
 end;
 
 { Test 18a: Truncated trailer section CR at EOF }
 procedure TestTruncatedTrailerCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
             'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
@@ -1932,14 +1889,10 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10 +
             'X-Test: value'#13#10#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated trailer CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedTrailerAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated trailer CR EOF');
 end;
 
 {$IFDEF NEXTPAS_LINUX}
@@ -2001,6 +1954,174 @@ begin
     'HTTP/1.1 400',
     'epoll truncated trailer CR EOF: explicit 400',
     True);
+end;
+
+procedure TestTruncatedTrailerAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13#10;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer EOF');
+end;
+
+procedure TestTruncatedTrailerFieldNameAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test';
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer field-name EOF');
+end;
+
+procedure TestTruncatedTrailerSeparatorAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test:';
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer separator EOF');
+end;
+
+procedure TestTruncatedTrailerEmptyValueCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test:'#13;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer empty-value CR EOF');
+end;
+
+procedure TestTruncatedTrailerEmptyValueAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test:'#13#10;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer empty-value EOF');
+end;
+
+procedure TestTruncatedTrailerEmptyValueSectionCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test:'#13#10#13;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer empty-value section CR EOF');
+end;
+
+procedure TestTruncatedTrailerWhitespaceAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: ';
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer whitespace EOF');
+end;
+
+procedure TestTruncatedTrailerWhitespaceCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: '#13;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer whitespace CR EOF');
+end;
+
+procedure TestTruncatedTrailerWhitespaceSectionAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: '#13#10;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer whitespace section EOF');
+end;
+
+procedure TestTruncatedTrailerWhitespaceSectionCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: '#13#10#13;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer whitespace section CR EOF');
+end;
+
+procedure TestTruncatedTrailerFieldLineAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value';
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer field line EOF');
+end;
+
+procedure TestTruncatedTrailerFieldCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Test'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'X-Test: value'#13;
+begin
+  RunTruncatedTrailerAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated trailer field CR EOF');
 end;
 {$ENDIF}
 
@@ -2100,6 +2221,30 @@ begin
     @TestInvalidChunkSizeEpollBackend);
   T.Run('Missing chunk-data CRLF -> 400 with epoll backend',
     @TestMissingChunkDataCrLfEpollBackend);
+  T.Run('Truncated trailer section at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerAtEofEpollBackend);
+  T.Run('Truncated trailer field-name at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerFieldNameAtEofEpollBackend);
+  T.Run('Truncated trailer separator at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerSeparatorAtEofEpollBackend);
+  T.Run('Truncated trailer empty-value CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerEmptyValueCrAtEofEpollBackend);
+  T.Run('Truncated trailer empty-value at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerEmptyValueAtEofEpollBackend);
+  T.Run('Truncated trailer empty-value section CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerEmptyValueSectionCrAtEofEpollBackend);
+  T.Run('Truncated trailer whitespace at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerWhitespaceAtEofEpollBackend);
+  T.Run('Truncated trailer whitespace CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerWhitespaceCrAtEofEpollBackend);
+  T.Run('Truncated trailer whitespace section at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerWhitespaceSectionAtEofEpollBackend);
+  T.Run('Truncated trailer whitespace section CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerWhitespaceSectionCrAtEofEpollBackend);
+  T.Run('Truncated trailer field line at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerFieldLineAtEofEpollBackend);
+  T.Run('Truncated trailer field CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTrailerFieldCrAtEofEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
