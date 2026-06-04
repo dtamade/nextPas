@@ -60,10 +60,12 @@
 - `H1 parser` 现在也有 `Content-Length + Connection: close + extra bytes after body` focused 覆盖。
 - `H1 parser` 现在也有 keep-alive `Content-Length` garbage tail focused 覆盖：首个合法 fixed-length request 只消费自己的字节，不会被后续垃圾尾巴污染。
 - `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up request-line focused 覆盖：首个合法 fixed-length request 只消费自己的字节，不会被半截下一请求行污染。
+- `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up request-line bridge proof：同样的半截 follow-up line 在后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
 - `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up headers focused 覆盖：首个合法 fixed-length request 只消费自己的字节，不会被半截下一请求头污染。
 - `H1 parser` 现在也有 `chunked + Connection: close + extra bytes after terminal chunk` focused 覆盖。
 - `H1 parser` 现在也有 keep-alive chunked garbage tail focused 覆盖：首个合法 chunked request 只消费自己的字节，不会被后续垃圾尾巴污染。
 - `H1 parser` 现在也有 keep-alive chunked partial follow-up request-line focused 覆盖：首个合法 chunked request 只消费自己的字节，不会被半截下一请求行污染。
+- `H1 parser` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：同样的半截 follow-up line 在后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
 - `H1 parser` 现在也有 keep-alive chunked partial follow-up headers focused 覆盖：首个合法 chunked request 只消费自己的字节，不会被半截下一请求头污染。
 - `H1 parser` 现在也有 keep-alive chunked trailer-complete garbage tail / partial follow-up request-line / partial follow-up headers focused 覆盖：完整 trailer section 结束后仍只消费首个合法 request，且 trailer 声明头保留、实际 trailer field 不进入普通请求头。
 - `H1 parser` 现在也有 keep-alive chunked trailer-complete valid pipelined next-request focused 覆盖：完整 trailer section 结束后，合法下一请求同样不会污染首个 request，且 trailer declaration / trailer isolation 契约保持不变。
