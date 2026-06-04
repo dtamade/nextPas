@@ -1,58 +1,64 @@
-# Findings: h1 parser keep-alive partial follow-up headers bridge
+# Findings: security request-target over max-header explicit 431
 
 ## Scope
 
-- 本轮继续 keep-alive request-tail contract refinement，不扩散成更大的
-  malformed 输入矩阵，只把 parser 层还没显式锁住的
-  `partial follow-up headers can complete later` bridge truth 收口。
+- 本轮离开上一刀的 request-tail bridge 模板，改做
+  `request-target over MaxHeaderSize` 的 raw-wire security 收紧。
+- 目标不是生产修复，而是把 `test_http_security` 里仍停留在 broad
+  safe-handling 的 URL/header-budget 分支收成显式 `431` 契约。
 
 ## Confirmed truths
 
-### 1. parser 层先前只有“首请求不被污染 + Finish 后报错”，还缺 “headers 可补全” 的 bridge proof
+### 1. `test_http_server` 早已锁住 request-target over MaxHeaderSize 的 server-layer 主分支
 
-- [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  之前对 `H1 parser` 只锁到：
-  - `Content-Length` / plain `chunked` / trailer-complete `chunked` 的 partial follow-up headers 不会污染首请求
-  - 如果只有这半截 headers 就 `Finish`，parser 会报错
-- 这能证明“当前请求不会被污染”，但还不能直接证明“后续补齐这些 headers 后第二请求能合法完成”。
+- `test_http_server` 已有 focused proof：
+  - 在受控小 `MaxHeaderSize := 256` 下
+  - oversized request-target 会直接返回 `HTTP/1.1 431`
+  - handler 不会进入
+- 因此这刀不是发现新行为，而是把 security 层补到和 server 一致的公开证据密度。
 
-### 2. server/security 已经证明 transport truth，parser 需要补底层对应真值
+### 2. `test_http_security` 之前还停留在 broad safe-handling current truth
 
-- `test_http_server` / `test_http_security` 现在都已证明：
-  - `Content-Length` / plain `chunked` / trailer-complete `chunked`
-  - 在 follow-up partial headers 后续补齐时，第二请求都能继续完成
-- 因此 parser 层缺的不是行为实现，而是更底层的 focused proof。
+- 之前 security 对“超长 URL / request-line”只断言：
+  - `431`
+  - `414`
+  - `400`
+  - `404`
+  - `200`
+  - 或安全关闭
+- 这只能证明 server 安全，不足以证明当前实现已经把
+  `request-target over MaxHeaderSize` 收敛到显式 `431`。
 
-### 3. focused gate 直接 GREEN，说明这条 parser bridge contract 已成立
+### 3. focused gate 直接 GREEN，说明这条 explicit `431` contract 已经成立
 
-- 在 [tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr)
-  新增三条 bridge proofs：
-  - `Content-Length` partial follow-up headers can complete later
-  - plain `chunked` partial follow-up headers can complete later
-  - trailer-complete `chunked` partial follow-up headers can complete later
-- focused gate 直接 GREEN，说明当前生产代码已经满足这条 bridge 契约，本轮不需要生产修复。
+- 在 [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  新增两条 focused proofs：
+  - threaded `request-target over MaxHeaderSize -> explicit 431`
+  - epoll `request-target over MaxHeaderSize -> explicit 431`
+- `make -C tests/nextpas.core.http/test_http_security clean test`
+  直接 GREEN，说明当前生产代码已经满足这条契约，本轮不需要生产修复。
 
-### 4. parser / server / security 三层对这组三支 headers bridge 现在重新对齐
+### 4. server / security 两层对这个 budget 分支现在重新对齐
 
-- 已有 direct live truth：
-- `test_http_h1parser`
-  - `Content-Length` / plain `chunked` / trailer-complete `chunked`
-    的 partial follow-up headers 都能在补齐后完成第二请求
-- `test_http_server` / `test_http_security`
-  - 同三条分支都已有更上层的 live/raw-wire bridge truth
+- `test_http_server`
+  - 锁更窄的 server-layer 语义：显式 `431` 且 handler 不进入
+- `test_http_security`
+  - 锁 raw-wire 语义：threaded / epoll 都显式返回 `431`
 - 因此这轮仍然是 coverage-expansion，不是生产修复。
 
 ## Verification evidence
 
 - focused:
-  - `make -C tests/nextpas.core.http/test_http_h1parser test`
-    - `88/88 passed`
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `130/130 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮补齐了 parser 层 keep-alive request-tail 三条主分支里 remaining 的 headers bridge 空档。
-- 邻接 still-open 收口方向仍包括：
-  - 继续挑仍未分类完的 malformed/runtime 边角，而不是机械平铺 parity
-- 如果继续沿 request-tail / malformed 主线推进，下一刀更自然的是转去仍未分类完的 runtime / malformed 邻接缺口，而不是继续复制同型 bridge。
-- 下一刀仍应继续 keep-alive request-tail contract，而不是回去铺 `Expect` 矩阵或 benchmark。
+- 这轮补掉的是 security 层 request-line / URL budget 的一个高价值小缺口。
+- 邻接 still-open 方向仍应保持同样策略：
+  - 优先挑还没分类完的 malformed/runtime 边角
+  - 不再机械平铺 request-tail parity
+- 下一刀更自然的是继续寻找：
+  - 仍停留在 broad safe-handling 的 request/header budget 分支
+  - 或其他还没被 security 明确锁成 `400/431/501` 的 raw-wire 邻接缺口

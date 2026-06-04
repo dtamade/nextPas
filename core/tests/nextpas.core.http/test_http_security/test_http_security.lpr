@@ -927,6 +927,42 @@ begin
   end;
 end;
 
+procedure RunRequestTargetOverMaxHeaderSizeUsesExplicit431(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LReq: string;
+  LPath: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    SetLength(LPath, 400);
+    FillChar(LPath[1], 400, Ord('a'));
+    LReq := 'GET /' + LPath + ' HTTP/1.1'#13#10 +
+      'Host: x'#13#10 +
+      'Connection: close'#13#10#13#10;
+    LResp := SendRaw(LPort, LReq);
+    Check(Pos('HTTP/1.1 431', LResp) > 0,
+      ALabel + ': explicit 431 for request-target over MaxHeaderSize');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRequestTargetOverMaxHeaderSizeUsesExplicit431;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  RunRequestTargetOverMaxHeaderSizeUsesExplicit431(
+    LOpts,
+    'threaded request-target over max-header');
+end;
+
 procedure RunIdleTimeoutCloseSecurityCase(
   const AOpts: THttpServerOptions; const APartial: string; const ALabel: string);
 var
@@ -2542,6 +2578,17 @@ begin
   Result.Backend := TCP_SERVER_BACKEND_EPOLL;
 end;
 
+procedure TestRequestTargetOverMaxHeaderSizeUsesExplicit431EpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.MaxHeaderSize := 256;
+  RunRequestTargetOverMaxHeaderSizeUsesExplicit431(
+    LOpts,
+    'epoll request-target over max-header');
+end;
+
 procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
@@ -3054,6 +3101,8 @@ begin
   T.Run('Oversized header >8KB', @TestOversizedHeader);
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);
   T.Run('Request line too long', @TestRequestLineTooLong);
+  T.Run('Request-target over MaxHeaderSize -> explicit 431',
+    @TestRequestTargetOverMaxHeaderSizeUsesExplicit431);
   T.Run('Slowloris partial request', @TestSlowloris);
   T.Run('Partial fixed-length body idle-timeout closes connection',
     @TestPartialFixedLengthBodyIdleTimeout);
@@ -3236,6 +3285,8 @@ begin
     @TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend);
   T.Run('Malformed trailer field -> 400 with epoll backend',
     @TestMalformedTrailerFieldEpollBackend);
+  T.Run('Request-target over MaxHeaderSize -> explicit 431 with epoll backend',
+    @TestRequestTargetOverMaxHeaderSizeUsesExplicit431EpollBackend);
   {$ENDIF}
   T.Summary;
 end.

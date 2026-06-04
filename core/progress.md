@@ -1,10 +1,12 @@
-# Progress Log: h1 parser keep-alive partial follow-up headers bridge
+# Progress Log: security request-target over max-header explicit 431
 
 ## Session
 
-- **Scope:** 把 parser 层 `Content-Length` / plain `chunked` / trailer-complete `chunked` 的 keep-alive partial follow-up headers 收成明确 bridge proof。
+- **Scope:** 把 `test_http_security` 里 `request-target over MaxHeaderSize`
+  从 broad safe-handling 收成 raw-wire explicit `431` proof，并补 threaded /
+  Linux `epoll` 两条路径。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `h1parser partial follow-up headers bridge`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `malformed/runtime 邻接缺口` -> `request-target over MaxHeaderSize explicit 431`
 
 ## Current state
 
@@ -20,25 +22,23 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  上一刀已经把 security 层的同类 headers bridge 空档补齐，本轮不再重复扩大 security parity。
-- [tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr)
-  新增三条 focused proofs：
-  - `Content-Length` partial follow-up headers can complete later
-  - plain `chunked` partial follow-up headers can complete later
-  - trailer-complete `chunked` partial follow-up headers can complete later
+  新增两条 focused proofs：
+  - threaded `Request-target over MaxHeaderSize -> explicit 431`
+  - epoll `Request-target over MaxHeaderSize -> explicit 431`
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已把 `H1 parser` 的 partial follow-up headers 从“focused 覆盖”提升成明确 bridge proof 口径。
+  已把 `test_http_security` 从 long-request-line broad safe-handling 口径收紧成
+  request-target over `MaxHeaderSize` 的 explicit `431` 口径。
 - 本轮没有生产代码变更；focused gate 直接 GREEN，说明这是 current truth 收口，而不是修复。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_h1parser test`
-  - `88/88 passed`
+- `make -C tests/nextpas.core.http/test_http_security clean test`
+  - `130/130 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 下一刀仍应优先真实协议缺口，不要回到大面积 parity 平铺。
 - 最自然的后续是继续补：
-  - 转去仍未分类完的 malformed/runtime 邻接缺口
-  - 或重新审视 request-tail contract 还有没有更高价值的非平铺空档
+  - 仍停留在 broad safe-handling 的 request/header budget 邻接分支
+  - 或其他仍未分类完的 malformed/runtime 小缺口

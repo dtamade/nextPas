@@ -1,39 +1,40 @@
-# Task Plan: h1 parser keep-alive partial follow-up headers bridge
+# Task Plan: security request-target over max-header explicit 431
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，这一刀补齐
-`test_http_h1parser` 里 keep-alive request-tail 的 `partial follow-up headers`
-bridge proof，让 parser / server / security 三层口径重新对齐：
+继续留在 `3/6 H1 正确性加固` 主线，但离开上一刀的
+request-tail bridge 模板，转到更高价值的 malformed/runtime 邻接缺口：
+把 `test_http_security` 里 `request-target over MaxHeaderSize` 从 broad
+safe-handling 收紧成 raw-wire explicit `431` proof，并补 threaded / epoll
+两条路径的直接证据。
 
-- `Content-Length` follow-up partial headers 后续补齐后应能在 parser 层完成第二请求
-- plain `chunked` follow-up partial headers 后续补齐后应能在 parser 层完成第二请求
-- trailer-complete `chunked` follow-up partial headers 后续补齐后也应能在 parser 层完成第二请求
-- 这次仍然只做 coverage-expansion，不预设生产修复
+- 复用 `test_http_server` 已有的 focused `431` 口径
+- 先在 `test_http_security` 写 focused tests 取真值
+- 如果直接 GREEN，本轮不改生产代码
+- 只跑 `test_http_security` focused gate，不回去跑全量 HTTP
 
 要求：
 
-- 优先复用现有 `test_http_h1parser` request-tail bridge 风格
-- 先用 focused tests 取真值；如果直接 GREEN，本轮不改生产代码
-- 只跑 `test_http_h1parser` focused gate
-- 不回去平铺 security 同型 parity case
+- 只动 HTTP 相关路径
+- 不扩散到 benchmark / server 基类设计 / 大面积 parity 平铺
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
-- [x] 审阅 `h1parser/server/security` 现有 request-tail proofs，确认 parser 层仍缺 headers bridge
-- [x] 选定 `Content-Length` / plain `chunked` / trailer-complete `chunked` 三条 parser headers bridge
-- [x] 在 `test_http_h1parser` 补三条 focused bridge tests
-- [x] focused gate 直接 GREEN，证明现有 parser bridge contract 已成立
+- [x] 审阅 `test_http_server` / `test_http_security` 现有 request-target over
+  `MaxHeaderSize` 口径
+- [x] 在 `test_http_security` 补 threaded raw-wire explicit `431` proof
+- [x] 在 `test_http_security` 补 Linux `epoll` raw-wire explicit `431` proof
+- [x] focused gate 直接 GREEN，证明现有 transport contract 已成立
 - [x] 跑 focused：
-  - `make -C tests/nextpas.core.http/test_http_h1parser test`
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
 - [x] 更新 coverage 文档与控制文件
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
+  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
   - `findings.md`
@@ -43,10 +44,13 @@ bridge proof，让 parser / server / security 三层口径重新对齐：
 
 ## Intended outcome
 
-- parser 层对三条 keep-alive 主分支都明确锁住：
-  - 首个请求只消费自己的字节
-  - follow-up partial headers 在补齐后能完成为合法第二请求
+- security 层对 `request-target over MaxHeaderSize` 明确锁住：
+  - 在受控小 `MaxHeaderSize` 下，oversized request-target 直接返回显式 `431`
+  - threaded / Linux `epoll` 两条路径都给出 raw-wire focused 证据
+- server / security 两层口径重新对齐：
+  - security 锁 raw-wire `431`
+  - server 继续锁 handler 不进入的更窄契约
 - 证据要求：
-  - 新增三条 parser partial follow-up headers bridge tests GREEN
-  - focused h1parser suite 全绿
+  - 新增两条 security request-target `431` tests GREEN
+  - focused security suite 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`
