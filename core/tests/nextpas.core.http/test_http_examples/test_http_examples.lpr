@@ -12,7 +12,9 @@ uses
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.net,
-  nextpas.core.http;
+  nextpas.core.http,
+  nextpas.core.time.base,
+  nextpas.core.time.deadline;
 
 var
   T: TTestRunner;
@@ -25,6 +27,8 @@ var
 const
   ExampleRelativeDir =
     'examples/nextpas.core.http/http_server_options_demo';
+  WebSocketExampleRelativeDir =
+    'examples/nextpas.core.http/http_websocket_echo_demo';
   HttpUnitPath = 'src/nextpas.core.http.pas';
 
 procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
@@ -200,6 +204,81 @@ begin
   Result := CreateBytesStreamFrom(LData) as IReader;
 end;
 
+function BuildMaskedTextFrame(const AData: string): string;
+var
+  LMaskKey: array[0..3] of Byte;
+  LPayloadLen: SizeUInt;
+  I: SizeUInt;
+begin
+  LMaskKey[0] := $12;
+  LMaskKey[1] := $34;
+  LMaskKey[2] := $56;
+  LMaskKey[3] := $78;
+
+  LPayloadLen := SizeUInt(Length(AData));
+  Check(LPayloadLen < 126, 'example websocket smoke uses short frames');
+  SetLength(Result, 6);
+  Result[1] := Chr($81);
+  Result[2] := Chr($80 or Byte(LPayloadLen));
+  Result[3] := Chr(LMaskKey[0]);
+  Result[4] := Chr(LMaskKey[1]);
+  Result[5] := Chr(LMaskKey[2]);
+  Result[6] := Chr(LMaskKey[3]);
+
+  for I := 1 to LPayloadLen do
+    Result := Result + Chr(Ord(AData[I]) xor LMaskKey[(I - 1) mod 4]);
+end;
+
+function ReadTcpUntilContains(const AConn: ITcpStream; const AMarker: string): string;
+var
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  repeat
+    LN := AConn.Read(LBuf[0], 4096);
+    if LN > 0 then
+    begin
+      SetLength(Result, Length(Result) + Int32(LN));
+      Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+    end;
+  until (Pos(AMarker, Result) > 0) or (LN = 0);
+end;
+
+function ReadServerTextFramePayload(const AConn: ITcpStream): string;
+var
+  LBuf: array[0..4095] of Byte;
+  LResp: string;
+  LN: SizeUInt;
+  LPayloadLen: Byte;
+begin
+  LResp := '';
+  repeat
+    LN := AConn.Read(LBuf[0], 4096);
+    if LN > 0 then
+    begin
+      SetLength(LResp, Length(LResp) + Int32(LN));
+      Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+    end;
+  until (Length(LResp) >= 2) or (LN = 0);
+
+  Check(Length(LResp) >= 2, 'websocket echo demo returned a frame header');
+  Check(Ord(LResp[1]) = $81, 'websocket echo demo returned text frame');
+  LPayloadLen := Ord(LResp[2]) and $7F;
+  Check(LPayloadLen < 126, 'websocket echo demo returned short text frame');
+  while Length(LResp) < 2 + LPayloadLen do
+  begin
+    LN := AConn.Read(LBuf[0], 4096);
+    if LN = 0 then
+      Break;
+    SetLength(LResp, Length(LResp) + Int32(LN));
+    Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+  end;
+  Check(Length(LResp) >= 2 + LPayloadLen,
+    'websocket echo demo returned full text frame payload');
+  Result := Copy(LResp, 3, LPayloadLen);
+end;
+
 procedure StopExampleServer(var AProcess: TProcess; var AOutput: string);
 var
   LWait: Integer;
@@ -355,10 +434,122 @@ begin
   end;
 end;
 
+function ResolveWebSocketExampleBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/http_websocket_echo_demo/http_websocket_echo_demo');
+end;
+
+procedure BuildWebSocketExample(out ABinaryPath: string; out AExampleDir: string);
+var
+  LRootDir: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(WebSocketExampleRelativeDir);
+  AExampleDir := PathJoin(LRootDir, WebSocketExampleRelativeDir);
+  Check(DirectoryExists(AExampleDir), 'websocket example directory exists');
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], AExampleDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'websocket example build exit code: ' + LOutput);
+  ABinaryPath := ResolveWebSocketExampleBinaryPath(LRootDir);
+  Check(FileExists(ABinaryPath), 'websocket example binary exists');
+end;
+
+procedure StartWebSocketExampleServer(const ABinaryPath, AExampleDir: string;
+  const APort: UInt16; out AProcess: TProcess; out AOutput: string);
+var
+  LReadyMarker: string;
+  LPortMarker: string;
+  LWait: Integer;
+begin
+  LReadyMarker := 'http-websocket-echo-demo=ready';
+  LPortMarker := 'listen=127.0.0.1:' + IntToStr(Int64(APort));
+  AProcess := TProcess.Create(nil);
+  AOutput := '';
+  try
+    AProcess.Executable := ABinaryPath;
+    AProcess.CurrentDirectory := AExampleDir;
+    AProcess.Parameters.Add(IntToStr(Int64(APort)));
+    AProcess.Options := [poUsePipes, poStderrToOutPut];
+    AProcess.Execute;
+
+    for LWait := 0 to 399 do
+    begin
+      AppendAvailableProcessOutput(AProcess, AOutput);
+      if (Pos(LReadyMarker, AOutput) > 0) and (Pos(LPortMarker, AOutput) > 0) then
+        Exit;
+      if not AProcess.Running then
+        Break;
+      Sleep(10);
+    end;
+  except
+    on E: Exception do
+    begin
+      StopExampleServer(AProcess, AOutput);
+      Fail('unable to start websocket example: ' + E.ClassName + ': ' + E.Message);
+    end;
+  end;
+
+  StopExampleServer(AProcess, AOutput);
+  Fail('websocket example did not reach ready state' + LineEnding + AOutput);
+end;
+
+procedure TestWebSocketEchoDemoServesDocumentedEndpoint;
+var
+  LBinaryPath: string;
+  LExampleDir: string;
+  LPort: UInt16;
+  LProcess: TProcess;
+  LStartupOutput: string;
+  LConn: ITcpStream;
+  LReq: string;
+  LHandshakeResp: string;
+  LFrame: string;
+  LPayload: string;
+begin
+  LProcess := nil;
+  LStartupOutput := '';
+  BuildWebSocketExample(LBinaryPath, LExampleDir);
+  LPort := ReserveLoopbackPort;
+  StartWebSocketExampleServer(LBinaryPath, LExampleDir, LPort, LProcess,
+    LStartupOutput);
+  try
+    CheckContains(LStartupOutput, 'try-websocket=', 'startup websocket marker');
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LReq := 'GET /ws HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Upgrade: websocket'#13#10 +
+        'Connection: Upgrade'#13#10 +
+        'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ=='#13#10 +
+        'Sec-WebSocket-Version: 13'#13#10 +
+        #13#10;
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LHandshakeResp := ReadTcpUntilContains(LConn, #13#10#13#10);
+      CheckContains(LHandshakeResp, 'HTTP/1.1 101',
+        'websocket echo demo handshake');
+
+      LFrame := BuildMaskedTextFrame('hello');
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+      LPayload := ReadServerTextFramePayload(LConn);
+      CheckEqual('echo=hello', LPayload, 'websocket echo demo payload');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopExampleServer(LProcess, LStartupOutput);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('http examples');
   T.Run('server options demo builds', @TestServerOptionsDemoBuilds);
   T.Run('server options demo serves documented endpoints',
     @TestServerOptionsDemoServesDocumentedEndpoints);
+  T.Run('websocket echo demo serves documented endpoint',
+    @TestWebSocketEchoDemoServesDocumentedEndpoint);
   T.Summary;
 end.

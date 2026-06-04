@@ -23,6 +23,7 @@ Run the examples instead of copy-pasting a partial snippet:
 make -C examples/nextpas.core.http/http_hello_server run
 make -C examples/nextpas.core.http/http_get_client run
 make -C examples/nextpas.core.http/http_server_options_demo run
+make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ```
 
 - `http_hello_server` shows `NewRouter`, `Router.Get(...)`,
@@ -33,6 +34,8 @@ make -C examples/nextpas.core.http/http_server_options_demo run
 - `http_server_options_demo` shows `THttpServerOptions.Backend`,
   `WriteTimeout`, `MaxHeaderSize`, `MaxBodySize`, and a runnable `POST /echo`
   path where oversize request bodies are rejected before the handler.
+- `http_websocket_echo_demo` shows `UpgradeWebSocket`, `IWebSocket.ReadFrame`,
+  `WriteText`, and `Close` on a runnable `/ws` echo endpoint.
 - The client defaults to `http://127.0.0.1:8080/hello/world?page=1`.
 - The server-options demo defaults to `threaded` on `127.0.0.1:8081`; pass
   `epoll` as the first arg on Linux to exercise the readiness backend.

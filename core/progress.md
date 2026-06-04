@@ -1,11 +1,10 @@
-# Progress Log: WebSocket outgoing text UTF-8 validation
+# Progress Log: WebSocket echo runnable example
 
 ## Session
 
-- **Scope:** 补齐 WebSocket outgoing `WriteText` UTF-8 validation。
+- **Scope:** 补齐 HTTP module 的 WebSocket runnable example 与 focused smoke。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket public API safety`
-  -> `outgoing text payload semantic validation`
+- **Roadmap Position:** `5/6 docs/examples` -> `WebSocket runnable example coverage`
 
 ## Current state
 
@@ -20,24 +19,24 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `OutgoingTextInvalidUtf8Rejected` focused proof。
-- `nextpas.core.http.websocket` 现在在 `WriteText` 写出前复用 text payload validation。
-- `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录新公开契约。
+- `test_http_examples` 新增 WebSocket echo demo build/run/raw-wire echo smoke。
+- 新增 `examples/nextpas.core.http/http_websocket_echo_demo`。
+- `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录新 runnable example。
 
 ## Verification
 
 - RED:
-  - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `28 total, 27 passed, 1 failed`
+  - `make -C tests/nextpas.core.http/test_http_examples test`
+  - `3 total, 2 passed, 1 failed`
   - failure:
-    - `outgoing-text-invalid-utf8: fail-fast reason: expected "WebSocket: invalid text payload encoding", got "�"`
+    - `websocket echo demo serves documented endpoint - unable to resolve core root from current directory or executable path`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
-  - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `28 total, 28 passed, 0 failed`
+  - `make -C tests/nextpas.core.http/test_http_examples test`
+  - `3 total, 3 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- WebSocket negative surface 已基本收口到真实 RED；下一刀建议转向 HttpServer examples/docs 或 remaining server runtime gaps。
-- 若继续 WebSocket，应先证明真实 RED，避免 `Pong` oversize 这类同路径 parity 覆盖。
+- 下一刀建议继续 `HttpServer 完成` 主线：优先找 remaining server runtime gap 或补 benchmark 规划前的 example/docs 缺口。
+- WebSocket negative API 面当前不应继续铺同路径 parity；只有发现真实 RED 再回到 WebSocket。
