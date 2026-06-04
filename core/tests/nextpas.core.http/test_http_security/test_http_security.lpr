@@ -711,23 +711,24 @@ begin
   end;
 end;
 
-{ Test 7: Slowloris — partial request, server should timeout and close }
-procedure TestSlowloris;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle;
-    LConn: ITcpStream; LBuf: array[0..1023] of Byte; LN: SizeUInt;
-    LOpts: THttpServerOptions; LResp: string; LClosed: Boolean;
-const PARTIAL = 'GET / HTTP/1.1'#13#10;
+procedure RunIdleTimeoutCloseSecurityCase(
+  const AOpts: THttpServerOptions; const APartial: string; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LBuf: array[0..1023] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LClosed: Boolean;
 begin
-  LOpts := THttpServerOptions.Default;
-  LOpts.IdleTimeout := 1000; { 1 second idle timeout }
-  LHandle := StartSecurityServer(LOpts, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LConn := TcpConnect('127.0.0.1', LPort);
     try
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
-      { Send partial request — only the request line, no CRLFCRLF }
-      LConn.Write(PARTIAL[1], SizeUInt(Length(PARTIAL)));
-      { Wait — server should timeout after 1s and close }
+      LConn.Write(APartial[1], SizeUInt(Length(APartial)));
       LResp := '';
       LClosed := False;
       repeat
@@ -744,15 +745,72 @@ begin
         else
           LClosed := True;
       until LClosed;
-      { Server must eventually close the connection — that's the key security property.
-        It may send a 400/408 error response first, or just close. }
-      Check(LClosed, 'Slowloris: server closed connection after timeout');
+
+      Check(LClosed, ALabel + ': server closed connection after timeout');
+      Check(Pos('HTTP/1.1 200', LResp) = 0,
+        ALabel + ': partial request must not reach success response');
+      Check(Pos('echo:', LResp) = 0,
+        ALabel + ': partial request must not reach echo handler');
     finally
       LConn.Close;
     end;
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+{ Test 7: Slowloris — partial request, server should timeout and close }
+procedure TestSlowloris;
+var
+  LOpts: THttpServerOptions;
+const
+  PARTIAL = 'GET / HTTP/1.1'#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 1000; { 1 second idle timeout }
+  RunIdleTimeoutCloseSecurityCase(LOpts, PARTIAL, 'Slowloris');
+end;
+
+procedure TestPartialFixedLengthBodyIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  PARTIAL =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'ab';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'Partial fixed-length body idle-timeout');
+end;
+
+procedure TestPartialChunkedTrailerIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  PARTIAL =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Test'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '3'#13#10 +
+    'abc'#13#10 +
+    '0'#13#10 +
+    'X-Test: value'#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'Partial chunked trailer idle-timeout');
 end;
 
 { Test 8: HTTP/0.9 request — no version. llhttp may reject or parse as HTTP/1.0 }
@@ -2212,6 +2270,62 @@ begin
     REQ,
     'epoll truncated trailer field CR EOF');
 end;
+
+procedure TestSlowlorisEpollBackend;
+const
+  PARTIAL = 'GET / HTTP/1.1'#13#10;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.IdleTimeout := 1000;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'epoll slowloris');
+end;
+
+procedure TestPartialFixedLengthBodyIdleTimeoutEpollBackend;
+const
+  PARTIAL =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'ab';
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.IdleTimeout := 200;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'epoll partial fixed-length body idle-timeout');
+end;
+
+procedure TestPartialChunkedTrailerIdleTimeoutEpollBackend;
+const
+  PARTIAL =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Test'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '3'#13#10 +
+    'abc'#13#10 +
+    '0'#13#10 +
+    'X-Test: value'#13#10;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := EpollSecurityServerOptions;
+  LOpts.IdleTimeout := 200;
+  RunIdleTimeoutCloseSecurityCase(
+    LOpts,
+    PARTIAL,
+    'epoll partial chunked trailer idle-timeout');
+end;
 {$ENDIF}
 
 { Main }
@@ -2249,6 +2363,10 @@ begin
   T.Run('Null byte in header -> 400', @TestHeaderNullByte);
   T.Run('Request line too long', @TestRequestLineTooLong);
   T.Run('Slowloris partial request', @TestSlowloris);
+  T.Run('Partial fixed-length body idle-timeout closes connection',
+    @TestPartialFixedLengthBodyIdleTimeout);
+  T.Run('Partial chunked trailer idle-timeout closes connection',
+    @TestPartialChunkedTrailerIdleTimeout);
   T.Run('HTTP/0.9 no version -> 400', @TestHttp09Request);
   T.Run('CRLF injection in path -> 400', @TestCrlfInjection);
   T.Run('Missing Host header -> 400', @TestMissingHost);
@@ -2360,6 +2478,12 @@ begin
     @TestTruncatedTrailerFieldCrAtEofEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
+  T.Run('Slowloris partial request with epoll backend',
+    @TestSlowlorisEpollBackend);
+  T.Run('Partial fixed-length body idle-timeout closes connection with epoll backend',
+    @TestPartialFixedLengthBodyIdleTimeoutEpollBackend);
+  T.Run('Partial chunked trailer idle-timeout closes connection with epoll backend',
+    @TestPartialChunkedTrailerIdleTimeoutEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
     @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',
