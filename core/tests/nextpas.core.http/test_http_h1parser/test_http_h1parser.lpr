@@ -1796,25 +1796,34 @@ procedure TestResetAndReparse;
 var
   LP: IH1Parser;
   LReq: string;
+  LReader: IReader;
 begin
   LP := NewH1RequestParser;
-  LReq := 'GET /first HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  LReq := 'POST /first HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 9'#13#10#13#10 +
+           'abcdefghi';
   LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(LP.IsComplete, 'first complete');
   CheckEqual('/first', LP.GetUrl, 'first url');
   CheckEqual('localhost', LP.GetHeaders.Get('Host'), 'first host');
+  CheckEqual(Int64(9), LP.GetBodySize, 'first body size');
+  CheckEqual('abcdefghi', LP.GetBody, 'first body');
+  LReader := LP.NewBodyReader;
 
   LP.Reset;
   LReq := 'POST /second HTTP/1.1'#13#10 +
            'Host: example.com'#13#10 +
-           'Content-Length: 3'#13#10#13#10 +
-           'abc';
+           'Content-Length: 2'#13#10#13#10 +
+           'xy';
   LP.Execute(PAnsiChar(LReq), Length(LReq));
   Check(LP.IsComplete, 'second complete');
   Check(LP.GetMethod = hmPost, 'second method POST');
   CheckEqual('/second', LP.GetUrl, 'second url');
   CheckEqual('example.com', LP.GetHeaders.Get('Host'), 'second host replaces first headers');
-  CheckEqual('abc', LP.GetBody, 'second body');
+  CheckEqual(Int64(2), LP.GetBodySize, 'second body size');
+  CheckEqual('xy', LP.GetBody, 'second shorter body does not include stale bytes');
+  CheckEqual('abcdefghi', ReadReaderStr(LReader), 'old body reader remains snapshot after reset');
 end;
 
 procedure TestRequestWithQuery;

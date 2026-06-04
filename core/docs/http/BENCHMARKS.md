@@ -264,3 +264,37 @@ command=make -C benchmarks/nextpas.core.http/bench_h1parser run
 with heaptrc reporting `0 unfreed memory blocks`. The H1 parser heaptrc
 allocation count dropped from the previous `1423` blocks to `1404` blocks in
 the focused parser gate.
+
+## Optimization Evidence: Parser Body Buffer Reuse
+
+On 2026-06-05 local time, `TH1Parser` changed request/response body storage
+from an exact-length dynamic array to a parser-owned capacity buffer plus an
+effective `FBodySize`. `Reset` now preserves body capacity, while `GetBody` and
+`NewBodyReader` only expose the current effective body bytes. `NewBodyReader`
+still returns a snapshot so parser buffer reuse cannot mutate older readers.
+
+The focused guard is `test_http_h1parser`'s `Reset and reparse` case: it parses
+a body-bearing request, keeps a body reader, resets, parses a shorter body, and
+proves the shorter body does not expose stale bytes while the old reader still
+sees its original body.
+
+Parser microbenchmark confirmation:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser run
+```
+
+| llhttp adapter workload | previous ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 641.8 | 644.2 |
+| 10 headers | 3284.4 | 3333.1 |
+| POST 1KB body | 1457.6 | 1404.6 |
+| pipeline 10 reqs | 6201.2 | 6206.8 |
+
+This is a narrow optimization: the body workload improved, while no-body rows
+remain effectively unchanged within local microbenchmark noise. It does not
+settle Pascal-translated llhttp versus C llhttp parity; that still needs a
+same-payload C llhttp comparator before making claims about translation cost.
+
+`test_http_h1parser` and `test_http_h1fast` both passed with heaptrc reporting
+`0 unfreed memory blocks`.

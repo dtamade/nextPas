@@ -75,6 +75,7 @@ type
     FUrl: string;
     FHeaders: IHttpHeaders;
     FBody: TBytes;
+    FBodySize: SizeUInt;
     FHeadersComplete: Boolean;
     FComplete: Boolean;
     FError: Boolean;
@@ -89,6 +90,8 @@ type
       const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
     function ValidateRequestTransferEncoding(
       const AParser: PTLlhttpInternalT): LongInt;
+    procedure EnsureBodyCapacity(const ARequired: SizeUInt);
+    function SnapshotBody: TBytes;
   public
     constructor Create(const AType: TH1ParserType;
       const ASkipBody: Boolean = False);
@@ -119,12 +122,13 @@ const
   INVALID_TRANSFER_ENCODING_REASON = 'Invalid `Transfer-Encoding` header value';
   UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
     'Unsupported `Transfer-Encoding` request coding';
+  BODY_TOO_LARGE_REASON = 'HTTP body buffer too large';
 
-function BytesToString(const AData: TBytes): string;
+function BytesToString(const AData: TBytes; const ASize: SizeUInt): string;
 begin
-  SetLength(Result, Length(AData));
-  if Length(AData) > 0 then
-    Move(AData[0], Result[1], Length(AData));
+  SetLength(Result, SizeInt(ASize));
+  if ASize > 0 then
+    Move(AData[0], Result[1], ASize);
 end;
 
 { TSharedBytesReader }
@@ -274,14 +278,19 @@ end;
 function CbOnBody(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
 var
   LSelf: TH1Parser;
-  LOldLen: SizeUInt;
+  LRequired: SizeUInt;
 begin
   LSelf := GetSelf(p0);
   if p2 > 0 then
   begin
-    LOldLen := SizeUInt(Length(LSelf.FBody));
-    SetLength(LSelf.FBody, LOldLen + p2);
-    Move(p1^, LSelf.FBody[LOldLen], p2);
+    if p2 > High(SizeUInt) - LSelf.FBodySize then
+      Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
+    LRequired := LSelf.FBodySize + p2;
+    if LRequired > SizeUInt(High(SizeInt)) then
+      Exit(LSelf.RejectWithUserError(BODY_TOO_LARGE_REASON, pekMalformed, p0));
+    LSelf.EnsureBodyCapacity(LRequired);
+    Move(p1^, LSelf.FBody[LSelf.FBodySize], p2);
+    LSelf.FBodySize := LRequired;
   end;
   Result := 0;
 end;
@@ -470,19 +479,19 @@ end;
 
 function TH1Parser.GetBody: string;
 begin
-  Result := BytesToString(FBody);
+  Result := BytesToString(FBody, FBodySize);
 end;
 
 function TH1Parser.GetBodySize: Int64;
 begin
-  Result := Int64(Length(FBody));
+  Result := Int64(FBodySize);
 end;
 
 function TH1Parser.NewBodyReader: IReader;
 begin
-  if Length(FBody) = 0 then
+  if FBodySize = 0 then
     Exit(nil);
-  Result := TSharedBytesReader.Create(FBody);
+  Result := TSharedBytesReader.Create(SnapshotBody);
 end;
 
 function TH1Parser.HeadersComplete: Boolean;
@@ -591,6 +600,29 @@ begin
   end;
 end;
 
+procedure TH1Parser.EnsureBodyCapacity(const ARequired: SizeUInt);
+var
+  LNewCapacity: SizeUInt;
+begin
+  if SizeUInt(Length(FBody)) >= ARequired then
+    Exit;
+
+  LNewCapacity := SizeUInt(Length(FBody));
+  if LNewCapacity < 256 then
+    LNewCapacity := 256;
+  while LNewCapacity < ARequired do
+    LNewCapacity := LNewCapacity * 2;
+  SetLength(FBody, SizeInt(LNewCapacity));
+end;
+
+function TH1Parser.SnapshotBody: TBytes;
+begin
+  Result := nil;
+  SetLength(Result, SizeInt(FBodySize));
+  if FBodySize > 0 then
+    Move(FBody[0], Result[0], FBodySize);
+end;
+
 function TH1Parser.HasError: Boolean;
 begin
   Result := FError;
@@ -613,7 +645,7 @@ begin
   FVersion := hvHttp11;
   FUrl := '';
   FHeaders.Clear;
-  FBody := nil;
+  FBodySize := 0;
   FHeadersComplete := False;
   FComplete := False;
   FError := False;

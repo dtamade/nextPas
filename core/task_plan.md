@@ -1,40 +1,35 @@
-# Task Plan: HTTP parser header reuse fast path
+# Task Plan: HTTP parser body buffer reuse
 
 ## Goal
 
-继续推进 `HttpServer 完成` 主线中的 `6/6 benchmark/performance` 阶段。上一批已经证明
-raw translated llhttp 状态机不是当前主要瓶颈，`IH1Parser` adapter materialization 才是更高收益
-区域。本轮聚焦 per-request header allocation：`TH1Parser.Reset` 旧实现每次都会创建新的
-`IHttpHeaders` 对象。
+继续推进 `HttpServer 完成` 主线中的 `6/6 benchmark/performance` 阶段。当前
+raw translated llhttp 诊断显示：在 nextPas 当前 H1 parser stack 内，主要成本仍来自
+`IH1Parser` adapter materialization，而不是裸 llhttp 状态机执行。本轮延续该方向，聚焦
+request/response body materialization。
 
-目标是在保持 headers public contract 可测试的前提下，为 `IHttpHeaders` 增加 `Clear`，并让
-`TH1Parser.Reset` 复用内部 header container，降低 repeated parse / keep-alive / benchmark 路径
-的分配与对象构造成本。
+旧实现中 `CbOnBody` 每次 body callback 都对 `FBody` 按有效长度重新 `SetLength`，
+`TH1Parser.Reset` 又直接释放 body array。目标是在不改变 `IH1Parser` public behavior 的前提下，
+让 parser-owned body buffer 可复用，并保留 `NewBodyReader` 的快照语义。
 
 ## Checklist
 
 - [x] 复核 `docs/design-conventions.md`、HTTP coverage/control 文件和 `git status`。
-- [x] 检查 `IHttpHeaders` / `THttpHeaders` 当前公开契约和 tests。
-- [x] 运行当前 `bench_h1parser` baseline。
-- [x] RED：新增 `IHttpHeaders.Clear` focused test，并确认缺失接口会失败。
-- [x] GREEN：实现 `IHttpHeaders.Clear` / `THttpHeaders.Clear`。
-- [x] 让 `TH1Parser.Reset` 复用 headers container。
-- [x] 增强 `Reset and reparse` parser guard，确认 Reset 后不串旧 header。
-- [x] 运行 headers / H1 parser / H1 fast focused tests + heaptrc。
-- [x] 运行 `bench_h1parser` after + confirmation。
-- [x] 更新 API coverage、benchmark 文档和控制文件。
+- [x] 保留并验证 `Reset and reparse` body guard：短 body 不暴露旧字节，旧 reader 在 Reset 后仍是快照。
+- [x] 将 `TH1Parser` body storage 改为 reusable capacity buffer + effective `FBodySize`。
+- [x] 确保 `GetBody` / `GetBodySize` / `NewBodyReader` 只暴露有效 body 区间。
+- [x] 跑 `test_http_h1parser` focused gate + heaptrc。
+- [x] 跑 `test_http_h1fast` differential gate + heaptrc。
+- [x] 跑 `bench_h1parser` after + confirmation。
+- [x] 用 `gpt-5.5 xhigh` 子代理只读审视 Pascal translated llhttp 性能归因。
+- [x] 更新 benchmark/control 文档。
 - [x] path-limited commit。
 
 ## Scope
 
 本轮只允许修改：
 
-- `src/nextpas.core.http.intf.pas`
-- `src/nextpas.core.http.headers.pas`
 - `src/nextpas.core.http.impl.h1.parser.pas`
-- `tests/nextpas.core.http/test_http_headers/test_http_headers.lpr`
 - `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
-- `docs/http/API_COVERAGE.md`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
@@ -42,6 +37,6 @@ raw translated llhttp 状态机不是当前主要瓶颈，`IH1Parser` adapter ma
 
 ## Intended outcome
 
-- `IHttpHeaders.Clear` 成为可复用 container 的明确 public contract。
-- parser Reset 不再为每个请求重新分配 headers object。
-- H1 parser benchmark 对 adapter allocation reduction 有明确投射证据。
+- parser Reset 不再释放 body capacity，repeated parse / POST body path 减少动态数组 resize。
+- body reader snapshot contract 明确被 focused test 锁住，避免 buffer reuse 引入 stale/mutated body 暴露。
+- benchmark 记录这轮 body buffer reuse 的真实收益边界：主要影响 body workload，不夸大为整体 parser/server parity。
