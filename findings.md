@@ -1,5 +1,25 @@
 # Findings & Decisions
 
+## 2026-06-04 http max-header 431 backpressure security proof
+
+- `test_http_security` 之前已经有 generic `MaxHeaderSize` 两条正向 raw-wire
+  `431` 证据：普通 header field over limit 与 request-target over limit
+  都会返回显式 `431`；`test_http_server` 也已锁住更窄的 server-layer
+  “不进入 handler” 语义。
+- 但 security 层此前仍缺这两条 direct-error 在 real-socket backpressure
+  尝试下的 safe-close 直接证据，也就是：
+  - 连接仍会在观察窗口内安全关闭
+  - wire 上至多暴露单一原始 `431` status-line 前缀
+  - 不会追加 synthetic `500`
+- 本轮在 `test_http_security` 新增 threaded / Linux `epoll` 四条 live proof，
+  直接锁定：
+  - `header field over MaxHeaderSize -> 431` 的 backpressure safe-close
+  - `request-target over MaxHeaderSize -> 431` 的 backpressure safe-close
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test`
+  结果为 `198/198 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：generic `MaxHeaderSize`
+  的两条 `431` direct-error runtime contract 与当前实现 truth 一致。
+
 ## 2026-06-04 http write-timeout follow-up suppression trio
 
 - `HttpServer` 的 real-socket write-timeout/backpressure live proof

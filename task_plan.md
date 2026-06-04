@@ -1,5 +1,25 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http max-header 431 backpressure security proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 direct-error raw-wire security proof，
+把 `header field over MaxHeaderSize -> 431` 与
+`request-target over MaxHeaderSize -> 431`
+在 backpressure 尝试下的 safe-close 语义补进 `test_http_security`，
+覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_security`、`test_http_server` 与 `API_COVERAGE`，确认
+  generic `MaxHeaderSize` 两条 `431` 路径仍缺 security 层 direct raw-wire/backpressure 证据。
+- [x] 新增 threaded / `epoll` 四条
+  `header field` / `request-target over MaxHeaderSize`
+  direct-error backpressure proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http write-timeout follow-up suppression trio
 
 ### Goal

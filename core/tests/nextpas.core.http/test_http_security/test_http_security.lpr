@@ -1899,6 +1899,8 @@ begin
 end;
 
 function BuildChunkedOversizeTrailerRequest: string; forward;
+function BuildHeaderFieldOverMaxHeaderSizeRequest: string; forward;
+function BuildRequestTargetOverMaxHeaderSizeRequest: string; forward;
 
 procedure TestExpectContinuePositiveFlow;
 begin
@@ -2047,6 +2049,32 @@ begin
     BuildChunkedOversizeTrailerRequest,
     'HTTP/1.1 431 Request Header Fields Too Large',
     'Oversize trailer direct error backpressure');
+end;
+
+procedure TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandling;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    BuildHeaderFieldOverMaxHeaderSizeRequest,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'Header field over MaxHeaderSize direct error backpressure');
+end;
+
+procedure TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandling;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    BuildRequestTargetOverMaxHeaderSizeRequest,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'Request-target over MaxHeaderSize direct error backpressure');
 end;
 
 procedure TestUnsupportedExpectBackpressureSafeHandling;
@@ -2318,6 +2346,34 @@ begin
     BuildChunkedOversizeTrailerRequest,
     'HTTP/1.1 431 Request Header Fields Too Large',
     'epoll oversize trailer direct error backpressure');
+end;
+
+procedure TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    BuildHeaderFieldOverMaxHeaderSizeRequest,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'epoll header field over MaxHeaderSize direct error backpressure');
+end;
+
+procedure TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    BuildRequestTargetOverMaxHeaderSizeRequest,
+    'HTTP/1.1 431 Request Header Fields Too Large',
+    'epoll request-target over MaxHeaderSize direct error backpressure');
 end;
 
 procedure TestUnsupportedExpectBackpressureSafeHandlingEpollBackend;
@@ -3684,6 +3740,29 @@ begin
             'X-Big: ' + LTrailerValue + #13#10#13#10;
 end;
 
+function BuildHeaderFieldOverMaxHeaderSizeRequest: string;
+var
+  LBig: string;
+begin
+  SetLength(LBig, 300);
+  FillChar(LBig[1], 300, Ord('A'));
+  Result := 'GET / HTTP/1.1'#13#10 +
+            'Host: x'#13#10 +
+            'X-Big: ' + LBig + #13#10 +
+            'Connection: close'#13#10#13#10;
+end;
+
+function BuildRequestTargetOverMaxHeaderSizeRequest: string;
+var
+  LPath: string;
+begin
+  SetLength(LPath, 400);
+  FillChar(LPath[1], 400, Ord('a'));
+  Result := 'GET /' + LPath + ' HTTP/1.1'#13#10 +
+            'Host: x'#13#10 +
+            'Connection: close'#13#10#13#10;
+end;
+
 procedure RunChunkedOversizeTrailerUsesMaxHeaderSize(
   const AOpts: THttpServerOptions; const ALabel: string);
 var
@@ -4757,6 +4836,10 @@ begin
     @TestTruncatedTrailerFieldLineEofBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
+  T.Run('Header field over MaxHeaderSize direct error backpressure safe handling',
+    @TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandling);
+  T.Run('Request-target over MaxHeaderSize direct error backpressure safe handling',
+    @TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandling);
   T.Run('Queued follow-up 400 preserves wire order',
     @TestQueuedFollowUp400PreservesWireOrder);
   T.Run('Queued follow-up 501 preserves wire order',
@@ -4963,6 +5046,10 @@ begin
     @TestTruncatedTrailerFieldLineEofBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
+  T.Run('Header field over MaxHeaderSize direct error backpressure safe handling with epoll backend',
+    @TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandlingEpollBackend);
+  T.Run('Request-target over MaxHeaderSize direct error backpressure safe handling with epoll backend',
+    @TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandlingEpollBackend);
   T.Run('Queued follow-up 400 preserves wire order with epoll backend',
     @TestQueuedFollowUp400PreservesWireOrderEpollBackend);
   T.Run('Queued follow-up 501 preserves wire order with epoll backend',

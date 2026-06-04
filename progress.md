@@ -1,5 +1,33 @@
 # Progress Log
 
+## Session: 2026-06-04 http max-header 431 backpressure security proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining generic `MaxHeaderSize` direct-error raw-wire gap in
+    `test_http_security`
+  - directly prove `header field over limit` and `request-target over limit`
+    both safe-close under backpressure on threaded and Linux `epoll`
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestHeaderFieldOverMaxHeaderSizeBackpressureSafeHandling`
+  - added `TestRequestTargetOverMaxHeaderSizeBackpressureSafeHandling`
+  - added both matching `epoll` variants
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `198/198 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `direct-error raw-wire security proof`
+  - this batch:
+    `MaxHeaderSize 431 backpressure`
+
 ## Session: 2026-06-04 http write-timeout follow-up suppression trio
 
 - **Status:** completed.
