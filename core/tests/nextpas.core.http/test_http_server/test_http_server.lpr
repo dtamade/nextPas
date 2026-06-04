@@ -4013,6 +4013,138 @@ begin
   RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp501('epoll', LHttpOpts);
 end;
 
+procedure RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+const
+  PIPELINED_REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUpError(
+    ABackendName,
+    ABackendName + ' payload-too-large follow-up backpressure',
+    PIPELINED_REQ,
+    'HTTP/1.1 413',
+    AHttpOpts);
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.MaxBodySize := 2;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413EpollBackend;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.MaxBodySize := 2;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413('epoll', LHttpOpts);
+end;
+
+procedure RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+const
+  PIPELINED_REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'GET /too-many-headers HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'X-Long: 0123456789012345678901234567890123456789'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUpError(
+    ABackendName,
+    ABackendName + ' header-too-large follow-up backpressure',
+    PIPELINED_REQ,
+    'HTTP/1.1 431',
+    AHttpOpts);
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.MaxHeaderSize := 64;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431EpollBackend;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.MaxHeaderSize := 64;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431('epoll', LHttpOpts);
+end;
+
+procedure RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417(
+  const ABackendName: string; const AHttpOpts: THttpServerOptions);
+const
+  PIPELINED_REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /unsupported-expect HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUpError(
+    ABackendName,
+    ABackendName + ' unsupported Expect follow-up backpressure',
+    PIPELINED_REQ,
+    'HTTP/1.1 417',
+    AHttpOpts);
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417('threaded', LHttpOpts);
+end;
+
+procedure TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417EpollBackend;
+var
+  LHttpOpts: THttpServerOptions;
+const
+  WRITE_TIMEOUT_MS = 50;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := WRITE_TIMEOUT_MS;
+  LHttpOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417('epoll', LHttpOpts);
+end;
+
 procedure RunRealSocketQueuedFollowUpErrorPreservesWireOrder(
   const ALabel, ARequest, AExpectedStatusLine: string;
   const AHttpOpts: THttpServerOptions);
@@ -10920,6 +11052,12 @@ begin
     @TestRealSocketWriteTimeoutBackpressureStopsPipelineEpollBackend);
   T.Run('Real socket write timeout backpressure does not emit follow-up 400 with epoll backend',
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400EpollBackend);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 413 with epoll backend',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413EpollBackend);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 431 with epoll backend',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431EpollBackend);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 417 with epoll backend',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417EpollBackend);
   T.Run('Real socket write timeout backpressure does not emit follow-up 501 with epoll backend',
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp501EpollBackend);
   T.Run('Real socket write timeout ignores slow buffered handler with epoll backend',
@@ -11072,6 +11210,12 @@ begin
     @TestRealSocketWriteTimeoutBackpressureStopsPipeline);
   T.Run('Real socket write timeout backpressure does not emit follow-up 400',
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp400);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 413',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 431',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431);
+  T.Run('Real socket write timeout backpressure does not emit follow-up 417',
+    @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417);
   T.Run('Real socket write timeout backpressure does not emit follow-up 501',
     @TestRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp501);
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);

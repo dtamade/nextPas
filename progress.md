@@ -1,5 +1,34 @@
 # Progress Log
 
+## Session: 2026-06-04 http write-timeout follow-up suppression trio
+
+- **Status:** completed.
+- Objective:
+  - close the remaining `HttpServer` write-timeout/backpressure live gaps for
+    follow-up `413` / `431` / `417`
+  - directly prove those follow-up errors are not emitted once the first
+    response drain times out under backpressure
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp413`
+  - added `RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp431`
+  - added `RunRealSocketWriteTimeoutBackpressureDoesNotEmitFollowUp417`
+  - added threaded / `epoll` tests for all three follow-up statuses
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `228/228 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `write-timeout/backpressure runtime truth`
+  - this batch:
+    `follow-up 413/431/417 suppression`
+
 ## Session: 2026-06-04 http truncated trailer field-line backpressure proof
 
 - **Status:** completed.

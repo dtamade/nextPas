@@ -1,5 +1,23 @@
 # Findings & Decisions
 
+## 2026-06-04 http write-timeout follow-up suppression trio
+
+- `HttpServer` 的 real-socket write-timeout/backpressure live proof
+  之前只直接锁了 follow-up malformed `400` 与 follow-up unsupported
+  transfer-coding `501` 不会误漏到 wire；同一运行时风险面的
+  follow-up `413 Payload Too Large`、`431 Request Header Fields Too Large`
+  与 `417 Expectation Failed` 还缺 live 证据。
+- 本轮在 `test_http_server` 新增 threaded / Linux `epoll` 六条 live proof，
+  直接锁定：
+  - 当首个大响应已开始排出、连接因 backpressure 命中 `WriteTimeout`
+    而关闭时，后续 follow-up `413/431/417` 不会误漏到 wire
+  - wire 上仍只保留首个 `200` status line，不会追加第二条状态行
+  - 首个请求仍只会处理一次
+- focused gate `make -C tests/nextpas.core.http/test_http_server clean test`
+  结果为 `228/228 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：这组三条
+  write-timeout/backpressure runtime contract 与当前实现 truth 一致。
+
 ## 2026-06-04 http truncated trailer field-line backpressure proof
 
 - `truncated trailer field line EOF` 之前在 `test_http_h1parser` 已有 parser error

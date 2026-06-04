@@ -1,5 +1,24 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http write-timeout follow-up suppression trio
+
+### Goal
+
+继续补 `nextpas.core.http` 的 `HttpServer` write-timeout/backpressure
+runtime contract，把 follow-up `413` / `431` / `417`
+在首个大响应被背压卡住时“不应误漏到 wire” 的 live proof
+补进 `test_http_server`，覆盖 threaded / Linux `epoll` 两条路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server` 与 `API_COVERAGE`，确认
+  `write-timeout backpressure does not emit follow-up` 目前只锁了
+  `400` / `501`，而 `413` / `431` / `417` 仍缺 live 证据。
+- [x] 新增 threaded / `epoll` 六条
+  `follow-up 413/431/417 does not emit under write-timeout backpressure` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_server clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http truncated trailer field-line backpressure proof
 
 ### Goal
