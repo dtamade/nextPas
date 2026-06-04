@@ -198,8 +198,10 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
 - readiness-family runtime owner 现在已经独立成
   `nextpas.core.net.server.readiness`，说明 future `kqueue` 不必再复制整套
   listener/poll/completion/deadline 驱动骨架；剩余缺口已进一步收窄到
-  backend registration 与 host-specific wake seam。
-- `platform.io` poller 现在也有 wake seam；Linux 先用 `eventfd` 落地。
+  backend registration 与 BSD/macOS live proof。
+- `platform.io` poller 现在也有 wake seam：
+  Linux 用 `eventfd`，BSD/macOS `kqueue` 分支也已用 nonblocking self-pipe
+  落地 `enable_wake / wake / drain_wake`。
 - `epoll` backend 现在会把 poll-driven session 的 worker completion 先排队回 reactor，
   再在 reactor 线程执行 completion，并用 synthetic re-entry 继续推进该 session。
 - `epoll` backend 现在也已具备 poll-driven session deadline wake seam：

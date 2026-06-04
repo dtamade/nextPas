@@ -1,34 +1,34 @@
-# Task Plan: net.server readiness runtime owner extraction
+# Task Plan: platform.io kqueue wake seam
 
 ## Goal
 
-把 `epoll` 内已经与 Linux syscall 脱钩的 readiness-family runtime owner
-正式抽成共享 internal unit：
+补齐 BSD/macOS `kqueue` 分支缺失的 poller wake seam，让
+`nextpas.core.net.server.readiness` 不再卡在 host-specific wake stub 上：
 
-- 新增 `nextpas.core.net.server.readiness`
-- 让 `epoll` backend 退成 Linux 命名工厂包装
-- 用 focused tests 直接锁定 generic readiness owner 的 worker-completion
-  wake / re-entry 契约
-- 保持 HTTP server contract 全量不回退
+- 为 `TPlatformPoller` 增加 `WakeReadFd` / `WakeWriteFd`
+- 实现 `platform_poller_enable_wake`
+- 实现 `platform_poller_wake`
+- 实现 `platform_poller_drain_wake`
+- 用 focused test 锁定 source-contract，并确认 Linux readiness 基线不回退
 
 ## Checklist
 
-- [x] 重新检查 shared checkout 状态，只处理 `net.server` / `http` 相关路径
-- [x] 审阅 `docs/net/ARCHITECTURE.md`、HTTP/runtime 计划文件与当前源码边界
-- [x] 先写 RED：`test_net_server` 直接引用尚不存在的 `nextpas.core.net.server.readiness`
-- [x] 新增 `src/nextpas.core.net.server.readiness.pas`
-- [x] 让 `src/nextpas.core.net.server.epoll.pas` 退成薄包装
-- [x] 跑 focused `test_net_server`
-- [x] 跑 module gate `test_http_server`
+- [x] 重新检查 shared checkout 状态，只处理 `platform.io` / `net.server` 相关路径
+- [x] 审阅 `docs/design-conventions.md`、控制文件、`docs/net/ARCHITECTURE.md`
+- [x] 先写 RED：给 `test_platform_io` 增加 `kqueue wake` source-contract focused test
+- [x] 为 BSD/macOS poller 增加 wake pipe 状态
+- [x] 实现 `enable_wake / wake / drain_wake`
+- [x] 跑 focused `test_platform_io`
+- [x] 跑 module gate `test_net_server`
 - [x] 更新必要架构文档与控制文件
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `src/nextpas.core.net.server.readiness.pas`
-  - `src/nextpas.core.net.server.epoll.pas`
-  - `tests/nextpas.core.net.server/test_net_server/test_net_server.lpr`
+  - `src/nextpas.core.platform.io.base.pas`
+  - `src/nextpas.core.platform.io.pas`
+  - `tests/nextpas.core.platform.io/test_platform_io/test_platform_io.lpr`
   - `docs/net/ARCHITECTURE.md`
   - `task_plan.md`
   - `findings.md`
@@ -38,6 +38,8 @@
 
 ## Intended outcome
 
-- readiness-family runtime owner 从 Linux `epoll` 私有实现里继续抽离
-- future `kqueue` 可以复用 shared readiness owner，而不是复制主循环骨架
-- 现有 `epoll` / HTTP contract 保持稳定，并有 focused tests + heaptrc 证据
+- BSD/macOS `kqueue` poller 不再在 wake 路径上返回 stub
+- readiness-family runtime owner 的剩余缺口从 host wake seam 缩到
+  `net.server.kqueue` backend 真正接线与实机验证
+- 现有 Linux `platform.io` / `net.server` contract 保持稳定，并有 focused tests
+  + heaptrc 证据

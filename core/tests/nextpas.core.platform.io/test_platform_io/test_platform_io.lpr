@@ -3,6 +3,8 @@ program test_platform_io;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.platform.io.base,
   nextpas.core.platform.io,
   nextpas.core.platform.posix.ffi,
@@ -10,6 +12,93 @@ uses
 
 var
   T: TTestRunner;
+
+function ExpandRepoPath(const ARelativePath: string): string;
+begin
+  Result := ExpandFileName('../../../' + ARelativePath);
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandRepoPath(ARelativePath);
+  Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LowerCase(LLines.Text);
+  finally
+    LLines.Free;
+  end;
+end;
+
+function ExtractFunctionSource(const ASource, AName: string): string;
+var
+  LLines: TStringList;
+  LLine: string;
+  LFound: Boolean;
+  LHasBody: Boolean;
+  LIndex: Integer;
+  LDeleteLen: Integer;
+begin
+  Result := '';
+  LLines := TStringList.Create;
+  try
+    LLines.Text := ASource;
+    LFound := False;
+    LHasBody := False;
+    for LIndex := 0 to LLines.Count - 1 do
+    begin
+      LLine := TrimLeft(LLines[LIndex]);
+      if not LFound then
+      begin
+        if Pos('function ' + AName + '(', LowerCase(LLine)) = 1 then
+        begin
+          Result := LLines[LIndex];
+          LFound := True;
+        end;
+        Continue;
+      end;
+
+      if Result <> '' then
+        Result := Result + LineEnding;
+      Result := Result + LLines[LIndex];
+
+      if Pos('begin', LowerCase(LLine)) > 0 then
+        LHasBody := True
+      else if LHasBody and
+        ((Pos('function ', LowerCase(LLine)) = 1) or
+         (Pos('procedure ', LowerCase(LLine)) = 1)) then
+      begin
+        LDeleteLen := Length(LLines[LIndex]);
+        if Result <> '' then
+          Inc(LDeleteLen, Length(LineEnding));
+        Delete(Result, Length(Result) - LDeleteLen + 1, LDeleteLen);
+        Break;
+      end;
+    end;
+  finally
+    LLines.Free;
+  end;
+  Check(LFound, 'function source should exist: ' + AName);
+end;
+
+function ExtractKqueueRegion(const ASource: string): string;
+const
+  StartMarker = '{$if defined(nextpas_macos) or defined(nextpas_freebsd)}';
+  EndMarker = '{$ifdef nextpas_windows}';
+var
+  LStartPos: SizeInt;
+  LEndPos: SizeInt;
+begin
+  LStartPos := Pos(StartMarker, ASource);
+  Check(LStartPos > 0, 'kqueue source region should exist');
+  LEndPos := Pos(EndMarker, ASource);
+  Check(LEndPos > LStartPos, 'windows source region should follow kqueue region');
+  Result := Copy(ASource, LStartPos, LEndPos - LStartPos);
+end;
 
 procedure TestCreateClose;
 var
@@ -149,6 +238,76 @@ begin
   platform_poller_close(P);
 end;
 
+procedure TestKqueueWakeSourceContract;
+var
+  LBaseSource: string;
+  LIoSource: string;
+  LKqueueSource: string;
+  LCloseSource: string;
+  LNonBlockingSource: string;
+  LCloseOnExecSource: string;
+  LEnableWakeSource: string;
+  LWakeSource: string;
+  LDrainWakeSource: string;
+begin
+  LBaseSource := LoadSourceText('src/nextpas.core.platform.io.base.pas');
+  Check(Pos('wakereadfd: int32;', LBaseSource) > 0,
+    'bsd/macOS poller should track wake read fd');
+  Check(Pos('wakewritefd: int32;', LBaseSource) > 0,
+    'bsd/macOS poller should track wake write fd');
+
+  LIoSource := LoadSourceText('src/nextpas.core.platform.io.pas');
+  LKqueueSource := ExtractKqueueRegion(LIoSource);
+
+  LCloseSource := ExtractFunctionSource(LKqueueSource, 'platform_poller_close');
+  Check(Pos('wakereadfd', LCloseSource) > 0,
+    'kqueue close should release wake read fd');
+  Check(Pos('wakewritefd', LCloseSource) > 0,
+    'kqueue close should release wake write fd');
+
+  LNonBlockingSource := ExtractFunctionSource(LKqueueSource, 'setfdnonblocking');
+  Check(Pos('f_setfl', LNonBlockingSource) > 0,
+    'kqueue wake helper should set nonblocking mode');
+  Check(Pos('o_nonblock', LNonBlockingSource) > 0,
+    'kqueue wake helper should use O_NONBLOCK');
+
+  LCloseOnExecSource := ExtractFunctionSource(LKqueueSource, 'setfdcloseonexec');
+  Check(Pos('f_setfd', LCloseOnExecSource) > 0,
+    'kqueue wake helper should set close-on-exec');
+  Check(Pos('fd_cloexec', LCloseOnExecSource) > 0,
+    'kqueue wake helper should use FD_CLOEXEC');
+
+  LEnableWakeSource := ExtractFunctionSource(LKqueueSource,
+    'platform_poller_enable_wake');
+  Check(Pos('result := -1;', LEnableWakeSource) = 0,
+    'kqueue enable wake should not remain a stub');
+  Check(Pos('pipe(@', LEnableWakeSource) > 0,
+    'kqueue enable wake should create a self-pipe');
+  Check(Pos('setfdnonblocking', LEnableWakeSource) > 0,
+    'kqueue enable wake should call the nonblocking helper');
+  Check(Pos('setfdcloseonexec', LEnableWakeSource) > 0,
+    'kqueue enable wake should call the close-on-exec helper');
+  Check(Pos('platform_poller_add', LEnableWakeSource) > 0,
+    'kqueue enable wake should register the read end');
+
+  LWakeSource := ExtractFunctionSource(LKqueueSource, 'platform_poller_wake');
+  Check(Pos('result := -1;', LWakeSource) = 0,
+    'kqueue wake should not remain a stub');
+  Check(Pos('write(', LWakeSource) > 0,
+    'kqueue wake should signal through write');
+  Check(Pos('wakewritefd', LWakeSource) > 0,
+    'kqueue wake should use the write end');
+
+  LDrainWakeSource := ExtractFunctionSource(LKqueueSource,
+    'platform_poller_drain_wake');
+  Check(Pos('result := -1;', LDrainWakeSource) = 0,
+    'kqueue drain wake should not remain a stub');
+  Check(Pos('read(', LDrainWakeSource) > 0,
+    'kqueue drain wake should read until empty');
+  Check(Pos('esyseagain', LDrainWakeSource) > 0,
+    'kqueue drain wake should tolerate EAGAIN');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestWakeDrain;
 var
@@ -186,6 +345,7 @@ begin
   T.Run('remove stops events', @TestRemove);
   T.Run('userdata preserved', @TestUserData);
   T.Run('multiple fds', @TestMultipleFds);
+  T.Run('kqueue wake source contract', @TestKqueueWakeSourceContract);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('wake drain', @TestWakeDrain);
   {$ENDIF}

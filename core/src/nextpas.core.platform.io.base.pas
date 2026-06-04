@@ -28,6 +28,8 @@ type
     WakeFd: Int32;
   {$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
     KqueueFd: Int32;
+    WakeReadFd: Int32;
+    WakeWriteFd: Int32;
   {$ELSEIF defined(NEXTPAS_WINDOWS)}
     Entries: Pointer;
     Count: Int32;

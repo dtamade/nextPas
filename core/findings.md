@@ -1,60 +1,60 @@
-# Findings: net.server readiness runtime owner extraction
+# Findings: platform.io kqueue wake seam
 
 ## Scope
 
-- 本轮留在 `nextpas.core.net.server` foundation，并验证 HTTP 不回退。
-- 目标不是新增 HTTP 公开功能，而是把 readiness-family runtime owner
-  从 `epoll` Linux 专属单元里继续抽离。
+- 本轮继续留在 `nextpas.core.net.server` foundation 线路。
+- 目标不是扩 HTTP public behavior，而是把 BSD/macOS `kqueue` host wake seam
+  从 stub 补成可复用实现。
 
 ## Confirmed truths
 
-### 1. readiness-family 的剩余高价值问题不是“再写一份 kqueue”
+### 1. readiness owner 已抽出后，剩余最高价值缺口就是 `kqueue` wake seam
 
-- 当前 `epoll` backend 已经大量依赖 `platform_poller_*` 抽象。
-- 继续把 owner 留在 `nextpas.core.net.server.epoll`，只会让 future `kqueue`
-  再复制一份 listener/poll/completion/deadline 主循环。
+- `nextpas.core.net.server.readiness` 已经拥有 listener/poll/completion/deadline
+  主循环骨架。
+- 如果 `platform_poller_enable_wake / wake / drain_wake` 在 BSD/macOS 仍是 stub，
+  那 `net.server.kqueue` 仍然无法安全复用这条 owner。
 
-### 2. 真正应抽出来的是 readiness runtime owner 本身
+### 2. 当前宿主是 Linux，不能伪造 BSD/macOS live proof
 
-- `runtime.pas` 已经拥有 poll target / completion queue / session context 这些底层 helper。
-- 但在这轮之前，真正把这些 helper 组合成“可运行 readiness backend”的 owner
-  还在 `epoll.pas` 里。
-- 这意味着 phase-5 `kqueue` 仍缺一个可复用的共享 owner。
+- 这轮最诚实的 RED/GREEN 形状不是“宣称 kqueue 已实机跑通”，而是：
+  - source-contract focused test 锁定源码不再是 stub
+  - Linux 侧跑 `test_net_server`，确认 foundation 基线不回退
 
-### 3. 这轮最合理的切法是：新增 internal unit，而不是改 public API
+### 3. 这轮最稳妥的实现是 self-pipe，而不是额外扩 `EVFILT_USER`
 
-- 新增 `nextpas.core.net.server.readiness` 后：
-  - `epoll` 可以退成 Linux 命名工厂包装
-  - `test_net_server` 可以直接对 shared readiness owner 做 focused proof
-  - HTTP facade 与 `ITcpServer` contract 不需要变化
+- 现有 POSIX seam 已经有 `pipe`、`fcntl`、`read`、`write`、`close`。
+- 直接落 nonblocking + close-on-exec 的 self-pipe，风险最低，也最符合当前
+  “先把基础契约做实”的节奏。
 
-### 4. 这轮已经把 readiness owner 抽实
+### 4. `kqueue` wake seam 现在已落地
 
-- `nextpas.core.net.server.readiness.pas` 现在拥有：
-  - listener readiness
-  - poll-driven session 注册
-  - worker-completion -> reactor re-entry
-  - deadline wake
-  - shutdown wake / fallback self-connect
-- `nextpas.core.net.server.epoll.pas` 现在只保留 Linux backend 工厂入口。
+- `TPlatformPoller` 现在有 `WakeReadFd` / `WakeWriteFd`
+- `platform_poller_close` 现在会关闭 wake pipe
+- `platform_poller_enable_wake` 现在会创建 self-pipe、设置 nonblocking /
+  close-on-exec，并把 read end 注册进 poller
+- `platform_poller_wake` 现在会向 write end 写入 wake byte，并把 full-pipe
+  `EAGAIN` 视作“已经唤醒”
+- `platform_poller_drain_wake` 现在会循环读取直到 `EAGAIN`
 
 ## Verification evidence
 
 - RED:
-  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - 先因缺失 `nextpas.core.net.server.readiness` 编译失败
+  - `make -C tests/nextpas.core.platform.io/test_platform_io clean test`
+  - 初次失败点：
+    - `FAIL: kqueue wake source contract - bsd/macOS poller should track wake read fd`
 - GREEN:
-  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - `23/23 passed`
+  - `make -C tests/nextpas.core.platform.io/test_platform_io clean test`
+  - `9/9 passed`
   - heaptrc: `0 unfreed memory blocks`
 - module gate:
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `173/173 passed`
+  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - `23/23 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- `kqueue` backend 还没真正注册/落地。
-- BSD/macOS `platform_poller_enable_wake` / `wake` / `drain_wake` 仍未实现，所以
-  readiness owner 虽已抽出，但 `kqueue` host wake seam 还差最后一段。
-- Windows `IOCP` completion-aware driver 仍是后续 phase，不在本轮范围。
+- `net.server.kqueue` backend 还没真正注册/落地；这现在是 readiness-family
+  下一刀的主目标。
+- 还没有 BSD/macOS 实机 compile/runtime proof；后续需要在真实宿主上补充。
+- Windows `IOCP` completion-family driver 仍是后续 phase，不在本轮范围。

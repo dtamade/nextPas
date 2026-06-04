@@ -200,10 +200,40 @@ uses
   nextpas.core.platform.freebsd.ffi;
   {$ENDIF}
 
+function SetFdNonBlocking(AFd: Int32): Int32;
+var
+  LFlags: PtrInt;
+begin
+  LFlags := fcntl(AFd, F_GETFL, 0);
+  if LFlags < 0 then
+    Exit(platform_get_errno);
+  if (LFlags and O_NONBLOCK) <> 0 then
+    Exit(0);
+  if fcntl(AFd, F_SETFL, LFlags or O_NONBLOCK) < 0 then
+    Exit(platform_get_errno);
+  Result := 0;
+end;
+
+function SetFdCloseOnExec(AFd: Int32): Int32;
+var
+  LFlags: PtrInt;
+begin
+  LFlags := fcntl(AFd, F_GETFD, 0);
+  if LFlags < 0 then
+    Exit(platform_get_errno);
+  if (LFlags and FD_CLOEXEC) <> 0 then
+    Exit(0);
+  if fcntl(AFd, F_SETFD, LFlags or FD_CLOEXEC) < 0 then
+    Exit(platform_get_errno);
+  Result := 0;
+end;
+
 function platform_poller_create(out APoller: TPlatformPoller): Int32;
 begin
   FillChar(APoller, SizeOf(APoller), 0);
   APoller.KqueueFd := -1;
+  APoller.WakeReadFd := -1;
+  APoller.WakeWriteFd := -1;
   APoller.KqueueFd := kqueue;
   if APoller.KqueueFd < 0 then
     Result := platform_get_errno
@@ -213,6 +243,16 @@ end;
 
 function platform_poller_close(var APoller: TPlatformPoller): Int32;
 begin
+  if APoller.WakeReadFd >= 0 then
+  begin
+    close(APoller.WakeReadFd);
+    APoller.WakeReadFd := -1;
+  end;
+  if APoller.WakeWriteFd >= 0 then
+  begin
+    close(APoller.WakeWriteFd);
+    APoller.WakeWriteFd := -1;
+  end;
   if APoller.KqueueFd >= 0 then
   begin
     close(APoller.KqueueFd);
@@ -320,18 +360,117 @@ end;
 
 function platform_poller_enable_wake(var APoller: TPlatformPoller;
   AUserData: Pointer): Int32;
+var
+  LFds: array[0..1] of Int32;
+  LErrno: Int32;
 begin
-  Result := -1;
+  if (APoller.WakeReadFd >= 0) and (APoller.WakeWriteFd >= 0) then
+    Exit(0);
+
+  if APoller.WakeReadFd >= 0 then
+  begin
+    close(APoller.WakeReadFd);
+    APoller.WakeReadFd := -1;
+  end;
+  if APoller.WakeWriteFd >= 0 then
+  begin
+    close(APoller.WakeWriteFd);
+    APoller.WakeWriteFd := -1;
+  end;
+
+  LFds[0] := -1;
+  LFds[1] := -1;
+  if pipe(@LFds[0]) <> 0 then
+    Exit(platform_get_errno);
+  LErrno := SetFdNonBlocking(LFds[0]);
+  if LErrno <> 0 then
+  begin
+    Result := LErrno;
+    close(LFds[0]);
+    close(LFds[1]);
+    Exit(Result);
+  end;
+  LErrno := SetFdNonBlocking(LFds[1]);
+  if LErrno <> 0 then
+  begin
+    Result := LErrno;
+    close(LFds[0]);
+    close(LFds[1]);
+    Exit(Result);
+  end;
+  LErrno := SetFdCloseOnExec(LFds[0]);
+  if LErrno <> 0 then
+  begin
+    Result := LErrno;
+    close(LFds[0]);
+    close(LFds[1]);
+    Exit(Result);
+  end;
+  LErrno := SetFdCloseOnExec(LFds[1]);
+  if LErrno <> 0 then
+  begin
+    Result := LErrno;
+    close(LFds[0]);
+    close(LFds[1]);
+    Exit(Result);
+  end;
+
+  APoller.WakeReadFd := LFds[0];
+  APoller.WakeWriteFd := LFds[1];
+  Result := platform_poller_add(APoller, APoller.WakeReadFd, [peReadable],
+    AUserData);
+  if Result <> 0 then
+  begin
+    close(APoller.WakeReadFd);
+    close(APoller.WakeWriteFd);
+    APoller.WakeReadFd := -1;
+    APoller.WakeWriteFd := -1;
+  end;
 end;
 
 function platform_poller_wake(var APoller: TPlatformPoller): Int32;
+var
+  LByte: Byte;
+  LWritten: ssize_t;
+  LErrno: Int32;
 begin
-  Result := -1;
+  if APoller.WakeWriteFd < 0 then
+    Exit(ESysEOPNOTSUPP);
+  LByte := 1;
+  repeat
+    LWritten := write(APoller.WakeWriteFd, @LByte, 1);
+    if LWritten = 1 then
+      Exit(0);
+    if LWritten >= 0 then
+      Exit(ESysEIO);
+    LErrno := platform_get_errno;
+    if (LErrno = ESysEAGAIN) or (LErrno = ESysEWOULDBLOCK) then
+      Exit(0);
+    if LErrno <> ESysEINTR then
+      Exit(LErrno);
+  until False;
 end;
 
 function platform_poller_drain_wake(var APoller: TPlatformPoller): Int32;
+var
+  LBuffer: array[0..63] of Byte;
+  LRead: ssize_t;
+  LErrno: Int32;
 begin
-  Result := -1;
+  if APoller.WakeReadFd < 0 then
+    Exit(ESysEOPNOTSUPP);
+  repeat
+    LRead := read(APoller.WakeReadFd, @LBuffer[0], SizeOf(LBuffer));
+    if LRead > 0 then
+      Continue;
+    if LRead = 0 then
+      Exit(0);
+    LErrno := platform_get_errno;
+    if (LErrno = ESysEAGAIN) or (LErrno = ESysEWOULDBLOCK) then
+      Exit(0);
+    if LErrno <> ESysEINTR then
+      Exit(LErrno);
+  until False;
 end;
 {$ENDIF}
 
