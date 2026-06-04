@@ -109,6 +109,16 @@ begin
   Result := Base64Encode(LBytes);
 end;
 
+function IsValidOpcode(const AOpcode: Byte): Boolean;
+begin
+  case AOpcode of
+    $0, $1, $2, $8, $9, $A:
+      Result := True;
+  else
+    Result := False;
+  end;
+end;
+
 { UpgradeWebSocket }
 
 function UpgradeWebSocket(const AReq: IHttpRequest;
@@ -197,6 +207,8 @@ begin
   ReadExact(LHdr[0], 2);
   Result.Fin := (LHdr[0] and $80) <> 0;
   LOpcode := LHdr[0] and $0F;
+  if not IsValidOpcode(LOpcode) then
+    raise EHttpError.Create('WebSocket: reserved or invalid opcode');
   Result.Opcode := TWebSocketOpcode(LOpcode);
   LMasked := (LHdr[1] and $80) <> 0;
   LPayloadLen := LHdr[1] and $7F;
