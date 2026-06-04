@@ -1,13 +1,12 @@
-# Progress Log: expect interim-100 body-stall idle-timeout truth
+# Progress Log: expect interim-100 body-stall server contract proof
 
 ## Session
 
-- **Scope:** 锁住 `Expect: 100-continue` 已发出 interim `100` 后，
-  partial request body stall 的 request-side `IdleTimeout` 语义；要求
-  threaded / Linux `epoll` 两条 live path 都安全关闭，且不追加 synthetic
-  `500`。
+- **Scope:** 承接上一刀的 threaded 生产修复，把 `Expect: 100-continue`
+  已发出 interim `100` 后 partial body stall 的 safe-close 语义补成
+  `IHttpServer` public-contract focused proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 body-stall idle-timeout`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 body-stall server proof`
 
 ## Current state
 
@@ -23,38 +22,34 @@
 
 ## Completed work
 
-- [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增 4 条 focused live proofs：
-  - threaded `Expect fixed-length partial body idle-timeout closes after interim 100`
-  - threaded `Expect chunked partial body idle-timeout closes after interim 100`
-  - epoll `Expect fixed-length partial body idle-timeout closes after interim 100`
-  - epoll `Expect chunked partial body idle-timeout closes after interim 100`
-- 首轮 focused gate 拿到真实 RED：
-  - `202 total, 200 passed, 2 failed`
-  - 失败只在 threaded 两条，失败断言是 `stalled body does not append synthetic 500`
-  - epoll 两条直接通过
-- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-  做了最小生产修复：
-  - 新增 `IsRequestReadFailure`
-  - `TH1ServerConnectionState.Run` 的 outer `except` 对 request-side read
-    failure 直接安全关闭，不再误补 final `500`
-- 根因已锁定：
-  - threaded live path 用的是 blocking `TTcpStream.Read`
-  - socket timeout 在这里会落成 `ENetworkError('tcp read failed (...)')`
-  - 旧 whole-run `Run` outer except 把这种 ingress 读失败误判成内部错误
+- [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
+  新增 4 条 focused public-contract proofs：
+  - threaded `Expect: fixed-length body stall closes safely after interim response`
+  - threaded `Expect: chunked body stall closes safely after interim response`
+  - epoll `Expect: fixed-length body stall closes safely after interim response`
+  - epoll `Expect: chunked body stall closes safely after interim response`
+- 这些 tests 直接锁住：
+  - interim `100` 先发出
+  - stall 后连接安全关闭
+  - handler 不进入
+  - 不重复 `100`
+  - 不追加 synthetic `500`
+  - 不再发 final status line
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步把 `Expect after interim 100 + body stall` safe-close / no synthetic
-  `500` 记入 `IHttpServer` coverage truth。
+  已同步把同一条 truth 提升成 `test_http_server` + `test_http_security`
+  双层证据，而不再只是 security 层 live proof。
+- 本轮没有生产代码变更；focused gate 直接 GREEN，说明上一刀修复已在
+  server 层 contract 上自然成立。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `202/202 passed`
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `232/232 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀继续优先 request-side runtime / malformed 的真实小缺口，不回到大面积 parity 平铺。
+- 下一刀继续优先 request-side runtime / malformed 的真实小缺口。
 - 更自然的后续候选：
-  - 看 `test_http_server` 是否还缺同主题 public-contract focused proof
-  - 或继续找 still-open 的 raw-wire malformed / timeout 邻接缺口
+  - 继续找 still-open 的 raw-wire malformed / timeout 邻接缺口
+  - 或转向更高层 example / benchmark 之前仍未闭环的 HTTP public API seam

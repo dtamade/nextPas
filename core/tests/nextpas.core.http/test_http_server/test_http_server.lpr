@@ -5131,6 +5131,146 @@ begin
 end;
 {$ENDIF}
 
+procedure RunExpectContinueBodyStallIdleTimeoutClosesSafely(
+  const AUseEpoll: Boolean; const ALabel, AReqHeaders, APartialBody: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+  LHandlerCalled: Boolean;
+  LOpts: THttpServerOptions;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LHandlerCalled := True;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(AReqHeaders[1], SizeUInt(Length(AReqHeaders)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
+        ALabel + ': interim 100 continue returned');
+      Check(Pos('HTTP/1.1 200', LResp1) = 0,
+        ALabel + ': no final success response before body bytes');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called before body bytes arrive');
+
+      if APartialBody <> '' then
+        LConn.Write(APartialBody[1], SizeUInt(Length(APartialBody)));
+      LResp2 := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+      Check(LClosed,
+        ALabel + ': stalled body closes connection within observation window');
+      Check(not LTimedOut,
+        ALabel + ': stalled body close does not overrun read deadline');
+      Check(Pos('HTTP/1.1 100 Continue', LResp2) = 0,
+        ALabel + ': interim 100 is not repeated after stall');
+      Check(Pos('HTTP/1.1 200', LResp2) = 0,
+        ALabel + ': stalled body never reaches success response');
+      Check(Pos('HTTP/1.1 500', LResp2) = 0,
+        ALabel + ': stalled body does not append synthetic 500');
+      CheckEqual(Int64(0), Int64(CountSubstring(LResp2, 'HTTP/1.1 ')),
+        ALabel + ': no final status line is emitted after idle-timeout close');
+      Check(not LHandlerCalled,
+        ALabel + ': handler is never entered when body stalls after interim 100');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafely;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY = 'ab';
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(False,
+    'expect-continue fixed-length body stall threaded',
+    REQ_HEADERS, PARTIAL_BODY);
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY = 'ab';
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(True,
+    'expect-continue fixed-length body stall epoll',
+    REQ_HEADERS, PARTIAL_BODY);
+end;
+{$ENDIF}
+
+procedure TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafely;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY =
+    '3'#13#10 +
+    'ab';
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(False,
+    'expect-continue chunked body stall threaded',
+    REQ_HEADERS, PARTIAL_BODY);
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafelyEpollBackend;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY =
+    '3'#13#10 +
+    'ab';
+begin
+  RunExpectContinueBodyStallIdleTimeoutClosesSafely(True,
+    'expect-continue chunked body stall epoll',
+    REQ_HEADERS, PARTIAL_BODY);
+end;
+{$ENDIF}
+
 procedure RunExpectContinueBodylessRequestDoesNotEmitInterim(
   const AUseEpoll: Boolean; const ALabel, AReq, AReason: string);
 var
@@ -10982,6 +11122,10 @@ begin
     @TestExpectContinueChunkedBodyReadableEpollBackend);
   T.Run('Expect: chunked MaxBodySize rejects after interim response with epoll backend',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
+  T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
+    @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend);
+  T.Run('Expect: chunked body stall closes safely after interim response with epoll backend',
+    @TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafelyEpollBackend);
   T.Run('Expect: zero content-length does not emit interim response with epoll backend',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
   T.Run('Expect: no declared body does not emit interim response with epoll backend',
@@ -11229,6 +11373,10 @@ begin
     @TestExpectContinueChunkedBodyReadable);
   T.Run('Expect: chunked MaxBodySize rejects after interim response',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
+  T.Run('Expect: fixed-length body stall closes safely after interim response',
+    @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafely);
+  T.Run('Expect: chunked body stall closes safely after interim response',
+    @TestExpectContinueChunkedBodyStallIdleTimeoutClosesSafely);
   T.Run('Expect: zero content-length does not emit interim response',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
   T.Run('Expect: no declared body does not emit interim response',
