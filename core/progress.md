@@ -1,11 +1,11 @@
-# Progress Log: WebSocket RSV bit rejection
+# Progress Log: WebSocket high-bit 64-bit payload length rejection
 
 ## Session
 
-- **Scope:** 补齐 WebSocket RSV bit rejection。
+- **Scope:** 补齐 WebSocket 64-bit payload length high-bit rejection。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket negative frame coverage`
-  -> `RSV bit rejection`
+  -> `extended payload length validation`
 
 ## Current state
 
@@ -21,23 +21,26 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `ReservedBitsRejected` focused proof。
-- `nextpas.core.http.websocket.ReadFrame` 增加 RSV bit guard。
-- `docs/http/API_COVERAGE.md` 已记录 WebSocket RSV bit rejection contract。
+- `test_http_websocket` 新增 `HighBitPayloadLength64Rejected` focused proof。
+- `nextpas.core.http.websocket.ReadFrame` 增加 64-bit extended length high-bit guard。
+- `docs/http/API_COVERAGE.md` 已记录 WebSocket high-bit payload length rejection contract。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `20 total, 19 passed, 1 failed`
-  - failure: `reserved-bits: server sends close frame`
+  - `21 total, 20 passed, 1 failed`
+  - failure: `high-bit-length64: fail-fast reason`
+  - expected: `WebSocket: invalid 64-bit payload length`
+  - got: `WebSocket: control frame payload too large`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `20 total, 20 passed, 0 failed`
+  - `21 total, 21 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先继续 WebSocket negative coverage：safe high-bit payload length proof 或 invalid fragmented final UTF-8；benchmark 仍后置，不跑全量。
+- 下一刀优先继续 WebSocket negative coverage：invalid fragmented final UTF-8；也可以先设计
+  bounded frame/message size policy，再针对超大合法 63-bit length 做安全 RED。

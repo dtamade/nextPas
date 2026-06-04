@@ -238,6 +238,25 @@ begin
     Result := Result + Chr(Ord(AData[I]) xor LMaskKey[(I - 1) mod 4]);
 end;
 
+function BuildMaskedFrameWithHighBitLength64(AOpcode: Byte): string;
+begin
+  SetLength(Result, 14);
+  Result[1] := Chr($80 or AOpcode);
+  Result[2] := Chr($80 or 127);
+  Result[3] := Chr($80);
+  Result[4] := #0;
+  Result[5] := #0;
+  Result[6] := #0;
+  Result[7] := #0;
+  Result[8] := #0;
+  Result[9] := #0;
+  Result[10] := #0;
+  Result[11] := Chr($12);
+  Result[12] := Chr($34);
+  Result[13] := Chr($56);
+  Result[14] := Chr($78);
+end;
+
 function ComputeExpectedAccept(const AKey: string): string;
 var
   LConcat: string;
@@ -1754,6 +1773,100 @@ begin
   end;
 end;
 
+{ Test 4o: 64-bit payload length must fit the RFC 6455 63-bit field }
+procedure TestHighBitPayloadLength64Rejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+  LReason: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpText then
+        LWs.WriteText(LF.Payload);
+    except
+      on E: EHttpError do
+        LWs.Close(1002, E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'high-bit-length64: got 101');
+
+      LFrame := BuildMaskedFrameWithHighBitLength64($09);
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'high-bit-length64: got close response');
+      Check(Ord(LResp[1]) = $88, 'high-bit-length64: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'high-bit-length64: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1002), Int64(LCode),
+        'high-bit-length64: close code protocol error');
+      LReason := Copy(LResp, 5, LPayloadLen - 2);
+      CheckEqual('WebSocket: invalid 64-bit payload length', LReason,
+        'high-bit-length64: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -1947,6 +2060,7 @@ begin
   T.Run('FragmentedTextUtf8SequenceAccepted', @TestFragmentedTextUtf8SequenceAccepted);
   T.Run('NonCanonicalPayloadLengthRejected', @TestNonCanonicalPayloadLengthRejected);
   T.Run('NonCanonicalPayloadLength64Rejected', @TestNonCanonicalPayloadLength64Rejected);
+  T.Run('HighBitPayloadLength64Rejected', @TestHighBitPayloadLength64Rejected);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

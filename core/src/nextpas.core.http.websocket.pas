@@ -277,6 +277,8 @@ begin
   else if LPayloadLen = 127 then
   begin
     ReadExact(LExtLen[0], 8);
+    if (LExtLen[0] and $80) <> 0 then
+      raise EHttpError.Create('WebSocket: invalid 64-bit payload length');
     LPayloadLen := 0;
     for I := 0 to 7 do
       LPayloadLen := (LPayloadLen shl 8) or UInt64(LExtLen[I]);
