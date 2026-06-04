@@ -2328,6 +2328,112 @@ begin
     ALabel + ': expected direct error status is written on wire');
 end;
 
+procedure RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+  const ALabel, AInput, AExpectedStatusLine: string;
+  const AMaxHeaderSize: Int32; const AMaxBodySize: Int64);
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TTimedDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+const
+  FIRST_WRITE_BYTES = 64;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 20;
+  LHttpOpts.MaxHeaderSize := AMaxHeaderSize;
+  LHttpOpts.MaxBodySize := AMaxBodySize;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    ALabel + ': h1 transport exposes context-aware session factory');
+
+  LStreamObj := TTimedDrainRuntimeTcpStream.Create(AInput, FIRST_WRITE_BYTES);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    ALabel + ': context-aware h1 session exposes poll-driven seam');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    ALabel + ': timed direct-error session exposes deadline seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    ALabel + ': first advance enters timed partial direct-error drain');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    ALabel + ': handler is not called');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    ALabel + ': direct error stays reactor-local without worker handoff');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    ALabel + ': timed direct error still avoids sync socket write');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': first advance attempts one nonblocking direct-error drain');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteDeadlineCalls),
+    ALabel + ': partial direct-error drain rearms write deadline after partial progress');
+  CheckEqual(Int64(FIRST_WRITE_BYTES), Int64(Length(LStreamObj.Output)),
+    ALabel + ': partial direct-error drain preserves first written bytes');
+  Check(Pos(AExpectedStatusLine, LStreamObj.Output) > 0,
+    ALabel + ': partial direct-error drain preserves expected status line');
+  CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
+    ALabel + ': partial direct-error drain still exposes only one status line');
+  Check(LNextEvents = [peWritable],
+    ALabel + ': partial direct-error drain waits for writable wake');
+  Check(not LDeadlineSession.WakeDeadline.IsInfinite,
+    ALabel + ': partial direct-error drain exposes finite wake deadline');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    ALabel + ': writable wake before deadline keeps partial direct-error drain waiting');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': writable wake retries partial direct-error drain exactly once');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteDeadlineCalls),
+    ALabel + ': would-block retry keeps prior direct-error deadline');
+  CheckEqual(Int64(FIRST_WRITE_BYTES), Int64(Length(LStreamObj.Output)),
+    ALabel + ': would-block retry writes no extra direct-error bytes');
+  Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
+    ALabel + ': partial direct-error drain does not append synthetic 500 before timeout');
+
+  platform_thread_sleep_ns(50000000);
+  Check(LDeadlineSession.WakeDeadline.IsExpired,
+    ALabel + ': direct-error wake deadline eventually expires');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    ALabel + ': deadline wake closes partial direct-error drain');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), ALabel + ': connection remains server-owned on timeout close');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': deadline wake closes partial direct-error drain without extra write retry');
+  CheckEqual(Int64(2), Int64(LStreamObj.WriteDeadlineCalls),
+    ALabel + ': timeout close preserves last direct-error deadline without further reset');
+  CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
+    ALabel + ': timeout close still leaves only one direct-error status line on wire');
+  Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
+    ALabel + ': timeout close does not append synthetic 500');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    ALabel + ': timeout close clears partial direct-error wake deadline');
+end;
+
 procedure TestH1PollDrivenSessionQueuesFollowUpBadRequestBehindActiveDrain;
 const
   REQ =
@@ -2694,6 +2800,54 @@ const
 begin
   RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
     'standalone poll unsupported transfer-coding rejection', REQ,
+    'HTTP/1.1 501 Not Implemented', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneBadRequestPartialTimeoutPreservesStatus;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+    'standalone poll generic bad request partial-timeout', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandalonePayloadTooLargePartialTimeoutPreservesStatus;
+const
+  REQ = 'POST /too-large HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Content-Length: 3'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'abc';
+begin
+  RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+    'standalone poll payload-too-large partial-timeout', REQ,
+    'HTTP/1.1 413 Payload Too Large', 0, 2);
+end;
+
+procedure TestH1PollDrivenStandaloneHeaderTooLargePartialTimeoutPreservesStatus;
+const
+  REQ = 'GET /too-many-headers HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'X-Long: 0123456789012345678901234567890123456789'#13#10 +
+        'Connection: close'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+    'standalone poll header-too-large partial-timeout', REQ,
+    'HTTP/1.1 431 Request Header Fields Too Large', 32, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneUnsupportedTransferCodingPartialTimeoutPreservesStatus;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: gzip, chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+    'standalone poll unsupported transfer-coding partial-timeout', REQ,
     'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
@@ -8896,6 +9050,14 @@ begin
     @TestH1PollDrivenStandaloneTruncatedTrailerCrAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone unsupported transfer-coding drains via writable events',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone bad request partial-timeout preserves status',
+    @TestH1PollDrivenStandaloneBadRequestPartialTimeoutPreservesStatus);
+  T.Run('H1 poll-driven standalone payload-too-large partial-timeout preserves status',
+    @TestH1PollDrivenStandalonePayloadTooLargePartialTimeoutPreservesStatus);
+  T.Run('H1 poll-driven standalone header-too-large partial-timeout preserves status',
+    @TestH1PollDrivenStandaloneHeaderTooLargePartialTimeoutPreservesStatus);
+  T.Run('H1 poll-driven standalone unsupported transfer-coding partial-timeout preserves status',
+    @TestH1PollDrivenStandaloneUnsupportedTransferCodingPartialTimeoutPreservesStatus);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Direct error response arms write timeout on malformed request',
