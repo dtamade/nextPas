@@ -1,10 +1,10 @@
-# Progress Log: http server expect-continue contract
+# Progress Log: http server expect-continue early 413
 
 ## Session
 
-- **Scope:** 给 `HttpServer` 补上 `Expect: 100-continue` request-side protocol contract。
+- **Scope:** 给 `HttpServer` 补上 `Expect: 100-continue` 下 declared oversize `Content-Length` 的 headers-stage early `413`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `expect-continue contract`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `expect-continue early final rejection`
 
 ## Current state
 
@@ -20,23 +20,23 @@
 ## Completed work
 
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-  在 threaded / poll-driven H1 request parse 路径补上 interim `100 Continue` 发送。
-- [src/nextpas.core.http.impl.h1.parser.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.parser.pas)
-  增加真实 `HeadersComplete` parser signal，修掉首版实现引入的 partial-follow-up 回归。
+  在 threaded / poll-driven H1 request parse 路径补上 declared `Content-Length`
+  超限的 headers-stage early `413` short-circuit。
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 threaded / epoll 两条 focused live contract tests。
+  新增 threaded / epoll 两条 focused live contract tests，直接锁定
+  declared oversize `Content-Length` 不会误发 `100 Continue`。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 `Expect: 100-continue` contract 说明。
+  已同步 `Expect: 100-continue` early final `413` contract 说明。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `181/181 passed`
+  - `183/183 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀优先继续补真正的 request-side protocol completeness，不要再回到低价值 parity 平铺。
+- 下一刀优先继续补真正的 request-side protocol completeness，不要回到低价值 parity 平铺。
 - 更合理的两个方向是：
-  - unsupported `Expect` / 更早的 declared oversize body rejection
+  - unsupported `Expect`
   - 或审视 `3/6 H1 正确性加固` 的阶段收口条件，准备衔接更高层的 server/base 架构演进

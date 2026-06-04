@@ -257,10 +257,23 @@ begin
   end;
 end;
 
+function TryGetDeclaredContentLength(const AParser: IH1Parser;
+  out AContentLength: Int64): Boolean;
+var
+  LContentLength: string;
+begin
+  AContentLength := 0;
+  if AParser = nil then
+    Exit(False);
+
+  LContentLength := Trim(AParser.GetHeaders.Get('content-length'));
+  Result := (LContentLength <> '') and TryStrToInt64(LContentLength, AContentLength);
+end;
+
 function RequestDeclaresBody(const AParser: IH1Parser): Boolean;
 var
   LTransferEncoding: string;
-  LContentLength: string;
+  LContentLength: Int64;
 begin
   if AParser = nil then
     Exit(False);
@@ -269,11 +282,8 @@ begin
   if LTransferEncoding <> '' then
     Exit(True);
 
-  LContentLength := Trim(AParser.GetHeaders.Get('content-length'));
-  if LContentLength = '' then
-    Exit(False);
-
-  Result := StrToInt64Def(LContentLength, 0) > 0;
+  Result := TryGetDeclaredContentLength(AParser, LContentLength) and
+    (LContentLength > 0);
 end;
 
 function RequestExpectsContinue(const AParser: IH1Parser): Boolean;
@@ -289,6 +299,16 @@ begin
   Result := AHeadersDone and (not AContinueSent) and (AParser <> nil) and
     (not AParser.IsComplete) and RequestExpectsContinue(AParser) and
     RequestDeclaresBody(AParser);
+end;
+
+function DeclaredContentLengthExceedsLimit(const AParser: IH1Parser;
+  const AMaxBodySize: Int64): Boolean;
+var
+  LContentLength: Int64;
+begin
+  Result := (AParser <> nil) and (AMaxBodySize > 0) and
+    TryGetDeclaredContentLength(AParser, LContentLength) and
+    (LContentLength > AMaxBodySize);
 end;
 
 { TPrefixedTcpStream }
@@ -1054,6 +1074,15 @@ begin
           FKeepAlive := False;
           Break;
         end;
+        if LHeadersDone and
+           DeclaredContentLengthExceedsLimit(FParser, FOptions.MaxBodySize) then
+        begin
+          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE,
+            FOptions.WriteTimeout);
+          LRejected := True;
+          FKeepAlive := False;
+          Break;
+        end;
         if ShouldSendContinueResponse(FParser, LHeadersDone, FContinueSent) then
         begin
           if not TryWriteContinueResponse(FConn, FOptions.WriteTimeout) then
@@ -1473,6 +1502,10 @@ begin
     if FParseHeadersDone and (FParser.GetHttpVersion = hvHttp11) and
        (FParser.GetHeaders.Get('host') = '') then
       Exit(FinishPollParseError(HTTP_STATUS_BAD_REQUEST));
+
+    if FParseHeadersDone and
+       DeclaredContentLengthExceedsLimit(FParser, FOptions.MaxBodySize) then
+      Exit(FinishPollParseError(HTTP_STATUS_PAYLOAD_TOO_LARGE));
 
     if ShouldSendContinueResponse(FParser, FParseHeadersDone, FContinueSent) then
     begin

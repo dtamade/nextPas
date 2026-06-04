@@ -4466,6 +4466,78 @@ begin
 end;
 {$ENDIF}
 
+procedure RunExpectContinueDeclaredOversizeRejectsEarly(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LHandlerCalled: Boolean;
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 2048'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LHandlerCalled := True;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 413 Payload Too Large', LResp) > 0,
+        ALabel + ': declared oversize rejected with final 413');
+      Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+        ALabel + ': no interim 100 for declared oversize body');
+      Check(Pos('connection: close', LResp) > 0,
+        ALabel + ': declared oversize closes connection');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called before any body bytes arrive');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueDeclaredOversizeRejectsEarly;
+begin
+  RunExpectContinueDeclaredOversizeRejectsEarly(False,
+    'expect-continue oversize threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend;
+begin
+  RunExpectContinueDeclaredOversizeRejectsEarly(True,
+    'expect-continue oversize epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -9392,6 +9464,8 @@ begin
     @TestKeepAliveEpollBackend);
   T.Run('Expect: 100-continue sends interim response with epoll backend',
     @TestExpectContinueSendsInterimResponseEpollBackend);
+  T.Run('Expect: declared oversize content-length rejects early with epoll backend',
+    @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
@@ -9575,6 +9649,8 @@ begin
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
   T.Run('Expect: 100-continue sends interim response',
     @TestExpectContinueSendsInterimResponse);
+  T.Run('Expect: declared oversize content-length rejects early',
+    @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Pipelined requests in single write', @TestPipelinedRequestsInSingleWrite);
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);

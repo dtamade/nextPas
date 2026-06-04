@@ -1,51 +1,56 @@
-# Findings: http server expect-continue contract
+# Findings: http server expect-continue early 413
 
 ## Scope
 
-- 本轮不再只是 coverage-expansion，而是补 `HttpServer` 的真实协议能力：
-  `Expect: 100-continue`。
-- 目标是让 default threaded 与 Linux `epoll` backend 都能在 headers 完整、
-  body 仍待发送时先返回单条 `100 Continue`，再继续读取 body。
+- 本轮继续补 `HttpServer` request-side protocol completeness，但不是继续扩
+  `100 Continue` 的 positive path，而是把它补完整：
+  当 declared `Content-Length` 在 headers 阶段已明确超过 `MaxBodySize`
+  时，server 必须直接回 final `413`。
 
 ## Confirmed truths
 
-### 1. 当前 `HttpServer` 原本没有 `Expect: 100-continue` contract
+### 1. 当前实现会把“已知必拒绝”的 declared oversize body 误走成 `100 Continue`
 
-- 现有证据已经包括：
-  - writer 已能正确写 `HTTP_STATUS_CONTINUE`
-  - server / security / parser 侧几乎没有任何 `Expect` 处理与证明
-- 新增 `test_http_server` focused case 先 RED：
-  - `Expect: 100-continue sends interim response`
-  - `Expect: 100-continue sends interim response with epoll backend`
-- RED 结果直接证明现状缺实现：`epoll` live case 收不到 interim `100 Continue`。
+- 新增 `test_http_server` focused live case：
+  - `Expect: declared oversize content-length rejects early`
+  - `Expect: declared oversize content-length rejects early with epoll backend`
+- RED 结果直接证明现状缺口：
+  - 至少 `epoll` 路径不会在 headers-stage 直接给 final `413`
+  - 现状会把 declared oversize request 继续按普通 `Expect: 100-continue`
+    处理，先发 `100 Continue`
 
-### 2. 最小生产修复落在 H1 parse 阶段，而不是 handler / writer 末端
+### 2. 最小生产修复仍然应落在 H1 parse 阶段
 
 - `src/nextpas.core.http.impl.h1.pas`
-  - threaded `Run` 路径：headers 完整且 body 仍待发送时发送 interim `100 Continue`
-  - poll-driven `AdvancePollRequestParse` 路径：通过 reactor-owned outbound drain 发送 interim `100 Continue`
-- `src/nextpas.core.http.impl.h1.parser.pas`
-  - 新增真实 `HeadersComplete` parser signal，避免把“URL 已出现”误当成“headers 已完成”
+  - 新增 declared `Content-Length` 解析 helper
+  - threaded `Run` 路径：headers 完整后、`100 Continue` 之前先判断
+    declared size 是否已超过 `MaxBodySize`
+  - poll-driven `AdvancePollRequestParse` 路径：在同一阶段直接 short-circuit
+    到 `413`
 
-这保证 `100 Continue` 的发送点在协议上正确，也不会把行为焊死到 handler 内部。
+这保证“是否发送 `100 Continue`”仍然由 parse 阶段统一裁决，而不是等到
+handler 或 body 累积阶段才被动发现。
 
-### 3. 首版修复确实引入了 keep-alive partial-follow-up regression，但已经在本轮修正
+### 3. 修复后的契约是“已知最终失败时不再误发 interim response”
 
-- 首版实现把“headers complete”错判成了“URL 已出现”，导致 `epoll`
-  `partial-follow-up request line can complete later` 家族回归失败。
-- 用 parser 的 `HeadersComplete` 真实信号替换该启发式后，回归消失，`Expect: 100-continue`
-  和既有 keep-alive bridge contract 同时成立。
+- positive path 仍保持：
+  - 正常 `Expect: 100-continue` 会先收到单条 `100 Continue`
+- 新增 negative path：
+  - declared oversize `Content-Length` 会直接收到 final `413`
+  - wire 上不会再出现 `100 Continue`
+  - handler 在任何 body byte 到达前不会被调用
 
 ## Verification evidence
 
 - focused:
   - `make -C tests/nextpas.core.http/test_http_server test`
-    - `181/181 passed`
+    - `183/183 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮补的是最基础的 positive `100-continue` contract，还没有扩展到：
+- 这轮把 declared oversize `Content-Length` 的 headers-stage final rejection
+  补上了，但仍未覆盖：
   - unsupported `Expect` expectation 的拒绝策略
-  - declared oversize `Content-Length` 在 headers 阶段的更早拒绝
-- 下一步更值的方向仍应优先真缺口，而不是回到机械 parity 扩张。
+  - 其他可在 headers 阶段直接裁决的 request-side final status
+- 下一步仍应优先剩余真实协议缺口，而不是继续做低价值 parity 平铺。
