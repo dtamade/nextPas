@@ -49,6 +49,33 @@ begin
   Check(LCaught, 'unknown method raises EHttpError');
 end;
 
+procedure TestHttpErrorCategory;
+var
+  LErr: EHttpError;
+  LCaught: Boolean;
+begin
+  LErr := EHttpError.Create('network boundary');
+  try
+    Check(LErr is ENextPasError, 'EHttpError inherits ENextPasError');
+    Check(LErr.Category = ecNetwork, 'EHttpError category is network');
+    CheckEqual('network boundary', LErr.Message, 'EHttpError preserves message');
+  finally
+    LErr.Free;
+  end;
+
+  LCaught := False;
+  try
+    HttpStrToMethod('INVALID');
+  except
+    on E: EHttpError do
+    begin
+      LCaught := True;
+      Check(E.Category = ecNetwork, 'HttpStrToMethod error category is network');
+    end;
+  end;
+  Check(LCaught, 'HttpStrToMethod raises EHttpError for invalid method');
+end;
+
 procedure TestHttpStatusText;
 begin
   CheckEqual('Continue', HttpStatusText(100), '100');
@@ -203,6 +230,7 @@ begin
   T := TTestRunner.Create('nextpas.core.http.base');
   T.Run('HttpMethodToStr', @TestHttpMethodToStr);
   T.Run('HttpStrToMethod', @TestHttpStrToMethod);
+  T.Run('EHttpError category', @TestHttpErrorCategory);
   T.Run('HttpStatusText', @TestHttpStatusText);
   T.Run('HttpVersionToStr', @TestHttpVersionToStr);
   T.Run('TUrl.Parse full URL', @TestUrlParseFullUrl);
