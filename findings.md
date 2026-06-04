@@ -1,5 +1,15 @@
 # Findings & Decisions
 
+## 2026-06-04 http fixed-length eof truncation epoll parity
+
+- `Truncated Content-Length request body at EOF` 是 fixed-length request-body framing 的高价值边界，
+  不能只停留在默认 backend raw-wire proof；Linux `epoll` 也需要直接证据。
+- 本轮补上 `epoll` case 后，focused gate
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `150/150 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：threaded / Linux `epoll` 两条 raw-wire ingress
+  路径都会把 fixed-length request body EOF truncation 直接收口成 explicit `400`。
+
 ## 2026-06-04 http request validation epoll parity
 
 - 这批 case 属于 request-side validation / malformed raw-wire ingress 边界，不能只停留在默认

@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-06-04 http fixed-length eof truncation epoll parity
+
+- **Status:** completed.
+- Objective:
+  - keep shrinking request-body framing raw-wire gaps
+  - add Linux `epoll` parity for fixed-length request body EOF truncation
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `TestTruncatedContentLengthRequestAtEofEpollBackend`
+  - registered `Truncated Content-Length request body at EOF -> 400 with epoll backend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `150/150 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `request-body framing / malformed raw-wire security proof`
+    - this batch:
+      `fixed-length body EOF truncation -> explicit 400 with epoll parity`
+
 ## Session: 2026-06-04 http request validation epoll parity
 
 - **Status:** completed.

@@ -1,5 +1,20 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http fixed-length eof truncation epoll parity
+
+### Goal
+
+继续补 `nextpas.core.http` request-body framing 的 raw-wire security proof，
+把 `Truncated Content-Length request body at EOF -> 400` 收到 Linux `epoll` live parity，
+仍然只跑 `test_http_security` focused gate，不改生产代码，除非测试先打出真实 RED。
+
+### Checklist
+
+- [x] 复核 `test_http_security` / `API_COVERAGE`，确认 fixed-length body EOF truncation 仍缺 `epoll` raw-wire proof。
+- [x] 新增 `Truncated Content-Length request body at EOF -> 400 with epoll backend`。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http request validation epoll parity
 
 ### Goal

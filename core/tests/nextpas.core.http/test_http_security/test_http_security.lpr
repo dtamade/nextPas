@@ -2886,6 +2886,18 @@ begin
     'epoll body larger than Content-Length: explicit 400');
 end;
 
+procedure TestTruncatedContentLengthRequestAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 10'#13#10 +
+            'Connection: close'#13#10#13#10'hello';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll truncated Content-Length request EOF: explicit 400',
+    True);
+end;
+
 procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
@@ -3582,6 +3594,8 @@ begin
     @TestTruncatedTrailerFieldCrAtEofEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
+  T.Run('Truncated Content-Length request body at EOF -> 400 with epoll backend',
+    @TestTruncatedContentLengthRequestAtEofEpollBackend);
   T.Run('Slowloris partial request with epoll backend',
     @TestSlowlorisEpollBackend);
   T.Run('Partial fixed-length body idle-timeout closes connection with epoll backend',
