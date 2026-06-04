@@ -1,14 +1,15 @@
-# Progress Log: expect interim-100 truncated trailer section EOF proof
+# Progress Log: expect interim-100 truncated trailer empty-value EOF proof
 
 ## Session
 
-- **Scope:** 承接上一刀的 `Expect: 100-continue` trailer section CR EOF
+- **Scope:** 承接上一刀的 `Expect: 100-continue` trailer section EOF
   after-interim coverage，继续补齐 `Expect + Transfer-Encoding: chunked`
-  在 interim `100` 已发出后 trailer section 在结束空行前直接 EOF 截断时的
+  在 interim `100` 已发出后 trailer field 只有空值起始 `CRLF`、
+  但 trailer section 尚未结束就直接 EOF 截断时的
   after-interim truth，用 `test_http_security` + `test_http_server`
   双层 focused proof 收口。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 truncated trailer section EOF`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 truncated trailer empty-value EOF`
 
 ## Current state
 
@@ -27,36 +28,36 @@
 - [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
   复用了上一刀的 `shutdown-after-body` after-interim helper，
   新增 2 条 raw-wire focused proofs：
-  - threaded `Expect chunked truncated trailer section EOF rejects after interim 100`
-  - epoll `Expect chunked truncated trailer section EOF rejects after interim 100`
+  - threaded `Expect chunked truncated trailer empty-value EOF rejects after interim 100`
+  - epoll `Expect chunked truncated trailer empty-value EOF rejects after interim 100`
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
   对称新增 2 条 focused public-contract proofs：
-  - threaded `Expect: chunked truncated trailer section EOF rejects after interim response`
-  - epoll `Expect: chunked truncated trailer section EOF rejects after interim response`
+  - threaded `Expect: chunked truncated trailer empty-value EOF rejects after interim response`
+  - epoll `Expect: chunked truncated trailer empty-value EOF rejects after interim response`
 - 这 4 条 tests 直接锁住：
   - interim `100` 先发出
-  - partial trailer field line + peer write-half-close 后返回 final `400 Bad Request`
+  - partial trailer empty-value + peer write-half-close 后返回 final `400 Bad Request`
   - 不重复 `100`
   - 不误回 `200`
   - handler 不进入
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步把 `Expect after interim 100 + truncated trailer section EOF -> final 400`
+  已同步把 `Expect after interim 100 + truncated trailer empty-value EOF -> final 400`
   纳入 `test_http_server` + `test_http_security` 双层证据。
 - 本轮没有生产代码变更；focused gate 直接 GREEN，说明当前生产代码已经自然满足这条契约，这轮仍是 coverage-expansion。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security test`
-  - `228/228 passed`
+  - `230/230 passed`
   - heaptrc: `0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `258/258 passed`
+  - `260/260 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 下一刀继续优先 request-side runtime / malformed 的真实小缺口。
 - 更自然的后续候选：
-  - `Expect + chunked + after interim 100 + truncated trailer empty-value EOF -> final 400`
-  - 或 `Expect + chunked + after interim 100 + truncated trailer whitespace EOF -> final 400`
+  - `Expect + chunked + after interim 100 + truncated trailer whitespace EOF -> final 400`
+  - 或 `Expect + chunked + after interim 100 + truncated trailer empty-value section CR EOF -> final 400`
 - 继续保持单刀推进，不宽铺同型 parity。
