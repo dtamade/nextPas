@@ -1,18 +1,18 @@
-# Findings: http chunked partial follow-up request-line epoll bridge proof
+# Findings: http content-length partial follow-up request-line epoll bridge proof
 
 ## Scope
 
 - 本轮继续留在 H1 correctness 主线，但先做了一次 parser/server/security 矩阵筛查，再沿 keep-alive request-tail contract 推进一步。
-- 目标不是扩大生产逻辑，而是确认 plain chunked request 结束后，如果同连接上的 follow-up request 只先到达半截 request-line，再补齐剩余字节，live `epoll` backend 也会先交付首个 `200 / echo:5`，再把第二个请求稳定完成为 `200 / ok`。
+- 目标不是扩大生产逻辑，而是确认 `Content-Length` request 结束后，如果同连接上的 follow-up request 只先到达半截 request-line，再补齐剩余字节，live `epoll` backend 也会先交付首个 `200 / echo:5`，再把第二个请求稳定完成为 `200 / ok`。
 
 ## Confirmed truths
 
-### 1. plain chunked partial follow-up request-line 的 epoll raw-wire bridge truth 现在补齐了
+### 1. `Content-Length` partial follow-up request-line 的 epoll raw-wire bridge truth 现在补齐了
 
 - 新增的 security proof 直接覆盖：
-  - 首个 chunked request 返回 `200 / echo:5`
+  - 首个 `Content-Length` request 返回 `200 / echo:5`
   - follow-up 半截请求行在后续字节补全后返回 `200 / ok`
-- 这说明当前 transport 在 chunked request 完整结束后，不会把半截下一请求行过早误判为 malformed tail；epoll live backend 上同样会把它保留为后继请求并等待补全。
+- 这说明当前 transport 在 fixed-length request 完整结束后，不会把半截下一请求行过早误判为 malformed tail；epoll live backend 上同样会把它保留为后继请求并等待补全。
 
 ### 2. 本轮没有暴露生产缺口，不需要修 transport / parser
 
@@ -21,12 +21,12 @@
 
 ### 3. 这轮把 request-tail 矩阵里一个真实缺口补平了，而不是继续盲目扩面
 
-- `server` 早就有 plain chunked partial follow-up request-line can-complete-later 的 threaded + epoll truth，`security` 层此前只有 threaded raw-wire proof。
+- `server` 早就有 `Content-Length` partial follow-up request-line can-complete-later 的 threaded + epoll truth，`security` 层此前只有 threaded raw-wire proof。
 - 这轮把缺口补到 security 后，三层矩阵在这个状态机位置重新对齐。
 
 ### 4. 下一步应继续只挑一格真实缺口，不再机械复制同型 parity
 
-- 既然现在代表性的 `400/501/431`、plain/trailer partial-next-line bridge、partial follow-up headers、same-write pipelining 都没有 backend 差异，再继续机械复制同型 epoll case 的收益已经明显下降。
+- 既然现在代表性的 `400/501/431`、`Content-Length` / plain chunked / trailer partial-next-line bridge、partial follow-up headers、same-write pipelining 都没有 backend 差异，再继续机械复制同型 epoll case 的收益已经明显下降。
 - 更值的下一刀有两个方向：
   - 尚未完全收口的 trailer/chunk truncation 相邻子类
   - 剩余 request-tail sibling gap 里，是否还有比 `garbage tail` / `truncated follow-up line` 更值得下沉到 security 的 raw-wire truth
@@ -35,7 +35,7 @@
 
 - focused:
   - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `74/74 passed`
+  - `75/75 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
