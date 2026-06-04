@@ -1,5 +1,19 @@
 # Findings & Decisions
 
+## 2026-06-04 http truncated trailer field-line backpressure proof
+
+- `truncated trailer field line EOF` 之前在 `test_http_h1parser` 已有 parser error
+  focused proof，在 `test_http_server` 也已有 explicit `400` / poll-driven writable-drain
+  证据，但 `test_http_security` 还缺 real-socket direct raw-wire/backpressure 直接证据。
+- 本轮新增 threaded / Linux `epoll` 两条 security proof，直接锁定：
+  - chunked trailer field line 在 EOF 截断时会直接返回 final `400 Bad Request`
+  - 在 backpressure 尝试下，连接仍会安全关闭
+  - wire 上至多暴露一条原始 `400` status-line 前缀，不会追加 synthetic `500`
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test`
+  结果为 `194/194 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：这条 malformed trailer EOF
+  路径在 security 层也已有 direct raw-wire/backpressure proof。
+
 ## 2026-06-04 http standalone 413 direct-error backpressure proof
 
 - `payload-too-large direct 413` 之前在 `test_http_server` 已有 poll-driven

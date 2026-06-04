@@ -1,5 +1,22 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http truncated trailer field-line backpressure proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 malformed trailer raw-wire security proof，
+把 `truncated trailer field line EOF direct-error backpressure safe-close`
+补进 `test_http_security`，覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server`、`test_http_security` 与 `API_COVERAGE`，确认
+  该类 trailer EOF truncation 仍缺 security 层 direct raw-wire/backpressure 证据。
+- [x] 新增 threaded / `epoll` 两条
+  `truncated trailer field line EOF direct error backpressure safe handling` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http standalone 413 direct-error backpressure proof
 
 ### Goal

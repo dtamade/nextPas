@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-06-04 http truncated trailer field-line backpressure proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining `truncated trailer field line EOF` direct-error raw-wire gap in `test_http_security`
+  - directly prove backpressure safe-close behavior on both threaded and Linux `epoll`
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - extended `RunDirectErrorBackpressureSafeHandling` with optional half-close
+  - added `TestTruncatedTrailerFieldLineEofBackpressureSafeHandling`
+  - added `TestTruncatedTrailerFieldLineEofBackpressureSafeHandlingEpollBackend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `194/194 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `malformed trailer raw-wire security proof`
+  - this batch:
+    `truncated trailer field line EOF backpressure`
+
 ## Session: 2026-06-04 http standalone 413 direct-error backpressure proof
 
 - **Status:** completed.

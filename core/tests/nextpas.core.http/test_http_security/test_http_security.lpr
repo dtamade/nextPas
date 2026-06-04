@@ -1336,7 +1336,8 @@ begin
 end;
 
 procedure RunDirectErrorBackpressureSafeHandling(const AOpts: THttpServerOptions;
-  const AReq, AExpectedStatusLine, ALabel: string);
+  const AReq, AExpectedStatusLine, ALabel: string;
+  const AShutdownWrite: Boolean = False);
 var
   LServer: THttpServer;
   LPort: UInt16;
@@ -1364,6 +1365,8 @@ begin
       SetSocketRecvBuffer(LConn, RECV_BUFFER_BYTES);
       if AReq <> '' then
         LConn.Write(AReq[1], SizeUInt(Length(AReq)));
+      if AShutdownWrite then
+        LConn.Shutdown;
       platform_thread_sleep_ns(BACKPRESSURE_WAIT_NS);
 
       LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
@@ -2148,6 +2151,26 @@ begin
     'Malformed trailer field direct error backpressure');
 end;
 
+procedure TestTruncatedTrailerFieldLineEofBackpressureSafeHandling;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Test'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: value';
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Truncated trailer field line EOF direct error backpressure',
+    True);
+end;
+
 procedure TestQueuedFollowUp400PreservesWireOrder;
 const
   REQ =
@@ -2418,6 +2441,30 @@ begin
     REQ,
     'HTTP/1.1 400 Bad Request',
     'epoll malformed trailer field direct error backpressure');
+end;
+
+procedure TestTruncatedTrailerFieldLineEofBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Test'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: value';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll truncated trailer field line EOF direct error backpressure',
+    True);
 end;
 
 procedure TestQueuedFollowUp400PreservesWireOrderEpollBackend;
@@ -4706,6 +4753,8 @@ begin
     @TestMissingChunkDataCrLfBackpressureSafeHandling);
   T.Run('Malformed trailer field direct error backpressure safe handling',
     @TestMalformedTrailerFieldBackpressureSafeHandling);
+  T.Run('Truncated trailer field line EOF direct error backpressure safe handling',
+    @TestTruncatedTrailerFieldLineEofBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
   T.Run('Queued follow-up 400 preserves wire order',
@@ -4910,6 +4959,8 @@ begin
     @TestMissingChunkDataCrLfBackpressureSafeHandlingEpollBackend);
   T.Run('Malformed trailer field direct error backpressure safe handling with epoll backend',
     @TestMalformedTrailerFieldBackpressureSafeHandlingEpollBackend);
+  T.Run('Truncated trailer field line EOF direct error backpressure safe handling with epoll backend',
+    @TestTruncatedTrailerFieldLineEofBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
   T.Run('Queued follow-up 400 preserves wire order with epoll backend',
