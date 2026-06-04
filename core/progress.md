@@ -1,11 +1,11 @@
-# Progress Log: Static MIME case-insensitive contract
+# Progress Log: WebSocket unmasked client-frame rejection
 
 ## Session
 
-- **Scope:** 补齐 static serving MIME 大小写不敏感和 fallback contract。
+- **Scope:** 补齐 WebSocket unmasked client frame rejection。
 - **Status:** verified
-- **Roadmap Position:** `4/6 HTTP examples/static helper polish` -> `static serving`
-  -> `MIME case-insensitive contract`
+- **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket negative frame coverage`
+  -> `client mask-required contract`
 
 ## Current state
 
@@ -21,25 +21,25 @@
 
 ## Completed work
 
-- `test_http_static` 新增 `ServeDir MIME case-insensitive and fallback` focused proof。
-- `SetupTmpDir` 增加 `.JSON` 与 unknown extension fixture。
-- `nextpas.core.http.static.MimeTypeFromExt` 改为 lowercase 后匹配 MIME table。
-- `docs/http/API_COVERAGE.md` 已记录 static helper-level MIME contract。
+- `test_http_websocket` 新增 `BuildUnmaskedFrame` helper。
+- `test_http_websocket` 新增 `UnmaskedClientFrameRejected` focused proof。
+- `nextpas.core.http.websocket.ReadFrame` 增加 client frame MASK bit guard。
+- `docs/http/API_COVERAGE.md` 已记录 WebSocket negative frame mask contract。
 
 ## Verification
 
 - RED:
-  - `make -C tests/nextpas.core.http/test_http_static test`
-  - `10 total, 9 passed, 1 failed`
-  - failure: `uppercase JSON extension maps to application/json`
+  - `make -C tests/nextpas.core.http/test_http_websocket test`
+  - `9 total, 8 passed, 1 failed`
+  - failure: `unmasked: server sends close frame`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
-  - `make -C tests/nextpas.core.http/test_http_static test`
-  - `10 total, 10 passed, 0 failed`
+  - `make -C tests/nextpas.core.http/test_http_websocket test`
+  - `9 total, 9 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先在 examples / docs / benchmark readiness 和仍缺 direct proof 的真实 runtime
-  gap 之间选择；benchmark 仍后置，不为了刷量重复 malformed parity。
+- 下一刀优先继续 WebSocket negative coverage：control-frame payload > 125 或 reserved opcode；
+  仍保持一刀一个 contract，不跑全量。

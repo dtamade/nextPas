@@ -123,6 +123,18 @@ begin
     Result := Result + Chr(Ord(AData[I]) xor LMaskKey[(I - 1) mod 4]);
 end;
 
+function BuildUnmaskedFrame(AOpcode: Byte; const AData: string): string;
+var
+  LPayloadLen: SizeUInt;
+begin
+  LPayloadLen := SizeUInt(Length(AData));
+  SetLength(Result, 2);
+  Result[1] := Chr($80 or AOpcode);
+  Result[2] := Chr(LPayloadLen);
+  if LPayloadLen > 0 then
+    Result := Result + AData;
+end;
+
 function ComputeExpectedAccept(const AKey: string): string;
 var
   LConcat: string;
@@ -560,6 +572,95 @@ begin
   end;
 end;
 
+{ Test 4d: unmasked client frames are rejected as protocol errors }
+procedure TestUnmaskedClientFrameRejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpText then
+        LWs.WriteText(LF.Payload);
+    except
+      on E: EHttpError do
+        LWs.Close(1002, 'protocol');
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'unmasked: got 101');
+
+      LFrame := BuildUnmaskedFrame($01, 'hello');
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'unmasked: got close response');
+      Check(Ord(LResp[1]) = $88, 'unmasked: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'unmasked: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1002), Int64(LCode), 'unmasked: close code protocol error');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -741,6 +842,7 @@ begin
   T.Run('TextFrameEchoCoalescedFirstFrame', @TestTextFrameEchoWithCoalescedFirstFrame);
   T.Run('UpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket',
     @TestUpgradeExceptionDoesNotWrite500OrCloseOwnedWebSocket);
+  T.Run('UnmaskedClientFrameRejected', @TestUnmaskedClientFrameRejected);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

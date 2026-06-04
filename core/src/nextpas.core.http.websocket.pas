@@ -199,6 +199,9 @@ begin
   LMasked := (LHdr[1] and $80) <> 0;
   LPayloadLen := LHdr[1] and $7F;
 
+  if not LMasked then
+    raise EHttpError.Create('WebSocket: client frames must be masked');
+
   if LPayloadLen = 126 then
   begin
     ReadExact(LExtLen[0], 2);
