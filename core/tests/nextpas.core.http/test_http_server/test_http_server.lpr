@@ -5198,6 +5198,29 @@ begin
     'expect-continue chunked invalid chunk-size threaded');
 end;
 
+procedure TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterim;
+const
+  REQ_BODY =
+    '5;'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(False,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked malformed chunk extension threaded');
+end;
+
+procedure TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterim;
+const
+  REQ_BODY =
+    '5'#13#10'hello0'#13#10#13#10;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(False,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked missing chunk-data CRLF threaded');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend;
 begin
@@ -5215,6 +5238,29 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'expect-continue chunked invalid chunk-size epoll');
+end;
+
+procedure TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterimEpollBackend;
+const
+  REQ_BODY =
+    '5;'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(True,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked malformed chunk extension epoll');
+end;
+
+procedure TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterimEpollBackend;
+const
+  REQ_BODY =
+    '5'#13#10'hello0'#13#10#13#10;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterim(True,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked missing chunk-data CRLF epoll');
 end;
 {$ENDIF}
 
@@ -11267,6 +11313,10 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
   T.Run('Expect: chunked invalid chunk-size rejects after interim response with epoll backend',
     @TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked malformed chunk extension rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked missing chunk-data CRLF rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterimEpollBackend);
   T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafelyEpollBackend);
   T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response with epoll backend',
@@ -11524,6 +11574,10 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
   T.Run('Expect: chunked invalid chunk-size rejects after interim response',
     @TestExpectContinueChunkedInvalidChunkSizeRejectsAfterInterim);
+  T.Run('Expect: chunked malformed chunk extension rejects after interim response',
+    @TestExpectContinueChunkedMalformedChunkExtensionRejectsAfterInterim);
+  T.Run('Expect: chunked missing chunk-data CRLF rejects after interim response',
+    @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterim);
   T.Run('Expect: fixed-length body stall closes safely after interim response',
     @TestExpectContinueFixedLengthBodyStallIdleTimeoutClosesSafely);
   T.Run('Expect: fixed-length zero body progress idle-timeout closes after interim response',
