@@ -2759,8 +2759,9 @@ begin
     'timeout before any wire bytes does not append synthetic 500');
 end;
 
-procedure RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
-  const ALabel, AReq: string; const AMaxBodySize, AMaxHeaderSize: Int64);
+procedure RunDirectErrorResponseWriteTimeoutOnRejectedRequest(
+  const ALabel, AReq, AExpectedStatusLine: string;
+  const AMaxBodySize, AMaxHeaderSize: Int64; const ABytesBeforeFailure: SizeUInt);
 var
   LHttpOpts: THttpServerOptions;
   LH1Opts: TH1ServerTransportOptions;
@@ -2771,8 +2772,6 @@ var
   LStream: ITcpStream;
   LOwnership: TTcpServerConnOwnership;
   LHandlerCalls: Int32;
-const
-  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
 begin
   LHttpOpts := THttpServerOptions.Default;
   LHttpOpts.WriteTimeout := 250;
@@ -2786,7 +2785,7 @@ begin
   Check(Supports(LTransport, IHttpServerSessionFactory, LFactory),
     ALabel + ': h1 transport exposes session factory for direct error write-timeout proof');
 
-  LStreamObj := TTimeoutWriteTcpStream.Create(AReq, 0, True);
+  LStreamObj := TTimeoutWriteTcpStream.Create(AReq, ABytesBeforeFailure, True);
   LStream := LStreamObj as ITcpStream;
   LHandlerCalls := 0;
   LSession := LFactory.NewSession(LStream, HandlerFunc(
@@ -2807,10 +2806,25 @@ begin
     ALabel + ': direct error still attempts to write an error response');
   CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
     ALabel + ': direct error arms write deadline before direct error response');
-  CheckEqual(Int64(0), Int64(Length(LStreamObj.Output)),
-    ALabel + ': direct error leaves no partial bytes when first error write times out');
+  CheckEqual(Int64(ABytesBeforeFailure), Int64(Length(LStreamObj.Output)),
+    ALabel + ': direct error preserves exactly the bytes written before timeout');
+  if AExpectedStatusLine <> '' then
+    Check(Pos(AExpectedStatusLine, LStreamObj.Output) > 0,
+      ALabel + ': direct error preserves the original status line bytes');
+  if ABytesBeforeFailure > 0 then
+    CheckEqual(Int64(1), Int64(CountSubstring(LStreamObj.Output, 'HTTP/1.1 ')),
+      ALabel + ': direct error partial-timeout still exposes only one status line');
   Check(Pos('HTTP/1.1 500', LStreamObj.Output) = 0,
     ALabel + ': direct error timeout does not append synthetic 500');
+end;
+
+procedure RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
+  const ALabel, AReq: string; const AMaxBodySize, AMaxHeaderSize: Int64);
+const
+  BYTES_BEFORE_FAILURE = 0;
+begin
+  RunDirectErrorResponseWriteTimeoutOnRejectedRequest(ALabel, AReq, '',
+    AMaxBodySize, AMaxHeaderSize, BYTES_BEFORE_FAILURE);
 end;
 
 procedure TestDirectErrorResponseArmsWriteTimeoutOnMalformedRequest;
@@ -2858,6 +2872,67 @@ const
 begin
   RunDirectErrorResponseArmsWriteTimeoutOnRejectedRequest(
     'unsupported transfer-coding direct 501', REQ, 0, 0);
+end;
+
+procedure RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
+  const ALabel, AReq, AExpectedStatusLine: string;
+  const AMaxBodySize, AMaxHeaderSize: Int64);
+const
+  BYTES_BEFORE_FAILURE = 64;
+begin
+  RunDirectErrorResponseWriteTimeoutOnRejectedRequest(ALabel, AReq,
+    AExpectedStatusLine, AMaxBodySize, AMaxHeaderSize, BYTES_BEFORE_FAILURE);
+end;
+
+procedure TestDirectErrorResponsePartialWriteTimeoutOnMalformedRequest;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
+    'malformed request direct 400 partial-timeout', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestDirectErrorResponsePartialWriteTimeoutOnPayloadTooLargeRequest;
+const
+  REQ =
+    'POST /too-large HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 3'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'abc';
+begin
+  RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
+    'payload-too-large direct 413 partial-timeout', REQ,
+    'HTTP/1.1 413 Payload Too Large', 2, 0);
+end;
+
+procedure TestDirectErrorResponsePartialWriteTimeoutOnHeaderTooLargeRequest;
+const
+  REQ =
+    'GET /too-many-headers HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'X-Long: 0123456789012345678901234567890123456789'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
+    'header-too-large direct 431 partial-timeout', REQ,
+    'HTTP/1.1 431 Request Header Fields Too Large', 0, 32);
+end;
+
+procedure TestDirectErrorResponsePartialWriteTimeoutOnUnsupportedTransferCodingRequest;
+const
+  REQ =
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunDirectErrorResponsePartialWriteTimeoutOnRejectedRequest(
+    'unsupported transfer-coding direct 501 partial-timeout', REQ,
+    'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
 procedure TestWriteTimeoutAfterPartialWireBytesStopsPipelineWithout500;
@@ -8831,6 +8906,14 @@ begin
     @TestDirectErrorResponseArmsWriteTimeoutOnHeaderTooLargeRequest);
   T.Run('Direct error response arms write timeout on unsupported transfer-coding request',
     @TestDirectErrorResponseArmsWriteTimeoutOnUnsupportedTransferCodingRequest);
+  T.Run('Direct error response partial-timeout on malformed request preserves status',
+    @TestDirectErrorResponsePartialWriteTimeoutOnMalformedRequest);
+  T.Run('Direct error response partial-timeout on payload-too-large request preserves status',
+    @TestDirectErrorResponsePartialWriteTimeoutOnPayloadTooLargeRequest);
+  T.Run('Direct error response partial-timeout on header-too-large request preserves status',
+    @TestDirectErrorResponsePartialWriteTimeoutOnHeaderTooLargeRequest);
+  T.Run('Direct error response partial-timeout on unsupported transfer-coding request preserves status',
+    @TestDirectErrorResponsePartialWriteTimeoutOnUnsupportedTransferCodingRequest);
   T.Run('Write timeout before any wire bytes does not append 500',
     @TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500);
   T.Run('Write timeout after partial wire bytes stops pipeline without 500',
