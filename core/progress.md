@@ -1,10 +1,10 @@
-# Progress Log: http server expect list-membership semantics
+# Progress Log: http server repeated expect header aggregation
 
 ## Session
 
-- **Scope:** 给 `Expect` request-side contract 补齐 list-membership 语义：duplicate `100-continue` 仍应触发 interim `100 Continue`。
+- **Scope:** 给 `Expect` request-side contract 补齐 repeated header-line aggregation 语义：后续 unsupported member 仍必须提升成 final `417`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `duplicate 100-continue list-membership`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `repeated Expect header aggregation`
 
 ## Current state
 
@@ -20,18 +20,18 @@
 ## Completed work
 
 - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-  把 `RequestExpectsContinue` 从 exact-equals 判定改成 comma-separated
-  list-membership 扫描。
+  把 `RequestExpectsContinue` / `RequestHasUnsupportedExpectations`
+  从 `Get('expect')` 改成 `GetAll('expect')` 全量扫描。
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 duplicate `100-continue` threaded / epoll focused tests，并先拿到 RED，
+  新增 repeated `Expect` header threaded / epoll focused tests，并先拿到 RED，
   再验证修复后 GREEN。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 `Expect` list-membership current truth。
+  已同步 repeated `Expect` header current truth。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `194/194 passed`
+  - `196/196 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

@@ -4727,6 +4727,77 @@ begin
 end;
 {$ENDIF}
 
+procedure RunRepeatedExpectHeaderUnsupportedMemberRejectsEarly(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LHandlerCalled: Boolean;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Expect: fancy'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LHandlerCalled := True;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 417 Expectation Failed', LResp) > 0,
+        ALabel + ': repeated expect headers with unsupported member reject with final 417');
+      Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+        ALabel + ': repeated expect headers do not emit interim 100');
+      Check(Pos('connection: close', LResp) > 0,
+        ALabel + ': repeated expect headers close connection');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called before any body bytes arrive');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly;
+begin
+  RunRepeatedExpectHeaderUnsupportedMemberRejectsEarly(False,
+    'repeated expect headers unsupported member threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend;
+begin
+  RunRepeatedExpectHeaderUnsupportedMemberRejectsEarly(True,
+    'repeated expect headers unsupported member epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -9659,6 +9730,8 @@ begin
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
     @TestUnsupportedExpectRejectsEarlyEpollBackend);
+  T.Run('Repeated Expect headers with unsupported member reject early with epoll backend',
+    @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
@@ -9862,6 +9935,8 @@ begin
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',
     @TestUnsupportedExpectRejectsEarly);
+  T.Run('Repeated Expect headers with unsupported member reject early',
+    @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
   T.Run('Pipelined requests in single write', @TestPipelinedRequestsInSingleWrite);
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);

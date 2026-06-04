@@ -288,6 +288,8 @@ end;
 
 function RequestExpectsContinue(const AParser: IH1Parser): Boolean;
 var
+  LValues: TStringArray;
+  LI: SizeInt;
   LExpect: string;
   LStart: SizeInt;
   LPos: SizeInt;
@@ -297,25 +299,31 @@ begin
   if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
     Exit(False);
 
-  LExpect := Trim(AParser.GetHeaders.Get('expect'));
-  if LExpect = '' then
-    Exit(False);
-
-  LStart := 1;
-  while LStart <= Length(LExpect) do
+  LValues := AParser.GetHeaders.GetAll('expect');
+  for LI := 0 to High(LValues) do
   begin
-    LPos := LStart;
-    while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
-      Inc(LPos);
-    LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
-    if LToken = '100-continue' then
-      Exit(True);
-    LStart := LPos + 1;
+    LExpect := Trim(LValues[LI]);
+    if LExpect = '' then
+      Continue;
+
+    LStart := 1;
+    while LStart <= Length(LExpect) do
+    begin
+      LPos := LStart;
+      while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
+        Inc(LPos);
+      LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
+      if LToken = '100-continue' then
+        Exit(True);
+      LStart := LPos + 1;
+    end;
   end;
 end;
 
 function RequestHasUnsupportedExpectations(const AParser: IH1Parser): Boolean;
 var
+  LValues: TStringArray;
+  LI: SizeInt;
   LExpect: string;
   LStart: SizeInt;
   LPos: SizeInt;
@@ -325,20 +333,24 @@ begin
   if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
     Exit(False);
 
-  LExpect := Trim(AParser.GetHeaders.Get('expect'));
-  if LExpect = '' then
-    Exit(False);
-
-  LStart := 1;
-  while LStart <= Length(LExpect) do
+  LValues := AParser.GetHeaders.GetAll('expect');
+  for LI := 0 to High(LValues) do
   begin
-    LPos := LStart;
-    while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
-      Inc(LPos);
-    LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
-    if (LToken <> '') and (LToken <> '100-continue') then
-      Exit(True);
-    LStart := LPos + 1;
+    LExpect := Trim(LValues[LI]);
+    if LExpect = '' then
+      Continue;
+
+    LStart := 1;
+    while LStart <= Length(LExpect) do
+    begin
+      LPos := LStart;
+      while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
+        Inc(LPos);
+      LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
+      if (LToken <> '') and (LToken <> '100-continue') then
+        Exit(True);
+      LStart := LPos + 1;
+    end;
   end;
 end;
 

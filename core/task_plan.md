@@ -1,22 +1,22 @@
-# Task Plan: http server expect list-membership semantics
+# Task Plan: http server repeated expect header aggregation
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，这一刀转回 request-side protocol
-completeness，专门收紧 `Expect` 的 list-membership 语义：
+继续留在 `3/6 H1 正确性加固` 主线，这一刀继续 request-side protocol
+completeness，专门收紧 repeated `Expect` header-line 的聚合语义：
 
-- `Expect` 不能只按“精确等于 `100-continue`”判断
-- 只要 header value 的 comma-separated member 里包含
-  `100-continue` expectation，server 就应按现有契约发出单条 interim
-  `100 Continue`
+- parser 会把重复 header-line 存成多条 entry
+- `Expect` 判定不能只看第一条 `Get('expect')`
+- 如果后续 `Expect:` 行里带 unsupported member，server 仍必须直接返回
+  final `417`，不能因为第一条是 `100-continue` 就误发 interim `100`
 
-本轮先只锁定一个最小但真实的组合值：
-`Expect: 100-continue, 100-continue`
+本轮只锁定一个最小但真实的重复 header-line 组合：
+第一条 `Expect: 100-continue`，第二条 `Expect: fancy`
 
 要求：
 
 - 先 RED，再最小修复 H1 parse-stage 判定
-- 优先复用现有 `RunExpectContinueSendsInterimResponse` helper
+- 优先复用现有 unsupported-Expect helper 风格
 - 只跑 `test_http_server` focused gate
 - 不扩成大面积 `Expect` 组合矩阵
 
@@ -24,10 +24,10 @@ completeness，专门收紧 `Expect` 的 list-membership 语义：
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 缩小剩余高价值缺口，选定 `Expect` list-membership 语义
-- [x] 在 `test_http_server` 补 duplicate `100-continue` threaded / epoll focused tests
-- [x] 先跑 RED，确认当前实现把合法 list value 漏判成“不发 interim 100”
-- [x] 最小修复 `RequestExpectsContinue`，从 exact-equals 改为 list-membership
+- [x] 缩小剩余高价值缺口，选定 repeated `Expect` header 聚合语义
+- [x] 在 `test_http_server` 补 repeated `Expect` threaded / epoll focused tests
+- [x] 先跑 RED，确认当前实现只看第一条 `Expect`，从而漏掉后续 unsupported member
+- [x] 最小修复 `RequestExpectsContinue` / `RequestHasUnsupportedExpectations`，从 `Get` 改为 `GetAll` 全量扫描
 - [x] 跑 focused：
   - `make -C tests/nextpas.core.http/test_http_server test`
 - [x] 更新 coverage 文档与控制文件
@@ -47,12 +47,12 @@ completeness，专门收紧 `Expect` 的 list-membership 语义：
 
 ## Intended outcome
 
-- duplicate `100-continue` 不再被当成“精确值不匹配”而漏掉 interim `100`
+- repeated `Expect` header-line 不再因为第一条是 `100-continue` 就漏掉后续 unsupported member
 - threaded / epoll 两条 live 路径都锁住：
-  - 先返回单条 `HTTP/1.1 100 Continue`
-  - 后续仍能读取 body 并进入正常 handler
-  - 最终 `200` 与 body contract 保持不变
+  - 直接返回 final `HTTP/1.1 417 Expectation Failed`
+  - 不会误发 interim `100 Continue`
+  - 不进入 handler
 - 证据要求：
-  - 新增 duplicate-member tests 先 RED 后 GREEN
+  - 新增 repeated-header tests 先 RED 后 GREEN
   - focused server suite 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`

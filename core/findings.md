@@ -1,64 +1,71 @@
-# Findings: http server expect list-membership semantics
+# Findings: http server repeated expect header aggregation
 
 ## Scope
 
-- 本轮转回 request-side protocol completeness，不扩散成更大的 `Expect`
+- 本轮继续 request-side protocol completeness，不扩散成更大的 `Expect`
   矩阵，只收一个真实生产缺口：
-  `Expect` 的 `100-continue` 判定不该是 exact-equals，而应是 list-membership。
+  repeated `Expect` header-line 的判定不能只看第一条 header value。
 
 ## Confirmed truths
 
-### 1. 当前实现确实把合法的 `Expect` list value 漏判了
+### 1. 当前实现确实只看了第一条 `Expect` header value
 
-- 旧实现的 [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-  里，`RequestExpectsContinue` 用的是：
-  - `LowerCase(Trim(...)) = '100-continue'`
-- 这只接受 header value 精确等于 `100-continue`。
-- 但 `RequestHasUnsupportedExpectations` 已经按 comma-separated list token 化了，
-  说明 `Expect` 本身就被当作 list 处理；continue 判定继续用 exact-equals 不一致。
+- parser 在 [src/nextpas.core.http.impl.h1.parser.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.parser.pas)
+  里会对重复 header-line 调 `FHeaders.Add(...)`。
+- 但旧实现的 [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
+  里，`RequestExpectsContinue` 和 `RequestHasUnsupportedExpectations`
+  都是基于：
+  - `AParser.GetHeaders.Get('expect')`
+- 而 [src/nextpas.core.http.headers.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.headers.pas)
+  的 `Get()` 只返回第一条 matching value。
+- 这意味着后续 `Expect:` 行会被完全忽略。
 
 ### 2. TDD 已证明这不是文档问题，而是真生产缺口
 
 - 在 [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  先加了 duplicate member focused tests：
-  - threaded `Expect: 100-continue, 100-continue`
-  - epoll `Expect: 100-continue, 100-continue`
+  新增 repeated header focused tests：
+  - 第一条 `Expect: 100-continue`
+  - 第二条 `Expect: fancy`
 - 首轮 RED 明确落在新 case：
-  - `interim 100 continue returned`
-- 这证明 server 确实没有把合法 list value 识别成 `100-continue` expectation。
+  - `repeated expect headers with unsupported member reject with final 417`
+- 这直接证明 server 因为只看第一条 `Expect`，没有把后续 unsupported member
+  正确提升成 final `417`。
 
-### 3. 最小修复只需要收紧 `RequestExpectsContinue`
+### 3. 最小修复只需要把 `Expect` 扫描切到 `GetAll('expect')`
 
 - 本轮没有动 parser error / body / write-timeout 等其他路径。
-- 只把 `RequestExpectsContinue` 改为和 unsupported-member 判定一致的
-  comma-separated token 扫描：
-  - 只要任一 token 等于 `100-continue`，就返回 `True`
-- 现有 `RequestHasUnsupportedExpectations` 继续负责：
-  - 一旦同时出现 unsupported member，仍然直接走 `417`
+- 只把 `RequestExpectsContinue` / `RequestHasUnsupportedExpectations`
+  从单值 `Get('expect')` 改为多值 `GetAll('expect')` 后逐条 token 扫描。
+- 这样：
+  - 任一 header-line / 任一 comma-separated member 里的 `100-continue`
+    都能被看到
+  - 任一后续 header-line / member 里的 unsupported expectation 也能被看到
 
-### 4. 修复后 `Expect` request-side live contract 更完整
+### 4. 修复后 repeated `Expect` 聚合语义更完整
 
-- duplicate `100-continue` 现在在 threaded / epoll 两条路径上都直接锁住：
-  - 先返回单条 interim `100 Continue`
-  - handler 仍只在 body 送达后才被调用
-  - 最终 `200` 和 body echo 契约不变
-- 这轮因此是小而真实的生产修复，不只是覆盖扩充。
+- 当第一条 `Expect` 是 `100-continue`、后续再出现 unsupported member 时，
+  threaded / epoll 两条 live 路径现在都直接锁住：
+  - 返回 final `417 Expectation Failed`
+  - 不误发 interim `100 Continue`
+  - 不进入 handler
+- 这轮因此也是小而真实的生产修复。
 
 ## Verification evidence
 
 - focused:
   - RED:
     - `make -C tests/nextpas.core.http/test_http_server test`
-    - 新增 epoll duplicate-member case 首轮失败，报错
-      `interim 100 continue returned`
+    - 新增 epoll repeated-header case 首轮失败，报错
+      `repeated expect headers with unsupported member reject with final 417`
   - GREEN:
     - `make -C tests/nextpas.core.http/test_http_server test`
-    - `194/194 passed`
+    - `196/196 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮只锁了 duplicate `100-continue`，还没系统铺开：
+- 这轮只锁了 repeated-header + unsupported-member 这一种重复 header 组合，
+  还没系统铺开：
   - bodyless `Expect: 100-continue`
   - 更复杂的 `Expect` 组合 / OWS / repeated header-line characterization
 - 下一刀如果继续做 `Expect`，应该仍保持“小而真”，不要一次扩成大矩阵。
