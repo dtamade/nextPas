@@ -1786,6 +1786,75 @@ begin
   end;
 end;
 
+procedure RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+  const AOpts: THttpServerOptions; const AReqHeaders, APartialBody,
+  ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+  LHandlerCalled: Boolean;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LHandlerCalled := True;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    LRouter as IHttpHandler, nil, AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(AReqHeaders[1], SizeUInt(Length(AReqHeaders)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) = 1,
+        ALabel + ': interim 100 returned first');
+      Check(Pos('HTTP/1.1 200', LResp1) = 0,
+        ALabel + ': no final success response before body bytes');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not entered before body bytes arrive');
+
+      if APartialBody <> '' then
+        LConn.Write(APartialBody[1], SizeUInt(Length(APartialBody)));
+      LResp2 := ReadUntilClosedOrDeadline(LConn, 5000, LClosed, LTimedOut);
+      Check(LClosed,
+        ALabel + ': stalled body closes connection within observation window');
+      Check(not LTimedOut,
+        ALabel + ': stalled body close does not overrun read deadline');
+      Check(Pos('HTTP/1.1 100 Continue', LResp2) = 0,
+        ALabel + ': interim 100 is not repeated after stall');
+      Check(Pos('HTTP/1.1 200', LResp2) = 0,
+        ALabel + ': stalled body never reaches success response');
+      Check(Pos('HTTP/1.1 500', LResp2) = 0,
+        ALabel + ': stalled body does not append synthetic 500');
+      CheckEqual(Int64(0), Int64(CountSubstring(LResp2, 'HTTP/1.1 ')),
+        ALabel + ': no final status line is emitted after idle timeout close');
+      Check(not LHandlerCalled,
+        ALabel + ': handler is never entered when body stalls after interim 100');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
   const AOpts: THttpServerOptions; const ALabel, AReq, AReason: string);
 var
@@ -1933,6 +2002,50 @@ begin
   RunExpectContinueChunkedMaxBodySizeRejectsAfterInterimSecurityCase(
     LOpts,
     'Expect chunked max-body rejects after interim 100');
+end;
+
+procedure TestExpectContinuePartialFixedLengthBodyIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY = 'ab';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    PARTIAL_BODY,
+    'Expect fixed-length partial body idle-timeout');
+end;
+
+procedure TestExpectContinuePartialChunkedBodyIdleTimeout;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY =
+    '3'#13#10 +
+    'ab';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    PARTIAL_BODY,
+    'Expect chunked partial body idle-timeout');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarly;
@@ -2679,6 +2792,52 @@ begin
   RunExpectContinueChunkedMaxBodySizeRejectsAfterInterimSecurityCase(
     LOpts,
     'epoll Expect chunked max-body rejects after interim 100');
+end;
+
+procedure TestExpectContinuePartialFixedLengthBodyIdleTimeoutEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY = 'ab';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    PARTIAL_BODY,
+    'epoll Expect fixed-length partial body idle-timeout');
+end;
+
+procedure TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+  PARTIAL_BODY =
+    '3'#13#10 +
+    'ab';
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.IdleTimeout := 200;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueBodyStallIdleTimeoutSecurityCase(
+    LOpts,
+    REQ_HEADERS,
+    PARTIAL_BODY,
+    'epoll Expect chunked partial body idle-timeout');
 end;
 
 procedure TestExpectDeclaredOversizeRejectsEarlyEpollBackend;
@@ -4806,6 +4965,10 @@ begin
     @TestExpectContinueChunkedPositiveFlow);
   T.Run('Expect chunked MaxBodySize rejects after interim 100',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
+  T.Run('Expect fixed-length partial body idle-timeout closes after interim 100',
+    @TestExpectContinuePartialFixedLengthBodyIdleTimeout);
+  T.Run('Expect chunked partial body idle-timeout closes after interim 100',
+    @TestExpectContinuePartialChunkedBodyIdleTimeout);
   T.Run('Expect declared oversize rejects early without interim 100',
     @TestExpectDeclaredOversizeRejectsEarly);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
@@ -5006,6 +5169,10 @@ begin
     @TestExpectContinueChunkedPositiveFlowEpollBackend);
   T.Run('Expect chunked MaxBodySize rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
+  T.Run('Expect fixed-length partial body idle-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinuePartialFixedLengthBodyIdleTimeoutEpollBackend);
+  T.Run('Expect chunked partial body idle-timeout closes after interim 100 with epoll backend',
+    @TestExpectContinuePartialChunkedBodyIdleTimeoutEpollBackend);
   T.Run('Expect declared oversize rejects early without interim 100 with epoll backend',
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',

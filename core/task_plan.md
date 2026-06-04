@@ -1,43 +1,42 @@
-# Task Plan: oversize trailer max-header explicit 431
+# Task Plan: expect interim-100 body-stall idle-timeout truth
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，完成 header-budget 邻接收口：
-把 chunked oversize trailer over `MaxHeaderSize` 从 `431 or safe-close`
-收紧成 explicit `431` proof，并补齐 server/security 两层的 threaded /
-epoll 直接证据。
+继续停留在 `3/6 H1 正确性加固` 主线，完成一个更高价值的 request-side
+runtime 缺口：
+把 `Expect: 100-continue` 已发出 interim `100` 之后，request body
+只到达一部分然后 stall 的语义锁清楚。
 
-- 复用普通 header field / request-target over `MaxHeaderSize` 已收紧的
-  focused `431` 口径
-- 先在 `test_http_server` / `test_http_security` 写 focused tests 取真值
-- 如果直接 GREEN，本轮不改生产代码
-- 只跑 `test_http_server` / `test_http_security` focused gates，不回去跑全量 HTTP
+- 先在 `test_http_security` 写 threaded / epoll 两条 focused live proof
+- 先 RED，确认 threaded 与 epoll 是否存在差异
+- 如果 threaded 真实会误补 synthetic `500`，做最小生产修复
+- 只跑 `test_http_security` focused gate，不回去跑全量 HTTP
 
 要求：
 
 - 只动 HTTP 相关路径
-- 不扩散到 benchmark / server 基类设计 / 大面积 parity 平铺
+- 不扩散到 benchmark / server 基类设计 / 大面积 malformed parity 平铺
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
-- [x] 审阅 `test_http_server` / `test_http_security` 现有 oversize trailer /
-  `MaxHeaderSize` 口径
-- [x] 在 `test_http_server` 收紧 threaded explicit `431` + handler 不进入 proof
-- [x] 在 `test_http_server` 补 Linux `epoll` explicit `431` + handler 不进入 proof
-- [x] 在 `test_http_security` 收紧 threaded raw-wire explicit `431` proof
-- [x] 在 `test_http_security` 收紧 Linux `epoll` raw-wire explicit `431` proof
-- [x] focused gates 直接 GREEN，证明现有 transport contract 已成立
-- [x] 跑 focused：
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `make -C tests/nextpas.core.http/test_http_security clean test`
+- [x] 在 `test_http_security` 新增 `Expect + interim 100 + partial body stall`
+  threaded / epoll focused live proof
+- [x] focused gate 先 RED，确认只有 threaded 路径会误补 synthetic `500`
+- [x] 锁定根因：blocking `TTcpStream.Read` 超时在 live threaded 路径上会落成
+  `ENetworkError('tcp read failed (...)')`，而 whole-run `Run` outer except
+  把 request-side ingress 读失败误当成内部错误写出 `500`
+- [x] 在 `src/nextpas.core.http.impl.h1.pas` 做最小生产修复：
+  `TH1ServerConnectionState.Run` 对 request-side read failure 直接安全关闭，
+  不再补写 final `500`
+- [x] focused gate 转绿并确认 heaptrc 无泄漏
 - [x] 更新 coverage 文档与控制文件
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+  - `src/nextpas.core.http.impl.h1.pas`
   - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
@@ -48,13 +47,12 @@ epoll 直接证据。
 
 ## Intended outcome
 
-- server/security 两层对 chunked oversize trailer over `MaxHeaderSize` 明确锁住：
-  - 在受控小 `MaxHeaderSize` 下，oversized trailer 直接返回显式 `431`
-  - threaded / Linux `epoll` 两条路径都给出 focused 证据
-- server / security 两层口径重新对齐：
-  - server 锁 `431` 且 handler 不进入
-  - security 锁 raw-wire `431`
+- `Expect: 100-continue` 已发出 interim `100` 之后：
+  - partial fixed-length body stall 会安全关闭
+  - partial chunked body stall 会安全关闭
+  - threaded / epoll 两条 live path 都不会追加 synthetic `500`
+  - handler 不会进入
 - 证据要求：
-  - 四条 oversize trailer `431` tests GREEN
-  - focused server/security suites 全绿
+  - 四条 `Expect + body stall idle-timeout` tests GREEN
+  - `make -C tests/nextpas.core.http/test_http_security clean test` 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`

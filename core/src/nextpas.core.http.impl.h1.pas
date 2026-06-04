@@ -372,6 +372,14 @@ begin
     (LContentLength > AMaxBodySize);
 end;
 
+function IsRequestReadFailure(const E: Exception): Boolean;
+begin
+  Result := False;
+  if E = nil then
+    Exit(False);
+  Result := (E is ETimeoutError) or (E is ENetworkError);
+end;
+
 { TPrefixedTcpStream }
 
 constructor TPrefixedTcpStream.Create(const AInner: ITcpStream; const APrefix: string);
@@ -1195,8 +1203,9 @@ begin
     except
       on E: Exception do
       begin
-        WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR,
-          FOptions.WriteTimeout);
+        if not IsRequestReadFailure(E) then
+          WriteErrorResponse(FConn, HTTP_STATUS_INTERNAL_SERVER_ERROR,
+            FOptions.WriteTimeout);
         FKeepAlive := False;
       end;
     end;
