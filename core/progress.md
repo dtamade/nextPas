@@ -1,10 +1,10 @@
-# Progress Log: http poll-driven chunked-not-final partial-timeout proof
+# Progress Log: http epoll malformed chunked live parity
 
 ## Session
 
-- **Scope:** 给 `Transfer-Encoding: chunked, gzip` 补上 poll-driven standalone direct-error partial-timeout `400` proof。
+- **Scope:** 给 Linux `epoll` backend 补上两条 malformed chunked live raw-wire `400` proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `poll-driven direct-error timeout tightening` -> `chunked-not-final partial-timeout proof`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `raw-wire malformed chunked security` -> `epoll live parity tightening`
 
 ## Current state
 
@@ -19,21 +19,22 @@
 
 ## Completed work
 
-- [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 focused proof：
-  `H1 poll-driven standalone chunked-not-final transfer-coding partial-timeout preserves status`。
+- [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  新增两条 focused live raw-wire proof：
+  `Chunked extra bytes after close -> 400 with epoll backend`、
+  `Malformed trailer field -> 400 with epoll backend`。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步这条 malformed `400` 的 poll-driven partial-timeout seam 说明。
+  已同步这两条 malformed chunked `epoll` live parity 说明。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_server test`
-  - `179/179 passed`
+- `make -C tests/nextpas.core.http/test_http_security clean test`
+  - `120/120 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀继续保持窄批次，不要回到大而散的治理节奏。
+- 下一刀不要继续平铺相同类型的 backend parity。
 - 更合理的两个方向是：
-  - 继续找还没被直接分类的真正 runtime / malformed 边角
-  - 或开始审视 `3/6 H1 正确性加固` 的阶段收口条件，避免继续低价值复制
+  - 转向真正还没分类完的 runtime / malformed 边角
+  - 或审视 `3/6 H1 正确性加固` 的阶段收口条件，准备衔接更高层的 server/base 架构演进

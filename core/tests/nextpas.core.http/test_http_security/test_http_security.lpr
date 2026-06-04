@@ -2314,6 +2314,35 @@ begin
     'epoll missing chunk-data CRLF: explicit 400');
 end;
 
+procedure TestChunkedExtraBytesAfterCloseEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10#13#10 +
+            'garbage';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll chunked extra bytes after close: explicit 400');
+end;
+
+procedure TestMalformedTrailerFieldEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10 +
+            'Trailer: X-Bad'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10 +
+            'Bad Header: value'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll malformed trailer field: explicit 400');
+end;
+
 procedure TestTruncatedChunkExtensionAtEofEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
@@ -2824,6 +2853,8 @@ begin
     @TestTruncatedChunkExtensionCrAtEofEpollBackend);
   T.Run('Missing chunk-data CRLF -> 400 with epoll backend',
     @TestMissingChunkDataCrLfEpollBackend);
+  T.Run('Chunked extra bytes after close -> 400 with epoll backend',
+    @TestChunkedExtraBytesAfterCloseEpollBackend);
   T.Run('Truncated chunked request at EOF -> 400 with epoll backend',
     @TestTruncatedChunkedRequestAtEofEpollBackend);
   T.Run('Truncated chunk-size line at EOF -> 400 with epoll backend',
@@ -2908,6 +2939,8 @@ begin
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   T.Run('Chunked trailer pipelined next request in single write with epoll backend',
     @TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend);
+  T.Run('Malformed trailer field -> 400 with epoll backend',
+    @TestMalformedTrailerFieldEpollBackend);
   {$ENDIF}
   T.Summary;
 end.

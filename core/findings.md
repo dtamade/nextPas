@@ -1,56 +1,48 @@
-# Findings: http poll-driven chunked-not-final partial-timeout proof
+# Findings: http epoll malformed chunked live parity
 
 ## Scope
 
-- 本轮不碰生产逻辑，只继续收口 `HttpServer` poll-driven direct-error timeout seam。
-- 目标是确认 `Transfer-Encoding: chunked, gzip` 这条
-  `chunked`-not-final malformed request 不只在 poll-driven standalone direct-error writable-drain
-  路径返回 `400`，在 partial-timeout 路径上也保持同样的原始状态行语义。
+- 本轮不碰生产逻辑，只回到 raw-wire malformed chunked request security。
+- 目标是给 Linux `epoll` backend 补上两条真实 socket 侧缺失证明：
+  - `chunked + Connection: close + extra bytes after terminal chunk` -> `400`
+  - malformed trailer field -> `400`
 
 ## Confirmed truths
 
-### 1. 这条 malformed `400` 之前还缺一条 poll-driven standalone partial-timeout 证据
+### 1. 这两条 malformed chunked contract 之前缺的是 `epoll` live parity，不是 parser/server 基础 truth
 
 - 现有证据已经包括：
-  - parser focused proof：`Transfer-Encoding: chunked, gzip` 会被判为 malformed
-  - generic/threaded server proof：返回显式 `400`
-  - epoll live raw-wire proof：返回显式 `400`
-  - poll-driven writable-drain proof：reactor-owned nonblocking drain 会写出显式 `400`
-- 现有 poll-driven partial-timeout seam 已覆盖：
-  - generic malformed `400`
-  - payload-too-large `413`
-  - header-too-large `431`
-  - unsupported transfer-coding `501`
-- 但 `chunked, gzip -> 400` 这条 transfer-coding order malformed 还没有自己的 partial-timeout proof。
+  - parser focused proof：terminal chunk close 后 extra bytes 会被拒绝；非法 trailer field 会被拒绝
+  - threaded/default server proof：两条请求都返回显式 `400`
+  - security `epoll` live parity：此前已覆盖 transfer-coding order、invalid chunk size、missing chunk-data CRLF、chunk/trailer truncation EOF、oversize trailer
+- 缺口在于：
+  - `epoll` security 还没有直接证明 terminal close 后 garbage tail -> `400`
+  - `epoll` security 还没有直接证明 malformed trailer field -> `400`
 
-### 2. 当前实现对这条 malformed request 在 partial-timeout 路径上也保持原始 `400`
+### 2. 当前实现对这两条 malformed request 在 `epoll` live raw-wire 路径上都已保持显式 `400`
 
-- `test_http_server` 新增 focused proof：
-  - `H1 poll-driven standalone chunked-not-final transfer-coding partial-timeout preserves status`
-- 新 case 直接锁定：
-  - 请求：`Transfer-Encoding: chunked, gzip`
-  - handler 不会被调用
-  - 不发生 worker handoff
-  - 部分 error bytes 已写出后仍只保留一条原始 `HTTP/1.1 400 Bad Request`
-  - 不追加 synthetic `500`
-
-新测试直接通过，说明 runtime 当前已把这条 malformed transfer-coding order contract 收敛到 poll-driven partial-timeout seam。
+- `test_http_security` 新增 focused proof：
+  - `Chunked extra bytes after close -> 400 with epoll backend`
+  - `Malformed trailer field -> 400 with epoll backend`
+- 两条 case 都直接通过，锁定：
+  - Linux `epoll` backend 下真实 socket 请求会返回显式 `HTTP/1.1 400`
+  - 这轮不需要生产修复
 
 ### 3. 本轮仍是 coverage-expansion，不需要生产修复
 
 - 没有新增实现改动。
-- 新测试直接通过，说明已有运行时行为已经满足我们要冻结的 timeout seam 语义。
+- “先 RED” 的结果是新增 case 直接 GREEN，说明本轮问题是 live security proof 缺档，而不是实现缺陷。
 
 ## Verification evidence
 
 - focused:
-  - `make -C tests/nextpas.core.http/test_http_server test`
-    - `179/179 passed`
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `120/120 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这一刀只补一条缺失的 partial-timeout seam 证据，不应继续把同型 malformed `400` 分支机械铺满。
-- 下一步更值的方向仍应二选一：
-  - 回到真正还没分类完的 runtime / malformed 边角
-  - 或开始审视 `3/6 H1 正确性加固` 的阶段收口条件，避免继续低价值补洞
+- 这轮已经把两条最顺手的 malformed chunked `epoll` live parity 缺口补掉，后续不应继续机械复制同型 backend parity。
+- 下一步更值的方向应转向：
+  - 真正还没分类完的 runtime / malformed 边角
+  - 或 `3/6 H1 正确性加固` 的阶段收口条件与后续架构演进接口
