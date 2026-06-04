@@ -371,38 +371,39 @@ begin
   end;
 end;
 
+procedure RunTruncatedChunkedAtEofCase(const AOpts: THttpServerOptions;
+  const AReq, ALabel: string);
+begin
+  RunSecurityRequestExpectStatus(
+    AOpts,
+    AReq,
+    'HTTP/1.1 400',
+    ALabel + ': explicit 400',
+    True);
+end;
+
 { Test 2aa: Truncated chunk extension at EOF }
 procedure TestTruncatedChunkExtensionAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5;sig=abc';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated chunk extension EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated chunk extension EOF');
 end;
 
 { Test 2ab: Truncated chunk extension CR at EOF }
 procedure TestTruncatedChunkExtensionCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5;sig=abc'#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated chunk extension CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated chunk extension CR EOF');
 end;
 
 { Test 2b: Missing chunk-data CRLF }
@@ -424,178 +425,128 @@ end;
 
 { Test 2c: Truncated chunked request at EOF }
 procedure TestTruncatedChunkedRequestAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hel';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated chunked request EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated chunked request EOF');
 end;
 
 { Test 2d: Truncated chunk-size line at EOF }
 procedure TestTruncatedChunkSizeLineAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated chunk-size line EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated chunk-size line EOF');
 end;
 
 { Test 2e: Truncated terminal chunk ending at EOF }
 procedure TestTruncatedTerminalChunkEndingAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13#10 +
             '0'#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated terminal chunk ending EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated terminal chunk ending EOF');
 end;
 
 { Test 2e0: Truncated terminal chunk ending CR at EOF }
 procedure TestTruncatedTerminalChunkEndingCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13#10 +
             '0'#13#10#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated terminal chunk ending CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated terminal chunk ending CR EOF');
 end;
 
 { Test 2ea: Truncated terminal chunk extension at EOF }
 procedure TestTruncatedTerminalChunkExtensionAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13#10 +
             '0;sig=abc';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated terminal chunk extension EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated terminal chunk extension EOF');
 end;
 
 { Test 2eb: Truncated terminal chunk extension CR at EOF }
 procedure TestTruncatedTerminalChunkExtensionCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13#10 +
             '0;sig=abc'#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated terminal chunk extension CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated terminal chunk extension CR EOF');
 end;
 
 { Test 2ec: Truncated terminal chunk ending after extension at EOF }
 procedure TestTruncatedTerminalChunkEndingAfterExtensionAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13#10 +
             '0;sig=abc'#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated terminal chunk ending after extension EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated terminal chunk ending after extension EOF');
 end;
 
 { Test 2ed: Truncated terminal chunk ending after extension CR at EOF }
 procedure TestTruncatedTerminalChunkEndingAfterExtensionCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13#10 +
             '0;sig=abc'#13#10#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated terminal chunk ending after extension CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated terminal chunk ending after extension CR EOF');
 end;
 
 { Test 2f: Truncated chunk-data ending at EOF }
 procedure TestTruncatedChunkDataEndingAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated chunk-data ending EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated chunk-data ending EOF');
 end;
 
 { Test 2g: Truncated chunk-data CR at EOF }
 procedure TestTruncatedChunkDataCrAtEof;
-var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
             '5'#13#10'hello'#13;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
-  try
-    LResp := SendRawAndShutdownWrite(LPort, REQ);
-    Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Truncated chunk-data CR EOF: explicit 400');
-  finally
-    StopServer(LServer, LHandle);
-  end;
+  RunTruncatedChunkedAtEofCase(
+    THttpServerOptions.Default,
+    REQ,
+    'Truncated chunk-data CR EOF');
 end;
 
 { Test 2h: Chunked MaxBodySize rejection must happen before terminal chunk }
@@ -1940,6 +1891,144 @@ begin
     'epoll missing chunk-data CRLF: explicit 400');
 end;
 
+procedure TestTruncatedChunkExtensionAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5;sig=abc';
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated chunk extension EOF');
+end;
+
+procedure TestTruncatedChunkExtensionCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5;sig=abc'#13;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated chunk extension CR EOF');
+end;
+
+procedure TestTruncatedChunkedRequestAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hel';
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated chunked request EOF');
+end;
+
+procedure TestTruncatedChunkSizeLineAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5';
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated chunk-size line EOF');
+end;
+
+procedure TestTruncatedTerminalChunkEndingAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated terminal chunk ending EOF');
+end;
+
+procedure TestTruncatedTerminalChunkEndingCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0'#13#10#13;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated terminal chunk ending CR EOF');
+end;
+
+procedure TestTruncatedTerminalChunkExtensionAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0;sig=abc';
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated terminal chunk extension EOF');
+end;
+
+procedure TestTruncatedTerminalChunkExtensionCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0;sig=abc'#13;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated terminal chunk extension CR EOF');
+end;
+
+procedure TestTruncatedTerminalChunkEndingAfterExtensionAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0;sig=abc'#13#10;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated terminal chunk ending after extension EOF');
+end;
+
+procedure TestTruncatedTerminalChunkEndingAfterExtensionCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13#10 +
+            '0;sig=abc'#13#10#13;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated terminal chunk ending after extension CR EOF');
+end;
+
+procedure TestTruncatedChunkDataEndingAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello';
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated chunk-data ending EOF');
+end;
+
+procedure TestTruncatedChunkDataCrAtEofEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+            'Transfer-Encoding: chunked'#13#10'Connection: close'#13#10#13#10 +
+            '5'#13#10'hello'#13;
+begin
+  RunTruncatedChunkedAtEofCase(
+    EpollSecurityServerOptions,
+    REQ,
+    'epoll truncated chunk-data CR EOF');
+end;
+
 procedure TestTruncatedTrailerCrAtEofEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
@@ -2219,8 +2308,32 @@ begin
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
   T.Run('Invalid chunk size -> 400 with epoll backend',
     @TestInvalidChunkSizeEpollBackend);
+  T.Run('Truncated chunk extension at EOF -> 400 with epoll backend',
+    @TestTruncatedChunkExtensionAtEofEpollBackend);
+  T.Run('Truncated chunk extension CR at EOF -> 400 with epoll backend',
+    @TestTruncatedChunkExtensionCrAtEofEpollBackend);
   T.Run('Missing chunk-data CRLF -> 400 with epoll backend',
     @TestMissingChunkDataCrLfEpollBackend);
+  T.Run('Truncated chunked request at EOF -> 400 with epoll backend',
+    @TestTruncatedChunkedRequestAtEofEpollBackend);
+  T.Run('Truncated chunk-size line at EOF -> 400 with epoll backend',
+    @TestTruncatedChunkSizeLineAtEofEpollBackend);
+  T.Run('Truncated terminal chunk ending at EOF -> 400 with epoll backend',
+    @TestTruncatedTerminalChunkEndingAtEofEpollBackend);
+  T.Run('Truncated terminal chunk ending CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTerminalChunkEndingCrAtEofEpollBackend);
+  T.Run('Truncated terminal chunk extension at EOF -> 400 with epoll backend',
+    @TestTruncatedTerminalChunkExtensionAtEofEpollBackend);
+  T.Run('Truncated terminal chunk extension CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTerminalChunkExtensionCrAtEofEpollBackend);
+  T.Run('Truncated terminal chunk ending after extension at EOF -> 400 with epoll backend',
+    @TestTruncatedTerminalChunkEndingAfterExtensionAtEofEpollBackend);
+  T.Run('Truncated terminal chunk ending after extension CR at EOF -> 400 with epoll backend',
+    @TestTruncatedTerminalChunkEndingAfterExtensionCrAtEofEpollBackend);
+  T.Run('Truncated chunk-data ending at EOF -> 400 with epoll backend',
+    @TestTruncatedChunkDataEndingAtEofEpollBackend);
+  T.Run('Truncated chunk-data CR at EOF -> 400 with epoll backend',
+    @TestTruncatedChunkDataCrAtEofEpollBackend);
   T.Run('Truncated trailer section at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerAtEofEpollBackend);
   T.Run('Truncated trailer field-name at EOF -> 400 with epoll backend',
