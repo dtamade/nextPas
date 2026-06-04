@@ -1,66 +1,58 @@
-# Findings: after-interim trailer EOF chain closure audit
+# Findings: keep-alive request-tail contract decision
 
 ## Scope
 
-本轮不新增测试，先审计上一阶段 `Expect: 100-continue` + chunked trailer EOF
-after-interim proof 是否已经形成完整邻接链。若已经闭合，就停止同型补证，
-把下一刀切到 keep-alive request-tail contract。
+本轮审计 keep-alive request-tail 现有证据，并把此前标记为 current-truth 的
+行为提升为明确 contract。目标是固定 TCP 分段 / pipelining 下的合理语义，
+避免后续 malformed hardening 误收紧合法 partial follow-up。
 
 ## Confirmed truths
 
-### 1. after-interim trailer EOF 邻接链已经闭合
+### 1. request-tail contract 三类 framing 均已有证据
 
-`test_http_security` 与 `test_http_server` 当前都已在 threaded / Linux `epoll`
-两条路径注册 after-interim proof，覆盖：
+已覆盖的首请求 framing：
 
-- malformed trailer field
-- truncated trailer field-name EOF
-- truncated trailer separator EOF
-- truncated trailer empty-value CR EOF
-- truncated trailer empty-value EOF
-- truncated trailer empty-value section CR EOF
-- truncated trailer whitespace CR EOF
-- truncated trailer whitespace EOF
-- truncated trailer whitespace section EOF
-- truncated trailer whitespace section CR EOF
-- truncated trailer field line EOF
-- truncated trailer field CR EOF
-- truncated trailer section CR EOF
-- truncated trailer section EOF
-- oversize trailer -> `431`
+- fixed-length `Content-Length`
+- plain `Transfer-Encoding: chunked`
+- trailer-complete chunked request
 
-这些用例共同锁住：
+每类都已有 parser / server / security 中的组合证据：
 
-- `HTTP/1.1 100 Continue` 已经先发出。
-- malformed / EOF-truncated trailer 后返回 final `400 Bad Request`，oversize trailer
-  返回 final `431 Request Header Fields Too Large`。
-- final response 不重复 interim `100`。
-- 不误回 final `200`。
-- handler 不进入。
+- garbage tail 不污染当前 request，随后作为 follow-up malformed request 返回 `400`。
+- partial follow-up request-line 在 EOF-truncated 时作为 follow-up `400`。
+- partial follow-up headers 在 EOF-truncated 时作为 follow-up `400`。
+- partial follow-up request-line / headers 在后续字节补全后可合法完成为第二请求。
+- valid same-read / same-write pipeline 不污染当前 request，并继续处理第二请求。
 
-### 2. 没有必要继续加同型 trailer EOF 测试
+### 2. contract 决策
 
-parser / standalone server / security / after-interim server 四层现有覆盖已经把 trailer
-EOF grammar 的相邻截断形态串起来。继续追加同型 case 只会增加测试维护成本，
-不会提高公开契约可信度。
+将上述 behavior 固定为 `IHttpServer` / H1 parser 的 keep-alive request-tail
+contract：
 
-### 3. 下一条主线应转向 keep-alive request-tail contract
+- 当前 request framing 完成即完成当前 request。
+- 未消费 tail bytes 属于下一次 request parse，不得污染当前 request body / headers。
+- partial follow-up 不应在还可能补全时被提前判成 malformed。
+- 当 follow-up 已经 conclusively malformed 或 EOF-truncated，返回 follow-up `400`。
 
-当前文档和测试已经记录的 transport truth 是：
+这个决策更接近 Go/Rust/主流 H1 server 对 TCP stream framing 的处理范式：把
+HTTP request framing 与 TCP 分段解耦，而不是因为同包 tail 或半截后续请求提前失败。
 
-- fixed-length / plain chunked / trailer-complete chunked 请求在当前 request framing
-  完成时即完成。
-- unread tail bytes 会留给下一次 request parse。
-- partial follow-up request-line / headers 可以继续补全为合法第二请求。
-- conclusively malformed 或 EOF-truncated follow-up request 会作为 follow-up `400`。
+### 3. 不新增测试的理由
 
-下一批应先判断这些行为哪些需要固定为公开 contract，哪些只是当前 transport
-truth；只对缺口补 focused tests。
+审计没有发现当前 contract 维度的真实空洞：
+
+- `test_http_h1parser` 已覆盖 same-read isolation、garbage tail、truncated
+  follow-up、partial follow-up bridge。
+- `test_http_server` 已覆盖 threaded / epoll live server 行为，包括 valid pipeline。
+- `test_http_security` 已覆盖 raw-wire garbage / truncated / partial bridge，
+  并有 trailer-complete same-write pipeline proof。
+
+因此本轮不新增重复测试，改为运行三个 focused gate 作为 fresh 证据。
 
 ## Remaining gaps / risks
 
-- 本轮是路线图收口，不是行为修改。
-- 没有生产代码或测试代码变更，因此不跑 focused 单元测试；后续一旦改 API / 行为 /
-  test surface，仍必须跑对应 focused gate 和 heaptrc。
-- keep-alive request-tail contract 需要避免误收紧：如果把“可补全的 partial
-  follow-up”过早定义成错误，可能破坏 pipelining / TCP 分段下的合法行为。
+- 本轮是契约固定，不是生产行为修改。
+- 后续 malformed hardening 必须遵守该 contract：不能把 partial follow-up 误当成当前
+  request 的垃圾尾巴。
+- 若未来引入 H2/H3 或不同 server backend，必须保持同等 request-tail 隔离原则，
+  或在协议文档中明确差异。

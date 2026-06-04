@@ -1,12 +1,12 @@
-# Progress Log: after-interim trailer EOF chain closure audit
+# Progress Log: keep-alive request-tail contract decision
 
 ## Session
 
-- **Scope:** 审计 `Expect: 100-continue` + chunked trailer EOF after-interim
-  coverage 是否已完整闭合，避免继续添加重复同型 tests。
+- **Scope:** 审计 keep-alive request-tail 现有证据，并把 current-truth 提升为明确
+  public contract。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth`
-  -> `after-interim trailer EOF chain closed` -> next `keep-alive request-tail contract`
+  -> `keep-alive request-tail contract`
 
 ## Current state
 
@@ -22,31 +22,31 @@
 
 ## Completed work
 
-- 已复读设计规范、HTTP API 覆盖地图、`task_plan.md`、`findings.md`、
-  `progress.md`。
-- 已检查 `git status --short --branch`；确认本轮必须继续 path-limited 操作，
-  不能使用 `git add .`。
-- 已审计 `test_http_security` 与 `test_http_server`：
-  - after-interim trailer EOF family 在 threaded / epoll 两边均有注册。
-  - malformed trailer field、field-name EOF、separator EOF、empty-value 系列、
-    whitespace 系列、field-line EOF、field-CR EOF、section EOF、section-CR EOF、
-    oversize trailer 均已覆盖。
-- 已决定不再新增重复 malformed trailer EOF tests。
-- 已把下一阶段路线固定到 keep-alive request-tail contract 决策。
+- 已审计 `test_http_h1parser`、`test_http_server`、`test_http_security` 的
+  request-tail 用例注册。
+- 已确认 fixed-length / plain chunked / trailer-complete chunked 三类 framing 都有
+  garbage tail、EOF-truncated follow-up、partial follow-up bridge 与 valid pipeline
+  证据。
+- 已将 keep-alive request-tail 从 current-truth 提升为明确 contract：
+  当前 request framing 完成即完成，tail bytes 属于下一次 request parse。
+- 本轮没有生产代码改动，也没有新增重复测试。
 
 ## Verification
 
-- 本轮未改生产代码或测试代码，未新增 API surface。
 - `git diff --check -- docs/http/API_COVERAGE.md task_plan.md findings.md progress.md`
   - exit code: `0`
-- 未运行 focused unit tests：本轮是文档/路线图-only 收口；下一批一旦改测试 /
-  行为 / API，会恢复对应 focused gate 与 heaptrc 证据。
+- `make -C tests/nextpas.core.http/test_http_h1parser test`
+  - `88/88 passed`
+  - heaptrc: `0 unfreed memory blocks`
+- `make -C tests/nextpas.core.http/test_http_server test`
+  - `272/272 passed`
+  - heaptrc: `0 unfreed memory blocks`
+- `make -C tests/nextpas.core.http/test_http_security test`
+  - `242/242 passed`
+  - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 本轮提交后，下一批进入 keep-alive request-tail contract：
-  - 先审计现有 fixed-length / plain chunked / trailer-complete chunked request-tail
-    tests。
-  - 区分“合法 partial follow-up 可补全”和“malformed / EOF-truncated follow-up
-    返回 follow-up `400`”。
-  - 只在发现 contract 缺口时补最小 focused tests。
+- 本轮提交后，继续 request-side runtime truth 的剩余边界。
+- 下一刀候选：回到 still-unclassified malformed / timeout / direct-error 小缺口，
+  或开始为后续 server backend 模型设计整理更清晰的 execution contract。

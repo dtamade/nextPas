@@ -110,11 +110,11 @@
 - `IHttpServer` 现在也有 `terminal 0 chunk ending EOF truncation` focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 `Content-Length + Connection: close + extra bytes after body` focused 覆盖：返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 `chunked + Connection: close + extra bytes after terminal chunk` focused 覆盖：返回显式 `400`，且不进入 handler。
-- `IHttpServer` 现在也有一条 server-layer current-truth proof：非 `Connection: close` `Content-Length` garbage tail 会先完成首个合法 request，再把尾巴作为 follow-up malformed request 返回 `400`；这条证据用于后续契约决策，尚未当作最终 public policy 冻结。
+- `IHttpServer` 现在也有一条 server-layer contract proof：非 `Connection: close` `Content-Length` garbage tail 会先完成首个合法 request，再把尾巴作为 follow-up malformed request 返回 `400`；该行为已固定为 keep-alive request-tail contract。
 - `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up request-line current-truth proof：首个合法 fixed-length request 会先完成并进入 handler，半截下一请求行在 peer half-close 后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
 - `IHttpServer` 现在也有 keep-alive `Content-Length` partial follow-up headers bridge proof：首个合法 fixed-length request 会先完成并进入 handler，半截下一请求头在后续字节补齐后仍可继续完成为合法第二请求，因此不会被过早判成 malformed follow-up。
-- `IHttpServer` 现在也有 keep-alive chunked garbage tail current-truth proof：首个合法 chunked request 会先完成并进入 handler，尾巴随后作为 follow-up malformed request 返回 `400`；这条证据同样用于后续契约决策，尚未当作最终 public policy 冻结。
+- `IHttpServer` 现在也有 keep-alive chunked garbage tail contract proof：首个合法 chunked request 会先完成并进入 handler，尾巴随后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up request-line current-truth proof：首个合法 chunked request 会先完成并进入 handler，半截下一请求行在 peer half-close 后作为 follow-up malformed request 返回 `400`。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
 - `IHttpServer` 现在也有 keep-alive chunked partial follow-up headers bridge proof：首个合法 chunked request 会先完成并进入 handler，半截下一请求头在后续字节补齐后仍可继续完成为合法第二请求，因此不会被过早判成 malformed follow-up。
@@ -123,6 +123,7 @@
 - `IHttpServer` 现在也有 keep-alive chunked trailer-complete partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求补全，第二个请求也会继续合法完成。
 - `IHttpServer` 现在也有 keep-alive chunked trailer-complete partial follow-up headers bridge proof：首个 trailer-complete chunked request 的 `200` 会先正常返回，后续若把半截下一请求头补全，第二个请求也会继续合法完成，同时首请求的 trailer declaration / trailer isolation 契约保持不变。
 - `IHttpServer` 现在也有 same-write pipelined request isolation focused 覆盖：transport 会保留未消费尾巴，确保前一 request 的 handler/response 与后一 request 分离；该证明现在同时覆盖普通 fixed-length 与 chunked 首请求。
+- keep-alive request-tail contract 已固定：fixed-length / plain chunked / trailer-complete chunked 请求在当前 request framing 完成时即完成，未消费 tail bytes 进入下一次 request parse；partial follow-up request-line / headers 在可能补全时不得被提前当成 malformed，后续补齐后可成为合法第二请求；conclusively malformed 或 EOF-truncated follow-up 才返回 follow-up `400`。该 contract 由 `test_http_h1parser`、`test_http_server`、`test_http_security` 三层 focused coverage 共同证明。
 - `IHttpServer` 现在也有 malformed trailer focused 覆盖：非法 trailer field-name 与 trailer section EOF truncation 都会返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 fixed-length request body EOF truncation focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
 - `IHttpServer` 现在也有 request-line / headers EOF truncation focused 覆盖：peer half-close 后返回显式 `400`，且不进入 handler。
