@@ -1,53 +1,47 @@
-# Progress Log: HTTP parser body buffer reuse
+# Progress Log: H1 parser callback-cost diagnostics
 
 ## Session
 
-- **Scope:** `TH1Parser` body capacity reuse + Reset/body snapshot guard。
+- **Scope:** `bench_h1parser` raw pipeline + no-op callback diagnostic rows。
 - **Status:** verified
-- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 parser adapter allocation reduction`
+- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 parser bottleneck attribution`
 
 ## Current state
 
-- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP parser/test/docs/control 文件。
+- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP benchmark/docs/control 文件。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- `API_COVERAGE.md` 本轮不改：没有公开 API 扩展。
-- `gpt-5.5 xhigh` 只读子代理已复核 llhttp 性能归因：当前主瓶颈证据仍指向 adapter materialization；
-  若要严格判断 Pascal 翻译本体，需要补 C llhttp comparator。
+- 本轮不改 `API_COVERAGE.md`：没有 public API 变化。
 
 ## Completed work
 
-- `TestResetAndReparse` 增强为 body-focused guard：Reset 后更短 body 不串旧字节，旧 body reader 仍是快照。
-- `TH1Parser` 新增 `FBodySize`，`FBody` 从 effective-size array 改为 reusable capacity buffer。
-- `CbOnBody` 改为 capacity append，避免 repeated parse/body path 每次按有效长度重分配。
-- `GetBody` / `GetBodySize` 只读取有效长度。
-- `NewBodyReader` 复制有效区间，保留 Reset/reparse 后的 reader snapshot 语义。
+- `bench_h1parser` 新增 `raw llhttp: pipeline pause-only (10 reqs)`。
+- `bench_h1parser` 新增 no-op callback section：
+  simple GET / 10 headers / POST 1KB / pipeline。
+- no-op callbacks 只计数，不做 URL/header/body materialization，用于拆分 callback dispatch 和 adapter 成本。
+- paused pipeline loop 已抽成 helper，避免 benchmark 代码重复。
 
 ## Verification
 
-- Focused tests:
-  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `89 total, 89 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - `18 total, 18 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
 - Benchmark:
   - `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  - `make -C benchmarks/nextpas.core.http/bench_h1parser run`
-  - confirmation llhttp adapter:
-    - `simple GET`: `644.2 ns/op`
-    - `10 headers`: `3333.1 ns/op`
-    - `POST 1KB body`: `1404.6 ns/op`
-    - `pipeline 10 reqs`: `6206.8 ns/op`
+  - confirmation rows:
+    - `raw llhttp: 10 headers`: `823.7 ns/op`
+    - `noop cb: 10 headers`: `806.1 ns/op`
+    - `llhttp adapter: 10 headers`: `3380.4 ns/op`
+    - `raw llhttp: POST 1KB body`: `489.4 ns/op`
+    - `noop cb: POST 1KB body`: `454.1 ns/op`
+    - `llhttp adapter: POST 1KB body`: `1401.3 ns/op`
+    - `raw llhttp: pipeline pause-only`: `2170.1 ns/op`
+    - `noop cb: pipeline`: `2163.7 ns/op`
+    - `llhttp adapter: pipeline`: `6205.7 ns/op`
 
 ## Current conclusion
 
-本轮方向没有走偏：继续沿 adapter materialization 降本，而不是先大改 runtime。收益边界也必须说清楚：
-body buffer reuse 对 POST body workload 有小幅正向投射；对 no-body/pipeline 不应期待明显收益。
+本轮方向没有走偏：新诊断 rows 支持继续优化 adapter materialization，而不是先重写 Pascal translated
+llhttp。严格的 C llhttp parity 仍需 comparator，但当前 nextPas stack 内的最高收益点仍是 header/body/string/
+metadata materialization。
 
 ## Next step
 
-- 等待并吸收 `gpt-5.5 xhigh` 子代理关于 Pascal translated llhttp comparator 的只读审视。
-- 下一批优先做 header/value materialization 或 server ingress metadata cache。
-- 若要回答“llhttp Pascal 翻译是否性能有问题”，必须补 C llhttp comparator；当前只能根据 raw no-callback rows
-  判断它不是 nextPas 当前 H1 parser stack 内的主瓶颈。
+- 下一批优先做 `THttpHeaders.Add` normalize/validate 热点拆分，或 parser/server request metadata cache。
+- 若要进一步回答翻译本体问题，补 C llhttp raw/no-op comparator；否则继续压已知 adapter 成本。

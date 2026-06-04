@@ -11,6 +11,7 @@ uses
 var
   B: TBenchRunner;
   GSink: SizeUInt;
+  GCallbackSink: SizeUInt;
 
 const
   REQ_SIMPLE: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
@@ -136,6 +137,94 @@ begin
   GSink := GSink + LParser.http_major + LParser.http_minor + LParser.method;
 end;
 
+function NoopDataCb(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
+begin
+  GCallbackSink := GCallbackSink + p2;
+  Result := 0;
+end;
+
+function NoopCb(p0: PTLlhttpInternalT): LongInt; cdecl;
+begin
+  Inc(GCallbackSink);
+  Result := 0;
+end;
+
+function PauseOnMessageCompleteCb(p0: PTLlhttpInternalT): LongInt; cdecl;
+begin
+  Inc(GCallbackSink);
+  Result := HPE_PAUSED;
+end;
+
+procedure InstallNoopCallbacks(var ASettings: TLlhttpSettingsT);
+begin
+  ASettings.on_url := @NoopDataCb;
+  ASettings.on_header_field := @NoopDataCb;
+  ASettings.on_header_value := @NoopDataCb;
+  ASettings.on_body := @NoopDataCb;
+  ASettings.on_headers_complete := @NoopCb;
+  ASettings.on_message_complete := @NoopCb;
+end;
+
+procedure BenchPausedPipelineWithSettings(var ASettings: TLlhttpSettingsT;
+  aIters: Int64);
+var
+  LIt: Int64;
+  LParser: TLlhttpInternalT;
+  LErr: TLlhttpErrnoT;
+  LPos: SizeUInt;
+  LConsumed: SizeUInt;
+  LErrorPos: PAnsiChar;
+begin
+  llhttp_init(@LParser, HTTP_REQUEST, @ASettings);
+  for LIt := 1 to aIters do
+  begin
+    LPos := 0;
+    while LPos < SizeUInt(Length(GPipeline)) do
+    begin
+      llhttp_reset(@LParser);
+      LErr := llhttp_execute(@LParser, PAnsiChar(GPipeline) + LPos,
+        SizeUInt(Length(GPipeline)) - LPos);
+      if LErr <> HPE_PAUSED then
+      begin
+        Inc(GSink);
+        Break;
+      end;
+      LErrorPos := llhttp_get_error_pos(@LParser);
+      if (LErrorPos = nil) or
+         (PtrUInt(LErrorPos) < PtrUInt(PAnsiChar(GPipeline) + LPos)) then
+        Break;
+      LConsumed := SizeUInt(PtrUInt(LErrorPos) -
+        PtrUInt(PAnsiChar(GPipeline) + LPos));
+      if LConsumed = 0 then
+        Break;
+      Inc(LPos, LConsumed);
+    end;
+  end;
+  GSink := GSink + GCallbackSink + LPos;
+end;
+
+procedure BenchNoopLlhttpRequest(const ARequest: AnsiString; aIters: Int64);
+var
+  LIt: Int64;
+  LParser: TLlhttpInternalT;
+  LSettings: TLlhttpSettingsT;
+  LErr: TLlhttpErrnoT;
+begin
+  GCallbackSink := 0;
+  llhttp_settings_init(@LSettings);
+  InstallNoopCallbacks(LSettings);
+  llhttp_init(@LParser, HTTP_REQUEST, @LSettings);
+  for LIt := 1 to aIters do
+  begin
+    llhttp_reset(@LParser);
+    LErr := llhttp_execute(@LParser, PAnsiChar(ARequest), Length(ARequest));
+    if LErr <> HPE_OK then
+      Inc(GSink);
+  end;
+  GSink := GSink + GCallbackSink + LParser.http_major + LParser.http_minor +
+    LParser.method;
+end;
+
 procedure BenchRawLlhttpSimpleGET(aIters: Int64);
 begin
   BenchRawLlhttpRequest(REQ_SIMPLE, aIters);
@@ -149,6 +238,42 @@ end;
 procedure BenchRawLlhttpPost1K(aIters: Int64);
 begin
   BenchRawLlhttpRequest(GReqPost1K, aIters);
+end;
+
+procedure BenchRawLlhttpPipelinePauseOnly(aIters: Int64);
+var
+  LSettings: TLlhttpSettingsT;
+begin
+  GCallbackSink := 0;
+  llhttp_settings_init(@LSettings);
+  LSettings.on_message_complete := @PauseOnMessageCompleteCb;
+  BenchPausedPipelineWithSettings(LSettings, aIters);
+end;
+
+procedure BenchNoopLlhttpSimpleGET(aIters: Int64);
+begin
+  BenchNoopLlhttpRequest(REQ_SIMPLE, aIters);
+end;
+
+procedure BenchNoopLlhttp10Headers(aIters: Int64);
+begin
+  BenchNoopLlhttpRequest(REQ_10HEADERS, aIters);
+end;
+
+procedure BenchNoopLlhttpPost1K(aIters: Int64);
+begin
+  BenchNoopLlhttpRequest(GReqPost1K, aIters);
+end;
+
+procedure BenchNoopLlhttpPipeline10(aIters: Int64);
+var
+  LSettings: TLlhttpSettingsT;
+begin
+  GCallbackSink := 0;
+  llhttp_settings_init(@LSettings);
+  InstallNoopCallbacks(LSettings);
+  LSettings.on_message_complete := @PauseOnMessageCompleteCb;
+  BenchPausedPipelineWithSettings(LSettings, aIters);
 end;
 
 { === Fast path benchmarks === }
@@ -215,6 +340,13 @@ begin
   B.Run('raw llhttp: simple GET (~60B)', @BenchRawLlhttpSimpleGET);
   B.Run('raw llhttp: 10 headers (~400B)', @BenchRawLlhttp10Headers);
   B.Run('raw llhttp: POST 1KB body', @BenchRawLlhttpPost1K);
+  B.Run('raw llhttp: pipeline pause-only (10 reqs)', @BenchRawLlhttpPipelinePauseOnly);
+  WriteLn;
+  WriteLn('--- translated llhttp with no-op callbacks ---');
+  B.Run('noop cb: simple GET (~60B)', @BenchNoopLlhttpSimpleGET);
+  B.Run('noop cb: 10 headers (~400B)', @BenchNoopLlhttp10Headers);
+  B.Run('noop cb: POST 1KB body', @BenchNoopLlhttpPost1K);
+  B.Run('noop cb: pipeline (10 reqs)', @BenchNoopLlhttpPipeline10);
   WriteLn;
   WriteLn('--- llhttp ---');
   B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);

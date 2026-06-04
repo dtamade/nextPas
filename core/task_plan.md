@@ -1,26 +1,28 @@
-# Task Plan: HTTP parser body buffer reuse
+# Task Plan: H1 parser callback-cost diagnostics
 
 ## Goal
 
-继续推进 `HttpServer 完成` 主线中的 `6/6 benchmark/performance` 阶段。当前
-raw translated llhttp 诊断显示：在 nextPas 当前 H1 parser stack 内，主要成本仍来自
-`IH1Parser` adapter materialization，而不是裸 llhttp 状态机执行。本轮延续该方向，聚焦
-request/response body materialization。
+继续推进 `HttpServer 完成` 主线中的 `6/6 benchmark/performance` 阶段。本轮直接回应
+“Pascal translated llhttp 可能有性能问题”的风险：在不引入 C comparator、不改生产行为的前提下，
+先把当前 Pascal translated llhttp 的成本拆得更细。
 
-旧实现中 `CbOnBody` 每次 body callback 都对 `FBody` 按有效长度重新 `SetLength`，
-`TH1Parser.Reset` 又直接释放 body array。目标是在不改变 `IH1Parser` public behavior 的前提下，
-让 parser-owned body buffer 可复用，并保留 `NewBodyReader` 的快照语义。
+现有 `bench_h1parser` 已有 raw no-callback rows 和 full `IH1Parser` adapter rows，但还缺两块关键信息：
+
+- pipeline/reset 场景下裸状态机 + message-complete pause 的成本。
+- 注册 URL/header/body callbacks 但不做字符串、headers、body materialization 时的成本。
+
+目标是补足这两类诊断 rows，用最小 benchmark 改动判断当前瓶颈到底更接近状态机/callback dispatch，
+还是 adapter materialization。
 
 ## Checklist
 
 - [x] 复核 `docs/design-conventions.md`、HTTP coverage/control 文件和 `git status`。
-- [x] 保留并验证 `Reset and reparse` body guard：短 body 不暴露旧字节，旧 reader 在 Reset 后仍是快照。
-- [x] 将 `TH1Parser` body storage 改为 reusable capacity buffer + effective `FBodySize`。
-- [x] 确保 `GetBody` / `GetBodySize` / `NewBodyReader` 只暴露有效 body 区间。
-- [x] 跑 `test_http_h1parser` focused gate + heaptrc。
-- [x] 跑 `test_http_h1fast` differential gate + heaptrc。
-- [x] 跑 `bench_h1parser` after + confirmation。
-- [x] 用 `gpt-5.5 xhigh` 子代理只读审视 Pascal translated llhttp 性能归因。
+- [x] 检查 `bench_h1parser` 与现有 benchmark smoke 覆盖。
+- [x] 新增 `raw llhttp: pipeline pause-only (10 reqs)`。
+- [x] 新增 `translated llhttp with no-op callbacks` section：
+  simple GET / 10 headers / POST 1KB / pipeline。
+- [x] 提取 paused pipeline helper，避免 benchmark 代码重复。
+- [x] 运行 `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`。
 - [x] 更新 benchmark/control 文档。
 - [x] path-limited commit。
 
@@ -28,8 +30,7 @@ request/response body materialization。
 
 本轮只允许修改：
 
-- `src/nextpas.core.http.impl.h1.parser.pas`
-- `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
+- `benchmarks/nextpas.core.http/bench_h1parser/bench_h1parser.lpr`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
@@ -37,6 +38,6 @@ request/response body materialization。
 
 ## Intended outcome
 
-- parser Reset 不再释放 body capacity，repeated parse / POST body path 减少动态数组 resize。
-- body reader snapshot contract 明确被 focused test 锁住，避免 buffer reuse 引入 stale/mutated body 暴露。
-- benchmark 记录这轮 body buffer reuse 的真实收益边界：主要影响 body workload，不夸大为整体 parser/server parity。
+- 给出更强证据：如果 no-op callback rows 仍明显低于 adapter rows，则当前优化重点继续放在
+  URL/header/body materialization、header container、metadata cache。
+- 保留 C llhttp comparator 作为后续严格证明项，而不是在证据不足时先重写 translated llhttp。

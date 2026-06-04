@@ -298,3 +298,47 @@ same-payload C llhttp comparator before making claims about translation cost.
 
 `test_http_h1parser` and `test_http_h1fast` both passed with heaptrc reporting
 `0 unfreed memory blocks`.
+
+## Diagnostic Evidence: H1 Callback Dispatch vs Adapter Materialization
+
+On 2026-06-05 local time, `bench_h1parser` gained two diagnostic groups:
+
+- `raw llhttp: pipeline pause-only (10 reqs)` registers only
+  `on_message_complete`, returns `HPE_PAUSED`, and consumes the pipeline one
+  request at a time. This makes raw translated llhttp closer to the adapter's
+  reset/keep-alive loop.
+- `translated llhttp with no-op callbacks` registers URL/header/body/header
+  completion/message completion callbacks, but the callbacks only count bytes
+  or events. They do not build strings, headers, body buffers, or request
+  metadata.
+
+Confirmation run:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| workload | ns/op |
+| --- | ---: |
+| raw llhttp simple GET | 232.1 |
+| noop cb simple GET | 221.3 |
+| llhttp adapter simple GET | 617.7 |
+| raw llhttp 10 headers | 823.7 |
+| noop cb 10 headers | 806.1 |
+| llhttp adapter 10 headers | 3380.4 |
+| raw llhttp POST 1KB | 489.4 |
+| noop cb POST 1KB | 454.1 |
+| llhttp adapter POST 1KB | 1401.3 |
+| raw llhttp pipeline pause-only | 2170.1 |
+| noop cb pipeline | 2163.7 |
+| llhttp adapter pipeline | 6205.7 |
+
+The simple-GET raw/no-op rows are very short and remain sensitive to local
+microbenchmark noise. The 10-header, POST, and pipeline rows are the useful
+classification signal: no-op callback cost stays close to raw translated
+llhttp, while the full adapter is much slower. Current evidence therefore
+continues to point at adapter materialization rather than callback dispatch.
+
+This still does not prove Pascal-translated llhttp parity with C llhttp. A
+same-payload C llhttp comparator is required before making claims about the
+translation itself.
