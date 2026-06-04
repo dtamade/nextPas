@@ -1,4 +1,4 @@
-# Task Plan: expect interim-100 truncated trailer whitespace section EOF proof
+# Task Plan: expect interim-100 truncated trailer whitespace section CR EOF proof
 
 ## Goal
 
@@ -6,11 +6,11 @@
 `Expect: 100-continue` trailer empty-value section CR EOF after-interim proof，继续补
 相邻的小缺口：`Expect + Transfer-Encoding: chunked`
 在 interim `100` 发出后，如果 trailer field 已进入 whitespace 值并完成
-field line，但 trailer section 尚未完整结束就直接 EOF 截断，
+field line，且 trailer section 只收到最终空行前的单个 `CR` 就 EOF 截断，
 应返回 final `400 Bad Request`。
 
 - 补 `test_http_security` 与 `test_http_server` 的
-  after-interim trailer whitespace section EOF focused proof
+  after-interim trailer whitespace section CR EOF focused proof
 - 锁住 `interim 100` 已发出后：
   - partial trailer whitespace section + write-half-close 会返回 explicit `400 Bad Request`
   - 不会重复发 `100 Continue`
@@ -29,11 +29,11 @@ field line，但 trailer section 尚未完整结束就直接 EOF 截断，
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `test_http_security` / `test_http_server` 现有 `Expect` / malformed
-  trailer EOF 覆盖，确认 after-interim `truncated trailer whitespace section EOF`
+  trailer EOF 覆盖，确认 after-interim `truncated trailer whitespace section CR EOF`
   仍是空缺
 - [x] 复用现有 `shutdown-after-body` helper，不再扩新 helper 形状
 - [x] 在 `test_http_security` 与 `test_http_server` 新增 threaded / epoll
-  两组 `Expect + chunked truncated trailer whitespace section EOF after interim 100`
+  两组 `Expect + chunked truncated trailer whitespace section CR EOF after interim 100`
   focused proof
 - [x] focused gate 直接 GREEN，证明这轮只是 coverage-expansion，不需要生产修复
 - [x] 跑 focused：
@@ -58,7 +58,7 @@ field line，但 trailer section 尚未完整结束就直接 EOF 截断，
 
 - `Expect: 100-continue` 的 trailer EOF 邻接 truth 在 security/server 两层收口：
   - interim `100` 先发出
-  - partial trailer whitespace section 后 peer write-half-close 会返回 final `400 Bad Request`
+  - partial trailer whitespace section CR EOF 后 peer write-half-close 会返回 final `400 Bad Request`
   - threaded / epoll 都不会重复 interim `100`
   - threaded / epoll 都不会误回 `200`
   - threaded / epoll 都不会进入 handler

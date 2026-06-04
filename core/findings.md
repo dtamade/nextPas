@@ -1,4 +1,4 @@
-# Findings: expect interim-100 truncated trailer whitespace section EOF proof
+# Findings: expect interim-100 truncated trailer whitespace section CR EOF proof
 
 ## Scope
 
@@ -6,13 +6,13 @@
   truncated trailer empty-value section CR EOF 的 after-interim truth。
 - 本轮继续补更贴近 EOF 邻接的小缺口：
   interim `100` 发出后，如果 chunked trailer field 已经完成 whitespace field line，
-  但 trailer section 结尾空行尚未完整出现就直接 EOF 截断，
+  但 trailer section 结尾空行只收到单个 `CR` 就直接 EOF 截断，
   server 仍应返回 final `400 Bad Request`，且不应进入 handler，
   也不应误补 synthetic `500`。
 
 ## Confirmed truths
 
-### 1. 现有 after-interim helper 已足够表达 whitespace section EOF 截断
+### 1. 现有 after-interim helper 已足够表达 whitespace section CR EOF 截断
 
 - 上一刀已经给
   `RunExpectContinueChunkedMalformedBodyRejectedAfterInterim...`
@@ -20,22 +20,22 @@
 - 因此这轮不需要再改 helper 形状，只要复用同一路径，把请求体切成：
   - `5\r\nhello\r\n`
   - `0\r\n`
-  - partial trailer whitespace section `X-Test: \r\n`
+  - partial trailer whitespace section CR EOF `X-Test: \r\n\r`
   - 然后客户端 write-half-close
 - 这使得本轮真正保持为纯测试补证，而不是再做测试基础设施扩展。
 
-### 2. after-interim trailer whitespace section EOF focused tests 直接 GREEN
+### 2. after-interim trailer whitespace section CR EOF focused tests 直接 GREEN
 
 - 在
   [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
   新增了 2 条 raw-wire focused tests：
-  - threaded `Expect chunked truncated trailer whitespace section EOF rejects after interim 100`
-  - epoll `Expect chunked truncated trailer whitespace section EOF rejects after interim 100`
+  - threaded `Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100`
+  - epoll `Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100`
 - 在
   [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
   新增了 2 条 public-contract focused tests：
-  - threaded `Expect: chunked truncated trailer whitespace section EOF rejects after interim response`
-  - epoll `Expect: chunked truncated trailer whitespace section EOF rejects after interim response`
+  - threaded `Expect: chunked truncated trailer whitespace section CR EOF rejects after interim response`
+  - epoll `Expect: chunked truncated trailer whitespace section CR EOF rejects after interim response`
 - 这 4 条 tests 直接锁住：
   - 先收到单条 `HTTP/1.1 100 Continue`
   - partial trailer whitespace section + peer write-half-close 后最终返回 `400 Bad Request`
@@ -59,10 +59,10 @@
 
 - focused:
   - `make -C tests/nextpas.core.http/test_http_security test`
-    - `236/236 passed`
+    - `238/238 passed`
     - heaptrc: `0 unfreed memory blocks`
   - `make -C tests/nextpas.core.http/test_http_server test`
-    - `266/266 passed`
+    - `268/268 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
@@ -71,6 +71,6 @@
 - 现有 helper 现在已经能表达 `field-name` / `separator` / `empty-value` / `empty-value section CR` / `whitespace` / `whitespace section` / `field line` / `field CR` / `section` / `section CR` 十个 after-interim
   trailer EOF 邻接形状，后续可以继续复用。
 - 下一刀更自然的是继续挑一个 after-interim trailer EOF 邻接 case：
-  - `truncated trailer whitespace section CR EOF after interim 100`
+  - `truncated trailer empty-value CR EOF after interim 100`
   - 或 `truncated trailer field line EOF` 之后的其他未归类 runtime seam
 - 继续保持单刀推进，不宽铺同型 parity。

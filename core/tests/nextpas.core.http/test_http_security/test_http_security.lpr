@@ -2235,6 +2235,23 @@ begin
     True);
 end;
 
+procedure TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionCrAtEofRejectsAfterInterim;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: '#13#10#13;
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCaseWithHeaders(
+    THttpServerOptions.Default,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100',
+    True);
+end;
+
 procedure TestExpectContinueChunkedTruncatedTrailerFieldLineAtEofRejectsAfterInterim;
 const
   EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
@@ -3350,6 +3367,27 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'epoll Expect chunked truncated trailer whitespace section EOF rejects after interim 100',
+    True);
+end;
+
+procedure TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionCrAtEofRejectsAfterInterimEpollBackend;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test: '#13#10#13;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCaseWithHeaders(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'epoll Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100',
     True);
 end;
 
@@ -5695,6 +5733,8 @@ begin
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceAtEofRejectsAfterInterim);
   T.Run('Expect chunked truncated trailer whitespace section EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionAtEofRejectsAfterInterim);
+  T.Run('Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100',
+    @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionCrAtEofRejectsAfterInterim);
   T.Run('Expect chunked truncated trailer field line EOF rejects after interim 100',
     @TestExpectContinueChunkedTruncatedTrailerFieldLineAtEofRejectsAfterInterim);
   T.Run('Expect chunked truncated trailer field CR EOF rejects after interim 100',
@@ -5933,6 +5973,8 @@ begin
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect chunked truncated trailer whitespace section EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionAtEofRejectsAfterInterimEpollBackend);
+  T.Run('Expect chunked truncated trailer whitespace section CR EOF rejects after interim 100 with epoll backend',
+    @TestExpectContinueChunkedTruncatedTrailerWhitespaceSectionCrAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect chunked truncated trailer field line EOF rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedTruncatedTrailerFieldLineAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect chunked truncated trailer field CR EOF rejects after interim 100 with epoll backend',
