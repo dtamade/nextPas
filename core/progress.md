@@ -1,11 +1,11 @@
-# Progress Log: Middleware nil-input contract
+# Progress Log: Static MIME case-insensitive contract
 
 ## Session
 
-- **Scope:** 补齐 `MiddlewareFunc` / `TMiddlewareChain` / `Chain` 的 nil 输入拒绝契约。
+- **Scope:** 补齐 static serving MIME 大小写不敏感和 fallback contract。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `public interface completeness`
-  -> `middleware nil-input contract`
+- **Roadmap Position:** `4/6 HTTP examples/static helper polish` -> `static serving`
+  -> `MIME case-insensitive contract`
 
 ## Current state
 
@@ -21,29 +21,25 @@
 
 ## Completed work
 
-- `test_http_middleware` 新增 `Middleware factories reject nil inputs` focused proof。
-- `nextpas.core.http.middleware.MiddlewareFunc` 增加 nil callback guard。
-- `TMiddlewareChain.Create` / `Use` 增加 nil guard。
-- `Chain` 增加异常路径释放，避免 nil middleware entry 抛出时泄漏中间 chain。
-- `docs/http/API_COVERAGE.md` 已记录 middleware nil 输入边界。
+- `test_http_static` 新增 `ServeDir MIME case-insensitive and fallback` focused proof。
+- `SetupTmpDir` 增加 `.JSON` 与 unknown extension fixture。
+- `nextpas.core.http.static.MimeTypeFromExt` 改为 lowercase 后匹配 MIME table。
+- `docs/http/API_COVERAGE.md` 已记录 static helper-level MIME contract。
 
 ## Verification
 
 - RED:
-  - `make -C tests/nextpas.core.http/test_http_middleware test`
-  - `11 total, 10 passed, 1 failed`
-  - failure: `nil middleware wrap callback raises EHttpError`
+  - `make -C tests/nextpas.core.http/test_http_static test`
+  - `10 total, 9 passed, 1 failed`
+  - failure: `uppercase JSON extension maps to application/json`
   - heaptrc: `0 unfreed memory blocks`
-- First GREEN exposed leak:
-  - `11 total, 11 passed, 0 failed`
-  - heaptrc: `2 unfreed memory blocks : 120`
-- Final GREEN:
-  - `make -C tests/nextpas.core.http/test_http_middleware test`
-  - `11 total, 11 passed, 0 failed`
+- GREEN:
+  - `make -C tests/nextpas.core.http/test_http_static test`
+  - `10 total, 10 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先从 API coverage 的剩余 next-action 中选择真实 gap；如果没有 public API
-  contract gap，转向 runnable examples 或 benchmark 准备，而不是机械复制同型 parity case。
+- 下一刀优先在 examples / docs / benchmark readiness 和仍缺 direct proof 的真实 runtime
+  gap 之间选择；benchmark 仍后置，不为了刷量重复 malformed parity。

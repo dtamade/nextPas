@@ -38,22 +38,25 @@ begin
 end;
 
 function MimeTypeFromExt(const AExt: string): string;
+var
+  LExt: string;
 begin
-  if AExt = '.html' then Result := 'text/html'
-  else if AExt = '.htm' then Result := 'text/html'
-  else if AExt = '.css' then Result := 'text/css'
-  else if AExt = '.js' then Result := 'application/javascript'
-  else if AExt = '.json' then Result := 'application/json'
-  else if AExt = '.png' then Result := 'image/png'
-  else if AExt = '.jpg' then Result := 'image/jpeg'
-  else if AExt = '.jpeg' then Result := 'image/jpeg'
-  else if AExt = '.gif' then Result := 'image/gif'
-  else if AExt = '.svg' then Result := 'image/svg+xml'
-  else if AExt = '.txt' then Result := 'text/plain'
-  else if AExt = '.xml' then Result := 'application/xml'
-  else if AExt = '.pdf' then Result := 'application/pdf'
-  else if AExt = '.wasm' then Result := 'application/wasm'
-  else if AExt = '.ico' then Result := 'image/x-icon'
+  LExt := LowerCase(AExt);
+  if LExt = '.html' then Result := 'text/html'
+  else if LExt = '.htm' then Result := 'text/html'
+  else if LExt = '.css' then Result := 'text/css'
+  else if LExt = '.js' then Result := 'application/javascript'
+  else if LExt = '.json' then Result := 'application/json'
+  else if LExt = '.png' then Result := 'image/png'
+  else if LExt = '.jpg' then Result := 'image/jpeg'
+  else if LExt = '.jpeg' then Result := 'image/jpeg'
+  else if LExt = '.gif' then Result := 'image/gif'
+  else if LExt = '.svg' then Result := 'image/svg+xml'
+  else if LExt = '.txt' then Result := 'text/plain'
+  else if LExt = '.xml' then Result := 'application/xml'
+  else if LExt = '.pdf' then Result := 'application/pdf'
+  else if LExt = '.wasm' then Result := 'application/wasm'
+  else if LExt = '.ico' then Result := 'image/x-icon'
   else Result := 'application/octet-stream';
 end;
 

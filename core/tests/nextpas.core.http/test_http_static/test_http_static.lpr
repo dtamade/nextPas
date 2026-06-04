@@ -118,6 +118,8 @@ begin
   nextpas.core.fs.WriteFileText(CTmpDir + '/index.html', '<h1>Hello</h1>');
   nextpas.core.fs.WriteFileText(CTmpDir + '/style.txt', 'body{}');
   nextpas.core.fs.WriteFileText(CTmpDir + '/css/main.css', '.a{color:red}');
+  nextpas.core.fs.WriteFileText(CTmpDir + '/data.JSON', '{"ok":true}');
+  nextpas.core.fs.WriteFileText(CTmpDir + '/asset.unknownext', 'opaque');
 end;
 
 procedure CleanupTmpDir;
@@ -312,6 +314,33 @@ begin
   end;
 end;
 
+{ ===== Test 10: ServeDir MIME matching is case-insensitive with safe fallback ===== }
+procedure TestServeDirMimeTypeCaseInsensitiveAndFallback;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/static/*filepath', ServeDir(CTmpDir));
+  LHandle := StartTestServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort, 'GET /static/data.JSON HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'uppercase extension status 200');
+    Check(Pos('content-type: application/json', LResp) > 0,
+      'uppercase JSON extension maps to application/json');
+
+    LResp := SendRawRequest(LPort, 'GET /static/asset.unknownext HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200', LResp) > 0, 'unknown extension status 200');
+    Check(Pos('content-type: application/octet-stream', LResp) > 0,
+      'unknown extension maps to application/octet-stream');
+  finally
+    StopTestServer(LServer, LHandle);
+  end;
+end;
+
 { ===== Main ===== }
 begin
   SetupTmpDir;
@@ -326,6 +355,7 @@ begin
     T.Run('ServeDir path traversal blocked', @TestServeDirTraversalBlocked);
     T.Run('ServeDir missing file returns 404', @TestServeDirMissing);
     T.Run('ServeDir absolute path rejected', @TestServeDirAbsolutePathRejected);
+    T.Run('ServeDir MIME case-insensitive and fallback', @TestServeDirMimeTypeCaseInsensitiveAndFallback);
     T.Summary;
   finally
     CleanupTmpDir;

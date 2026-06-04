@@ -1,58 +1,41 @@
-# Findings: Middleware nil-input contract
+# Findings: Static MIME case-insensitive contract
 
 ## Scope
 
-本轮补齐 `MiddlewareFunc` / `TMiddlewareChain` / `Chain` 的 nil 输入 contract。
-这些 API 都是 public middleware 组装边界；nil callback、nil root handler、nil
-middleware entry 应该被显式拒绝。
+本轮补齐 `ServeFile` / `ServeDir` 的 helper-level MIME coverage。静态资源 helper
+已经通过 facade 公开，MIME 推断不应因为扩展名大小写不同而退化成
+`application/octet-stream`。
 
 ## Confirmed truths
 
 ### 1. RED 证明了真实缺口
 
-`test_http_middleware` 新增 `Middleware factories reject nil inputs` 后首次 focused
-gate 失败：
+`test_http_static` 新增 `ServeDir MIME case-insensitive and fallback` 后首次
+focused gate 失败：
 
-- `11 total, 10 passed, 1 failed`
-- failure: `nil middleware wrap callback raises EHttpError`
+- `10 total, 9 passed, 1 failed`
+- failure: `uppercase JSON extension maps to application/json`
 - heaptrc: `0 unfreed memory blocks`
 
-这证明旧 `MiddlewareFunc` 会接受 nil callback，留下后续 nil procedure variable
-调用风险。
+这证明旧 `MimeTypeFromExt` 对扩展名大小写敏感，`.JSON` 会误走 fallback。
 
-### 2. GREEN 过程中暴露了异常路径泄漏
+### 2. 最小修复
 
-首次 GREEN 后 functional checks 已经全过，但 heaptrc 报告：
+`nextpas.core.http.static.MimeTypeFromExt` 现在先对扩展名调用 `LowerCase`，再进入
+既有 MIME table。未知扩展名仍保持 `application/octet-stream` fallback。
 
-- `11 total, 11 passed, 0 failed`
-- `2 unfreed memory blocks : 120`
+### 3. Focused proof
 
-根因是 `Chain(ValidHandler, [nil])` 会先创建中间 `TMiddlewareChain`，再由
-`Use(nil)` 抛异常；旧 `Chain` 没有在异常路径释放中间对象。
+`test_http_static` 现在同时覆盖：
 
-### 3. 最小修复
-
-`nextpas.core.http.middleware` 现在补齐：
-
-- `MiddlewareFunc(nil)` 立即抛 `EHttpError`。
-- `TMiddlewareChain.Create(nil)` 立即抛 `EHttpError`。
-- `TMiddlewareChain.Use(nil)` 立即抛 `EHttpError`。
-- `Chain` 在构造后续步骤抛异常时释放中间 chain，再重新抛出原异常。
-
-### 4. Focused proof
-
-`test_http_middleware` 现在同时覆盖：
-
-- 正常 handler / middleware wrapping。
-- middleware nil callback / nil root handler / nil middleware entry 都显式抛
-  `EHttpError`。
-- 异常路径无泄漏。
-- middleware chain 既有 order / short-circuit / response mutation 行为仍保持。
+- `ServeFile` / `ServeDir` 既有文件内容、Content-Type、Content-Length、missing file。
+- path traversal / absolute path rejection。
+- uppercase `.JSON` MIME case-insensitive mapping。
+- unknown extension safe fallback。
 
 ## Remaining gaps / risks
 
-- 本轮不改变 router / server runtime。
-- 仍未把 concrete middleware classes 作为 facade API 扩大暴露；当前只收紧已公开
-  middleware assembly 边界。
-- 后续如果要约束 `IHttpMiddleware.Wrap(nil)` 或 middleware 返回 nil handler，应单独成批，
-  因为那涉及更细的 implementation contract。
+- 本轮不扩大 MIME table，只修正匹配语义。
+- 当前 static helper 仍以 `ReadFileText` 读取内容；二进制大文件 streaming / range request
+  属于后续性能与生产化增强，不在本切片。
+- 后续如果把更多 static helper API 公开，应补相应 helper-level focused tests。
