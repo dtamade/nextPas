@@ -1,5 +1,21 @@
 # Findings & Decisions
 
+## 2026-06-04 http expect bodyless and duplicate-member security proof
+
+- `Expect: 100-continue` 的 duplicate-member 正向 interim 行为，以及 bodyless / no-length
+  变体的 no-interim 合同，之前在 `test_http_server` 已有 focused live 证明，但
+  `test_http_security` 还缺 direct raw-wire 证据。
+- 本轮新增 threaded / Linux `epoll` 两组 security proof，直接锁定：
+  - `Expect: 100-continue, 100-continue` 仍会先返回单条 interim `100 Continue`，
+    且 body 到达前不会误进 handler
+  - `Content-Length: 0 + Expect: 100-continue`、普通 no-length `POST + Expect: 100-continue`、
+    以及 no-length `HEAD + Expect: 100-continue` 都不会误发 interim `100 Continue`
+  - no-length `HEAD` 变体仍保持 bodyless wire contract
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `180/180 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：这组 `Expect` request-side public contract
+  在 security 层也已有 direct raw-wire proof。
+
 ## 2026-06-04 http queued follow-up 400 security proof
 
 - `malformed follow-up 400 preserves wire order` 之前在

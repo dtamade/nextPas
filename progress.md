@@ -1,5 +1,33 @@
 # Progress Log
 
+## Session: 2026-06-04 http expect bodyless and duplicate-member security proof
+
+- **Status:** completed.
+- Objective:
+  - close the remaining `Expect` duplicate-member / bodyless raw-wire gaps in `test_http_security`
+  - directly prove duplicate `100-continue` still emits one interim `100`, while bodyless variants emit none
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestExpectContinueDuplicateMembersStillSendInterim`
+  - added `TestExpectContinueZeroContentLengthDoesNotEmitInterim`
+  - added `TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim`
+  - added `TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim`
+  - added all four matching `epoll` variants
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `180/180 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `Expect request-side raw-wire security proof`
+  - this batch:
+    `duplicate-member interim 100` + `bodyless/no-length no-interim`
+
 ## Session: 2026-06-04 http queued follow-up 400 security proof
 
 - **Status:** completed.

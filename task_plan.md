@@ -1,5 +1,20 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http expect bodyless and duplicate-member security proof
+
+### Goal
+
+继续补 `nextpas.core.http` 的 `Expect: 100-continue` request-side raw-wire security proof，
+把 duplicate-member 正向 interim 行为，以及 bodyless / no-length 变体的 no-interim
+合同补进 `test_http_security`，覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server` 与 `test_http_security`，确认 duplicate-member 与 bodyless `Expect` 变体仍缺 security 层 direct raw-wire 证据。
+- [x] 新增 duplicate `100-continue` interim proof，以及 `Content-Length: 0` / no-length `POST` / no-length `HEAD` 的 no-interim proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http queued follow-up 400 security proof
 
 ### Goal

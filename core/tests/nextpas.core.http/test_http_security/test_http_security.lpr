@@ -1486,6 +1486,31 @@ end;
 
 procedure RunExpectContinuePositiveSecurityCase(const AOpts: THttpServerOptions;
   const ALabel: string);
+forward;
+
+procedure RunExpectContinuePositiveSecurityCaseWithExpectValue(
+  const AOpts: THttpServerOptions; const ALabel, AExpectValue: string);
+forward;
+
+procedure RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
+  const AOpts: THttpServerOptions; const ALabel, AReq, AReason: string);
+forward;
+
+procedure RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterimSecurityCase(
+  const AOpts: THttpServerOptions; const ALabel: string);
+forward;
+
+procedure RunExpectContinuePositiveSecurityCase(const AOpts: THttpServerOptions;
+  const ALabel: string);
+begin
+  RunExpectContinuePositiveSecurityCaseWithExpectValue(
+    AOpts,
+    ALabel,
+    '100-continue');
+end;
+
+procedure RunExpectContinuePositiveSecurityCaseWithExpectValue(
+  const AOpts: THttpServerOptions; const ALabel, AExpectValue: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1494,6 +1519,7 @@ var
   LConn: ITcpStream;
   LResp1: string;
   LResp2: string;
+  LReqHeaders: string;
   LSeenUpload: Boolean;
   LGotBody: string;
 const
@@ -1501,12 +1527,13 @@ const
     'POST /upload HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
     'Content-Length: 5'#13#10 +
-    'Expect: 100-continue'#13#10 +
+    'Expect: %EXPECT%'#13#10 +
     'Connection: close'#13#10#13#10;
   REQ_BODY = 'hello';
 begin
   LSeenUpload := False;
   LGotBody := '';
+  LReqHeaders := StringReplace(REQ_HEADERS, '%EXPECT%', AExpectValue, True);
   LRouter := THttpRouter.Create;
   LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
     const AW: IHttpResponseWriter)
@@ -1540,7 +1567,7 @@ begin
     LConn := TcpConnect('127.0.0.1', LPort);
     try
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
-      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LConn.Write(LReqHeaders[1], SizeUInt(Length(LReqHeaders)));
       LResp1 := ReadOneResponse(LConn);
       Check(Pos('HTTP/1.1 100 Continue', LResp1) = 1,
         ALabel + ': interim 100 returned first');
@@ -1736,6 +1763,118 @@ begin
   end;
 end;
 
+procedure RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
+  const AOpts: THttpServerOptions; const ALabel, AReq, AReason: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp: string;
+  LSeenUpload: Boolean;
+  LGotBody: string;
+begin
+  LSeenUpload := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+    LReply: string;
+  begin
+    LSeenUpload := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LReply := 'upload:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], SizeUInt(Length(LReply)));
+  end);
+
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    LRouter as IHttpHandler, nil, AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(AReq[1], SizeUInt(Length(AReq)));
+      LResp := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200 OK', LResp) = 1,
+        ALabel + ': final response 200 without interim 100');
+      Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+        ALabel + ': ' + AReason + ' does not emit interim 100');
+      Check(Pos('upload:', LResp) > 0,
+        ALabel + ': final body still emitted');
+      Check(LSeenUpload, ALabel + ': handler called immediately');
+      CheckEqual('', LGotBody, ALabel + ': handler sees empty request body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterimSecurityCase(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+  LBody: string;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmHead, '/head-expect', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    LRouter as IHttpHandler, nil, AOpts, LServer, LPort);
+  try
+    LResp := SendRaw(LPort,
+      'HEAD /head-expect HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Expect: 100-continue'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200 OK', LResp) = 1,
+      ALabel + ': final response 200 without interim 100');
+    Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+      ALabel + ': no-length HEAD does not emit interim 100');
+    Check(Pos('content-length: 4'#13#10, LResp) > 0,
+      ALabel + ': explicit content-length preserved');
+    Check(Pos('transfer-encoding: chunked', LResp) = 0,
+      ALabel + ': no chunked header');
+    Check(Pos('pong', LResp) = 0,
+      ALabel + ': HEAD response stays bodyless on wire');
+    Check(LHandlerCalled, ALabel + ': handler called immediately');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 function BuildChunkedOversizeTrailerRequest: string; forward;
 
 procedure TestExpectContinuePositiveFlow;
@@ -1750,6 +1889,14 @@ begin
   RunExpectContinueChunkedPositiveSecurityCase(
     THttpServerOptions.Default,
     'Expect chunked positive 100-continue flow');
+end;
+
+procedure TestExpectContinueDuplicateMembersStillSendInterim;
+begin
+  RunExpectContinuePositiveSecurityCaseWithExpectValue(
+    THttpServerOptions.Default,
+    'Expect duplicate 100-continue members positive flow',
+    '100-continue, 100-continue');
 end;
 
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim;
@@ -1798,6 +1945,44 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'Repeated Expect header unsupported member early reject');
+end;
+
+procedure TestExpectContinueZeroContentLengthDoesNotEmitInterim;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 0'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
+    THttpServerOptions.Default,
+    'Expect zero content-length does not emit interim',
+    REQ,
+    'zero content-length');
+end;
+
+procedure TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
+    THttpServerOptions.Default,
+    'Expect no-length request does not emit interim',
+    REQ,
+    'missing body declaration');
+end;
+
+procedure TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim;
+begin
+  RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterimSecurityCase(
+    THttpServerOptions.Default,
+    'HEAD Expect no-length request does not emit interim');
 end;
 
 procedure TestMalformedRequestBackpressureSafeHandling;
@@ -2158,6 +2343,18 @@ begin
     'epoll Expect chunked positive 100-continue flow');
 end;
 
+procedure TestExpectContinueDuplicateMembersStillSendInterimEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinuePositiveSecurityCaseWithExpectValue(
+    LOpts,
+    'epoll Expect duplicate 100-continue members positive flow',
+    '100-continue, 100-continue');
+end;
+
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend;
 var
   LOpts: THttpServerOptions;
@@ -2210,6 +2407,56 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll repeated Expect header unsupported member early reject');
+end;
+
+procedure TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 0'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
+    LOpts,
+    'epoll Expect zero content-length does not emit interim',
+    REQ,
+    'zero content-length');
+end;
+
+procedure TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Expect: 100-continue'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueBodylessRequestDoesNotEmitInterimSecurityCase(
+    LOpts,
+    'epoll Expect no-length request does not emit interim',
+    REQ,
+    'missing body declaration');
+end;
+
+procedure TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterimSecurityCase(
+    LOpts,
+    'epoll HEAD Expect no-length request does not emit interim');
 end;
 {$ENDIF}
 
@@ -4194,6 +4441,8 @@ begin
   T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
   T.Run('Expect positive flow sends interim 100 before final 200',
     @TestExpectContinuePositiveFlow);
+  T.Run('Expect duplicate 100-continue members still send interim 100',
+    @TestExpectContinueDuplicateMembersStillSendInterim);
   T.Run('Expect chunked positive flow sends interim 100 before final 200',
     @TestExpectContinueChunkedPositiveFlow);
   T.Run('Expect chunked MaxBodySize rejects after interim 100',
@@ -4202,6 +4451,12 @@ begin
     @TestExpectDeclaredOversizeRejectsEarly);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarly);
+  T.Run('Expect zero content-length does not emit interim 100',
+    @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
+  T.Run('Expect no-length request does not emit interim 100',
+    @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim);
+  T.Run('HEAD Expect no-length request does not emit interim 100',
+    @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim);
   T.Run('Malformed direct error backpressure safe handling',
     @TestMalformedRequestBackpressureSafeHandling);
   T.Run('Unsupported transfer-coding direct error backpressure safe handling',
@@ -4370,6 +4625,8 @@ begin
     @TestTruncatedContentLengthRequestAtEofEpollBackend);
   T.Run('Expect positive flow sends interim 100 before final 200 with epoll backend',
     @TestExpectContinuePositiveFlowEpollBackend);
+  T.Run('Expect duplicate 100-continue members still send interim 100 with epoll backend',
+    @TestExpectContinueDuplicateMembersStillSendInterimEpollBackend);
   T.Run('Expect chunked positive flow sends interim 100 before final 200 with epoll backend',
     @TestExpectContinueChunkedPositiveFlowEpollBackend);
   T.Run('Expect chunked MaxBodySize rejects after interim 100 with epoll backend',
@@ -4378,6 +4635,12 @@ begin
     @TestExpectDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Repeated Expect headers with unsupported member reject early without interim 100 with epoll backend',
     @TestRepeatedExpectHeaderUnsupportedMemberRejectsEarlyEpollBackend);
+  T.Run('Expect zero content-length does not emit interim 100 with epoll backend',
+    @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
+  T.Run('Expect no-length request does not emit interim 100 with epoll backend',
+    @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
+  T.Run('HEAD Expect no-length request does not emit interim 100 with epoll backend',
+    @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
   T.Run('Slowloris partial request with epoll backend',
     @TestSlowlorisEpollBackend);
   T.Run('Partial fixed-length body idle-timeout closes connection with epoll backend',
