@@ -119,6 +119,31 @@ begin
   end;
 end;
 
+function IsValidCloseCode(const ACode: UInt16): Boolean;
+begin
+  Result :=
+    (ACode >= 1000) and
+    (ACode < 5000) and
+    (ACode <> 1004) and
+    (ACode <> 1005) and
+    (ACode <> 1006) and
+    (ACode <> 1015);
+end;
+
+procedure ValidateClosePayload(const APayload: string);
+var
+  LCode: UInt16;
+begin
+  if Length(APayload) = 0 then
+    Exit;
+  if Length(APayload) = 1 then
+    raise EHttpError.Create('WebSocket: invalid close frame payload');
+
+  LCode := (UInt16(Ord(APayload[1])) shl 8) or UInt16(Ord(APayload[2]));
+  if not IsValidCloseCode(LCode) then
+    raise EHttpError.Create('WebSocket: invalid close code');
+end;
+
 { UpgradeWebSocket }
 
 function UpgradeWebSocket(const AReq: IHttpRequest;
@@ -249,7 +274,10 @@ begin
   Result.Payload := LBuf;
 
   if Result.Opcode = wsOpClose then
+  begin
+    ValidateClosePayload(Result.Payload);
     FCloseReceived := True;
+  end;
 end;
 
 procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);
