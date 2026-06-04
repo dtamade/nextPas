@@ -2270,6 +2270,100 @@ begin
   end;
 end;
 
+procedure CheckOutgoingCloseRejected(const ACaseName: string; const ACode: UInt16;
+  const AReason, AExpectedError: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LWs.Close(ACode, AReason);
+    except
+      on E: EHttpError do
+        LWs.WriteText(E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, ACaseName + ': got 101');
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, ACaseName + ': got response');
+      Check(Ord(LResp[1]) = $81, ACaseName + ': server sends text frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      CheckEqual(AExpectedError, Copy(LResp, 3, LPayloadLen),
+        ACaseName + ': fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4t: server Close must reject invalid outbound close codes }
+procedure TestOutgoingCloseInvalidCodeRejected;
+begin
+  CheckOutgoingCloseRejected('outgoing-close-invalid-code', 999, 'bad',
+    'WebSocket: invalid close code');
+end;
+
+{ Test 4u: server Close must reject invalid outbound close reason encoding }
+procedure TestOutgoingCloseInvalidUtf8ReasonRejected;
+begin
+  CheckOutgoingCloseRejected('outgoing-close-invalid-utf8', 1000, #$C3,
+    'WebSocket: invalid close reason encoding');
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -2470,6 +2564,9 @@ begin
     @TestWebSocketMaxMessageSizeRejectsFragmentedMessage);
   T.Run('OutgoingPingPayloadTooLargeRejected', @TestOutgoingPingPayloadTooLargeRejected);
   T.Run('OutgoingClosePayloadTooLargeRejected', @TestOutgoingClosePayloadTooLargeRejected);
+  T.Run('OutgoingCloseInvalidCodeRejected', @TestOutgoingCloseInvalidCodeRejected);
+  T.Run('OutgoingCloseInvalidUtf8ReasonRejected',
+    @TestOutgoingCloseInvalidUtf8ReasonRejected);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

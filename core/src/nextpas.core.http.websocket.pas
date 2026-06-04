@@ -492,6 +492,7 @@ begin
   if Length(AReason) > 0 then
     Move(AReason[1], LPayload[3], Length(AReason));
   ValidateControlPayloadSize(LPayload);
+  ValidateClosePayload(LPayload);
   FCloseSent := True;
   FOpen := False;
   WriteFrameRaw(wsOpClose, LPayload);

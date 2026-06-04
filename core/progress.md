@@ -1,11 +1,11 @@
-# Progress Log: WebSocket outgoing control-frame payload limits
+# Progress Log: WebSocket outgoing close validation
 
 ## Session
 
-- **Scope:** 补齐 WebSocket outgoing `Ping` / `Close` control-frame payload limit。
+- **Scope:** 补齐 WebSocket outgoing `Close` close code / reason validation。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket public API safety`
-  -> `outgoing control-frame payload limits`
+  -> `outgoing close payload semantic validation`
 
 ## Current state
 
@@ -20,28 +20,27 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `OutgoingPingPayloadTooLargeRejected` focused proof。
-- `test_http_websocket` 新增 `OutgoingClosePayloadTooLargeRejected` focused proof。
-- `nextpas.core.http.websocket` 新增 write-side control payload guard。
+- `test_http_websocket` 新增 `OutgoingCloseInvalidCodeRejected` focused proof。
+- `test_http_websocket` 新增 `OutgoingCloseInvalidUtf8ReasonRejected` focused proof。
+- `nextpas.core.http.websocket` 现在在 `Close` 写出前复用 close payload validation。
 - `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录新公开契约。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `25 total, 23 passed, 2 failed`
+  - `27 total, 25 passed, 2 failed`
   - failures:
-    - `outgoing-ping-oversize: server sends close frame`
-    - `outgoing-close-oversize: server sends text frame`
+    - `outgoing-close-invalid-code: server sends text frame`
+    - `outgoing-close-invalid-utf8: server sends text frame`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `25 total, 25 passed, 0 failed`
+  - `27 total, 27 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀建议优先复查 WebSocket 是否还存在真实 RED 的 public API gap；候选是 `Pong(126 bytes)`
-  parity 或 invalid fragmented final UTF-8。如果都只是同路径 PASS，应转回 HttpServer examples/docs
-  或 H1/server remaining public gaps。
+- 下一刀建议优先评估 `WriteText` outbound UTF-8 validation 是否应成为 public contract。
+- 如果选择继续 WebSocket，先 RED；如果用例已 PASS 或只是同路径 parity，则转向 HttpServer examples/docs
+  或 server runtime gap，不再复制低价值同型覆盖。
