@@ -130,11 +130,15 @@ end;
 
 function HandlerFunc(const AFunc: THttpHandlerFunc): IHttpHandler;
 begin
+  if not Assigned(AFunc) then
+    raise EHttpError.Create('HTTP handler callback must not be nil');
   Result := TFuncHandler.Create(AFunc);
 end;
 
 function HandlerFunc(const AMethod: THttpHandlerMethod): IHttpHandler;
 begin
+  if not Assigned(AMethod) then
+    raise EHttpError.Create('HTTP handler method must not be nil');
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     AMethod(AReq, AW);
@@ -143,6 +147,8 @@ end;
 
 function HandlerFunc(const AProc: THttpHandlerProc): IHttpHandler;
 begin
+  if not Assigned(AProc) then
+    raise EHttpError.Create('HTTP handler procedure must not be nil');
   Result := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
     AProc(AReq, AW);

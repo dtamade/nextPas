@@ -1,12 +1,12 @@
-# Progress Log: request RemoteAddr direct proof
+# Progress Log: HandlerFunc nil-callback contract
 
 ## Session
 
-- **Scope:** 补齐 `IHttpRequest.RemoteAddr` / `THttpRequest.SetRemoteAddr`
-  direct focused proof。
+- **Scope:** 补齐 `HandlerFunc` nil closure / method / procedure callback 的
+  显式拒绝契约。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1 正确性加固` -> `public interface completeness`
-  -> `request RemoteAddr object contract`
+  -> `HandlerFunc nil-callback contract`
 
 ## Current state
 
@@ -22,16 +22,20 @@
 
 ## Completed work
 
-- `test_http_message` 新增 `RemoteAddr default and set` focused proof。
-- `NewGetRequest` 创建的 request 默认 `RemoteAddr = ''`。
-- concrete `THttpRequest.SetRemoteAddr` 设置后，interface 侧 `IHttpRequest.RemoteAddr`
-  能读回同一值。
-- `docs/http/API_COVERAGE.md` 已移除 RemoteAddr direct proof next-action。
+- `test_http_middleware` 新增 `HandlerFunc rejects nil callbacks` focused proof。
+- `nextpas.core.http.middleware.HandlerFunc` 三个 overload 均增加 nil guard。
+- nil closure / method / procedure callback 现在都会立即抛 `EHttpError`。
+- `docs/http/API_COVERAGE.md` 已移除 HandlerFunc nil-callback next-action。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_message test`
-  - `13/13 passed`
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_middleware test`
+  - `10 total, 9 passed, 1 failed`
+  - failure: `nil handler closure raises EHttpError`
+- GREEN:
+  - `make -C tests/nextpas.core.http/test_http_middleware test`
+  - `10/10 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

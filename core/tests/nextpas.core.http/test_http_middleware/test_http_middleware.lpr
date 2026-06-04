@@ -352,6 +352,44 @@ begin
   CheckEqual(Int64(HTTP_STATUS_OK), Int64(LWObj.Status), 'status 200');
 end;
 
+procedure TestHandlerFuncRejectsNilCallbacks;
+var
+  LFunc: THttpHandlerFunc;
+  LMethod: THttpHandlerMethod;
+  LProc: THttpHandlerProc;
+  LCaught: Boolean;
+begin
+  LFunc := nil;
+  LCaught := False;
+  try
+    HandlerFunc(LFunc);
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'nil handler closure raises EHttpError');
+
+  LMethod := nil;
+  LCaught := False;
+  try
+    HandlerFunc(LMethod);
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'nil handler method raises EHttpError');
+
+  LProc := nil;
+  LCaught := False;
+  try
+    HandlerFunc(LProc);
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'nil handler proc raises EHttpError');
+end;
+
 procedure TestSingleMiddleware;
 var
   LChainIntf: IHttpHandler;
@@ -502,6 +540,7 @@ var
 begin
   T := TTestRunner.Create('nextpas.core.http.middleware');
   T.Run('HandlerFunc wraps function', @TestHandlerFuncWraps);
+  T.Run('HandlerFunc rejects nil callbacks', @TestHandlerFuncRejectsNilCallbacks);
   T.Run('Single middleware wraps handler', @TestSingleMiddleware);
   T.Run('Multiple middlewares execute in order', @TestMultipleMiddlewaresOrder);
   T.Run('Chain convenience function', @TestChainConvenience);
