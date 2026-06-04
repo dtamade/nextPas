@@ -1,61 +1,60 @@
-# Findings: http server options demo smoke
+# Findings: net.server readiness runtime owner extraction
 
 ## Scope
 
-- 本轮留在 `nextpas.core.http`。
-- 目标不是生产修复，而是给 `http_server_options_demo` 建立 focused runnable
-  smoke 证据。
+- 本轮留在 `nextpas.core.net.server` foundation，并验证 HTTP 不回退。
+- 目标不是新增 HTTP 公开功能，而是把 readiness-family runtime owner
+  从 `epoll` Linux 专属单元里继续抽离。
 
 ## Confirmed truths
 
-### 1. 当前 malformed chunk / raw-wire security 证据已经足够厚
+### 1. readiness-family 的剩余高价值问题不是“再写一份 kqueue”
 
-- parser / server / security 三层对 chunked ingress 的 malformed/truncated
-  case 已经有大量 focused proof。
-- 再继续堆相邻子类，边际收益已经明显低于补 example smoke。
+- 当前 `epoll` backend 已经大量依赖 `platform_poller_*` 抽象。
+- 继续把 owner 留在 `nextpas.core.net.server.epoll`，只会让 future `kqueue`
+  再复制一份 listener/poll/completion/deadline 主循环。
 
-### 2. `http_server_options_demo` 的高价值契约是“示例真能跑”
+### 2. 真正应抽出来的是 readiness runtime owner 本身
 
-- 这个 example 公开展示的不只是 API surface，还包括：
-  - `THttpServerOptions.Backend`
-  - `WriteTimeout`
-  - `MaxHeaderSize`
-  - `MaxBodySize`
-  - `/health`
-  - `/hello/:name`
-  - `/echo`
-- 如果没有外部进程级 smoke，它仍然只算“编译示例”，不算运行契约。
+- `runtime.pas` 已经拥有 poll target / completion queue / session context 这些底层 helper。
+- 但在这轮之前，真正把这些 helper 组合成“可运行 readiness backend”的 owner
+  还在 `epoll.pas` 里。
+- 这意味着 phase-5 `kqueue` 仍缺一个可复用的共享 owner。
 
-### 3. 最合适的模式是“外部进程 + 客户端打点”，不是内嵌 server
+### 3. 这轮最合理的切法是：新增 internal unit，而不是改 public API
 
-- `test_config_examples` 适合一次性退出的 example。
-- `http_server_options_demo` 是常驻 server，更合适的模式是：
-  - 测试内先 `make build`
-  - 直接启动 example binary
-  - 等待 ready marker
-  - 用 `IHttpClient` 打 `/health`、`/hello/world`、`POST /echo`
-  - 再验证 oversize body 被 `413` 拒绝
+- 新增 `nextpas.core.net.server.readiness` 后：
+  - `epoll` 可以退成 Linux 命名工厂包装
+  - `test_net_server` 可以直接对 shared readiness owner 做 focused proof
+  - HTTP facade 与 `ITcpServer` contract 不需要变化
 
-### 4. 本轮不需要生产修复
+### 4. 这轮已经把 readiness owner 抽实
 
-- 新增 smoke 一次通过，说明当前 example/HTTP 生产路径已经满足这批契约。
-- 本轮只新增测试与控制面证据。
+- `nextpas.core.net.server.readiness.pas` 现在拥有：
+  - listener readiness
+  - poll-driven session 注册
+  - worker-completion -> reactor re-entry
+  - deadline wake
+  - shutdown wake / fallback self-connect
+- `nextpas.core.net.server.epoll.pas` 现在只保留 Linux backend 工厂入口。
 
 ## Verification evidence
 
-- `make -C tests/nextpas.core.http/test_http_examples clean test`
-  - `2/2 passed`
+- RED:
+  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - 先因缺失 `nextpas.core.net.server.readiness` 编译失败
+- GREEN:
+  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - `23/23 passed`
   - heaptrc: `0 unfreed memory blocks`
-- 其中 smoke 已覆盖：
-  - example build 成功
-  - ready startup marker
-  - `/health` 返回 options 文本
-  - `/hello/world` 返回 path-param 示例文本
-  - `/echo` 返回 body/byte-count
-  - oversize body 返回 `413`
+- module gate:
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `173/173 passed`
+  - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 当前 smoke 只锁 `threaded` backend，没有额外跑 `epoll` CLI 参数分支。
-- 这仍然是示例级别的 focused proof，不替代 `test_http_server` 的协议边界覆盖。
-- 如果后续 example 再扩公开演示面，应优先在这个 smoke 上增量补证据，而不是把断言散回大而全的集成测试。
+- `kqueue` backend 还没真正注册/落地。
+- BSD/macOS `platform_poller_enable_wake` / `wake` / `drain_wake` 仍未实现，所以
+  readiness owner 虽已抽出，但 `kqueue` host wake seam 还差最后一段。
+- Windows `IOCP` completion-aware driver 仍是后续 phase，不在本轮范围。

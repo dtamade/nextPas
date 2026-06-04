@@ -11,6 +11,7 @@ uses
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.net.server,
+  nextpas.core.net.server.readiness,
   nextpas.core.platform.io.base,
   nextpas.core.platform.thread,
   nextpas.core.time.base,
@@ -1658,6 +1659,86 @@ begin
 end;
 
 {$IFDEF NEXTPAS_LINUX}
+procedure TestReadinessServerWakesPollDrivenSessionAfterWorkerCompletion;
+var
+  LHandler: TWakeupPollDrivenHandler;
+  LHandlerRef: ITcpServerHandler;
+  LServer: ITcpServer;
+  LCtx: PServerCtx;
+  LHandle: TPlatformThreadHandle;
+  LWait: Int32;
+  LPort: UInt16;
+  LClient: ITcpStream;
+  LBuf: array[0..7] of Byte;
+  LN: SizeUInt;
+  LRet: Pointer;
+begin
+  LHandler := TWakeupPollDrivenHandler.Create;
+  LHandlerRef := LHandler;
+  Check(LHandlerRef <> nil, 'readiness handler keepalive installed');
+  LServer := NewTcpReadinessServer(TTcpServerOptions.Default);
+  New(LCtx);
+  LCtx^.Server := LServer;
+  LCtx^.Handler := LHandler;
+  LCtx^.Addr := '127.0.0.1';
+  LCtx^.Port := 0;
+  platform_thread_create(LHandle, @ServerThreadFunc, LCtx);
+
+  LWait := 0;
+  while (not LServer.IsRunning) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  LPort := LServer.LocalAddr.Port;
+  Check(LPort > 0, 'readiness server exposes bound port');
+
+  LClient := TcpConnect('127.0.0.1', LPort);
+  try
+    LClient.Write(PAnsiChar('x')^, 1);
+    LN := LClient.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    CheckEqual(SizeUInt(2), LN, 'readiness response size');
+    CheckEqual(Byte(Ord('o')), LBuf[0], 'readiness first byte');
+    CheckEqual(Byte(Ord('k')), LBuf[1], 'readiness second byte');
+  finally
+    LClient.Close;
+  end;
+
+  LWait := 0;
+  while (LHandler.CompletionCount = 0) and (LWait < 200) do
+  begin
+    platform_thread_sleep_ns(5000000);
+    Inc(LWait);
+  end;
+
+  Check(LHandler.ContextFactoryCalled,
+    'readiness path uses context-aware session factory');
+  Check(not LHandler.ServeConnCalled,
+    'readiness path bypasses ServeConn');
+  CheckEqual(Int64(Ord(TCP_SERVER_HANDOFF_ACCEPTED)),
+    Int64(Ord(LHandler.SubmitResult)), 'readiness handoff accepted');
+  CheckEqual(Int64(1), Int64(LHandler.WorkExecuteCount),
+    'readiness work executed once');
+  CheckEqual(Int64(1), Int64(LHandler.CompletionCount),
+    'readiness completion executed once');
+  Check(LHandler.AdvanceCount > 1,
+    'readiness path re-enters poll-driven session after completion');
+  Check(LHandler.ObservedEmptyAdvance,
+    'readiness path re-enters session without socket readiness');
+  Check(LHandler.ReactorThreadId <> 0, 'readiness path captured reactor thread');
+  Check(LHandler.WorkThreadId <> 0, 'readiness path captured worker thread');
+  Check(LHandler.CompletionThreadId <> 0,
+    'readiness path captured completion thread');
+  Check(LHandler.WorkThreadId <> LHandler.ReactorThreadId,
+    'readiness worker runs off reactor thread');
+  CheckEqual(Int64(LHandler.ReactorThreadId), Int64(LHandler.CompletionThreadId),
+    'readiness completion returns to reactor thread');
+
+  LServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
+end;
+
 procedure TestEpollServerEcho;
 var
   LHandler: TEchoHandler;
@@ -2065,6 +2146,8 @@ begin
   T.Run('Missing backend factory raises not supported',
     @TestMissingBackendFactoryRaisesNotSupported);
   {$IFDEF NEXTPAS_LINUX}
+  T.Run('Readiness server wakes poll-driven session after worker completion',
+    @TestReadinessServerWakesPollDrivenSessionAfterWorkerCompletion);
   T.Run('Epoll server echo', @TestEpollServerEcho);
   T.Run('Epoll server shutdown without clients',
     @TestEpollServerShutdownWithoutClients);

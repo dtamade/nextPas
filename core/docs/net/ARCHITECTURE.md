@@ -94,15 +94,17 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   、poll-driven worker completion bridge / session context wrapper，
   以及 pending completion queue / poll target registry 这两块 backend 共用状态管理
   也已经下沉到这里，避免 future `epoll` / `kqueue` backend 重复复制这层逻辑。
+- [src/nextpas.core.net.server.readiness.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.readiness.pas:1)
+  现在拥有共用的 readiness-family runtime owner：listener readiness、
+  poll-driven session 注册、worker completion re-entry、deadline wake、
+  以及基于 `platform_poller_*` 的主循环都已经从 Linux 专属单元里抽到这里。
 - [src/nextpas.core.net.server.threaded.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.threaded.pas:1)
   是当前 correctness 基线 backend，负责 listen / accept / shutdown / detach ownership，
   并先用 foundation-owned worker handoff 证明 session/context/handoff contract 成立。
 - [src/nextpas.core.net.server.epoll.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.epoll.pas:1)
-  现在同时承载两条路径：
-  - phase-1：`epoll` 负责 listener readiness 与 nonblocking `TryAccept`，
-    blocking session 继续交给 foundation worker 执行
-  - phase-2 seam：若 session 同时实现 `ITcpServerPollDrivenSession`，
-    `epoll` 可直接驱动该 per-connection session
+  现在是 Linux 命名 backend 入口；真实实现 owner 已下沉到
+  `nextpas.core.net.server.readiness`，因此 `epoll` backend 不再自己复制
+  readiness 主循环，只负责保留 Linux backend 的工厂/命名边界。
 - [src/nextpas.core.net.intf.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.net.intf.pas:1)
   现在提供了 `ITcpSocketRuntime`、`ITcpListenerRuntime.TryAccept`、
   `ITcpStreamRuntime.TryRead/TryWrite` 这组 runtime-only seam，用来暴露 native socket
@@ -193,6 +195,10 @@ nextPas 不复制其中任何一个的整套实现，而是固定成混合选型
   session-context wrapper，说明 readiness-family glue 正在继续从 backend 私有实现里抽离
 - epoll backend 现在也开始复用 foundation-owned pending completion queue /
   poll target registry，说明 poll-driven driver 的状态管理边界也已经进入 runtime owner。
+- readiness-family runtime owner 现在已经独立成
+  `nextpas.core.net.server.readiness`，说明 future `kqueue` 不必再复制整套
+  listener/poll/completion/deadline 驱动骨架；剩余缺口已进一步收窄到
+  backend registration 与 host-specific wake seam。
 - `platform.io` poller 现在也有 wake seam；Linux 先用 `eventfd` 落地。
 - `epoll` backend 现在会把 poll-driven session 的 worker completion 先排队回 reactor，
   再在 reactor 线程执行 completion，并用 synthetic re-entry 继续推进该 session。
