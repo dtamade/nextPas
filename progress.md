@@ -1,5 +1,34 @@
 # Progress Log
 
+## Session: 2026-06-04 http malformed chunked direct-error backpressure trio
+
+- **Status:** completed.
+- Objective:
+  - close the remaining malformed chunked direct-error raw-wire gaps for
+    `invalid chunk-size`, `missing chunk-data CRLF`, and `malformed trailer field`
+  - directly prove backpressure safe-close behavior on both threaded and Linux `epoll`
+- Scope and safety:
+  - touching `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal HTTP control-file updates only
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed proof:
+  - added `TestInvalidChunkSizeBackpressureSafeHandling`
+  - added `TestMissingChunkDataCrLfBackpressureSafeHandling`
+  - added `TestMalformedTrailerFieldBackpressureSafeHandling`
+  - added all three matching `epoll` variants
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `188/188 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+- Route position:
+  - HTTP roadmap `3/6 H1 correctness hardening`
+  - current sub-slice: `malformed chunked raw-wire security proof`
+  - this batch:
+    `invalid chunk-size` + `missing chunk-data CRLF` + `malformed trailer field`
+    direct-error backpressure
+
 ## Session: 2026-06-04 http chunked-not-final backpressure security proof
 
 - **Status:** completed.

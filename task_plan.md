@@ -1,5 +1,23 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http malformed chunked direct-error backpressure trio
+
+### Goal
+
+继续补 `nextpas.core.http` malformed chunked request 的 raw-wire security proof，
+把 `invalid chunk-size`、`missing chunk-data CRLF`、`malformed trailer field`
+这组三个 direct-error / backpressure safe-close 合同补进 `test_http_security`，
+覆盖 threaded / Linux `epoll` 两条 live 路径。
+
+### Checklist
+
+- [x] 对比 `test_http_server`、`test_http_security` 与 `test_http_h1parser`，确认这组三个 malformed chunked case 仍缺 security 层 direct raw-wire/backpressure 证据。
+- [x] 新增 threaded / `epoll` 六条
+  `invalid chunk-size` / `missing chunk-data CRLF` / `malformed trailer field`
+  direct-error backpressure proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http chunked-not-final backpressure security proof
 
 ### Goal

@@ -2056,6 +2056,58 @@ begin
     'Chunked-not-final transfer-coding direct error backpressure');
 end;
 
+procedure TestInvalidChunkSizeBackpressureSafeHandling;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'Z'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Invalid chunk-size direct error backpressure');
+end;
+
+procedure TestMissingChunkDataCrLfBackpressureSafeHandling;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello0'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Missing chunk-data CRLF direct error backpressure');
+end;
+
+procedure TestMalformedTrailerFieldBackpressureSafeHandling;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Bad'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'Bad Header: value'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Malformed trailer field direct error backpressure');
+end;
+
 procedure TestQueuedFollowUp400PreservesWireOrder;
 const
   REQ =
@@ -2241,6 +2293,70 @@ begin
     REQ,
     'HTTP/1.1 400 Bad Request',
     'epoll chunked-not-final transfer-coding direct error backpressure');
+end;
+
+procedure TestInvalidChunkSizeBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    'Z'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll invalid chunk-size direct error backpressure');
+end;
+
+procedure TestMissingChunkDataCrLfBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello0'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll missing chunk-data CRLF direct error backpressure');
+end;
+
+procedure TestMalformedTrailerFieldBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST / HTTP/1.1'#13#10 +
+    'Host: x'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Bad'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'Bad Header: value'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll malformed trailer field direct error backpressure');
 end;
 
 procedure TestQueuedFollowUp400PreservesWireOrderEpollBackend;
@@ -4499,6 +4615,12 @@ begin
     @TestUnsupportedExpectBackpressureSafeHandling);
   T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling',
     @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandling);
+  T.Run('Invalid chunk-size direct error backpressure safe handling',
+    @TestInvalidChunkSizeBackpressureSafeHandling);
+  T.Run('Missing chunk-data CRLF direct error backpressure safe handling',
+    @TestMissingChunkDataCrLfBackpressureSafeHandling);
+  T.Run('Malformed trailer field direct error backpressure safe handling',
+    @TestMalformedTrailerFieldBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
   T.Run('Queued follow-up 400 preserves wire order',
@@ -4693,6 +4815,12 @@ begin
     @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked-not-final transfer-coding direct error backpressure safe handling with epoll backend',
     @TestChunkedMustBeFinalTransferCodingBackpressureSafeHandlingEpollBackend);
+  T.Run('Invalid chunk-size direct error backpressure safe handling with epoll backend',
+    @TestInvalidChunkSizeBackpressureSafeHandlingEpollBackend);
+  T.Run('Missing chunk-data CRLF direct error backpressure safe handling with epoll backend',
+    @TestMissingChunkDataCrLfBackpressureSafeHandlingEpollBackend);
+  T.Run('Malformed trailer field direct error backpressure safe handling with epoll backend',
+    @TestMalformedTrailerFieldBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
   T.Run('Queued follow-up 400 preserves wire order with epoll backend',

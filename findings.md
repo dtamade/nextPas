@@ -1,5 +1,20 @@
 # Findings & Decisions
 
+## 2026-06-04 http malformed chunked direct-error backpressure trio
+
+- `invalid chunk-size`、`missing chunk-data CRLF`、`malformed trailer field`
+  之前都已有 parser focused proof、server focused live proof、以及 poll-driven writable-drain truth，
+  但 `test_http_security` 还缺 threaded / Linux `epoll` real-socket direct-error/backpressure
+  直接证据。
+- 本轮新增 threaded / Linux `epoll` 六条 security proof，直接锁定：
+  - 这三个 malformed chunked case 都会直接返回 final `400 Bad Request`
+  - 在 backpressure 尝试下，连接仍会安全关闭
+  - wire 上至多暴露一条原始 `400` status-line 前缀，不会追加 synthetic `500`
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `188/188 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：这组三个 malformed chunked
+  direct-error 路径在 security 层也已有 direct raw-wire/backpressure proof。
+
 ## 2026-06-04 http chunked-not-final backpressure security proof
 
 - `Transfer-Encoding: chunked, gzip` 这条 malformed chunked framing 之前已有
