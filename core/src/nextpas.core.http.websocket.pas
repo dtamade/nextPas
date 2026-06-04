@@ -278,6 +278,8 @@ begin
     LPayloadLen := 0;
     for I := 0 to 7 do
       LPayloadLen := (LPayloadLen shl 8) or UInt64(LExtLen[I]);
+    if LPayloadLen < 65536 then
+      raise EHttpError.Create('WebSocket: non-canonical payload length');
   end;
 
   if (LOpcode >= $08) and (LPayloadLen > 125) then
