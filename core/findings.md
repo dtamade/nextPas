@@ -1,29 +1,27 @@
-# Findings: WebSocket fragmented UTF-8 text sequence acceptance
+# Findings: WebSocket non-canonical payload length rejection
 
 ## Scope
 
-本轮补齐 WebSocket fragmented data-frame policy 的正向边界：text message 的 UTF-8
-byte sequence 可以跨 frame boundary 拆分；`ReadFrame` 不应对 `FIN=0` text 首片做单帧
-UTF-8 误拒，而应在 final continuation 到达时校验累计 text message。
+本轮补齐 WebSocket payload length canonical encoding 的第一刀：payload length 必须使用
+最短可表达编码；短 payload 不能用 16-bit extended length 绕过正常 frame grammar。
 
 ## Confirmed truths
 
 ### 1. RED 证明了真实缺口
 
-`test_http_websocket` 新增 `FragmentedTextUtf8SequenceAccepted` 后首次 focused gate 失败：
+`test_http_websocket` 新增 `NonCanonicalPayloadLengthRejected` 后首次 focused gate 失败：
 
-- `17 total, 16 passed, 1 failed`
-- failure: `fragmented-utf8: server sends text frame`
+- `18 total, 17 passed, 1 failed`
+- failure: `non-canonical-length: server sends close frame`
 - heaptrc: `0 unfreed memory blocks`
 
-这证明旧 `ReadFrame` 会在首片 `#$C3` 上做单帧 UTF-8 校验并误回 protocol close，
-即使首片加 final continuation `#$A9` 后整体是合法 UTF-8。
+这证明旧 `ReadFrame` 会接受 payload `"hi"` 的 16-bit extended length encoding，
+并把它当正常 text frame 交给 handler。
 
 ### 2. 最小修复
 
-`nextpas.core.http.websocket.TWebSocketImpl` 现在记录 fragmented text 的累计 payload。
-非 fragmented text 仍立即校验 UTF-8；fragmented text 首片与中间 continuation 先累计，
-final continuation 到达后校验整条 text message。binary fragmentation 不参与 UTF-8 校验。
+`nextpas.core.http.websocket.TWebSocketImpl.ReadFrame` 现在在读取 16-bit extended length
+后检查实际长度；如果 `<126`，立即抛 `EHttpError('WebSocket: non-canonical payload length')`。
 
 ### 3. Focused proof
 
@@ -43,8 +41,9 @@ final continuation 到达后校验整条 text message。binary fragmentation 不
 - malformed UTF-8 close reason 被 handler 捕获为 `EHttpError` 后返回 close code `1002`。
 - standalone continuation 被 handler 捕获为 `EHttpError` 后返回 close code `1002`。
 - `FIN=0 text #$C3` + final continuation `#$A9` 可被 handler 连续读取，并返回正常 text response。
+- 短 payload 使用 16-bit extended length 会被 handler 捕获为 `EHttpError` 后返回 close code `1002`。
 
 ## Remaining gaps / risks
 
-- 当前仍是 frame-level API，handler 仍需自行理解 fragmented frame 序列；本轮只修正 UTF-8 校验时机。
-- 下一刀建议补 invalid fragmented final UTF-8 或 interleaved data-frame rejection 的 focused proof。
+- 本轮只直接证明 16-bit extended length 表达 `<126` 的 non-canonical case。
+- 下一刀建议补 64-bit extended length 表达 `<65536` 或 high-bit set 的 payload length rejection。

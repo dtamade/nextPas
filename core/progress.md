@@ -1,11 +1,11 @@
-# Progress Log: WebSocket fragmented UTF-8 text sequence acceptance
+# Progress Log: WebSocket non-canonical payload length rejection
 
 ## Session
 
-- **Scope:** 补齐 WebSocket fragmented UTF-8 text sequence acceptance。
+- **Scope:** 补齐 WebSocket non-canonical payload length rejection。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket negative frame coverage`
-  -> `fragmented data-frame policy` -> `valid fragmented UTF-8 text sequence`
+  -> `payload length canonical encoding` -> `16-bit non-canonical rejection`
 
 ## Current state
 
@@ -21,23 +21,23 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `FragmentedTextUtf8SequenceAccepted` focused proof。
-- `nextpas.core.http.websocket.ReadFrame` 增加 fragmented text 累计 UTF-8 校验。
-- `docs/http/API_COVERAGE.md` 已记录 WebSocket valid fragmented UTF-8 text sequence contract。
+- `test_http_websocket` 新增 `NonCanonicalPayloadLengthRejected` focused proof。
+- `nextpas.core.http.websocket.ReadFrame` 增加 16-bit non-canonical payload length guard。
+- `docs/http/API_COVERAGE.md` 已记录 WebSocket 16-bit non-canonical payload length rejection contract。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `17 total, 16 passed, 1 failed`
-  - failure: `fragmented-utf8: server sends text frame`
+  - `18 total, 17 passed, 1 failed`
+  - failure: `non-canonical-length: server sends close frame`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `17 total, 17 passed, 0 failed`
+  - `18 total, 18 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先继续 WebSocket fragmented data-frame policy：invalid fragmented final UTF-8 或 interleaved data-frame rejection；benchmark 仍后置，不跑全量。
+- 下一刀优先继续 WebSocket payload length canonical coverage：64-bit non-canonical length 或 high-bit set rejection；benchmark 仍后置，不跑全量。

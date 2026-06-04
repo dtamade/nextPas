@@ -269,6 +269,8 @@ begin
   begin
     ReadExact(LExtLen[0], 2);
     LPayloadLen := (UInt64(LExtLen[0]) shl 8) or UInt64(LExtLen[1]);
+    if LPayloadLen < 126 then
+      raise EHttpError.Create('WebSocket: non-canonical payload length');
   end
   else if LPayloadLen = 127 then
   begin
