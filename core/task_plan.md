@@ -1,19 +1,19 @@
-# Task Plan: http trailer-complete truncated follow-up headers epoll raw-wire proof
+# Task Plan: http chunked truncated follow-up headers epoll raw-wire proof
 
 ## Goal
 
 继续留在 H1 correctness 主线，并沿 keep-alive request-tail contract 补掉一个明确的 security 缺口：
 
 - 先做矩阵筛查，确认 parser/server 已有而 security 还缺的 request-tail truth
-- 在 `test_http_security` 里补 chunked trailer-complete truncated follow-up headers 的 Linux `epoll` raw-wire proof
-- 锁定“首个 trailer-complete chunked request 先返回 `200 / echo:5`，follow-up 半截请求头在 peer half-close 后返回 `400`”的 live truth
+- 在 `test_http_security` 里补 plain chunked truncated follow-up headers 的 Linux `epoll` raw-wire proof
+- 锁定“首个 chunked request 先返回 `200 / echo:5`，follow-up 半截请求头在 peer half-close 后返回 `400`”的 live truth
 - 只有真出现 threaded / epoll 分歧时才做最小生产修复；否则本轮继续保持测试和文档批次
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 做 parser/server/security 矩阵筛查，确认这轮最值的缺口是 trailer-complete truncated follow-up headers 的 epoll raw-wire proof
+- [x] 做 parser/server/security 矩阵筛查，确认这轮最值的缺口是 plain chunked truncated follow-up headers 的 epoll raw-wire proof
 - [x] 在 `test_http_security` 里复用 threaded helper，并补 Linux `epoll` live variant：
   - first response -> `200 / echo:5`
   - follow-up truncated headers on EOF -> `400`
@@ -35,7 +35,7 @@
 
 ## Intended outcome
 
-- 把 `test_http_security` 从已存在的 threaded trailer-complete truncated follow-up headers truth，再往前补到 epoll live backend
+- 把 `test_http_security` 从已存在的 threaded plain chunked truncated follow-up headers truth，再往前补到 epoll live backend
 - 用最小 raw-wire live 证据确认这条 follow-up `200 -> 400` request-tail contract 在 threaded / epoll backend 上都没有偏移
 - 如果直接 GREEN，就把结论固定进文档，避免后续反复猜测 backend 是否有差异
 - 下一刀只从剩余 request-tail sibling gap 或 trailer/chunk truncation 边角里挑一格，不再扩成整片 parity 搬运

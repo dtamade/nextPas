@@ -1,18 +1,18 @@
-# Findings: http trailer-complete truncated follow-up headers epoll raw-wire proof
+# Findings: http chunked truncated follow-up headers epoll raw-wire proof
 
 ## Scope
 
 - 本轮继续留在 H1 correctness 主线，但先做了一次 parser/server/security 矩阵筛查，再沿 keep-alive request-tail contract 推进一步。
-- 目标不是扩大生产逻辑，而是确认 trailer-complete chunked request 结束后，如果同连接上的 follow-up request 只到达半截 headers 再 EOF，live `epoll` backend 也会先交付首个 `200 / echo:5`，再把 follow-up 稳定收口成 `400`。
+- 目标不是扩大生产逻辑，而是确认 plain chunked request 结束后，如果同连接上的 follow-up request 只到达半截 headers 再 EOF，live `epoll` backend 也会先交付首个 `200 / echo:5`，再把 follow-up 稳定收口成 `400`。
 
 ## Confirmed truths
 
-### 1. trailer-complete truncated follow-up headers 的 epoll raw-wire truth 现在补齐了
+### 1. plain chunked truncated follow-up headers 的 epoll raw-wire truth 现在补齐了
 
 - 新增的 security proof 直接覆盖：
-  - 首个 trailer-complete chunked request 返回 `200 / echo:5`
+  - 首个 chunked request 返回 `200 / echo:5`
   - follow-up 半截请求头在 peer half-close 后返回 `400`
-- 这说明当前 transport 在 trailer-complete 边界之后，仍会先稳定完成首请求，再把 follow-up header truncation 作为后继 malformed request 处理；epoll live backend 没有把这条 contract 做偏。
+- 这说明当前 transport 在 chunked request 完整结束后，仍会先稳定完成首请求，再把 follow-up header truncation 作为后继 malformed request 处理；epoll live backend 没有把这条 contract 做偏。
 
 ### 2. 本轮没有暴露生产缺口，不需要修 transport / parser
 
@@ -21,7 +21,7 @@
 
 ### 3. 这轮把 request-tail 矩阵里一个真实缺口补平了，而不是继续盲目扩面
 
-- `server` 早就有 trailer-complete truncated follow-up headers 的 threaded + epoll truth，`security` 层此前只有 threaded raw-wire proof。
+- `server` 早就有 plain chunked truncated follow-up headers 的 threaded + epoll truth，`security` 层此前只有 threaded raw-wire proof。
 - 这轮把缺口补到 security 后，三层矩阵在这个状态机位置重新对齐。
 
 ### 4. 下一步应继续只挑一格真实缺口，不再机械复制同型 parity
@@ -35,7 +35,7 @@
 
 - focused:
   - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `72/72 passed`
+  - `73/73 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks

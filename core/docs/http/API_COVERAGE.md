@@ -152,7 +152,7 @@
 - `test_http_security` 现在也有 keep-alive chunked garbage tail safe-handling proof：首个请求先完成，尾巴随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked partial follow-up request-line safe-handling proof：首个请求先完成，半截下一请求行随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：首个请求的 `200` 会先正常返回，后续若把半截下一请求行补全，第二个请求也会继续合法完成。
-- `test_http_security` 现在也有 keep-alive chunked partial follow-up headers safe-handling proof：首个请求先完成，半截下一请求头随后作为 follow-up malformed request 返回 `400`。
+- `test_http_security` 现在也有 keep-alive chunked partial follow-up headers safe-handling proof：首个请求先完成，半截下一请求头随后作为 follow-up malformed request 返回 `400`；Linux `epoll` backend 现在也有相同 raw-wire live proof。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete garbage tail / partial follow-up request-line / partial follow-up headers safe-handling proof：完整 trailer section 结束后首个请求仍先完成，尾巴随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete partial follow-up headers 的 epoll raw-wire live proof：首个 trailer-complete chunked request 的 `200 / echo:5` 会先正常返回，而 follow-up 半截请求头在 peer half-close 后仍稳定落为 `400`。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete partial follow-up request-line bridge proof：首个 trailer-complete chunked request 的 `200 / echo:5` 会先正常返回，后续把半截下一请求行补全后，第二个 request 仍可继续合法返回 `200 / ok`；Linux `epoll` backend 现在也有相同 raw-wire live proof。

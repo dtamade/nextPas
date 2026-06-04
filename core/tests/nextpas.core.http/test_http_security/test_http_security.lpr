@@ -1137,7 +1137,8 @@ begin
 end;
 
 { Test 14cb: Keep-alive chunked request with truncated follow-up headers }
-procedure TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling;
+procedure RunChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10#13#10 +
@@ -1146,18 +1147,25 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'GET /next HTTP/1.1'#13#10 +
             'Host: x'#13#10;
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRawAndShutdownWrite(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive chunked partial follow-up headers: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive chunked partial follow-up headers: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive chunked partial follow-up headers: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling;
+begin
+  RunChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive chunked partial follow-up headers');
 end;
 
 { Test 14cc: Keep-alive chunked trailer-complete request with garbage tail }
@@ -1383,6 +1391,17 @@ begin
   RunChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling(
     LOpts,
     'epoll keep-alive chunked trailer partial follow-up headers');
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling(
+    LOpts,
+    'epoll keep-alive chunked partial follow-up headers');
 end;
 {$ENDIF}
 
@@ -1912,6 +1931,8 @@ begin
     @TestMissingChunkDataCrLfEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
+  T.Run('Chunked keep-alive truncated follow-up headers safe handling with epoll backend',
+    @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
   T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
   T.Run('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
