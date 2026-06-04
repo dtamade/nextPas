@@ -155,6 +155,7 @@
 - `test_http_security` 现在也有 keep-alive chunked partial follow-up headers safe-handling proof：首个请求先完成，半截下一请求头随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete garbage tail / partial follow-up request-line / partial follow-up headers safe-handling proof：完整 trailer section 结束后首个请求仍先完成，尾巴随后作为 follow-up malformed request 返回 `400`。
 - `test_http_security` 现在也有 keep-alive chunked trailer-complete partial follow-up request-line bridge proof：首个 trailer-complete chunked request 的 `200 / echo:5` 会先正常返回，后续把半截下一请求行补全后，第二个 request 仍可继续合法返回 `200 / ok`；Linux `epoll` backend 现在也有相同 raw-wire live proof。
+- `test_http_security` 现在也有 keep-alive chunked trailer-complete same-write pipelining raw-wire proof：首个 trailer-complete chunked request 与同包第二个 request 都会稳定返回各自的 `200` 响应，首请求 body 仍保持 `echo:5`；Linux `epoll` backend 现在也有相同 live proof。
 - `TChunkedWriter` 现在有独立 focused 覆盖，并且 helper 自身会在 terminal chunk 后拒绝继续写入。
 - `WebSocket` 现在也有 upgrade read-ahead focused 覆盖：握手请求和首帧同包写入时，hijack 后依然能正确读到首帧。
 - facade 覆盖主要来自 `test_http_contract` 和 `test_http_smoke`；后续如要进一步收紧，可再审视未转发 helper 是否也应进入 facade。
@@ -192,4 +193,4 @@
 2. facade helper boundary audit to decide which non-forwarded helpers should stay unit-local versus move into `nextpas.core.http`.
 3. future H2/H3 transport registration coverage on the landed internal registry.
 4. add broader informational response proof only if runtime later needs multi-stage non-`101` response handling.
-5. keep tightening malformed raw-wire chunked security and the adjacent keep-alive request-tail contract only where the security suite still lacks direct raw-wire proof; live epoll 现在已经有代表性的 `400/501/431` 覆盖，下一刀更应优先补 trailer-complete same-write pipelining raw-wire truth 或仍未分类完的 trailer/chunk truncation 边角，而不是继续复制同型状态码。
+5. keep tightening malformed raw-wire chunked security and the adjacent keep-alive request-tail contract only where the security suite still lacks direct raw-wire proof; live epoll 现在已经有代表性的 `400/501/431` 覆盖，trailer-complete partial-next-line 与 same-write pipelining 也都已补到 security，下一刀更应回到仍未分类完的 trailer/chunk truncation 边角，或重新筛查 request-tail contract 里是否还有尚未下沉到 raw-wire 的 bridge truth。

@@ -1,11 +1,11 @@
-# Task Plan: http trailer-complete partial-next-line raw-wire bridge proof
+# Task Plan: http trailer-complete same-write pipelining raw-wire proof
 
 ## Goal
 
-继续留在 H1 correctness 主线，但本轮从纯 malformed status 收口，切到相邻的 keep-alive request-tail contract：
+继续留在 H1 correctness 主线，并沿 keep-alive request-tail contract 再往前推进一刀：
 
-- 在 `test_http_security` 里补 chunked trailer-complete partial follow-up request-line bridge proof
-- 锁定“首请求先完成，半截 follow-up 行后续补全后仍能成为合法第二请求”的 raw-wire truth
+- 在 `test_http_security` 里补 chunked trailer-complete same-write pipelined next request 的 raw-wire proof
+- 锁定“首个 trailer-complete chunked request 与同包第二个 request 会各自稳定完成”的 raw-wire truth
 - 先补 default threaded，再补 Linux `epoll` live variant
 - 只有真出现 threaded / epoll 分歧时才做最小生产修复；否则本轮继续保持测试和文档批次
 
@@ -13,7 +13,7 @@
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 在 `test_http_security` 增加 chunked trailer-complete partial follow-up request-line bridge proof：
+- [x] 在 `test_http_security` 增加 chunked trailer-complete same-write pipelining raw-wire proof：
   - first response -> `200 / echo:5`
   - completed follow-up request -> `200 / ok`
   - Linux `epoll` live variant 保持相同语义
@@ -35,7 +35,7 @@
 
 ## Intended outcome
 
-- 把 `test_http_security` 从 trailer-complete safe-handling 再往前补一格到 partial-next-line bridge truth
-- 用最小 raw-wire live 证据确认这条 bridge contract 在 threaded / epoll backend 上都没有偏移
+- 把 `test_http_security` 从 trailer-complete partial-next-line bridge truth 再往前补一格到 same-write pipelining truth
+- 用最小 raw-wire live 证据确认这条 pipeline contract 在 threaded / epoll backend 上都没有偏移
 - 如果直接 GREEN，就把结论固定进文档，避免后续反复猜测 backend 是否有差异
-- 下一刀优先看 trailer-complete same-write pipelining raw-wire proof，或继续回到尚未分类完的 malformed trailer/chunk truncation 边角
+- 下一刀优先回到尚未分类完的 malformed trailer/chunk truncation 边角，或重新筛查 request-tail contract 里仍未下沉到 security 的 bridge truth

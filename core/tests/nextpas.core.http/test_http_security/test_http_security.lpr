@@ -1290,6 +1290,59 @@ begin
     'Keep-alive chunked trailer partial-next-line');
 end;
 
+procedure RunChunkedTrailerPipelinedNextRequestInSingleWrite(
+  const AOpts: THttpServerOptions; const ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+  LCombinedReq: string;
+const
+  REQ1 = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+         'Transfer-Encoding: chunked'#13#10 +
+         'Trailer: X-Test'#13#10#13#10 +
+         '5'#13#10'hello'#13#10 +
+         '0'#13#10 +
+         'X-Test: value'#13#10#13#10;
+  REQ2 = 'GET / HTTP/1.1'#13#10 +
+         'Host: x'#13#10 +
+         'Connection: close'#13#10#13#10;
+begin
+  LCombinedReq := REQ1 + REQ2;
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LCombinedReq[1], SizeUInt(Length(LCombinedReq)));
+      LResp1 := ReadOneResponse(LConn);
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp1) > 0,
+        ALabel + ': first response 200');
+      Check(Pos('echo:5', LResp1) > 0,
+        ALabel + ': first body preserved');
+      Check(Pos('HTTP/1.1 200', LResp2) > 0,
+        ALabel + ': second response 200');
+      Check(Pos('ok', LResp2) > 0,
+        ALabel + ': second body preserved');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedTrailerPipelinedNextRequestInSingleWrite;
+begin
+  RunChunkedTrailerPipelinedNextRequestInSingleWrite(
+    THttpServerOptions.Default,
+    'Keep-alive chunked trailer same-write pipeline');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend;
 var
@@ -1300,6 +1353,17 @@ begin
   RunChunkedTrailerPartialFollowUpRequestLineCanCompleteLater(
     LOpts,
     'epoll keep-alive chunked trailer partial-next-line');
+end;
+
+procedure TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedTrailerPipelinedNextRequestInSingleWrite(
+    LOpts,
+    'epoll keep-alive chunked trailer same-write pipeline');
 end;
 {$ENDIF}
 
@@ -1796,6 +1860,8 @@ begin
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandling);
   T.Run('Chunked trailer keep-alive partial follow-up request line can complete later',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLater);
+  T.Run('Chunked trailer pipelined next request in single write',
+    @TestChunkedTrailerPipelinedNextRequestInSingleWrite);
   T.Run('Negative Content-Length -> 400', @TestNegativeContentLength);
   T.Run('Truncated Content-Length request body at EOF -> 400', @TestTruncatedContentLengthRequestAtEof);
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
@@ -1829,6 +1895,8 @@ begin
     @TestTruncatedTrailerCrAtEofEpollBackend);
   T.Run('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend);
+  T.Run('Chunked trailer pipelined next request in single write with epoll backend',
+    @TestChunkedTrailerPipelinedNextRequestInSingleWriteEpollBackend);
   {$ENDIF}
   T.Summary;
 end.
