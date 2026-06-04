@@ -2412,6 +2412,19 @@ begin
     'HTTP/1.1 400 Bad Request', 0, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneMissingChunkDataCrLfDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll missing chunk-data crlf request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneChunkedMaxBodySizeDrainsViaWritableEvents;
 const
   REQ = 'POST / HTTP/1.1'#13#10 +
@@ -8154,6 +8167,8 @@ begin
     @TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone malformed chunked request drains via writable events',
     @TestH1PollDrivenStandaloneMalformedChunkedRequestDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone missing chunk-data CRLF drains via writable events',
+    @TestH1PollDrivenStandaloneMissingChunkDataCrLfDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone chunked max-body rejection drains via writable events',
     @TestH1PollDrivenStandaloneChunkedMaxBodySizeDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone oversize trailer drains via writable events',
