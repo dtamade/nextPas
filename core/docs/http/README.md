@@ -82,6 +82,7 @@ make -C examples/nextpas.core.http/http_server_options_demo run
 
 `MaxFrameSize` 在 payload 分配/读取前检查 declared frame length；`MaxMessageSize`
 会累计 fragmented message，超过限制时由 `ReadFrame` 抛出 `EHttpError`。
+`WriteText` 会在写出前拒绝 invalid UTF-8 payload，避免 server API 生成非法 text frame。
 `Ping`、`Pong` 与 `Close` 也会在写出前拒绝超过 125 bytes 的 control-frame payload；
 `Close` 会同时校验 close code 与 reason UTF-8，失败前不会关闭 `IWebSocket` 状态。
 

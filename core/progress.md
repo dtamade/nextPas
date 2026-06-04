@@ -1,11 +1,11 @@
-# Progress Log: WebSocket outgoing close validation
+# Progress Log: WebSocket outgoing text UTF-8 validation
 
 ## Session
 
-- **Scope:** 补齐 WebSocket outgoing `Close` close code / reason validation。
+- **Scope:** 补齐 WebSocket outgoing `WriteText` UTF-8 validation。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket public API safety`
-  -> `outgoing close payload semantic validation`
+  -> `outgoing text payload semantic validation`
 
 ## Current state
 
@@ -20,27 +20,24 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `OutgoingCloseInvalidCodeRejected` focused proof。
-- `test_http_websocket` 新增 `OutgoingCloseInvalidUtf8ReasonRejected` focused proof。
-- `nextpas.core.http.websocket` 现在在 `Close` 写出前复用 close payload validation。
+- `test_http_websocket` 新增 `OutgoingTextInvalidUtf8Rejected` focused proof。
+- `nextpas.core.http.websocket` 现在在 `WriteText` 写出前复用 text payload validation。
 - `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录新公开契约。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `27 total, 25 passed, 2 failed`
-  - failures:
-    - `outgoing-close-invalid-code: server sends text frame`
-    - `outgoing-close-invalid-utf8: server sends text frame`
+  - `28 total, 27 passed, 1 failed`
+  - failure:
+    - `outgoing-text-invalid-utf8: fail-fast reason: expected "WebSocket: invalid text payload encoding", got "�"`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `27 total, 27 passed, 0 failed`
+  - `28 total, 28 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀建议优先评估 `WriteText` outbound UTF-8 validation 是否应成为 public contract。
-- 如果选择继续 WebSocket，先 RED；如果用例已 PASS 或只是同路径 parity，则转向 HttpServer examples/docs
-  或 server runtime gap，不再复制低价值同型覆盖。
+- WebSocket negative surface 已基本收口到真实 RED；下一刀建议转向 HttpServer examples/docs 或 remaining server runtime gaps。
+- 若继续 WebSocket，应先证明真实 RED，避免 `Pong` oversize 这类同路径 parity 覆盖。

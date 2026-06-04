@@ -2364,6 +2364,87 @@ begin
     'WebSocket: invalid close reason encoding');
 end;
 
+{ Test 4v: server WriteText must reject invalid outbound UTF-8 payloads }
+procedure TestOutgoingTextInvalidUtf8Rejected;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LWs.WriteText(#$C3);
+      LWs.WriteText('bad');
+    except
+      on E: EHttpError do
+        LWs.WriteText(E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'outgoing-text-invalid-utf8: got 101');
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'outgoing-text-invalid-utf8: got response');
+      Check(Ord(LResp[1]) = $81, 'outgoing-text-invalid-utf8: server sends text frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      CheckEqual('WebSocket: invalid text payload encoding',
+        Copy(LResp, 3, LPayloadLen), 'outgoing-text-invalid-utf8: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -2567,6 +2648,7 @@ begin
   T.Run('OutgoingCloseInvalidCodeRejected', @TestOutgoingCloseInvalidCodeRejected);
   T.Run('OutgoingCloseInvalidUtf8ReasonRejected',
     @TestOutgoingCloseInvalidUtf8ReasonRejected);
+  T.Run('OutgoingTextInvalidUtf8Rejected', @TestOutgoingTextInvalidUtf8Rejected);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

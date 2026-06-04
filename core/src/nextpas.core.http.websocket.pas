@@ -462,6 +462,7 @@ end;
 
 procedure TWebSocketImpl.WriteText(const AData: string);
 begin
+  ValidateTextPayload(AData);
   WriteFrame(wsOpText, AData);
 end;
 
