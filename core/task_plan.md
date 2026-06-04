@@ -1,15 +1,14 @@
-# Task Plan: http security trailer-complete chunked partial follow-up headers raw-wire bridge
+# Task Plan: http security keep-alive partial follow-up headers raw-wire bridge
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，这一刀直接进入
-`test_http_security`，把 trailer-complete chunked follow-up partial headers 从
-half-close safe-handling 提升成 raw-wire bridge proof：
+继续留在 `3/6 H1 正确性加固` 主线，这一刀继续收口
+`test_http_security` 的 keep-alive request-tail contract，把还缺的两条
+`partial follow-up headers` 从 half-close safe-handling 提升成 raw-wire bridge proof：
 
-- 首个 trailer-complete chunked request 先完整完成并进入 handler
-- 同连接后续只送到一半的 follow-up headers 不应污染首个请求
-- 若后续再补齐剩余 header bytes 与 header terminator，第二个请求应合法完成
-- 首请求的 trailer declaration / trailer isolation 契约仍必须保持不变
+- `Content-Length` 首请求先完整完成，半截 follow-up headers 后续补齐后第二请求应合法完成
+- plain `chunked` 首请求先完整完成，半截 follow-up headers 后续补齐后第二请求应合法完成
+- 两条路径都必须保住“不要过早判 malformed”的 transport 契约
 - 这次仍然只做 coverage-expansion，不预设生产修复
 
 要求：
@@ -17,14 +16,14 @@ half-close safe-handling 提升成 raw-wire bridge proof：
 - 优先复用现有 `test_http_security` raw-wire keep-alive bridge 风格
 - 先用 focused tests 取真值；如果直接 GREEN，本轮不改生产代码
 - 只跑 `test_http_security` focused gate
-- 不扩成 fixed-length / plain chunked 的同型 parity 平铺
+- 为了减少重复往返，这次把 `Content-Length` 与 plain `chunked` 同类缺口合并一刀完成
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
-- [x] 审阅 `test_http_security` 中 trailer-complete request-tail 相邻用例与 helper 风格
-- [x] 缩小剩余高价值缺口，选定 trailer-complete chunked partial follow-up headers raw-wire bridge
-- [x] 在 `test_http_security` 补 threaded / epoll focused live tests
+- [x] 审阅 `server/security` 现有 request-tail proofs，确认还缺的 security/raw-wire headers bridge
+- [x] 选定 `Content-Length` 与 plain `chunked` partial follow-up headers raw-wire bridge
+- [x] 在 `test_http_security` 补两组 threaded / epoll focused live tests
 - [x] focused gate 直接 GREEN，证明现有 raw-wire bridge contract 已成立
 - [x] 跑 focused：
   - `make -C tests/nextpas.core.http/test_http_security test`
@@ -44,12 +43,11 @@ half-close safe-handling 提升成 raw-wire bridge proof：
 
 ## Intended outcome
 
-- trailer-complete chunked partial follow-up headers 不再只停留在 half-close 后 follow-up `400`
+- `Content-Length` 与 plain `chunked` 的 partial follow-up headers 不再只停留在 half-close 后 follow-up `400`
 - threaded / epoll 两条 live 路径都锁住：
-  - 首个 trailer-complete chunked request 先返回 `200`
-  - handler 只读到解码后的首个 request body，且 trailer declaration / isolation 不变
-  - follow-up partial headers 在补齐后能完成为合法第二请求
+  - 首个请求先返回 `200 / echo:5`
+  - follow-up partial headers 在补齐后能完成为合法第二请求 `200 / ok`
 - 证据要求：
-  - 新增 trailer-complete chunked partial follow-up headers raw-wire bridge tests GREEN
+  - 新增 `Content-Length` 与 plain `chunked` partial follow-up headers raw-wire bridge tests GREEN
   - focused security suite 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`
