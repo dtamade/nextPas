@@ -1,10 +1,10 @@
-# Progress Log: http server bodyless expect-continue guard proof
+# Progress Log: http server no-length expect-continue guard proof
 
 ## Session
 
-- **Scope:** 给 `Expect` request-side contract 补齐 no-body guard live proof：`Content-Length: 0` 时不应误发 interim `100`。
+- **Scope:** 给 `Expect` request-side contract 补齐 no-body guard 的相邻分支：完全不声明 body 时不应误发 interim `100`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `bodyless expect-continue guard`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `no-length expect-continue guard`
 
 ## Current state
 
@@ -20,17 +20,17 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增两条 no-body `Expect` focused proofs：
-  - threaded / epoll `Content-Length: 0 + Expect: 100-continue`
+  抽出共享 bodyless `Expect` live helper，并新增两条 focused proofs：
+  - threaded / epoll no-length `Expect: 100-continue`
   - 直接 final `200`，且 wire 上不出现 interim `100`
   - handler 正常被调用，并读到空 body
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 no-body `Expect` current truth。
+  已同步 no-length bodyless `Expect` current truth。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `202/202 passed`
+  - `204/204 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

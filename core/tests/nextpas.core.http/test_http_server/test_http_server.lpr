@@ -4985,8 +4985,8 @@ begin
 end;
 {$ENDIF}
 
-procedure RunExpectContinueZeroContentLengthDoesNotEmitInterim(
-  const AUseEpoll: Boolean; const ALabel: string);
+procedure RunExpectContinueBodylessRequestDoesNotEmitInterim(
+  const AUseEpoll: Boolean; const ALabel, AReq, AReason: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -4996,12 +4996,6 @@ var
   LResp: string;
   LSeenEcho: Boolean;
   LGotBody: string;
-const
-  REQ =
-    'POST /echo HTTP/1.1'#13#10 +
-    'Host: localhost'#13#10 +
-    'Content-Length: 0'#13#10 +
-    'Expect: 100-continue'#13#10#13#10;
 begin
   LSeenEcho := False;
   LGotBody := '';
@@ -5038,12 +5032,12 @@ begin
     LConn := TcpConnect('127.0.0.1', LPort);
     try
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
-      LConn.Write(REQ[1], SizeUInt(Length(REQ)));
+      LConn.Write(AReq[1], SizeUInt(Length(AReq)));
       LResp := ReadOneResponse(LConn);
       Check(Pos('HTTP/1.1 200 OK', LResp) > 0,
         ALabel + ': final response 200 without interim 100');
       Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
-        ALabel + ': zero content-length does not emit interim 100');
+        ALabel + ': ' + AReason + ' does not emit interim 100');
       Check(Pos('echo:', LResp) > 0,
         ALabel + ': final body still emitted');
       Check(LSeenEcho, ALabel + ': handler called immediately');
@@ -5054,6 +5048,19 @@ begin
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure RunExpectContinueZeroContentLengthDoesNotEmitInterim(
+  const AUseEpoll: Boolean; const ALabel: string);
+const
+  REQ =
+    'POST /echo HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 0'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+begin
+  RunExpectContinueBodylessRequestDoesNotEmitInterim(AUseEpoll, ALabel, REQ,
+    'zero content-length');
 end;
 
 procedure TestExpectContinueZeroContentLengthDoesNotEmitInterim;
@@ -5067,6 +5074,32 @@ procedure TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend;
 begin
   RunExpectContinueZeroContentLengthDoesNotEmitInterim(True,
     'expect-continue zero-length epoll');
+end;
+{$ENDIF}
+
+procedure RunExpectContinueWithoutDeclaredBodyDoesNotEmitInterim(
+  const AUseEpoll: Boolean; const ALabel: string);
+const
+  REQ =
+    'POST /echo HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+begin
+  RunExpectContinueBodylessRequestDoesNotEmitInterim(AUseEpoll, ALabel, REQ,
+    'missing body declaration');
+end;
+
+procedure TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim;
+begin
+  RunExpectContinueWithoutDeclaredBodyDoesNotEmitInterim(False,
+    'expect-continue no-length threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend;
+begin
+  RunExpectContinueWithoutDeclaredBodyDoesNotEmitInterim(True,
+    'expect-continue no-length epoll');
 end;
 {$ENDIF}
 
@@ -10004,6 +10037,8 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
   T.Run('Expect: zero content-length does not emit interim response with epoll backend',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
+  T.Run('Expect: no declared body does not emit interim response with epoll backend',
+    @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
@@ -10215,6 +10250,8 @@ begin
     @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
   T.Run('Expect: zero content-length does not emit interim response',
     @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
+  T.Run('Expect: no declared body does not emit interim response',
+    @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',
