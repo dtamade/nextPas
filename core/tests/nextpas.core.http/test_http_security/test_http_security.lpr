@@ -923,44 +923,60 @@ begin
 end;
 
 { Test 14a: Keep-alive Content-Length request with garbage tail }
-procedure TestContentLengthKeepAliveGarbageTailSafeHandling;
+procedure RunContentLengthKeepAliveGarbageTailSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10#13#10 +
             'hello_extra_bytes_here';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive Content-Length tail: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive Content-Length tail: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive Content-Length tail: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
 
+procedure TestContentLengthKeepAliveGarbageTailSafeHandling;
+begin
+  RunContentLengthKeepAliveGarbageTailSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive Content-Length tail');
+end;
+
 { Test 14aa: Keep-alive Content-Length request with truncated follow-up request line }
-procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+procedure RunContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10#13#10 +
             'hello' +
             'GET /next HTTP/1.1';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRawAndShutdownWrite(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive Content-Length partial follow-up line: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive Content-Length partial follow-up line: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive Content-Length partial follow-up line: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+begin
+  RunContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive Content-Length partial follow-up line');
 end;
 
 procedure RunContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater(
@@ -1459,6 +1475,28 @@ begin
   RunContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandling(
     LOpts,
     'epoll keep-alive Content-Length partial follow-up headers');
+end;
+
+procedure TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunContentLengthKeepAliveGarbageTailSafeHandling(
+    LOpts,
+    'epoll keep-alive Content-Length tail');
+end;
+
+procedure TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+    LOpts,
+    'epoll keep-alive Content-Length partial follow-up line');
 end;
 {$ENDIF}
 
@@ -1988,6 +2026,10 @@ begin
     @TestMissingChunkDataCrLfEpollBackend);
   T.Run('Truncated trailer section CR at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerCrAtEofEpollBackend);
+  T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
+    @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
+  T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',
+    @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive partial follow-up request line can complete later with epoll backend',
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up headers safe handling with epoll backend',

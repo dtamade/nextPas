@@ -1,10 +1,10 @@
-# Progress Log: http content-length truncated follow-up headers epoll raw-wire proof
+# Progress Log: http content-length epoll request-tail safety proofs
 
 ## Session
 
-- **Scope:** 做一次 parser/server/security 矩阵筛查，然后给 `test_http_security` 补 `Content-Length` truncated follow-up headers 的 epoll raw-wire proof。
+- **Scope:** 做一次 parser/server/security 矩阵筛查，然后把 `test_http_security` 里 `Content-Length` epoll request-tail 剩余 sibling gap 成批补齐。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `content-length truncated follow-up headers epoll proof`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `content-length epoll request-tail safety proofs`
 
 ## Current state
 
@@ -17,17 +17,19 @@
 
 ## Completed work
 
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1017)
-  把 `Content-Length` truncated follow-up headers 的 threaded 断言抽成可复用 helper，避免 epoll 版本再拷一份 safe-handling 逻辑。
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1453)
-  新增 `Content-Length keep-alive truncated follow-up headers safe handling with epoll backend` raw-wire proof，锁定首个 `200 / echo:5` 之后 follow-up EOF truncation 仍回 `400`。
-- [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md:18)
-  已同步 security 层新的 epoll request-tail truth，并把下一步路线收敛为“只挑剩余真实 gap”，不再做整片同型 parity 搬运。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  把 threaded 版 `Content-Length` garbage tail / truncated follow-up request line 断言抽成可复用 helper，避免 epoll 版本再复制同型 safe-handling 逻辑。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  新增两条 epoll raw-wire proof：
+  - `Content-Length keep-alive garbage tail safe handling with epoll backend`
+  - `Content-Length keep-alive truncated follow-up request line safe handling with epoll backend`
+- [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
+  已同步 security 层新的 `Content-Length` epoll request-tail truth，并把下一步路线继续收敛为“只挑剩余真实 gap”。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `76/76 passed`
+  - `78/78 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
