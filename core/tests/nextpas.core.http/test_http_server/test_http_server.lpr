@@ -2294,6 +2294,79 @@ begin
     'HTTP/1.1 431 Request Header Fields Too Large', 64, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LStreamObj: TWritableDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for standalone poll error drain test');
+
+  LStreamObj := TWritableDrainRuntimeTcpStream.Create(REQ, 1, 0);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for standalone poll error drain test');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'standalone poll bad request should enter reactor-owned drain instead of finishing via sync write');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    'standalone poll bad request does not enter handler');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    'standalone poll bad request does not hand off work to worker');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    'standalone poll bad request avoids sync socket write path');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    'standalone poll bad request attempts one nonblocking drain on first advance');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    'standalone poll bad request arms timed drain deadline before nonblocking error drain');
+  Check(LNextEvents = [peWritable],
+    'standalone poll bad request subscribes writable wake after would-block');
+  CheckEqual('', LStreamObj.Output,
+    'standalone poll bad request writes no bytes before writable wake');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    'writable wake drains standalone poll bad request response');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), 'standalone poll bad request remains server-owned');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    'writable wake still avoids sync socket write path');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    'writable wake resumes nonblocking drain exactly once');
+  Check(Pos('HTTP/1.1 400 Bad Request', LStreamObj.Output) > 0,
+    'standalone poll bad request drains explicit 400 on wire');
+end;
+
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
 var
   LHttpOpts: THttpServerOptions;
@@ -7884,6 +7957,8 @@ begin
     @TestH1PollDrivenSessionQueuesFollowUpPayloadTooLargeBehindActiveDrain);
   T.Run('H1 poll-driven session queues follow-up 431 behind active drain',
     @TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain);
+  T.Run('H1 poll-driven standalone bad request drains via writable events',
+    @TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Direct error response arms write timeout on malformed request',

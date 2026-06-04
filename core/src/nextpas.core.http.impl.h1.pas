@@ -1256,6 +1256,19 @@ var
   LN: SizeUInt;
   LConsumed: SizeUInt;
   LReadResult: TTcpStreamIOResult;
+  function FinishPollParseError(const AStatus: THttpStatus): TTcpServerPollResult;
+  begin
+    if QueuePollErrorResponse(AStatus) then
+    begin
+      FKeepAlive := False;
+      Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+    end;
+
+    WriteErrorResponse(FConn, AStatus, FOptions.WriteTimeout);
+    FKeepAlive := False;
+    ANextEvents := [];
+    Result := tsprDone;
+  end;
 begin
   AOwnership := tscoServer;
 
@@ -1296,18 +1309,7 @@ begin
                (not FParser.HasError) then
               FParser.Finish;
             if FParser.HasError then
-            begin
-              if FPollResponsePending and
-                 QueuePollErrorResponse(ParserErrorStatus(FParser)) then
-              begin
-                FKeepAlive := False;
-                Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
-              end;
-              WriteErrorResponse(FConn, ParserErrorStatus(FParser),
-                FOptions.WriteTimeout);
-              ANextEvents := [];
-              Exit(tsprDone);
-            end;
+              Exit(FinishPollParseError(ParserErrorStatus(FParser)));
             ANextEvents := [];
             Exit(tsprDone);
           end;
@@ -1330,67 +1332,19 @@ begin
       if (FOptions.MaxHeaderSize > 0) and
          (Int64(FParseTotalRead) - FParser.GetBodySize >
           Int64(FOptions.MaxHeaderSize)) then
-      begin
-        if FPollResponsePending and
-           QueuePollErrorResponse(HTTP_STATUS_HEADER_TOO_LARGE) then
-        begin
-          FKeepAlive := False;
-          Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
-        end;
-        WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
-          FOptions.WriteTimeout);
-        FKeepAlive := False;
-        ANextEvents := [];
-        Exit(tsprDone);
-      end;
+        Exit(FinishPollParseError(HTTP_STATUS_HEADER_TOO_LARGE));
     end;
 
     if FParseHeadersDone and (FOptions.MaxHeaderSize > 0) and
        (FParser.GetTrailerBytes > Int64(FOptions.MaxHeaderSize)) then
-    begin
-      if FPollResponsePending and
-         QueuePollErrorResponse(HTTP_STATUS_HEADER_TOO_LARGE) then
-      begin
-        FKeepAlive := False;
-        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
-      end;
-      WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
-        FOptions.WriteTimeout);
-      FKeepAlive := False;
-      ANextEvents := [];
-      Exit(tsprDone);
-    end;
+      Exit(FinishPollParseError(HTTP_STATUS_HEADER_TOO_LARGE));
 
     if (FOptions.MaxBodySize > 0) and
        (FParser.GetBodySize > FOptions.MaxBodySize) then
-    begin
-      if FPollResponsePending and
-         QueuePollErrorResponse(HTTP_STATUS_PAYLOAD_TOO_LARGE) then
-      begin
-        FKeepAlive := False;
-        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
-      end;
-      WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE,
-        FOptions.WriteTimeout);
-      FKeepAlive := False;
-      ANextEvents := [];
-      Exit(tsprDone);
-    end;
+      Exit(FinishPollParseError(HTTP_STATUS_PAYLOAD_TOO_LARGE));
 
     if FParser.HasError then
-    begin
-      if FPollResponsePending and
-         QueuePollErrorResponse(ParserErrorStatus(FParser)) then
-      begin
-        FKeepAlive := False;
-        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
-      end;
-      WriteErrorResponse(FConn, ParserErrorStatus(FParser),
-        FOptions.WriteTimeout);
-      FKeepAlive := False;
-      ANextEvents := [];
-      Exit(tsprDone);
-    end;
+      Exit(FinishPollParseError(ParserErrorStatus(FParser)));
 
     if FParser.IsComplete then
       Exit(SubmitCurrentPollRequest(ANextEvents, AOwnership));
