@@ -257,6 +257,25 @@ begin
   Result[14] := Chr($78);
 end;
 
+function BuildMaskedFrameWithDeclaredLength64(AOpcode: Byte; ALength: UInt64): string;
+begin
+  SetLength(Result, 14);
+  Result[1] := Chr($80 or AOpcode);
+  Result[2] := Chr($80 or 127);
+  Result[3] := Chr((ALength shr 56) and $FF);
+  Result[4] := Chr((ALength shr 48) and $FF);
+  Result[5] := Chr((ALength shr 40) and $FF);
+  Result[6] := Chr((ALength shr 32) and $FF);
+  Result[7] := Chr((ALength shr 24) and $FF);
+  Result[8] := Chr((ALength shr 16) and $FF);
+  Result[9] := Chr((ALength shr 8) and $FF);
+  Result[10] := Chr(ALength and $FF);
+  Result[11] := Chr($12);
+  Result[12] := Chr($34);
+  Result[13] := Chr($56);
+  Result[14] := Chr($78);
+end;
+
 function ComputeExpectedAccept(const AKey: string): string;
 var
   LConcat: string;
@@ -1867,6 +1886,213 @@ begin
   end;
 end;
 
+{ Test 4p: websocket options bound frame allocation before payload read }
+procedure TestWebSocketMaxFrameSizeRejectsDeclaredOversizeFrame;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+  LReason: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LOptions: TWebSocketOptions;
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LOptions := TWebSocketOptions.Default;
+    CheckEqual(Int64(WEBSOCKET_DEFAULT_MAX_FRAME_SIZE), LOptions.MaxFrameSize,
+      'websocket-options: default max frame size');
+    CheckEqual(Int64(WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE), LOptions.MaxMessageSize,
+      'websocket-options: default max message size');
+    LOptions.MaxFrameSize := 16;
+    LOptions.MaxMessageSize := 32;
+    LWs := UpgradeWebSocket(AReq, AW, LOptions);
+    try
+      LF := LWs.ReadFrame;
+      if LF.Opcode = wsOpText then
+        LWs.WriteText(LF.Payload);
+    except
+      on E: EHttpError do
+        LWs.Close(1009, E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'max-frame-size: got 101');
+
+      LFrame := BuildMaskedFrameWithDeclaredLength64($01, 65536);
+      LConn.Write(LFrame[1], SizeUInt(Length(LFrame)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'max-frame-size: got close response');
+      Check(Ord(LResp[1]) = $88, 'max-frame-size: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'max-frame-size: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1009), Int64(LCode),
+        'max-frame-size: close code message too big');
+      LReason := Copy(LResp, 5, LPayloadLen - 2);
+      CheckEqual('WebSocket: frame too large', LReason,
+        'max-frame-size: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+{ Test 4q: websocket options bound accumulated fragmented messages }
+procedure TestWebSocketMaxMessageSizeRejectsFragmentedMessage;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame1: string;
+  LFrame2: string;
+  LPayloadLen: Byte;
+  LCode: UInt16;
+  LReason: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LOptions: TWebSocketOptions;
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LOptions := TWebSocketOptions.Default;
+    LOptions.MaxFrameSize := 16;
+    LOptions.MaxMessageSize := 3;
+    LWs := UpgradeWebSocket(AReq, AW, LOptions);
+    try
+      LF := LWs.ReadFrame;
+      if (LF.Opcode = wsOpText) and (not LF.Fin) then
+      begin
+        LF := LWs.ReadFrame;
+        if (LF.Opcode = wsOpContinuation) and LF.Fin then
+          LWs.WriteText('ok');
+      end;
+    except
+      on E: EHttpError do
+        LWs.Close(1009, E.Message);
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'max-message-size: got 101');
+
+      LFrame1 := BuildMaskedFrameWithFin($01, 'ab', False);
+      LFrame2 := BuildMaskedFrame($00, 'cd');
+      LConn.Write(LFrame1[1], SizeUInt(Length(LFrame1)));
+      LConn.Write(LFrame2[1], SizeUInt(Length(LFrame2)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'max-message-size: got close response');
+      Check(Ord(LResp[1]) = $88, 'max-message-size: server sends close frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      Check(LPayloadLen >= 2, 'max-message-size: close frame includes code');
+      LCode := (UInt16(Ord(LResp[3])) shl 8) or UInt16(Ord(LResp[4]));
+      CheckEqual(Int64(1009), Int64(LCode),
+        'max-message-size: close code message too big');
+      LReason := Copy(LResp, 5, LPayloadLen - 2);
+      CheckEqual('WebSocket: message too large', LReason,
+        'max-message-size: fail-fast reason');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -2061,6 +2287,10 @@ begin
   T.Run('NonCanonicalPayloadLengthRejected', @TestNonCanonicalPayloadLengthRejected);
   T.Run('NonCanonicalPayloadLength64Rejected', @TestNonCanonicalPayloadLength64Rejected);
   T.Run('HighBitPayloadLength64Rejected', @TestHighBitPayloadLength64Rejected);
+  T.Run('WebSocketMaxFrameSizeRejectsDeclaredOversizeFrame',
+    @TestWebSocketMaxFrameSizeRejectsDeclaredOversizeFrame);
+  T.Run('WebSocketMaxMessageSizeRejectsFragmentedMessage',
+    @TestWebSocketMaxMessageSizeRejectsFragmentedMessage);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;

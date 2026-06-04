@@ -56,6 +56,7 @@ type
   THttpHandlerMethod = nextpas.core.http.intf.THttpHandlerMethod;
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
+  TWebSocketOptions = nextpas.core.http.websocket.TWebSocketOptions;
   TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
   TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
 
@@ -98,6 +99,8 @@ const
   wsOpClose = nextpas.core.http.websocket.wsOpClose;
   wsOpPing = nextpas.core.http.websocket.wsOpPing;
   wsOpPong = nextpas.core.http.websocket.wsOpPong;
+  WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
+  WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = nextpas.core.http.websocket.WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;
   TCP_SERVER_BACKEND_EPOLL = nextpas.core.http.base.TCP_SERVER_BACKEND_EPOLL;
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.http.base.TCP_SERVER_BACKEND_KQUEUE;
@@ -139,7 +142,9 @@ function ServeFile(const APath: string): THttpHandlerFunc; inline;
 function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
 
 { WebSocket helper }
-function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; inline;
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; overload; inline;
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const AOptions: TWebSocketOptions): IWebSocket; overload; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -253,6 +258,12 @@ end;
 function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;
 begin
   Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW);
+end;
+
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const AOptions: TWebSocketOptions): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW, AOptions);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;

@@ -74,6 +74,15 @@ make -C examples/nextpas.core.http/http_server_options_demo run
 - `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、`MaxHeaderSize`、`MaxBodySize`
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
 
+### WebSocket
+
+- `UpgradeWebSocket(Req, Writer[, Options])` — 升级 HTTP 连接并返回 handler-owned `IWebSocket`
+- `TWebSocketOptions` — 公开 carrier，当前包括 `MaxFrameSize` 与 `MaxMessageSize`
+- `TWebSocketOptions.Default` — 默认限制为 16 MiB frame / 64 MiB message，调用方可按 endpoint 调整
+
+`MaxFrameSize` 在 payload 分配/读取前检查 declared frame length；`MaxMessageSize`
+会累计 fragmented message，超过限制时由 `ReadFrame` 抛出 `EHttpError`。
+
 `THttpServerOptions.Backend` 会下沉到 `nextpas.core.net.server` foundation。
 当前默认值是 `TCP_SERVER_BACKEND_THREADED`。在 Linux 上，
 `TCP_SERVER_BACKEND_EPOLL` 已有第一阶段 backend：`epoll` 负责 listener

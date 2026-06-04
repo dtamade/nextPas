@@ -14,6 +14,12 @@ uses
   nextpas.core.http.intf;
 
 type
+  TWebSocketOptions = record
+    MaxFrameSize: Int64;
+    MaxMessageSize: Int64;
+    class function Default: TWebSocketOptions; static;
+  end;
+
   TWebSocketOpcode = (
     wsOpContinuation = 0,
     wsOpText = 1,
@@ -40,12 +46,18 @@ type
     function IsOpen: Boolean;
   end;
 
+const
+  WEBSOCKET_DEFAULT_MAX_FRAME_SIZE = Int64(16777216);
+  WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE = Int64(67108864);
+
 { Upgrade an HTTP connection to WebSocket.
   Validates Upgrade headers, sends 101 response, returns IWebSocket.
   The response writer must support IHttpHijacker to obtain the raw connection.
   Raises EHttpError if upgrade fails. }
 function UpgradeWebSocket(const AReq: IHttpRequest;
-  const AW: IHttpResponseWriter): IWebSocket;
+  const AW: IHttpResponseWriter): IWebSocket; overload;
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const AOptions: TWebSocketOptions): IWebSocket; overload;
 
 implementation
 
@@ -71,12 +83,15 @@ type
     FCloseSent: Boolean;
     FFragmentOpen: Boolean;
     FFragmentOpcode: TWebSocketOpcode;
+    FFragmentPayloadSize: UInt64;
     FFragmentTextPayload: string;
+    FOptions: TWebSocketOptions;
     procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: string);
     procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);
     procedure ReadExact(var ABuf; ACount: SizeUInt);
   public
-    constructor Create(const AReader: IReader; const AWriter: IWriter);
+    constructor Create(const AReader: IReader; const AWriter: IWriter;
+      const AOptions: TWebSocketOptions);
     function ReadFrame: TWebSocketFrame;
     procedure WriteText(const AData: string);
     procedure WriteBinary(const AData: string);
@@ -87,6 +102,12 @@ type
   end;
 
 { Helpers }
+
+class function TWebSocketOptions.Default: TWebSocketOptions;
+begin
+  Result.MaxFrameSize := WEBSOCKET_DEFAULT_MAX_FRAME_SIZE;
+  Result.MaxMessageSize := WEBSOCKET_DEFAULT_MAX_MESSAGE_SIZE;
+end;
 
 function LowerCase(const S: string): string;
 var
@@ -159,10 +180,33 @@ begin
     raise EHttpError.Create('WebSocket: invalid text payload encoding');
 end;
 
+function SizeExceedsLimit(const ASize: UInt64; const ALimit: Int64): Boolean;
+begin
+  Result := (ALimit > 0) and (ASize > UInt64(ALimit));
+end;
+
+function CombinedSizeExceedsLimit(const ACurrent, AAdd: UInt64;
+  const ALimit: Int64): Boolean;
+begin
+  if ALimit <= 0 then
+    Exit(False);
+  if AAdd > UInt64(ALimit) then
+    Exit(True);
+  if ACurrent > UInt64(ALimit) - AAdd then
+    Exit(True);
+  Result := False;
+end;
+
 { UpgradeWebSocket }
 
 function UpgradeWebSocket(const AReq: IHttpRequest;
   const AW: IHttpResponseWriter): IWebSocket;
+begin
+  Result := UpgradeWebSocket(AReq, AW, TWebSocketOptions.Default);
+end;
+
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter;
+  const AOptions: TWebSocketOptions): IWebSocket;
 var
   LUpgrade, LConnection, LKey, LVersion: string;
   LAccept: string;
@@ -198,21 +242,24 @@ begin
            #13#10;
   LConn.Write(LResp[1], SizeUInt(Length(LResp)));
 
-  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter);
+  Result := TWebSocketImpl.Create(LConn as IReader, LConn as IWriter, AOptions);
 end;
 
 { TWebSocketImpl }
 
-constructor TWebSocketImpl.Create(const AReader: IReader; const AWriter: IWriter);
+constructor TWebSocketImpl.Create(const AReader: IReader; const AWriter: IWriter;
+  const AOptions: TWebSocketOptions);
 begin
   inherited Create;
   FReader := AReader;
   FWriter := AWriter;
+  FOptions := AOptions;
   FOpen := True;
   FCloseReceived := False;
   FCloseSent := False;
   FFragmentOpen := False;
   FFragmentOpcode := wsOpContinuation;
+  FFragmentPayloadSize := 0;
   FFragmentTextPayload := '';
 end;
 
@@ -289,6 +336,20 @@ begin
   if (LOpcode >= $08) and (LPayloadLen > 125) then
     raise EHttpError.Create('WebSocket: control frame payload too large');
 
+  if SizeExceedsLimit(LPayloadLen, FOptions.MaxFrameSize) then
+    raise EHttpError.Create('WebSocket: frame too large');
+  if LOpcode in [Byte(wsOpText), Byte(wsOpBinary)] then
+  begin
+    if SizeExceedsLimit(LPayloadLen, FOptions.MaxMessageSize) then
+      raise EHttpError.Create('WebSocket: message too large');
+  end
+  else if LOpcode = Byte(wsOpContinuation) then
+  begin
+    if CombinedSizeExceedsLimit(FFragmentPayloadSize, LPayloadLen,
+       FOptions.MaxMessageSize) then
+      raise EHttpError.Create('WebSocket: message too large');
+  end;
+
   if LMasked then
     ReadExact(LMaskKey[0], 4);
 
@@ -321,8 +382,11 @@ begin
     begin
       FFragmentOpen := False;
       FFragmentOpcode := wsOpContinuation;
+      FFragmentPayloadSize := 0;
       FFragmentTextPayload := '';
-    end;
+    end
+    else
+      Inc(FFragmentPayloadSize, LPayloadLen);
   end
   else if Result.Opcode in [wsOpText, wsOpBinary] then
   begin
@@ -335,6 +399,7 @@ begin
     begin
       FFragmentOpen := True;
       FFragmentOpcode := Result.Opcode;
+      FFragmentPayloadSize := LPayloadLen;
       if Result.Opcode = wsOpText then
         FFragmentTextPayload := Result.Payload
       else
