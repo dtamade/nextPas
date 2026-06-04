@@ -1,10 +1,10 @@
-# Progress Log: http security keep-alive partial follow-up headers raw-wire bridge
+# Progress Log: h1 parser keep-alive partial follow-up headers bridge
 
 ## Session
 
-- **Scope:** 把 `Content-Length` 与 plain `chunked` 的 keep-alive partial follow-up headers 从 half-close safe-handling 收成更具体的 raw-wire bridge proof。
+- **Scope:** 把 parser 层 `Content-Length` / plain `chunked` / trailer-complete `chunked` 的 keep-alive partial follow-up headers 收成明确 bridge proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `Content-Length/chunked partial follow-up headers raw-wire bridge`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `h1parser partial follow-up headers bridge`
 
 ## Current state
 
@@ -20,18 +20,20 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增四条 focused proofs：
-  - threaded / epoll `Content-Length` partial follow-up headers can complete later
-  - threaded / epoll plain `chunked` partial follow-up headers can complete later
-  - 四条路径都锁住首个请求先完成、follow-up headers 后续可补齐成合法第二请求
+  上一刀已经把 security 层的同类 headers bridge 空档补齐，本轮不再重复扩大 security parity。
+- [tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr)
+  新增三条 focused proofs：
+  - `Content-Length` partial follow-up headers can complete later
+  - plain `chunked` partial follow-up headers can complete later
+  - trailer-complete `chunked` partial follow-up headers can complete later
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已把 `test_http_security` 的 `Content-Length` / plain `chunked` partial follow-up headers 从 half-close safe-handling 提升成 raw-wire bridge proof。
+  已把 `H1 parser` 的 partial follow-up headers 从“focused 覆盖”提升成明确 bridge proof 口径。
 - 本轮没有生产代码变更；focused gate 直接 GREEN，说明这是 current truth 收口，而不是修复。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_security test`
-  - `128/128 passed`
+- `make -C tests/nextpas.core.http/test_http_h1parser test`
+  - `88/88 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

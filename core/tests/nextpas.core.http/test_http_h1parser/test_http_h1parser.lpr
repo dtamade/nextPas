@@ -1282,6 +1282,37 @@ begin
   Check(LP.HasError, 'partial follow-up headers report parser error on finish');
 end;
 
+procedure TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLater;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail1: string;
+  LTail2: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'hello';
+  LTail1 := 'GET /next HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10;
+  LTail2 := 'Connection: close'#13#10#13#10;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq1 + LTail1), Length(LReq1 + LTail1));
+  Check(not LP.HasError, 'partial follow-up headers should not corrupt first content-length request');
+  Check(LP.IsComplete, 'first content-length request should complete before follow-up headers finish');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'parser should consume only the first content-length request before follow-up headers complete');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail1 + LTail2), Length(LTail1 + LTail2));
+  Check(not LP.HasError, 'completed content-length follow-up headers should parse cleanly');
+  Check(LP.IsComplete, 'completed content-length follow-up headers should finish as a valid second request');
+  Check(LP.GetMethod = hmGet, 'completed content-length follow-up headers preserve GET method');
+  CheckEqual('/next', LP.GetUrl, 'completed content-length follow-up headers preserve second request url');
+  CheckEqual('', LP.GetBody, 'completed content-length follow-up headers have no body');
+end;
+
 procedure TestChunkedRequestExtraBytesAfterCloseRejected;
 var
   LP: IH1Parser;
@@ -1423,6 +1454,38 @@ begin
   Check(LP.HasError, 'chunked partial follow-up headers report parser error on finish');
 end;
 
+procedure TestChunkedKeepAlivePartialFollowUpHeadersCanCompleteLater;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail1: string;
+  LTail2: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10#13#10;
+  LTail1 := 'GET /next HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10;
+  LTail2 := 'Connection: close'#13#10#13#10;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq1 + LTail1), Length(LReq1 + LTail1));
+  Check(not LP.HasError, 'partial follow-up headers should not corrupt first chunked request');
+  Check(LP.IsComplete, 'first chunked request should complete before follow-up headers finish');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'parser should consume only the first chunked request before follow-up headers complete');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail1 + LTail2), Length(LTail1 + LTail2));
+  Check(not LP.HasError, 'completed chunked follow-up headers should parse cleanly');
+  Check(LP.IsComplete, 'completed chunked follow-up headers should finish as a valid second request');
+  Check(LP.GetMethod = hmGet, 'completed chunked follow-up headers preserve GET method');
+  CheckEqual('/next', LP.GetUrl, 'completed chunked follow-up headers preserve second request url');
+  CheckEqual('', LP.GetBody, 'completed chunked follow-up headers have no body');
+end;
+
 procedure TestChunkedTrailerKeepAliveGarbageTailConsumesFirstRequestOnly;
 var
   LP: IH1Parser;
@@ -1521,6 +1584,40 @@ begin
   if (not LP.HasError) and (not LP.IsComplete) then
     LP.Finish;
   Check(LP.HasError, 'chunked trailer partial follow-up headers report parser error on finish');
+end;
+
+procedure TestChunkedTrailerKeepAlivePartialFollowUpHeadersCanCompleteLater;
+var
+  LP: IH1Parser;
+  LReq1: string;
+  LTail1: string;
+  LTail2: string;
+  LConsumed: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LReq1 := 'POST /upload HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10 +
+           'Trailer: X-Test'#13#10#13#10 +
+           '5'#13#10'hello'#13#10 +
+           '0'#13#10 +
+           'X-Test: value'#13#10#13#10;
+  LTail1 := 'GET /next HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10;
+  LTail2 := 'Connection: close'#13#10#13#10;
+
+  LConsumed := LP.Execute(PAnsiChar(LReq1 + LTail1), Length(LReq1 + LTail1));
+  Check(not LP.HasError, 'partial follow-up headers should not corrupt first chunked trailer request');
+  Check(LP.IsComplete, 'first chunked trailer request should complete before follow-up headers finish');
+  CheckEqual(SizeUInt(Length(LReq1)), LConsumed, 'parser should consume only the first chunked trailer request before follow-up headers complete');
+
+  LP.Reset;
+  LP.Execute(PAnsiChar(LTail1 + LTail2), Length(LTail1 + LTail2));
+  Check(not LP.HasError, 'completed chunked trailer follow-up headers should parse cleanly');
+  Check(LP.IsComplete, 'completed chunked trailer follow-up headers should finish as a valid second request');
+  Check(LP.GetMethod = hmGet, 'completed chunked trailer follow-up headers preserve GET method');
+  CheckEqual('/next', LP.GetUrl, 'completed chunked trailer follow-up headers preserve second request url');
+  CheckEqual('', LP.GetBody, 'completed chunked trailer follow-up headers have no body');
 end;
 
 procedure TestChunkedTrailerPipelinedNextRequestDoesNotPolluteCurrentRequest;
@@ -1825,6 +1922,8 @@ begin
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater);
   T.Run('Content-Length keep-alive truncated follow-up headers consumes first request only',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
+  T.Run('Content-Length keep-alive partial follow-up headers can complete later',
+    @TestContentLengthKeepAlivePartialFollowUpHeadersCanCompleteLater);
   T.Run('Chunked request extra bytes after close rejected', @TestChunkedRequestExtraBytesAfterCloseRejected);
   T.Run('Chunked keep-alive garbage tail consumes first request only', @TestChunkedKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Chunked keep-alive truncated follow-up request line consumes first request only',
@@ -1833,12 +1932,16 @@ begin
     @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater);
   T.Run('Chunked keep-alive truncated follow-up headers consumes first request only',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
+  T.Run('Chunked keep-alive partial follow-up headers can complete later',
+    @TestChunkedKeepAlivePartialFollowUpHeadersCanCompleteLater);
   T.Run('Chunked trailer keep-alive garbage tail consumes first request only',
     @TestChunkedTrailerKeepAliveGarbageTailConsumesFirstRequestOnly);
   T.Run('Chunked trailer keep-alive truncated follow-up request line consumes first request only',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineConsumesFirstRequestOnly);
   T.Run('Chunked trailer keep-alive truncated follow-up headers consumes first request only',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersConsumesFirstRequestOnly);
+  T.Run('Chunked trailer keep-alive partial follow-up headers can complete later',
+    @TestChunkedTrailerKeepAlivePartialFollowUpHeadersCanCompleteLater);
   T.Run('Chunked trailer pipelined next request does not pollute current request',
     @TestChunkedTrailerPipelinedNextRequestDoesNotPolluteCurrentRequest);
   T.Run('Chunked trailer partial follow-up request line can complete later',

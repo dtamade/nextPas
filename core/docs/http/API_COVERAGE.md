@@ -65,15 +65,16 @@
 - `H1 parser` 现在也有 keep-alive `Content-Length` garbage tail focused 覆盖：首个合法 fixed-length request 只消费自己的字节，不会被后续垃圾尾巴污染。
 - `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up request-line focused 覆盖：首个合法 fixed-length request 只消费自己的字节，不会被半截下一请求行污染。
 - `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up request-line bridge proof：同样的半截 follow-up line 在后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
-- `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up headers focused 覆盖：首个合法 fixed-length request 只消费自己的字节，不会被半截下一请求头污染。
+- `H1 parser` 现在也有 keep-alive `Content-Length` partial follow-up headers bridge proof：首个合法 fixed-length request 只消费自己的字节，不会被半截下一请求头污染，且后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
 - `H1 parser` 现在也有 `chunked + Connection: close + extra bytes after terminal chunk` focused 覆盖。
 - `H1 parser` 现在也有 keep-alive chunked garbage tail focused 覆盖：首个合法 chunked request 只消费自己的字节，不会被后续垃圾尾巴污染。
 - `H1 parser` 现在也有 keep-alive chunked partial follow-up request-line focused 覆盖：首个合法 chunked request 只消费自己的字节，不会被半截下一请求行污染。
 - `H1 parser` 现在也有 keep-alive chunked partial follow-up request-line bridge proof：同样的半截 follow-up line 在后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
-- `H1 parser` 现在也有 keep-alive chunked partial follow-up headers focused 覆盖：首个合法 chunked request 只消费自己的字节，不会被半截下一请求头污染。
-- `H1 parser` 现在也有 keep-alive chunked trailer-complete garbage tail / partial follow-up request-line / partial follow-up headers focused 覆盖：完整 trailer section 结束后仍只消费首个合法 request，且 trailer 声明头保留、实际 trailer field 不进入普通请求头。
+- `H1 parser` 现在也有 keep-alive chunked partial follow-up headers bridge proof：首个合法 chunked request 只消费自己的字节，不会被半截下一请求头污染，且后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
+- `H1 parser` 现在也有 keep-alive chunked trailer-complete garbage tail focused 覆盖：完整 trailer section 结束后仍只消费首个合法 request，且 trailer 声明头保留、实际 trailer field 不进入普通请求头。
 - `H1 parser` 现在也有 keep-alive chunked trailer-complete valid pipelined next-request focused 覆盖：完整 trailer section 结束后，合法下一请求同样不会污染首个 request，且 trailer declaration / trailer isolation 契约保持不变。
 - `H1 parser` 现在也有 keep-alive chunked trailer-complete partial follow-up request-line bridge proof：同样的半截 follow-up line 在后续字节补全后可以合法完成为第二个请求，因此不能被过早当成 malformed tail。
+- `H1 parser` 现在也有 keep-alive chunked trailer-complete partial follow-up headers bridge proof：同样的半截 follow-up headers 在后续字节补全后也可以合法完成为第二个请求，同时 trailer declaration / trailer isolation 契约保持不变，因此不能被过早当成 malformed tail。
 - `H1 parser` 现在也有 same-read pipelined request isolation focused 覆盖：普通 fixed-length 与 chunked 首请求都只消费自己的字节，不会被同包后续 request 污染。
 - `IHttpServer` 现在有 inbound chunked request focused 覆盖：handler 可读 decoded body、`MaxBodySize` 对 chunked ingress 的跨 chunk 累加超限生效、invalid chunk-size 返回 `400`、malformed chunk extension 返回显式 `400`、missing chunk-data CRLF 返回显式 `400`、chunked/trailer EOF truncation 在 peer half-close 后返回显式 `400`、generic malformed request 返回显式 `400`、`HTTP/1.1 missing Host` 返回显式 `400`、`HTTP/1.0 missing Host` 仍允许、`HTTP/0.9 / no-version` 返回显式 `400`、`CRLF injection / request-line splitting` 返回显式 `400`、`negative Content-Length` 返回显式 `400`、`very long method` 返回显式 `400`、`CL+TE` conflict 两种顺序返回 `400`、duplicate `Content-Length` 返回显式 `400`、`null-byte header` 返回显式 `400`、request-target over `MaxHeaderSize` 返回显式 `431` 且不进入 handler、trailer 声明头保留且 trailer 字段不进入普通请求头、oversize trailer 在后续 read 到达时仍受 `MaxHeaderSize` 限制并触发 `431` 或安全关闭，且异常 chunk 不进入 handler。
 - `IHttpServer` 现在也有 request-side unsupported transfer-coding focused 覆盖：`Transfer-Encoding: gzip, chunked` 返回显式 `501`，而 `chunked, gzip` 继续作为 malformed framing 返回显式 `400`。
