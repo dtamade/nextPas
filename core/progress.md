@@ -1,10 +1,10 @@
-# Progress Log: http server repeated expect header aggregation
+# Progress Log: http server expect-continue chunked ingress coverage
 
 ## Session
 
-- **Scope:** 给 `Expect` request-side contract 补齐 repeated header-line aggregation 语义：后续 unsupported member 仍必须提升成 final `417`。
+- **Scope:** 给 `Expect` request-side contract 补齐 chunked ingress live proof：interim `100`、decoded body、以及 after-interim `413`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `repeated Expect header aggregation`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `Expect semantics tightening` -> `expect-continue chunked ingress`
 
 ## Current state
 
@@ -19,19 +19,18 @@
 
 ## Completed work
 
-- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-  把 `RequestExpectsContinue` / `RequestHasUnsupportedExpectations`
-  从 `Get('expect')` 改成 `GetAll('expect')` 全量扫描。
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 repeated `Expect` header threaded / epoll focused tests，并先拿到 RED，
-  再验证修复后 GREEN。
+  新增四条 `Expect + chunked` focused proofs：
+  - threaded / epoll `Expect + chunked` interim `100` + decoded body
+  - threaded / epoll `Expect + chunked` cross-chunk `MaxBodySize` after-interim `413`
+  同时把 oversize case 从错误的固定 literal 改成动态构造真实 700-byte chunks。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 repeated `Expect` header current truth。
+  已同步 `Expect + chunked` current truth。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `196/196 passed`
+  - `200/200 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

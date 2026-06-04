@@ -1,33 +1,31 @@
-# Task Plan: http server repeated expect header aggregation
+# Task Plan: http server expect-continue chunked ingress coverage
 
 ## Goal
 
 继续留在 `3/6 H1 正确性加固` 主线，这一刀继续 request-side protocol
-completeness，专门收紧 repeated `Expect` header-line 的聚合语义：
+completeness，补齐 `Expect: 100-continue` 和 chunked ingress 的 live 契约：
 
-- parser 会把重复 header-line 存成多条 entry
-- `Expect` 判定不能只看第一条 `Get('expect')`
-- 如果后续 `Expect:` 行里带 unsupported member，server 仍必须直接返回
-  final `417`，不能因为第一条是 `100-continue` 就误发 interim `100`
-
-本轮只锁定一个最小但真实的重复 header-line 组合：
-第一条 `Expect: 100-continue`，第二条 `Expect: fancy`
+- chunked request body 也应先收到单条 interim `100 Continue`
+- handler 应读到解码后的 chunked body
+- 如果 chunked ingress 在收到 `100` 之后跨 chunk 越过 `MaxBodySize`，
+  最终仍应返回 `413`
 
 要求：
 
-- 先 RED，再最小修复 H1 parse-stage 判定
-- 优先复用现有 unsupported-Expect helper 风格
+- 优先复用现有 `Expect` helper 风格
+- 先用 focused tests 取真值；如果直接 GREEN，本轮不改生产代码
 - 只跑 `test_http_server` focused gate
-- 不扩成大面积 `Expect` 组合矩阵
+- 不扩成大面积 `Expect` / chunked 组合矩阵
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 缩小剩余高价值缺口，选定 repeated `Expect` header 聚合语义
-- [x] 在 `test_http_server` 补 repeated `Expect` threaded / epoll focused tests
-- [x] 先跑 RED，确认当前实现只看第一条 `Expect`，从而漏掉后续 unsupported member
-- [x] 最小修复 `RequestExpectsContinue` / `RequestHasUnsupportedExpectations`，从 `Get` 改为 `GetAll` 全量扫描
+- [x] 缩小剩余高价值缺口，选定 `Expect + chunked` live contract
+- [x] 在 `test_http_server` 补 chunked body readable / chunked MaxBodySize after-interim focused tests
+- [x] 首轮 failed case 追到测试体自身 chunk-size literal 错误，而不是生产缺口
+- [x] 把 oversize case 改成动态构造真实 700-byte chunks
+- [x] 校正后 focused gate 直接 GREEN，本轮无需生产修复
 - [x] 跑 focused：
   - `make -C tests/nextpas.core.http/test_http_server test`
 - [x] 更新 coverage 文档与控制文件
@@ -36,7 +34,6 @@ completeness，专门收紧 repeated `Expect` header-line 的聚合语义：
 ## Scope
 
 - 本轮只动：
-  - `src/nextpas.core.http.impl.h1.pas`
   - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
@@ -47,12 +44,12 @@ completeness，专门收紧 repeated `Expect` header-line 的聚合语义：
 
 ## Intended outcome
 
-- repeated `Expect` header-line 不再因为第一条是 `100-continue` 就漏掉后续 unsupported member
+- `Expect: 100-continue` + chunked ingress 不再只靠推断，而是有 direct live proof
 - threaded / epoll 两条 live 路径都锁住：
-  - 直接返回 final `HTTP/1.1 417 Expectation Failed`
-  - 不会误发 interim `100 Continue`
-  - 不进入 handler
+  - 先返回单条 `HTTP/1.1 100 Continue`
+  - chunked body 仍能被正常解码交给 handler
+  - chunked ingress 跨 chunk 越过 `MaxBodySize` 后最终返回 `413`
 - 证据要求：
-  - 新增 repeated-header tests 先 RED 后 GREEN
+  - 新增 `Expect + chunked` tests GREEN
   - focused server suite 全绿
   - `heaptrc` 为 `0 unfreed memory blocks`

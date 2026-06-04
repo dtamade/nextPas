@@ -4798,6 +4798,193 @@ begin
 end;
 {$ENDIF}
 
+procedure RunExpectContinueChunkedBodyReadable(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+  LSeenEcho: Boolean;
+  LGotBody: string;
+const
+  REQ_HEADERS =
+    'POST /echo HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '6'#13#10' world'#13#10 +
+    '0'#13#10#13#10;
+begin
+  LSeenEcho := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/echo', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..31] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenEcho := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'echo:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
+        ALabel + ': interim 100 continue returned');
+      Check(not LSeenEcho, ALabel + ': handler not called before chunked body send');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ_BODY[1], SizeUInt(Length(REQ_BODY)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200 OK', LResp2) > 0,
+        ALabel + ': final response 200');
+      Check(Pos('echo:hello world', LResp2) > 0,
+        ALabel + ': final body preserved');
+      Check(LSeenEcho, ALabel + ': handler called after chunked body send');
+      CheckEqual('hello world', LGotBody,
+        ALabel + ': handler sees full decoded chunked body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueChunkedBodyReadable;
+begin
+  RunExpectContinueChunkedBodyReadable(False,
+    'expect-continue chunked threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueChunkedBodyReadableEpollBackend;
+begin
+  RunExpectContinueChunkedBodyReadable(True,
+    'expect-continue chunked epoll');
+end;
+{$ENDIF}
+
+procedure RunExpectContinueChunkedMaxBodySizeRejectsAfterInterim(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LChunk1: string;
+  LChunk2: string;
+  LChunkHex1: string;
+  LChunkHex2: string;
+  LReqBody: string;
+  LResp1, LResp2: string;
+  LHandlerCalled: Boolean;
+  LOpts: THttpServerOptions;
+const
+  REQ_HEADERS =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+begin
+  LHandlerCalled := False;
+  SetLength(LChunk1, 700);
+  FillChar(LChunk1[1], 700, Ord('B'));
+  SetLength(LChunk2, 700);
+  FillChar(LChunk2[1], 700, Ord('C'));
+  LChunkHex1 := IntToHex(Length(LChunk1), 1);
+  LChunkHex2 := IntToHex(Length(LChunk2), 1);
+  LReqBody := LChunkHex1 + #13#10 +
+    LChunk1 + #13#10 +
+    LChunkHex2 + #13#10 +
+    LChunk2 + #13#10 +
+    '0'#13#10#13#10;
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LReply: string;
+  begin
+    LHandlerCalled := True;
+    LReply := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LReply[1], 2);
+  end);
+
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxBodySize := 1024;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
+        ALabel + ': interim 100 continue returned');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called before oversize chunked body send');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(LReqBody[1], SizeUInt(Length(LReqBody)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 413 Payload Too Large', LResp2) > 0,
+        ALabel + ': chunked oversize rejected with final 413 after interim 100');
+      Check(not LHandlerCalled,
+        ALabel + ': handler not called when chunked body crosses max size');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim;
+begin
+  RunExpectContinueChunkedMaxBodySizeRejectsAfterInterim(False,
+    'expect-continue chunked max-body threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend;
+begin
+  RunExpectContinueChunkedMaxBodySizeRejectsAfterInterim(True,
+    'expect-continue chunked max-body epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -9726,6 +9913,10 @@ begin
     @TestExpectContinueSendsInterimResponseEpollBackend);
   T.Run('Expect: duplicate 100-continue members still send interim response with epoll backend',
     @TestExpectContinueDuplicateMembersStillSendInterimResponseEpollBackend);
+  T.Run('Expect: chunked body sends interim response with epoll backend',
+    @TestExpectContinueChunkedBodyReadableEpollBackend);
+  T.Run('Expect: chunked MaxBodySize rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterimEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
@@ -9931,6 +10122,10 @@ begin
     @TestExpectContinueSendsInterimResponse);
   T.Run('Expect: duplicate 100-continue members still send interim response',
     @TestExpectContinueDuplicateMembersStillSendInterimResponse);
+  T.Run('Expect: chunked body sends interim response',
+    @TestExpectContinueChunkedBodyReadable);
+  T.Run('Expect: chunked MaxBodySize rejects after interim response',
+    @TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',
