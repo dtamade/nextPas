@@ -1288,20 +1288,17 @@ begin
   end;
 end;
 
-{ Test 17a: Oversize trailer still uses MaxHeaderSize enforcement }
-procedure TestChunkedOversizeTrailerUsesMaxHeaderSize;
+procedure RunChunkedOversizeTrailerUsesMaxHeaderSize(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var
   LServer: THttpServer;
   LPort: UInt16;
   LHandle: TPlatformThreadHandle;
   LResp: string;
-  LOpts: THttpServerOptions;
   LTrailerValue: string;
   LReq: string;
 begin
-  LOpts := THttpServerOptions.Default;
-  LOpts.MaxHeaderSize := 256;
-  LHandle := StartSecurityServer(LOpts, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     SetLength(LTrailerValue, 300);
     FillChar(LTrailerValue[1], 300, Ord('x'));
@@ -1315,13 +1312,35 @@ begin
             'X-Big: ' + LTrailerValue + #13#10#13#10;
     LResp := SendRaw(LPort, LReq);
     Check((Pos('HTTP/1.1 431', LResp) > 0) or (Length(LResp) = 0),
-      'Oversize trailer: 431 or connection closed');
+      ALabel + ': 431 or connection closed');
     Check(Pos('echo:5', LResp) = 0,
-      'Oversize trailer: handler response not written');
+      ALabel + ': handler response not written');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
+
+{ Test 17a: Oversize trailer still uses MaxHeaderSize enforcement }
+procedure TestChunkedOversizeTrailerUsesMaxHeaderSize;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  RunChunkedOversizeTrailerUsesMaxHeaderSize(LOpts, 'Oversize trailer');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestChunkedOversizeTrailerUsesMaxHeaderSizeEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.MaxHeaderSize := 256;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedOversizeTrailerUsesMaxHeaderSize(LOpts, 'epoll oversize trailer');
+end;
+{$ENDIF}
 
 { Test 18: Truncated trailer section at EOF }
 procedure TestTruncatedTrailerAtEof;
@@ -1713,6 +1732,10 @@ begin
   T.Run('Malformed trailer field -> 400', @TestMalformedTrailerField);
   T.Run('Chunked oversize trailer uses MaxHeaderSize',
     @TestChunkedOversizeTrailerUsesMaxHeaderSize);
+  {$IFDEF NEXTPAS_LINUX}
+  T.Run('Chunked oversize trailer uses MaxHeaderSize with epoll backend',
+    @TestChunkedOversizeTrailerUsesMaxHeaderSizeEpollBackend);
+  {$ENDIF}
   T.Run('Truncated trailer section at EOF -> 400', @TestTruncatedTrailerAtEof);
   T.Run('Truncated trailer field-name at EOF -> 400', @TestTruncatedTrailerFieldNameAtEof);
   T.Run('Truncated trailer separator at EOF -> 400', @TestTruncatedTrailerSeparatorAtEof);
