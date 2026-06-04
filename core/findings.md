@@ -1,43 +1,51 @@
-# Findings: WebSocket echo runnable example
+# Findings: HTTP server benchmark smoke
 
 ## Scope
 
-本轮补齐 WebSocket runnable example。此前 `test_http_websocket` 已覆盖 WebSocket API
-契约，但 examples 目录里只有 HTTP hello/client/server-options demo，没有可运行的 WebSocket
-server example。
+本轮补齐 `benchmarks/nextpas.core.http/bench_server` 的可自动 smoke 能力。目标不是宣称
+Go/Rust 对照已经完成，而是先把 nextPas HTTP server benchmark 变成可小规模验证、可稳定采集
+指标的基线。
 
 ## Confirmed truths
 
 ### 1. RED 证明真实缺口
 
-`test_http_examples` 新增 WebSocket example smoke 后首次 focused gate 失败：
+`test_http_benchmarks` 新增后首次 focused gate 失败：
 
-- `3 total, 2 passed, 1 failed`
-- failure: `websocket echo demo serves documented endpoint - unable to resolve core root from current directory or executable path`
+- `1 total, 0 passed, 1 failed`
+- failure: `operation marker missing from output: operation=http.server.keepalive`
 - heaptrc: `0 unfreed memory blocks`
 
-失败原因是 `examples/nextpas.core.http/http_websocket_echo_demo` 尚不存在，因此测试无法解析并构建该示例。
+旧 `bench_server` 会忽略 `--requests 32 --threads 2`，仍用固定 `20000 / 4` 运行，并只输出
+`Req/s`，没有 `operation`、`iterations`、`ns/op` 等标准字段。
 
 ### 2. 最小实现
 
-新增 `http_websocket_echo_demo`：
+`bench_http_server` 现在支持：
 
-- `GET /health` 返回 `websocket-echo=ready`。
-- `GET /ws` 执行 `UpgradeWebSocket`，读取一个 frame。
-- text frame 返回 `echo=<payload>`，随后 `Close(1000, 'bye')`。
-- 示例启动时打印 ready/listen/try markers，供 smoke 与人工运行使用。
+- `--requests <n>`
+- `--threads <n>`
+
+并输出：
+
+- `operation=http.server.keepalive`
+- `iterations=<requests>`
+- `threads=<threads>`
+- `completed=<successful requests>`
+- `elapsed_ns=<elapsed>`
+- `ns/op=<elapsed per completed request>`
+- `req/s=<throughput>`
 
 ### 3. Focused proof
 
-`test_http_examples` 现在覆盖：
+`test_http_benchmarks` 现在覆盖：
 
-- 自动 build `http_websocket_echo_demo`。
-- 启动外部 example server 进程并等待 ready marker。
-- raw TCP 完成 WebSocket handshake。
-- 发送 masked text frame `hello`。
-- 验证 server 返回 unmasked text frame `echo=hello`。
+- 自动 build `bench_server`。
+- 以 `--requests 32 --threads 2` 运行 benchmark。
+- 验证 benchmark 进程 exit code 为 0。
+- 验证标准字段存在。
 
 ## Remaining gaps / risks
 
-- 这个示例是最小 echo demo，不覆盖 TLS/WebSocket over TLS、fragmentation 或大消息 streaming。
-- benchmark 仍按路线后置；当前只补 examples/docs 可运行性闭环。
+- Go/Rust/FPC RTL 对照 benchmark 尚未落地；本轮只是先固定 nextPas 侧 benchmark 输出契约。
+- 当前 server benchmark 是 keep-alive hello-world QPS 基线，不覆盖 TLS、WebSocket 或 request body。

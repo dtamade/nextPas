@@ -8,6 +8,7 @@ program bench_http_server;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.server,
@@ -20,9 +21,8 @@ uses
   nextpas.core.platform.time;
 
 const
-  NUM_REQUESTS = 20000;
-  NUM_THREADS = 4;
-  REQ_PER_THREAD = NUM_REQUESTS div NUM_THREADS;
+  DEFAULT_NUM_REQUESTS = 20000;
+  DEFAULT_NUM_THREADS = 4;
 
 var
   GServer: THttpServer;
@@ -30,6 +30,8 @@ var
   GReady: Int32;
   GDone: Int32;
   GSuccess: Int32;
+  GRequests: Int32;
+  GThreads: Int32;
 
 function ServerThread(AParam: Pointer): Pointer; cdecl;
 begin
@@ -40,6 +42,7 @@ end;
 function ClientThread(AParam: Pointer): Pointer; cdecl;
 var
   LI: Int32;
+  LRequests: Int32;
   LConn: ITcpStream;
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
@@ -48,11 +51,12 @@ const
   REQ: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
 begin
   Result := nil;
+  LRequests := Int32(PtrInt(AParam));
   try
     LConn := TcpConnect('127.0.0.1', GPort);
     LConn.SetNoDelay(True);
     LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(10)));
-    for LI := 1 to REQ_PER_THREAD do
+    for LI := 1 to LRequests do
     begin
       LConn.Write(PAnsiChar(REQ)^, Length(REQ));
       LTotal := 0;
@@ -70,15 +74,51 @@ begin
   InterlockedIncrement(GDone);
 end;
 
+procedure ParseOptions;
+var
+  LI: Integer;
+  LValue: Integer;
+begin
+  GRequests := DEFAULT_NUM_REQUESTS;
+  GThreads := DEFAULT_NUM_THREADS;
+  LI := 1;
+  while LI <= ParamCount do
+  begin
+    if (ParamStr(LI) = '--requests') and (LI < ParamCount) then
+    begin
+      LValue := StrToIntDef(ParamStr(LI + 1), GRequests);
+      if LValue > 0 then
+        GRequests := LValue;
+      Inc(LI, 2);
+    end
+    else if (ParamStr(LI) = '--threads') and (LI < ParamCount) then
+    begin
+      LValue := StrToIntDef(ParamStr(LI + 1), GThreads);
+      if LValue > 0 then
+        GThreads := LValue;
+      Inc(LI, 2);
+    end
+    else
+      Inc(LI);
+  end;
+  if GThreads > GRequests then
+    GThreads := GRequests;
+end;
+
 var
   LHandle: TPlatformThreadHandle;
-  LHandles: array[0..NUM_THREADS-1] of TPlatformThreadHandle;
+  LHandles: array of TPlatformThreadHandle;
   LI: Int32;
+  LThreadRequests: Int32;
+  LThreadCount: Int32;
   LStart, LEnd: UInt64;
   LElapsedNs: UInt64;
   LReqPerSec: Double;
+  LNsPerOp: Double;
+  LRet: Pointer;
 
 begin
+  ParseOptions;
   GReady := 0;
   GDone := 0;
   GSuccess := 0;
@@ -98,29 +138,51 @@ begin
   GPort := GServer.LocalAddr.Port;
 
   WriteLn('=== HTTP Server Benchmark ===');
-  WriteLn('  Requests: ', NUM_REQUESTS);
-  WriteLn('  Threads:  ', NUM_THREADS);
+  WriteLn('  Requests: ', GRequests);
+  WriteLn('  Threads:  ', GThreads);
   WriteLn('  Port:     ', GPort);
   WriteLn;
 
   LStart := platform_monotonic_ns;
 
-  for LI := 0 to NUM_THREADS - 1 do
-    platform_thread_create(LHandles[LI], @ClientThread, nil);
+  SetLength(LHandles, GThreads);
+  for LI := 0 to GThreads - 1 do
+  begin
+    LThreadRequests := GRequests div GThreads;
+    if LI < (GRequests mod GThreads) then
+      Inc(LThreadRequests);
+    platform_thread_create(LHandles[LI], @ClientThread, Pointer(PtrInt(LThreadRequests)));
+  end;
 
-  while InterlockedCompareExchange(GDone, 0, 0) < NUM_THREADS do
+  while InterlockedCompareExchange(GDone, 0, 0) < GThreads do
     platform_thread_sleep_ns(1000000);
+
+  for LI := 0 to GThreads - 1 do
+    platform_thread_join(LHandles[LI], LRet);
 
   LEnd := platform_monotonic_ns;
   LElapsedNs := LEnd - LStart;
 
   LReqPerSec := (GSuccess / (LElapsedNs / 1000000000.0));
+  if GSuccess > 0 then
+    LNsPerOp := LElapsedNs / GSuccess
+  else
+    LNsPerOp := 0.0;
 
-  WriteLn('  Completed: ', GSuccess, ' / ', NUM_REQUESTS);
+  WriteLn('  Completed: ', GSuccess, ' / ', GRequests);
   WriteLn('  Elapsed:   ', LElapsedNs div 1000000, ' ms');
   WriteLn('  Req/s:     ', Trunc(LReqPerSec));
   WriteLn;
+  WriteLn('operation=http.server.keepalive');
+  WriteLn('iterations=', GRequests);
+  WriteLn('threads=', GThreads);
+  WriteLn('completed=', GSuccess);
+  WriteLn('elapsed_ns=', LElapsedNs);
+  WriteLn('ns/op=', Trunc(LNsPerOp));
+  WriteLn('req/s=', Trunc(LReqPerSec));
+  WriteLn;
 
   GServer.Shutdown;
+  platform_thread_join(LHandle, LRet);
   GServer.Free;
 end.

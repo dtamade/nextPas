@@ -104,3 +104,21 @@ public HTTP contract，但通过 foundation 的 completion-aware runtime path �
 Current transport implementation depends on `nextpas.core.net` (TCP) and
 `nextpas.core.io` (stream interfaces). Future H2/H3 work will extend this with
 TLS/ALPN and QUIC when those protocol families are actually implemented.
+
+## Benchmarks
+
+Run the focused server benchmark:
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_server run
+```
+
+For smoke-sized runs, pass explicit scale knobs:
+
+```sh
+build/projects/nextpas.core.http/bench_server/bench_http_server --requests 1000 --threads 4
+```
+
+`bench_http_server` reports `operation`, `iterations`, `threads`, `ns/op`, and
+`req/s`, so results can be captured and compared against later Go/Rust runs
+without changing the benchmark format.
