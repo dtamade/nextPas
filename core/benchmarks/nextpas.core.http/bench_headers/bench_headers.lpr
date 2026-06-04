@@ -98,6 +98,21 @@ begin
     GSink := LH.Get('connection');
 end;
 
+procedure BenchGet_HitUppercase(aIters: Int64);
+var
+  LIt: Int64;
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LH.Set_('content-type', 'text/html');
+  LH.Set_('content-length', '1024');
+  LH.Set_('server', 'nextpas');
+  LH.Set_('date', 'Sat, 31 May 2026');
+  LH.Set_('connection', 'keep-alive');
+  for LIt := 1 to aIters do
+    GSink := LH.Get('CONNECTION');
+end;
+
 procedure BenchHas(aIters: Int64);
 var
   LIt: Int64;
@@ -136,6 +151,7 @@ begin
   B.Run('Add 15 headers', @BenchAdd_15Headers);
   B.Run('Get miss (3 headers)', @BenchGet_Miss);
   B.Run('Get hit (5 headers, last)', @BenchGet_Hit);
+  B.Run('Get hit uppercase (5 headers, last)', @BenchGet_HitUppercase);
   B.Run('Has (3 headers)', @BenchHas);
   B.Run('Clone 10 headers', @BenchClone_10Headers);
   WriteLn;

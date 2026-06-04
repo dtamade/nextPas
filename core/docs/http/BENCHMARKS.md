@@ -140,3 +140,32 @@ The benchmark has normal local noise, so these numbers should be treated as a
 directional microbenchmark. The split-callback contract is covered by
 `test_http_h1parser`, and `test_http_h1fast` keeps the fast parser differential
 gate green against the llhttp adapter.
+
+## Optimization Evidence: Header Lookup Exact Fast Path
+
+On 2026-06-05 local time, `THttpHeaders.Get/Has` gained an exact-match fast path.
+This favors the server/adapter hot path, where lookup keys such as `host`,
+`content-length`, and `connection` are already lowercase. If exact lookup misses
+and the query contains uppercase characters, lookup falls back to normalized
+case-insensitive matching.
+
+Header microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| Set+Get 5 headers | 1404.5 | 928.0 |
+| Set+Get 15 headers | 3420.0 | 2665.6 |
+| Add 15 headers | 2064.0 | 1775.8 |
+| Get miss (3 headers) | 58.8 | 55.6 |
+| Get hit (5 headers, last) | 68.6 | 46.6 |
+| Get hit uppercase (5 headers, last) | 122.8 | 149.7 |
+| Has (3 headers) | 53.3 | 25.1 |
+| Clone 10 headers | 752.3 | 723.9 |
+
+The uppercase lookup row is intentionally tracked because public header APIs
+remain case-insensitive. This slice trades a slower uppercase fallback for a
+faster lowercase hot path, which matches current server internals.

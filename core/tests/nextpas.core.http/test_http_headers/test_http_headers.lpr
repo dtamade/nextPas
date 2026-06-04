@@ -95,6 +95,7 @@ begin
   LH.Set_('X-Present', 'yes');
   Check(LH.Has('X-Present'), 'present returns true');
   Check(LH.Has('x-present'), 'case insensitive has');
+  Check(LH.Has('X-PRESENT'), 'uppercase has');
 end;
 
 procedure TestCountReflectsTotalEntries;

@@ -22,6 +22,7 @@ type
     procedure ClearEntries(const AFrom, AToExclusive: Int32);
     procedure EnsureCapacity(const ARequired: Int32);
     function FindFirst(const AName: string): Int32;
+    class function NeedsNormalize(const AName: string): Boolean; static;
     class function Normalize(const AName: string): string; static;
     class procedure ValidateName(const AName: string); static;
     class procedure ValidateValue(const AValue: string); static;
@@ -69,6 +70,16 @@ begin
   SetLength(FEntries, LNewCapacity);
 end;
 
+class function THttpHeaders.NeedsNormalize(const AName: string): Boolean;
+var
+  LI: Int32;
+begin
+  for LI := 1 to Length(AName) do
+    if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
+      Exit(True);
+  Result := False;
+end;
+
 class function THttpHeaders.Normalize(const AName: string): string;
 var
   LI: Int32;
@@ -104,6 +115,13 @@ var
   LNorm: string;
   LI: Int32;
 begin
+  for LI := 0 to FCount - 1 do
+    if FEntries[LI].Name = AName then
+      Exit(LI);
+
+  if not NeedsNormalize(AName) then
+    Exit(-1);
+
   LNorm := Normalize(AName);
   for LI := 0 to FCount - 1 do
     if FEntries[LI].Name = LNorm then

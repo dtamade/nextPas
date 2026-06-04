@@ -1,70 +1,73 @@
-# Findings: HTTP parser span append fast path
+# Findings: HTTP header lookup exact fast path
 
 ## Scope
 
-本轮继续服务 `HttpServer 完成` 的性能路线，聚焦 `TH1Parser` 的 llhttp callback adapter。
-上一轮已经降低 `THttpHeaders.Add` 的数组分配抖动；本轮继续处理 URL/header field/header
-value span 进入 Pascal string 的成本。
+本轮继续服务 `HttpServer 完成` 的性能路线，聚焦 `THttpHeaders.Get/Has`。server ingress 和
+parser adapter 常用 lookup key 已经是小写形式，例如 `host`、`content-length`、`connection`。
+旧实现每次 `Get/Has` 都先 normalize 查询名，再扫描 entries。
 
 ## Confirmed truths
 
-### 1. Existing callback pattern did extra allocation
+### 1. Lowercase lookup is the hot path
 
-旧回调模式：
+HTTP server 侧典型调用包括：
 
-```pascal
-SetString(LChunk, p1, p2);
-FCurrentField := FCurrentField + LChunk;
-```
+- `AParser.GetHeaders.Get('content-length')`
+- `AParser.GetHeaders.Get('transfer-encoding')`
+- `AParser.GetHeaders.GetAll('expect')`
+- `FParser.GetHeaders.Get('host')`
+- fast path gating 里的 `host`、`connection`、`expect`、`transfer-encoding`
 
-常见单段 header field/value 会先创建临时 `LChunk`，再通过字符串拼接写入目标字段。跨 buffer
-分片时也会同时承担临时 string 和最终 string 的两次搬运。
+这些 key 都是小写。public API 仍要求大小写不敏感，因此 uppercase fallback 不能移除。
 
-### 2. Split callback behavior is now locked
+### 2. Behavior guard
 
-`test_http_h1parser` 新增 `Split header callbacks accumulate`，把 request line、`Host`
-field/value、`X-Custom` field/value 分成多个 `Execute` 调用喂给 parser，并验证：
+`test_http_headers` 的 `Has returns true/false` 现在额外覆盖 `LH.Has('X-PRESENT')`，继续锁住
+uppercase public lookup 语义。
 
-- request 最终完成。
-- URL 合并为 `/split/path?x=1`。
-- `Host` 合并为 `example.com`。
-- `X-Custom` 合并为 `value`。
-
-### 3. Parser benchmark evidence
+### 3. Header benchmark evidence
 
 生产代码修改前：
 
 ```sh
-make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+make -C benchmarks/nextpas.core.http/bench_headers clean run
 ```
 
-修改前 llhttp rows：
+修改前 rows：
 
 | workload | before ns/op |
 | --- | ---: |
-| simple GET | 1298.0 |
-| 10 headers | 4704.7 |
-| POST 1KB body | 2136.6 |
-| pipeline 10 reqs | 11400.4 |
+| Set+Get 5 headers | 1404.5 |
+| Set+Get 15 headers | 3420.0 |
+| Add 15 headers | 2064.0 |
+| Get miss (3 headers) | 58.8 |
+| Get hit (5 headers, last) | 68.6 |
+| Get hit uppercase (5 headers, last) | 122.8 |
+| Has (3 headers) | 53.3 |
+| Clone 10 headers | 752.3 |
 
-修改后使用同一 benchmark 复测，并再跑一次确认。确认 run 的 llhttp rows：
+修改后 confirmation run：
 
 | workload | before ns/op | after ns/op |
 | --- | ---: | ---: |
-| simple GET | 1298.0 | 1208.7 |
-| 10 headers | 4704.7 | 3952.9 |
-| POST 1KB body | 2136.6 | 1926.7 |
-| pipeline 10 reqs | 11400.4 | 10668.5 |
+| Set+Get 5 headers | 1404.5 | 928.0 |
+| Set+Get 15 headers | 3420.0 | 2665.6 |
+| Add 15 headers | 2064.0 | 1775.8 |
+| Get miss (3 headers) | 58.8 | 55.6 |
+| Get hit (5 headers, last) | 68.6 | 46.6 |
+| Get hit uppercase (5 headers, last) | 122.8 | 149.7 |
+| Has (3 headers) | 53.3 | 25.1 |
+| Clone 10 headers | 752.3 | 723.9 |
 
-微基准存在抖动，但 10-header、POST、pipeline 三个与 adapter span/body/header 相关负载均显示
-正向变化。simple GET 改善较小，下一步不应继续在这条小 helper 上榨，而应转向重复 lookup /
-normalization 和 server ingress 判定缓存。
+小写 lookup hot path 改善明显；uppercase public lookup 变慢，这是本轮有意接受的 tradeoff，因为
+server/adapter 内部热路径走小写 key。若后续发现外部 uppercase-heavy workload 是真实瓶颈，可再
+用单独策略优化 fallback。
 
 ## Remaining gaps / risks
 
-- 本轮只优化 URL/header field/value span append；body callback 仍按每个 body span `SetLength`
-  扩展 `TBytes`，后续 body-heavy workload 可单独处理。
-- `ValidateRequestTransferEncoding` 仍会 `GetAll + LowerCase + TextSplit`。transfer-coding 错误路径
-  correctness 更重要，性能优化要谨慎，不应影响 security proof。
-- 下一个高收益点仍是 headers-complete/server ingress 常用判定：Host、Expect、Content-Length、
-  Transfer-Encoding、Connection 的重复 `Normalize + linear scan`。
+- `GetAll` 仍总是 normalize 并分配 result array；`Expect` 和 `Transfer-Encoding` 相关路径仍有
+  `GetAll + split/lowercase` 成本。
+- server ingress 仍在多个阶段重复查询同一批 headers；下一步更高收益可能是 request metadata
+  cache，而不是继续微调 `FindFirst`。
+- uppercase fallback 性能下降已记录；这不是 correctness 风险，但需要在后续公开 API benchmark
+  中持续观察。
