@@ -1,11 +1,11 @@
-# Progress Log: WebSocket reserved opcode rejection
+# Progress Log: WebSocket fragmented control-frame rejection
 
 ## Session
 
-- **Scope:** 补齐 WebSocket reserved opcode rejection。
+- **Scope:** 补齐 WebSocket fragmented control-frame rejection。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1/WebSocket correctness hardening` -> `WebSocket negative frame coverage`
-  -> `reserved opcode rejection`
+  -> `fragmented control-frame rejection`
 
 ## Current state
 
@@ -21,24 +21,24 @@
 
 ## Completed work
 
-- `test_http_websocket` 新增 `ReservedOpcodeRejected` focused proof。
-- `nextpas.core.http.websocket.ReadFrame` 增加 opcode validity guard。
-- `docs/http/API_COVERAGE.md` 已记录 WebSocket reserved opcode rejection contract。
+- `test_http_websocket` 新增 `BuildMaskedFrameWithFin` helper。
+- `test_http_websocket` 新增 `FragmentedControlFrameRejected` focused proof。
+- `nextpas.core.http.websocket.ReadFrame` 增加 control-frame FIN guard。
+- `docs/http/API_COVERAGE.md` 已记录 WebSocket fragmented control-frame rejection contract。
 
 ## Verification
 
 - RED:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `11 total, 10 passed, 1 failed`
-  - failure: `reserved-opcode: got close response`
+  - `12 total, 11 passed, 1 failed`
+  - failure: `fragmented-control: server sends close frame`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_websocket test`
-  - `11 total, 11 passed, 0 failed`
+  - `12 total, 12 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 本轮提交后继续 `HttpServer 完成` 主线。
-- 下一刀优先继续 WebSocket negative coverage：fragmented control frame 或 invalid close code；
-  benchmark 仍后置，不跑全量。
+- 下一刀优先继续 WebSocket negative coverage：invalid close code；benchmark 仍后置，不跑全量。

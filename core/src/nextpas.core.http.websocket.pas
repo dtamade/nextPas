@@ -209,6 +209,8 @@ begin
   LOpcode := LHdr[0] and $0F;
   if not IsValidOpcode(LOpcode) then
     raise EHttpError.Create('WebSocket: reserved or invalid opcode');
+  if (LOpcode >= $08) and (not Result.Fin) then
+    raise EHttpError.Create('WebSocket: control frames must not be fragmented');
   Result.Opcode := TWebSocketOpcode(LOpcode);
   LMasked := (LHdr[1] and $80) <> 0;
   LPayloadLen := LHdr[1] and $7F;
