@@ -1004,6 +1004,109 @@ begin
   end;
 end;
 
+procedure TestChunkedRequestMultipleTrailerDeclarationContract;
+var
+  LRouter: IHttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LGotBody: string;
+  LGotTrailerDecl: string;
+  LGotTrailerDeclValues: TStringArray;
+  LGotTraceValue: string;
+  LGotAuthValue: string;
+  LGotTraceValues: TStringArray;
+  LGotAuthValues: TStringArray;
+  LHasTrace: Boolean;
+  LHasAuth: Boolean;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: close'#13#10 +
+    'Transfer-Encoding: chunked'#13#10 +
+    'Trailer: X-Trace, X-Auth-Context'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Trace: abc123'#13#10 +
+    'X-Auth-Context: role=admin'#13#10#13#10;
+begin
+  LGotBody := '';
+  LGotTrailerDecl := '';
+  SetLength(LGotTrailerDeclValues, 0);
+  LGotTraceValue := '';
+  LGotAuthValue := '';
+  SetLength(LGotTraceValues, 0);
+  SetLength(LGotAuthValues, 0);
+  LHasTrace := False;
+  LHasAuth := False;
+  LRouter := NewRouter;
+  LRouter.Post('/upload', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+    LRespBody: string;
+  begin
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+
+    LGotBody := LBody;
+    LGotTrailerDecl := AReq.Headers.Get('Trailer');
+    LGotTrailerDeclValues := AReq.Headers.GetAll('Trailer');
+    LGotTraceValue := AReq.Headers.Get('X-Trace');
+    LGotAuthValue := AReq.Headers.Get('X-Auth-Context');
+    LGotTraceValues := AReq.Headers.GetAll('X-Trace');
+    LGotAuthValues := AReq.Headers.GetAll('X-Auth-Context');
+    LHasTrace := AReq.Headers.Has('X-Trace');
+    LHasAuth := AReq.Headers.Has('X-Auth-Context');
+
+    LRespBody := 'ok';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LRespBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LRespBody[1], SizeUInt(Length(LRespBody)));
+  end);
+
+  LHandle := StartServerWithTransport(LRouter as IHttpHandler, nil, LServer, LPort);
+  try
+    LResp := SendRawRequestAndReadAll(LPort, REQ);
+    Check(Pos('200 OK', LResp) > 0,
+      'Chunked multiple trailer declaration contract returns 200');
+    CheckEqual('hello', LGotBody,
+      'Chunked multiple trailer declaration contract decodes chunked body');
+    CheckEqual('X-Trace, X-Auth-Context', LGotTrailerDecl,
+      'Chunked multiple trailer declaration contract preserves declaration header');
+    CheckEqual(Int64(1), Int64(Length(LGotTrailerDeclValues)),
+      'Chunked multiple trailer declaration contract keeps one declaration entry');
+    CheckEqual('X-Trace, X-Auth-Context', LGotTrailerDeclValues[0],
+      'Chunked multiple trailer declaration contract preserves declaration entry text');
+    CheckEqual('', LGotTraceValue,
+      'Chunked multiple trailer declaration contract hides trace trailer field');
+    CheckEqual('', LGotAuthValue,
+      'Chunked multiple trailer declaration contract hides auth trailer field');
+    CheckEqual(Int64(0), Int64(Length(LGotTraceValues)),
+      'Chunked multiple trailer declaration contract exposes no trace trailer values');
+    CheckEqual(Int64(0), Int64(Length(LGotAuthValues)),
+      'Chunked multiple trailer declaration contract exposes no auth trailer values');
+    Check(not LHasTrace,
+      'Chunked multiple trailer declaration contract does not report hidden trace trailer field');
+    Check(not LHasAuth,
+      'Chunked multiple trailer declaration contract does not report hidden auth trailer field');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.contract');
   T.Run('NewHeaders: Set/Get/Has/Del/Count/Clone', @TestNewHeaders);
@@ -1038,5 +1141,7 @@ begin
     @TestHttpServerHonorsExplicitBackendSelection);
   T.Run('Chunked request trailer contract',
     @TestChunkedRequestTrailerContract);
+  T.Run('Chunked request multiple trailer declaration contract',
+    @TestChunkedRequestMultipleTrailerDeclarationContract);
   T.Summary;
 end.

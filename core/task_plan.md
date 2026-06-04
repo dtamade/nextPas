@@ -1,33 +1,30 @@
-# Task Plan: http idle-timeout chunk-size-line characterization
+# Task Plan: http multiple trailer declaration contract
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，这一刀专注 request-side `IdleTimeout`
-在真实 parser 中间态上的收口：
+继续留在 `3/6 H1 正确性加固` 主线，这一刀只补 chunked trailer
+公共契约的窄缺口：
 
-- 不再复制另一组 direct-error / follow-up wire-order case
-- 专门锁定 `partial chunk-size-line stall` 这类 chunk framing 中间态
-- 同时补 poll-driven seam proof 与 threaded / epoll live-socket proof
+- 不扩散到新的 malformed/runtime 家族
+- 只把已有单个 trailer 声明契约扩成 single / multiple declaration 都有直接 proof
+- 锁定“保留 `Trailer` 声明头，但真实 trailer fields 不泄漏到普通 headers”
 - 如果只是既有 truth 缺测试，本轮保持 coverage-expansion，不改生产代码
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 缩小剩余高价值缺口，选定 `IdleTimeout` + `chunk-size-line stall`
-- [x] 在 `test_http_server` 新增 poll-driven partial chunk-size-line timeout proof
-- [x] 在 `test_http_security` 新增 threaded / epoll live chunk-size-line timeout proof
+- [x] 缩小剩余高价值缺口，选定 trailer multiple declaration contract
+- [x] 在 `test_http_contract` 新增多 trailer 声明 focused proof
 - [x] 跑 focused：
-  - `make -C tests/nextpas.core.http/test_http_server test`
-  - `make -C tests/nextpas.core.http/test_http_security test`
+  - `make -C tests/nextpas.core.http/test_http_contract test`
 - [x] 更新 coverage 文档与控制文件
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
-  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+  - `tests/nextpas.core.http/test_http_contract/test_http_contract.lpr`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
   - `findings.md`
@@ -38,14 +35,12 @@
 
 ## Intended outcome
 
-- request-side `IdleTimeout` 的 contract 不只覆盖：
-  - slowloris
-  - partial fixed-length body
-  - partial chunked trailer
+- chunked trailer 公共契约不只覆盖：
+  - 单个 trailer 声明
 - 还要直接覆盖：
-  - `partial chunk-size-line stall`
+  - 多个 trailer 声明放在同一个 `Trailer` header value
 - 证据要求：
-  - poll-driven seam focused proof
-  - threaded live-socket proof
-  - epoll live-socket proof
+  - handler 仍可读到解码后的 body
+  - `Trailer` 声明头原文保留
+  - trailer field 不出现在普通 header 查询面
   - heaptrc `0 unfreed memory blocks`
