@@ -1,17 +1,17 @@
-# Task Plan: expect interim-100 truncated trailer field-name EOF proof
+# Task Plan: expect interim-100 truncated trailer separator EOF proof
 
 ## Goal
 
 继续停留在 `3/6 H1 正确性加固` 主线，承接上一刀已经完成的
-`Expect: 100-continue` malformed trailer grammar after-interim proof，继续补
+`Expect: 100-continue` trailer field-name EOF after-interim proof，继续补
 更贴近 EOF 邻接的小缺口：`Expect + Transfer-Encoding: chunked`
-在 interim `100` 发出后，如果 trailer field-name 在 EOF 前被截断，
+在 interim `100` 发出后，如果 trailer separator 在 EOF 前被截断，
 应返回 final `400 Bad Request`。
 
 - 补 `test_http_security` 与 `test_http_server` 的
-  after-interim trailer EOF focused proof
+  after-interim trailer separator EOF focused proof
 - 锁住 `interim 100` 已发出后：
-  - partial trailer field-name + write-half-close 会返回 explicit `400 Bad Request`
+  - partial trailer separator + write-half-close 会返回 explicit `400 Bad Request`
   - 不会重复发 `100 Continue`
   - 不会误回 `200`
   - handler 不会进入
@@ -28,14 +28,11 @@
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `test_http_security` / `test_http_server` 现有 `Expect` / malformed
-  trailer EOF 覆盖，确认 after-interim `truncated trailer field-name EOF`
+  trailer EOF 覆盖，确认 after-interim `truncated trailer separator EOF`
   仍是空缺
-- [x] 先做 RED，证明现有 after-interim helper 不足以表达
-  “写部分 trailer 后 shutdown” 场景
-- [x] 给现有 after-interim malformed helper 新增最小可选
-  `shutdown-after-body` 路径
+- [x] 复用现有 `shutdown-after-body` helper，不再扩新 helper 形状
 - [x] 在 `test_http_security` 与 `test_http_server` 新增 threaded / epoll
-  两组 `Expect + chunked truncated trailer field-name EOF after interim 100`
+  两组 `Expect + chunked truncated trailer separator EOF after interim 100`
   focused proof
 - [x] focused gate 直接 GREEN，证明这轮只是 coverage-expansion，不需要生产修复
 - [x] 跑 focused：
@@ -60,7 +57,7 @@
 
 - `Expect: 100-continue` 的 trailer EOF 邻接 truth 在 security/server 两层收口：
   - interim `100` 先发出
-  - partial trailer field-name 后 peer write-half-close 会返回 final `400 Bad Request`
+  - partial trailer separator 后 peer write-half-close 会返回 final `400 Bad Request`
   - threaded / epoll 都不会重复 interim `100`
   - threaded / epoll 都不会误回 `200`
   - threaded / epoll 都不会进入 handler
