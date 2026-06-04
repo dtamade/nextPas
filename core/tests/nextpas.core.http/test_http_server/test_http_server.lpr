@@ -2249,6 +2249,81 @@ begin
     ALabel + ': first response body is still written before queued error');
 end;
 
+procedure RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+  const ALabel, AInput, AExpectedStatusLine: string;
+  const AMaxHeaderSize: Int32; const AMaxBodySize: Int64);
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LStreamObj: TWritableDrainRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.WriteTimeout := 20;
+  LHttpOpts.MaxHeaderSize := AMaxHeaderSize;
+  LHttpOpts.MaxBodySize := AMaxBodySize;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    ALabel + ': h1 transport exposes context-aware session factory');
+
+  LStreamObj := TWritableDrainRuntimeTcpStream.Create(AInput, 1, 0);
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    ALabel + ': context-aware h1 session exposes poll-driven seam');
+
+  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    ALabel + ': first advance enters reactor-owned writable drain');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    ALabel + ': handler is not called');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    ALabel + ': no worker handoff occurs');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    ALabel + ': direct error path avoids sync socket write');
+  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': first advance attempts exactly one nonblocking drain');
+  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
+    ALabel + ': timed drain arms one write deadline before draining');
+  Check(LNextEvents = [peWritable],
+    ALabel + ': writable wake is subscribed after would-block');
+  CheckEqual('', LStreamObj.Output,
+    ALabel + ': no bytes are emitted before writable wake');
+
+  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    ALabel + ': writable wake drains the direct error response');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), ALabel + ': connection remains server-owned');
+  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
+    ALabel + ': writable wake still avoids sync socket write');
+  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
+    ALabel + ': writable wake resumes nonblocking drain once');
+  Check(Pos(AExpectedStatusLine, LStreamObj.Output) > 0,
+    ALabel + ': expected direct error status is written on wire');
+end;
+
 procedure TestH1PollDrivenSessionQueuesFollowUpBadRequestBehindActiveDrain;
 const
   REQ =
@@ -2295,76 +2370,74 @@ begin
 end;
 
 procedure TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents;
-var
-  LHttpOpts: THttpServerOptions;
-  LH1Opts: TH1ServerTransportOptions;
-  LTransport: IHttpServerTransport;
-  LFactory: IHttpServerSessionFactoryWithContext;
-  LSession: ITcpServerSession;
-  LPollSession: ITcpServerPollDrivenSession;
-  LStreamObj: TWritableDrainRuntimeTcpStream;
-  LStream: ITcpStream;
-  LHandoffObj: TInlineWorkerHandoff;
-  LHandoff: ITcpServerWorkerHandoff;
-  LContext: ITcpServerSessionContext;
-  LResult: TTcpServerPollResult;
-  LNextEvents: TPlatformPollEvents;
-  LOwnership: TTcpServerConnOwnership;
-  LHandlerCalls: Int32;
 const
   REQ = 'GARBAGE DATA HERE'#13#10#13#10;
 begin
-  LHttpOpts := THttpServerOptions.Default;
-  LHttpOpts.WriteTimeout := 20;
-  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll generic bad request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
 
-  LTransport := NewH1ServerTransport(LH1Opts);
-  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
-    'h1 transport exposes context-aware session factory for standalone poll error drain test');
+procedure TestH1PollDrivenStandaloneMalformedChunkedRequestDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        'Z'#13#10'hello'#13#10 +
+        '0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll invalid chunk-size request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
 
-  LStreamObj := TWritableDrainRuntimeTcpStream.Create(REQ, 1, 0);
-  LStream := LStreamObj as ITcpStream;
-  LHandoffObj := TInlineWorkerHandoff.Create;
-  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
-  LContext := TMockSessionContext.Create(LHandoff);
-  LHandlerCalls := 0;
-  LSession := LFactory.NewSession(LStream, HandlerFunc(
-    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-    begin
-      Inc(LHandlerCalls);
-    end), LContext);
-  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
-    'context-aware h1 session exposes poll-driven seam for standalone poll error drain test');
+procedure TestH1PollDrivenStandaloneChunkedMaxBodySizeDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '2'#13#10'ab'#13#10 +
+        '1'#13#10'c'#13#10 +
+        '0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll chunked max-body rejection', REQ,
+    'HTTP/1.1 413 Payload Too Large', 0, 2);
+end;
 
-  LResult := LPollSession.Advance([peReadable], LNextEvents, LOwnership);
-  Check(LResult = TCP_SERVER_POLL_WAIT,
-    'standalone poll bad request should enter reactor-owned drain instead of finishing via sync write');
-  CheckEqual(Int64(0), Int64(LHandlerCalls),
-    'standalone poll bad request does not enter handler');
-  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
-    'standalone poll bad request does not hand off work to worker');
-  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
-    'standalone poll bad request avoids sync socket write path');
-  CheckEqual(Int64(1), Int64(LStreamObj.TryWriteCalls),
-    'standalone poll bad request attempts one nonblocking drain on first advance');
-  CheckEqual(Int64(1), Int64(LStreamObj.WriteDeadlineCalls),
-    'standalone poll bad request arms timed drain deadline before nonblocking error drain');
-  Check(LNextEvents = [peWritable],
-    'standalone poll bad request subscribes writable wake after would-block');
-  CheckEqual('', LStreamObj.Output,
-    'standalone poll bad request writes no bytes before writable wake');
+procedure TestH1PollDrivenStandaloneOversizeTrailerDrainsViaWritableEvents;
+const
+  TRAILER_VALUE =
+    '012345678901234567890123456789012345678901234567890123456789' +
+    '012345678901234567890123456789012345678901234567890123456789';
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Big'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '1'#13#10'a'#13#10 +
+        '0'#13#10 +
+        'X-Big: ' + TRAILER_VALUE + #13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll oversize trailer rejection', REQ,
+    'HTTP/1.1 431 Request Header Fields Too Large', 128, 0);
+end;
 
-  LResult := LPollSession.Advance([peWritable], LNextEvents, LOwnership);
-  Check(LResult = TCP_SERVER_POLL_DONE,
-    'writable wake drains standalone poll bad request response');
-  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
-    Int64(Ord(LOwnership)), 'standalone poll bad request remains server-owned');
-  CheckEqual(Int64(0), Int64(LStreamObj.SyncWriteCalls),
-    'writable wake still avoids sync socket write path');
-  CheckEqual(Int64(2), Int64(LStreamObj.TryWriteCalls),
-    'writable wake resumes nonblocking drain exactly once');
-  Check(Pos('HTTP/1.1 400 Bad Request', LStreamObj.Output) > 0,
-    'standalone poll bad request drains explicit 400 on wire');
+procedure TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: gzip, chunked'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll unsupported transfer-coding rejection', REQ,
+    'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
@@ -7959,6 +8032,14 @@ begin
     @TestH1PollDrivenSessionQueuesFollowUpHeaderTooLargeBehindActiveDrain);
   T.Run('H1 poll-driven standalone bad request drains via writable events',
     @TestH1PollDrivenStandaloneBadRequestDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone malformed chunked request drains via writable events',
+    @TestH1PollDrivenStandaloneMalformedChunkedRequestDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone chunked max-body rejection drains via writable events',
+    @TestH1PollDrivenStandaloneChunkedMaxBodySizeDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone oversize trailer drains via writable events',
+    @TestH1PollDrivenStandaloneOversizeTrailerDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone unsupported transfer-coding drains via writable events',
+    @TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Direct error response arms write timeout on malformed request',
