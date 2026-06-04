@@ -1,10 +1,10 @@
-# Progress Log: http poll-driven chunked-not-final direct-error proof
+# Progress Log: http poll-driven chunked-not-final partial-timeout proof
 
 ## Session
 
-- **Scope:** 给 `Transfer-Encoding: chunked, gzip` 补上 poll-driven standalone direct-error writable-drain `400` proof。
+- **Scope:** 给 `Transfer-Encoding: chunked, gzip` 补上 poll-driven standalone direct-error partial-timeout `400` proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `poll-driven direct-error seam tightening` -> `chunked-not-final writable-drain proof`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `poll-driven direct-error timeout tightening` -> `chunked-not-final partial-timeout proof`
 
 ## Current state
 
@@ -21,14 +21,14 @@
 
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
   新增 focused proof：
-  `H1 poll-driven standalone chunked-not-final transfer-coding drains via writable events`。
+  `H1 poll-driven standalone chunked-not-final transfer-coding partial-timeout preserves status`。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步这条 malformed `400` 的 poll-driven direct-error seam 说明。
+  已同步这条 malformed `400` 的 poll-driven partial-timeout seam 说明。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `178/178 passed`
+  - `179/179 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

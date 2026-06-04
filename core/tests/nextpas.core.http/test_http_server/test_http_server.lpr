@@ -3217,6 +3217,20 @@ begin
     'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingPartialTimeoutPreservesStatus;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked, gzip'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneTimedDirectErrorPartialTimeoutPreservesStatus(
+    'standalone poll chunked-not-final transfer-coding partial-timeout', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
 procedure TestWriteTimeoutBeforeAnyWireBytesDoesNotAppend500;
 var
   LHttpOpts: THttpServerOptions;
@@ -9434,6 +9448,8 @@ begin
     @TestH1PollDrivenStandaloneHeaderTooLargePartialTimeoutPreservesStatus);
   T.Run('H1 poll-driven standalone unsupported transfer-coding partial-timeout preserves status',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingPartialTimeoutPreservesStatus);
+  T.Run('H1 poll-driven standalone chunked-not-final transfer-coding partial-timeout preserves status',
+    @TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingPartialTimeoutPreservesStatus);
   T.Run('Session stops after zero-progress response write failure',
     @TestSessionStopsAfterZeroProgressWriteFailure);
   T.Run('Direct error response arms write timeout on malformed request',
