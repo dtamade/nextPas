@@ -429,6 +429,23 @@ begin
   end;
 end;
 
+procedure RunSecurityBytesRequestExpectStatus(const AOpts: THttpServerOptions;
+  const AData: PByte; const ALen: SizeUInt; const AExpectedStatus, ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+begin
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
+  try
+    LResp := SendRawBytes(LPort, AData, ALen);
+    Check(Pos(AExpectedStatus, LResp) > 0, ALabel);
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 function ReadOneResponse(const AConn: ITcpStream): string;
 var
   LBuf: array[0..0] of Byte;
@@ -2752,6 +2769,75 @@ begin
     'epoll negative Content-Length: explicit 400');
 end;
 
+procedure TestGenericMalformedRequestEpollBackend;
+const REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll generic malformed request: explicit 400');
+end;
+
+procedure TestHeaderNullByteEpollBackend;
+var
+  LReq: array of Byte;
+const
+  PREFIX = 'GET / HTTP/1.1'#13#10'Host: x'#13#10'X-Evil: foo';
+  SUFFIX = 'bar'#13#10'Connection: close'#13#10#13#10;
+begin
+  SetLength(LReq, Length(PREFIX) + 1 + Length(SUFFIX));
+  Move(PREFIX[1], LReq[0], Length(PREFIX));
+  LReq[Length(PREFIX)] := 0;
+  Move(SUFFIX[1], LReq[Length(PREFIX) + 1], Length(SUFFIX));
+  RunSecurityBytesRequestExpectStatus(
+    EpollSecurityServerOptions,
+    @LReq[0],
+    SizeUInt(Length(LReq)),
+    'HTTP/1.1 400',
+    'epoll null byte in header: explicit 400');
+end;
+
+procedure TestHttp09RequestEpollBackend;
+const REQ = 'GET /'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll HTTP/0.9 request: explicit 400');
+end;
+
+procedure TestCrlfInjectionEpollBackend;
+var
+  LReq: array of Byte;
+const
+  PART1 = 'GET /path';
+  INJECT = #13#10'Injected: header';
+  PART2 = ' HTTP/1.1'#13#10'Host: x'#13#10'Connection: close'#13#10#13#10;
+begin
+  SetLength(LReq, Length(PART1) + Length(INJECT) + Length(PART2));
+  Move(PART1[1], LReq[0], Length(PART1));
+  Move(INJECT[1], LReq[Length(PART1)], Length(INJECT));
+  Move(PART2[1], LReq[Length(PART1) + Length(INJECT)], Length(PART2));
+  RunSecurityBytesRequestExpectStatus(
+    EpollSecurityServerOptions,
+    @LReq[0],
+    SizeUInt(Length(LReq)),
+    'HTTP/1.1 400',
+    'epoll CRLF injection: explicit 400');
+end;
+
+procedure TestMissingHostEpollBackend;
+const REQ = 'GET / HTTP/1.1'#13#10'Connection: close'#13#10#13#10;
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll missing Host: explicit 400');
+end;
+
 procedure TestRequestLineTruncatedAtEofEpollBackend;
 const REQ = 'GET / HTTP/1.';
 begin
@@ -2772,6 +2858,32 @@ begin
     'HTTP/1.1 400',
     'epoll truncated headers EOF: explicit 400',
     True);
+end;
+
+procedure TestLongMethodNameEpollBackend;
+var
+  LMethod: string;
+  LReq: string;
+begin
+  SetLength(LMethod, 1000);
+  FillChar(LMethod[1], 1000, Ord('X'));
+  LReq := LMethod + ' / HTTP/1.1'#13#10'Host: x'#13#10'Connection: close'#13#10#13#10;
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    LReq,
+    'HTTP/1.1 400',
+    'epoll long method: explicit 400');
+end;
+
+procedure TestBodyLargerThanContentLengthEpollBackend;
+const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10 +
+            'Connection: close'#13#10#13#10'hello_extra_bytes_here';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll body larger than Content-Length: explicit 400');
 end;
 
 procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
@@ -3386,10 +3498,24 @@ begin
     @TestDuplicateContentLengthEpollBackend);
   T.Run('Negative Content-Length -> 400 with epoll backend',
     @TestNegativeContentLengthEpollBackend);
+  T.Run('Generic malformed request -> 400 with epoll backend',
+    @TestGenericMalformedRequestEpollBackend);
+  T.Run('Null byte in header -> 400 with epoll backend',
+    @TestHeaderNullByteEpollBackend);
+  T.Run('HTTP/0.9 no version -> 400 with epoll backend',
+    @TestHttp09RequestEpollBackend);
+  T.Run('CRLF injection in path -> 400 with epoll backend',
+    @TestCrlfInjectionEpollBackend);
+  T.Run('Missing Host header -> 400 with epoll backend',
+    @TestMissingHostEpollBackend);
   T.Run('Request line truncated at EOF -> 400 with epoll backend',
     @TestRequestLineTruncatedAtEofEpollBackend);
   T.Run('Headers truncated at EOF -> 400 with epoll backend',
     @TestHeadersTruncatedAtEofEpollBackend);
+  T.Run('Very long method name -> 400 with epoll backend',
+    @TestLongMethodNameEpollBackend);
+  T.Run('Body larger than CL with Connection: close -> 400 with epoll backend',
+    @TestBodyLargerThanContentLengthEpollBackend);
   T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
   T.Run('Chunked must be final transfer coding -> 400 with epoll backend',

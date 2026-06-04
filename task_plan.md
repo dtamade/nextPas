@@ -1,5 +1,22 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http request validation epoll parity
+
+### Goal
+
+继续补 `nextpas.core.http` request-side raw-wire security proof，
+把 generic malformed / host/version/path/method/content-length 边界补到 Linux `epoll`
+live parity，仍然只跑 `test_http_security` focused gate，不改生产代码，除非先打出真实 RED。
+
+### Checklist
+
+- [x] 复核 shared checkout 脏状态与当前 HEAD，确认 EOF truncation 批次已提交，不重复收口。
+- [x] 对比 `test_http_security` 默认 backend / `epoll` 注册项，筛出仍缺的 request validation gap。
+- [x] 新增 `generic malformed`、`null-byte header`、`HTTP/0.9`、`CRLF injection`、
+  `missing Host`、`very long method`、`body larger than Content-Length` 的 `epoll` proof。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http eof truncation epoll parity
 
 ### Goal

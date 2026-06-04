@@ -1,5 +1,37 @@
 # Progress Log
 
+## Session: 2026-06-04 http request validation epoll parity
+
+- **Status:** completed.
+- Objective:
+  - keep shrinking request-side raw-wire validation gaps
+  - add Linux `epoll` parity for high-value malformed/request-validation cases
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `RunSecurityBytesRequestExpectStatus`
+  - added `TestGenericMalformedRequestEpollBackend`
+  - added `TestHeaderNullByteEpollBackend`
+  - added `TestHttp09RequestEpollBackend`
+  - added `TestCrlfInjectionEpollBackend`
+  - added `TestMissingHostEpollBackend`
+  - added `TestLongMethodNameEpollBackend`
+  - added `TestBodyLargerThanContentLengthEpollBackend`
+  - registered all 7 matching `epoll` test entries
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `149/149 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `request-side validation / malformed raw-wire security proof`
+    - this batch:
+      `generic malformed / host/version/path/method/content-length-close -> explicit 400 with epoll parity`
+
 ## Session: 2026-06-04 http eof truncation epoll parity
 
 - **Status:** completed.

@@ -1,5 +1,17 @@
 # Findings & Decisions
 
+## 2026-06-04 http request validation epoll parity
+
+- 这批 case 属于 request-side validation / malformed raw-wire ingress 边界，不能只停留在默认
+  backend live proof；Linux `epoll` 也需要直接证据。
+- 本轮补上的 `epoll` proof 包括：generic malformed request、`HTTP/1.1 missing Host`、
+  `HTTP/0.9 / no-version`、`CRLF injection / request-line splitting`、`null-byte header`、
+  very long method、以及 `Content-Length + Connection: close + extra bytes after body`。
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `149/149 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：threaded / Linux `epoll` 两条 raw-wire ingress
+  路径都会把这组 request validation / malformed input 直接收口成 explicit `400`。
+
 ## 2026-06-04 http eof truncation epoll parity
 
 - request-line EOF truncation 与 headers EOF truncation 是 request parser 边界，不应只停留在默认
