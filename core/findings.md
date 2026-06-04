@@ -1,75 +1,70 @@
-# Findings: HTTP headers allocation fast path
+# Findings: HTTP parser span append fast path
 
 ## Scope
 
-本轮继续服务 `HttpServer 完成` 的性能路线。用户怀疑 Pascal llhttp 翻译本体可能有性能
-问题；当前证据还不能直接证明状态机本体慢，上一轮子代理审计和本轮 microbenchmark 更
-指向 `TH1Parser` adapter / `THttpHeaders` 的 managed allocation 成本。
-
-因此本轮先做基础件优化：让 `THttpHeaders` 使用 `FCount + EnsureCapacity`，避免每次
-`Add` 或删除都调整动态数组长度。
+本轮继续服务 `HttpServer 完成` 的性能路线，聚焦 `TH1Parser` 的 llhttp callback adapter。
+上一轮已经降低 `THttpHeaders.Add` 的数组分配抖动；本轮继续处理 URL/header field/header
+value span 进入 Pascal string 的成本。
 
 ## Confirmed truths
 
-### 1. llhttp vs adapter 判断
+### 1. Existing callback pattern did extra allocation
 
-上一轮 `bench_h1parser` 已证明 fast path 快于当前 llhttp adapter：
+旧回调模式：
 
-| workload | llhttp ns/op | fast ns/op |
-| --- | ---: | ---: |
-| simple GET | 1111.4 | 691.3 |
-| 10 headers | 4978.4 | 3753.0 |
-| POST 1KB body | 2167.2 | 1442.8 |
-| pipeline 10 requests | 9810.0 | 6973.5 |
-
-Peirce 子代理只读审计结论仍成立：最高概率瓶颈不是 llhttp 状态机本体，而是 URL/header/body
-span 进入 Pascal managed string / bytes 的 adapter 分配路径。
-
-### 2. Headers baseline evidence
-
-生产代码修改前，加入 `Add 15 headers` 场景后运行：
-
-```sh
-make -C benchmarks/nextpas.core.http/bench_headers clean run
+```pascal
+SetString(LChunk, p1, p2);
+FCurrentField := FCurrentField + LChunk;
 ```
 
-基线结果：
+常见单段 header field/value 会先创建临时 `LChunk`，再通过字符串拼接写入目标字段。跨 buffer
+分片时也会同时承担临时 string 和最终 string 的两次搬运。
+
+### 2. Split callback behavior is now locked
+
+`test_http_h1parser` 新增 `Split header callbacks accumulate`，把 request line、`Host`
+field/value、`X-Custom` field/value 分成多个 `Execute` 调用喂给 parser，并验证：
+
+- request 最终完成。
+- URL 合并为 `/split/path?x=1`。
+- `Host` 合并为 `example.com`。
+- `X-Custom` 合并为 `value`。
+
+### 3. Parser benchmark evidence
+
+生产代码修改前：
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+修改前 llhttp rows：
 
 | workload | before ns/op |
 | --- | ---: |
-| Set+Get 5 headers | 1235.6 |
-| Set+Get 15 headers | 3233.0 |
-| Add 15 headers | 2424.4 |
-| Get miss (3 headers) | 58.1 |
-| Get hit (5 headers, last) | 64.7 |
-| Has (3 headers) | 49.7 |
-| Clone 10 headers | 725.9 |
+| simple GET | 1298.0 |
+| 10 headers | 4704.7 |
+| POST 1KB body | 2136.6 |
+| pipeline 10 reqs | 11400.4 |
 
-### 3. Headers optimization evidence
-
-`THttpHeaders` 现在保留动态数组容量，并用 `FCount` 标记有效条目。删除和 `Set_` 去重后
-清理尾部 managed strings，避免 stale entries 外泄或长期持有已删除值。
-
-同一 benchmark 修改后结果：
+修改后使用同一 benchmark 复测，并再跑一次确认。确认 run 的 llhttp rows：
 
 | workload | before ns/op | after ns/op |
 | --- | ---: | ---: |
-| Set+Get 5 headers | 1235.6 | 924.2 |
-| Set+Get 15 headers | 3233.0 | 2712.2 |
-| Add 15 headers | 2424.4 | 1832.8 |
-| Get miss (3 headers) | 58.1 | 53.9 |
-| Get hit (5 headers, last) | 64.7 | 61.6 |
-| Has (3 headers) | 49.7 | 46.0 |
-| Clone 10 headers | 725.9 | 732.4 |
+| simple GET | 1298.0 | 1208.7 |
+| 10 headers | 4704.7 | 3952.9 |
+| POST 1KB body | 2136.6 | 1926.7 |
+| pipeline 10 reqs | 11400.4 | 10668.5 |
 
-`Add 15 headers` 下降约 24%，直接覆盖 llhttp adapter 逐 header `Add` 路径。`Clone` 本轮不优化，
-轻微波动不作为结论。
+微基准存在抖动，但 10-header、POST、pipeline 三个与 adapter span/body/header 相关负载均显示
+正向变化。simple GET 改善较小，下一步不应继续在这条小 helper 上榨，而应转向重复 lookup /
+normalization 和 server ingress 判定缓存。
 
 ## Remaining gaps / risks
 
-- 仍不能把性能问题归因到 llhttp Pascal 状态机本体；下一步应继续减少 adapter span copy /
-  normalization / lookup，而不是先重写状态机。
-- `Get/Has/GetAll` 仍会 Normalize 并线性扫描。后续可在 headers-complete 阶段缓存 Host、
-  Expect、Content-Length、keep-alive 等 server ingress 常用判定，避免同一请求重复扫描。
-- 正式追平 Go/Rust 仍需要全链 benchmark 轮次：更稳定的多轮采样、Hyper/Tokio comparator、
-  body/chunked/router/middleware/TLS 负载，以及 threaded/epoll/backend 对照。
+- 本轮只优化 URL/header field/value span append；body callback 仍按每个 body span `SetLength`
+  扩展 `TBytes`，后续 body-heavy workload 可单独处理。
+- `ValidateRequestTransferEncoding` 仍会 `GetAll + LowerCase + TextSplit`。transfer-coding 错误路径
+  correctness 更重要，性能优化要谨慎，不应影响 security proof。
+- 下一个高收益点仍是 headers-complete/server ingress 常用判定：Host、Expect、Content-Length、
+  Transfer-Encoding、Connection 的重复 `Normalize + linear scan`。

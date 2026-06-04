@@ -1,8 +1,8 @@
-# Progress Log: HTTP headers allocation fast path
+# Progress Log: HTTP parser span append fast path
 
 ## Session
 
-- **Scope:** `THttpHeaders` capacity/count optimization + focused header benchmark evidence。
+- **Scope:** `TH1Parser` URL/header span append optimization + split callback proof。
 - **Status:** verified
 - **Roadmap Position:** `6/6 benchmark/performance` -> `llhttp adapter allocation reduction`
 
@@ -22,42 +22,36 @@
 
 ## Completed work
 
-- `bench_headers` 新增 `Add 15 headers` 场景，直接覆盖 parser adapter 常用追加路径。
-- `test_http_headers` 新增 compaction 语义护栏：删除、`Set_` 去重、再追加后，`Count`、
-  `GetAll`、`ForEach`、`Clone` 只暴露有效条目并保持可见顺序。
-- `THttpHeaders` 改为 `FCount + EnsureCapacity`：
-  - `Add` 几何扩容，不再每个 header `SetLength + 1`。
-  - `Set_` / `Del` 不再收缩容量，只清理有效尾部的 managed strings。
-  - `FindFirst`、`GetAll`、`ForEach`、`Clone` 都只扫描 `FCount`。
+- `test_http_h1parser` 新增 split callback 语义护栏，覆盖 URL、header field、header value
+  跨多个 `Execute` 调用的累积。
+- `TH1Parser` 新增 `AppendSpan` helper：
+  - 首段直接 `SetString` 到目标字段。
+  - 后续分片用 `SetLength + Move` 追加。
+  - 移除 URL/header callback 里的临时 `LChunk` 和字符串拼接。
 
 ## Verification
 
 - Behavior guard:
-  - `make -C tests/nextpas.core.http/test_http_headers clean test`
-  - `13 total, 13 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- Direct parser/fast gates:
   - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `88 total, 88 passed, 0 failed`
+  - `89 total, 89 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
+- Differential parser gate:
   - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
   - `18 total, 18 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 - Benchmark evidence:
-  - `make -C benchmarks/nextpas.core.http/bench_headers clean run`
-  - before / after:
-    - `Set+Get 5 headers`: `1235.6` -> `924.2 ns/op`
-    - `Set+Get 15 headers`: `3233.0` -> `2712.2 ns/op`
-    - `Add 15 headers`: `2424.4` -> `1832.8 ns/op`
-    - `Get miss (3 headers)`: `58.1` -> `53.9 ns/op`
-    - `Get hit (5 headers, last)`: `64.7` -> `61.6 ns/op`
-    - `Has (3 headers)`: `49.7` -> `46.0 ns/op`
-    - `Clone 10 headers`: `725.9` -> `732.4 ns/op`
+  - baseline: `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+  - after: `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+  - confirmation: `make -C benchmarks/nextpas.core.http/bench_h1parser run`
+  - llhttp before / confirmation-after:
+    - `simple GET`: `1298.0` -> `1208.7 ns/op`
+    - `10 headers`: `4704.7` -> `3952.9 ns/op`
+    - `POST 1KB body`: `2136.6` -> `1926.7 ns/op`
+    - `pipeline 10 reqs`: `11400.4` -> `10668.5 ns/op`
 
 ## Next step
 
-- 继续 `TH1Parser` adapter allocation reduction：优先审计 URL/header span `SetString`
-  与 header lookup normalization，考虑在 headers-complete 阶段缓存 Host、Expect、
-  Content-Length、keep-alive 判定。
-- 若下一轮证据仍指向 llhttp 状态机本体，再开子代理做 Pascal llhttp port 的 state-machine
-  指令路径、branch layout、callback ABI 和 string boundary 深审。
+- 继续 `llhttp adapter allocation reduction`，但不要继续微调 `AppendSpan` helper；下一刀应看
+  server ingress 重复 header lookup / normalization，或 body-heavy request 的 `TBytes` 增长策略。
+- 如果后续 benchmark 指向 llhttp state-machine/callback ABI 本体，再开 `gpt-5.5 xhigh` 子代理
+  做只读深审。

@@ -1846,6 +1846,33 @@ begin
   CheckEqual('value2', LAll[1], 'second value');
 end;
 
+procedure TestSplitHeaderCallbacksAccumulate;
+var
+  LP: IH1Parser;
+  LPart: string;
+
+  procedure Feed(const APart: string);
+  begin
+    LPart := APart;
+    LP.Execute(PAnsiChar(LPart), Length(LPart));
+    Check(not LP.HasError, 'split feed has no parser error');
+  end;
+
+begin
+  LP := NewH1RequestParser;
+  Feed('GET /spl');
+  Feed('it/path?x=1 HTTP/1.1'#13#10'Ho');
+  Feed('st: exa');
+  Feed('mple.com'#13#10'X-Cus');
+  Feed('tom: val');
+  Feed('ue'#13#10#13#10);
+
+  Check(LP.IsComplete, 'split request completes');
+  CheckEqual('/split/path?x=1', LP.GetUrl, 'split url accumulates');
+  CheckEqual('example.com', LP.GetHeaders.Get('Host'), 'split host accumulates');
+  CheckEqual('value', LP.GetHeaders.Get('X-Custom'), 'split custom header accumulates');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.impl.h1.parser');
   T.Run('Simple GET', @TestSimpleGet);
@@ -1955,5 +1982,6 @@ begin
   T.Run('Reset and reparse', @TestResetAndReparse);
   T.Run('Request with query', @TestRequestWithQuery);
   T.Run('Multiple headers same name', @TestMultipleHeadersSameName);
+  T.Run('Split header callbacks accumulate', @TestSplitHeaderCallbacksAccumulate);
   T.Summary;
 end.

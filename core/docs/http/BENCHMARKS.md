@@ -115,3 +115,28 @@ command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 because parsed header callbacks append entries as they arrive. The change keeps
 the public header API unchanged; `test_http_headers`, `test_http_h1parser`, and
 `test_http_h1fast` all passed with heaptrc reporting `0 unfreed memory blocks`.
+
+## Optimization Evidence: Parser Span Append Fast Path
+
+On 2026-06-05 local time, the llhttp adapter stopped copying URL/header
+callback spans through a temporary string before appending them to the parser
+state. The first span now writes directly into the target string, and later
+split spans append with `SetLength + Move`.
+
+Parser microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| llhttp workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 1298.0 | 1208.7 |
+| 10 headers | 4704.7 | 3952.9 |
+| POST 1KB body | 2136.6 | 1926.7 |
+| pipeline 10 reqs | 11400.4 | 10668.5 |
+
+The benchmark has normal local noise, so these numbers should be treated as a
+directional microbenchmark. The split-callback contract is covered by
+`test_http_h1parser`, and `test_http_h1fast` keeps the fast parser differential
+gate green against the llhttp adapter.

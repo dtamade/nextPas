@@ -163,42 +163,53 @@ begin
             ((AParser^.http_minor = 0) or (AParser^.http_minor = 1));
 end;
 
+procedure AppendSpan(var AText: string; const AData: PAnsiChar;
+  const ALen: SizeUInt); inline;
+var
+  LOldLen: SizeInt;
+begin
+  if ALen = 0 then
+    Exit;
+  LOldLen := Length(AText);
+  if LOldLen = 0 then
+  begin
+    SetString(AText, AData, ALen);
+    Exit;
+  end;
+  SetLength(AText, LOldLen + SizeInt(ALen));
+  Move(AData^, AText[LOldLen + 1], ALen);
+end;
+
 { cdecl callbacks }
 
 function CbOnUrl(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
 var
   LSelf: TH1Parser;
-  LChunk: string;
 begin
   LSelf := GetSelf(p0);
-  SetString(LChunk, p1, p2);
-  LSelf.FUrl := LSelf.FUrl + LChunk;
+  AppendSpan(LSelf.FUrl, p1, p2);
   Result := 0;
 end;
 
 function CbOnHeaderField(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
 var
   LSelf: TH1Parser;
-  LChunk: string;
 begin
   LSelf := GetSelf(p0);
-  SetString(LChunk, p1, p2);
   if (p0^.flags and F_TRAILING) <> 0 then
     Inc(LSelf.FTrailerBytes, Int64(p2));
-  LSelf.FCurrentField := LSelf.FCurrentField + LChunk;
+  AppendSpan(LSelf.FCurrentField, p1, p2);
   Result := 0;
 end;
 
 function CbOnHeaderValue(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
 var
   LSelf: TH1Parser;
-  LChunk: string;
 begin
   LSelf := GetSelf(p0);
-  SetString(LChunk, p1, p2);
   if (p0^.flags and F_TRAILING) <> 0 then
     Inc(LSelf.FTrailerBytes, Int64(p2));
-  LSelf.FCurrentValue := LSelf.FCurrentValue + LChunk;
+  AppendSpan(LSelf.FCurrentValue, p1, p2);
   Result := 0;
 end;
 

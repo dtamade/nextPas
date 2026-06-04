@@ -1,29 +1,29 @@
-# Task Plan: HTTP headers allocation fast path
+# Task Plan: HTTP parser span append fast path
 
 ## Goal
 
-继续推进 `HttpServer 完成` 主线中的 benchmark/performance 阶段。用户指出 Pascal
-llhttp 翻译可能存在 hot-path 性能问题；本轮不直接假设状态机本体有问题，而是先优化
-已有证据指向的 `TH1Parser` adapter / `THttpHeaders` 分配路径。
+继续推进 `HttpServer 完成` 主线中的 benchmark/performance 阶段。本轮延续
+`TH1Parser` adapter allocation reduction：在不改公开 API、不改 llhttp 状态机的前提下，
+减少 URL/header field/header value 回调把 span 搬进 Pascal string 时的临时分配。
 
-本轮目标是把 `THttpHeaders` 从每次追加/删除都调整动态数组，改成 count + capacity
-模型，减少 llhttp adapter 逐 header `Add` 时的分配抖动，同时保持公开 API 语义不变。
+当前判断：性能问题仍更像 adapter managed allocation / copy 成本，而不是 llhttp Pascal
+状态机本体。先落一刀小而可证的 adapter 优化，再继续判断是否需要更深的 llhttp port 审计。
 
 要求：
 
 - 不写 `docs/nextpas.core.http.inbox.md`。
-- 不跑全量测试；只跑 headers/parser/fast/benchmark focused gates。
-- 先证明 correctness 和 heaptrc，再记录性能结果；不使用脆弱的耗时阈值单测。
+- 不跑全量测试；只跑 H1 parser / H1 fast / parser benchmark focused gates。
+- split callback 行为必须有 focused proof，heaptrc 必须为 `0 unfreed memory blocks`。
 
 ## Checklist
 
 - [x] 检查 `git status --short --branch`，确认 shared checkout 无关脏文件边界。
-- [x] 读取 `docs/design-conventions.md`、HTTP docs、coverage、`task_plan.md`、`findings.md`、`progress.md`。
-- [x] 增加 `Add 15 headers` benchmark，覆盖 llhttp adapter 常用追加路径。
-- [x] 增加 headers compaction focused 语义护栏测试。
-- [x] 将 `THttpHeaders` 改成 `FCount + EnsureCapacity`，删除/Set 去重仅清理可见尾部。
-- [x] 运行 headers / H1 parser / H1 fast focused 验证与 heaptrc。
-- [x] 运行 `bench_headers` before/after 对照。
+- [x] 读取 `docs/design-conventions.md`、HTTP coverage、`task_plan.md`、`findings.md`、`progress.md`。
+- [x] 增加 split URL/header/value callback focused 语义护栏。
+- [x] 记录生产改动前 `bench_h1parser` baseline。
+- [x] 优化 parser 回调 span append：首段直接 `SetString`，后续分片 `SetLength + Move`。
+- [x] 运行 H1 parser / H1 fast focused 验证与 heaptrc。
+- [x] 运行 `bench_h1parser` before/after 对照。
 - [x] 更新控制文件与 HTTP benchmark 文档。
 - [x] path-limited commit。
 
@@ -31,9 +31,8 @@ llhttp 翻译可能存在 hot-path 性能问题；本轮不直接假设状态机
 
 本轮只允许修改：
 
-- `src/nextpas.core.http.headers.pas`
-- `tests/nextpas.core.http/test_http_headers/test_http_headers.lpr`
-- `benchmarks/nextpas.core.http/bench_headers/bench_headers.lpr`
+- `src/nextpas.core.http.impl.h1.parser.pas`
+- `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
@@ -41,7 +40,6 @@ llhttp 翻译可能存在 hot-path 性能问题；本轮不直接假设状态机
 
 ## Intended outcome
 
-- `THttpHeaders.Add` 不再每个 header 触发动态数组重新分配。
-- 删除/Set 去重后保留容量，但 `Count`、`GetAll`、`ForEach`、`Clone` 只暴露有效条目。
-- 为后续继续优化 `TH1Parser` span/string 分配、headers-complete 缓存 Host/Expect/Content-Length
-  判定提供更稳的基础。
+- 常见单段 URL/header callback 不再先分配临时 `LChunk` 再做字符串拼接。
+- 跨 `Execute` 分片的 URL/header field/header value 仍能正确累积。
+- 为下一步继续减少 header lookup normalization / server ingress 重复扫描提供更干净的 adapter 基线。
