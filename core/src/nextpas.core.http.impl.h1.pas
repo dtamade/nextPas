@@ -287,10 +287,31 @@ begin
 end;
 
 function RequestExpectsContinue(const AParser: IH1Parser): Boolean;
+var
+  LExpect: string;
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
 begin
-  Result := (AParser <> nil) and
-    (AParser.GetHttpVersion = hvHttp11) and
-    (LowerCase(Trim(AParser.GetHeaders.Get('expect'))) = '100-continue');
+  Result := False;
+  if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
+    Exit(False);
+
+  LExpect := Trim(AParser.GetHeaders.Get('expect'));
+  if LExpect = '' then
+    Exit(False);
+
+  LStart := 1;
+  while LStart <= Length(LExpect) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
+      Inc(LPos);
+    LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
+    if LToken = '100-continue' then
+      Exit(True);
+    LStart := LPos + 1;
+  end;
 end;
 
 function RequestHasUnsupportedExpectations(const AParser: IH1Parser): Boolean;

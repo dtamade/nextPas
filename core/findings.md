@@ -1,69 +1,64 @@
-# Findings: http security oversize-trailer backpressure proof
+# Findings: http server expect list-membership semantics
 
 ## Scope
 
-- 本轮回到 malformed chunked raw-wire security 主线，不扩新生产语义，
-  只把 `chunked oversize trailer -> 431` 接到 live direct-error
-  backpressure 证据链上。
+- 本轮转回 request-side protocol completeness，不扩散成更大的 `Expect`
+  矩阵，只收一个真实生产缺口：
+  `Expect` 的 `100-continue` 判定不该是 exact-equals，而应是 list-membership。
 
 ## Confirmed truths
 
-### 1. `431` 先前已有普通 live / poll seam proof，但还缺 live direct-error backpressure proof
+### 1. 当前实现确实把合法的 `Expect` list value 漏判了
 
-- `oversize trailer` 先前已有：
-  - 普通 raw-wire live proof：`431 or safe-close`
-  - poll-driven standalone writable-drain proof
-  - write-timeout / partial-timeout `431` proof
-- 但 live direct-error backpressure 侧先前只锁住了：
-  - malformed `400`
-  - unsupported `Expect` `417`
-  - unsupported transfer-coding `501`
-- 缺的正是 trailer-limit 这条独立 `431` 状态分支。
+- 旧实现的 [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
+  里，`RequestExpectsContinue` 用的是：
+  - `LowerCase(Trim(...)) = '100-continue'`
+- 这只接受 header value 精确等于 `100-continue`。
+- 但 `RequestHasUnsupportedExpectations` 已经按 comma-separated list token 化了，
+  说明 `Expect` 本身就被当作 list 处理；continue 判定继续用 exact-equals 不一致。
 
-### 2. 现有 generic direct-error path 已经天然支持这条 `431`，本轮不需要生产修复
+### 2. TDD 已证明这不是文档问题，而是真生产缺口
 
-- 在 [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增两个 focused tests 后，直接 GREEN：
-  - threaded `chunked oversize trailer` direct-error backpressure
-  - epoll `chunked oversize trailer` direct-error backpressure
-- 这直接证明 trailer-limit `431` 不需要额外特殊分支；现有 direct-error
-  live close / preserve-status 逻辑已经能正确兜住它。
+- 在 [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
+  先加了 duplicate member focused tests：
+  - threaded `Expect: 100-continue, 100-continue`
+  - epoll `Expect: 100-continue, 100-continue`
+- 首轮 RED 明确落在新 case：
+  - `interim 100 continue returned`
+- 这证明 server 确实没有把合法 list value 识别成 `100-continue` expectation。
 
-因此这轮是 coverage-expansion，不是生产修复。
+### 3. 最小修复只需要收紧 `RequestExpectsContinue`
 
-### 3. focused gate 顺手暴露了一个既有旧测试 truth 偏差，并已按当前实现校正
+- 本轮没有动 parser error / body / write-timeout 等其他路径。
+- 只把 `RequestExpectsContinue` 改为和 unsupported-member 判定一致的
+  comma-separated token 扫描：
+  - 只要任一 token 等于 `100-continue`，就返回 `True`
+- 现有 `RequestHasUnsupportedExpectations` 继续负责：
+  - 一旦同时出现 unsupported member，仍然直接走 `417`
 
-- `Request line too long` 旧断言原先只接受 `414/400/404/200/empty`。
-- 但当前实现里 request-line bytes 同样受 `MaxHeaderSize` 预算约束：
-  - [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
-    会在 headers-stage 以 `HTTP_STATUS_HEADER_TOO_LARGE` 直接裁决。
-- 这意味着超长 URL 在当前 truth 下完全可能走 `431`，而旧测试没有接受
-  该结果，导致 focused suite 首轮出现一处既有 RED。
-- 本轮只校正测试 truth，不改生产代码。
+### 4. 修复后 `Expect` request-side live contract 更完整
 
-### 4. 现在 malformed chunked live direct-error 代表性状态更完整
-
-- standalone direct-error 在 backpressure 尝试下现在至少已经有：
-  - malformed `400`
-  - oversize trailer `431`
-  - unsupported `Expect` `417`
-  - unsupported transfer-coding `501`
-- threaded / epoll 两条 live 路径都证明：
-  - 不进入成功 handler
-  - 不追加 synthetic `500`
-  - wire 上至多暴露一条原始 status line 前缀
-  - 连接会在观测窗口内安全关闭
+- duplicate `100-continue` 现在在 threaded / epoll 两条路径上都直接锁住：
+  - 先返回单条 interim `100 Continue`
+  - handler 仍只在 body 送达后才被调用
+  - 最终 `200` 和 body echo 契约不变
+- 这轮因此是小而真实的生产修复，不只是覆盖扩充。
 
 ## Verification evidence
 
 - focused:
-  - `make -C tests/nextpas.core.http/test_http_security test`
-    - `122/122 passed`
+  - RED:
+    - `make -C tests/nextpas.core.http/test_http_server test`
+    - 新增 epoll duplicate-member case 首轮失败，报错
+      `interim 100 continue returned`
+  - GREEN:
+    - `make -C tests/nextpas.core.http/test_http_server test`
+    - `194/194 passed`
     - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- malformed chunked 这条线上，低价值 parity 已经很多，下一刀不能再机械复制。
-- 更值得做的两个方向是：
-  - 继续只挑仍未分类完的 runtime / malformed 边角
-  - 或转回 `Expect` 组合/优先级 characterization
+- 这轮只锁了 duplicate `100-continue`，还没系统铺开：
+  - bodyless `Expect: 100-continue`
+  - 更复杂的 `Expect` 组合 / OWS / repeated header-line characterization
+- 下一刀如果继续做 `Expect`，应该仍保持“小而真”，不要一次扩成大矩阵。

@@ -4481,14 +4481,14 @@ end;
 {$ENDIF}
 
 procedure RunExpectContinueSendsInterimResponse(const AUseEpoll: Boolean;
-  const ALabel: string);
+  const ALabel, AExpectValue: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
   LPort: UInt16;
   LHandle: TPlatformThreadHandle;
   LConn: ITcpStream;
-  LResp1, LResp2: string;
+  LReqHeaders, LResp1, LResp2: string;
   LSeenEcho: Boolean;
   LGotBody: string;
 const
@@ -4496,11 +4496,12 @@ const
     'POST /echo HTTP/1.1'#13#10 +
     'Host: localhost'#13#10 +
     'Content-Length: 5'#13#10 +
-    'Expect: 100-continue'#13#10#13#10;
+    'Expect: %EXPECT%'#13#10#13#10;
   REQ_BODY = 'hello';
 begin
   LSeenEcho := False;
   LGotBody := '';
+  LReqHeaders := StringReplace(REQ_HEADERS, '%EXPECT%', AExpectValue, True);
   LRouter := THttpRouter.Create;
   LRouter.Post('/echo', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var
@@ -4533,7 +4534,7 @@ begin
     LConn := TcpConnect('127.0.0.1', LPort);
     try
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
-      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LConn.Write(LReqHeaders[1], SizeUInt(Length(LReqHeaders)));
       LResp1 := ReadOneResponse(LConn);
       Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
         ALabel + ': interim 100 continue returned');
@@ -4558,13 +4559,31 @@ end;
 
 procedure TestExpectContinueSendsInterimResponse;
 begin
-  RunExpectContinueSendsInterimResponse(False, 'expect-continue threaded');
+  RunExpectContinueSendsInterimResponse(False, 'expect-continue threaded',
+    '100-continue');
 end;
 
 {$IFDEF NEXTPAS_LINUX}
 procedure TestExpectContinueSendsInterimResponseEpollBackend;
 begin
-  RunExpectContinueSendsInterimResponse(True, 'expect-continue epoll');
+  RunExpectContinueSendsInterimResponse(True, 'expect-continue epoll',
+    '100-continue');
+end;
+{$ENDIF}
+
+procedure TestExpectContinueDuplicateMembersStillSendInterimResponse;
+begin
+  RunExpectContinueSendsInterimResponse(False,
+    'expect-continue duplicate members threaded',
+    '100-continue, 100-continue');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueDuplicateMembersStillSendInterimResponseEpollBackend;
+begin
+  RunExpectContinueSendsInterimResponse(True,
+    'expect-continue duplicate members epoll',
+    '100-continue, 100-continue');
 end;
 {$ENDIF}
 
@@ -9634,6 +9653,8 @@ begin
     @TestKeepAliveEpollBackend);
   T.Run('Expect: 100-continue sends interim response with epoll backend',
     @TestExpectContinueSendsInterimResponseEpollBackend);
+  T.Run('Expect: duplicate 100-continue members still send interim response with epoll backend',
+    @TestExpectContinueDuplicateMembersStillSendInterimResponseEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
@@ -9835,6 +9856,8 @@ begin
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
   T.Run('Expect: 100-continue sends interim response',
     @TestExpectContinueSendsInterimResponse);
+  T.Run('Expect: duplicate 100-continue members still send interim response',
+    @TestExpectContinueDuplicateMembersStillSendInterimResponse);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',
