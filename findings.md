@@ -1,5 +1,14 @@
 # Findings & Decisions
 
+## 2026-06-04 http eof truncation epoll parity
+
+- request-line EOF truncation 与 headers EOF truncation 是 request parser 边界，不应只停留在默认
+  backend live proof；Linux `epoll` raw-wire ingress 也需要直接证据。
+- 这轮新增两条 `epoll` proof 后，`make -C tests/nextpas.core.http/test_http_security clean test`
+  结果为 `142/142 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍是 coverage-expansion，不是生产修复：threaded / Linux `epoll` 两条 ingress 路径都会把
+  request-line/header EOF truncation 判成 explicit `400`。
+
 ## 2026-06-04 http content-length validation epoll parity
 
 - `duplicate Content-Length` 与 `negative Content-Length` 属于 request header validation /
@@ -2953,3 +2962,48 @@
   - 清理这轮临时 debug harness
   - 固化 `llvm_var_param` 已绿的验证事实
   - 用 fresh gate 去找下一个真实 blocker
+
+## 2026-06-04 compiler truth absorb live verification and recategorization
+
+- `codex/compiler-truth-integration-20260604-main0915` 的 live 状态已经确认不是待处理 worktree，而是已完成安全归档的历史锚点：
+  - local tag：`archive/compiler-truth-integration-20260604-main0915`
+  - branch 与 worktree 都已删除
+- `codex/compiler-truth-absorb-20260604` 当前是唯一带 fresh 编译器 gate 证据的升级候选线：
+  - fresh `make rebuild-compiler` 输出 `48332 lines compiled`
+  - fresh `bash build/verify_local.sh` 已越过 compiler/HIR/stage0/platform/sync 等 gate
+  - 当前 full gate 真失败点是：
+    - `failure-kind=rtl-sysutils-run-failed`
+    - 文件：`rtl/core/sysutils/np_sysutils_test.pas`
+    - 7 条失败：
+      - `ExtractFileDir trailing slash`
+      - `Include delimiter empty`
+      - `FileExists existing file`
+      - `ExpandFileName starts with /`
+      - `Now returns reasonable date after 2009`
+      - `ExtractFileDir single-level path`
+      - `ExtractFileDir root`
+- 因而 absorb 线当前没有暴露新的 compiler/stage0/toolchain regression；full gate 卡点已经收敛成独立 `rtl/sysutils` 旧红。
+- absorb 候选线 worktree 仍有 1 个未提交改动：
+  - `build/verify_local.sh`
+  - 内容是把 `llvm_var_param` expected exit 从旧值改回 fresh truth `7`
+  - 在这 1 行没有形成干净 follow-up commit 前，不能把 absorb 线当成可落地主线的完成品
+- `codex/compiler-c8-np-allocator-20260604` 仍然是实际升级主线，但现在不能直接移动 branch ref：
+  - live worktree 仍有 compiler/sema/syntax/toolchain/tests/target facade 的 dirty WIP
+  - 在没先保护这批 dirty 内容前，不能把 absorb 候选 fast-forward 回真实 C8 分支
+- `codex/compiler-truth-audit-main-20260603` 也还不能降级成“已吸收可删”：
+  - `git cherry` 证明很多 committed truth 已被 absorb 以新 commit 形式重放
+  - 但仍有 audit-only 提交没有形成 patch-equivalent，必须逐提交判定是吸收、丢弃还是保留
+- `fix/sema-include-resolver` 继续处于“不确定”：
+  - 这条线还没有对照当前 `C8` imported/include truth 做 live focused review
+  - 在没确认它与当前 imported-unit body / resolver / sema 路线是否冲突前，不应 archive，更不应直接 merge
+- 这一轮 fresh 复盘后的分类应更新为：
+  - 有价值但需要整理后合并：
+    - `codex/compiler-truth-absorb-20260604`
+    - `codex/compiler-c8-np-allocator-20260604`
+  - 实验 / 不建议合并但要 archive：
+    - `backup/accidental-mixed-commit-20260603`
+    - `backup/sema-no-matching-overload-before-rebase`
+    - `codex/compiler-truth-integration-20260604-main0915`（已 archive 并清理）
+  - 不确定，需要继续审查：
+    - `codex/compiler-truth-audit-main-20260603`
+    - `fix/sema-include-resolver`

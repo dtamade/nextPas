@@ -2752,6 +2752,28 @@ begin
     'epoll negative Content-Length: explicit 400');
 end;
 
+procedure TestRequestLineTruncatedAtEofEpollBackend;
+const REQ = 'GET / HTTP/1.';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll truncated request line EOF: explicit 400',
+    True);
+end;
+
+procedure TestHeadersTruncatedAtEofEpollBackend;
+const REQ = 'GET / HTTP/1.1'#13#10'Host: local';
+begin
+  RunSecurityRequestExpectStatus(
+    EpollSecurityServerOptions,
+    REQ,
+    'HTTP/1.1 400',
+    'epoll truncated headers EOF: explicit 400',
+    True);
+end;
+
 procedure TestUnsupportedTransferCodingBeforeChunkedEpollBackend;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: gzip, chunked'#13#10#13#10 +
@@ -3364,6 +3386,10 @@ begin
     @TestDuplicateContentLengthEpollBackend);
   T.Run('Negative Content-Length -> 400 with epoll backend',
     @TestNegativeContentLengthEpollBackend);
+  T.Run('Request line truncated at EOF -> 400 with epoll backend',
+    @TestRequestLineTruncatedAtEofEpollBackend);
+  T.Run('Headers truncated at EOF -> 400 with epoll backend',
+    @TestHeadersTruncatedAtEofEpollBackend);
   T.Run('Unsupported transfer coding before chunked -> 501 with epoll backend',
     @TestUnsupportedTransferCodingBeforeChunkedEpollBackend);
   T.Run('Chunked must be final transfer coding -> 400 with epoll backend',

@@ -1,5 +1,19 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http eof truncation epoll parity
+
+### Goal
+
+继续补 `nextpas.core.http` request-line/header parse boundary 的 Linux `epoll` raw-wire proof，
+本轮只收 request-line EOF truncation 与 headers EOF truncation 两条 explicit `400` 契约。
+
+### Checklist
+
+- [x] 过滤 security parity gap，确认这两条 parser-boundary case 仍缺 `epoll` live proof。
+- [x] 新增 request-line EOF 与 headers EOF 的 `epoll` 用例。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 只记录 current truth，并做 path-limited commit。
+
 ## Active Session: 2026-06-04 http content-length validation epoll parity
 
 ### Goal
@@ -11063,3 +11077,89 @@ source-surface gate 和 full verification 吸收。
   - 用 fresh rebuilt stage0 再跑 `llvm_var_param`，程序退出码为 `7`
   - fresh IR 已改成 `call i64 @TNodeHelper.ClearNode(ptr %v58, ptr %v2)`，第二个参数变回 caller slot address
 - 本轮因此不再继续对 `llvm_var_param` 做生产代码扩张；下一步应基于 fresh gate 识别 `C5 -> C6/C8` 的下一个真实阻塞，而不是围绕已消失的假红点空转。
+
+## Active Session: 2026-06-04 compiler truth absorb live verification and recategorization
+
+### Goal
+
+把编译器清理线从“初步分类”推进到“带 fresh gate 证据的分类”，确认当前单线升级候选是否应收敛到
+`codex/compiler-truth-absorb-20260604`，并明确哪些原始分支还不能删。
+
+### Checklist
+
+- [x] 重新检查 live worktree / branch / archive tag 状态，确认 `compiler-truth-integration` 已安全归档清理。
+- [x] 在 `codex/compiler-truth-absorb-20260604` fresh 跑 `make rebuild-compiler`。
+- [x] 在 `codex/compiler-truth-absorb-20260604` fresh 跑 `bash build/verify_local.sh`，确认当前 full gate 真失败点。
+- [x] 重新比较 `codex/compiler-truth-audit-main-20260603` 与 `codex/compiler-truth-absorb-20260604` 的 `git cherry` / diff。
+- [x] 基于 live 证据刷新 6 条目标线的分类。
+- [ ] 把 `build/verify_local.sh` 里 `llvm_var_param` 预期值修正提交成 absorb 候选线的干净 follow-up。
+- [ ] 逐提交判定 `codex/compiler-truth-audit-main-20260603` 仍未 patch-equivalent 的 audit-only 提交是吸收、丢弃还是保留。
+- [ ] 设计把 absorb 候选安全带回真实 `codex/compiler-c8-np-allocator-20260604` 的方案，不触碰其当前 dirty WIP。
+
+### Current Verdict
+
+- `codex/compiler-truth-integration-20260604-main0915`
+  - 已完成安全处理：
+    - archive tag：`archive/compiler-truth-integration-20260604-main0915`
+    - branch / worktree：已删除
+  - 它不再是后续 merge 候选，而是历史保全锚点。
+- `codex/compiler-truth-absorb-20260604`
+  - 当前是唯一带 fresh 编译器 gate 证据的升级候选线。
+  - fresh `make rebuild-compiler`：
+    - `48332 lines compiled`
+  - fresh `bash build/verify_local.sh`：
+    - compiler / HIR / stage0 / platform / sync 路径继续通过
+    - 当前失败点收敛到：
+      - `failure-kind=rtl-sysutils-run-failed`
+      - `rtl/core/sysutils/np_sysutils_test.pas`
+      - 7 条旧红：
+        - `ExtractFileDir trailing slash`
+        - `Include delimiter empty`
+        - `FileExists existing file`
+        - `ExpandFileName starts with /`
+        - `Now returns reasonable date after 2009`
+        - `ExtractFileDir single-level path`
+        - `ExtractFileDir root`
+  - 这说明 absorb 线已经越过当前 compiler/stage0/toolchain gate；full gate 现在卡在独立的 `rtl/sysutils` 旧红，而不是新 compiler regression。
+  - 当前 worktree 仍有 1 个未提交改动：
+    - `build/verify_local.sh`
+    - 内容是把 `llvm_var_param` 期望 exit 纠正回 fresh truth `7`
+- `codex/compiler-c8-np-allocator-20260604`
+  - 仍是有价值主线，但不能直接移动 branch ref：
+    - live worktree 仍 dirty
+    - 含 `compiler/sema`、`compiler/syntax`、`compiler/toolchain`、tests 与 target facade 的未提交 / 未跟踪 WIP
+  - 在 absorb 线整理稳定前，不应直接回写这条真实 C8 线。
+- `codex/compiler-truth-audit-main-20260603`
+  - 不能因为 absorb 已存在就直接降级成“可删”。
+  - fresh `git cherry` 显示：
+    - 很多 committed truth 已被 absorb 以新 commit 形式重放
+    - 但仍有一批 audit 提交没有形成 patch-equivalent，需要逐提交复核
+  - 在这一步做完前，这条线应继续保留。
+- `fix/sema-include-resolver`
+  - 仍未完成当前 `C8` imported/include truth 的 live 对照，继续保留在“待继续审查”。
+- `backup/accidental-mixed-commit-20260603` / `backup/sema-no-matching-overload-before-rebase`
+  - 继续维持 archive 倾向，不进入主线吸收。
+
+### Refreshed Classification
+
+- 已合并可删：
+  - 当前剩余 live 目标线里暂无。
+- 有价值但需要整理后合并：
+  - `codex/compiler-truth-absorb-20260604`
+  - `codex/compiler-c8-np-allocator-20260604`
+- 实验 / 不建议合并但要 archive：
+  - `backup/accidental-mixed-commit-20260603`
+  - `backup/sema-no-matching-overload-before-rebase`
+  - `codex/compiler-truth-integration-20260604-main0915`：已 archive 并清理完成
+- 不确定，需要继续审查：
+  - `codex/compiler-truth-audit-main-20260603`
+  - `fix/sema-include-resolver`
+
+### Route Position
+
+- 当前总路线图位置：
+  - `C6-A / C8-F`
+- 当前这轮复盘后的最佳动作：
+  - 先把 absorb 候选线收成干净 commit
+  - 再做 `truth-audit` 剩余未等价提交的逐提交判定
+  - 最后才处理真实 C8 dirty 线的安全回流

@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-06-04 http eof truncation epoll parity
+
+- **Status:** completed.
+- Objective:
+  - tighten parser-boundary raw-wire security proof
+  - add Linux `epoll` parity for request-line/header EOF truncation
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `TestRequestLineTruncatedAtEofEpollBackend`
+  - added `TestHeadersTruncatedAtEofEpollBackend`
+  - registered both `Request line truncated at EOF -> 400 with epoll backend`
+    and `Headers truncated at EOF -> 400 with epoll backend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `142/142 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `request-line/header parser-boundary security proof`
+    - this batch: `request-line/header EOF truncation -> explicit 400 with epoll parity`
+
 ## Session: 2026-06-04 http content-length validation epoll parity
 
 - **Status:** completed.
@@ -8719,3 +8745,70 @@ Hello from nextPas!
   - remove temporary debug harnesses before committing this compiler slice
   - update findings/plan docs
   - identify the next real `C5 -> C6/C8` blocker from a fresh gate, not from the stale `llvm_var_param` report
+
+## Session: 2026-06-04 compiler truth absorb live verification and recategorization
+
+- **Status:** completed for the current audit round; absorb candidate follow-up commit landed, but no branch/worktree cleanup was performed yet.
+- Objective:
+  - Turn the compiler cleanup classification from a branch-name guess into a live-evidence table.
+  - Re-verify the absorb candidate before touching the real dirty C8 branch.
+  - Distinguish compiler regressions from unrelated repo reds.
+- Live repo state rechecked:
+  - active compiler-related branches now are:
+    - `codex/compiler-c8-np-allocator-20260604`
+    - `codex/compiler-truth-absorb-20260604`
+    - `codex/compiler-truth-audit-main-20260603`
+    - `fix/sema-include-resolver`
+    - `backup/accidental-mixed-commit-20260603`
+    - `backup/sema-no-matching-overload-before-rebase`
+  - `codex/compiler-truth-integration-20260604-main0915` is no longer a live branch/worktree:
+    - preserved as tag `archive/compiler-truth-integration-20260604-main0915`
+    - branch/worktree already removed
+- Fresh absorb-candidate verification:
+  - `make rebuild-compiler`
+    - `48332 lines compiled`
+  - `bash build/verify_local.sh`
+    - compiler/HIR/stage0/platform/sync gates continued to pass
+    - final failure was:
+      - `failure-kind=rtl-sysutils-run-failed`
+      - file: `rtl/core/sysutils/np_sysutils_test.pas`
+      - `7` failing assertions
+  - interpretation:
+    - current absorb candidate is not blocked by a newly introduced compiler regression
+    - the live full-gate blocker is an independent `rtl/sysutils` red
+- Truth-fix follow-up landed on absorb candidate:
+  - branch: `codex/compiler-truth-absorb-20260604`
+  - commit: `d196bb75 fix(verify): align llvm_var_param truth`
+  - scope:
+    - `build/verify_local.sh`
+    - absorb branch control files (`task_plan.md`, `findings.md`, `progress.md`)
+  - reason:
+    - fresh rebuilt compiler truth for `llvm_var_param` is `exit=7`
+    - absorb branch no longer carries the stale `expected-exit=42`
+- Refreshed classification after the live audit:
+  - already merged and deletable:
+    - none
+  - valuable but needs cleanup/integration before merge:
+    - `codex/compiler-truth-absorb-20260604`
+    - `codex/compiler-c8-np-allocator-20260604`
+  - experimental / should archive instead of merge:
+    - `backup/accidental-mixed-commit-20260603`
+    - `backup/sema-no-matching-overload-before-rebase`
+    - `codex/compiler-truth-integration-20260604-main0915` (already archived and cleaned)
+  - uncertain / needs deeper review:
+    - `codex/compiler-truth-audit-main-20260603`
+    - `fix/sema-include-resolver`
+- Why `truth-audit` remains uncertain:
+  - `git cherry` shows many committed truth-audit changes were replayed onto absorb with new commit IDs
+  - but it is not yet fully patch-equivalent
+  - therefore it cannot be downgraded to “absorbed and deletable” until its residual audit-only commits are reviewed one by one
+- Why the real C8 branch was not moved:
+  - `codex/compiler-c8-np-allocator-20260604` worktree still contains dirty compiler/toolchain/test/target-facade WIP
+  - moving that branch ref now would risk overwriting protected in-progress work
+- Route position:
+  - current total roadmap position remains `C6-A / C8-F`
+  - this round improved confidence and cleanup truth, not the route milestone itself
+- Next safe step:
+  - review the residual non-equivalent commits on `codex/compiler-truth-audit-main-20260603`
+  - decide which ones still belong on the absorb candidate
+  - only after that design a safe way to bring absorb back toward the real dirty C8 branch
