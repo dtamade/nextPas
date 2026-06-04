@@ -1,50 +1,42 @@
-# Task Plan: net.server readiness driver extraction step2
+# Task Plan: http server options demo smoke
 
 ## Goal
 
-继续把 readiness-family runtime glue 从 `nextpas.core.net.server.epoll`
-收回到 foundation：
+给 `examples/nextpas.core.http/http_server_options_demo` 补一个 focused
+example smoke，证明这个示例不只是“能编译”，而是：
 
-- poll-driven worker completion bridge
-- poll-driven session context wrapper
-
-让 future `kqueue` 在接入时不需要复制这三层 glue。
+- 可从测试里自动构建
+- 可作为外部进程启动并进入 ready 状态
+- `/health`、`/hello/:name`、`/echo` 这三条文档路径可用
+- `MaxBodySize=64` 的 oversize ingress 会被直接拒绝为 `413`
 
 ## Checklist
 
-- [x] 重新检查 shared checkout / worktree 状态，只处理 `net.server` / `http` 相关路径
-- [x] 审阅 `nextpas.core.net.server.runtime`、`nextpas.core.net.server.epoll`、
-      `test_net_server`、`test_http_server`
-- [x] 确认切口：不动 completion queue 存储本身，只抽 bridge/context glue
-- [x] 在 `nextpas.core.net.server.runtime.pas` 落地：
-  - `TTcpServerPollWorkerHandoff`
-  - `TTcpServerPollSessionContext`
-  - `TTcpServerPollQueuedCompletion`
-- [x] 让 `nextpas.core.net.server.epoll.pas` 改为消费 foundation bridge/context helper
-- [x] 跑 focused `test_net_server`
-- [x] 跑模块 gate `test_http_server`
-- [x] 更新文档与控制文件
+- [x] 重新检查 shared checkout 状态，只处理 `nextpas.core.http` 相关路径
+- [x] 读 `docs/design-conventions.md`、HTTP 控制文件与覆盖矩阵
+- [x] 对照 `test_config_examples` / `test_http_smoke`，确定外部 example smoke 模式
+- [x] 新增 `tests/nextpas.core.http/test_http_examples`
+- [x] 让 smoke 负责：
+  - `make build` 构建 example
+  - 启动独立 server 进程并探测 ready marker
+  - 用 `IHttpClient` 验证 `/health`、`/hello/world`、`POST /echo`
+  - 验证 oversize body 返回 `413` 且不是 handler 正常回包
+- [x] 更新必要控制文件与覆盖矩阵
+- [x] 跑 focused `test_http_examples`
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `src/nextpas.core.net.server.runtime.pas`
-  - `src/nextpas.core.net.server.epoll.pas`
-  - `docs/net/ARCHITECTURE.md`
+  - `tests/nextpas.core.http/test_http_examples/`
+  - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
   - `findings.md`
   - `progress.md`
-- 不改 public HTTP API
-- 不改 H1 语义
-- 不引入 `IOCP` 新接口
+- 不改 HTTP 生产实现
 - 不跑全量测试
 
 ## Intended outcome
 
-- readiness-family foundation 继续成型，不再只有 poll-session target 被收口
-- future `kqueue` 至少可以直接复用：
-  - poll session target
-  - worker completion bridge
-  - session context wrapper
-- `HttpServer` 现有 threaded / epoll 契约保持不变，并有 focused tests + heaptrc 证据
+- `http_server_options_demo` 从“文档示例”提升为“带 focused smoke 证据的可运行契约”
+- 后续若再扩这个 example 的公开演示面，可以直接在同一 smoke 上继续加窄断言
