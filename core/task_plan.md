@@ -20,7 +20,7 @@
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
 - [x] 缩小剩余高价值缺口，选定 unsupported `Expect`
-- [x] 在 `test_http_server` 先加 focused RED tests
+- [x] 在 `test_http_server` 先加 focused tests
 - [x] 最小生产修复：headers-stage 直接 short-circuit 到 final `417`
 - [x] 跑 focused：
   - `make -C tests/nextpas.core.http/test_http_server test`

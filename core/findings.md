@@ -9,14 +9,14 @@
 
 ## Confirmed truths
 
-### 1. 当前实现对 unsupported `Expect` 没有明确 final rejection
+### 1. 当前实现需要一条明确的 unsupported `Expect` final-rejection contract
 
 - 新增 `test_http_server` focused live case：
   - `Unsupported Expect rejects early`
   - `Unsupported Expect rejects early with epoll backend`
-- RED 结果直接证明现状缺口：
-  - unsupported `Expect` 不会被明确收口成 final `417`
-  - 现状要么静默忽略，要么错误落入后续 body/read 路径
+- 这些 case 现在把目标契约锁定为：
+  - unsupported `Expect` 必须被明确收口成 final `417`
+  - server 不能静默忽略，也不能错误落入后续 body/read 路径
 
 ### 2. 最小生产修复仍然应落在 H1 parse 阶段，并补齐公开状态常量
 
