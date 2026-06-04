@@ -803,8 +803,8 @@ begin
     'Fixed-length MaxBodySize');
 end;
 
-{ Test 2h: Chunked MaxBodySize rejection must happen before terminal chunk }
-procedure TestChunkedMaxBodySizeRejectsBeforeTerminalChunk;
+procedure RunChunkedMaxBodySizeRejectsBeforeTerminalChunk(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var
   LServer: THttpServer;
   LPort: UInt16;
@@ -820,7 +820,7 @@ var
   LChunkHex1: string;
   LChunkHex2: string;
 begin
-  LOpts := THttpServerOptions.Default;
+  LOpts := AOpts;
   LOpts.MaxBodySize := 1024;
   LHandle := StartSecurityServer(LOpts, LServer, LPort);
   try
@@ -861,12 +861,31 @@ begin
     end;
 
     Check(Pos('HTTP/1.1 413', LResp) > 0,
-      'Chunked MaxBodySize: explicit 413 before terminal chunk');
+      ALabel + ': explicit 413 before terminal chunk');
     Check(Pos('echo:', LResp) = 0,
-      'Chunked MaxBodySize: handler response never written before terminal chunk');
+      ALabel + ': handler response never written before terminal chunk');
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+{ Test 2h: Chunked MaxBodySize rejection must happen before terminal chunk }
+procedure TestChunkedMaxBodySizeRejectsBeforeTerminalChunk;
+begin
+  RunChunkedMaxBodySizeRejectsBeforeTerminalChunk(
+    THttpServerOptions.Default,
+    'Chunked MaxBodySize');
+end;
+
+procedure TestChunkedMaxBodySizeRejectsBeforeTerminalChunkEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedMaxBodySizeRejectsBeforeTerminalChunk(
+    LOpts,
+    'epoll chunked MaxBodySize');
 end;
 
 { Test 3: Generic malformed request }
@@ -3330,6 +3349,8 @@ begin
     @TestTruncatedChunkDataCrAtEofEpollBackend);
   T.Run('Fixed-length MaxBodySize -> 413 with epoll backend',
     @TestFixedLengthMaxBodySizeRejectedEpollBackend);
+  T.Run('Chunked MaxBodySize rejects before terminal chunk with epoll backend',
+    @TestChunkedMaxBodySizeRejectsBeforeTerminalChunkEpollBackend);
   T.Run('Truncated trailer section at EOF -> 400 with epoll backend',
     @TestTruncatedTrailerAtEofEpollBackend);
   T.Run('Truncated trailer field-name at EOF -> 400 with epoll backend',

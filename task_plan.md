@@ -1,5 +1,20 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http chunked max-body epoll parity
+
+### Goal
+
+继续补 `nextpas.core.http` 的 malformed/limit raw-wire security proof，
+把 `Chunked MaxBodySize rejects before terminal chunk` 的 Linux `epoll` live parity 锁进
+`test_http_security`，不改生产代码，除非测试先打出真实 runtime RED。
+
+### Checklist
+
+- [x] 对比 `test_http_security` 默认 backend / `epoll` case 清单，定位 still-missing 的 raw-wire gap。
+- [x] 复用现有 chunked `MaxBodySize` case，补 `epoll` parity 用例。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若只是 coverage gap，则只更新记录并 path-limited 提交。
+
 ## Active Session: 2026-06-04 http malformed chunk extension epoll parity
 
 ### Goal

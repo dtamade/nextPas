@@ -1,5 +1,16 @@
 # Findings & Decisions
 
+## 2026-06-04 http chunked max-body epoll parity
+
+- `Chunked MaxBodySize rejects before terminal chunk` 原先在 `test_http_security` 只有默认 backend
+  raw-wire proof；Linux `epoll` 这条更接近公开 limit contract 的 live parity 仍缺。
+- 这轮补上 `epoll` case 后，focused gate
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `136/136 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 因此这条同样是 coverage-expansion，不是生产修复。当前 truth 可以更明确地写成：
+  chunked ingress 跨 chunk 越过 `MaxBodySize` 时，threaded / Linux `epoll` raw-wire 路径都会在
+  terminal chunk 到达前直接返回 explicit `413`，且不会泄漏 handler 成功响应。
+
 ## 2026-06-04 http malformed chunk extension epoll parity
 
 - `Malformed chunk extension -> 400` 原先在 parser focused coverage 与 threaded live coverage 都有证据，

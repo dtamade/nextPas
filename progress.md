@@ -1,5 +1,30 @@
 # Progress Log
 
+## Session: 2026-06-04 http chunked max-body epoll parity
+
+- **Status:** completed.
+- Objective:
+  - keep shrinking remaining raw-wire limit/security gaps
+  - add Linux `epoll` parity for chunked ingress `MaxBodySize` rejection before terminal chunk
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal doc/control-file updates only
+  - left unrelated async/client/compiler/plans dirt untouched
+- Landed proof:
+  - extracted reusable helper for chunked `MaxBodySize` rejection before terminal chunk
+  - added `TestChunkedMaxBodySizeRejectsBeforeTerminalChunkEpollBackend`
+  - registered `Chunked MaxBodySize rejects before terminal chunk with epoll backend`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `136/136 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `runtime/limit contract closing`
+    - this batch: `chunked MaxBodySize -> explicit 413 with epoll raw-wire parity`
+
 ## Session: 2026-06-04 http malformed chunk extension epoll parity
 
 - **Status:** completed.
