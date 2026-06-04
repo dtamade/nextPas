@@ -129,3 +129,14 @@ The harness builds and runs nextPas, Go, and Rust keep-alive server benchmarks a
 smoke scale. Each implementation reports `operation`, `impl`, `iterations`,
 `threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so later benchmark
 result capture can use one stable format.
+
+For manual comparison runs, use the server comparison runner:
+
+```sh
+benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 \
+  --output build/projects/nextpas.core.http/server_comparison/report.txt
+```
+
+The runner builds all three implementations, streams the combined output to
+stdout, and optionally writes the same report to `--output`.

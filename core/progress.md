@@ -1,10 +1,10 @@
-# Progress Log: HTTP server benchmark comparators
+# Progress Log: HTTP server benchmark comparison runner
 
 ## Session
 
-- **Scope:** 补齐 HTTP server keep-alive benchmark 的 Go/Rust comparator smoke。
+- **Scope:** 补齐 HTTP server keep-alive benchmark comparison runner 与报告写入。
 - **Status:** verified
-- **Roadmap Position:** `6/6 benchmark/performance` -> `HTTP server keep-alive comparator harness`
+- **Roadmap Position:** `6/6 benchmark/performance` -> `HTTP server keep-alive comparison runner`
 
 ## Current state
 
@@ -22,29 +22,31 @@
 
 ## Completed work
 
-- `test_http_benchmarks` 现在 smoke nextPas / Go / Rust 三条 server benchmark。
-- `bench_http_server` 新增 `impl=nextpas`，和 comparator 输出对齐。
-- 新增 Go `net/http` keep-alive comparator。
-- 新增 Rust std-only HTTP/1.1 keep-alive comparator。
-- `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录 comparator harness。
+- 新增 `benchmarks/nextpas.core.http/run_server_comparison.sh`。
+- runner 统一 build/run nextPas、Go、Rust 三路 keep-alive benchmark。
+- runner 支持 `--requests`、`--threads`、`--output`。
+- `test_http_benchmarks` 现在锁住 runner stdout 与 report file 的三路指标输出。
+- `docs/http/API_COVERAGE.md` 与 `docs/http/README.md` 已记录 runner 用法。
 
 ## Verification
 
-- RED:
+- RED 1:
   - `make -C tests/nextpas.core.http/test_http_benchmarks test`
-  - `3 total, 0 passed, 3 failed`
-  - failures:
-    - `impl=nextpas` missing
-    - Go comparator path missing
-    - Rust comparator path missing
+  - `4 total, 3 passed, 1 failed`
+  - failure: `server comparison runner exists`
+  - heaptrc: `0 unfreed memory blocks`
+- RED 2:
+  - `make -C tests/nextpas.core.http/test_http_benchmarks test`
+  - `4 total, 3 passed, 1 failed`
+  - failure: `unknown argument: --output`
   - heaptrc: `0 unfreed memory blocks`
 - GREEN:
   - `make -C tests/nextpas.core.http/test_http_benchmarks test`
-  - `3 total, 3 passed, 0 failed`
+  - `4 total, 4 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀建议补正式 benchmark runner / result capture，把 nextPas、Go、Rust 的同字段输出写成可重复采集报告。
-- 如果继续提高 Rust 对照质量，应新增 Hyper/Tokio comparator，并把当前 std-only comparator 明确保留为零依赖 microbaseline。
+- 下一刀建议补正式 benchmark result snapshot：记录硬件/OS/toolchain 信息、运行参数、nextPas/Go/Rust 三路输出，并明确“不作为性能排名”的当前解释边界。
+- 如果继续提高 Rust 对照质量，应新增 Hyper/Tokio comparator，并把当前 std-only comparator 保留为零依赖 microbaseline。
 - correctness 方向若重启，应先找真实 runtime RED，不再铺低价值 parity 覆盖。
