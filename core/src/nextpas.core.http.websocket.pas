@@ -55,6 +55,7 @@ uses
   nextpas.core.hash,
   nextpas.core.hash.base,
   nextpas.core.encoding,
+  nextpas.core.text.utf8,
   nextpas.core.net.intf;
 
 const
@@ -142,6 +143,14 @@ begin
   LCode := (UInt16(Ord(APayload[1])) shl 8) or UInt16(Ord(APayload[2]));
   if not IsValidCloseCode(LCode) then
     raise EHttpError.Create('WebSocket: invalid close code');
+end;
+
+procedure ValidateTextPayload(const APayload: string);
+begin
+  if Length(APayload) = 0 then
+    Exit;
+  if not UTF8IsValid(PByte(@APayload[1]), SizeUInt(Length(APayload))) then
+    raise EHttpError.Create('WebSocket: invalid text payload encoding');
 end;
 
 { UpgradeWebSocket }
@@ -272,6 +281,9 @@ begin
   end;
 
   Result.Payload := LBuf;
+
+  if Result.Opcode = wsOpText then
+    ValidateTextPayload(Result.Payload);
 
   if Result.Opcode = wsOpClose then
   begin
