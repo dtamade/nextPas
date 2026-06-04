@@ -192,6 +192,43 @@ type
     property LastWriteDeadline: TDeadline read FLastWriteDeadline;
   end;
 
+  TIdleReadRuntimeTcpStream = class(TInterfacedObject, IReader, IWriter,
+    IStream, ITcpStream, ITcpSocketRuntime, ITcpStreamRuntime)
+  private
+    FBlocking: Boolean;
+    FSetBlockingCalls: Int32;
+    FTryReadCalls: Int32;
+    FReadDeadlineCalls: Int32;
+    FLastReadDeadline: TDeadline;
+  public
+    constructor Create;
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function Seek(const AOffset: Int64; const AOrigin: TSeekOrigin): Int64;
+    procedure Close;
+    function GetSize: Int64;
+    function GetPosition: Int64;
+    procedure SetPosition(const AValue: Int64);
+    function LocalAddr: TNetAddress;
+    function RemoteAddr: TNetAddress;
+    procedure Shutdown;
+    procedure SetNoDelay(const AValue: Boolean);
+    procedure SetKeepAlive(const AValue: Boolean);
+    procedure SetReadDeadline(const ADeadline: TDeadline);
+    procedure SetWriteDeadline(const ADeadline: TDeadline);
+    function NativeSocketHandle: PtrUInt;
+    procedure SetBlocking(const ABlocking: Boolean);
+    function TryRead(var ABuf; const ACount: SizeUInt;
+      out ARead: SizeUInt): TTcpStreamIOResult;
+    function TryWrite(const ABuf; const ACount: SizeUInt;
+      out AWritten: SizeUInt): TTcpStreamIOResult;
+    property Blocking: Boolean read FBlocking;
+    property SetBlockingCalls: Int32 read FSetBlockingCalls;
+    property TryReadCalls: Int32 read FTryReadCalls;
+    property ReadDeadlineCalls: Int32 read FReadDeadlineCalls;
+    property LastReadDeadline: TDeadline read FLastReadDeadline;
+  end;
+
   TZeroProgressTcpStream = class(TInterfacedObject, IReader, IWriter, IStream, ITcpStream)
   private
     FInput: string;
@@ -707,6 +744,108 @@ begin
     Inc(FWrittenBeforeWouldBlock, AWritten);
   end;
   Result := tsiorOk;
+end;
+
+constructor TIdleReadRuntimeTcpStream.Create;
+begin
+  inherited Create;
+  FBlocking := False;
+  FSetBlockingCalls := 0;
+  FTryReadCalls := 0;
+  FReadDeadlineCalls := 0;
+  FLastReadDeadline := TDeadline.Infinite;
+end;
+
+function TIdleReadRuntimeTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+function TIdleReadRuntimeTcpStream.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  raise EIOError.Create('idle read test stream must not use sync write path');
+end;
+
+function TIdleReadRuntimeTcpStream.Seek(const AOffset: Int64;
+  const AOrigin: TSeekOrigin): Int64;
+begin
+  Result := -1;
+end;
+
+procedure TIdleReadRuntimeTcpStream.Close;
+begin
+end;
+
+function TIdleReadRuntimeTcpStream.GetSize: Int64;
+begin
+  Result := -1;
+end;
+
+function TIdleReadRuntimeTcpStream.GetPosition: Int64;
+begin
+  Result := -1;
+end;
+
+procedure TIdleReadRuntimeTcpStream.SetPosition(const AValue: Int64);
+begin
+end;
+
+function TIdleReadRuntimeTcpStream.LocalAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(8080);
+end;
+
+function TIdleReadRuntimeTcpStream.RemoteAddr: TNetAddress;
+begin
+  Result := TNetAddress.Loopback(65000);
+end;
+
+procedure TIdleReadRuntimeTcpStream.Shutdown;
+begin
+end;
+
+procedure TIdleReadRuntimeTcpStream.SetNoDelay(const AValue: Boolean);
+begin
+end;
+
+procedure TIdleReadRuntimeTcpStream.SetKeepAlive(const AValue: Boolean);
+begin
+end;
+
+procedure TIdleReadRuntimeTcpStream.SetReadDeadline(const ADeadline: TDeadline);
+begin
+  Inc(FReadDeadlineCalls);
+  FLastReadDeadline := ADeadline;
+end;
+
+procedure TIdleReadRuntimeTcpStream.SetWriteDeadline(const ADeadline: TDeadline);
+begin
+end;
+
+function TIdleReadRuntimeTcpStream.NativeSocketHandle: PtrUInt;
+begin
+  Result := 45;
+end;
+
+procedure TIdleReadRuntimeTcpStream.SetBlocking(const ABlocking: Boolean);
+begin
+  FBlocking := ABlocking;
+  Inc(FSetBlockingCalls);
+end;
+
+function TIdleReadRuntimeTcpStream.TryRead(var ABuf; const ACount: SizeUInt;
+  out ARead: SizeUInt): TTcpStreamIOResult;
+begin
+  Inc(FTryReadCalls);
+  ARead := 0;
+  Result := tsiorWouldBlock;
+end;
+
+function TIdleReadRuntimeTcpStream.TryWrite(const ABuf; const ACount: SizeUInt;
+  out AWritten: SizeUInt): TTcpStreamIOResult;
+begin
+  AWritten := 0;
+  raise EIOError.Create('idle read test stream must not use nonblocking write path');
 end;
 
 constructor TZeroProgressTcpStream.Create(const AInput: string);
@@ -1933,6 +2072,82 @@ begin
     'timed reset drain writes response status line');
   Check(Pos(BODY, LStreamObj.Output) > 0,
     'timed reset drain writes response body');
+end;
+
+procedure TestH1PollDrivenSessionTimesOutIdleReadWaitBeforeFirstRequest;
+var
+  LHttpOpts: THttpServerOptions;
+  LH1Opts: TH1ServerTransportOptions;
+  LTransport: IHttpServerTransport;
+  LFactory: IHttpServerSessionFactoryWithContext;
+  LSession: ITcpServerSession;
+  LPollSession: ITcpServerPollDrivenSession;
+  LDeadlineSession: ITcpServerPollDrivenSessionWithDeadline;
+  LStreamObj: TIdleReadRuntimeTcpStream;
+  LStream: ITcpStream;
+  LHandoffObj: TInlineWorkerHandoff;
+  LHandoff: ITcpServerWorkerHandoff;
+  LContext: ITcpServerSessionContext;
+  LResult: TTcpServerPollResult;
+  LNextEvents: TPlatformPollEvents;
+  LOwnership: TTcpServerConnOwnership;
+  LHandlerCalls: Int32;
+begin
+  LHttpOpts := THttpServerOptions.Default;
+  LHttpOpts.IdleTimeout := 20;
+  LH1Opts := DefaultH1ServerTransportOptions(LHttpOpts);
+
+  LTransport := NewH1ServerTransport(LH1Opts);
+  Check(Supports(LTransport, IHttpServerSessionFactoryWithContext, LFactory),
+    'h1 transport exposes context-aware session factory for idle read timeout test');
+
+  LStreamObj := TIdleReadRuntimeTcpStream.Create;
+  LStream := LStreamObj as ITcpStream;
+  LHandoffObj := TInlineWorkerHandoff.Create;
+  LHandoff := LHandoffObj as ITcpServerWorkerHandoff;
+  LContext := TMockSessionContext.Create(LHandoff);
+  LHandlerCalls := 0;
+  LSession := LFactory.NewSession(LStream, HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      Inc(LHandlerCalls);
+    end), LContext);
+  Check(Supports(LSession, ITcpServerPollDrivenSession, LPollSession),
+    'context-aware h1 session exposes poll-driven seam for idle read timeout test');
+  Check(Supports(LSession, ITcpServerPollDrivenSessionWithDeadline, LDeadlineSession),
+    'idle read timeout session exposes deadline seam');
+  CheckEqual(Int64(1), Int64(LStreamObj.ReadDeadlineCalls),
+    'idle read timeout arms initial read deadline before first poll event');
+  Check(not LDeadlineSession.WakeDeadline.IsInfinite,
+    'idle read timeout exposes finite wake deadline before first request bytes arrive');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_WAIT,
+    'idle read timeout stays active while deadline has not expired');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    'idle read timeout path does not call handler before request bytes exist');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    'idle read timeout path does not hand off worker work before request bytes exist');
+  Check(LNextEvents = [peReadable],
+    'idle read timeout keeps waiting for readable events');
+  CheckEqual(Int64(0), Int64(LStreamObj.TryReadCalls),
+    'idle read timeout does not force speculative read without readiness');
+
+  platform_thread_sleep_ns(50000000);
+  Check(LDeadlineSession.WakeDeadline.IsExpired,
+    'idle read timeout wake deadline eventually expires');
+
+  LResult := LPollSession.Advance([], LNextEvents, LOwnership);
+  Check(LResult = TCP_SERVER_POLL_DONE,
+    'expired idle read timeout closes poll-driven session safely');
+  CheckEqual(Int64(Ord(TCP_SERVER_CONN_OWNERSHIP_SERVER)),
+    Int64(Ord(LOwnership)), 'idle read timeout keeps server ownership on close');
+  CheckEqual(Int64(0), Int64(LHandlerCalls),
+    'idle read timeout still does not call handler on timeout close');
+  CheckEqual(Int64(0), Int64(LHandoffObj.SubmitCount),
+    'idle read timeout still does not submit worker work on timeout close');
+  Check(LDeadlineSession.WakeDeadline.IsInfinite,
+    'idle read timeout clears wake deadline after timeout close');
 end;
 
 procedure TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp;
@@ -8998,6 +9213,8 @@ begin
     @TestH1PollDrivenSessionTimesOutStalledDrainOnDeadlineWake);
   T.Run('H1 poll-driven session clears wake deadline after successful timed drain',
     @TestH1PollDrivenSessionClearsWakeDeadlineAfterSuccessfulTimedDrain);
+  T.Run('H1 poll-driven session times out idle read wait before first request',
+    @TestH1PollDrivenSessionTimesOutIdleReadWaitBeforeFirstRequest);
   T.Run('H1 poll-driven session partial timed drain stops buffered follow-up',
     @TestH1PollDrivenSessionPartialTimedDrainStopsBufferedFollowUp);
   T.Run('H1 poll-driven session queues bounded responses while draining',

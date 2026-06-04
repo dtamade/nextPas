@@ -1,53 +1,54 @@
-# Findings: net.server kqueue backend wiring
+# Findings: http H1 poll-driven IdleTimeout parity
 
 ## Scope
 
-- 本轮继续留在 `nextpas.core.net.server` foundation 主线。
-- 目标不是扩 HTTP public behavior，而是把 `kqueue` 从“底层 wake seam 已备好”
-  推进到“backend 命名入口与 facade 注册边界都真实存在”。
+- 本轮回到 `nextpas.core.http` 主线。
+- 目标不是继续扩 malformed chunk grammar 覆盖，而是先补一个更靠近真实 backend
+  正确性的缺口：poll-driven request-side `IdleTimeout` parity。
 
 ## Confirmed truths
 
-### 1. `platform.io` wake seam 补完后，下一刀就应该是 `net.server.kqueue`
+### 1. 现有 poll-driven H1 只对 write-side stalled drain 暴露 `WakeDeadline`
 
-- `nextpas.core.net.server.readiness` 已经抽出共用 owner。
-- `platform_poller_enable_wake / wake / drain_wake` 在 BSD/macOS 也已落地。
-- 如果这时还没有 `nextpas.core.net.server.kqueue` 单元与 builtin registration，
-  那 `kqueue` 仍然只是架构意图，不是实际 backend 边界。
+- `TH1ServerConnectionState.WakeDeadline` 之前只返回 `FPollWriteDeadline`。
+- `AdvancePollRequestParse(...)` 在等待 `peReadable` 时只会返回 `tsprWait` +
+  `[peReadable]`，没有任何 read-side timeout 收口。
+- readiness runtime 虽然已经支持 synthetic deadline wake，但 H1 request parse
+  路径之前没有把这个机制接上。
 
-### 2. 当前宿主仍然是 Linux，不能伪造 BSD/macOS live truth
+### 2. 这不是“测试缺一条”的问题，而是真实行为缺口
 
-- 这轮最诚实的 TDD 形状是：
-  - source-contract RED：要求 `nextpas.core.net.server.kqueue.pas` 真存在
-  - runtime gate：Linux 上 `kqueue` builtin factory 仍不应误注册
-  - HTTP 只补轻量 contract gate，而不是跑重型全量 server suite
+- RED 新增 focused test 后，初次失败点就是：
+  - `idle read timeout arms initial read deadline before first poll event: expected 1, got 0`
+- 这说明 poll-driven session 在第一个 request byte 到来前，确实没有 arm
+  read deadline，也就谈不上 timeout close。
 
-### 3. 最合理的实现仍然是薄包装，而不是第二份 owner
+### 3. blocking `Run` 的更接近真相的 parity 是“每个 request parse 周期一条 read deadline”
 
-- `epoll` 现在已经退成命名包装。
-- `kqueue` 的正确落点也应该一样：
-  - 单独 unit 保留 backend 名义边界
-  - 真实运行 owner 继续复用 `nextpas.core.net.server.readiness`
-  - host 差异交给 `platform.io` poller 与 facade registration
+- `Run` 会在每个 request parse 开始前执行一次
+  `SetReadDeadline(now + IdleTimeout)`。
+- 它不是 write-side timeout，也不是 facade 级 SLA，而是 request parse 生命周期里的
+  read deadline。
+- 本轮最小实现也因此采用 request-parse state 的 read deadline，而不是扩 public API。
 
-### 4. `kqueue` backend wiring 现在已落地
+### 4. 最小修复已经落地
 
-- 新增了 `src/nextpas.core.net.server.kqueue.pas`
-- `NewTcpKqueueServer(...)` 现在直接 forward 到 `NewTcpReadinessServer(...)`
-- `src/nextpas.core.net.server.pas` 现在会：
-  - 在 BSD/macOS 条件下引入 `nextpas.core.net.server.kqueue`
-  - 在 BSD/macOS 条件下注册 `tsbKqueue` builtin factory
-- Linux 上仍不会误注册 builtin `kqueue` backend
+- `TH1ServerConnectionState` 新增了 `FPollReadDeadline`。
+- 构造 poll-driven session 时会为初始 request parse arm read deadline。
+- `ResetPollRequestState` 在进入下一次 request parse 前会重新 arm read deadline。
+- `SubmitCurrentPollRequest(...)` 与 parse-error / timeout-close 路径会 clear
+  read deadline，避免和 response drain/write deadline 生命周期混淆。
+- `WakeDeadline` 现在返回 read/write 两侧 deadline 的 `Min(...)`。
 
 ## Verification evidence
 
 - RED:
-  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
   - 初次失败点：
-    - `FAIL: Kqueue backend source contract - source file should exist: /home/dtamade/projects/nextPas/core/src/nextpas.core.net.server.kqueue.pas`
+    - `FAIL: H1 poll-driven session times out idle read wait before first request - idle read timeout arms initial read deadline before first poll event: expected 1, got 0`
 - GREEN:
-  - `make -C tests/nextpas.core.net.server/test_net_server clean test`
-  - `24/24 passed`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `174/174 passed`
   - heaptrc: `0 unfreed memory blocks`
 - light HTTP module gate:
   - `make -C tests/nextpas.core.http/test_http_contract clean test`
@@ -56,7 +57,9 @@
 
 ## Remaining gaps / risks
 
-- 还没有 BSD/macOS 实机 compile/runtime proof；这仍是 `kqueue` 路线的主缺口。
-- `kqueue` backend 目前仍是命名包装，和 `epoll` 一样还没把 H1 全量迁入
-  per-connection evented driver。
-- Windows `IOCP` completion-family driver 仍是后续 phase，不在本轮范围。
+- 本轮只锁定了 “pre-first-byte idle wait” 的 poll-driven parity，还没有锁定
+  partial mid-request body / trailer stall 的 timing truth。
+- 目前 read deadline 语义已经能通过 readiness synthetic wake 收口，但还没把这条
+  request-side timeout 进一步做成更细的 live socket characterization。
+- malformed raw-wire chunked security proof 仍是 HTTP correctness 路线上的后续目标，
+  只是这轮先让 evented runtime 的 request-side timeout 契约不再空着。

@@ -185,7 +185,10 @@ type
     FPollQueuedOutbound: IH1OutboundBuffer;
     FPollQueuedResponsePending: Boolean;
     FPollQueuedCloseAfterDrain: Boolean;
+    FPollReadDeadline: TDeadline;
     FPollWriteDeadline: TDeadline;
+    procedure ArmPollReadDeadline;
+    procedure ClearPollReadDeadline;
     procedure ResetPollRequestState;
     procedure PreparePollRequestParse;
     procedure ResetPollResponseState;
@@ -523,7 +526,25 @@ begin
   FPollQueuedOutbound := nil;
   FPollQueuedResponsePending := False;
   FPollQueuedCloseAfterDrain := False;
+  FPollReadDeadline := TDeadline.Infinite;
   FPollWriteDeadline := TDeadline.Infinite;
+  if FStreamRuntime <> nil then
+    ArmPollReadDeadline;
+end;
+
+procedure TH1ServerConnectionState.ArmPollReadDeadline;
+begin
+  if FStreamRuntime = nil then
+    Exit;
+  FPollReadDeadline := TDeadline.After(TDuration.FromMilliseconds(FIdleMs));
+  FConn.SetReadDeadline(FPollReadDeadline);
+end;
+
+procedure TH1ServerConnectionState.ClearPollReadDeadline;
+begin
+  FPollReadDeadline := TDeadline.Infinite;
+  if FStreamRuntime <> nil then
+    FConn.SetReadDeadline(TDeadline.Infinite);
 end;
 
 procedure TH1ServerConnectionState.ResetPollRequestState;
@@ -532,6 +553,7 @@ begin
   FParseTotalRead := 0;
   FParseHeadersDone := False;
   FPollNeedRequestReset := False;
+  ArmPollReadDeadline;
 end;
 
 procedure TH1ServerConnectionState.PreparePollRequestParse;
@@ -1057,6 +1079,7 @@ var
   LCloseAfterDrain: Boolean;
 begin
   AOwnership := tscoServer;
+  ClearPollReadDeadline;
 
   if FWorkerHandoff = nil then
   begin
@@ -1258,6 +1281,7 @@ var
   LReadResult: TTcpStreamIOResult;
   function FinishPollParseError(const AStatus: THttpStatus): TTcpServerPollResult;
   begin
+    ClearPollReadDeadline;
     if QueuePollErrorResponse(AStatus) then
     begin
       FKeepAlive := False;
@@ -1289,6 +1313,13 @@ begin
         Exit(AdvanceWholeRunBridge(AEvents, ANextEvents, AOwnership));
       if not (peReadable in AEvents) then
       begin
+        if FPollReadDeadline.IsExpired then
+        begin
+          ClearPollReadDeadline;
+          FKeepAlive := False;
+          ANextEvents := [];
+          Exit(tsprDone);
+        end;
         if FPollResponsePending then
           Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
         ANextEvents := [peReadable];
@@ -1304,6 +1335,7 @@ begin
           end;
         tsiorClosed:
           begin
+            ClearPollReadDeadline;
             FKeepAlive := False;
             if (FParseTotalRead > 0) and (not FParser.IsComplete) and
                (not FParser.HasError) then
@@ -1395,7 +1427,7 @@ end;
 
 function TH1ServerConnectionState.WakeDeadline: TDeadline;
 begin
-  Result := FPollWriteDeadline;
+  Result := TDeadline.Min(FPollReadDeadline, FPollWriteDeadline);
 end;
 
 { TH1ClientTransport }
