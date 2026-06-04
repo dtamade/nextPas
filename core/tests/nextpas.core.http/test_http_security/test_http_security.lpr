@@ -1411,6 +1411,21 @@ begin
     'Oversize trailer direct error backpressure');
 end;
 
+procedure TestUnsupportedExpectBackpressureSafeHandling;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 417 Expectation Failed',
+    'Unsupported Expect direct error backpressure');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestMalformedRequestBackpressureSafeHandlingEpollBackend;
 var
@@ -1460,6 +1475,25 @@ begin
     BuildChunkedOversizeTrailerRequest,
     'HTTP/1.1 431 Request Header Fields Too Large',
     'epoll oversize trailer direct error backpressure');
+end;
+
+procedure TestUnsupportedExpectBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /upload HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue, fancy'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 417 Expectation Failed',
+    'epoll unsupported Expect direct error backpressure');
 end;
 {$ENDIF}
 
@@ -3446,6 +3480,8 @@ begin
     @TestMalformedRequestBackpressureSafeHandling);
   T.Run('Unsupported transfer-coding direct error backpressure safe handling',
     @TestUnsupportedTransferCodingBackpressureSafeHandling);
+  T.Run('Unsupported Expect direct error backpressure safe handling',
+    @TestUnsupportedExpectBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
@@ -3608,6 +3644,8 @@ begin
     @TestMalformedRequestBackpressureSafeHandlingEpollBackend);
   T.Run('Unsupported transfer-coding direct error backpressure safe handling with epoll backend',
     @TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend);
+  T.Run('Unsupported Expect direct error backpressure safe handling with epoll backend',
+    @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',

@@ -1,5 +1,20 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-04 http unsupported-expect backpressure proof
+
+### Goal
+
+继续补 `nextpas.core.http` direct-error / early-reject 的 raw-wire security proof，
+把 `unsupported Expect -> 417` 的 backpressure safe-close 语义补进 `test_http_security`，
+覆盖 threaded / Linux `epoll` 两条 live 路径，只跑 focused gate，不改生产代码，除非先打出真实 RED。
+
+### Checklist
+
+- [x] 复核 server/security 对 `unsupported Expect -> 417` 的现有证据，确认 security 层仍缺 direct raw-wire/backpressure proof。
+- [x] 新增 threaded / `epoll` 两条 `unsupported Expect direct error backpressure safe handling` 用例。
+- [x] 跑 focused gate：`make -C tests/nextpas.core.http/test_http_security clean test`。
+- [x] 若仍是 coverage-expansion，则只更新记录并 path-limited commit。
+
 ## Active Session: 2026-06-04 http fixed-length eof truncation epoll parity
 
 ### Goal

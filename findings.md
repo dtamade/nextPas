@@ -1,5 +1,16 @@
 # Findings & Decisions
 
+## 2026-06-04 http unsupported-expect backpressure proof
+
+- `unsupported Expect -> 417` 属于 request-side early-reject / direct-error contract，server 层已有 focused proof，
+  但 security 层此前还缺 raw-wire/backpressure 直接证据。
+- 本轮把 threaded / Linux `epoll` 两条 live 路径都补进 `test_http_security` 后，focused gate
+  `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `152/152 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：在 backpressure 尝试下，
+  `unsupported Expect` 的 direct-error 路径会保持原始 `417 Expectation Failed` status-line 前缀，
+  不会误进 `200`、不会追加 synthetic `500`，并会安全关闭连接。
+
 ## 2026-06-04 http fixed-length eof truncation epoll parity
 
 - `Truncated Content-Length request body at EOF` 是 fixed-length request-body framing 的高价值边界，

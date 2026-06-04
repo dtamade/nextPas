@@ -1,5 +1,31 @@
 # Progress Log
 
+## Session: 2026-06-04 http unsupported-expect backpressure proof
+
+- **Status:** completed.
+- Objective:
+  - keep shrinking direct-error / early-reject raw-wire gaps
+  - add security-layer backpressure proof for `unsupported Expect -> 417`
+- Scope and safety:
+  - touched `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+    plus minimal control-file updates only
+  - unrelated async/client/compiler/plans dirt remained untouched
+- Landed proof:
+  - added `TestUnsupportedExpectBackpressureSafeHandling`
+  - added `TestUnsupportedExpectBackpressureSafeHandlingEpollBackend`
+  - registered both threaded / `epoll` `unsupported Expect direct error backpressure safe handling` entries
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_security clean test`
+    - `152/152 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - no production fix was needed
+  - route position:
+    - HTTP roadmap `3/6 H1 correctness hardening`
+    - current sub-slice: `direct-error / early-reject raw-wire security proof`
+    - this batch:
+      `unsupported Expect -> 417 backpressure safe-close`
+
 ## Session: 2026-06-04 http fixed-length eof truncation epoll parity
 
 - **Status:** completed.
