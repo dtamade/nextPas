@@ -70,6 +70,8 @@ type
     FCloseReceived: Boolean;
     FCloseSent: Boolean;
     FFragmentOpen: Boolean;
+    FFragmentOpcode: TWebSocketOpcode;
+    FFragmentTextPayload: string;
     procedure WriteFrame(AOpcode: TWebSocketOpcode; const APayload: string);
     procedure WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);
     procedure ReadExact(var ABuf; ACount: SizeUInt);
@@ -210,6 +212,8 @@ begin
   FCloseReceived := False;
   FCloseSent := False;
   FFragmentOpen := False;
+  FFragmentOpcode := wsOpContinuation;
+  FFragmentTextPayload := '';
 end;
 
 procedure TWebSocketImpl.ReadExact(var ABuf; ACount: SizeUInt);
@@ -291,9 +295,6 @@ begin
 
   Result.Payload := LBuf;
 
-  if Result.Opcode = wsOpText then
-    ValidateTextPayload(Result.Payload);
-
   if Result.Opcode = wsOpClose then
   begin
     ValidateClosePayload(Result.Payload);
@@ -302,11 +303,36 @@ begin
 
   if Result.Opcode = wsOpContinuation then
   begin
+    if FFragmentOpcode = wsOpText then
+    begin
+      FFragmentTextPayload := FFragmentTextPayload + Result.Payload;
+      if Result.Fin then
+        ValidateTextPayload(FFragmentTextPayload);
+    end;
     if Result.Fin then
+    begin
       FFragmentOpen := False;
+      FFragmentOpcode := wsOpContinuation;
+      FFragmentTextPayload := '';
+    end;
   end
-  else if (Result.Opcode in [wsOpText, wsOpBinary]) and (not Result.Fin) then
-    FFragmentOpen := True;
+  else if Result.Opcode in [wsOpText, wsOpBinary] then
+  begin
+    if Result.Fin then
+    begin
+      if Result.Opcode = wsOpText then
+        ValidateTextPayload(Result.Payload);
+    end
+    else
+    begin
+      FFragmentOpen := True;
+      FFragmentOpcode := Result.Opcode;
+      if Result.Opcode = wsOpText then
+        FFragmentTextPayload := Result.Payload
+      else
+        FFragmentTextPayload := '';
+    end;
+  end;
 end;
 
 procedure TWebSocketImpl.WriteFrameRaw(AOpcode: TWebSocketOpcode; const APayload: string);

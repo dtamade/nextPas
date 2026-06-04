@@ -1315,6 +1315,100 @@ begin
   end;
 end;
 
+{ Test 4l: fragmented text may split a UTF-8 sequence across frames }
+procedure TestFragmentedTextUtf8SequenceAccepted;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LKey, LReq: string;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LResp: string;
+  LFrame1: string;
+  LFrame2: string;
+  LPayloadLen: Byte;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/ws', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LWs: IWebSocket;
+    LF: TWebSocketFrame;
+  begin
+    LWs := UpgradeWebSocket(AReq, AW);
+    try
+      LF := LWs.ReadFrame;
+      if (LF.Opcode = wsOpText) and (not LF.Fin) then
+      begin
+        LF := LWs.ReadFrame;
+        if (LF.Opcode = wsOpContinuation) and LF.Fin then
+          LWs.WriteText('ok');
+      end;
+    except
+      on E: EHttpError do
+        LWs.Close(1002, 'protocol');
+    end;
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LKey := 'dGhlIHNhbXBsZSBub25jZQ==';
+    LReq := 'GET /ws HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Upgrade: websocket'#13#10 +
+            'Connection: Upgrade'#13#10 +
+            'Sec-WebSocket-Key: ' + LKey + #13#10 +
+            'Sec-WebSocket-Version: 13'#13#10 +
+            #13#10;
+
+    LConn := TcpConnect('127.0.0.1', LPort);
+    LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(3)));
+    try
+      LConn.Write(LReq[1], SizeUInt(Length(LReq)));
+      LResp := '';
+      repeat
+        LN := LConn.Read(LBuf[0], 4096);
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until Pos(#13#10#13#10, LResp) > 0;
+      Check(Pos('HTTP/1.1 101', LResp) > 0, 'fragmented-utf8: got 101');
+
+      LFrame1 := BuildMaskedFrameWithFin($01, #$C3, False);
+      LFrame2 := BuildMaskedFrame($00, #$A9);
+      LConn.Write(LFrame1[1], SizeUInt(Length(LFrame1)));
+      LConn.Write(LFrame2[1], SizeUInt(Length(LFrame2)));
+
+      LResp := '';
+      repeat
+        try
+          LN := LConn.Read(LBuf[0], 4096);
+        except
+          LN := 0;
+        end;
+        if LN > 0 then
+        begin
+          SetLength(LResp, Length(LResp) + Int32(LN));
+          Move(LBuf[0], LResp[Length(LResp) - Int32(LN) + 1], LN);
+        end;
+      until (Length(LResp) >= 4) or (LN = 0);
+
+      Check(Length(LResp) >= 4, 'fragmented-utf8: got response frame');
+      Check(Ord(LResp[1]) = $81, 'fragmented-utf8: server sends text frame');
+      LPayloadLen := Ord(LResp[2]) and $7F;
+      CheckEqual(Int64(2), Int64(LPayloadLen), 'fragmented-utf8: payload len = 2');
+      CheckEqual('ok', Copy(LResp, 3, LPayloadLen), 'fragmented-utf8: payload');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Binary frame }
 procedure TestBinaryFrame;
 var
@@ -1504,6 +1598,7 @@ begin
   T.Run('InvalidUtf8TextFrameRejected', @TestInvalidUtf8TextFrameRejected);
   T.Run('InvalidUtf8CloseReasonRejected', @TestInvalidUtf8CloseReasonRejected);
   T.Run('StandaloneContinuationFrameRejected', @TestStandaloneContinuationFrameRejected);
+  T.Run('FragmentedTextUtf8SequenceAccepted', @TestFragmentedTextUtf8SequenceAccepted);
   T.Run('BinaryFrame', @TestBinaryFrame);
   T.Run('CloseFrame', @TestCloseFrame);
   T.Summary;
