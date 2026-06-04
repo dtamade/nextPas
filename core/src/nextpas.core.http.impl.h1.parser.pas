@@ -29,6 +29,7 @@ type
     function GetBody: string;
     function GetBodySize: Int64;
     function NewBodyReader: IReader;
+    function HeadersComplete: Boolean;
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
@@ -74,6 +75,7 @@ type
     FUrl: string;
     FHeaders: IHttpHeaders;
     FBody: TBytes;
+    FHeadersComplete: Boolean;
     FComplete: Boolean;
     FError: Boolean;
     FErrorMsg: string;
@@ -100,6 +102,7 @@ type
     function GetBody: string;
     function GetBodySize: Int64;
     function NewBodyReader: IReader;
+    function HeadersComplete: Boolean;
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
@@ -231,6 +234,7 @@ begin
     LSelf.FVersion := hvHttp10
   else
     LSelf.FVersion := hvHttp11;
+  LSelf.FHeadersComplete := True;
   // Extract method (request) or status (response)
   if LSelf.FParserType = ptRequest then
   begin
@@ -470,6 +474,11 @@ begin
   Result := TSharedBytesReader.Create(FBody);
 end;
 
+function TH1Parser.HeadersComplete: Boolean;
+begin
+  Result := FHeadersComplete;
+end;
+
 function TH1Parser.IsComplete: Boolean;
 begin
   Result := FComplete;
@@ -594,6 +603,7 @@ begin
   FUrl := '';
   FHeaders := NewHttpHeaders;
   FBody := nil;
+  FHeadersComplete := False;
   FComplete := False;
   FError := False;
   FErrorMsg := '';

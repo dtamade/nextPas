@@ -1,10 +1,10 @@
-# Progress Log: http epoll malformed chunked live parity
+# Progress Log: http server expect-continue contract
 
 ## Session
 
-- **Scope:** 给 Linux `epoll` backend 补上两条 malformed chunked live raw-wire `400` proof。
+- **Scope:** 给 `HttpServer` 补上 `Expect: 100-continue` request-side protocol contract。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `raw-wire malformed chunked security` -> `epoll live parity tightening`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side protocol completeness` -> `expect-continue contract`
 
 ## Current state
 
@@ -19,22 +19,24 @@
 
 ## Completed work
 
-- [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增两条 focused live raw-wire proof：
-  `Chunked extra bytes after close -> 400 with epoll backend`、
-  `Malformed trailer field -> 400 with epoll backend`。
+- [src/nextpas.core.http.impl.h1.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.pas)
+  在 threaded / poll-driven H1 request parse 路径补上 interim `100 Continue` 发送。
+- [src/nextpas.core.http.impl.h1.parser.pas](/home/dtamade/projects/nextPas/core/src/nextpas.core.http.impl.h1.parser.pas)
+  增加真实 `HeadersComplete` parser signal，修掉首版实现引入的 partial-follow-up 回归。
+- [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
+  新增 threaded / epoll 两条 focused live contract tests。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步这两条 malformed chunked `epoll` live parity 说明。
+  已同步 `Expect: 100-continue` contract 说明。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `120/120 passed`
+- `make -C tests/nextpas.core.http/test_http_server test`
+  - `181/181 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀不要继续平铺相同类型的 backend parity。
+- 下一刀优先继续补真正的 request-side protocol completeness，不要再回到低价值 parity 平铺。
 - 更合理的两个方向是：
-  - 转向真正还没分类完的 runtime / malformed 边角
+  - unsupported `Expect` / 更早的 declared oversize body rejection
   - 或审视 `3/6 H1 正确性加固` 的阶段收口条件，准备衔接更高层的 server/base 架构演进

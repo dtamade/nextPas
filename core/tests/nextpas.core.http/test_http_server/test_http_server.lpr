@@ -4378,6 +4378,94 @@ begin
 end;
 {$ENDIF}
 
+procedure RunExpectContinueSendsInterimResponse(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1, LResp2: string;
+  LSeenEcho: Boolean;
+  LGotBody: string;
+const
+  REQ_HEADERS =
+    'POST /echo HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 5'#13#10 +
+    'Expect: 100-continue'#13#10#13#10;
+  REQ_BODY = 'hello';
+begin
+  LSeenEcho := False;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/echo', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBuf: array[0..15] of Byte;
+    LN: SizeUInt;
+    LBody: string;
+  begin
+    LSeenEcho := True;
+    LBody := '';
+    if AReq.Body <> nil then
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+        if LN > 0 then
+        begin
+          SetLength(LBody, Length(LBody) + Int32(LN));
+          Move(LBuf[0], LBody[Length(LBody) - Int32(LN) + 1], LN);
+        end;
+      until LN = 0;
+    LGotBody := LBody;
+    LBody := 'echo:' + LBody;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(1000)));
+      LConn.Write(REQ_HEADERS[1], SizeUInt(Length(REQ_HEADERS)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 100 Continue', LResp1) > 0,
+        ALabel + ': interim 100 continue returned');
+      Check(not LSeenEcho, ALabel + ': handler not called before body send');
+
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ_BODY[1], SizeUInt(Length(REQ_BODY)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200 OK', LResp2) > 0,
+        ALabel + ': final response 200');
+      Check(Pos('echo:hello', LResp2) > 0,
+        ALabel + ': final body preserved');
+      Check(LSeenEcho, ALabel + ': handler called after body send');
+      CheckEqual('hello', LGotBody, ALabel + ': handler sees full request body');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestExpectContinueSendsInterimResponse;
+begin
+  RunExpectContinueSendsInterimResponse(False, 'expect-continue threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestExpectContinueSendsInterimResponseEpollBackend;
+begin
+  RunExpectContinueSendsInterimResponse(True, 'expect-continue epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -9302,6 +9390,8 @@ begin
   T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
   T.Run('Keep-alive: two requests one connection with epoll backend',
     @TestKeepAliveEpollBackend);
+  T.Run('Expect: 100-continue sends interim response with epoll backend',
+    @TestExpectContinueSendsInterimResponseEpollBackend);
   T.Run('Pipelined requests in single write with epoll backend',
     @TestPipelinedRequestsInSingleWriteEpollBackend);
   T.Run('Content-Length keep-alive garbage tail -> follow-up 400 with epoll backend',
@@ -9483,6 +9573,8 @@ begin
   T.Run('Shutdown stops accepting', @TestShutdownStopsAccepting);
   T.Run('POST with body -> 201', @TestPostWithBody);
   T.Run('Keep-alive: two requests one connection', @TestKeepAlive);
+  T.Run('Expect: 100-continue sends interim response',
+    @TestExpectContinueSendsInterimResponse);
   T.Run('Pipelined requests in single write', @TestPipelinedRequestsInSingleWrite);
   T.Run('Connection: close stops keep-alive', @TestConnectionClose);
   T.Run('HTTP/1.0 no keep-alive', @TestHttp10NoKeepAlive);

@@ -1,43 +1,50 @@
-# Task Plan: http epoll malformed chunked live parity
+# Task Plan: http server expect-continue contract
 
 ## Goal
 
-继续留在 `3/6 H1 正确性加固` 主线，这一刀回到用户要求的
-raw-wire malformed chunked request security proof，只补两条还没拿到
-`epoll` live parity 的窄缺口：
+继续留在 `3/6 H1 正确性加固` 主线，这一刀补一条真正属于
+`HttpServer` request-side protocol completeness 的缺口：
 
-- `chunked + Connection: close + extra bytes after terminal chunk` -> `400`
-- malformed trailer field -> `400`
+- `Expect: 100-continue`
 
-如果只是既有 truth 缺测试，本轮保持 coverage-expansion，不改生产代码。
+要求：
+
+- default threaded 与 Linux `epoll` backend 都要拿到 focused live proof
+- 先 RED，再做最小生产修复
+- 不为了补能力而打破既有 keep-alive / partial-follow-up bridge 契约
 
 ## Checklist
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、控制文件
-- [x] 缩小剩余高价值缺口，选定两条 `epoll` malformed chunked live case
-- [x] 在 `test_http_security` 新增 focused live raw-wire proof
+- [x] 缩小剩余高价值缺口，选定 `Expect: 100-continue` contract
+- [x] 在 `test_http_server` 先加 focused RED tests
+- [x] 最小生产修复：threaded / poll-driven parse 路径补 interim `100 Continue`
+- [x] 修复首版实现引入的 partial-follow-up regression
 - [x] 跑 focused：
-  - `make -C tests/nextpas.core.http/test_http_security clean test`
+  - `make -C tests/nextpas.core.http/test_http_server test`
 - [x] 更新 coverage 文档与控制文件
 - [x] path-limited commit
 
 ## Scope
 
 - 本轮只动：
-  - `tests/nextpas.core.http/test_http_security/test_http_security.lpr`
+  - `src/nextpas.core.http.impl.h1.pas`
+  - `src/nextpas.core.http.impl.h1.parser.pas`
+  - `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
   - `docs/http/API_COVERAGE.md`
   - `task_plan.md`
   - `findings.md`
   - `progress.md`
-- 不改生产代码
 - 不跑全量 HTTP suite
 - 不扩散到 benchmark / H2/H3 / facade 话题
 
 ## Intended outcome
 
-- Linux `epoll` backend 对这两条 malformed chunked request 拿到真实 socket 侧显式 `400` 证明
+- server 在 headers 完整且 body 仍待发送时返回单条 `100 Continue`
+- handler 仍能读到完整 body
+- threaded / epoll 两条路径都通过 focused live proof
 - 证据要求：
-  - 请求不进入 handler 成功路径
-  - wire 上出现单一 `HTTP/1.1 400`
+  - wire 上先出现 `HTTP/1.1 100 Continue`
+  - 后续最终响应仍是业务 `200`
   - `heaptrc` 为 `0 unfreed memory blocks`

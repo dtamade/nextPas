@@ -37,6 +37,7 @@ function NewH1ServerTransport(const AOptions: TH1ServerTransportOptions): IHttpS
 implementation
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.base.utils,
   nextpas.core.errors,
@@ -179,6 +180,7 @@ type
     FPollNeedRequestReset: Boolean;
     FParseTotalRead: SizeUInt;
     FParseHeadersDone: Boolean;
+    FContinueSent: Boolean;
     FPollOutbound: IH1OutboundBuffer;
     FPollResponsePending: Boolean;
     FPollCloseAfterDrain: Boolean;
@@ -253,6 +255,40 @@ begin
   else
     Result := HTTP_STATUS_BAD_REQUEST;
   end;
+end;
+
+function RequestDeclaresBody(const AParser: IH1Parser): Boolean;
+var
+  LTransferEncoding: string;
+  LContentLength: string;
+begin
+  if AParser = nil then
+    Exit(False);
+
+  LTransferEncoding := LowerCase(Trim(AParser.GetHeaders.Get('transfer-encoding')));
+  if LTransferEncoding <> '' then
+    Exit(True);
+
+  LContentLength := Trim(AParser.GetHeaders.Get('content-length'));
+  if LContentLength = '' then
+    Exit(False);
+
+  Result := StrToInt64Def(LContentLength, 0) > 0;
+end;
+
+function RequestExpectsContinue(const AParser: IH1Parser): Boolean;
+begin
+  Result := (AParser <> nil) and
+    (AParser.GetHttpVersion = hvHttp11) and
+    (LowerCase(Trim(AParser.GetHeaders.Get('expect'))) = '100-continue');
+end;
+
+function ShouldSendContinueResponse(const AParser: IH1Parser;
+  const AHeadersDone, AContinueSent: Boolean): Boolean;
+begin
+  Result := AHeadersDone and (not AContinueSent) and (AParser <> nil) and
+    (not AParser.IsComplete) and RequestExpectsContinue(AParser) and
+    RequestDeclaresBody(AParser);
 end;
 
 { TPrefixedTcpStream }
@@ -394,6 +430,32 @@ begin
     LW.Write(LBody[1], SizeUInt(Length(LBody)));
 end;
 
+function TryWriteContinueResponse(const AConn: ITcpStream;
+  const AWriteTimeoutMs: Int64 = 0): Boolean;
+var
+  LW: IHttpResponseWriter;
+begin
+  Result := False;
+  try
+    if AWriteTimeoutMs > 0 then
+      AConn.SetWriteDeadline(TDeadline.After(
+        TDuration.FromMilliseconds(AWriteTimeoutMs)));
+    LW := TH1ResponseWriter.Create(AConn as IWriter);
+    LW.WriteHeader(HTTP_STATUS_CONTINUE);
+    Result := True;
+  except
+    Result := False;
+  end;
+end;
+
+procedure WriteContinueResponseToWriter(const AWriter: IWriter);
+var
+  LW: IHttpResponseWriter;
+begin
+  LW := TH1ResponseWriter.Create(AWriter);
+  LW.WriteHeader(HTTP_STATUS_CONTINUE);
+end;
+
 { TH1PollRunWork }
 
 constructor TH1PollRunWork.Create(const AState: TH1ServerConnectionState);
@@ -520,6 +582,7 @@ begin
   FPollNeedRequestReset := False;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
+  FContinueSent := False;
   FPollOutbound := nil;
   FPollResponsePending := False;
   FPollCloseAfterDrain := False;
@@ -552,6 +615,7 @@ begin
   FParser.Reset;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
+  FContinueSent := False;
   FPollNeedRequestReset := False;
   ArmPollReadDeadline;
 end;
@@ -910,6 +974,7 @@ begin
       FParser.Reset;
       LTotalRead := 0;
       LHeadersDone := False;
+      FContinueSent := False;
       LRejected := False;
       repeat
         if FPending <> '' then
@@ -940,7 +1005,7 @@ begin
           end;
         end;
         Inc(LTotalRead, LConsumed);
-        if (not LHeadersDone) and ((FParser.GetUrl <> '') or FParser.IsComplete) then
+        if (not LHeadersDone) and FParser.HeadersComplete then
         begin
           LHeadersDone := True;
           if (FOptions.MaxHeaderSize > 0) and
@@ -971,6 +1036,32 @@ begin
           LRejected := True;
           FKeepAlive := False;
           Break;
+        end;
+        if FParser.HasError then
+        begin
+          WriteErrorResponse(FConn, ParserErrorStatus(FParser),
+            FOptions.WriteTimeout);
+          LRejected := True;
+          FKeepAlive := False;
+          Break;
+        end;
+        if LHeadersDone and (FParser.GetHttpVersion = hvHttp11) and
+           (FParser.GetHeaders.Get('host') = '') then
+        begin
+          WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST,
+            FOptions.WriteTimeout);
+          LRejected := True;
+          FKeepAlive := False;
+          Break;
+        end;
+        if ShouldSendContinueResponse(FParser, LHeadersDone, FContinueSent) then
+        begin
+          if not TryWriteContinueResponse(FConn, FOptions.WriteTimeout) then
+          begin
+            FKeepAlive := False;
+            Break;
+          end;
+          FContinueSent := True;
         end;
       until FParser.IsComplete or FParser.HasError;
 
@@ -1279,6 +1370,7 @@ var
   LN: SizeUInt;
   LConsumed: SizeUInt;
   LReadResult: TTcpStreamIOResult;
+  LContinueOutbound: IH1OutboundBuffer;
   function FinishPollParseError(const AStatus: THttpStatus): TTcpServerPollResult;
   begin
     ClearPollReadDeadline;
@@ -1358,7 +1450,7 @@ begin
     end;
 
     Inc(FParseTotalRead, LConsumed);
-    if (not FParseHeadersDone) and ((FParser.GetUrl <> '') or FParser.IsComplete) then
+    if (not FParseHeadersDone) and FParser.HeadersComplete then
     begin
       FParseHeadersDone := True;
       if (FOptions.MaxHeaderSize > 0) and
@@ -1377,6 +1469,24 @@ begin
 
     if FParser.HasError then
       Exit(FinishPollParseError(ParserErrorStatus(FParser)));
+
+    if FParseHeadersDone and (FParser.GetHttpVersion = hvHttp11) and
+       (FParser.GetHeaders.Get('host') = '') then
+      Exit(FinishPollParseError(HTTP_STATUS_BAD_REQUEST));
+
+    if ShouldSendContinueResponse(FParser, FParseHeadersDone, FContinueSent) then
+    begin
+      LContinueOutbound := NewH1OutboundBuffer;
+      WriteContinueResponseToWriter(LContinueOutbound as IWriter);
+      if not EnqueuePollResponse(LContinueOutbound, False) then
+      begin
+        FKeepAlive := False;
+        ANextEvents := [];
+        Exit(tsprDone);
+      end;
+      FContinueSent := True;
+      Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+    end;
 
     if FParser.IsComplete then
       Exit(SubmitCurrentPollRequest(ANextEvents, AOwnership));
