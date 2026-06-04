@@ -1079,7 +1079,8 @@ begin
 end;
 
 { Test 14c: Keep-alive chunked request with garbage tail }
-procedure TestChunkedKeepAliveGarbageTailSafeHandling;
+procedure RunChunkedKeepAliveGarbageTailSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10#13#10 +
@@ -1087,22 +1088,30 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10#13#10 +
             'garbage';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive chunked tail: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive chunked tail: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive chunked tail: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
 
+procedure TestChunkedKeepAliveGarbageTailSafeHandling;
+begin
+  RunChunkedKeepAliveGarbageTailSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive chunked tail');
+end;
+
 { Test 14ca: Keep-alive chunked request with truncated follow-up request line }
-procedure TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+procedure RunChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10#13#10 +
@@ -1110,18 +1119,25 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             '0'#13#10#13#10 +
             'GET /next HTTP/1.1';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRawAndShutdownWrite(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive chunked partial follow-up line: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive chunked partial follow-up line: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive chunked partial follow-up line: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+begin
+  RunChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive chunked partial follow-up line');
 end;
 
 procedure RunChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater(
@@ -1209,7 +1225,8 @@ begin
 end;
 
 { Test 14cc: Keep-alive chunked trailer-complete request with garbage tail }
-procedure TestChunkedTrailerKeepAliveGarbageTailSafeHandling;
+procedure RunChunkedTrailerKeepAliveGarbageTailSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
@@ -1219,22 +1236,30 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'X-Test: value'#13#10#13#10 +
             'garbage';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRaw(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive chunked trailer tail: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive chunked trailer tail: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive chunked trailer tail: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
 
+procedure TestChunkedTrailerKeepAliveGarbageTailSafeHandling;
+begin
+  RunChunkedTrailerKeepAliveGarbageTailSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive chunked trailer tail');
+end;
+
 { Test 14cd: Keep-alive chunked trailer-complete request with truncated follow-up request line }
-procedure TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+procedure RunChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+  const AOpts: THttpServerOptions; const ALabel: string);
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
 const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'Transfer-Encoding: chunked'#13#10 +
@@ -1244,18 +1269,25 @@ const REQ = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
             'X-Test: value'#13#10#13#10 +
             'GET /next HTTP/1.1';
 begin
-  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRawAndShutdownWrite(LPort, REQ);
     Check(Pos('HTTP/1.1 200', LResp) > 0,
-      'Keep-alive chunked trailer partial follow-up line: first response still completes');
+      ALabel + ': first response still completes');
     Check(Pos('echo:5', LResp) > 0,
-      'Keep-alive chunked trailer partial follow-up line: first request body handled correctly');
+      ALabel + ': first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
-      'Keep-alive chunked trailer partial follow-up line: malformed follow-up gets 400');
+      ALabel + ': malformed follow-up gets 400');
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling;
+begin
+  RunChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+    THttpServerOptions.Default,
+    'Keep-alive chunked trailer partial follow-up line');
 end;
 
 { Test 14ce: Keep-alive chunked trailer-complete request with truncated follow-up headers }
@@ -1433,6 +1465,28 @@ begin
     'epoll keep-alive chunked trailer partial follow-up headers');
 end;
 
+procedure TestChunkedTrailerKeepAliveGarbageTailSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedTrailerKeepAliveGarbageTailSafeHandling(
+    LOpts,
+    'epoll keep-alive chunked trailer tail');
+end;
+
+procedure TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+    LOpts,
+    'epoll keep-alive chunked trailer partial follow-up line');
+end;
+
 procedure TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend;
 var
   LOpts: THttpServerOptions;
@@ -1442,6 +1496,28 @@ begin
   RunChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling(
     LOpts,
     'epoll keep-alive chunked partial follow-up headers');
+end;
+
+procedure TestChunkedKeepAliveGarbageTailSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedKeepAliveGarbageTailSafeHandling(
+    LOpts,
+    'epoll keep-alive chunked tail');
+end;
+
+procedure TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling(
+    LOpts,
+    'epoll keep-alive chunked partial follow-up line');
 end;
 
 procedure TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend;
@@ -2034,10 +2110,18 @@ begin
     @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
+  T.Run('Chunked keep-alive garbage tail safe handling with epoll backend',
+    @TestChunkedKeepAliveGarbageTailSafeHandlingEpollBackend);
+  T.Run('Chunked keep-alive truncated follow-up request line safe handling with epoll backend',
+    @TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend);
   T.Run('Chunked keep-alive partial follow-up request line can complete later with epoll backend',
     @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   T.Run('Chunked keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
+  T.Run('Chunked trailer keep-alive garbage tail safe handling with epoll backend',
+    @TestChunkedTrailerKeepAliveGarbageTailSafeHandlingEpollBackend);
+  T.Run('Chunked trailer keep-alive truncated follow-up request line safe handling with epoll backend',
+    @TestChunkedTrailerKeepAliveTruncatedFollowUpRequestLineSafeHandlingEpollBackend);
   T.Run('Chunked trailer keep-alive truncated follow-up headers safe handling with epoll backend',
     @TestChunkedTrailerKeepAliveTruncatedFollowUpHeadersSafeHandlingEpollBackend);
   T.Run('Chunked trailer keep-alive partial follow-up request line can complete later with epoll backend',
