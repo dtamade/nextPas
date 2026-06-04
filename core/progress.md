@@ -1,10 +1,10 @@
-# Progress Log: http epoll chunked-not-final security parity
+# Progress Log: http poll-driven chunked-not-final direct-error proof
 
 ## Session
 
-- **Scope:** 给 `Transfer-Encoding: chunked, gzip` 补上 epoll backend live raw-wire `400` proof。
+- **Scope:** 给 `Transfer-Encoding: chunked, gzip` 补上 poll-driven standalone direct-error writable-drain `400` proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `malformed raw-wire security tightening` -> `epoll chunked-not-final parity`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `poll-driven direct-error seam tightening` -> `chunked-not-final writable-drain proof`
 
 ## Current state
 
@@ -19,16 +19,16 @@
 
 ## Completed work
 
-- [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增 focused/live proof：
-  `Chunked must be final transfer coding -> 400 with epoll backend`。
+- [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
+  新增 focused proof：
+  `H1 poll-driven standalone chunked-not-final transfer-coding drains via writable events`。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步 `chunked`-must-be-final transfer-coding 的 epoll live parity 说明。
+  已同步这条 malformed `400` 的 poll-driven direct-error seam 说明。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_security test`
-  - `118/118 passed`
+- `make -C tests/nextpas.core.http/test_http_server test`
+  - `178/178 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step

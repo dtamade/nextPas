@@ -3155,6 +3155,20 @@ begin
     'HTTP/1.1 501 Not Implemented', 0, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked, gzip'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll chunked-not-final transfer-coding rejection', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneBadRequestPartialTimeoutPreservesStatus;
 const
   REQ = 'GARBAGE DATA HERE'#13#10#13#10;
@@ -9410,6 +9424,8 @@ begin
     @TestH1PollDrivenStandaloneTruncatedTrailerCrAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone unsupported transfer-coding drains via writable events',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone chunked-not-final transfer-coding drains via writable events',
+    @TestH1PollDrivenStandaloneChunkedMustBeFinalTransferCodingDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone bad request partial-timeout preserves status',
     @TestH1PollDrivenStandaloneBadRequestPartialTimeoutPreservesStatus);
   T.Run('H1 poll-driven standalone payload-too-large partial-timeout preserves status',
