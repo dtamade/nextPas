@@ -5,6 +5,7 @@ program test_http_headers;
 uses
   nextpas.core.base,
   nextpas.core.testing,
+  nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers;
 
@@ -234,6 +235,34 @@ begin
   CheckEqual('d1', LH.Get('X-D'), 'reused set/get');
 end;
 
+procedure ExpectHeaderError(const ALabel: string; const AUseSet: Boolean;
+  const AName, AValue: string);
+var
+  LH: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LH := NewHttpHeaders;
+  LRaised := False;
+  try
+    if AUseSet then
+      LH.Set_(AName, AValue)
+    else
+      LH.Add(AName, AValue);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, ALabel);
+end;
+
+procedure TestValidationRejectsInvalidNamesAndValues;
+begin
+  ExpectHeaderError('add rejects empty name', False, '', 'value');
+  ExpectHeaderError('set rejects colon in name', True, 'Bad:Name', 'value');
+  ExpectHeaderError('add rejects CR in value', False, 'x-good', 'bad'#13'value');
+  ExpectHeaderError('set rejects NUL in value', True, 'x-good', 'bad'#0'value');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.headers');
   T.Run('Set and Get basic', @TestSetAndGetBasic);
@@ -250,5 +279,6 @@ begin
   T.Run('Del non-existent is no-op', @TestDelNonExistentIsNoOp);
   T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
   T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
+  T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
   T.Summary;
 end.

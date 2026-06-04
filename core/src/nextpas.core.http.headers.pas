@@ -24,7 +24,8 @@ type
     function FindFirst(const AName: string): Int32;
     class function NeedsNormalize(const AName: string): Boolean; static;
     class function Normalize(const AName: string): string; static;
-    class procedure ValidateName(const AName: string); static;
+    class function NormalizeIfNeeded(const AName: string): string; static;
+    class function ValidateNameAndNeedsNormalize(const AName: string): Boolean; static;
     class procedure ValidateValue(const AValue: string); static;
   public
     procedure Set_(const AName, AValue: string);
@@ -91,15 +92,29 @@ begin
       Result[LI] := Chr(Ord(Result[LI]) + 32);
 end;
 
-class procedure THttpHeaders.ValidateName(const AName: string);
+class function THttpHeaders.NormalizeIfNeeded(const AName: string): string;
+begin
+  if NeedsNormalize(AName) then
+    Result := Normalize(AName)
+  else
+    Result := AName;
+end;
+
+class function THttpHeaders.ValidateNameAndNeedsNormalize(
+  const AName: string): Boolean;
 var
   LI: SizeInt;
 begin
   if AName = '' then
     raise EHttpError.Create('empty header name');
+  Result := False;
   for LI := 1 to Length(AName) do
+  begin
     if (Ord(AName[LI]) < 33) or (Ord(AName[LI]) > 126) or (AName[LI] = ':') then
       raise EHttpError.Create('invalid header name character');
+    if (AName[LI] >= 'A') and (AName[LI] <= 'Z') then
+      Result := True;
+  end;
 end;
 
 class procedure THttpHeaders.ValidateValue(const AValue: string);
@@ -136,9 +151,11 @@ var
   LI, LDst: Int32;
   LFound: Boolean;
 begin
-  ValidateName(AName);
+  if ValidateNameAndNeedsNormalize(AName) then
+    LNorm := Normalize(AName)
+  else
+    LNorm := AName;
   ValidateValue(AValue);
-  LNorm := Normalize(AName);
   LFound := False;
   LDst := 0;
   for LI := 0 to FCount - 1 do
@@ -176,11 +193,16 @@ begin
 end;
 
 procedure THttpHeaders.Add(const AName, AValue: string);
+var
+  LNorm: string;
 begin
-  ValidateName(AName);
+  if ValidateNameAndNeedsNormalize(AName) then
+    LNorm := Normalize(AName)
+  else
+    LNorm := AName;
   ValidateValue(AValue);
   EnsureCapacity(FCount + 1);
-  FEntries[FCount].Name := Normalize(AName);
+  FEntries[FCount].Name := LNorm;
   FEntries[FCount].Value := AValue;
   Inc(FCount);
 end;
@@ -249,7 +271,7 @@ var
   LNorm: string;
   LI, LDst: Int32;
 begin
-  LNorm := Normalize(AName);
+  LNorm := NormalizeIfNeeded(AName);
   LDst := 0;
   for LI := 0 to FCount - 1 do
   begin

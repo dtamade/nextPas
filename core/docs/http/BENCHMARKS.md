@@ -342,3 +342,42 @@ continues to point at adapter materialization rather than callback dispatch.
 This still does not prove Pascal-translated llhttp parity with C llhttp. A
 same-payload C llhttp comparator is required before making claims about the
 translation itself.
+
+## Optimization Evidence: Header Name Normalization Fast Path
+
+On 2026-06-05 local time, `THttpHeaders.Add` and `Set_` stopped normalizing
+already-lowercase header names after validating them. A new combined scan
+validates the name and detects whether uppercase normalization is actually
+needed. Public mixed/uppercase input still canonicalizes to lowercase, and
+invalid name/value rejection remains covered by focused tests.
+
+Header benchmark:
+
+```text
+baseline=make -C benchmarks/nextpas.core.http/bench_headers clean run
+confirmation=make -C benchmarks/nextpas.core.http/bench_headers run
+```
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| Set+Get 5 headers | 828.2 | 784.3 |
+| Set+Get 15 headers | 2665.1 | 2516.8 |
+| Add 15 headers | 1783.5 | 1635.8 |
+
+Parser projection:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+llhttp adapter simple GET ns/op=622.7
+llhttp adapter 10 headers ns/op=3324.8
+llhttp adapter POST 1KB ns/op=1429.5
+llhttp adapter pipeline 10 reqs ns/op=6280.6
+```
+
+The direct header workload improved on the intended lowercase hot path. The
+full parser projection remains dominated by broader adapter materialization,
+so the next high-value target is request metadata caching or callback string
+materialization, not this header-name path alone.
+
+`test_http_headers` and `test_http_h1parser` both passed with heaptrc reporting
+`0 unfreed memory blocks`.
