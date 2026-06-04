@@ -1,5 +1,19 @@
 # Findings & Decisions
 
+## 2026-06-04 http queued follow-up 400 security proof
+
+- `malformed follow-up 400 preserves wire order` 之前在
+  `test_http_server` 已有 real-socket/backpressure live 证明，但 `test_http_security`
+  还缺 direct raw-wire 证据。
+- 本轮新增 threaded / Linux `epoll` 两条 security proof，直接锁定：
+  - 首个 `200 OK` 响应会先开始排出
+  - follow-up `400 Bad Request` 会保持在首个响应 body 之后
+  - wire 上只暴露两条 status line，不会追加 synthetic `500`
+- focused gate `make -C tests/nextpas.core.http/test_http_security clean test` 结果为
+  `172/172 passed`，`heaptrc: 0 unfreed memory blocks`。
+- 结论仍然是 coverage-expansion，不是生产修复：queued follow-up `400`
+  的 wire-order contract 在 security 层也已有 direct raw-wire proof。
+
 ## 2026-06-04 http queued follow-up 413 security proof
 
 - `payload-too-large follow-up 413 preserves wire order` 之前在

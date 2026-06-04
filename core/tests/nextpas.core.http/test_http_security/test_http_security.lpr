@@ -1856,6 +1856,24 @@ begin
     'Unsupported Expect direct error backpressure');
 end;
 
+procedure TestQueuedFollowUp400PreservesWireOrder;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /bad HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  RunQueuedFollowUpErrorPreservesWireOrder(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Queued follow-up 400 preserves wire order');
+end;
+
 procedure TestQueuedFollowUp501PreservesWireOrder;
 const
   REQ =
@@ -2004,6 +2022,28 @@ begin
     REQ,
     'HTTP/1.1 417 Expectation Failed',
     'epoll unsupported Expect direct error backpressure');
+end;
+
+procedure TestQueuedFollowUp400PreservesWireOrderEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'GET /block HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10#13#10 +
+    'POST /bad HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Content-Length: 1'#13#10 +
+    'Connection: close'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunQueuedFollowUpErrorPreservesWireOrder(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll queued follow-up 400 preserves wire order');
 end;
 
 procedure TestQueuedFollowUp501PreservesWireOrderEpollBackend;
@@ -4170,6 +4210,8 @@ begin
     @TestUnsupportedExpectBackpressureSafeHandling);
   T.Run('Chunked oversize trailer direct error backpressure safe handling',
     @TestChunkedOversizeTrailerBackpressureSafeHandling);
+  T.Run('Queued follow-up 400 preserves wire order',
+    @TestQueuedFollowUp400PreservesWireOrder);
   T.Run('Queued follow-up 501 preserves wire order',
     @TestQueuedFollowUp501PreservesWireOrder);
   T.Run('Queued follow-up 417 preserves wire order',
@@ -4352,6 +4394,8 @@ begin
     @TestUnsupportedExpectBackpressureSafeHandlingEpollBackend);
   T.Run('Chunked oversize trailer direct error backpressure safe handling with epoll backend',
     @TestChunkedOversizeTrailerBackpressureSafeHandlingEpollBackend);
+  T.Run('Queued follow-up 400 preserves wire order with epoll backend',
+    @TestQueuedFollowUp400PreservesWireOrderEpollBackend);
   T.Run('Queued follow-up 501 preserves wire order with epoll backend',
     @TestQueuedFollowUp501PreservesWireOrderEpollBackend);
   T.Run('Queued follow-up 417 preserves wire order with epoll backend',
