@@ -1,15 +1,15 @@
-# Task Plan: WebSocket invalid UTF-8 text-frame rejection
+# Task Plan: WebSocket invalid UTF-8 close-reason rejection
 
 ## Goal
 
 继续推进 `HttpServer 完成` 主线中的 WebSocket negative frame coverage。RFC 6455
-要求 text frame payload 必须是合法 UTF-8；server-side `ReadFrame` 必须拒绝
-malformed UTF-8 text payload，不得把非法 text frame 当正常文本交给 handler。
+要求 close frame reason 必须是合法 UTF-8；server-side `ReadFrame` 必须拒绝
+malformed UTF-8 close reason，不得把非法 close frame 当正常 close 交给 handler。
 
 要求：
 
-- 先 RED：masked text frame payload `#$C0#$AF` 当前被当作正常 text，handler 会 echo。
-- GREEN：`ReadFrame` 在 text frame payload 解码后校验 UTF-8，非法 payload 抛 `EHttpError`。
+- 先 RED：masked close frame code `1000` + reason `#$C0#$AF` 当前被当作正常 close。
+- GREEN：`ReadFrame` 在 close frame payload 解码后校验 reason UTF-8，非法 reason 抛 `EHttpError`。
 - handler 可捕获该错误并返回 close frame code `1002`。
 - 不写 `docs/nextpas.core.http.inbox.md`。
 - 不跑全量测试；只跑 `test_http_websocket` focused gate。
@@ -17,9 +17,9 @@ malformed UTF-8 text payload，不得把非法 text frame 当正常文本交给 
 ## Checklist
 
 - [x] 检查 `git status --short --branch`，确认 shared checkout 仍有大量无关脏文件。
-- [x] 从 `docs/http/API_COVERAGE.md` 选择 WebSocket invalid UTF-8 text frame 缺口。
-- [x] 在 `test_http_websocket` 写 RED：malformed UTF-8 text frame 应被 protocol close。
-- [x] 在 `nextpas.core.http.websocket.ReadFrame` 增加 text payload UTF-8 guard。
+- [x] 从 `docs/http/API_COVERAGE.md` 选择 WebSocket invalid UTF-8 close reason 缺口。
+- [x] 在 `test_http_websocket` 写 RED：malformed UTF-8 close reason 应被 protocol close。
+- [x] 在 `nextpas.core.http.websocket.ReadFrame` 增加 close reason UTF-8 guard。
 - [x] 更新 `docs/http/API_COVERAGE.md`、`task_plan.md`、`findings.md`、`progress.md`。
 - [x] 运行 focused 验证。
 - [x] path-limited commit。
@@ -37,6 +37,6 @@ malformed UTF-8 text payload，不得把非法 text frame 当正常文本交给 
 
 ## Intended outcome
 
-- masked text frame payload `#$C0#$AF` 不再被 handler 当作正常 text。
+- masked close frame code `1000` + reason `#$C0#$AF` 不再被 handler 当作正常 close。
 - handler 捕获 `EHttpError` 后可发送 close frame，wire 上 close code 为 `1002`。
-- 正常 text/binary/close、unmasked rejection、control-frame oversize rejection、reserved opcode rejection、fragmented control-frame rejection、invalid close-code rejection 保持不变。
+- 正常 text/binary/close、unmasked rejection、control-frame oversize rejection、reserved opcode rejection、fragmented control-frame rejection、invalid close-code rejection、invalid text UTF-8 rejection 保持不变。

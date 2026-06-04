@@ -143,6 +143,9 @@ begin
   LCode := (UInt16(Ord(APayload[1])) shl 8) or UInt16(Ord(APayload[2]));
   if not IsValidCloseCode(LCode) then
     raise EHttpError.Create('WebSocket: invalid close code');
+  if (Length(APayload) > 2) and
+     (not UTF8IsValid(PByte(@APayload[3]), SizeUInt(Length(APayload) - 2))) then
+    raise EHttpError.Create('WebSocket: invalid close reason encoding');
 end;
 
 procedure ValidateTextPayload(const APayload: string);
