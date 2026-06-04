@@ -1,13 +1,13 @@
-# Task Plan: http server no-length expect-continue guard proof
+# Task Plan: http server head expect-continue no-body guard proof
 
 ## Goal
 
 继续留在 `3/6 H1 正确性加固` 主线，这一刀继续 request-side protocol
-completeness，补齐 `Expect: 100-continue` 的 no-body 守卫 live 契约里
-“完全不声明 body”的分支：
+completeness，补齐 `Expect: 100-continue` 的 no-body 守卫 live 契约在
+HEAD method 上的分支：
 
 - 当请求没有真正声明 body 时，不应误发 interim `100 Continue`
-- 这次只锁 `POST + Expect: 100-continue` 且无 `Content-Length` / 无
+- 这次只锁 `HEAD + Expect: 100-continue` 且无 `Content-Length` / 无
   `Transfer-Encoding`
 - 最终应直接进入 handler/final response 路径
 
@@ -22,8 +22,7 @@ completeness，补齐 `Expect: 100-continue` 的 no-body 守卫 live 契约里
 
 - [x] 重新检查 shared checkout 状态，只处理 HTTP 相关路径
 - [x] 审阅实现里的 `ShouldSendContinueResponse` / `RequestDeclaresBody`
-- [x] 缩小剩余高价值缺口，选定 no-length bodyless `Expect`
-- [x] 把 zero-length helper 泛化，避免重复 live-test 代码
+- [x] 缩小剩余高价值缺口，选定 HEAD + no-length `Expect`
 - [x] 在 `test_http_server` 补 threaded / epoll focused live tests
 - [x] focused gate 直接 GREEN，证明现有 no-body guard 已成立
 - [x] 跑 focused：
@@ -49,6 +48,7 @@ completeness，补齐 `Expect: 100-continue` 的 no-body 守卫 live 契约里
   - 无 `Content-Length` / `Transfer-Encoding` 时不发 interim `100 Continue`
   - handler 仍会被正常调度
   - final response 直接返回 `200`
+  - HEAD response 仍保持 bodyless wire contract
 - 证据要求：
   - 新增 no-body `Expect` tests GREEN
   - focused server suite 全绿

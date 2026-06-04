@@ -5103,6 +5103,69 @@ begin
 end;
 {$ENDIF}
 
+procedure RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterim(
+  const AUseEpoll: Boolean; const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LHandlerCalled: Boolean;
+  LBody: string;
+begin
+  LHandlerCalled := False;
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmHead, '/head-expect', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    LHandlerCalled := True;
+    LBody := 'pong';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+
+  if AUseEpoll then
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort)
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'HEAD /head-expect HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Expect: 100-continue'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('HTTP/1.1 200 OK', LResp) = 1,
+      ALabel + ': final response 200 without interim 100');
+    Check(Pos('HTTP/1.1 100 Continue', LResp) = 0,
+      ALabel + ': no-length HEAD does not emit interim 100');
+    Check(Pos('content-length: 4'#13#10, LResp) > 0,
+      ALabel + ': explicit content-length preserved');
+    Check(Pos('transfer-encoding: chunked', LResp) = 0,
+      ALabel + ': no chunked header');
+    Check(Pos('pong', LResp) = 0,
+      ALabel + ': HEAD response stays bodyless on wire');
+    Check(LHandlerCalled, ALabel + ': handler called immediately');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim;
+begin
+  RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterim(False,
+    'head expect no-length threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend;
+begin
+  RunHeadExpectWithoutDeclaredBodyDoesNotEmitInterim(True,
+    'head expect no-length epoll');
+end;
+{$ENDIF}
+
 procedure TestPipelinedRequestsInSingleWrite;
 var
   LRouter: THttpRouter;
@@ -10039,6 +10102,8 @@ begin
     @TestExpectContinueZeroContentLengthDoesNotEmitInterimEpollBackend);
   T.Run('Expect: no declared body does not emit interim response with epoll backend',
     @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
+  T.Run('HEAD Expect: no declared body does not emit interim response with epoll backend',
+    @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterimEpollBackend);
   T.Run('Expect: declared oversize content-length rejects early with epoll backend',
     @TestExpectContinueDeclaredOversizeRejectsEarlyEpollBackend);
   T.Run('Unsupported Expect rejects early with epoll backend',
@@ -10252,6 +10317,8 @@ begin
     @TestExpectContinueZeroContentLengthDoesNotEmitInterim);
   T.Run('Expect: no declared body does not emit interim response',
     @TestExpectContinueWithoutDeclaredBodyDoesNotEmitInterim);
+  T.Run('HEAD Expect: no declared body does not emit interim response',
+    @TestHeadExpectWithoutDeclaredBodyDoesNotEmitInterim);
   T.Run('Expect: declared oversize content-length rejects early',
     @TestExpectContinueDeclaredOversizeRejectsEarly);
   T.Run('Unsupported Expect rejects early',
