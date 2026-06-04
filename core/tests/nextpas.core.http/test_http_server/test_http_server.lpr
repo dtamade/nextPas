@@ -2475,6 +2475,22 @@ begin
     'HTTP/1.1 400 Bad Request', 0, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneTruncatedTrailerAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: value'#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneTruncatedTrailerFieldNameAtEofDrainsViaWritableEvents;
 const
   REQ = 'POST / HTTP/1.1'#13#10 +
@@ -2500,10 +2516,138 @@ const
         'Connection: close'#13#10#13#10 +
         '5'#13#10'hello'#13#10 +
         '0'#13#10 +
-        'X-Test:'#13#10;
+        'X-Test:';
 begin
   RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
     'standalone poll truncated trailer separator eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerEmptyValueCrAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test:'#13;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer empty-value cr eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerEmptyValueAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test:'#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer empty-value eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerEmptyValueSectionCrAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test:'#13#10#13;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer empty-value section cr eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: ';
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer whitespace eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceCrAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: '#13;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer whitespace cr eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceSectionAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: '#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer whitespace section eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceSectionCrAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: '#13#10#13;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer whitespace section cr eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
+procedure TestH1PollDrivenStandaloneTruncatedTrailerFieldLineAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test: value';
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer field line eof request', REQ,
     'HTTP/1.1 400 Bad Request', 0, 0);
 end;
 
@@ -2516,7 +2660,7 @@ const
         'Connection: close'#13#10#13#10 +
         '5'#13#10'hello'#13#10 +
         '0'#13#10 +
-        'X-Test: value';
+        'X-Test: value'#13;
 begin
   RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
     'standalone poll truncated trailer field cr eof request', REQ,
@@ -8255,10 +8399,28 @@ begin
     @TestH1PollDrivenStandaloneOversizeTrailerDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone invalid trailer field drains via writable events',
     @TestH1PollDrivenStandaloneInvalidTrailerFieldDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone truncated trailer field-name EOF drains via writable events',
     @TestH1PollDrivenStandaloneTruncatedTrailerFieldNameAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone truncated trailer separator EOF drains via writable events',
     @TestH1PollDrivenStandaloneTruncatedTrailerSeparatorAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer empty-value CR EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerEmptyValueCrAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer empty-value EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerEmptyValueAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer empty-value section CR EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerEmptyValueSectionCrAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer whitespace EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer whitespace CR EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceCrAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer whitespace section EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceSectionAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer whitespace section CR EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerWhitespaceSectionCrAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer field line EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerFieldLineAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone truncated trailer field CR EOF drains via writable events',
     @TestH1PollDrivenStandaloneTruncatedTrailerFieldCrAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone truncated trailer CR EOF drains via writable events',
