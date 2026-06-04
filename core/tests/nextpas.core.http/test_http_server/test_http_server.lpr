@@ -9694,7 +9694,8 @@ begin
   end;
 end;
 
-procedure TestChunkedRequestOversizeTrailerUsesMaxHeaderSize;
+procedure RunChunkedRequestOversizeTrailerUsesMaxHeaderSize(
+  const AUseEpoll: Boolean; const ALabel: string);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -9724,6 +9725,8 @@ begin
   end);
   LOpts := THttpServerOptions.Default;
   LOpts.MaxHeaderSize := 256;
+  if AUseEpoll then
+    LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   LHandle := StartServerWithOptions(LRouter as IHttpHandler, LOpts, LServer, LPort);
   try
     SetLength(LTrailerValue, 300);
@@ -9759,13 +9762,27 @@ begin
     finally
       LConn.Close;
     end;
-    Check((Pos('431', LResp) > 0) or (Length(LResp) = 0),
-      'oversize trailer: 431 or connection closed');
-    Check(not LHandlerCalled, 'oversize trailer: handler not called');
+    Check(Pos('HTTP/1.1 431', LResp) > 0,
+      ALabel + ': oversize trailer returns explicit 431');
+    Check(not LHandlerCalled, ALabel + ': handler not called');
   finally
     StopServer(LServer, LHandle);
   end;
 end;
+
+procedure TestChunkedRequestOversizeTrailerUsesMaxHeaderSize;
+begin
+  RunChunkedRequestOversizeTrailerUsesMaxHeaderSize(False,
+    'oversize trailer threaded');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestChunkedRequestOversizeTrailerUsesMaxHeaderSizeEpollBackend;
+begin
+  RunChunkedRequestOversizeTrailerUsesMaxHeaderSize(True,
+    'oversize trailer epoll');
+end;
+{$ENDIF}
 
 procedure TestMalformedChunkedRequestInvalidTrailerField;
 var
@@ -10854,6 +10871,8 @@ begin
     @TestChunkedTrailerPartialFollowUpRequestLineCanCompleteLaterEpollBackend);
   T.Run('Chunked trailer partial follow-up headers can complete later with epoll backend',
     @TestChunkedTrailerPartialFollowUpHeadersCanCompleteLaterEpollBackend);
+  T.Run('Chunked request oversize trailer uses MaxHeaderSize with epoll backend',
+    @TestChunkedRequestOversizeTrailerUsesMaxHeaderSizeEpollBackend);
   T.Run('Hijack keeps connection open for handler owner with epoll backend',
     @TestHijackLeavesConnectionOpenForHandlerOwnerEpollBackend);
   T.Run('Hijack exception does not write 500 or close handler connection with epoll backend',

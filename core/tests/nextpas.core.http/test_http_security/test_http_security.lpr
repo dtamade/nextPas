@@ -2364,8 +2364,8 @@ begin
   LHandle := StartSecurityServer(AOpts, LServer, LPort);
   try
     LResp := SendRaw(LPort, BuildChunkedOversizeTrailerRequest);
-    Check((Pos('HTTP/1.1 431', LResp) > 0) or (Length(LResp) = 0),
-      ALabel + ': 431 or connection closed');
+    Check(Pos('HTTP/1.1 431', LResp) > 0,
+      ALabel + ': explicit 431');
     Check(Pos('echo:5', LResp) = 0,
       ALabel + ': handler response not written');
   finally
