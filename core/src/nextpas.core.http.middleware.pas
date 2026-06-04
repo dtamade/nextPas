@@ -70,6 +70,8 @@ end;
 
 constructor TMiddlewareChain.Create(const AHandler: IHttpHandler);
 begin
+  if AHandler = nil then
+    raise EHttpError.Create('HTTP middleware chain root handler must not be nil');
   inherited Create;
   FHandler := AHandler;
   FBuilt := nil;
@@ -89,6 +91,8 @@ end;
 
 procedure TMiddlewareChain.Use(const AMiddleware: IHttpMiddleware);
 begin
+  if AMiddleware = nil then
+    raise EHttpError.Create('HTTP middleware must not be nil');
   SetLength(FMiddlewares, Length(FMiddlewares) + 1);
   FMiddlewares[High(FMiddlewares)] := AMiddleware;
   FBuilt := nil; // invalidate cached build
@@ -157,6 +161,8 @@ end;
 
 function MiddlewareFunc(const AWrapFunc: TMiddlewareWrapFunc): IHttpMiddleware;
 begin
+  if not Assigned(AWrapFunc) then
+    raise EHttpError.Create('HTTP middleware callback must not be nil');
   Result := TFuncMiddleware.Create(AWrapFunc);
 end;
 
@@ -166,10 +172,15 @@ var
   LI: Int32;
 begin
   LChain := TMiddlewareChain.Create(AHandler);
-  for LI := 0 to High(AMiddlewares) do
-    LChain.Use(AMiddlewares[LI]);
-  LChain.Build;
-  Result := LChain;
+  try
+    for LI := 0 to High(AMiddlewares) do
+      LChain.Use(AMiddlewares[LI]);
+    LChain.Build;
+    Result := LChain;
+  except
+    LChain.Free;
+    raise;
+  end;
 end;
 
 end.

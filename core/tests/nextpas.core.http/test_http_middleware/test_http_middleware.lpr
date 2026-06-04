@@ -3,6 +3,7 @@ program test_http_middleware;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.io.intf,
@@ -238,6 +239,28 @@ type
 var
   GLog: string;
 
+type
+  TExceptionProbe = reference to procedure;
+
+procedure CheckRaisesEHttpError(const ALabel: string; const AProbe: TExceptionProbe);
+var
+  LRaised: Boolean;
+begin
+  LRaised := False;
+  try
+    AProbe();
+  except
+    on E: EHttpError do
+      LRaised := True;
+    on E: Exception do
+    begin
+      Check(False, ALabel + ' raises EHttpError, got ' + E.ClassName);
+      Exit;
+    end;
+  end;
+  Check(LRaised, ALabel + ' raises EHttpError');
+end;
+
 procedure ResetLog;
 begin
   GLog := '';
@@ -461,6 +484,38 @@ begin
   CheckEqual('wrap>inner;<wrap;', GLog, 'Wrap creates wrapping handler');
 end;
 
+procedure TestMiddlewareFactoriesRejectNilInputs;
+var
+  LWrapFunc: TMiddlewareWrapFunc;
+  LChain: TMiddlewareChain;
+begin
+  LWrapFunc := nil;
+  CheckRaisesEHttpError('nil middleware wrap callback', procedure
+  begin
+    MiddlewareFunc(LWrapFunc);
+  end);
+
+  CheckRaisesEHttpError('nil chain root handler', procedure
+  begin
+    TMiddlewareChain.Create(nil);
+  end);
+
+  LChain := TMiddlewareChain.Create(TTagHandler.Create('handler;', HTTP_STATUS_OK));
+  try
+    CheckRaisesEHttpError('nil middleware in direct chain use', procedure
+    begin
+      LChain.Use(nil);
+    end);
+  finally
+    LChain.Free;
+  end;
+
+  CheckRaisesEHttpError('nil middleware in Chain convenience', procedure
+  begin
+    Chain(TTagHandler.Create('handler;', HTTP_STATUS_OK), [nil]);
+  end);
+end;
+
 procedure TestMiddlewareModifiesResponse;
 var
   LResult: IHttpHandler;
@@ -545,6 +600,7 @@ begin
   T.Run('Multiple middlewares execute in order', @TestMultipleMiddlewaresOrder);
   T.Run('Chain convenience function', @TestChainConvenience);
   T.Run('MiddlewareFunc wraps function', @TestMiddlewareFuncWraps);
+  T.Run('Middleware factories reject nil inputs', @TestMiddlewareFactoriesRejectNilInputs);
   T.Run('Middleware modifies response', @TestMiddlewareModifiesResponse);
   T.Run('Middleware short-circuits', @TestMiddlewareShortCircuit);
   T.Run('Empty chain passthrough', @TestEmptyChainPassthrough);
