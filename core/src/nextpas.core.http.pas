@@ -17,6 +17,8 @@ uses
   nextpas.core.http.router,
   nextpas.core.http.middleware,
   nextpas.core.http.message,
+  nextpas.core.http.static,
+  nextpas.core.http.websocket,
   nextpas.core.http.server,
   nextpas.core.http.client;
 
@@ -46,6 +48,7 @@ type
   IHttpServerSessionFactory = nextpas.core.http.intf.IHttpServerSessionFactory;
   IHttpServerSessionFactoryWithContext = nextpas.core.http.intf.IHttpServerSessionFactoryWithContext;
   IHttpHijacker = nextpas.core.http.intf.IHttpHijacker;
+  IWebSocket = nextpas.core.http.websocket.IWebSocket;
   TTcpServerConnOwnership = nextpas.core.http.intf.TTcpServerConnOwnership;
 
   { Re-export callback types }
@@ -53,6 +56,8 @@ type
   THttpHandlerMethod = nextpas.core.http.intf.THttpHandlerMethod;
   THttpHandlerProc = nextpas.core.http.intf.THttpHandlerProc;
   THeaderIterator = nextpas.core.http.intf.THeaderIterator;
+  TWebSocketOpcode = nextpas.core.http.websocket.TWebSocketOpcode;
+  TWebSocketFrame = nextpas.core.http.websocket.TWebSocketFrame;
 
   { Re-export server/client types }
   THttpServer = nextpas.core.http.server.THttpServer;
@@ -85,6 +90,12 @@ const
   HTTP_STATUS_NOT_IMPLEMENTED = nextpas.core.http.base.HTTP_STATUS_NOT_IMPLEMENTED;
   HTTP_STATUS_BAD_GATEWAY = nextpas.core.http.base.HTTP_STATUS_BAD_GATEWAY;
   HTTP_STATUS_SERVICE_UNAVAILABLE = nextpas.core.http.base.HTTP_STATUS_SERVICE_UNAVAILABLE;
+  wsOpContinuation = nextpas.core.http.websocket.wsOpContinuation;
+  wsOpText = nextpas.core.http.websocket.wsOpText;
+  wsOpBinary = nextpas.core.http.websocket.wsOpBinary;
+  wsOpClose = nextpas.core.http.websocket.wsOpClose;
+  wsOpPing = nextpas.core.http.websocket.wsOpPing;
+  wsOpPong = nextpas.core.http.websocket.wsOpPong;
   TCP_SERVER_BACKEND_THREADED = nextpas.core.http.base.TCP_SERVER_BACKEND_THREADED;
   TCP_SERVER_BACKEND_EPOLL = nextpas.core.http.base.TCP_SERVER_BACKEND_EPOLL;
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.http.base.TCP_SERVER_BACKEND_KQUEUE;
@@ -120,6 +131,13 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse; inline;
+
+{ Static helpers }
+function ServeFile(const APath: string): THttpHandlerFunc; inline;
+function ServeDir(const ARoot: string): THttpHandlerFunc; inline;
+
+{ WebSocket helper }
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket; inline;
 
 { Server/Client factories }
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer; overload; inline;
@@ -218,6 +236,21 @@ end;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse;
 begin
   Result := nextpas.core.http.message.NewResponse(AStatus, AHeaders, ABody);
+end;
+
+function ServeFile(const APath: string): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeFile(APath);
+end;
+
+function ServeDir(const ARoot: string): THttpHandlerFunc;
+begin
+  Result := nextpas.core.http.static.ServeDir(ARoot);
+end;
+
+function UpgradeWebSocket(const AReq: IHttpRequest; const AW: IHttpResponseWriter): IWebSocket;
+begin
+  Result := nextpas.core.http.websocket.UpgradeWebSocket(AReq, AW);
 end;
 
 function NewHttpServer(const AHandler: IHttpHandler): IHttpServer;

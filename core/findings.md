@@ -1,43 +1,64 @@
-# Findings: http direct-error live safe-close proof
+# Findings: http facade helper boundary audit
 
 ## Scope
 
-- 本轮继续 HTTP Server correctness 收口，不改生产逻辑。
-- 目标是把 `standalone direct-error` 在 real-socket/backpressure 尝试下的外部语义直接钉在 security 层。
+- 本轮目标不是再补一层 malformed/runtime parity，而是校正 `nextpas.core.http`
+  的 facade public surface。
+- 只审 static / websocket 这两个已经公开、且文档明显暗示应可从 facade 进入的 helper。
 
 ## Confirmed truths
 
-### 1. direct-error 现在有了 live-socket safe-close 代表性证据
+### 1. facade 之前确实缺 static / websocket helper 转发
 
-- `test_http_security` 新增 threaded / epoll 两条 live proof，覆盖：
-  - malformed request direct `400`
-  - unsupported transfer-coding direct `501`
-- 新用例直接锁定 peer 视角：
-  - 连接会在观察窗口内关闭
-  - wire 上最多只暴露一个原始 status line / prefix
-  - 不会出现 synthetic `500`
-  - 非法请求不会误走成功 `200`
+- `test_http_static` 切到 `uses nextpas.core.http` 后，RED 直接报：
+  - `ServeFile`
+  - `ServeDir`
+- `test_http_websocket` 切到 `uses nextpas.core.http` 后，RED 直接报：
+  - `UpgradeWebSocket`
+  - `IWebSocket`
+  - `TWebSocketFrame`
+  - `wsOpText/wsOpBinary/wsOpClose`
 
-### 2. 这批 proof 补的是 external envelope，不是内部 timeout 机理替代
+这说明文档里的“single uses entry point”在这两个 helper 族上原先并不成立。
 
-- `test_http_server` 已经有 poll-driven seam / write-timeout focused proof，说明 direct-error path 会 arm deadline、partial-timeout 不会追加第二个 status line。
-- 本轮新增的是 real-socket 侧的安全边界证据：即使不把“必须观测到 partial-timeout”当成硬条件，外部 peer 看到的仍然只会是原始 direct-error 或安全关闭。
+### 2. 最小修复点只需要落在 facade
 
-### 3. 本轮没有暴露生产缺口
+- `src/nextpas.core.http.pas` 新增对：
+  - `nextpas.core.http.static`
+  - `nextpas.core.http.websocket`
+  的依赖与 inline forward。
+- 同时补齐 facade re-export：
+  - `IWebSocket`
+  - `TWebSocketOpcode`
+  - `TWebSocketFrame`
+  - `wsOpContinuation/wsOpText/wsOpBinary/wsOpClose/wsOpPing/wsOpPong`
 
-- 新增 4 条 live proof 在当前实现上直接通过，说明当前 threaded / epoll runtime 已经满足这条安全 envelope。
-- 因此本轮保持为 coverage-expansion；没有新增生产代码，也没有调整 transport 行为。
+static / websocket 子模块自身没有缺陷，因此不需要改生产实现。
+
+### 3. focused suite 现在已成为 facade helper 的直接证据
+
+- `test_http_static` 现在通过 facade 直接消费 `ServeFile/ServeDir`
+- `test_http_websocket` 现在通过 facade 直接消费
+  `UpgradeWebSocket/IWebSocket/TWebSocket*` 与 `wsOp*`
+- 这不是 compile-only proof：两组 suite 都完整跑到了真实行为与 heaptrc
 
 ## Verification evidence
 
-- focused:
-  - `make -C tests/nextpas.core.http/test_http_security test`
-  - `115/115 passed`
-  - heaptrc: `0 unfreed memory blocks`
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_static test`
+  - `make -C tests/nextpas.core.http/test_http_websocket test`
+  - 预期失败，直接暴露 facade 缺口
+- GREEN:
+  - `make -C tests/nextpas.core.http/test_http_static clean test`
+    - `9/9 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_websocket clean test`
+    - `8/8 passed`
+    - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮补的是 representative direct-error live envelope，不是完整 direct-error matrix 的全部 live duplication。
-- 下一步更值的方向仍应在：
-  - facade helper boundary audit
-  - 或 HTTP Server correctness 阶段结束条件的再审查
+- 这轮只收口了 helper surface，不代表所有 concrete type 都该进 facade。
+- 下一步应回到 correctness 主线，先判断：
+  - 还剩哪些真正高价值的 malformed/runtime/security 边角
+  - 或 H1 correctness 是否已接近本阶段收口线
