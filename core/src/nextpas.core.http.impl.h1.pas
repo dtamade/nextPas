@@ -50,6 +50,7 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.message,
   nextpas.core.http.impl.h1.outbound,
+  nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.parser,
   nextpas.core.http.impl.h1.writer;
 
@@ -81,6 +82,36 @@ type
     procedure SetKeepAlive(const AValue: Boolean);
     procedure SetReadDeadline(const ADeadline: TDeadline);
     procedure SetWriteDeadline(const ADeadline: TDeadline);
+  end;
+
+  TH1FastRequestSnapshot = class(TInterfacedObject, IH1Parser)
+  private
+    FMethod: THttpMethod;
+    FUrl: string;
+    FVersion: THttpVersion;
+    FHeaders: IHttpHeaders;
+    FBodySize: Int64;
+    FComplete: Boolean;
+  public
+    constructor Create(const AResult: TFastParseResult);
+    function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
+    procedure Finish;
+    function GetMethod: THttpMethod;
+    function GetStatusCode: THttpStatus;
+    function GetHttpVersion: THttpVersion;
+    function GetUrl: string;
+    function GetHeaders: IHttpHeaders;
+    function GetBody: string;
+    function GetBodySize: Int64;
+    function NewBodyReader: IReader;
+    function HeadersComplete: Boolean;
+    function IsComplete: Boolean;
+    function ShouldKeepAlive: Boolean;
+    function GetTrailerBytes: Int64;
+    function HasError: Boolean;
+    function ErrorMessage: string;
+    function ErrorKind: TH1ParserErrorKind;
+    procedure Reset;
   end;
 
   TH1ClientTransport = class(TInterfacedObject, IHttpTransport)
@@ -189,8 +220,12 @@ type
     FPollQueuedCloseAfterDrain: Boolean;
     FPollReadDeadline: TDeadline;
     FPollWriteDeadline: TDeadline;
+    FParserIsSnapshot: Boolean;
     procedure ArmPollReadDeadline;
     procedure ClearPollReadDeadline;
+    procedure ResetRequestParser;
+    function TryUseFastRequestParser(const ABuf: PAnsiChar; const ALen: SizeUInt;
+      out AConsumed: SizeUInt): Boolean;
     procedure ResetPollRequestState;
     procedure PreparePollRequestParse;
     procedure ResetPollResponseState;
@@ -482,6 +517,118 @@ begin
   FInner.SetWriteDeadline(ADeadline);
 end;
 
+{ TH1FastRequestSnapshot }
+
+constructor TH1FastRequestSnapshot.Create(const AResult: TFastParseResult);
+begin
+  inherited Create;
+  FMethod := AResult.Method;
+  FUrl := AResult.Path;
+  FVersion := AResult.Version;
+  FHeaders := AResult.Headers;
+  FBodySize := AResult.ContentLength;
+  FComplete := True;
+end;
+
+function TH1FastRequestSnapshot.Execute(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): SizeUInt;
+begin
+  Result := 0;
+end;
+
+procedure TH1FastRequestSnapshot.Finish;
+begin
+end;
+
+function TH1FastRequestSnapshot.GetMethod: THttpMethod;
+begin
+  Result := FMethod;
+end;
+
+function TH1FastRequestSnapshot.GetStatusCode: THttpStatus;
+begin
+  Result := 0;
+end;
+
+function TH1FastRequestSnapshot.GetHttpVersion: THttpVersion;
+begin
+  Result := FVersion;
+end;
+
+function TH1FastRequestSnapshot.GetUrl: string;
+begin
+  Result := FUrl;
+end;
+
+function TH1FastRequestSnapshot.GetHeaders: IHttpHeaders;
+begin
+  Result := FHeaders;
+end;
+
+function TH1FastRequestSnapshot.GetBody: string;
+begin
+  Result := '';
+end;
+
+function TH1FastRequestSnapshot.GetBodySize: Int64;
+begin
+  Result := FBodySize;
+end;
+
+function TH1FastRequestSnapshot.NewBodyReader: IReader;
+begin
+  Result := nil;
+end;
+
+function TH1FastRequestSnapshot.HeadersComplete: Boolean;
+begin
+  Result := FComplete;
+end;
+
+function TH1FastRequestSnapshot.IsComplete: Boolean;
+begin
+  Result := FComplete;
+end;
+
+function TH1FastRequestSnapshot.ShouldKeepAlive: Boolean;
+var
+  LConn: string;
+begin
+  LConn := LowerCase(FHeaders.Get('connection'));
+  if FVersion = hvHttp10 then
+    Result := LConn = 'keep-alive'
+  else
+    Result := LConn <> 'close';
+end;
+
+function TH1FastRequestSnapshot.GetTrailerBytes: Int64;
+begin
+  Result := 0;
+end;
+
+function TH1FastRequestSnapshot.HasError: Boolean;
+begin
+  Result := False;
+end;
+
+function TH1FastRequestSnapshot.ErrorMessage: string;
+begin
+  Result := '';
+end;
+
+function TH1FastRequestSnapshot.ErrorKind: TH1ParserErrorKind;
+begin
+  Result := pekNone;
+end;
+
+procedure TH1FastRequestSnapshot.Reset;
+begin
+  FComplete := False;
+  FHeaders := NewHttpHeaders;
+  FUrl := '';
+  FBodySize := 0;
+end;
+
 procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus;
   const AWriteTimeoutMs: Int64 = 0);
 var
@@ -680,6 +827,7 @@ begin
   FPollQueuedCloseAfterDrain := False;
   FPollReadDeadline := TDeadline.Infinite;
   FPollWriteDeadline := TDeadline.Infinite;
+  FParserIsSnapshot := False;
   if FStreamRuntime <> nil then
     ArmPollReadDeadline;
 end;
@@ -699,9 +847,51 @@ begin
     FConn.SetReadDeadline(TDeadline.Infinite);
 end;
 
+procedure TH1ServerConnectionState.ResetRequestParser;
+begin
+  if (FParser = nil) or FParserIsSnapshot then
+  begin
+    FParser := NewH1RequestParser;
+    FParserIsSnapshot := False;
+  end
+  else
+    FParser.Reset;
+end;
+
+function TH1ServerConnectionState.TryUseFastRequestParser(const ABuf: PAnsiChar;
+  const ALen: SizeUInt; out AConsumed: SizeUInt): Boolean;
+var
+  LFast: TFastParseResult;
+begin
+  Result := False;
+  AConsumed := 0;
+  try
+    LFast := FastParseRequest(ABuf, ALen);
+  except
+    Exit(False);
+  end;
+
+  if (not LFast.Success) or (LFast.Consumed = 0) or
+     (LFast.Consumed > ALen) then
+    Exit(False);
+
+  if (LFast.Version <> hvHttp11) or
+     (LFast.ContentLength <> 0) or
+     (LFast.Headers.Get('host') = '') or
+     (LFast.Headers.Get('connection') <> '') or
+     (LFast.Headers.Get('expect') <> '') or
+     (LFast.Headers.Get('transfer-encoding') <> '') then
+    Exit(False);
+
+  FParser := TH1FastRequestSnapshot.Create(LFast);
+  FParserIsSnapshot := True;
+  AConsumed := LFast.Consumed;
+  Result := True;
+end;
+
 procedure TH1ServerConnectionState.ResetPollRequestState;
 begin
-  FParser.Reset;
+  ResetRequestParser;
   FParseTotalRead := 0;
   FParseHeadersDone := False;
   FContinueSent := False;
@@ -867,7 +1057,7 @@ begin
         FParser.GetHttpVersion, FParser.GetHeaders, nil, LContentLen);
     end;
 
-    (LReq as THttpRequest).SetRemoteAddr(FConn.RemoteAddr.ToString);
+    (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
 
     if FPending <> '' then
       LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
@@ -975,7 +1165,7 @@ begin
         FParser.GetHttpVersion, FParser.GetHeaders, nil, LContentLen);
     end;
 
-    (LReq as THttpRequest).SetRemoteAddr(FConn.RemoteAddr.ToString);
+    (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
 
     if FPending <> '' then
       LHijackConn := TPrefixedTcpStream.Create(FConn, FPending)
@@ -1060,7 +1250,7 @@ begin
     try
       FConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(FIdleMs)));
 
-      FParser.Reset;
+      ResetRequestParser;
       LTotalRead := 0;
       LHeadersDone := False;
       FContinueSent := False;
@@ -1069,7 +1259,9 @@ begin
         if FPending <> '' then
         begin
           LN := SizeUInt(Length(FPending));
-          LConsumed := FParser.Execute(PAnsiChar(FPending), LN);
+          if not ((LTotalRead = 0) and
+             TryUseFastRequestParser(PAnsiChar(FPending), LN, LConsumed)) then
+            LConsumed := FParser.Execute(PAnsiChar(FPending), LN);
           if LConsumed < LN then
             FPending := Copy(FPending, Int32(LConsumed) + 1, Int32(LN - LConsumed))
           else
@@ -1086,7 +1278,9 @@ begin
               FParser.Finish;
             Break;
           end;
-          LConsumed := FParser.Execute(@FBuf[0], LN);
+          if not ((LTotalRead = 0) and
+             TryUseFastRequestParser(@FBuf[0], LN, LConsumed)) then
+            LConsumed := FParser.Execute(@FBuf[0], LN);
           if LConsumed < LN then
           begin
             SetLength(FPending, Int32(LN - LConsumed));
@@ -1500,7 +1694,9 @@ begin
     if FPending <> '' then
     begin
       LN := SizeUInt(Length(FPending));
-      LConsumed := FParser.Execute(PAnsiChar(FPending), LN);
+      if not ((FParseTotalRead = 0) and
+         TryUseFastRequestParser(PAnsiChar(FPending), LN, LConsumed)) then
+        LConsumed := FParser.Execute(PAnsiChar(FPending), LN);
       if LConsumed < LN then
         FPending := Copy(FPending, Int32(LConsumed) + 1, Int32(LN - LConsumed))
       else
@@ -1545,13 +1741,14 @@ begin
             Exit(tsprDone);
           end;
       else
-        begin
+      begin
+        if not ((FParseTotalRead = 0) and
+           TryUseFastRequestParser(@FBuf[0], LN, LConsumed)) then
           LConsumed := FParser.Execute(@FBuf[0], LN);
-          if LConsumed < LN then
-          begin
-            SetLength(FPending, Int32(LN - LConsumed));
-            Move(FBuf[LConsumed], FPending[1], LN - LConsumed);
-          end;
+        if LConsumed < LN then
+        begin
+          SetLength(FPending, Int32(LN - LConsumed));
+          Move(FBuf[LConsumed], FPending[1], LN - LConsumed);
         end;
       end;
     end;
@@ -1692,7 +1889,7 @@ end;
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
   const AReq: IHttpRequest): Boolean;
 const
-  CRLF: array[0..1] of Byte = (13, 10);
+  CRLF: AnsiString = #13#10;
 var
   LPath: string;
   LBuf: IWriter;
@@ -1720,7 +1917,7 @@ begin
 
   LStr := ' ' + HttpVersionToStr(AReq.Version);
   LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
-  LBuf.Write(CRLF[0], 2);
+  LBuf.Write(CRLF[1], 2);
 
   AReq.Headers.ForEach(procedure(const AName, AValue: string)
   var
@@ -1728,10 +1925,10 @@ begin
   begin
     LHeader := AName + ': ' + AValue;
     LBuf.Write(LHeader[1], SizeUInt(Length(LHeader)));
-    LBuf.Write(CRLF[0], 2);
+    LBuf.Write(CRLF[1], 2);
   end);
 
-  LBuf.Write(CRLF[0], 2);
+  LBuf.Write(CRLF[1], 2);
 
   if AReq.Body <> nil then
   begin

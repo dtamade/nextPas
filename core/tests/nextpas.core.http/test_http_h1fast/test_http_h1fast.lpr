@@ -92,6 +92,16 @@ begin
   Check(not LR.Success, 'should fail — malformed');
 end;
 
+procedure TestInvalidSameLengthMethodFallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GUT / HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, 'should fail — invalid same-length method fallback');
+end;
+
 procedure TestChunkedFallback;
 var
   LReq: AnsiString;
@@ -102,6 +112,44 @@ begin
            'Transfer-Encoding: chunked'#13#10#13#10;
   LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
   Check(not LR.Success, 'should fail — chunked fallback');
+end;
+
+procedure TestUnsupportedTransferEncodingFallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: gzip'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, 'should fail — transfer-encoding fallback');
+end;
+
+procedure TestDuplicateContentLengthFallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 0'#13#10 +
+           'Content-Length: 0'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, 'should fail — duplicate content-length fallback');
+end;
+
+procedure TestIncompleteBodyFallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: 5'#13#10#13#10 +
+           'he';
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, 'should fail — incomplete body fallback');
 end;
 
 procedure TestLargeHeaders;
@@ -254,7 +302,11 @@ begin
   T.Run('HTTP/1.0 version', @TestHttp10Version);
   T.Run('Incomplete headers', @TestIncompleteHeaders);
   T.Run('Malformed request line', @TestMalformedRequestLine);
+  T.Run('Invalid same-length method fallback', @TestInvalidSameLengthMethodFallback);
   T.Run('Chunked fallback', @TestChunkedFallback);
+  T.Run('Unsupported transfer-encoding fallback', @TestUnsupportedTransferEncodingFallback);
+  T.Run('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
+  T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);

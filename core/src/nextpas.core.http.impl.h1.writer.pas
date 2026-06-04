@@ -109,9 +109,9 @@ end;
 
 procedure TH1ResponseWriter.WriteCRLF;
 const
-  CRLF: array[0..1] of Byte = (13, 10);
+  CRLF: AnsiString = #13#10;
 begin
-  WriteAllOrRaise(FWriter, CRLF[0], 2);
+  WriteAllOrRaise(FWriter, CRLF[1], 2);
 end;
 
 procedure TH1ResponseWriter.WriteStatusLine;

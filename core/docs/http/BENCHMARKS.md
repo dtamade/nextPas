@@ -55,3 +55,36 @@ Results:
 The snapshot build had no FPC `Warning:` or `Note:` lines in the captured raw
 output. Re-run the command above after runtime, compiler, or OS changes before
 drawing conclusions.
+
+## Optimization Evidence: H1 Ingress Fast Path
+
+On 2026-06-05 local time, H1 server ingress gained a conservative fast path for
+complete HTTP/1.1 no-body requests with a `Host` header and no
+`Connection` / `Expect` / `Transfer-Encoding` policy headers. Other requests
+fall back to the llhttp adapter.
+
+Parser microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+llhttp simple GET ns/op=1111.4
+fast simple GET ns/op=691.3
+llhttp pipeline 10 reqs ns/op=9810.0
+fast pipeline 10 reqs ns/op=6973.5
+```
+
+Server comparison after the fast path:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
+```
+
+| impl | completed | elapsed_ns | ns/op | req/s |
+| --- | ---: | ---: | ---: | ---: |
+| nextPas | 50000 | 619882610 | 12397 | 80660 |
+| Go `net/http` | 50000 | 2685471938 | 53709 | 18618 |
+| Rust std-only | 50000 | 503399527 | 10067 | 99324 |
+
+The same local 50k/4 comparison before the fast path measured nextPas at
+`14736 ns/op` / `67857 req/s`, so this slice narrows the gap to the Rust
+std-only comparator without changing public HTTP APIs.

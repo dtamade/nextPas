@@ -7,6 +7,7 @@ uses
   nextpas.core.testing,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
+  nextpas.core.net.base,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
@@ -77,6 +78,17 @@ begin
   LObj := THttpRequest(LReq as TObject);
   LObj.SetRemoteAddr('127.0.0.1:54321');
   CheckEqual('127.0.0.1:54321', LReq.RemoteAddr, 'remote addr is stored');
+end;
+
+procedure TestRemoteAddrFromNetAddress;
+var
+  LReq: IHttpRequest;
+  LObj: THttpRequest;
+begin
+  LReq := NewGetRequest('/remote');
+  LObj := THttpRequest(LReq as TObject);
+  LObj.SetRemoteNetAddr(TNetAddress.Loopback(65000));
+  CheckEqual('127.0.0.1:65000', LReq.RemoteAddr, 'remote addr is rendered from net addr');
 end;
 
 procedure TestNewGetRequestConvenience;
@@ -177,6 +189,7 @@ begin
   T.Run('PathParam set and get', @TestPathParamSetAndGet);
   T.Run('PathParam not found returns empty', @TestPathParamNotFoundReturnsEmpty);
   T.Run('RemoteAddr default and set', @TestRemoteAddrDefaultAndSet);
+  T.Run('RemoteAddr from TNetAddress', @TestRemoteAddrFromNetAddress);
   T.Run('NewGetRequest convenience', @TestNewGetRequestConvenience);
   T.Run('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
   T.Run('Response headers accessible', @TestResponseHeadersAccessible);

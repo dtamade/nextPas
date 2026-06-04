@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.io.intf,
+  nextpas.core.net.base,
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.url;
@@ -27,6 +28,8 @@ type
       FContentLength: Int64;
       FPathParams: array of TPathParam;
       FRemoteAddr: string;
+      FRemoteNetAddr: TNetAddress;
+      FRemoteAddrFromNet: Boolean;
       FQueryParsed: Boolean;
       FQueryParams: TQueryParams;
   public
@@ -35,6 +38,7 @@ type
       const ABody: IReader; const AContentLength: Int64);
     procedure SetPathParam(const AName, AValue: string);
     procedure SetRemoteAddr(const AAddr: string);
+    procedure SetRemoteNetAddr(const AAddr: TNetAddress);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
     function GetVersion: THttpVersion;
@@ -137,12 +141,22 @@ end;
 
 function THttpRequest.GetRemoteAddr: string;
 begin
+  if FRemoteAddrFromNet and (FRemoteAddr = '') then
+    FRemoteAddr := FRemoteNetAddr.ToString;
   Result := FRemoteAddr;
 end;
 
 procedure THttpRequest.SetRemoteAddr(const AAddr: string);
 begin
   FRemoteAddr := AAddr;
+  FRemoteAddrFromNet := False;
+end;
+
+procedure THttpRequest.SetRemoteNetAddr(const AAddr: TNetAddress);
+begin
+  FRemoteNetAddr := AAddr;
+  FRemoteAddr := '';
+  FRemoteAddrFromNet := True;
 end;
 
 function THttpRequest.QueryParam(const AName: string): string;
