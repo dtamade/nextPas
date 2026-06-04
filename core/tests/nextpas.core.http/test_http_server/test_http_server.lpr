@@ -2491,6 +2491,22 @@ begin
     'HTTP/1.1 400 Bad Request', 0, 0);
 end;
 
+procedure TestH1PollDrivenStandaloneTruncatedTrailerSeparatorAtEofDrainsViaWritableEvents;
+const
+  REQ = 'POST / HTTP/1.1'#13#10 +
+        'Host: localhost'#13#10 +
+        'Transfer-Encoding: chunked'#13#10 +
+        'Trailer: X-Test'#13#10 +
+        'Connection: close'#13#10#13#10 +
+        '5'#13#10'hello'#13#10 +
+        '0'#13#10 +
+        'X-Test:'#13#10;
+begin
+  RunPollDrivenStandaloneDirectErrorDrainsViaWritableEvents(
+    'standalone poll truncated trailer separator eof request', REQ,
+    'HTTP/1.1 400 Bad Request', 0, 0);
+end;
+
 procedure TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents;
 const
   REQ = 'POST / HTTP/1.1'#13#10 +
@@ -8209,6 +8225,8 @@ begin
     @TestH1PollDrivenStandaloneInvalidTrailerFieldDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone truncated trailer field-name EOF drains via writable events',
     @TestH1PollDrivenStandaloneTruncatedTrailerFieldNameAtEofDrainsViaWritableEvents);
+  T.Run('H1 poll-driven standalone truncated trailer separator EOF drains via writable events',
+    @TestH1PollDrivenStandaloneTruncatedTrailerSeparatorAtEofDrainsViaWritableEvents);
   T.Run('H1 poll-driven standalone unsupported transfer-coding drains via writable events',
     @TestH1PollDrivenStandaloneUnsupportedTransferCodingDrainsViaWritableEvents);
   T.Run('Session stops after zero-progress response write failure',
