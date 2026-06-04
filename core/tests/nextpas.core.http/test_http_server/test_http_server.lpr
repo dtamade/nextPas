@@ -11523,6 +11523,69 @@ begin
   end;
 end;
 
+procedure RunInformationalResponseAllowsFinalResponse(const AUseEpoll: Boolean;
+  const ALabel: string);
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LResp: string;
+  LBody: string;
+  LInfoPos: SizeInt;
+  LFinalPos: SizeInt;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/early', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.Set_('Link', '</style.css>; rel=preload');
+    AW.WriteHeader(HTTP_STATUS_EARLY_HINTS);
+    AW.WriteHeader(HTTP_STATUS_OK);
+    LBody := 'ok';
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  if AUseEpoll then
+  begin
+    {$IFDEF NEXTPAS_LINUX}
+    LHandle := StartEpollServer(LRouter as IHttpHandler, LServer, LPort);
+    {$ELSE}
+    Fail(ALabel + ': epoll backend is only available on Linux');
+    Exit;
+    {$ENDIF}
+  end
+  else
+    LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET /early HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    LInfoPos := Pos('HTTP/1.1 103 Early Hints'#13#10, LResp);
+    LFinalPos := Pos('HTTP/1.1 200 OK'#13#10, LResp);
+    Check(LInfoPos = 1, ALabel + ': 103 informational response first');
+    Check(LFinalPos > LInfoPos, ALabel + ': final 200 follows 103');
+    Check(Pos('transfer-encoding: chunked', LResp) > LFinalPos,
+      ALabel + ': final response uses chunked body framing');
+    Check(Pos('ok', LResp) > LFinalPos,
+      ALabel + ': final response body present');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestInformationalResponseAllowsFinalResponse;
+begin
+  RunInformationalResponseAllowsFinalResponse(False, 'informational response');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestInformationalResponseAllowsFinalResponseEpollBackend;
+begin
+  RunInformationalResponseAllowsFinalResponse(True, 'epoll informational response');
+end;
+{$ENDIF}
+
 { Test 18c: HEAD response stays bodyless on the wire even if handler writes }
 procedure TestHeadResponseDoesNotUseChunkedEncodingOrWriteBody;
 var
@@ -11938,6 +12001,8 @@ begin
   T.Run('Simple GET 200 with epoll backend', @TestSimpleGet200EpollBackend);
   T.Run('Keep-alive: two requests one connection with epoll backend',
     @TestKeepAliveEpollBackend);
+  T.Run('Informational response allows later final response with epoll backend',
+    @TestInformationalResponseAllowsFinalResponseEpollBackend);
   T.Run('Expect: 100-continue sends interim response with epoll backend',
     @TestExpectContinueSendsInterimResponseEpollBackend);
   T.Run('Expect: duplicate 100-continue members still send interim response with epoll backend',
@@ -12414,6 +12479,8 @@ begin
     @TestNoContentResponseDoesNotUseChunkedEncoding);
   T.Run('304 response does not use chunked encoding',
     @TestNotModifiedResponseDoesNotUseChunkedEncoding);
+  T.Run('Informational response allows later final response',
+    @TestInformationalResponseAllowsFinalResponse);
   T.Run('HEAD response does not use chunked encoding or write body',
     @TestHeadResponseDoesNotUseChunkedEncodingOrWriteBody);
   T.Run('HEAD response preserves explicit content-length without body bytes',

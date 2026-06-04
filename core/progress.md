@@ -1,12 +1,12 @@
-# Progress Log: keep-alive request-tail contract decision
+# Progress Log: non-101 informational response contract
 
 ## Session
 
-- **Scope:** 审计 keep-alive request-tail 现有证据，并把 current-truth 提升为明确
-  public contract。
+- **Scope:** 补齐 H1 response-side non-`101` informational response contract：
+  `103 Early Hints` 可先发，后续仍可发送 final `200 OK` 与 body。
 - **Status:** verified
 - **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth`
-  -> `keep-alive request-tail contract`
+  -> `response-side informational response contract`
 
 ## Current state
 
@@ -22,31 +22,36 @@
 
 ## Completed work
 
-- 已审计 `test_http_h1parser`、`test_http_server`、`test_http_security` 的
-  request-tail 用例注册。
-- 已确认 fixed-length / plain chunked / trailer-complete chunked 三类 framing 都有
-  garbage tail、EOF-truncated follow-up、partial follow-up bridge 与 valid pipeline
-  证据。
-- 已将 keep-alive request-tail 从 current-truth 提升为明确 contract：
-  当前 request framing 完成即完成，tail bytes 属于下一次 request parse。
-- 本轮没有生产代码改动，也没有新增重复测试。
+- 新增 `HTTP_STATUS_EARLY_HINTS = 103`，并让 `HttpStatusText(103)` 返回
+  `Early Hints`。
+- `nextpas.core.http` facade 现在 re-export `HTTP_STATUS_EARLY_HINTS`。
+- `TH1ResponseWriter.WriteHeader` 现在把非 `101` 的 `1xx` 当作 interim
+  informational response：立即写出，但不提交 final response。
+- `test_http_h1writer` 新增 RED/GREEN proof：`103 Early Hints` 后仍可 final
+  `200 OK` + body。
+- `test_http_server` 新增 threaded / epoll live proof：wire order 保持
+  `103 -> 200 -> body`。
+- `test_http_contract` 新增 facade status constant proof。
 
 ## Verification
 
-- `git diff --check -- docs/http/API_COVERAGE.md task_plan.md findings.md progress.md`
-  - exit code: `0`
-- `make -C tests/nextpas.core.http/test_http_h1parser test`
-  - `88/88 passed`
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_h1writer test`
+  - `28/29 passed, 1 failed`
+  - failure: `response status must not include a body`
+- GREEN:
+  - `make -C tests/nextpas.core.http/test_http_h1writer test`
+  - `29/29 passed`
   - heaptrc: `0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `272/272 passed`
+  - `274/274 passed`
   - heaptrc: `0 unfreed memory blocks`
-- `make -C tests/nextpas.core.http/test_http_security test`
-  - `242/242 passed`
+- `make -C tests/nextpas.core.http/test_http_contract test`
+  - `29/29 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 本轮提交后，继续 request-side runtime truth 的剩余边界。
-- 下一刀候选：回到 still-unclassified malformed / timeout / direct-error 小缺口，
-  或开始为后续 server backend 模型设计整理更清晰的 execution contract。
+- 本轮提交后，继续 `HttpServer 完成` 主线。
+- 下一刀优先选择仍有公开 contract 意义的 response-side 或 backend execution seam；
+  benchmark 继续后置，不做全量测试扫射。

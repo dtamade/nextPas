@@ -56,6 +56,7 @@ type
 
 const
   HTTP_STATUS_CONTINUE              = THttpStatus(100);
+  HTTP_STATUS_EARLY_HINTS           = THttpStatus(103);
   TCP_SERVER_BACKEND_THREADED = nextpas.core.net.server.base.tsbThreaded;
   TCP_SERVER_BACKEND_EPOLL = nextpas.core.net.server.base.tsbEpoll;
   TCP_SERVER_BACKEND_KQUEUE = nextpas.core.net.server.base.tsbKqueue;
@@ -134,6 +135,7 @@ begin
   case ACode of
     100: Result := 'Continue';
     101: Result := 'Switching Protocols';
+    103: Result := 'Early Hints';
     200: Result := 'OK';
     201: Result := 'Created';
     204: Result := 'No Content';

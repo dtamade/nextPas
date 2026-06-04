@@ -24,6 +24,7 @@ type
     FNoBodyAllowed: Boolean;
     FSuppressBody: Boolean;
     procedure WriteStatusLine;
+    procedure WriteInformationalHeader(const AStatus: THttpStatus);
     procedure WriteAllHeaders;
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
@@ -122,6 +123,18 @@ begin
   WriteCRLF;
 end;
 
+procedure TH1ResponseWriter.WriteInformationalHeader(const AStatus: THttpStatus);
+var
+  LFinalStatus: THttpStatus;
+begin
+  LFinalStatus := FStatus;
+  FStatus := AStatus;
+  WriteStatusLine;
+  WriteAllHeaders;
+  WriteCRLF;
+  FStatus := LFinalStatus;
+end;
+
 procedure TH1ResponseWriter.WriteAllHeaders;
 begin
   FHeaders.ForEach(procedure(const AName, AValue: string)
@@ -144,6 +157,11 @@ procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);
 begin
   if FHeadersSent then
     Exit;
+  if ((AStatus div 100) = 1) and (AStatus <> HTTP_STATUS_SWITCHING_PROTOCOLS) then
+  begin
+    WriteInformationalHeader(AStatus);
+    Exit;
+  end;
   FStatus := AStatus;
   FNoBodyAllowed := ResponseMustNotHaveBody;
   if (not FNoBodyAllowed) and

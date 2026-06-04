@@ -520,6 +520,34 @@ begin
   LRW.Free;
 end;
 
+procedure TestNonSwitchingInformationalAllowsFinalResponse;
+var
+  LW: TBytesWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LBody: string;
+  LInfoPos: SizeInt;
+  LFinalPos: SizeInt;
+begin
+  LW := TBytesWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  LRW.GetHeaders.Set_('Link', '</style.css>; rel=preload');
+  LRW.WriteHeader(HTTP_STATUS_EARLY_HINTS);
+  LRW.WriteHeader(HTTP_STATUS_OK);
+  LBody := 'ok';
+  LRW.Write(LBody[1], SizeUInt(Length(LBody)));
+  LRW.Flush;
+  LOut := LW.GetOutput;
+  LInfoPos := Pos('HTTP/1.1 103 Early Hints'#13#10, LOut);
+  LFinalPos := Pos('HTTP/1.1 200 OK'#13#10, LOut);
+  Check(LInfoPos = 1, '103 informational status written first');
+  Check(LFinalPos > LInfoPos, 'final 200 follows informational response');
+  Check(Pos('transfer-encoding: chunked', LOut) > LFinalPos,
+    'final response gets chunked header');
+  Check(Pos('ok', LOut) > LFinalPos, 'final response body written');
+  LRW.Free;
+end;
+
 procedure TestSwitchingProtocolsResponseDoesNotInjectChunkedEncoding;
 var
   LW: TBytesWriter;
@@ -890,6 +918,8 @@ begin
     @TestNotModifiedResponseDoesNotInjectChunkedEncoding);
   T.Run('100 response does not inject chunked encoding',
     @TestInformationalResponseDoesNotInjectChunkedEncoding);
+  T.Run('non-101 informational response allows later final response',
+    @TestNonSwitchingInformationalAllowsFinalResponse);
   T.Run('101 response does not inject chunked encoding',
     @TestSwitchingProtocolsResponseDoesNotInjectChunkedEncoding);
   T.Run('101 response rejects body write',

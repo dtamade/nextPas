@@ -1,18 +1,17 @@
-# Task Plan: keep-alive request-tail contract decision
+# Task Plan: non-101 informational response contract
 
 ## Goal
 
-继续停留在 `3/6 H1 正确性加固` 主线，把 keep-alive request-tail
-从“current transport truth”提升为明确 contract：当前请求 framing 完成即完成，
-剩余 tail bytes 属于下一次 request parse；partial follow-up 可以补全，只有在
-conclusive malformed 或 EOF-truncated 时才返回 follow-up `400`。
+继续停留在 `3/6 H1 正确性加固` 主线，补齐 H1 response-side informational
+response contract：非 `101 Switching Protocols` 的 `1xx` 响应（以
+`103 Early Hints` 为代表）应立即写到 wire，但不能提交 final response，
+后续仍可发送 final `200 OK` 与 body。
 
 要求：
 
-- 只动 HTTP 相关控制文件和覆盖文档；除非发现真实缺口，否则不新增测试。
+- 先 RED，再做最小生产修复。
 - 不写 `docs/nextpas.core.http.inbox.md`。
-- 不改生产代码。
-- 不跑全量测试；只跑 `test_http_h1parser`、`test_http_server`、`test_http_security`
+- 不跑全量测试；只跑 `test_http_h1writer`、`test_http_server`、`test_http_contract`
   三个 focused gate。
 
 ## Checklist
@@ -20,10 +19,12 @@ conclusive malformed 或 EOF-truncated 时才返回 follow-up `400`。
 - [x] 阅读 `docs/design-conventions.md`、`docs/http/API_COVERAGE.md`、
   `task_plan.md`、`findings.md`、`progress.md`。
 - [x] 检查 `git status --short --branch`，确认 shared checkout 仍有大量无关脏文件。
-- [x] 审计 parser / server / security 的 keep-alive request-tail 用例。
-- [x] 确认 fixed-length / plain chunked / trailer-complete chunked 三类 framing 都有
-  garbage / truncated / partial-complete / valid pipeline 证据。
-- [x] 决定把当前 request-tail truth 固定为公开 contract。
+- [x] 审计 `TH1ResponseWriter.WriteHeader` 当前对 `1xx` 的提交语义。
+- [x] 在 `test_http_h1writer` 写 RED：`103 Early Hints` 后仍可 final `200` + body。
+- [x] 最小修复 writer 状态机：非 `101` informational 不设置 final committed。
+- [x] 新增 `HTTP_STATUS_EARLY_HINTS` public constant / status text / facade re-export。
+- [x] 补 `test_http_server` threaded / epoll live proof。
+- [x] 补 `test_http_contract` facade status constant proof。
 - [x] 更新 `docs/http/API_COVERAGE.md`、`task_plan.md`、`findings.md`、`progress.md`。
 - [x] 运行 focused 验证。
 - [x] path-limited commit。
@@ -36,12 +37,17 @@ conclusive malformed 或 EOF-truncated 时才返回 follow-up `400`。
 - `task_plan.md`
 - `findings.md`
 - `progress.md`
+- `src/nextpas.core.http.base.pas`
+- `src/nextpas.core.http.pas`
+- `src/nextpas.core.http.impl.h1.writer.pas`
+- `tests/nextpas.core.http/test_http_h1writer/test_http_h1writer.lpr`
+- `tests/nextpas.core.http/test_http_server/test_http_server.lpr`
+- `tests/nextpas.core.http/test_http_contract/test_http_contract.lpr`
 
 ## Intended outcome
 
-- 明确固定 keep-alive request-tail contract：
-  - valid current request 完成后，tail bytes 不污染当前 request。
-  - garbage / EOF-truncated follow-up 作为 follow-up `400`。
-  - partial follow-up request-line / headers 可以继续补全为合法第二请求。
-  - same-write / same-read valid pipeline 继续作为合法行为。
-- 保持当前生产代码不变；本轮是契约固定与证据归档。
+- 明确固定 non-`101` informational response contract：
+  - `103 Early Hints` 立即写出。
+  - 后续 final `200 OK` 仍会写出。
+  - final response 仍正常获得 chunked body framing。
+  - `101 Switching Protocols` 仍保持 no-body / upgrade 边界。

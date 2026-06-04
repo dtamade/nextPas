@@ -72,6 +72,7 @@ type
 { Status constants - re-export }
 const
   HTTP_STATUS_CONTINUE = nextpas.core.http.base.HTTP_STATUS_CONTINUE;
+  HTTP_STATUS_EARLY_HINTS = nextpas.core.http.base.HTTP_STATUS_EARLY_HINTS;
   HTTP_STATUS_SWITCHING_PROTOCOLS = nextpas.core.http.base.HTTP_STATUS_SWITCHING_PROTOCOLS;
   HTTP_STATUS_OK = nextpas.core.http.base.HTTP_STATUS_OK;
   HTTP_STATUS_CREATED = nextpas.core.http.base.HTTP_STATUS_CREATED;

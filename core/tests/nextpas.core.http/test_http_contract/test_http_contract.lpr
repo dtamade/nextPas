@@ -769,6 +769,9 @@ begin
   CheckEqual('Switching Protocols',
     nextpas.core.http.HttpStatusText(
       nextpas.core.http.HTTP_STATUS_SWITCHING_PROTOCOLS), '101 facade');
+  CheckEqual('Early Hints',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_EARLY_HINTS), '103 facade');
   CheckEqual('OK', HttpStatusText(HTTP_STATUS_OK), '200');
   CheckEqual('Created', HttpStatusText(HTTP_STATUS_CREATED), '201');
   CheckEqual('Payload Too Large',
