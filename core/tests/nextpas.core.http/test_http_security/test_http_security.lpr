@@ -195,6 +195,57 @@ begin
   end;
 end;
 
+function ReadOneResponse(const AConn: ITcpStream): string;
+var
+  LBuf: array[0..0] of Byte;
+  LN: SizeUInt;
+  LHeaderEnd: Int32;
+  LContentLength: Int32;
+  LClPos, LClEnd: Int32;
+  LClStr: string;
+  LBodyRead: Int32;
+begin
+  Result := '';
+  repeat
+    try
+      LN := AConn.Read(LBuf[0], 1);
+    except
+      LN := 0;
+    end;
+    if LN = 0 then
+      Exit;
+    Result := Result + Chr(LBuf[0]);
+    LHeaderEnd := Pos(#13#10#13#10, Result);
+  until LHeaderEnd > 0;
+
+  LContentLength := 0;
+  LClPos := Pos('content-length: ', Result);
+  if LClPos > 0 then
+  begin
+    LClPos := LClPos + 16;
+    LClEnd := LClPos;
+    while (LClEnd <= Length(Result)) and (Result[LClEnd] >= '0') and
+      (Result[LClEnd] <= '9') do
+      Inc(LClEnd);
+    LClStr := Copy(Result, LClPos, LClEnd - LClPos);
+    LContentLength := Int32(StrToInt(LClStr));
+  end;
+
+  LBodyRead := Length(Result) - (LHeaderEnd + 3);
+  while LBodyRead < LContentLength do
+  begin
+    try
+      LN := AConn.Read(LBuf[0], 1);
+    except
+      LN := 0;
+    end;
+    if LN = 0 then
+      Exit;
+    Result := Result + Chr(LBuf[0]);
+    Inc(LBodyRead);
+  end;
+end;
+
 { Test 1: Content-Length + Transfer-Encoding conflict }
 procedure TestContentLengthTransferEncodingConflict;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -892,6 +943,48 @@ begin
   end;
 end;
 
+procedure TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater;
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+const
+  REQ1 = 'POST / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 5'#13#10#13#10 +
+         'hello' +
+         'GET / HTTP/1.1';
+  REQ2_REST = #13#10 +
+              'Host: x'#13#10 +
+              'Connection: close'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp1) > 0,
+        'Keep-alive Content-Length partial-next-line: first response still completes');
+      Check(Pos('echo:5', LResp1) > 0,
+        'Keep-alive Content-Length partial-next-line: first request body handled correctly');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp2) > 0,
+        'Keep-alive Content-Length partial-next-line: completed follow-up request returns 200');
+      Check(Pos('ok', LResp2) > 0,
+        'Keep-alive Content-Length partial-next-line: second request body preserved');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 14ab: Keep-alive Content-Length request with truncated follow-up headers }
 procedure TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandling;
 var LServer: THttpServer; LPort: UInt16; LHandle: TPlatformThreadHandle; LResp: string;
@@ -974,6 +1067,50 @@ begin
       'Keep-alive chunked partial follow-up line: first request body handled correctly');
     Check(Pos('HTTP/1.1 400', LResp) > 0,
       'Keep-alive chunked partial follow-up line: malformed follow-up gets 400');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater;
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LResp1: string;
+  LResp2: string;
+const
+  REQ1 = 'POST / HTTP/1.1'#13#10'Host: x'#13#10 +
+         'Transfer-Encoding: chunked'#13#10#13#10 +
+         '5'#13#10'hello'#13#10 +
+         '0'#13#10#13#10 +
+         'GET / HTTP/1.1';
+  REQ2_REST = #13#10 +
+              'Host: x'#13#10 +
+              'Connection: close'#13#10#13#10;
+begin
+  LHandle := StartSecurityServer(THttpServerOptions.Default, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
+      LConn.Write(REQ1[1], SizeUInt(Length(REQ1)));
+      LResp1 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp1) > 0,
+        'Keep-alive chunked partial-next-line: first response still completes');
+      Check(Pos('echo:5', LResp1) > 0,
+        'Keep-alive chunked partial-next-line: first request body handled correctly');
+
+      LConn.Write(REQ2_REST[1], SizeUInt(Length(REQ2_REST)));
+      LResp2 := ReadOneResponse(LConn);
+      Check(Pos('HTTP/1.1 200', LResp2) > 0,
+        'Keep-alive chunked partial-next-line: completed follow-up request returns 200');
+      Check(Pos('ok', LResp2) > 0,
+        'Keep-alive chunked partial-next-line: second request body preserved');
+    finally
+      LConn.Close;
+    end;
   finally
     StopServer(LServer, LHandle);
   end;
@@ -1471,12 +1608,16 @@ begin
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
+  T.Run('Content-Length keep-alive partial follow-up request line can complete later',
+    @TestContentLengthKeepAlivePartialFollowUpRequestLineCanCompleteLater);
   T.Run('Content-Length keep-alive truncated follow-up headers safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpHeadersSafeHandling);
   T.Run('Chunked extra bytes after close -> 400', @TestChunkedExtraBytesAfterClose);
   T.Run('Chunked keep-alive garbage tail safe handling', @TestChunkedKeepAliveGarbageTailSafeHandling);
   T.Run('Chunked keep-alive truncated follow-up request line safe handling',
     @TestChunkedKeepAliveTruncatedFollowUpRequestLineSafeHandling);
+  T.Run('Chunked keep-alive partial follow-up request line can complete later',
+    @TestChunkedKeepAlivePartialFollowUpRequestLineCanCompleteLater);
   T.Run('Chunked keep-alive truncated follow-up headers safe handling',
     @TestChunkedKeepAliveTruncatedFollowUpHeadersSafeHandling);
   T.Run('Chunked trailer keep-alive garbage tail safe handling',
