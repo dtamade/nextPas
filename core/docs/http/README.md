@@ -140,3 +140,15 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 
 The runner builds all three implementations, streams the combined output to
 stdout, and optionally writes the same report to `--output`.
+
+To capture environment metadata and the comparison output in Markdown, run:
+
+```sh
+benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
+  --requests 20000 --threads 4 \
+  --output build/projects/nextpas.core.http/server_comparison/snapshot.md
+```
+
+The snapshot includes `git_head`, OS, FPC, Go, and Rust versions, the benchmark
+parameters, and the raw comparison output. Treat snapshots as local evidence,
+not as a permanent ranking across machines.

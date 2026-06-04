@@ -27,7 +27,6 @@ const
 var
   GServer: THttpServer;
   GPort: UInt16;
-  GReady: Int32;
   GDone: Int32;
   GSuccess: Int32;
   GRequests: Int32;
@@ -51,7 +50,7 @@ const
   REQ: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
 begin
   Result := nil;
-  LRequests := Int32(PtrInt(AParam));
+  LRequests := Int32(PtrUInt(AParam));
   try
     LConn := TcpConnect('127.0.0.1', GPort);
     LConn.SetNoDelay(True);
@@ -110,7 +109,6 @@ var
   LHandles: array of TPlatformThreadHandle;
   LI: Int32;
   LThreadRequests: Int32;
-  LThreadCount: Int32;
   LStart, LEnd: UInt64;
   LElapsedNs: UInt64;
   LReqPerSec: Double;
@@ -119,7 +117,6 @@ var
 
 begin
   ParseOptions;
-  GReady := 0;
   GDone := 0;
   GSuccess := 0;
 

@@ -16,6 +16,8 @@ const
   ServerComparisonRelativeDir = 'benchmarks/nextpas.core.http';
   ServerComparisonRunnerRelativePath =
     'benchmarks/nextpas.core.http/run_server_comparison.sh';
+  ServerSnapshotRunnerRelativePath =
+    'benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
@@ -129,6 +131,13 @@ begin
     ALabel + ' missing from output: ' + AFragment + LineEnding + AOutput);
 end;
 
+procedure CheckNotContains(const AOutput, AFragment, ALabel: string);
+begin
+  Check(Pos(AFragment, AOutput) = 0,
+    ALabel + ' unexpectedly present in output: ' + AFragment + LineEnding +
+    AOutput);
+end;
+
 function ResolveBenchServerBinaryPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -156,6 +165,11 @@ end;
 function ResolveServerComparisonRunnerPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir, ServerComparisonRunnerRelativePath);
+end;
+
+function ResolveServerSnapshotRunnerPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir, ServerSnapshotRunnerRelativePath);
 end;
 
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
@@ -293,6 +307,47 @@ begin
   CheckServerBenchmarkOutput(LReport, 'rust', '8', '1');
 end;
 
+procedure TestServerComparisonSnapshotSmallSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison snapshot runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--output', LSnapshotPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath), 'server comparison snapshot exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, '# nextpas.core.http Server Benchmark Snapshot',
+    'snapshot title');
+  CheckContains(LSnapshot, '## Environment', 'environment heading');
+  CheckContains(LSnapshot, 'git_head=', 'git head marker');
+  CheckContains(LSnapshot, 'fpc_version=', 'fpc version marker');
+  CheckContains(LSnapshot, 'go_version=', 'go version marker');
+  CheckContains(LSnapshot, 'rustc_version=', 'rustc version marker');
+  CheckContains(LSnapshot, '## Raw Comparison Output',
+    'raw comparison heading');
+  CheckContains(LSnapshot, 'comparison=http.server.keepalive',
+    'snapshot comparison marker');
+  CheckNotContains(LSnapshot, ' Warning:', 'snapshot compiler warning');
+  CheckNotContains(LSnapshot, ' Note:', 'snapshot compiler note');
+  CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1');
+  CheckServerBenchmarkOutput(LSnapshot, 'go', '8', '1');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust', '8', '1');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -300,6 +355,8 @@ begin
   T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
   T.Run('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
+  T.Run('server comparison snapshot small smoke',
+    @TestServerComparisonSnapshotSmallSmoke);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
