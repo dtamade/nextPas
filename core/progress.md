@@ -1,14 +1,14 @@
-# Progress Log: expect interim-100 malformed trailer grammar proof
+# Progress Log: expect interim-100 truncated trailer field-name EOF proof
 
 ## Session
 
-- **Scope:** 承接上一刀的 `Expect: 100-continue` malformed chunk framing
+- **Scope:** 承接上一刀的 `Expect: 100-continue` malformed trailer grammar
   after-interim coverage，继续补齐 `Expect + Transfer-Encoding: chunked`
-  在 interim `100` 已发出后收到 malformed trailer field / oversize
-  trailer 的 malformed-after-interim truth，用
-  `test_http_security` + `test_http_server` 双层 focused proof 收口。
+  在 interim `100` 已发出后收到 partial trailer field-name 并在 EOF 截断时的
+  after-interim truth，用 `test_http_security` + `test_http_server`
+  双层 focused proof 收口。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 malformed trailer grammar`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `request-side runtime truth` -> `Expect after interim 100 truncated trailer field-name EOF`
 
 ## Current state
 
@@ -25,44 +25,40 @@
 ## Completed work
 
 - [tests/nextpas.core.http/test_http_security/test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
-  新增 4 条 raw-wire focused proofs：
-  - threaded `Expect: chunked malformed trailer field rejects after interim 100`
-  - threaded `Expect: chunked oversize trailer rejects after interim 100`
-  - epoll `Expect: chunked malformed trailer field rejects after interim 100`
-  - epoll `Expect: chunked oversize trailer rejects after interim 100`
+  扩展了现有 after-interim malformed helper：新增可选
+  `shutdown-after-body` 路径，用来表达
+  “收到 `100` 后写 partial trailer 再 half-close” 的窄场景。
+- 同文件新增 2 条 raw-wire focused proofs：
+  - threaded `Expect chunked truncated trailer field-name EOF rejects after interim 100`
+  - epoll `Expect chunked truncated trailer field-name EOF rejects after interim 100`
 - [tests/nextpas.core.http/test_http_server/test_http_server.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_server/test_http_server.lpr)
-  新增 4 条 focused public-contract proofs：
-  - threaded `Expect: chunked malformed trailer field rejects after interim response`
-  - threaded `Expect: chunked oversize trailer rejects after interim response`
-  - epoll `Expect: chunked malformed trailer field rejects after interim response`
-  - epoll `Expect: chunked oversize trailer rejects after interim response`
-- 这些 tests 直接锁住：
+  对称扩展同型 helper，并新增 2 条 focused public-contract proofs：
+  - threaded `Expect: chunked truncated trailer field-name EOF rejects after interim response`
+  - epoll `Expect: chunked truncated trailer field-name EOF rejects after interim response`
+- 这 4 条 tests 直接锁住：
   - interim `100` 先发出
-  - malformed trailer field 到达后返回 final `400 Bad Request`
-  - oversize trailer 到达后返回 final `431 Request Header Fields Too Large`
-  - handler 不进入
+  - partial trailer field-name + peer write-half-close 后返回 final `400 Bad Request`
   - 不重复 `100`
-  - 不追加 synthetic `500`
-  - 不误回成功响应
+  - 不误回 `200`
+  - handler 不进入
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步把 `Expect after interim 100 + malformed trailer field /
-  oversize trailer -> final 400/431` 纳入
-  `test_http_server` + `test_http_security` 双层证据。
-- 本轮没有生产代码变更；focused gate 直接 GREEN，说明上一刀修复已在
-  当前生产代码上自然成立，这轮只是 coverage-expansion。
+  已同步把 `Expect after interim 100 + truncated trailer field-name EOF -> final 400`
+  纳入 `test_http_server` + `test_http_security` 双层证据。
+- 本轮没有生产代码变更；focused gate 直接 GREEN，说明当前生产代码已经自然满足这条契约，这轮仍是 coverage-expansion。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security test`
-  - `216/216 passed`
+  - `218/218 passed`
   - heaptrc: `0 unfreed memory blocks`
 - `make -C tests/nextpas.core.http/test_http_server test`
-  - `246/246 passed`
+  - `248/248 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
 - 下一刀继续优先 request-side runtime / malformed 的真实小缺口。
 - 更自然的后续候选：
-  - 继续找 still-open 的 raw-wire malformed / runtime 邻接缺口
-  - 优先挑 after-interim trailer truncation EOF 邻接 truth，而不是宽铺 parity
+  - `Expect + chunked + after interim 100 + truncated trailer separator EOF -> final 400`
+  - 或 `Expect + chunked + after interim 100 + truncated trailer field line EOF -> final 400`
+- 继续保持单刀推进，不宽铺同型 parity。

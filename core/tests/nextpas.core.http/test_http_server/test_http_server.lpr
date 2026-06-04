@@ -5119,7 +5119,8 @@ end;
 
 procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
   const AOpts: THttpServerOptions; const AExtraHeaders, AReqBody,
-  AExpectedStatusLine, ALabel: string);
+  AExpectedStatusLine, ALabel: string;
+  const AShutdownWriteAfterBody: Boolean = False);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -5161,6 +5162,8 @@ begin
 
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
       LConn.Write(AReqBody[1], SizeUInt(Length(AReqBody)));
+      if AShutdownWriteAfterBody then
+        LConn.Shutdown;
       LResp2 := ReadOneResponse(LConn);
       Check(Pos(AExpectedStatusLine, LResp2) > 0,
         ALabel + ': malformed chunked body rejected after interim 100');
@@ -5188,7 +5191,7 @@ begin
   if AUseEpoll then
     LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
   RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
-    LOpts, '', AReqBody, AExpectedStatusLine, ALabel);
+    LOpts, '', AReqBody, AExpectedStatusLine, ALabel, False);
 end;
 
 procedure TestExpectContinueChunkedMaxBodySizeRejectsAfterInterim;
@@ -5249,6 +5252,26 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'expect-continue chunked malformed trailer field threaded');
+end;
+
+procedure TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterim;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test';
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked truncated trailer field-name eof threaded',
+    True);
 end;
 
 procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim;
@@ -5335,6 +5358,27 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'expect-continue chunked malformed trailer field epoll');
+end;
+
+procedure TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterimEpollBackend;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test';
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimWithHeadersAndOptions(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'expect-continue chunked truncated trailer field-name eof epoll',
+    True);
 end;
 
 procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend;
@@ -11418,6 +11462,8 @@ begin
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterimEpollBackend);
   T.Run('Expect: chunked malformed trailer field rejects after interim response with epoll backend',
     @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterimEpollBackend);
+  T.Run('Expect: chunked truncated trailer field-name EOF rejects after interim response with epoll backend',
+    @TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect: chunked oversize trailer rejects after interim response with epoll backend',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend);
   T.Run('Expect: fixed-length body stall closes safely after interim response with epoll backend',
@@ -11683,6 +11729,8 @@ begin
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterim);
   T.Run('Expect: chunked malformed trailer field rejects after interim response',
     @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterim);
+  T.Run('Expect: chunked truncated trailer field-name EOF rejects after interim response',
+    @TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterim);
   T.Run('Expect: chunked oversize trailer rejects after interim response',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim);
   T.Run('Expect: fixed-length body stall closes safely after interim response',

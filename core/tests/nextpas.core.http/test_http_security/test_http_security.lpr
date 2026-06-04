@@ -1788,7 +1788,8 @@ end;
 
 procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCaseWithHeaders(
   const AOpts: THttpServerOptions; const AExtraHeaders, AReqBody,
-  AExpectedStatusLine, ALabel: string);
+  AExpectedStatusLine, ALabel: string;
+  const AShutdownWriteAfterBody: Boolean = False);
 var
   LRouter: THttpRouter;
   LServer: THttpServer;
@@ -1833,6 +1834,8 @@ begin
 
       LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(5)));
       LConn.Write(AReqBody[1], SizeUInt(Length(AReqBody)));
+      if AShutdownWriteAfterBody then
+        LConn.Shutdown;
       LResp2 := ReadOneResponse(LConn);
       Check(Pos(AExpectedStatusLine, LResp2) > 0,
         ALabel + ': final malformed response returned after interim 100');
@@ -1855,7 +1858,7 @@ procedure RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCase(
   ALabel: string);
 begin
   RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCaseWithHeaders(
-    AOpts, '', AReqBody, AExpectedStatusLine, ALabel);
+    AOpts, '', AReqBody, AExpectedStatusLine, ALabel, False);
 end;
 
 procedure RunExpectContinueBodyStallIdleTimeoutSecurityCase(
@@ -2128,6 +2131,23 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'Expect chunked malformed trailer field rejects after interim 100');
+end;
+
+procedure TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterim;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test';
+begin
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCaseWithHeaders(
+    THttpServerOptions.Default,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'Expect chunked truncated trailer field-name EOF rejects after interim 100',
+    True);
 end;
 
 procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim;
@@ -3052,6 +3072,27 @@ begin
     REQ_BODY,
     'HTTP/1.1 400 Bad Request',
     'epoll Expect chunked malformed trailer field rejects after interim 100');
+end;
+
+procedure TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterimEpollBackend;
+const
+  EXTRA_HEADERS = 'Trailer: X-Test'#13#10;
+  REQ_BODY =
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10 +
+    'X-Test';
+var
+  LOpts: THttpServerOptions;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunExpectContinueChunkedMalformedBodyRejectedAfterInterimSecurityCaseWithHeaders(
+    LOpts,
+    EXTRA_HEADERS,
+    REQ_BODY,
+    'HTTP/1.1 400 Bad Request',
+    'epoll Expect chunked truncated trailer field-name EOF rejects after interim 100',
+    True);
 end;
 
 procedure TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend;
@@ -5300,6 +5341,8 @@ begin
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterim);
   T.Run('Expect chunked malformed trailer field rejects after interim 100',
     @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterim);
+  T.Run('Expect chunked truncated trailer field-name EOF rejects after interim 100',
+    @TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterim);
   T.Run('Expect chunked oversize trailer rejects after interim 100',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterim);
   T.Run('Expect fixed-length partial body idle-timeout closes after interim 100',
@@ -5518,6 +5561,8 @@ begin
     @TestExpectContinueChunkedMissingChunkDataCrLfRejectsAfterInterimEpollBackend);
   T.Run('Expect chunked malformed trailer field rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedMalformedTrailerFieldRejectsAfterInterimEpollBackend);
+  T.Run('Expect chunked truncated trailer field-name EOF rejects after interim 100 with epoll backend',
+    @TestExpectContinueChunkedTruncatedTrailerFieldNameAtEofRejectsAfterInterimEpollBackend);
   T.Run('Expect chunked oversize trailer rejects after interim 100 with epoll backend',
     @TestExpectContinueChunkedOversizeTrailerRejectsAfterInterimEpollBackend);
   T.Run('Expect fixed-length partial body idle-timeout closes after interim 100 with epoll backend',
