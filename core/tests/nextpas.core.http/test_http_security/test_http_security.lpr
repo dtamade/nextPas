@@ -8,6 +8,7 @@ program test_http_security;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.testing,
   nextpas.core.text.conv,
@@ -19,15 +20,26 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http.impl.h1,
   nextpas.core.http.message,
   nextpas.core.http.router,
   nextpas.core.http.server,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
+  nextpas.core.platform.socket,
   nextpas.core.platform.thread;
 
 var
   T: TTestRunner;
+
+const
+{$IFDEF NEXTPAS_LINUX}
+  TEST_SOCKET_SO_RCVBUF = 8;
+  TEST_SOCKET_SO_SNDBUF = 7;
+{$ELSE}
+  TEST_SOCKET_SO_RCVBUF = PLATFORM_SO_RCVBUF;
+  TEST_SOCKET_SO_SNDBUF = PLATFORM_SO_SNDBUF;
+{$ENDIF}
 
 type
   PServerCtx = ^TServerCtx;
@@ -36,6 +48,25 @@ type
     Addr: string;
     Port: UInt16;
   end;
+
+  TSocketTuningServerTransport = class(TInterfacedObject, IHttpServerTransport,
+    IHttpServerSessionFactory)
+  private
+    FInner: IHttpServerTransport;
+    FSendBufferBytes: Int32;
+    procedure TuneConn(const AConn: ITcpStream);
+  public
+    constructor Create(const AInner: IHttpServerTransport;
+      const ASendBufferBytes: Int32);
+    function ServeConn(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): TTcpServerConnOwnership;
+    function NewSession(const AConn: ITcpStream;
+      const AHandler: IHttpHandler): ITcpServerSession;
+  end;
+
+function StartSecurityServerWithTransportAndOptions(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport; const AOpts: THttpServerOptions;
+  out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle; forward;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var LCtx: PServerCtx;
@@ -51,38 +82,111 @@ end;
 
 function StartSecurityServer(const AOpts: THttpServerOptions; out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
 var
+  LHandler: IHttpHandler;
+begin
+  LHandler := nil;
+  Result := StartSecurityServerWithTransportAndOptions(
+    LHandler, nil, AOpts, AServer, APort);
+end;
+
+constructor TSocketTuningServerTransport.Create(const AInner: IHttpServerTransport;
+  const ASendBufferBytes: Int32);
+begin
+  inherited Create;
+  FInner := AInner;
+  FSendBufferBytes := ASendBufferBytes;
+end;
+
+procedure TSocketTuningServerTransport.TuneConn(const AConn: ITcpStream);
+var
+  LRuntime: ITcpSocketRuntime;
+  LSocket: TPlatformSocket;
+  LSize: Int32;
+begin
+  if FSendBufferBytes <= 0 then
+    Exit;
+  if not Supports(AConn, ITcpSocketRuntime, LRuntime) then
+    Exit;
+  LSocket := PLATFORM_INVALID_SOCKET;
+{$IFDEF NEXTPAS_WINDOWS}
+  LSocket.Value := LRuntime.NativeSocketHandle;
+{$ELSE}
+  LSocket.Value := Int32(LRuntime.NativeSocketHandle);
+{$ENDIF}
+  LSize := FSendBufferBytes;
+  if platform_socket_setsockopt(LSocket, PLATFORM_SOL_SOCKET,
+    TEST_SOCKET_SO_SNDBUF, @LSize, SizeOf(LSize)) <> 0 then
+    raise EIOError.Create('server send buffer tuning failed');
+end;
+
+function TSocketTuningServerTransport.ServeConn(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): TTcpServerConnOwnership;
+begin
+  TuneConn(AConn);
+  Result := FInner.ServeConn(AConn, AHandler);
+end;
+
+function TSocketTuningServerTransport.NewSession(const AConn: ITcpStream;
+  const AHandler: IHttpHandler): ITcpServerSession;
+var
+  LFactory: IHttpServerSessionFactory;
+begin
+  TuneConn(AConn);
+  if not Supports(FInner, IHttpServerSessionFactory, LFactory) then
+    raise EInvalidOperationError.Create(
+      'inner transport does not expose session factory');
+  Result := LFactory.NewSession(AConn, AHandler);
+end;
+
+function StartSecurityServerWithTransportAndOptions(const AHandler: IHttpHandler;
+  const ATransport: IHttpServerTransport; const AOpts: THttpServerOptions;
+  out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
+var
   LCtx: PServerCtx;
   LHandle: TPlatformThreadHandle;
   LWait: Int32;
   LRouter: THttpRouter;
+  LResolvedHandler: IHttpHandler;
 begin
-  LRouter := THttpRouter.Create;
-  LRouter.Post('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var LBuf: array[0..4095] of Byte; LN: SizeUInt; LTotal: SizeUInt; LReply: string;
+  LResolvedHandler := AHandler;
+  if LResolvedHandler = nil then
   begin
-    LTotal := 0;
-    if AReq.Body <> nil then
+    LRouter := THttpRouter.Create;
+    LRouter.Post('/', procedure(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter)
+    var
+      LBuf: array[0..4095] of Byte;
+      LN: SizeUInt;
+      LTotal: SizeUInt;
+      LReply: string;
     begin
-      repeat
-        LN := AReq.Body.Read(LBuf[0], 4096);
-        LTotal := LTotal + LN;
-      until LN = 0;
-    end;
-    LReply := 'echo:' + IntToStr(Int64(LTotal));
-    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LReply[1], SizeUInt(Length(LReply)));
-  end);
-  LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
-  var LBody: string;
-  begin
-    LBody := 'ok';
-    AW.GetHeaders.Set_('content-length', '2');
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(LBody[1], 2);
-  end);
+      LTotal := 0;
+      if AReq.Body <> nil then
+      begin
+        repeat
+          LN := AReq.Body.Read(LBuf[0], 4096);
+          LTotal := LTotal + LN;
+        until LN = 0;
+      end;
+      LReply := 'echo:' + IntToStr(Int64(LTotal));
+      AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LReply))));
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LReply[1], SizeUInt(Length(LReply)));
+    end);
+    LRouter.Get('/', procedure(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter)
+    var
+      LBody: string;
+    begin
+      LBody := 'ok';
+      AW.GetHeaders.Set_('content-length', '2');
+      AW.WriteHeader(HTTP_STATUS_OK);
+      AW.Write(LBody[1], 2);
+    end);
+    LResolvedHandler := LRouter as IHttpHandler;
+  end;
 
-  AServer := THttpServer.Create(LRouter as IHttpHandler, AOpts);
+  AServer := THttpServer.Create(LResolvedHandler, ATransport, AOpts);
   New(LCtx);
   LCtx^.Server := AServer;
   LCtx^.Addr := '127.0.0.1';
@@ -105,6 +209,116 @@ begin
   platform_thread_join(AHandle, LRet);
   AServer.Free;
   AServer := nil;
+end;
+
+function DefaultH1ServerTransportOptions(
+  const AHttpOptions: THttpServerOptions): TH1ServerTransportOptions;
+begin
+  Result.ReadTimeout := AHttpOptions.ReadTimeout;
+  Result.WriteTimeout := AHttpOptions.WriteTimeout;
+  Result.IdleTimeout := AHttpOptions.IdleTimeout;
+  Result.MaxHeaderSize := AHttpOptions.MaxHeaderSize;
+  Result.MaxBodySize := AHttpOptions.MaxBodySize;
+end;
+
+function SocketFromRuntime(const ARuntime: ITcpSocketRuntime): TPlatformSocket;
+begin
+  Result := PLATFORM_INVALID_SOCKET;
+{$IFDEF NEXTPAS_WINDOWS}
+  Result.Value := ARuntime.NativeSocketHandle;
+{$ELSE}
+  Result.Value := Int32(ARuntime.NativeSocketHandle);
+{$ENDIF}
+end;
+
+procedure SetSocketRecvBuffer(const AConn: ITcpStream; const ASize: Int32);
+var
+  LRuntime: ITcpSocketRuntime;
+  LSocket: TPlatformSocket;
+  LSize: Int32;
+begin
+  Check(Supports(AConn, ITcpSocketRuntime, LRuntime),
+    'tcp stream exposes runtime socket control for recvbuf tuning');
+  LSocket := SocketFromRuntime(LRuntime);
+  LSize := ASize;
+  CheckEqual(Int64(0), Int64(platform_socket_setsockopt(LSocket,
+    PLATFORM_SOL_SOCKET, TEST_SOCKET_SO_RCVBUF, @LSize, SizeOf(LSize))),
+    'recv buffer tuning succeeds');
+end;
+
+function ReadUntilClosedOrDeadline(const AConn: ITcpStream;
+  const AReadTimeoutMs: Int64; out AClosed: Boolean;
+  out ATimedOut: Boolean): string;
+var
+  LBuf: array[0..8191] of Byte;
+  LN: SizeUInt;
+begin
+  Result := '';
+  AClosed := False;
+  ATimedOut := False;
+  AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(
+    AReadTimeoutMs)));
+  repeat
+    try
+      LN := AConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    except
+      on ENetworkError do
+      begin
+        ATimedOut := True;
+        Break;
+      end;
+    end;
+    if LN = 0 then
+    begin
+      AClosed := True;
+      Break;
+    end;
+    SetLength(Result, Length(Result) + Int32(LN));
+    Move(LBuf[0], Result[Length(Result) - Int32(LN) + 1], LN);
+  until False;
+end;
+
+function CountSubstring(const AText, APattern: string): Int32;
+var
+  LSearchStart: Int32;
+  LFoundAt: Int32;
+begin
+  Result := 0;
+  if (AText = '') or (APattern = '') then
+    Exit(0);
+  LSearchStart := 1;
+  repeat
+    LFoundAt := Pos(APattern, Copy(AText, LSearchStart, MaxInt));
+    if LFoundAt <= 0 then
+      Exit;
+    Inc(Result);
+    Inc(LSearchStart, LFoundAt + Length(APattern) - 1);
+  until False;
+end;
+
+function StatusLineMatchesExpectedPrefix(const AResp,
+  AExpectedStatusLine: string): Boolean;
+var
+  LStatusPos: Int32;
+  LLineEndRel: Int32;
+  LLine: string;
+begin
+  if AResp = '' then
+    Exit(True);
+
+  LStatusPos := Pos('HTTP/1.1', AResp);
+  if LStatusPos > 0 then
+  begin
+    LLineEndRel := Pos(#13#10, Copy(AResp, LStatusPos, MaxInt));
+    if LLineEndRel > 0 then
+      LLine := Copy(AResp, LStatusPos, LLineEndRel - 1)
+    else
+      LLine := Copy(AResp, LStatusPos, MaxInt);
+    Exit((LLine = AExpectedStatusLine) or
+      (Copy(AExpectedStatusLine, 1, Length(LLine)) = LLine));
+  end;
+
+  Result := Copy(AExpectedStatusLine, 1, Length(AResp)) = AResp;
 end;
 
 function SendRaw(const APort: UInt16; const AData: string; ATimeoutSec: Int32 = 3): string;
@@ -930,6 +1144,125 @@ begin
     StopServer(LServer, LHandle);
   end;
 end;
+
+procedure RunDirectErrorBackpressureSafeHandling(const AOpts: THttpServerOptions;
+  const AReq, AExpectedStatusLine, ALabel: string);
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LConn: ITcpStream;
+  LTransport: IHttpServerTransport;
+  LH1Opts: TH1ServerTransportOptions;
+  LResp: string;
+  LClosed: Boolean;
+  LTimedOut: Boolean;
+const
+  RECV_BUFFER_BYTES = 1024;
+  SEND_BUFFER_BYTES = 1024;
+  BACKPRESSURE_WAIT_NS = 500000000;
+  CLOSE_WAIT_MS = 5000;
+begin
+  LH1Opts := DefaultH1ServerTransportOptions(AOpts);
+  LTransport := TSocketTuningServerTransport.Create(
+    NewH1ServerTransport(LH1Opts), SEND_BUFFER_BYTES);
+  LHandle := StartSecurityServerWithTransportAndOptions(
+    nil, LTransport, AOpts, LServer, LPort);
+  try
+    LConn := TcpConnect('127.0.0.1', LPort);
+    try
+      SetSocketRecvBuffer(LConn, RECV_BUFFER_BYTES);
+      if AReq <> '' then
+        LConn.Write(AReq[1], SizeUInt(Length(AReq)));
+      platform_thread_sleep_ns(BACKPRESSURE_WAIT_NS);
+
+      LResp := ReadUntilClosedOrDeadline(LConn, CLOSE_WAIT_MS, LClosed, LTimedOut);
+
+      Check(LClosed,
+        ALabel + ': connection closes within observation window');
+      Check(not LTimedOut,
+        ALabel + ': close does not overrun read deadline');
+      Check(Pos('HTTP/1.1 200 OK', LResp) = 0,
+        ALabel + ': malformed request never reaches success response');
+      Check(Pos('HTTP/1.1 500', LResp) = 0,
+        ALabel + ': malformed request does not append synthetic 500');
+      Check(CountSubstring(LResp, 'HTTP/1.1 ') <= 1,
+        ALabel + ': wire never exposes more than one status line');
+      Check(StatusLineMatchesExpectedPrefix(LResp, AExpectedStatusLine),
+        ALabel + ': wire bytes stay within expected direct-error status prefix');
+    finally
+      LConn.Close;
+    end;
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestMalformedRequestBackpressureSafeHandling;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'Malformed direct error backpressure');
+end;
+
+procedure TestUnsupportedTransferCodingBackpressureSafeHandling;
+const
+  REQ =
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  RunDirectErrorBackpressureSafeHandling(
+    THttpServerOptions.Default,
+    REQ,
+    'HTTP/1.1 501 Not Implemented',
+    'Unsupported transfer-coding direct error backpressure');
+end;
+
+{$IFDEF NEXTPAS_LINUX}
+procedure TestMalformedRequestBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ = 'GARBAGE DATA HERE'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 400 Bad Request',
+    'epoll malformed direct error backpressure');
+end;
+
+procedure TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend;
+var
+  LOpts: THttpServerOptions;
+const
+  REQ =
+    'POST /unsupported HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Transfer-Encoding: gzip, chunked'#13#10 +
+    'Connection: close'#13#10#13#10 +
+    '5'#13#10'hello'#13#10 +
+    '0'#13#10#13#10;
+begin
+  LOpts := THttpServerOptions.Default;
+  LOpts.Backend := TCP_SERVER_BACKEND_EPOLL;
+  RunDirectErrorBackpressureSafeHandling(
+    LOpts,
+    REQ,
+    'HTTP/1.1 501 Not Implemented',
+    'epoll unsupported transfer-coding direct error backpressure');
+end;
+{$ENDIF}
 
 { Test 14a: Keep-alive Content-Length request with garbage tail }
 procedure RunContentLengthKeepAliveGarbageTailSafeHandling(
@@ -2374,6 +2707,10 @@ begin
   T.Run('Headers truncated at EOF -> 400', @TestHeadersTruncatedAtEof);
   T.Run('Very long method name -> 400', @TestLongMethodName);
   T.Run('Body larger than CL with Connection: close -> 400', @TestBodyLargerThanContentLength);
+  T.Run('Malformed direct error backpressure safe handling',
+    @TestMalformedRequestBackpressureSafeHandling);
+  T.Run('Unsupported transfer-coding direct error backpressure safe handling',
+    @TestUnsupportedTransferCodingBackpressureSafeHandling);
   T.Run('Content-Length keep-alive garbage tail safe handling', @TestContentLengthKeepAliveGarbageTailSafeHandling);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling',
     @TestContentLengthKeepAliveTruncatedFollowUpRequestLineSafeHandling);
@@ -2484,6 +2821,10 @@ begin
     @TestPartialFixedLengthBodyIdleTimeoutEpollBackend);
   T.Run('Partial chunked trailer idle-timeout closes connection with epoll backend',
     @TestPartialChunkedTrailerIdleTimeoutEpollBackend);
+  T.Run('Malformed direct error backpressure safe handling with epoll backend',
+    @TestMalformedRequestBackpressureSafeHandlingEpollBackend);
+  T.Run('Unsupported transfer-coding direct error backpressure safe handling with epoll backend',
+    @TestUnsupportedTransferCodingBackpressureSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive garbage tail safe handling with epoll backend',
     @TestContentLengthKeepAliveGarbageTailSafeHandlingEpollBackend);
   T.Run('Content-Length keep-alive truncated follow-up request line safe handling with epoll backend',

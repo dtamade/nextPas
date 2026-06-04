@@ -1,10 +1,10 @@
-# Progress Log: http trailer public contract proof
+# Progress Log: http direct-error live safe-close proof
 
 ## Session
 
-- **Scope:** 把 chunked trailer 的当前公共语义从间接 truth 升格成 `test_http_contract` 的 focused proof。
+- **Scope:** 把 `standalone direct-error` 的 real-socket safe-close truth 补到 `test_http_security`。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `public contract narrowing` -> `trailer contract proof`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `runtime truth tightening` -> `direct-error live safe-close proof`
 
 ## Current state
 
@@ -17,25 +17,24 @@
 
 ## Completed work
 
-- [test_http_contract.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_contract/test_http_contract.lpr)
-  新增一个最小 raw-wire helper，允许 contract suite 用真实 socket 向 `THttpServer` 发送 chunked request 并读完整响应。
-- [test_http_contract.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_contract/test_http_contract.lpr)
-  新增 `Chunked request trailer contract`：
-  - handler 看到解码后的 `hello`
-  - `Trailer: X-Test` 声明头保留
-  - `X-Test: value` trailer field 不暴露为普通 header
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  引入最小 socket-tuning transport seam 与 real-socket helpers，让 security suite 可以稳定做 backpressure 尝试而不动生产代码。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr)
+  新增 representative live proof：
+  - threaded：malformed direct `400`、unsupported transfer-coding direct `501`
+  - epoll：malformed direct `400`、unsupported transfer-coding direct `501`
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md)
-  已同步当前 trailer narrow contract 现在有 focused public proof。
+  已同步 direct-error real-socket safe-close envelope 的新证据。
 
 ## Verification
 
-- `make -C tests/nextpas.core.http/test_http_contract clean test`
-  - `28/28 passed`
+- `make -C tests/nextpas.core.http/test_http_security test`
+  - `115/115 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀优先在两个方向里做一次价值筛查：
+- 下一刀优先做一次高价值收口判断：
   - facade helper boundary audit
-  - direct-error / queued follow-up live runtime truth 是否还存在真正未锁定的高价值缺口
-- 如果两者都没有实质缺口，就停止扩 HTTP correctness，转去更高层路线图节点
+  - 或 HTTP Server correctness 当前阶段是否已经接近可收口边界
+- 如果 correctness 只剩低价值 duplication，就应停止横向补 case，转到更高层路线图

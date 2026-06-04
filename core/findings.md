@@ -1,37 +1,43 @@
-# Findings: http trailer public contract proof
+# Findings: http direct-error live safe-close proof
 
 ## Scope
 
-- 本轮从 security/runtime parity 批次切回 public contract 收口。
-- 目标不是扩生产行为，而是把当前 chunked trailer 的对外语义直接钉在契约层。
+- 本轮继续 HTTP Server correctness 收口，不改生产逻辑。
+- 目标是把 `standalone direct-error` 在 real-socket/backpressure 尝试下的外部语义直接钉在 security 层。
 
 ## Confirmed truths
 
-### 1. 当前 trailer 公共契约现在有了 focused public proof
+### 1. direct-error 现在有了 live-socket safe-close 代表性证据
 
-- `test_http_contract` 直接用真实 `THttpServer` + raw chunked request 锁定：
-  - handler 能读到解码后的 chunked body
-  - `Trailer` 声明头会保留在 `AReq.Headers`
-  - 实际 trailer field 不会作为普通 header 暴露
+- `test_http_security` 新增 threaded / epoll 两条 live proof，覆盖：
+  - malformed request direct `400`
+  - unsupported transfer-coding direct `501`
+- 新用例直接锁定 peer 视角：
+  - 连接会在观察窗口内关闭
+  - wire 上最多只暴露一个原始 status line / prefix
+  - 不会出现 synthetic `500`
+  - 非法请求不会误走成功 `200`
 
-### 2. 这轮没有发现生产缺口
+### 2. 这批 proof 补的是 external envelope，不是内部 timeout 机理替代
 
-- 新用例在当前实现上直接通过，说明此前 server/security 间接证明的行为和 public facade 视角一致。
-- 因此本轮保持为 coverage-expansion，不需要改 parser、transport 或 server 生产代码。
+- `test_http_server` 已经有 poll-driven seam / write-timeout focused proof，说明 direct-error path 会 arm deadline、partial-timeout 不会追加第二个 status line。
+- 本轮新增的是 real-socket 侧的安全边界证据：即使不把“必须观测到 partial-timeout”当成硬条件，外部 peer 看到的仍然只会是原始 direct-error 或安全关闭。
 
-### 3. 这批工作把后续 trailer API 讨论边界收窄了
+### 3. 本轮没有暴露生产缺口
 
-- 现在已经明确：v1 当前契约不是“读 trailer fields”，而是“保留 declaration header，隐藏 trailer fields”。
-- 如果将来要暴露 trailer fields，应该新增显式 public API，而不是让它们悄悄混入普通 headers。
+- 新增 4 条 live proof 在当前实现上直接通过，说明当前 threaded / epoll runtime 已经满足这条安全 envelope。
+- 因此本轮保持为 coverage-expansion；没有新增生产代码，也没有调整 transport 行为。
 
 ## Verification evidence
 
 - focused:
-  - `make -C tests/nextpas.core.http/test_http_contract clean test`
-  - `28/28 passed`
+  - `make -C tests/nextpas.core.http/test_http_security test`
+  - `115/115 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 这轮锁定的是当前 trailer public contract，不代表 trailer API 设计已经终局。
-- 下一步应优先筛查更高价值的 runtime truth / facade helper boundary，而不是回到机械 parity 复制。
+- 这轮补的是 representative direct-error live envelope，不是完整 direct-error matrix 的全部 live duplication。
+- 下一步更值的方向仍应在：
+  - facade helper boundary audit
+  - 或 HTTP Server correctness 阶段结束条件的再审查
