@@ -1,10 +1,10 @@
-# Progress Log: http trailer-complete same-write pipelining raw-wire proof
+# Progress Log: http trailer-complete truncated follow-up headers epoll raw-wire proof
 
 ## Session
 
-- **Scope:** 给 `test_http_security` 补 chunked trailer-complete same-write pipelined next request 的 raw-wire proof，并补 Linux `epoll` live variant。
+- **Scope:** 做一次 parser/server/security 矩阵筛查，然后给 `test_http_security` 补 chunked trailer-complete truncated follow-up headers 的 epoll raw-wire proof。
 - **Status:** verified
-- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `chunked trailer-complete same-write pipelining proof`
+- **Roadmap Position:** `3/6 H1 正确性加固` -> `keep-alive request-tail contract` -> `chunked trailer-complete truncated follow-up headers epoll proof`
 
 ## Current state
 
@@ -17,22 +17,20 @@
 
 ## Completed work
 
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1294)
-  新增了一个窄 helper，用来证明 trailer-complete chunked request 与同包第二个 request 能稳定拆分为两条独立 `200` 响应。
-- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1330)
-  现在新增两条 security raw-wire proof：
-  - threaded: chunked trailer same-write pipeline
-  - epoll: chunked trailer same-write pipeline
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1214)
+  把 trailer-complete truncated follow-up headers 的 threaded 断言抽成可复用 helper，避免 epoll 版本再拷一份分叉逻辑。
+- [test_http_security.lpr](/home/dtamade/projects/nextPas/core/tests/nextpas.core.http/test_http_security/test_http_security.lpr:1377)
+  新增 `Chunked trailer keep-alive truncated follow-up headers safe handling with epoll backend` raw-wire proof，锁定 `200 / echo:5` 之后 follow-up EOF truncation 仍回 `400`。
 - [docs/http/API_COVERAGE.md](/home/dtamade/projects/nextPas/core/docs/http/API_COVERAGE.md:18)
-  已同步 trailer-complete same-write pipelining truth，并把下一步路线重新收敛到剩余 malformed grammar 边角或 request-tail contract 余下缺口筛查。
+  已同步 security 层新的 epoll request-tail truth，并把下一步路线收敛为“只挑剩余真实 gap”，不再做整片同型 parity 搬运。
 
 ## Verification
 
 - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `71/71 passed`
+  - `72/72 passed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Next step
 
-- 下一刀优先回到仍缺分类的 malformed trailer/chunk truncation 相邻子类
-- 或者先做一次 request-tail contract 矩阵筛查，确认 security 层是否还缺别的 raw-wire truth
+- 下一刀优先只挑一个剩余 request-tail sibling gap，或回到仍缺分类的 malformed trailer/chunk truncation 相邻子类
+- 如果下一次矩阵筛查只剩机械 parity case，就停止扩 security，回到更高价值的 correctness 边界
