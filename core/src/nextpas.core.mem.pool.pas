@@ -21,7 +21,7 @@ type
    * @desc 固定大小块池，O(1) 分配/释放
    * @note 非线程安全。适用于频繁创建/销毁相同大小对象的场景
    *}
-  TPool = record
+  TLocalBlockPool = record
   private
     FBacking: Pointer;
     FBlockSize: SizeUInt;
@@ -44,6 +44,8 @@ type
     function IsEmpty: Boolean; inline;
     function Owns(const APtr: Pointer): Boolean;
   end;
+
+  TPool = TLocalBlockPool;
 
 function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator; AMinShift: SizeUInt = 3): IFixedSlabPool; overload;
 function MakeFixedSlabPool(ACapacity: SizeUInt; AAllocator: IAllocator): IFixedSlabPool; overload;
@@ -72,9 +74,9 @@ begin
   Result := TFixedSlabPool.Create(ACapacity);
 end;
 
-{ TPool }
+{ TLocalBlockPool }
 
-procedure TPool.Init(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt);
+procedure TLocalBlockPool.Init(const ABlockSize: SizeUInt; const ABlockCount: SizeUInt);
 var
   LActualBlockSize: SizeUInt;
   LI: SizeUInt;
@@ -90,10 +92,10 @@ begin
 
   LTotalSize := LActualBlockSize * ABlockCount;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> ABlockCount) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TPool.Init: size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Init: size overflow');
   FBacking := GetMem(LTotalSize);
   if FBacking = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TPool.Init: out of memory');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalBlockPool.Init: out of memory');
   FillChar(FBacking^, LTotalSize, 0);
 
   FFreeStack := nil;
@@ -105,7 +107,7 @@ begin
   end;
 end;
 
-procedure TPool.Done;
+procedure TLocalBlockPool.Done;
 begin
   if FBacking <> nil then
   begin
@@ -117,7 +119,7 @@ begin
   FAcquired := 0;
 end;
 
-function TPool.Acquire: Pointer;
+function TLocalBlockPool.Acquire: Pointer;
 var
   LNode: PFreeNode;
 begin
@@ -129,7 +131,7 @@ begin
   Result := Pointer(LNode);
 end;
 
-procedure TPool.Release(const APtr: Pointer);
+procedure TLocalBlockPool.Release(const APtr: Pointer);
 var
   LNode: PFreeNode;
 begin
@@ -139,7 +141,7 @@ begin
   Dec(FAcquired);
 end;
 
-procedure TPool.Reset;
+procedure TLocalBlockPool.Reset;
 var
   LI: SizeUInt;
   LNode: PFreeNode;
@@ -154,37 +156,37 @@ begin
   end;
 end;
 
-function TPool.BlockSize: SizeUInt;
+function TLocalBlockPool.BlockSize: SizeUInt;
 begin
   Result := FBlockSize;
 end;
 
-function TPool.BlockCount: SizeUInt;
+function TLocalBlockPool.BlockCount: SizeUInt;
 begin
   Result := FBlockCount;
 end;
 
-function TPool.AcquiredCount: SizeUInt;
+function TLocalBlockPool.AcquiredCount: SizeUInt;
 begin
   Result := FAcquired;
 end;
 
-function TPool.AvailableCount: SizeUInt;
+function TLocalBlockPool.AvailableCount: SizeUInt;
 begin
   Result := FBlockCount - FAcquired;
 end;
 
-function TPool.IsFull: Boolean;
+function TLocalBlockPool.IsFull: Boolean;
 begin
   Result := FAcquired >= FBlockCount;
 end;
 
-function TPool.IsEmpty: Boolean;
+function TLocalBlockPool.IsEmpty: Boolean;
 begin
   Result := FAcquired = 0;
 end;
 
-function TPool.Owns(const APtr: Pointer): Boolean;
+function TLocalBlockPool.Owns(const APtr: Pointer): Boolean;
 begin
   Result := (APtr >= FBacking) and
             (APtr < FBacking + FBlockSize * FBlockCount);

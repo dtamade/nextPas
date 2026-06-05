@@ -250,8 +250,8 @@ type
    * @threadsafety 非线程安全，需要外部同步
    *               Not thread-safe, requires external synchronization
    *
-   * @warning 启用 EnableAutoGrow 时，扩容会使之前分配的指针失效。
-   *          如果有活跃作用域，扩容将抛出异常以防止指针悬空。
+   * @warning EnableAutoGrow 使用 relocate-grow；池内已有分配或活跃作用域时
+   *          扩容将抛出异常以防止旧指针悬空。
    *}
   TScopedStackPool = class(TStackPool)
   private
@@ -264,6 +264,7 @@ type
 
     procedure UpdateStatistics(aAllocSize: SizeUInt);
     procedure GrowPool(aRequiredSize: SizeUInt);
+    function CanRelocateBufferForGrow: Boolean;
     function CalculateFragmentation: Double;
 
   public
@@ -854,10 +855,9 @@ var
 begin
   if not FPolicy.EnableAutoGrow then Exit;
 
-  // ✅ C-2: 安全检查 - 如果有活跃作用域，禁止扩容（避免指针悬空）
-  if Assigned(FScopeManager) and (FScopeManager.GetScopeDepth > 0) then
+  if not CanRelocateBufferForGrow then
     raise EStackPoolError.Create(aeInternalError,
-      'Cannot grow pool while scopes are active (would invalidate existing pointers)');
+      'Cannot grow pool while allocations or scopes are active (would invalidate existing pointers)');
 
   // 计算最小所需大小
   LMinRequired := UsedSize + aRequiredSize;
@@ -889,6 +889,13 @@ begin
   // 更新池状态
   FBuffer := LNewBuffer;
   FSize := LNewSize;
+end;
+
+function TScopedStackPool.CanRelocateBufferForGrow: Boolean;
+begin
+  Result := UsedSize = 0;
+  if Result and Assigned(FScopeManager) then
+    Result := FScopeManager.GetScopeDepth = 0;
 end;
 
 function TScopedStackPool.CalculateFragmentation: Double;

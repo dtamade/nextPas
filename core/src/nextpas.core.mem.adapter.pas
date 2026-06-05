@@ -97,12 +97,20 @@ type
    *}
   TAllocToAllocatorAdapter = class(TAllocator, IAllocator)
   private
+    type
+      TTrackedLayout = record
+        Size: SizeUInt;
+        Align: SizeUInt;
+      end;
+      TTrackedLayoutMap = specialize TFPGMap<Pointer, TTrackedLayout>;
+  private
     FAlloc: IAlloc;
     FTraits: TAllocatorTraits;
-    FSizeMap: specialize TFPGMap<Pointer, SizeUInt>;
-    procedure TrackSize(aPtr: Pointer; aSize: SizeUInt);
-    procedure UntrackSize(aPtr: Pointer);
-    function LookupSize(aPtr: Pointer): SizeUInt;
+    FLayoutMap: TTrackedLayoutMap;
+    FLayoutMapLock: TRTLCriticalSection;
+    procedure TrackLayout(aPtr: Pointer; aSize, aAlign: SizeUInt);
+    procedure UntrackLayout(aPtr: Pointer);
+    function LookupLayout(aPtr: Pointer): TTrackedLayout;
   protected
     function DoGetMem(aSize: SizeUInt): Pointer; override;
     function DoAllocMem(aSize: SizeUInt): Pointer; override;
@@ -118,6 +126,7 @@ type
      *   aAlloc: IAlloc 要适配的 v2.0 分配器
      *}
     constructor Create(aAlloc: IAlloc);
+    destructor Destroy; override;
 
     { IAllocator overrides }
     function AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
@@ -194,41 +203,60 @@ function WrapAsAllocator(aAlloc: IAlloc): IAllocator;
 begin
   Result := TAllocToAllocatorAdapter.Create(aAlloc);
 end;
-procedure TAllocToAllocatorAdapter.TrackSize(aPtr: Pointer; aSize: SizeUInt);
+procedure TAllocToAllocatorAdapter.TrackLayout(aPtr: Pointer; aSize, aAlign: SizeUInt);
+var
+  LIndex: SizeInt;
+  LLayout: TTrackedLayout;
+begin
+  if aPtr = nil then Exit;
+  LLayout.Size := aSize;
+  LLayout.Align := aAlign;
+  EnterCriticalSection(FLayoutMapLock);
+  try
+    if FLayoutMap = nil then
+      FLayoutMap := TTrackedLayoutMap.Create;
+    LIndex := FLayoutMap.IndexOf(aPtr);
+    if LIndex < 0 then
+      FLayoutMap.Add(aPtr, LLayout)
+    else
+      FLayoutMap.Data[LIndex] := LLayout;
+  finally
+    LeaveCriticalSection(FLayoutMapLock);
+  end;
+end;
+
+procedure TAllocToAllocatorAdapter.UntrackLayout(aPtr: Pointer);
 var
   LIndex: SizeInt;
 begin
   if aPtr = nil then Exit;
-  if FSizeMap = nil then
-    FSizeMap := specialize TFPGMap<Pointer, SizeUInt>.Create;
-  LIndex := FSizeMap.IndexOf(aPtr);
-  if LIndex < 0 then
-    FSizeMap.Add(aPtr, aSize)
-  else
-    FSizeMap.Data[LIndex] := aSize;
+  EnterCriticalSection(FLayoutMapLock);
+  try
+    if FLayoutMap = nil then Exit;
+    LIndex := FLayoutMap.IndexOf(aPtr);
+    if LIndex >= 0 then
+      FLayoutMap.Delete(LIndex);
+  finally
+    LeaveCriticalSection(FLayoutMapLock);
+  end;
 end;
 
-procedure TAllocToAllocatorAdapter.UntrackSize(aPtr: Pointer);
+function TAllocToAllocatorAdapter.LookupLayout(aPtr: Pointer): TTrackedLayout;
 var
   LIndex: SizeInt;
 begin
-  if (FSizeMap = nil) or (aPtr = nil) then Exit;
-  LIndex := FSizeMap.IndexOf(aPtr);
-  if LIndex >= 0 then
-    FSizeMap.Delete(LIndex);
-end;
-
-function TAllocToAllocatorAdapter.LookupSize(aPtr: Pointer): SizeUInt;
-var
-  LIndex: SizeInt;
-begin
-  if (FSizeMap = nil) or (aPtr = nil) then
-    Exit(0);
-  LIndex := FSizeMap.IndexOf(aPtr);
-  if LIndex >= 0 then
-    Result := FSizeMap.Data[LIndex]
-  else
-    Result := 0;
+  Result.Size := 0;
+  Result.Align := MEM_DEFAULT_ALIGN;
+  if aPtr = nil then Exit;
+  EnterCriticalSection(FLayoutMapLock);
+  try
+    if FLayoutMap = nil then Exit;
+    LIndex := FLayoutMap.IndexOf(aPtr);
+    if LIndex >= 0 then
+      Result := FLayoutMap.Data[LIndex];
+  finally
+    LeaveCriticalSection(FLayoutMapLock);
+  end;
 end;
 
 { TAllocatorToAllocAdapter }
@@ -383,8 +411,17 @@ end;
 constructor TAllocToAllocatorAdapter.Create(aAlloc: IAlloc);
 begin
   inherited Create;
+  InitCriticalSection(FLayoutMapLock);
   FAlloc := aAlloc;
   FTraits := AllocCapsToTraits(aAlloc.Caps);
+end;
+
+destructor TAllocToAllocatorAdapter.Destroy;
+begin
+  FLayoutMap.Free;
+  FLayoutMap := nil;
+  DoneCriticalSection(FLayoutMapLock);
+  inherited Destroy;
 end;
 
 function TAllocToAllocatorAdapter.DoGetMem(aSize: SizeUInt): Pointer;
@@ -396,7 +433,7 @@ begin
   LResult := FAlloc.Alloc(LLayout);
   Result := LResult.Unwrap;
   if Result <> nil then
-    TrackSize(Result, aSize);
+    TrackLayout(Result, aSize, MEM_DEFAULT_ALIGN);
 end;
 
 function TAllocToAllocatorAdapter.DoAllocMem(aSize: SizeUInt): Pointer;
@@ -408,34 +445,36 @@ begin
   LResult := FAlloc.AllocZeroed(LLayout);
   Result := LResult.Unwrap;
   if Result <> nil then
-    TrackSize(Result, aSize);
+    TrackLayout(Result, aSize, MEM_DEFAULT_ALIGN);
 end;
 
 function TAllocToAllocatorAdapter.DoReallocMem(aDst: Pointer; aSize: SizeUInt): Pointer;
 var
   LOldLayout, LNewLayout: TMemLayout;
   LResult: TAllocResult;
-  LOldSize: SizeUInt;
+  LTracked: TTrackedLayout;
 begin
-  LOldSize := LookupSize(aDst);
-  LOldLayout := TMemLayout.Create(LOldSize, MEM_DEFAULT_ALIGN);
-  LNewLayout := TMemLayout.Create(aSize, MEM_DEFAULT_ALIGN);
+  LTracked := LookupLayout(aDst);
+  LOldLayout := TMemLayout.Create(LTracked.Size, LTracked.Align);
+  LNewLayout := TMemLayout.Create(aSize, LTracked.Align);
   LResult := FAlloc.Realloc(aDst, LOldLayout, LNewLayout);
   Result := LResult.Unwrap;
   if Result <> nil then
   begin
     if Result <> aDst then
-      UntrackSize(aDst);
-    TrackSize(Result, aSize);
+      UntrackLayout(aDst);
+    TrackLayout(Result, aSize, LTracked.Align);
   end;
 end;
 
 procedure TAllocToAllocatorAdapter.DoFreeMem(aDst: Pointer);
 var
   LLayout: TMemLayout;
+  LTracked: TTrackedLayout;
 begin
-  LLayout := TMemLayout.Create(LookupSize(aDst), MEM_DEFAULT_ALIGN);
-  UntrackSize(aDst);
+  LTracked := LookupLayout(aDst);
+  LLayout := TMemLayout.Create(LTracked.Size, LTracked.Align);
+  UntrackLayout(aDst);
   FAlloc.Dealloc(aDst, LLayout);
 end;
 
@@ -448,15 +487,17 @@ begin
   LResult := FAlloc.Alloc(LLayout);
   Result := LResult.Unwrap;
   if Result <> nil then
-    TrackSize(Result, aSize);
+    TrackLayout(Result, aSize, aAlignment);
 end;
 
 procedure TAllocToAllocatorAdapter.FreeAligned(aPtr: Pointer);
 var
   LLayout: TMemLayout;
+  LTracked: TTrackedLayout;
 begin
-  LLayout := TMemLayout.Create(LookupSize(aPtr), MEM_DEFAULT_ALIGN);
-  UntrackSize(aPtr);
+  LTracked := LookupLayout(aPtr);
+  LLayout := TMemLayout.Create(LTracked.Size, LTracked.Align);
+  UntrackLayout(aPtr);
   FAlloc.Dealloc(aPtr, LLayout);
 end;
 

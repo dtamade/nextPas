@@ -19,7 +19,9 @@ type
   TAllocatorKind = nextpas.core.mem.base.TAllocatorKind;
   TArenaMarker = nextpas.core.mem.base.TArenaMarker;
   IAllocator = nextpas.core.mem.intf.IAllocator;
+  TLocalArena = nextpas.core.mem.arena.TLocalArena;
   TArena = nextpas.core.mem.arena.TArena;
+  TLocalBlockPool = nextpas.core.mem.pool.TLocalBlockPool;
   TPool = nextpas.core.mem.pool.TPool;
 
 function DefaultAllocator: IAllocator; inline;

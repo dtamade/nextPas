@@ -32,6 +32,8 @@ type
 
 function TryGetMimallocAllocator(out A: IAllocator): Boolean;
 function GetMimallocAllocator: IAllocator;
+function MimallocUsableSizeAvailable: Boolean;
+function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
 
 implementation
 
@@ -45,6 +47,7 @@ implementation
   function _mi_calloc(aCount, aSize: SizeUInt): Pointer; cdecl; external name 'mi_calloc';
   function _mi_realloc(aPtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl; external name 'mi_realloc';
   procedure _mi_free(aPtr: Pointer); cdecl; external name 'mi_free';
+  function _mi_malloc_usable_size(aPtr: Pointer): SizeUInt; cdecl; external name 'mi_malloc_usable_size';
   function EnsureMimallocLoaded: Boolean; inline;
   begin
     Result := True;
@@ -58,6 +61,7 @@ implementation
     _mi_calloc: function(aCount, aSize: SizeUInt): Pointer; cdecl = nil;
     _mi_realloc: function(aPtr: Pointer; aNewSize: SizeUInt): Pointer; cdecl = nil;
     _mi_free: procedure(aPtr: Pointer); cdecl = nil;
+    _mi_malloc_usable_size: function(aPtr: Pointer): SizeUInt; cdecl = nil;
     GLoadLock: TRTLCriticalSection;
 
   function GetPlatformLibSubdir: string;
@@ -136,9 +140,11 @@ implementation
       Pointer(_mi_calloc) := GetProcedureAddress(_miLib, 'mi_calloc');
       Pointer(_mi_realloc) := GetProcedureAddress(_miLib, 'mi_realloc');
       Pointer(_mi_free) := GetProcedureAddress(_miLib, 'mi_free');
+      Pointer(_mi_malloc_usable_size) := GetProcedureAddress(_miLib, 'mi_malloc_usable_size');
       _miLoaded := Assigned(_mi_malloc) and Assigned(_mi_calloc) and Assigned(_mi_realloc) and Assigned(_mi_free);
       if not _miLoaded then
       begin
+        _mi_malloc_usable_size := nil;
         FreeLibrary(_miLib);
         _miLib := 0;
       end;
@@ -153,6 +159,28 @@ var
   _MimallocAllocatorObj: TAllocator = nil;
   _MimallocAllocatorIntf: IAllocator = nil;
   GAllocatorLock: TRTLCriticalSection;
+
+function MimallocUsableSizeAvailable: Boolean;
+begin
+  if not EnsureMimallocLoaded then
+    Exit(False);
+  {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
+  Result := True;
+  {$ELSE}
+  Result := Assigned(_mi_malloc_usable_size);
+  {$ENDIF}
+end;
+
+function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
+begin
+  aSize := 0;
+  if aPtr = nil then
+    Exit(False);
+  if not MimallocUsableSizeAvailable then
+    Exit(False);
+  aSize := _mi_malloc_usable_size(aPtr);
+  Result := True;
+end;
 
 function TMimallocAllocator.DoGetMem(aSize: SizeUInt): Pointer;
 begin
@@ -188,10 +216,10 @@ begin
   // mimalloc semantics:
   // - AllocMem uses mi_calloc => zero initialized; GetMem not guaranteed
   // - SupportsAligned remains False here (use aligned bridge or module)
-  // - HasMemSize stays False until we wire mi_usable_size with contract/tests
+  // - HasMemSize is true only when the optional usable-size symbol is present
   Result.ZeroInitialized := True;
   Result.SupportsAligned := False;
-  Result.HasMemSize      := False;
+  Result.HasMemSize      := MimallocUsableSizeAvailable;
 end;
 
 function GetMimallocAllocator: IAllocator;
@@ -238,6 +266,11 @@ finalization
   if _miLib <> 0 then
     FreeLibrary(_miLib);
   _miLib := 0;
+  _mi_malloc := nil;
+  _mi_calloc := nil;
+  _mi_realloc := nil;
+  _mi_free := nil;
+  _mi_malloc_usable_size := nil;
   {$ENDIF}
 
 

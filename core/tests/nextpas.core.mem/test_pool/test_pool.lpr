@@ -12,7 +12,7 @@ var
 
 procedure TestPoolInit;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
 begin
   LP.Init(64, 10);
   CheckEqual(Int64(10), Int64(LP.BlockCount), 'block count');
@@ -26,7 +26,7 @@ end;
 
 procedure TestPoolAcquireRelease;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LPtr: Pointer;
 begin
   LP.Init(32, 5);
@@ -43,7 +43,7 @@ end;
 
 procedure TestPoolExhaust;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LPtrs: array[0..2] of Pointer;
   LI: Integer;
 begin
@@ -62,7 +62,7 @@ end;
 
 procedure TestPoolReset;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LI: Integer;
 begin
   LP.Init(32, 10);
@@ -81,7 +81,7 @@ end;
 
 procedure TestPoolOwns;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LPtr: Pointer;
   LExternal: Integer;
 begin
@@ -95,7 +95,7 @@ end;
 
 procedure TestPoolWriteRead;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LPtr: PInteger;
 begin
   LP.Init(SizeOf(Integer), 10);
@@ -109,7 +109,7 @@ end;
 
 procedure TestPoolMultipleBlocks;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LPtrs: array[0..99] of Pointer;
   LI: Integer;
 begin
@@ -129,7 +129,7 @@ end;
 
 procedure TestPoolDone;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
 begin
   LP.Init(64, 10);
   LP.Acquire;
@@ -141,7 +141,7 @@ end;
 
 procedure TestPoolSmallBlockSize;
 var
-  LP: TPool;
+  LP: TLocalBlockPool;
   LPtr: Pointer;
 begin
   LP.Init(1, 5);
@@ -150,6 +150,21 @@ begin
   Check(LPtr <> nil);
   LP.Release(LPtr);
   LP.Done;
+end;
+
+procedure TestPoolLegacyAlias;
+var
+  LP: TPool;
+  LPtr: Pointer;
+begin
+  LP.Init(16, 1);
+  try
+    LPtr := LP.Acquire;
+    Check(LPtr <> nil, 'legacy TPool alias remains usable');
+    LP.Release(LPtr);
+  finally
+    LP.Done;
+  end;
 end;
 
 begin
@@ -163,5 +178,6 @@ begin
   T.Run('Multiple blocks (100)', @TestPoolMultipleBlocks);
   T.Run('Done', @TestPoolDone);
   T.Run('Small block size', @TestPoolSmallBlockSize);
+  T.Run('legacy TPool alias', @TestPoolLegacyAlias);
   T.Summary;
 end.

@@ -13,7 +13,7 @@ type
    * @desc 固定大小 bump 分配器，分配只前进，Reset 一次性释放全部
    * @note 非线程安全。适用于请求/帧/文档等有限生命周期的场景
    *}
-  TArena = record
+  TLocalArena = record
   private
     FBacking: Pointer;
     FCapacity: SizeUInt;
@@ -34,20 +34,22 @@ type
     function Capacity: SizeUInt; inline;
   end;
 
+  TArena = TLocalArena;
+
 implementation
 
-{ TArena }
+{ TLocalArena }
 
-procedure TArena.Init(const ACapacity: SizeUInt);
+procedure TLocalArena.Init(const ACapacity: SizeUInt);
 begin
   FBacking := GetMem(ACapacity);
   if (ACapacity > 0) and (FBacking = nil) then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TArena.Init: out of memory');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TLocalArena.Init: out of memory');
   FCapacity := ACapacity;
   FOffset := 0;
 end;
 
-procedure TArena.Done;
+procedure TLocalArena.Done;
 begin
   if FBacking <> nil then
   begin
@@ -58,7 +60,7 @@ begin
   FOffset := 0;
 end;
 
-function TArena.Alloc(const ASize: SizeUInt): Pointer;
+function TLocalArena.Alloc(const ASize: SizeUInt): Pointer;
 begin
   if FOffset + ASize > FCapacity then
     Exit(nil);
@@ -66,7 +68,7 @@ begin
   Inc(FOffset, ASize);
 end;
 
-function TArena.AllocAligned(const ASize: SizeUInt; const AAlign: SizeUInt): Pointer;
+function TLocalArena.AllocAligned(const ASize: SizeUInt; const AAlign: SizeUInt): Pointer;
 var
   LAligned: SizeUInt;
   LPadding: SizeUInt;
@@ -79,33 +81,33 @@ begin
   Result := Pointer(LAligned);
 end;
 
-procedure TArena.Reset;
+procedure TLocalArena.Reset;
 begin
   FOffset := 0;
 end;
 
-function TArena.Mark: TArenaMarker;
+function TLocalArena.Mark: TArenaMarker;
 begin
   Result := FOffset;
 end;
 
-procedure TArena.Restore(const AMarker: TArenaMarker);
+procedure TLocalArena.Restore(const AMarker: TArenaMarker);
 begin
   if AMarker <= FOffset then
     FOffset := AMarker;
 end;
 
-function TArena.BytesUsed: SizeUInt;
+function TLocalArena.BytesUsed: SizeUInt;
 begin
   Result := FOffset;
 end;
 
-function TArena.BytesRemaining: SizeUInt;
+function TLocalArena.BytesRemaining: SizeUInt;
 begin
   Result := FCapacity - FOffset;
 end;
 
-function TArena.Capacity: SizeUInt;
+function TLocalArena.Capacity: SizeUInt;
 begin
   Result := FCapacity;
 end;

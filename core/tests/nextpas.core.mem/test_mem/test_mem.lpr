@@ -15,6 +15,10 @@ begin
   LAlloc := DefaultAllocator;
   Assert(LAlloc <> nil, 'DefaultAllocator should not be nil');
 
+  LPtr := LAlloc.GetMem(16);
+  Assert(LPtr <> nil, 'facade IAllocator should expose GetMem');
+  LAlloc.FreeMem(LPtr);
+
   // Allocate
   LPtr := LAlloc.Allocate(1024);
   Assert(LPtr <> nil, 'Allocate should return non-nil');

@@ -5,11 +5,14 @@ program test_contracts;
 uses
   SysUtils,
   nextpas.core.base,
-  nextpas.core.testing,
-  nextpas.core.mem.intf,
-  nextpas.core.mem.utils,
-  nextpas.core.mem.allocator,
-  nextpas.core.mem.allocator.base;
+	  nextpas.core.testing,
+	  nextpas.core.mem.intf,
+	  nextpas.core.mem.utils,
+	  nextpas.core.mem.allocator,
+	  nextpas.core.mem.allocator.base,
+	  nextpas.core.mem.allocator.mimalloc,
+	  nextpas.core.mem.alloc,
+	  nextpas.core.mem.adapter;
 
 type
   TByteArray = array[0..5] of Byte;
@@ -149,6 +152,146 @@ begin
   end;
 end;
 
+procedure TestCanonicalAllocatorSurface;
+var
+  LAllocator: nextpas.core.mem.intf.IAllocator;
+  LTraits: nextpas.core.mem.intf.TAllocatorTraits;
+  LPtr: Pointer;
+begin
+  LAllocator := GetRtlAllocator as nextpas.core.mem.intf.IAllocator;
+  LTraits := LAllocator.Traits;
+  Check(LTraits.ThreadSafe, 'canonical allocator exposes traits');
+
+  LPtr := LAllocator.GetMem(16);
+  try
+    Check(LPtr <> nil, 'canonical allocator exposes GetMem');
+    PByte(LPtr)^ := $4A;
+    LPtr := LAllocator.ReallocMem(LPtr, 32);
+    Check(LPtr <> nil, 'canonical allocator exposes ReallocMem');
+    CheckEqual(Int64($4A), Int64(PByte(LPtr)^), 'canonical ReallocMem preserves prefix');
+  finally
+    LAllocator.FreeMem(LPtr);
+  end;
+end;
+
+procedure TestAllocatorAliasesAreCanonical;
+var
+  LCanonical: nextpas.core.mem.intf.IAllocator;
+  LFacade: nextpas.core.mem.allocator.IAllocator;
+begin
+  LFacade := GetRtlAllocator;
+  LCanonical := LFacade as nextpas.core.mem.intf.IAllocator;
+  Check(LCanonical <> nil, 'allocator facade alias should be canonical');
+  Check(LCanonical = LFacade, 'facade and canonical allocator interfaces should resolve to the same interface identity');
+end;
+
+procedure TestAllocatorAdapterRoundTrip;
+var
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LAlloc: IAlloc;
+  LRoundTrip: nextpas.core.mem.allocator.IAllocator;
+  LPtr: Pointer;
+begin
+  LAllocator := GetRtlAllocator;
+  LAlloc := WrapAsAlloc(LAllocator);
+  Check(LAlloc <> nil, 'WrapAsAlloc should return an adapter');
+
+  LRoundTrip := WrapAsAllocator(LAlloc);
+  Check(LRoundTrip <> nil, 'WrapAsAllocator should return an adapter');
+
+  LPtr := LRoundTrip.GetMem(24);
+  try
+    Check(LPtr <> nil, 'adapter round trip should allocate');
+    PByte(LPtr)^ := $27;
+    LPtr := LRoundTrip.ReallocMem(LPtr, 48);
+    Check(LPtr <> nil, 'adapter round trip should reallocate');
+    CheckEqual(Int64($27), Int64(PByte(LPtr)^), 'adapter round trip should preserve data');
+  finally
+    LRoundTrip.FreeMem(LPtr);
+  end;
+end;
+
+procedure TestAllocatorAdapterAlignedRoundTrip;
+var
+  LAlloc: IAlloc;
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LPtr: Pointer;
+begin
+  LAlloc := GetAlignedAlloc;
+  LAllocator := WrapAsAllocator(LAlloc);
+  Check(LAllocator <> nil, 'aligned IAlloc should adapt to IAllocator');
+
+  LPtr := LAllocator.AllocAligned(64, 64);
+  try
+    Check(LPtr <> nil, 'aligned adapter should allocate');
+    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 64), 'aligned adapter should honor alignment');
+    PByte(LPtr)^ := $42;
+
+    LPtr := LAllocator.ReallocMem(LPtr, 128);
+    Check(LPtr <> nil, 'aligned adapter should reallocate through tracked layout');
+    CheckEqual(Int64(0), Int64(PtrUInt(LPtr) mod 64), 'aligned adapter realloc should preserve alignment');
+    CheckEqual(Int64($42), Int64(PByte(LPtr)^), 'aligned adapter realloc should preserve prefix');
+  finally
+    LAllocator.FreeAligned(LPtr);
+  end;
+end;
+
+procedure TestMimallocUsableSizeCapabilityFallback;
+var
+  LAllocator: nextpas.core.mem.allocator.IAllocator;
+  LTraits: nextpas.core.mem.allocator.base.TAllocatorTraits;
+  LPtr: Pointer;
+  LSize: SizeUInt;
+  LHasSurface: Boolean;
+begin
+  LAllocator := nextpas.core.mem.allocator.mimalloc.GetMimallocAllocator;
+  Check(LAllocator <> nil, 'mimalloc allocator object should be creatable without eager loading');
+
+  LTraits := LAllocator.Traits;
+  LHasSurface := nextpas.core.mem.allocator.mimalloc.MimallocUsableSizeAvailable;
+  CheckEqual(LHasSurface, LTraits.HasMemSize, 'mimalloc HasMemSize should match mi_malloc_usable_size availability');
+
+  LSize := 123;
+  CheckEqual(False, nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(nil, LSize),
+    'nil is not a usable-size query target');
+  CheckEqual(Int64(0), Int64(LSize), 'failed usable-size queries should clear the output size');
+
+  if LTraits.HasMemSize then
+  begin
+    LPtr := LAllocator.GetMem(33);
+    try
+      Check(LPtr <> nil, 'mimalloc allocation should succeed when usable-size surface is available');
+      Check(nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(LPtr, LSize),
+        'usable-size query should succeed for mimalloc-owned blocks when symbol is available');
+      Check(LSize >= 33, 'mimalloc usable size should cover the requested allocation size');
+    finally
+      LAllocator.FreeMem(LPtr);
+    end;
+  end
+  else
+  begin
+    LPtr := nil;
+    try
+      try
+        LPtr := LAllocator.GetMem(33);
+      except
+        on E: Exception do
+          LPtr := nil;
+      end;
+
+      if LPtr <> nil then
+      begin
+        CheckEqual(False, nextpas.core.mem.allocator.mimalloc.TryGetMimallocUsableSize(LPtr, LSize),
+          'fallback should not query usable size when the optional symbol is unavailable');
+        CheckEqual(Int64(0), Int64(LSize), 'fallback usable-size query should return size 0');
+      end;
+    finally
+      if LPtr <> nil then
+        LAllocator.FreeMem(LPtr);
+    end;
+  end;
+end;
+
 procedure TestMemUtilsNoOpAndOverlapContract;
 var
   LBytes: TByteArray;
@@ -225,6 +368,11 @@ begin
   T.Run('callback allocator compatibility methods', @TestCallbackAllocatorCompatibilityMethods);
   T.Run('callback allocator supports allocate interface', @TestCallbackAllocatorSupportsAllocateInterface);
   T.Run('rtl allocator zero init traits and aligned alloc', @TestRtlAllocatorZeroInitTraitsAndAlignedAlloc);
+  T.Run('canonical allocator surface', @TestCanonicalAllocatorSurface);
+  T.Run('allocator aliases are canonical', @TestAllocatorAliasesAreCanonical);
+  T.Run('allocator adapter round trip', @TestAllocatorAdapterRoundTrip);
+  T.Run('allocator adapter aligned round trip', @TestAllocatorAdapterAlignedRoundTrip);
+  T.Run('mimalloc usable-size capability fallback', @TestMimallocUsableSizeCapabilityFallback);
   T.Run('mem.utils no-op and overlap contract', @TestMemUtilsNoOpAndOverlapContract);
   T.Run('mem.utils copy unchecked handles overlap', @TestMemUtilsCopyUncheckedHandlesOverlap);
   T.Run('mem.utils fill and zero helpers', @TestMemUtilsFillAndZeroHelpers);

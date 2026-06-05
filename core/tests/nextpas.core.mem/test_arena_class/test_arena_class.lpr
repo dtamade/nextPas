@@ -13,7 +13,7 @@ var
   T: TTestRunner;
 
 procedure TestBasicAlloc;
-var A: TArena; R: TAllocResult;
+var A: TFixedArena; R: TAllocResult;
 begin
   A := TArena.Create(1024);
   try
@@ -28,7 +28,7 @@ begin
 end;
 
 procedure TestMultipleAllocs;
-var A: TArena; R1, R2, R3: TAllocResult;
+var A: TFixedArena; R1, R2, R3: TAllocResult;
 begin
   A := TArena.Create(256);
   try
@@ -45,7 +45,7 @@ begin
 end;
 
 procedure TestExhaust;
-var A: TArena; R: TAllocResult;
+var A: TFixedArena; R: TAllocResult;
 begin
   A := TArena.Create(100);
   try
@@ -59,7 +59,7 @@ begin
 end;
 
 procedure TestReset;
-var A: TArena; R: TAllocResult;
+var A: TFixedArena; R: TAllocResult;
 begin
   A := TArena.Create(128);
   try
@@ -76,7 +76,7 @@ begin
 end;
 
 procedure TestMarkRestore;
-var A: TArena; M: TArenaMarker; R: TAllocResult;
+var A: TFixedArena; M: TArenaMarker; R: TAllocResult;
 begin
   A := TArena.Create(512);
   try
@@ -94,7 +94,7 @@ begin
 end;
 
 procedure TestAllocZeroed;
-var A: TArena; R: TAllocResult; P: PByte; I: Integer; AllZero: Boolean;
+var A: TFixedArena; R: TAllocResult; P: PByte; I: Integer; AllZero: Boolean;
 begin
   A := TArena.Create(256);
   try
@@ -114,7 +114,7 @@ begin
 end;
 
 procedure TestAllocFast;
-var A: TArena; P1, P2: Pointer;
+var A: TFixedArena; P1, P2: Pointer;
 begin
   A := TArena.Create(256);
   try
@@ -129,7 +129,7 @@ begin
 end;
 
 procedure TestZeroSizeAlloc;
-var A: TArena; R: TAllocResult;
+var A: TFixedArena; R: TAllocResult;
 begin
   A := TArena.Create(64);
   try
@@ -142,7 +142,7 @@ begin
 end;
 
 procedure TestStats;
-var A: TArena;
+var A: TFixedArena;
 begin
   A := TArena.Create(256);
   try
@@ -159,6 +159,20 @@ begin
   end;
 end;
 
+procedure TestArenaClassLegacyAlias;
+var
+  A: TArena;
+  R: TAllocResult;
+begin
+  A := TArena.Create(128);
+  try
+    R := A.Alloc(TMemLayout.Create(16));
+    Check(R.IsOk, 'legacy blockpool.TArena alias remains usable');
+  finally
+    A.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.arena_class');
   T.Run('basic alloc', @TestBasicAlloc);
@@ -170,5 +184,6 @@ begin
   T.Run('alloc fast', @TestAllocFast);
   T.Run('zero size alloc', @TestZeroSizeAlloc);
   T.Run('statistics', @TestStats);
+  T.Run('legacy TArena alias', @TestArenaClassLegacyAlias);
   T.Summary;
 end.

@@ -11,53 +11,12 @@ function DefaultAllocator: IAllocator;
 
 implementation
 
-type
-  { TDefaultAllocator - wraps FPC GetMem/FreeMem }
-  TDefaultAllocator = class(TInterfacedObject, IAllocator)
-  public
-    function Allocate(const ASize: SizeUInt): Pointer;
-    function Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-    procedure Deallocate(const APtr: Pointer);
-  end;
-
-var
-  GDefaultAllocator: IAllocator = nil;
-  GDefaultAllocatorInit: LongInt = 0;
+uses
+  nextpas.core.mem.allocator.foundation;
 
 function DefaultAllocator: IAllocator;
-var LNew: IAllocator;
 begin
-  if GDefaultAllocator = nil then
-  begin
-    if InterlockedCompareExchange(GDefaultAllocatorInit, 1, 0) = 0 then
-    begin
-      LNew := TDefaultAllocator.Create;
-      GDefaultAllocator := LNew;
-    end
-    else
-      while GDefaultAllocator = nil do ;
-  end;
-  Result := GDefaultAllocator;
-end;
-
-{ TDefaultAllocator }
-
-function TDefaultAllocator.Allocate(const ASize: SizeUInt): Pointer;
-begin
-  Result := GetMem(ASize);
-end;
-
-function TDefaultAllocator.Reallocate(const APtr: Pointer; const ANewSize: SizeUInt): Pointer;
-var
-  LPtr: Pointer;
-begin
-  LPtr := APtr;
-  Result := ReAllocMem(LPtr, ANewSize);
-end;
-
-procedure TDefaultAllocator.Deallocate(const APtr: Pointer);
-begin
-  FreeMem(APtr);
+  Result := nextpas.core.mem.allocator.foundation.GetRtlAllocator;
 end;
 
 end.

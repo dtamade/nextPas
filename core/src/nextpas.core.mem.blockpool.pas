@@ -180,7 +180,7 @@ type
   end;
 
   {**
-   * TArena
+   * TFixedArena
    *
    * @desc 高性能线性分配器
    *       High-performance arena/bump allocator
@@ -195,7 +195,7 @@ type
    *   - AllocFast: ~1ns (无检查版本)
    *   - Reset: O(1)
    *}
-  TArena = class(TInterfacedObject, IArena)
+  TFixedArena = class(TInterfacedObject, IArena)
   private
     FRawMemory: Pointer;          // 原始分配指针（释放用）
     FMemory: PByte;              // 内存起始
@@ -230,6 +230,8 @@ type
     property PeakUsed: SizeUInt read FPeakUsed;
     property TotalAllocCount: QWord read FTotalAllocs;
   end;
+
+  TArena = TFixedArena;
 
   { 向后兼容的基类（已废弃，仅用于接口兼容） }
   TBlockPoolBase = class(TInterfacedObject, IBlockPool)
@@ -658,10 +660,10 @@ begin
 end;
 
 { ============================================================================ }
-{ TArena }
+{ TFixedArena }
 { ============================================================================ }
 
-constructor TArena.Create(aTotalSize: SizeUInt);
+constructor TFixedArena.Create(aTotalSize: SizeUInt);
 var
   LAllocSize: SizeUInt;
   LRaw: Pointer;
@@ -671,7 +673,7 @@ begin
   inherited Create;
 
   if aTotalSize = 0 then
-    raise EAllocError.Create(aeInvalidLayout, 'TArena: size must be > 0');
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedArena: size must be > 0');
 
   FTotalSize := aTotalSize;
   FAlignment := DEFAULT_ALIGNMENT;
@@ -681,11 +683,11 @@ begin
   // 分配并对齐 Arena 基址，保证至少有 TotalSize 可用空间
   LAllocSize := aTotalSize + (FAlignment - 1);
   if LAllocSize < aTotalSize then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TArena: allocation size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TFixedArena: allocation size overflow');
 
   GetMem(LRaw, LAllocSize);
   if LRaw = nil then
-    raise EOutOfMemory.Create(aeOutOfMemory, 'TArena: failed to allocate memory');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TFixedArena: failed to allocate memory');
 
   FRawMemory := LRaw;
   LAddr := PtrUInt(LRaw);
@@ -697,7 +699,7 @@ begin
   FEnd := FMemory + aTotalSize;
 end;
 
-destructor TArena.Destroy;
+destructor TFixedArena.Destroy;
 begin
   if FRawMemory <> nil then
     FreeMem(FRawMemory);
@@ -708,7 +710,7 @@ begin
   inherited Destroy;
 end;
 
-function TArena.Alloc(const aLayout: TMemLayout): TAllocResult;
+function TFixedArena.Alloc(const aLayout: TMemLayout): TAllocResult;
 var
   LAlign: SizeUInt;
   LMask: SizeUInt;
@@ -765,14 +767,14 @@ begin
   Result := TAllocResult.Ok(LPtr);
 end;
 
-function TArena.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
+function TFixedArena.AllocZeroed(const aLayout: TMemLayout): TAllocResult;
 begin
   Result := Alloc(aLayout);
   if Result.IsOk and (Result.Ptr <> nil) then
     FillChar(Result.Ptr^, aLayout.Size, 0);
 end;
 
-function TArena.AllocFast(aSize: SizeUInt): Pointer;
+function TFixedArena.AllocFast(aSize: SizeUInt): Pointer;
 var
   LUsed: SizeUInt;
 begin
@@ -780,7 +782,7 @@ begin
     Exit(nil);
   Result := FCurrent;
   {$IFDEF DEBUG}
-  Assert((PtrUInt(FEnd) - PtrUInt(FCurrent)) >= aSize, 'TArena.AllocFast: out of memory');
+  Assert((PtrUInt(FEnd) - PtrUInt(FCurrent)) >= aSize, 'TFixedArena.AllocFast: out of memory');
   {$ENDIF}
   Inc(FCurrent, aSize);
   Inc(FTotalAllocs);
@@ -789,7 +791,7 @@ begin
     FPeakUsed := LUsed;
 end;
 
-function TArena.AllocAlignedFast(aSize, aAlign: SizeUInt): Pointer;
+function TFixedArena.AllocAlignedFast(aSize, aAlign: SizeUInt): Pointer;
 var
   LMask: SizeUInt;
   LUsed: SizeUInt;
@@ -803,12 +805,12 @@ begin
 
   LMask := aAlign - 1;
   {$IFDEF DEBUG}
-  Assert(LMask <= (High(PtrUInt) - PtrUInt(FCurrent)), 'TArena.AllocAlignedFast: pointer overflow');
+  Assert(LMask <= (High(PtrUInt) - PtrUInt(FCurrent)), 'TFixedArena.AllocAlignedFast: pointer overflow');
   {$ENDIF}
   FCurrent := PByte((PtrUInt(FCurrent) + LMask) and not LMask);
   Result := FCurrent;
   {$IFDEF DEBUG}
-  Assert((PtrUInt(FEnd) - PtrUInt(FCurrent)) >= aSize, 'TArena.AllocAlignedFast: out of memory');
+  Assert((PtrUInt(FEnd) - PtrUInt(FCurrent)) >= aSize, 'TFixedArena.AllocAlignedFast: out of memory');
   {$ENDIF}
   Inc(FCurrent, aSize);
   Inc(FTotalAllocs);
@@ -817,38 +819,38 @@ begin
     FPeakUsed := LUsed;
 end;
 
-function TArena.SaveMark: TArenaMarker;
+function TFixedArena.SaveMark: TArenaMarker;
 begin
   Result := TArenaMarker(PtrUInt(FCurrent) - PtrUInt(FMemory));
 end;
 
-procedure TArena.RestoreToMark(aMark: TArenaMarker);
+procedure TFixedArena.RestoreToMark(aMark: TArenaMarker);
 var
   LTarget: PByte;
 begin
   if SizeUInt(aMark) > FTotalSize then
-    raise EAllocError.Create(aeInvalidLayout, 'TArena.RestoreToMark: marker out of range');
+    raise EAllocError.Create(aeInvalidLayout, 'TFixedArena.RestoreToMark: marker out of range');
   LTarget := FMemory + SizeUInt(aMark);
 
   FCurrent := LTarget;
 end;
 
-procedure TArena.Reset;
+procedure TFixedArena.Reset;
 begin
   FCurrent := FMemory;
 end;
 
-function TArena.TotalSize: SizeUInt;
+function TFixedArena.TotalSize: SizeUInt;
 begin
   Result := FTotalSize;
 end;
 
-function TArena.UsedSize: SizeUInt;
+function TFixedArena.UsedSize: SizeUInt;
 begin
   Result := PtrUInt(FCurrent) - PtrUInt(FMemory);
 end;
 
-function TArena.RemainingSize: SizeUInt;
+function TFixedArena.RemainingSize: SizeUInt;
 begin
   Result := PtrUInt(FEnd) - PtrUInt(FCurrent);
 end;

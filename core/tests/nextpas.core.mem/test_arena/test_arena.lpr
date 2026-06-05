@@ -13,7 +13,7 @@ var
 
 procedure TestArenaInit;
 var
-  LA: TArena;
+  LA: TLocalArena;
 begin
   LA.Init(1024);
   CheckEqual(Int64(1024), Int64(LA.Capacity), 'capacity');
@@ -24,7 +24,7 @@ end;
 
 procedure TestArenaAlloc;
 var
-  LA: TArena;
+  LA: TLocalArena;
   LP1, LP2: Pointer;
 begin
   LA.Init(256);
@@ -41,7 +41,7 @@ end;
 
 procedure TestArenaAllocExhaust;
 var
-  LA: TArena;
+  LA: TLocalArena;
   LP: Pointer;
 begin
   LA.Init(100);
@@ -54,7 +54,7 @@ end;
 
 procedure TestArenaAllocAligned;
 var
-  LA: TArena;
+  LA: TLocalArena;
   LP: Pointer;
 begin
   LA.Init(1024);
@@ -71,7 +71,7 @@ end;
 
 procedure TestArenaReset;
 var
-  LA: TArena;
+  LA: TLocalArena;
 begin
   LA.Init(256);
   LA.Alloc(100);
@@ -88,7 +88,7 @@ end;
 
 procedure TestArenaMark;
 var
-  LA: TArena;
+  LA: TLocalArena;
   LMark: TArenaMarker;
   LP: Pointer;
 begin
@@ -110,7 +110,7 @@ end;
 
 procedure TestArenaMarkNested;
 var
-  LA: TArena;
+  LA: TLocalArena;
   LMark1, LMark2: TArenaMarker;
 begin
   LA.Init(256);
@@ -133,7 +133,7 @@ end;
 
 procedure TestArenaWriteRead;
 var
-  LA: TArena;
+  LA: TLocalArena;
   LP: PInteger;
 begin
   LA.Init(256);
@@ -146,13 +146,25 @@ end;
 
 procedure TestArenaDone;
 var
-  LA: TArena;
+  LA: TLocalArena;
 begin
   LA.Init(1024);
   LA.Alloc(512);
   LA.Done;
   CheckEqual(Int64(0), Int64(LA.BytesUsed), 'done clears state');
   CheckEqual(Int64(0), Int64(LA.Capacity), 'done clears capacity');
+end;
+
+procedure TestArenaLegacyAlias;
+var
+  LA: TArena;
+begin
+  LA.Init(64);
+  try
+    Check(LA.Alloc(8) <> nil, 'legacy TArena alias remains usable');
+  finally
+    LA.Done;
+  end;
 end;
 
 begin
@@ -166,5 +178,6 @@ begin
   T.Run('Mark nested', @TestArenaMarkNested);
   T.Run('Write/Read', @TestArenaWriteRead);
   T.Run('Done', @TestArenaDone);
+  T.Run('legacy TArena alias', @TestArenaLegacyAlias);
   T.Summary;
 end.

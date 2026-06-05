@@ -41,8 +41,7 @@ uses
   {$ELSE}
   BaseUnix, Unix,
   {$ENDIF}
-  nextpas.core.base,
-  nextpas.core.mem.allocator;
+  nextpas.core.base;
 
 {$IFNDEF WINDOWS}
 const

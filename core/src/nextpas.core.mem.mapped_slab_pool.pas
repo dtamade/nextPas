@@ -46,6 +46,10 @@ type
     FDataArea: Pointer;       // 实际数据区域
 
     function GetBaseAddress: Pointer;
+    function GetPageDescriptor(aPageIndex: UInt32): Pointer;
+    function DataOffsetToPointer(aOffset: UInt64): Pointer;
+    function PointerToDataOffset(aPtr: Pointer; out aOffset: UInt64): Boolean;
+    function PageUsableSize(aPageIndex: UInt32): UInt32;
     function CalculateRequiredSize(aPoolSize: UInt64): UInt64;
     procedure InitializeHeader(aPoolSize: UInt64; aPageSize: UInt32; aMaxSizeClass: UInt32);
     function ValidateHeader: Boolean;
@@ -257,6 +261,7 @@ implementation
 uses
   nextpas.core.fs.util,
   nextpas.core.text.conv,
+  nextpas.core.mem.error,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
 
@@ -264,7 +269,11 @@ const
   // 内存布局常量
   HEADER_SIZE = 128;         // 头部大小
   SLAB_MAGIC = $534C4142;    // 'SLAB' 魔数
-  SLAB_VERSION = 1;          // 版本号
+  SLAB_VERSION = 2;          // 版本号
+  BLOCK_MAGIC = $4D53424C;   // 'MSBL' block magic
+  BLOCK_STATE_FREE = 0;
+  BLOCK_STATE_USED = 1;
+  NO_FREE_OFFSET = High(UInt64);
 
   // 默认池大小（字节）
   DEFAULT_POOL_SIZES: array[0..8] of UInt64 = (
@@ -293,7 +302,30 @@ type
     TotalAllocs: UInt64;     // 总分配次数
     TotalFrees: UInt64;      // 总释放次数
     FailedAllocs: UInt64;    // 失败分配次数
-    Reserved: array[0..31] of Byte; // 保留字段
+    ResetGeneration: UInt32; // Reset 后旧指针失效
+    Reserved: array[0..27] of Byte; // 保留字段
+  end;
+
+  PMappedSlabPage = ^TMappedSlabPage;
+  TMappedSlabPage = packed record
+    BlockSize: UInt32;       // payload size class, 0 means unused page
+    BlockCapacity: UInt32;   // max blocks in this page
+    AllocatedCount: UInt32;  // currently checked-out blocks
+    FreeCount: UInt32;       // blocks in free list
+    FreeHeadOffset: UInt64;  // offset of block header from FDataArea
+    BumpOffset: UInt32;      // next uninitialized byte within page
+    Generation: UInt32;      // copied from header reset generation
+  end;
+
+  PMappedSlabBlockHeader = ^TMappedSlabBlockHeader;
+  TMappedSlabBlockHeader = packed record
+    Magic: UInt32;
+    PageIndex: UInt32;
+    BlockSize: UInt32;
+    RequestedSize: UInt32;
+    State: UInt32;
+    Generation: UInt32;
+    NextFreeOffset: UInt64;
   end;
 
 { TMappedSlabPool }
@@ -330,6 +362,47 @@ begin
     Result := nil;
 end;
 
+function TMappedSlabPool.GetPageDescriptor(aPageIndex: UInt32): Pointer;
+begin
+  Result := Pointer(PByte(FPages) + SizeUInt(aPageIndex) * SizeOf(TMappedSlabPage));
+end;
+
+function TMappedSlabPool.DataOffsetToPointer(aOffset: UInt64): Pointer;
+begin
+  Result := Pointer(PByte(FDataArea) + SizeUInt(aOffset));
+end;
+
+function TMappedSlabPool.PointerToDataOffset(aPtr: Pointer; out aOffset: UInt64): Boolean;
+var
+  LBase: PtrUInt;
+  LPtr: PtrUInt;
+begin
+  Result := False;
+  aOffset := 0;
+  if (aPtr = nil) or (FDataArea = nil) then Exit;
+
+  LBase := PtrUInt(FDataArea);
+  LPtr := PtrUInt(aPtr);
+  if LPtr < LBase then Exit;
+  aOffset := UInt64(LPtr - LBase);
+  Result := aOffset < FPoolSize;
+end;
+
+function TMappedSlabPool.PageUsableSize(aPageIndex: UInt32): UInt32;
+var
+  LPageStart: UInt64;
+  LRemaining: UInt64;
+begin
+  LPageStart := UInt64(aPageIndex) * UInt64(FPageSize);
+  if LPageStart >= FPoolSize then
+    Exit(0);
+  LRemaining := FPoolSize - LPageStart;
+  if LRemaining > FPageSize then
+    Result := FPageSize
+  else
+    Result := UInt32(LRemaining);
+end;
+
 function TMappedSlabPool.CalculateRequiredSize(aPoolSize: UInt64): UInt64;
 var
   LPageCount: UInt64;
@@ -338,8 +411,8 @@ begin
   // 计算页面数量
   LPageCount := (aPoolSize + FPageSize - 1) div FPageSize;
 
-  // 页面描述符大小（简化的 slab 页面结构）
-  LPageDescriptorSize := LPageCount * 32; // 每个页面描述符32字节
+  // 页面描述符保存在映射区，不能保存进程本地指针。
+  LPageDescriptorSize := LPageCount * SizeOf(TMappedSlabPage);
 
   // 总大小 = 头部 + 页面描述符 + 数据区域
   Result := HEADER_SIZE + LPageDescriptorSize + aPoolSize;
@@ -352,17 +425,22 @@ procedure TMappedSlabPool.InitializeHeader(aPoolSize: UInt64; aPageSize: UInt32;
 var
   LHeader: PMappedSlabHeader;
 begin
+  FPoolSize := aPoolSize;
+  FPageSize := aPageSize;
+  FMaxSizeClass := aMaxSizeClass;
+
   LHeader := PMappedSlabHeader(FHeader);
   LHeader^.Magic := SLAB_MAGIC;
   LHeader^.Version := SLAB_VERSION;
   LHeader^.PoolSize := aPoolSize;
   LHeader^.PageSize := aPageSize;
   LHeader^.MaxSizeClass := aMaxSizeClass;
-  LHeader^.TotalPages := aPoolSize div aPageSize;
+  LHeader^.TotalPages := (aPoolSize + aPageSize - 1) div aPageSize;
   LHeader^.UsedPages := 0;
   LHeader^.TotalAllocs := 0;
   LHeader^.TotalFrees := 0;
   LHeader^.FailedAllocs := 0;
+  LHeader^.ResetGeneration := 1;
   FillChar(LHeader^.Reserved, SizeOf(LHeader^.Reserved), 0);
 end;
 
@@ -388,14 +466,15 @@ var
   LPageCount: UInt64;
   LPageDescriptorSize: UInt64;
 begin
-  LPageCount := FPoolSize div FPageSize;
-  LPageDescriptorSize := LPageCount * 32;
+  LPageCount := (FPoolSize + FPageSize - 1) div FPageSize;
+  LPageDescriptorSize := LPageCount * SizeOf(TMappedSlabPage);
 
   // 设置内存布局指针
   FPages := Pointer(PByte(FHeader) + HEADER_SIZE);
   FDataArea := Pointer(PByte(FPages) + LPageDescriptorSize);
+  FSlabData := FDataArea;
 
-  // 初始化页面描述符（简化实现）
+  // 初始化页面描述符。描述符必须只含相对 offset，避免映射地址变化后失效。
   if FIsCreator then
     FillChar(FPages^, LPageDescriptorSize, 0);
 end;
@@ -596,55 +675,174 @@ end;
 function TMappedSlabPool.Alloc(aSize: UInt64): Pointer;
 var
   LHeader: PMappedSlabHeader;
-  LAlignedSize: UInt64;
+  LBlockSize: UInt32;
+  LBlockBytes: UInt32;
   LPageIndex: UInt32;
-  LOffset: UInt64;
+  LChosenPageIndex: UInt32;
+  LPage: PMappedSlabPage;
+  LChosenPage: PMappedSlabPage;
+  LBlock: PMappedSlabBlockHeader;
+  LBlockOffset: UInt64;
+  LPageStart: UInt64;
+  LPageUsable: UInt32;
+  LFound: Boolean;
 begin
   Result := nil;
-  if not IsValid or (aSize = 0) or (aSize > FMaxSizeClass) then
+  if not IsValid then Exit;
+
+  LHeader := PMappedSlabHeader(FHeader);
+  if (aSize = 0) or (aSize > FMaxSizeClass) or
+     (aSize > UInt64(High(UInt32)) - SizeOf(TMappedSlabBlockHeader) - 7) then
   begin
-    if IsValid then
-      Inc(PMappedSlabHeader(FHeader)^.FailedAllocs);
+    Inc(LHeader^.FailedAllocs);
     Exit;
   end;
 
-  LHeader := PMappedSlabHeader(FHeader);
+  LBlockSize := UInt32((aSize + 7) and not UInt64(7));
+  LBlockBytes := LBlockSize + SizeOf(TMappedSlabBlockHeader);
 
-  // 简化的分配算法：线性分配（实际应该实现完整的 slab 算法）
-  LAlignedSize := (aSize + 7) and not 7; // 8字节对齐
+  LFound := False;
+  LChosenPage := nil;
+  LChosenPageIndex := 0;
 
-  // 查找可用空间（简化实现）
-  if LHeader^.UsedPages * FPageSize + LAlignedSize <= FPoolSize then
+  for LPageIndex := 0 to LHeader^.TotalPages - 1 do
   begin
-    LPageIndex := LHeader^.UsedPages;
-    LOffset := (LPageIndex * FPageSize) + (LAlignedSize * (LHeader^.TotalAllocs mod (FPageSize div LAlignedSize)));
+    LPage := PMappedSlabPage(GetPageDescriptor(LPageIndex));
+    LPageUsable := PageUsableSize(LPageIndex);
 
-    if LOffset + LAlignedSize <= FPoolSize then
+    if (LPage^.BlockSize = LBlockSize) and
+       ((LPage^.FreeHeadOffset <> NO_FREE_OFFSET) or
+        (UInt64(LPage^.BumpOffset) + LBlockBytes <= LPageUsable)) then
     begin
-      Result := Pointer(PByte(FDataArea) + LOffset);
-      Inc(LHeader^.TotalAllocs);
+      LChosenPage := LPage;
+      LChosenPageIndex := LPageIndex;
+      LFound := True;
+      Break;
+    end;
 
-      // 简单的页面使用跟踪
-      if (LHeader^.TotalAllocs mod (FPageSize div LAlignedSize)) = 0 then
-        Inc(LHeader^.UsedPages);
-    end
-    else
+    if (not LFound) and (LChosenPage = nil) and (LPage^.BlockSize = 0) and
+       (LBlockBytes <= LPageUsable) then
+    begin
+      LChosenPage := LPage;
+      LChosenPageIndex := LPageIndex;
+    end;
+  end;
+
+  if LChosenPage = nil then
+  begin
+    Inc(LHeader^.FailedAllocs);
+    Exit;
+  end;
+
+  if not LFound then
+  begin
+    LPageUsable := PageUsableSize(LChosenPageIndex);
+    FillChar(LChosenPage^, SizeOf(TMappedSlabPage), 0);
+    LChosenPage^.BlockSize := LBlockSize;
+    LChosenPage^.BlockCapacity := LPageUsable div LBlockBytes;
+    LChosenPage^.FreeHeadOffset := NO_FREE_OFFSET;
+    LChosenPage^.Generation := LHeader^.ResetGeneration;
+    Inc(LHeader^.UsedPages);
+  end;
+
+  if LChosenPage^.FreeHeadOffset <> NO_FREE_OFFSET then
+  begin
+    LBlockOffset := LChosenPage^.FreeHeadOffset;
+    LBlock := PMappedSlabBlockHeader(DataOffsetToPointer(LBlockOffset));
+    if (LBlock^.Magic <> BLOCK_MAGIC) or
+       (LBlock^.PageIndex <> LChosenPageIndex) or
+       (LBlock^.BlockSize <> LBlockSize) or
+       (LBlock^.State <> BLOCK_STATE_FREE) or
+       (LBlock^.Generation <> LChosenPage^.Generation) then
+    begin
       Inc(LHeader^.FailedAllocs);
+      Exit;
+    end;
+    LChosenPage^.FreeHeadOffset := LBlock^.NextFreeOffset;
+    Dec(LChosenPage^.FreeCount);
   end
   else
-    Inc(LHeader^.FailedAllocs);
+  begin
+    LPageUsable := PageUsableSize(LChosenPageIndex);
+    if UInt64(LChosenPage^.BumpOffset) + LBlockBytes > LPageUsable then
+    begin
+      Inc(LHeader^.FailedAllocs);
+      Exit;
+    end;
+
+    LPageStart := UInt64(LChosenPageIndex) * UInt64(FPageSize);
+    LBlockOffset := LPageStart + LChosenPage^.BumpOffset;
+    LBlock := PMappedSlabBlockHeader(DataOffsetToPointer(LBlockOffset));
+    Inc(LChosenPage^.BumpOffset, LBlockBytes);
+  end;
+
+  LBlock^.Magic := BLOCK_MAGIC;
+  LBlock^.PageIndex := LChosenPageIndex;
+  LBlock^.BlockSize := LBlockSize;
+  LBlock^.RequestedSize := UInt32(aSize);
+  LBlock^.State := BLOCK_STATE_USED;
+  LBlock^.Generation := LChosenPage^.Generation;
+  LBlock^.NextFreeOffset := NO_FREE_OFFSET;
+
+  Inc(LChosenPage^.AllocatedCount);
+  Inc(LHeader^.TotalAllocs);
+  Result := Pointer(PByte(LBlock) + SizeOf(TMappedSlabBlockHeader));
 end;
 
 procedure TMappedSlabPool.FreeBlock(aPtr: Pointer);
 var
   LHeader: PMappedSlabHeader;
+  LPayloadOffset: UInt64;
+  LBlockOffset: UInt64;
+  LPageIndex: UInt32;
+  LPageStart: UInt64;
+  LWithinPage: UInt64;
+  LBlockStride: UInt32;
+  LPage: PMappedSlabPage;
+  LBlock: PMappedSlabBlockHeader;
 begin
-  if not IsValid or (aPtr = nil) then Exit;
+  if aPtr = nil then Exit;
+  if not IsValid then
+    raise EAllocError.Create(aePoolClosed, 'TMappedSlabPool.FreeBlock: pool is not valid');
 
   LHeader := PMappedSlabHeader(FHeader);
+  if (not PointerToDataOffset(aPtr, LPayloadOffset)) or
+     (LPayloadOffset < SizeOf(TMappedSlabBlockHeader)) then
+    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPool.FreeBlock: pointer is not from this pool');
 
-  // 简化的释放实现：只增加计数器
-  // 实际应该实现完整的 slab 释放算法
+  LBlockOffset := LPayloadOffset - SizeOf(TMappedSlabBlockHeader);
+  LPageIndex := LBlockOffset div FPageSize;
+  if LPageIndex >= LHeader^.TotalPages then
+    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPool.FreeBlock: page index out of range');
+
+  LPage := PMappedSlabPage(GetPageDescriptor(LPageIndex));
+  if (LPage^.BlockSize = 0) or (LPage^.Generation <> LHeader^.ResetGeneration) then
+    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPool.FreeBlock: stale or unowned pointer');
+
+  LPageStart := UInt64(LPageIndex) * UInt64(FPageSize);
+  LBlockStride := LPage^.BlockSize + SizeOf(TMappedSlabBlockHeader);
+  LWithinPage := LBlockOffset - LPageStart;
+  if (LBlockStride = 0) or (LWithinPage mod LBlockStride <> 0) then
+    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPool.FreeBlock: pointer is not a block payload');
+
+  LBlock := PMappedSlabBlockHeader(DataOffsetToPointer(LBlockOffset));
+  if (LBlock^.Magic <> BLOCK_MAGIC) or
+     (LBlock^.PageIndex <> LPageIndex) or
+     (LBlock^.BlockSize <> LPage^.BlockSize) or
+     (LBlock^.Generation <> LPage^.Generation) then
+    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPool.FreeBlock: invalid block header');
+
+  if LBlock^.State = BLOCK_STATE_FREE then
+    raise EAllocError.Create(aeDoubleFree, 'TMappedSlabPool.FreeBlock: double free detected');
+  if LBlock^.State <> BLOCK_STATE_USED then
+    raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPool.FreeBlock: invalid block state');
+
+  LBlock^.State := BLOCK_STATE_FREE;
+  LBlock^.NextFreeOffset := LPage^.FreeHeadOffset;
+  LPage^.FreeHeadOffset := LBlockOffset;
+  Inc(LPage^.FreeCount);
+  if LPage^.AllocatedCount > 0 then
+    Dec(LPage^.AllocatedCount);
   Inc(LHeader^.TotalFrees);
 end;
 
@@ -693,6 +891,7 @@ end;
 procedure TMappedSlabPool.Reset;
 var
   LHeader: PMappedSlabHeader;
+  LPageDescriptorSize: UInt64;
 begin
   if not IsValid then Exit;
 
@@ -701,11 +900,15 @@ begin
   LHeader^.TotalAllocs := 0;
   LHeader^.TotalFrees := 0;
   LHeader^.FailedAllocs := 0;
+  Inc(LHeader^.ResetGeneration);
+  if LHeader^.ResetGeneration = 0 then
+    LHeader^.ResetGeneration := 1;
 
   // 重置页面描述符
   if FPages <> nil then
   begin
-    FillChar(FPages^, (FPoolSize div FPageSize) * 32, 0);
+    LPageDescriptorSize := UInt64(LHeader^.TotalPages) * SizeOf(TMappedSlabPage);
+    FillChar(FPages^, LPageDescriptorSize, 0);
   end;
 end;
 
@@ -826,6 +1029,7 @@ var
   LPool: TMappedSlabPool;
   LBaseAddr: Pointer;
   LPtrAddr: SizeUInt;
+  LMappedSize: UInt64;
 begin
   if aPtr = nil then Exit;
 
@@ -837,13 +1041,21 @@ begin
     LPool := FPools[LIndex];
     if LPool.IsValid then
     begin
-      LBaseAddr := LPool.BaseAddress;
-      if (LPtrAddr >= SizeUInt(LBaseAddr)) and
+      LBaseAddr := LPool.FDataArea;
+      if (LBaseAddr <> nil) and
+         (LPtrAddr >= SizeUInt(LBaseAddr)) and
          (LPtrAddr - SizeUInt(LBaseAddr) < LPool.PoolSize) then
       begin
         LPool.FreeBlock(aPtr);
         Exit;
       end;
+
+      LBaseAddr := LPool.BaseAddress;
+      LMappedSize := LPool.CalculateRequiredSize(LPool.PoolSize);
+      if (LBaseAddr <> nil) and
+         (LPtrAddr >= SizeUInt(LBaseAddr)) and
+         (UInt64(LPtrAddr - SizeUInt(LBaseAddr)) < LMappedSize) then
+        raise EAllocError.Create(aeInvalidPointer, 'TMappedSlabPoolManager.FreeAny: pointer is not a pool block');
     end;
   end;
 
