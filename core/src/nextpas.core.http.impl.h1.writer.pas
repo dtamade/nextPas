@@ -143,13 +143,59 @@ begin
 end;
 
 procedure TH1ResponseWriter.WriteAllHeaders;
+const
+  HEADER_LINE_STACK_LIMIT = 512;
+  HEADER_SEPARATOR: AnsiString = ': ';
+  CRLF: AnsiString = #13#10;
 begin
   FHeaders.ForEach(procedure(const AName, AValue: string)
+  var
+    LBuf: array[0..HEADER_LINE_STACK_LIMIT - 1] of AnsiChar;
+    LLine: string;
+    LLineLen: SizeInt;
+    LNameLen: SizeInt;
+    LValueLen: SizeInt;
+    LPos: SizeInt;
   begin
-    WriteStr(AName);
-    WriteStr(': ');
-    WriteStr(AValue);
-    WriteCRLF;
+    LNameLen := Length(AName);
+    LValueLen := Length(AValue);
+    LLineLen := LNameLen + 4 + LValueLen;
+    if LLineLen <= SizeInt(SizeOf(LBuf)) then
+    begin
+      LPos := 0;
+      if LNameLen > 0 then
+      begin
+        Move(AName[1], LBuf[LPos], LNameLen);
+        Inc(LPos, LNameLen);
+      end;
+      Move(HEADER_SEPARATOR[1], LBuf[LPos], 2);
+      Inc(LPos, 2);
+      if LValueLen > 0 then
+      begin
+        Move(AValue[1], LBuf[LPos], LValueLen);
+        Inc(LPos, LValueLen);
+      end;
+      Move(CRLF[1], LBuf[LPos], 2);
+      WriteAllOrRaise(FWriter, LBuf[0], SizeUInt(LLineLen));
+      Exit;
+    end;
+
+    SetLength(LLine, LLineLen);
+    LPos := 1;
+    if LNameLen > 0 then
+    begin
+      Move(AName[1], LLine[LPos], LNameLen);
+      Inc(LPos, LNameLen);
+    end;
+    Move(HEADER_SEPARATOR[1], LLine[LPos], 2);
+    Inc(LPos, 2);
+    if LValueLen > 0 then
+    begin
+      Move(AValue[1], LLine[LPos], LValueLen);
+      Inc(LPos, LValueLen);
+    end;
+    Move(CRLF[1], LLine[LPos], 2);
+    WriteStr(LLine);
   end);
 end;
 

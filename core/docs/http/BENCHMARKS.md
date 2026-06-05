@@ -98,8 +98,8 @@ Local focused row from 2026-06-05:
 
 | workload | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| headers only 200 | 100000 | 1284.0 | 778840 |
-| fixed 200 13B | 100000 | 1261.1 | 792973 |
+| headers only 200 | 100000 | 1247.1 | 801852 |
+| fixed 200 13B | 100000 | 1250.5 | 799680 |
 
 ## Run the H1 Outbound Drain Benchmark
 
@@ -213,6 +213,51 @@ The clean `bench_h1writer` build for the `headers only 200` row emitted no FPC
 `Warning:` or `Note:` lines. This optimization deliberately does not change
 header order, header normalization, chunked defaults, no-body statuses, `HEAD`
 suppression, or non-200 status-line serialization.
+
+## Optimization Evidence: H1 Writer Header Line Coalescing
+
+On 2026-06-05 local time, `TH1ResponseWriter.WriteAllHeaders` gained a narrow
+header-line coalescing path. Common header lines are materialized into a
+512-byte stack buffer and sent through one write-all invocation per header line;
+long header lines fall back to a heap string with the same wire bytes. A
+full-progress writer sees one `IWriter.Write` call per header line, while
+short writers still use the existing retry loop.
+
+Focused RED before the production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+30 total, 29 passed, 1 failed
+Header lines use a single writer call each: expected 4, got 10
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the stack-buffer implementation:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+30 total, 30 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+26 total, 26 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh same-host filtered rows compared with the previous committed
+`HTTP_STATUS_OK` status-line fast path:
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| headers only 200 | 1284.0 | 1247.1 |
+| fixed 200 13B | 1261.1 | 1250.5 |
+
+A simpler string-concatenation implementation was measured and rejected because
+it reduced write calls but regressed these rows. The kept implementation
+preserves header order, lowercase normalization, repeated-header iteration,
+short-writer retry behavior, no-body statuses, `HEAD` suppression, and chunked
+defaults.
 
 ## Optimization Evidence: H1 Ingress Fast Path
 

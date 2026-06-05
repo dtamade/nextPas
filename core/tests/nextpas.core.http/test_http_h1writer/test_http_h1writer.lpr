@@ -36,6 +36,16 @@ type
     function GetOutput: string;
   end;
 
+  TCountingWriter = class(TInterfacedObject, IWriter)
+  private
+    FBuf: string;
+    FWriteCalls: Int32;
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    function GetOutput: string;
+    function WriteCalls: Int32;
+  end;
+
   TMockTcpStream = class(TInterfacedObject, ITcpStream)
   public
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -112,6 +122,29 @@ end;
 function TShortWriter.GetOutput: string;
 begin
   Result := FBuf;
+end;
+
+function TCountingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LOld: SizeUInt;
+begin
+  Inc(FWriteCalls);
+  if ACount = 0 then
+    Exit(0);
+  LOld := SizeUInt(Length(FBuf));
+  SetLength(FBuf, LOld + ACount);
+  Move(ABuf, FBuf[LOld + 1], ACount);
+  Result := ACount;
+end;
+
+function TCountingWriter.GetOutput: string;
+begin
+  Result := FBuf;
+end;
+
+function TCountingWriter.WriteCalls: Int32;
+begin
+  Result := FWriteCalls;
 end;
 
 function TMockTcpStream.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
@@ -773,6 +806,31 @@ begin
   LRW.Free;
 end;
 
+procedure TestHeaderLinesUseSingleWriterCallEach;
+var
+  LW: TCountingWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+begin
+  LW := TCountingWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '0');
+    LRW.GetHeaders.Set_('X-Test', 'ok');
+    LRW.WriteHeader(HTTP_STATUS_OK);
+    LOut := LW.GetOutput;
+    CheckEqual('HTTP/1.1 200 OK'#13#10 +
+      'content-length: 0'#13#10 +
+      'x-test: ok'#13#10 +
+      #13#10, LOut,
+      'combined header-line writes preserve exact wire bytes');
+    CheckEqual(Int64(4), Int64(LW.WriteCalls),
+      'status line, each header line, and final CRLF are single writes');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestContentLengthBodyWithShortWriterWritesAllBytes;
 var
   LW: TShortWriter;
@@ -936,6 +994,8 @@ begin
   T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
   T.Run('WriteHeader with short writer still writes full headers',
     @TestWriteHeaderWithShortWriterStillWritesFullHeaders);
+  T.Run('Header lines use a single writer call each',
+    @TestHeaderLinesUseSingleWriterCallEach);
   T.Run('Content-Length body with short writer writes all bytes',
     @TestContentLengthBodyWithShortWriterWritesAllBytes);
   T.Run('Chunked body with short writer writes complete chunk',

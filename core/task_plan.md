@@ -1,11 +1,11 @@
-# Task Plan: HTTP H1 writer 200 OK status-line fast path
+# Task Plan: HTTP H1 writer header-line coalescing
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-上一批已经把 `TH1ResponseWriter` 的 header-only 与小 body rows 拆开，本轮在不改变
-public API / wire contract 的前提下，对最常见的 `HTTP_STATUS_OK` status-line 做极小
-fast path，减少小响应 header serialization 成本。
+上一批已经把常见 `HTTP_STATUS_OK` status-line 改成单次 fixed write；本轮继续在
+`TH1ResponseWriter.WriteAllHeaders` 上隔离 response serialization 成本，在不改变
+public API / wire contract 的前提下降低常见 full-progress writer 路径的小写入次数。
 
 本轮不改 public HTTP API，不改 server/client 架构，不手改 generated
 `src/nextpas.core.http.impl.h1.llhttp.pas`，不写
@@ -14,10 +14,12 @@ fast path，减少小响应 header serialization 成本。
 ## Checklist
 
 - [x] 复核设计规范、HTTP docs/control files 与 git status，确认共享 checkout 脏文件边界。
-- [x] 复核 `test_http_h1writer` 的 200/404/1xx/101/204/304/HEAD/short-writer/chunked 精确 wire contract。
-- [x] 跑 `test_http_h1writer` baseline，确认当前 writer contract 与 heaptrc。
-- [x] GREEN candidate：`TH1ResponseWriter.WriteStatusLine` 对 `HTTP_STATUS_OK` 写固定 `HTTP/1.1 200 OK\r\n`，其他 status 保持旧泛化路径。
-- [x] 跑 focused writer gate，确认 wire contract 与 heaptrc。
+- [x] RED：`test_http_h1writer` 新增 header-line exact wire bytes / full-progress write-call contract。
+- [x] 验证 RED：当前实现每个 header 拆成 name / separator / value / CRLF 多段写入，测试失败为 `expected 4, got 10`，heaptrc `0 unfreed memory blocks`。
+- [x] GREEN candidate 1：简单字符串拼接合并 header line。
+- [x] benchmark 复盘：简单拼接版减少 write calls 但 live rows 退化，因此不保留。
+- [x] GREEN candidate 2：常见 header line 用 512-byte 栈缓冲物化，长 header line fallback 到 heap string。
+- [x] 跑 focused writer gate，确认 wire contract / call-count contract 与 heaptrc。
 - [x] 跑 focused benchmark gate，确认 benchmark contract 与 heaptrc。
 - [x] 跑 fresh `bench_h1writer` filtered rows，判断收益并决定保留。
 - [x] 更新 API coverage / benchmark docs / 控制文件。
@@ -27,6 +29,7 @@ fast path，减少小响应 header serialization 成本。
 本轮允许修改：
 
 - `src/nextpas.core.http.impl.h1.writer.pas`
+- `tests/nextpas.core.http/test_http_h1writer/test_http_h1writer.lpr`
 - `docs/http/API_COVERAGE.md`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
@@ -35,24 +38,26 @@ fast path，减少小响应 header serialization 成本。
 
 ## Current conclusion
 
-`HTTP_STATUS_OK` fixed status-line fast path 保留。
+`TH1ResponseWriter.WriteAllHeaders` header-line stack-buffer coalescing 保留。
 
-Fresh local `bench_h1writer` rows after the change:
+Fresh local `bench_h1writer` rows after the kept implementation:
 
-- `headers only 200`: `100000` iterations, `1284.0 ns/op`, `778840 ops/s`
-- `fixed 200 13B`: `100000` iterations, `1261.1 ns/op`, `792973 ops/s`
+- `headers only 200`: `100000` iterations, `1247.1 ns/op`, `801852 ops/s`
+- `fixed 200 13B`: `100000` iterations, `1250.5 ns/op`, `799680 ops/s`
 
-Compared with the previous committed local rows:
+Compared with the previous committed local rows after the `HTTP_STATUS_OK`
+status-line fast path:
 
-- `headers only 200`: `1414.6 -> 1284.0 ns/op`
-- `fixed 200 13B`: `1389.1 -> 1261.1 ns/op`
+- `headers only 200`: `1284.0 -> 1247.1 ns/op`
+- `fixed 200 13B`: `1261.1 -> 1250.5 ns/op`
 
-这条 fast path 不改 header order、header normalization、chunked default、
-no-body statuses、HEAD suppression 或非 200 status-line serialization。
+这条优化不改 `IHttpHeaders.ForEach` public surface、header order、lowercase
+normalization、repeated headers、short-writer retry、chunked default、
+no-body statuses 或 HEAD suppression。
 
 ## Next target
 
-继续 `6/6 benchmark/performance`。下一批建议继续在 `TH1ResponseWriter` 内拆
-header materialization：优先评估 `WriteAllHeaders` 多段小写入是否可以在不改变
-`IHttpHeaders.ForEach` public surface 和 header order 的前提下合并输出。必须先用
-`test_http_h1writer` 保护 precise wire bytes，再用 `bench_h1writer` filtered rows 判断是否保留。
+继续 `6/6 benchmark/performance`。下一批建议评估 response writer 更大粒度的 header
+block / outbound buffer seam：不要继续无证据地堆微优化，优先确认 full-chain server
+瓶颈是否仍在 response serialization、router dispatch、request construction，还是已经转移到
+TCP/session 调度。
