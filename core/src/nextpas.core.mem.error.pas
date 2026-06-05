@@ -27,7 +27,7 @@ unit nextpas.core.mem.error;
 interface
 
 uses
-  nextpas.core.base;  // ✅ MEM-002: 引入 ECore 基类
+  nextpas.core.exception;
 
 type
   {**
@@ -195,7 +195,7 @@ type
    *
    * @note 仅在需要异常语义时使用，热路径不应抛异常
    *}
-  EAllocError = class(ECore)  // ✅ MEM-002: 继承自 ECore
+  EAllocError = class(nextpas.core.exception.ENextPasError)
   private
     FError: TAllocError;
   public
@@ -203,7 +203,13 @@ type
     property Error: TAllocError read FError;
   end;
 
-  EOutOfMemory = class(EAllocError);
+  EOutOfMemory = class(nextpas.core.exception.EOutOfMemory)
+  private
+    FError: TAllocError;
+  public
+    constructor Create(aError: TAllocError; const aMsg: string = '');
+    property Error: TAllocError read FError;
+  end;
   EInvalidLayout = class(EAllocError);
   EInvalidPointer = class(EAllocError);
   EDoubleFree = class(EAllocError);
@@ -236,6 +242,24 @@ const
 function AllocErrorToString(aError: TAllocError): string;
 begin
   Result := ERROR_MESSAGES[aError];
+end;
+
+function AllocErrorCategory(aError: TAllocError): TErrorCategory;
+begin
+  case aError of
+    aeOutOfMemory, aeCapacityExhausted:
+      Result := ecResourceExhausted;
+    aeInvalidLayout, aeAlignmentNotSupported, aeSizeMismatch:
+      Result := ecInvalidArgument;
+    aeInvalidPointer, aeDoubleFree:
+      Result := ecInvalidOperation;
+    aePoolClosed, aeReallocNotSupported:
+      Result := ecInvalidOperation;
+    aeInternalError:
+      Result := ecInternal;
+  else
+    Result := ecNone;
+  end;
 end;
 
 { TAllocResult }
@@ -308,6 +332,17 @@ end;
 { EAllocError }
 
 constructor EAllocError.Create(aError: TAllocError; const aMsg: string);
+begin
+  FError := aError;
+  if aMsg <> '' then
+    inherited Create(aMsg + ': ' + ERROR_MESSAGES[aError], AllocErrorCategory(aError))
+  else
+    inherited Create(ERROR_MESSAGES[aError], AllocErrorCategory(aError));
+end;
+
+{ EOutOfMemory }
+
+constructor EOutOfMemory.Create(aError: TAllocError; const aMsg: string);
 begin
   FError := aError;
   if aMsg <> '' then

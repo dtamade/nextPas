@@ -39,9 +39,22 @@ begin
   Assert(LCaught, 'Should catch EIndexOutOfRangeError as ENextPasError');
 end;
 
+procedure TestCategoryConstantsRemainPublic;
+var
+  LErr: ENextPasError;
+begin
+  LErr := ENextPasError.Create('network failed', ecNetwork);
+  try
+    Assert(LErr.Category = ecNetwork, 'ecNetwork should remain public through nextpas.core.errors');
+  finally
+    LErr.Free;
+  end;
+end;
+
 begin
   WriteLn('=== nextpas.core.errors tests ===');
   TestExceptionHierarchy;
   TestExceptionRaise;
+  TestCategoryConstantsRemainPublic;
   WriteLn('PASS: all errors tests passed');
 end.

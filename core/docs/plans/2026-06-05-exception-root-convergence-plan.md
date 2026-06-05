@@ -33,6 +33,7 @@
 The test must assert:
 
 - `ECore` is catchable as `ENextPasError`.
+- Legacy `on E: ECore` catches canonical timeout and OOM aliases.
 - `nextpas.core.base.ETimeoutError` and `nextpas.core.errors.ETimeoutError` resolve to the same runtime class.
 - `nextpas.core.errors.EOutOfMemoryError` catches compatibility `nextpas.core.base.EOutOfMemory`.
 - `nextpas.core.mem.error.EAllocError` is catchable as `ENextPasError`.
@@ -84,7 +85,7 @@ Expected: still fail because `base`, `errors`, and `mem.error` have not been rew
 
 - [ ] **Step 1: Update base compatibility**
 
-Make `ECore` inherit from `ENextPasError`. Keep legacy base-specific exceptions under `ECore`. Re-export canonical timeout and OOM names without creating new class identities.
+Make `ECore` a compatibility alias of `ENextPasError`. Keep legacy base-specific exceptions source-compatible under `ECore`. Re-export canonical timeout and OOM names without creating new class identities.
 
 - [ ] **Step 2: Update errors facade**
 
@@ -115,6 +116,8 @@ Make `EAllocError` inherit from `ENextPasError` or the canonical resource-exhaus
 - [ ] **Step 2: Keep OOM compatibility**
 
 Ensure allocation OOM exceptions are catchable as `EOutOfMemoryError` and `ENextPasError`. If constructor compatibility needs a mem-specific subclass, keep it under `EOutOfMemoryError`.
+
+Because Pascal exceptions have single inheritance, do not pretend `mem.error.EOutOfMemory` can also remain an `EAllocError` subclass after it moves into the canonical OOM lineage. Preserve source construction and `Error: TAllocError`; migrate OOM catch sites to `EOutOfMemoryError` in later stages if any appear.
 
 - [ ] **Step 3: Run focused tests**
 

@@ -8,7 +8,8 @@ unit nextpas.core.base;
 interface
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.exception;
 
 { ============================================================ }
 { Framework identity                                           }
@@ -36,19 +37,19 @@ const
 
 type
   TBytes = array of Byte;
-  ECore = class(Exception);
+  ECore = nextpas.core.exception.ENextPasError;
   EWow = class(ECore);
   EArgumentNil = class(ECore);
   EEmptyCollection = class(ECore);
   EInvalidArgument = class(ECore);
   EInvalidResult = class(ECore);
-  ETimeoutError = class(ECore);
+  ETimeoutError = nextpas.core.exception.ETimeoutError;
   EInvalidState = class(ECore);
   EOutOfRange = class(ECore);
   ENotSupported = class(ECore);
   ENotCompatible = class(ECore);
   EInvalidOperation = class(ECore);
-  EOutOfMemory = class(ECore);
+  EOutOfMemory = nextpas.core.exception.EOutOfMemory;
   EOverflow = class(ECore);
 
   THashCode = UInt32;

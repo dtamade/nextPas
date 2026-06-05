@@ -48,9 +48,7 @@ SysUtils.Exception
   |
   +-- nextpas.core.exception.ENextPasError   official framework root
         |
-        +-- ECore                            legacy compatibility root
-        |     |
-        |     +-- EArgumentNil, EInvalidArgument, ...
+        +-- EArgumentNil, EInvalidArgument, ...
         |
         +-- ETimeoutError                    canonical timeout exception
         +-- EOutOfMemoryError                canonical public OOM exception
@@ -59,7 +57,9 @@ SysUtils.Exception
         |
         +-- EAllocError                      mem allocation root
               |
-              +-- mem-specific allocation subclasses
+              +-- non-OOM mem-specific allocation subclasses
+
+ECore = nextpas.core.exception.ENextPasError  legacy compatibility alias
 ```
 
 Target unit dependencies:
@@ -77,7 +77,7 @@ There is no `nextpas.core.base -> nextpas.core.errors` dependency.
 
 `base` remains the root type carrier for constants, aliases, callbacks, spans, and legacy base exceptions. It re-exports canonical exception names from `nextpas.core.exception` through type aliases where possible.
 
-`ECore` remains as a compatibility root in stage 1, but it now inherits from `ENextPasError`. This makes existing `on E: ECore` and new `on E: ENextPasError` catch semantics both work for old base-derived exceptions.
+`ECore` remains as a compatibility name in stage 1, but it is an alias of `ENextPasError`, not a separate subclass. This makes existing `on E: ECore` equivalent to the new unified root catch, so old catch sites also catch canonical aliases such as `ETimeoutError` and `EOutOfMemory`.
 
 `ECore` is not the long-term public root. The deprecation route is:
 
@@ -100,6 +100,8 @@ This keeps existing `uses nextpas.core.errors` consumers working while moving ow
 - `EOutOfMemory` is catchable as `ENextPasError`.
 - `EOutOfMemory` is catchable as the canonical OOM public type.
 - `EAllocError` is catchable as `ENextPasError`.
+
+Pascal single inheritance means the mem-specific `EOutOfMemory` cannot simultaneously keep the old `EAllocError` ancestor and also be catchable as the canonical `EOutOfMemoryError`. Stage 1 intentionally prioritizes the canonical public OOM catch contract, while preserving the old mem constructor shape and `Error: TAllocError` detail on `mem.error.EOutOfMemory`. Code that caught allocation OOM through `EAllocError` should migrate to `EOutOfMemoryError` for resource exhaustion and keep `EAllocError` for non-OOM allocation contract failures.
 
 ### Timeout Convergence
 

@@ -23,12 +23,13 @@
 - [x] baseline: `make -C tests/nextpas.core.errors/test_errors clean test` 通过，heaptrc 0 泄漏。
 - [x] 写设计文档：`docs/plans/2026-06-05-exception-root-convergence-design.md`。
 - [x] 写实施计划：`docs/plans/2026-06-05-exception-root-convergence-plan.md`。
-- [ ] RED: 新增 unified root focused test 并确认失败原因正确。
-- [ ] GREEN: 新增 `nextpas.core.exception`。
-- [ ] GREEN: rewiring `base` / `errors`，消除 `ETimeoutError` 双定义。
-- [ ] GREEN: rewiring `mem.error`，收敛 OOM 主语义。
-- [ ] Focused verification: exception/errors/http-server gates + heaptrc。
-- [ ] 更新 findings/progress。
+- [x] RED: 新增 unified root focused test 并确认失败原因正确。
+- [x] GREEN: 新增 `nextpas.core.exception`。
+- [x] GREEN: rewiring `base` / `errors`，消除 `ETimeoutError` 双定义。
+- [x] GREEN: rewiring `mem.error`，收敛 OOM 主语义。
+- [x] `/codex` 子代理复核：确认 OOM canonical 优先，修正 `ECore` 为统一根 alias。
+- [x] Focused verification: exception/errors/http-server gates + heaptrc。
+- [x] 更新 findings/progress。
 - [ ] 提交分支。
 - [ ] 只在共享 `main` 干净或获得确认后再考虑合并。
 
@@ -70,3 +71,6 @@ git status --short --branch
 | Error | Attempt | Resolution |
 | --- | --- | --- |
 | `planning-with-files` first read used wrong skill path | 1 | Re-read from `/home/dtamade/.codex/skills/planning-with-files/SKILL.md`. |
+| Relative `apply_patch` wrote RED test into shared `main` checkout | 1 | Deleted the two files I created there, verified shared `main` no longer reports `tests/nextpas.core.exception`, then recreated the files with absolute worktree paths. |
+| RED focused test failed because `nextpas.core.exception` is missing | 1 | Expected TDD failure; proceed to add the canonical root unit. |
+| Added `ECore` catch coverage failed with `Class or Object types "ECore" and "EOutOfMemoryError" are not related` | 1 | Correct RED proof that `ECore` must be a compatibility alias of `ENextPasError`, not a sibling subclass. |

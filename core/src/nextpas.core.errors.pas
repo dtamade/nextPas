@@ -1,6 +1,6 @@
 unit nextpas.core.errors;
 {**
- * @desc 异常层次结构：ENextPasError 及其子类。
+ * @desc Public exception taxonomy facade.
  *}
 
 {$I nextpas.core.settings.inc}
@@ -8,256 +8,57 @@ unit nextpas.core.errors;
 interface
 
 uses
-  SysUtils;
+  SysUtils,
+  nextpas.core.exception;
 
 type
-  { Re-export base Exception from RTL so consumers dont need SysUtils }
-  Exception = SysUtils.Exception;
-  ExceptClass = SysUtils.ExceptClass;
-  EConvertError = SysUtils.EConvertError;
-  EAssertionFailed = SysUtils.EAssertionFailed;
-  { 错误分类码 }
-  TErrorCategory = (
-    ecNone,
-    ecInvalidArgument,
-    ecNullReference,
-    ecInvalidOperation,
-    ecNotImplemented,
-    ecNotSupported,
-    ecTimeout,
-    ecCancelled,
-    ecInterrupted,
-    ecWouldBlock,
-    ecPermission,
-    ecNotFound,
-    ecAlreadyExists,
-    ecResourceExhausted,
-    ecIO,
-    ecNetwork,
-    ecParse,
-    ecInternal
-  );
+  { Re-export base Exception from RTL so consumers do not need SysUtils. }
+  Exception = nextpas.core.exception.Exception;
+  ExceptClass = nextpas.core.exception.ExceptClass;
+  EConvertError = nextpas.core.exception.EConvertError;
+  EAssertionFailed = nextpas.core.exception.EAssertionFailed;
 
-  { ENextPasError - framework root exception with category + inner }
-  ENextPasError = class(Exception)
-  private
-    FCategory: TErrorCategory;
-    FInner: Exception;
-    FOwnsInner: Boolean;
-  public
-    constructor Create(const AMessage: string); overload;
-    constructor Create(const AMessage: string; const ACategory: TErrorCategory); overload;
-    constructor Create(const AMessage: string; const AInner: Exception; const AOwnsInner: Boolean = True); overload;
-    constructor Create(const AMessage: string; const ACategory: TErrorCategory; const AInner: Exception; const AOwnsInner: Boolean = True); overload;
-    destructor Destroy; override;
-    property Category: TErrorCategory read FCategory;
-    property Inner: Exception read FInner;
-  end;
+  TErrorCategory = nextpas.core.exception.TErrorCategory;
+  ENextPasError = nextpas.core.exception.ENextPasError;
 
-  { Specific exception types }
-  EArgumentError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
+  EArgumentError = nextpas.core.exception.EArgumentError;
+  ENullReferenceError = nextpas.core.exception.ENullReferenceError;
+  EInvalidOperationError = nextpas.core.exception.EInvalidOperationError;
+  ENotImplementedError = nextpas.core.exception.ENotImplementedError;
+  ENotSupportedError = nextpas.core.exception.ENotSupportedError;
+  ETimeoutError = nextpas.core.exception.ETimeoutError;
+  ECancelledError = nextpas.core.exception.ECancelledError;
+  EPermissionError = nextpas.core.exception.EPermissionError;
+  ENotFoundError = nextpas.core.exception.ENotFoundError;
+  EAlreadyExistsError = nextpas.core.exception.EAlreadyExistsError;
+  EResourceExhaustedError = nextpas.core.exception.EResourceExhaustedError;
+  EIOError = nextpas.core.exception.EIOError;
+  ENetworkError = nextpas.core.exception.ENetworkError;
+  EParseError = nextpas.core.exception.EParseError;
+  EIndexOutOfRangeError = nextpas.core.exception.EIndexOutOfRangeError;
+  EOutOfMemoryError = nextpas.core.exception.EOutOfMemoryError;
+  EOutOfMemory = nextpas.core.exception.EOutOfMemory;
 
-  ENullReferenceError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EInvalidOperationError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  ENotImplementedError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  ENotSupportedError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  ETimeoutError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  ECancelledError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EPermissionError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  ENotFoundError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EAlreadyExistsError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EResourceExhaustedError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EIOError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  ENetworkError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EParseError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EIndexOutOfRangeError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
-
-  EOutOfMemoryError = class(ENextPasError)
-  public
-    constructor Create(const AMessage: string); overload;
-  end;
+const
+  ecNone = nextpas.core.exception.ecNone;
+  ecInvalidArgument = nextpas.core.exception.ecInvalidArgument;
+  ecNullReference = nextpas.core.exception.ecNullReference;
+  ecInvalidOperation = nextpas.core.exception.ecInvalidOperation;
+  ecNotImplemented = nextpas.core.exception.ecNotImplemented;
+  ecNotSupported = nextpas.core.exception.ecNotSupported;
+  ecTimeout = nextpas.core.exception.ecTimeout;
+  ecCancelled = nextpas.core.exception.ecCancelled;
+  ecInterrupted = nextpas.core.exception.ecInterrupted;
+  ecWouldBlock = nextpas.core.exception.ecWouldBlock;
+  ecPermission = nextpas.core.exception.ecPermission;
+  ecNotFound = nextpas.core.exception.ecNotFound;
+  ecAlreadyExists = nextpas.core.exception.ecAlreadyExists;
+  ecResourceExhausted = nextpas.core.exception.ecResourceExhausted;
+  ecIO = nextpas.core.exception.ecIO;
+  ecNetwork = nextpas.core.exception.ecNetwork;
+  ecParse = nextpas.core.exception.ecParse;
+  ecInternal = nextpas.core.exception.ecInternal;
 
 implementation
-
-{ ENextPasError }
-
-constructor ENextPasError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage);
-  FCategory := ecNone;
-  FInner := nil;
-  FOwnsInner := False;
-end;
-
-constructor ENextPasError.Create(const AMessage: string; const ACategory: TErrorCategory);
-begin
-  inherited Create(AMessage);
-  FCategory := ACategory;
-  FInner := nil;
-  FOwnsInner := False;
-end;
-
-constructor ENextPasError.Create(const AMessage: string; const AInner: Exception; const AOwnsInner: Boolean);
-begin
-  inherited Create(AMessage);
-  FCategory := ecNone;
-  FInner := AInner;
-  FOwnsInner := AOwnsInner;
-end;
-
-constructor ENextPasError.Create(const AMessage: string; const ACategory: TErrorCategory; const AInner: Exception; const AOwnsInner: Boolean);
-begin
-  inherited Create(AMessage);
-  FCategory := ACategory;
-  FInner := AInner;
-  FOwnsInner := AOwnsInner;
-end;
-
-destructor ENextPasError.Destroy;
-begin
-  if FOwnsInner and (FInner <> nil) then
-    FInner.Free;
-  inherited;
-end;
-
-{ Specific exceptions }
-
-constructor EArgumentError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecInvalidArgument);
-end;
-
-constructor ENullReferenceError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecNullReference);
-end;
-
-constructor EInvalidOperationError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecInvalidOperation);
-end;
-
-constructor ENotImplementedError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecNotImplemented);
-end;
-
-constructor ENotSupportedError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecNotSupported);
-end;
-
-constructor ETimeoutError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecTimeout);
-end;
-
-constructor ECancelledError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecCancelled);
-end;
-
-constructor EPermissionError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecPermission);
-end;
-
-constructor ENotFoundError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecNotFound);
-end;
-
-constructor EAlreadyExistsError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecAlreadyExists);
-end;
-
-constructor EResourceExhaustedError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecResourceExhausted);
-end;
-
-constructor EIOError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecIO);
-end;
-
-constructor ENetworkError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecNetwork);
-end;
-
-constructor EParseError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecParse);
-end;
-
-constructor EIndexOutOfRangeError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecInvalidArgument);
-end;
-
-constructor EOutOfMemoryError.Create(const AMessage: string);
-begin
-  inherited Create(AMessage, ecResourceExhausted);
-end;
 
 end.
