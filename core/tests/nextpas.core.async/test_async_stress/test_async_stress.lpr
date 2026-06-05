@@ -225,7 +225,25 @@ begin
   LLoop.Close;
 end;
 
-{ === Test 6: PostStress === }
+{ === Test 6: CancelTimerAfterCloseIsStaleNoOp === }
+
+procedure TestCancelTimerAfterCloseIsStaleNoOp;
+var
+  LLoop: TAsyncLoop;
+  LH: TAsyncTimerHandle;
+  LCancelled: Boolean;
+begin
+  ResetState;
+  LLoop := TAsyncLoop.Create(32);
+  LH := LLoop.Schedule(TDuration.FromMilliseconds(100), @IncrementCallback, nil);
+  Check(LH.IsValid, 'pre-close timer handle valid');
+  LLoop.Close;
+  Check(not LLoop.IsValid, 'loop invalid after close');
+  LCancelled := LLoop.CancelTimer(LH);
+  Check(not LCancelled, 'cancel after close is stale-handle no-op');
+end;
+
+{ === Test 7: PostStress === }
 
 const
   POST_STRESS_THREADS = 4;
@@ -279,7 +297,7 @@ begin
   LLoop.Close;
 end;
 
-{ === Test 7: TimerPlusIO === }
+{ === Test 8: TimerPlusIO === }
 
 var
   GTimerFired: Boolean = False;
@@ -333,7 +351,7 @@ begin
   platform_pipe_close(LPipe);
 end;
 
-{ === Test 8: StopFromPost === }
+{ === Test 9: StopFromPost === }
 
 procedure PostStopCallback(AContext: Pointer);
 begin
@@ -368,6 +386,7 @@ begin
   T.Run('Wake', @TestWake);
   T.Run('ManyTimers', @TestManyTimers);
   T.Run('RapidScheduleCancel', @TestRapidScheduleCancel);
+  T.Run('CancelTimerAfterCloseIsStaleNoOp', @TestCancelTimerAfterCloseIsStaleNoOp);
   T.Run('PostStress', @TestPostStress);
   T.Run('TimerPlusIO', @TestTimerPlusIO);
   T.Run('StopFromPost', @TestStopFromPost);

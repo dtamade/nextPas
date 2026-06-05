@@ -36,6 +36,7 @@ type
     function AllocEntry: UInt32;
   public
     class function Create: TTimerHeap; static;
+    procedure Clear;
     function Schedule(const ADeadline: TDeadline; ACallback: TAsyncCallback;
       AContext: Pointer): TAsyncTimerHandle;
     function ScheduleAfter(const ADelay: TDuration; ACallback: TAsyncCallback;
@@ -155,7 +156,10 @@ begin
   begin
     if FEntryCount >= FEntryCap then
     begin
-      LNewCap := FEntryCap * 2;
+      if FEntryCap = 0 then
+        LNewCap := INITIAL_CAP
+      else
+        LNewCap := FEntryCap * 2;
       SetLength(FEntries, LNewCap);
       SetLength(FHeap, LNewCap);
       FEntryCap := LNewCap;
@@ -163,6 +167,18 @@ begin
     Result := FEntryCount;
     Inc(FEntryCount);
   end;
+end;
+
+procedure TTimerHeap.Clear;
+begin
+  SetLength(FEntries, 0);
+  SetLength(FHeap, 0);
+  FHeapCount := 0;
+  FEntryCap := 0;
+  FEntryCount := 0;
+  FFreeHead := -1;
+  if FNextGen = 0 then
+    FNextGen := 1;
 end;
 
 function TTimerHeap.Schedule(const ADeadline: TDeadline; ACallback: TAsyncCallback;

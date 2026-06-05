@@ -156,6 +156,7 @@ end;
 
 procedure TAsyncLoop.Close;
 begin
+  FTimers.Clear;
   platform_mutex_destroy(FPendingLock);
   if FWakeFd >= 0 then
   begin
@@ -236,17 +237,23 @@ end;
 function TAsyncLoop.Schedule(const ADelay: TDuration; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
+  if FWakeFd < 0 then
+    Exit(TAsyncTimerHandle.None);
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
 end;
 
 function TAsyncLoop.ScheduleAt(const ADeadline: TDeadline; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
+  if FWakeFd < 0 then
+    Exit(TAsyncTimerHandle.None);
   Result := FTimers.Schedule(ADeadline, ACallback, AContext);
 end;
 
 function TAsyncLoop.CancelTimer(const AHandle: TAsyncTimerHandle): Boolean;
 begin
+  if FWakeFd < 0 then
+    Exit(False);
   Result := FTimers.Cancel(AHandle);
 end;
 
@@ -394,6 +401,8 @@ end;
 function TAsyncLoop.AsyncSleep(const ADelay: TDuration; ACallback: TAsyncCallback;
   AContext: Pointer): TAsyncTimerHandle;
 begin
+  if FWakeFd < 0 then
+    Exit(TAsyncTimerHandle.None);
   Result := FTimers.ScheduleAfter(ADelay, ACallback, AContext);
 end;
 
