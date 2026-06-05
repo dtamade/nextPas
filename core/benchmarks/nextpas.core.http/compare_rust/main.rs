@@ -6,13 +6,20 @@ use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-const REQUEST: &[u8] = b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n";
+const REQUEST_NO_URL: &[u8] = b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n";
+const REQUEST_URL_PATH: &[u8] =
+    b"GET /api/v1/users HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n";
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: keep-alive\r\n\r\nHello, World!";
+const NOT_FOUND_RESPONSE: &[u8] =
+    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
 const RESPONSE_BODY_LEN: usize = 13;
+const WORKLOAD_NO_URL: &str = "no_url";
+const WORKLOAD_URL_PATH: &str = "url_path";
 
-fn parse_options() -> (usize, usize) {
+fn parse_options() -> (usize, usize, String) {
     let mut requests = 20_000usize;
     let mut threads = 4usize;
+    let mut workload = WORKLOAD_NO_URL.to_string();
     let args: Vec<String> = env::args().collect();
     let mut index = 1usize;
 
@@ -31,6 +38,13 @@ fn parse_options() -> (usize, usize) {
                 }
             }
             index += 2;
+        } else if args[index] == "--workload" && index + 1 < args.len() {
+            if args[index + 1] == WORKLOAD_URL_PATH {
+                workload = WORKLOAD_URL_PATH.to_string();
+            } else {
+                workload = WORKLOAD_NO_URL.to_string();
+            }
+            index += 2;
         } else {
             index += 1;
         }
@@ -40,7 +54,7 @@ fn parse_options() -> (usize, usize) {
         threads = requests;
     }
 
-    (requests, threads)
+    (requests, threads, workload)
 }
 
 fn requests_for_thread(index: usize, total_requests: usize, threads: usize) -> usize {
@@ -71,14 +85,21 @@ fn read_from_stream(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
     }
 }
 
-fn read_one_request(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
+fn read_one_request_matches_workload(
+    stream: &mut TcpStream,
+    buffer: &mut Vec<u8>,
+    workload: &str,
+) -> Option<bool> {
     loop {
         if let Some(end) = find_bytes(buffer, b"\r\n\r\n") {
+            let request = &buffer[..end + 4];
+            let matches_workload =
+                workload != WORKLOAD_URL_PATH || request.starts_with(b"GET /api/v1/users ");
             buffer.drain(..end + 4);
-            return true;
+            return Some(matches_workload);
         }
         if !read_from_stream(stream, buffer) {
-            return false;
+            return None;
         }
     }
 }
@@ -98,24 +119,36 @@ fn read_one_response(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
     }
 }
 
-fn handle_connection(mut stream: TcpStream) {
+fn handle_connection(mut stream: TcpStream, workload: String) {
     let _ = stream.set_read_timeout(Some(Duration::from_secs(10)));
     let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
 
     let mut buffer = Vec::with_capacity(1024);
-    while read_one_request(&mut stream, &mut buffer) {
-        if stream.write_all(RESPONSE).is_err() {
+    while let Some(matches_workload) =
+        read_one_request_matches_workload(&mut stream, &mut buffer, &workload)
+    {
+        let response = if matches_workload {
+            RESPONSE
+        } else {
+            NOT_FOUND_RESPONSE
+        };
+        if stream.write_all(response).is_err() {
             break;
         }
     }
 }
 
-fn run_accept_loop(listener: TcpListener, stopping: Arc<AtomicBool>) {
+fn run_accept_loop(listener: TcpListener, stopping: Arc<AtomicBool>, workload: String) {
     let mut workers = Vec::new();
 
     while !stopping.load(Ordering::Relaxed) {
         match listener.accept() {
-            Ok((stream, _)) => workers.push(thread::spawn(move || handle_connection(stream))),
+            Ok((stream, _)) => {
+                let worker_workload = workload.clone();
+                workers.push(thread::spawn(move || {
+                    handle_connection(stream, worker_workload)
+                }))
+            }
             Err(ref err) if err.kind() == ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(1));
             }
@@ -128,7 +161,7 @@ fn run_accept_loop(listener: TcpListener, stopping: Arc<AtomicBool>) {
     }
 }
 
-fn run_client(addr: SocketAddr, requests: usize, completed: Arc<AtomicUsize>) {
+fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Arc<AtomicUsize>) {
     let mut stream = match TcpStream::connect(addr) {
         Ok(stream) => stream,
         Err(_) => return,
@@ -138,8 +171,13 @@ fn run_client(addr: SocketAddr, requests: usize, completed: Arc<AtomicUsize>) {
     let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
 
     let mut buffer = Vec::with_capacity(1024);
+    let request = if workload == WORKLOAD_URL_PATH {
+        REQUEST_URL_PATH
+    } else {
+        REQUEST_NO_URL
+    };
     for _ in 0..requests {
-        if stream.write_all(REQUEST).is_err() {
+        if stream.write_all(request).is_err() {
             break;
         }
         if !read_one_response(&mut stream, &mut buffer) {
@@ -150,7 +188,13 @@ fn run_client(addr: SocketAddr, requests: usize, completed: Arc<AtomicUsize>) {
     let _ = stream.shutdown(Shutdown::Both);
 }
 
-fn print_results(requests: usize, threads: usize, completed: usize, elapsed: Duration) {
+fn print_results(
+    requests: usize,
+    threads: usize,
+    workload: &str,
+    completed: usize,
+    elapsed: Duration,
+) {
     let elapsed_ns = elapsed.as_nanos() as u128;
     let ns_per_op = if completed > 0 {
         elapsed_ns / completed as u128
@@ -164,7 +208,7 @@ fn print_results(requests: usize, threads: usize, completed: usize, elapsed: Dur
     };
 
     println!("operation=http.server.keepalive");
-    println!("workload=no_url");
+    println!("workload={}", workload);
     println!("impl=rust");
     println!("iterations={}", requests);
     println!("threads={}", threads);
@@ -175,14 +219,16 @@ fn print_results(requests: usize, threads: usize, completed: usize, elapsed: Dur
 }
 
 fn main() {
-    let (requests, threads) = parse_options();
+    let (requests, threads, workload) = parse_options();
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind listener");
     listener.set_nonblocking(true).expect("set nonblocking");
     let addr = listener.local_addr().expect("local addr");
     let stopping = Arc::new(AtomicBool::new(false));
     let accept_stopping = Arc::clone(&stopping);
+    let accept_workload = workload.clone();
 
-    let accept_handle = thread::spawn(move || run_accept_loop(listener, accept_stopping));
+    let accept_handle =
+        thread::spawn(move || run_accept_loop(listener, accept_stopping, accept_workload));
     let completed = Arc::new(AtomicUsize::new(0));
     let mut clients = Vec::new();
 
@@ -190,8 +236,9 @@ fn main() {
     for index in 0..threads {
         let client_completed = Arc::clone(&completed);
         let client_requests = requests_for_thread(index, requests, threads);
+        let client_workload = workload.clone();
         clients.push(thread::spawn(move || {
-            run_client(addr, client_requests, client_completed)
+            run_client(addr, client_requests, client_workload, client_completed)
         }));
     }
 
@@ -207,6 +254,7 @@ fn main() {
     print_results(
         requests,
         threads,
+        &workload,
         completed.load(Ordering::Relaxed),
         elapsed,
     );

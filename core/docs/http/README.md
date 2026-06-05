@@ -128,20 +128,22 @@ make -C tests/nextpas.core.http/test_http_benchmarks test
 ```
 
 The harness builds and runs nextPas, Go, and Rust keep-alive server benchmarks at
-smoke scale. Each implementation reports `operation`, `impl`, `iterations`,
-`threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so later benchmark
-result capture can use one stable format.
+smoke scale. Each implementation reports `operation`, `workload`, `impl`,
+`iterations`, `threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so
+later benchmark result capture can use one stable format.
 
 For manual comparison runs, use the server comparison runner:
 
 ```sh
 benchmarks/nextpas.core.http/run_server_comparison.sh \
-  --requests 20000 --threads 4 \
+  --requests 20000 --threads 4 --workload no_url \
   --output build/projects/nextpas.core.http/server_comparison/report.txt
 ```
 
 The runner builds all three implementations, streams the combined output to
-stdout, and optionally writes the same report to `--output`.
+stdout, and optionally writes the same report to `--output`. Use
+`--workload url_path` to make the client request `/api/v1/users` and make each
+server implementation touch the request path before writing the response.
 
 To capture environment metadata and the comparison output in Markdown, run:
 

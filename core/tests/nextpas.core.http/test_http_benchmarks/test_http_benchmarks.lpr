@@ -213,10 +213,10 @@ begin
 end;
 
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
-  const AIterations, AThreads: string);
+  const AIterations, AThreads: string; const AWorkload: string = 'no_url');
 begin
   CheckContains(AOutput, 'operation=http.server.keepalive', 'operation marker');
-  CheckContains(AOutput, 'workload=no_url', 'workload marker');
+  CheckContains(AOutput, 'workload=' + AWorkload, 'workload marker');
   CheckContains(AOutput, 'impl=' + AImplementation, 'implementation marker');
   CheckContains(AOutput, 'iterations=' + AIterations, 'iterations marker');
   CheckContains(AOutput, 'threads=' + AThreads, 'threads marker');
@@ -261,6 +261,35 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '32', '2');
 end;
 
+procedure TestBenchServerUrlPathSmallSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchServerRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server url_path build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_server url_path binary exists');
+
+  RunProcessAndCapture(LBinaryPath,
+    ['--requests', '32', '--threads', '2', '--workload', 'url_path'],
+    LBenchDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_server url_path smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'workload=url_path',
+    'bench_server url_path workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '32', '2', 'url_path');
+end;
+
 procedure TestGoServerComparatorSmallSmoke;
 var
   LRootDir: string;
@@ -287,6 +316,37 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'go', '32', '2');
 end;
 
+procedure TestGoServerComparatorUrlPathSmallSmoke;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareGoRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  ForceDirectories(LBuildDir);
+  LBinaryPath := ResolveGoComparatorBinaryPath(LRootDir);
+
+  RunProcessAndCapture('go', ['build', '-o', LBinaryPath, 'main.go'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'go comparator url_path build exit code: ' + LOutput);
+  Check(FileExists(LBinaryPath), 'go comparator url_path binary exists');
+
+  RunProcessAndCapture(LBinaryPath,
+    ['--requests', '32', '--threads', '2', '--workload', 'url_path'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'go comparator url_path smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'workload=url_path',
+    'go comparator url_path workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'go', '32', '2', 'url_path');
+end;
+
 procedure TestRustServerComparatorSmallSmoke;
 var
   LRootDir: string;
@@ -311,6 +371,37 @@ begin
     LCompareDir, LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode), 'rust comparator smoke exit code: ' + LOutput);
   CheckServerBenchmarkOutput(LOutput, 'rust', '32', '2');
+end;
+
+procedure TestRustServerComparatorUrlPathSmallSmoke;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareRustRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  ForceDirectories(LBuildDir);
+  LBinaryPath := ResolveRustComparatorBinaryPath(LRootDir);
+
+  RunProcessAndCapture('rustc', ['-O', '-o', LBinaryPath, 'main.rs'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'rust comparator url_path build exit code: ' + LOutput);
+  Check(FileExists(LBinaryPath), 'rust comparator url_path binary exists');
+
+  RunProcessAndCapture(LBinaryPath,
+    ['--requests', '32', '--threads', '2', '--workload', 'url_path'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'rust comparator url_path smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'workload=url_path',
+    'rust comparator url_path workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'rust', '32', '2', 'url_path');
 end;
 
 procedure TestServerComparisonRunnerSmallSmoke;
@@ -346,6 +437,46 @@ begin
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1');
   CheckServerBenchmarkOutput(LReport, 'rust', '8', '1');
+end;
+
+procedure TestServerComparisonRunnerUrlPathSmallSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison url_path runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_url_path_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'url_path', '--output', LReportPath], LRootDir, LExitCode,
+    LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison url_path runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'comparison=http.server.keepalive',
+    'url_path comparison marker');
+  CheckContains(LOutput, 'workload=url_path',
+    'url_path comparison workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1', 'url_path');
+
+  Check(FileExists(LReportPath), 'server comparison url_path report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'comparison=http.server.keepalive',
+    'url_path report comparison marker');
+  CheckContains(LReport, 'workload=url_path',
+    'url_path report workload marker');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'url_path');
 end;
 
 procedure TestServerComparisonSnapshotSmallSmoke;
@@ -724,10 +855,18 @@ end;
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
+  T.Run('bench_server url_path small smoke',
+    @TestBenchServerUrlPathSmallSmoke);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
+  T.Run('go server comparator url_path small smoke',
+    @TestGoServerComparatorUrlPathSmallSmoke);
   T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
+  T.Run('rust server comparator url_path small smoke',
+    @TestRustServerComparatorUrlPathSmallSmoke);
   T.Run('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
+  T.Run('server comparison runner url_path small smoke',
+    @TestServerComparisonRunnerUrlPathSmallSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',

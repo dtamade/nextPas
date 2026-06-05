@@ -23,6 +23,8 @@ uses
 const
   DEFAULT_NUM_REQUESTS = 20000;
   DEFAULT_NUM_THREADS = 4;
+  WORKLOAD_NO_URL = 'no_url';
+  WORKLOAD_URL_PATH = 'url_path';
 
 var
   GServer: THttpServer;
@@ -31,6 +33,7 @@ var
   GSuccess: Int32;
   GRequests: Int32;
   GThreads: Int32;
+  GWorkload: string;
 
 function ServerThread(AParam: Pointer): Pointer; cdecl;
 begin
@@ -47,7 +50,8 @@ var
   LN: SizeUInt;
   LTotal: SizeUInt;
 const
-  REQ: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
+  REQ_NO_URL: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
+  REQ_URL_PATH: AnsiString = 'GET /api/v1/users HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
 begin
   Result := nil;
   LRequests := Int32(PtrUInt(AParam));
@@ -57,7 +61,10 @@ begin
     LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(10)));
     for LI := 1 to LRequests do
     begin
-      LConn.Write(PAnsiChar(REQ)^, Length(REQ));
+      if GWorkload = WORKLOAD_URL_PATH then
+        LConn.Write(PAnsiChar(REQ_URL_PATH)^, Length(REQ_URL_PATH))
+      else
+        LConn.Write(PAnsiChar(REQ_NO_URL)^, Length(REQ_NO_URL));
       LTotal := 0;
       repeat
         LN := LConn.Read(LBuf[LTotal], 4096 - LTotal);
@@ -80,6 +87,7 @@ var
 begin
   GRequests := DEFAULT_NUM_REQUESTS;
   GThreads := DEFAULT_NUM_THREADS;
+  GWorkload := WORKLOAD_NO_URL;
   LI := 1;
   while LI <= ParamCount do
   begin
@@ -95,6 +103,13 @@ begin
       LValue := StrToIntDef(ParamStr(LI + 1), GThreads);
       if LValue > 0 then
         GThreads := LValue;
+      Inc(LI, 2);
+    end
+    else if (ParamStr(LI) = '--workload') and (LI < ParamCount) then
+    begin
+      if (ParamStr(LI + 1) = WORKLOAD_NO_URL) or
+         (ParamStr(LI + 1) = WORKLOAD_URL_PATH) then
+        GWorkload := ParamStr(LI + 1);
       Inc(LI, 2);
     end
     else
@@ -123,6 +138,12 @@ begin
   GServer := THttpServer.Create(HandlerFunc(
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
+      if (GWorkload = WORKLOAD_URL_PATH) and
+         (AReq.Url.Path <> '/api/v1/users') then
+      begin
+        AW.WriteHeader(404);
+        Exit;
+      end;
       AW.Headers.Set_('content-type', 'text/plain');
       AW.Headers.Set_('content-length', '13');
       AW.WriteHeader(200);
@@ -137,6 +158,7 @@ begin
   WriteLn('=== HTTP Server Benchmark ===');
   WriteLn('  Requests: ', GRequests);
   WriteLn('  Threads:  ', GThreads);
+  WriteLn('  Workload: ', GWorkload);
   WriteLn('  Port:     ', GPort);
   WriteLn;
 
@@ -171,7 +193,7 @@ begin
   WriteLn('  Req/s:     ', Trunc(LReqPerSec));
   WriteLn;
   WriteLn('operation=http.server.keepalive');
-  WriteLn('workload=no_url');
+  WriteLn('workload=', GWorkload);
   WriteLn('impl=nextpas');
   WriteLn('iterations=', GRequests);
   WriteLn('threads=', GThreads);

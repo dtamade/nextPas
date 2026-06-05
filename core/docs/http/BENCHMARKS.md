@@ -10,7 +10,7 @@ Run the comparison harness:
 
 ```sh
 benchmarks/nextpas.core.http/run_server_comparison.sh \
-  --requests 20000 --threads 4 \
+  --requests 20000 --threads 4 --workload no_url \
   --output build/projects/nextpas.core.http/server_comparison/report.txt
 ```
 
@@ -22,12 +22,16 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
-The comparison currently covers one HTTP/1.1 keep-alive hello-world workload.
-The workload is explicitly marked as `workload=no_url`: the handler does not
-read the request URL or query string. It does not cover TLS, request bodies,
-WebSocket, router/middleware full-chain cost, `epoll`, or an async Rust server.
-The Rust comparator is a std-only microbaseline; add a Hyper/Tokio comparator
-before treating Rust ecosystem performance as represented.
+The comparison currently covers two HTTP/1.1 keep-alive hello-world workloads:
+
+- `workload=no_url`: the handler does not read the request URL or query string.
+- `workload=url_path`: the client sends `GET /api/v1/users` and the handler
+  reads the path before returning the same hello-world response.
+
+It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
+cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
+microbaseline; add a Hyper/Tokio comparator before treating Rust ecosystem
+performance as represented.
 
 ## Local Snapshot: 2026-06-04 UTC
 
@@ -1096,7 +1100,7 @@ RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp 
 
 GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
   make -C tests/nextpas.core.http/test_http_benchmarks clean test
-13 total, 13 passed, 0 failed
+17 total, 17 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
@@ -1118,6 +1122,47 @@ the Rust std-only comparator on this no-URL workload. The lazy request-target
 microbenchmark win therefore does not yet prove a full-chain req/s win; the next
 high-value work should profile or isolate remaining server/runtime costs that
 sit outside URL projection.
+
+## Full-Chain Correlation: URL Path Workload
+
+On 2026-06-05 local time, the server comparison runner gained
+`--workload no_url|url_path`, and the nextPas, Go, and Rust comparator binaries
+now accept the same selector. `url_path` sends `GET /api/v1/users`; nextPas and
+Go validate the parsed request path, while the Rust std-only comparator checks
+the same path from the one buffered request frame before writing its response.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+4 url_path smoke cases failed before the comparator binaries and runner accepted
+or propagated --workload url_path.
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+17 total, 17 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh local correlation:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload url_path
+```
+
+| impl | workload | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| nextPas | url_path | 50000 | 628713623 | 12574 | 79527 |
+| Go `net/http` | url_path | 50000 | 2628825324 | 52576 | 19019 |
+| Rust std-only | url_path | 50000 | 441859972 | 8837 | 113158 |
+
+The `url_path` row keeps nextPas ahead of the Go comparator and still behind the
+Rust std-only comparator. It does not prove that Pascal-translated llhttp is the
+full-chain bottleneck: this request still fits the H1 server fast path, and URL
+projection is paid lazily only when the handler reads `Req.Url.Path`. The next
+useful isolation step is a forced-adapter workload, or a narrower parser
+comparison against C llhttp with hardware counters on a perf-enabled machine.
 
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 

@@ -6,11 +6,12 @@ CORE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUILD_DIR="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison"
 REQUESTS=20000
 THREADS=4
+WORKLOAD="no_url"
 OUTPUT_PATH=""
 
 usage() {
   cat <<'EOF'
-usage: run_server_comparison.sh [--requests N] [--threads N] [--output PATH]
+usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path] [--output PATH]
 
 Build and run nextPas, Go, and Rust HTTP/1.1 keep-alive server benchmarks.
 EOF
@@ -24,6 +25,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --threads)
       THREADS="${2:?missing value for --threads}"
+      shift 2
+      ;;
+    --workload)
+      WORKLOAD="${2:?missing value for --workload}"
       shift 2
       ;;
     --output)
@@ -65,6 +70,15 @@ if [[ "${THREADS}" -gt "${REQUESTS}" ]]; then
   THREADS="${REQUESTS}"
 fi
 
+case "${WORKLOAD}" in
+  no_url|url_path)
+    ;;
+  *)
+    echo "--workload must be no_url or url_path" >&2
+    exit 2
+    ;;
+esac
+
 run_comparison() {
   mkdir -p "${BUILD_DIR}"
 
@@ -75,17 +89,20 @@ run_comparison() {
   echo "comparison=http.server.keepalive"
   echo "requests=${REQUESTS}"
   echo "threads=${THREADS}"
+  echo "workload=${WORKLOAD}"
   echo
 
   echo "section=nextpas"
   "${CORE_ROOT}/build/projects/nextpas.core.http/bench_server/bench_http_server" \
-    --requests "${REQUESTS}" --threads "${THREADS}"
+    --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
 
   echo "section=go"
-  "${BUILD_DIR}/bench_http_server_go" --requests "${REQUESTS}" --threads "${THREADS}"
+  "${BUILD_DIR}/bench_http_server_go" \
+    --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
 
   echo "section=rust"
-  "${BUILD_DIR}/bench_http_server_rust" --requests "${REQUESTS}" --threads "${THREADS}"
+  "${BUILD_DIR}/bench_http_server_rust" \
+    --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
 }
 
 if [[ "${OUTPUT_PATH}" == "" ]]; then

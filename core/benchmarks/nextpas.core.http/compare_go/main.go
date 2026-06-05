@@ -13,10 +13,13 @@ import (
 )
 
 const responseBody = "Hello, World!"
+const workloadNoUrl = "no_url"
+const workloadUrlPath = "url_path"
 
-func parseOptions() (int, int) {
+func parseOptions() (int, int, string) {
 	requests := flag.Int("requests", 20000, "total requests")
 	threads := flag.Int("threads", 4, "concurrent keep-alive clients")
+	workload := flag.String("workload", workloadNoUrl, "workload: no_url or url_path")
 	flag.Parse()
 
 	if *requests < 1 {
@@ -28,8 +31,11 @@ func parseOptions() (int, int) {
 	if *threads > *requests {
 		*threads = *requests
 	}
+	if *workload != workloadUrlPath {
+		*workload = workloadNoUrl
+	}
 
-	return *requests, *threads
+	return *requests, *threads, *workload
 }
 
 func requestsForThread(index, totalRequests, threads int) int {
@@ -71,7 +77,7 @@ func runClient(url string, requests int, completed *int64, wg *sync.WaitGroup) {
 	}
 }
 
-func printResults(requests, threads int, completed int64, elapsed time.Duration) {
+func printResults(requests, threads int, workload string, completed int64, elapsed time.Duration) {
 	elapsedNs := elapsed.Nanoseconds()
 	nsPerOp := int64(0)
 	reqPerSec := int64(0)
@@ -84,7 +90,7 @@ func printResults(requests, threads int, completed int64, elapsed time.Duration)
 	}
 
 	fmt.Println("operation=http.server.keepalive")
-	fmt.Println("workload=no_url")
+	fmt.Println("workload=" + workload)
 	fmt.Println("impl=go")
 	fmt.Printf("iterations=%d\n", requests)
 	fmt.Printf("threads=%d\n", threads)
@@ -95,7 +101,7 @@ func printResults(requests, threads int, completed int64, elapsed time.Duration)
 }
 
 func main() {
-	requests, threads := parseOptions()
+	requests, threads, workload := parseOptions()
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -104,6 +110,10 @@ func main() {
 
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if workload == workloadUrlPath && request.URL.Path != "/api/v1/users" {
+				writer.WriteHeader(http.StatusNotFound)
+				return
+			}
 			writer.Header().Set("Content-Type", "text/plain")
 			writer.Header().Set("Content-Length", "13")
 			writer.WriteHeader(http.StatusOK)
@@ -117,7 +127,11 @@ func main() {
 		}
 	}()
 
-	url := "http://" + listener.Addr().String() + "/"
+	urlPath := "/"
+	if workload == workloadUrlPath {
+		urlPath = "/api/v1/users"
+	}
+	url := "http://" + listener.Addr().String() + urlPath
 	var completed int64
 	var wg sync.WaitGroup
 
@@ -133,5 +147,5 @@ func main() {
 	_ = server.Shutdown(ctx)
 	cancel()
 
-	printResults(requests, threads, completed, elapsed)
+	printResults(requests, threads, workload, completed, elapsed)
 }
