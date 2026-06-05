@@ -1438,26 +1438,26 @@ translation code.
 
 ## Optimization Evidence: H1 Request Metadata Cache
 
-On 2026-06-05 local time, H1 request-side metadata moved from repeated server
-lookup/token parsing to one parser-owned snapshot. The parser now builds
-`TH1RequestMetadata` once at request headers-complete time and the server reuses
-it for header policy, `100-continue`, dispatch Host validation, and request
-keep-alive decisions.
+On 2026-06-06 local time, H1 request-side metadata moved from headers-complete
+header-store rescans to one parser-owned parse-time cache. The parser now
+updates pending `TH1RequestMetadata` as watched request headers complete, and
+`BuildRequestMetadata` validates cached `Transfer-Encoding` state before
+publishing the final metadata snapshot, without calling `IHttpHeaders.Get/GetAll`.
 
-This targets the hot path where the previous server-side logic repeated
+This targets the adapter hot path where the previous parser logic repeated
 `Get/GetAll/Trim/LowerCase/TryStrToInt64` for `Host`, `Expect`,
-`Content-Length`, `Transfer-Encoding`, and `Connection`. The change does not
-alter public HTTP facade APIs, response parsing, generated llhttp code, or the
-existing request-side `Connection` exact-string keep-alive behavior.
-The fast-parser snapshot also records whether `Content-Length` was actually
-present, so accepted fast-path requests do not confuse an omitted header with
-`Content-Length: 0`.
+`Content-Length`, `Transfer-Encoding`, and `Connection` after the public header
+store had already been populated. The change does not alter public HTTP facade
+APIs, response parsing, generated llhttp code, public `IHttpHeaders` order, or
+the existing request-side `Connection` exact-string behavior. The cache keeps
+first-value semantics for `Host` / `Connection` / `Content-Length`, merges
+duplicate `Expect` values in parse order, and ignores chunked trailer headers.
 
 Focused benchmark:
 
 ```text
-command=NEXTPAS_BENCH_FILTER='request metadata' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
-adapter cost: request metadata legacy expect+cl ns/op=1320.7
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request metadata' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request metadata legacy expect+cl ns/op=1321.3
 adapter cost: request metadata cached expect+cl ns/op=6.1
 ```
 
@@ -1465,20 +1465,16 @@ Focused validation:
 
 ```text
 make -C tests/nextpas.core.http/test_http_h1parser clean test
-91 total, 91 passed, 0 failed
-heaptrc: 0 unfreed memory blocks
-
-make -C tests/nextpas.core.http/test_http_h1fast clean test
-22 total, 22 passed, 0 failed
+94 total, 94 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 
 make -C tests/nextpas.core.http/test_http_server clean test
-274 total, 274 passed, 0 failed
+275 total, 275 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
   make -C tests/nextpas.core.http/test_http_benchmarks clean test
-13 total, 13 passed, 0 failed
+32 total, 32 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 

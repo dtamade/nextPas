@@ -1,5 +1,60 @@
 # Progress Log
 
+## Session: 2026-06-06 http h1 parser request metadata cache slice
+
+- **Status:** completed.
+- Objective:
+  - remove `IHttpHeaders.Get/GetAll` rescans from H1 request metadata build
+  - keep parser/header/trailer public behavior unchanged
+- Scope and safety:
+  - touched only H1 parser implementation, H1 parser focused tests,
+    benchmark/source-contract test, and HTTP/control docs
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not stage unrelated dirty `test_http_client`, async, worktree marker,
+    compiler, or untracked files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `32 total, 31 passed, 1 failed`
+    - failed at `H1 parser parse-time request metadata helper missing`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - added `UpdateRequestMetadataFromHeader`
+  - parser now caches watched request metadata in pending state during non-trailer
+    header completion
+  - `BuildRequestMetadata` now validates cached `Transfer-Encoding`, publishes final
+    metadata only after headers-complete, and no longer scans `FHeaders`
+  - added split/duplicate watched-header, trailer-non-pollution, and
+    no-partial-publish focused tests
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
+    - `94/94 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `32/32 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request metadata' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+    - `adapter cost: request metadata legacy expect+cl: 1321.3 ns/op`
+    - `adapter cost: request metadata cached expect+cl: 6.1 ns/op`
+- Sidecar review:
+  - metadata audit emphasized preserving first-value semantics, duplicate order,
+    trailer isolation, reset lifecycle, and TE malformed/unsupported error classes
+  - performance audit ranked next slices as fast lazy header access, then response
+    writer/header serialization; router dispatch should wait
+- Outcome:
+  - request metadata no longer pays header-store lookup/tokenization at
+    headers-complete
+  - public header store and wire behavior remain covered by focused parser/server gates
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: llhttp adapter request metadata parse-time cache
+  - next best batch: fast-path header block finer lazy access; keep benchmark-final
+    cross-language sweep deferred
+
+
 ## Session: 2026-06-06 http request path-only projection slice
 
 - **Status:** completed.

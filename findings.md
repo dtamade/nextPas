@@ -1,5 +1,47 @@
 # Findings & Decisions
 
+## 2026-06-06 http h1 parser request metadata cache slice
+
+- 本轮把 H1 request metadata 从 headers-complete 后回扫 `IHttpHeaders`
+  改为 header parse 阶段 pending cache，并在 headers-complete 校验通过后发布。
+- 选择依据：
+  - 上一批路径投影后，HTTP roadmap 已进入 `6/6 Benchmark 与优化` 的 adapter
+    固定成本削减阶段。
+  - 子代理审计确认 parser 当前 `BuildRequestMetadata` 会对 `Host`、`Connection`、
+    `Content-Length`、`Expect`、`Transfer-Encoding` 做 `Get/GetAll` 二次扫描。
+  - narrowed benchmark 中 legacy request metadata synthetic row 仍约 `1321.3 ns/op`，
+    cached synthetic row 为 `6.1 ns/op`，说明这类固定成本值得先压。
+- 实现决策：
+  - `FPendingRequestMetadata` 作为 parser-owned cache，`FRequestMetadata` 仍只在
+    headers-complete 校验通过后对外发布。
+  - 新增 `Host` / `Connection` / `Content-Length` 首值 seen flags，保留 `Get`
+    首值语义，避免空首值被后续重复 header 覆盖。
+  - `Expect` 按重复 header 顺序增量归约；`Transfer-Encoding` 保存 combined string，
+    仍在 headers-complete 统一执行 malformed / unsupported 校验，避免错误时机漂移。
+  - trailer 阶段完全不更新 metadata cache，继续只统计 trailer bytes。
+  - 不改 public `IHttpHeaders` store，不改 generated llhttp state machine，不改公开 API。
+- RED 证据：
+  - `test_http_benchmarks` 先失败在
+    `H1 parser parse-time request metadata helper missing`。
+  - 结果为 `32 total, 31 passed, 1 failed`，heaptrc 为
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_h1parser`：`94/94 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`32/32 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server`：`275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `adapter cost: request metadata legacy expect+cl = 1321.3 ns/op`
+  - `adapter cost: request metadata cached expect+cl = 6.1 ns/op`
+- 子代理只读复盘：
+  - metadata cache 必须保护 `Get` 首值、`GetAll` 顺序、TE 错误分类和 trailer 隔离。
+  - 下一批性能优先级建议为 fast-path header block 更细粒度 lazy access，其次是
+    response writer/header serialization；router dispatch 暂缓。
+- 复盘结论：
+  方向没有走偏：本轮是 adapter 热路径固定成本削减，不是碎片化 inline。实现标准达到
+  当前切片目标：source-contract 锁住不回扫，行为测试锁住高风险语义，server gate 锁住
+  对外 wire contract。下一步应进入 fast lazy headers 按需命中，而不是继续扩大本 slice。
+
+
 ## 2026-06-06 http request path-only projection slice
 
 - 本轮把上一批新增的 `Req.Path` / `Req.RawQuery` direct accessor 从“少复制

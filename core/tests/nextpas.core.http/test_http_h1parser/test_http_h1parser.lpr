@@ -330,6 +330,119 @@ begin
     'chunked metadata keeps unsupported expect absence');
 end;
 
+procedure TestRequestMetadataSplitDuplicateWatchedHeaders;
+var
+  LP: IH1Parser;
+  LPart1: string;
+  LPart2: string;
+  LMetadata: TH1RequestMetadata;
+  LHostValues: TStringArray;
+begin
+  LP := NewH1RequestParser;
+  LPart1 := 'GET /meta HTTP/1.1'#13#10 +
+            'Ho';
+  LPart2 := 'st: '#13#10 +
+            'Host: later.example'#13#10 +
+            'Connection: close'#13#10 +
+            'Connection: keep-alive'#13#10 +
+            'Expect: fancy'#13#10 +
+            'Expect: 100-continue'#13#10#13#10;
+
+  LP.Execute(PAnsiChar(LPart1), Length(LPart1));
+  LP.Execute(PAnsiChar(LPart2), Length(LPart2));
+
+  Check(LP.IsComplete, 'split duplicate metadata request complete');
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasHost,
+    'metadata preserves first empty Host value semantics');
+  Check(LMetadata.ConnectionClose,
+    'metadata preserves first Connection value');
+  Check(not LMetadata.ConnectionKeepAlive,
+    'metadata ignores duplicate Connection for first-value semantics');
+  Check(LMetadata.ExpectsContinue,
+    'metadata merges duplicate Expect values');
+  Check(LMetadata.HasUnsupportedExpect,
+    'metadata preserves unsupported Expect token from duplicate value');
+
+  LHostValues := LP.GetHeaders.GetAll('Host');
+  CheckEqual(Int64(2), Int64(Length(LHostValues)),
+    'split duplicate Host headers stay in public header store');
+  CheckEqual('', LHostValues[0], 'first Host header value preserved');
+  CheckEqual('later.example', LHostValues[1],
+    'second Host header value preserved');
+end;
+
+procedure TestRequestMetadataIgnoresChunkedTrailerHeaders;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10 +
+          'Trailer: Expect, Host'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10 +
+          'Expect: fancy'#13#10 +
+          'Host: attacker.example'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  if (not LP.HasError) and (not LP.IsComplete) then
+    LP.Finish;
+
+  Check(LP.IsComplete, 'chunked trailer metadata request complete');
+  Check(not LP.HasError, 'chunked trailer metadata request has no parser error');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasHost,
+    'metadata keeps regular Host despite trailer Host');
+  Check(LMetadata.HasTransferEncoding,
+    'metadata keeps regular Transfer-Encoding despite trailers');
+  Check(not LMetadata.ExpectsContinue,
+    'metadata ignores trailer Expect 100-continue state');
+  Check(not LMetadata.HasUnsupportedExpect,
+    'metadata ignores unsupported trailer Expect token');
+  CheckEqual('', LP.GetHeaders.Get('Expect'),
+    'trailer Expect does not enter public header store');
+  CheckEqual('localhost', LP.GetHeaders.Get('Host'),
+    'trailer Host does not override public header store');
+end;
+
+procedure TestRequestMetadataPublishesAfterHeadersComplete;
+var
+  LP: IH1Parser;
+  LPart1: string;
+  LPart2: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LPart1 := 'POST /upload HTTP/1.1'#13#10 +
+            'Host: localhost'#13#10 +
+            'Expect: 100-continue'#13#10;
+  LPart2 := 'Content-Length: 5'#13#10#13#10'hello';
+
+  LP.Execute(PAnsiChar(LPart1), Length(LPart1));
+
+  Check(not LP.HeadersComplete,
+    'partial metadata request has not completed headers');
+  LMetadata := LP.GetRequestMetadata;
+  Check(not LMetadata.HasHost,
+    'metadata does not publish Host before headers-complete');
+  Check(not LMetadata.ExpectsContinue,
+    'metadata does not publish Expect before headers-complete');
+
+  LP.Execute(PAnsiChar(LPart2), Length(LPart2));
+
+  Check(LP.IsComplete, 'metadata request completes after final headers');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasHost,
+    'metadata publishes Host after headers-complete');
+  Check(LMetadata.ExpectsContinue,
+    'metadata publishes Expect after headers-complete');
+  Check(LMetadata.HasContentLength,
+    'metadata publishes Content-Length after headers-complete');
+end;
+
 procedure TestRequestBodyReaderView;
 var
   LP: IH1Parser;
@@ -1965,6 +2078,12 @@ begin
     @TestRequestMetadataFixedLengthExpectConnection);
   T.Run('Request metadata chunked transfer-encoding',
     @TestRequestMetadataChunkedTransferEncoding);
+  T.Run('Request metadata split duplicate watched headers',
+    @TestRequestMetadataSplitDuplicateWatchedHeaders);
+  T.Run('Request metadata ignores chunked trailer headers',
+    @TestRequestMetadataIgnoresChunkedTrailerHeaders);
+  T.Run('Request metadata publishes after headers complete',
+    @TestRequestMetadataPublishesAfterHeadersComplete);
   T.Run('Request body reader view', @TestRequestBodyReaderView);
   T.Run('Response body reader view', @TestResponseBodyReaderView);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);

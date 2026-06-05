@@ -1,5 +1,30 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http h1 parser request metadata cache slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 llhttp adapter request metadata 热路径：
+让 `TH1Parser` 在 header parse 完成时增量维护 `TH1RequestMetadata`，不再在
+`BuildRequestMetadata` 中通过 `IHttpHeaders.Get/GetAll` 二次回扫 header store，
+同时保持 public header store、重复 header 顺序、trailer 隔离和异常 framing 语义不变。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract，证明
+  `BuildRequestMetadata` 不应再访问 `FHeaders.Get/GetAll`。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1.parser`，新增 parse-time
+  pending metadata cache、首值 seen flags、headers-complete 发布边界和
+  `Transfer-Encoding` combined value 校验。
+- [x] 在 `test_http_h1parser` 补 split/duplicate watched headers 与 chunked trailer
+  不污染 metadata 的 focused tests。
+- [x] 跑 focused gates：
+  `test_http_h1parser`、`test_http_benchmarks`、`test_http_server`。
+- [x] 跑小 benchmark smoke：
+  `bench_h1parser` 的 `request metadata` filter。
+- [x] 更新 HTTP benchmark/API/control 文档并 path-limited commit。
+
+
 ## Active Session: 2026-06-06 http request path-only projection slice
 
 ### Goal

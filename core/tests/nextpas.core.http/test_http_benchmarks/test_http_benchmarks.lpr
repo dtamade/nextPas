@@ -28,6 +28,7 @@ const
   HeaderUnitPath = 'src/nextpas.core.http.headers.pas';
   HttpMessageUnitPath = 'src/nextpas.core.http.message.pas';
   H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
+  H1ParserUnitPath = 'src/nextpas.core.http.impl.h1.parser.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
@@ -367,6 +368,21 @@ begin
   end;
 end;
 
+function ExtractSourceBlock(const ASource, AStartMarker, AEndMarker,
+  ALabel: string): string;
+var
+  LStart: SizeInt;
+  LEnd: SizeInt;
+  LTail: string;
+begin
+  LStart := Pos(AStartMarker, ASource);
+  Check(LStart > 0, ALabel + ' start marker missing: ' + AStartMarker);
+  LTail := Copy(ASource, LStart, MaxInt);
+  LEnd := Pos(AEndMarker, LTail);
+  Check(LEnd > 0, ALabel + ' end marker missing: ' + AEndMarker);
+  Result := Copy(LTail, 1, LEnd - 1);
+end;
+
 procedure TestBenchServerSmallSmoke;
 var
   LRootDir: string;
@@ -617,6 +633,37 @@ begin
     'function THttpRequest.GetRawQuery: string;' + LineEnding + 'begin' +
     LineEnding + '  EnsureUrlParsed;',
     'THttpRequest.GetRawQuery should not force full Url materialization');
+end;
+
+procedure TestH1ParserRequestMetadataCacheSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LBuildBody: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1ParserUnitPath));
+  LBuildBody := ExtractSourceBlock(LSource,
+    'function TH1Parser.BuildRequestMetadata(',
+    'procedure TH1Parser.UpdateRequestMetadataFromHeader',
+    'H1 parser BuildRequestMetadata body');
+
+  CheckContains(LSource, 'procedure TH1Parser.UpdateRequestMetadataFromHeader',
+    'H1 parser parse-time request metadata helper');
+  CheckContains(LSource, 'LSelf.UpdateRequestMetadataFromHeader(LSelf.FCurrentField',
+    'H1 parser parse-time request metadata callback hook');
+  CheckNotContains(LBuildBody, 'LHeaders := FHeaders;',
+    'H1 parser request metadata should not rescan header store');
+  CheckNotContains(LBuildBody, 'LHeaders.Get(''host'')',
+    'H1 parser request metadata should cache Host during parse');
+  CheckNotContains(LBuildBody, 'LHeaders.Get(''connection'')',
+    'H1 parser request metadata should cache Connection during parse');
+  CheckNotContains(LBuildBody, 'LHeaders.Get(''content-length'')',
+    'H1 parser request metadata should cache Content-Length during parse');
+  CheckNotContains(LBuildBody, 'LHeaders.GetAll(''expect'')',
+    'H1 parser request metadata should cache Expect during parse');
+  CheckNotContains(LBuildBody, 'LHeaders.GetAll(''transfer-encoding'')',
+    'H1 parser request metadata should cache Transfer-Encoding during parse');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -1495,6 +1542,8 @@ begin
     @TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract);
   T.Run('HTTP request direct path projection source contract',
     @TestHttpRequestDirectPathProjectionSourceContract);
+  T.Run('H1 parser request metadata cache source contract',
+    @TestH1ParserRequestMetadataCacheSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

@@ -96,6 +96,11 @@ type
     FErrorKind: TH1ParserErrorKind;
     FTrailerBytes: Int64;
     FRequestMetadata: TH1RequestMetadata;
+    FPendingRequestMetadata: TH1RequestMetadata;
+    FRequestMetadataSawHost: Boolean;
+    FRequestMetadataSawConnection: Boolean;
+    FRequestMetadataSawContentLength: Boolean;
+    FRequestTransferEncoding: string;
     FCurrentField: string;
     FCurrentValue: string;
     FCurrentFieldPtr: PAnsiChar;
@@ -108,10 +113,15 @@ type
       const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
     function BuildRequestMetadata(
       const AParser: PTLlhttpInternalT): LongInt;
+    procedure UpdateRequestMetadataFromHeader(const AField: string;
+      const AFieldPtr: PAnsiChar; const AFieldLen: SizeUInt;
+      const AValue: string; const AValuePtr: PAnsiChar;
+      const AValueLen: SizeUInt);
     procedure EnsureBodyCapacity(const ARequired: SizeUInt);
     function SnapshotBody: TBytes;
     procedure MaterializeCurrentHeaderSpans;
     procedure ClearCurrentHeaderSpans;
+    procedure ClearRequestMetadataCache;
   public
     constructor Create(const AType: TH1ParserType;
       const ASkipBody: Boolean = False);
@@ -148,6 +158,49 @@ const
 function LowerTrim(const AValue: string): string; inline;
 begin
   Result := LowerCase(TextTrim(AValue));
+end;
+
+function LowerAscii(const AChar: AnsiChar): AnsiChar; inline;
+begin
+  if (AChar >= 'A') and (AChar <= 'Z') then
+    Result := AnsiChar(Ord(AChar) + 32)
+  else
+    Result := AChar;
+end;
+
+function HeaderFieldSpanEquals(const AFieldPtr: PAnsiChar;
+  const AFieldLen: SizeUInt; const AName: string): Boolean; inline;
+var
+  I: SizeUInt;
+begin
+  Result := False;
+  if AFieldPtr = nil then
+    Exit;
+  if AFieldLen <> SizeUInt(Length(AName)) then
+    Exit;
+  for I := 0 to AFieldLen - 1 do
+    if LowerAscii(AFieldPtr[I]) <> AnsiChar(AName[SizeInt(I) + 1]) then
+      Exit;
+  Result := True;
+end;
+
+function HeaderFieldEquals(const AField: string; const AFieldPtr: PAnsiChar;
+  const AFieldLen: SizeUInt; const AName: string): Boolean; inline;
+begin
+  if AField <> '' then
+    Result := SameText(AField, AName)
+  else
+    Result := HeaderFieldSpanEquals(AFieldPtr, AFieldLen, AName);
+end;
+
+function CapturedHeaderValueToString(const AValue: string;
+  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt): string; inline;
+begin
+  if AValue <> '' then
+    Exit(AValue);
+  if AValuePtr = nil then
+    Exit('');
+  SetString(Result, AValuePtr, AValueLen);
 end;
 
 procedure UpdateExpectMetadata(var AMetadata: TH1RequestMetadata;
@@ -305,6 +358,11 @@ begin
   begin
     if (p0^.flags and F_TRAILING) = 0 then
     begin
+      if LSelf.FParserType = ptRequest then
+        LSelf.UpdateRequestMetadataFromHeader(LSelf.FCurrentField,
+          LSelf.FCurrentFieldPtr, LSelf.FCurrentFieldLen,
+          LSelf.FCurrentValue, LSelf.FCurrentValuePtr,
+          LSelf.FCurrentValueLen);
       if (LSelf.FCurrentField = '') and (LSelf.FCurrentValue = '') then
         LSelf.FHeaderStore.AddParsedSpans(LSelf.FCurrentFieldPtr,
           LSelf.FCurrentFieldLen, LSelf.FCurrentValuePtr,
@@ -418,7 +476,7 @@ begin
   FMethod := hmGet;
   FStatusCode := 0;
   FVersion := hvHttp11;
-  FRequestMetadata := Default(TH1RequestMetadata);
+  ClearRequestMetadataCache;
 
   llhttp_settings_init(@FSettings);
   FSettings.on_url := @CbOnUrl;
@@ -647,51 +705,15 @@ end;
 function TH1Parser.BuildRequestMetadata(
   const AParser: PTLlhttpInternalT): LongInt;
 var
-  LMetadata: TH1RequestMetadata;
-  LHeaders: IHttpHeaders;
-  LConnection: string;
-  LContentLength: string;
-  LExpectValues: TStringArray;
-  LValues: TStringArray;
-  LCombined: string;
   LTokens: TStringArray;
   LIndex: SizeInt;
   LLastTokenIndex: SizeInt;
   LToken: string;
 begin
   Result := 0;
-  LMetadata := Default(TH1RequestMetadata);
-  LHeaders := FHeaders;
-  LMetadata.HasHost := LHeaders.Get('host') <> '';
-
-  LConnection := LHeaders.Get('connection');
-  LMetadata.ConnectionClose := LConnection = 'close';
-  LMetadata.ConnectionKeepAlive := LConnection = 'keep-alive';
-
-  LContentLength := TextTrim(LHeaders.Get('content-length'));
-  if LContentLength <> '' then
+  if FPendingRequestMetadata.HasTransferEncoding then
   begin
-    LMetadata.HasContentLength := TryStrToInt64(LContentLength,
-      LMetadata.DeclaredContentLength);
-    if LMetadata.HasContentLength and (LMetadata.DeclaredContentLength > 0) then
-      LMetadata.RequestDeclaresBody := True;
-  end;
-
-  LExpectValues := LHeaders.GetAll('expect');
-  for LIndex := 0 to High(LExpectValues) do
-    UpdateExpectMetadata(LMetadata, TextTrim(LExpectValues[LIndex]));
-
-  LValues := LHeaders.GetAll('transfer-encoding');
-  if Length(LValues) > 0 then
-  begin
-    LMetadata.HasTransferEncoding := True;
-    LMetadata.RequestDeclaresBody := True;
-
-    LCombined := LValues[0];
-    for LIndex := 1 to High(LValues) do
-      LCombined := LCombined + ',' + LValues[LIndex];
-
-    LTokens := TextSplit(LowerCase(LCombined), ',');
+    LTokens := TextSplit(LowerCase(FRequestTransferEncoding), ',');
     LLastTokenIndex := -1;
     for LIndex := High(LTokens) downto 0 do
     begin
@@ -723,8 +745,73 @@ begin
       end;
     end;
   end;
+  FRequestMetadata := FPendingRequestMetadata;
+end;
 
-  FRequestMetadata := LMetadata;
+procedure TH1Parser.UpdateRequestMetadataFromHeader(const AField: string;
+  const AFieldPtr: PAnsiChar; const AFieldLen: SizeUInt;
+  const AValue: string; const AValuePtr: PAnsiChar;
+  const AValueLen: SizeUInt);
+var
+  LValue: string;
+  LContentLength: string;
+begin
+  if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'host') then
+  begin
+    if FRequestMetadataSawHost then
+      Exit;
+    FRequestMetadataSawHost := True;
+    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
+    FPendingRequestMetadata.HasHost := LValue <> '';
+    Exit;
+  end;
+
+  if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'connection') then
+  begin
+    if FRequestMetadataSawConnection then
+      Exit;
+    FRequestMetadataSawConnection := True;
+    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
+    FPendingRequestMetadata.ConnectionClose := LValue = 'close';
+    FPendingRequestMetadata.ConnectionKeepAlive := LValue = 'keep-alive';
+    Exit;
+  end;
+
+  if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'content-length') then
+  begin
+    if FRequestMetadataSawContentLength then
+      Exit;
+    FRequestMetadataSawContentLength := True;
+    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
+    LContentLength := TextTrim(LValue);
+    if LContentLength <> '' then
+    begin
+      FPendingRequestMetadata.HasContentLength := TryStrToInt64(LContentLength,
+        FPendingRequestMetadata.DeclaredContentLength);
+      if FPendingRequestMetadata.HasContentLength and
+         (FPendingRequestMetadata.DeclaredContentLength > 0) then
+        FPendingRequestMetadata.RequestDeclaresBody := True;
+    end;
+    Exit;
+  end;
+
+  if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'expect') then
+  begin
+    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
+    UpdateExpectMetadata(FPendingRequestMetadata, TextTrim(LValue));
+    Exit;
+  end;
+
+  if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'transfer-encoding') then
+  begin
+    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
+    if FPendingRequestMetadata.HasTransferEncoding then
+      FRequestTransferEncoding := FRequestTransferEncoding + ',' + LValue
+    else
+      FRequestTransferEncoding := LValue;
+    FPendingRequestMetadata.HasTransferEncoding := True;
+    FPendingRequestMetadata.RequestDeclaresBody := True;
+  end;
 end;
 
 procedure TH1Parser.EnsureBodyCapacity(const ARequired: SizeUInt);
@@ -766,6 +853,16 @@ begin
   FCurrentValueLen := 0;
 end;
 
+procedure TH1Parser.ClearRequestMetadataCache;
+begin
+  FRequestMetadata := Default(TH1RequestMetadata);
+  FPendingRequestMetadata := Default(TH1RequestMetadata);
+  FRequestMetadataSawHost := False;
+  FRequestMetadataSawConnection := False;
+  FRequestMetadataSawContentLength := False;
+  FRequestTransferEncoding := '';
+end;
+
 function TH1Parser.HasError: Boolean;
 begin
   Result := FError;
@@ -795,7 +892,7 @@ begin
   FErrorMsg := '';
   FErrorKind := pekNone;
   FTrailerBytes := 0;
-  FRequestMetadata := Default(TH1RequestMetadata);
+  ClearRequestMetadataCache;
   ClearCurrentHeaderSpans;
   llhttp_reset(@FParser);
   FParser.data := Pointer(Self);
