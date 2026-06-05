@@ -9671,6 +9671,61 @@ begin
   end;
 end;
 
+procedure TestRequestTargetUrlMaterialization;
+var
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LHandler: IHttpHandler;
+  LResp: string;
+begin
+  LHandler := HandlerFunc(procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LUrl: TUrl;
+    LBody: string;
+  begin
+    LUrl := AReq.Url;
+    LBody := LUrl.Scheme + '|' + LUrl.Host + '|' +
+      IntToStr(Int64(LUrl.Port)) + '|' + LUrl.Path + '|' + LUrl.RawQuery;
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+
+  LHandle := StartServer(LHandler, LServer, LPort);
+  try
+    LResp := SendRawRequest(LPort,
+      'GET http://example.com:8080/proxy?q=1 HTTP/1.1'#13#10 +
+      'Host: proxy.local'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('http|example.com|8080|/proxy|q=1', LResp) > 0,
+      'absolute-form request-target materialized as URL authority/path/query');
+
+    LResp := SendRawRequest(LPort,
+      'OPTIONS * HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('||0|*|', LResp) > 0,
+      'asterisk-form request-target preserved as path');
+
+    LResp := SendRawRequest(LPort,
+      'CONNECT example.com:443 HTTP/1.1'#13#10 +
+      'Host: example.com:443'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('||0|example.com:443|', LResp) > 0,
+      'authority-form request-target preserved as path');
+
+    LResp := SendRawRequest(LPort,
+      'GET /http://example.com/path?q=1 HTTP/1.1'#13#10 +
+      'Host: localhost'#13#10 +
+      'Connection: close'#13#10#13#10);
+    Check(Pos('||0|/http://example.com/path|q=1', LResp) > 0,
+      'origin-form scheme-like path is not parsed as authority');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 14: RemoteAddr contains 127.0.0.1 }
 procedure TestRemoteAddr;
 var
@@ -12412,6 +12467,7 @@ begin
     @TestChunkedTrailerPartialFollowUpHeadersCanCompleteLater);
   T.Run('Chunked pipelined requests in single write', @TestChunkedPipelinedRequestsInSingleWrite);
   T.Run('Query parameters', @TestQueryParam);
+  T.Run('Request-target URL materialization', @TestRequestTargetUrlMaterialization);
   T.Run('RemoteAddr is 127.0.0.1', @TestRemoteAddr);
   T.Run('Concurrent stress 10x100', @TestConcurrentStress);
   T.Run('Header field over MaxHeaderSize -> explicit 431',

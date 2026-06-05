@@ -1,119 +1,99 @@
-# Findings: Pascal llhttp raw-gap diagnosis
+# Findings: H1 request-target URL materialization
 
 ## Scope
 
-本轮是 H1 parser raw llhttp 性能诊断，不改变 public facade API、不改变 wire
-contract、不写 `docs/nextpas.core.http.inbox.md`，也不手改 generated
-`nextpas.core.http.impl.h1.llhttp.pas`。
+本轮是 H1 server adapter/materialization 优化，不改变 wire contract，不手改
+generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
 
-## Fresh focused evidence
+## Root cause
 
-Pascal raw row:
+H1 server direct dispatch 与 poll-driven dispatch 在构造 `THttpRequest` 时都使用：
+
+```pascal
+TUrl.Parse(FParser.GetUrl)
+```
+
+通用 `TUrl.Parse` 必须支持 full URL、userinfo、host、port、IPv6、query、
+fragment 等场景。HTTP server 常见 request-target 是 origin-form，例如
+`/api/v1?page=2`，只需要拆 path / query / fragment。把普通 request-target
+送入通用 parser，会在每个请求分发时支付不必要的 materialization 成本。
+
+## Implemented decision
+
+新增 `TUrl.ParseRequestTarget`：
+
+- 空输入抛 `EHttpError`。
+- common origin-form `'/...'` 与 asterisk-form `'*'` 不扫描 `://`，直接拆
+  fragment / query / path。
+- absolute-form request-target 仍委托 `TUrl.Parse`，避免破坏 proxy-style
+  `GET http://host/path HTTP/1.1` 兼容性。
+- authority-form request-target 保持旧兼容，不把 `example.com:443` 提升成
+  URL host / port，而是作为 `Path` 暴露给 handler。
+- scheme-like origin-form path，例如 `/http://example.com/path?q=1`，保持为
+  origin-form path，不被通用 URL parser 误拆成 scheme/authority。
+- H1 server direct 和 poll-driven request construction 都改用
+  `TUrl.ParseRequestTarget(FParser.GetUrl)`。
+
+## Performance evidence
+
+Focused local row:
 
 ```text
 NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+NEXTPAS_BENCH_FILTER='url parse' \
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 
-raw llhttp: 10 headers (~400B) = 766.5 ns/op
+adapter cost: url parse generic origin-form = 276.8 ns/op
+adapter cost: url parse request-target origin-form = 232.0 ns/op
 ```
 
-C raw row:
+This is about a 16.6% reduction for this materialization sub-step.
+
+## Verification evidence
+
+RED proof:
 
 ```text
-NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' \
-make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run \
-  LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
-
-C raw llhttp: 10 headers (~400B) = 525.0 ns/op
+make -C tests/nextpas.core.http/test_http_base clean test
+test_http_base.lpr(210,16) Error: Identifier idents no member "ParseRequestTarget"
 ```
 
-This confirms a representative Pascal raw gap of about `1.46x` on this machine.
-
-## Flag matrix evidence
-
-Focused single-row matrix:
+GREEN focused gates:
 
 ```text
-NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
-NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' \
-LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
-benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --no-perf
+make -C tests/nextpas.core.http/test_http_base clean test
+22 total, 22 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
 ```
 
-Results:
+## Direction review
 
-```text
-pascal-default      854.9 ns/op
-c-default           526.0 ns/op
-pascal-coreavx2     769.7 ns/op
-pascal-extra-opts   750.6 ns/op
-c-native            524.5 ns/op
-```
-
-The matrix shows that CPU/FPU flags and extra FPC opts can reduce noise or win a
-small amount, but they do not close the gap. The extra-opts build also emits
-additional FPC warnings, so it is not a production default decision from this
-single diagnostic row.
-
-## Code structure observations
-
-- Pascal generated llhttp has the same broad llparse shape as C: large
-  goto-driven state machine, `_current` state storage, and match helpers.
-- Pascal stores `_current` as `Pointer` and repeatedly converts through
-  `Pointer(PtrInt(...))` / `TLlparseStateT(PtrInt(...))`; the generated file has
-  215 `_current` assignments and 216 `PtrInt` occurrences.
-- The generated Pascal `llhttp__internal__run` declares many local match/start
-  temporaries up front, matching the C shape but giving FPC a harder register
-  allocation problem than a smaller function would.
-- C llhttp has conditional SIMD/range-match blocks behind `__SSE4_2__`, but the
-  focused `c-native` 10-header row did not materially improve over default C on
-  this input, so SIMD alone is not the immediate explanation for this row.
-- The Pascal port initializes generated `llparse_blob*` arrays at unit
-  initialization rather than as C `static const` data. That is unlikely to affect
-  steady-state raw rows, but it is a codegen difference to keep in mind.
-
-## Perf availability
-
-`perf stat -e cycles -- true` fails locally:
-
-```text
-Access to performance monitoring and observability operations is limited.
-perf_event_paranoid setting is 3
-```
-
-So this checkout cannot yet provide cycles/instructions/branch/cache proof for
-the raw gap. The existing flag-matrix perf fallback remains the right runner,
-but it needs a machine with usable perf counters.
-
-## Current conclusion
-
-The Pascal-translated llhttp raw gap is real enough to keep as a dedicated
-optimization track. It is not yet actionable as a production code change in this
-round because the available evidence does not identify one safe generated-code
-fix. The next raw-gap step should be perf/codegen evidence, not hand-editing the
-generated state machine.
+用户关于 Pascal-translated llhttp raw gap 的怀疑仍成立；上一轮已经证明代表性
+10-header raw row 约 `1.46x` 慢于 C llhttp。但本轮没有为了追 raw gap 手改
+generated state machine，而是继续削 adapter/server 侧已可证明的热路径成本。
+这是当前更稳、更可维护的短期性能路线。
 
 ## Subagent review
 
-Read-only `gpt-5.5 xhigh` subagent `Fermat` reached the same conclusion:
-
-- do not hand-edit generated `nextpas.core.http.impl.h1.llhttp.pas`;
-- the most likely raw-gap causes are FPC codegen/register pressure in the giant
-  dispatcher, helper calling/record-return shape, and `_current` pointer/int
-  state casts;
-- keep production throughput work on adapter/materialization until perf or
-  codegen evidence identifies a safe generated-code fix.
+只读 `gpt-5.5 xhigh` 子代理 `Popper` 审查后未发现 Critical；Important 反馈是
+提交前应补齐 asterisk-form / authority-form public API proof，以及
+handler-visible request-target URL proof。本轮已采纳并验证。
 
 ## Remaining gaps / risks
 
-- Need perf counters or compiler codegen inspection to separate branch
-  prediction, instruction count, register pressure, and callback/state dispatch
-  costs.
-- Need a generator-level plan before changing `nextpas.core.http.impl.h1.llhttp.pas`;
-  hand edits would be hard to maintain and easy to lose on regeneration.
-- Adapter/materialization still has larger proven cost than the raw state
-  machine gap, so production throughput work should continue there unless perf
-  evidence shows a higher-value raw parser fix.
+- `ParseRequestTarget` 仍返回 `TUrl`，因此 path/query/fragment 字符串拆分仍会有
+  managed-string materialization；下一步如果继续追 server hot path，可研究
+  request snapshot 持有 raw target span 或 lazy URL projection。
+- 这批没有声明 full server throughput 排名改善；只锁定 URL materialization
+  sub-step 与 server contract 不回退。
+- Pascal llhttp raw state-machine gap 仍需要 perf/codegen 证据，不应靠手工改
+  generated file 解决。

@@ -33,6 +33,7 @@ type
     RawQuery: string;
     Fragment: string;
     class function Parse(const ARaw: string): TUrl; static;
+    class function ParseRequestTarget(const ARaw: string): TUrl; static;
     function ToString: string;
     function HostPort: string;
   end;
@@ -277,6 +278,37 @@ begin
   end;
 
   // Query
+  LPos := Pos('?', LRest);
+  if LPos > 0 then
+  begin
+    Result.RawQuery := Copy(LRest, LPos + 1, Length(LRest) - LPos);
+    LRest := Copy(LRest, 1, LPos - 1);
+  end;
+
+  Result.Path := LRest;
+end;
+
+class function TUrl.ParseRequestTarget(const ARaw: string): TUrl;
+var
+  LRest: string;
+  LPos: SizeInt;
+begin
+  if ARaw = '' then
+    raise EHttpError.Create('Cannot parse empty request-target');
+
+  if (ARaw[1] <> '/') and (ARaw[1] <> '*') and (Pos('://', ARaw) > 0) then
+    Exit(TUrl.Parse(ARaw));
+
+  Result := Default(TUrl);
+  LRest := ARaw;
+
+  LPos := Pos('#', LRest);
+  if LPos > 0 then
+  begin
+    Result.Fragment := Copy(LRest, LPos + 1, Length(LRest) - LPos);
+    LRest := Copy(LRest, 1, LPos - 1);
+  end;
+
   LPos := Pos('?', LRest);
   if LPos > 0 then
   begin

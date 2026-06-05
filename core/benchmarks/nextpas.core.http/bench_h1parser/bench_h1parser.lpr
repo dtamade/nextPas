@@ -6,6 +6,7 @@ uses
   SysUtils,
   nextpas.core.base,
   nextpas.core.bench,
+  nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.parser,
@@ -437,6 +438,38 @@ begin
   GSink := GSink + LBodySize + LBody[0];
 end;
 
+procedure BenchAdapterUrlParseGenericOriginForm(aIters: Int64);
+var
+  LIt: Int64;
+  LUrl: TUrl;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LUrl := TUrl.Parse('/api/v1/users?page=2&filter=active#top');
+    LScore := LScore + SizeUInt(Length(LUrl.Path)) +
+      SizeUInt(Length(LUrl.RawQuery)) + SizeUInt(Length(LUrl.Fragment));
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterUrlParseRequestTargetOriginForm(aIters: Int64);
+var
+  LIt: Int64;
+  LUrl: TUrl;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LUrl := TUrl.ParseRequestTarget('/api/v1/users?page=2&filter=active#top');
+    LScore := LScore + SizeUInt(Length(LUrl.Path)) +
+      SizeUInt(Length(LUrl.RawQuery)) + SizeUInt(Length(LUrl.Fragment));
+  end;
+  GSink := GSink + LScore;
+end;
+
 function BenchTryGetDeclaredContentLength(const AHeaders: IHttpHeaders;
   out AContentLength: Int64): Boolean;
 var
@@ -672,6 +705,10 @@ begin
   B.Run('adapter cost: header add 10 headers', @BenchAdapterHeaderAdd10Headers);
   B.Run('adapter cost: header span add 10 headers', @BenchAdapterHeaderSpanAdd10Headers);
   B.Run('adapter cost: body copy 1KB', @BenchAdapterBodyCopy1K);
+  B.Run('adapter cost: url parse generic origin-form',
+    @BenchAdapterUrlParseGenericOriginForm);
+  B.Run('adapter cost: url parse request-target origin-form',
+    @BenchAdapterUrlParseRequestTargetOriginForm);
   B.Run('adapter cost: request metadata legacy expect+cl',
     @BenchAdapterRequestMetadataLegacyExpectCl);
   B.Run('adapter cost: request metadata cached expect+cl',

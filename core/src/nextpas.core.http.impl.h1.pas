@@ -998,7 +998,7 @@ begin
       Exit(tscoServer);
     end;
 
-    LUrl := TUrl.Parse(FParser.GetUrl);
+    LUrl := TUrl.ParseRequestTarget(FParser.GetUrl);
     LContentLen := FParser.GetBodySize;
     LBodyReader := FParser.NewBodyReader;
     if LBodyReader <> nil then
@@ -1109,7 +1109,7 @@ begin
       Exit(tscoServer);
     end;
 
-    LUrl := TUrl.Parse(FParser.GetUrl);
+    LUrl := TUrl.ParseRequestTarget(FParser.GetUrl);
     LContentLen := FParser.GetBodySize;
     LBodyReader := FParser.NewBodyReader;
     if LBodyReader <> nil then

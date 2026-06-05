@@ -203,6 +203,96 @@ begin
   CheckEqual(UInt16(0), LUrl.Port, 'ipv6 no port');
 end;
 
+procedure TestUrlParseRequestTargetOriginForm;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.ParseRequestTarget('/api/v1?page=2#frag');
+  CheckEqual('', LUrl.Scheme, 'no scheme');
+  CheckEqual('', LUrl.UserInfo, 'no userinfo');
+  CheckEqual('', LUrl.Host, 'no host');
+  CheckEqual(UInt16(0), LUrl.Port, 'no port');
+  CheckEqual('/api/v1', LUrl.Path, 'path');
+  CheckEqual('page=2', LUrl.RawQuery, 'query');
+  CheckEqual('frag', LUrl.Fragment, 'fragment');
+end;
+
+procedure TestUrlParseRequestTargetPathOnly;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.ParseRequestTarget('/api/v1');
+  CheckEqual('', LUrl.Scheme, 'no scheme');
+  CheckEqual('', LUrl.Host, 'no host');
+  CheckEqual('/api/v1', LUrl.Path, 'path');
+  CheckEqual('', LUrl.RawQuery, 'no query');
+  CheckEqual('', LUrl.Fragment, 'no fragment');
+end;
+
+procedure TestUrlParseRequestTargetAbsoluteForm;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.ParseRequestTarget('http://example.com:8080/proxy?q=1#top');
+  CheckEqual('http', LUrl.Scheme, 'scheme');
+  CheckEqual('example.com', LUrl.Host, 'host');
+  CheckEqual(UInt16(8080), LUrl.Port, 'port');
+  CheckEqual('/proxy', LUrl.Path, 'path');
+  CheckEqual('q=1', LUrl.RawQuery, 'query');
+  CheckEqual('top', LUrl.Fragment, 'fragment');
+end;
+
+procedure TestUrlParseRequestTargetAsteriskForm;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.ParseRequestTarget('*');
+  CheckEqual('', LUrl.Scheme, 'no scheme');
+  CheckEqual('', LUrl.Host, 'no host');
+  CheckEqual(UInt16(0), LUrl.Port, 'no port');
+  CheckEqual('*', LUrl.Path, 'asterisk path');
+  CheckEqual('', LUrl.RawQuery, 'no query');
+  CheckEqual('', LUrl.Fragment, 'no fragment');
+end;
+
+procedure TestUrlParseRequestTargetAuthorityForm;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.ParseRequestTarget('example.com:443');
+  CheckEqual('', LUrl.Scheme, 'no scheme');
+  CheckEqual('', LUrl.Host, 'authority is not parsed as URL host');
+  CheckEqual(UInt16(0), LUrl.Port, 'authority port is not parsed as URL port');
+  CheckEqual('example.com:443', LUrl.Path, 'authority target is preserved as path');
+  CheckEqual('', LUrl.RawQuery, 'no query');
+  CheckEqual('', LUrl.Fragment, 'no fragment');
+end;
+
+procedure TestUrlParseRequestTargetOriginFormWithSchemeLikePath;
+var
+  LUrl: TUrl;
+begin
+  LUrl := TUrl.ParseRequestTarget('/http://example.com/path?q=1');
+  CheckEqual('', LUrl.Scheme, 'origin-form keeps scheme-like path unparsed');
+  CheckEqual('', LUrl.Host, 'no host');
+  CheckEqual('/http://example.com/path', LUrl.Path, 'path');
+  CheckEqual('q=1', LUrl.RawQuery, 'query');
+end;
+
+procedure TestUrlParseRequestTargetEmptyRaises;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    TUrl.ParseRequestTarget('');
+  except
+    on E: EHttpError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'empty request-target raises EHttpError');
+end;
+
 procedure TestHttpClientOptionsDefault;
 var
   LOptions: THttpClientOptions;
@@ -241,6 +331,13 @@ begin
   T.Run('TUrl.ToString round-trip', @TestUrlToString);
   T.Run('TUrl.HostPort', @TestUrlHostPort);
   T.Run('TUrl.Parse IPv6', @TestUrlParseIPv6);
+  T.Run('TUrl.ParseRequestTarget origin-form', @TestUrlParseRequestTargetOriginForm);
+  T.Run('TUrl.ParseRequestTarget path-only', @TestUrlParseRequestTargetPathOnly);
+  T.Run('TUrl.ParseRequestTarget absolute-form', @TestUrlParseRequestTargetAbsoluteForm);
+  T.Run('TUrl.ParseRequestTarget asterisk-form', @TestUrlParseRequestTargetAsteriskForm);
+  T.Run('TUrl.ParseRequestTarget authority-form', @TestUrlParseRequestTargetAuthorityForm);
+  T.Run('TUrl.ParseRequestTarget scheme-like origin-form', @TestUrlParseRequestTargetOriginFormWithSchemeLikePath);
+  T.Run('TUrl.ParseRequestTarget empty raises', @TestUrlParseRequestTargetEmptyRaises);
   T.Run('THttpClientOptions.Default', @TestHttpClientOptionsDefault);
   T.Run('THttpServerOptions.Default', @TestHttpServerOptionsDefault);
   T.Summary;

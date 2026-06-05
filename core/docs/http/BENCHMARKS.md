@@ -982,6 +982,57 @@ per-request policy/dispatch cost without changing wire contracts. The broader
 H1 performance track should continue with adapter materialization rows before
 returning to generated llhttp translation changes.
 
+## Optimization Evidence: Request-Target URL Parser
+
+On 2026-06-05 local time, `TUrl` gained `ParseRequestTarget` for HTTP
+request-target materialization. The common origin-form path skips authority,
+userinfo, host, and port parsing, and it also avoids scanning for `://` when
+the target starts with `/` or `*`. Absolute-form request targets still delegate
+to `TUrl.Parse`, preserving proxy-style compatibility.
+
+H1 server request construction now uses `TUrl.ParseRequestTarget(FParser.GetUrl)`
+in both direct and poll-driven dispatch paths. This changes only URL
+materialization cost; it does not alter parser framing, header policy, body
+handling, or wire contracts.
+
+Focused benchmark:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='url parse' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: url parse generic origin-form = 276.8 ns/op
+adapter cost: url parse request-target origin-form = 232.0 ns/op
+```
+
+Focused validation:
+
+```text
+RED: make -C tests/nextpas.core.http/test_http_base clean test
+Identifier idents no member "ParseRequestTarget"
+
+make -C tests/nextpas.core.http/test_http_base clean test
+22 total, 22 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+The public parser proof now covers origin-form, path-only, absolute-form,
+asterisk-form, authority-form, scheme-like origin-form, and empty input. The
+server proof directly checks handler-visible URL materialization for
+absolute-form, asterisk-form, authority-form, and an origin-form path that
+contains `://`.
+
+This is a narrow adapter/materialization win. It does not close the
+Pascal-translated llhttp raw gap by itself, but it removes a per-request
+server dispatch cost that sits after successful H1 parsing.
+
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 
 On 2026-06-05 local time, the Pascal-translated llhttp raw-gap hypothesis was

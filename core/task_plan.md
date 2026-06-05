@@ -1,53 +1,60 @@
-# Task Plan: Pascal llhttp raw-gap diagnosis
+# Task Plan: H1 request-target URL materialization
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-本轮聚焦用户提出的疑点：Pascal-translated llhttp 是否存在 raw state-machine 性能差距。
+本轮聚焦 H1 server adapter/materialization 热路径：普通 HTTP request-target
+不应每次都走通用 URL parser 的 authority / host / port 解析路径。
 
-本轮不改 HTTP public facade API、不改 wire contract、不写
-`docs/nextpas.core.http.inbox.md`，不手改 generated
-`src/nextpas.core.http.impl.h1.llhttp.pas`。
+本轮不改 generated `src/nextpas.core.http.impl.h1.llhttp.pas`，不写
+`docs/nextpas.core.http.inbox.md`，不跑全量测试。
 
 ## Checklist
 
-- [x] 复核设计规范、HTTP coverage、benchmark docs、控制文件与 git status。
-- [x] 使用 focused row 复测 Pascal raw llhttp 与 C raw llhttp 的 10-header 代表行。
-- [x] 跑单行 flag matrix，确认 CPU/FPU flags 与 extra FPC opts 是否能追平 C raw row。
-- [x] 检查 generated Pascal llhttp 与 C llhttp 的结构差异，分类最可能的 raw-gap 来源。
-- [x] 确认本机 `perf` 是否可用于 cycles/branch/cache 证据。
-- [x] 开只读 `gpt-5.5 xhigh` 子代理做第二视角审计。
-- [x] 更新 benchmark 文档与控制文件，固定本轮证据和下一步路线。
-- [x] 跑 focused benchmark smoke / diff check。
-- [ ] path-limited commit。
+- [x] 复核设计规范、HTTP coverage / benchmark docs、控制文件与 git status。
+- [x] 确认 H1 server direct / poll dispatch 都仍用 `TUrl.Parse(FParser.GetUrl)`。
+- [x] RED：新增 `TUrl.ParseRequestTarget` focused tests，锁住 origin-form、
+  path-only、absolute-form compatibility、asterisk-form、authority-form、
+  scheme-like origin-form、empty-input rejection。
+- [x] GREEN：实现 `TUrl.ParseRequestTarget`，common origin-form 避开 authority
+  parsing 和 `://` 扫描，absolute-form 委托 `TUrl.Parse`。
+- [x] 将 H1 server request construction 切到 `TUrl.ParseRequestTarget`。
+- [x] 补 H1 server handler-visible URL materialization proof，覆盖
+  absolute-form、asterisk-form、authority-form 与 scheme-like origin-form。
+- [x] 新增 H1 parser benchmark URL materialization rows，并更新 benchmark smoke marker。
+- [x] 更新 README / API coverage / benchmark docs / 控制文件。
+- [x] 跑 focused gates 与 diff check。
 
 ## Scope
 
-本轮只允许修改：
+本轮允许修改：
 
+- `src/nextpas.core.http.base.pas`
+- `src/nextpas.core.http.impl.h1.pas`
+- `tests/nextpas.core.http/test_http_base/test_http_base.lpr`
+- `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
+- `benchmarks/nextpas.core.http/bench_h1parser/bench_h1parser.lpr`
+- `docs/http/README.md`
+- `docs/http/API_COVERAGE.md`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
 - `progress.md`
 
-如果后续需要新增或修改 benchmark 工具，只能在新的 RED/GREEN 小切片中处理：
-
-- `benchmarks/nextpas.core.http/bench_h1parser/*`
-- `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
-
 ## Current conclusion
 
-用户怀疑是合理的：fresh focused rows 显示 Pascal raw llhttp 10-header 约
-`766.5 ns/op`，C raw llhttp 约 `525.0 ns/op`，差距约 `1.46x`。
+`ParseRequestTarget` 是比继续手碰 Pascal llhttp generated code 更稳的短期收益点。
+本机 focused row 显示：
 
-但本轮证据仍不支持直接手改 generated state machine：
+- generic origin-form URL parse: `276.8 ns/op`
+- request-target origin-form parse: `232.0 ns/op`
 
-- flag matrix 只能把 Pascal row 小幅压到约 `750.6 ns/op`，仍无法追平 C。
-- `perf` 在本机受 `perf_event_paranoid=3` 限制，不可采集 cycles / branch / cache counters。
-- 当前 full adapter/materialization 成本仍比 raw state-machine gap 更大。
+收益约 16.6%，且 H1 server 275-case gate 证明 direct / epoll / poll-driven
+server contracts 未被破坏，并直接锁住 handler-visible request-target
+materialization。
 
-## Intended outcome
+## Next target
 
-- 把 Pascal raw-gap 作为独立性能轨道固定到 benchmark docs。
-- 下一步先用 perf 可用环境或 codegen 级证据定位 state-machine 差距。
-- 生产优化继续优先处理 adapter/materialization 中已证明的高倍数成本。
+继续沿 adapter/materialization 优先级推进。下一批优先看 body reader
+copy/ownership 或 request snapshot URL/cache 之外的剩余 dispatch allocation，
+raw Pascal llhttp state-machine gap 仍保留到 perf/codegen 证据充分后处理。

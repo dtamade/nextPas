@@ -1,59 +1,59 @@
-# Progress Log: Pascal llhttp raw-gap diagnosis
+# Progress Log: H1 request-target URL materialization
 
 ## Session
 
-- **Scope:** H1 parser raw Pascal llhttp vs C llhttp focused diagnosis.
-- **Status:** evidence gathered; docs/control update in progress; final focused
-  smoke, diff check, and commit pending.
-- **Roadmap Position:** `6/6 benchmark/performance` -> `Pascal-translated llhttp raw-gap track`.
+- **Scope:** H1 server request-target URL materialization optimization.
+- **Status:** focused RED/GREEN, benchmark row, docs, and verification completed.
+- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 adapter/server materialization`.
 
 ## Current state
 
-- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP
-  benchmark docs/control 文件。
+- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理
+  HTTP URL materialization 相关源码、测试、benchmark 与文档。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮没有跑全量测试；只跑 filtered benchmark rows 和 single-row flag matrix。
+- 本轮没有跑全量测试；只跑受影响的 focused gates。
 
 ## Completed work
 
-- 复测 Pascal raw 10-header row：`766.5 ns/op`。
-- 复测 C raw 10-header row：`525.0 ns/op`。
-- 跑 focused flag matrix：Pascal extra opts 最好约 `750.6 ns/op`，C native 约
-  `524.5 ns/op`，flags 不能追平。
-- 检查 generated Pascal/C llhttp 结构：当前更像 generator/codegen/register-pressure
-  问题，不是简单 SIMD flag 问题。
-- 确认本机 `perf` 不可用：`perf_event_paranoid=3`，无法采集 hardware counters。
-- 已完成只读 `gpt-5.5 xhigh` 子代理 `Fermat` 第二视角审计，结论与本地判断一致：
-  不手改 generated llhttp，先固定 perf/codegen 诊断路线。
+- 新增 `TUrl.ParseRequestTarget`，用于 HTTP request-target 解析。
+- H1 server direct / poll-driven request construction 改用
+  `TUrl.ParseRequestTarget(FParser.GetUrl)`。
+- `test_http_base` 新增 origin-form、path-only、absolute-form compatibility、
+  asterisk-form、authority-form、scheme-like origin-form、empty-input rejection
+  focused tests。
+- `test_http_server` 新增 handler-visible request-target URL materialization
+  proof，覆盖 absolute-form、asterisk-form、authority-form 与 scheme-like
+  origin-form。
+- `bench_h1parser` 新增 URL materialization rows，并更新
+  `test_http_benchmarks` marker。
+- `docs/http/README.md`、`docs/http/API_COVERAGE.md`、`docs/http/BENCHMARKS.md`
+  已同步新 public API 与性能证据。
+- 只读 `gpt-5.5 xhigh` 子代理 `Popper` 提交前审查无 Critical；Important
+  反馈已补测试并验证。
 
-## Verification So Far
+## Verification
 
-- `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  - `raw llhttp: 10 headers (~400B) = 766.5 ns/op`
-- `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`
-  - `C raw llhttp: 10 headers (~400B) = 525.0 ns/op`
-- `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --no-perf`
-  - `pascal-default = 854.9 ns/op`
-  - `pascal-coreavx2 = 769.7 ns/op`
-  - `pascal-extra-opts = 750.6 ns/op`
-  - `c-default = 526.0 ns/op`
-  - `c-native = 524.5 ns/op`
+- RED:
+  `make -C tests/nextpas.core.http/test_http_base clean test`
+  -> failed with `Identifier idents no member "ParseRequestTarget"`.
+- `make -C tests/nextpas.core.http/test_http_base clean test`
+  -> `22 total, 22 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+- `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='url parse' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+  -> generic origin-form `276.8 ns/op`; request-target origin-form `232.0 ns/op`.
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  -> `275 total, 275 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+- `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  -> `13 total, 13 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
 
-## Current conclusion
+## Direction review
 
-方向没有走偏：用户指出的 Pascal llhttp raw 性能问题存在，但本轮证据不支持直接改
-generated llhttp。性能追平 Go/Rust 的主线仍应分两条推进：
-
-- 短期：继续削 adapter/server materialization 中已证明的高倍数成本。
-- 中期：在 perf 可用环境或 compiler/codegen 审计下处理 Pascal raw state-machine gap。
-
-## Commit scope
-
-- Only stage this batch's HTTP benchmark docs/control files.
-- Planned commit message: `docs(http): classify pascal llhttp raw gap`
+方向没有走偏：本轮没有试图用手改 generated Pascal llhttp 解决 raw gap，而是按
+性能路线优先削 adapter/materialization。`ParseRequestTarget` 对普通 server
+origin-form request-target 的子步骤有明确 benchmark 收益，同时保持 absolute-form
+兼容，并用 server 275-case gate 锁住 handler-visible URL materialization。
 
 ## Next step
 
-- 提交本轮诊断文档。
-- 下一批优先继续 H1 adapter materialization：URL parse/cache 或 body reader copy/ownership，
-  仍按 focused RED/GREEN + narrow benchmark row 推进。
+继续 `6/6 benchmark/performance` 的 H1 adapter/server materialization 轨道。
+下一批优先评估 body reader copy/ownership 或 request snapshot/lazy URL projection；
+Pascal-translated llhttp raw state-machine gap 继续等待 perf/codegen 证据。
