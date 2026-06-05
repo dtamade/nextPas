@@ -1,6 +1,13 @@
 .ace-tool/
 .nextpas/
 .sisyphus/
+.worktrees/
+.claude/projects/
+GPATH
+GRTAGS
+GTAGS
+tmp/
+core/src/libimp*.a
 *.o
 *.ppu
 tests/snapshots/*.diff.txt
