@@ -40,12 +40,17 @@ function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overloa
 function NewHttpClient(const ATransport: IHttpTransport): IHttpClient; overload;
 function NewHttpClient(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions): IHttpClient; overload;
+function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
+  const ADest: IWriter): Int64;
+function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
 
 implementation
 
 uses
   nextpas.core.base,
   nextpas.core.errors,
+  nextpas.core.fs,
+  nextpas.core.io,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.http.headers,
@@ -58,6 +63,23 @@ begin
   SetLength(Result, Length(S));
   if Length(S) > 0 then
     Move(S[1], Result[0], Length(S));
+end;
+
+procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
+begin
+  if AClient = nil then
+    raise EArgumentError.Create('HTTP download client is nil');
+  if AUrl = '' then
+    raise EArgumentError.Create('HTTP download URL is empty');
+end;
+
+procedure CheckDownloadResponse(const AResp: IHttpResponse; const AUrl: string);
+begin
+  if AResp = nil then
+    raise EHttpError.Create('HTTP download returned no response: ' + AUrl);
+  if (AResp.StatusCode < 200) or (AResp.StatusCode >= 300) then
+    raise EHttpError.Create('HTTP download failed with status ' +
+      IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl);
 end;
 
 { THttpClient }
@@ -301,6 +323,71 @@ function NewHttpClient(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions): IHttpClient;
 begin
   Result := THttpClient.Create(ATransport, AOptions);
+end;
+
+function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
+  const ADest: IWriter): Int64;
+var
+  LResp: IHttpResponse;
+begin
+  CheckDownloadArgs(AClient, AUrl);
+  if ADest = nil then
+    raise EArgumentError.Create('HTTP download destination writer is nil');
+
+  LResp := AClient.Get(AUrl);
+  CheckDownloadResponse(LResp, AUrl);
+  if LResp.Body = nil then
+    Exit(0);
+  Result := nextpas.core.io.Copy(ADest, LResp.Body);
+end;
+
+function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
+var
+  LResp: IHttpResponse;
+  LDestDir: string;
+  LTempPath: string;
+  LTempFile: IFile;
+  LCommitted: Boolean;
+begin
+  CheckDownloadArgs(AClient, AUrl);
+  if ADestPath = '' then
+    raise EArgumentError.Create('HTTP download destination path is empty');
+
+  LResp := AClient.Get(AUrl);
+  CheckDownloadResponse(LResp, AUrl);
+
+  LDestDir := nextpas.core.fs.PathDir(ADestPath);
+  if not nextpas.core.fs.MkdirAll(LDestDir) then
+    raise EHttpError.Create('HTTP download could not create directory: ' + LDestDir);
+
+  LTempFile := nextpas.core.fs.TempFile(LDestDir,
+    '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
+  LTempPath := LTempFile.Name;
+  LCommitted := False;
+  try
+    if LResp.Body <> nil then
+      Result := nextpas.core.io.Copy(LTempFile as IWriter, LResp.Body)
+    else
+      Result := 0;
+    LTempFile.Sync;
+    LTempFile.Close;
+    LTempFile := nil;
+
+    if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
+      raise EHttpError.Create('HTTP download could not publish file: ' + ADestPath);
+    LCommitted := True;
+  finally
+    if LTempFile <> nil then
+    begin
+      try
+        LTempFile.Close;
+      except
+        on E: Exception do ;
+      end;
+    end;
+    if (not LCommitted) and (LTempPath <> '') then
+      nextpas.core.fs.Remove(LTempPath);
+  end;
 end;
 
 end.

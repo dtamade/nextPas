@@ -157,6 +157,9 @@ function NewHttpClient(const AOptions: THttpClientOptions): IHttpClient; overloa
 function NewHttpClient(const ATransport: IHttpTransport): IHttpClient; overload; inline;
 function NewHttpClient(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions): IHttpClient; overload; inline;
+function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
+  const ADest: IWriter): Int64; inline;
+function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64; inline;
 
 implementation
 
@@ -308,6 +311,17 @@ function NewHttpClient(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions): IHttpClient;
 begin
   Result := nextpas.core.http.client.NewHttpClient(ATransport, AOptions);
+end;
+
+function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
+  const ADest: IWriter): Int64;
+begin
+  Result := nextpas.core.http.client.HttpGetToWriter(AClient, AUrl, ADest);
+end;
+
+function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
+begin
+  Result := nextpas.core.http.client.HttpGetToFile(AClient, AUrl, ADestPath);
 end;
 
 end.

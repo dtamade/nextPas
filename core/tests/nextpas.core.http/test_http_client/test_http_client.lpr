@@ -9,6 +9,7 @@ uses
   nextpas.core.testing,
   nextpas.core.text.conv,
   nextpas.core.errors,
+  nextpas.core.fs,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
   nextpas.core.net,
@@ -22,6 +23,7 @@ uses
   nextpas.core.http.router,
   nextpas.core.http.server,
   nextpas.core.http.client,
+  nextpas.core.http,
   nextpas.core.time.base,
   nextpas.core.time.deadline,
   nextpas.core.platform.thread;
@@ -165,6 +167,17 @@ begin
   if Length(AValue) > 0 then
     Move(AValue[1], LData[0], Length(AValue));
   Result := CreateBytesStreamFrom(LData) as IReader;
+end;
+
+function DownloadTempRoot: string;
+begin
+  Result := PathJoin([GetTempDir, 'nextpas-http-client-download']);
+end;
+
+procedure ResetDownloadTempRoot;
+begin
+  RemoveAll(DownloadTempRoot);
+  MkdirAll(DownloadTempRoot);
 end;
 
 { Test 1: Client GET returns 200 + body }
@@ -563,6 +576,174 @@ begin
   end;
 end;
 
+procedure TestHttpGetToWriterCopiesResponseBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LBuffer: IStream;
+  LCount: Int64;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/download', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'toolchain';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LBuffer := CreateBytesStreamFrom(nil);
+    LCount := nextpas.core.http.HttpGetToWriter(
+      LClient,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/download',
+      LBuffer as IWriter);
+    CheckEqual(Int64(9), LCount, 'copied byte count');
+    LBuffer.Position := 0;
+    CheckEqual('toolchain', ReadReaderStr(LBuffer as IReader), 'writer receives response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttpGetToFileWritesFinalPathAtomically;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LDestPath: string;
+  LCount: Int64;
+begin
+  ResetDownloadTempRoot;
+  LDestPath := PathJoin([DownloadTempRoot, 'artifacts', 'bootstrap.txt']);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/bootstrap', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'bootstrap-bits';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LCount := HttpGetToFile(
+      LClient,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/bootstrap',
+      LDestPath);
+    CheckEqual(Int64(14), LCount, 'file byte count');
+    Check(Exists(LDestPath), 'final file exists');
+    CheckEqual('bootstrap-bits', ReadFileText(LDestPath), 'final file content');
+  finally
+    StopServer(LServer, LHandle);
+    RemoveAll(DownloadTempRoot);
+  end;
+end;
+
+procedure TestHttpGetToFileRejects404Responses;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LDestPath: string;
+  LRaised: Boolean;
+begin
+  ResetDownloadTempRoot;
+  LDestPath := PathJoin([DownloadTempRoot, 'missing', 'tool.txt']);
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/missing', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LBody: string;
+  begin
+    LBody := 'not-found';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LBody))));
+    AW.WriteHeader(HTTP_STATUS_NOT_FOUND);
+    AW.Write(LBody[1], SizeUInt(Length(LBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LRaised := False;
+    try
+      HttpGetToFile(
+        LClient,
+        'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/missing',
+        LDestPath);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+    Check(LRaised, '404 download raises EHttpError');
+    Check(not Exists(LDestPath), '404 download does not create final file');
+  finally
+    StopServer(LServer, LHandle);
+    RemoveAll(DownloadTempRoot);
+  end;
+end;
+
+procedure TestHttpGetToFileCleansTempFilesOnTruncatedBody;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LRet: Pointer;
+  LClient: IHttpClient;
+  LDestPath: string;
+  LDestDir: string;
+  LRaised: Boolean;
+begin
+  ResetDownloadTempRoot;
+  LDestDir := PathJoin([DownloadTempRoot, 'partial']);
+  LDestPath := PathJoin([LDestDir, 'tool.txt']);
+  GRawResponse1 := 'HTTP/1.1 200 OK'#13#10 +
+                   'Content-Length: 10'#13#10 +
+                   'Content-Type: text/plain'#13#10 +
+                   #13#10 +
+                   'hello';
+  GRawResponse2 := '';
+  GRawAcceptLimit := 1;
+  GRawListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRawListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @RawResponseThread, nil);
+
+  try
+    LClient := NewHttpClient;
+    LRaised := False;
+    try
+      HttpGetToFile(
+        LClient,
+        'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/truncated-download',
+        LDestPath);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+    Check(LRaised, 'truncated download raises EHttpError');
+    Check(not Exists(LDestPath), 'truncated download does not leave final file');
+    if IsDir(LDestDir) then
+      CheckEqual(Int64(0), Int64(Length(ReadDir(LDestDir))), 'truncated download cleans temp files');
+  finally
+    GRawListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRawListener := nil;
+    GRawResponse1 := '';
+    GRawResponse2 := '';
+    GRawAcceptLimit := 0;
+    RemoveAll(DownloadTempRoot);
+  end;
+end;
+
 { Test 4: Client follows redirect (301 -> 200) }
 procedure TestClientFollowsRedirect;
 var
@@ -840,6 +1021,10 @@ begin
   T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
+  T.Run('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
+  T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
+  T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
+  T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);

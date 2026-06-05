@@ -75,6 +75,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
 - `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)`
+- `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`
+- `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
 - `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、`MaxHeaderSize`、`MaxBodySize`
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
