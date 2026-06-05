@@ -30,8 +30,8 @@
 - [x] `/codex` 子代理复核：确认 OOM canonical 优先，修正 `ECore` 为统一根 alias。
 - [x] Focused verification: exception/errors/http-server gates + heaptrc。
 - [x] 更新 findings/progress。
-- [ ] 提交分支。
-- [ ] 只在共享 `main` 干净或获得确认后再考虑合并。
+- [x] 提交分支：`f198fc86 refactor(errors): introduce unified framework exception root`。
+- [x] 只在共享 `main` 干净或获得确认后再考虑合并；本轮未合并。
 
 ## Scope
 

@@ -105,9 +105,15 @@ Existing compile warnings/notes appeared in SIMD, platform path, hash, and HTTP 
 
 First-stage exception-root convergence is implemented and verified in the isolated worktree.
 
+## Commit
+
+```text
+f198fc86 refactor(errors): introduce unified framework exception root
+```
+
 ## Next Step
 
-Commit the isolated branch. Merge remains deferred while shared `main` contains unrelated HTTP/async/compiler work.
+Merge remains deferred while shared `main` contains unrelated HTTP/async/compiler work.
 
 ## Follow-Up Migration Items
 
