@@ -21,6 +21,7 @@ static const int64_t target_ns = 50000000;
 static const int64_t warmup_iters = 5;
 static const int samples = 3;
 static const int64_t default_max_iters = 100000;
+static const char* bench_filter_env = "NEXTPAS_BENCH_FILTER";
 
 static const char req_simple[] =
   "GET / HTTP/1.1\r\n"
@@ -80,6 +81,55 @@ static int64_t configured_max_iters(void) {
     return default_max_iters;
   }
   return (int64_t) parsed;
+}
+
+static const char* configured_filter(void) {
+  const char* value = getenv(bench_filter_env);
+  if (value == NULL) {
+    return "";
+  }
+  return value;
+}
+
+static char ascii_lower(char value) {
+  if (value >= 'A' && value <= 'Z') {
+    return (char) (value + ('a' - 'A'));
+  }
+  return value;
+}
+
+static int contains_case_insensitive(const char* haystack, const char* needle) {
+  size_t haystack_len;
+  size_t needle_len;
+
+  if (needle == NULL || needle[0] == '\0') {
+    return 1;
+  }
+  if (haystack == NULL) {
+    return 0;
+  }
+
+  haystack_len = strlen(haystack);
+  needle_len = strlen(needle);
+  if (needle_len > haystack_len) {
+    return 0;
+  }
+
+  for (size_t i = 0; i <= haystack_len - needle_len; i++) {
+    size_t j = 0;
+    while (j < needle_len &&
+        ascii_lower(haystack[i + j]) == ascii_lower(needle[j])) {
+      j++;
+    }
+    if (j == needle_len) {
+      return 1;
+    }
+  }
+  return 0;
+}
+
+static int should_run_benchmark(const char* name) {
+  return contains_case_insensitive(name, configured_filter());
 }
 
 static void init_data(void) {
@@ -287,7 +337,13 @@ static void sort_samples(uint64_t* values, int count) {
 static void run_benchmark(const char* name, bench_proc proc) {
   uint64_t sample_values[3];
   uint64_t median;
-  int64_t iters = calibrate_iterations(proc);
+  int64_t iters;
+
+  if (!should_run_benchmark(name)) {
+    return;
+  }
+
+  iters = calibrate_iterations(proc);
 
   for (int i = 0; i < samples; i++) {
     sample_values[i] = measure_ns(proc, iters);
@@ -314,8 +370,12 @@ static void run_benchmark(const char* name, bench_proc proc) {
 }
 
 static void print_summary(void) {
+  const char* filter = configured_filter();
   printf("\n=== SUMMARY ===\n");
   printf("bench_max_iters=%lld\n", (long long) configured_max_iters());
+  if (filter[0] != '\0') {
+    printf("bench_filter=%s\n", filter);
+  }
   printf("  %40s%10s%14s\n", "Benchmark", "ns/op", "ops/s");
   printf("  %40s%10s%14s\n", "", "", "");
   for (int i = 0; i < result_count; i++) {

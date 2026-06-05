@@ -1,67 +1,53 @@
-# Progress Log: H1 parser direct header span insertion
+# Progress Log: H1 benchmark row filter and flag matrix
 
 ## Session
 
-- **Scope:** parser-trusted direct header span insertion for H1 parser.
+- **Scope:** H1 benchmark row filtering and flag-matrix runner for Pascal llhttp raw-gap profiling.
 - **Status:** complete; path-limited commit prepared for this batch.
-- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 parser adapter materialization`
+- **Roadmap Position:** `6/6 benchmark/performance` -> `Pascal llhttp raw-gap profiling seam`
 
 ## Current state
 
-- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP parser/header/benchmark/docs/control 文件。
+- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP benchmark/tooling/control 文件。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮不跑全量测试；只跑 headers/parser/server/benchmark focused gates、Pascal parser benchmark 和 C llhttp comparator。
-- 已复用历史子代理审计结果；新 spawn 因 thread limit reached 未成功，但现有子代理结论与本轮 fresh comparator 一致。
+- 本轮不跑全量测试；只跑 `test_http_benchmarks` focused gate 和 filtered H1/C raw rows。
+- 子代理 `Galileo` 已给出只读建议：先补 flag-matrix/profiling seam，不要手改 generated llhttp state machine。
 
 ## Completed work
 
-- RED：`test_http_headers` 新增 `THttpHeaders.AddParsedSpans` canonicalization proof，先因 helper 不存在编译失败。
-- GREEN：新增 concrete `THttpHeaders.AddParsedSpans`，不进入 `IHttpHeaders` interface。
-- `TH1Parser` 对 common unsplit header field/value callback 走 direct span insertion。
-- `TH1Parser` 对 split/cross-buffer header callbacks 在 `Execute` 返回前物化回 string fallback，保留 buffer lifetime 安全。
-- `bench_h1parser` 新增 `adapter cost: header span add 10 headers` row。
-- `test_http_benchmarks` smoke 新增对应 row marker。
+- RED：`test_http_benchmarks` 新增 `NEXTPAS_BENCH_FILTER` smoke，先因 marker 缺失失败。
+- GREEN：`TBenchRunner` 与 C llhttp comparator 都支持 `NEXTPAS_BENCH_FILTER`。
+- RED：flag-matrix smoke 先因 `run_flag_matrix.sh` 不存在失败。
+- GREEN：新增 `run_flag_matrix.sh`，输出 `results.tsv/env.txt/logs/perf` 到 `build/.../flag_matrix`。
+- `test_http_benchmarks` 直接锁住 Pascal filter、C filter、flag-matrix smoke。
+- `bench_h1parser` raw/no-op helper 缓存 request pointer/length，减少 wrapper 噪声。
 
 ## Verification
 
-- RED:
-  - `make -C tests/nextpas.core.http/test_http_headers clean test`
-  - failed as expected: `Identifier idents no member "AddParsedSpans"`。
-- Focused gates:
-  - `make -C tests/nextpas.core.http/test_http_headers clean test`
-  - `17 total, 17 passed, 0 failed`; heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `89 total, 89 passed, 0 failed`; heaptrc: `0 unfreed memory blocks`
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `274 total, 274 passed, 0 failed`; heaptrc: `0 unfreed memory blocks`
+- Focused gate:
   - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  - `9 total, 9 passed, 0 failed`; heaptrc: `0 unfreed memory blocks`
-- Benchmark sanity:
-  - `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  - `bench_max_iters=100000`
-  - raw llhttp 10 headers `785.4 ns/op`
-  - adapter span append 10 headers `787.0 ns/op`
-  - adapter header add 10 headers `752.9 ns/op`
-  - adapter header span add 10 headers `1293.0 ns/op`
-  - full adapter 10 headers `2808.4 ns/op`
-  - full adapter POST 1KB `1199.0 ns/op`
-  - full adapter pipeline `5553.6 ns/op`
-  - `make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`
-  - C raw 10 headers `532.2 ns/op`
-  - C raw POST 1KB `275.3 ns/op`
-  - C raw pipeline `1464.6 ns/op`
+  - `12 total, 12 passed, 0 failed`; heaptrc: `0 unfreed memory blocks`
+- Filtered benchmark sanity:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+  - Pascal raw 10 headers `749.7 ns/op`
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`
+  - C raw 10 headers `523.0 ns/op`
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser clean run EXTRA_FLAGS='-CpCOREAVX2 -CfAVX2'`
+  - Pascal raw 10 headers with CPU/FPU flags `759.6 ns/op`
 
 ## Current conclusion
 
-方向没有走偏：Pascal translated llhttp raw gap 是真实后续性能专项，但当前更大瓶颈仍是 adapter/materialization。
-本轮选择 direct header span insertion，是低风险、可验证、对 full adapter 有实测收益的一步。
+方向没有走偏：这批主要提升后续工作效率和证据质量。简单 CPU/FPU target flags 没有缩小 raw gap；
+下一步应使用 `run_flag_matrix.sh --perf` 或独立 `perf record` 去看 branch/cache/call 热点。
 
 ## Commit scope
 
-- Only stage this batch's HTTP parser/header benchmark/docs/control files.
-- Planned commit message: `perf(http): insert h1 headers from parser spans`
+- Only stage this batch's HTTP benchmark/tooling/docs/control files.
+- Planned commit message: `bench(http): add h1 parser row filter`
 
 ## Next step
 
-- 下一批建议进入 Pascal llhttp raw-gap 专项：用 `perf stat/record` + FPC flags/codegen A/B 确认是 branch/goto 状态机、cdecl helper、还是 generated Pascal 形态导致的 `1.4x-1.5x` 差距。
-- 并行保持 adapter 优化路线：URL/header policy metadata lazy/cache，避免普通 server path 反复 materialize 或查找 header container。
+- 下一批运行 `run_flag_matrix.sh --perf` 或 `perf stat/record`，确认 raw gap 是 branch/goto 状态机、
+  cdecl helper/callback trampoline，还是 FPC generated code layout。
+- 如果 profile 指向 generated state machine，不直接手改 `nextpas.core.http.impl.h1.llhttp.pas`，
+  而应设计 translation/generator seam。

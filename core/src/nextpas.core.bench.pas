@@ -18,8 +18,10 @@ type
   private
     FResults: array of TBenchResult;
     FCount: Integer;
+    FFilter: string;
     function CalibrateIterations(aProc: TBenchProc): Int64;
     function MeasureNs(aProc: TBenchProc; aIters: Int64): UInt64;
+    function ShouldRun(const aName: string): Boolean;
   public
     constructor Create;
     procedure Run(const aName: string; aProc: TBenchProc);
@@ -34,6 +36,7 @@ uses
 
 const
   BENCH_MAX_ITERS_ENV = 'NEXTPAS_BENCH_MAX_ITERS';
+  BENCH_FILTER_ENV = 'NEXTPAS_BENCH_FILTER';
   TARGET_NS = 50000000;
   WARMUP_ITERS = 5;
   SAMPLES = 3;
@@ -54,6 +57,7 @@ constructor TBenchRunner.Create;
 begin
   inherited Create;
   FCount := 0;
+  FFilter := Trim(GetEnvironmentVariable(BENCH_FILTER_ENV));
   SetLength(FResults, 0);
 end;
 
@@ -65,6 +69,12 @@ begin
   aProc(aIters);
   LEnd := platform_monotonic_ns;
   Result := LEnd - LStart;
+end;
+
+function TBenchRunner.ShouldRun(const aName: string): Boolean;
+begin
+  Result := (FFilter = '') or
+    (Pos(LowerCase(FFilter), LowerCase(aName)) > 0);
 end;
 
 function TBenchRunner.CalibrateIterations(aProc: TBenchProc): Int64;
@@ -108,6 +118,9 @@ var
   LMedianNs: UInt64;
   LR: TBenchResult;
 begin
+  if not ShouldRun(aName) then
+    Exit;
+
   LIters := CalibrateIterations(aProc);
 
   for i := 0 to SAMPLES - 1 do
@@ -146,6 +159,8 @@ begin
   WriteLn;
   WriteLn('=== SUMMARY ===');
   WriteLn('bench_max_iters=', ConfiguredMaxIterations);
+  if FFilter <> '' then
+    WriteLn('bench_filter=', FFilter);
   WriteLn('  ', 'Benchmark':40, 'ns/op':10, 'ops/s':14);
   WriteLn('  ', '':40, '':10, '':14);
   for i := 0 to FCount - 1 do

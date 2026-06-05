@@ -18,6 +18,23 @@ make -C benchmarks/nextpas.core.http/bench_h1parser \
   run-c LLHTTP_ROOT=/path/to/llhttp-9.4.1
 ```
 
+For focused raw-gap work, use the shared benchmark filter:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' \
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c \
+  clean run LLHTTP_ROOT=/path/to/llhttp-9.4.1
+```
+
+The parent directory also provides a small flag-matrix runner that writes only
+under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix`:
+
+```sh
+LLHTTP_ROOT=/path/to/llhttp-9.4.1 \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf
+```
+
 Supported `LLHTTP_ROOT` layouts:
 
 - `LLHTTP_ROOT/{llhttp.h,api.c,http.c,llhttp.c}`

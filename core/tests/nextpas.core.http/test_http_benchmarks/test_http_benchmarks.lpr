@@ -19,11 +19,14 @@ const
     'benchmarks/nextpas.core.http/run_server_comparison.sh';
   ServerSnapshotRunnerRelativePath =
     'benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh';
+  H1FlagMatrixRunnerRelativePath =
+    'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
   LlhttpRootEnvName = 'NEXTPAS_LLHTTP_ROOT';
   BenchMaxItersEnvName = 'NEXTPAS_BENCH_MAX_ITERS';
+  BenchFilterEnvName = 'NEXTPAS_BENCH_FILTER';
   BenchMaxItersSmokeValue = '2000';
 
 procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
@@ -202,6 +205,11 @@ end;
 function ResolveServerSnapshotRunnerPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir, ServerSnapshotRunnerRelativePath);
+end;
+
+function ResolveH1FlagMatrixRunnerPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir, H1FlagMatrixRunnerRelativePath);
 end;
 
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
@@ -435,6 +443,39 @@ begin
     'H1 parser benchmark body copy breakdown row');
 end;
 
+procedure TestH1ParserBenchmarkFilterEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser benchmark filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'H1 parser benchmark filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=raw llhttp: 10 headers'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser benchmark filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=raw llhttp: 10 headers',
+    'H1 parser benchmark filter marker');
+  CheckContains(LOutput, 'raw llhttp: 10 headers',
+    'H1 parser benchmark filtered raw row');
+  CheckNotContains(LOutput, 'adapter cost: span append 10 headers',
+    'H1 parser benchmark filter skips unrelated adapter row');
+end;
+
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;
 var
   LRootDir: string;
@@ -499,6 +540,114 @@ begin
     'C llhttp comparator raw row');
 end;
 
+procedure TestCllhttpComparatorFilterEnvWhenConfigured;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LLhttpRoot: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  if LLhttpRoot = '' then
+    Exit;
+
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LCompareDir := PathJoin(LRootDir, H1ParserBenchRelativeDir + '/compare_c');
+
+  RunProcessAndCapture(ResolveMakeExecutable,
+    ['build', 'LLHTTP_ROOT=' + LLhttpRoot], LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'C llhttp comparator filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveCllhttpComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'C llhttp comparator filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LCompareDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=C raw llhttp: 10 headers'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'C llhttp comparator filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=C raw llhttp: 10 headers',
+    'C llhttp comparator filter marker');
+  CheckContains(LOutput, 'C raw llhttp: 10 headers',
+    'C llhttp comparator filtered raw row');
+  CheckNotContains(LOutput, 'C noop cb: pipeline',
+    'C llhttp comparator filter skips unrelated noop row');
+end;
+
+procedure TestH1ParserFlagMatrixSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LRunnerPath: string;
+  LOutputDir: string;
+  LResultsPath: string;
+  LEnvPath: string;
+  LLhttpRoot: string;
+  LExitCode: Integer;
+  LOutput: string;
+  LResults: string;
+  LEnv: string;
+  LEnvVars: array of string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+  LRunnerPath := ResolveH1FlagMatrixRunnerPath(LRootDir);
+  LOutputDir := PathJoin(LRootDir,
+    'build/projects/nextpas.core.http/bench_h1parser/flag_matrix/smoke');
+  LResultsPath := PathJoin(LOutputDir, 'results.tsv');
+  LEnvPath := PathJoin(LOutputDir, 'env.txt');
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+
+  if LLhttpRoot <> '' then
+  begin
+    SetLength(LEnvVars, 5);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
+    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end
+  else
+  begin
+    SetLength(LEnvVars, 4);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[3] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end;
+
+  RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--no-perf'],
+    LBenchDir, LEnvVars, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser flag matrix smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'flag_matrix_output=' + LOutputDir,
+    'H1 parser flag matrix output marker');
+  Check(FileExists(LResultsPath), 'H1 parser flag matrix results.tsv exists');
+  Check(FileExists(LEnvPath), 'H1 parser flag matrix env.txt exists');
+
+  LResults := LoadTextFile(LResultsPath);
+  CheckContains(LResults, 'variant' + #9 + 'impl' + #9 + 'benchmark',
+    'H1 parser flag matrix results header');
+  CheckContains(LResults, 'pascal-default',
+    'H1 parser flag matrix Pascal variant');
+  CheckContains(LResults, 'raw llhttp: 10 headers',
+    'H1 parser flag matrix Pascal filtered row');
+  if LLhttpRoot <> '' then
+    CheckContains(LResults, 'c-default',
+      'H1 parser flag matrix C variant');
+
+  LEnv := LoadTextFile(LEnvPath);
+  CheckContains(LEnv, 'git_head=', 'H1 parser flag matrix git marker');
+  CheckContains(LEnv, 'bench_filter=raw llhttp: 10 headers',
+    'H1 parser flag matrix filter marker');
+  CheckContains(LEnv, 'perf_enabled=0',
+    'H1 parser flag matrix no-perf marker');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -512,10 +661,16 @@ begin
     @TestCllhttpComparatorRequiresRoot);
   T.Run('H1 parser benchmark max iterations env',
     @TestH1ParserBenchmarkMaxItersEnv);
+  T.Run('H1 parser benchmark filter env',
+    @TestH1ParserBenchmarkFilterEnv);
   T.Run('C llhttp comparator small smoke when configured',
     @TestCllhttpComparatorSmallSmokeWhenConfigured);
   T.Run('C llhttp comparator max iterations env when configured',
     @TestCllhttpComparatorMaxItersEnvWhenConfigured);
+  T.Run('C llhttp comparator filter env when configured',
+    @TestCllhttpComparatorFilterEnvWhenConfigured);
+  T.Run('H1 parser flag matrix smoke',
+    @TestH1ParserFlagMatrixSmoke);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

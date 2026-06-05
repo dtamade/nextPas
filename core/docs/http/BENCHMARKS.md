@@ -823,3 +823,66 @@ The isolated `adapter cost: header span add 10 headers` row is slower than the
 string `AddParsed` row because it includes the final name/value string copy.
 The full parser still benefits because the direct path removes the intermediate
 `FCurrentField` / `FCurrentValue` string allocation/copy before the final store.
+
+## Benchmark Tooling: H1 Row Filter and Flag Matrix
+
+On 2026-06-05 local time, `TBenchRunner` and the C llhttp comparator gained a
+shared row filter via `NEXTPAS_BENCH_FILTER`. This is an efficiency seam for
+the Pascal-translated llhttp raw-gap work: focused flag/profile runs can target
+one row instead of running the whole H1 parser benchmark.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+H1 parser benchmark filter env failed:
+bench_filter=raw llhttp: 10 headers marker was missing and unrelated rows still ran.
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+12 total, 12 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused Pascal/C row commands:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' \
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run \
+  LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
+```
+
+Fresh filtered sanity after caching the Pascal raw/no-op request pointer and
+length outside the inner loop:
+
+```text
+Pascal raw llhttp 10 headers: 749.7 ns/op
+C raw llhttp 10 headers: 523.0 ns/op
+Pascal raw llhttp 10 headers with -CpCOREAVX2 -CfAVX2: 759.6 ns/op
+```
+
+The CPU/FPU target flag trial did not show a useful improvement. The next
+raw-gap step should use `perf stat/record` or codegen/profile evidence, not
+hand-editing the generated llhttp state machine.
+
+`bench_h1parser/run_flag_matrix.sh` now provides a repeatable smoke/full matrix
+runner. It writes `results.tsv`, `env.txt`, logs, and optional `perf/*.txt`
+only under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+
+```sh
+LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf
+```
+
+Do not run multiple `clean run` jobs against the same `bench_h1parser` build
+root in parallel; a concurrent parent benchmark clean can remove the C
+comparator output directory or produce `Text file busy`. The flag-matrix runner
+uses per-variant build directories to avoid that race.

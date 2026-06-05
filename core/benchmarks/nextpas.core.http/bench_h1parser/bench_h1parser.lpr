@@ -127,13 +127,17 @@ var
   LParser: TLlhttpInternalT;
   LSettings: TLlhttpSettingsT;
   LErr: TLlhttpErrnoT;
+  LRequestPtr: PAnsiChar;
+  LRequestLen: SizeUInt;
 begin
+  LRequestPtr := PAnsiChar(ARequest);
+  LRequestLen := SizeUInt(Length(ARequest));
   llhttp_settings_init(@LSettings);
   llhttp_init(@LParser, HTTP_REQUEST, @LSettings);
   for LIt := 1 to aIters do
   begin
     llhttp_reset(@LParser);
-    LErr := llhttp_execute(@LParser, PAnsiChar(ARequest), Length(ARequest));
+    LErr := llhttp_execute(@LParser, LRequestPtr, LRequestLen);
     if LErr <> HPE_OK then
       Inc(GSink);
   end;
@@ -212,7 +216,11 @@ var
   LParser: TLlhttpInternalT;
   LSettings: TLlhttpSettingsT;
   LErr: TLlhttpErrnoT;
+  LRequestPtr: PAnsiChar;
+  LRequestLen: SizeUInt;
 begin
+  LRequestPtr := PAnsiChar(ARequest);
+  LRequestLen := SizeUInt(Length(ARequest));
   GCallbackSink := 0;
   llhttp_settings_init(@LSettings);
   InstallNoopCallbacks(LSettings);
@@ -220,7 +228,7 @@ begin
   for LIt := 1 to aIters do
   begin
     llhttp_reset(@LParser);
-    LErr := llhttp_execute(@LParser, PAnsiChar(ARequest), Length(ARequest));
+    LErr := llhttp_execute(@LParser, LRequestPtr, LRequestLen);
     if LErr <> HPE_OK then
       Inc(GSink);
   end;
