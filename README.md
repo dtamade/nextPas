@@ -21,6 +21,15 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 如果你要恢复当前上下文，这些入口已经足够把“协作纪律、基线决策、稳定规范、活动计划和历史记录”
 分开看清。
 
+## 文档分工
+
+- `AGENTS.md` 管仓库级 AI 协作、worktree、汇报、Git 安全和验证纪律。
+- `docs/worktrees.md` 管项目本地 `.worktrees/`、模块 lane、landing 和清理规则。
+- `core/AGENTS.md` 管直接进入 `core/` 工作时的 AI 开工入口。
+- `core/docs/design-conventions.md` 管 `nextpas.core` 的稳定设计规范和项目规范。
+- `docs/architecture/` 管编译器、toolchain、stage0、RTL/CRT 等仓库级稳定架构事实。
+- `docs/plans/` 管当前路线图、阶段计划和活动计划。
+
 ## 当前主线状态
 
 - 稳定架构专题已经补齐，覆盖总览、兼容矩阵、自举路线图、`compiler`、toolchain、
@@ -43,7 +52,7 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 
 这些护栏来自 ADR 和架构文档，不应该在 README 里被重新解释成另一套规则。
 
-## 文档入口
+## 详细入口
 
 - AI/协作规范：`AGENTS.md`
 - worktree 与模块 lane 规范：`docs/worktrees.md`

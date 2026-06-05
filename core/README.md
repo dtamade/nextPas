@@ -17,7 +17,7 @@ nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例
 
 ## 构建
 
-core 有自己的聚合 `Makefile`：
+core 有自己的聚合 `Makefile`。它适合做收口验证，不是每个小任务的默认第一选择：
 
 ```bash
 make build       # 编译框架
@@ -35,6 +35,8 @@ make clean       # 清理构建产物
 
 ```bash
 make -C tests/nextpas.core.http/test_http_client clean test
+make -C tests/nextpas.core.math clean test
+make -C tests/nextpas.core.simd cpuinfo-focused
 ```
 
 提交前还要从仓库根目录运行：
@@ -72,6 +74,14 @@ build/      构建产物（git ignored）
 - 构建产物隔离和多人 / 多 AI 协作纪律
 
 core 下的任何生产代码、测试、示例或 benchmark 改动，都必须遵守该文件。
+
+## 文档分工
+
+- `AGENTS.md`：core 目录下的 AI 开工入口。
+- `README.md`：core 子项目导航。
+- `docs/design-conventions.md`：稳定设计规范和项目规范。
+- `docs/plans/`：阶段性计划、审计和迁移记录。
+- `docs/<module>/`、`docs/nextpas.core.<module>*.md`：模块专题设计和维护文档。
 
 ## 许可证
 

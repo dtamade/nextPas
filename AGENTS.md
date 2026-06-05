@@ -18,6 +18,14 @@
 做 `core/` 下任何生产代码、测试、示例或 benchmark 改动前，必须先读
 `core/AGENTS.md` 和 `core/docs/design-conventions.md`。不要用本文件替代 `nextpas.core` 的设计规范。
 
+## Route By Task
+
+- 仓库治理、分支/worktree 清理、landing：读本文件和 `docs/worktrees.md`。
+- 编译器、toolchain、stage0、RTL/CRT：读本文件、`docs/architecture/README.md`、相关 roadmap / plan。
+- `nextpas.core` 模块开发：读本文件、`core/AGENTS.md`、`core/docs/design-conventions.md`、模块文档。
+- 文档或路线图修改：先确认权威层级。稳定事实进 `docs/architecture/` 或 `core/docs/design-conventions.md`；活动计划进 `docs/plans/` 或 `core/docs/plans/`。
+- 不确定归属时，先做只读审计并汇报建议，不要先改跨模块代码。
+
 ## Start Here
 
 - 先运行 `git status --short --branch`，确认当前分支和脏文件范围。
@@ -28,7 +36,7 @@
 - 新建模块 worktree 使用 `scripts/worktree-add.sh <branch> [base]`，不要手写随机路径。
 - 不要创建新的全局 worktree 到 `~/.config/superpowers/worktrees`、`.claude/worktrees` 或项目外目录。
 - 详细规则见 `docs/worktrees.md`。
-- 如果任务在 `core/` 内，继续读取 `core/docs/design-conventions.md` 后再改代码。
+- 如果任务在 `core/` 内，继续读取 `core/AGENTS.md` 和 `core/docs/design-conventions.md` 后再改代码。
 
 ## Module Lane Discipline
 

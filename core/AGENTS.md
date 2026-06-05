@@ -14,6 +14,14 @@
 开始任何 core 代码、测试、示例或 benchmark 改动前，先读 `docs/design-conventions.md`
 和对应模块文档。
 
+## Route By Task
+
+- 新模块、公开 API、门面、FFI、分层或测试布局：先读 `docs/design-conventions.md`。
+- HTTP、TUI、SIMD、math、platform、mem、crypto、config 等模块：再读对应 `docs/<module>/` 或 `docs/nextpas.core.<module>*.md`。
+- 活动计划、审计、设计迁移：读 `docs/plans/` 下对应计划；没有计划时先写或请求计划，不要直接铺大改。
+- 跨 L0/L1/L2/L3 的改动：先做依赖方向审计，说明为什么必须跨层。
+- 只修测试/benchmark/example：也要确认测试布局和产物隔离规则，不要把临时产物提交进来。
+
 ## Start Every Session
 
 Run:
@@ -36,10 +44,12 @@ make -C "$REPO_ROOT" hygiene
 ## Verification
 
 - Prefer focused module gates over broad sweeps.
-- Use each focused project `Makefile`, for example:
+- Use each focused project `Makefile`. Examples:
 
 ```bash
 make -C tests/nextpas.core.http/test_http_client clean test
+make -C tests/nextpas.core.math clean test
+make -C tests/nextpas.core.simd cpuinfo-focused
 ```
 
 - For exposed API or ownership changes, focused tests must cover the changed surface and leak-sensitive paths.

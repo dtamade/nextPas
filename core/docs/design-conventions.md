@@ -2,6 +2,13 @@
 
 本文档是 nextpas.core 框架的设计基准，所有代码必须遵循此规范。
 
+## 如何使用本文档
+
+- 改 `core/src/`、`core/tests/`、`core/examples/`、`core/benchmarks/` 前先读本文档。
+- 本文档定义稳定设计规范；短期任务状态、临时审计和迁移计划写入 `docs/plans/`。
+- 直接在 `core/` 目录开工时，先读 `AGENTS.md`，再读本文档。
+- 不确定某条规则是否适用时，先按本文档做只读审计并汇报，不要先制造新的例外。
+
 ---
 
 ## 1. 命名约定
@@ -706,7 +713,12 @@ build/
 - `make build` — 编译框架
 - `make test` — 编译并运行所有测试
 - `make examples` — 编译所有示例
+- `make benchmarks` — 编译并运行所有基准
 - `make clean` — 清理所有构建产物
+
+模块开发优先使用 focused project Makefile，例如
+`make -C tests/nextpas.core.<module>/test_<name> clean test`。只有在收口或总控要求时，
+才把聚合 `make test` 当作默认验证入口。
 
 ---
 
