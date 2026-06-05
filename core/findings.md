@@ -1,42 +1,49 @@
-# Findings: HTTP H1 writer header-only benchmark split
+# Findings: HTTP H1 writer 200 OK status-line fast path
 
 ## Scope
 
-本轮是 benchmark/tooling 强化，不改变 public HTTP API，不改变 wire contract，
-不手改 generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
+本轮是 production performance micro-optimization，不改变 public HTTP API，不改变
+HTTP wire contract，不手改 generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
 
 ## Implemented decision
 
-`bench_h1writer` 现在除了 `fixed 200 13B`，还输出：
+`TH1ResponseWriter.WriteStatusLine` 现在对常见 `HTTP_STATUS_OK` 使用固定 status-line：
 
 ```text
-operation=http.h1writer.serialize
-headers only 200
+HTTP/1.1 200 OK\r\n
 ```
 
-`headers only 200` 每次迭代创建一个 `TH1ResponseWriter`，设置
-`content-type: text/plain` 与 `content-length: 0`，调用 `WriteHeader(200)` 和
-`Flush`，然后把响应写入固定 in-memory writer。它不写 body，也不触发 chunked
-default，用来隔离 writer construction + header/status serialization 成本。
-
-`test_http_benchmarks` 现在对 H1 writer row 使用真实 run-row 断言：同一行必须包含
-row name 和 `iters`，避免 `bench_filter=` 或 summary 行误判成 benchmark row。
-
-## RED / GREEN evidence
-
-RED:
+其他 status 仍走旧逻辑：
 
 ```text
-NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
-make -C tests/nextpas.core.http/test_http_benchmarks clean test
+HTTP/1.1 <status-code> <HttpStatusText(status)>\r\n
+```
 
-26 total, 25 passed, 1 failed
-bench_h1writer response serialization smoke failed:
-H1 writer headers-only benchmark row missing benchmark run row: headers only 200
+这避免了 `200 OK` 路径上的 `IntToStr`、`HttpStatusText` 与多段 `WriteStr` 调用，
+但不改 headers 输出、chunked 判断、body 写入、HEAD suppression、1xx/101/204/304
+语义或 short-write retry 行为。
+
+## Contract evidence
+
+Baseline before production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+
+29 total, 29 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
-GREEN:
+After production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Benchmark contract:
 
 ```text
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
@@ -48,14 +55,14 @@ heaptrc: 0 unfreed memory blocks
 
 ## Performance evidence
 
-Fresh local H1 writer rows:
+Fresh local H1 writer rows after the change:
 
 ```text
 NEXTPAS_BENCH_MAX_ITERS=100000 \
 NEXTPAS_BENCH_FILTER='headers only 200' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 
-headers only 200: 1414.6 ns/op, 706917 ops/s
+headers only 200: 1284.0 ns/op, 778840 ops/s
 ```
 
 ```text
@@ -63,31 +70,27 @@ NEXTPAS_BENCH_MAX_ITERS=100000 \
 NEXTPAS_BENCH_FILTER='fixed 200 13B' \
 make -C benchmarks/nextpas.core.http/bench_h1writer run
 
-fixed 200 13B: 1389.1 ns/op, 719869 ops/s
+fixed 200 13B: 1261.1 ns/op, 792973 ops/s
 ```
+
+Previous committed local rows were:
+
+- `headers only 200`: `1414.6 ns/op`, `706917 ops/s`
+- `fixed 200 13B`: `1389.1 ns/op`, `719869 ops/s`
 
 The clean `headers only 200` build emitted no FPC `Warning:` or `Note:` lines.
 
-## Sidecar review
-
-Sidecar 子代理只读审计结论与本轮方向一致：
-
-- 最小可测试 seam 是 `bench_h1writer` 的 `headers only 200` row。
-- 真正生产热点 seam 更可能在 `TH1ResponseWriter.WriteStatusLine` 与
-  `TH1ResponseWriter.WriteAllHeaders` 的多段小写入。
-- 不应先改 `IHttpHeaders.ForEach`、header normalization/order、chunked/no-body/HEAD
-  contract，也不应复用 writer/header object 以免 keep-alive 请求间泄漏状态。
-
 ## Direction review
 
-方向没有走偏：本轮没有把 benchmark 当成优化成果，只补足了 writer 成本归因的可测试
-row。新 row 显示 header/status serialization 与 writer setup 已经占据小响应 writer
-row 的大部分成本，因此下一批生产优化应针对 status-line/header materialization，而不是
-继续优化 body copy 或 outbound buffer。
+方向没有走偏：本轮只优化最高频的 `200 OK` status-line 写入，不碰 HTTP public API、
+header iteration、chunked/no-body/HEAD 语义或 server runtime。收益出现在两个 filtered
+writer rows 上，且 focused wire-byte tests 保持 green，因此这条 micro-optimization
+值得保留。
 
 ## Remaining gaps / risks
 
-- 本轮没有改生产 writer，因此没有吞吐提升；它只是把优化目标从猜测收窄为可测 seam。
-- 单次 benchmark row 有噪声，优化后必须对比同一 binary / same-host filtered rows。
-- 若下一批改 `WriteStatusLine`，必须跑 `test_http_h1writer` 保护精确 wire bytes，
-  再跑 `test_http_benchmarks` 保护 benchmark contract。
+- 这不是 full-chain server throughput 结论；只证明 H1 writer narrowed rows 变快。
+- `WriteAllHeaders` 仍然按 header name / separator / value / CRLF 多段写入，可能仍是
+  下一层成本来源。
+- 后续若合并 header 输出，必须保护 `IHttpHeaders.ForEach` 顺序、小写 normalization、
+  repeated headers、short-write retry 和 no-body/chunked contract。

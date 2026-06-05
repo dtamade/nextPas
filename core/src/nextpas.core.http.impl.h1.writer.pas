@@ -115,7 +115,14 @@ begin
 end;
 
 procedure TH1ResponseWriter.WriteStatusLine;
+const
+  OK_STATUS_LINE: AnsiString = 'HTTP/1.1 200 OK'#13#10;
 begin
+  if FStatus = HTTP_STATUS_OK then
+  begin
+    WriteAllOrRaise(FWriter, OK_STATUS_LINE[1], SizeUInt(Length(OK_STATUS_LINE)));
+    Exit;
+  end;
   WriteStr('HTTP/1.1 ');
   WriteStr(IntToStr(Int64(FStatus)));
   WriteStr(' ');

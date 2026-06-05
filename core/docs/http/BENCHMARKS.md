@@ -98,8 +98,8 @@ Local focused row from 2026-06-05:
 
 | workload | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| headers only 200 | 100000 | 1414.6 | 706917 |
-| fixed 200 13B | 100000 | 1389.1 | 719869 |
+| headers only 200 | 100000 | 1284.0 | 778840 |
+| fixed 200 13B | 100000 | 1261.1 | 792973 |
 
 ## Run the H1 Outbound Drain Benchmark
 
@@ -181,6 +181,38 @@ Results:
 The snapshot build had no FPC `Warning:` or `Note:` lines in the captured raw
 output. Re-run the command above after runtime, compiler, or OS changes before
 drawing conclusions.
+
+## Optimization Evidence: H1 Writer 200 OK Status Line
+
+On 2026-06-05 local time, `TH1ResponseWriter.WriteStatusLine` gained a narrow
+fast path for the common `HTTP_STATUS_OK` case. It writes the fixed
+`HTTP/1.1 200 OK\r\n` status line in one write call and leaves all other
+statuses on the existing generic path.
+
+Focused verification:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+26 total, 26 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh same-host filtered rows:
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| headers only 200 | 1414.6 | 1284.0 |
+| fixed 200 13B | 1389.1 | 1261.1 |
+
+The clean `bench_h1writer` build for the `headers only 200` row emitted no FPC
+`Warning:` or `Note:` lines. This optimization deliberately does not change
+header order, header normalization, chunked defaults, no-body statuses, `HEAD`
+suppression, or non-200 status-line serialization.
 
 ## Optimization Evidence: H1 Ingress Fast Path
 
