@@ -1,4 +1,4 @@
-# Progress Log: Exception Root Convergence
+# Historical Progress: Exception Root Convergence
 
 ## Session
 

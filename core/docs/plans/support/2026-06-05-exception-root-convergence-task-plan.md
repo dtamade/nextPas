@@ -1,4 +1,4 @@
-# Task Plan: Exception Root Convergence
+# Historical Task Plan: Exception Root Convergence
 
 ## Goal
 

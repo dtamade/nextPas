@@ -1,4 +1,4 @@
-# Progress Log
+# Historical Progress: HTTP H1 Performance Work
 
 ## Session: 2026-06-06 http h1 parser metadata span fast path slice
 

@@ -1,4 +1,4 @@
-# Findings & Decisions
+# Historical Findings: HTTP H1 Performance Work
 
 ## 2026-06-06 http h1 parser metadata span fast path slice
 

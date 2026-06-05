@@ -1,4 +1,4 @@
-# Findings: Exception Root Convergence
+# Historical Findings: Exception Root Convergence
 
 ## Current State Evidence
 

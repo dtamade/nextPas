@@ -1,4 +1,4 @@
-# Task Plan: nextPas active work
+# Historical Task Plan: HTTP H1 Performance Work
 
 ## Active Session: 2026-06-06 http h1 parser metadata span fast path slice
 
