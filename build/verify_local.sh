@@ -3532,8 +3532,8 @@ set +e
 "$LLVM_DESTRUCTOR_OUT_DIR/llvm_destructor" >/dev/null 2>&1
 LLVM_DESTRUCTOR_EXIT=$?
 set -e
-if [ "$LLVM_DESTRUCTOR_EXIT" -ne 3 ]; then
-  printf 'llvm-destructor-expected-exit=3 actual-exit=%d\n' "$LLVM_DESTRUCTOR_EXIT"
+if [ "$LLVM_DESTRUCTOR_EXIT" -ne 42 ]; then
+  printf 'llvm-destructor-expected-exit=42 actual-exit=%d\n' "$LLVM_DESTRUCTOR_EXIT"
   fail 'llvm-destructor-wrong-exit-code'
 fi
 printf 'llvm-destructor-program=pass\n'
