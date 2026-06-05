@@ -1,72 +1,72 @@
-# Task Plan: HTTP adapter_no_url fast-gate optimization
+# Task Plan: Exception Root Convergence
 
 ## Goal
 
-继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-上一批 median snapshot 显示 `adapter_no_url` 是最清晰的 nextPas 内部 fast-gate 差分。
-本轮先用 narrowed benchmark 证明旧路径存在 fast parse 后又 llhttp parse 的 double-parse
-成本，再做最小生产优化：HTTP/1.1 显式 `Connection: keep-alive` 不再强制离开 H1 fast path。
+将 nextpas.core 异常体系收敛到一个正式框架根，同时保留兼容层，第一阶段只处理最危险的 `ETimeoutError` 和 out-of-memory 分裂。
 
-本轮不改 public HTTP API，不手改 generated `src/nextpas.core.http.impl.h1.llhttp.pas`，
-不写 `docs/nextpas.core.http.inbox.md`，不跑全量仓库测试。
+## Roadmap Position
+
+- 项目目标树：`G0` 质量纪律 + Core L0 `base/errors/mem` 架构治理。
+- 当前不推进 HTTP performance 路线。
+- 当前不触碰 compiler 工作。
+
+## Worktree
+
+- Path: `/home/dtamade/.config/superpowers/worktrees/nextPas/exception-root-20260605`
+- Branch: `codex/exception-root-20260605`
+- Base commit: `5c28a959b5fd5065d1de98c93f9089d60bf80de1`
+- Shared `main` remains dirty and untouched.
 
 ## Checklist
 
-- [x] 复核设计规范、HTTP docs/control files 与 git status，确认共享 checkout 脏文件边界。
-- [x] 派只读子代理并行定位 `adapter_no_url`、`url_path` 与 benchmark fairness。
-- [x] RED：`bench_h1parser` filtered `adapter no-url` 当前没有 narrowed rows。
-- [x] RED：`test_http_h1fast` 期望 connection-policy flags，编译失败证明字段缺失。
-- [x] GREEN：`TFastParseResult` 增加 `ConnectionKeepAlive` / `ConnectionClose` /
-  `ConnectionUnsupported`，fast parser 解析 trimmed exact connection token。
-- [x] GREEN：H1 server fast gate 放行 HTTP/1.1 `Connection: keep-alive` no-body request，
-  `close` / `upgrade` / unsupported token 仍回退 llhttp。
-- [x] GREEN：`bench_h1parser` 增加 `adapter no-url` narrowed rows：
-  metadata 3 headers、old fast-reject + llhttp、llhttp direct、fast parse only。
-- [x] Focused gates：`test_http_h1fast`、`test_http_benchmarks`、`test_http_server`。
-- [x] Live rows：`adapter_no_url --runs 3` 与 `no_url --runs 3`。
-- [ ] 更新 docs/control files。
-- [ ] Path-limited stage/commit。
+- [x] 建隔离 worktree，避免污染共享 `main`。
+- [x] baseline: `make -C tests/nextpas.core.errors/test_errors clean test` 通过，heaptrc 0 泄漏。
+- [x] 写设计文档：`docs/plans/2026-06-05-exception-root-convergence-design.md`。
+- [x] 写实施计划：`docs/plans/2026-06-05-exception-root-convergence-plan.md`。
+- [ ] RED: 新增 unified root focused test 并确认失败原因正确。
+- [ ] GREEN: 新增 `nextpas.core.exception`。
+- [ ] GREEN: rewiring `base` / `errors`，消除 `ETimeoutError` 双定义。
+- [ ] GREEN: rewiring `mem.error`，收敛 OOM 主语义。
+- [ ] Focused verification: exception/errors/http-server gates + heaptrc。
+- [ ] 更新 findings/progress。
+- [ ] 提交分支。
+- [ ] 只在共享 `main` 干净或获得确认后再考虑合并。
 
 ## Scope
 
-本轮允许修改：
+允许修改：
 
-- `src/nextpas.core.http.impl.h1.fast.pas`
-- `src/nextpas.core.http.impl.h1.pas`
-- `benchmarks/nextpas.core.http/bench_h1parser/bench_h1parser.lpr`
-- `tests/nextpas.core.http/test_http_h1fast/test_http_h1fast.lpr`
-- `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
-- `docs/http/API_COVERAGE.md`
-- `docs/http/BENCHMARKS.md`
+- `src/nextpas.core.exception.pas`
+- `src/nextpas.core.base.pas`
+- `src/nextpas.core.errors.pas`
+- `src/nextpas.core.mem.error.pas`
+- `tests/nextpas.core.exception/test_exception_root/*`
+- `tests/nextpas.core.errors/test_errors/test_errors.lpr`
+- 必要时 `tests/nextpas.core.mem/test_exception_root/*`
+- `docs/plans/2026-06-05-exception-root-convergence-design.md`
+- `docs/plans/2026-06-05-exception-root-convergence-plan.md`
 - `task_plan.md`
 - `findings.md`
 - `progress.md`
 
-## Current conclusion
+禁止修改：
 
-Narrowed benchmark confirms the old `adapter_no_url` route paid double parse:
+- compiler 任何文件。
+- HTTP 行为、benchmark、parser、transport 逻辑。
+- 共享 `main` 上 HTTP 同事的脏改。
 
-| row | ns/op |
-| --- | ---: |
-| `adapter no-url: fast reject + llhttp` | 2084.3 |
-| `adapter no-url: llhttp direct only` | 1494.0 |
-| `adapter no-url: fast parse only` | 629.3 |
-| `adapter no-url: metadata 3 headers` | 372.2 |
+## Verification Commands
 
-After the production fast-gate change, same-host server comparison:
+```bash
+make -C tests/nextpas.core.exception/test_exception_root clean test
+make -C tests/nextpas.core.errors/test_errors clean test
+make -C tests/nextpas.core.http/test_http_server clean test
+git diff --check
+git status --short --branch
+```
 
-| workload | nextPas median ns/op | nextPas median req/s | Rust median ns/op | Go median ns/op |
-| --- | ---: | ---: | ---: | ---: |
-| `adapter_no_url` | 11022 | 90720 | 8843 | 53076 |
-| `no_url` | 10948 | 91335 | 8935 | 49245 |
+## Errors Encountered
 
-`adapter_no_url` improved from earlier same-day `12280 ns/op` to `11022 ns/op`。
-但子代理 fairness review 指出该 workload 不是跨语言 apples-to-apples；它应作为 nextPas
-内部 fast-gate differential，而不是永久排名依据。
-
-## Next target
-
-继续 `6/6 benchmark/performance`。下一批建议先补 benchmark harness contract：
-server comparison summary 应断言 `completed == requests`，并给 nextPas row 输出更明确的
-request-path marker（例如 fast/adapter counter 或等价 trace），再转向 `url_path`
-的 path-only URL materialization narrowed proof。
+| Error | Attempt | Resolution |
+| --- | --- | --- |
+| `planning-with-files` first read used wrong skill path | 1 | Re-read from `/home/dtamade/.codex/skills/planning-with-files/SKILL.md`. |
