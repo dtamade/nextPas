@@ -1,60 +1,61 @@
-# Progress Log: HTTP H1 writer header-line coalescing
+# Progress Log: HTTP full-chain benchmark client read correction
 
 ## Session
 
-- **Scope:** H1 writer header-line coalescing micro-optimization.
-- **Status:** stack-buffer production fast path landed locally, focused gates passed, docs/control files updated.
+- **Scope:** full-chain benchmark client read correction.
+- **Status:** benchmark harness buffered read landed locally, focused gate passed, docs/control files updated.
 - **Roadmap Position:** `6/6 benchmark/performance` ->
-  `response serialization cost isolation`.
+  `full-chain benchmark quality and server comparison calibration`.
 
 ## Current state
 
 - shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理
-  HTTP writer/tests/docs/control files。
+  HTTP benchmark/docs/control files。
 - 父目录 `../task_plan.md`、`../findings.md`、`../progress.md` 已有无关脏改；
   本轮只更新 `core/task_plan.md`、`core/findings.md`、`core/progress.md`。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮没有跑全量 HTTP 测试；只跑 `test_http_h1writer`、`test_http_benchmarks`
-  和两条 focused `bench_h1writer` live rows。
+- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks`、`bench_fullchain plaintext`
+  和一个 `run_server_comparison --workload no_url` live row。
 
 ## Completed work
 
-- `test_http_h1writer` 新增 focused RED：验证两个 header line 的 exact wire bytes
-  不变，并要求 full-progress writer 下 status line、每个 header line、final CRLF
-  分别为单次 write。
-- `TH1ResponseWriter.WriteAllHeaders` 新增常见 header line stack-buffer coalescing；
-  长 header line fallback 到 heap string。
-- 简单字符串拼接版和 heap `SetLength + Move` 版都被 live rows 证明不够好，未保留。
-- `docs/http/API_COVERAGE.md` 与 `docs/http/BENCHMARKS.md` 已同步生产优化和 fresh
-  local evidence。
+- 复核 live performance：server comparison `no_url` 当前 nextPas `107002 req/s`，
+  Rust std-only `104418 req/s`，Go `21163 req/s`。
+- 定位 `bench_fullchain` 低分来源：client `ReadResponse` 逐字节 socket read + string concat。
+- `test_http_benchmarks` 新增 focused RED：fullchain smoke 必须输出
+  `client_read_mode=buffered`。
+- `bench_fullchain.ReadResponse` 改为 buffered chunk read，并保留按 header boundary +
+  `Content-Length` 判断完整 response。
+- `docs/http/API_COVERAGE.md` 与 `docs/http/BENCHMARKS.md` 已同步 fresh local evidence。
 
 ## Verification
 
 - RED:
-  `make -C tests/nextpas.core.http/test_http_h1writer clean test`
-  -> `30 total, 29 passed, 1 failed`，失败为 `expected 4, got 10`，heaptrc
-  `0 unfreed memory blocks`。
-- Writer gate after kept implementation:
-  `make -C tests/nextpas.core.http/test_http_h1writer clean test`
-  -> `30 total, 30 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
-- Benchmark gate:
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  -> `26 total, 25 passed, 1 failed`，失败为 missing `client_read_mode=buffered`，
+  heaptrc `0 unfreed memory blocks`。
+- Benchmark gate after change:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
   -> `26 total, 26 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
-- Fresh live row:
-  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='headers only 200' make -C benchmarks/nextpas.core.http/bench_h1writer clean run`
-  -> `headers only 200: 1247.1 ns/op`, `801852 ops/s`。
-- Fresh comparison row:
-  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='fixed 200 13B' make -C benchmarks/nextpas.core.http/bench_h1writer run`
-  -> `fixed 200 13B: 1250.5 ns/op`, `799680 ops/s`。
+- Fresh fullchain row:
+  `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
+  -> `client_read_mode=buffered`，`plaintext: 42132.4 ns/op`, `23735 req/s`。
+- Fullchain all-scenario smoke:
+  `NEXTPAS_BENCH_MAX_ITERS=128 make -C benchmarks/nextpas.core.http/bench_fullchain run`
+  -> `plaintext/json/echo_1k/sink_16k/param_route` 均 `128/128 completed`。
+- Fresh server comparison row:
+  `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 20000 --threads 4 --workload no_url`
+  -> nextPas `9345 ns/op`, `107002 req/s`; Rust std-only `9576 ns/op`, `104418 req/s`;
+  Go `47251 ns/op`, `21163 req/s`。
 
 ## Direction review
 
-方向没有走偏：本轮先 RED，再实现；发现拼接版退化后及时止损，最终保留有 contract proof
-和 narrowed benchmark proof 的栈缓冲版本。当前收益只声明在 H1 writer narrowed rows，不把
-它包装成 server full-chain 结论。
+方向没有走偏：本轮把“性能低”拆成 benchmark harness 与 production server 两条证据线。
+没有碰生产 server，也没有把单连接 fullchain row 当成 Rust/Go 对标结论。下一步应以
+multi-client comparison median 和 workload 分解驱动优化。
 
 ## Next step
 
-继续 `6/6 benchmark/performance`。下一步不要继续盲目拆细 header writer；建议先用
-full-chain / narrowed profiler 重新定位瓶颈，再决定是否做 header block 更大粒度合并、
-outbound buffer seam 调整，或回到 server/session 调度成本。
+继续 `6/6 benchmark/performance`。下一批建议跑/记录 `--runs 3` 的
+`no_url`、`adapter_no_url`、`url_path`、`response_1k` median snapshot；若某个 workload
+落后 Rust std-only，再针对对应 seam 写 focused RED/GREEN。

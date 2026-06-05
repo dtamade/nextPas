@@ -143,16 +143,54 @@ markers:
 - `elapsed_ns`
 - `ns/op`
 - `req/s`
+- `client_read_mode=buffered`
 
 Local focused row from 2026-06-05:
 
 | workload | iterations | completed | elapsed_ns | ns/op | req/s |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| plaintext | 1000 | 1000 | 127167209 | 127167.2 | 7864 |
+| plaintext | 1000 | 1000 | 42132376 | 42132.4 | 23735 |
 
 The clean build for this row emitted two existing FPC `Note:` lines from
 `nextpas.core.text.format` and the translated llhttp inline call. It emitted no
 FPC `Warning:` lines.
+
+## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
+
+On 2026-06-05 local time, `bench_fullchain` stopped reading the response header
+one byte at a time. Its client-side response reader now reads available chunks,
+finds the header boundary in the accumulated buffer, and then waits for the
+declared `Content-Length` body bytes. The benchmark prints
+`client_read_mode=buffered` so smoke tests can lock this harness behavior.
+
+Focused RED before the harness change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+26 total, 25 passed, 1 failed
+bench_fullchain plaintext smoke - fullchain client read mode marker missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the harness change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+26 total, 26 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh same-host filtered row:
+
+| workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| plaintext | 112063.8 | 42132.4 |
+
+This is a benchmark harness correction, not a production server code change.
+The row still measures single-connection synchronous ping-pong and should not
+be compared directly with the multi-client server comparison rows.
 
 ## Local Snapshot: 2026-06-04 UTC
 

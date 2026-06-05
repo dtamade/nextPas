@@ -332,6 +332,8 @@ procedure CheckFullchainBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
+  CheckContains(AOutput, 'client_read_mode=buffered',
+    'fullchain client read mode marker');
   CheckContains(AOutput, 'workload=plaintext',
     'fullchain workload marker');
   CheckContains(AOutput, 'iterations=' + FullchainSmokeIterations,

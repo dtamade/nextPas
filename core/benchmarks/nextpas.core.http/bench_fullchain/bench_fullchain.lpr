@@ -169,19 +169,33 @@ function ReadResponse(const AConn: ITcpStream): SizeUInt;
 var
   LBuf: array[0..4095] of Byte;
   LN, LTotal: SizeUInt;
-  LHeaderEnd: Int32;
+  LHeaderEnd: SizeInt;
   LResp: string;
-  LClPos, LClEnd: Int32;
-  LContentLen, LBodyRead: Int32;
+  LClPos, LClEnd: SizeInt;
+  LContentLen, LBodyRead: SizeInt;
+  LNeed: SizeInt;
+  LReadSize: SizeUInt;
+  procedure AppendBytes(const ABuf; const ACount: SizeUInt);
+  var
+    LOld: SizeInt;
+  begin
+    if ACount = 0 then
+      Exit;
+    LOld := Length(LResp);
+    SetLength(LResp, LOld + SizeInt(ACount));
+    Move(ABuf, LResp[LOld + 1], ACount);
+  end;
 begin
   LResp := '';
   LTotal := 0;
-  { Read until we see CRLFCRLF }
+  LHeaderEnd := 0;
+  { Read until we see CRLFCRLF. Use chunk reads so the benchmark measures the
+    server path instead of a byte-at-a-time client parser. }
   repeat
-    LN := AConn.Read(LBuf[0], 1);
+    LN := AConn.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
     if LN = 0 then begin Result := LTotal; Exit; end;
+    AppendBytes(LBuf[0], LN);
     Inc(LTotal, LN);
-    LResp := LResp + Chr(LBuf[0]);
     LHeaderEnd := Pos(#13#10#13#10, LResp);
   until LHeaderEnd > 0;
 
@@ -194,16 +208,21 @@ begin
     LClEnd := LClPos;
     while (LClEnd <= Length(LResp)) and (LResp[LClEnd] >= '0') and (LResp[LClEnd] <= '9') do
       Inc(LClEnd);
-    LContentLen := Int32(StrToInt(Copy(LResp, LClPos, LClEnd - LClPos)));
+    LContentLen := SizeInt(StrToInt(Copy(LResp, LClPos, LClEnd - LClPos)));
   end;
 
   { Read body }
   LBodyRead := Length(LResp) - (LHeaderEnd + 3);
   while LBodyRead < LContentLen do
   begin
-    LN := AConn.Read(LBuf[0], SizeUInt(LContentLen - LBodyRead));
+    LNeed := LContentLen - LBodyRead;
+    if LNeed > SizeInt(SizeOf(LBuf)) then
+      LReadSize := SizeUInt(SizeOf(LBuf))
+    else
+      LReadSize := SizeUInt(LNeed);
+    LN := AConn.Read(LBuf[0], LReadSize);
     if LN = 0 then Break;
-    Inc(LBodyRead, Int32(LN));
+    Inc(LBodyRead, SizeInt(LN));
     Inc(LTotal, LN);
   end;
   Result := LTotal;
@@ -285,6 +304,7 @@ begin
 
   WriteLn('=== nextpas.core.http.fullchain benchmark ===');
   WriteLn('operation=http.fullchain.keepalive');
+  WriteLn('client_read_mode=buffered');
   WriteLn('bench_max_iters=', GIterations);
   if GFilter <> '' then
     WriteLn('bench_filter=', GFilter);
