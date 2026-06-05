@@ -417,17 +417,17 @@ begin
   // 计算总大小并检查溢出
   LTotalSize := LActualBlockSize * aCapacity;
   if (LActualBlockSize <> 0) and ((LTotalSize div LActualBlockSize) <> aCapacity) then
-    raise EAllocError.Create(aeOutOfMemory, 'TBlockPool: total size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: total size overflow');
   FTotalSize := LTotalSize;
 
   // 分配内存（over-allocate 用于对齐）
   // 额外字节数最大为 (Alignment - 1)，保证对齐后仍有 TotalSize 可用空间
   LAllocSize := LTotalSize + (FAlignment - 1);
   if LAllocSize < LTotalSize then
-    raise EAllocError.Create(aeOutOfMemory, 'TBlockPool: allocation size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: allocation size overflow');
   GetMem(LRaw, LAllocSize);
   if LRaw = nil then
-    raise EAllocError.Create(aeOutOfMemory, 'TBlockPool: failed to allocate memory');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TBlockPool: failed to allocate memory');
 
   FRawBuffer := LRaw;
 
@@ -681,11 +681,11 @@ begin
   // 分配并对齐 Arena 基址，保证至少有 TotalSize 可用空间
   LAllocSize := aTotalSize + (FAlignment - 1);
   if LAllocSize < aTotalSize then
-    raise EAllocError.Create(aeOutOfMemory, 'TArena: allocation size overflow');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TArena: allocation size overflow');
 
   GetMem(LRaw, LAllocSize);
   if LRaw = nil then
-    raise EAllocError.Create(aeOutOfMemory, 'TArena: failed to allocate memory');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TArena: failed to allocate memory');
 
   FRawMemory := LRaw;
   LAddr := PtrUInt(LRaw);

@@ -131,10 +131,15 @@ Stage 1:
 - Add focused tests proving unified root, timeout identity, and OOM compatibility.
 - Keep HTTP changes mechanical only if the timeout test requires qualification.
 
+Stage 1B:
+
+- Migrate discovered production `ECore.Create` allocation-failure seams in collections to canonical OOM.
+- Migrate in-repo mem `aeOutOfMemory` producer paths to canonical OOM so resource exhaustion is no longer hidden behind non-OOM `EAllocError` subclasses.
+- Migrate the TUI module root from `ECore` compatibility inheritance to direct `ENextPasError` inheritance.
+
 Stage 2:
 
-- Migrate module roots that still inherit `ECore`, starting with `nextpas.core.tui.error`.
-- Migrate direct `ECore.Create` raises in collections to specific exceptions.
+- Continue module-focused migration for remaining mixed `base`/`errors` uses and any future module roots found to inherit through the `ECore` compatibility alias.
 - Add focused tests for each migrated module root.
 
 Stage 3:
@@ -155,9 +160,23 @@ Allowed files:
 - `src/nextpas.core.base.pas`
 - `src/nextpas.core.errors.pas`
 - `src/nextpas.core.mem.error.pas`
+- Stage 1B additions:
+  - `src/nextpas.core.collections.vec.pas`
+  - `src/nextpas.core.mem.blockpool.pas`
+  - `src/nextpas.core.mem.blockpool.growable.pas`
+  - `src/nextpas.core.mem.arena.growable.pas`
+  - `src/nextpas.core.mem.pool.fixed.pas`
+  - `src/nextpas.core.mem.pool.fixed.growable.pas`
+  - `src/nextpas.core.mem.ring_buffer.pas`
+  - `src/nextpas.core.mem.stack_pool.pas`
+  - `src/nextpas.core.tui.error.pas`
 - `tests/nextpas.core.exception/test_exception_root/*`
 - `tests/nextpas.core.errors/test_errors/test_errors.lpr`
 - `tests/nextpas.core.mem/test_exception_root/*` if needed for allocation-specific coverage
+- Stage 1B additions:
+  - `tests/nextpas.core.collections/test_vec/test_vec.lpr`
+  - `tests/nextpas.core.mem/test_oom/*`
+  - `tests/nextpas.core.tui/test_tui_error/test_tui_error.lpr`
 - `task_plan.md`, `findings.md`, `progress.md`
 - this design and implementation plan
 
@@ -170,6 +189,10 @@ Focused verification for stage 1:
 - `make -C tests/nextpas.core.exception/test_exception_root clean test`
 - `make -C tests/nextpas.core.errors/test_errors clean test`
 - `make -C tests/nextpas.core.mem/test_exception_root clean test` if created
+- `make -C tests/nextpas.core.collections/test_vec clean test`
+- `make -C tests/nextpas.core.mem/test_oom clean test`
+- Existing mem gates affected by producer changes: `test_mem`, `test_arena`, `test_arena_class`, `test_pool`, `test_blockpool`, `test_contracts`
+- `make -C tests/nextpas.core.tui/test_tui_error clean test`
 - `make -C tests/nextpas.core.http/test_http_server clean test` only if timeout identity touches HTTP test/source references
 
 Every focused test must report zero failures and heaptrc `0 unfreed memory blocks`.

@@ -247,14 +247,14 @@ begin
   begin
     LOverflowCheck := FTotalSize div FBlockSize;
     if LOverflowCheck <> SizeUInt(FCapacity) then
-      raise EMemFixedPoolError.Create(aeOutOfMemory, 'Total size overflow');
+      raise EOutOfMemory.Create(aeOutOfMemory, 'Total size overflow');
   end;
 
   // 分配连续 Arena（对齐）
   // 如果分配器不提供对齐接口，则 over-allocate 并手动对齐
   LRaw := FAllocator.GetMem(FTotalSize + (FAlignment - 1));
   if LRaw = nil then
-    raise EMemFixedPoolError.Create(aeOutOfMemory, 'Failed to allocate arena buffer');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'Failed to allocate arena buffer');
   FRawBuffer := LRaw;
   try
     LAddr := PtrUInt(LRaw);

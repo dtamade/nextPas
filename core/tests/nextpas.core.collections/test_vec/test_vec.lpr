@@ -5,6 +5,7 @@ program test_vec;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.collections,
   nextpas.core.collections.vec.intf,
@@ -148,6 +149,48 @@ begin
   LV.Reserve(100);
   Check(LV.Capacity >= 100);
   CheckEqual(Int64(0), Int64(LV.Count));
+end;
+
+procedure TestReserveFailureRaisesOutOfMemory;
+var
+  LV: IIntVec;
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  LV := TIntVec.Create;
+  LV.Push(1);
+  try
+    try
+      LV.Reserve(SizeUInt(-1));
+    except
+      on E: EOutOfMemoryError do
+        LCaught := True;
+    end;
+  finally
+    LV := nil;
+  end;
+  Check(LCaught, 'Reserve overflow failure raises canonical OOM');
+end;
+
+procedure TestReserveExactFailureRaisesOutOfMemory;
+var
+  LV: IIntVec;
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  LV := TIntVec.Create;
+  LV.Push(1);
+  try
+    try
+      LV.ReserveExact(SizeUInt(-1));
+    except
+      on E: EOutOfMemoryError do
+        LCaught := True;
+    end;
+  finally
+    LV := nil;
+  end;
+  Check(LCaught, 'ReserveExact overflow failure raises canonical OOM');
 end;
 
 procedure TestString;
@@ -786,6 +829,8 @@ begin
   T.Run('Contains', @TestContains);
   T.Run('IndexOf', @TestIndexOf);
   T.Run('Reserve', @TestReserve);
+  T.Run('Reserve failure raises OOM', @TestReserveFailureRaisesOutOfMemory);
+  T.Run('ReserveExact failure raises OOM', @TestReserveExactFailureRaisesOutOfMemory);
   T.Run('String type', @TestString);
   T.Run('Clear', @TestClear);
   T.Run('Auto free (interface)', @TestAutoFree);

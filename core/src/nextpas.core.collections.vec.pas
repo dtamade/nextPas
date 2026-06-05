@@ -1186,7 +1186,7 @@ end;
 procedure TVec.Reserve(aAdditional: SizeUInt);
 begin
   if not TryReserve(aAdditional) then
-    raise ECore.Create('TVec.Reserve: failed to reserve');
+    raise EOutOfMemory.Create('TVec.Reserve: failed to reserve');
 end;
 
 function TVec.TryReserveExact(aAdditional: SizeUInt): Boolean;
@@ -1216,7 +1216,7 @@ end;
 procedure TVec.ReserveExact(aAdditional: SizeUInt);
 begin
   if not TryReserveExact(aAdditional) then
-    raise ECore.Create('TVec.ReserveExact: failed to reserve exact additional capacity');
+    raise EOutOfMemory.Create('TVec.ReserveExact: failed to reserve exact additional capacity');
 end;
 
 procedure TVec.EnsureCapacity(aCapacity: SizeUInt);

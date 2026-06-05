@@ -3,7 +3,7 @@ unit nextpas.core.tui.error;
 {**
  * @desc TUI 模块异常层次。
  *
- * 基类 ETui 继承框架根异常 ECore，便于消费方在 TUI 事件循环入口统一
+ * 基类 ETui 继承框架根异常 ENextPasError，便于消费方在 TUI 事件循环入口统一
  * 捕获 TUI 级失败而无需引入 terminal/widget 运行时单元。子类按场景细分，
  * 错误信息应带上下文，让消费方不读源码即可定位。
  *
@@ -17,11 +17,11 @@ interface
 
 uses
   SysUtils,
-  nextpas.core.base;
+  nextpas.core.exception;
 
 type
   { TUI 模块异常基类 }
-  ETui = class(ECore);
+  ETui = class(ENextPasError);
 
   { 缓冲区错误：越界、resize 失败、尺寸不一致 }
   ETuiBuffer = class(ETui);

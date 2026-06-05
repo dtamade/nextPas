@@ -5,6 +5,7 @@ program test_tui_error;
 uses
   SysUtils,
   nextpas.core.base,
+  nextpas.core.exception,
   nextpas.core.tui.error,
   nextpas.core.testing;
 
@@ -13,7 +14,8 @@ var
 
 procedure TestHierarchy;
 begin
-  Check(ETui.InheritsFrom(ECore), 'ETui is ECore');
+  Check(ETui.InheritsFrom(ENextPasError), 'ETui is ENextPasError');
+  Check(ETui.InheritsFrom(ECore), 'ETui remains ECore-compatible');
   Check(ETuiBuffer.InheritsFrom(ETui), 'ETuiBuffer is ETui');
   Check(ETuiLayout.InheritsFrom(ETui), 'ETuiLayout is ETui');
   Check(ETuiBackend.InheritsFrom(ETui), 'ETuiBackend is ETui');
@@ -37,7 +39,21 @@ begin
   Check(LCaught, 'caught ETuiBuffer as ETui');
 end;
 
-procedure TestCatchAsCore;
+procedure TestCatchAsFrameworkRoot;
+var
+  LCaught: Boolean;
+begin
+  LCaught := False;
+  try
+    raise ETuiBackend.Create('write failed');
+  except
+    on E: ENextPasError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'caught ETuiBackend as ENextPasError');
+end;
+
+procedure TestCatchAsCoreCompatibility;
 var
   LCaught: Boolean;
 begin
@@ -55,7 +71,8 @@ begin
   T := TTestRunner.Create('nextpas.core.tui.error');
   T.Run('hierarchy', @TestHierarchy);
   T.Run('catch as base ETui', @TestCatchAsBase);
-  T.Run('catch as ECore', @TestCatchAsCore);
+  T.Run('catch as ENextPasError', @TestCatchAsFrameworkRoot);
+  T.Run('catch as ECore compatibility', @TestCatchAsCoreCompatibility);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

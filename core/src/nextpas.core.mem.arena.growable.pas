@@ -497,7 +497,7 @@ begin
   FTotalAllocs := 0;
 
   if not AddSegment(LInitSize) then
-    raise EAllocError.Create(aeOutOfMemory, 'TGrowingArena: failed to allocate initial segment');
+    raise EOutOfMemory.Create(aeOutOfMemory, 'TGrowingArena: failed to allocate initial segment');
   FActive := 0;
 end;
 
