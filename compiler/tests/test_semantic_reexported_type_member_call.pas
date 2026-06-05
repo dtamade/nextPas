@@ -143,6 +143,69 @@ begin
   );
 end;
 
+procedure WriteImportedCreateSupportUnits(
+  const ASystemPath: string;
+  const ASysUtilsPath: string;
+  const ABaseErrPath: string
+);
+begin
+  WriteTextFile(
+    ASystemPath,
+    'unit System;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TObject = class' + LineEnding +
+    '  end;' + LineEnding +
+    '  Exception = class(TObject)' + LineEnding +
+    '  public' + LineEnding +
+    '    constructor Create(Code: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'constructor Exception.Create(Code: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    '  inherited Create;' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+  WriteTextFile(
+    ASysUtilsPath,
+    'unit SysUtils;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'uses System;' + LineEnding +
+    'type' + LineEnding +
+    '  Exception = class(System.Exception)' + LineEnding +
+    '  public' + LineEnding +
+    '    constructor Create(const Msg: string);' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'constructor Exception.Create(const Msg: string);' + LineEnding +
+    'begin' + LineEnding +
+    '  inherited Create(0);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+  WriteTextFile(
+    ABaseErrPath,
+    'unit BaseErr;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'uses SysUtils;' + LineEnding +
+    'type' + LineEnding +
+    '  ECore = class(Exception);' + LineEnding +
+    '  EInvalidOperation = class(ECore);' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+end;
+
 function BuildRootModel(
   const ARootSourceText: string;
   const ARootName: string;
@@ -535,8 +598,268 @@ begin
   end;
 end;
 
+procedure CheckImportedInheritedExceptionCreateCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  BaseErrPath: string;
+  ECoreSymbolId: LongInt;
+  ECoreTypeId: LongInt;
+  Lexer: TLexerResult;
+  MethodSymbolId: LongInt;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  SystemPath: string;
+  SysUtilsPath: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  Randomize;
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-sema-imported-inherited-exception-create-' +
+    IntToStr(Random(MaxInt));
+  SystemPath := ProjectRoot + DirectorySeparator + 'system.pas';
+  SysUtilsPath := ProjectRoot + DirectorySeparator + 'sysutils.pas';
+  BaseErrPath := ProjectRoot + DirectorySeparator + 'baseerr.pas';
+  RootSourceText :=
+    'program ImportedInheritedExceptionCreateCalls;' + LineEnding +
+    'uses BaseErr;' + LineEnding +
+    'begin' + LineEnding +
+    '  raise EInvalidOperation.Create(''' + 'boom' + ''');' + LineEnding +
+    'end.' + LineEnding;
+  WriteImportedCreateSupportUnits(SystemPath, SysUtilsPath, BaseErrPath);
+
+  Diagnostics := nil;
+  Lexer := nil;
+  Tree := nil;
+  Ast := nil;
+  UnitGraph := nil;
+  Analyzer := nil;
+  Model := nil;
+  try
+    Model := BuildRootModel(
+      RootSourceText,
+      'ImportedInheritedExceptionCreateCalls',
+      [
+        BuildResolvedUnit('ImportedInheritedExceptionCreateCalls', '', ruoRootSource, '', 'program', 1),
+        BuildResolvedUnit('BaseErr', BaseErrPath, ruoProjectSource, '', 'unit', 2),
+        BuildResolvedUnit('SysUtils', SysUtilsPath, ruoInstalledSource, '', 'unit', 3),
+        BuildResolvedUnit('System', SystemPath, ruoImplicitRuntime, '', 'unit', 4)
+      ],
+      Diagnostics,
+      Analyzer,
+      Ast,
+      Tree,
+      Lexer,
+      UnitGraph
+    );
+
+    if Diagnostics.HasErrors then
+      Fail('unexpected-imported-inherited-create-diagnostic:' +
+        Diagnostics.LastDiagnosticCode + ':' +
+        Diagnostics.LastDiagnosticMessage);
+    if Model = nil then
+      Fail('missing-imported-inherited-create-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-imported-inherited-create-model-status:' + Model.Status);
+
+    MethodSymbolId := SymbolIdByNameKindAndOwner(
+      Model,
+      'Exception.Create',
+      'constructor',
+      'sysutils'
+    );
+    if MethodSymbolId <= 0 then
+      MethodSymbolId := SymbolIdByNameKindAndOwner(
+        Model,
+        'Exception.Create',
+        'method',
+        'sysutils'
+      );
+    if MethodSymbolId <= 0 then
+      Fail('missing-imported-inherited-create-symbol');
+
+    ECoreSymbolId := SymbolIdByNameKindAndOwner(Model, 'ECore', 'type', 'baseerr');
+    if ECoreSymbolId <= 0 then
+      Fail('missing-imported-inherited-ecore-symbol');
+    ECoreTypeId := Model.SymbolAt(ECoreSymbolId - 1).TypeId;
+    if ECoreTypeId <= 0 then
+      Fail('missing-imported-inherited-ecore-type');
+    if Model.TypeAt(ECoreTypeId - 1).ParentTypeId <= 0 then
+      Fail('missing-imported-inherited-ecore-parent');
+
+    CheckSingleMemberBinding(
+      Model,
+      'Create',
+      'importedinheritedexceptioncreatecalls',
+      MethodSymbolId,
+      Pos('Create(''' + 'boom' + ''')', RootSourceText) - 1,
+      'imported-inherited-create-member-call'
+    );
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+    DeleteFileIfExists(BaseErrPath);
+    DeleteFileIfExists(SysUtilsPath);
+    DeleteFileIfExists(SystemPath);
+    RemoveDirIfExists(ProjectRoot);
+  end;
+end;
+
+procedure CheckInheritedImportedExceptionMemberCallBinding;
+var
+  Analyzer: TSemanticAnalyzer;
+  Ast: TAstFacade;
+  Diagnostics: TDiagnosticsSink;
+  Lexer: TLexerResult;
+  MethodSymbolId: LongInt;
+  Model: TSemanticModel;
+  ProjectRoot: string;
+  RootSourceText: string;
+  SystemPath: string;
+  SysUtilsPath: string;
+  Tree: TGreenTree;
+  UnitGraph: TUnitGraph;
+begin
+  Randomize;
+  ProjectRoot := IncludeTrailingPathDelimiter(GetTempDir(False)) +
+    'nextpas-sema-inherited-imported-exception-' + IntToStr(Random(MaxInt));
+  SystemPath := ProjectRoot + DirectorySeparator + 'system.pas';
+  SysUtilsPath := ProjectRoot + DirectorySeparator + 'sysutils.pas';
+  RootSourceText :=
+    'program InheritedImportedExceptionCalls;' + LineEnding +
+    'uses SysUtils;' + LineEnding +
+    'type' + LineEnding +
+    '  ECore = class(Exception);' + LineEnding +
+    '  EOutOfRange = class(ECore);' + LineEnding +
+    'begin' + LineEnding +
+    '  raise EOutOfRange.CreateFmt(''' + 'value=%d' + ''', [1]);' + LineEnding +
+    'end.' + LineEnding;
+  WriteTextFile(
+    SystemPath,
+    'unit System;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  TObject = class' + LineEnding +
+    '  end;' + LineEnding +
+    '  Exception = class(TObject)' + LineEnding +
+    '  public' + LineEnding +
+    '    constructor Create(Code: Integer);' + LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'constructor Exception.Create(Code: Integer);' + LineEnding +
+    'begin' + LineEnding +
+    '  inherited Create;' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+  WriteTextFile(
+    SysUtilsPath,
+    'unit SysUtils;' + LineEnding +
+    LineEnding +
+    'interface' + LineEnding +
+    'type' + LineEnding +
+    '  Exception = class(System.Exception)' + LineEnding +
+    '  public' + LineEnding +
+    '    constructor CreateFmt(const Msg: string; const Args: array of const);' +
+      LineEnding +
+    '  end;' + LineEnding +
+    LineEnding +
+    'implementation' + LineEnding +
+    'constructor Exception.CreateFmt(const Msg: string; const Args: array of const);' +
+      LineEnding +
+    'begin' + LineEnding +
+    '  inherited Create(0);' + LineEnding +
+    'end;' + LineEnding +
+    LineEnding +
+    'end.' + LineEnding
+  );
+
+  Diagnostics := nil;
+  Lexer := nil;
+  Tree := nil;
+  Ast := nil;
+  UnitGraph := nil;
+  Analyzer := nil;
+  Model := nil;
+  try
+    Model := BuildRootModel(
+      RootSourceText,
+      'InheritedImportedExceptionCalls',
+      [
+        BuildResolvedUnit('InheritedImportedExceptionCalls', '', ruoRootSource, '', 'program', 1),
+        BuildResolvedUnit('SysUtils', SysUtilsPath, ruoInstalledSource, '', 'unit', 2),
+        BuildResolvedUnit('System', SystemPath, ruoImplicitRuntime, '', 'unit', 3)
+      ],
+      Diagnostics,
+      Analyzer,
+      Ast,
+      Tree,
+      Lexer,
+      UnitGraph
+    );
+
+    if Diagnostics.HasErrors then
+      Fail('unexpected-inherited-imported-diagnostic:' +
+        Diagnostics.LastDiagnosticCode + ':' +
+        Diagnostics.LastDiagnosticMessage);
+    if Model = nil then
+      Fail('missing-inherited-imported-semantic-model');
+    if not SameText(Model.Status, 'ready') then
+      Fail('unexpected-inherited-imported-model-status:' + Model.Status);
+
+    MethodSymbolId := SymbolIdByNameKindAndOwner(
+      Model,
+      'Exception.CreateFmt',
+      'constructor',
+      'sysutils'
+    );
+    if MethodSymbolId <= 0 then
+      MethodSymbolId := SymbolIdByNameKindAndOwner(
+        Model,
+        'Exception.CreateFmt',
+        'method',
+        'sysutils'
+      );
+    if MethodSymbolId <= 0 then
+      Fail('missing-inherited-imported-createfmt-symbol');
+
+    CheckSingleMemberBinding(
+      Model,
+      'CreateFmt',
+      'inheritedimportedexceptioncalls',
+      MethodSymbolId,
+      Pos('CreateFmt(''' + 'value=%d' + ''', [1])', RootSourceText) - 1,
+      'inherited-imported-member-call'
+    );
+  finally
+    Model.Free;
+    Analyzer.Free;
+    UnitGraph.Free;
+    Ast.Free;
+    Tree.Free;
+    Lexer.Free;
+    Diagnostics.Free;
+    DeleteFileIfExists(SysUtilsPath);
+    DeleteFileIfExists(SystemPath);
+    RemoveDirIfExists(ProjectRoot);
+  end;
+end;
+
 begin
   CheckRootTypeReceiverMemberCallBinding;
   CheckImportedUnitBodyTypeReceiverMemberCallBinding;
   CheckImportedUnitBodyRaiseConstructorMemberCallBinding;
+  CheckImportedInheritedExceptionCreateCallBinding;
+  CheckInheritedImportedExceptionMemberCallBinding;
 end.

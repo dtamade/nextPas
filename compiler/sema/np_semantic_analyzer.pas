@@ -119,6 +119,10 @@ type
       const AOwnerUnitId: string
     ): Boolean;
     function HasInstalledSourceImports: Boolean;
+    function UnitDirectlyImports(
+      const AOwnerUnitId: string;
+      const AImportedUnitId: string
+    ): Boolean;
     function IsCurrentlyInlining(const AName: string): Boolean;
     procedure PushInlining(const AName: string);
     procedure PopInlining;
@@ -296,10 +300,12 @@ type
     procedure SeedUnitSymbolsAndHir;
     procedure SeedForeignProcedureBindings;
     procedure SeedRuntimeContracts;
+    procedure RebindExplicitClassParents;
     function ResolveTypeId(const ATypeName: string): LongInt;
     function ResolveTypeIdForOwner(
       const ATypeName: string;
-      const APreferredOwnerUnitId: string
+      const APreferredOwnerUnitId: string;
+      const AAllowDirectImportSearch: Boolean = True
     ): LongInt;
     function ImplicitSystemObjectParentTypeId(const AClassName: string): LongInt;
     function FindSymbolByName(const AName: string): LongInt;
@@ -1553,6 +1559,58 @@ begin
   end;
 end;
 
+function TSemanticAnalyzer.UnitDirectlyImports(
+  const AOwnerUnitId: string;
+  const AImportedUnitId: string
+): Boolean;
+var
+  ImportId: string;
+  Index: LongInt;
+  OwnerUnitId: string;
+  UnitTree: TGreenTree;
+  UseIndex: LongInt;
+begin
+  Result := False;
+  if (Trim(AOwnerUnitId) = '') or (Trim(AImportedUnitId) = '') then
+    Exit;
+
+  OwnerUnitId := NormalizeUnitIdentity(AOwnerUnitId);
+  ImportId := NormalizeUnitIdentity(AImportedUnitId);
+  if (OwnerUnitId = '') or (ImportId = '') then
+    Exit;
+
+  if SameText(OwnerUnitId, NormalizeUnitIdentity(FUnitGraph.RootName)) then
+  begin
+    for UseIndex := 0 to FRootAst.InterfaceUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(FRootAst.InterfaceUseAt(UseIndex)),
+        ImportId) then
+        Exit(True);
+    for UseIndex := 0 to FRootAst.ImplementationUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(FRootAst.ImplementationUseAt(UseIndex)),
+        ImportId) then
+        Exit(True);
+    Exit(False);
+  end;
+
+  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+  begin
+    if not SameText(FImportedUnitOwners[Index], OwnerUnitId) then
+      Continue;
+    UnitTree := FImportedUnitTrees[Index];
+    if UnitTree = nil then
+      Exit(False);
+    for UseIndex := 0 to UnitTree.InterfaceUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(UnitTree.InterfaceUseAt(UseIndex)),
+        ImportId) then
+        Exit(True);
+    for UseIndex := 0 to UnitTree.ImplementationUseCount - 1 do
+      if SameText(NormalizeUnitIdentity(
+        UnitTree.ImplementationUseAt(UseIndex)), ImportId) then
+        Exit(True);
+    Exit(False);
+  end;
+end;
+
 function TSemanticAnalyzer.ExpressionTypeFactIsStable(
   const ANode: TGreenNode;
   const ACurrentOwnerUnitId: string
@@ -1915,7 +1973,8 @@ begin
 
   Result := ResolveTypeIdForOwner(
     AName,
-    NormalizeUnitIdentity(FUnitGraph.RootName)
+    NormalizeUnitIdentity(FUnitGraph.RootName),
+    False
   );
 end;
 
@@ -4215,6 +4274,7 @@ begin
   FCurrentScopeId := FModel.AddScope(skUnit, FUnitGraph.RootName, 1);
   SeedImportedUnitBodies;
   SeedDeclarations;
+  RebindExplicitClassParents;
   CompletePendingSignatures;
   AssignScopesToSymbols;
   SeedCallBindings;
@@ -4266,13 +4326,18 @@ end;
 
 function TSemanticAnalyzer.ResolveTypeIdForOwner(
   const ATypeName: string;
-  const APreferredOwnerUnitId: string
+  const APreferredOwnerUnitId: string;
+  const AAllowDirectImportSearch: Boolean
 ): LongInt;
 var
   CandidateSeen: Boolean;
+  DirectImportMatchCount: LongInt;
+  DotPos: LongInt;
   Index: LongInt;
   NormalizedOwnerUnitId: string;
   PreferredMatchCount: LongInt;
+  QualifiedOwnerUnitId: string;
+  ShortTypeName: string;
   Symbol: TSemanticSymbol;
   UniqueTypeId: LongInt;
 begin
@@ -4286,6 +4351,39 @@ begin
     Exit(FModel.FindTypeByName('Double'));
   if SameText(ATypeName, 'Extended') then
     Exit(FModel.FindTypeByName('Double'));
+
+  DotPos := LastDelimiter('.', ATypeName);
+  if (DotPos > 1) and (DotPos < Length(ATypeName)) then
+  begin
+    QualifiedOwnerUnitId := NormalizeUnitIdentity(
+      Copy(ATypeName, 1, DotPos - 1)
+    );
+    ShortTypeName := Copy(ATypeName, DotPos + 1, MaxInt);
+    if (QualifiedOwnerUnitId <> '') and (ShortTypeName <> '') then
+    begin
+      PreferredMatchCount := 0;
+      UniqueTypeId := 0;
+      for Index := 0 to FModel.SymbolCount - 1 do
+      begin
+        Symbol := FModel.SymbolAt(Index);
+        if SameText(Symbol.Kind, 'type') and
+          SameText(Symbol.Name, ShortTypeName) and
+          SameText(Symbol.OwnerUnitId, QualifiedOwnerUnitId) and
+          (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
+        begin
+          Inc(PreferredMatchCount);
+          if UniqueTypeId = 0 then
+            UniqueTypeId := Symbol.TypeId
+          else if UniqueTypeId <> Symbol.TypeId then
+            Exit(0);
+        end;
+      end;
+      if PreferredMatchCount = 1 then
+        Exit(UniqueTypeId);
+      if PreferredMatchCount > 1 then
+        Exit(0);
+    end;
+  end;
 
   NormalizedOwnerUnitId := NormalizeUnitIdentity(APreferredOwnerUnitId);
   if NormalizedOwnerUnitId <> '' then
@@ -4311,6 +4409,31 @@ begin
       Exit(UniqueTypeId);
     if PreferredMatchCount > 1 then
       Exit(0);
+
+    if AAllowDirectImportSearch then
+    begin
+      DirectImportMatchCount := 0;
+      UniqueTypeId := 0;
+      for Index := 0 to FModel.SymbolCount - 1 do
+      begin
+        Symbol := FModel.SymbolAt(Index);
+        if SameText(Symbol.Kind, 'type') and
+          SameText(Symbol.Name, ATypeName) and
+          UnitDirectlyImports(NormalizedOwnerUnitId, Symbol.OwnerUnitId) and
+          (Symbol.TypeId > 0) and (Symbol.TypeId <= FModel.TypeCount) then
+        begin
+          Inc(DirectImportMatchCount);
+          if UniqueTypeId = 0 then
+            UniqueTypeId := Symbol.TypeId
+          else if UniqueTypeId <> Symbol.TypeId then
+            Exit(0);
+        end;
+      end;
+      if DirectImportMatchCount = 1 then
+        Exit(UniqueTypeId);
+      if DirectImportMatchCount > 1 then
+        Exit(0);
+    end;
   end;
 
   CandidateSeen := False;
@@ -5984,6 +6107,112 @@ begin
   if RootNode = nil then
     Exit;
   WalkDeclarations(RootNode, OwnerUnitId);
+end;
+
+procedure TSemanticAnalyzer.RebindExplicitClassParents;
+
+  procedure RebindTypeSection(
+    const ATypeSection: TGreenNode;
+    const AOwnerUnitId: string
+  );
+  var
+    Child: TGreenNode;
+    Index: LongInt;
+    Meta: TTypeMetadata;
+    ParentNode: TGreenNode;
+    ParentTypeId: LongInt;
+    TypeChild: TGreenNode;
+    TypeId: LongInt;
+    TypeInfo: TSemanticType;
+    TypeIndex: LongInt;
+  begin
+    if ATypeSection = nil then
+      Exit;
+
+    for Index := 0 to ATypeSection.ChildCount - 1 do
+    begin
+      Child := ATypeSection.ChildAt(Index);
+      if (Child = nil) or (Child.NodeKind <> gnkTypeDecl) or
+        (Child.Text = '') then
+        Continue;
+
+      TypeId := ResolveTypeIdForOwner(Child.Text, AOwnerUnitId);
+      if (TypeId <= 0) or (TypeId > FModel.TypeCount) then
+        Continue;
+
+      TypeInfo := FModel.TypeAt(TypeId - 1);
+      if TypeInfo.ParentTypeId > 0 then
+        Continue;
+
+      for TypeIndex := 0 to Child.ChildCount - 1 do
+      begin
+        TypeChild := Child.ChildAt(TypeIndex);
+        if (TypeChild = nil) or (TypeChild.NodeKind <> gnkClassType) or
+          SameText(TypeChild.Text, 'interface') or
+          (TypeChild.ChildCount = 0) then
+          Continue;
+
+        ParentNode := TypeChild.ChildAt(0);
+        if (ParentNode = nil) or (ParentNode.NodeKind <> gnkIdentifier) then
+          Break;
+
+        ParentTypeId := ResolveTypeIdForOwner(ParentNode.Text, AOwnerUnitId);
+        if (ParentTypeId <= 0) or (ParentTypeId > FModel.TypeCount) then
+          Break;
+        if TypeMetaIsInterface(FModel.TypeAt(ParentTypeId - 1).Name) then
+          Break;
+
+        FModel.SetTypeParent(TypeId, ParentTypeId);
+        if FModel.GetTypeMeta(TypeId, Meta) then
+        begin
+          Meta.ParentClassId := ParentTypeId;
+          if Meta.ParentClassName = '' then
+            Meta.ParentClassName := FModel.TypeAt(ParentTypeId - 1).Name;
+          FModel.SetTypeMeta(TypeId, Meta);
+        end;
+        Break;
+      end;
+    end;
+  end;
+
+  procedure RebindInNode(
+    const ANode: TGreenNode;
+    const AOwnerUnitId: string
+  );
+  var
+    Child: TGreenNode;
+    Index: LongInt;
+  begin
+    if ANode = nil then
+      Exit;
+
+    for Index := 0 to ANode.ChildCount - 1 do
+    begin
+      Child := ANode.ChildAt(Index);
+      if Child = nil then
+        Continue;
+      case Child.NodeKind of
+        gnkTypeSection:
+          RebindTypeSection(Child, AOwnerUnitId);
+        gnkInterfaceSection, gnkImplementationSection:
+          RebindInNode(Child, AOwnerUnitId);
+      end;
+    end;
+  end;
+
+var
+  Index: LongInt;
+  RootNode: TGreenNode;
+begin
+  if (FRootAst <> nil) and FRootAst.IsValid then
+  begin
+    RootNode := FRootAst.RootNode;
+    if RootNode <> nil then
+      RebindInNode(RootNode, NormalizeUnitIdentity(FUnitGraph.RootName));
+  end;
+
+  for Index := 0 to Length(FImportedUnitTrees) - 1 do
+    RebindInNode(FImportedUnitTrees[Index].RootNode, FImportedUnitOwners[Index]);
 end;
 
 procedure TSemanticAnalyzer.WalkAssignmentStatements(const ANode: TGreenNode);
