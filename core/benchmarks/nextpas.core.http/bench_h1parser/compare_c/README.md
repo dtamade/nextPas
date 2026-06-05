@@ -35,6 +35,11 @@ LLHTTP_ROOT=/path/to/llhttp-9.4.1 \
 benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf
 ```
 
+Use `--perf` on machines that allow hardware perf events. The runner probes
+`perf stat` first; if perf is blocked by `perf_event_paranoid` or missing
+capabilities, it still runs the timing matrix and records `perf_requested=1`
+and `perf_usable=0` in `env.txt`.
+
 Supported `LLHTTP_ROOT` layouts:
 
 - `LLHTTP_ROOT/{llhttp.h,api.c,http.c,llhttp.c}`

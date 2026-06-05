@@ -644,8 +644,68 @@ begin
   CheckContains(LEnv, 'git_head=', 'H1 parser flag matrix git marker');
   CheckContains(LEnv, 'bench_filter=raw llhttp: 10 headers',
     'H1 parser flag matrix filter marker');
-  CheckContains(LEnv, 'perf_enabled=0',
+  CheckContains(LEnv, 'perf_requested=0',
     'H1 parser flag matrix no-perf marker');
+end;
+
+procedure TestH1ParserFlagMatrixPerfGracefulSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LRunnerPath: string;
+  LOutputDir: string;
+  LResultsPath: string;
+  LEnvPath: string;
+  LLhttpRoot: string;
+  LExitCode: Integer;
+  LOutput: string;
+  LResults: string;
+  LEnv: string;
+  LEnvVars: array of string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+  LRunnerPath := ResolveH1FlagMatrixRunnerPath(LRootDir);
+  LOutputDir := PathJoin(LRootDir,
+    'build/projects/nextpas.core.http/bench_h1parser/flag_matrix/smoke');
+  LResultsPath := PathJoin(LOutputDir, 'results.tsv');
+  LEnvPath := PathJoin(LOutputDir, 'env.txt');
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+
+  if LLhttpRoot <> '' then
+  begin
+    SetLength(LEnvVars, 5);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
+    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end
+  else
+  begin
+    SetLength(LEnvVars, 4);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[3] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end;
+
+  RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--perf'],
+    LBenchDir, LEnvVars, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser flag matrix perf smoke exit code: ' + LOutput);
+  Check(FileExists(LResultsPath), 'H1 parser flag matrix perf results.tsv exists');
+  Check(FileExists(LEnvPath), 'H1 parser flag matrix perf env.txt exists');
+
+  LResults := LoadTextFile(LResultsPath);
+  CheckContains(LResults, 'pascal-default',
+    'H1 parser flag matrix perf Pascal variant');
+
+  LEnv := LoadTextFile(LEnvPath);
+  CheckContains(LEnv, 'perf_requested=1',
+    'H1 parser flag matrix perf requested marker');
+  CheckContains(LEnv, 'perf_usable=',
+    'H1 parser flag matrix perf usability marker');
 end;
 
 begin
@@ -671,6 +731,8 @@ begin
     @TestCllhttpComparatorFilterEnvWhenConfigured);
   T.Run('H1 parser flag matrix smoke',
     @TestH1ParserFlagMatrixSmoke);
+  T.Run('H1 parser flag matrix perf graceful smoke',
+    @TestH1ParserFlagMatrixPerfGracefulSmoke);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

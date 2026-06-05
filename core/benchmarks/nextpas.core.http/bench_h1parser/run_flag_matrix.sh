@@ -55,9 +55,17 @@ LOG_DIR="$OUTPUT_DIR/logs"
 PERF_DIR="$OUTPUT_DIR/perf"
 RESULTS_PATH="$OUTPUT_DIR/results.tsv"
 ENV_PATH="$OUTPUT_DIR/env.txt"
+PERF_CHECK_PATH="$PERF_DIR/perf-check.txt"
 
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$LOG_DIR" "$PERF_DIR"
+
+PERF_USABLE=0
+if [ "$PERF_ENABLED" = "1" ] && command -v perf >/dev/null 2>&1; then
+  if perf stat -e cycles -o "$PERF_CHECK_PATH" -- true >/dev/null 2>&1; then
+    PERF_USABLE=1
+  fi
+fi
 
 {
   echo "git_head=$(git -C "$CORE_ROOT" rev-parse HEAD 2>/dev/null || echo unknown)"
@@ -66,7 +74,8 @@ mkdir -p "$LOG_DIR" "$PERF_DIR"
   echo "bench_filter=$BENCH_FILTER"
   echo "c_bench_filter=$C_BENCH_FILTER"
   echo "llhttp_root=$LLHTTP_ROOT_VALUE"
-  echo "perf_enabled=$PERF_ENABLED"
+  echo "perf_requested=$PERF_ENABLED"
+  echo "perf_usable=$PERF_USABLE"
   echo "fpc_version=$(fpc -iV 2>/dev/null || echo unknown)"
   echo "cc_version=$(${CC:-cc} --version 2>/dev/null | head -n 1 || echo unknown)"
 } > "$ENV_PATH"
@@ -90,7 +99,7 @@ run_with_optional_perf() {
   local perf_name="$1"
   shift
 
-  if [ "$PERF_ENABLED" = "1" ] && command -v perf >/dev/null 2>&1; then
+  if [ "$PERF_USABLE" = "1" ]; then
     perf stat \
       -e cycles,instructions,branches,branch-misses,cache-misses \
       -o "$PERF_DIR/$perf_name.txt" \

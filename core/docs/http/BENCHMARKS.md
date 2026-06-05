@@ -886,3 +886,47 @@ Do not run multiple `clean run` jobs against the same `bench_h1parser` build
 root in parallel; a concurrent parent benchmark clean can remove the C
 comparator output directory or produce `Text file busy`. The flag-matrix runner
 uses per-variant build directories to avoid that race.
+
+## Benchmark Tooling: Perf Fallback
+
+On 2026-06-05 local time, `run_flag_matrix.sh --perf` was hardened for ordinary
+developer machines where Linux perf events are unavailable. The runner now
+probes `perf stat -e cycles -- true` before wrapping benchmark binaries. If the
+probe fails, it still runs the timing matrix and records the perf state in
+`env.txt`.
+
+Focused evidence:
+
+```text
+RED:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+NEXTPAS_BENCH_MAX_ITERS=2000 \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --perf
+
+exit=255
+perf_event_paranoid setting is 3
+Access to performance monitoring and observability operations is limited.
+
+GREEN:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Current local environment:
+
+```text
+/proc/sys/kernel/perf_event_paranoid = 3
+flag_matrix env.txt:
+perf_requested=1
+perf_usable=0
+```
+
+This means local timing rows are still usable, but hardware counters such as
+`cycles`, `instructions`, `branches`, `branch-misses`, and `cache-misses` must
+be captured on a machine with lower `perf_event_paranoid` or the required
+`CAP_PERFMON` / tracing capabilities. The next raw-gap analysis step should use
+the same flag-matrix runner on such a machine before changing generated llhttp
+translation code.
