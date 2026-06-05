@@ -132,6 +132,18 @@ make -C benchmarks/nextpas.core.http/bench_router clean run
 This emits `operation=http.router.dispatch` and a `handler dispatch` row for
 route match plus no-op handler invocation, without H1 parsing or socket I/O.
 
+Run the focused H1 response serialization benchmark:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='fixed 200 13B' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
+This emits `operation=http.h1writer.serialize` and a `fixed 200 13B` row for
+writer construction, fixed response header serialization, and body copy into an
+in-memory sink.
+
 Run the focused comparator smoke from the test harness:
 
 ```sh

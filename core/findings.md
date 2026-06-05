@@ -1,4 +1,4 @@
-# Findings: HTTP router dispatch benchmark contract
+# Findings: HTTP H1 writer serialization benchmark contract
 
 ## Scope
 
@@ -7,21 +7,22 @@
 
 ## Implemented decision
 
-`bench_router` 现在输出稳定 marker：
+新增 `bench_h1writer`，输出稳定 marker：
 
 ```text
-operation=http.router.dispatch
+operation=http.h1writer.serialize
 ```
 
 并新增 row：
 
 ```text
-handler dispatch (match + no-op handler)
+fixed 200 13B
 ```
 
-这个 row 复用一个 `NewGetRequest('/health')`，通过 `THttpRouter.ServeHTTP`
-执行静态 route match 与 no-op handler invocation。它刻意不包含 socket I/O、
-H1 parser、response writer serialization、middleware 或 URL/query materialization。
+这个 row 每次迭代创建一个 `TH1ResponseWriter`，设置 `content-type` 与
+`content-length=13`，写出固定 `200 OK` header 和 `Hello, World!` body 到固定容量
+内存 writer。它刻意不包含 request parsing、router dispatch、middleware、socket drain
+或 backpressure。
 
 ## RED / GREEN evidence
 
@@ -31,9 +32,9 @@ RED:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-23 total, 22 passed, 1 failed
-bench_router handler dispatch smoke failed:
-router dispatch operation marker missing from output: operation=http.router.dispatch
+24 total, 23 passed, 1 failed
+bench_h1writer response serialization smoke failed:
+unable to resolve core root from current directory or executable path
 heaptrc: 0 unfreed memory blocks
 ```
 
@@ -43,35 +44,34 @@ GREEN:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-23 total, 23 passed, 0 failed
+24 total, 24 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
 ## Performance evidence
 
-Fresh local router dispatch row:
+Fresh local H1 writer serialization row:
 
 ```text
 NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='handler dispatch' \
-make -C benchmarks/nextpas.core.http/bench_router clean run
+NEXTPAS_BENCH_FILTER='fixed 200 13B' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 
-handler dispatch (match + no-op handler): 508.1 ns/op, 1968021 ops/s
+fixed 200 13B: 1441.1 ns/op, 693895 ops/s
 ```
 
-The final `bench_router` build emitted no FPC `Warning:` or `Note:` lines.
+The final `bench_h1writer` build emitted no FPC `Warning:` or `Note:` lines.
 
 ## Direction review
 
-方向没有走偏：上一轮 full-chain server comparison 显示 nextPas 与 Rust std-only
-差距约 `1.16x`，这轮没有继续堆 full-chain single row，而是开始拆窄成本。当前
-router dispatch row 说明普通静态 route + no-op handler invocation 是亚微秒级成本，
-后续更应继续拆 response serialization / outbound buffer / socket drain，而不是凭
-full-chain row 盲猜。
+方向没有走偏：本轮沿上一批 router dispatch 继续拆 server full-chain 成本，没有改
+生产 HTTP 行为。当前证据显示固定小响应的 writer construction + header serialization +
+body copy 约 `1.44 us/op`，明显高于上一批静态 router dispatch `0.51 us/op`，后续更应
+看 writer allocation/header materialization/outbound drain，而不是先回到泛化 full-chain row。
 
 ## Remaining gaps / risks
 
-- 当前 dispatch row 不覆盖 middleware chain、param extraction、query materialization 或
-  response writer serialization。
+- 当前 writer row 不覆盖 chunked response、large body、informational response、HEAD
+  suppress-body 或 socket drain/backpressure。
 - `bench_fullchain` 仍是旧式非 normalized output，暂时不适合作为机器断言入口。
 - Rust comparator 仍是 std-only comparator，不代表 Hyper/Tokio。

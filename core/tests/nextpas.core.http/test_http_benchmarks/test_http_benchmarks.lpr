@@ -14,6 +14,7 @@ var
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
   BenchRouterRelativeDir = 'benchmarks/nextpas.core.http/bench_router';
+  BenchH1WriterRelativeDir = 'benchmarks/nextpas.core.http/bench_h1writer';
   H1ParserBenchRelativeDir = 'benchmarks/nextpas.core.http/bench_h1parser';
   ServerComparisonRelativeDir = 'benchmarks/nextpas.core.http';
   ServerComparisonRunnerRelativePath =
@@ -174,6 +175,12 @@ begin
     'build/projects/nextpas.core.http/bench_router/bench_router');
 end;
 
+function ResolveBenchH1WriterBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_h1writer/bench_h1writer');
+end;
+
 function ResolveBenchmarkTestBuildDir(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -241,6 +248,18 @@ begin
     'router dispatch filter marker');
   CheckContains(AOutput, 'ns/op', 'router dispatch ns/op marker');
   CheckContains(AOutput, 'ops/s', 'router dispatch ops/s marker');
+end;
+
+procedure CheckH1WriterSerializeBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1writer.serialize',
+    'H1 writer serialize operation marker');
+  CheckContains(AOutput, 'fixed 200 13B',
+    'H1 writer fixed response benchmark row');
+  CheckContains(AOutput, 'bench_filter=fixed 200 13B',
+    'H1 writer filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 writer ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 writer ops/s marker');
 end;
 
 function LoadTextFile(const APath: string): string;
@@ -335,6 +354,34 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_router handler dispatch smoke exit code: ' + LOutput);
   CheckRouterDispatchBenchmarkOutput(LOutput);
+end;
+
+procedure TestBenchH1WriterSerializeSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1WriterRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchH1WriterRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1writer build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchH1WriterBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_h1writer binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=fixed 200 13B'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1writer serialize smoke exit code: ' + LOutput);
+  CheckH1WriterSerializeBenchmarkOutput(LOutput);
 end;
 
 procedure TestGoServerComparatorSmallSmoke;
@@ -1144,6 +1191,8 @@ begin
     @TestBenchServerUrlPathSmallSmoke);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
+  T.Run('bench_h1writer response serialization smoke',
+    @TestBenchH1WriterSerializeSmoke);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
   T.Run('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);

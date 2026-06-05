@@ -65,6 +65,27 @@ Local focused row from 2026-06-05:
 | --- | ---: | ---: | ---: |
 | handler dispatch (match + no-op handler) | 100000 | 508.1 | 1968021 |
 
+## Run the H1 Writer Serialization Benchmark
+
+Run the focused response serialization row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='fixed 200 13B' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
+This row reports `operation=http.h1writer.serialize` and measures
+`TH1ResponseWriter` construction, fixed `200 OK` response header serialization,
+and a 13-byte body write into a fixed in-memory writer. It does not include
+request parsing, router dispatch, middleware, socket drain, or backpressure.
+
+Local focused row from 2026-06-05:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| fixed 200 13B | 100000 | 1441.1 | 693895 |
+
 ## Local Snapshot: 2026-06-04 UTC
 
 Environment:
