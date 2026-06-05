@@ -24,7 +24,8 @@ var
   InvalidLabelPos, InvalidBoundaryCallPos, InvalidDoneBranchPos,
   ReleaseLabelPos, ReleaseBoundaryCallPos, ReleaseDoneBranchPos,
   ReleaseBoundaryHelperPos, ReleaseBoundaryMagicSlotPos,
-  ReleaseBoundaryMagicStorePos, InvalidBoundaryHelperPos, InvalidTrapCallPos,
+  ReleaseBoundaryMagicStorePos, ReleaseBoundaryFreeCallPos,
+  ReleaseBoundaryFreeHelperPos, InvalidBoundaryHelperPos, InvalidTrapCallPos,
   InvalidTrapUnreachablePos, InvalidTrapDeclarePos: LongInt;
 
 procedure Fail(const AMessage: string);
@@ -246,9 +247,19 @@ begin
       ReleaseBoundaryMagicSlotPos);
     if ReleaseBoundaryMagicStorePos = 0 then
       Fail('missing-object-free-release-poison-magic-store');
+    ReleaseBoundaryFreeCallPos := FindAfter(
+      'call void @np_free(ptr %raw, i64 %size)', LlvmText,
+      ReleaseBoundaryMagicStorePos);
+    if ReleaseBoundaryFreeCallPos = 0 then
+      Fail('missing-object-free-release-free-call');
+    ReleaseBoundaryFreeHelperPos := FindAfter(
+      'define internal void @np_free(ptr %raw, i64 %size)',
+      LlvmText, ReleaseBoundaryHelperPos);
+    if ReleaseBoundaryFreeHelperPos = 0 then
+      Fail('missing-object-free-release-free-helper');
     InvalidBoundaryHelperPos := FindAfter(
       'define internal void @np_object_release_invalid(ptr %raw, i64 %size, i64 %magic)',
-      LlvmText, ReleaseBoundaryHelperPos);
+      LlvmText, ReleaseBoundaryFreeHelperPos);
     if InvalidBoundaryHelperPos = 0 then
       Fail('missing-object-free-release-invalid-helper');
     InvalidTrapCallPos := FindAfter('call void @llvm.trap()', LlvmText,

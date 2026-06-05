@@ -26,6 +26,7 @@ type
     FGlobalRefIds: array of THIRValueId;
     FGlobalRefCount: LongInt;
     FNeedsWriteInt: Boolean;
+    FNeedsAlloc: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStrCmp: Boolean;
     FNeedsIntToStr: Boolean;
@@ -63,11 +64,14 @@ type
     procedure EmitTerminator(const ATerm: THIRTerminator);
     procedure EmitWriteIntHelper;
     procedure EmitStrConstants;
+    procedure EmitAllocHelper;
+    procedure EmitMemcpyHelper;
     procedure EmitStrConcatHelper;
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
     procedure EmitIntfRefCountHelpers;
     procedure EmitObjectReleaseValidHelper;
+    procedure EmitFreeHelper;
     procedure EmitObjectReleaseInvalidHelper;
     procedure EmitExceptionRuntimeHelpers;
     procedure EmitVmtGlobals;
@@ -107,6 +111,7 @@ begin
   FLineCount := 0;
   FGlobalRefCount := 0;
   FNeedsWriteInt := False;
+  FNeedsAlloc := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
@@ -319,6 +324,7 @@ end;
 
 procedure THIRLlvmEmitter.EmitObjectFreeRelease(const AInstr: THIRInstr);
 begin
+  FNeedsAlloc := True;
   FNeedsObjectFreeRelease := True;
   if Length(AInstr.Operands) >= 1 then
     Emit('  call void @np_object_free_release(ptr ' +
@@ -515,6 +521,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'str_concat' then
       begin
+        FNeedsAlloc := True;
         FNeedsStrConcat := True;
         if Length(AInstr.Operands) >= 6 then
         begin
@@ -602,6 +609,7 @@ begin
       begin
         if Length(AInstr.Operands) >= 3 then
         begin
+          FNeedsAlloc := True;
           Emit('  %its.' + IntToStr(AInstr.ResultId) +
             ' = call {ptr, i64} @np_int_to_str(i64 ' + ValueRef(AInstr.Operands[0].ValueId) + ')');
           Emit('  %its.' + IntToStr(AInstr.ResultId) +
@@ -645,7 +653,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'arr_alloc' then
       begin
-        FNeedsStrConcat := True;
+        FNeedsAlloc := True;
         if Length(AInstr.Operands) >= 1 then
         begin
           Emit('  %arralloc.' + IntToStr(AInstr.ResultId) +
@@ -657,7 +665,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'arr_alloc_sized' then
       begin
-        FNeedsStrConcat := True;
+        FNeedsAlloc := True;
         if Length(AInstr.Operands) >= 2 then
         begin
           Emit('  %arralloc.' + IntToStr(AInstr.ResultId) +
@@ -670,7 +678,7 @@ begin
       end
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
-        FNeedsStrConcat := True;
+        FNeedsAlloc := True;
         FNeedsObjectAlloc := True;
         if Length(AInstr.Operands) >= 1 then
           Emit('  ' + ValueRef(AInstr.ResultId) +
@@ -941,6 +949,7 @@ begin
   FLineCount := 0;
   FStrConstCount := 0;
   FNeedsWriteInt := False;
+  FNeedsAlloc := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
@@ -979,6 +988,12 @@ begin
 
   if FNeedsWriteInt then
     EmitWriteIntHelper;
+
+  if FNeedsAlloc then
+    EmitAllocHelper;
+
+  if FNeedsStrConcat then
+    EmitMemcpyHelper;
 
   if FNeedsStrConcat or FNeedsIntToStr then
     EmitStrConcatHelper;
@@ -1177,7 +1192,7 @@ begin
   end;
 end;
 
-procedure THIRLlvmEmitter.EmitStrConcatHelper;
+procedure THIRLlvmEmitter.EmitAllocHelper;
 begin
   Emit('');
   Emit('@__heap_cur = internal global ptr null');
@@ -1200,6 +1215,10 @@ begin
   Emit('  store ptr %next, ptr @__heap_cur');
   Emit('  ret ptr %base');
   Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitMemcpyHelper;
+begin
   Emit('');
   Emit('define internal void @np_memcpy(ptr %dst, ptr %src, i64 %n) {');
   Emit('entry:');
@@ -1217,6 +1236,10 @@ begin
   Emit('done:');
   Emit('  ret void');
   Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitStrConcatHelper;
+begin
   Emit('');
   Emit('define internal {ptr, i64} @np_str_concat(ptr %a_ptr, i64 %a_len, ptr %b_ptr, i64 %b_len) {');
   Emit('entry:');
@@ -1272,6 +1295,7 @@ begin
   Emit('  ret void');
   Emit('}');
   EmitObjectReleaseValidHelper;
+  EmitFreeHelper;
   EmitObjectReleaseInvalidHelper;
 end;
 
@@ -1282,6 +1306,30 @@ begin
   Emit('entry:');
   Emit('  %released.magicp = getelementptr i8, ptr %raw, i64 8');
   Emit('  store i64 0, ptr %released.magicp');
+  Emit('  call void @np_free(ptr %raw, i64 %size)');
+  Emit('  ret void');
+  Emit('}');
+end;
+
+procedure THIRLlvmEmitter.EmitFreeHelper;
+begin
+  Emit('');
+  Emit('define internal void @np_free(ptr %raw, i64 %size) {');
+  Emit('entry:');
+  Emit('  %cur = load ptr, ptr @__heap_cur');
+  Emit('  %isnull = icmp eq ptr %cur, null');
+  Emit('  br i1 %isnull, label %done, label %check');
+  Emit('check:');
+  Emit('  %total = add i64 %size, 24');
+  Emit('  %end = getelementptr i8, ptr %raw, i64 %total');
+  Emit('  %is_top = icmp eq ptr %cur, %end');
+  Emit('  br i1 %is_top, label %rewind, label %done');
+  Emit('rewind:');
+  Emit('  %rawi = ptrtoint ptr %raw to i64');
+  Emit('  call i64 asm sideeffect "movq $$12, %rax\0Asyscall", "={rax},{rdi},~{rcx},~{r11}"(i64 %rawi)');
+  Emit('  store ptr %raw, ptr @__heap_cur');
+  Emit('  br label %done');
+  Emit('done:');
   Emit('  ret void');
   Emit('}');
 end;
