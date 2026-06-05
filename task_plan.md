@@ -1,5 +1,22 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-05 http benchmark completion-marker contract
+
+### Goal
+
+收束 `nextpas.core.http` benchmark harness 校准批次，让 server comparison
+runner 不只报告速度，还证明每个 comparator 实际完成了目标请求数，并把
+nextPas 当前 H1 fast-path 解释显式写入 raw output。
+
+### Checklist
+
+- [x] 复核当前 HTTP benchmark diff 与 shared checkout 脏文件边界，避免覆盖无关 async/client/compiler 改动。
+- [x] 基于已有 RED，要求 server comparison 输出 `completed=<requests>`、nextPas row 输出 `nextpas_h1_path=...`，multi-run summary/report 输出 `median_completed=<requests>`。
+- [x] 修正 `run_server_comparison.sh` summary 字段顺序，让 `median_completed` 来自 completed 列而不是 `ns/op` 列。
+- [x] 跑 focused gate：`NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑小规模 live runner smoke：`benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`。
+- [x] 更新 benchmark/API coverage 文档；不写 `docs/nextpas.core.http.inbox.md`。
+
 ## Active Session: 2026-06-04 http max-header 431 backpressure security proof
 
 ### Goal

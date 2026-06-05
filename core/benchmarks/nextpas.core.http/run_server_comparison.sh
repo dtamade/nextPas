@@ -114,6 +114,8 @@ append_result_row() {
   local output="$3"
   local ns_op
   local req_s
+  local iterations
+  local completed
 
   if ! printf '%s\n' "${output}" | grep -q "^impl=${expected_impl}$"; then
     echo "unable to find benchmark impl marker for impl=${expected_impl}" >&2
@@ -121,16 +123,24 @@ append_result_row() {
     exit 1
   fi
 
+  iterations="$(printf '%s\n' "${output}" | sed -nE 's/^iterations=([0-9]+)$/\1/p' | tail -n 1)"
+  completed="$(printf '%s\n' "${output}" | sed -nE 's/^completed=([0-9]+)$/\1/p' | tail -n 1)"
   ns_op="$(printf '%s\n' "${output}" | sed -nE 's/^ns\/op=([0-9]+)$/\1/p' | tail -n 1)"
   req_s="$(printf '%s\n' "${output}" | sed -nE 's/^req\/s=([0-9]+)$/\1/p' | tail -n 1)"
-  if [[ "${ns_op}" == "" || "${req_s}" == "" ]]; then
+  if [[ "${iterations}" == "" || "${completed}" == "" || "${ns_op}" == "" || "${req_s}" == "" ]]; then
     echo "unable to parse benchmark output for impl=${expected_impl}" >&2
     echo "${output}" >&2
     exit 1
   fi
 
-  printf '%s\t%s\t%s\t%s\n' \
-    "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" >> "${RESULTS_TMP}"
+  if [[ "${iterations}" != "${REQUESTS}" || "${completed}" != "${REQUESTS}" ]]; then
+    echo "incomplete benchmark run for impl=${expected_impl}: iterations=${iterations} completed=${completed} expected=${REQUESTS}" >&2
+    echo "${output}" >&2
+    exit 1
+  fi
+
+  printf '%s\t%s\t%s\t%s\t%s\n' \
+    "${run_index}" "${expected_impl}" "${ns_op}" "${req_s}" "${completed}" >> "${RESULTS_TMP}"
 }
 
 run_one_impl() {
@@ -175,19 +185,22 @@ write_summary() {
       count[impl]++;
       ns_values[impl, count[impl]] = $3 + 0.0;
       req_values[impl, count[impl]] = $4 + 0.0;
+      completed_values[impl, count[impl]] = $5 + 0.0;
     }
 
     END {
       for (impl in count) {
         delete current_ns;
         delete current_req;
+        delete current_completed;
         for (i = 1; i <= count[impl]; i++) {
           current_ns[i] = ns_values[impl, i];
           current_req[i] = req_values[impl, i];
+          current_completed[i] = completed_values[impl, i];
         }
-        printf "summary_impl=%s runs=%d median_ns/op=%.1f median_req/s=%.0f\n",
-          impl, count[impl], median(current_ns, count[impl]),
-          median(current_req, count[impl]);
+        printf "summary_impl=%s runs=%d median_completed=%.0f median_ns/op=%.1f median_req/s=%.0f\n",
+          impl, count[impl], median(current_completed, count[impl]),
+          median(current_ns, count[impl]), median(current_req, count[impl]);
       }
     }
   ' "${RESULTS_TMP}" | sort

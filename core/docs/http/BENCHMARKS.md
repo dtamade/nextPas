@@ -46,6 +46,12 @@ median summary at the end of the raw output. This is the preferred mode for
 fresh local comparison rows because single-shot server results are visibly
 affected by scheduler noise.
 
+The runner treats incomplete workload execution as a harness failure: every raw
+row must report `iterations=<requests>` and `completed=<requests>`. The median
+summary repeats this guard as `median_completed=<requests>`, and nextPas rows
+also print `nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads so
+fast-path interpretation is explicit.
+
 ## Local Median Snapshot: 2026-06-05
 
 These rows were captured on the same host with:
@@ -1612,10 +1618,14 @@ prints `run=...` markers for raw rows, and emits a median summary:
 
 ```text
 summary=http.server.keepalive
-summary_impl=go runs=3 median_ns/op=55017.0 median_req/s=18176
-summary_impl=nextpas runs=3 median_ns/op=11431.0 median_req/s=87476
-summary_impl=rust runs=3 median_ns/op=9885.0 median_req/s=101153
+summary_impl=go runs=3 median_completed=50000 median_ns/op=55017.0 median_req/s=18176
+summary_impl=nextpas runs=3 median_completed=50000 median_ns/op=11431.0 median_req/s=87476
+summary_impl=rust runs=3 median_completed=50000 median_ns/op=9885.0 median_req/s=101153
 ```
+
+Each raw nextPas row for the current no-body H1 workloads also includes
+`nextpas_h1_path=fast`, which keeps the fast-gate interpretation visible in
+captured reports instead of relying on workload names alone.
 
 Focused RED/GREEN:
 
@@ -1633,9 +1643,16 @@ GREEN:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-22 total, 22 passed, 0 failed
+26 total, 26 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
+
+Later focused tightening made the same gate require `completed=<requests>` on
+every raw implementation row, `nextpas_h1_path=...` on nextPas rows, and
+`median_completed=<requests>` in stdout/report summaries. A small live smoke
+with `--requests 8 --threads 1 --workload adapter_no_url --runs 2` produced
+`completed=8`, `nextpas_h1_path=fast`, and `median_completed=8` for the
+comparison summary.
 
 Fresh local `no_url` 50k/4 3-run summary:
 

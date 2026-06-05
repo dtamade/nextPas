@@ -276,8 +276,11 @@ begin
   CheckContains(AOutput, 'impl=' + AImplementation, 'implementation marker');
   CheckContains(AOutput, 'iterations=' + AIterations, 'iterations marker');
   CheckContains(AOutput, 'threads=' + AThreads, 'threads marker');
+  CheckContains(AOutput, 'completed=' + AIterations, 'completed marker');
   CheckContains(AOutput, 'ns/op=', 'ns/op marker');
   CheckContains(AOutput, 'req/s=', 'req/s marker');
+  if AImplementation = 'nextpas' then
+    CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
 end;
 
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
@@ -836,6 +839,8 @@ begin
   CheckContains(LOutput, 'summary_impl=rust', 'rust summary marker');
   CheckContains(LOutput, 'median_ns/op=', 'median ns/op marker');
   CheckContains(LOutput, 'median_req/s=', 'median req/s marker');
+  CheckContains(LOutput, 'median_completed=8',
+    'median completed marker');
 
   Check(FileExists(LReportPath), 'server comparison runs report exists');
   LReport := LoadTextFile(LReportPath);
@@ -848,6 +853,8 @@ begin
     'runs report go summary marker');
   CheckContains(LReport, 'summary_impl=rust',
     'runs report rust summary marker');
+  CheckContains(LReport, 'median_completed=8',
+    'runs report median completed marker');
 end;
 
 procedure TestServerComparisonSnapshotSmallSmoke;

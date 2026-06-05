@@ -1,5 +1,28 @@
 # Findings & Decisions
 
+## 2026-06-05 http benchmark completion-marker contract
+
+- server comparison 之前虽然输出 `iterations`、`ns/op`、`req/s`，但 summary
+  层没有强制证明 comparator 实际完成了目标请求数；这会让部分请求失败或短读时的
+  速度数字失去解释力。
+- 本轮把 harness contract 收紧为：
+  - 每个 raw row 必须含 `iterations=<requests>` 与 `completed=<requests>`
+  - runner 会拒绝 `iterations` 或 `completed` 不等于目标请求数的 row
+  - summary/report 输出 `median_completed=<requests>`
+  - nextPas raw row 额外输出 `nextpas_h1_path=fast`，当前 no-body HTTP/1.1
+    workload 的 fast-path 解释不再只靠 workload 名称推断
+- 实现上没有改生产 HTTP server；只改 benchmark binary / runner / focused benchmark tests。
+- 一个修复点是 `run_server_comparison.sh` 的 awk `printf` 参数顺序：
+  `median_completed` 必须取 completed 列，而不是误取 `ns/op` median。
+- focused gate 结果：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  -> `26/26 passed`，`heaptrc: 0 unfreed memory blocks`。
+- live smoke 结果：
+  `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`
+  -> nextPas/Go/Rust raw rows 均有 `completed=8`，nextPas rows 有
+  `nextpas_h1_path=fast`，summary rows 均有 `median_completed=8`。
+- 复盘结论：这轮仍属于 benchmark harness correctness，不是生产性能优化；下一轮性能优化应基于更可信的 harness，优先审计 H1 热路径小函数 `inline`、URL materialization、response writer/drain、以及 Pascal llhttp adapter raw gap。
+
 ## 2026-06-04 http max-header 431 backpressure security proof
 
 - `test_http_security` 之前已经有 generic `MaxHeaderSize` 两条正向 raw-wire

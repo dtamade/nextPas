@@ -1,5 +1,38 @@
 # Progress Log
 
+## Session: 2026-06-05 http benchmark completion-marker contract
+
+- **Status:** completed.
+- Objective:
+  - tighten server comparison benchmark harness correctness
+  - make incomplete comparator runs fail the runner instead of producing misleading speed summaries
+  - expose nextPas H1 fast-path interpretation in raw benchmark output
+- Scope and safety:
+  - touched HTTP benchmark/test/docs paths plus this control-file entry
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - unrelated async/client/compiler/plans dirt remains untouched
+- Landed contract:
+  - `bench_http_server` nextPas output now prints `nextpas_h1_path=fast`
+  - `run_server_comparison.sh` parses `iterations` and `completed`
+  - runner rejects rows whose `iterations` or `completed` does not match requested count
+  - runner summary/report now includes `median_completed=<requests>`
+  - `test_http_benchmarks` locks raw `completed`, nextPas H1 path marker, and summary/report `median_completed`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `26/26 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`
+    - nextPas/Go/Rust raw rows: `completed=8`
+    - nextPas raw rows: `nextpas_h1_path=fast`
+    - summary rows: `median_completed=8`
+- Outcome:
+  - no production HTTP code was changed
+  - harness truth is stronger before the next optimization batch
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: benchmark harness correctness / comparator calibration
+  - next best batch: focused H1 hot-path optimization audit, including selective `inline` candidates, URL materialization costs, response writer/drain costs, and Pascal llhttp adapter raw gap
+
 ## Session: 2026-06-04 http max-header 431 backpressure security proof
 
 - **Status:** completed.

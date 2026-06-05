@@ -156,6 +156,13 @@ begin
     GThreads := GRequests;
 end;
 
+function ExpectedH1PathForWorkload: string;
+begin
+  { All current benchmark requests are no-body HTTP/1.1 requests that should
+    stay on the conservative H1 fast path. }
+  Result := 'fast';
+end;
+
 var
   LHandle: TPlatformThreadHandle;
   LHandles: array of TPlatformThreadHandle;
@@ -243,6 +250,7 @@ begin
   WriteLn('operation=http.server.keepalive');
   WriteLn('workload=', GWorkload);
   WriteLn('impl=nextpas');
+  WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload);
   WriteLn('iterations=', GRequests);
   WriteLn('threads=', GThreads);
   WriteLn('completed=', GSuccess);
