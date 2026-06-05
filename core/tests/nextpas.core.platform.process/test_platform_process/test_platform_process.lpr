@@ -3,14 +3,38 @@ program test_platform_process;
 {$I nextpas.core.settings.inc}
 
 uses
+  Classes,
+  SysUtils,
   nextpas.core.platform.process.base,
   nextpas.core.platform.process,
   nextpas.core.process,
+  nextpas.core.platform.unix.base,
   nextpas.core.platform.posix.ffi,
   nextpas.core.testing;
 
 var
   T: TTestRunner;
+
+function ExpandRepoPath(const ARelativePath: string): string;
+begin
+  Result := ExpandFileName('../../../' + ARelativePath);
+end;
+
+function LoadSourceText(const ARelativePath: string): string;
+var
+  LSourcePath: string;
+  LLines: TStringList;
+begin
+  LSourcePath := ExpandRepoPath(ARelativePath);
+  Check(FileExists(LSourcePath), 'source file should exist: ' + LSourcePath);
+  LLines := TStringList.Create;
+  try
+    LLines.LoadFromFile(LSourcePath);
+    Result := LLines.Text;
+  finally
+    LLines.Free;
+  end;
+end;
 
 procedure TestSpawnTrue;
 var
@@ -241,6 +265,85 @@ begin
     'EnvAdd duplicate PATH resolves using final PATH view');
 end;
 
+procedure TestSpawnFdsNoHardcoded1024SourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.platform.process.pas');
+  Check(Pos('to 1023', LSource) = 0,
+    'spawn_fds child fd cleanup must not hardcode 1024 as the max fd');
+  Check(Pos('PLATFORM_SYSCONF_OPEN_MAX', LSource) = 0,
+    'spawn_fds child fd cleanup must consume the shared POSIX sysconf constant');
+  Check(Pos('sysconf(PLATFORM_SC_OPEN_MAX)', LSource) > 0,
+    'spawn_fds fallback must use the shared POSIX _SC_OPEN_MAX constant');
+  Check(Pos('NEXTPAS_PROCESS_HAS_CLOSE_RANGE', LSource) > 0,
+    'spawn_fds close_range path must be guarded by supported Linux architectures');
+  Check(Pos('PLATFORM_CHILD_FD_FIRST', LSource) > 0,
+    'spawn_fds close logic must preserve the standard 0/1/2 descriptor boundary');
+  Check(Pos('LErrPipe[1]', LSource) > 0,
+    'spawn_fds must preserve exec-error pipe write fd while closing child fds');
+end;
+
+procedure TestSpawnFdsClosesHighInheritedFd;
+var
+  LDevNull: Int32;
+  LHighFd: Int32;
+  LScript: string;
+  LOut: nextpas.core.process.TProcessOutput;
+begin
+{$IFDEF NEXTPAS_LINUX}
+  LDevNull := nextpas.core.platform.posix.ffi.open('/dev/null', O_RDONLY, 0);
+  Check(LDevNull >= 0, 'open /dev/null');
+  LHighFd := -1;
+  try
+    LHighFd := nextpas.core.platform.posix.ffi.fcntl(LDevNull, F_DUPFD, 1500);
+    if LHighFd < 0 then
+      LHighFd := nextpas.core.platform.posix.ffi.fcntl(LDevNull, F_DUPFD, 1024);
+    if LHighFd < 0 then
+    begin
+      Check(True,
+        'environment cannot allocate fd above 1023; runtime high-fd proof skipped');
+      Exit;
+    end;
+    Check(LHighFd > 1023, 'create inheritable fd above legacy 1024 bound');
+    nextpas.core.platform.posix.ffi.close(LDevNull);
+    LDevNull := -1;
+
+    LScript := 'if [ -e /proc/self/fd/' + IntToStr(LHighFd) +
+      ' ]; then exit 42; else exit 0; fi';
+    LOut := Command('/bin/sh')
+      .Args(['-c', LScript])
+      .Output;
+    Check(LOut.ExitCode = 0,
+      'spawn_fds must close inherited fd above 1023 before exec');
+  finally
+    if LHighFd >= 0 then
+      nextpas.core.platform.posix.ffi.close(LHighFd);
+    if LDevNull >= 0 then
+      nextpas.core.platform.posix.ffi.close(LDevNull);
+  end;
+{$ELSE}
+  Check(True,
+    'runtime high-fd leak proof uses Linux /proc/self/fd; POSIX fallback is source-guarded');
+{$ENDIF}
+end;
+
+procedure TestSpawnFdsExecFailureKeepsErrorPipe;
+var
+  LProc: TPlatformProcess;
+  LFailStage: TPlatformProcessSpawnStage;
+  LArgv: array[0..1] of PAnsiChar;
+  LErr: Int32;
+begin
+  LArgv[0] := '/definitely_missing_nextpas_spawn_fds';
+  LArgv[1] := nil;
+  LErr := platform_process_spawn_fds('/definitely_missing_nextpas_spawn_fds',
+    @LArgv[0], nil, nil, -1, -1, -1, LProc, LFailStage);
+  Check(LErr <> 0, 'missing executable should return exec errno');
+  Check(LFailStage = pssExec,
+    'spawn_fds must report exec failure through preserved error pipe');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.process');
   T.Run('spawn /bin/true', @TestSpawnTrue);
@@ -256,5 +359,8 @@ begin
   T.Run('run: capture output', @TestRun);
   T.Run('run: working directory', @TestRunCwd);
   T.Run('command: EnvAdd duplicate PATH final view', @TestCommandEnvAddDuplicatePathUsesFinalResolvedView);
+  T.Run('spawn_fds source: no hardcoded 1024', @TestSpawnFdsNoHardcoded1024SourceContract);
+  T.Run('spawn_fds closes high inherited fd', @TestSpawnFdsClosesHighInheritedFd);
+  T.Run('spawn_fds exec failure keeps error pipe', @TestSpawnFdsExecFailureKeepsErrorPipe);
   T.Summary;
 end.

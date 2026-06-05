@@ -267,6 +267,12 @@ type
 
 {$packrecords c}
 const
+{$IF defined(NEXTPAS_LINUX) or defined(NEXTPAS_ANDROID)}
+  PLATFORM_SC_OPEN_MAX = 4;
+{$ELSEIF defined(NEXTPAS_MACOS) or defined(NEXTPAS_FREEBSD)}
+  PLATFORM_SC_OPEN_MAX = 5;
+{$ENDIF}
+
   AF_INET     = cint(2);
 {$IFDEF NEXTPAS_LINUX}
   AF_INET6    = cint(10);

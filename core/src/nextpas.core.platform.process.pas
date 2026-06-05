@@ -36,16 +36,84 @@ function platform_process_pid(const AProc: TPlatformProcess): Int32;
 implementation
 
 {$IFDEF NEXTPAS_UNIX}
+{$IF defined(NEXTPAS_LINUX) and (defined(NEXTPAS_X86_64) or defined(NEXTPAS_AARCH64))}
+  {$DEFINE NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
+{$ENDIF}
 uses
   nextpas.core.platform.posix.base,
   nextpas.core.platform.posix.ffi
 {$IFDEF NEXTPAS_LINUX}
   , nextpas.core.platform.linux.base
 {$ENDIF}
+{$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
+  , nextpas.core.platform.linux.modern
+{$ENDIF}
   ;
 
 const
   WNOHANG = 1;
+  PLATFORM_CHILD_FD_FIRST = 3;
+  PLATFORM_CHILD_FD_FALLBACK_MAX = 65536;
+
+function ChildFdCloseMax: Int32;
+var
+  LOpenMax: PtrInt;
+begin
+  LOpenMax := sysconf(PLATFORM_SC_OPEN_MAX);
+  if LOpenMax <= 3 then
+    Exit(PLATFORM_CHILD_FD_FALLBACK_MAX);
+  if LOpenMax > High(Int32) then
+    Exit(High(Int32));
+  Result := Int32(LOpenMax) - 1;
+end;
+
+procedure CloseChildFdLoop(APreserveFd: Int32);
+var
+  LFd: Int32;
+  LLastFd: Int32;
+begin
+  LLastFd := ChildFdCloseMax;
+  for LFd := PLATFORM_CHILD_FD_FIRST to LLastFd do
+    if LFd <> APreserveFd then
+      close(LFd);
+end;
+
+{$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
+function TryCloseRangeSegment(AFirst, ALast: cuint): Boolean;
+begin
+  if AFirst > ALast then
+    Exit(True);
+  Result := close_range(AFirst, ALast, 0) = 0;
+end;
+
+function TryCloseChildFdsWithCloseRange(APreserveFd: Int32): Boolean;
+var
+  LAfterPreserve: cuint;
+begin
+  if APreserveFd > PLATFORM_CHILD_FD_FIRST then
+    Result := TryCloseRangeSegment(PLATFORM_CHILD_FD_FIRST,
+      cuint(APreserveFd - 1))
+  else
+    Result := True;
+  if not Result then
+    Exit;
+
+  if APreserveFd >= PLATFORM_CHILD_FD_FIRST then
+    LAfterPreserve := cuint(APreserveFd) + 1
+  else
+    LAfterPreserve := PLATFORM_CHILD_FD_FIRST;
+  Result := TryCloseRangeSegment(LAfterPreserve, High(cuint));
+end;
+{$ENDIF}
+
+procedure CloseChildFdsExcept(APreserveFd: Int32);
+begin
+{$IFDEF NEXTPAS_PROCESS_HAS_CLOSE_RANGE}
+  if TryCloseChildFdsWithCloseRange(APreserveFd) then
+    Exit;
+{$ENDIF}
+  CloseChildFdLoop(APreserveFd);
+end;
 
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
@@ -161,7 +229,6 @@ var
   LErrPipe: array[0..1] of Int32;
   LWire: TPosixSpawnWireError;
   LRead: ssize_t;
-  LFd: Int32;
 begin
   FillChar(AProc, SizeOf(AProc), 0);
   AFailStage := pssNone;
@@ -220,9 +287,7 @@ begin
         posix_exit(127);
       end;
 
-    for LFd := 3 to 1023 do
-      if LFd <> LErrPipe[1] then
-        close(LFd);
+    CloseChildFdsExcept(LErrPipe[1]);
 
     if AEnvp <> nil then
       execve(APath, AArgv, AEnvp)
