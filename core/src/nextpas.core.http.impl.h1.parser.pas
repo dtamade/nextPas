@@ -72,6 +72,7 @@ type
     FMethod: THttpMethod;
     FStatusCode: THttpStatus;
     FVersion: THttpVersion;
+    FHeaderStore: THttpHeaders;
     FUrl: string;
     FHeaders: IHttpHeaders;
     FBody: TBytes;
@@ -225,7 +226,7 @@ begin
   if LSelf.FCurrentField <> '' then
   begin
     if (p0^.flags and F_TRAILING) = 0 then
-      LSelf.FHeaders.Add(LSelf.FCurrentField, LSelf.FCurrentValue);
+      LSelf.FHeaderStore.AddParsed(LSelf.FCurrentField, LSelf.FCurrentValue);
     if (p0^.flags and F_TRAILING) <> 0 then
       Inc(LSelf.FTrailerBytes, 4);
   end;
@@ -323,7 +324,8 @@ begin
   inherited Create;
   FParserType := AType;
   FSkipBody := ASkipBody and (AType = ptResponse);
-  FHeaders := NewHttpHeaders;
+  FHeaderStore := THttpHeaders.Create;
+  FHeaders := FHeaderStore;
   FComplete := False;
   FError := False;
   FMethod := hmGet;
@@ -644,7 +646,7 @@ begin
   FStatusCode := 0;
   FVersion := hvHttp11;
   FUrl := '';
-  FHeaders.Clear;
+  FHeaderStore.Clear;
   FBodySize := 0;
   FHeadersComplete := False;
   FComplete := False;

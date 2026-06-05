@@ -25,11 +25,14 @@ type
     class function NeedsNormalize(const AName: string): Boolean; static;
     class function Normalize(const AName: string): string; static;
     class function NormalizeIfNeeded(const AName: string): string; static;
+    class function NormalizeParsedName(const AName: string): string; static;
     class function ValidateNameAndNeedsNormalize(const AName: string): Boolean; static;
     class procedure ValidateValue(const AValue: string); static;
   public
     procedure Set_(const AName, AValue: string);
     procedure Add(const AName, AValue: string);
+    // Trusted parser path: name/value syntax has already been validated.
+    procedure AddParsed(const AName, AValue: string);
     function Get(const AName: string): string;
     function GetAll(const AName: string): TStringArray;
     function Has(const AName: string): Boolean;
@@ -98,6 +101,16 @@ begin
     Result := Normalize(AName)
   else
     Result := AName;
+end;
+
+class function THttpHeaders.NormalizeParsedName(const AName: string): string;
+var
+  LI: Int32;
+begin
+  Result := AName;
+  for LI := 1 to Length(Result) do
+    if (Result[LI] >= 'A') and (Result[LI] <= 'Z') then
+      Result[LI] := Chr(Ord(Result[LI]) + 32);
 end;
 
 class function THttpHeaders.ValidateNameAndNeedsNormalize(
@@ -203,6 +216,14 @@ begin
   ValidateValue(AValue);
   EnsureCapacity(FCount + 1);
   FEntries[FCount].Name := LNorm;
+  FEntries[FCount].Value := AValue;
+  Inc(FCount);
+end;
+
+procedure THttpHeaders.AddParsed(const AName, AValue: string);
+begin
+  EnsureCapacity(FCount + 1);
+  FEntries[FCount].Name := NormalizeParsedName(AName);
   FEntries[FCount].Value := AValue;
   Inc(FCount);
 end;

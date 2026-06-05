@@ -235,6 +235,40 @@ begin
   CheckEqual('d1', LH.Get('X-D'), 'reused set/get');
 end;
 
+procedure TestParsedAddCanonicalizesParserValidatedHeaders;
+var
+  LStore: THttpHeaders;
+  LH: IHttpHeaders;
+  LAll: TStringArray;
+  LSeen: string;
+begin
+  LStore := THttpHeaders.Create;
+  LH := LStore;
+
+  LStore.AddParsed('Content-Type', 'text/plain');
+  LStore.AddParsed('X-Custom', 'a');
+  LStore.AddParsed('x-custom', 'b');
+
+  CheckEqual(Int64(3), Int64(LH.Count), 'parsed add preserves duplicate entries');
+  CheckEqual('text/plain', LH.Get('CONTENT-TYPE'), 'parsed add canonical lookup');
+
+  LAll := LH.GetAll('X-Custom');
+  CheckEqual(Int64(2), Int64(Length(LAll)), 'parsed add duplicate count');
+  CheckEqual('a', LAll[0], 'parsed add first duplicate value');
+  CheckEqual('b', LAll[1], 'parsed add second duplicate value');
+
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('content-type=text/plain|x-custom=a|x-custom=b', LSeen,
+    'parsed add stores canonical lowercase names');
+end;
+
 procedure ExpectHeaderError(const ALabel: string; const AUseSet: Boolean;
   const AName, AValue: string);
 var
@@ -279,6 +313,8 @@ begin
   T.Run('Del non-existent is no-op', @TestDelNonExistentIsNoOp);
   T.Run('Compaction preserves visible order', @TestCompactionPreservesVisibleOrder);
   T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
+  T.Run('Parsed add canonicalizes parser validated headers',
+    @TestParsedAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
   T.Summary;
 end.

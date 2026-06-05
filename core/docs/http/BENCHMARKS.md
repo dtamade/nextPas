@@ -515,6 +515,56 @@ optimization should therefore prioritize reducing ordinary-path header
 materialization before spending time on body copy or hand-editing the
 Pascal-translated llhttp state machine.
 
+## Optimization Evidence: Trusted Parser Header Insertion
+
+On 2026-06-05 local time, `TH1Parser` started storing parser-validated headers
+through concrete `THttpHeaders.AddParsed`. This keeps `IHttpHeaders` unchanged
+while avoiding repeated external-input validation on header names and values
+that llhttp has already accepted. The helper still stores canonical lowercase
+header names so case-insensitive lookups and duplicate header order stay stable.
+
+Focused RED/GREEN:
+
+```text
+RED: make -C tests/nextpas.core.http/test_http_headers clean test
+test_http_headers.lpr(...): Error: Identifier idents no member "AddParsed"
+
+GREEN:
+make -C tests/nextpas.core.http/test_http_headers clean test
+16 total, 16 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_h1parser clean test
+89 total, 89 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+274 total, 274 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+9 total, 9 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Parser benchmark sanity:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+bench_max_iters=100000
+adapter header add 10 headers ns/op=866.7
+full llhttp adapter 10 headers ns/op=3030.8
+full llhttp adapter POST 1KB ns/op=1268.4
+full llhttp adapter pipeline 10 reqs ns/op=6007.6
+```
+
+Compared with the previous adapter-breakdown snapshot, header insertion dropped
+from `1220.9 ns/op` to `866.7 ns/op`, full 10-header adapter parsing dropped
+from `3378.2 ns/op` to `3030.8 ns/op`, and POST 1KB dropped from `1417.2 ns/op`
+to `1268.4 ns/op`. This confirms the previous direction: the next remaining
+adapter target is string span materialization rather than body copying.
+
 ## Optimization Evidence: Parser Header Container Reuse
 
 On 2026-06-05 local time, `IHttpHeaders` gained a focused `Clear` contract and

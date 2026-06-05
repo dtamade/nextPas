@@ -1,55 +1,53 @@
-# Findings: H1 parser adapter materialization breakdown
+# Findings: H1 parser trusted header add
 
 ## Scope
 
-本轮只改 H1 parser benchmark 与 benchmark smoke，不改 HTTP public facade API，不改 wire
-contract。目标是拆分 full `IH1Parser` adapter 相比 raw/no-op llhttp 的额外成本。
-
-## Subagent / local conclusion
-
-- Pascal translated llhttp raw 本体相比 C llhttp 有真实差距，代表性 raw/no-op rows 约
-  `1.4x-1.6x`。
-- 但 full adapter 明显更慢，当前更大的可控成本在 URL/header/body materialization。
-- 巨型 llhttp 翻译状态机不适合手工直接改；如果 raw gap 后续仍稳定，应走 profile/codegen
-  A/B，而不是手写 patch。
+本轮是窄生产优化：新增 concrete `THttpHeaders.AddParsed`，让 `TH1Parser` 对 llhttp 已验证的
+header 走 parser-trusted insertion path。它不改变 `IHttpHeaders` interface、不改变 HTTP facade、
+不改变 wire contract。
 
 ## RED evidence
 
-新增 focused smoke 后先跑：
+新增 focused test 后先跑：
 
 ```sh
-NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
-  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+make -C tests/nextpas.core.http/test_http_headers clean test
 ```
 
 失败点：
 
-- `adapter cost: span append 10 headers`
-- `adapter cost: header add 10 headers`
-- `adapter cost: body copy 1KB`
+```text
+test_http_headers.lpr(...): Error: Identifier idents no member "AddParsed"
+```
 
-实际输出仍只有 raw/no-op/full adapter/fast rows，证明 benchmark 还不能拆分 adapter 成本。
+这证明新增 parser-trusted concrete helper 尚不存在。
 
 ## Implemented change
 
-- `bench_h1parser` 新增 `adapter materialization costs` 分组。
-- 新增 synthetic rows：
-  - `adapter cost: span append 10 headers`
-  - `adapter cost: header add 10 headers`
-  - `adapter cost: body copy 1KB`
-- `test_http_benchmarks` 的 H1 parser smoke 现在检查这些 rows，防止后续误删。
+- `THttpHeaders.AddParsed`：用于 parser-validated header，保持 duplicate entries，存储 canonical lowercase name。
+- `THttpHeaders.NormalizeParsedName`：single-pass lowercase，避免 public `Add` 的 validation + normalization 双路径成本。
+- `TH1Parser` 现在持有 parser-owned concrete `FHeaderStore: THttpHeaders`，`GetHeaders` 仍返回 `IHttpHeaders`。
+- header callback complete 时用 `FHeaderStore.AddParsed`；trailer fields 仍不污染普通 headers。
+- `bench_h1parser` 的 `adapter cost: header add 10 headers` row 改为测 parser trusted header-add path。
 
 ## Verification
 
-- Focused benchmark gate:
+- Headers focused gate:
+  - `make -C tests/nextpas.core.http/test_http_headers clean test`
+  - `16 total, 16 passed, 0 failed`
+  - heaptrc: `0 unfreed memory blocks`
+- H1 parser focused gate:
+  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
+  - `89 total, 89 passed, 0 failed`
+  - heaptrc: `0 unfreed memory blocks`
+- Server focused gate:
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `274 total, 274 passed, 0 failed`
+  - heaptrc: `0 unfreed memory blocks`
+- Benchmark smoke:
   - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
   - `9 total, 9 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
-
-中间错误：
-
-- 第一次 GREEN build 失败：`Identifier not found "TBytes"`。
-- 修复：benchmark 程序引入 `nextpas.core.base`。
 
 ## Benchmark sanity
 
@@ -60,25 +58,21 @@ make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 Evidence:
 
 - `bench_max_iters=100000`
-- raw translated llhttp 10 headers: `753.6 ns/op`
-- no-op callback 10 headers: `786.6 ns/op`
-- adapter span append 10 headers: `801.1 ns/op`
-- adapter header add 10 headers: `1220.9 ns/op`
-- adapter body copy 1KB: `33.1 ns/op`
-- full llhttp adapter 10 headers: `3378.2 ns/op`
-- fast 10 headers: `1381.5 ns/op`
+- adapter header add 10 headers: `866.7 ns/op` vs previous `1220.9 ns/op`
+- full llhttp adapter 10 headers: `3030.8 ns/op` vs previous `3378.2 ns/op`
+- full llhttp adapter POST 1KB: `1268.4 ns/op` vs previous `1417.2 ns/op`
+- full llhttp adapter pipeline 10 reqs: `6007.6 ns/op` vs previous `6254.6 ns/op`
+- body copy remains tiny: `31.5 ns/op`
 
 ## Current conclusion
 
-方向没有走偏：本轮是 performance 阶段的证据拆分，不改变接口或 wire contract。它服务于后续
-把 nextPas HTTP 追到 Go/Rust 标准的真实优化，不再扩大同型 correctness 测试。
-
-breakdown 结论很明确：body copy 不是当前主要问题；10 headers 的 full adapter 成本主要由
-header string append 和 `THttpHeaders.Add` 叠加形成。下一批生产优化应优先减少普通路径的
-header materialization，而不是优先动 body copy 或手改 llhttp 状态机。
+方向没有走偏：本轮优化命中上一批证据指出的 header materialization 大头，并保持 parser/server
+contract 绿色。Pascal translated llhttp raw gap 仍保留为后续 profile/codegen 专项；下一批最优方向
+继续减少 header string span append 或把普通 server fast path 的 header access 进一步 lazy 化。
 
 ## Remaining gaps / risks
 
-- breakdown rows 是 synthetic microbench，不代表完整 server throughput。
-- 如果后续做 zero-copy/lazy span，必须处理 llhttp callback span 指向输入 buffer 的生命周期。
-- 本轮不声明生产吞吐提升。
+- `AddParsed` 是 trusted helper，调用方必须只用于 parser-validated header；public `Add`/`Set_`
+  仍负责外部输入 validation。
+- `AppendSpan` string materialization 仍约 `787.7 ns/op`，是下一批更大的剩余 adapter 成本。
+- 本轮 benchmark 是本机 microbench，不声明永久 server throughput 排名。

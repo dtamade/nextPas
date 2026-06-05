@@ -343,24 +343,25 @@ end;
 procedure BenchAdapterHeaderAdd10Headers(aIters: Int64);
 var
   LIt: Int64;
-  LHeaders: IHttpHeaders;
+  LHeaders: THttpHeaders;
 begin
-  LHeaders := NewHttpHeaders;
+  LHeaders := THttpHeaders.Create;
   for LIt := 1 to aIters do
   begin
     LHeaders.Clear;
-    LHeaders.Add('Host', 'example.com');
-    LHeaders.Add('User-Agent', 'nextpas/1.0');
-    LHeaders.Add('Accept', 'application/json');
-    LHeaders.Add('Accept-Encoding', 'gzip, deflate');
-    LHeaders.Add('Accept-Language', 'en-US');
-    LHeaders.Add('Connection', 'keep-alive');
-    LHeaders.Add('Cache-Control', 'no-cache');
-    LHeaders.Add('X-Request-Id', 'abc123');
-    LHeaders.Add('X-Forwarded-For', '10.0.0.1');
-    LHeaders.Add('Authorization', 'Bearer token123');
+    LHeaders.AddParsed('Host', 'example.com');
+    LHeaders.AddParsed('User-Agent', 'nextpas/1.0');
+    LHeaders.AddParsed('Accept', 'application/json');
+    LHeaders.AddParsed('Accept-Encoding', 'gzip, deflate');
+    LHeaders.AddParsed('Accept-Language', 'en-US');
+    LHeaders.AddParsed('Connection', 'keep-alive');
+    LHeaders.AddParsed('Cache-Control', 'no-cache');
+    LHeaders.AddParsed('X-Request-Id', 'abc123');
+    LHeaders.AddParsed('X-Forwarded-For', '10.0.0.1');
+    LHeaders.AddParsed('Authorization', 'Bearer token123');
   end;
   GSink := GSink + SizeUInt(LHeaders.Count);
+  LHeaders.Free;
 end;
 
 procedure EnsureBenchBodyCapacity(var ABody: TBytes; const ARequired: SizeUInt);
