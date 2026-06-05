@@ -1,35 +1,35 @@
-# Task Plan: C llhttp comparator proof track
+# Task Plan: H1 fast parser Content-Length hot-path trim
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-用户指出 Pascal translated llhttp 可能存在性能问题；本轮不再停留在栈内
-raw/no-op/adapter 推断，而是新增 same-payload C llhttp comparator，直接对照
-Pascal 翻译版 state machine 与 C llhttp `9.4.1` 的本机吞吐差距。
+上一批 C llhttp comparator 证明 Pascal translated llhttp 与 adapter/materialization
+都需要继续优化；本轮聚焦当前 server fast path 的一个明确重复成本：
+`FastParseRequest` 在 header scan 中已经识别 `Content-Length`，但随后又通过
+`Headers.Get('Content-Length')` 做一次额外 lookup / normalization / scan。
 
-本轮不改公开 API，不改生产 HTTP 语义，不写 inbox。工作性质是 benchmark/test/docs
-证据补齐。
+本轮不改公开 API，不改 HTTP wire contract，不写 inbox。工作性质是窄生产性能修正
+加 focused regression。
 
 ## Checklist
 
-- [x] 复核 `docs/design-conventions.md`、HTTP coverage/control 文件和 `git status`。
-- [x] 保留 RED 证据：`bench_h1parser/compare_c` 入口不存在时 `make ... run` 失败。
-- [x] 新增 `bench_h1parser/compare_c` C llhttp comparator，不 vendor llhttp。
-- [x] 给父级 `bench_h1parser` Makefile 增加 `run-c` 代理目标。
-- [x] 给 `test_http_benchmarks` 增加 missing `LLHTTP_ROOT` diagnostic smoke。
-- [x] 给 `test_http_benchmarks` 增加 `NEXTPAS_LLHTTP_ROOT` opt-in C comparator smoke。
-- [x] 本机用 llhttp `9.4.1` 跑 C comparator 与 Pascal comparator，记录方向性对照。
+- [x] 复核 `docs/design-conventions.md`、HTTP benchmark/coverage/control 文件和 `git status`。
+- [x] 建立基线：`bench_h1parser` 显示 fast path 当前比 adapter 慢，尤其 simple GET / 10 headers / pipeline。
+- [x] 做负收益实验：禁用 server fast path 后 `bench_server` 下降，撤销该实验，不提交。
+- [x] 新增 invalid `Content-Length` fast fallback focused test。
+- [x] 实现 `Content-Length` scan-time parse/cache，删除后续 `Headers.Get('Content-Length')`。
+- [x] 跑 `test_http_h1fast` focused gate + heaptrc。
+- [x] 跑 `bench_h1parser`，确认 fast parser rows 有方向性改善。
+- [x] 跑 `test_http_server` focused gate + heaptrc。
 - [x] 更新 `findings.md`、`progress.md`、`docs/http/BENCHMARKS.md`。
-- [x] 跑聚焦验证：`diff --check`、Pascal bench、C bench、benchmark smoke + heaptrc。
 - [x] path-limited commit。
 
 ## Scope
 
 本轮只允许修改：
 
-- `benchmarks/nextpas.core.http/bench_h1parser/Makefile`
-- `benchmarks/nextpas.core.http/bench_h1parser/compare_c/*`
-- `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
+- `src/nextpas.core.http.impl.h1.fast.pas`
+- `tests/nextpas.core.http/test_http_h1fast/test_http_h1fast.lpr`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
@@ -37,14 +37,14 @@ Pascal 翻译版 state machine 与 C llhttp `9.4.1` 的本机吞吐差距。
 
 ## Current conclusion
 
-本机对照显示 C llhttp 在 10 headers、POST、pipeline 与 no-op callback rows 上通常快于
-Pascal translated llhttp，差距约 `1.4x-1.6x`；raw simple GET 这类极短输入噪声敏感，
-不能单独当成 parity 结论。这说明 Pascal 翻译版性能确实需要进入优化路线；但 nextPas
-完整 `IH1Parser` adapter 相比 raw state machine 的差距仍更大，当前最高收益点仍是
-adapter/materialization、header/body storage、server hot path 与后续 zero-copy 路线。
+`FastParseRequest` 的重复 `Content-Length` lookup 可以安全删除，parser microbench
+显示 fast rows 改善：simple GET `856.4 -> 754.9 ns/op`，10 headers
+`3679.0 -> 3429.8 ns/op`，POST 1KB `1500.2 -> 1374.2 ns/op`，pipeline
+`8685.5 -> 7581.2 ns/op`。server full-chain 单次 benchmark 噪声较大，本轮不声明
+server req/s 已提升。
 
 ## Intended outcome
 
-- 用户关于 “Pascal llhttp 翻译移植可能慢” 的问题有可复跑 C comparator 证据。
-- 后续优化路线不再凭感觉二选一：先量化 C/Pascal state machine 差距，再继续削减
-  adapter/server 额外成本。
+- 减少 fast parser 自身重复 header lookup 成本。
+- 保留 server fast path，不做负收益禁用。
+- 为下一步更大的 lazy-header / adapter materialization 优化打基础。

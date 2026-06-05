@@ -139,6 +139,18 @@ begin
   Check(not LR.Success, 'should fail — duplicate content-length fallback');
 end;
 
+procedure TestInvalidContentLengthFallback;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Content-Length: nope'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, 'should fail — invalid content-length fallback');
+end;
+
 procedure TestIncompleteBodyFallback;
 var
   LReq: AnsiString;
@@ -306,6 +318,7 @@ begin
   T.Run('Chunked fallback', @TestChunkedFallback);
   T.Run('Unsupported transfer-encoding fallback', @TestUnsupportedTransferEncodingFallback);
   T.Run('Duplicate Content-Length fallback', @TestDuplicateContentLengthFallback);
+  T.Run('Invalid Content-Length fallback', @TestInvalidContentLengthFallback);
   T.Run('Incomplete body fallback', @TestIncompleteBodyFallback);
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);

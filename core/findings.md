@@ -1,111 +1,99 @@
-# Findings: C llhttp comparator proof track
+# Findings: H1 fast parser Content-Length hot-path trim
 
 ## Scope
 
-本轮是 `nextpas.core.http` 的 H1 parser performance proof slice，不改公开 API，不改
-生产 HTTP wire contract。目标是回答用户指出的核心疑点：Pascal translated llhttp
-是否比 C llhttp 慢，以及当前优化路线是否应继续优先处理 adapter/materialization。
+本轮是 `nextpas.core.http` H1 fast parser 的窄性能修正，不改公开 API，不改
+HTTP wire contract。目标是减少 fast path 中一个明确重复的 `Content-Length`
+lookup / normalization / scan。
 
-## RED evidence
+## Baseline evidence
 
-上一阶段进入本批时，C comparator 入口不存在：
-
-```sh
-make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c run
-```
-
-结果是目录/目标缺失。这证明当前仓库还不能直接做 Pascal translated llhttp 与 C
-llhttp 的 same-payload 对照。
-
-## Comparator design
-
-新增 `benchmarks/nextpas.core.http/bench_h1parser/compare_c`：
-
-- 不 vendor llhttp 源码。
-- 使用 `LLHTTP_ROOT` 指向外部 llhttp `9.4.1` source tree。
-- 支持 flat source layout、`include/src` layout、以及 generated build layout。
-- 镜像 Pascal `bench_h1parser` 的 payload：
-  - simple GET：35 bytes
-  - 10 headers：286 bytes
-  - POST 1KB：1130 bytes
-  - pipeline：350 bytes，10 requests
-- 镜像 raw/no-op/pipeline rows：
-  - raw no callbacks：simple GET、10 headers、POST 1KB
-  - raw pipeline pause-only
-  - no-op callbacks：simple GET、10 headers、POST 1KB、pipeline
-
-`test_http_benchmarks` 现在直接锁住两条 benchmark contract：
-
-- missing `LLHTTP_ROOT` 必须给出清晰 diagnostic。
-- 设置 `NEXTPAS_LLHTTP_ROOT` 时会 opt-in 跑真实 C comparator smoke，并校验标题、
-  llhttp version 与代表性 rows。
-
-## Fresh local evidence
-
-本机 llhttp source：
-
-```text
-LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
-version=9.4.1
-```
-
-Pascal translated llhttp / adapter：
+当前 `bench_h1parser` fresh baseline：
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| workload | Pascal translated raw ns/op | Pascal no-op ns/op | nextPas adapter ns/op |
-| --- | ---: | ---: | ---: |
-| simple GET | 222.0 | 221.5 | 623.0 |
-| 10 headers | 779.5 | 785.7 | 3341.4 |
-| POST 1KB | 437.1 | 454.5 | 1429.1 |
-| pipeline 10 reqs | 2203.0 | 2159.2 | 6273.4 |
+关键行：
 
-C llhttp `9.4.1`:
+| workload | adapter ns/op | fast ns/op |
+| --- | ---: | ---: |
+| simple GET | 632.5 | 856.4 |
+| 10 headers | 3367.5 | 3679.0 |
+| POST 1KB | 1454.5 | 1500.2 |
+| pipeline 10 reqs | 6412.8 | 8685.5 |
+
+这说明 standalone fast parser 当前没有达到“fast”预期，尤其 simple GET / pipeline
+明显慢于 adapter。
+
+## Negative experiment
+
+我先做了一个不提交的实验：在 server integration 层禁用 fast path。
+
+- baseline `bench_server`: `86066 req/s`
+- disabled fast path `bench_server`: `82888 req/s`
+
+结论：禁用 fast path 不是最佳方案，已撤销。即使 standalone parser rows 较慢，
+server full-chain 仍可能受分配、request handoff、响应路径和调度噪声影响；不能直接把
+microbench 结论等价成 server path 禁用策略。
+
+## Implemented change
+
+旧 `FastParseRequest` 行为：
+
+1. header scan 中已识别 `content-length`，只记录是否见过。
+2. 所有 headers 都加入 `IHttpHeaders`。
+3. header scan 后再调用 `Result.Headers.Get('Content-Length')`。
+4. `Get` 会做 uppercase normalize 判断和线性扫描，然后再 parse int。
+
+新行为：
+
+- 在 header scan 中遇到 `content-length` 时立即用 value span 做 `ParseInt64Fast`。
+- 缓存 parsed `LContentLength`。
+- header scan 结束后直接使用缓存值计算 `Consumed`。
+- duplicate `Content-Length` 仍 fallback。
+- invalid `Content-Length` 仍 fallback。
+- incomplete body 仍 fallback。
+
+新增 focused regression：
+
+- `test_http_h1fast`: invalid `Content-Length: nope` 必须 `Success=False`。
+
+## Fresh local evidence
+
+After change:
 
 ```sh
-make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c \
-  clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-| workload | C raw ns/op | C no-op ns/op |
+| workload | before fast ns/op | after fast ns/op |
 | --- | ---: | ---: |
-| simple GET | 279.4 | 138.2 |
-| 10 headers | 561.5 | 544.7 |
-| POST 1KB | 299.1 | 283.4 |
-| pipeline 10 reqs | 1408.2 | 1401.7 |
+| simple GET | 856.4 | 754.9 |
+| 10 headers | 3679.0 | 3429.8 |
+| POST 1KB | 1500.2 | 1374.2 |
+| pipeline 10 reqs | 8685.5 | 7581.2 |
 
-## Interpretation
+`bench_server` after change produced two local rows:
 
-- raw simple GET 是极短输入，当前 `MAX_ITERS=1000` 下噪声敏感；这次 fresh run 里
-  Pascal raw simple GET 反而快于 C raw simple GET，不能拿这一行单独下 parity 结论。
-- 10 headers、POST 1KB、pipeline 与 no-op callback rows 更能代表实际 parser 工作；
-  这些行显示 Pascal translated llhttp 相比 C llhttp 通常慢约 `1.4x-1.6x`。
-- nextPas 完整 `IH1Parser` adapter 仍是更大的栈内成本：
-  - 10 headers adapter/C raw 约 `5.95x`
-  - POST 1KB adapter/C raw 约 `4.78x`
-  - pipeline adapter/C raw 约 `4.46x`
-  - simple GET adapter/C raw 约 `2.23x`
-- 因此用户的怀疑是有依据的：Pascal llhttp translation 需要进入性能路线。
-  但最高收益不应只盯 state machine；adapter/header/body materialization 与 server
-  hot path 仍然是更大的优化池。
+- clean run: `74197 req/s`
+- immediate second run: `85182 req/s`
+
+这些 server rows 噪声明显，本轮不把它们写成 server throughput win。可靠结论只限于
+fast parser microbench：重复 lookup 已删除，fast rows 有方向性改善。
+
+## Verification
+
+- `make -C tests/nextpas.core.http/test_http_h1fast clean test`
+  - `19 total, 19 passed, 0 failed`
+  - heaptrc: `0 unfreed memory blocks`
+- `make -C tests/nextpas.core.http/test_http_server clean test`
+  - `274 total, 274 passed, 0 failed`
+  - heaptrc: `0 unfreed memory blocks`
 
 ## Remaining gaps / risks
 
-- 当前 C comparator 是本机 directional benchmark，不是跨平台永久排名。
-- comparator 依赖外部 `LLHTTP_ROOT`，测试中的真实 C run 是 opt-in，避免仓库 vendor
-  或强制依赖外部源码。
-- `MAX_ITERS=1000` 对短输入噪声仍偏高，后续正式 benchmark 轮次应提升 runner 统计质量。
-- 如果要继续追平 Go/Rust，应把优化路线分为：
-  1. C/Pascal state machine parity。
-  2. adapter materialization / header storage / body buffer / callback span cost。
-  3. server full-chain worker handoff、drain、keep-alive 与 future evented backend。
-
-## Next optimization targets
-
-1. 先把 benchmark runner 的统计质量提高：更高 cap、可配置 iterations、报告环境和 commit。
-2. 深挖 Pascal translated llhttp 热点：record layout、callback cdecl 成本、branch/cache locality、
-   bounds/string conversion、可能的 generated-table/inline 策略。
-3. 并行继续削 adapter/materialization：header insert/lookup、body reader snapshot、
-   URL/header span zero-copy、request object reuse。
+- Fast parser 仍会 eagerly materialize `IHttpHeaders`，这仍是主要成本。
+- Fast parser simple GET 仍慢于 optimized adapter simple GET；下一步要考虑 lazy header
+  snapshot 或把 server policy flags 从 fast scan 直接传给 server，减少 post-parse lookups。
+- Server benchmark 当前噪声较大；正式性能判断需要改进 runner 统计质量。

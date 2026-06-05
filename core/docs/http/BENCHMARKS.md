@@ -89,6 +89,43 @@ The same local 50k/4 comparison before the fast path measured nextPas at
 `14736 ns/op` / `67857 req/s`, so this slice narrows the gap to the Rust
 std-only comparator without changing public HTTP APIs.
 
+## Optimization Evidence: Fast Parser Content-Length Cache
+
+On 2026-06-05 local time, `FastParseRequest` stopped doing a second
+`Headers.Get('Content-Length')` lookup after it had already identified the
+`Content-Length` header during its header scan. The value is now parsed from
+the original header value span and cached for the later `Consumed` calculation.
+
+This keeps the public parser result unchanged:
+
+- duplicate `Content-Length` still falls back to llhttp/server validation
+- invalid `Content-Length` still falls back
+- incomplete body still falls back
+- valid body offsets and `IHttpHeaders` behavior remain unchanged
+
+Parser microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| fast workload | before ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 856.4 | 754.9 |
+| 10 headers | 3679.0 | 3429.8 |
+| POST 1KB body | 1500.2 | 1374.2 |
+| pipeline 10 reqs | 8685.5 | 7581.2 |
+
+The same batch also tested a server-side disable-fast-path experiment and
+rejected it: disabling the server fast path reduced the local `bench_server`
+row from `86066 req/s` to `82888 req/s`. Later server rows were noisy
+(`74197` then `85182 req/s`), so this batch records only the parser microbench
+win and does not claim a stable server throughput improvement.
+
+`test_http_h1fast` now includes invalid `Content-Length` fallback coverage.
+`test_http_h1fast` and `test_http_server` both passed with heaptrc reporting
+`0 unfreed memory blocks`.
+
 ## Optimization Evidence: Header Allocation Fast Path
 
 On 2026-06-05 local time, `THttpHeaders` switched from per-entry dynamic array

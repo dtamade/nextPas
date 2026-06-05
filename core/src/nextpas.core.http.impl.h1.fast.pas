@@ -153,12 +153,12 @@ var
   LValStart, LValLen: SizeUInt;
   LHdrName, LHdrVal: string;
   LBodyStart: SizeUInt;
-  LCLStr: string;
-  LCL: Int64;
+  LContentLength: Int64;
   LSeenContentLength: Boolean;
 begin
   Result := Default(TFastParseResult);
   Result.ContentLength := -1;
+  LContentLength := 0;
   LSeenContentLength := False;
 
   // Step 1: Find header end (\r\n\r\n)
@@ -267,6 +267,9 @@ begin
     begin
       if LSeenContentLength then
         Exit; // duplicate Content-Length is validated by llhttp/server fallback
+      LContentLength := ParseInt64Fast(ABuf + LValStart, LValLen);
+      if LContentLength < 0 then
+        Exit; // invalid Content-Length
       LSeenContentLength := True;
     end;
 
@@ -278,15 +281,10 @@ begin
   LBodyStart := SizeUInt(LHeaderEnd) + 4; // past \r\n\r\n
   Result.BodyStart := LBodyStart;
 
-  // Check Content-Length
-  LCLStr := Result.Headers.Get('Content-Length');
-  if LCLStr <> '' then
+  if LSeenContentLength then
   begin
-    LCL := ParseInt64Fast(PAnsiChar(LCLStr), Length(LCLStr));
-    if LCL < 0 then
-      Exit; // invalid Content-Length
-    Result.ContentLength := LCL;
-    Result.Consumed := LBodyStart + SizeUInt(LCL);
+    Result.ContentLength := LContentLength;
+    Result.Consumed := LBodyStart + SizeUInt(LContentLength);
     if Result.Consumed > ALen then
       Exit; // body is incomplete
   end
