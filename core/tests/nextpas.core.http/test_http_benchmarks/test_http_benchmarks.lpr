@@ -216,6 +216,7 @@ procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
   const AIterations, AThreads: string);
 begin
   CheckContains(AOutput, 'operation=http.server.keepalive', 'operation marker');
+  CheckContains(AOutput, 'workload=no_url', 'workload marker');
   CheckContains(AOutput, 'impl=' + AImplementation, 'implementation marker');
   CheckContains(AOutput, 'iterations=' + AIterations, 'iterations marker');
   CheckContains(AOutput, 'threads=' + AThreads, 'threads marker');

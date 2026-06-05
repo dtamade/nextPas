@@ -84,6 +84,7 @@ func printResults(requests, threads int, completed int64, elapsed time.Duration)
 	}
 
 	fmt.Println("operation=http.server.keepalive")
+	fmt.Println("workload=no_url")
 	fmt.Println("impl=go")
 	fmt.Printf("iterations=%d\n", requests)
 	fmt.Printf("threads=%d\n", threads)

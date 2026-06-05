@@ -1,58 +1,50 @@
-# Progress Log: H1 lazy request-target projection
+# Progress Log: H1 server no-URL benchmark correlation
 
 ## Session
 
-- **Scope:** H1 server request-target lazy projection optimization.
-- **Status:** focused RED/GREEN, benchmark row, docs, and verification completed.
-- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 adapter/server materialization`.
+- **Scope:** HTTP server benchmark workload marker and full-chain correlation.
+- **Status:** focused RED/GREEN, fresh comparison row, docs, and control files updated.
+- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 server full-chain correlation`.
 
 ## Current state
 
 - shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理
-  HTTP lazy request-target 相关源码、测试、benchmark 与文档。
+  HTTP benchmark/comparator/test/docs/control files。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮没有跑全量 HTTP 测试；只跑受影响的 focused gates。
+- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks` 和一条 50k/4 comparison。
 
 ## Completed work
 
-- `THttpRequest` 新增 `CreateFromRequestTarget`，保存 raw request-target。
-- `THttpRequest.GetUrl` / `QueryParam` 首次访问时才调用
-  `TUrl.ParseRequestTarget`。
-- 现有 `THttpRequest.Create` / `NewRequest` / `NewGetRequest` eager 行为保持。
-- H1 server direct / poll-driven request construction 改为
-  `THttpRequest.CreateFromRequestTarget(FParser.GetUrl, ...)`。
-- `test_http_message` 新增 lazy request-target focused proof。
-- `bench_h1parser` 新增 request-create eager/lazy rows，并更新
-  `test_http_benchmarks` marker。
-- `docs/http/API_COVERAGE.md`、`docs/http/BENCHMARKS.md` 已同步本轮 contract 与
-  性能证据。
+- 确认 `bench_server` handler 不读取 `AReq.Url`，当前 keep-alive comparison 已经是
+  no-URL workload。
+- `bench_server`、Go comparator、Rust comparator 输出新增 `workload=no_url`。
+- `test_http_benchmarks` 现在会验证三方 benchmark/comparison/snapshot 都包含
+  `workload=no_url`。
+- 跑 fresh `50000 / 4` server comparison 并记录 nextPas / Go / Rust no-URL row。
+- `docs/http/API_COVERAGE.md` 与 `docs/http/BENCHMARKS.md` 已同步 benchmark
+  输出契约与 fresh correlation。
 
 ## Verification
 
 - RED:
-  `make -C tests/nextpas.core.http/test_http_message clean test`
-  -> failed with `Identifier idents no member "CreateFromRequestTarget"`.
-- `make -C tests/nextpas.core.http/test_http_message clean test`
-  -> `15 total, 15 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
-- `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request create' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  -> eager URL parse request create `557.1 ns/op`; lazy target request create
-  `293.9 ns/op`.
-- `make -C tests/nextpas.core.http/test_http_server clean test`
-  -> `275 total, 275 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
-- `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  -> `5 failed` because `workload=no_url` was missing from server benchmark outputs;
+  heaptrc `0 unfreed memory blocks`.
+- GREEN:
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
   -> `13 total, 13 passed, 0 failed`, heaptrc `0 unfreed memory blocks`.
+- Fresh comparison:
+  `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4`
+  -> nextPas `77958 req/s`; Go `18871 req/s`; Rust std-only `98422 req/s`.
 
 ## Direction review
 
-方向没有走偏：本轮承认 Pascal-translated llhttp raw gap 是真实性能轨道，但没有在
-缺少 perf/codegen 证据时手改 generated state machine。当前更高 ROI 的改动仍是
-削 adapter/server materialization；lazy projection 对 simple handler dispatch
-直接减少 URL parse 成本，同时 server 275-case gate 证明 handler-visible URL 语义
-没有回退。
+方向没有走偏：本轮把 benchmark workload 语义固定为 `no_url`，并证明 lazy
+request-target projection 的微基准收益尚未形成稳定 full-chain 吞吐优势。当前下一步
+不应宣称追平 Rust，而应继续找 no-URL full-chain 的剩余瓶颈。
 
 ## Next step
 
-继续 `6/6 benchmark/performance`。下一批建议做 full-chain correlation：增加或复用
-不读取 `Req.Url` 的 server benchmark row，确认 lazy projection 在真实 request/response
-链路里是否能穿透到 req/s；同时保留 Pascal llhttp raw-gap 为 perf-enabled 机器上的
-generator/codegen 专项。
+继续 `6/6 benchmark/performance`。下一批建议补 URL-touch / router-touch server
+workload，或对 no-URL workload 做更细分 profile，定位 socket/runtime、response
+writer、header materialization、request dispatch 哪个子层仍在拖慢。

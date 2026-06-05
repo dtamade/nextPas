@@ -1,87 +1,83 @@
-# Findings: H1 lazy request-target projection
+# Findings: H1 server no-URL benchmark correlation
 
 ## Scope
 
-本轮是 H1 server adapter/materialization 优化，不改变 wire contract，不手改
-generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
+本轮是 benchmark/correlation 强化，不改变 public HTTP API，不改变 wire contract，
+不手改 generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
 
 ## Root cause
 
-上一批已经把 H1 server dispatch 从通用 `TUrl.Parse` 降到
-`TUrl.ParseRequestTarget`，但 direct / poll-driven dispatch 仍在构造
-`THttpRequest` 前同步解析 request-target。
+上一批 lazy request-target projection 的微基准显示 request creation 子步骤有收益，
+但缺少 full-chain 证据说明这个收益是否能穿透到真实 server benchmark。
 
-这意味着即使 handler 只写一个固定响应、完全不读取 `Req.Url` 或
-`Req.QueryParam`，每个请求仍会支付 URL path/query/fragment materialization
-成本。对 router / middleware / static 等需要 `Req.Url.Path` 的路径，这个成本
-仍然必要；对 simple handler 则可以延迟。
+只读检查后发现当前 `bench_server` handler 已经完全不读取 `AReq.Url` 或
+`AReq.QueryParam`。也就是说它天然就是 lazy projection 最可能受益的 no-URL
+workload；问题是输出没有显式标注 workload，容易被误读成一般 router/middleware
+场景。
 
 ## Implemented decision
 
-新增 `THttpRequest.CreateFromRequestTarget`：
+在三方 comparator 输出中加入同一行：
 
-- 现有 `THttpRequest.Create` 保持 eager `TUrl` 行为，用于 public request factory
-  和已经 materialized 的调用方。
-- `CreateFromRequestTarget` 保存 raw request-target，并把 `FUrlParsed` 标记为
-  false。
-- `GetUrl` 与 `QueryParam` 通过 `EnsureUrlParsed` 首次调用
-  `TUrl.ParseRequestTarget`。
-- H1 server direct / poll-driven request construction 改为传 raw
-  `FParser.GetUrl`，不再在 dispatch 阶段解析 URL。
+```text
+workload=no_url
+```
+
+覆盖范围：
+
+- nextPas `bench_server`
+- Go `net/http` comparator
+- Rust std-only comparator
+- `run_server_comparison.sh` 与 snapshot smoke 通过 existing raw output 自动覆盖
 
 ## Performance evidence
 
-Focused local row:
+Fresh local row:
 
 ```text
-NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='request create' \
-make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
 
-adapter cost: request create eager url parse = 557.1 ns/op
-adapter cost: request create lazy target = 293.9 ns/op
+nextPas no_url: 77958 req/s, 12827 ns/op
+Go net/http no_url: 18871 req/s, 52990 ns/op
+Rust std-only no_url: 98422 req/s, 10160 ns/op
 ```
 
-这是 request creation/materialization 子步骤的约 `47.2%` 降低。该数字不等同于
-full server throughput 改善；router 或 handler 读取 URL 时仍会按需解析。
+这个结果没有证明上一批 lazy projection 带来了稳定 full-chain req/s 提升。nextPas
+仍落在此前本机 server benchmark 噪声带内，并继续落后 Rust std-only comparator。
 
 ## Verification evidence
 
 RED proof:
 
 ```text
-make -C tests/nextpas.core.http/test_http_message clean test
-test_http_message.lpr(190,24) Error: Identifier idents no member "CreateFromRequestTarget"
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+5 failed: bench_server, go comparator, rust comparator, server comparison runner,
+server comparison snapshot all missed workload=no_url.
+heaptrc: 0 unfreed memory blocks
 ```
 
-GREEN focused gates:
+GREEN focused gate:
 
 ```text
-make -C tests/nextpas.core.http/test_http_message clean test
-15 total, 15 passed, 0 failed
-heaptrc: 0 unfreed memory blocks
-
-make -C tests/nextpas.core.http/test_http_server clean test
-275 total, 275 passed, 0 failed
-heaptrc: 0 unfreed memory blocks
-
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
-  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
 13 total, 13 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
 ## Direction review
 
-用户关于 Pascal-translated llhttp raw gap 的怀疑成立：当前文档中的 fresh filtered
-evidence 仍显示 10-header raw row 约 `1.46x` 慢于 C llhttp。不过这轮继续不手改
-generated llhttp，因为现有证据同时显示 adapter/materialization 成本仍更大、更安全、
-更容易通过 public contract tests 锁住。
+方向没有走偏：本轮没有把微基准收益夸大成 server throughput 结论，而是把 benchmark
+语义标清，并用 Go/Rust 对照重测。当前证据指向：下一步应继续定位 no-URL workload
+里的 socket/runtime、response writer、request dispatch 或 header materialization
+成本，而不是优先改 public API。
 
 ## Remaining gaps / risks
 
-- Lazy projection 只优化不读 URL 的路径；router-heavy 应用仍会触发 URL parse。
-- `THttpRequest` 仍以 managed string 保存 raw request-target；更激进的 span/slice
-  设计需要重新审视 lifetime 与 public `TUrl` 值语义，不适合本轮顺手做。
-- Pascal llhttp raw-gap 需要 perf-enabled 机器上的 cycles/instructions/branch data，
-  或 generator/codegen 证据；不应靠手工 patch generated state machine。
+- 还缺 URL-touch / router-touch workload，用来证明 lazy projection 与 route-heavy
+  场景之间的差异。
+- Rust comparator 仍是 std-only microbaseline，不代表 Hyper/Tokio 生态性能。
+- 本机 benchmark 仍有调度噪声；正式性能结论需要多轮 snapshot 或更稳定 runner。

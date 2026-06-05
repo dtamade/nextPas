@@ -23,10 +23,11 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
 ```
 
 The comparison currently covers one HTTP/1.1 keep-alive hello-world workload.
-It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
-cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
-microbaseline; add a Hyper/Tokio comparator before treating Rust ecosystem
-performance as represented.
+The workload is explicitly marked as `workload=no_url`: the handler does not
+read the request URL or query string. It does not cover TLS, request bodies,
+WebSocket, router/middleware full-chain cost, `epoll`, or an async Rust server.
+The Rust comparator is a std-only microbaseline; add a Hyper/Tokio comparator
+before treating Rust ecosystem performance as represented.
 
 ## Local Snapshot: 2026-06-04 UTC
 
@@ -1078,6 +1079,45 @@ heaptrc: 0 unfreed memory blocks
 The Pascal-translated llhttp raw gap remains a real track, but this batch again
 removed a larger, safer adapter/server materialization cost without touching
 generated llhttp code.
+
+## Full-Chain Correlation: No-URL Keep-Alive Workload
+
+On 2026-06-05 local time, the server comparison output gained an explicit
+`workload=no_url` marker across nextPas, Go, and Rust comparator binaries. This
+locks the benchmark interpretation: the current keep-alive comparison measures a
+simple handler that does not read `Req.Url` / query parameters.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+5 server benchmark/comparison smoke cases failed because workload=no_url was missing.
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh local correlation after lazy request-target projection:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4
+```
+
+| impl | workload | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| nextPas | no_url | 50000 | 641366179 | 12827 | 77958 |
+| Go `net/http` | no_url | 50000 | 2649511337 | 52990 | 18871 |
+| Rust std-only | no_url | 50000 | 508013046 | 10160 | 98422 |
+
+The result is directionally useful but not a stable throughput claim. Compared
+with earlier local rows, nextPas remains in the same noise band and still trails
+the Rust std-only comparator on this no-URL workload. The lazy request-target
+microbenchmark win therefore does not yet prove a full-chain req/s win; the next
+high-value work should profile or isolate remaining server/runtime costs that
+sit outside URL projection.
 
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 

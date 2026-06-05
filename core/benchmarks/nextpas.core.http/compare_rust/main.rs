@@ -164,6 +164,7 @@ fn print_results(requests: usize, threads: usize, completed: usize, elapsed: Dur
     };
 
     println!("operation=http.server.keepalive");
+    println!("workload=no_url");
     println!("impl=rust");
     println!("iterations={}", requests);
     println!("threads={}", threads);
