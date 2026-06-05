@@ -20,14 +20,14 @@ baseline。
 `tests/run_all_tests.sh` 当前会把 runner 编译到：
 
 ```text
-.sisyphus/tmp/harness/bootstrap/runner
+build/harness/bootstrap/runner
 ```
 
 也就是说，runner bootstrap 产物已经不再写回 `tests/harness/` 源码目录。
 同一条 shell 控制面还会把 `stage0` 驱动自举到：
 
 ```text
-.sisyphus/tmp/stage0-bootstrap/nextpas
+build/stage0-bootstrap/nextpas
 ```
 
 所以 `compiler-pass` / `compiler-fail` 不再依赖源码树里“碰巧已经有一个”
@@ -113,13 +113,13 @@ snapshot-bearing groups 还会为每个 fixture 额外输出：
 fixture 的 build/run 输出和 host-backed 二进制现在写到：
 
 ```text
-.sisyphus/tmp/harness/<fixture-token>/
+build/harness/work/<fixture-token>/
 ```
 
 `stage0` bootstrap 二进制与 stderr evidence 则写到：
 
 ```text
-.sisyphus/tmp/stage0-bootstrap/
+build/stage0-bootstrap/
 ```
 
 这让源码树不再承担临时产物目录的角色，也降低了生成物反向污染 fixture 收集的风险。

@@ -20,7 +20,7 @@ esac
 
 SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
 ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
-OUT="$ROOT/.sisyphus/tmp/stage0-bootstrap"
+OUT="$ROOT/build/stage0-bootstrap"
 mkdir -p "$OUT"
 
 # 清除所有 PPU 缓存（stage0 输出目录 + rtl 源码目录的散落产物）
@@ -31,6 +31,7 @@ rm -f "$ROOT"/rtl/core/text/*.ppu "$ROOT"/rtl/core/text/*.o
 # 完整重编译（显式指定所有 unit 路径，含 rtl/core）
 fpc "$ROOT/tools/stage0/nextpas.pas" \
   -FE"$OUT" \
+  -FU"$OUT" \
   -o"$OUT/nextpas" \
   -Fu"$ROOT/compiler/sema" \
   -Fu"$ROOT/compiler/frontend" \

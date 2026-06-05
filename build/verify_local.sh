@@ -250,15 +250,14 @@ STAGE0_PKG_PLAN_MISSING_WORKSPACE=$(mktemp -d)
 CORE_TEXT_SMOKE_OUTPUT=$(mktemp)
 CORE_TEXT_SMOKE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_text_smoke"
 CORE_TEXT_SMOKE_BINARY="$CORE_TEXT_SMOKE_BUILD_DIR/core_text_smoke"
+RTL_SYSUTILS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/rtl_sysutils"
+RTL_SYSUTILS_BINARY="$RTL_SYSUTILS_BUILD_DIR/np_sysutils_test"
 CORE_TIME_TEST_OUTPUT=$(mktemp)
 CORE_TIME_TEST_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_time_test"
 CORE_TIME_TEST_BINARY="$CORE_TIME_TEST_BUILD_DIR/test_time"
 CORE_PLATFORM_TIME_HELPERS_OUTPUT=$(mktemp)
 CORE_PLATFORM_TIME_HELPERS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_helpers"
 CORE_PLATFORM_TIME_HELPERS_BINARY="$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR/test_platform_time_helpers"
-CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT=$(mktemp)
-CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_host_ffi_surface"
-CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BINARY="$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR/test_platform_time_host_ffi_surface"
 CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT=$(mktemp)
 CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_time_l0_boundary"
 CORE_PLATFORM_TIME_L0_BOUNDARY_BINARY="$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR/test_platform_time_l0_boundary"
@@ -296,48 +295,15 @@ CORE_PLATFORM_THREAD_BENCH_BINARY="$CORE_PLATFORM_THREAD_BENCH_BUILD_DIR/bench_p
 CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT=$(mktemp)
 CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_posix_ffi_surface"
 CORE_PLATFORM_POSIX_FFI_SURFACE_BINARY="$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR/test_platform_posix_ffi_surface"
-CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT=$(mktemp)
-CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_partition_surface"
-CORE_PLATFORM_FFI_PARTITION_SURFACE_BINARY="$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR/test_platform_ffi_partition_surface"
 CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT=$(mktemp)
 CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_owner_boundary"
 CORE_PLATFORM_FFI_OWNER_BOUNDARY_BINARY="$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR/test_platform_ffi_owner_boundary"
-CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_gap_matrix"
-CORE_PLATFORM_HOST_GAP_MATRIX_BINARY="$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR/test_platform_host_gap_matrix"
-CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave1"
-CORE_PLATFORM_HOST_ABI_WAVE1_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR/test_platform_host_abi_wave1"
-CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave2_files"
-CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR/test_platform_host_abi_wave2_files"
-CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave3_stat"
-CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR/test_platform_host_abi_wave3_stat"
-CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave4_paths"
-CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR/test_platform_host_abi_wave4_paths"
 CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT=$(mktemp)
 CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave5_env"
 CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR/test_platform_host_abi_wave5_env"
-CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave6_process"
-CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR/test_platform_host_abi_wave6_process"
-CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave7_process_status"
-CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR/test_platform_host_abi_wave7_process_status"
-CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave8_file_io"
-CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR/test_platform_host_abi_wave8_file_io"
-CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave9_linux_stat"
-CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR/test_platform_host_abi_wave9_linux_stat"
 CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT=$(mktemp)
 CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave10_posix_stat_hosts"
 CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR/test_platform_host_abi_wave10_posix_stat_hosts"
-CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT=$(mktemp)
-CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_host_abi_wave11_signal_control"
-CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BINARY="$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR/test_platform_host_abi_wave11_signal_control"
 CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT=$(mktemp)
 CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_ffi_source_evidence_index"
 CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BINARY="$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR/test_platform_ffi_source_evidence_index"
@@ -358,12 +324,6 @@ CORE_PLATFORM_SYNC_NO_FPC_BINARY="$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR/test_plat
 CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_l0_boundary"
 CORE_PLATFORM_SYNC_L0_BOUNDARY_BINARY="$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR/test_platform_sync_l0_boundary"
-CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT=$(mktemp)
-CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_posix_surface"
-CORE_PLATFORM_SYNC_POSIX_SURFACE_BINARY="$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR/test_platform_sync_posix_surface"
-CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT=$(mktemp)
-CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_host_ffi_surface"
-CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BINARY="$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR/test_platform_sync_host_ffi_surface"
 CORE_PLATFORM_SYNC_SIZE_OUTPUT=$(mktemp)
 CORE_PLATFORM_SYNC_SIZE_BUILD_DIR="$VERIFY_RUN_TMP_DIR/core_platform_sync_sizes"
 CORE_PLATFORM_SYNC_SIZE_BINARY="$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR/test_platform_sync_sizes"
@@ -639,12 +599,11 @@ cleanup() {
   rm -rf "$STAGE0_PKG_PLAN_MISSING_WORKSPACE"
   rm -f "$CORE_TEXT_SMOKE_OUTPUT"
   rm -rf "$CORE_TEXT_SMOKE_BUILD_DIR"
+  rm -rf "$RTL_SYSUTILS_BUILD_DIR"
   rm -f "$CORE_TIME_TEST_OUTPUT"
   rm -rf "$CORE_TIME_TEST_BUILD_DIR"
   rm -f "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
   rm -rf "$CORE_PLATFORM_TIME_HELPERS_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
-  rm -rf "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_TIME_L0_BOUNDARY_OUTPUT"
   rm -rf "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR"
   rm -f "$CORE_PLATFORM_TIME_NO_FPC_OUTPUT"
@@ -671,18 +630,8 @@ cleanup() {
   rm -rf "$CORE_PLATFORM_THREAD_BENCH_BUILD_DIR"
   rm -f "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT"
   rm -rf "$CORE_PLATFORM_POSIX_FFI_SURFACE_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
-  rm -rf "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
   rm -rf "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
-  rm -rf "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
-  rm -rf "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
-  rm -rf "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
-  rm -rf "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR"
   rm -f "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_OUTPUT"
   rm -rf "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR"
   rm -f "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT"
@@ -695,10 +644,6 @@ cleanup() {
   rm -rf "$CORE_PLATFORM_SYNC_NO_FPC_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_L0_BOUNDARY_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
-  rm -rf "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR"
-  rm -f "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
-  rm -rf "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_SIZE_OUTPUT"
   rm -rf "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR"
   rm -f "$CORE_PLATFORM_SYNC_WIN64_OUTPUT"
@@ -970,36 +915,13 @@ require_path core/src/nextpas.core.time.stopwatch.pas
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync/test_platform_sync.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_no_fpc_units/test_platform_sync_no_fpc_units.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_l0_boundary/test_platform_sync_l0_boundary.lpr
-require_path core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr
-require_path core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/test_platform_sync_host_ffi_surface.lpr
 require_path core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr
 require_path core/tests/nextpas.core.platform/test_platform_posix_ffi_surface/test_platform_posix_ffi_surface.lpr
-require_path core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/test_platform_ffi_partition_surface.lpr
 require_path core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary/test_platform_ffi_owner_boundary.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_gap_matrix/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_gap_matrix/test_platform_host_gap_matrix.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave1/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave1/test_platform_host_abi_wave1.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/test_platform_host_abi_wave2_files.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/test_platform_host_abi_wave3_stat.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/test_platform_host_abi_wave4_paths.lpr
 require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/Makefile
 require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/test_platform_host_abi_wave5_env.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/test_platform_host_abi_wave6_process.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/test_platform_host_abi_wave7_process_status.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/test_platform_host_abi_wave8_file_io.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/test_platform_host_abi_wave9_linux_stat.lpr
 require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/Makefile
 require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/test_platform_host_abi_wave10_posix_stat_hosts.lpr
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/Makefile
-require_path core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/test_platform_host_abi_wave11_signal_control.lpr
 require_path core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/Makefile
 require_path core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/test_platform_ffi_source_evidence_index.lpr
 require_path core/tests/nextpas.core.platform/test_platform_ffi_import_workflow/Makefile
@@ -1011,7 +933,6 @@ require_path core/examples/nextpas.core.platform.sync/platform_sync_basics/platf
 require_path core/benchmarks/nextpas.core.platform.sync/bench_platform_sync/bench_platform_sync.lpr
 require_path core/tests/nextpas.core.sync/test_sync/test_sync.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_helpers/test_platform_time_helpers.lpr
-require_path core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/test_platform_time_host_ffi_surface.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr
 require_path core/tests/nextpas.core.platform.time/test_platform_time_no_fpc_units/test_platform_time_no_fpc_units.lpr
 require_path core/examples/nextpas.core.platform.time/platform_time_clock/platform_time_clock.lpr
@@ -1106,9 +1027,9 @@ require_executable "$STAGE0_BINARY"
 printf 'stage0-build=pass\n'
 
 printf 'hir-late-alloca-hoist=running\n'
-printf 'hir-late-alloca-hoist-command=fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_late_alloca_hoist.pas\n' "$HIR_LATE_ALLOCA_BUILD_DIR" "$HIR_LATE_ALLOCA_BUILD_DIR"
-if ! fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas
+printf 'hir-late-alloca-hoist-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_late_alloca_hoist.pas\n' "$HIR_LATE_ALLOCA_BUILD_DIR" "$HIR_LATE_ALLOCA_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_LATE_ALLOCA_BUILD_DIR" -FU"$HIR_LATE_ALLOCA_BUILD_DIR" tests/hir/test_hir_late_alloca_hoist.pas
   fail 'hir-late-alloca-hoist-build-failed'
 fi
 if [ ! -x "$HIR_LATE_ALLOCA_BINARY" ]; then
@@ -1143,9 +1064,9 @@ grep -Eq '^  br i1 %v[0-9]+, label %bb[0-9]+, label %bb[0-9]+$' "$HIR_LATE_ALLOC
 printf 'hir-late-alloca-hoist=pass\n'
 
 printf 'hir-class-alloc-contract=running\n'
-printf 'hir-class-alloc-contract-command=fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_class_alloc_contract.pas\n' "$HIR_CLASS_ALLOC_BUILD_DIR" "$HIR_CLASS_ALLOC_BUILD_DIR"
-if ! fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas
+printf 'hir-class-alloc-contract-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_class_alloc_contract.pas\n' "$HIR_CLASS_ALLOC_BUILD_DIR" "$HIR_CLASS_ALLOC_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_CLASS_ALLOC_BUILD_DIR" -FU"$HIR_CLASS_ALLOC_BUILD_DIR" tests/hir/test_hir_class_alloc_contract.pas
   fail 'hir-class-alloc-contract-build-failed'
 fi
 if [ ! -x "$HIR_CLASS_ALLOC_BINARY" ]; then
@@ -1161,9 +1082,9 @@ require_output_pattern '^hir-class-alloc-contract-status=pass$' "$HIR_CLASS_ALLO
 printf 'hir-class-alloc-contract=pass\n'
 
 printf 'hir-object-free-contract=running\n'
-printf 'hir-object-free-contract-command=fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_object_free_contract.pas\n' "$HIR_OBJECT_FREE_BUILD_DIR" "$HIR_OBJECT_FREE_BUILD_DIR"
-if ! fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas
+printf 'hir-object-free-contract-command=fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/hir/test_hir_object_free_contract.pas\n' "$HIR_OBJECT_FREE_BUILD_DIR" "$HIR_OBJECT_FREE_BUILD_DIR"
+if ! fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/sema -Fucompiler/syntax -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$HIR_OBJECT_FREE_BUILD_DIR" -FU"$HIR_OBJECT_FREE_BUILD_DIR" tests/hir/test_hir_object_free_contract.pas
   fail 'hir-object-free-contract-build-failed'
 fi
 if [ ! -x "$HIR_OBJECT_FREE_BINARY" ]; then
@@ -1283,7 +1204,7 @@ printf 'parser-bench=pass\n'
 printf 'sema-bench=running\n'
 SEMA_BENCH_BUILD_DIR="$VERIFY_RUN_TMP_DIR/sema_bench"
 SEMA_BENCH_BINARY="$SEMA_BENCH_BUILD_DIR/sema_bench"
-SEMA_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -O2"
+SEMA_BENCH_FPC_FLAGS="-Futools/bench -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -O2"
 SEMA_BENCH_MIN_MB_PER_SEC=1
 mkdir -p "$SEMA_BENCH_BUILD_DIR"
 if ! fpc $SEMA_BENCH_FPC_FLAGS -FE"$SEMA_BENCH_BUILD_DIR" -FU"$SEMA_BENCH_BUILD_DIR" tools/sema_bench/sema_bench.pas >/dev/null 2>&1; then
@@ -1302,9 +1223,9 @@ require_output_pattern '^sema-bench-timing-source=process-cpu$' "$SEMA_BENCH_OUT
 printf 'sema-bench=pass\n'
 
 printf 'semantic-call-bindings-check=running\n'
-printf 'semantic-call-bindings-command=fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/semantic/test_semantic_call_bindings.pas\n' "$SEMANTIC_CALL_BINDINGS_BUILD_DIR" "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
-if ! fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas >/dev/null 2>&1; then
-  fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Furtl/core/base -Furtl/core/text -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas
+printf 'semantic-call-bindings-command=fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE%s -FU%s tests/semantic/test_semantic_call_bindings.pas\n' "$SEMANTIC_CALL_BINDINGS_BUILD_DIR" "$SEMANTIC_CALL_BINDINGS_BUILD_DIR"
+if ! fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas >/dev/null 2>&1; then
+  fpc -Fucompiler/syntax -Fucompiler/diagnostics -Fucompiler/frontend -Fucompiler/sema -Fucompiler/ir -Furtl/core/base -Furtl/core/text -FE"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" -FU"$SEMANTIC_CALL_BINDINGS_BUILD_DIR" tests/semantic/test_semantic_call_bindings.pas
   fail 'semantic-call-bindings-build-failed'
 fi
 if [ ! -x "$SEMANTIC_CALL_BINDINGS_BINARY" ]; then
@@ -4272,27 +4193,6 @@ cat "$CORE_PLATFORM_TIME_HELPERS_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.time\.helpers: 11 total, 11 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_HELPERS_OUTPUT" 'missing-core-platform-time-helpers-pass-summary'
 printf 'core-platform-time-helpers-check=pass\n'
 
-printf 'core-platform-time-host-ffi-surface-check=running\n'
-printf 'core-platform-time-host-ffi-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/test_platform_time_host_ffi_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform.time/test_platform_time_host_ffi_surface/test_platform_time_host_ffi_surface.lpr" \
-  >"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
-  fail 'core-platform-time-host-ffi-surface-build-failed'
-fi
-if ! "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_BINARY" >>"$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
-  fail 'core-platform-time-host-ffi-surface-run-failed'
-fi
-cat "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.time\.host_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_TIME_HOST_FFI_SURFACE_OUTPUT" 'missing-core-platform-time-host-ffi-surface-pass-summary'
-printf 'core-platform-time-host-ffi-surface-check=pass\n'
-
 printf 'core-platform-time-l0-boundary-check=running\n'
 printf 'core-platform-time-l0-boundary-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.time/test_platform_time_l0_boundary/test_platform_time_l0_boundary.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR" "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_TIME_L0_BOUNDARY_BUILD_DIR"
@@ -4579,27 +4479,6 @@ cat "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.posix_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_POSIX_FFI_SURFACE_OUTPUT" 'missing-core-platform-posix-ffi-surface-pass-summary'
 printf 'core-platform-posix-ffi-surface-check=pass\n'
 
-printf 'core-platform-ffi-partition-surface-check=running\n'
-printf 'core-platform-ffi-partition-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/test_platform_ffi_partition_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_FFI_PARTITION_SURFACE_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_ffi_partition_surface/test_platform_ffi_partition_surface.lpr" \
-  >"$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
-  fail 'core-platform-ffi-partition-surface-build-failed'
-fi
-if ! "$CORE_PLATFORM_FFI_PARTITION_SURFACE_BINARY" >>"$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
-  fail 'core-platform-ffi-partition-surface-run-failed'
-fi
-cat "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.ffi_partition_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_PARTITION_SURFACE_OUTPUT" 'missing-core-platform-ffi-partition-surface-pass-summary'
-printf 'core-platform-ffi-partition-surface-check=pass\n'
-
 printf 'core-platform-ffi-owner-boundary-check=running\n'
 printf 'core-platform-ffi-owner-boundary-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_owner_boundary/test_platform_ffi_owner_boundary.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR" "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_BUILD_DIR"
@@ -4620,27 +4499,6 @@ fi
 cat "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.ffi_owner_boundary: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_OWNER_BOUNDARY_OUTPUT" 'missing-core-platform-ffi-owner-boundary-pass-summary'
 printf 'core-platform-ffi-owner-boundary-check=pass\n'
-
-printf 'core-platform-host-gap-matrix-check=running\n'
-printf 'core-platform-host-gap-matrix-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_gap_matrix/test_platform_host_gap_matrix.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_GAP_MATRIX_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_gap_matrix/test_platform_host_gap_matrix.lpr" \
-  >"$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
-  fail 'core-platform-host-gap-matrix-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_GAP_MATRIX_BINARY" >>"$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
-  fail 'core-platform-host-gap-matrix-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_gap_matrix: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_GAP_MATRIX_OUTPUT" 'missing-core-platform-host-gap-matrix-pass-summary'
-printf 'core-platform-host-gap-matrix-check=pass\n'
 
 printf 'core-platform-ffi-source-evidence-index-check=running\n'
 printf 'core-platform-ffi-source-evidence-index-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_ffi_source_evidence_index/test_platform_ffi_source_evidence_index.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR" "$CORE_PLATFORM_FFI_SOURCE_EVIDENCE_INDEX_BUILD_DIR" "$REPO_ROOT"
@@ -4684,90 +4542,6 @@ cat "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.ffi_import_workflow: 2 total, 2 passed, 0 failed ---$' "$CORE_PLATFORM_FFI_IMPORT_WORKFLOW_OUTPUT" 'missing-core-platform-ffi-import-workflow-pass-summary'
 printf 'core-platform-ffi-import-workflow-check=pass\n'
 
-printf 'core-platform-host-abi-wave1-check=running\n'
-printf 'core-platform-host-abi-wave1-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave1/test_platform_host_abi_wave1.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE1_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave1/test_platform_host_abi_wave1.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
-  fail 'core-platform-host-abi-wave1-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE1_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
-  fail 'core-platform-host-abi-wave1-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave1: 3 total, 3 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE1_OUTPUT" 'missing-core-platform-host-abi-wave1-pass-summary'
-printf 'core-platform-host-abi-wave1-check=pass\n'
-
-printf 'core-platform-host-abi-wave2-files-check=running\n'
-printf 'core-platform-host-abi-wave2-files-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/test_platform_host_abi_wave2_files.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave2_files/test_platform_host_abi_wave2_files.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
-  fail 'core-platform-host-abi-wave2-files-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
-  fail 'core-platform-host-abi-wave2-files-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave2_files: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE2_FILES_OUTPUT" 'missing-core-platform-host-abi-wave2-files-pass-summary'
-printf 'core-platform-host-abi-wave2-files-check=pass\n'
-
-printf 'core-platform-host-abi-wave3-stat-check=running\n'
-printf 'core-platform-host-abi-wave3-stat-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/test_platform_host_abi_wave3_stat.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave3_stat/test_platform_host_abi_wave3_stat.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
-  fail 'core-platform-host-abi-wave3-stat-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
-  fail 'core-platform-host-abi-wave3-stat-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave3_stat: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE3_STAT_OUTPUT" 'missing-core-platform-host-abi-wave3-stat-pass-summary'
-printf 'core-platform-host-abi-wave3-stat-check=pass\n'
-
-printf 'core-platform-host-abi-wave4-paths-check=running\n'
-printf 'core-platform-host-abi-wave4-paths-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/test_platform_host_abi_wave4_paths.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave4_paths/test_platform_host_abi_wave4_paths.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT"
-  fail 'core-platform-host-abi-wave4-paths-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT"
-  fail 'core-platform-host-abi-wave4-paths-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave4_paths: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE4_PATHS_OUTPUT" 'missing-core-platform-host-abi-wave4-paths-pass-summary'
-printf 'core-platform-host-abi-wave4-paths-check=pass\n'
-
 printf 'core-platform-host-abi-wave5-env-check=running\n'
 printf 'core-platform-host-abi-wave5-env-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave5_env/test_platform_host_abi_wave5_env.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_BUILD_DIR"
@@ -4789,90 +4563,6 @@ cat "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave5_env: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE5_ENV_OUTPUT" 'missing-core-platform-host-abi-wave5-env-pass-summary'
 printf 'core-platform-host-abi-wave5-env-check=pass\n'
 
-printf 'core-platform-host-abi-wave6-process-check=running\n'
-printf 'core-platform-host-abi-wave6-process-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/test_platform_host_abi_wave6_process.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave6_process/test_platform_host_abi_wave6_process.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT"
-  fail 'core-platform-host-abi-wave6-process-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT"
-  fail 'core-platform-host-abi-wave6-process-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave6_process: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE6_PROCESS_OUTPUT" 'missing-core-platform-host-abi-wave6-process-pass-summary'
-printf 'core-platform-host-abi-wave6-process-check=pass\n'
-
-printf 'core-platform-host-abi-wave7-process-status-check=running\n'
-printf 'core-platform-host-abi-wave7-process-status-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/test_platform_host_abi_wave7_process_status.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave7_process_status/test_platform_host_abi_wave7_process_status.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT"
-  fail 'core-platform-host-abi-wave7-process-status-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT"
-  fail 'core-platform-host-abi-wave7-process-status-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave7_process_status: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE7_PROCESS_STATUS_OUTPUT" 'missing-core-platform-host-abi-wave7-process-status-pass-summary'
-printf 'core-platform-host-abi-wave7-process-status-check=pass\n'
-
-printf 'core-platform-host-abi-wave8-file-io-check=running\n'
-printf 'core-platform-host-abi-wave8-file-io-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/test_platform_host_abi_wave8_file_io.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave8_file_io/test_platform_host_abi_wave8_file_io.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT"
-  fail 'core-platform-host-abi-wave8-file-io-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT"
-  fail 'core-platform-host-abi-wave8-file-io-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave8_file_io: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE8_FILE_IO_OUTPUT" 'missing-core-platform-host-abi-wave8-file-io-pass-summary'
-printf 'core-platform-host-abi-wave8-file-io-check=pass\n'
-
-printf 'core-platform-host-abi-wave9-linux-stat-check=running\n'
-printf 'core-platform-host-abi-wave9-linux-stat-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/test_platform_host_abi_wave9_linux_stat.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave9_linux_stat/test_platform_host_abi_wave9_linux_stat.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT"
-  fail 'core-platform-host-abi-wave9-linux-stat-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT"
-  fail 'core-platform-host-abi-wave9-linux-stat-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave9_linux_stat: 5 total, 5 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE9_LINUX_STAT_OUTPUT" 'missing-core-platform-host-abi-wave9-linux-stat-pass-summary'
-printf 'core-platform-host-abi-wave9-linux-stat-check=pass\n'
-
 printf 'core-platform-host-abi-wave10-posix-stat-hosts-check=running\n'
 printf 'core-platform-host-abi-wave10-posix-stat-hosts-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave10_posix_stat_hosts/test_platform_host_abi_wave10_posix_stat_hosts.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR" "$REPO_ROOT"
 mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_BUILD_DIR"
@@ -4893,27 +4583,6 @@ fi
 cat "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave10_posix_stat_hosts: 7 total, 7 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE10_POSIX_STAT_HOSTS_OUTPUT" 'missing-core-platform-host-abi-wave10-posix-stat-hosts-pass-summary'
 printf 'core-platform-host-abi-wave10-posix-stat-hosts-check=pass\n'
-
-printf 'core-platform-host-abi-wave11-signal-control-check=running\n'
-printf 'core-platform-host-abi-wave11-signal-control-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/test_platform_host_abi_wave11_signal_control.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform/test_platform_host_abi_wave11_signal_control/test_platform_host_abi_wave11_signal_control.lpr" \
-  >"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT"
-  fail 'core-platform-host-abi-wave11-signal-control-build-failed'
-fi
-if ! "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_BINARY" >>"$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT"
-  fail 'core-platform-host-abi-wave11-signal-control-run-failed'
-fi
-cat "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.host_abi_wave11_signal_control: 7 total, 7 passed, 0 failed ---$' "$CORE_PLATFORM_HOST_ABI_WAVE11_SIGNAL_CONTROL_OUTPUT" 'missing-core-platform-host-abi-wave11-signal-control-pass-summary'
-printf 'core-platform-host-abi-wave11-signal-control-check=pass\n'
 
 printf 'core-platform-facade-surface-check=running\n'
 printf 'core-platform-facade-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform/test_platform_facade_surface/test_platform_facade_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR" "$CORE_PLATFORM_FACADE_SURFACE_BUILD_DIR" "$REPO_ROOT"
@@ -5016,48 +4685,6 @@ fi
 cat "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT"
 require_output_pattern '^--- nextpas\.core\.platform\.sync\.l0_boundary: 4 total, 4 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_L0_BOUNDARY_OUTPUT" 'missing-core-platform-sync-l0-boundary-pass-summary'
 printf 'core-platform-sync-l0-boundary-check=pass\n'
-
-printf 'core-platform-sync-posix-surface-check=running\n'
-printf 'core-platform-sync-posix-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_SYNC_POSIX_SURFACE_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_posix_surface/test_platform_sync_posix_surface.lpr" \
-  >"$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
-  fail 'core-platform-sync-posix-surface-build-failed'
-fi
-if ! "$CORE_PLATFORM_SYNC_POSIX_SURFACE_BINARY" >>"$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
-  fail 'core-platform-sync-posix-surface-run-failed'
-fi
-cat "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.sync\.posix_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_POSIX_SURFACE_OUTPUT" 'missing-core-platform-sync-posix-surface-pass-summary'
-printf 'core-platform-sync-posix-surface-check=pass\n'
-
-printf 'core-platform-sync-host-ffi-surface-check=running\n'
-printf 'core-platform-sync-host-ffi-surface-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/test_platform_sync_host_ffi_surface.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" "$REPO_ROOT"
-mkdir -p "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR"
-if ! fpc \
-  -Fi"$REPO_ROOT/core/src" \
-  -Fu"$REPO_ROOT/core/src" \
-  -FE"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" \
-  -FU"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BUILD_DIR" \
-  "$REPO_ROOT/core/tests/nextpas.core.platform.sync/test_platform_sync_host_ffi_surface/test_platform_sync_host_ffi_surface.lpr" \
-  >"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
-  fail 'core-platform-sync-host-ffi-surface-build-failed'
-fi
-if ! "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_BINARY" >>"$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT" 2>&1; then
-  cat "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
-  fail 'core-platform-sync-host-ffi-surface-run-failed'
-fi
-cat "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.platform\.sync\.host_ffi_surface: 1 total, 1 passed, 0 failed ---$' "$CORE_PLATFORM_SYNC_HOST_FFI_SURFACE_OUTPUT" 'missing-core-platform-sync-host-ffi-surface-pass-summary'
-printf 'core-platform-sync-host-ffi-surface-check=pass\n'
 
 printf 'core-platform-sync-size-check=running\n'
 printf 'core-platform-sync-size-command=fpc -Fi%s/core/src -Fu%s/core/src -FE%s -FU%s %s/core/tests/nextpas.core.platform.sync/test_platform_sync_sizes/test_platform_sync_sizes.lpr\n' "$REPO_ROOT" "$REPO_ROOT" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$CORE_PLATFORM_SYNC_SIZE_BUILD_DIR" "$REPO_ROOT"
@@ -5197,17 +4824,19 @@ printf 'core-sync-posix-fallback-check=pass\n'
 
 printf 'rtl-sysutils-check=running\n'
 RTL_SYSUTILS_OUTPUT=$(mktemp)
-RTL_SYSUTILS_BIN=$(mktemp)
-printf 'rtl-sysutils-command=fpc -Fu%s/rtl/core/sysutils %s/rtl/core/sysutils/np_sysutils_test.pas\n' "$REPO_ROOT" "$REPO_ROOT"
+mkdir -p "$RTL_SYSUTILS_BUILD_DIR"
+printf 'rtl-sysutils-command=fpc -Fu%s/rtl/core/sysutils -FE%s -FU%s -o%s %s/rtl/core/sysutils/np_sysutils_test.pas\n' "$REPO_ROOT" "$RTL_SYSUTILS_BUILD_DIR" "$RTL_SYSUTILS_BUILD_DIR" "$RTL_SYSUTILS_BINARY" "$REPO_ROOT"
 if ! fpc \
   -Fu"$REPO_ROOT/rtl/core/sysutils" \
-  -o"$RTL_SYSUTILS_BIN" \
+  -FE"$RTL_SYSUTILS_BUILD_DIR" \
+  -FU"$RTL_SYSUTILS_BUILD_DIR" \
+  -o"$RTL_SYSUTILS_BINARY" \
   "$REPO_ROOT/rtl/core/sysutils/np_sysutils_test.pas" \
   >"$RTL_SYSUTILS_OUTPUT" 2>&1; then
   cat "$RTL_SYSUTILS_OUTPUT"
   fail 'rtl-sysutils-build-failed'
 fi
-if ! "$RTL_SYSUTILS_BIN" >"$RTL_SYSUTILS_OUTPUT" 2>&1; then
+if ! "$RTL_SYSUTILS_BINARY" >"$RTL_SYSUTILS_OUTPUT" 2>&1; then
   cat "$RTL_SYSUTILS_OUTPUT"
   fail 'rtl-sysutils-run-failed'
 fi

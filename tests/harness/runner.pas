@@ -23,8 +23,8 @@ const
   ExitSuccessCode = 0;
   ExitFailureCode = 1;
   BaselineTargetName = 'linux-x86_64';
-  HarnessTempRoot = '.sisyphus/tmp/harness';
-  DefaultStage0Executable = '.sisyphus/tmp/stage0-bootstrap/nextpas';
+  HarnessTempRoot = 'build/harness/work';
+  DefaultStage0Executable = 'build/stage0-bootstrap/nextpas';
   HostCompilerExecutable = 'fpc';
 
   HARNESS_GROUP_NAMES: array[THarnessGroup] of string = (

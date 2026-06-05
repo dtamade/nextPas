@@ -15,6 +15,10 @@ libimp*.a
 *.ppu
 *.compiled
 *.exe
+*.dll
+*.so
+*.dylib
+*.a
 link*.res
 *.test.res
 tests/snapshots/*.diff.txt
@@ -42,6 +46,8 @@ ppas.sh
 tools/stage0/*.s
 # Compiled test/benchmark binaries
 build/bin/
+build/harness/
+build/stage0-bootstrap/
 tests/*/test_*/test_*[!.lpr]
 benchmarks/*/bench_*[!.lpr]
 benchmarks/**/bench_*

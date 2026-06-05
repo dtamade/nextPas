@@ -19,16 +19,16 @@ CI 粘合层，以及与公开发行布局相关的控制面语义。
 Run:
 
 ```bash
-./build/verify_local.sh
+make verify
 ```
 
 Then:
 
 ```bash
-./tests/run_all_tests.sh --filter smoke
+make test-smoke
 ```
 
-第一条命令会先检查关键架构文档、目标规格、`compiler/` skeleton 输入和驱动入口，再用 `fpc`
+第一条命令通过根目录 `Makefile` 调用 `build/verify_local.sh`，会先检查关键架构文档、目标规格、`compiler/` skeleton 输入和驱动入口，再用 `fpc`
 构建 `stage0` 驱动，随后执行 `stage0 build` 的真实 smoke 路径并断言输出里存在
 `command-envelope=`、`session-id=`、`source-db-file-count=1`、`syntax-status=ready`、
 `resolution-status=ready`、`semantic-status=ready`、`mir-status=ready`、
@@ -65,7 +65,7 @@ failure，断言输出里存在 `bootstrap-step`、`bootstrap-command`、
 并断言 `tests/run_all_tests.sh --filter smoke` 的输出里同样存在
 `command-envelope=`。
 第二条命令保留为手工回放时可单独执行的最小验证入口，但 CI 与本地默认都应该优先复用
-`verify_local.sh`。
+根目录 `Makefile` 入口。
 
 ## `verify_local.sh` 是编排入口，不是新的结果协议
 
@@ -85,7 +85,7 @@ failure，断言输出里存在 `bootstrap-step`、`bootstrap-command`、
 
 - `stage0 build`
   - 结果语义继续朝统一 `CommandResultEnvelope` 收敛；当前 key/value 只是 human projection
-- `tests/run_all_tests.sh --filter smoke`
+- `make test-smoke`
   - 默认继续消费命令级 outcome、diagnostics snapshot 与 build trace 的分工，而不是 scrape 任意 progress 文本
 - `build/verify_local.sh`
   - 只负责把 docs check、目标输入检查、stage0 构建、stage0 smoke envelope 断言，以及 harness smoke envelope 断言编排成一条公开路径

@@ -59,7 +59,7 @@
 
 ## `smoke` 现在到底证明什么
 
-`./tests/run_all_tests.sh --filter smoke` 现在会：
+`make test-smoke` 现在会通过 `tests/run_all_tests.sh --filter smoke`：
 
 - 真实执行每个 group 的最小 fixture
 - 汇总缺失 fixture、缺失 snapshot、unstable snapshot 和 failing groups
@@ -75,8 +75,8 @@
 
 ## 这一层当前如何避免污染源码树
 
-- runner bootstrap 产物写到 `.sisyphus/tmp/harness/bootstrap/runner`
-- fixture 的 build/run 输出与 host-backed 二进制写到 `.sisyphus/tmp/harness/...`
+- runner bootstrap 产物写到 `build/harness/bootstrap/runner`
+- fixture 的 build/run 输出与 host-backed 二进制写到 `build/harness/work/...`
 - `tests/snapshots/*.diff.txt` 只在 baseline 缺失或不稳定时生成 evidence
 
 这条规则的目的是让 fixture collection 和源码树状态尽量解耦，不再因为工作区里残留二进制而
