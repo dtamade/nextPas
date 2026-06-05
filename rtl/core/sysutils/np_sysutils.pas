@@ -31,10 +31,16 @@ type
     FMessage: string;
   public
     constructor Create(const Msg: string);
+    constructor CreateFmt(const Msg: string; const Args: array of const);
     property Message: string read FMessage;
   end;
 
+  ExceptClass = class of Exception;
+
   EConvertError = class(Exception)
+  end;
+
+  EAssertionFailed = class(Exception)
   end;
 
 // String operations
@@ -114,6 +120,12 @@ constructor Exception.Create(const Msg: string);
 begin
   inherited Create;
   FMessage := Msg;
+end;
+
+constructor Exception.CreateFmt(const Msg: string;
+  const Args: array of const);
+begin
+  Create(Format(Msg, Args));
 end;
 
 { String operations }

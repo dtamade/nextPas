@@ -6,10 +6,22 @@
 # 2. 散落在 rtl/units 目录的 .ppu 也会污染编译。一并清理。
 # 3. np_base_types/np_text_primitives 在 rtl/core/ 下，unit 路径必须包含它们，
 #    否则要么编译失败，要么用到 stale ppu。
-set -e
+# 4. 在独立 worktree 里也必须解析到当前 checkout，并且不能让 pipeline 吞掉编译失败。
+set -euo pipefail
 
-ROOT="/home/dtamade/projects/nextPas"
+case "$0" in
+  */*)
+    SCRIPT_PATH="$0"
+    ;;
+  *)
+    SCRIPT_PATH="./$0"
+    ;;
+esac
+
+SCRIPT_DIR=$(CDPATH= cd -- "${SCRIPT_PATH%/*}" && pwd)
+ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 OUT="$ROOT/.sisyphus/tmp/stage0-bootstrap"
+mkdir -p "$OUT"
 
 # 清除所有 PPU 缓存（stage0 输出目录 + rtl 源码目录的散落产物）
 rm -f "$OUT"/*.ppu "$OUT"/*.o

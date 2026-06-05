@@ -147,6 +147,9 @@ type
 
   TTokenKindSet = set of TTokenKind;
 
+var
+  ActiveExpressionTree: TGreenTree = nil;
+
 function CurrentToken(const ALexer: TLexerResult; const ACursor: LongInt): TToken;
   forward;
 
@@ -318,6 +321,13 @@ function ParseParameterList(
 ): Boolean; forward;
 
 function ParseTypeReference(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): TGreenNode; forward;
+
+function ParseAnonymousRoutineExpression(
   const ALexer: TLexerResult;
   var ACursor: LongInt;
   const ADiagnostics: TDiagnosticsSink;
@@ -568,6 +578,19 @@ begin
     (AKind = tkPlatformKeyword) or (AKind = tkExperimentalKeyword);
 end;
 
+function IsOperatorNameToken(AKind: TTokenKind): Boolean;
+begin
+  Result := AKind in [tkPlus, tkMinus, tkStar, tkSlash, tkEquals,
+    tkNotEquals, tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual,
+    tkModKeyword, tkDivKeyword, tkShlKeyword, tkShrKeyword, tkAndKeyword,
+    tkOrKeyword, tkXorKeyword, tkNotKeyword, tkInKeyword];
+end;
+
+function IsDeclNameToken(AKind: TTokenKind): Boolean;
+begin
+  Result := IsMethodNameToken(AKind) or IsOperatorNameToken(AKind);
+end;
+
 function IsDirectiveToken(AKind: TTokenKind): Boolean;
 begin
   Result := AKind in [tkInlineKeyword, tkOverloadKeyword, tkCdeclKeyword,
@@ -585,6 +608,37 @@ end;
 function CurrentToken(const ALexer: TLexerResult; const ACursor: LongInt): TToken;
 begin
   Result := ALexer.TokenAt(ACursor);
+end;
+
+function ConsumeIdentifierPath(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const AAllowDots: Boolean;
+  out AName: string;
+  out AByteOffset: LongInt
+): Boolean;
+begin
+  AName := '';
+  AByteOffset := 0;
+  if (ACursor >= ALexer.TokenCount) or
+    (CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) then
+    Exit(False);
+
+  AByteOffset := CurrentToken(ALexer, ACursor).ByteOffset;
+  AName := CurrentToken(ALexer, ACursor).Lexeme;
+  AdvanceCursor(ACursor);
+
+  if AAllowDots then
+    while (ACursor + 1 < ALexer.TokenCount) and
+      (CurrentToken(ALexer, ACursor).Kind = tkDot) and
+      IsMethodNameToken(ALexer.TokenAt(ACursor + 1).Kind) do
+    begin
+      AdvanceCursor(ACursor);
+      AName := AName + '.' + CurrentToken(ALexer, ACursor).Lexeme;
+      AdvanceCursor(ACursor);
+    end;
+
+  Result := True;
 end;
 
 procedure SkipToSyncSet(
@@ -653,8 +707,8 @@ function ParseUsesClause(
 ): Boolean;
 var
   UseName: string;
+  UseOffset: LongInt;
   UsesNode: TGreenNode;
-  UseToken: TToken;
 begin
   Result := True;
   if CurrentToken(ALexer, ACursor).Kind <> tkUsesKeyword then
@@ -671,7 +725,13 @@ begin
 
   while True do
   begin
-    if CurrentToken(ALexer, ACursor).Kind <> tkIdentifier then
+    if not ConsumeIdentifierPath(
+      ALexer,
+      ACursor,
+      True,
+      UseName,
+      UseOffset
+    ) then
     begin
       EmitSyntaxError(
         ADiagnostics,
@@ -683,8 +743,6 @@ begin
       Exit(False);
     end;
 
-    UseToken := CurrentToken(ALexer, ACursor);
-    UseName := UseToken.Lexeme;
     if ASectionKind = uskInterface then
       ATree.AppendInterfaceUse(UseName)
     else
@@ -692,13 +750,12 @@ begin
 
     UsesNode.AppendChild(TGreenNode.Create(
       gnkUseEntry,
-      UseToken.ByteOffset,
-      Length(UseToken.Lexeme),
+      UseOffset,
+      Length(UseName),
       UseName
     ));
 
     Inc(ATree.FNodeCount);
-    AdvanceCursor(ACursor);
 
     if CurrentToken(ALexer, ACursor).Kind <> tkComma then
       Break;
@@ -1090,6 +1147,9 @@ begin
         end;
         MatchTokenSilent(ALexer, ACursor, tkRBracket);
       end;
+    tkFunctionKeyword, tkProcedureKeyword:
+      Result := ParseAnonymousRoutineExpression(ALexer, ACursor, ADiagnostics,
+        ARootFileId);
   else
     Result := nil;
   end;
@@ -1715,6 +1775,79 @@ begin
   else
     Exit(nil);
   end;
+end;
+
+function ParseAnonymousRoutineExpression(
+  const ALexer: TLexerResult;
+  var ACursor: LongInt;
+  const ADiagnostics: TDiagnosticsSink;
+  const ARootFileId: TSourceFileId
+): TGreenNode;
+var
+  Node: TGreenNode;
+  RoutineKind: TTokenKind;
+  TypeNode: TGreenNode;
+begin
+  Result := nil;
+  if ActiveExpressionTree = nil then
+    Exit;
+
+  RoutineKind := CurrentToken(ALexer, ACursor).Kind;
+  case RoutineKind of
+    tkFunctionKeyword:
+      Node := TGreenNode.Create(gnkFunctionDecl,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+    tkProcedureKeyword:
+      Node := TGreenNode.Create(gnkProcedureDecl,
+        CurrentToken(ALexer, ACursor).ByteOffset, 0, '');
+  else
+    Exit;
+  end;
+
+  Inc(ACursor);
+  ParseParameterList(ALexer, ACursor, Node, ActiveExpressionTree,
+    ADiagnostics, ARootFileId);
+
+  if RoutineKind = tkFunctionKeyword then
+  begin
+    if not MatchTokenSilent(ALexer, ACursor, tkColon) then
+    begin
+      EmitSyntaxError(ADiagnostics, ARootFileId,
+        CurrentToken(ALexer, ACursor), ':');
+      Node.Free;
+      Exit(nil);
+    end;
+
+    TypeNode := ParseTypeReference(ALexer, ACursor, ADiagnostics, ARootFileId);
+    if TypeNode <> nil then
+    begin
+      Node.AppendChild(TypeNode);
+      Inc(ActiveExpressionTree.FNodeCount);
+    end;
+  end;
+
+  while (ACursor < ALexer.TokenCount) and
+    (IsDirectiveToken(CurrentToken(ALexer, ACursor).Kind) or
+     ((CurrentToken(ALexer, ACursor).Kind = tkIdentifier) and
+      IsCallingDirective(CurrentToken(ALexer, ACursor).Lexeme))) do
+    Inc(ACursor);
+
+  if not MatchTokenSilent(ALexer, ACursor, tkBeginKeyword) then
+  begin
+    EmitSyntaxError(ADiagnostics, ARootFileId,
+      CurrentToken(ALexer, ACursor), 'BEGIN');
+    Node.Free;
+    Exit(nil);
+  end;
+
+  if not ParseBeginBlock(ALexer, ACursor, Node, ActiveExpressionTree,
+    ADiagnostics, ARootFileId) then
+  begin
+    Node.Free;
+    Exit(nil);
+  end;
+
+  Result := Node;
 end;
 
 function ParseParameterList(
@@ -2377,7 +2510,7 @@ begin
                      tkGenericKeyword, tkOperatorKeyword]) do
                   Inc(ACursor);
                 if (ACursor < ALexer.TokenCount) and
-                  IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
+                  IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
                 begin
                   ElementNode.AppendChild(TGreenNode.Create(gnkIdentifier,
                     CurrentToken(ALexer, ACursor).ByteOffset, 0,
@@ -3000,16 +3133,18 @@ begin
     Inc(ACursor);
   end;
 
-  if (ACursor < ALexer.TokenCount) and
-    (CurrentToken(ALexer, ACursor).Kind = tkDot) then
+  while (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkDot) do
   begin
     Inc(ACursor);
     if (ACursor < ALexer.TokenCount) and
-      IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
+      IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
-      Node.FText := NameToken.Lexeme + '.' + CurrentToken(ALexer, ACursor).Lexeme;
+      Node.FText := Node.FText + '.' + CurrentToken(ALexer, ACursor).Lexeme;
       Inc(ACursor);
-    end;
+    end
+    else
+      Break;
   end;
 
   if (ACursor < ALexer.TokenCount) and
@@ -3165,13 +3300,7 @@ begin
 
   SkipDirectives(ALexer, ACursor);
   if (ACursor >= ALexer.TokenCount) or
-    ((CurrentToken(ALexer, ACursor).Kind <> tkIdentifier) and
-     not (CurrentToken(ALexer, ACursor).Kind in
-       [tkPlus, tkMinus, tkStar, tkSlash, tkEquals, tkNotEquals,
-        tkLessThan, tkGreaterThan, tkLessEqual, tkGreaterEqual,
-        tkModKeyword, tkDivKeyword, tkShlKeyword, tkShrKeyword,
-        tkAndKeyword, tkOrKeyword, tkXorKeyword, tkNotKeyword,
-        tkInKeyword])) then
+    not IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
   begin
     Node.Free;
     Exit(False);
@@ -3189,16 +3318,18 @@ begin
     Inc(ACursor);
   end;
 
-  if (ACursor < ALexer.TokenCount) and
-    (CurrentToken(ALexer, ACursor).Kind = tkDot) then
+  while (ACursor < ALexer.TokenCount) and
+    (CurrentToken(ALexer, ACursor).Kind = tkDot) do
   begin
     Inc(ACursor);
     if (ACursor < ALexer.TokenCount) and
-      IsMethodNameToken(CurrentToken(ALexer, ACursor).Kind) then
+      IsDeclNameToken(CurrentToken(ALexer, ACursor).Kind) then
     begin
-      Node.FText := NameToken.Lexeme + '.' + CurrentToken(ALexer, ACursor).Lexeme;
+      Node.FText := Node.FText + '.' + CurrentToken(ALexer, ACursor).Lexeme;
       Inc(ACursor);
-    end;
+    end
+    else
+      Break;
   end;
 
   if (ACursor < ALexer.TokenCount) and
@@ -4540,85 +4671,103 @@ var
   Cursor: LongInt;
   Current: TToken;
   RootNode: TGreenNode;
+  DeclaredName: string;
+  DeclaredNameOffset: LongInt;
+  PreviousExpressionTree: TGreenTree;
 begin
   Result := TGreenTree.Create;
-  Cursor := 0;
-  SkipDirectives(ALexer, Cursor);
-  Current := CurrentToken(ALexer, Cursor);
+  PreviousExpressionTree := ActiveExpressionTree;
+  ActiveExpressionTree := Result;
+  try
+    Cursor := 0;
+    SkipDirectives(ALexer, Cursor);
+    Current := CurrentToken(ALexer, Cursor);
 
-  Result.FRootKind := RootKindFromToken(Current.Kind);
-  if Result.FRootKind = grkUnknown then
-  begin
-    EmitSyntaxError(
-      ADiagnostics,
-      ARootFileId,
-      Current,
-      'program|unit|library|package'
-    );
-    Exit;
-  end;
-
-  RootNode := TGreenNode.Create(
-    GreenNodeKindFromRootKind(Result.FRootKind),
-    Current.ByteOffset,
-    Length(Current.Lexeme),
-    Current.Lexeme
-  );
-  Result.FRootNode := RootNode;
-  Result.FNodeCount := 1;
-  AdvanceCursor(Cursor);
-  Current := CurrentToken(ALexer, Cursor);
-
-  if Current.Kind <> tkIdentifier then
-  begin
-    EmitSyntaxError(ADiagnostics, ARootFileId, Current, 'identifier');
-    Exit;
-  end;
-
-  Result.FDeclaredName := Current.Lexeme;
-  RootNode.AppendChild(TGreenNode.Create(
-    gnkIdentifier,
-    Current.ByteOffset,
-    Length(Current.Lexeme),
-    Current.Lexeme
-  ));
-  Inc(Result.FNodeCount);
-  AdvanceCursor(Cursor);
-
-  if not MatchToken(ALexer, Cursor, tkSemicolon, ADiagnostics, ARootFileId, ';') then
-    Exit;
-  Inc(Result.FNodeCount);
-
-  case Result.FRootKind of
-    grkProgram, grkLibrary, grkPackage:
-      begin
-        if not ParseProgramLikeRoot(
-          ALexer,
-          Cursor,
-          Result,
-          RootNode,
-          ADiagnostics,
-          ARootFileId
-        ) then
-          Exit;
-      end;
-    grkUnit:
-      begin
-        if not ParseUnitRoot(
-          ALexer,
-          Cursor,
-          Result,
-          RootNode,
-          ADiagnostics,
-          ARootFileId
-        ) then
-          Exit;
-      end;
-    grkUnknown:
+    Result.FRootKind := RootKindFromToken(Current.Kind);
+    if Result.FRootKind = grkUnknown then
+    begin
+      EmitSyntaxError(
+        ADiagnostics,
+        ARootFileId,
+        Current,
+        'program|unit|library|package'
+      );
       Exit;
-  end;
+    end;
 
-  Result.FIsValid := not ADiagnostics.HasErrors;
+    RootNode := TGreenNode.Create(
+      GreenNodeKindFromRootKind(Result.FRootKind),
+      Current.ByteOffset,
+      Length(Current.Lexeme),
+      Current.Lexeme
+    );
+    Result.FRootNode := RootNode;
+    Result.FNodeCount := 1;
+    AdvanceCursor(Cursor);
+
+    if not ConsumeIdentifierPath(
+      ALexer,
+      Cursor,
+      Result.FRootKind = grkUnit,
+      DeclaredName,
+      DeclaredNameOffset
+    ) then
+    begin
+      EmitSyntaxError(
+        ADiagnostics,
+        ARootFileId,
+        CurrentToken(ALexer, Cursor),
+        'identifier'
+      );
+      Exit;
+    end;
+
+    Result.FDeclaredName := DeclaredName;
+    RootNode.AppendChild(TGreenNode.Create(
+      gnkIdentifier,
+      DeclaredNameOffset,
+      Length(DeclaredName),
+      DeclaredName
+    ));
+    Inc(Result.FNodeCount);
+
+    if not MatchToken(ALexer, Cursor, tkSemicolon, ADiagnostics, ARootFileId, ';') then
+      Exit;
+    Inc(Result.FNodeCount);
+
+    case Result.FRootKind of
+      grkProgram, grkLibrary, grkPackage:
+        begin
+          if not ParseProgramLikeRoot(
+            ALexer,
+            Cursor,
+            Result,
+            RootNode,
+            ADiagnostics,
+            ARootFileId
+          ) then
+            Exit;
+        end;
+      grkUnit:
+        begin
+          if not ParseUnitRoot(
+            ALexer,
+            Cursor,
+            Result,
+            RootNode,
+            ADiagnostics,
+            ARootFileId
+          ) then
+            Exit;
+        end;
+      grkUnknown:
+        Exit;
+    end;
+
+    Result.FIsValid := not ADiagnostics.HasErrors;
+  finally
+    ActiveExpressionTree := PreviousExpressionTree;
+  end;
 end;
 
 constructor TGreenNode.Create(

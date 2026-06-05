@@ -30,10 +30,27 @@ type
     FMessage: string;
   public
     constructor Create(const Msg: string);
+    constructor CreateFmt(const Msg: string; const Args: array of const);
     property Message: string read FMessage;
   end;
 
+  ExceptClass = class of Exception;
+
+  EHeapMemoryError = class(Exception)
+  end;
+
+  EHeapException = EHeapMemoryError;
+
+  EInvalidPointer = class(EHeapMemoryError)
+  end;
+
+  EOutOfMemory = class(EHeapMemoryError)
+  end;
+
   EConvertError = class(Exception)
+  end;
+
+  EAssertionFailed = class(Exception)
   end;
 
 // String operations
@@ -92,6 +109,12 @@ constructor Exception.Create(const Msg: string);
 begin
   inherited Create;
   FMessage := Msg;
+end;
+
+constructor Exception.CreateFmt(const Msg: string;
+  const Args: array of const);
+begin
+  Create(Format(Msg, Args));
 end;
 
 { String operations }
@@ -444,10 +467,51 @@ end;
 { String formatting }
 
 function Format(const Fmt: string; const Args: array of const): string;
+var
+  I, ArgIdx: Integer;
+  Buf: string;
 begin
-  // Stub implementation - returns format string as-is
-  // TODO: Implement proper formatting
-  Result := Fmt;
+  if Length(Args) = 0 then
+    Exit(Fmt);
+
+  Result := '';
+  ArgIdx := 0;
+  I := 1;
+  while I <= Length(Fmt) do
+  begin
+    if (Fmt[I] = '%') and (I < Length(Fmt)) and (ArgIdx <= High(Args)) then
+    begin
+      Inc(I);
+      case Fmt[I] of
+        'd', 'u':
+          begin
+            case Args[ArgIdx].VType of
+              vtInteger: Buf := IntToStr(Args[ArgIdx].VInteger);
+            else
+              Buf := '?';
+            end;
+            Result := Result + Buf;
+            Inc(ArgIdx);
+          end;
+        's':
+          begin
+            case Args[ArgIdx].VType of
+              vtAnsiString: Buf := string(Args[ArgIdx].VAnsiString);
+              vtPChar: Buf := string(Args[ArgIdx].VPChar);
+            else
+              Buf := '?';
+            end;
+            Result := Result + Buf;
+            Inc(ArgIdx);
+          end;
+      else
+        Result := Result + Fmt[I];
+      end;
+    end
+    else
+      Result := Result + Fmt[I];
+    Inc(I);
+  end;
 end;
 
 { Memory management }

@@ -20,6 +20,11 @@ type
     CandidatePaths: TStringArray;
   end;
 
+  TResolutionStackEntry = record
+    UnitId: string;
+    EnteredBy: TUnitGraphEdgeKind;
+  end;
+
   TRootSearchIndex = record
     RootPath: string;
     Status: string;
@@ -37,7 +42,7 @@ type
     FUnitGraph: TUnitGraph;
     FRootFileId: TSourceFileId;
     FResolutionStatus: string;
-    FResolutionStack: TStringArray;
+    FResolutionStack: array of TResolutionStackEntry;
     FProjectUnitRootInfos: TProjectUnitRootInfoArray;
     FExplicitUnitRoots: TStringArray;
     FRootIndexes: array of TRootSearchIndex;
@@ -46,9 +51,11 @@ type
       const AFileId: TSourceFileId;
       const AMessage: string
     );
-    procedure PushResolutionStack(const AUnitId: string);
+    procedure PushResolutionStack(
+      const AUnitId: string;
+      const AEnteredBy: TUnitGraphEdgeKind
+    );
     procedure PopResolutionStack;
-    function StackContains(const AUnitId: string): Boolean;
     function BuildCyclePath(const AUnitId: string): string;
     function DescribeSearchPathEntry(const AEntry: TSearchPathEntry): string;
     function FindSearchPathEntryForPath(
@@ -59,10 +66,14 @@ type
     function CandidateSummary(const ACandidates: TStringArray): string;
     function ResolveUnitOrigin(const ASourcePath: string): TResolvedUnitOrigin;
     function EnsureRuntimeUnit: TResolvedUnit;
+    function StackIndexOf(const AUnitId: string): LongInt;
     function FindIndexedEntry(
       const ARootIndex: LongInt;
       const AUnitId: string
     ): LongInt;
+    function StackPathHasImplementationBoundary(
+      const AStartIndex: LongInt
+    ): Boolean;
     function FindCandidatePaths(const ARequestedName: string): TStringArray;
     function FindCandidatePathsInRoot(
       const ARootIndex: LongInt;
@@ -158,9 +169,17 @@ begin
   FUnitGraph.MarkFailure;
 end;
 
-procedure TUnitResolver.PushResolutionStack(const AUnitId: string);
+procedure TUnitResolver.PushResolutionStack(
+  const AUnitId: string;
+  const AEnteredBy: TUnitGraphEdgeKind
+);
+var
+  NextIndex: SizeInt;
 begin
-  AppendString(FResolutionStack, AUnitId);
+  NextIndex := Length(FResolutionStack);
+  SetLength(FResolutionStack, NextIndex + 1);
+  FResolutionStack[NextIndex].UnitId := AUnitId;
+  FResolutionStack[NextIndex].EnteredBy := AEnteredBy;
 end;
 
 procedure TUnitResolver.PopResolutionStack;
@@ -171,12 +190,25 @@ begin
   SetLength(FResolutionStack, Length(FResolutionStack) - 1);
 end;
 
-function TUnitResolver.StackContains(const AUnitId: string): Boolean;
+function TUnitResolver.StackIndexOf(const AUnitId: string): LongInt;
 var
   Index: LongInt;
 begin
   for Index := 0 to Length(FResolutionStack) - 1 do
-    if FResolutionStack[Index] = AUnitId then
+    if FResolutionStack[Index].UnitId = AUnitId then
+      Exit(Index);
+
+  Result := -1;
+end;
+
+function TUnitResolver.StackPathHasImplementationBoundary(
+  const AStartIndex: LongInt
+): Boolean;
+var
+  Index: LongInt;
+begin
+  for Index := AStartIndex + 1 to Length(FResolutionStack) - 1 do
+    if FResolutionStack[Index].EnteredBy = ugeImplementationUse then
       Exit(True);
 
   Result := False;
@@ -187,20 +219,16 @@ var
   Index: LongInt;
   StartIndex: LongInt;
 begin
-  StartIndex := 0;
-  for Index := 0 to Length(FResolutionStack) - 1 do
-    if FResolutionStack[Index] = AUnitId then
-    begin
-      StartIndex := Index;
-      Break;
-    end;
+  StartIndex := StackIndexOf(AUnitId);
+  if StartIndex < 0 then
+    StartIndex := 0;
 
   Result := '';
   for Index := StartIndex to Length(FResolutionStack) - 1 do
   begin
     if Result <> '' then
       Result := Result + ' -> ';
-    Result := Result + FResolutionStack[Index];
+    Result := Result + FResolutionStack[Index].UnitId;
   end;
 
   if Result <> '' then
@@ -513,20 +541,28 @@ var
   DependencyGreenTree: TGreenTree;
   DependencyAst: TAstFacade;
   DependencyName: string;
+  ExistingStackIndex: LongInt;
 begin
   Result := False;
   RequestedUnitId := NormalizeUnitIdentity(ARequestedName);
   if RequestedUnitId = '' then
     Exit(True);
 
-  if StackContains(RequestedUnitId) then
+  ExistingStackIndex := StackIndexOf(RequestedUnitId);
+  if ExistingStackIndex >= 0 then
   begin
-    if AEdgeKind <> ugeImplementationUse then
-      EmitResolutionError(
-        'resolver.unit-cycle-detected',
-        ARequestFileId,
-        'unit cycle detected: ' + BuildCyclePath(RequestedUnitId)
-      );
+    if (AEdgeKind = ugeImplementationUse) or
+      StackPathHasImplementationBoundary(ExistingStackIndex) then
+    begin
+      FUnitGraph.AddEdge(AEdgeKind, ASourceUnitId, RequestedUnitId);
+      Exit(True);
+    end;
+
+    EmitResolutionError(
+      'resolver.unit-cycle-detected',
+      ARequestFileId,
+      'unit cycle detected: ' + BuildCyclePath(RequestedUnitId)
+    );
     Exit;
   end;
 
@@ -631,7 +667,7 @@ begin
     FUnitGraph.AddResolvedUnit(ResolvedUnit);
     FUnitGraph.AddEdge(AEdgeKind, ASourceUnitId, ResolvedUnit.UnitId);
 
-    PushResolutionStack(ResolvedUnit.UnitId);
+    PushResolutionStack(ResolvedUnit.UnitId, AEdgeKind);
     try
       if not ResolveDependencyList(
         ResolvedUnit.UnitId,
@@ -786,7 +822,7 @@ begin
   FUnitGraph.AddResolvedUnit(RootUnit);
   FUnitGraph.AddEdge(ugeRootRequest, '@build', RootUnit.UnitId);
 
-  PushResolutionStack(RootUnit.UnitId);
+  PushResolutionStack(RootUnit.UnitId, ugeRootRequest);
   try
     if (ARootAst.RootKindName = 'program') or
       (ARootAst.RootKindName = 'library') or
