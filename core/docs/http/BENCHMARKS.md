@@ -885,12 +885,24 @@ raw-gap step should use `perf stat/record` or codegen/profile evidence, not
 hand-editing the generated llhttp state machine.
 
 `bench_h1parser/run_flag_matrix.sh` now provides a repeatable smoke/full matrix
-runner. It writes `results.tsv`, `env.txt`, logs, and optional `perf/*.txt`
-only under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+runner. It writes `results.tsv`, `summary.tsv`, `env.txt`, logs, and optional
+`perf/*.txt` only under
+`build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
 
 ```sh
 LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf
+```
+
+Use `--runs N` when you want a median across repeated runs without rebuilding a
+separate shell loop around the tool:
+
+```sh
+LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh \
+  --smoke --no-perf --runs 3
 ```
 
 Do not run multiple `clean run` jobs against the same `bench_h1parser` build
@@ -1303,6 +1315,50 @@ c-native = 524.5 ns/op
 CPU/FPU flags and extra FPC optimizer switches do not close the gap. The extra
 FPC opts also emit additional warnings in this benchmark build, so they should
 not become the production default based on this row.
+
+## Benchmark Tooling: Multi-Run H1 Parser Flag Matrix
+
+On 2026-06-05 local time, `run_flag_matrix.sh` gained `--runs N`. The runner
+now reuses each built Pascal/C variant across repeated measurements, writes
+every run to `results.tsv`, and emits a median-based `summary.tsv`. This keeps
+the narrowed Pascal-vs-C llhttp track reproducible without repeatedly
+hand-running separate commands.
+
+Focused RED/GREEN:
+
+```text
+RED:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+20 total, 19 passed, 1 failed
+H1 parser flag matrix runs summary smoke failed:
+unknown argument: --runs
+heaptrc: 0 unfreed memory blocks
+
+GREEN:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+20 total, 20 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh local 3-run filtered summary:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf --runs 3
+
+summary.tsv:
+c-default      C raw llhttp: 10 headers (~400B)      median 534.1 ns/op
+pascal-default raw llhttp: 10 headers (~400B)        median 749.1 ns/op
+```
+
+This recheck keeps the raw translation gap in roughly the same band as the
+earlier single-shot evidence: Pascal-translated llhttp remains about `1.40x`
+slower than C llhttp on this machine for the narrowed 10-header row. The tool
+improvement matters because future raw-gap work can now compare repeated runs
+before deciding whether generator/codegen changes are warranted.
 
 Code inspection points to a generator/codegen track rather than a one-line
 runtime fix:

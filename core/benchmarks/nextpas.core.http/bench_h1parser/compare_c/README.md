@@ -35,6 +35,17 @@ LLHTTP_ROOT=/path/to/llhttp-9.4.1 \
 benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf
 ```
 
+Use `--runs N` to execute the same built variants multiple times and emit both
+per-run `results.tsv` and a median-based `summary.tsv`:
+
+```sh
+LLHTTP_ROOT=/path/to/llhttp-9.4.1 \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh \
+  --smoke --no-perf --runs 3
+```
+
 Use `--perf` on machines that allow hardware perf events. The runner probes
 `perf stat` first; if perf is blocked by `perf_event_paranoid` or missing
 capabilities, it still runs the timing matrix and records `perf_requested=1`

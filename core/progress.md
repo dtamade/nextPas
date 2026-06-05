@@ -1,58 +1,55 @@
-# Progress Log: H1 server 1 KiB response benchmark correlation
+# Progress Log: H1 parser llhttp multi-run evidence tightening
 
 ## Session
 
-- **Scope:** HTTP server benchmark workload split: 1 KiB response writer/drain path.
-- **Status:** focused RED/GREEN completed, fresh `response_1k` comparison row
-  captured, no-url calibration row captured, docs/control files updated.
+- **Scope:** H1 parser raw Pascal-vs-C llhttp multi-run benchmark runner.
+- **Status:** focused RED/GREEN completed, `--runs` + `summary.tsv` landed,
+  aggregation bug fixed, fresh 3-run filtered summary captured, docs/control
+  files updated.
 - **Roadmap Position:** `6/6 benchmark/performance` ->
-  `H1 server response writer/drain full-chain isolation`.
+  `H1 parser Pascal-vs-C raw-gap evidence stabilization`.
 
 ## Current state
 
 - shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理
-  HTTP benchmark/comparator/test/docs/control files。
+  HTTP benchmark/test/docs/control files。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks` 和两条 50k/4 comparison：
-  `response_1k` 与 no-url calibration。
+- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks` 和一条 focused
+  `run_flag_matrix.sh --runs 3` live row。
 
 ## Completed work
 
-- `bench_server` 新增 `--workload response_1k`，server 写 1 KiB fixed-length body。
-- `bench_server` raw client 改为按 response header boundary + expected body length
-  读取完整响应。
-- Go comparator 新增同名 workload，并预构造 1 KiB response body。
-- Rust comparator 新增同名 workload，并按 expected body length 读取完整响应。
-- `run_server_comparison.sh` 新增 `response_1k` 校验和三方参数下传。
-- `test_http_benchmarks` 新增 runner-level `response_1k` smoke，覆盖 stdout / report
-  以及 nextPas / Go / Rust 三方 output marker。
+- `run_flag_matrix.sh` 新增 `--runs N`，支持每个 Pascal/C variant 单次 build、多次 run。
+- runner 现在会写逐次 `results.tsv`、聚合 `summary.tsv` 与 `env.txt`。
+- `test_http_benchmarks` 新增 `H1 parser flag matrix runs summary smoke`，
+  先锁 `unknown argument: --runs` RED，再锁 summary 契约 GREEN。
+- 发现并修正 `summary.tsv` 聚合 bug：C variant 不再被排序+跳头逻辑误丢。
 - `docs/http/API_COVERAGE.md`、`docs/http/BENCHMARKS.md`、`docs/http/README.md`
-  已同步 benchmark 输出契约、完整响应读取口径与 fresh correlation。
+  与 `bench_h1parser/compare_c/README.md` 已同步 multi-run / summary 契约和 fresh
+  raw-gap evidence。
 
 ## Verification
 
 - RED:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `19 total, 18 passed, 1 failed`，runner 仍拒绝 `response_1k`，heaptrc
+  -> `20 total, 19 passed, 1 failed`，`run_flag_matrix.sh` 仍拒绝 `--runs`，heaptrc
   `0 unfreed memory blocks`。
 - GREEN:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `19 total, 19 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
-- Fresh comparison:
-  `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload response_1k`
-  -> nextPas `80184 req/s`; Go `18392 req/s`; Rust std-only `90185 req/s`。
-- Calibration:
-  `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url`
-  -> nextPas `87726 req/s`; Go `18247 req/s`; Rust std-only `94715 req/s`。
+  -> `20 total, 20 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
+- Fresh live row:
+  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf --runs 3`
+  -> `summary.tsv`:
+  C `534.1 ns/op`; Pascal `749.1 ns/op`。
 
 ## Direction review
 
-方向没有走偏：本轮先修 benchmark harness correctness，再用 1 KiB response workload
-拆 response writer/drain path。当前证据显示 nextPas 在 response_1k row 已接近 Rust
-std-only comparator，因此下一步不应优先盲改 response writer，而应继续拆 request
-dispatch / handler invocation / serialization 或引入 multi-run median runner。
+方向没有走偏：这轮先把 llhttp raw-gap 证据从单次结果升级成 multi-run 中位数工具。
+当前结论是 Pascal-translated llhttp 仍慢于 C，但程度约 `1.40x`，暂时仍不足以支撑
+“直接改 generated llhttp 就能显著拉平 full-chain”的判断。
 
 ## Next step
 
-继续 `6/6 benchmark/performance`。下一批建议做 multi-run server comparison runner
-或 request-dispatch micro/full-chain 对照，降低噪声后再决定真正的优化点。
+继续 `6/6 benchmark/performance`。下一批建议把 multi-run / median 能力扩到
+`run_server_comparison.sh`，或者直接补 request dispatch / response serialization
+的 micro/full-chain 对照，再决定要不要进入 llhttp generator/codegen 优化。

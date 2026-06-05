@@ -161,5 +161,19 @@ The snapshot includes `git_head`, OS, FPC, Go, and Rust versions, the benchmark
 parameters, and the raw comparison output. Treat snapshots as local evidence,
 not as a permanent ranking across machines.
 
+For narrowed `Pascal raw llhttp vs C llhttp` work, use the H1 parser flag
+matrix runner instead of repeating separate single-shot commands:
+
+```sh
+LLHTTP_ROOT=/path/to/llhttp-9.4.1 \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh \
+  --smoke --no-perf --runs 3
+```
+
+This writes per-run `results.tsv`, aggregated `summary.tsv`, `env.txt`, and
+logs under `build/projects/nextpas.core.http/bench_h1parser/flag_matrix/...`.
+
 See [BENCHMARKS.md](BENCHMARKS.md) for the current harness details and the
 latest committed local snapshot.

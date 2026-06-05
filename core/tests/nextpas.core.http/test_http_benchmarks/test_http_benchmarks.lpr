@@ -932,6 +932,79 @@ begin
     'H1 parser flag matrix perf usability marker');
 end;
 
+procedure TestH1ParserFlagMatrixRunsSummarySmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LRunnerPath: string;
+  LOutputDir: string;
+  LResultsPath: string;
+  LSummaryPath: string;
+  LEnvPath: string;
+  LLhttpRoot: string;
+  LExitCode: Integer;
+  LOutput: string;
+  LSummary: string;
+  LEnv: string;
+  LEnvVars: array of string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+  LRunnerPath := ResolveH1FlagMatrixRunnerPath(LRootDir);
+  LOutputDir := PathJoin(LRootDir,
+    'build/projects/nextpas.core.http/bench_h1parser/flag_matrix/smoke');
+  LResultsPath := PathJoin(LOutputDir, 'results.tsv');
+  LSummaryPath := PathJoin(LOutputDir, 'summary.tsv');
+  LEnvPath := PathJoin(LOutputDir, 'env.txt');
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+
+  if LLhttpRoot <> '' then
+  begin
+    SetLength(LEnvVars, 5);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'LLHTTP_ROOT=' + LLhttpRoot;
+    LEnvVars[3] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[4] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end
+  else
+  begin
+    SetLength(LEnvVars, 4);
+    LEnvVars[0] := BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue;
+    LEnvVars[1] := BenchFilterEnvName + '=raw llhttp: 10 headers';
+    LEnvVars[2] := 'PATH=' + GetEnvironmentVariable('PATH');
+    LEnvVars[3] := 'HOME=' + GetEnvironmentVariable('HOME');
+  end;
+
+  RunProcessAndCaptureWithEnv(LRunnerPath, ['--smoke', '--no-perf', '--runs', '2'],
+    LBenchDir, LEnvVars, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser flag matrix runs smoke exit code: ' + LOutput);
+  Check(FileExists(LResultsPath),
+    'H1 parser flag matrix runs results.tsv exists');
+  Check(FileExists(LSummaryPath),
+    'H1 parser flag matrix runs summary.tsv exists');
+  Check(FileExists(LEnvPath), 'H1 parser flag matrix runs env.txt exists');
+
+  LSummary := LoadTextFile(LSummaryPath);
+  CheckContains(LSummary,
+    'variant' + #9 + 'impl' + #9 + 'benchmark' + #9 + 'runs',
+    'H1 parser flag matrix summary header');
+  CheckContains(LSummary, 'pascal-default',
+    'H1 parser flag matrix summary Pascal variant');
+  CheckContains(LSummary, 'raw llhttp: 10 headers',
+    'H1 parser flag matrix summary filtered row');
+  CheckContains(LSummary, #9 + '2' + #9,
+    'H1 parser flag matrix summary run count');
+  if LLhttpRoot <> '' then
+    CheckContains(LSummary, 'c-default',
+      'H1 parser flag matrix summary C variant');
+
+  LEnv := LoadTextFile(LEnvPath);
+  CheckContains(LEnv, 'runs=2',
+    'H1 parser flag matrix runs marker');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -969,6 +1042,8 @@ begin
     @TestH1ParserFlagMatrixSmoke);
   T.Run('H1 parser flag matrix perf graceful smoke',
     @TestH1ParserFlagMatrixPerfGracefulSmoke);
+  T.Run('H1 parser flag matrix runs summary smoke',
+    @TestH1ParserFlagMatrixRunsSummarySmoke);
   T.Summary;
   if not T.AllPassed then
     Halt(1);
