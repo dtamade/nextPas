@@ -1,5 +1,36 @@
 # Findings & Decisions
 
+## 2026-06-06 http header lookup hot-helper inline slice
+
+- 本轮只处理 `THttpHeaders` lookup/normalize 热路径中的三个短 helper：
+  `FindFirst`、`NeedsNormalize`、`NormalizeIfNeeded`。
+- 选择依据：
+  - `FindFirst` 是 `Get` / `Has` 的内部 concrete-call 热路径；server policy、
+    writer header checks、handler 常用 header lookup 都会经过它。
+  - `NeedsNormalize` 是 lowercase exact lookup fast path 的分支判断，函数体只是
+    扫描是否存在大写 ASCII。
+  - `NormalizeIfNeeded` 是 `Del` 等路径的短 wrapper，lowercase 输入直接返回原字符串。
+- 本轮明确不改：
+  - 不改 `IHttpHeaders` public API。
+  - 不改 header 存储结构、大小写语义、validation 语义。
+  - 不 inline `Normalize` / `NormalizeParsedNameSpan` 这类循环物化函数。
+- RED 证据：
+  `test_http_benchmarks` 新增 source-contract 后先失败在
+  `THttpHeaders FindFirst inline declaration missing`；
+  结果为 `29 total, 28 passed, 1 failed`，heaptrc 仍是 `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_benchmarks` 后续为 `29/29 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_headers` 后续为 `17/17 passed`，heaptrc `0 unfreed memory blocks`
+  - `bench_headers` filtered `Get hit` 小 row：
+    `Get hit (5 headers, last) = 48.9 ns/op`，
+    `Get hit uppercase (5 headers, last) = 155.4 ns/op`
+- 该 benchmark row 是小 smoke，不声明跨运行永久提升；本轮更重要的是锁住
+  header lookup hot helper source shape，防止未来回退。
+- 复盘结论：
+  方向仍在 HttpServer 性能主线上；这轮比继续堆大 server benchmark 更有效，
+  因为它用一个小 source-contract 固定了 server 内部高频 header lookup 形状。
+
+
 ## 2026-06-05 http h1 server policy-helper inline slice
 
 - 本轮只处理 H1 server policy 决策路径中的三个短 helper：

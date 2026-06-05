@@ -25,6 +25,7 @@ const
     'benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh';
   H1FlagMatrixRunnerRelativePath =
     'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
+  HeaderUnitPath = 'src/nextpas.core.http.headers.pas';
   H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
@@ -552,6 +553,34 @@ begin
   CheckContains(LSource,
     'const AHeadersDone, AContinueSent: Boolean): Boolean; inline;',
     'H1 server ShouldSendContinueResponse inline implementation');
+end;
+
+procedure TestHttpHeadersLookupHotHelpersInlineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchRouterRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, HeaderUnitPath));
+
+  CheckContains(LSource,
+    'function FindFirst(const AName: string): Int32; inline;',
+    'THttpHeaders FindFirst inline declaration');
+  CheckContains(LSource,
+    'class function NeedsNormalize(const AName: string): Boolean; static; inline;',
+    'THttpHeaders NeedsNormalize inline declaration');
+  CheckContains(LSource,
+    'class function NormalizeIfNeeded(const AName: string): string; static; inline;',
+    'THttpHeaders NormalizeIfNeeded inline declaration');
+  CheckContains(LSource,
+    'function THttpHeaders.FindFirst(const AName: string): Int32; inline;',
+    'THttpHeaders FindFirst inline implementation');
+  CheckContains(LSource,
+    'class function THttpHeaders.NeedsNormalize(const AName: string): Boolean; inline;',
+    'THttpHeaders NeedsNormalize inline implementation');
+  CheckContains(LSource,
+    'class function THttpHeaders.NormalizeIfNeeded(const AName: string): string; inline;',
+    'THttpHeaders NormalizeIfNeeded inline implementation');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -1416,6 +1445,8 @@ begin
     @TestH1OutboundHotHelpersInlineSourceContract);
   T.Run('H1 server policy hot helpers inline source contract',
     @TestH1ServerPolicyHotHelpersInlineSourceContract);
+  T.Run('HTTP headers lookup hot helpers inline source contract',
+    @TestHttpHeadersLookupHotHelpersInlineSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

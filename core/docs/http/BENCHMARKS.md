@@ -698,6 +698,47 @@ The uppercase lookup row is intentionally tracked because public header APIs
 remain case-insensitive. This slice trades a slower uppercase fallback for a
 faster lowercase hot path, which matches current server internals.
 
+Later on 2026-06-06, `THttpHeaders.FindFirst`, `NeedsNormalize`, and
+`NormalizeIfNeeded` were locked as `inline` hot helpers. This keeps
+`Get` / `Has` exact lowercase lookup and the delete-path normalize check on a
+short concrete-call path while leaving full normalization loops and public
+interface dispatch unchanged.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+29 total, 28 passed, 1 failed
+failure: THttpHeaders FindFirst inline declaration missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_headers clean test
+17 total, 17 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small filtered local row:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='Get hit' make -C benchmarks/nextpas.core.http/bench_headers clean run
+Get hit (5 headers, last) = 48.9 ns/op
+Get hit uppercase (5 headers, last) = 155.4 ns/op
+```
+
+This row is a small smoke for the header lookup path, not a durable
+cross-run performance claim.
+
 ## Optimization Evidence: Header GetAll Miss Fast Path
 
 On 2026-06-05 local time, `THttpHeaders.GetAll` stopped allocating a full

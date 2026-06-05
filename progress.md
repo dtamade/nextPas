@@ -1,5 +1,44 @@
 # Progress Log
 
+## Session: 2026-06-06 http header lookup hot-helper inline slice
+
+- **Status:** completed.
+- Objective:
+  - improve HTTP header lookup hot path with a narrow inline slice
+  - keep `IHttpHeaders` public API and storage semantics unchanged
+- Scope and safety:
+  - touched `src/nextpas.core.http.headers.pas`
+  - added one source-contract smoke in `test_http_benchmarks`
+  - updated HTTP benchmark/API docs and top control-file entries only
+  - did not touch unrelated async/client/compiler dirty files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `29 total, 28 passed, 1 failed`
+    - failed at `HTTP headers lookup hot helpers inline source contract`
+    - missing `function FindFirst(const AName: string): Int32; inline;`
+    - heaptrc still showed `0 unfreed memory blocks`
+- Landed change:
+  - marked `THttpHeaders.FindFirst`, `NeedsNormalize`, and `NormalizeIfNeeded` as `inline`
+  - kept full normalization/materialization loops and public interface dispatch unchanged
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `29/29 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_headers clean test`
+    - `17/17 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='Get hit' make -C benchmarks/nextpas.core.http/bench_headers clean run`
+    - `Get hit (5 headers, last): 48.9 ns/op`
+    - `Get hit uppercase (5 headers, last): 155.4 ns/op`
+- Outcome:
+  - header lookup hot-helper inline source contract is now locked
+  - no public API or storage layout changed
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: `THttpHeaders` lookup helper inline
+  - next best batch: H1 fast parser source-order contract or targeted request construction/header materialization benchmark row
+
+
 ## Session: 2026-06-05 http h1 server policy-helper inline slice
 
 - **Status:** completed.

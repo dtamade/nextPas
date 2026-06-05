@@ -1,5 +1,27 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http header lookup hot-helper inline slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 header lookup 热路径性能切片，
+把 `THttpHeaders.FindFirst`、`NeedsNormalize`、`NormalizeIfNeeded`
+锁成 inline source contract，保持 public `IHttpHeaders` API 与 header
+存储结构不变。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 header lookup hot helper inline source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.headers` 的三个短 helper 声明/实现。
+- [x] 跑 focused benchmark/source-contract gate：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 header behavior/leak gate：
+  `make -C tests/nextpas.core.http/test_http_headers clean test`。
+- [x] 跑小 header benchmark row：
+  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='Get hit' make -C benchmarks/nextpas.core.http/bench_headers clean run`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
+
 ## Active Session: 2026-06-05 http h1 server policy-helper inline slice
 
 ### Goal
