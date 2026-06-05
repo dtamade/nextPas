@@ -10,7 +10,6 @@ unit nextpas.core.simd.cpuinfo.diagnostic;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.platform.time,
   nextpas.core.simd.cpuinfo,
   nextpas.core.simd.cpuinfo.base;
@@ -57,6 +56,8 @@ implementation
 uses
   Windows;
 {$ENDIF}
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 // Local helpers for OS enablement on x86
 {$IFDEF SIMD_X86_AVAILABLE}

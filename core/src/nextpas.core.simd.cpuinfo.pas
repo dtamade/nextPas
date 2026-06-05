@@ -7,7 +7,6 @@ unit nextpas.core.simd.cpuinfo;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.simd.base,
   nextpas.core.simd.cpuinfo.base,
   nextpas.core.atomic
@@ -125,6 +124,8 @@ uses
   nextpas.core.platform.files;
   {$ENDIF}
 {$ENDIF}
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 var
   // Global CPU info cache
@@ -748,8 +749,8 @@ end;
 // Safe reset to force re-detection on next query
 procedure ResetCPUInfo;
 begin
-  // Clear structure
-  FillChar(G_CPUInfo, SizeOf(G_CPUInfo), 0);
+  // TCPUInfo contains managed strings; keep reset compatible with refcount finalization.
+  G_CPUInfo := Default(TCPUInfo);
   atomic_thread_fence(mo_seq_cst);
   // Reset init state
   G_InitState := 0;

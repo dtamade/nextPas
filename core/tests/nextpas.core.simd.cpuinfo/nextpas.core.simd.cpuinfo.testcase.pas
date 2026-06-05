@@ -1,6 +1,5 @@
 unit nextpas.core.simd.cpuinfo.testcase;
 
-{$mode objfpc}{$H+}
 {$I nextpas.core.settings.inc}
 {$CODEPAGE UTF8}
 

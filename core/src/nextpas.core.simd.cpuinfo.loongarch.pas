@@ -20,13 +20,13 @@ implementation
 
 {$IFDEF SIMD_LOONGARCH_AVAILABLE}
 
+{$IFDEF LINUX}
 uses
-  nextpas.core.text.conv
-  {$IFDEF LINUX}
-  , nextpas.core.platform.files.base
-  , nextpas.core.platform.files
-  {$ENDIF}
-  ;
+  nextpas.core.platform.files.base,
+  nextpas.core.platform.files;
+{$ENDIF}
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 {$IFDEF LINUX}
 function PlatformFileExists(const APath: string): Boolean;

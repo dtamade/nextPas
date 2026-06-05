@@ -51,9 +51,10 @@ implementation
 {$IFDEF SIMD_RISCV_AVAILABLE}
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 function PlatformFileExists(const APath: string): Boolean;
 var
@@ -91,7 +92,7 @@ function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
   LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: Int64;
+  LReadBytes: QWord;
 begin
   Result := False;
   aHWCAP := 0;
@@ -102,7 +103,8 @@ begin
   try
     while True do
     begin
-      LReadBytes := platform_file_read(LHandle, @LEntry, SizeOf(LEntry));
+      if platform_file_read(LHandle, @LEntry, SizeOf(LEntry), LReadBytes) <> 0 then
+        Break;
       if LReadBytes <> SizeOf(LEntry) then
         Break;
       if LEntry.Tag = LINUX_AUXV_AT_NULL then
@@ -202,7 +204,7 @@ var
   LStat: TPlatformFileStat;
   LRaw: RawByteString;
   LIndex: Integer;
-  LRead: Int64;
+  LRead: QWord;
 begin
   Result := False;
   aText := '';
@@ -218,9 +220,10 @@ begin
       SetLength(LRaw, LStat.Size);
       if Length(LRaw) > 0 then
       begin
-        LRead := platform_file_read(LHandle, @LRaw[1], Length(LRaw));
-        if LRead < Length(LRaw) then
-          SetLength(LRaw, LRead);
+        if platform_file_read(LHandle, @LRaw[1], Length(LRaw), LRead) <> 0 then
+          LRead := 0;
+        if LRead < QWord(Length(LRaw)) then
+          SetLength(LRaw, Integer(LRead));
       end;
     finally
       platform_file_close(LHandle);
@@ -498,11 +501,12 @@ end;
 
 function ParseRISCVVendorModelFromCpuInfo(const aCpuInfo: string; out aVendor, aModel: string): Boolean;
 var
-  LLines: TStringList;
+  LText: string;
+  LScanPos: Integer;
+  LNextPos: Integer;
   LLine: string;
   LKey: string;
   LValue: string;
-  LLineIndex: Integer;
   LVendorPriority: Integer;
   LModelPriority: Integer;
 begin
@@ -511,53 +515,54 @@ begin
   LVendorPriority := 0;
   LModelPriority := 0;
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ReplaceChar(aCpuInfo, #13, #10);
-    for LLineIndex := 0 to LLines.Count - 1 do
+  LText := ReplaceChar(aCpuInfo, #13, #10);
+  LScanPos := 1;
+  while LScanPos <= Length(LText) do
+  begin
+    LNextPos := PosEx(#10, LText, LScanPos);
+    if LNextPos = 0 then
+      LNextPos := Length(LText) + 1;
+
+    LLine := Trim(Copy(LText, LScanPos, LNextPos - LScanPos));
+    LScanPos := LNextPos + 1;
+    if not TryParseKeyValueLine(LLine, LKey, LValue) then
+      Continue;
+
+    LValue := NormalizeFieldValue(LValue);
+    if LValue = '' then
+      Continue;
+
+    if (LKey = 'vendor_id') or (LKey = 'vendor') or (LKey = 'riscv vendor') then
     begin
-      LLine := Trim(LLines[LLineIndex]);
-      if not TryParseKeyValueLine(LLine, LKey, LValue) then
-        Continue;
-
-      LValue := NormalizeFieldValue(LValue);
-      if LValue = '' then
-        Continue;
-
-      if (LKey = 'vendor_id') or (LKey = 'vendor') or (LKey = 'riscv vendor') then
-      begin
-        PromoteIdentityCandidate(aVendor, LVendorPriority, LValue, 30);
-        Continue;
-      end;
-
-      if (LKey = 'soc') or (LKey = 'machine') or (LKey = 'hardware') or (LKey = 'platform') then
-      begin
-        PromoteIdentityCandidate(aVendor, LVendorPriority, LValue, 20);
-        Continue;
-      end;
-
-      if (LKey = 'model name') or (LKey = 'cpu model') or (LKey = 'uarch') or
-         (LKey = 'core') or (LKey = 'core name') then
-      begin
-        PromoteIdentityCandidate(aModel, LModelPriority, LValue, 30);
-        Continue;
-      end;
-
-      if (LKey = 'model') or (LKey = 'cpu') then
-      begin
-        PromoteIdentityCandidate(aModel, LModelPriority, LValue, 25);
-        Continue;
-      end;
-
-      if (LKey = 'processor') and not IsNumericIndexValue(LValue) then
-      begin
-        // "processor : 0/1/..." is usually hart index, not a model string.
-        PromoteIdentityCandidate(aModel, LModelPriority, LValue, 10);
-        Continue;
-      end;
+      PromoteIdentityCandidate(aVendor, LVendorPriority, LValue, 30);
+      Continue;
     end;
-  finally
-    LLines.Free;
+
+    if (LKey = 'soc') or (LKey = 'machine') or (LKey = 'hardware') or (LKey = 'platform') then
+    begin
+      PromoteIdentityCandidate(aVendor, LVendorPriority, LValue, 20);
+      Continue;
+    end;
+
+    if (LKey = 'model name') or (LKey = 'cpu model') or (LKey = 'uarch') or
+       (LKey = 'core') or (LKey = 'core name') then
+    begin
+      PromoteIdentityCandidate(aModel, LModelPriority, LValue, 30);
+      Continue;
+    end;
+
+    if (LKey = 'model') or (LKey = 'cpu') then
+    begin
+      PromoteIdentityCandidate(aModel, LModelPriority, LValue, 25);
+      Continue;
+    end;
+
+    if (LKey = 'processor') and not IsNumericIndexValue(LValue) then
+    begin
+      // "processor : 0/1/..." is usually hart index, not a model string.
+      PromoteIdentityCandidate(aModel, LModelPriority, LValue, 10);
+      Continue;
+    end;
   end;
 
   Result := (aVendor <> '') or (aModel <> '');
@@ -1174,11 +1179,12 @@ end;
 function ExtractBestRISCVISAFromCpuInfo(const aCpuInfo: string; out aISA: string;
   out aFeatures: TRISCVFeatures): Boolean;
 var
-  LLines: TStringList;
+  LText: string;
+  LScanPos: Integer;
+  LNextPos: Integer;
   LLine: string;
   LKey: string;
   LValue: string;
-  LLineIndex: Integer;
   LCandidateFeatures: TRISCVFeatures;
   LMISAFeatures: TRISCVFeatures;
   LMISA: QWord;
@@ -1204,62 +1210,63 @@ begin
   LFoundCandidate := False;
   LFoundMISA := False;
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ReplaceChar(aCpuInfo, #13, #10);
-    for LLineIndex := 0 to LLines.Count - 1 do
+  LText := ReplaceChar(aCpuInfo, #13, #10);
+  LScanPos := 1;
+  while LScanPos <= Length(LText) do
+  begin
+    LNextPos := PosEx(#10, LText, LScanPos);
+    if LNextPos = 0 then
+      LNextPos := Length(LText) + 1;
+
+    LLine := Trim(Copy(LText, LScanPos, LNextPos - LScanPos));
+    LScanPos := LNextPos + 1;
+    if not TryParseKeyValueLine(LLine, LKey, LValue) then
+      Continue;
+
+    if IsMISAKey(LKey) then
     begin
-      LLine := Trim(LLines[LLineIndex]);
-      if not TryParseKeyValueLine(LLine, LKey, LValue) then
-        Continue;
-
-      if IsMISAKey(LKey) then
+      LValue := NormalizeFieldValue(LValue);
+      if TryParseRISCVMISAValue(LValue, LMISA) then
       begin
-        LValue := NormalizeFieldValue(LValue);
-        if TryParseRISCVMISAValue(LValue, LMISA) then
-        begin
-          MergeRISCVFeaturesFromMISA(LMISAFeatures, LMISA);
-          LFoundMISA := True;
-        end;
-        Continue;
+        MergeRISCVFeaturesFromMISA(LMISAFeatures, LMISA);
+        LFoundMISA := True;
       end;
-
-      if not IsISAKey(LKey) then
-        Continue;
-
-      LValue := NormalizeISAValue(LValue);
-      if LValue = '' then
-        Continue;
-      if IsWeakRISCVISAKey(LKey) and not IsLikelyRISCVISAValue(LValue) then
-        Continue;
-
-      FillChar(LCandidateFeatures, SizeOf(LCandidateFeatures), 0);
-      ParseISAString(LValue, LCandidateFeatures);
-      LCandidateFeatureScore := CountRISCVFeatureFlags(LCandidateFeatures);
-      if LCandidateFeatureScore <= 0 then
-        Continue;
-
-      LCandidateHasBase := HasRISCVISABase(LCandidateFeatures);
-      LCandidateKeyPriority := GetRISCVISAKeyPriority(LKey);
-      LCandidateTextLength := Length(LValue);
-
-      if ShouldPromoteRISCVISACandidate(
-        LFoundCandidate, LBestHasBase, LCandidateHasBase,
-        LBestKeyPriority, LCandidateKeyPriority,
-        LBestFeatureScore, LCandidateFeatureScore,
-        LBestTextLength, LCandidateTextLength) then
-      begin
-        aISA := LValue;
-        aFeatures := LCandidateFeatures;
-        LBestHasBase := LCandidateHasBase;
-        LBestKeyPriority := LCandidateKeyPriority;
-        LBestFeatureScore := LCandidateFeatureScore;
-        LBestTextLength := LCandidateTextLength;
-        LFoundCandidate := True;
-      end;
+      Continue;
     end;
-  finally
-    LLines.Free;
+
+    if not IsISAKey(LKey) then
+      Continue;
+
+    LValue := NormalizeISAValue(LValue);
+    if LValue = '' then
+      Continue;
+    if IsWeakRISCVISAKey(LKey) and not IsLikelyRISCVISAValue(LValue) then
+      Continue;
+
+    FillChar(LCandidateFeatures, SizeOf(LCandidateFeatures), 0);
+    ParseISAString(LValue, LCandidateFeatures);
+    LCandidateFeatureScore := CountRISCVFeatureFlags(LCandidateFeatures);
+    if LCandidateFeatureScore <= 0 then
+      Continue;
+
+    LCandidateHasBase := HasRISCVISABase(LCandidateFeatures);
+    LCandidateKeyPriority := GetRISCVISAKeyPriority(LKey);
+    LCandidateTextLength := Length(LValue);
+
+    if ShouldPromoteRISCVISACandidate(
+      LFoundCandidate, LBestHasBase, LCandidateHasBase,
+      LBestKeyPriority, LCandidateKeyPriority,
+      LBestFeatureScore, LCandidateFeatureScore,
+      LBestTextLength, LCandidateTextLength) then
+    begin
+      aISA := LValue;
+      aFeatures := LCandidateFeatures;
+      LBestHasBase := LCandidateHasBase;
+      LBestKeyPriority := LCandidateKeyPriority;
+      LBestFeatureScore := LCandidateFeatureScore;
+      LBestTextLength := LCandidateTextLength;
+      LFoundCandidate := True;
+    end;
   end;
 
   if LFoundCandidate then
@@ -1477,42 +1484,44 @@ end;
 
 function ParseRISCVFeaturesFromCpuInfo(const cpuInfo: string): TRISCVFeatures;
 var
-  LLines: TStringList;
+  LText: string;
+  LScanPos: Integer;
+  LNextPos: Integer;
   LLine: string;
   LKey: string;
   LValue: string;
-  LLineIndex: Integer;
   LMISA: QWord;
 begin
   FillChar(Result, SizeOf(TRISCVFeatures), 0);
 
-  LLines := TStringList.Create;
-  try
-    LLines.Text := ReplaceChar(cpuInfo, #13, #10);
-    for LLineIndex := 0 to LLines.Count - 1 do
+  LText := ReplaceChar(cpuInfo, #13, #10);
+  LScanPos := 1;
+  while LScanPos <= Length(LText) do
+  begin
+    LNextPos := PosEx(#10, LText, LScanPos);
+    if LNextPos = 0 then
+      LNextPos := Length(LText) + 1;
+
+    LLine := Trim(Copy(LText, LScanPos, LNextPos - LScanPos));
+    LScanPos := LNextPos + 1;
+    if not TryParseKeyValueLine(LLine, LKey, LValue) then
+      Continue;
+
+    if not IsISAKey(LKey) then
     begin
-      LLine := Trim(LLines[LLineIndex]);
-      if not TryParseKeyValueLine(LLine, LKey, LValue) then
-        Continue;
-
-      if not IsISAKey(LKey) then
+      if IsMISAKey(LKey) then
       begin
-        if IsMISAKey(LKey) then
-        begin
-          LValue := NormalizeFieldValue(LValue);
-          if TryParseRISCVMISAValue(LValue, LMISA) then
-            MergeRISCVFeaturesFromMISA(Result, LMISA);
-        end;
-        Continue;
+        LValue := NormalizeFieldValue(LValue);
+        if TryParseRISCVMISAValue(LValue, LMISA) then
+          MergeRISCVFeaturesFromMISA(Result, LMISA);
       end;
-
-      LValue := NormalizeISAValue(LValue);
-      if IsWeakRISCVISAKey(LKey) and not IsLikelyRISCVISAValue(LValue) then
-        Continue;
-      ParseISAString(LValue, Result);
+      Continue;
     end;
-  finally
-    LLines.Free;
+
+    LValue := NormalizeISAValue(LValue);
+    if IsWeakRISCVISAKey(LKey) and not IsLikelyRISCVISAValue(LValue) then
+      Continue;
+    ParseISAString(LValue, Result);
   end;
 
   // Keep parser deterministic when mixed ISA lines report conflicting RV base.

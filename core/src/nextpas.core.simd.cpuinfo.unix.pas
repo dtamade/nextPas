@@ -10,12 +10,12 @@ function DetectCoreCounts(out Physical, Logical: LongInt): Boolean;
 
 implementation
 
+{$IFDEF LINUX}
 uses
-  nextpas.core.text.conv
-  {$IFDEF LINUX}
-  , Unix
-  {$ENDIF}
-  ;
+  Unix;
+{$ENDIF}
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 {$IFNDEF FPC_HAS_SYSCONF}
 const

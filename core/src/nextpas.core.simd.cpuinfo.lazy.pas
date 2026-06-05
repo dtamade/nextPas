@@ -131,7 +131,6 @@ function HasFeatureLazy(f: TGenericFeature): Boolean;
 implementation
 
 uses
-  nextpas.core.text.conv, nextpas.core.text.strings,
   nextpas.core.os.env,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files
@@ -155,6 +154,8 @@ uses
   , nextpas.core.simd.cpuinfo.loongarch
   {$ENDIF}
   ;
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 var
   g_LazyCPUInfo: TLazyCPUInfo = nil;
@@ -937,7 +938,7 @@ end;
 
 function TLazyCPUInfo.GetLoadStatistics: string;
 var
-  Stats: TStringArray;
+  Stats: TCpuInfoStringArray;
 begin
   Stats := nil;
   StringsAppend(Stats, '=== Lazy Load Statistics ===');

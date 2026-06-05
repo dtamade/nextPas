@@ -154,8 +154,7 @@ function CollapseSpaces(const aStr: string): string;
 
 implementation
 
-uses
-  nextpas.core.text.conv;
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 function RemoveChars(const aStr: string; aChar: Char): string;
 var
@@ -335,7 +334,6 @@ begin
 end;
 
 end.
-
 
 
 

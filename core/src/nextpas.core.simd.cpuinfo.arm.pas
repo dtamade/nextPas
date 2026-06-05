@@ -52,13 +52,11 @@ implementation
 
 {$IFDEF UNIX}
 uses
-  nextpas.core.text.conv,
   nextpas.core.platform.files.base,
   nextpas.core.platform.files;
-{$ELSE}
-uses
-  nextpas.core.text.conv;
 {$ENDIF}
+
+{$I nextpas.core.simd.cpuinfo.helpers.inc}
 
 {$IFDEF UNIX}
 function PlatformFileExists(const APath: string): Boolean;
@@ -129,7 +127,7 @@ function TryReadLinuxAuxvHWCAP(out aHWCAP, aHWCAP2: QWord): Boolean;
 var
   LHandle: TPlatformFileHandle;
   LEntry: TLinuxAuxvEntry;
-  LReadBytes: Int64;
+  LReadBytes: QWord;
 begin
   Result := False;
   aHWCAP := 0;
@@ -140,7 +138,8 @@ begin
   try
     while True do
     begin
-      LReadBytes := platform_file_read(LHandle, @LEntry, SizeOf(LEntry));
+      if platform_file_read(LHandle, @LEntry, SizeOf(LEntry), LReadBytes) <> 0 then
+        Break;
       if LReadBytes <> SizeOf(LEntry) then
         Break;
       if LEntry.Tag = LINUX_AUXV_AT_NULL then
@@ -560,7 +559,7 @@ var
   LStat: TPlatformFileStat;
   LRaw: RawByteString;
   LIndex: Integer;
-  LRead: Int64;
+  LRead: QWord;
 begin
   Result := False;
   aText := '';
@@ -576,9 +575,10 @@ begin
       SetLength(LRaw, LStat.Size);
       if Length(LRaw) > 0 then
       begin
-        LRead := platform_file_read(LHandle, @LRaw[1], Length(LRaw));
-        if LRead < Length(LRaw) then
-          SetLength(LRaw, LRead);
+        if platform_file_read(LHandle, @LRaw[1], Length(LRaw), LRead) <> 0 then
+          LRead := 0;
+        if LRead < QWord(Length(LRaw)) then
+          SetLength(LRaw, Integer(LRead));
       end;
     finally
       platform_file_close(LHandle);
@@ -1278,5 +1278,3 @@ end;
 {$ENDIF} // SIMD_ARM_AVAILABLE
 
 end.
-
-
