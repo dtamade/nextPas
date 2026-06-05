@@ -369,6 +369,22 @@ begin
   DeleteFilesMatching(AStep.WorkingDirectory, '*_ppas.sh');
 end;
 
+function CanSkipAssemblerStep(const AStep: TToolInvocationStep): Boolean;
+var
+  InputIndex: LongInt;
+begin
+  Result := False;
+  if not SameText(AStep.ToolRole, 'assembler') then
+    Exit;
+  if SameText(AStep.StepId, 'native-assemble') then
+    Exit;
+
+  for InputIndex := 0 to Length(AStep.Inputs) - 1 do
+    if SameText(AStep.Inputs[InputIndex].Kind, 'assembly-text') and
+      (not FileExists(ExpandFileName(AStep.Inputs[InputIndex].Path))) then
+      Exit(True);
+end;
+
 function ExecuteStep(
   const AStep: TToolInvocationStep;
   const AResolvedPath: string
@@ -508,6 +524,20 @@ begin
       EnsureStepDirectories(Step);
       CleanHostCompilerScratchOutputs(Step);
       MaterializeSidecars(Step, ExecutedSidecars);
+      if CanSkipAssemblerStep(Step) then
+      begin
+        CleanupSidecars(ExecutedSidecars);
+        Result.AppendStep(
+          Step.StepId,
+          Step.LogicalExecutable,
+          '',
+          'success',
+          False,
+          0,
+          ExecutedSidecars
+        );
+        Continue;
+      end;
       ResolvedPath := ResolveExecutablePath(Step, AExecutableSearchPath);
       ExitCodeValue := ExecuteStep(Step, ResolvedPath);
     except

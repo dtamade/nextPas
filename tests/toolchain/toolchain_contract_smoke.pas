@@ -698,6 +698,7 @@ begin
     'cp "$rsp" "' + CaptureResponsePath + '"' + LineEnding +
     'printf "fake-linked\n" > "$out"' + LineEnding
   );
+  WriteExecutableScript(LinkScriptPath + '.bfd', ReadTextFile(LinkScriptPath));
 
   BackendPlan := TBackendPlan.Create;
   try
@@ -749,21 +750,24 @@ begin
       WriteLn('native-run-response-captured=true')
     else
       WriteLn('native-run-response-captured=false');
-    if Pos(
-      ExpandFileName(ObjectPath),
-      NormalizeWhitespace(ReadTextFile(CaptureResponsePath))
-    ) > 0 then
+    if FileExists(CaptureResponsePath) and
+      (Pos(
+        ExpandFileName(ObjectPath),
+        NormalizeWhitespace(ReadTextFile(CaptureResponsePath))
+      ) > 0) then
       WriteLn('native-run-response-contains-object=true')
     else
       WriteLn('native-run-response-contains-object=false');
-    if Pos(
-      '-L' + RuntimeLibRootPath(ATargetFacts),
-      NormalizeWhitespace(ReadTextFile(LinkArgvCapturePath))
-    ) > 0 then
+    if FileExists(LinkArgvCapturePath) and
+      (Pos(
+        '-L' + RuntimeLibRootPath(ATargetFacts),
+        NormalizeWhitespace(ReadTextFile(LinkArgvCapturePath))
+      ) > 0) then
       WriteLn('native-run-link-contains-runtime-root=true')
     else
       WriteLn('native-run-link-contains-runtime-root=false');
-    if Pos('-lc', NormalizeWhitespace(ReadTextFile(LinkArgvCapturePath))) > 0 then
+    if FileExists(LinkArgvCapturePath) and
+      (Pos('-lc', NormalizeWhitespace(ReadTextFile(LinkArgvCapturePath))) > 0) then
       WriteLn('native-run-link-contains-libc=true')
     else
       WriteLn('native-run-link-contains-libc=false');
@@ -774,6 +778,220 @@ begin
     DeleteFileIfExists(CaptureResponsePath);
     DeleteFileIfExists(LinkArgvCapturePath);
     RemoveRuntimeLibcFixture(ATargetFacts);
+  end;
+end;
+
+procedure PrintBootstrapExecutionContract(const ATargetFacts: TTargetFactsView);
+var
+  AdditionalAssemblyBaseNames: TStringArray;
+  ArtifactDir: string;
+  AssembleScriptPath: string;
+  AssemblyPath: string;
+  BackendPlan: TBackendPlan;
+  BootstrapFacts: TTargetFactsView;
+  CaptureResponsePath: string;
+  EmitScriptPath: string;
+  EmptyRoots: TStringArray;
+  FakeBinDir: string;
+  LinkArgvCapturePath: string;
+  LinkScriptPath: string;
+  MainBaseName: string;
+  MissingAdditionalAssemblyPath: string;
+  ObjectPath: string;
+  OutputPath: string;
+  Plan: TToolchainPlan;
+  Planner: TToolchainPlanner;
+  RunResult: TToolchainRunResult;
+  RunnerRoot: string;
+  SearchPath: string;
+  SourcePath: string;
+begin
+  RunnerRoot := ExpandFileName(
+    IncludeTrailingPathDelimiter(ExtractFileDir(ParamStr(0))) +
+    'toolchain-bootstrap-runner-fixture'
+  );
+  FakeBinDir := IncludeTrailingPathDelimiter(RunnerRoot) + 'bin';
+  ArtifactDir := IncludeTrailingPathDelimiter(RunnerRoot) + 'artifacts';
+  ForceDirectories(FakeBinDir);
+  ForceDirectories(ArtifactDir);
+
+  MainBaseName := 'bootstrap_main';
+  SourcePath := IncludeTrailingPathDelimiter(ArtifactDir) + MainBaseName + '.pas';
+  AssemblyPath := IncludeTrailingPathDelimiter(ArtifactDir) + MainBaseName + '.s';
+  MissingAdditionalAssemblyPath := IncludeTrailingPathDelimiter(ArtifactDir) +
+    'bootstrap_extra.s';
+  ObjectPath := IncludeTrailingPathDelimiter(ArtifactDir) + MainBaseName + '.o';
+  OutputPath := IncludeTrailingPathDelimiter(ArtifactDir) + MainBaseName;
+  CaptureResponsePath := IncludeTrailingPathDelimiter(ArtifactDir) +
+    'captured-bootstrap-link-argv.txt';
+  LinkArgvCapturePath := CaptureResponsePath;
+  EmitScriptPath := IncludeTrailingPathDelimiter(FakeBinDir) + 'fake-fpc';
+  AssembleScriptPath := IncludeTrailingPathDelimiter(FakeBinDir) + 'as';
+  LinkScriptPath := IncludeTrailingPathDelimiter(FakeBinDir) + 'ld';
+
+  DeleteFileIfExists(MissingAdditionalAssemblyPath);
+  WriteTextFile(SourcePath, 'program bootstrap_main; begin end.' + LineEnding);
+  WriteExecutableScript(
+    EmitScriptPath,
+    '#!/usr/bin/env sh' + LineEnding +
+    'src=""' + LineEnding +
+    'outdir=""' + LineEnding +
+    'while [ "$#" -gt 0 ]; do' + LineEnding +
+    '  case "$1" in' + LineEnding +
+    '    -FE*) outdir="${1#-FE}" ;;' + LineEnding +
+    '    *.pas) src="$1" ;;' + LineEnding +
+    '  esac' + LineEnding +
+    '  shift' + LineEnding +
+    'done' + LineEnding +
+    'base=$(basename "$src" .pas)' + LineEnding +
+    'printf "; fake bootstrap asm\n" > "$outdir/$base.s"' + LineEnding +
+    'printf "ENTRY(_start)\nSECTIONS {}\n" > "$outdir/$base_link.res"' + LineEnding
+  );
+  WriteExecutableScript(
+    AssembleScriptPath,
+    '#!/usr/bin/env sh' + LineEnding +
+    'out=""' + LineEnding +
+    'infile=""' + LineEnding +
+    'while [ "$#" -gt 0 ]; do' + LineEnding +
+    '  if [ "$1" = "-o" ]; then' + LineEnding +
+    '    out="$2"' + LineEnding +
+    '    shift 2' + LineEnding +
+    '    continue' + LineEnding +
+    '  fi' + LineEnding +
+    '  infile="$1"' + LineEnding +
+    '  shift' + LineEnding +
+    'done' + LineEnding +
+    'if [ ! -f "$infile" ]; then' + LineEnding +
+    '  exit 9' + LineEnding +
+    'fi' + LineEnding +
+    'printf "fake-object\n" > "$out"' + LineEnding
+  );
+  WriteExecutableScript(
+    LinkScriptPath,
+    '#!/usr/bin/env sh' + LineEnding +
+    'out=""' + LineEnding +
+    'printf "%s\n" "$@" > "' + LinkArgvCapturePath + '"' + LineEnding +
+    'while [ "$#" -gt 0 ]; do' + LineEnding +
+    '  if [ "$1" = "-o" ]; then' + LineEnding +
+    '    out="$2"' + LineEnding +
+    '    shift 2' + LineEnding +
+    '    continue' + LineEnding +
+    '  fi' + LineEnding +
+    '  shift' + LineEnding +
+    'done' + LineEnding +
+    'printf "fake-linked\n" > "$out"' + LineEnding
+  );
+  WriteExecutableScript(LinkScriptPath + '.bfd', ReadTextFile(LinkScriptPath));
+
+  BootstrapFacts := ATargetFacts;
+  BootstrapFacts.CompilerExecutable := EmitScriptPath;
+  SetLength(EmptyRoots, 0);
+  SetLength(AdditionalAssemblyBaseNames, 1);
+  AdditionalAssemblyBaseNames[0] := MissingAdditionalAssemblyPath;
+
+  BackendPlan := TBackendPlan.Create;
+  try
+    BackendPlan.SetRootName(MainBaseName);
+    BackendPlan.SetTargetMetadata(BootstrapFacts);
+    BackendPlan.SetOutputKind('executable');
+    BackendPlan.AddArtifact('assembly-text', AssemblyPath);
+    BackendPlan.AddArtifact('object-file', ObjectPath);
+    BackendPlan.AddArtifact('executable', OutputPath);
+    BackendPlan.SetPrimaryArtifact('executable', OutputPath);
+    BackendPlan.AddLogicalLibraryRequest('c', 'shared', 'strong');
+    BackendPlan.MarkReady;
+
+    EnsureRuntimeLibcFixture(BootstrapFacts);
+    Planner := TToolchainPlanner.Create(
+      BackendPlan,
+      BootstrapFacts,
+      SourcePath,
+      RunnerRoot,
+      EmptyRoots,
+      EmptyRoots,
+      AdditionalAssemblyBaseNames
+    );
+    try
+      Planner.PlanFromBackend;
+      Plan := Planner.DetachPlan;
+    finally
+      Planner.Free;
+    end;
+
+    try
+      WriteLn('bootstrap-plan-status=', Plan.Status);
+      WriteLn('bootstrap-plan-family=', Plan.PlanFamily);
+      WriteLn('bootstrap-tool-invocation-count=', Plan.ToolInvocationCount);
+      WriteLn(
+        'bootstrap-tool-invocation-plan=',
+        Plan.ToolInvocationPlanJson('plan-bootstrap-native-assemble-link', '')
+      );
+
+      SearchPath := FakeBinDir + PathSeparator + GetEnvironmentVariable('PATH');
+      RunResult := ExecuteToolchainPlan(Plan, SearchPath);
+      try
+        WriteLn('bootstrap-run-status=', RunResult.Status);
+        WriteLn('bootstrap-run-step-count=', RunResult.StepCount);
+        if (RunResult.StepCount > 0) and
+          (RunResult.StepAt(0).Status = 'success') then
+          WriteLn('bootstrap-run-emit-step-status=success')
+        else
+          WriteLn('bootstrap-run-emit-step-status=failure');
+        if (RunResult.StepCount > 1) and
+          (RunResult.StepAt(1).Status = 'success') then
+          WriteLn('bootstrap-run-main-assemble-step-status=success')
+        else
+          WriteLn('bootstrap-run-main-assemble-step-status=failure');
+        if (RunResult.StepCount > 2) and
+          (RunResult.StepAt(2).Status = 'success') then
+          WriteLn('bootstrap-run-extra-assemble-step-status=success')
+        else
+          WriteLn('bootstrap-run-extra-assemble-step-status=failure');
+        if (RunResult.StepCount > 3) and
+          (RunResult.StepAt(3).Status = 'success') then
+          WriteLn('bootstrap-run-link-step-status=success')
+        else
+          WriteLn('bootstrap-run-link-step-status=failure');
+        if (RunResult.StepCount > 2) and
+          SameText(RunResult.StepAt(2).StepId, 'native-assemble-bootstrap_extra') and
+          (RunResult.StepAt(2).Status = 'success') and
+          (not RunResult.StepAt(2).HasExitCode) and
+          (RunResult.StepAt(2).ResolvedPath = '') then
+          WriteLn('bootstrap-run-missing-assembly-skip=true')
+        else
+          WriteLn('bootstrap-run-missing-assembly-skip=false');
+        WriteLn(
+          'bootstrap-run-missing-assembly-step-id=',
+          RunResult.StepAt(2).StepId
+        );
+        WriteLn(
+          'bootstrap-run-missing-assembly-has-exit-code=',
+          BoolToStr(RunResult.StepAt(2).HasExitCode, True)
+        );
+        WriteLn(
+          'bootstrap-run-missing-assembly-resolved-path=',
+          RunResult.StepAt(2).ResolvedPath
+        );
+        if FileExists(OutputPath) then
+          WriteLn('bootstrap-run-output-exists=true')
+        else
+          WriteLn('bootstrap-run-output-exists=false');
+        if FileExists(LinkArgvCapturePath) and
+          (Pos('-lc', NormalizeWhitespace(ReadTextFile(LinkArgvCapturePath))) > 0) then
+          WriteLn('bootstrap-run-link-contains-libc=true')
+        else
+          WriteLn('bootstrap-run-link-contains-libc=false');
+        WriteLn('bootstrap-run-transcript=', BuildRunTranscriptJson(RunResult));
+      finally
+        RunResult.Free;
+      end;
+    finally
+      Plan.Free;
+    end;
+  finally
+    BackendPlan.Free;
+    DeleteFileIfExists(LinkArgvCapturePath);
+    RemoveRuntimeLibcFixture(BootstrapFacts);
   end;
 end;
 
@@ -1135,6 +1353,7 @@ begin
   PrintLlvmMissingPlan(BaseFacts);
   PrintLlvmExecutionContract(BaseFacts);
   PrintNativeExecutionContract(BaseFacts);
+  PrintBootstrapExecutionContract(BaseFacts);
   PrintDirectLinkMissingLibcContract(BaseFacts);
   PrintDiagnosticsContract;
   PrintResolverIndexContract(BaseFacts);

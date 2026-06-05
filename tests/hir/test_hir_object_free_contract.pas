@@ -184,7 +184,7 @@ begin
       LlvmText);
     if ReleaseHelperPos = 0 then
       Fail('missing-object-free-llvm-release-helper');
-    if FindAfter('%raw = getelementptr i8, ptr %obj, i64 -16', LlvmText,
+    if FindAfter('%raw = getelementptr i8, ptr %obj, i64 -24', LlvmText,
       ReleaseHelperPos) = 0 then
       Fail('missing-object-free-release-header-base');
     if FindAfter('%size = load i64, ptr %raw', LlvmText, ReleaseHelperPos) = 0 then

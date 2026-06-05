@@ -1708,6 +1708,7 @@ begin
   FPlan.AddStepArg(StepIndex, 'elf_x86_64');
   FPlan.AddStepArg(StepIndex, '-s');
   FPlan.AddStepArg(StepIndex, '-L.');
+  FPlan.AddStepArg(StepIndex, '-lc');
   FPlan.AddStepArg(StepIndex, '-o');
   FPlan.AddStepArg(StepIndex, ExpandFileName(ArtifactPath));
   FPlan.AddStepArg(StepIndex, '-T');
