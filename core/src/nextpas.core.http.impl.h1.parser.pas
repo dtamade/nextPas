@@ -16,6 +16,17 @@ uses
 type
   TH1ParserType = (ptRequest, ptResponse);
   TH1ParserErrorKind = (pekNone, pekMalformed, pekUnsupportedTransferCoding);
+  TH1RequestMetadata = record
+    HasHost: Boolean;
+    HasTransferEncoding: Boolean;
+    HasContentLength: Boolean;
+    DeclaredContentLength: Int64;
+    RequestDeclaresBody: Boolean;
+    ExpectsContinue: Boolean;
+    HasUnsupportedExpect: Boolean;
+    ConnectionClose: Boolean;
+    ConnectionKeepAlive: Boolean;
+  end;
 
   IH1Parser = interface
     ['{A1B2C3D4-E5F6-7890-ABCD-500000000001}']
@@ -33,6 +44,7 @@ type
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
+    function GetRequestMetadata: TH1RequestMetadata;
     function HasError: Boolean;
     function ErrorMessage: string;
     function ErrorKind: TH1ParserErrorKind;
@@ -83,6 +95,7 @@ type
     FErrorMsg: string;
     FErrorKind: TH1ParserErrorKind;
     FTrailerBytes: Int64;
+    FRequestMetadata: TH1RequestMetadata;
     FCurrentField: string;
     FCurrentValue: string;
     FCurrentFieldPtr: PAnsiChar;
@@ -93,7 +106,7 @@ type
     procedure ApplyResponseSkipBodyHint;
     function RejectWithUserError(const AReason: string;
       const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
-    function ValidateRequestTransferEncoding(
+    function BuildRequestMetadata(
       const AParser: PTLlhttpInternalT): LongInt;
     procedure EnsureBodyCapacity(const ARequired: SizeUInt);
     function SnapshotBody: TBytes;
@@ -116,6 +129,7 @@ type
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
+    function GetRequestMetadata: TH1RequestMetadata;
     function HasError: Boolean;
     function ErrorMessage: string;
     function ErrorKind: TH1ParserErrorKind;
@@ -130,6 +144,36 @@ const
   UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON =
     'Unsupported `Transfer-Encoding` request coding';
   BODY_TOO_LARGE_REASON = 'HTTP body buffer too large';
+
+function LowerTrim(const AValue: string): string; inline;
+begin
+  Result := LowerCase(TextTrim(AValue));
+end;
+
+procedure UpdateExpectMetadata(var AMetadata: TH1RequestMetadata;
+  const AValue: string);
+var
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
+begin
+  if AValue = '' then
+    Exit;
+
+  LStart := 1;
+  while LStart <= Length(AValue) do
+  begin
+    LPos := LStart;
+    while (LPos <= Length(AValue)) and (AValue[LPos] <> ',') do
+      Inc(LPos);
+    LToken := LowerTrim(Copy(AValue, LStart, LPos - LStart));
+    if LToken = '100-continue' then
+      AMetadata.ExpectsContinue := True
+    else if LToken <> '' then
+      AMetadata.HasUnsupportedExpect := True;
+    LStart := LPos + 1;
+  end;
+end;
 
 function BytesToString(const AData: TBytes; const ASize: SizeUInt): string;
 begin
@@ -310,7 +354,7 @@ begin
     else
       LSelf.FMethod := hmGet;
     end;
-    Result := LSelf.ValidateRequestTransferEncoding(p0);
+    Result := LSelf.BuildRequestMetadata(p0);
     if Result <> 0 then
       Exit;
   end
@@ -374,6 +418,7 @@ begin
   FMethod := hmGet;
   FStatusCode := 0;
   FVersion := hvHttp11;
+  FRequestMetadata := Default(TH1RequestMetadata);
 
   llhttp_settings_init(@FSettings);
   FSettings.on_url := @CbOnUrl;
@@ -585,6 +630,11 @@ begin
   Result := FTrailerBytes;
 end;
 
+function TH1Parser.GetRequestMetadata: TH1RequestMetadata;
+begin
+  Result := FRequestMetadata;
+end;
+
 function TH1Parser.RejectWithUserError(const AReason: string;
   const AKind: TH1ParserErrorKind; const AParser: PTLlhttpInternalT): LongInt;
 begin
@@ -594,9 +644,14 @@ begin
   Result := HPE_USER;
 end;
 
-function TH1Parser.ValidateRequestTransferEncoding(
+function TH1Parser.BuildRequestMetadata(
   const AParser: PTLlhttpInternalT): LongInt;
 var
+  LMetadata: TH1RequestMetadata;
+  LHeaders: IHttpHeaders;
+  LConnection: string;
+  LContentLength: string;
+  LExpectValues: TStringArray;
   LValues: TStringArray;
   LCombined: string;
   LTokens: TStringArray;
@@ -605,45 +660,71 @@ var
   LToken: string;
 begin
   Result := 0;
-  LValues := FHeaders.GetAll('transfer-encoding');
-  if Length(LValues) = 0 then
-    Exit(0);
+  LMetadata := Default(TH1RequestMetadata);
+  LHeaders := FHeaders;
+  LMetadata.HasHost := LHeaders.Get('host') <> '';
 
-  LCombined := LValues[0];
-  for LIndex := 1 to High(LValues) do
-    LCombined := LCombined + ',' + LValues[LIndex];
+  LConnection := LHeaders.Get('connection');
+  LMetadata.ConnectionClose := LConnection = 'close';
+  LMetadata.ConnectionKeepAlive := LConnection = 'keep-alive';
 
-  LTokens := TextSplit(LowerCase(LCombined), ',');
-  LLastTokenIndex := -1;
-  for LIndex := High(LTokens) downto 0 do
+  LContentLength := TextTrim(LHeaders.Get('content-length'));
+  if LContentLength <> '' then
   begin
-    LToken := TextTrim(LTokens[LIndex]);
-    if LToken <> '' then
+    LMetadata.HasContentLength := TryStrToInt64(LContentLength,
+      LMetadata.DeclaredContentLength);
+    if LMetadata.HasContentLength and (LMetadata.DeclaredContentLength > 0) then
+      LMetadata.RequestDeclaresBody := True;
+  end;
+
+  LExpectValues := LHeaders.GetAll('expect');
+  for LIndex := 0 to High(LExpectValues) do
+    UpdateExpectMetadata(LMetadata, TextTrim(LExpectValues[LIndex]));
+
+  LValues := LHeaders.GetAll('transfer-encoding');
+  if Length(LValues) > 0 then
+  begin
+    LMetadata.HasTransferEncoding := True;
+    LMetadata.RequestDeclaresBody := True;
+
+    LCombined := LValues[0];
+    for LIndex := 1 to High(LValues) do
+      LCombined := LCombined + ',' + LValues[LIndex];
+
+    LTokens := TextSplit(LowerCase(LCombined), ',');
+    LLastTokenIndex := -1;
+    for LIndex := High(LTokens) downto 0 do
     begin
-      LLastTokenIndex := LIndex;
-      Break;
+      LToken := TextTrim(LTokens[LIndex]);
+      if LToken <> '' then
+      begin
+        LLastTokenIndex := LIndex;
+        Break;
+      end;
+    end;
+
+    if LLastTokenIndex >= 0 then
+    begin
+      if LLastTokenIndex <> High(LTokens) then
+        Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
+          pekMalformed, AParser));
+
+      if TextTrim(LTokens[LLastTokenIndex]) = 'chunked' then
+      begin
+        for LIndex := 0 to LLastTokenIndex - 1 do
+        begin
+          LToken := TextTrim(LTokens[LIndex]);
+          if (LToken = '') or (LToken = 'chunked') then
+            Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
+              pekMalformed, AParser));
+          Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
+            pekUnsupportedTransferCoding, AParser));
+        end;
+      end;
     end;
   end;
 
-  if LLastTokenIndex < 0 then
-    Exit(0);
-
-  if LLastTokenIndex <> High(LTokens) then
-    Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
-      pekMalformed, AParser));
-
-  if TextTrim(LTokens[LLastTokenIndex]) <> 'chunked' then
-    Exit(0);
-
-  for LIndex := 0 to LLastTokenIndex - 1 do
-  begin
-    LToken := TextTrim(LTokens[LIndex]);
-    if (LToken = '') or (LToken = 'chunked') then
-      Exit(RejectWithUserError(INVALID_TRANSFER_ENCODING_REASON,
-        pekMalformed, AParser));
-    Exit(RejectWithUserError(UNSUPPORTED_REQUEST_TRANSFER_CODING_REASON,
-      pekUnsupportedTransferCoding, AParser));
-  end;
+  FRequestMetadata := LMetadata;
 end;
 
 procedure TH1Parser.EnsureBodyCapacity(const ARequired: SizeUInt);
@@ -714,6 +795,7 @@ begin
   FErrorMsg := '';
   FErrorKind := pekNone;
   FTrailerBytes := 0;
+  FRequestMetadata := Default(TH1RequestMetadata);
   ClearCurrentHeaderSpans;
   llhttp_reset(@FParser);
   FParser.data := Pointer(Self);

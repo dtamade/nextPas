@@ -27,6 +27,7 @@ type
     HasConnection: Boolean;
     HasExpect: Boolean;
     HasTransferEncoding: Boolean;
+    HasContentLength: Boolean;
   end;
 
 { Try to parse a complete HTTP request from buffer using SIMD fast path.
@@ -445,6 +446,7 @@ begin
       if LContentLength < 0 then
         Exit; // invalid Content-Length
       LSeenContentLength := True;
+      Result.HasContentLength := True;
     end;
 
     // Advance past \r\n

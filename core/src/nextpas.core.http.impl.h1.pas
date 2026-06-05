@@ -92,6 +92,7 @@ type
     FHeaders: IHttpHeaders;
     FBodySize: Int64;
     FComplete: Boolean;
+    FRequestMetadata: TH1RequestMetadata;
   public
     constructor Create(const AResult: TFastParseResult);
     function Execute(const ABuf: PAnsiChar; const ALen: SizeUInt): SizeUInt;
@@ -108,6 +109,7 @@ type
     function IsComplete: Boolean;
     function ShouldKeepAlive: Boolean;
     function GetTrailerBytes: Int64;
+    function GetRequestMetadata: TH1RequestMetadata;
     function HasError: Boolean;
     function ErrorMessage: string;
     function ErrorKind: TH1ParserErrorKind;
@@ -273,13 +275,13 @@ type
 
 function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
 var
-  LConn: string;
+  LMetadata: TH1RequestMetadata;
 begin
-  LConn := AParser.GetHeaders.Get('connection');
+  LMetadata := AParser.GetRequestMetadata;
   if AParser.GetHttpVersion = hvHttp10 then
-    Result := (LConn = 'keep-alive')
+    Result := LMetadata.ConnectionKeepAlive
   else
-    Result := (LConn <> 'close');
+    Result := not LMetadata.ConnectionClose;
 end;
 
 function ParserErrorStatus(const AParser: IH1Parser): THttpStatus;
@@ -292,128 +294,35 @@ begin
   end;
 end;
 
-function TryGetDeclaredContentLength(const AParser: IH1Parser;
-  out AContentLength: Int64): Boolean;
-var
-  LContentLength: string;
-begin
-  AContentLength := 0;
-  if AParser = nil then
-    Exit(False);
-
-  LContentLength := Trim(AParser.GetHeaders.Get('content-length'));
-  Result := (LContentLength <> '') and TryStrToInt64(LContentLength, AContentLength);
-end;
-
-function RequestDeclaresBody(const AParser: IH1Parser): Boolean;
-var
-  LTransferEncoding: string;
-  LContentLength: Int64;
+function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
 begin
   if AParser = nil then
-    Exit(False);
-
-  LTransferEncoding := LowerCase(Trim(AParser.GetHeaders.Get('transfer-encoding')));
-  if LTransferEncoding <> '' then
-    Exit(True);
-
-  Result := TryGetDeclaredContentLength(AParser, LContentLength) and
-    (LContentLength > 0);
-end;
-
-function RequestExpectsContinue(const AParser: IH1Parser): Boolean;
-var
-  LValues: TStringArray;
-  LI: SizeInt;
-  LExpect: string;
-  LStart: SizeInt;
-  LPos: SizeInt;
-  LToken: string;
-begin
-  Result := False;
-  if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
-    Exit(False);
-
-  LValues := AParser.GetHeaders.GetAll('expect');
-  for LI := 0 to High(LValues) do
-  begin
-    LExpect := Trim(LValues[LI]);
-    if LExpect = '' then
-      Continue;
-
-    LStart := 1;
-    while LStart <= Length(LExpect) do
-    begin
-      LPos := LStart;
-      while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
-        Inc(LPos);
-      LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
-      if LToken = '100-continue' then
-        Exit(True);
-      LStart := LPos + 1;
-    end;
-  end;
-end;
-
-function RequestHasUnsupportedExpectations(const AParser: IH1Parser): Boolean;
-var
-  LValues: TStringArray;
-  LI: SizeInt;
-  LExpect: string;
-  LStart: SizeInt;
-  LPos: SizeInt;
-  LToken: string;
-begin
-  Result := False;
-  if (AParser = nil) or (AParser.GetHttpVersion <> hvHttp11) then
-    Exit(False);
-
-  LValues := AParser.GetHeaders.GetAll('expect');
-  for LI := 0 to High(LValues) do
-  begin
-    LExpect := Trim(LValues[LI]);
-    if LExpect = '' then
-      Continue;
-
-    LStart := 1;
-    while LStart <= Length(LExpect) do
-    begin
-      LPos := LStart;
-      while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
-        Inc(LPos);
-      LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
-      if (LToken <> '') and (LToken <> '100-continue') then
-        Exit(True);
-      LStart := LPos + 1;
-    end;
-  end;
+    Exit(Default(TH1RequestMetadata));
+  Result := AParser.GetRequestMetadata;
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
   const AHeadersDone, AContinueSent: Boolean): Boolean;
-begin
-  Result := AHeadersDone and (not AContinueSent) and (AParser <> nil) and
-    (not AParser.IsComplete) and RequestExpectsContinue(AParser) and
-    RequestDeclaresBody(AParser);
-end;
-
-function DeclaredContentLengthExceedsLimit(const AParser: IH1Parser;
-  const AMaxBodySize: Int64): Boolean;
 var
-  LContentLength: Int64;
+  LMetadata: TH1RequestMetadata;
 begin
-  Result := (AParser <> nil) and (AMaxBodySize > 0) and
-    TryGetDeclaredContentLength(AParser, LContentLength) and
-    (LContentLength > AMaxBodySize);
+  LMetadata := RequestMetadata(AParser);
+  Result := AHeadersDone and (not AContinueSent) and (AParser <> nil) and
+    (not AParser.IsComplete) and LMetadata.ExpectsContinue and
+    LMetadata.RequestDeclaresBody;
 end;
 
 function HeaderPolicyErrorStatus(const AParser: IH1Parser;
   const AOptions: TH1ServerTransportOptions;
   const ATotalRead: SizeUInt; const AFastSnapshot: Boolean): THttpStatus;
+var
+  LMetadata: TH1RequestMetadata;
 begin
   Result := 0;
   if AParser = nil then
     Exit;
+
+  LMetadata := RequestMetadata(AParser);
 
   if (AOptions.MaxHeaderSize > 0) and
      (Int64(ATotalRead) - AParser.GetBodySize >
@@ -427,13 +336,14 @@ begin
     Exit(0);
 
   if (AParser.GetHttpVersion = hvHttp11) and
-     (AParser.GetHeaders.Get('host') = '') then
+     (not LMetadata.HasHost) then
     Exit(HTTP_STATUS_BAD_REQUEST);
 
-  if RequestHasUnsupportedExpectations(AParser) then
+  if LMetadata.HasUnsupportedExpect then
     Exit(HTTP_STATUS_EXPECTATION_FAILED);
 
-  if DeclaredContentLengthExceedsLimit(AParser, AOptions.MaxBodySize) then
+  if (AOptions.MaxBodySize > 0) and LMetadata.HasContentLength and
+     (LMetadata.DeclaredContentLength > AOptions.MaxBodySize) then
     Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);
 end;
 
@@ -558,6 +468,16 @@ begin
   FHeaders := AResult.Headers;
   FBodySize := AResult.ContentLength;
   FComplete := True;
+  FRequestMetadata := Default(TH1RequestMetadata);
+  FRequestMetadata.HasHost := AResult.HasHost;
+  FRequestMetadata.HasTransferEncoding := AResult.HasTransferEncoding;
+  FRequestMetadata.HasContentLength := AResult.HasContentLength;
+  FRequestMetadata.DeclaredContentLength := AResult.ContentLength;
+  FRequestMetadata.RequestDeclaresBody := AResult.ContentLength > 0;
+  FRequestMetadata.ExpectsContinue := False;
+  FRequestMetadata.HasUnsupportedExpect := False;
+  FRequestMetadata.ConnectionClose := False;
+  FRequestMetadata.ConnectionKeepAlive := False;
 end;
 
 function TH1FastRequestSnapshot.Execute(const ABuf: PAnsiChar;
@@ -621,19 +541,21 @@ begin
 end;
 
 function TH1FastRequestSnapshot.ShouldKeepAlive: Boolean;
-var
-  LConn: string;
 begin
-  LConn := LowerCase(FHeaders.Get('connection'));
   if FVersion = hvHttp10 then
-    Result := LConn = 'keep-alive'
+    Result := FRequestMetadata.ConnectionKeepAlive
   else
-    Result := LConn <> 'close';
+    Result := not FRequestMetadata.ConnectionClose;
 end;
 
 function TH1FastRequestSnapshot.GetTrailerBytes: Int64;
 begin
   Result := 0;
+end;
+
+function TH1FastRequestSnapshot.GetRequestMetadata: TH1RequestMetadata;
+begin
+  Result := FRequestMetadata;
 end;
 
 function TH1FastRequestSnapshot.HasError: Boolean;
@@ -657,6 +579,7 @@ begin
   FHeaders := NewHttpHeaders;
   FUrl := '';
   FBodySize := 0;
+  FRequestMetadata := Default(TH1RequestMetadata);
 end;
 
 procedure WriteErrorResponse(const AConn: ITcpStream; const AStatus: THttpStatus;
@@ -1068,7 +991,7 @@ begin
       FKeepAlive := ShouldKeepAlive(FParser);
 
     if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
-       (FParser.GetHeaders.Get('host') = '') then
+       (not RequestMetadata(FParser).HasHost) then
     begin
       WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
       FKeepAlive := False;
@@ -1177,7 +1100,7 @@ begin
       LKeepAlive := ShouldKeepAlive(FParser);
 
     if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
-       (FParser.GetHeaders.Get('host') = '') then
+       (not RequestMetadata(FParser).HasHost) then
     begin
       LOutbound := NewH1OutboundBuffer;
       WriteErrorResponseToWriter(LOutbound as IWriter, HTTP_STATUS_BAD_REQUEST);

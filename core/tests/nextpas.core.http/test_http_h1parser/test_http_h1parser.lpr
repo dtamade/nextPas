@@ -271,6 +271,65 @@ begin
   CheckEqual('hello world', LP.GetBody, 'chunked request body decoded');
 end;
 
+procedure TestRequestMetadataFixedLengthExpectConnection;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Connection: keep-alive'#13#10 +
+          'Expect: 100-continue, fancy'#13#10 +
+          'Content-Length: 11'#13#10#13#10 +
+          'hello world';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'fixed-length metadata request complete');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasHost, 'metadata keeps host presence');
+  Check(LMetadata.HasContentLength, 'metadata keeps declared content-length');
+  CheckEqual(Int64(11), LMetadata.DeclaredContentLength,
+    'metadata keeps declared content-length value');
+  Check(LMetadata.RequestDeclaresBody, 'metadata sees fixed-length body');
+  Check(LMetadata.ExpectsContinue, 'metadata sees 100-continue token');
+  Check(LMetadata.HasUnsupportedExpect,
+    'metadata keeps unsupported expect token');
+  Check(not LMetadata.HasTransferEncoding,
+    'metadata keeps transfer-encoding absence');
+  Check(LMetadata.ConnectionKeepAlive,
+    'metadata keeps explicit keep-alive request hint');
+  Check(not LMetadata.ConnectionClose,
+    'metadata keeps close hint absent');
+end;
+
+procedure TestRequestMetadataChunkedTransferEncoding;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Transfer-Encoding: chunked'#13#10#13#10 +
+          '5'#13#10'hello'#13#10 +
+          '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'chunked metadata request complete');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasHost, 'chunked metadata keeps host presence');
+  Check(LMetadata.HasTransferEncoding,
+    'chunked metadata keeps transfer-encoding presence');
+  Check(not LMetadata.HasContentLength,
+    'chunked metadata keeps content-length absence');
+  Check(LMetadata.RequestDeclaresBody, 'chunked metadata sees body');
+  Check(not LMetadata.ExpectsContinue,
+    'chunked metadata keeps expect absence');
+  Check(not LMetadata.HasUnsupportedExpect,
+    'chunked metadata keeps unsupported expect absence');
+end;
+
 procedure TestRequestBodyReaderView;
 var
   LP: IH1Parser;
@@ -1902,6 +1961,10 @@ begin
   T.Run('Content-Length body', @TestContentLengthBody);
   T.Run('Content-Length request truncated at EOF', @TestContentLengthRequestTruncatedAtEof);
   T.Run('Chunked request body', @TestChunkedRequestBody);
+  T.Run('Request metadata fixed-length expect connection',
+    @TestRequestMetadataFixedLengthExpectConnection);
+  T.Run('Request metadata chunked transfer-encoding',
+    @TestRequestMetadataChunkedTransferEncoding);
   T.Run('Request body reader view', @TestRequestBodyReaderView);
   T.Run('Response body reader view', @TestResponseBodyReaderView);
   T.Run('Chunked request invalid chunk size', @TestChunkedRequestInvalidChunkSize);

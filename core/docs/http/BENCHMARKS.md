@@ -930,3 +930,54 @@ be captured on a machine with lower `perf_event_paranoid` or the required
 `CAP_PERFMON` / tracing capabilities. The next raw-gap analysis step should use
 the same flag-matrix runner on such a machine before changing generated llhttp
 translation code.
+
+## Optimization Evidence: H1 Request Metadata Cache
+
+On 2026-06-05 local time, H1 request-side metadata moved from repeated server
+lookup/token parsing to one parser-owned snapshot. The parser now builds
+`TH1RequestMetadata` once at request headers-complete time and the server reuses
+it for header policy, `100-continue`, dispatch Host validation, and request
+keep-alive decisions.
+
+This targets the hot path where the previous server-side logic repeated
+`Get/GetAll/Trim/LowerCase/TryStrToInt64` for `Host`, `Expect`,
+`Content-Length`, `Transfer-Encoding`, and `Connection`. The change does not
+alter public HTTP facade APIs, response parsing, generated llhttp code, or the
+existing request-side `Connection` exact-string keep-alive behavior.
+The fast-parser snapshot also records whether `Content-Length` was actually
+present, so accepted fast-path requests do not confuse an omitted header with
+`Content-Length: 0`.
+
+Focused benchmark:
+
+```text
+command=NEXTPAS_BENCH_FILTER='request metadata' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request metadata legacy expect+cl ns/op=1320.7
+adapter cost: request metadata cached expect+cl ns/op=6.1
+```
+
+Focused validation:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1parser clean test
+91 total, 91 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_h1fast clean test
+22 total, 22 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+274 total, 274 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+The immediate conclusion is that request metadata caching removes a measurable
+per-request policy/dispatch cost without changing wire contracts. The broader
+H1 performance track should continue with adapter materialization rows before
+returning to generated llhttp translation changes.

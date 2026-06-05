@@ -441,6 +441,10 @@ begin
     'H1 parser benchmark header span add breakdown row');
   CheckContains(LOutput, 'adapter cost: body copy 1KB',
     'H1 parser benchmark body copy breakdown row');
+  CheckContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
+    'H1 parser benchmark legacy request metadata breakdown row');
+  CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',
+    'H1 parser benchmark cached request metadata breakdown row');
 end;
 
 procedure TestH1ParserBenchmarkFilterEnv;

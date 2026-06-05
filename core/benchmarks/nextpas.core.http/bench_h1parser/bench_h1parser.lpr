@@ -3,6 +3,7 @@ program bench_h1parser;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.bench,
   nextpas.core.http.intf,
@@ -436,6 +437,164 @@ begin
   GSink := GSink + LBodySize + LBody[0];
 end;
 
+function BenchTryGetDeclaredContentLength(const AHeaders: IHttpHeaders;
+  out AContentLength: Int64): Boolean;
+var
+  LContentLength: string;
+begin
+  AContentLength := 0;
+  LContentLength := Trim(AHeaders.Get('content-length'));
+  Result := (LContentLength <> '') and
+    TryStrToInt64(LContentLength, AContentLength);
+end;
+
+function BenchRequestDeclaresBody(const AHeaders: IHttpHeaders): Boolean;
+var
+  LTransferEncoding: string;
+  LContentLength: Int64;
+begin
+  LTransferEncoding := LowerCase(Trim(AHeaders.Get('transfer-encoding')));
+  if LTransferEncoding <> '' then
+    Exit(True);
+  Result := BenchTryGetDeclaredContentLength(AHeaders, LContentLength) and
+    (LContentLength > 0);
+end;
+
+function BenchRequestExpectsContinue(const AHeaders: IHttpHeaders): Boolean;
+var
+  LValues: TStringArray;
+  LI: SizeInt;
+  LExpect: string;
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
+begin
+  Result := False;
+  LValues := AHeaders.GetAll('expect');
+  for LI := 0 to High(LValues) do
+  begin
+    LExpect := Trim(LValues[LI]);
+    if LExpect = '' then
+      Continue;
+    LStart := 1;
+    while LStart <= Length(LExpect) do
+    begin
+      LPos := LStart;
+      while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
+        Inc(LPos);
+      LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
+      if LToken = '100-continue' then
+        Exit(True);
+      LStart := LPos + 1;
+    end;
+  end;
+end;
+
+function BenchRequestHasUnsupportedExpectations(
+  const AHeaders: IHttpHeaders): Boolean;
+var
+  LValues: TStringArray;
+  LI: SizeInt;
+  LExpect: string;
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
+begin
+  Result := False;
+  LValues := AHeaders.GetAll('expect');
+  for LI := 0 to High(LValues) do
+  begin
+    LExpect := Trim(LValues[LI]);
+    if LExpect = '' then
+      Continue;
+    LStart := 1;
+    while LStart <= Length(LExpect) do
+    begin
+      LPos := LStart;
+      while (LPos <= Length(LExpect)) and (LExpect[LPos] <> ',') do
+        Inc(LPos);
+      LToken := LowerCase(Trim(Copy(LExpect, LStart, LPos - LStart)));
+      if (LToken <> '') and (LToken <> '100-continue') then
+        Exit(True);
+      LStart := LPos + 1;
+    end;
+  end;
+end;
+
+procedure InitBenchMetadataHeaders(const AHeaders: IHttpHeaders);
+begin
+  AHeaders.Set_('host', 'example.com');
+  AHeaders.Set_('connection', 'keep-alive');
+  AHeaders.Set_('expect', '100-continue, fancy');
+  AHeaders.Set_('content-length', '1024');
+  AHeaders.Set_('content-type', 'application/octet-stream');
+  AHeaders.Set_('user-agent', 'nextpas/1.0');
+  AHeaders.Set_('accept', 'application/json');
+  AHeaders.Set_('cache-control', 'no-cache');
+  AHeaders.Set_('x-request-id', 'abc123');
+  AHeaders.Set_('authorization', 'Bearer token123');
+end;
+
+procedure BenchAdapterRequestMetadataLegacyExpectCl(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LContentLength: Int64;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  InitBenchMetadataHeaders(LHeaders);
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    if LHeaders.Get('host') <> '' then
+      Inc(LScore);
+    if BenchRequestHasUnsupportedExpectations(LHeaders) then
+      Inc(LScore);
+    if BenchTryGetDeclaredContentLength(LHeaders, LContentLength) and
+       (LContentLength > 512) then
+      Inc(LScore);
+    if BenchRequestExpectsContinue(LHeaders) and
+       BenchRequestDeclaresBody(LHeaders) then
+      Inc(LScore);
+    if LHeaders.Get('connection') = 'keep-alive' then
+      Inc(LScore);
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterRequestMetadataCachedExpectCl(aIters: Int64);
+var
+  LIt: Int64;
+  LMetadata: TH1RequestMetadata;
+  LScore: SizeUInt;
+begin
+  LMetadata := Default(TH1RequestMetadata);
+  LMetadata.HasHost := True;
+  LMetadata.HasContentLength := True;
+  LMetadata.DeclaredContentLength := 1024;
+  LMetadata.RequestDeclaresBody := True;
+  LMetadata.ExpectsContinue := True;
+  LMetadata.HasUnsupportedExpect := True;
+  LMetadata.ConnectionKeepAlive := True;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    if LMetadata.HasHost then
+      Inc(LScore);
+    if LMetadata.HasUnsupportedExpect then
+      Inc(LScore);
+    if LMetadata.HasContentLength and
+       (LMetadata.DeclaredContentLength > 512) then
+      Inc(LScore);
+    if LMetadata.ExpectsContinue and LMetadata.RequestDeclaresBody then
+      Inc(LScore);
+    if LMetadata.ConnectionKeepAlive then
+      Inc(LScore);
+  end;
+  GSink := GSink + LScore;
+end;
+
 { === Fast path benchmarks === }
 
 procedure BenchFastParseSimpleGET(aIters: Int64);
@@ -513,6 +672,10 @@ begin
   B.Run('adapter cost: header add 10 headers', @BenchAdapterHeaderAdd10Headers);
   B.Run('adapter cost: header span add 10 headers', @BenchAdapterHeaderSpanAdd10Headers);
   B.Run('adapter cost: body copy 1KB', @BenchAdapterBodyCopy1K);
+  B.Run('adapter cost: request metadata legacy expect+cl',
+    @BenchAdapterRequestMetadataLegacyExpectCl);
+  B.Run('adapter cost: request metadata cached expect+cl',
+    @BenchAdapterRequestMetadataCachedExpectCl);
   WriteLn;
   WriteLn('--- llhttp ---');
   B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);

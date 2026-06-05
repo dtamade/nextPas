@@ -25,6 +25,7 @@ begin
   Check(LR.Method = hmGet, 'method is GET');
   CheckEqual('/', LR.Path, 'path is /');
   Check(LR.Version = hvHttp11, 'version is HTTP/1.1');
+  Check(not LR.HasContentLength, 'simple GET has no content-length');
 end;
 
 procedure TestPostWithContentLength;
@@ -40,6 +41,7 @@ begin
   Check(LR.Success, 'should succeed');
   Check(LR.Method = hmPost, 'method is POST');
   CheckEqual('/data', LR.Path, 'path');
+  Check(LR.HasContentLength, 'post has content-length');
   CheckEqual(Int64(5), LR.ContentLength, 'content-length');
   CheckEqual(Int64(Length(LReq)), Int64(LR.Consumed), 'consumed all');
 end;

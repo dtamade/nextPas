@@ -1,34 +1,43 @@
-# Task Plan: H1 flag-matrix perf fallback
+# Task Plan: H1 request metadata cache
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-上一批已补 `NEXTPAS_BENCH_FILTER` 与 flag-matrix runner。本轮验证 `--perf` 路径，
-发现当前系统 `perf_event_paranoid=3` 会拒绝普通用户 perf events，因此先补 graceful
-fallback：请求 perf 时先探测权限，不能用时仍跑 benchmark，并在 `env.txt` 记录
-`perf_requested=1` / `perf_usable=0`。
+本轮聚焦 H1 parser/server 的 request metadata materialization：同一请求在 parser headers-complete、
+server header policy、`100-continue` 判定、dispatch keep-alive / Host 判定之间不应重复执行
+`Get/GetAll/Trim/LowerCase/TryStrToInt64`。
 
-本轮不改 HTTP public API、不改 wire contract、不写 `docs/nextpas.core.http.inbox.md`。
+本轮不改 HTTP public facade API、不改 wire contract、不写 `docs/nextpas.core.http.inbox.md`，
+也不碰 generated `nextpas.core.http.impl.h1.llhttp.pas`。
 
 ## Checklist
 
-- [x] 复核控制文件、HTTP benchmark docs、git status。
-- [x] 运行 `run_flag_matrix.sh --smoke --perf`，确认当前环境 perf 受限。
-- [x] 实现 perf usability preflight，避免 `perf stat` 权限失败中断 benchmark。
-- [x] 更新 `env.txt` marker：`perf_requested` / `perf_usable`。
-- [x] 新增 `test_http_benchmarks` perf graceful smoke。
-- [x] 跑 `test_http_benchmarks` focused gate + heaptrc。
+- [x] 复核设计规范、HTTP coverage、benchmark docs、控制文件与 git status。
+- [x] RED：在 `test_http_h1parser` 增加 request metadata focused contract，确认缺少
+      `TH1RequestMetadata` / `GetRequestMetadata` 时编译失败。
+- [x] 在 H1 parser 内构建 request metadata cache，并把 server header policy /
+      `100-continue` / dispatch keep-alive / Host 判断切到缓存。
+- [x] 给 H1 fast parser 增加 `HasContentLength` 标志，避免 fast snapshot metadata 混淆
+      “无 Content-Length”和“Content-Length: 0”。
+- [x] 保留旧 request keep-alive 的精确字符串语义，不混入 behavior 修复。
+- [x] 增加 H1 parser benchmark metadata rows：legacy repeated scan vs cached metadata。
+- [x] 更新 `test_http_benchmarks` smoke marker。
+- [x] 跑 focused parser/server/benchmark gates + heaptrc。
 - [x] 更新 docs/control 证据。
-- [x] 跑 `git diff --check`。
+- [ ] 跑 `git diff --check`。
 - [ ] path-limited commit。
 
 ## Scope
 
 本轮只允许修改：
 
-- `benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh`
+- `src/nextpas.core.http.impl.h1.parser.pas`
+- `src/nextpas.core.http.impl.h1.pas`
+- `src/nextpas.core.http.impl.h1.fast.pas`
+- `tests/nextpas.core.http/test_http_h1fast/test_http_h1fast.lpr`
+- `tests/nextpas.core.http/test_http_h1parser/test_http_h1parser.lpr`
+- `benchmarks/nextpas.core.http/bench_h1parser/bench_h1parser.lpr`
 - `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
-- `benchmarks/nextpas.core.http/bench_h1parser/compare_c/README.md`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
 - `findings.md`
@@ -36,12 +45,13 @@ fallback：请求 perf 时先探测权限，不能用时仍跑 benchmark，并�
 
 ## Current conclusion
 
-当前机器的 `perf_event_paranoid=3`，不能直接采集 cycles/branches/cache-misses。
-脚本必须把 perf 作为可选增强，而不是 benchmark smoke 的硬依赖。下一步若要得到真实
-branch/cache 指标，需要在允许 perf 的环境运行，或调整系统权限。
+Pascal-translated llhttp raw gap 仍是长期性能轨道，但当前更大的短期收益在 adapter/server
+metadata materialization。本轮把 H1 request-side metadata 从 scattered repeated lookup
+收束成 parser 内一次构建、server 复用，避免每个请求在 policy/continue/dispatch 阶段重复解析。
 
 ## Intended outcome
 
-- `run_flag_matrix.sh --perf` 在 perf 不可用时仍输出 `results.tsv/env.txt`。
-- `test_http_benchmarks` 直接锁住 perf graceful fallback。
-- 文档明确当前环境边界和下一步可执行命令。
+- request metadata focused tests 证明 Host、Content-Length、Expect、Transfer-Encoding、
+  Connection 摘要正确。
+- server whole-run / poll-driven focused gate 保持 274-case wire contract 不回退。
+- benchmark 同场输出 legacy repeated scan 与 cached metadata 的差异。
