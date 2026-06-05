@@ -159,6 +159,16 @@ type
       const ACurrentMethodClass: string;
       const ACurrentOwnerUnitId: string
     ): LongInt;
+    function TryResolveTypeNameMemberCallTarget(
+      const AReceiverName: string;
+      const AMemberName: string;
+      const AArgCount: LongInt;
+      const AArgSignature: string;
+      const AHasArgSignature: Boolean;
+      const AHasTypeMismatchEvidence: Boolean;
+      out AReceiverTypeId: LongInt;
+      out ATargetSymbolId: LongInt
+    ): Boolean;
     function TypeSymbolForTypeId(
       const ATypeId: LongInt;
       out ASymbol: TSemanticSymbol
@@ -1909,6 +1919,84 @@ begin
   );
 end;
 
+function TSemanticAnalyzer.TryResolveTypeNameMemberCallTarget(
+  const AReceiverName: string;
+  const AMemberName: string;
+  const AArgCount: LongInt;
+  const AArgSignature: string;
+  const AHasArgSignature: Boolean;
+  const AHasTypeMismatchEvidence: Boolean;
+  out AReceiverTypeId: LongInt;
+  out ATargetSymbolId: LongInt
+): Boolean;
+var
+  CandidateResolutionFailure: string;
+  CandidateTargetSymbolId: LongInt;
+  CandidateTypeId: LongInt;
+  Candidates: TOverloadCandidateArray;
+  Index: LongInt;
+  MatchCount: LongInt;
+  SeenIndex: LongInt;
+  SeenTypeIds: array of LongInt;
+  Symbol: TSemanticSymbol;
+  TypeAlreadySeen: Boolean;
+begin
+  Result := False;
+  AReceiverTypeId := 0;
+  ATargetSymbolId := 0;
+  if (AReceiverName = '') or (AMemberName = '') then
+    Exit;
+
+  MatchCount := 0;
+  SetLength(SeenTypeIds, 0);
+  for Index := 0 to FModel.SymbolCount - 1 do
+  begin
+    Symbol := FModel.SymbolAt(Index);
+    if not SameText(Symbol.Kind, 'type') or
+      not SameText(Symbol.Name, AReceiverName) or
+      (Symbol.TypeId <= 0) or (Symbol.TypeId > FModel.TypeCount) then
+      Continue;
+
+    CandidateTypeId := Symbol.TypeId;
+    TypeAlreadySeen := False;
+    for SeenIndex := 0 to Length(SeenTypeIds) - 1 do
+      if SeenTypeIds[SeenIndex] = CandidateTypeId then
+      begin
+        TypeAlreadySeen := True;
+        Break;
+      end;
+    if TypeAlreadySeen then
+      Continue;
+
+    SetLength(SeenTypeIds, Length(SeenTypeIds) + 1);
+    SeenTypeIds[High(SeenTypeIds)] := CandidateTypeId;
+
+    CandidateResolutionFailure := '';
+    SetLength(Candidates, 0);
+    CandidateTargetSymbolId := MethodSymbolIdForClassTypeMember(
+      CandidateTypeId,
+      AMemberName,
+      AArgCount,
+      AArgSignature,
+      AHasArgSignature,
+      AHasTypeMismatchEvidence,
+      CandidateResolutionFailure,
+      Candidates
+    );
+    if CandidateTargetSymbolId <= 0 then
+      Continue;
+
+    Inc(MatchCount);
+    if MatchCount > 1 then
+      Exit(False);
+
+    AReceiverTypeId := CandidateTypeId;
+    ATargetSymbolId := CandidateTargetSymbolId;
+  end;
+
+  Result := MatchCount = 1;
+end;
+
 function TSemanticAnalyzer.TypeSymbolForTypeId(
   const ATypeId: LongInt;
   out ASymbol: TSemanticSymbol
@@ -2478,6 +2566,8 @@ begin
   AFailureName := '';
   AFailureOffset := 0;
   AActualArgCount := 0;
+  TargetSymbolId := 0;
+  SetLength(ACandidates, 0);
   if not ExtractDirectMemberCall(
     ACallNode,
     ReceiverName,
@@ -2489,28 +2579,43 @@ begin
   AActualArgCount := ArgCount;
   AFailureName := MemberName;
   AFailureOffset := MemberOffset;
+  HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
+  HasTypeMismatchEvidence := HasArgSignature and
+    CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
   ReceiverTypeId := TypeIdForMemberReceiver(
     ReceiverName,
     ACurrentMethodClass,
     ACurrentOwnerUnitId
   );
   if ReceiverTypeId <= 0 then
-    Exit;
-  HasArgSignature := CallArgumentSignature(ACallNode, ArgSignature);
-  HasTypeMismatchEvidence := HasArgSignature and
-    CallArgumentSignatureIsStable(ACallNode, ACurrentOwnerUnitId);
+  begin
+    if not TryResolveTypeNameMemberCallTarget(
+      ReceiverName,
+      MemberName,
+      ArgCount,
+      ArgSignature,
+      HasArgSignature,
+      HasTypeMismatchEvidence,
+      ReceiverTypeId,
+      TargetSymbolId
+    ) then
+      Exit;
+  end;
 
-  TargetSymbolId := MethodSymbolIdForClassTypeMember(
-    ReceiverTypeId,
-    MemberName,
-    ArgCount,
-    ArgSignature,
-    HasArgSignature,
-    HasTypeMismatchEvidence,
-    AResolutionFailureKind,
-    Candidates
-  );
-  ACandidates := Candidates;
+  if TargetSymbolId <= 0 then
+  begin
+    TargetSymbolId := MethodSymbolIdForClassTypeMember(
+      ReceiverTypeId,
+      MemberName,
+      ArgCount,
+      ArgSignature,
+      HasArgSignature,
+      HasTypeMismatchEvidence,
+      AResolutionFailureKind,
+      Candidates
+    );
+    ACandidates := Candidates;
+  end;
   if TargetSymbolId <= 0 then
     Exit;
 
