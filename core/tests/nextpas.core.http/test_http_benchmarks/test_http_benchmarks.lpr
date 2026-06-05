@@ -583,6 +583,19 @@ begin
     'THttpHeaders NormalizeIfNeeded inline implementation');
 end;
 
+procedure TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1ServerUnitPath));
+
+  CheckNotContains(LSource,
+    'CreateBufferedWriter(LOutbound as IWriter, 4096)',
+    'H1 server response path should write directly into IH1OutboundBuffer');
+end;
+
 procedure TestBenchFullchainPlaintextSmoke;
 var
   LRootDir: string;
@@ -1451,6 +1464,8 @@ begin
     @TestH1ServerPolicyHotHelpersInlineSourceContract);
   T.Run('HTTP headers lookup hot helpers inline source contract',
     @TestHttpHeadersLookupHotHelpersInlineSourceContract);
+  T.Run('H1 server response drain avoids generic buffered writer source contract',
+    @TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

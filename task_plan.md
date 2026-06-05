@@ -1,5 +1,29 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http direct outbound response path slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 HttpServer response-drain 热路径：
+让 H1 server 的 threaded / poll response writer 直接写入 `IH1OutboundBuffer`，
+去掉每个请求额外包一层 generic `TBufferedWriter` 的对象和内存缓冲成本。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract，要求 H1 server
+  response path 不再出现 `CreateBufferedWriter(LOutbound as IWriter, 4096)`。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1` 的 server response path，
+  threaded / poll 两条路径都把 `TH1ResponseWriter` 直接接到 `IH1OutboundBuffer`。
+- [x] 保留 H1 client request writer 的 generic buffered writer，因为 client 路径是直接写 socket。
+- [x] 跑 focused benchmark/source-contract gate：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 server behavior/leak gate：
+  `make -C tests/nextpas.core.http/test_http_server clean test`。
+- [x] 跑小 benchmark smoke：
+  `NEXTPAS_BENCH_MAX_ITERS=5000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
+  与 `bench_http_server --requests 512 --threads 1 --workload response_1k`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-06 http request path direct-accessor slice
 
 ### Goal

@@ -1,5 +1,51 @@
 # Progress Log
 
+## Session: 2026-06-06 http direct outbound response path slice
+
+- **Status:** completed.
+- Objective:
+  - improve HttpServer response-drain hot path
+  - remove the unnecessary generic `TBufferedWriter` layer around `IH1OutboundBuffer`
+- Scope and safety:
+  - touched only H1 server implementation and benchmark/source-contract test
+  - updated HTTP benchmark/API docs and top control-file entries
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not stage unrelated async/client/compiler dirty files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `30 total, 29 passed, 1 failed`
+    - failed at `H1 server response path should write directly into IH1OutboundBuffer`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - threaded `ExecuteCurrentRequest` now passes `LOutbound as IWriter` directly to
+    `TH1ResponseWriter`
+  - poll-driven `ExecuteCurrentPollRequest` does the same, including its error-response fallback
+  - removed now-unneeded `IFlusher` probes on that server response path
+  - left H1 client request writing unchanged
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `30/30 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=5000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
+    - `completed=5000`
+    - `ns/op=38134.9`
+    - `req/s=26223`
+  - `make -C benchmarks/nextpas.core.http/bench_server clean build && build/projects/nextpas.core.http/bench_server/bench_http_server --requests 512 --threads 1 --workload response_1k`
+    - `completed=512`
+    - `ns/op=35310`
+    - `req/s=28319`
+- Outcome:
+  - H1 server response writer now writes directly into the protocol-owned outbound drain buffer
+  - source-contract protects against reintroducing the redundant generic buffered writer layer
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 server direct outbound response path
+  - next best batch: request-target path-only projection for `Req.Path`, or llhttp header materialization / parsed-span insertion cost reduction
+
 ## Session: 2026-06-06 http request path direct-accessor slice
 
 - **Status:** completed.

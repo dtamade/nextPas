@@ -280,6 +280,59 @@ Fresh single-run local row after that slice:
 This row is directional only; keep using repeated or narrowed rows before
 claiming a durable cross-run performance delta.
 
+## Optimization Evidence: H1 Server Direct Outbound Response Path
+
+On 2026-06-06 local time, H1 server response construction stopped wrapping the
+per-request `IH1OutboundBuffer` in the generic `TBufferedWriter`. The response
+writer now writes directly into the outbound buffer, and the server drains that
+same buffer to the socket or poll runtime.
+
+This removes one extra object, one extra in-memory buffer layer, and the
+matching `IFlusher` probe from the threaded and poll-driven response paths. The
+client request writer still uses `CreateBufferedWriter` because that path writes
+directly to a transport stream instead of to the H1 outbound drain buffer.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+30 total, 29 passed, 1 failed
+failure: H1 server response path should write directly into IH1OutboundBuffer
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+30 total, 30 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small local smoke rows:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=5000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+completed=5000
+ns/op=38134.9
+req/s=26223
+
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 512 --threads 1 --workload response_1k
+completed=512
+ns/op=35310
+req/s=28319
+```
+
+These rows prove the direct outbound response path runs through the focused
+benchmark harness. They are intentionally not a durable cross-run ranking.
+
 ## Run the Full-Chain Keep-Alive Benchmark
 
 Run a filtered plaintext full-chain row:

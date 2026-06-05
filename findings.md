@@ -1,5 +1,43 @@
 # Findings & Decisions
 
+## 2026-06-06 http direct outbound response path slice
+
+- 本轮去掉 H1 server response path 中的额外 generic buffered writer：
+  `TH1ResponseWriter` 现在直接写入 `IH1OutboundBuffer`，再由 server drain 到 socket
+  或 poll runtime。
+- 选择依据：
+  - server 响应已经有协议专用 `IH1OutboundBuffer` 承担排队、backpressure、poll drain。
+  - 再包一层 `TBufferedWriter` 会为每个请求增加一个对象和一层内存缓冲/flush，
+    对 full-chain response path 没有必要。
+  - 这个切片比继续盲目 inline 小 helper 更贴近 `HttpServer` full-chain 成本，
+    同时不改变公开 API。
+- 明确不改：
+  - 不改 H1 client request writer；client 仍直接写 transport stream，generic buffered writer
+    在那里仍是合理边界。
+  - 不改 `TH1ResponseWriter` wire contract，不改 chunked/HEAD/no-body/hijack 语义。
+  - 不触碰 dirty 的 `test_http_client.lpr` 和其他无关文件。
+- RED 证据：
+  - `test_http_benchmarks` 新增 source-contract 后先失败在
+    `H1 server response path should write directly into IH1OutboundBuffer`。
+  - 结果为 `30 total, 29 passed, 1 failed`，heaptrc 仍是
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_benchmarks` 后续为 `30/30 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server` 后续为 `275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `bench_fullchain plaintext`：`completed=5000`，`38134.9 ns/op`，`26223 req/s`
+  - `bench_server response_1k`：`completed=512`，`35310 ns/op`，`28319 req/s`
+  - 这两条是本机 smoke，不声明永久跨运行性能提升。
+- 子代理只读审计结论：
+  - 后续高价值候选优先级是 request-target path-only 投影、llhttp header materialization、
+    fast lazy headers lookup、response writer 固定头部快路径。
+  - 本轮 direct outbound response path 属于 response writer/drain 候选的底层降本，
+    方向合理，但下一批应回到更显著的 request-target / header materialization 差距。
+- 复盘结论：
+  方向没有走偏：本轮是生产 hot-path 去冗余，不是碎片化治理；验证覆盖了 source-contract、
+  threaded/epoll server behavior 和小 benchmark smoke。下一步应做 `Req.Path` origin-form
+  path-only 快捷投影，或 llhttp parsed header insertion/materialization 降本。
+
 ## 2026-06-06 http request path direct-accessor slice
 
 - 本轮把 `IHttpRequest` 从“只能通过 `Url` record 取 path/query”扩展为直接

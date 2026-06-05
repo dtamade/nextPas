@@ -980,7 +980,6 @@ var
   LHijackConn: ITcpStream;
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
-  LFlusher: IFlusher;
   LDrainStarted: Boolean;
 begin
   Result := tscoServer;
@@ -1025,7 +1024,7 @@ begin
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
-    LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+    LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
     if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
@@ -1043,8 +1042,6 @@ begin
     end;
 
     LW.Flush;
-    if Supports(LResponseWriter, IFlusher, LFlusher) then
-      LFlusher.Flush;
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
@@ -1063,8 +1060,6 @@ begin
          (LW as TH1ResponseWriter).HasCommitted and (not LDrainStarted) then
       begin
         try
-          if Supports(LResponseWriter, IFlusher, LFlusher) then
-            LFlusher.Flush;
           if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
           begin
             ArmDirectWriteDeadline;
@@ -1088,7 +1083,6 @@ var
   LHijackConn: ITcpStream;
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
-  LFlusher: IFlusher;
   LKeepAlive: Boolean;
 begin
   Result := tscoServer;
@@ -1136,7 +1130,7 @@ begin
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
-    LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+    LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
@@ -1154,8 +1148,6 @@ begin
     end;
 
     LW.Flush;
-    if Supports(LResponseWriter, IFlusher, LFlusher) then
-      LFlusher.Flush;
 
     if LW.GetHeaders.Get('connection') = 'close' then
       LKeepAlive := False;
@@ -1171,7 +1163,7 @@ begin
         if LOutbound = nil then
         begin
           LOutbound := NewH1OutboundBuffer;
-          LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+          LResponseWriter := LOutbound as IWriter;
         end;
         try
           WriteErrorResponseToWriter(LOutbound as IWriter,
@@ -1185,11 +1177,6 @@ begin
       end
       else
       begin
-        try
-          if Supports(LResponseWriter, IFlusher, LFlusher) then
-            LFlusher.Flush;
-        except
-        end;
         if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
         begin
           AOutbound := LOutbound;
