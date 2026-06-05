@@ -1,56 +1,83 @@
-# Progress Log: H1 server header-policy one-shot evaluation
+# Progress Log: C llhttp comparator proof track
 
 ## Session
 
-- **Scope:** H1 server headers-complete policy evaluation and body-ingress benchmark signal.
+- **Scope:** H1 parser C llhttp comparator and benchmark smoke coverage.
 - **Status:** verified
-- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 server hot path` -> `metadata/materialization cost`
+- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 parser C parity proof`
 
 ## Current state
 
-- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP server/benchmark/docs/control 文件。
+- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP
+  benchmark/test/docs/control 文件。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮不改 `API_COVERAGE.md`：没有 public API 变化。
-- 子代理只读审视已完成；没有修改工作区。
+- 本轮不改 `docs/http/API_COVERAGE.md`：没有 public API 变化，只有 benchmark harness
+  与 smoke 覆盖。
+- 本轮不跑全量测试；只跑 benchmark comparator 与 `test_http_benchmarks` focused gate。
 
 ## Completed work
 
-- 重新跑 `bench_h1parser`，确认 raw/no-op/adapter 分层仍显示当前栈内瓶颈在 adapter/server materialization。
-- `bench_fullchain` 新增 `/sink` 16KB POST body 场景，用来观察多 read-loop body ingress。
-- 修复 `AdvancePollRequestParse` 中 `case LReadResult of` 缺失结束符，恢复 server/fullchain 构建。
-- 新增 `HeaderPolicyErrorStatus`，把 headers-stage policy 收口成 shared helper。
-- threaded `Run` 与 poll/epoll `AdvancePollRequestParse` 均在 headers 首次完成时执行 host/expect/declared-CL/header-size 判定。
-- body-size progress、trailer-size progress、parser error progress 仍保留在 read loop 内。
+- 新增 `bench_h1parser/compare_c` C llhttp comparator。
+- 父级 `bench_h1parser` Makefile 增加 `run-c`，统一从 parser benchmark 入口代理。
+- `test_http_benchmarks` 增加 missing `LLHTTP_ROOT` diagnostic smoke。
+- `test_http_benchmarks` 增加 `NEXTPAS_LLHTTP_ROOT` opt-in C comparator smoke。
+- 本机确认外部 llhttp source 是 `9.4.1`：
+  `/home/dtamade/projects/fafafa.ccore/third_party/llhttp`。
+- fresh 跑 Pascal translated llhttp / adapter benchmark。
+- fresh 跑 C llhttp comparator benchmark。
 
-## Verification
+## Verification so far
 
-- Diagnostic parser benchmark:
+- llhttp source version:
+  - `rg -n "LLHTTP_VERSION_(MAJOR|MINOR|PATCH)" /home/dtamade/projects/fafafa.ccore/third_party/llhttp/llhttp.h`
+  - result: `9.4.1`
+- Pascal benchmark:
   - `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  - raw/no-op rows remain close; adapter rows remain materially slower.
-- Full-chain benchmark baseline:
-  - initial `make -C benchmarks/nextpas.core.http/bench_fullchain clean run` exposed existing compile blocker at `src/nextpas.core.http.impl.h1.pas:1807`.
-  - after syntax fix / before one-shot policy: 16KB sink `998 ms`, `5005 req/s`.
-- Full-chain benchmark confirmation:
-  - `make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
-  - 16KB sink `910 ms`, `5488 req/s`.
-- Focused server gate:
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `274 total, 274 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- Focused security gate:
-  - `make -C tests/nextpas.core.http/test_http_security clean test`
-  - `242 total, 242 passed, 0 failed`
+  - exit: `0`
+  - representative rows:
+    - Pascal raw simple GET: `222.0 ns/op`
+    - Pascal raw 10 headers: `779.5 ns/op`
+    - Pascal raw POST 1KB: `437.1 ns/op`
+    - Pascal raw pipeline: `2203.0 ns/op`
+    - adapter simple GET: `623.0 ns/op`
+    - adapter 10 headers: `3341.4 ns/op`
+    - adapter POST 1KB: `1429.1 ns/op`
+    - adapter pipeline: `6273.4 ns/op`
+- C comparator:
+  - `make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`
+  - exit: `0`
+  - representative rows:
+    - C raw simple GET: `279.4 ns/op`
+    - C raw 10 headers: `561.5 ns/op`
+    - C raw POST 1KB: `299.1 ns/op`
+    - C raw pipeline: `1408.2 ns/op`
+    - C no-op simple GET: `138.2 ns/op`
+    - C no-op 10 headers: `544.7 ns/op`
+    - C no-op POST 1KB: `283.4 ns/op`
+    - C no-op pipeline: `1401.7 ns/op`
+- Diff check:
+  - `git diff --check -- benchmarks/nextpas.core.http/bench_h1parser tests/nextpas.core.http/test_http_benchmarks docs/http/BENCHMARKS.md task_plan.md findings.md progress.md`
+  - exit: `0`
+- Parent C comparator target:
+  - `make -C benchmarks/nextpas.core.http/bench_h1parser run-c LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`
+  - exit: `0`
+  - output confirms llhttp `9.4.1` and matching payload sizes.
+- Focused benchmark test gate:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  - `7 total, 7 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Current conclusion
 
-方向没有走偏：本轮没有把性能问题泛化成大重构，而是先修复 server/fullchain 构建阻塞，再把明确重复的
-headers-stage checks 移到一次性执行点。语义由 threaded/epoll server focused gate 覆盖，16KB body
-sink row 显示该优化对多 read-loop request body 有方向性收益。
+方向没有走偏：本轮没有把性能怀疑直接变成大重构，而是先补同 payload C comparator。
+证据显示 Pascal translated llhttp 在更有代表性的 10 headers、POST、pipeline/no-op rows
+上确实慢于 C llhttp；但 nextPas adapter/materialization 仍是更大的成本池。
 
-Pascal translated llhttp 仍不能直接下 parity 结论；下一批应落 C llhttp comparator，补齐用户指出的核心证据缺口。
+## Remaining work before commit
+
+- path-limited commit。
 
 ## Next step
 
-- 下一批优先实现 `bench_h1parser/compare_c` same-payload C llhttp comparator，固定 llhttp `9.4.1` 并镜像 raw/no-op/pipeline rows。
-- comparator 完成后再决定是否继续深入 parser adapter metadata cache、body reader zero-copy snapshot 或 header insert internal fast path。
+- 下一批不要再扩同型 benchmark 文档；应开始收敛性能路线：
+  benchmark runner 统计质量、Pascal llhttp translation hotspot、adapter/materialization 三线择优。

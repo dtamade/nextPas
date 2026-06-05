@@ -234,6 +234,61 @@ runner's `MAX_ITERS = 1000` cap, so these numbers are directional. The
 classification remains stable: complete adapter parsing is materially slower
 than raw state-machine execution.
 
+## Diagnostic Evidence: C llhttp Comparator
+
+On 2026-06-05 local time, `bench_h1parser` gained an external C llhttp
+comparator. The comparator does not vendor llhttp into nextPas. Point
+`LLHTTP_ROOT` at llhttp `9.4.1`, matching the Pascal-translated
+`nextpas.core.http.impl.h1.llhttp.pas` source.
+
+Run the C comparator directly:
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c \
+  clean run LLHTTP_ROOT=/path/to/llhttp-9.4.1
+```
+
+Or run it through the parent parser benchmark:
+
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser \
+  run-c LLHTTP_ROOT=/path/to/llhttp-9.4.1
+```
+
+The benchmark smoke test always verifies that a missing `LLHTTP_ROOT` reports a
+clear diagnostic. To run the real C comparator smoke, set
+`NEXTPAS_LLHTTP_ROOT`:
+
+```sh
+NEXTPAS_LLHTTP_ROOT=/path/to/llhttp-9.4.1 \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+```
+
+Local comparator input sizes match `bench_h1parser`: simple GET is 35 bytes,
+10 headers is 286 bytes, POST 1KB is 1130 bytes, and the 10-request pipeline is
+350 bytes.
+
+Local snapshot with
+`LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`:
+
+| workload | Pascal raw ns/op | C raw ns/op | Pascal no-op ns/op | C no-op ns/op | nextPas adapter ns/op |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| simple GET | 222.0 | 279.4 | 221.5 | 138.2 | 623.0 |
+| 10 headers | 779.5 | 561.5 | 785.7 | 544.7 | 3341.4 |
+| POST 1KB body | 437.1 | 299.1 | 454.5 | 283.4 | 1429.1 |
+| pipeline 10 reqs | 2203.0 | 1408.2 | 2159.2 | 1401.7 | 6273.4 |
+
+The raw simple-GET row is too short and noisy to use as a standalone parity
+claim. The more representative 10-header, POST, pipeline, and no-op callback
+rows show C llhttp ahead by roughly `1.4x-1.6x` on this machine. That makes the
+Pascal translation a real optimization track, but the larger current cost is
+still the nextPas adapter/materialization layer: the adapter is about `2.2x` to
+`6.0x` slower than C raw llhttp across these same rows.
+
+Treat these rows as local directional evidence. The current runner still caps
+iterations at `MAX_ITERS = 1000`; the formal benchmark round should improve the
+runner before making cross-machine or cross-toolchain claims.
+
 ## Optimization Evidence: Parser Header Container Reuse
 
 On 2026-06-05 local time, `IHttpHeaders` gained a focused `Clear` contract and

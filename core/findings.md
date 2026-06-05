@@ -1,124 +1,111 @@
-# Findings: H1 server header-policy one-shot evaluation
+# Findings: C llhttp comparator proof track
 
 ## Scope
 
-本轮是 HTTP server hot-path performance + build-correctness slice，不改公开 API，不改
-request/response wire contract。目标是减少 body 读取循环中的重复 header metadata 解析，并把
-Pascal translated llhttp 的性能疑点拆成独立 benchmark proof track。
+本轮是 `nextpas.core.http` 的 H1 parser performance proof slice，不改公开 API，不改
+生产 HTTP wire contract。目标是回答用户指出的核心疑点：Pascal translated llhttp
+是否比 C llhttp 慢，以及当前优化路线是否应继续优先处理 adapter/materialization。
 
-## Confirmed truths
+## RED evidence
 
-### 1. 当前证据不支持把 Pascal llhttp state machine 列为第一瓶颈
+上一阶段进入本批时，C comparator 入口不存在：
 
-本轮重新跑：
+```sh
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c run
+```
+
+结果是目录/目标缺失。这证明当前仓库还不能直接做 Pascal translated llhttp 与 C
+llhttp 的 same-payload 对照。
+
+## Comparator design
+
+新增 `benchmarks/nextpas.core.http/bench_h1parser/compare_c`：
+
+- 不 vendor llhttp 源码。
+- 使用 `LLHTTP_ROOT` 指向外部 llhttp `9.4.1` source tree。
+- 支持 flat source layout、`include/src` layout、以及 generated build layout。
+- 镜像 Pascal `bench_h1parser` 的 payload：
+  - simple GET：35 bytes
+  - 10 headers：286 bytes
+  - POST 1KB：1130 bytes
+  - pipeline：350 bytes，10 requests
+- 镜像 raw/no-op/pipeline rows：
+  - raw no callbacks：simple GET、10 headers、POST 1KB
+  - raw pipeline pause-only
+  - no-op callbacks：simple GET、10 headers、POST 1KB、pipeline
+
+`test_http_benchmarks` 现在直接锁住两条 benchmark contract：
+
+- missing `LLHTTP_ROOT` 必须给出清晰 diagnostic。
+- 设置 `NEXTPAS_LLHTTP_ROOT` 时会 opt-in 跑真实 C comparator smoke，并校验标题、
+  llhttp version 与代表性 rows。
+
+## Fresh local evidence
+
+本机 llhttp source：
+
+```text
+LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
+version=9.4.1
+```
+
+Pascal translated llhttp / adapter：
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-关键行：
+| workload | Pascal translated raw ns/op | Pascal no-op ns/op | nextPas adapter ns/op |
+| --- | ---: | ---: | ---: |
+| simple GET | 222.0 | 221.5 | 623.0 |
+| 10 headers | 779.5 | 785.7 | 3341.4 |
+| POST 1KB | 437.1 | 454.5 | 1429.1 |
+| pipeline 10 reqs | 2203.0 | 2159.2 | 6273.4 |
 
-| workload | ns/op |
-| --- | ---: |
-| raw llhttp simple GET | 308.9 |
-| noop cb simple GET | 229.5 |
-| llhttp adapter simple GET | 623.0 |
-| raw llhttp 10 headers | 822.8 |
-| noop cb 10 headers | 785.1 |
-| llhttp adapter 10 headers | 3346.3 |
-| raw llhttp POST 1KB | 455.9 |
-| noop cb POST 1KB | 454.5 |
-| llhttp adapter POST 1KB | 1428.8 |
-| raw llhttp pipeline pause-only | 2171.3 |
-| noop cb pipeline | 2170.8 |
-| llhttp adapter pipeline | 6295.9 |
-
-这只能说明 nextPas 当前 H1 stack 内第一瓶颈在 adapter/server materialization；不能证明 Pascal
-translation 与 C llhttp 性能等价。严格证明仍需要 same-payload C llhttp comparator。
-
-### 2. 子代理独立审视结论一致
-
-`gpt-5.5 xhigh` 子代理只读审视后建议：
-
-- 最小 C comparator 应固定 llhttp `9.4.1`，镜像 raw/no-op/pipeline rows。
-- 不依赖系统 `pkg-config llhttp`，优先用 `LLHTTP_ROOT` 指向固定源码/静态库。
-- 在不做 C comparator 前，最高收益仍是 request metadata / header-policy cache。
-
-### 3. Server/fullchain 构建暴露现有 poll path syntax blocker
-
-新增 `bench_fullchain` 场景后先跑 baseline：
+C llhttp `9.4.1`:
 
 ```sh
-make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c \
+  clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
 ```
 
-第一次构建失败在 `src/nextpas.core.http.impl.h1.pas:1807`，根因是
-`TH1ServerConnectionState.AdvancePollRequestParse` 的 `case LReadResult of` 缺少结束 `end;`，
-导致后续 `PollEvents` 被解析成非法嵌套函数。补上 `case` block 结束符后，server/fullchain 构建恢复。
-
-### 4. Header policy 旧路径在 body read loop 中重复解析
-
-旧路径在 headers 完成后，每次继续读取 body 都会重复执行：
-
-- `FParser.GetHeaders.Get('host')`
-- `RequestHasUnsupportedExpectations(FParser)` -> `GetAll('expect')` + comma token split + lowercase
-- `DeclaredContentLengthExceedsLimit(...)` -> `Get('content-length')` + trim + int parse
-- `ShouldSendContinueResponse(...)` -> `Expect` + declared body 判定
-
-这些判定只依赖 headers-stage metadata，不需要随 body progress 重复计算。
-
-### 5. New one-shot helper preserves contract
-
-新增 `HeaderPolicyErrorStatus`：
-
-- headers-size check 仍优先于 parser error。
-- parser error 仍映射到 `400` / `501`。
-- HTTP/1.1 missing `Host` 仍返回 `400`。
-- unsupported `Expect` 仍返回 `417`，并且不会误发 `100 Continue`。
-- declared `Content-Length` 超过 `MaxBodySize` 仍早返回 `413`。
-
-threaded `Run` 与 poll/epoll `AdvancePollRequestParse` 都只在 headers 首次完成时调用该 helper；
-body-size progress、trailer-size progress、parser error progress 仍保留在循环中继续检查。
-
-## Benchmark projection
-
-`bench_fullchain` 新增 16KB body sink 场景，用来暴露多 read-loop body ingress 的 server overhead。
-
-Baseline after build-fix / before header-policy one-shot:
-
-```sh
-make -C benchmarks/nextpas.core.http/bench_fullchain clean run
-```
-
-| workload | elapsed | req/s |
+| workload | C raw ns/op | C no-op ns/op |
 | --- | ---: | ---: |
-| Plaintext GET | 711 ms | 7023 |
-| JSON GET | 722 ms | 6923 |
-| Echo 1KB POST | 861 ms | 5806 |
-| Sink 16KB POST | 998 ms | 5005 |
-| Param GET | 684 ms | 7305 |
+| simple GET | 279.4 | 138.2 |
+| 10 headers | 561.5 | 544.7 |
+| POST 1KB | 299.1 | 283.4 |
+| pipeline 10 reqs | 1408.2 | 1401.7 |
 
-Confirmation after header-policy one-shot:
+## Interpretation
 
-```sh
-make -C benchmarks/nextpas.core.http/bench_fullchain clean run
-```
-
-| workload | before req/s | after req/s |
-| --- | ---: | ---: |
-| Sink 16KB POST | 5005 | 5488 |
-
-Only the 16KB sink row should be treated as the signal for this slice. Other rows are short local
-full-chain measurements and showed normal scheduler/network noise.
+- raw simple GET 是极短输入，当前 `MAX_ITERS=1000` 下噪声敏感；这次 fresh run 里
+  Pascal raw simple GET 反而快于 C raw simple GET，不能拿这一行单独下 parity 结论。
+- 10 headers、POST 1KB、pipeline 与 no-op callback rows 更能代表实际 parser 工作；
+  这些行显示 Pascal translated llhttp 相比 C llhttp 通常慢约 `1.4x-1.6x`。
+- nextPas 完整 `IH1Parser` adapter 仍是更大的栈内成本：
+  - 10 headers adapter/C raw 约 `5.95x`
+  - POST 1KB adapter/C raw 约 `4.78x`
+  - pipeline adapter/C raw 约 `4.46x`
+  - simple GET adapter/C raw 约 `2.23x`
+- 因此用户的怀疑是有依据的：Pascal llhttp translation 需要进入性能路线。
+  但最高收益不应只盯 state machine；adapter/header/body materialization 与 server
+  hot path 仍然是更大的优化池。
 
 ## Remaining gaps / risks
 
-- C llhttp comparator is still missing; current evidence is stack-internal, not language parity proof.
-- `HeaderPolicyErrorStatus` deliberately keeps header-derived checks one-shot, but body/trailer progress checks must remain per-read.
-- `bench_fullchain` is a local directional benchmark, not a permanent Go/Rust ranking.
+- 当前 C comparator 是本机 directional benchmark，不是跨平台永久排名。
+- comparator 依赖外部 `LLHTTP_ROOT`，测试中的真实 C run 是 opt-in，避免仓库 vendor
+  或强制依赖外部源码。
+- `MAX_ITERS=1000` 对短输入噪声仍偏高，后续正式 benchmark 轮次应提升 runner 统计质量。
+- 如果要继续追平 Go/Rust，应把优化路线分为：
+  1. C/Pascal state machine parity。
+  2. adapter materialization / header storage / body buffer / callback span cost。
+  3. server full-chain worker handoff、drain、keep-alive 与 future evented backend。
 
-## Next optimization target
+## Next optimization targets
 
-1. Build the C llhttp comparator proof track to directly answer Pascal translation parity.
-2. Then consider parser/server request metadata cache deeper in the adapter, especially transfer-coding and body-reader copy paths.
-3. Keep benchmark runner scoped; avoid full-suite sweeps unless a public/API contract changes.
+1. 先把 benchmark runner 的统计质量提高：更高 cap、可配置 iterations、报告环境和 commit。
+2. 深挖 Pascal translated llhttp 热点：record layout、callback cdecl 成本、branch/cache locality、
+   bounds/string conversion、可能的 generated-table/inline 策略。
+3. 并行继续削 adapter/materialization：header insert/lookup、body reader snapshot、
+   URL/header span zero-copy、request object reuse。

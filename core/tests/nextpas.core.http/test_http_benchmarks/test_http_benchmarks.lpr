@@ -13,6 +13,7 @@ var
 
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
+  H1ParserBenchRelativeDir = 'benchmarks/nextpas.core.http/bench_h1parser';
   ServerComparisonRelativeDir = 'benchmarks/nextpas.core.http';
   ServerComparisonRunnerRelativePath =
     'benchmarks/nextpas.core.http/run_server_comparison.sh';
@@ -21,6 +22,7 @@ const
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
+  LlhttpRootEnvName = 'NEXTPAS_LLHTTP_ROOT';
 
 procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
 var
@@ -348,6 +350,52 @@ begin
   CheckServerBenchmarkOutput(LSnapshot, 'rust', '8', '1');
 end;
 
+procedure TestCllhttpComparatorRequiresRoot;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['run-c'], LBenchDir,
+    LExitCode, LOutput);
+  Check(LExitCode <> 0, 'C llhttp comparator without root should fail');
+  CheckContains(LOutput, 'LLHTTP_ROOT is required',
+    'C llhttp comparator missing-root diagnostic');
+end;
+
+procedure TestCllhttpComparatorSmallSmokeWhenConfigured;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LLhttpRoot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  if LLhttpRoot = '' then
+    Exit;
+
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable,
+    ['run-c', 'LLHTTP_ROOT=' + LLhttpRoot], LBenchDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'C llhttp comparator smoke exit code: ' + LOutput);
+  CheckContains(LOutput, '=== C llhttp H1 parser comparator ===',
+    'C llhttp comparator title');
+  CheckContains(LOutput, 'llhttp version: 9.4.1',
+    'C llhttp comparator version');
+  CheckContains(LOutput, 'C raw llhttp: 10 headers',
+    'C llhttp raw row');
+  CheckContains(LOutput, 'C noop cb: pipeline',
+    'C llhttp noop pipeline row');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -357,6 +405,10 @@ begin
     @TestServerComparisonRunnerSmallSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
+  T.Run('C llhttp comparator requires LLHTTP_ROOT',
+    @TestCllhttpComparatorRequiresRoot);
+  T.Run('C llhttp comparator small smoke when configured',
+    @TestCllhttpComparatorSmallSmokeWhenConfigured);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

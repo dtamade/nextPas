@@ -7,7 +7,7 @@ EXTRA_FLAGS ?=
 FPC_FLAGS := -MObjFPC -Sh -O2 $(EXTRA_FLAGS)
 FPC_FLAGS += -FU$(BUILD_DIR) -FE$(BUILD_DIR) -Fu$(CORE_ROOT)/src -Fi$(CORE_ROOT)/src -Fu$(CORE_ROOT)/build/lib
 
-.PHONY: build run clean
+.PHONY: build run run-c clean
 
 build:
 	@mkdir -p $(BUILD_DIR)
@@ -15,6 +15,9 @@ build:
 
 run: build
 	$(BUILD_DIR)/$(PROGRAM)
+
+run-c:
+	$(MAKE) -C compare_c run LLHTTP_ROOT="$(LLHTTP_ROOT)"
 
 clean:
 	rm -rf $(BUILD_DIR)
