@@ -425,6 +425,12 @@ begin
     'H1 parser benchmark max-iters marker');
   CheckContains(LOutput, 'raw llhttp: simple GET',
     'H1 parser benchmark raw row');
+  CheckContains(LOutput, 'adapter cost: span append 10 headers',
+    'H1 parser benchmark span append breakdown row');
+  CheckContains(LOutput, 'adapter cost: header add 10 headers',
+    'H1 parser benchmark header add breakdown row');
+  CheckContains(LOutput, 'adapter cost: body copy 1KB',
+    'H1 parser benchmark body copy breakdown row');
 end;
 
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;

@@ -3,7 +3,10 @@ program bench_h1parser;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.base,
   nextpas.core.bench,
+  nextpas.core.http.intf,
+  nextpas.core.http.headers,
   nextpas.core.http.impl.h1.parser,
   nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.llhttp;
@@ -276,6 +279,123 @@ begin
   BenchPausedPipelineWithSettings(LSettings, aIters);
 end;
 
+{ === Adapter materialization cost breakdown === }
+
+procedure AppendBenchSpan(var AText: string; const AData: PAnsiChar;
+  const ALen: SizeUInt);
+var
+  LOldLen: SizeInt;
+begin
+  if ALen = 0 then
+    Exit;
+  LOldLen := Length(AText);
+  if LOldLen = 0 then
+  begin
+    SetString(AText, AData, ALen);
+    Exit;
+  end;
+  SetLength(AText, LOldLen + SizeInt(ALen));
+  Move(AData^, AText[LOldLen + 1], ALen);
+end;
+
+procedure AppendBenchLiteral(var AText: string; const ALiteral: AnsiString);
+begin
+  AppendBenchSpan(AText, PAnsiChar(ALiteral), Length(ALiteral));
+end;
+
+procedure AppendBenchHeaderPair(var AField, AValue: string;
+  const AName, AHeaderValue: AnsiString);
+begin
+  AppendBenchLiteral(AField, AName);
+  AppendBenchLiteral(AValue, AHeaderValue);
+  GSink := GSink + SizeUInt(Length(AField)) + SizeUInt(Length(AValue));
+  AField := '';
+  AValue := '';
+end;
+
+procedure BenchAdapterSpanAppend10Headers(aIters: Int64);
+var
+  LIt: Int64;
+  LUrl: string;
+  LField: string;
+  LValue: string;
+begin
+  for LIt := 1 to aIters do
+  begin
+    LUrl := '';
+    LField := '';
+    LValue := '';
+    AppendBenchLiteral(LUrl, '/api/v1/users');
+    AppendBenchHeaderPair(LField, LValue, 'Host', 'example.com');
+    AppendBenchHeaderPair(LField, LValue, 'User-Agent', 'nextpas/1.0');
+    AppendBenchHeaderPair(LField, LValue, 'Accept', 'application/json');
+    AppendBenchHeaderPair(LField, LValue, 'Accept-Encoding', 'gzip, deflate');
+    AppendBenchHeaderPair(LField, LValue, 'Accept-Language', 'en-US');
+    AppendBenchHeaderPair(LField, LValue, 'Connection', 'keep-alive');
+    AppendBenchHeaderPair(LField, LValue, 'Cache-Control', 'no-cache');
+    AppendBenchHeaderPair(LField, LValue, 'X-Request-Id', 'abc123');
+    AppendBenchHeaderPair(LField, LValue, 'X-Forwarded-For', '10.0.0.1');
+    AppendBenchHeaderPair(LField, LValue, 'Authorization', 'Bearer token123');
+  end;
+  GSink := GSink + SizeUInt(Length(LUrl));
+end;
+
+procedure BenchAdapterHeaderAdd10Headers(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  for LIt := 1 to aIters do
+  begin
+    LHeaders.Clear;
+    LHeaders.Add('Host', 'example.com');
+    LHeaders.Add('User-Agent', 'nextpas/1.0');
+    LHeaders.Add('Accept', 'application/json');
+    LHeaders.Add('Accept-Encoding', 'gzip, deflate');
+    LHeaders.Add('Accept-Language', 'en-US');
+    LHeaders.Add('Connection', 'keep-alive');
+    LHeaders.Add('Cache-Control', 'no-cache');
+    LHeaders.Add('X-Request-Id', 'abc123');
+    LHeaders.Add('X-Forwarded-For', '10.0.0.1');
+    LHeaders.Add('Authorization', 'Bearer token123');
+  end;
+  GSink := GSink + SizeUInt(LHeaders.Count);
+end;
+
+procedure EnsureBenchBodyCapacity(var ABody: TBytes; const ARequired: SizeUInt);
+var
+  LNewCapacity: SizeUInt;
+begin
+  if SizeUInt(Length(ABody)) >= ARequired then
+    Exit;
+
+  LNewCapacity := SizeUInt(Length(ABody));
+  if LNewCapacity < 256 then
+    LNewCapacity := 256;
+  while LNewCapacity < ARequired do
+    LNewCapacity := LNewCapacity * 2;
+  SetLength(ABody, SizeInt(LNewCapacity));
+end;
+
+procedure BenchAdapterBodyCopy1K(aIters: Int64);
+var
+  LIt: Int64;
+  LBody: TBytes;
+  LBodySize: SizeUInt;
+  LCopySize: SizeUInt;
+begin
+  LCopySize := SizeUInt(Length(GBody1K));
+  for LIt := 1 to aIters do
+  begin
+    LBodySize := 0;
+    EnsureBenchBodyCapacity(LBody, LCopySize);
+    Move(GBody1K[1], LBody[LBodySize], LCopySize);
+    LBodySize := LCopySize;
+  end;
+  GSink := GSink + LBodySize + LBody[0];
+end;
+
 { === Fast path benchmarks === }
 
 procedure BenchFastParseSimpleGET(aIters: Int64);
@@ -347,6 +467,11 @@ begin
   B.Run('noop cb: 10 headers (~400B)', @BenchNoopLlhttp10Headers);
   B.Run('noop cb: POST 1KB body', @BenchNoopLlhttpPost1K);
   B.Run('noop cb: pipeline (10 reqs)', @BenchNoopLlhttpPipeline10);
+  WriteLn;
+  WriteLn('--- adapter materialization costs ---');
+  B.Run('adapter cost: span append 10 headers', @BenchAdapterSpanAppend10Headers);
+  B.Run('adapter cost: header add 10 headers', @BenchAdapterHeaderAdd10Headers);
+  B.Run('adapter cost: body copy 1KB', @BenchAdapterBodyCopy1K);
   WriteLn;
   WriteLn('--- llhttp ---');
   B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);

@@ -470,6 +470,51 @@ not make everyday benchmark sanity runs as expensive as a full formal capture.
 Use `NEXTPAS_BENCH_MAX_ITERS=1000000` or higher for dedicated cross-toolchain
 snapshot work when runtime cost is acceptable.
 
+## Diagnostic Evidence: Adapter Materialization Breakdown
+
+On 2026-06-05 local time, `bench_h1parser` gained an `adapter materialization
+costs` group. These rows are synthetic and intentionally narrower than a full
+parser run: they isolate string span accumulation, `THttpHeaders.Add`, and body
+buffer copy so later optimization work can target the dominant adapter cost
+instead of guessing from the full `IH1Parser` row.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+H1 parser benchmark breakdown markers were missing:
+adapter cost: span append 10 headers
+adapter cost: header add 10 headers
+adapter cost: body copy 1KB
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+9 total, 9 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Default parser sanity:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+bench_max_iters=100000
+raw translated llhttp 10 headers ns/op=753.6
+noop callback 10 headers ns/op=786.6
+adapter span append 10 headers ns/op=801.1
+adapter header add 10 headers ns/op=1220.9
+adapter body copy 1KB ns/op=33.1
+full llhttp adapter 10 headers ns/op=3378.2
+fast 10 headers ns/op=1381.5
+```
+
+The immediate conclusion is that body copy is not the current parser adapter
+bottleneck. The 10-header adapter row is dominated by header string
+materialization and header container insertion/normalization. Future production
+optimization should therefore prioritize reducing ordinary-path header
+materialization before spending time on body copy or hand-editing the
+Pascal-translated llhttp state machine.
+
 ## Optimization Evidence: Parser Header Container Reuse
 
 On 2026-06-05 local time, `IHttpHeaders` gained a focused `Clear` contract and
