@@ -307,3 +307,9 @@ Merge safety:
 - `main` is an ancestor of `codex/exception-root-20260605`; merge can be fast-forwarded.
 - Branch changed paths and shared `main` dirty/untracked paths have no path intersection.
 - Shared `main` still has unrelated dirty HTTP/async/compiler/control-file work; do not stash, reset, or rewrite it.
+
+Reviewer closeout:
+
+- Read-only reviewer reported no Critical/Important/Minor findings and no blocking merge issue.
+- Reviewer did not rerun tests; local focused verification above is the test evidence for this closeout.
+- Remaining risks are outside this stage: non-L0 modules with direct `Exception` roots, and `EOutOfMemory.CreateFmt` category coverage.

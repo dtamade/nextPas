@@ -39,7 +39,8 @@
 - [x] Stage 1B 提交分支：`refactor(errors): migrate remaining oom and tui root seams`。
 - [x] 合并前重新 merge 当前 `main` 并完成 post-merge focused verification。
 - [x] 合并安全审查：异常分支改动与共享 `main` 未提交/未跟踪文件无路径交集，且可 fast-forward。
-- [ ] 只在共享 `main` 安全时再合并；否则停在隔离分支。
+- [x] 合并前 reviewer 复盘：无阻塞合并问题。
+- [x] 在共享 `main` 可 fast-forward 且无路径交集时执行合并。
 
 ## Scope
 

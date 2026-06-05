@@ -38,6 +38,8 @@
 - During RED setup, relative patch paths wrote two new test files into shared `main`. They were files created by this session, were removed immediately, and shared `main` no longer reports that test directory in git status.
 - Final merge safety recheck: `main` is an ancestor of `codex/exception-root-20260605`, so merge can be fast-forwarded.
 - Final merge safety recheck: branch-changed paths and shared `main` dirty/untracked paths have no path intersection. Dirty HTTP/async/compiler/control-file work remains unrelated and must not be rewritten.
+- Final read-only reviewer recheck: no Critical/Important/Minor findings and no blocking merge issue.
+- Reviewer remaining risks are stage-external: other modules may still have direct `Exception` roots, and `EOutOfMemory.CreateFmt` category coverage deserves a later focused test.
 
 ## RED Evidence
 
