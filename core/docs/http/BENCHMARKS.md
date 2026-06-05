@@ -381,3 +381,36 @@ materialization, not this header-name path alone.
 
 `test_http_headers` and `test_http_h1parser` both passed with heaptrc reporting
 `0 unfreed memory blocks`.
+
+## Optimization Evidence: H1 Server Header-Policy One-Shot Evaluation
+
+On 2026-06-05 local time, H1 server request validation moved headers-stage
+policy checks to the first `HeadersComplete` transition. The threaded and
+poll/epoll paths now share one helper for max header size, parser error status,
+HTTP/1.1 `Host`, unsupported `Expect`, and declared `Content-Length` vs
+`MaxBodySize` decisions. Body-size progress, trailer-size progress, and parser
+errors still remain checked during the read loop.
+
+This avoids repeating `Host` / `Expect` / declared `Content-Length` header
+lookups and token parsing while a large request body arrives across multiple
+reads. The same slice also fixed a poll-path `case` block syntax error that was
+exposed by building the full-chain benchmark.
+
+`bench_fullchain` now includes a 16KB POST body sink scenario:
+
+```text
+baseline=make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+confirmation=make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+```
+
+| workload | before req/s | after req/s |
+| --- | ---: | ---: |
+| Sink 16KB POST | 5005 | 5488 |
+
+The full-chain benchmark is intentionally directional and local. Short GET rows
+showed normal scheduler/socket noise in the same runs, so the 16KB sink row is
+the useful signal for this slice.
+
+`test_http_server` passed with `274 total, 274 passed, 0 failed`; `test_http_security`
+passed with `242 total, 242 passed, 0 failed`; heaptrc reported
+`0 unfreed memory blocks` in both focused gates.

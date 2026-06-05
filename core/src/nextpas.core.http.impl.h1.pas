@@ -407,6 +407,33 @@ begin
     (LContentLength > AMaxBodySize);
 end;
 
+function HeaderPolicyErrorStatus(const AParser: IH1Parser;
+  const AOptions: TH1ServerTransportOptions;
+  const ATotalRead: SizeUInt): THttpStatus;
+begin
+  Result := 0;
+  if AParser = nil then
+    Exit;
+
+  if (AOptions.MaxHeaderSize > 0) and
+     (Int64(ATotalRead) - AParser.GetBodySize >
+      Int64(AOptions.MaxHeaderSize)) then
+    Exit(HTTP_STATUS_HEADER_TOO_LARGE);
+
+  if AParser.HasError then
+    Exit(ParserErrorStatus(AParser));
+
+  if (AParser.GetHttpVersion = hvHttp11) and
+     (AParser.GetHeaders.Get('host') = '') then
+    Exit(HTTP_STATUS_BAD_REQUEST);
+
+  if RequestHasUnsupportedExpectations(AParser) then
+    Exit(HTTP_STATUS_EXPECTATION_FAILED);
+
+  if DeclaredContentLengthExceedsLimit(AParser, AOptions.MaxBodySize) then
+    Exit(HTTP_STATUS_PAYLOAD_TOO_LARGE);
+end;
+
 function IsRequestReadFailure(const E: Exception): Boolean;
 begin
   Result := False;
@@ -1243,6 +1270,7 @@ var
   LTotalRead: SizeUInt;
   LHeadersDone: Boolean;
   LRejected: Boolean;
+  LHeaderStatus: THttpStatus;
 begin
   Result := tscoServer;
   while FKeepAlive do
@@ -1291,15 +1319,22 @@ begin
         if (not LHeadersDone) and FParser.HeadersComplete then
         begin
           LHeadersDone := True;
-          if (FOptions.MaxHeaderSize > 0) and
-             (Int64(LTotalRead) - FParser.GetBodySize >
-              Int64(FOptions.MaxHeaderSize)) then
+          LHeaderStatus := HeaderPolicyErrorStatus(FParser, FOptions, LTotalRead);
+          if LHeaderStatus <> 0 then
           begin
-            WriteErrorResponse(FConn, HTTP_STATUS_HEADER_TOO_LARGE,
-              FOptions.WriteTimeout);
+            WriteErrorResponse(FConn, LHeaderStatus, FOptions.WriteTimeout);
             LRejected := True;
             FKeepAlive := False;
             Break;
+          end;
+          if ShouldSendContinueResponse(FParser, LHeadersDone, FContinueSent) then
+          begin
+            if not TryWriteContinueResponse(FConn, FOptions.WriteTimeout) then
+            begin
+              FKeepAlive := False;
+              Break;
+            end;
+            FContinueSent := True;
           end;
         end;
         if LHeadersDone and (FOptions.MaxHeaderSize > 0) and
@@ -1327,41 +1362,6 @@ begin
           LRejected := True;
           FKeepAlive := False;
           Break;
-        end;
-        if LHeadersDone and (FParser.GetHttpVersion = hvHttp11) and
-           (FParser.GetHeaders.Get('host') = '') then
-        begin
-          WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST,
-            FOptions.WriteTimeout);
-          LRejected := True;
-          FKeepAlive := False;
-          Break;
-        end;
-        if LHeadersDone and RequestHasUnsupportedExpectations(FParser) then
-        begin
-          WriteErrorResponse(FConn, HTTP_STATUS_EXPECTATION_FAILED,
-            FOptions.WriteTimeout);
-          LRejected := True;
-          FKeepAlive := False;
-          Break;
-        end;
-        if LHeadersDone and
-           DeclaredContentLengthExceedsLimit(FParser, FOptions.MaxBodySize) then
-        begin
-          WriteErrorResponse(FConn, HTTP_STATUS_PAYLOAD_TOO_LARGE,
-            FOptions.WriteTimeout);
-          LRejected := True;
-          FKeepAlive := False;
-          Break;
-        end;
-        if ShouldSendContinueResponse(FParser, LHeadersDone, FContinueSent) then
-        begin
-          if not TryWriteContinueResponse(FConn, FOptions.WriteTimeout) then
-          begin
-            FKeepAlive := False;
-            Break;
-          end;
-          FContinueSent := True;
         end;
       until FParser.IsComplete or FParser.HasError;
 
@@ -1672,6 +1672,7 @@ var
   LConsumed: SizeUInt;
   LReadResult: TTcpStreamIOResult;
   LContinueOutbound: IH1OutboundBuffer;
+  LHeaderStatus: THttpStatus;
   function FinishPollParseError(const AStatus: THttpStatus): TTcpServerPollResult;
   begin
     ClearPollReadDeadline;
@@ -1751,16 +1752,29 @@ begin
           Move(FBuf[LConsumed], FPending[1], LN - LConsumed);
         end;
       end;
+      end;
     end;
 
     Inc(FParseTotalRead, LConsumed);
     if (not FParseHeadersDone) and FParser.HeadersComplete then
     begin
       FParseHeadersDone := True;
-      if (FOptions.MaxHeaderSize > 0) and
-         (Int64(FParseTotalRead) - FParser.GetBodySize >
-          Int64(FOptions.MaxHeaderSize)) then
-        Exit(FinishPollParseError(HTTP_STATUS_HEADER_TOO_LARGE));
+      LHeaderStatus := HeaderPolicyErrorStatus(FParser, FOptions, FParseTotalRead);
+      if LHeaderStatus <> 0 then
+        Exit(FinishPollParseError(LHeaderStatus));
+      if ShouldSendContinueResponse(FParser, FParseHeadersDone, FContinueSent) then
+      begin
+        LContinueOutbound := NewH1OutboundBuffer;
+        WriteContinueResponseToWriter(LContinueOutbound as IWriter);
+        if not EnqueuePollResponse(LContinueOutbound, False) then
+        begin
+          FKeepAlive := False;
+          ANextEvents := [];
+          Exit(tsprDone);
+        end;
+        FContinueSent := True;
+        Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
+      end;
     end;
 
     if FParseHeadersDone and (FOptions.MaxHeaderSize > 0) and
@@ -1773,31 +1787,6 @@ begin
 
     if FParser.HasError then
       Exit(FinishPollParseError(ParserErrorStatus(FParser)));
-
-    if FParseHeadersDone and (FParser.GetHttpVersion = hvHttp11) and
-       (FParser.GetHeaders.Get('host') = '') then
-      Exit(FinishPollParseError(HTTP_STATUS_BAD_REQUEST));
-
-    if FParseHeadersDone and RequestHasUnsupportedExpectations(FParser) then
-      Exit(FinishPollParseError(HTTP_STATUS_EXPECTATION_FAILED));
-
-    if FParseHeadersDone and
-       DeclaredContentLengthExceedsLimit(FParser, FOptions.MaxBodySize) then
-      Exit(FinishPollParseError(HTTP_STATUS_PAYLOAD_TOO_LARGE));
-
-    if ShouldSendContinueResponse(FParser, FParseHeadersDone, FContinueSent) then
-    begin
-      LContinueOutbound := NewH1OutboundBuffer;
-      WriteContinueResponseToWriter(LContinueOutbound as IWriter);
-      if not EnqueuePollResponse(LContinueOutbound, False) then
-      begin
-        FKeepAlive := False;
-        ANextEvents := [];
-        Exit(tsprDone);
-      end;
-      FContinueSent := True;
-      Exit(AdvancePollResponseDrain(AEvents, ANextEvents, AOwnership));
-    end;
 
     if FParser.IsComplete then
       Exit(SubmitCurrentPollRequest(ANextEvents, AOwnership));

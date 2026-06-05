@@ -87,6 +87,20 @@ begin
       AW.Write(LBuf[0], LTotal);
   end);
 
+  { Drain POST body without echoing it back. }
+  LRouter.Post('/sink', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var LBuf: array[0..4095] of Byte; LN: SizeUInt;
+  begin
+    if AReq.Body <> nil then
+    begin
+      repeat
+        LN := AReq.Body.Read(LBuf[0], SizeOf(LBuf));
+      until LN = 0;
+    end;
+    AW.GetHeaders.Set_('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_OK);
+  end);
+
   { Router with params }
   LRouter.Get('/users/:id', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   var LBody: string;
@@ -186,6 +200,8 @@ end;
 var
   LBody1K: string;
   LEchoReq: string;
+  LBody16K: string;
+  LSinkReq: string;
 
 begin
   WriteLn('=== HTTP Full-Chain Benchmark ===');
@@ -210,7 +226,14 @@ begin
   LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
   RunScenario('Echo 1KB (POST /echo)', LEchoReq, 100);
 
-  { Scenario 4: Router with params }
+  { Scenario 4: Body sink 16KB }
+  SetLength(LBody16K, 16 * 1024);
+  FillChar(LBody16K[1], Length(LBody16K), Ord('x'));
+  LSinkReq := 'POST /sink HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: ' +
+    IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
+  RunScenario('Sink 16KB (POST /sink)', LSinkReq, 100);
+
+  { Scenario 5: Router with params }
   RunScenario('Param (GET /users/12345)',
     'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10, 50);
 
