@@ -1,61 +1,50 @@
-# Progress Log: HTTP full-chain benchmark client read correction
+# Progress Log: HTTP server comparison median snapshot
 
 ## Session
 
-- **Scope:** full-chain benchmark client read correction.
-- **Status:** benchmark harness buffered read landed locally, focused gate passed, docs/control files updated.
+- **Scope:** multi-workload server comparison median snapshot.
+- **Status:** four workload `--runs 3` evidence captured, docs/control files updated.
 - **Roadmap Position:** `6/6 benchmark/performance` ->
-  `full-chain benchmark quality and server comparison calibration`.
+  `server comparison calibration and next-seam selection`.
 
 ## Current state
 
 - shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理
-  HTTP benchmark/docs/control files。
+  HTTP docs/control files。
 - 父目录 `../task_plan.md`、`../findings.md`、`../progress.md` 已有无关脏改；
   本轮只更新 `core/task_plan.md`、`core/findings.md`、`core/progress.md`。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks`、`bench_fullchain plaintext`
-  和一个 `run_server_comparison --workload no_url` live row。
+- 本轮没有跑全量 HTTP 测试；只跑四条 focused live comparison rows。
 
 ## Completed work
 
-- 复核 live performance：server comparison `no_url` 当前 nextPas `107002 req/s`，
-  Rust std-only `104418 req/s`，Go `21163 req/s`。
-- 定位 `bench_fullchain` 低分来源：client `ReadResponse` 逐字节 socket read + string concat。
-- `test_http_benchmarks` 新增 focused RED：fullchain smoke 必须输出
-  `client_read_mode=buffered`。
-- `bench_fullchain.ReadResponse` 改为 buffered chunk read，并保留按 header boundary +
-  `Content-Length` 判断完整 response。
-- `docs/http/API_COVERAGE.md` 与 `docs/http/BENCHMARKS.md` 已同步 fresh local evidence。
+- `no_url --runs 3`: nextPas median `10405 ns/op`, Rust std-only `9051 ns/op`,
+  Go `47688 ns/op`。
+- `adapter_no_url --runs 3`: nextPas median `12280 ns/op`, Rust std-only
+  `8140 ns/op`, Go `48857 ns/op`。
+- `url_path --runs 3`: nextPas median `10133 ns/op`, Rust std-only `7391 ns/op`,
+  Go `47782 ns/op`。
+- `response_1k --runs 3`: nextPas median `9896 ns/op`, Rust std-only
+  `9408 ns/op`, Go `50560 ns/op`。
+- `docs/http/BENCHMARKS.md` 与 `docs/http/API_COVERAGE.md` 已同步 snapshot 和下一批方向。
 
 ## Verification
 
-- RED:
-  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `26 total, 25 passed, 1 failed`，失败为 missing `client_read_mode=buffered`，
-  heaptrc `0 unfreed memory blocks`。
-- Benchmark gate after change:
-  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `26 total, 26 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
-- Fresh fullchain row:
-  `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
-  -> `client_read_mode=buffered`，`plaintext: 42132.4 ns/op`, `23735 req/s`。
-- Fullchain all-scenario smoke:
-  `NEXTPAS_BENCH_MAX_ITERS=128 make -C benchmarks/nextpas.core.http/bench_fullchain run`
-  -> `plaintext/json/echo_1k/sink_16k/param_route` 均 `128/128 completed`。
-- Fresh server comparison row:
-  `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 20000 --threads 4 --workload no_url`
-  -> nextPas `9345 ns/op`, `107002 req/s`; Rust std-only `9576 ns/op`, `104418 req/s`;
-  Go `47251 ns/op`, `21163 req/s`。
+- `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 20000 --threads 4 --workload no_url --runs 3`
+  -> summary nextPas `10405 ns/op`, `96098 req/s`; Rust `9051 ns/op`, `110479 req/s`; Go `47688 ns/op`, `20969 req/s`。
+- `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 20000 --threads 4 --workload adapter_no_url --runs 3`
+  -> summary nextPas `12280 ns/op`, `81433 req/s`; Rust `8140 ns/op`, `122845 req/s`; Go `48857 ns/op`, `20467 req/s`。
+- `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 20000 --threads 4 --workload url_path --runs 3`
+  -> summary nextPas `10133 ns/op`, `98685 req/s`; Rust `7391 ns/op`, `135291 req/s`; Go `47782 ns/op`, `20928 req/s`。
+- `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 20000 --threads 4 --workload response_1k --runs 3`
+  -> summary nextPas `9896 ns/op`, `101044 req/s`; Rust `9408 ns/op`, `106285 req/s`; Go `50560 ns/op`, `19778 req/s`。
 
 ## Direction review
 
-方向没有走偏：本轮把“性能低”拆成 benchmark harness 与 production server 两条证据线。
-没有碰生产 server，也没有把单连接 fullchain row 当成 Rust/Go 对标结论。下一步应以
-multi-client comparison median 和 workload 分解驱动优化。
+方向没有走偏：当前要追 Rust/Go，不应只看单一 row。median snapshot 显示 nextPas 已显著快于
+Go `net/http`，接近 Rust std-only 的 `response_1k`，但 adapter path 与 URL path 仍明显落后。
 
 ## Next step
 
-继续 `6/6 benchmark/performance`。下一批建议跑/记录 `--runs 3` 的
-`no_url`、`adapter_no_url`、`url_path`、`response_1k` median snapshot；若某个 workload
-落后 Rust std-only，再针对对应 seam 写 focused RED/GREEN。
+继续 `6/6 benchmark/performance`。下一批建议聚焦 `adapter_no_url`：先用 H1 parser /
+server adapter narrowed benchmark 锁住当前 llhttp adapter path 成本，再做最小 RED/GREEN 优化。

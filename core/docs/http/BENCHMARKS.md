@@ -44,6 +44,40 @@ median summary at the end of the raw output. This is the preferred mode for
 fresh local comparison rows because single-shot server results are visibly
 affected by scheduler noise.
 
+## Local Median Snapshot: 2026-06-05
+
+These rows were captured on the same host with:
+
+```sh
+benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload <workload> --runs 3
+```
+
+Each cell is the script's median summary across three runs.
+
+| workload | nextPas ns/op | nextPas req/s | Rust std-only ns/op | Rust std-only req/s | Go `net/http` ns/op | Go `net/http` req/s |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| no_url | 10405 | 96098 | 9051 | 110479 | 47688 | 20969 |
+| adapter_no_url | 12280 | 81433 | 8140 | 122845 | 48857 | 20467 |
+| url_path | 10133 | 98685 | 7391 | 135291 | 47782 | 20928 |
+| response_1k | 9896 | 101044 | 9408 | 106285 | 50560 | 19778 |
+
+Interpretation for this host:
+
+- `response_1k` is close to Rust std-only: nextPas is about 5% slower by
+  median `ns/op`.
+- `no_url` is about 15% slower than Rust std-only while staying far ahead of
+  Go `net/http`.
+- `url_path` is about 37% slower than Rust std-only and points at request URL
+  materialization / path access costs.
+- `adapter_no_url` is about 51% slower than Rust std-only and is the clearest
+  next optimization target because it forces nextPas off the H1 fast path and
+  into the llhttp adapter path.
+
+This still does not represent async Rust such as Hyper/Tokio. Treat it as a
+std-only comparator snapshot and a workload-routing guide for the next
+optimization batch.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:
