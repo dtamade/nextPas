@@ -223,6 +223,21 @@ Local focused row from 2026-06-05:
 | --- | ---: | ---: | ---: |
 | buffer write+drain 1KB | 100000 | 303.0 | 3300665 |
 
+Later on 2026-06-05, `TH1OutboundBuffer.PendingBytes`, `IsEmpty`, and
+`Advance` were marked as hot helper `inline` methods, with the implementations
+ordered before hot callers to avoid FPC "marked as inline is not inlined" notes
+in the focused benchmark build. `test_http_benchmarks` now has a source-contract
+smoke that locks this shape.
+
+Fresh single-run local row after that slice:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| buffer write+drain 1KB | 100000 | 283.1 | 3532176 |
+
+This row is directional only; keep using repeated or narrowed rows before
+claiming a durable cross-run performance delta.
+
 ## Run the Full-Chain Keep-Alive Benchmark
 
 Run a filtered plaintext full-chain row:

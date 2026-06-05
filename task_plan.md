@@ -1,5 +1,23 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-05 http h1 outbound hot-helper inline slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 response-drain 热路径性能切片，
+先把 `TH1OutboundBuffer` 中极短且高频的
+`PendingBytes` / `IsEmpty` / `Advance` 锁成 inline source contract，
+不扩大到全局编译策略或大型 server state-machine 重构。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract smoke，要求 H1 outbound hot helpers 带 `inline`。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1.outbound` 的三个短 helper 声明/实现，并调整实现顺序避免 FPC inline note。
+- [x] 跑 focused benchmark gate：`NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 focused behavior/leak gate：`make -C tests/nextpas.core.http/test_http_h1writer clean test`。
+- [x] 跑小 benchmark row：`NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' make -C benchmarks/nextpas.core.http/bench_h1outbound run`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-05 http benchmark completion-marker contract
 
 ### Goal

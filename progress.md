@@ -1,5 +1,46 @@
 # Progress Log
 
+## Session: 2026-06-05 http h1 outbound hot-helper inline slice
+
+- **Status:** completed.
+- Objective:
+  - improve the H1 outbound response-drain hot path with a narrow inline slice
+  - keep the change measurable and source-contract protected
+- Scope and safety:
+  - touched `src/nextpas.core.http.impl.h1.outbound.pas`
+  - added a source-contract smoke in `test_http_benchmarks`
+  - updated HTTP benchmark/API docs and top control-file entries only
+  - did not touch unrelated async/client/compiler dirty files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - failed at `H1 outbound hot helpers inline source contract`
+    - missing `procedure Advance(const ACount: SizeUInt); inline;`
+    - heaptrc still showed `0 unfreed memory blocks`
+- Landed change:
+  - marked `TH1OutboundBuffer.PendingBytes`, `IsEmpty`, and `Advance` as `inline`
+  - moved `PendingBytes` / `IsEmpty` implementations before callers so clean benchmark builds do not emit FPC inline notes
+  - deliberately did not inline `Compact` or `EnsureCapacity`
+- Focused verification so far:
+  - `make -C benchmarks/nextpas.core.http/bench_h1outbound clean build`
+    - passed
+    - no FPC inline note after implementation order fix
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `27/27 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' make -C benchmarks/nextpas.core.http/bench_h1outbound run`
+    - `283.1 ns/op`
+    - `3532176 ops/s`
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - `30/30 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Outcome:
+  - H1 outbound hot-helper inline source contract is now locked
+  - no large state-machine rewrite or generated llhttp hand-edit was performed
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 outbound response-drain hot helper inline
+  - next best batch: one of fast parser helpers, header lookup, writer status/header path, URL materialization, or body reader/copy focused rows
+
 ## Session: 2026-06-05 http benchmark completion-marker contract
 
 - **Status:** completed.

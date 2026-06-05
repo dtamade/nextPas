@@ -1,5 +1,38 @@
 # Findings & Decisions
 
+## 2026-06-05 http h1 outbound hot-helper inline slice
+
+- 本轮只处理 H1 outbound response-drain 热路径的一个窄切片：
+  `TH1OutboundBuffer.PendingBytes`、`IsEmpty`、`Advance`。
+- sidecar 复核结论：
+  - `PendingBytes` 适合 inline：只是 `FWritePos - FReadPos`，且在
+    `Compact`、`EnsureCapacity`、`DrainAllTo`、`TryDrainTo` 中频繁调用。
+  - `Advance` 适合 inline：每次 drain 成功写出后都会走，快路径是
+    `Inc` 加少量分支；`Reset` / `Compact` 是冷分支。
+  - `IsEmpty` 可 inline：主要是 public convenience 与 server poll 状态机判空，
+    收益低于前两者，但函数体极短。
+  - `Compact` 不 inline：包含 `Move` 与状态重排，属于冷路径，inline 会增加代码膨胀。
+  - `EnsureCapacity` 不 inline：包含扩容策略、循环、`SetLength` 与 `Compact`，
+    后续若优化应拆 slow path，而不是整段 inline。
+- 初次只加 `inline` 后，`bench_h1outbound` clean build 暴露 FPC note：
+  `PendingBytes` 在实现体声明前被调用时出现 “marked as inline is not inlined”。
+  本轮因此把 `PendingBytes` / `IsEmpty` 实现提前到 `Compact` / `EnsureCapacity`
+  之前，focused build 不再出现该 note。
+- 这轮不把 `-Si` / `{$INLINE ON}` 上升为全局策略；项目中已有大量 inline 标注，
+  全局编译选项是否需要强化应单独建 batch，用 source-contract、focused benchmark
+  和 warning/note gate 一起验证。
+- RED 证据：
+  新增 `H1 outbound hot helpers inline source contract` 后，
+  `test_http_benchmarks` 先失败在缺少
+  `procedure Advance(const ACount: SizeUInt); inline;`，同时 heaptrc 仍为 0 unfreed blocks。
+- GREEN / benchmark 证据：
+  `test_http_benchmarks` 后续为 `27/27 passed`，`heaptrc: 0 unfreed memory blocks`；
+  `bench_h1outbound buffer write+drain 1KB` 本机单次 row 为 `283.1 ns/op`、
+  `3532176 ops/s`。该 row 只作为方向性观测，不声明永久性能排名。
+- 下一批性能候选应优先从 sidecar 筛出的 H1 fast parser helpers、header lookup、
+  writer status/header path、URL materialization、body reader/copy focused rows 中选一个，
+  不手改生成 llhttp 状态机，不动大型 server state-machine 函数。
+
 ## 2026-06-05 http benchmark completion-marker contract
 
 - server comparison 之前虽然输出 `iterations`、`ns/op`、`req/s`，但 summary

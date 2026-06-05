@@ -25,6 +25,7 @@ const
     'benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh';
   H1FlagMatrixRunnerRelativePath =
     'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
+  H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
@@ -506,6 +507,31 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1outbound drain smoke exit code: ' + LOutput);
   CheckH1OutboundDrainBenchmarkOutput(LOutput);
+end;
+
+procedure TestH1OutboundHotHelpersInlineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1OutboundRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1OutboundUnitPath));
+
+  CheckContains(LSource, 'procedure Advance(const ACount: SizeUInt); inline;',
+    'H1 outbound Advance inline declaration');
+  CheckContains(LSource, 'function PendingBytes: SizeUInt; inline;',
+    'H1 outbound PendingBytes inline declaration');
+  CheckContains(LSource, 'function IsEmpty: Boolean; inline;',
+    'H1 outbound IsEmpty inline declaration');
+  CheckContains(LSource,
+    'procedure TH1OutboundBuffer.Advance(const ACount: SizeUInt); inline;',
+    'H1 outbound Advance inline implementation');
+  CheckContains(LSource,
+    'function TH1OutboundBuffer.PendingBytes: SizeUInt; inline;',
+    'H1 outbound PendingBytes inline implementation');
+  CheckContains(LSource,
+    'function TH1OutboundBuffer.IsEmpty: Boolean; inline;',
+    'H1 outbound IsEmpty inline implementation');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -1366,6 +1392,8 @@ begin
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_h1writer response serialization smoke',
     @TestBenchH1WriterSerializeSmoke);
+  T.Run('H1 outbound hot helpers inline source contract',
+    @TestH1OutboundHotHelpersInlineSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',
