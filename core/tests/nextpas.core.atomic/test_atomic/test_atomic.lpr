@@ -8,7 +8,9 @@ uses
   nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.atomic,
-  nextpas.core.atomic.compat;
+  nextpas.core.atomic.types,
+  nextpas.core.atomic.compat,
+  nextpas.core.platform.sync;
 
 var
   T: TTestRunner;
@@ -68,6 +70,25 @@ begin
     AStartMarker,
     AEndMarker
   );
+end;
+
+function CountOccurrences(const AText, APattern: string): SizeInt;
+var
+  LSearchPos: SizeInt;
+  LFoundPos: SizeInt;
+begin
+  Result := 0;
+  if APattern = '' then
+    Exit;
+
+  LSearchPos := 1;
+  repeat
+    LFoundPos := Pos(APattern, Copy(AText, LSearchPos, MaxInt));
+    if LFoundPos = 0 then
+      Break;
+    Inc(Result);
+    Inc(LSearchPos, LFoundPos + Length(APattern) - 1);
+  until False;
 end;
 
 procedure TestLoad32Store32;
@@ -194,6 +215,40 @@ begin
   CpuPause;
 end;
 
+procedure TestAtomicDefaultLoadSurface;
+var
+  LI32: Int32;
+  LU32: UInt32;
+  LI64: Int64;
+  LU64: UInt64;
+  LPtr: Pointer;
+  LValue: Int32;
+  LPtrInt: PtrInt;
+  LPtrUInt: PtrUInt;
+begin
+  LI32 := 41;
+  CheckEqual(Int64(41), Int64(atomic_load(LI32)));
+
+  LU32 := 42;
+  CheckEqual(Int64(42), Int64(atomic_load(LU32)));
+
+  LI64 := Int64(1) shl 40;
+  CheckEqual(Int64(1) shl 40, atomic_load_64(LI64));
+
+  LU64 := UInt64(1) shl 41;
+  CheckEqual(Int64(UInt64(1) shl 41), Int64(atomic_load_64(LU64)));
+
+  LValue := 7;
+  LPtr := @LValue;
+  Check(LPtr = atomic_load(LPtr), 'default pointer atomic_load must be available');
+
+  LPtrInt := PtrInt(@LValue);
+  CheckEqual(Int64(LPtrInt), Int64(atomic_load(LPtrInt)));
+
+  LPtrUInt := PtrUInt(@LValue);
+  CheckEqual(Int64(LPtrUInt), Int64(atomic_load(LPtrUInt)));
+end;
+
 procedure TestAtomicSourceContracts;
 const
   AtomicSourcePath = '../../../src/nextpas.core.atomic.pas';
@@ -219,11 +274,19 @@ var
   LTypesFailureSection: string;
   LTypesInt64LockFreeSection: string;
   LTypesUInt64LockFreeSection: string;
+  LTypesISizeLockFreeSection: string;
+  LTypesUSizeLockFreeSection: string;
+  LTypesRefCountLockFreeSection: string;
+  LTypesPtrLockFreeSection: string;
   LFetchAddFallbackSection: string;
   LLoad32Section: string;
   LLoad64Section: string;
   LLoad32SeqCstSection: string;
   LLoad64SeqCstSection: string;
+  LDefaultLoad32Section: string;
+  LDefaultLoad64Section: string;
+  LDefaultLoadPtrSection: string;
+  LDefaultLoadPtrIntSection: string;
   LStore32Section: string;
   LStore64Section: string;
   LStore32SeqCstSection: string;
@@ -231,6 +294,17 @@ var
   LPascalCaseCas32Section: string;
   LPascalCaseCas64Section: string;
   LPascalCaseCasPtrSection: string;
+  LDefaultTaggedPtrLoadSection: string;
+  LAtomicWaitSection: string;
+  LAtomicNotifyOneSection: string;
+  LAtomicNotifyAllSection: string;
+  LRefCountTypeSection: string;
+  LFetchAnd64Section: string;
+  LFetchOr64Section: string;
+  LFetchXor64Section: string;
+  LFetchMax64Section: string;
+  LFetchMin64Section: string;
+  LFetchNand64Section: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -272,6 +346,18 @@ begin
   LTypesUInt64LockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicUInt64.is_lock_free: Boolean;',
     'function TAtomicUInt64.Load(AOrder: memory_order_t): UInt64;');
+  LTypesISizeLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicISize.is_lock_free: Boolean;',
+    'function TAtomicISize.Load(AOrder: memory_order_t): PtrInt;');
+  LTypesUSizeLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicUSize.is_lock_free: Boolean;',
+    'function TAtomicUSize.Load(AOrder: memory_order_t): PtrUInt;');
+  LTypesRefCountLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicRefCount.is_lock_free: Boolean;',
+    'function TAtomicRefCount.Load(AOrder: memory_order_t): PtrUInt;');
+  LTypesPtrLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
+    'class function TAtomicPtr.is_lock_free: Boolean;',
+    'function TAtomicPtr.Load(AOrder: memory_order_t): PT;');
   LFetchAddFallbackSection := ExtractImplementationSection(LAtomicSource,
     'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;',
     '{$ENDIF}');
@@ -287,6 +373,18 @@ begin
   LLoad64SeqCstSection := ExtractSection(LLoad64Section,
     '    mo_seq_cst:',
     '      end;');
+  LDefaultLoad32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_load(var aObj: Int32): Int32;',
+    'function atomic_load(var aObj: UInt32; aOrder: memory_order_t): UInt32;');
+  LDefaultLoad64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_load_64(var aObj: Int64): Int64;',
+    'function atomic_load_64(var aObj: UInt64; aOrder: memory_order_t): UInt64;');
+  LDefaultLoadPtrSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_load(var aObj: Pointer): Pointer;',
+    '{$IFDEF CPU64}');
+  LDefaultLoadPtrIntSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_load(var aObj: PtrInt): PtrInt;',
+    'function atomic_load(var aObj: PtrUInt; aOrder: memory_order_t): PtrUInt;');
   LStore32Section := ExtractImplementationSection(LAtomicSource,
     'procedure atomic_store(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t);',
     'procedure atomic_store(var aObj: Int32; aDesired: Int32);');
@@ -308,6 +406,39 @@ begin
   LPascalCaseCasPtrSection := ExtractImplementationSection(LAtomicSource,
     'function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder): Pointer;',
     'procedure AtomicThreadFence(const AOrder: TMemoryOrder);');
+  LDefaultTaggedPtrLoadSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;',
+    'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t);');
+  LAtomicWaitSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;',
+    'function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;');
+  LAtomicNotifyOneSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_notify_one(var aObj: Int32): Int32;',
+    'function atomic_notify_one(var aObj: UInt32): Int32;');
+  LAtomicNotifyAllSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_notify_all(var aObj: Int32): Int32;',
+    'function atomic_notify_all(var aObj: UInt32): Int32;');
+  LRefCountTypeSection := ExtractSection(LAtomicTypesSource,
+    '  TAtomicRefCount = record',
+    '  { TAtomicPtr - 泛型原子指针 }');
+  LFetchAnd64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_and_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_fetch_and_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;');
+  LFetchOr64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_or_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_fetch_or_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;');
+  LFetchXor64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_xor_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_fetch_xor_64(var aObj: UInt64; aArg: UInt64; aOrder: memory_order_t): UInt64;');
+  LFetchMax64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_max_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_fetch_max_64(var aObj: Int64; aArg: Int64): Int64;');
+  LFetchMin64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_min_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_fetch_min_64(var aObj: Int64; aArg: Int64): Int64;');
+  LFetchNand64Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64; aOrder: memory_order_t): Int64;',
+    'function atomic_fetch_nand_64(var aObj: Int64; aArg: Int64): Int64;');
 
   Check(Pos('mo_relaxed: 无效，会触发运行时错误', LAtomicSource) = 0,
     'atomic_thread_fence docs must not claim mo_relaxed raises runtime error');
@@ -317,12 +448,12 @@ begin
     'main atomic unit must mark PascalCase wrappers as legacy compatibility surface');
   CheckContains(LAtomicSource, 'Prefer atomic_* or TAtomic* in new code.',
     'main atomic unit must recommend canonical C-style or typed APIs');
-  CheckContains(LAtomicSource,
+  CheckNotContains(LAtomicSource,
     'On x86/x86_64, a plain load is already strongly ordered at the CPU level;',
-    'seq_cst load docs must describe x86 plain-load mapping');
-  CheckContains(LAtomicSource,
+    'seq_cst load docs must not keep the old plain-load x86 mapping');
+  CheckNotContains(LAtomicSource,
     'use only a compiler barrier to prevent reordering.',
-    'seq_cst load docs must describe compiler-barrier-only x86 mapping');
+    'seq_cst load docs must not describe compiler-barrier-only x86 mapping');
   CheckContains(LAtomicCoreSource, 'procedure atomic_seq_cst_fence;',
     'atomic core must define a dedicated seq_cst fence helper');
   CheckNotContains(LSignalFenceSection, 'ReadWriteBarrier',
@@ -375,20 +506,170 @@ begin
     'typed Int64 lock-free query must delegate to runtime truth');
   CheckContains(LTypesUInt64LockFreeSection, 'atomic_is_lock_free_64',
     'typed UInt64 lock-free query must delegate to runtime truth');
+  CheckContains(LTypesISizeLockFreeSection, 'atomic_is_lock_free_ptr',
+    'typed ISize lock-free query must delegate to pointer-sized runtime truth');
+  CheckContains(LTypesUSizeLockFreeSection, 'atomic_is_lock_free_ptr',
+    'typed USize lock-free query must delegate to pointer-sized runtime truth');
+  CheckContains(LTypesRefCountLockFreeSection, 'atomic_is_lock_free_ptr',
+    'typed refcount lock-free query must delegate to pointer-sized runtime truth');
+  CheckContains(LTypesPtrLockFreeSection, 'atomic_is_lock_free_ptr',
+    'typed pointer lock-free query must delegate to pointer-sized runtime truth');
   CheckContains(LFetchAddFallbackSection, 'try',
     'i386 64-bit fallback add must guard lock release with try/finally');
   CheckContains(LFetchAddFallbackSection, 'finally',
     'i386 64-bit fallback add must guard lock release with try/finally');
+  CheckContains(LDefaultLoad32Section, 'mo_seq_cst',
+    'default Int32 atomic_load must use seq_cst');
+  CheckNotContains(LDefaultLoad32Section, 'mo_relaxed',
+    'default Int32 atomic_load must not use relaxed');
+  CheckContains(LDefaultLoad64Section, 'mo_seq_cst',
+    'default Int64 atomic_load must use seq_cst');
+  CheckNotContains(LDefaultLoad64Section, 'mo_relaxed',
+    'default Int64 atomic_load must not use relaxed');
+  CheckContains(LDefaultLoadPtrSection, 'mo_seq_cst',
+    'default Pointer atomic_load must use seq_cst');
+  CheckNotContains(LDefaultLoadPtrSection, 'mo_relaxed',
+    'default Pointer atomic_load must not use relaxed');
+  CheckContains(LDefaultLoadPtrIntSection, 'mo_seq_cst',
+    'default PtrInt atomic_load must use seq_cst');
+  CheckNotContains(LDefaultLoadPtrIntSection, 'mo_relaxed',
+    'default PtrInt atomic_load must not use relaxed');
+  CheckContains(LDefaultTaggedPtrLoadSection, 'mo_seq_cst',
+    'default tagged pointer load must use seq_cst');
+  CheckNotContains(LDefaultTaggedPtrLoadSection, 'mo_relaxed',
+    'default tagged pointer load must not use relaxed');
+  CheckContains(LAtomicWaitSection, 'platform_wait_address32',
+    'atomic_wait must delegate to platform wait-address primitive');
+  CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
+    'atomic_notify_one must delegate to platform wake-one primitive');
+  CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',
+    'atomic_notify_all must delegate to platform wake-all primitive');
+  CheckContains(LRefCountTypeSection, 'function Load(AOrder: memory_order_t = mo_relaxed): PtrUInt;',
+    'TAtomicRefCount Load should default to relaxed');
+  CheckContains(LRefCountTypeSection, 'function Inc: PtrUInt;',
+    'TAtomicRefCount must expose Inc');
+  CheckContains(LRefCountTypeSection, 'function TryInc(out ANewValue: PtrUInt): Boolean;',
+    'TAtomicRefCount must expose TryInc');
+  CheckContains(LRefCountTypeSection, 'function Dec: PtrUInt;',
+    'TAtomicRefCount must expose Dec');
+  CheckContains(LRefCountTypeSection, 'function IntoInner: PtrUInt;',
+    'TAtomicRefCount must expose IntoInner');
+  CheckNotContains(LRefCountTypeSection, 'procedure Store(',
+    'TAtomicRefCount must not expose Store');
+  CheckNotContains(LRefCountTypeSection, 'function Exchange(',
+    'TAtomicRefCount must not expose Exchange');
+  CheckNotContains(LRefCountTypeSection, 'function FetchAdd(',
+    'TAtomicRefCount must not expose FetchAdd');
+  CheckNotContains(LRefCountTypeSection, 'function FetchSub(',
+    'TAtomicRefCount must not expose FetchSub');
+  CheckNotContains(LRefCountTypeSection, 'function GetMut',
+    'TAtomicRefCount must not expose GetMut');
+  CheckContains(LLoad32SeqCstSection, '_atomic_seq_cst_load_32_x86',
+    'x86/x86_64 seq_cst 32-bit load must use a dedicated locked/fenced helper');
+  CheckContains(LLoad64SeqCstSection, '_atomic_seq_cst_load_64_x86',
+    'x86/x86_64 seq_cst 64-bit load must use a dedicated locked/fenced helper');
+  CheckNotContains(LLoad32SeqCstSection, '_compiler_barrier',
+    'seq_cst 32-bit load must not be compiler-barrier-only');
+  CheckNotContains(LLoad64SeqCstSection, '_compiler_barrier',
+    'seq_cst 64-bit load must not be compiler-barrier-only');
   CheckNotContains(LLoad64Section, 'Result := aObj;' + LineEnding + '  {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}',
     'i386 64-bit atomic load must not perform a pre-load plain read');
   CheckContains(LLoad32SeqCstSection, 'atomic_seq_cst_fence;',
     'non-x86 seq_cst 32-bit load must use the dedicated seq_cst fence helper');
   CheckContains(LLoad64SeqCstSection, 'atomic_seq_cst_fence;',
     'non-x86 seq_cst 64-bit load must use the dedicated seq_cst fence helper');
+  Check(CountOccurrences(LLoad32SeqCstSection, 'atomic_seq_cst_fence;') >= 2,
+    'AArch64/non-x86 seq_cst 32-bit load must keep fence-load-fence ordering');
+  Check(CountOccurrences(LLoad64SeqCstSection, 'atomic_seq_cst_fence;') >= 2,
+    'AArch64/non-x86 seq_cst 64-bit load must keep fence-load-fence ordering');
   CheckContains(LStore32SeqCstSection, 'atomic_seq_cst_fence;',
     'non-x86 seq_cst 32-bit store must use the dedicated seq_cst fence helper');
   CheckContains(LStore64SeqCstSection, 'atomic_seq_cst_fence;',
     'non-x86 seq_cst 64-bit store must use the dedicated seq_cst fence helper');
+  CheckContains(LFetchAnd64Section,
+    '    mo_release, mo_acq_rel:' + LineEnding +
+    '      WriteBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_and_64 non-x86 write-order case must have explicit else');
+  CheckContains(LFetchAnd64Section,
+    '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
+    '      ReadBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_and_64 non-x86 read-order case must have explicit else');
+  CheckContains(LFetchOr64Section,
+    '    mo_release, mo_acq_rel:' + LineEnding +
+    '      WriteBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_or_64 non-x86 write-order case must have explicit else');
+  CheckContains(LFetchOr64Section,
+    '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
+    '      ReadBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_or_64 non-x86 read-order case must have explicit else');
+  CheckContains(LFetchXor64Section,
+    '    mo_release, mo_acq_rel:' + LineEnding +
+    '      WriteBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_xor_64 non-x86 write-order case must have explicit else');
+  CheckContains(LFetchXor64Section,
+    '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
+    '      ReadBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_xor_64 non-x86 read-order case must have explicit else');
+  CheckContains(LFetchMax64Section,
+    '    mo_release, mo_acq_rel:' + LineEnding +
+    '      WriteBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_max_64 non-x86 write-order case must have explicit else');
+  CheckContains(LFetchMax64Section,
+    '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
+    '      ReadBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_max_64 non-x86 read-order case must have explicit else');
+  CheckContains(LFetchMin64Section,
+    '    mo_release, mo_acq_rel:' + LineEnding +
+    '      WriteBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_min_64 non-x86 write-order case must have explicit else');
+  CheckContains(LFetchMin64Section,
+    '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
+    '      ReadBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_min_64 non-x86 read-order case must have explicit else');
+  CheckContains(LFetchNand64Section,
+    '    mo_release, mo_acq_rel:' + LineEnding +
+    '      WriteBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_nand_64 non-x86 write-order case must have explicit else');
+  CheckContains(LFetchNand64Section,
+    '    mo_consume, mo_acquire, mo_acq_rel:' + LineEnding +
+    '      ReadBarrier;' + LineEnding +
+    '  else' + LineEnding +
+    '    ;' + LineEnding +
+    '  end;',
+    'atomic_fetch_nand_64 non-x86 read-order case must have explicit else');
 end;
 
 procedure TestConcurrentFetchAdd;
@@ -451,6 +732,8 @@ begin
 end;
 
 procedure TestAtomicRecordTypes;
+type
+  TIntAtomicPtr = specialize TAtomicPtr<Integer>;
 var
   LAtomic: TAtomicUInt32;
   LExpected: UInt32;
@@ -465,6 +748,15 @@ begin
   Check(LAtomic.CompareExchangeStrong(LExpected, 18, mo_seq_cst),
     'record strong CAS succeeds');
   CheckEqual(Int64(18), Int64(LAtomic.IntoInner));
+
+  Check(TAtomicISize.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicISize lock-free surface must match pointer-sized runtime truth');
+  Check(TAtomicUSize.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicUSize lock-free surface must match pointer-sized runtime truth');
+  Check(TAtomicRefCount.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicRefCount lock-free surface must match pointer-sized runtime truth');
+  Check(TIntAtomicPtr.is_lock_free = atomic_is_lock_free_ptr,
+    'TAtomicPtr lock-free surface must match pointer-sized runtime truth');
 end;
 
 procedure TestAtomicCompatFacade;
@@ -483,6 +775,14 @@ begin
   nextpas.core.atomic.compat.AtomicThreadFence(moSeqCst);
   nextpas.core.atomic.compat.AtomicSignalFence(moSeqCst);
   nextpas.core.atomic.compat.CpuPause;
+
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN),
+    Int64(nextpas.core.atomic.compat.AtomicWait32(LVal, 99, 1000000)),
+    'compat AtomicWait32 should surface wait-address mismatch result');
+  CheckEqual(Int64(0), Int64(nextpas.core.atomic.compat.AtomicNotifyOne32(LVal)),
+    'compat AtomicNotifyOne32 should succeed on supported platforms');
+  CheckEqual(Int64(0), Int64(nextpas.core.atomic.compat.AtomicNotifyAll32(LVal)),
+    'compat AtomicNotifyAll32 should succeed on supported platforms');
 end;
 
 procedure TestAtomicTaggedPointer;
@@ -523,6 +823,175 @@ begin
 end;
 {$ENDIF}
 
+type
+  PAtomicWaitState = ^TAtomicWaitState;
+  TAtomicWaitState = record
+    Value: PInt32;
+    WaitRet: Int32;
+  end;
+
+procedure TestAtomicWaitNotifySurfaceAndBehavior;
+var
+  LValue: Int32;
+  LRet: Int32;
+  LStarted: Int32;
+  LState1: TAtomicWaitState;
+  LState2: TAtomicWaitState;
+  LThread1: TThread;
+  LThread2: TThread;
+  LSpin: Integer;
+begin
+  LValue := 7;
+  LRet := atomic_wait(LValue, 9, 1000000);
+  CheckEqual(Int64(PLATFORM_ERR_AGAIN), Int64(LRet),
+    'atomic_wait must return AGAIN on value mismatch');
+
+  LValue := 11;
+  LRet := atomic_wait(LValue, 11, 0);
+  CheckEqual(Int64(PLATFORM_ERR_TIMEOUT), Int64(LRet),
+    'atomic_wait timeout=0 must report TIMEOUT when still equal');
+
+  LState1.Value := @LValue;
+  LState1.WaitRet := -1;
+  LState2.Value := @LValue;
+  LState2.WaitRet := -1;
+  LValue := 0;
+  LStarted := 0;
+
+  LThread1 := TThread.CreateAnonymousThread(procedure
+    var
+      LWaitRet: Int32;
+    begin
+      atomic_fetch_add(LStarted, 1, mo_seq_cst);
+      repeat
+        if atomic_load(LState1.Value^, mo_seq_cst) <> 0 then
+        begin
+          LState1.WaitRet := 0;
+          Exit;
+        end;
+
+        LWaitRet := atomic_wait(LState1.Value^, 0, 1000000000);
+        if LWaitRet = 0 then
+          Continue;
+        if LWaitRet <> PLATFORM_ERR_AGAIN then
+        begin
+          LState1.WaitRet := LWaitRet;
+          Exit;
+        end;
+      until False;
+    end);
+  LThread1.FreeOnTerminate := False;
+  LThread2 := TThread.CreateAnonymousThread(procedure
+    var
+      LWaitRet: Int32;
+    begin
+      atomic_fetch_add(LStarted, 1, mo_seq_cst);
+      repeat
+        if atomic_load(LState2.Value^, mo_seq_cst) <> 0 then
+        begin
+          LState2.WaitRet := 0;
+          Exit;
+        end;
+
+        LWaitRet := atomic_wait(LState2.Value^, 0, 1000000000);
+        if LWaitRet = 0 then
+          Continue;
+        if LWaitRet <> PLATFORM_ERR_AGAIN then
+        begin
+          LState2.WaitRet := LWaitRet;
+          Exit;
+        end;
+      until False;
+    end);
+  LThread2.FreeOnTerminate := False;
+
+  LThread1.Start;
+  LThread2.Start;
+
+  for LSpin := 1 to 1000 do
+  begin
+    if atomic_load(LStarted, mo_seq_cst) = 2 then
+      Break;
+    Sleep(1);
+  end;
+  CheckEqual(Int64(2), Int64(atomic_load(LStarted, mo_seq_cst)),
+    'waiter threads must start before notify path is exercised');
+
+  atomic_store(LValue, 1, mo_seq_cst);
+  LRet := atomic_notify_all(LValue);
+  CheckEqual(Int64(0), Int64(LRet), 'atomic_notify_all should succeed on supported platforms');
+
+  LThread1.WaitFor;
+  LThread2.WaitFor;
+  LThread1.Free;
+  LThread2.Free;
+
+  CheckEqual(Int64(0), Int64(LState1.WaitRet), 'first waiter should be released by notify_all');
+  CheckEqual(Int64(0), Int64(LState2.WaitRet), 'second waiter should be released by notify_all');
+
+  CheckEqual(Int64(0), Int64(atomic_notify_one(LValue)),
+    'atomic_notify_one should succeed on supported platforms');
+end;
+
+procedure TestAtomicRefCountContract;
+var
+  LRef: TAtomicRefCount;
+  LNewValue: PtrUInt;
+  LRaised: Boolean;
+begin
+  LRef := TAtomicRefCount.Create(1);
+  CheckEqual(Int64(1), Int64(LRef.Load()));
+  CheckEqual(Int64(2), Int64(LRef.Inc()));
+  CheckEqual(Int64(2), Int64(LRef.Load()));
+  Check(LRef.TryInc(LNewValue), 'TryInc should succeed from non-zero refcount');
+  CheckEqual(Int64(3), Int64(LNewValue));
+  CheckEqual(Int64(3), Int64(LRef.Load()));
+  CheckEqual(Int64(2), Int64(LRef.Dec()));
+  CheckEqual(Int64(1), Int64(LRef.Dec()));
+  CheckEqual(Int64(0), Int64(LRef.Dec()));
+
+  LRaised := False;
+  try
+    LRef.Dec();
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Dec on zero refcount must raise EInvalidOperationError');
+
+  LRaised := False;
+  try
+    LRef.Inc();
+  except
+    on E: EInvalidOperationError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Inc on zero refcount must raise EInvalidOperationError');
+
+  LRef := TAtomicRefCount.Create(0);
+  Check(not LRef.TryInc(LNewValue), 'TryInc should fail from zero refcount');
+  CheckEqual(Int64(0), Int64(LRef.Load()));
+
+  LRef := TAtomicRefCount.Create(High(PtrUInt));
+  LRaised := False;
+  try
+    LRef.Inc();
+  except
+    on E: EResourceExhaustedError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Inc at High(PtrUInt) must raise EResourceExhaustedError');
+
+  LRaised := False;
+  try
+    LRef.TryInc(LNewValue);
+  except
+    on E: EResourceExhaustedError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'TryInc at High(PtrUInt) must raise EResourceExhaustedError');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.atomic');
   T.Run('Load32/Store32 all orders', @TestLoad32Store32);
@@ -534,6 +1003,7 @@ begin
   T.Run('Exchange64', @TestExchange64);
   T.Run('Pointer atomics', @TestPointerAtomics);
   T.Run('Fences (no crash)', @TestFence);
+  T.Run('default atomic_load surface', @TestAtomicDefaultLoadSurface);
   T.Run('atomic source contracts', @TestAtomicSourceContracts);
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
@@ -541,5 +1011,7 @@ begin
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
+  T.Run('atomic wait/notify API', @TestAtomicWaitNotifySurfaceAndBehavior);
+  T.Run('atomic refcount contract', @TestAtomicRefCountContract);
   T.Summary;
 end.

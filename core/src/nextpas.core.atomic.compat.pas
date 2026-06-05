@@ -57,6 +57,9 @@ function AtomicLoadPtr(var ATarget: Pointer; const AOrder: TMemoryOrder = moSeqC
 procedure AtomicStorePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchangePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
 function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
+function AtomicWait32(var ATarget: Int32; const AExpected: Int32; const ATimeoutNs: Int64 = -1): Int32; inline;
+function AtomicNotifyOne32(var ATarget: Int32): Int32; inline;
+function AtomicNotifyAll32(var ATarget: Int32): Int32; inline;
 
 procedure AtomicThreadFence(const AOrder: TMemoryOrder = moSeqCst); inline;
 procedure AtomicSignalFence(const AOrder: TMemoryOrder = moSeqCst); inline;
@@ -292,6 +295,21 @@ end;
 function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder): Pointer;
 begin
   Result := nextpas.core.atomic.AtomicCompareExchangePtr(ATarget, AExpected, ADesired, AOrder);
+end;
+
+function AtomicWait32(var ATarget: Int32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+begin
+  Result := nextpas.core.atomic.AtomicWait32(ATarget, AExpected, ATimeoutNs);
+end;
+
+function AtomicNotifyOne32(var ATarget: Int32): Int32;
+begin
+  Result := nextpas.core.atomic.AtomicNotifyOne32(ATarget);
+end;
+
+function AtomicNotifyAll32(var ATarget: Int32): Int32;
+begin
+  Result := nextpas.core.atomic.AtomicNotifyAll32(ATarget);
 end;
 
 procedure AtomicThreadFence(const AOrder: TMemoryOrder);

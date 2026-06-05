@@ -66,6 +66,7 @@ type
   TAtomicFlag = nextpas.core.atomic.types.TAtomicFlag;
   TAtomicISize = nextpas.core.atomic.types.TAtomicISize;
   TAtomicUSize = nextpas.core.atomic.types.TAtomicUSize;
+  TAtomicRefCount = nextpas.core.atomic.types.TAtomicRefCount;
 
 const
   mo_relaxed = nextpas.core.atomic.core.mo_relaxed;
@@ -112,6 +113,9 @@ function AtomicLoadPtr(var ATarget: Pointer; const AOrder: TMemoryOrder = moSeqC
 procedure AtomicStorePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchangePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
 function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
+function AtomicWait32(var ATarget: Int32; const AExpected: Int32; const ATimeoutNs: Int64 = -1): Int32; inline;
+function AtomicNotifyOne32(var ATarget: Int32): Int32; inline;
+function AtomicNotifyAll32(var ATarget: Int32): Int32; inline;
 
 procedure AtomicThreadFence(const AOrder: TMemoryOrder = moSeqCst); inline;
 procedure AtomicSignalFence(const AOrder: TMemoryOrder = moSeqCst); inline;
@@ -162,6 +166,13 @@ procedure atomic_thread_fence(aOrder: memory_order_t);
  * @cpp_equivalent std::atomic_signal_fence
  *}
 procedure atomic_signal_fence(aOrder: memory_order_t);
+
+function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64 = -1): Int32; overload; inline;
+function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64 = -1): Int32; overload; inline;
+function atomic_notify_one(var aObj: Int32): Int32; overload; inline;
+function atomic_notify_one(var aObj: UInt32): Int32; overload; inline;
+function atomic_notify_all(var aObj: Int32): Int32; overload; inline;
+function atomic_notify_all(var aObj: UInt32): Int32; overload; inline;
 
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│                                atomic_load                                 │
@@ -626,6 +637,9 @@ procedure atomic_tagged_ptr_update_tag(var aObj: atomic_tagged_ptr_t; aTag: {$IF
 
 implementation
 
+uses
+  nextpas.core.platform.sync;
+
 {$WARN 5024 off} // keep implementation hint-clean on platforms where order params are intentionally ignored
 
 //┌────────────────────────────────────────────────────────────────────────────┐
@@ -663,6 +677,20 @@ begin
   _consume_memory_order(aSuccessOrder);
   _consume_memory_order(aFailureOrder);
 end;
+
+{$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+function _atomic_seq_cst_load_32_x86(var aObj: Int32): Int32; inline;
+begin
+  Result := InterlockedCompareExchange(aObj, 0, 0);
+end;
+{$ENDIF}
+
+{$IF DEFINED(CPUX86_64)}
+function _atomic_seq_cst_load_64_x86(var aObj: Int64): Int64; inline;
+begin
+  Result := InterlockedCompareExchange64(aObj, 0, 0);
+end;
+{$ENDIF}
 
 function _cas_success_order(const aOrder: memory_order_t): memory_order_t; inline;
 begin
@@ -954,7 +982,6 @@ end;
 
 function atomic_load(var aObj: Int32; aOrder: memory_order_t): Int32;
 begin
-  Result := aObj;
   case aOrder of
     mo_relaxed:
       Result := aObj;
@@ -977,12 +1004,9 @@ begin
 
     mo_seq_cst:
       begin
-        // On weakly-ordered CPUs (e.g. AArch64), make seq_cst loads fully ordered.
-        // On x86/x86_64, a plain load is already strongly ordered at the CPU level;
-        // use only a compiler barrier to prevent reordering.
+        // seq_cst loads use a locked read on x86/x86_64 and fence-load-fence on weak CPUs.
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          Result := aObj;
-          _compiler_barrier;
+          Result := _atomic_seq_cst_load_32_x86(aObj);
         {$ELSE}
           atomic_seq_cst_fence;
           Result := aObj;
@@ -994,11 +1018,7 @@ end;
 
 function atomic_load(var aObj: Int32): Int32;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    Result := atomic_load(aObj, mo_relaxed);
-  {$ELSE}
-    Result := atomic_load(aObj, mo_acquire);
-  {$ENDIF}
+  Result := atomic_load(aObj, mo_seq_cst);
 end;
 
 function atomic_load(var aObj: UInt32; aOrder: memory_order_t): UInt32;
@@ -1052,8 +1072,12 @@ begin
     mo_seq_cst:
       begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-          Result := aObj;
-          _compiler_barrier;
+          {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
+          Result := _atomic_load_64_x86(aObj);
+          atomic_seq_cst_fence;
+          {$ELSE}
+          Result := _atomic_seq_cst_load_64_x86(aObj);
+          {$ENDIF}
         {$ELSE}
           atomic_seq_cst_fence;
           Result := aObj;
@@ -1066,11 +1090,7 @@ end;
 
 function atomic_load_64(var aObj: Int64): Int64;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    Result := atomic_load_64(aObj, mo_relaxed);
-  {$ELSE}
-    Result := atomic_load_64(aObj, mo_acquire);
-  {$ENDIF}
+  Result := atomic_load_64(aObj, mo_seq_cst);
 end;
 
 function atomic_load_64(var aObj: UInt64; aOrder: memory_order_t): UInt64;
@@ -1105,11 +1125,7 @@ end;
 
 function atomic_load(var aObj: Pointer): Pointer;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    Result := atomic_load(aObj, mo_relaxed);
-  {$ELSE}
-    Result := atomic_load(aObj, mo_acquire);
-  {$ENDIF}
+  Result := atomic_load(aObj, mo_seq_cst);
 end;
 
 {$IFDEF CPU64}
@@ -1127,11 +1143,7 @@ end;
 
 function atomic_load(var aObj: PtrInt): PtrInt;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    Result := atomic_load(aObj, mo_relaxed);
-  {$ELSE}
-    Result := atomic_load(aObj, mo_acquire);
-  {$ENDIF}
+  Result := atomic_load(aObj, mo_seq_cst);
 end;
 
 
@@ -2902,6 +2914,8 @@ begin
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2921,6 +2935,8 @@ begin
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -2946,6 +2962,8 @@ begin
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2970,6 +2988,8 @@ begin
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -3267,11 +3287,7 @@ end;
 
 function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    Result := atomic_tagged_ptr_load(aObj, mo_relaxed);
-  {$ELSE}
-    Result := atomic_tagged_ptr_load(aObj, mo_acquire);
-  {$ENDIF}
+  Result := atomic_tagged_ptr_load(aObj, mo_seq_cst);
 end;
 
 procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t);
@@ -3379,6 +3395,36 @@ end;
 procedure atomic_signal_fence(aOrder: memory_order_t);
 begin
   nextpas.core.atomic.core.atomic_signal_fence(aOrder);
+end;
+
+function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;
+begin
+  Result := platform_wait_address32(@aObj, aExpected, aTimeoutNs);
+end;
+
+function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;
+begin
+  Result := platform_wait_address32(PInt32(@aObj), Int32(aExpected), aTimeoutNs);
+end;
+
+function atomic_notify_one(var aObj: Int32): Int32;
+begin
+  Result := platform_wake_address_one(@aObj);
+end;
+
+function atomic_notify_one(var aObj: UInt32): Int32;
+begin
+  Result := platform_wake_address_one(PInt32(@aObj));
+end;
+
+function atomic_notify_all(var aObj: Int32): Int32;
+begin
+  Result := platform_wake_address_all(@aObj);
+end;
+
+function atomic_notify_all(var aObj: UInt32): Int32;
+begin
+  Result := platform_wake_address_all(PInt32(@aObj));
 end;
 
 function atomic_tagged_ptr_next(const aTaggedPtr: atomic_tagged_ptr_t): {$IFDEF CPU64}UInt16{$ELSE}UInt32{$ENDIF};
@@ -3530,6 +3576,21 @@ begin
   atomic_compare_exchange_strong(ATarget, LExpected, ADesired,
     _cas_success_order(AOrder), AtomicCompatFailureOrder(AOrder));
   Result := LExpected;
+end;
+
+function AtomicWait32(var ATarget: Int32; const AExpected: Int32; const ATimeoutNs: Int64): Int32;
+begin
+  Result := atomic_wait(ATarget, AExpected, ATimeoutNs);
+end;
+
+function AtomicNotifyOne32(var ATarget: Int32): Int32;
+begin
+  Result := atomic_notify_one(ATarget);
+end;
+
+function AtomicNotifyAll32(var ATarget: Int32): Int32;
+begin
+  Result := atomic_notify_all(ATarget);
 end;
 
 procedure AtomicThreadFence(const AOrder: TMemoryOrder);

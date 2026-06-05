@@ -370,6 +370,21 @@ type
     function IntoInner: PtrUInt; inline;
   end;
 
+  { TAtomicRefCount - 专用原子引用计数器 }
+  TAtomicRefCount = record
+  private
+    FValue: PtrUInt;
+  public
+    class function Create(AInitial: PtrUInt): TAtomicRefCount; static; inline;
+    class function is_lock_free: Boolean; static; inline;
+
+    function Load(AOrder: memory_order_t = mo_relaxed): PtrUInt; inline;
+    function Inc: PtrUInt; inline;
+    function TryInc(out ANewValue: PtrUInt): Boolean; inline;
+    function Dec: PtrUInt; inline;
+    function IntoInner: PtrUInt; inline;
+  end;
+
   { TAtomicPtr - 泛型原子指针 }
   generic TAtomicPtr<T> = record
   public type
@@ -404,7 +419,8 @@ type
 implementation
 
 uses
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.errors;
 
 function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
 begin
@@ -430,6 +446,37 @@ begin
   else
     Result := mo_seq_cst;
 end;
+
+function _refcount_load_relaxed(var AValue: PtrUInt): PtrUInt; inline;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  Result := PtrUInt(atomic_load(PUInt32(@AValue)^, mo_relaxed));
+  {$ELSE}
+  Result := PtrUInt(atomic_load_64(PUInt64(@AValue)^, mo_relaxed));
+  {$ENDIF}
+end;
+
+function _refcount_compare_exchange_strong(var AValue: PtrUInt; var AExpected: PtrUInt;
+  const ADesired: PtrUInt; const ASuccessOrder, AFailureOrder: memory_order_t): Boolean; inline;
+{$IF SIZEOF(PtrUInt) = 4}
+var
+  LExpected32: UInt32;
+begin
+  LExpected32 := UInt32(AExpected);
+  Result := atomic_compare_exchange_strong(PUInt32(@AValue)^, LExpected32, UInt32(ADesired),
+    ASuccessOrder, AFailureOrder);
+  AExpected := PtrUInt(LExpected32);
+end;
+{$ELSE}
+var
+  LExpected64: UInt64;
+begin
+  LExpected64 := UInt64(AExpected);
+  Result := atomic_compare_exchange_strong_64(PUInt64(@AValue)^, LExpected64, UInt64(ADesired),
+    ASuccessOrder, AFailureOrder);
+  AExpected := PtrUInt(LExpected64);
+end;
+{$ENDIF}
 
 { TAtomicInt32 }
 
@@ -981,8 +1028,7 @@ end;
 
 class function TAtomicISize.is_lock_free: Boolean;
 begin
-  // Pointer-sized atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_ptr;
 end;
 
 function TAtomicISize.Load(AOrder: memory_order_t): PtrInt;
@@ -1142,8 +1188,7 @@ end;
 
 class function TAtomicUSize.is_lock_free: Boolean;
 begin
-  // Pointer-sized atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_ptr;
 end;
 
 function TAtomicUSize.Load(AOrder: memory_order_t): PtrUInt;
@@ -1294,6 +1339,91 @@ begin
   Result := FValue;
 end;
 
+{ TAtomicRefCount }
+
+class function TAtomicRefCount.Create(AInitial: PtrUInt): TAtomicRefCount;
+begin
+  Result.FValue := AInitial;
+end;
+
+class function TAtomicRefCount.is_lock_free: Boolean;
+begin
+  Result := atomic_is_lock_free_ptr;
+end;
+
+function TAtomicRefCount.Load(AOrder: memory_order_t): PtrUInt;
+begin
+  {$IF SIZEOF(PtrUInt) = 4}
+  Result := PtrUInt(atomic_load(PUInt32(@FValue)^, AOrder));
+  {$ELSE}
+  Result := PtrUInt(atomic_load_64(PUInt64(@FValue)^, AOrder));
+  {$ENDIF}
+end;
+
+function TAtomicRefCount.Inc: PtrUInt;
+var
+  LCurrent: PtrUInt;
+  LNew: PtrUInt;
+begin
+  repeat
+    LCurrent := _refcount_load_relaxed(FValue);
+    if LCurrent = 0 then
+      raise EInvalidOperationError.Create('TAtomicRefCount.Inc: cannot resurrect zero refcount');
+    if LCurrent = High(PtrUInt) then
+      raise EResourceExhaustedError.Create('TAtomicRefCount.Inc: refcount overflow');
+    LNew := LCurrent + 1;
+    if _refcount_compare_exchange_strong(FValue, LCurrent, LNew, mo_relaxed, mo_relaxed) then
+      Exit(LNew);
+  until False;
+end;
+
+function TAtomicRefCount.TryInc(out ANewValue: PtrUInt): Boolean;
+var
+  LCurrent: PtrUInt;
+  LNew: PtrUInt;
+begin
+  repeat
+    LCurrent := _refcount_load_relaxed(FValue);
+    if LCurrent = 0 then
+    begin
+      ANewValue := 0;
+      Exit(False);
+    end;
+    if LCurrent = High(PtrUInt) then
+      raise EResourceExhaustedError.Create('TAtomicRefCount.TryInc: refcount overflow');
+    LNew := LCurrent + 1;
+    if _refcount_compare_exchange_strong(FValue, LCurrent, LNew, mo_acquire, mo_relaxed) then
+    begin
+      ANewValue := LNew;
+      Exit(True);
+    end;
+  until False;
+end;
+
+function TAtomicRefCount.Dec: PtrUInt;
+var
+  LCurrent: PtrUInt;
+  LNew: PtrUInt;
+begin
+  repeat
+    LCurrent := _refcount_load_relaxed(FValue);
+    if LCurrent = 0 then
+      raise EInvalidOperationError.Create('TAtomicRefCount.Dec: refcount already zero');
+    LNew := LCurrent - 1;
+    if _refcount_compare_exchange_strong(FValue, LCurrent, LNew, mo_release, mo_relaxed) then
+    begin
+      if LNew = 0 then
+        atomic_thread_fence(mo_acquire);
+      Exit(LNew);
+    end;
+  until False;
+end;
+
+function TAtomicRefCount.IntoInner: PtrUInt;
+begin
+  Result := FValue;
+end;
+
 { TAtomicPtr }
 
 class function TAtomicPtr.Create(AValue: PT): TAtomicPtr;
@@ -1303,8 +1433,7 @@ end;
 
 class function TAtomicPtr.is_lock_free: Boolean;
 begin
-  // Pointer atomic operations are always lock-free on modern platforms
-  Result := True;
+  Result := atomic_is_lock_free_ptr;
 end;
 
 function TAtomicPtr.Load(AOrder: memory_order_t): PT;
