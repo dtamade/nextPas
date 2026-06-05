@@ -1,5 +1,70 @@
 # Progress Log
 
+## Session: 2026-06-06 http h1 fast lazy header lookup slice
+
+- **Status:** completed.
+- Objective:
+  - reduce H1 fast-path header access materialization cost
+  - let `TFastLazyHeaders.Get` / `Has` answer single-header lookups from the raw
+    header block when possible
+  - preserve full `THttpHeaders` materialization semantics for whole-header access
+- Scope and safety:
+  - touched only H1 fast parser/lazy headers, h1fast focused test,
+    benchmark/source-contract test, H1 parser benchmark rows, and HTTP/control docs
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not stage unrelated dirty `test_http_client`, async, compiler, worktree
+    marker, or untracked files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `TFastLazyHeaders raw first-value lookup helper`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
+    - `23 total, 22 passed, 1 failed`
+    - failed at `lazy header semantic request should parse`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - added `TFastLazyHeaders.FindRawFirstValue`
+  - `TFastLazyHeaders.Get` / `Has` no longer force `EnsureMaterialized` before
+    single-header lookup
+  - `GetAll` / `ForEach` / `Count` / `Clone` / mutation methods still materialize
+  - fixed `IsValidHeaderValueFast(ALen=0)` so empty header values stay valid and
+    do not underflow the `SizeUInt` loop bound
+  - added h1fast coverage for empty value, case-insensitive lookup, first-value
+    duplicate order, missing header, and post-raw materialization
+  - added H1 parser benchmark rows for fast-header `Get` vs full `ForEach`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
+    - `23/23 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `33/33 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='fast headers' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+    - `adapter cost: fast headers get host only: 1466.4 ns/op`
+    - `adapter cost: fast headers foreach all: 4678.8 ns/op`
+- Sidecar review:
+  - one subagent reviewed fast parser acceptance/fallback conditions and confirmed
+    ordinary duplicate headers should stay fast-path compatible
+  - one subagent reviewed raw lookup semantics and called out empty value,
+    case-insensitive lookup, first-value order, and materialization preservation
+    as the key proof points
+- Outcome:
+  - single-header access on the H1 fast lazy header wrapper no longer pays full
+    header-store materialization cost
+  - empty header values are accepted by the fast parser again
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 fast-path header block finer lazy access
+  - next best batch: H1 writer/header serialization fast paths or llhttp adapter
+    parsed-header insertion/materialization cost; keep formal cross-language
+    benchmark sweep deferred
+
+
 ## Session: 2026-06-06 http h1 parser request metadata cache slice
 
 - **Status:** completed.

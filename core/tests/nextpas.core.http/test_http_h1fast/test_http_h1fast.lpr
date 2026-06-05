@@ -229,6 +229,38 @@ begin
   CheckEqual('*/*', LR.Headers.Get('Accept'), 'trimmed accept');
 end;
 
+procedure TestLazyHeadersRawLookupPreservesSemantics;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+  LAcceptValues: TStringArray;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'x-empty: '#13#10 +
+           'AcCePt: application/json'#13#10 +
+           'aCcEpT: text/plain'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'lazy header semantic request should parse');
+
+  Check(LR.Headers.Has('X-EMPTY'), 'empty X-Empty is still present');
+  CheckEqual('', LR.Headers.Get('X-Empty'), 'Get preserves empty header value');
+  Check(not LR.Headers.Has('Missing'),
+    'missing header is absent without materialization');
+  CheckEqual('application/json', LR.Headers.Get('ACCEPT'),
+    'Get preserves first duplicate value');
+  CheckEqual(Int64(4), Int64(LR.Headers.Count),
+    'Count can still materialize after raw Get/Has');
+
+  LAcceptValues := LR.Headers.GetAll('Accept');
+  CheckEqual(Int64(2), Int64(Length(LAcceptValues)),
+    'GetAll preserves duplicate count after raw Get/Has');
+  CheckEqual('application/json', LAcceptValues[0],
+    'GetAll preserves first duplicate value');
+  CheckEqual('text/plain', LAcceptValues[1],
+    'GetAll preserves second duplicate value');
+end;
+
 procedure TestPolicyHeaderFlags;
 var
   LReq: AnsiString;
@@ -397,6 +429,8 @@ begin
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
+  T.Run('Lazy headers raw lookup preserves semantics',
+    @TestLazyHeadersRawLookupPreservesSemantics);
   T.Run('Policy header flags', @TestPolicyHeaderFlags);
   T.Run('Empty path', @TestEmptyPath);
   T.Run('All methods', @TestAllMethods);

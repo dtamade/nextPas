@@ -50,6 +50,7 @@ type
     FRaw: string;
     FHeaders: IHttpHeaders;
     procedure EnsureMaterialized;
+    function FindRawFirstValue(const AName: string; out AValue: string): Boolean;
   public
     constructor Create(const ABuf: PAnsiChar; const ALen: SizeUInt);
     procedure Set_(const AName, AValue: string);
@@ -86,9 +87,34 @@ function IsValidHeaderValueFast(const ABuf: PAnsiChar;
 var
   LI: SizeUInt;
 begin
+  if ALen = 0 then
+    Exit(True);
   for LI := 0 to ALen - 1 do
     if ABuf[LI] = #0 then
       Exit(False);
+  Result := True;
+end;
+
+function FastLowerAscii(const AChar: AnsiChar): AnsiChar; inline;
+begin
+  if (AChar >= 'A') and (AChar <= 'Z') then
+    Result := AnsiChar(Ord(AChar) + 32)
+  else
+    Result := AChar;
+end;
+
+function FastHeaderNameMatches(const ARaw: string; const AStart: SizeInt;
+  const ALen: SizeInt; const AName: string): Boolean; inline;
+var
+  LI: SizeInt;
+begin
+  Result := False;
+  if ALen <> Length(AName) then
+    Exit;
+  for LI := 0 to ALen - 1 do
+    if FastLowerAscii(ARaw[AStart + LI]) <>
+       FastLowerAscii(AnsiChar(AName[LI + 1])) then
+      Exit;
   Result := True;
 end;
 
@@ -145,6 +171,51 @@ begin
   FRaw := '';
 end;
 
+function TFastLazyHeaders.FindRawFirstValue(const AName: string;
+  out AValue: string): Boolean;
+var
+  LLineStart, LLineEnd: SizeInt;
+  LColon: SizeInt;
+  LValStart: SizeInt;
+  LRawLen: SizeInt;
+begin
+  Result := False;
+  AValue := '';
+  LRawLen := Length(FRaw);
+  LLineStart := 1;
+  while LLineStart <= LRawLen do
+  begin
+    LLineEnd := LLineStart;
+    while (LLineEnd <= LRawLen) and
+          (not ((FRaw[LLineEnd] = #13) and
+                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
+      Inc(LLineEnd);
+
+    LColon := LLineStart;
+    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
+      Inc(LColon);
+    if LColon >= LLineEnd then
+      Break;
+
+    if FastHeaderNameMatches(FRaw, LLineStart, LColon - LLineStart,
+      AName) then
+    begin
+      LValStart := LColon + 1;
+      while (LValStart < LLineEnd) and
+            ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
+        Inc(LValStart);
+      SetString(AValue, PAnsiChar(FRaw) + LValStart - 1,
+        LLineEnd - LValStart);
+      Exit(True);
+    end;
+
+    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
+      LLineStart := LLineEnd + 2
+    else
+      Break;
+  end;
+end;
+
 procedure TFastLazyHeaders.Set_(const AName, AValue: string);
 begin
   EnsureMaterialized;
@@ -159,8 +230,10 @@ end;
 
 function TFastLazyHeaders.Get(const AName: string): string;
 begin
-  EnsureMaterialized;
-  Result := FHeaders.Get(AName);
+  if FHeaders <> nil then
+    Exit(FHeaders.Get(AName));
+  if not FindRawFirstValue(AName, Result) then
+    Result := '';
 end;
 
 function TFastLazyHeaders.GetAll(const AName: string): TStringArray;
@@ -170,9 +243,12 @@ begin
 end;
 
 function TFastLazyHeaders.Has(const AName: string): Boolean;
+var
+  LValue: string;
 begin
-  EnsureMaterialized;
-  Result := FHeaders.Has(AName);
+  if FHeaders <> nil then
+    Exit(FHeaders.Has(AName));
+  Result := FindRawFirstValue(AName, LValue);
 end;
 
 procedure TFastLazyHeaders.Del(const AName: string);

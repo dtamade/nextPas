@@ -1,5 +1,34 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http h1 fast lazy header lookup slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 fast-path header block 细粒度 lazy access：
+让 `TFastLazyHeaders.Get` / `Has` 在单 header lookup 时直接扫描 raw header
+block，避免强制 materialize 完整 `THttpHeaders` store，同时保持 `GetAll` /
+`ForEach` / `Count` / mutation 的完整 materialization 语义。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` source-contract 先失败，证明
+  `TFastLazyHeaders.FindRawFirstValue` / raw `Get` / raw `Has` 尚不存在。
+- [x] GREEN：新增 raw first-value lookup helper，`Get` / `Has` 改为未 materialized
+  时直接扫描 raw header block。
+- [x] GREEN：修复 `IsValidHeaderValueFast(ALen=0)` 的 `SizeUInt` loop-bound
+  underflow，空 header value 不再误触发 fast parser fallback。
+- [x] 在 `test_http_h1fast` 补空 header value、case-insensitive lookup、`Get`
+  首值、missing header、raw lookup 后 `Count` / `GetAll` materialization 的 focused proof。
+- [x] 在 `bench_h1parser` 增加 `fast headers get host only` 与
+  `fast headers foreach all` materialization-cost rows，并用 `test_http_benchmarks`
+  锁住 row。
+- [x] 跑 focused gates：
+  `test_http_h1fast`、`test_http_benchmarks`、`test_http_server`。
+- [x] 跑小 benchmark smoke：
+  `bench_h1parser` 的 `fast headers` filter。
+- [x] 更新 HTTP benchmark/API/control 文档并 path-limited commit。
+
+
 ## Active Session: 2026-06-06 http h1 parser request metadata cache slice
 
 ### Goal

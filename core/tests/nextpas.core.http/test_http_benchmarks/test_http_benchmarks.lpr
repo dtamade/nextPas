@@ -29,6 +29,7 @@ const
   HttpMessageUnitPath = 'src/nextpas.core.http.message.pas';
   H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
   H1ParserUnitPath = 'src/nextpas.core.http.impl.h1.parser.pas';
+  H1FastUnitPath = 'src/nextpas.core.http.impl.h1.fast.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
@@ -666,6 +667,36 @@ begin
     'H1 parser request metadata should cache Transfer-Encoding during parse');
 end;
 
+procedure TestH1FastLazyHeadersSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LGetBody: string;
+  LHasBody: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1FastUnitPath));
+  LGetBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.Get(const AName: string): string;',
+    'function TFastLazyHeaders.GetAll',
+    'TFastLazyHeaders.Get body');
+  LHasBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.Has(const AName: string): Boolean;',
+    'procedure TFastLazyHeaders.Del',
+    'TFastLazyHeaders.Has body');
+
+  CheckContains(LSource, 'function TFastLazyHeaders.FindRawFirstValue',
+    'TFastLazyHeaders raw first-value lookup helper');
+  CheckContains(LGetBody, 'FindRawFirstValue(AName, Result)',
+    'TFastLazyHeaders.Get should use raw first-value lookup');
+  CheckNotContains(LGetBody, 'EnsureMaterialized;',
+    'TFastLazyHeaders.Get should not materialize the full header block');
+  CheckContains(LHasBody, 'FindRawFirstValue(AName, LValue)',
+    'TFastLazyHeaders.Has should use raw first-value lookup');
+  CheckNotContains(LHasBody, 'EnsureMaterialized;',
+    'TFastLazyHeaders.Has should not materialize the full header block');
+end;
+
 procedure TestBenchFullchainPlaintextSmoke;
 var
   LRootDir: string;
@@ -1166,6 +1197,10 @@ begin
     'H1 parser benchmark legacy request metadata breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',
     'H1 parser benchmark cached request metadata breakdown row');
+  CheckContains(LOutput, 'adapter cost: fast headers get host only',
+    'H1 parser benchmark fast lazy header Get row');
+  CheckContains(LOutput, 'adapter cost: fast headers foreach all',
+    'H1 parser benchmark fast lazy header ForEach row');
 end;
 
 procedure TestH1ParserBenchmarkFilterEnv;
@@ -1544,6 +1579,8 @@ begin
     @TestHttpRequestDirectPathProjectionSourceContract);
   T.Run('H1 parser request metadata cache source contract',
     @TestH1ParserRequestMetadataCacheSourceContract);
+  T.Run('H1 fast lazy headers source contract',
+    @TestH1FastLazyHeadersSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

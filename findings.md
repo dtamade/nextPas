@@ -1,5 +1,51 @@
 # Findings & Decisions
 
+## 2026-06-06 http h1 fast lazy header lookup slice
+
+- 本轮把 `TFastLazyHeaders.Get` / `Has` 从“单次 lookup 也强制
+  `EnsureMaterialized`”改为 raw header block first-value scan；`GetAll` /
+  `ForEach` / `Count` / `Clone` / mutation 仍保留完整 materialization。
+- 选择依据：
+  - 上一批 request metadata cache 已去掉 parser metadata 二次扫 header 的固定成本；
+    下一处高价值成本是 fast path request object 暴露 headers 时的单 header lookup。
+  - 常见 handler/server policy 只读 `Host` 或少量 header，不应与全量 iteration
+    支付同等 materialization 成本。
+  - 子代理只读审查确认本切片应优先保持 case-insensitive name、`Get` 首值、
+    empty-value `Has=True`、duplicate order、raw block 不变和 trailer 隔离。
+- 实现决策：
+  - 新增 `FindRawFirstValue`，按 raw header block 顺序查找首个匹配 header name。
+  - `FastHeaderNameMatches` 仅做 ASCII case-fold，保持 fast parser 当前 header-name
+    acceptance policy，不扩大到 Unicode 或复杂 normalization。
+  - `Get` / `Has` 未 materialized 时不调用 `EnsureMaterialized`；materialized 后仍委托
+    `THttpHeaders`。
+  - `IsValidHeaderValueFast(ALen=0)` 必须直接返回 true，避免 `SizeUInt` 下 `ALen - 1`
+    underflow 导致空 header value 误判非法。
+- RED / debugging 证据：
+  - `test_http_benchmarks` 先失败在 `TFastLazyHeaders raw first-value lookup helper`
+    source-contract 缺失，heaptrc 为 `0 unfreed memory blocks`。
+  - 新增 h1fast focused test 后先失败在 `lazy header semantic request should parse`；
+    sentinel 诊断定位到空 value validation 分支，根因为 `ALen=0` unsigned loop-bound
+    underflow。
+- GREEN / behavior 证据：
+  - `test_http_h1fast`：`23/23 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`33/33 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server`：`275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `adapter cost: fast headers get host only = 1466.4 ns/op`
+  - `adapter cost: fast headers foreach all = 4678.8 ns/op`
+- 子代理只读复盘：
+  - fast parser 接受条件不应为普通重复 header 回退；真正回退仍限于
+    transfer-coding、重复/非法 `Content-Length`、obs-fold、非法 header/name/value、
+    incomplete body 等既有策略。
+  - raw lookup 语义风险集中在 empty value、case-insensitive lookup、first-value
+    order 和 materialization 后 duplicate order；本轮 focused test 已覆盖这些点。
+- 复盘结论：
+  方向没有走偏：本轮不是碎片化 inline，而是减少 H1 fast-path header access
+  的实际 materialization 成本，并顺手修复一个空 header value correctness bug。
+  下一步应继续处理 H1 writer/header serialization 或 llhttp adapter parsed-header
+  insertion 成本；跨语言正式 benchmark 仍后置。
+
+
 ## 2026-06-06 http h1 parser request metadata cache slice
 
 - 本轮把 H1 request metadata 从 headers-complete 后回扫 `IHttpHeaders`

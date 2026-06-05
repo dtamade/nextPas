@@ -811,6 +811,42 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchFastHeadersGetHostOnly(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success then
+      LScore := LScore + SizeUInt(Length(LResult.Headers.Get('Host')));
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchFastHeadersForEachAll(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success then
+      LResult.Headers.ForEach(
+        procedure(const AName, AValue: string)
+        begin
+          LScore := LScore + SizeUInt(Length(AName) + Length(AValue));
+        end);
+  end;
+  GSink := GSink + LScore;
+end;
+
 procedure BenchParseAdapterNoUrl(aIters: Int64);
 var
   LIt: Int64;
@@ -939,6 +975,10 @@ begin
     @BenchAdapterRequestMetadataLegacyExpectCl);
   B.Run('adapter cost: request metadata cached expect+cl',
     @BenchAdapterRequestMetadataCachedExpectCl);
+  B.Run('adapter cost: fast headers get host only',
+    @BenchFastHeadersGetHostOnly);
+  B.Run('adapter cost: fast headers foreach all',
+    @BenchFastHeadersForEachAll);
   B.Run('adapter no-url: metadata 3 headers',
     @BenchAdapterNoUrlMetadata3Headers);
   B.Run('adapter no-url: fast reject + llhttp',

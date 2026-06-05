@@ -187,6 +187,53 @@ req/s=23797
 This smoke row proves the benchmark path still completes after the inline
 slice. It is intentionally not a durable performance ranking.
 
+## Optimization Evidence: H1 Fast Lazy Header Lookup
+
+On 2026-06-06 local time, `TFastLazyHeaders.Get` and `Has` stopped forcing full
+header-block materialization for single-header lookups. The fast path now scans
+the raw request header block for the first matching field name; `GetAll`,
+`ForEach`, `Count`, `Clone`, and mutation methods still materialize the full
+`THttpHeaders` store to preserve duplicate-order and mutation semantics.
+
+The same focused slice also fixed an empty-header-value fast validation bug:
+`IsValidHeaderValueFast` now accepts `ALen = 0` instead of underflowing the
+unsigned loop bound and falling back from the fast parser.
+
+Focused verification:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1fast clean test
+23 total, 23 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+33 total, 33 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small H1 parser benchmark rows:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='fast headers' \
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| row | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| adapter cost: fast headers get host only | 100000 | 1466.4 | 681947 |
+| adapter cost: fast headers foreach all | 100000 | 4678.8 | 213732 |
+
+This is a nextPas internal materialization-cost split, not a cross-language
+server ranking. It shows the single-header lookup path no longer pays the same
+full materialization cost as whole-header iteration.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:
