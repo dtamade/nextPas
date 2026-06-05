@@ -303,6 +303,37 @@ begin
     'metadata keeps close hint absent');
 end;
 
+procedure TestRequestMetadataSpanFastPathKeepsTrimAndTokenSemantics;
+var
+  LP: IH1Parser;
+  LReq: string;
+  LMetadata: TH1RequestMetadata;
+begin
+  LP := NewH1RequestParser;
+  LReq := 'POST /upload HTTP/1.1'#13#10 +
+          'Host: localhost'#13#10 +
+          'Connection: keep-alive'#13#10 +
+          'Expect:  100-CONTINUE , fancy  '#13#10 +
+          'Content-Length:  0011  '#13#10#13#10 +
+          'hello world';
+  LP.Execute(PAnsiChar(LReq), Length(LReq));
+  Check(LP.IsComplete, 'metadata span-fast request complete');
+  LMetadata := LP.GetRequestMetadata;
+  Check(LMetadata.HasHost, 'metadata span-fast keeps host presence');
+  Check(LMetadata.ConnectionKeepAlive,
+    'metadata span-fast keeps exact keep-alive hint');
+  Check(LMetadata.HasContentLength,
+    'metadata span-fast keeps trimmed content-length presence');
+  CheckEqual(Int64(11), LMetadata.DeclaredContentLength,
+    'metadata span-fast keeps trimmed content-length value');
+  Check(LMetadata.RequestDeclaresBody,
+    'metadata span-fast sees fixed-length body');
+  Check(LMetadata.ExpectsContinue,
+    'metadata span-fast keeps case-insensitive 100-continue token');
+  Check(LMetadata.HasUnsupportedExpect,
+    'metadata span-fast keeps unsupported expect token');
+end;
+
 procedure TestRequestMetadataChunkedTransferEncoding;
 var
   LP: IH1Parser;
@@ -2076,6 +2107,8 @@ begin
   T.Run('Chunked request body', @TestChunkedRequestBody);
   T.Run('Request metadata fixed-length expect connection',
     @TestRequestMetadataFixedLengthExpectConnection);
+  T.Run('Request metadata span fast path keeps trim and token semantics',
+    @TestRequestMetadataSpanFastPathKeepsTrimAndTokenSemantics);
   T.Run('Request metadata chunked transfer-encoding',
     @TestRequestMetadataChunkedTransferEncoding);
   T.Run('Request metadata split duplicate watched headers',

@@ -1,5 +1,44 @@
 # Findings & Decisions
 
+## 2026-06-06 http h1 parser metadata span fast path slice
+
+- 本轮把 H1 parser watched request metadata 从“parse-time cache 但仍为部分
+  watched value 物化 string”继续推进到单 span callback 下的 direct span scan。
+- 选择依据：
+  - `AddParsedSpans` 与 request metadata cache 已经落地；重复做 parsed-header
+    insertion 会浪费，直接 staging/materialize public headers 又是更大架构 slice。
+  - 当前更窄、更安全的真实成本是 `UpdateRequestMetadataFromHeader` 对
+    `Host` / `Connection` / `Content-Length` / `Expect` 仍调用
+    `CapturedHeaderValueToString`，随后 public header store 又会为同一 value
+    物化一次。
+  - `Transfer-Encoding` 的 malformed-vs-unsupported 分类敏感，本轮不改它的
+    combined-string validation。
+- 实现决策：
+  - 新增 captured value helpers：non-empty、exact equals、trimmed Int64 parse、
+    trimmed/case-insensitive `Expect` token scan。
+  - `Host` / `Connection` / `Content-Length` / `Expect` metadata 在 value 未分片时
+    直接扫描 captured span；分片或已 materialized 情况保留 string fallback。
+  - 不改 public `IHttpHeaders`，不改 `THttpHeaders` 存储，不改 generated llhttp。
+- RED 证据：
+  - `test_http_benchmarks` 先失败在
+    `H1 parser request metadata span fast path source contract`：
+    `36 total, 35 passed, 1 failed`，heaptrc `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_h1parser`：`95/95 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`36/36 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server`：`275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `adapter no-url: metadata 3 headers = 322.2 ns/op`
+  - `adapter no-url: llhttp direct only = 1172.1 ns/op`
+- 子代理只读复盘：
+  - Euclid 确认 direct `AddParsedSpans` 已经存在，主要风险是 buffer lifetime 和
+    token/trim 语义漂移；本轮保留 `Execute` 后 pending-span materialization。
+  - Cicero 建议 parsed-header staging 是下一批更大候选；本轮按收敛期要求没有扩大。
+- 复盘结论：
+  方向没有走偏：这是 adapter metadata 热路径降本，不是碎片化 inline，也没有引入新
+  worktree 或大功能。下一步进入收敛：只处理已验证 HTTP 改动的提交与 merge readiness，
+  暂停新增大 slice；如果后续恢复性能批次，优先评估 parsed-header staging 的收益/风险。
+
 ## 2026-06-06 http h1 writer known status-line slice
 
 - 本轮把 `TH1ResponseWriter.WriteStatusLine` 从“只有 `200 OK` 固定行”推进到

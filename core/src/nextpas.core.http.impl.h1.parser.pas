@@ -203,6 +203,109 @@ begin
   SetString(Result, AValuePtr, AValueLen);
 end;
 
+function CapturedHeaderValueIsNonEmpty(const AValue: string;
+  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt): Boolean; inline;
+begin
+  if AValue <> '' then
+    Exit(True);
+  Result := (AValuePtr <> nil) and (AValueLen > 0);
+end;
+
+function CapturedHeaderValueEquals(const AValue: string;
+  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
+  const AExpected: string): Boolean; inline;
+var
+  I: SizeUInt;
+begin
+  if AValue <> '' then
+    Exit(AValue = AExpected);
+  if AValuePtr = nil then
+    Exit(AExpected = '');
+  if AValueLen <> SizeUInt(Length(AExpected)) then
+    Exit(False);
+  for I := 0 to AValueLen - 1 do
+    if AValuePtr[I] <> AnsiChar(AExpected[SizeInt(I) + 1]) then
+      Exit(False);
+  Result := True;
+end;
+
+function SpanTrimBounds(const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
+  out AStart, AStop: SizeUInt): Boolean; inline;
+begin
+  AStart := 0;
+  AStop := AValueLen;
+  while (AStart < AStop) and (AValuePtr[AStart] <= ' ') do
+    Inc(AStart);
+  while (AStop > AStart) and (AValuePtr[AStop - 1] <= ' ') do
+    Dec(AStop);
+  Result := AStart < AStop;
+end;
+
+function TryParseTrimmedInt64Span(const AValuePtr: PAnsiChar;
+  const AValueLen: SizeUInt; out AResult: Int64): Boolean;
+var
+  LStart: SizeUInt;
+  LStop: SizeUInt;
+  LIndex: SizeUInt;
+  LLimit: QWord;
+  LAcc: QWord;
+  LDigit: QWord;
+  LNegative: Boolean;
+  LCh: AnsiChar;
+begin
+  AResult := 0;
+  if (AValuePtr = nil) or
+     (not SpanTrimBounds(AValuePtr, AValueLen, LStart, LStop)) then
+    Exit(False);
+
+  LNegative := False;
+  LCh := AValuePtr[LStart];
+  if (LCh = '+') or (LCh = '-') then
+  begin
+    LNegative := LCh = '-';
+    Inc(LStart);
+    if LStart >= LStop then
+      Exit(False);
+  end;
+
+  if LNegative then
+    LLimit := QWord(High(Int64)) + 1
+  else
+    LLimit := QWord(High(Int64));
+
+  LAcc := 0;
+  for LIndex := LStart to LStop - 1 do
+  begin
+    LCh := AValuePtr[LIndex];
+    if (LCh < '0') or (LCh > '9') then
+      Exit(False);
+    LDigit := QWord(Ord(LCh) - Ord('0'));
+    if LAcc > (LLimit - LDigit) div 10 then
+      Exit(False);
+    LAcc := (LAcc * 10) + LDigit;
+  end;
+
+  if LNegative then
+  begin
+    if LAcc = QWord(High(Int64)) + 1 then
+      AResult := Low(Int64)
+    else
+      AResult := -Int64(LAcc);
+  end
+  else
+    AResult := Int64(LAcc);
+  Result := True;
+end;
+
+function CapturedHeaderValueTrimmedToInt64(const AValue: string;
+  const AValuePtr: PAnsiChar; const AValueLen: SizeUInt;
+  out AResult: Int64): Boolean; inline;
+begin
+  if AValue <> '' then
+    Exit(TryStrToInt64(TextTrim(AValue), AResult));
+  Result := TryParseTrimmedInt64Span(AValuePtr, AValueLen, AResult);
+end;
+
 procedure UpdateExpectMetadata(var AMetadata: TH1RequestMetadata;
   const AValue: string);
 var
@@ -224,6 +327,64 @@ begin
       AMetadata.ExpectsContinue := True
     else if LToken <> '' then
       AMetadata.HasUnsupportedExpect := True;
+    LStart := LPos + 1;
+  end;
+end;
+
+function TrimmedSpanEqualsLowerAscii(const AValuePtr: PAnsiChar;
+  const AStart, AStop: SizeUInt; const AExpected: string): Boolean; inline;
+var
+  I: SizeUInt;
+begin
+  if (AStop - AStart) <> SizeUInt(Length(AExpected)) then
+    Exit(False);
+  for I := 0 to (AStop - AStart) - 1 do
+    if LowerAscii(AValuePtr[AStart + I]) <>
+       AnsiChar(AExpected[SizeInt(I) + 1]) then
+      Exit(False);
+  Result := True;
+end;
+
+procedure UpdateExpectMetadataFromCapturedValue(var AMetadata: TH1RequestMetadata;
+  const AValue: string; const AValuePtr: PAnsiChar; const AValueLen: SizeUInt);
+var
+  LStart: SizeUInt;
+  LPos: SizeUInt;
+  LTokenStart: SizeUInt;
+  LTokenStop: SizeUInt;
+begin
+  if AValue <> '' then
+  begin
+    UpdateExpectMetadata(AMetadata, TextTrim(AValue));
+    Exit;
+  end;
+  if (AValuePtr = nil) or (AValueLen = 0) then
+    Exit;
+
+  LStart := 0;
+  while LStart < AValueLen do
+  begin
+    LPos := LStart;
+    while (LPos < AValueLen) and (AValuePtr[LPos] <> ',') do
+      Inc(LPos);
+
+    LTokenStart := LStart;
+    LTokenStop := LPos;
+    while (LTokenStart < LTokenStop) and
+          (AValuePtr[LTokenStart] <= ' ') do
+      Inc(LTokenStart);
+    while (LTokenStop > LTokenStart) and
+          (AValuePtr[LTokenStop - 1] <= ' ') do
+      Dec(LTokenStop);
+
+    if LTokenStart < LTokenStop then
+    begin
+      if TrimmedSpanEqualsLowerAscii(AValuePtr, LTokenStart, LTokenStop,
+        '100-continue') then
+        AMetadata.ExpectsContinue := True
+      else
+        AMetadata.HasUnsupportedExpect := True;
+    end;
     LStart := LPos + 1;
   end;
 end;
@@ -754,15 +915,14 @@ procedure TH1Parser.UpdateRequestMetadataFromHeader(const AField: string;
   const AValueLen: SizeUInt);
 var
   LValue: string;
-  LContentLength: string;
 begin
   if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'host') then
   begin
     if FRequestMetadataSawHost then
       Exit;
     FRequestMetadataSawHost := True;
-    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
-    FPendingRequestMetadata.HasHost := LValue <> '';
+    FPendingRequestMetadata.HasHost := CapturedHeaderValueIsNonEmpty(AValue,
+      AValuePtr, AValueLen);
     Exit;
   end;
 
@@ -771,9 +931,10 @@ begin
     if FRequestMetadataSawConnection then
       Exit;
     FRequestMetadataSawConnection := True;
-    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
-    FPendingRequestMetadata.ConnectionClose := LValue = 'close';
-    FPendingRequestMetadata.ConnectionKeepAlive := LValue = 'keep-alive';
+    FPendingRequestMetadata.ConnectionClose := CapturedHeaderValueEquals(AValue,
+      AValuePtr, AValueLen, 'close');
+    FPendingRequestMetadata.ConnectionKeepAlive :=
+      CapturedHeaderValueEquals(AValue, AValuePtr, AValueLen, 'keep-alive');
     Exit;
   end;
 
@@ -782,14 +943,11 @@ begin
     if FRequestMetadataSawContentLength then
       Exit;
     FRequestMetadataSawContentLength := True;
-    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
-    LContentLength := TextTrim(LValue);
-    if LContentLength <> '' then
+    if CapturedHeaderValueTrimmedToInt64(AValue, AValuePtr, AValueLen,
+      FPendingRequestMetadata.DeclaredContentLength) then
     begin
-      FPendingRequestMetadata.HasContentLength := TryStrToInt64(LContentLength,
-        FPendingRequestMetadata.DeclaredContentLength);
-      if FPendingRequestMetadata.HasContentLength and
-         (FPendingRequestMetadata.DeclaredContentLength > 0) then
+      FPendingRequestMetadata.HasContentLength := True;
+      if FPendingRequestMetadata.DeclaredContentLength > 0 then
         FPendingRequestMetadata.RequestDeclaresBody := True;
     end;
     Exit;
@@ -797,8 +955,8 @@ begin
 
   if HeaderFieldEquals(AField, AFieldPtr, AFieldLen, 'expect') then
   begin
-    LValue := CapturedHeaderValueToString(AValue, AValuePtr, AValueLen);
-    UpdateExpectMetadata(FPendingRequestMetadata, TextTrim(LValue));
+    UpdateExpectMetadataFromCapturedValue(FPendingRequestMetadata, AValue,
+      AValuePtr, AValueLen);
     Exit;
   end;
 

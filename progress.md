@@ -1,5 +1,60 @@
 # Progress Log
 
+## Session: 2026-06-06 http h1 parser metadata span fast path slice
+
+- **Status:** completed.
+- Objective:
+  - reduce H1 parser request metadata value materialization cost
+  - keep public header store, trailer isolation, split callback safety, and
+    Transfer-Encoding error classification unchanged
+- Scope and safety:
+  - touched only H1 parser implementation, H1 parser focused tests,
+    benchmark/source-contract test, and HTTP/control docs
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not create a new worktree
+  - did not stage unrelated dirty `test_http_client`, async, compiler, worktree
+    marker, untracked docs/plans, or `../tmp/`
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `36 total, 35 passed, 1 failed`
+    - failed at `H1 parser request metadata span fast path source contract`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - added captured header value helpers for non-empty, exact compare, trimmed
+    Int64 parse, and `Expect` token scan
+  - `Host` / `Connection` / `Content-Length` / `Expect` metadata now scans
+    live captured spans directly when callbacks are unsplit
+  - split/materialized callbacks still use the existing string fallback
+  - `Transfer-Encoding` still uses the existing combined-string validation path
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
+    - `95/95 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `36/36 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='adapter no-url' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+    - `adapter no-url: metadata 3 headers: 322.2 ns/op`
+    - `adapter no-url: fast reject + llhttp: 1813.5 ns/op`
+    - `adapter no-url: llhttp direct only: 1172.1 ns/op`
+    - `adapter no-url: fast parse only: 646.2 ns/op`
+- Sidecar review:
+  - two read-only subagents reviewed parser/header seam and test/benchmark risks
+  - both agents were closed before commit
+- Outcome:
+  - watched request metadata no longer pays an extra value string copy on the
+    common unsplit llhttp callback path
+  - no public API or wire-contract behavior changed
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 parser request metadata span fast path
+  - convergence status: keep and commit this HTTP slice; no new big feature or
+    worktree in this round
+
 ## Session: 2026-06-06 http h1 writer known status-line slice
 
 - **Status:** completed.

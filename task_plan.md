@@ -1,5 +1,29 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http h1 parser metadata span fast path slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 llhttp adapter request metadata 热路径：
+在 parser watched headers 已由 llhttp 以单 span callback 交付时，让
+`Host` / `Connection` / `Content-Length` / `Expect` metadata 直接扫描 captured
+span，避免为了 metadata 再物化一份 header value string；`Transfer-Encoding`
+继续保留 combined-string validation，避免 malformed / unsupported 分类漂移。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 先失败，证明 parser metadata 缺少 span
+  fast-path helper source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1.parser`，新增 captured value
+  non-empty / equals / trimmed-int64 / expect-token span helper，并让 watched
+  metadata 分支使用它们。
+- [x] 在 `test_http_h1parser` 补 span fast path 下 trim / case-insensitive
+  `Expect` token / trimmed `Content-Length` behavior proof。
+- [x] 跑 focused gates：`test_http_h1parser`、`test_http_benchmarks`、
+  `test_http_server`。
+- [x] 跑小 benchmark smoke：`bench_h1parser` 的 `adapter no-url` filter。
+- [x] 更新 HTTP benchmark/API/control 文档，不写 inbox，并 path-limited commit。
+
 ## Active Session: 2026-06-06 http h1 writer known status-line slice
 
 ### Goal

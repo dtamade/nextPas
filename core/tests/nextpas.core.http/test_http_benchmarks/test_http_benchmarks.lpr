@@ -708,6 +708,37 @@ begin
     'H1 parser request metadata should cache Transfer-Encoding during parse');
 end;
 
+procedure TestH1ParserRequestMetadataSpanFastPathSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LUpdateBody: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1ParserUnitPath));
+  LUpdateBody := ExtractSourceBlock(LSource,
+    'procedure TH1Parser.UpdateRequestMetadataFromHeader',
+    'procedure TH1Parser.EnsureBodyCapacity',
+    'H1 parser UpdateRequestMetadataFromHeader body');
+
+  CheckContains(LSource, 'function CapturedHeaderValueIsNonEmpty',
+    'H1 parser metadata host span helper');
+  CheckContains(LSource, 'function CapturedHeaderValueEquals',
+    'H1 parser metadata connection span helper');
+  CheckContains(LSource, 'function CapturedHeaderValueTrimmedToInt64',
+    'H1 parser metadata content-length span helper');
+  CheckContains(LSource, 'procedure UpdateExpectMetadataFromCapturedValue',
+    'H1 parser metadata expect span helper');
+  CheckContains(LUpdateBody, 'CapturedHeaderValueIsNonEmpty(',
+    'H1 parser Host metadata should avoid value string materialization');
+  CheckContains(LUpdateBody, 'CapturedHeaderValueEquals(',
+    'H1 parser Connection metadata should compare spans directly');
+  CheckContains(LUpdateBody, 'CapturedHeaderValueTrimmedToInt64(',
+    'H1 parser Content-Length metadata should parse spans directly');
+  CheckContains(LUpdateBody, 'UpdateExpectMetadataFromCapturedValue(',
+    'H1 parser Expect metadata should scan spans directly');
+end;
+
 procedure TestH1FastLazyHeadersSourceContract;
 var
   LRootDir: string;
@@ -1675,6 +1706,8 @@ begin
     @TestHttpRequestDirectPathProjectionSourceContract);
   T.Run('H1 parser request metadata cache source contract',
     @TestH1ParserRequestMetadataCacheSourceContract);
+  T.Run('H1 parser request metadata span fast path source contract',
+    @TestH1ParserRequestMetadataSpanFastPathSourceContract);
   T.Run('H1 fast lazy headers source contract',
     @TestH1FastLazyHeadersSourceContract);
   T.Run('H1 writer compact header block source contract',

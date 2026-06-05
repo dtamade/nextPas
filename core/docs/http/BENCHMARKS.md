@@ -1661,10 +1661,50 @@ NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 heaptrc: 0 unfreed memory blocks
 ```
 
-The immediate conclusion is that request metadata caching removes a measurable
-per-request policy/dispatch cost without changing wire contracts. The broader
-H1 performance track should continue with adapter materialization rows before
-returning to generated llhttp translation changes.
+On 2026-06-06 local time, the watched metadata cache gained a narrower span
+fast path. `Host`, `Connection`, `Content-Length`, and `Expect` metadata now
+avoid materializing the captured header value string when llhttp delivered the
+field/value as a single live span. `Transfer-Encoding` intentionally keeps the
+existing combined-string validation path so malformed-vs-unsupported error
+classification does not drift.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test
+36 total, 35 passed, 1 failed
+failed at: H1 parser request metadata span fast path source contract
+heaptrc: 0 unfreed memory blocks
+
+GREEN:
+make -C tests/nextpas.core.http/test_http_h1parser clean test
+95 total, 95 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test
+36 total, 36 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small parser benchmark smoke:
+
+```text
+command=NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='adapter no-url' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter no-url: metadata 3 headers ns/op=322.2
+adapter no-url: fast reject + llhttp ns/op=1813.5
+adapter no-url: llhttp direct only ns/op=1172.1
+adapter no-url: fast parse only ns/op=646.2
+```
+
+The immediate conclusion is that request metadata caching and the follow-up span
+fast path remove measurable per-request policy/dispatch cost without changing
+wire contracts. The broader H1 performance track should continue with
+adapter/header materialization rows before returning to generated llhttp
+translation changes.
 
 ## Optimization Evidence: Request-Target URL Parser
 
