@@ -9,6 +9,7 @@ uses
   nextpas.core.http.base,
   nextpas.core.http.intf,
   nextpas.core.http.headers,
+  nextpas.core.http.message,
   nextpas.core.http.impl.h1.parser,
   nextpas.core.http.impl.h1.fast,
   nextpas.core.http.impl.h1.llhttp;
@@ -470,6 +471,45 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchAdapterRequestCreateEagerUrlParse(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LUrl := TUrl.ParseRequestTarget('/api/v1/users?page=2&filter=active#top');
+    LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, LHeaders, nil, 0);
+    LScore := LScore + SizeUInt(Ord(LReq.Method)) +
+      SizeUInt(LReq.ContentLength);
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterRequestCreateLazyTarget(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+      '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
+    LScore := LScore + SizeUInt(Ord(LReq.Method)) +
+      SizeUInt(LReq.ContentLength);
+  end;
+  GSink := GSink + LScore;
+end;
+
 function BenchTryGetDeclaredContentLength(const AHeaders: IHttpHeaders;
   out AContentLength: Int64): Boolean;
 var
@@ -709,6 +749,10 @@ begin
     @BenchAdapterUrlParseGenericOriginForm);
   B.Run('adapter cost: url parse request-target origin-form',
     @BenchAdapterUrlParseRequestTargetOriginForm);
+  B.Run('adapter cost: request create eager url parse',
+    @BenchAdapterRequestCreateEagerUrlParse);
+  B.Run('adapter cost: request create lazy target',
+    @BenchAdapterRequestCreateLazyTarget);
   B.Run('adapter cost: request metadata legacy expect+cl',
     @BenchAdapterRequestMetadataLegacyExpectCl);
   B.Run('adapter cost: request metadata cached expect+cl',

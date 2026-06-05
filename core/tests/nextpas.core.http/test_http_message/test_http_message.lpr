@@ -181,6 +181,22 @@ begin
   CheckEqual(Int64(1024), LReq.ContentLength, 'content-length 1024');
 end;
 
+procedure TestRequestFromRequestTargetParsesOnDemand;
+var
+  LReq: IHttpRequest;
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+    '/api/v1/users?page=2&filter=active#top', hvHttp11, LH, nil, 0);
+
+  CheckEqual('/api/v1/users', LReq.Url.Path, 'lazy request-target path');
+  CheckEqual('page=2&filter=active', LReq.Url.RawQuery,
+    'lazy request-target raw query');
+  CheckEqual('top', LReq.Url.Fragment, 'lazy request-target fragment');
+  CheckEqual('active', LReq.QueryParam('filter'), 'lazy query param');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.message');
   T.Run('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -197,5 +213,7 @@ begin
   T.Run('Request version defaults to HTTP/1.1', @TestRequestVersionDefaultsHttp11);
   T.Run('Multiple path params', @TestMultiplePathParams);
   T.Run('Request content-length stored', @TestRequestContentLengthStored);
+  T.Run('Request from request-target parses URL on demand',
+    @TestRequestFromRequestTargetParsesOnDemand);
   T.Summary;
 end.

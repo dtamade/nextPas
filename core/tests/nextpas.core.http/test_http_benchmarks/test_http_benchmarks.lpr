@@ -445,6 +445,10 @@ begin
     'H1 parser benchmark generic URL parse breakdown row');
   CheckContains(LOutput, 'adapter cost: url parse request-target origin-form',
     'H1 parser benchmark request-target URL parse breakdown row');
+  CheckContains(LOutput, 'adapter cost: request create eager url parse',
+    'H1 parser benchmark eager request create breakdown row');
+  CheckContains(LOutput, 'adapter cost: request create lazy target',
+    'H1 parser benchmark lazy request create breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
     'H1 parser benchmark legacy request metadata breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',

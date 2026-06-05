@@ -990,10 +990,10 @@ userinfo, host, and port parsing, and it also avoids scanning for `://` when
 the target starts with `/` or `*`. Absolute-form request targets still delegate
 to `TUrl.Parse`, preserving proxy-style compatibility.
 
-H1 server request construction now uses `TUrl.ParseRequestTarget(FParser.GetUrl)`
-in both direct and poll-driven dispatch paths. This changes only URL
-materialization cost; it does not alter parser framing, header policy, body
-handling, or wire contracts.
+H1 server request construction used `TUrl.ParseRequestTarget(FParser.GetUrl)`
+in both direct and poll-driven dispatch paths for this slice. A later lazy
+request-target projection slice moved that parse out of dispatch for handlers
+that do not read `Req.Url` / `Req.QueryParam`.
 
 Focused benchmark:
 
@@ -1032,6 +1032,52 @@ contains `://`.
 This is a narrow adapter/materialization win. It does not close the
 Pascal-translated llhttp raw gap by itself, but it removes a per-request
 server dispatch cost that sits after successful H1 parsing.
+
+## Optimization Evidence: Lazy Request-Target Projection
+
+On 2026-06-05 local time, `THttpRequest` gained an internal
+`CreateFromRequestTarget` constructor. H1 direct and poll-driven dispatch now
+pass the raw request-target into the request object and defer
+`TUrl.ParseRequestTarget` until `Req.Url` or `Req.QueryParam` is actually read.
+Existing `THttpRequest.Create` / `NewRequest` paths remain eager and keep their
+public behavior.
+
+This is intentionally not a wire-contract change. Routers, middleware, static
+serving, and handlers that read `Req.Url.Path` still trigger the same
+request-target parsing before observing URL fields. The savings apply to simple
+handlers or internal paths that do not need URL/query materialization.
+
+Focused benchmark:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request create' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request create eager url parse = 557.1 ns/op
+adapter cost: request create lazy target = 293.9 ns/op
+```
+
+Focused validation:
+
+```text
+RED: make -C tests/nextpas.core.http/test_http_message clean test
+Identifier idents no member "CreateFromRequestTarget"
+
+make -C tests/nextpas.core.http/test_http_message clean test
+15 total, 15 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+The Pascal-translated llhttp raw gap remains a real track, but this batch again
+removed a larger, safer adapter/server materialization cost without touching
+generated llhttp code.
 
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 

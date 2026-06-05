@@ -1,4 +1,4 @@
-# Findings: H1 request-target URL materialization
+# Findings: H1 lazy request-target projection
 
 ## Scope
 
@@ -7,32 +7,27 @@ generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
 
 ## Root cause
 
-H1 server direct dispatch 与 poll-driven dispatch 在构造 `THttpRequest` 时都使用：
+上一批已经把 H1 server dispatch 从通用 `TUrl.Parse` 降到
+`TUrl.ParseRequestTarget`，但 direct / poll-driven dispatch 仍在构造
+`THttpRequest` 前同步解析 request-target。
 
-```pascal
-TUrl.Parse(FParser.GetUrl)
-```
-
-通用 `TUrl.Parse` 必须支持 full URL、userinfo、host、port、IPv6、query、
-fragment 等场景。HTTP server 常见 request-target 是 origin-form，例如
-`/api/v1?page=2`，只需要拆 path / query / fragment。把普通 request-target
-送入通用 parser，会在每个请求分发时支付不必要的 materialization 成本。
+这意味着即使 handler 只写一个固定响应、完全不读取 `Req.Url` 或
+`Req.QueryParam`，每个请求仍会支付 URL path/query/fragment materialization
+成本。对 router / middleware / static 等需要 `Req.Url.Path` 的路径，这个成本
+仍然必要；对 simple handler 则可以延迟。
 
 ## Implemented decision
 
-新增 `TUrl.ParseRequestTarget`：
+新增 `THttpRequest.CreateFromRequestTarget`：
 
-- 空输入抛 `EHttpError`。
-- common origin-form `'/...'` 与 asterisk-form `'*'` 不扫描 `://`，直接拆
-  fragment / query / path。
-- absolute-form request-target 仍委托 `TUrl.Parse`，避免破坏 proxy-style
-  `GET http://host/path HTTP/1.1` 兼容性。
-- authority-form request-target 保持旧兼容，不把 `example.com:443` 提升成
-  URL host / port，而是作为 `Path` 暴露给 handler。
-- scheme-like origin-form path，例如 `/http://example.com/path?q=1`，保持为
-  origin-form path，不被通用 URL parser 误拆成 scheme/authority。
-- H1 server direct 和 poll-driven request construction 都改用
-  `TUrl.ParseRequestTarget(FParser.GetUrl)`。
+- 现有 `THttpRequest.Create` 保持 eager `TUrl` 行为，用于 public request factory
+  和已经 materialized 的调用方。
+- `CreateFromRequestTarget` 保存 raw request-target，并把 `FUrlParsed` 标记为
+  false。
+- `GetUrl` 与 `QueryParam` 通过 `EnsureUrlParsed` 首次调用
+  `TUrl.ParseRequestTarget`。
+- H1 server direct / poll-driven request construction 改为传 raw
+  `FParser.GetUrl`，不再在 dispatch 阶段解析 URL。
 
 ## Performance evidence
 
@@ -40,29 +35,30 @@ Focused local row:
 
 ```text
 NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='url parse' \
+NEXTPAS_BENCH_FILTER='request create' \
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 
-adapter cost: url parse generic origin-form = 276.8 ns/op
-adapter cost: url parse request-target origin-form = 232.0 ns/op
+adapter cost: request create eager url parse = 557.1 ns/op
+adapter cost: request create lazy target = 293.9 ns/op
 ```
 
-This is about a 16.6% reduction for this materialization sub-step.
+这是 request creation/materialization 子步骤的约 `47.2%` 降低。该数字不等同于
+full server throughput 改善；router 或 handler 读取 URL 时仍会按需解析。
 
 ## Verification evidence
 
 RED proof:
 
 ```text
-make -C tests/nextpas.core.http/test_http_base clean test
-test_http_base.lpr(210,16) Error: Identifier idents no member "ParseRequestTarget"
+make -C tests/nextpas.core.http/test_http_message clean test
+test_http_message.lpr(190,24) Error: Identifier idents no member "CreateFromRequestTarget"
 ```
 
 GREEN focused gates:
 
 ```text
-make -C tests/nextpas.core.http/test_http_base clean test
-22 total, 22 passed, 0 failed
+make -C tests/nextpas.core.http/test_http_message clean test
+15 total, 15 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 
 make -C tests/nextpas.core.http/test_http_server clean test
@@ -77,23 +73,15 @@ heaptrc: 0 unfreed memory blocks
 
 ## Direction review
 
-用户关于 Pascal-translated llhttp raw gap 的怀疑仍成立；上一轮已经证明代表性
-10-header raw row 约 `1.46x` 慢于 C llhttp。但本轮没有为了追 raw gap 手改
-generated state machine，而是继续削 adapter/server 侧已可证明的热路径成本。
-这是当前更稳、更可维护的短期性能路线。
-
-## Subagent review
-
-只读 `gpt-5.5 xhigh` 子代理 `Popper` 审查后未发现 Critical；Important 反馈是
-提交前应补齐 asterisk-form / authority-form public API proof，以及
-handler-visible request-target URL proof。本轮已采纳并验证。
+用户关于 Pascal-translated llhttp raw gap 的怀疑成立：当前文档中的 fresh filtered
+evidence 仍显示 10-header raw row 约 `1.46x` 慢于 C llhttp。不过这轮继续不手改
+generated llhttp，因为现有证据同时显示 adapter/materialization 成本仍更大、更安全、
+更容易通过 public contract tests 锁住。
 
 ## Remaining gaps / risks
 
-- `ParseRequestTarget` 仍返回 `TUrl`，因此 path/query/fragment 字符串拆分仍会有
-  managed-string materialization；下一步如果继续追 server hot path，可研究
-  request snapshot 持有 raw target span 或 lazy URL projection。
-- 这批没有声明 full server throughput 排名改善；只锁定 URL materialization
-  sub-step 与 server contract 不回退。
-- Pascal llhttp raw state-machine gap 仍需要 perf/codegen 证据，不应靠手工改
-  generated file 解决。
+- Lazy projection 只优化不读 URL 的路径；router-heavy 应用仍会触发 URL parse。
+- `THttpRequest` 仍以 managed string 保存 raw request-target；更激进的 span/slice
+  设计需要重新审视 lifetime 与 public `TUrl` 值语义，不适合本轮顺手做。
+- Pascal llhttp raw-gap 需要 perf-enabled 机器上的 cycles/instructions/branch data，
+  或 generator/codegen 证据；不应靠手工 patch generated state machine。

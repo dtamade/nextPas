@@ -22,6 +22,8 @@ type
     var
       FMethod: THttpMethod;
       FUrl: TUrl;
+      FRawRequestTarget: string;
+      FUrlParsed: Boolean;
       FVersion: THttpVersion;
       FHeaders: IHttpHeaders;
       FBody: IReader;
@@ -32,10 +34,15 @@ type
       FRemoteAddrFromNet: Boolean;
       FQueryParsed: Boolean;
       FQueryParams: TQueryParams;
+    procedure EnsureUrlParsed;
   public
     constructor Create(const AMethod: THttpMethod; const AUrl: TUrl;
       const AVersion: THttpVersion; const AHeaders: IHttpHeaders;
       const ABody: IReader; const AContentLength: Int64);
+    constructor CreateFromRequestTarget(const AMethod: THttpMethod;
+      const ARequestTarget: string; const AVersion: THttpVersion;
+      const AHeaders: IHttpHeaders; const ABody: IReader;
+      const AContentLength: Int64);
     procedure SetPathParam(const AName, AValue: string);
     procedure SetRemoteAddr(const AAddr: string);
     procedure SetRemoteNetAddr(const AAddr: TNetAddress);
@@ -83,10 +90,36 @@ begin
   inherited Create;
   FMethod := AMethod;
   FUrl := AUrl;
+  FRawRequestTarget := '';
+  FUrlParsed := True;
   FVersion := AVersion;
   FHeaders := AHeaders;
   FBody := ABody;
   FContentLength := AContentLength;
+end;
+
+constructor THttpRequest.CreateFromRequestTarget(const AMethod: THttpMethod;
+  const ARequestTarget: string; const AVersion: THttpVersion;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64);
+begin
+  inherited Create;
+  FMethod := AMethod;
+  FUrl := Default(TUrl);
+  FRawRequestTarget := ARequestTarget;
+  FUrlParsed := False;
+  FVersion := AVersion;
+  FHeaders := AHeaders;
+  FBody := ABody;
+  FContentLength := AContentLength;
+end;
+
+procedure THttpRequest.EnsureUrlParsed;
+begin
+  if FUrlParsed then
+    Exit;
+  FUrl := TUrl.ParseRequestTarget(FRawRequestTarget);
+  FUrlParsed := True;
 end;
 
 procedure THttpRequest.SetPathParam(const AName, AValue: string);
@@ -106,6 +139,7 @@ end;
 
 function THttpRequest.GetUrl: TUrl;
 begin
+  EnsureUrlParsed;
   Result := FUrl;
 end;
 
@@ -163,6 +197,7 @@ function THttpRequest.QueryParam(const AName: string): string;
 begin
   if not FQueryParsed then
   begin
+    EnsureUrlParsed;
     FQueryParams := ParseQueryString(FUrl.RawQuery);
     FQueryParsed := True;
   end;

@@ -968,7 +968,6 @@ end;
 
 function TH1ServerConnectionState.ExecuteCurrentRequest: TTcpServerConnOwnership;
 var
-  LUrl: TUrl;
   LReq: IHttpRequest;
   LW: IHttpResponseWriter;
   LBodyReader: IReader;
@@ -998,19 +997,20 @@ begin
       Exit(tscoServer);
     end;
 
-    LUrl := TUrl.ParseRequestTarget(FParser.GetUrl);
     LContentLen := FParser.GetBodySize;
     LBodyReader := FParser.NewBodyReader;
     if LBodyReader <> nil then
     begin
-      LReq := THttpRequest.Create(FParser.GetMethod, LUrl,
-        FParser.GetHttpVersion, FParser.GetHeaders, LBodyReader, LContentLen);
+      LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
+        FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders,
+        LBodyReader, LContentLen);
     end
     else
     begin
       LContentLen := 0;
-      LReq := THttpRequest.Create(FParser.GetMethod, LUrl,
-        FParser.GetHttpVersion, FParser.GetHeaders, nil, LContentLen);
+      LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
+        FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders, nil,
+        LContentLen);
     end;
 
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
@@ -1076,7 +1076,6 @@ end;
 function TH1ServerConnectionState.ExecuteCurrentPollRequest(
   out AOutbound: IH1OutboundBuffer; out ACloseAfterDrain: Boolean): TTcpServerConnOwnership;
 var
-  LUrl: TUrl;
   LReq: IHttpRequest;
   LW: IHttpResponseWriter;
   LBodyReader: IReader;
@@ -1109,19 +1108,20 @@ begin
       Exit(tscoServer);
     end;
 
-    LUrl := TUrl.ParseRequestTarget(FParser.GetUrl);
     LContentLen := FParser.GetBodySize;
     LBodyReader := FParser.NewBodyReader;
     if LBodyReader <> nil then
     begin
-      LReq := THttpRequest.Create(FParser.GetMethod, LUrl,
-        FParser.GetHttpVersion, FParser.GetHeaders, LBodyReader, LContentLen);
+      LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
+        FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders,
+        LBodyReader, LContentLen);
     end
     else
     begin
       LContentLen := 0;
-      LReq := THttpRequest.Create(FParser.GetMethod, LUrl,
-        FParser.GetHttpVersion, FParser.GetHeaders, nil, LContentLen);
+      LReq := THttpRequest.CreateFromRequestTarget(FParser.GetMethod,
+        FParser.GetUrl, FParser.GetHttpVersion, FParser.GetHeaders, nil,
+        LContentLen);
     end;
 
     (LReq as THttpRequest).SetRemoteNetAddr(FConn.RemoteAddr);
