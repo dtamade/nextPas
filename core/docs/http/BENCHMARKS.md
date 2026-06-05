@@ -67,6 +67,14 @@ Local focused row from 2026-06-05:
 
 ## Run the H1 Writer Serialization Benchmark
 
+Run the focused header-only row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='headers only 200' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
 Run the focused response serialization row:
 
 ```sh
@@ -75,16 +83,23 @@ NEXTPAS_BENCH_FILTER='fixed 200 13B' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 ```
 
-This row reports `operation=http.h1writer.serialize` and measures
-`TH1ResponseWriter` construction, fixed `200 OK` response header serialization,
-and a 13-byte body write into a fixed in-memory writer. It does not include
-request parsing, router dispatch, middleware, socket drain, or backpressure.
+These rows report `operation=http.h1writer.serialize`.
+
+- `headers only 200` measures `TH1ResponseWriter` construction, two header
+  mutations, fixed `200 OK` response header serialization, and `Flush`, with
+  `Content-Length: 0` and no body write.
+- `fixed 200 13B` measures the same setup plus a 13-byte body write into a
+  fixed in-memory writer.
+
+Neither row includes request parsing, router dispatch, middleware, socket
+drain, or backpressure.
 
 Local focused row from 2026-06-05:
 
 | workload | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| fixed 200 13B | 100000 | 1441.1 | 693895 |
+| headers only 200 | 100000 | 1414.6 | 706917 |
+| fixed 200 13B | 100000 | 1389.1 | 719869 |
 
 ## Run the H1 Outbound Drain Benchmark
 

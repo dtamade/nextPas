@@ -1,12 +1,12 @@
-# Progress Log: HTTP full-chain benchmark output contract
+# Progress Log: HTTP H1 writer header-only benchmark split
 
 ## Session
 
-- **Scope:** HTTP full-chain keep-alive benchmark normalized output contract.
-- **Status:** focused RED/GREEN completed, `bench_fullchain` plaintext row locked
-  by `test_http_benchmarks`, docs/control files updated.
+- **Scope:** H1 writer header/status serialization benchmark split.
+- **Status:** focused RED/GREEN completed, `bench_h1writer` header-only row landed,
+  docs/control files updated.
 - **Roadmap Position:** `6/6 benchmark/performance` ->
-  `request dispatch / response serialization / full-chain cost isolation`.
+  `response serialization cost isolation`.
 
 ## Current state
 
@@ -15,43 +15,46 @@
 - 父目录 `../task_plan.md`、`../findings.md`、`../progress.md` 已有无关脏改；
   本轮只更新 `core/task_plan.md`、`core/findings.md`、`core/progress.md`。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks` 和一条 focused
-  `bench_fullchain` live row。
+- 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks` 和两条 focused
+  `bench_h1writer` live rows。
 
 ## Completed work
 
-- `test_http_benchmarks` 新增 `bench_fullchain plaintext smoke`。
-- `bench_fullchain` 新增 `NEXTPAS_BENCH_MAX_ITERS` 和 `NEXTPAS_BENCH_FILTER`
-  支持。
-- `bench_fullchain` 输出 `operation=http.fullchain.keepalive` marker。
-- `bench_fullchain` 新增 normalized row marker：`workload`、`iterations`、
-  `completed`、`elapsed_ns`、`ns/op`、`req/s`。
+- `test_http_benchmarks` 的 H1 writer smoke 现在验证 `headers only 200`。
+- 新增 `CheckBenchmarkRunRow`，避免 `bench_filter=` 或 summary 行误判为真实
+  benchmark run row。
+- `bench_h1writer` 新增 `headers only 200` row。
 - `docs/http/API_COVERAGE.md`、`docs/http/BENCHMARKS.md`、`docs/http/README.md`
-  已同步 full-chain benchmark 契约和 fresh live evidence。
+  已同步 H1 writer header-only benchmark 契约和 fresh live evidence。
+- sidecar 子代理完成只读审计，确认下一步生产优化候选应在 `WriteStatusLine` /
+  header materialization，而不是 header API 或 chunked/body path。
 
 ## Verification
 
 - RED:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `26 total, 25 passed, 1 failed`，失败原因是旧 `bench_fullchain` 输出缺少
-  `operation=http.fullchain.keepalive`，heaptrc `0 unfreed memory blocks`。
+  -> `26 total, 25 passed, 1 failed`，失败原因是 `bench_h1writer` 缺少真实
+  `headers only 200` run row，heaptrc `0 unfreed memory blocks`。
 - GREEN:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
   -> `26 total, 26 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
 - Fresh live row:
-  `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
-  -> `workload=plaintext`, `completed=1000`, `elapsed_ns=127167209`,
-  `127167.2 ns/op`, `7864 req/s`。该 clean build 没有 FPC `Warning:`，
-  但有 2 条既有 FPC `Note:`，分别来自 `nextpas.core.text.format` 和 llhttp inline。
+  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='headers only 200' make -C benchmarks/nextpas.core.http/bench_h1writer clean run`
+  -> `headers only 200: 1414.6 ns/op`, `706917 ops/s`，clean build 没有 FPC
+  `Warning:` / `Note:`。
+- Fresh comparison row:
+  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='fixed 200 13B' make -C benchmarks/nextpas.core.http/bench_h1writer run`
+  -> `fixed 200 13B: 1389.1 ns/op`, `719869 ops/s`。
 
 ## Direction review
 
-方向没有走偏：本轮继续把 HTTP server performance 归因从大而粗的 full-chain
-comparison 拆成可测试 benchmark 契约，没有改生产 HTTP 逻辑。full-chain row 已经可
-被测试锁住，后续可以更高效地对比 narrowed rows 和真实端到端成本。
+方向没有走偏：本轮继续把 full-chain server gap 拆到 response serialization 层，
+没有改生产 HTTP 行为。新证据显示小响应 body write 与 header-only path 同量级，
+下一批更应验证 status-line/header materialization 的生产优化，而不是继续堆 broad
+benchmark 或改 outbound buffer。
 
 ## Next step
 
-继续 `6/6 benchmark/performance`。下一批建议围绕 H1 writer allocation / header
-materialization 做更细拆分，或用已有 comparison runner 做一次小规模 multi-run
-sanity；不要先跑全量测试或 broad benchmark sweep。
+继续 `6/6 benchmark/performance`。下一批建议做 `TH1ResponseWriter.WriteStatusLine`
+的 `HTTP_STATUS_OK` fixed string fast path，先用 `test_http_h1writer` 保护 wire bytes，
+再用 `test_http_benchmarks` 和 `bench_h1writer` filtered rows 看收益。

@@ -49,6 +49,35 @@ begin
   Result := FSize;
 end;
 
+procedure BenchHeadersOnly200(aIters: Int64);
+var
+  LIt: Int64;
+  LSink: TFixedMemoryWriter;
+  LSinkWriter: IWriter;
+  LWriter: TH1ResponseWriter;
+begin
+  LSink := TFixedMemoryWriter.Create;
+  LSinkWriter := LSink as IWriter;
+  try
+    for LIt := 1 to aIters do
+    begin
+      LSink.Reset;
+      LWriter := TH1ResponseWriter.Create(LSinkWriter);
+      try
+        LWriter.Headers.Set_('content-type', 'text/plain');
+        LWriter.Headers.Set_('content-length', '0');
+        LWriter.WriteHeader(HTTP_STATUS_OK);
+        LWriter.Flush;
+        Inc(GBytesWritten, LSink.Size);
+      finally
+        LWriter.Free;
+      end;
+    end;
+  finally
+    LSinkWriter := nil;
+  end;
+end;
+
 procedure BenchFixed200_13B(aIters: Int64);
 const
   RESPONSE_BODY: AnsiString = 'Hello, World!';
@@ -86,6 +115,7 @@ begin
   WriteLn('=== nextpas.core.http.h1writer benchmark ===');
   WriteLn('operation=http.h1writer.serialize');
   WriteLn;
+  B.Run('headers only 200', @BenchHeadersOnly200);
   B.Run('fixed 200 13B', @BenchFixed200_13B);
   WriteLn;
   B.Summary;

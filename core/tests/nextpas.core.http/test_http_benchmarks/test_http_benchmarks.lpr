@@ -166,6 +166,33 @@ begin
     AOutput);
 end;
 
+procedure CheckBenchmarkRunRow(const AOutput, ARowName, ALabel: string);
+var
+  LLines: TStringList;
+  LLine: string;
+  LFound: Boolean;
+  I: Integer;
+begin
+  LFound := False;
+  LLines := TStringList.Create;
+  try
+    LLines.Text := AOutput;
+    for I := 0 to LLines.Count - 1 do
+    begin
+      LLine := LLines[I];
+      if (Pos(ARowName, LLine) > 0) and (Pos(' iters', LLine) > 0) then
+      begin
+        LFound := True;
+        Break;
+      end;
+    end;
+  finally
+    LLines.Free;
+  end;
+  Check(LFound, ALabel + ' missing benchmark run row: ' + ARowName +
+    LineEnding + AOutput);
+end;
+
 function ResolveBenchServerBinaryPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -269,12 +296,24 @@ procedure CheckH1WriterSerializeBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.h1writer.serialize',
     'H1 writer serialize operation marker');
-  CheckContains(AOutput, 'fixed 200 13B',
+  CheckBenchmarkRunRow(AOutput, 'fixed 200 13B',
     'H1 writer fixed response benchmark row');
   CheckContains(AOutput, 'bench_filter=fixed 200 13B',
     'H1 writer filter marker');
   CheckContains(AOutput, 'ns/op', 'H1 writer ns/op marker');
   CheckContains(AOutput, 'ops/s', 'H1 writer ops/s marker');
+end;
+
+procedure CheckH1WriterHeadersOnlyBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1writer.serialize',
+    'H1 writer headers-only operation marker');
+  CheckBenchmarkRunRow(AOutput, 'headers only 200',
+    'H1 writer headers-only benchmark row');
+  CheckContains(AOutput, 'bench_filter=headers only 200',
+    'H1 writer headers-only filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 writer headers-only ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 writer headers-only ops/s marker');
 end;
 
 procedure CheckH1OutboundDrainBenchmarkOutput(const AOutput: string);
@@ -426,6 +465,14 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1writer serialize smoke exit code: ' + LOutput);
   CheckH1WriterSerializeBenchmarkOutput(LOutput);
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=headers only 200'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1writer headers-only smoke exit code: ' + LOutput);
+  CheckH1WriterHeadersOnlyBenchmarkOutput(LOutput);
 end;
 
 procedure TestBenchH1OutboundDrainSmoke;

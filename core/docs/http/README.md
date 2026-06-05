@@ -136,13 +136,20 @@ Run the focused H1 response serialization benchmark:
 
 ```sh
 NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='headers only 200' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
 NEXTPAS_BENCH_FILTER='fixed 200 13B' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 ```
 
-This emits `operation=http.h1writer.serialize` and a `fixed 200 13B` row for
-writer construction, fixed response header serialization, and body copy into an
-in-memory sink.
+This emits `operation=http.h1writer.serialize`. Use `headers only 200` to
+isolate writer construction and fixed response header serialization, then
+compare with `fixed 200 13B` to include the small body write into an in-memory
+sink.
 
 Run the focused H1 outbound drain benchmark:
 
