@@ -641,7 +641,7 @@ begin
   FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Clear: tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.Clear: tail invariant broken');
   {$ENDIF}
 end;
 
@@ -723,7 +723,7 @@ begin
   end;
 {$IFDEF DEBUG}
 if not DebugValidateTail then
-  raise EWow.Create('TForwardList.AppendUnchecked: tail invariant broken');
+  raise EInvariantViolation.Create('TForwardList.AppendUnchecked: tail invariant broken');
 {$ENDIF}
 end;
 
@@ -881,7 +881,7 @@ begin
     FLast := nil;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.TryPopFront: tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.TryPopFront: tail invariant broken');
   {$ENDIF}
 end;
 
@@ -2271,7 +2271,7 @@ begin
   aOther.FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Merge(func): tail invariant broken (self)');
+    raise EInvariantViolation.Create('TForwardList.Merge(func): tail invariant broken (self)');
   {$ENDIF}
 end;
 
@@ -2339,7 +2339,7 @@ begin
   aOther.FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Merge(method): tail invariant broken (self)');
+    raise EInvariantViolation.Create('TForwardList.Merge(method): tail invariant broken (self)');
   {$ENDIF}
 end;
 
@@ -2539,7 +2539,7 @@ begin
   aOther.FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Merge(ref): tail invariant broken (self)');
+    raise EInvariantViolation.Create('TForwardList.Merge(ref): tail invariant broken (self)');
   {$ENDIF}
 end;
 {$ENDIF}
@@ -2604,7 +2604,7 @@ begin
   aOther.FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Splice(all): tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.Splice(all): tail invariant broken');
   {$ENDIF}
 end;
 
@@ -2680,7 +2680,7 @@ begin
   Inc(FCount);
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Splice(single): tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.Splice(single): tail invariant broken');
   {$ENDIF}
 end;
 
@@ -2785,7 +2785,7 @@ begin
   Dec(aOther.FCount, LMoveCount);
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.Splice(range): tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.Splice(range): tail invariant broken');
   {$ENDIF}
 end;
 
@@ -2855,7 +2855,7 @@ begin
     FLast := LNewTail;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.PushFrontRangeUnchecked: tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.PushFrontRangeUnchecked: tail invariant broken');
   {$ENDIF}
 end;
 
@@ -2876,7 +2876,7 @@ begin
   FCount := 0;
   {$IFDEF DEBUG}
   if not DebugValidateTail then
-    raise EWow.Create('TForwardList.ClearUnchecked: tail invariant broken');
+    raise EInvariantViolation.Create('TForwardList.ClearUnchecked: tail invariant broken');
   {$ENDIF}
 end;
 

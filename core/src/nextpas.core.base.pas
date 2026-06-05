@@ -38,7 +38,8 @@ const
 type
   TBytes = array of Byte;
   ECore = nextpas.core.exception.ENextPasError;
-  EWow = class(ECore);
+  EInvariantViolation = class(ECore);
+  EWow = EInvariantViolation;
   EArgumentNil = class(ECore);
   EEmptyCollection = class(ECore);
   EInvalidArgument = class(ECore);
@@ -86,6 +87,62 @@ type
   TRandomGeneratorRefFunc = reference to function(ARange: Int64): Int64;
 
 { ============================================================ }
+{ Generic value semantics                                      }
+{ ============================================================ }
+
+type
+  generic TNullable<T> = record
+  private
+    FHasValue: Boolean;
+    FValue: T;
+    function GetHasValue: Boolean; inline;
+    function GetIsNone: Boolean; inline;
+    function GetValue: T;
+  public
+    class function Some(const AValue: T): specialize TNullable<T>; static;
+    class function None: specialize TNullable<T>; static;
+    function ValueOr(const ADefault: T): T; inline;
+    property HasValue: Boolean read GetHasValue;
+    property IsNone: Boolean read GetIsNone;
+    property Value: T read GetValue;
+  end;
+
+  generic TOption<T> = record
+  private
+    FHasValue: Boolean;
+    FValue: T;
+    function GetIsSome: Boolean; inline;
+    function GetIsNone: Boolean; inline;
+    function GetUnwrap: T;
+  public
+    class function Some(const AValue: T): specialize TOption<T>; static;
+    class function None: specialize TOption<T>; static;
+    function UnwrapOr(const ADefault: T): T; inline;
+    property IsSome: Boolean read GetIsSome;
+    property IsNone: Boolean read GetIsNone;
+    property Unwrap: T read GetUnwrap;
+  end;
+
+  generic TResult<T, E> = record
+  private
+    FIsOk: Boolean;
+    FValue: T;
+    FError: E;
+    function GetIsOk: Boolean; inline;
+    function GetIsErr: Boolean; inline;
+    function GetUnwrap: T;
+    function GetUnwrapErr: E;
+  public
+    class function Ok(const AValue: T): specialize TResult<T, E>; static;
+    class function Err(const AError: E): specialize TResult<T, E>; static;
+    function UnwrapOr(const ADefault: T): T; inline;
+    property IsOk: Boolean read GetIsOk;
+    property IsErr: Boolean read GetIsErr;
+    property Unwrap: T read GetUnwrap;
+    property UnwrapErr: E read GetUnwrapErr;
+  end;
+
+{ ============================================================ }
 { Non-owning byte span (view into existing memory)             }
 { ============================================================ }
 
@@ -117,6 +174,7 @@ procedure Unreachable(const AMessage: string = 'unreachable code reached');
 
 function HashBytes(const AData: PByte; const ALen: SizeUInt): THashCode;
 function HashString(const AValue: string): THashCode;
+function HashString(const AValue: UnicodeString): THashCode; overload;
 function HashInteger(const AValue: Int64): THashCode;
 function HashPointer(const AValue: Pointer): THashCode;
 
@@ -128,6 +186,131 @@ class function TPair.Create(const AKey: TKey; const AValue: TValue): specialize 
 begin
   Result.Key := AKey;
   Result.Value := AValue;
+end;
+
+{ TNullable<T> }
+
+function TNullable.GetHasValue: Boolean;
+begin
+  Result := FHasValue;
+end;
+
+function TNullable.GetIsNone: Boolean;
+begin
+  Result := not FHasValue;
+end;
+
+function TNullable.GetValue: T;
+begin
+  if not FHasValue then
+    raise EInvalidState.Create('TNullable has no value');
+  Result := FValue;
+end;
+
+class function TNullable.Some(const AValue: T): specialize TNullable<T>;
+begin
+  Result := Default(specialize TNullable<T>);
+  Result.FHasValue := True;
+  Result.FValue := AValue;
+end;
+
+class function TNullable.None: specialize TNullable<T>;
+begin
+  Result := Default(specialize TNullable<T>);
+end;
+
+function TNullable.ValueOr(const ADefault: T): T;
+begin
+  if FHasValue then
+    Result := FValue
+  else
+    Result := ADefault;
+end;
+
+{ TOption<T> }
+
+function TOption.GetIsSome: Boolean;
+begin
+  Result := FHasValue;
+end;
+
+function TOption.GetIsNone: Boolean;
+begin
+  Result := not FHasValue;
+end;
+
+function TOption.GetUnwrap: T;
+begin
+  if not FHasValue then
+    raise EInvalidState.Create('TOption has no value');
+  Result := FValue;
+end;
+
+class function TOption.Some(const AValue: T): specialize TOption<T>;
+begin
+  Result := Default(specialize TOption<T>);
+  Result.FHasValue := True;
+  Result.FValue := AValue;
+end;
+
+class function TOption.None: specialize TOption<T>;
+begin
+  Result := Default(specialize TOption<T>);
+end;
+
+function TOption.UnwrapOr(const ADefault: T): T;
+begin
+  if FHasValue then
+    Result := FValue
+  else
+    Result := ADefault;
+end;
+
+{ TResult<T, E> }
+
+function TResult.GetIsOk: Boolean;
+begin
+  Result := FIsOk;
+end;
+
+function TResult.GetIsErr: Boolean;
+begin
+  Result := not FIsOk;
+end;
+
+function TResult.GetUnwrap: T;
+begin
+  if not FIsOk then
+    raise EInvalidState.Create('TResult has no value');
+  Result := FValue;
+end;
+
+function TResult.GetUnwrapErr: E;
+begin
+  if FIsOk then
+    raise EInvalidState.Create('TResult has no error');
+  Result := FError;
+end;
+
+class function TResult.Ok(const AValue: T): specialize TResult<T, E>;
+begin
+  Result := Default(specialize TResult<T, E>);
+  Result.FIsOk := True;
+  Result.FValue := AValue;
+end;
+
+class function TResult.Err(const AError: E): specialize TResult<T, E>;
+begin
+  Result := Default(specialize TResult<T, E>);
+  Result.FError := AError;
+end;
+
+function TResult.UnwrapOr(const ADefault: T): T;
+begin
+  if FIsOk then
+    Result := FValue
+  else
+    Result := ADefault;
 end;
 
 { TByteSpan }
@@ -190,18 +373,18 @@ end;
 procedure Ensure(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
-    raise EAssertionFailed.Create(AMessage);
+    raise EInvariantViolation.Create(AMessage);
 end;
 
 procedure CheckState(const ACondition: Boolean; const AMessage: string);
 begin
   if not ACondition then
-    raise EInvalidOpException.Create(AMessage);
+    raise EInvalidState.Create(AMessage);
 end;
 
 procedure Unreachable(const AMessage: string);
 begin
-  raise EAssertionFailed.Create(AMessage);
+  raise EInvariantViolation.Create(AMessage);
 end;
 
 { Hash functions - FNV-1a }
@@ -215,6 +398,8 @@ var
   LI: SizeUInt;
 begin
   Result := FNV_OFFSET_BASIS_32;
+  if ALen = 0 then
+    Exit;
   for LI := 0 to ALen - 1 do
   begin
     Result := Result xor THashCode((AData + LI)^);
@@ -225,7 +410,17 @@ end;
 function HashString(const AValue: string): THashCode;
 begin
   if Length(AValue) > 0 then
-    Result := HashBytes(@AValue[1], SizeUInt(Length(AValue)))
+    Result := HashBytes(@AValue[1],
+      SizeUInt(Length(AValue)) * SizeUInt(SizeOf(AValue[1])))
+  else
+    Result := FNV_OFFSET_BASIS_32;
+end;
+
+function HashString(const AValue: UnicodeString): THashCode;
+begin
+  if Length(AValue) > 0 then
+    Result := HashBytes(PByte(@AValue[1]),
+      SizeUInt(Length(AValue)) * SizeUInt(SizeOf(AValue[1])))
   else
     Result := FNV_OFFSET_BASIS_32;
 end;

@@ -19,6 +19,9 @@ function Supports(const AInstance: IInterface; const AIID: TGuid; out AIntf): Bo
 
 implementation
 
+uses
+  nextpas.core.base;
+
 procedure FreeAndNil(var AObj);
 var LTemp: TObject;
 begin
@@ -34,11 +37,21 @@ end;
 
 procedure ZeroMem(ADst: Pointer; ASize: SizeUInt);
 begin
+  if ASize = 0 then
+    Exit;
+  if ADst = nil then
+    raise EArgumentNil.Create('ZeroMem: destination is nil');
   FillChar(ADst^, ASize, 0);
 end;
 
 procedure CopyMem(ADst: Pointer; ASrc: Pointer; ASize: SizeUInt);
 begin
+  if ASize = 0 then
+    Exit;
+  if ADst = nil then
+    raise EArgumentNil.Create('CopyMem: destination is nil');
+  if ASrc = nil then
+    raise EArgumentNil.Create('CopyMem: source is nil');
   Move(ASrc^, ADst^, ASize);
 end;
 
