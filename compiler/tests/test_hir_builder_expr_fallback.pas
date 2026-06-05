@@ -1051,6 +1051,33 @@ begin
 
   Model := TSemanticModel.Create;
   try
+    PtrTypeId := AddTypeWithFact(Model, 'Pointer', sskPointer, 64, False);
+    Model.AddTypedHirNode('var-decl-arr-runtime', 'items', 0, 0, 'items');
+    Model.AddTypedHirNode('var-decl-ptr-runtime', 'node', 0, 0, 'node');
+    NodeId := Model.AddTypedHirNode(
+      'assign-arr-elem-runtime', 'items[0] := multiline ptr blob tail', 0, 0,
+      'items'#9'int 0'#10#9'var node'#10'int 7'#10
+    );
+
+    Builder := THIRBuilder.Create(Model);
+    try
+      Builder.Build;
+      Func := Builder.Module.FunctionAt(0);
+      if not HasIntStore(Builder.Module, Func, 64) then
+        Halt(34);
+      if HasPointerStore(Builder.Module, Func) then
+        Halt(35);
+      if not HasConstLoad(Func, 'const:7') then
+        Halt(36);
+    finally
+      Builder.Free;
+    end;
+  finally
+    Model.Free;
+  end;
+
+  Model := TSemanticModel.Create;
+  try
     Model.AddTypedHirNode('function-body-begin', 'ClearNode', 0, 0, '1:v:i');
     Model.AddTypedHirNode('var-decl-varref-runtime', 'node', 0, 0, 'node');
     Model.AddTypedHirNode(
@@ -1065,11 +1092,11 @@ begin
       Builder.Build;
       Func := Builder.Module.FunctionAt(1);
       if Func.Name <> 'ClearNode' then
-        Halt(31);
+        Halt(41);
       if not HasPointerStore(Builder.Module, Func) then
-        Halt(32);
+        Halt(42);
       if HasIntStore(Builder.Module, Func, 64) then
-        Halt(33);
+        Halt(43);
     finally
       Builder.Free;
     end;
@@ -1089,13 +1116,13 @@ begin
       Builder.Build;
       Func := Builder.Module.FunctionAt(1);
       if Func.Name <> 'TNodeUser.UseNode' then
-        Halt(34);
+        Halt(44);
       if Length(Func.Params) <> 2 then
-        Halt(35);
+        Halt(45);
       if not Func.Params[1].IsVar then
-        Halt(36);
+        Halt(46);
       if Builder.Module.Types.GetType(Func.Params[1].TypeId).Kind <> htkPointer then
-        Halt(37);
+        Halt(47);
     finally
       Builder.Free;
     end;

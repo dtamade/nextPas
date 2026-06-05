@@ -330,6 +330,19 @@ begin
   end;
 end;
 
+function ExtractPlainVarOperandName(const ABlob: string): string;
+var
+  NewlinePos: LongInt;
+begin
+  Result := '';
+  if (Length(ABlob) <= 4) or (Copy(ABlob, 1, 4) <> 'var ') then
+    Exit;
+  NewlinePos := Pos(#10, ABlob);
+  if (NewlinePos <= 5) or (NewlinePos <> Length(ABlob)) then
+    Exit;
+  Result := Trim(Copy(ABlob, 5, NewlinePos - 5));
+end;
+
 constructor THIRBuilder.Create(ASemaModel: TSemanticModel);
 var
   I, J: LongInt;
@@ -4567,7 +4580,7 @@ end;
 procedure THIRBuilder.ProcessAssignArrElem(const ANode: TTypedHirNode);
 var
   TabPos, TabPos2, TabPos3: LongInt;
-  ArrName, Rest, IdxBlob, ValBlob, FieldIdxStr: string;
+  ArrName, Rest, IdxBlob, ValBlob, FieldIdxStr, PlainVarName: string;
   IdxVal, ValVal, BasePtr, ElemPtr, ObjPtr, FieldIdx: THIRValueId;
   StoreType, ValueType: THIRTypeId;
   TargetResult: THIRExprResult;
@@ -4753,9 +4766,9 @@ begin
   EmitInstr(Instr);
   ElemPtr := Instr.ResultId;
 
+  PlainVarName := ExtractPlainVarOperandName(ValBlob);
   if (Pos(' p' + #10, ValBlob) > 0) or
-    ((Length(ValBlob) > 4) and (Copy(ValBlob, 1, 4) = 'var ') and
-     (FindAllocaType(Copy(ValBlob, 5, Pos(#10, ValBlob) - 5)) = GetPtrType)) then
+    ((PlainVarName <> '') and (FindAllocaType(PlainVarName) = GetPtrType)) then
     EmitStore(GetPtrType, ValVal, ElemPtr)
   else
     EmitStore(GetIntType, ValVal, ElemPtr);
