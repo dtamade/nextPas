@@ -6,6 +6,17 @@
 如果本文件、历史计划和用户当前指令冲突，以用户当前指令为准；稳定架构事实以
 `docs/architecture/` 和 `docs/adr/` 为准。
 
+## Authority Map
+
+- `AGENTS.md`：仓库级 AI 协作、worktree、汇报、Git 安全和验证纪律。
+- `docs/worktrees.md`：项目本地 `.worktrees/` 与模块 lane 的操作规范。
+- `core/docs/design-conventions.md`：`nextpas.core` 的设计风格、模块范式、分层约束、测试布局和代码组织规范。
+- `docs/architecture/`：nextPas 编译器、toolchain、stage0、RTL/CRT 等仓库级稳定架构事实。
+- `docs/plans/`：当前路线图、阶段计划和活动计划。
+
+做 `core/` 下任何生产代码、测试、示例或 benchmark 改动前，必须先读
+`core/docs/design-conventions.md`。不要用本文件替代 `nextpas.core` 的设计规范。
+
 ## Start Here
 
 - 先运行 `git status --short --branch`，确认当前分支和脏文件范围。
@@ -16,6 +27,7 @@
 - 新建模块 worktree 使用 `scripts/worktree-add.sh <branch> [base]`，不要手写随机路径。
 - 不要创建新的全局 worktree 到 `~/.config/superpowers/worktrees`、`.claude/worktrees` 或项目外目录。
 - 详细规则见 `docs/worktrees.md`。
+- 如果任务在 `core/` 内，继续读取 `core/docs/design-conventions.md` 后再改代码。
 
 ## Module Lane Discipline
 
@@ -72,4 +84,3 @@
 - 不要修改不属于当前任务的 dirty 文件。
 - 每个 commit 必须是一个可回滚的逻辑单元，提交前先看 `git diff --cached`。
 - 推送前确认 `git status --short --branch`、`make hygiene` 和相关 focused gate。
-

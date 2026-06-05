@@ -132,6 +132,7 @@ The controller should give the module owner a paste-ready prompt that includes:
 - focused verification commands
 - reporting format
 - merge/landing constraints
+- required module design documents
 
 The module owner should start by running:
 
@@ -144,6 +145,10 @@ make hygiene
 
 If `make hygiene` fails before any local edits, report it as baseline debt
 instead of silently cleaning or committing unrelated files.
+
+For any `core/` module lane, read `core/docs/design-conventions.md` before
+changing source, tests, examples, or benchmarks. That file is the authority for
+`nextpas.core` module shape, layer rules, test layout, and naming conventions.
 
 ## Landing Discipline
 
