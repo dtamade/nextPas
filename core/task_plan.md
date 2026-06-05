@@ -1,12 +1,10 @@
-# Task Plan: HTTP server comparison multi-run evidence tightening
+# Task Plan: HTTP router dispatch benchmark contract
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-本轮聚焦 `HttpServer` full-chain comparison 的证据稳定性，而不是继续依赖单次
-server row。目标是把 `run_server_comparison.sh` 和
-`capture_server_comparison_snapshot.sh` 提升为 multi-run runner / snapshot，
-让 nextPas / Go / Rust 对照直接产出逐次结果和中位数汇总。
+本轮聚焦把 request dispatch 成本从 server full-chain row 中拆出来，先让
+`bench_router` 具备可测试、可记录的稳定输出契约。
 
 本轮不改 public HTTP API，不改 server/client 生产逻辑，不手改 generated
 `src/nextpas.core.http.impl.h1.llhttp.pas`，不写
@@ -14,24 +12,22 @@ server row。目标是把 `run_server_comparison.sh` 和
 
 ## Checklist
 
-- [x] 复核设计规范、HTTP coverage / benchmark docs、控制文件与 git status。
-- [x] RED：新增 `run_server_comparison.sh --runs 2` summary smoke，先看到
-  runner 直接报 `unknown argument: --runs`。
-- [x] GREEN：`run_server_comparison.sh` 支持 `--runs N`，每轮保留 `run=...`
-  raw output，并追加 nextPas / Go / Rust median summary。
-- [x] RED/GREEN：`capture_server_comparison_snapshot.sh` 支持 `--runs N`，
-  snapshot 记录 `runs=`、命令和 summary rows。
-- [x] 跑 focused benchmark gate，锁住 runner/snapshot multi-run 契约与 heaptrc 无泄漏。
-- [x] 跑 fresh `no_url --runs 3` live row，固定 server full-chain 中位数。
+- [x] 复核设计规范、HTTP docs/control files 与 git status，确认共享 checkout 脏文件边界。
+- [x] RED：新增 `bench_router handler dispatch smoke`，先看到 `bench_router`
+  缺少 `operation=http.router.dispatch` marker。
+- [x] GREEN：`bench_router` 新增 `handler dispatch (match + no-op handler)`
+  row，并输出稳定 `operation=http.router.dispatch`。
+- [x] 清理 `bench_router` 既有 unused local variable notes，避免 benchmark 输出被 FPC
+  `Note:` 污染。
+- [x] 跑 focused benchmark gate，锁住 `bench_router` 输出契约与 heaptrc 无泄漏。
+- [x] 跑 fresh router dispatch live row，记录 narrowed dispatch 成本。
 - [x] 更新 API coverage / README / benchmark docs / 控制文件。
-- [x] 跑 diff check 并 path-limited commit。
 
 ## Scope
 
 本轮允许修改：
 
-- `benchmarks/nextpas.core.http/run_server_comparison.sh`
-- `benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh`
+- `benchmarks/nextpas.core.http/bench_router/bench_router.lpr`
 - `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
 - `docs/http/API_COVERAGE.md`
 - `docs/http/BENCHMARKS.md`
@@ -42,18 +38,19 @@ server row。目标是把 `run_server_comparison.sh` 和
 
 ## Current conclusion
 
-Fresh `no_url` 50k/4 `--runs 3` summary:
+Fresh local `bench_router` dispatch row:
 
-- nextPas median: `11431 ns/op`, `87476 req/s`
-- Go `net/http` median: `55017 ns/op`, `18176 req/s`
-- Rust std-only median: `9885 ns/op`, `101153 req/s`
+- command: `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='handler dispatch' make -C benchmarks/nextpas.core.http/bench_router clean run`
+- row: `handler dispatch (match + no-op handler)`
+- result: `508.1 ns/op`, `1968021 ops/s`
 
-这个结果把 server full-chain 对比从单次 row 提升成了 multi-run 中位数证据。
-nextPas 在本机 no-URL microbaseline 中继续明显快于 Go `net/http`，仍落后于 Rust
-std-only comparator，但差距必须用 multi-run 或更窄 benchmark 再判断。
+这条 row 测的是 `THttpRouter.ServeHTTP` 对静态 route 的 match + no-op handler
+调用，不包含 socket I/O、H1 parse、response serialization、middleware 或
+URL/query materialization。它用于把 request dispatch 成本从 server full-chain
+comparison 中拆出来。
 
 ## Next target
 
-继续 `6/6 benchmark/performance`。下一批建议直接补 request dispatch /
-response serialization 的 micro/full-chain 对照，或增加 Hyper/Tokio Rust comparator，
-避免继续只围绕 std-only comparator 做判断。
+继续 `6/6 benchmark/performance`。下一批建议补 response serialization / writer
+microbenchmark 输出契约，或把 `bench_fullchain` 整理成同样可测试的 normalized output，
+再决定优化重心。

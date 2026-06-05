@@ -44,6 +44,27 @@ median summary at the end of the raw output. This is the preferred mode for
 fresh local comparison rows because single-shot server results are visibly
 affected by scheduler noise.
 
+## Run the Router Dispatch Benchmark
+
+Run the focused router dispatch row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='handler dispatch' \
+make -C benchmarks/nextpas.core.http/bench_router clean run
+```
+
+This row reports `operation=http.router.dispatch` and measures
+`THttpRouter.ServeHTTP` for a static route plus a no-op handler. It reuses one
+request object and does not include socket I/O, H1 parsing, response
+serialization, middleware, or URL/query materialization.
+
+Local focused row from 2026-06-05:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| handler dispatch (match + no-op handler) | 100000 | 508.1 | 1968021 |
+
 ## Local Snapshot: 2026-06-04 UTC
 
 Environment:

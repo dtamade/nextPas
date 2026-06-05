@@ -121,6 +121,17 @@ For smoke-sized runs, pass explicit scale knobs:
 build/projects/nextpas.core.http/bench_server/bench_http_server --requests 1000 --threads 4
 ```
 
+Run the focused router dispatch benchmark:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='handler dispatch' \
+make -C benchmarks/nextpas.core.http/bench_router clean run
+```
+
+This emits `operation=http.router.dispatch` and a `handler dispatch` row for
+route match plus no-op handler invocation, without H1 parsing or socket I/O.
+
 Run the focused comparator smoke from the test harness:
 
 ```sh

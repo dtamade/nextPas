@@ -13,6 +13,7 @@ var
 
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
+  BenchRouterRelativeDir = 'benchmarks/nextpas.core.http/bench_router';
   H1ParserBenchRelativeDir = 'benchmarks/nextpas.core.http/bench_h1parser';
   ServerComparisonRelativeDir = 'benchmarks/nextpas.core.http';
   ServerComparisonRunnerRelativePath =
@@ -167,6 +168,12 @@ begin
     'build/projects/nextpas.core.http/bench_server/bench_http_server');
 end;
 
+function ResolveBenchRouterBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_router/bench_router');
+end;
+
 function ResolveBenchmarkTestBuildDir(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -222,6 +229,18 @@ begin
   CheckContains(AOutput, 'threads=' + AThreads, 'threads marker');
   CheckContains(AOutput, 'ns/op=', 'ns/op marker');
   CheckContains(AOutput, 'req/s=', 'req/s marker');
+end;
+
+procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.router.dispatch',
+    'router dispatch operation marker');
+  CheckContains(AOutput, 'handler dispatch (match + no-op handler)',
+    'router dispatch benchmark row');
+  CheckContains(AOutput, 'bench_filter=handler dispatch',
+    'router dispatch filter marker');
+  CheckContains(AOutput, 'ns/op', 'router dispatch ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'router dispatch ops/s marker');
 end;
 
 function LoadTextFile(const APath: string): string;
@@ -288,6 +307,34 @@ begin
   CheckContains(LOutput, 'workload=url_path',
     'bench_server url_path workload marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '32', '2', 'url_path');
+end;
+
+procedure TestBenchRouterHandlerDispatchSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchRouterRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchRouterRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_router build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchRouterBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_router binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=handler dispatch'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_router handler dispatch smoke exit code: ' + LOutput);
+  CheckRouterDispatchBenchmarkOutput(LOutput);
 end;
 
 procedure TestGoServerComparatorSmallSmoke;
@@ -1095,6 +1142,8 @@ begin
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
   T.Run('bench_server url_path small smoke',
     @TestBenchServerUrlPathSmallSmoke);
+  T.Run('bench_router handler dispatch smoke',
+    @TestBenchRouterHandlerDispatchSmoke);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
   T.Run('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);

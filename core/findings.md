@@ -1,4 +1,4 @@
-# Findings: HTTP server comparison multi-run evidence tightening
+# Findings: HTTP router dispatch benchmark contract
 
 ## Scope
 
@@ -7,21 +7,21 @@
 
 ## Implemented decision
 
-`run_server_comparison.sh` 现在支持：
+`bench_router` 现在输出稳定 marker：
 
 ```text
---runs N
+operation=http.router.dispatch
 ```
 
-multi-run 语义：
+并新增 row：
 
-- nextPas / Go / Rust 各自只 build 一次。
-- 每轮输出 `run=N`，保留原始三方 benchmark output。
-- 末尾输出 `summary=http.server.keepalive`。
-- 每个 impl 输出 `summary_impl=... runs=N median_ns/op=... median_req/s=...`。
+```text
+handler dispatch (match + no-op handler)
+```
 
-`capture_server_comparison_snapshot.sh` 也支持同一 `--runs N`，并在 Markdown snapshot
-中记录 `runs=`、完整命令和 raw summary rows。
+这个 row 复用一个 `NewGetRequest('/health')`，通过 `THttpRouter.ServeHTTP`
+执行静态 route match 与 no-op handler invocation。它刻意不包含 socket I/O、
+H1 parser、response writer serialization、middleware 或 URL/query materialization。
 
 ## RED / GREEN evidence
 
@@ -31,9 +31,9 @@ RED:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-21 total, 20 passed, 1 failed
-server comparison runner runs summary smoke failed:
-unknown argument: --runs
+23 total, 22 passed, 1 failed
+bench_router handler dispatch smoke failed:
+router dispatch operation marker missing from output: operation=http.router.dispatch
 heaptrc: 0 unfreed memory blocks
 ```
 
@@ -43,49 +43,35 @@ GREEN:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-22 total, 22 passed, 0 failed
+23 total, 23 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
 ## Performance evidence
 
-Fresh local `no_url` full-chain summary:
+Fresh local router dispatch row:
 
 ```text
-benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url --runs 3
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='handler dispatch' \
+make -C benchmarks/nextpas.core.http/bench_router clean run
 
-nextPas median: 11431 ns/op, 87476 req/s
-Go net/http median: 55017 ns/op, 18176 req/s
-Rust std-only median: 9885 ns/op, 101153 req/s
+handler dispatch (match + no-op handler): 508.1 ns/op, 1968021 ops/s
 ```
 
-Representative per-run rows:
-
-```text
-nextPas no_url: 11388 / 12818 / 11431 ns/op
-Go net/http no_url: 54598 / 55017 / 55111 ns/op
-Rust std-only no_url: 10407 / 9885 / 9741 ns/op
-```
-
-结论：full-chain no-URL row 现在有了中位数口径。nextPas 在本机继续明显快于
-Go `net/http`，并落后 Rust std-only comparator 约 `1.16x`（按 `ns/op` median）。
-这说明下一步不应只盯单次 server row，而应拆 request dispatch / response serialization
-或补更真实的 async Rust comparator。
-
-## Tooling bug note
-
-初版 runner summary 解析时错误假设 `impl=` 与 `ns/op=` 在同一行。focused gate
-暴露出旧单次 smoke 也会失败。修正后改为先确认 `impl=` marker，再从同一 impl 输出块
-分别读取 `ns/op=` 与 `req/s=`。
+The final `bench_router` build emitted no FPC `Warning:` or `Note:` lines.
 
 ## Direction review
 
-方向没有走偏：这轮把 full-chain server comparison 的噪声问题直接收口到工具层，
-减少后续优化误判。没有改生产 HTTP server 行为，也没有把 benchmark-only 工具误包装成
-API 变更。
+方向没有走偏：上一轮 full-chain server comparison 显示 nextPas 与 Rust std-only
+差距约 `1.16x`，这轮没有继续堆 full-chain single row，而是开始拆窄成本。当前
+router dispatch row 说明普通静态 route + no-op handler invocation 是亚微秒级成本，
+后续更应继续拆 response serialization / outbound buffer / socket drain，而不是凭
+full-chain row 盲猜。
 
 ## Remaining gaps / risks
 
+- 当前 dispatch row 不覆盖 middleware chain、param extraction、query materialization 或
+  response writer serialization。
+- `bench_fullchain` 仍是旧式非 normalized output，暂时不适合作为机器断言入口。
 - Rust comparator 仍是 std-only comparator，不代表 Hyper/Tokio。
-- 还缺 request dispatch / handler invocation / response serialization 的更窄对照。
-- local scheduler noise 仍存在，但 multi-run median 已经比单次 row 更稳。
