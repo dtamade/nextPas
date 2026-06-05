@@ -248,6 +248,9 @@ const
   WINDOWS_MUTEX_SIZE = SizeOf(SRWLOCK);
   WINDOWS_RWLOCK_SIZE = SizeOf(SRWLOCK);
   WINDOWS_CONDVAR_SIZE = SizeOf(CONDITION_VARIABLE);
+  CP_UTF8 = UINT(65001);
+  MB_ERR_INVALID_CHARS = DWORD($00000008);
+  WC_ERR_INVALID_CHARS = DWORD($00000080);
 
 { additional kernel32 types, error codes, and constants }
 {$I nextpas.core.platform.windows.base.kernel32.inc}

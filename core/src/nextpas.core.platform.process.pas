@@ -486,23 +486,68 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
 
-function BuildCmdLine(const APath: PAnsiChar; AArgv: PPAnsiChar): AnsiString;
-var LP: PPAnsiChar;
+function CreateWindowsProcess(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar; AInheritHandles: Boolean;
+  ACreationFlags: DWORD; var AStartupInfo: STARTUPINFOW;
+  out AProcessInfo: PROCESS_INFORMATION): Int32;
+var
+  LCmd: UnicodeString;
+  LCwd: UnicodeString;
+  LEnvBlock: UnicodeString;
+  LCwdPtr: PWideChar;
+  LEnvPtr: Pointer;
+  LCreationFlags: DWORD;
 begin
-  Result := APath;
-  if AArgv <> nil then begin LP := AArgv; Inc(LP); while LP^ <> nil do begin Result := Result + ' ' + LP^; Inc(LP); end; end;
+  FillChar(AProcessInfo, SizeOf(AProcessInfo), 0);
+  if not platform_windows_argv_to_command_line(APath, AArgv, LCmd) then
+    Exit(Int32(ERROR_INVALID_NAME));
+
+  LCwdPtr := nil;
+  if ACwd <> nil then
+  begin
+    if not platform_windows_utf8_to_wide_checked(ACwd, LCwd) then
+      Exit(Int32(ERROR_INVALID_NAME));
+    LCwdPtr := PWideChar(LCwd);
+  end;
+
+  LEnvPtr := nil;
+  if AEnvp <> nil then
+  begin
+    if not platform_windows_envp_to_wide_block(AEnvp, LEnvBlock) then
+      Exit(Int32(ERROR_INVALID_NAME));
+    LEnvPtr := PWideChar(LEnvBlock);
+  end;
+
+  LCreationFlags := ACreationFlags;
+  if AEnvp <> nil then
+    LCreationFlags := LCreationFlags or CREATE_UNICODE_ENVIRONMENT;
+  if not CreateProcessW(nil, PWideChar(LCmd), nil, nil, AInheritHandles,
+    LCreationFlags, LEnvPtr, LCwdPtr, @AStartupInfo,
+    @AProcessInfo) then
+    Exit(Int32(GetLastError));
+  Result := 0;
 end;
 
 function platform_process_spawn(const APath: PAnsiChar; AArgv: PPAnsiChar; AEnvp: PPAnsiChar; out AProc: TPlatformProcess): Int32;
-var LSI: STARTUPINFOA; LPI: PROCESS_INFORMATION; LCmd: AnsiString;
+var
+  LSI: STARTUPINFOW;
+  LPI: PROCESS_INFORMATION;
 begin
-  FillChar(AProc, SizeOf(AProc), 0); FillChar(LSI, SizeOf(LSI), 0); FillChar(LPI, SizeOf(LPI), 0);
-  LSI.cb := SizeOf(LSI); LCmd := BuildCmdLine(APath, AArgv);
-  if not CreateProcessA(nil, @LCmd[1], nil, nil, False, 0, nil, nil, @LSI, @LPI) then Exit(Int32(GetLastError));
-  AProc.ProcessHandle := PtrUInt(LPI.hProcess); AProc.ThreadHandle := PtrUInt(LPI.hThread);
-  AProc.Pid := LPI.dwProcessId; CloseHandle(HANDLE(AProc.ThreadHandle)); AProc.ThreadHandle := 0; Result := 0;
+  FillChar(AProc, SizeOf(AProc), 0);
+  FillChar(LSI, SizeOf(LSI), 0);
+  LSI.cb := SizeOf(LSI);
+  Result := CreateWindowsProcess(APath, AArgv, AEnvp, nil, False, 0, LSI, LPI);
+  if Result <> 0 then
+    Exit;
+  AProc.ProcessHandle := PtrUInt(LPI.hProcess);
+  AProc.ThreadHandle := PtrUInt(LPI.hThread);
+  AProc.Pid := LPI.dwProcessId;
+  CloseHandle(HANDLE(AProc.ThreadHandle));
+  AProc.ThreadHandle := 0;
+  Result := 0;
 end;
 
 function platform_process_wait(const AProc: TPlatformProcess; out AResult: TPlatformProcessResult): Int32;
@@ -543,9 +588,8 @@ function platform_process_spawn_piped(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; out AProc: TPlatformProcess;
   out APipes: TPlatformProcessPipes): Int32;
 var
-  LSI: STARTUPINFOA;
+  LSI: STARTUPINFOW;
   LPI: PROCESS_INFORMATION;
-  LCmd: AnsiString;
   LStdinRd, LStdinWr, LStdoutRd, LStdoutWr, LStderrRd, LStderrWr: HANDLE;
   LSA: SECURITY_ATTRIBUTES;
 begin
@@ -571,15 +615,14 @@ begin
   LSI.hStdInput := LStdinRd;
   LSI.hStdOutput := LStdoutWr;
   LSI.hStdError := LStderrWr;
-  FillChar(LPI, SizeOf(LPI), 0);
-  LCmd := BuildCmdLine(APath, AArgv);
 
-  if not CreateProcessA(nil, @LCmd[1], nil, nil, True, 0, nil, nil, @LSI, @LPI) then
+  Result := CreateWindowsProcess(APath, AArgv, AEnvp, nil, True, 0, LSI, LPI);
+  if Result <> 0 then
   begin
     CloseHandle(LStdinRd); CloseHandle(LStdinWr);
     CloseHandle(LStdoutRd); CloseHandle(LStdoutWr);
     CloseHandle(LStderrRd); CloseHandle(LStderrWr);
-    Exit(Int32(GetLastError));
+    Exit;
   end;
 
   CloseHandle(LStdinRd);
@@ -589,30 +632,77 @@ begin
 
   AProc.ProcessHandle := PtrUInt(LPI.hProcess);
   AProc.Pid := LPI.dwProcessId;
-  APipes.StdinWrite := Int32(PtrUInt(LStdinWr));
-  APipes.StdoutRead := Int32(PtrUInt(LStdoutRd));
-  APipes.StderrRead := Int32(PtrUInt(LStderrRd));
+  APipes.StdinWrite := PtrInt(PtrUInt(LStdinWr));
+  APipes.StdoutRead := PtrInt(PtrUInt(LStdoutRd));
+  APipes.StderrRead := PtrInt(PtrUInt(LStderrRd));
   Result := 0;
 end;
 
 function platform_process_spawn_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar; out AProc: TPlatformProcess): Int32;
-var LSI: STARTUPINFOA; LPI: PROCESS_INFORMATION; LCmd: AnsiString;
+var
+  LSI: STARTUPINFOW;
+  LPI: PROCESS_INFORMATION;
 begin
-  FillChar(AProc, SizeOf(AProc), 0); FillChar(LSI, SizeOf(LSI), 0); FillChar(LPI, SizeOf(LPI), 0);
-  LSI.cb := SizeOf(LSI); LCmd := BuildCmdLine(APath, AArgv);
-  if not CreateProcessA(nil, @LCmd[1], nil, nil, False, 0, nil, ACwd, @LSI, @LPI) then Exit(Int32(GetLastError));
+  FillChar(AProc, SizeOf(AProc), 0);
+  FillChar(LSI, SizeOf(LSI), 0);
+  LSI.cb := SizeOf(LSI);
+  Result := CreateWindowsProcess(APath, AArgv, AEnvp, ACwd, False, 0, LSI, LPI);
+  if Result <> 0 then
+    Exit;
   AProc.ProcessHandle := PtrUInt(LPI.hProcess);
-  AProc.Pid := LPI.dwProcessId; CloseHandle(HANDLE(LPI.hThread)); Result := 0;
+  AProc.Pid := LPI.dwProcessId;
+  CloseHandle(HANDLE(LPI.hThread));
+  Result := 0;
+end;
+
+function platform_process_spawn_fds(const APath: PAnsiChar; AArgv: PPAnsiChar;
+  AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
+  AChildStdin, AChildStdout, AChildStderr: PtrInt;
+  out AProc: TPlatformProcess;
+  out AFailStage: TPlatformProcessSpawnStage): Int32;
+var
+  LSI: STARTUPINFOW;
+  LPI: PROCESS_INFORMATION;
+begin
+  FillChar(AProc, SizeOf(AProc), 0);
+  AFailStage := pssNone;
+  FillChar(LSI, SizeOf(LSI), 0);
+  LSI.cb := SizeOf(LSI);
+  LSI.dwFlags := STARTF_USESTDHANDLES;
+  if AChildStdin >= 0 then
+    LSI.hStdInput := HANDLE(PtrUInt(AChildStdin))
+  else
+    LSI.hStdInput := GetStdHandle(STD_INPUT_HANDLE);
+  if AChildStdout >= 0 then
+    LSI.hStdOutput := HANDLE(PtrUInt(AChildStdout))
+  else
+    LSI.hStdOutput := GetStdHandle(STD_OUTPUT_HANDLE);
+  if AChildStderr >= 0 then
+    LSI.hStdError := HANDLE(PtrUInt(AChildStderr))
+  else
+    LSI.hStdError := GetStdHandle(STD_ERROR_HANDLE);
+
+  Result := CreateWindowsProcess(APath, AArgv, AEnvp, ACwd, True, 0, LSI, LPI);
+  if Result <> 0 then
+  begin
+    AFailStage := pssExec;
+    Exit;
+  end;
+  AProc.ProcessHandle := PtrUInt(LPI.hProcess);
+  AProc.ThreadHandle := PtrUInt(LPI.hThread);
+  AProc.Pid := LPI.dwProcessId;
+  CloseHandle(HANDLE(AProc.ThreadHandle));
+  AProc.ThreadHandle := 0;
+  Result := 0;
 end;
 
 function platform_process_spawn_piped_cwd(const APath: PAnsiChar; AArgv: PPAnsiChar;
   AEnvp: PPAnsiChar; const ACwd: PAnsiChar;
   out AProc: TPlatformProcess; out APipes: TPlatformProcessPipes): Int32;
 var
-  LSI: STARTUPINFOA;
+  LSI: STARTUPINFOW;
   LPI: PROCESS_INFORMATION;
-  LCmd: AnsiString;
   LStdinRd, LStdinWr, LStdoutRd, LStdoutWr, LStderrRd, LStderrWr: HANDLE;
   LSA: SECURITY_ATTRIBUTES;
 begin
@@ -638,15 +728,14 @@ begin
   LSI.hStdInput := LStdinRd;
   LSI.hStdOutput := LStdoutWr;
   LSI.hStdError := LStderrWr;
-  FillChar(LPI, SizeOf(LPI), 0);
-  LCmd := BuildCmdLine(APath, AArgv);
 
-  if not CreateProcessA(nil, @LCmd[1], nil, nil, True, 0, nil, ACwd, @LSI, @LPI) then
+  Result := CreateWindowsProcess(APath, AArgv, AEnvp, ACwd, True, 0, LSI, LPI);
+  if Result <> 0 then
   begin
     CloseHandle(LStdinRd); CloseHandle(LStdinWr);
     CloseHandle(LStdoutRd); CloseHandle(LStdoutWr);
     CloseHandle(LStderrRd); CloseHandle(LStderrWr);
-    Exit(Int32(GetLastError));
+    Exit;
   end;
 
   CloseHandle(LStdinRd);
@@ -656,9 +745,9 @@ begin
 
   AProc.ProcessHandle := PtrUInt(LPI.hProcess);
   AProc.Pid := LPI.dwProcessId;
-  APipes.StdinWrite := Int32(PtrUInt(LStdinWr));
-  APipes.StdoutRead := Int32(PtrUInt(LStdoutRd));
-  APipes.StderrRead := Int32(PtrUInt(LStderrRd));
+  APipes.StdinWrite := PtrInt(PtrUInt(LStdinWr));
+  APipes.StdoutRead := PtrInt(PtrUInt(LStdoutRd));
+  APipes.StderrRead := PtrInt(PtrUInt(LStderrRd));
   Result := 0;
 end;
 

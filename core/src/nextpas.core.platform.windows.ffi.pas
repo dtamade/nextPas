@@ -46,6 +46,7 @@ function WaitOnAddress(Address: Pointer; CompareAddress: Pointer; AddressSize: P
 procedure WakeByAddressSingle(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressSingle';
 procedure WakeByAddressAll(Address: Pointer); stdcall; external 'kernel32' name 'WakeByAddressAll';
 function LoadLibraryA(lpLibFileName: PAnsiChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryA';
+function LoadLibraryW(lpLibFileName: PWideChar): HMODULE; stdcall; external 'kernel32' name 'LoadLibraryW';
 function GetProcAddress(hModule: HMODULE; lpProcName: PAnsiChar): FARPROC; stdcall; external 'kernel32' name 'GetProcAddress';
 function FreeLibrary(hLibModule: HMODULE): BOOL; stdcall; external 'kernel32' name 'FreeLibrary';
 function VirtualAlloc(lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAlloc';
@@ -64,6 +65,7 @@ function SetFilePointerEx(InFile: HANDLE; InDistanceToMove: Int64; OutoptNewFile
 function GetFileAttributesExA(lpFileName: LPCSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExA';
 function SetFileAttributesA(lpFileName: LPCSTR; dwFileAttributes: DWORD): BOOL; stdcall; external 'kernel32' name 'SetFileAttributesA';
 function GetFileAttributesExW(lpFileName: LPCWSTR; fInfoLevelId: GET_FILEEX_INFO_LEVELS; lpFileInformation: Pointer): BOOL; stdcall; external 'kernel32' name 'GetFileAttributesExW';
+function SetFileAttributesW(lpFileName: LPCWSTR; dwFileAttributes: DWORD): BOOL; stdcall; external 'kernel32' name 'SetFileAttributesW';
 function GetFileInformationByHandle(hFile: HANDLE; lpFileInformation: PBY_HANDLE_FILE_INFORMATION): BOOL; stdcall; external 'kernel32' name 'GetFileInformationByHandle';
 function CreateDirectoryA(lpPathName: LPCSTR; lpSecurityAttributes: Pointer): BOOL; stdcall; external 'kernel32' name 'CreateDirectoryA';
 function CreateDirectoryW(lpPathName: LPCWSTR; lpSecurityAttributes: Pointer): BOOL; stdcall; external 'kernel32' name 'CreateDirectoryW';
@@ -89,6 +91,8 @@ function FreeEnvironmentStringsA(lpszEnvironmentBlock: LPSTR): BOOL; stdcall; ex
 function FreeEnvironmentStringsW(lpszEnvironmentBlock: LPWSTR): BOOL; stdcall; external 'kernel32' name 'FreeEnvironmentStringsW';
 function ExpandEnvironmentStringsA(lpSrc: LPCSTR; lpDst: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'ExpandEnvironmentStringsA';
 function ExpandEnvironmentStringsW(lpSrc: LPCWSTR; lpDst: LPWSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'ExpandEnvironmentStringsW';
+function MultiByteToWideChar(CodePage: UINT; dwFlags: DWORD; lpMultiByteStr: LPCSTR; cbMultiByte: Int32; lpWideCharStr: LPWSTR; cchWideChar: Int32): Int32; stdcall; external 'kernel32' name 'MultiByteToWideChar';
+function WideCharToMultiByte(CodePage: UINT; dwFlags: DWORD; lpWideCharStr: LPCWSTR; cchWideChar: Int32; lpMultiByteStr: LPSTR; cbMultiByte: Int32; lpDefaultChar: LPCSTR; lpUsedDefaultChar: Pointer): Int32; stdcall; external 'kernel32' name 'WideCharToMultiByte';
 function CreateProcessA(lpApplicationName: LPCSTR; lpCommandLine: LPSTR; lpProcessAttributes: LPSECURITY_ATTRIBUTES; lpThreadAttributes: LPSECURITY_ATTRIBUTES; bInheritHandles: WINBOOL; dwCreationFlags: DWORD; lpEnvironment: LPVOID; lpCurrentDirectory: LPCSTR; lpStartupInfo: LPSTARTUPINFOA; lpProcessInformation: LPPROCESS_INFORMATION): WINBOOL; stdcall; external 'kernel32' name 'CreateProcessA';
 function CreateProcessW(lpApplicationName: LPCWSTR; lpCommandLine: LPWSTR; lpProcessAttributes: LPSECURITY_ATTRIBUTES; lpThreadAttributes: LPSECURITY_ATTRIBUTES; bInheritHandles: WINBOOL; dwCreationFlags: DWORD; lpEnvironment: LPVOID; lpCurrentDirectory: LPCWSTR; lpStartupInfo: LPSTARTUPINFOW; lpProcessInformation: LPPROCESS_INFORMATION): WINBOOL; stdcall; external 'kernel32' name 'CreateProcessW';
 procedure GetStartupInfoA(lpStartupInfo: LPSTARTUPINFOA); stdcall; external 'kernel32' name 'GetStartupInfoA';
@@ -130,12 +134,16 @@ function GetConsoleScreenBufferInfo(hConsoleOutput: HANDLE; lpConsoleScreenBuffe
 function FormatMessageA(dwFlags: DWORD; lpSource: Pointer; dwMessageId: DWORD; dwLanguageId: DWORD; lpBuffer: LPSTR; nSize: DWORD; Arguments: Pointer): DWORD; stdcall; external 'kernel32' name 'FormatMessageA';
 function LocalFree(hMem: Pointer): Pointer; stdcall; external 'kernel32' name 'LocalFree';
 function GetModuleFileNameA(hModule: HMODULE; lpFilename: LPSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetModuleFileNameA';
+function GetModuleFileNameW(hModule: HMODULE; lpFilename: LPWSTR; nSize: DWORD): DWORD; stdcall; external 'kernel32' name 'GetModuleFileNameW';
 function GetTempPathA(nBufferLength: DWORD; lpBuffer: LPSTR): DWORD; stdcall; external 'kernel32' name 'GetTempPathA';
+function GetTempPathW(nBufferLength: DWORD; lpBuffer: LPWSTR): DWORD; stdcall; external 'kernel32' name 'GetTempPathW';
 function RtlGenRandom(RandomBuffer: Pointer; RandomBufferLength: DWORD): WINBOOL; stdcall; external 'advapi32' name 'SystemFunction036';
 function LockFileEx(hFile: HANDLE; dwFlags: DWORD; dwReserved: DWORD; nNumberOfBytesToLockLow: DWORD; nNumberOfBytesToLockHigh: DWORD; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'LockFileEx';
 function UnlockFileEx(hFile: HANDLE; dwReserved: DWORD; nNumberOfBytesToUnlockLow: DWORD; nNumberOfBytesToUnlockHigh: DWORD; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'UnlockFileEx';
 function CreateSymbolicLinkA(lpSymlinkFileName: LPCSTR; lpTargetFileName: LPCSTR; dwFlags: DWORD): BOOL; stdcall; external 'kernel32' name 'CreateSymbolicLinkA';
+function CreateSymbolicLinkW(lpSymlinkFileName: LPCWSTR; lpTargetFileName: LPCWSTR; dwFlags: DWORD): BOOL; stdcall; external 'kernel32' name 'CreateSymbolicLinkW';
 function GetFinalPathNameByHandleA(hFile: HANDLE; lpszFilePath: LPSTR; cchFilePath: DWORD; dwFlags: DWORD): DWORD; stdcall; external 'kernel32' name 'GetFinalPathNameByHandleA';
+function GetFinalPathNameByHandleW(hFile: HANDLE; lpszFilePath: LPWSTR; cchFilePath: DWORD; dwFlags: DWORD): DWORD; stdcall; external 'kernel32' name 'GetFinalPathNameByHandleW';
 function FindFirstFileA(lpFileName: LPCSTR; lpFindFileData: LPWIN32_FIND_DATAA): HANDLE; stdcall; external 'kernel32' name 'FindFirstFileA';
 function FindNextFileA(hFindFile: HANDLE; lpFindFileData: LPWIN32_FIND_DATAA): WINBOOL; stdcall; external 'kernel32' name 'FindNextFileA';
 

@@ -114,7 +114,8 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
 
 function platform_mmap_file(const APath: PAnsiChar; out AMap: TPlatformMappedFile): Int32;
 var
@@ -122,9 +123,13 @@ var
   LSizeHigh: DWORD;
   LSizeLow: DWORD;
   LAddr: Pointer;
+  LPath: UnicodeString;
 begin
   FillChar(AMap, SizeOf(AMap), 0);
-  LFile := CreateFileA(APath, GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, $80, nil);
+  if not platform_windows_utf8_to_wide_checked(APath, LPath) then
+    Exit(Int32(ERROR_INVALID_NAME));
+  LFile := CreateFileW(PWideChar(LPath), GENERIC_READ, FILE_SHARE_READ, nil,
+    OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nil);
   if LFile = HANDLE(PtrInt(-1)) then
     Exit(Int32(GetLastError));
   LSizeHigh := 0;
@@ -135,7 +140,7 @@ begin
     Exit(Int32(87)); // ERROR_INVALID_PARAMETER
   end;
   LMap := CreateFileMappingA(LFile, nil, PAGE_READONLY, 0, 0, nil);
-  if LMap = 0 then
+  if LMap = nil then
   begin
     CloseHandle(LFile);
     Exit(Int32(GetLastError));

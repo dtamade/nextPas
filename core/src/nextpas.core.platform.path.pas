@@ -47,7 +47,8 @@ uses
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
 {$ENDIF}
 
 function IsSep(C: AnsiChar): Boolean; inline;
@@ -449,19 +450,28 @@ end;
 function platform_path_resolve(const APath: PAnsiChar;
   ABuf: PAnsiChar; ABufLen: Int32): Int32;
 var
+  LPath: UnicodeString;
+  LBuf: array of WideChar;
   LLen: DWORD;
+  LUtf8: AnsiString;
 begin
   if (ABuf = nil) or (ABufLen <= 0) then
     Exit(-1);
-  LLen := GetFullPathNameA(APath, DWORD(ABufLen), ABuf, nil);
+  if not platform_windows_utf8_to_wide_checked(APath, LPath) then
+    Exit(-1);
+
+  LLen := GetFullPathNameW(PWideChar(LPath), 0, nil, nil);
   if LLen = 0 then
     Exit(-1);
-  if Int32(LLen) >= ABufLen then
-  begin
-    ABuf[ABufLen - 1] := #0;
-    Exit(Int32(LLen));
-  end;
-  Result := Int32(LLen);
+  SetLength(LBuf, LLen + 1);
+  LLen := GetFullPathNameW(PWideChar(LPath), DWORD(Length(LBuf)),
+    @LBuf[0], nil);
+  if (LLen = 0) or (LLen >= DWORD(Length(LBuf))) then
+    Exit(-1);
+  LBuf[LLen] := #0;
+  if not platform_windows_wide_to_utf8_checked(@LBuf[0], LUtf8) then
+    Exit(-1);
+  Result := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
 end;
 {$ENDIF}
 

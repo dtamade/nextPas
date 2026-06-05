@@ -68,41 +68,66 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
 
 function platform_env_get(const AName: PAnsiChar; ABuf: PAnsiChar;
   ABufLen: Int32; out ALen: Int32): Int32;
 var
+  LName: UnicodeString;
+  LValue: array of WideChar;
   LResult: DWORD;
+  LUtf8: AnsiString;
 begin
   ALen := 0;
   if ABuf = nil then
     ABufLen := 0;
-  LResult := GetEnvironmentVariableA(AName, ABuf, DWORD(ABufLen));
+  if not platform_windows_utf8_to_wide_checked(AName, LName) then
+    Exit(Int32(ERROR_INVALID_NAME));
+
+  LResult := GetEnvironmentVariableW(PWideChar(LName), nil, 0);
   if LResult = 0 then
   begin
-    if GetLastError = 203 then
-      Exit(203); // ERROR_ENVVAR_NOT_FOUND
+    if GetLastError = ERROR_ENVVAR_NOT_FOUND then
+      Exit(Int32(ERROR_ENVVAR_NOT_FOUND));
     Exit(Int32(GetLastError));
   end;
-  ALen := Int32(LResult);
-  if (ABuf <> nil) and (Int32(LResult) < ABufLen) then
-    ABuf[LResult] := #0;
+
+  SetLength(LValue, LResult + 1);
+  LResult := GetEnvironmentVariableW(PWideChar(LName), @LValue[0],
+    DWORD(Length(LValue)));
+  if LResult = 0 then
+    Exit(Int32(GetLastError));
+  LValue[LResult] := #0;
+  if not platform_windows_wide_to_utf8_checked(@LValue[0], LUtf8) then
+    Exit(Int32(ERROR_INVALID_NAME));
+  ALen := platform_windows_copy_utf8_to_buffer(LUtf8, ABuf, ABufLen);
   Result := 0;
 end;
 
 function platform_env_set(const AName: PAnsiChar;
   const AValue: PAnsiChar): Int32;
+var
+  LName: UnicodeString;
+  LValue: UnicodeString;
 begin
-  if SetEnvironmentVariableA(AName, AValue) then
+  if not platform_windows_utf8_to_wide_checked(AName, LName) then
+    Exit(Int32(ERROR_INVALID_NAME));
+  if not platform_windows_utf8_to_wide_checked(AValue, LValue) then
+    Exit(Int32(ERROR_INVALID_NAME));
+  if SetEnvironmentVariableW(PWideChar(LName), PWideChar(LValue)) then
     Result := 0
   else
     Result := Int32(GetLastError);
 end;
 
 function platform_env_unset(const AName: PAnsiChar): Int32;
+var
+  LName: UnicodeString;
 begin
-  if SetEnvironmentVariableA(AName, nil) then
+  if not platform_windows_utf8_to_wide_checked(AName, LName) then
+    Exit(Int32(ERROR_INVALID_NAME));
+  if SetEnvironmentVariableW(PWideChar(LName), nil) then
     Result := 0
   else
     Result := Int32(GetLastError);
@@ -110,10 +135,12 @@ end;
 
 function platform_env_exists(const AName: PAnsiChar): Boolean;
 var
-  LBuf: array[0..0] of AnsiChar;
+  LName: UnicodeString;
 begin
-  Result := (GetEnvironmentVariableA(AName, @LBuf[0], 1) > 0) or
-            (GetLastError <> 203);
+  if not platform_windows_utf8_to_wide_checked(AName, LName) then
+    Exit(False);
+  Result := (GetEnvironmentVariableW(PWideChar(LName), nil, 0) > 0) or
+            (GetLastError <> ERROR_ENVVAR_NOT_FOUND);
 end;
 {$ENDIF}
 

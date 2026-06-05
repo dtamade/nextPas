@@ -126,13 +126,18 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
 
 function platform_dl_open(const APath: PAnsiChar; AFlags: Int32;
   out ALib: TPlatformLibrary): Int32;
+var
+  LPath: UnicodeString;
 begin
   FillChar(ALib, SizeOf(ALib), 0);
-  ALib.Handle := PtrUInt(LoadLibraryA(APath));
+  if not platform_windows_utf8_to_wide_checked(APath, LPath) then
+    Exit(Int32(ERROR_INVALID_NAME));
+  ALib.Handle := PtrUInt(LoadLibraryW(PWideChar(LPath)));
   if ALib.Handle = 0 then
     Result := Int32(GetLastError)
   else

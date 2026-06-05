@@ -236,7 +236,8 @@ end;
 {$IFDEF NEXTPAS_WINDOWS}
 uses
   nextpas.core.platform.windows.base,
-  nextpas.core.platform.windows.ffi;
+  nextpas.core.platform.windows.ffi,
+  nextpas.core.platform.windows.utf16;
 
 function platform_pty_open(const ASize: TPlatformPtySize;
   out APty: TPlatformPty): Int32;
@@ -280,10 +281,16 @@ function platform_pty_spawn(var APty: TPlatformPty;
   const ACwd: PAnsiChar; out APid: Int32;
   out AFailStage: TPlatformPtySpawnStage): Int32;
 var
-  LSiEx: STARTUPINFOEXA;
+  LSiEx: STARTUPINFOEXW;
   LPi: PROCESS_INFORMATION;
   LAttrSize: PtrUInt;
   LAttrList: Pointer;
+  LCmd: UnicodeString;
+  LCwd: UnicodeString;
+  LEnvBlock: UnicodeString;
+  LCwdPtr: PWideChar;
+  LEnvPtr: Pointer;
+  LCreationFlags: DWORD;
 begin
   APid := -1;
   AFailStage := ptssNone;
@@ -315,9 +322,44 @@ begin
 
   LSiEx.lpAttributeList := LAttrList;
 
-  if not CreateProcessA(APath, nil, nil, nil, False,
-    EXTENDED_STARTUPINFO_PRESENT, nil, ACwd,
-    @LSiEx.StartupInfo, @LPi) then
+  if not platform_windows_argv_to_command_line(APath, AArgv, LCmd) then
+  begin
+    DeleteProcThreadAttributeList(LAttrList);
+    FreeMem(LAttrList);
+    AFailStage := ptssExec;
+    Exit(Int32(ERROR_INVALID_NAME));
+  end;
+
+  LCwdPtr := nil;
+  if ACwd <> nil then
+  begin
+    if not platform_windows_utf8_to_wide_checked(ACwd, LCwd) then
+    begin
+      DeleteProcThreadAttributeList(LAttrList);
+      FreeMem(LAttrList);
+      AFailStage := ptssChdir;
+      Exit(Int32(ERROR_INVALID_NAME));
+    end;
+    LCwdPtr := PWideChar(LCwd);
+  end;
+
+  LEnvPtr := nil;
+  LCreationFlags := EXTENDED_STARTUPINFO_PRESENT;
+  if AEnvp <> nil then
+  begin
+    if not platform_windows_envp_to_wide_block(AEnvp, LEnvBlock) then
+    begin
+      DeleteProcThreadAttributeList(LAttrList);
+      FreeMem(LAttrList);
+      AFailStage := ptssExec;
+      Exit(Int32(ERROR_INVALID_NAME));
+    end;
+    LEnvPtr := PWideChar(LEnvBlock);
+    LCreationFlags := LCreationFlags or CREATE_UNICODE_ENVIRONMENT;
+  end;
+
+  if not CreateProcessW(nil, PWideChar(LCmd), nil, nil, False,
+    LCreationFlags, LEnvPtr, LCwdPtr, @LSiEx.StartupInfo, @LPi) then
   begin
     DeleteProcThreadAttributeList(LAttrList);
     FreeMem(LAttrList);
