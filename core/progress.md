@@ -1,61 +1,63 @@
-# Progress Log: H1 fast parser lazy headers
+# Progress Log: HTTP benchmark runner max iterations
 
 ## Session
 
-- **Scope:** H1 fast parser lazy headers and server fast snapshot materialization trim.
-- **Status:** verified, ready for path-limited commit.
-- **Roadmap Position:** `6/6 benchmark/performance` -> `H1 parser/server fast path`
+- **Scope:** benchmark max-iteration configurability for Pascal `TBenchRunner` and C llhttp comparator.
+- **Status:** complete; path-limited commit prepared for this batch.
+- **Roadmap Position:** `6/6 benchmark/performance` -> `benchmark evidence quality`
 
 ## Current state
 
-- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 HTTP fast
-  parser/server/test/docs/control 文件。
+- shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理 benchmark
+  runner/C comparator/test/docs/control 文件。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
-- 本轮不改 `docs/http/API_COVERAGE.md`：没有 public facade API 变化。
-- 本轮不跑全量测试；只跑 fast parser/server focused gates 和局部 benchmark sanity。
+- 本轮不改 `docs/http/API_COVERAGE.md`：没有 public HTTP facade API 变化。
+- 本轮不跑全量测试；只跑 `test_http_benchmarks` 和局部 parser/C comparator sanity。
 
 ## Completed work
 
-- 子代理只读审查 Pascal translated llhttp 性能疑点，结论是 raw gap 真实但当前不宜手改大状态机。
-- 本地复跑 Pascal / C llhttp comparator，确认 C raw 在代表性行约 `1.4x-1.6x` 快。
-- 新增 `test_http_h1fast` invalid header name/value fallback RED。
-- `FastParseRequest` 改为 scan-time header validation + lazy `IHttpHeaders`。
-- server fast snapshot 路径避免通过 `GetHeaders` 做 policy/keep-alive/Host 判断，从而避免普通
-  no-header-access handler 强制物化 headers。
+- 新增 benchmark max-iters env focused RED。
+- `src/nextpas.core.bench.pas` 现在默认 `bench_max_iters=100000`，并支持
+  `NEXTPAS_BENCH_MAX_ITERS`。
+- C llhttp comparator 同步支持 `NEXTPAS_BENCH_MAX_ITERS`。
+- 两个 runner 都在 summary 中输出 effective `bench_max_iters`，方便 benchmark snapshot
+  追溯。
 
 ## Verification
 
 - RED:
-  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - failed as expected on invalid header name/value fallback.
-- Focused fast parser gate:
-  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - `22 total, 22 passed, 0 failed`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  - failed as expected: Pascal/C max-iters marker missing and rows still used `1000 iters`。
+- Focused benchmark gate:
+  - same command after implementation
+  - `9 total, 9 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
-- Focused server gate:
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `274 total, 274 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
+  - fresh pre-commit rerun on 2026-06-05:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  - fresh result: `9 total, 9 passed, 0 failed`; heaptrc: `0 unfreed memory blocks`
 - Benchmark sanity:
   - `make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  - fast rows: simple GET `349.9 ns/op`, 10 headers `1351.5 ns/op`,
-    POST 1KB `628.9 ns/op`, pipeline `3526.5 ns/op`
-  - `make -C benchmarks/nextpas.core.http/bench_server clean run`: `87356 req/s`
+  - output includes `bench_max_iters=100000`
+  - representative rows: raw simple GET `215.3 ns/op`, raw 10 headers `776.0 ns/op`,
+    adapter 10 headers `3458.0 ns/op`, fast 10 headers `1432.8 ns/op`
+  - `make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp`
+  - output includes `bench_max_iters=100000`
+  - representative C rows: raw simple GET `152.4 ns/op`, raw 10 headers `535.1 ns/op`,
+    raw POST 1KB `300.9 ns/op`, raw pipeline `1443.6 ns/op`
 
 ## Current conclusion
 
-方向没有走偏：针对性能追 Go/Rust 的目标，本轮优先优化更确定、更安全的
-adapter/materialization 成本，而不是贸然手改 Pascal llhttp 大状态机。fast parser microbench
-收益明确；server full-chain 仍有噪声，不能夸大。
+方向没有走偏：本轮提升 benchmark 证据质量，避免继续基于 `1000` 迭代的短样本做性能决策。
+这对后续追 Go/Rust 标准是必要基础，但不是生产吞吐提升。
 
-## Remaining work before commit
+## Commit scope
 
-- 确认只 stage 本轮 HTTP/core 控制文件。
-- path-limited commit。
+- Only stage this batch's benchmark/control files.
+- Commit message: `bench(http): make parser iteration cap configurable`.
 
 ## Next step
 
-- 下一批优先修 benchmark 可信度：提高/参数化 `TBenchRunner` 与 C comparator 的 `MAX_ITERS`，
-  让 sub-microsecond parser rows 达到更稳定采样。
-- 然后继续 adapter materialization：评估 fast path raw header block 是否还能避免一次复制，或在
-  llhttp adapter 侧减少 request metadata/header string materialization。
+- 下一批继续 parser adapter materialization，优先看 `TH1Parser` request metadata/header string
+  materialization 是否还能减少。
+- 如果要做正式对标 snapshot，先把 Pascal runner calibration 进一步调到更接近 C comparator
+  的 target-time 行为，再跑 Go/Rust/nextPas 对照。

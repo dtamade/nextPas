@@ -23,6 +23,8 @@ const
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
   LlhttpRootEnvName = 'NEXTPAS_LLHTTP_ROOT';
+  BenchMaxItersEnvName = 'NEXTPAS_BENCH_MAX_ITERS';
+  BenchMaxItersSmokeValue = '2000';
 
 procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
 var
@@ -92,9 +94,23 @@ begin
     Result := 'make';
 end;
 
+procedure RunProcessAndCaptureWithEnv(const AExecutable: string;
+  const AArguments: array of string; const AWorkingDir: string;
+  const AEnvironment: array of string; out AExitCode: Integer;
+  out AOutput: string); forward;
+
 procedure RunProcessAndCapture(const AExecutable: string;
   const AArguments: array of string; const AWorkingDir: string;
   out AExitCode: Integer; out AOutput: string);
+begin
+  RunProcessAndCaptureWithEnv(AExecutable, AArguments, AWorkingDir, [],
+    AExitCode, AOutput);
+end;
+
+procedure RunProcessAndCaptureWithEnv(const AExecutable: string;
+  const AArguments: array of string; const AWorkingDir: string;
+  const AEnvironment: array of string; out AExitCode: Integer;
+  out AOutput: string);
 var
   LProcess: TProcess;
   I: Integer;
@@ -107,6 +123,8 @@ begin
     LProcess.CurrentDirectory := AWorkingDir;
     for I := Low(AArguments) to High(AArguments) do
       LProcess.Parameters.Add(AArguments[I]);
+    for I := Low(AEnvironment) to High(AEnvironment) do
+      LProcess.Environment.Add(AEnvironment[I]);
     LProcess.Options := [poUsePipes, poStderrToOutPut];
     LProcess.Execute;
     while LProcess.Running do
@@ -150,6 +168,18 @@ function ResolveBenchmarkTestBuildDir(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
     'build/projects/nextpas.core.http/test_http_benchmarks');
+end;
+
+function ResolveH1ParserBenchBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_h1parser/bench_h1parser');
+end;
+
+function ResolveCllhttpComparatorBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_h1parser/compare_c/bench_llhttp_c');
 end;
 
 function ResolveGoComparatorBinaryPath(const ARootDir: string): string;
@@ -367,6 +397,36 @@ begin
     'C llhttp comparator missing-root diagnostic');
 end;
 
+procedure TestH1ParserBenchmarkMaxItersEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser benchmark build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'H1 parser benchmark binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser benchmark max-iters smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_max_iters=' + BenchMaxItersSmokeValue,
+    'H1 parser benchmark max-iters marker');
+  CheckContains(LOutput, 'raw llhttp: simple GET',
+    'H1 parser benchmark raw row');
+end;
+
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;
 var
   LRootDir: string;
@@ -396,6 +456,41 @@ begin
     'C llhttp noop pipeline row');
 end;
 
+procedure TestCllhttpComparatorMaxItersEnvWhenConfigured;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LLhttpRoot: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LLhttpRoot := Trim(GetEnvironmentVariable(LlhttpRootEnvName));
+  if LLhttpRoot = '' then
+    Exit;
+
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LCompareDir := PathJoin(LRootDir, H1ParserBenchRelativeDir + '/compare_c');
+
+  RunProcessAndCapture(ResolveMakeExecutable,
+    ['build', 'LLHTTP_ROOT=' + LLhttpRoot], LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'C llhttp comparator max-iters build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveCllhttpComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'C llhttp comparator binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LCompareDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'C llhttp comparator max-iters smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_max_iters=' + BenchMaxItersSmokeValue,
+    'C llhttp comparator max-iters marker');
+  CheckContains(LOutput, 'C raw llhttp: simple GET',
+    'C llhttp comparator raw row');
+end;
+
 begin
   T := TTestRunner.Create('http benchmarks');
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
@@ -407,8 +502,12 @@ begin
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',
     @TestCllhttpComparatorRequiresRoot);
+  T.Run('H1 parser benchmark max iterations env',
+    @TestH1ParserBenchmarkMaxItersEnv);
   T.Run('C llhttp comparator small smoke when configured',
     @TestCllhttpComparatorSmallSmokeWhenConfigured);
+  T.Run('C llhttp comparator max iterations env when configured',
+    @TestCllhttpComparatorMaxItersEnvWhenConfigured);
   T.Summary;
   if not T.AllPassed then
     Halt(1);

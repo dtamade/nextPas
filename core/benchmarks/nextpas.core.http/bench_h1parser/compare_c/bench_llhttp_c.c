@@ -20,7 +20,7 @@ typedef struct bench_result_s {
 static const int64_t target_ns = 50000000;
 static const int64_t warmup_iters = 5;
 static const int samples = 3;
-static const int64_t max_iters = 1000;
+static const int64_t default_max_iters = 100000;
 
 static const char req_simple[] =
   "GET / HTTP/1.1\r\n"
@@ -64,6 +64,22 @@ static uint64_t monotonic_ns(void) {
     return 0;
   }
   return ((uint64_t) ts.tv_sec * 1000000000ull) + (uint64_t) ts.tv_nsec;
+}
+
+static int64_t configured_max_iters(void) {
+  const char* value = getenv("NEXTPAS_BENCH_MAX_ITERS");
+  char* endptr = NULL;
+  long long parsed;
+
+  if (value == NULL || value[0] == '\0') {
+    return default_max_iters;
+  }
+
+  parsed = strtoll(value, &endptr, 10);
+  if (endptr == value || *endptr != '\0' || parsed < 100) {
+    return default_max_iters;
+  }
+  return (int64_t) parsed;
 }
 
 static void init_data(void) {
@@ -232,6 +248,7 @@ static uint64_t measure_ns(bench_proc proc, int64_t iters) {
 static int64_t calibrate_iterations(bench_proc proc) {
   uint64_t elapsed;
   int64_t iters;
+  int64_t max_iters = configured_max_iters();
 
   proc(warmup_iters);
   iters = 100;
@@ -298,6 +315,7 @@ static void run_benchmark(const char* name, bench_proc proc) {
 
 static void print_summary(void) {
   printf("\n=== SUMMARY ===\n");
+  printf("bench_max_iters=%lld\n", (long long) configured_max_iters());
   printf("  %40s%10s%14s\n", "Benchmark", "ns/op", "ops/s");
   printf("  %40s%10s%14s\n", "", "", "");
   for (int i = 0; i < result_count; i++) {

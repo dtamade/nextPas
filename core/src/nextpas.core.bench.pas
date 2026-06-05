@@ -29,13 +29,26 @@ type
 implementation
 
 uses
+  SysUtils,
   nextpas.core.platform.time;
 
 const
+  BENCH_MAX_ITERS_ENV = 'NEXTPAS_BENCH_MAX_ITERS';
   TARGET_NS = 50000000;
   WARMUP_ITERS = 5;
   SAMPLES = 3;
-  MAX_ITERS = 1000;
+  DEFAULT_MAX_ITERS = 100000;
+
+function ConfiguredMaxIterations: Int64;
+var
+  LValue: string;
+begin
+  Result := DEFAULT_MAX_ITERS;
+  LValue := Trim(GetEnvironmentVariable(BENCH_MAX_ITERS_ENV));
+  if (LValue <> '') and TryStrToInt64(LValue, Result) and (Result >= 100) then
+    Exit;
+  Result := DEFAULT_MAX_ITERS;
+end;
 
 constructor TBenchRunner.Create;
 begin
@@ -58,9 +71,11 @@ function TBenchRunner.CalibrateIterations(aProc: TBenchProc): Int64;
 var
   LElapsed: UInt64;
   LIters: Int64;
+  LMaxIters: Int64;
 begin
   aProc(WARMUP_ITERS);
 
+  LMaxIters := ConfiguredMaxIterations;
   LIters := 100;
   while True do
   begin
@@ -76,9 +91,9 @@ begin
       LIters := Int64((Double(LIters) * Double(TARGET_NS)) / Double(LElapsed));
     if LIters < 100 then
       LIters := 100;
-    if LIters > MAX_ITERS then
+    if LIters > LMaxIters then
     begin
-      Result := MAX_ITERS;
+      Result := LMaxIters;
       Exit;
     end;
   end;
@@ -130,6 +145,7 @@ var
 begin
   WriteLn;
   WriteLn('=== SUMMARY ===');
+  WriteLn('bench_max_iters=', ConfiguredMaxIterations);
   WriteLn('  ', 'Benchmark':40, 'ns/op':10, 'ops/s':14);
   WriteLn('  ', '':40, '':10, '':14);
   for i := 0 to FCount - 1 do

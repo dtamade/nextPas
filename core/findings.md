@@ -1,99 +1,86 @@
-# Findings: H1 fast parser lazy headers
+# Findings: HTTP benchmark runner max iterations
 
 ## Scope
 
-本轮是 `nextpas.core.http` H1 fast parser / server fast snapshot 的窄性能优化。
-不改公开 HTTP facade API，不改 wire contract，不写 inbox。
-
-## Evidence on Pascal llhttp
-
-本地复跑结果继续支持用户的疑虑：Pascal translated llhttp 本体相比 C llhttp 有 raw
-gap。
-
-- Pascal raw / C raw:
-  - simple GET: `214.7 ns/op` vs `143.8 ns/op`
-  - 10 headers: `754.8 ns/op` vs `535.6 ns/op`
-  - POST 1KB: `436.6 ns/op` vs `285.7 ns/op`
-  - pipeline 10 reqs: `2107.3 ns/op` vs `1346.5 ns/op`
-
-子代理只读审查也给出同一结论：Pascal translated llhttp 有优化空间，但不建议现在手改大
-状态机；当前 full parser / server 更大的确定成本仍是 adapter/materialization。
+本轮只改 benchmark 基础设施和 benchmark smoke，不改 HTTP public facade API，不改 wire
+contract。目标是让 parser/C comparator 数据更可信，避免旧 `MAX_ITERS = 1000` 对
+sub-microsecond rows 造成过强噪声。
 
 ## RED evidence
 
-新增 `test_http_h1fast` invalid header name/value fallback 后先跑：
+新增 focused smoke 后先跑：
 
 ```sh
-make -C tests/nextpas.core.http/test_http_h1fast clean test
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
 ```
 
 失败点：
 
 ```text
-FAIL: Invalid header name fallback - invalid header name character
-FAIL: Invalid header value fallback - invalid header value: contains CR/LF/NUL
+FAIL: H1 parser benchmark max iterations env - bench_max_iters=2000 marker missing
+FAIL: C llhttp comparator max iterations env when configured - bench_max_iters=2000 marker missing
 ```
 
-这证明 fast parser 成功路径当前依赖 eager `THttpHeaders.Add` 做校验，异常输入不能干净
-fallback。
+失败输出同时显示 Pascal/C rows 仍是 `1000 iters`，证明旧上限不可配置。
 
 ## Implemented change
 
-- 新增内部 `TFastLazyHeaders`，实现 `IHttpHeaders`，保存 raw header block。
-- `FastParseRequest` 在扫描阶段显式校验 header name/value、设置 policy flags 和解析
-  `Content-Length`，成功后才返回 lazy header interface。
-- lazy headers 只在 `Get` / `GetAll` / `ForEach` / mutation / `Clone` 等接口调用时物化成
-  `THttpHeaders`。
-- `TH1ServerConnectionState` 在 fast snapshot 路径复用已知 policy facts，避免
-  `HeaderPolicyErrorStatus`、keep-alive、Host 检查触发 materialization。
+- `TBenchRunner` 默认 max iterations 改为 `100000`。
+- `TBenchRunner` 读取 `NEXTPAS_BENCH_MAX_ITERS`；空值、非法值、`<100` 回退默认。
+- `TBenchRunner.Summary` 输出 `bench_max_iters=<effective>`。
+- C llhttp comparator 使用同名 env 和同样默认值，并在 summary 输出 effective value。
+- `test_http_benchmarks` 新增 env override smoke：
+  - Pascal `bench_h1parser` 用 `NEXTPAS_BENCH_MAX_ITERS=2000` 运行并检查 marker。
+  - C llhttp comparator 在 `NEXTPAS_LLHTTP_ROOT` 已配置时做同样检查。
 
 ## Verification
 
-- RED:
-  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - 2 个新增 case 按预期失败。
-- Focused fast parser gate:
-  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - `22 total, 22 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- Focused server gate:
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `274 total, 274 passed, 0 failed`
+- Focused benchmark gate:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+  - `9 total, 9 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 
 ## Benchmark sanity
 
-Parser benchmark:
+Pascal parser benchmark:
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-Fast rows:
+Evidence:
 
-| workload | ns/op |
-| --- | ---: |
-| simple GET | 349.9 |
-| 10 headers | 1351.5 |
-| POST 1KB | 628.9 |
-| pipeline 10 reqs | 3526.5 |
+- `bench_max_iters=100000`
+- raw llhttp simple GET: `215.3 ns/op`
+- raw llhttp 10 headers: `776.0 ns/op`
+- llhttp adapter 10 headers: `3458.0 ns/op`
+- fast simple GET: `350.1 ns/op`
+- fast 10 headers: `1432.8 ns/op`
 
-Server benchmark:
+C llhttp comparator:
 
 ```sh
-make -C benchmarks/nextpas.core.http/bench_server clean run
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
 ```
 
-- `87356 req/s`
+Evidence:
 
-Conclusion: parser microbench 明确受益；server benchmark 仍在此前噪声带内，不能声明稳定
-full-chain throughput 提升。
+- `bench_max_iters=100000`
+- C raw simple GET: `152.4 ns/op`
+- C raw 10 headers: `535.1 ns/op`
+- C raw POST 1KB: `300.9 ns/op`
+- C raw pipeline: `1443.6 ns/op`
+
+## Current conclusion
+
+方向没有走偏：这不是生产 hot-path 修复，而是为了让后续“追 Go/Rust 标准”的性能决策有更可信
+数据。默认 `100000` 控制了日常 benchmark 成本；正式 snapshot 可以显式提高 env。
 
 ## Remaining gaps / risks
 
-- `TBenchRunner` / C comparator 当前 `MAX_ITERS = 1000`，短路径 benchmark 可信度不足；
-  下一批应先提高/参数化迭代上限。
-- Pascal translated llhttp 的大状态机、record-return matcher、cdecl helper 仍是长期优化轨道，
-  但不适合当前手工改。
-- lazy headers 目前复制 raw header block；相比 eager 多 string/header entries，仍是明显更轻，
-  后续可继续评估 span-backed lifetime 模型，但要谨慎处理 buffer ownership。
+- Pascal `TBenchRunner` 的 calibration 仍容易让多行撞到 max cap；下一步如果继续做 formal
+  benchmark，需要进一步改善 calibration 算法，而不仅是提高 cap。
+- 目前 C comparator 行为更接近 target time，Pascal runner 的 cap 策略仍偏保守；后续可统一
+  成更接近 C comparator 的校准逻辑。
+- 本轮不声明任何新的 server throughput 提升。

@@ -358,10 +358,11 @@ comparator yet. It does show that, inside the current nextPas H1 parser stack,
 the dominant cost is adapter materialization rather than the Pascal-translated
 llhttp state machine itself.
 
-The raw simple-GET row is especially sensitive to the current benchmark
-runner's `MAX_ITERS = 1000` cap, so these numbers are directional. The
+The raw simple-GET row was especially sensitive to the old benchmark runner's
+`MAX_ITERS = 1000` cap, so these historical numbers are directional. The
 classification remains stable: complete adapter parsing is materially slower
-than raw state-machine execution.
+than raw state-machine execution. A later runner update in this document records
+the current configurable iteration cap.
 
 ## Diagnostic Evidence: C llhttp Comparator
 
@@ -414,9 +415,60 @@ Pascal translation a real optimization track, but the larger current cost is
 still the nextPas adapter/materialization layer: the adapter is about `2.2x` to
 `6.0x` slower than C raw llhttp across these same rows.
 
-Treat these rows as local directional evidence. The current runner still caps
-iterations at `MAX_ITERS = 1000`; the formal benchmark round should improve the
-runner before making cross-machine or cross-toolchain claims.
+Treat these rows as local directional evidence. This snapshot used the old
+`MAX_ITERS = 1000` cap; the formal benchmark round should use the current
+configurable runner settings before making cross-machine or cross-toolchain
+claims.
+
+## Optimization Evidence: Benchmark Runner Max Iterations
+
+On 2026-06-05 local time, the Pascal `TBenchRunner` and the C llhttp comparator
+stopped using a hard-coded `MAX_ITERS = 1000`. Both runners now default to
+`bench_max_iters=100000`, print the effective value in the summary, and accept
+`NEXTPAS_BENCH_MAX_ITERS` for short smoke runs or heavier formal captures.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+H1 parser benchmark max iterations env and C llhttp comparator max iterations env failed:
+bench_max_iters=2000 marker was missing; both still emitted 1000-iter rows.
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+9 total, 9 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Default parser sanity:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+bench_max_iters=100000
+raw llhttp simple GET ns/op=215.3
+raw llhttp 10 headers ns/op=776.0
+llhttp adapter 10 headers ns/op=3458.0
+fast simple GET ns/op=350.1
+fast 10 headers ns/op=1432.8
+```
+
+Default C comparator sanity:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
+bench_max_iters=100000
+C raw llhttp simple GET ns/op=152.4
+C raw llhttp 10 headers ns/op=535.1
+C raw llhttp POST 1KB ns/op=300.9
+C raw llhttp pipeline ns/op=1443.6
+```
+
+The default is intentionally a balance: it is 100x higher than the old cap, so
+sub-microsecond parser rows are much less sensitive to timer noise, but it does
+not make everyday benchmark sanity runs as expensive as a full formal capture.
+Use `NEXTPAS_BENCH_MAX_ITERS=1000000` or higher for dedicated cross-toolchain
+snapshot work when runtime cost is acceptable.
 
 ## Optimization Evidence: Parser Header Container Reuse
 
