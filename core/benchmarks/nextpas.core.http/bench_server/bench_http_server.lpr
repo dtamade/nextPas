@@ -26,6 +26,12 @@ const
   WORKLOAD_NO_URL = 'no_url';
   WORKLOAD_URL_PATH = 'url_path';
   WORKLOAD_ADAPTER_NO_URL = 'adapter_no_url';
+  WORKLOAD_RESPONSE_1K = 'response_1k';
+  SMALL_RESPONSE_BODY = 'Hello, World!';
+  SMALL_RESPONSE_LEN = 13;
+  SMALL_RESPONSE_LEN_TEXT = '13';
+  RESPONSE_1K_LEN = 1024;
+  RESPONSE_1K_LEN_TEXT = '1024';
 
 var
   GServer: THttpServer;
@@ -35,6 +41,24 @@ var
   GRequests: Int32;
   GThreads: Int32;
   GWorkload: string;
+  GResponseBody1K: AnsiString;
+
+function ResponseComplete(const ABuf: array of Byte; const ATotal: SizeUInt;
+  const ABodyLen: SizeUInt): Boolean;
+var
+  LI: SizeUInt;
+begin
+  Result := False;
+  if ATotal < 4 then
+    Exit;
+  for LI := 0 to ATotal - 4 do
+    if (ABuf[LI] = 13) and (ABuf[LI + 1] = 10) and
+       (ABuf[LI + 2] = 13) and (ABuf[LI + 3] = 10) then
+    begin
+      Result := ATotal >= LI + 4 + ABodyLen;
+      Exit;
+    end;
+end;
 
 function ServerThread(AParam: Pointer): Pointer; cdecl;
 begin
@@ -50,6 +74,7 @@ var
   LBuf: array[0..4095] of Byte;
   LN: SizeUInt;
   LTotal: SizeUInt;
+  LExpectedBodyLen: SizeUInt;
 const
   REQ_NO_URL: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
   REQ_URL_PATH: AnsiString = 'GET /api/v1/users HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
@@ -57,6 +82,10 @@ const
 begin
   Result := nil;
   LRequests := Int32(PtrUInt(AParam));
+  if GWorkload = WORKLOAD_RESPONSE_1K then
+    LExpectedBodyLen := RESPONSE_1K_LEN
+  else
+    LExpectedBodyLen := SMALL_RESPONSE_LEN;
   try
     LConn := TcpConnect('127.0.0.1', GPort);
     LConn.SetNoDelay(True);
@@ -71,10 +100,12 @@ begin
         LConn.Write(PAnsiChar(REQ_NO_URL)^, Length(REQ_NO_URL));
       LTotal := 0;
       repeat
-        LN := LConn.Read(LBuf[LTotal], 4096 - LTotal);
+        if LTotal >= SizeUInt(Length(LBuf)) then
+          Break;
+        LN := LConn.Read(LBuf[LTotal], SizeUInt(Length(LBuf)) - LTotal);
         if LN = 0 then Break;
         Inc(LTotal, LN);
-      until LTotal >= 50;
+      until ResponseComplete(LBuf, LTotal, LExpectedBodyLen);
       if LN = 0 then Break;
       InterlockedIncrement(GSuccess);
     end;
@@ -113,7 +144,8 @@ begin
     begin
       if (ParamStr(LI + 1) = WORKLOAD_NO_URL) or
          (ParamStr(LI + 1) = WORKLOAD_URL_PATH) or
-         (ParamStr(LI + 1) = WORKLOAD_ADAPTER_NO_URL) then
+         (ParamStr(LI + 1) = WORKLOAD_ADAPTER_NO_URL) or
+         (ParamStr(LI + 1) = WORKLOAD_RESPONSE_1K) then
         GWorkload := ParamStr(LI + 1);
       Inc(LI, 2);
     end
@@ -137,6 +169,11 @@ var
 
 begin
   ParseOptions;
+  if GWorkload = WORKLOAD_RESPONSE_1K then
+  begin
+    SetLength(GResponseBody1K, RESPONSE_1K_LEN);
+    FillChar(GResponseBody1K[1], RESPONSE_1K_LEN, Byte('x'));
+  end;
   GDone := 0;
   GSuccess := 0;
 
@@ -150,9 +187,15 @@ begin
         Exit;
       end;
       AW.Headers.Set_('content-type', 'text/plain');
-      AW.Headers.Set_('content-length', '13');
+      if GWorkload = WORKLOAD_RESPONSE_1K then
+        AW.Headers.Set_('content-length', RESPONSE_1K_LEN_TEXT)
+      else
+        AW.Headers.Set_('content-length', SMALL_RESPONSE_LEN_TEXT);
       AW.WriteHeader(200);
-      AW.Write(PAnsiChar('Hello, World!')^, 13);
+      if GWorkload = WORKLOAD_RESPONSE_1K then
+        AW.Write(PAnsiChar(GResponseBody1K)^, Length(GResponseBody1K))
+      else
+        AW.Write(PAnsiChar(SMALL_RESPONSE_BODY)^, SMALL_RESPONSE_LEN);
     end), THttpServerOptions.Default);
 
   platform_thread_create(LHandle, @ServerThread, nil);

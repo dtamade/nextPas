@@ -18,6 +18,7 @@ const RESPONSE_BODY_LEN: usize = 13;
 const WORKLOAD_NO_URL: &str = "no_url";
 const WORKLOAD_URL_PATH: &str = "url_path";
 const WORKLOAD_ADAPTER_NO_URL: &str = "adapter_no_url";
+const WORKLOAD_RESPONSE_1K: &str = "response_1k";
 
 fn parse_options() -> (usize, usize, String) {
     let mut requests = 20_000usize;
@@ -46,6 +47,8 @@ fn parse_options() -> (usize, usize, String) {
                 workload = WORKLOAD_URL_PATH.to_string();
             } else if args[index + 1] == WORKLOAD_ADAPTER_NO_URL {
                 workload = WORKLOAD_ADAPTER_NO_URL.to_string();
+            } else if args[index + 1] == WORKLOAD_RESPONSE_1K {
+                workload = WORKLOAD_RESPONSE_1K.to_string();
             } else {
                 workload = WORKLOAD_NO_URL.to_string();
             }
@@ -109,10 +112,27 @@ fn read_one_request_matches_workload(
     }
 }
 
-fn read_one_response(stream: &mut TcpStream, buffer: &mut Vec<u8>) -> bool {
+fn response_body_len_for_workload(workload: &str) -> usize {
+    if workload == WORKLOAD_RESPONSE_1K {
+        1024
+    } else {
+        RESPONSE_BODY_LEN
+    }
+}
+
+fn build_response_1k() -> Vec<u8> {
+    let mut response = Vec::with_capacity(96 + 1024);
+    response.extend_from_slice(
+        b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 1024\r\nConnection: keep-alive\r\n\r\n",
+    );
+    response.extend(std::iter::repeat(b'x').take(1024));
+    response
+}
+
+fn read_one_response(stream: &mut TcpStream, buffer: &mut Vec<u8>, body_len: usize) -> bool {
     loop {
         if let Some(header_end) = find_bytes(buffer, b"\r\n\r\n") {
-            let required = header_end + 4 + RESPONSE_BODY_LEN;
+            let required = header_end + 4 + body_len;
             if buffer.len() >= required {
                 buffer.drain(..required);
                 return true;
@@ -129,11 +149,16 @@ fn handle_connection(mut stream: TcpStream, workload: String) {
     let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
 
     let mut buffer = Vec::with_capacity(1024);
+    let response_1k = build_response_1k();
     while let Some(matches_workload) =
         read_one_request_matches_workload(&mut stream, &mut buffer, &workload)
     {
         let response = if matches_workload {
-            RESPONSE
+            if workload == WORKLOAD_RESPONSE_1K {
+                response_1k.as_slice()
+            } else {
+                RESPONSE
+            }
         } else {
             NOT_FOUND_RESPONSE
         };
@@ -176,6 +201,7 @@ fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Ar
     let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
 
     let mut buffer = Vec::with_capacity(1024);
+    let response_body_len = response_body_len_for_workload(&workload);
     let request = match workload.as_str() {
         WORKLOAD_URL_PATH => REQUEST_URL_PATH,
         WORKLOAD_ADAPTER_NO_URL => REQUEST_ADAPTER_NO_URL,
@@ -185,7 +211,7 @@ fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Ar
         if stream.write_all(request).is_err() {
             break;
         }
-        if !read_one_response(&mut stream, &mut buffer) {
+        if !read_one_response(&mut stream, &mut buffer, response_body_len) {
             break;
         }
         completed.fetch_add(1, Ordering::Relaxed);

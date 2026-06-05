@@ -11,7 +11,7 @@ OUTPUT_PATH=""
 
 usage() {
   cat <<'EOF'
-usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url] [--output PATH]
+usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--output PATH]
 
 Build and run nextPas, Go, and Rust HTTP/1.1 keep-alive server benchmarks.
 EOF
@@ -71,10 +71,10 @@ if [[ "${THREADS}" -gt "${REQUESTS}" ]]; then
 fi
 
 case "${WORKLOAD}" in
-  no_url|url_path|adapter_no_url)
+  no_url|url_path|adapter_no_url|response_1k)
     ;;
   *)
-    echo "--workload must be no_url, url_path, or adapter_no_url" >&2
+    echo "--workload must be no_url, url_path, adapter_no_url, or response_1k" >&2
     exit 2
     ;;
 esac

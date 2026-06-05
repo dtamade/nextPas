@@ -146,7 +146,8 @@ stdout, and optionally writes the same report to `--output`. Use
 server implementation touch the request path before writing the response. Use
 `--workload adapter_no_url` to keep the handler no-URL while adding
 `Connection: keep-alive`, which forces nextPas through the llhttp adapter path
-instead of the H1 fast path.
+instead of the H1 fast path. Use `--workload response_1k` to write and read a
+complete 1 KiB fixed-length response body.
 
 To capture environment metadata and the comparison output in Markdown, run:
 

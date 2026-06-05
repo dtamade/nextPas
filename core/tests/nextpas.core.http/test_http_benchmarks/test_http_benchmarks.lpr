@@ -519,6 +519,46 @@ begin
   CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'adapter_no_url');
 end;
 
+procedure TestServerComparisonRunnerResponse1KSmallSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison response_1k runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_response_1k_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'response_1k', '--output', LReportPath], LRootDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison response_1k runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'comparison=http.server.keepalive',
+    'response_1k comparison marker');
+  CheckContains(LOutput, 'workload=response_1k',
+    'response_1k comparison workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1', 'response_1k');
+
+  Check(FileExists(LReportPath), 'server comparison response_1k report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'comparison=http.server.keepalive',
+    'response_1k report comparison marker');
+  CheckContains(LReport, 'workload=response_1k',
+    'response_1k report workload marker');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'response_1k');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -909,6 +949,8 @@ begin
     @TestServerComparisonRunnerUrlPathSmallSmoke);
   T.Run('server comparison runner adapter_no_url small smoke',
     @TestServerComparisonRunnerAdapterNoUrlSmallSmoke);
+  T.Run('server comparison runner response_1k small smoke',
+    @TestServerComparisonRunnerResponse1KSmallSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',

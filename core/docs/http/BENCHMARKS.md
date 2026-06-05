@@ -30,6 +30,9 @@ The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
 - `workload=adapter_no_url`: the request stays on `/` and does not read the
   URL, but it includes `Connection: keep-alive` so nextPas must leave the H1
   fast path and use the llhttp adapter path.
+- `workload=response_1k`: the request stays on `/`, and the server writes a
+  1 KiB fixed-length response body. The raw nextPas/Rust clients wait for the
+  complete response body, not just a status/header prefix.
 
 It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
 cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
@@ -1209,6 +1212,59 @@ does not erase the raw Pascal-vs-C llhttp gap below, but it shows that the
 current full-chain server gap is not explained by the H1 fast path alone. The
 next useful step is to split adapter materialization, response writer/drain, and
 runtime/socket overhead with narrower benchmarks or profiling.
+
+## Full-Chain Correlation: 1 KiB Response Workload
+
+On 2026-06-05 local time, `response_1k` was added to isolate response
+writer/drain and socket throughput beyond the tiny hello-world body. This batch
+also fixed the nextPas raw benchmark client to wait for `header_end + body_len`
+before counting a response as complete. That makes the large-response row
+meaningful and also makes new no-URL rows stricter than older prefix-read rows.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+19 total, 18 passed, 1 failed
+response_1k runner smoke failed because --workload accepted only no_url|url_path|adapter_no_url.
+heaptrc: 0 unfreed memory blocks
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+19 total, 19 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh local correlation:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload response_1k
+```
+
+| impl | workload | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| nextPas | response_1k | 50000 | 623561283 | 12471 | 80184 |
+| Go `net/http` | response_1k | 50000 | 2718470762 | 54369 | 18392 |
+| Rust std-only | response_1k | 50000 | 554412389 | 11088 | 90185 |
+
+Calibration no-URL row with the same complete-response reader:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url
+```
+
+| impl | workload | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| nextPas | no_url | 50000 | 569950075 | 11399 | 87726 |
+| Go `net/http` | no_url | 50000 | 2740141668 | 54802 | 18247 |
+| Rust std-only | no_url | 50000 | 527895368 | 10557 | 94715 |
+
+This suggests the current 1 KiB response writer/drain path is not the dominant
+gap versus Rust std-only on this machine. nextPas remains close to the Rust
+std-only comparator and far ahead of the Go comparator in these local rows.
+Future rows should use the complete-response reader when comparing server
+throughput.
 
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 

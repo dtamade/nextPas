@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,11 +17,14 @@ const responseBody = "Hello, World!"
 const workloadNoUrl = "no_url"
 const workloadUrlPath = "url_path"
 const workloadAdapterNoUrl = "adapter_no_url"
+const workloadResponse1K = "response_1k"
+const responseBodyLen = "13"
+const responseBody1KLen = "1024"
 
 func parseOptions() (int, int, string) {
 	requests := flag.Int("requests", 20000, "total requests")
 	threads := flag.Int("threads", 4, "concurrent keep-alive clients")
-	workload := flag.String("workload", workloadNoUrl, "workload: no_url, url_path, or adapter_no_url")
+	workload := flag.String("workload", workloadNoUrl, "workload: no_url, url_path, adapter_no_url, or response_1k")
 	flag.Parse()
 
 	if *requests < 1 {
@@ -32,7 +36,7 @@ func parseOptions() (int, int, string) {
 	if *threads > *requests {
 		*threads = *requests
 	}
-	if *workload != workloadUrlPath && *workload != workloadAdapterNoUrl {
+	if *workload != workloadUrlPath && *workload != workloadAdapterNoUrl && *workload != workloadResponse1K {
 		*workload = workloadNoUrl
 	}
 
@@ -116,16 +120,24 @@ func main() {
 		panic(err)
 	}
 
+	responseBody1K := strings.Repeat("x", 1024)
+
 	server := &http.Server{
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 			if workload == workloadUrlPath && request.URL.Path != "/api/v1/users" {
 				writer.WriteHeader(http.StatusNotFound)
 				return
 			}
+			body := responseBody
+			bodyLen := responseBodyLen
+			if workload == workloadResponse1K {
+				body = responseBody1K
+				bodyLen = responseBody1KLen
+			}
 			writer.Header().Set("Content-Type", "text/plain")
-			writer.Header().Set("Content-Length", "13")
+			writer.Header().Set("Content-Length", bodyLen)
 			writer.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(writer, responseBody)
+			_, _ = io.WriteString(writer, body)
 		}),
 	}
 

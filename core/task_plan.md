@@ -1,12 +1,14 @@
-# Task Plan: H1 server forced-adapter benchmark correlation
+# Task Plan: H1 server 1 KiB response benchmark correlation
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-本轮聚焦 forced-adapter full-chain isolation：在 `no_url` 与 `url_path` 之后，
-新增 `adapter_no_url` workload。该 workload 保持 no-URL handler，但在请求里带
-`Connection: keep-alive`，让 nextPas 明确绕开 H1 fast parser，进入 llhttp adapter
-path。
+本轮聚焦 response writer/drain + socket 成本拆分：在 `no_url`、`url_path`、
+`adapter_no_url` 之后，新增 `response_1k` workload。该 workload 保持 request
+路径为 `/`，但 server 写 1 KiB fixed-length body，用于观察响应写出和完整读取成本。
+
+本轮同时修正 benchmark harness：nextPas raw client 不再只读响应前缀，而是按
+`header_end + expected_body_len` 读完整响应再计数。
 
 本轮不改 public HTTP API，不改 generated
 `src/nextpas.core.http.impl.h1.llhttp.pas`，不写
@@ -15,14 +17,16 @@ path。
 ## Checklist
 
 - [x] 复核设计规范、HTTP coverage / benchmark docs、控制文件与 git status。
-- [x] 确认 fast path 条件：`HasConnection` 会让 `TryUseFastRequestParser` 返回
-  false。
-- [x] RED：新增 `adapter_no_url` runner smoke，先看到 runner 只接受
-  `no_url|url_path` 而失败。
+- [x] RED：新增 `response_1k` runner smoke，先看到 runner 只接受
+  `no_url|url_path|adapter_no_url` 而失败。
 - [x] GREEN：nextPas `bench_server`、Go comparator、Rust comparator 与
-  `run_server_comparison.sh` 都支持 `--workload adapter_no_url`。
-- [x] 跑 focused benchmark gate，锁住 no-url / url-path / adapter-no-url smoke。
-- [x] 跑 fresh 50k/4 `adapter_no_url` comparison，记录 nextPas / Go / Rust 对照。
+  `run_server_comparison.sh` 都支持 `--workload response_1k`。
+- [x] 修正 nextPas raw client：按 response header boundary + expected body length
+  读取完整响应。
+- [x] 跑 focused benchmark gate，锁住 no-url / url-path / adapter-no-url /
+  response-1k smoke。
+- [x] 跑 fresh 50k/4 `response_1k` comparison，并补一条完整响应读取后的 no-url
+  calibration row。
 - [x] 更新 API coverage / README / benchmark docs / 控制文件。
 - [ ] 跑 diff check 并 path-limited commit。
 
@@ -44,20 +48,24 @@ path。
 
 ## Current conclusion
 
-Fresh 50k/4 `adapter_no_url` row:
+Fresh 50k/4 `response_1k` row:
 
-- nextPas: `78828 req/s`, `12685 ns/op`
-- Go `net/http`: `17294 req/s`, `57822 ns/op`
-- Rust std-only: `95806 req/s`, `10437 ns/op`
+- nextPas: `80184 req/s`, `12471 ns/op`
+- Go `net/http`: `18392 req/s`, `54369 ns/op`
+- Rust std-only: `90185 req/s`, `11088 ns/op`
 
-这个结果说明：forced-adapter no-URL workload 下，nextPas 仍明显快于 Go comparator，
-仍慢于 Rust std-only comparator，但没有出现“离开 fast path 后 full-chain 崩塌”的证据。
-Pascal translated llhttp 的 raw gap 仍是真实优化 track；只是当前 server full-chain 差距
-不能只归因于 fast path 或 URL projection。
+Fresh 50k/4 no-url calibration row with complete-response reader:
+
+- nextPas: `87726 req/s`, `11399 ns/op`
+- Go `net/http`: `18247 req/s`, `54802 ns/op`
+- Rust std-only: `94715 req/s`, `10557 ns/op`
+
+这个结果说明：当前 1 KiB response writer/drain path 没有暴露明显的 Rust 级差距；
+nextPas 在本机 response_1k / no_url rows 中已经接近 Rust std-only comparator，并继续
+明显快于 Go comparator。
 
 ## Next target
 
-继续 `6/6 benchmark/performance`。下一批优先拆更窄的 full-chain 成本桶：
-parser adapter materialization、response writer/drain、runtime/socket handoff、
-request dispatch。若要继续碰 generated llhttp，应先补 perf-counter 证据或 generator
-级方案，而不是手改翻译产物。
+继续 `6/6 benchmark/performance`。下一批优先拆 request dispatch / handler
+invocation / response writer serialization 的更窄 micro/full-chain 组合，或者加稳定
+multi-run snapshot runner，减少单次本机噪声后再决定优化方向。
