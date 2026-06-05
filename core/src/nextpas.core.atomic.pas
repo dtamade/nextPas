@@ -1335,7 +1335,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -1348,7 +1348,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -1421,7 +1421,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -1439,7 +1439,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -1663,7 +1663,7 @@ begin
   // 成功路径的 release 屏障
   case aSuccessOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -1680,7 +1680,7 @@ begin
     // 成功路径的 acquire 屏障
     case aSuccessOrder of
       mo_seq_cst:
-        ReadWriteBarrier;
+        atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
         ReadBarrier;
     else
@@ -1695,7 +1695,7 @@ begin
     // 失败路径的 acquire 屏障
     case aFailureOrder of
       mo_seq_cst:
-        ReadWriteBarrier;
+        atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
         ReadBarrier;
     else
@@ -1728,7 +1728,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aSuccessOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -1745,7 +1745,7 @@ begin
     {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
     case aSuccessOrder of
       mo_seq_cst:
-        ReadWriteBarrier;
+        atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
         ReadBarrier;
     else
@@ -1759,7 +1759,7 @@ begin
     {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
     case aFailureOrder of
       mo_seq_cst:
-        ReadWriteBarrier;
+        atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
         ReadBarrier;
     else
@@ -1795,7 +1795,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aSuccessOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -1810,7 +1810,7 @@ begin
     {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
     case aFailureOrder of
       mo_seq_cst:
-        ReadWriteBarrier;
+        atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
         ReadBarrier;
     else
@@ -1830,7 +1830,7 @@ begin
     {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
     case aFailureOrder of
       mo_seq_cst:
-        ReadWriteBarrier;
+        atomic_seq_cst_fence;
       mo_consume, mo_acquire, mo_acq_rel:
         ReadBarrier;
     else
@@ -1844,7 +1844,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aSuccessOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -2390,7 +2390,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -2403,7 +2403,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -2450,7 +2450,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -2467,7 +2467,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -2546,7 +2546,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -2564,7 +2564,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -2610,7 +2610,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -2633,7 +2633,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -2661,7 +2661,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -2679,7 +2679,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -2725,7 +2725,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   end;
@@ -2746,7 +2746,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   end;
@@ -2772,7 +2772,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   end;
@@ -2788,7 +2788,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   end;
@@ -2832,7 +2832,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   end;
@@ -2853,7 +2853,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   end;
@@ -2883,7 +2883,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   end;
@@ -2902,7 +2902,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   end;
@@ -2927,7 +2927,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   end;
@@ -2951,7 +2951,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   end;
@@ -2977,7 +2977,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -2998,7 +2998,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -3025,7 +3025,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -3051,7 +3051,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -3079,7 +3079,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -3097,7 +3097,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else
@@ -3124,7 +3124,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
   else
@@ -3147,7 +3147,7 @@ begin
   {$IF NOT (DEFINED(CPUX86_64) OR DEFINED(CPUX86))}
   case aOrder of
     mo_seq_cst:
-      ReadWriteBarrier;
+      atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
   else

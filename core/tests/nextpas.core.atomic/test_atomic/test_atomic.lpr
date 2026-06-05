@@ -206,6 +206,8 @@ var
   LX8664SnapshotSource: string;
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
+  LSeqCstFenceHelperSection: string;
+  LThreadFenceSection: string;
   LSingleStrongCasSection: string;
   LSingleWeakCasSection: string;
   LCompatFailureSection: string;
@@ -223,12 +225,18 @@ begin
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotPath);
+  LThreadFenceSection := ExtractImplementationSection(LAtomicCoreSource,
+    'procedure atomic_thread_fence(aOrder: memory_order_t);',
+    'procedure atomic_signal_fence(aOrder: memory_order_t);');
   LSignalFenceSection := ExtractImplementationSection(LAtomicCoreSource,
     'procedure atomic_signal_fence(aOrder: memory_order_t);',
     'function atomic_tagged_ptr');
   LSignalFenceHelperSection := ExtractImplementationSection(LAtomicCoreSource,
     'procedure _compiler_signal_fence; assembler; nostackframe;',
     'procedure atomic_thread_fence');
+  LSeqCstFenceHelperSection := ExtractSection(LAtomicCoreSource,
+    'procedure atomic_seq_cst_fence;',
+    'procedure cpu_pause;');
   LSingleStrongCasSection := ExtractImplementationSection(LAtomicSource,
     '// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（成功和失败使用相同内存序）',
     'function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;');
@@ -276,8 +284,8 @@ begin
   CheckContains(LAtomicSource,
     'use only a compiler barrier to prevent reordering.',
     'seq_cst load docs must describe compiler-barrier-only x86 mapping');
-  CheckContains(LAtomicCoreSource, 'mo_seq_cst: ReadWriteBarrier;',
-    'atomic_thread_fence seq_cst must map to ReadWriteBarrier in live core path');
+  CheckContains(LAtomicCoreSource, 'procedure atomic_seq_cst_fence;',
+    'atomic core must define a dedicated seq_cst fence helper');
   CheckNotContains(LSignalFenceSection, 'ReadWriteBarrier',
     'atomic_signal_fence must not use hardware fences in live core path');
   CheckContains(LSignalFenceSection, '_compiler_signal_fence;',
@@ -286,6 +294,12 @@ begin
     'atomic_signal_fence compiler barrier helper must be assembler-based');
   CheckContains(LSignalFenceHelperSection, 'end;',
     'atomic_signal_fence compiler barrier helper must remain empty assembler barrier');
+  CheckContains(LSeqCstFenceHelperSection, 'CPUPPC',
+    'seq_cst fence helper must specialize PPC/PPC64');
+  CheckContains(LSeqCstFenceHelperSection, 'sync',
+    'seq_cst fence helper must use a heavyweight PPC sync fence');
+  CheckContains(LThreadFenceSection, 'mo_seq_cst: atomic_seq_cst_fence;',
+    'atomic_thread_fence seq_cst must route through the dedicated seq_cst fence helper');
   CheckContains(LX8664SnapshotSource, 'Historical x86_64 atomic implementation snapshot.',
     'x86_64 snapshot must be marked historical');
   CheckContains(LX8664SnapshotSource, 'This file is not included by nextpas.core.atomic.pas.',
@@ -312,6 +326,12 @@ begin
     'non-x86 seq_cst 32-bit store must add full barriers around InterlockedExchange');
   CheckContains(LStore64SeqCstSection, 'ReadWriteBarrier',
     'non-x86 seq_cst 64-bit store must add full barriers around InterlockedExchange64');
+  CheckNotContains(LAtomicSource, 'mo_seq_cst:' + LineEnding + '      ReadWriteBarrier;',
+    'seq_cst cases in atomic source must not rely on bare ReadWriteBarrier');
+  CheckNotContains(LAtomicSource, 'mo_seq_cst:' + LineEnding + '        ReadWriteBarrier;',
+    'deep seq_cst cases in atomic source must not rely on bare ReadWriteBarrier');
+  CheckContains(LAtomicSource, 'mo_seq_cst:' + LineEnding + '      atomic_seq_cst_fence;',
+    'seq_cst cases must use the dedicated seq_cst fence helper');
 end;
 
 procedure TestConcurrentFetchAdd;

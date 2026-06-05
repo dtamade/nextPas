@@ -32,6 +32,7 @@ type
   );
 
 procedure cpu_pause;
+procedure atomic_seq_cst_fence;
 procedure atomic_thread_fence(aOrder: memory_order_t);
 procedure atomic_signal_fence(aOrder: memory_order_t);
 
@@ -112,6 +113,18 @@ begin
 end;
 {$ENDIF}
 
+{$IF DEFINED(CPUPPC) OR DEFINED(CPUPPC64)}
+procedure atomic_seq_cst_fence; assembler; nostackframe;
+asm
+  sync
+end;
+{$ELSE}
+procedure atomic_seq_cst_fence;
+begin
+  ReadWriteBarrier;
+end;
+{$ENDIF}
+
 procedure cpu_pause;
 begin
   {$IF DEFINED(CPUX86_64)}
@@ -148,7 +161,7 @@ begin
     mo_acquire: ReadBarrier;
     mo_release: WriteBarrier;
     mo_acq_rel: ReadWriteBarrier;
-    mo_seq_cst: ReadWriteBarrier;
+    mo_seq_cst: atomic_seq_cst_fence;
   end;
 end;
 
