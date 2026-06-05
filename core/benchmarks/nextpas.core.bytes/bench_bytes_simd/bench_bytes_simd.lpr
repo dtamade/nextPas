@@ -1,4 +1,4 @@
-program bench_bytes_ops;
+program bench_bytes_simd;
 {$mode objfpc}{$H+}
 uses
   SysUtils, Unix, BaseUnix,
