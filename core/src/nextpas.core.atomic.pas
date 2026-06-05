@@ -95,12 +95,14 @@ function AtomicFetchAnd32(var ATarget: Int32; const AValue: Int32; const AOrder:
 function AtomicFetchOr32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 function AtomicFetchXor32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function AtomicLoad64(var ATarget: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
 procedure AtomicStore64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchange64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
 function AtomicCompareExchange64(var ATarget: Int64; const AExpected, ADesired: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
 function AtomicFetchAdd64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
 function AtomicFetchSub64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder = moSeqCst): Int64; inline;
+{$ENDIF}
 
 function AtomicLoadPtr(var ATarget: Pointer; const AOrder: TMemoryOrder = moSeqCst): Pointer; inline;
 procedure AtomicStorePtr(var ATarget: Pointer; const AValue: Pointer; const AOrder: TMemoryOrder = moSeqCst); inline;
@@ -123,7 +125,7 @@ procedure AtomicSignalFence(const AOrder: TMemoryOrder = moSeqCst); inline;
  *   - mo_release: 释放屏障，确保屏障前的写操作不会被重排到屏障后
  *   - mo_acq_rel: 获取+释放屏障，结合两者的效果
  *   - mo_seq_cst: 顺序一致性屏障，最强的同步保证
- *   - mo_relaxed: 无效，会触发运行时错误
+ *   - mo_relaxed: 无额外同步要求；在当前实现中是 no-op
  *
  * @usage
  *   // 生产者-消费者模式
@@ -151,7 +153,7 @@ procedure atomic_thread_fence(aOrder: memory_order_t);
  *   atomic_signal_fence(mo_release);  // 防止编译器重排序
  *
  * @thread_safety 线程安全
- * @performance 零开销（仅编译器指令）
+ * @performance 不发出硬件内存屏障；当前实现可能保留轻量过程调用开销
  * @rust_equivalent std::sync::atomic::compiler_fence
  * @cpp_equivalent std::atomic_signal_fence
  *}
@@ -658,6 +660,32 @@ begin
   _consume_memory_order(aFailureOrder);
 end;
 
+function _cas_success_order(const aOrder: memory_order_t): memory_order_t; inline;
+begin
+  if aOrder = mo_consume then
+    Result := mo_acquire
+  else
+    Result := aOrder;
+end;
+
+function AtomicCompatFailureOrder(const AOrder: TMemoryOrder): TMemoryOrder; inline;
+begin
+  case _cas_success_order(AOrder) of
+    mo_relaxed:
+      Result := mo_relaxed;
+    mo_acquire:
+      Result := mo_acquire;
+    mo_release:
+      Result := mo_relaxed;
+    mo_acq_rel:
+      Result := mo_acquire;
+    mo_seq_cst:
+      Result := mo_seq_cst;
+  else
+    Result := mo_relaxed;
+  end;
+end;
+
 //┌────────────────────────────────────────────────────────────────────────────┐
 //│       Phase 1: 32 位 x86 上的 64 位原子操作底层实现                      │
 //└────────────────────────────────────────────────────────────────────────────┘
@@ -885,9 +913,12 @@ begin
   if not gAtomic64HasCmpxchg8b then
   begin
     _atomic64_fallback_lock;
-    Result := aObj;
-    aObj := aObj + aArg;
-    _atomic64_fallback_unlock;
+    try
+      Result := aObj;
+      aObj := Int64(UInt64(aObj) + UInt64(aArg));
+    finally
+      _atomic64_fallback_unlock;
+    end;
     Exit;
   end;
 
@@ -986,7 +1017,6 @@ end;
 {$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function atomic_load_64(var aObj: Int64; aOrder: memory_order_t): Int64;
 begin
-  Result := aObj;
   {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}
   // 32-bit x86: use CMPXCHG8B-based atomic load
   Result := _atomic_load_64_x86(aObj);
@@ -1886,26 +1916,30 @@ end;
 function atomic_compare_exchange_strong(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_compare_exchange_strong(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 {$IFDEF CPU64}
 function atomic_compare_exchange_strong(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_compare_exchange_strong(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 {$ENDIF}
 
@@ -1913,46 +1947,53 @@ end;
 function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong_64(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 {$ENDIF}
 
 function atomic_compare_exchange_strong(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_strong(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 // weak 版本 - 单内存序
 function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_compare_exchange_weak(var aObj: UInt32; var aExpected: UInt32; aDesired: UInt32;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 {$IFDEF CPU64}
 function atomic_compare_exchange_weak(var aObj: PtrInt; var aExpected: PtrInt; aDesired: PtrInt;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_compare_exchange_weak(var aObj: PtrUInt; var aExpected: PtrUInt; aDesired: PtrUInt;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 {$ENDIF}
 
@@ -1960,20 +2001,23 @@ end;
 function atomic_compare_exchange_weak_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak_64(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak_64(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_compare_exchange_weak_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak_64(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak_64(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 {$ENDIF}
 
 function atomic_compare_exchange_weak(var aObj: Pointer; var aExpected: Pointer; aDesired: Pointer;
   aOrder: memory_order_t): Boolean;
 begin
-  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired, aOrder, aOrder);
+  Result := atomic_compare_exchange_weak(aObj, aExpected, aDesired,
+    _cas_success_order(aOrder), AtomicCompatFailureOrder(aOrder));
 end;
 
 function atomic_increment(var aObj: Int32): Int32;
@@ -2553,6 +2597,8 @@ begin
       ReadWriteBarrier;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2574,6 +2620,8 @@ begin
       ReadWriteBarrier;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -2600,6 +2648,8 @@ begin
       ReadWriteBarrier;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2616,6 +2666,8 @@ begin
       ReadWriteBarrier;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -2912,6 +2964,8 @@ begin
       ReadWriteBarrier;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2931,6 +2985,8 @@ begin
       ReadWriteBarrier;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -2956,6 +3012,8 @@ begin
       ReadWriteBarrier;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2980,6 +3038,8 @@ begin
       ReadWriteBarrier;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -3006,6 +3066,8 @@ begin
       ReadWriteBarrier;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -3022,6 +3084,8 @@ begin
       ReadWriteBarrier;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -3047,6 +3111,8 @@ begin
       ReadWriteBarrier;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -3068,6 +3134,8 @@ begin
       ReadWriteBarrier;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -3315,24 +3383,6 @@ begin
   until False;
 end;
 
-function AtomicCompatFailureOrder(const AOrder: TMemoryOrder): TMemoryOrder; inline;
-begin
-  case AOrder of
-    mo_relaxed:
-      Result := mo_relaxed;
-    mo_acquire:
-      Result := mo_acquire;
-    mo_release:
-      Result := mo_relaxed;
-    mo_acq_rel:
-      Result := mo_acquire;
-    mo_seq_cst:
-      Result := mo_seq_cst;
-  else
-    Result := mo_relaxed;
-  end;
-end;
-
 procedure CpuPause;
 begin
   cpu_pause;
@@ -3387,6 +3437,7 @@ begin
   Result := atomic_fetch_xor(ATarget, AValue, AOrder);
 end;
 
+{$IF DEFINED(CPU64) OR DEFINED(CPUX86)}
 function AtomicLoad64(var ATarget: Int64; const AOrder: TMemoryOrder): Int64;
 begin
   Result := atomic_load_64(ATarget, AOrder);
@@ -3420,6 +3471,7 @@ function AtomicFetchSub64(var ATarget: Int64; const AValue: Int64; const AOrder:
 begin
   Result := atomic_fetch_sub_64(ATarget, AValue, AOrder);
 end;
+{$ENDIF}
 
 function AtomicLoadPtr(var ATarget: Pointer; const AOrder: TMemoryOrder): Pointer;
 begin

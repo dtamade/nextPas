@@ -419,20 +419,16 @@ end;
 function _cas_failure_order(const ASuccessOrder: memory_order_t): memory_order_t; inline;
 begin
   // Failure order may not include release/acq_rel.
-  case ASuccessOrder of
-    mo_relaxed:
-      Result := mo_relaxed;
-    mo_acquire:
-      Result := mo_acquire;
-    mo_release:
-      Result := mo_relaxed;
-    mo_acq_rel:
-      Result := mo_acquire;
-    mo_seq_cst:
-      Result := mo_seq_cst;
+  if ASuccessOrder = mo_relaxed then
+    Result := mo_relaxed
+  else if (ASuccessOrder = mo_consume) or (ASuccessOrder = mo_acquire) then
+    Result := mo_acquire
+  else if ASuccessOrder = mo_release then
+    Result := mo_relaxed
+  else if ASuccessOrder = mo_acq_rel then
+    Result := mo_acquire
   else
-    Result := mo_relaxed;
-  end;
+    Result := mo_seq_cst;
 end;
 
 { TAtomicInt32 }
@@ -635,13 +631,7 @@ end;
 
 class function TAtomicInt64.is_lock_free: Boolean;
 begin
-  // 64-bit atomic operations are lock-free on 64-bit platforms
-  // On x86/x64, CMPXCHG8B provides lock-free 64-bit atomics even in 32-bit mode
-  {$IFDEF CPU64}
-  Result := True;
-  {$ELSE}
-  Result := True;  // x86 with CMPXCHG8B instruction
-  {$ENDIF}
+  Result := atomic_is_lock_free_64;
 end;
 
 function TAtomicInt64.Load(AOrder: memory_order_t): Int64;
@@ -735,13 +725,7 @@ end;
 
 class function TAtomicUInt64.is_lock_free: Boolean;
 begin
-  // 64-bit atomic operations are lock-free on 64-bit platforms
-  // On x86/x64, CMPXCHG8B provides lock-free 64-bit atomics even in 32-bit mode
-  {$IFDEF CPU64}
-  Result := True;
-  {$ELSE}
-  Result := True;  // x86 with CMPXCHG8B instruction
-  {$ENDIF}
+  Result := atomic_is_lock_free_64;
 end;
 
 function TAtomicUInt64.Load(AOrder: memory_order_t): UInt64;

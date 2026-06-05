@@ -1,6 +1,13 @@
 {
   nextpas.core.atomic.x86_64.inc
-  x86_64 atomic operations implementation.
+  Historical x86_64 atomic implementation snapshot.
+
+  NOTE:
+  - This file is not included by nextpas.core.atomic.pas.
+  - The live implementation path is nextpas.core.atomic.pas plus
+    nextpas.core.atomic.core.pas.
+  - Keep this file only as a reference snapshot; do not use it as proof of
+    current runtime behavior.
 
   x86_64 has Total Store Order (TSO):
   - All stores are release stores (visible to other cores in order)

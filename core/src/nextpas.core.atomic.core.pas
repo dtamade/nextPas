@@ -18,6 +18,9 @@ unit nextpas.core.atomic.core;
 
 interface
 
+uses
+  nextpas.core.errors;
+
 type
   memory_order_t = (
     mo_relaxed,
@@ -69,6 +72,46 @@ const
   MAX_TAG: UInt32 = UInt32((PtrUInt(1) shl TAG_BITS) - 1);
 {$ENDIF}
 
+{$IF DEFINED(CPUX86_64)}
+function _x86_64_pointer_to_low48(const aPtr: Pointer): PtrUInt; inline;
+var
+  LValue: PtrUInt;
+  LLow48: PtrUInt;
+  LCanonical: PtrUInt;
+  LSignBit: PtrUInt;
+  LHighMask: PtrUInt;
+begin
+  LValue := PtrUInt(aPtr);
+  LLow48 := LValue and PTR_MASK;
+  LSignBit := PtrUInt(1) shl (TAG_SHIFT - 1);
+  LHighMask := not PTR_MASK;
+  if (LLow48 and LSignBit) <> 0 then
+    LCanonical := LLow48 or LHighMask
+  else
+    LCanonical := LLow48;
+
+  if LCanonical <> LValue then
+    raise EArgumentError.Create('atomic_tagged_ptr: pointer out of range for x86_64 packing');
+
+  Result := LLow48;
+end;
+
+function _x86_64_low48_to_pointer(const aValue: PtrUInt): Pointer; inline;
+var
+  LCanonical: PtrUInt;
+  LSignBit: PtrUInt;
+  LHighMask: PtrUInt;
+begin
+  LSignBit := PtrUInt(1) shl (TAG_SHIFT - 1);
+  LHighMask := not PTR_MASK;
+  if (aValue and LSignBit) <> 0 then
+    LCanonical := aValue or LHighMask
+  else
+    LCanonical := aValue and PTR_MASK;
+  Result := Pointer(LCanonical);
+end;
+{$ENDIF}
+
 procedure cpu_pause;
 begin
   {$IF DEFINED(CPUX86_64)}
@@ -91,6 +134,12 @@ begin
   {$ENDIF}
 end;
 
+// FPC does not expose a dedicated compiler-fence intrinsic here, so use an
+// empty assembler procedure as a compiler-only barrier for signal fences.
+procedure _compiler_signal_fence; assembler; nostackframe;
+asm
+end;
+
 procedure atomic_thread_fence(aOrder: memory_order_t);
 begin
   case aOrder of
@@ -107,11 +156,12 @@ procedure atomic_signal_fence(aOrder: memory_order_t);
 begin
   case aOrder of
     mo_relaxed:;
-    mo_consume: ReadWriteBarrier;
-    mo_acquire: ReadWriteBarrier;
-    mo_release: ReadWriteBarrier;
-    mo_acq_rel: ReadWriteBarrier;
-    mo_seq_cst: ReadWriteBarrier;
+    mo_consume,
+    mo_acquire,
+    mo_release,
+    mo_acq_rel,
+    mo_seq_cst:
+      _compiler_signal_fence;
   end;
 end;
 
@@ -121,7 +171,7 @@ begin
   {$WARN 4055 OFF}
   {$IFDEF NEXTPAS_ATOMIC_TAGGED_PTR_CHECKS}
     {$IF DEFINED(CPUX86_64)}
-      Assert((PtrUInt(aPtr) and (not PTR_MASK)) = 0, 'atomic_tagged_ptr: pointer out of range for x86_64 packing');
+      _x86_64_pointer_to_low48(aPtr);
     {$ELSE}
       Assert((PtrUInt(aPtr) and TAG_MASK) = 0, 'atomic_tagged_ptr: pointer not aligned for low-bit tag packing');
       Assert((PtrUInt(aTag) and (not TAG_MASK)) = 0, 'atomic_tagged_ptr: tag does not fit TAG_BITS');
@@ -129,7 +179,7 @@ begin
   {$ENDIF}
 
   {$IF DEFINED(CPUX86_64)}
-  Result := (PtrUInt(aPtr) and PTR_MASK) or (PtrUInt(aTag) shl TAG_SHIFT);
+  Result := _x86_64_pointer_to_low48(aPtr) or (PtrUInt(aTag) shl TAG_SHIFT);
   {$ELSE}
   Result := (PtrUInt(aPtr) and PTR_MASK) or (PtrUInt(aTag) and TAG_MASK);
   {$ENDIF}
@@ -140,7 +190,11 @@ function atomic_tagged_ptr_get_ptr(const aTaggedPtr: atomic_tagged_ptr_t): Point
 begin
   {$PUSH}
   {$WARN 4055 OFF}
+  {$IF DEFINED(CPUX86_64)}
+  Result := _x86_64_low48_to_pointer(PtrUInt(aTaggedPtr) and PTR_MASK);
+  {$ELSE}
   Result := Pointer(PtrUInt(aTaggedPtr) and PTR_MASK);
+  {$ENDIF}
   {$POP}
 end;
 
