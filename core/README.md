@@ -1,19 +1,23 @@
 # nextpas.core
 
-nextPas 的唯一基座框架。提供从基础类型到 HTTP 服务、终端 UI 的完整开发能力。
+nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例、benchmark 和模块文档。
 
-## 状态
+这份 README 只做 core 子项目导航；设计规范以 `docs/design-conventions.md` 为准。
 
-初始阶段，L0 内核模块与第一批 L1 基础设施模块已开始落地：
+## 先从这里读
 
-- L0: `base`、`errors`、`platform`、`mem`、`log.intf`
-- L1: `testing`、`bytes`、`time`、`sync`
+1. `AGENTS.md`
+2. `docs/design-conventions.md`
+3. 仓库根目录 `../AGENTS.md`
+4. 仓库根目录 `../docs/worktrees.md`
+5. 当前模块的 `docs/<module>/`、`docs/nextpas.core.<module>*.md` 或 `docs/plans/*`
 
-顶层 `build/verify_local.sh` 已覆盖 `nextpas.core.time`，以及
-`nextpas.core.platform` 下 `time` / `thread` / `sync` / FFI focused 编译、运行、边界检查与
-simulated host compile matrix。
+如果你直接在 `core/` 目录启动 Codex/Claude，先读 `AGENTS.md`。如果你在仓库根目录启动，
+也要在改 core 代码前回到这里读 core 专属入口。
 
 ## 构建
+
+core 有自己的聚合 `Makefile`：
 
 ```bash
 make build       # 编译框架
@@ -26,6 +30,19 @@ make clean       # 清理构建产物
 每个 `tests/`、`benchmarks/`、`examples/` 下的独立项目都应提供自己的
 `Makefile`，可以进入项目目录单独构建或运行。顶层 Makefile 只做聚合，
 不要把大型框架的失败边界藏在一个总脚本里。
+
+普通模块开发优先跑 focused gate，例如：
+
+```bash
+make -C tests/nextpas.core.http/test_http_client clean test
+```
+
+提交前还要从仓库根目录运行：
+
+```bash
+make -C "$(git rev-parse --show-toplevel)" hygiene
+git diff --check
+```
 
 ## 要求
 
@@ -46,7 +63,15 @@ build/      构建产物（git ignored）
 
 ## 设计规范
 
-见 [docs/design-conventions.md](docs/design-conventions.md)
+`docs/design-conventions.md` 是 nextpas.core 的设计规范和项目规范权威入口。它覆盖：
+
+- 命名、文件组织和模块四件套范式
+- L0-L3 分层和 owner boundary
+- 接口、错误处理、FFI、内存所有权、线程安全
+- 测试、benchmark、example 和文档布局
+- 构建产物隔离和多人 / 多 AI 协作纪律
+
+core 下的任何生产代码、测试、示例或 benchmark 改动，都必须遵守该文件。
 
 ## 许可证
 

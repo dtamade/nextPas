@@ -9,13 +9,14 @@
 ## Authority Map
 
 - `AGENTS.md`：仓库级 AI 协作、worktree、汇报、Git 安全和验证纪律。
+- `core/AGENTS.md`：`nextpas.core` 专属 AI 入口，适用于直接在 `core/` 下开工的同事。
 - `docs/worktrees.md`：项目本地 `.worktrees/` 与模块 lane 的操作规范。
 - `core/docs/design-conventions.md`：`nextpas.core` 的设计风格、模块范式、分层约束、测试布局和代码组织规范。
 - `docs/architecture/`：nextPas 编译器、toolchain、stage0、RTL/CRT 等仓库级稳定架构事实。
 - `docs/plans/`：当前路线图、阶段计划和活动计划。
 
 做 `core/` 下任何生产代码、测试、示例或 benchmark 改动前，必须先读
-`core/docs/design-conventions.md`。不要用本文件替代 `nextpas.core` 的设计规范。
+`core/AGENTS.md` 和 `core/docs/design-conventions.md`。不要用本文件替代 `nextpas.core` 的设计规范。
 
 ## Start Here
 

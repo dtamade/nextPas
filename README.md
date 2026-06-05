@@ -11,11 +11,12 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 
 1. `AGENTS.md`
 2. `docs/worktrees.md`
-3. `core/docs/design-conventions.md`
-4. `docs/adr/0001-fpc-reference-baseline.md`
-5. `docs/architecture/documentation-baseline-specification.md`
-6. `docs/architecture/README.md`
-7. `docs/plans/README.md`
+3. `core/AGENTS.md`
+4. `core/docs/design-conventions.md`
+5. `docs/adr/0001-fpc-reference-baseline.md`
+6. `docs/architecture/documentation-baseline-specification.md`
+7. `docs/architecture/README.md`
+8. `docs/plans/README.md`
 
 如果你要恢复当前上下文，这些入口已经足够把“协作纪律、基线决策、稳定规范、活动计划和历史记录”
 分开看清。
@@ -46,6 +47,7 @@ nextPas 是一个与 FreePascal 兼容的现代化重构项目，长期目标是
 
 - AI/协作规范：`AGENTS.md`
 - worktree 与模块 lane 规范：`docs/worktrees.md`
+- `nextpas.core` AI/协作入口：`core/AGENTS.md`
 - `nextpas.core` 设计风格与范式规范：`core/docs/design-conventions.md`
 - 基线决策：`docs/adr/0001-fpc-reference-baseline.md`
 - 文档分层规则：`docs/architecture/documentation-baseline-specification.md`
