@@ -186,16 +186,16 @@ procedure HookSigwinch;
 begin
   if GSigwinchHooked then Exit;
   {$IF declared(PLATFORM_SIGWINCH)}
-  platform_signal_set(PLATFORM_SIGWINCH, @SigwinchHandler);
+  if platform_signal_set(PLATFORM_SIGWINCH, @SigwinchHandler) = 0 then
+    GSigwinchHooked := True;
   {$ENDIF}
-  GSigwinchHooked := True;
 end;
 
 procedure HookSigterm;
 begin
   if GSigtermHooked then Exit;
-  platform_signal_set(PLATFORM_SIGTERM, @SigtermHandler);
-  GSigtermHooked := True;
+  if platform_signal_set(PLATFORM_SIGTERM, @SigtermHandler) = 0 then
+    GSigtermHooked := True;
 end;
 
 procedure UnhookSigwinch;

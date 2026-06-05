@@ -31,6 +31,7 @@ type
   SRWLOCK = Pointer;
   CONDITION_VARIABLE = Pointer;
   TPlatformWindowsThreadProc = function(AArg: Pointer): Pointer; cdecl;
+  TConsoleCtrlHandlerRoutine = function(dwCtrlType: DWORD): WINBOOL; stdcall;
 
   FILETIME = record
     dwLowDateTime: DWORD;
@@ -251,6 +252,9 @@ const
   CP_UTF8 = UINT(65001);
   MB_ERR_INVALID_CHARS = DWORD($00000008);
   WC_ERR_INVALID_CHARS = DWORD($00000080);
+  CTRL_C_EVENT = DWORD(0);
+  CTRL_BREAK_EVENT = DWORD(1);
+  ERROR_NOT_SUPPORTED = DWORD(50);
 
 { additional kernel32 types, error codes, and constants }
 {$I nextpas.core.platform.windows.base.kernel32.inc}
