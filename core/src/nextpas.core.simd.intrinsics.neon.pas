@@ -1,12 +1,12 @@
 unit nextpas.core.simd.intrinsics.neon;
-// Disposition: STABLE — low-level intrinsics for non-x86 backends
+// Disposition: Experimental Isolated — NEON stub intrinsics for opt-in bring-up
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.neon ===
-  Placeholder ARM NEON intrinsics surface for isolated experimental bring-up.
+  Stub ARM NEON intrinsics surface for isolated experimental bring-up.
   NEON is ARM's 128-bit SIMD extension.
   Highlights:
   - 128-bit vector registers (q0-q15)

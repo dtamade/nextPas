@@ -1,12 +1,12 @@
 unit nextpas.core.simd.intrinsics.rvv;
-// Disposition: STABLE — low-level intrinsics for non-x86 backends
+// Disposition: Experimental Isolated — RVV stub intrinsics for opt-in bring-up
 
 {$I nextpas.core.settings.inc}
 {$I nextpas.core.simd.settings.inc}
 
 {
   === nextpas.core.simd.intrinsics.rvv ===
-  Placeholder RISC-V Vector Extension (RVV) intrinsics surface.
+  Stub RISC-V Vector Extension (RVV) intrinsics surface.
   RVV provides scalable vector-length programming for RISC-V targets.
   Highlights:
   - configurable vector lengths

@@ -1,6 +1,6 @@
 # SIMD 模块目标树（总控地图）
 
-> 最后更新: 2026-05-29
+> 最后更新: 2026-06-06
 > 总目标: 打造 FreePascal 领域最优秀的 SIMD 框架
 
 ## 总览
@@ -18,8 +18,21 @@ nextpas.core.simd
 ├── G9: RTL 依赖清零                 [ 90%] ✅
 ├── G10: 高级计算 (parallel/quant/NEON) [100%] ✅
 ├── G11: SIMD 深化 (INT8 dot/RealFft) [100%] ✅
-└── G12: 算法层 (Winograd/Attention/Strassen) [100%] ✅
+├── G12: 算法层 (Winograd/Attention/Strassen) [100%] ✅
+└── G13: SIMD contract qualification roadmap [ACTIVE] 🚧
 ```
+
+## G13: SIMD contract qualification roadmap — 当前活跃路线
+
+这条路线不是新增性能承诺，而是把 public contract、backend disposition、测试隔离和未来 API 边界说清楚。它覆盖当前 SIMD 线的验收点：
+
+- [x] 512-bit record alignment: FPC `RECORDMIN=32` 不能保证普通 record/栈/数组/对象字段有 64-byte 地址；AVX-512 aligned load/store 只能依赖 `SimdAlloc(..., sa64)`、`AlignedAlloc(..., SIMD_ALIGN_64)` 或显式 aligned storage。
+- [ ] NEON public backend status: 默认 public 状态是 scalar fallback；NEON inline asm 只有在 FPC 3.3.1+ 且 `NEXTPAS_SIMD_EXPERIMENTAL_BACKEND_ASM` / `NEXTPAS_SIMD_ENABLE_NEON_ASM` / `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY` 同时满足时 opt-in。
+- [ ] RISC-V V and LoongArch/LASX: 只能描述为 experimental/stub，不能包装成 stable backend；相关测试保持 opt-in / source-contract / QEMU 或目标机隔离。
+- [ ] gather/scatter partial coverage: 现有 `VecF32x4` / `VecI32x4` utility 层和 AVX2 intrinsics 已有部分 coverage；下一阶段补正式 public facade、更多 lane、更多 backend coverage。
+- [ ] F16/half precision design: 先定义类型/转换/检测/fallback 边界，再进入 ABI；能力检测至少覆盖 F16C、AVX512BF16、NEON FP16 和 scalar fallback。
+- [ ] transpose API boundary: 区分 linalg matrix transpose（矩阵布局/API）和 SIMD lane transpose（寄存器 lane 重排），避免同名 API 混用。
+- [ ] NEON AArch64 ABI GPR-to-vector: 文档和 benchmark 必须说明 GPR-to-vector 组装/拆回开销，不能无条件宣称 NEON 更快。
 
 ---
 
@@ -148,18 +161,18 @@ nextpas.core.simd
 
 ```
 >>> 立即执行 <<<
-1. [G3.2] 审计修复 Wave 1 — Step 1-3 (测试bug + 死代码 + 过时文件)
-2. [G3.3] HeapTrc 验证 nn 模块
-3. [G3.2] 审计修复 Wave 1 — Step 4-7 (文档 + 补充测试)
+1. [G13] SIMD contract qualification roadmap — public/backend/source contract
+2. [G13] 512-bit alignment + non-x86 backend status + experimental isolation
+3. [G13] F16 / gather-scatter / transpose API boundary design
 
 >>> 下一阶段 <<<
-4. [G4] 文档修复
-5. [G3.2] 审计修复 Wave 2
-6. [G5] nn benchmark
+4. [G13] public facade/API proposal with tests before ABI changes
+5. [G3] focused source-contract and runtime gate maintenance
+6. [G5] benchmark and cross-runtime comparison after contracts stabilize
 
 >>> 远期 <<<
-7. [G1.5] Integer AVX-512 batch
-8. [G5] 跨后端对比
+7. [G5] NEON AArch64 ABI cost benchmark and cross-runtime comparison
+8. [G13] broader backend/lane coverage after hardware or QEMU evidence is available
 ```
 
 ---

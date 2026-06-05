@@ -121,6 +121,12 @@ src/
 - **当前支持**：NEON（支持原生 AArch64 汇编路径；不满足编译器/平台条件时自动回退到标量实现）
 - **规划支持**：CRC32, AES, PMULL, SVE
 
+### NEON default public status
+
+NEON 的默认 public 状态是 default scalar fallback。AArch64 NEON asm opt-in 需要 FPC 3.3.1+，并且必须显式启用 `NEXTPAS_SIMD_EXPERIMENTAL_BACKEND_ASM`、`NEXTPAS_SIMD_ENABLE_NEON_ASM`、`NEXTPAS_SIMD_NEON_ASM_COMPILER_READY`，同时不能定义 `SIMD_VECTOR_ASM_DISABLED`。因此，文档中的 NEON dispatch 覆盖率只说明当前派发表赋值口径，不等于默认构建已经启用 NEON inline asm。
+
+NEON benchmark 还必须说明 AArch64 ABI GPR-to-vector 成本：部分 16-byte record 参数经 GPR 传入，asm 包装需要先组装到 vector register，返回时再拆回 GPR。只有当实测 workload 摊薄这段桥接成本时，才能宣称 NEON 路径比 scalar fallback 更快。
+
 ### 性能等级
 
 | 等级 | x86_64 | AArch64 | 描述 |
@@ -145,6 +151,7 @@ src/
 **说明**：
 - 这里展示的是当前更有决策价值的 dispatch 覆盖与成熟度，不再使用早期的 ASM 块占比口径。
 - `558 / 558` 表示在 `check_interface_implementation_completeness.py` 的当前机器检查口径下，该 backend 已为全部 dispatch 槽位提供赋值。
+- `sbNEON` 的 `558 / 558` 不代表默认 public 构建启用 NEON asm；默认仍按 scalar fallback，除非满足上面的 asm opt-in 条件。
 - `sbRISCVV` 虽然当前覆盖已补满，但默认成熟度仍受编译器/汇编链路限制约束，不能简单等同于 AVX2/NEON 主线成熟度。
 
 ### 性能基准 (4096 字节, 1M 次迭代)
@@ -470,7 +477,7 @@ AVX2 注意事项
   - POPCNT：BitsetPopCount 快路径
   - UTF‑8：FastPath（ASCII SSE2 + 非 ASCII 回退标量）
   - 搜索：BytesIndexOf（标量 BMH + SSE2/AVX2 快速筛选与否决）
-- 其他架构：ARM NEON 后端已完整实现（558/558 dispatch 覆盖），RISC-V V 为实验性
+- 其他架构：ARM NEON 后端有 558/558 dispatch 赋值口径，但默认 public 状态仍是 scalar fallback，NEON asm 需要显式 opt-in；RISC-V V 为实验性
 
 排障提示
 - 若出现非预期性能/行为：
@@ -482,7 +489,7 @@ AVX2 注意事项
 
 ## AArch64/NEON 后端状态
 
-NEON 后端已于 2026-04 完成落地，实现 558/558 dispatch 覆盖。详见 `docs/nextpas.core.simd.closeout.md`。
+NEON 后端已于 2026-04 完成落地，实现 558/558 dispatch 覆盖。这个结论只表示 dispatch coverage，不改变默认 public scalar fallback 和 asm opt-in 契约。详见 `docs/nextpas.core.simd.closeout.md`。
 
 历史规划文档已归档至 `docs/legacy/simd/`。
 

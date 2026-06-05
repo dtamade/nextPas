@@ -27,8 +27,8 @@
 │  nextpas.core.simd.scalar     标量参考实现                │
 │  nextpas.core.simd.sse2       SSE2 后端                   │
 │  nextpas.core.simd.avx2       AVX2 后端                   │
-│  nextpas.core.simd.neon       NEON 后端                   │
-│  nextpas.core.simd.riscvv     RISC-V V 后端              │
+│  nextpas.core.simd.neon       NEON adapter（asm opt-in）   │
+│  nextpas.core.simd.riscvv     RISC-V V experimental       │
 │  ... (sse3/ssse3/sse41/sse42/avx512)                    │
 ├─────────────────────────────────────────────────────────┤
 │  Layer 5: Raw Leaves (ISA Intrinsics)                   │
@@ -76,6 +76,45 @@ Scalar → SSE2 → SSE3 → SSSE3 → SSE4.1 → SSE4.2 → AVX2 → AVX-512
 | `active leaf` | 活跃维护，有测试 | ✅ 可以 |
 | `experimental isolated` | 默认隔离，需 opt-in | ❌ 不可以 |
 | `retire target` | 已确认可删除 | ❌ 不可以 |
+
+## Active Contract Boundaries
+
+### 512-bit record alignment contract
+
+FPC currently caps `{$CODEALIGN RECORDMIN}` at `32`, so 512-bit record types are only 64-byte payload value types. `FPC RECORDMIN=32` does not make ordinary storage 64-byte aligned. In particular, ordinary record/stack/array/object fields, variant-record fields, hidden result pointers, and by-value or `constref` parameters cannot be used as proof for AVX-512 aligned load/store.
+
+Backend code that reads 512-bit records from ordinary Pascal storage must use unaligned-safe instructions or ordinary copy semantics. Code that needs a 64-byte address must use `SimdAlloc(..., sa64)`, `AlignedAlloc(..., SIMD_ALIGN_64)`, `TAlignedArray<T>.Create(..., SIMD_ALIGN_64)`, or another explicitly documented aligned storage owner.
+
+### NEON public backend status
+
+The NEON public backend status is conservative by default: default scalar fallback remains the public behavior unless the build explicitly opts into NEON assembly. Inline asm is enabled only when all of these gates hold: AArch64 target, `FPC 3.3.1+`, no `SIMD_VECTOR_ASM_DISABLED`, `NEXTPAS_SIMD_EXPERIMENTAL_BACKEND_ASM`, `NEXTPAS_SIMD_ENABLE_NEON_ASM`, and `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY`.
+
+The AArch64 ABI shape matters for performance. Several small vector record APIs arrive in GPRs, so the current asm path has GPR-to-vector assembly and vector-to-GPR return work (`fmov` / `ins` / `umov`) around the actual NEON operation. Benchmark reports must call out this overhead and must not claim NEON is faster until the measured workload amortizes that ABI cost.
+
+### Experimental non-x86 backends
+
+RISC-V V and LoongArch/LASX are experimental/stub surfaces. They can appear in source contracts, opt-in tests, or QEMU/target-machine evidence, but they must not be presented as stable public backends. Stable adapters must not depend on `experimental isolated` raw leaves by default, and tests for these surfaces stay isolated from normal x86 runs.
+
+### Gather/scatter partial coverage
+
+Gather/scatter partial coverage already exists. `VecF32x4Gather`, `VecI32x4Gather`, `VecF32x4Scatter`, and `VecI32x4Scatter` live in the utility layer with focused tests. Masked utility variants `VecF32x4GatherSelect`, `VecI32x4GatherSelect`, `VecF32x4ScatterSelect`, and `VecI32x4ScatterSelect` also exist and must get focused coverage before the surface expands. AVX2 raw intrinsics expose `avx2_gather_*` helpers with argument validation. The missing work is a formal public facade contract plus more lane/backend coverage, not the feature being completely absent.
+
+Do not add gather/scatter fields to the public ABI wrapper until the public facade has tests before ABI changes. Public ABI growth is a separate stable-surface decision, not a side effect of utility helper availability.
+
+### F16/half precision design
+
+F16/half precision design is not a public ABI yet. The proposed boundary is:
+
+- a scalar storage type such as `TF16` / `THalf`, with explicit conversion APIs rather than implicit arithmetic;
+- conversion functions for `F32 <-> F16` and, separately, `F32 <-> BF16` when the type is introduced;
+- capability detection for `F16C`, `AVX512BF16`, `AVX-512 FP16`, and `NEON FP16`;
+- scalar fallback semantics that define rounding, NaN payload handling, infinities, denormals, and saturation before any backend is advertised.
+
+No vector ABI should expose half-precision records until the type and conversion tests are stable. As with gather/scatter, public ABI wrapper changes require tests before ABI changes.
+
+### Transpose API boundary
+
+The transpose API boundary has two separate meanings. `linalg matrix transpose` belongs to matrix layout APIs such as `TSimdF32Matrix.Transpose` and may allocate or repack storage. `SIMD lane transpose` belongs to register-local lane rearrangement and should use explicit names such as `VecF32x4Transpose*` or `LaneTranspose*` if introduced. The two APIs must not share a vague `Transpose` facade name without the matrix/lane owner in the name or unit.
 
 ## 派发表结构
 

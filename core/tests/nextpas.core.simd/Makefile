@@ -32,6 +32,7 @@ audit:
 	python3 $(CORE_ROOT)/tools/simdgen/simdgen.py --verify
 	python3 $(CORE_ROOT)/tools/simdgen/simdgen_verify_slots.py
 	python3 check_avx512_alignment_contract.py
+	python3 check_simd_contract_roadmap.py
 
 bench:
 	@mkdir -p $(BUILD_DIR)

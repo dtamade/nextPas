@@ -8,6 +8,20 @@ ARM NEON SIMD 指令集支持模块
 
 NEON 是 ARM 架构的高级 SIMD（Single Instruction Multiple Data）扩展，提供 128-bit 向量运算能力。NEON 在 ARMv7-A、ARMv8-A（AArch32）和 AArch64 处理器上可用。
 
+## Backend Status And Performance Caution
+
+The default public backend state is scalar fallback. The NEON raw leaf and backend adapter remain isolated unless the build explicitly opts into assembly. Inline asm is opt-in and requires all of these gates:
+
+- `FPC 3.3.1+` with AArch64 NEON inline assembly support.
+- `NEXTPAS_SIMD_EXPERIMENTAL_BACKEND_ASM`.
+- `NEXTPAS_SIMD_ENABLE_NEON_ASM`.
+- `NEXTPAS_SIMD_NEON_ASM_COMPILER_READY`.
+- No `SIMD_VECTOR_ASM_DISABLED`.
+
+This is intentional. FPC 3.2.2 cannot safely compile AArch64 NEON inline assembly with vector register syntax, so the stable public path must keep scalar fallback behavior unless the toolchain and build flags prove otherwise.
+
+AArch64 ABI details also affect small-vector performance. FPC passes some 16-byte records through general-purpose registers, so NEON asm wrappers can need GPR-to-vector assembly before the real vector instruction and vector-to-GPR extraction on return. Current asm snippets use instructions such as `fmov`, `ins`, and `umov` for that bridge. Benchmark results must mention this setup/teardown cost and must not claim NEON is faster unless the measured workload amortizes it.
+
 ### 特性
 
 - 128-bit 向量寄存器（AArch64: v0-v31，ARMv7: q0-q15）
