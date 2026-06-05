@@ -15,6 +15,8 @@ libimp*.a
 *.ppu
 *.compiled
 *.exe
+link*.res
+*.test.res
 tests/snapshots/*.diff.txt
 tests/harness/runner
 tools/stage0/nextpas

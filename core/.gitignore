@@ -7,6 +7,8 @@ build/
 *.rst
 *.compiled
 *.exe
+link*.res
+*.test.res
 libimp*.a
 *.py[cod]
 
