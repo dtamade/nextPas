@@ -19,34 +19,43 @@ function SimdSinF32(AX: Single): Single;
 function SimdCosF32(AX: Single): Single;
 function SimdLnF32(AX: Single): Single;
 function SimdTruncF32(AX: Single): SizeUInt; inline;
+function SimdTruncIndexF32(AX: Single): SizeUInt; inline;
 
+function SimdMin(AA, AB: Single): Single; inline; overload;
+function SimdMax(AA, AB: Single): Single; inline; overload;
+function SimdMin(AA, AB: Double): Double; inline; overload;
+function SimdMax(AA, AB: Double): Double; inline; overload;
 function SimdMinF32(AA, AB: Single): Single; inline;
 function SimdMaxF32(AA, AB: Single): Single; inline;
 function SimdMinF64(AA, AB: Double): Double; inline;
 function SimdMaxF64(AA, AB: Double): Double; inline;
+function SimdFloor(AX: Single): Single; inline; overload;
+function SimdFloor(AX: Double): Double; inline; overload;
+function SimdCeil(AX: Single): Single; inline; overload;
+function SimdCeil(AX: Double): Double; inline; overload;
 function SimdFloorF32(AX: Single): Single; inline;
 function SimdCeilF32(AX: Single): Single; inline;
+function SimdFloorF64(AX: Double): Double; inline;
+function SimdCeilF64(AX: Double): Double; inline;
+function SimdRound(AX: Single): Single; inline; overload;
+function SimdRound(AX: Double): Double; inline; overload;
+function SimdRoundF32(AX: Single): Single; inline;
+function SimdRoundF64(AX: Double): Double; inline;
+function SimdTruncFloat(AX: Single): Single; inline; overload;
+function SimdTruncFloat(AX: Double): Double; inline; overload;
+function SimdTruncFloatF32(AX: Single): Single; inline;
+function SimdTruncFloatF64(AX: Double): Double; inline;
 function SimdPowerF32(ABase, AExp: Single): Single;
 
-// Math-compatible overloads
-function Min(AA, AB: Single): Single; inline; overload;
-function Max(AA, AB: Single): Single; inline; overload;
-function Min(AA, AB: Double): Double; inline; overload;
-function Max(AA, AB: Double): Double; inline; overload;
-function Floor(AX: Single): Single; inline; overload;
-function Floor(AX: Double): Double; inline; overload;
-function Ceil(AX: Single): Single; inline; overload;
-function Ceil(AX: Double): Double; inline; overload;
+function SimdIsNaN(AX: Single): Boolean; inline; overload;
+function SimdIsNaN(AX: Double): Boolean; inline; overload;
+function SimdIsInfinite(AX: Single): Boolean; inline; overload;
+function SimdIsInfinite(AX: Double): Boolean; inline; overload;
 
-function IsNan(AX: Single): Boolean; inline; overload;
-function IsNan(AX: Double): Boolean; inline; overload;
-function IsInfinite(AX: Single): Boolean; inline; overload;
-function IsInfinite(AX: Double): Boolean; inline; overload;
-
-function Tan(AX: Single): Single; inline;
-function ArcSin(AX: Single): Single;
-function ArcCos(AX: Single): Single;
-function ArcTan2(AY, AX: Single): Single;
+function SimdTanF32(AX: Single): Single; inline;
+function SimdArcSinF32(AX: Single): Single;
+function SimdArcCosF32(AX: Single): Single;
+function SimdArcTan2F32(AY, AX: Single): Single;
 
 implementation
 
@@ -109,7 +118,14 @@ var
 const
   LN2: Single = 0.6931471805599453;
 begin
-  if AX <= 0 then begin Result := -1e30; Exit; end;
+  if SimdIsNaN(AX) then
+    Exit(SimdNaN);
+  if AX = 0.0 then
+    Exit(SimdNegInfinity);
+  if AX < 0.0 then
+    Exit(SimdNaN);
+  if SimdIsInfinite(AX) then
+    Exit(SimdInfinity);
 
   LSubnormalAdj := 0;
   Move(AX, LI, 4);
@@ -134,7 +150,34 @@ end;
 
 function SimdTruncF32(AX: Single): SizeUInt; inline;
 begin
+  Result := SimdTruncIndexF32(AX);
+end;
+
+function SimdTruncIndexF32(AX: Single): SizeUInt; inline;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (AX < 0.0) or (AX > High(SizeUInt)) then
+    Exit(0);
   Result := System.Trunc(AX);
+end;
+
+function SimdMin(AA, AB: Single): Single; inline; overload;
+begin
+  Result := SimdMinF32(AA, AB);
+end;
+
+function SimdMax(AA, AB: Single): Single; inline; overload;
+begin
+  Result := SimdMaxF32(AA, AB);
+end;
+
+function SimdMin(AA, AB: Double): Double; inline; overload;
+begin
+  Result := SimdMinF64(AA, AB);
+end;
+
+function SimdMax(AA, AB: Double): Double; inline; overload;
+begin
+  Result := SimdMaxF64(AA, AB);
 end;
 
 function SimdMinF32(AA, AB: Single): Single; inline;
@@ -161,7 +204,7 @@ function SimdFloorF32(AX: Single): Single; inline;
 var
   LI: Int32;
 begin
-  if System.Abs(AX) >= 8388608.0 then begin Result := AX; Exit; end;
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 8388608.0) then begin Result := AX; Exit; end;
   LI := System.Trunc(AX);
   if (AX < 0) and (AX <> LI) then Dec(LI);
   Result := LI;
@@ -171,10 +214,96 @@ function SimdCeilF32(AX: Single): Single; inline;
 var
   LI: Int32;
 begin
-  if System.Abs(AX) >= 8388608.0 then begin Result := AX; Exit; end;
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 8388608.0) then begin Result := AX; Exit; end;
   LI := System.Trunc(AX);
   if (AX > 0) and (AX <> LI) then Inc(LI);
   Result := LI;
+end;
+
+function SimdFloor(AX: Single): Single; inline; overload;
+begin
+  Result := SimdFloorF32(AX);
+end;
+
+function SimdFloor(AX: Double): Double; inline; overload;
+begin
+  Result := SimdFloorF64(AX);
+end;
+
+function SimdCeil(AX: Single): Single; inline; overload;
+begin
+  Result := SimdCeilF32(AX);
+end;
+
+function SimdCeil(AX: Double): Double; inline; overload;
+begin
+  Result := SimdCeilF64(AX);
+end;
+
+function SimdFloorF64(AX: Double): Double; inline;
+var
+  LValue: Double;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 4503599627370496.0) then begin Result := AX; Exit; end;
+  LValue := System.Int(AX);
+  if (AX < 0.0) and (AX <> LValue) then
+    LValue := LValue - 1.0;
+  Result := LValue;
+end;
+
+function SimdCeilF64(AX: Double): Double; inline;
+var
+  LValue: Double;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 4503599627370496.0) then begin Result := AX; Exit; end;
+  LValue := System.Int(AX);
+  if (AX > 0.0) and (AX <> LValue) then
+    LValue := LValue + 1.0;
+  Result := LValue;
+end;
+
+function SimdRound(AX: Single): Single; inline; overload;
+begin
+  Result := SimdRoundF32(AX);
+end;
+
+function SimdRound(AX: Double): Double; inline; overload;
+begin
+  Result := SimdRoundF64(AX);
+end;
+
+function SimdRoundF32(AX: Single): Single; inline;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 8388608.0) then begin Result := AX; Exit; end;
+  Result := System.Round(AX);
+end;
+
+function SimdRoundF64(AX: Double): Double; inline;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 4503599627370496.0) then begin Result := AX; Exit; end;
+  Result := System.Round(AX);
+end;
+
+function SimdTruncFloat(AX: Single): Single; inline; overload;
+begin
+  Result := SimdTruncFloatF32(AX);
+end;
+
+function SimdTruncFloat(AX: Double): Double; inline; overload;
+begin
+  Result := SimdTruncFloatF64(AX);
+end;
+
+function SimdTruncFloatF32(AX: Single): Single; inline;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 8388608.0) then begin Result := AX; Exit; end;
+  Result := System.Trunc(AX);
+end;
+
+function SimdTruncFloatF64(AX: Double): Double; inline;
+begin
+  if SimdIsNaN(AX) or SimdIsInfinite(AX) or (System.Abs(AX) >= 4503599627370496.0) then begin Result := AX; Exit; end;
+  Result := System.Trunc(AX);
 end;
 
 // power(base, exp) = exp(exp * ln(base))
@@ -194,87 +323,35 @@ begin
   Result := Single(System.Exp(LLn * AExp));
 end;
 
-function Min(AA, AB: Single): Single; inline; overload;
-begin
-  if AA <= AB then Result := AA else Result := AB;
-end;
-
-function Max(AA, AB: Single): Single; inline; overload;
-begin
-  if AA >= AB then Result := AA else Result := AB;
-end;
-
-function Min(AA, AB: Double): Double; inline; overload;
-begin
-  if AA <= AB then Result := AA else Result := AB;
-end;
-
-function Max(AA, AB: Double): Double; inline; overload;
-begin
-  if AA >= AB then Result := AA else Result := AB;
-end;
-
-function Floor(AX: Single): Single; inline; overload;
-var LI: Int32;
-begin
-  LI := System.Trunc(AX);
-  if (AX < 0) and (AX <> LI) then Dec(LI);
-  Result := LI;
-end;
-
-function Floor(AX: Double): Double; inline; overload;
-var LI: Int64;
-begin
-  LI := System.Trunc(AX);
-  if (AX < 0) and (AX <> LI) then Dec(LI);
-  Result := LI;
-end;
-
-function Ceil(AX: Single): Single; inline; overload;
-var LI: Int32;
-begin
-  LI := System.Trunc(AX);
-  if (AX > 0) and (AX <> LI) then Inc(LI);
-  Result := LI;
-end;
-
-function Ceil(AX: Double): Double; inline; overload;
-var LI: Int64;
-begin
-  LI := System.Trunc(AX);
-  if (AX > 0) and (AX <> LI) then Inc(LI);
-  Result := LI;
-end;
-
-function IsNan(AX: Single): Boolean; inline; overload;
+function SimdIsNaN(AX: Single): Boolean; inline; overload;
 var LI: UInt32;
 begin
   Move(AX, LI, 4);
   Result := (LI and $7F800000 = $7F800000) and (LI and $007FFFFF <> 0);
 end;
 
-function IsNan(AX: Double): Boolean; inline; overload;
+function SimdIsNaN(AX: Double): Boolean; inline; overload;
 var LI: UInt64;
 begin
   Move(AX, LI, 8);
   Result := (LI and $7FF0000000000000 = $7FF0000000000000) and (LI and $000FFFFFFFFFFFFF <> 0);
 end;
 
-function IsInfinite(AX: Single): Boolean; inline; overload;
+function SimdIsInfinite(AX: Single): Boolean; inline; overload;
 var LI: UInt32;
 begin
   Move(AX, LI, 4);
   Result := (LI and $7FFFFFFF) = $7F800000;
 end;
 
-function IsInfinite(AX: Double): Boolean; inline; overload;
+function SimdIsInfinite(AX: Double): Boolean; inline; overload;
 var LI: UInt64;
 begin
   Move(AX, LI, 8);
   Result := (LI and $7FFFFFFFFFFFFFFF) = $7FF0000000000000;
 end;
 
-function Tan(AX: Single): Single; inline;
+function SimdTanF32(AX: Single): Single; inline;
 var LC: Single;
 begin
   LC := SimdCosF32(AX);
@@ -285,7 +362,7 @@ begin
 end;
 
 // ArcSin via Chebyshev approximation for |x| <= 1
-function ArcSin(AX: Single): Single;
+function SimdArcSinF32(AX: Single): Single;
 var
   LNeg: Boolean;
   LX, LX2, LR: Single;
@@ -313,12 +390,12 @@ begin
   if LNeg then Result := -LR else Result := LR;
 end;
 
-function ArcCos(AX: Single): Single;
+function SimdArcCosF32(AX: Single): Single;
 begin
-  Result := SIMD_PI * 0.5 - ArcSin(AX);
+  Result := SIMD_PI * 0.5 - SimdArcSinF32(AX);
 end;
 
-function ArcTan2(AY, AX: Single): Single;
+function SimdArcTan2F32(AY, AX: Single): Single;
 var
   LR, LR2, LPoly, LAbsX, LAbsY: Single;
 begin

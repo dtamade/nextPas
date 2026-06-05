@@ -1639,23 +1639,23 @@ const
 var
   LResult: Single;
 begin
-  if IsNan(aLeftValue) then
+  if SimdIsNaN(aLeftValue) then
     Exit(aLeftBits);
-  if IsNan(aRightValue) then
+  if SimdIsNaN(aRightValue) then
     Exit(aRightBits);
 
   case aKind of
     bakAdd:
-      if IsInfinite(aLeftValue) and IsInfinite(aRightValue) and
+      if SimdIsInfinite(aLeftValue) and SimdIsInfinite(aRightValue) and
         (((aLeftBits xor aRightBits) and DWord($80000000)) <> 0) then
         Exit(CANONICAL_SINGLE_QNAN);
     bakSub:
-      if IsInfinite(aLeftValue) and IsInfinite(aRightValue) and
+      if SimdIsInfinite(aLeftValue) and SimdIsInfinite(aRightValue) and
         (((aLeftBits xor aRightBits) and DWord($80000000)) = 0) then
         Exit(CANONICAL_SINGLE_QNAN);
     bakMul:
-      if (SingleBitsIsZero(aLeftBits) and IsInfinite(aRightValue)) or
-        (SingleBitsIsZero(aRightBits) and IsInfinite(aLeftValue)) then
+      if (SingleBitsIsZero(aLeftBits) and SimdIsInfinite(aRightValue)) or
+        (SingleBitsIsZero(aRightBits) and SimdIsInfinite(aLeftValue)) then
         Exit(CANONICAL_SINGLE_QNAN);
   end;
 
@@ -1678,23 +1678,23 @@ const
 var
   LResult: Double;
 begin
-  if IsNan(aLeftValue) then
+  if SimdIsNaN(aLeftValue) then
     Exit(aLeftBits);
-  if IsNan(aRightValue) then
+  if SimdIsNaN(aRightValue) then
     Exit(aRightBits);
 
   case aKind of
     bakAdd:
-      if IsInfinite(aLeftValue) and IsInfinite(aRightValue) and
+      if SimdIsInfinite(aLeftValue) and SimdIsInfinite(aRightValue) and
         (((aLeftBits xor aRightBits) and QWord($8000000000000000)) <> 0) then
         Exit(CANONICAL_DOUBLE_QNAN);
     bakSub:
-      if IsInfinite(aLeftValue) and IsInfinite(aRightValue) and
+      if SimdIsInfinite(aLeftValue) and SimdIsInfinite(aRightValue) and
         (((aLeftBits xor aRightBits) and QWord($8000000000000000)) = 0) then
         Exit(CANONICAL_DOUBLE_QNAN);
     bakMul:
-      if (DoubleBitsIsZero(aLeftBits) and IsInfinite(aRightValue)) or
-        (DoubleBitsIsZero(aRightBits) and IsInfinite(aLeftValue)) then
+      if (DoubleBitsIsZero(aLeftBits) and SimdIsInfinite(aRightValue)) or
+        (DoubleBitsIsZero(aRightBits) and SimdIsInfinite(aLeftValue)) then
         Exit(CANONICAL_DOUBLE_QNAN);
   end;
 
@@ -1768,9 +1768,9 @@ var
   LNegative: Boolean;
   LResult: Single;
 begin
-  if IsNan(aLeftValue) then
+  if SimdIsNaN(aLeftValue) then
     Exit(aLeftBits);
-  if IsNan(aRightValue) then
+  if SimdIsNaN(aRightValue) then
     Exit(aRightBits);
   if SingleBitsIsZero(aRightBits) then
   begin
@@ -1779,7 +1779,7 @@ begin
     LNegative := ((aLeftBits xor aRightBits) and DWord($80000000)) <> 0;
     Exit(BuildSingleInfinityBits(LNegative));
   end;
-  if IsInfinite(aLeftValue) and IsInfinite(aRightValue) then
+  if SimdIsInfinite(aLeftValue) and SimdIsInfinite(aRightValue) then
     Exit(CANONICAL_SINGLE_QNAN);
   LResult := aLeftValue / aRightValue;
   Move(LResult, Result, SizeOf(Result));
@@ -1795,9 +1795,9 @@ var
   LNegative: Boolean;
   LResult: Double;
 begin
-  if IsNan(aLeftValue) then
+  if SimdIsNaN(aLeftValue) then
     Exit(aLeftBits);
-  if IsNan(aRightValue) then
+  if SimdIsNaN(aRightValue) then
     Exit(aRightBits);
   if DoubleBitsIsZero(aRightBits) then
   begin
@@ -1806,7 +1806,7 @@ begin
     LNegative := ((aLeftBits xor aRightBits) and QWord($8000000000000000)) <> 0;
     Exit(BuildDoubleInfinityBits(LNegative));
   end;
-  if IsInfinite(aLeftValue) and IsInfinite(aRightValue) then
+  if SimdIsInfinite(aLeftValue) and SimdIsInfinite(aRightValue) then
     Exit(CANONICAL_DOUBLE_QNAN);
   LResult := aLeftValue / aRightValue;
   Move(LResult, Result, SizeOf(Result));
@@ -1887,7 +1887,7 @@ const
 var
   LResult: Single;
 begin
-  if IsNan(aValue) then
+  if SimdIsNaN(aValue) then
     Exit(aBits);
   if aValue < 0 then
     Exit(CANONICAL_SINGLE_QNAN);
@@ -1901,7 +1901,7 @@ const
 var
   LResult: Double;
 begin
-  if IsNan(aValue) then
+  if SimdIsNaN(aValue) then
     Exit(aBits);
   if aValue < 0 then
     Exit(CANONICAL_DOUBLE_QNAN);
@@ -3076,7 +3076,7 @@ end;
 
 function ConvertSingleToInt32Nearest(const aValue: Single): LongInt; inline;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) or
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) or
      (aValue < -2147483648.5) or (aValue >= 2147483647.5) then
     Exit(LongInt($80000000));
 
@@ -3085,7 +3085,7 @@ end;
 
 function ConvertSingleToInt32Trunc(const aValue: Single): LongInt; inline;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) or
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) or
      (aValue <= -2147483649.0) or (aValue >= 2147483648.0) then
     Exit(LongInt($80000000));
 
@@ -3094,7 +3094,7 @@ end;
 
 function ConvertDoubleToInt32Nearest(const aValue: Double): LongInt; inline;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) or
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) or
      (aValue < -2147483648.5) or (aValue >= 2147483647.5) then
     Exit(LongInt($80000000));
 
@@ -3103,7 +3103,7 @@ end;
 
 function ConvertDoubleToInt32Trunc(const aValue: Double): LongInt; inline;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) or
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) or
      (aValue <= -2147483649.0) or (aValue >= 2147483648.0) then
     Exit(LongInt($80000000));
 
@@ -3112,7 +3112,7 @@ end;
 
 function ConvertDoubleToInt64Nearest(const aValue: Double): Int64; inline;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) or
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) or
      (aValue < -9223372036854775808.0) or (aValue >= 9223372036854775808.0) then
     Exit(Int64(QWord($8000000000000000)));
 
@@ -3121,7 +3121,7 @@ end;
 
 function ConvertDoubleToInt64Trunc(const aValue: Double): Int64; inline;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) or
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) or
      (aValue < -9223372036854775808.0) or (aValue >= 9223372036854775808.0) then
     Exit(Int64(QWord($8000000000000000)));
 
@@ -3166,14 +3166,14 @@ const
 var
   LSingle: Single;
 begin
-  if IsNan(aValue) then
+  if SimdIsNaN(aValue) then
   begin
     if (aBits and QWord($8000000000000000)) <> 0 then
       Exit(DWord($FFC00000));
     Exit(DWord($7FC00000));
   end;
 
-  if IsInfinite(aValue) or (aValue > MAX_SINGLE_AS_DOUBLE) or (aValue < -MAX_SINGLE_AS_DOUBLE) then
+  if SimdIsInfinite(aValue) or (aValue > MAX_SINGLE_AS_DOUBLE) or (aValue < -MAX_SINGLE_AS_DOUBLE) then
   begin
     if (aBits and QWord($8000000000000000)) <> 0 then
       Exit(DWord($FF800000));
@@ -4198,7 +4198,7 @@ var
 begin
   LA := a.m128d_f64[0];
   LB := b.m128d_f64[0];
-  LUnordered := IsNan(LA) or IsNan(LB);
+  LUnordered := SimdIsNaN(LA) or SimdIsNaN(LB);
 
   case aKind of
     sckEq:
@@ -4228,7 +4228,7 @@ function EvaluateDoubleMaskCompare(const aLeft, aRight: Double; const aKind: TSi
 var
   LUnordered: Boolean;
 begin
-  LUnordered := IsNan(aLeft) or IsNan(aRight);
+  LUnordered := SimdIsNaN(aLeft) or SimdIsNaN(aRight);
 
   case aKind of
     dmckEq:
@@ -4292,7 +4292,7 @@ function SelectSingleMinMaxBits(
   const aKind: TSimdDoubleMinMaxKind
 ): DWord; inline;
 begin
-  if IsNan(aLeftValue) or IsNan(aRightValue) then
+  if SimdIsNaN(aLeftValue) or SimdIsNaN(aRightValue) then
     Exit(aRightBits);
 
   if SingleBitsIsZero(aLeftBits) and SingleBitsIsZero(aRightBits) then
@@ -4316,7 +4316,7 @@ function SelectDoubleMinMaxBits(
   const aKind: TSimdDoubleMinMaxKind
 ): QWord; inline;
 begin
-  if IsNan(aLeftValue) or IsNan(aRightValue) then
+  if SimdIsNaN(aLeftValue) or SimdIsNaN(aRightValue) then
     Exit(aRightBits);
 
   if DoubleBitsIsZero(aLeftBits) and DoubleBitsIsZero(aRightBits) then

@@ -1021,7 +1021,7 @@ function VecF32x4Tan(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Tan(a.f[i]);
+    Result.f[i] := SimdTanF32(a.f[i]);
 end;
 
 function VecF32x4Exp(const a: TVecF32x4): TVecF32x4;
@@ -1078,14 +1078,14 @@ function VecF32x4Asin(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := ArcSin(a.f[i]);
+    Result.f[i] := SimdArcSinF32(a.f[i]);
 end;
 
 function VecF32x4Acos(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := ArcCos(a.f[i]);
+    Result.f[i] := SimdArcCosF32(a.f[i]);
 end;
 
 function VecF32x4Atan(const a: TVecF32x4): TVecF32x4;
@@ -1099,7 +1099,7 @@ function VecF32x4Atan2(const y, x: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := ArcTan2(y.f[i], x.f[i]);
+    Result.f[i] := SimdArcTan2F32(y.f[i], x.f[i]);
 end;
 
 // === 高级算法实现 (Phase 5) ===
@@ -1133,9 +1133,9 @@ var
   function NeedSwap(const aLeft, aRight: Single): Boolean; inline;
   begin
     // Deterministic NaN policy: always push NaN lanes to the tail.
-    if IsNan(aLeft) then
-      Exit(not IsNan(aRight));
-    if IsNan(aRight) then
+    if SimdIsNaN(aLeft) then
+      Exit(not SimdIsNaN(aRight));
+    if SimdIsNaN(aRight) then
       Exit(False);
 
     if ascending then

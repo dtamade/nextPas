@@ -3285,7 +3285,7 @@ begin
   begin
     for LIndex := 0 to 3 do
     begin
-      if IsNan(a.f[LIndex]) or IsInfinite(a.f[LIndex]) then
+      if SimdIsNaN(a.f[LIndex]) or SimdIsInfinite(a.f[LIndex]) then
       begin
         Result.f[LIndex] := a.f[LIndex];
         Continue;
@@ -3321,7 +3321,7 @@ begin
   begin
     for LIndex := 0 to 3 do
     begin
-      if IsNan(a.f[LIndex]) or IsInfinite(a.f[LIndex]) then
+      if SimdIsNaN(a.f[LIndex]) or SimdIsInfinite(a.f[LIndex]) then
       begin
         Result.f[LIndex] := a.f[LIndex];
         Continue;
@@ -3358,11 +3358,11 @@ begin
   begin
     LBits := 0;
     for LIndex := 0 to 3 do
-      if IsNan(a.f[LIndex]) or IsInfinite(a.f[LIndex]) then
+      if SimdIsNaN(a.f[LIndex]) or SimdIsInfinite(a.f[LIndex]) then
         Result.f[LIndex] := a.f[LIndex]
       else
       begin
-        Result.f[LIndex] := Round(a.f[LIndex]);
+        Result.f[LIndex] := SimdRound(a.f[LIndex]);
         if Result.f[LIndex] = 0.0 then
         begin
           Move(a.f[LIndex], LBits, SizeOf(LBits));
@@ -3397,7 +3397,7 @@ begin
   begin
     LBits := 0;
     for LIndex := 0 to 3 do
-      if IsNan(a.f[LIndex]) or IsInfinite(a.f[LIndex]) then
+      if SimdIsNaN(a.f[LIndex]) or SimdIsInfinite(a.f[LIndex]) then
         Result.f[LIndex] := a.f[LIndex]
       else
       begin
@@ -4607,9 +4607,9 @@ function SSE2FloorF64Lane(const aValue: Double): Double; inline;
 var
   LFloor: Double;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) then
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) then
     Exit(aValue);
-  LFloor := Floor(aValue);
+  LFloor := SimdFloor(aValue);
   Result := SSE2NormalizeSignedZeroDouble(aValue, LFloor);
 end;
 
@@ -4617,9 +4617,9 @@ function SSE2CeilF64Lane(const aValue: Double): Double; inline;
 var
   LCeil: Double;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) then
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) then
     Exit(aValue);
-  LCeil := Ceil(aValue);
+  LCeil := SimdCeil(aValue);
   Result := SSE2NormalizeSignedZeroDouble(aValue, LCeil);
 end;
 
@@ -4627,9 +4627,9 @@ function SSE2RoundF64Lane(const aValue: Double): Double; inline;
 var
   LRounded: Double;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) then
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) then
     Exit(aValue);
-  LRounded := Round(aValue);
+  LRounded := SimdRound(aValue);
   Result := SSE2NormalizeSignedZeroDouble(aValue, LRounded);
 end;
 
@@ -4637,9 +4637,9 @@ function SSE2TruncF64Lane(const aValue: Double): Double; inline;
 var
   LTruncated: Double;
 begin
-  if IsNan(aValue) or IsInfinite(aValue) then
+  if SimdIsNaN(aValue) or SimdIsInfinite(aValue) then
     Exit(aValue);
-  LTruncated := Trunc(aValue);
+  LTruncated := SimdTruncFloat(aValue);
   Result := SSE2NormalizeSignedZeroDouble(aValue, LTruncated);
 end;
 

@@ -236,8 +236,8 @@ begin
   a.d[0] := 2.0; a.d[1] := 3.0; a.d[2] := 0.25; a.d[3] := 1.0;
   r := VecF64x4Sqrt(a);
 
-  AssertEquals('Sqrt(2.0)', Sqrt(2.0), r.d[0], F64_TOLERANCE);
-  AssertEquals('Sqrt(3.0)', Sqrt(3.0), r.d[1], F64_TOLERANCE);
+  AssertEquals('Sqrt(2.0)', System.Sqrt(Double(2.0)), r.d[0], F64_TOLERANCE);
+  AssertEquals('Sqrt(3.0)', System.Sqrt(Double(3.0)), r.d[1], F64_TOLERANCE);
   AssertEquals('Sqrt(0.25) = 0.5', 0.5, r.d[2], F64_TOLERANCE);
   AssertEquals('Sqrt(1.0) = 1.0', 1.0, r.d[3], F64_TOLERANCE);
 end;

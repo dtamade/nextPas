@@ -1837,14 +1837,14 @@ function ScalarMinF32x4(const a, b: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Min(a.f[i], b.f[i]);
+    Result.f[i] := SimdMin(a.f[i], b.f[i]);
 end;
 
 function ScalarMaxF32x4(const a, b: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Max(a.f[i], b.f[i]);
+    Result.f[i] := SimdMax(a.f[i], b.f[i]);
 end;
 
 // === Extended Math Functions ===
@@ -1875,10 +1875,10 @@ var i: Integer;
 begin
   for i := 0 to 3 do
   begin
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
-      Result.f[i] := Floor(a.f[i]);
+      Result.f[i] := SimdFloor(a.f[i]);
   end;
 end;
 
@@ -1887,10 +1887,10 @@ var i: Integer;
 begin
   for i := 0 to 3 do
   begin
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
-      Result.f[i] := Ceil(a.f[i]);
+      Result.f[i] := SimdCeil(a.f[i]);
   end;
 end;
 
@@ -1901,11 +1901,11 @@ var
 begin
   for i := 0 to 3 do
   begin
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
     begin
-      LRounded := Round(a.f[i]);
+      LRounded := SimdRound(a.f[i]);
       Result.f[i] := ScalarNormalizeSignedZeroSingle(a.f[i], LRounded);
     end;
   end;
@@ -1918,11 +1918,11 @@ var
 begin
   for i := 0 to 3 do
   begin
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
     begin
-      LTrunced := Trunc(a.f[i]);
+      LTrunced := SimdTruncFloat(a.f[i]);
       Result.f[i] := ScalarNormalizeSignedZeroSingle(a.f[i], LTrunced);
     end;
   end;
@@ -1932,7 +1932,7 @@ function ScalarClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Max(minVal.f[i], Min(a.f[i], maxVal.f[i]));
+    Result.f[i] := SimdMax(minVal.f[i], SimdMin(a.f[i], maxVal.f[i]));
 end;
 
 // === Wide Vector Math Functions ===
@@ -1952,20 +1952,20 @@ end;
 
 function ScalarMinF64x2(const a, b: TVecF64x2): TVecF64x2;
 begin
-  Result.d[0] := Min(a.d[0], b.d[0]);
-  Result.d[1] := Min(a.d[1], b.d[1]);
+  Result.d[0] := SimdMin(a.d[0], b.d[0]);
+  Result.d[1] := SimdMin(a.d[1], b.d[1]);
 end;
 
 function ScalarMaxF64x2(const a, b: TVecF64x2): TVecF64x2;
 begin
-  Result.d[0] := Max(a.d[0], b.d[0]);
-  Result.d[1] := Max(a.d[1], b.d[1]);
+  Result.d[0] := SimdMax(a.d[0], b.d[0]);
+  Result.d[1] := SimdMax(a.d[1], b.d[1]);
 end;
 
 function ScalarClampF64x2(const a, minVal, maxVal: TVecF64x2): TVecF64x2;
 begin
-  Result.d[0] := Max(minVal.d[0], Min(a.d[0], maxVal.d[0]));
-  Result.d[1] := Max(minVal.d[1], Min(a.d[1], maxVal.d[1]));
+  Result.d[0] := SimdMax(minVal.d[0], SimdMin(a.d[0], maxVal.d[0]));
+  Result.d[1] := SimdMax(minVal.d[1], SimdMin(a.d[1], maxVal.d[1]));
 end;
 
 // F32x8 Math
@@ -1987,21 +1987,21 @@ function ScalarMinF32x8(const a, b: TVecF32x8): TVecF32x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    Result.f[i] := Min(a.f[i], b.f[i]);
+    Result.f[i] := SimdMin(a.f[i], b.f[i]);
 end;
 
 function ScalarMaxF32x8(const a, b: TVecF32x8): TVecF32x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    Result.f[i] := Max(a.f[i], b.f[i]);
+    Result.f[i] := SimdMax(a.f[i], b.f[i]);
 end;
 
 function ScalarClampF32x8(const a, minVal, maxVal: TVecF32x8): TVecF32x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    Result.f[i] := Max(minVal.f[i], Min(a.f[i], maxVal.f[i]));
+    Result.f[i] := SimdMax(minVal.f[i], SimdMin(a.f[i], maxVal.f[i]));
 end;
 
 // F64x4 Math
@@ -2023,21 +2023,21 @@ function ScalarMinF64x4(const a, b: TVecF64x4): TVecF64x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.d[i] := Min(a.d[i], b.d[i]);
+    Result.d[i] := SimdMin(a.d[i], b.d[i]);
 end;
 
 function ScalarMaxF64x4(const a, b: TVecF64x4): TVecF64x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.d[i] := Max(a.d[i], b.d[i]);
+    Result.d[i] := SimdMax(a.d[i], b.d[i]);
 end;
 
 function ScalarClampF64x4(const a, minVal, maxVal: TVecF64x4): TVecF64x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.d[i] := Max(minVal.d[i], Min(a.d[i], maxVal.d[i]));
+    Result.d[i] := SimdMax(minVal.d[i], SimdMin(a.d[i], maxVal.d[i]));
 end;
 
 // F32x16 (512-bit)
@@ -2059,21 +2059,21 @@ function ScalarMinF32x16(const a, b: TVecF32x16): TVecF32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
-    Result.f[i] := Min(a.f[i], b.f[i]);
+    Result.f[i] := SimdMin(a.f[i], b.f[i]);
 end;
 
 function ScalarMaxF32x16(const a, b: TVecF32x16): TVecF32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
-    Result.f[i] := Max(a.f[i], b.f[i]);
+    Result.f[i] := SimdMax(a.f[i], b.f[i]);
 end;
 
 function ScalarClampF32x16(const a, minVal, maxVal: TVecF32x16): TVecF32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
-    Result.f[i] := Max(minVal.f[i], Min(a.f[i], maxVal.f[i]));
+    Result.f[i] := SimdMax(minVal.f[i], SimdMin(a.f[i], maxVal.f[i]));
 end;
 
 // F64x8 (512-bit)
@@ -2095,21 +2095,21 @@ function ScalarMinF64x8(const a, b: TVecF64x8): TVecF64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    Result.d[i] := Min(a.d[i], b.d[i]);
+    Result.d[i] := SimdMin(a.d[i], b.d[i]);
 end;
 
 function ScalarMaxF64x8(const a, b: TVecF64x8): TVecF64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    Result.d[i] := Max(a.d[i], b.d[i]);
+    Result.d[i] := SimdMax(a.d[i], b.d[i]);
 end;
 
 function ScalarClampF64x8(const a, minVal, maxVal: TVecF64x8): TVecF64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    Result.d[i] := Max(minVal.d[i], Min(a.d[i], maxVal.d[i]));
+    Result.d[i] := SimdMax(minVal.d[i], SimdMin(a.d[i], maxVal.d[i]));
 end;
 
 // === Wide Vector Extended Math Functions ===
@@ -2123,47 +2123,47 @@ end;
 
 function ScalarFloorF64x2(const a: TVecF64x2): TVecF64x2;
 begin
-  if IsNan(a.d[0]) or IsInfinite(a.d[0]) then
+  if SimdIsNaN(a.d[0]) or SimdIsInfinite(a.d[0]) then
     Result.d[0] := a.d[0]
   else
-    Result.d[0] := Floor(a.d[0]);
+    Result.d[0] := SimdFloor(a.d[0]);
 
-  if IsNan(a.d[1]) or IsInfinite(a.d[1]) then
+  if SimdIsNaN(a.d[1]) or SimdIsInfinite(a.d[1]) then
     Result.d[1] := a.d[1]
   else
-    Result.d[1] := Floor(a.d[1]);
+    Result.d[1] := SimdFloor(a.d[1]);
 end;
 
 function ScalarCeilF64x2(const a: TVecF64x2): TVecF64x2;
 begin
-  if IsNan(a.d[0]) or IsInfinite(a.d[0]) then
+  if SimdIsNaN(a.d[0]) or SimdIsInfinite(a.d[0]) then
     Result.d[0] := a.d[0]
   else
-    Result.d[0] := Ceil(a.d[0]);
+    Result.d[0] := SimdCeil(a.d[0]);
 
-  if IsNan(a.d[1]) or IsInfinite(a.d[1]) then
+  if SimdIsNaN(a.d[1]) or SimdIsInfinite(a.d[1]) then
     Result.d[1] := a.d[1]
   else
-    Result.d[1] := Ceil(a.d[1]);
+    Result.d[1] := SimdCeil(a.d[1]);
 end;
 
 function ScalarRoundF64x2(const a: TVecF64x2): TVecF64x2;
 var
   LRounded: Double;
 begin
-  if IsNan(a.d[0]) or IsInfinite(a.d[0]) then
+  if SimdIsNaN(a.d[0]) or SimdIsInfinite(a.d[0]) then
     Result.d[0] := a.d[0]
   else
   begin
-    LRounded := Round(a.d[0]);
+    LRounded := SimdRound(a.d[0]);
     Result.d[0] := ScalarNormalizeSignedZeroDouble(a.d[0], LRounded);
   end;
 
-  if IsNan(a.d[1]) or IsInfinite(a.d[1]) then
+  if SimdIsNaN(a.d[1]) or SimdIsInfinite(a.d[1]) then
     Result.d[1] := a.d[1]
   else
   begin
-    LRounded := Round(a.d[1]);
+    LRounded := SimdRound(a.d[1]);
     Result.d[1] := ScalarNormalizeSignedZeroDouble(a.d[1], LRounded);
   end;
 end;
@@ -2172,19 +2172,19 @@ function ScalarTruncF64x2(const a: TVecF64x2): TVecF64x2;
 var
   LTrunced: Double;
 begin
-  if IsNan(a.d[0]) or IsInfinite(a.d[0]) then
+  if SimdIsNaN(a.d[0]) or SimdIsInfinite(a.d[0]) then
     Result.d[0] := a.d[0]
   else
   begin
-    LTrunced := Trunc(a.d[0]);
+    LTrunced := SimdTruncFloat(a.d[0]);
     Result.d[0] := ScalarNormalizeSignedZeroDouble(a.d[0], LTrunced);
   end;
 
-  if IsNan(a.d[1]) or IsInfinite(a.d[1]) then
+  if SimdIsNaN(a.d[1]) or SimdIsInfinite(a.d[1]) then
     Result.d[1] := a.d[1]
   else
   begin
-    LTrunced := Trunc(a.d[1]);
+    LTrunced := SimdTruncFloat(a.d[1]);
     Result.d[1] := ScalarNormalizeSignedZeroDouble(a.d[1], LTrunced);
   end;
 end;
@@ -2201,20 +2201,20 @@ function ScalarFloorF32x8(const a: TVecF32x8): TVecF32x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
-      Result.f[i] := Floor(a.f[i]);
+      Result.f[i] := SimdFloor(a.f[i]);
 end;
 
 function ScalarCeilF32x8(const a: TVecF32x8): TVecF32x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
-      Result.f[i] := Ceil(a.f[i]);
+      Result.f[i] := SimdCeil(a.f[i]);
 end;
 
 function ScalarRoundF32x8(const a: TVecF32x8): TVecF32x8;
@@ -2223,11 +2223,11 @@ var
   LRounded: Single;
 begin
   for i := 0 to 7 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
     begin
-      LRounded := Round(a.f[i]);
+      LRounded := SimdRound(a.f[i]);
       Result.f[i] := ScalarNormalizeSignedZeroSingle(a.f[i], LRounded);
     end;
 end;
@@ -2238,11 +2238,11 @@ var
   LTrunced: Single;
 begin
   for i := 0 to 7 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
     begin
-      LTrunced := Trunc(a.f[i]);
+      LTrunced := SimdTruncFloat(a.f[i]);
       Result.f[i] := ScalarNormalizeSignedZeroSingle(a.f[i], LTrunced);
     end;
 end;
@@ -2259,20 +2259,20 @@ function ScalarFloorF64x4(const a: TVecF64x4): TVecF64x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
-      Result.d[i] := Floor(a.d[i]);
+      Result.d[i] := SimdFloor(a.d[i]);
 end;
 
 function ScalarCeilF64x4(const a: TVecF64x4): TVecF64x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
-      Result.d[i] := Ceil(a.d[i]);
+      Result.d[i] := SimdCeil(a.d[i]);
 end;
 
 function ScalarRoundF64x4(const a: TVecF64x4): TVecF64x4;
@@ -2281,11 +2281,11 @@ var
   LRounded: Double;
 begin
   for i := 0 to 3 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
     begin
-      LRounded := Round(a.d[i]);
+      LRounded := SimdRound(a.d[i]);
       Result.d[i] := ScalarNormalizeSignedZeroDouble(a.d[i], LRounded);
     end;
 end;
@@ -2296,11 +2296,11 @@ var
   LTrunced: Double;
 begin
   for i := 0 to 3 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
     begin
-      LTrunced := Trunc(a.d[i]);
+      LTrunced := SimdTruncFloat(a.d[i]);
       Result.d[i] := ScalarNormalizeSignedZeroDouble(a.d[i], LTrunced);
     end;
 end;
@@ -2324,20 +2324,20 @@ function ScalarFloorF32x16(const a: TVecF32x16): TVecF32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
-      Result.f[i] := Floor(a.f[i]);
+      Result.f[i] := SimdFloor(a.f[i]);
 end;
 
 function ScalarCeilF32x16(const a: TVecF32x16): TVecF32x16;
 var i: Integer;
 begin
   for i := 0 to 15 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
-      Result.f[i] := Ceil(a.f[i]);
+      Result.f[i] := SimdCeil(a.f[i]);
 end;
 
 function ScalarRoundF32x16(const a: TVecF32x16): TVecF32x16;
@@ -2346,11 +2346,11 @@ var
   LRounded: Single;
 begin
   for i := 0 to 15 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
     begin
-      LRounded := Round(a.f[i]);
+      LRounded := SimdRound(a.f[i]);
       Result.f[i] := ScalarNormalizeSignedZeroSingle(a.f[i], LRounded);
     end;
 end;
@@ -2361,11 +2361,11 @@ var
   LTrunced: Single;
 begin
   for i := 0 to 15 do
-    if IsNan(a.f[i]) or IsInfinite(a.f[i]) then
+    if SimdIsNaN(a.f[i]) or SimdIsInfinite(a.f[i]) then
       Result.f[i] := a.f[i]
     else
     begin
-      LTrunced := Trunc(a.f[i]);
+      LTrunced := SimdTruncFloat(a.f[i]);
       Result.f[i] := ScalarNormalizeSignedZeroSingle(a.f[i], LTrunced);
     end;
 end;
@@ -2382,20 +2382,20 @@ function ScalarFloorF64x8(const a: TVecF64x8): TVecF64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
-      Result.d[i] := Floor(a.d[i]);
+      Result.d[i] := SimdFloor(a.d[i]);
 end;
 
 function ScalarCeilF64x8(const a: TVecF64x8): TVecF64x8;
 var i: Integer;
 begin
   for i := 0 to 7 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
-      Result.d[i] := Ceil(a.d[i]);
+      Result.d[i] := SimdCeil(a.d[i]);
 end;
 
 function ScalarRoundF64x8(const a: TVecF64x8): TVecF64x8;
@@ -2404,11 +2404,11 @@ var
   LRounded: Double;
 begin
   for i := 0 to 7 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
     begin
-      LRounded := Round(a.d[i]);
+      LRounded := SimdRound(a.d[i]);
       Result.d[i] := ScalarNormalizeSignedZeroDouble(a.d[i], LRounded);
     end;
 end;
@@ -2419,11 +2419,11 @@ var
   LTrunced: Double;
 begin
   for i := 0 to 7 do
-    if IsNan(a.d[i]) or IsInfinite(a.d[i]) then
+    if SimdIsNaN(a.d[i]) or SimdIsInfinite(a.d[i]) then
       Result.d[i] := a.d[i]
     else
     begin
-      LTrunced := Trunc(a.d[i]);
+      LTrunced := SimdTruncFloat(a.d[i]);
       Result.d[i] := ScalarNormalizeSignedZeroDouble(a.d[i], LTrunced);
     end;
 end;
@@ -2536,7 +2536,7 @@ var i: Integer;
 begin
   Result := a.f[0];
   for i := 1 to 3 do
-    Result := Min(Result, a.f[i]);
+    Result := SimdMin(Result, a.f[i]);
 end;
 
 function ScalarReduceMaxF32x4(const a: TVecF32x4): Single;
@@ -2544,7 +2544,7 @@ var i: Integer;
 begin
   Result := a.f[0];
   for i := 1 to 3 do
-    Result := Max(Result, a.f[i]);
+    Result := SimdMax(Result, a.f[i]);
 end;
 
 function ScalarReduceMulF32x4(const a: TVecF32x4): Single;
@@ -2565,12 +2565,12 @@ end;
 
 function ScalarReduceMinF64x2(const a: TVecF64x2): Double;
 begin
-  Result := Min(a.d[0], a.d[1]);
+  Result := SimdMin(a.d[0], a.d[1]);
 end;
 
 function ScalarReduceMaxF64x2(const a: TVecF64x2): Double;
 begin
-  Result := Max(a.d[0], a.d[1]);
+  Result := SimdMax(a.d[0], a.d[1]);
 end;
 
 function ScalarReduceMulF64x2(const a: TVecF64x2): Double;
@@ -2592,7 +2592,7 @@ var i: Integer;
 begin
   Result := a.f[0];
   for i := 1 to 7 do
-    Result := Min(Result, a.f[i]);
+    Result := SimdMin(Result, a.f[i]);
 end;
 
 function ScalarReduceMaxF32x8(const a: TVecF32x8): Single;
@@ -2600,7 +2600,7 @@ var i: Integer;
 begin
   Result := a.f[0];
   for i := 1 to 7 do
-    Result := Max(Result, a.f[i]);
+    Result := SimdMax(Result, a.f[i]);
 end;
 
 function ScalarReduceMulF32x8(const a: TVecF32x8): Single;
@@ -2625,7 +2625,7 @@ var i: Integer;
 begin
   Result := a.d[0];
   for i := 1 to 3 do
-    Result := Min(Result, a.d[i]);
+    Result := SimdMin(Result, a.d[i]);
 end;
 
 function ScalarReduceMaxF64x4(const a: TVecF64x4): Double;
@@ -2633,7 +2633,7 @@ var i: Integer;
 begin
   Result := a.d[0];
   for i := 1 to 3 do
-    Result := Max(Result, a.d[i]);
+    Result := SimdMax(Result, a.d[i]);
 end;
 
 function ScalarReduceMulF64x4(const a: TVecF64x4): Double;
@@ -2658,7 +2658,7 @@ var i: Integer;
 begin
   Result := a.f[0];
   for i := 1 to 15 do
-    Result := Min(Result, a.f[i]);
+    Result := SimdMin(Result, a.f[i]);
 end;
 
 function ScalarReduceMaxF32x16(const a: TVecF32x16): Single;
@@ -2666,7 +2666,7 @@ var i: Integer;
 begin
   Result := a.f[0];
   for i := 1 to 15 do
-    Result := Max(Result, a.f[i]);
+    Result := SimdMax(Result, a.f[i]);
 end;
 
 function ScalarReduceMulF32x16(const a: TVecF32x16): Single;
@@ -2691,7 +2691,7 @@ var i: Integer;
 begin
   Result := a.d[0];
   for i := 1 to 7 do
-    Result := Min(Result, a.d[i]);
+    Result := SimdMin(Result, a.d[i]);
 end;
 
 function ScalarReduceMaxF64x8(const a: TVecF64x8): Double;
@@ -2699,7 +2699,7 @@ var i: Integer;
 begin
   Result := a.d[0];
   for i := 1 to 7 do
-    Result := Max(Result, a.d[i]);
+    Result := SimdMax(Result, a.d[i]);
 end;
 
 function ScalarReduceMulF64x8(const a: TVecF64x8): Double;

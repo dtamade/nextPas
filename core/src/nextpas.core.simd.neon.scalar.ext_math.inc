@@ -4,28 +4,28 @@ function NEONFloorF32x4(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Floor(a.f[i]);
+    Result.f[i] := SimdFloor(a.f[i]);
 end;
 
 function NEONCeilF32x4(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Ceil(a.f[i]);
+    Result.f[i] := SimdCeil(a.f[i]);
 end;
 
 function NEONRoundF32x4(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Round(a.f[i]);
+    Result.f[i] := SimdRound(a.f[i]);
 end;
 
 function NEONTruncF32x4(const a: TVecF32x4): TVecF32x4;
 var i: Integer;
 begin
   for i := 0 to 3 do
-    Result.f[i] := Trunc(a.f[i]);
+    Result.f[i] := SimdTruncFloat(a.f[i]);
 end;
 
 function NEONClampF32x4(const a, minVal, maxVal: TVecF32x4): TVecF32x4;
