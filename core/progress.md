@@ -1,54 +1,57 @@
-# Progress Log: HTTP H1 outbound drain benchmark contract
+# Progress Log: HTTP full-chain benchmark output contract
 
 ## Session
 
-- **Scope:** HTTP H1 outbound buffer drain benchmark output contract.
-- **Status:** focused RED/GREEN completed, `bench_h1outbound` write+drain row
-  landed, docs/control files updated.
+- **Scope:** HTTP full-chain keep-alive benchmark normalized output contract.
+- **Status:** focused RED/GREEN completed, `bench_fullchain` plaintext row locked
+  by `test_http_benchmarks`, docs/control files updated.
 - **Roadmap Position:** `6/6 benchmark/performance` ->
-  `request dispatch / response serialization cost isolation`.
+  `request dispatch / response serialization / full-chain cost isolation`.
 
 ## Current state
 
 - shared checkout 仍有大量无关 dirty/untracked 文件；本轮只 path-limited 处理
   HTTP benchmark/test/docs/control files。
+- 父目录 `../task_plan.md`、`../findings.md`、`../progress.md` 已有无关脏改；
+  本轮只更新 `core/task_plan.md`、`core/findings.md`、`core/progress.md`。
 - 本轮没有写 `docs/nextpas.core.http.inbox.md`。
 - 本轮没有跑全量 HTTP 测试；只跑 `test_http_benchmarks` 和一条 focused
-  `bench_h1outbound` live row。
+  `bench_fullchain` live row。
 
 ## Completed work
 
-- `test_http_benchmarks` 新增 `bench_h1outbound drain smoke`。
-- 新增 `benchmarks/nextpas.core.http/bench_h1outbound`。
-- `bench_h1outbound` 输出 `operation=http.h1outbound.drain` marker。
-- `bench_h1outbound` 新增 `buffer write+drain 1KB` row，测量 internal outbound
-  buffer 1 KiB write + `DrainAllTo` 固定内存 writer。
-- `bench_h1outbound` final build 已清理 FPC `Note:` 输出。
+- `test_http_benchmarks` 新增 `bench_fullchain plaintext smoke`。
+- `bench_fullchain` 新增 `NEXTPAS_BENCH_MAX_ITERS` 和 `NEXTPAS_BENCH_FILTER`
+  支持。
+- `bench_fullchain` 输出 `operation=http.fullchain.keepalive` marker。
+- `bench_fullchain` 新增 normalized row marker：`workload`、`iterations`、
+  `completed`、`elapsed_ns`、`ns/op`、`req/s`。
 - `docs/http/API_COVERAGE.md`、`docs/http/BENCHMARKS.md`、`docs/http/README.md`
-  已同步 H1 outbound benchmark 契约和 fresh live evidence。
+  已同步 full-chain benchmark 契约和 fresh live evidence。
 
 ## Verification
 
 - RED:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `25 total, 24 passed, 1 failed`，失败原因是 `bench_h1outbound` 入口不存在，
-  heaptrc `0 unfreed memory blocks`。
+  -> `26 total, 25 passed, 1 failed`，失败原因是旧 `bench_fullchain` 输出缺少
+  `operation=http.fullchain.keepalive`，heaptrc `0 unfreed memory blocks`。
 - GREEN:
   `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  -> `25 total, 25 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
+  -> `26 total, 26 passed, 0 failed`，heaptrc `0 unfreed memory blocks`。
 - Fresh live row:
-  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' make -C benchmarks/nextpas.core.http/bench_h1outbound clean run`
-  -> `buffer write+drain 1KB: 303.0 ns/op`, `3300665 ops/s`，final build output
-  没有 FPC `Warning:` / `Note:`。
+  `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
+  -> `workload=plaintext`, `completed=1000`, `elapsed_ns=127167209`,
+  `127167.2 ns/op`, `7864 req/s`。该 clean build 没有 FPC `Warning:`，
+  但有 2 条既有 FPC `Note:`，分别来自 `nextpas.core.text.format` 和 llhttp inline。
 
 ## Direction review
 
-方向没有走偏：本轮继续把 full-chain server gap 拆到 response-side outbound drain 层，
-且没有改生产 HTTP 行为。与上一批 fixed `200 OK` writer row `1441.1 ns/op` 相比，
-outbound buffer 1 KiB write+drain 只有 `303.0 ns/op`，当前更可能的优化点仍在 writer
-allocation / header materialization / full-chain normalization。
+方向没有走偏：本轮继续把 HTTP server performance 归因从大而粗的 full-chain
+comparison 拆成可测试 benchmark 契约，没有改生产 HTTP 逻辑。full-chain row 已经可
+被测试锁住，后续可以更高效地对比 narrowed rows 和真实端到端成本。
 
 ## Next step
 
-继续 `6/6 benchmark/performance`。下一批建议把 `bench_fullchain` 整理成 normalized
-output，或针对 H1 writer allocation/header materialization 做生产优化前的更细拆分。
+继续 `6/6 benchmark/performance`。下一批建议围绕 H1 writer allocation / header
+materialization 做更细拆分，或用已有 comparison runner 做一次小规模 multi-run
+sanity；不要先跑全量测试或 broad benchmark sweep。

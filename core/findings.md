@@ -1,4 +1,4 @@
-# Findings: HTTP H1 outbound drain benchmark contract
+# Findings: HTTP full-chain benchmark output contract
 
 ## Scope
 
@@ -7,21 +7,28 @@
 
 ## Implemented decision
 
-新增 `bench_h1outbound`，输出稳定 marker：
+`bench_fullchain` 现在支持：
 
 ```text
-operation=http.h1outbound.drain
+NEXTPAS_BENCH_MAX_ITERS=<positive integer>
+NEXTPAS_BENCH_FILTER=<workload or display-name fragment>
 ```
 
-并新增 row：
+并输出稳定 marker：
 
 ```text
-buffer write+drain 1KB
+operation=http.fullchain.keepalive
+workload=<plaintext|json|echo_1k|sink_16k|param_route>
+iterations=<N>
+completed=<N>
+elapsed_ns=<ns>
+ns/op=<float>
+req/s=<float>
 ```
 
-这个 row 每次迭代创建一个 `IH1OutboundBuffer`，写入固定 1 KiB payload，然后
-`DrainAllTo` 固定容量内存 writer。它刻意不包含 response writer serialization、
-真实 socket I/O、readiness wake、write deadline 或 backpressure。
+这个 benchmark 仍然启动真实 `THttpServer`，使用单连接 keep-alive，逐次写入请求并
+读取完整响应。`completed` 只统计读到足够响应字节的请求，用来防止只读 header
+或前缀的 benchmark 误报成功。
 
 ## RED / GREEN evidence
 
@@ -31,9 +38,9 @@ RED:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-25 total, 24 passed, 1 failed
-bench_h1outbound drain smoke failed:
-unable to resolve core root from current directory or executable path
+26 total, 25 passed, 1 failed
+bench_fullchain plaintext smoke failed:
+fullchain operation marker missing from output: operation=http.fullchain.keepalive
 heaptrc: 0 unfreed memory blocks
 ```
 
@@ -43,34 +50,42 @@ GREEN:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-25 total, 25 passed, 0 failed
+26 total, 26 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
 ## Performance evidence
 
-Fresh local H1 outbound drain row:
+Fresh local full-chain plaintext row:
 
 ```text
-NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' \
-make -C benchmarks/nextpas.core.http/bench_h1outbound clean run
+NEXTPAS_BENCH_MAX_ITERS=1000 \
+NEXTPAS_BENCH_FILTER=plaintext \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
 
-buffer write+drain 1KB: 303.0 ns/op, 3300665 ops/s
+workload=plaintext
+iterations=1000
+completed=1000
+elapsed_ns=127167209
+ns/op=127167.2
+req/s=7864
 ```
 
-The final `bench_h1outbound` build emitted no FPC `Warning:` or `Note:` lines.
+The clean build emitted no FPC `Warning:` lines, but did emit two existing FPC
+`Note:` lines from `nextpas.core.text.format` and the translated llhttp inline
+call. Those notes are not from the changed benchmark file.
 
 ## Direction review
 
-方向没有走偏：本轮沿上一批 H1 writer serialization 继续拆 response-side 成本，没有改
-生产 HTTP 行为。当前证据显示 internal outbound buffer 1 KiB write+drain 约
-`303 ns/op`，明显低于固定小响应 writer row `1441.1 ns/op`，所以后续生产优化前更应
-继续拆 writer allocation/header materialization，而不是先优化 outbound buffer。
+方向没有走偏：本轮把 full-chain server benchmark 从人工输出整理成可测试契约，
+没有把 benchmark 结果误当生产优化，也没有引入新的 HTTP runtime behavior。现在
+`bench_router`、`bench_h1writer`、`bench_h1outbound` 和 `bench_fullchain` 都有
+focused smoke，可以继续做成本归因。
 
 ## Remaining gaps / risks
 
-- 当前 outbound row 不覆盖 `TryDrainTo` runtime path、real socket、partial writes、
-  write deadline 或 backpressure。
-- `bench_fullchain` 仍是旧式非 normalized output，暂时不适合作为机器断言入口。
-- Rust comparator 仍是 std-only comparator，不代表 Hyper/Tokio。
+- `bench_fullchain` 仍是单连接 keep-alive row，不覆盖多连接并发、epoll、TLS、H2/H3
+  或 backpressure。
+- 单次 full-chain row 噪声较大；性能判断仍应优先看 narrowed micro rows 或后续
+  multi-run summary。
+- 现有依赖的 FPC `Note:` 尚未治理，本轮只如实记录，不扩大范围。

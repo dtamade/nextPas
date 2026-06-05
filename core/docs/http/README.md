@@ -155,6 +155,17 @@ make -C benchmarks/nextpas.core.http/bench_h1outbound clean run
 This emits `operation=http.h1outbound.drain` and a `buffer write+drain 1KB`
 row for the internal outbound buffer write and in-memory drain path.
 
+Run the filtered full-chain keep-alive benchmark:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=1000 \
+NEXTPAS_BENCH_FILTER=plaintext \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+```
+
+This emits `operation=http.fullchain.keepalive` and a `workload=plaintext` row
+with `iterations`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`.
+
 Run the focused comparator smoke from the test harness:
 
 ```sh
@@ -164,7 +175,8 @@ make -C tests/nextpas.core.http/test_http_benchmarks test
 The harness builds and runs nextPas, Go, and Rust keep-alive server benchmarks at
 smoke scale. Each implementation reports `operation`, `workload`, `impl`,
 `iterations`, `threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so
-later benchmark result capture can use one stable format.
+later benchmark result capture can use one stable format. It also builds
+`bench_fullchain` and validates the filtered plaintext row markers.
 
 For manual comparison runs, use the server comparison runner:
 

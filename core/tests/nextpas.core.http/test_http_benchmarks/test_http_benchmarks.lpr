@@ -16,6 +16,7 @@ const
   BenchRouterRelativeDir = 'benchmarks/nextpas.core.http/bench_router';
   BenchH1WriterRelativeDir = 'benchmarks/nextpas.core.http/bench_h1writer';
   BenchH1OutboundRelativeDir = 'benchmarks/nextpas.core.http/bench_h1outbound';
+  BenchFullchainRelativeDir = 'benchmarks/nextpas.core.http/bench_fullchain';
   H1ParserBenchRelativeDir = 'benchmarks/nextpas.core.http/bench_h1parser';
   ServerComparisonRelativeDir = 'benchmarks/nextpas.core.http';
   ServerComparisonRunnerRelativePath =
@@ -31,6 +32,7 @@ const
   BenchMaxItersEnvName = 'NEXTPAS_BENCH_MAX_ITERS';
   BenchFilterEnvName = 'NEXTPAS_BENCH_FILTER';
   BenchMaxItersSmokeValue = '2000';
+  FullchainSmokeIterations = '128';
 
 procedure AppendAvailableProcessOutput(AProcess: TProcess; var AOutput: string);
 var
@@ -188,6 +190,12 @@ begin
     'build/projects/nextpas.core.http/bench_h1outbound/bench_h1outbound');
 end;
 
+function ResolveBenchFullchainBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_fullchain/bench_fullchain');
+end;
+
 function ResolveBenchmarkTestBuildDir(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -279,6 +287,23 @@ begin
     'H1 outbound filter marker');
   CheckContains(AOutput, 'ns/op', 'H1 outbound ns/op marker');
   CheckContains(AOutput, 'ops/s', 'H1 outbound ops/s marker');
+end;
+
+procedure CheckFullchainBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.fullchain.keepalive',
+    'fullchain operation marker');
+  CheckContains(AOutput, 'workload=plaintext',
+    'fullchain workload marker');
+  CheckContains(AOutput, 'iterations=' + FullchainSmokeIterations,
+    'fullchain iterations marker');
+  CheckContains(AOutput, 'completed=' + FullchainSmokeIterations,
+    'fullchain completed marker');
+  CheckContains(AOutput, 'elapsed_ns=', 'fullchain elapsed marker');
+  CheckContains(AOutput, 'ns/op=', 'fullchain ns/op marker');
+  CheckContains(AOutput, 'req/s=', 'fullchain req/s marker');
+  CheckContains(AOutput, 'bench_filter=plaintext',
+    'fullchain filter marker');
 end;
 
 function LoadTextFile(const APath: string): string;
@@ -429,6 +454,34 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1outbound drain smoke exit code: ' + LOutput);
   CheckH1OutboundDrainBenchmarkOutput(LOutput);
+end;
+
+procedure TestBenchFullchainPlaintextSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=plaintext'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain plaintext smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput);
 end;
 
 procedure TestGoServerComparatorSmallSmoke;
@@ -1242,6 +1295,8 @@ begin
     @TestBenchH1WriterSerializeSmoke);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
+  T.Run('bench_fullchain plaintext smoke',
+    @TestBenchFullchainPlaintextSmoke);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
   T.Run('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);

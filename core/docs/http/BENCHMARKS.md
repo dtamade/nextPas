@@ -107,6 +107,38 @@ Local focused row from 2026-06-05:
 | --- | ---: | ---: | ---: |
 | buffer write+drain 1KB | 100000 | 303.0 | 3300665 |
 
+## Run the Full-Chain Keep-Alive Benchmark
+
+Run a filtered plaintext full-chain row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=1000 \
+NEXTPAS_BENCH_FILTER=plaintext \
+make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+```
+
+This benchmark starts a real `THttpServer`, opens one keep-alive TCP
+connection, sends requests, reads complete responses, and reports stable
+markers:
+
+- `operation=http.fullchain.keepalive`
+- `workload=<plaintext|json|echo_1k|sink_16k|param_route>`
+- `iterations`
+- `completed`
+- `elapsed_ns`
+- `ns/op`
+- `req/s`
+
+Local focused row from 2026-06-05:
+
+| workload | iterations | completed | elapsed_ns | ns/op | req/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| plaintext | 1000 | 1000 | 127167209 | 127167.2 | 7864 |
+
+The clean build for this row emitted two existing FPC `Note:` lines from
+`nextpas.core.text.format` and the translated llhttp inline call. It emitted no
+FPC `Warning:` lines.
+
 ## Local Snapshot: 2026-06-04 UTC
 
 Environment:

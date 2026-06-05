@@ -9,6 +9,7 @@ program bench_fullchain;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
+  SysUtils,
   nextpas.core.base,
   nextpas.core.text.conv,
   nextpas.core.http.base,
@@ -25,11 +26,55 @@ uses
   nextpas.core.platform.time;
 
 const
-  ITERATIONS = 5000;
+  DEFAULT_ITERATIONS = 5000;
+  BENCH_MAX_ITERS_ENV = 'NEXTPAS_BENCH_MAX_ITERS';
+  BENCH_FILTER_ENV = 'NEXTPAS_BENCH_FILTER';
+
+type
+  TScenarioResult = record
+    Completed: Int64;
+    ElapsedNs: UInt64;
+    NsPerOp: Double;
+    ReqPerSec: Double;
+  end;
 
 var
   GServer: THttpServer;
   GPort: UInt16;
+  GIterations: Int64;
+  GFilter: string;
+
+function ConfiguredIterations: Int64;
+var
+  LValue: string;
+begin
+  Result := DEFAULT_ITERATIONS;
+  LValue := Trim(GetEnvironmentVariable(BENCH_MAX_ITERS_ENV));
+  if (LValue <> '') and TryStrToInt64(LValue, Result) and (Result > 0) then
+    Exit;
+  Result := DEFAULT_ITERATIONS;
+end;
+
+function ConfiguredFilter: string;
+begin
+  Result := Trim(GetEnvironmentVariable(BENCH_FILTER_ENV));
+end;
+
+function ShouldRunScenario(const AWorkload, AName: string): Boolean;
+var
+  LFilter: string;
+begin
+  if GFilter = '' then
+  begin
+    Result := True;
+    Exit;
+  end;
+
+  LFilter := LowerCase(GFilter);
+  Result :=
+    (Pos(LFilter, LowerCase(AWorkload)) > 0) or
+    (Pos(LFilter, LowerCase(AName)) > 0);
+end;
 
 function ServerThread(AParam: Pointer): Pointer; cdecl;
 begin
@@ -164,13 +209,23 @@ begin
   Result := LTotal;
 end;
 
-procedure RunScenario(const AName, ARequest: string; AExpectMin: SizeUInt);
+function RunScenario(const AWorkload, AName, ARequest: string;
+  AExpectMin: SizeUInt): TScenarioResult;
 var
   LConn: ITcpStream;
   LStart, LEnd, LElapsedNs: UInt64;
-  LI: Int32;
+  LI: Int64;
+  LBytesRead: SizeUInt;
   LReqPerSec: Double;
 begin
+  Result.Completed := 0;
+  Result.ElapsedNs := 0;
+  Result.NsPerOp := 0;
+  Result.ReqPerSec := 0;
+
+  if not ShouldRunScenario(AWorkload, AName) then
+    Exit;
+
   LConn := TcpConnect('127.0.0.1', GPort);
   LConn.SetNoDelay(True);
   LConn.SetReadDeadline(TDeadline.After(TDuration.FromSeconds(30)));
@@ -183,18 +238,36 @@ begin
   end;
 
   LStart := platform_monotonic_ns;
-  for LI := 1 to ITERATIONS do
+  for LI := 1 to GIterations do
   begin
     LConn.Write(ARequest[1], SizeUInt(Length(ARequest)));
-    ReadResponse(LConn);
+    LBytesRead := ReadResponse(LConn);
+    if LBytesRead >= AExpectMin then
+      Inc(Result.Completed);
   end;
   LEnd := platform_monotonic_ns;
   LConn.Close;
 
   LElapsedNs := LEnd - LStart;
-  LReqPerSec := (Double(ITERATIONS) / (Double(LElapsedNs) / 1000000000.0));
-  WriteLn('  ', AName:25, '  ', ITERATIONS, ' reqs  ', LElapsedNs div 1000000, ' ms  ',
+  if GIterations > 0 then
+    Result.NsPerOp := Double(LElapsedNs) / Double(GIterations);
+  if LElapsedNs > 0 then
+    LReqPerSec := (Double(Result.Completed) / (Double(LElapsedNs) / 1000000000.0))
+  else
+    LReqPerSec := 0;
+  Result.ElapsedNs := LElapsedNs;
+  Result.ReqPerSec := LReqPerSec;
+
+  WriteLn('  ', AName:25, '  ', GIterations, ' reqs  ', LElapsedNs div 1000000, ' ms  ',
     Trunc(LReqPerSec):8, ' req/s');
+  WriteLn('operation=http.fullchain.keepalive');
+  WriteLn('workload=', AWorkload);
+  WriteLn('iterations=', GIterations);
+  WriteLn('completed=', Result.Completed);
+  WriteLn('elapsed_ns=', Result.ElapsedNs);
+  WriteLn('ns/op=', Result.NsPerOp:0:1);
+  WriteLn('req/s=', Result.ReqPerSec:0:0);
+  WriteLn;
 end;
 
 var
@@ -202,10 +275,20 @@ var
   LEchoReq: string;
   LBody16K: string;
   LSinkReq: string;
+  LResult: TScenarioResult;
+  LScenariosRun: Int32;
 
 begin
-  WriteLn('=== HTTP Full-Chain Benchmark ===');
-  WriteLn('  Iterations per scenario: ', ITERATIONS);
+  GIterations := ConfiguredIterations;
+  GFilter := ConfiguredFilter;
+  LScenariosRun := 0;
+
+  WriteLn('=== nextpas.core.http.fullchain benchmark ===');
+  WriteLn('operation=http.fullchain.keepalive');
+  WriteLn('bench_max_iters=', GIterations);
+  if GFilter <> '' then
+    WriteLn('bench_filter=', GFilter);
+  WriteLn('  Iterations per scenario: ', GIterations);
   WriteLn;
 
   SetupServer;
@@ -213,29 +296,42 @@ begin
   WriteLn;
 
   { Scenario 1: Plaintext }
-  RunScenario('Plaintext (GET /)',
+  LResult := RunScenario('plaintext', 'Plaintext (GET /)',
     'GET / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10, 50);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
 
   { Scenario 2: JSON }
-  RunScenario('JSON (GET /json)',
+  LResult := RunScenario('json', 'JSON (GET /json)',
     'GET /json HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10, 60);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
 
   { Scenario 3: Body echo 1KB }
   SetLength(LBody1K, 1024);
   FillChar(LBody1K[1], 1024, Ord('x'));
   LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
-  RunScenario('Echo 1KB (POST /echo)', LEchoReq, 100);
+  LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq, 100);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
 
   { Scenario 4: Body sink 16KB }
   SetLength(LBody16K, 16 * 1024);
   FillChar(LBody16K[1], Length(LBody16K), Ord('x'));
   LSinkReq := 'POST /sink HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: ' +
     IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
-  RunScenario('Sink 16KB (POST /sink)', LSinkReq, 100);
+  LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq, 20);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
 
   { Scenario 5: Router with params }
-  RunScenario('Param (GET /users/12345)',
+  LResult := RunScenario('param_route', 'Param (GET /users/12345)',
     'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10, 50);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
+
+  if LScenariosRun = 0 then
+    WriteLn('  No matching full-chain scenarios.');
 
   WriteLn;
   GServer.Shutdown;
