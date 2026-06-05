@@ -144,6 +144,17 @@ This emits `operation=http.h1writer.serialize` and a `fixed 200 13B` row for
 writer construction, fixed response header serialization, and body copy into an
 in-memory sink.
 
+Run the focused H1 outbound drain benchmark:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' \
+make -C benchmarks/nextpas.core.http/bench_h1outbound clean run
+```
+
+This emits `operation=http.h1outbound.drain` and a `buffer write+drain 1KB`
+row for the internal outbound buffer write and in-memory drain path.
+
 Run the focused comparator smoke from the test harness:
 
 ```sh

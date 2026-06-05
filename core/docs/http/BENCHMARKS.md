@@ -86,6 +86,27 @@ Local focused row from 2026-06-05:
 | --- | ---: | ---: | ---: |
 | fixed 200 13B | 100000 | 1441.1 | 693895 |
 
+## Run the H1 Outbound Drain Benchmark
+
+Run the focused outbound buffer row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' \
+make -C benchmarks/nextpas.core.http/bench_h1outbound clean run
+```
+
+This row reports `operation=http.h1outbound.drain` and measures
+`NewH1OutboundBuffer`, a 1 KiB buffer write, and `DrainAllTo` into a fixed
+in-memory writer. It does not include response writer serialization, real
+socket I/O, readiness wakeups, write deadlines, or backpressure.
+
+Local focused row from 2026-06-05:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| buffer write+drain 1KB | 100000 | 303.0 | 3300665 |
+
 ## Local Snapshot: 2026-06-04 UTC
 
 Environment:

@@ -15,6 +15,7 @@ const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
   BenchRouterRelativeDir = 'benchmarks/nextpas.core.http/bench_router';
   BenchH1WriterRelativeDir = 'benchmarks/nextpas.core.http/bench_h1writer';
+  BenchH1OutboundRelativeDir = 'benchmarks/nextpas.core.http/bench_h1outbound';
   H1ParserBenchRelativeDir = 'benchmarks/nextpas.core.http/bench_h1parser';
   ServerComparisonRelativeDir = 'benchmarks/nextpas.core.http';
   ServerComparisonRunnerRelativePath =
@@ -181,6 +182,12 @@ begin
     'build/projects/nextpas.core.http/bench_h1writer/bench_h1writer');
 end;
 
+function ResolveBenchH1OutboundBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_h1outbound/bench_h1outbound');
+end;
+
 function ResolveBenchmarkTestBuildDir(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -260,6 +267,18 @@ begin
     'H1 writer filter marker');
   CheckContains(AOutput, 'ns/op', 'H1 writer ns/op marker');
   CheckContains(AOutput, 'ops/s', 'H1 writer ops/s marker');
+end;
+
+procedure CheckH1OutboundDrainBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1outbound.drain',
+    'H1 outbound drain operation marker');
+  CheckContains(AOutput, 'buffer write+drain 1KB',
+    'H1 outbound drain benchmark row');
+  CheckContains(AOutput, 'bench_filter=buffer write+drain 1KB',
+    'H1 outbound filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 outbound ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 outbound ops/s marker');
 end;
 
 function LoadTextFile(const APath: string): string;
@@ -382,6 +401,34 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1writer serialize smoke exit code: ' + LOutput);
   CheckH1WriterSerializeBenchmarkOutput(LOutput);
+end;
+
+procedure TestBenchH1OutboundDrainSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1OutboundRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchH1OutboundRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1outbound build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchH1OutboundBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_h1outbound binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=buffer write+drain 1KB'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1outbound drain smoke exit code: ' + LOutput);
+  CheckH1OutboundDrainBenchmarkOutput(LOutput);
 end;
 
 procedure TestGoServerComparatorSmallSmoke;
@@ -1193,6 +1240,8 @@ begin
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_h1writer response serialization smoke',
     @TestBenchH1WriterSerializeSmoke);
+  T.Run('bench_h1outbound drain smoke',
+    @TestBenchH1OutboundDrainSmoke);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
   T.Run('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);
