@@ -39,9 +39,9 @@ def check_no_stable_disposition(a_errors: list[str], a_rel: str) -> None:
 
 def check_forbidden_gather_absence_claims(a_errors: list[str]) -> None:
     l_files = [
-        "docs/SIMD_GOAL_TREE.md",
-        "docs/nextpas.core.simd.architecture-guide.md",
-        "docs/nextpas.core.simd.maintenance.md",
+        "docs/simd/GOAL_TREE.md",
+        "docs/simd/architecture-guide.md",
+        "docs/simd/maintenance.md",
     ]
     l_patterns = [
         r"gather/scatter\s+(?:is\s+)?(?:completely\s+)?missing",
@@ -85,7 +85,7 @@ def main() -> int:
 
     require_tokens(
         l_errors,
-        "docs/SIMD_GOAL_TREE.md",
+        "docs/simd/GOAL_TREE.md",
         [
             "G13",
             "SIMD contract qualification roadmap",
@@ -101,7 +101,7 @@ def main() -> int:
 
     require_tokens(
         l_errors,
-        "docs/nextpas.core.simd.architecture-guide.md",
+        "docs/simd/architecture-guide.md",
         [
             "512-bit record alignment contract",
             "FPC RECORDMIN=32",
@@ -158,7 +158,7 @@ def main() -> int:
 
     require_tokens(
         l_errors,
-        "docs/nextpas.core.simd.intrinsics.neon.md",
+        "docs/simd/intrinsics.neon.md",
         [
             "default public backend state is scalar fallback",
             "inline asm is opt-in",
@@ -174,7 +174,7 @@ def main() -> int:
 
     require_tokens(
         l_errors,
-        "docs/nextpas.core.simd.md",
+        "docs/simd/README.md",
         [
             "NEON default public status",
             "default scalar fallback",

@@ -2,7 +2,7 @@
 
 这份文档给下一位维护者一个简短但完整的现状说明：现在这个模块已经整理到什么程度、哪些边界比较稳、接下来最值得做什么。
 
-如果你只想看“现在该做什么”，再看 `docs/nextpas.core.simd.checklist.md`。
+如果你只想看“现在该做什么”，再看 `docs/simd/checklist.md`。
 
 如果你这次接手的是 backend / intrinsics / SSE2 分账，不要先翻历史计划，先看：
 
@@ -188,10 +188,9 @@ FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh freeze-sta
 
 优先维护：
 
-- `docs/nextpas.core.simd.md`
-- `src/nextpas.core.simd.README.md`
-- `docs/nextpas.core.simd.maintenance.md`
-- `docs/nextpas.core.simd.map.md`
+- `docs/simd/README.md`
+- `docs/simd/maintenance.md`
+- `docs/simd/map.md`
 
 ### 2. 只做高 ROI 改动
 

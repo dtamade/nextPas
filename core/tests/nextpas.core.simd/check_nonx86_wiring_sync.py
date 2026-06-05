@@ -136,7 +136,7 @@ def main() -> int:
     parser.add_argument("--json", action="store_true", help="print machine-readable JSON result")
     parser.add_argument("--summary-line", action="store_true", help="print one-line summary for gate logs")
     parser.add_argument("--testcase", default="tests/nextpas.core.simd/nextpas.core.simd.dispatchapi.testcase.pas")
-    parser.add_argument("--checklist", default="docs/nextpas.core.simd.checklist.md")
+    parser.add_argument("--checklist", default="docs/simd/checklist.md")
     args = parser.parse_args()
 
     repo_root = Path(__file__).resolve().parents[2]

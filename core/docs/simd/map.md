@@ -37,8 +37,7 @@
 
 从这里开始，先理解模块对外承诺什么：
 
-- `src/nextpas.core.simd.README.md`
-- `docs/nextpas.core.simd.md`
+- `docs/simd/README.md`
 - `src/nextpas.core.simd.pas`
 - `src/nextpas.core.simd.api.pas`
 

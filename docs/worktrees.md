@@ -1,24 +1,21 @@
-# Worktree Policy
+# Worktree 与模块 Lane 规范
 
-## Rule
+## 核心规则
 
-All project-owned linked worktrees for this repository must live under the
-repository root:
+本仓库所有项目自有的 linked worktree 必须放在仓库根目录下：
 
 ```text
-.worktrees/<short-name>
+.worktrees/<短名称>
 ```
 
-The `.worktrees/` directory is ignored by Git and must never be committed as
-source. Do not create new nextPas worktrees under `~/.config/superpowers`,
-`.claude/worktrees`, or arbitrary sibling directories.
+`.worktrees/` 已被 Git 忽略，不能作为源码提交。不要再把新的 nextPas
+worktree 建到 `~/.config/superpowers`、`.claude/worktrees` 或任意项目外目录。
 
-## Module Lanes
+## 模块 Lane
 
-Use one persistent worktree per active module or governance lane. This keeps
-agent session context, branch state, and module ownership easy to resume.
+每个活跃模块或治理线使用一个长期 worktree。这样 AI 同事的会话上下文、分支状态和模块责任都能稳定恢复。
 
-Recommended layout:
+推荐目录：
 
 ```text
 .worktrees/core-http
@@ -29,7 +26,7 @@ Recommended layout:
 .worktrees/compiler
 ```
 
-Recommended branch names:
+推荐分支名：
 
 ```text
 codex/core-http
@@ -40,101 +37,97 @@ codex/core-simd
 codex/compiler
 ```
 
-Do not create a new date-stamped branch for every prompt. The module lane is
-the long-lived continuation branch. Use small commits inside that lane, and use
-temporary `landing/<module>-YYYYMMDD` branches only when preparing reviewed
-mainline integration.
+不要每次提示词都新建一个日期分支。模块 lane 是长期延续分支；在 lane 内用小提交推进。
+只有准备进入主线时，才临时创建 `landing/<module>-YYYYMMDD` 这类候选分支。
 
-## Create A Module Worktree
+## 创建模块 Worktree
 
-Use the project script:
+使用项目脚本：
 
 ```bash
 scripts/worktree-add.sh codex/core-http main
 ```
 
-The script creates:
+脚本会创建：
 
 ```text
 .worktrees/core-http
 ```
 
-If the branch already exists, the script checks it out in that directory. If it
-does not exist, the script creates it from `main` by default:
+如果分支已经存在，脚本会把它 checkout 到该目录；如果分支不存在，默认从 `main` 创建：
 
 ```bash
 scripts/worktree-add.sh codex/core-http main
 ```
 
-Then resume the agent session from the worktree path:
+然后从对应 worktree 目录恢复 AI 会话：
 
 ```bash
 cd .worktrees/core-http
 codex
 ```
 
-or:
+或：
 
 ```bash
 cd .worktrees/core-http
 claude
 ```
 
-Only the controller should create new module lanes unless the user explicitly
-delegates that setup. Module owners should continue from the assigned worktree
-instead of creating new side branches.
+只有总控或明确被授权的同事可以创建新模块 lane。模块负责人应该从分配的 worktree
+继续工作，不要自己再开旁路分支。
 
-## Audit Worktrees
+## 审计 Worktree
 
-Run:
+运行：
 
 ```bash
 scripts/worktree-audit.sh
 ```
 
-The audit reports every linked worktree, its branch, dirtiness, and whether it
-is inside the project-local `.worktrees/` directory. Any non-main linked
-worktree outside `.worktrees/` is a policy violation.
+审计会列出每个 linked worktree、所在分支、是否 dirty，以及是否位于项目本地
+`.worktrees/` 目录内。任何非 `main` 的 linked worktree 如果不在 `.worktrees/`
+下，都属于规范违规。
 
-Run this audit before branch cleanup, before a landing wave, and when a user
-asks whether the repository is still in worktree/branch debt.
+以下场景必须先跑审计：
 
-## Move An Existing Worktree
+- 分支清理前。
+- landing 批次前。
+- 用户询问仓库是否仍有 worktree 或分支债务时。
 
-Do not move a worktree with `mv`. Use Git so `.git/worktrees` metadata stays
-valid:
+## 迁移已有 Worktree
+
+不要用 `mv` 手动移动 worktree。必须让 Git 更新 `.git/worktrees` 元数据：
 
 ```bash
-git worktree move <old-path> .worktrees/<short-name>
+git worktree move <旧路径> .worktrees/<短名称>
 ```
 
-Only move a worktree after its owner confirms no agent or build is currently
-running inside it.
+迁移前必须确认该 worktree 的负责人没有正在其中运行 AI 会话、构建或测试。
 
-After moving, run:
+迁移后运行：
 
 ```bash
 scripts/worktree-audit.sh
 git worktree list --porcelain
 ```
 
-Do not delete the old path manually. Let Git update its linked-worktree
-metadata.
+不要手动删除旧路径。让 Git 负责维护 linked-worktree 元数据。
 
-## Starting A Module Session
+## 启动模块会话
 
-The controller should give the module owner a paste-ready prompt that includes:
+总控给模块负责人分发任务时，提示词必须包含：
 
-- module name and assigned worktree path
-- branch name and current `HEAD`
-- allowed paths and forbidden paths
-- current module status and known red points
-- focused verification commands
-- reporting format
-- merge/landing constraints
-- required module design documents
+- 模块名和指定 worktree 路径。
+- 分支名和当前 `HEAD`。
+- 允许修改的路径和禁止修改的路径。
+- 当前模块状态和已知红点。
+- focused verification 命令。
+- 汇报格式。
+- merge / landing 约束。
+- 必读的模块设计文档。
 
-The module owner should start by running:
+模块负责人开工后先运行：
 
 ```bash
 git status --short --branch
@@ -143,73 +136,64 @@ scripts/worktree-audit.sh
 make hygiene
 ```
 
-If `make hygiene` fails before any local edits, report it as baseline debt
-instead of silently cleaning or committing unrelated files.
+如果 `make hygiene` 在本地修改前已经失败，必须把它报告为 baseline debt，不要静默清理或提交无关文件。
 
-For any `core/` module lane, read `core/docs/design-conventions.md` before
-changing source, tests, examples, or benchmarks. That file is the authority for
-`nextpas.core` module shape, layer rules, test layout, and naming conventions.
+任何 `core/` 模块 lane 在改源码、测试、示例或 benchmark 前，都必须先读
+`core/AGENTS.md` 和 `core/docs/design-conventions.md`。其中 `design-conventions.md`
+是 `nextpas.core` 模块形态、层级规则、测试布局、文档布局和命名规范的权威文件。
 
-## Landing Discipline
+## Landing 纪律
 
-Worktree location does not make a branch safe to merge.
+worktree 位置正确不代表分支可以合并。
 
-Before landing any branch:
+任何分支进入主线前必须满足：
 
-1. Confirm the worktree is clean.
-2. Confirm the changed paths are in the intended module.
-3. Rebase, merge, or replay onto current `main` in a landing candidate.
-4. Run focused verification for the changed surface.
-5. Merge only with `ff-only` or an equivalent reviewed landing commit.
-6. Remove the worktree after the branch is fully absorbed.
+1. worktree 是干净的。
+2. 改动路径属于预期模块或治理线。
+3. 已在 landing candidate 上基于当前 `main` rebase、merge 或 replay。
+4. 已运行改动表面的 focused verification。
+5. 只用 `ff-only` 或等价的已审查 landing commit 进入主线。
+6. 分支完全吸收后，清理对应临时 worktree。
 
-Cleanup command after a successful landing:
+成功 landing 后清理：
 
 ```bash
-git worktree remove .worktrees/<short-name>
-git branch -d <branch-name>
+git worktree remove .worktrees/<短名称>
+git branch -d <分支名>
 git worktree prune
 ```
 
-For branches that should not land but are still historically useful, create an
-archive tag before deleting the branch:
+如果某个分支不应该进入主线，但仍有历史保留价值，删分支前先打 archive tag：
 
 ```bash
-git tag archive/<short-name> <branch-or-commit>
+git tag archive/<短名称> <分支或提交>
 ```
 
-Do not raw-merge long-lived module lanes into `main`. Land them through a clean
-candidate branch, reviewed cherry-picks, or path-limited replay. The controller
-owns final mainline integration unless explicitly delegated.
+不要把长期模块 lane raw merge 到 `main`。主线集成必须通过干净候选分支、已审查
+cherry-pick 或 path-limited replay。除非明确授权，最终 mainline integration
+由总控负责。
 
-## Reporting Discipline
+## 汇报纪律
 
-Module owners should not report every small action. Report only when the state
-changes:
+模块负责人不要汇报每个小动作，只在状态变化时汇报：
 
-- `Ready`: implementation and focused verification are complete, and the branch
-  is ready for landing review.
-- `Blocked`: progress requires controller or user decision.
-- `Landed`: changes reached `main`, verification was rerun, and cleanup status
-  is known.
-- `Needs Review`: a design or cross-module decision is required before more
-  code should be written.
+- `Ready`：实现和 focused verification 已完成，等待 landing review。
+- `Blocked`：继续推进需要总控或用户决策。
+- `Landed`：改动已进入 `main`，验证已复跑，清理状态已知。
+- `Needs Review`：继续写代码前需要设计或跨模块决策。
 
-A `Ready` report must include branch, worktree path, `HEAD`, changed file list,
-files that must not be landed, focused verification evidence, and merge
-recommendation.
+`Ready` 汇报必须包含分支、worktree 路径、`HEAD`、改动文件清单、不能带入主线的文件、
+focused verification 证据和 merge 建议。
 
-Do not bring root `task_plan.md`, `findings.md`, or `progress.md` into `main`
-as routine module status. If durable documentation is needed, write a scoped
-document under `docs/plans/` or the module's documentation path.
+不要把根目录 `task_plan.md`、`findings.md`、`progress.md` 当作常规模块状态带进
+`main`。需要长期保存的记录，写到 `docs/plans/` 或对应模块的文档目录。
 
-## Do Not
+## 禁止事项
 
-- Do not commit `.worktrees/` contents or gitlink placeholders.
-- Do not raw-merge a branch just because its worktree is clean.
-- Do not delete a dirty worktree without owner approval.
-- Do not move a worktree manually with `mv`.
-- Do not keep stale completed worktrees around after their code has landed.
-- Do not create a new branch/worktree when an assigned module lane already
-  exists.
-- Do not use a module lane to make unrelated cross-module changes.
+- 不要提交 `.worktrees/` 内容或 gitlink 占位。
+- 不要因为 worktree 干净就 raw merge 分支。
+- 不要未经负责人确认删除 dirty worktree。
+- 不要用 `mv` 手动移动 worktree。
+- 不要让已经完成且已吸收的 stale worktree 长期留着。
+- 不要已有模块 lane 时再开新的分支或 worktree。
+- 不要在模块 lane 中顺手做无关跨模块改动。

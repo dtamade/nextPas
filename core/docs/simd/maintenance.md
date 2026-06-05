@@ -2,16 +2,16 @@
 
 这份文档面向维护 `nextpas.core.simd` 的开发者，重点说明现在的代码组织、推荐阅读顺序、哪些地方适合继续整理，以及哪些地方暂时不要再拆。
 
-如果你只想快速定位入口，再看 `docs/nextpas.core.simd.map.md`。
+如果你只想快速定位入口，再看 `docs/simd/map.md`。
 
-如果你只想看“现在该做什么”，再看 `docs/nextpas.core.simd.checklist.md`。
+如果你只想看“现在该做什么”，再看 `docs/simd/checklist.md`。
 
-如果你想快速了解当前收口已经做到哪里，以及后续最值得做什么，再看 `docs/nextpas.core.simd.handoff.md`。
+如果你想快速了解当前收口已经做到哪里，以及后续最值得做什么，再看 `docs/simd/handoff.md`。
 
 如果你这次接手的是“当前到底还要不要继续改实现，还是已经只差 release 证据”，先记住一条最新事实：
 
 - 截至 `2026-05-21`，当前应按 `code-green / cross-ready` 理解
-- 也就是说，默认不要再重开 closeout blocker 讨论；除非 future `freeze-status` 再次拉红，否则优先沿 `docs/nextpas.core.simd.checklist.md` / `docs/nextpas.core.simd.closeout.md` 参考 future rerun 纪律，并把主要精力放回实现 residual / qualification
+- 也就是说，默认不要再重开 closeout blocker 讨论；除非 future `freeze-status` 再次拉红，否则优先沿 `docs/simd/checklist.md` / `docs/simd/closeout.md` 参考 future rerun 纪律，并把主要精力放回实现 residual / qualification
 - 当前 `public-api-coverage` 也已经是默认硬护栏：canonical `public-api-coverage` 现在默认按 `strict-thin` 运行；future `thin > 0` 会直接让 `gate` / `gate-strict` 变红
 
 如果你这次要判断 backend / intrinsics / SSE2 的真实归属，先看三张真相表：
@@ -28,12 +28,11 @@
 
 如果你第一次接手这个模块，建议按这个顺序读：
 
-1. `src/nextpas.core.simd.README.md`
-2. `docs/nextpas.core.simd.md`
-3. `docs/nextpas.core.simd.architecture-impl.md`
-4. `src/nextpas.core.simd.pas`
-5. `src/nextpas.core.simd.dispatch.pas`
-6. `src/nextpas.core.simd.dataplane.pas`
+1. `docs/simd/README.md`
+2. `docs/simd/architecture-impl.md`
+3. `src/nextpas.core.simd.pas`
+4. `src/nextpas.core.simd.dispatch.pas`
+5. `src/nextpas.core.simd.dataplane.pas`
 7. `src/nextpas.core.simd.cpuinfo.pas`
 8. `src/nextpas.core.simd.direct.pas` / `public_abi` include
 9. 具体后端（`avx2` / `avx512` / `neon` / `sse2`）
@@ -355,7 +354,7 @@ bash tests/nextpas.core.simd/BuildOrTest.sh gate
 
 - `check` 负责编译卫生、基础 runner parity，以及默认启用的轻量静态检查；其中 `wiring-sync` 现在默认执行，如需临时跳过要显式设 `SIMD_CHECK_WIRING_SYNC=0`。
 - runner parity 当前只允许两条刻意保留的 Windows-only batch alias：`evidence-win` 与 `evidence-win-verify`。它们服务 native Windows evidence capture/verify 手册，不应再被当成待清理的 drift action。
-- `check` 现在还包含 `simdgen --verify`、`public-operator-surface`、`dispatch-read-scope`、`dataplane-consumer-scope`、`direct-dispatch-scope`、`metadata-query-scope`、`implementation-matrix-sync`、`register-truthfulness --strict` 与 experimental isolation：`simdgen --verify` 只守住 `src/generated/nextpas.core.simd.*.inc` 等于 canonical type-order 生成器输出，不等于完整 public surface 证明；`public-operator-surface` 把 unsigned `VecU*Add/Sub/Mul/And/Or/Xor/Not` 和 `nextpas.core.simd` 默认 operator 声明/实现/委派绑在一起，并同时读取 generated facade 声明和主门面手写补充面；`dispatch-read-scope` 把 `GetDispatchTable` 的直接读取限制在 `dispatch` / `dataplane` / `runtime` 这三处内部单元；`dataplane-consumer-scope` 把 `GetCurrentSimdDataPlane` / `GetCurrentSimdDataPlaneDispatch` / `RebindSimdDataPlane` 的直接消费限制在 `dataplane` / `direct` / `public ABI` / façade companion surfaces，防止其他模块长出第二条 publication-consumer path；`direct-dispatch-scope` 把 `GetDirectDispatchTable` 的直接读取限制在 `api` / `arrays` / `ops` / `direct` 这几个 companion fast-path surface，防止其他模块再长出新的 direct fast-path 边界；`metadata-query-scope` 则把 `GetBackendInfo` / `TryGetRegisteredBackendDispatchTable` / backend text getters 的直接使用限制在 `dispatch` / `runtime` / `public ABI` / `backend adapter` 内部，防止 façade / companion surfaces 又长出第二条 metadata truth path；`implementation-matrix-sync` 会 fail-close active `docs/nextpas.core.simd.implementation-matrix.md` 与 key-slot / bounded-frontier ledger 的漂移，避免 working ledger 和当前实现护栏长期分叉。
+- `check` 现在还包含 `simdgen --verify`、`public-operator-surface`、`dispatch-read-scope`、`dataplane-consumer-scope`、`direct-dispatch-scope`、`metadata-query-scope`、`implementation-matrix-sync`、`register-truthfulness --strict` 与 experimental isolation：`simdgen --verify` 只守住 `src/generated/nextpas.core.simd.*.inc` 等于 canonical type-order 生成器输出，不等于完整 public surface 证明；`public-operator-surface` 把 unsigned `VecU*Add/Sub/Mul/And/Or/Xor/Not` 和 `nextpas.core.simd` 默认 operator 声明/实现/委派绑在一起，并同时读取 generated facade 声明和主门面手写补充面；`dispatch-read-scope` 把 `GetDispatchTable` 的直接读取限制在 `dispatch` / `dataplane` / `runtime` 这三处内部单元；`dataplane-consumer-scope` 把 `GetCurrentSimdDataPlane` / `GetCurrentSimdDataPlaneDispatch` / `RebindSimdDataPlane` 的直接消费限制在 `dataplane` / `direct` / `public ABI` / façade companion surfaces，防止其他模块长出第二条 publication-consumer path；`direct-dispatch-scope` 把 `GetDirectDispatchTable` 的直接读取限制在 `api` / `arrays` / `ops` / `direct` 这几个 companion fast-path surface，防止其他模块再长出新的 direct fast-path 边界；`metadata-query-scope` 则把 `GetBackendInfo` / `TryGetRegisteredBackendDispatchTable` / backend text getters 的直接使用限制在 `dispatch` / `runtime` / `public ABI` / `backend adapter` 内部，防止 façade / companion surfaces 又长出第二条 metadata truth path；`implementation-matrix-sync` 会 fail-close active `docs/simd/implementation-matrix.md` 与 key-slot / bounded-frontier ledger 的漂移，避免 working ledger 和当前实现护栏长期分叉。
 - `gate` 负责日常改动使用的快门禁 / 基础门禁；它会串联主要模块回归，并默认包含 `contract-signature` 与 `publicabi-signature` 这类结构护栏，但不会默认打开所有重检查。
 - `gate` 默认包含 `public-operator-surface`，防止生成/手写 `VecU*` façade 面继续扩展时漏掉 `uses nextpas.core.simd;` 下的 operator 编译边界。
 - `gate` 现在还默认包含 `publicabi-concurrent-chain`，固定重跑历史上真实炸过的组合：`TTestCase_PublicAbi,TTestCase_SimdConcurrentPublicAbi,TTestCase_SimdConcurrentFramework`。

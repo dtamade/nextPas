@@ -7,25 +7,20 @@ import sys
 
 
 TARGET_SPECS: dict[str, dict[str, tuple[str, ...]]] = {
-    "src/nextpas.core.simd.README.md": {
+    "docs/simd/README.md": {
         "required": (
             "模块状态应按 `code-green / cross-ready` 理解",
-            "docs/nextpas.core.simd.checklist.md",
-            "docs/nextpas.core.simd.closeout.md",
+            "docs/simd/checklist.md",
+            "docs/simd/closeout.md",
+            "full `freeze-status` 当前为 `ready=True / mainline-ready=True / cross-ready=True`",
+            "当前状态理解成 `code-green / cross-ready`",
             "canonical `public-api-coverage` 现在默认按 `strict-thin` 运行",
         ),
         "forbidden": (
             "截至 `2026-05-17`，模块状态应按 `code-green / release-evidence-blocked` 理解",
         ),
     },
-    "docs/nextpas.core.simd.md": {
-        "required": (
-            "full `freeze-status` 当前为 `ready=True / mainline-ready=True / cross-ready=True`",
-            "当前状态理解成 `code-green / cross-ready`",
-            "canonical `public-api-coverage` 现在默认按 `strict-thin` 运行",
-        ),
-    },
-    "docs/nextpas.core.simd.checklist.md": {
+    "docs/simd/checklist.md": {
         "required": (
             "`cross-ready=True`",
             "`code-green / cross-ready`",
@@ -33,7 +28,7 @@ TARGET_SPECS: dict[str, dict[str, tuple[str, ...]]] = {
             "canonical `public-api-coverage` 现在默认按 `strict-thin` 运行",
         ),
     },
-    "docs/nextpas.core.simd.closeout.md": {
+    "docs/simd/closeout.md": {
         "required": (
             "`ready=True / mainline-ready=True / cross-ready=True`",
             "`code-green / cross-ready`",
@@ -47,14 +42,14 @@ TARGET_SPECS: dict[str, dict[str, tuple[str, ...]]] = {
             ("当前 fresh 结果：", "`checks="),
         ),
     },
-    "docs/nextpas.core.simd.maintenance.md": {
+    "docs/simd/maintenance.md": {
         "required": (
             "当前应按 `code-green / cross-ready` 理解",
             "默认不要再重开 closeout blocker 讨论",
             "canonical `public-api-coverage` 现在默认按 `strict-thin` 运行",
         ),
     },
-    "docs/nextpas.core.simd.handoff.md": {
+    "docs/simd/handoff.md": {
         "required": (
             "cross-platform `freeze-status` 当前为 `ready=True / mainline-ready=True / cross-ready=True`",
             "当前 `HEAD` 的更准确交接口径应是 `code-green / cross-ready`",

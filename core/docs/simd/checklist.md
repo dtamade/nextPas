@@ -58,10 +58,10 @@
 
 ### 1. 先读这些文件
 
-- `docs/nextpas.core.simd.map.md`
-- `docs/nextpas.core.simd.maintenance.md`
-- `docs/nextpas.core.simd.handoff.md`
-- `docs/nextpas.core.simd.closeout.md`
+- `docs/simd/map.md`
+- `docs/simd/maintenance.md`
+- `docs/simd/handoff.md`
+- `docs/simd/closeout.md`
 - `docs/SIMD_LAYERING_IMPLEMENTATION.md`
 
 ### 2. 改代码前先定位层级
@@ -173,7 +173,7 @@ FAFAFA_BUILD_MODE=Release bash tests/nextpas.core.simd/BuildOrTest.sh impl-audit
 
 默认它会串行跑：helper semantics、`implementation-matrix-sync`、wiring-sync strict-extra、RISCVV ABI shape、`neon/riscvv` register truthfulness strict，以及 `DispatchAPI/DirectDispatch/DataPlane` release targeted suite。
 其中 `key-slot-audit` 会把少量高价值 wide slot 明确分成两类契约再审一遍：`backend_owned` 必须真的由 backend register 接管，`reuse_base_scalar` 则必须继续继承 `FillBaseDispatchTable`，不能靠“误绑一个 wrapper”混过去。
-当前 non-x86 implementation 主线的 backend/slot/契约/证据/下一步动作，请以 `docs/nextpas.core.simd.implementation-matrix.md` 为准；后续审查优先沿这张矩阵推进，而不是散点翻文件。
+当前 non-x86 implementation 主线的 backend/slot/契约/证据/下一步动作，请以 `docs/simd/implementation-matrix.md` 为准；后续审查优先沿这张矩阵推进，而不是散点翻文件。
 如果你显式提供 `SIMD_NONX86_NATIVE_EVIDENCE_ROOT=...`，它还会把归档 native evidence verifier 一起带上；如果没提供，就只做 source/runtime-side implementation audit，不会伪装成 native runtime closeout。
 如果你要拆开诊断，再单独跑下面这些底层 checker：
 
@@ -310,17 +310,17 @@ SIMD_OUTPUT_ROOT=/tmp/simd-run-123 bash tests/nextpas.core.simd/BuildOrTest.sh e
 
 ## Task 2 / Task 3 维护顺序（当前已回填完成）
 
-当前 `docs/nextpas.core.simd.implementation-matrix.md` 已经把 `Task 2 / Task 3` 用 `2026-04-19` fresh evidence 回填完成。下面这组顺序保留给以后再次刷新同类 lane 时复用，不要在没有 fresh regression 的情况下把 `Task 3` 机械写回 `pending`。
+当前 `docs/simd/implementation-matrix.md` 已经把 `Task 2 / Task 3` 用 `2026-04-19` fresh evidence 回填完成。下面这组顺序保留给以后再次刷新同类 lane 时复用，不要在没有 fresh regression 的情况下把 `Task 3` 机械写回 `pending`。
 
 1. 先记 `Task 2` 的 fresh 证据键值：
    - `NONX86_HELPER_SEMANTICS_SUMMARY`
    - `NONX86_IMPL_AUDIT_SUMMARY`
    - `qemu-nonx86-evidence` 最新 `summary.md` 路径
    - `closeout-host-local` 最终结果
-2. 再更新 `docs/nextpas.core.simd.closeout.md`：
+2. 再更新 `docs/simd/closeout.md`：
    - 只写已经落盘的结果
    - 把 QEMU 路径写成可点击路径，后续不用二次查 logs
-3. 然后更新 `docs/nextpas.core.simd.implementation-matrix.md`：
+3. 然后更新 `docs/simd/implementation-matrix.md`：
    - 把相关 family 的 `runtime evidence` / `current status` 补到最新
    - 只有 fresh red 真落在某个 task family 上，才把对应 `next action` 收回到 `ready-to-refresh`，而不是默认改成 `pending`
 4. 最后再更新 phase2 plan：

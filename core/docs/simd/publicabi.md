@@ -4,7 +4,7 @@
 >
 > 它不是当前 `TSimdDispatchTable` 的直接公开版本。`TSimdDispatchTable` 仍然只是仓库内 dispatch contract。
 >
-> 如果你想看“到底承诺什么”，请继续看 `docs/nextpas.core.simd.publicabi.stability.md`。
+> 如果你想看“到底承诺什么”，请继续看 `docs/simd/publicabi.stability.md`。
 
 ## 目标
 

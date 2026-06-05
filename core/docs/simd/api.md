@@ -19,7 +19,7 @@
 - `nextpas.core.simd.runtime`: runtime/control-plane 视图与后端切换
 - `nextpas.core.simd.cpuinfo`: CPU/OS capability 视图
 
-如果你要先把 canonical API 与兼容别名区分清楚，先看 `docs/nextpas.core.simd.interface.md`。
+如果你要先把 canonical API 与兼容别名区分清楚，先看 `docs/simd/interface.md`。
 
 如果你要看 Pascal 侧最小可运行的 v2 snapshot façade，用 `examples/example_simd_public_api_v2.pas`。
 
@@ -312,7 +312,7 @@ begin
 end;
 ```
 
-如果你是在做 external/public ABI 调用方，不要在循环里重复 `GetSimdPublicApi`；先取一次 table，再缓存后直调。详细约束见 `docs/nextpas.core.simd.publicabi.md`。
+如果你是在做 external/public ABI 调用方，不要在循环里重复 `GetSimdPublicApi`；先取一次 table，再缓存后直调。详细约束见 `docs/simd/publicabi.md`。
 
 ### 高级扩展：`TSimdBackendOps`
 

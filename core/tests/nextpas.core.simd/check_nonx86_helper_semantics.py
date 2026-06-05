@@ -33,9 +33,9 @@ NATIVE_EVIDENCE_VERIFY_FILE = ROOT / "tests" / "nextpas.core.simd" / "verify_non
 NATIVE_EVIDENCE_IMPORT_FILE = ROOT / "tests" / "nextpas.core.simd" / "import_nonx86_native_evidence_artifacts.sh"
 QEMU_RUNNER_FILE = ROOT / "tests" / "nextpas.core.simd" / "docker" / "run_multiarch_qemu.sh"
 KEY_SLOT_AUDIT_FILE = ROOT / "tests" / "nextpas.core.simd" / "check_nonx86_key_slot_audit.py"
-CHECKLIST_FILE = ROOT / "docs" / "nextpas.core.simd.checklist.md"
-CLOSEOUT_FILE = ROOT / "docs" / "nextpas.core.simd.closeout.md"
-IMPLEMENTATION_MATRIX_FILE = ROOT / "docs" / "nextpas.core.simd.implementation-matrix.md"
+CHECKLIST_FILE = ROOT / "docs" / "simd" / "checklist.md"
+CLOSEOUT_FILE = ROOT / "docs" / "simd" / "closeout.md"
+IMPLEMENTATION_MATRIX_FILE = ROOT / "docs" / "simd" / "implementation-matrix.md"
 
 
 ROUTINE_BLOCK_PATTERN = r"(?ims)^(function|procedure)\s+{name}\b.*?(?=^(function|procedure)\s+[A-Za-z_][A-Za-z0-9_\.]*\b|^initialization\b|\Z)"
@@ -1543,7 +1543,7 @@ def main() -> int:
         ),
         (
             checklist_source,
-            "docs/nextpas.core.simd.checklist.md",
+            "docs/simd/checklist.md",
             [
                 "x86_64 主机只能跑 source checker",
                 "bash tests/nextpas.core.simd/BuildOrTest.sh impl-audit-nonx86",
@@ -1555,7 +1555,7 @@ def main() -> int:
                 "SIMD_GATE_REQUIRE_NONX86_NATIVE_EVIDENCE=0",
                 "python3 tests/nextpas.core.simd/check_nonx86_helper_semantics.py --summary-line",
                 "python3 tests/nextpas.core.simd/check_nonx86_key_slot_audit.py --summary-line",
-                "docs/nextpas.core.simd.implementation-matrix.md",
+                "docs/simd/implementation-matrix.md",
                 "没有硬件时，不再把 native host 当成 blocker",
                 "compare/mask / shift/bitwise / arithmetic/minmax 的 source-side 语义矩阵",
                 "backend_owned",
@@ -1570,7 +1570,7 @@ def main() -> int:
         ),
         (
             closeout_source,
-            "docs/nextpas.core.simd.closeout.md",
+            "docs/simd/closeout.md",
             [
                 "2026-04-11 implementation audit snapshot",
                 "NONX86_IMPL_AUDIT_SUMMARY",
@@ -1581,7 +1581,7 @@ def main() -> int:
                 "closeout-host-local",
                 "import-nonx86-native-evidence",
                 "closeout-host-local-from-import",
-                "docs/nextpas.core.simd.implementation-matrix.md",
+                "docs/simd/implementation-matrix.md",
                 "TTestCase_NonX86BackendParity,TTestCase_DataPlane",
                 "TTestCase_NonX86BackendParity,TTestCase_DirectDispatch,TTestCase_DataPlane",
                 "DataPlane wide snapshot",
@@ -1591,7 +1591,7 @@ def main() -> int:
         ),
         (
             implementation_matrix_source,
-            "docs/nextpas.core.simd.implementation-matrix.md",
+            "docs/simd/implementation-matrix.md",
             [
                 "# SIMD Implementation Matrix",
                 "## Current Focus",

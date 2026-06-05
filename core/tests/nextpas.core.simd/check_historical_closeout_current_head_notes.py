@@ -17,7 +17,7 @@ KEYWORDS = (
     "closeout",
 )
 REQUIRED_REFERENCES = (
-    "docs/nextpas.core.simd.closeout.md",
+    "docs/simd/closeout.md",
     "tests/nextpas.core.simd/docs/windows_b07_closeout_runbook.md",
 )
 

@@ -23,7 +23,7 @@ ALLOWED_DIRECT_READ_FILES = {
     "src/nextpas.core.simd.runtime.pas",
 }
 SYMBOL_RE = re.compile(rf"\b{re.escape(SYMBOL)}\b")
-ACTIVE_PUBLIC_ABI_DOC = "docs/nextpas.core.simd.publicabi.md"
+ACTIVE_PUBLIC_ABI_DOC = "docs/simd/publicabi.md"
 FACADE_SOURCE_FILE = "src/nextpas.core.simd.pas"
 FACADE_FORBIDDEN_GETTER_SYMBOL = "GetCurrentSimdDataPlaneDispatch"
 PUBLIC_ABI_DOC_FORBIDDEN_PATTERNS = (

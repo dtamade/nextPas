@@ -15,7 +15,7 @@ import check_nonx86_key_slot_audit as key_slot_audit
 
 
 REPO_ROOT = SCRIPT_DIR.parent.parent
-IMPLEMENTATION_MATRIX_FILE = REPO_ROOT / "docs" / "nextpas.core.simd.implementation-matrix.md"
+IMPLEMENTATION_MATRIX_FILE = REPO_ROOT / "docs" / "simd" / "implementation-matrix.md"
 
 NONX86_BACKEND_NAMES = {"neon": "NEON", "riscvv": "RISCVV"}
 ACTIVE_NONX86_ROW_SLOTS = {
@@ -80,7 +80,7 @@ REQUIRED_DOC_FRAGMENTS = (
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Fail-close sync check for docs/nextpas.core.simd.implementation-matrix.md"
+        description="Fail-close sync check for docs/simd/implementation-matrix.md"
     )
     parser.add_argument("--json", action="store_true", help="Print JSON payload to stdout.")
     parser.add_argument(

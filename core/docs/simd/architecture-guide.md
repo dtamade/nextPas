@@ -189,8 +189,8 @@ python3 tools/simdgen/simdgen.py --audit
 
 | 文件 | 用途 |
 |------|------|
-| `docs/nextpas.core.simd.quickref.md` | 快速参考（本文件的姊妹篇） |
-| `docs/nextpas.core.simd.api.md` | 详细 API 文档 |
+| `docs/simd/quickref.md` | 快速参考（本文件的姊妹篇） |
+| `docs/simd/api.md` | 详细 API 文档 |
 | `docs/SIMD_INTRINSICS_DISPOSITION.md` | 各 intrinsics 单元状态 |
 | `docs/SIMD_BACKEND_TRUTH.md` | 后端真相源表 |
 | `docs/SIMD_SSE2_MIGRATION_MAP.md` | SSE2 迁移分桶图 |

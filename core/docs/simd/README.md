@@ -2,7 +2,7 @@
 
 > 这页负责讲清模块全貌、阅读顺序和维护边界。
 >
-> 如果你只想查公开 API，请优先看 `docs/nextpas.core.simd.api.md` 和 `docs/nextpas.core.simd.interface.md`；如果你只想落地维护，请优先看 `docs/nextpas.core.simd.map.md`、`docs/nextpas.core.simd.maintenance.md` 和 `docs/nextpas.core.simd.checklist.md`。
+> 如果你只想查公开 API，请优先看 `docs/simd/api.md` 和 `docs/simd/interface.md`；如果你只想落地维护，请优先看 `docs/simd/map.md`、`docs/simd/maintenance.md` 和 `docs/simd/checklist.md`。
 
 ## 概述
 
@@ -10,6 +10,7 @@
 
 ### 当前状态（2026-05-19）
 
+- 模块状态应按 `code-green / cross-ready` 理解。
 - 当前代码主线应按 `code-green` 理解：
   - Linux canonical `gate` 已为 PASS
   - `linux_qemu_cpuinfo_nonx86_evidence` 已 fresh PASS
@@ -19,7 +20,7 @@
 - 当前 public API proof 也已 fail-close：
   - canonical `public-api-coverage` 现在默认按 `strict-thin` 运行
   - future `thin > 0` 会直接让 `gate` / `gate-strict` 变红
-- 因此，如果你这次只是从入口文档重新接手模块，不要先重开 SIMD 泛审查；先看 `docs/nextpas.core.simd.checklist.md` 与 `docs/nextpas.core.simd.closeout.md`，并把当前状态理解成 `code-green / cross-ready`
+- 因此，如果你这次只是从入口文档重新接手模块，不要先重开 SIMD 泛审查；先看 `docs/simd/checklist.md` 与 `docs/simd/closeout.md`，并把当前状态理解成 `code-green / cross-ready`
 
 ### 设计目标
 
@@ -37,15 +38,15 @@
 
 ## 建议阅读顺序
 
-- **使用者入口**：`src/nextpas.core.simd.README.md`
-- **公开 API 参考**：`docs/nextpas.core.simd.api.md`
-- **接口分层与 canonical/legacy 名称矩阵**：`docs/nextpas.core.simd.interface.md`
-- **public ABI wrapper**：`docs/nextpas.core.simd.publicabi.md`
-- **public ABI 稳定承诺**：`docs/nextpas.core.simd.publicabi.stability.md`
-- **阅读地图**：`docs/nextpas.core.simd.map.md`
-- **维护策略**：`docs/nextpas.core.simd.maintenance.md`
-- **极简行动清单**：`docs/nextpas.core.simd.checklist.md`
-- **本轮收尾与回归矩阵**：`docs/nextpas.core.simd.closeout.md`
+- **模块入口**：`docs/simd/README.md`
+- **公开 API 参考**：`docs/simd/api.md`
+- **接口分层与 canonical/legacy 名称矩阵**：`docs/simd/interface.md`
+- **public ABI wrapper**：`docs/simd/publicabi.md`
+- **public ABI 稳定承诺**：`docs/simd/publicabi.stability.md`
+- **阅读地图**：`docs/simd/map.md`
+- **维护策略**：`docs/simd/maintenance.md`
+- **极简行动清单**：`docs/simd/checklist.md`
+- **本轮收尾与回归矩阵**：`docs/simd/closeout.md`
 - **历史草案与分析快照**：统一看 `docs/legacy/simd/README.md`；如果你在顶层搜索结果里看到 `docs/SIMD_*.md` 或 `docs/NEON_*.md` 单页，占位文件只用于保路径，不是当前真相源
 
 ## 示例定位
@@ -108,7 +109,7 @@ src/
 - `nextpas.core.simd.pas` 负责对外 API，内部通过 `types` / `framework` include 保持主入口稳定。
 - `dispatch` / `cpuinfo` 负责运行时选择与能力判定，当前把 hook、backend 选择等机制拆成独立 include。
 - `AVX2` / `AVX-512` / `NEON` 的注册区、门面区和若干 family 区已拆出，便于审查与回归。
-- 维护入口：结构收口与稳定边界说明见 `docs/nextpas.core.simd.maintenance.md`。
+- 维护入口：结构收口与稳定边界说明见 `docs/simd/maintenance.md`。
 - `SSE2` 仍然是重要但相对脆弱的基线后端；继续做细颗粒物理拆分的收益已经变小，风险开始上升。
 
 ### 支持的指令集
@@ -489,7 +490,7 @@ AVX2 注意事项
 
 ## AArch64/NEON 后端状态
 
-NEON 后端已于 2026-04 完成落地，实现 558/558 dispatch 覆盖。这个结论只表示 dispatch coverage，不改变默认 public scalar fallback 和 asm opt-in 契约。详见 `docs/nextpas.core.simd.closeout.md`。
+NEON 后端已于 2026-04 完成落地，实现 558/558 dispatch 覆盖。这个结论只表示 dispatch coverage，不改变默认 public scalar fallback 和 asm opt-in 契约。详见 `docs/simd/closeout.md`。
 
 历史规划文档已归档至 `docs/legacy/simd/`。
 

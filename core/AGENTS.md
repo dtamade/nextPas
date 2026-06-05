@@ -7,7 +7,7 @@
 
 - `docs/design-conventions.md` 是 nextpas.core 的设计风格、模块范式、分层约束、测试布局和代码组织权威文件。
 - `README.md` 是 core 子项目导航，不替代设计规范。
-- 模块专题文档在 `docs/<module>/` 或 `docs/nextpas.core.<module>*.md`。
+- 模块专题文档只放在 `docs/<module>/`；旧式 `docs/nextpas.core.<module>*.md` 平铺文档已废弃，修改前应先迁入模块目录。
 - 活动计划在 `docs/plans/`。不要把临时 `task_plan.md`、`findings.md`、`progress.md` 直接带入主线，除非总控明确要求。
 - worktree/lane 规则以仓库根目录 `docs/worktrees.md` 为准。
 
@@ -17,7 +17,7 @@
 ## Route By Task
 
 - 新模块、公开 API、门面、FFI、分层或测试布局：先读 `docs/design-conventions.md`。
-- HTTP、TUI、SIMD、math、platform、mem、crypto、config 等模块：再读对应 `docs/<module>/` 或 `docs/nextpas.core.<module>*.md`。
+- HTTP、TUI、SIMD、math、platform、mem、crypto、config 等模块：再读对应 `docs/<module>/`。
 - 活动计划、审计、设计迁移：读 `docs/plans/` 下对应计划；没有计划时先写或请求计划，不要直接铺大改。
 - 跨 L0/L1/L2/L3 的改动：先做依赖方向审计，说明为什么必须跨层。
 - 只修测试/benchmark/example：也要确认测试布局和产物隔离规则，不要把临时产物提交进来。
@@ -37,7 +37,7 @@ make -C "$REPO_ROOT" hygiene
 
 - A module lane should touch only its owned module paths unless the task explicitly requires cross-module work.
 - Typical module paths are `src/nextpas.core.<module>*`, `tests/nextpas.core.<module>/`,
-  `examples/nextpas.core.<module>/`, `benchmarks/nextpas.core.<module>/`, and the matching `docs/` paths.
+  `examples/nextpas.core.<module>/`, `benchmarks/nextpas.core.<module>/`, and `docs/<module>/`.
 - Cross-module changes must be called out in the report with the reason, risk, and verification impact.
 - Do not bypass layer rules from `docs/design-conventions.md`.
 

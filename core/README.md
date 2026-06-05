@@ -10,7 +10,7 @@ nextPas 的基座框架。这里承载 `nextpas.core.*` 源码、测试、示例
 2. `docs/design-conventions.md`
 3. 仓库根目录 `../AGENTS.md`
 4. 仓库根目录 `../docs/worktrees.md`
-5. 当前模块的 `docs/<module>/`、`docs/nextpas.core.<module>*.md` 或 `docs/plans/*`
+5. 当前模块的 `docs/<module>/` 或相关 `docs/plans/*`
 
 如果你直接在 `core/` 目录启动 Codex/Claude，先读 `AGENTS.md`。如果你在仓库根目录启动，
 也要在改 core 代码前回到这里读 core 专属入口。
@@ -81,7 +81,7 @@ core 下的任何生产代码、测试、示例或 benchmark 改动，都必须�
 - `README.md`：core 子项目导航。
 - `docs/design-conventions.md`：稳定设计规范和项目规范。
 - `docs/plans/`：阶段性计划、审计和迁移记录。
-- `docs/<module>/`、`docs/nextpas.core.<module>*.md`：模块专题设计和维护文档。
+- `docs/<module>/`：模块专题设计和维护文档；旧式 `docs/nextpas.core.<module>*.md` 平铺文档已废弃。
 
 ## 许可证
 

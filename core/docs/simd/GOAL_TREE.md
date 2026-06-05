@@ -140,7 +140,7 @@ nextpas.core.simd
 - [x] quickref API 名称更新 (DC1/DC2)
 - [x] NEON 文档更新 (DC3)
 - [x] architecture.md 路径修正 (DC4/DC5)
-- [x] nn 模块 API 文档 (docs/nextpas.core.simd.nn.md, 47 函数)
+- [x] nn 模块 API 文档 (docs/simd/nn.md, 47 函数)
 - [x] 使用示例 (encoder-decoder pipeline in nn.md)
 
 ---
