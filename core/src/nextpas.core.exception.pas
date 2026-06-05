@@ -109,6 +109,7 @@ type
   EResourceExhaustedError = class(ENextPasError)
   public
     constructor Create(const AMessage: string); overload;
+    constructor CreateFmt(const AMessage: string; const AArgs: array of const); overload;
   end;
 
   EIOError = class(ENextPasError)
@@ -241,6 +242,12 @@ end;
 constructor EResourceExhaustedError.Create(const AMessage: string);
 begin
   inherited Create(AMessage, ecResourceExhausted);
+end;
+
+constructor EResourceExhaustedError.CreateFmt(const AMessage: string;
+  const AArgs: array of const);
+begin
+  inherited Create(Format(AMessage, AArgs), ecResourceExhausted);
 end;
 
 constructor EIOError.Create(const AMessage: string);

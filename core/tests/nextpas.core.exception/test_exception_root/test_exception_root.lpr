@@ -173,6 +173,34 @@ begin
   end;
 end;
 
+procedure TestOutOfMemoryCreateFmtKeepsResourceExhaustedCategory;
+var
+  LCanonical: nextpas.core.exception.EOutOfMemoryError;
+  LCompat: nextpas.core.exception.EOutOfMemory;
+begin
+  LCanonical := nextpas.core.exception.EOutOfMemoryError.CreateFmt(
+    'canonical oom %d', [42]);
+  try
+    Check(LCanonical.Message = 'canonical oom 42',
+      'EOutOfMemoryError.CreateFmt must format the message');
+    Check(LCanonical.Category = nextpas.core.exception.ecResourceExhausted,
+      'EOutOfMemoryError.CreateFmt must keep resource-exhausted category');
+  finally
+    LCanonical.Free;
+  end;
+
+  LCompat := nextpas.core.exception.EOutOfMemory.CreateFmt(
+    'compat oom %d', [7]);
+  try
+    Check(LCompat.Message = 'compat oom 7',
+      'EOutOfMemory.CreateFmt must format the message');
+    Check(LCompat.Category = nextpas.core.exception.ecResourceExhausted,
+      'EOutOfMemory.CreateFmt must keep resource-exhausted category');
+  finally
+    LCompat.Free;
+  end;
+end;
+
 begin
   WriteLn('=== nextpas.core.exception root tests ===');
   TestBaseExceptionsCatchAsUnifiedRoot;
@@ -183,5 +211,6 @@ begin
   TestAllocResultOutOfMemoryCatchesAsPublicOutOfMemory;
   TestAllocOutOfMemoryUsesCanonicalCatchBeforeAllocRoot;
   TestMemOutOfMemoryKeepsConstructorCompatibility;
+  TestOutOfMemoryCreateFmtKeepsResourceExhaustedCategory;
   WriteLn('PASS: all exception root tests passed');
 end.
