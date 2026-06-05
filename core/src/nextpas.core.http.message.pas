@@ -24,6 +24,7 @@ type
       FUrl: TUrl;
       FRawRequestTarget: string;
       FUrlParsed: Boolean;
+      FRequestTargetPartsParsed: Boolean;
       FVersion: THttpVersion;
       FHeaders: IHttpHeaders;
       FBody: IReader;
@@ -35,6 +36,7 @@ type
       FQueryParsed: Boolean;
       FQueryParams: TQueryParams;
     procedure EnsureUrlParsed;
+    procedure EnsureRequestTargetParts;
   public
     constructor Create(const AMethod: THttpMethod; const AUrl: TUrl;
       const AVersion: THttpVersion; const AHeaders: IHttpHeaders;
@@ -48,6 +50,8 @@ type
     procedure SetRemoteNetAddr(const AAddr: TNetAddress);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
+    function GetPath: string;
+    function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
@@ -92,6 +96,7 @@ begin
   FUrl := AUrl;
   FRawRequestTarget := '';
   FUrlParsed := True;
+  FRequestTargetPartsParsed := True;
   FVersion := AVersion;
   FHeaders := AHeaders;
   FBody := ABody;
@@ -108,6 +113,7 @@ begin
   FUrl := Default(TUrl);
   FRawRequestTarget := ARequestTarget;
   FUrlParsed := False;
+  FRequestTargetPartsParsed := False;
   FVersion := AVersion;
   FHeaders := AHeaders;
   FBody := ABody;
@@ -120,6 +126,50 @@ begin
     Exit;
   FUrl := TUrl.ParseRequestTarget(FRawRequestTarget);
   FUrlParsed := True;
+  FRequestTargetPartsParsed := True;
+end;
+
+procedure THttpRequest.EnsureRequestTargetParts;
+var
+  LRest: string;
+  LPos: SizeInt;
+begin
+  if FRequestTargetPartsParsed then
+    Exit;
+  if FUrlParsed then
+  begin
+    FRequestTargetPartsParsed := True;
+    Exit;
+  end;
+
+  if FRawRequestTarget = '' then
+    raise EHttpError.Create('Cannot parse empty request-target');
+
+  if (FRawRequestTarget[1] <> '/') and (FRawRequestTarget[1] <> '*') and
+    (Pos('://', FRawRequestTarget) > 0) then
+  begin
+    EnsureUrlParsed;
+    Exit;
+  end;
+
+  LRest := FRawRequestTarget;
+
+  LPos := Pos('#', LRest);
+  if LPos > 0 then
+  begin
+    FUrl.Fragment := Copy(LRest, LPos + 1, Length(LRest) - LPos);
+    LRest := Copy(LRest, 1, LPos - 1);
+  end;
+
+  LPos := Pos('?', LRest);
+  if LPos > 0 then
+  begin
+    FUrl.RawQuery := Copy(LRest, LPos + 1, Length(LRest) - LPos);
+    LRest := Copy(LRest, 1, LPos - 1);
+  end;
+
+  FUrl.Path := LRest;
+  FRequestTargetPartsParsed := True;
 end;
 
 procedure THttpRequest.SetPathParam(const AName, AValue: string);
@@ -141,6 +191,18 @@ function THttpRequest.GetUrl: TUrl;
 begin
   EnsureUrlParsed;
   Result := FUrl;
+end;
+
+function THttpRequest.GetPath: string;
+begin
+  EnsureRequestTargetParts;
+  Result := FUrl.Path;
+end;
+
+function THttpRequest.GetRawQuery: string;
+begin
+  EnsureRequestTargetParts;
+  Result := FUrl.RawQuery;
 end;
 
 function THttpRequest.GetVersion: THttpVersion;
@@ -197,7 +259,7 @@ function THttpRequest.QueryParam(const AName: string): string;
 begin
   if not FQueryParsed then
   begin
-    EnsureUrlParsed;
+    EnsureRequestTargetParts;
     FQueryParams := ParseQueryString(FUrl.RawQuery);
     FQueryParsed := True;
   end;

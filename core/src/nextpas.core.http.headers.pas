@@ -21,10 +21,10 @@ type
       FCount: Int32;
     procedure ClearEntries(const AFrom, AToExclusive: Int32);
     procedure EnsureCapacity(const ARequired: Int32);
-    function FindFirst(const AName: string): Int32;
-    class function NeedsNormalize(const AName: string): Boolean; static;
+    function FindFirst(const AName: string): Int32; inline;
+    class function NeedsNormalize(const AName: string): Boolean; static; inline;
     class function Normalize(const AName: string): string; static;
-    class function NormalizeIfNeeded(const AName: string): string; static;
+    class function NormalizeIfNeeded(const AName: string): string; static; inline;
     class function NormalizeParsedName(const AName: string): string; static;
     class function NormalizeParsedNameSpan(const AName: PAnsiChar;
       const ANameLen: SizeUInt): string; static;
@@ -79,7 +79,7 @@ begin
   SetLength(FEntries, LNewCapacity);
 end;
 
-class function THttpHeaders.NeedsNormalize(const AName: string): Boolean;
+class function THttpHeaders.NeedsNormalize(const AName: string): Boolean; inline;
 var
   LI: Int32;
 begin
@@ -99,7 +99,7 @@ begin
       Result[LI] := Chr(Ord(Result[LI]) + 32);
 end;
 
-class function THttpHeaders.NormalizeIfNeeded(const AName: string): string;
+class function THttpHeaders.NormalizeIfNeeded(const AName: string): string; inline;
 begin
   if NeedsNormalize(AName) then
     Result := Normalize(AName)
@@ -162,7 +162,7 @@ begin
       raise EHttpError.Create('invalid header value: contains CR/LF/NUL');
 end;
 
-function THttpHeaders.FindFirst(const AName: string): Int32;
+function THttpHeaders.FindFirst(const AName: string): Int32; inline;
 var
   LNorm: string;
   LI: Int32;

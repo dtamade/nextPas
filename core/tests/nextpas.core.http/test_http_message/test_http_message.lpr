@@ -197,6 +197,96 @@ begin
   CheckEqual('active', LReq.QueryParam('filter'), 'lazy query param');
 end;
 
+procedure TestRequestDirectPathAndRawQueryAccessors;
+var
+  LReq: IHttpRequest;
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+    '/api/v1/users?page=2&filter=active#top', hvHttp11, LH, nil, 0);
+
+  CheckEqual('/api/v1/users', LReq.Path, 'direct request path');
+  CheckEqual('page=2&filter=active', LReq.RawQuery,
+    'direct request raw query');
+  CheckEqual('/api/v1/users', LReq.Url.Path,
+    'direct path accessor preserves Url materialization');
+  CheckEqual('active', LReq.QueryParam('filter'),
+    'direct raw query accessor preserves QueryParam');
+end;
+
+procedure TestRequestDirectPathAccessorsPreserveAbsoluteTarget;
+var
+  LReq: IHttpRequest;
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+    'http://example.com:8080/api/v1/users?page=2#top', hvHttp11, LH, nil, 0);
+
+  CheckEqual('/api/v1/users', LReq.Path,
+    'absolute request-target direct path');
+  CheckEqual('page=2', LReq.RawQuery,
+    'absolute request-target direct raw query');
+  CheckEqual('example.com', LReq.Url.Host,
+    'absolute request-target Url host remains available');
+  CheckEqual(Int64(8080), Int64(LReq.Url.Port),
+    'absolute request-target Url port remains available');
+  CheckEqual('top', LReq.Url.Fragment,
+    'absolute request-target Url fragment remains available');
+end;
+
+procedure CheckDirectRequestTarget(const ATarget, AExpectedPath,
+  AExpectedRawQuery, AExpectedFragment: string);
+var
+  LReq: IHttpRequest;
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet, ATarget, hvHttp11, LH,
+    nil, 0);
+
+  CheckEqual(AExpectedPath, LReq.Path, ATarget + ' direct path');
+  CheckEqual(AExpectedRawQuery, LReq.RawQuery, ATarget + ' direct raw query');
+  CheckEqual(AExpectedPath, LReq.Url.Path, ATarget + ' Url path');
+  CheckEqual(AExpectedRawQuery, LReq.Url.RawQuery, ATarget + ' Url raw query');
+  CheckEqual(AExpectedFragment, LReq.Url.Fragment, ATarget + ' Url fragment');
+end;
+
+procedure TestRequestDirectPathAccessorTargetForms;
+begin
+  CheckDirectRequestTarget('/api/v1', '/api/v1', '', '');
+  CheckDirectRequestTarget('/api/v1?', '/api/v1', '', '');
+  CheckDirectRequestTarget('/?q=1', '/', 'q=1', '');
+  CheckDirectRequestTarget('/p?q#f', '/p', 'q', 'f');
+  CheckDirectRequestTarget('/p#f?q', '/p', '', 'f?q');
+  CheckDirectRequestTarget('*', '*', '', '');
+  CheckDirectRequestTarget('*?q=1#f', '*', 'q=1', 'f');
+  CheckDirectRequestTarget('example.com:443', 'example.com:443', '', '');
+  CheckDirectRequestTarget('relative/path?q=1#f', 'relative/path', 'q=1',
+    'f');
+end;
+
+procedure TestRequestDirectPathAccessorInvalidAbsoluteTargetRaises;
+var
+  LReq: IHttpRequest;
+  LH: IHttpHeaders;
+  LRaised: Boolean;
+begin
+  LH := NewHttpHeaders;
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+    'http://example.com:70000/path', hvHttp11, LH, nil, 0);
+
+  LRaised := False;
+  try
+    LReq.Path;
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'invalid absolute request-target direct path raises EHttpError');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.message');
   T.Run('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -215,5 +305,13 @@ begin
   T.Run('Request content-length stored', @TestRequestContentLengthStored);
   T.Run('Request from request-target parses URL on demand',
     @TestRequestFromRequestTargetParsesOnDemand);
+  T.Run('Request direct path/raw-query accessors',
+    @TestRequestDirectPathAndRawQueryAccessors);
+  T.Run('Request direct path/raw-query absolute target',
+    @TestRequestDirectPathAccessorsPreserveAbsoluteTarget);
+  T.Run('Request direct path/raw-query target forms',
+    @TestRequestDirectPathAccessorTargetForms);
+  T.Run('Request direct path/raw-query invalid absolute target raises',
+    @TestRequestDirectPathAccessorInvalidAbsoluteTargetRaises);
   T.Summary;
 end.

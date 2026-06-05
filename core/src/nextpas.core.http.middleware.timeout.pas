@@ -34,7 +34,7 @@ begin
       AW.Headers.Set_('X-Response-Time', IntToStr(LMs) + 'ms');
       if LElapsed > ATimeout then
         WriteLn('[WARN] Handler exceeded timeout: ', LElapsed.ToString,
-                ' > ', ATimeout.ToString, ' for ', AReq.Url.Path);
+                ' > ', ATimeout.ToString, ' for ', AReq.Path);
     end);
   end);
 end;

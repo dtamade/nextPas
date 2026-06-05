@@ -517,6 +517,79 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchAdapterRequestLazyUrlPathAccess(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+      '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
+    LScore := LScore + SizeUInt(Length(LReq.Url.Path));
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterRequestDirectPathAccess(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+      '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
+    LScore := LScore + SizeUInt(Length(LReq.Path));
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterRequestDirectRawQueryAccess(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+      '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
+    LScore := LScore + SizeUInt(Length(LReq.RawQuery));
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterRequestDirectPathAndRawQueryAccess(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+      '/api/v1/users?page=2&filter=active#top', hvHttp11, LHeaders, nil, 0);
+    LScore := LScore + SizeUInt(Length(LReq.Path)) +
+      SizeUInt(Length(LReq.RawQuery));
+  end;
+  GSink := GSink + LScore;
+end;
+
 function BenchTryGetDeclaredContentLength(const AHeaders: IHttpHeaders;
   out AContentLength: Int64): Boolean;
 var
@@ -854,6 +927,14 @@ begin
     @BenchAdapterRequestCreateEagerUrlParse);
   B.Run('adapter cost: request create lazy target',
     @BenchAdapterRequestCreateLazyTarget);
+  B.Run('adapter cost: request lazy Url.Path access',
+    @BenchAdapterRequestLazyUrlPathAccess);
+  B.Run('adapter cost: request direct Path access',
+    @BenchAdapterRequestDirectPathAccess);
+  B.Run('adapter cost: request direct RawQuery access',
+    @BenchAdapterRequestDirectRawQueryAccess);
+  B.Run('adapter cost: request direct Path+RawQuery access',
+    @BenchAdapterRequestDirectPathAndRawQueryAccess);
   B.Run('adapter cost: request metadata legacy expect+cl',
     @BenchAdapterRequestMetadataLegacyExpectCl);
   B.Run('adapter cost: request metadata cached expect+cl',

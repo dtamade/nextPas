@@ -1,5 +1,138 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http request path-only projection slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 request-target materialization 热路径：
+让 `THttpRequest.Path` / `RawQuery` / `QueryParam` 在常见 origin-form
+request-target 下只做轻量 path/query projection，不再强制完整
+`TUrl.ParseRequestTarget`，同时保持 `Req.Url` 的完整 URL record 语义。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract，证明 direct
+  `Path` / `RawQuery` 不应直接调用 `EnsureUrlParsed`。
+- [x] GREEN：只修改 `nextpas.core.http.message`，新增
+  `EnsureRequestTargetParts`，absolute-form 仍回退完整 parser。
+- [x] 在 `test_http_message` 补 origin-form、query/fragment、asterisk、
+  authority-like、relative target、absolute target 和 invalid absolute port
+  focused 回归。
+- [x] 在 `bench_h1parser` 增加 `direct RawQuery` 与 `direct Path+RawQuery`
+  rows，并用 `test_http_benchmarks` 锁住 row。
+- [x] 跑 focused gates：
+  `test_http_message`、`test_http_benchmarks`、`test_http_router`。
+- [x] 跑小 benchmark smoke：
+  `bench_h1parser` request filter 与 `bench_server --workload url_path`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
+## Active Session: 2026-06-06 http direct outbound response path slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 HttpServer response-drain 热路径：
+让 H1 server 的 threaded / poll response writer 直接写入 `IH1OutboundBuffer`，
+去掉每个请求额外包一层 generic `TBufferedWriter` 的对象和内存缓冲成本。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract，要求 H1 server
+  response path 不再出现 `CreateBufferedWriter(LOutbound as IWriter, 4096)`。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1` 的 server response path，
+  threaded / poll 两条路径都把 `TH1ResponseWriter` 直接接到 `IH1OutboundBuffer`。
+- [x] 保留 H1 client request writer 的 generic buffered writer，因为 client 路径是直接写 socket。
+- [x] 跑 focused benchmark/source-contract gate：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 server behavior/leak gate：
+  `make -C tests/nextpas.core.http/test_http_server clean test`。
+- [x] 跑小 benchmark smoke：
+  `NEXTPAS_BENCH_MAX_ITERS=5000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run`
+  与 `bench_http_server --requests 512 --threads 1 --workload response_1k`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
+## Active Session: 2026-06-06 http request path direct-accessor slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 HttpServer handler/router path 热路径：
+给 `IHttpRequest` 增加直接 `Path` / `RawQuery` 访问器，让只需要路径/查询的
+router、static、middleware、H1 client request writer 与 benchmark workload
+不再通过整条 `Url` record projection 取字段。
+
+### Checklist
+
+- [x] RED：在 `test_http_message` 直接要求 `IHttpRequest.Path` / `RawQuery`。
+- [x] GREEN：扩展 `IHttpRequest`、更新 IID、补 `THttpRequest` 实现和 mock 实现。
+- [x] 将 router/static/middleware/logger/timeout/H1 client writer/`bench_server url_path`
+  切到直接 `Path` / `RawQuery`。
+- [x] 在 `bench_h1parser` 增加 `request lazy Url.Path access` 与
+  `request direct Path access` 对比 row，并用 `test_http_benchmarks` 锁住 row。
+- [x] 跑 focused API/behavior/benchmark gates 与小 benchmark row。
+- [x] 更新 HTTP benchmark/API/control 文档并 path-limited commit。
+
+
+## Active Session: 2026-06-06 http header lookup hot-helper inline slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 header lookup 热路径性能切片，
+把 `THttpHeaders.FindFirst`、`NeedsNormalize`、`NormalizeIfNeeded`
+锁成 inline source contract，保持 public `IHttpHeaders` API 与 header
+存储结构不变。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 header lookup hot helper inline source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.headers` 的三个短 helper 声明/实现。
+- [x] 跑 focused benchmark/source-contract gate：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 header behavior/leak gate：
+  `make -C tests/nextpas.core.http/test_http_headers clean test`。
+- [x] 跑小 header benchmark row：
+  `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='Get hit' make -C benchmarks/nextpas.core.http/bench_headers clean run`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
+
+## Active Session: 2026-06-05 http h1 server policy-helper inline slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 server request-policy 热路径性能切片，
+把 keep-alive、parser-error status、`Expect: 100-continue` 三个短 helper
+锁成 inline source contract，不扩大到大型 header-policy evaluator 或 server
+state-machine 函数。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 H1 server policy helper inline source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1` 的
+  `ShouldKeepAlive`、`ParserErrorStatus`、`ShouldSendContinueResponse` 三个短 helper。
+- [x] 跑 focused benchmark/source-contract gate：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 server behavior/leak gate：
+  `make -C tests/nextpas.core.http/test_http_server clean test`。
+- [x] 跑 nextPas-only 小 server smoke：
+  `build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload adapter_no_url`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
+## Active Session: 2026-06-05 http h1 outbound hot-helper inline slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 response-drain 热路径性能切片，
+先把 `TH1OutboundBuffer` 中极短且高频的
+`PendingBytes` / `IsEmpty` / `Advance` 锁成 inline source contract，
+不扩大到全局编译策略或大型 server state-machine 重构。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract smoke，要求 H1 outbound hot helpers 带 `inline`。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1.outbound` 的三个短 helper 声明/实现，并调整实现顺序避免 FPC inline note。
+- [x] 跑 focused benchmark gate：`NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 focused behavior/leak gate：`make -C tests/nextpas.core.http/test_http_h1writer clean test`。
+- [x] 跑小 benchmark row：`NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='buffer write+drain 1KB' make -C benchmarks/nextpas.core.http/bench_h1outbound run`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-05 http benchmark completion-marker contract
 
 ### Goal

@@ -25,6 +25,10 @@ const
     'benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh';
   H1FlagMatrixRunnerRelativePath =
     'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
+  HeaderUnitPath = 'src/nextpas.core.http.headers.pas';
+  HttpMessageUnitPath = 'src/nextpas.core.http.message.pas';
+  H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
+  H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
@@ -506,6 +510,113 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1outbound drain smoke exit code: ' + LOutput);
   CheckH1OutboundDrainBenchmarkOutput(LOutput);
+end;
+
+procedure TestH1OutboundHotHelpersInlineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1OutboundRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1OutboundUnitPath));
+
+  CheckContains(LSource, 'procedure Advance(const ACount: SizeUInt); inline;',
+    'H1 outbound Advance inline declaration');
+  CheckContains(LSource, 'function PendingBytes: SizeUInt; inline;',
+    'H1 outbound PendingBytes inline declaration');
+  CheckContains(LSource, 'function IsEmpty: Boolean; inline;',
+    'H1 outbound IsEmpty inline declaration');
+  CheckContains(LSource,
+    'procedure TH1OutboundBuffer.Advance(const ACount: SizeUInt); inline;',
+    'H1 outbound Advance inline implementation');
+  CheckContains(LSource,
+    'function TH1OutboundBuffer.PendingBytes: SizeUInt; inline;',
+    'H1 outbound PendingBytes inline implementation');
+  CheckContains(LSource,
+    'function TH1OutboundBuffer.IsEmpty: Boolean; inline;',
+    'H1 outbound IsEmpty inline implementation');
+end;
+
+procedure TestH1ServerPolicyHotHelpersInlineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1ServerUnitPath));
+
+  CheckContains(LSource,
+    'function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;',
+    'H1 server ShouldKeepAlive inline implementation');
+  CheckContains(LSource,
+    'function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;',
+    'H1 server ParserErrorStatus inline implementation');
+  CheckContains(LSource,
+    'const AHeadersDone, AContinueSent: Boolean): Boolean; inline;',
+    'H1 server ShouldSendContinueResponse inline implementation');
+end;
+
+procedure TestHttpHeadersLookupHotHelpersInlineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchRouterRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, HeaderUnitPath));
+
+  CheckContains(LSource,
+    'function FindFirst(const AName: string): Int32; inline;',
+    'THttpHeaders FindFirst inline declaration');
+  CheckContains(LSource,
+    'class function NeedsNormalize(const AName: string): Boolean; static; inline;',
+    'THttpHeaders NeedsNormalize inline declaration');
+  CheckContains(LSource,
+    'class function NormalizeIfNeeded(const AName: string): string; static; inline;',
+    'THttpHeaders NormalizeIfNeeded inline declaration');
+  CheckContains(LSource,
+    'function THttpHeaders.FindFirst(const AName: string): Int32; inline;',
+    'THttpHeaders FindFirst inline implementation');
+  CheckContains(LSource,
+    'class function THttpHeaders.NeedsNormalize(const AName: string): Boolean; inline;',
+    'THttpHeaders NeedsNormalize inline implementation');
+  CheckContains(LSource,
+    'class function THttpHeaders.NormalizeIfNeeded(const AName: string): string; inline;',
+    'THttpHeaders NormalizeIfNeeded inline implementation');
+end;
+
+procedure TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1ServerUnitPath));
+
+  CheckNotContains(LSource,
+    'CreateBufferedWriter(LOutbound as IWriter, 4096)',
+    'H1 server response path should write directly into IH1OutboundBuffer');
+end;
+
+procedure TestHttpRequestDirectPathProjectionSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchRouterRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, HttpMessageUnitPath));
+
+  CheckContains(LSource, 'procedure EnsureRequestTargetParts;',
+    'THttpRequest request-target projection helper declaration');
+  CheckContains(LSource, 'procedure THttpRequest.EnsureRequestTargetParts;',
+    'THttpRequest request-target projection helper implementation');
+  CheckNotContains(LSource,
+    'function THttpRequest.GetPath: string;' + LineEnding + 'begin' +
+    LineEnding + '  EnsureUrlParsed;',
+    'THttpRequest.GetPath should not force full Url materialization');
+  CheckNotContains(LSource,
+    'function THttpRequest.GetRawQuery: string;' + LineEnding + 'begin' +
+    LineEnding + '  EnsureUrlParsed;',
+    'THttpRequest.GetRawQuery should not force full Url materialization');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -996,6 +1107,14 @@ begin
     'H1 parser benchmark eager request create breakdown row');
   CheckContains(LOutput, 'adapter cost: request create lazy target',
     'H1 parser benchmark lazy request create breakdown row');
+  CheckContains(LOutput, 'adapter cost: request lazy Url.Path access',
+    'H1 parser benchmark lazy Url.Path access breakdown row');
+  CheckContains(LOutput, 'adapter cost: request direct Path access',
+    'H1 parser benchmark direct Path access breakdown row');
+  CheckContains(LOutput, 'adapter cost: request direct RawQuery access',
+    'H1 parser benchmark direct RawQuery access breakdown row');
+  CheckContains(LOutput, 'adapter cost: request direct Path+RawQuery access',
+    'H1 parser benchmark direct Path+RawQuery access breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
     'H1 parser benchmark legacy request metadata breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',
@@ -1366,6 +1485,16 @@ begin
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_h1writer response serialization smoke',
     @TestBenchH1WriterSerializeSmoke);
+  T.Run('H1 outbound hot helpers inline source contract',
+    @TestH1OutboundHotHelpersInlineSourceContract);
+  T.Run('H1 server policy hot helpers inline source contract',
+    @TestH1ServerPolicyHotHelpersInlineSourceContract);
+  T.Run('HTTP headers lookup hot helpers inline source contract',
+    @TestHttpHeadersLookupHotHelpersInlineSourceContract);
+  T.Run('H1 server response drain avoids generic buffered writer source contract',
+    @TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract);
+  T.Run('HTTP request direct path projection source contract',
+    @TestHttpRequestDirectPathProjectionSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

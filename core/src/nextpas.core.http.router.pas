@@ -429,7 +429,7 @@ var
   LAllow: string;
 begin
   LMethod := AReq.Method;
-  LPath := AReq.Url.Path;
+  LPath := AReq.Path;
   LParams := nil;
   LHandler := MatchNode(FTrees[LMethod], LPath, LParams);
   if LHandler <> nil then

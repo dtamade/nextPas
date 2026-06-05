@@ -34,11 +34,11 @@ type
     FWritePos: SizeUInt;
     procedure Compact;
     procedure EnsureCapacity(const AExtra: SizeUInt);
-    procedure Advance(const ACount: SizeUInt);
+    procedure Advance(const ACount: SizeUInt); inline;
   public
     function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
-    function PendingBytes: SizeUInt;
-    function IsEmpty: Boolean;
+    function PendingBytes: SizeUInt; inline;
+    function IsEmpty: Boolean; inline;
     function DrainAllTo(const AWriter: IWriter): SizeUInt;
     function TryDrainTo(const ARuntime: ITcpStreamRuntime;
       out AWritten: SizeUInt): TTcpStreamIOResult;
@@ -48,6 +48,16 @@ type
 procedure RaiseDrainFailure;
 begin
   raise EIOError.Create('h1 outbound buffer: write failed (zero progress)');
+end;
+
+function TH1OutboundBuffer.PendingBytes: SizeUInt; inline;
+begin
+  Result := FWritePos - FReadPos;
+end;
+
+function TH1OutboundBuffer.IsEmpty: Boolean; inline;
+begin
+  Result := PendingBytes = 0;
 end;
 
 procedure TH1OutboundBuffer.Compact;
@@ -86,7 +96,7 @@ begin
     Compact;
 end;
 
-procedure TH1OutboundBuffer.Advance(const ACount: SizeUInt);
+procedure TH1OutboundBuffer.Advance(const ACount: SizeUInt); inline;
 begin
   Inc(FReadPos, ACount);
   if FReadPos >= FWritePos then
@@ -103,16 +113,6 @@ begin
   Move(ABuf, FBuf[FWritePos], ACount);
   Inc(FWritePos, ACount);
   Result := ACount;
-end;
-
-function TH1OutboundBuffer.PendingBytes: SizeUInt;
-begin
-  Result := FWritePos - FReadPos;
-end;
-
-function TH1OutboundBuffer.IsEmpty: Boolean;
-begin
-  Result := PendingBytes = 0;
 end;
 
 function TH1OutboundBuffer.DrainAllTo(const AWriter: IWriter): SizeUInt;

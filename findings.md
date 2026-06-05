@@ -1,5 +1,224 @@
 # Findings & Decisions
 
+## 2026-06-06 http request path-only projection slice
+
+- 本轮把上一批新增的 `Req.Path` / `Req.RawQuery` direct accessor 从“少复制
+  `TUrl` record”推进成真正的 request-target path-only projection。
+- 选择依据：
+  - 上一轮 micro row 显示 direct `Path` 仍约 `710 ns/op`，说明仍在支付完整
+    `TUrl.ParseRequestTarget` 成本。
+  - `url_path` workload、router/static/middleware/H1 client writer 多数只需要
+    path/query，不需要 scheme/host/port。
+  - 这是比继续扩大 inline 更直接的 adapter/materialization 固定成本削减。
+- 实现决策：
+  - `THttpRequest` 新增内部 `EnsureRequestTargetParts`，只拆 `#` 与 `?` 后填
+    `FUrl.Path` / `RawQuery` / `Fragment`。
+  - absolute-form 仍回退 `EnsureUrlParsed`，所以 host/port validation 和
+    `Req.Url` 完整语义不变。
+  - `Req.Url` 继续完整 materialize；`QueryParam` 现在可基于轻量 RawQuery 解析，
+    外部行为不变。
+- RED 证据：
+  - `test_http_benchmarks` 先失败在
+    `THttpRequest request-target projection helper declaration missing`。
+  - 结果为 `31 total, 30 passed, 1 failed`，heaptrc 仍是
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_message`：`19/19 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`31/31 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_router`：`21/21 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `request lazy Url.Path access = 779.9 ns/op`
+  - `request direct Path access = 496.5 ns/op`
+  - `request direct RawQuery access = 494.2 ns/op`
+  - `request direct Path+RawQuery access = 542.6 ns/op`
+  - `bench_server --requests 512 --threads 1 --workload url_path` 完成 `512/512`，
+    `43622 ns/op`、`22923 req/s`
+- 子代理只读复盘：
+  - `Boyle` 认为方案方向正确，并建议补足 origin/absolute/asterisk/authority/relative
+    target 边界；本轮已按建议补 compact matrix。
+  - `Parfit` 认为本轮是当前最高优先级性能切片；下一批应转向 llhttp adapter
+    request metadata parse-time cache，第三候选是 fast-path header block 按需物化。
+- 复盘结论：
+  方向没有走偏：这轮不是碎片化 inline，而是把 `url_path` 代表的公开 handler
+  热路径从完整 URL materialization 中解耦。下一批不应继续扩同类 accessor，
+  应处理 parser adapter metadata 二次扫 header 的固定成本。
+
+## 2026-06-06 http direct outbound response path slice
+
+- 本轮去掉 H1 server response path 中的额外 generic buffered writer：
+  `TH1ResponseWriter` 现在直接写入 `IH1OutboundBuffer`，再由 server drain 到 socket
+  或 poll runtime。
+- 选择依据：
+  - server 响应已经有协议专用 `IH1OutboundBuffer` 承担排队、backpressure、poll drain。
+  - 再包一层 `TBufferedWriter` 会为每个请求增加一个对象和一层内存缓冲/flush，
+    对 full-chain response path 没有必要。
+  - 这个切片比继续盲目 inline 小 helper 更贴近 `HttpServer` full-chain 成本，
+    同时不改变公开 API。
+- 明确不改：
+  - 不改 H1 client request writer；client 仍直接写 transport stream，generic buffered writer
+    在那里仍是合理边界。
+  - 不改 `TH1ResponseWriter` wire contract，不改 chunked/HEAD/no-body/hijack 语义。
+  - 不触碰 dirty 的 `test_http_client.lpr` 和其他无关文件。
+- RED 证据：
+  - `test_http_benchmarks` 新增 source-contract 后先失败在
+    `H1 server response path should write directly into IH1OutboundBuffer`。
+  - 结果为 `30 total, 29 passed, 1 failed`，heaptrc 仍是
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_benchmarks` 后续为 `30/30 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server` 后续为 `275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `bench_fullchain plaintext`：`completed=5000`，`38134.9 ns/op`，`26223 req/s`
+  - `bench_server response_1k`：`completed=512`，`35310 ns/op`，`28319 req/s`
+  - 这两条是本机 smoke，不声明永久跨运行性能提升。
+- 子代理只读审计结论：
+  - 后续高价值候选优先级是 request-target path-only 投影、llhttp header materialization、
+    fast lazy headers lookup、response writer 固定头部快路径。
+  - 本轮 direct outbound response path 属于 response writer/drain 候选的底层降本，
+    方向合理，但下一批应回到更显著的 request-target / header materialization 差距。
+- 复盘结论：
+  方向没有走偏：本轮是生产 hot-path 去冗余，不是碎片化治理；验证覆盖了 source-contract、
+  threaded/epoll server behavior 和小 benchmark smoke。下一步应做 `Req.Path` origin-form
+  path-only 快捷投影，或 llhttp parsed header insertion/materialization 降本。
+
+## 2026-06-06 http request path direct-accessor slice
+
+- 本轮把 `IHttpRequest` 从“只能通过 `Url` record 取 path/query”扩展为直接
+  `Path` / `RawQuery` 访问器。
+- 选择依据：
+  - `url_path` server workload、router dispatch、static serving、middleware logging
+    都只需要 path，不需要完整 `TUrl` record。
+  - 直接 getter 保留旧 `Req.Url` 语义，但避免常见路径读取复制整个 `TUrl` record。
+  - 这是公开接口完整性提升，也更接近 Go/Rust handler 里直接读 path/query 的使用范式。
+- 接口决策：
+  - `IHttpRequest` IID 从 `...000000000002` 更新到 `...000000010002`，因为 vtable
+    增加了新成员。
+  - 不删除 `Req.Url`，不改变 `QueryParam`，不引入第二套复杂 request-target cache。
+- 本轮切换到 direct accessor 的内部调用点：
+  router dispatch、static serving、logger/timeout middleware、H1 client request writer、
+  `bench_server url_path` handler。
+- RED 证据：
+  `test_http_message` 先失败在 `Identifier idents no member "Path"` /
+  `"RawQuery"`。
+- GREEN / behavior / leak 证据：
+  - `test_http_message`：`16/16 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_contract`：`29/29 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_router`：`21/21 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_middleware`：`11/11 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_middlewares`：`13/13 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_static`：`10/10 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`29/29 passed`，heaptrc `0 unfreed memory blocks`
+  - `http_hello_server` example build passed
+- 小 benchmark row：
+  - `request lazy Url.Path access = 780.6 ns/op`
+  - `request direct Path access = 710.0 ns/op`
+  - `bench_server --requests 128 --threads 1 --workload url_path` 完成 `128/128`，
+    `42179 ns/op`、`23708 req/s`
+- 已知非本批阻塞：
+  - `test_http_client` 当前在 shared dirty test file 中失败于
+    `HttpGetToWriter` / `HttpGetToFile` 未实现，这是既有 HTTP client helper RED，
+    不属于本轮 `Path` / `RawQuery` accessor 变更。
+- 复盘结论：
+  方向正确：这不是继续堆碎片 inline，而是把高频 handler/router path 访问提升成
+  公共 API，并用 focused tests + microbenchmark 证明。下一步应继续找能影响 full-chain
+  server row 的剩余 adapter/runtime 成本，而不是扩大同类 accessor。
+
+
+## 2026-06-06 http header lookup hot-helper inline slice
+
+- 本轮只处理 `THttpHeaders` lookup/normalize 热路径中的三个短 helper：
+  `FindFirst`、`NeedsNormalize`、`NormalizeIfNeeded`。
+- 选择依据：
+  - `FindFirst` 是 `Get` / `Has` 的内部 concrete-call 热路径；server policy、
+    writer header checks、handler 常用 header lookup 都会经过它。
+  - `NeedsNormalize` 是 lowercase exact lookup fast path 的分支判断，函数体只是
+    扫描是否存在大写 ASCII。
+  - `NormalizeIfNeeded` 是 `Del` 等路径的短 wrapper，lowercase 输入直接返回原字符串。
+- 本轮明确不改：
+  - 不改 `IHttpHeaders` public API。
+  - 不改 header 存储结构、大小写语义、validation 语义。
+  - 不 inline `Normalize` / `NormalizeParsedNameSpan` 这类循环物化函数。
+- RED 证据：
+  `test_http_benchmarks` 新增 source-contract 后先失败在
+  `THttpHeaders FindFirst inline declaration missing`；
+  结果为 `29 total, 28 passed, 1 failed`，heaptrc 仍是 `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_benchmarks` 后续为 `29/29 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_headers` 后续为 `17/17 passed`，heaptrc `0 unfreed memory blocks`
+  - `bench_headers` filtered `Get hit` 小 row：
+    `Get hit (5 headers, last) = 48.9 ns/op`，
+    `Get hit uppercase (5 headers, last) = 155.4 ns/op`
+- 该 benchmark row 是小 smoke，不声明跨运行永久提升；本轮更重要的是锁住
+  header lookup hot helper source shape，防止未来回退。
+- 复盘结论：
+  方向仍在 HttpServer 性能主线上；这轮比继续堆大 server benchmark 更有效，
+  因为它用一个小 source-contract 固定了 server 内部高频 header lookup 形状。
+
+
+## 2026-06-05 http h1 server policy-helper inline slice
+
+- 本轮只处理 H1 server policy 决策路径中的三个短 helper：
+  `ShouldKeepAlive`、`ParserErrorStatus`、`ShouldSendContinueResponse`。
+- 选择依据：
+  - `ShouldKeepAlive` 位于 threaded / poll keep-alive 决策路径，函数体只是 metadata
+    读取加 HTTP/1.0/1.1 分支。
+  - `ParserErrorStatus` 位于 parser-error 直接响应路径，函数体只是 error-kind 到
+    status 的小 case。
+  - `ShouldSendContinueResponse` 位于 headers-complete 后的 `Expect: 100-continue`
+    决策路径，函数体是 metadata 快照加布尔判断。
+- 本轮明确不 inline：
+  - `HeaderPolicyErrorStatus`：包含 size policy、Host、Expect、MaxBodySize 等多分支，
+    应保持普通 helper，避免代码膨胀。
+  - `TH1ServerConnectionState.*` 大型状态机方法：继续保持非 inline。
+  - `h1.scan` SIMD 扫描函数：函数体较大，盲目 inline 可能增加 icache 压力。
+- RED 证据：
+  `test_http_benchmarks` 新增 source-contract 后先失败在
+  `H1 server ShouldKeepAlive inline implementation missing`；
+  结果为 `28 total, 27 passed, 1 failed`，heaptrc 仍是 `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_benchmarks` 后续为 `28/28 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server` 后续为 `275/275 passed`，heaptrc `0 unfreed memory blocks`
+  - `bench_server --requests 128 --threads 1 --workload adapter_no_url`
+    完成 `128/128`，row 为 `42022 ns/op`、`23797 req/s`
+- 该 benchmark row 是小 smoke，只证明 fast-path server benchmark 仍可完成；
+  不能声明跨语言或跨运行性能提升。
+- 复盘结论：
+  这轮是窄性能卫生切片，方向正确：用 source-contract 锁住高频短 helper，
+  同时避免把大 policy evaluator / state-machine / SIMD scanner 硬 inline。
+
+## 2026-06-05 http h1 outbound hot-helper inline slice
+
+- 本轮只处理 H1 outbound response-drain 热路径的一个窄切片：
+  `TH1OutboundBuffer.PendingBytes`、`IsEmpty`、`Advance`。
+- sidecar 复核结论：
+  - `PendingBytes` 适合 inline：只是 `FWritePos - FReadPos`，且在
+    `Compact`、`EnsureCapacity`、`DrainAllTo`、`TryDrainTo` 中频繁调用。
+  - `Advance` 适合 inline：每次 drain 成功写出后都会走，快路径是
+    `Inc` 加少量分支；`Reset` / `Compact` 是冷分支。
+  - `IsEmpty` 可 inline：主要是 public convenience 与 server poll 状态机判空，
+    收益低于前两者，但函数体极短。
+  - `Compact` 不 inline：包含 `Move` 与状态重排，属于冷路径，inline 会增加代码膨胀。
+  - `EnsureCapacity` 不 inline：包含扩容策略、循环、`SetLength` 与 `Compact`，
+    后续若优化应拆 slow path，而不是整段 inline。
+- 初次只加 `inline` 后，`bench_h1outbound` clean build 暴露 FPC note：
+  `PendingBytes` 在实现体声明前被调用时出现 “marked as inline is not inlined”。
+  本轮因此把 `PendingBytes` / `IsEmpty` 实现提前到 `Compact` / `EnsureCapacity`
+  之前，focused build 不再出现该 note。
+- 这轮不把 `-Si` / `{$INLINE ON}` 上升为全局策略；项目中已有大量 inline 标注，
+  全局编译选项是否需要强化应单独建 batch，用 source-contract、focused benchmark
+  和 warning/note gate 一起验证。
+- RED 证据：
+  新增 `H1 outbound hot helpers inline source contract` 后，
+  `test_http_benchmarks` 先失败在缺少
+  `procedure Advance(const ACount: SizeUInt); inline;`，同时 heaptrc 仍为 0 unfreed blocks。
+- GREEN / benchmark 证据：
+  `test_http_benchmarks` 后续为 `27/27 passed`，`heaptrc: 0 unfreed memory blocks`；
+  `bench_h1outbound buffer write+drain 1KB` 本机单次 row 为 `283.1 ns/op`、
+  `3532176 ops/s`。该 row 只作为方向性观测，不声明永久性能排名。
+- 下一批性能候选应优先从 sidecar 筛出的 H1 fast parser helpers、header lookup、
+  writer status/header path、URL materialization、body reader/copy focused rows 中选一个，
+  不手改生成 llhttp 状态机，不动大型 server state-machine 函数。
+
 ## 2026-06-05 http benchmark completion-marker contract
 
 - server comparison 之前虽然输出 `iterations`、`ns/op`、`req/s`，但 summary

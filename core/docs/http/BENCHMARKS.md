@@ -145,6 +145,48 @@ this as a permanent cross-language ranking; the durable conclusion is that
 explicit HTTP/1.1 `Connection: keep-alive` no longer pays the old
 fast-parse-then-llhttp double parse cost.
 
+Later on 2026-06-05, the small H1 server policy helpers
+`ShouldKeepAlive`, `ParserErrorStatus`, and `ShouldSendContinueResponse` were
+marked as `inline`. These helpers sit on the keep-alive, parser-error, and
+`Expect: 100-continue` decision paths; the large header-policy evaluator and
+state-machine methods were deliberately left non-inline.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+28 total, 27 passed, 1 failed
+failure: H1 server ShouldKeepAlive inline implementation missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+28 total, 28 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small nextPas-only smoke row:
+
+```text
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload adapter_no_url
+completed=128
+ns/op=42022
+req/s=23797
+```
+
+This smoke row proves the benchmark path still completes after the inline
+slice. It is intentionally not a durable performance ranking.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:
@@ -222,6 +264,74 @@ Local focused row from 2026-06-05:
 | workload | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
 | buffer write+drain 1KB | 100000 | 303.0 | 3300665 |
+
+Later on 2026-06-05, `TH1OutboundBuffer.PendingBytes`, `IsEmpty`, and
+`Advance` were marked as hot helper `inline` methods, with the implementations
+ordered before hot callers to avoid FPC "marked as inline is not inlined" notes
+in the focused benchmark build. `test_http_benchmarks` now has a source-contract
+smoke that locks this shape.
+
+Fresh single-run local row after that slice:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| buffer write+drain 1KB | 100000 | 283.1 | 3532176 |
+
+This row is directional only; keep using repeated or narrowed rows before
+claiming a durable cross-run performance delta.
+
+## Optimization Evidence: H1 Server Direct Outbound Response Path
+
+On 2026-06-06 local time, H1 server response construction stopped wrapping the
+per-request `IH1OutboundBuffer` in the generic `TBufferedWriter`. The response
+writer now writes directly into the outbound buffer, and the server drains that
+same buffer to the socket or poll runtime.
+
+This removes one extra object, one extra in-memory buffer layer, and the
+matching `IFlusher` probe from the threaded and poll-driven response paths. The
+client request writer still uses `CreateBufferedWriter` because that path writes
+directly to a transport stream instead of to the H1 outbound drain buffer.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+30 total, 29 passed, 1 failed
+failure: H1 server response path should write directly into IH1OutboundBuffer
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+30 total, 30 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small local smoke rows:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=5000 NEXTPAS_BENCH_FILTER=plaintext make -C benchmarks/nextpas.core.http/bench_fullchain clean run
+completed=5000
+ns/op=38134.9
+req/s=26223
+
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 512 --threads 1 --workload response_1k
+completed=512
+ns/op=35310
+req/s=28319
+```
+
+These rows prove the direct outbound response path runs through the focused
+benchmark harness. They are intentionally not a durable cross-run ranking.
 
 ## Run the Full-Chain Keep-Alive Benchmark
 
@@ -640,6 +750,47 @@ command=make -C benchmarks/nextpas.core.http/bench_headers clean run
 The uppercase lookup row is intentionally tracked because public header APIs
 remain case-insensitive. This slice trades a slower uppercase fallback for a
 faster lowercase hot path, which matches current server internals.
+
+Later on 2026-06-06, `THttpHeaders.FindFirst`, `NeedsNormalize`, and
+`NormalizeIfNeeded` were locked as `inline` hot helpers. This keeps
+`Get` / `Has` exact lowercase lookup and the delete-path normalize check on a
+short concrete-call path while leaving full normalization loops and public
+interface dispatch unchanged.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+29 total, 28 passed, 1 failed
+failure: THttpHeaders FindFirst inline declaration missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_headers clean test
+17 total, 17 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small filtered local row:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='Get hit' make -C benchmarks/nextpas.core.http/bench_headers clean run
+Get hit (5 headers, last) = 48.9 ns/op
+Get hit uppercase (5 headers, last) = 155.4 ns/op
+```
+
+This row is a small smoke for the header lookup path, not a durable
+cross-run performance claim.
 
 ## Optimization Evidence: Header GetAll Miss Fast Path
 
@@ -1432,6 +1583,134 @@ heaptrc: 0 unfreed memory blocks
 The Pascal-translated llhttp raw gap remains a real track, but this batch again
 removed a larger, safer adapter/server materialization cost without touching
 generated llhttp code.
+
+## Optimization Evidence: Request Path Direct Accessor
+
+On 2026-06-06 local time, `IHttpRequest` gained direct `Path` and `RawQuery`
+accessors. The older `Req.Url` property is unchanged, but router, static
+serving, middleware logging/timeout diagnostics, H1 client request writing, and
+the `bench_server url_path` workload now use `Req.Path` / `Req.RawQuery` where
+they only need the request-target path/query. This avoids copying the full
+`TUrl` record on common handler/router path reads.
+
+Focused RED before the production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_message clean test
+
+test_http_message.lpr(...) Error: Identifier idents no member "Path"
+test_http_message.lpr(...) Error: Identifier idents no member "RawQuery"
+```
+
+Focused verification after the change:
+
+```text
+make -C tests/nextpas.core.http/test_http_message clean test
+16 total, 16 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_contract clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_router clean test
+21 total, 21 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_static clean test
+10 total, 10 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_middlewares clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small filtered local row:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request ' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request lazy Url.Path access = 780.6 ns/op
+adapter cost: request direct Path access = 710.0 ns/op
+
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload url_path
+completed=128
+ns/op=42179
+req/s=23708
+```
+
+The direct accessor row is a small adapter/materialization proof, not a durable
+server throughput claim. A same-round `test_http_client` run was attempted
+because H1 client request writing now uses `Req.Path` / `Req.RawQuery`, but the
+shared checkout currently carries an unrelated dirty client test RED for
+missing `HttpGetToWriter` / `HttpGetToFile`; that failure is not attributed to
+this accessor slice.
+
+## Optimization Evidence: Request Path-Only Projection
+
+On 2026-06-06 local time, `THttpRequest.Path`, `RawQuery`, and `QueryParam`
+stopped forcing full `TUrl.ParseRequestTarget` materialization for common
+origin-form request-targets. `Req.Url` still materializes the complete `TUrl`
+record, and absolute-form request-targets still fall back to the full parser so
+scheme/host/port validation remains unchanged.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+31 total, 30 passed, 1 failed
+failure: THttpRequest request-target projection helper declaration missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+make -C tests/nextpas.core.http/test_http_message clean test
+19 total, 19 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+31 total, 31 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_router clean test
+21 total, 21 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+The message test now covers origin-form query/fragment boundaries,
+asterisk-form, authority-like targets, relative path targets, absolute-form
+host/port preservation, and invalid absolute port rejection through the direct
+accessors.
+
+Fresh filtered local rows:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request ' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request lazy Url.Path access = 779.9 ns/op
+adapter cost: request direct Path access = 496.5 ns/op
+adapter cost: request direct RawQuery access = 494.2 ns/op
+adapter cost: request direct Path+RawQuery access = 542.6 ns/op
+
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 512 --threads 1 --workload url_path
+completed=512
+ns/op=43622
+req/s=22923
+```
+
+This closes the direct path accessor slow-path gap. The next high-value
+performance slice should move to llhttp adapter metadata caching during parse,
+then fast-path header block lazy materialization, rather than hand-editing the
+generated llhttp state machine.
 
 ## Full-Chain Correlation: No-URL Keep-Alive Workload
 

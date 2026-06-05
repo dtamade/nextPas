@@ -273,7 +273,7 @@ type
     function WakeDeadline: TDeadline;
   end;
 
-function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
+function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;
 var
   LMetadata: TH1RequestMetadata;
 begin
@@ -284,7 +284,7 @@ begin
     Result := not LMetadata.ConnectionClose;
 end;
 
-function ParserErrorStatus(const AParser: IH1Parser): THttpStatus;
+function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
     pekUnsupportedTransferCoding:
@@ -302,7 +302,7 @@ begin
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
-  const AHeadersDone, AContinueSent: Boolean): Boolean;
+  const AHeadersDone, AContinueSent: Boolean): Boolean; inline;
 var
   LMetadata: TH1RequestMetadata;
 begin
@@ -980,7 +980,6 @@ var
   LHijackConn: ITcpStream;
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
-  LFlusher: IFlusher;
   LDrainStarted: Boolean;
 begin
   Result := tscoServer;
@@ -1025,7 +1024,7 @@ begin
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
-    LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+    LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
     if FKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
@@ -1043,8 +1042,6 @@ begin
     end;
 
     LW.Flush;
-    if Supports(LResponseWriter, IFlusher, LFlusher) then
-      LFlusher.Flush;
     LDrainStarted := True;
     ArmDirectWriteDeadline;
     LOutbound.DrainAllTo(FConn as IWriter);
@@ -1063,8 +1060,6 @@ begin
          (LW as TH1ResponseWriter).HasCommitted and (not LDrainStarted) then
       begin
         try
-          if Supports(LResponseWriter, IFlusher, LFlusher) then
-            LFlusher.Flush;
           if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
           begin
             ArmDirectWriteDeadline;
@@ -1088,7 +1083,6 @@ var
   LHijackConn: ITcpStream;
   LOutbound: IH1OutboundBuffer;
   LResponseWriter: IWriter;
-  LFlusher: IFlusher;
   LKeepAlive: Boolean;
 begin
   Result := tscoServer;
@@ -1136,7 +1130,7 @@ begin
     else
       LHijackConn := FConn;
     LOutbound := NewH1OutboundBuffer;
-    LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+    LResponseWriter := LOutbound as IWriter;
     LW := TH1ResponseWriter.Create(LResponseWriter, LHijackConn,
       LReq.Method = hmHead);
     if LKeepAlive and (FParser.GetHttpVersion = hvHttp10) then
@@ -1154,8 +1148,6 @@ begin
     end;
 
     LW.Flush;
-    if Supports(LResponseWriter, IFlusher, LFlusher) then
-      LFlusher.Flush;
 
     if LW.GetHeaders.Get('connection') = 'close' then
       LKeepAlive := False;
@@ -1171,7 +1163,7 @@ begin
         if LOutbound = nil then
         begin
           LOutbound := NewH1OutboundBuffer;
-          LResponseWriter := CreateBufferedWriter(LOutbound as IWriter, 4096);
+          LResponseWriter := LOutbound as IWriter;
         end;
         try
           WriteErrorResponseToWriter(LOutbound as IWriter,
@@ -1185,11 +1177,6 @@ begin
       end
       else
       begin
-        try
-          if Supports(LResponseWriter, IFlusher, LFlusher) then
-            LFlusher.Flush;
-        except
-        end;
         if (LOutbound <> nil) and (not LOutbound.IsEmpty) then
         begin
           AOutbound := LOutbound;
@@ -1836,11 +1823,11 @@ begin
   LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
   LBuf.Write(PAnsiChar(' ')^, 1);
 
-  LPath := AReq.Url.Path;
+  LPath := AReq.Path;
   if LPath = '' then
     LPath := '/';
-  if AReq.Url.RawQuery <> '' then
-    LPath := LPath + '?' + AReq.Url.RawQuery;
+  if AReq.RawQuery <> '' then
+    LPath := LPath + '?' + AReq.RawQuery;
   LBuf.Write(LPath[1], SizeUInt(Length(LPath)));
 
   LStr := ' ' + HttpVersionToStr(AReq.Version);
