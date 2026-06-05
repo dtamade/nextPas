@@ -126,6 +126,51 @@ win and does not claim a stable server throughput improvement.
 `test_http_h1fast` and `test_http_server` both passed with heaptrc reporting
 `0 unfreed memory blocks`.
 
+## Optimization Evidence: Fast Parser Policy Flags
+
+On 2026-06-05 local time, `TFastParseResult` gained scan-time policy flags for
+the headers that decide whether the parsed request can enter the H1 server fast
+path:
+
+- `HasHost`
+- `HasConnection`
+- `HasExpect`
+- `HasTransferEncoding`
+
+`TryUseFastRequestParser` now uses those flags instead of doing four post-parse
+`IHttpHeaders.Get(...)` lookups for `host`, `connection`, `expect`, and
+`transfer-encoding`. This keeps the same narrow server fast-path policy:
+HTTP/1.1, no body, non-empty `Host`, and no `Connection` / `Expect` /
+`Transfer-Encoding` policy headers.
+
+Focused verification:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1fast clean test
+20 total, 20 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+274 total, 274 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Benchmark sanity:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+fast simple GET ns/op=757.2
+fast 10 headers ns/op=3554.1
+fast POST 1KB ns/op=1394.2
+fast pipeline 10 reqs ns/op=7821.6
+```
+
+Server keep-alive samples from this batch were `96699 req/s` and then
+`86312 req/s` on an immediate second run. Treat these as noisy sanity rows, not
+a stable full-chain throughput claim. The stable conclusion is narrower: the
+server fast-path admission check now avoids repeated header lookups and remains
+covered by focused parser/server gates.
+
 ## Optimization Evidence: Header Allocation Fast Path
 
 On 2026-06-05 local time, `THttpHeaders` switched from per-entry dynamic array

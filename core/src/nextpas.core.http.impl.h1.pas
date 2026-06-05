@@ -904,10 +904,10 @@ begin
 
   if (LFast.Version <> hvHttp11) or
      (LFast.ContentLength <> 0) or
-     (LFast.Headers.Get('host') = '') or
-     (LFast.Headers.Get('connection') <> '') or
-     (LFast.Headers.Get('expect') <> '') or
-     (LFast.Headers.Get('transfer-encoding') <> '') then
+     (not LFast.HasHost) or
+     LFast.HasConnection or
+     LFast.HasExpect or
+     LFast.HasTransferEncoding then
     Exit(False);
 
   FParser := TH1FastRequestSnapshot.Create(LFast);

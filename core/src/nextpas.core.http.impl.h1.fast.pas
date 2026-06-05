@@ -23,6 +23,10 @@ type
     BodyStart: SizeUInt;
     ContentLength: Int64;
     Consumed: SizeUInt;
+    HasHost: Boolean;
+    HasConnection: Boolean;
+    HasExpect: Boolean;
+    HasTransferEncoding: Boolean;
   end;
 
 { Try to parse a complete HTTP request from buffer using SIMD fast path.
@@ -261,9 +265,18 @@ begin
     SetString(LHdrVal, ABuf + LValStart, LValLen);
     Result.Headers.Add(LHdrName, LHdrVal);
 
-    if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'transfer-encoding') then
+    if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'host') then
+      Result.HasHost := LValLen > 0
+    else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'connection') then
+      Result.HasConnection := True
+    else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'expect') then
+      Result.HasExpect := True
+    else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'transfer-encoding') then
+    begin
+      Result.HasTransferEncoding := True;
       Exit; // transfer-coding validation belongs to the llhttp fallback
-    if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'content-length') then
+    end
+    else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'content-length') then
     begin
       if LSeenContentLength then
         Exit; // duplicate Content-Length is validated by llhttp/server fallback

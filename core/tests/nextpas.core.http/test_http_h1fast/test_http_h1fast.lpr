@@ -204,6 +204,30 @@ begin
   CheckEqual('*/*', LR.Headers.Get('Accept'), 'trimmed accept');
 end;
 
+procedure TestPolicyHeaderFlags;
+var
+  LReq: AnsiString;
+  LR: TFastParseResult;
+begin
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Connection: keep-alive'#13#10 +
+           'Expect: 100-continue'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'policy request should parse');
+  Check(LR.HasHost, 'host flag');
+  Check(LR.HasConnection, 'connection flag');
+  Check(LR.HasExpect, 'expect flag');
+  Check(not LR.HasTransferEncoding, 'transfer-encoding flag absent');
+
+  LReq := 'POST /data HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(not LR.Success, 'transfer-encoding still falls back');
+  Check(LR.HasTransferEncoding, 'transfer-encoding flag');
+end;
+
 procedure TestEmptyPath;
 var
   LReq: AnsiString;
@@ -323,6 +347,7 @@ begin
   T.Run('Large headers (>1KB)', @TestLargeHeaders);
   T.Run('Path with query string', @TestPathWithQuery);
   T.Run('Header value leading spaces', @TestHeaderValueLeadingSpaces);
+  T.Run('Policy header flags', @TestPolicyHeaderFlags);
   T.Run('Empty path', @TestEmptyPath);
   T.Run('All methods', @TestAllMethods);
   T.Run('Differential (vs llhttp)', @TestDifferential);
