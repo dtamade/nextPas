@@ -3,6 +3,7 @@
 .sisyphus/
 .worktrees/
 .claude/projects/
+.claude/worktrees/
 __pycache__/
 *.py[cod]
 GPATH

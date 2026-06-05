@@ -13,40 +13,76 @@ The `.worktrees/` directory is ignored by Git and must never be committed as
 source. Do not create new nextPas worktrees under `~/.config/superpowers`,
 `.claude/worktrees`, or arbitrary sibling directories.
 
-## Create A Worktree
+## Module Lanes
+
+Use one persistent worktree per active module or governance lane. This keeps
+agent session context, branch state, and module ownership easy to resume.
+
+Recommended layout:
+
+```text
+.worktrees/core-http
+.worktrees/core-math
+.worktrees/core-mem
+.worktrees/core-platform
+.worktrees/core-simd
+.worktrees/compiler
+```
+
+Recommended branch names:
+
+```text
+codex/core-http
+codex/core-math
+codex/core-mem
+codex/core-platform
+codex/core-simd
+codex/compiler
+```
+
+Do not create a new date-stamped branch for every prompt. The module lane is
+the long-lived continuation branch. Use small commits inside that lane, and use
+temporary `landing/<module>-YYYYMMDD` branches only when preparing reviewed
+mainline integration.
+
+## Create A Module Worktree
 
 Use the project script:
 
 ```bash
-scripts/worktree-add.sh codex/my-task-20260606
+scripts/worktree-add.sh codex/core-http main
 ```
 
 The script creates:
 
 ```text
-.worktrees/my-task-20260606
+.worktrees/core-http
 ```
 
 If the branch already exists, the script checks it out in that directory. If it
 does not exist, the script creates it from `main` by default:
 
 ```bash
-scripts/worktree-add.sh codex/my-task-20260606 main
+scripts/worktree-add.sh codex/core-http main
 ```
 
 Then resume the agent session from the worktree path:
 
 ```bash
-cd .worktrees/my-task-20260606
+cd .worktrees/core-http
 codex
 ```
 
 or:
 
 ```bash
-cd .worktrees/my-task-20260606
+cd .worktrees/core-http
 claude
 ```
+
+Only the controller should create new module lanes unless the user explicitly
+delegates that setup. Module owners should continue from the assigned worktree
+instead of creating new side branches.
 
 ## Audit Worktrees
 
@@ -60,6 +96,9 @@ The audit reports every linked worktree, its branch, dirtiness, and whether it
 is inside the project-local `.worktrees/` directory. Any non-main linked
 worktree outside `.worktrees/` is a policy violation.
 
+Run this audit before branch cleanup, before a landing wave, and when a user
+asks whether the repository is still in worktree/branch debt.
+
 ## Move An Existing Worktree
 
 Do not move a worktree with `mv`. Use Git so `.git/worktrees` metadata stays
@@ -71,6 +110,40 @@ git worktree move <old-path> .worktrees/<short-name>
 
 Only move a worktree after its owner confirms no agent or build is currently
 running inside it.
+
+After moving, run:
+
+```bash
+scripts/worktree-audit.sh
+git worktree list --porcelain
+```
+
+Do not delete the old path manually. Let Git update its linked-worktree
+metadata.
+
+## Starting A Module Session
+
+The controller should give the module owner a paste-ready prompt that includes:
+
+- module name and assigned worktree path
+- branch name and current `HEAD`
+- allowed paths and forbidden paths
+- current module status and known red points
+- focused verification commands
+- reporting format
+- merge/landing constraints
+
+The module owner should start by running:
+
+```bash
+git status --short --branch
+git rev-parse --short HEAD
+scripts/worktree-audit.sh
+make hygiene
+```
+
+If `make hygiene` fails before any local edits, report it as baseline debt
+instead of silently cleaning or committing unrelated files.
 
 ## Landing Discipline
 
@@ -100,6 +173,31 @@ archive tag before deleting the branch:
 git tag archive/<short-name> <branch-or-commit>
 ```
 
+Do not raw-merge long-lived module lanes into `main`. Land them through a clean
+candidate branch, reviewed cherry-picks, or path-limited replay. The controller
+owns final mainline integration unless explicitly delegated.
+
+## Reporting Discipline
+
+Module owners should not report every small action. Report only when the state
+changes:
+
+- `Ready`: implementation and focused verification are complete, and the branch
+  is ready for landing review.
+- `Blocked`: progress requires controller or user decision.
+- `Landed`: changes reached `main`, verification was rerun, and cleanup status
+  is known.
+- `Needs Review`: a design or cross-module decision is required before more
+  code should be written.
+
+A `Ready` report must include branch, worktree path, `HEAD`, changed file list,
+files that must not be landed, focused verification evidence, and merge
+recommendation.
+
+Do not bring root `task_plan.md`, `findings.md`, or `progress.md` into `main`
+as routine module status. If durable documentation is needed, write a scoped
+document under `docs/plans/` or the module's documentation path.
+
 ## Do Not
 
 - Do not commit `.worktrees/` contents or gitlink placeholders.
@@ -107,3 +205,6 @@ git tag archive/<short-name> <branch-or-commit>
 - Do not delete a dirty worktree without owner approval.
 - Do not move a worktree manually with `mv`.
 - Do not keep stale completed worktrees around after their code has landed.
+- Do not create a new branch/worktree when an assigned module lane already
+  exists.
+- Do not use a module lane to make unrelated cross-module changes.
