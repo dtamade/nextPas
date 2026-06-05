@@ -981,3 +981,57 @@ The immediate conclusion is that request metadata caching removes a measurable
 per-request policy/dispatch cost without changing wire contracts. The broader
 H1 performance track should continue with adapter materialization rows before
 returning to generated llhttp translation changes.
+
+## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
+
+On 2026-06-05 local time, the Pascal-translated llhttp raw-gap hypothesis was
+rechecked with the filtered benchmark rows instead of a full benchmark sweep.
+
+Focused Pascal row:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+raw llhttp: 10 headers (~400B) = 766.5 ns/op
+```
+
+Focused C row:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
+C raw llhttp: 10 headers (~400B) = 525.0 ns/op
+```
+
+The representative raw gap is therefore about `1.46x` on this machine. That
+keeps the Pascal translation as a real optimization track, but the evidence
+still does not justify hand-editing the generated state machine.
+
+Focused flag matrix:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --no-perf
+pascal-default = 854.9 ns/op
+c-default = 526.0 ns/op
+pascal-coreavx2 = 769.7 ns/op
+pascal-extra-opts = 750.6 ns/op
+c-native = 524.5 ns/op
+```
+
+CPU/FPU flags and extra FPC optimizer switches do not close the gap. The extra
+FPC opts also emit additional warnings in this benchmark build, so they should
+not become the production default based on this row.
+
+Code inspection points to a generator/codegen track rather than a one-line
+runtime fix:
+
+- generated Pascal and C share the same broad llparse goto-state-machine shape;
+- the Pascal file repeatedly stores enum states through pointer/integer casts;
+- `llhttp__internal__run` has a large set of up-front local temporaries, which
+  may increase FPC register pressure;
+- the C source has conditional SIMD/range-match code, but `c-native` did not
+  materially improve this 10-header row.
+
+Local `perf` is still blocked by `perf_event_paranoid=3`, so hardware counters
+for cycles, instructions, branches, branch misses, and cache misses must be
+captured on a perf-enabled machine before changing generated llhttp code. Until
+that evidence exists, the best production throughput path remains reducing the
+larger adapter/materialization costs already exposed by the benchmark rows.

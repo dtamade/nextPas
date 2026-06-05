@@ -1,85 +1,119 @@
-# Findings: H1 request metadata cache
+# Findings: Pascal llhttp raw-gap diagnosis
 
 ## Scope
 
-本轮是 H1 parser/server request metadata 性能切片，不改变 public facade API、不改变 wire
-contract、不写 `docs/nextpas.core.http.inbox.md`，也不碰 generated llhttp state machine。
+本轮是 H1 parser raw llhttp 性能诊断，不改变 public facade API、不改变 wire
+contract、不写 `docs/nextpas.core.http.inbox.md`，也不手改 generated
+`nextpas.core.http.impl.h1.llhttp.pas`。
 
-## RED evidence
+## Fresh focused evidence
 
-先在 `test_http_h1parser` 增加 request metadata focused contract：
-
-```text
-make -C tests/nextpas.core.http/test_http_h1parser clean test
-```
-
-失败点：
+Pascal raw row:
 
 ```text
-Identifier not found "TH1RequestMetadata"
-Identifier idents no member "GetRequestMetadata"
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+
+raw llhttp: 10 headers (~400B) = 766.5 ns/op
 ```
 
-这证明 parser 当前没有可复用的 request metadata 摘要，server 只能继续 scattered header lookup /
-token parse。
+C raw row:
 
-## Implemented change
+```text
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='C raw llhttp: 10 headers' \
+make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run \
+  LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
 
-- `nextpas.core.http.impl.h1.parser` 新增内部 `TH1RequestMetadata` record 与
-  `IH1Parser.GetRequestMetadata`。
-- `TH1Parser` 在 request headers-complete 阶段构建一次 metadata：
-  - Host presence
-  - Transfer-Encoding presence
-  - Content-Length presence/value
-  - request declares body
-  - Expect `100-continue` / unsupported member
-  - Connection close / keep-alive hints
-- 原 `ValidateRequestTransferEncoding` 逻辑并入 metadata build，继续保留 unsupported coding
-  -> `pekUnsupportedTransferCoding` 和 malformed transfer-coding -> `pekMalformed`。
-- `TH1ServerConnectionState` 的 header policy、`100-continue`、dispatch keep-alive / Host
-  判断改为读取 parser metadata。
-- `TH1FastRequestSnapshot` 提供 accepted fast-path 的常量 metadata，不触发 lazy headers
-  materialization。
-- `TFastParseResult` 新增 `HasContentLength`，避免 fast snapshot metadata 把 “无
-  Content-Length” 误标为 `Content-Length: 0`。
-- benchmark 新增同场对比：
-  - `adapter cost: request metadata legacy expect+cl`
-  - `adapter cost: request metadata cached expect+cl`
+C raw llhttp: 10 headers (~400B) = 525.0 ns/op
+```
 
-## Verification
+This confirms a representative Pascal raw gap of about `1.46x` on this machine.
 
-- H1 fast focused gate:
-  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - `22 total, 22 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- Parser focused gate:
-  - `make -C tests/nextpas.core.http/test_http_h1parser clean test`
-  - `91 total, 91 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- Server focused gate:
-  - `make -C tests/nextpas.core.http/test_http_server clean test`
-  - `274 total, 274 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
-- Benchmark rows:
-  - `NEXTPAS_BENCH_FILTER='request metadata' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
-  - legacy repeated scan: `1320.7 ns/op`
-  - cached metadata read: `6.1 ns/op`
-- Benchmark smoke:
-  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
-  - `13 total, 13 passed, 0 failed`
-  - heaptrc: `0 unfreed memory blocks`
+## Flag matrix evidence
+
+Focused single-row matrix:
+
+```text
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
+NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' \
+LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --no-perf
+```
+
+Results:
+
+```text
+pascal-default      854.9 ns/op
+c-default           526.0 ns/op
+pascal-coreavx2     769.7 ns/op
+pascal-extra-opts   750.6 ns/op
+c-native            524.5 ns/op
+```
+
+The matrix shows that CPU/FPU flags and extra FPC opts can reduce noise or win a
+small amount, but they do not close the gap. The extra-opts build also emits
+additional FPC warnings, so it is not a production default decision from this
+single diagnostic row.
+
+## Code structure observations
+
+- Pascal generated llhttp has the same broad llparse shape as C: large
+  goto-driven state machine, `_current` state storage, and match helpers.
+- Pascal stores `_current` as `Pointer` and repeatedly converts through
+  `Pointer(PtrInt(...))` / `TLlparseStateT(PtrInt(...))`; the generated file has
+  215 `_current` assignments and 216 `PtrInt` occurrences.
+- The generated Pascal `llhttp__internal__run` declares many local match/start
+  temporaries up front, matching the C shape but giving FPC a harder register
+  allocation problem than a smaller function would.
+- C llhttp has conditional SIMD/range-match blocks behind `__SSE4_2__`, but the
+  focused `c-native` 10-header row did not materially improve over default C on
+  this input, so SIMD alone is not the immediate explanation for this row.
+- The Pascal port initializes generated `llparse_blob*` arrays at unit
+  initialization rather than as C `static const` data. That is unlikely to affect
+  steady-state raw rows, but it is a codegen difference to keep in mind.
+
+## Perf availability
+
+`perf stat -e cycles -- true` fails locally:
+
+```text
+Access to performance monitoring and observability operations is limited.
+perf_event_paranoid setting is 3
+```
+
+So this checkout cannot yet provide cycles/instructions/branch/cache proof for
+the raw gap. The existing flag-matrix perf fallback remains the right runner,
+but it needs a machine with usable perf counters.
 
 ## Current conclusion
 
-方向没有走偏：这一批没有盲目手改 Pascal-translated llhttp，也没有扩大到 headers 容器 mutation
-invalidation。性能收益来自把 H1 request policy/dispatch 所需 metadata 在 parser 内一次构建，
-再由 server 复用。
+The Pascal-translated llhttp raw gap is real enough to keep as a dedicated
+optimization track. It is not yet actionable as a production code change in this
+round because the available evidence does not identify one safe generated-code
+fix. The next raw-gap step should be perf/codegen evidence, not hand-editing the
+generated state machine.
+
+## Subagent review
+
+Read-only `gpt-5.5 xhigh` subagent `Fermat` reached the same conclusion:
+
+- do not hand-edit generated `nextpas.core.http.impl.h1.llhttp.pas`;
+- the most likely raw-gap causes are FPC codegen/register pressure in the giant
+  dispatcher, helper calling/record-return shape, and `_current` pointer/int
+  state casts;
+- keep production throughput work on adapter/materialization until perf or
+  codegen evidence identifies a safe generated-code fix.
 
 ## Remaining gaps / risks
 
-- `Connection` request-side keep-alive 仍保留旧的精确字符串语义；如果要改成 RFC token /
-  case-insensitive 语义，必须作为 correctness 行为修复单独 RED/GREEN。
-- 本轮 benchmark 证明 metadata lookup/cache 本身的成本差异；正式 server throughput 对照仍应
-  留到 benchmark 总结轮与 Go/Rust/Hyper 对照一起做。
-- Pascal raw llhttp vs C llhttp 的 `1.4x-1.5x` gap 仍未关闭；需要 perf 可用环境里的
-  cycles/branch/cache 证据后再判断是否动生成翻译策略。
+- Need perf counters or compiler codegen inspection to separate branch
+  prediction, instruction count, register pressure, and callback/state dispatch
+  costs.
+- Need a generator-level plan before changing `nextpas.core.http.impl.h1.llhttp.pas`;
+  hand edits would be hard to maintain and easy to lose on regeneration.
+- Adapter/materialization still has larger proven cost than the raw state
+  machine gap, so production throughput work should continue there unless perf
+  evidence shows a higher-value raw parser fix.
