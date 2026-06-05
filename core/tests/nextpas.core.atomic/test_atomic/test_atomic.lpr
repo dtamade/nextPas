@@ -214,6 +214,10 @@ var
   LTypesUInt64LockFreeSection: string;
   LFetchAddFallbackSection: string;
   LLoad64Section: string;
+  LStore32Section: string;
+  LStore64Section: string;
+  LStore32SeqCstSection: string;
+  LStore64SeqCstSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
@@ -249,6 +253,18 @@ begin
   LLoad64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_load_64(var aObj: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_load_64(var aObj: Int64): Int64;');
+  LStore32Section := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_store(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t);',
+    'procedure atomic_store(var aObj: Int32; aDesired: Int32);');
+  LStore64Section := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_store_64(var aObj: Int64; aDesired: Int64; aOrder: memory_order_t);',
+    'procedure atomic_store_64(var aObj: Int64; aDesired: Int64);');
+  LStore32SeqCstSection := ExtractSection(LStore32Section,
+    '    mo_seq_cst:',
+    '  end;');
+  LStore64SeqCstSection := ExtractSection(LStore64Section,
+    '    mo_seq_cst:',
+    '  end;');
 
   Check(Pos('mo_relaxed: 无效，会触发运行时错误', LAtomicSource) = 0,
     'atomic_thread_fence docs must not claim mo_relaxed raises runtime error');
@@ -292,6 +308,10 @@ begin
     'i386 64-bit fallback add must guard lock release with try/finally');
   CheckNotContains(LLoad64Section, 'Result := aObj;' + LineEnding + '  {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}',
     'i386 64-bit atomic load must not perform a pre-load plain read');
+  CheckContains(LStore32SeqCstSection, 'ReadWriteBarrier',
+    'non-x86 seq_cst 32-bit store must add full barriers around InterlockedExchange');
+  CheckContains(LStore64SeqCstSection, 'ReadWriteBarrier',
+    'non-x86 seq_cst 64-bit store must add full barriers around InterlockedExchange64');
 end;
 
 procedure TestConcurrentFetchAdd;

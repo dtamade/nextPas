@@ -1159,9 +1159,18 @@ begin
       end;
 
     mo_seq_cst:
-      // ✅ P0-2 修复: seq_cst store 需要使用 XCHG (隐含 full barrier)
-      // 原实现错误地在 store 之前放置屏障，正确做法是使用 InterlockedExchange
-      InterlockedExchange(aObj, aDesired);
+      begin
+        {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+          // XCHG is already a full fence on x86/x86_64.
+          InterlockedExchange(aObj, aDesired);
+        {$ELSE}
+          // On weakly-ordered CPUs, InterlockedExchange provides atomicity but
+          // not a global seq_cst edge on its own. Surround it with full fences.
+          ReadWriteBarrier;
+          InterlockedExchange(aObj, aDesired);
+          ReadWriteBarrier;
+        {$ENDIF}
+      end;
   end;
 end;
 
@@ -1219,8 +1228,15 @@ begin
       end;
 
     mo_seq_cst:
-      // ✅ P0-2 修复: seq_cst store 需要使用 XCHG (隐含 full barrier)
-      InterlockedExchange64(aObj, aDesired);
+      begin
+        {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
+          InterlockedExchange64(aObj, aDesired);
+        {$ELSE}
+          ReadWriteBarrier;
+          InterlockedExchange64(aObj, aDesired);
+          ReadWriteBarrier;
+        {$ENDIF}
+      end;
   end;
   {$ENDIF}
 end;
