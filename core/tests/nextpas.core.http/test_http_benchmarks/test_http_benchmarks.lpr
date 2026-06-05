@@ -31,6 +31,7 @@ const
   H1ParserUnitPath = 'src/nextpas.core.http.impl.h1.parser.pas';
   H1FastUnitPath = 'src/nextpas.core.http.impl.h1.fast.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
+  H1WriterUnitPath = 'src/nextpas.core.http.impl.h1.writer.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
   HttpUnitPath = 'src/nextpas.core.http.pas';
@@ -325,6 +326,18 @@ begin
   CheckContains(AOutput, 'ops/s', 'H1 writer headers-only ops/s marker');
 end;
 
+procedure CheckH1WriterHeaderBlockBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1writer.serialize',
+    'H1 writer header-block operation marker');
+  CheckBenchmarkRunRow(AOutput, 'headers block 200 6 headers',
+    'H1 writer header-block benchmark row');
+  CheckContains(AOutput, 'bench_filter=headers block 200 6 headers',
+    'H1 writer header-block filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 writer header-block ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 writer header-block ops/s marker');
+end;
+
 procedure CheckH1OutboundDrainBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.h1outbound.drain',
@@ -499,6 +512,14 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1writer headers-only smoke exit code: ' + LOutput);
   CheckH1WriterHeadersOnlyBenchmarkOutput(LOutput);
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=headers block 200 6 headers'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1writer header-block smoke exit code: ' + LOutput);
+  CheckH1WriterHeaderBlockBenchmarkOutput(LOutput);
 end;
 
 procedure TestBenchH1OutboundDrainSmoke;
@@ -695,6 +716,35 @@ begin
     'TFastLazyHeaders.Has should use raw first-value lookup');
   CheckNotContains(LHasBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.Has should not materialize the full header block');
+end;
+
+procedure TestH1WriterCompactHeaderBlockSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LWriteHeaderBody: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1WriterRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1WriterUnitPath));
+  LWriteHeaderBody := ExtractSourceBlock(LSource,
+    'procedure TH1ResponseWriter.WriteHeader(const AStatus: THttpStatus);',
+    'function TH1ResponseWriter.GetHeaders: IHttpHeaders;',
+    'TH1ResponseWriter.WriteHeader body');
+
+  CheckContains(LSource, 'function TryWriteSmallHeaderBlock: Boolean;',
+    'H1 writer compact header-block helper declaration');
+  CheckContains(LSource,
+    'function TH1ResponseWriter.TryWriteSmallHeaderBlock: Boolean;',
+    'H1 writer compact header-block helper implementation');
+  CheckContains(LSource, 'procedure TH1ResponseWriter.WriteHeaderBlock;',
+    'H1 writer header-block dispatcher implementation');
+  CheckContains(LSource, 'if not TryWriteSmallHeaderBlock then',
+    'H1 writer header-block dispatcher should try compact path first');
+  CheckContains(LWriteHeaderBody, 'WriteHeaderBlock;',
+    'TH1ResponseWriter.WriteHeader should use header-block dispatcher');
+  CheckNotContains(LWriteHeaderBody,
+    'WriteAllHeaders;' + LineEnding + '  WriteCRLF;',
+    'TH1ResponseWriter.WriteHeader should not split small header block CRLF');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -1581,6 +1631,8 @@ begin
     @TestH1ParserRequestMetadataCacheSourceContract);
   T.Run('H1 fast lazy headers source contract',
     @TestH1FastLazyHeadersSourceContract);
+  T.Run('H1 writer compact header block source contract',
+    @TestH1WriterCompactHeaderBlockSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

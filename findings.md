@@ -1,5 +1,47 @@
 # Findings & Decisions
 
+## 2026-06-06 http h1 writer compact header block slice
+
+- 本轮把 `TH1ResponseWriter` 的 response header serialization 从“小 header line
+  单行 coalescing”推进到“小 header section 整块 coalescing”。
+- 选择依据：
+  - 上一批 fast lazy header lookup 后，HTTP roadmap 仍处于 `6/6 Benchmark 与优化`
+    的热路径降本阶段。
+  - `WriteHeader` 当前仍是 status line、每条 header line、final CRLF 分开写；
+    对常见小响应来说，header block write 调用数是可消除的固定成本。
+  - 子代理只读审查确认本切片要保持 status line 独立、short-writer 全进度、
+    informational response 不提交 final、large header fallback 写出前决策。
+- 实现决策：
+  - 新增 `WriteHeaderBlock` dispatcher；先调用 `TryWriteSmallHeaderBlock`，失败再回退
+    `WriteAllHeaders` + `WriteCRLF`。
+  - compact path 用 2048-byte stack buffer 聚合所有 header lines 与最终空行，并仍通过
+    `WriteAllOrRaise` 写出，保留 short-write retry / zero-progress raise 语义。
+  - large header block 在写出前回退旧逐行路径，避免 partial compact bytes 污染 wire。
+  - `WriteInformationalHeader` 与 final `WriteHeader` 共用 header-block dispatcher，但
+    informational 仍不设置 `FHeadersSent`。
+- RED 证据：
+  - `test_http_h1writer` 先失败在 small header block write-call count：
+    `30 total, 29 passed, 1 failed`，heaptrc `0 unfreed memory blocks`。
+  - `test_http_benchmarks` 先失败在缺少 `headers block 200 6 headers` benchmark row
+    与 compact helper source-contract：`34 total, 32 passed, 2 failed`，
+    heaptrc `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_h1writer`：`31/31 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`34/34 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server`：`275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `headers only 200 = 1280.4 ns/op`
+  - `headers block 200 6 headers = 1890.9 ns/op`
+- 子代理只读复盘：
+  - 主要风险是 CRLF 边界、重复 header 顺序、short-writer 截断、non-101
+    informational response 提交状态、101/204/304/HEAD no-body 语义。
+  - 本轮 tests 覆盖 small-block exact wire/write count、large-block fallback exact wire，
+    既有 h1writer/server gates 覆盖 informational/no-body/HEAD/chunked 语义。
+- 复盘结论：
+  方向没有走偏：这是 response writer 固定 write 调用成本削减，不是碎片化 inline。
+  下一步应继续评估 H1 writer 非-200 status-line / generic string materialization 成本，
+  或回到 llhttp adapter parsed-header insertion/materialization；跨语言正式 benchmark 仍后置。
+
 ## 2026-06-06 http h1 fast lazy header lookup slice
 
 - 本轮把 `TFastLazyHeaders.Get` / `Has` 从“单次 lookup 也强制

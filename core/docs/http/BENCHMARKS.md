@@ -265,6 +265,14 @@ NEXTPAS_BENCH_FILTER='headers only 200' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 ```
 
+Run the focused multi-header block row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='headers block 200 6 headers' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
 Run the focused response serialization row:
 
 ```sh
@@ -278,6 +286,9 @@ These rows report `operation=http.h1writer.serialize`.
 - `headers only 200` measures `TH1ResponseWriter` construction, two header
   mutations, fixed `200 OK` response header serialization, and `Flush`, with
   `Content-Length: 0` and no body write.
+- `headers block 200 6 headers` measures the same header-only path with six
+  representative response headers, so the row is more sensitive to header block
+  serialization and write-call coalescing.
 - `fixed 200 13B` measures the same setup plus a 13-byte body write into a
   fixed in-memory writer.
 
@@ -290,6 +301,13 @@ Local focused row from 2026-06-05:
 | --- | ---: | ---: | ---: |
 | headers only 200 | 100000 | 1247.1 | 801852 |
 | fixed 200 13B | 100000 | 1250.5 | 799680 |
+
+Local focused rows from 2026-06-06 after compact header-block writes:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| headers only 200 | 100000 | 1280.4 | 781028 |
+| headers block 200 6 headers | 100000 | 1890.9 | 528835 |
 
 ## Run the H1 Outbound Drain Benchmark
 
@@ -554,6 +572,58 @@ it reduced write calls but regressed these rows. The kept implementation
 preserves header order, lowercase normalization, repeated-header iteration,
 short-writer retry behavior, no-body statuses, `HEAD` suppression, and chunked
 defaults.
+
+## Optimization Evidence: H1 Writer Header Block Coalescing
+
+On 2026-06-06 local time, `TH1ResponseWriter` gained a compact header-block
+path for small response header sections. `WriteHeaderBlock` first tries to
+serialize all header lines plus the final blank line into a 2048-byte stack
+buffer and write that block through `WriteAllOrRaise`; oversized blocks fall
+back to the previous per-line serialization before any compact bytes are
+written.
+
+Focused RED before the production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+30 total, 29 passed, 1 failed
+Small header block uses a single writer call: expected 2, got 4
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+34 total, 32 passed, 2 failed
+missing headers block benchmark row and compact helper source-contract
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the compact block implementation:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+31 total, 31 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+34 total, 34 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh same-host filtered rows:
+
+| workload | ns/op | ops/s |
+| --- | ---: | ---: |
+| headers only 200 | 1280.4 | 781028 |
+| headers block 200 6 headers | 1890.9 | 528835 |
+
+This slice keeps the status line separate, preserves exact wire bytes for
+short-writer and large-header fallback paths, and keeps `100/103` informational
+headers on the same non-committing response path.
 
 ## Optimization Evidence: H1 Ingress Fast Path
 

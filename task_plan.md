@@ -1,5 +1,32 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http h1 writer compact header block slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 response header serialization 热路径：
+让 `TH1ResponseWriter` 在小 header section 下把所有 header lines 与最终空行
+聚合成一次 write-all invocation，减少 response header block 的 write 调用数；
+大 header block 在写出前回退旧逐行路径，保持 wire bytes 与 short-writer 契约不变。
+
+### Checklist
+
+- [x] RED：`test_http_h1writer` 先失败，证明当前小 header block 仍是
+  status line + 每条 header line + final CRLF 分开写。
+- [x] RED：`test_http_benchmarks` 先失败，证明 `bench_h1writer` 缺少
+  `headers block 200 6 headers` row，writer 也缺少 compact helper source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1.writer`，新增
+  `WriteHeaderBlock` / `TryWriteSmallHeaderBlock`，小 header block 走栈缓冲聚合写，
+  大块回退旧 `WriteAllHeaders` + `WriteCRLF`。
+- [x] 在 `test_http_h1writer` 补 small-block 2 write-call proof 与 large-block
+  fallback exact-wire proof。
+- [x] 在 `bench_h1writer` 增加 `headers block 200 6 headers` row，并用
+  `test_http_benchmarks` 锁住 row 与 source-contract。
+- [x] 跑 focused gates：`test_http_h1writer`、`test_http_benchmarks`、
+  `test_http_server`。
+- [x] 跑小 benchmark smoke：`bench_h1writer` 的 `headers` filter。
+- [x] 更新 HTTP benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-06 http h1 fast lazy header lookup slice
 
 ### Goal

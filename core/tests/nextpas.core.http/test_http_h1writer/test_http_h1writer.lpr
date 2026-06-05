@@ -806,7 +806,7 @@ begin
   LRW.Free;
 end;
 
-procedure TestHeaderLinesUseSingleWriterCallEach;
+procedure TestSmallHeaderBlockUsesSingleWriterCall;
 var
   LW: TCountingWriter;
   LRW: TH1ResponseWriter;
@@ -824,8 +824,37 @@ begin
       'x-test: ok'#13#10 +
       #13#10, LOut,
       'combined header-line writes preserve exact wire bytes');
+    CheckEqual(Int64(2), Int64(LW.WriteCalls),
+      'status line and compact header block are single writes');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestLargeHeaderBlockFallsBackAndPreservesWireBytes;
+var
+  LW: TCountingWriter;
+  LRW: TH1ResponseWriter;
+  LOut: string;
+  LValue: string;
+begin
+  SetLength(LValue, 2100);
+  FillChar(LValue[1], Length(LValue), Ord('a'));
+
+  LW := TCountingWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '0');
+    LRW.GetHeaders.Set_('X-Large', LValue);
+    LRW.WriteHeader(HTTP_STATUS_OK);
+    LOut := LW.GetOutput;
+    CheckEqual('HTTP/1.1 200 OK'#13#10 +
+      'content-length: 0'#13#10 +
+      'x-large: ' + LValue + #13#10 +
+      #13#10, LOut,
+      'large header block fallback preserves exact wire bytes');
     CheckEqual(Int64(4), Int64(LW.WriteCalls),
-      'status line, each header line, and final CRLF are single writes');
+      'large header block falls back before writing partial compact bytes');
   finally
     LRW.Free;
   end;
@@ -994,8 +1023,10 @@ begin
   T.Run('Hijack returns connection and marks writer', @TestHijackReturnsConnectionAndMarksWriter);
   T.Run('WriteHeader with short writer still writes full headers',
     @TestWriteHeaderWithShortWriterStillWritesFullHeaders);
-  T.Run('Header lines use a single writer call each',
-    @TestHeaderLinesUseSingleWriterCallEach);
+  T.Run('Small header block uses a single writer call',
+    @TestSmallHeaderBlockUsesSingleWriterCall);
+  T.Run('Large header block falls back and preserves wire bytes',
+    @TestLargeHeaderBlockFallsBackAndPreservesWireBytes);
   T.Run('Content-Length body with short writer writes all bytes',
     @TestContentLengthBodyWithShortWriterWritesAllBytes);
   T.Run('Chunked body with short writer writes complete chunk',

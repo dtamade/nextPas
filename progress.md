@@ -1,5 +1,68 @@
 # Progress Log
 
+## Session: 2026-06-06 http h1 writer compact header block slice
+
+- **Status:** completed.
+- Objective:
+  - reduce H1 response header serialization write-call count for common small
+    header sections
+  - keep exact wire bytes, short-writer full-progress semantics, informational
+    response behavior, and large-header fallback intact
+- Scope and safety:
+  - touched only H1 response writer implementation, H1 writer focused tests,
+    benchmark/source-contract test, H1 writer benchmark rows, and HTTP/control docs
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not stage unrelated dirty `test_http_client`, async, worktree marker,
+    compiler, or untracked files
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - `30 total, 29 passed, 1 failed`
+    - failed at `Small header block uses a single writer call`
+    - expected `2` write calls, got `4`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `34 total, 32 passed, 2 failed`
+    - failed at missing `headers block 200 6 headers` row and compact helper
+      source-contract
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - added `TH1ResponseWriter.WriteHeaderBlock`
+  - added `TH1ResponseWriter.TryWriteSmallHeaderBlock`
+  - small header sections are serialized into a 2048-byte stack buffer and
+    written once through `WriteAllOrRaise`
+  - large header sections fall back to the previous per-line path before any
+    compact bytes are written
+  - final and informational response paths share the dispatcher while preserving
+    the non-committing informational response contract
+  - added `headers block 200 6 headers` benchmark row
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - `31/31 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `34/34 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='headers' make -C benchmarks/nextpas.core.http/bench_h1writer clean run`
+    - `headers only 200: 1280.4 ns/op`
+    - `headers block 200 6 headers: 1890.9 ns/op`
+- Sidecar review:
+  - one subagent reviewed writer wire/short-writer/informational/no-body risks
+  - one subagent reviewed benchmark/source-contract and docs update boundaries
+- Outcome:
+  - common small response header blocks now use one write-all invocation after
+    the status line instead of one write per header plus final CRLF
+  - large header fallback and exact wire bytes are directly covered
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 writer compact header-block serialization
+  - next best batch: H1 writer non-200 status-line/string materialization cost
+    or llhttp adapter parsed-header insertion/materialization; keep formal
+    cross-language benchmark sweep deferred
+
 ## Session: 2026-06-06 http h1 fast lazy header lookup slice
 
 - **Status:** completed.

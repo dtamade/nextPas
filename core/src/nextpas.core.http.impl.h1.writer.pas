@@ -25,9 +25,11 @@ type
     FSuppressBody: Boolean;
     procedure WriteStatusLine;
     procedure WriteInformationalHeader(const AStatus: THttpStatus);
+    procedure WriteHeaderBlock;
     procedure WriteAllHeaders;
     procedure WriteCRLF;
     procedure WriteStr(const AStr: string);
+    function TryWriteSmallHeaderBlock: Boolean;
     function ResponseMustNotHaveBody: Boolean;
   public
     constructor Create(const AWriter: IWriter); overload;
@@ -137,9 +139,73 @@ begin
   LFinalStatus := FStatus;
   FStatus := AStatus;
   WriteStatusLine;
-  WriteAllHeaders;
-  WriteCRLF;
+  WriteHeaderBlock;
   FStatus := LFinalStatus;
+end;
+
+procedure TH1ResponseWriter.WriteHeaderBlock;
+begin
+  if not TryWriteSmallHeaderBlock then
+  begin
+    WriteAllHeaders;
+    WriteCRLF;
+  end;
+end;
+
+function TH1ResponseWriter.TryWriteSmallHeaderBlock: Boolean;
+const
+  HEADER_BLOCK_STACK_LIMIT = 2048;
+  HEADER_SEPARATOR: AnsiString = ': ';
+  CRLF: AnsiString = #13#10;
+var
+  LBuf: array[0..HEADER_BLOCK_STACK_LIMIT - 1] of AnsiChar;
+  LCanFit: Boolean;
+  LPos: SizeInt;
+begin
+  LCanFit := True;
+  LPos := 0;
+
+  FHeaders.ForEach(procedure(const AName, AValue: string)
+  var
+    LLineLen: SizeInt;
+    LNameLen: SizeInt;
+    LValueLen: SizeInt;
+  begin
+    if not LCanFit then
+      Exit;
+
+    LNameLen := Length(AName);
+    LValueLen := Length(AValue);
+    LLineLen := LNameLen + 4 + LValueLen;
+    if LLineLen > SizeInt(SizeOf(LBuf)) - LPos - 2 then
+    begin
+      LCanFit := False;
+      Exit;
+    end;
+
+    if LNameLen > 0 then
+    begin
+      Move(AName[1], LBuf[LPos], LNameLen);
+      Inc(LPos, LNameLen);
+    end;
+    Move(HEADER_SEPARATOR[1], LBuf[LPos], 2);
+    Inc(LPos, 2);
+    if LValueLen > 0 then
+    begin
+      Move(AValue[1], LBuf[LPos], LValueLen);
+      Inc(LPos, LValueLen);
+    end;
+    Move(CRLF[1], LBuf[LPos], 2);
+    Inc(LPos, 2);
+  end);
+
+  Result := LCanFit;
+  if not Result then
+    Exit;
+
+  Move(CRLF[1], LBuf[LPos], 2);
+  Inc(LPos, 2);
+  WriteAllOrRaise(FWriter, LBuf[0], SizeUInt(LPos));
 end;
 
 procedure TH1ResponseWriter.WriteAllHeaders;
@@ -223,8 +289,7 @@ begin
      (not FHeaders.Has('transfer-encoding')) then
     FHeaders.Set_('transfer-encoding', 'chunked');
   WriteStatusLine;
-  WriteAllHeaders;
-  WriteCRLF;
+  WriteHeaderBlock;
   FHeadersSent := True;
   if FHeaders.Get('transfer-encoding') = 'chunked' then
     FChunkedWriter := TChunkedWriter.Create(FWriter);
