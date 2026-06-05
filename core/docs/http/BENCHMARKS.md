@@ -10,7 +10,7 @@ Run the comparison harness:
 
 ```sh
 benchmarks/nextpas.core.http/run_server_comparison.sh \
-  --requests 20000 --threads 4 --workload no_url \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
   --output build/projects/nextpas.core.http/server_comparison/report.txt
 ```
 
@@ -18,7 +18,7 @@ Capture a Markdown snapshot with environment metadata:
 
 ```sh
 benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
-  --requests 20000 --threads 4 \
+  --requests 20000 --threads 4 --runs 3 \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
@@ -38,6 +38,11 @@ It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
 cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
 microbaseline; add a Hyper/Tokio comparator before treating Rust ecosystem
 performance as represented.
+
+Use `--runs N` to repeat each implementation after a single build and emit a
+median summary at the end of the raw output. This is the preferred mode for
+fresh local comparison rows because single-shot server results are visibly
+affected by scheduler noise.
 
 ## Local Snapshot: 2026-06-04 UTC
 
@@ -1277,6 +1282,56 @@ gap versus Rust std-only on this machine. nextPas remains close to the Rust
 std-only comparator and far ahead of the Go comparator in these local rows.
 Future rows should use the complete-response reader when comparing server
 throughput.
+
+## Benchmark Tooling: Multi-Run Server Comparison
+
+On 2026-06-05 local time, `run_server_comparison.sh` and
+`capture_server_comparison_snapshot.sh` gained `--runs N`. The server runner
+now builds nextPas, Go, and Rust once, repeats each implementation `N` times,
+prints `run=...` markers for raw rows, and emits a median summary:
+
+```text
+summary=http.server.keepalive
+summary_impl=go runs=3 median_ns/op=55017.0 median_req/s=18176
+summary_impl=nextpas runs=3 median_ns/op=11431.0 median_req/s=87476
+summary_impl=rust runs=3 median_ns/op=9885.0 median_req/s=101153
+```
+
+Focused RED/GREEN:
+
+```text
+RED:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+21 total, 20 passed, 1 failed
+server comparison runner runs summary smoke failed:
+unknown argument: --runs
+heaptrc: 0 unfreed memory blocks
+
+GREEN:
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+22 total, 22 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh local `no_url` 50k/4 3-run summary:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url --runs 3
+
+nextPas median: 11431 ns/op, 87476 req/s
+Go net/http median: 55017 ns/op, 18176 req/s
+Rust std-only median: 9885 ns/op, 101153 req/s
+```
+
+The median row keeps the earlier direction intact: nextPas is still far ahead
+of Go `net/http` in this local no-URL microbaseline and remains behind the Rust
+std-only comparator. The remaining gap is now small enough that future
+optimization decisions should rely on multi-run rows or narrower dispatch /
+serialization benchmarks rather than single-shot server samples.
 
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 

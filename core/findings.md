@@ -1,26 +1,27 @@
-# Findings: H1 parser llhttp multi-run evidence tightening
+# Findings: HTTP server comparison multi-run evidence tightening
 
 ## Scope
 
-本轮是 benchmark/tooling 强化，不改变 public HTTP API，不改变 wire
-contract，不手改 generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
+本轮是 benchmark/tooling 强化，不改变 public HTTP API，不改变 wire contract，
+不手改 generated llhttp，不写 `docs/nextpas.core.http.inbox.md`。
 
 ## Implemented decision
 
-`bench_h1parser/run_flag_matrix.sh` 现在支持：
+`run_server_comparison.sh` 现在支持：
 
 ```text
---smoke / full
---perf / --no-perf
 --runs N
 ```
 
 multi-run 语义：
 
-- 每个 Pascal/C variant 只 build 一次，再重复执行 `N` 次。
-- 每次输出仍进入 `results.tsv`，新增 `run` 列。
-- 聚合输出进入 `summary.tsv`，口径是同 variant / benchmark 的 `median_ns_per_op`。
-- `env.txt` 现在也记录 `runs=N`，便于后续引用证据。
+- nextPas / Go / Rust 各自只 build 一次。
+- 每轮输出 `run=N`，保留原始三方 benchmark output。
+- 末尾输出 `summary=http.server.keepalive`。
+- 每个 impl 输出 `summary_impl=... runs=N median_ns/op=... median_req/s=...`。
+
+`capture_server_comparison_snapshot.sh` 也支持同一 `--runs N`，并在 Markdown snapshot
+中记录 `runs=`、完整命令和 raw summary rows。
 
 ## RED / GREEN evidence
 
@@ -30,8 +31,8 @@ RED:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-20 total, 19 passed, 1 failed
-H1 parser flag matrix runs summary smoke failed:
+21 total, 20 passed, 1 failed
+server comparison runner runs summary smoke failed:
 unknown argument: --runs
 heaptrc: 0 unfreed memory blocks
 ```
@@ -42,52 +43,49 @@ GREEN:
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
 
-20 total, 20 passed, 0 failed
+22 total, 22 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 
 ## Performance evidence
 
-Fresh local filtered summary:
+Fresh local `no_url` full-chain summary:
 
 ```text
-NEXTPAS_BENCH_MAX_ITERS=100000 \
-NEXTPAS_BENCH_FILTER='raw llhttp: 10 headers' \
-NEXTPAS_C_BENCH_FILTER='C raw llhttp: 10 headers' \
-LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
-benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh --smoke --no-perf --runs 3
+benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload no_url --runs 3
 
-C raw llhttp 10 headers median: 534.1 ns/op
-Pascal raw llhttp 10 headers median: 749.1 ns/op
+nextPas median: 11431 ns/op, 87476 req/s
+Go net/http median: 55017 ns/op, 18176 req/s
+Rust std-only median: 9885 ns/op, 101153 req/s
 ```
 
 Representative per-run rows:
 
 ```text
-C raw llhttp: 526.7 / 522.6 / 525.7 ns/op
-Pascal raw llhttp: 791.9 / 768.1 / 753.9 ns/op
+nextPas no_url: 11388 / 12818 / 11431 ns/op
+Go net/http no_url: 54598 / 55017 / 55111 ns/op
+Rust std-only no_url: 10407 / 9885 / 9741 ns/op
 ```
 
-结论：`Pascal raw llhttp` 相对 `C raw llhttp` 的代表性差距目前约 `1.40x`。这说明
-用户对“llhttp 的 Pascal 翻译移植可能有性能问题”的判断是成立的，但当前证据仍更像
-“真实但非唯一瓶颈”，而不是已经足以解释 full-chain 全部剩余差距的单点根因。
+结论：full-chain no-URL row 现在有了中位数口径。nextPas 在本机继续明显快于
+Go `net/http`，并落后 Rust std-only comparator 约 `1.16x`（按 `ns/op` median）。
+这说明下一步不应只盯单次 server row，而应拆 request dispatch / response serialization
+或补更真实的 async Rust comparator。
 
 ## Tooling bug note
 
-首次实现 `summary.tsv` 时，排序后又执行了 `tail -n +2`，导致第一条真实数据行被误丢。
-因为排序结果里 `c-default` 恰好排在 `pascal-default` 之前，所以 live 证据暴露出
-`summary.tsv` 只剩 Pascal 行。这个聚合 bug 已通过补测后修正。
+初版 runner summary 解析时错误假设 `impl=` 与 `ns/op=` 在同一行。focused gate
+暴露出旧单次 smoke 也会失败。修正后改为先确认 `impl=` marker，再从同一 impl 输出块
+分别读取 `ns/op=` 与 `req/s=`。
 
 ## Direction review
 
-方向没有走偏：本轮没有直接去手改 generated llhttp，而是先把 raw-gap 证据链做稳。
-现在已经可以低成本复跑 Pascal/C narrowed row，后续如果还要进入 generator/codegen
-层优化，至少不会再建立在单次噪声结果上。
+方向没有走偏：这轮把 full-chain server comparison 的噪声问题直接收口到工具层，
+减少后续优化误判。没有改生产 HTTP server 行为，也没有把 benchmark-only 工具误包装成
+API 变更。
 
 ## Remaining gaps / risks
 
-- multi-run/median 目前只覆盖 `bench_h1parser` flag matrix，还没有扩到
-  `run_server_comparison.sh`。
-- `perf` 在当前机器仍因 `perf_event_paranoid=3` 不可用，缺硬件计数器。
-- 如果要进入 generated llhttp 优化，下一步仍应优先拿 perf-enabled 机器上的
-  cycles/instructions/branch-miss 证据。
+- Rust comparator 仍是 std-only comparator，不代表 Hyper/Tokio。
+- 还缺 request dispatch / handler invocation / response serialization 的更窄对照。
+- local scheduler noise 仍存在，但 multi-run median 已经比单次 row 更稳。

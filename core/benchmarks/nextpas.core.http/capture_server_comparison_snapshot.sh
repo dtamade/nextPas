@@ -5,11 +5,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REQUESTS=20000
 THREADS=4
+RUNS=1
 OUTPUT_PATH="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison/snapshot.md"
 
 usage() {
   cat <<'EOF'
-usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--output PATH]
+usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--runs N] [--output PATH]
 
 Capture a Markdown snapshot for the nextPas/Go/Rust HTTP server comparison.
 EOF
@@ -23,6 +24,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --threads)
       THREADS="${2:?missing value for --threads}"
+      shift 2
+      ;;
+    --runs)
+      RUNS="${2:?missing value for --runs}"
       shift 2
       ;;
     --output)
@@ -55,8 +60,15 @@ case "${THREADS}" in
     ;;
 esac
 
-if [[ "${REQUESTS}" -lt 1 || "${THREADS}" -lt 1 ]]; then
-  echo "--requests and --threads must be positive" >&2
+case "${RUNS}" in
+  ''|*[!0-9]*)
+    echo "--runs must be a positive integer" >&2
+    exit 2
+    ;;
+esac
+
+if [[ "${REQUESTS}" -lt 1 || "${THREADS}" -lt 1 || "${RUNS}" -lt 1 ]]; then
+  echo "--requests, --threads, and --runs must be positive" >&2
   exit 2
 fi
 
@@ -71,6 +83,7 @@ mkdir -p "${OUTPUT_DIR}"
 "${SCRIPT_DIR}/run_server_comparison.sh" \
   --requests "${REQUESTS}" \
   --threads "${THREADS}" \
+  --runs "${RUNS}" \
   --output "${RAW_OUTPUT}" >/dev/null
 
 git_head="$(git -C "${CORE_ROOT}/.." rev-parse HEAD 2>/dev/null || printf 'unknown')"
@@ -100,12 +113,13 @@ go_version=${go_version}
 rustc_version=${rustc_version}
 requests=${REQUESTS}
 threads=${THREADS}
+runs=${RUNS}
 \`\`\`
 
 ## Command
 
 \`\`\`sh
-benchmarks/nextpas.core.http/run_server_comparison.sh --requests ${REQUESTS} --threads ${THREADS}
+benchmarks/nextpas.core.http/run_server_comparison.sh --requests ${REQUESTS} --threads ${THREADS} --runs ${RUNS}
 \`\`\`
 
 ## Raw Comparison Output

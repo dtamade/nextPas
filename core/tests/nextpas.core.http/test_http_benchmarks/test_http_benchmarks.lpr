@@ -559,6 +559,54 @@ begin
   CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'response_1k');
 end;
 
+procedure TestServerComparisonRunnerRunsSummarySmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison runs runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_runs_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'no_url', '--runs', '2', '--output', LReportPath],
+    LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison runs runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'comparison=http.server.keepalive',
+    'runs comparison marker');
+  CheckContains(LOutput, 'runs=2', 'runs count marker');
+  CheckContains(LOutput, 'run=1', 'first run marker');
+  CheckContains(LOutput, 'run=2', 'second run marker');
+  CheckContains(LOutput, 'summary=http.server.keepalive',
+    'summary marker');
+  CheckContains(LOutput, 'summary_impl=nextpas',
+    'nextpas summary marker');
+  CheckContains(LOutput, 'summary_impl=go', 'go summary marker');
+  CheckContains(LOutput, 'summary_impl=rust', 'rust summary marker');
+  CheckContains(LOutput, 'median_ns/op=', 'median ns/op marker');
+  CheckContains(LOutput, 'median_req/s=', 'median req/s marker');
+
+  Check(FileExists(LReportPath), 'server comparison runs report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'runs=2', 'runs report count marker');
+  CheckContains(LReport, 'summary=http.server.keepalive',
+    'runs report summary marker');
+  CheckContains(LReport, 'summary_impl=nextpas',
+    'runs report nextpas summary marker');
+  CheckContains(LReport, 'summary_impl=go',
+    'runs report go summary marker');
+  CheckContains(LReport, 'summary_impl=rust',
+    'runs report rust summary marker');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -598,6 +646,43 @@ begin
   CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LSnapshot, 'go', '8', '1');
   CheckServerBenchmarkOutput(LSnapshot, 'rust', '8', '1');
+end;
+
+procedure TestServerComparisonSnapshotRunsSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison snapshot runs runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_runs_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--runs', '2', '--output', LSnapshotPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot runs exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath), 'server comparison snapshot runs exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'runs=2', 'snapshot runs marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --runs 2',
+    'snapshot runs command marker');
+  CheckContains(LSnapshot, 'summary=http.server.keepalive',
+    'snapshot runs summary marker');
+  CheckContains(LSnapshot, 'summary_impl=nextpas',
+    'snapshot runs nextpas summary marker');
+  CheckContains(LSnapshot, 'summary_impl=go',
+    'snapshot runs go summary marker');
+  CheckContains(LSnapshot, 'summary_impl=rust',
+    'snapshot runs rust summary marker');
 end;
 
 procedure TestCllhttpComparatorRequiresRoot;
@@ -1024,8 +1109,12 @@ begin
     @TestServerComparisonRunnerAdapterNoUrlSmallSmoke);
   T.Run('server comparison runner response_1k small smoke',
     @TestServerComparisonRunnerResponse1KSmallSmoke);
+  T.Run('server comparison runner runs summary smoke',
+    @TestServerComparisonRunnerRunsSummarySmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
+  T.Run('server comparison snapshot runs smoke',
+    @TestServerComparisonSnapshotRunsSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',
     @TestCllhttpComparatorRequiresRoot);
   T.Run('H1 parser benchmark max iterations env',
