@@ -4394,6 +4394,7 @@ function ParseProgramLikeRoot(
   const ARootFileId: TSourceFileId
 ): Boolean;
 begin
+  SkipDirectives(ALexer, ACursor);
   Result := ParseUsesClause(
     ALexer,
     ACursor,
