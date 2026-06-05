@@ -1,27 +1,29 @@
-# Task Plan: H1 fast parser policy flags
+# Task Plan: H1 fast parser lazy headers
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-上一批已经删除 fast parser 内部 `Content-Length` 的重复 lookup；本轮继续减少
-server fast path 成功判定中的重复 header lookup。`FastParseRequest` 在扫描 header
-时本来就能看到 `Host` / `Connection` / `Expect` / `Transfer-Encoding`，因此把这些
-policy facts 直接暴露给 `TryUseFastRequestParser`，避免成功路径后再执行多次
-`Headers.Get(...)`。
+本轮针对用户提出的 llhttp Pascal 翻译性能疑虑先做证据拆分：Pascal translated
+llhttp 相比 C llhttp 确实有本机 raw gap，但当前 full parser / server hot path 更大的
+成本仍在 adapter/materialization。基于这个判断，本轮做一个窄生产优化：fast parser
+成功路径不再 eager 构造完整 `THttpHeaders`，普通 server fast-path request 如果 handler
+不读 headers，就避免 header 容器物化。
 
-本轮不改公开 HTTP facade API，不改 wire contract，不写 inbox。
+本轮不改公开 HTTP facade API，不改 wire contract，不写
+`docs/nextpas.core.http.inbox.md`。
 
 ## Checklist
 
-- [x] 复核当前 git status、HTTP benchmark/control 文件和上一批结论。
-- [x] 新增 focused RED：`TFastParseResult` 缺少 policy flag 字段导致 `test_http_h1fast` 编译失败。
-- [x] 给 `TFastParseResult` 增加 `HasHost` / `HasConnection` / `HasExpect` / `HasTransferEncoding`。
-- [x] 在 fast header scan 中直接设置 policy flags。
-- [x] `TryUseFastRequestParser` 使用 policy flags，删除 4 次 server fast-path `Headers.Get(...)` 判定。
+- [x] 复核设计规范、HTTP coverage/benchmark/control 文件、git status。
+- [x] 用子代理只读审查 Pascal translated llhttp 性能疑点。
+- [x] 本地复跑 `bench_h1parser` 与 C llhttp comparator，确认 raw gap 与 adapter gap。
+- [x] 新增 focused RED：fast parser 对 invalid header name/value 应 fallback，而不是因 eager header materialization 抛异常。
+- [x] `FastParseRequest` 改成 scan-time header validation + lazy `IHttpHeaders`。
+- [x] server fast snapshot 路径使用已知 policy facts，避免 `HeaderPolicyErrorStatus` / keep-alive / Host 检查触发 header materialization。
 - [x] 跑 `test_http_h1fast` focused gate + heaptrc。
 - [x] 跑 `test_http_server` focused gate + heaptrc。
-- [x] 跑 `bench_h1parser` / `bench_server` sanity，不把噪声结果写成稳定吞吐结论。
-- [x] 更新 `findings.md`、`progress.md`、`docs/http/BENCHMARKS.md`。
+- [x] 跑 `bench_h1parser` / `bench_server` sanity。
+- [x] 跑 `git diff --check`。
 - [x] path-limited commit。
 
 ## Scope
@@ -38,13 +40,13 @@ policy facts 直接暴露给 `TryUseFastRequestParser`，避免成功路径后�
 
 ## Current conclusion
 
-server fast path 不再为了判断是否可用而做 `host` / `connection` / `expect` /
-`transfer-encoding` 四次 `IHttpHeaders.Get` lookup。语义由 `test_http_h1fast`
-和 `test_http_server` 锁住。`bench_server` 当前仍有明显调度噪声，本轮只记录方向性
-sanity，不声明稳定 server throughput 提升。
+Pascal translated llhttp 本体有真实优化空间，但现在不应手改大状态机。当前最佳小步是继续削
+adapter/materialization：lazy headers 已把 fast parser 代表性 microbench 大幅压低，并保持
+server 274-case contract gate 绿色。
 
 ## Intended outcome
 
-- 保留 server fast path。
-- 减少 fast path 成功判定的 post-parse header lookup。
-- 为后续 lazy headers / policy snapshot 继续降 adapter/materialization 成本铺路。
+- 保持 server fast path 的严格入口策略。
+- fast parser 成功时延迟 header 容器构造。
+- invalid fast header name/value 干净 fallback 到 llhttp/server validation。
+- 为后续更可信 benchmark runner 和更深 adapter materialization 优化铺路。

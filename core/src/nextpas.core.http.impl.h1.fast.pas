@@ -40,6 +40,167 @@ uses
   nextpas.core.http.headers,
   nextpas.core.http.impl.h1.scan;
 
+type
+  TFastLazyHeaders = class(TInterfacedObject, IHttpHeaders)
+  private
+    FRaw: string;
+    FHeaders: IHttpHeaders;
+    procedure EnsureMaterialized;
+  public
+    constructor Create(const ABuf: PAnsiChar; const ALen: SizeUInt);
+    procedure Set_(const AName, AValue: string);
+    procedure Add(const AName, AValue: string);
+    function Get(const AName: string): string;
+    function GetAll(const AName: string): TStringArray;
+    function Has(const AName: string): Boolean;
+    procedure Del(const AName: string);
+    procedure Clear;
+    function Count: Int32;
+    procedure ForEach(const ACallback: THeaderIterator);
+    function Clone: IHttpHeaders;
+  end;
+
+function IsValidHeaderNameFast(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
+var
+  LI: SizeUInt;
+  LB: Byte;
+begin
+  if ALen = 0 then
+    Exit(False);
+  for LI := 0 to ALen - 1 do
+  begin
+    LB := Byte(ABuf[LI]);
+    if (LB < 33) or (LB > 126) or (LB = Byte(':')) then
+      Exit(False);
+  end;
+  Result := True;
+end;
+
+function IsValidHeaderValueFast(const ABuf: PAnsiChar;
+  const ALen: SizeUInt): Boolean;
+var
+  LI: SizeUInt;
+begin
+  for LI := 0 to ALen - 1 do
+    if ABuf[LI] = #0 then
+      Exit(False);
+  Result := True;
+end;
+
+constructor TFastLazyHeaders.Create(const ABuf: PAnsiChar;
+  const ALen: SizeUInt);
+begin
+  inherited Create;
+  if ALen > 0 then
+    SetString(FRaw, ABuf, ALen);
+end;
+
+procedure TFastLazyHeaders.EnsureMaterialized;
+var
+  LLineStart, LLineEnd: SizeInt;
+  LColon: SizeInt;
+  LValStart: SizeInt;
+  LRawLen: SizeInt;
+  LName, LValue: string;
+begin
+  if FHeaders <> nil then
+    Exit;
+
+  FHeaders := NewHttpHeaders;
+  LRawLen := Length(FRaw);
+  LLineStart := 1;
+  while LLineStart <= LRawLen do
+  begin
+    LLineEnd := LLineStart;
+    while (LLineEnd <= LRawLen) and
+          (not ((FRaw[LLineEnd] = #13) and
+                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
+      Inc(LLineEnd);
+
+    LColon := LLineStart;
+    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
+      Inc(LColon);
+    if LColon >= LLineEnd then
+      Break;
+
+    LValStart := LColon + 1;
+    while (LValStart < LLineEnd) and
+          ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
+      Inc(LValStart);
+
+    SetString(LName, PAnsiChar(FRaw) + LLineStart - 1, LColon - LLineStart);
+    SetString(LValue, PAnsiChar(FRaw) + LValStart - 1, LLineEnd - LValStart);
+    FHeaders.Add(LName, LValue);
+
+    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
+      LLineStart := LLineEnd + 2
+    else
+      Break;
+  end;
+  FRaw := '';
+end;
+
+procedure TFastLazyHeaders.Set_(const AName, AValue: string);
+begin
+  EnsureMaterialized;
+  FHeaders.Set_(AName, AValue);
+end;
+
+procedure TFastLazyHeaders.Add(const AName, AValue: string);
+begin
+  EnsureMaterialized;
+  FHeaders.Add(AName, AValue);
+end;
+
+function TFastLazyHeaders.Get(const AName: string): string;
+begin
+  EnsureMaterialized;
+  Result := FHeaders.Get(AName);
+end;
+
+function TFastLazyHeaders.GetAll(const AName: string): TStringArray;
+begin
+  EnsureMaterialized;
+  Result := FHeaders.GetAll(AName);
+end;
+
+function TFastLazyHeaders.Has(const AName: string): Boolean;
+begin
+  EnsureMaterialized;
+  Result := FHeaders.Has(AName);
+end;
+
+procedure TFastLazyHeaders.Del(const AName: string);
+begin
+  EnsureMaterialized;
+  FHeaders.Del(AName);
+end;
+
+procedure TFastLazyHeaders.Clear;
+begin
+  EnsureMaterialized;
+  FHeaders.Clear;
+end;
+
+function TFastLazyHeaders.Count: Int32;
+begin
+  EnsureMaterialized;
+  Result := FHeaders.Count;
+end;
+
+procedure TFastLazyHeaders.ForEach(const ACallback: THeaderIterator);
+begin
+  EnsureMaterialized;
+  FHeaders.ForEach(ACallback);
+end;
+
+function TFastLazyHeaders.Clone: IHttpHeaders;
+begin
+  EnsureMaterialized;
+  Result := FHeaders.Clone;
+end;
+
 function TryParseMethodFast(const ABuf: PAnsiChar; const ALen: SizeUInt;
   out AMethod: THttpMethod): Boolean;
 begin
@@ -155,7 +316,7 @@ var
   LColonOff: SizeInt;
   LNameStart, LNameLen: SizeUInt;
   LValStart, LValLen: SizeUInt;
-  LHdrName, LHdrVal: string;
+  LHeadersStart, LHeadersLen: SizeUInt;
   LBodyStart: SizeUInt;
   LContentLength: Int64;
   LSeenContentLength: Boolean;
@@ -225,8 +386,8 @@ begin
     Exit; // wrong version length
 
   // Step 3: Parse headers
-  Result.Headers := NewHttpHeaders;
   LLineStart := SizeUInt(LReqLineEnd) + 2; // skip past \r\n of request line
+  LHeadersStart := LLineStart;
 
   while LLineStart < SizeUInt(LHeaderEnd) do
   begin
@@ -261,9 +422,9 @@ begin
       Inc(LValStart);
     LValLen := LLineEnd - LValStart;
 
-    SetString(LHdrName, ABuf + LNameStart, LNameLen);
-    SetString(LHdrVal, ABuf + LValStart, LValLen);
-    Result.Headers.Add(LHdrName, LHdrVal);
+    if (not IsValidHeaderNameFast(ABuf + LNameStart, LNameLen)) or
+       (not IsValidHeaderValueFast(ABuf + LValStart, LValLen)) then
+      Exit;
 
     if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'host') then
       Result.HasHost := LValLen > 0
@@ -307,6 +468,8 @@ begin
     Result.Consumed := LBodyStart;
   end;
 
+  LHeadersLen := SizeUInt(LHeaderEnd) - LHeadersStart;
+  Result.Headers := TFastLazyHeaders.Create(ABuf + LHeadersStart, LHeadersLen);
   Result.Success := True;
 end;
 

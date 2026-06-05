@@ -171,6 +171,53 @@ a stable full-chain throughput claim. The stable conclusion is narrower: the
 server fast-path admission check now avoids repeated header lookups and remains
 covered by focused parser/server gates.
 
+## Optimization Evidence: Fast Parser Lazy Headers
+
+On 2026-06-05 local time, `FastParseRequest` stopped eagerly materializing a
+full `THttpHeaders` container on successful fast-path parses. It now validates
+header name/value spans during the fast scan, caches the raw header block, and
+returns an internal lazy `IHttpHeaders` implementation that materializes only
+when code actually calls `Headers.Get` / `GetAll` / `ForEach` / mutation APIs.
+
+The H1 server snapshot path also uses scan-time facts for the accepted fast
+case, so ordinary HTTP/1.1 no-body requests with a non-empty `Host` and no
+`Connection` / `Expect` / `Transfer-Encoding` policy headers do not force header
+materialization before dispatch. Public HTTP APIs and wire contracts remain
+unchanged.
+
+Focused RED/GREEN:
+
+```text
+RED: make -C tests/nextpas.core.http/test_http_h1fast clean test
+Invalid header name/value fallback raised EHttpError from eager THttpHeaders.Add
+
+GREEN: make -C tests/nextpas.core.http/test_http_h1fast clean test
+22 total, 22 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+274 total, 274 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Parser microbenchmark:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+```
+
+| fast workload | previous ns/op | after ns/op |
+| --- | ---: | ---: |
+| simple GET | 757.2 | 349.9 |
+| 10 headers | 3554.1 | 1351.5 |
+| POST 1KB body | 1394.2 | 628.9 |
+| pipeline 10 reqs | 7821.6 | 3526.5 |
+
+The parser rows show the intended materialization win. A same-batch
+`bench_server` sanity row measured `87356 req/s`, which is within the already
+observed local noise band; do not treat it as a stable full-chain throughput
+claim.
+
 ## Optimization Evidence: Header Allocation Fast Path
 
 On 2026-06-05 local time, `THttpHeaders` switched from per-entry dynamic array

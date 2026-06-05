@@ -1,14 +1,27 @@
-# Findings: H1 fast parser policy flags
+# Findings: H1 fast parser lazy headers
 
 ## Scope
 
-本轮是 `nextpas.core.http` H1 server fast path 的窄性能修正，不改公开 HTTP facade
-API，不改 request/response wire contract。目标是减少 fast parser 成功后 server
-integration 再次扫描 headers 的成本。
+本轮是 `nextpas.core.http` H1 fast parser / server fast snapshot 的窄性能优化。
+不改公开 HTTP facade API，不改 wire contract，不写 inbox。
+
+## Evidence on Pascal llhttp
+
+本地复跑结果继续支持用户的疑虑：Pascal translated llhttp 本体相比 C llhttp 有 raw
+gap。
+
+- Pascal raw / C raw:
+  - simple GET: `214.7 ns/op` vs `143.8 ns/op`
+  - 10 headers: `754.8 ns/op` vs `535.6 ns/op`
+  - POST 1KB: `436.6 ns/op` vs `285.7 ns/op`
+  - pipeline 10 reqs: `2107.3 ns/op` vs `1346.5 ns/op`
+
+子代理只读审查也给出同一结论：Pascal translated llhttp 有优化空间，但不建议现在手改大
+状态机；当前 full parser / server 更大的确定成本仍是 adapter/materialization。
 
 ## RED evidence
 
-新增 focused test 后先跑：
+新增 `test_http_h1fast` invalid header name/value fallback 后先跑：
 
 ```sh
 make -C tests/nextpas.core.http/test_http_h1fast clean test
@@ -17,44 +30,31 @@ make -C tests/nextpas.core.http/test_http_h1fast clean test
 失败点：
 
 ```text
-Identifier idents no member "HasHost"
-Identifier idents no member "HasConnection"
-Identifier idents no member "HasExpect"
-Identifier idents no member "HasTransferEncoding"
+FAIL: Invalid header name fallback - invalid header name character
+FAIL: Invalid header value fallback - invalid header value: contains CR/LF/NUL
 ```
 
-这证明当前 `TFastParseResult` 没有把 fast scan 已经知道的 server policy facts 暴露出来。
+这证明 fast parser 成功路径当前依赖 eager `THttpHeaders.Add` 做校验，异常输入不能干净
+fallback。
 
 ## Implemented change
 
-新增 `TFastParseResult` fields：
-
-- `HasHost`
-- `HasConnection`
-- `HasExpect`
-- `HasTransferEncoding`
-
-`FastParseRequest` 在 header scan 阶段直接设置这些 flags：
-
-- `Host` 只有 value 非空才算 `HasHost=True`，保持原先 server fast path 必须有非空
-  Host 的窄入口。
-- `Connection` 和 `Expect` 一出现就置 flag，server fast path 继续 fallback。
-- `Transfer-Encoding` 一出现就置 flag 并继续 fallback 到 llhttp/server validation。
-
-`TryUseFastRequestParser` 现在使用这些 flags 判定能否走 server fast path，不再做：
-
-```pascal
-Headers.Get('host')
-Headers.Get('connection')
-Headers.Get('expect')
-Headers.Get('transfer-encoding')
-```
+- 新增内部 `TFastLazyHeaders`，实现 `IHttpHeaders`，保存 raw header block。
+- `FastParseRequest` 在扫描阶段显式校验 header name/value、设置 policy flags 和解析
+  `Content-Length`，成功后才返回 lazy header interface。
+- lazy headers 只在 `Get` / `GetAll` / `ForEach` / mutation / `Clone` 等接口调用时物化成
+  `THttpHeaders`。
+- `TH1ServerConnectionState` 在 fast snapshot 路径复用已知 policy facts，避免
+  `HeaderPolicyErrorStatus`、keep-alive、Host 检查触发 materialization。
 
 ## Verification
 
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
+  - 2 个新增 case 按预期失败。
 - Focused fast parser gate:
   - `make -C tests/nextpas.core.http/test_http_h1fast clean test`
-  - `20 total, 20 passed, 0 failed`
+  - `22 total, 22 passed, 0 failed`
   - heaptrc: `0 unfreed memory blocks`
 - Focused server gate:
   - `make -C tests/nextpas.core.http/test_http_server clean test`
@@ -69,34 +69,31 @@ Parser benchmark:
 make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 ```
 
-Representative fast rows:
+Fast rows:
 
 | workload | ns/op |
 | --- | ---: |
-| simple GET | 757.2 |
-| 10 headers | 3554.1 |
-| POST 1KB | 1394.2 |
-| pipeline 10 reqs | 7821.6 |
+| simple GET | 349.9 |
+| 10 headers | 1351.5 |
+| POST 1KB | 628.9 |
+| pipeline 10 reqs | 3526.5 |
 
-Server benchmark sanity:
+Server benchmark:
 
 ```sh
 make -C benchmarks/nextpas.core.http/bench_server clean run
-build/projects/nextpas.core.http/bench_server/bench_http_server --requests 20000 --threads 4
 ```
 
-Rows:
+- `87356 req/s`
 
-- clean run: `96699 req/s`
-- immediate second run: `86312 req/s`
-
-Conclusion: this batch removes definite repeated lookups from the server fast path, but the current
-server benchmark runner is too noisy to claim a stable full-chain throughput win from this slice alone.
+Conclusion: parser microbench 明确受益；server benchmark 仍在此前噪声带内，不能声明稳定
+full-chain throughput 提升。
 
 ## Remaining gaps / risks
 
-- Fast parser still eagerly materializes `IHttpHeaders`; this remains the larger cost.
-- `TFastParseResult` is internal implementation surface, but tests consume it directly; keep future
-  changes in `test_http_h1fast`.
-- The next larger step should be lazy headers or a dedicated policy snapshot so simple handler paths
-  avoid constructing full header collections until actually needed.
+- `TBenchRunner` / C comparator 当前 `MAX_ITERS = 1000`，短路径 benchmark 可信度不足；
+  下一批应先提高/参数化迭代上限。
+- Pascal translated llhttp 的大状态机、record-return matcher、cdecl helper 仍是长期优化轨道，
+  但不适合当前手工改。
+- lazy headers 目前复制 raw header block；相比 eager 多 string/header entries，仍是明显更轻，
+  后续可继续评估 span-backed lifetime 模型，但要谨慎处理 buffer ownership。

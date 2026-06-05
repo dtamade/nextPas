@@ -409,7 +409,7 @@ end;
 
 function HeaderPolicyErrorStatus(const AParser: IH1Parser;
   const AOptions: TH1ServerTransportOptions;
-  const ATotalRead: SizeUInt): THttpStatus;
+  const ATotalRead: SizeUInt; const AFastSnapshot: Boolean): THttpStatus;
 begin
   Result := 0;
   if AParser = nil then
@@ -422,6 +422,9 @@ begin
 
   if AParser.HasError then
     Exit(ParserErrorStatus(AParser));
+
+  if AFastSnapshot then
+    Exit(0);
 
   if (AParser.GetHttpVersion = hvHttp11) and
      (AParser.GetHeaders.Get('host') = '') then
@@ -1059,9 +1062,12 @@ begin
   LResponseWriter := nil;
   LDrainStarted := False;
   try
-    FKeepAlive := ShouldKeepAlive(FParser);
+    if FParserIsSnapshot then
+      FKeepAlive := True
+    else
+      FKeepAlive := ShouldKeepAlive(FParser);
 
-    if (FParser.GetHttpVersion = hvHttp11) and
+    if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
        (FParser.GetHeaders.Get('host') = '') then
     begin
       WriteErrorResponse(FConn, HTTP_STATUS_BAD_REQUEST, FOptions.WriteTimeout);
@@ -1165,9 +1171,12 @@ begin
   LOutbound := nil;
   LResponseWriter := nil;
   try
-    LKeepAlive := ShouldKeepAlive(FParser);
+    if FParserIsSnapshot then
+      LKeepAlive := True
+    else
+      LKeepAlive := ShouldKeepAlive(FParser);
 
-    if (FParser.GetHttpVersion = hvHttp11) and
+    if (not FParserIsSnapshot) and (FParser.GetHttpVersion = hvHttp11) and
        (FParser.GetHeaders.Get('host') = '') then
     begin
       LOutbound := NewH1OutboundBuffer;
@@ -1319,7 +1328,8 @@ begin
         if (not LHeadersDone) and FParser.HeadersComplete then
         begin
           LHeadersDone := True;
-          LHeaderStatus := HeaderPolicyErrorStatus(FParser, FOptions, LTotalRead);
+          LHeaderStatus := HeaderPolicyErrorStatus(FParser, FOptions,
+            LTotalRead, FParserIsSnapshot);
           if LHeaderStatus <> 0 then
           begin
             WriteErrorResponse(FConn, LHeaderStatus, FOptions.WriteTimeout);
@@ -1759,7 +1769,8 @@ begin
     if (not FParseHeadersDone) and FParser.HeadersComplete then
     begin
       FParseHeadersDone := True;
-      LHeaderStatus := HeaderPolicyErrorStatus(FParser, FOptions, FParseTotalRead);
+      LHeaderStatus := HeaderPolicyErrorStatus(FParser, FOptions,
+        FParseTotalRead, FParserIsSnapshot);
       if LHeaderStatus <> 0 then
         Exit(FinishPollParseError(LHeaderStatus));
       if ShouldSendContinueResponse(FParser, FParseHeadersDone, FContinueSent) then
