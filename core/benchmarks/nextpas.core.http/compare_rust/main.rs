@@ -9,12 +9,15 @@ use std::time::{Duration, Instant};
 const REQUEST_NO_URL: &[u8] = b"GET / HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n";
 const REQUEST_URL_PATH: &[u8] =
     b"GET /api/v1/users HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n";
+const REQUEST_ADAPTER_NO_URL: &[u8] =
+    b"GET / HTTP/1.1\r\nHost: localhost\r\nConnection: keep-alive\r\nContent-Length: 0\r\n\r\n";
 const RESPONSE: &[u8] = b"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: keep-alive\r\n\r\nHello, World!";
 const NOT_FOUND_RESPONSE: &[u8] =
     b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: keep-alive\r\n\r\n";
 const RESPONSE_BODY_LEN: usize = 13;
 const WORKLOAD_NO_URL: &str = "no_url";
 const WORKLOAD_URL_PATH: &str = "url_path";
+const WORKLOAD_ADAPTER_NO_URL: &str = "adapter_no_url";
 
 fn parse_options() -> (usize, usize, String) {
     let mut requests = 20_000usize;
@@ -41,6 +44,8 @@ fn parse_options() -> (usize, usize, String) {
         } else if args[index] == "--workload" && index + 1 < args.len() {
             if args[index + 1] == WORKLOAD_URL_PATH {
                 workload = WORKLOAD_URL_PATH.to_string();
+            } else if args[index + 1] == WORKLOAD_ADAPTER_NO_URL {
+                workload = WORKLOAD_ADAPTER_NO_URL.to_string();
             } else {
                 workload = WORKLOAD_NO_URL.to_string();
             }
@@ -171,10 +176,10 @@ fn run_client(addr: SocketAddr, requests: usize, workload: String, completed: Ar
     let _ = stream.set_write_timeout(Some(Duration::from_secs(10)));
 
     let mut buffer = Vec::with_capacity(1024);
-    let request = if workload == WORKLOAD_URL_PATH {
-        REQUEST_URL_PATH
-    } else {
-        REQUEST_NO_URL
+    let request = match workload.as_str() {
+        WORKLOAD_URL_PATH => REQUEST_URL_PATH,
+        WORKLOAD_ADAPTER_NO_URL => REQUEST_ADAPTER_NO_URL,
+        _ => REQUEST_NO_URL,
     };
     for _ in 0..requests {
         if stream.write_all(request).is_err() {

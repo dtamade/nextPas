@@ -15,11 +15,12 @@ import (
 const responseBody = "Hello, World!"
 const workloadNoUrl = "no_url"
 const workloadUrlPath = "url_path"
+const workloadAdapterNoUrl = "adapter_no_url"
 
 func parseOptions() (int, int, string) {
 	requests := flag.Int("requests", 20000, "total requests")
 	threads := flag.Int("threads", 4, "concurrent keep-alive clients")
-	workload := flag.String("workload", workloadNoUrl, "workload: no_url or url_path")
+	workload := flag.String("workload", workloadNoUrl, "workload: no_url, url_path, or adapter_no_url")
 	flag.Parse()
 
 	if *requests < 1 {
@@ -31,7 +32,7 @@ func parseOptions() (int, int, string) {
 	if *threads > *requests {
 		*threads = *requests
 	}
-	if *workload != workloadUrlPath {
+	if *workload != workloadUrlPath && *workload != workloadAdapterNoUrl {
 		*workload = workloadNoUrl
 	}
 
@@ -46,7 +47,7 @@ func requestsForThread(index, totalRequests, threads int) int {
 	return count
 }
 
-func runClient(url string, requests int, completed *int64, wg *sync.WaitGroup) {
+func runClient(url string, requests int, workload string, completed *int64, wg *sync.WaitGroup) {
 	defer wg.Done()
 
 	transport := &http.Transport{
@@ -64,7 +65,14 @@ func runClient(url string, requests int, completed *int64, wg *sync.WaitGroup) {
 	}
 
 	for i := 0; i < requests; i++ {
-		response, err := client.Get(url)
+		request, err := http.NewRequest(http.MethodGet, url, nil)
+		if err != nil {
+			return
+		}
+		if workload == workloadAdapterNoUrl {
+			request.Header.Set("Connection", "keep-alive")
+		}
+		response, err := client.Do(request)
 		if err != nil {
 			return
 		}
@@ -138,7 +146,7 @@ func main() {
 	start := time.Now()
 	for i := 0; i < threads; i++ {
 		wg.Add(1)
-		go runClient(url, requestsForThread(i, requests, threads), &completed, &wg)
+		go runClient(url, requestsForThread(i, requests, threads), workload, &completed, &wg)
 	}
 	wg.Wait()
 	elapsed := time.Since(start)

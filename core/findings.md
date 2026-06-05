@@ -1,4 +1,4 @@
-# Findings: H1 server URL-path benchmark correlation
+# Findings: H1 server forced-adapter benchmark correlation
 
 ## Scope
 
@@ -12,81 +12,81 @@ contract，不手改 generated llhttp，不写 `docs/nextpas.core.http.inbox.md`
 ```text
 --workload no_url
 --workload url_path
+--workload adapter_no_url
 ```
 
-`url_path` 语义：
+`adapter_no_url` 语义：
 
-- nextPas client 发送 `GET /api/v1/users`，handler 读取 `AReq.Url.Path` 并校验。
-- Go comparator 发送同一路径，handler 读取 `request.URL.Path` 并校验。
-- Rust std-only comparator 发送同一路径，并在同一个 buffered request frame 内校验
-  `GET /api/v1/users ` 前缀后再响应。
+- nextPas client 发送 `GET /`，并带 `Connection: keep-alive` 与
+  `Content-Length: 0`。
+- nextPas H1 server 因 `HasConnection` 拒绝 fast path，转入 llhttp adapter path。
+- Go comparator 仍用 `net/http`，在该 workload 下通过 request header 设置
+  `Connection: keep-alive`。
+- Rust std-only comparator 发送同一类 raw request，handler 不做 URL path 检查。
 - `run_server_comparison.sh` 负责校验并下传 workload，输出也包含
   `workload=<value>`。
 
-## Bug caught during GREEN
+## RED / GREEN evidence
 
-Rust comparator 的初版 `url_path` 分支先用 `read_one_request` 消费掉当前
-request，又在一个新 buffer 上调用 `read_one_request_with_path`。这会导致 server
-等待第二个 request 才响应，benchmark 语义错误。
+RED:
 
-修正后只保留一个 `read_one_request_matches_workload`，一次读取、一次判定、一次
-响应。
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+18 total, 17 passed, 1 failed
+server comparison runner adapter_no_url small smoke failed:
+--workload must be no_url or url_path
+heaptrc: 0 unfreed memory blocks
+```
+
+GREEN:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+18 total, 18 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
 
 ## Performance evidence
 
 Fresh local row:
 
 ```text
-benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload url_path
+benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload adapter_no_url
 
-nextPas url_path: 79527 req/s, 12574 ns/op
-Go net/http url_path: 19019 req/s, 52576 ns/op
-Rust std-only url_path: 113158 req/s, 8837 ns/op
+nextPas adapter_no_url: 78828 req/s, 12685 ns/op
+Go net/http adapter_no_url: 17294 req/s, 57822 ns/op
+Rust std-only adapter_no_url: 95806 req/s, 10437 ns/op
 ```
 
-对比上一批 `no_url` 50k/4 row：
+对比最近两条 full-chain rows：
 
 ```text
 nextPas no_url: 77958 req/s, 12827 ns/op
-Go net/http no_url: 18871 req/s, 52990 ns/op
-Rust std-only no_url: 98422 req/s, 10160 ns/op
+nextPas url_path: 79527 req/s, 12574 ns/op
+nextPas adapter_no_url: 78828 req/s, 12685 ns/op
 ```
 
-结论：`url_path` 没有把 nextPas 拉出既有噪声带，也没有显示 URL projection 是主要
-瓶颈。nextPas 仍快于 Go comparator，仍慢于 Rust std-only comparator。
-
-## Verification evidence
-
-Focused gate:
-
-```text
-NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
-make -C tests/nextpas.core.http/test_http_benchmarks clean test
-
-17 total, 17 passed, 0 failed
-heaptrc: 0 unfreed memory blocks
-```
-
-Earlier RED / intermediate failure:
-
-```text
-17 total, 13 passed, 4 failed
-heaptrc: 0 unfreed memory blocks
-```
-
-失败点用于证明新增 `url_path` contract 有效：实现或测试 helper 仍停留在
-`workload=no_url` 时会失败。
+结论：forced-adapter no-URL row 没有把 nextPas 拉出既有本机噪声带，也没有显示
+fast path 是 full-chain throughput 的唯一关键因素。nextPas 仍快于 Go comparator，
+仍慢于 Rust std-only comparator。
 
 ## Direction review
 
-方向没有走偏：本轮没有在没有证据的情况下直接手改 Pascal 翻译版 llhttp。已有 raw
-parser 证据说明 Pascal translated llhttp 相对 C llhttp 有代表性差距，但本轮
-full-chain `url_path` workload 仍走 H1 fast path，不能把 server 吞吐差距直接归咎到
-llhttp。
+方向没有走偏：本轮按证据把 full-chain workload 拆到 forced-adapter，而不是直接手改
+Pascal translated llhttp。已有 raw parser 证据说明 Pascal translated llhttp 相对 C
+llhttp 有代表性差距，但 full-chain forced-adapter row 指向更复杂的成本构成：
+adapter materialization、response writer/drain、runtime/socket handoff、request
+dispatch 都需要继续拆。
 
 ## Remaining gaps / risks
 
-- 还缺 forced-adapter workload，用来让 server full-chain 明确走 llhttp adapter path。
+- `adapter_no_url` 只证明带 `Connection` header 的 no-body path 进入 adapter；
+  还没有拆分 adapter 内 header materialization、request construction、response drain
+  的占比。
 - Rust comparator 仍是 std-only microbaseline，不代表 Hyper/Tokio 生态性能。
 - 本机 benchmark 仍有调度噪声；正式性能结论需要多轮 snapshot 或更稳定 runner。
 - 如果要优化 translated llhttp，下一步应先拿 C/Pascal narrowed benchmark 与硬件计数器，

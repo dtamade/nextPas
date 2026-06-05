@@ -479,6 +479,46 @@ begin
   CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'url_path');
 end;
 
+procedure TestServerComparisonRunnerAdapterNoUrlSmallSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison adapter_no_url runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_adapter_no_url_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'adapter_no_url', '--output', LReportPath], LRootDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison adapter_no_url runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'comparison=http.server.keepalive',
+    'adapter_no_url comparison marker');
+  CheckContains(LOutput, 'workload=adapter_no_url',
+    'adapter_no_url comparison workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1', 'adapter_no_url');
+
+  Check(FileExists(LReportPath), 'server comparison adapter_no_url report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'comparison=http.server.keepalive',
+    'adapter_no_url report comparison marker');
+  CheckContains(LReport, 'workload=adapter_no_url',
+    'adapter_no_url report workload marker');
+  CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'adapter_no_url');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -867,6 +907,8 @@ begin
     @TestServerComparisonRunnerSmallSmoke);
   T.Run('server comparison runner url_path small smoke',
     @TestServerComparisonRunnerUrlPathSmallSmoke);
+  T.Run('server comparison runner adapter_no_url small smoke',
+    @TestServerComparisonRunnerAdapterNoUrlSmallSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',

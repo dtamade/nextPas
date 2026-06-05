@@ -25,6 +25,7 @@ const
   DEFAULT_NUM_THREADS = 4;
   WORKLOAD_NO_URL = 'no_url';
   WORKLOAD_URL_PATH = 'url_path';
+  WORKLOAD_ADAPTER_NO_URL = 'adapter_no_url';
 
 var
   GServer: THttpServer;
@@ -52,6 +53,7 @@ var
 const
   REQ_NO_URL: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
   REQ_URL_PATH: AnsiString = 'GET /api/v1/users HTTP/1.1'#13#10'Host: localhost'#13#10'Content-Length: 0'#13#10#13#10;
+  REQ_ADAPTER_NO_URL: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10'Connection: keep-alive'#13#10'Content-Length: 0'#13#10#13#10;
 begin
   Result := nil;
   LRequests := Int32(PtrUInt(AParam));
@@ -63,6 +65,8 @@ begin
     begin
       if GWorkload = WORKLOAD_URL_PATH then
         LConn.Write(PAnsiChar(REQ_URL_PATH)^, Length(REQ_URL_PATH))
+      else if GWorkload = WORKLOAD_ADAPTER_NO_URL then
+        LConn.Write(PAnsiChar(REQ_ADAPTER_NO_URL)^, Length(REQ_ADAPTER_NO_URL))
       else
         LConn.Write(PAnsiChar(REQ_NO_URL)^, Length(REQ_NO_URL));
       LTotal := 0;
@@ -108,7 +112,8 @@ begin
     else if (ParamStr(LI) = '--workload') and (LI < ParamCount) then
     begin
       if (ParamStr(LI + 1) = WORKLOAD_NO_URL) or
-         (ParamStr(LI + 1) = WORKLOAD_URL_PATH) then
+         (ParamStr(LI + 1) = WORKLOAD_URL_PATH) or
+         (ParamStr(LI + 1) = WORKLOAD_ADAPTER_NO_URL) then
         GWorkload := ParamStr(LI + 1);
       Inc(LI, 2);
     end

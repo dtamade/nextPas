@@ -143,7 +143,10 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 The runner builds all three implementations, streams the combined output to
 stdout, and optionally writes the same report to `--output`. Use
 `--workload url_path` to make the client request `/api/v1/users` and make each
-server implementation touch the request path before writing the response.
+server implementation touch the request path before writing the response. Use
+`--workload adapter_no_url` to keep the handler no-URL while adding
+`Connection: keep-alive`, which forces nextPas through the llhttp adapter path
+instead of the H1 fast path.
 
 To capture environment metadata and the comparison output in Markdown, run:
 

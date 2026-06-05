@@ -22,11 +22,14 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
-The comparison currently covers two HTTP/1.1 keep-alive hello-world workloads:
+The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
 
 - `workload=no_url`: the handler does not read the request URL or query string.
 - `workload=url_path`: the client sends `GET /api/v1/users` and the handler
   reads the path before returning the same hello-world response.
+- `workload=adapter_no_url`: the request stays on `/` and does not read the
+  URL, but it includes `Connection: keep-alive` so nextPas must leave the H1
+  fast path and use the llhttp adapter path.
 
 It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
 cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
@@ -1126,10 +1129,11 @@ sit outside URL projection.
 ## Full-Chain Correlation: URL Path Workload
 
 On 2026-06-05 local time, the server comparison runner gained
-`--workload no_url|url_path`, and the nextPas, Go, and Rust comparator binaries
-now accept the same selector. `url_path` sends `GET /api/v1/users`; nextPas and
-Go validate the parsed request path, while the Rust std-only comparator checks
-the same path from the one buffered request frame before writing its response.
+`--workload no_url|url_path|adapter_no_url`, and the nextPas, Go, and Rust
+comparator binaries now accept the same selector. `url_path` sends
+`GET /api/v1/users`; nextPas and Go validate the parsed request path, while the
+Rust std-only comparator checks the same path from the one buffered request
+frame before writing its response.
 
 Focused RED/GREEN:
 
@@ -1163,6 +1167,48 @@ full-chain bottleneck: this request still fits the H1 server fast path, and URL
 projection is paid lazily only when the handler reads `Req.Url.Path`. The next
 useful isolation step is a forced-adapter workload, or a narrower parser
 comparison against C llhttp with hardware counters on a perf-enabled machine.
+
+## Full-Chain Correlation: Forced Adapter No-URL Workload
+
+On 2026-06-05 local time, `adapter_no_url` was added as a full-chain isolation
+workload. It keeps the request target at `/` and keeps the handler from reading
+the URL, but adds `Connection: keep-alive` to the request. In nextPas this
+forces `TryUseFastRequestParser` to reject the H1 fast path (`HasConnection`)
+and use the llhttp adapter path.
+
+Focused RED/GREEN:
+
+```text
+RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+18 total, 17 passed, 1 failed
+adapter_no_url runner smoke failed because --workload accepted only no_url|url_path.
+heaptrc: 0 unfreed memory blocks
+
+GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+18 total, 18 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh local correlation:
+
+```text
+command=benchmarks/nextpas.core.http/run_server_comparison.sh --requests 50000 --threads 4 --workload adapter_no_url
+```
+
+| impl | workload | completed | elapsed_ns | ns/op | req/s |
+| --- | --- | ---: | ---: | ---: | ---: |
+| nextPas | adapter_no_url | 50000 | 634287816 | 12685 | 78828 |
+| Go `net/http` | adapter_no_url | 50000 | 2891101718 | 57822 | 17294 |
+| Rust std-only | adapter_no_url | 50000 | 521882998 | 10437 | 95806 |
+
+The forced-adapter row keeps nextPas in the same local band as the no-URL and
+URL-path rows, still ahead of Go and behind the Rust std-only comparator. That
+does not erase the raw Pascal-vs-C llhttp gap below, but it shows that the
+current full-chain server gap is not explained by the H1 fast path alone. The
+next useful step is to split adapter materialization, response writer/drain, and
+runtime/socket overhead with narrower benchmarks or profiling.
 
 ## Diagnostic Evidence: Pascal llhttp Raw Gap Recheck
 
