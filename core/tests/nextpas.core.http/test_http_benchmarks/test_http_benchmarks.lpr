@@ -1026,6 +1026,23 @@ begin
     'H1 parser benchmark filtered raw row');
   CheckNotContains(LOutput, 'adapter cost: span append 10 headers',
     'H1 parser benchmark filter skips unrelated adapter row');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=adapter no-url'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser benchmark adapter no-url filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=adapter no-url',
+    'H1 parser benchmark adapter no-url filter marker');
+  CheckContains(LOutput, 'adapter no-url: fast reject + llhttp',
+    'H1 parser benchmark adapter no-url double-parse row');
+  CheckContains(LOutput, 'adapter no-url: llhttp direct only',
+    'H1 parser benchmark adapter no-url direct llhttp row');
+  CheckContains(LOutput, 'adapter no-url: fast parse only',
+    'H1 parser benchmark adapter no-url fast parse row');
+  CheckContains(LOutput, 'adapter no-url: metadata 3 headers',
+    'H1 parser benchmark adapter no-url metadata row');
 end;
 
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;

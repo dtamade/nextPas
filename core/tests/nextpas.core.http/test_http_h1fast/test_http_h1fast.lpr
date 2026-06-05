@@ -242,8 +242,31 @@ begin
   Check(LR.Success, 'policy request should parse');
   Check(LR.HasHost, 'host flag');
   Check(LR.HasConnection, 'connection flag');
+  Check(LR.ConnectionKeepAlive, 'connection keep-alive flag');
+  Check(not LR.ConnectionClose, 'connection close flag absent');
+  Check(not LR.ConnectionUnsupported, 'connection unsupported flag absent');
   Check(LR.HasExpect, 'expect flag');
   Check(not LR.HasTransferEncoding, 'transfer-encoding flag absent');
+
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Connection: close'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'connection close request should parse');
+  Check(LR.HasConnection, 'connection close has connection flag');
+  Check(not LR.ConnectionKeepAlive, 'connection close keep-alive flag absent');
+  Check(LR.ConnectionClose, 'connection close flag');
+  Check(not LR.ConnectionUnsupported, 'connection close unsupported flag absent');
+
+  LReq := 'GET / HTTP/1.1'#13#10 +
+           'Host: localhost'#13#10 +
+           'Connection: upgrade'#13#10#13#10;
+  LR := FastParseRequest(PAnsiChar(LReq), Length(LReq));
+  Check(LR.Success, 'connection upgrade request should parse');
+  Check(LR.HasConnection, 'connection upgrade has connection flag');
+  Check(not LR.ConnectionKeepAlive, 'connection upgrade keep-alive flag absent');
+  Check(not LR.ConnectionClose, 'connection upgrade close flag absent');
+  Check(LR.ConnectionUnsupported, 'connection upgrade unsupported flag');
 
   LReq := 'POST /data HTTP/1.1'#13#10 +
            'Host: localhost'#13#10 +

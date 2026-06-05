@@ -476,8 +476,8 @@ begin
   FRequestMetadata.RequestDeclaresBody := AResult.ContentLength > 0;
   FRequestMetadata.ExpectsContinue := False;
   FRequestMetadata.HasUnsupportedExpect := False;
-  FRequestMetadata.ConnectionClose := False;
-  FRequestMetadata.ConnectionKeepAlive := False;
+  FRequestMetadata.ConnectionClose := AResult.ConnectionClose;
+  FRequestMetadata.ConnectionKeepAlive := AResult.ConnectionKeepAlive;
 end;
 
 function TH1FastRequestSnapshot.Execute(const ABuf: PAnsiChar;
@@ -831,9 +831,14 @@ begin
   if (LFast.Version <> hvHttp11) or
      (LFast.ContentLength <> 0) or
      (not LFast.HasHost) or
-     LFast.HasConnection or
      LFast.HasExpect or
      LFast.HasTransferEncoding then
+    Exit(False);
+
+  if LFast.HasConnection and
+     ((not LFast.ConnectionKeepAlive) or
+      LFast.ConnectionClose or
+      LFast.ConnectionUnsupported) then
     Exit(False);
 
   FParser := TH1FastRequestSnapshot.Create(LFast);

@@ -1,30 +1,41 @@
-# Task Plan: HTTP server comparison median snapshot
+# Task Plan: HTTP adapter_no_url fast-gate optimization
 
 ## Goal
 
 继续推进 `nextpas.core.http` 总路线图的 `6/6 benchmark/performance` 阶段。
-上一批修正了 `bench_fullchain` 的客户端逐字节读法，本轮用 `run_server_comparison.sh --runs 3`
-对四个 server workload 做 median snapshot，避免基于单次噪声判断优化方向。
+上一批 median snapshot 显示 `adapter_no_url` 是最清晰的 nextPas 内部 fast-gate 差分。
+本轮先用 narrowed benchmark 证明旧路径存在 fast parse 后又 llhttp parse 的 double-parse
+成本，再做最小生产优化：HTTP/1.1 显式 `Connection: keep-alive` 不再强制离开 H1 fast path。
 
-本轮不改 public HTTP API，不改生产 server/client 代码，不改 benchmark harness，
-不手改 generated `src/nextpas.core.http.impl.h1.llhttp.pas`，不写
-`docs/nextpas.core.http.inbox.md`，不跑全量 HTTP 测试。
+本轮不改 public HTTP API，不手改 generated `src/nextpas.core.http.impl.h1.llhttp.pas`，
+不写 `docs/nextpas.core.http.inbox.md`，不跑全量仓库测试。
 
 ## Checklist
 
 - [x] 复核设计规范、HTTP docs/control files 与 git status，确认共享 checkout 脏文件边界。
-- [x] 跑 `run_server_comparison.sh --requests 20000 --threads 4 --workload no_url --runs 3`。
-- [x] 跑 `run_server_comparison.sh --requests 20000 --threads 4 --workload adapter_no_url --runs 3`。
-- [x] 跑 `run_server_comparison.sh --requests 20000 --threads 4 --workload url_path --runs 3`。
-- [x] 跑 `run_server_comparison.sh --requests 20000 --threads 4 --workload response_1k --runs 3`。
-- [x] 汇总 nextPas / Rust std-only / Go `net/http` median `ns/op` 与 `req/s`。
-- [x] 判断下一批优化 seam：优先 `adapter_no_url` / llhttp adapter path，其次 `url_path` / URL materialization。
-- [x] 更新 API coverage / benchmark docs / 控制文件。
+- [x] 派只读子代理并行定位 `adapter_no_url`、`url_path` 与 benchmark fairness。
+- [x] RED：`bench_h1parser` filtered `adapter no-url` 当前没有 narrowed rows。
+- [x] RED：`test_http_h1fast` 期望 connection-policy flags，编译失败证明字段缺失。
+- [x] GREEN：`TFastParseResult` 增加 `ConnectionKeepAlive` / `ConnectionClose` /
+  `ConnectionUnsupported`，fast parser 解析 trimmed exact connection token。
+- [x] GREEN：H1 server fast gate 放行 HTTP/1.1 `Connection: keep-alive` no-body request，
+  `close` / `upgrade` / unsupported token 仍回退 llhttp。
+- [x] GREEN：`bench_h1parser` 增加 `adapter no-url` narrowed rows：
+  metadata 3 headers、old fast-reject + llhttp、llhttp direct、fast parse only。
+- [x] Focused gates：`test_http_h1fast`、`test_http_benchmarks`、`test_http_server`。
+- [x] Live rows：`adapter_no_url --runs 3` 与 `no_url --runs 3`。
+- [ ] 更新 docs/control files。
+- [ ] Path-limited stage/commit。
 
 ## Scope
 
 本轮允许修改：
 
+- `src/nextpas.core.http.impl.h1.fast.pas`
+- `src/nextpas.core.http.impl.h1.pas`
+- `benchmarks/nextpas.core.http/bench_h1parser/bench_h1parser.lpr`
+- `tests/nextpas.core.http/test_http_h1fast/test_http_h1fast.lpr`
+- `tests/nextpas.core.http/test_http_benchmarks/test_http_benchmarks.lpr`
 - `docs/http/API_COVERAGE.md`
 - `docs/http/BENCHMARKS.md`
 - `task_plan.md`
@@ -33,21 +44,29 @@
 
 ## Current conclusion
 
-2026-06-05 same-host median snapshot:
+Narrowed benchmark confirms the old `adapter_no_url` route paid double parse:
 
-| workload | nextPas ns/op | Rust std-only ns/op | Go ns/op | Direction |
-| --- | ---: | ---: | ---: | --- |
-| `no_url` | 10405 | 9051 | 47688 | nextPas 比 Rust 慢约 15%，显著快于 Go |
-| `adapter_no_url` | 12280 | 8140 | 48857 | nextPas 比 Rust 慢约 51%，下一批首要 seam |
-| `url_path` | 10133 | 7391 | 47782 | nextPas 比 Rust 慢约 37%，第二优先 seam |
-| `response_1k` | 9896 | 9408 | 50560 | nextPas 比 Rust 慢约 5%，暂不优先 |
+| row | ns/op |
+| --- | ---: |
+| `adapter no-url: fast reject + llhttp` | 2084.3 |
+| `adapter no-url: llhttp direct only` | 1494.0 |
+| `adapter no-url: fast parse only` | 629.3 |
+| `adapter no-url: metadata 3 headers` | 372.2 |
 
-`adapter_no_url` 强制请求离开 H1 fast path，进入 llhttp adapter path；这是当前最清晰的
-性能差距来源。`url_path` 仍走 fast parser，但 handler 访问 `AReq.Url.Path`，因此更像
-request URL materialization / path accessor 成本。
+After the production fast-gate change, same-host server comparison:
+
+| workload | nextPas median ns/op | nextPas median req/s | Rust median ns/op | Go median ns/op |
+| --- | ---: | ---: | ---: | ---: |
+| `adapter_no_url` | 11022 | 90720 | 8843 | 53076 |
+| `no_url` | 10948 | 91335 | 8935 | 49245 |
+
+`adapter_no_url` improved from earlier same-day `12280 ns/op` to `11022 ns/op`。
+但子代理 fairness review 指出该 workload 不是跨语言 apples-to-apples；它应作为 nextPas
+内部 fast-gate differential，而不是永久排名依据。
 
 ## Next target
 
-继续 `6/6 benchmark/performance`。下一批建议直接针对 `adapter_no_url`：先补或复用
-H1 parser / adapter narrowed benchmark，找出 llhttp adapter path 的分配与 header/request
-construction 成本，再先 RED 后做最小优化。
+继续 `6/6 benchmark/performance`。下一批建议先补 benchmark harness contract：
+server comparison summary 应断言 `completed == requests`，并给 nextPas row 输出更明确的
+request-path marker（例如 fast/adapter counter 或等价 trace），再转向 `url_path`
+的 path-only URL materialization narrowed proof。

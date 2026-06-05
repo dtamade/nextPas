@@ -25,6 +25,9 @@ type
     Consumed: SizeUInt;
     HasHost: Boolean;
     HasConnection: Boolean;
+    ConnectionKeepAlive: Boolean;
+    ConnectionClose: Boolean;
+    ConnectionUnsupported: Boolean;
     HasExpect: Boolean;
     HasTransferEncoding: Boolean;
     HasContentLength: Boolean;
@@ -62,7 +65,7 @@ type
   end;
 
 function IsValidHeaderNameFast(const ABuf: PAnsiChar;
-  const ALen: SizeUInt): Boolean;
+  const ALen: SizeUInt): Boolean; inline;
 var
   LI: SizeUInt;
   LB: Byte;
@@ -79,7 +82,7 @@ begin
 end;
 
 function IsValidHeaderValueFast(const ABuf: PAnsiChar;
-  const ALen: SizeUInt): Boolean;
+  const ALen: SizeUInt): Boolean; inline;
 var
   LI: SizeUInt;
 begin
@@ -203,7 +206,7 @@ begin
 end;
 
 function TryParseMethodFast(const ABuf: PAnsiChar; const ALen: SizeUInt;
-  out AMethod: THttpMethod): Boolean;
+  out AMethod: THttpMethod): Boolean; inline;
 begin
   Result := True;
   case ALen of
@@ -266,7 +269,7 @@ begin
   Result := False;
 end;
 
-function ParseInt64Fast(const ABuf: PAnsiChar; const ALen: SizeUInt): Int64;
+function ParseInt64Fast(const ABuf: PAnsiChar; const ALen: SizeUInt): Int64; inline;
 var
   LI: SizeUInt;
   LB: Byte;
@@ -286,7 +289,7 @@ begin
 end;
 
 function AsciiEqualsCI(const ABuf: PAnsiChar; const ALen: SizeUInt;
-  const AText: AnsiString): Boolean;
+  const AText: AnsiString): Boolean; inline;
 var
   LI: SizeUInt;
   LC, LW: AnsiChar;
@@ -303,6 +306,25 @@ begin
       Exit(False);
   end;
   Result := True;
+end;
+
+function AsciiValueEqualsCITrimmed(const ABuf: PAnsiChar; const ALen: SizeUInt;
+  const AText: AnsiString): Boolean; inline;
+var
+  LStart: SizeUInt;
+  LEnd: SizeUInt;
+begin
+  LStart := 0;
+  while (LStart < ALen) and
+        ((ABuf[LStart] = ' ') or (ABuf[LStart] = #9)) do
+    Inc(LStart);
+
+  LEnd := ALen;
+  while (LEnd > LStart) and
+        ((ABuf[LEnd - 1] = ' ') or (ABuf[LEnd - 1] = #9)) do
+    Dec(LEnd);
+
+  Result := AsciiEqualsCI(ABuf + LStart, LEnd - LStart, AText);
 end;
 
 function FastParseRequest(const ABuf: PAnsiChar; const ALen: SizeUInt): TFastParseResult;
@@ -430,7 +452,15 @@ begin
     if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'host') then
       Result.HasHost := LValLen > 0
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'connection') then
-      Result.HasConnection := True
+    begin
+      Result.HasConnection := True;
+      if AsciiValueEqualsCITrimmed(ABuf + LValStart, LValLen, 'keep-alive') then
+        Result.ConnectionKeepAlive := True
+      else if AsciiValueEqualsCITrimmed(ABuf + LValStart, LValLen, 'close') then
+        Result.ConnectionClose := True
+      else
+        Result.ConnectionUnsupported := True;
+    end
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'expect') then
       Result.HasExpect := True
     else if AsciiEqualsCI(ABuf + LNameStart, LNameLen, 'transfer-encoding') then

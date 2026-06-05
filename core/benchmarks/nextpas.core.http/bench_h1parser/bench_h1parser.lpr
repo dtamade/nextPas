@@ -22,6 +22,13 @@ var
 const
   REQ_SIMPLE: AnsiString = 'GET / HTTP/1.1'#13#10'Host: localhost'#13#10#13#10;
 
+  REQ_ADAPTER_NO_URL: AnsiString =
+    'GET / HTTP/1.1'#13#10 +
+    'Host: localhost'#13#10 +
+    'Connection: keep-alive'#13#10 +
+    'Content-Length: 0'#13#10 +
+    #13#10;
+
   REQ_10HEADERS: AnsiString =
     'GET /api/v1/users HTTP/1.1'#13#10 +
     'Host: example.com'#13#10 +
@@ -668,6 +675,38 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure InitBenchAdapterNoUrlHeaders(const AHeaders: IHttpHeaders);
+begin
+  AHeaders.Set_('host', 'localhost');
+  AHeaders.Set_('connection', 'keep-alive');
+  AHeaders.Set_('content-length', '0');
+end;
+
+procedure BenchAdapterNoUrlMetadata3Headers(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: IHttpHeaders;
+  LContentLength: Int64;
+  LScore: SizeUInt;
+begin
+  LHeaders := NewHttpHeaders;
+  InitBenchAdapterNoUrlHeaders(LHeaders);
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    if LHeaders.Get('host') <> '' then
+      Inc(LScore);
+    if LHeaders.Get('connection') = 'keep-alive' then
+      Inc(LScore);
+    if BenchTryGetDeclaredContentLength(LHeaders, LContentLength) and
+       (LContentLength = 0) then
+      Inc(LScore);
+    if not BenchRequestDeclaresBody(LHeaders) then
+      Inc(LScore);
+  end;
+  GSink := GSink + LScore;
+end;
+
 { === Fast path benchmarks === }
 
 procedure BenchFastParseSimpleGET(aIters: Int64);
@@ -678,6 +717,68 @@ begin
   for LIt := 1 to aIters do
     LResult := FastParseRequest(PAnsiChar(REQ_SIMPLE), Length(REQ_SIMPLE));
   if LResult.Success then GSink := LResult.Consumed;
+end;
+
+procedure BenchFastParseAdapterNoUrl(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_ADAPTER_NO_URL),
+      Length(REQ_ADAPTER_NO_URL));
+    if LResult.Success then
+      LScore := LScore + LResult.Consumed;
+    if LResult.HasConnection then
+      Inc(LScore);
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchParseAdapterNoUrl(aIters: Int64);
+var
+  LIt: Int64;
+  LP: IH1Parser;
+  LScore: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LP.Reset;
+    LScore := LScore + LP.Execute(PAnsiChar(REQ_ADAPTER_NO_URL),
+      Length(REQ_ADAPTER_NO_URL));
+  end;
+  GSink := GSink + LScore;
+end;
+
+procedure BenchAdapterNoUrlFastRejectThenLlhttp(aIters: Int64);
+var
+  LIt: Int64;
+  LP: IH1Parser;
+  LFast: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LP := NewH1RequestParser;
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LFast := FastParseRequest(PAnsiChar(REQ_ADAPTER_NO_URL),
+      Length(REQ_ADAPTER_NO_URL));
+    if LFast.Success and LFast.HasConnection then
+    begin
+      Inc(LScore);
+      LP.Reset;
+      LScore := LScore + LP.Execute(PAnsiChar(REQ_ADAPTER_NO_URL),
+        Length(REQ_ADAPTER_NO_URL));
+    end
+    else if LFast.Success then
+      LScore := LScore + LFast.Consumed;
+  end;
+  GSink := GSink + LScore;
 end;
 
 procedure BenchFastParse10Headers(aIters: Int64);
@@ -757,6 +858,14 @@ begin
     @BenchAdapterRequestMetadataLegacyExpectCl);
   B.Run('adapter cost: request metadata cached expect+cl',
     @BenchAdapterRequestMetadataCachedExpectCl);
+  B.Run('adapter no-url: metadata 3 headers',
+    @BenchAdapterNoUrlMetadata3Headers);
+  B.Run('adapter no-url: fast reject + llhttp',
+    @BenchAdapterNoUrlFastRejectThenLlhttp);
+  B.Run('adapter no-url: llhttp direct only',
+    @BenchParseAdapterNoUrl);
+  B.Run('adapter no-url: fast parse only',
+    @BenchFastParseAdapterNoUrl);
   WriteLn;
   WriteLn('--- llhttp ---');
   B.Run('llhttp: simple GET (~60B)', @BenchParseSimpleGET);

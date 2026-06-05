@@ -28,8 +28,10 @@ The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
 - `workload=url_path`: the client sends `GET /api/v1/users` and the handler
   reads the path before returning the same hello-world response.
 - `workload=adapter_no_url`: the request stays on `/` and does not read the
-  URL, but it includes `Connection: keep-alive` so nextPas must leave the H1
-  fast path and use the llhttp adapter path.
+  URL, but it includes `Connection: keep-alive`. This was originally used to
+  force nextPas off the H1 fast path; current nextPas treats explicit
+  `keep-alive` as fast-path compatible while still rejecting `close`,
+  `upgrade`, and other connection-policy tokens to the llhttp path.
 - `workload=response_1k`: the request stays on `/`, and the server writes a
   1 KiB fixed-length response body. The raw nextPas/Rust clients wait for the
   complete response body, not just a status/header prefix.
@@ -70,13 +72,72 @@ Interpretation for this host:
   Go `net/http`.
 - `url_path` is about 37% slower than Rust std-only and points at request URL
   materialization / path access costs.
-- `adapter_no_url` is about 51% slower than Rust std-only and is the clearest
-  next optimization target because it forces nextPas off the H1 fast path and
-  into the llhttp adapter path.
+- `adapter_no_url` was about 51% slower than Rust std-only in this snapshot,
+  but that row is not apples-to-apples across implementations: Rust std-only
+  has no equivalent fast/adapter split and simply ignores the extra
+  `Connection` header. Treat this row primarily as a nextPas internal
+  fast-gate differential.
 
 This still does not represent async Rust such as Hyper/Tokio. Treat it as a
 std-only comparator snapshot and a workload-routing guide for the next
 optimization batch.
+
+## Optimization Evidence: H1 Fast Path Explicit Keep-Alive
+
+On 2026-06-05 local time, H1 server ingress stopped treating explicit
+`Connection: keep-alive` on HTTP/1.1 no-body requests as an automatic llhttp
+fallback. The fast path still rejects `Connection: close`, `Connection:
+upgrade`, unsupported connection-policy tokens, `Expect`, `Transfer-Encoding`,
+missing `Host`, and non-zero request bodies.
+
+Focused RED before adding narrowed rows:
+
+```text
+NEXTPAS_BENCH_MAX_ITERS=2000 NEXTPAS_BENCH_FILTER='adapter no-url' \
+make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+
+bench_filter=adapter no-url
+summary contained no matching adapter no-url rows
+```
+
+Narrowed breakdown after adding the rows and the fast-gate change:
+
+| row | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| adapter no-url: metadata 3 headers | 2000 | 372.2 | 2686504 |
+| adapter no-url: fast reject + llhttp | 2000 | 2084.3 | 479786 |
+| adapter no-url: llhttp direct only | 2000 | 1494.0 | 669348 |
+| adapter no-url: fast parse only | 2000 | 629.3 | 1589120 |
+
+Focused verification:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1fast clean test
+22 total, 22 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+26 total, 26 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh same-host comparison rows after the change:
+
+| workload | nextPas median ns/op | nextPas median req/s | Rust std-only median ns/op | Go `net/http` median ns/op |
+| --- | ---: | ---: | ---: | ---: |
+| adapter_no_url | 11022 | 90720 | 8843 | 53076 |
+| no_url | 10948 | 91335 | 8935 | 49245 |
+
+The `adapter_no_url` row improved from the earlier same-day `12280 ns/op` to
+`11022 ns/op`, but the `no_url` row also showed scheduler noise. Do not treat
+this as a permanent cross-language ranking; the durable conclusion is that
+explicit HTTP/1.1 `Connection: keep-alive` no longer pays the old
+fast-parse-then-llhttp double parse cost.
 
 ## Run the Router Dispatch Benchmark
 
