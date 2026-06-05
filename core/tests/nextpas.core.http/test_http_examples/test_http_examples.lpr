@@ -27,6 +27,8 @@ var
 const
   ExampleRelativeDir =
     'examples/nextpas.core.http/http_server_options_demo';
+  HelloExampleRelativeDir =
+    'examples/nextpas.core.http/http_hello_server';
   WebSocketExampleRelativeDir =
     'examples/nextpas.core.http/http_websocket_echo_demo';
   HttpUnitPath = 'src/nextpas.core.http.pas';
@@ -440,6 +442,101 @@ begin
     'build/projects/nextpas.core.http/http_websocket_echo_demo/http_websocket_echo_demo');
 end;
 
+function ResolveHelloExampleBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/http_hello_server/hello_http_server');
+end;
+
+procedure BuildHelloExample(out ABinaryPath: string; out AExampleDir: string);
+var
+  LRootDir: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(HelloExampleRelativeDir);
+  AExampleDir := PathJoin(LRootDir, HelloExampleRelativeDir);
+  Check(DirectoryExists(AExampleDir), 'hello example directory exists');
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], AExampleDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hello example build exit code: ' + LOutput);
+  ABinaryPath := ResolveHelloExampleBinaryPath(LRootDir);
+  Check(FileExists(ABinaryPath), 'hello example binary exists');
+end;
+
+procedure StartHelloExampleServer(const ABinaryPath, AExampleDir: string;
+  const APort: UInt16; out AProcess: TProcess; out AOutput: string);
+var
+  LReadyMarker: string;
+  LPortMarker: string;
+  LWait: Integer;
+begin
+  LReadyMarker := 'http-hello-server=ready';
+  LPortMarker := 'listen=127.0.0.1:' + IntToStr(Int64(APort));
+  AProcess := TProcess.Create(nil);
+  AOutput := '';
+  try
+    AProcess.Executable := ABinaryPath;
+    AProcess.CurrentDirectory := AExampleDir;
+    AProcess.Parameters.Add(IntToStr(Int64(APort)));
+    AProcess.Options := [poUsePipes, poStderrToOutPut];
+    AProcess.Execute;
+
+    for LWait := 0 to 399 do
+    begin
+      AppendAvailableProcessOutput(AProcess, AOutput);
+      if (Pos(LReadyMarker, AOutput) > 0) and (Pos(LPortMarker, AOutput) > 0) then
+        Exit;
+      if not AProcess.Running then
+        Break;
+      Sleep(10);
+    end;
+  except
+    on E: Exception do
+    begin
+      StopExampleServer(AProcess, AOutput);
+      Fail('unable to start hello example: ' + E.ClassName + ': ' + E.Message);
+    end;
+  end;
+
+  StopExampleServer(AProcess, AOutput);
+  Fail('hello example did not reach ready state' + LineEnding + AOutput);
+end;
+
+procedure TestHelloServerExampleServesDocumentedEndpoint;
+var
+  LBinaryPath: string;
+  LExampleDir: string;
+  LPort: UInt16;
+  LProcess: TProcess;
+  LStartupOutput: string;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: string;
+begin
+  LProcess := nil;
+  LStartupOutput := '';
+  BuildHelloExample(LBinaryPath, LExampleDir);
+  LPort := ReserveLoopbackPort;
+  StartHelloExampleServer(LBinaryPath, LExampleDir, LPort, LProcess,
+    LStartupOutput);
+  try
+    CheckContains(LStartupOutput,
+      'example=http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/hello/world?page=2',
+      'hello example startup URL');
+    LClient := NewHttpClient;
+    LResp := LClient.Get(MakeUrl(LPort, '/hello/world?page=2'));
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'hello example status 200');
+    LBody := ReadBodyStr(LResp);
+    CheckContains(LBody, 'hello=world', 'hello example path param marker');
+    CheckContains(LBody, 'page=2', 'hello example query marker');
+    CheckContains(LBody, 'path=/hello/world', 'hello example path marker');
+  finally
+    StopExampleServer(LProcess, LStartupOutput);
+  end;
+end;
+
 procedure BuildWebSocketExample(out ABinaryPath: string; out AExampleDir: string);
 var
   LRootDir: string;
@@ -549,6 +646,8 @@ begin
   T.Run('server options demo builds', @TestServerOptionsDemoBuilds);
   T.Run('server options demo serves documented endpoints',
     @TestServerOptionsDemoServesDocumentedEndpoints);
+  T.Run('hello server example serves documented endpoint',
+    @TestHelloServerExampleServesDocumentedEndpoint);
   T.Run('websocket echo demo serves documented endpoint',
     @TestWebSocketEchoDemoServesDocumentedEndpoint);
   T.Summary;

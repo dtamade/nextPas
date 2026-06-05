@@ -3,6 +3,7 @@ program hello_http_server;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.http,
   nextpas.core.text.conv;
 
@@ -20,8 +21,14 @@ var
   LRouter: IHttpRouter;
   LServer: IHttpServer;
   LOptions: THttpServerOptions;
+  LPort: UInt16;
 
 begin
+  if ParamCount >= 1 then
+    LPort := UInt16(StrToIntDef(ParamStr(1), 8080))
+  else
+    LPort := 8080;
+
   LRouter := NewRouter;
   LRouter.Get('/hello/:name',
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
@@ -44,7 +51,7 @@ begin
   LServer := NewHttpServer(LRouter, LOptions);
 
   WriteLn('http-hello-server=ready');
-  WriteLn('listen=127.0.0.1:8080');
-  WriteLn('example=http://127.0.0.1:8080/hello/world?page=2');
-  LServer.ListenAndServe('127.0.0.1', 8080);
+  WriteLn('listen=127.0.0.1:', LPort);
+  WriteLn('example=http://127.0.0.1:', LPort, '/hello/world?page=2');
+  LServer.ListenAndServe('127.0.0.1', LPort);
 end.
