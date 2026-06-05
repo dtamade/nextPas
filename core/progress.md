@@ -217,3 +217,93 @@ Updated follow-up migration items after Stage 1B:
 - Low-risk mixed imports remain in fs/io/compress/http and should be migrated in module-focused slices, not by broad replacement.
 - HTTP files were intentionally not mechanically migrated in this round because current aliases already preserve timeout identity and a colleague is working in HTTP.
 - TLS result utils still deserves a later focused review for bare `EOutOfMemory` binding and SSL error mapping.
+
+## Post-Merge Reverification: 2026-06-06
+
+Roadmap position:
+
+- Still in `G0` quality discipline + Core L0 exception architecture governance.
+- Current work is first-stage exception root convergence closeout.
+- No compiler work touched.
+- HTTP was only used as a focused compatibility gate.
+
+Fresh verification commands all exited `0`:
+
+```text
+make -C tests/nextpas.core.exception/test_exception_root clean test
+PASS: all exception root tests passed
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.errors/test_errors clean test
+PASS: all errors tests passed
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.base/test_base clean test
+PASS: all base tests passed
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_oom clean test
+--- nextpas.core.mem.oom: 5 total, 5 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.tui/test_tui_error clean test
+--- nextpas.core.tui.error: 4 total, 4 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.collections/test_vec clean test
+--- nextpas.core.collections.vec: 49 total, 49 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_mem clean test
+PASS: all mem tests passed
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_arena clean test
+--- nextpas.core.mem.arena: 9 total, 9 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_arena_class clean test
+--- nextpas.core.mem.arena_class: 9 total, 9 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_pool clean test
+--- nextpas.core.mem.pool: 9 total, 9 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_blockpool clean test
+--- nextpas.core.mem.blockpool: 9 total, 9 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.mem/test_contracts clean test
+--- nextpas.core.mem.contracts: 6 total, 6 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+make -C tests/nextpas.core.http/test_http_server clean test
+--- nextpas.core.http.server: 275 total, 275 passed, 0 failed ---
+0 unfreed memory blocks : 0
+
+git diff --check
+PASS
+```
+
+Fresh static audit:
+
+```text
+rg -n "class\(ECore\)|ECore\.Create" src --glob '!src/nextpas.core.base.pas'
+no matches
+
+rg -n "EAllocError\.Create\(aeOutOfMemory|E[A-Za-z0-9_]*Error\.Create\(aeOutOfMemory" src/nextpas.core.mem*.pas
+no matches
+
+rg -n "ENextPasError\s*=\s*class|ECore\s*=\s*class|ECore\s*=\s*nextpas\.core\.exception\.ENextPasError" src/nextpas.core.exception.pas src/nextpas.core.base.pas src/nextpas.core.errors.pas src/nextpas.core.mem.error.pas
+one ENextPasError class in nextpas.core.exception; ECore is an alias only
+
+rg -n "ETimeoutError\s*=\s*class|ETimeoutError\s*=\s*nextpas\.core\.exception\.ETimeoutError" src/nextpas.core.exception.pas src/nextpas.core.base.pas src/nextpas.core.errors.pas
+canonical class in nextpas.core.exception; aliases only in base/errors
+```
+
+Merge safety:
+
+- `main` is an ancestor of `codex/exception-root-20260605`; merge can be fast-forwarded.
+- Branch changed paths and shared `main` dirty/untracked paths have no path intersection.
+- Shared `main` still has unrelated dirty HTTP/async/compiler/control-file work; do not stash, reset, or rewrite it.
