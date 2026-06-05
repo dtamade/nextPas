@@ -7,8 +7,9 @@ FPC_FLAGS += -FE$(BUILD_DIR)
 
 RUNNER := nextpas.core.simd.test
 VEC_TEST := test_vec_all
+ALG_TEST := test_algorithms
 
-.PHONY: test test-vec test-all bench audit clean
+.PHONY: test test-vec test-algorithms test-all bench audit clean
 
 test:
 	@mkdir -p $(BUILD_DIR)
@@ -19,6 +20,11 @@ test-vec:
 	@mkdir -p $(BUILD_DIR)
 	$(FPC) $(FPC_FLAGS) -B $(VEC_TEST).pas
 	$(BUILD_DIR)/$(VEC_TEST)
+
+test-algorithms:
+	@mkdir -p $(BUILD_DIR)
+	$(FPC) $(FPC_FLAGS) -B $(ALG_TEST).lpr
+	$(BUILD_DIR)/$(ALG_TEST) --all --format=plainnotiming
 
 test-all: test test-vec audit
 
@@ -32,4 +38,4 @@ bench:
 	$(BUILD_DIR)/$(RUNNER) --bench-only --vector-asm
 
 clean:
-	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST)
+	rm -f $(BUILD_DIR)/$(RUNNER) $(BUILD_DIR)/$(VEC_TEST) $(BUILD_DIR)/$(ALG_TEST)
