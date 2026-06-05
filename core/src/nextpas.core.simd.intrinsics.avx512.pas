@@ -52,8 +52,6 @@ function avx512_maskz_add_ps512(const a, b: TM512; mask: UInt16): TM512;
 
 implementation
 
-uses
-
 type
   TAVX512F32x16BinaryOp = (avx512OpAdd, avx512OpSub, avx512OpMul, avx512OpDiv);
 
@@ -71,6 +69,12 @@ begin
   
   RunError(217);  {$ENDIF}
   {$ENDIF}
+end;
+
+procedure AssertAvx512AlignedPointer64(const Ptr: Pointer; const AContext: string); inline;
+begin
+  Assert((Ptr <> nil) and ((PtrUInt(Ptr) and 63) = 0),
+    AContext + ' requires 64-byte aligned storage');
 end;
 
 function AVX512LoadF32x16(const Ptr: Pointer): TM512; inline;
@@ -127,6 +131,7 @@ end;
 // === 基础函数实现 (Pascal 版本) ===
 function avx512_load_ps512(const Ptr: Pointer): TM512;
 begin
+  AssertAvx512AlignedPointer64(Ptr, 'avx512_load_ps512');
   Result := AVX512LoadF32x16(Ptr);
 end;
 
@@ -137,6 +142,7 @@ end;
 
 procedure avx512_store_ps512(var Dest; const Src: TM512);
 begin
+  AssertAvx512AlignedPointer64(@Dest, 'avx512_store_ps512');
   AVX512StoreF32x16(Dest, Src);
 end;
 

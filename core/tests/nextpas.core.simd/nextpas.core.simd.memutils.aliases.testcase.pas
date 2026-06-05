@@ -11,6 +11,7 @@ interface
 uses
   Classes, SysUtils, fpcunit, testregistry,
   nextpas.core.simd,
+  nextpas.core.simd.alloc,
   nextpas.core.simd.memutils;
 
 type
@@ -18,6 +19,9 @@ type
   TTestCase_Memutils = class(TTestCase)
   published
     procedure Test_AlignedAlloc_AlignedAndWritable;
+    procedure Test_AlignedAlloc_64ByteAlignedAndWritable;
+    procedure Test_TAlignedArray_64ByteAligned;
+    procedure Test_SimdAlloc_Sa64_64ByteAlignedAndWritable;
     procedure Test_AlignedRealloc_Grow_PreservesPrefix;
     procedure Test_AlignedRealloc_Shrink_PreservesPrefix;
     procedure Test_AlignedRealloc_NilAndZero_Semantics;
@@ -73,6 +77,70 @@ begin
       AssertEquals('Written data must round-trip', Byte(LIndex and $FF), LPtr[LIndex]);
   finally
     AlignedFree(LPtr);
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_AlignedAlloc_64ByteAlignedAndWritable;
+var
+  LPtr: PByte;
+  LIndex: Integer;
+begin
+  LPtr := AlignedAlloc(256, SIMD_ALIGN_64);
+  try
+    AssertTrue('AlignedAlloc should return non-nil', LPtr <> nil);
+    AssertTrue('Pointer should be 64-byte aligned for AVX-512 storage',
+      IsAligned(LPtr, SIMD_ALIGN_64));
+    for LIndex := 0 to 255 do
+      LPtr[LIndex] := Byte((LIndex * 3) and $FF);
+    for LIndex := 0 to 255 do
+      AssertEquals('Written 64-byte aligned data must round-trip',
+        Byte((LIndex * 3) and $FF), LPtr[LIndex]);
+  finally
+    AlignedFree(LPtr);
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_TAlignedArray_64ByteAligned;
+type
+  TByteAlignedArray = specialize TAlignedArray<Byte>;
+var
+  LArray: TByteAlignedArray;
+  LIndex: Integer;
+begin
+  LArray := TByteAlignedArray.Create(128, SIMD_ALIGN_64);
+  try
+    AssertTrue('TAlignedArray should own non-nil storage', LArray.Data <> nil);
+    AssertEquals('TAlignedArray should record requested 64-byte alignment',
+      SIMD_ALIGN_64, LArray.Alignment);
+    AssertTrue('TAlignedArray data should be 64-byte aligned',
+      IsAligned(LArray.Data, SIMD_ALIGN_64));
+    for LIndex := 0 to 127 do
+      LArray[LIndex] := Byte((LIndex + 17) and $FF);
+    for LIndex := 0 to 127 do
+      AssertEquals('TAlignedArray 64-byte data must round-trip',
+        Byte((LIndex + 17) and $FF), LArray[LIndex]);
+  finally
+    LArray.Free;
+  end;
+end;
+
+procedure TTestCase_Memutils.Test_SimdAlloc_Sa64_64ByteAlignedAndWritable;
+var
+  LPtr: PByte;
+  LIndex: Integer;
+begin
+  LPtr := PByte(SimdAlloc(256, sa64));
+  try
+    AssertTrue('SimdAlloc(sa64) should return non-nil', LPtr <> nil);
+    AssertTrue('SimdAlloc(sa64) should return 64-byte aligned storage',
+      IsAligned(LPtr, SIMD_ALIGN_64));
+    for LIndex := 0 to 255 do
+      LPtr[LIndex] := Byte((255 - LIndex) and $FF);
+    for LIndex := 0 to 255 do
+      AssertEquals('SimdAlloc(sa64) data must round-trip',
+        Byte((255 - LIndex) and $FF), LPtr[LIndex]);
+  finally
+    SimdFree(LPtr);
   end;
 end;
 

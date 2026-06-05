@@ -53,6 +53,10 @@ type
   PTM256 = ^TM256;
 
   // 512-bit 向量类型 (AVX-512)
+  // TM512 is a 64-byte payload value type, not a 64-byte storage guarantee.
+  // Ordinary record, stack, array, and object-field storage must not be used
+  // as the address source for AVX-512 aligned load/store APIs unless an
+  // explicit 64-byte aligned storage owner provides the address.
   TM512 = record
     case Integer of
       0: (m512i_u8: array[0..63] of Byte);

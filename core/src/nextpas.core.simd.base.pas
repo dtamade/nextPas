@@ -14,7 +14,7 @@ interface
 // =============================================================
 
 // === 向量数据类型（record + variant 部分）===
-// 注意: 对齐属性确保向量可安全用于 SIMD load/store 指令
+// 注意: 对齐属性只描述 record 的最小存储布局要求；指针 API 仍需遵守各自的地址对齐 contract。
 // - 128-bit 向量: 16 字节对齐 (SSE/NEON)
 // - 256-bit 向量: 32 字节对齐 (AVX/AVX2)
 // - 512-bit 向量: 32 字节对齐 (AVX-512, FPC 最大支持)
@@ -167,9 +167,10 @@ type
 
 {$PUSH}
 {$CODEALIGN RECORDMIN=32}
-  // 512-bit 向量类型 (32 字节对齐 - FPC 最大支持值)
-  // 注意: AVX-512 理论需要 64 字节对齐，但 FPC CODEALIGN 最大支持 32
-  // 对于栈分配，编译器通常会保证足够对齐
+  // 512-bit 向量类型 (64-byte payload, 32 字节最小 record 对齐 - FPC 最大支持值)
+  // 注意: AVX-512 aligned load/store 需要 64 字节地址对齐；ordinary record storage
+  //（普通 record、栈变量、数组元素和对象字段）does not guarantee 64-byte address。需要 64 字节地址对齐时，调用方
+  // 必须使用 SimdAlloc(..., sa64)、AlignedAlloc(..., SIMD_ALIGN_64) 或显式 aligned storage。
   TVecF32x16 = record
     case Integer of
       0: (f: array[0..15] of Single);
