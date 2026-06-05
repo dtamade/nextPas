@@ -36,9 +36,11 @@ type
   end;
 
   IHttpRequest = interface
-    ['{A1B2C3D4-E5F6-7890-ABCD-400000000002}']
+    ['{A1B2C3D4-E5F6-7890-ABCD-400000010002}']
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
+    function GetPath: string;
+    function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
@@ -48,6 +50,8 @@ type
     function QueryParam(const AName: string): string;
     property Method: THttpMethod read GetMethod;
     property Url: TUrl read GetUrl;
+    property Path: string read GetPath;
+    property RawQuery: string read GetRawQuery;
     property Version: THttpVersion read GetVersion;
     property Headers: IHttpHeaders read GetHeaders;
     property Body: IReader read GetBody;

@@ -188,7 +188,7 @@ begin
     procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
     begin
       if (GWorkload = WORKLOAD_URL_PATH) and
-         (AReq.Url.Path <> '/api/v1/users') then
+         (AReq.Path <> '/api/v1/users') then
       begin
         AW.WriteHeader(404);
         Exit;

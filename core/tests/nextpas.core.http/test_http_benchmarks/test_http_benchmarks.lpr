@@ -1071,6 +1071,10 @@ begin
     'H1 parser benchmark eager request create breakdown row');
   CheckContains(LOutput, 'adapter cost: request create lazy target',
     'H1 parser benchmark lazy request create breakdown row');
+  CheckContains(LOutput, 'adapter cost: request lazy Url.Path access',
+    'H1 parser benchmark lazy Url.Path access breakdown row');
+  CheckContains(LOutput, 'adapter cost: request direct Path access',
+    'H1 parser benchmark direct Path access breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
     'H1 parser benchmark legacy request metadata breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',

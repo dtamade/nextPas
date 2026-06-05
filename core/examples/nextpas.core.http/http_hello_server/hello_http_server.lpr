@@ -36,7 +36,7 @@ begin
         LPage := '1';
       LBody := 'hello=' + LName + LineEnding +
         'page=' + LPage + LineEnding +
-        'path=' + AReq.Url.Path + LineEnding;
+        'path=' + AReq.Path + LineEnding;
       WritePlainText(AW, HTTP_STATUS_OK, LBody);
     end);
 

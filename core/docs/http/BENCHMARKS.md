@@ -1531,6 +1531,73 @@ The Pascal-translated llhttp raw gap remains a real track, but this batch again
 removed a larger, safer adapter/server materialization cost without touching
 generated llhttp code.
 
+## Optimization Evidence: Request Path Direct Accessor
+
+On 2026-06-06 local time, `IHttpRequest` gained direct `Path` and `RawQuery`
+accessors. The older `Req.Url` property is unchanged, but router, static
+serving, middleware logging/timeout diagnostics, H1 client request writing, and
+the `bench_server url_path` workload now use `Req.Path` / `Req.RawQuery` where
+they only need the request-target path/query. This avoids copying the full
+`TUrl` record on common handler/router path reads.
+
+Focused RED before the production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_message clean test
+
+test_http_message.lpr(...) Error: Identifier idents no member "Path"
+test_http_message.lpr(...) Error: Identifier idents no member "RawQuery"
+```
+
+Focused verification after the change:
+
+```text
+make -C tests/nextpas.core.http/test_http_message clean test
+16 total, 16 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_contract clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_router clean test
+21 total, 21 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_static clean test
+10 total, 10 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_middlewares clean test
+13 total, 13 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+29 total, 29 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small filtered local row:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request ' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request lazy Url.Path access = 780.6 ns/op
+adapter cost: request direct Path access = 710.0 ns/op
+
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload url_path
+completed=128
+ns/op=42179
+req/s=23708
+```
+
+The direct accessor row is a small adapter/materialization proof, not a durable
+server throughput claim. A same-round `test_http_client` run was attempted
+because H1 client request writing now uses `Req.Path` / `Req.RawQuery`, but the
+shared checkout currently carries an unrelated dirty client test RED for
+missing `HttpGetToWriter` / `HttpGetToFile`; that failure is not attributed to
+this accessor slice.
+
 ## Full-Chain Correlation: No-URL Keep-Alive Workload
 
 On 2026-06-05 local time, the server comparison output gained an explicit

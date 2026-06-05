@@ -197,6 +197,24 @@ begin
   CheckEqual('active', LReq.QueryParam('filter'), 'lazy query param');
 end;
 
+procedure TestRequestDirectPathAndRawQueryAccessors;
+var
+  LReq: IHttpRequest;
+  LH: IHttpHeaders;
+begin
+  LH := NewHttpHeaders;
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet,
+    '/api/v1/users?page=2&filter=active#top', hvHttp11, LH, nil, 0);
+
+  CheckEqual('/api/v1/users', LReq.Path, 'direct request path');
+  CheckEqual('page=2&filter=active', LReq.RawQuery,
+    'direct request raw query');
+  CheckEqual('/api/v1/users', LReq.Url.Path,
+    'direct path accessor preserves Url materialization');
+  CheckEqual('active', LReq.QueryParam('filter'),
+    'direct raw query accessor preserves QueryParam');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.http.message');
   T.Run('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
@@ -215,5 +233,7 @@ begin
   T.Run('Request content-length stored', @TestRequestContentLengthStored);
   T.Run('Request from request-target parses URL on demand',
     @TestRequestFromRequestTargetParsesOnDemand);
+  T.Run('Request direct path/raw-query accessors',
+    @TestRequestDirectPathAndRawQueryAccessors);
   T.Summary;
 end.

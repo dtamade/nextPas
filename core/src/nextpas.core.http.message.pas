@@ -48,6 +48,8 @@ type
     procedure SetRemoteNetAddr(const AAddr: TNetAddress);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
+    function GetPath: string;
+    function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
@@ -141,6 +143,18 @@ function THttpRequest.GetUrl: TUrl;
 begin
   EnsureUrlParsed;
   Result := FUrl;
+end;
+
+function THttpRequest.GetPath: string;
+begin
+  EnsureUrlParsed;
+  Result := FUrl.Path;
+end;
+
+function THttpRequest.GetRawQuery: string;
+begin
+  EnsureUrlParsed;
+  Result := FUrl.RawQuery;
 end;
 
 function THttpRequest.GetVersion: THttpVersion;

@@ -38,6 +38,8 @@ type
     constructor Create(const AMethod: THttpMethod; const APath: string);
     function GetMethod: THttpMethod;
     function GetUrl: TUrl;
+    function GetPath: string;
+    function GetRawQuery: string;
     function GetVersion: THttpVersion;
     function GetHeaders: IHttpHeaders;
     function GetBody: IReader;
@@ -106,6 +108,16 @@ end;
 function TMockRequest.GetUrl: TUrl;
 begin
   Result := FUrl;
+end;
+
+function TMockRequest.GetPath: string;
+begin
+  Result := FUrl.Path;
+end;
+
+function TMockRequest.GetRawQuery: string;
+begin
+  Result := FUrl.RawQuery;
 end;
 
 function TMockRequest.GetVersion: THttpVersion;

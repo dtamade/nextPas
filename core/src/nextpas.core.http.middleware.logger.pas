@@ -29,7 +29,7 @@ begin
       LStart := TInstant.Now;
       ANext.ServeHTTP(AReq, AW);
       LDuration := LStart.Elapsed;
-      WriteLn(HttpMethodToStr(AReq.Method), ' ', AReq.Url.Path,
+      WriteLn(HttpMethodToStr(AReq.Method), ' ', AReq.Path,
               ' ', AW.GetStatus, ' ', LDuration.ToString);
     end);
   end);

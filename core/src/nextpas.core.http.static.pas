@@ -129,7 +129,7 @@ begin
     LRelative := AReq.PathParam('filepath');
     if LRelative = '' then
     begin
-      LRelative := AReq.Url.Path;
+      LRelative := AReq.Path;
       { Strip leading slash }
       if (Length(LRelative) > 0) and (LRelative[1] = '/') then
         LRelative := Copy(LRelative, 2, Length(LRelative) - 1);

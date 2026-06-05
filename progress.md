@@ -1,5 +1,70 @@
 # Progress Log
 
+## Session: 2026-06-06 http request path direct-accessor slice
+
+- **Status:** completed.
+- Objective:
+  - improve HttpServer handler/router path hot path and public request API
+  - add direct `IHttpRequest.Path` / `RawQuery` accessors while preserving `Url`
+- Scope and safety:
+  - touched HTTP interface/message/router/static/middleware/H1 request writer
+  - updated two benchmark entrypoints and focused tests
+  - updated `http_hello_server` example to show the direct path API
+  - did not stage unrelated async/client/compiler dirty files
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_message clean test`
+    - failed at `Identifier idents no member "Path"` and `"RawQuery"`
+- Landed change:
+  - added `GetPath` / `GetRawQuery` plus `Path` / `RawQuery` properties to `IHttpRequest`
+  - changed `IHttpRequest` IID because the interface vtable changed
+  - implemented direct getters in `THttpRequest`
+  - switched router/static/logger/timeout/H1 client request writer and `bench_server url_path` to direct accessors
+  - added `bench_h1parser` rows comparing old `Url.Path` access to direct `Path`
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_message clean test`
+    - `16/16 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_contract clean test`
+    - `29/29 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_router clean test`
+    - `21/21 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_middleware clean test`
+    - `11/11 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_middlewares clean test`
+    - `13/13 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_static clean test`
+    - `10/10 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `29/29 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C examples/nextpas.core.http/http_hello_server clean build`
+    - build passed
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request ' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+    - `request lazy Url.Path access: 780.6 ns/op`
+    - `request direct Path access: 710.0 ns/op`
+  - `make -C benchmarks/nextpas.core.http/bench_server clean build && build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload url_path`
+    - `completed=128`
+    - `ns/op=42179`
+    - `req/s=23708`
+- Known unrelated red:
+  - `make -C tests/nextpas.core.http/test_http_client clean test`
+    still fails in the pre-existing dirty client test file on missing
+    `HttpGetToWriter` / `HttpGetToFile`; this batch did not stage that file.
+- Outcome:
+  - direct request path/query public API is now covered and used in hot paths
+  - old `Req.Url` and `QueryParam` behavior remains covered
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: request path direct accessor
+  - next best batch: isolate remaining full-chain server/runtime cost outside URL projection, likely H1 response writer/request dispatch allocation or poll/thread handoff overhead
+
+
 ## Session: 2026-06-06 http header lookup hot-helper inline slice
 
 - **Status:** completed.

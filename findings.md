@@ -1,5 +1,48 @@
 # Findings & Decisions
 
+## 2026-06-06 http request path direct-accessor slice
+
+- 本轮把 `IHttpRequest` 从“只能通过 `Url` record 取 path/query”扩展为直接
+  `Path` / `RawQuery` 访问器。
+- 选择依据：
+  - `url_path` server workload、router dispatch、static serving、middleware logging
+    都只需要 path，不需要完整 `TUrl` record。
+  - 直接 getter 保留旧 `Req.Url` 语义，但避免常见路径读取复制整个 `TUrl` record。
+  - 这是公开接口完整性提升，也更接近 Go/Rust handler 里直接读 path/query 的使用范式。
+- 接口决策：
+  - `IHttpRequest` IID 从 `...000000000002` 更新到 `...000000010002`，因为 vtable
+    增加了新成员。
+  - 不删除 `Req.Url`，不改变 `QueryParam`，不引入第二套复杂 request-target cache。
+- 本轮切换到 direct accessor 的内部调用点：
+  router dispatch、static serving、logger/timeout middleware、H1 client request writer、
+  `bench_server url_path` handler。
+- RED 证据：
+  `test_http_message` 先失败在 `Identifier idents no member "Path"` /
+  `"RawQuery"`。
+- GREEN / behavior / leak 证据：
+  - `test_http_message`：`16/16 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_contract`：`29/29 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_router`：`21/21 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_middleware`：`11/11 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_middlewares`：`13/13 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_static`：`10/10 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`29/29 passed`，heaptrc `0 unfreed memory blocks`
+  - `http_hello_server` example build passed
+- 小 benchmark row：
+  - `request lazy Url.Path access = 780.6 ns/op`
+  - `request direct Path access = 710.0 ns/op`
+  - `bench_server --requests 128 --threads 1 --workload url_path` 完成 `128/128`，
+    `42179 ns/op`、`23708 req/s`
+- 已知非本批阻塞：
+  - `test_http_client` 当前在 shared dirty test file 中失败于
+    `HttpGetToWriter` / `HttpGetToFile` 未实现，这是既有 HTTP client helper RED，
+    不属于本轮 `Path` / `RawQuery` accessor 变更。
+- 复盘结论：
+  方向正确：这不是继续堆碎片 inline，而是把高频 handler/router path 访问提升成
+  公共 API，并用 focused tests + microbenchmark 证明。下一步应继续找能影响 full-chain
+  server row 的剩余 adapter/runtime 成本，而不是扩大同类 accessor。
+
+
 ## 2026-06-06 http header lookup hot-helper inline slice
 
 - 本轮只处理 `THttpHeaders` lookup/normalize 热路径中的三个短 helper：

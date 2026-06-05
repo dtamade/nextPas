@@ -1,5 +1,26 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http request path direct-accessor slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 HttpServer handler/router path 热路径：
+给 `IHttpRequest` 增加直接 `Path` / `RawQuery` 访问器，让只需要路径/查询的
+router、static、middleware、H1 client request writer 与 benchmark workload
+不再通过整条 `Url` record projection 取字段。
+
+### Checklist
+
+- [x] RED：在 `test_http_message` 直接要求 `IHttpRequest.Path` / `RawQuery`。
+- [x] GREEN：扩展 `IHttpRequest`、更新 IID、补 `THttpRequest` 实现和 mock 实现。
+- [x] 将 router/static/middleware/logger/timeout/H1 client writer/`bench_server url_path`
+  切到直接 `Path` / `RawQuery`。
+- [x] 在 `bench_h1parser` 增加 `request lazy Url.Path access` 与
+  `request direct Path access` 对比 row，并用 `test_http_benchmarks` 锁住 row。
+- [x] 跑 focused API/behavior/benchmark gates 与小 benchmark row。
+- [x] 更新 HTTP benchmark/API/control 文档并 path-limited commit。
+
+
 ## Active Session: 2026-06-06 http header lookup hot-helper inline slice
 
 ### Goal

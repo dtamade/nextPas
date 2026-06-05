@@ -414,6 +414,8 @@ begin
   Check(LReq.Method = hmPost, 'Method = POST');
   CheckEqual('/path', LReq.Url.Path, 'Url.Path');
   CheckEqual('q=1', LReq.Url.RawQuery, 'Url.RawQuery');
+  CheckEqual('/path', LReq.Path, 'Path direct accessor');
+  CheckEqual('q=1', LReq.RawQuery, 'RawQuery direct accessor');
   Check(LReq.Version = hvHttp11, 'Version = HTTP/1.1');
 end;
 

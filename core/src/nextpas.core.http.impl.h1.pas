@@ -1836,11 +1836,11 @@ begin
   LBuf.Write(LStr[1], SizeUInt(Length(LStr)));
   LBuf.Write(PAnsiChar(' ')^, 1);
 
-  LPath := AReq.Url.Path;
+  LPath := AReq.Path;
   if LPath = '' then
     LPath := '/';
-  if AReq.Url.RawQuery <> '' then
-    LPath := LPath + '?' + AReq.Url.RawQuery;
+  if AReq.RawQuery <> '' then
+    LPath := LPath + '?' + AReq.RawQuery;
   LBuf.Write(LPath[1], SizeUInt(Length(LPath)));
 
   LStr := ' ' + HttpVersionToStr(AReq.Version);
