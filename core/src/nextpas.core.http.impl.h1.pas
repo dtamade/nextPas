@@ -273,7 +273,7 @@ type
     function WakeDeadline: TDeadline;
   end;
 
-function ShouldKeepAlive(const AParser: IH1Parser): Boolean;
+function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;
 var
   LMetadata: TH1RequestMetadata;
 begin
@@ -284,7 +284,7 @@ begin
     Result := not LMetadata.ConnectionClose;
 end;
 
-function ParserErrorStatus(const AParser: IH1Parser): THttpStatus;
+function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;
 begin
   case AParser.ErrorKind of
     pekUnsupportedTransferCoding:
@@ -302,7 +302,7 @@ begin
 end;
 
 function ShouldSendContinueResponse(const AParser: IH1Parser;
-  const AHeadersDone, AContinueSent: Boolean): Boolean;
+  const AHeadersDone, AContinueSent: Boolean): Boolean; inline;
 var
   LMetadata: TH1RequestMetadata;
 begin

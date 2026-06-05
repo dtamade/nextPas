@@ -145,6 +145,48 @@ this as a permanent cross-language ranking; the durable conclusion is that
 explicit HTTP/1.1 `Connection: keep-alive` no longer pays the old
 fast-parse-then-llhttp double parse cost.
 
+Later on 2026-06-05, the small H1 server policy helpers
+`ShouldKeepAlive`, `ParserErrorStatus`, and `ShouldSendContinueResponse` were
+marked as `inline`. These helpers sit on the keep-alive, parser-error, and
+`Expect: 100-continue` decision paths; the large header-policy evaluator and
+state-machine methods were deliberately left non-inline.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+28 total, 27 passed, 1 failed
+failure: H1 server ShouldKeepAlive inline implementation missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+28 total, 28 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Small nextPas-only smoke row:
+
+```text
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload adapter_no_url
+completed=128
+ns/op=42022
+req/s=23797
+```
+
+This smoke row proves the benchmark path still completes after the inline
+slice. It is intentionally not a durable performance ranking.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:

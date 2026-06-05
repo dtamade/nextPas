@@ -25,6 +25,7 @@ const
     'benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh';
   H1FlagMatrixRunnerRelativePath =
     'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
+  H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
@@ -532,6 +533,25 @@ begin
   CheckContains(LSource,
     'function TH1OutboundBuffer.IsEmpty: Boolean; inline;',
     'H1 outbound IsEmpty inline implementation');
+end;
+
+procedure TestH1ServerPolicyHotHelpersInlineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1ServerUnitPath));
+
+  CheckContains(LSource,
+    'function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;',
+    'H1 server ShouldKeepAlive inline implementation');
+  CheckContains(LSource,
+    'function ParserErrorStatus(const AParser: IH1Parser): THttpStatus; inline;',
+    'H1 server ParserErrorStatus inline implementation');
+  CheckContains(LSource,
+    'const AHeadersDone, AContinueSent: Boolean): Boolean; inline;',
+    'H1 server ShouldSendContinueResponse inline implementation');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -1394,6 +1414,8 @@ begin
     @TestBenchH1WriterSerializeSmoke);
   T.Run('H1 outbound hot helpers inline source contract',
     @TestH1OutboundHotHelpersInlineSourceContract);
+  T.Run('H1 server policy hot helpers inline source contract',
+    @TestH1ServerPolicyHotHelpersInlineSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

@@ -1,5 +1,46 @@
 # Progress Log
 
+## Session: 2026-06-05 http h1 server policy-helper inline slice
+
+- **Status:** completed.
+- Objective:
+  - improve H1 server request-policy hot path with a narrow inline slice
+  - keep the change source-contract protected and avoid broad state-machine edits
+- Scope and safety:
+  - touched `src/nextpas.core.http.impl.h1.pas`
+  - added one source-contract smoke in `test_http_benchmarks`
+  - updated HTTP benchmark/API docs and top control-file entries only
+  - did not touch unrelated async/client/compiler dirty files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `28 total, 27 passed, 1 failed`
+    - failed at `H1 server policy hot helpers inline source contract`
+    - missing `function ShouldKeepAlive(const AParser: IH1Parser): Boolean; inline;`
+    - heaptrc still showed `0 unfreed memory blocks`
+- Landed change:
+  - marked `ShouldKeepAlive`, `ParserErrorStatus`, and `ShouldSendContinueResponse` as `inline`
+  - kept `HeaderPolicyErrorStatus`, server state-machine methods, and SIMD scan functions non-inline
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `28/28 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C benchmarks/nextpas.core.http/bench_server clean build`
+    - passed
+  - `build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload adapter_no_url`
+    - `completed=128`
+    - `ns/op=42022`
+    - `req/s=23797`
+- Outcome:
+  - H1 server policy helper inline source contract is now locked
+  - no generated llhttp code or large server state-machine method was edited
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 server policy helper inline
+  - next best batch: header lookup source-contract/benchmark cleanup or one H1 fast parser/source-order contract, not a full suite sweep
+
 ## Session: 2026-06-05 http h1 outbound hot-helper inline slice
 
 - **Status:** completed.

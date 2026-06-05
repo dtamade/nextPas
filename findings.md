@@ -1,5 +1,36 @@
 # Findings & Decisions
 
+## 2026-06-05 http h1 server policy-helper inline slice
+
+- 本轮只处理 H1 server policy 决策路径中的三个短 helper：
+  `ShouldKeepAlive`、`ParserErrorStatus`、`ShouldSendContinueResponse`。
+- 选择依据：
+  - `ShouldKeepAlive` 位于 threaded / poll keep-alive 决策路径，函数体只是 metadata
+    读取加 HTTP/1.0/1.1 分支。
+  - `ParserErrorStatus` 位于 parser-error 直接响应路径，函数体只是 error-kind 到
+    status 的小 case。
+  - `ShouldSendContinueResponse` 位于 headers-complete 后的 `Expect: 100-continue`
+    决策路径，函数体是 metadata 快照加布尔判断。
+- 本轮明确不 inline：
+  - `HeaderPolicyErrorStatus`：包含 size policy、Host、Expect、MaxBodySize 等多分支，
+    应保持普通 helper，避免代码膨胀。
+  - `TH1ServerConnectionState.*` 大型状态机方法：继续保持非 inline。
+  - `h1.scan` SIMD 扫描函数：函数体较大，盲目 inline 可能增加 icache 压力。
+- RED 证据：
+  `test_http_benchmarks` 新增 source-contract 后先失败在
+  `H1 server ShouldKeepAlive inline implementation missing`；
+  结果为 `28 total, 27 passed, 1 failed`，heaptrc 仍是 `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_benchmarks` 后续为 `28/28 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server` 后续为 `275/275 passed`，heaptrc `0 unfreed memory blocks`
+  - `bench_server --requests 128 --threads 1 --workload adapter_no_url`
+    完成 `128/128`，row 为 `42022 ns/op`、`23797 req/s`
+- 该 benchmark row 是小 smoke，只证明 fast-path server benchmark 仍可完成；
+  不能声明跨语言或跨运行性能提升。
+- 复盘结论：
+  这轮是窄性能卫生切片，方向正确：用 source-contract 锁住高频短 helper，
+  同时避免把大 policy evaluator / state-machine / SIMD scanner 硬 inline。
+
 ## 2026-06-05 http h1 outbound hot-helper inline slice
 
 - 本轮只处理 H1 outbound response-drain 热路径的一个窄切片：

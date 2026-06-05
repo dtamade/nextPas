@@ -1,5 +1,27 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-05 http h1 server policy-helper inline slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 server request-policy 热路径性能切片，
+把 keep-alive、parser-error status、`Expect: 100-continue` 三个短 helper
+锁成 inline source contract，不扩大到大型 header-policy evaluator 或 server
+state-machine 函数。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 H1 server policy helper inline source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1` 的
+  `ShouldKeepAlive`、`ParserErrorStatus`、`ShouldSendContinueResponse` 三个短 helper。
+- [x] 跑 focused benchmark/source-contract gate：
+  `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`。
+- [x] 跑 server behavior/leak gate：
+  `make -C tests/nextpas.core.http/test_http_server clean test`。
+- [x] 跑 nextPas-only 小 server smoke：
+  `build/projects/nextpas.core.http/bench_server/bench_http_server --requests 128 --threads 1 --workload adapter_no_url`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-05 http h1 outbound hot-helper inline slice
 
 ### Goal
