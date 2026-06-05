@@ -455,7 +455,7 @@ begin
         IntToStr(LErr) + ')');
 
     LErr := platform_poller_add(FPoller,
-      Int32(FListenerSocketRuntime.NativeSocketHandle),
+      FListenerSocketRuntime.NativeSocketHandle,
       [peReadable], nil);
     if LErr <> 0 then
       raise ENetworkError.Create('tcp readiness poller add failed (' +
@@ -466,7 +466,7 @@ begin
       while FRunning do
       begin
         LTimeoutMs := ComputePollTimeoutMs;
-        LErr := platform_poller_wait(FPoller, @LEntries[0], SizeOf(LEntries),
+        LErr := platform_poller_wait(FPoller, @LEntries[0], Length(LEntries),
           LTimeoutMs,
           LCount);
         if LErr <> 0 then

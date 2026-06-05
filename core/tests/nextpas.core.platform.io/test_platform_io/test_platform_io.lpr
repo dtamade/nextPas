@@ -100,6 +100,31 @@ begin
   Result := Copy(ASource, LStartPos, LEndPos - LStartPos);
 end;
 
+function ExtractWindowsRegion(const ASource: string): string;
+const
+  StartMarker = '{$ifdef nextpas_windows}';
+  EndMarker = '{$if not defined(nextpas_linux) and not defined(nextpas_macos) and not defined(nextpas_freebsd) and not defined(nextpas_windows)}';
+var
+  LStartPos: SizeInt;
+  LEndPos: SizeInt;
+begin
+  LStartPos := Pos(StartMarker, ASource);
+  Check(LStartPos > 0, 'windows source region should exist');
+  LEndPos := Pos(EndMarker, ASource);
+  Check(LEndPos > LStartPos, 'unsupported source region should follow windows region');
+  Result := Copy(ASource, LStartPos, LEndPos - LStartPos);
+end;
+
+procedure CheckContains(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) > 0, AMessage + ': ' + AToken);
+end;
+
+procedure CheckAbsent(const ASource, AToken, AMessage: string);
+begin
+  Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
+end;
+
 procedure TestCreateClose;
 var
   P: TPlatformPoller;
@@ -238,6 +263,45 @@ begin
   platform_poller_close(P);
 end;
 
+procedure TestWaitCapacityBeyondLegacy64;
+const
+  FD_COUNT = 70;
+var
+  P: TPlatformPoller;
+  LPipes: array[0..FD_COUNT - 1, 0..1] of Int32;
+  LEntries: array[0..FD_COUNT - 1] of TPlatformPollEntry;
+  LCount: Int32;
+  LI: Int32;
+  LBuf: Byte;
+begin
+  FillChar(LPipes, SizeOf(LPipes), $FF);
+  Check(platform_poller_create(P) = 0, 'create');
+  try
+    LBuf := 1;
+    for LI := 0 to FD_COUNT - 1 do
+    begin
+      Check(pipe(@LPipes[LI, 0]) = 0, 'pipe ' + IntToStr(LI));
+      Check(platform_poller_add(P, LPipes[LI, 0], [peReadable],
+        Pointer(PtrUInt(LI + 1))) = 0, 'add ' + IntToStr(LI));
+      Check(write(LPipes[LI, 1], @LBuf, 1) = 1, 'write ' + IntToStr(LI));
+    end;
+
+    Check(platform_poller_wait(P, @LEntries[0], FD_COUNT, 1000, LCount) = 0,
+      'wait beyond legacy 64');
+    Check(LCount = FD_COUNT,
+      'wait should honor AMaxEntries beyond the legacy fixed 64 buffer');
+  finally
+    platform_poller_close(P);
+    for LI := 0 to FD_COUNT - 1 do
+    begin
+      if LPipes[LI, 0] >= 0 then
+        close(LPipes[LI, 0]);
+      if LPipes[LI, 1] >= 0 then
+        close(LPipes[LI, 1]);
+    end;
+  end;
+end;
+
 procedure TestKqueueWakeSourceContract;
 var
   LBaseSource: string;
@@ -308,6 +372,135 @@ begin
     'kqueue drain wake should tolerate EAGAIN');
 end;
 
+procedure TestPollerWaitCapacitySourceContract;
+var
+  LIoSource: string;
+  LWaitSource: string;
+  LKqueueSource: string;
+  LKqueueWaitSource: string;
+begin
+  LIoSource := LoadSourceText('src/nextpas.core.platform.io.pas');
+
+  LWaitSource := ExtractFunctionSource(LIoSource, 'platform_poller_wait');
+  CheckAbsent(LWaitSource, 'array[0..63]',
+    'linux wait must not use a fixed 64-event buffer');
+  CheckAbsent(LWaitSource, 'if lmax > 64',
+    'linux wait must not silently clamp AMaxEntries to 64');
+  CheckContains(LWaitSource, 'amaxentries',
+    'linux wait should size native event storage from AMaxEntries');
+
+  LKqueueSource := ExtractKqueueRegion(LIoSource);
+  LKqueueWaitSource := ExtractFunctionSource(LKqueueSource,
+    'platform_poller_wait');
+  CheckAbsent(LKqueueWaitSource, 'array[0..63]',
+    'kqueue wait must not use a fixed 64-event buffer');
+  CheckAbsent(LKqueueWaitSource, 'if lmax > 64',
+    'kqueue wait must not silently clamp AMaxEntries to 64');
+  CheckContains(LKqueueWaitSource, 'amaxentries',
+    'kqueue wait should size native event storage from AMaxEntries');
+end;
+
+procedure TestWindowsPollerSourceContract;
+var
+  LBaseSource: string;
+  LIoSource: string;
+  LWindowsSource: string;
+  LFfiSource: string;
+  LCreateSource: string;
+  LAddSource: string;
+  LEnableWakeSource: string;
+  LWakeSource: string;
+  LDrainWakeSource: string;
+  LWaitSource: string;
+begin
+  LBaseSource := LoadSourceText('src/nextpas.core.platform.io.base.pas');
+  CheckContains(LBaseSource, 'fd: ptruint;',
+    'poll entries must preserve full native socket handle width');
+  CheckContains(LBaseSource, 'wakereadsocket: ptruint;',
+    'windows poller should track wake read socket');
+  CheckContains(LBaseSource, 'wakewritesocket: ptruint;',
+    'windows poller should track wake write socket');
+
+  LFfiSource := LoadSourceText(
+    'src/nextpas.core.platform.windows.ffi.winsock2.inc');
+  CheckContains(LFfiSource, 'function wsapoll',
+    'windows readiness fallback should import WSAPoll through nextPas FFI');
+
+  LIoSource := LoadSourceText('src/nextpas.core.platform.io.pas');
+  CheckContains(LIoSource, 'afd: ptruint',
+    'poller add/modify/remove signatures should accept native-width handles');
+
+  LWindowsSource := ExtractWindowsRegion(LIoSource);
+  LCreateSource := ExtractFunctionSource(LWindowsSource,
+    'platform_poller_create');
+  CheckAbsent(LCreateSource, 'result := -1',
+    'windows poller create must not remain a stub');
+  CheckContains(LWindowsSource, 'wsastartup',
+    'windows poller implementation should initialize Winsock');
+  CheckContains(LCreateSource, 'ensurewinsockready',
+    'windows poller create should go through the Winsock init helper');
+
+  LAddSource := ExtractFunctionSource(LWindowsSource, 'platform_poller_add');
+  CheckAbsent(LAddSource, 'result := -1',
+    'windows poller add must not remain a stub');
+
+  LEnableWakeSource := ExtractFunctionSource(LWindowsSource,
+    'platform_poller_enable_wake');
+  CheckAbsent(LEnableWakeSource, 'result := -1',
+    'windows enable wake must not remain a stub');
+  CheckContains(LWindowsSource, 'winsock_socket',
+    'windows wake should create sockets through Winsock FFI');
+  CheckContains(LWindowsSource, 'winsock_connect',
+    'windows wake should connect a loopback wake pair');
+  CheckContains(LWindowsSource, 'winsock_accept',
+    'windows wake should accept a loopback wake pair');
+  CheckContains(LEnableWakeSource, 'windowscreatewakepair',
+    'windows enable wake should delegate to the wake-pair helper');
+  CheckContains(LEnableWakeSource, 'platform_poller_add',
+    'windows wake should register the read socket');
+
+  LWakeSource := ExtractFunctionSource(LWindowsSource, 'platform_poller_wake');
+  CheckAbsent(LWakeSource, 'result := -1',
+    'windows wake must not remain a stub');
+  CheckContains(LWakeSource, 'winsock_send',
+    'windows wake should signal with send');
+
+  LDrainWakeSource := ExtractFunctionSource(LWindowsSource,
+    'platform_poller_drain_wake');
+  CheckAbsent(LDrainWakeSource, 'result := -1',
+    'windows drain wake must not remain a stub');
+  CheckContains(LDrainWakeSource, 'winsock_recv',
+    'windows drain wake should drain with recv');
+
+  LWaitSource := ExtractFunctionSource(LWindowsSource, 'platform_poller_wait');
+  CheckAbsent(LWaitSource, 'result := -1',
+    'windows wait must not remain a stub');
+  CheckContains(LWaitSource, 'wsapoll',
+    'windows wait should use a real readiness API');
+  CheckContains(LWaitSource, 'amaxentries',
+    'windows wait should honor caller-provided max entries');
+end;
+
+procedure TestReadinessServerPollerSourceContract;
+var
+  LReadinessSource: string;
+  LRuntimeSource: string;
+begin
+  LReadinessSource := LoadSourceText('src/nextpas.core.net.server.readiness.pas');
+  CheckAbsent(LReadinessSource, 'sizeof(lentries)',
+    'readiness server must pass entry count, not byte size, to poller wait');
+  CheckContains(LReadinessSource, 'length(lentries)',
+    'readiness server should pass the static array entry count');
+  CheckAbsent(LReadinessSource, 'int32(flistenersocketruntime.nativesockethandle)',
+    'readiness server must not truncate listener socket handles');
+
+  LRuntimeSource := LoadSourceText('src/nextpas.core.net.server.runtime.pas');
+  CheckContains(LRuntimeSource, 'function sockethandle: ptruint',
+    'poll session target socket handle should be native-width');
+  CheckAbsent(LRuntimeSource, 'result := int32(fsocketruntime.nativesockethandle)',
+    'poll session target socket handle must not truncate native handles');
+end;
+
 {$IFDEF NEXTPAS_LINUX}
 procedure TestWakeDrain;
 var
@@ -345,7 +538,11 @@ begin
   T.Run('remove stops events', @TestRemove);
   T.Run('userdata preserved', @TestUserData);
   T.Run('multiple fds', @TestMultipleFds);
+  T.Run('wait capacity beyond 64', @TestWaitCapacityBeyondLegacy64);
   T.Run('kqueue wake source contract', @TestKqueueWakeSourceContract);
+  T.Run('poller wait capacity source contract', @TestPollerWaitCapacitySourceContract);
+  T.Run('windows poller source contract', @TestWindowsPollerSourceContract);
+  T.Run('readiness server poller source contract', @TestReadinessServerPollerSourceContract);
   {$IFDEF NEXTPAS_LINUX}
   T.Run('wake drain', @TestWakeDrain);
   {$ENDIF}

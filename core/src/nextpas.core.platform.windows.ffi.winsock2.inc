@@ -21,6 +21,7 @@ function winsock_setsockopt(s: TSocket; level: LongInt; optname: LongInt; optval
 function winsock_getsockopt(s: TSocket; level: LongInt; optname: LongInt; optval: Pointer; optlen: Pointer): LongInt; stdcall; external 'ws2_32' name 'getsockopt';
 function winsock_getsockname(s: TSocket; name: Pointer; namelen: Pointer): LongInt; stdcall; external 'ws2_32' name 'getsockname';
 function winsock_getpeername(s: TSocket; name: Pointer; namelen: Pointer): LongInt; stdcall; external 'ws2_32' name 'getpeername';
+function WSAPoll(fdArray: PWSAPollFd; fds: ULONG; timeout: LongInt): LongInt; stdcall; external 'ws2_32' name 'WSAPoll';
 function winsock_getaddrinfo(nodename: PAnsiChar; servname: PAnsiChar; hints: Pointer; res: Pointer): LongInt; stdcall; external 'ws2_32' name 'getaddrinfo';
 procedure winsock_freeaddrinfo(ai: Pointer); stdcall; external 'ws2_32' name 'freeaddrinfo';
 function winsock_getnameinfo(sa: Pointer; salen: LongInt; host: PAnsiChar; hostlen: DWORD; serv: PAnsiChar; servlen: DWORD; flags: LongInt): LongInt; stdcall; external 'ws2_32' name 'getnameinfo';

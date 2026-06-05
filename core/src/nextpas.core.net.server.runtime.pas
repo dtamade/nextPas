@@ -46,7 +46,7 @@ type
       const ASocketRuntime: ITcpSocketRuntime;
       const ASession: ITcpServerSession;
       const APollSession: ITcpServerPollDrivenSession);
-    function SocketHandle: Int32;
+    function SocketHandle: PtrUInt;
     function CurrentEvents: TPlatformPollEvents;
     procedure SetCurrentEvents(const AEvents: TPlatformPollEvents);
     function WakeDeadline: TDeadline;
@@ -205,9 +205,9 @@ begin
     raise EArgumentError.Create('poll-driven session must expose poll events');
 end;
 
-function TTcpServerPollSessionTarget.SocketHandle: Int32;
+function TTcpServerPollSessionTarget.SocketHandle: PtrUInt;
 begin
-  Result := Int32(FSocketRuntime.NativeSocketHandle);
+  Result := FSocketRuntime.NativeSocketHandle;
 end;
 
 function TTcpServerPollSessionTarget.CurrentEvents: TPlatformPollEvents;

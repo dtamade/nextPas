@@ -15,7 +15,7 @@ type
   TPlatformPollEvents = set of TPlatformPollEvent;
 
   TPlatformPollEntry = record
-    Fd: Int32;
+    Fd: PtrUInt;
     Events: TPlatformPollEvents;
     REvents: TPlatformPollEvents;
     UserData: Pointer;
@@ -34,6 +34,9 @@ type
     Entries: Pointer;
     Count: Int32;
     Capacity: Int32;
+    WakeReadSocket: PtrUInt;
+    WakeWriteSocket: PtrUInt;
+    WinsockStarted: Boolean;
   {$ELSE}
     Dummy: Int32;
   {$ENDIF}

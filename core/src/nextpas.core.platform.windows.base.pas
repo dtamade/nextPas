@@ -10,6 +10,7 @@ type
   UINT = UInt32;
   DWORD = UInt32;
   LONG = Int32;
+  ULONG = UInt32;
   LONGLONG = Int64;
   WINBOOL = LongBool;
   BOOL = WINBOOL;

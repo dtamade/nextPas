@@ -65,6 +65,17 @@ const
   MSG_DONTROUTE = $4;
   MSG_WAITALL  = $8;
 
+  POLLERR    = $0001;
+  POLLHUP    = $0002;
+  POLLNVAL   = $0004;
+  POLLWRNORM = $0010;
+  POLLWRBAND = $0020;
+  POLLOUT    = POLLWRNORM;
+  POLLRDNORM = $0100;
+  POLLRDBAND = $0200;
+  POLLIN     = POLLRDNORM or POLLRDBAND;
+  POLLPRI    = $0400;
+
   SHUT_RD   = 0;
   SHUT_WR   = 1;
   SHUT_RDWR = 2;
@@ -142,6 +153,33 @@ const
 type
   TSocket = UINT_PTR;
 
+  in_addr = packed record
+    s_addr: DWORD;
+  end;
+  pin_addr = ^in_addr;
+  TInAddr = in_addr;
+  PInAddr = pin_addr;
+
+  sockaddr = packed record
+    sa_family: WORD;
+    sa_data: array[0..13] of AnsiChar;
+  end;
+  psockaddr = ^sockaddr;
+
+  sockaddr_in = packed record
+    sin_family: WORD;
+    sin_port: WORD;
+    sin_addr: in_addr;
+    sin_zero: array[0..7] of Byte;
+  end;
+  psockaddr_in = ^sockaddr_in;
+
+  sockaddr_storage = packed record
+    ss_family: WORD;
+    ss_pad: array[0..125] of Byte;
+  end;
+  psockaddr_storage = ^sockaddr_storage;
+
   TWSAData = record
     wVersion: WORD;
     wHighVersion: WORD;
@@ -166,6 +204,13 @@ type
     fd_array: array[0..FD_SETSIZE - 1] of TSocket;
   end;
   PWinSockFDSet = ^TWinSockFDSet;
+
+  TWSAPollFd = record
+    fd: TSocket;
+    events: Int16;
+    revents: Int16;
+  end;
+  PWSAPollFd = ^TWSAPollFd;
 
   WSABUF = record
     len: DWORD;
