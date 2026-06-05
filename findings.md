@@ -1,5 +1,48 @@
 # Findings & Decisions
 
+## 2026-06-06 http request path-only projection slice
+
+- 本轮把上一批新增的 `Req.Path` / `Req.RawQuery` direct accessor 从“少复制
+  `TUrl` record”推进成真正的 request-target path-only projection。
+- 选择依据：
+  - 上一轮 micro row 显示 direct `Path` 仍约 `710 ns/op`，说明仍在支付完整
+    `TUrl.ParseRequestTarget` 成本。
+  - `url_path` workload、router/static/middleware/H1 client writer 多数只需要
+    path/query，不需要 scheme/host/port。
+  - 这是比继续扩大 inline 更直接的 adapter/materialization 固定成本削减。
+- 实现决策：
+  - `THttpRequest` 新增内部 `EnsureRequestTargetParts`，只拆 `#` 与 `?` 后填
+    `FUrl.Path` / `RawQuery` / `Fragment`。
+  - absolute-form 仍回退 `EnsureUrlParsed`，所以 host/port validation 和
+    `Req.Url` 完整语义不变。
+  - `Req.Url` 继续完整 materialize；`QueryParam` 现在可基于轻量 RawQuery 解析，
+    外部行为不变。
+- RED 证据：
+  - `test_http_benchmarks` 先失败在
+    `THttpRequest request-target projection helper declaration missing`。
+  - 结果为 `31 total, 30 passed, 1 failed`，heaptrc 仍是
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_message`：`19/19 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`31/31 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_router`：`21/21 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `request lazy Url.Path access = 779.9 ns/op`
+  - `request direct Path access = 496.5 ns/op`
+  - `request direct RawQuery access = 494.2 ns/op`
+  - `request direct Path+RawQuery access = 542.6 ns/op`
+  - `bench_server --requests 512 --threads 1 --workload url_path` 完成 `512/512`，
+    `43622 ns/op`、`22923 req/s`
+- 子代理只读复盘：
+  - `Boyle` 认为方案方向正确，并建议补足 origin/absolute/asterisk/authority/relative
+    target 边界；本轮已按建议补 compact matrix。
+  - `Parfit` 认为本轮是当前最高优先级性能切片；下一批应转向 llhttp adapter
+    request metadata parse-time cache，第三候选是 fast-path header block 按需物化。
+- 复盘结论：
+  方向没有走偏：这轮不是碎片化 inline，而是把 `url_path` 代表的公开 handler
+  热路径从完整 URL materialization 中解耦。下一批不应继续扩同类 accessor，
+  应处理 parser adapter metadata 二次扫 header 的固定成本。
+
 ## 2026-06-06 http direct outbound response path slice
 
 - 本轮去掉 H1 server response path 中的额外 generic buffered writer：

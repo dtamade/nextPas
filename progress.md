@@ -1,5 +1,67 @@
 # Progress Log
 
+## Session: 2026-06-06 http request path-only projection slice
+
+- **Status:** completed.
+- Objective:
+  - remove full URL materialization from common `Req.Path` / `Req.RawQuery`
+    direct-accessor hot paths
+  - keep `Req.Url` full `TUrl` behavior intact
+- Scope and safety:
+  - touched only HTTP message implementation, message tests, benchmark smoke
+    tests, benchmark rows, and HTTP/control docs
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not stage unrelated dirty `test_http_client`, async, worktree marker,
+    compiler, or untracked files
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `31 total, 30 passed, 1 failed`
+    - failed at `THttpRequest request-target projection helper declaration missing`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - added `THttpRequest.EnsureRequestTargetParts`
+  - `GetPath`, `GetRawQuery`, and `QueryParam` now use lightweight request-target
+    path/query projection where possible
+  - absolute-form request-targets still use full `TUrl.ParseRequestTarget`
+  - `Req.Url` remains the full materialization path
+  - added direct `RawQuery` and `Path+RawQuery` benchmark rows
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_message clean test`
+    - `19/19 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `31/31 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_router clean test`
+    - `21/21 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request ' make -C benchmarks/nextpas.core.http/bench_h1parser clean run`
+    - `request lazy Url.Path access: 779.9 ns/op`
+    - `request direct Path access: 496.5 ns/op`
+    - `request direct RawQuery access: 494.2 ns/op`
+    - `request direct Path+RawQuery access: 542.6 ns/op`
+  - `make -C benchmarks/nextpas.core.http/bench_server build && build/projects/nextpas.core.http/bench_server/bench_http_server --requests 512 --threads 1 --workload url_path`
+    - `completed=512`
+    - `ns/op=43622`
+    - `req/s=22923`
+- Sidecar review:
+  - `Boyle` reviewed request-target projection boundaries and pushed the compact
+    target-form matrix that was added before closure
+  - `Parfit` ranked next performance slices as llhttp adapter metadata
+    parse-time cache, then fast-path header block lazy materialization
+- Outcome:
+  - direct path/query access no longer pays full URL parser cost on common
+    request-targets
+  - behavior coverage includes origin-form, query/fragment boundaries,
+    asterisk-form, authority-like targets, relative targets, absolute target
+    host/port preservation, and invalid absolute port rejection
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: request path-only projection
+  - next best batch: llhttp adapter request metadata parse-time cache; do not
+    hand-edit generated llhttp or broadly inline large state-machine helpers
+
 ## Session: 2026-06-06 http direct outbound response path slice
 
 - **Status:** completed.

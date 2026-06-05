@@ -1651,6 +1651,67 @@ shared checkout currently carries an unrelated dirty client test RED for
 missing `HttpGetToWriter` / `HttpGetToFile`; that failure is not attributed to
 this accessor slice.
 
+## Optimization Evidence: Request Path-Only Projection
+
+On 2026-06-06 local time, `THttpRequest.Path`, `RawQuery`, and `QueryParam`
+stopped forcing full `TUrl.ParseRequestTarget` materialization for common
+origin-form request-targets. `Req.Url` still materializes the complete `TUrl`
+record, and absolute-form request-targets still fall back to the full parser so
+scheme/host/port validation remains unchanged.
+
+Focused RED before the production change:
+
+```text
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+
+31 total, 30 passed, 1 failed
+failure: THttpRequest request-target projection helper declaration missing
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the change:
+
+```text
+make -C tests/nextpas.core.http/test_http_message clean test
+19 total, 19 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+31 total, 31 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_router clean test
+21 total, 21 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+The message test now covers origin-form query/fragment boundaries,
+asterisk-form, authority-like targets, relative path targets, absolute-form
+host/port preservation, and invalid absolute port rejection through the direct
+accessors.
+
+Fresh filtered local rows:
+
+```text
+command=NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='request ' make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+adapter cost: request lazy Url.Path access = 779.9 ns/op
+adapter cost: request direct Path access = 496.5 ns/op
+adapter cost: request direct RawQuery access = 494.2 ns/op
+adapter cost: request direct Path+RawQuery access = 542.6 ns/op
+
+command=build/projects/nextpas.core.http/bench_server/bench_http_server --requests 512 --threads 1 --workload url_path
+completed=512
+ns/op=43622
+req/s=22923
+```
+
+This closes the direct path accessor slow-path gap. The next high-value
+performance slice should move to llhttp adapter metadata caching during parse,
+then fast-path header block lazy materialization, rather than hand-editing the
+generated llhttp state machine.
+
 ## Full-Chain Correlation: No-URL Keep-Alive Workload
 
 On 2026-06-05 local time, the server comparison output gained an explicit

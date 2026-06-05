@@ -1,5 +1,31 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http request path-only projection slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 request-target materialization 热路径：
+让 `THttpRequest.Path` / `RawQuery` / `QueryParam` 在常见 origin-form
+request-target 下只做轻量 path/query projection，不再强制完整
+`TUrl.ParseRequestTarget`，同时保持 `Req.Url` 的完整 URL record 语义。
+
+### Checklist
+
+- [x] RED：在 `test_http_benchmarks` 新增 source-contract，证明 direct
+  `Path` / `RawQuery` 不应直接调用 `EnsureUrlParsed`。
+- [x] GREEN：只修改 `nextpas.core.http.message`，新增
+  `EnsureRequestTargetParts`，absolute-form 仍回退完整 parser。
+- [x] 在 `test_http_message` 补 origin-form、query/fragment、asterisk、
+  authority-like、relative target、absolute target 和 invalid absolute port
+  focused 回归。
+- [x] 在 `bench_h1parser` 增加 `direct RawQuery` 与 `direct Path+RawQuery`
+  rows，并用 `test_http_benchmarks` 锁住 row。
+- [x] 跑 focused gates：
+  `test_http_message`、`test_http_benchmarks`、`test_http_router`。
+- [x] 跑小 benchmark smoke：
+  `bench_h1parser` request filter 与 `bench_server --workload url_path`。
+- [x] 更新 benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-06 http direct outbound response path slice
 
 ### Goal

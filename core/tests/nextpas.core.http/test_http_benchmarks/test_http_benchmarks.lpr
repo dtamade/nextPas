@@ -26,6 +26,7 @@ const
   H1FlagMatrixRunnerRelativePath =
     'benchmarks/nextpas.core.http/bench_h1parser/run_flag_matrix.sh';
   HeaderUnitPath = 'src/nextpas.core.http.headers.pas';
+  HttpMessageUnitPath = 'src/nextpas.core.http.message.pas';
   H1ServerUnitPath = 'src/nextpas.core.http.impl.h1.pas';
   H1OutboundUnitPath = 'src/nextpas.core.http.impl.h1.outbound.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
@@ -596,6 +597,28 @@ begin
     'H1 server response path should write directly into IH1OutboundBuffer');
 end;
 
+procedure TestHttpRequestDirectPathProjectionSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchRouterRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, HttpMessageUnitPath));
+
+  CheckContains(LSource, 'procedure EnsureRequestTargetParts;',
+    'THttpRequest request-target projection helper declaration');
+  CheckContains(LSource, 'procedure THttpRequest.EnsureRequestTargetParts;',
+    'THttpRequest request-target projection helper implementation');
+  CheckNotContains(LSource,
+    'function THttpRequest.GetPath: string;' + LineEnding + 'begin' +
+    LineEnding + '  EnsureUrlParsed;',
+    'THttpRequest.GetPath should not force full Url materialization');
+  CheckNotContains(LSource,
+    'function THttpRequest.GetRawQuery: string;' + LineEnding + 'begin' +
+    LineEnding + '  EnsureUrlParsed;',
+    'THttpRequest.GetRawQuery should not force full Url materialization');
+end;
+
 procedure TestBenchFullchainPlaintextSmoke;
 var
   LRootDir: string;
@@ -1088,6 +1111,10 @@ begin
     'H1 parser benchmark lazy Url.Path access breakdown row');
   CheckContains(LOutput, 'adapter cost: request direct Path access',
     'H1 parser benchmark direct Path access breakdown row');
+  CheckContains(LOutput, 'adapter cost: request direct RawQuery access',
+    'H1 parser benchmark direct RawQuery access breakdown row');
+  CheckContains(LOutput, 'adapter cost: request direct Path+RawQuery access',
+    'H1 parser benchmark direct Path+RawQuery access breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
     'H1 parser benchmark legacy request metadata breakdown row');
   CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',
@@ -1466,6 +1493,8 @@ begin
     @TestHttpHeadersLookupHotHelpersInlineSourceContract);
   T.Run('H1 server response drain avoids generic buffered writer source contract',
     @TestH1ServerResponseDrainAvoidsGenericBufferedWriterSourceContract);
+  T.Run('HTTP request direct path projection source contract',
+    @TestHttpRequestDirectPathProjectionSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',
