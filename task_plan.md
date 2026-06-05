@@ -1,5 +1,34 @@
 # Task Plan: nextPas active work
 
+## Active Session: 2026-06-06 http h1 writer known status-line slice
+
+### Goal
+
+推进 `nextpas.core.http` 的 H1 response status-line serialization 热路径：
+让 `TH1ResponseWriter.WriteStatusLine` 对常见状态码使用固定 status-line
+fast path，尤其覆盖 server 错误响应常见的 `400/404/413/417/431/500/501`，
+避免每次经过 `IntToStr`、`HttpStatusText` 和多段 `WriteStr`；未知状态仍保留
+原 fallback 语义。
+
+### Checklist
+
+- [x] RED：`test_http_h1writer` 先失败，证明 common status line 当前仍是
+  多段写，`expected 2, got 6`。
+- [x] RED：`test_http_benchmarks` 先失败，证明缺少
+  `status lines common errors` row 与 known status-line source-contract。
+- [x] GREEN：只修改 `nextpas.core.http.impl.h1.writer`，新增
+  `TryWriteKnownStatusLine`，常见状态走固定 status-line 常量写出，未知状态保留
+  `IntToStr` / `HttpStatusText` fallback。
+- [x] 在 `test_http_h1writer` 补 common status exact-wire/write-call proof、
+  unknown `599 Unknown` fallback proof、fixed `431` short-writer proof。
+- [x] 在 `bench_h1writer` 增加 `status lines common errors` row，并用
+  `test_http_benchmarks` 锁住 row 与 source-contract。
+- [x] 跑 focused gates：`test_http_h1writer`、`test_http_benchmarks`、
+  `test_http_server`。
+- [x] 跑小 benchmark smoke：`bench_h1writer` 的
+  `status lines common errors` filter。
+- [x] 更新 HTTP benchmark/API/control 文档并 path-limited commit。
+
 ## Active Session: 2026-06-06 http h1 writer compact header block slice
 
 ### Goal

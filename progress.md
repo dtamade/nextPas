@@ -1,5 +1,63 @@
 # Progress Log
 
+## Session: 2026-06-06 http h1 writer known status-line slice
+
+- **Status:** completed.
+- Objective:
+  - reduce H1 response status-line serialization cost for common statuses
+  - keep unknown status fallback and short-writer full-progress semantics intact
+- Scope and safety:
+  - touched only H1 response writer implementation, H1 writer focused tests,
+    benchmark/source-contract test, H1 writer benchmark rows, and HTTP/control docs
+  - did not write `docs/nextpas.core.http.inbox.md`
+  - did not stage unrelated dirty `test_http_client`, async, compiler, worktree
+    marker, or untracked files
+- RED:
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - `32 total, 31 passed, 1 failed`
+    - failed at `Common status lines use a single writer call`
+    - expected `2` write calls, got `6`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `35 total, 33 passed, 2 failed`
+    - failed at missing `status lines common errors` row and known status-line
+      source-contract
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed change:
+  - added `TH1ResponseWriter.TryWriteKnownStatusLine`
+  - known statuses now write fixed `HTTP/1.1 ...` status-line constants through
+    `WriteAllOrRaise`
+  - unknown statuses still use the generic `IntToStr` + `HttpStatusText` fallback
+  - added writer proof for common status exact wire, unknown `599 Unknown` fallback,
+    and fixed `431` short-writer retry
+  - added `status lines common errors` benchmark row
+- Focused verification:
+  - `make -C tests/nextpas.core.http/test_http_h1writer clean test`
+    - `34/34 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `35/35 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C tests/nextpas.core.http/test_http_server clean test`
+    - `275/275 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=100000 NEXTPAS_BENCH_FILTER='status lines common errors' make -C benchmarks/nextpas.core.http/bench_h1writer clean run`
+    - `status lines common errors: 1204.8 ns/op`
+- Sidecar review:
+  - one subagent reviewed common status priorities, focused tests, benchmark row
+    shape, and source-contract boundaries
+- Outcome:
+  - common server error/application status-lines no longer pay generic formatting
+    and multi-`WriteStr` cost
+  - fallback and short-writer behavior remain directly covered
+- Route position:
+  - HTTP roadmap `6/6 Benchmark 与优化`
+  - current sub-slice: H1 writer known status-line fast path
+  - next best batch: llhttp adapter parsed-header insertion/materialization or
+    remaining writer/body generic string allocation; keep formal cross-language
+    benchmark sweep deferred
+
 ## Session: 2026-06-06 http h1 writer compact header block slice
 
 - **Status:** completed.

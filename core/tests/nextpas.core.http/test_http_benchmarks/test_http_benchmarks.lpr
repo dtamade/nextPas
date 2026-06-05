@@ -338,6 +338,18 @@ begin
   CheckContains(AOutput, 'ops/s', 'H1 writer header-block ops/s marker');
 end;
 
+procedure CheckH1WriterKnownStatusLinesBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1writer.serialize',
+    'H1 writer known-status operation marker');
+  CheckBenchmarkRunRow(AOutput, 'status lines common errors',
+    'H1 writer known-status benchmark row');
+  CheckContains(AOutput, 'bench_filter=status lines common errors',
+    'H1 writer known-status filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 writer known-status ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 writer known-status ops/s marker');
+end;
+
 procedure CheckH1OutboundDrainBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.h1outbound.drain',
@@ -520,6 +532,14 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1writer header-block smoke exit code: ' + LOutput);
   CheckH1WriterHeaderBlockBenchmarkOutput(LOutput);
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=status lines common errors'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1writer known-status smoke exit code: ' + LOutput);
+  CheckH1WriterKnownStatusLinesBenchmarkOutput(LOutput);
 end;
 
 procedure TestBenchH1OutboundDrainSmoke;
@@ -745,6 +765,32 @@ begin
   CheckNotContains(LWriteHeaderBody,
     'WriteAllHeaders;' + LineEnding + '  WriteCRLF;',
     'TH1ResponseWriter.WriteHeader should not split small header block CRLF');
+end;
+
+procedure TestH1WriterKnownStatusLineSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LWriteStatusLineBody: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1WriterRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, H1WriterUnitPath));
+  LWriteStatusLineBody := ExtractSourceBlock(LSource,
+    'procedure TH1ResponseWriter.WriteStatusLine;',
+    'procedure TH1ResponseWriter.WriteInformationalHeader',
+    'TH1ResponseWriter.WriteStatusLine body');
+
+  CheckContains(LSource, 'function TryWriteKnownStatusLine: Boolean;',
+    'H1 writer known status-line helper declaration');
+  CheckContains(LSource,
+    'function TH1ResponseWriter.TryWriteKnownStatusLine: Boolean;',
+    'H1 writer known status-line helper implementation');
+  CheckContains(LWriteStatusLineBody, 'if TryWriteKnownStatusLine then',
+    'TH1ResponseWriter.WriteStatusLine should try known status fast path first');
+  CheckContains(LSource, '''HTTP/1.1 400 Bad Request''#13#10',
+    'H1 writer should have fixed 400 status line');
+  CheckContains(LSource, '''HTTP/1.1 500 Internal Server Error''#13#10',
+    'H1 writer should have fixed 500 status line');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -1633,6 +1679,8 @@ begin
     @TestH1FastLazyHeadersSourceContract);
   T.Run('H1 writer compact header block source contract',
     @TestH1WriterCompactHeaderBlockSourceContract);
+  T.Run('H1 writer known status line source contract',
+    @TestH1WriterKnownStatusLineSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

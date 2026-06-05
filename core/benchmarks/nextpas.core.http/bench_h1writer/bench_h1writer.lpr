@@ -111,6 +111,46 @@ begin
   end;
 end;
 
+procedure BenchStatusLinesCommonErrors(aIters: Int64);
+var
+  LIt: Int64;
+  LSink: TFixedMemoryWriter;
+  LSinkWriter: IWriter;
+  LWriter: TH1ResponseWriter;
+  LStatus: THttpStatus;
+begin
+  LSink := TFixedMemoryWriter.Create;
+  LSinkWriter := LSink as IWriter;
+  try
+    for LIt := 1 to aIters do
+    begin
+      case LIt mod 7 of
+        0: LStatus := HTTP_STATUS_BAD_REQUEST;
+        1: LStatus := HTTP_STATUS_NOT_FOUND;
+        2: LStatus := HTTP_STATUS_PAYLOAD_TOO_LARGE;
+        3: LStatus := HTTP_STATUS_EXPECTATION_FAILED;
+        4: LStatus := HTTP_STATUS_HEADER_TOO_LARGE;
+        5: LStatus := HTTP_STATUS_INTERNAL_SERVER_ERROR;
+      else
+        LStatus := HTTP_STATUS_NOT_IMPLEMENTED;
+      end;
+
+      LSink.Reset;
+      LWriter := TH1ResponseWriter.Create(LSinkWriter);
+      try
+        LWriter.Headers.Set_('content-length', '0');
+        LWriter.WriteHeader(LStatus);
+        LWriter.Flush;
+        Inc(GBytesWritten, LSink.Size);
+      finally
+        LWriter.Free;
+      end;
+    end;
+  finally
+    LSinkWriter := nil;
+  end;
+end;
+
 procedure BenchFixed200_13B(aIters: Int64);
 const
   RESPONSE_BODY: AnsiString = 'Hello, World!';
@@ -150,6 +190,7 @@ begin
   WriteLn;
   B.Run('headers only 200', @BenchHeadersOnly200);
   B.Run('headers block 200 6 headers', @BenchHeadersBlock200_6Headers);
+  B.Run('status lines common errors', @BenchStatusLinesCommonErrors);
   B.Run('fixed 200 13B', @BenchFixed200_13B);
   WriteLn;
   B.Summary;

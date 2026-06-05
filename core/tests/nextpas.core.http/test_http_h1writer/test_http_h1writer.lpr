@@ -831,6 +831,94 @@ begin
   end;
 end;
 
+procedure TestCommonStatusLinesUseSingleWriterCall;
+
+  procedure CheckStatusLine(const AStatus: THttpStatus;
+    const AExpected: string; const AWithContentLength: Boolean);
+  var
+    LW: TCountingWriter;
+    LRW: TH1ResponseWriter;
+  begin
+    LW := TCountingWriter.Create;
+    LRW := TH1ResponseWriter.Create(LW as IWriter);
+    try
+      if AWithContentLength then
+        LRW.GetHeaders.Set_('Content-Length', '0');
+      LRW.WriteHeader(AStatus);
+      if AWithContentLength then
+        CheckEqual(AExpected + 'content-length: 0'#13#10#13#10,
+          LW.GetOutput, 'common status line preserves header wire bytes')
+      else
+        CheckEqual(AExpected + #13#10, LW.GetOutput,
+          'common no-body status line preserves wire bytes');
+      CheckEqual(Int64(2), Int64(LW.WriteCalls),
+        'common status line and header block are single writes');
+    finally
+      LRW.Free;
+    end;
+  end;
+
+begin
+  CheckStatusLine(HTTP_STATUS_CONTINUE, 'HTTP/1.1 100 Continue'#13#10, False);
+  CheckStatusLine(HTTP_STATUS_EARLY_HINTS, 'HTTP/1.1 103 Early Hints'#13#10, False);
+  CheckStatusLine(HTTP_STATUS_SWITCHING_PROTOCOLS,
+    'HTTP/1.1 101 Switching Protocols'#13#10, False);
+  CheckStatusLine(HTTP_STATUS_NO_CONTENT, 'HTTP/1.1 204 No Content'#13#10, False);
+  CheckStatusLine(HTTP_STATUS_NOT_MODIFIED, 'HTTP/1.1 304 Not Modified'#13#10, False);
+  CheckStatusLine(HTTP_STATUS_BAD_REQUEST, 'HTTP/1.1 400 Bad Request'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_NOT_FOUND, 'HTTP/1.1 404 Not Found'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_PAYLOAD_TOO_LARGE,
+    'HTTP/1.1 413 Payload Too Large'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_EXPECTATION_FAILED,
+    'HTTP/1.1 417 Expectation Failed'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_HEADER_TOO_LARGE,
+    'HTTP/1.1 431 Request Header Fields Too Large'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_INTERNAL_SERVER_ERROR,
+    'HTTP/1.1 500 Internal Server Error'#13#10, True);
+  CheckStatusLine(HTTP_STATUS_NOT_IMPLEMENTED,
+    'HTTP/1.1 501 Not Implemented'#13#10, True);
+end;
+
+procedure TestUnknownStatusLineKeepsFallbackReason;
+var
+  LW: TCountingWriter;
+  LRW: TH1ResponseWriter;
+begin
+  LW := TCountingWriter.Create;
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '0');
+    LRW.WriteHeader(THttpStatus(599));
+    CheckEqual('HTTP/1.1 599 Unknown'#13#10 +
+      'content-length: 0'#13#10 +
+      #13#10, LW.GetOutput,
+      'unknown status falls back to numeric status and Unknown reason');
+    Check(LW.WriteCalls > 2,
+      'unknown status keeps generic multi-part fallback path');
+  finally
+    LRW.Free;
+  end;
+end;
+
+procedure TestKnownStatusLineWithShortWriterStillWritesFullHeaders;
+var
+  LW: TShortWriter;
+  LRW: TH1ResponseWriter;
+begin
+  LW := TShortWriter.Create(1);
+  LRW := TH1ResponseWriter.Create(LW as IWriter);
+  try
+    LRW.GetHeaders.Set_('Content-Length', '0');
+    LRW.WriteHeader(HTTP_STATUS_HEADER_TOO_LARGE);
+    CheckEqual('HTTP/1.1 431 Request Header Fields Too Large'#13#10 +
+      'content-length: 0'#13#10 +
+      #13#10, LW.GetOutput,
+      'known status fast path still retries short writes to full framing');
+  finally
+    LRW.Free;
+  end;
+end;
+
 procedure TestLargeHeaderBlockFallsBackAndPreservesWireBytes;
 var
   LW: TCountingWriter;
@@ -1025,6 +1113,12 @@ begin
     @TestWriteHeaderWithShortWriterStillWritesFullHeaders);
   T.Run('Small header block uses a single writer call',
     @TestSmallHeaderBlockUsesSingleWriterCall);
+  T.Run('Common status lines use a single writer call',
+    @TestCommonStatusLinesUseSingleWriterCall);
+  T.Run('Unknown status line keeps fallback reason',
+    @TestUnknownStatusLineKeepsFallbackReason);
+  T.Run('Known status line with short writer still writes full headers',
+    @TestKnownStatusLineWithShortWriterStillWritesFullHeaders);
   T.Run('Large header block falls back and preserves wire bytes',
     @TestLargeHeaderBlockFallsBackAndPreservesWireBytes);
   T.Run('Content-Length body with short writer writes all bytes',

@@ -273,6 +273,14 @@ NEXTPAS_BENCH_FILTER='headers block 200 6 headers' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 ```
 
+Run the focused common error status-line row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='status lines common errors' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
 Run the focused response serialization row:
 
 ```sh
@@ -289,6 +297,9 @@ These rows report `operation=http.h1writer.serialize`.
 - `headers block 200 6 headers` measures the same header-only path with six
   representative response headers, so the row is more sensitive to header block
   serialization and write-call coalescing.
+- `status lines common errors` cycles through common server error statuses
+  (`400`, `404`, `413`, `417`, `431`, `500`, `501`) with `Content-Length: 0`
+  to measure status-line serialization without request parsing or socket I/O.
 - `fixed 200 13B` measures the same setup plus a 13-byte body write into a
   fixed in-memory writer.
 
@@ -308,6 +319,12 @@ Local focused rows from 2026-06-06 after compact header-block writes:
 | --- | ---: | ---: | ---: |
 | headers only 200 | 100000 | 1280.4 | 781028 |
 | headers block 200 6 headers | 100000 | 1890.9 | 528835 |
+
+Local focused row from 2026-06-06 after known status-line fast paths:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| status lines common errors | 100000 | 1204.8 | 830013 |
 
 ## Run the H1 Outbound Drain Benchmark
 
@@ -624,6 +641,55 @@ Fresh same-host filtered rows:
 This slice keeps the status line separate, preserves exact wire bytes for
 short-writer and large-header fallback paths, and keeps `100/103` informational
 headers on the same non-committing response path.
+
+## Optimization Evidence: H1 Writer Known Status Lines
+
+On 2026-06-06 local time, `TH1ResponseWriter.WriteStatusLine` gained fixed
+status-line fast paths for common response statuses, including server error
+paths used by malformed request handling (`400`, `413`, `417`, `431`, `500`,
+`501`) and common application/router statuses such as `404`. Unknown status
+codes still fall back to numeric formatting plus `HttpStatusText`.
+
+Focused RED before the production change:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+32 total, 31 passed, 1 failed
+Common status lines use a single writer call: expected 2, got 6
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+35 total, 33 passed, 2 failed
+missing status lines common errors row and known status-line source-contract
+heaptrc: 0 unfreed memory blocks
+```
+
+Focused verification after the fixed status-line implementation:
+
+```text
+make -C tests/nextpas.core.http/test_http_h1writer clean test
+34 total, 34 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+make -C tests/nextpas.core.http/test_http_benchmarks clean test
+35 total, 35 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+275 total, 275 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Fresh same-host filtered row:
+
+| workload | ns/op | ops/s |
+| --- | ---: | ---: |
+| status lines common errors | 1204.8 | 830013 |
+
+The focused writer tests also lock the unknown-status fallback (`599 Unknown`)
+and the short-writer retry behavior for a fixed `431` status-line.
 
 ## Optimization Evidence: H1 Ingress Fast Path
 

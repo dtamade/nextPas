@@ -1,5 +1,45 @@
 # Findings & Decisions
 
+## 2026-06-06 http h1 writer known status-line slice
+
+- 本轮把 `TH1ResponseWriter.WriteStatusLine` 从“只有 `200 OK` 固定行”推进到
+  常见 status 固定行 fast path。
+- 选择依据：
+  - 上一批 compact header block 已减少 header section write 调用数；下一处真实固定成本是
+    非 200 status-line 仍走 `WriteStr('HTTP/1.1 ')`、`IntToStr`、`HttpStatusText`、
+    `WriteStr(reason)`、`WriteCRLF` 多段路径。
+  - Server malformed/error 路径大量使用 `400/413/417/431/500/501`，router 常见 miss 使用
+    `404`；这些 fixed status-line 比继续扩大 header block 优化更贴近 HttpServer 热路径。
+  - 子代理只读审查确认应保持 unknown status fallback，不在整个 writer 禁用
+    `IntToStr` / `HttpStatusText`，benchmark 只锁 row/marker 不锁数值。
+- 实现决策：
+  - 新增 `TryWriteKnownStatusLine`，覆盖
+    `100/101/103/200/201/204/301/302/304/400/401/403/404/405/413/417/431/500/501/502/503`。
+  - `WriteStatusLine` 先尝试 known fast path，失败再走原来的 generic fallback。
+  - fixed line 仍通过 `WriteAllOrRaise` 写出，保留 short-writer retry / zero-progress raise。
+  - 不改 public API，不改 `HttpStatusText`，不改 no-body / informational / hijack 语义。
+- RED 证据：
+  - `test_http_h1writer` 先失败在 common status write-call count：
+    `32 total, 31 passed, 1 failed`，expected `2` got `6`，heaptrc `0 unfreed memory blocks`。
+  - `test_http_benchmarks` 先失败在缺少 `status lines common errors` row
+    与 known status-line source-contract：`35 total, 33 passed, 2 failed`，
+    heaptrc `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_h1writer`：`34/34 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_benchmarks`：`35/35 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_server`：`275/275 passed`，heaptrc `0 unfreed memory blocks`
+- 小 benchmark row：
+  - `status lines common errors = 1204.8 ns/op`
+- 子代理只读复盘：
+  - 第一梯队 status 是 `400/413/417/431/500/501`，第二梯队是 `404`；
+    `101/204/304/100/103` 可以低成本同表覆盖。
+  - 本轮 tests 直接覆盖 common status exact wire、unknown fallback 和 fixed `431`
+    short-writer retry；server gate 覆盖响应路径集成语义。
+- 复盘结论：
+  方向没有走偏：这是 response writer 固定 status-line 成本削减，目标仍是提高
+  HttpServer error/response 热路径性能。下一步应转向 llhttp adapter parsed-header
+  insertion/materialization，或继续审计 writer/body path 中仍存在的 generic string allocation。
+
 ## 2026-06-06 http h1 writer compact header block slice
 
 - 本轮把 `TH1ResponseWriter` 的 response header serialization 从“小 header line
