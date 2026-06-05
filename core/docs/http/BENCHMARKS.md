@@ -745,3 +745,81 @@ the useful signal for this slice.
 `test_http_server` passed with `274 total, 274 passed, 0 failed`; `test_http_security`
 passed with `242 total, 242 passed, 0 failed`; heaptrc reported
 `0 unfreed memory blocks` in both focused gates.
+
+## Optimization Evidence: Parser Direct Header Span Insertion
+
+On 2026-06-05 local time, `TH1Parser` started inserting common unsplit
+header field/value callbacks directly from llhttp spans into the parser-owned
+`THttpHeaders` store. The new concrete helper is `THttpHeaders.AddParsedSpans`;
+it remains outside `IHttpHeaders` and is only for parser-validated input.
+
+The parser keeps the safe fallback for split or cross-buffer callbacks: any
+captured span still pending when `Execute` returns is materialized into
+`FCurrentField` / `FCurrentValue`, so no callback buffer pointer survives past
+the caller's input lifetime.
+
+Focused RED/GREEN:
+
+```text
+RED: make -C tests/nextpas.core.http/test_http_headers clean test
+test_http_headers.lpr(290,10) Error: Identifier idents no member "AddParsedSpans"
+
+GREEN:
+make -C tests/nextpas.core.http/test_http_headers clean test
+17 total, 17 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_h1parser clean test
+89 total, 89 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+make -C tests/nextpas.core.http/test_http_server clean test
+274 total, 274 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+
+NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
+  make -C tests/nextpas.core.http/test_http_benchmarks clean test
+9 total, 9 passed, 0 failed
+heaptrc: 0 unfreed memory blocks
+```
+
+Parser benchmark sanity:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser clean run
+bench_max_iters=100000
+raw translated llhttp 10 headers ns/op=785.4
+raw translated llhttp POST 1KB ns/op=431.7
+raw translated llhttp pipeline ns/op=2104.6
+adapter span append 10 headers ns/op=787.0
+adapter header add 10 headers ns/op=752.9
+adapter header span add 10 headers ns/op=1293.0
+full llhttp adapter 10 headers ns/op=2808.4
+full llhttp adapter POST 1KB ns/op=1199.0
+full llhttp adapter pipeline 10 reqs ns/op=5553.6
+```
+
+C comparator sanity with llhttp `9.4.1`:
+
+```text
+command=make -C benchmarks/nextpas.core.http/bench_h1parser/compare_c clean run LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp
+bench_max_iters=100000
+C raw llhttp 10 headers ns/op=532.2
+C raw llhttp POST 1KB ns/op=275.3
+C raw llhttp pipeline ns/op=1464.6
+C noop callback 10 headers ns/op=548.7
+C noop callback POST 1KB ns/op=280.3
+C noop callback pipeline ns/op=1431.4
+```
+
+The user's suspicion about the Pascal-translated llhttp state machine is valid
+enough to keep as a dedicated optimization track: representative raw rows are
+still about `1.4x-1.5x` slower than C llhttp on this machine. It is not the
+largest current bottleneck, though. Full `IH1Parser` adapter rows remain much
+slower than raw translated llhttp, and this slice lowered the full adapter
+10-header row from the previous `3030.8 ns/op` snapshot to `2808.4 ns/op`.
+
+The isolated `adapter cost: header span add 10 headers` row is slower than the
+string `AddParsed` row because it includes the final name/value string copy.
+The full parser still benefits because the direct path removes the intermediate
+`FCurrentField` / `FCurrentValue` string allocation/copy before the final store.

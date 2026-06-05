@@ -364,6 +364,37 @@ begin
   LHeaders.Free;
 end;
 
+procedure AddBenchParsedHeaderSpan(const AHeaders: THttpHeaders;
+  const AName, AHeaderValue: AnsiString);
+begin
+  AHeaders.AddParsedSpans(PAnsiChar(AName), Length(AName),
+    PAnsiChar(AHeaderValue), Length(AHeaderValue));
+end;
+
+procedure BenchAdapterHeaderSpanAdd10Headers(aIters: Int64);
+var
+  LIt: Int64;
+  LHeaders: THttpHeaders;
+begin
+  LHeaders := THttpHeaders.Create;
+  for LIt := 1 to aIters do
+  begin
+    LHeaders.Clear;
+    AddBenchParsedHeaderSpan(LHeaders, 'Host', 'example.com');
+    AddBenchParsedHeaderSpan(LHeaders, 'User-Agent', 'nextpas/1.0');
+    AddBenchParsedHeaderSpan(LHeaders, 'Accept', 'application/json');
+    AddBenchParsedHeaderSpan(LHeaders, 'Accept-Encoding', 'gzip, deflate');
+    AddBenchParsedHeaderSpan(LHeaders, 'Accept-Language', 'en-US');
+    AddBenchParsedHeaderSpan(LHeaders, 'Connection', 'keep-alive');
+    AddBenchParsedHeaderSpan(LHeaders, 'Cache-Control', 'no-cache');
+    AddBenchParsedHeaderSpan(LHeaders, 'X-Request-Id', 'abc123');
+    AddBenchParsedHeaderSpan(LHeaders, 'X-Forwarded-For', '10.0.0.1');
+    AddBenchParsedHeaderSpan(LHeaders, 'Authorization', 'Bearer token123');
+  end;
+  GSink := GSink + SizeUInt(LHeaders.Count);
+  LHeaders.Free;
+end;
+
 procedure EnsureBenchBodyCapacity(var ABody: TBytes; const ARequired: SizeUInt);
 var
   LNewCapacity: SizeUInt;
@@ -472,6 +503,7 @@ begin
   WriteLn('--- adapter materialization costs ---');
   B.Run('adapter cost: span append 10 headers', @BenchAdapterSpanAppend10Headers);
   B.Run('adapter cost: header add 10 headers', @BenchAdapterHeaderAdd10Headers);
+  B.Run('adapter cost: header span add 10 headers', @BenchAdapterHeaderSpanAdd10Headers);
   B.Run('adapter cost: body copy 1KB', @BenchAdapterBodyCopy1K);
   WriteLn;
   WriteLn('--- llhttp ---');

@@ -85,6 +85,10 @@ type
     FTrailerBytes: Int64;
     FCurrentField: string;
     FCurrentValue: string;
+    FCurrentFieldPtr: PAnsiChar;
+    FCurrentFieldLen: SizeUInt;
+    FCurrentValuePtr: PAnsiChar;
+    FCurrentValueLen: SizeUInt;
     function ResponseEndsAtEof: Boolean;
     procedure ApplyResponseSkipBodyHint;
     function RejectWithUserError(const AReason: string;
@@ -93,6 +97,8 @@ type
       const AParser: PTLlhttpInternalT): LongInt;
     procedure EnsureBodyCapacity(const ARequired: SizeUInt);
     function SnapshotBody: TBytes;
+    procedure MaterializeCurrentHeaderSpans;
+    procedure ClearCurrentHeaderSpans;
   public
     constructor Create(const AType: TH1ParserType;
       const ASkipBody: Boolean = False);
@@ -185,6 +191,32 @@ begin
   Move(AData^, AText[LOldLen + 1], ALen);
 end;
 
+procedure MaterializeCapturedSpan(var AText: string; var AData: PAnsiChar;
+  var ALen: SizeUInt); inline;
+begin
+  if AData = nil then
+    Exit;
+  AppendSpan(AText, AData, ALen);
+  AData := nil;
+  ALen := 0;
+end;
+
+procedure CaptureHeaderSpan(var AText: string; var AData: PAnsiChar;
+  var ACapturedLen: SizeUInt; const ASpan: PAnsiChar;
+  const ASpanLen: SizeUInt); inline;
+begin
+  if ASpanLen = 0 then
+    Exit;
+  if (AText = '') and (AData = nil) then
+  begin
+    AData := ASpan;
+    ACapturedLen := ASpanLen;
+    Exit;
+  end;
+  MaterializeCapturedSpan(AText, AData, ACapturedLen);
+  AppendSpan(AText, ASpan, ASpanLen);
+end;
+
 { cdecl callbacks }
 
 function CbOnUrl(p0: PTLlhttpInternalT; p1: PAnsiChar; p2: SizeUInt): LongInt; cdecl;
@@ -203,7 +235,8 @@ begin
   LSelf := GetSelf(p0);
   if (p0^.flags and F_TRAILING) <> 0 then
     Inc(LSelf.FTrailerBytes, Int64(p2));
-  AppendSpan(LSelf.FCurrentField, p1, p2);
+  CaptureHeaderSpan(LSelf.FCurrentField, LSelf.FCurrentFieldPtr,
+    LSelf.FCurrentFieldLen, p1, p2);
   Result := 0;
 end;
 
@@ -214,7 +247,8 @@ begin
   LSelf := GetSelf(p0);
   if (p0^.flags and F_TRAILING) <> 0 then
     Inc(LSelf.FTrailerBytes, Int64(p2));
-  AppendSpan(LSelf.FCurrentValue, p1, p2);
+  CaptureHeaderSpan(LSelf.FCurrentValue, LSelf.FCurrentValuePtr,
+    LSelf.FCurrentValueLen, p1, p2);
   Result := 0;
 end;
 
@@ -223,15 +257,24 @@ var
   LSelf: TH1Parser;
 begin
   LSelf := GetSelf(p0);
-  if LSelf.FCurrentField <> '' then
+  if (LSelf.FCurrentField <> '') or (LSelf.FCurrentFieldPtr <> nil) then
   begin
     if (p0^.flags and F_TRAILING) = 0 then
-      LSelf.FHeaderStore.AddParsed(LSelf.FCurrentField, LSelf.FCurrentValue);
+    begin
+      if (LSelf.FCurrentField = '') and (LSelf.FCurrentValue = '') then
+        LSelf.FHeaderStore.AddParsedSpans(LSelf.FCurrentFieldPtr,
+          LSelf.FCurrentFieldLen, LSelf.FCurrentValuePtr,
+          LSelf.FCurrentValueLen)
+      else
+      begin
+        LSelf.MaterializeCurrentHeaderSpans;
+        LSelf.FHeaderStore.AddParsed(LSelf.FCurrentField, LSelf.FCurrentValue);
+      end;
+    end;
     if (p0^.flags and F_TRAILING) <> 0 then
       Inc(LSelf.FTrailerBytes, 4);
   end;
-  LSelf.FCurrentField := '';
-  LSelf.FCurrentValue := '';
+  LSelf.ClearCurrentHeaderSpans;
   Result := 0;
 end;
 
@@ -357,6 +400,7 @@ var
   LErrorPos: PAnsiChar;
 begin
   LErrno := llhttp_execute(@FParser, ABuf, ALen);
+  MaterializeCurrentHeaderSpans;
   if (LErrno = HPE_PAUSED) and FComplete then
   begin
     FError := False;
@@ -625,6 +669,22 @@ begin
     Move(FBody[0], Result[0], FBodySize);
 end;
 
+procedure TH1Parser.MaterializeCurrentHeaderSpans;
+begin
+  MaterializeCapturedSpan(FCurrentField, FCurrentFieldPtr, FCurrentFieldLen);
+  MaterializeCapturedSpan(FCurrentValue, FCurrentValuePtr, FCurrentValueLen);
+end;
+
+procedure TH1Parser.ClearCurrentHeaderSpans;
+begin
+  FCurrentField := '';
+  FCurrentValue := '';
+  FCurrentFieldPtr := nil;
+  FCurrentFieldLen := 0;
+  FCurrentValuePtr := nil;
+  FCurrentValueLen := 0;
+end;
+
 function TH1Parser.HasError: Boolean;
 begin
   Result := FError;
@@ -654,8 +714,7 @@ begin
   FErrorMsg := '';
   FErrorKind := pekNone;
   FTrailerBytes := 0;
-  FCurrentField := '';
-  FCurrentValue := '';
+  ClearCurrentHeaderSpans;
   llhttp_reset(@FParser);
   FParser.data := Pointer(Self);
   ApplyResponseSkipBodyHint;

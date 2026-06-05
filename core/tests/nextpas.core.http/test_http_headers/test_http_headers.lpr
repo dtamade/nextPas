@@ -269,6 +269,51 @@ begin
     'parsed add stores canonical lowercase names');
 end;
 
+procedure TestParsedSpanAddCanonicalizesParserValidatedHeaders;
+var
+  LStore: THttpHeaders;
+  LH: IHttpHeaders;
+  LName1, LValue1, LName2, LValue2, LName3, LValue3: AnsiString;
+  LAll: TStringArray;
+  LSeen: string;
+begin
+  LStore := THttpHeaders.Create;
+  LH := LStore;
+
+  LName1 := 'Content-Type';
+  LValue1 := 'text/plain';
+  LName2 := 'X-Custom';
+  LValue2 := 'a';
+  LName3 := 'x-custom';
+  LValue3 := 'b';
+
+  LStore.AddParsedSpans(PAnsiChar(LName1), Length(LName1),
+    PAnsiChar(LValue1), Length(LValue1));
+  LStore.AddParsedSpans(PAnsiChar(LName2), Length(LName2),
+    PAnsiChar(LValue2), Length(LValue2));
+  LStore.AddParsedSpans(PAnsiChar(LName3), Length(LName3),
+    PAnsiChar(LValue3), Length(LValue3));
+
+  CheckEqual(Int64(3), Int64(LH.Count), 'parsed span add preserves duplicate entries');
+  CheckEqual('text/plain', LH.Get('CONTENT-TYPE'), 'parsed span add canonical lookup');
+
+  LAll := LH.GetAll('X-Custom');
+  CheckEqual(Int64(2), Int64(Length(LAll)), 'parsed span add duplicate count');
+  CheckEqual('a', LAll[0], 'parsed span add first duplicate value');
+  CheckEqual('b', LAll[1], 'parsed span add second duplicate value');
+
+  LSeen := '';
+  LH.ForEach(
+    procedure(const AName, AValue: string)
+    begin
+      if LSeen <> '' then
+        LSeen := LSeen + '|';
+      LSeen := LSeen + AName + '=' + AValue;
+    end);
+  CheckEqual('content-type=text/plain|x-custom=a|x-custom=b', LSeen,
+    'parsed span add stores canonical lowercase names');
+end;
+
 procedure ExpectHeaderError(const ALabel: string; const AUseSet: Boolean;
   const AName, AValue: string);
 var
@@ -315,6 +360,8 @@ begin
   T.Run('Clear resets and allows reuse', @TestClearResetsAndAllowsReuse);
   T.Run('Parsed add canonicalizes parser validated headers',
     @TestParsedAddCanonicalizesParserValidatedHeaders);
+  T.Run('Parsed span add canonicalizes parser validated headers',
+    @TestParsedSpanAddCanonicalizesParserValidatedHeaders);
   T.Run('Validation rejects invalid names and values', @TestValidationRejectsInvalidNamesAndValues);
   T.Summary;
 end.
