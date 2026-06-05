@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CONFIG>
-  <Compiler Value="/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc" Date="1767810746"/>
-  <Params Value="-MObjFPC -Scghi -Cg -O1 -gw3 -gl -l -vewnhibq -Fi/home/dtamade/projects/fafafa.ssl/tests/winssl/lib/x86_64-linux -Fu/home/dtamade/projects/fafafa.ssl/tests/winssl/ -Fu/home/dtamade/projects/fafafa.ssl/src -Fu/home/dtamade/projects/fafafa.ssl/tests/framework -FU/home/dtamade/projects/fafafa.ssl/tests/winssl/lib/x86_64-linux/ -FE/home/dtamade/projects/fafafa.ssl/tests/winssl/bin/ -o/home/dtamade/projects/fafafa.ssl/tests/winssl/bin/test_winssl_session_resumption test_winssl_session_resumption.pas"/>
-  <Complete Value="False"/>
-</CONFIG>

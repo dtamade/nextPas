@@ -6,6 +6,9 @@ build/
 *.ppu
 *.rst
 *.compiled
+*.exe
+libimp*.a
+*.py[cod]
 
 # IDE files
 *.lps

@@ -3,13 +3,18 @@
 .sisyphus/
 .worktrees/
 .claude/projects/
+__pycache__/
+*.py[cod]
 GPATH
 GRTAGS
 GTAGS
 tmp/
 core/src/libimp*.a
+libimp*.a
 *.o
 *.ppu
+*.compiled
+*.exe
 tests/snapshots/*.diff.txt
 tests/harness/runner
 tools/stage0/nextpas
@@ -34,8 +39,30 @@ crash_*.txt
 ppas.sh
 tools/stage0/*.s
 # Compiled test/benchmark binaries
+build/bin/
 tests/*/test_*/test_*[!.lpr]
 benchmarks/*/bench_*[!.lpr]
+benchmarks/**/bench_*
+!benchmarks/**/*.lpr
+!benchmarks/**/*.go
+core/tests/*/test_*/test_*
+!core/tests/*/test_*/test_*.lpr
+core/tests/*/*/test_*[!.pas]
+core/tests/nextpas.core.simd/test_conv2d_pool2d
+core/tests/nextpas.core.tls/certificate/**/test_p2_*
+!core/tests/nextpas.core.tls/certificate/**/*.pas
+!core/tests/nextpas.core.tls/certificate/**/*.lpi
+core/tests/nextpas.core.tls/mbedtls/test_mbedtls_cert_*
+!core/tests/nextpas.core.tls/mbedtls/*.pas
+core/tests/*/benchmarks/benchmark_*
+core/benchmarks/*/bench_*/bench_*
+!core/benchmarks/*/bench_*/bench_*.lpr
+core/benchmarks/**/compare_go/bench_*
+!core/benchmarks/**/*.go
+core/benchmarks/**/compare_rust/bench_*
+!core/benchmarks/**/*.rs
+core/benchmarks/**/compare_fpcrtl/bench_*
+core/benchmarks/platform-comparison/**/bench_compare
 
 # TUI migration staging (fafafa.tui reference source, not committed)
 core/_migration/

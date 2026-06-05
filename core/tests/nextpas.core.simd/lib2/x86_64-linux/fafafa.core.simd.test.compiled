@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<CONFIG>
-  <Compiler Value="/opt/fpcupdeluxe/fpc/bin/x86_64-linux/fpc" Date="1767810746"/>
-  <Params Value="-MObjFPC -Scghi -CX -Cg -O3 -XX -l -vewnhibq -Fi/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/lib2/x86_64-linux -Fi/home/dtamade/projects/fafafa.core/src -Fu/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/ -Fu/home/dtamade/projects/fafafa.core/src -Fu/opt/fpcupdeluxe/lazarus/packager/units/x86_64-linux -FU/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/lib2/x86_64-linux/ -FE/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/bin2/ -o/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/bin2/fafafa.core.simd.test -FE/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/bin2 -FU/home/dtamade/projects/fafafa.core/tests/fafafa.core.simd/lib2/x86_64-linux fafafa.core.simd.test.lpr"/>
-</CONFIG>
