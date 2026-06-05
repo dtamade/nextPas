@@ -182,10 +182,16 @@ function atomic_tagged_ptr(aPtr: Pointer; aTag: {$IFDEF CPU64}UInt16{$ELSE}UInt3
 begin
   {$PUSH}
   {$WARN 4055 OFF}
-  {$IFDEF NEXTPAS_ATOMIC_TAGGED_PTR_CHECKS}
-    {$IF DEFINED(CPUX86_64)}
+  {$IF DEFINED(CPUX86_64)}
+    {$IFDEF NEXTPAS_ATOMIC_TAGGED_PTR_CHECKS}
       _x86_64_pointer_to_low48(aPtr);
-    {$ELSE}
+    {$ENDIF}
+  {$ELSE}
+    if (PtrUInt(aPtr) and TAG_MASK) <> 0 then
+      raise EArgumentError.Create('atomic_tagged_ptr: pointer not aligned for low-bit tag packing');
+    if (PtrUInt(aTag) and (not TAG_MASK)) <> 0 then
+      raise EArgumentError.Create('atomic_tagged_ptr: tag does not fit TAG_BITS');
+    {$IFDEF NEXTPAS_ATOMIC_TAGGED_PTR_CHECKS}
       Assert((PtrUInt(aPtr) and TAG_MASK) = 0, 'atomic_tagged_ptr: pointer not aligned for low-bit tag packing');
       Assert((PtrUInt(aTag) and (not TAG_MASK)) = 0, 'atomic_tagged_ptr: tag does not fit TAG_BITS');
     {$ENDIF}

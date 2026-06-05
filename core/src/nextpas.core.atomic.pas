@@ -85,6 +85,10 @@ const
 procedure cpu_pause;
 procedure CpuPause; inline;
 
+// Legacy PascalCase compatibility facade.
+// Prefer atomic_* or TAtomic* in new code.
+// Keep these wrappers source-compatible while older call sites migrate toward
+// the canonical C-style or typed atomic APIs.
 function AtomicLoad32(var ATarget: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
 procedure AtomicStore32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst); inline;
 function AtomicExchange32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder = moSeqCst): Int32; inline;
@@ -980,9 +984,9 @@ begin
           Result := aObj;
           _compiler_barrier;
         {$ELSE}
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
           Result := aObj;
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
         {$ENDIF}
       end;
   end;
@@ -1051,9 +1055,9 @@ begin
           Result := aObj;
           _compiler_barrier;
         {$ELSE}
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
           Result := aObj;
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
         {$ENDIF}
       end;
   end;
@@ -1166,9 +1170,9 @@ begin
         {$ELSE}
           // On weakly-ordered CPUs, InterlockedExchange provides atomicity but
           // not a global seq_cst edge on its own. Surround it with full fences.
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
           InterlockedExchange(aObj, aDesired);
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
         {$ENDIF}
       end;
   end;
@@ -1232,9 +1236,9 @@ begin
         {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
           InterlockedExchange64(aObj, aDesired);
         {$ELSE}
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
           InterlockedExchange64(aObj, aDesired);
-          ReadWriteBarrier;
+          atomic_seq_cst_fence;
         {$ENDIF}
       end;
   end;
@@ -2728,6 +2732,8 @@ begin
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2749,6 +2755,8 @@ begin
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -2775,6 +2783,8 @@ begin
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2791,6 +2801,8 @@ begin
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -2835,6 +2847,8 @@ begin
       atomic_seq_cst_fence;
     mo_release, mo_acq_rel:
       WriteBarrier;
+  else
+    ;
   end;
   {$ENDIF}
   repeat
@@ -2856,6 +2870,8 @@ begin
       atomic_seq_cst_fence;
     mo_consume, mo_acquire, mo_acq_rel:
       ReadBarrier;
+  else
+    ;
   end;
   {$ENDIF}
 end;
@@ -3424,7 +3440,8 @@ var
   LExpected: Int32;
 begin
   LExpected := AExpected;
-  atomic_compare_exchange_strong(ATarget, LExpected, ADesired, AOrder, AtomicCompatFailureOrder(AOrder));
+  atomic_compare_exchange_strong(ATarget, LExpected, ADesired,
+    _cas_success_order(AOrder), AtomicCompatFailureOrder(AOrder));
   Result := LExpected;
 end;
 
@@ -3474,7 +3491,8 @@ var
   LExpected: Int64;
 begin
   LExpected := AExpected;
-  atomic_compare_exchange_strong_64(ATarget, LExpected, ADesired, AOrder, AtomicCompatFailureOrder(AOrder));
+  atomic_compare_exchange_strong_64(ATarget, LExpected, ADesired,
+    _cas_success_order(AOrder), AtomicCompatFailureOrder(AOrder));
   Result := LExpected;
 end;
 
@@ -3509,7 +3527,8 @@ var
   LExpected: Pointer;
 begin
   LExpected := AExpected;
-  atomic_compare_exchange_strong(ATarget, LExpected, ADesired, AOrder, AtomicCompatFailureOrder(AOrder));
+  atomic_compare_exchange_strong(ATarget, LExpected, ADesired,
+    _cas_success_order(AOrder), AtomicCompatFailureOrder(AOrder));
   Result := LExpected;
 end;
 

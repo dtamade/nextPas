@@ -7,7 +7,8 @@ uses
   SysUtils, Classes,
   nextpas.core.errors,
   nextpas.core.testing,
-  nextpas.core.atomic;
+  nextpas.core.atomic,
+  nextpas.core.atomic.compat;
 
 var
   T: TTestRunner;
@@ -198,15 +199,19 @@ const
   AtomicSourcePath = '../../../src/nextpas.core.atomic.pas';
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
-  AtomicX8664SnapshotPath = '../../../src/nextpas.core.atomic.x86_64.inc';
+  AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
+  AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
+  AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
 var
   LAtomicSource: string;
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
+  LAtomicCompatSource: string;
   LX8664SnapshotSource: string;
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
   LSeqCstFenceHelperSection: string;
+  LTaggedPtrSection: string;
   LThreadFenceSection: string;
   LSingleStrongCasSection: string;
   LSingleWeakCasSection: string;
@@ -215,16 +220,25 @@ var
   LTypesInt64LockFreeSection: string;
   LTypesUInt64LockFreeSection: string;
   LFetchAddFallbackSection: string;
+  LLoad32Section: string;
   LLoad64Section: string;
+  LLoad32SeqCstSection: string;
+  LLoad64SeqCstSection: string;
   LStore32Section: string;
   LStore64Section: string;
   LStore32SeqCstSection: string;
   LStore64SeqCstSection: string;
+  LPascalCaseCas32Section: string;
+  LPascalCaseCas64Section: string;
+  LPascalCaseCasPtrSection: string;
 begin
   LAtomicSource := ReadUtf8TextFile(AtomicSourcePath);
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
-  LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotPath);
+  LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
+  Check(not FileExists(AtomicX8664SnapshotLegacyPath),
+    'x86_64 snapshot must not remain in src');
+  LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotArchivePath);
   LThreadFenceSection := ExtractImplementationSection(LAtomicCoreSource,
     'procedure atomic_thread_fence(aOrder: memory_order_t);',
     'procedure atomic_signal_fence(aOrder: memory_order_t);');
@@ -237,6 +251,9 @@ begin
   LSeqCstFenceHelperSection := ExtractSection(LAtomicCoreSource,
     'procedure atomic_seq_cst_fence;',
     'procedure cpu_pause;');
+  LTaggedPtrSection := ExtractImplementationSection(LAtomicCoreSource,
+    'function atomic_tagged_ptr(aPtr: Pointer; aTag:',
+    'function atomic_tagged_ptr_get_ptr');
   LSingleStrongCasSection := ExtractImplementationSection(LAtomicSource,
     '// ✅ P1-002: CAS 单内存序版本实现 - 简化常见用法（成功和失败使用相同内存序）',
     'function atomic_compare_exchange_weak(var aObj: Int32; var aExpected: Int32; aDesired: Int32;');
@@ -258,9 +275,18 @@ begin
   LFetchAddFallbackSection := ExtractImplementationSection(LAtomicSource,
     'function _atomic_fetch_add_64_x86(var aObj: Int64; aArg: Int64): Int64;',
     '{$ENDIF}');
+  LLoad32Section := ExtractImplementationSection(LAtomicSource,
+    'function atomic_load(var aObj: Int32; aOrder: memory_order_t): Int32;',
+    'function atomic_load(var aObj: Int32): Int32;');
   LLoad64Section := ExtractImplementationSection(LAtomicSource,
     'function atomic_load_64(var aObj: Int64; aOrder: memory_order_t): Int64;',
     'function atomic_load_64(var aObj: Int64): Int64;');
+  LLoad32SeqCstSection := ExtractSection(LLoad32Section,
+    '    mo_seq_cst:',
+    '      end;');
+  LLoad64SeqCstSection := ExtractSection(LLoad64Section,
+    '    mo_seq_cst:',
+    '      end;');
   LStore32Section := ExtractImplementationSection(LAtomicSource,
     'procedure atomic_store(var aObj: Int32; aDesired: Int32; aOrder: memory_order_t);',
     'procedure atomic_store(var aObj: Int32; aDesired: Int32);');
@@ -273,11 +299,24 @@ begin
   LStore64SeqCstSection := ExtractSection(LStore64Section,
     '    mo_seq_cst:',
     '  end;');
+  LPascalCaseCas32Section := ExtractImplementationSection(LAtomicSource,
+    'function AtomicCompareExchange32(var ATarget: Int32; const AExpected, ADesired: Int32; const AOrder: TMemoryOrder): Int32;',
+    'function AtomicFetchAdd32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder): Int32;');
+  LPascalCaseCas64Section := ExtractImplementationSection(LAtomicSource,
+    'function AtomicCompareExchange64(var ATarget: Int64; const AExpected, ADesired: Int64; const AOrder: TMemoryOrder): Int64;',
+    'function AtomicFetchAdd64(var ATarget: Int64; const AValue: Int64; const AOrder: TMemoryOrder): Int64;');
+  LPascalCaseCasPtrSection := ExtractImplementationSection(LAtomicSource,
+    'function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder): Pointer;',
+    'procedure AtomicThreadFence(const AOrder: TMemoryOrder);');
 
   Check(Pos('mo_relaxed: 无效，会触发运行时错误', LAtomicSource) = 0,
     'atomic_thread_fence docs must not claim mo_relaxed raises runtime error');
   CheckNotContains(LAtomicSource, '@performance 零开销（仅编译器指令）',
     'atomic_signal_fence docs must not promise zero runtime overhead');
+  CheckContains(LAtomicSource, 'Legacy PascalCase compatibility facade.',
+    'main atomic unit must mark PascalCase wrappers as legacy compatibility surface');
+  CheckContains(LAtomicSource, 'Prefer atomic_* or TAtomic* in new code.',
+    'main atomic unit must recommend canonical C-style or typed APIs');
   CheckContains(LAtomicSource,
     'On x86/x86_64, a plain load is already strongly ordered at the CPU level;',
     'seq_cst load docs must describe x86 plain-load mapping');
@@ -298,16 +337,36 @@ begin
     'seq_cst fence helper must specialize PPC/PPC64');
   CheckContains(LSeqCstFenceHelperSection, 'sync',
     'seq_cst fence helper must use a heavyweight PPC sync fence');
+  CheckContains(LTaggedPtrSection,
+    'raise EArgumentError.Create(''atomic_tagged_ptr: pointer not aligned for low-bit tag packing'')',
+    'non-x86 tagged pointer packing must reject misaligned pointers in release builds');
+  CheckContains(LTaggedPtrSection,
+    'raise EArgumentError.Create(''atomic_tagged_ptr: tag does not fit TAG_BITS'')',
+    'non-x86 tagged pointer packing must reject oversized tags in release builds');
   CheckContains(LThreadFenceSection, 'mo_seq_cst: atomic_seq_cst_fence;',
     'atomic_thread_fence seq_cst must route through the dedicated seq_cst fence helper');
-  CheckContains(LX8664SnapshotSource, 'Historical x86_64 atomic implementation snapshot.',
-    'x86_64 snapshot must be marked historical');
-  CheckContains(LX8664SnapshotSource, 'This file is not included by nextpas.core.atomic.pas.',
-    'x86_64 snapshot must declare non-live include status');
+  CheckContains(LAtomicCompatSource, 'Legacy PascalCase compatibility facade mirrored for older call sites.',
+    'compat unit must document PascalCase compatibility ownership');
+  CheckContains(LAtomicCompatSource, 'function AtomicLoad32',
+    'compat unit must mirror PascalCase load/store facade');
+  CheckContains(LAtomicCompatSource, 'procedure AtomicThreadFence',
+    'compat unit must mirror PascalCase fence facade');
+  CheckContains(LX8664SnapshotSource, 'Archived historical x86_64 atomic implementation snapshot.',
+    'archived x86_64 snapshot must be marked historical');
+  CheckContains(LX8664SnapshotSource, 'Documentation archive only.',
+    'archived x86_64 snapshot must declare documentation-only status');
+  CheckContains(LX8664SnapshotSource, 'This file is not part of the live source set.',
+    'archived x86_64 snapshot must declare non-live status');
   CheckContains(LSingleStrongCasSection, 'AtomicCompatFailureOrder(aOrder)',
     'single-order strong CAS must derive failure order');
   CheckContains(LSingleWeakCasSection, 'AtomicCompatFailureOrder(aOrder)',
     'single-order weak CAS must derive failure order');
+  CheckContains(LPascalCaseCas32Section, '_cas_success_order(AOrder)',
+    'PascalCase Int32 CAS must normalize consume to acquire on success path');
+  CheckContains(LPascalCaseCas64Section, '_cas_success_order(AOrder)',
+    'PascalCase Int64 CAS must normalize consume to acquire on success path');
+  CheckContains(LPascalCaseCasPtrSection, '_cas_success_order(AOrder)',
+    'PascalCase pointer CAS must normalize consume to acquire on success path');
   CheckContains(LCompatFailureSection, 'mo_consume',
     'AtomicCompatFailureOrder must treat consume explicitly');
   CheckContains(LTypesFailureSection, 'mo_consume',
@@ -322,16 +381,14 @@ begin
     'i386 64-bit fallback add must guard lock release with try/finally');
   CheckNotContains(LLoad64Section, 'Result := aObj;' + LineEnding + '  {$IF DEFINED(CPUX86) AND NOT DEFINED(CPU64)}',
     'i386 64-bit atomic load must not perform a pre-load plain read');
-  CheckContains(LStore32SeqCstSection, 'ReadWriteBarrier',
-    'non-x86 seq_cst 32-bit store must add full barriers around InterlockedExchange');
-  CheckContains(LStore64SeqCstSection, 'ReadWriteBarrier',
-    'non-x86 seq_cst 64-bit store must add full barriers around InterlockedExchange64');
-  CheckNotContains(LAtomicSource, 'mo_seq_cst:' + LineEnding + '      ReadWriteBarrier;',
-    'seq_cst cases in atomic source must not rely on bare ReadWriteBarrier');
-  CheckNotContains(LAtomicSource, 'mo_seq_cst:' + LineEnding + '        ReadWriteBarrier;',
-    'deep seq_cst cases in atomic source must not rely on bare ReadWriteBarrier');
-  CheckContains(LAtomicSource, 'mo_seq_cst:' + LineEnding + '      atomic_seq_cst_fence;',
-    'seq_cst cases must use the dedicated seq_cst fence helper');
+  CheckContains(LLoad32SeqCstSection, 'atomic_seq_cst_fence;',
+    'non-x86 seq_cst 32-bit load must use the dedicated seq_cst fence helper');
+  CheckContains(LLoad64SeqCstSection, 'atomic_seq_cst_fence;',
+    'non-x86 seq_cst 64-bit load must use the dedicated seq_cst fence helper');
+  CheckContains(LStore32SeqCstSection, 'atomic_seq_cst_fence;',
+    'non-x86 seq_cst 32-bit store must use the dedicated seq_cst fence helper');
+  CheckContains(LStore64SeqCstSection, 'atomic_seq_cst_fence;',
+    'non-x86 seq_cst 64-bit store must use the dedicated seq_cst fence helper');
 end;
 
 procedure TestConcurrentFetchAdd;
@@ -410,6 +467,24 @@ begin
   CheckEqual(Int64(18), Int64(LAtomic.IntoInner));
 end;
 
+procedure TestAtomicCompatFacade;
+var
+  LVal: Int32;
+  LOld: Int32;
+begin
+  LVal := 0;
+  nextpas.core.atomic.compat.AtomicStore32(LVal, 9, moRelease);
+  CheckEqual(Int64(9), Int64(nextpas.core.atomic.compat.AtomicLoad32(LVal, moAcquire)));
+
+  LOld := nextpas.core.atomic.compat.AtomicFetchAdd32(LVal, 4, moAcqRel);
+  CheckEqual(Int64(9), Int64(LOld));
+  CheckEqual(Int64(13), Int64(LVal));
+
+  nextpas.core.atomic.compat.AtomicThreadFence(moSeqCst);
+  nextpas.core.atomic.compat.AtomicSignalFence(moSeqCst);
+  nextpas.core.atomic.compat.CpuPause;
+end;
+
 procedure TestAtomicTaggedPointer;
 var
   LValue: Int32;
@@ -463,6 +538,7 @@ begin
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
   T.Summary;

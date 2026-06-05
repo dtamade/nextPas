@@ -1,20 +1,27 @@
 {
-  nextpas.core.atomic.x86_64.inc
-  Historical x86_64 atomic implementation snapshot.
+  nextpas.core.atomic.x86_64.snapshot.txt
+  Archived historical x86_64 atomic implementation snapshot.
 
   NOTE:
-  - This file is not included by nextpas.core.atomic.pas.
+  - Documentation archive only.
+  - This file is not part of the live source set.
   - The live implementation path is nextpas.core.atomic.pas plus
     nextpas.core.atomic.core.pas.
   - Keep this file only as a reference snapshot; do not use it as proof of
     current runtime behavior.
+
+  Historical context:
+  - This snapshot predates the current evidence-backed x86/x86_64 seq_cst load
+    mapping and is preserved only to explain earlier review discussions.
+  - Its comments and implementation choices can diverge from the live atomic
+    module and must not be treated as normative.
 
   x86_64 has Total Store Order (TSO):
   - All stores are release stores (visible to other cores in order)
   - All loads are acquire loads (see prior stores from other cores)
   - Only store-load reordering is possible
 
-  Implications:
+  Historical snapshot implications:
   - moRelaxed load/store: plain mov (compiler barrier only if needed)
   - moAcquire load: plain mov + compiler barrier after
   - moRelease store: compiler barrier before + plain mov
@@ -220,33 +227,20 @@ begin
   Result := Pointer(InterlockedCompareExchange64(Int64(ATarget), Int64(ADesired), Int64(AExpected)));
 end;
 
-{ ============================================================ }
-{ Fences - x86_64                                              }
-{ ============================================================ }
-
 procedure AtomicThreadFence(const AOrder: TMemoryOrder);
 begin
   case AOrder of
-    moRelaxed:
-      { no-op };
-    moAcquire, moRelease, moAcqRel:
-      CompilerBarrier;
-    moSeqCst:
-      asm
-        mfence
-      end;
+    moRelaxed: ;
+    moAcquire:
+      asm lfence end;
+    moRelease:
+      asm sfence end;
+  else
+      asm mfence end;
   end;
 end;
 
 procedure AtomicSignalFence(const AOrder: TMemoryOrder);
 begin
-  if AOrder <> moRelaxed then
-    CompilerBarrier;
-end;
-
-procedure CpuPause;
-begin
-  asm
-    pause
-  end;
+  CompilerBarrier;
 end;
