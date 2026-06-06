@@ -417,6 +417,8 @@ begin
   LUrl := AReq.Url;
   CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LResp := FTransport.RoundTrip(AReq);
+  if LResp = nil then
+    raise EHttpError.Create('HTTP transport returned no response');
 
   // Handle redirects
   if FOptions.FollowRedirects and

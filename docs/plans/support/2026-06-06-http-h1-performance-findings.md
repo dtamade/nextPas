@@ -1,5 +1,32 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http client nil transport response slice
+
+- 本轮转向 client transport seam 错误语义：
+  `IHttpTransport.RoundTrip` 是 default H1、future H2/H3 与 injected test/custom
+  transport 的共同边界。若 transport 返回 nil response，旧 `THttpClient.DoRequest`
+  会直接读取 `LResp.StatusCode`，把 contract violation 暴露成 access violation。
+- 选择依据：
+  - Go/Rust HTTP client 都把“没有 response”表达为 error，而不是让调用方碰到
+    nil response runtime fault。
+  - 这是 public client facade 的错误语义，不是 redirect URL spelling 变体。
+  - 本 slice 不需要新增 public API 或修改 transport vtable。
+- RED 证据：
+  - injected `TNilResponseTransport.RoundTrip` 返回 nil。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `46 total, 45 passed, 1 failed`
+    - failed at `Client Do rejects nil transport response`
+    - failure: `Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `THttpClient.DoRequest` 在 `RoundTrip` 后立即检查 nil response，并抛
+    `EHttpError`。
+  - focused gate 证明该错误不会再穿透成 access violation。
+- 复盘结论：
+  client facade 现在对 transport 返回 nil response 有稳定错误边界。后续同线可继续
+  审计 nil headers、options validation 或 per-request policy，但不要混成一个大
+  API 变更。
+
 ## 2026-06-06 http redirect response body error-path proof
 
 - 本轮补齐上一 slice 的 error-path proof：

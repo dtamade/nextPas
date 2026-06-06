@@ -85,6 +85,11 @@ type
     property SeenCookie2Header: string read FSeenCookie2Header;
   end;
 
+  TNilResponseTransport = class(TInterfacedObject, IHttpTransport)
+  public
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+  end;
+
   TOneShotReader = class(TInterfacedObject, IReader)
   private
     FData: string;
@@ -319,6 +324,11 @@ begin
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'));
 end;
 
+function TNilResponseTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+begin
+  Result := nil;
+end;
+
 constructor TOneShotReader.Create(const AData: string);
 begin
   inherited Create;
@@ -518,6 +528,28 @@ begin
       LRaised := True;
   end;
   Check(LRaised, 'Client.Do_ rejects nil request');
+end;
+
+procedure TestClientDoRejectsNilTransportResponse;
+var
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LTransport := TNilResponseTransport.Create as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmGet, 'http://example.test/');
+
+  LRaised := False;
+  try
+    LClient.Do_(LReq);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'Client.Do_ rejects nil transport response');
 end;
 
 // PLACEHOLDER_TEST2
@@ -2045,6 +2077,8 @@ begin
   T := TTestRunner.Create('nextpas.core.http.client');
   T.Run('Client GET returns 200 + body', @TestClientGet200);
   T.Run('Client Do rejects nil request', @TestClientDoRejectsNilRequest);
+  T.Run('Client Do rejects nil transport response',
+    @TestClientDoRejectsNilTransportResponse);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
   T.Run('Client POST with body', @TestClientPostBody);
   T.Run('Client Do uses NewRequest headers/body helper',

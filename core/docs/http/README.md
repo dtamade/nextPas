@@ -86,6 +86,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
 - `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`; `Do_(nil)` raises `EArgumentError`
+- If a transport returns nil from `RoundTrip`, `IHttpClient.Do_` raises
+  `EHttpError` instead of leaking a nil-response access violation through the
+  client facade.
 - Client redirects follow `301` / `302` / `303` by replaying as `GET` with no body;
   `307` / `308` preserve the original method and replay body readers that support
   `IStream` rewind. Non-empty non-replayable bodies raise `EHttpError` instead

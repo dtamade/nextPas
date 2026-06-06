@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http client nil transport response slice
+
+- **Status:** completed.
+- Objective:
+  - make nil `IHttpTransport.RoundTrip` results fail as `EHttpError`
+  - keep this as a transport seam error-boundary slice, not a new public API
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - injected `TNilResponseTransport` returned nil from `RoundTrip`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `46 total, 45 passed, 1 failed`
+    - failed at `Client Do rejects nil transport response`
+    - failure: `Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpClient.DoRequest` validates the `RoundTrip` response before redirect
+    handling or status inspection
+  - nil response now raises `EHttpError`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `46 total, 46 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - custom/future transports now have a stable client facade error boundary for
+    nil response contract violations
+  - this does not claim per-request policy, redirect callback, or transport
+    vtable expansion
+
 ## Session: 2026-06-06 http redirect response body error-path proof
 
 - **Status:** completed.

@@ -50,6 +50,10 @@
   - 继续收紧：`IHttpClient.Do_(Req)` 现在在 public client 入口拒绝 nil
     request，并抛 `EArgumentError`，避免调用方错误穿透到 transport 形成
     access violation；`test_http_client` 锁住该错误语义。
+  - 继续收紧：`IHttpClient.Do_(Req)` 现在也拒绝 nil transport response。
+    injected/default transport 如果从 `RoundTrip` 返回 nil，client facade 会抛
+    `EHttpError`，而不是让 nil response 访问穿透成 access violation；
+    `test_http_client` 锁住该 transport seam contract。
   - 继续收紧：client redirect 现在覆盖 `303 See Other`。`HTTP_STATUS_SEE_OTHER`
     由 `http.base` 与 facade 暴露，`HttpStatusText(303)` 返回 `See Other`；
     `IHttpClient` 跟随 `303` 时按 Go / Rust 常见 client 语义把原请求改为

@@ -1,5 +1,23 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http client nil transport response slice
+
+### Goal
+
+收紧 client transport seam 错误语义：如果 injected/default `IHttpTransport`
+从 `RoundTrip` 返回 nil response，`IHttpClient.Do_` 必须抛 `EHttpError`，
+不能让 nil response 访问穿透成 access violation。
+
+### Checklist
+
+- [x] RED：新增 injected nil-response transport，证明当前 `Do_` 会失败在 access
+  violation，而不是稳定 `EHttpError`。
+- [x] GREEN：`THttpClient.DoRequest` 在 `RoundTrip` 后立即验证 response 非 nil。
+- [x] 保持本 slice 边界：不新增 public API、不改变 redirect policy、不改
+  H1/default transport。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http redirect response body error-path proof
 
 ### Goal
