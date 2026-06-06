@@ -47,8 +47,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.transform` now provides projection, view, model, and 2D camera builders for
   both `TMat4f` and `TMat4d`.
 - Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
-  `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, composition order, and
-  direct `Double`-path parity for projection/view/model/camera builders.
+  `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, composition order, exact
+  owner-level `LookAt` finite-guard messages, and direct `Double`-path parity for
+  projection/view/model/camera builders.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints, representative midpoint/branch
   points, finite out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
@@ -241,8 +242,8 @@ Status:
   for `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and
   `Camera2D`, `LookAt` up-vector magnitude invariance for the same direction, screen-space
   `Camera2D` positive Y down, geometry guard messages for degenerate `Ortho` / `Perspective` /
-  `LookAt` / `Camera2D` inputs, invalid projection inputs, and `Translate * Rotate * Scale` local
-  composition.
+  `LookAt` / `Camera2D` inputs, exact owner-level finite guard messages for `LookAt` eye/target/up
+  inputs, invalid projection inputs, and `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing
 

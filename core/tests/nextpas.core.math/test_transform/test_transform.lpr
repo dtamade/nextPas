@@ -191,6 +191,18 @@ begin
   LookAt(TVec3d.Create(DoubleInfinity, 0.0, 5.0), TVec3d.Zero, TVec3d.Create(0.0, 1.0, 0.0));
 end;
 
+procedure RaiseLookAtInfiniteTargetSingle;
+begin
+  LookAt(TVec3f.Create(0.0, 0.0, 5.0),
+    TVec3f.Create(SingleInfinity, 0.0, 0.0), TVec3f.Create(0.0, 1.0, 0.0));
+end;
+
+procedure RaiseLookAtInfiniteUpDouble;
+begin
+  LookAt(TVec3d.Create(0.0, 0.0, 5.0), TVec3d.Zero,
+    TVec3d.Create(0.0, DoubleInfinity, 0.0));
+end;
+
 procedure RaiseTranslateNaNSingle;
 begin
   Translate(SingleNaN, Single(0.0), Single(0.0));
@@ -401,8 +413,14 @@ begin
   ExpectArgumentError('Ortho double infinite far', @RaiseOrthoInfiniteFarDouble);
   ExpectArgumentError('Perspective single NaN FOV', @RaisePerspectiveNaNFovSingle);
   ExpectArgumentError('Perspective double NaN FOV', @RaisePerspectiveNaNFovDouble);
-  ExpectArgumentError('LookAt single infinite eye', @RaiseLookAtInfiniteEyeSingle);
-  ExpectArgumentError('LookAt double infinite eye', @RaiseLookAtInfiniteEyeDouble);
+  ExpectArgumentErrorMessage('LookAt: eye must be finite', 'LookAt single infinite eye',
+    @RaiseLookAtInfiniteEyeSingle);
+  ExpectArgumentErrorMessage('LookAt: eye must be finite', 'LookAt double infinite eye',
+    @RaiseLookAtInfiniteEyeDouble);
+  ExpectArgumentErrorMessage('LookAt: target must be finite', 'LookAt single infinite target',
+    @RaiseLookAtInfiniteTargetSingle);
+  ExpectArgumentErrorMessage('LookAt: up vector must be finite', 'LookAt double infinite up',
+    @RaiseLookAtInfiniteUpDouble);
   ExpectArgumentError('Translate single NaN', @RaiseTranslateNaNSingle);
   ExpectArgumentError('Translate double infinity', @RaiseTranslateInfinityDouble);
   ExpectArgumentError('Scale single NaN', @RaiseScaleNaNSingle);
