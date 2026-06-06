@@ -285,6 +285,63 @@ begin
   end;
 end;
 
+procedure TestNextBoolRejectsNonFiniteProbability;
+var
+  Rng: TRandomGen;
+  Caught: Boolean;
+  ErrorMessage: string;
+begin
+  Rng := TRandomGen.Create(123);
+  try
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Rng.NextBool(SingleNaN);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'NextBool rejects NaN probability');
+    CheckEqual('TRandomGen.NextBool: AProbability must be finite', ErrorMessage,
+      'NextBool reports public finite-contract message for NaN');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Rng.NextBool(SingleInfinity);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'NextBool rejects positive infinite probability');
+    CheckEqual('TRandomGen.NextBool: AProbability must be finite', ErrorMessage,
+      'NextBool reports public finite-contract message for positive infinity');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Rng.NextBool(-SingleInfinity);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'NextBool rejects negative infinite probability');
+    CheckEqual('TRandomGen.NextBool: AProbability must be finite', ErrorMessage,
+      'NextBool reports public finite-contract message for negative infinity');
+  finally
+    Rng.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.random');
   T.Run('seed determinism', @TestSeedDeterminism);
@@ -293,5 +350,6 @@ begin
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
   T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);
   T.Run('non-finite parameter validation', @TestNonFiniteParameterValidation);
+  T.Run('NextBool rejects non-finite probability', @TestNextBoolRejectsNonFiniteProbability);
   T.Summary;
 end.

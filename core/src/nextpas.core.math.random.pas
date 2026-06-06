@@ -180,6 +180,8 @@ end;
 
 function TRandomGen.NextBool(const AProbability: Single): Boolean;
 begin
+  if not IsFinite(AProbability) then
+    raise EArgumentError.Create('TRandomGen.NextBool: AProbability must be finite');
   if AProbability <= 0.0 then
     Exit(False);
   if AProbability >= 1.0 then
