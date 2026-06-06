@@ -1163,17 +1163,26 @@ stopped using a hard-coded `MAX_ITERS = 1000`. Both runners now default to
 `bench_max_iters=100000`, print the effective value in the summary, and accept
 `NEXTPAS_BENCH_MAX_ITERS` for short smoke runs or heavier formal captures.
 
+The focused benchmark gate also now locks stable operation markers for these two
+parser-facing tools:
+
+- `bench_h1parser` emits `operation=http.h1parser`
+- `bench_h1parser/compare_c` emits `operation=http.h1parser.c_llhttp`
+
+This keeps parser-filtered smoke runs, saved raw output, and future snapshot
+parsers from inferring tool identity from human-readable titles alone.
+
 Focused RED/GREEN:
 
 ```text
 RED: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
   make -C tests/nextpas.core.http/test_http_benchmarks clean test
 H1 parser benchmark max iterations env and C llhttp comparator max iterations env failed:
-bench_max_iters=2000 marker was missing; both still emitted 1000-iter rows.
+operation=http.h1parser / operation=http.h1parser.c_llhttp markers were missing.
 
 GREEN: NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
   make -C tests/nextpas.core.http/test_http_benchmarks clean test
-9 total, 9 passed, 0 failed
+49 total, 49 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 ```
 

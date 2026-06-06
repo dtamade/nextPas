@@ -388,6 +388,7 @@ int main(void) {
   init_data();
 
   printf("=== C llhttp H1 parser comparator ===\n");
+  printf("operation=http.h1parser.c_llhttp\n");
   printf("  llhttp version: %d.%d.%d\n",
     LLHTTP_VERSION_MAJOR, LLHTTP_VERSION_MINOR, LLHTTP_VERSION_PATCH);
   printf("  Simple GET: %zu bytes\n", sizeof(req_simple) - 1);

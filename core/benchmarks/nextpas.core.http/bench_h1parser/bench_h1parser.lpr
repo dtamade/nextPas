@@ -933,6 +933,7 @@ begin
   InitData;
   B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http H1 parser benchmark ===');
+  WriteLn('operation=http.h1parser');
   WriteLn('  Simple GET: ', Length(REQ_SIMPLE), ' bytes');
   WriteLn('  10 headers: ', Length(REQ_10HEADERS), ' bytes');
   WriteLn('  POST 1KB:   ', Length(GReqPost1K), ' bytes');

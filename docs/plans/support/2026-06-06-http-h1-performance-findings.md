@@ -31,6 +31,36 @@
   benchmark row。后续 benchmark truth 仍应优先补输入契约、metadata 和 artifact
   boundary，而不是直接追加数字。
 
+## 2026-06-06 h1 parser operation marker slice
+
+- 本轮继续收紧 parser benchmark metadata contract：
+  `bench_h1parser` 和外部 C llhttp comparator 已经有 title、`bench_max_iters`、
+  `bench_filter` 等文本信息，但 focused smoke 还没有锁住稳定 `operation=` marker。
+- 选择依据：
+  - parser benchmark 现在不仅被人直接运行，也会被 filter、flag matrix、保存 raw
+    output、后续 snapshot/parser 工具消费。
+  - 只靠 `=== ... ===` 标题区分工具不够稳；machine-readable marker 更适合 runner
+    和证据收集链路。
+  - 这是 benchmark truth slice，不改变 row schema、性能数字、HTTP runtime 或
+    public API。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 47 passed, 2 failed`
+    - failed at `H1 parser benchmark max iterations env`
+    - failed at `C llhttp comparator max iterations env when configured`
+    - failures: missing `operation=http.h1parser` and
+      `operation=http.h1parser.c_llhttp`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `bench_h1parser` now emits `operation=http.h1parser`.
+  - `bench_h1parser/compare_c` now emits `operation=http.h1parser.c_llhttp`.
+  - focused gate locks both markers alongside the existing `bench_max_iters`
+    smoke.
+- 复盘结论：
+  parser benchmark 与 C comparator 现在和 server/header/writer/outbound/fullchain
+  benchmark 一样有稳定 operation marker。后续若再加 snapshot/runner 机器消费逻辑，
+  应优先复用这些 marker，而不是重新解析标题文本。
+
 ## 2026-06-06 header benchmark smoke marker slice
 
 - 本轮收紧 header microbenchmark evidence：

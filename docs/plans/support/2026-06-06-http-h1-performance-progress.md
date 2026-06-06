@@ -1,5 +1,48 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 h1 parser operation marker slice
+
+- **Status:** completed.
+- Objective:
+  - add stable machine-readable operation markers to the Pascal H1 parser
+    benchmark and the external C llhttp comparator
+  - keep parser benchmark raw output usable for future runner/snapshot tooling
+  - lock this metadata contract in the focused benchmark gate
+- Scope and safety:
+  - touched the Pascal parser benchmark, the external C comparator, the
+    benchmark focused test, HTTP benchmark docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, H1
+    parser/runtime behavior, benchmark row math, generated outputs, or
+    source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 47 passed, 2 failed`
+    - failures:
+      `H1 parser benchmark max iterations env`,
+      `C llhttp comparator max iterations env when configured`
+    - missing markers:
+      `operation=http.h1parser`,
+      `operation=http.h1parser.c_llhttp`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_h1parser` now prints `operation=http.h1parser`
+  - `bench_h1parser/compare_c` now prints `operation=http.h1parser.c_llhttp`
+  - existing focused smoke now locks both operation markers while preserving the
+    `bench_max_iters` contract
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 49 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `git diff --check`
+    - pass
+  - `make hygiene`
+    - `build-hygiene=pass`
+- Outcome:
+  - parser benchmark raw output now exposes stable tool identity without relying
+    on human-readable titles
+  - this does not claim a new optimization, new parser row, or new Rust/Go
+    comparator coverage
+
 ## Session: 2026-06-06 comparator scale validation slice
 
 - **Status:** completed.

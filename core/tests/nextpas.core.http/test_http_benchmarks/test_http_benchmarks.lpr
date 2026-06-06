@@ -1686,6 +1686,8 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'H1 parser benchmark max-iters smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'operation=http.h1parser',
+    'H1 parser benchmark operation marker');
   CheckContains(LOutput, 'bench_max_iters=' + BenchMaxItersSmokeValue,
     'H1 parser benchmark max-iters marker');
   CheckContains(LOutput, 'raw llhttp: simple GET',
@@ -1832,6 +1834,8 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'C llhttp comparator max-iters smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'operation=http.h1parser.c_llhttp',
+    'C llhttp comparator operation marker');
   CheckContains(LOutput, 'bench_max_iters=' + BenchMaxItersSmokeValue,
     'C llhttp comparator max-iters marker');
   CheckContains(LOutput, 'C raw llhttp: simple GET',
