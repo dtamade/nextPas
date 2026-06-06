@@ -93,7 +93,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - Redirect follow-up requests inherit caller headers. Cross-authority redirects
   strip `Authorization`, `WWW-Authenticate`, `Cookie`, and `Cookie2`; bodyless
   `301` / `302` / `303` follow-ups also drop `Content-Length` /
-  `Transfer-Encoding`.
+  `Transfer-Encoding`. Caller-specified `Host` is preserved for relative and
+  same-authority redirects, but dropped when the redirect changes authority so
+  the transport derives the host from the new URL.
 - Relative, path-relative, and network-path redirect `Location` values are
   resolved before the follow-up request is passed to the transport. Path-relative
   redirects merge against the original request directory and normalize dot

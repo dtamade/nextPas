@@ -1,5 +1,26 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http redirect Host ownership slice
+
+### Goal
+
+收紧 client redirect header ownership：caller-specified `Host` header 是请求
+authority override，不应在 relative / same-authority redirect 中被无条件删除。
+absolute 或 network-path redirect 一旦改变 URL authority，仍必须删除旧 `Host`，
+让 transport 从新 URL 派生 wire host。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明
+  `Location: /next` 的 relative redirect 当前会把 caller `Host: override.test`
+  清空。
+- [x] GREEN：新增内部 same-authority 判断；`RedirectHeadersFor` 只在 URL
+  authority 变化时删除 `host`，不复用 auth/cookie 的 trusted-subdomain 规则。
+- [x] 保持本 slice 边界：不新增 redirect policy、cookie jar、request builder
+  或 transport API。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http redirect header ownership slice
 
 ### Goal

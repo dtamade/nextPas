@@ -155,6 +155,13 @@ begin
   Result := LRedirectHost[Length(LRedirectHost) - Length(LInitialHost)] = '.';
 end;
 
+function IsRedirectSameAuthority(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
+begin
+  Result := (AInitialUrl.Host <> '') and (ARedirectUrl.Host <> '') and
+    (LowerCase(AInitialUrl.Host) = LowerCase(ARedirectUrl.Host)) and
+    (AInitialUrl.Port = ARedirectUrl.Port);
+end;
+
 function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,
   ARedirectUrl: TUrl; const AIncludeBody: Boolean): IHttpHeaders;
 begin
@@ -163,7 +170,8 @@ begin
   else
     Result := NewHttpHeaders;
 
-  Result.Del('host');
+  if not IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) then
+    Result.Del('host');
   if not AIncludeBody then
   begin
     Result.Del('content-length');

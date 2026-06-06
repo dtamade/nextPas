@@ -1,5 +1,42 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http redirect Host ownership slice
+
+- **Status:** completed.
+- Objective:
+  - preserve caller-specified `Host` on relative / same-authority redirect
+    follow-up requests
+  - continue dropping `Host` when redirect changes URL authority so the
+    transport derives the wire host from the new target
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - injected transport returned `302 Location: /next`
+  - caller request used URL `http://example.test/old` plus
+    `Host: override.test`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37 total, 36 passed, 1 failed`
+    - failed at `Client redirect preserves custom host header on relative Location`
+    - expected follow-up Host `override.test`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal same-authority check for redirect URL host/port
+  - `RedirectHeadersFor` now deletes `host` only when the redirect changes URL
+    authority
+  - auth/cookie stripping remains on the existing trusted-host rule
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37/37 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see caller Host overrides on relative redirect
+    follow-up requests
+  - this does not claim cookie jar support, redirect callback policy,
+    default-port authority normalization, or a full request builder API
+
 ## Session: 2026-06-06 http redirect header ownership slice
 
 - **Status:** completed.

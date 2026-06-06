@@ -1,5 +1,42 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http redirect Host ownership slice
+
+- 本轮继续收紧 client redirect header ownership：
+  上一个 header carry-over slice 为了避免跨 authority 旧 Host 污染新目标，
+  在 follow-up request 中无条件删除 `host`。这会破坏调用方显式设置的
+  Host override：relative redirect 没有改变 URL authority，却丢掉了 caller
+  `Host: override.test`。
+- 选择依据：
+  - Go/Rust 常见 client 语义都把 redirect follow-up 当作同一个调用方请求意图的
+    延续；relative / same-authority redirect 不应丢失 caller 指定的 authority
+    override。
+  - `Host` 与 auth/cookie 不同，不能用 trusted-subdomain 规则。它只在 URL
+    authority 变化时删除，否则 same-authority redirect 中 caller override
+    应继续可见。
+  - 这仍是 redirect request-object contract，不改 `IHttpClient` vtable、
+    cookie jar、per-request redirect policy、H1 writer 或底层 net runtime。
+- 实现决策：
+  - 新增内部 `IsRedirectSameAuthority`，只比较 host（case-insensitive）和 port。
+  - `RedirectHeadersFor` 在 authority 不同时删除 `host`；relative redirect
+    经 `ResolveRedirectUrl` 继承 base authority，因此保留 caller Host override。
+  - sensitive header stripping 仍使用 `IsRedirectTrustedHost`，保持 previous
+    same-host/subdomain auth-cookie 语义不变。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37 total, 36 passed, 1 failed`
+    - failed at `Client redirect preserves custom host header on relative Location`
+    - failure: `relative redirect preserves caller host override: expected "override.test", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `37/37 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 follow-up Host ownership 的窄修正。后续如果继续 redirect header
+  semantics，可单独补 cross-authority Host removal proof 或 default-port
+  authority 规范化，但不要混进 cookie jar / redirect callback 扩展。
+
 ## 2026-06-06 http redirect header ownership slice
 
 - 本轮转向 client redirect header ownership：

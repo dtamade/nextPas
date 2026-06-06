@@ -57,6 +57,7 @@ type
     FSeenRawQuery: string;
     FSeenQueryParam: string;
     FSeenFragment: string;
+    FSeenHostHeader: string;
     FSeenTraceHeader: string;
     FSeenAuthorizationHeader: string;
     FSeenWwwAuthenticateHeader: string;
@@ -76,6 +77,7 @@ type
     property SeenRawQuery: string read FSeenRawQuery;
     property SeenQueryParam: string read FSeenQueryParam;
     property SeenFragment: string read FSeenFragment;
+    property SeenHostHeader: string read FSeenHostHeader;
     property SeenTraceHeader: string read FSeenTraceHeader;
     property SeenAuthorizationHeader: string read FSeenAuthorizationHeader;
     property SeenWwwAuthenticateHeader: string read FSeenWwwAuthenticateHeader;
@@ -252,6 +254,7 @@ begin
   FSeenRawQuery := AReq.RawQuery;
   FSeenQueryParam := AReq.QueryParam('from');
   FSeenFragment := LUrl.Fragment;
+  FSeenHostHeader := AReq.Headers.Get('host');
   FSeenTraceHeader := AReq.Headers.Get('x-trace');
   FSeenAuthorizationHeader := AReq.Headers.Get('authorization');
   FSeenWwwAuthenticateHeader := AReq.Headers.Get('www-authenticate');
@@ -1336,6 +1339,35 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'cross-authority redirect final body');
 end;
 
+procedure TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '/next';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LHeaders := NewHeaders;
+  LHeaders.Set_('host', 'override.test');
+  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LResp := LClient.Do_(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'relative redirect with custom host performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'relative redirect with custom host final status');
+  CheckEqual('override.test', LTransportObj.SeenHostHeader,
+    'relative redirect preserves caller host override');
+  CheckEqual('/next', LTransportObj.SeenPath,
+    'relative redirect still follows target path');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'relative redirect with custom host final body');
+end;
+
 procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -1665,6 +1697,8 @@ begin
     @TestClientRedirectPreservesHeadersOnSameAuthority);
   T.Run('Client redirect strips sensitive headers across authority',
     @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
+  T.Run('Client redirect preserves custom host header on relative Location',
+    @TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation);
   T.Run('Client replays seekable body on 307 redirect',
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
   T.Run('Client rejects non-replayable body on 307 redirect',
