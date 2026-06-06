@@ -231,6 +231,8 @@ var
 begin
   if Length(AValues) = 0 then
     Exit(0);
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(0);
   LTail := FTail;
   LAvail := Int64(FCapacity) - (LTail - FHeadCache);
   if LAvail <= 0 then

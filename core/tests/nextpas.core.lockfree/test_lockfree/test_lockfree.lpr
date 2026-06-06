@@ -370,6 +370,10 @@ begin
   CheckEqual(Int64(4), Int64(LN), 'batch deq 4');
   CheckEqual(Int64(10), Int64(LOut[0]));
   CheckEqual(Int64(40), Int64(LOut[3]));
+  LQ.Close;
+  LN := LQ.EnqueueBatch(LIn);
+  CheckEqual(Int64(0), Int64(LN), 'batch enqueue after close rejected');
+  Check(LQ.IsEmpty, 'closed queue remains empty after rejected batch enqueue');
   LQ.Free;
 end;
 
@@ -747,6 +751,8 @@ var
   LRustCompareSource: string;
   LGoCompareSource: string;
   LCppCompareSource: string;
+  LSpscBatchSourceSection: string;
+  LSpscBatchTestSection: string;
   LMpscBasicTestSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscTimeoutTestSection: string;
@@ -778,6 +784,14 @@ begin
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
   LGoCompareSource := ReadUtf8TextFile(BenchGoComparePath);
   LCppCompareSource := ReadUtf8TextFile(BenchCppComparePath);
+  LSpscBatchSourceSection := ExtractSection(LSpscSource,
+    'function TSpscQueueImpl.EnqueueBatch',
+    'function TSpscQueueImpl.DequeueBatch',
+    'SPSC batch source section');
+  LSpscBatchTestSection := ExtractSection(LTestSource,
+    'procedure TestSpscBatch;',
+    '{ MPMC Timeout }',
+    'SPSC batch test source section');
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
     'procedure TestMpscMultiProducer;',
@@ -869,6 +883,9 @@ begin
     '`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers, after which new enqueue attempts fail while consumers may drain already published items.',
     'lockfree README must document the MPMC caller-role and close contract');
   CheckContains(LDocsReadme,
+    '`TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
+    'lockfree README must document SPSC batch close semantics');
+  CheckContains(LDocsReadme,
     '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
   CheckContains(LDocsReadme,
@@ -939,6 +956,10 @@ begin
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
     'SPSC queue must notify space waiters after consume');
+  CheckContains(LSpscBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+    'SPSC batch enqueue must reject new items after close');
+  CheckContains(LSpscBatchTestSection, 'batch enqueue after close rejected',
+    'SPSC batch behavior test must cover close rejection');
   CheckContains(LMpmcSource, 'FSlots[LI].Sequence := Int64(LI)',
     'MPMC queue must initialize per-slot sequence numbers');
   CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease)',
