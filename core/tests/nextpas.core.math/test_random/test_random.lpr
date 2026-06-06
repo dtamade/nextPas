@@ -398,50 +398,75 @@ var
   Rng: TRandomGen;
   Weights: TWeight3;
   Caught: Boolean;
+  ErrorMessage: string;
 begin
   Rng := TRandomGen.Create(123);
   try
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.NextFloatRange(SingleNaN, 1.0);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'NextFloatRange rejects NaN bounds');
+    CheckEqual('TRandomGen.NextFloatRange: AMin must be finite', ErrorMessage,
+      'NextFloatRange reports owner-level finite-contract message for NaN min');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.NextFloatRange(-1.0, SingleInfinity);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'NextFloatRange rejects infinite bounds');
+    CheckEqual('TRandomGen.NextFloatRange: AMax must be finite', ErrorMessage,
+      'NextFloatRange reports owner-level finite-contract message for infinite max');
 
     Weights[0] := 1.0;
     Weights[1] := SingleNaN;
     Weights[2] := 2.0;
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.WeightedChoice(Weights);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'WeightedChoice rejects NaN weights');
+    CheckEqual('TRandomGen.WeightedChoice: weights must be finite', ErrorMessage,
+      'WeightedChoice reports owner-level finite-contract message for NaN weight');
 
     Weights[0] := 1.0;
     Weights[1] := SingleInfinity;
     Weights[2] := 2.0;
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.WeightedChoice(Weights);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'WeightedChoice rejects infinite weights');
+    CheckEqual('TRandomGen.WeightedChoice: weights must be finite', ErrorMessage,
+      'WeightedChoice reports owner-level finite-contract message for infinite weight');
   finally
     Rng.Free;
   end;

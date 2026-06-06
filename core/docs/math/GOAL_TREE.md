@@ -55,9 +55,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
-  owner-level reversed-range messages, probability clamp, dice rules, `RollMultiple`
-  integer-overflow owner boundary, weighted choice including empty/negative owner-level messages,
-  shuffle, Gaussian, and unit-circle vector helpers.
+  owner-level reversed-range and non-finite-range messages, probability clamp, dice rules,
+  `RollMultiple` integer-overflow owner boundary, weighted choice including empty/negative and
+  non-finite owner-level messages, shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
   reference vectors, invalid FBM octave/lacunarity/gain inputs with owner-level messages,
   finite-combination overflow contracts for coordinates, amplitudes, and accumulated results,
@@ -281,9 +281,9 @@ Status:
 - Invalid integer/float ranges fail fast with `EArgumentError`; `NextBool` clamps probability into
   false/true behavior; dice helpers return `0` for non-positive dice/sides; `RollMultiple`
   rejects positive dice/side combinations whose maximum total would overflow `Integer`;
-  `test_random` now directly locks owner-level messages for reversed integer/float ranges and for
-  empty/negative weighted-choice inputs; weighted choice rejects empty, negative, and all-zero
-  weights.
+  `test_random` now directly locks owner-level messages for reversed and non-finite integer/float
+  range validation and for empty/negative/non-finite weighted-choice inputs; weighted choice
+  rejects empty, negative, non-finite, and all-zero weights.
 - `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
   `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
   `EArgumentError`; `test_noise` now directly locks zero, negative, and non-finite
