@@ -44,6 +44,11 @@ begin
   Check(Pos(AExpected, AText) > 0, AMessage + ': missing "' + AExpected + '"');
 end;
 
+procedure CheckNotContains(const AText, AUnexpected, AMessage: string);
+begin
+  Check(Pos(AUnexpected, AText) = 0, AMessage + ': unexpected "' + AUnexpected + '"');
+end;
+
 { SPSC tests }
 
 procedure TestSpscBasic;
@@ -626,6 +631,8 @@ const
   MpscSourcePath = '../../../src/nextpas.core.lockfree.mpsc.pas';
   DequeSourcePath = '../../../src/nextpas.core.lockfree.deque.pas';
   WaitSourcePath = '../../../src/nextpas.core.lockfree.wait.pas';
+  BenchSourcePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr';
+  BenchRustComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_rust/main.rs';
 var
   LDocsReadme: string;
   LSpscSource: string;
@@ -634,9 +641,15 @@ var
   LMpscSource: string;
   LDequeSource: string;
   LWaitSource: string;
+  LBenchSource: string;
+  LRustCompareSource: string;
 begin
   Check(FileExists(LockFreeDocsReadmePath),
     'lockfree README must exist as the module documentation entrypoint');
+  Check(FileExists(BenchSourcePath),
+    'lockfree benchmark source must exist as the benchmark entrypoint');
+  Check(FileExists(BenchRustComparePath),
+    'lockfree Rust comparison source must exist as an external baseline reference');
 
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
   LSpscSource := ReadUtf8TextFile(SpscSourcePath);
@@ -645,6 +658,8 @@ begin
   LMpscSource := ReadUtf8TextFile(MpscSourcePath);
   LDequeSource := ReadUtf8TextFile(DequeSourcePath);
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
+  LBenchSource := ReadUtf8TextFile(BenchSourcePath);
+  LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
 
   CheckContains(LDocsReadme, '# nextpas.core.lockfree',
     'lockfree README must use the module title');
@@ -676,6 +691,18 @@ begin
     'lockfree README must list the lockfree stress gate');
   CheckContains(LDocsReadme, 'source-contract',
     'lockfree README must distinguish source-contract coverage from runtime proof');
+  CheckContains(LDocsReadme,
+    'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run',
+    'lockfree README must list the focused benchmark command');
+  CheckContains(LDocsReadme,
+    'core/benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr',
+    'lockfree README must point to the Pascal benchmark source');
+  CheckContains(LDocsReadme, 'compare_rust/main.rs',
+    'lockfree README must point to the external Rust comparison source');
+  CheckContains(LDocsReadme, 'platform/compiler flags/input size/baseline',
+    'lockfree README must name the benchmark evidence envelope');
+  CheckNotContains(LDocsReadme, '当前模块还缺少正式 benchmark harness',
+    'lockfree README must not say the benchmark harness is missing when it exists');
 
   CheckContains(LSpscSource, 'if IsManagedType(T) then',
     'SPSC queue must reject managed element types');
@@ -707,6 +734,16 @@ begin
     'lockfree wait helper must register waiters before blocking');
   CheckContains(LWaitSource, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel)',
     'lockfree wait helper must unregister waiters after blocking');
+  CheckContains(LBenchSource, 'WriteLn(''Platform: '', BenchmarkPlatformName)',
+    'lockfree benchmark must print the platform evidence field');
+  CheckContains(LBenchSource, 'WriteLn(''Compiler flags: -MObjFPC -Sh -O2'')',
+    'lockfree benchmark must print the compiler flags evidence field');
+  CheckContains(LBenchSource, 'WriteLn(''Input size: OPS=1000000; capacity=1024; scenarios=SPSC 1P+1C, MPMC 2P+2C, mutex channel baseline, Try* 1T'')',
+    'lockfree benchmark must print the input-size evidence field');
+  CheckContains(LBenchSource, 'WriteLn(''Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs external Rust source (not auto-run)'')',
+    'lockfree benchmark must print the baseline evidence field');
+  CheckContains(LRustCompareSource, 'const N: usize = 1_000_000;',
+    'Rust comparison source must use the same nominal operation count');
 end;
 
 begin

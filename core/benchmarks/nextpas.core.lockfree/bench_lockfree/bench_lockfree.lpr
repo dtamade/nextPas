@@ -10,6 +10,7 @@ uses
   nextpas.core.lockfree.spsc,
   nextpas.core.lockfree.mpmc,
   nextpas.core.thread.channel,
+  nextpas.core.platform.info,
   nextpas.core.platform.thread;
 
 type
@@ -19,6 +20,20 @@ type
 
 const
   OPS = 1000000;
+
+function BenchmarkPlatformName: string;
+begin
+  Result := OSName + ' ' + CPUName;
+end;
+
+procedure PrintBenchmarkEnvelope;
+begin
+  WriteLn('Platform: ', BenchmarkPlatformName);
+  WriteLn('Compiler flags: -MObjFPC -Sh -O2');
+  WriteLn('Input size: OPS=1000000; capacity=1024; scenarios=SPSC 1P+1C, MPMC 2P+2C, mutex channel baseline, Try* 1T');
+  WriteLn('Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs external Rust source (not auto-run)');
+  WriteLn;
+end;
 
 { SPSC benchmark: 1 producer + 1 consumer }
 
@@ -193,7 +208,7 @@ end;
 
 begin
   WriteLn('=== nextpas.core.lockfree benchmarks (1M ops) ===');
-  WriteLn;
+  PrintBenchmarkEnvelope;
   WriteLn('  --- Multi-thread (blocking wait) ---');
   BenchSpsc;
   BenchMpmc;
