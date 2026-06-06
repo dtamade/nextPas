@@ -88,6 +88,11 @@ begin
   Ortho(Single(1.0), Single(1.0), Single(-1.0), Single(1.0), Single(0.0), Single(10.0));
 end;
 
+procedure RaiseOrthoZeroHeightSingle;
+begin
+  Ortho(Single(-1.0), Single(1.0), Single(2.0), Single(2.0), Single(0.0), Single(10.0));
+end;
+
 procedure RaisePerspectiveZeroAspect;
 begin
   Perspective(Single(HALF_PI), Single(0.0), Single(1.0), Single(10.0));
@@ -179,6 +184,31 @@ end;
 procedure RaiseOrthoInfiniteFarDouble;
 begin
   Ortho(Double(-1.0), Double(1.0), Double(-1.0), Double(1.0), Double(0.0), DoubleInfinity);
+end;
+
+procedure RaiseOrthoInfiniteLeftSingle;
+begin
+  Ortho(SingleInfinity, Single(1.0), Single(-1.0), Single(1.0), Single(0.0), Single(10.0));
+end;
+
+procedure RaiseOrthoInfiniteRightDouble;
+begin
+  Ortho(Double(-1.0), DoubleInfinity, Double(-1.0), Double(1.0), Double(0.0), Double(10.0));
+end;
+
+procedure RaiseOrthoInfiniteBottomSingle;
+begin
+  Ortho(Single(-1.0), Single(1.0), SingleInfinity, Single(1.0), Single(0.0), Single(10.0));
+end;
+
+procedure RaiseOrthoInfiniteTopDouble;
+begin
+  Ortho(Double(-1.0), Double(1.0), Double(-1.0), DoubleInfinity, Double(0.0), Double(10.0));
+end;
+
+procedure RaiseOrthoNaNNearSingle;
+begin
+  Ortho(Single(-1.0), Single(1.0), Single(-1.0), Single(1.0), SingleNaN, Single(10.0));
 end;
 
 procedure RaisePerspectiveNaNFovSingle;
@@ -307,7 +337,6 @@ begin
   Clip := M * TVec4f.Create(0.0, 0.0, -11.0, 1.0);
   CheckNear(1.0, Clip.Z / Clip.W, 0.000001, 'Perspective maps far plane');
 
-  ExpectArgumentError('Ortho zero width', @RaiseOrthoZeroWidth);
   ExpectArgumentErrorMessage('Perspective: aspect must be positive', 'Perspective zero aspect',
     @RaisePerspectiveZeroAspect);
 end;
@@ -455,8 +484,20 @@ end;
 
 procedure TestNonFiniteInputsFailFast;
 begin
-  ExpectArgumentError('Ortho single infinite far', @RaiseOrthoInfiniteFarSingle);
-  ExpectArgumentError('Ortho double infinite far', @RaiseOrthoInfiniteFarDouble);
+  ExpectArgumentErrorMessage('Ortho: left must be finite', 'Ortho single infinite left',
+    @RaiseOrthoInfiniteLeftSingle);
+  ExpectArgumentErrorMessage('Ortho: right must be finite', 'Ortho double infinite right',
+    @RaiseOrthoInfiniteRightDouble);
+  ExpectArgumentErrorMessage('Ortho: bottom must be finite', 'Ortho single infinite bottom',
+    @RaiseOrthoInfiniteBottomSingle);
+  ExpectArgumentErrorMessage('Ortho: top must be finite', 'Ortho double infinite top',
+    @RaiseOrthoInfiniteTopDouble);
+  ExpectArgumentErrorMessage('Ortho: near plane must be finite', 'Ortho single NaN near',
+    @RaiseOrthoNaNNearSingle);
+  ExpectArgumentErrorMessage('Ortho: far plane must be finite', 'Ortho single infinite far',
+    @RaiseOrthoInfiniteFarSingle);
+  ExpectArgumentErrorMessage('Ortho: far plane must be finite', 'Ortho double infinite far',
+    @RaiseOrthoInfiniteFarDouble);
   ExpectArgumentErrorMessage('Perspective: vertical FOV must be finite',
     'Perspective single NaN FOV', @RaisePerspectiveNaNFovSingle);
   ExpectArgumentErrorMessage('Perspective: aspect must be finite',
@@ -505,6 +546,10 @@ end;
 
 procedure TestGeometryGuardMessages;
 begin
+  ExpectArgumentErrorMessage('Ortho: width must not be zero',
+    'Ortho zero width', @RaiseOrthoZeroWidth);
+  ExpectArgumentErrorMessage('Ortho: height must not be zero',
+    'Ortho single zero height', @RaiseOrthoZeroHeightSingle);
   ExpectArgumentErrorMessage('Ortho: depth must not be zero',
     'Ortho double zero depth', @RaiseOrthoZeroDepthDouble);
   ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
