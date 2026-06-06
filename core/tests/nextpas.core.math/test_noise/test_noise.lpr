@@ -35,6 +35,14 @@ begin
   Result := LValue.Value;
 end;
 
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
 procedure TestNoiseRepeatability;
 var
   A, B: TNoiseGen;
@@ -82,6 +90,7 @@ procedure TestNoiseInvalidInputs;
 var
   Noise: TNoiseGen;
   Caught: Boolean;
+  ErrorMessage: string;
 begin
   Noise := TNoiseGen.Create(1);
   try
@@ -129,6 +138,201 @@ begin
         Caught := True;
     end;
     Check(Caught, 'FBM rejects infinite gain');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise1D(DoubleNaN);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise1D rejects NaN coordinate');
+    CheckEqual('TNoiseGen.Noise1D: AX must be finite', ErrorMessage,
+      'Noise1D reports public finite-contract message for NaN');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise1D(DoubleInfinity);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise1D rejects infinite coordinate');
+    CheckEqual('TNoiseGen.Noise1D: AX must be finite', ErrorMessage,
+      'Noise1D reports public finite-contract message for infinity');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise2D(DoubleNaN, 0.75);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise2D rejects NaN X coordinate');
+    CheckEqual('TNoiseGen.Noise2D: AX must be finite', ErrorMessage,
+      'Noise2D reports public finite-contract message for X');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise2D(0.25, DoubleInfinity);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise2D rejects infinite Y coordinate');
+    CheckEqual('TNoiseGen.Noise2D: AY must be finite', ErrorMessage,
+      'Noise2D reports public finite-contract message for Y');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise3D(DoubleNaN, 0.75, 1.25);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise3D rejects NaN X coordinate');
+    CheckEqual('TNoiseGen.Noise3D: AX must be finite', ErrorMessage,
+      'Noise3D reports public finite-contract message for X');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise3D(0.25, DoubleInfinity, 1.25);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise3D rejects infinite Y coordinate');
+    CheckEqual('TNoiseGen.Noise3D: AY must be finite', ErrorMessage,
+      'Noise3D reports public finite-contract message for Y');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.Noise3D(0.25, 0.75, DoubleNaN);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'Noise3D rejects NaN Z coordinate');
+    CheckEqual('TNoiseGen.Noise3D: AZ must be finite', ErrorMessage,
+      'Noise3D reports public finite-contract message for Z');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM1D(DoubleInfinity, 3);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM1D rejects infinite coordinate');
+    CheckEqual('TNoiseGen.FBM1D: AX must be finite', ErrorMessage,
+      'FBM1D reports public finite-contract message for coordinate');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(DoubleNaN, 0.75, 3);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects NaN X coordinate');
+    CheckEqual('TNoiseGen.FBM2D: AX must be finite', ErrorMessage,
+      'FBM2D reports public finite-contract message for X');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(0.25, DoubleInfinity, 3);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects infinite Y coordinate');
+    CheckEqual('TNoiseGen.FBM2D: AY must be finite', ErrorMessage,
+      'FBM2D reports public finite-contract message for Y');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(DoubleNaN, 0.75, 1.25, 3);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects NaN X coordinate');
+    CheckEqual('TNoiseGen.FBM3D: AX must be finite', ErrorMessage,
+      'FBM3D reports public finite-contract message for X');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, DoubleInfinity, 1.25, 3);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects infinite Y coordinate');
+    CheckEqual('TNoiseGen.FBM3D: AY must be finite', ErrorMessage,
+      'FBM3D reports public finite-contract message for Y');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 0.75, DoubleNaN, 3);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects NaN Z coordinate');
+    CheckEqual('TNoiseGen.FBM3D: AZ must be finite', ErrorMessage,
+      'FBM3D reports public finite-contract message for Z');
   finally
     Noise.Free;
   end;

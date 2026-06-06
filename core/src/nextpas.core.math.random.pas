@@ -43,6 +43,8 @@ type
     FPerm: array[0..511] of Byte;
     class procedure ValidateFBMInputs(const AFunctionName: string; const AOctaves: Integer;
       const ALacunarity, AGain: Double); static;
+    class procedure ValidateCoordinateInput(const AFunctionName, AParamName: string;
+      const AValue: Double); static;
     function Fade(const AT: Double): Double; inline;
     function Lerp(const AT, AA, AB: Double): Double; inline;
     function Grad1D(const AHash: Integer; const AX: Double): Double; inline;
@@ -306,6 +308,13 @@ begin
     raise EArgumentError.Create(AFunctionName + ': AGain must be positive');
 end;
 
+class procedure TNoiseGen.ValidateCoordinateInput(const AFunctionName, AParamName: string;
+  const AValue: Double);
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
+end;
+
 procedure TNoiseGen.SetSeed(const ASeed: UInt64);
 var
   LRng: TRandomGen;
@@ -396,6 +405,7 @@ var
   LXf: Double;
   LU: Double;
 begin
+  ValidateCoordinateInput('TNoiseGen.Noise1D', 'AX', AX);
   LFloorX := FloorIndex(AX);
   LXi := LFloorX and 255;
   LXf := AX - LFloorX;
@@ -420,6 +430,8 @@ var
   LBA: Integer;
   LBB: Integer;
 begin
+  ValidateCoordinateInput('TNoiseGen.Noise2D', 'AX', AX);
+  ValidateCoordinateInput('TNoiseGen.Noise2D', 'AY', AY);
   LFloorX := FloorIndex(AX);
   LFloorY := FloorIndex(AY);
   LXi := LFloorX and 255;
@@ -460,6 +472,9 @@ var
   LBA: Integer;
   LBB: Integer;
 begin
+  ValidateCoordinateInput('TNoiseGen.Noise3D', 'AX', AX);
+  ValidateCoordinateInput('TNoiseGen.Noise3D', 'AY', AY);
+  ValidateCoordinateInput('TNoiseGen.Noise3D', 'AZ', AZ);
   LFloorX := FloorIndex(AX);
   LFloorY := FloorIndex(AY);
   LFloorZ := FloorIndex(AZ);
@@ -501,6 +516,7 @@ var
   LFreq: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM1D', AOctaves, ALacunarity, AGain);
+  ValidateCoordinateInput('TNoiseGen.FBM1D', 'AX', AX);
   Result := 0.0;
   LAmp := 1.0;
   LFreq := 1.0;
@@ -520,6 +536,8 @@ var
   LFreq: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM2D', AOctaves, ALacunarity, AGain);
+  ValidateCoordinateInput('TNoiseGen.FBM2D', 'AX', AX);
+  ValidateCoordinateInput('TNoiseGen.FBM2D', 'AY', AY);
   Result := 0.0;
   LAmp := 1.0;
   LFreq := 1.0;
@@ -539,6 +557,9 @@ var
   LFreq: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM3D', AOctaves, ALacunarity, AGain);
+  ValidateCoordinateInput('TNoiseGen.FBM3D', 'AX', AX);
+  ValidateCoordinateInput('TNoiseGen.FBM3D', 'AY', AY);
+  ValidateCoordinateInput('TNoiseGen.FBM3D', 'AZ', AZ);
   Result := 0.0;
   LAmp := 1.0;
   LFreq := 1.0;
