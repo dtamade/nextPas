@@ -472,12 +472,24 @@ procedure CheckH1OutboundDrainBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.h1outbound.drain',
     'H1 outbound drain operation marker');
-  CheckContains(AOutput, 'buffer write+drain 1KB',
+  CheckBenchmarkRunRow(AOutput, 'buffer write+drain 1KB',
     'H1 outbound drain benchmark row');
   CheckContains(AOutput, 'bench_filter=buffer write+drain 1KB',
     'H1 outbound filter marker');
   CheckContains(AOutput, 'ns/op', 'H1 outbound ns/op marker');
   CheckContains(AOutput, 'ops/s', 'H1 outbound ops/s marker');
+end;
+
+procedure CheckH1OutboundTryDrainBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1outbound.drain',
+    'H1 outbound trydrain operation marker');
+  CheckBenchmarkRunRow(AOutput, 'buffer trydrain runtime 1KB chunk128',
+    'H1 outbound trydrain benchmark row');
+  CheckContains(AOutput, 'bench_filter=buffer trydrain runtime 1KB chunk128',
+    'H1 outbound trydrain filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 outbound trydrain ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 outbound trydrain ops/s marker');
 end;
 
 procedure CheckFullchainBenchmarkOutput(const AOutput: string);
@@ -757,6 +769,14 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1outbound drain smoke exit code: ' + LOutput);
   CheckH1OutboundDrainBenchmarkOutput(LOutput);
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=buffer trydrain runtime 1KB chunk128'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1outbound trydrain smoke exit code: ' + LOutput);
+  CheckH1OutboundTryDrainBenchmarkOutput(LOutput);
 end;
 
 procedure TestH1OutboundHotHelpersInlineSourceContract;

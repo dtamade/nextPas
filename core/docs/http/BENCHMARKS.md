@@ -488,6 +488,32 @@ Fresh single-run local row after that slice:
 | --- | ---: | ---: | ---: |
 | buffer write+drain 1KB | 100000 | 283.1 | 3532176 |
 
+On 2026-06-07 local time, the same focused benchmark gained a narrower
+runtime-facing drain row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100 \
+NEXTPAS_BENCH_FILTER='buffer trydrain runtime 1KB chunk128' \
+make -C benchmarks/nextpas.core.http/bench_h1outbound clean run
+```
+
+This row keeps the same 1 KiB payload but replaces the generic `IWriter` sink
+with a fake `ITcpStreamRuntime` that accepts at most `128` bytes per
+`TryWrite`. It therefore isolates repeated
+`IH1OutboundBuffer.TryDrainTo(runtime)` loop cost without mixing in real
+socket/backend/scheduler noise.
+
+Small focused row from the same host:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| buffer trydrain runtime 1KB chunk128 | 100 | 393.5 | 2541231 |
+
+Treat the pair as an internal split:
+
+- `buffer write+drain 1KB` isolates drain-to-generic-writer cost
+- `buffer trydrain runtime 1KB chunk128` isolates partial runtime drain cost
+
 This row is directional only; keep using repeated or narrowed rows before
 claiming a durable cross-run performance delta.
 
