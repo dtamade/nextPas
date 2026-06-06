@@ -116,6 +116,16 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
     RequiredCoreMakeTarget(
+        target="core-math-symbol-scope-local-smoke",
+        command="make -C core core-math-symbol-scope-local-smoke",
+        recipe_steps=(
+            (
+                "test-symbol-scope",
+                "$(MAKE) -C tests/nextpas.core.math/test_symbol_scope clean test",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-full-local-smoke",
         command="make -C core core-math-full-local-smoke",
         recipe_steps=(

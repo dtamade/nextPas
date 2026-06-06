@@ -52,6 +52,16 @@ make -C core core-math-facade-local-smoke
 `core-math-facade-local-smoke` wraps
 `make -C core/tests/nextpas.core.math/test_facade clean test` through the same owner-level
 boundary, so the direct facade-consumer proof no longer depends on a trig-specific gate.
+Use the named symbol-scope gate when you want to prove `nextpas.core.math` still coexists cleanly
+with `nextpas.core.simd.mathutil`:
+
+```sh
+make -C core core-math-symbol-scope-local-smoke
+```
+
+`core-math-symbol-scope-local-smoke` wraps
+`make -C core/tests/nextpas.core.math/test_symbol_scope clean test` through the same owner-level
+boundary, so the common-symbol namespace contract no longer depends on a direct subproject command.
 
 ## Public Modules
 

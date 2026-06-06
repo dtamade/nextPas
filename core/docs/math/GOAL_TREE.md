@@ -181,8 +181,9 @@ Completion gate:
 Status:
 
 - Partial. Linux local scalar/trig/facade/symbol-scope tests pass with heaptrc `0 unfreed memory blocks`,
-  and `core/Makefile` now exposes `core-math-facade-local-smoke` plus a `core-math-trig-local-smoke`
-  path that reuses it for the repeatable current-host proof path.
+  and `core/Makefile` now exposes `core-math-facade-local-smoke`,
+  `core-math-symbol-scope-local-smoke`, plus a `core-math-trig-local-smoke` path that reuses the
+  facade gate for the repeatable current-host proof path.
 - `nextpas.core.math.ffi.pas` is deleted in this branch.
 - API surface checks reject naked `external 'm'`, public/test `math.ffi` consumers, public impl consumers, and legacy vector bridge names.
 - macOS/Windows host link smokes are not run in this local round.
@@ -414,6 +415,11 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `make -C tests/nextpas.core.math/test_facade clean test` through a stable owner-level named
   entrypoint, so the canonical public consumer contract remains independently repeatable instead of
   only piggybacking on the trig host proof.
+- `core/Makefile` now also exposes `core-math-symbol-scope-local-smoke`, reachable as
+  `make -C core core-math-symbol-scope-local-smoke`. It reruns
+  `make -C tests/nextpas.core.math/test_symbol_scope clean test` through a stable owner-level
+  named entrypoint, so the coexistence contract between `nextpas.core.math` and
+  `nextpas.core.simd.mathutil` no longer depends on a direct subproject command.
 - Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
   declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules.
   `test_api_surface` now extracts root facade constants, public type aliases, and public function
