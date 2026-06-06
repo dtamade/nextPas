@@ -43,6 +43,7 @@ function NewHttpClient(const ATransport: IHttpTransport;
 function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
   const ADest: IWriter): Int64;
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
+function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 
 implementation
 
@@ -388,6 +389,32 @@ begin
     if (not LCommitted) and (LTempPath <> '') then
       nextpas.core.fs.Remove(LTempPath);
   end;
+end;
+
+function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
+var
+  LBody: IReader;
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LOldLen: SizeInt;
+begin
+  if AResp = nil then
+    raise EArgumentError.Create('HTTP response is nil');
+
+  LBody := AResp.Body;
+  Result := '';
+  if LBody = nil then
+    Exit;
+
+  repeat
+    LN := LBody.Read(LBuf[0], SizeUInt(SizeOf(LBuf)));
+    if LN > 0 then
+    begin
+      LOldLen := Length(Result);
+      SetLength(Result, LOldLen + SizeInt(LN));
+      Move(LBuf[0], Result[LOldLen + 1], LN);
+    end;
+  until LN = 0;
 end;
 
 end.

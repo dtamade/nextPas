@@ -1,5 +1,48 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http response body string helper slice
+
+- **Status:** completed.
+- Objective:
+  - add a small response body helper for common client/example usage
+  - keep body ownership simple: the helper consumes the existing
+    `IHttpResponse.Body` reader and does not change transport or client
+    interfaces
+- Scope and safety:
+  - touched HTTP client/facade source, client/contract tests, client example,
+    HTTP docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP transport/runtime,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile at the new helper calls:
+      `Identifier not found "HttpReadResponseBodyString"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at the facade helper call:
+      `Identifier not found "HttpReadResponseBodyString"`
+- Landed change:
+  - added `HttpReadResponseBodyString(Resp)` in `nextpas.core.http.client`
+  - facade `nextpas.core.http` re-exports the helper through an inline forwarder
+  - nil response raises `EArgumentError`
+  - nil body returns `''`
+  - successful reads consume the current response body reader
+  - `http_get_client` now uses the helper instead of a local bytes-to-string
+    helper plus `ReadAll`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - simple response body reads now have a stable public helper
+  - the module still does not claim charset decoding, response buffering
+    ownership, or a fluent request/response builder
+
 ## Session: 2026-06-06 http hyper comparator smoke slice
 
 - **Status:** completed.

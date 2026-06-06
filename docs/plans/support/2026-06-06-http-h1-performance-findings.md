@@ -1,5 +1,46 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http response body string helper slice
+
+- 本轮继续收紧 client response ergonomics：
+  request construction helper 已落地，但常见 response body 读取仍散落在测试和
+  example 的 reader loop / `ReadAll` + bytes conversion 中。
+- 选择依据：
+  - Go `net/http` 和 Rust reqwest/hyper 生态都让调用方很直接地表达“消费 body
+    并读完整内容”；nextPas 目前只有底层 `IReader`，对简单 client/example 场景
+    过于啰嗦。
+  - 这是 helper，不改 `IHttpClient` vtable，不改 transport，不改变 body
+    ownership；helper 明确消费当前 response body reader。
+  - 不把它扩大成 charset-aware decoder、streaming builder 或 response owner 类型；
+    这些 contract 需要后续单独设计。
+- 实现决策：
+  - `nextpas.core.http.client.HttpReadResponseBodyString(Resp)` 读取 `Resp.Body`
+    到 Pascal string。
+  - nil response 抛 `EArgumentError`；nil body 返回 `''`。
+  - facade `nextpas.core.http.HttpReadResponseBodyString` 只做 inline 转发。
+  - `http_get_client` example 改用新 helper，删除本地 bytes-to-string helper。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败于 3 处 `Identifier not found "HttpReadResponseBodyString"`。
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败于 facade helper 缺失：
+      `Identifier not found "HttpReadResponseBodyString"`。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是低风险 public helper ergonomics，不是继续复制 correctness
+  malformed case，也不是 premature request/response builder。后续 client API 仍应
+  评估 per-request timeout / redirect override / charset decoding 是否需要独立
+  contract。
+
 ## 2026-06-06 http hyper comparator smoke slice
 
 - 本轮继续收紧 benchmark truth：

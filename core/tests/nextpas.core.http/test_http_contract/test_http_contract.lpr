@@ -481,6 +481,15 @@ begin
   Check(LResp.Body = nil, 'Body is nil');
 end;
 
+procedure TestHttpReadResponseBodyStringFacadeHelper;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_NO_CONTENT, NewHeaders, nil);
+  CheckEqual('', nextpas.core.http.HttpReadResponseBodyString(LResp),
+    'Facade response body string helper is callable');
+end;
+
 { Test 5: HandlerFunc wraps correctly }
 procedure TestHandlerFuncWrap;
 var
@@ -1189,6 +1198,8 @@ begin
   T.Run('NewRequest string URL overloads are available through facade',
     @TestNewRequestStringUrlFacadeOverloads);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
+  T.Run('HttpReadResponseBodyString is available through facade',
+    @TestHttpReadResponseBodyStringFacadeHelper);
   T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
   T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);
   T.Run('HandlerFunc wraps object methods through facade', @TestHandlerMethodWrap);

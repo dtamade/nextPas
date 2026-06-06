@@ -664,6 +664,63 @@ begin
   end;
 end;
 
+procedure TestHttpReadResponseBodyStringReadsLiveResponse;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: string;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/body-text', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LResponseBody: string;
+  begin
+    LResponseBody := 'response text';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/body-text');
+    LBody := nextpas.core.http.client.HttpReadResponseBodyString(LResp);
+    CheckEqual('response text', LBody, 'response body helper reads full body');
+    CheckEqual('', ReadBodyStr(LResp), 'response body helper consumes the reader');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttpReadResponseBodyStringNilBodyReturnsEmpty;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := NewResponse(HTTP_STATUS_NO_CONTENT, NewHttpHeaders, nil);
+  CheckEqual('', nextpas.core.http.client.HttpReadResponseBodyString(LResp),
+    'response body helper treats nil body as empty');
+end;
+
+procedure TestHttpReadResponseBodyStringRejectsNilResponse;
+var
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+begin
+  LResp := nil;
+  LRaised := False;
+  try
+    nextpas.core.http.client.HttpReadResponseBodyString(LResp);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'response body helper rejects nil response');
+end;
+
 procedure TestHttpGetToFileWritesFinalPathAtomically;
 var
   LRouter: THttpRouter;
@@ -1076,6 +1133,12 @@ begin
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
   T.Run('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
+  T.Run('HttpReadResponseBodyString reads live response body',
+    @TestHttpReadResponseBodyStringReadsLiveResponse);
+  T.Run('HttpReadResponseBodyString nil body returns empty',
+    @TestHttpReadResponseBodyStringNilBodyReturnsEmpty);
+  T.Run('HttpReadResponseBodyString rejects nil response',
+    @TestHttpReadResponseBodyStringRejectsNilResponse);
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);

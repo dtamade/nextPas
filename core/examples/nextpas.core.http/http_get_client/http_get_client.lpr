@@ -4,16 +4,7 @@ program http_get_client;
 
 uses
   SysUtils,
-  nextpas.core.base,
-  nextpas.core.http,
-  nextpas.core.io;
-
-function BytesToString(const ABytes: TBytes): string;
-begin
-  SetLength(Result, Length(ABytes));
-  if Length(ABytes) > 0 then
-    Move(ABytes[0], Result[1], Length(ABytes));
-end;
+  nextpas.core.http;
 
 procedure PrintHeaders(const AHeaders: IHttpHeaders);
 begin
@@ -48,10 +39,7 @@ begin
   WriteLn('status-text=', HttpStatusText(LResp.StatusCode));
   WriteLn('headers:');
   PrintHeaders(LResp.Headers);
-  if LResp.Body <> nil then
-    LBody := BytesToString(ReadAll(LResp.Body))
-  else
-    LBody := '';
+  LBody := HttpReadResponseBodyString(LResp);
   WriteLn('body:');
   WriteLn(LBody);
 end.

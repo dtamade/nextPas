@@ -1,5 +1,30 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http response body string helper slice
+
+### Goal
+
+继续收紧 client response ergonomics：新增
+`HttpReadResponseBodyString(Resp)` public helper，让常见 client/example
+调用方能把完整 response body 读成 Pascal string，而不再在每个调用点手写
+reader loop 或 `ReadAll` + bytes conversion。该 helper 明确会消费
+`IHttpResponse.Body`；nil body 返回空串，nil response 作为调用错误抛
+`EArgumentError`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 先用 helper 读取 live response body，并锁住
+  nil body / nil response 边界；当前编译失败于 helper 缺失。
+- [x] RED：`test_http_contract` 先通过 `nextpas.core.http` facade 调用 helper；
+  当前编译失败，证明 facade 还没有暴露该 public surface。
+- [x] GREEN：在 `nextpas.core.http.client` 添加 helper，在
+  `nextpas.core.http` facade 添加 inline forwarding helper；不改
+  `IHttpClient` vtable、不改 transport、不引入 response builder。
+- [x] 更新 `http_get_client` example，改用新 helper。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_client`、`test_http_contract`、
+  `test_http_examples`。
+
 ## Active Session: 2026-06-06 http hyper comparator smoke slice
 
 ### Goal
