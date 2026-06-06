@@ -338,10 +338,74 @@ begin
   end;
 end;
 
+procedure TestNoiseLargePeriodicCoordinatesStayStable;
+const
+  LARGE_SHIFT_X: Double = 5120000000.0;
+  LARGE_SHIFT_Y: Double = -7680000000.0;
+  LARGE_SHIFT_Z: Double = 10240000000.0;
+var
+  Noise: TNoiseGen;
+  BaseValue: Double;
+  ShiftedValue: Double;
+begin
+  Noise := TNoiseGen.Create(2468);
+  try
+    BaseValue := Noise.Noise1D(0.25);
+    ShiftedValue := Noise.Noise1D(0.25 + LARGE_SHIFT_X);
+    CheckNear(BaseValue, ShiftedValue, 0.0,
+      'Noise1D stays stable across large 256-periodic X shifts');
+    CheckNear(Noise.Noise2D(0.25, 0.75),
+      Noise.Noise2D(0.25 + LARGE_SHIFT_X, 0.75 + LARGE_SHIFT_Y), 0.0,
+      'Noise2D stays stable across large 256-periodic XY shifts');
+    CheckNear(Noise.Noise3D(0.25, 0.75, 1.25),
+      Noise.Noise3D(0.25 + LARGE_SHIFT_X, 0.75 + LARGE_SHIFT_Y, 1.25 + LARGE_SHIFT_Z), 0.0,
+      'Noise3D stays stable across large 256-periodic XYZ shifts');
+    CheckNear(Noise.FBM1D(0.25, 4), Noise.FBM1D(0.25 + LARGE_SHIFT_X, 4), 0.0,
+      'FBM1D stays stable across large 256-periodic X shifts');
+    CheckNear(Noise.FBM2D(0.25, 0.75, 4),
+      Noise.FBM2D(0.25 + LARGE_SHIFT_X, 0.75 + LARGE_SHIFT_Y, 4), 0.0,
+      'FBM2D stays stable across large 256-periodic XY shifts');
+    CheckNear(Noise.FBM3D(0.25, 0.75, 1.25, 4),
+      Noise.FBM3D(0.25 + LARGE_SHIFT_X, 0.75 + LARGE_SHIFT_Y, 1.25 + LARGE_SHIFT_Z, 4), 0.0,
+      'FBM3D stays stable across large 256-periodic XYZ shifts');
+  finally
+    Noise.Free;
+  end;
+end;
+
+procedure TestNoiseHugeFiniteLatticeCoordinatesStayStable;
+const
+  HUGE_X: Double = 1.0e300;
+  HUGE_Y: Double = -1.0e300;
+  HUGE_Z: Double = 1.0e300;
+var
+  Noise: TNoiseGen;
+begin
+  Noise := TNoiseGen.Create(2468);
+  try
+    CheckNear(0.0, Noise.Noise1D(HUGE_X), 0.0,
+      'Noise1D keeps huge finite lattice coordinates stable');
+    CheckNear(0.0, Noise.Noise2D(HUGE_X, HUGE_Y), 0.0,
+      'Noise2D keeps huge finite lattice coordinates stable');
+    CheckNear(0.0, Noise.Noise3D(HUGE_X, HUGE_Y, HUGE_Z), 0.0,
+      'Noise3D keeps huge finite lattice coordinates stable');
+    CheckNear(0.0, Noise.FBM1D(HUGE_X, 4), 0.0,
+      'FBM1D keeps huge finite lattice coordinates stable');
+    CheckNear(0.0, Noise.FBM2D(HUGE_X, HUGE_Y, 4), 0.0,
+      'FBM2D keeps huge finite lattice coordinates stable');
+    CheckNear(0.0, Noise.FBM3D(HUGE_X, HUGE_Y, HUGE_Z, 4), 0.0,
+      'FBM3D keeps huge finite lattice coordinates stable');
+  finally
+    Noise.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.noise');
   T.Run('noise repeatability', @TestNoiseRepeatability);
   T.Run('noise reference vectors', @TestNoiseReferenceVectors);
   T.Run('noise invalid inputs', @TestNoiseInvalidInputs);
+  T.Run('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
+  T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
   T.Summary;
 end.

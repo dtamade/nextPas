@@ -98,9 +98,21 @@ begin
     Result := ASeed;
 end;
 
-function FloorIndex(const AValue: Double): Integer; inline;
+function FloorValue(const AValue: Double): Double; inline;
 begin
-  Result := Integer(nextpas.core.math.scalar.Floor(AValue));
+  Result := System.Int(AValue);
+  if (AValue < 0.0) and (AValue <> Result) then
+    Result := Result - 1.0;
+end;
+
+function PermutationIndex(const AFloorValue: Double): Integer; inline;
+var
+  LWrapped: Double;
+begin
+  LWrapped := nextpas.core.math.scalar.Fmod(AFloorValue, 256.0);
+  if LWrapped < 0.0 then
+    LWrapped := LWrapped + 256.0;
+  Result := Integer(nextpas.core.math.scalar.Round(LWrapped)) and 255;
 end;
 
 { TRandomGen }
@@ -403,13 +415,13 @@ end;
 function TNoiseGen.Noise1D(const AX: Double): Double;
 var
   LXi: Integer;
-  LFloorX: Integer;
+  LFloorX: Double;
   LXf: Double;
   LU: Double;
 begin
   ValidateCoordinateInput('TNoiseGen.Noise1D', 'AX', AX);
-  LFloorX := FloorIndex(AX);
-  LXi := LFloorX and 255;
+  LFloorX := FloorValue(AX);
+  LXi := PermutationIndex(LFloorX);
   LXf := AX - LFloorX;
   LU := Fade(LXf);
   Result := Lerp(LU,
@@ -421,8 +433,8 @@ function TNoiseGen.Noise2D(const AX, AY: Double): Double;
 var
   LXi: Integer;
   LYi: Integer;
-  LFloorX: Integer;
-  LFloorY: Integer;
+  LFloorX: Double;
+  LFloorY: Double;
   LXf: Double;
   LYf: Double;
   LU: Double;
@@ -434,10 +446,10 @@ var
 begin
   ValidateCoordinateInput('TNoiseGen.Noise2D', 'AX', AX);
   ValidateCoordinateInput('TNoiseGen.Noise2D', 'AY', AY);
-  LFloorX := FloorIndex(AX);
-  LFloorY := FloorIndex(AY);
-  LXi := LFloorX and 255;
-  LYi := LFloorY and 255;
+  LFloorX := FloorValue(AX);
+  LFloorY := FloorValue(AY);
+  LXi := PermutationIndex(LFloorX);
+  LYi := PermutationIndex(LFloorY);
   LXf := AX - LFloorX;
   LYf := AY - LFloorY;
   LU := Fade(LXf);
@@ -458,9 +470,9 @@ var
   LXi: Integer;
   LYi: Integer;
   LZi: Integer;
-  LFloorX: Integer;
-  LFloorY: Integer;
-  LFloorZ: Integer;
+  LFloorX: Double;
+  LFloorY: Double;
+  LFloorZ: Double;
   LXf: Double;
   LYf: Double;
   LZf: Double;
@@ -477,12 +489,12 @@ begin
   ValidateCoordinateInput('TNoiseGen.Noise3D', 'AX', AX);
   ValidateCoordinateInput('TNoiseGen.Noise3D', 'AY', AY);
   ValidateCoordinateInput('TNoiseGen.Noise3D', 'AZ', AZ);
-  LFloorX := FloorIndex(AX);
-  LFloorY := FloorIndex(AY);
-  LFloorZ := FloorIndex(AZ);
-  LXi := LFloorX and 255;
-  LYi := LFloorY and 255;
-  LZi := LFloorZ and 255;
+  LFloorX := FloorValue(AX);
+  LFloorY := FloorValue(AY);
+  LFloorZ := FloorValue(AZ);
+  LXi := PermutationIndex(LFloorX);
+  LYi := PermutationIndex(LFloorY);
+  LZi := PermutationIndex(LFloorZ);
   LXf := AX - LFloorX;
   LYf := AY - LFloorY;
   LZf := AZ - LFloorZ;

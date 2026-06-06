@@ -83,9 +83,12 @@ end;
 There is no public global random or noise singleton. Seed `0` maps to a deterministic default seed,
 so it is repeatable but not magical entropy.
 
-Invalid integer and float ranges raise `EArgumentError`. `NextBool` clamps probabilities into false
-or true behavior. Dice helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects
-empty, negative, and all-zero weights. FBM noise rejects non-positive octaves, lacunarity, and gain.
+Invalid integer ranges and reversed or non-finite float ranges raise `EArgumentError`. `NextBool`
+rejects non-finite probabilities and clamps finite probabilities into false or true behavior. Dice
+helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects empty, non-finite,
+negative, and all-zero weights. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject non-finite
+coordinate inputs. FBM also rejects non-positive octaves and non-positive or non-finite lacunarity
+and gain.
 
 ## SIMD And Platform Boundaries
 
