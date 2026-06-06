@@ -487,6 +487,32 @@ begin
     'TQuatd Nlerp t=1 canonicalizes opposite-sign end');
 end;
 
+procedure TestInterpolationFollowsShortestPathForOppositeSignStart;
+var
+  Qf: TQuatf;
+  NegatedIdentityf: TQuatf;
+  Qd: TQuatd;
+  NegatedIdentityd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  NegatedIdentityf := TQuatf.Create(0.0, 0.0, 0.0, -1.0);
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(NegatedIdentityf, Qf, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp follows shortest path for opposite-sign start');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(NegatedIdentityf, Qf, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp follows shortest path for opposite-sign start');
+
+  Qd := QuarterTurnZd;
+  NegatedIdentityd := TQuatd.Create(0.0, 0.0, 0.0, -1.0);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(NegatedIdentityd, Qd, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp follows shortest path for opposite-sign start');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(NegatedIdentityd, Qd, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp follows shortest path for opposite-sign start');
+end;
+
 procedure TestToAxisAngleCanonicalizesOppositeSignRotations;
 var
   Axisf: TVec3f;
@@ -541,6 +567,8 @@ begin
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
+  T.Run('Interpolation follows shortest path for opposite-sign start',
+    @TestInterpolationFollowsShortestPathForOppositeSignStart);
   T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
     @TestToAxisAngleCanonicalizesOppositeSignRotations);
   T.Summary;

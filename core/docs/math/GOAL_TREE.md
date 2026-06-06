@@ -45,10 +45,10 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
   half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
-  shortest-path handling for opposite-sign equivalent interpolation endpoints, finite-guard
-  parameter-position parity across `AAxis`, `AAngleRad`, and `AT`, `Equals`, and direct `TQuatd`
-  parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`, quaternion multiply
-  composition, and `Nlerp` midpoint.
+  shortest-path handling for opposite-sign equivalent interpolation endpoints including direct
+  start/end sign parity, finite-guard parameter-position parity across `AAxis`, `AAngleRad`, and
+  `AT`, `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`,
+  `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - Vector tests now also have direct `Double`-path parity coverage for `Data` aliases, `Zero`,
   add/subtract/unary minus, scalar multiply left, and representative length/component-multiply
   contracts.
@@ -229,13 +229,13 @@ Status:
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
   half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
   normalization for rotation matrix conversion and vector rotation, quaternion multiply composition,
-  `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints,
-  finite out-of-range extrapolation, finite-guard parameter-position parity across
-  `FromAxisAngle(AAxis, AAngleRad)` and `Slerp`/`Nlerp(AT)`, interpolation endpoint
-  normalization/canonicalization, component-wise `Equals` semantics including non-canonical
-  opposite-sign behavior and negative epsilon rejection, and direct `TQuatd` parity coverage for
-  `Create`, `Data`, `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp`
-  midpoint.
+  `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints
+  including direct start/end sign parity, finite out-of-range extrapolation, finite-guard
+  parameter-position parity across `FromAxisAngle(AAxis, AAngleRad)` and `Slerp`/`Nlerp(AT)`,
+  interpolation endpoint normalization/canonicalization, component-wise `Equals` semantics
+  including non-canonical opposite-sign behavior and negative epsilon rejection, and direct
+  `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`, quaternion
+  multiply composition, and `Nlerp` midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders
