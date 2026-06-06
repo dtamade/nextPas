@@ -245,8 +245,8 @@ Status:
   `LookAt` / `Camera2D` inputs, exact owner-level `Ortho` finite and zero-extent guard messages,
   exact owner-level `Perspective` finite/positive parameter guard messages, exact owner-level
   finite guard messages for `LookAt` eye/target/up inputs plus `Translate` / `Scale` axis inputs,
-  `RotateX/Y/Z` radian inputs, and `Camera2D` center/zoom inputs, invalid projection inputs, and
-  `Translate * Rotate * Scale` local composition.
+  `RotateX/Y/Z` radian inputs, and `Camera2D` center/zoom finite inputs plus positive-zoom
+  validation, invalid projection inputs, and `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing
 

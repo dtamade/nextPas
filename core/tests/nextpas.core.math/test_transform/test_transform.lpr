@@ -435,7 +435,8 @@ begin
   CheckVec4d(5.0, 8.0, 7.0, 1.0, D * TVec4d.Create(1.0, 0.0, 0.0, 1.0),
     'Double transform builders compose');
 
-  ExpectArgumentError('Camera2D zero zoom', @RaiseCamera2DZeroZoom);
+  ExpectArgumentErrorMessage('Camera2D: zoom must be positive',
+    'Camera2D zero zoom', @RaiseCamera2DZeroZoom);
 end;
 
 procedure TestDirectDoubleBuilderParity;
