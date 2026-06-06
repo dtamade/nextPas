@@ -307,6 +307,9 @@ var
   LAtomicWaitSection: string;
   LAtomicNotifyOneSection: string;
   LAtomicNotifyAllSection: string;
+  LAtomicFlagTestAndSetSection: string;
+  LAtomicFlagTestSection: string;
+  LAtomicFlagClearSection: string;
   LRefCountTypeSection: string;
   LFetchAnd64Section: string;
   LFetchOr64Section: string;
@@ -443,6 +446,15 @@ begin
   LAtomicNotifyAllSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_notify_all(var aObj: Int32): Int32;',
     'function atomic_notify_all(var aObj: UInt32): Int32;');
+  LAtomicFlagTestAndSetSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_flag_test_and_set(var aFlag: atomic_flag_t): Boolean;',
+    'function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;');
+  LAtomicFlagTestSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;',
+    'procedure atomic_flag_clear(var aFlag: atomic_flag_t);');
+  LAtomicFlagClearSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_flag_clear(var aFlag: atomic_flag_t);',
+    'function atomic_is_lock_free_32: Boolean;');
   LRefCountTypeSection := ExtractSection(LAtomicTypesSource,
     '  TAtomicRefCount = record',
     '  { TAtomicPtr - 泛型原子指针 }');
@@ -538,6 +550,9 @@ begin
     'atomic README must document the wait/notify surface');
   CheckContains(LAtomicDocsReadme, 'platform_wait_address32',
     'atomic README must disclose the current 32-bit wait-address seam');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_flag_t` and `TAtomicFlag` model C++ `atomic_flag`: `test_and_set` returns the previous set state, `clear` resets the flag, and `test` observes without modifying.',
+    'atomic README must document atomic_flag operation semantics');
   CheckContains(LAtomicDocsReadme, 'core/docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt',
     'atomic README must point to the historical x86_64 archive');
   CheckContains(LAtomicDocsReadme, 'make hygiene',
@@ -654,6 +669,12 @@ begin
     'atomic_notify_one must delegate to platform wake-one primitive');
   CheckContains(LAtomicNotifyAllSection, 'platform_wake_address_all',
     'atomic_notify_all must delegate to platform wake-all primitive');
+  CheckContains(LAtomicFlagTestAndSetSection, 'atomic_exchange(PInt32(@aFlag)^, 1, mo_seq_cst)',
+    'atomic_flag_test_and_set must set and return the previous flag state');
+  CheckContains(LAtomicFlagTestSection, 'atomic_load(PInt32(@aFlag)^',
+    'atomic_flag_test must observe the flag without modifying it');
+  CheckContains(LAtomicFlagClearSection, 'atomic_store(PInt32(@aFlag)^, 0, mo_seq_cst)',
+    'atomic_flag_clear must reset the flag with seq_cst default semantics');
   CheckContains(LRefCountTypeSection, 'function Load(AOrder: memory_order_t = mo_relaxed): PtrUInt;',
     'TAtomicRefCount Load should default to relaxed');
   CheckContains(LRefCountTypeSection, 'function Inc: PtrUInt;',
@@ -896,6 +917,42 @@ begin
     'facade TAtomicPtr strong CAS should update when expected matches');
   Check(LPtr.Load = @LValueB,
     'facade TAtomicPtr default Load should observe the CAS result');
+end;
+
+procedure TestAtomicFlagApi;
+var
+  LFlag: atomic_flag_t;
+  LTypedFlag: TAtomicFlag;
+begin
+  LFlag := 0;
+  Check(not atomic_flag_test(LFlag),
+    'atomic_flag_test should observe the initial clear state');
+  Check(not atomic_flag_test_and_set(LFlag),
+    'atomic_flag_test_and_set should return the previous clear state');
+  Check(atomic_flag_test(LFlag),
+    'atomic_flag_test should observe the set state after test_and_set');
+  Check(atomic_flag_test_and_set(LFlag),
+    'atomic_flag_test_and_set should return the previous set state');
+  atomic_flag_clear(LFlag);
+  Check(not atomic_flag_test(LFlag),
+    'atomic_flag_clear should reset the flag');
+
+  LTypedFlag := TAtomicFlag.Create(False);
+  Check(TAtomicFlag.is_lock_free,
+    'TAtomicFlag must expose the guaranteed lock-free surface');
+  Check(not LTypedFlag.test(mo_relaxed),
+    'TAtomicFlag.test should observe the initial clear state');
+  Check(not LTypedFlag.test_and_set(mo_acq_rel),
+    'TAtomicFlag.test_and_set should return the previous clear state');
+  Check(LTypedFlag.test(mo_acquire),
+    'TAtomicFlag.test should observe the set state after test_and_set');
+  LTypedFlag.clear(mo_release);
+  Check(not LTypedFlag.test(mo_acquire),
+    'TAtomicFlag.clear should reset the typed flag');
+
+  LTypedFlag := TAtomicFlag.Create(True);
+  Check(LTypedFlag.test(mo_relaxed),
+    'TAtomicFlag.Create(True) should create a set flag');
 end;
 
 procedure TestAtomicCompatFacade;
@@ -1147,6 +1204,7 @@ begin
   T.Run('Concurrent FetchAdd (4 threads x 10000)', @TestConcurrentFetchAdd);
   T.Run('fafafa-style atomic API', @TestFafafaStyleAtomicApi);
   T.Run('typed atomic record API', @TestAtomicRecordTypes);
+  T.Run('atomic flag API', @TestAtomicFlagApi);
   T.Run('compat PascalCase facade', @TestAtomicCompatFacade);
   T.Run('tagged pointer atomic API', @TestAtomicTaggedPointer);
   T.Run('tagged pointer rejects out-of-range x86_64 pointer', @TestAtomicTaggedPointerRejectsOutOfRangeX8664Pointer);
