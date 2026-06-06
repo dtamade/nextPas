@@ -130,12 +130,15 @@ the helper returns instead of sleeping on the new epoch.
 ```bash
 make hygiene
 make -C core/tests/nextpas.core.lockfree/test_lockfree clean test
+make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-debug
 make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test
 git diff --check
 git status --short --branch
 ```
 
 `test_lockfree` 包含 API 行为、close/timeout、managed type guard 和 source-contract 覆盖。
+`test-debug` 用 `-dDEBUG` 编译 focused gate，用来执行 `TMpscQueue<T>.Destroy` 的
+close-before-destroy assert，防止测试代码绕过 MPSC producer-stop / drain 纪律。
 `test_lockfree_stress` 覆盖本地 Linux x86_64 上的多线程压力场景。没有目标机 runtime gate 时，只能声称
 source-contract 或本机 Linux x86_64 runtime 证据，不能宣称其他平台已实机验证。
 

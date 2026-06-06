@@ -45,6 +45,20 @@ begin
   Check(Pos(AUnexpected, AText) = 0, AMessage + ': unexpected "' + AUnexpected + '"');
 end;
 
+function ExtractSection(const AText, AStartMarker, AEndMarker, AMessage: string): string;
+var
+  LStart: SizeInt;
+  LEnd: SizeInt;
+  LRest: string;
+begin
+  LStart := Pos(AStartMarker, AText);
+  Check(LStart > 0, AMessage + ': missing start marker "' + AStartMarker + '"');
+  LRest := Copy(AText, LStart, Length(AText) - LStart + 1);
+  LEnd := Pos(AEndMarker, LRest);
+  Check(LEnd > 0, AMessage + ': missing end marker "' + AEndMarker + '"');
+  Result := Copy(LRest, 1, LEnd - 1);
+end;
+
 { SPSC tests }
 
 procedure TestSpscBasic;
@@ -428,6 +442,7 @@ begin
   Check(LQ.TryDequeue(LV), 'deq 2');
   CheckEqual(Int64(77), Int64(LV));
   Check(not LQ.TryDequeue(LV), 'empty again');
+  LQ.Close;
   LQ.Free;
 end;
 
@@ -447,6 +462,7 @@ begin
   while GMpscQ.TryDequeue(LV) do
     Inc(LSum, Int64(LV));
   CheckEqual(Int64(80200), LSum, '4 producers sum');
+  GMpscQ.Close;
   GMpscQ.Free;
 end;
 
@@ -557,6 +573,7 @@ begin
   LQ.Enqueue(42);
   Check(LQ.DequeueTimeout(LV, 1000000), 'immediate');
   CheckEqual(Int64(42), Int64(LV));
+  LQ.Close;
   LQ.Free;
 end;
 
@@ -703,6 +720,8 @@ procedure TestLockFreeSourceContracts;
 const
   LockFreeSourcePath = '../../../src/nextpas.core.lockfree.pas';
   LockFreeDocsReadmePath = '../../../docs/lockfree/README.md';
+  LockFreeTestSourcePath = 'test_lockfree.lpr';
+  LockFreeTestMakefilePath = 'Makefile';
   SpscSourcePath = '../../../src/nextpas.core.lockfree.spsc.pas';
   MpmcSourcePath = '../../../src/nextpas.core.lockfree.mpmc.pas';
   StackSourcePath = '../../../src/nextpas.core.lockfree.stack.pas';
@@ -714,6 +733,8 @@ const
 var
   LLockFreeSource: string;
   LDocsReadme: string;
+  LTestSource: string;
+  LTestMakefile: string;
   LSpscSource: string;
   LMpmcSource: string;
   LStackSource: string;
@@ -722,9 +743,14 @@ var
   LWaitSource: string;
   LBenchSource: string;
   LRustCompareSource: string;
+  LMpscBasicTestSection: string;
+  LMpscMultiProducerTestSection: string;
+  LMpscTimeoutTestSection: string;
 begin
   Check(FileExists(LockFreeDocsReadmePath),
     'lockfree README must exist as the module documentation entrypoint');
+  Check(FileExists(LockFreeTestMakefilePath),
+    'lockfree test Makefile must exist as the focused verification entrypoint');
   Check(FileExists(BenchSourcePath),
     'lockfree benchmark source must exist as the benchmark entrypoint');
   Check(FileExists(BenchRustComparePath),
@@ -732,6 +758,8 @@ begin
 
   LLockFreeSource := ReadUtf8TextFile(LockFreeSourcePath);
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
+  LTestSource := ReadUtf8TextFile(LockFreeTestSourcePath);
+  LTestMakefile := ReadUtf8TextFile(LockFreeTestMakefilePath);
   LSpscSource := ReadUtf8TextFile(SpscSourcePath);
   LMpmcSource := ReadUtf8TextFile(MpmcSourcePath);
   LStackSource := ReadUtf8TextFile(StackSourcePath);
@@ -740,6 +768,18 @@ begin
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
   LBenchSource := ReadUtf8TextFile(BenchSourcePath);
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
+  LMpscBasicTestSection := ExtractSection(LTestSource,
+    'procedure TestMpscBasic;',
+    'procedure TestMpscMultiProducer;',
+    'MPSC basic test source section');
+  LMpscMultiProducerTestSection := ExtractSection(LTestSource,
+    'procedure TestMpscMultiProducer;',
+    '{ Work-stealing Deque }',
+    'MPSC multi-producer test source section');
+  LMpscTimeoutTestSection := ExtractSection(LTestSource,
+    'procedure TestMpscDequeueTimeout;',
+    'procedure TestDequeCapacity;',
+    'MPSC timeout test source section');
 
   CheckContains(LDocsReadme, '# nextpas.core.lockfree',
     'lockfree README must use the module title');
@@ -833,6 +873,9 @@ begin
     'make -C core/tests/nextpas.core.lockfree/test_lockfree clean test',
     'lockfree README must list the focused lockfree gate');
   CheckContains(LDocsReadme,
+    'make -C core/tests/nextpas.core.lockfree/test_lockfree clean test-debug',
+    'lockfree README must list the DEBUG close-before-destroy gate');
+  CheckContains(LDocsReadme,
     'make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test',
     'lockfree README must list the lockfree stress gate');
   CheckContains(LDocsReadme, 'source-contract',
@@ -879,6 +922,18 @@ begin
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
     'MPSC destroy guard must document the producer-stop discipline');
+  CheckContains(LMpscBasicTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
+    'MPSC basic test must close before freeing the queue');
+  CheckContains(LMpscMultiProducerTestSection, 'GMpscQ.Close;' + LineEnding + '  GMpscQ.Free;',
+    'MPSC multi-producer test must close after producers stop and before freeing the queue');
+  CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
+    'MPSC timeout test must close before freeing the queue');
+  CheckContains(LTestMakefile, '.PHONY: build run test test-debug clean',
+    'lockfree test Makefile must expose the DEBUG verification target');
+  CheckContains(LTestMakefile, '-dDEBUG',
+    'lockfree test DEBUG target must compile with DEBUG defined');
+  CheckContains(LTestMakefile, 'test-debug: run-debug',
+    'lockfree test Makefile must provide a runnable DEBUG gate');
   CheckContains(LMpscSource,
     'function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;',
     'MPSC queue must define a pointer-sized atomic node load helper');
