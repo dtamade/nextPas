@@ -1,5 +1,46 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http redirect absolute scheme slice
+
+- **Status:** completed.
+- Objective:
+  - resolve uppercase `HTTP://...` / `HTTPS://...` redirect schemes as
+    absolute HTTP URLs instead of relative targets
+  - reject unsupported absolute `://` schemes before dispatching a follow-up
+    request
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, global URL parser,
+    server runtime, benchmark assets, root planning files, generated outputs,
+    or build artifacts
+- RED:
+  - injected transport returned `302 Location: HTTP://redirect.test/new?from=upper`
+  - current follow-up kept base host `example.test`
+  - same fake transport returned `302 Location: ftp://redirect.test/new`
+  - current client did not raise `EHttpError` and attempted a second round trip
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39 total, 37 passed, 2 failed`
+    - failed at `Client redirect transport resolves uppercase absolute Location`
+    - failed at `Client redirect rejects unsupported absolute scheme`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal absolute redirect scheme detection
+  - `http` / `https` schemes are matched case-insensitively and normalized to
+    lowercase in the follow-up request URL
+  - unsupported absolute `://` schemes raise `EHttpError` before a follow-up
+    `RoundTrip`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `HTTP://redirect.test/...` as
+    `Scheme=http`, `Host=redirect.test`, parsed path/query, and no base-host
+    leakage
+  - this does not claim TLS implementation, global `TUrl.Parse` normalization,
+    H2/H3 support, or a broad redirect policy callback
+
 ## Session: 2026-06-06 http redirect Host ownership slice
 
 - **Status:** completed.

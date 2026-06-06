@@ -1172,6 +1172,59 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'network-path redirect final body');
 end;
 
+procedure TestClientRedirectTransportResolvesUppercaseAbsoluteLocation;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'HTTP://redirect.test/new?from=upper';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/old');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'uppercase absolute redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'uppercase absolute redirect transport final status');
+  CheckEqual('http', LTransportObj.SeenScheme,
+    'uppercase absolute redirect normalizes scheme');
+  CheckEqual('redirect.test', LTransportObj.SeenHost,
+    'uppercase absolute redirect updates host');
+  CheckEqual('/new', LTransportObj.SeenPath,
+    'uppercase absolute redirect updates path');
+  CheckEqual('from=upper', LTransportObj.SeenRawQuery,
+    'uppercase absolute redirect raw query is parsed');
+  CheckEqual('upper', LTransportObj.SeenQueryParam,
+    'uppercase absolute redirect query param is visible');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'uppercase absolute redirect final body');
+end;
+
+procedure TestClientRedirectRejectsUnsupportedAbsoluteScheme;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'ftp://redirect.test/new';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'absolute redirect with unsupported scheme raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'unsupported redirect scheme does not perform second round trip');
+end;
+
 procedure TestClientRedirectTransportResolvesPathRelativeLocation;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -1687,6 +1740,10 @@ begin
     @TestClientRedirectTransportSeesParsedRelativeQuery);
   T.Run('Client redirect transport resolves network-path Location',
     @TestClientRedirectTransportResolvesNetworkPathLocation);
+  T.Run('Client redirect transport resolves uppercase absolute Location',
+    @TestClientRedirectTransportResolvesUppercaseAbsoluteLocation);
+  T.Run('Client redirect rejects unsupported absolute scheme',
+    @TestClientRedirectRejectsUnsupportedAbsoluteScheme);
   T.Run('Client redirect transport resolves path-relative Location',
     @TestClientRedirectTransportResolvesPathRelativeLocation);
   T.Run('Client redirect transport normalizes dot-segment Location',

@@ -1,5 +1,28 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http redirect absolute scheme slice
+
+### Goal
+
+收紧 client redirect URL resolution：absolute redirect scheme 应按 URL 语义
+case-insensitive 处理。`HTTP://redirect.test/...` 不能被误当成 relative
+target 并保留 base authority；unsupported absolute scheme（例如 `ftp://...`）
+应在第二次 round trip 前 fail-fast，而不是静默落到 base host。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明
+  `Location: HTTP://redirect.test/new?from=upper` 当前仍保留
+  `example.test` host。
+- [x] RED：同一 fake transport 证明 `Location: ftp://redirect.test/new`
+  当前不会抛 `EHttpError`，还会进入第二次 round trip。
+- [x] GREEN：新增内部 absolute redirect scheme helper；`http` / `https`
+  case-insensitive 匹配并规范成小写，其他 `://` scheme 抛 `EHttpError`。
+- [x] 保持本 slice 边界：不修改全局 `TUrl.Parse` contract、不新增 redirect
+  policy 或 transport API。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http redirect Host ownership slice
 
 ### Goal

@@ -137,6 +137,16 @@ begin
   Result := False;
 end;
 
+function RedirectAbsoluteScheme(const ALocation: string): string;
+var
+  LSchemeEnd: SizeInt;
+begin
+  LSchemeEnd := Pos('://', ALocation);
+  if LSchemeEnd <= 1 then
+    Exit('');
+  Result := LowerCase(System.Copy(ALocation, 1, LSchemeEnd - 1));
+end;
+
 function IsRedirectTrustedHost(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
 var
   LInitialHost: string;
@@ -291,9 +301,17 @@ function ResolveRedirectUrl(const ABaseUrl: TUrl; const ALocation: string): TUrl
 var
   LTarget: TUrl;
   LHasQueryDelimiter: Boolean;
+  LScheme: string;
 begin
-  if (Pos('http://', ALocation) = 1) or (Pos('https://', ALocation) = 1) then
-    Exit(TUrl.Parse(ALocation));
+  LScheme := RedirectAbsoluteScheme(ALocation);
+  if LScheme <> '' then
+  begin
+    if (LScheme <> 'http') and (LScheme <> 'https') then
+      raise EHttpError.Create('unsupported redirect URL scheme: ' + LScheme);
+    Result := TUrl.Parse(ALocation);
+    Result.Scheme := LScheme;
+    Exit;
+  end;
   if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
   begin
     if ABaseUrl.Scheme = '' then

@@ -1,5 +1,43 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http redirect absolute scheme slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  `ResolveRedirectUrl` 只直接识别小写 `http://` / `https://`。大写 scheme
+  例如 `HTTP://redirect.test/new` 会进入 relative 分支，导致 follow-up request
+  保留 base host；unsupported absolute scheme 例如 `ftp://...` 也会被误当成
+  relative target，而不是 fail-fast。
+- 选择依据：
+  - URL scheme 语义是 case-insensitive；Go/Rust 常见 client 都不会把
+    `HTTP://...` 当成相对路径。
+  - redirect client 层应该决定是否支持一个 absolute scheme，transport 不应收到
+    被错误合并到 base authority 的 request object。
+  - 本 slice 仍限于 redirect resolver，不改全局 `TUrl.Parse`、不新增 TLS/H2/H3
+    或 redirect policy。
+- 实现决策：
+  - 新增内部 `RedirectAbsoluteScheme`，用 `://` 检测 absolute redirect scheme
+    并转小写。
+  - `http` / `https` scheme 走 `TUrl.Parse`，然后把 follow-up `Scheme`
+    规范成小写。
+  - 其他 `://` absolute scheme 抛 `EHttpError`，并且不会执行第二次
+    `RoundTrip`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39 total, 37 passed, 2 failed`
+    - failed at `Client redirect transport resolves uppercase absolute Location`
+    - failure: `uppercase absolute redirect updates host: expected "redirect.test", got "example.test"`
+    - failed at `Client redirect rejects unsupported absolute scheme`
+    - failure: `absolute redirect with unsupported scheme raises EHttpError`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect request-object URL scheme contract 的真实收紧。后续如果继续
+  URL resolution，可以单独审计 default-port authority normalization；不要把
+  TLS implementation 或 H2/H3 support 混入此 resolver slice。
+
 ## 2026-06-06 http redirect Host ownership slice
 
 - 本轮继续收紧 client redirect header ownership：

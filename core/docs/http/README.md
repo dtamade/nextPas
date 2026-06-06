@@ -97,9 +97,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   same-authority redirects, but dropped when the redirect changes authority so
   the transport derives the host from the new URL.
 - Relative, path-relative, and network-path redirect `Location` values are
-  resolved before the follow-up request is passed to the transport. Path-relative
-  redirects merge against the original request directory and normalize dot
-  segments, while network-path URLs inherit the original scheme and replace
+  resolved before the follow-up request is passed to the transport. Absolute
+  `http` / `https` redirect schemes are matched case-insensitively and
+  normalized to lowercase for the follow-up request; unsupported absolute
+  schemes raise `EHttpError` before a second round trip. Path-relative redirects
+  merge against the original request directory and normalize dot segments, while
+  network-path URLs inherit the original scheme and replace
   authority/path/query/fragment. Fragment-only redirects preserve the original
   path/query and update only the request URL fragment; H1 request writing still
   omits fragments from the wire request-target.
