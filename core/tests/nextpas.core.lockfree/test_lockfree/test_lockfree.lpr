@@ -726,6 +726,27 @@ begin
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
     'MPSC destroy guard must document the producer-stop discipline');
+  CheckContains(LMpscSource,
+    'function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;',
+    'MPSC queue must define a pointer-sized atomic node load helper');
+  CheckContains(LMpscSource,
+    'procedure AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);',
+    'MPSC queue must define a pointer-sized atomic node store helper');
+  CheckContains(LMpscSource,
+    'function AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;',
+    'MPSC queue must define a pointer-sized atomic node exchange helper');
+  CheckContains(LMpscSource, 'atomic_load(PPointer(@ANode)^, AOrder)',
+    'MPSC node load helper must use pointer-sized atomic_load');
+  CheckContains(LMpscSource, 'atomic_store(PPointer(@ANode)^, Pointer(AValue), AOrder)',
+    'MPSC node store helper must use pointer-sized atomic_store');
+  CheckContains(LMpscSource, 'atomic_exchange(PPointer(@ANode)^, Pointer(AValue), AOrder)',
+    'MPSC node exchange helper must use pointer-sized atomic_exchange');
+  CheckNotContains(LMpscSource, 'AtomicLoad64(Int64(PtrUInt(',
+    'MPSC queue must not load pointer links through 64-bit pointer casts');
+  CheckNotContains(LMpscSource, 'AtomicStore64(Int64(PtrUInt(',
+    'MPSC queue must not store pointer links through 64-bit pointer casts');
+  CheckNotContains(LMpscSource, 'AtomicExchange64(Int64(PtrUInt(',
+    'MPSC queue must not exchange pointer links through 64-bit pointer casts');
   CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop',
     'work-stealing deque must linearize steals through top CAS');
   CheckContains(LWaitSource, 'platform_wait_address32',

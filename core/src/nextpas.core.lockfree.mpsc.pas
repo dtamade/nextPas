@@ -4,6 +4,9 @@ unit nextpas.core.lockfree.mpsc;
 
 interface
 
+uses
+  nextpas.core.atomic.core;
+
 type
   generic TMpscQueue<T> = class
   private
@@ -20,6 +23,9 @@ type
     FClosed: Int32;
     FDataEpoch: Int32;
     FDataWaiters: Int32;
+    function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode; inline;
+    procedure AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t); inline;
+    function AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode; inline;
   public
     constructor Create;
     destructor Destroy; override;
@@ -39,6 +45,21 @@ uses
   nextpas.core.atomic,
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
+
+function TMpscQueue.AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;
+begin
+  Result := PNode(atomic_load(PPointer(@ANode)^, AOrder));
+end;
+
+procedure TMpscQueue.AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);
+begin
+  atomic_store(PPointer(@ANode)^, Pointer(AValue), AOrder);
+end;
+
+function TMpscQueue.AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;
+begin
+  Result := PNode(atomic_exchange(PPointer(@ANode)^, Pointer(AValue), AOrder));
+end;
 
 constructor TMpscQueue.Create;
 begin
@@ -71,24 +92,24 @@ begin
   New(LNode);
   LNode^.Value := AValue;
   LNode^.Next := nil;
-  LPrev := PNode(PtrUInt(AtomicExchange64(Int64(PtrUInt(FHead)), Int64(PtrUInt(LNode)), moAcqRel)));
-  AtomicStore64(Int64(PtrUInt(LPrev^.Next)), Int64(PtrUInt(LNode)), moRelease);
+  LPrev := AtomicExchangeNode(FHead, LNode, mo_acq_rel);
+  AtomicStoreNode(LPrev^.Next, LNode, mo_release);
   LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
 function TMpscQueue.TryDequeue(out AValue: T): Boolean;
 var
-  LTail, LNext: PNode;
+  LTail, LNext, LPrev: PNode;
 begin
   LTail := FTail;
-  LNext := PNode(PtrUInt(AtomicLoad64(Int64(PtrUInt(LTail^.Next)), moAcquire)));
+  LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
   if LTail = @FStub then
   begin
     if LNext = nil then
       Exit(False);
     FTail := LNext;
     LTail := LNext;
-    LNext := PNode(PtrUInt(AtomicLoad64(Int64(PtrUInt(LTail^.Next)), moAcquire)));
+    LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
   end;
   if LNext <> nil then
   begin
@@ -98,13 +119,12 @@ begin
     Result := True;
     Exit;
   end;
-  if LTail <> PNode(PtrUInt(AtomicLoad64(Int64(PtrUInt(FHead)), moAcquire))) then
+  if LTail <> AtomicLoadNode(FHead, mo_acquire) then
     Exit(False);
   FStub.Next := nil;
-  AtomicStore64(Int64(PtrUInt(
-    PNode(PtrUInt(AtomicExchange64(Int64(PtrUInt(FHead)), Int64(PtrUInt(@FStub)), moAcqRel)))^.Next)),
-    Int64(PtrUInt(@FStub)), moRelease);
-  LNext := PNode(PtrUInt(AtomicLoad64(Int64(PtrUInt(LTail^.Next)), moAcquire)));
+  LPrev := AtomicExchangeNode(FHead, @FStub, mo_acq_rel);
+  AtomicStoreNode(LPrev^.Next, @FStub, mo_release);
+  LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
   if LNext <> nil then
   begin
     FTail := LNext;
@@ -172,7 +192,7 @@ var
   LTail, LNext: PNode;
 begin
   LTail := FTail;
-  LNext := PNode(PtrUInt(AtomicLoad64(Int64(PtrUInt(LTail^.Next)), moAcquire)));
+  LNext := AtomicLoadNode(LTail^.Next, mo_acquire);
   if LTail = @FStub then
     Result := LNext = nil
   else
