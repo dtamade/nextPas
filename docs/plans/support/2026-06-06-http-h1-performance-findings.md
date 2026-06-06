@@ -1,5 +1,33 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 snapshot workload propagation slice
+
+- 本轮继续收紧 benchmark evidence capture：
+  `run_server_comparison.sh` 已能选择 `no_url` / `url_path` /
+  `adapter_no_url` / `response_1k`，但 snapshot helper 只能捕获默认
+  `no_url`。这使得 docs 里的 non-default workload 证据难以通过带环境元数据的
+  Markdown snapshot 复现。
+- 选择依据：
+  - snapshot 是长期性能证据入口，应该能记录同一个 runner 支持的 workload。
+  - 这是 benchmark harness truth，不触碰 HTTP public API、server runtime 或
+    comparator 输出格式。
+  - 默认 snapshot 行为保持兼容；只有显式 `--workload` 时才在 command block 中展示。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot url_path smoke`
+    - failure: `unknown argument: --workload`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - snapshot helper 新增 `--workload no_url|url_path|adapter_no_url|response_1k`。
+  - 非法 workload 走与 runner 相同的 allow-list validation。
+  - 显式 workload 会透传到 runner，并写入 snapshot environment `workload=...`
+    和 command block。
+- 复盘结论：
+  现在可以用 snapshot helper 捕获 non-default workload 的环境化证据。下一步若继续
+  benchmark truth，应优先让 snapshot 覆盖 `--include-hyper + --workload` 的组合或
+  记录 Cargo/Hyper dependency versions，而不是只追加裸 benchmark 数字。
+
 ## 2026-06-06 comparator workload validation slice
 
 - 本轮转向 benchmark truth 的输入契约：

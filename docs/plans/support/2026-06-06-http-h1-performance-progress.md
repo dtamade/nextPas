@@ -1,5 +1,41 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 snapshot workload propagation slice
+
+- **Status:** completed.
+- Objective:
+  - let `capture_server_comparison_snapshot.sh` pass an explicit workload to
+    `run_server_comparison.sh`
+  - record the selected workload in the snapshot environment block
+  - keep default snapshot invocation compatible with the existing `no_url` path
+- Scope and safety:
+  - touched the snapshot helper script, benchmark focused test, HTTP docs, and
+    this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, comparator output format, generated outputs, or
+    build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot url_path smoke`
+    - failure: `unknown argument: --workload`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added `--workload no_url|url_path|adapter_no_url|response_1k` to snapshot
+    CLI parsing and validation
+  - explicit workload is passed to the comparison runner and written into the
+    command block
+  - snapshot environment now records `workload=<name>`
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - non-default server comparison workloads can now be captured with environment
+    metadata through the snapshot helper
+  - this does not claim new workloads, new comparator behavior, or new
+    cross-language rankings
+
 ## Session: 2026-06-06 comparator workload validation slice
 
 - **Status:** completed.

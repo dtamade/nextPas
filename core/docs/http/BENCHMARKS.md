@@ -18,7 +18,7 @@ Capture a Markdown snapshot with environment metadata:
 
 ```sh
 benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
-  --requests 20000 --threads 4 --runs 3 \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
@@ -53,11 +53,12 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 
 The Hyper/Tokio row reports `impl=rust_hyper` and
 `rust_profile=hyper_tokio`. The snapshot helper accepts the same flag and
-records `include_hyper=1` in the Markdown environment block:
+also accepts `--workload`; it records `workload=<name>` and
+`include_hyper=1` in the Markdown environment block:
 
 ```sh
 benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
-  --requests 20000 --threads 4 --runs 3 --include-hyper \
+  --requests 20000 --threads 4 --workload no_url --runs 3 --include-hyper \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 

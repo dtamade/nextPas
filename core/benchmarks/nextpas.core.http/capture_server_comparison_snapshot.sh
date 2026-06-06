@@ -5,13 +5,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CORE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REQUESTS=20000
 THREADS=4
+WORKLOAD="no_url"
+WORKLOAD_EXPLICIT=0
 RUNS=1
 INCLUDE_HYPER=0
 OUTPUT_PATH="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison/snapshot.md"
 
 usage() {
   cat <<'EOF'
-usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--runs N] [--include-hyper] [--output PATH]
+usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--include-hyper] [--output PATH]
 
 Capture a Markdown snapshot for the nextPas/Go/Rust std-only HTTP server comparison.
 Pass --include-hyper to include the optional Hyper/Tokio comparator.
@@ -26,6 +28,11 @@ while [[ $# -gt 0 ]]; do
       ;;
     --threads)
       THREADS="${2:?missing value for --threads}"
+      shift 2
+      ;;
+    --workload)
+      WORKLOAD="${2:?missing value for --workload}"
+      WORKLOAD_EXPLICIT=1
       shift 2
       ;;
     --runs)
@@ -82,12 +89,27 @@ if [[ "${THREADS}" -gt "${REQUESTS}" ]]; then
   THREADS="${REQUESTS}"
 fi
 
+case "${WORKLOAD}" in
+  no_url|url_path|adapter_no_url|response_1k)
+    ;;
+  *)
+    echo "--workload must be no_url, url_path, adapter_no_url, or response_1k" >&2
+    exit 2
+    ;;
+esac
+
 OUTPUT_DIR="$(dirname "${OUTPUT_PATH}")"
 RAW_OUTPUT="${OUTPUT_PATH}.raw"
 mkdir -p "${OUTPUT_DIR}"
 
-RUNNER_ARGS=(--requests "${REQUESTS}" --threads "${THREADS}" --runs "${RUNS}")
-RUNNER_COMMAND="benchmarks/nextpas.core.http/run_server_comparison.sh --requests ${REQUESTS} --threads ${THREADS} --runs ${RUNS}"
+RUNNER_ARGS=(--requests "${REQUESTS}" --threads "${THREADS}")
+RUNNER_COMMAND="benchmarks/nextpas.core.http/run_server_comparison.sh --requests ${REQUESTS} --threads ${THREADS}"
+if [[ "${WORKLOAD_EXPLICIT}" -eq 1 ]]; then
+  RUNNER_ARGS+=(--workload "${WORKLOAD}")
+  RUNNER_COMMAND="${RUNNER_COMMAND} --workload ${WORKLOAD}"
+fi
+RUNNER_ARGS+=(--runs "${RUNS}")
+RUNNER_COMMAND="${RUNNER_COMMAND} --runs ${RUNS}"
 if [[ "${INCLUDE_HYPER}" -eq 1 ]]; then
   RUNNER_ARGS+=(--include-hyper)
   RUNNER_COMMAND="${RUNNER_COMMAND} --include-hyper"
@@ -124,6 +146,7 @@ go_version=${go_version}
 rustc_version=${rustc_version}
 requests=${REQUESTS}
 threads=${THREADS}
+workload=${WORKLOAD}
 runs=${RUNS}
 include_hyper=${INCLUDE_HYPER}
 \`\`\`

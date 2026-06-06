@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 snapshot workload propagation slice
+
+### Goal
+
+让 `capture_server_comparison_snapshot.sh` 能显式选择 server comparison workload，
+并把该 workload 写入 Markdown snapshot 的 environment / command / raw output。
+这样 `url_path`、`adapter_no_url`、`response_1k` 的对比证据可以通过 snapshot
+helper 复现，而不再只能手工跑 runner 或默认捕获 `no_url`。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增 `server comparison snapshot url_path smoke`，
+  证明 snapshot helper 当前不接受 `--workload url_path`。
+- [x] GREEN：snapshot helper 新增 `--workload` 参数、allow-list validation、
+  runner 透传、environment `workload=` 记录和 command block 记录。
+- [x] 保持本 slice 边界：不新增 workload、不改变 default no-arg snapshot 行为、
+  不修改 comparator 输出格式或 HTTP runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 comparator workload validation slice
 
 ### Goal

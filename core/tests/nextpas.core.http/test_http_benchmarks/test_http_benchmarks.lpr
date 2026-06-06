@@ -1383,6 +1383,41 @@ begin
   CheckServerBenchmarkOutput(LSnapshot, 'rust_std', '8', '1');
 end;
 
+procedure TestServerComparisonSnapshotUrlPathSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot url_path runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_url_path_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'url_path', '--output', LSnapshotPath], LRootDir, LExitCode,
+    LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot url_path exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath), 'server comparison snapshot url_path exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'workload=url_path',
+    'snapshot url_path workload marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --workload url_path --runs 1',
+    'snapshot url_path command marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LSnapshot, 'go', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust_std', '8', '1', 'url_path');
+end;
+
 procedure TestServerComparisonSnapshotRunsSmoke;
 var
   LRootDir: string;
@@ -1950,6 +1985,8 @@ begin
     @TestServerComparisonRunnerIncludeHyperSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
+  T.Run('server comparison snapshot url_path smoke',
+    @TestServerComparisonSnapshotUrlPathSmoke);
   T.Run('server comparison snapshot runs smoke',
     @TestServerComparisonSnapshotRunsSmoke);
   T.Run('server comparison snapshot include hyper smoke',
