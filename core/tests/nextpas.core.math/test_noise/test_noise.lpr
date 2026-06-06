@@ -140,6 +140,21 @@ begin
     Caught := False;
     ErrorMessage := '';
     try
+      Noise.FBM2D(0.25, 0.75, 0);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects non-positive octaves');
+    CheckEqual('TNoiseGen.FBM2D: AOctaves must be positive', ErrorMessage,
+      'FBM2D reports owner-level positive-contract message for octaves');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
       Noise.FBM2D(0.25, 0.75, 3, 0.0, 0.5);
     except
       on E: EArgumentError do
@@ -170,6 +185,21 @@ begin
     Caught := False;
     ErrorMessage := '';
     try
+      Noise.FBM3D(0.25, 0.75, 1.25, 0);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-positive octaves');
+    CheckEqual('TNoiseGen.FBM3D: AOctaves must be positive', ErrorMessage,
+      'FBM3D reports owner-level positive-contract message for octaves');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
       Noise.FBM2D(0.25, 0.75, 3, DoubleInfinity, 0.5);
     except
       on E: EArgumentError do
@@ -181,6 +211,21 @@ begin
     Check(Caught, 'FBM rejects infinite lacunarity');
     CheckEqual('TNoiseGen.FBM2D: ALacunarity must be positive', ErrorMessage,
       'FBM2D reports owner-level positive-contract message for infinite lacunarity');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 0.75, 1.25, 3, 0.0, 0.5);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-positive lacunarity');
+    CheckEqual('TNoiseGen.FBM3D: ALacunarity must be positive', ErrorMessage,
+      'FBM3D reports owner-level positive-contract message for zero lacunarity');
 
     Caught := False;
     ErrorMessage := '';
@@ -256,6 +301,21 @@ begin
     Check(Caught, 'FBM3D rejects NaN gain');
     CheckEqual('TNoiseGen.FBM3D: AGain must be positive', ErrorMessage,
       'FBM3D reports owner-level positive-contract message for NaN gain');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(0.25, 0.75, 3, 2.0, 0.0);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects non-positive gain');
+    CheckEqual('TNoiseGen.FBM2D: AGain must be positive', ErrorMessage,
+      'FBM2D reports owner-level positive-contract message for zero gain');
 
     Caught := False;
     ErrorMessage := '';
@@ -544,6 +604,21 @@ begin
     Caught := False;
     ErrorMessage := '';
     try
+      Noise.FBM2D(1.0e308, 0.75, 2);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects non-finite octave AX coordinates');
+    CheckEqual('TNoiseGen.FBM2D: octave AX must be finite', ErrorMessage,
+      'FBM2D reports owner-level octave AX finite-contract message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
       Noise.FBM2D(0.25, 1.0e308, 2);
     except
       on E: EArgumentError do
@@ -555,6 +630,36 @@ begin
     Check(Caught, 'FBM2D rejects non-finite octave coordinates');
     CheckEqual('TNoiseGen.FBM2D: octave AY must be finite', ErrorMessage,
       'FBM2D reports owner-level octave finite-contract message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(1.0e308, 0.75, 1.25, 2);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-finite octave AX coordinates');
+    CheckEqual('TNoiseGen.FBM3D: octave AX must be finite', ErrorMessage,
+      'FBM3D reports owner-level octave AX finite-contract message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 1.0e308, 1.25, 2);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-finite octave AY coordinates');
+    CheckEqual('TNoiseGen.FBM3D: octave AY must be finite', ErrorMessage,
+      'FBM3D reports owner-level octave AY finite-contract message');
 
     Caught := False;
     ErrorMessage := '';
