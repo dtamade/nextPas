@@ -1103,6 +1103,35 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'network-path redirect final body');
 end;
 
+procedure TestClientRedirectTransportResolvesPathRelativeLocation;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'next?from=relative-path';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/dir/old');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'path-relative redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'path-relative redirect transport final status');
+  CheckEqual('http', LTransportObj.SeenScheme,
+    'path-relative redirect preserves original scheme');
+  CheckEqual('example.test', LTransportObj.SeenHost,
+    'path-relative redirect preserves host');
+  CheckEqual('/dir/next', LTransportObj.SeenPath,
+    'path-relative redirect merges with base directory');
+  CheckEqual('from=relative-path', LTransportObj.SeenRawQuery,
+    'path-relative redirect raw query is parsed');
+  CheckEqual('relative-path', LTransportObj.SeenQueryParam,
+    'path-relative redirect query param is visible');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'path-relative redirect final body');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1362,6 +1391,8 @@ begin
     @TestClientRedirectTransportSeesParsedRelativeQuery);
   T.Run('Client redirect transport resolves network-path Location',
     @TestClientRedirectTransportResolvesNetworkPathLocation);
+  T.Run('Client redirect transport resolves path-relative Location',
+    @TestClientRedirectTransportResolvesPathRelativeLocation);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);

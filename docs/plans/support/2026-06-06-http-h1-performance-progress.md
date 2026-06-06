@@ -1,5 +1,43 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http path-relative redirect slice
+
+- **Status:** completed.
+- Objective:
+  - make path-relative redirect `Location` values merge against the original
+    request directory
+  - make injected transports see a valid absolute request path rather than bare
+    `next`
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: next?from=relative-path`
+  - base request was `http://example.test/dir/old`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30 total, 29 passed, 1 failed`
+    - failed at `Client redirect transport resolves path-relative Location`
+    - expected follow-up path `/dir/next`, got `next`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `MergeRedirectPath`
+  - absolute-path targets still replace the path directly
+  - path-relative targets merge with the base path directory; no-directory
+    base paths fall back to root-relative `/<target>`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30/30 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=example.test`,
+    `Path=/dir/next`, `RawQuery=from=relative-path`, and query param
+    `from=relative-path`
+  - this does not claim dot-segment normalization, query-only redirects,
+    fragment-only redirects, or per-request redirect policy controls
+
 ## Session: 2026-06-06 http network-path redirect slice
 
 - **Status:** completed.

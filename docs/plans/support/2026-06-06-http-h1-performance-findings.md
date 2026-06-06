@@ -1,5 +1,38 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http path-relative redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  network-path redirect 已能替换 authority，但 path-relative `Location`
+  例如 `next?from=relative-path` 仍被直接写入 follow-up `Url.Path`，
+  变成裸 `next`。
+- 选择依据：
+  - Go/Rust HTTP client 都按 base URL 目录解析 path-relative redirects；
+    transport 不应收到没有 leading slash 的 request path。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - 对 H1 wire 和 future H2/H3 transport seam 都有价值：follow-up request
+    object 应暴露合并后的 path，而不是要求 transport 再做 URL resolution。
+- 实现决策：
+  - 新增内部 `MergeRedirectPath(BasePath, TargetPath)`。
+  - absolute-path target 仍直接替换 path。
+  - path-relative target 使用 base path 的最后一个 `/` 作为目录边界；
+    base path 没有目录时落到 root-relative `/<target>`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30 total, 29 passed, 1 failed`
+    - failed at `Client redirect transport resolves path-relative Location`
+    - failure: `path-relative redirect merges with base directory: expected "/dir/next", got "next"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `30/30 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object path contract，不是 H1
+  malformed parity。后续可单独审计 dot-segment normalization、query-only 和
+  fragment-only redirects，但不应混入本 slice。
+
 ## 2026-06-06 http network-path redirect slice
 
 - 本轮继续收紧 client redirect URL resolution：

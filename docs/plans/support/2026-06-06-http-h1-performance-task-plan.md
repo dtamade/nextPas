@@ -1,5 +1,27 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http path-relative redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：path-relative `Location`（例如
+`next?from=relative-path`）必须按 base URL 目录合并成 follow-up path。
+显式注入的 `IHttpTransport` 和 future H2/H3 transport 都应收到
+`/dir/next` 这样的有效 request path，而不是裸 `next`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: next?from=relative-path`，base request 为
+  `http://example.test/dir/old`；当前失败为
+  `expected "/dir/next", got "next"`。
+- [x] GREEN：新增内部 `MergeRedirectPath`，path-relative target 使用 base
+  path 最后一个 `/` 作为目录边界合并。
+- [x] 保持既有分支：absolute URL、network-path URL、absolute-path relative URL
+  继续沿用各自分支。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http network-path redirect slice
 
 ### Goal

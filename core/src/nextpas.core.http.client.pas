@@ -83,6 +83,30 @@ begin
       IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl);
 end;
 
+function MergeRedirectPath(const ABasePath, ATargetPath: string): string;
+var
+  LI: SizeInt;
+  LSlashPos: SizeInt;
+begin
+  if ATargetPath = '' then
+    Exit(ABasePath);
+  if ATargetPath[1] = '/' then
+    Exit(ATargetPath);
+
+  LSlashPos := 0;
+  for LI := Length(ABasePath) downto 1 do
+    if ABasePath[LI] = '/' then
+    begin
+      LSlashPos := LI;
+      Break;
+    end;
+
+  if LSlashPos > 0 then
+    Result := System.Copy(ABasePath, 1, LSlashPos) + ATargetPath
+  else
+    Result := '/' + ATargetPath;
+end;
+
 function ResolveRedirectUrl(const ABaseUrl: TUrl; const ALocation: string): TUrl;
 var
   LTarget: TUrl;
@@ -99,7 +123,7 @@ begin
   Result := ABaseUrl;
   LTarget := TUrl.ParseRequestTarget(ALocation);
   if LTarget.Path <> '' then
-    Result.Path := LTarget.Path;
+    Result.Path := MergeRedirectPath(Result.Path, LTarget.Path);
   Result.RawQuery := LTarget.RawQuery;
   Result.Fragment := LTarget.Fragment;
 end;
