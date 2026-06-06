@@ -22,6 +22,7 @@ require_token() {
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
+require_file "docs/system/runtime-contracts.md"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -47,6 +48,34 @@ done
 
 for phase in S0 S1 S2 S3 S4 S5; do
   require_token "docs/system/goal-tree.md" "$phase"
+done
+
+for token in \
+  "managed string" \
+  "dynamic array" \
+  "interface reference" \
+  "managed record" \
+  "heap manager" \
+  "nextpas.core.mem" \
+  "not public ABI" \
+  "leak-sensitive"; do
+  require_token "docs/system/runtime-contracts.md" "$token"
+done
+
+for helper in \
+  "np.system.string_init" \
+  "np.system.string_fini" \
+  "np.system.string_assign" \
+  "np.system.dynarray_init" \
+  "np.system.dynarray_fini" \
+  "np.system.dynarray_set_length" \
+  "np.system.interface_addref" \
+  "np.system.interface_release" \
+  "np.system.managed_record_init" \
+  "np.system.managed_record_fini" \
+  "np.system.heap_alloc" \
+  "np.system.heap_free"; do
+  require_token "docs/system/runtime-contracts.md" "$helper"
 done
 
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"

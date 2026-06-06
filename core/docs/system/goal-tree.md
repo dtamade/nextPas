@@ -33,10 +33,10 @@ Exit evidence:
 
 ## S2 Memory / Managed / Dynarray / String Runtime Contracts
 
-- [ ] Document managed string, dynamic array, interface and managed record lifetime contracts.
-- [ ] Map heap-manager responsibilities onto `nextpas.core.mem` without moving allocator ownership.
-- [ ] Add source-contract tests for runtime helper names and owner boundaries.
-- [ ] Add leak-sensitive tests before any runtime-owned implementation appears.
+- [x] Document managed string, dynamic array, interface and managed record lifetime contracts.
+- [x] Map heap-manager responsibilities onto `nextpas.core.mem` without moving allocator ownership.
+- [x] Add source-contract tests for runtime helper names and owner boundaries.
+- [x] Record leak-sensitive test requirements before any runtime-owned implementation appears.
 
 ## S3 Exception / RTTI / Unit Lifecycle Contracts
 

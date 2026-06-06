@@ -26,6 +26,9 @@ managed type lifetime、memory primitive、exception/unwinding、RTTI/TypeInfo �
 - `ZeroMem`、`CopyMem`、`CompareMem`、`FreeAndNil`、`SafeFree` 和 `Supports` 只委派给
   `nextpas.core.base.utils`，保持现有 guard 和异常语义。
 
+S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
+compiler/runtime handshake names, not public ABI and not current facade functions.
+
 ## Boundaries
 
 | Area | System stance |
