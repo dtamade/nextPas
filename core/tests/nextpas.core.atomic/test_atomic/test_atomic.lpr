@@ -258,6 +258,7 @@ const
   AtomicDocsReadmePath = '../../../docs/atomic/README.md';
   AtomicBenchMakefilePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/Makefile';
   AtomicBenchSourcePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr';
+  AtomicBenchRustComparePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/compare_rust/main.rs';
   AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
   AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
 var
@@ -268,6 +269,7 @@ var
   LAtomicDocsReadme: string;
   LAtomicBenchMakefile: string;
   LAtomicBenchSource: string;
+  LAtomicBenchRustCompareSource: string;
   LX8664SnapshotSource: string;
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
@@ -321,8 +323,11 @@ begin
     'atomic benchmark Makefile must exist as the focused benchmark entrypoint');
   Check(FileExists(AtomicBenchSourcePath),
     'atomic benchmark source must exist as the benchmark entrypoint');
+  Check(FileExists(AtomicBenchRustComparePath),
+    'atomic benchmark Rust comparison source must exist as an external baseline reference');
   LAtomicBenchMakefile := ReadUtf8TextFile(AtomicBenchMakefilePath);
   LAtomicBenchSource := ReadUtf8TextFile(AtomicBenchSourcePath);
+  LAtomicBenchRustCompareSource := ReadUtf8TextFile(AtomicBenchRustComparePath);
   Check(not FileExists(AtomicX8664SnapshotLegacyPath),
     'x86_64 snapshot must not remain in src');
   LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotArchivePath);
@@ -535,6 +540,8 @@ begin
   CheckContains(LAtomicDocsReadme,
     'core/benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr',
     'atomic README must point to the Pascal benchmark source');
+  CheckContains(LAtomicDocsReadme, 'compare_rust/main.rs',
+    'atomic README must point to the external Rust comparison source');
   CheckContains(LAtomicDocsReadme, 'platform/compiler flags/input size/baseline',
     'atomic README must name the benchmark evidence envelope');
   CheckContains(LAtomicBenchMakefile,
@@ -550,8 +557,16 @@ begin
     'WriteLn(''Input size: ITERS=1000000; scenarios=plain baseline, AtomicLoad/Store32, AtomicFetchAdd32, AtomicCompareExchange32, TAtomicUInt32'')',
     'atomic benchmark must print the input-size evidence field');
   CheckContains(LAtomicBenchSource,
-    'WriteLn(''Baselines: plain local variable operations for single-thread overhead context; no external runtime auto-run'')',
+    'WriteLn(''Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs external Rust source (not auto-run)'')',
     'atomic benchmark must print the baseline evidence field');
+  CheckContains(LAtomicBenchRustCompareSource, 'use std::sync::atomic',
+    'atomic Rust comparison source must use Rust std atomic APIs');
+  CheckContains(LAtomicBenchRustCompareSource, 'const ITERS: usize = 1_000_000;',
+    'atomic Rust comparison source must use the same nominal iteration count');
+  CheckContains(LAtomicBenchRustCompareSource, 'AtomicLoad/Store32 2M',
+    'atomic Rust comparison source must mirror the load/store scenario name');
+  CheckContains(LAtomicBenchRustCompareSource, 'AtomicCompareExchange32 1M',
+    'atomic Rust comparison source must mirror the compare-exchange scenario name');
   CheckContains(LSingleStrongCasSection, 'AtomicCompatFailureOrder(aOrder)',
     'single-order strong CAS must derive failure order');
   CheckContains(LSingleWeakCasSection, 'AtomicCompatFailureOrder(aOrder)',

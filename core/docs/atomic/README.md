@@ -113,5 +113,7 @@ benchmark 使用 `ITERS=1000000`，Makefile 默认编译参数是 `-MObjFPC -Sh 
 ms、M ops/sec 和 ns/op。
 
 当前 baseline 只是同一 Pascal 程序里的 plain local variable 操作，用于帮助判断单线程测试开销；
-它不是 Rust、Go 或 C++ runtime 对照。性能结论必须带上平台、编译参数、输入规模、benchmark 输出
-和 baseline 说明。没有同一机器、同一轮次的外部 runtime 输出时，不应写入胜过 Rust/Go/C++ 标准库的结论。
+它不是 Rust、Go 或 C++ runtime 对照。`compare_rust/main.rs` 是外部 Rust comparison source，
+用于后续同机手动对照；当前 Pascal benchmark 不会自动编译或运行 Rust 程序。性能结论必须带上平台、
+编译参数、输入规模、benchmark 输出和 baseline 说明。没有同一机器、同一轮次的外部 runtime 输出时，
+不应写入胜过 Rust/Go/C++ 标准库的结论。
