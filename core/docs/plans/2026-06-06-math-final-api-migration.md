@@ -145,16 +145,19 @@ Files:
 
 Steps:
 
-- [ ] Implement `TMat3f`, `TMat4f`, `TMat3d`, `TMat4d`.
-- [ ] Preserve column-major `Data[column, row]`.
-- [ ] Implement matrix/vector and matrix/matrix multiply.
-- [ ] Implement determinant, inverse, try-inverse, transpose, identity, zero.
-- [ ] Run `test_mat` and `test_api_surface`.
+- [x] Implement `TMat3f`, `TMat4f`, `TMat3d`, `TMat4d`.
+- [x] Preserve column-major `Data[column, row]`.
+- [x] Implement matrix/vector and matrix/matrix multiply.
+- [x] Implement determinant, inverse, try-inverse, transpose, identity, zero.
+- [x] Run `test_mat` and `test_api_surface`.
 - [ ] Commit with `feat(math): add final matrix types`.
 
 Expected result:
 
 - Matrix conventions and singular inverse behavior are locked by tests.
+- `nextpas.core.math.mat` is intentionally kept as one cohesive matrix value-type unit for this slice;
+  it exceeds the 800-line soft split guideline, but common inversion/determinant helpers are already
+  extracted and a forced split is deferred until a later maintainability slice has evidence.
 
 ### Task 5: Quat Final Types
 

@@ -16,10 +16,10 @@
 
 ## Current Position
 
-This branch is at **M1/M2 focused scalar + trig + symbol-conflict slice**.
+This branch is at **M3 Vec/Mat value-type slice**.
 
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
-- This slice adds scalar/trig/facade/symbol-scope tests only; it does not complete Vec/Mat/Quat/Transform/Easing/Random/Noise.
+- Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
 - `nextpas.core.math.scalar` and `nextpas.core.math.impl.scalar` now exist.
 - `nextpas.core.math` is now a scalar/trig facade.
 - `nextpas.core.math.trig` no longer depends on `nextpas.core.math.ffi`.
@@ -27,6 +27,11 @@ This branch is at **M1/M2 focused scalar + trig + symbol-conflict slice**.
 - `nextpas.core.simd.mathutil` no longer exports common bare math-compatible helper names.
 - Added scalar `Single` overloads, `GCD`, `LCM`, `Hypot`, `Fmod`, `SmoothStep`, guarded `Abs(Low(...))`, and IEEE-style `SimdLnF32` boundaries.
 - Edge-case fixes are locked by tests for guarded integer conversion, `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases, and `SimdLnF32(NaN)`.
+- `nextpas.core.math.mat` now provides the final matrix types: `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
+- Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
+  `Zero`, `Identity`, arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix
+  multiply, `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and
+  singular inverse behavior.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -36,7 +41,7 @@ nextpas.core.math final migration
 ├── M0: Control, design, and audit                       [complete]
 ├── M1: RED behavior tests for final API                 [partial: scalar/trig/facade/surface]
 ├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
-├── M3: Vec/Mat/Quat value types                         [partial: Vec complete, Mat/Quat pending]
+├── M3: Vec/Mat/Quat value types                         [partial: Vec/Mat complete, Quat pending]
 ├── M4: Transform builders                               [not started]
 ├── M5: Easing                                           [not started]
 ├── M6: Random + noise                                   [not started]
@@ -92,8 +97,8 @@ Completion gate:
 
 Status:
 
-- Partial. This slice covers API surface, facade, scalar, trig, and symbol-scope tests.
-- Vec/Mat/Quat/Transform/Easing/Random/Noise tests remain pending.
+- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, and mat tests.
+- Quat/Transform/Easing/Random/Noise tests remain pending.
 
 ## M2: Scalar + Trig Foundation
 
@@ -145,7 +150,14 @@ Status:
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
   `Normalize`, `Lerp`, `Equals`, and zero-vector normalize returning zero.
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
-- Matrices and quaternions remain pending.
+- Matrix tests cover compact layout, column-major storage, row/column accessors, arithmetic operators,
+  scalar multiply, matrix-vector multiply, matrix-matrix multiply, transpose, determinant, inverse,
+  singular `TryInverse`, singular `Inverse` raising `EArgumentError`, and double-precision variants.
+- `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
+  split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
+  until a later architecture slice has evidence that it improves maintainability without widening the
+  public API boundary.
+- Quaternions remain pending.
 
 ## M4: Transform Builders
 

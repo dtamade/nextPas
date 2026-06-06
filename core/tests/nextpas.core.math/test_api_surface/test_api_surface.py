@@ -150,6 +150,16 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("vec-mul-components", r"\bclass\s+function\s+MulComponents\s*\("),
         ("vec-div-components", r"\bclass\s+function\s+DivComponents\s*\("),
     ),
+    "src/nextpas.core.math.mat.pas": (
+        ("mat-type-3f", r"\bTMat3f\s*=\s*packed\s+record\b"),
+        ("mat-type-4f", r"\bTMat4f\s*=\s*packed\s+record\b"),
+        ("mat-type-3d", r"\bTMat3d\s*=\s*packed\s+record\b"),
+        ("mat-type-4d", r"\bTMat4d\s*=\s*packed\s+record\b"),
+        ("mat-identity", r"\bclass\s+function\s+Identity\s*:\s*TMat[34][fd]\b"),
+        ("mat-try-inverse", r"\bfunction\s+TryInverse\s*\(\s*out\s+AInverse\s*:\s*TMat[34][fd]\s*\)\s*:\s*Boolean\b"),
+        ("mat-determinant", r"\bfunction\s+Determinant\s*:\s*(?:Single|Double)\b"),
+        ("mat-transpose", r"\bfunction\s+Transpose\s*:\s*TMat[34][fd]\b"),
+    ),
 }
 
 
