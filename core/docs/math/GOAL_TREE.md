@@ -46,7 +46,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.transform` now provides projection, view, model, and 2D camera builders for
   both `TMat4f` and `TMat4d`.
 - Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
-  `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, and composition order.
+  `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, composition order, and
+  direct `Double`-path parity for projection/view/model/camera builders.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints and representative midpoint/branch
   points, and the surface checker rejects direct FPC `Math` usage in the easing unit.
@@ -230,10 +231,12 @@ Status:
 - `nextpas.core.math.transform` provides `Single` and `Double` overloads for `Ortho`, `Perspective`,
   `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and `Camera2D`.
 - Tests lock column-major translation in column 3, right-handed `LookAt`, right-handed perspective
-  with NDC `[-1,+1]`, direct `Ortho` reversed-bounds axis flips, `LookAt` up-vector magnitude
-  invariance for the same direction, screen-space `Camera2D` positive Y down, geometry guard
-  messages for degenerate `Ortho` / `Perspective` / `LookAt` / `Camera2D` inputs, invalid
-  projection inputs, and `Translate * Rotate * Scale` local composition.
+  with NDC `[-1,+1]`, direct `Ortho` reversed-bounds axis flips, direct `Double` parity coverage
+  for `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and
+  `Camera2D`, `LookAt` up-vector magnitude invariance for the same direction, screen-space
+  `Camera2D` positive Y down, geometry guard messages for degenerate `Ortho` / `Perspective` /
+  `LookAt` / `Camera2D` inputs, invalid projection inputs, and `Translate * Rotate * Scale` local
+  composition.
 
 ## M5: Easing
 

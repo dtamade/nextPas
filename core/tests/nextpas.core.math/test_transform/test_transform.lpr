@@ -351,6 +351,50 @@ begin
   ExpectArgumentError('Camera2D zero zoom', @RaiseCamera2DZeroZoom);
 end;
 
+procedure TestDirectDoubleBuilderParity;
+var
+  M: TMat4d;
+  Clip: TVec4d;
+begin
+  M := Perspective(Double(HALF_PI), Double(2.0), Double(1.0), Double(11.0));
+  CheckNear(0.5, M[0, 0], 0.000000000001, 'Double Perspective stores aspect scale');
+  CheckNear(1.0, M[1, 1], 0.000000000001, 'Double Perspective stores vertical scale');
+  CheckNear(-1.0, M[2, 3], 0.000000000001, 'Double Perspective stores homogeneous divide');
+  Clip := M * TVec4d.Create(0.0, 0.0, -1.0, 1.0);
+  CheckNear(-1.0, Clip.Z / Clip.W, 0.000000000001, 'Double Perspective maps near plane');
+  Clip := M * TVec4d.Create(0.0, 0.0, -11.0, 1.0);
+  CheckNear(1.0, Clip.Z / Clip.W, 0.000000000001, 'Double Perspective maps far plane');
+
+  CheckVec4d(6.0, 8.0, 10.0, 1.0,
+    Translate(Double(5.0), Double(6.0), Double(7.0)) * TVec4d.Create(1.0, 2.0, 3.0, 1.0),
+    'Double Translate stores offset in column 3');
+  CheckVec4d(2.0, 6.0, 12.0, 1.0,
+    Scale(Double(2.0), Double(3.0), Double(4.0)) * TVec4d.Create(1.0, 2.0, 3.0, 1.0),
+    'Double Scale maps known point');
+  CheckVec4d(0.0, 1.0, 0.0, 1.0,
+    RotateZ(Double(HALF_PI)) * TVec4d.Create(1.0, 0.0, 0.0, 1.0),
+    'Double RotateZ quarter turn');
+  CheckVec4d(0.0, 0.0, 1.0, 1.0,
+    RotateX(Double(HALF_PI)) * TVec4d.Create(0.0, 1.0, 0.0, 1.0),
+    'Double RotateX quarter turn');
+  CheckVec4d(1.0, 0.0, 0.0, 1.0,
+    RotateY(Double(HALF_PI)) * TVec4d.Create(0.0, 0.0, 1.0, 1.0),
+    'Double RotateY quarter turn');
+
+  M := LookAt(TVec3d.Create(1.0, 2.0, 5.0), TVec3d.Create(1.0, 2.0, 4.0),
+    TVec3d.Create(0.0, 1.0, 0.0));
+  CheckVec4d(0.0, 0.0, 0.0, 1.0, M * TVec4d.Create(1.0, 2.0, 5.0, 1.0),
+    'Double LookAt maps eye to origin');
+  CheckVec4d(0.0, 0.0, -1.0, 1.0, M * TVec4d.Create(1.0, 2.0, 4.0, 1.0),
+    'Double LookAt maps target down negative Z');
+
+  M := Camera2D(Double(10.0), Double(20.0), Double(2.0), 100, 50);
+  CheckVec4d(0.0, 0.0, 0.0, 1.0, M * TVec4d.Create(10.0, 20.0, 0.0, 1.0),
+    'Double Camera2D maps center to origin');
+  CheckVec4d(1.0, -1.0, 0.0, 1.0, M * TVec4d.Create(35.0, 32.5, 0.0, 1.0),
+    'Double Camera2D keeps screen-space positive Y down');
+end;
+
 procedure TestNonFiniteInputsFailFast;
 begin
   ExpectArgumentError('Ortho single infinite far', @RaiseOrthoInfiniteFarSingle);
@@ -392,6 +436,7 @@ begin
   T.Run('model and view builders', @TestModelAndViewBuilders);
   T.Run('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
+  T.Run('direct double builder parity', @TestDirectDoubleBuilderParity);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Run('geometry guards report public contract messages', @TestGeometryGuardMessages);
   T.Summary;
