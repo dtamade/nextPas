@@ -178,5 +178,20 @@ Pascal benchmark keeps consumed values in a printed sink to reduce optimizer-eli
 `compare_cpp/main.cpp` 是外部 C++ comparison source。C++ std nearest equivalents: `std::queue<uint64_t>` guarded by `std::mutex` and `std::condition_variable` for bounded 1P+1C and 2P+2C, and the same guarded queue for the 1T baseline.
 当前 Pascal benchmark 不会自动编译或运行 Rust、Go 或 C++ 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust、Go 或 C++ runtime baseline 证据。
 
+当前推荐的对照入口是 `bench_lockfree` Makefile：
+
+```bash
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-rust-compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-go-compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-cpp-compare
+make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare
+```
+
+这些 target 最终会在 `core/build/projects/nextpas.core.lockfree/bench_lockfree/...` 下产出并运行：
+
+- Rust：`rustc -C opt-level=3 compare_rust/main.rs -o $(RUST_COMPARE_BIN)`
+- Go：`go build -o $(GO_COMPARE_BIN) compare_go/main.go`
+- C++：`g++ -std=c++17 -O2 -pthread compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)`
+
 性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
 性能胜过 Rust/Go/C++ 标准库的结论。

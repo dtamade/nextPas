@@ -736,6 +736,7 @@ const
   MpscSourcePath = '../../../src/nextpas.core.lockfree.mpsc.pas';
   DequeSourcePath = '../../../src/nextpas.core.lockfree.deque.pas';
   WaitSourcePath = '../../../src/nextpas.core.lockfree.wait.pas';
+  BenchMakefilePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/Makefile';
   BenchSourcePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr';
   BenchRustComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_rust/main.rs';
   BenchGoComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_go/main.go';
@@ -751,6 +752,7 @@ var
   LMpscSource: string;
   LDequeSource: string;
   LWaitSource: string;
+  LBenchMakefile: string;
   LBenchSource: string;
   LRustCompareSource: string;
   LGoCompareSource: string;
@@ -767,6 +769,8 @@ begin
     'lockfree README must exist as the module documentation entrypoint');
   Check(FileExists(LockFreeTestMakefilePath),
     'lockfree test Makefile must exist as the focused verification entrypoint');
+  Check(FileExists(BenchMakefilePath),
+    'lockfree benchmark Makefile must exist as the benchmark verification entrypoint');
   Check(FileExists(BenchSourcePath),
     'lockfree benchmark source must exist as the benchmark entrypoint');
   Check(FileExists(BenchRustComparePath),
@@ -786,6 +790,7 @@ begin
   LMpscSource := ReadUtf8TextFile(MpscSourcePath);
   LDequeSource := ReadUtf8TextFile(DequeSourcePath);
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
+  LBenchMakefile := ReadUtf8TextFile(BenchMakefilePath);
   LBenchSource := ReadUtf8TextFile(BenchSourcePath);
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
   LGoCompareSource := ReadUtf8TextFile(BenchGoComparePath);
@@ -945,6 +950,18 @@ begin
     'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree clean run',
     'lockfree README must list the focused benchmark command');
   CheckContains(LDocsReadme,
+    'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-rust-compare',
+    'lockfree README must route the Rust baseline through the benchmark Makefile');
+  CheckContains(LDocsReadme,
+    'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-go-compare',
+    'lockfree README must route the Go baseline through the benchmark Makefile');
+  CheckContains(LDocsReadme,
+    'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree run-cpp-compare',
+    'lockfree README must route the C++ baseline through the benchmark Makefile');
+  CheckContains(LDocsReadme,
+    'make -C core/benchmarks/nextpas.core.lockfree/bench_lockfree compare',
+    'lockfree README must list the all-baseline benchmark Makefile entrypoint');
+  CheckContains(LDocsReadme,
     'core/benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr',
     'lockfree README must point to the Pascal benchmark source');
   CheckContains(LDocsReadme, 'compare_rust/main.rs',
@@ -953,6 +970,18 @@ begin
     'lockfree README must point to the external Go comparison source');
   CheckContains(LDocsReadme, 'compare_cpp/main.cpp',
     'lockfree README must point to the external C++ comparison source');
+  CheckContains(LDocsReadme,
+    '这些 target 最终会在 `core/build/projects/nextpas.core.lockfree/bench_lockfree/...` 下产出并运行：',
+    'lockfree README must document the compare target output location');
+  CheckContains(LDocsReadme,
+    'Rust：`rustc -C opt-level=3 compare_rust/main.rs -o $(RUST_COMPARE_BIN)`',
+    'lockfree README must document the Rust compare build command behind the Makefile target');
+  CheckContains(LDocsReadme,
+    'Go：`go build -o $(GO_COMPARE_BIN) compare_go/main.go`',
+    'lockfree README must document the Go compare build command behind the Makefile target');
+  CheckContains(LDocsReadme,
+    'C++：`g++ -std=c++17 -O2 -pthread compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)`',
+    'lockfree README must document the C++ compare build command behind the Makefile target');
   CheckContains(LDocsReadme,
     'Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.',
     'lockfree README must describe the manual Rust comparison source approximations');
@@ -1078,6 +1107,33 @@ begin
     'lockfree wait helper must register waiters before blocking');
   CheckContains(LWaitSource, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel)',
     'lockfree wait helper must unregister waiters after blocking');
+  CheckContains(LBenchMakefile,
+    '.PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean',
+    'lockfree benchmark Makefile must expose Pascal and external baseline entrypoints');
+  CheckContains(LBenchMakefile, 'RUSTC ?= rustc',
+    'lockfree benchmark Makefile must expose the Rust compiler override');
+  CheckContains(LBenchMakefile, 'GO ?= go',
+    'lockfree benchmark Makefile must expose the Go compiler override');
+  CheckContains(LBenchMakefile, 'CXX ?= g++',
+    'lockfree benchmark Makefile must expose the C++ compiler override');
+  CheckContains(LBenchMakefile, 'run-rust-compare: build-rust-compare',
+    'lockfree benchmark Makefile must provide a runnable Rust baseline target');
+  CheckContains(LBenchMakefile,
+    '$(RUSTC) -C opt-level=3 compare_rust/main.rs -o $(RUST_COMPARE_BIN)',
+    'lockfree benchmark Makefile must build the Rust baseline with the documented command');
+  CheckContains(LBenchMakefile, 'run-go-compare: build-go-compare',
+    'lockfree benchmark Makefile must provide a runnable Go baseline target');
+  CheckContains(LBenchMakefile,
+    '$(GO) build -o $(GO_COMPARE_BIN) compare_go/main.go',
+    'lockfree benchmark Makefile must build the Go baseline with the documented command');
+  CheckContains(LBenchMakefile, 'run-cpp-compare: build-cpp-compare',
+    'lockfree benchmark Makefile must provide a runnable C++ baseline target');
+  CheckContains(LBenchMakefile,
+    '$(CXX) -std=c++17 -O2 -pthread compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)',
+    'lockfree benchmark Makefile must build the C++ baseline with the documented command');
+  CheckContains(LBenchMakefile,
+    'compare: run run-rust-compare run-go-compare run-cpp-compare',
+    'lockfree benchmark Makefile must provide a single all-baseline compare target');
   CheckContains(LDocsReadme,
     'Wait helpers receive the caller-observed epoch and only block while the epoch is unchanged',
     'lockfree README must document the wait helper lost-wake guard');
