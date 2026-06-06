@@ -140,12 +140,17 @@ Quaternion operations:
 - Utility operations: `Conjugate`, `Normalize`, `Equals`
 
 Zero quaternion normalization returns identity.
+`Equals` is a component-wise epsilon comparison on quaternion storage. It does not canonicalize
+opposite-sign equivalent rotations, and negative epsilon returns `False`.
 `Slerp` and `Nlerp` normalize their source quaternions before interpolation, so positive scaling of
 equivalent input rotations does not change the result.
 `Slerp` and `Nlerp` also follow the shortest rotational path: opposite-sign equivalent endpoints are
 treated as the same rotation instead of forcing the long arc.
 Finite interpolation factors outside `[0, 1]` are not clamped: `Slerp` and `Nlerp` extrapolate
 through the same formulas instead of snapping to either endpoint.
+The interpolation endpoints follow the same normalization and shortest-path rules: `AT = 0`
+returns the normalized start rotation, and `AT = 1` returns the normalized end rotation after any
+opposite-sign canonicalization.
 `Slerp` and `Nlerp` reject NaN and infinite interpolation factors with `EArgumentError`.
 `FromAxisAngle` normalizes its axis, returns identity for a zero axis, and rejects NaN and infinite
 axis components or angles with `EArgumentError`.

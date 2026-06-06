@@ -242,6 +242,11 @@ begin
     Single(0.000001)), 'TQuatf FromAxisAngle normalizes axis');
   Check(TQuatf.Equals(TQuatf.Identity, TQuatf.FromAxisAngle(TVec3f.Zero, Single(HALF_PI)),
     Single(0.0)), 'TQuatf FromAxisAngle zero axis returns identity');
+  Check(TQuatf.Equals(Q, TQuatf.Create(Q.X + Single(0.0000001), Q.Y, Q.Z, Q.W), Single(0.000001)),
+    'TQuatf Equals uses component epsilon');
+  Check(not TQuatf.Equals(Q, NegatedQ, Single(0.000001)),
+    'TQuatf Equals does not canonicalize opposite-sign rotations');
+  Check(not TQuatf.Equals(Q, Q, Single(-0.000001)), 'TQuatf Equals rejects negative epsilon');
 end;
 
 procedure TestQuatdContracts;
@@ -311,6 +316,11 @@ begin
     0.000000000001), 'TQuatd FromAxisAngle normalizes axis');
   Check(TQuatd.Equals(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Zero, HALF_PI), 0.0),
     'TQuatd FromAxisAngle zero axis returns identity');
+  Check(TQuatd.Equals(Q, TQuatd.Create(Q.X + 0.0000000000001, Q.Y, Q.Z, Q.W), 0.000000000001),
+    'TQuatd Equals uses component epsilon');
+  Check(not TQuatd.Equals(Q, NegatedQ, 0.000000000001),
+    'TQuatd Equals does not canonicalize opposite-sign rotations');
+  Check(not TQuatd.Equals(Q, Q, -0.000000000001), 'TQuatd Equals rejects negative epsilon');
 end;
 
 procedure TestFromAxisAngleRejectsNonFiniteInputs;
@@ -371,6 +381,52 @@ begin
     'TQuatd Nlerp extrapolates above one');
 end;
 
+procedure TestInterpolationEndpointContracts;
+var
+  Qf: TQuatf;
+  NegatedQf: TQuatf;
+  ScaledIdentityf: TQuatf;
+  ScaledQf: TQuatf;
+  Qd: TQuatd;
+  NegatedQd: TQuatd;
+  ScaledIdentityd: TQuatd;
+  ScaledQd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  NegatedQf := TQuatf.Create(-Qf.X, -Qf.Y, -Qf.Z, -Qf.W);
+  ScaledIdentityf := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQf := TQuatf.Create(Qf.X * 3.0, Qf.Y * 3.0, Qf.Z * 3.0, Qf.W * 3.0);
+  Check(TQuatf.Equals(TQuatf.Slerp(ScaledIdentityf, ScaledQf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Slerp t=0 returns normalized start');
+  Check(TQuatf.Equals(TQuatf.Nlerp(ScaledIdentityf, ScaledQf, Single(0.0)), TQuatf.Identity,
+    Single(0.000001)), 'TQuatf Nlerp t=0 returns normalized start');
+  Check(TQuatf.Equals(TQuatf.Slerp(ScaledIdentityf, ScaledQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Slerp t=1 returns normalized end');
+  Check(TQuatf.Equals(TQuatf.Nlerp(ScaledIdentityf, ScaledQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Nlerp t=1 returns normalized end');
+  Check(TQuatf.Equals(TQuatf.Slerp(TQuatf.Identity, NegatedQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Slerp t=1 canonicalizes opposite-sign end');
+  Check(TQuatf.Equals(TQuatf.Nlerp(TQuatf.Identity, NegatedQf, Single(1.0)), Qf,
+    Single(0.000001)), 'TQuatf Nlerp t=1 canonicalizes opposite-sign end');
+
+  Qd := QuarterTurnZd;
+  NegatedQd := TQuatd.Create(-Qd.X, -Qd.Y, -Qd.Z, -Qd.W);
+  ScaledIdentityd := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQd := TQuatd.Create(Qd.X * 3.0, Qd.Y * 3.0, Qd.Z * 3.0, Qd.W * 3.0);
+  Check(TQuatd.Equals(TQuatd.Slerp(ScaledIdentityd, ScaledQd, 0.0), TQuatd.Identity,
+    0.000000000001), 'TQuatd Slerp t=0 returns normalized start');
+  Check(TQuatd.Equals(TQuatd.Nlerp(ScaledIdentityd, ScaledQd, 0.0), TQuatd.Identity,
+    0.000000000001), 'TQuatd Nlerp t=0 returns normalized start');
+  Check(TQuatd.Equals(TQuatd.Slerp(ScaledIdentityd, ScaledQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Slerp t=1 returns normalized end');
+  Check(TQuatd.Equals(TQuatd.Nlerp(ScaledIdentityd, ScaledQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Nlerp t=1 returns normalized end');
+  Check(TQuatd.Equals(TQuatd.Slerp(TQuatd.Identity, NegatedQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Slerp t=1 canonicalizes opposite-sign end');
+  Check(TQuatd.Equals(TQuatd.Nlerp(TQuatd.Identity, NegatedQd, 1.0), Qd, 0.000000000001),
+    'TQuatd Nlerp t=1 canonicalizes opposite-sign end');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -378,5 +434,6 @@ begin
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
+  T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
   T.Summary;
 end.

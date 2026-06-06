@@ -80,9 +80,13 @@ identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its
 axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes first and uses `+Z`
 as the axis when the output rotation angle collapses to zero. `ToRotationMatrix` and `Rotate` also
 normalize first, so positive scaling of the same input rotation does not change the result.
+`Equals` is a component-wise epsilon comparison; it does not canonicalize opposite-sign equivalent
+rotations, and negative epsilon returns `False`.
 `Slerp` and `Nlerp` follow the shortest rotational path, so opposite-sign equivalent endpoints are
 treated as the same rotation instead of taking the long arc. Finite interpolation factors outside
-`[0, 1]` are not clamped, so callers can deliberately extrapolate through the same formulas.
+`[0, 1]` are not clamped, so callers can deliberately extrapolate through the same formulas. Those
+same rules also define the interpolation endpoints: `AT = 0` returns the normalized start
+rotation, and `AT = 1` returns the normalized end rotation after any opposite-sign canonicalization.
 `TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular and
 numerically singular matrices, and `Inverse` raises `EArgumentError` on the same inputs.
 

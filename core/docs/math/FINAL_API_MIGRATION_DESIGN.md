@@ -221,11 +221,13 @@ column snapshots.
 Quaternions expose:
 
 - vector part `X`, `Y`, `Z` and real part `W`, or an equivalent explicitly documented layout
-- `Identity`, `Normalize`, `Conjugate`
+- `Identity`, `Normalize`, `Conjugate`, `Equals`
 - `FromAxisAngle`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`
 - quaternion multiplication
 - `Slerp`, `Nlerp`
 
+`Equals` remains a component-wise epsilon comparison on quaternion storage rather than a
+rotation-equivalence helper.
 Interpolation follows the shortest rotational path: opposite-sign equivalent quaternion endpoints
 must be treated as the same rotation instead of forcing the long arc through quaternion space.
 
@@ -417,8 +419,13 @@ Resolved by tests and implementation:
   rotation output.
 - `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
   equivalent input rotation does not change the result.
+- `Equals` is a component-wise epsilon comparison on quaternion storage; it does not canonicalize
+  opposite-sign equivalent rotations, and negative epsilon returns `False`.
 - Finite interpolation factors outside `[0, 1]` are not clamped: `Slerp` and `Nlerp` extrapolate
   through the same formulas instead of snapping to either endpoint.
+- The interpolation endpoints follow the same normalization and shortest-path contract: `AT = 0`
+  returns the normalized start rotation, and `AT = 1` returns the normalized end rotation after
+  any opposite-sign canonicalization.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
   positive dice/side combinations whose maximum total would overflow `Integer`.
