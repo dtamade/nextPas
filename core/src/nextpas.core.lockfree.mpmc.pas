@@ -279,6 +279,8 @@ var
 begin
   if Length(AValues) = 0 then
     Exit(0);
+  if AtomicLoad32(FClosed, moAcquire) <> 0 then
+    Exit(0);
   Result := 0;
   for LI := 0 to PtrUInt(High(AValues)) do
   begin

@@ -36,6 +36,7 @@ batch API 是连续单元素操作的批量便利方法，不表示整个 batch 
 
 `TMpmcQueue<T>` 支持多个 producer 和多个 consumer。队列是固定容量 ring，构造时把容量提升到
 power-of-two。`Close` 会阻止新的 `TryEnqueue` 成功并唤醒等待者；consumer 仍可 drain 已发布元素。
+`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.
 
 `TMpscQueue<T>` 是多 producer、单 consumer 队列。`Enqueue` 是过程，不返回 close 结果；`Close`
 只作为 consumer 等待唤醒和终止信号。调用方必须让 producer 协作停止、join producer，并 drain

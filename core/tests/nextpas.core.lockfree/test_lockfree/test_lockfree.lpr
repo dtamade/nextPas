@@ -523,6 +523,10 @@ begin
   CheckEqual(Int64(4), Int64(LN), 'mpmc batch deq');
   CheckEqual(Int64(5), Int64(LOut[0]));
   CheckEqual(Int64(8), Int64(LOut[3]));
+  LQ.Close;
+  LN := LQ.EnqueueBatch(LIn);
+  CheckEqual(Int64(0), Int64(LN), 'mpmc batch enqueue after close rejected');
+  Check(LQ.IsEmpty, 'closed MPMC queue remains empty after rejected batch enqueue');
   LQ.Free;
 end;
 
@@ -753,6 +757,8 @@ var
   LCppCompareSource: string;
   LSpscBatchSourceSection: string;
   LSpscBatchTestSection: string;
+  LMpmcBatchSourceSection: string;
+  LMpmcBatchTestSection: string;
   LMpscBasicTestSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscTimeoutTestSection: string;
@@ -792,6 +798,14 @@ begin
     'procedure TestSpscBatch;',
     '{ MPMC Timeout }',
     'SPSC batch test source section');
+  LMpmcBatchSourceSection := ExtractSection(LMpmcSource,
+    'function TMpmcQueueImpl.EnqueueBatch',
+    'function TMpmcQueueImpl.DequeueBatch',
+    'MPMC batch source section');
+  LMpmcBatchTestSection := ExtractSection(LTestSource,
+    'procedure TestMpmcBatch;',
+    'procedure TestMpmcCapacity;',
+    'MPMC batch test source section');
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
     'procedure TestMpscMultiProducer;',
@@ -886,6 +900,9 @@ begin
     '`TSpscQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
     'lockfree README must document SPSC batch close semantics');
   CheckContains(LDocsReadme,
+    '`TMpmcQueue<T>.EnqueueBatch` returns 0 after `Close` and must not publish new items.',
+    'lockfree README must document MPMC batch close semantics');
+  CheckContains(LDocsReadme,
     '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
   CheckContains(LDocsReadme,
@@ -966,6 +983,10 @@ begin
     'MPMC enqueue linearization must publish slot sequence with release ordering');
   CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease)',
     'MPMC dequeue must recycle slot sequence with release ordering');
+  CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
+    'MPMC batch enqueue must reject new items after close');
+  CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
+    'MPMC batch behavior test must cover close rejection');
   CheckContains(LStackSource, 'FFreeHead: Int64',
     'stack must keep a tagged free-list head');
   CheckContains(LStackSource, 'function PackTagIdx',
