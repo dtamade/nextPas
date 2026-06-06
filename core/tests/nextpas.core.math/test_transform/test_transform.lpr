@@ -93,6 +93,16 @@ begin
   Perspective(Single(HALF_PI), Single(0.0), Single(1.0), Single(10.0));
 end;
 
+procedure RaisePerspectiveZeroFovSingle;
+begin
+  Perspective(Single(0.0), Single(1.0), Single(1.0), Single(10.0));
+end;
+
+procedure RaisePerspectiveZeroNearDouble;
+begin
+  Perspective(Double(HALF_PI), Double(1.0), Double(0.0), Double(10.0));
+end;
+
 procedure RaiseCamera2DZeroZoom;
 begin
   Camera2D(Single(0.0), Single(0.0), Single(0.0), 100, 100);
@@ -176,9 +186,19 @@ begin
   Perspective(SingleNaN, Single(1.0), Single(1.0), Single(10.0));
 end;
 
-procedure RaisePerspectiveNaNFovDouble;
+procedure RaisePerspectiveInfiniteAspectDouble;
 begin
-  Perspective(DoubleNaN, Double(1.0), Double(1.0), Double(10.0));
+  Perspective(Double(HALF_PI), DoubleInfinity, Double(1.0), Double(10.0));
+end;
+
+procedure RaisePerspectiveNaNNearSingle;
+begin
+  Perspective(Single(HALF_PI), Single(1.0), SingleNaN, Single(10.0));
+end;
+
+procedure RaisePerspectiveInfiniteFarDouble;
+begin
+  Perspective(Double(HALF_PI), Double(1.0), Double(1.0), DoubleInfinity);
 end;
 
 procedure RaiseLookAtInfiniteEyeSingle;
@@ -288,7 +308,8 @@ begin
   CheckNear(1.0, Clip.Z / Clip.W, 0.000001, 'Perspective maps far plane');
 
   ExpectArgumentError('Ortho zero width', @RaiseOrthoZeroWidth);
-  ExpectArgumentError('Perspective zero aspect', @RaisePerspectiveZeroAspect);
+  ExpectArgumentErrorMessage('Perspective: aspect must be positive', 'Perspective zero aspect',
+    @RaisePerspectiveZeroAspect);
 end;
 
 procedure TestOrthoAllowsReversedBounds;
@@ -436,8 +457,18 @@ procedure TestNonFiniteInputsFailFast;
 begin
   ExpectArgumentError('Ortho single infinite far', @RaiseOrthoInfiniteFarSingle);
   ExpectArgumentError('Ortho double infinite far', @RaiseOrthoInfiniteFarDouble);
-  ExpectArgumentError('Perspective single NaN FOV', @RaisePerspectiveNaNFovSingle);
-  ExpectArgumentError('Perspective double NaN FOV', @RaisePerspectiveNaNFovDouble);
+  ExpectArgumentErrorMessage('Perspective: vertical FOV must be finite',
+    'Perspective single NaN FOV', @RaisePerspectiveNaNFovSingle);
+  ExpectArgumentErrorMessage('Perspective: aspect must be finite',
+    'Perspective double infinite aspect', @RaisePerspectiveInfiniteAspectDouble);
+  ExpectArgumentErrorMessage('Perspective: near plane must be finite',
+    'Perspective single NaN near', @RaisePerspectiveNaNNearSingle);
+  ExpectArgumentErrorMessage('Perspective: far plane must be finite',
+    'Perspective double infinite far', @RaisePerspectiveInfiniteFarDouble);
+  ExpectArgumentErrorMessage('Perspective: vertical FOV must be positive',
+    'Perspective single zero FOV', @RaisePerspectiveZeroFovSingle);
+  ExpectArgumentErrorMessage('Perspective: near plane must be positive',
+    'Perspective double zero near', @RaisePerspectiveZeroNearDouble);
   ExpectArgumentErrorMessage('LookAt: eye must be finite', 'LookAt single infinite eye',
     @RaiseLookAtInfiniteEyeSingle);
   ExpectArgumentErrorMessage('LookAt: eye must be finite', 'LookAt double infinite eye',
