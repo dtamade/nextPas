@@ -1,5 +1,57 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http hyper comparator smoke slice
+
+- 本轮继续收紧 benchmark truth：
+  `rust_std` 已经明确不是 Rust 生态代表，但 runner 仍缺少真实 Rust HTTP
+  stack 的可执行 seam。
+- 选择依据：
+  - Hyper/Tokio 是 Rust HTTP 生态常见基础栈，比 std-only microbaseline 更接近
+    真实 async server stack。
+  - 直接把 Hyper 纳入默认 runner 会让普通 smoke 依赖 Cargo dependency fetch，
+    不适合所有快速验证；因此本轮做 opt-in `--include-hyper`。
+- 实现决策：
+  - 新增 `benchmarks/nextpas.core.http/compare_hyper` Cargo project。
+  - Hyper/Tokio comparator 只负责 HTTP/1.1 server；client 仍使用 raw
+    keep-alive workload shape，保持与 std-only comparator 的 request/response
+    读取口径一致。
+  - 输出统一为 `impl=rust_hyper` 与 `rust_profile=hyper_tokio`。
+  - `run_server_comparison.sh --include-hyper` 才 cargo build / run Hyper
+    comparator；默认仍只跑 nextPas、Go、Rust std-only。
+  - `capture_server_comparison_snapshot.sh --include-hyper` 透传同一 flag，并在
+    Markdown 中记录 `include_hyper=1` 和完整 command。
+- RED 证据：
+  - `test_http_benchmarks` 首次 RED：
+    - `38 total, 36 passed, 2 failed`
+    - Hyper comparator 失败于无法 resolve `compare_hyper` core root。
+    - runner 失败于 `unknown argument: --include-hyper`。
+    - heaptrc: `0 unfreed memory blocks`
+  - snapshot pass-through RED：
+    - `39 total, 38 passed, 1 failed`
+    - `capture_server_comparison_snapshot.sh` 失败于
+      `unknown argument: --include-hyper`。
+    - heaptrc: `0 unfreed memory blocks`
+- 调试证据：
+  - 直接 smoke 初版 Hyper comparator 暴露 runtime-context bug：
+    `TokioTcpListener::from_std` 在 runtime 外调用会 panic。
+  - 根因是 Tokio listener 需要在 runtime context 内注册 IO driver；修复为在
+    server thread 的 `runtime.block_on(async move { ... })` 内执行 `from_std`。
+- GREEN / behavior 证据：
+  - direct comparator smoke：
+    - `bench_http_server_hyper --requests 32 --threads 2`
+    - 输出 `impl=rust_hyper`、`rust_profile=hyper_tokio`、`completed=32`
+  - optional runner smoke：
+    - `run_server_comparison.sh --requests 8 --threads 1 --include-hyper`
+    - 输出 `section=rust_hyper` 与 `summary_impl=rust_hyper`
+  - focused gate：
+    - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 benchmark truth seam，不是把一次本机数字包装成排名。
+  后续正式 benchmark 应继续把 `rust_std` 与 `rust_hyper` 分开报告，必要时再补
+  TLS、router/middleware 或 async-client workload。
+
 ## 2026-06-06 http request string URL overload slice
 
 - 本轮继续收紧 client request construction ergonomics：

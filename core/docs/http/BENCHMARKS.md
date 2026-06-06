@@ -37,10 +37,33 @@ The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
   complete response body, not just a status/header prefix.
 
 It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
-cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
-microbaseline labeled `impl=rust_std` with `rust_profile=std_only`; add a
-Hyper/Tokio comparator before treating Rust ecosystem performance as
-represented.
+cost, or `epoll`. The default Rust comparator is a std-only microbaseline
+labeled `impl=rust_std` with `rust_profile=std_only`; it is still not a Rust
+ecosystem benchmark by itself.
+
+To include the optional Cargo-based Hyper/Tokio HTTP/1.1 comparator, pass
+`--include-hyper`:
+
+```sh
+benchmarks/nextpas.core.http/run_server_comparison.sh \
+  --requests 20000 --threads 4 --workload no_url --runs 3 \
+  --include-hyper \
+  --output build/projects/nextpas.core.http/server_comparison/report.txt
+```
+
+The Hyper/Tokio row reports `impl=rust_hyper` and
+`rust_profile=hyper_tokio`. The snapshot helper accepts the same flag and
+records `include_hyper=1` in the Markdown environment block:
+
+```sh
+benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
+  --requests 20000 --threads 4 --runs 3 --include-hyper \
+  --output build/projects/nextpas.core.http/server_comparison/snapshot.md
+```
+
+This comparator is a benchmark-truth seam, not a final Rust ecosystem ranking:
+it covers a minimal Hyper HTTP/1.1 server on Tokio with the same raw keep-alive
+client workload shape as the std-only comparator.
 
 Use `--runs N` to repeat each implementation after a single build and emit a
 median summary at the end of the raw output. This is the preferred mode for
@@ -51,8 +74,9 @@ The runner treats incomplete workload execution as a harness failure: every raw
 row must report `iterations=<requests>` and `completed=<requests>`. The median
 summary repeats this guard as `median_completed=<requests>`, nextPas rows print
 `nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads, and Rust
-std-only rows print `rust_profile=std_only` so fast-path and comparator
-interpretation stay explicit.
+std-only / Hyper rows print `rust_profile=std_only` /
+`rust_profile=hyper_tokio` so fast-path and comparator interpretation stay
+explicit.
 
 ## Local Median Snapshot: 2026-06-05
 

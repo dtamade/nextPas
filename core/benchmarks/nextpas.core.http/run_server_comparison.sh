@@ -9,12 +9,14 @@ THREADS=4
 WORKLOAD="no_url"
 OUTPUT_PATH=""
 RUNS=1
+INCLUDE_HYPER=0
 
 usage() {
   cat <<'EOF'
-usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--output PATH]
+usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--include-hyper] [--output PATH]
 
 Build and run nextPas, Go, and Rust std-only HTTP/1.1 keep-alive server benchmarks.
+Pass --include-hyper to also build and run the Cargo-based Hyper/Tokio comparator.
 EOF
 }
 
@@ -35,6 +37,10 @@ while [[ $# -gt 0 ]]; do
     --runs)
       RUNS="${2:?missing value for --runs}"
       shift 2
+      ;;
+    --include-hyper)
+      INCLUDE_HYPER=1
+      shift
       ;;
     --output)
       OUTPUT_PATH="${2:?missing value for --output}"
@@ -106,6 +112,13 @@ build_comparators() {
   "${MAKE:-make}" -C "${SCRIPT_DIR}/bench_server" build
   go build -o "${BUILD_DIR}/bench_http_server_go" "${SCRIPT_DIR}/compare_go/main.go"
   rustc -O -o "${BUILD_DIR}/bench_http_server_rust" "${SCRIPT_DIR}/compare_rust/main.rs"
+  if [[ "${INCLUDE_HYPER}" -eq 1 ]]; then
+    "${CARGO:-cargo}" build --release \
+      --manifest-path "${SCRIPT_DIR}/compare_hyper/Cargo.toml" \
+      --target-dir "${BUILD_DIR}/cargo-target"
+    cp "${BUILD_DIR}/cargo-target/release/bench_http_server_hyper" \
+      "${BUILD_DIR}/bench_http_server_hyper"
+  fi
 }
 
 append_result_row() {
@@ -235,6 +248,13 @@ run_comparison() {
     run_one_impl "${run_index}" "rust_std" \
       "${BUILD_DIR}/bench_http_server_rust" \
       --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
+
+    if [[ "${INCLUDE_HYPER}" -eq 1 ]]; then
+      echo "section=rust_hyper"
+      run_one_impl "${run_index}" "rust_hyper" \
+        "${BUILD_DIR}/bench_http_server_hyper" \
+        --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
+    fi
   done
 
   echo

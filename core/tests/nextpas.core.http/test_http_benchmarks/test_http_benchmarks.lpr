@@ -34,6 +34,7 @@ const
   H1WriterUnitPath = 'src/nextpas.core.http.impl.h1.writer.pas';
   CompareGoRelativeDir = 'benchmarks/nextpas.core.http/compare_go';
   CompareRustRelativeDir = 'benchmarks/nextpas.core.http/compare_rust';
+  CompareHyperRelativeDir = 'benchmarks/nextpas.core.http/compare_hyper';
   HttpUnitPath = 'src/nextpas.core.http.pas';
   LlhttpRootEnvName = 'NEXTPAS_LLHTTP_ROOT';
   BenchMaxItersEnvName = 'NEXTPAS_BENCH_MAX_ITERS';
@@ -260,6 +261,12 @@ begin
     'bench_http_server_rust');
 end;
 
+function ResolveHyperComparatorBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ResolveBenchmarkTestBuildDir(ARootDir),
+    'cargo-target/release/bench_http_server_hyper');
+end;
+
 function ResolveServerComparisonRunnerPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir, ServerComparisonRunnerRelativePath);
@@ -291,6 +298,9 @@ begin
   if AImplementation = 'rust_std' then
     CheckContains(AOutput, 'rust_profile=std_only',
       'Rust std-only profile marker');
+  if AImplementation = 'rust_hyper' then
+    CheckContains(AOutput, 'rust_profile=hyper_tokio',
+      'Rust Hyper/Tokio profile marker');
 end;
 
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
@@ -969,6 +979,40 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'rust_std', '32', '2', 'url_path');
 end;
 
+procedure TestHyperTokioServerComparatorSmallSmoke;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBuildDir: string;
+  LTargetDir: string;
+  LBinaryPath: string;
+  LManifestPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareHyperRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  LBuildDir := ResolveBenchmarkTestBuildDir(LRootDir);
+  LTargetDir := PathJoin(LBuildDir, 'cargo-target');
+  ForceDirectories(LBuildDir);
+  LBinaryPath := ResolveHyperComparatorBinaryPath(LRootDir);
+  LManifestPath := PathJoin(LCompareDir, 'Cargo.toml');
+
+  RunProcessAndCapture('cargo',
+    ['build', '--release', '--manifest-path', LManifestPath,
+     '--target-dir', LTargetDir],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator build exit code: ' + LOutput);
+  Check(FileExists(LBinaryPath), 'hyper comparator binary exists');
+
+  RunProcessAndCapture(LBinaryPath, ['--requests', '32', '--threads', '2'],
+    LCompareDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'hyper comparator smoke exit code: ' + LOutput);
+  CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '32', '2');
+end;
+
 procedure TestServerComparisonRunnerSmallSmoke;
 var
   LRootDir: string;
@@ -1176,6 +1220,44 @@ begin
     'runs report median completed marker');
 end;
 
+procedure TestServerComparisonRunnerIncludeHyperSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison include-hyper runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_include_hyper_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--include-hyper', '--output', LReportPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison include-hyper runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'comparison=http.server.keepalive',
+    'include-hyper comparison marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1');
+  CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '8', '1');
+  CheckContains(LOutput, 'summary_impl=rust_hyper',
+    'include-hyper rust_hyper summary marker');
+
+  Check(FileExists(LReportPath), 'server comparison include-hyper report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'comparison=http.server.keepalive',
+    'include-hyper report comparison marker');
+  CheckServerBenchmarkOutput(LReport, 'rust_hyper', '8', '1');
+  CheckContains(LReport, 'summary_impl=rust_hyper',
+    'include-hyper report rust_hyper summary marker');
+end;
+
 procedure TestServerComparisonSnapshotSmallSmoke;
 var
   LRootDir: string;
@@ -1252,6 +1334,39 @@ begin
     'snapshot runs go summary marker');
   CheckContains(LSnapshot, 'summary_impl=rust_std',
     'snapshot runs rust std summary marker');
+end;
+
+procedure TestServerComparisonSnapshotIncludeHyperSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath), 'server comparison snapshot include-hyper runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_include_hyper_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--include-hyper', '--output', LSnapshotPath], LRootDir, LExitCode,
+    LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot include-hyper exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath),
+    'server comparison snapshot include-hyper exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --runs 1 --include-hyper',
+    'snapshot include-hyper command marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust_hyper', '8', '1');
+  CheckContains(LSnapshot, 'summary_impl=rust_hyper',
+    'snapshot include-hyper summary marker');
 end;
 
 procedure TestCllhttpComparatorRequiresRoot;
@@ -1727,6 +1842,8 @@ begin
   T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
   T.Run('rust server comparator url_path small smoke',
     @TestRustServerComparatorUrlPathSmallSmoke);
+  T.Run('hyper/tokio server comparator small smoke',
+    @TestHyperTokioServerComparatorSmallSmoke);
   T.Run('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
   T.Run('server comparison runner url_path small smoke',
@@ -1737,10 +1854,14 @@ begin
     @TestServerComparisonRunnerResponse1KSmallSmoke);
   T.Run('server comparison runner runs summary smoke',
     @TestServerComparisonRunnerRunsSummarySmoke);
+  T.Run('server comparison runner include hyper smoke',
+    @TestServerComparisonRunnerIncludeHyperSmoke);
   T.Run('server comparison snapshot small smoke',
     @TestServerComparisonSnapshotSmallSmoke);
   T.Run('server comparison snapshot runs smoke',
     @TestServerComparisonSnapshotRunsSmoke);
+  T.Run('server comparison snapshot include hyper smoke',
+    @TestServerComparisonSnapshotIncludeHyperSmoke);
   T.Run('C llhttp comparator requires LLHTTP_ROOT',
     @TestCllhttpComparatorRequiresRoot);
   T.Run('H1 parser benchmark max iterations env',

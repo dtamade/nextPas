@@ -189,12 +189,13 @@ Run the focused comparator smoke from the test harness:
 make -C tests/nextpas.core.http/test_http_benchmarks test
 ```
 
-The harness builds and runs nextPas, Go, and Rust std-only keep-alive server
-benchmarks at smoke scale. Each implementation reports `operation`, `workload`,
-`impl`, `iterations`, `threads`, `completed`, `elapsed_ns`, `ns/op`, and
-`req/s`, so later benchmark result capture can use one stable format. The
-std-only Rust row is labeled `impl=rust_std` and also reports
-`rust_profile=std_only`; it is not a Hyper/Tokio benchmark. The harness also
+The harness builds and runs nextPas, Go, Rust std-only, and Hyper/Tokio
+keep-alive server benchmarks at smoke scale. Each implementation reports
+`operation`, `workload`, `impl`, `iterations`, `threads`, `completed`,
+`elapsed_ns`, `ns/op`, and `req/s`, so later benchmark result capture can use
+one stable format. The std-only Rust row is labeled `impl=rust_std` and also
+reports `rust_profile=std_only`; the Hyper/Tokio row is labeled
+`impl=rust_hyper` and reports `rust_profile=hyper_tokio`. The harness also
 builds `bench_fullchain` and validates the filtered plaintext row markers.
 
 For manual comparison runs, use the server comparison runner:
@@ -205,10 +206,10 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
   --output build/projects/nextpas.core.http/server_comparison/report.txt
 ```
 
-The runner builds all three implementations, streams the combined output to
-stdout, and optionally writes the same report to `--output`. Use `--runs N` to
-repeat each implementation after one build and print median `ns/op` / `req/s`
-summary rows. Use
+The runner builds the default nextPas / Go / Rust std-only implementations,
+streams the combined output to stdout, and optionally writes the same report to
+`--output`. Use `--runs N` to repeat each implementation after one build and
+print median `ns/op` / `req/s` summary rows. Use
 `--workload url_path` to make the client request `/api/v1/users` and make each
 server implementation touch the request path before writing the response. Use
 `--workload adapter_no_url` to keep the handler no-URL while adding
@@ -217,6 +218,8 @@ server implementation touch the request path before writing the response. Use
 while `close`, `upgrade`, and unsupported connection-policy tokens still fall
 back to the llhttp adapter path. Use `--workload response_1k` to write and read
 a complete 1 KiB fixed-length response body.
+Pass `--include-hyper` when you want the optional Cargo-based Hyper/Tokio
+comparator included in the same runner output and median summary.
 
 To capture environment metadata and the comparison output in Markdown, run:
 

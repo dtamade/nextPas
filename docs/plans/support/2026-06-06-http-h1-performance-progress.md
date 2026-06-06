@@ -1,5 +1,60 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http hyper comparator smoke slice
+
+- **Status:** completed.
+- Objective:
+  - add a real Rust HTTP-stack comparator seam without pretending std-only Rust
+    represents the Rust ecosystem
+  - keep Hyper/Tokio opt-in so default runner smoke remains dependency-light
+- Scope and safety:
+  - touched only HTTP benchmark assets, benchmark focused tests, HTTP docs, and
+    this support evidence
+  - did not touch HTTP runtime, public HTTP API, lower layers, compiler paths,
+    root planning files, generated benchmark output, or build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - first RED: `38 total, 36 passed, 2 failed`
+    - missing `compare_hyper` failed core-root resolution
+    - `run_server_comparison.sh --include-hyper` failed with unknown argument
+    - heaptrc: `0 unfreed memory blocks`
+  - snapshot pass-through RED:
+    - `39 total, 38 passed, 1 failed`
+    - `capture_server_comparison_snapshot.sh --include-hyper` failed with
+      unknown argument
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added `compare_hyper` Cargo project with Hyper HTTP/1.1 server on Tokio
+  - comparator outputs `impl=rust_hyper` and `rust_profile=hyper_tokio`
+  - raw client workload shape stays aligned with the existing std-only
+    comparator: keep-alive, `no_url`, `url_path`, `adapter_no_url`, and
+    `response_1k`
+  - `run_server_comparison.sh --include-hyper` builds/runs Hyper/Tokio and adds
+    `summary_impl=rust_hyper`
+  - `capture_server_comparison_snapshot.sh --include-hyper` passes the flag to
+    the runner and records `include_hyper=1`
+- Debugging note:
+  - initial direct smoke panicked because `TokioTcpListener::from_std` was
+    called outside a Tokio runtime context
+  - fixed by moving listener conversion inside the server thread's
+    `runtime.block_on(async move { ... })`
+- Focused verification:
+  - direct Hyper smoke:
+    - `bench_http_server_hyper --requests 32 --threads 2`
+    - `completed=32`, `impl=rust_hyper`, `rust_profile=hyper_tokio`
+  - optional runner smoke:
+    - `run_server_comparison.sh --requests 8 --threads 1 --include-hyper`
+    - output includes `section=rust_hyper` and `summary_impl=rust_hyper`
+  - benchmark focused gate:
+    - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `39/39 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - benchmark harness now has a real Hyper/Tokio comparator smoke seam
+  - default comparison remains dependency-light; `--include-hyper` is explicit
+  - Rust std-only and Hyper/Tokio rows are machine-distinguishable, so future
+    benchmark reports can avoid overclaiming
+
 ## Session: 2026-06-06 http request string URL overload slice
 
 - **Status:** completed.

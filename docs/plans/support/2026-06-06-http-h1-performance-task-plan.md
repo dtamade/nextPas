@@ -1,5 +1,27 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http hyper comparator smoke slice
+
+### Goal
+
+继续收紧 benchmark truth：在保留 `rust_std` std-only microbaseline 的同时，
+新增一个可选 Cargo-based Hyper/Tokio HTTP/1.1 server comparator smoke。
+runner 默认仍不强制跑外部依赖；显式 `--include-hyper` 时才纳入
+`impl=rust_hyper` / `rust_profile=hyper_tokio` 行和 median summary。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 先要求 `compare_hyper` Cargo comparator
+  和 runner `--include-hyper`，当前分别失败于目录缺失和 unknown argument。
+- [x] GREEN：新增 `compare_hyper` Cargo project，Hyper/Tokio 负责 server，
+  raw keep-alive client 保持与 std-only comparator 相同 workload shape。
+- [x] GREEN：`run_server_comparison.sh --include-hyper` 可选构建/运行
+  Hyper/Tokio comparator，并把 `summary_impl=rust_hyper` 纳入 summary。
+- [x] RED/GREEN：snapshot helper 先失败于 unknown `--include-hyper`，随后
+  透传该 flag，并在 Markdown environment / command / raw output 中记录。
+- [x] 更新 HTTP benchmark/API docs 与本 support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 http request string URL overload slice
 
 ### Goal

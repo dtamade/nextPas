@@ -6,13 +6,15 @@ CORE_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REQUESTS=20000
 THREADS=4
 RUNS=1
+INCLUDE_HYPER=0
 OUTPUT_PATH="${CORE_ROOT}/build/projects/nextpas.core.http/server_comparison/snapshot.md"
 
 usage() {
   cat <<'EOF'
-usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--runs N] [--output PATH]
+usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--runs N] [--include-hyper] [--output PATH]
 
 Capture a Markdown snapshot for the nextPas/Go/Rust std-only HTTP server comparison.
+Pass --include-hyper to include the optional Hyper/Tokio comparator.
 EOF
 }
 
@@ -29,6 +31,10 @@ while [[ $# -gt 0 ]]; do
     --runs)
       RUNS="${2:?missing value for --runs}"
       shift 2
+      ;;
+    --include-hyper)
+      INCLUDE_HYPER=1
+      shift
       ;;
     --output)
       OUTPUT_PATH="${2:?missing value for --output}"
@@ -80,10 +86,15 @@ OUTPUT_DIR="$(dirname "${OUTPUT_PATH}")"
 RAW_OUTPUT="${OUTPUT_PATH}.raw"
 mkdir -p "${OUTPUT_DIR}"
 
+RUNNER_ARGS=(--requests "${REQUESTS}" --threads "${THREADS}" --runs "${RUNS}")
+RUNNER_COMMAND="benchmarks/nextpas.core.http/run_server_comparison.sh --requests ${REQUESTS} --threads ${THREADS} --runs ${RUNS}"
+if [[ "${INCLUDE_HYPER}" -eq 1 ]]; then
+  RUNNER_ARGS+=(--include-hyper)
+  RUNNER_COMMAND="${RUNNER_COMMAND} --include-hyper"
+fi
+
 "${SCRIPT_DIR}/run_server_comparison.sh" \
-  --requests "${REQUESTS}" \
-  --threads "${THREADS}" \
-  --runs "${RUNS}" \
+  "${RUNNER_ARGS[@]}" \
   --output "${RAW_OUTPUT}" >/dev/null
 
 git_head="$(git -C "${CORE_ROOT}/.." rev-parse HEAD 2>/dev/null || printf 'unknown')"
@@ -114,12 +125,13 @@ rustc_version=${rustc_version}
 requests=${REQUESTS}
 threads=${THREADS}
 runs=${RUNS}
+include_hyper=${INCLUDE_HYPER}
 \`\`\`
 
 ## Command
 
 \`\`\`sh
-benchmarks/nextpas.core.http/run_server_comparison.sh --requests ${REQUESTS} --threads ${THREADS} --runs ${RUNS}
+${RUNNER_COMMAND}
 \`\`\`
 
 ## Raw Comparison Output
