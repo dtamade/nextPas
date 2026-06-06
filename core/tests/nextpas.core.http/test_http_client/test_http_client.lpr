@@ -694,6 +694,61 @@ begin
   end;
 end;
 
+procedure TestClientDoWithRequestHelperBytesBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LBody: TBytes;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotContentLength := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/bytes', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LHeaders := NewHeaders;
+    LHeaders.Set_('x-client', 'bytes-helper');
+    SetLength(LBody, 5);
+    LBody[0] := Ord('b');
+    LBody[1] := Ord('i');
+    LBody[2] := Ord('n');
+    LBody[3] := 0;
+    LBody[4] := 255;
+    LReq := nextpas.core.http.NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/bytes',
+      LHeaders, LBody);
+
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual(Int64(5), LGotContentLength, 'bytes content-length forwarded');
+    CheckEqual('bin' + #0 + #255, LGotBody, 'bytes body forwarded');
+    CheckEqual('ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 // PLACEHOLDER_TEST4
 
 procedure TestClientPutBodyAndContentType;
@@ -2181,6 +2236,8 @@ begin
   T.Run('Client POST with body', @TestClientPostBody);
   T.Run('Client Do uses NewRequest headers/body helper',
     @TestClientDoWithRequestHelperHeadersBody);
+  T.Run('Client Do uses NewRequest bytes body helper',
+    @TestClientDoWithRequestHelperBytesBody);
   T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
   T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
   T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);

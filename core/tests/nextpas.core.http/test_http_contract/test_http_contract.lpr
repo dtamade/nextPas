@@ -442,6 +442,7 @@ procedure TestNewRequestStringUrlFacadeOverloads;
 var
   LReq: IHttpRequest;
   LHeaders: IHttpHeaders;
+  LBody: TBytes;
 begin
   LReq := nextpas.core.http.NewRequest(hmGet,
     'http://example.com/search?q=next');
@@ -474,6 +475,20 @@ begin
     'Facade NewRequest(string URL, string body) preserves method');
   CheckEqual('5', LReq.Headers.Get('content-length'),
     'Facade NewRequest(string URL, string body) sets content-length');
+
+  SetLength(LBody, 3);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+  LReq := nextpas.core.http.NewRequest(hmPatch,
+    'http://example.com/bytes-body', LHeaders, LBody);
+
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, bytes body) returns non-nil');
+  Check(LReq.Method = hmPatch,
+    'Facade NewRequest(string URL, bytes body) preserves method');
+  CheckEqual('3', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(string URL, bytes body) sets content-length');
 end;
 
 { Test 4: NewResponse — StatusCode/Headers accessible }

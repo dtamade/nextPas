@@ -42,6 +42,13 @@
     in-memory reader 并发布 `Content-Length`，但不自动设置 `Content-Type`。
     `test_http_message`、`test_http_contract` 与 `test_http_client` 分别锁住
     helper contract、facade 可见性和 live `IHttpClient.Do_` 发送路径。
+  - 继续补齐：新增 `NewRequest(Method, Url, Headers, BodyBytes)` public helper。
+    调用方可以用 `TBytes` 构造 binary request body；helper 会复制 bytes 到
+    in-memory reader 并发布 `Content-Length`，但同样不自动设置 `Content-Type`。
+    `test_http_message` 锁住 `TUrl` 与 URL string overload，`test_http_contract`
+    锁住 facade 可见性，`test_http_client` 锁住 live `IHttpClient.Do_` 发送零字节
+    与高字节 payload 的路径。这补齐 Go/Rust 常见 binary body ergonomics，但仍不
+    引入完整 request builder 或 streaming/chunked request body ownership API。
   - 继续补齐：新增 `HttpReadResponseBodyString(Resp)` public helper。它直接消费
     `IHttpResponse.Body` reader 并返回 Pascal string；nil body 返回 `''`，nil
     response 抛 `EArgumentError`。`test_http_client` 锁住 live response、消费

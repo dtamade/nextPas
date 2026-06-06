@@ -1,5 +1,29 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http request bytes body helper slice
+
+- 本轮补齐 client request body ergonomics：
+  `NewRequest(..., BodyText)` 已覆盖文本请求体，但 binary request body 仍需要调用方
+  自己创建 `IReader` 和显式 length。`TBytes` helper 是 Go/Rust 常见 binary body
+  使用面的低风险补齐。
+- 选择依据：
+  - 这是 public message/facade helper，不新增 builder、不扩大 transport vtable。
+  - helper 复制 bytes 到 in-memory reader，ownership 与 string body helper 对齐。
+  - `Content-Type` 仍由调用方设置，避免 helper 根据 bytes 做不稳定推断。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - compile failed at missing overload:
+      `Error: Incompatible type for arg no. 4: Got "TBytes", expected "AnsiString"`
+- GREEN / behavior 证据：
+  - 新增 `NewRequest(Method, Url, Headers, BodyBytes)` overload，`Url` 支持
+    `TUrl` 与 URL string。
+  - 新增内部 `BytesBodyReader`；`StringBodyReader` 复用同一 bytes reader 路径。
+  - facade `nextpas.core.http.NewRequest(..., BodyBytes)` 转发同一 helper。
+- 复盘结论：
+  request body helper 现在覆盖 reader + explicit length、string、bytes 三个低风险
+  使用面。后续若继续 client ergonomics，应审计 per-request policy 或 streaming
+  body ownership contract，而不是直接引入完整 builder。
+
 ## 2026-06-06 http response body bytes helper slice
 
 - 本轮补齐 client response body ergonomics：

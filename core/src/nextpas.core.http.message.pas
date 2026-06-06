@@ -5,6 +5,7 @@ unit nextpas.core.http.message;
 interface
 
 uses
+  nextpas.core.base,
   nextpas.core.io.intf,
   nextpas.core.net.base,
   nextpas.core.http.base,
@@ -87,6 +88,10 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewGetRequest(const APath: string): IHttpRequest;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse;
@@ -94,22 +99,27 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
 implementation
 
 uses
-  nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.io.memory,
   nextpas.core.text.conv,
   nextpas.core.http.headers;
 
+function BytesBodyReader(const ABodyBytes: TBytes): IReader;
+var
+  LStream: IStream;
+begin
+  LStream := CreateBytesStreamFrom(ABodyBytes);
+  Result := LStream as IReader;
+end;
+
 function StringBodyReader(const ABodyText: string): IReader;
 var
   LData: TBytes;
-  LStream: IStream;
 begin
   SetLength(LData, Length(ABodyText));
   if Length(ABodyText) > 0 then
     Move(ABodyText[1], LData[0], Length(ABodyText));
-  LStream := CreateBytesStreamFrom(LData);
-  Result := LStream as IReader;
+  Result := BytesBodyReader(LData);
 end;
 
 function HeadersOrNew(const AHeaders: IHttpHeaders): IHttpHeaders;
@@ -376,6 +386,19 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
 begin
   Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl, AHeaders, BytesBodyReader(ABodyBytes),
+    Int64(Length(ABodyBytes)));
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABodyBytes);
 end;
 
 function NewGetRequest(const APath: string): IHttpRequest;

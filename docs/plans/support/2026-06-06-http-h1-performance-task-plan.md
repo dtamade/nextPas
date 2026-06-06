@@ -1,5 +1,27 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http request bytes body helper slice
+
+### Goal
+
+补齐 client request body ergonomics：`NewRequest(Method, Url, Headers, BodyBytes)`
+应支持 `TBytes` request body，经 `nextpas.core.http.message` 与 facade
+`nextpas.core.http` 暴露。helper 复制 bytes 到 in-memory reader，发布
+`Content-Length`，保留零字节/高字节 payload；不自动设置 `Content-Type`，也不引入完整
+request builder 或 streaming body ownership API。
+
+### Checklist
+
+- [x] RED：`test_http_message` 先因 `TBytes` body overload 缺失编译失败。
+- [x] GREEN：新增 `BytesBodyReader`，`StringBodyReader` 复用同一 bytes reader
+  路径；`TUrl` 与 URL string overload 都转到既有 request helper contract。
+- [x] facade source-contract：`test_http_contract` 证明
+  `nextpas.core.http.NewRequest(..., BodyBytes)` 可调用并发布 content length。
+- [x] live client proof：`test_http_client` 证明 `IHttpClient.Do_` 会发送 binary
+  request body，server 端能看到零字节与高字节 payload。
+- [x] 保持本 slice 边界：不新增 fluent builder、per-request policy、
+  automatic content-type、streaming/chunked request body 或 transport vtable。
+
 ## Active Session: 2026-06-06 http response body bytes helper slice
 
 ### Goal

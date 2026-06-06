@@ -1,5 +1,44 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http request bytes body helper slice
+
+- **Status:** completed.
+- Objective:
+  - expose `NewRequest(Method, Url, Headers, BodyBytes)` through
+    `nextpas.core.http.message`
+  - expose the same overloads through facade `nextpas.core.http`
+  - preserve binary request body bytes and generated `Content-Length`
+- Scope and safety:
+  - touched HTTP message/facade source, message/client/contract focused tests,
+    HTTP docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - compile failed because the new `TBytes` body call site resolved against the
+      existing string overload
+    - `Error: Incompatible type for arg no. 4: Got "TBytes", expected "AnsiString"`
+- Landed change:
+  - added `NewRequest(Method, Url, Headers, BodyBytes)` overloads for `TUrl` and
+    URL string
+  - added facade forwarding overloads
+  - added internal `BytesBodyReader`; `StringBodyReader` now reuses that path
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `29 total, 29 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `34 total, 34 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `51 total, 51 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - callers can build binary request bodies without hand-written in-memory
+    readers
+  - this does not claim a request builder, automatic content-type inference,
+    per-request policy, streaming/chunked request bodies, or transport changes
+
 ## Session: 2026-06-06 http response body bytes helper slice
 
 - **Status:** completed.

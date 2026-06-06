@@ -147,6 +147,10 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders; const ABody: IReader): IHttpResponse; inline;
 
@@ -286,6 +290,20 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
 begin
   Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
     ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
+    ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
+    ABodyBytes);
 end;
 
 function NewGetRequest(const APath: string): IHttpRequest;

@@ -135,6 +135,68 @@ begin
   CheckEqual(Byte(Ord('h')), LBuf[0], 'string body request helper first byte');
 end;
 
+procedure TestNewRequestWithBytesBody;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LBody: TBytes;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-client', 'bytes-body');
+  SetLength(LBody, 5);
+  LBody[0] := Ord('b');
+  LBody[1] := Ord('i');
+  LBody[2] := Ord('n');
+  LBody[3] := 0;
+  LBody[4] := 255;
+
+  LReq := NewRequest(hmPost, LUrl, LHeaders, LBody);
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'bytes body request helper method');
+  CheckEqual('bytes-body', LReq.Headers.Get('x-client'),
+    'bytes body request helper preserves custom headers');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'bytes body request helper sets content-length');
+  CheckEqual(Int64(5), LReq.ContentLength,
+    'bytes body request helper stores content-length');
+  Check(LReq.Body <> nil, 'bytes body request helper creates body reader');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(5), Int64(LN), 'bytes body request helper body length');
+  CheckEqual(Byte(0), LBuf[3], 'bytes body request helper preserves zero byte');
+  CheckEqual(Byte(255), LBuf[4], 'bytes body request helper preserves high byte');
+end;
+
+procedure TestNewRequestStringUrlWithBytesBody;
+var
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LBody: TBytes;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-client', 'bytes-url');
+  SetLength(LBody, 2);
+  LBody[0] := Ord('o');
+  LBody[1] := Ord('k');
+
+  LReq := NewRequest(hmPut, 'http://example.com/upload?x=1', LHeaders, LBody);
+
+  CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
+    'string URL bytes body helper method');
+  CheckEqual('/upload', LReq.Path, 'string URL bytes body helper path');
+  CheckEqual('x=1', LReq.RawQuery, 'string URL bytes body helper query');
+  CheckEqual('bytes-url', LReq.Headers.Get('x-client'),
+    'string URL bytes body helper preserves custom headers');
+  CheckEqual('2', LReq.Headers.Get('content-length'),
+    'string URL bytes body helper sets content-length');
+  CheckEqual(Int64(2), LReq.ContentLength,
+    'string URL bytes body helper stores content-length');
+end;
+
 procedure TestNewRequestWithNilHeadersCreatesHeaders;
 var
   LUrl: TUrl;
@@ -468,6 +530,10 @@ begin
     @TestNewRequestStringUrlWithHeadersBodyAndContentLength);
   T.Run('NewRequest accepts string body helper',
     @TestNewRequestWithStringBody);
+  T.Run('NewRequest accepts bytes body helper',
+    @TestNewRequestWithBytesBody);
+  T.Run('NewRequest accepts string URL bytes body helper',
+    @TestNewRequestStringUrlWithBytesBody);
   T.Run('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
   T.Run('Request constructors create headers when headers argument is nil',
