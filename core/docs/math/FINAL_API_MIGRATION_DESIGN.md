@@ -402,6 +402,8 @@ Resolved by tests and implementation:
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
 - `FromAxisAngle` normalizes its axis and returns identity for a zero axis instead of inventing a
   partial rotation.
+- `ToAxisAngle` normalizes its quaternion first and uses `+Z` as the fallback axis for zero
+  rotation output.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
   positive dice/side combinations whose maximum total would overflow `Integer`.

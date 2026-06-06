@@ -67,7 +67,8 @@ zoom and positive viewport dimensions.
 
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero
-axis returns identity instead of a partial rotation.
+axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes first and uses `+Z`
+as the axis when the output rotation angle collapses to zero.
 Singular `TryInverse` returns `False` and zeroes the `out` matrix; `Inverse` raises
 `EArgumentError`.
 

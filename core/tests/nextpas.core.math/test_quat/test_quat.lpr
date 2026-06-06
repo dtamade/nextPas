@@ -181,6 +181,9 @@ begin
   Q.ToAxisAngle(Axis, Angle);
   CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle axis');
   CheckNear(HALF_PI, Angle, 0.000001, 'TQuatf ToAxisAngle angle');
+  TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axis, Angle);
+  CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle zero rotation axis');
+  CheckNear(0.0, Angle, 0.0, 'TQuatf ToAxisAngle zero rotation angle');
 
   CheckVec3f(0.0, 1.0, 0.0, Q.Rotate(TVec3f.Create(1.0, 0.0, 0.0)), 'TQuatf Rotate');
   Matrix := Q.ToRotationMatrix;
@@ -213,6 +216,8 @@ end;
 procedure TestQuatdContracts;
 var
   Q: TQuatd;
+  Axis: TVec3d;
+  Angle: Double;
   ScaledIdentity: TQuatd;
   ScaledQ: TQuatd;
 begin
@@ -223,6 +228,12 @@ begin
   CheckNear(1.0, TQuatd.Identity.W, 0.0, 'TQuatd identity real');
   Check(TQuatd.Equals(TQuatd.Create(0.0, 0.0, 0.0, 0.0).Normalize, TQuatd.Identity, 0.0),
     'TQuatd zero normalize returns identity');
+  Q.ToAxisAngle(Axis, Angle);
+  CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle axis');
+  CheckNear(HALF_PI, Angle, 0.000000000001, 'TQuatd ToAxisAngle angle');
+  TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axis, Angle);
+  CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle zero rotation axis');
+  CheckNear(0.0, Angle, 0.0, 'TQuatd ToAxisAngle zero rotation angle');
   CheckVec3d(0.0, 1.0, 0.0, Q.Rotate(TVec3d.Create(1.0, 0.0, 0.0)), 'TQuatd Rotate');
   CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
     TQuatd.Slerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
