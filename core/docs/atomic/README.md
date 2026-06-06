@@ -1,0 +1,92 @@
+# nextpas.core.atomic
+
+`nextpas.core.atomic` 提供 nextpas.core 内部和上层模块共享的原子操作基础。新代码优先使用
+`atomic_*` 函数或 `TAtomic*` 类型安全 record；PascalCase facade 和部分 pointer
+arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点迁移保留。
+
+## 模块分层
+
+当前 live source set 由这些单元组成：
+
+| 单元 | 职责 |
+| --- | --- |
+| `nextpas.core.atomic.core` | `memory_order_t`、fence、`cpu_pause`、tagged pointer packing 的低层公共 seam。 |
+| `nextpas.core.atomic` | 主 facade，暴露 `atomic_*` 函数、`AtomicLoad32` 等 legacy PascalCase wrapper、wait/notify 和 tagged pointer 原子操作。 |
+| `nextpas.core.atomic.types` | Rust/C++ 风格的类型安全 record：`TAtomicInt32`、`TAtomicUInt64`、`TAtomicBool`、`TAtomicFlag`、`TAtomicISize`、`TAtomicUSize`、`TAtomicRefCount`、`TAtomicPtr<T>`。 |
+| `nextpas.core.atomic.compat` | 旧调用点兼容层，镜像 PascalCase API，并保留部分不建议扩大的 pointer arithmetic/bitwise overload。 |
+
+`core/docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt` 是历史 x86_64 实现快照，
+只用于解释旧评审上下文；它不是 live source set，也不能作为当前 runtime 行为证据。
+
+## API 选择
+
+优先级：
+
+1. 新的低层或热路径代码使用 `atomic_*`，例如 `atomic_load(Value, mo_acquire)`。
+2. 需要更清晰所有权和类型边界时使用 `TAtomic*` record。
+3. 旧 PascalCase surface，例如 `AtomicLoad32`、`AtomicFetchAdd64`、`AtomicWait32`，只用于兼容旧代码。
+4. `nextpas.core.atomic.compat` 中的 pointer arithmetic/bitwise overload 不再扩大；新代码应使用整数或 typed pointer API 明确表达意图。
+
+`TAtomicRefCount` 是专用引用计数器，不是通用 `PtrUInt` 原子类型。它只暴露 `Load`、`Inc`、
+`TryInc`、`Dec`、`IntoInner`，刻意不暴露 `Store`、`Exchange`、`FetchAdd`、`FetchSub`
+或 `GetMut`，避免调用方破坏引用计数纪律。
+
+## 内存序语义
+
+`memory_order_t` 包含 `mo_relaxed`、`mo_consume`、`mo_acquire`、`mo_release`、`mo_acq_rel`
+和 `mo_seq_cst`。无参数 overload 默认使用 `mo_seq_cst`，这是当前公开 API 的最强默认语义。
+
+当前实现要点：
+
+- `atomic_thread_fence(mo_seq_cst)` 通过专用 `atomic_seq_cst_fence` 路由；PPC/PPC64 使用 heavyweight `sync`。
+- `atomic_signal_fence` 是 compiler fence seam，不作为硬件可见性保证。
+- x86/x86_64 的 `mo_seq_cst` load 使用 locked/fenced helper，不能退回 plain load + compiler barrier。
+- 非 x86 的 `mo_seq_cst` load/store 通过 source-contract 约束 fence contract；没有目标机 runtime 证据时，不应写成实机验证结论。
+- CAS single-order wrapper 会把成功序中的 `mo_consume` 规范化为 acquire，并派生合法 failure order；failure order 不包含 release/acq_rel。
+
+## AtomicWait/Notify
+
+当前 wait/notify surface 只覆盖 32-bit address wait：
+
+- `atomic_wait(var Int32/UInt32, Expected, TimeoutNs)`
+- `atomic_notify_one(var Int32/UInt32)`
+- `atomic_notify_all(var Int32/UInt32)`
+- legacy wrapper：`AtomicWait32`、`AtomicNotifyOne32`、`AtomicNotifyAll32`
+
+主实现只通过 `platform_wait_address32`、`platform_wake_address_one` 和
+`platform_wake_address_all` 暴露平台能力。不要在 atomic 层自行扩展 64-bit 或 pointer wait；
+如果要扩展，先设计 platform contract，再补当前模块 consumer gate。
+
+## Tagged Pointer
+
+`atomic_tagged_ptr_t` 用于 ABA-sensitive 数据结构的 pointer + tag 组合：
+
+- x86_64 使用 high-tag packing，并在 release path 拒绝不能安全打包的非 canonical pointer。
+- 非 x86 使用 low-bit tag packing，要求 pointer 对齐并检查 tag 是否能放入 `TAG_BITS`。
+- `atomic_tagged_ptr_load` 无参数 overload 默认 `mo_seq_cst`。
+- `atomic_tagged_ptr_update` 和 `atomic_tagged_ptr_update_tag` 基于 CAS 循环更新。
+
+## 跨平台边界
+
+当前 focused gate 在本地 Linux x86_64 上运行，source-contract 额外约束了一些 arch-specific
+路径文本，例如 x86/x86_64 `mo_seq_cst` load helper、PPC fence helper、i386 64-bit fallback
+lock cleanup、非 x86 fence-load-fence 结构。没有对应目标机 runtime gate 时，只能声称 source-contract
+覆盖，不能声称该平台已实机通过。
+
+FPC 目前会输出 inline/assembler note。这些 note 是已知基线噪音；不要为了隐藏 note 修改语义或删除
+source-contract。
+
+## 验证
+
+普通 atomic 切片至少运行：
+
+```bash
+make hygiene
+make -C core/tests/nextpas.core.atomic/test_atomic clean test
+git diff --check
+git status --short --branch
+```
+
+如果触碰 platform wait-address、fence、异常类型或相邻模块 API，需要追加被触达模块自己的
+focused gate。涉及跨平台 fence 或 arch-specific helper 时，至少补 source-contract 或 compile gate，
+并在没有目标机 runtime 时登记残余风险。

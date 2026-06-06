@@ -255,6 +255,7 @@ const
   AtomicCoreSourcePath = '../../../src/nextpas.core.atomic.core.pas';
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
+  AtomicDocsReadmePath = '../../../docs/atomic/README.md';
   AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
   AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
 var
@@ -262,6 +263,7 @@ var
   LAtomicCoreSource: string;
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
+  LAtomicDocsReadme: string;
   LX8664SnapshotSource: string;
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
@@ -310,6 +312,7 @@ begin
   LAtomicCoreSource := ReadUtf8TextFile(AtomicCoreSourcePath);
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
+  LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
   Check(not FileExists(AtomicX8664SnapshotLegacyPath),
     'x86_64 snapshot must not remain in src');
   LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotArchivePath);
@@ -488,6 +491,34 @@ begin
     'archived x86_64 snapshot must declare documentation-only status');
   CheckContains(LX8664SnapshotSource, 'This file is not part of the live source set.',
     'archived x86_64 snapshot must declare non-live status');
+  CheckContains(LAtomicDocsReadme, '# nextpas.core.atomic',
+    'atomic README must exist as the module documentation entrypoint');
+  CheckContains(LAtomicDocsReadme, 'nextpas.core.atomic.core',
+    'atomic README must explain the core submodule');
+  CheckContains(LAtomicDocsReadme, 'nextpas.core.atomic.types',
+    'atomic README must explain the typed record submodule');
+  CheckContains(LAtomicDocsReadme, 'nextpas.core.atomic.compat',
+    'atomic README must document legacy compatibility ownership');
+  CheckContains(LAtomicDocsReadme, 'atomic_*',
+    'atomic README must name the canonical function API');
+  CheckContains(LAtomicDocsReadme, 'TAtomic*',
+    'atomic README must name the typed record API');
+  CheckContains(LAtomicDocsReadme, 'memory_order_t',
+    'atomic README must describe memory-order semantics');
+  CheckContains(LAtomicDocsReadme, 'mo_seq_cst',
+    'atomic README must document the default strongest order');
+  CheckContains(LAtomicDocsReadme, 'AtomicWait/Notify',
+    'atomic README must document the wait/notify surface');
+  CheckContains(LAtomicDocsReadme, 'platform_wait_address32',
+    'atomic README must disclose the current 32-bit wait-address seam');
+  CheckContains(LAtomicDocsReadme, 'core/docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt',
+    'atomic README must point to the historical x86_64 archive');
+  CheckContains(LAtomicDocsReadme, 'make hygiene',
+    'atomic README must list hygiene verification');
+  CheckContains(LAtomicDocsReadme, 'make -C core/tests/nextpas.core.atomic/test_atomic clean test',
+    'atomic README must list the focused atomic gate');
+  CheckContains(LAtomicDocsReadme, 'git diff --check',
+    'atomic README must list whitespace verification');
   CheckContains(LSingleStrongCasSection, 'AtomicCompatFailureOrder(aOrder)',
     'single-order strong CAS must derive failure order');
   CheckContains(LSingleWeakCasSection, 'AtomicCompatFailureOrder(aOrder)',
