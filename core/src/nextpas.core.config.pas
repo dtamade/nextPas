@@ -1005,6 +1005,14 @@ begin
     Result := APath;
 end;
 
+procedure RequireHierarchicalConfigPath(const AKey: string);
+begin
+  if (AKey = '') or (AKey[1] = '.') or
+    (AKey[Length(AKey)] = '.') or (Pos('..', AKey) > 0) then
+    raise EConfigError.Create('config key "' + AKey +
+      '" cannot be exported as hierarchical config: empty path segment is not representable');
+end;
+
 { TConfigExportNode }
 
 destructor TConfigExportNode.Destroy;
@@ -1088,6 +1096,8 @@ var
   LPos: Integer;
   LSegment: string;
 begin
+  RequireHierarchicalConfigPath(AKey);
+
   LNode := Self;
   LPos := 1;
   while NextConfigPathSegment(AKey, LPos, LSegment) do

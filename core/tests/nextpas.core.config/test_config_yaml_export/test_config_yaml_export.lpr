@@ -195,6 +195,36 @@ begin
   end;
 end;
 
+procedure CheckToYamlRejectsEmptyPathSegment(const AKey: string);
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString(AKey, 'secret');
+
+    LRaised := False;
+    try
+      LCfg.ToYaml;
+    except
+      on E: EConfigError do
+        LRaised := Pos(AKey, E.Message) > 0;
+    end;
+    CheckEqual(True, LRaised,
+      'yaml empty path segment raises EConfigError for ' + AKey);
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestToYamlRejectsEmptyPathSegments;
+begin
+  CheckToYamlRejectsEmptyPathSegment('.hidden');
+  CheckToYamlRejectsEmptyPathSegment('name.');
+  CheckToYamlRejectsEmptyPathSegment('a..b');
+end;
+
 procedure TestSaveToYamlWritesFile;
 var
   LCfg: TConfig;
@@ -244,6 +274,8 @@ begin
     @TestToYamlPreservesFlowSpecialStrings);
   T.Run('YamlExport.ToYamlRejectsScalarSubtreeConflict',
     @TestToYamlRejectsScalarSubtreeConflict);
+  T.Run('YamlExport.ToYamlRejectsEmptyPathSegments',
+    @TestToYamlRejectsEmptyPathSegments);
   T.Run('YamlExport.SaveToYamlWritesFile',
     @TestSaveToYamlWritesFile);
   T.Summary;

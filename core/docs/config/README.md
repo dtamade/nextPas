@@ -97,8 +97,8 @@ same public API shown below.
 For export/save flows, see the [runnable export demo](../../examples/nextpas.core.config/config_export_patterns/config_export_patterns.lpr)
 and its [Makefile](../../examples/nextpas.core.config/config_export_patterns/Makefile).
 It exercises `ToIni` / `ToJson` / `ToYaml` / `ToToml`, all four `SaveTo...`
-helpers, reload through `ConfigLoad`, and the current INI representability
-guard for lossy values.
+helpers, reload through `ConfigLoad`, and the current representability guards
+for lossy values.
 
 For in-memory mutation flows, see the [runnable mutation demo](../../examples/nextpas.core.config/config_mutation_patterns/config_mutation_patterns.lpr)
 and its [Makefile](../../examples/nextpas.core.config/config_mutation_patterns/Makefile).
@@ -337,6 +337,9 @@ Export semantics stay faithful to the config module's flat storage model:
     keys round-trip without reindexing
   - scalar/subtree conflicts such as `db` plus `db.host` raise `EConfigError`
     instead of silently dropping data
+  - empty path segments such as `.hidden`, `name.`, or `a..b` raise
+    `EConfigError`, because hierarchical JSON/YAML export cannot round-trip
+    those flat keys without changing their shape
 - TOML intentionally does **not** rebuild tables or dotted-key structure.
   Instead it writes one TOML entry per stored config key:
   - `server.host` becomes `"server.host" = "127.0.0.1"`

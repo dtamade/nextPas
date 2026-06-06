@@ -144,6 +144,36 @@ begin
   end;
 end;
 
+procedure CheckToJsonRejectsEmptyPathSegment(const AKey: string);
+var
+  LCfg: TConfig;
+  LRaised: Boolean;
+begin
+  LCfg := TConfig.Create;
+  try
+    LCfg.SetString(AKey, 'secret');
+
+    LRaised := False;
+    try
+      LCfg.ToJson;
+    except
+      on E: EConfigError do
+        LRaised := Pos(AKey, E.Message) > 0;
+    end;
+    CheckEqual(True, LRaised,
+      'empty path segment raises EConfigError for ' + AKey);
+  finally
+    LCfg.Free;
+  end;
+end;
+
+procedure TestToJsonRejectsEmptyPathSegments;
+begin
+  CheckToJsonRejectsEmptyPathSegment('.hidden');
+  CheckToJsonRejectsEmptyPathSegment('name.');
+  CheckToJsonRejectsEmptyPathSegment('a..b');
+end;
+
 procedure TestSaveToJsonWritesFile;
 var
   LCfg: TConfig;
@@ -186,6 +216,8 @@ begin
     @TestToJsonRoundTripsCanonicalStringValues);
   T.Run('Export.ToJsonRejectsScalarSubtreeConflict',
     @TestToJsonRejectsScalarSubtreeConflict);
+  T.Run('Export.ToJsonRejectsEmptyPathSegments',
+    @TestToJsonRejectsEmptyPathSegments);
   T.Run('Export.SaveToJsonWritesFile',
     @TestSaveToJsonWritesFile);
   T.Summary;
