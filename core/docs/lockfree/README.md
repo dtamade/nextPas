@@ -172,7 +172,8 @@ ms、M ops/sec 和 ns/op。
 
 `compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.
 `compare_go/main.go` 是外部 Go comparison source。Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.
-当前 Pascal benchmark 不会自动编译或运行 Rust 或 Go 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust 或 Go runtime baseline 证据。
+`compare_cpp/main.cpp` 是外部 C++ comparison source。C++ std nearest equivalents: `std::queue<uint64_t>` guarded by `std::mutex` and `std::condition_variable` for bounded 1P+1C and 2P+2C, and the same guarded queue for the 1T baseline.
+当前 Pascal benchmark 不会自动编译或运行 Rust、Go 或 C++ 程序；除非同一机器、同一轮次实际运行并记录外部输出，否则不能把它当作 Rust、Go 或 C++ runtime baseline 证据。
 
 性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
 性能胜过 Rust/Go/C++ 标准库的结论。

@@ -31,7 +31,7 @@ begin
   WriteLn('Platform: ', BenchmarkPlatformName);
   WriteLn('Compiler flags: -MObjFPC -Sh -O2');
   WriteLn('Input size: OPS=1000000; capacity=1024; scenarios=SPSC 1P+1C, MPMC 2P+2C, mutex channel baseline, Try* 1T');
-  WriteLn('Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs and compare_go/main.go external sources (not auto-run)');
+  WriteLn('Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)');
   WriteLn;
 end;
 
