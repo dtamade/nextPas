@@ -359,6 +359,63 @@ begin
   B.Done;
 end;
 
+procedure TestDuplicateKeysLastValueWinsSmallObject;
+var
+  Doc: TJsonDocument;
+  V: TJsonValue;
+begin
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(SV('{"a":1,"a":2}')), 'parse duplicate-key small object');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsObject, 'is object');
+  CheckEqual(Int64(2), Int64(V.ObjectLen), 'len=2');
+  CheckEqual('a', V.ObjectKeyAt(0).ToString, 'key[0]=a');
+  CheckEqual(Int64(1), V.ObjectValueAt(0).AsInt, 'value[0]=1');
+  CheckEqual('a', V.ObjectKeyAt(1).ToString, 'key[1]=a');
+  CheckEqual(Int64(2), V.ObjectValueAt(1).AsInt, 'value[1]=2');
+  CheckEqual(Int64(2), V.ObjectGet(SV('a')).AsInt, 'lookup returns last duplicate');
+  Doc.Done;
+end;
+
+procedure TestDuplicateKeysLastValueWinsHashedObject;
+var
+  Doc: TJsonDocument;
+  V: TJsonValue;
+  B: TStringBuilder;
+  W: TJsonWriter;
+  I: Int32;
+  LKey: string;
+begin
+  B.Init(4096);
+  W.Init(B);
+  W.BeginObject;
+  W.Key(SV('dup'));
+  W.Int(1);
+  for I := 0 to JSON_OBJECT_HASH_THRESHOLD - 1 do
+  begin
+    Str(I, LKey);
+    LKey := 'key' + LKey;
+    W.Key(TStringView.FromStr(LKey));
+    W.Int(I);
+  end;
+  W.Key(SV('dup'));
+  W.Int(99);
+  W.EndObject;
+
+  Doc.Init(DefaultAllocator);
+  Check(Doc.Parse(TStringView.FromStr(B.ToString)), 'parse duplicate-key hashed object');
+  V := TJsonValue.Create(Doc, Doc.Root);
+  Check(V.IsObject, 'is object');
+  CheckEqual(Int64(JSON_OBJECT_HASH_THRESHOLD + 2), Int64(V.ObjectLen), 'all pairs preserved');
+  CheckEqual('dup', V.ObjectKeyAt(0).ToString, 'first duplicate key preserved');
+  CheckEqual(Int64(1), V.ObjectValueAt(0).AsInt, 'first duplicate value preserved');
+  CheckEqual('dup', V.ObjectKeyAt(V.ObjectLen - 1).ToString, 'last duplicate key preserved');
+  CheckEqual(Int64(99), V.ObjectValueAt(V.ObjectLen - 1).AsInt, 'last duplicate value preserved');
+  CheckEqual(Int64(99), V.ObjectGet(SV('dup')).AsInt, 'hashed lookup returns last duplicate');
+  Doc.Done;
+  B.Done;
+end;
+
 procedure TestInitNilAllocator;
 var Doc: TJsonDocument; V: TJsonValue;
 begin
@@ -596,6 +653,8 @@ begin
   T.Run('round trip', @TestRoundTrip);
   T.Run('large array', @TestLargeArray);
   T.Run('large object hash lookup', @TestLargeObjectHashLookup);
+  T.Run('duplicate keys last value wins small object', @TestDuplicateKeysLastValueWinsSmallObject);
+  T.Run('duplicate keys last value wins hashed object', @TestDuplicateKeysLastValueWinsHashedObject);
   T.Run('init nil allocator', @TestInitNilAllocator);
   T.Run('deep nesting 500', @TestDeepNesting500);
   T.Run('deep nesting exceeds limit', @TestDeepNestingExceedsLimit);

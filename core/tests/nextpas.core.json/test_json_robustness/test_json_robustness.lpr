@@ -111,7 +111,7 @@ begin
   Doc := JsonParse('{"a":1,"a":2}');
   Check(not Doc.HasError, 'duplicate keys accepted');
   V := Doc.Root;
-  CheckEqual(Int64(1), V.ObjectGet('a').AsInt, 'first occurrence wins');
+  CheckEqual(Int64(2), V.ObjectGet('a').AsInt, 'last occurrence wins');
 end;
 
 procedure TestSpecialStrings;

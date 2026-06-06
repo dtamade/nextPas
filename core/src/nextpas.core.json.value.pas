@@ -198,8 +198,10 @@ begin
     LKeyNode := FDoc^.Node(LCur);
     if (LKeyNode^.Kind = jnkString) and AKey.Equals(LKeyNode^.Str) then
     begin
-      Result.FIdx := LKeyNode^.Next;
-      Exit;
+      if LKeyNode^.Next <> JSON_NODE_NONE then
+        Result.FIdx := LKeyNode^.Next
+      else
+        Result.FIdx := JSON_NODE_NONE;
     end;
     if LKeyNode^.Next <> JSON_NODE_NONE then
       LCur := FDoc^.Node(LKeyNode^.Next)^.Next

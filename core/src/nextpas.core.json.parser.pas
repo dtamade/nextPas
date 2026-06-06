@@ -769,6 +769,7 @@ var
   LCap, LSlot: UInt32;
   LCur: UInt32;
   LKeyNode: PJsonNode;
+  LExistingKeyIdx: UInt32;
   LH: UInt32;
   LIdx: PJsonObjectIndex;
 begin
@@ -796,7 +797,12 @@ begin
     LH := WyHash32(LKeyNode^.Str.Data, LKeyNode^.Str.Len);
     LSlot := LH and LIdx^.Mask;
     while LIdx^.Slots[LSlot] <> JSON_NODE_NONE do
+    begin
+      LExistingKeyIdx := LIdx^.Slots[LSlot];
+      if LKeyNode^.Str.Equals(FNodes[LExistingKeyIdx].Str) then
+        Break;
       LSlot := (LSlot + 1) and LIdx^.Mask;
+    end;
     LIdx^.Slots[LSlot] := LCur;
     if LKeyNode^.Next <> JSON_NODE_NONE then
       LCur := FNodes[LKeyNode^.Next].Next
