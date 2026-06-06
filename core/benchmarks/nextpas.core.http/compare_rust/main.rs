@@ -19,6 +19,22 @@ const WORKLOAD_NO_URL: &str = "no_url";
 const WORKLOAD_URL_PATH: &str = "url_path";
 const WORKLOAD_ADAPTER_NO_URL: &str = "adapter_no_url";
 const WORKLOAD_RESPONSE_1K: &str = "response_1k";
+const VALID_WORKLOADS_TEXT: &str = "no_url, url_path, adapter_no_url, or response_1k";
+
+fn is_valid_workload(value: &str) -> bool {
+    value == WORKLOAD_NO_URL
+        || value == WORKLOAD_URL_PATH
+        || value == WORKLOAD_ADAPTER_NO_URL
+        || value == WORKLOAD_RESPONSE_1K
+}
+
+fn reject_invalid_workload(value: &str) -> ! {
+    eprintln!(
+        "invalid --workload: {}; expected one of: {}",
+        value, VALID_WORKLOADS_TEXT
+    );
+    std::process::exit(2);
+}
 
 fn parse_options() -> (usize, usize, String) {
     let mut requests = 20_000usize;
@@ -43,14 +59,10 @@ fn parse_options() -> (usize, usize, String) {
             }
             index += 2;
         } else if args[index] == "--workload" && index + 1 < args.len() {
-            if args[index + 1] == WORKLOAD_URL_PATH {
-                workload = WORKLOAD_URL_PATH.to_string();
-            } else if args[index + 1] == WORKLOAD_ADAPTER_NO_URL {
-                workload = WORKLOAD_ADAPTER_NO_URL.to_string();
-            } else if args[index + 1] == WORKLOAD_RESPONSE_1K {
-                workload = WORKLOAD_RESPONSE_1K.to_string();
+            if is_valid_workload(&args[index + 1]) {
+                workload = args[index + 1].clone();
             } else {
-                workload = WORKLOAD_NO_URL.to_string();
+                reject_invalid_workload(&args[index + 1]);
             }
             index += 2;
         } else {

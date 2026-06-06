@@ -1,5 +1,26 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 comparator workload validation slice
+
+### Goal
+
+收紧 benchmark truth：nextPas `bench_server`、Go `net/http` comparator、Rust
+std-only comparator 与 Hyper/Tokio comparator 的显式 `--workload` 参数必须共享
+runner 的 allow-list。非法 workload 不能静默 fallback 到 `no_url` 并产出看似有效的
+benchmark row，而应非零退出并输出诊断。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增四条 invalid workload focused tests，
+  证明四个单体 comparator 当前都会把 `--workload not_a_workload` 静默跑成
+  `workload=no_url`。
+- [x] GREEN：四个 comparator 都改成显式拒绝非法 workload，输出
+  `invalid --workload` 诊断并 `exit 2` / `Halt(2)`。
+- [x] 保持本 slice 边界：不修改 public HTTP API、不改变 runner 参数格式、不新增
+  workload、不修改 H1 server/runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 http download body release slice
 
 ### Goal

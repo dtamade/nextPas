@@ -1,5 +1,45 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 comparator workload validation slice
+
+- **Status:** completed.
+- Objective:
+  - make single-implementation benchmark comparators reject invalid workload
+    names
+  - keep comparator workload semantics aligned with `run_server_comparison.sh`
+  - prevent typoed workload runs from silently producing `workload=no_url` rows
+- Scope and safety:
+  - touched benchmark comparator sources, benchmark focused tests, HTTP docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API,
+    server runtime, H1 parser/runtime, generated outputs, or build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `43 total, 39 passed, 4 failed`
+    - failures:
+      `bench_server rejects invalid workload`,
+      `go server comparator rejects invalid workload`,
+      `rust server comparator rejects invalid workload`,
+      `hyper/tokio server comparator rejects invalid workload`
+    - each failure showed a successful fallback `workload=no_url` row
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - nextPas `bench_http_server` rejects invalid workload with `Halt(2)`
+  - Go comparator rejects invalid workload with `os.Exit(2)`
+  - Rust std-only and Hyper/Tokio comparators reject invalid workload with
+    `std::process::exit(2)`
+  - all four diagnostics include `invalid --workload` and the same valid
+    workload list
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `43 total, 43 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - invalid workload input can no longer produce misleading successful
+    comparator rows
+  - this does not claim new workloads, new public HTTP APIs, or new cross-language
+    performance rankings
+
 ## Session: 2026-06-06 http download body release slice
 
 - **Status:** completed.

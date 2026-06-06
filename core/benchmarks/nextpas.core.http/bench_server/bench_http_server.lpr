@@ -27,6 +27,7 @@ const
   WORKLOAD_URL_PATH = 'url_path';
   WORKLOAD_ADAPTER_NO_URL = 'adapter_no_url';
   WORKLOAD_RESPONSE_1K = 'response_1k';
+  VALID_WORKLOADS_TEXT = 'no_url, url_path, adapter_no_url, or response_1k';
   SMALL_RESPONSE_BODY = 'Hello, World!';
   SMALL_RESPONSE_LEN = 13;
   SMALL_RESPONSE_LEN_TEXT = '13';
@@ -42,6 +43,13 @@ var
   GThreads: Int32;
   GWorkload: string;
   GResponseBody1K: AnsiString;
+
+procedure RejectInvalidWorkload(const AValue: string);
+begin
+  WriteLn(StdErr, 'invalid --workload: ', AValue,
+    '; expected one of: ', VALID_WORKLOADS_TEXT);
+  Halt(2);
+end;
 
 function ResponseComplete(const ABuf: array of Byte; const ATotal: SizeUInt;
   const ABodyLen: SizeUInt): Boolean;
@@ -146,7 +154,9 @@ begin
          (ParamStr(LI + 1) = WORKLOAD_URL_PATH) or
          (ParamStr(LI + 1) = WORKLOAD_ADAPTER_NO_URL) or
          (ParamStr(LI + 1) = WORKLOAD_RESPONSE_1K) then
-        GWorkload := ParamStr(LI + 1);
+        GWorkload := ParamStr(LI + 1)
+      else
+        RejectInvalidWorkload(ParamStr(LI + 1));
       Inc(LI, 2);
     end
     else

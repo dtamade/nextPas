@@ -22,7 +22,7 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
-The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
+The comparison currently covers four HTTP/1.1 keep-alive hello-world workloads:
 
 - `workload=no_url`: the handler does not read the request URL or query string.
 - `workload=url_path`: the client sends `GET /api/v1/users` and the handler
@@ -77,6 +77,12 @@ summary repeats this guard as `median_completed=<requests>`, nextPas rows print
 std-only / Hyper rows print `rust_profile=std_only` /
 `rust_profile=hyper_tokio` so fast-path and comparator interpretation stay
 explicit.
+
+All single-implementation comparator binaries use the same workload allow-list
+as the runner. An explicit invalid `--workload` exits non-zero with an
+`invalid --workload` diagnostic instead of silently falling back to `no_url`.
+`test_http_benchmarks` locks this for nextPas `bench_server`, Go `net/http`,
+Rust std-only, and Hyper/Tokio comparator binaries.
 
 ## Local Median Snapshot: 2026-06-05
 

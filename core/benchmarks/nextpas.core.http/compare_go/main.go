@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -20,6 +21,19 @@ const workloadAdapterNoUrl = "adapter_no_url"
 const workloadResponse1K = "response_1k"
 const responseBodyLen = "13"
 const responseBody1KLen = "1024"
+const validWorkloadsText = "no_url, url_path, adapter_no_url, or response_1k"
+
+func isValidWorkload(value string) bool {
+	return value == workloadNoUrl ||
+		value == workloadUrlPath ||
+		value == workloadAdapterNoUrl ||
+		value == workloadResponse1K
+}
+
+func rejectInvalidWorkload(value string) {
+	fmt.Fprintf(os.Stderr, "invalid --workload: %s; expected one of: %s\n", value, validWorkloadsText)
+	os.Exit(2)
+}
 
 func parseOptions() (int, int, string) {
 	requests := flag.Int("requests", 20000, "total requests")
@@ -36,8 +50,8 @@ func parseOptions() (int, int, string) {
 	if *threads > *requests {
 		*threads = *requests
 	}
-	if *workload != workloadUrlPath && *workload != workloadAdapterNoUrl && *workload != workloadResponse1K {
-		*workload = workloadNoUrl
+	if !isValidWorkload(*workload) {
+		rejectInvalidWorkload(*workload)
 	}
 
 	return *requests, *threads, *workload

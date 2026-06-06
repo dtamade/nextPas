@@ -1,5 +1,36 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 comparator workload validation slice
+
+- 本轮转向 benchmark truth 的输入契约：
+  `run_server_comparison.sh` 已经拒绝非法 `--workload`，但四个单体 comparator
+  仍会把拼错的 workload 静默 fallback 到 `no_url`。这会让手工 smoke 或后续报告
+  捕获出一条真实完成的 `workload=no_url` row，从而掩盖调用方原本想测的 workload
+  并污染性能证据。
+- 选择依据：
+  - 这是 benchmark harness correctness，不是新增 public HTTP API。
+  - Go/Rust/Hyper comparator 的价值在于提供可信对照；显式输入错误必须 fail-fast，
+    否则 Rust std-only / Hyper rows 再清晰也可能被错误 workload 污染。
+  - runner 已经有 allow-list，本轮只让单体 comparator 与 runner 契约一致。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `43 total, 39 passed, 4 failed`
+    - failed at `bench_server rejects invalid workload`
+    - failed at `go server comparator rejects invalid workload`
+    - failed at `rust server comparator rejects invalid workload`
+    - failed at `hyper/tokio server comparator rejects invalid workload`
+    - 四条失败输出都包含成功的 `workload=no_url` benchmark row
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - nextPas `bench_server` 对非法 workload `Halt(2)`。
+  - Go comparator 对非法 workload `os.Exit(2)`。
+  - Rust std-only / Hyper comparator 对非法 workload `std::process::exit(2)`。
+  - 四者都输出 `invalid --workload` 和相同 workload allow-list。
+- 复盘结论：
+  benchmark comparator 现在不会因 workload 拼写错误生成误导性 `no_url` 行。后续
+  benchmark truth 更高价值方向是继续加强 snapshot/runner 的参数透传和环境元数据，
+  或补更完整的 Hyper/Tokio workload，而不是新增未验证的性能排名。
+
 ## 2026-06-06 http download body release slice
 
 - 本轮收紧 client download helper 的 response body ownership：

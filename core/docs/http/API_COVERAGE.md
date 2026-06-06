@@ -169,6 +169,11 @@
     Hyper/Tokio comparator smoke，输出 `impl=rust_hyper` /
     `rust_profile=hyper_tokio`。这补上了真实 Rust HTTP stack 的 runner seam，
     但仍不声明代表完整 Rust 生态性能排名。
+  - Benchmark truth 继续收紧：nextPas `bench_server`、Go `net/http` comparator、
+    Rust std-only comparator 与 Hyper/Tokio comparator 现在都拒绝显式非法
+    `--workload`，输出 `invalid --workload` 诊断并非零退出。单体 comparator
+    不再把拼错的 workload 静默当成 `no_url`，避免手工 smoke 或报告捕获生成
+    可误读的 benchmark row。
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
 - `http_get_client` 现在也有 focused runnable example smoke：测试会先启动
   `http_hello_server` 的保留 loopback 端口，再通过 `NEXTPAS_HTTP_GET_URL`

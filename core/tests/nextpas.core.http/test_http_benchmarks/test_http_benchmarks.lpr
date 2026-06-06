@@ -303,6 +303,24 @@ begin
       'Rust Hyper/Tokio profile marker');
 end;
 
+procedure CheckInvalidWorkloadRejected(const AExecutable: string;
+  const AArguments: array of string; const AWorkingDir, ALabel: string);
+var
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  RunProcessAndCapture(AExecutable, AArguments, AWorkingDir, LExitCode,
+    LOutput);
+  Check(LExitCode <> 0, ALabel + ' should reject invalid workload: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid --workload',
+    ALabel + ' invalid workload diagnostic');
+  CheckContains(LOutput, 'no_url',
+    ALabel + ' valid workload list diagnostic');
+  CheckNotContains(LOutput, 'workload=no_url',
+    ALabel + ' should not silently fall back to no_url');
+end;
+
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.router.dispatch',
@@ -473,6 +491,22 @@ begin
   CheckContains(LOutput, 'workload=url_path',
     'bench_server url_path workload marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '32', '2', 'url_path');
+end;
+
+procedure TestBenchServerRejectsInvalidWorkload;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchServerRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+  LBinaryPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_server invalid workload binary exists');
+
+  CheckInvalidWorkloadRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '1', '--workload', 'not_a_workload'],
+    LBenchDir, 'bench_server');
 end;
 
 procedure TestBenchRouterHandlerDispatchSmoke;
@@ -922,6 +956,22 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'go', '32', '2', 'url_path');
 end;
 
+procedure TestGoServerComparatorRejectsInvalidWorkload;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareGoRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  LBinaryPath := ResolveGoComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'go comparator invalid workload binary exists');
+
+  CheckInvalidWorkloadRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '1', '--workload', 'not_a_workload'],
+    LCompareDir, 'go comparator');
+end;
+
 procedure TestRustServerComparatorSmallSmoke;
 var
   LRootDir: string;
@@ -979,6 +1029,23 @@ begin
   CheckServerBenchmarkOutput(LOutput, 'rust_std', '32', '2', 'url_path');
 end;
 
+procedure TestRustServerComparatorRejectsInvalidWorkload;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareRustRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  LBinaryPath := ResolveRustComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'rust comparator invalid workload binary exists');
+
+  CheckInvalidWorkloadRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '1', '--workload', 'not_a_workload'],
+    LCompareDir, 'rust comparator');
+end;
+
 procedure TestHyperTokioServerComparatorSmallSmoke;
 var
   LRootDir: string;
@@ -1011,6 +1078,23 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'hyper comparator smoke exit code: ' + LOutput);
   CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '32', '2');
+end;
+
+procedure TestHyperTokioServerComparatorRejectsInvalidWorkload;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareHyperRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  LBinaryPath := ResolveHyperComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'hyper comparator invalid workload binary exists');
+
+  CheckInvalidWorkloadRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '1', '--workload', 'not_a_workload'],
+    LCompareDir, 'hyper comparator');
 end;
 
 procedure TestServerComparisonRunnerSmallSmoke;
@@ -1808,6 +1892,8 @@ begin
   T.Run('bench_server small smoke', @TestBenchServerSmallSmoke);
   T.Run('bench_server url_path small smoke',
     @TestBenchServerUrlPathSmallSmoke);
+  T.Run('bench_server rejects invalid workload',
+    @TestBenchServerRejectsInvalidWorkload);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_h1writer response serialization smoke',
@@ -1839,11 +1925,17 @@ begin
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
   T.Run('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);
+  T.Run('go server comparator rejects invalid workload',
+    @TestGoServerComparatorRejectsInvalidWorkload);
   T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
   T.Run('rust server comparator url_path small smoke',
     @TestRustServerComparatorUrlPathSmallSmoke);
+  T.Run('rust server comparator rejects invalid workload',
+    @TestRustServerComparatorRejectsInvalidWorkload);
   T.Run('hyper/tokio server comparator small smoke',
     @TestHyperTokioServerComparatorSmallSmoke);
+  T.Run('hyper/tokio server comparator rejects invalid workload',
+    @TestHyperTokioServerComparatorRejectsInvalidWorkload);
   T.Run('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
   T.Run('server comparison runner url_path small smoke',
