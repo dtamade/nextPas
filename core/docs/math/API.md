@@ -176,6 +176,8 @@ Public easing functions:
 - Back: `EaseInBack`, `EaseOutBack`, `EaseInOutBack`
 - Bounce: `EaseInBounce`, `EaseOutBounce`, `EaseInOutBounce`
 
+All easing functions reject NaN and infinite inputs with `EArgumentError`.
+
 ## Random And Noise
 
 Random state is explicit:

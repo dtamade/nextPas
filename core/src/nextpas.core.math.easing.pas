@@ -33,26 +33,43 @@ function EaseInOutBounce(const AT: Double): Double;
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
+function IsFinite(const AValue: Double): Boolean; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+procedure RequireFinite(const AValue: Double; const AMessage: string); inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
 function EaseLinear(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseLinear: T must be finite');
   Result := AT;
 end;
 
 function EaseInQuad(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInQuad: T must be finite');
   Result := AT * AT;
 end;
 
 function EaseOutQuad(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseOutQuad: T must be finite');
   Result := AT * (2.0 - AT);
 end;
 
 function EaseInOutQuad(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInOutQuad: T must be finite');
   if AT < 0.5 then
     Result := 2.0 * AT * AT
   else
@@ -61,6 +78,7 @@ end;
 
 function EaseInCubic(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInCubic: T must be finite');
   Result := AT * AT * AT;
 end;
 
@@ -68,6 +86,7 @@ function EaseOutCubic(const AT: Double): Double;
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseOutCubic: T must be finite');
   T := AT - 1.0;
   Result := T * T * T + 1.0;
 end;
@@ -76,6 +95,7 @@ function EaseInOutCubic(const AT: Double): Double;
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseInOutCubic: T must be finite');
   if AT < 0.5 then
     Result := 4.0 * AT * AT * AT
   else
@@ -87,6 +107,7 @@ end;
 
 function EaseInQuart(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInQuart: T must be finite');
   Result := AT * AT * AT * AT;
 end;
 
@@ -94,6 +115,7 @@ function EaseOutQuart(const AT: Double): Double;
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseOutQuart: T must be finite');
   T := AT - 1.0;
   Result := 1.0 - T * T * T * T;
 end;
@@ -102,6 +124,7 @@ function EaseInOutQuart(const AT: Double): Double;
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseInOutQuart: T must be finite');
   if AT < 0.5 then
     Result := 8.0 * AT * AT * AT * AT
   else
@@ -113,6 +136,7 @@ end;
 
 function EaseInExpo(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInExpo: T must be finite');
   if AT = 0.0 then
     Result := 0.0
   else
@@ -121,6 +145,7 @@ end;
 
 function EaseOutExpo(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseOutExpo: T must be finite');
   if AT = 1.0 then
     Result := 1.0
   else
@@ -129,6 +154,7 @@ end;
 
 function EaseInOutExpo(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInOutExpo: T must be finite');
   if AT = 0.0 then
     Result := 0.0
   else if AT = 1.0 then
@@ -143,6 +169,7 @@ function EaseInElastic(const AT: Double): Double;
 var
   C4: Double;
 begin
+  RequireFinite(AT, 'EaseInElastic: T must be finite');
   if AT = 0.0 then
     Result := 0.0
   else if AT = 1.0 then
@@ -159,6 +186,7 @@ function EaseOutElastic(const AT: Double): Double;
 var
   C4: Double;
 begin
+  RequireFinite(AT, 'EaseOutElastic: T must be finite');
   if AT = 0.0 then
     Result := 0.0
   else if AT = 1.0 then
@@ -175,6 +203,7 @@ function EaseInOutElastic(const AT: Double): Double;
 var
   C5: Double;
 begin
+  RequireFinite(AT, 'EaseInOutElastic: T must be finite');
   if AT = 0.0 then
     Result := 0.0
   else if AT = 1.0 then
@@ -196,6 +225,7 @@ const
   C1 = 1.70158;
   C3 = C1 + 1.0;
 begin
+  RequireFinite(AT, 'EaseInBack: T must be finite');
   Result := C3 * AT * AT * AT - C1 * AT * AT;
 end;
 
@@ -206,6 +236,7 @@ const
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseOutBack: T must be finite');
   T := AT - 1.0;
   Result := 1.0 + C3 * T * T * T + C1 * T * T;
 end;
@@ -217,6 +248,7 @@ const
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseInOutBack: T must be finite');
   if AT < 0.5 then
   begin
     T := 2.0 * AT;
@@ -236,6 +268,7 @@ const
 var
   T: Double;
 begin
+  RequireFinite(AT, 'EaseOutBounce: T must be finite');
   T := AT;
   if T = 0.0 then
     Result := 0.0
@@ -262,11 +295,13 @@ end;
 
 function EaseInBounce(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInBounce: T must be finite');
   Result := 1.0 - EaseOutBounce(1.0 - AT);
 end;
 
 function EaseInOutBounce(const AT: Double): Double;
 begin
+  RequireFinite(AT, 'EaseInOutBounce: T must be finite');
   if AT < 0.5 then
     Result := (1.0 - EaseOutBounce(1.0 - 2.0 * AT)) * 0.5
   else

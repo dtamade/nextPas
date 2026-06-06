@@ -3,8 +3,21 @@ program test_easing;
 {$I nextpas.core.settings.inc}
 
 uses
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.math.easing;
+
+type
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
+
+  TEasingCase = record
+    Name: string;
+    Func: TEasingFunction;
+  end;
 
 var
   T: TTestRunner;
@@ -24,6 +37,22 @@ begin
   CheckNear(0.0, AFunc(0.0), AName + ' starts at zero');
   CheckNear(1.0, AFunc(1.0), AName + ' ends at one');
   CheckNear(AMidpoint, AFunc(0.5), AName + ' midpoint');
+end;
+
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
 end;
 
 procedure TestPolynomialAndExpoEasing;
@@ -80,9 +109,79 @@ begin
   CheckNear(0.8828125, EaseInOutBounce(0.75), 'EaseInOutBounce second half');
 end;
 
+procedure TestNonFiniteInputsFailFast;
+const
+  Cases: array[0..20] of TEasingCase = (
+    (Name: 'EaseLinear'; Func: @EaseLinear),
+    (Name: 'EaseInQuad'; Func: @EaseInQuad),
+    (Name: 'EaseOutQuad'; Func: @EaseOutQuad),
+    (Name: 'EaseInOutQuad'; Func: @EaseInOutQuad),
+    (Name: 'EaseInCubic'; Func: @EaseInCubic),
+    (Name: 'EaseOutCubic'; Func: @EaseOutCubic),
+    (Name: 'EaseInOutCubic'; Func: @EaseInOutCubic),
+    (Name: 'EaseInQuart'; Func: @EaseInQuart),
+    (Name: 'EaseOutQuart'; Func: @EaseOutQuart),
+    (Name: 'EaseInOutQuart'; Func: @EaseInOutQuart),
+    (Name: 'EaseInExpo'; Func: @EaseInExpo),
+    (Name: 'EaseOutExpo'; Func: @EaseOutExpo),
+    (Name: 'EaseInOutExpo'; Func: @EaseInOutExpo),
+    (Name: 'EaseInElastic'; Func: @EaseInElastic),
+    (Name: 'EaseOutElastic'; Func: @EaseOutElastic),
+    (Name: 'EaseInOutElastic'; Func: @EaseInOutElastic),
+    (Name: 'EaseInBack'; Func: @EaseInBack),
+    (Name: 'EaseOutBack'; Func: @EaseOutBack),
+    (Name: 'EaseInOutBack'; Func: @EaseInOutBack),
+    (Name: 'EaseInBounce'; Func: @EaseInBounce),
+    (Name: 'EaseOutBounce'; Func: @EaseOutBounce)
+  );
+var
+  I: Integer;
+  Caught: Boolean;
+begin
+  for I := Low(Cases) to High(Cases) do
+  begin
+    Caught := False;
+    try
+      Cases[I].Func(DoubleNaN);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, Cases[I].Name + ' rejects NaN input');
+
+    Caught := False;
+    try
+      Cases[I].Func(DoubleInfinity);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, Cases[I].Name + ' rejects infinite input');
+  end;
+
+  Caught := False;
+  try
+    EaseInOutBounce(DoubleNaN);
+  except
+    on E: EArgumentError do
+      Caught := True;
+  end;
+  Check(Caught, 'EaseInOutBounce rejects NaN input');
+
+  Caught := False;
+  try
+    EaseInOutBounce(DoubleInfinity);
+  except
+    on E: EArgumentError do
+      Caught := True;
+  end;
+  Check(Caught, 'EaseInOutBounce rejects infinite input');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.easing');
   T.Run('polynomial and expo easing', @TestPolynomialAndExpoEasing);
   T.Run('elastic back and bounce easing', @TestElasticBackAndBounceEasing);
+  T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Summary;
 end.
