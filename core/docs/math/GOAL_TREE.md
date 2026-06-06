@@ -28,8 +28,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Added scalar `Single` overloads, `GCD`, `LCM`, `Hypot`, `Fmod`, `SmoothStep`, guarded `Abs(Low(...))`, and IEEE-style `SimdLnF32` boundaries.
 - Edge-case fixes are locked by tests for exact owner-level integer conversion and integer-boundary
   messages across `Floor` / `Ceil` / `Round` / `Trunc` / `Frac`, `GCD` / `LCM`,
-  `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases, and
-  `SimdLnF32(NaN)`.
+  `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases plus direct
+  `Log2` / `Log10` coverage, selected missing `Single`-path trig parity, and `Power`
+  negative-base / zero-base edge semantics, and `SimdLnF32(NaN)`.
 - `nextpas.core.math.mat` now provides the final matrix types: `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
   row/column setter write-through semantics over the same backing storage, `Zero`, `Identity`,

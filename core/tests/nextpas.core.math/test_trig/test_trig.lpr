@@ -1,114 +1,205 @@
 program test_trig;
+
 {$I nextpas.core.settings.inc}
+
 uses
-  SysUtils,
+  nextpas.core.testing,
   nextpas.core.math.trig;
+
 var
-  GPass: Integer = 0;
-  GFail: Integer = 0;
+  T: TTestRunner;
 
-procedure Check(const AName: string; ACond: Boolean);
-begin
-  if ACond then begin Inc(GPass); WriteLn('  PASS: ', AName); end
-  else begin Inc(GFail); WriteLn('  FAIL: ', AName); end;
-end;
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
 
-procedure CheckFloat(const AName: string; AExpected, AActual, AEps: Double);
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
+
+procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
   LDelta: Double;
 begin
   LDelta := AExpected - AActual;
-  if LDelta < 0 then
+  if LDelta < 0.0 then
     LDelta := -LDelta;
-  Check(AName, LDelta < AEps);
+  Check(LDelta <= AEpsilon, AMessage);
 end;
 
-function MakeNaN: Double;
+function SingleNaN: Single;
 var
-  LBits: UInt64;
+  LValue: TSingleBitCast;
 begin
-  LBits := UInt64($7FF8000000000000);
-  Move(LBits, Result, SizeOf(Result));
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
 end;
 
-function MakePositiveInfinity: Double;
+function SingleInfinity: Single;
 var
-  LBits: UInt64;
+  LValue: TSingleBitCast;
 begin
-  LBits := UInt64($7FF0000000000000);
-  Move(LBits, Result, SizeOf(Result));
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
 end;
 
-function MakeNegativeInfinity: Double;
+function DoubleNaN: Double;
 var
-  LBits: UInt64;
+  LValue: TDoubleBitCast;
 begin
-  LBits := UInt64($FFF0000000000000);
-  Move(LBits, Result, SizeOf(Result));
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
 end;
 
-function IsNaNValue(const AValue: Double): Boolean;
+function DoubleInfinity: Double;
 var
-  LBits: UInt64;
+  LValue: TDoubleBitCast;
 begin
-  Move(AValue, LBits, SizeOf(LBits));
-  Result := ((LBits and UInt64($7FF0000000000000)) = UInt64($7FF0000000000000)) and
-    ((LBits and UInt64($000FFFFFFFFFFFFF)) <> 0);
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+function IsSingleNaN(const AValue: Single): Boolean;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := ((LValue.Bits and $7F800000) = $7F800000) and
+    ((LValue.Bits and $007FFFFF) <> 0);
+end;
+
+function IsDoubleNaN(const AValue: Double): Boolean;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := ((LValue.Bits and $7FF0000000000000) = $7FF0000000000000) and
+    ((LValue.Bits and $000FFFFFFFFFFFFF) <> 0);
+end;
+
+function IsSinglePositiveInfinity(const AValue: Single): Boolean;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = $7F800000;
+end;
+
+function IsDoublePositiveInfinity(const AValue: Double): Boolean;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = $7FF0000000000000;
+end;
+
+procedure TestBasicTrigValues;
+begin
+  CheckNear(0.0, Sin(0.0), 0.0001, 'Sin(0)=0');
+  CheckNear(1.0, Sin(HALF_PI), 0.0001, 'Sin(PI/2)=1');
+  CheckNear(1.0, Sin(Single(HALF_PI)), 0.0001, 'Sin(Single PI/2)=1');
+  CheckNear(1.0, Cos(0.0), 0.0001, 'Cos(0)=1');
+  CheckNear(-1.0, Cos(PI_VALUE), 0.0001, 'Cos(PI)=-1');
+  CheckNear(1.0, Cos(Single(0.0)), 0.0001, 'Cos(Single 0)=1');
+  CheckNear(1.0, Tan(PI_VALUE / 4.0), 0.0001, 'Tan(PI/4)=1');
+  CheckNear(1.0, Tan(Single(PI_VALUE / 4.0)), 0.0001, 'Tan(Single PI/4)=1');
+  CheckNear(HALF_PI, ArcSin(1.0), 0.0001, 'ArcSin(1)=PI/2');
+  CheckNear(-HALF_PI, ArcSin(-1.0), 0.0001, 'ArcSin(-1)=-PI/2');
+  CheckNear(HALF_PI, ArcSin(Single(1.0)), 0.0001, 'ArcSin(Single 1)=PI/2');
+  CheckNear(HALF_PI, ArcCos(0.0), 0.0001, 'ArcCos(0)=PI/2');
+  CheckNear(PI_VALUE, ArcCos(-1.0), 0.0001, 'ArcCos(-1)=PI');
+  CheckNear(HALF_PI, ArcCos(Single(0.0)), 0.0001, 'ArcCos(Single 0)=PI/2');
+  CheckNear(PI_VALUE / 4.0, ArcTan(1.0), 0.0001, 'ArcTan(1)=PI/4');
+  CheckNear(PI_VALUE / 4.0, ArcTan(Single(1.0)), 0.0001, 'ArcTan(Single 1)=PI/4');
+  CheckNear(PI_VALUE / 4.0, ArcTan2(1.0, 1.0), 0.0001, 'ArcTan2(1,1)=PI/4');
+  CheckNear(PI_VALUE / 4.0, ArcTan2(Single(1.0), Single(1.0)), 0.0001,
+    'ArcTan2(Single 1,1)=PI/4');
+end;
+
+procedure TestInverseTrigDomainContracts;
+begin
+  Check(IsDoubleNaN(ArcSin(1.0001)), 'ArcSin(out of domain)=NaN');
+  Check(IsSingleNaN(ArcSin(Single(1.0001))), 'ArcSin(Single out of domain)=NaN');
+  Check(IsDoubleNaN(ArcCos(-1.0001)), 'ArcCos(out of domain)=NaN');
+  Check(IsSingleNaN(ArcCos(Single(-1.0001))), 'ArcCos(Single out of domain)=NaN');
+end;
+
+procedure TestArcTan2SpecialCases;
+begin
+  Check(IsDoubleNaN(ArcTan2(DoubleNaN, 1.0)), 'ArcTan2(NaN,1)=NaN');
+  Check(IsDoubleNaN(ArcTan2(1.0, DoubleNaN)), 'ArcTan2(1,NaN)=NaN');
+  Check(IsSingleNaN(ArcTan2(SingleNaN, Single(1.0))), 'ArcTan2(Single NaN,1)=NaN');
+  CheckNear(PI_VALUE / 4.0, ArcTan2(DoubleInfinity, DoubleInfinity), 0.0001,
+    'ArcTan2(+Inf,+Inf)=PI/4');
+  CheckNear(3.0 * PI_VALUE / 4.0, ArcTan2(DoubleInfinity, -DoubleInfinity), 0.0001,
+    'ArcTan2(+Inf,-Inf)=3PI/4');
+  CheckNear(-PI_VALUE / 4.0, ArcTan2(-DoubleInfinity, DoubleInfinity), 0.0001,
+    'ArcTan2(-Inf,+Inf)=-PI/4');
+  CheckNear(-3.0 * PI_VALUE / 4.0, ArcTan2(-DoubleInfinity, -DoubleInfinity), 0.0001,
+    'ArcTan2(-Inf,-Inf)=-3PI/4');
+  CheckNear(PI_VALUE / 4.0, ArcTan2(SingleInfinity, SingleInfinity), 0.0001,
+    'ArcTan2(Single +Inf,+Inf)=PI/4');
+end;
+
+procedure TestExpLogAndSqrtContracts;
+begin
+  CheckNear(1.0, Exp(0.0), 0.0001, 'Exp(0)=1');
+  CheckNear(2.71828, Exp(1.0), 0.001, 'Exp(1)=e');
+  CheckNear(2.71828, Exp(Single(1.0)), 0.001, 'Exp(Single 1)=e');
+  CheckNear(0.0, Ln(1.0), 0.0001, 'Ln(1)=0');
+  CheckNear(0.0, Ln(Single(1.0)), 0.0001, 'Ln(Single 1)=0');
+  CheckNear(1.0, Ln(2.71828), 0.001, 'Ln(e)=1');
+  CheckNear(3.0, Log2(8.0), 0.0001, 'Log2(8)=3');
+  CheckNear(3.0, Log2(Single(8.0)), 0.0001, 'Log2(Single 8)=3');
+  CheckNear(3.0, Log10(1000.0), 0.0001, 'Log10(1000)=3');
+  CheckNear(3.0, Log10(Single(1000.0)), 0.0001, 'Log10(Single 1000)=3');
+  Check(IsDoubleNaN(Log2(-1.0)), 'Log2(negative)=NaN');
+  Check(IsDoubleNaN(Log10(-1.0)), 'Log10(negative)=NaN');
+  CheckNear(2.0, Sqrt(4.0), 0.0001, 'Sqrt(4)=2');
+  CheckNear(2.0, Sqrt(Single(4.0)), 0.0001, 'Sqrt(Single 4)=2');
+  CheckNear(1.41421, Sqrt(2.0), 0.001, 'Sqrt(2)=1.414');
+  Check(IsDoubleNaN(Sqrt(-1.0)), 'Sqrt(-1)=NaN');
+  Check(IsSingleNaN(Sqrt(Single(-1.0))), 'Sqrt(Single -1)=NaN');
+end;
+
+procedure TestPowerEdgeContracts;
+begin
+  CheckNear(1024.0, Power(2.0, 10.0), 0.001, 'Power(2,10)=1024');
+  CheckNear(1024.0, Power(Single(2.0), Single(10.0)), 0.001, 'Power(Single 2,10)=1024');
+  CheckNear(-8.0, Power(-2.0, 3.0), 0.0001, 'Power negative base odd integer exponent');
+  CheckNear(4.0, Power(-2.0, 2.0), 0.0001, 'Power negative base even integer exponent');
+  CheckNear(-0.125, Power(-2.0, -3.0), 0.0001, 'Power negative base negative odd exponent');
+  CheckNear(-8.0, Power(Single(-2.0), Single(3.0)), 0.0001,
+    'Power Single negative base odd integer exponent');
+  Check(IsDoubleNaN(Power(-2.0, 0.5)), 'Power negative base fractional exponent returns NaN');
+  Check(IsSingleNaN(Power(Single(-2.0), Single(0.5))),
+    'Power Single negative base fractional exponent returns NaN');
+  Check(IsDoublePositiveInfinity(Power(0.0, -1.0)),
+    'Power zero negative exponent returns +Inf');
+  Check(IsSinglePositiveInfinity(Power(Single(0.0), Single(-1.0))),
+    'Power Single zero negative exponent returns +Inf');
+end;
+
+procedure TestAngleConversions;
+begin
+  CheckNear(PI_VALUE, DegToRad(180.0), 0.0001, 'DegToRad(180)=PI');
+  CheckNear(PI_VALUE, DegToRad(Single(180.0)), 0.0001, 'DegToRad(Single 180)=PI');
+  CheckNear(180.0, RadToDeg(PI_VALUE), 0.0001, 'RadToDeg(PI)=180');
+  CheckNear(180.0, RadToDeg(Single(PI_VALUE)), 0.0001, 'RadToDeg(Single PI)=180');
 end;
 
 begin
-  WriteLn('=== nextpas.core.math.trig tests ===');
-  WriteLn;
-
-  WriteLn('--- Trig ---');
-  CheckFloat('Sin(0)=0', 0, Sin(0), 0.0001);
-  CheckFloat('Sin(PI/2)=1', 1, Sin(HALF_PI), 0.0001);
-  CheckFloat('Sin(Single PI/2)=1', 1, Sin(Single(HALF_PI)), 0.0001);
-  CheckFloat('Cos(0)=1', 1, Cos(0), 0.0001);
-  CheckFloat('Cos(PI)=-1', -1, Cos(PI_VALUE), 0.0001);
-  CheckFloat('Cos(Single 0)=1', 1, Cos(Single(0)), 0.0001);
-  CheckFloat('Tan(PI/4)=1', 1, Tan(PI_VALUE / 4), 0.0001);
-  CheckFloat('Tan(Single PI/4)=1', 1, Tan(Single(PI_VALUE / 4)), 0.0001);
-  CheckFloat('ArcSin(1)=PI/2', HALF_PI, ArcSin(1), 0.0001);
-  CheckFloat('ArcSin(Single 1)=PI/2', HALF_PI, ArcSin(Single(1)), 0.0001);
-  CheckFloat('ArcCos(0)=PI/2', HALF_PI, ArcCos(0), 0.0001);
-  CheckFloat('ArcTan(1)=PI/4', PI_VALUE/4, ArcTan(1), 0.0001);
-  CheckFloat('ArcTan2(1,1)=PI/4', PI_VALUE/4, ArcTan2(1, 1), 0.0001);
-  CheckFloat('ArcTan2(Single 1,1)=PI/4', PI_VALUE/4, ArcTan2(Single(1), Single(1)), 0.0001);
-  Check('ArcSin(out of domain)=NaN', IsNaNValue(ArcSin(1.0001)));
-  Check('ArcCos(out of domain)=NaN', IsNaNValue(ArcCos(-1.0001)));
-  Check('ArcTan2(NaN,1)=NaN', IsNaNValue(ArcTan2(MakeNaN, 1.0)));
-  Check('ArcTan2(1,NaN)=NaN', IsNaNValue(ArcTan2(1.0, MakeNaN)));
-  CheckFloat('ArcTan2(+Inf,+Inf)=PI/4', PI_VALUE / 4.0,
-    ArcTan2(MakePositiveInfinity, MakePositiveInfinity), 0.0001);
-  CheckFloat('ArcTan2(+Inf,-Inf)=3PI/4', 3.0 * PI_VALUE / 4.0,
-    ArcTan2(MakePositiveInfinity, MakeNegativeInfinity), 0.0001);
-  CheckFloat('ArcTan2(-Inf,+Inf)=-PI/4', -PI_VALUE / 4.0,
-    ArcTan2(MakeNegativeInfinity, MakePositiveInfinity), 0.0001);
-  CheckFloat('ArcTan2(-Inf,-Inf)=-3PI/4', -3.0 * PI_VALUE / 4.0,
-    ArcTan2(MakeNegativeInfinity, MakeNegativeInfinity), 0.0001);
-
-  WriteLn('--- Exp/Log ---');
-  CheckFloat('Exp(0)=1', 1, Exp(0), 0.0001);
-  CheckFloat('Exp(1)=e', 2.71828, Exp(1), 0.001);
-  CheckFloat('Exp(Single 1)=e', 2.71828, Exp(Single(1)), 0.001);
-  CheckFloat('Ln(1)=0', 0, Ln(1), 0.0001);
-  CheckFloat('Ln(Single 1)=0', 0, Ln(Single(1)), 0.0001);
-  CheckFloat('Ln(e)=1', 1, Ln(2.71828), 0.001);
-  CheckFloat('Sqrt(4)=2', 2, Sqrt(4), 0.0001);
-  CheckFloat('Sqrt(Single 4)=2', 2, Sqrt(Single(4)), 0.0001);
-  CheckFloat('Sqrt(2)=1.414', 1.41421, Sqrt(2), 0.001);
-  Check('Sqrt(-1)=NaN', IsNaNValue(Sqrt(-1.0)));
-  CheckFloat('Power(2,10)=1024', 1024, Power(2, 10), 0.001);
-  CheckFloat('Power(Single 2,10)=1024', 1024, Power(Single(2), Single(10)), 0.001);
-
-  WriteLn('--- DegToRad/RadToDeg ---');
-  CheckFloat('DegToRad(180)=PI', PI_VALUE, DegToRad(180), 0.0001);
-  CheckFloat('DegToRad(Single 180)=PI', PI_VALUE, DegToRad(Single(180)), 0.0001);
-  CheckFloat('RadToDeg(PI)=180', 180, RadToDeg(PI_VALUE), 0.0001);
-  CheckFloat('RadToDeg(Single PI)=180', 180, RadToDeg(Single(PI_VALUE)), 0.0001);
-
-  WriteLn;
-  WriteLn('=== Results: ', GPass, ' passed, ', GFail, ' failed ===');
-  if GFail > 0 then Halt(1);
+  T := TTestRunner.Create('nextpas.core.math.trig');
+  T.Run('basic trig values', @TestBasicTrigValues);
+  T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
+  T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
+  T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
+  T.Run('power edge contracts', @TestPowerEdgeContracts);
+  T.Run('angle conversions', @TestAngleConversions);
+  T.Summary;
 end.
