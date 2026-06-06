@@ -243,6 +243,11 @@ begin
   RotateZ(SingleNaN);
 end;
 
+procedure RaiseRotateXInfinityDouble;
+begin
+  RotateX(DoubleInfinity);
+end;
+
 procedure RaiseRotateYInfinityDouble;
 begin
   RotateY(DoubleInfinity);
@@ -256,6 +261,11 @@ end;
 procedure RaiseCamera2DInfiniteCenterDouble;
 begin
   Camera2D(DoubleInfinity, Double(0.0), Double(1.0), 100, 100);
+end;
+
+procedure RaiseCamera2DInfiniteCenterYDouble;
+begin
+  Camera2D(Double(0.0), DoubleInfinity, Double(1.0), 100, 100);
 end;
 
 procedure TestProjectionBuilders;
@@ -448,10 +458,18 @@ begin
     @RaiseScaleNaNSingle);
   ExpectArgumentErrorMessage('Scale: Z must be finite', 'Scale single NaN Z',
     @RaiseScaleNaNZSingle);
-  ExpectArgumentError('RotateZ single NaN', @RaiseRotateZNaNSingle);
-  ExpectArgumentError('RotateY double infinity', @RaiseRotateYInfinityDouble);
-  ExpectArgumentError('Camera2D single NaN zoom', @RaiseCamera2DNaNZoomSingle);
-  ExpectArgumentError('Camera2D double infinite center', @RaiseCamera2DInfiniteCenterDouble);
+  ExpectArgumentErrorMessage('RotateX: radians must be finite', 'RotateX double infinity',
+    @RaiseRotateXInfinityDouble);
+  ExpectArgumentErrorMessage('RotateY: radians must be finite', 'RotateY double infinity',
+    @RaiseRotateYInfinityDouble);
+  ExpectArgumentErrorMessage('RotateZ: radians must be finite', 'RotateZ single NaN',
+    @RaiseRotateZNaNSingle);
+  ExpectArgumentErrorMessage('Camera2D: zoom must be finite', 'Camera2D single NaN zoom',
+    @RaiseCamera2DNaNZoomSingle);
+  ExpectArgumentErrorMessage('Camera2D: center X must be finite',
+    'Camera2D double infinite center X', @RaiseCamera2DInfiniteCenterDouble);
+  ExpectArgumentErrorMessage('Camera2D: center Y must be finite',
+    'Camera2D double infinite center Y', @RaiseCamera2DInfiniteCenterYDouble);
 end;
 
 procedure TestGeometryGuardMessages;
