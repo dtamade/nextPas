@@ -592,6 +592,33 @@ begin
     'atomic README must point to the external Go comparison source');
   CheckContains(LAtomicDocsReadme, 'compare_cpp/main.cpp',
     'atomic README must point to the external C++ comparison source');
+  CheckContains(LAtomicDocsReadme,
+    'mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust',
+    'atomic README must create the Rust comparison build directory');
+  CheckContains(LAtomicDocsReadme,
+    'rustc -C opt-level=3 core/benchmarks/nextpas.core.atomic/bench_atomic/compare_rust/main.rs -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust/bench_atomic_rust',
+    'atomic README must list the manual Rust comparison build command');
+  CheckContains(LAtomicDocsReadme,
+    'core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust/bench_atomic_rust',
+    'atomic README must list the manual Rust comparison run command');
+  CheckContains(LAtomicDocsReadme,
+    'mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_go',
+    'atomic README must create the Go comparison build directory');
+  CheckContains(LAtomicDocsReadme,
+    'go build -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_go/bench_atomic_go core/benchmarks/nextpas.core.atomic/bench_atomic/compare_go/main.go',
+    'atomic README must list the manual Go comparison build command');
+  CheckContains(LAtomicDocsReadme,
+    'core/build/projects/nextpas.core.atomic/bench_atomic/compare_go/bench_atomic_go',
+    'atomic README must list the manual Go comparison run command');
+  CheckContains(LAtomicDocsReadme,
+    'mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp',
+    'atomic README must create the C++ comparison build directory');
+  CheckContains(LAtomicDocsReadme,
+    'g++ -std=c++17 -O2 core/benchmarks/nextpas.core.atomic/bench_atomic/compare_cpp/main.cpp -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp/bench_atomic_cpp',
+    'atomic README must list the manual C++ comparison build command');
+  CheckContains(LAtomicDocsReadme,
+    'core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp/bench_atomic_cpp',
+    'atomic README must list the manual C++ comparison run command');
   CheckContains(LAtomicDocsReadme, 'platform/compiler flags/input size/baseline',
     'atomic README must name the benchmark evidence envelope');
   CheckContains(LAtomicDocsReadme,

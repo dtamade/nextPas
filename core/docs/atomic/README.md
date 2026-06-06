@@ -127,3 +127,17 @@ ms、M ops/sec 和 ns/op。
 C++ `std::atomic` comparison source；这些文件用于后续同机手动对照。当前 Pascal benchmark 不会自动编译或运行
 Rust、Go 或 C++ 程序。性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有同一机器、
 同一轮次的外部 runtime 输出时，不应写入胜过 Rust/Go/C++ 标准库的结论。
+
+当前推荐的手动对照命令是：
+
+```bash
+mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust
+rustc -C opt-level=3 core/benchmarks/nextpas.core.atomic/bench_atomic/compare_rust/main.rs -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust/bench_atomic_rust
+core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust/bench_atomic_rust
+mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_go
+go build -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_go/bench_atomic_go core/benchmarks/nextpas.core.atomic/bench_atomic/compare_go/main.go
+core/build/projects/nextpas.core.atomic/bench_atomic/compare_go/bench_atomic_go
+mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp
+g++ -std=c++17 -O2 core/benchmarks/nextpas.core.atomic/bench_atomic/compare_cpp/main.cpp -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp/bench_atomic_cpp
+core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp/bench_atomic_cpp
+```
