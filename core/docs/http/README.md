@@ -185,11 +185,13 @@ Run the focused comparator smoke from the test harness:
 make -C tests/nextpas.core.http/test_http_benchmarks test
 ```
 
-The harness builds and runs nextPas, Go, and Rust keep-alive server benchmarks at
-smoke scale. Each implementation reports `operation`, `workload`, `impl`,
-`iterations`, `threads`, `completed`, `elapsed_ns`, `ns/op`, and `req/s`, so
-later benchmark result capture can use one stable format. It also builds
-`bench_fullchain` and validates the filtered plaintext row markers.
+The harness builds and runs nextPas, Go, and Rust std-only keep-alive server
+benchmarks at smoke scale. Each implementation reports `operation`, `workload`,
+`impl`, `iterations`, `threads`, `completed`, `elapsed_ns`, `ns/op`, and
+`req/s`, so later benchmark result capture can use one stable format. The
+std-only Rust row is labeled `impl=rust_std` and also reports
+`rust_profile=std_only`; it is not a Hyper/Tokio benchmark. The harness also
+builds `bench_fullchain` and validates the filtered plaintext row markers.
 
 For manual comparison runs, use the server comparison runner:
 
@@ -206,9 +208,11 @@ summary rows. Use
 `--workload url_path` to make the client request `/api/v1/users` and make each
 server implementation touch the request path before writing the response. Use
 `--workload adapter_no_url` to keep the handler no-URL while adding
-`Connection: keep-alive`, which forces nextPas through the llhttp adapter path
-instead of the H1 fast path. Use `--workload response_1k` to write and read a
-complete 1 KiB fixed-length response body.
+`Connection: keep-alive`; current nextPas reports the actual route with
+`nextpas_h1_path`, because explicit HTTP/1.1 keep-alive is fast-path compatible
+while `close`, `upgrade`, and unsupported connection-policy tokens still fall
+back to the llhttp adapter path. Use `--workload response_1k` to write and read
+a complete 1 KiB fixed-length response body.
 
 To capture environment metadata and the comparison output in Markdown, run:
 

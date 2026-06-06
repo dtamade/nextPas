@@ -1,5 +1,40 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http rust std comparator label slice
+
+- **Status:** completed.
+- Objective:
+  - prevent current std-only Rust benchmark comparator output from being
+    mistaken for a Rust ecosystem / Hyper/Tokio comparator
+  - keep the existing smoke harness small and dependency-free
+- Scope and safety:
+  - touched only HTTP benchmark comparator/runner, benchmark focused test, HTTP
+    benchmark/API docs, and this support evidence
+  - did not touch HTTP runtime, lower layers, compiler paths, root planning
+    files, generated benchmark outputs, or build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `36 total, 27 passed, 9 failed`
+    - representative failure: `implementation marker missing from output: impl=rust_std`
+    - actual comparator/runner output still used `impl=rust` and `summary_impl=rust`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - Rust std-only comparator now prints `impl=rust_std` and
+    `rust_profile=std_only`
+  - server comparison runner now uses `section=rust_std`, expects
+    `impl=rust_std`, and emits `summary_impl=rust_std`
+  - benchmark tests lock the new markers in direct comparator smoke, runner
+    report, multi-run summary, and snapshot output
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `36/36 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - current benchmark output no longer labels the std-only Rust baseline as
+    generic `rust`
+  - Hyper/Tokio or equivalent async Rust comparator remains an explicit future
+    benchmark truth gap
+
 ## Session: 2026-06-06 http API parity request helper slice
 
 - **Status:** completed.
@@ -663,7 +698,7 @@
     - `26/26 passed`
     - `heaptrc: 0 unfreed memory blocks`
   - `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`
-    - nextPas/Go/Rust raw rows: `completed=8`
+    - nextPas/Go/Rust std-only raw rows: `completed=8`
     - nextPas raw rows: `nextpas_h1_path=fast`
     - summary rows: `median_completed=8`
 - Outcome:

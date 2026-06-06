@@ -1,5 +1,24 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http rust std comparator label slice
+
+### Goal
+
+收紧 benchmark truth：把当前 Rust std-only server comparator 从泛化
+`impl=rust` 改成机器可读的 `impl=rust_std` / `rust_profile=std_only`，
+让 runner、snapshot 和 focused tests 都明确它不是 Hyper/Tokio 或 Rust 生态代表。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 先要求 Rust comparator / runner / snapshot
+  输出 `impl=rust_std` 与 `rust_profile=std_only`，当前 `impl=rust` 触发失败。
+- [x] GREEN：只修改 `compare_rust/main.rs` 与 `run_server_comparison.sh`，
+  comparator 输出新 marker，runner 的 section / expected impl / summary 统一使用
+  `rust_std`。
+- [x] 更新 HTTP benchmark/API/control 文档，记录 std-only label contract 和
+  Hyper/Tokio 仍是后续缺口。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 http API parity request helper slice
 
 ### Goal

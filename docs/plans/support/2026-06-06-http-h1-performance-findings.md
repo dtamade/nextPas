@@ -1,5 +1,35 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http rust std comparator label slice
+
+- 本轮不是新增 Hyper/Tokio comparator，而是先修正现有 benchmark harness 的
+  输出 contract：std-only Rust comparator 不能继续以 `impl=rust` 出现在 raw rows、
+  summary rows 和 snapshots 里。
+- 选择依据：
+  - 文档已经明确该 comparator 是 std-only microbaseline，但机器可读输出仍是
+    `impl=rust` / `summary_impl=rust`，后续报告容易被误读成 Rust 生态代表。
+  - 引入真实 Hyper/Tokio 需要 Cargo dependency、async runtime 和 server/client
+    harness 设计；当前更小、更可回滚的 truth slice 是先把已有 baseline 标准化为
+    `rust_std`。
+- 实现决策：
+  - `compare_rust/main.rs` 输出 `impl=rust_std` 与 `rust_profile=std_only`。
+  - `run_server_comparison.sh` 的 runner section、expected impl 和 median summary
+    统一使用 `rust_std`。
+  - `test_http_benchmarks` 同时锁住 comparator smoke、runner report、multi-run
+    summary 和 snapshot 中的新 marker。
+- RED 证据：
+  - `test_http_benchmarks` 先失败 9 个 case，典型失败为
+    `implementation marker missing from output: impl=rust_std`，实际输出仍是
+    `impl=rust` / `summary_impl=rust`。
+  - 失败 run 仍显示 heaptrc `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+  - `36/36 passed`，heaptrc `0 unfreed memory blocks`。
+- 复盘结论：
+  方向没有走偏：这是 benchmark truth 的 contract tightening，不是性能数字包装。
+  后续仍不能声明 Rust 生态对标完成；下一步若继续 benchmark truth，应新增真实
+  Hyper/Tokio 或等价 async Rust comparator。
+
 ## 2026-06-06 http API parity request helper slice
 
 - 对标结论：
@@ -484,7 +514,7 @@
   -> `26/26 passed`，`heaptrc: 0 unfreed memory blocks`。
 - live smoke 结果：
   `benchmarks/nextpas.core.http/run_server_comparison.sh --requests 8 --threads 1 --workload adapter_no_url --runs 2 --output build/projects/nextpas.core.http/server_comparison/adapter_no_url_completed_smoke.txt`
-  -> nextPas/Go/Rust raw rows 均有 `completed=8`，nextPas rows 有
+  -> nextPas/Go/Rust std-only raw rows 均有 `completed=8`，nextPas rows 有
   `nextpas_h1_path=fast`，summary rows 均有 `median_completed=8`。
 - 复盘结论：这轮仍属于 benchmark harness correctness，不是生产性能优化；下一轮性能优化应基于更可信的 harness，优先审计 H1 热路径小函数 `inline`、URL materialization、response writer/drain、以及 Pascal llhttp adapter raw gap。
 

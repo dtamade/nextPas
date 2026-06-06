@@ -38,8 +38,9 @@ The comparison currently covers three HTTP/1.1 keep-alive hello-world workloads:
 
 It does not cover TLS, request bodies, WebSocket, router/middleware full-chain
 cost, `epoll`, or an async Rust server. The Rust comparator is a std-only
-microbaseline; add a Hyper/Tokio comparator before treating Rust ecosystem
-performance as represented.
+microbaseline labeled `impl=rust_std` with `rust_profile=std_only`; add a
+Hyper/Tokio comparator before treating Rust ecosystem performance as
+represented.
 
 Use `--runs N` to repeat each implementation after a single build and emit a
 median summary at the end of the raw output. This is the preferred mode for
@@ -48,9 +49,10 @@ affected by scheduler noise.
 
 The runner treats incomplete workload execution as a harness failure: every raw
 row must report `iterations=<requests>` and `completed=<requests>`. The median
-summary repeats this guard as `median_completed=<requests>`, and nextPas rows
-also print `nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads so
-fast-path interpretation is explicit.
+summary repeats this guard as `median_completed=<requests>`, nextPas rows print
+`nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads, and Rust
+std-only rows print `rust_profile=std_only` so fast-path and comparator
+interpretation stay explicit.
 
 ## Local Median Snapshot: 2026-06-05
 
@@ -1934,9 +1936,10 @@ generated llhttp state machine.
 ## Full-Chain Correlation: No-URL Keep-Alive Workload
 
 On 2026-06-05 local time, the server comparison output gained an explicit
-`workload=no_url` marker across nextPas, Go, and Rust comparator binaries. This
-locks the benchmark interpretation: the current keep-alive comparison measures a
-simple handler that does not read `Req.Url` / query parameters.
+`workload=no_url` marker across nextPas, Go, and Rust std-only comparator
+binaries. This locks the benchmark interpretation: the current keep-alive
+comparison measures a simple handler that does not read `Req.Url` / query
+parameters.
 
 Focused RED/GREEN:
 
@@ -1974,7 +1977,7 @@ sit outside URL projection.
 
 On 2026-06-05 local time, the server comparison runner gained
 `--workload no_url|url_path|adapter_no_url`, and the nextPas, Go, and Rust
-comparator binaries now accept the same selector. `url_path` sends
+std-only comparator binaries now accept the same selector. `url_path` sends
 `GET /api/v1/users`; nextPas and Go validate the parsed request path, while the
 Rust std-only comparator checks the same path from the one buffered request
 frame before writing its response.
@@ -2111,14 +2114,14 @@ throughput.
 
 On 2026-06-05 local time, `run_server_comparison.sh` and
 `capture_server_comparison_snapshot.sh` gained `--runs N`. The server runner
-now builds nextPas, Go, and Rust once, repeats each implementation `N` times,
-prints `run=...` markers for raw rows, and emits a median summary:
+now builds nextPas, Go, and Rust std-only once, repeats each implementation
+`N` times, prints `run=...` markers for raw rows, and emits a median summary:
 
 ```text
 summary=http.server.keepalive
 summary_impl=go runs=3 median_completed=50000 median_ns/op=55017.0 median_req/s=18176
 summary_impl=nextpas runs=3 median_completed=50000 median_ns/op=11431.0 median_req/s=87476
-summary_impl=rust runs=3 median_completed=50000 median_ns/op=9885.0 median_req/s=101153
+summary_impl=rust_std runs=3 median_completed=50000 median_ns/op=9885.0 median_req/s=101153
 ```
 
 Each raw nextPas row for the current no-body H1 workloads also includes
@@ -2147,10 +2150,13 @@ heaptrc: 0 unfreed memory blocks
 
 Later focused tightening made the same gate require `completed=<requests>` on
 every raw implementation row, `nextpas_h1_path=...` on nextPas rows, and
-`median_completed=<requests>` in stdout/report summaries. A small live smoke
-with `--requests 8 --threads 1 --workload adapter_no_url --runs 2` produced
-`completed=8`, `nextpas_h1_path=fast`, and `median_completed=8` for the
-comparison summary.
+`median_completed=<requests>` in stdout/report summaries. On 2026-06-06, the
+std-only Rust comparator marker was tightened from `impl=rust` to
+`impl=rust_std` and `rust_profile=std_only`, so future reports cannot be read
+as a Hyper/Tokio or broader Rust ecosystem row. A small live smoke with
+`--requests 8 --threads 1 --workload adapter_no_url --runs 2` produced
+`completed=8`, `nextpas_h1_path=fast`, `rust_profile=std_only`, and
+`median_completed=8` for the comparison summary.
 
 Fresh local `no_url` 50k/4 3-run summary:
 
