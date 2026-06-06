@@ -121,7 +121,7 @@ benchmark 使用 `ITERS=1000000`，Makefile 默认编译参数是 `-MObjFPC -Sh 
 运行输出会先打印 `platform/compiler flags/input size/baseline` envelope，再打印各场景的
 ms、M ops/sec 和 ns/op。
 
-当前 baseline 只是同一 Pascal 程序里的 plain local variable 操作，用于帮助判断单线程测试开销；
+当前 baseline 只是同一 Pascal 程序里的 plain local variable 操作；plain baseline uses loop-index-dependent local integer work to reduce optimizer folding risk，用于帮助判断单线程测试开销；
 它不是 Rust、Go 或 C++ runtime 对照。`compare_rust/main.rs` 是外部 Rust comparison source，
 `compare_go/main.go` 是外部 Go `sync/atomic` comparison source，`compare_cpp/main.cpp` 是外部
 C++ `std::atomic` comparison source；这些文件用于后续同机手动对照。当前 Pascal benchmark 不会自动编译或运行

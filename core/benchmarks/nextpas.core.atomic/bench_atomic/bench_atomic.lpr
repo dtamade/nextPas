@@ -53,7 +53,7 @@ begin
   LValue := 0;
   LStart := TInstant.Now;
   for LI := 1 to ITERS do
-    Inc(LValue);
+    LValue := LValue + Int32((LI and 1) + 1);
   LNs := LStart.Elapsed.AsNanoseconds;
   GSink32 := LValue;
   PrintResult('Plain local increment 1M', LNs, ITERS);

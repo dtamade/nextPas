@@ -594,6 +594,9 @@ begin
     'atomic README must point to the external C++ comparison source');
   CheckContains(LAtomicDocsReadme, 'platform/compiler flags/input size/baseline',
     'atomic README must name the benchmark evidence envelope');
+  CheckContains(LAtomicDocsReadme,
+    'plain baseline uses loop-index-dependent local integer work to reduce optimizer folding risk',
+    'atomic README must document the plain-baseline anti-folding contract');
   CheckContains(LAtomicBenchMakefile,
     'BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.atomic/bench_atomic',
     'atomic benchmark Makefile must isolate build artifacts under core/build');
@@ -609,6 +612,8 @@ begin
   CheckContains(LAtomicBenchSource,
     'WriteLn(''Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)'')',
     'atomic benchmark must print the baseline evidence field');
+  CheckContains(LAtomicBenchSource, 'LValue := LValue + Int32((LI and 1) + 1);',
+    'atomic benchmark plain baseline must use loop-index-dependent local work');
   CheckContains(LAtomicBenchRustCompareSource, 'use std::sync::atomic',
     'atomic Rust comparison source must use Rust std atomic APIs');
   CheckContains(LAtomicBenchRustCompareSource, 'const ITERS: usize = 1_000_000;',
