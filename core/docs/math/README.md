@@ -34,12 +34,15 @@ make -C core core-math-smoke
 
 The named `core-math-api-surface-smoke` gate in `core/Makefile` wraps
 `make -C core/tests/nextpas.core.math/test_api_surface clean test`.
-`core-math-smoke` reuses that target and then builds/runs the overview example. Use the example
-target directly when you only want the facade-consumer proof:
+Use the named overview-only gate when you only want the facade-consumer proof:
 
 ```sh
-make -C core/examples/nextpas.core.math/math_overview clean run
+make -C core core-math-overview-local-smoke
 ```
+
+`core-math-overview-local-smoke` wraps
+`make -C core/examples/nextpas.core.math/math_overview clean run`, and `core-math-smoke`
+reuses that named example gate after the surface proof.
 
 ## Public Modules
 

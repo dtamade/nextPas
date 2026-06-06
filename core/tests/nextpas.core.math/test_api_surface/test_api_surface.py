@@ -90,6 +90,16 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
                 "$(MAKE) core-math-api-surface-smoke",
             ),
             (
+                "overview-local-smoke",
+                "$(MAKE) core-math-overview-local-smoke",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
+        target="core-math-overview-local-smoke",
+        command="make -C core core-math-overview-local-smoke",
+        recipe_steps=(
+            (
                 "math-overview",
                 "$(MAKE) -C examples/nextpas.core.math/math_overview clean run",
             ),

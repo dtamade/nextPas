@@ -11,7 +11,7 @@ internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-in
 without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
 candidate seam result and a negative `TQuatf.Rotate` candidate seam result on the local
 x86_64/Linux gate. M8 documentation and named local module gates are now in place via
-`make -C core core-math-api-surface-smoke`, `make -C core core-math-smoke`,
+`make -C core core-math-api-surface-smoke`, `make -C core core-math-overview-local-smoke`, `make -C core core-math-smoke`,
 `make -C core core-math-full-local-smoke`, `make -C core core-math-impl-simd-local-smoke`, and
 `make -C core core-math-trig-local-smoke`. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform

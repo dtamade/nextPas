@@ -42,16 +42,18 @@ Run the named module smoke when you want the public math gate:
 make -C core core-math-smoke
 ```
 
-Run the facade-only overview example directly when you only want the consumer compile/run proof:
+Run the named facade-only overview smoke when you only want the consumer compile/run proof:
 
 ```sh
-make -C core/examples/nextpas.core.math/math_overview clean run
+make -C core core-math-overview-local-smoke
 ```
 
 `core-math-api-surface-smoke` in `core/Makefile` wraps
 `make -C core/tests/nextpas.core.math/test_api_surface clean test` through a stable owner-level
-entrypoint. `core-math-smoke` calls that target first, then builds and runs the facade-only
-overview example. The example imports only `nextpas.core.math` and covers vectors, matrices,
+entrypoint. `core-math-overview-local-smoke` wraps
+`make -C core/examples/nextpas.core.math/math_overview clean run` through the same owner-level
+boundary. `core-math-smoke` calls the surface gate first, then reuses the overview gate for the
+facade-only consumer proof. The example imports only `nextpas.core.math` and covers vectors, matrices,
 quaternions, transforms, easing, deterministic random state, and noise.
 
 ## Scalar And Trig
