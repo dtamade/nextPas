@@ -213,6 +213,11 @@ begin
   Translate(Double(0.0), Double(0.0), DoubleInfinity);
 end;
 
+procedure RaiseTranslateInfinityYDouble;
+begin
+  Translate(Double(0.0), DoubleInfinity, Double(0.0));
+end;
+
 procedure RaiseScaleNaNSingle;
 begin
   Scale(Single(1.0), SingleNaN, Single(1.0));
@@ -221,6 +226,16 @@ end;
 procedure RaiseScaleInfinityDouble;
 begin
   Scale(Double(1.0), DoubleInfinity, Double(1.0));
+end;
+
+procedure RaiseScaleInfinityXDouble;
+begin
+  Scale(DoubleInfinity, Double(1.0), Double(1.0));
+end;
+
+procedure RaiseScaleNaNZSingle;
+begin
+  Scale(Single(1.0), Single(1.0), SingleNaN);
 end;
 
 procedure RaiseRotateZNaNSingle;
@@ -421,10 +436,18 @@ begin
     @RaiseLookAtInfiniteTargetSingle);
   ExpectArgumentErrorMessage('LookAt: up vector must be finite', 'LookAt double infinite up',
     @RaiseLookAtInfiniteUpDouble);
-  ExpectArgumentError('Translate single NaN', @RaiseTranslateNaNSingle);
-  ExpectArgumentError('Translate double infinity', @RaiseTranslateInfinityDouble);
-  ExpectArgumentError('Scale single NaN', @RaiseScaleNaNSingle);
-  ExpectArgumentError('Scale double infinity', @RaiseScaleInfinityDouble);
+  ExpectArgumentErrorMessage('Translate: X must be finite', 'Translate single NaN X',
+    @RaiseTranslateNaNSingle);
+  ExpectArgumentErrorMessage('Translate: Y must be finite', 'Translate double infinite Y',
+    @RaiseTranslateInfinityYDouble);
+  ExpectArgumentErrorMessage('Translate: Z must be finite', 'Translate double infinite Z',
+    @RaiseTranslateInfinityDouble);
+  ExpectArgumentErrorMessage('Scale: X must be finite', 'Scale double infinite X',
+    @RaiseScaleInfinityXDouble);
+  ExpectArgumentErrorMessage('Scale: Y must be finite', 'Scale single NaN Y',
+    @RaiseScaleNaNSingle);
+  ExpectArgumentErrorMessage('Scale: Z must be finite', 'Scale single NaN Z',
+    @RaiseScaleNaNZSingle);
   ExpectArgumentError('RotateZ single NaN', @RaiseRotateZNaNSingle);
   ExpectArgumentError('RotateY double infinity', @RaiseRotateYInfinityDouble);
   ExpectArgumentError('Camera2D single NaN zoom', @RaiseCamera2DNaNZoomSingle);
