@@ -41,7 +41,12 @@
 ## Module Lane Discipline
 
 - 一个 worktree 只负责一个模块或一条明确治理线。
-- 只改自己的模块路径；需要跨模块改动时，先在汇报中说明原因和风险。
+- 模块 lane 是默认责任边界，不是架构设计边界。默认只改自己的模块路径；如果当前模块质量必须依赖其他模块、底座 API 或架构边界修正，可以做受控跨模块修改。
+- 高层模块开发过程应当反哺低层模块。HTTP、TUI、config 等高层模块如果暴露出 platform、net、async、mem、base 等底层 contract 的设计缺陷，优先修正底层接口或实现，不要在高层堆 workaround 掩盖底层问题。
+- 受控跨模块修改必须先说明原因：不改会阻碍哪个设计目标、涉及哪些路径、风险是什么、需要哪些额外验证。
+- 跨模块改动必须是最小必要范围。不要借模块任务顺手重构无关模块，也不要偷偷把大范围架构迁移混进普通模块 slice。
+- 跨模块改动要同时验证被改模块和当前模块的 consumer 行为；`Ready` 报告必须单独列出 cross-module touched files、设计理由、风险和验证证据。
+- 如果跨模块影响面较大，先汇报 `Needs Review`，由总控决定是否拆成独立 cross-cutting lane 或 landing slice。
 - 不要 raw merge 长期模块 lane 到 `main`。进入主线前创建 landing candidate，做 path-limited replay、cherry-pick 或等价小提交。
 - 合并前必须证明：worktree clean、改动路径正确、focused verification 通过、`git diff --check` 通过、`make hygiene` 通过。
 - 合并后模块 lane 必须重新基于最新 `main` 收敛，已完全吸收的临时 landing worktree 要删除。
@@ -78,7 +83,7 @@
 - 函数保持单一职责，重复逻辑要提取公共函数。
 - 外部输入、路径、句柄、内存大小、整数边界都要做防御性检查。
 - 资源必须有清晰所有权，文件、进程、socket、内存、映射和锁都要可靠释放。
-- 不要绕过 owner boundary。platform、compiler、core 模块的边界变化要先看对应架构文档。
+- 不要绕过 owner boundary。需要改变 owner boundary 时，先看对应架构文档，并把边界变更作为显式设计决策记录在报告或文档中。
 
 ## Documentation
 
