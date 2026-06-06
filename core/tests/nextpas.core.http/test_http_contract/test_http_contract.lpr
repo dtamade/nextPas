@@ -858,6 +858,9 @@ begin
       nextpas.core.http.HTTP_STATUS_EARLY_HINTS), '103 facade');
   CheckEqual('OK', HttpStatusText(HTTP_STATUS_OK), '200');
   CheckEqual('Created', HttpStatusText(HTTP_STATUS_CREATED), '201');
+  CheckEqual('See Other',
+    nextpas.core.http.HttpStatusText(
+      nextpas.core.http.HTTP_STATUS_SEE_OTHER), '303 facade');
   CheckEqual('Payload Too Large',
     nextpas.core.http.HttpStatusText(
       nextpas.core.http.HTTP_STATUS_PAYLOAD_TOO_LARGE), '413 facade');

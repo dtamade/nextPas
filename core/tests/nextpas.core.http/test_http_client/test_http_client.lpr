@@ -909,6 +909,52 @@ begin
   end;
 end;
 
+procedure TestClientFollowsSeeOtherAsGet;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotFinalMethod: THttpMethod;
+  LGotFinalBody: string;
+begin
+  LGotFinalMethod := hmTrace;
+  LGotFinalBody := 'not-hit';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/submit', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.Set_('location', '/complete');
+    AW.GetHeaders.Set_('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_SEE_OTHER);
+  end);
+  LRouter.Get('/complete', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotFinalMethod := AReq.Method;
+    LGotFinalBody := ReadReaderStr(AReq.Body);
+    LB := 'done';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Post('http://127.0.0.1:' + IntToStr(Int64(LPort)) +
+      '/submit', 'text/plain', StringBodyReader('payload') as IReader);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      '303 redirect followed to final response');
+    Check(LGotFinalMethod = hmGet, '303 redirect changes POST to GET');
+    CheckEqual('', LGotFinalBody, '303 redirect drops original request body');
+    CheckEqual('done', ReadBodyStr(LResp), '303 final response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1162,6 +1208,7 @@ begin
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
+  T.Run('Client follows 303 redirect as GET', @TestClientFollowsSeeOtherAsGet);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);

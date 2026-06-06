@@ -68,6 +68,7 @@ const
   HTTP_STATUS_NO_CONTENT            = THttpStatus(204);
   HTTP_STATUS_MOVED_PERMANENTLY     = THttpStatus(301);
   HTTP_STATUS_FOUND                 = THttpStatus(302);
+  HTTP_STATUS_SEE_OTHER             = THttpStatus(303);
   HTTP_STATUS_NOT_MODIFIED          = THttpStatus(304);
   HTTP_STATUS_BAD_REQUEST           = THttpStatus(400);
   HTTP_STATUS_UNAUTHORIZED          = THttpStatus(401);
@@ -142,6 +143,7 @@ begin
     204: Result := 'No Content';
     301: Result := 'Moved Permanently';
     302: Result := 'Found';
+    303: Result := 'See Other';
     304: Result := 'Not Modified';
     400: Result := 'Bad Request';
     401: Result := 'Unauthorized';

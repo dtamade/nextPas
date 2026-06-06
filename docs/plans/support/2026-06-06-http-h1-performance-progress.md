@@ -1,5 +1,46 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http see-other redirect slice
+
+- **Status:** completed.
+- Objective:
+  - expose `303 See Other` through `http.base` and the facade
+  - make client redirect following treat `303` as replay-as-GET with no body
+- Scope and safety:
+  - touched HTTP base/facade/client source, base/contract/client tests, HTTP
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, transport/runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - failed to compile at `HTTP_STATUS_SEE_OTHER`:
+      `Identifier not found "HTTP_STATUS_SEE_OTHER"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at facade `HTTP_STATUS_SEE_OTHER`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile at the live `303` redirect test status constant
+- Landed change:
+  - added `HTTP_STATUS_SEE_OTHER = 303`
+  - `HttpStatusText(303)` now returns `See Other`
+  - facade `nextpas.core.http` re-exports `HTTP_STATUS_SEE_OTHER`
+  - `THttpClient.DoRequest` now follows `303` redirects and converts them to
+    bodyless `GET`, matching the existing `301/302` branch
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - `22/22 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `26/26 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - `POST` followed by `303 Location: ...` now lands on a `GET` request with
+    an empty body
+  - this does not claim per-request redirect override, timeout override, or
+    general replayable streaming-body ownership
+
 ## Session: 2026-06-06 http request string body helper slice
 
 - **Status:** completed.

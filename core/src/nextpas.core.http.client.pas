@@ -114,7 +114,9 @@ begin
 
   // Handle redirects
   if FOptions.FollowRedirects and
-     ((LResp.StatusCode = 301) or (LResp.StatusCode = 302) or
+     ((LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
+      (LResp.StatusCode = HTTP_STATUS_FOUND) or
+      (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) or
       (LResp.StatusCode = 307) or (LResp.StatusCode = 308)) then
   begin
     if ARedirectsLeft <= 0 then
@@ -135,8 +137,10 @@ begin
       LNewUrl.RawQuery := '';
     end;
 
-    // For 301/302, change method to GET (drop body)
-    if (LResp.StatusCode = 301) or (LResp.StatusCode = 302) then
+    // Go-style 301/302/303 redirects replay as GET and drop the body.
+    if (LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
+       (LResp.StatusCode = HTTP_STATUS_FOUND) or
+       (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) then
       LNewReq := THttpRequest.Create(hmGet, LNewUrl, hvHttp11, NewHttpHeaders, nil, 0)
     else
       LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11, NewHttpHeaders, AReq.Body, AReq.ContentLength);

@@ -1,5 +1,29 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http see-other redirect slice
+
+### Goal
+
+收紧 client redirect/error semantics：补齐 `303 See Other` status constant /
+facade visibility，并让 `IHttpClient` 跟随 `303` 时按 Go/Rust 常见 client
+语义把原请求改为 `GET` 且丢弃 body。该 slice 不改 `IHttpClient` vtable、
+transport、timeout 或 per-request redirect option。
+
+### Checklist
+
+- [x] RED：`test_http_base` 先要求 `HTTP_STATUS_SEE_OTHER` 与
+  `HttpStatusText(303) = 'See Other'`，当前编译失败于 status constant 缺失。
+- [x] RED：`test_http_contract` 先通过 facade 读取
+  `nextpas.core.http.HTTP_STATUS_SEE_OTHER`，当前编译失败，证明 facade 未暴露。
+- [x] RED：`test_http_client` 先启动 live server，POST `/submit` 返回 `303`
+  到 `/complete`，期望最终请求为 `GET` 且 body 为空；当前编译失败于 status
+  constant 缺失。
+- [x] GREEN：在 `http.base` / facade 增加 `HTTP_STATUS_SEE_OTHER` 与
+  status text，在 client redirect set 中加入 `303`，并沿用 `301/302` 的
+  replay-as-GET/drop-body 分支。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_base`、`test_http_contract`、`test_http_client`。
+
 ## Active Session: 2026-06-06 http request string body helper slice
 
 ### Goal

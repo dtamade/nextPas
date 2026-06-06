@@ -84,6 +84,7 @@ begin
   CheckEqual('No Content', HttpStatusText(204), '204');
   CheckEqual('Moved Permanently', HttpStatusText(301), '301');
   CheckEqual('Found', HttpStatusText(302), '302');
+  CheckEqual('See Other', HttpStatusText(HTTP_STATUS_SEE_OTHER), '303');
   CheckEqual('Not Modified', HttpStatusText(304), '304');
   CheckEqual('Bad Request', HttpStatusText(400), '400');
   CheckEqual('Unauthorized', HttpStatusText(401), '401');

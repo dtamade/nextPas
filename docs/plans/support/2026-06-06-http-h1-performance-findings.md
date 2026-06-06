@@ -1,5 +1,44 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http see-other redirect slice
+
+- 本轮继续收紧 client redirect/error semantics：
+  HTTP status surface 里缺少 `303 See Other`，client redirect set 也只覆盖
+  `301/302/307/308`。
+- 选择依据：
+  - Go `net/http` 与 Rust 常见 client surface 都把 `303 See Other` 视作常见
+    redirect 语义，POST 后跳转到 GET 结果页是核心使用面，不是边角 malformed case。
+  - 这是 redirect/status contract tightening，不改 `IHttpClient` vtable、
+    transport、timeout、连接池或 request helper。
+  - `303` 明确应丢弃原 body；`307/308` 继续保持既有 method/body preservation
+    语义，本轮不扩大到 body replay ownership 设计。
+- 实现决策：
+  - `HTTP_STATUS_SEE_OTHER = 303` 进入 `http.base` 与 facade。
+  - `HttpStatusText(303)` 返回 `See Other`。
+  - `THttpClient.DoRequest` 将 `303` 纳入 redirect set，并与 `301/302`
+    一样构造无 body 的 `GET` follow-up request。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - 编译失败：`Identifier not found "HTTP_STATUS_SEE_OTHER"`。
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败：`Identifier not found "HTTP_STATUS_SEE_OTHER"`。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败：`Identifier not found "HTTP_STATUS_SEE_OTHER"`。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_base clean test`
+    - `22/22 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `26/26 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 client redirect 语义真实缺口，不是扩大 builder 或继续铺
+  malformed wire case。后续若继续 client 侧，应优先单独审计 redirect override、
+  per-request timeout 与 body replay ownership，而不是把这些塞进 `303` slice。
+
 ## 2026-06-06 http request string body helper slice
 
 - 本轮继续收紧 client request construction ergonomics：
