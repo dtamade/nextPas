@@ -123,49 +123,139 @@ begin
   Noise := TNoiseGen.Create(1);
   try
     Caught := False;
+    ErrorMessage := '';
     try
       Noise.FBM1D(0.25, 0);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'FBM rejects non-positive octaves');
+    CheckEqual('TNoiseGen.FBM1D: AOctaves must be positive', ErrorMessage,
+      'FBM1D reports owner-level positive-contract message for octaves');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Noise.FBM2D(0.25, 0.75, 3, 0.0, 0.5);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'FBM rejects non-positive lacunarity');
+    CheckEqual('TNoiseGen.FBM2D: ALacunarity must be positive', ErrorMessage,
+      'FBM2D reports owner-level positive-contract message for zero lacunarity');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Noise.FBM3D(0.25, 0.75, 1.25, 3, 2.0, 0.0);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'FBM rejects non-positive gain');
+    CheckEqual('TNoiseGen.FBM3D: AGain must be positive', ErrorMessage,
+      'FBM3D reports owner-level positive-contract message for zero gain');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Noise.FBM2D(0.25, 0.75, 3, DoubleInfinity, 0.5);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'FBM rejects infinite lacunarity');
+    CheckEqual('TNoiseGen.FBM2D: ALacunarity must be positive', ErrorMessage,
+      'FBM2D reports owner-level positive-contract message for infinite lacunarity');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Noise.FBM3D(0.25, 0.75, 1.25, 3, 2.0, DoubleInfinity);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'FBM rejects infinite gain');
+    CheckEqual('TNoiseGen.FBM3D: AGain must be positive', ErrorMessage,
+      'FBM3D reports owner-level positive-contract message for infinite gain');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM1D(0.25, 3, -2.0, 0.5);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM1D rejects negative lacunarity');
+    CheckEqual('TNoiseGen.FBM1D: ALacunarity must be positive', ErrorMessage,
+      'FBM1D reports owner-level positive-contract message for negative lacunarity');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(0.25, 0.75, 3, DoubleNaN, 0.5);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects NaN lacunarity');
+    CheckEqual('TNoiseGen.FBM2D: ALacunarity must be positive', ErrorMessage,
+      'FBM2D reports owner-level positive-contract message for NaN lacunarity');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM1D(0.25, 3, 2.0, -0.5);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM1D rejects negative gain');
+    CheckEqual('TNoiseGen.FBM1D: AGain must be positive', ErrorMessage,
+      'FBM1D reports owner-level positive-contract message for negative gain');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 0.75, 1.25, 3, 2.0, DoubleNaN);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects NaN gain');
+    CheckEqual('TNoiseGen.FBM3D: AGain must be positive', ErrorMessage,
+      'FBM3D reports owner-level positive-contract message for NaN gain');
 
     Caught := False;
     ErrorMessage := '';

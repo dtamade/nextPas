@@ -58,9 +58,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   probability clamp, dice rules, `RollMultiple` integer-overflow owner boundary, weighted choice,
   shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
-  reference vectors, invalid FBM inputs, finite-combination overflow contracts for coordinates,
-  amplitudes, and accumulated results, precision-ceiling stored-value semantics, and heaptrc-clean
-  object ownership.
+  reference vectors, invalid FBM octave/lacunarity/gain inputs with owner-level messages,
+  finite-combination overflow contracts for coordinates, amplitudes, and accumulated results,
+  precision-ceiling stored-value semantics, and heaptrc-clean object ownership.
 - The public surface checker requires the random/noise declarations and rejects public global
   random/noise singleton variables.
 - `nextpas.core.math.impl.simd` now exists as an internal implementation seam for selected
@@ -283,8 +283,10 @@ Status:
   choice rejects empty, negative, and all-zero weights.
 - `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
   `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
-  `EArgumentError`, and finite parameter combinations that would make octave coordinates,
-  amplitudes, or accumulated results non-finite also fail fast at the `FBM*` owner boundary.
+  `EArgumentError`; `test_noise` now directly locks zero, negative, and non-finite
+  lacunarity/gain branches plus owner-level messages, and finite parameter combinations that would
+  make octave coordinates, amplitudes, or accumulated results non-finite also fail fast at the
+  `FBM*` owner boundary.
 - `test_random`, `test_noise`, `test_facade`, and `test_api_surface` lock behavior, facade export,
   public-surface declarations, no global heap singleton, and heaptrc clean object lifetimes.
 

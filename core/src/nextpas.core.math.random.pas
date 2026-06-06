@@ -385,9 +385,9 @@ class procedure TNoiseGen.ValidateFBMInputs(const AFunctionName: string; const A
 begin
   if AOctaves <= 0 then
     raise EArgumentError.Create(AFunctionName + ': AOctaves must be positive');
-  if (ALacunarity <= 0.0) or (not IsFinite(ALacunarity)) then
+  if (not IsFinite(ALacunarity)) or (ALacunarity <= 0.0) then
     raise EArgumentError.Create(AFunctionName + ': ALacunarity must be positive');
-  if (AGain <= 0.0) or (not IsFinite(AGain)) then
+  if (not IsFinite(AGain)) or (AGain <= 0.0) then
     raise EArgumentError.Create(AFunctionName + ': AGain must be positive');
 end;
 
