@@ -129,6 +129,30 @@ begin
   TQuatd.FromAxisAngle(TVec3d.Create(DoubleInfinity, 0.0, 1.0), HALF_PI);
 end;
 
+procedure RaiseQuatfSlerpNaNT;
+begin
+  TQuatf.Slerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleNaN);
+end;
+
+procedure RaiseQuatfNlerpInfiniteT;
+begin
+  TQuatf.Nlerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleInfinity);
+end;
+
+procedure RaiseQuatdSlerpNaNT;
+begin
+  TQuatd.Slerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    DoubleNaN);
+end;
+
+procedure RaiseQuatdNlerpInfiniteT;
+begin
+  TQuatd.Nlerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    DoubleInfinity);
+end;
+
 function QuarterTurnZf: TQuatf;
 begin
   Result := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI));
@@ -227,10 +251,23 @@ begin
     'TQuatd FromAxisAngle infinite axis', @RaiseQuatdFromAxisAngleInfiniteAxis);
 end;
 
+procedure TestInterpolationRejectsNonFiniteT;
+begin
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
+    'TQuatf Slerp NaN t', @RaiseQuatfSlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AT must be finite',
+    'TQuatf Nlerp infinite t', @RaiseQuatfNlerpInfiniteT);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AT must be finite',
+    'TQuatd Slerp NaN t', @RaiseQuatdSlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AT must be finite',
+    'TQuatd Nlerp infinite t', @RaiseQuatdNlerpInfiniteT);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
   T.Run('TQuatd contracts', @TestQuatdContracts);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
+  T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Summary;
 end.

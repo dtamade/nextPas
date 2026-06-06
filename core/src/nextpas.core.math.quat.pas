@@ -104,6 +104,20 @@ begin
     raise EArgumentError.Create(AFunctionName + ': AAngleRad must be finite');
 end;
 
+procedure ValidateInterpolationFactorInputs(const AFunctionName: string;
+  const AT: Single); overload; inline;
+begin
+  if not IsFinite(AT) then
+    raise EArgumentError.Create(AFunctionName + ': AT must be finite');
+end;
+
+procedure ValidateInterpolationFactorInputs(const AFunctionName: string;
+  const AT: Double); overload; inline;
+begin
+  if not IsFinite(AT) then
+    raise EArgumentError.Create(AFunctionName + ': AT must be finite');
+end;
+
 function QuatLengthSqr(const AX, AY, AZ, AW: Single): Single; inline;
 begin
   Result := AX * AX + AY * AY + AZ * AZ + AW * AW;
@@ -206,6 +220,7 @@ var
   WeightA: Single;
   WeightB: Single;
 begin
+  ValidateInterpolationFactorInputs('TQuatf.Slerp', AT);
   StartQuat := AA.Normalize;
   EndQuat := AB.Normalize;
   CosTheta := QuatDot(StartQuat, EndQuat);
@@ -237,6 +252,7 @@ var
   StartQuat: TQuatf;
   EndQuat: TQuatf;
 begin
+  ValidateInterpolationFactorInputs('TQuatf.Nlerp', AT);
   StartQuat := AA.Normalize;
   EndQuat := AB.Normalize;
   if QuatDot(StartQuat, EndQuat) < 0.0 then
@@ -371,6 +387,7 @@ var
   WeightA: Double;
   WeightB: Double;
 begin
+  ValidateInterpolationFactorInputs('TQuatd.Slerp', AT);
   StartQuat := AA.Normalize;
   EndQuat := AB.Normalize;
   CosTheta := QuatDot(StartQuat, EndQuat);
@@ -402,6 +419,7 @@ var
   StartQuat: TQuatd;
   EndQuat: TQuatd;
 begin
+  ValidateInterpolationFactorInputs('TQuatd.Nlerp', AT);
   StartQuat := AA.Normalize;
   EndQuat := AB.Normalize;
   if QuatDot(StartQuat, EndQuat) < 0.0 then
