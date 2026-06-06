@@ -83,6 +83,12 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const ABody: IReader; const AContentLength: Int64): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
@@ -93,6 +99,10 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const ABodyText: string): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType, ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType, ABodyText: string): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest; overload;
@@ -100,6 +110,10 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABodyBytes: TBytes): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: string;
@@ -140,6 +154,14 @@ begin
     Result := AHeaders
   else
     Result := NewHttpHeaders;
+end;
+
+function NewRequestContentTypeHeaders(const AContentType: string): IHttpHeaders;
+begin
+  if AContentType = '' then
+    Exit(nil);
+  Result := NewHttpHeaders;
+  Result.Set_('content-type', AContentType);
 end;
 
 { THttpRequest }
@@ -374,6 +396,22 @@ begin
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl,
+    NewRequestContentTypeHeaders(AContentType), ABody, AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABody,
+    AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64): IHttpRequest;
 var
@@ -412,6 +450,19 @@ begin
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType, ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl,
+    NewRequestContentTypeHeaders(AContentType), ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType, ABodyText: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABodyText);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABodyText: string): IHttpRequest;
 begin
   Result := NewRequest(AMethod, AUrl, AHeaders, StringBodyReader(ABodyText),
@@ -434,6 +485,19 @@ function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const ABodyBytes: TBytes): IHttpRequest;
 begin
   Result := NewRequest(AMethod, TUrl.Parse(AUrl), nil, ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, AUrl,
+    NewRequestContentTypeHeaders(AContentType), ABodyBytes);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType: string; const ABodyBytes: TBytes): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AContentType, ABodyBytes);
 end;
 
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;

@@ -958,6 +958,121 @@ begin
   end;
 end;
 
+procedure TestClientDoWithRequestHelperStringBodyAndContentTypeWithoutHeaders;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LGotContentType: string;
+  LGotContentLength: Int64;
+  LGotHeaderCount: Int64;
+  LGotBody: string;
+begin
+  LGotContentType := '';
+  LGotContentLength := -1;
+  LGotHeaderCount := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/content-type-string', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotContentLength := AReq.ContentLength;
+    LGotHeaderCount := AReq.Headers.Count;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LReq := nextpas.core.http.NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-string',
+      'text/plain; charset=utf-8', 'payload');
+
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('text/plain; charset=utf-8', LGotContentType,
+      'content-type forwarded');
+    CheckEqual(Int64(7), LGotContentLength, 'content-length forwarded');
+    CheckEqual('payload', LGotBody, 'body forwarded');
+    Check(LGotHeaderCount >= 2,
+      'string helper publishes content-length and content-type headers');
+    CheckEqual('ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientDoWithRequestHelperBytesBodyAndContentTypeWithoutHeaders;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LBody: TBytes;
+  LGotContentType: string;
+  LGotContentLength: Int64;
+  LGotHeaderCount: Int64;
+  LGotBody: string;
+begin
+  LGotContentType := '';
+  LGotContentLength := -1;
+  LGotHeaderCount := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/content-type-bytes', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotContentLength := AReq.ContentLength;
+    LGotHeaderCount := AReq.Headers.Count;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    SetLength(LBody, 3);
+    LBody[0] := Ord('b');
+    LBody[1] := 0;
+    LBody[2] := 255;
+    LReq := nextpas.core.http.NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/content-type-bytes',
+      'application/octet-stream', LBody);
+
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('application/octet-stream', LGotContentType,
+      'content-type forwarded');
+    CheckEqual(Int64(3), LGotContentLength, 'content-length forwarded');
+    CheckEqual('b' + #0 + #255, LGotBody, 'bytes body forwarded');
+    Check(LGotHeaderCount >= 2,
+      'bytes helper publishes content-length and content-type headers');
+    CheckEqual('ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 procedure TestClientShortcutBodyImplementationUsesBytesBuffer;
 var
   LSource: string;
@@ -2707,6 +2822,10 @@ begin
     @TestClientDoWithRequestHelperStringBodyWithoutHeaders);
   T.Run('Client Do uses NewRequest bytes body helper without headers',
     @TestClientDoWithRequestHelperBytesBodyWithoutHeaders);
+  T.Run('Client Do uses NewRequest string body helper with content-type without headers',
+    @TestClientDoWithRequestHelperStringBodyAndContentTypeWithoutHeaders);
+  T.Run('Client Do uses NewRequest bytes body helper with content-type without headers',
+    @TestClientDoWithRequestHelperBytesBodyAndContentTypeWithoutHeaders);
   T.Run('Client shortcut bodies use bytes buffer',
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Run('Client POST string body overload',

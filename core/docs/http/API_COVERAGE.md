@@ -58,6 +58,15 @@
     `IHttpClient.Do_` 发送路径。这样调用方可以像 Go `NewRequest(...)` /
     Rust 常见 request body helper 那样先表达 method/url/body，再按需决定是否
     追加 custom headers，而不必为了“无自定义头”也先分配一个 header 容器。
+  - 继续补齐：新增 `NewRequest(Method, Url, ContentType, BodyText)`、
+    `NewRequest(Method, Url, ContentType, BodyBytes)` 与
+    `NewRequest(Method, Url, ContentType, Body, ContentLength)` public helper。
+    这组 overload 解决了“调用方只想声明 request body 的 `Content-Type`，却仍得先
+    手造一个 headers 容器”的剩余 ergonomics 缺口。helper 只发布调用方显式提供的
+    `content-type` 与既有 `content-length`，不再额外猜测其他 header，也不上完整
+    builder family。`test_http_message`、`test_http_contract` 与
+    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
+    `IHttpClient.Do_` 发送路径。
   - 继续收紧：`IHttpClient.Post` / `Put` / `Patch` shortcut 现在共享内部
     bytes-buffer request helper。它们仍会读取 `IReader` 以发布 `Content-Length`，
     但不再先 materialize 到 Pascal string 再转回 bytes；`test_http_client` 用

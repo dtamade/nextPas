@@ -538,6 +538,61 @@ begin
     'Facade NewRequest(TUrl, reader body) without headers sets content-length');
 end;
 
+procedure TestNewRequestContentTypeBodyFacadeOverloads;
+var
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LBody: TBytes;
+  LStream: IStream;
+  LStreamBytes: TBytes;
+begin
+  LUrl := TUrl.Parse('http://example.com/content-type-body');
+
+  LReq := nextpas.core.http.NewRequest(hmPost, LUrl,
+    'text/plain; charset=utf-8', 'hello');
+  Check(LReq <> nil,
+    'Facade NewRequest(TUrl, content-type, string body) returns non-nil');
+  Check(LReq.Method = hmPost,
+    'Facade NewRequest(TUrl, content-type, string body) preserves method');
+  CheckEqual('text/plain; charset=utf-8', LReq.Headers.Get('content-type'),
+    'Facade NewRequest(TUrl, content-type, string body) sets content-type');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(TUrl, content-type, string body) sets content-length');
+
+  SetLength(LBody, 3);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+  LReq := nextpas.core.http.NewRequest(hmPatch,
+    'http://example.com/content-type-bytes',
+    'application/octet-stream', LBody);
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, content-type, bytes body) returns non-nil');
+  Check(LReq.Method = hmPatch,
+    'Facade NewRequest(string URL, content-type, bytes body) preserves method');
+  CheckEqual('application/octet-stream', LReq.Headers.Get('content-type'),
+    'Facade NewRequest(string URL, content-type, bytes body) sets content-type');
+  CheckEqual('3', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(string URL, content-type, bytes body) sets content-length');
+
+  SetLength(LStreamBytes, 4);
+  LStreamBytes[0] := Ord('d');
+  LStreamBytes[1] := Ord('a');
+  LStreamBytes[2] := Ord('t');
+  LStreamBytes[3] := Ord('a');
+  LStream := CreateBytesStreamFrom(LStreamBytes);
+  LReq := nextpas.core.http.NewRequest(hmPut, LUrl,
+    'application/custom', LStream as IReader, 4);
+  Check(LReq <> nil,
+    'Facade NewRequest(TUrl, content-type, reader body) returns non-nil');
+  Check(LReq.Method = hmPut,
+    'Facade NewRequest(TUrl, content-type, reader body) preserves method');
+  CheckEqual('application/custom', LReq.Headers.Get('content-type'),
+    'Facade NewRequest(TUrl, content-type, reader body) sets content-type');
+  CheckEqual('4', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(TUrl, content-type, reader body) sets content-length');
+end;
+
 procedure TestHttpClientShortcutBodyFacadeOverloads;
 var
   LTransport: IHttpTransport;
@@ -1377,6 +1432,8 @@ begin
     @TestNewRequestStringUrlFacadeOverloads);
   T.Run('NewRequest no-headers body overloads are available through facade',
     @TestNewRequestNoHeadersBodyFacadeOverloads);
+  T.Run('NewRequest content-type body overloads are available through facade',
+    @TestNewRequestContentTypeBodyFacadeOverloads);
   T.Run('HttpClient shortcut body overloads are available through facade',
     @TestHttpClientShortcutBodyFacadeOverloads);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);

@@ -286,6 +286,101 @@ begin
     'reader body without headers helper stores content-length');
 end;
 
+procedure TestNewRequestWithStringBodyAndContentTypeWithoutHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LUrl := TUrl.Parse('http://example.com/submit');
+
+  LReq := NewRequest(hmPost, LUrl, 'text/plain; charset=utf-8', 'hello');
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'string body with content-type helper method');
+  Check(LReq.Headers <> nil,
+    'string body with content-type helper creates headers');
+  CheckEqual(Int64(2), Int64(LReq.Headers.Count),
+    'string body with content-type helper publishes content-length and content-type');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'string body with content-type helper sets content-length');
+  CheckEqual('text/plain; charset=utf-8', LReq.Headers.Get('content-type'),
+    'string body with content-type helper sets content-type');
+  CheckEqual(Int64(5), LReq.ContentLength,
+    'string body with content-type helper stores content-length');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(5), Int64(LN),
+    'string body with content-type helper body length');
+  CheckEqual(Byte(Ord('h')), LBuf[0],
+    'string body with content-type helper first byte');
+end;
+
+procedure TestNewRequestWithBytesBodyAndContentTypeWithoutHeaders;
+var
+  LReq: IHttpRequest;
+  LBody: TBytes;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  SetLength(LBody, 3);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+
+  LReq := NewRequest(hmPatch, 'http://example.com/upload',
+    'application/octet-stream', LBody);
+
+  CheckEqual(Int64(Ord(hmPatch)), Int64(Ord(LReq.Method)),
+    'bytes body with content-type helper method');
+  Check(LReq.Headers <> nil,
+    'bytes body with content-type helper creates headers');
+  CheckEqual(Int64(2), Int64(LReq.Headers.Count),
+    'bytes body with content-type helper publishes content-length and content-type');
+  CheckEqual('3', LReq.Headers.Get('content-length'),
+    'bytes body with content-type helper sets content-length');
+  CheckEqual('application/octet-stream', LReq.Headers.Get('content-type'),
+    'bytes body with content-type helper sets content-type');
+  CheckEqual(Int64(3), LReq.ContentLength,
+    'bytes body with content-type helper stores content-length');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(3), Int64(LN),
+    'bytes body with content-type helper body length');
+  CheckEqual(Byte(0), LBuf[1],
+    'bytes body with content-type helper preserves zero byte');
+  CheckEqual(Byte(255), LBuf[2],
+    'bytes body with content-type helper preserves high byte');
+end;
+
+procedure TestNewRequestWithReaderBodyAndContentTypeWithoutHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LBody: IStream;
+  LData: TBytes;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  SetLength(LData, 4);
+  Move('data'[1], LData[0], 4);
+  LBody := CreateBytesStreamFrom(LData);
+
+  LReq := NewRequest(hmPut, LUrl, 'application/custom',
+    LBody as IReader, 4);
+
+  CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
+    'reader body with content-type helper method');
+  Check(LReq.Headers <> nil,
+    'reader body with content-type helper creates headers');
+  CheckEqual(Int64(2), Int64(LReq.Headers.Count),
+    'reader body with content-type helper publishes content-length and content-type');
+  CheckEqual('4', LReq.Headers.Get('content-length'),
+    'reader body with content-type helper sets content-length');
+  CheckEqual('application/custom', LReq.Headers.Get('content-type'),
+    'reader body with content-type helper sets content-type');
+  CheckEqual(Int64(4), LReq.ContentLength,
+    'reader body with content-type helper stores content-length');
+end;
+
 procedure TestNewRequestWithNilHeadersCreatesHeaders;
 var
   LUrl: TUrl;
@@ -629,6 +724,12 @@ begin
     @TestNewRequestWithBytesBodyWithoutHeaders);
   T.Run('NewRequest accepts reader body helper without headers',
     @TestNewRequestWithReaderBodyWithoutHeaders);
+  T.Run('NewRequest accepts string body and content-type helper without headers',
+    @TestNewRequestWithStringBodyAndContentTypeWithoutHeaders);
+  T.Run('NewRequest accepts bytes body and content-type helper without headers',
+    @TestNewRequestWithBytesBodyAndContentTypeWithoutHeaders);
+  T.Run('NewRequest accepts reader body and content-type helper without headers',
+    @TestNewRequestWithReaderBodyAndContentTypeWithoutHeaders);
   T.Run('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
   T.Run('Request constructors create headers when headers argument is nil',
