@@ -1,5 +1,46 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http redirect response body release slice
+
+- **Status:** completed.
+- Objective:
+  - release intermediate redirect response bodies before issuing follow-up
+    requests
+  - prefer close when the body exposes close semantics; drain plain `IReader`
+    bodies to EOF otherwise
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - close-capable RED used an injected `IHttpTransport`
+  - first response returned `302 Location: /final` with an `IReadCloser` body
+  - second `RoundTrip` checked whether the first body had been closed
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `41 total, 40 passed, 1 failed`
+    - failed at `Client closes redirect response body before follow-up`
+    - expected body closed before follow-up
+    - heaptrc: `0 unfreed memory blocks`
+  - non-closeable RED used a plain `IReader` body and a temporary no-drain
+    implementation
+  - the same focused gate failed at
+    `Client drains redirect response body before follow-up`
+- Landed change:
+  - added internal `ReleaseRedirectResponseBody`
+  - close-capable bodies are closed via `IReadCloser`, `ICloser`, or `IStream`
+  - plain `IReader` bodies are drained to EOF
+  - redirect error branches that discard the response also release the body
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `42/42 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected/future streaming transports now get a clear ownership signal when
+    automatic redirect following discards an intermediate response
+  - this does not claim a new public response streaming API, redirect callback,
+    cookie jar, or broader H1 transport redesign
+
 ## Session: 2026-06-06 http redirect default-port authority slice
 
 - **Status:** completed.

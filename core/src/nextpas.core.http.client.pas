@@ -240,6 +240,38 @@ begin
   ABodyStream.Position := AStartPosition;
 end;
 
+procedure ReleaseRedirectResponseBody(const AResp: IHttpResponse);
+var
+  LBody: IReader;
+  LReadCloser: IReadCloser;
+  LCloser: ICloser;
+  LStream: IStream;
+  LBuf: array[0..4095] of Byte;
+begin
+  if (AResp = nil) or (AResp.Body = nil) then
+    Exit;
+  LBody := AResp.Body;
+
+  if Supports(LBody, IReadCloser, LReadCloser) then
+  begin
+    LReadCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, ICloser, LCloser) then
+  begin
+    LCloser.Close;
+    Exit;
+  end;
+  if Supports(LBody, IStream, LStream) then
+  begin
+    LStream.Close;
+    Exit;
+  end;
+
+  while LBody.Read(LBuf[0], SizeUInt(Length(LBuf))) > 0 do
+    ;
+end;
+
 procedure RemoveLastPathSegment(var AOutput: string);
 var
   LI: SizeInt;
@@ -394,11 +426,19 @@ begin
       (LResp.StatusCode = 307) or (LResp.StatusCode = 308)) then
   begin
     if ARedirectsLeft <= 0 then
+    begin
+      ReleaseRedirectResponseBody(LResp);
       raise EHttpError.Create('too many redirects');
+    end;
 
     LLocation := LResp.Headers.Get('location');
     if LLocation = '' then
+    begin
+      ReleaseRedirectResponseBody(LResp);
       raise EHttpError.Create('redirect with no Location header');
+    end;
+
+    ReleaseRedirectResponseBody(LResp);
 
     LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
 

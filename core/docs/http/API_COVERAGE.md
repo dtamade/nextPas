@@ -76,6 +76,12 @@
     仍删除旧 Host，让 transport 从新 URL 派生 wire host。`test_http_client`
     用注入 transport 锁住 relative redirect 与 default-port redirect 的
     Host ownership。
+  - 继续收紧：client 跟随 redirect 时，现在会在 follow-up round trip 前释放
+    上一跳 redirect response body。支持 `IReadCloser` / `ICloser` / `IStream`
+    close 语义的 body 会被关闭；只有 plain `IReader` 能力的 body 会被 drain
+    到 EOF。`test_http_client` 用注入 transport 分别锁住 close-capable body
+    和 non-closeable body 的 release 语义，避免 custom/future streaming
+    transport 在 redirect 路径上泄漏被丢弃的响应 body 或污染连接复用。
   - 继续收紧：relative redirect `Location` 现在会在 client redirect 层解析
     path/query/fragment，再构造 follow-up request。live H1 wire path 和显式注入
     `IHttpTransport` 的 transport-visible request 都已证明 `/new?x=...` 不会把

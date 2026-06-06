@@ -94,6 +94,55 @@ type
     function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
   end;
 
+  TRedirectTrackedBody = class(TInterfacedObject, IReader, IReadCloser)
+  private
+    FData: string;
+    FPos: SizeInt;
+    FClosed: Boolean;
+  public
+    constructor Create(const AData: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    procedure Close;
+    property Closed: Boolean read FClosed;
+  end;
+
+  TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FCalls: Int32;
+    FBody: TRedirectTrackedBody;
+    FBodyRef: IReadCloser;
+    FBodyClosedBeforeFollowup: Boolean;
+  public
+    constructor Create;
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property Calls: Int32 read FCalls;
+    property BodyClosedBeforeFollowup: Boolean read FBodyClosedBeforeFollowup;
+  end;
+
+  TRedirectDrainingBody = class(TInterfacedObject, IReader)
+  private
+    FData: string;
+    FPos: SizeInt;
+    FDrained: Boolean;
+  public
+    constructor Create(const AData: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+    property Drained: Boolean read FDrained;
+  end;
+
+  TRedirectBodyDrainTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FCalls: Int32;
+    FBody: TRedirectDrainingBody;
+    FBodyRef: IReader;
+    FBodyDrainedBeforeFollowup: Boolean;
+  public
+    constructor Create;
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property Calls: Int32 read FCalls;
+    property BodyDrainedBeforeFollowup: Boolean read FBodyDrainedBeforeFollowup;
+  end;
+
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
   LCtx: PServerCtx;
@@ -284,6 +333,116 @@ begin
     Result := SizeUInt(LRemaining);
   Move(FData[FPos], ABuf, Result);
   Inc(FPos, SizeInt(Result));
+end;
+
+constructor TRedirectTrackedBody.Create(const AData: string);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 1;
+  FClosed := False;
+end;
+
+function TRedirectTrackedBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeInt;
+begin
+  if FClosed or (ACount = 0) or (FPos > Length(FData)) then
+    Exit(0);
+  LRemaining := Length(FData) - FPos + 1;
+  if SizeUInt(LRemaining) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LRemaining);
+  Move(FData[FPos], ABuf, Result);
+  Inc(FPos, SizeInt(Result));
+end;
+
+procedure TRedirectTrackedBody.Close;
+begin
+  FClosed := True;
+end;
+
+constructor TRedirectBodyReleaseTransport.Create;
+begin
+  inherited Create;
+  FBody := TRedirectTrackedBody.Create('redirect-body');
+  FBodyRef := FBody as IReadCloser;
+end;
+
+function TRedirectBodyReleaseTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  Inc(FCalls);
+  LHeaders := NewHttpHeaders;
+  if FCalls = 1 then
+  begin
+    LHeaders.Set_('location', '/final');
+    LHeaders.Set_('content-length', '13');
+    Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef as IReader));
+  end;
+
+  FBodyClosedBeforeFollowup := FBody.Closed;
+  LHeaders.Set_('content-length', '7');
+  if FBodyClosedBeforeFollowup then
+    Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'))
+  else
+    Result := NewResponse(THttpStatus(599), LHeaders, StringBodyReader('leaked!'));
+end;
+
+constructor TRedirectDrainingBody.Create(const AData: string);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 1;
+  FDrained := False;
+end;
+
+function TRedirectDrainingBody.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeInt;
+begin
+  if (ACount = 0) or (FPos > Length(FData)) then
+  begin
+    FDrained := True;
+    Exit(0);
+  end;
+  LRemaining := Length(FData) - FPos + 1;
+  if SizeUInt(LRemaining) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LRemaining);
+  Move(FData[FPos], ABuf, Result);
+  Inc(FPos, SizeInt(Result));
+end;
+
+constructor TRedirectBodyDrainTransport.Create;
+begin
+  inherited Create;
+  FBody := TRedirectDrainingBody.Create('redirect-body');
+  FBodyRef := FBody as IReader;
+end;
+
+function TRedirectBodyDrainTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  Inc(FCalls);
+  LHeaders := NewHttpHeaders;
+  if FCalls = 1 then
+  begin
+    LHeaders.Set_('location', '/final');
+    LHeaders.Set_('content-length', '13');
+    Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef));
+  end;
+
+  FBodyDrainedBeforeFollowup := FBody.Drained;
+  LHeaders.Set_('content-length', '7');
+  if FBodyDrainedBeforeFollowup then
+    Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'))
+  else
+    Result := NewResponse(THttpStatus(599), LHeaders, StringBodyReader('leaked!'));
 end;
 
 function DownloadTempRoot: string;
@@ -1452,6 +1611,52 @@ begin
     'default-port redirect final body');
 end;
 
+procedure TestClientClosesRedirectResponseBodyBeforeFollowup;
+var
+  LTransportObj: TRedirectBodyReleaseTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectBodyReleaseTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LResp := LClient.Get('http://example.test/old');
+
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'redirect with body performs second round trip');
+  Check(LTransportObj.BodyClosedBeforeFollowup,
+    'redirect response body is closed before follow-up round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'redirect body release final status');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'redirect body release final body');
+end;
+
+procedure TestClientDrainsRedirectResponseBodyBeforeFollowup;
+var
+  LTransportObj: TRedirectBodyDrainTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectBodyDrainTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LResp := LClient.Get('http://example.test/old');
+
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'redirect with non-closeable body performs second round trip');
+  Check(LTransportObj.BodyDrainedBeforeFollowup,
+    'non-closeable redirect response body is drained before follow-up round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'redirect body drain final status');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'redirect body drain final body');
+end;
+
 procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -1789,6 +1994,10 @@ begin
     @TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation);
   T.Run('Client redirect preserves custom host header on default-port authority',
     @TestClientRedirectPreservesCustomHostHeaderOnDefaultPortAuthority);
+  T.Run('Client closes redirect response body before follow-up',
+    @TestClientClosesRedirectResponseBodyBeforeFollowup);
+  T.Run('Client drains redirect response body before follow-up',
+    @TestClientDrainsRedirectResponseBodyBeforeFollowup);
   T.Run('Client replays seekable body on 307 redirect',
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
   T.Run('Client rejects non-replayable body on 307 redirect',

@@ -1,5 +1,28 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http redirect response body release slice
+
+### Goal
+
+收紧 client redirect response body ownership：follow redirect 时上一跳
+redirect response 不会返回给调用方，因此 client 必须在进入 follow-up
+`RoundTrip` 前释放上一跳 body。close-capable body 走 close；plain `IReader`
+fallback drain 到 EOF，避免 injected/future streaming transport 在 redirect
+路径上泄漏被丢弃 body 或污染连接复用。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 返回 `IReadCloser`
+  redirect body，证明当前第二次 `RoundTrip` 前没有 close。
+- [x] RED：补 non-closeable `IReader` redirect body，并用临时 no-drain
+  实现证明测试会失败在未 drain。
+- [x] GREEN：新增内部 response body release helper；`IReadCloser` /
+  `ICloser` / `IStream` 优先 close，plain `IReader` drain 到 EOF。
+- [x] 保持本 slice 边界：不新增 redirect policy、cookie jar、streaming
+  response public API 或 transport vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http redirect default-port authority slice
 
 ### Goal

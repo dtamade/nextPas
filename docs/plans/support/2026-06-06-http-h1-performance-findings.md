@@ -1,5 +1,48 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http redirect response body release slice
+
+- 本轮转向 client redirect response body ownership：
+  `THttpClient.DoRequest` 在收到 redirect response 后直接构造 follow-up request，
+  没有释放上一跳 response body。默认 H1 transport 当前会在返回前把
+  fixed/chunked/close-delimited body 收到内存 reader，所以 live H1 connection
+  reuse 不会立刻被未消费 body 污染；但 injected/future streaming transport seam
+  仍会看到被丢弃的 response body 没有 close/drain。
+- 选择依据：
+  - Go `net/http` redirect 路径不会把中间 redirect response body 交给最终调用方；
+    resource ownership 必须由 client 处理。
+  - nextPas 已有 `IReadCloser` / `ICloser` / `IStream.Close` 语义；不需要为了本
+    slice 新增 public redirect policy 或 streaming response API。
+  - plain `IReader` 没有 close 能力时，唯一可表达的释放方式是 drain 到 EOF。
+- 实现决策：
+  - 新增内部 `ReleaseRedirectResponseBody`。
+  - 优先 close `IReadCloser`、`ICloser`、`IStream`。
+  - non-closeable `IReader` fallback 读取到 EOF。
+  - `too many redirects` 和 `redirect with no Location header` 错误路径也会释放
+    当前 redirect body。
+- RED 证据：
+  - close-capable body RED：
+    - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `41 total, 40 passed, 1 failed`
+    - failed at `Client closes redirect response body before follow-up`
+    - failure: `redirect response body is closed before follow-up round trip`
+    - heaptrc: `0 unfreed memory blocks`
+  - non-closeable drain RED：
+    - 临时移除 fallback drain 循环后，同一 focused gate 失败在
+      `Client drains redirect response body before follow-up`
+    - failure:
+      `non-closeable redirect response body is drained before follow-up round trip`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `42/42 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect 中间响应 body ownership 的窄修正。它没有声明新增 response
+  streaming API、per-request redirect callback、cookie jar 或 H1 parser 重构。
+  后续 client 方向可以继续审计 redirect error-path body release、timeout
+  ergonomics 或 per-request redirect policy，但应先有具体 contract。
+
 ## 2026-06-06 http redirect default-port authority slice
 
 - 本轮继续收紧 client redirect Host ownership：
