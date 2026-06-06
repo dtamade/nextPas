@@ -9,6 +9,7 @@ uses
   nextpas.core.math.random;
 
 type
+  TWeight2 = array[0..1] of Single;
   TWeight3 = array[0..2] of Single;
   TInt5 = array[0..4] of Integer;
   TSingleBitCast = packed record
@@ -127,6 +128,28 @@ begin
     end;
   finally
     Rng.Free;
+  end;
+end;
+
+procedure TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant;
+const
+  SMALL_WEIGHTS: TWeight2 = (3.0, 1.0);
+  LARGE_WEIGHTS: TWeight2 = (3.0e38, 1.0e38);
+var
+  SmallRng: TRandomGen;
+  LargeRng: TRandomGen;
+  I: Integer;
+begin
+  SmallRng := TRandomGen.Create(2468);
+  LargeRng := TRandomGen.Create(2468);
+  try
+    for I := 1 to 8 do
+      CheckEqual(Int64(SmallRng.WeightedChoice(SMALL_WEIGHTS)),
+        Int64(LargeRng.WeightedChoice(LARGE_WEIGHTS)),
+        'WeightedChoice stays scale-invariant for large finite weights');
+  finally
+    LargeRng.Free;
+    SmallRng.Free;
   end;
 end;
 
@@ -370,6 +393,8 @@ begin
   T.Run('range boundaries', @TestRangeBoundaries);
   T.Run('large finite float range stays finite and bounded',
     @TestLargeFiniteFloatRangeStaysFiniteAndBounded);
+  T.Run('WeightedChoice large finite weights stay scale-invariant',
+    @TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant);
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
   T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);

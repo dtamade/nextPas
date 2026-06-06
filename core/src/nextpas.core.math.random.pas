@@ -244,9 +244,9 @@ end;
 
 function TRandomGen.WeightedChoice(const AWeights: array of Single): Integer;
 var
-  LTotal: Single;
-  LPick: Single;
-  LAccumulated: Single;
+  LTotal: Double;
+  LPick: Double;
+  LAccumulated: Double;
   I: Integer;
 begin
   if Length(AWeights) = 0 then
@@ -259,7 +259,7 @@ begin
       raise EArgumentError.Create('TRandomGen.WeightedChoice: weights must be finite');
     if AWeights[I] < 0.0 then
       raise EArgumentError.Create('TRandomGen.WeightedChoice: weights must be non-negative');
-    LTotal := LTotal + AWeights[I];
+    LTotal := LTotal + Double(AWeights[I]);
   end;
 
   if LTotal <= 0.0 then
@@ -269,7 +269,7 @@ begin
   LAccumulated := 0.0;
   for I := 0 to High(AWeights) do
   begin
-    LAccumulated := LAccumulated + AWeights[I];
+    LAccumulated := LAccumulated + Double(AWeights[I]);
     if LPick < LAccumulated then
       Exit(I);
   end;
