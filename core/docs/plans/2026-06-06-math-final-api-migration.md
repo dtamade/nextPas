@@ -1,6 +1,6 @@
 # Math Final API Migration Implementation Plan
 
-> Target branch: `codex/math-final-api-20260606`
+> Target branch: `codex/core-math`
 
 ## Goal
 
@@ -75,7 +75,7 @@ Steps:
 - [ ] Write Quat tests for identity, axis-angle, rotation matrix, rotate, slerp, and nlerp.
 - [ ] Write Transform tests with known matrices and transformed vectors.
 - [ ] Write Easing tests for every public function.
-- [ ] Write Random/Noise tests for seed determinism, boundaries, and invalid inputs.
+- [x] Write Random/Noise tests for seed determinism, boundaries, and invalid inputs.
 - [ ] Write surface tests that reject `nextpas.core.math.ffi`, naked `external 'm'`, public `Vectors` names, public `uses nextpas.core.math.impl.*`, backend-private SIMD dependencies, and untested public symbols.
 - [ ] Run each test project and confirm RED failures only because final API does not exist.
 - [ ] Commit with `test(math): lock final api contracts`.
@@ -230,19 +230,21 @@ Files:
 
 Steps:
 
-- [ ] Implement deterministic random state.
-- [ ] Implement range, bool, gaussian, circle, dice, weighted choice, shuffle.
-- [ ] Implement deterministic noise and FBM.
-- [ ] Avoid global heap-owned public singletons.
-- [ ] Test invalid input behavior and object release under heaptrc.
-- [ ] Run `make -C tests/nextpas.core.math/test_random clean test`.
-- [ ] Run `make -C tests/nextpas.core.math/test_noise clean test`.
-- [ ] Run `make -C tests/nextpas.core.math/test_api_surface clean test`.
-- [ ] Commit with `feat(math): add deterministic random and noise`.
+- [x] Implement deterministic random state.
+- [x] Implement range, bool, gaussian, circle, dice, weighted choice, shuffle.
+- [x] Implement deterministic noise and FBM.
+- [x] Avoid global heap-owned public singletons.
+- [x] Test invalid input behavior and object release under heaptrc.
+- [x] Run `make -C core/tests/nextpas.core.math/test_random clean test`.
+- [x] Run `make -C core/tests/nextpas.core.math/test_noise clean test`.
+- [x] Run `make -C core/tests/nextpas.core.math/test_api_surface clean test`.
+- [x] Commit with `feat(math): add deterministic random and noise`.
 
 Expected result:
 
 - Random/noise behavior is deterministic and leak-free.
+- `nextpas.core.math.random` exposes `TRandomState`, `TRandomGen`, and `TNoiseGen` with explicit
+  ownership and no public global singleton.
 
 ### Task 9: SIMD Implementation Seam
 

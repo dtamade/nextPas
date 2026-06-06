@@ -85,6 +85,10 @@ PUBLIC_IMPL_RE = re.compile(
     r"\bnextpas\.core\.math\.impl\.[A-Za-z0-9_.]+\b",
     re.IGNORECASE,
 )
+PUBLIC_GLOBAL_RANDOM_RE = re.compile(
+    r"^\s*(?:threadvar|var)\s+(?:G(?:Random|Noise)|Global(?:Random|Noise))\b",
+    re.IGNORECASE | re.MULTILINE,
+)
 UNIT_NAME_RE = re.compile(
     r"^\s*unit\s+(?P<name>nextpas\.core\.math(?:\.[A-Za-z0-9_]+)*)\s*;",
     re.IGNORECASE | re.MULTILINE,
@@ -206,6 +210,27 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("easing-in-bounce", r"\bfunction\s+EaseInBounce\s*\("),
         ("easing-out-bounce", r"\bfunction\s+EaseOutBounce\s*\("),
         ("easing-in-out-bounce", r"\bfunction\s+EaseInOutBounce\s*\("),
+    ),
+    "src/nextpas.core.math.random.pas": (
+        ("random-state-type", r"\bTRandomState\s*=\s*record\b"),
+        ("random-gen-class", r"\bTRandomGen\s*=\s*class\b"),
+        ("random-next-int-range", r"\bfunction\s+NextIntRange\s*\(\s*const\s+AMin\s*,\s*AMax\s*:\s*Integer\s*\)\s*:\s*Integer\b"),
+        ("random-next-float-range", r"\bfunction\s+NextFloatRange\s*\(\s*const\s+AMin\s*,\s*AMax\s*:\s*Single\s*\)\s*:\s*Single\b"),
+        ("random-next-bool", r"\bfunction\s+NextBool\s*\(\s*const\s+AProbability\s*:\s*Single\s*=\s*0\.5\s*\)\s*:\s*Boolean\b"),
+        ("random-gaussian", r"\bfunction\s+NextGaussian\s*:\s*Single\b"),
+        ("random-circle-inside", r"\bfunction\s+NextVec2InCircle\s*:\s*TVec2f\b"),
+        ("random-circle-on", r"\bfunction\s+NextVec2OnCircle\s*:\s*TVec2f\b"),
+        ("random-roll", r"\bfunction\s+Roll\s*\(\s*const\s+ASides\s*:\s*Integer\s*\)\s*:\s*Integer\b"),
+        ("random-roll-multiple", r"\bfunction\s+RollMultiple\s*\(\s*const\s+ADice\s*,\s*ASides\s*:\s*Integer\s*\)\s*:\s*Integer\b"),
+        ("random-weighted-choice", r"\bfunction\s+WeightedChoice\s*\(\s*const\s+AWeights\s*:\s*array\s+of\s+Single\s*\)\s*:\s*Integer\b"),
+        ("random-shuffle", r"\bprocedure\s+Shuffle\s*\(\s*var\s+AValues\s*:\s*array\s+of\s+Integer\s*\)"),
+        ("noise-gen-class", r"\bTNoiseGen\s*=\s*class\b"),
+        ("noise-1d", r"\bfunction\s+Noise1D\s*\(\s*const\s+AX\s*:\s*Double\s*\)\s*:\s*Double\b"),
+        ("noise-2d", r"\bfunction\s+Noise2D\s*\(\s*const\s+AX\s*,\s*AY\s*:\s*Double\s*\)\s*:\s*Double\b"),
+        ("noise-3d", r"\bfunction\s+Noise3D\s*\(\s*const\s+AX\s*,\s*AY\s*,\s+AZ\s*:\s*Double\s*\)\s*:\s*Double\b"),
+        ("noise-fbm-1d", r"\bfunction\s+FBM1D\s*\("),
+        ("noise-fbm-2d", r"\bfunction\s+FBM2D\s*\("),
+        ("noise-fbm-3d", r"\bfunction\s+FBM3D\s*\("),
     ),
 }
 
@@ -607,6 +632,22 @@ def scan_forbidden_fpc_math_unit_in_easing(root: Path, path: Path, text: str) ->
     return findings
 
 
+def scan_public_global_random_singletons(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    code = interface_text(text)
+    for match in PUBLIC_GLOBAL_RANDOM_RE.finditer(code):
+        line = line_no_at(code, match.start())
+        add_finding(
+            findings,
+            "no-public-global-random-singleton",
+            root,
+            path,
+            line,
+            original_line(text, line),
+        )
+    return findings
+
+
 def scan_required_public_declarations(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
     rel = relative(path, root)
@@ -683,6 +724,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
         findings.extend(scan_forbidden_fpc_math_unit_in_easing(root, path, text))
+        findings.extend(scan_public_global_random_singletons(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
 
     for path in consumer_files:

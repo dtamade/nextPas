@@ -69,11 +69,28 @@ begin
   CheckNear(0.25, EaseInQuad(0.5), 'facade exposes easing functions');
 end;
 
+procedure TestFacadeRandomSurface;
+var
+  Rng: TRandomGen;
+  Noise: TNoiseGen;
+begin
+  Rng := TRandomGen.Create(123456789);
+  Noise := TNoiseGen.Create(2468);
+  try
+    CheckEqual(Int64(702724636), Int64(Rng.NextInt), 'facade exposes TRandomGen');
+    CheckNear(0.146484375, Noise.Noise1D(0.25), 'facade exposes TNoiseGen');
+  finally
+    Noise.Free;
+    Rng.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math facade');
   T.Run('scalar and trig re-export', @TestFacadeScalarAndTrig);
   T.Run('facade scalar rounding surface', @TestFacadeRoundingSurface);
   T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
   T.Run('facade vector surface', @TestFacadeVectorSurface);
+  T.Run('facade random surface', @TestFacadeRandomSurface);
   T.Summary;
 end.

@@ -16,7 +16,7 @@
 
 ## Current Position
 
-This branch is at **M5 Easing slice**.
+This branch has completed the current **M6 Random + noise slice** and should continue toward M7/M8 work.
 
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
 - Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
@@ -43,6 +43,14 @@ This branch is at **M5 Easing slice**.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints and representative midpoint/branch
   points, and the surface checker rejects direct FPC `Math` usage in the easing unit.
+- `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
+  `TNoiseGen`.
+- Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
+  probability clamp, dice rules, weighted choice, shuffle, Gaussian, and unit-circle vector helpers.
+- Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
+  reference vectors, invalid FBM inputs, and heaptrc-clean object ownership.
+- The public surface checker requires the random/noise declarations and rejects public global
+  random/noise singleton variables.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -55,7 +63,7 @@ nextpas.core.math final migration
 ├── M3: Vec/Mat/Quat value types                         [complete]
 ├── M4: Transform builders                               [complete]
 ├── M5: Easing                                           [complete]
-├── M6: Random + noise                                   [not started]
+├── M6: Random + noise                                   [complete]
 ├── M7: SIMD-backed implementation seams                 [not started]
 ├── M8: API surface, docs, leak proof, and module gates   [not started]
 └── M9: fafafa.game cutover and old Vectors retirement    [not started]
@@ -108,9 +116,8 @@ Completion gate:
 
 Status:
 
-- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, mat, quat,
-  transform, and easing tests.
-- Random/Noise tests remain pending.
+- Complete for current final API behavior-test scope. This slice covers API surface, facade, scalar,
+  trig, symbol-scope, vec, mat, quat, transform, easing, random, and noise tests.
 
 ## M2: Scalar + Trig Foundation
 
@@ -220,6 +227,23 @@ Completion gate:
 - Seed determinism, range boundaries, invalid ranges, probability clamps, dice rules, weighted choice, shuffle, and noise repeatability are tested.
 - No global heap-owned random/noise singletons are part of the public API.
 - Heaptrc confirms object lifetimes are clean.
+
+Status:
+
+- Complete for the current final public random/noise scope.
+- `nextpas.core.math.random` provides `TRandomState`, `TRandomGen`, and `TNoiseGen`.
+- `TRandomGen` owns xoroshiro-style deterministic state explicitly. It covers `NextInt`,
+  integer/float ranges, `NextFloat`, `NextDouble`, `NextBool`, `NextGaussian`,
+  `NextVec2InCircle`, `NextVec2OnCircle`, dice helpers, weighted choice, shuffle, and state
+  restore.
+- Invalid integer/float ranges fail fast with `EArgumentError`; `NextBool` clamps probability into
+  false/true behavior; dice helpers return `0` for non-positive dice/sides; weighted choice rejects
+  empty, negative, and all-zero weights.
+- `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
+  `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
+  `EArgumentError`.
+- `test_random`, `test_noise`, `test_facade`, and `test_api_surface` lock behavior, facade export,
+  public-surface declarations, no global heap singleton, and heaptrc clean object lifetimes.
 
 ## M7: SIMD-Backed Implementation Seams
 

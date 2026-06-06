@@ -11,7 +11,8 @@ uses
   nextpas.core.math.mat,
   nextpas.core.math.quat,
   nextpas.core.math.transform,
-  nextpas.core.math.easing;
+  nextpas.core.math.easing,
+  nextpas.core.math.random;
 
 const
   PI_VALUE: Double = 3.14159265358979323846;
@@ -34,6 +35,9 @@ type
   TQuatf = nextpas.core.math.quat.TQuatf;
   TQuatd = nextpas.core.math.quat.TQuatd;
   TEasingFunction = nextpas.core.math.easing.TEasingFunction;
+  TRandomState = nextpas.core.math.random.TRandomState;
+  TRandomGen = nextpas.core.math.random.TRandomGen;
+  TNoiseGen = nextpas.core.math.random.TNoiseGen;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
