@@ -8,7 +8,6 @@ uses
   nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.atomic,
-  nextpas.core.atomic.types,
   nextpas.core.atomic.compat,
   nextpas.core.platform.sync;
 
@@ -518,6 +517,8 @@ begin
     'atomic README must name the canonical function API');
   CheckContains(LAtomicDocsReadme, 'TAtomic*',
     'atomic README must name the typed record API');
+  CheckContains(LAtomicDocsReadme, 'facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`',
+    'atomic README must document the typed-record facade boundary');
   CheckContains(LAtomicDocsReadme, 'memory_order_t',
     'atomic README must describe memory-order semantics');
   CheckContains(LAtomicDocsReadme, 'mo_seq_cst',
@@ -567,6 +568,9 @@ begin
     'atomic Rust comparison source must mirror the load/store scenario name');
   CheckContains(LAtomicBenchRustCompareSource, 'AtomicCompareExchange32 1M',
     'atomic Rust comparison source must mirror the compare-exchange scenario name');
+  CheckContains(LAtomicSource,
+    'generic TAtomicPtr<T> = record',
+    'atomic facade must expose the generic typed pointer record');
   CheckContains(LSingleStrongCasSection, 'AtomicCompatFailureOrder(aOrder)',
     'single-order strong CAS must derive failure order');
   CheckContains(LSingleWeakCasSection, 'AtomicCompatFailureOrder(aOrder)',
@@ -816,6 +820,11 @@ type
 var
   LAtomic: TAtomicUInt32;
   LExpected: UInt32;
+  LPtr: TIntAtomicPtr;
+  LPtrExpected: PInteger;
+  LPtrOld: PInteger;
+  LValueA: Integer;
+  LValueB: Integer;
 begin
   LAtomic := TAtomicUInt32.Create(7);
   CheckEqual(Int64(7), Int64(LAtomic.Load(mo_relaxed)));
@@ -836,6 +845,30 @@ begin
     'TAtomicRefCount lock-free surface must match pointer-sized runtime truth');
   Check(TIntAtomicPtr.is_lock_free = atomic_is_lock_free_ptr,
     'TAtomicPtr lock-free surface must match pointer-sized runtime truth');
+
+  LValueA := 10;
+  LValueB := 20;
+  LPtr := TIntAtomicPtr.Create(@LValueA);
+  Check(LPtr.Load(mo_relaxed) = @LValueA,
+    'facade TAtomicPtr Load should return the stored pointer');
+  LPtr.Store(@LValueB, mo_release);
+  Check(LPtr.Load(mo_acquire) = @LValueB,
+    'facade TAtomicPtr Store should publish the new pointer');
+  LPtrOld := LPtr.Exchange(@LValueA, mo_acq_rel);
+  Check(LPtrOld = @LValueB,
+    'facade TAtomicPtr Exchange should return the old pointer');
+  Check(LPtr.IntoInner = @LValueA,
+    'facade TAtomicPtr IntoInner should return the current pointer');
+
+  LPtrExpected := @LValueB;
+  Check(not LPtr.CompareExchangeStrong(LPtrExpected, @LValueB, mo_release),
+    'facade TAtomicPtr strong CAS should fail when expected mismatches');
+  Check(LPtrExpected = @LValueA,
+    'facade TAtomicPtr strong CAS failure should write the observed pointer');
+  Check(LPtr.CompareExchangeStrong(LPtrExpected, @LValueB, mo_seq_cst),
+    'facade TAtomicPtr strong CAS should update when expected matches');
+  Check(LPtr.Load = @LValueB,
+    'facade TAtomicPtr default Load should observe the CAS result');
 end;
 
 procedure TestAtomicCompatFacade;

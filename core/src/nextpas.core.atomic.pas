@@ -68,6 +68,29 @@ type
   TAtomicUSize = nextpas.core.atomic.types.TAtomicUSize;
   TAtomicRefCount = nextpas.core.atomic.types.TAtomicRefCount;
 
+  { TAtomicPtr - generic atomic pointer facade }
+  generic TAtomicPtr<T> = record
+  public type
+    PT = ^T;
+  private
+    FValue: PT;
+  public
+    class function Create(AValue: PT): TAtomicPtr; static; inline;
+    class function is_lock_free: Boolean; static; inline;
+
+    function Load(AOrder: memory_order_t = mo_seq_cst): PT; inline;
+    procedure Store(AValue: PT; AOrder: memory_order_t = mo_seq_cst); inline;
+    function Exchange(AValue: PT; AOrder: memory_order_t = mo_seq_cst): PT; inline;
+
+    function CompareExchangeStrong(var AExpected: PT; ADesired: PT;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+    function CompareExchangeWeak(var AExpected: PT; ADesired: PT;
+      AOrder: memory_order_t = mo_seq_cst): Boolean; inline;
+
+    function GetMut: Pointer; inline;
+    function IntoInner: PT; inline;
+  end;
+
 const
   mo_relaxed = nextpas.core.atomic.core.mo_relaxed;
   mo_consume = nextpas.core.atomic.core.mo_consume;
@@ -716,6 +739,111 @@ begin
   else
     Result := mo_relaxed;
   end;
+end;
+
+{ TAtomicPtr }
+
+class function TAtomicPtr.Create(AValue: PT): TAtomicPtr;
+begin
+  Result.FValue := AValue;
+end;
+
+class function TAtomicPtr.is_lock_free: Boolean;
+begin
+  Result := atomic_is_lock_free_ptr;
+end;
+
+function TAtomicPtr.Load(AOrder: memory_order_t): PT;
+begin
+  Result := PT(atomic_load(PPointer(@FValue)^, AOrder));
+end;
+
+procedure TAtomicPtr.Store(AValue: PT; AOrder: memory_order_t);
+begin
+  atomic_store(PPointer(@FValue)^, Pointer(AValue), AOrder);
+end;
+
+function TAtomicPtr.Exchange(AValue: PT; AOrder: memory_order_t): PT;
+begin
+  Result := PT(atomic_exchange(PPointer(@FValue)^, Pointer(AValue), AOrder));
+end;
+
+function TAtomicPtr.CompareExchangeStrong(var AExpected: PT; ADesired: PT;
+  AOrder: memory_order_t): Boolean;
+var
+  LExpected: Pointer;
+  LSuccessOrder: memory_order_t;
+  LFailureOrder: memory_order_t;
+begin
+  LExpected := Pointer(AExpected);
+
+  if AOrder = mo_consume then
+    LSuccessOrder := mo_acquire
+  else
+    LSuccessOrder := AOrder;
+
+  case LSuccessOrder of
+    mo_relaxed: LFailureOrder := mo_relaxed;
+    mo_acquire: LFailureOrder := mo_acquire;
+    mo_release: LFailureOrder := mo_relaxed;
+    mo_acq_rel: LFailureOrder := mo_acquire;
+    mo_seq_cst: LFailureOrder := mo_seq_cst;
+  else
+    LFailureOrder := mo_relaxed;
+  end;
+
+  Result := atomic_compare_exchange_strong(
+    PPointer(@FValue)^,
+    LExpected,
+    Pointer(ADesired),
+    LSuccessOrder,
+    LFailureOrder
+  );
+  AExpected := PT(LExpected);
+end;
+
+function TAtomicPtr.CompareExchangeWeak(var AExpected: PT; ADesired: PT;
+  AOrder: memory_order_t): Boolean;
+var
+  LExpected: Pointer;
+  LSuccessOrder: memory_order_t;
+  LFailureOrder: memory_order_t;
+begin
+  LExpected := Pointer(AExpected);
+
+  if AOrder = mo_consume then
+    LSuccessOrder := mo_acquire
+  else
+    LSuccessOrder := AOrder;
+
+  case LSuccessOrder of
+    mo_relaxed: LFailureOrder := mo_relaxed;
+    mo_acquire: LFailureOrder := mo_acquire;
+    mo_release: LFailureOrder := mo_relaxed;
+    mo_acq_rel: LFailureOrder := mo_acquire;
+    mo_seq_cst: LFailureOrder := mo_seq_cst;
+  else
+    LFailureOrder := mo_relaxed;
+  end;
+
+  Result := atomic_compare_exchange_weak(
+    PPointer(@FValue)^,
+    LExpected,
+    Pointer(ADesired),
+    LSuccessOrder,
+    LFailureOrder
+  );
+  AExpected := PT(LExpected);
+end;
+
+function TAtomicPtr.GetMut: Pointer;
+begin
+  Result := @FValue;
+end;
+
+function TAtomicPtr.IntoInner: PT;
+begin
+  Result := FValue;
 end;
 
 //┌────────────────────────────────────────────────────────────────────────────┐

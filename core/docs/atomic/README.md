@@ -31,6 +31,9 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 `TryInc`、`Dec`、`IntoInner`，刻意不暴露 `Store`、`Exchange`、`FetchAdd`、`FetchSub`
 或 `GetMut`，避免调用方破坏引用计数纪律。
 
+`nextpas.core.atomic` facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`;
+consumers should not need to import `nextpas.core.atomic.types` just to use the public typed-record surface.
+
 ## 内存序语义
 
 `memory_order_t` 包含 `mo_relaxed`、`mo_consume`、`mo_acquire`、`mo_release`、`mo_acq_rel`
