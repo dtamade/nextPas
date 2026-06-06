@@ -185,6 +185,7 @@ Status:
 - `nextpas.core.math.ffi.pas` is deleted in this branch.
 - API surface checks reject naked `external 'm'`, public/test `math.ffi` consumers, public impl consumers, and legacy vector bridge names.
 - macOS/Windows host link smokes are not run in this local round.
+- Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 
 ## M3: Vec/Mat/Quat Value Types
 

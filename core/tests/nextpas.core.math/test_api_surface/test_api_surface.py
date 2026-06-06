@@ -52,6 +52,24 @@ REQUIRED_CORE_TARGET_DOC_PATHS = (
 ROOT_MAKEFILE_PATH = "Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
+REQUIRED_HOST_GATE_RESIDUAL_TRUTH = (
+    (
+        "docs/math/README.md",
+        "Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.",
+    ),
+    (
+        "docs/math/API.md",
+        "Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -943,6 +961,26 @@ def scan_required_core_make_target_doc_coverage(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_required_host_gate_residual_truth(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for rel, snippet in REQUIRED_HOST_GATE_RESIDUAL_TRUTH:
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if snippet in text:
+            continue
+        add_finding(
+            findings,
+            "missing-required-host-gate-truth",
+            root,
+            path,
+            1,
+            snippet,
+        )
+    return findings
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -952,6 +990,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_root_facade_api_doc_coverage(root))
     findings.extend(scan_required_core_make_targets(root))
     findings.extend(scan_required_core_make_target_doc_coverage(root))
+    findings.extend(scan_required_host_gate_residual_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

@@ -293,6 +293,7 @@ Cross-platform link proof has two layers:
   `test_facade` as the current-host local link proof. macOS/Windows host gates must still rerun
   equivalent checks before trig is marked complete. If macOS/Windows gates are unavailable in a
   round, the round must report that final cross-platform completion is blocked, not complete.
+  Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 
 ## Random And Noise Design
 

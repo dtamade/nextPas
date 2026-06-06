@@ -172,6 +172,7 @@ make -C core core-math-trig-local-smoke
 The current trig implementation is protected from a public naked `external 'm'` dependency by
 source-surface tests plus this local host link smoke. macOS and Windows host link smokes are still
 pending before the module can claim final cross-platform trig completion.
+Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 
 ## Verification
 
