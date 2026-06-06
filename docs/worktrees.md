@@ -40,6 +40,11 @@ codex/compiler
 不要每次提示词都新建一个日期分支。模块 lane 是长期延续分支；在 lane 内用小提交推进。
 只有准备进入主线时，才临时创建 `landing/<module>-YYYYMMDD` 这类候选分支。
 
+模块 lane 是默认责任边界，不是架构设计边界。负责人默认在本模块内工作，但如果当前模块要达到正确的
+API、性能或架构质量，必须修正依赖模块或底座 contract，可以做受控跨模块修改。跨模块修改要先说明
+设计原因、风险、触碰路径和验证计划；影响面较大时先汇报 `Needs Review`，不要把大范围架构迁移混进
+普通模块 slice。
+
 ## 创建模块 Worktree
 
 使用项目脚本：
@@ -120,7 +125,7 @@ git worktree list --porcelain
 
 - 模块名和指定 worktree 路径。
 - 分支名和当前 `HEAD`。
-- 允许修改的路径和禁止修改的路径。
+- 默认修改路径、受控跨模块修改规则和明确禁止触碰的路径。
 - 当前模块状态和已知红点。
 - focused verification 命令。
 - 汇报格式。
@@ -141,6 +146,25 @@ make hygiene
 任何 `core/` 模块 lane 在改源码、测试、示例或 benchmark 前，都必须先读
 `core/AGENTS.md` 和 `core/docs/design-conventions.md`。其中 `design-conventions.md`
 是 `nextpas.core` 模块形态、层级规则、测试布局、文档布局和命名规范的权威文件。
+
+提示词中的路径规则建议使用这个结构：
+
+```text
+默认修改范围：
+<本模块源码、测试、示例、benchmark、docs/<module> 路径>
+
+受控跨模块修改：
+如果当前模块质量必须依赖其他模块/API/底座修正，可以修改相关路径，但必须：
+1. 先说明跨模块原因和设计目标；
+2. 只改最小必要范围；
+3. 同时跑被改模块 focused gate 和当前模块 consumer gate；
+4. 在 Ready 报告中单独列出 cross-module touched files、设计理由、风险和验证证据；
+5. 不触碰其他同事 active dirty worktree；
+6. 影响面大时改报 Needs Review，由总控决定是否拆出独立 cross-cutting lane。
+
+明确禁止：
+<当前任务无关的 active 模块、dirty worktree、生成物、控制文件等>
+```
 
 ## Landing 纪律
 
@@ -185,6 +209,13 @@ cherry-pick 或 path-limited replay。除非明确授权，最终 mainline integ
 `Ready` 汇报必须包含分支、worktree 路径、`HEAD`、改动文件清单、不能带入主线的文件、
 focused verification 证据和 merge 建议。
 
+如果包含受控跨模块修改，`Ready` 还必须包含：
+
+- `cross-module touched files`：跨模块文件清单。
+- `design reason`：为什么不改这些路径就无法做好当前模块。
+- `risk`：对 owner boundary、依赖方向、API 稳定性和其他 active lane 的影响。
+- `extra verification`：被改模块 focused gate、当前模块 consumer gate、必要的 source-contract 或 compile gate。
+
 不要把根目录 `task_plan.md`、`findings.md`、`progress.md` 当作常规模块状态带进
 `main`。需要长期保存的记录，写到 `docs/plans/` 或对应模块的文档目录。
 
@@ -196,4 +227,4 @@ focused verification 证据和 merge 建议。
 - 不要用 `mv` 手动移动 worktree。
 - 不要让已经完成且已吸收的 stale worktree 长期留着。
 - 不要已有模块 lane 时再开新的分支或 worktree。
-- 不要在模块 lane 中顺手做无关跨模块改动。
+- 不要在模块 lane 中顺手做无关跨模块改动；必要跨模块修正必须按受控跨模块规则登记和验证。

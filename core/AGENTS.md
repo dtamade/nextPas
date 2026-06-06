@@ -35,10 +35,13 @@ make -C "$REPO_ROOT" hygiene
 
 ## Module Scope
 
-- A module lane should touch only its owned module paths unless the task explicitly requires cross-module work.
+- A module lane is the default ownership boundary, not a design cage. Start inside the owned module paths, but fix dependent modules or foundation contracts when the current module can't be made correct without that change.
 - Typical module paths are `src/nextpas.core.<module>*`, `tests/nextpas.core.<module>/`,
   `examples/nextpas.core.<module>/`, `benchmarks/nextpas.core.<module>/`, and `docs/<module>/`.
-- Cross-module changes must be called out in the report with the reason, risk, and verification impact.
+- Cross-module changes must be minimal and intentional. Before or during the slice, call out why the change is required, which owner boundary or API contract is affected, and why a local workaround would be worse.
+- Reports with cross-module changes must list `cross-module touched files`, design reason, risk, and extra verification.
+- Extra verification must include the changed module's focused gate plus the current module's consumer gate. Add source-contract, compile, or leak-sensitive tests when public API, ownership, or platform behavior changes.
+- If the cross-module impact is broad, stop and report `Needs Review` so the controller can split a dedicated cross-cutting lane or landing slice.
 - Do not bypass layer rules from `docs/design-conventions.md`.
 
 ## Verification
