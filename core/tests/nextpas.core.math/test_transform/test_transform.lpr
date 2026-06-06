@@ -13,6 +13,19 @@ uses
 var
   T: TTestRunner;
 
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
+
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
+
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
   LDelta: Double;
@@ -67,6 +80,108 @@ end;
 procedure RaiseCamera2DZeroZoom;
 begin
   Camera2D(Single(0.0), Single(0.0), Single(0.0), 100, 100);
+end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
+end;
+
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+procedure RaiseOrthoInfiniteFarSingle;
+begin
+  Ortho(Single(-1.0), Single(1.0), Single(-1.0), Single(1.0), Single(0.0), SingleInfinity);
+end;
+
+procedure RaiseOrthoInfiniteFarDouble;
+begin
+  Ortho(Double(-1.0), Double(1.0), Double(-1.0), Double(1.0), Double(0.0), DoubleInfinity);
+end;
+
+procedure RaisePerspectiveNaNFovSingle;
+begin
+  Perspective(SingleNaN, Single(1.0), Single(1.0), Single(10.0));
+end;
+
+procedure RaisePerspectiveNaNFovDouble;
+begin
+  Perspective(DoubleNaN, Double(1.0), Double(1.0), Double(10.0));
+end;
+
+procedure RaiseLookAtInfiniteEyeSingle;
+begin
+  LookAt(TVec3f.Create(SingleInfinity, 0.0, 5.0), TVec3f.Zero, TVec3f.Create(0.0, 1.0, 0.0));
+end;
+
+procedure RaiseLookAtInfiniteEyeDouble;
+begin
+  LookAt(TVec3d.Create(DoubleInfinity, 0.0, 5.0), TVec3d.Zero, TVec3d.Create(0.0, 1.0, 0.0));
+end;
+
+procedure RaiseTranslateNaNSingle;
+begin
+  Translate(SingleNaN, Single(0.0), Single(0.0));
+end;
+
+procedure RaiseTranslateInfinityDouble;
+begin
+  Translate(Double(0.0), Double(0.0), DoubleInfinity);
+end;
+
+procedure RaiseScaleNaNSingle;
+begin
+  Scale(Single(1.0), SingleNaN, Single(1.0));
+end;
+
+procedure RaiseScaleInfinityDouble;
+begin
+  Scale(Double(1.0), DoubleInfinity, Double(1.0));
+end;
+
+procedure RaiseRotateZNaNSingle;
+begin
+  RotateZ(SingleNaN);
+end;
+
+procedure RaiseRotateYInfinityDouble;
+begin
+  RotateY(DoubleInfinity);
+end;
+
+procedure RaiseCamera2DNaNZoomSingle;
+begin
+  Camera2D(Single(0.0), Single(0.0), SingleNaN, 100, 100);
+end;
+
+procedure RaiseCamera2DInfiniteCenterDouble;
+begin
+  Camera2D(DoubleInfinity, Double(0.0), Double(1.0), 100, 100);
 end;
 
 procedure TestProjectionBuilders;
@@ -138,10 +253,29 @@ begin
   ExpectArgumentError('Camera2D zero zoom', @RaiseCamera2DZeroZoom);
 end;
 
+procedure TestNonFiniteInputsFailFast;
+begin
+  ExpectArgumentError('Ortho single infinite far', @RaiseOrthoInfiniteFarSingle);
+  ExpectArgumentError('Ortho double infinite far', @RaiseOrthoInfiniteFarDouble);
+  ExpectArgumentError('Perspective single NaN FOV', @RaisePerspectiveNaNFovSingle);
+  ExpectArgumentError('Perspective double NaN FOV', @RaisePerspectiveNaNFovDouble);
+  ExpectArgumentError('LookAt single infinite eye', @RaiseLookAtInfiniteEyeSingle);
+  ExpectArgumentError('LookAt double infinite eye', @RaiseLookAtInfiniteEyeDouble);
+  ExpectArgumentError('Translate single NaN', @RaiseTranslateNaNSingle);
+  ExpectArgumentError('Translate double infinity', @RaiseTranslateInfinityDouble);
+  ExpectArgumentError('Scale single NaN', @RaiseScaleNaNSingle);
+  ExpectArgumentError('Scale double infinity', @RaiseScaleInfinityDouble);
+  ExpectArgumentError('RotateZ single NaN', @RaiseRotateZNaNSingle);
+  ExpectArgumentError('RotateY double infinity', @RaiseRotateYInfinityDouble);
+  ExpectArgumentError('Camera2D single NaN zoom', @RaiseCamera2DNaNZoomSingle);
+  ExpectArgumentError('Camera2D double infinite center', @RaiseCamera2DInfiniteCenterDouble);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.transform');
   T.Run('projection builders', @TestProjectionBuilders);
   T.Run('model and view builders', @TestModelAndViewBuilders);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
+  T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Summary;
 end.

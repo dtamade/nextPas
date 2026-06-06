@@ -155,6 +155,7 @@ composition uses `Translate * Rotate * Scale`, and projection/view/model composi
 
 `Perspective` is right-handed, looks down `-Z`, and uses NDC `[-1, +1]`. `Camera2D` uses screen-space
 positive Y down.
+All transform builders reject NaN and infinite inputs with `EArgumentError`.
 
 ## Easing
 

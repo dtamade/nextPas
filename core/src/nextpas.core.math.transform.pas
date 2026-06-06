@@ -33,7 +33,44 @@ implementation
 
 uses
   nextpas.core.errors,
+  nextpas.core.math.scalar,
   nextpas.core.math.trig;
+
+function IsFinite(const AValue: Single): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: Double): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+procedure RequireFinite(const AValue: Single; const AMessage: string); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
+procedure RequireFinite(const AValue: Double; const AMessage: string); overload; inline;
+begin
+  if not IsFinite(AValue) then
+    raise EArgumentError.Create(AMessage);
+end;
+
+procedure RequireFinite(const AValue: TVec3f; const AMessage: string); overload; inline;
+begin
+  if (not IsFinite(AValue.X)) or (not IsFinite(AValue.Y)) or (not IsFinite(AValue.Z)) then
+    raise EArgumentError.Create(AMessage);
+end;
+
+procedure RequireFinite(const AValue: TVec3d; const AMessage: string); overload; inline;
+begin
+  if (not IsFinite(AValue.X)) or (not IsFinite(AValue.Y)) or (not IsFinite(AValue.Z)) then
+    raise EArgumentError.Create(AMessage);
+end;
 
 procedure RequireNonZero(const AValue: Single; const AMessage: string); overload; inline;
 begin
@@ -71,6 +108,12 @@ var
   Height: Single;
   Depth: Single;
 begin
+  RequireFinite(ALeft, 'Ortho: left must be finite');
+  RequireFinite(ARight, 'Ortho: right must be finite');
+  RequireFinite(ABottom, 'Ortho: bottom must be finite');
+  RequireFinite(ATop, 'Ortho: top must be finite');
+  RequireFinite(ANear, 'Ortho: near plane must be finite');
+  RequireFinite(AFar, 'Ortho: far plane must be finite');
   Width := ARight - ALeft;
   Height := ATop - ABottom;
   Depth := AFar - ANear;
@@ -94,6 +137,12 @@ var
   Height: Double;
   Depth: Double;
 begin
+  RequireFinite(ALeft, 'Ortho: left must be finite');
+  RequireFinite(ARight, 'Ortho: right must be finite');
+  RequireFinite(ABottom, 'Ortho: bottom must be finite');
+  RequireFinite(ATop, 'Ortho: top must be finite');
+  RequireFinite(ANear, 'Ortho: near plane must be finite');
+  RequireFinite(AFar, 'Ortho: far plane must be finite');
   Width := ARight - ALeft;
   Height := ATop - ABottom;
   Depth := AFar - ANear;
@@ -116,6 +165,10 @@ var
   F: Single;
   Depth: Single;
 begin
+  RequireFinite(AFovYRad, 'Perspective: vertical FOV must be finite');
+  RequireFinite(AAspect, 'Perspective: aspect must be finite');
+  RequireFinite(ANear, 'Perspective: near plane must be finite');
+  RequireFinite(AFar, 'Perspective: far plane must be finite');
   RequirePositive(AFovYRad, 'Perspective: vertical FOV must be positive');
   RequirePositive(AAspect, 'Perspective: aspect must be positive');
   RequirePositive(ANear, 'Perspective: near plane must be positive');
@@ -139,6 +192,10 @@ var
   F: Double;
   Depth: Double;
 begin
+  RequireFinite(AFovYRad, 'Perspective: vertical FOV must be finite');
+  RequireFinite(AAspect, 'Perspective: aspect must be finite');
+  RequireFinite(ANear, 'Perspective: near plane must be finite');
+  RequireFinite(AFar, 'Perspective: far plane must be finite');
   RequirePositive(AFovYRad, 'Perspective: vertical FOV must be positive');
   RequirePositive(AAspect, 'Perspective: aspect must be positive');
   RequirePositive(ANear, 'Perspective: near plane must be positive');
@@ -163,6 +220,9 @@ var
   Right: TVec3f;
   RealUp: TVec3f;
 begin
+  RequireFinite(AEye, 'LookAt: eye must be finite');
+  RequireFinite(ATarget, 'LookAt: target must be finite');
+  RequireFinite(AUp, 'LookAt: up vector must be finite');
   Forward := (ATarget - AEye).Normalize;
   if TVec3f.Equals(Forward, TVec3f.Zero, Single(0.0)) then
     raise EArgumentError.Create('LookAt: eye and target must differ');
@@ -194,6 +254,9 @@ var
   Right: TVec3d;
   RealUp: TVec3d;
 begin
+  RequireFinite(AEye, 'LookAt: eye must be finite');
+  RequireFinite(ATarget, 'LookAt: target must be finite');
+  RequireFinite(AUp, 'LookAt: up vector must be finite');
   Forward := (ATarget - AEye).Normalize;
   if TVec3d.Equals(Forward, TVec3d.Zero, 0.0) then
     raise EArgumentError.Create('LookAt: eye and target must differ');
@@ -221,6 +284,9 @@ end;
 
 function Translate(const AX, AY, AZ: Single): TMat4f;
 begin
+  RequireFinite(AX, 'Translate: X must be finite');
+  RequireFinite(AY, 'Translate: Y must be finite');
+  RequireFinite(AZ, 'Translate: Z must be finite');
   Result := TMat4f.Identity;
   Result[3, 0] := AX;
   Result[3, 1] := AY;
@@ -229,6 +295,9 @@ end;
 
 function Translate(const AX, AY, AZ: Double): TMat4d;
 begin
+  RequireFinite(AX, 'Translate: X must be finite');
+  RequireFinite(AY, 'Translate: Y must be finite');
+  RequireFinite(AZ, 'Translate: Z must be finite');
   Result := TMat4d.Identity;
   Result[3, 0] := AX;
   Result[3, 1] := AY;
@@ -237,6 +306,9 @@ end;
 
 function Scale(const AX, AY, AZ: Single): TMat4f;
 begin
+  RequireFinite(AX, 'Scale: X must be finite');
+  RequireFinite(AY, 'Scale: Y must be finite');
+  RequireFinite(AZ, 'Scale: Z must be finite');
   Result := TMat4f.Identity;
   Result[0, 0] := AX;
   Result[1, 1] := AY;
@@ -245,6 +317,9 @@ end;
 
 function Scale(const AX, AY, AZ: Double): TMat4d;
 begin
+  RequireFinite(AX, 'Scale: X must be finite');
+  RequireFinite(AY, 'Scale: Y must be finite');
+  RequireFinite(AZ, 'Scale: Z must be finite');
   Result := TMat4d.Identity;
   Result[0, 0] := AX;
   Result[1, 1] := AY;
@@ -256,6 +331,7 @@ var
   C: Single;
   S: Single;
 begin
+  RequireFinite(ARadians, 'RotateX: radians must be finite');
   C := nextpas.core.math.trig.Cos(ARadians);
   S := nextpas.core.math.trig.Sin(ARadians);
   Result := TMat4f.Identity;
@@ -270,6 +346,7 @@ var
   C: Double;
   S: Double;
 begin
+  RequireFinite(ARadians, 'RotateX: radians must be finite');
   C := nextpas.core.math.trig.Cos(ARadians);
   S := nextpas.core.math.trig.Sin(ARadians);
   Result := TMat4d.Identity;
@@ -284,6 +361,7 @@ var
   C: Single;
   S: Single;
 begin
+  RequireFinite(ARadians, 'RotateY: radians must be finite');
   C := nextpas.core.math.trig.Cos(ARadians);
   S := nextpas.core.math.trig.Sin(ARadians);
   Result := TMat4f.Identity;
@@ -298,6 +376,7 @@ var
   C: Double;
   S: Double;
 begin
+  RequireFinite(ARadians, 'RotateY: radians must be finite');
   C := nextpas.core.math.trig.Cos(ARadians);
   S := nextpas.core.math.trig.Sin(ARadians);
   Result := TMat4d.Identity;
@@ -312,6 +391,7 @@ var
   C: Single;
   S: Single;
 begin
+  RequireFinite(ARadians, 'RotateZ: radians must be finite');
   C := nextpas.core.math.trig.Cos(ARadians);
   S := nextpas.core.math.trig.Sin(ARadians);
   Result := TMat4f.Identity;
@@ -326,6 +406,7 @@ var
   C: Double;
   S: Double;
 begin
+  RequireFinite(ARadians, 'RotateZ: radians must be finite');
   C := nextpas.core.math.trig.Cos(ARadians);
   S := nextpas.core.math.trig.Sin(ARadians);
   Result := TMat4d.Identity;
@@ -341,6 +422,9 @@ var
   HalfWidth: Single;
   HalfHeight: Single;
 begin
+  RequireFinite(ACenterX, 'Camera2D: center X must be finite');
+  RequireFinite(ACenterY, 'Camera2D: center Y must be finite');
+  RequireFinite(AZoom, 'Camera2D: zoom must be finite');
   RequirePositive(AZoom, 'Camera2D: zoom must be positive');
   RequirePositive(AViewportWidth, 'Camera2D: viewport width must be positive');
   RequirePositive(AViewportHeight, 'Camera2D: viewport height must be positive');
@@ -359,6 +443,9 @@ var
   HalfWidth: Double;
   HalfHeight: Double;
 begin
+  RequireFinite(ACenterX, 'Camera2D: center X must be finite');
+  RequireFinite(ACenterY, 'Camera2D: center Y must be finite');
+  RequireFinite(AZoom, 'Camera2D: zoom must be finite');
   RequirePositive(AZoom, 'Camera2D: zoom must be positive');
   RequirePositive(AViewportWidth, 'Camera2D: viewport width must be positive');
   RequirePositive(AViewportHeight, 'Camera2D: viewport height must be positive');
