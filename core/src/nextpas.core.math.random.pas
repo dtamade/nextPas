@@ -76,6 +76,18 @@ const
   FLOAT_DENOMINATOR: Single = 16777216.0;
   DOUBLE_DENOMINATOR: Double = 9007199254740992.0;
 
+function IsFinite(const AValue: Single): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: Double): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
 function NormalizeSeed(const ASeed: UInt64): UInt64; inline;
 begin
   if ASeed = 0 then
@@ -148,6 +160,10 @@ end;
 
 function TRandomGen.NextFloatRange(const AMin, AMax: Single): Single;
 begin
+  if not IsFinite(AMin) then
+    raise EArgumentError.Create('TRandomGen.NextFloatRange: AMin must be finite');
+  if not IsFinite(AMax) then
+    raise EArgumentError.Create('TRandomGen.NextFloatRange: AMax must be finite');
   if AMin > AMax then
     raise EArgumentError.Create('TRandomGen.NextFloatRange: AMin must be <= AMax');
   if AMin = AMax then
@@ -235,6 +251,8 @@ begin
   LTotal := 0.0;
   for I := 0 to High(AWeights) do
   begin
+    if not IsFinite(AWeights[I]) then
+      raise EArgumentError.Create('TRandomGen.WeightedChoice: weights must be finite');
     if AWeights[I] < 0.0 then
       raise EArgumentError.Create('TRandomGen.WeightedChoice: weights must be non-negative');
     LTotal := LTotal + AWeights[I];
@@ -282,9 +300,9 @@ class procedure TNoiseGen.ValidateFBMInputs(const AFunctionName: string; const A
 begin
   if AOctaves <= 0 then
     raise EArgumentError.Create(AFunctionName + ': AOctaves must be positive');
-  if (ALacunarity <= 0.0) or nextpas.core.math.scalar.IsNaN(ALacunarity) then
+  if (ALacunarity <= 0.0) or (not IsFinite(ALacunarity)) then
     raise EArgumentError.Create(AFunctionName + ': ALacunarity must be positive');
-  if (AGain <= 0.0) or nextpas.core.math.scalar.IsNaN(AGain) then
+  if (AGain <= 0.0) or (not IsFinite(AGain)) then
     raise EArgumentError.Create(AFunctionName + ': AGain must be positive');
 end;
 

@@ -11,6 +11,11 @@ uses
 type
   TWeight3 = array[0..2] of Single;
   TInt5 = array[0..4] of Integer;
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
 
 var
   T: TTestRunner;
@@ -33,6 +38,22 @@ begin
   CheckEqual(Int64(AExpected2), Int64(AActual[2]), AMessage + '[2]');
   CheckEqual(Int64(AExpected3), Int64(AActual[3]), AMessage + '[3]');
   CheckEqual(Int64(AExpected4), Int64(AActual[4]), AMessage + '[4]');
+end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
 end;
 
 procedure TestSeedDeterminism;
@@ -210,6 +231,60 @@ begin
   end;
 end;
 
+procedure TestNonFiniteParameterValidation;
+var
+  Rng: TRandomGen;
+  Weights: TWeight3;
+  Caught: Boolean;
+begin
+  Rng := TRandomGen.Create(123);
+  try
+    Caught := False;
+    try
+      Rng.NextFloatRange(SingleNaN, 1.0);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, 'NextFloatRange rejects NaN bounds');
+
+    Caught := False;
+    try
+      Rng.NextFloatRange(-1.0, SingleInfinity);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, 'NextFloatRange rejects infinite bounds');
+
+    Weights[0] := 1.0;
+    Weights[1] := SingleNaN;
+    Weights[2] := 2.0;
+    Caught := False;
+    try
+      Rng.WeightedChoice(Weights);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, 'WeightedChoice rejects NaN weights');
+
+    Weights[0] := 1.0;
+    Weights[1] := SingleInfinity;
+    Weights[2] := 2.0;
+    Caught := False;
+    try
+      Rng.WeightedChoice(Weights);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, 'WeightedChoice rejects infinite weights');
+  finally
+    Rng.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.random');
   T.Run('seed determinism', @TestSeedDeterminism);
@@ -217,5 +292,6 @@ begin
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
   T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);
+  T.Run('non-finite parameter validation', @TestNonFiniteParameterValidation);
   T.Summary;
 end.

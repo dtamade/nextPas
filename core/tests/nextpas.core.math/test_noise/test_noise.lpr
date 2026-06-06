@@ -10,6 +10,13 @@ uses
 var
   T: TTestRunner;
 
+type
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
+
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
   LDelta: Double;
@@ -18,6 +25,14 @@ begin
   if LDelta < 0.0 then
     LDelta := -LDelta;
   Check(LDelta <= AEpsilon, AMessage);
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
 end;
 
 procedure TestNoiseRepeatability;
@@ -96,6 +111,24 @@ begin
         Caught := True;
     end;
     Check(Caught, 'FBM rejects non-positive gain');
+
+    Caught := False;
+    try
+      Noise.FBM2D(0.25, 0.75, 3, DoubleInfinity, 0.5);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, 'FBM rejects infinite lacunarity');
+
+    Caught := False;
+    try
+      Noise.FBM3D(0.25, 0.75, 1.25, 3, 2.0, DoubleInfinity);
+    except
+      on E: EArgumentError do
+        Caught := True;
+    end;
+    Check(Caught, 'FBM rejects infinite gain');
   finally
     Noise.Free;
   end;

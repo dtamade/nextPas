@@ -198,9 +198,10 @@ Random state is explicit:
 - Fractal Brownian motion: `FBM1D`, `FBM2D`, `FBM3D`
 
 There is no public global random or noise singleton. Seed `0` maps to a deterministic default seed.
-Invalid integer and float ranges raise `EArgumentError`. `NextBool` clamps probabilities into false
-or true behavior. Dice helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects
-empty, negative, and all-zero weights. FBM noise rejects non-positive octaves, lacunarity, and gain.
+Invalid integer ranges and reversed or non-finite float ranges raise `EArgumentError`. `NextBool`
+clamps probabilities into false or true behavior. Dice helpers return `0` for non-positive dice or
+sides. `WeightedChoice` rejects empty, non-finite, negative, and all-zero weights. FBM noise rejects
+non-positive octaves and non-finite or non-positive lacunarity and gain.
 
 ## Verification
 
