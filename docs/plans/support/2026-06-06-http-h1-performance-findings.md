@@ -1,5 +1,42 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http API parity request helper slice
+
+- 对标结论：
+  - Go `net/http` 的稳定使用面是同步 `Server` lifecycle、handler/middleware
+    composition、`Request`/`Header`/`Body` ownership 与 `Client.Do`。
+  - Rust 生态不能只看 std-only comparator；hyper/tower 更强调 service/connection
+    seam，reqwest 更强调 request-builder ergonomics。
+  - nextPas 当前 server lifecycle、router/middleware、transport injection、
+    static helper 与 WebSocket helper surface 已经够稳；H2/H3 仍只能保留 registry
+    seam 和 future plan，不能伪实现。
+- 真实缺口：
+  - client shortcut 已有 `Get/Post/Put/Delete/Patch/Head`，download helpers 也已落地；
+    缺的是一个不用 concrete `THttpRequest` 的 request construction helper。
+  - 完整 fluent `IHttpRequestBuilder` 还不是当前最佳切片，因为 per-request timeout、
+    redirect override、form/json convenience、streaming/chunked request body ownership
+    都需要额外 contract。
+- 实现决策：
+  - 新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` overload。
+  - nil headers 创建空 `IHttpHeaders`，body/positive length 会设置
+    `content-length`，negative length 抛 `EArgumentError`。
+  - 不改 `IHttpClient` vtable，不改 transport registry，不改 H1 request writer
+    streaming model。
+- RED 证据：
+  - `test_http_message` 先失败于 `Wrong number of parameters specified for call to "NewRequest"`。
+  - `test_http_contract` 先失败于 facade `NewRequest` overload 缺失。
+  - negative content-length 用例先失败：`22 total, 21 passed, 1 failed`，heaptrc
+    `0 unfreed memory blocks`。
+- GREEN / behavior 证据：
+  - `test_http_message`：`22/22 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_contract`：`30/30 passed`，heaptrc `0 unfreed memory blocks`
+  - `test_http_client`：`21/21 passed`，heaptrc `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 API ergonomics 的小 public surface，不是继续堆 correctness
+  case，也不是 premature builder。后续若继续 API 设计，对 client 侧优先评估
+  per-request options / body ownership；若转 benchmark truth，优先补 Hyper/Tokio
+  comparator 或至少明确 runner smoke。
+
 ## 2026-06-06 http h1 parser metadata span fast path slice
 
 - 本轮把 H1 parser watched request metadata 从“parse-time cache 但仍为部分

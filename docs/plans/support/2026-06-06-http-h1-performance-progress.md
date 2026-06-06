@@ -1,5 +1,56 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http API parity request helper slice
+
+- **Status:** completed.
+- Objective:
+  - record a short Go/Rust API parity decision for `nextpas.core.http`
+  - close one real client ergonomics gap without adding a broad builder
+- Scope and safety:
+  - touched HTTP message/facade source, HTTP message/contract/client tests,
+    HTTP docs, and this support evidence only
+  - did not touch compiler paths, non-HTTP modules, root planning files,
+    generated benchmark output, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - failed at missing `NewRequest(..., Headers, Body, ContentLength)` overload
+    - compiler reported `Wrong number of parameters specified for call to "NewRequest"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed at missing facade `NewRequest(..., Headers, Body, ContentLength)` overload
+  - after adding the overload, `test_http_message` negative content-length proof
+    failed as expected:
+    - `22 total, 21 passed, 1 failed`
+    - `heaptrc: 0 unfreed memory blocks`
+- Landed feature commit:
+  - `c386bfc0 feat(http): add request helper overload`
+  - added `NewRequest(Method, Url, Headers, Body, ContentLength)` in
+    `nextpas.core.http.message` and the `nextpas.core.http` facade
+  - nil headers create an empty header set
+  - body or positive length writes `content-length`
+  - negative `ContentLength` raises `EArgumentError`
+  - `test_http_client` proves `IHttpClient.Do_` sends helper-built custom header,
+    content-length, and body to a live server
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `22/22 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `30/30 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `21/21 passed`
+    - `heaptrc: 0 unfreed memory blocks`
+  - `git diff --check`
+    - exit 0
+  - `make hygiene`
+    - `build-hygiene=pass`
+- Outcome:
+  - public request construction now supports custom headers/body without forcing
+    callers onto concrete `THttpRequest`
+  - docs record that full request builder, static range/streaming, WebSocket
+    expansion, fake H2/H3, and Rust ecosystem performance claims remain out of
+    scope for this slice
+
 ## Session: 2026-06-06 http h1 parser metadata span fast path slice
 
 - **Status:** completed.

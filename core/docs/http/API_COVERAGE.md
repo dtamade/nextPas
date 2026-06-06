@@ -11,6 +11,33 @@
 
 ## 当前结论
 
+- 2026-06-06 API 对标结论：
+  - 已够稳：`IHttpServer.ListenAndServe` / `Shutdown` / `LocalAddr` / `IsRunning`
+    的生命周期形状足够清晰，保持同步 facade，不把 Go `net/http` 或 Rust
+    async runtime 细节泄漏到 public contract；handler / middleware / router
+    组合也已符合小接口、可组合、可测试的稳定面。
+  - 已够稳：static serving 与 WebSocket 仍停在 helper/facade 层更合适。当前
+    helper 已有 focused coverage；没有 range、streaming static file、WebSocket
+    extension negotiation 等稳定 contract 前，不扩大成独立 builder 或 service
+    family。
+  - 已够稳：H2/H3 只保留 registry / transport seam 和规划文档。不创建伪 H2/H3
+    public API，不用空实现制造“支持”假象。
+  - 真实缺口：client 侧需要比 `Get/Post/...` shortcut 更自然的自定义 request
+    construction。Go `net/http` 和 Rust reqwest/hyper 生态都让调用方清晰表达
+    method、headers、body 和 body length / ownership；旧 surface 要么只能用
+    shortcut，要么需要直接构造 concrete `THttpRequest`。
+  - 本轮补齐：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` public
+    helper，经 `nextpas.core.http` facade 转发。nil headers 会创建空 header set；
+    body/positive length 会写入 `content-length`；negative content length 会抛
+    `EArgumentError`。`test_http_message`、`test_http_contract` 和
+    `test_http_client` 分别锁住 helper contract、facade 可见性和
+    `IHttpClient.Do_` live header/body 发送路径。
+  - 暂不做：不引入完整 fluent `IHttpRequestBuilder`。当前 helper 已覆盖低风险
+    ergonomics 缺口；per-request timeout、redirect override、form/json body helper、
+    streaming/chunked request body ownership 等需要更明确 contract 后再扩。
+  - Benchmark truth 仍未完成：当前 Rust comparator 仍是 std-only microbaseline；
+    不能声明代表 Rust HTTP 生态。Hyper/Tokio 或等价 async Rust comparator
+    仍是后续 benchmark truth 缺口。
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
 - `http_server_options_demo` 现在也有 focused runnable example smoke：测试会自动 build example、启动外部 server 进程，并验证 `/health`、`/hello/world`、`POST /echo` 与 oversize body `413` rejection。
 - `http_websocket_echo_demo` 现在也有 focused runnable example smoke：测试会自动 build example、启动外部 server 进程，完成 `/ws` WebSocket handshake，并验证 masked text frame -> server text echo。

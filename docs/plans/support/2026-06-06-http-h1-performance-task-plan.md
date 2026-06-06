@@ -1,5 +1,33 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http API parity request helper slice
+
+### Goal
+
+完成一轮 HTTP public API 对标审计，并落一个低风险 client ergonomics
+切片：新增 `NewRequest(Method, Url, Headers, Body, ContentLength)` helper，
+让调用方不必直接依赖 concrete `THttpRequest` 就能构造带自定义 headers/body
+的 `IHttpClient.Do_` 请求。
+
+### Checklist
+
+- [x] 只读审计当前 HTTP docs、coverage、benchmark truth 与 public API。
+- [x] 对标 Go `net/http` 与 Rust hyper/tower/reqwest 核心使用面，记录短结论：
+  server lifecycle/router/middleware/static/websocket/H2-H3 boundary 已够稳；
+  client request construction 是真实缺口；Hyper/Tokio comparator 仍是 benchmark truth 缺口。
+- [x] RED：`test_http_message` / `test_http_contract` 先因缺少
+  `NewRequest(..., Headers, Body, ContentLength)` overload 编译失败。
+- [x] RED：负 `ContentLength` 用例先失败，证明 helper 缺少输入校验。
+- [x] GREEN：在 `nextpas.core.http.message` 与 facade 增加 overload；
+  nil headers 创建空 header set，body/positive length 写入 `content-length`，
+  negative length 抛 `EArgumentError`。
+- [x] 在 `test_http_client` 补 live proof：新 helper 构造的 request 经
+  `IHttpClient.Do_` 正确发送 custom header、content-length 与 body。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`、`test_http_client`。
+- [x] 跑 `git diff --check` 与 `make hygiene`，并先提交 feature。
+- [x] 更新 `core/docs/http/README.md`、`API_COVERAGE.md` 与本 support evidence，
+  单独提交 docs。
+
 ## Active Session: 2026-06-06 http h1 parser metadata span fast path slice
 
 ### Goal
