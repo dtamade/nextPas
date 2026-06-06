@@ -301,6 +301,8 @@ var
   LPascalCaseCas32Section: string;
   LPascalCaseCas64Section: string;
   LPascalCaseCasPtrSection: string;
+  LFacadePtrStrongCasSection: string;
+  LFacadePtrWeakCasSection: string;
   LDefaultTaggedPtrLoadSection: string;
   LAtomicWaitSection: string;
   LAtomicNotifyOneSection: string;
@@ -423,6 +425,12 @@ begin
   LPascalCaseCasPtrSection := ExtractImplementationSection(LAtomicSource,
     'function AtomicCompareExchangePtr(var ATarget: Pointer; const AExpected, ADesired: Pointer; const AOrder: TMemoryOrder): Pointer;',
     'procedure AtomicThreadFence(const AOrder: TMemoryOrder);');
+  LFacadePtrStrongCasSection := ExtractImplementationSection(LAtomicSource,
+    'function TAtomicPtr.CompareExchangeStrong(var AExpected: PT; ADesired: PT;',
+    'function TAtomicPtr.CompareExchangeWeak(var AExpected: PT; ADesired: PT;');
+  LFacadePtrWeakCasSection := ExtractImplementationSection(LAtomicSource,
+    'function TAtomicPtr.CompareExchangeWeak(var AExpected: PT; ADesired: PT;',
+    'function TAtomicPtr.GetMut: Pointer;');
   LDefaultTaggedPtrLoadSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;',
     'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t);');
@@ -519,6 +527,9 @@ begin
     'atomic README must name the typed record API');
   CheckContains(LAtomicDocsReadme, 'facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`',
     'atomic README must document the typed-record facade boundary');
+  CheckContains(LAtomicDocsReadme,
+    '`TAtomicPtr<T>` single-order CAS normalizes `mo_consume` success to acquire and derives a legal failure order; failure order never includes release or acq_rel.',
+    'atomic README must document facade TAtomicPtr CAS failure-order derivation');
   CheckContains(LAtomicDocsReadme, 'memory_order_t',
     'atomic README must describe memory-order semantics');
   CheckContains(LAtomicDocsReadme, 'mo_seq_cst',
@@ -581,6 +592,22 @@ begin
     'PascalCase Int64 CAS must normalize consume to acquire on success path');
   CheckContains(LPascalCaseCasPtrSection, '_cas_success_order(AOrder)',
     'PascalCase pointer CAS must normalize consume to acquire on success path');
+  CheckContains(LFacadePtrStrongCasSection,
+    'if AOrder = mo_consume then' + LineEnding +
+    '    LSuccessOrder := mo_acquire',
+    'facade TAtomicPtr strong CAS must normalize consume to acquire on success path');
+  CheckContains(LFacadePtrWeakCasSection,
+    'if AOrder = mo_consume then' + LineEnding +
+    '    LSuccessOrder := mo_acquire',
+    'facade TAtomicPtr weak CAS must normalize consume to acquire on success path');
+  CheckContains(LFacadePtrStrongCasSection, 'mo_release: LFailureOrder := mo_relaxed;',
+    'facade TAtomicPtr strong CAS failure order must not include release');
+  CheckContains(LFacadePtrWeakCasSection, 'mo_release: LFailureOrder := mo_relaxed;',
+    'facade TAtomicPtr weak CAS failure order must not include release');
+  CheckContains(LFacadePtrStrongCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
+    'facade TAtomicPtr strong CAS failure order must not include acq_rel');
+  CheckContains(LFacadePtrWeakCasSection, 'mo_acq_rel: LFailureOrder := mo_acquire;',
+    'facade TAtomicPtr weak CAS failure order must not include acq_rel');
   CheckContains(LCompatFailureSection, 'mo_consume',
     'AtomicCompatFailureOrder must treat consume explicitly');
   CheckContains(LTypesFailureSection, 'mo_consume',
