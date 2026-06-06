@@ -76,6 +76,22 @@ begin
   Check(LToks[4].Kind = xtkEndElement, 'a end');
 end;
 
+procedure TestTokenPositions;
+var LToks: TXmlTokenArray;
+begin
+  LToks := ReadAll('<root><child/></root>');
+  CheckEqual(Int64(3), Int64(Length(LToks)), 'token count');
+  CheckEqual(Int64(0), Int64(LToks[0].Position.ByteOffset), 'root start offset');
+  CheckEqual(Int64(1), Int64(LToks[0].Position.Line), 'root start line');
+  CheckEqual(Int64(1), Int64(LToks[0].Position.Column), 'root start column');
+  CheckEqual(Int64(6), Int64(LToks[1].Position.ByteOffset), 'child offset');
+  CheckEqual(Int64(1), Int64(LToks[1].Position.Line), 'child line');
+  CheckEqual(Int64(7), Int64(LToks[1].Position.Column), 'child column');
+  CheckEqual(Int64(14), Int64(LToks[2].Position.ByteOffset), 'root end offset');
+  CheckEqual(Int64(1), Int64(LToks[2].Position.Line), 'root end line');
+  CheckEqual(Int64(15), Int64(LToks[2].Position.Column), 'root end column');
+end;
+
 procedure TestSelfClosing;
 var LToks: TXmlTokenArray;
 begin
@@ -536,6 +552,7 @@ begin
   T := TTestRunner.Create('XML Reader');
   T.Run('SimpleElement', @TestSimpleElement);
   T.Run('NestedElements', @TestNestedElements);
+  T.Run('TokenPositions', @TestTokenPositions);
   T.Run('SelfClosing', @TestSelfClosing);
   T.Run('SelfClosingWithSpace', @TestSelfClosingWithSpace);
   T.Run('AttributeDouble', @TestAttributeDouble);

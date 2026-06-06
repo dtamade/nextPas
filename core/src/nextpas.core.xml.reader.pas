@@ -621,6 +621,8 @@ begin
     Inc(FCol, 3);
   end;
 
+  AToken.Position := Position;
+
   if AtEnd then
   begin
     { HIGH 4 fix: check for unclosed tags at EOF }

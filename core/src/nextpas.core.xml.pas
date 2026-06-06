@@ -65,7 +65,8 @@ begin
   except
     on EXmlError do
     begin
-      FreeAndNil(ADoc);
+      ADoc.Free;
+      ADoc := nil;
       Result := False;
     end;
   end;
