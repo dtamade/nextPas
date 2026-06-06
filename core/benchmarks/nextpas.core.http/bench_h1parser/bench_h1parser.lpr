@@ -843,6 +843,28 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchFastHeadersGetAllAccept(aIters: Int64);
+var
+  LIt: Int64;
+  LI: SizeInt;
+  LResult: TFastParseResult;
+  LValues: TStringArray;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success then
+    begin
+      LValues := LResult.Headers.GetAll('Accept');
+      for LI := 0 to High(LValues) do
+        LScore := LScore + SizeUInt(Length(LValues[LI]));
+    end;
+  end;
+  GSink := GSink + LScore;
+end;
+
 procedure BenchFastHeadersForEachAll(aIters: Int64);
 var
   LIt: Int64;
@@ -996,6 +1018,8 @@ begin
     @BenchFastHeadersGetHostOnly);
   B.Run('adapter cost: fast headers count all',
     @BenchFastHeadersCountAll);
+  B.Run('adapter cost: fast headers get all accept',
+    @BenchFastHeadersGetAllAccept);
   B.Run('adapter cost: fast headers foreach all',
     @BenchFastHeadersForEachAll);
   B.Run('adapter no-url: metadata 3 headers',

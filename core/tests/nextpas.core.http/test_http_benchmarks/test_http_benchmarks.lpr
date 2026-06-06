@@ -914,6 +914,7 @@ var
   LSource: string;
   LMaterializeBody: string;
   LGetBody: string;
+  LGetAllBody: string;
   LHasBody: string;
   LCountBody: string;
 begin
@@ -927,6 +928,10 @@ begin
     'function TFastLazyHeaders.Get(const AName: string): string;',
     'function TFastLazyHeaders.GetAll',
     'TFastLazyHeaders.Get body');
+  LGetAllBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.GetAll(const AName: string): TStringArray;',
+    'function TFastLazyHeaders.Has',
+    'TFastLazyHeaders.GetAll body');
   LHasBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.Has(const AName: string): Boolean;',
     'procedure TFastLazyHeaders.Del',
@@ -940,6 +945,8 @@ begin
     'TFastLazyHeaders raw first-value lookup helper');
   CheckContains(LSource, 'function TFastLazyHeaders.CountRawHeaders: Int32',
     'TFastLazyHeaders raw count helper');
+  CheckContains(LSource, 'function TFastLazyHeaders.GetAllRawValues',
+    'TFastLazyHeaders raw multi-value lookup helper');
   CheckContains(LMaterializeBody, 'AddParsedSpans(',
     'TFastLazyHeaders.EnsureMaterialized should use parser-trusted span insertion');
   CheckNotContains(LMaterializeBody, 'FHeaders.Add(',
@@ -948,6 +955,10 @@ begin
     'TFastLazyHeaders.Get should use raw first-value lookup');
   CheckNotContains(LGetBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.Get should not materialize the full header block');
+  CheckContains(LGetAllBody, 'GetAllRawValues(AName)',
+    'TFastLazyHeaders.GetAll should use raw multi-value lookup');
+  CheckNotContains(LGetAllBody, 'EnsureMaterialized;',
+    'TFastLazyHeaders.GetAll should not materialize the full header block');
   CheckContains(LHasBody, 'FindRawFirstValue(AName, LValue)',
     'TFastLazyHeaders.Has should use raw first-value lookup');
   CheckNotContains(LHasBody, 'EnsureMaterialized;',
@@ -1793,6 +1804,8 @@ begin
     'H1 parser benchmark fast lazy header Get row');
   CheckContains(LOutput, 'adapter cost: fast headers count all',
     'H1 parser benchmark fast lazy header Count row');
+  CheckContains(LOutput, 'adapter cost: fast headers get all accept',
+    'H1 parser benchmark fast lazy header GetAll row');
   CheckContains(LOutput, 'adapter cost: fast headers foreach all',
     'H1 parser benchmark fast lazy header ForEach row');
 end;

@@ -253,11 +253,12 @@ slice. It is intentionally not a durable performance ranking.
 
 ## Optimization Evidence: H1 Fast Lazy Header Lookup
 
-On 2026-06-06 local time, `TFastLazyHeaders.Get`, `Has`, and `Count` stopped
-forcing full header-block materialization. The fast path now scans the raw
-request header block for first-value lookup and count-only access; `GetAll`,
-`ForEach`, `Clone`, and mutation methods still materialize the full
-`THttpHeaders` store to preserve duplicate-order and mutation semantics.
+On 2026-06-06 local time, `TFastLazyHeaders.Get`, `Has`, `Count`, and `GetAll`
+stopped forcing full header-block materialization. The fast path now scans the
+raw request header block for first-value lookup, count-only access, and
+same-name multi-value lookup; `ForEach`, `Clone`, and mutation methods still
+materialize the full `THttpHeaders` store to preserve duplicate-order and
+mutation semantics.
 
 The same focused slice also fixed an empty-header-value fast validation bug:
 `IsValidHeaderValueFast` now accepts `ALen = 0` instead of underflowing the
@@ -291,15 +292,17 @@ make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 
 | row | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| adapter cost: fast headers get host only | 100000 | 1486.1 | 672910 |
-| adapter cost: fast headers count all | 100000 | 1740.7 | 574494 |
-| adapter cost: fast headers foreach all | 100000 | 3953.1 | 252966 |
+| adapter cost: fast headers get host only | 100000 | 1454.8 | 687396 |
+| adapter cost: fast headers count all | 100000 | 1709.5 | 584957 |
+| adapter cost: fast headers get all accept | 100000 | 2601.8 | 384353 |
+| adapter cost: fast headers foreach all | 100000 | 3893.2 | 256857 |
 
 This is a nextPas internal materialization-cost split, not a cross-language
-server ranking. It shows the single-header lookup and count-only paths no
-longer pay the same full materialization cost as whole-header access. The
-`count all` row isolates raw header-line counting, while `foreach all` still
-measures materialization plus iteration callback overhead.
+server ranking. It shows the single-header lookup, count-only path, and
+same-name `GetAll` path no longer pay the same full materialization cost as
+whole-header access. The `count all` row isolates raw header-line counting,
+`get all accept` isolates raw multi-value lookup for one header name, and
+`foreach all` still measures materialization plus iteration callback overhead.
 
 On 2026-06-06 local time, `TFastLazyHeaders.EnsureMaterialized` stopped
 re-entering the public `IHttpHeaders.Add` validation / copy path and now inserts
@@ -312,6 +315,11 @@ The follow-up count-only slice added a raw header-count helper for
 `TFastLazyHeaders.Count`. On the same benchmark shape, `count all` dropped
 again from `3823.4 ns/op` to `1740.7 ns/op`; `foreach all` remains the
 materialization row.
+
+The next same-name lookup slice added `TFastLazyHeaders.GetAllRawValues` and a
+dedicated `get all accept` benchmark row. On this host that row reports
+`2601.8 ns/op`, below the full `foreach all` materialization row at
+`3893.2 ns/op`.
 
 ## Run the Router Dispatch Benchmark
 

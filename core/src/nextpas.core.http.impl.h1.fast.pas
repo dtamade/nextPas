@@ -51,6 +51,7 @@ type
     FHeaders: IHttpHeaders;
     procedure EnsureMaterialized;
     function FindRawFirstValue(const AName: string; out AValue: string): Boolean;
+    function GetAllRawValues(const AName: string): TStringArray;
     function CountRawHeaders: Int32;
   public
     constructor Create(const ABuf: PAnsiChar; const ALen: SizeUInt);
@@ -218,6 +219,83 @@ begin
   end;
 end;
 
+function TFastLazyHeaders.GetAllRawValues(const AName: string): TStringArray;
+var
+  LCount: Int32;
+  LIndex: Int32;
+  LLineStart: SizeInt;
+  LValueStart: SizeInt;
+  LValueLen: SizeInt;
+
+  function NextMatchingValue(var ALineStart: SizeInt; out AValueStart: SizeInt;
+    out AValueLen: SizeInt): Boolean;
+  var
+    LNameStart: SizeInt;
+    LLineEnd: SizeInt;
+    LColon: SizeInt;
+    LValStart: SizeInt;
+    LRawLen: SizeInt;
+  begin
+    Result := False;
+    LRawLen := Length(FRaw);
+    while ALineStart <= LRawLen do
+    begin
+      LNameStart := ALineStart;
+      LLineEnd := ALineStart;
+      while (LLineEnd <= LRawLen) and
+            (not ((FRaw[LLineEnd] = #13) and
+                  (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
+        Inc(LLineEnd);
+
+      LColon := ALineStart;
+      while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
+        Inc(LColon);
+      if LColon >= LLineEnd then
+      begin
+        ALineStart := LRawLen + 1;
+        Exit;
+      end;
+
+      LValStart := LColon + 1;
+      while (LValStart < LLineEnd) and
+            ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
+        Inc(LValStart);
+
+      if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
+        ALineStart := LLineEnd + 2
+      else
+        ALineStart := LRawLen + 1;
+
+      if FastHeaderNameMatches(FRaw, LNameStart, LColon - LNameStart,
+        AName) then
+      begin
+        AValueStart := LValStart;
+        AValueLen := LLineEnd - LValStart;
+        Exit(True);
+      end;
+    end;
+  end;
+
+begin
+  Result := nil;
+  LCount := 0;
+  LLineStart := 1;
+  while NextMatchingValue(LLineStart, LValueStart, LValueLen) do
+    Inc(LCount);
+
+  if LCount = 0 then
+    Exit;
+
+  SetLength(Result, LCount);
+  LIndex := 0;
+  LLineStart := 1;
+  while NextMatchingValue(LLineStart, LValueStart, LValueLen) do
+  begin
+    SetString(Result[LIndex], PAnsiChar(FRaw) + LValueStart - 1, LValueLen);
+    Inc(LIndex);
+  end;
+end;
+
 function TFastLazyHeaders.CountRawHeaders: Int32;
 var
   LLineStart, LLineEnd: SizeInt;
@@ -272,8 +350,9 @@ end;
 
 function TFastLazyHeaders.GetAll(const AName: string): TStringArray;
 begin
-  EnsureMaterialized;
-  Result := FHeaders.GetAll(AName);
+  if FHeaders <> nil then
+    Exit(FHeaders.GetAll(AName));
+  Result := GetAllRawValues(AName);
 end;
 
 function TFastLazyHeaders.Has(const AName: string): Boolean;
