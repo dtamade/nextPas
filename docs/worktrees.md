@@ -45,6 +45,10 @@ API、性能或架构质量，必须修正依赖模块或底座 contract，可�
 设计原因、风险、触碰路径和验证计划；影响面较大时先汇报 `Needs Review`，不要把大范围架构迁移混进
 普通模块 slice。
 
+高层模块开发是低层模块设计的压力测试。HTTP、TUI、config、app 这类高层模块如果发现 platform、
+net、async、mem、base 等底层接口不顺、语义错误或性能路径不合理，应通过受控跨模块修改推动底层收敛，
+而不是在高层长期保留 workaround。最终 landing 时由验证和设计说明来判断哪套方案更合理。
+
 ## 创建模块 Worktree
 
 使用项目脚本：

@@ -36,6 +36,7 @@ make -C "$REPO_ROOT" hygiene
 ## Module Scope
 
 - A module lane is the default ownership boundary, not a design cage. Start inside the owned module paths, but fix dependent modules or foundation contracts when the current module can't be made correct without that change.
+- Higher-level modules should feed foundation design. If HTTP, TUI, config, app, or similar modules expose a bad contract in platform, net, async, mem, base, or another lower layer, improve the lower-layer contract instead of hiding the problem behind a high-level workaround.
 - Typical module paths are `src/nextpas.core.<module>*`, `tests/nextpas.core.<module>/`,
   `examples/nextpas.core.<module>/`, `benchmarks/nextpas.core.<module>/`, and `docs/<module>/`.
 - Cross-module changes must be minimal and intentional. Before or during the slice, call out why the change is required, which owner boundary or API contract is affected, and why a local workaround would be worse.
