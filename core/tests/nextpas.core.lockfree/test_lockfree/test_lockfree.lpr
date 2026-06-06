@@ -964,6 +964,9 @@ begin
     'lockfree README must describe the manual C++ comparison source approximations');
   CheckContains(LDocsReadme, 'platform/compiler flags/input size/baseline',
     'lockfree README must name the benchmark evidence envelope');
+  CheckContains(LDocsReadme,
+    'benchmark keeps consumed values in a printed sink to reduce optimizer-elision risk',
+    'lockfree README must document the benchmark sink keepalive contract');
   CheckNotContains(LDocsReadme, '当前模块还缺少正式 benchmark harness',
     'lockfree README must not say the benchmark harness is missing when it exists');
 
@@ -1086,6 +1089,10 @@ begin
     'lockfree benchmark must print the input-size evidence field');
   CheckContains(LBenchSource, 'WriteLn(''Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)'')',
     'lockfree benchmark must print the baseline evidence field');
+  CheckContains(LBenchSource, 'GBenchSink: Int64;',
+    'lockfree benchmark must keep a visible consumed-value sink');
+  CheckContains(LBenchSource, 'WriteLn(''Sink: '', GBenchSink);',
+    'lockfree benchmark must print the consumed-value sink');
   CheckContains(LRustCompareSource, 'use std::sync::mpsc',
     'Rust comparison source must use Rust std channel APIs');
   CheckContains(LRustCompareSource, 'use std::sync::{Arc, Condvar, Mutex};',

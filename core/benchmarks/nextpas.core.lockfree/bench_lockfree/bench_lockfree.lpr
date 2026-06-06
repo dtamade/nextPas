@@ -21,6 +21,9 @@ type
 const
   OPS = 1000000;
 
+var
+  GBenchSink: Int64;
+
 function BenchmarkPlatformName: string;
 begin
   Result := OSName + ' ' + CPUName;
@@ -54,20 +57,26 @@ var
   LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
   LV, LCount: Integer;
+  LSink: Int64;
   LStart: TInstant;
   LNs: Int64;
 begin
   GSpsc := TIntSpsc.Create(1024);
   LCount := 0;
+  LSink := 0;
   LStart := TInstant.Now;
   platform_thread_create(LHandle, @SpscProducer, nil);
   while LCount < OPS do
   begin
     if GSpsc.DequeueWait(LV) then
+    begin
       Inc(LCount);
+      LSink := LSink + LV;
+    end;
   end;
   platform_thread_join(LHandle, LRetVal);
   LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + LSink;
   WriteLn(Format('  SPSC 1M ops          %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
     [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
   GSpsc.Free;
@@ -78,6 +87,7 @@ end;
 var
   GMpmc: TIntMpmc;
   GMpmcDone: Int32;
+  GMpmcSink: Int64;
 
 function MpmcProducer(AArg: Pointer): Pointer; cdecl;
 var
@@ -91,10 +101,16 @@ end;
 function MpmcConsumer(AArg: Pointer): Pointer; cdecl;
 var
   LV: Integer;
+  LSink: Int64;
 begin
   Result := nil;
+  LSink := 0;
   while GMpmc.DequeueWait(LV) do
+  begin
+    LSink := LSink + LV;
     InterlockedIncrement(GMpmcDone);
+  end;
+  AtomicFetchAdd64(GMpmcSink, LSink, moAcqRel);
 end;
 
 procedure BenchMpmc;
@@ -108,6 +124,7 @@ var
 begin
   GMpmc := TIntMpmc.Create(1024);
   GMpmcDone := 0;
+  GMpmcSink := 0;
   LStart := TInstant.Now;
   for LI := 0 to 1 do
     platform_thread_create(LC[LI], @MpmcConsumer, nil);
@@ -119,6 +136,7 @@ begin
   for LI := 0 to 1 do
     platform_thread_join(LC[LI], LRetVal);
   LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + AtomicLoad64(GMpmcSink, moAcquire);
   WriteLn(Format('  MPMC 2P+2C 1M ops    %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
     [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
   GMpmc.Free;
@@ -143,20 +161,26 @@ var
   LHandle: TPlatformThreadHandle;
   LRetVal: Pointer;
   LV, LCount: Integer;
+  LSink: Int64;
   LStart: TInstant;
   LNs: Int64;
 begin
   GMutexCh := TIntChannel.Create(1024);
   LCount := 0;
+  LSink := 0;
   LStart := TInstant.Now;
   platform_thread_create(LHandle, @MutexProducer, nil);
   while LCount < OPS do
   begin
     if GMutexCh.TryReceive(LV) then
+    begin
       Inc(LCount);
+      LSink := LSink + LV;
+    end;
   end;
   platform_thread_join(LHandle, LRetVal);
   LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + LSink;
   WriteLn(Format('  Mutex Ch 1P+1C 1M    %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
     [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
   GMutexCh.Free;
@@ -169,17 +193,21 @@ var
   LQ: TIntSpsc;
   LI: Integer;
   LV: Integer;
+  LSink: Int64;
   LStart: TInstant;
   LNs: Int64;
 begin
   LQ := TIntSpsc.Create(1024);
+  LSink := 0;
   LStart := TInstant.Now;
   for LI := 1 to OPS do
   begin
     LQ.TryEnqueue(LI);
     LQ.TryDequeue(LV);
+    LSink := LSink + LV;
   end;
   LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + LSink;
   WriteLn(Format('  SPSC Try* 1T 1M      %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
     [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
   LQ.Free;
@@ -190,17 +218,21 @@ var
   LQ: TIntMpmc;
   LI: Integer;
   LV: Integer;
+  LSink: Int64;
   LStart: TInstant;
   LNs: Int64;
 begin
   LQ := TIntMpmc.Create(1024);
+  LSink := 0;
   LStart := TInstant.Now;
   for LI := 1 to OPS do
   begin
     LQ.TryEnqueue(LI);
     LQ.TryDequeue(LV);
+    LSink := LSink + LV;
   end;
   LNs := LStart.Elapsed.AsNanoseconds;
+  GBenchSink := GBenchSink + LSink;
   WriteLn(Format('  MPMC Try* 1T 1M      %8.2f ms  %6.1f M ops/sec  %5.1f ns/op',
     [LNs / 1000000.0, OPS / (LNs / 1000000000.0) / 1000000.0, LNs / Double(OPS)]));
   LQ.Free;
@@ -218,5 +250,6 @@ begin
   BenchSpscSingleThread;
   BenchMpmcSingleThread;
   WriteLn;
+  WriteLn('Sink: ', GBenchSink);
   WriteLn('Done.');
 end.
