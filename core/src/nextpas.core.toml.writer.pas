@@ -440,10 +440,39 @@ begin
 end;
 
 procedure TTomlWriter.Comment(const AText: string);
+var
+  LStart, LPos, LLen, LLineLen: Integer;
 begin
-  FBuilder^.AppendBytes('# ', 2);
-  FBuilder^.AppendStr(AText);
-  FBuilder^.AppendChar(#10);
+  LLen := Length(AText);
+  if LLen = 0 then
+  begin
+    FBuilder^.AppendBytes('# ', 2);
+    FBuilder^.AppendChar(#10);
+    Exit;
+  end;
+
+  LStart := 1;
+  while LStart <= LLen do
+  begin
+    LPos := LStart;
+    while (LPos <= LLen) and (AText[LPos] <> #10) and (AText[LPos] <> #13) do
+      Inc(LPos);
+
+    FBuilder^.AppendBytes('# ', 2);
+    if LPos > LStart then
+    begin
+      LLineLen := LPos - LStart;
+      FBuilder^.AppendBytes(PAnsiChar(AText) + LStart - 1,
+        SizeUInt(LLineLen));
+    end;
+    FBuilder^.AppendChar(#10);
+
+    if LPos > LLen then
+      Break;
+    if (AText[LPos] = #13) and (LPos < LLen) and (AText[LPos + 1] = #10) then
+      Inc(LPos);
+    LStart := LPos + 1;
+  end;
 end;
 
 procedure TTomlWriter.Newline;

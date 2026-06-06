@@ -122,6 +122,17 @@ begin
   B.Done;
 end;
 
+procedure TestMultilineComment;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(128); W.Init(B);
+  W.Comment('first' + #10 + 'second' + #13#10 + 'third');
+  W.Key('x'); W.Int(1);
+  CheckEqual('# first' + #10 + '# second' + #10 + '# third' + #10 +
+    'x = 1' + #10, B.ToString, 'multiline comment');
+  B.Done;
+end;
+
 procedure TestDateTimeOffset;
 var B: TStringBuilder; W: TTomlWriter;
 begin
@@ -254,6 +265,7 @@ begin
   T.Run('escaped string', @TestEscapedString);
   T.Run('quoted key', @TestQuotedKey);
   T.Run('comment', @TestComment);
+  T.Run('multiline comment', @TestMultilineComment);
   T.Run('datetime offset Z', @TestDateTimeOffset);
   T.Run('datetime +09:00', @TestDateTimePositiveOffset);
   T.Run('local date', @TestLocalDate);
