@@ -51,8 +51,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   direct `Double`-path parity for projection/view/model/camera builders.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints, representative midpoint/branch
-  points, finite out-of-range extrapolation, and NaN/Inf rejection, and the surface checker rejects
-  direct FPC `Math` usage in the easing unit.
+  points, finite out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
+  `Ease*: T must be finite` messages, and the surface checker rejects direct FPC `Math` usage in
+  the easing unit.
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
@@ -260,7 +261,8 @@ Status:
 - `nextpas.core.math.easing` provides `TEasingFunction`, `EaseLinear`, Quad/Cubic/Quart,
   Expo, Elastic, Back, and Bounce variants.
 - `test_easing` locks endpoints, midpoints, representative `InOut*` branch points, finite
-  out-of-range extrapolation, and NaN/Inf rejection; `test_facade` proves root facade exposure.
+  out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
+  `Ease*: T must be finite` messages; `test_facade` proves root facade exposure.
 - `test_api_surface` rejects a direct `uses Math` dependency in `nextpas.core.math.easing.pas`.
 
 ## M6: Random + Noise

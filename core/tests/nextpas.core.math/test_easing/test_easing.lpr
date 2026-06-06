@@ -17,6 +17,7 @@ type
   TEasingCase = record
     Name: string;
     Func: TEasingFunction;
+    ExpectedMessage: string;
   end;
 
   TOutOfRangeCase = record
@@ -49,6 +50,23 @@ begin
   CheckNear(0.0, AFunc(0.0), AName + ' starts at zero');
   CheckNear(1.0, AFunc(1.0), AName + ' ends at one');
   CheckNear(AMidpoint, AFunc(0.5), AName + ' midpoint');
+end;
+
+procedure ExpectArgumentErrorMessage(const AName, AExpectedMessage: string;
+  const AFunc: TEasingFunction; const AValue: Double);
+begin
+  try
+    AFunc(AValue);
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
 end;
 
 function DoubleNaN: Double;
@@ -183,71 +201,41 @@ end;
 
 procedure TestNonFiniteInputsFailFast;
 const
-  Cases: array[0..20] of TEasingCase = (
-    (Name: 'EaseLinear'; Func: @EaseLinear),
-    (Name: 'EaseInQuad'; Func: @EaseInQuad),
-    (Name: 'EaseOutQuad'; Func: @EaseOutQuad),
-    (Name: 'EaseInOutQuad'; Func: @EaseInOutQuad),
-    (Name: 'EaseInCubic'; Func: @EaseInCubic),
-    (Name: 'EaseOutCubic'; Func: @EaseOutCubic),
-    (Name: 'EaseInOutCubic'; Func: @EaseInOutCubic),
-    (Name: 'EaseInQuart'; Func: @EaseInQuart),
-    (Name: 'EaseOutQuart'; Func: @EaseOutQuart),
-    (Name: 'EaseInOutQuart'; Func: @EaseInOutQuart),
-    (Name: 'EaseInExpo'; Func: @EaseInExpo),
-    (Name: 'EaseOutExpo'; Func: @EaseOutExpo),
-    (Name: 'EaseInOutExpo'; Func: @EaseInOutExpo),
-    (Name: 'EaseInElastic'; Func: @EaseInElastic),
-    (Name: 'EaseOutElastic'; Func: @EaseOutElastic),
-    (Name: 'EaseInOutElastic'; Func: @EaseInOutElastic),
-    (Name: 'EaseInBack'; Func: @EaseInBack),
-    (Name: 'EaseOutBack'; Func: @EaseOutBack),
-    (Name: 'EaseInOutBack'; Func: @EaseInOutBack),
-    (Name: 'EaseInBounce'; Func: @EaseInBounce),
-    (Name: 'EaseOutBounce'; Func: @EaseOutBounce)
+  Cases: array[0..21] of TEasingCase = (
+    (Name: 'EaseLinear'; Func: @EaseLinear; ExpectedMessage: 'EaseLinear: T must be finite'),
+    (Name: 'EaseInQuad'; Func: @EaseInQuad; ExpectedMessage: 'EaseInQuad: T must be finite'),
+    (Name: 'EaseOutQuad'; Func: @EaseOutQuad; ExpectedMessage: 'EaseOutQuad: T must be finite'),
+    (Name: 'EaseInOutQuad'; Func: @EaseInOutQuad; ExpectedMessage: 'EaseInOutQuad: T must be finite'),
+    (Name: 'EaseInCubic'; Func: @EaseInCubic; ExpectedMessage: 'EaseInCubic: T must be finite'),
+    (Name: 'EaseOutCubic'; Func: @EaseOutCubic; ExpectedMessage: 'EaseOutCubic: T must be finite'),
+    (Name: 'EaseInOutCubic'; Func: @EaseInOutCubic; ExpectedMessage: 'EaseInOutCubic: T must be finite'),
+    (Name: 'EaseInQuart'; Func: @EaseInQuart; ExpectedMessage: 'EaseInQuart: T must be finite'),
+    (Name: 'EaseOutQuart'; Func: @EaseOutQuart; ExpectedMessage: 'EaseOutQuart: T must be finite'),
+    (Name: 'EaseInOutQuart'; Func: @EaseInOutQuart; ExpectedMessage: 'EaseInOutQuart: T must be finite'),
+    (Name: 'EaseInExpo'; Func: @EaseInExpo; ExpectedMessage: 'EaseInExpo: T must be finite'),
+    (Name: 'EaseOutExpo'; Func: @EaseOutExpo; ExpectedMessage: 'EaseOutExpo: T must be finite'),
+    (Name: 'EaseInOutExpo'; Func: @EaseInOutExpo; ExpectedMessage: 'EaseInOutExpo: T must be finite'),
+    (Name: 'EaseInElastic'; Func: @EaseInElastic; ExpectedMessage: 'EaseInElastic: T must be finite'),
+    (Name: 'EaseOutElastic'; Func: @EaseOutElastic; ExpectedMessage: 'EaseOutElastic: T must be finite'),
+    (Name: 'EaseInOutElastic'; Func: @EaseInOutElastic; ExpectedMessage: 'EaseInOutElastic: T must be finite'),
+    (Name: 'EaseInBack'; Func: @EaseInBack; ExpectedMessage: 'EaseInBack: T must be finite'),
+    (Name: 'EaseOutBack'; Func: @EaseOutBack; ExpectedMessage: 'EaseOutBack: T must be finite'),
+    (Name: 'EaseInOutBack'; Func: @EaseInOutBack; ExpectedMessage: 'EaseInOutBack: T must be finite'),
+    (Name: 'EaseInBounce'; Func: @EaseInBounce; ExpectedMessage: 'EaseInBounce: T must be finite'),
+    (Name: 'EaseOutBounce'; Func: @EaseOutBounce; ExpectedMessage: 'EaseOutBounce: T must be finite'),
+    (Name: 'EaseInOutBounce'; Func: @EaseInOutBounce;
+      ExpectedMessage: 'EaseInOutBounce: T must be finite')
   );
 var
   I: Integer;
-  Caught: Boolean;
 begin
   for I := Low(Cases) to High(Cases) do
   begin
-    Caught := False;
-    try
-      Cases[I].Func(DoubleNaN);
-    except
-      on E: EArgumentError do
-        Caught := True;
-    end;
-    Check(Caught, Cases[I].Name + ' rejects NaN input');
-
-    Caught := False;
-    try
-      Cases[I].Func(DoubleInfinity);
-    except
-      on E: EArgumentError do
-        Caught := True;
-    end;
-    Check(Caught, Cases[I].Name + ' rejects infinite input');
+    ExpectArgumentErrorMessage(Cases[I].Name + ' rejects NaN input', Cases[I].ExpectedMessage,
+      Cases[I].Func, DoubleNaN);
+    ExpectArgumentErrorMessage(Cases[I].Name + ' rejects infinite input',
+      Cases[I].ExpectedMessage, Cases[I].Func, DoubleInfinity);
   end;
-
-  Caught := False;
-  try
-    EaseInOutBounce(DoubleNaN);
-  except
-    on E: EArgumentError do
-      Caught := True;
-  end;
-  Check(Caught, 'EaseInOutBounce rejects NaN input');
-
-  Caught := False;
-  try
-    EaseInOutBounce(DoubleInfinity);
-  except
-    on E: EArgumentError do
-      Caught := True;
-  end;
-  Check(Caught, 'EaseInOutBounce rejects infinite input');
 end;
 
 begin
