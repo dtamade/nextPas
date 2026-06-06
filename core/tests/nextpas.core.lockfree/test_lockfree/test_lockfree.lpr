@@ -850,6 +850,23 @@ begin
     'lockfree README must document stack ownership');
   CheckContains(LDocsReadme, '`TWorkStealingDeque<T>`',
     'lockfree README must document deque ownership');
+  CheckContains(LDocsReadme, 'Thread safety contract',
+    'lockfree README must document the consolidated thread-safety contract');
+  CheckContains(LDocsReadme,
+    '`TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.',
+    'lockfree README must document the SPSC caller-role contract');
+  CheckContains(LDocsReadme,
+    '`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers, after which new enqueue attempts fail while consumers may drain already published items.',
+    'lockfree README must document the MPMC caller-role and close contract');
+  CheckContains(LDocsReadme,
+    '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
+    'lockfree README must document the MPSC caller-role and destroy contract');
+  CheckContains(LDocsReadme,
+    '`TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.',
+    'lockfree README must document the stack caller-role contract');
+  CheckContains(LDocsReadme,
+    '`TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.',
+    'lockfree README must document the deque caller-role contract');
   CheckContains(LDocsReadme, 'Linearization points',
     'lockfree README must name linearization points');
   CheckContains(LDocsReadme, 'ABA',

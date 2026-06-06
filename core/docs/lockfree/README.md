@@ -51,6 +51,14 @@ with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 固定容量结构会拒绝 0 容量。`TSpscQueue<T>`、`TMpmcQueue<T>` 和 `TWorkStealingDeque<T>` 会把容量提升到
 power-of-two；超过最大可表示 power-of-two 的容量会被拒绝，而不是溢出后继续构造。
 
+## Thread safety contract
+
+`TSpscQueue<T>` permits exactly one producer-side caller and exactly one consumer-side caller; multiple producers or multiple consumers on the same queue are outside the contract.
+`TMpmcQueue<T>` permits multiple concurrent producers and consumers; `Close` may race with producers, after which new enqueue attempts fail while consumers may drain already published items.
+`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.
+`TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.
+`TWorkStealingDeque<T>` permits exactly one owner thread for `TryPush` / `TryPop` and multiple thief threads for `TrySteal`; owner methods are not multi-owner safe.
+
 ## Linearization points
 
 - `TSpscQueue<T>.TryEnqueue`：写入 slot 后，对 `FTailPublished` 的 release store 发布元素。
