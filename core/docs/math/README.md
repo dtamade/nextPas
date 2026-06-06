@@ -50,6 +50,10 @@ aliases. Matrices use column-major storage:
 M.Data[Column, Row]
 ```
 
+`Items[Column, Row]` is the default property. `Rows[Row]` and `Columns[Column]` are read/write
+views over that same backing storage, so setter writes alias through immediately to the underlying
+column-major matrix data.
+
 The transform convention is:
 
 - vectors are column vectors;

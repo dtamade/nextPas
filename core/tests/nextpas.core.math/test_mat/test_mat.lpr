@@ -38,6 +38,23 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000001, AMessage + '.W');
 end;
 
+procedure CheckVec3d(const AExpectedX, AExpectedY, AExpectedZ: Double; const AActual: TVec3d;
+  const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000000000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
+end;
+
+procedure CheckVec4d(const AExpectedX, AExpectedY, AExpectedZ, AExpectedW: Double;
+  const AActual: TVec4d; const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000000000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
+  CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
 procedure CheckMat3fIdentity(const AActual: TMat3f; const AMessage: string);
 begin
   Check(TMat3f.Equals(TMat3f.Identity, AActual, Single(0.00001)), AMessage);
@@ -200,6 +217,15 @@ begin
   CheckNear(6.0, M[2, 1], 0.0, 'TMat3f default Items[column,row]');
   CheckVec3f(1.0, 2.0, 3.0, M.Columns[0], 'TMat3f column property');
   CheckVec3f(2.0, 1.0, 6.0, M.Rows[1], 'TMat3f row property');
+  M := TMat3f.Zero;
+  M.Rows[1] := TVec3f.Create(10.0, 20.0, 30.0);
+  CheckNear(10.0, M[0, 1], 0.0, 'TMat3f row setter writes column 0');
+  CheckNear(20.0, M[1, 1], 0.0, 'TMat3f row setter writes column 1');
+  CheckNear(30.0, M[2, 1], 0.0, 'TMat3f row setter writes column 2');
+  M.Columns[2] := TVec3f.Create(40.0, 50.0, 60.0);
+  CheckVec3f(40.0, 50.0, 60.0, M.Columns[2], 'TMat3f column setter writes column view');
+  CheckVec3f(10.0, 20.0, 50.0, M.Rows[1], 'TMat3f column setter updates overlapping row view');
+  M := SampleMat3f;
   CheckNear(1.0, TMat3f.Identity[0, 0], 0.0, 'TMat3f identity diagonal');
   CheckNear(0.0, TMat3f.Identity[2, 1], 0.0, 'TMat3f identity off diagonal');
   CheckNear(0.0, TMat3f.Zero[1, 1], 0.0, 'TMat3f zero');
@@ -247,6 +273,17 @@ begin
   CheckNear(5.0, M.Data[3, 0], 0.0, 'TMat4f translation column X');
   CheckNear(7.0, M.Columns[3].Z, 0.0, 'TMat4f column property');
   CheckVec4f(0.0, 3.0, 0.0, 6.0, M.Rows[1], 'TMat4f row property');
+  M := TMat4f.Zero;
+  M.Rows[2] := TVec4f.Create(11.0, 22.0, 33.0, 44.0);
+  CheckNear(11.0, M[0, 2], 0.0, 'TMat4f row setter writes column 0');
+  CheckNear(22.0, M[1, 2], 0.0, 'TMat4f row setter writes column 1');
+  CheckNear(33.0, M[2, 2], 0.0, 'TMat4f row setter writes column 2');
+  CheckNear(44.0, M[3, 2], 0.0, 'TMat4f row setter writes column 3');
+  M.Columns[1] := TVec4f.Create(12.0, 24.0, 48.0, 96.0);
+  CheckVec4f(12.0, 24.0, 48.0, 96.0, M.Columns[1], 'TMat4f column setter writes column view');
+  CheckVec4f(0.0, 24.0, 0.0, 0.0, M.Rows[1], 'TMat4f column setter updates row 1 overlap');
+  CheckVec4f(11.0, 48.0, 33.0, 44.0, M.Rows[2], 'TMat4f column setter updates row 2 overlap');
+  M := SampleMat4f;
   CheckVec4f(7.0, 12.0, 19.0, 1.0, M * TVec4f.Create(1.0, 2.0, 3.0, 1.0),
     'TMat4f matrix vector multiply');
   CheckVec4f(9.0, 18.0, 31.0, 1.0, (M * Scale) * TVec4f.Create(1.0, 2.0, 3.0, 1.0),
@@ -288,6 +325,18 @@ begin
     TVec3d.Create(0.0, 0.0, 1.0));
   CheckEqual(Int64(SizeOf(Double) * 9), Int64(SizeOf(TMat3d)), 'TMat3d is compact value type');
   CheckNear(5.0, M3[2, 0], 0.0, 'TMat3d default Items[column,row]');
+  M3 := TMat3d.Zero;
+  M3.Rows[0] := TVec3d.Create(1.5, 2.5, 3.5);
+  CheckNear(1.5, M3[0, 0], 0.0, 'TMat3d row setter writes column 0');
+  CheckNear(2.5, M3[1, 0], 0.0, 'TMat3d row setter writes column 1');
+  CheckNear(3.5, M3[2, 0], 0.0, 'TMat3d row setter writes column 2');
+  M3.Columns[1] := TVec3d.Create(4.5, 5.5, 6.5);
+  CheckVec3d(4.5, 5.5, 6.5, M3.Columns[1], 'TMat3d column setter writes column view');
+  CheckVec3d(1.5, 4.5, 3.5, M3.Rows[0], 'TMat3d column setter updates overlapping row view');
+  M3 := TMat3d.Create(
+    TVec3d.Create(1.0, 2.0, 3.0),
+    TVec3d.Create(0.0, 1.0, 4.0),
+    TVec3d.Create(5.0, 6.0, 0.0));
   CheckNear(1.0, M3.Determinant, 0.000000000001, 'TMat3d determinant');
   Check(M3.TryInverse(Inverse3), 'TMat3d TryInverse succeeds');
   CheckMat3dIdentity(M3 * Inverse3, 'TMat3d inverse product');
@@ -310,6 +359,20 @@ begin
     TVec4d.Create(0.0, 0.0, 1.0, 0.0),
     TVec4d.Create(0.0, 0.0, 0.0, 1.0));
   CheckEqual(Int64(SizeOf(Double) * 16), Int64(SizeOf(TMat4d)), 'TMat4d is compact value type');
+  M4 := TMat4d.Zero;
+  M4.Rows[3] := TVec4d.Create(7.5, 8.5, 9.5, 10.5);
+  CheckNear(7.5, M4[0, 3], 0.0, 'TMat4d row setter writes column 0');
+  CheckNear(8.5, M4[1, 3], 0.0, 'TMat4d row setter writes column 1');
+  CheckNear(9.5, M4[2, 3], 0.0, 'TMat4d row setter writes column 2');
+  CheckNear(10.5, M4[3, 3], 0.0, 'TMat4d row setter writes column 3');
+  M4.Columns[0] := TVec4d.Create(11.5, 12.5, 13.5, 14.5);
+  CheckVec4d(11.5, 12.5, 13.5, 14.5, M4.Columns[0], 'TMat4d column setter writes column view');
+  CheckVec4d(14.5, 8.5, 9.5, 10.5, M4.Rows[3], 'TMat4d column setter updates overlapping row view');
+  M4 := TMat4d.Create(
+    TVec4d.Create(2.0, 0.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 3.0, 0.0, 0.0),
+    TVec4d.Create(0.0, 0.0, 4.0, 0.0),
+    TVec4d.Create(5.0, 6.0, 7.0, 1.0));
   CheckNear(24.0, M4.Determinant, 0.000000000001, 'TMat4d determinant');
   CheckNear(0.0000000000001, NearSingular4.Determinant, 0.000000000000000001,
     'TMat4d determinant preserves small nonzero pivot');

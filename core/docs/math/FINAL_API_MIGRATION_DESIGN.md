@@ -214,6 +214,10 @@ Matrices expose:
 - operators for add/sub/neg/scalar multiply/matrix multiply/matrix-vector multiply
 - `Identity`, `Zero`, `Transpose`, `Determinant`, `Inverse`, `TryInverse`, `Equals`
 
+`Items` is the default indexed view. `Rows` and `Columns` are read/write projections over the same
+column-major backing storage, so setter writes must alias through instead of updating detached row or
+column snapshots.
+
 Quaternions expose:
 
 - vector part `X`, `Y`, `Z` and real part `W`, or an equivalent explicitly documented layout

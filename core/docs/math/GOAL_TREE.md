@@ -1,6 +1,6 @@
 # nextpas.core.math Goal Tree
 
-> Last updated: 2026-06-06
+> Last updated: 2026-06-07
 > Goal: make `nextpas.core.math.*` the only official framework math API for scalar math, trig, vectors, matrices, quaternions, transforms, easing, random, and noise.
 
 ## North Star
@@ -29,9 +29,10 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Edge-case fixes are locked by tests for guarded integer conversion, `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases, and `SimdLnF32(NaN)`.
 - `nextpas.core.math.mat` now provides the final matrix types: `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
-  `Zero`, `Identity`, arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix
-  multiply, `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and
-  singular inverse behavior, including zeroing the failed `TryInverse` out matrix.
+  row/column setter write-through semantics over the same backing storage, `Zero`, `Identity`,
+  arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix multiply,
+  `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and singular inverse
+  behavior, including zeroing the failed `TryInverse` out matrix.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
@@ -190,10 +191,11 @@ Status:
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
   `Normalize`, `Lerp`, `Equals`, and zero-vector normalize returning zero.
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
-- Matrix tests cover compact layout, column-major storage, row/column accessors, arithmetic operators,
-  scalar multiply, matrix-vector multiply, matrix-matrix multiply, transpose, determinant, inverse,
-  near-singular and singular `TryInverse` zeroing the out matrix, `Inverse` raising
-  `EArgumentError` for the same failure cases, and double-precision variants.
+- Matrix tests cover compact layout, column-major storage, row/column accessors, row/column setter
+  write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,
+  matrix-matrix multiply, transpose, determinant, inverse, near-singular and singular `TryInverse`
+  zeroing the out matrix, `Inverse` raising `EArgumentError` for the same failure cases, and
+  double-precision variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
   until a later architecture slice has evidence that it improves maintainability without widening the

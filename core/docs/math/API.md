@@ -102,7 +102,8 @@ M.Data[Column, Row]
 ```
 
 Use `Items[Column, Row]`, `Rows[Row]`, and `Columns[Column]` for explicit access. `Items` is the
-default property.
+default property. `Rows` and `Columns` are read/write views over the same backing storage, so
+setter writes update the shared column-major matrix data rather than a detached copy.
 
 Matrix operations:
 
