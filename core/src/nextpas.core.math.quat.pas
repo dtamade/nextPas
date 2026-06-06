@@ -156,6 +156,7 @@ end;
 
 class function TQuatf.Slerp(const AA, AB: TQuatf; const AT: Single): TQuatf;
 var
+  StartQuat: TQuatf;
   EndQuat: TQuatf;
   CosTheta: Single;
   Theta: Single;
@@ -163,8 +164,9 @@ var
   WeightA: Single;
   WeightB: Single;
 begin
-  EndQuat := AB;
-  CosTheta := QuatDot(AA, EndQuat);
+  StartQuat := AA.Normalize;
+  EndQuat := AB.Normalize;
+  CosTheta := QuatDot(StartQuat, EndQuat);
   if CosTheta < 0.0 then
   begin
     EndQuat := NegateQuat(EndQuat);
@@ -180,22 +182,24 @@ begin
     WeightA := nextpas.core.math.trig.Sin((1.0 - AT) * Theta) / SinTheta;
     WeightB := nextpas.core.math.trig.Sin(AT * Theta) / SinTheta;
     Result := TQuatf.Create(
-      AA.X * WeightA + EndQuat.X * WeightB,
-      AA.Y * WeightA + EndQuat.Y * WeightB,
-      AA.Z * WeightA + EndQuat.Z * WeightB,
-      AA.W * WeightA + EndQuat.W * WeightB).Normalize;
+      StartQuat.X * WeightA + EndQuat.X * WeightB,
+      StartQuat.Y * WeightA + EndQuat.Y * WeightB,
+      StartQuat.Z * WeightA + EndQuat.Z * WeightB,
+      StartQuat.W * WeightA + EndQuat.W * WeightB).Normalize;
   end else
-    Result := Nlerp(AA, EndQuat, AT);
+    Result := Nlerp(StartQuat, EndQuat, AT);
 end;
 
 class function TQuatf.Nlerp(const AA, AB: TQuatf; const AT: Single): TQuatf;
 var
+  StartQuat: TQuatf;
   EndQuat: TQuatf;
 begin
-  EndQuat := AB;
-  if QuatDot(AA, EndQuat) < 0.0 then
+  StartQuat := AA.Normalize;
+  EndQuat := AB.Normalize;
+  if QuatDot(StartQuat, EndQuat) < 0.0 then
     EndQuat := NegateQuat(EndQuat);
-  Result := LerpQuat(AA, EndQuat, AT).Normalize;
+  Result := LerpQuat(StartQuat, EndQuat, AT).Normalize;
 end;
 
 class function TQuatf.Equals(const AA, AB: TQuatf; const AEpsilon: Single): Boolean;
@@ -316,6 +320,7 @@ end;
 
 class function TQuatd.Slerp(const AA, AB: TQuatd; const AT: Double): TQuatd;
 var
+  StartQuat: TQuatd;
   EndQuat: TQuatd;
   CosTheta: Double;
   Theta: Double;
@@ -323,8 +328,9 @@ var
   WeightA: Double;
   WeightB: Double;
 begin
-  EndQuat := AB;
-  CosTheta := QuatDot(AA, EndQuat);
+  StartQuat := AA.Normalize;
+  EndQuat := AB.Normalize;
+  CosTheta := QuatDot(StartQuat, EndQuat);
   if CosTheta < 0.0 then
   begin
     EndQuat := NegateQuat(EndQuat);
@@ -340,22 +346,24 @@ begin
     WeightA := nextpas.core.math.trig.Sin((1.0 - AT) * Theta) / SinTheta;
     WeightB := nextpas.core.math.trig.Sin(AT * Theta) / SinTheta;
     Result := TQuatd.Create(
-      AA.X * WeightA + EndQuat.X * WeightB,
-      AA.Y * WeightA + EndQuat.Y * WeightB,
-      AA.Z * WeightA + EndQuat.Z * WeightB,
-      AA.W * WeightA + EndQuat.W * WeightB).Normalize;
+      StartQuat.X * WeightA + EndQuat.X * WeightB,
+      StartQuat.Y * WeightA + EndQuat.Y * WeightB,
+      StartQuat.Z * WeightA + EndQuat.Z * WeightB,
+      StartQuat.W * WeightA + EndQuat.W * WeightB).Normalize;
   end else
-    Result := Nlerp(AA, EndQuat, AT);
+    Result := Nlerp(StartQuat, EndQuat, AT);
 end;
 
 class function TQuatd.Nlerp(const AA, AB: TQuatd; const AT: Double): TQuatd;
 var
+  StartQuat: TQuatd;
   EndQuat: TQuatd;
 begin
-  EndQuat := AB;
-  if QuatDot(AA, EndQuat) < 0.0 then
+  StartQuat := AA.Normalize;
+  EndQuat := AB.Normalize;
+  if QuatDot(StartQuat, EndQuat) < 0.0 then
     EndQuat := NegateQuat(EndQuat);
-  Result := LerpQuat(AA, EndQuat, AT).Normalize;
+  Result := LerpQuat(StartQuat, EndQuat, AT).Normalize;
 end;
 
 class function TQuatd.Equals(const AA, AB: TQuatd; const AEpsilon: Double): Boolean;

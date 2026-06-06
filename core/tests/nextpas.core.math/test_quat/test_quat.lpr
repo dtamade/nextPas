@@ -59,6 +59,8 @@ var
   Angle: Single;
   HalfTurn: TQuatf;
   Matrix: TMat3f;
+  ScaledIdentity: TQuatf;
+  ScaledQ: TQuatf;
 begin
   Q := QuarterTurnZf;
 
@@ -88,6 +90,14 @@ begin
   CheckVec3f(0.7071068, 0.7071068, 0.0,
     TQuatf.Nlerp(TQuatf.Identity, Q, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
     'TQuatf Nlerp midpoint');
+  ScaledIdentity := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQ := TQuatf.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(ScaledIdentity, ScaledQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp normalizes scaled inputs');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(ScaledIdentity, ScaledQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp normalizes scaled inputs');
   Check(TQuatf.Equals(Q, TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 2.0), Single(HALF_PI)),
     Single(0.000001)), 'TQuatf FromAxisAngle normalizes axis');
   Check(TQuatf.Equals(TQuatf.Identity, TQuatf.FromAxisAngle(TVec3f.Zero, Single(HALF_PI)),
@@ -97,6 +107,8 @@ end;
 procedure TestQuatdContracts;
 var
   Q: TQuatd;
+  ScaledIdentity: TQuatd;
+  ScaledQ: TQuatd;
 begin
   Q := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI);
 
@@ -109,6 +121,14 @@ begin
   CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
     TQuatd.Slerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
     'TQuatd Slerp midpoint');
+  ScaledIdentity := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
+  ScaledQ := TQuatd.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(ScaledIdentity, ScaledQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp normalizes scaled inputs');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(ScaledIdentity, ScaledQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp normalizes scaled inputs');
   Check(TQuatd.Equals(Q, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 2.0), HALF_PI),
     0.000000000001), 'TQuatd FromAxisAngle normalizes axis');
 end;
