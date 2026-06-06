@@ -56,12 +56,53 @@ type
 implementation
 
 uses
+  nextpas.core.errors,
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
 const
   SINGLE_QUAT_EPSILON: Single = 0.000001;
   DOUBLE_QUAT_EPSILON: Double = 0.000000000001;
+
+function IsFinite(const AValue: Single): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: Double): Boolean; overload; inline;
+begin
+  Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
+    (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function IsFinite(const AValue: TVec3f): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and IsFinite(AValue.Z);
+end;
+
+function IsFinite(const AValue: TVec3d): Boolean; overload; inline;
+begin
+  Result := IsFinite(AValue.X) and IsFinite(AValue.Y) and IsFinite(AValue.Z);
+end;
+
+procedure ValidateAxisAngleInputs(const AFunctionName: string; const AAxis: TVec3f;
+  const AAngleRad: Single); overload; inline;
+begin
+  if not IsFinite(AAxis) then
+    raise EArgumentError.Create(AFunctionName + ': AAxis must be finite');
+  if not IsFinite(AAngleRad) then
+    raise EArgumentError.Create(AFunctionName + ': AAngleRad must be finite');
+end;
+
+procedure ValidateAxisAngleInputs(const AFunctionName: string; const AAxis: TVec3d;
+  const AAngleRad: Double); overload; inline;
+begin
+  if not IsFinite(AAxis) then
+    raise EArgumentError.Create(AFunctionName + ': AAxis must be finite');
+  if not IsFinite(AAngleRad) then
+    raise EArgumentError.Create(AFunctionName + ': AAngleRad must be finite');
+end;
 
 function QuatLengthSqr(const AX, AY, AZ, AW: Single): Single; inline;
 begin
@@ -141,6 +182,7 @@ var
   HalfAngle: Single;
   SinHalfAngle: Single;
 begin
+  ValidateAxisAngleInputs('TQuatf.FromAxisAngle', AAxis, AAngleRad);
   Axis := AAxis.Normalize;
   if TVec3f.Equals(Axis, TVec3f.Zero, Single(0.0)) then
     Exit(Identity);
@@ -305,6 +347,7 @@ var
   HalfAngle: Double;
   SinHalfAngle: Double;
 begin
+  ValidateAxisAngleInputs('TQuatd.FromAxisAngle', AAxis, AAngleRad);
   Axis := AAxis.Normalize;
   if TVec3d.Equals(Axis, TVec3d.Zero, 0.0) then
     Exit(Identity);

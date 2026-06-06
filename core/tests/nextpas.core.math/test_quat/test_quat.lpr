@@ -4,6 +4,7 @@ program test_quat;
 
 uses
   nextpas.core.testing,
+  nextpas.core.errors,
   nextpas.core.math.scalar,
   nextpas.core.math.vec,
   nextpas.core.math.mat,
@@ -11,6 +12,19 @@ uses
 
 var
   T: TTestRunner;
+
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: LongWord);
+  end;
+
+  TDoubleBitCast = packed record
+    case Integer of
+      0: (Value: Double);
+      1: (Bits: QWord);
+  end;
 
 procedure CheckNear(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
@@ -45,6 +59,74 @@ begin
   CheckNear(AExpectedY, AActual.Y, 0.000001, AMessage + '.Y');
   CheckNear(AExpectedZ, AActual.Z, 0.000001, AMessage + '.Z');
   CheckNear(AExpectedW, AActual.W, 0.000001, AMessage + '.W');
+end;
+
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
+function SingleNaN: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7FC00000;
+  Result := LValue.Value;
+end;
+
+function SingleInfinity: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := $7F800000;
+  Result := LValue.Value;
+end;
+
+function DoubleNaN: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF8000000000000;
+  Result := LValue.Value;
+end;
+
+function DoubleInfinity: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := $7FF0000000000000;
+  Result := LValue.Value;
+end;
+
+procedure RaiseQuatfFromAxisAngleNaNAngle;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), SingleNaN);
+end;
+
+procedure RaiseQuatfFromAxisAngleInfiniteAxis;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(SingleInfinity, 0.0, 1.0), Single(HALF_PI));
+end;
+
+procedure RaiseQuatdFromAxisAngleNaNAngle;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), DoubleNaN);
+end;
+
+procedure RaiseQuatdFromAxisAngleInfiniteAxis;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(DoubleInfinity, 0.0, 1.0), HALF_PI);
 end;
 
 function QuarterTurnZf: TQuatf;
@@ -133,9 +215,22 @@ begin
     0.000000000001), 'TQuatd FromAxisAngle normalizes axis');
 end;
 
+procedure TestFromAxisAngleRejectsNonFiniteInputs;
+begin
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAngleRad must be finite',
+    'TQuatf FromAxisAngle NaN angle', @RaiseQuatfFromAxisAngleNaNAngle);
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAxis must be finite',
+    'TQuatf FromAxisAngle infinite axis', @RaiseQuatfFromAxisAngleInfiniteAxis);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAngleRad must be finite',
+    'TQuatd FromAxisAngle NaN angle', @RaiseQuatdFromAxisAngleNaNAngle);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAxis must be finite',
+    'TQuatd FromAxisAngle infinite axis', @RaiseQuatdFromAxisAngleInfiniteAxis);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
   T.Run('TQuatd contracts', @TestQuatdContracts);
+  T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Summary;
 end.
