@@ -8,11 +8,7 @@ uses
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.atomic,
-  nextpas.core.lockfree.spsc,
-  nextpas.core.lockfree.mpmc,
-  nextpas.core.lockfree.stack,
-  nextpas.core.lockfree.mpsc,
-  nextpas.core.lockfree.deque,
+  nextpas.core.lockfree,
   nextpas.core.platform.thread;
 
 type
@@ -705,6 +701,7 @@ end;
 
 procedure TestLockFreeSourceContracts;
 const
+  LockFreeSourcePath = '../../../src/nextpas.core.lockfree.pas';
   LockFreeDocsReadmePath = '../../../docs/lockfree/README.md';
   SpscSourcePath = '../../../src/nextpas.core.lockfree.spsc.pas';
   MpmcSourcePath = '../../../src/nextpas.core.lockfree.mpmc.pas';
@@ -715,6 +712,7 @@ const
   BenchSourcePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr';
   BenchRustComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_rust/main.rs';
 var
+  LLockFreeSource: string;
   LDocsReadme: string;
   LSpscSource: string;
   LMpmcSource: string;
@@ -732,6 +730,7 @@ begin
   Check(FileExists(BenchRustComparePath),
     'lockfree Rust comparison source must exist as an external baseline reference');
 
+  LLockFreeSource := ReadUtf8TextFile(LockFreeSourcePath);
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
   LSpscSource := ReadUtf8TextFile(SpscSourcePath);
   LMpmcSource := ReadUtf8TextFile(MpmcSourcePath);
@@ -744,6 +743,63 @@ begin
 
   CheckContains(LDocsReadme, '# nextpas.core.lockfree',
     'lockfree README must use the module title');
+  CheckContains(LDocsReadme,
+    '`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`',
+    'lockfree README must document the facade re-export surface');
+  CheckContains(LDocsReadme,
+    '`TLockFreeStack<T>`, and `TWorkStealingDeque<T>`',
+    'lockfree README must document the facade stack/deque surface');
+  CheckContains(LDocsReadme,
+    'The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation',
+    'lockfree README must document the generic facade wrapper boundary');
+  CheckContains(LDocsReadme,
+    'not Pascal type aliases',
+    'lockfree README must document that generic facade wrappers are not aliases');
+  CheckContains(LSpscSource,
+    'generic TSpscQueueImpl<T> = class',
+    'SPSC source must keep a shared implementation base for facade re-export');
+  CheckContains(LMpmcSource,
+    'generic TMpmcQueueImpl<T> = class',
+    'MPMC source must keep a shared implementation base for facade re-export');
+  CheckContains(LMpscSource,
+    'generic TMpscQueueImpl<T> = class',
+    'MPSC source must keep a shared implementation base for facade re-export');
+  CheckContains(LStackSource,
+    'generic TLockFreeStackImpl<T> = class',
+    'stack source must keep a shared implementation base for facade re-export');
+  CheckContains(LDequeSource,
+    'generic TWorkStealingDequeImpl<T> = class',
+    'deque source must keep a shared implementation base for facade re-export');
+  CheckContains(LSpscSource,
+    'generic TSpscQueue<T> = class(specialize TSpscQueueImpl<T>)',
+    'SPSC submodule must keep the public wrapper type');
+  CheckContains(LMpmcSource,
+    'generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)',
+    'MPMC submodule must keep the public wrapper type');
+  CheckContains(LMpscSource,
+    'generic TMpscQueue<T> = class(specialize TMpscQueueImpl<T>)',
+    'MPSC submodule must keep the public wrapper type');
+  CheckContains(LStackSource,
+    'generic TLockFreeStack<T> = class(specialize TLockFreeStackImpl<T>)',
+    'stack submodule must keep the public wrapper type');
+  CheckContains(LDequeSource,
+    'generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)',
+    'deque submodule must keep the public wrapper type');
+  CheckContains(LLockFreeSource,
+    'generic TSpscQueue<T> = class(specialize TSpscQueueImpl<T>)',
+    'lockfree facade must explicitly expose the SPSC queue type');
+  CheckContains(LLockFreeSource,
+    'generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)',
+    'lockfree facade must explicitly expose the MPMC queue type');
+  CheckContains(LLockFreeSource,
+    'generic TMpscQueue<T> = class(specialize TMpscQueueImpl<T>)',
+    'lockfree facade must explicitly expose the MPSC queue type');
+  CheckContains(LLockFreeSource,
+    'generic TLockFreeStack<T> = class(specialize TLockFreeStackImpl<T>)',
+    'lockfree facade must explicitly expose the stack type');
+  CheckContains(LLockFreeSource,
+    'generic TWorkStealingDeque<T> = class(specialize TWorkStealingDequeImpl<T>)',
+    'lockfree facade must explicitly expose the work-stealing deque type');
   CheckContains(LDocsReadme, '`TSpscQueue<T>`',
     'lockfree README must document SPSC queue ownership');
   CheckContains(LDocsReadme, '`TMpmcQueue<T>`',

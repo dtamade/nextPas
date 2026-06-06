@@ -8,7 +8,7 @@ uses
   nextpas.core.lockfree.base;
 
 type
-  generic TSpscQueue<T> = class
+  generic TSpscQueueImpl<T> = class
   private
     FSlots: array of T;
     FCapacity: PtrUInt;
@@ -47,6 +47,9 @@ type
     function ApproxCount: PtrUInt;
   end;
 
+  generic TSpscQueue<T> = class(specialize TSpscQueueImpl<T>)
+  end;
+
 implementation
 
 uses
@@ -55,7 +58,7 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
-constructor TSpscQueue.Create(const ACapacity: PtrUInt);
+constructor TSpscQueueImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
 begin
@@ -81,7 +84,7 @@ begin
   FSpaceWaiters := 0;
 end;
 
-function TSpscQueue.TryEnqueue(const AValue: T): Boolean;
+function TSpscQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LTail: Int64;
 begin
@@ -101,7 +104,7 @@ begin
   Result := True;
 end;
 
-function TSpscQueue.TryDequeue(out AValue: T): Boolean;
+function TSpscQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LHead: Int64;
 begin
@@ -119,7 +122,7 @@ begin
   Result := True;
 end;
 
-function TSpscQueue.EnqueueWait(const AValue: T): Boolean;
+function TSpscQueueImpl.EnqueueWait(const AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -141,7 +144,7 @@ begin
   end;
 end;
 
-function TSpscQueue.DequeueWait(out AValue: T): Boolean;
+function TSpscQueueImpl.DequeueWait(out AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -163,7 +166,7 @@ begin
   end;
 end;
 
-function TSpscQueue.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+function TSpscQueueImpl.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -192,7 +195,7 @@ begin
   end;
 end;
 
-function TSpscQueue.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+function TSpscQueueImpl.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -220,7 +223,7 @@ begin
   end;
 end;
 
-function TSpscQueue.EnqueueBatch(const AValues: array of T): PtrUInt;
+function TSpscQueueImpl.EnqueueBatch(const AValues: array of T): PtrUInt;
 var
   LTail, LAvail: Int64;
   LI: PtrUInt;
@@ -248,7 +251,7 @@ begin
   Result := LCount;
 end;
 
-function TSpscQueue.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+function TSpscQueueImpl.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
 var
   LHead, LAvail: Int64;
   LI: PtrUInt;
@@ -278,19 +281,19 @@ begin
   Result := LCount;
 end;
 
-procedure TSpscQueue.Close;
+procedure TSpscQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
   LockFreeWakeAll(@FSpaceEpoch);
 end;
 
-function TSpscQueue.IsClosed: Boolean;
+function TSpscQueueImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TSpscQueue.ApproxCount: PtrUInt;
+function TSpscQueueImpl.ApproxCount: PtrUInt;
 var
   LTail, LHead: Int64;
 begin
@@ -302,17 +305,17 @@ begin
     Result := 0;
 end;
 
-function TSpscQueue.IsEmpty: Boolean;
+function TSpscQueueImpl.IsEmpty: Boolean;
 begin
   Result := ApproxCount = 0;
 end;
 
-function TSpscQueue.IsFull: Boolean;
+function TSpscQueueImpl.IsFull: Boolean;
 begin
   Result := ApproxCount >= FCapacity;
 end;
 
-function TSpscQueue.Capacity: PtrUInt;
+function TSpscQueueImpl.Capacity: PtrUInt;
 begin
   Result := FCapacity;
 end;

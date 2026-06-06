@@ -8,7 +8,7 @@ uses
   nextpas.core.atomic.core;
 
 type
-  generic TMpscQueue<T> = class
+  generic TMpscQueueImpl<T> = class
   private
     type
       PNode = ^TNode;
@@ -38,6 +38,9 @@ type
     function IsEmpty: Boolean;
   end;
 
+  generic TMpscQueue<T> = class(specialize TMpscQueueImpl<T>)
+  end;
+
 implementation
 
 uses
@@ -46,22 +49,22 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
-function TMpscQueue.AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;
+function TMpscQueueImpl.AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;
 begin
   Result := PNode(atomic_load(PPointer(@ANode)^, AOrder));
 end;
 
-procedure TMpscQueue.AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);
+procedure TMpscQueueImpl.AtomicStoreNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t);
 begin
   atomic_store(PPointer(@ANode)^, Pointer(AValue), AOrder);
 end;
 
-function TMpscQueue.AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;
+function TMpscQueueImpl.AtomicExchangeNode(var ANode: PNode; const AValue: PNode; const AOrder: memory_order_t): PNode;
 begin
   Result := PNode(atomic_exchange(PPointer(@ANode)^, Pointer(AValue), AOrder));
 end;
 
-constructor TMpscQueue.Create;
+constructor TMpscQueueImpl.Create;
 begin
   inherited Create;
   if IsManagedType(T) then
@@ -74,7 +77,7 @@ begin
   FDataWaiters := 0;
 end;
 
-destructor TMpscQueue.Destroy;
+destructor TMpscQueueImpl.Destroy;
 var
   LV: T;
 begin
@@ -85,7 +88,7 @@ begin
   inherited;
 end;
 
-procedure TMpscQueue.Enqueue(const AValue: T);
+procedure TMpscQueueImpl.Enqueue(const AValue: T);
 var
   LNode, LPrev: PNode;
 begin
@@ -97,7 +100,7 @@ begin
   LockFreeNotifyData(@FDataEpoch, @FDataWaiters);
 end;
 
-function TMpscQueue.TryDequeue(out AValue: T): Boolean;
+function TMpscQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LTail, LNext, LPrev: PNode;
 begin
@@ -136,7 +139,7 @@ begin
   Result := False;
 end;
 
-function TMpscQueue.DequeueWait(out AValue: T): Boolean;
+function TMpscQueueImpl.DequeueWait(out AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -153,7 +156,7 @@ begin
   end;
 end;
 
-function TMpscQueue.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+function TMpscQueueImpl.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -176,18 +179,18 @@ begin
   end;
 end;
 
-procedure TMpscQueue.Close;
+procedure TMpscQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
 end;
 
-function TMpscQueue.IsClosed: Boolean;
+function TMpscQueueImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TMpscQueue.IsEmpty: Boolean;
+function TMpscQueueImpl.IsEmpty: Boolean;
 var
   LTail, LNext: PNode;
 begin

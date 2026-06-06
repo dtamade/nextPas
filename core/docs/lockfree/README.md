@@ -19,6 +19,14 @@ runtime/framework 内部热路径，而不是公开宣称完整替代 Rust std�
 | `nextpas.core.lockfree.deque` | `TWorkStealingDeque<T>`，有界 single-owner push/pop + multi-thief steal deque。 |
 | `nextpas.core.lockfree` | 聚合 facade。 |
 
+`nextpas.core.lockfree` facade exposes `TSpscQueue<T>`, `TMpmcQueue<T>`, `TMpscQueue<T>`,
+`TLockFreeStack<T>`, and `TWorkStealingDeque<T>` so consumers can use the public lockfree
+surface without importing implementation submodules directly.
+
+The facade and submodule public names are wrapper classes over shared `*Impl<T>` implementation
+bases. Keep variables and parameters on one public boundary; the wrappers are source-compatible
+constructors, not Pascal type aliases.
+
 ## API 边界
 
 `TSpscQueue<T>` 只有一个 producer 和一个 consumer 可以并发使用。`TryEnqueue` / `TryDequeue`

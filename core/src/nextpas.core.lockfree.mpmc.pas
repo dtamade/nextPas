@@ -8,7 +8,7 @@ uses
   nextpas.core.lockfree.base;
 
 type
-  generic TMpmcQueue<T> = class
+  generic TMpmcQueueImpl<T> = class
   private
     type
       TSlot = record
@@ -44,6 +44,9 @@ type
     function ApproxCount: PtrUInt;
   end;
 
+  generic TMpmcQueue<T> = class(specialize TMpmcQueueImpl<T>)
+  end;
+
 implementation
 
 uses
@@ -52,7 +55,7 @@ uses
   nextpas.core.lockfree.wait,
   nextpas.core.time.base;
 
-constructor TMpmcQueue.Create(const ACapacity: PtrUInt);
+constructor TMpmcQueueImpl.Create(const ACapacity: PtrUInt);
 var
   LCap: PtrUInt;
   LI: PtrUInt;
@@ -77,7 +80,7 @@ begin
   FSpaceWaiters := 0;
 end;
 
-function TMpmcQueue.TryEnqueue(const AValue: T): Boolean;
+function TMpmcQueueImpl.TryEnqueue(const AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
@@ -109,7 +112,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.TryDequeue(out AValue: T): Boolean;
+function TMpmcQueueImpl.TryDequeue(out AValue: T): Boolean;
 var
   LPos: Int64;
   LIdx: PtrUInt;
@@ -140,7 +143,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.EnqueueWait(const AValue: T): Boolean;
+function TMpmcQueueImpl.EnqueueWait(const AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -163,7 +166,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.DequeueWait(out AValue: T): Boolean;
+function TMpmcQueueImpl.DequeueWait(out AValue: T): Boolean;
 var
   LEpoch: Int32;
 begin
@@ -186,7 +189,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
+function TMpmcQueueImpl.EnqueueTimeout(const AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -215,7 +218,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
+function TMpmcQueueImpl.DequeueTimeout(out AValue: T; const ATimeoutNs: Int64): Boolean;
 var
   LEpoch: Int32;
   LStart: TInstant;
@@ -244,7 +247,7 @@ begin
   end;
 end;
 
-procedure TMpmcQueue.Close;
+procedure TMpmcQueueImpl.Close;
 begin
   AtomicStore32(FClosed, 1, moRelease);
   LockFreeWakeAll(@FDataEpoch);
@@ -253,12 +256,12 @@ begin
   
 end;
 
-function TMpmcQueue.IsClosed: Boolean;
+function TMpmcQueueImpl.IsClosed: Boolean;
 begin
   Result := AtomicLoad32(FClosed, moAcquire) <> 0;
 end;
 
-function TMpmcQueue.ApproxCount: PtrUInt;
+function TMpmcQueueImpl.ApproxCount: PtrUInt;
 var
   LEnq, LDeq: Int64;
 begin
@@ -270,7 +273,7 @@ begin
     Result := 0;
 end;
 
-function TMpmcQueue.EnqueueBatch(const AValues: array of T): PtrUInt;
+function TMpmcQueueImpl.EnqueueBatch(const AValues: array of T): PtrUInt;
 var
   LI: PtrUInt;
 begin
@@ -285,7 +288,7 @@ begin
   end;
 end;
 
-function TMpmcQueue.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
+function TMpmcQueueImpl.DequeueBatch(out AValues: array of T; const AMaxCount: PtrUInt): PtrUInt;
 var
   LI, LCount: PtrUInt;
 begin
@@ -303,17 +306,17 @@ begin
   end;
 end;
 
-function TMpmcQueue.IsEmpty: Boolean;
+function TMpmcQueueImpl.IsEmpty: Boolean;
 begin
   Result := ApproxCount = 0;
 end;
 
-function TMpmcQueue.IsFull: Boolean;
+function TMpmcQueueImpl.IsFull: Boolean;
 begin
   Result := ApproxCount >= FCapacity;
 end;
 
-function TMpmcQueue.Capacity: PtrUInt;
+function TMpmcQueueImpl.Capacity: PtrUInt;
 begin
   Result := FCapacity;
 end;
