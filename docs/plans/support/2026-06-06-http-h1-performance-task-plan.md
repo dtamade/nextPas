@@ -1,5 +1,27 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http dot-segment redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：relative redirect path 合并后必须移除
+`.` / `..` dot segments。例如 base request
+`http://example.test/dir/sub/old` 收到 `Location: ../next?from=dot` 时，
+follow-up transport-visible path 应为 `/dir/next`，而不是
+`/dir/sub/../next`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: ../next?from=dot`，当前失败为
+  `expected "/dir/next", got "/dir/sub/../next"`。
+- [x] GREEN：新增内部 `NormalizeRedirectPath`，在 relative `Location`
+  path merge 后移除 dot segments。
+- [x] 保持本 slice 边界：不改变 public API、absolute URL redirect、
+  network-path redirect 或 redirect policy/body ownership。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http path-relative redirect slice
 
 ### Goal

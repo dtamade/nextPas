@@ -1,5 +1,37 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http dot-segment redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  path-relative redirect 已按 base directory 合并，但 merged path 中的 `..`
+  segment 仍原样暴露给 follow-up request。
+- 选择依据：
+  - Go/Rust HTTP client 都按 RFC-style relative reference resolution 移除
+    dot segments；transport 不应收到 `/dir/sub/../next` 再自行解释。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - 对 future H2/H3 transport seam 有直接价值：protocol implementation 应收到
+    已解析的 path，而不是把 URL resolution 逻辑复制到每个 transport。
+- 实现决策：
+  - 新增内部 `NormalizeRedirectPath`，在 relative `Location` 分支完成
+    base-directory merge 后移除 `.` / `..` segments。
+  - normalizer 使用 segment-moving algorithm，避免把逻辑下沉到 H1 writer。
+  - 本 slice 不改变 absolute URL 和 network-path redirect 的既有分支。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31 total, 30 passed, 1 failed`
+    - failed at `Client redirect transport normalizes dot-segment Location`
+    - failure: `dot-segment redirect normalizes merged path: expected "/dir/next", got "/dir/sub/../next"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object path normalization
+  contract，不是 H1 malformed parity。后续若继续 URL resolution，应单独审计
+  query-only / fragment-only 语义或 absolute/network-path dot-segment normalization。
+
 ## 2026-06-06 http path-relative redirect slice
 
 - 本轮继续收紧 client redirect URL resolution：

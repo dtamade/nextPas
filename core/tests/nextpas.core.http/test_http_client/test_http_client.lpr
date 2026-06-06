@@ -1132,6 +1132,35 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'path-relative redirect final body');
 end;
 
+procedure TestClientRedirectTransportNormalizesDotSegmentLocation;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '../next?from=dot';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/dir/sub/old');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'dot-segment redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'dot-segment redirect transport final status');
+  CheckEqual('http', LTransportObj.SeenScheme,
+    'dot-segment redirect preserves original scheme');
+  CheckEqual('example.test', LTransportObj.SeenHost,
+    'dot-segment redirect preserves host');
+  CheckEqual('/dir/next', LTransportObj.SeenPath,
+    'dot-segment redirect normalizes merged path');
+  CheckEqual('from=dot', LTransportObj.SeenRawQuery,
+    'dot-segment redirect raw query is parsed');
+  CheckEqual('dot', LTransportObj.SeenQueryParam,
+    'dot-segment redirect query param is visible');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'dot-segment redirect final body');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1393,6 +1422,8 @@ begin
     @TestClientRedirectTransportResolvesNetworkPathLocation);
   T.Run('Client redirect transport resolves path-relative Location',
     @TestClientRedirectTransportResolvesPathRelativeLocation);
+  T.Run('Client redirect transport normalizes dot-segment Location',
+    @TestClientRedirectTransportNormalizesDotSegmentLocation);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);

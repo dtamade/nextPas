@@ -1,5 +1,41 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http dot-segment redirect slice
+
+- **Status:** completed.
+- Objective:
+  - remove dot segments from merged relative redirect paths
+  - keep URL resolution inside the client redirect layer instead of pushing it
+    down into H1 or future protocol transports
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: ../next?from=dot`
+  - base request was `http://example.test/dir/sub/old`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31 total, 30 passed, 1 failed`
+    - failed at `Client redirect transport normalizes dot-segment Location`
+    - expected follow-up path `/dir/next`, got `/dir/sub/../next`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `NormalizeRedirectPath`
+  - relative redirects now normalize `.` / `..` segments after base-directory
+    path merge
+  - absolute URL and network-path redirect branches were left unchanged
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=example.test`,
+    `Path=/dir/next`, `RawQuery=from=dot`, and query param `from=dot`
+  - this does not claim query-only redirects, fragment-only redirects, or
+    absolute/network-path dot-segment normalization
+
 ## Session: 2026-06-06 http path-relative redirect slice
 
 - **Status:** completed.

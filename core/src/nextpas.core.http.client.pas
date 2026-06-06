@@ -107,6 +107,90 @@ begin
     Result := '/' + ATargetPath;
 end;
 
+function StartsWith(const AValue, APrefix: string): Boolean;
+begin
+  Result := (Length(AValue) >= Length(APrefix)) and
+    (System.Copy(AValue, 1, Length(APrefix)) = APrefix);
+end;
+
+procedure RemoveLastPathSegment(var AOutput: string);
+var
+  LI: SizeInt;
+begin
+  for LI := Length(AOutput) downto 1 do
+    if AOutput[LI] = '/' then
+    begin
+      SetLength(AOutput, LI - 1);
+      Exit;
+    end;
+  AOutput := '';
+end;
+
+procedure MoveFirstPathSegment(var AInput, AOutput: string);
+var
+  LI: SizeInt;
+  LSegmentLen: SizeInt;
+begin
+  if AInput = '' then
+    Exit;
+
+  LSegmentLen := Length(AInput);
+  if AInput[1] = '/' then
+  begin
+    for LI := 2 to Length(AInput) do
+      if AInput[LI] = '/' then
+      begin
+        LSegmentLen := LI - 1;
+        Break;
+      end;
+  end
+  else
+  begin
+    for LI := 1 to Length(AInput) do
+      if AInput[LI] = '/' then
+      begin
+        LSegmentLen := LI - 1;
+        Break;
+      end;
+  end;
+
+  AOutput := AOutput + System.Copy(AInput, 1, LSegmentLen);
+  Delete(AInput, 1, LSegmentLen);
+end;
+
+function NormalizeRedirectPath(const APath: string): string;
+var
+  LInput: string;
+begin
+  LInput := APath;
+  Result := '';
+  while LInput <> '' do
+  begin
+    if StartsWith(LInput, '../') then
+      Delete(LInput, 1, 3)
+    else if StartsWith(LInput, './') then
+      Delete(LInput, 1, 2)
+    else if StartsWith(LInput, '/./') then
+      Delete(LInput, 2, 2)
+    else if LInput = '/.' then
+      LInput := '/'
+    else if StartsWith(LInput, '/../') then
+    begin
+      Delete(LInput, 2, 3);
+      RemoveLastPathSegment(Result);
+    end
+    else if LInput = '/..' then
+    begin
+      LInput := '/';
+      RemoveLastPathSegment(Result);
+    end
+    else if (LInput = '.') or (LInput = '..') then
+      LInput := ''
+    else
+      MoveFirstPathSegment(LInput, Result);
+  end;
+end;
+
 function ResolveRedirectUrl(const ABaseUrl: TUrl; const ALocation: string): TUrl;
 var
   LTarget: TUrl;
@@ -123,7 +207,7 @@ begin
   Result := ABaseUrl;
   LTarget := TUrl.ParseRequestTarget(ALocation);
   if LTarget.Path <> '' then
-    Result.Path := MergeRedirectPath(Result.Path, LTarget.Path);
+    Result.Path := NormalizeRedirectPath(MergeRedirectPath(Result.Path, LTarget.Path));
   Result.RawQuery := LTarget.RawQuery;
   Result.Fragment := LTarget.Fragment;
 end;

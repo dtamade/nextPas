@@ -90,8 +90,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `307` / `308` preserve the original method and body reader.
 - Relative, path-relative, and network-path redirect `Location` values are
   resolved before the follow-up request is passed to the transport. Path-relative
-  redirects merge against the original request directory, while network-path
-  URLs inherit the original scheme and replace authority/path/query/fragment.
+  redirects merge against the original request directory and normalize dot
+  segments, while network-path URLs inherit the original scheme and replace
+  authority/path/query/fragment.
 - `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
 - `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
