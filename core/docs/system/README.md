@@ -29,6 +29,10 @@ managed type lifetime、memory primitive、exception/unwinding、RTTI/TypeInfo �
 S2 runtime/managed lifetime contract names live in `runtime-contracts.md`. They are documented
 compiler/runtime handshake names, not public ABI and not current facade functions.
 
+S3 lifecycle contract names and evidence categories live in `lifecycle-contracts.md`. They cover
+exception raise/unwind ownership, RTTI / TypeInfo boundary rules, unit initialization/finalization
+ordering and runtime-fault classification.
+
 ## Boundaries
 
 | Area | System stance |

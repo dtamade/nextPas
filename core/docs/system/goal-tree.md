@@ -40,10 +40,10 @@ Exit evidence:
 
 ## S3 Exception / RTTI / Unit Lifecycle Contracts
 
-- [ ] Document exception raise/unwind boundary between compiler, runtime and exception taxonomy owner.
-- [ ] Document RTTI / TypeInfo minimum truth and what remains compiler-owned.
-- [ ] Document unit initialization/finalization ordering and failure behavior.
-- [ ] Add source-contract tests for `np.system.unit_init`, `np.system.unit_fini` and runtime-fault classification.
+- [x] Document exception raise/unwind boundary between compiler, runtime and exception taxonomy owner.
+- [x] Document RTTI / TypeInfo minimum truth and what remains compiler-owned.
+- [x] Document unit initialization/finalization ordering and failure behavior.
+- [x] Add source-contract tests for `np.system.unit_init`, `np.system.unit_fini` and runtime-fault classification.
 
 ## S4 SysUtils / TypInfo / Classes Compatibility Facades
 

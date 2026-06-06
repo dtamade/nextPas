@@ -23,6 +23,7 @@ require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
 require_file "docs/system/runtime-contracts.md"
+require_file "docs/system/lifecycle-contracts.md"
 
 require_token "docs/system/README.md" "RTL root"
 require_token "docs/system/README.md" "owner boundary"
@@ -76,6 +77,30 @@ for helper in \
   "np.system.heap_alloc" \
   "np.system.heap_free"; do
   require_token "docs/system/runtime-contracts.md" "$helper"
+done
+
+for token in \
+  "exception raise" \
+  "unwind" \
+  "nextpas.core.exception" \
+  "RTTI" \
+  "TypeInfo" \
+  "compiler-owned" \
+  "unit initialization" \
+  "unit finalization" \
+  "reverse dependency order" \
+  "runtime-startup-failed" \
+  "unit-initialization-failed" \
+  "unit-finalization-failed" \
+  "runtime-abort"; do
+  require_token "docs/system/lifecycle-contracts.md" "$token"
+done
+
+for helper in \
+  "np.system.unit_init" \
+  "np.system.unit_fini" \
+  "np.system.runtime_fault"; do
+  require_token "docs/system/lifecycle-contracts.md" "$helper"
 done
 
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
