@@ -253,20 +253,27 @@ Files:
 - Create: `src/nextpas.core.math.impl.simd.pas`
 - Modify: `src/nextpas.core.math.vec.pas`, `mat.pas`, or `quat.pas` only if tests justify acceleration.
 - Modify or add `nextpas.core.simd` files only for missing public primitives.
+- Create: `tests/nextpas.core.math/test_impl_simd/test_impl_simd.lpr`
+- Modify: `tests/nextpas.core.math/test_api_surface/test_api_surface.py`
 - Add matching SIMD tests if new primitives are added.
 
 Steps:
 
-- [ ] Identify scalar-hot operations worth accelerating.
-- [ ] Use only `nextpas.core.simd` public APIs such as `VecF32x4*`, `Array*`, and public utility functions.
-- [ ] Do not call `nextpas.core.simd.direct`, `GetDirectDispatchTable`, dispatch internals, dataplane internals, or backend-private units.
-- [ ] Add missing SIMD primitives with dedicated SIMD tests before math consumes them.
-- [ ] Run math tests plus relevant SIMD tests.
+- [x] Identify an initial public-SIMD-safe helper seam: `TVec4f` add/sub/component-multiply/scale,
+  dot, length, and `TVec3f` dot/cross.
+- [x] Use only `nextpas.core.simd` public APIs such as `VecF32x4*`, `Array*`, and public utility functions.
+- [x] Do not call `nextpas.core.simd.direct`, `GetDirectDispatchTable`, dispatch internals, dataplane internals, or backend-private units.
+- [x] Add source-contract coverage requiring the internal seam file and declarations.
+- [x] Add internal helper behavior coverage in `test_impl_simd`.
+- [x] Add no new SIMD primitives; existing public `VecF32x4*` primitives were sufficient for this slice.
+- [x] Run full math tests plus relevant SIMD tests.
 - [ ] Commit with a precise message for each primitive or math acceleration.
 
 Expected result:
 
 - SIMD acceleration is optional, tested, and not a public math API dependency.
+- Current status is an internal helper seam only; public math value types still run their scalar paths
+  until a later profiling-backed acceleration slice wires them intentionally.
 
 ### Task 10: Documentation And Closeout Gates
 

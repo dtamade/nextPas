@@ -33,6 +33,9 @@ PUBLIC_DOC_PATHS = (
     "docs/math/API.md",
 )
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
+INTERNAL_IMPL_TEST_PREFIXES = (
+    "tests/nextpas.core.math/test_impl_",
+)
 
 CONSUMER_FACING_UNITS = {
     "nextpas.core.math",
@@ -231,6 +234,16 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("noise-fbm-1d", r"\bfunction\s+FBM1D\s*\("),
         ("noise-fbm-2d", r"\bfunction\s+FBM2D\s*\("),
         ("noise-fbm-3d", r"\bfunction\s+FBM3D\s*\("),
+    ),
+    "src/nextpas.core.math.impl.simd.pas": (
+        ("impl-simd-vec4f-add", r"\bfunction\s+SimdVec4fAdd\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
+        ("impl-simd-vec4f-sub", r"\bfunction\s+SimdVec4fSub\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
+        ("impl-simd-vec4f-mul-components", r"\bfunction\s+SimdVec4fMulComponents\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
+        ("impl-simd-vec4f-scale", r"\bfunction\s+SimdVec4fScale\s*\(\s*const\s+AValue\s*:\s*TVec4f\s*;\s*const\s+AScalar\s*:\s*Single\s*\)\s*:\s*TVec4f\b"),
+        ("impl-simd-vec4f-dot", r"\bfunction\s+SimdVec4fDot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec4f\s*\)\s*:\s*Single\b"),
+        ("impl-simd-vec4f-length", r"\bfunction\s+SimdVec4fLength\s*\(\s*const\s+AValue\s*:\s*TVec4f\s*\)\s*:\s*Single\b"),
+        ("impl-simd-vec3f-dot", r"\bfunction\s+SimdVec3fDot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec3f\s*\)\s*:\s*Single\b"),
+        ("impl-simd-vec3f-cross", r"\bfunction\s+SimdVec3fCross\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec3f\s*\)\s*:\s*TVec3f\b"),
     ),
 }
 
@@ -543,6 +556,10 @@ def scan_private_simd(root: Path, path: Path, text: str) -> list[Finding]:
 
 def scan_public_impl_consumers(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
+    rel = relative(path, root)
+    if rel.startswith(INTERNAL_IMPL_TEST_PREFIXES):
+        return findings
+
     code = strip_pascal_comments_and_strings(text)
     for match in PUBLIC_IMPL_RE.finditer(code):
         line = line_no_at(code, match.start())

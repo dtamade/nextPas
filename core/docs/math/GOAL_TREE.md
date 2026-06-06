@@ -16,7 +16,7 @@
 
 ## Current Position
 
-This branch has completed the current **M6 Random + noise slice** and should continue toward M7/M8 work.
+This branch has completed the current **M7 internal SIMD seam slice** and should continue toward M8/M9 work.
 
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
 - Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
@@ -51,6 +51,11 @@ This branch has completed the current **M6 Random + noise slice** and should con
   reference vectors, invalid FBM inputs, and heaptrc-clean object ownership.
 - The public surface checker requires the random/noise declarations and rejects public global
   random/noise singleton variables.
+- `nextpas.core.math.impl.simd` now exists as an internal implementation seam for selected
+  `TVec3f`/`TVec4f` helpers. It uses only the public `nextpas.core.simd` facade and is not wired into
+  public math value-type methods yet.
+- `test_impl_simd` validates the internal helper seam and `test_api_surface` keeps public
+  consumers/docs/tests from importing `nextpas.core.math.impl.*`.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -64,7 +69,7 @@ nextpas.core.math final migration
 ├── M4: Transform builders                               [complete]
 ├── M5: Easing                                           [complete]
 ├── M6: Random + noise                                   [complete]
-├── M7: SIMD-backed implementation seams                 [not started]
+├── M7: SIMD-backed implementation seams                 [partial: internal Vec3f/Vec4f helper seam]
 ├── M8: API surface, docs, leak proof, and module gates   [partial: README]
 └── M9: fafafa.game cutover and old Vectors retirement    [not started]
 ```
@@ -257,6 +262,16 @@ Completion gate:
 - `VectorsSIMD.pas` is never copied into core.
 - Public consumers and public tests do not `uses nextpas.core.math.impl.*`.
 
+Status:
+
+- Partial. `nextpas.core.math.impl.simd` provides internal `TVec4f` add/sub/component-multiply/scale,
+  dot, length, and `TVec3f` dot/cross helpers through the public `nextpas.core.simd` facade.
+- `test_impl_simd` locks the helper behavior and heaptrc-clean execution.
+- `test_api_surface` now requires the internal seam file and declarations, rejects backend-private
+  SIMD dependencies, and allows only implementation-specific tests to import `math.impl.*`.
+- No public `TVec*`, `TMat*`, or `TQuat*` method has been routed through this seam yet. Broader SIMD
+  acceleration, profiling evidence, and any missing public SIMD primitives remain future work.
+
 ## M8: API Surface, Docs, Leak Proof, And Module Gates
 
 Goal: close nextPas/core math as a framework-quality module.
@@ -274,7 +289,7 @@ Status:
 - Partial. `docs/math/README.md` now documents the public modules, matrix/quaternion conventions,
   random/noise explicit ownership, SIMD boundary, focused verification commands, and the remaining
   macOS/Windows trig host-gate risk.
-- M8 is not complete until M7 SIMD seam decisions, full closeout gates, host trig link evidence, and
+- M8 is not complete until broader M7 SIMD acceleration decisions, full closeout gates, host trig link evidence, and
   final API/docs review are finished.
 
 ## M9: fafafa.game Cutover And Old Vectors Retirement
