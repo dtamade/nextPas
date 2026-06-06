@@ -291,8 +291,13 @@ Status:
   macOS/Windows trig host-gate risk. `docs/math/API.md` groups the current public API by module and
   records public behavior boundaries for vectors, matrices, quaternions, transforms, easing, random,
   and noise.
-- M8 is not complete until broader M7 SIMD acceleration decisions, full closeout gates, host trig link evidence, and
-  final API/docs review are finished.
+- Local Linux closeout gates have been rerun for the current docs/API surface: `make -C
+  core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
+  `MATH_API_SURFACE OK: scanned=40 findings=0`, allocation-bearing math tests report heaptrc
+  `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
+  has no findings.
+- M8 is not complete until broader M7 SIMD acceleration decisions, host trig link evidence, and final
+  API/docs review are finished.
 
 ## M9: fafafa.game Cutover And Old Vectors Retirement
 

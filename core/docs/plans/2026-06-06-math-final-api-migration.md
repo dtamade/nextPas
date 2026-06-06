@@ -289,16 +289,16 @@ Steps:
 
 - [x] Document public modules and conventions.
 - [x] Document grouped public API reference.
-- [ ] Run all `tests/nextpas.core.math` projects.
-- [ ] Run API surface checker.
-- [ ] Run heaptrc checks and record evidence.
-- [ ] Run `git diff --check`.
-- [ ] Commit with `docs(math): document final api`.
+- [x] Run all `tests/nextpas.core.math` projects on the local Linux gate.
+- [x] Run API surface checker.
+- [x] Run heaptrc checks and record local zero-leak evidence.
+- [x] Run `git diff --check`.
+- [x] Commit current documentation and local gate evidence.
 
 Expected result:
 
 - Public docs explain the current module API and conventions.
-- Math is not ready for `fafafa.game` cutover until M7, final module gates, and host trig link
+- Math is not ready for `fafafa.game` cutover until M7, final API/docs review, and host trig link
   evidence are closed.
 
 ### Task 11: fafafa.game Cutover
