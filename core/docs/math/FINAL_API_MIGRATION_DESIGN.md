@@ -10,8 +10,8 @@ types, transform builders, easing functions, explicit-state random/noise generat
 internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-internal-seam evidence
 without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
 candidate seam result and a negative `TQuatf.Rotate` candidate seam result on the local
-x86_64/Linux gate. M8 documentation and a named local module gate are now in place via
-`make -C core core-math-smoke`. The branch also has a facade-only public example under
+x86_64/Linux gate. M8 documentation and named local module gates are now in place via
+`make -C core core-math-smoke` and `make -C core core-math-trig-local-smoke`. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
 completion still requires macOS/Windows trig host link smokes, final API/docs review,
 profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.
@@ -281,7 +281,10 @@ The first implementation batch should not attempt to be the fastest trig library
 Cross-platform link proof has two layers:
 
 - Static surface proof: `test_api_surface` rejects `external 'm'` under `src/nextpas.core.math*.pas` and rejects behavior tests that import `nextpas.core.math.ffi`.
-- Host link proof: `test_trig` and `test_facade` must link on Linux locally and on macOS/Windows host gates before trig is marked complete. If macOS/Windows gates are unavailable in a round, the round must report that final cross-platform completion is blocked, not complete.
+- Host link proof: `make -C core core-math-trig-local-smoke` bundles `test_trig` and
+  `test_facade` as the current-host local link proof. macOS/Windows host gates must still rerun
+  equivalent checks before trig is marked complete. If macOS/Windows gates are unavailable in a
+  round, the round must report that final cross-platform completion is blocked, not complete.
 
 ## Random And Noise Design
 

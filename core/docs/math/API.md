@@ -267,5 +267,12 @@ git diff --check
 git status --short --branch
 ```
 
-Linux link coverage runs locally. macOS and Windows trig link smokes remain host-gated and must be
-reported separately until those hosts run equivalent checks.
+Run the local trig link smoke on the current host with:
+
+```sh
+make -C core core-math-trig-local-smoke
+```
+
+It bundles `test_trig` and `test_facade` as the current-host local link proof. macOS and Windows
+trig link smokes remain host-gated and must be reported separately until those hosts run equivalent
+checks.

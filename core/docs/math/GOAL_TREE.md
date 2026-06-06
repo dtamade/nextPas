@@ -180,7 +180,8 @@ Completion gate:
 
 Status:
 
-- Partial. Linux local scalar/trig/facade/symbol-scope tests pass with heaptrc `0 unfreed memory blocks`.
+- Partial. Linux local scalar/trig/facade/symbol-scope tests pass with heaptrc `0 unfreed memory blocks`,
+  and `core/Makefile` now exposes `core-math-trig-local-smoke` for the repeatable current-host proof path.
 - `nextpas.core.math.ffi.pas` is deleted in this branch.
 - API surface checks reject naked `external 'm'`, public/test `math.ffi` consumers, public impl consumers, and legacy vector bridge names.
 - macOS/Windows host link smokes are not run in this local round.
@@ -401,6 +402,9 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   reruns `test_api_surface` and then runs `make -C core/examples/nextpas.core.math/math_overview clean run`,
   so the facade-only public consumer example is both directly runnable and reachable through a stable
   named module entrypoint.
+- `core/Makefile` now also exposes `core-math-trig-local-smoke`, reachable as
+  `make -C core core-math-trig-local-smoke`. It reruns `test_trig` plus `test_facade` as the
+  current-host local trig link proof without pretending macOS/Windows have already been verified.
 - M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are
   finished.
 

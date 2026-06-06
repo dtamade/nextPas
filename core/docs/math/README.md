@@ -145,9 +145,15 @@ it matches public `TQuatf.Rotate` semantics, but local x86_64/Linux benchmark ev
 both candidate seams out of the public path because the scalar implementations remain faster. Public
 docs, examples, facade tests, and downstream consumers must not import `math.impl.*` units.
 
-The current trig implementation is protected from a public naked `external 'm'` dependency by source
-surface tests and Linux local link tests. macOS and Windows host link smokes are still pending before
-the module can claim final cross-platform trig completion.
+Run the local trig link smoke on the current host with:
+
+```sh
+make -C core core-math-trig-local-smoke
+```
+
+The current trig implementation is protected from a public naked `external 'm'` dependency by
+source-surface tests plus this local host link smoke. macOS and Windows host link smokes are still
+pending before the module can claim final cross-platform trig completion.
 
 ## Verification
 
