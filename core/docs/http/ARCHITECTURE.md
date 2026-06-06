@@ -16,7 +16,7 @@ HTTP 模块是 L3 框架层的核心模块，提供 HTTP 服务器和客户端�
 - 当前扩展 seam 已经是显式 transport 注入：`NewHttpClient([Transport][, Options])`、`NewHttpServer(Handler[, Transport][, Options])`。
 - `THttpServerOptions.Backend` 现在是公开 runtime seam：HTTP facade 会把它原样下沉到 `nextpas.core.net.server` foundation。
 - 当前内建注册是 `hvHttp10` / `hvHttp11` -> H1，默认 client/server 版本都为 `hvHttp11`。
-- 当前真实源码库存为 24 个 HTTP 单元，测试工程为 21 个；H2/H3 仍未进入实现。
+- 当前真实源码库存为 25 个 HTTP 单元，测试工程为 23 个；H2/H3 仍未进入实现。
 
 HTTP server runtime 的权威方向已经固定在
 [docs/net/ARCHITECTURE.md](/home/dtamade/projects/nextPas/core/docs/net/ARCHITECTURE.md:1)：
@@ -353,7 +353,9 @@ http.base + http.intf + http.headers + http.url
 
 依赖：net, net.server, io, text, time
 测试：完整接口覆盖 + echo server + client round-trip + router dispatch + registry default resolution
-Benchmark：对照 Go net/http、Rust actix-web 的 hello-world QPS
+Benchmark：对照 Go `net/http`、Rust std-only comparator，并在需要更真实 Rust
+生态对照时追加可选 Hyper/Tokio comparator；当前不把任何单一 comparator row
+表述成完整 Rust 生态结论
 
 ### Phase 2: HTTP/2
 
