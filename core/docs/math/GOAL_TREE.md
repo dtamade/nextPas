@@ -67,7 +67,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 ```text
 nextpas.core.math final migration
 ├── M0: Control, design, and audit                       [complete]
-├── M1: RED behavior tests for final API                 [partial: scalar/trig/facade/surface]
+├── M1: RED behavior tests for final API                 [complete for current final API scope]
 ├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
 ├── M3: Vec/Mat/Quat value types                         [complete]
 ├── M4: Transform builders                               [complete]
@@ -172,7 +172,8 @@ Completion gate:
 
 Status:
 
-- Partial. `nextpas.core.math.vec` now provides `TVec2f`, `TVec3f`, `TVec4f`, `TVec2d`,
+- Complete for the current final Vec/Mat/Quat value-type scope. `nextpas.core.math.vec` now provides
+  `TVec2f`, `TVec3f`, `TVec4f`, `TVec2d`,
   `TVec3d`, and `TVec4d`.
 - Vector tests cover compact layout, `Create`, `Zero`, arithmetic operators, explicit
   component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
@@ -308,12 +309,14 @@ Status:
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
 - Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
-  declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules.
+  declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules. A
+  source-to-doc audit of the root facade constants, public type aliases, and public function names
+  found no names missing from `API.md` (`constants=5 types=16 functions=70 missing=0`).
 - `core/examples/nextpas.core.math/math_overview` now exercises the facade as a public consumer
   example, passes `make -C core/examples/nextpas.core.math/math_overview clean run`, and is protected
   by `test_api_surface`.
-- M8 is not complete until broader M7 SIMD acceleration decisions, host trig link evidence, and final
-  API/docs signoff are finished.
+- M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are
+  finished.
 
 ## M9: fafafa.game Cutover And Old Vectors Retirement
 

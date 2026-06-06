@@ -302,11 +302,13 @@ Steps:
 - [x] Review `docs/math/API.md` and `docs/math/README.md` against current public declarations.
 - [x] Commit current documentation and local gate evidence.
 - [x] Add a facade-only overview example and run its focused compile/run gate.
+- [x] Re-audit root facade constants, public type aliases, and public function names against
+  `docs/math/API.md`.
 
 Expected result:
 
 - Public docs explain the current module API and conventions.
-- Math is not ready for `fafafa.game` cutover until M7, final API/docs signoff, and host trig link
+- Math is not ready for `fafafa.game` cutover until M7 acceleration decisions and host trig link
   evidence are closed.
 
 ### Task 11: fafafa.game Cutover
