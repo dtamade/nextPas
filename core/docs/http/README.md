@@ -107,8 +107,10 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   authority/path/query/fragment. Fragment-only redirects preserve the original
   path/query and update only the request URL fragment; H1 request writing still
   omits fragments from the wire request-target.
-- Redirect responses that are followed are not returned to the caller. Before
-  the follow-up round trip, the client releases the previous response body:
+- Redirect responses that are followed or discarded by redirect errors are not
+  returned to the caller. Before the follow-up round trip, or before raising a
+  redirect error such as too many redirects, missing `Location`, or unsupported
+  absolute scheme, the client releases the previous response body:
   close-capable readers are closed, and plain `IReader` bodies are drained to
   EOF. This keeps injected/future streaming transports from leaking an
   abandoned redirect body into connection reuse.

@@ -109,13 +109,19 @@ type
   TRedirectBodyReleaseTransport = class(TInterfacedObject, IHttpTransport)
   private
     FCalls: Int32;
+    FRedirectLocation: string;
+    FOmitLocation: Boolean;
     FBody: TRedirectTrackedBody;
     FBodyRef: IReadCloser;
     FBodyClosedBeforeFollowup: Boolean;
+    function GetBodyClosed: Boolean;
   public
     constructor Create;
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
+    property RedirectLocation: string read FRedirectLocation write FRedirectLocation;
+    property OmitLocation: Boolean read FOmitLocation write FOmitLocation;
+    property BodyClosed: Boolean read GetBodyClosed;
     property BodyClosedBeforeFollowup: Boolean read FBodyClosedBeforeFollowup;
   end;
 
@@ -366,8 +372,15 @@ end;
 constructor TRedirectBodyReleaseTransport.Create;
 begin
   inherited Create;
+  FRedirectLocation := '/final';
+  FOmitLocation := False;
   FBody := TRedirectTrackedBody.Create('redirect-body');
   FBodyRef := FBody as IReadCloser;
+end;
+
+function TRedirectBodyReleaseTransport.GetBodyClosed: Boolean;
+begin
+  Result := FBody.Closed;
 end;
 
 function TRedirectBodyReleaseTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
@@ -378,7 +391,8 @@ begin
   LHeaders := NewHttpHeaders;
   if FCalls = 1 then
   begin
-    LHeaders.Set_('location', '/final');
+    if not FOmitLocation then
+      LHeaders.Set_('location', FRedirectLocation);
     LHeaders.Set_('content-length', '13');
     Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, FBodyRef as IReader));
   end;
@@ -1657,6 +1671,89 @@ begin
     'redirect body drain final body');
 end;
 
+procedure TestClientClosesRedirectResponseBodyOnTooManyRedirects;
+var
+  LTransportObj: TRedirectBodyReleaseTransport;
+  LTransport: IHttpTransport;
+  LOptions: THttpClientOptions;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectBodyReleaseTransport.Create;
+  LTransport := LTransportObj as IHttpTransport;
+  LOptions := THttpClientOptions.Default;
+  LOptions.MaxRedirects := 0;
+  LClient := NewHttpClient(LTransport, LOptions);
+
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'too many redirects raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'too many redirects stops before follow-up round trip');
+  Check(LTransportObj.BodyClosed,
+    'too many redirects closes discarded redirect response body');
+end;
+
+procedure TestClientClosesRedirectResponseBodyOnMissingLocation;
+var
+  LTransportObj: TRedirectBodyReleaseTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectBodyReleaseTransport.Create;
+  LTransportObj.OmitLocation := True;
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'missing redirect Location raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'missing redirect Location stops before follow-up round trip');
+  Check(LTransportObj.BodyClosed,
+    'missing redirect Location closes discarded redirect response body');
+end;
+
+procedure TestClientClosesRedirectResponseBodyOnUnsupportedScheme;
+var
+  LTransportObj: TRedirectBodyReleaseTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectBodyReleaseTransport.Create;
+  LTransportObj.RedirectLocation := 'ftp://redirect.test/final';
+  LTransport := LTransportObj as IHttpTransport;
+  LClient := NewHttpClient(LTransport);
+
+  LRaised := False;
+  try
+    LClient.Get('http://example.test/old');
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'unsupported redirect scheme raises EHttpError');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'unsupported redirect scheme stops before follow-up round trip');
+  Check(LTransportObj.BodyClosed,
+    'unsupported redirect scheme closes discarded redirect response body');
+end;
+
 procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -1998,6 +2095,12 @@ begin
     @TestClientClosesRedirectResponseBodyBeforeFollowup);
   T.Run('Client drains redirect response body before follow-up',
     @TestClientDrainsRedirectResponseBodyBeforeFollowup);
+  T.Run('Client closes redirect response body on too many redirects',
+    @TestClientClosesRedirectResponseBodyOnTooManyRedirects);
+  T.Run('Client closes redirect response body on missing Location',
+    @TestClientClosesRedirectResponseBodyOnMissingLocation);
+  T.Run('Client closes redirect response body on unsupported scheme',
+    @TestClientClosesRedirectResponseBodyOnUnsupportedScheme);
   T.Run('Client replays seekable body on 307 redirect',
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
   T.Run('Client rejects non-replayable body on 307 redirect',

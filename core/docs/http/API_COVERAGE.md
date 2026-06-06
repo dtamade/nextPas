@@ -80,8 +80,10 @@
     上一跳 redirect response body。支持 `IReadCloser` / `ICloser` / `IStream`
     close 语义的 body 会被关闭；只有 plain `IReader` 能力的 body 会被 drain
     到 EOF。`test_http_client` 用注入 transport 分别锁住 close-capable body
-    和 non-closeable body 的 release 语义，避免 custom/future streaming
-    transport 在 redirect 路径上泄漏被丢弃的响应 body 或污染连接复用。
+    和 non-closeable body 的 release 语义。后续又补齐 error-path proof：
+    `too many redirects`、missing `Location`、unsupported absolute scheme 在
+    抛出 `EHttpError` 前同样释放被丢弃的 redirect body，避免 custom/future
+    streaming transport 在 redirect 路径上泄漏响应 body 或污染连接复用。
   - 继续收紧：relative redirect `Location` 现在会在 client redirect 层解析
     path/query/fragment，再构造 follow-up request。live H1 wire path 和显式注入
     `IHttpTransport` 的 transport-visible request 都已证明 `/new?x=...` 不会把

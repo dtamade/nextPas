@@ -1,5 +1,38 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http redirect response body error-path proof
+
+- 本轮补齐上一 slice 的 error-path proof：
+  redirect follow-up 前的 body release 已落地，但 `too many redirects`、
+  missing `Location`、unsupported absolute scheme 这些会丢弃当前 3xx response
+  并抛出 `EHttpError` 的路径也需要明确 body ownership 证据。
+- 选择依据：
+  - 这些路径都不会把中间 redirect response 返回给调用方；如果不释放 body，
+    close/drain 责任会丢失。
+  - 这是 client error semantics / resource ownership，不是继续铺 URL spelling
+    variant。
+  - 当前实现已具备 release 顺序，本轮只补 source-contract proof，不新增 public
+    API。
+- RED 证据：
+  - 临时移除 `too many redirects` / missing `Location` 分支的 release，并把正常
+    release 移到 `ResolveRedirectUrl` 之后。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `45 total, 42 passed, 3 failed`
+    - failed at
+      `Client closes redirect response body on too many redirects`
+    - failed at
+      `Client closes redirect response body on missing Location`
+    - failed at
+      `Client closes redirect response body on unsupported scheme`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 恢复正式 release 顺序后，`test_http_client` 锁住三条错误路径都会在抛出前
+    close discarded redirect body，且不会执行 follow-up `RoundTrip`。
+- 复盘结论：
+  error-path body release 已有直接 focused proof。后续同线更高价值方向是
+  per-request redirect policy 或 timeout/body ownership API，而不是继续枚举
+  redirect resolver 拼写。
+
 ## 2026-06-06 http redirect response body release slice
 
 - 本轮转向 client redirect response body ownership：

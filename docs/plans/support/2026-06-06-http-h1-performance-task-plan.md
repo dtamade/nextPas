@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http redirect response body error-path proof
+
+### Goal
+
+补齐 client redirect body release 的错误路径证据：当 redirect response 因
+`MaxRedirects` 耗尽、缺少 `Location`、或 unsupported absolute scheme 被丢弃并
+抛出 `EHttpError` 时，上一跳 response body 也必须先释放。
+
+### Checklist
+
+- [x] source-contract：复用 injected close-capable redirect body transport，
+  增加 max-redirects / missing-Location / unsupported-scheme 三条 error-path
+  断言。
+- [x] RED：临时移除 error branches 的 release，并把 normal release 移到
+  URL resolve 之后，证明三条新测试会失败。
+- [x] GREEN：恢复上一 slice 的 release 顺序；无需新增 public API 或 transport
+  vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http redirect response body release slice
 
 ### Goal

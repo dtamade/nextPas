@@ -439,7 +439,6 @@ begin
     end;
 
     ReleaseRedirectResponseBody(LResp);
-
     LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
 
     // Go-style 301/302/303 redirects replay as GET and drop the body.

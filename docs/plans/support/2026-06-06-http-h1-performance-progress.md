@@ -1,5 +1,41 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http redirect response body error-path proof
+
+- **Status:** completed.
+- Objective:
+  - prove discarded redirect bodies are released on redirect error paths
+  - keep this as a focused contract proof, not a new public redirect policy
+- Scope and safety:
+  - touched HTTP client focused tests, HTTP docs, and this support evidence
+  - production client source ended with the previous slice's release ordering
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - temporary reverse patch removed release in `too many redirects` and missing
+    `Location` branches
+  - the same patch moved normal release after `ResolveRedirectUrl`, exposing the
+    unsupported-scheme error path
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `45 total, 42 passed, 3 failed`
+    - failures:
+      `Client closes redirect response body on too many redirects`,
+      `Client closes redirect response body on missing Location`,
+      `Client closes redirect response body on unsupported scheme`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - test-only source-contract coverage for the three redirect error paths
+  - README/API coverage updated to document discarded-body release on redirect
+    errors
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `45 total, 45 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - discarded redirect bodies now have focused proof for normal follow-up and
+    error paths
+  - this does not claim a redirect callback, cookie jar, or broader timeout API
+
 ## Session: 2026-06-06 http redirect response body release slice
 
 - **Status:** completed.
