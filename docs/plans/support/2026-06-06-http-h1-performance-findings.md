@@ -1,5 +1,35 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http server options validation slice
+
+- 本轮收紧 server options error semantics：
+  `THttpServerOptions` 是 server facade 的 public carrier。旧实现只校验 nil
+  handler，negative `ReadTimeout` / `WriteTimeout` / `IdleTimeout` 会继续下沉到
+  H1 runtime，negative `MaxHeaderSize` / `MaxBodySize` 也会下沉到 request parser /
+  limit handling。
+- 选择依据：
+  - Go/Rust 侧 timeout 和 size limit 都是明确策略输入，负数不是稳定 public
+    contract。
+  - construction-time `EArgumentError` 比把非法 options 延迟到 runtime 更可测试，
+    也避免 HTTP facade 把坏 carrier 推给 foundation。
+  - 本 slice 不改变 `0` timeout / limit 的现有语义，不修改
+    `nextpas.core.net.server`，也不扩大 H1 runtime。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `HttpServer options reject negative values`
+    - failure: `negative server read timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `ValidateServerOptions`。
+  - `THttpServer.Create(Handler, Options)` 与
+    `THttpServer.Create(Handler, Transport, Options)` 共享同一校验路径，因此
+    default transport 与 injected transport overload 都会拒绝 negative timeout /
+    size-limit fields。
+- 复盘结论：
+  server options 现在与 client options 一样具备明确 non-negative invariant。后续若
+  继续 options 方向，应先审计 zero-value limit 是否需要 contract，而不是顺手改变。
+
 ## 2026-06-06 http client options validation slice
 
 - 本轮继续收紧 client options error semantics：

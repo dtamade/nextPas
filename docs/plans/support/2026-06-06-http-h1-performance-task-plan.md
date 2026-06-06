@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http server options validation slice
+
+### Goal
+
+收紧 `THttpServerOptions` construction contract：negative `ReadTimeout`、
+`WriteTimeout`、`IdleTimeout`、`MaxHeaderSize`、`MaxBodySize` 都应在
+`NewHttpServer(Handler[, Transport], Options)` 边界抛 `EArgumentError`，不能继续
+下沉到 H1 transport 或 TCP foundation。
+
+### Checklist
+
+- [x] RED：`test_http_contract` 证明 negative read timeout 当前没有抛
+  `EArgumentError`。
+- [x] GREEN：新增内部 `ValidateServerOptions`，所有 `THttpServer` constructor
+  路径共享同一校验。
+- [x] 保持本 slice 边界：不改变 zero-value timeout / limit 语义、不修改
+  `nextpas.core.net.server`、不改 H1 runtime。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_contract`、`test_http_server`。
+
 ## Active Session: 2026-06-06 http client options validation slice
 
 ### Goal

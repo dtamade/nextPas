@@ -1,5 +1,42 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http server options validation slice
+
+- **Status:** completed.
+- Objective:
+  - reject negative `THttpServerOptions.ReadTimeout`
+  - reject negative `THttpServerOptions.WriteTimeout`
+  - reject negative `THttpServerOptions.IdleTimeout`
+  - reject negative `THttpServerOptions.MaxHeaderSize`
+  - reject negative `THttpServerOptions.MaxBodySize`
+- Scope and safety:
+  - touched HTTP server source, contract focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, H1 runtime, benchmark
+    assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `HttpServer options reject negative values`
+    - failure: `negative server read timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `ValidateServerOptions`
+  - default and injected transport server constructors now share
+    construction-time validation
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `33 total, 33 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_server clean test`
+    - `275 total, 275 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - invalid server options now fail before default transport resolution,
+    injected transport use, or TCP server creation
+  - this does not claim zero-value limit changes, foundation runtime changes, or
+    H1 protocol behavior changes
+
 ## Session: 2026-06-06 http client options validation slice
 
 - **Status:** completed.

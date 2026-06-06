@@ -122,7 +122,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
 - `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
-- `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、`MaxHeaderSize`、`MaxBodySize`
+- `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、
+  `MaxHeaderSize`、`MaxBodySize`; negative timeout or size-limit fields raise
+  `EArgumentError` at server construction time.
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
 - `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`MaxRedirects` 和
   `FollowRedirects`; negative `Timeout` or `MaxRedirects` raises

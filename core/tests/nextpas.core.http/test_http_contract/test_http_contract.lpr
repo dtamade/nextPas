@@ -968,6 +968,62 @@ begin
   Check(LRaised, 'NewHttpServer rejects nil handler');
 end;
 
+procedure TestHttpServerOptionsRejectNegativeValues;
+var
+  LOptions: THttpServerOptions;
+
+  procedure CheckRejects(const AOptions: THttpServerOptions;
+    const ALabel: string; const AUseInjectedTransport: Boolean = False);
+  var
+    LHandler: IHttpHandler;
+    LTransport: IHttpServerTransport;
+    LRaised: Boolean;
+  begin
+    LHandler := HandlerFunc(procedure(const AReq: IHttpRequest;
+      const AW: IHttpResponseWriter)
+    begin
+    end);
+    if AUseInjectedTransport then
+      LTransport := TMockServerTransport.Create
+    else
+      LTransport := nil;
+
+    LRaised := False;
+    try
+      if AUseInjectedTransport then
+        NewHttpServer(LHandler, LTransport, AOptions)
+      else
+        NewHttpServer(LHandler, AOptions);
+    except
+      on E: EArgumentError do
+        LRaised := True;
+    end;
+    Check(LRaised, ALabel);
+  end;
+
+begin
+  LOptions := THttpServerOptions.Default;
+  LOptions.ReadTimeout := -1;
+  CheckRejects(LOptions, 'negative server read timeout raises EArgumentError');
+
+  LOptions := THttpServerOptions.Default;
+  LOptions.WriteTimeout := -1;
+  CheckRejects(LOptions, 'negative server write timeout raises EArgumentError');
+
+  LOptions := THttpServerOptions.Default;
+  LOptions.IdleTimeout := -1;
+  CheckRejects(LOptions, 'negative server idle timeout raises EArgumentError');
+
+  LOptions := THttpServerOptions.Default;
+  LOptions.MaxHeaderSize := -1;
+  CheckRejects(LOptions, 'negative server max header size raises EArgumentError');
+
+  LOptions := THttpServerOptions.Default;
+  LOptions.MaxBodySize := -1;
+  CheckRejects(LOptions, 'negative server max body size raises EArgumentError',
+    True);
+end;
+
 procedure TestHttpServerLifecycleContractOnInterface;
 var
   LHandler: IHttpHandler;
@@ -1241,6 +1297,8 @@ begin
   T.Run('IHttpServerTransport ServeConn contract shape', @TestHttpServerTransportServeConnContract);
   T.Run('IHttpHijacker facade alias', @TestHttpHijackerFacadeAlias);
   T.Run('HttpServer rejects nil handler', @TestHttpServerRejectsNilHandler);
+  T.Run('HttpServer options reject negative values',
+    @TestHttpServerOptionsRejectNegativeValues);
   T.Run('IHttpServer lifecycle contract shape', @TestHttpServerLifecycleContractOnInterface);
   T.Run('HttpServer honors explicit backend selection',
     @TestHttpServerHonorsExplicitBackendSelection);

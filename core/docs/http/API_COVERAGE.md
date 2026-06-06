@@ -68,6 +68,11 @@
     max-redirects 仍表示不允许任何 follow-up redirect；负数不再被默默解释成
     no-timeout 或 redirect error side effect。`test_http_client` 锁住该 options
     validation contract。
+  - 继续收紧：`NewHttpServer(Handler[, Transport], Options)` 现在会在 server
+    construction 边界拒绝负数 `THttpServerOptions.ReadTimeout` / `WriteTimeout` /
+    `IdleTimeout` / `MaxHeaderSize` / `MaxBodySize`，并抛 `EArgumentError`。
+    负数不再下沉到 H1 transport 或 TCP foundation。`test_http_contract` 锁住
+    facade contract，`test_http_server` 锁住 server consumer gate。
   - 继续收紧：client redirect 现在覆盖 `303 See Other`。`HTTP_STATUS_SEE_OTHER`
     由 `http.base` 与 facade 暴露，`HttpStatusText(303)` 返回 `See Other`；
     `IHttpClient` 跟随 `303` 时按 Go / Rust 常见 client 语义把原请求改为
