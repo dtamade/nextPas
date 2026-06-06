@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 runner include-hyper marker slice
+
+- **Status:** completed.
+- Objective:
+  - make server comparison raw output/report state whether Hyper/Tokio was
+    requested
+  - avoid inferring runner parameters only from later `rust_hyper` sections
+  - keep row and summary schemas unchanged
+- Scope and safety:
+  - touched the comparison runner, benchmark focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, comparator binaries, generated outputs, or build
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison runner include hyper smoke`
+    - missing marker: `include_hyper=1`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `run_server_comparison.sh` comparison header now prints
+    `include_hyper=${INCLUDE_HYPER}`
+  - include-hyper focused smoke checks both stdout and saved report
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - saved server comparison reports now preserve the include-hyper parameter
+  - this does not claim new comparator workloads or new performance rankings
+
 ## Session: 2026-06-06 hyper snapshot cargo metadata slice
 
 - **Status:** completed.

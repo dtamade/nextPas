@@ -1,5 +1,23 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 runner include-hyper marker slice
+
+### Goal
+
+收紧 server comparison raw/report header：`run_server_comparison.sh` 应显式输出
+`include_hyper=0|1`。否则保存下来的 report 只能靠是否出现 `rust_hyper` section
+反推 runner 是否请求了可选 Hyper/Tokio comparator。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 的 include-hyper runner smoke 要求 stdout/report
+  包含 `include_hyper=1`，当前 runner 缺该 marker。
+- [x] GREEN：runner comparison header 输出 `include_hyper=${INCLUDE_HYPER}`。
+- [x] 保持本 slice 边界：不修改 comparator row 格式、不改 summary 解析、不改
+  snapshot helper 或 HTTP runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 hyper snapshot cargo metadata slice
 
 ### Goal

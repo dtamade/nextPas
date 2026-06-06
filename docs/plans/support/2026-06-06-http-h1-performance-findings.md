@@ -1,5 +1,32 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 runner include-hyper marker slice
+
+- 本轮继续收紧 comparison report header：
+  runner raw output 已有 `comparison`、`requests`、`threads`、`workload`、`runs`，
+  但缺 `include_hyper`。保存 report 后，调用方只能从后续是否出现
+  `section=rust_hyper` / `summary_impl=rust_hyper` 推断当时是否请求了 Hyper/Tokio
+  comparator。
+- 选择依据：
+  - 这是 benchmark evidence metadata，不改变任何 comparator row 或 summary
+    解析。
+  - snapshot helper 已经记录 `include_hyper=`，runner raw report 也应有同一
+    参数 truth。
+  - marker 位于 header，便于 grep/脚本消费。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison runner include hyper smoke`
+    - failure: missing `include_hyper=1`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `run_server_comparison.sh` header 现在输出 `include_hyper=0|1`。
+  - include-hyper smoke 锁住 stdout 和 saved report 都包含 `include_hyper=1`。
+- 复盘结论：
+  server comparison report 现在能直接说明是否请求 Hyper/Tokio comparator。后续
+  benchmark truth 可继续补 runner/snapshot 的 parameter metadata，但不应改变已经
+  稳定的 row schema。
+
 ## 2026-06-06 hyper snapshot cargo metadata slice
 
 - 本轮继续收紧 Hyper/Tokio comparator 的环境证据：

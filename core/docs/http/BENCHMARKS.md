@@ -78,7 +78,9 @@ summary repeats this guard as `median_completed=<requests>`, nextPas rows print
 `nextpas_h1_path=fast` for current no-body HTTP/1.1 workloads, and Rust
 std-only / Hyper rows print `rust_profile=std_only` /
 `rust_profile=hyper_tokio` so fast-path and comparator interpretation stay
-explicit.
+explicit. The raw comparison header also prints `include_hyper=0|1`, so saved
+reports do not need to infer whether the optional Hyper/Tokio comparator was
+requested from later sections.
 
 All single-implementation comparator binaries use the same workload allow-list
 as the runner. An explicit invalid `--workload` exits non-zero with an

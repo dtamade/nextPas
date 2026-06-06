@@ -192,6 +192,10 @@
   `cargo_version=` 与 `hyper_cargo_lock_sha256=`，让 Hyper/Tokio comparator 的
   Cargo toolchain 与 locked dependency set 出现在同一份 Markdown snapshot
   environment block 中；`test_http_benchmarks` 锁住这两个 marker。
+- `run_server_comparison.sh --include-hyper` 现在会在 raw comparison header 和
+  saved report 中记录 `include_hyper=1`；默认 runner 仍可保留
+  `include_hyper=0` marker。`test_http_benchmarks` 锁住 include-hyper report
+  marker，避免手工报告只能靠后续 `rust_hyper` section 推断 runner 参数。
 - `test_http_benchmarks` 现在还用 source-contract smoke 锁住 H1 server policy 热路径 helper：`ShouldKeepAlive`、`ParserErrorStatus` 与 `ShouldSendContinueResponse` 保持 `inline`，覆盖 keep-alive、parser-error 与 `Expect: 100-continue` 决策入口；`HeaderPolicyErrorStatus` 和大型 server state-machine 仍保持非 inline，避免代码膨胀。
 - `bench_router` 现在也有 focused benchmark smoke：测试会自动 build `bench_router`，用 `NEXTPAS_BENCH_FILTER=handler dispatch` 和小迭代上限验证输出包含 `operation=http.router.dispatch`、`handler dispatch`、`ns/op` 与 `ops/s`；`docs/http/BENCHMARKS.md` 已记录本机 `THttpRouter.ServeHTTP` 静态路由 + no-op handler dispatch row。
 - `bench_h1writer` 现在也有 focused benchmark smoke：测试会自动 build `bench_h1writer`，用 `NEXTPAS_BENCH_FILTER=fixed 200 13B`、`NEXTPAS_BENCH_FILTER=headers only 200`、`NEXTPAS_BENCH_FILTER=headers block 200 6 headers` 和 `NEXTPAS_BENCH_FILTER=status lines common errors` 的小迭代上限验证输出包含 `operation=http.h1writer.serialize`、真实 benchmark run row、`ns/op` 与 `ops/s`；`docs/http/BENCHMARKS.md` 已记录本机 `TH1ResponseWriter` fixed `200 OK` header-only、6-header block、common error status-line 与 13B body serialization rows。

@@ -1326,6 +1326,8 @@ begin
     'server comparison include-hyper runner exit code: ' + LOutput);
   CheckContains(LOutput, 'comparison=http.server.keepalive',
     'include-hyper comparison marker');
+  CheckContains(LOutput, 'include_hyper=1',
+    'include-hyper runner marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1');
   CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1');
@@ -1337,6 +1339,8 @@ begin
   LReport := LoadTextFile(LReportPath);
   CheckContains(LReport, 'comparison=http.server.keepalive',
     'include-hyper report comparison marker');
+  CheckContains(LReport, 'include_hyper=1',
+    'include-hyper report marker');
   CheckServerBenchmarkOutput(LReport, 'rust_hyper', '8', '1');
   CheckContains(LReport, 'summary_impl=rust_hyper',
     'include-hyper report rust_hyper summary marker');

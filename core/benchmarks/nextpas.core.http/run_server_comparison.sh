@@ -229,6 +229,7 @@ run_comparison() {
   echo "threads=${THREADS}"
   echo "workload=${WORKLOAD}"
   echo "runs=${RUNS}"
+  echo "include_hyper=${INCLUDE_HYPER}"
   echo
 
   for run_index in $(seq 1 "${RUNS}"); do
