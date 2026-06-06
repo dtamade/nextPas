@@ -336,3 +336,4 @@ reuses `core-math-facade-local-smoke`, so the current-host proof keeps the sourc
 `external 'm'` and consumer-boundary checks coupled to the link smoke without losing an
 independently callable facade-consumer gate.
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
+M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.

@@ -434,8 +434,7 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `make -C core core-math-trig-local-smoke`. It first calls `core-math-api-surface-smoke`, then
   reuses `core-math-facade-local-smoke`, and finally reruns `test_trig` as the current-host local
   trig link proof without pretending macOS/Windows have already been verified.
-- M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are
-  finished.
+- M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.
 
 ## M9: fafafa.game Cutover And Old Vectors Retirement
 

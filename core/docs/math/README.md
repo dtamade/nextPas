@@ -198,6 +198,7 @@ source-surface tests plus this local host link smoke. `core-math-trig-local-smok
 public consumer contract remains independently repeatable. macOS and Windows host link smokes are
 still pending before the module can claim final cross-platform trig completion.
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
+M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are resolved.
 
 ## Verification
 
