@@ -113,7 +113,7 @@ producer 侧等待操作应返回失败，consumer 侧可继续 drain 已发布�
 2. producer 已停止并 join。
 3. consumer 已 drain 队列。
 
-debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy assert，用来冻结这条纪律。
+debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy 和 drained-before-destroy assert，用来冻结这条纪律。
 
 ## Atomic dependency
 

@@ -83,6 +83,7 @@ var
 begin
   {$IFDEF DEBUG}
   Assert(FClosed <> 0, 'TMpscQueue.Destroy: Close must be called before Destroy to ensure all producers have stopped');
+  Assert(IsEmpty, 'TMpscQueue.Destroy: queue must be drained before Destroy after Close');
   {$ENDIF}
   while TryDequeue(LV) do;
   inherited;

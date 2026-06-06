@@ -474,6 +474,42 @@ begin
   LQ.Free;
 end;
 
+procedure TestMpscDestroyRequiresDrainInDebug;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+  LRaised: Boolean;
+begin
+  LQ := TIntMpsc.Create;
+  LQ.Enqueue(42);
+  LQ.Close;
+  LRaised := False;
+  try
+    LQ.Free;
+  except
+    on E: EAssertionFailed do
+      LRaised := True;
+  end;
+  {$IFDEF DEBUG}
+  Check(LRaised, 'DEBUG MPSC destroy must reject close-without-drain');
+  if LRaised then
+  begin
+    Check(LQ.TryDequeue(LV), 'cleanup drain queued MPSC item after failed destroy');
+    CheckEqual(Int64(42), Int64(LV));
+    LQ.Free;
+  end;
+  {$ELSE}
+  Check(not LRaised, 'non-DEBUG MPSC destroy should not raise close-without-drain assertion');
+  {$ENDIF}
+
+  LQ := TIntMpsc.Create;
+  LQ.Enqueue(42);
+  LQ.Close;
+  Check(LQ.TryDequeue(LV), 'drain queued MPSC item before destroy');
+  CheckEqual(Int64(42), Int64(LV));
+  LQ.Free;
+end;
+
 procedure TestMpscMultiProducer;
 var
   LHandles: array[0..3] of TPlatformThreadHandle;
@@ -789,6 +825,7 @@ var
   LMpmcBatchTestSection: string;
   LMpscBasicTestSection: string;
   LMpscCloseProducerTestSection: string;
+  LMpscDestroyDrainTestSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscTimeoutTestSection: string;
 begin
@@ -852,8 +889,12 @@ begin
     'MPSC basic test source section');
   LMpscCloseProducerTestSection := ExtractSection(LTestSource,
     'procedure TestMpscCloseProducerContract;',
-    'procedure TestMpscMultiProducer;',
+    'procedure TestMpscDestroyRequiresDrainInDebug;',
     'MPSC close producer contract test source section');
+  LMpscDestroyDrainTestSection := ExtractSection(LTestSource,
+    'procedure TestMpscDestroyRequiresDrainInDebug;',
+    'procedure TestMpscMultiProducer;',
+    'MPSC destroy drain contract test source section');
   LMpscMultiProducerTestSection := ExtractSection(LTestSource,
     'procedure TestMpscMultiProducer;',
     '{ Work-stealing Deque }',
@@ -949,6 +990,9 @@ begin
   CheckContains(LDocsReadme,
     '`TMpscQueue<T>` permits multiple producers and exactly one consumer; `Enqueue` does not observe `Close`, so callers must stop and join producers before destroy.',
     'lockfree README must document the MPSC caller-role and destroy contract');
+  CheckContains(LDocsReadme,
+    'debug build 中 `TMpscQueue.Destroy` 保留 close-before-destroy 和 drained-before-destroy assert，用来冻结这条纪律。',
+    'lockfree README must document the DEBUG close-and-drain destroy asserts');
   CheckContains(LDocsReadme,
     '`TLockFreeStack<T>` permits multiple concurrent `TryPush` / `TryPop` callers over its fixed slot pool; capacity bounds and unmanaged element restrictions still apply.',
     'lockfree README must document the stack caller-role contract');
@@ -1092,7 +1136,11 @@ begin
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
-    'MPSC destroy guard must document the producer-stop discipline');
+    'MPSC destroy guard must document the close-before-destroy discipline');
+  CheckContains(LMpscSource, 'Assert(IsEmpty',
+    'MPSC destroy must keep the drained-before-destroy debug guard');
+  CheckContains(LMpscSource, 'queue must be drained before Destroy after Close',
+    'MPSC destroy guard must document the drain-before-destroy discipline');
   CheckContains(LMpscBasicTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC basic test must close before freeing the queue');
   CheckContains(LMpscCloseProducerTestSection,
@@ -1109,6 +1157,12 @@ begin
   CheckContains(LMpscCloseProducerTestSection,
     'Check(not LQ.DequeueTimeout(LV, 1000000), ''dequeue timeout false on closed empty MPSC'');',
     'MPSC close producer contract test must freeze closed-empty timeout termination');
+  CheckContains(LMpscDestroyDrainTestSection,
+    'Check(LRaised, ''DEBUG MPSC destroy must reject close-without-drain'');',
+    'MPSC destroy drain contract test must reject freeing a closed but undrained queue in DEBUG builds');
+  CheckContains(LMpscDestroyDrainTestSection,
+    'Check(LQ.TryDequeue(LV), ''drain queued MPSC item before destroy'');',
+    'MPSC destroy drain contract test must drain queued items before the final free');
   CheckContains(LMpscMultiProducerTestSection, 'GMpscQ.Close;' + LineEnding + '  GMpscQ.Free;',
     'MPSC multi-producer test must close after producers stop and before freeing the queue');
   CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
@@ -1372,6 +1426,7 @@ begin
   T.Run('Stack basic', @TestStackBasic);
   T.Run('MPSC basic', @TestMpscBasic);
   T.Run('MPSC close producer contract', @TestMpscCloseProducerContract);
+  T.Run('MPSC destroy requires drain in DEBUG', @TestMpscDestroyRequiresDrainInDebug);
   T.Run('MPSC multi-producer', @TestMpscMultiProducer);
   T.Run('Deque basic', @TestDequeBasic);
   T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
