@@ -83,6 +83,34 @@ begin
   end;
 end;
 
+procedure TestZeroSeedUsesDeterministicDefault;
+var
+  A, B: TRandomGen;
+  FirstInt: Integer;
+  FirstDouble: Double;
+begin
+  A := TRandomGen.Create(0);
+  B := TRandomGen.Create(0);
+  try
+    FirstInt := A.NextInt;
+    CheckEqual(Int64(FirstInt), Int64(B.NextInt),
+      'zero seed uses the same deterministic default NextInt sequence');
+
+    FirstDouble := A.NextDouble;
+    CheckNear(FirstDouble, B.NextDouble, 0.0,
+      'zero seed uses the same deterministic default NextDouble sequence');
+
+    A.SetSeed(0);
+    CheckEqual(Int64(FirstInt), Int64(A.NextInt),
+      'SetSeed(0) resets the deterministic default NextInt sequence');
+    CheckNear(FirstDouble, A.NextDouble, 0.0,
+      'SetSeed(0) resets the deterministic default NextDouble sequence');
+  finally
+    B.Free;
+    A.Free;
+  end;
+end;
+
 procedure TestRangeBoundaries;
 var
   Rng: TRandomGen;
@@ -150,6 +178,37 @@ begin
   finally
     LargeRng.Free;
     SmallRng.Free;
+  end;
+end;
+
+procedure TestWeightedChoiceRejectsAllZeroWeights;
+var
+  Rng: TRandomGen;
+  Weights: TWeight3;
+  Caught: Boolean;
+  ErrorMessage: string;
+begin
+  Rng := TRandomGen.Create(1);
+  try
+    Weights[0] := 0.0;
+    Weights[1] := 0.0;
+    Weights[2] := 0.0;
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Rng.WeightedChoice(Weights);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'WeightedChoice rejects all-zero weights');
+    CheckEqual('TRandomGen.WeightedChoice: at least one weight must be positive', ErrorMessage,
+      'WeightedChoice reports owner-level all-zero weight message');
+  finally
+    Rng.Free;
   end;
 end;
 
@@ -422,11 +481,13 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.math.random');
   T.Run('seed determinism', @TestSeedDeterminism);
+  T.Run('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
   T.Run('range boundaries', @TestRangeBoundaries);
   T.Run('large finite float range stays finite and bounded',
     @TestLargeFiniteFloatRangeStaysFiniteAndBounded);
   T.Run('WeightedChoice large finite weights stay scale-invariant',
     @TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant);
+  T.Run('WeightedChoice rejects all-zero weights', @TestWeightedChoiceRejectsAllZeroWeights);
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
   T.Run('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);

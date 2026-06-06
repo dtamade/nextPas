@@ -65,6 +65,34 @@ begin
   end;
 end;
 
+procedure TestZeroSeedUsesDeterministicDefault;
+var
+  A, B: TNoiseGen;
+  Noise1DValue: Double;
+  FBM2DValue: Double;
+begin
+  A := TNoiseGen.Create(0);
+  B := TNoiseGen.Create(0);
+  try
+    Noise1DValue := A.Noise1D(0.25);
+    CheckNear(Noise1DValue, B.Noise1D(0.25), 0.0,
+      'zero seed uses the same deterministic default Noise1D permutation');
+
+    FBM2DValue := A.FBM2D(0.25, 0.75, 4);
+    CheckNear(FBM2DValue, B.FBM2D(0.25, 0.75, 4), 0.0,
+      'zero seed uses the same deterministic default FBM2D permutation');
+
+    A.SetSeed(0);
+    CheckNear(Noise1DValue, A.Noise1D(0.25), 0.0,
+      'SetSeed(0) resets the deterministic default Noise1D permutation');
+    CheckNear(FBM2DValue, A.FBM2D(0.25, 0.75, 4), 0.0,
+      'SetSeed(0) resets the deterministic default FBM2D permutation');
+  finally
+    B.Free;
+    A.Free;
+  end;
+end;
+
 procedure TestNoiseReferenceVectors;
 var
   Noise: TNoiseGen;
@@ -637,6 +665,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.math.noise');
   T.Run('noise repeatability', @TestNoiseRepeatability);
+  T.Run('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
   T.Run('noise reference vectors', @TestNoiseReferenceVectors);
   T.Run('noise invalid inputs', @TestNoiseInvalidInputs);
   T.Run('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
