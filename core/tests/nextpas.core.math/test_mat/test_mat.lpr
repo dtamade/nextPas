@@ -43,9 +43,19 @@ begin
   Check(TMat3f.Equals(TMat3f.Identity, AActual, Single(0.00001)), AMessage);
 end;
 
+procedure CheckMat3fZero(const AActual: TMat3f; const AMessage: string);
+begin
+  Check(TMat3f.Equals(TMat3f.Zero, AActual, Single(0.0)), AMessage);
+end;
+
 procedure CheckMat4fIdentity(const AActual: TMat4f; const AMessage: string);
 begin
   Check(TMat4f.Equals(TMat4f.Identity, AActual, Single(0.00001)), AMessage);
+end;
+
+procedure CheckMat4fZero(const AActual: TMat4f; const AMessage: string);
+begin
+  Check(TMat4f.Equals(TMat4f.Zero, AActual, Single(0.0)), AMessage);
 end;
 
 procedure CheckMat3dIdentity(const AActual: TMat3d; const AMessage: string);
@@ -53,9 +63,19 @@ begin
   Check(TMat3d.Equals(TMat3d.Identity, AActual, 0.000000000001), AMessage);
 end;
 
+procedure CheckMat3dZero(const AActual: TMat3d; const AMessage: string);
+begin
+  Check(TMat3d.Equals(TMat3d.Zero, AActual, 0.0), AMessage);
+end;
+
 procedure CheckMat4dIdentity(const AActual: TMat4d; const AMessage: string);
 begin
   Check(TMat4d.Equals(TMat4d.Identity, AActual, 0.000000000001), AMessage);
+end;
+
+procedure CheckMat4dZero(const AActual: TMat4d; const AMessage: string);
+begin
+  Check(TMat4d.Equals(TMat4d.Zero, AActual, 0.0), AMessage);
 end;
 
 procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
@@ -140,6 +160,7 @@ begin
   Check(M.TryInverse(Inverse), 'TMat3f TryInverse succeeds');
   CheckMat3fIdentity(M * Inverse, 'TMat3f inverse product');
   Check(not Singular.TryInverse(Inverse), 'TMat3f TryInverse rejects singular matrix');
+  CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes out result for singular matrix');
   ExpectArgumentError('TMat3f singular inverse', @RaiseTMat3fSingularInverse);
   Check(TMat3f.Equals(M, M + TMat3f.Zero, Single(0.0)), 'TMat3f equals exact');
   Check(TMat3f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat3f equals epsilon');
@@ -179,6 +200,7 @@ begin
   Check(M.TryInverse(Inverse), 'TMat4f TryInverse succeeds');
   CheckMat4fIdentity(M * Inverse, 'TMat4f inverse product');
   Check(not TMat4f.Zero.TryInverse(Inverse), 'TMat4f TryInverse rejects singular matrix');
+  CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes out result for singular matrix');
   ExpectArgumentError('TMat4f singular inverse', @RaiseTMat4fSingularInverse);
   Check(TMat4f.Equals(M, M + TMat4f.Zero, Single(0.0)), 'TMat4f equals exact');
   Check(TMat4f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat4f scalar multiply right');
@@ -203,6 +225,7 @@ begin
   Check(M3.TryInverse(Inverse3), 'TMat3d TryInverse succeeds');
   CheckMat3dIdentity(M3 * Inverse3, 'TMat3d inverse product');
   Check(not TMat3d.Zero.TryInverse(Inverse3), 'TMat3d TryInverse rejects singular matrix');
+  CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes out result for singular matrix');
 
   M4 := TMat4d.Create(
     TVec4d.Create(2.0, 0.0, 0.0, 0.0),
@@ -220,6 +243,7 @@ begin
   Check(M4.TryInverse(Inverse4), 'TMat4d TryInverse succeeds');
   CheckMat4dIdentity(M4 * Inverse4, 'TMat4d inverse product');
   Check(not TMat4d.Zero.TryInverse(Inverse4), 'TMat4d TryInverse rejects singular matrix');
+  CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes out result for singular matrix');
 end;
 
 begin

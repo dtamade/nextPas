@@ -31,7 +31,7 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Matrix tests cover compact layout, column-major `Data[column,row]`, `Items`, `Rows`, `Columns`,
   `Zero`, `Identity`, arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix
   multiply, `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and
-  singular inverse behavior.
+  singular inverse behavior, including zeroing the failed `TryInverse` out matrix.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, `FromAxisAngle`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, quaternion
@@ -175,7 +175,8 @@ Goal: provide final public value types:
 Completion gate:
 
 - Vec/Mat/Quat tests cover every public constructor, operator, and method.
-- Singular matrix inversion uses a documented `TryInverse` path and does not return silent garbage.
+- Singular matrix inversion uses a documented `TryInverse` path, zeroes the failed out matrix, and
+  does not return silent garbage.
 - Normalize of zero vectors/quaternions is explicitly defined and tested.
 
 Status:
@@ -189,7 +190,8 @@ Status:
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
 - Matrix tests cover compact layout, column-major storage, row/column accessors, arithmetic operators,
   scalar multiply, matrix-vector multiply, matrix-matrix multiply, transpose, determinant, inverse,
-  singular `TryInverse`, singular `Inverse` raising `EArgumentError`, and double-precision variants.
+  singular `TryInverse` zeroing the out matrix, singular `Inverse` raising `EArgumentError`, and
+  double-precision variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
   until a later architecture slice has evidence that it improves maintainability without widening the
@@ -331,7 +333,7 @@ Status:
   records public behavior boundaries for vectors, matrices, quaternions, transforms, easing, random,
   and noise.
 - Local Linux closeout gates have been rerun for the current docs/API surface: `make -C
-  core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
+core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `MATH_API_SURFACE OK: scanned=42 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.

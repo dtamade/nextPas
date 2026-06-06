@@ -255,11 +255,11 @@ Final strategy and current status:
 
 1. Add RED surface tests first. They reject public/test `uses nextpas.core.math.ffi`.
 1. `nextpas.core.math.trig` exposes safe public functions.
-2. `nextpas.core.math.trig` depends on `nextpas.core.math.impl.scalar` or platform-owned helpers.
-3. Platform-specific native bindings, if used, belong under host-owner platform seams, not under a public `math.ffi` facade.
-4. Where dynamic loading is needed, keep the public facade loading-strategy-agnostic.
-5. For first correctness implementation, pure Pascal or host-safe RTL-compatible implementations are acceptable if they pass accuracy tests and link on Linux/macOS/Windows.
-6. Delete `nextpas.core.math.ffi.pas` once no source or test uses it. This branch has deleted it; do not reintroduce a deprecated stub unless a landing review finds an external compatibility blocker and the source-surface test still prevents new use.
+1. `nextpas.core.math.trig` depends on `nextpas.core.math.impl.scalar` or platform-owned helpers.
+1. Platform-specific native bindings, if used, belong under host-owner platform seams, not under a public `math.ffi` facade.
+1. Where dynamic loading is needed, keep the public facade loading-strategy-agnostic.
+1. For first correctness implementation, pure Pascal or host-safe RTL-compatible implementations are acceptable if they pass accuracy tests and link on Linux/macOS/Windows.
+1. Delete `nextpas.core.math.ffi.pas` once no source or test uses it. This branch has deleted it; do not reintroduce a deprecated stub unless a landing review finds an external compatibility blocker and the source-surface test still prevents new use.
 
 The first implementation batch should not attempt to be the fastest trig library. It should first be correct, safe, and linkable. SIMD/transcendental acceleration comes later through `nextpas.core.simd` primitives.
 
@@ -394,7 +394,8 @@ Each step is a separate reversible commit.
 Resolved by tests and implementation:
 
 - Constructors use static `Create`; no short free constructors are part of the current public API.
-- `Inverse` raises `EArgumentError` for singular matrices; `TryInverse` returns `False`.
+- `Inverse` raises `EArgumentError` for singular matrices; `TryInverse` returns `False` and zeroes
+  the failed `out` matrix.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects

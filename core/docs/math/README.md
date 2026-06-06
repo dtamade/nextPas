@@ -62,6 +62,8 @@ The transform convention is:
 
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero.
+Singular `TryInverse` returns `False` and zeroes the `out` matrix; `Inverse` raises
+`EArgumentError`.
 
 ## Random And Noise Ownership
 

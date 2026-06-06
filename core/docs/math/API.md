@@ -114,8 +114,8 @@ Matrix operations:
 - Determinant and inverse: `Determinant`, `TryInverse`, `Inverse`
 - Comparison: `Equals`
 
-`TryInverse` returns `False` for singular matrices. `Inverse` raises `EArgumentError` for singular
-matrices.
+`TryInverse` returns `False` for singular matrices and sets `AInverse` to `Zero`. `Inverse` raises
+`EArgumentError` for singular matrices.
 
 ## Quaternions
 
