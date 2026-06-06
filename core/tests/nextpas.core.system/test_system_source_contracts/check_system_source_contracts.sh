@@ -33,6 +33,7 @@ require_token "docs/system/README.md" "nextpas.core.mem"
 require_token "docs/system/README.md" "nextpas.core.platform"
 require_token "docs/system/README.md" "nextpas.core.text"
 require_token "docs/system/README.md" "non-goals"
+require_token "docs/system/README.md" "deferred"
 
 for unit_name in System SysUtils TypInfo Classes ObjPas; do
   require_token "docs/system/rtl-mapping.md" "$unit_name"
@@ -49,6 +50,14 @@ done
 
 for phase in S0 S1 S2 S3 S4 S5; do
   require_token "docs/system/goal-tree.md" "$phase"
+done
+
+for token in \
+  "S4" \
+  "deferred" \
+  "not a current phase gate" \
+  "no public units yet"; do
+  require_token "docs/system/goal-tree.md" "$token"
 done
 
 for token in \
@@ -105,6 +114,9 @@ done
 
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
+[[ ! -e "$CORE_ROOT/src/nextpas.core.system.sysutils.pas" ]] || fail "S4 deferred: no live nextpas.core.system.sysutils unit expected yet"
+[[ ! -e "$CORE_ROOT/src/nextpas.core.system.typinfo.pas" ]] || fail "S4 deferred: no live nextpas.core.system.typinfo unit expected yet"
+[[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
 
 mapfile -t system_units < <(find "$CORE_ROOT/src" -maxdepth 1 -name 'nextpas.core.system*.pas' | sort)
 (( ${#system_units[@]} > 0 )) || fail "no nextpas.core.system units found"

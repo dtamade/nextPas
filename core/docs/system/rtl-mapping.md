@@ -38,6 +38,9 @@ ownership status so future slices can expand the module without turning it into 
 
 ## FPC SysUtils
 
+Current phase note: compatibility facade work for SysUtils is deferred; there are no public units yet
+under `nextpas.core.system.sysutils`.
+
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
 | Exception base aliases | `system facade delegating to owner` | `nextpas.core.exception` and `nextpas.core.errors`. |
@@ -49,6 +52,9 @@ ownership status so future slices can expand the module without turning it into 
 
 ## FPC TypInfo
 
+Current phase note: compatibility facade work for TypInfo is deferred; there are no public units yet
+under `nextpas.core.system.typinfo`.
+
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
 | `TypeInfo` identity | `future compiler/runtime only` | Needs compiler-backed RTTI truth first. |
@@ -56,6 +62,9 @@ ownership status so future slices can expand the module without turning it into 
 | String-based property access | `explicitly out of scope` | Not part of S0/S1; future compatibility requires separate design. |
 
 ## FPC Classes
+
+Current phase note: compatibility facade work for Classes is deferred; there are no public units yet
+under `nextpas.core.system.classes`.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |

@@ -33,6 +33,11 @@ S3 lifecycle contract names and evidence categories live in `lifecycle-contracts
 exception raise/unwind ownership, RTTI / TypeInfo boundary rules, unit initialization/finalization
 ordering and runtime-fault classification.
 
+S4 compatibility facades are currently deferred. `nextpas.core.system.sysutils`,
+`nextpas.core.system.typinfo`, and `nextpas.core.system.classes` are not live public units in the
+current phase. Their eventual public surface is not a current phase gate and must be reopened only
+when real compiler/runtime or higher-level consumer pressure produces focused evidence.
+
 ## Boundaries
 
 | Area | System stance |
@@ -47,6 +52,12 @@ ordering and runtime-fault classification.
 | `nextpas.core.math` | math owner; system may later expose compatibility aliases only after focused tests. |
 | `nextpas.core.io` | stream and IO owner; no system IO facade in S0/S1. |
 | atomic/sync/thread modules | concurrency owners; system does not own locks, atomics or scheduler policy. |
+
+Deferred S4 note:
+
+- no public units yet for `system.sysutils`, `system.typinfo`, or `system.classes`
+- deferred means “documented and guarded by source-contract”, not “silently available”
+- any future compatibility facade must arrive with real consumer pressure and focused API tests
 
 ## Contract Names
 

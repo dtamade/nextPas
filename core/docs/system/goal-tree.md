@@ -47,10 +47,21 @@ Exit evidence:
 
 ## S4 SysUtils / TypInfo / Classes Compatibility Facades
 
+- [x] Record that S4 is deferred for the current phase and not a current phase gate.
+- [x] Record that no public units yet should exist for `system.sysutils`, `system.typinfo`, or `system.classes`.
 - [ ] Decide which compatibility surfaces deserve `system.*` facade units.
 - [ ] Add only tested aliases or forwarding functions; no broad historical copy.
 - [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.
 - [ ] Report `Needs Review` before exposing compatibility API with wide consumer impact.
+
+Current phase note:
+
+- S4 is deferred.
+- S4 is not a current phase gate for this lane.
+- no public units yet should exist for `nextpas.core.system.sysutils`, `nextpas.core.system.typinfo`,
+  or `nextpas.core.system.classes`.
+- If real consumer pressure appears, reopen as `Needs Review` with focused evidence instead of creating
+  broad placeholders.
 
 ## S5 Compiler / Runtime Integration Readiness
 
