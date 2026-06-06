@@ -843,6 +843,22 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchFastHeadersHasAccept(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success and LResult.Headers.Has('Accept') then
+      Inc(LScore);
+  end;
+  GSink := GSink + LScore;
+end;
+
 procedure BenchFastHeadersGetAllAccept(aIters: Int64);
 var
   LIt: Int64;
@@ -1018,6 +1034,8 @@ begin
     @BenchFastHeadersGetHostOnly);
   B.Run('adapter cost: fast headers count all',
     @BenchFastHeadersCountAll);
+  B.Run('adapter cost: fast headers has accept',
+    @BenchFastHeadersHasAccept);
   B.Run('adapter cost: fast headers get all accept',
     @BenchFastHeadersGetAllAccept);
   B.Run('adapter cost: fast headers foreach all',

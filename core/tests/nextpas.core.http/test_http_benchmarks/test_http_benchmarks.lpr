@@ -984,8 +984,10 @@ begin
     'TFastLazyHeaders.GetAll should use raw multi-value lookup');
   CheckNotContains(LGetAllBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.GetAll should not materialize the full header block');
-  CheckContains(LHasBody, 'FindRawFirstValue(AName, LValue)',
-    'TFastLazyHeaders.Has should use raw first-value lookup');
+  CheckContains(LHasBody, 'HasRawHeader(AName)',
+    'TFastLazyHeaders.Has should use raw presence lookup');
+  CheckNotContains(LHasBody, 'FindRawFirstValue(AName, LValue)',
+    'TFastLazyHeaders.Has should not materialize a temporary header value');
   CheckNotContains(LHasBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.Has should not materialize the full header block');
   CheckContains(LCountBody, 'CountRawHeaders;',
@@ -1829,6 +1831,8 @@ begin
     'H1 parser benchmark fast lazy header Get row');
   CheckContains(LOutput, 'adapter cost: fast headers count all',
     'H1 parser benchmark fast lazy header Count row');
+  CheckContains(LOutput, 'adapter cost: fast headers has accept',
+    'H1 parser benchmark fast lazy header Has row');
   CheckContains(LOutput, 'adapter cost: fast headers get all accept',
     'H1 parser benchmark fast lazy header GetAll row');
   CheckContains(LOutput, 'adapter cost: fast headers foreach all',

@@ -58,6 +58,7 @@ type
     FHeaders: IHttpHeaders;
     function NextRawHeader(var ALineStart: SizeInt;
       out ASpan: TFastRawHeaderSpan): Boolean;
+    function HasRawHeader(const AName: string): Boolean;
     procedure EnsureMaterialized;
     function FindRawFirstValue(const AName: string; out AValue: string): Boolean;
     function GetAllRawValues(const AName: string): TStringArray;
@@ -223,6 +224,19 @@ begin
   end;
 end;
 
+function TFastLazyHeaders.HasRawHeader(const AName: string): Boolean;
+var
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
+begin
+  LLineStart := 1;
+  while NextRawHeader(LLineStart, LSpan) do
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
+      AName) then
+      Exit(True);
+  Result := False;
+end;
+
 function TFastLazyHeaders.GetAllRawValues(const AName: string): TStringArray;
 var
   LCount: Int32;
@@ -294,12 +308,10 @@ begin
 end;
 
 function TFastLazyHeaders.Has(const AName: string): Boolean;
-var
-  LValue: string;
 begin
   if FHeaders <> nil then
     Exit(FHeaders.Has(AName));
-  Result := FindRawFirstValue(AName, LValue);
+  Result := HasRawHeader(AName);
 end;
 
 procedure TFastLazyHeaders.Del(const AName: string);

@@ -273,7 +273,7 @@ heaptrc: 0 unfreed memory blocks
 
 NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp \
 make -C tests/nextpas.core.http/test_http_benchmarks clean test
-33 total, 33 passed, 0 failed
+50 total, 50 passed, 0 failed
 heaptrc: 0 unfreed memory blocks
 
 make -C tests/nextpas.core.http/test_http_server clean test
@@ -292,17 +292,20 @@ make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 
 | row | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| adapter cost: fast headers get host only | 100000 | 1454.8 | 687396 |
-| adapter cost: fast headers count all | 100000 | 1709.5 | 584957 |
-| adapter cost: fast headers get all accept | 100000 | 2601.8 | 384353 |
-| adapter cost: fast headers foreach all | 100000 | 3893.2 | 256857 |
+| adapter cost: fast headers get host only | 100000 | 1565.5 | 638773 |
+| adapter cost: fast headers count all | 100000 | 1783.0 | 560854 |
+| adapter cost: fast headers has accept | 100000 | 1541.3 | 648818 |
+| adapter cost: fast headers get all accept | 100000 | 2392.2 | 418020 |
+| adapter cost: fast headers foreach all | 100000 | 4033.6 | 247915 |
 
 This is a nextPas internal materialization-cost split, not a cross-language
 server ranking. It shows the single-header lookup, count-only path, and
 same-name `GetAll` path no longer pay the same full materialization cost as
 whole-header access. The `count all` row isolates raw header-line counting,
-`get all accept` isolates raw multi-value lookup for one header name, and
-`foreach all` still measures materialization plus iteration callback overhead.
+`has accept` isolates raw presence lookup without constructing a temporary
+header value string, `get all accept` isolates raw multi-value lookup for one
+header name, and `foreach all` still measures materialization plus iteration
+callback overhead.
 
 On 2026-06-06 local time, `TFastLazyHeaders.EnsureMaterialized` stopped
 re-entering the public `IHttpHeaders.Add` validation / copy path and now inserts
@@ -320,6 +323,12 @@ The next same-name lookup slice added `TFastLazyHeaders.GetAllRawValues` and a
 dedicated `get all accept` benchmark row. On this host that row reports
 `2601.8 ns/op`, below the full `foreach all` materialization row at
 `3893.2 ns/op`.
+
+The follow-up presence-only slice added `TFastLazyHeaders.HasRawHeader` and
+moved `TFastLazyHeaders.Has` off `FindRawFirstValue`. On the same benchmark
+shape, `has accept` reports `1541.3 ns/op`, which keeps `Has` closer to the
+single-header lookup path than to the value-materializing `GetAll` /
+materializing `ForEach` rows.
 
 ## Run the Router Dispatch Benchmark
 
