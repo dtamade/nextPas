@@ -201,6 +201,12 @@ begin
     'TQuatf Nlerp midpoint');
   ScaledIdentity := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatf.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  CheckVec3f(0.0, 1.0, 0.0,
+    ScaledQ.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Rotate normalizes scaled input');
+  CheckVec3f(0.0, 1.0, 0.0,
+    ScaledQ.ToRotationMatrix * TVec3f.Create(1.0, 0.0, 0.0),
+    'TQuatf ToRotationMatrix normalizes scaled input');
   CheckVec3f(0.7071068, 0.7071068, 0.0,
     TQuatf.Slerp(ScaledIdentity, ScaledQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
     'TQuatf Slerp normalizes scaled inputs');
@@ -240,6 +246,12 @@ begin
     'TQuatd Slerp midpoint');
   ScaledIdentity := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatd.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  CheckVec3d(0.0, 1.0, 0.0,
+    ScaledQ.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Rotate normalizes scaled input');
+  CheckVec3d(0.0, 1.0, 0.0,
+    ScaledQ.ToRotationMatrix * TVec3d.Create(1.0, 0.0, 0.0),
+    'TQuatd ToRotationMatrix normalizes scaled input');
   CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
     TQuatd.Slerp(ScaledIdentity, ScaledQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
     'TQuatd Slerp normalizes scaled inputs');

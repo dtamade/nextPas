@@ -404,6 +404,8 @@ Resolved by tests and implementation:
   partial rotation.
 - `ToAxisAngle` normalizes its quaternion first and uses `+Z` as the fallback axis for zero
   rotation output.
+- `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
+  equivalent input rotation does not change the result.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
   positive dice/side combinations whose maximum total would overflow `Integer`.

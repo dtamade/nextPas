@@ -144,6 +144,8 @@ equivalent input rotations does not change the result.
 axis components or angles with `EArgumentError`.
 `ToAxisAngle` normalizes its quaternion first and returns axis `+Z` with angle `0` for zero
 rotation output.
+`ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
+equivalent input rotation does not change the result.
 
 ## Transforms
 
