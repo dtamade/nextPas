@@ -149,6 +149,8 @@ end;
 
 function THttpClient.Do_(const AReq: IHttpRequest): IHttpResponse;
 begin
+  if AReq = nil then
+    raise EArgumentError.Create('HTTP request is nil');
   Result := DoRequest(AReq, FOptions.MaxRedirects);
 end;
 

@@ -1,5 +1,36 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http client nil request error slice
+
+- **Status:** completed.
+- Objective:
+  - make `IHttpClient.Do_(nil)` fail at the public client boundary with a
+    clear argument error
+  - avoid leaking caller mistakes into transport / redirect internals as an
+    access violation
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP API coverage docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP transport/runtime,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25 total, 24 passed, 1 failed`
+    - failed at `Client Do rejects nil request - Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpClient.Do_` now raises `EArgumentError` when `AReq = nil`
+  - transport, redirect recursion, helper construction, and `IHttpClient`
+    vtable shape were left unchanged
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - the client public API now has an explicit nil request error contract
+  - this does not claim broader per-request timeout, redirect override, or
+    streaming request body ownership semantics
+
 ## Session: 2026-06-06 http response body string helper slice
 
 - **Status:** completed.

@@ -1,5 +1,33 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http client nil request error slice
+
+- 本轮继续收紧 client public error semantics：
+  `IHttpClient.Do_(nil)` 之前会进入 `DoRequest`，读取 `AReq.Url` 时触发
+  access violation。
+- 选择依据：
+  - Go / Rust 的 HTTP client 使用面都会把 request 对象视为调用边界的必需参数；
+    nil request 属于调用方参数错误，应该在 public API 入口给出明确错误。
+  - 这是错误语义 guard，不改 `IHttpClient` vtable，不改 transport registry，
+    不改变 redirect 或 body ownership。
+- 实现决策：
+  - `THttpClient.Do_` 在调用 `DoRequest` 前检查 `AReq = nil`。
+  - nil request 抛 `EArgumentError.Create('HTTP request is nil')`。
+  - redirect recursion 仍走内部 `DoRequest`，不额外扩大 internal guard。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25 total, 24 passed, 1 failed`
+    - failure: `Client Do rejects nil request - Access violation`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 client API 边界的真实错误语义缺口，不是继续铺
+  malformed wire case。后续 client 侧仍应优先审计 timeout / redirect /
+  body ownership 等 public contract，而不是扩大 builder。
+
 ## 2026-06-06 http response body string helper slice
 
 - 本轮继续收紧 client response ergonomics：

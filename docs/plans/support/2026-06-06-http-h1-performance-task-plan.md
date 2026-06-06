@@ -1,5 +1,22 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http client nil request error slice
+
+### Goal
+
+收紧 `IHttpClient.Do_` 的 public error semantics：nil request 是调用方
+参数错误，必须在 client 入口抛 `EArgumentError`，不能穿透到 transport /
+redirect path 形成 access violation。
+
+### Checklist
+
+- [x] RED：`test_http_client` 新增 `Client Do rejects nil request`，
+  当前失败为 `Access violation`，证明 public 入口缺少 guard。
+- [x] GREEN：只在 `THttpClient.Do_` 增加 nil request guard，不改
+  `IHttpClient` vtable、transport、redirect 或 request helper 语义。
+- [x] 更新 `core/docs/http/API_COVERAGE.md` 与本 support evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http response body string helper slice
 
 ### Goal

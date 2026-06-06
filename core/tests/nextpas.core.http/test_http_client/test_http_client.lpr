@@ -212,6 +212,24 @@ begin
   end;
 end;
 
+procedure TestClientDoRejectsNilRequest;
+var
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LClient := NewHttpClient;
+  LReq := nil;
+  LRaised := False;
+  try
+    LClient.Do_(LReq);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'Client.Do_ rejects nil request');
+end;
+
 // PLACEHOLDER_TEST2
 
 { Test 2: Client GET with custom headers }
@@ -1121,6 +1139,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.client');
   T.Run('Client GET returns 200 + body', @TestClientGet200);
+  T.Run('Client Do rejects nil request', @TestClientDoRejectsNilRequest);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
   T.Run('Client POST with body', @TestClientPostBody);
   T.Run('Client Do uses NewRequest headers/body helper',
