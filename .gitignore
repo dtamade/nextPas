@@ -57,6 +57,7 @@ benchmarks/**/bench_*
 core/tests/*/test_*/test_*
 !core/tests/*/test_*/test_*.lpr
 core/tests/*/*/test_*[!.pas]
+!core/tests/*/*/test_*.lpr
 core/tests/nextpas.core.simd/test_conv2d_pool2d
 core/tests/nextpas.core.tls/certificate/**/test_p2_*
 !core/tests/nextpas.core.tls/certificate/**/*.pas
