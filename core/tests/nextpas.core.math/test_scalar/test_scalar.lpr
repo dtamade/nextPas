@@ -183,9 +183,19 @@ begin
   Floor(MakeNaN);
 end;
 
+procedure RaiseFloorSingleNaN;
+begin
+  Floor(MakeSingleNaN);
+end;
+
 procedure RaiseFloorPositiveInfinity;
 begin
   Floor(MakePositiveInfinity);
+end;
+
+procedure RaiseFloorSinglePositiveInfinity;
+begin
+  Floor(MakeSinglePositiveInfinity);
 end;
 
 procedure RaiseFloorNegativeInfinity;
@@ -213,9 +223,19 @@ begin
   Ceil(-1.0e300);
 end;
 
+procedure RaiseCeilSinglePositive2Pow63;
+begin
+  Ceil(Single(Pow2_63));
+end;
+
 procedure RaiseTruncPositive2Pow63;
 begin
   Trunc(Pow2_63);
+end;
+
+procedure RaiseTruncSinglePositive2Pow63;
+begin
+  Trunc(Single(Pow2_63));
 end;
 
 procedure RaiseFloorPositive2Pow63;
@@ -223,9 +243,19 @@ begin
   Floor(Pow2_63);
 end;
 
+procedure RaiseFloorSinglePositive2Pow63;
+begin
+  Floor(Single(Pow2_63));
+end;
+
 procedure RaiseRoundPositive2Pow63;
 begin
   Round(Pow2_63);
+end;
+
+procedure RaiseRoundSinglePositive2Pow63;
+begin
+  Round(Single(Pow2_63));
 end;
 
 procedure RaiseRoundNaN;
@@ -233,9 +263,19 @@ begin
   Round(MakeNaN);
 end;
 
+procedure RaiseRoundSingleNaN;
+begin
+  Round(MakeSingleNaN);
+end;
+
 procedure RaiseRoundPositiveInfinity;
 begin
   Round(MakePositiveInfinity);
+end;
+
+procedure RaiseRoundSinglePositiveInfinity;
+begin
+  Round(MakeSinglePositiveInfinity);
 end;
 
 procedure RaiseTruncBelowInt64Min;
@@ -243,9 +283,19 @@ begin
   Trunc(-Pow2_63 - 4096.0);
 end;
 
+procedure RaiseTruncSingleNaN;
+begin
+  Trunc(MakeSingleNaN);
+end;
+
 procedure RaiseTruncNaN;
 begin
   Trunc(MakeNaN);
+end;
+
+procedure RaiseTruncSinglePositiveInfinity;
+begin
+  Trunc(MakeSinglePositiveInfinity);
 end;
 
 procedure RaiseTruncPositiveInfinity;
@@ -268,14 +318,29 @@ begin
   Frac(MakeNaN);
 end;
 
+procedure RaiseFracSingleNaN;
+begin
+  Frac(MakeSingleNaN);
+end;
+
 procedure RaiseFracPositiveInfinity;
 begin
   Frac(MakePositiveInfinity);
 end;
 
+procedure RaiseFracSinglePositiveInfinity;
+begin
+  Frac(MakeSinglePositiveInfinity);
+end;
+
 procedure RaiseFracPositive2Pow63;
 begin
   Frac(Pow2_63);
+end;
+
+procedure RaiseFracSinglePositive2Pow63;
+begin
+  Frac(Single(Pow2_63));
 end;
 
 procedure RaiseGCDLowInt64;
@@ -368,6 +433,40 @@ begin
     'LCM overflow', @RaiseLCMOverflow);
 end;
 
+procedure TestSinglePrecisionBoundaryMessages;
+begin
+  ExpectArgumentErrorMessage('Floor: NaN cannot be converted to Int64',
+    'Floor(Single NaN)', @RaiseFloorSingleNaN);
+  ExpectArgumentErrorMessage('Floor: infinity cannot be converted to Int64',
+    'Floor(Single +Inf)', @RaiseFloorSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Floor: value is outside Int64 range',
+    'Floor(Single 2^63)', @RaiseFloorSinglePositive2Pow63);
+
+  ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
+    'Ceil(Single 2^63)', @RaiseCeilSinglePositive2Pow63);
+
+  ExpectArgumentErrorMessage('Round: NaN cannot be converted to Int64',
+    'Round(Single NaN)', @RaiseRoundSingleNaN);
+  ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
+    'Round(Single +Inf)', @RaiseRoundSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Round: value is outside Int64 range',
+    'Round(Single 2^63)', @RaiseRoundSinglePositive2Pow63);
+
+  ExpectArgumentErrorMessage('Trunc: NaN cannot be converted to Int64',
+    'Trunc(Single NaN)', @RaiseTruncSingleNaN);
+  ExpectArgumentErrorMessage('Trunc: infinity cannot be converted to Int64',
+    'Trunc(Single +Inf)', @RaiseTruncSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
+    'Trunc(Single 2^63)', @RaiseTruncSinglePositive2Pow63);
+
+  ExpectArgumentErrorMessage('Frac: NaN cannot be converted to Int64',
+    'Frac(Single NaN)', @RaiseFracSingleNaN);
+  ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
+    'Frac(Single +Inf)', @RaiseFracSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
+    'Frac(Single 2^63)', @RaiseFracSinglePositive2Pow63);
+end;
+
 procedure TestOverflowHelpers;
 begin
   Check(IsAddOverflow(High(SizeUInt), SizeUInt(1)), 'IsAddOverflow SizeUInt');
@@ -386,6 +485,7 @@ begin
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
   T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
+  T.Run('single-precision boundary messages', @TestSinglePrecisionBoundaryMessages);
   T.Run('overflow helpers', @TestOverflowHelpers);
   T.Summary;
 end.

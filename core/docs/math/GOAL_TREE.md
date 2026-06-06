@@ -27,7 +27,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.simd.mathutil` no longer exports common bare math-compatible helper names.
 - Added scalar `Single` overloads, `GCD`, `LCM`, `Hypot`, `Fmod`, `SmoothStep`, guarded `Abs(Low(...))`, and IEEE-style `SimdLnF32` boundaries.
 - Edge-case fixes are locked by tests for exact owner-level integer conversion and integer-boundary
-  messages across `Floor` / `Ceil` / `Round` / `Trunc` / `Frac`, `GCD` / `LCM`,
+  messages across `Floor` / `Ceil` / `Round` / `Trunc` / `Frac`, including direct
+  `Single` fail-fast parity for the conversion-boundary message families, `GCD` / `LCM`,
   `Abs(Low(...))`, `Hypot(+Inf,+Inf)`, trig NaN/out-of-domain/double-infinity cases plus direct
   `Log2` / `Log10` coverage, selected missing `Single`-path trig parity, and `Power`
   negative-base / zero-base edge semantics, and `SimdLnF32(NaN)`.
