@@ -32,7 +32,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   row/column setter write-through semantics over the same backing storage, `Zero`, `Identity`,
   arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix multiply,
   `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and singular inverse
-  behavior, including zeroing the failed `TryInverse` out matrix.
+  behavior, including zeroing the failed `TryInverse` out matrix and directly locking the exact
+  owner-level `Inverse` singular-matrix messages for `TMat3f`, `TMat4f`, `TMat3d`, and `TMat4d`.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
@@ -204,7 +205,8 @@ Status:
 - Matrix tests cover compact layout, column-major storage, row/column accessors, row/column setter
   write-through semantics, arithmetic operators, scalar multiply, matrix-vector multiply,
   matrix-matrix multiply, transpose, determinant, inverse, near-singular and singular `TryInverse`
-  zeroing the out matrix, `Inverse` raising `EArgumentError` for the same failure cases, and
+  zeroing the out matrix, `Inverse` raising `EArgumentError` with exact owner-level
+  `'<TMat*>.Inverse: matrix is singular'` messages for the same failure cases, and
   double-precision variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
