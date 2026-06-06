@@ -537,6 +537,15 @@ begin
     'atomic README must name the canonical function API');
   CheckContains(LAtomicDocsReadme, 'TAtomic*',
     'atomic README must name the typed record API');
+  CheckContains(LAtomicDocsReadme,
+    '`Load` defaults to `mo_relaxed`; `Inc` must not resurrect a zero refcount, and `TryInc` returns `False` instead of resurrecting when the count is already zero.',
+    'atomic README must document TAtomicRefCount zero-state increment rules');
+  CheckContains(LAtomicDocsReadme,
+    '`Dec` publishes the release-side decrement, and a final drop to zero issues an acquire fence before destruction-side cleanup proceeds.',
+    'atomic README must document TAtomicRefCount final-drop ordering');
+  CheckContains(LAtomicDocsReadme,
+    '`Inc` and `TryInc` raise `EResourceExhaustedError` on `High(PtrUInt)` overflow, and `Dec` raises `EInvalidOperationError` if the refcount is already zero.',
+    'atomic README must document TAtomicRefCount overflow and underflow errors');
   CheckContains(LAtomicDocsReadme, 'facade exposes scalar typed records, `TAtomicRefCount`, and generic `TAtomicPtr<T>`',
     'atomic README must document the typed-record facade boundary');
   CheckContains(LAtomicDocsReadme,

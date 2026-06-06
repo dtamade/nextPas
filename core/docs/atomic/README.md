@@ -30,6 +30,9 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 `TAtomicRefCount` 是专用引用计数器，不是通用 `PtrUInt` 原子类型。它只暴露 `Load`、`Inc`、
 `TryInc`、`Dec`、`IntoInner`，刻意不暴露 `Store`、`Exchange`、`FetchAdd`、`FetchSub`
 或 `GetMut`，避免调用方破坏引用计数纪律。
+`Load` defaults to `mo_relaxed`; `Inc` must not resurrect a zero refcount, and `TryInc` returns `False` instead of resurrecting when the count is already zero.
+`Dec` publishes the release-side decrement, and a final drop to zero issues an acquire fence before destruction-side cleanup proceeds.
+`Inc` and `TryInc` raise `EResourceExhaustedError` on `High(PtrUInt)` overflow, and `Dec` raises `EInvalidOperationError` if the refcount is already zero.
 
 `atomic_flag_t` and `TAtomicFlag` model C++ `atomic_flag`: `test_and_set` returns the previous set state, `clear` resets the flag, and `test` observes without modifying.
 
