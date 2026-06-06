@@ -239,6 +239,7 @@ The design keeps the useful `fafafa.game` conventions because they are internall
 - Local transform composition, if exposed, uses `Translate * Rotate * Scale`.
 - Parent/world transform composition, if exposed, uses `ParentWorld * Local`.
 - `LookAt` is a right-handed view-matrix builder. Object-transform `LookAt` semantics are a separate concern and must not share an ambiguous name.
+- `LookAt` treats the magnitude of a valid `up` vector as non-semantic: only its direction matters, so positive rescaling does not change the resulting view matrix.
 - Guard contracts are part of the public behavior: `Ortho` rejects zero width/height/depth,
   `Perspective` requires positive FOV/aspect/near plus `far > near`, `LookAt` requires
   `eye <> target` and non-parallel `up`, and `Camera2D` requires positive zoom and viewport size.

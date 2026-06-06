@@ -165,6 +165,8 @@ positive Y down.
 `Ortho` requires non-zero width, height, and depth. `Perspective` requires positive FOV, aspect,
 and near plane, plus `far > near`. `LookAt` requires `eye <> target` and an `up` vector that is not
 parallel to forward. `Camera2D` requires positive zoom and positive viewport dimensions.
+`LookAt` normalizes its derived basis, so the magnitude of a valid `up` vector is non-semantic:
+positive rescaling of the same `up` direction does not change the resulting view matrix.
 All transform builders reject NaN and infinite inputs with `EArgumentError`, and geometry guard
 failures also raise `EArgumentError`.
 

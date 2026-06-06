@@ -64,6 +64,8 @@ Builder guard rules are explicit: `Ortho` requires non-zero width, height, and d
 `Perspective` requires positive FOV, aspect, and near plane plus `far > near`; `LookAt` requires
 `eye <> target` and an `up` vector that is not parallel to forward; `Camera2D` requires positive
 zoom and positive viewport dimensions.
+`LookAt` uses the direction of `up`, not its magnitude, so positive rescaling of the same valid
+`up` vector does not change the resulting view matrix.
 
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero

@@ -281,6 +281,36 @@ begin
     'LookAt maps target down negative Z');
 end;
 
+procedure TestLookAtIgnoresUpMagnitude;
+var
+  SingleBase: TMat4f;
+  SingleScaled: TMat4f;
+  DoubleBase: TMat4d;
+  DoubleScaled: TMat4d;
+begin
+  SingleBase := LookAt(
+    TVec3f.Create(1.0, 2.0, 5.0),
+    TVec3f.Create(2.0, 4.0, 1.0),
+    TVec3f.Create(0.0, 2.0, 1.0));
+  SingleScaled := LookAt(
+    TVec3f.Create(1.0, 2.0, 5.0),
+    TVec3f.Create(2.0, 4.0, 1.0),
+    TVec3f.Create(0.0, 10.0, 5.0));
+  Check(TMat4f.Equals(SingleBase, SingleScaled, Single(0.000001)),
+    'LookAt single ignores positive up scaling');
+
+  DoubleBase := LookAt(
+    TVec3d.Create(-3.0, 1.0, 7.0),
+    TVec3d.Create(0.0, 5.0, 2.0),
+    TVec3d.Create(1.0, 2.0, 3.0));
+  DoubleScaled := LookAt(
+    TVec3d.Create(-3.0, 1.0, 7.0),
+    TVec3d.Create(0.0, 5.0, 2.0),
+    TVec3d.Create(4.0, 8.0, 12.0));
+  Check(TMat4d.Equals(DoubleBase, DoubleScaled, 0.000000000001),
+    'LookAt double ignores positive up scaling');
+end;
+
 procedure TestCamera2DAndDoubleBuilders;
 var
   M: TMat4f;
@@ -338,6 +368,7 @@ begin
   T := TTestRunner.Create('nextpas.core.math.transform');
   T.Run('projection builders', @TestProjectionBuilders);
   T.Run('model and view builders', @TestModelAndViewBuilders);
+  T.Run('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Run('geometry guards report public contract messages', @TestGeometryGuardMessages);
