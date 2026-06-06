@@ -46,7 +46,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
-  probability clamp, dice rules, weighted choice, shuffle, Gaussian, and unit-circle vector helpers.
+  probability clamp, dice rules, `RollMultiple` integer-overflow owner boundary, weighted choice,
+  shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
   reference vectors, invalid FBM inputs, finite-combination overflow contracts for coordinates,
   amplitudes, and accumulated results, precision-ceiling stored-value semantics, and heaptrc-clean
@@ -254,8 +255,9 @@ Status:
   `NextVec2InCircle`, `NextVec2OnCircle`, dice helpers, weighted choice, shuffle, and state
   restore.
 - Invalid integer/float ranges fail fast with `EArgumentError`; `NextBool` clamps probability into
-  false/true behavior; dice helpers return `0` for non-positive dice/sides; weighted choice rejects
-  empty, negative, and all-zero weights.
+  false/true behavior; dice helpers return `0` for non-positive dice/sides; `RollMultiple`
+  rejects positive dice/side combinations whose maximum total would overflow `Integer`; weighted
+  choice rejects empty, negative, and all-zero weights.
 - `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
   `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
   `EArgumentError`, and finite parameter combinations that would make octave coordinates,

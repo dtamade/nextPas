@@ -283,6 +283,7 @@ Final strategy:
   - `NextBool(Probability)` outside `[0,1]`
   - `Roll(Sides <= 0)`
   - `RollMultiple(Dice <= 0)`
+  - `RollMultiple(Dice > 0, Sides > 0)` when `Dice * Sides` would not fit `Integer`
   - `WeightedChoice([])` or non-positive weights
   - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, bad `Gain`, or finite parameter
     combinations that would make octave coordinates, amplitudes, or accumulated results non-finite
@@ -396,7 +397,8 @@ Resolved by tests and implementation:
 - `Inverse` raises `EArgumentError` for singular matrices; `TryInverse` returns `False`.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
-- Convenience dice helpers return `0` for non-positive dice or sides.
+- Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
+  positive dice/side combinations whose maximum total would overflow `Integer`.
 - `NextBool` clamps probability into false or true behavior.
 - Invalid FBM octave, lacunarity, and gain inputs fail fast with `EArgumentError`, and owner-level
   FBM checks also reject finite coordinate/lacunarity or gain combinations that would make octave

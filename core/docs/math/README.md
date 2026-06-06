@@ -85,10 +85,11 @@ so it is repeatable but not magical entropy.
 
 Invalid integer ranges and reversed or non-finite float ranges raise `EArgumentError`. `NextBool`
 rejects non-finite probabilities and clamps finite probabilities into false or true behavior. Dice
-helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects empty, non-finite,
-negative, and all-zero weights. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject non-finite
-coordinate inputs. FBM also rejects non-positive octaves and non-positive or non-finite lacunarity
-and gain, plus finite coordinate/lacunarity combinations that would make octave coordinates
+helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects positive dice/side
+combinations whose maximum total would not fit `Integer`. `WeightedChoice` rejects empty,
+non-finite, negative, and all-zero weights. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject
+non-finite coordinate inputs. FBM also rejects non-positive octaves and non-positive or non-finite
+lacunarity and gain, plus finite coordinate/lacunarity combinations that would make octave coordinates
 non-finite and finite gain combinations that would make octave amplitudes or accumulated results
 non-finite.
 Noise and FBM use the stored `Double` coordinate value. Around `2^52` and above, sub-unit deltas

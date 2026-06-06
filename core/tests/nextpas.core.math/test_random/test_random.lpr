@@ -182,6 +182,38 @@ begin
   end;
 end;
 
+procedure TestRollMultipleRejectsOverflowingTotal;
+var
+  Rng: TRandomGen;
+  Caught: Boolean;
+  ErrorClass: string;
+  ErrorMessage: string;
+begin
+  Rng := TRandomGen.Create(2);
+  try
+    Caught := False;
+    ErrorClass := '';
+    ErrorMessage := '';
+    try
+      Rng.RollMultiple(2, High(Integer));
+    except
+      on E: Exception do
+      begin
+        ErrorClass := E.ClassName;
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'RollMultiple rejects overflowing total range');
+    CheckEqual('EArgumentError', ErrorClass,
+      'RollMultiple maps overflowing total range into the public owner-level exception');
+    CheckEqual('TRandomGen.RollMultiple: ADice * ASides must fit Integer', ErrorMessage,
+      'RollMultiple reports owner-level total-range message');
+  finally
+    Rng.Free;
+  end;
+end;
+
 procedure TestProbabilityDiceWeightedAndShuffle;
 var
   Rng: TRandomGen;
@@ -396,6 +428,7 @@ begin
   T.Run('WeightedChoice large finite weights stay scale-invariant',
     @TestWeightedChoiceLargeFiniteWeightsStayScaleInvariant);
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
+  T.Run('RollMultiple rejects overflowing total', @TestRollMultipleRejectsOverflowingTotal);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
   T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);
   T.Run('non-finite parameter validation', @TestNonFiniteParameterValidation);

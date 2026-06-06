@@ -317,6 +317,8 @@ begin
   Result := 0;
   if (ADice <= 0) or (ASides <= 0) then
     Exit;
+  if ADice > (High(Integer) div ASides) then
+    raise EArgumentError.Create('TRandomGen.RollMultiple: ADice * ASides must fit Integer');
   for I := 1 to ADice do
     Inc(Result, Roll(ASides));
 end;

@@ -204,8 +204,9 @@ Random state is explicit:
 There is no public global random or noise singleton. Seed `0` maps to a deterministic default seed.
 Invalid integer ranges and reversed or non-finite float ranges raise `EArgumentError`. `NextBool`
 rejects non-finite probabilities and clamps finite probabilities into false or true behavior. Dice
-helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects empty, non-finite,
-negative, and all-zero weights. FBM noise rejects non-positive octaves and non-finite or
+helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects positive
+`ADice * ASides` combinations that would exceed `Integer`. `WeightedChoice` rejects empty,
+non-finite, negative, and all-zero weights. FBM noise rejects non-positive octaves and non-finite or
 non-positive lacunarity and gain. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject NaN and infinite
 coordinate inputs with `EArgumentError`, and `FBM1D`/`2D`/`3D` also reject finite
 coordinate/lacunarity combinations that would make octave coordinates non-finite and finite gain
