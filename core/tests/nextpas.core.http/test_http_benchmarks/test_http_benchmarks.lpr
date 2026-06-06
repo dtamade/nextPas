@@ -456,6 +456,18 @@ begin
   CheckContains(AOutput, 'ops/s', 'H1 writer known-status ops/s marker');
 end;
 
+procedure CheckH1WriterOutboundDrainBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.h1writer.serialize',
+    'H1 writer outbound-drain operation marker');
+  CheckBenchmarkRunRow(AOutput, 'outbound fixed 200 1KB',
+    'H1 writer outbound-drain benchmark row');
+  CheckContains(AOutput, 'bench_filter=outbound fixed 200 1KB',
+    'H1 writer outbound-drain filter marker');
+  CheckContains(AOutput, 'ns/op', 'H1 writer outbound-drain ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'H1 writer outbound-drain ops/s marker');
+end;
+
 procedure CheckH1OutboundDrainBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.h1outbound.drain',
@@ -709,6 +721,14 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_h1writer known-status smoke exit code: ' + LOutput);
   CheckH1WriterKnownStatusLinesBenchmarkOutput(LOutput);
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=outbound fixed 200 1KB'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_h1writer outbound-drain smoke exit code: ' + LOutput);
+  CheckH1WriterOutboundDrainBenchmarkOutput(LOutput);
 end;
 
 procedure TestBenchH1OutboundDrainSmoke;
@@ -1049,6 +1069,29 @@ begin
     'H1 writer should have fixed 400 status line');
   CheckContains(LSource, '''HTTP/1.1 500 Internal Server Error''#13#10',
     'H1 writer should have fixed 500 status line');
+end;
+
+procedure TestH1WriterOutboundDrainSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LBody: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchH1WriterRelativeDir);
+  LSource := LoadTextFile(PathJoin(
+    PathJoin(LRootDir, BenchH1WriterRelativeDir),
+    'bench_h1writer.lpr'));
+  LBody := ExtractSourceBlock(LSource,
+    'procedure BenchOutboundFixed200_1KB',
+    'begin' + LineEnding + '  InitBody1K;',
+    'H1 writer outbound-drain benchmark body');
+
+  CheckContains(LBody, 'LOutbound := NewH1OutboundBuffer;',
+    'H1 writer outbound-drain row should allocate an outbound buffer');
+  CheckContains(LBody, 'TH1ResponseWriter.Create(LOutbound as IWriter)',
+    'H1 writer outbound-drain row should serialize through TH1ResponseWriter');
+  CheckContains(LBody, 'LOutbound.DrainAllTo(LSinkWriter);',
+    'H1 writer outbound-drain row should drain the outbound buffer');
 end;
 
 procedure TestBenchFullchainPlaintextSmoke;
@@ -2231,6 +2274,8 @@ begin
     @TestH1WriterCompactHeaderBlockSourceContract);
   T.Run('H1 writer known status line source contract',
     @TestH1WriterKnownStatusLineSourceContract);
+  T.Run('H1 writer outbound drain source contract',
+    @TestH1WriterOutboundDrainSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

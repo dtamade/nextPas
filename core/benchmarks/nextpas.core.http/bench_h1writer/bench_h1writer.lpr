@@ -7,7 +7,8 @@ uses
   nextpas.core.io.intf,
   nextpas.core.http.base,
   nextpas.core.http.intf,
-  nextpas.core.http.impl.h1.writer;
+  nextpas.core.http.impl.h1.writer,
+  nextpas.core.http.impl.h1.outbound;
 
 type
   TFixedMemoryWriter = class(TInterfacedObject, IWriter)
@@ -22,6 +23,7 @@ type
 
 var
   B: TBenchRunner;
+  GBody1K: AnsiString;
   GBytesWritten: SizeUInt;
 
 procedure TFixedMemoryWriter.Reset;
@@ -47,6 +49,12 @@ end;
 function TFixedMemoryWriter.Size: SizeUInt;
 begin
   Result := FSize;
+end;
+
+procedure InitBody1K;
+begin
+  SetLength(GBody1K, 1024);
+  FillChar(GBody1K[1], Length(GBody1K), Ord('x'));
 end;
 
 procedure BenchHeadersOnly200(aIters: Int64);
@@ -183,7 +191,41 @@ begin
   end;
 end;
 
+procedure BenchOutboundFixed200_1KB(aIters: Int64);
+var
+  LIt: Int64;
+  LSink: TFixedMemoryWriter;
+  LSinkWriter: IWriter;
+  LOutbound: IH1OutboundBuffer;
+  LWriter: TH1ResponseWriter;
 begin
+  LSink := TFixedMemoryWriter.Create;
+  LSinkWriter := LSink as IWriter;
+  try
+    for LIt := 1 to aIters do
+    begin
+      LSink.Reset;
+      LOutbound := NewH1OutboundBuffer;
+      LWriter := TH1ResponseWriter.Create(LOutbound as IWriter);
+      try
+        LWriter.Headers.Set_('content-type', 'application/octet-stream');
+        LWriter.Headers.Set_('content-length', '1024');
+        LWriter.WriteHeader(HTTP_STATUS_OK);
+        LWriter.Write(GBody1K[1], SizeUInt(Length(GBody1K)));
+        LWriter.Flush;
+        LOutbound.DrainAllTo(LSinkWriter);
+        Inc(GBytesWritten, LSink.Size);
+      finally
+        LWriter.Free;
+      end;
+    end;
+  finally
+    LSinkWriter := nil;
+  end;
+end;
+
+begin
+  InitBody1K;
   B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.h1writer benchmark ===');
   WriteLn('operation=http.h1writer.serialize');
@@ -192,6 +234,7 @@ begin
   B.Run('headers block 200 6 headers', @BenchHeadersBlock200_6Headers);
   B.Run('status lines common errors', @BenchStatusLinesCommonErrors);
   B.Run('fixed 200 13B', @BenchFixed200_13B);
+  B.Run('outbound fixed 200 1KB', @BenchOutboundFixed200_1KB);
   WriteLn;
   B.Summary;
   B.Free;

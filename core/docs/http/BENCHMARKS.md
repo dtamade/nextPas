@@ -399,6 +399,14 @@ NEXTPAS_BENCH_FILTER='fixed 200 13B' \
 make -C benchmarks/nextpas.core.http/bench_h1writer clean run
 ```
 
+Run the focused writer-plus-outbound row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='outbound fixed 200 1KB' \
+make -C benchmarks/nextpas.core.http/bench_h1writer clean run
+```
+
 These rows report `operation=http.h1writer.serialize`.
 
 - `headers only 200` measures `TH1ResponseWriter` construction, two header
@@ -412,6 +420,11 @@ These rows report `operation=http.h1writer.serialize`.
   to measure status-line serialization without request parsing or socket I/O.
 - `fixed 200 13B` measures the same setup plus a 13-byte body write into a
   fixed in-memory writer.
+- `outbound fixed 200 1KB` measures `TH1ResponseWriter` writing a fixed 1 KiB
+  body into `IH1OutboundBuffer`, followed by `DrainAllTo` into a fixed
+  in-memory writer. This isolates the response writer plus outbound-drain
+  combination used by the server response path, without adding real socket I/O
+  or scheduler noise.
 
 Neither row includes request parsing, router dispatch, middleware, socket
 drain, or backpressure.
@@ -435,6 +448,12 @@ Local focused row from 2026-06-06 after known status-line fast paths:
 | workload | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
 | status lines common errors | 100000 | 1204.8 | 830013 |
+
+Local focused row from 2026-06-07 for writer plus outbound drain:
+
+| workload | iterations | ns/op | ops/s |
+| --- | ---: | ---: | ---: |
+| outbound fixed 200 1KB | 100000 | 1892.3 | 528470 |
 
 ## Run the H1 Outbound Drain Benchmark
 
