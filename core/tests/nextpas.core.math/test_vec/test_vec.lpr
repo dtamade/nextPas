@@ -167,6 +167,9 @@ begin
   V2 := TVec2d.Create(3.0, 4.0);
   CheckEqual(Int64(SizeOf(Double) * 2), Int64(SizeOf(TVec2d)), 'TVec2d is compact value type');
   CheckVec2d(3.0, 4.0, V2, 'TVec2d.Create');
+  CheckNear(3.0, V2.Data[0], 0.0, 'TVec2d Data[0]');
+  CheckNear(4.0, V2.Data[1], 0.0, 'TVec2d Data[1]');
+  CheckVec2d(0.0, 0.0, TVec2d.Zero, 'TVec2d.Zero');
   CheckVec2d(4.0, 6.0, V2 + TVec2d.Create(1.0, 2.0), 'TVec2d add');
   CheckVec2d(2.0, 2.0, V2 - TVec2d.Create(1.0, 2.0), 'TVec2d subtract');
   CheckVec2d(-3.0, -4.0, -V2, 'TVec2d unary minus');
@@ -189,15 +192,24 @@ begin
   V3 := TVec3d.Create(1.0, 2.0, 3.0);
   CheckEqual(Int64(SizeOf(Double) * 3), Int64(SizeOf(TVec3d)), 'TVec3d is compact value type');
   CheckVec3d(1.0, 2.0, 3.0, V3, 'TVec3d.Create');
+  CheckNear(3.0, V3.Data[2], 0.0, 'TVec3d Data[2]');
+  CheckVec3d(0.0, 0.0, 0.0, TVec3d.Zero, 'TVec3d.Zero');
+  CheckVec3d(5.0, 7.0, 9.0, V3 + TVec3d.Create(4.0, 5.0, 6.0), 'TVec3d add');
+  CheckVec3d(-3.0, -3.0, -3.0, V3 - TVec3d.Create(4.0, 5.0, 6.0), 'TVec3d subtract');
+  CheckVec3d(-1.0, -2.0, -3.0, -V3, 'TVec3d unary minus');
   CheckVec3d(2.0, 4.0, 6.0, V3 * 2.0, 'TVec3d scalar multiply');
+  CheckVec3d(2.0, 4.0, 6.0, 2.0 * V3, 'TVec3d scalar multiply left');
   CheckVec3d(1.0, 0.5, Double(1.0) / Double(3.0),
     TVec3d.DivComponents(TVec3d.Create(1.0, 1.0, 1.0), V3),
     'TVec3d component divide');
+  CheckVec3d(4.0, 10.0, 18.0, TVec3d.MulComponents(V3, TVec3d.Create(4.0, 5.0, 6.0)),
+    'TVec3d component multiply');
   CheckNear(32.0, TVec3d.Dot(V3, TVec3d.Create(4.0, 5.0, 6.0)), 0.000000000001,
     'TVec3d dot');
   CheckVec3d(0.0, 0.0, 1.0, TVec3d.Cross(TVec3d.Create(1.0, 0.0, 0.0),
     TVec3d.Create(0.0, 1.0, 0.0)), 'TVec3d cross');
   CheckNear(14.0, V3.LengthSqr, 0.000000000001, 'TVec3d length squared');
+  CheckNear(3.7416573867739413, V3.Length, 0.000000000001, 'TVec3d length');
   CheckNear(1.0, TVec3d.Create(0.0, 3.0, 4.0).Normalize.Length, 0.000000000001,
     'TVec3d normalized length');
   CheckVec3d(0.0, 0.0, 0.0, TVec3d.Zero.Normalize, 'TVec3d zero normalize');
@@ -209,13 +221,22 @@ begin
   V4 := TVec4d.Create(1.0, 2.0, 3.0, 4.0);
   CheckEqual(Int64(SizeOf(Double) * 4), Int64(SizeOf(TVec4d)), 'TVec4d is compact value type');
   CheckVec4d(1.0, 2.0, 3.0, 4.0, V4, 'TVec4d.Create');
+  CheckNear(4.0, V4.Data[3], 0.0, 'TVec4d Data[3]');
+  CheckVec4d(0.0, 0.0, 0.0, 0.0, TVec4d.Zero, 'TVec4d.Zero');
+  CheckVec4d(6.0, 8.0, 10.0, 12.0, V4 + TVec4d.Create(5.0, 6.0, 7.0, 8.0), 'TVec4d add');
+  CheckVec4d(-4.0, -4.0, -4.0, -4.0, V4 - TVec4d.Create(5.0, 6.0, 7.0, 8.0), 'TVec4d subtract');
+  CheckVec4d(-1.0, -2.0, -3.0, -4.0, -V4, 'TVec4d unary minus');
   CheckVec4d(2.0, 4.0, 6.0, 8.0, V4 * 2.0, 'TVec4d scalar multiply');
+  CheckVec4d(2.0, 4.0, 6.0, 8.0, 2.0 * V4, 'TVec4d scalar multiply left');
   CheckVec4d(1.0, 0.5, Double(1.0) / Double(3.0), 0.25,
     TVec4d.DivComponents(TVec4d.Create(1.0, 1.0, 1.0, 1.0), V4),
     'TVec4d component divide');
+  CheckVec4d(5.0, 12.0, 21.0, 32.0, TVec4d.MulComponents(V4, TVec4d.Create(5.0, 6.0, 7.0, 8.0)),
+    'TVec4d component multiply');
   CheckNear(70.0, TVec4d.Dot(V4, TVec4d.Create(5.0, 6.0, 7.0, 8.0)), 0.000000000001,
     'TVec4d dot');
   CheckNear(30.0, V4.LengthSqr, 0.000000000001, 'TVec4d length squared');
+  CheckNear(5.4772255750516612, V4.Length, 0.000000000001, 'TVec4d length');
   CheckNear(1.0, TVec4d.Create(0.0, 0.0, 3.0, 4.0).Normalize.Length, 0.000000000001,
     'TVec4d normalized length');
   CheckVec4d(0.0, 0.0, 0.0, 0.0, TVec4d.Zero.Normalize, 'TVec4d zero normalize');
