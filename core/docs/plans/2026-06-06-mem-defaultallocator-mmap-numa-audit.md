@@ -4,6 +4,14 @@
 
 This note is a read-only subagent audit for the active mem slice.
 
+Status note:
+
+- This audit fed the accepted `22efa6ae` helper-surface hardening batch.
+- It is no longer the active lane goal.
+- The next active mem entry point is
+  `core/docs/plans/2026-06-06-mem-memory-map-shared-memory-owner-boundary-review.md`
+  and should start at `Needs Review`.
+
 - Worktree: `codex/mem-api-pool-slab-20260606`
 - Allowed output: docs/tests draft only
 - Explicitly out of scope: `compiler/**`, `mapped_slab_pool`, `stack_pool`, `allocator.mimalloc`
