@@ -186,9 +186,9 @@ int main() {
             << '\n';
   std::cout << '\n';
 
-  gSink = bench_bounded_spsc() ^
-          bench_bounded_mpmc() ^
-          bench_mutex_queue_single_thread();
+  gSink = bench_bounded_spsc();
+  gSink += bench_bounded_mpmc();
+  gSink += bench_mutex_queue_single_thread();
 
   std::cout << '\n';
   std::cout << "Sink: " << gSink << '\n';

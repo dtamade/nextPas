@@ -996,6 +996,9 @@ begin
   CheckContains(LDocsReadme,
     'benchmark keeps consumed values in a printed sink to reduce optimizer-elision risk',
     'lockfree README must document the benchmark sink keepalive contract');
+  CheckContains(LDocsReadme,
+    'External Rust/Go/C++ comparison sources should follow the same consumed-value sink discipline.',
+    'lockfree README must document the external comparison sink contract');
   CheckNotContains(LDocsReadme, '当前模块还缺少正式 benchmark harness',
     'lockfree README must not say the benchmark harness is missing when it exists');
 
@@ -1171,6 +1174,14 @@ begin
     'Rust comparison source must mirror the bounded MPMC approximation scenario name');
   CheckContains(LRustCompareSource, 'Mutex<VecDeque> 1T',
     'Rust comparison source must mirror the single-thread std baseline scenario name');
+  CheckContains(LRustCompareSource, 'let mut sink = bench_std_mpsc_spsc();',
+    'Rust comparison source must initialize the consumed-value sink from the first scenario');
+  CheckContains(LRustCompareSource, 'sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());',
+    'Rust comparison source must accumulate the bounded MPMC consumed-value sink');
+  CheckContains(LRustCompareSource, 'sink = sink.wrapping_add(bench_mutex_vecdeque_single_thread());',
+    'Rust comparison source must accumulate the single-thread consumed-value sink');
+  CheckNotContains(LRustCompareSource, ' ^ bench_bounded_mutex_condvar_mpmc()',
+    'Rust comparison source must not XOR-aggregate consumed-value sinks');
   CheckContains(LGoCompareSource, 'package main',
     'Go comparison source must be a standalone Go program');
   CheckContains(LGoCompareSource, 'sync.WaitGroup',
@@ -1195,6 +1206,14 @@ begin
     'Go comparison source must mirror the MPMC channel scenario name');
   CheckContains(LGoCompareSource, 'chan uint64 1T',
     'Go comparison source must mirror the single-thread channel baseline scenario name');
+  CheckContains(LGoCompareSource, 'sink = benchChannelSPSC()',
+    'Go comparison source must initialize the consumed-value sink from the first scenario');
+  CheckContains(LGoCompareSource, 'sink += benchChannelMPMC()',
+    'Go comparison source must accumulate the bounded MPMC consumed-value sink');
+  CheckContains(LGoCompareSource, 'sink += benchChannelSingleThread()',
+    'Go comparison source must accumulate the single-thread consumed-value sink');
+  CheckNotContains(LGoCompareSource, 'sink = benchChannelSPSC() ^',
+    'Go comparison source must not XOR-aggregate consumed-value sinks');
   CheckContains(LCppCompareSource, '#include <condition_variable>',
     'C++ comparison source must use C++ std synchronization primitives');
   CheckContains(LCppCompareSource, '#include <mutex>',
@@ -1219,6 +1238,14 @@ begin
     'C++ comparison source must mirror the bounded MPMC approximation scenario name');
   CheckContains(LCppCompareSource, 'mutex queue 1T',
     'C++ comparison source must mirror the single-thread std baseline scenario name');
+  CheckContains(LCppCompareSource, 'gSink = bench_bounded_spsc();',
+    'C++ comparison source must initialize the consumed-value sink from the first scenario');
+  CheckContains(LCppCompareSource, 'gSink += bench_bounded_mpmc();',
+    'C++ comparison source must accumulate the bounded MPMC consumed-value sink');
+  CheckContains(LCppCompareSource, 'gSink += bench_mutex_queue_single_thread();',
+    'C++ comparison source must accumulate the single-thread consumed-value sink');
+  CheckNotContains(LCppCompareSource, 'gSink = bench_bounded_spsc() ^',
+    'C++ comparison source must not XOR-aggregate consumed-value sinks');
 end;
 
 begin

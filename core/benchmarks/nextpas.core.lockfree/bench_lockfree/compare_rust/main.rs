@@ -143,9 +143,9 @@ fn main() {
     println!("Baselines: Rust std synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark");
     println!();
 
-    let sink = bench_std_mpsc_spsc()
-        ^ bench_bounded_mutex_condvar_mpmc()
-        ^ bench_mutex_vecdeque_single_thread();
+    let mut sink = bench_std_mpsc_spsc();
+    sink = sink.wrapping_add(bench_bounded_mutex_condvar_mpmc());
+    sink = sink.wrapping_add(bench_mutex_vecdeque_single_thread());
     black_box(sink);
 
     println!();

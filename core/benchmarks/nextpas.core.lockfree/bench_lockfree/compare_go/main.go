@@ -114,9 +114,9 @@ func main() {
 	fmt.Println("Baselines: Go channel synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark")
 	fmt.Println()
 
-	sink = benchChannelSPSC() ^
-		benchChannelMPMC() ^
-		benchChannelSingleThread()
+	sink = benchChannelSPSC()
+	sink += benchChannelMPMC()
+	sink += benchChannelSingleThread()
 	runtime.KeepAlive(sink)
 
 	fmt.Println()
