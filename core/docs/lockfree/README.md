@@ -34,9 +34,14 @@ power-of-two。`Close` 会阻止新的 `TryEnqueue` 成功并唤醒等待者；c
 
 `TLockFreeStack<T>` 是固定容量 stack。push/pop 会先从内部 free-list 取得或归还 slot，因此不是
 无界栈，也不动态分配节点。
+`TLockFreeStack<T>` capacity is limited to `High(Int32)` because tagged heads pack a 32-bit slot index
+with a 32-bit tag; larger capacities are rejected with `EArgumentError`.
 
 `TWorkStealingDeque<T>` 是 work-stealing deque：owner 线程执行 `TryPush` / `TryPop`，thief
 线程只执行 `TrySteal`。当前实现没有 close/wait surface。
+
+固定容量结构会拒绝 0 容量。`TSpscQueue<T>`、`TMpmcQueue<T>` 和 `TWorkStealingDeque<T>` 会把容量提升到
+power-of-two；超过最大可表示 power-of-two 的容量会被拒绝，而不是溢出后继续构造。
 
 ## Linearization points
 

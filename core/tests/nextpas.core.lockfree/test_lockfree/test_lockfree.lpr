@@ -270,6 +270,11 @@ begin
   Result := (LMax - (LMax shr 1)) + 1;
 end;
 
+function StackCapacityAboveIndexLimit: PtrUInt;
+begin
+  Result := PtrUInt(High(Int32)) + 1;
+end;
+
 procedure TestCapacityOverflowReject;
 var
   LCapacity: PtrUInt;
@@ -312,6 +317,30 @@ begin
   end;
   LDeque.Free;
   Check(LGot, 'deque rejects capacity above maximum power-of-two');
+end;
+
+procedure TestStackCapacityIndexLimitReject;
+var
+  LCapacity: PtrUInt;
+  LStack: TIntStack;
+  LGot: Boolean;
+  LWrongException: string;
+begin
+  LCapacity := StackCapacityAboveIndexLimit;
+
+  LGot := False;
+  LWrongException := '';
+  LStack := nil;
+  try
+    LStack := TIntStack.Create(LCapacity);
+  except
+    on E: EArgumentError do
+      LGot := True;
+    on E: Exception do
+      LWrongException := E.ClassName;
+  end;
+  LStack.Free;
+  Check(LGot, 'stack rejects capacity above 32-bit slot index limit; got ' + LWrongException);
 end;
 
 { SPSC Batch }
@@ -733,6 +762,9 @@ begin
     'lockfree README must document reclamation policy');
   CheckContains(LDocsReadme, 'Close/Destroy discipline',
     'lockfree README must document close and destroy discipline');
+  CheckContains(LDocsReadme,
+    '`TLockFreeStack<T>` capacity is limited to `High(Int32)` because tagged heads pack a 32-bit slot index',
+    'lockfree README must document stack 32-bit slot index capacity limit');
   CheckContains(LDocsReadme, 'Atomic dependency',
     'lockfree README must document dependency on atomic wait/notify');
   CheckContains(LDocsReadme,
@@ -780,6 +812,10 @@ begin
     'stack must keep tag/index packing helper for ABA resistance');
   CheckContains(LStackSource, 'FSlots[LIdx].Value := Default(T)',
     'stack pop must clear the slot before returning it to the free list');
+  CheckContains(LStackSource, 'if ACapacity > PtrUInt(High(Int32)) then',
+    'stack constructor must reject capacity beyond its 32-bit slot index');
+  CheckContains(LStackSource, 'TLockFreeStack: capacity exceeds 32-bit slot index limit',
+    'stack constructor must expose a stable argument error for capacity overflow');
   CheckContains(LMpscSource, 'Assert(FClosed <> 0',
     'MPSC destroy must keep the close-before-destroy debug guard');
   CheckContains(LMpscSource, 'Close must be called before Destroy',
@@ -837,6 +873,7 @@ begin
   T.Run('MPMC 4P+4C contention', @TestMpmcContention);
   T.Run('Capacity zero reject', @TestCapacityZero);
   T.Run('Capacity overflow reject', @TestCapacityOverflowReject);
+  T.Run('Stack capacity index limit reject', @TestStackCapacityIndexLimitReject);
   T.Run('SPSC batch', @TestSpscBatch);
   T.Run('MPMC timeout', @TestMpmcTimeout);
   T.Run('Stack basic', @TestStackBasic);
