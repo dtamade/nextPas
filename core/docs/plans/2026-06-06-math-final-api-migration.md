@@ -301,6 +301,7 @@ Steps:
 - [x] Run `git diff --check`.
 - [x] Review `docs/math/API.md` and `docs/math/README.md` against current public declarations.
 - [x] Commit current documentation and local gate evidence.
+- [x] Add a facade-only overview example and run its focused compile/run gate.
 
 Expected result:
 

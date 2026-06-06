@@ -15,6 +15,16 @@ Use a submodule directly only when you want a narrower import, for example
 
 For a grouped public API reference, see [nextpas.core.math API](API.md).
 
+## Facade Overview Example
+
+`core/examples/nextpas.core.math/math_overview` is a compilable facade-only example. It imports only
+`nextpas.core.math` and demonstrates vector normalization, quaternion rotation, transform
+composition, projection/view builders, easing, deterministic random state, and noise:
+
+```sh
+make -C core/examples/nextpas.core.math/math_overview clean run
+```
+
 ## Public Modules
 
 - `nextpas.core.math`: facade that explicitly re-exports the public math API.

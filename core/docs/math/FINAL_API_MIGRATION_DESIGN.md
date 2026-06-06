@@ -9,8 +9,10 @@ The current branch has implemented the scalar/trig facade, final vector/matrix/q
 types, transform builders, easing functions, explicit-state random/noise generators, and the initial
 internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-internal-seam evidence
 without routing public value-type methods through SIMD. M8 documentation and local module gates are in
-progress. Final cross-platform completion still requires macOS/Windows trig host link smokes, final
-API/docs review, profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.
+progress. The branch also has a facade-only public example under
+`core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
+completion still requires macOS/Windows trig host link smokes, final API/docs review,
+profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.
 
 The target is not gradual compatibility. The target is to absorb the useful math semantics from `fafafa.game` into `nextpas.core` and make `nextpas.core.math.*` the only official framework math API.
 

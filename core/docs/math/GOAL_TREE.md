@@ -58,6 +58,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   consumers/docs/tests from importing `nextpas.core.math.impl.*`.
 - `bench_simd_seam` records local scalar-vs-SIMD-seam evidence for `TVec3f`/`TVec4f` helpers without
   routing public value-type methods through the seam.
+- `math_overview` now provides a facade-only public example that compiles and runs without importing
+  narrower math submodules or implementation-only units.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -302,11 +304,14 @@ Status:
   and noise.
 - Local Linux closeout gates have been rerun for the current docs/API surface: `make -C
   core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
-  `MATH_API_SURFACE OK: scanned=40 findings=0`, allocation-bearing math tests report heaptrc
+  `MATH_API_SURFACE OK: scanned=41 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
 - Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
   declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules.
+- `core/examples/nextpas.core.math/math_overview` now exercises the facade as a public consumer
+  example, passes `make -C core/examples/nextpas.core.math/math_overview clean run`, and is protected
+  by `test_api_surface`.
 - M8 is not complete until broader M7 SIMD acceleration decisions, host trig link evidence, and final
   API/docs signoff are finished.
 
