@@ -730,6 +730,7 @@ const
   WaitSourcePath = '../../../src/nextpas.core.lockfree.wait.pas';
   BenchSourcePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/bench_lockfree.lpr';
   BenchRustComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_rust/main.rs';
+  BenchGoComparePath = '../../../benchmarks/nextpas.core.lockfree/bench_lockfree/compare_go/main.go';
 var
   LLockFreeSource: string;
   LDocsReadme: string;
@@ -743,6 +744,7 @@ var
   LWaitSource: string;
   LBenchSource: string;
   LRustCompareSource: string;
+  LGoCompareSource: string;
   LMpscBasicTestSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscTimeoutTestSection: string;
@@ -755,6 +757,8 @@ begin
     'lockfree benchmark source must exist as the benchmark entrypoint');
   Check(FileExists(BenchRustComparePath),
     'lockfree Rust comparison source must exist as an external baseline reference');
+  Check(FileExists(BenchGoComparePath),
+    'lockfree Go comparison source must exist as an external baseline reference');
 
   LLockFreeSource := ReadUtf8TextFile(LockFreeSourcePath);
   LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
@@ -768,6 +772,7 @@ begin
   LWaitSource := ReadUtf8TextFile(WaitSourcePath);
   LBenchSource := ReadUtf8TextFile(BenchSourcePath);
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
+  LGoCompareSource := ReadUtf8TextFile(BenchGoComparePath);
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
     'procedure TestMpscMultiProducer;',
@@ -905,9 +910,14 @@ begin
     'lockfree README must point to the Pascal benchmark source');
   CheckContains(LDocsReadme, 'compare_rust/main.rs',
     'lockfree README must point to the external Rust comparison source');
+  CheckContains(LDocsReadme, 'compare_go/main.go',
+    'lockfree README must point to the external Go comparison source');
   CheckContains(LDocsReadme,
     'Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.',
     'lockfree README must describe the manual Rust comparison source approximations');
+  CheckContains(LDocsReadme,
+    'Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.',
+    'lockfree README must describe the manual Go comparison source approximations');
   CheckContains(LDocsReadme, 'platform/compiler flags/input size/baseline',
     'lockfree README must name the benchmark evidence envelope');
   CheckNotContains(LDocsReadme, '当前模块还缺少正式 benchmark harness',
@@ -1022,7 +1032,7 @@ begin
     'lockfree benchmark must print the compiler flags evidence field');
   CheckContains(LBenchSource, 'WriteLn(''Input size: OPS=1000000; capacity=1024; scenarios=SPSC 1P+1C, MPMC 2P+2C, mutex channel baseline, Try* 1T'')',
     'lockfree benchmark must print the input-size evidence field');
-  CheckContains(LBenchSource, 'WriteLn(''Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs external Rust source (not auto-run)'')',
+  CheckContains(LBenchSource, 'WriteLn(''Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs and compare_go/main.go external sources (not auto-run)'')',
     'lockfree benchmark must print the baseline evidence field');
   CheckContains(LRustCompareSource, 'use std::sync::mpsc',
     'Rust comparison source must use Rust std channel APIs');
@@ -1046,6 +1056,30 @@ begin
     'Rust comparison source must mirror the bounded MPMC approximation scenario name');
   CheckContains(LRustCompareSource, 'Mutex<VecDeque> 1T',
     'Rust comparison source must mirror the single-thread std baseline scenario name');
+  CheckContains(LGoCompareSource, 'package main',
+    'Go comparison source must be a standalone Go program');
+  CheckContains(LGoCompareSource, 'sync.WaitGroup',
+    'Go comparison source must use Go std synchronization primitives for concurrent scenarios');
+  CheckContains(LGoCompareSource, 'make(chan uint64, Capacity)',
+    'Go comparison source must use a bounded buffered channel context');
+  CheckContains(LGoCompareSource, 'const Ops = 1000000',
+    'Go comparison source must use the same nominal operation count');
+  CheckContains(LGoCompareSource, 'const Capacity = 1024',
+    'Go comparison source must use the same nominal bounded-capacity context');
+  CheckContains(LGoCompareSource, 'fmt.Println("Platform:", runtime.GOOS, runtime.GOARCH)',
+    'Go comparison source must print the platform evidence field');
+  CheckContains(LGoCompareSource, 'fmt.Println("Compiler flags: go build (default optimized gc toolchain; recommended manual command)")',
+    'Go comparison source must print the compiler-flags evidence field');
+  CheckContains(LGoCompareSource, 'fmt.Println("Input size: OPS=1000000; capacity=1024; scenarios=chan uint64 1P+1C, chan uint64 2P+2C, chan uint64 1T")',
+    'Go comparison source must print the input-size evidence field');
+  CheckContains(LGoCompareSource, 'fmt.Println("Baselines: Go channel synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark")',
+    'Go comparison source must print the baseline evidence field');
+  CheckContains(LGoCompareSource, 'chan uint64 1P+1C',
+    'Go comparison source must mirror the SPSC channel scenario name');
+  CheckContains(LGoCompareSource, 'chan uint64 2P+2C',
+    'Go comparison source must mirror the MPMC channel scenario name');
+  CheckContains(LGoCompareSource, 'chan uint64 1T',
+    'Go comparison source must mirror the single-thread channel baseline scenario name');
 end;
 
 begin
