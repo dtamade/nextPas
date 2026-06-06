@@ -284,7 +284,8 @@ Final strategy:
   - `Roll(Sides <= 0)`
   - `RollMultiple(Dice <= 0)`
   - `WeightedChoice([])` or non-positive weights
-  - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, or bad `Gain`
+  - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, bad `Gain`, or finite parameter
+    combinations that would make octave coordinates or amplitudes non-finite
 - Keep deterministic test vectors for seeds.
 
 The public names are now locked by tests as `TRandomState`, `TRandomGen`, and `TNoiseGen`.
@@ -395,7 +396,9 @@ Resolved by tests and implementation:
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides.
 - `NextBool` clamps probability into false or true behavior.
-- Invalid FBM octave, lacunarity, and gain inputs fail fast with `EArgumentError`.
+- Invalid FBM octave, lacunarity, and gain inputs fail fast with `EArgumentError`, and owner-level
+  FBM checks also reject finite coordinate/lacunarity or gain combinations that would make octave
+  coordinates or amplitudes non-finite.
 - `nextpas.core.math` re-exports the scalar/trig/vector/matrix/quaternion/transform/easing/random API.
 - The first transform cut exposes builder functions only; no `TTransform3f` or `TTransform3d` records are public.
 
