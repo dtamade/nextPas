@@ -4,6 +4,7 @@ program test_impl_simd;
 
 uses
   nextpas.core.testing,
+  nextpas.core.math.mat,
   nextpas.core.math.vec,
   nextpas.core.math.impl.simd;
 
@@ -68,9 +69,26 @@ begin
     TVec3f.Create(0.0, 1.0, 0.0)), 'SimdVec3fCross');
 end;
 
+procedure TestMat4fSimdHelpers;
+var
+  M: TMat4f;
+  V: TVec4f;
+begin
+  M := TMat4f.Create(
+    TVec4f.Create(1.0, 2.0, 3.0, 4.0),
+    TVec4f.Create(5.0, 6.0, 7.0, 8.0),
+    TVec4f.Create(9.0, 10.0, 11.0, 12.0),
+    TVec4f.Create(13.0, 14.0, 15.0, 16.0));
+  V := TVec4f.Create(0.5, -1.0, 2.0, 1.5);
+
+  CheckVec4f(33.0, 36.0, 39.0, 42.0, SimdMat4fMulVec4f(M, V),
+    'SimdMat4fMulVec4f');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.impl.simd');
   T.Run('vec4f simd helpers', @TestVec4fSimdHelpers);
   T.Run('vec3f simd helpers', @TestVec3fSimdHelpers);
+  T.Run('mat4f simd helpers', @TestMat4fSimdHelpers);
   T.Summary;
 end.

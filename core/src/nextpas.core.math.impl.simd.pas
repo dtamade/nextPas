@@ -5,6 +5,7 @@ unit nextpas.core.math.impl.simd;
 interface
 
 uses
+  nextpas.core.math.mat,
   nextpas.core.math.vec;
 
 function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f; inline;
@@ -15,6 +16,7 @@ function SimdVec4fDot(const AA, AB: TVec4f): Single; inline;
 function SimdVec4fLength(const AValue: TVec4f): Single; inline;
 function SimdVec3fDot(const AA, AB: TVec3f): Single; inline;
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f; inline;
+function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f; inline;
 
 implementation
 
@@ -29,6 +31,15 @@ end;
 function Vec3fToSimd(const AValue: TVec3f): TVecF32x4; inline;
 begin
   Result := VecF32x4Make(AValue.X, AValue.Y, AValue.Z, 0.0);
+end;
+
+function Mat4fColumnToSimd(const AMatrix: TMat4f; const AColumn: TMat4f.TIndex): TVecF32x4; inline;
+begin
+  Result := VecF32x4Make(
+    AMatrix.Data[AColumn, 0],
+    AMatrix.Data[AColumn, 1],
+    AMatrix.Data[AColumn, 2],
+    AMatrix.Data[AColumn, 3]);
 end;
 
 function SimdToVec4f(const AValue: TVecF32x4): TVec4f; inline;
@@ -86,6 +97,20 @@ end;
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f;
 begin
   Result := SimdToVec3f(VecF32x3Cross(Vec3fToSimd(AA), Vec3fToSimd(AB)));
+end;
+
+function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f;
+var
+  LResult: TVecF32x4;
+begin
+  LResult := VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 0), VecF32x4Splat(AVector.X));
+  LResult := VecF32x4Add(LResult,
+    VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 1), VecF32x4Splat(AVector.Y)));
+  LResult := VecF32x4Add(LResult,
+    VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 2), VecF32x4Splat(AVector.Z)));
+  LResult := VecF32x4Add(LResult,
+    VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 3), VecF32x4Splat(AVector.W)));
+  Result := SimdToVec4f(LResult);
 end;
 
 end.

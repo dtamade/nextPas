@@ -8,7 +8,8 @@ tests in this branch.
 The current branch has implemented the scalar/trig facade, final vector/matrix/quaternion value
 types, transform builders, easing functions, explicit-state random/noise generators, and the initial
 internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-internal-seam evidence
-without routing public value-type methods through SIMD. M8 documentation and local module gates are in
+without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
+candidate seam result on the local x86_64/Linux gate. M8 documentation and local module gates are in
 progress. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
 completion still requires macOS/Windows trig host link smokes, final API/docs review,
@@ -308,9 +309,13 @@ Initial SIMD candidates:
 - `TMat4f * TVec4f` and `TMat4f * TMat4f` only after profiling proves they are hot enough to justify a public SIMD primitive
 
 The current local benchmark harness now preserves scalar baselines for the next likely candidates
-before any SIMD primitive is proposed: `TMat4f * TVec4f`, `TMat4f * TMat4f`, and `TQuatf.Rotate`.
-`test_api_surface` requires those benchmark labels so future M7 work cannot silently drop the
-evidence while experimenting with new primitives.
+before any new public SIMD primitive is proposed: `TMat4f * TMat4f` and `TQuatf.Rotate`. It also now
+includes a candidate internal `TMat4f * TVec4f` seam that uses only public `VecF32x4*` operations.
+On the same x86_64/Linux/FPC 3.3.1 local run with `NEXTPAS_BENCH_MAX_ITERS=20000`, the scalar
+operator remained faster at 26.7 ns/op versus 437.3 ns/op for the current seam shape. This is
+negative wiring evidence, so the public `TMat4f * TVec4f` operator remains scalar. `test_api_surface`
+requires the scalar and seam benchmark labels so future M7 work cannot silently drop the evidence
+while experimenting with new primitives.
 
 These should not block the first API implementation. They belong after scalar correctness and full tests.
 

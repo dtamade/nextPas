@@ -227,6 +227,21 @@ begin
   GVec4Sink := LValue;
 end;
 
+procedure BenchMat4fSimdMatVec(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec4f;
+begin
+  LValue := GVec4Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdMat4fMulVec4f(GMat4A[LIndex], GVec4A[LIndex]);
+  end;
+  GVec4Sink := LValue;
+end;
+
 procedure BenchMat4fScalarMatMat(AIterations: Int64);
 var
   I: Int64;
@@ -280,6 +295,7 @@ begin
     B.Run('TVec3f scalar cross', @BenchVec3fScalarCross);
     B.Run('TVec3f simd seam cross', @BenchVec3fSimdCross);
     B.Run('TMat4f scalar mat-vec', @BenchMat4fScalarMatVec);
+    B.Run('TMat4f simd seam mat-vec', @BenchMat4fSimdMatVec);
     B.Run('TMat4f scalar mat-mat', @BenchMat4fScalarMatMat);
     B.Run('TQuatf scalar rotate', @BenchQuatfScalarRotate);
     WriteLn;

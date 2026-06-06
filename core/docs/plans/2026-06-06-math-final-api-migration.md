@@ -275,14 +275,20 @@ Steps:
 - [x] Extend `bench_simd_seam` with scalar-only baselines for broader M7 candidates
   (`TMat4f * TVec4f`, `TMat4f * TMat4f`, and `TQuatf.Rotate`) and protect those benchmark labels in
   `test_api_surface`.
+- [x] Extend `nextpas.core.math.impl.simd` with a candidate internal `TMat4f * TVec4f` helper using
+  only public `VecF32x4*` operations, then lock its declaration and behavior in
+  `test_api_surface` and `test_impl_simd`.
+- [x] Run the same benchmark on the candidate `TMat4f * TVec4f` seam; local x86_64/Linux evidence is
+  negative (`26.7 ns/op` scalar vs `437.3 ns/op` seam), so the public operator remains intentionally
+  scalar.
 
 Expected result:
 
 - SIMD acceleration is optional, tested, and not a public math API dependency.
 - Current status is an internal helper seam only; public math value types still run their scalar paths
-  until a later profiling-backed acceleration slice wires them intentionally. The first local
-  benchmark result is negative evidence for wiring the current seam shape directly into public
-  vector methods.
+  until a later profiling-backed acceleration slice wires them intentionally. The current local
+  benchmark results are negative evidence for wiring the existing seam shape directly into public
+  vector or matrix-vector methods.
 
 ### Task 10: Documentation And Closeout Gates
 
