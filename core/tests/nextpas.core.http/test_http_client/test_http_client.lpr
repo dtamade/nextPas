@@ -749,6 +749,19 @@ begin
   end;
 end;
 
+procedure TestClientShortcutBodyImplementationUsesBytesBuffer;
+var
+  LSource: string;
+begin
+  LSource := ReadFileText('../../../src/nextpas.core.http.client.pas');
+  Check(Pos('function BufferedBodyRequest(', LSource) > 0,
+    'client shortcut body path uses one bytes-buffer request helper');
+  Check(Pos('LBodyBuf: string;', LSource) = 0,
+    'client shortcut body path does not materialize body through string');
+  Check(Pos('CreateBytesStreamFrom(StrToBytes(LBodyBuf))', LSource) = 0,
+    'client shortcut body path does not convert string buffer back to bytes');
+end;
+
 // PLACEHOLDER_TEST4
 
 procedure TestClientPutBodyAndContentType;
@@ -2238,6 +2251,8 @@ begin
     @TestClientDoWithRequestHelperHeadersBody);
   T.Run('Client Do uses NewRequest bytes body helper',
     @TestClientDoWithRequestHelperBytesBody);
+  T.Run('Client shortcut bodies use bytes buffer',
+    @TestClientShortcutBodyImplementationUsesBytesBuffer);
   T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
   T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
   T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);

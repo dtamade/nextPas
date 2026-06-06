@@ -1,5 +1,34 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http shortcut body bytes-buffer slice
+
+- 本轮收紧 client shortcut body materialization：
+  `IHttpClient.Post` / `Put` / `Patch` 旧实现各自重复读取 `IReader`，并把 bytes
+  先追加到 Pascal string，再用 `StrToBytes` 转回 `TBytes` 创建 body stream。
+- 选择依据：
+  - 这不是新增 public API，而是让已有 shortcut 的内部载体与刚落地的
+    `NewRequest(..., BodyBytes)` helper 对齐。
+  - Go/Rust 的 body helper 语义应把 bytes 当 bytes 处理；string 中转既重复，也让
+    binary payload ownership 更难审计。
+  - 本 slice 不改变 shortcut 仍需 buffer body 以生成 `Content-Length` 的当前
+    public contract，也不引入 streaming/chunked request body。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `52 total, 51 passed, 1 failed`
+    - failed at `Client shortcut bodies use bytes buffer`
+    - failure: `client shortcut body path uses one bytes-buffer request helper`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `BufferedBodyRequest`。
+  - `Post` / `Put` / `Patch` 共享该 helper；helper 用
+    `nextpas.core.io.ReadAll` 读取 body，再调用 bytes body `NewRequest` helper。
+  - source-contract 证明不再存在 `LBodyBuf: string;` 与
+    `CreateBytesStreamFrom(StrToBytes(LBodyBuf))` 中转。
+- 复盘结论：
+  client shortcut body path 现在和 public bytes request helper 用同一个载体语义。
+  后续若继续 body ownership，应先设计 streaming/chunked request contract，而不是在
+  shortcut 内继续堆 ad hoc buffer 逻辑。
+
 ## 2026-06-06 http request bytes body helper slice
 
 - 本轮补齐 client request body ergonomics：

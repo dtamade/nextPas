@@ -49,6 +49,11 @@
     锁住 facade 可见性，`test_http_client` 锁住 live `IHttpClient.Do_` 发送零字节
     与高字节 payload 的路径。这补齐 Go/Rust 常见 binary body ergonomics，但仍不
     引入完整 request builder 或 streaming/chunked request body ownership API。
+  - 继续收紧：`IHttpClient.Post` / `Put` / `Patch` shortcut 现在共享内部
+    bytes-buffer request helper。它们仍会读取 `IReader` 以发布 `Content-Length`，
+    但不再先 materialize 到 Pascal string 再转回 bytes；`test_http_client` 用
+    source-contract 锁住 single helper 与 no-string-buffer 实现形状，并继续保留
+    live POST / PUT / PATCH 行为覆盖。
   - 继续补齐：新增 `HttpReadResponseBodyString(Resp)` public helper。它直接消费
     `IHttpResponse.Body` reader 并返回 Pascal string；nil body 返回 `''`，nil
     response 抛 `EArgumentError`。`test_http_client` 锁住 live response、消费

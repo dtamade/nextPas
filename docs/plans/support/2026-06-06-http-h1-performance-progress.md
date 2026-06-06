@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http shortcut body bytes-buffer slice
+
+- **Status:** completed.
+- Objective:
+  - make `IHttpClient.Post` / `Put` / `Patch` share one bytes-buffer body helper
+  - remove Pascal string body materialization from shortcut request construction
+  - keep current buffered `Content-Length` semantics unchanged
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `52 total, 51 passed, 1 failed`
+    - failed at `Client shortcut bodies use bytes buffer`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `BufferedBodyRequest`
+  - removed `StrToBytes` and the three duplicated `LBodyBuf: string` reader-drain
+    loops
+  - `Post` / `Put` / `Patch` now read `IReader` with `nextpas.core.io.ReadAll`
+    and build requests through `NewRequest(..., BodyBytes)`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `52 total, 52 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - shortcut body materialization now uses bytes consistently
+  - this does not claim public shortcut overloads, request builder support,
+    streaming/chunked request bodies, or transport changes
+
 ## Session: 2026-06-06 http request bytes body helper slice
 
 - **Status:** completed.

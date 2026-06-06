@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http shortcut body bytes-buffer slice
+
+### Goal
+
+收紧 `IHttpClient.Post` / `Put` / `Patch` shortcut 的 request body materialization：
+这些方法仍然需要读取 `IReader` 以生成 `Content-Length`，但不应再把 payload 先塞进
+Pascal string，再用 `StrToBytes` 转回 bytes。三条 shortcut 应共享一个 bytes-buffer
+helper，并复用 `NewRequest(..., BodyBytes)` 的 request construction contract。
+
+### Checklist
+
+- [x] RED：`test_http_client` source-contract 先证明 client shortcut body path
+  缺少 single bytes-buffer helper，并且仍存在 string body buffer 中转。
+- [x] GREEN：新增内部 `BufferedBodyRequest`，用 `nextpas.core.io.ReadAll` 读取
+  `IReader` 为 `TBytes`，再调用 `NewRequest(Method, Url, Headers, BodyBytes)`。
+- [x] 复用既有 live behavior proof：`POST` / `PUT` / `PATCH` shortcut 仍发送
+  content type、content length 和 body。
+- [x] 保持本 slice 边界：不新增 public overload、不修改 `IHttpClient` interface、
+  不改变 streaming request ownership、不改 H1 transport。
+
 ## Active Session: 2026-06-06 http request bytes body helper slice
 
 ### Goal

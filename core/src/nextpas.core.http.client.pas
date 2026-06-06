@@ -60,14 +60,6 @@ uses
   nextpas.core.http.message,
   nextpas.core.http.impl.registry;
 
-function StrToBytes(const S: string): TBytes;
-begin
-  Result := nil;
-  SetLength(Result, Length(S));
-  if Length(S) > 0 then
-    Move(S[1], Result[0], Length(S));
-end;
-
 procedure CheckDownloadArgs(const AClient: IHttpClient; const AUrl: string);
 begin
   if AClient = nil then
@@ -200,6 +192,23 @@ begin
   Result := (AInitialUrl.Host <> '') and (ARedirectUrl.Host <> '') and
     (LowerCase(AInitialUrl.Host) = LowerCase(ARedirectUrl.Host)) and
     (EffectiveAuthorityPort(AInitialUrl) = EffectiveAuthorityPort(ARedirectUrl));
+end;
+
+function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AContentType: string; const ABody: IReader): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TBytes;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-type', AContentType);
+
+  if ABody <> nil then
+    LBody := nextpas.core.io.ReadAll(ABody)
+  else
+    LBody := nil;
+
+  Result := NewRequest(AMethod, AUrl, LHeaders, LBody);
 end;
 
 function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,
@@ -497,40 +506,9 @@ function THttpClient.Post(const AUrl, AContentType: string; const ABody: IReader
 var
   LUrl: TUrl;
   LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-  LBodyBuf: string;
-  LTmp: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
 begin
   LUrl := TUrl.Parse(AUrl);
-  LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
-
-  // Read all body into buffer to determine content-length
-  LBodyBuf := '';
-  if ABody <> nil then
-  begin
-    repeat
-      LN := ABody.Read(LTmp[0], 4096);
-      if LN > 0 then
-      begin
-        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
-        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
-      end;
-    until LN = 0;
-  end;
-
-  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
-
-  if LBodyBuf <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
-    LReq := THttpRequest.Create(hmPost, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
-  end
-  else
-    LReq := THttpRequest.Create(hmPost, LUrl, hvHttp11, LHeaders, nil, 0);
-
+  LReq := BufferedBodyRequest(hmPost, LUrl, AContentType, ABody);
   Result := Do_(LReq);
 end;
 
@@ -538,39 +516,9 @@ function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader)
 var
   LUrl: TUrl;
   LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-  LBodyBuf: string;
-  LTmp: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
 begin
   LUrl := TUrl.Parse(AUrl);
-  LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
-
-  LBodyBuf := '';
-  if ABody <> nil then
-  begin
-    repeat
-      LN := ABody.Read(LTmp[0], 4096);
-      if LN > 0 then
-      begin
-        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
-        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
-      end;
-    until LN = 0;
-  end;
-
-  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
-
-  if LBodyBuf <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
-    LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
-  end
-  else
-    LReq := THttpRequest.Create(hmPut, LUrl, hvHttp11, LHeaders, nil, 0);
-
+  LReq := BufferedBodyRequest(hmPut, LUrl, AContentType, ABody);
   Result := Do_(LReq);
 end;
 
@@ -588,39 +536,9 @@ function THttpClient.Patch(const AUrl, AContentType: string; const ABody: IReade
 var
   LUrl: TUrl;
   LReq: IHttpRequest;
-  LHeaders: IHttpHeaders;
-  LBodyBuf: string;
-  LTmp: array[0..4095] of Byte;
-  LN: SizeUInt;
-  LBodyStream: IStream;
 begin
   LUrl := TUrl.Parse(AUrl);
-  LHeaders := NewHttpHeaders;
-  LHeaders.Set_('content-type', AContentType);
-
-  LBodyBuf := '';
-  if ABody <> nil then
-  begin
-    repeat
-      LN := ABody.Read(LTmp[0], 4096);
-      if LN > 0 then
-      begin
-        SetLength(LBodyBuf, Length(LBodyBuf) + Int32(LN));
-        Move(LTmp[0], LBodyBuf[Length(LBodyBuf) - Int32(LN) + 1], LN);
-      end;
-    until LN = 0;
-  end;
-
-  LHeaders.Set_('content-length', IntToStr(Int64(Length(LBodyBuf))));
-
-  if LBodyBuf <> '' then
-  begin
-    LBodyStream := CreateBytesStreamFrom(StrToBytes(LBodyBuf));
-    LReq := THttpRequest.Create(hmPatch, LUrl, hvHttp11, LHeaders, LBodyStream as IReader, Int64(Length(LBodyBuf)));
-  end
-  else
-    LReq := THttpRequest.Create(hmPatch, LUrl, hvHttp11, LHeaders, nil, 0);
-
+  LReq := BufferedBodyRequest(hmPatch, LUrl, AContentType, ABody);
   Result := Do_(LReq);
 end;
 
