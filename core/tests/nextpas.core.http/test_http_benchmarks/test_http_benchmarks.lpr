@@ -913,6 +913,9 @@ var
   LRootDir: string;
   LSource: string;
   LMaterializeBody: string;
+  LRawFirstBody: string;
+  LGetAllRawBody: string;
+  LCountRawBody: string;
   LGetBody: string;
   LGetAllBody: string;
   LHasBody: string;
@@ -924,6 +927,18 @@ begin
     'procedure TFastLazyHeaders.EnsureMaterialized;',
     'function TFastLazyHeaders.FindRawFirstValue',
     'TFastLazyHeaders.EnsureMaterialized body');
+  LRawFirstBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.FindRawFirstValue',
+    'function TFastLazyHeaders.GetAllRawValues',
+    'TFastLazyHeaders.FindRawFirstValue body');
+  LGetAllRawBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.GetAllRawValues',
+    'function TFastLazyHeaders.CountRawHeaders',
+    'TFastLazyHeaders.GetAllRawValues body');
+  LCountRawBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.CountRawHeaders',
+    'procedure TFastLazyHeaders.Set_',
+    'TFastLazyHeaders.CountRawHeaders body');
   LGetBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.Get(const AName: string): string;',
     'function TFastLazyHeaders.GetAll',
@@ -947,10 +962,20 @@ begin
     'TFastLazyHeaders raw count helper');
   CheckContains(LSource, 'function TFastLazyHeaders.GetAllRawValues',
     'TFastLazyHeaders raw multi-value lookup helper');
+  CheckContains(LSource, 'function TFastLazyHeaders.NextRawHeader',
+    'TFastLazyHeaders shared raw header iterator');
+  CheckContains(LMaterializeBody, 'NextRawHeader(LLineStart, LSpan)',
+    'TFastLazyHeaders.EnsureMaterialized should use shared raw iterator');
   CheckContains(LMaterializeBody, 'AddParsedSpans(',
     'TFastLazyHeaders.EnsureMaterialized should use parser-trusted span insertion');
   CheckNotContains(LMaterializeBody, 'FHeaders.Add(',
     'TFastLazyHeaders.EnsureMaterialized should not use public header Add path');
+  CheckContains(LRawFirstBody, 'NextRawHeader(LLineStart, LSpan)',
+    'TFastLazyHeaders.FindRawFirstValue should use shared raw iterator');
+  CheckContains(LGetAllRawBody, 'NextRawHeader(LLineStart, LSpan)',
+    'TFastLazyHeaders.GetAllRawValues should use shared raw iterator');
+  CheckContains(LCountRawBody, 'NextRawHeader(LLineStart, LSpan)',
+    'TFastLazyHeaders.CountRawHeaders should use shared raw iterator');
   CheckContains(LGetBody, 'FindRawFirstValue(AName, Result)',
     'TFastLazyHeaders.Get should use raw first-value lookup');
   CheckNotContains(LGetBody, 'EnsureMaterialized;',

@@ -45,10 +45,19 @@ uses
   nextpas.core.http.impl.h1.scan;
 
 type
+  TFastRawHeaderSpan = record
+    NameStart: SizeInt;
+    NameLen: SizeInt;
+    ValueStart: SizeInt;
+    ValueLen: SizeInt;
+  end;
+
   TFastLazyHeaders = class(TInterfacedObject, IHttpHeaders)
   private
     FRaw: string;
     FHeaders: IHttpHeaders;
+    function NextRawHeader(var ALineStart: SizeInt;
+      out ASpan: TFastRawHeaderSpan): Boolean;
     procedure EnsureMaterialized;
     function FindRawFirstValue(const AName: string; out AValue: string): Boolean;
     function GetAllRawValues(const AName: string): TStringArray;
@@ -128,12 +137,56 @@ begin
     SetString(FRaw, ABuf, ALen);
 end;
 
-procedure TFastLazyHeaders.EnsureMaterialized;
+function TFastLazyHeaders.NextRawHeader(var ALineStart: SizeInt;
+  out ASpan: TFastRawHeaderSpan): Boolean;
 var
-  LLineStart, LLineEnd: SizeInt;
+  LLineEnd: SizeInt;
   LColon: SizeInt;
   LValStart: SizeInt;
   LRawLen: SizeInt;
+begin
+  Result := False;
+  ASpan := Default(TFastRawHeaderSpan);
+  LRawLen := Length(FRaw);
+  if ALineStart > LRawLen then
+    Exit;
+
+  LLineEnd := ALineStart;
+  while (LLineEnd <= LRawLen) and
+        (not ((FRaw[LLineEnd] = #13) and
+              (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
+    Inc(LLineEnd);
+
+  LColon := ALineStart;
+  while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
+    Inc(LColon);
+  if LColon >= LLineEnd then
+  begin
+    ALineStart := LRawLen + 1;
+    Exit;
+  end;
+
+  LValStart := LColon + 1;
+  while (LValStart < LLineEnd) and
+        ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
+    Inc(LValStart);
+
+  ASpan.NameStart := ALineStart;
+  ASpan.NameLen := LColon - ALineStart;
+  ASpan.ValueStart := LValStart;
+  ASpan.ValueLen := LLineEnd - LValStart;
+
+  if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
+    ALineStart := LLineEnd + 2
+  else
+    ALineStart := LRawLen + 1;
+  Result := True;
+end;
+
+procedure TFastLazyHeaders.EnsureMaterialized;
+var
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
   LHeaders: THttpHeaders;
 begin
   if FHeaders <> nil then
@@ -141,81 +194,32 @@ begin
 
   LHeaders := THttpHeaders.Create;
   FHeaders := LHeaders as IHttpHeaders;
-  LRawLen := Length(FRaw);
   LLineStart := 1;
-  while LLineStart <= LRawLen do
-  begin
-    LLineEnd := LLineStart;
-    while (LLineEnd <= LRawLen) and
-          (not ((FRaw[LLineEnd] = #13) and
-                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
-      Inc(LLineEnd);
-
-    LColon := LLineStart;
-    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
-      Inc(LColon);
-    if LColon >= LLineEnd then
-      Break;
-
-    LValStart := LColon + 1;
-    while (LValStart < LLineEnd) and
-          ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
-      Inc(LValStart);
-
-    LHeaders.AddParsedSpans(PAnsiChar(FRaw) + LLineStart - 1,
-      SizeUInt(LColon - LLineStart), PAnsiChar(FRaw) + LValStart - 1,
-      SizeUInt(LLineEnd - LValStart));
-
-    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
-      LLineStart := LLineEnd + 2
-    else
-      Break;
-  end;
+  while NextRawHeader(LLineStart, LSpan) do
+    LHeaders.AddParsedSpans(PAnsiChar(FRaw) + LSpan.NameStart - 1,
+      SizeUInt(LSpan.NameLen), PAnsiChar(FRaw) + LSpan.ValueStart - 1,
+      SizeUInt(LSpan.ValueLen));
   FRaw := '';
 end;
 
 function TFastLazyHeaders.FindRawFirstValue(const AName: string;
   out AValue: string): Boolean;
 var
-  LLineStart, LLineEnd: SizeInt;
-  LColon: SizeInt;
-  LValStart: SizeInt;
-  LRawLen: SizeInt;
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
 begin
   Result := False;
   AValue := '';
-  LRawLen := Length(FRaw);
   LLineStart := 1;
-  while LLineStart <= LRawLen do
+  while NextRawHeader(LLineStart, LSpan) do
   begin
-    LLineEnd := LLineStart;
-    while (LLineEnd <= LRawLen) and
-          (not ((FRaw[LLineEnd] = #13) and
-                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
-      Inc(LLineEnd);
-
-    LColon := LLineStart;
-    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
-      Inc(LColon);
-    if LColon >= LLineEnd then
-      Break;
-
-    if FastHeaderNameMatches(FRaw, LLineStart, LColon - LLineStart,
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
       AName) then
     begin
-      LValStart := LColon + 1;
-      while (LValStart < LLineEnd) and
-            ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
-        Inc(LValStart);
-      SetString(AValue, PAnsiChar(FRaw) + LValStart - 1,
-        LLineEnd - LValStart);
+      SetString(AValue, PAnsiChar(FRaw) + LSpan.ValueStart - 1,
+        LSpan.ValueLen);
       Exit(True);
     end;
-
-    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
-      LLineStart := LLineEnd + 2
-    else
-      Break;
   end;
 end;
 
@@ -224,64 +228,16 @@ var
   LCount: Int32;
   LIndex: Int32;
   LLineStart: SizeInt;
-  LValueStart: SizeInt;
-  LValueLen: SizeInt;
-
-  function NextMatchingValue(var ALineStart: SizeInt; out AValueStart: SizeInt;
-    out AValueLen: SizeInt): Boolean;
-  var
-    LNameStart: SizeInt;
-    LLineEnd: SizeInt;
-    LColon: SizeInt;
-    LValStart: SizeInt;
-    LRawLen: SizeInt;
-  begin
-    Result := False;
-    LRawLen := Length(FRaw);
-    while ALineStart <= LRawLen do
-    begin
-      LNameStart := ALineStart;
-      LLineEnd := ALineStart;
-      while (LLineEnd <= LRawLen) and
-            (not ((FRaw[LLineEnd] = #13) and
-                  (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
-        Inc(LLineEnd);
-
-      LColon := ALineStart;
-      while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
-        Inc(LColon);
-      if LColon >= LLineEnd then
-      begin
-        ALineStart := LRawLen + 1;
-        Exit;
-      end;
-
-      LValStart := LColon + 1;
-      while (LValStart < LLineEnd) and
-            ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
-        Inc(LValStart);
-
-      if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
-        ALineStart := LLineEnd + 2
-      else
-        ALineStart := LRawLen + 1;
-
-      if FastHeaderNameMatches(FRaw, LNameStart, LColon - LNameStart,
-        AName) then
-      begin
-        AValueStart := LValStart;
-        AValueLen := LLineEnd - LValStart;
-        Exit(True);
-      end;
-    end;
-  end;
+  LSpan: TFastRawHeaderSpan;
 
 begin
   Result := nil;
   LCount := 0;
   LLineStart := 1;
-  while NextMatchingValue(LLineStart, LValueStart, LValueLen) do
-    Inc(LCount);
+  while NextRawHeader(LLineStart, LSpan) do
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
+      AName) then
+      Inc(LCount);
 
   if LCount = 0 then
     Exit;
@@ -289,43 +245,25 @@ begin
   SetLength(Result, LCount);
   LIndex := 0;
   LLineStart := 1;
-  while NextMatchingValue(LLineStart, LValueStart, LValueLen) do
-  begin
-    SetString(Result[LIndex], PAnsiChar(FRaw) + LValueStart - 1, LValueLen);
-    Inc(LIndex);
-  end;
+  while NextRawHeader(LLineStart, LSpan) do
+    if FastHeaderNameMatches(FRaw, LSpan.NameStart, LSpan.NameLen,
+      AName) then
+    begin
+      SetString(Result[LIndex], PAnsiChar(FRaw) + LSpan.ValueStart - 1,
+        LSpan.ValueLen);
+      Inc(LIndex);
+    end;
 end;
 
 function TFastLazyHeaders.CountRawHeaders: Int32;
 var
-  LLineStart, LLineEnd: SizeInt;
-  LColon: SizeInt;
-  LRawLen: SizeInt;
+  LLineStart: SizeInt;
+  LSpan: TFastRawHeaderSpan;
 begin
   Result := 0;
-  LRawLen := Length(FRaw);
   LLineStart := 1;
-  while LLineStart <= LRawLen do
-  begin
-    LLineEnd := LLineStart;
-    while (LLineEnd <= LRawLen) and
-          (not ((FRaw[LLineEnd] = #13) and
-                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
-      Inc(LLineEnd);
-
-    LColon := LLineStart;
-    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
-      Inc(LColon);
-    if LColon >= LLineEnd then
-      Break;
-
+  while NextRawHeader(LLineStart, LSpan) do
     Inc(Result);
-
-    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
-      LLineStart := LLineEnd + 2
-    else
-      Break;
-  end;
 end;
 
 procedure TFastLazyHeaders.Set_(const AName, AValue: string);
