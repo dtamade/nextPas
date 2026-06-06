@@ -145,6 +145,15 @@ it matches public `TQuatf.Rotate` semantics, but local x86_64/Linux benchmark ev
 both candidate seams out of the public path because the scalar implementations remain faster. Public
 docs, examples, facade tests, and downstream consumers must not import `math.impl.*` units.
 
+Run the internal seam correctness smoke on the current host with:
+
+```sh
+make -C core core-math-impl-simd-local-smoke
+```
+
+It wraps `make -C core/tests/nextpas.core.math/test_impl_simd clean test` through a stable
+owner-level `core/Makefile` entrypoint.
+
 Run the local trig link smoke on the current host with:
 
 ```sh

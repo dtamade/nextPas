@@ -271,6 +271,18 @@ Run the focused math gate after changing public API, behavior, tests, or docs:
 make -C core/tests/nextpas.core.math clean test
 ```
 
+Run the internal seam correctness smoke on the current host with:
+
+```sh
+make -C core core-math-impl-simd-local-smoke
+```
+
+It wraps the targeted implementation-only correctness gate:
+
+```sh
+make -C core/tests/nextpas.core.math/test_impl_simd clean test
+```
+
 For landing review, also run:
 
 ```sh

@@ -341,6 +341,10 @@ Status:
   candidate `TMat4f * TVec4f` and `TQuatf.Rotate` helpers for evidence-only measurement.
 - `test_impl_simd` locks the helper behavior and heaptrc-clean execution, including the requirement
   that `SimdQuatfRotate` matches public `TQuatf.Rotate` semantics for non-unit quaternions.
+- `core/Makefile` now exposes `core-math-impl-simd-local-smoke`, reachable as
+  `make -C core core-math-impl-simd-local-smoke`. It reruns
+  `make -C tests/nextpas.core.math/test_impl_simd clean test` through a stable owner-level
+  targeted proof entrypoint for the internal seam correctness contract.
 - `test_api_surface` now requires the internal seam file and declarations, rejects backend-private
   SIMD dependencies, and allows only implementation-specific tests to import `math.impl.*`.
 - `bench_simd_seam` now provides a repeatable local Linux benchmark harness for the internal seam:
