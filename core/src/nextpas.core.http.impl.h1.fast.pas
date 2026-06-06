@@ -51,6 +51,7 @@ type
     FHeaders: IHttpHeaders;
     procedure EnsureMaterialized;
     function FindRawFirstValue(const AName: string; out AValue: string): Boolean;
+    function CountRawHeaders: Int32;
   public
     constructor Create(const ABuf: PAnsiChar; const ALen: SizeUInt);
     procedure Set_(const AName, AValue: string);
@@ -217,6 +218,38 @@ begin
   end;
 end;
 
+function TFastLazyHeaders.CountRawHeaders: Int32;
+var
+  LLineStart, LLineEnd: SizeInt;
+  LColon: SizeInt;
+  LRawLen: SizeInt;
+begin
+  Result := 0;
+  LRawLen := Length(FRaw);
+  LLineStart := 1;
+  while LLineStart <= LRawLen do
+  begin
+    LLineEnd := LLineStart;
+    while (LLineEnd <= LRawLen) and
+          (not ((FRaw[LLineEnd] = #13) and
+                (LLineEnd < LRawLen) and (FRaw[LLineEnd + 1] = #10))) do
+      Inc(LLineEnd);
+
+    LColon := LLineStart;
+    while (LColon < LLineEnd) and (FRaw[LColon] <> ':') do
+      Inc(LColon);
+    if LColon >= LLineEnd then
+      Break;
+
+    Inc(Result);
+
+    if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
+      LLineStart := LLineEnd + 2
+    else
+      Break;
+  end;
+end;
+
 procedure TFastLazyHeaders.Set_(const AName, AValue: string);
 begin
   EnsureMaterialized;
@@ -266,8 +299,9 @@ end;
 
 function TFastLazyHeaders.Count: Int32;
 begin
-  EnsureMaterialized;
-  Result := FHeaders.Count;
+  if FHeaders <> nil then
+    Exit(FHeaders.Count);
+  Result := CountRawHeaders;
 end;
 
 procedure TFastLazyHeaders.ForEach(const ACallback: THeaderIterator);

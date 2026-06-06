@@ -915,6 +915,7 @@ var
   LMaterializeBody: string;
   LGetBody: string;
   LHasBody: string;
+  LCountBody: string;
 begin
   LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
   LSource := LoadTextFile(PathJoin(LRootDir, H1FastUnitPath));
@@ -930,9 +931,15 @@ begin
     'function TFastLazyHeaders.Has(const AName: string): Boolean;',
     'procedure TFastLazyHeaders.Del',
     'TFastLazyHeaders.Has body');
+  LCountBody := ExtractSourceBlock(LSource,
+    'function TFastLazyHeaders.Count: Int32;',
+    'procedure TFastLazyHeaders.ForEach',
+    'TFastLazyHeaders.Count body');
 
   CheckContains(LSource, 'function TFastLazyHeaders.FindRawFirstValue',
     'TFastLazyHeaders raw first-value lookup helper');
+  CheckContains(LSource, 'function TFastLazyHeaders.CountRawHeaders: Int32',
+    'TFastLazyHeaders raw count helper');
   CheckContains(LMaterializeBody, 'AddParsedSpans(',
     'TFastLazyHeaders.EnsureMaterialized should use parser-trusted span insertion');
   CheckNotContains(LMaterializeBody, 'FHeaders.Add(',
@@ -945,6 +952,10 @@ begin
     'TFastLazyHeaders.Has should use raw first-value lookup');
   CheckNotContains(LHasBody, 'EnsureMaterialized;',
     'TFastLazyHeaders.Has should not materialize the full header block');
+  CheckContains(LCountBody, 'CountRawHeaders;',
+    'TFastLazyHeaders.Count should use raw count lookup');
+  CheckNotContains(LCountBody, 'EnsureMaterialized;',
+    'TFastLazyHeaders.Count should not materialize the full header block');
 end;
 
 procedure TestH1WriterCompactHeaderBlockSourceContract;
