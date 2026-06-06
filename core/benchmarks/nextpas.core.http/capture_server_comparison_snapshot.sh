@@ -100,6 +100,12 @@ esac
 
 OUTPUT_DIR="$(dirname "${OUTPUT_PATH}")"
 RAW_OUTPUT="${OUTPUT_PATH}.raw"
+
+cleanup() {
+  rm -f "${RAW_OUTPUT}"
+}
+trap cleanup EXIT
+
 mkdir -p "${OUTPUT_DIR}"
 
 RUNNER_ARGS=(--requests "${REQUESTS}" --threads "${THREADS}")

@@ -1,5 +1,24 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 snapshot raw cleanup slice
+
+### Goal
+
+收紧 benchmark snapshot helper 的 artifact hygiene：`capture_server_comparison_snapshot.sh`
+会用 `${output}.raw` 暂存 runner 输出并嵌入 Markdown snapshot，但成功后不应把该
+raw 临时文件留在 build tree。durable evidence 应是 `.md` snapshot；`.raw`
+只是实现细节。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 的 snapshot small smoke 先证明
+  `${snapshot}.raw` 在成功生成 snapshot 后仍残留。
+- [x] GREEN：snapshot helper 为 raw temp file 加 `EXIT` cleanup trap。
+- [x] 保持本 slice 边界：不改变 runner row/schema、不改变 Markdown snapshot
+  environment/raw-output 内容、不修改 comparator 或 HTTP runtime。
+- [x] 更新 HTTP benchmark docs/support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 http response body release helper slice
 
 ### Goal

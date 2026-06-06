@@ -63,6 +63,10 @@ benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \
   --output build/projects/nextpas.core.http/server_comparison/snapshot.md
 ```
 
+The snapshot helper embeds the raw runner output into the Markdown file and
+then removes the intermediate `${output}.raw` file. Treat the `.md` snapshot as
+the durable artifact; the adjacent `.raw` file is only a temporary capture path.
+
 This comparator is a benchmark-truth seam, not a final Rust ecosystem ranking:
 it covers a minimal Hyper HTTP/1.1 server on Tokio with the same raw keep-alive
 client workload shape as the std-only comparator.

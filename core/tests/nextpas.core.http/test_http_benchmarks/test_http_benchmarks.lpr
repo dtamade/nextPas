@@ -1351,6 +1351,7 @@ var
   LRootDir: string;
   LRunnerPath: string;
   LSnapshotPath: string;
+  LRawPath: string;
   LSnapshot: string;
   LExitCode: Integer;
   LOutput: string;
@@ -1360,7 +1361,9 @@ begin
   Check(FileExists(LRunnerPath), 'server comparison snapshot runner exists');
   LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
     'server_comparison_snapshot_smoke.md');
+  LRawPath := LSnapshotPath + '.raw';
   DeleteFile(LSnapshotPath);
+  DeleteFile(LRawPath);
 
   RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
     '--output', LSnapshotPath], LRootDir, LExitCode, LOutput);
@@ -1368,6 +1371,8 @@ begin
     'server comparison snapshot exit code: ' + LOutput);
 
   Check(FileExists(LSnapshotPath), 'server comparison snapshot exists');
+  Check(not FileExists(LRawPath),
+    'server comparison snapshot raw temp file should be removed');
   LSnapshot := LoadTextFile(LSnapshotPath);
   CheckContains(LSnapshot, '# nextpas.core.http Server Benchmark Snapshot',
     'snapshot title');

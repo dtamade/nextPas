@@ -1,5 +1,33 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 snapshot raw cleanup slice
+
+- 本轮收紧 benchmark snapshot helper 的 artifact hygiene：
+  `capture_server_comparison_snapshot.sh` 会把 runner 输出先写入
+  `${OUTPUT_PATH}.raw`，再嵌入 Markdown snapshot。旧实现成功后保留该 raw 文件，
+  容易让 build tree 留下不该提交的临时 benchmark 输出。
+- 选择依据：
+  - benchmark truth 不只依赖 row schema，也依赖 evidence capture 的可维护性和
+    artifact boundary。
+  - `.md` snapshot 已包含 raw comparison output；相邻 `.raw` 文件只是实现临时文件，
+    不应成为第二个需要人工清理的产物。
+  - 这是 harness cleanup，不触碰 HTTP runtime、public API、comparator workload 或
+    Hyper/Tokio dependency set。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot small smoke`
+    - failure: `server comparison snapshot raw temp file should be removed`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - snapshot helper 现在用 `trap cleanup EXIT` 删除 `${OUTPUT_PATH}.raw`。
+  - Markdown snapshot 仍保留 `## Raw Comparison Output`，runner stdout/report schema
+    不变。
+- 复盘结论：
+  snapshot helper 现在只留下 durable Markdown snapshot，不再在成功路径残留临时 raw
+  capture。后续 benchmark evidence slice 应继续优先收紧可复现参数和 artifact
+  boundary，而不是追加裸数字。
+
 ## 2026-06-06 http response body release helper slice
 
 - 本轮转向 client response body ownership：

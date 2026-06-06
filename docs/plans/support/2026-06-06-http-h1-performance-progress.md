@@ -1,5 +1,39 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 snapshot raw cleanup slice
+
+- **Status:** completed.
+- Objective:
+  - keep server comparison snapshot output as a single durable Markdown artifact
+  - remove the intermediate `${output}.raw` file after embedding it into the
+    snapshot
+  - avoid leaving temporary benchmark output in the build tree after successful
+    snapshot capture
+- Scope and safety:
+  - touched the snapshot helper script, benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, comparator schemas, generated outputs, or
+    source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot small smoke`
+    - `server comparison snapshot raw temp file should be removed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `capture_server_comparison_snapshot.sh` now installs an `EXIT` cleanup trap
+    after computing `RAW_OUTPUT`
+  - the trap removes `${OUTPUT_PATH}.raw` after success or early exit
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - snapshot helper no longer leaves adjacent raw temporary files behind
+  - this does not claim new performance data, new Rust comparator coverage,
+    public API changes, or HTTP runtime changes
+
 ## Session: 2026-06-06 http response body release helper slice
 
 - **Status:** completed.
