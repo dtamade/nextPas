@@ -160,6 +160,17 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("mat-determinant", r"\bfunction\s+Determinant\s*:\s*(?:Single|Double)\b"),
         ("mat-transpose", r"\bfunction\s+Transpose\s*:\s*TMat[34][fd]\b"),
     ),
+    "src/nextpas.core.math.quat.pas": (
+        ("quat-type-f", r"\bTQuatf\s*=\s*packed\s+record\b"),
+        ("quat-type-d", r"\bTQuatd\s*=\s*packed\s+record\b"),
+        ("quat-identity", r"\bclass\s+function\s+Identity\s*:\s*TQuat[fd]\b"),
+        ("quat-from-axis-angle", r"\bclass\s+function\s+FromAxisAngle\s*\("),
+        ("quat-to-axis-angle", r"\bprocedure\s+ToAxisAngle\s*\("),
+        ("quat-to-rotation-matrix", r"\bfunction\s+ToRotationMatrix\s*:\s*TMat3[fd]\b"),
+        ("quat-rotate", r"\bfunction\s+Rotate\s*\("),
+        ("quat-slerp", r"\bclass\s+function\s+Slerp\s*\("),
+        ("quat-nlerp", r"\bclass\s+function\s+Nlerp\s*\("),
+    ),
 }
 
 

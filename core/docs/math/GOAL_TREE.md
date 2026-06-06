@@ -16,7 +16,7 @@
 
 ## Current Position
 
-This branch is at **M3 Vec/Mat value-type slice**.
+This branch is at **M3 Vec/Mat/Quat value-type slice**.
 
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
 - Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
@@ -32,6 +32,10 @@ This branch is at **M3 Vec/Mat value-type slice**.
   `Zero`, `Identity`, arithmetic operators, scalar multiply, matrix-vector multiply, matrix-matrix
   multiply, `Transpose`, `Determinant`, `TryInverse`, `Inverse`, exact/epsilon `Equals`, and
   singular inverse behavior.
+- `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
+- Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
+  identity, `Conjugate`, `FromAxisAngle`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, quaternion
+  multiply, `Slerp`, `Nlerp`, `Equals`, and double-precision variants.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -41,7 +45,7 @@ nextpas.core.math final migration
 ├── M0: Control, design, and audit                       [complete]
 ├── M1: RED behavior tests for final API                 [partial: scalar/trig/facade/surface]
 ├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
-├── M3: Vec/Mat/Quat value types                         [partial: Vec/Mat complete, Quat pending]
+├── M3: Vec/Mat/Quat value types                         [complete]
 ├── M4: Transform builders                               [not started]
 ├── M5: Easing                                           [not started]
 ├── M6: Random + noise                                   [not started]
@@ -97,8 +101,8 @@ Completion gate:
 
 Status:
 
-- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, and mat tests.
-- Quat/Transform/Easing/Random/Noise tests remain pending.
+- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, mat, and quat tests.
+- Transform/Easing/Random/Noise tests remain pending.
 
 ## M2: Scalar + Trig Foundation
 
@@ -157,7 +161,11 @@ Status:
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
   until a later architecture slice has evidence that it improves maintainability without widening the
   public API boundary.
-- Quaternions remain pending.
+- `nextpas.core.math.quat` now provides `TQuatf` and `TQuatd`.
+- Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
+  identity, `Conjugate`, axis-angle roundtrip, rotation matrix conversion, vector rotation, quaternion
+  multiply composition, `Slerp`, `Nlerp`, `Equals`, and double-precision variants.
+- M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders
 

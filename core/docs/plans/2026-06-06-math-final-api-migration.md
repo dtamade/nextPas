@@ -169,10 +169,10 @@ Files:
 
 Steps:
 
-- [ ] Implement `TQuatf` and `TQuatd`.
-- [ ] Implement identity, normalize, conjugate, multiply.
-- [ ] Implement axis-angle, rotation matrix, rotate, slerp, nlerp.
-- [ ] Run `test_quat`, `test_mat`, and `test_api_surface`.
+- [x] Implement `TQuatf` and `TQuatd`.
+- [x] Implement identity, normalize, conjugate, multiply.
+- [x] Implement axis-angle, rotation matrix, rotate, slerp, nlerp.
+- [x] Run `test_quat`, `test_mat`, and `test_api_surface`.
 - [ ] Commit with `feat(math): add final quaternion types`.
 
 Expected result:

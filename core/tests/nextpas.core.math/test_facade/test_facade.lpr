@@ -54,6 +54,7 @@ procedure TestFacadeVectorSurface;
 var
   V: TVec3f;
   M: TMat4f;
+  Q: TQuatf;
 begin
   V := TVec3f.Create(1.0, 2.0, 3.0);
   CheckNear(14.0, V.LengthSqr, 'facade exposes TVec3f');
@@ -61,6 +62,8 @@ begin
     TVec3f.Create(0.0, 1.0, 0.0)).Z, 'facade exposes TVec3f.Cross');
   M := TMat4f.Identity;
   CheckNear(1.0, (M * TVec4f.Create(1.0, 0.0, 0.0, 1.0)).X, 'facade exposes TMat4f');
+  Q := TQuatf.Identity;
+  CheckNear(1.0, Q.W, 'facade exposes TQuatf');
 end;
 
 begin

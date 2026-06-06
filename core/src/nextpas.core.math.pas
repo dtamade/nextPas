@@ -8,7 +8,8 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.math.trig,
   nextpas.core.math.vec,
-  nextpas.core.math.mat;
+  nextpas.core.math.mat,
+  nextpas.core.math.quat;
 
 const
   PI_VALUE: Double = 3.14159265358979323846;
@@ -28,6 +29,8 @@ type
   TMat4f = nextpas.core.math.mat.TMat4f;
   TMat3d = nextpas.core.math.mat.TMat3d;
   TMat4d = nextpas.core.math.mat.TMat4d;
+  TQuatf = nextpas.core.math.quat.TQuatf;
+  TQuatd = nextpas.core.math.quat.TQuatd;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
