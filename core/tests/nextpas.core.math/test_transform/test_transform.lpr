@@ -70,19 +70,6 @@ begin
   Fail(AName + ': expected EArgumentError');
 end;
 
-procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
-begin
-  try
-    AProc;
-  except
-    on E: EArgumentError do
-      Exit;
-    on E: Exception do
-      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
-  end;
-  Fail(AName + ': expected EArgumentError');
-end;
-
 procedure RaiseOrthoZeroWidth;
 begin
   Ortho(Single(1.0), Single(1.0), Single(-1.0), Single(1.0), Single(0.0), Single(10.0));

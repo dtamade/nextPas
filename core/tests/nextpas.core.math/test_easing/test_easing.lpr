@@ -52,7 +52,7 @@ begin
   CheckNear(AMidpoint, AFunc(0.5), AName + ' midpoint');
 end;
 
-procedure ExpectArgumentErrorMessage(const AName, AExpectedMessage: string;
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string;
   const AFunc: TEasingFunction; const AValue: Double);
 begin
   try
@@ -231,10 +231,10 @@ var
 begin
   for I := Low(Cases) to High(Cases) do
   begin
-    ExpectArgumentErrorMessage(Cases[I].Name + ' rejects NaN input', Cases[I].ExpectedMessage,
+    ExpectArgumentErrorMessage(Cases[I].ExpectedMessage, Cases[I].Name + ' rejects NaN input',
       Cases[I].Func, DoubleNaN);
-    ExpectArgumentErrorMessage(Cases[I].Name + ' rejects infinite input',
-      Cases[I].ExpectedMessage, Cases[I].Func, DoubleInfinity);
+    ExpectArgumentErrorMessage(Cases[I].ExpectedMessage, Cases[I].Name + ' rejects infinite input',
+      Cases[I].Func, DoubleInfinity);
   end;
 end;
 

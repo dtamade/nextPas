@@ -70,19 +70,6 @@ begin
   Check(LDelta <= AEpsilon, AMessage);
 end;
 
-procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
-begin
-  try
-    AProc;
-  except
-    on E: EArgumentError do
-      Exit;
-    on E: Exception do
-      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
-  end;
-  Fail(AName + ': expected EArgumentError');
-end;
-
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try

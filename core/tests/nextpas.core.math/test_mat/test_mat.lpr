@@ -95,20 +95,7 @@ begin
   Check(TMat4d.Equals(TMat4d.Zero, AActual, 0.0), AMessage);
 end;
 
-procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
-begin
-  try
-    AProc;
-  except
-    on E: EArgumentError do
-      Exit;
-    on E: Exception do
-      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
-  end;
-  Fail(AName + ': expected EArgumentError');
-end;
-
-procedure ExpectArgumentErrorMessage(const AName, AExpectedMessage: string; const AProc: TTestProc);
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try
     AProc;
@@ -273,14 +260,14 @@ begin
   CheckMat3fIdentity(M * Inverse, 'TMat3f inverse product');
   Check(not Singular.TryInverse(Inverse), 'TMat3f TryInverse rejects singular matrix');
   CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat3f singular inverse', 'TMat3f.Inverse: matrix is singular',
+  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular', 'TMat3f singular inverse',
     @RaiseTMat3fSingularInverse);
   CheckNear(0.0000001, NearSingular.Determinant, 0.000000000001,
     'TMat3f determinant preserves small nonzero pivot');
   Check(not NearSingular.TryInverse(Inverse), 'TMat3f TryInverse rejects near-singular matrix');
   CheckMat3fZero(Inverse, 'TMat3f TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat3f near-singular inverse',
-    'TMat3f.Inverse: matrix is singular', @RaiseTMat3fNearSingularInverse);
+  ExpectArgumentErrorMessage('TMat3f.Inverse: matrix is singular',
+    'TMat3f near-singular inverse', @RaiseTMat3fNearSingularInverse);
   Check(TMat3f.Equals(M, M + TMat3f.Zero, Single(0.0)), 'TMat3f equals exact');
   Check(TMat3f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat3f equals epsilon');
   Check(TMat3f.Equals(M, Single(1.0) * M, Single(0.000001)), 'TMat3f scalar multiply left');
@@ -333,12 +320,12 @@ begin
   CheckMat4fIdentity(M * Inverse, 'TMat4f inverse product');
   Check(not TMat4f.Zero.TryInverse(Inverse), 'TMat4f TryInverse rejects singular matrix');
   CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat4f singular inverse', 'TMat4f.Inverse: matrix is singular',
+  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular', 'TMat4f singular inverse',
     @RaiseTMat4fSingularInverse);
   Check(not NearSingular.TryInverse(Inverse), 'TMat4f TryInverse rejects near-singular matrix');
   CheckMat4fZero(Inverse, 'TMat4f TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat4f near-singular inverse',
-    'TMat4f.Inverse: matrix is singular', @RaiseTMat4fNearSingularInverse);
+  ExpectArgumentErrorMessage('TMat4f.Inverse: matrix is singular',
+    'TMat4f near-singular inverse', @RaiseTMat4fNearSingularInverse);
   Check(TMat4f.Equals(M, M + TMat4f.Zero, Single(0.0)), 'TMat4f equals exact');
   Check(TMat4f.Equals(M, M * Single(1.0), Single(0.000001)), 'TMat4f scalar multiply right');
   Check(TMat4f.Equals(M, Single(1.0) * M, Single(0.000001)), 'TMat4f scalar multiply left');
@@ -381,14 +368,14 @@ begin
   CheckMat3dIdentity(M3 * Inverse3, 'TMat3d inverse product');
   Check(not TMat3d.Zero.TryInverse(Inverse3), 'TMat3d TryInverse rejects singular matrix');
   CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat3d singular inverse', 'TMat3d.Inverse: matrix is singular',
+  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular', 'TMat3d singular inverse',
     @RaiseTMat3dSingularInverse);
   CheckNear(0.0000000000001, NearSingular3.Determinant, 0.000000000000000001,
     'TMat3d determinant preserves small nonzero pivot');
   Check(not NearSingular3.TryInverse(Inverse3), 'TMat3d TryInverse rejects near-singular matrix');
   CheckMat3dZero(Inverse3, 'TMat3d TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat3d near-singular inverse',
-    'TMat3d.Inverse: matrix is singular', @RaiseTMat3dNearSingularInverse);
+  ExpectArgumentErrorMessage('TMat3d.Inverse: matrix is singular',
+    'TMat3d near-singular inverse', @RaiseTMat3dNearSingularInverse);
 
   M4 := TMat4d.Create(
     TVec4d.Create(2.0, 0.0, 0.0, 0.0),
@@ -422,12 +409,12 @@ begin
   CheckMat4dIdentity(M4 * Inverse4, 'TMat4d inverse product');
   Check(not TMat4d.Zero.TryInverse(Inverse4), 'TMat4d TryInverse rejects singular matrix');
   CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes out result for singular matrix');
-  ExpectArgumentErrorMessage('TMat4d singular inverse', 'TMat4d.Inverse: matrix is singular',
+  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular', 'TMat4d singular inverse',
     @RaiseTMat4dSingularInverse);
   Check(not NearSingular4.TryInverse(Inverse4), 'TMat4d TryInverse rejects near-singular matrix');
   CheckMat4dZero(Inverse4, 'TMat4d TryInverse zeroes near-singular result');
-  ExpectArgumentErrorMessage('TMat4d near-singular inverse',
-    'TMat4d.Inverse: matrix is singular', @RaiseTMat4dNearSingularInverse);
+  ExpectArgumentErrorMessage('TMat4d.Inverse: matrix is singular',
+    'TMat4d near-singular inverse', @RaiseTMat4dNearSingularInverse);
 end;
 
 begin
