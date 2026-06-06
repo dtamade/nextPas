@@ -1771,6 +1771,8 @@ begin
     'H1 parser benchmark cached request metadata breakdown row');
   CheckContains(LOutput, 'adapter cost: fast headers get host only',
     'H1 parser benchmark fast lazy header Get row');
+  CheckContains(LOutput, 'adapter cost: fast headers count all',
+    'H1 parser benchmark fast lazy header Count row');
   CheckContains(LOutput, 'adapter cost: fast headers foreach all',
     'H1 parser benchmark fast lazy header ForEach row');
 end;

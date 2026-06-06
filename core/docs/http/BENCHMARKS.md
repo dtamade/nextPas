@@ -291,12 +291,16 @@ make -C benchmarks/nextpas.core.http/bench_h1parser clean run
 
 | row | iterations | ns/op | ops/s |
 | --- | ---: | ---: | ---: |
-| adapter cost: fast headers get host only | 100000 | 1466.4 | 681947 |
-| adapter cost: fast headers foreach all | 100000 | 4678.8 | 213732 |
+| adapter cost: fast headers get host only | 100000 | 1455.9 | 686839 |
+| adapter cost: fast headers count all | 100000 | 4617.2 | 216583 |
+| adapter cost: fast headers foreach all | 100000 | 4695.8 | 212959 |
 
 This is a nextPas internal materialization-cost split, not a cross-language
 server ranking. It shows the single-header lookup path no longer pays the same
-full materialization cost as whole-header iteration.
+full materialization cost as whole-header access. The `count all` row isolates
+the cost of forcing the lazy header block into the concrete `THttpHeaders` store
+without also paying per-header callback dispatch, while `foreach all` measures
+the same materialization plus iteration callback overhead.
 
 ## Run the Router Dispatch Benchmark
 

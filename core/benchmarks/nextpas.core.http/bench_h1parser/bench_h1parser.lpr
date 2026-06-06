@@ -827,6 +827,22 @@ begin
   GSink := GSink + LScore;
 end;
 
+procedure BenchFastHeadersCountAll(aIters: Int64);
+var
+  LIt: Int64;
+  LResult: TFastParseResult;
+  LScore: SizeUInt;
+begin
+  LScore := 0;
+  for LIt := 1 to aIters do
+  begin
+    LResult := FastParseRequest(PAnsiChar(REQ_10HEADERS), Length(REQ_10HEADERS));
+    if LResult.Success then
+      LScore := LScore + SizeUInt(LResult.Headers.Count);
+  end;
+  GSink := GSink + LScore;
+end;
+
 procedure BenchFastHeadersForEachAll(aIters: Int64);
 var
   LIt: Int64;
@@ -978,6 +994,8 @@ begin
     @BenchAdapterRequestMetadataCachedExpectCl);
   B.Run('adapter cost: fast headers get host only',
     @BenchFastHeadersGetHostOnly);
+  B.Run('adapter cost: fast headers count all',
+    @BenchFastHeadersCountAll);
   B.Run('adapter cost: fast headers foreach all',
     @BenchFastHeadersForEachAll);
   B.Run('adapter no-url: metadata 3 headers',
