@@ -1,5 +1,41 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http download body release slice
+
+- **Status:** completed.
+- Objective:
+  - make `HttpGetToWriter` release the response body after successful copy
+  - make `HttpGetToWriter` release the response body when destination copy fails
+  - make `HttpGetToWriter` release discarded non-2xx response bodies before
+    raising `EHttpError`
+  - apply the same response release discipline to `HttpGetToFile`
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    transport/parser/runtime, benchmark assets, generated outputs, or build
+    artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `55 total, 52 passed, 3 failed`
+    - failed at `HttpGetToWriter closes body after successful copy`
+    - failed at `HttpGetToWriter closes body when copy fails`
+    - failed at `HttpGetToWriter closes non-2xx body before raising`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - renamed the internal redirect release helper to `ReleaseResponseBody`
+  - kept close-capable body close priority and plain-reader drain fallback
+  - wrapped download helper success and error paths in response-release
+    `finally` blocks
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `55 total, 55 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - download helpers now own and release response bodies they consume or discard
+  - this does not claim response streaming API, charset decoding, body helper
+    close semantics, redirect policy changes, or H1 transport changes
+
 ## Session: 2026-06-06 http shortcut body bytes-buffer slice
 
 - **Status:** completed.

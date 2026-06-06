@@ -154,6 +154,27 @@ type
     property BodyDrainedBeforeFollowup: Boolean read FBodyDrainedBeforeFollowup;
   end;
 
+  TDownloadClient = class(TInterfacedObject, IHttpClient)
+  private
+    FResponse: IHttpResponse;
+    FSeenUrl: string;
+  public
+    constructor Create(const AResponse: IHttpResponse);
+    function Do_(const AReq: IHttpRequest): IHttpResponse;
+    function Get(const AUrl: string): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Delete(const AUrl: string): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Head(const AUrl: string): IHttpResponse;
+    property SeenUrl: string read FSeenUrl;
+  end;
+
+  TZeroProgressWriter = class(TInterfacedObject, IWriter)
+  public
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+  end;
+
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
   LCtx: PServerCtx;
@@ -475,6 +496,53 @@ begin
     Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'))
   else
     Result := NewResponse(THttpStatus(599), LHeaders, StringBodyReader('leaked!'));
+end;
+
+constructor TDownloadClient.Create(const AResponse: IHttpResponse);
+begin
+  inherited Create;
+  FResponse := AResponse;
+end;
+
+function TDownloadClient.Do_(const AReq: IHttpRequest): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Get(const AUrl: string): IHttpResponse;
+begin
+  FSeenUrl := AUrl;
+  Result := FResponse;
+end;
+
+function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Delete(const AUrl: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Head(const AUrl: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TZeroProgressWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+begin
+  Result := 0;
 end;
 
 function DownloadTempRoot: string;
@@ -1078,6 +1146,86 @@ begin
   finally
     StopServer(LServer, LHandle);
   end;
+end;
+
+procedure TestHttpGetToWriterClosesBodyAfterSuccessfulCopy;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectTrackedBody;
+  LBodyRef: IReadCloser;
+  LClient: IHttpClient;
+  LBuffer: IStream;
+  LCount: Int64;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-length', '9');
+  LBody := TRedirectTrackedBody.Create('toolchain');
+  LBodyRef := LBody as IReadCloser;
+  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
+    LBodyRef as IReader)) as IHttpClient;
+  LBuffer := CreateBytesStreamFrom(nil);
+
+  LCount := HttpGetToWriter(LClient, 'http://example.test/tool',
+    LBuffer as IWriter);
+
+  CheckEqual(Int64(9), LCount, 'download helper copied byte count');
+  Check(LBody.Closed, 'download helper closes response body after copy');
+end;
+
+procedure TestHttpGetToWriterClosesBodyWhenCopyFails;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectTrackedBody;
+  LBodyRef: IReadCloser;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-length', '9');
+  LBody := TRedirectTrackedBody.Create('toolchain');
+  LBodyRef := LBody as IReadCloser;
+  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_OK, LHeaders,
+    LBodyRef as IReader)) as IHttpClient;
+
+  LRaised := False;
+  try
+    HttpGetToWriter(LClient, 'http://example.test/tool',
+      TZeroProgressWriter.Create as IWriter);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'download helper propagates writer failure');
+  Check(LBody.Closed, 'download helper closes response body when copy fails');
+end;
+
+procedure TestHttpGetToWriterClosesNon2xxBodyBeforeRaising;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectTrackedBody;
+  LBodyRef: IReadCloser;
+  LClient: IHttpClient;
+  LRaised: Boolean;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-length', '9');
+  LBody := TRedirectTrackedBody.Create('not-found');
+  LBodyRef := LBody as IReadCloser;
+  LClient := TDownloadClient.Create(NewResponse(HTTP_STATUS_NOT_FOUND, LHeaders,
+    LBodyRef as IReader)) as IHttpClient;
+
+  LRaised := False;
+  try
+    HttpGetToWriter(LClient, 'http://example.test/missing',
+      CreateBytesStreamFrom(nil) as IWriter);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'download helper rejects non-2xx response');
+  Check(LBody.Closed, 'download helper closes non-2xx response body before raising');
 end;
 
 procedure TestHttpReadResponseBodyStringReadsLiveResponse;
@@ -2261,6 +2409,12 @@ begin
   T.Run('Client reads close-delimited response body', @TestClientReadsCloseDelimitedResponse);
   T.Run('Client rejects truncated content-length response', @TestClientRejectsTruncatedContentLengthResponse);
   T.Run('HttpGetToWriter copies response body', @TestHttpGetToWriterCopiesResponseBody);
+  T.Run('HttpGetToWriter closes body after successful copy',
+    @TestHttpGetToWriterClosesBodyAfterSuccessfulCopy);
+  T.Run('HttpGetToWriter closes body when copy fails',
+    @TestHttpGetToWriterClosesBodyWhenCopyFails);
+  T.Run('HttpGetToWriter closes non-2xx body before raising',
+    @TestHttpGetToWriterClosesNon2xxBodyBeforeRaising);
   T.Run('HttpReadResponseBodyString reads live response body',
     @TestHttpReadResponseBodyStringReadsLiveResponse);
   T.Run('HttpReadResponseBodyString nil body returns empty',

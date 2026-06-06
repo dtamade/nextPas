@@ -258,7 +258,7 @@ begin
   ABodyStream.Position := AStartPosition;
 end;
 
-procedure ReleaseRedirectResponseBody(const AResp: IHttpResponse);
+procedure ReleaseResponseBody(const AResp: IHttpResponse);
 var
   LBody: IReader;
   LReadCloser: IReadCloser;
@@ -448,18 +448,18 @@ begin
   begin
     if ARedirectsLeft <= 0 then
     begin
-      ReleaseRedirectResponseBody(LResp);
+      ReleaseResponseBody(LResp);
       raise EHttpError.Create('too many redirects');
     end;
 
     LLocation := LResp.Headers.Get('location');
     if LLocation = '' then
     begin
-      ReleaseRedirectResponseBody(LResp);
+      ReleaseResponseBody(LResp);
       raise EHttpError.Create('redirect with no Location header');
     end;
 
-    ReleaseRedirectResponseBody(LResp);
+    ReleaseResponseBody(LResp);
     LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
 
     // Go-style 301/302/303 redirects replay as GET and drop the body.
@@ -585,10 +585,14 @@ begin
     raise EArgumentError.Create('HTTP download destination writer is nil');
 
   LResp := AClient.Get(AUrl);
-  CheckDownloadResponse(LResp, AUrl);
-  if LResp.Body = nil then
-    Exit(0);
-  Result := nextpas.core.io.Copy(ADest, LResp.Body);
+  try
+    CheckDownloadResponse(LResp, AUrl);
+    if LResp.Body = nil then
+      Exit(0);
+    Result := nextpas.core.io.Copy(ADest, LResp.Body);
+  finally
+    ReleaseResponseBody(LResp);
+  end;
 end;
 
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
@@ -604,39 +608,43 @@ begin
     raise EArgumentError.Create('HTTP download destination path is empty');
 
   LResp := AClient.Get(AUrl);
-  CheckDownloadResponse(LResp, AUrl);
-
-  LDestDir := nextpas.core.fs.PathDir(ADestPath);
-  if not nextpas.core.fs.MkdirAll(LDestDir) then
-    raise EHttpError.Create('HTTP download could not create directory: ' + LDestDir);
-
-  LTempFile := nextpas.core.fs.TempFile(LDestDir,
-    '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
-  LTempPath := LTempFile.Name;
-  LCommitted := False;
   try
-    if LResp.Body <> nil then
-      Result := nextpas.core.io.Copy(LTempFile as IWriter, LResp.Body)
-    else
-      Result := 0;
-    LTempFile.Sync;
-    LTempFile.Close;
-    LTempFile := nil;
+    CheckDownloadResponse(LResp, AUrl);
 
-    if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
-      raise EHttpError.Create('HTTP download could not publish file: ' + ADestPath);
-    LCommitted := True;
-  finally
-    if LTempFile <> nil then
-    begin
-      try
-        LTempFile.Close;
-      except
-        on E: Exception do ;
+    LDestDir := nextpas.core.fs.PathDir(ADestPath);
+    if not nextpas.core.fs.MkdirAll(LDestDir) then
+      raise EHttpError.Create('HTTP download could not create directory: ' + LDestDir);
+
+    LTempFile := nextpas.core.fs.TempFile(LDestDir,
+      '.' + nextpas.core.fs.PathBase(ADestPath) + '.tmp.');
+    LTempPath := LTempFile.Name;
+    LCommitted := False;
+    try
+      if LResp.Body <> nil then
+        Result := nextpas.core.io.Copy(LTempFile as IWriter, LResp.Body)
+      else
+        Result := 0;
+      LTempFile.Sync;
+      LTempFile.Close;
+      LTempFile := nil;
+
+      if not nextpas.core.fs.Rename(LTempPath, ADestPath) then
+        raise EHttpError.Create('HTTP download could not publish file: ' + ADestPath);
+      LCommitted := True;
+    finally
+      if LTempFile <> nil then
+      begin
+        try
+          LTempFile.Close;
+        except
+          on E: Exception do ;
+        end;
       end;
+      if (not LCommitted) and (LTempPath <> '') then
+        nextpas.core.fs.Remove(LTempPath);
     end;
-    if (not LCommitted) and (LTempPath <> '') then
-      nextpas.core.fs.Remove(LTempPath);
+  finally
+    ReleaseResponseBody(LResp);
   end;
 end;
 

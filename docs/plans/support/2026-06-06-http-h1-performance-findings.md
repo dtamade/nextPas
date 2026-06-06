@@ -1,5 +1,33 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http download body release slice
+
+- 本轮收紧 client download helper 的 response body ownership：
+  `HttpGetToWriter` / `HttpGetToFile` 旧实现会消费成功响应体、丢弃非 2xx 响应体，
+  但没有在 helper 边界释放 close-capable body。调用方拿不到 response，因此也无法
+  自己 close。
+- 选择依据：
+  - Go/Rust 生态里代替调用方消费 response body 的 helper 应同时负责释放资源。
+  - 这属于 client helper 错误/资源语义，不是新增 builder、transport vtable 或 H1
+    runtime 改造。
+  - redirect 路径已经有 close/drain release 语义，可以复用同一内部 contract。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `55 total, 52 passed, 3 failed`
+    - failed at `HttpGetToWriter closes body after successful copy`
+    - failed at `HttpGetToWriter closes body when copy fails`
+    - failed at `HttpGetToWriter closes non-2xx body before raising`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `ReleaseRedirectResponseBody` 泛化为 `ReleaseResponseBody`。
+  - redirect 路径继续复用同一 release helper。
+  - `HttpGetToWriter` / `HttpGetToFile` 现在在 successful copy、copy failure、
+    non-2xx rejection、temp-file failure 等路径通过 `finally` 释放 response body。
+- 复盘结论：
+  download helper 现在承担它隐藏掉的 response body ownership。后续如果继续
+  response body 方向，应先设计 streaming/read helper 是否也应 close，而不是把 close
+  行为隐式扩散到所有 reader helper。
+
 ## 2026-06-06 http shortcut body bytes-buffer slice
 
 - 本轮收紧 client shortcut body materialization：

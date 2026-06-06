@@ -123,8 +123,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   close-capable readers are closed, and plain `IReader` bodies are drained to
   EOF. This keeps injected/future streaming transports from leaking an
   abandoned redirect body into connection reuse.
-- `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`
-- `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
+- `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`; consumed or discarded response bodies are released before the helper returns or raises
+- `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, cleans partial temp files on failure, and releases the response body before returning or raising
 - `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EArgumentError`
 - `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`

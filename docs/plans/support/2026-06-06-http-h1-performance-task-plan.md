@@ -1,5 +1,24 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http download body release slice
+
+### Goal
+
+收紧 `HttpGetToWriter` / `HttpGetToFile` response body ownership：这些 helper
+代表调用方消费或丢弃 GET response body，因此在 successful copy、copy failure、
+non-2xx rejection 等路径都应释放 close-capable body，并对 plain `IReader` 保留
+drain fallback。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected client + close-capable response body
+  证明 `HttpGetToWriter` 在 successful copy / writer failure / non-2xx rejection
+  三条路径上当前没有关闭 body。
+- [x] GREEN：将 redirect body release helper 泛化为 response body release helper，
+  并在 download helper 中用 `finally` 收口成功和异常路径。
+- [x] 保持本 slice 边界：不新增 public API、不改变 response body read helpers、
+  不新增 streaming response API、不修改 H1 transport。
+
 ## Active Session: 2026-06-06 http shortcut body bytes-buffer slice
 
 ### Goal
