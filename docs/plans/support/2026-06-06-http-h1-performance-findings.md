@@ -1,5 +1,38 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http relative redirect query slice
+
+- 本轮继续收紧 client redirect transport seam：
+  live H1 request-target 会在 server 侧重新解析，所以 `/new?from=redirect`
+  端到端已能工作；但显式注入 `IHttpTransport` 时，redirect follow-up request
+  对象本身仍把 query 留在 `Url.Path`，`RawQuery` 为空。
+- 选择依据：
+  - Go/Rust HTTP client 都把 redirect 解析视为 client 层职责；transport 应收到
+    已拆分的 URL parts，而不是被迫自己从 path 字符串里二次解析 query。
+  - 这直接影响 future H2/H3 transport seam：H2/H3 不会发送 HTTP/1.1
+    request-target 文本再让 server 解析，follow-up request object 必须是权威。
+  - 这是内部 redirect resolver 收敛，不改 public API、vtable、timeout 或
+    body replay ownership。
+- 实现决策：
+  - `ResolveRedirectUrl(BaseUrl, Location)` 作为 client 内部 helper。
+  - absolute `http://` / `https://` 继续走 `TUrl.Parse`。
+  - relative Location 走 `TUrl.ParseRequestTarget` 拆分 path/query/fragment，再合并
+    scheme/host/port 等 base URL authority。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28 total, 27 passed, 1 failed`
+    - failed at `Client redirect transport sees parsed relative query`
+    - failure: `redirect follow-up request path excludes query: expected "/new", got "/new?from=redirect"`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28/28 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 redirect follow-up request object contract，不是再铺一个
+  H1 live malformed case。后续可继续审计 query-only / network-path Location 或
+  per-request redirect policy，但应单独 RED，不和本 slice 混合。
+
 ## 2026-06-06 http see-other redirect slice
 
 - 本轮继续收紧 client redirect/error semantics：

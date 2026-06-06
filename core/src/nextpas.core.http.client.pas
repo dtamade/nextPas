@@ -83,6 +83,21 @@ begin
       IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl);
 end;
 
+function ResolveRedirectUrl(const ABaseUrl: TUrl; const ALocation: string): TUrl;
+var
+  LTarget: TUrl;
+begin
+  if (Pos('http://', ALocation) = 1) or (Pos('https://', ALocation) = 1) then
+    Exit(TUrl.Parse(ALocation));
+
+  Result := ABaseUrl;
+  LTarget := TUrl.ParseRequestTarget(ALocation);
+  if LTarget.Path <> '' then
+    Result.Path := LTarget.Path;
+  Result.RawQuery := LTarget.RawQuery;
+  Result.Fragment := LTarget.Fragment;
+end;
+
 { THttpClient }
 
 constructor THttpClient.Create(const AOptions: THttpClientOptions);
@@ -126,16 +141,7 @@ begin
     if LLocation = '' then
       raise EHttpError.Create('redirect with no Location header');
 
-    // Parse new URL (handle relative and absolute)
-    if (Pos('http://', LLocation) = 1) or (Pos('https://', LLocation) = 1) then
-      LNewUrl := TUrl.Parse(LLocation)
-    else
-    begin
-      // Relative redirect
-      LNewUrl := LUrl;
-      LNewUrl.Path := LLocation;
-      LNewUrl.RawQuery := '';
-    end;
+    LNewUrl := ResolveRedirectUrl(LUrl, LLocation);
 
     // Go-style 301/302/303 redirects replay as GET and drop the body.
     if (LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or

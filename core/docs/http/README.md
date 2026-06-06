@@ -88,6 +88,8 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`; `Do_(nil)` raises `EArgumentError`
 - Client redirects follow `301` / `302` / `303` by replaying as `GET` with no body;
   `307` / `308` preserve the original method and body reader.
+- Relative redirect `Location` values are parsed into path, query, and fragment
+  before the follow-up request is passed to the transport.
 - `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
 - `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`

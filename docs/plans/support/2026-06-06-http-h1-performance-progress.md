@@ -1,5 +1,42 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http relative redirect query slice
+
+- **Status:** completed.
+- Objective:
+  - keep relative redirect query strings out of follow-up request `Url.Path`
+  - make injected transports see parsed `Path` / `RawQuery` after redirect
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - initial live H1 redirect-with-query test passed because the wire
+    request-target was reparsed server-side
+  - the transport-visible RED used an injected `IHttpTransport`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28 total, 27 passed, 1 failed`
+    - failed at `Client redirect transport sees parsed relative query`
+    - expected follow-up `Path` `/new`, got `/new?from=redirect`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `ResolveRedirectUrl`
+  - absolute redirect URLs still use `TUrl.Parse`
+  - relative redirect Locations use `TUrl.ParseRequestTarget` before being
+    merged with the base URL authority
+  - follow-up request objects now expose parsed `Path`, `RawQuery`, and
+    `QueryParam` values to injected transports
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `28/28 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - H1 live redirects and transport-injected redirects now agree on relative
+    Location query parsing
+  - this does not claim network-path redirects, full RFC URL resolution, or
+    per-request redirect policy controls
+
 ## Session: 2026-06-06 http see-other redirect slice
 
 - **Status:** completed.

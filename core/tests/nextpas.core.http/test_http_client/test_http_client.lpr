@@ -43,6 +43,20 @@ type
     Port: UInt16;
   end;
 
+  TRedirectCaptureTransport = class(TInterfacedObject, IHttpTransport)
+  private
+    FCalls: Int32;
+    FSeenPath: string;
+    FSeenRawQuery: string;
+    FSeenQueryParam: string;
+  public
+    function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    property Calls: Int32 read FCalls;
+    property SeenPath: string read FSeenPath;
+    property SeenRawQuery: string read FSeenRawQuery;
+    property SeenQueryParam: string read FSeenQueryParam;
+  end;
+
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
 var
   LCtx: PServerCtx;
@@ -167,6 +181,26 @@ begin
   if Length(AValue) > 0 then
     Move(AValue[1], LData[0], Length(AValue));
   Result := CreateBytesStreamFrom(LData) as IReader;
+end;
+
+function TRedirectCaptureTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+var
+  LHeaders: IHttpHeaders;
+begin
+  Inc(FCalls);
+  LHeaders := NewHttpHeaders;
+  if FCalls = 1 then
+  begin
+    LHeaders.Set_('location', '/new?from=redirect');
+    LHeaders.Set_('content-length', '0');
+    Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, nil));
+  end;
+
+  FSeenPath := AReq.Path;
+  FSeenRawQuery := AReq.RawQuery;
+  FSeenQueryParam := AReq.QueryParam('from');
+  LHeaders.Set_('content-length', '7');
+  Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'));
 end;
 
 function DownloadTempRoot: string;
@@ -955,6 +989,77 @@ begin
   end;
 end;
 
+procedure TestClientPreservesRelativeRedirectQuery;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotPath: string;
+  LGotRawQuery: string;
+  LGotQueryParam: string;
+begin
+  LGotPath := 'not-hit';
+  LGotRawQuery := 'not-hit';
+  LGotQueryParam := 'not-hit';
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/old', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  begin
+    AW.GetHeaders.Set_('location', '/new?from=redirect');
+    AW.GetHeaders.Set_('content-length', '0');
+    AW.WriteHeader(HTTP_STATUS_FOUND);
+  end);
+  LRouter.Get('/new', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotPath := AReq.Path;
+    LGotRawQuery := AReq.RawQuery;
+    LGotQueryParam := AReq.QueryParam('from');
+    LB := 'arrived';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/old');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'relative redirect with query reaches final route');
+    CheckEqual('/new', LGotPath, 'relative redirect preserves path without query');
+    CheckEqual('from=redirect', LGotRawQuery, 'relative redirect preserves raw query');
+    CheckEqual('redirect', LGotQueryParam, 'relative redirect query param is visible');
+    CheckEqual('arrived', ReadBodyStr(LResp), 'relative redirect final body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientRedirectTransportSeesParsedRelativeQuery;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/old');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls), 'redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode), 'redirect transport final status');
+  CheckEqual('/new', LTransportObj.SeenPath,
+    'redirect follow-up request path excludes query');
+  CheckEqual('from=redirect', LTransportObj.SeenRawQuery,
+    'redirect follow-up request raw query is parsed');
+  CheckEqual('redirect', LTransportObj.SeenQueryParam,
+    'redirect follow-up request query param is visible');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'redirect transport final body');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1209,6 +1314,9 @@ begin
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);
   T.Run('Client follows redirect (301 -> 200)', @TestClientFollowsRedirect);
   T.Run('Client follows 303 redirect as GET', @TestClientFollowsSeeOtherAsGet);
+  T.Run('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
+  T.Run('Client redirect transport sees parsed relative query',
+    @TestClientRedirectTransportSeesParsedRelativeQuery);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);

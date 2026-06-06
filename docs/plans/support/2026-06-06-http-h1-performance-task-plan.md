@@ -1,5 +1,30 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http relative redirect query slice
+
+### Goal
+
+收紧 client redirect transport seam：relative `Location` 里带 query 时，
+follow-up request 对象必须把 path/query 拆开，而不是把整串留在 `Url.Path`。
+这保证显式注入的 `IHttpTransport` 以及 future H2/H3 transport 都能看到正确
+`Path` / `RawQuery` contract。
+
+### Checklist
+
+- [x] 审计发现 live H1 wire path 已能正确到达 `/new?from=redirect`，因为 server
+  会重新解析 request-target；但 injected transport seam 仍能暴露 follow-up
+  request 对象的 URL parts 缺口。
+- [x] RED：`test_http_client` 新增 fake transport，第一轮返回
+  `302 Location: /new?from=redirect`，第二轮检查 request `Path` / `RawQuery`；
+  当前失败为 `expected "/new", got "/new?from=redirect"`。
+- [x] GREEN：在 `nextpas.core.http.client` 增加内部 `ResolveRedirectUrl`，absolute
+  URL 继续走 `TUrl.Parse`，relative Location 走 `TUrl.ParseRequestTarget` 后
+  合并到 base URL。
+- [x] 保留 live H1 proof：relative redirect with query 能命中最终 route，并且
+  handler 可见 `Path`、`RawQuery` 与 `QueryParam`。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http see-other redirect slice
 
 ### Goal
