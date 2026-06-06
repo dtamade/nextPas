@@ -360,7 +360,8 @@ Coverage requirements:
 - Mat3/Mat4: `Identity`, `Zero`, `Transpose`, `Determinant`, `Inverse`, `TryInverse`, matrix multiply, matrix-vector multiply.
 - Quat: `Identity`, `Normalize`, `Conjugate`, `FromAxisAngle`, `ToRotationMatrix`, `Rotate`, `Slerp`, `Nlerp`.
 - Transform: `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, `Camera2D`.
-- Easing: every public easing function.
+- Easing: every public easing function, including finite out-of-range behavior and NaN/Inf
+  rejection.
 - Random/Noise: deterministic seed, range boundaries, invalid input behavior.
 - Trig: Linux/macOS/Windows link safety and no `external 'm'` surface dependency.
 

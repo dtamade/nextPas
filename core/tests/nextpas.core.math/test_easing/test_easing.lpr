@@ -19,17 +19,29 @@ type
     Func: TEasingFunction;
   end;
 
+  TOutOfRangeCase = record
+    Name: string;
+    Func: TEasingFunction;
+    BelowZeroExpected: Double;
+    AboveOneExpected: Double;
+  end;
+
 var
   T: TTestRunner;
 
-procedure CheckNear(const AExpected, AActual: Double; const AMessage: string);
+procedure CheckNearEpsilon(const AExpected, AActual, AEpsilon: Double; const AMessage: string);
 var
   Delta: Double;
 begin
   Delta := AExpected - AActual;
   if Delta < 0.0 then
     Delta := -Delta;
-  Check(Delta <= 0.0000001, AMessage);
+  Check(Delta <= AEpsilon, AMessage);
+end;
+
+procedure CheckNear(const AExpected, AActual: Double; const AMessage: string);
+begin
+  CheckNearEpsilon(AExpected, AActual, 0.0000001, AMessage);
 end;
 
 procedure CheckEase(const AName: string; const AFunc: TEasingFunction; const AMidpoint: Double);
@@ -109,6 +121,66 @@ begin
   CheckNear(0.8828125, EaseInOutBounce(0.75), 'EaseInOutBounce second half');
 end;
 
+procedure TestFiniteOutOfRangeInputsExtrapolate;
+const
+  Cases: array[0..21] of TOutOfRangeCase = (
+    (Name: 'EaseLinear'; Func: @EaseLinear;
+      BelowZeroExpected: -0.5; AboveOneExpected: 1.5),
+    (Name: 'EaseInQuad'; Func: @EaseInQuad;
+      BelowZeroExpected: 0.25; AboveOneExpected: 2.25),
+    (Name: 'EaseOutQuad'; Func: @EaseOutQuad;
+      BelowZeroExpected: -1.25; AboveOneExpected: 0.75),
+    (Name: 'EaseInOutQuad'; Func: @EaseInOutQuad;
+      BelowZeroExpected: 0.5; AboveOneExpected: 0.5),
+    (Name: 'EaseInCubic'; Func: @EaseInCubic;
+      BelowZeroExpected: -0.125; AboveOneExpected: 3.375),
+    (Name: 'EaseOutCubic'; Func: @EaseOutCubic;
+      BelowZeroExpected: -2.375; AboveOneExpected: 1.125),
+    (Name: 'EaseInOutCubic'; Func: @EaseInOutCubic;
+      BelowZeroExpected: -0.5; AboveOneExpected: 1.5),
+    (Name: 'EaseInQuart'; Func: @EaseInQuart;
+      BelowZeroExpected: 0.0625; AboveOneExpected: 5.0625),
+    (Name: 'EaseOutQuart'; Func: @EaseOutQuart;
+      BelowZeroExpected: -4.0625; AboveOneExpected: 0.9375),
+    (Name: 'EaseInOutQuart'; Func: @EaseInOutQuart;
+      BelowZeroExpected: 0.5; AboveOneExpected: 0.5),
+    (Name: 'EaseInExpo'; Func: @EaseInExpo;
+      BelowZeroExpected: 0.000030517578125; AboveOneExpected: 32.0),
+    (Name: 'EaseOutExpo'; Func: @EaseOutExpo;
+      BelowZeroExpected: -31.0; AboveOneExpected: 0.999969482421875),
+    (Name: 'EaseInOutExpo'; Func: @EaseInOutExpo;
+      BelowZeroExpected: 0.000000476837158203125; AboveOneExpected: 0.9999995231628418),
+    (Name: 'EaseInElastic'; Func: @EaseInElastic;
+      BelowZeroExpected: 0.000030517578125; AboveOneExpected: -16.0),
+    (Name: 'EaseOutElastic'; Func: @EaseOutElastic;
+      BelowZeroExpected: 17.0; AboveOneExpected: 0.999969482421875),
+    (Name: 'EaseInOutElastic'; Func: @EaseInOutElastic;
+      BelowZeroExpected: -0.00000044808035867656106; AboveOneExpected: 1.0000004480803587),
+    (Name: 'EaseInBack'; Func: @EaseInBack;
+      BelowZeroExpected: -0.7630925; AboveOneExpected: 5.2892775),
+    (Name: 'EaseOutBack'; Func: @EaseOutBack;
+      BelowZeroExpected: -4.2892775; AboveOneExpected: 1.7630925),
+    (Name: 'EaseInOutBack'; Func: @EaseInOutBack;
+      BelowZeroExpected: -3.0949095; AboveOneExpected: 4.0949095),
+    (Name: 'EaseInBounce'; Func: @EaseInBounce;
+      BelowZeroExpected: -2.234375; AboveOneExpected: -0.890625),
+    (Name: 'EaseOutBounce'; Func: @EaseOutBounce;
+      BelowZeroExpected: 1.890625; AboveOneExpected: 3.234375),
+    (Name: 'EaseInOutBounce'; Func: @EaseInOutBounce;
+      BelowZeroExpected: -4.125; AboveOneExpected: 5.125)
+  );
+var
+  I: Integer;
+begin
+  for I := Low(Cases) to High(Cases) do
+  begin
+    CheckNearEpsilon(Cases[I].BelowZeroExpected, Cases[I].Func(-0.5), 0.000001,
+      Cases[I].Name + ' extrapolates finite input below zero');
+    CheckNearEpsilon(Cases[I].AboveOneExpected, Cases[I].Func(1.5), 0.000001,
+      Cases[I].Name + ' extrapolates finite input above one');
+  end;
+end;
+
 procedure TestNonFiniteInputsFailFast;
 const
   Cases: array[0..20] of TEasingCase = (
@@ -182,6 +254,7 @@ begin
   T := TTestRunner.Create('nextpas.core.math.easing');
   T.Run('polynomial and expo easing', @TestPolynomialAndExpoEasing);
   T.Run('elastic back and bounce easing', @TestElasticBackAndBounceEasing);
+  T.Run('finite out-of-range inputs extrapolate', @TestFiniteOutOfRangeInputsExtrapolate);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
   T.Summary;
 end.

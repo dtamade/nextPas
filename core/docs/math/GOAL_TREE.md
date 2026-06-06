@@ -49,8 +49,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, composition order, and
   direct `Double`-path parity for projection/view/model/camera builders.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
-- Easing tests cover every public easing function with endpoints and representative midpoint/branch
-  points, and the surface checker rejects direct FPC `Math` usage in the easing unit.
+- Easing tests cover every public easing function with endpoints, representative midpoint/branch
+  points, finite out-of-range extrapolation, and NaN/Inf rejection, and the surface checker rejects
+  direct FPC `Math` usage in the easing unit.
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
@@ -245,6 +246,8 @@ Goal: migrate easing functions into `nextpas.core.math.easing`.
 Completion gate:
 
 - Every public easing function has endpoint and representative midpoint tests.
+- Finite inputs outside `[0, 1]` have explicit documented/tested behavior instead of implicit
+  clamping assumptions.
 - Functions use `nextpas.core.math.trig`/scalar helpers, not FPC `Math`.
 
 Status:
@@ -252,8 +255,8 @@ Status:
 - Complete for the current final public easing scope.
 - `nextpas.core.math.easing` provides `TEasingFunction`, `EaseLinear`, Quad/Cubic/Quart,
   Expo, Elastic, Back, and Bounce variants.
-- `test_easing` locks endpoints, midpoints, and `InOut*` branch points; `test_facade`
-  proves root facade exposure.
+- `test_easing` locks endpoints, midpoints, representative `InOut*` branch points, finite
+  out-of-range extrapolation, and NaN/Inf rejection; `test_facade` proves root facade exposure.
 - `test_api_surface` rejects a direct `uses Math` dependency in `nextpas.core.math.easing.pas`.
 
 ## M6: Random + Noise

@@ -72,6 +72,8 @@ Reversed non-zero `Ortho` bounds are valid and flip the corresponding axis; `Cam
 reversed Y range to keep screen-space `+Y down`.
 `LookAt` uses the direction of `up`, not its magnitude, so positive rescaling of the same valid
 `up` vector does not change the resulting view matrix.
+Easing functions reject `NaN` and infinite input, and finite inputs outside `[0, 1]` extrapolate
+through the same formulas rather than clamping to the unit interval.
 
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero

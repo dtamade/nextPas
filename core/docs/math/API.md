@@ -194,7 +194,9 @@ Public easing functions:
 - Back: `EaseInBack`, `EaseOutBack`, `EaseInOutBack`
 - Bounce: `EaseInBounce`, `EaseOutBounce`, `EaseInOutBounce`
 
-All easing functions reject NaN and infinite inputs with `EArgumentError`.
+All easing functions reject NaN and infinite inputs with `EArgumentError`. Finite inputs outside
+`[0, 1]` are not clamped; they extrapolate according to the same closed-form or piecewise formulas
+used in-range.
 
 ## Random And Noise
 
