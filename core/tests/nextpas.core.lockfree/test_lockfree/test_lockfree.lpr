@@ -789,6 +789,9 @@ begin
     'lockfree README must point to the Pascal benchmark source');
   CheckContains(LDocsReadme, 'compare_rust/main.rs',
     'lockfree README must point to the external Rust comparison source');
+  CheckContains(LDocsReadme,
+    'Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.',
+    'lockfree README must describe the manual Rust comparison source approximations');
   CheckContains(LDocsReadme, 'platform/compiler flags/input size/baseline',
     'lockfree README must name the benchmark evidence envelope');
   CheckNotContains(LDocsReadme, '当前模块还缺少正式 benchmark harness',
@@ -893,8 +896,28 @@ begin
     'lockfree benchmark must print the input-size evidence field');
   CheckContains(LBenchSource, 'WriteLn(''Baselines: nextpas.core.thread.channel mutex channel; compare_rust/main.rs external Rust source (not auto-run)'')',
     'lockfree benchmark must print the baseline evidence field');
+  CheckContains(LRustCompareSource, 'use std::sync::mpsc',
+    'Rust comparison source must use Rust std channel APIs');
+  CheckContains(LRustCompareSource, 'use std::sync::{Arc, Condvar, Mutex};',
+    'Rust comparison source must use Rust std synchronization primitives for bounded MPMC approximation');
   CheckContains(LRustCompareSource, 'const N: usize = 1_000_000;',
     'Rust comparison source must use the same nominal operation count');
+  CheckContains(LRustCompareSource, 'const CAPACITY: usize = 1024;',
+    'Rust comparison source must use the same nominal bounded-capacity context');
+  CheckContains(LRustCompareSource, 'println!("Platform: {} {}", std::env::consts::OS, std::env::consts::ARCH);',
+    'Rust comparison source must print the platform evidence field');
+  CheckContains(LRustCompareSource, 'println!("Compiler flags: rustc -C opt-level=3 (recommended manual command)");',
+    'Rust comparison source must print the compiler-flags evidence field');
+  CheckContains(LRustCompareSource, 'println!("Input size: OPS=1000000; capacity=1024; scenarios=std::sync::mpsc 1P+1C, Mutex+Condvar VecDeque 2P+2C, Mutex<VecDeque> 1T");',
+    'Rust comparison source must print the input-size evidence field');
+  CheckContains(LRustCompareSource, 'println!("Baselines: Rust std synchronization primitives only; manual comparison source, not auto-run by Pascal benchmark");',
+    'Rust comparison source must print the baseline evidence field');
+  CheckContains(LRustCompareSource, 'std::sync::mpsc 1P+1C',
+    'Rust comparison source must mirror the SPSC scenario name');
+  CheckContains(LRustCompareSource, 'Mutex+Condvar VecDeque 2P+2C',
+    'Rust comparison source must mirror the bounded MPMC approximation scenario name');
+  CheckContains(LRustCompareSource, 'Mutex<VecDeque> 1T',
+    'Rust comparison source must mirror the single-thread std baseline scenario name');
 end;
 
 begin

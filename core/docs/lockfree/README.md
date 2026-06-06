@@ -151,9 +151,8 @@ benchmark 使用 `OPS=1000000`、容量 `1024`，Makefile 默认编译参数是 
 运行输出会先打印 `platform/compiler flags/input size/baseline` envelope，再打印各场景的
 ms、M ops/sec 和 ns/op。
 
-`compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。当前 Pascal benchmark
-不会自动编译或运行 Rust 程序；除非同一机器、同一轮次实际运行并记录 Rust 输出，否则不能把它当作
-Rust runtime baseline 证据。
+`compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline. 当前 Pascal benchmark 不会自动编译或运行 Rust 程序；
+除非同一机器、同一轮次实际运行并记录 Rust 输出，否则不能把它当作 Rust runtime baseline 证据。
 
 性能结论必须带上平台、编译参数、输入规模、benchmark 输出和 baseline 说明。没有这些证据时，不应写入
 性能胜过 Rust/Go/C++ 标准库的结论。
