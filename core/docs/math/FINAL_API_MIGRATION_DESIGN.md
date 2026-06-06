@@ -10,8 +10,8 @@ types, transform builders, easing functions, explicit-state random/noise generat
 internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-internal-seam evidence
 without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
 candidate seam result and a negative `TQuatf.Rotate` candidate seam result on the local
-x86_64/Linux gate. M8 documentation and local module gates are in progress. The branch also has a
-facade-only public example under
+x86_64/Linux gate. M8 documentation and a named local module gate are now in place via
+`make -C core core-math-smoke`. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
 completion still requires macOS/Windows trig host link smokes, final API/docs review,
 profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.

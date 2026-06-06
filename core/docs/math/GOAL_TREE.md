@@ -388,7 +388,7 @@ Status:
   and noise.
 - Local Linux closeout gates have been rerun for the current docs/API surface: `make -C
 core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
-  `MATH_API_SURFACE OK: scanned=42 findings=0`, allocation-bearing math tests report heaptrc
+  `MATH_API_SURFACE OK: scanned=43 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
 - Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
@@ -396,10 +396,11 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `test_api_surface` now extracts root facade constants, public type aliases, and public function
   names, then fails if any name is missing from `docs/math/API.md`. The rule was mutation-tested by
   removing `Fmod` from a temporary API doc copy and observing
-  `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=42 findings=0`.
-- `core/examples/nextpas.core.math/math_overview` now exercises the facade as a public consumer
-  example, passes `make -C core/examples/nextpas.core.math/math_overview clean run`, and is protected
-  by `test_api_surface`.
+  `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=43 findings=0`.
+- `core/Makefile` now exposes `core-math-smoke`, reachable as `make -C core core-math-smoke`. It
+  reruns `test_api_surface` and then runs `make -C core/examples/nextpas.core.math/math_overview clean run`,
+  so the facade-only public consumer example is both directly runnable and reachable through a stable
+  named module entrypoint.
 - M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are
   finished.
 

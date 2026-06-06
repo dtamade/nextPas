@@ -22,6 +22,13 @@ For a grouped public API reference, see [nextpas.core.math API](API.md).
 composition, projection/view builders, easing, deterministic random state, and noise:
 
 ```sh
+make -C core core-math-smoke
+```
+
+The named `core-math-smoke` gate in `core/Makefile` reruns `test_api_surface` and then builds/runs
+the overview example. Use the example target directly when you only want the facade-consumer proof:
+
+```sh
 make -C core/examples/nextpas.core.math/math_overview clean run
 ```
 

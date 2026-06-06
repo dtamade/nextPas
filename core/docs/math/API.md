@@ -30,14 +30,21 @@ code, examples, public docs, or public tests.
 
 ## Public Example
 
-Run the facade-only overview example when you want a quick compile smoke for common consumer usage:
+Run the named module smoke when you want the public math gate:
+
+```sh
+make -C core core-math-smoke
+```
+
+Run the facade-only overview example directly when you only want the consumer compile/run proof:
 
 ```sh
 make -C core/examples/nextpas.core.math/math_overview clean run
 ```
 
-The example imports only `nextpas.core.math` and covers vectors, matrices, quaternions, transforms,
-easing, deterministic random state, and noise.
+`core-math-smoke` in `core/Makefile` first reruns `test_api_surface`, then builds and runs the
+facade-only overview example. The example imports only `nextpas.core.math` and covers vectors,
+matrices, quaternions, transforms, easing, deterministic random state, and noise.
 
 ## Scalar And Trig
 

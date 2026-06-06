@@ -36,8 +36,21 @@ PUBLIC_DOC_PATHS = (
     "docs/math/README.md",
     "docs/math/API.md",
 )
+ROOT_MAKEFILE_PATH = "Makefile"
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
+ROOT_MATH_SMOKE_TARGET = "core-math-smoke"
+ROOT_MATH_SMOKE_COMMAND = f"make -C core {ROOT_MATH_SMOKE_TARGET}"
+ROOT_MATH_SMOKE_RECIPE_STEPS: tuple[tuple[str, str], ...] = (
+    (
+        "api-surface",
+        "$(MAKE) -C tests/nextpas.core.math/test_api_surface clean test",
+    ),
+    (
+        "math-overview",
+        "$(MAKE) -C examples/nextpas.core.math/math_overview clean run",
+    ),
+)
 BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 INTERNAL_IMPL_TEST_PREFIXES = (
@@ -797,6 +810,72 @@ def scan_root_facade_api_doc_coverage(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_root_math_smoke_makefile(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    path = root / ROOT_MAKEFILE_PATH
+    if not path.is_file():
+        add_finding(
+            findings,
+            "missing-root-math-smoke-makefile",
+            root,
+            path,
+            1,
+            ROOT_MAKEFILE_PATH,
+        )
+        return findings
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    target_re = re.compile(
+        rf"(?ms)^{re.escape(ROOT_MATH_SMOKE_TARGET)}\s*:(?P<head>[^\n]*)\n"
+        r"(?P<body>(?:\t.*\n)+)"
+    )
+    match = target_re.search(text)
+    if match is None:
+        add_finding(
+            findings,
+            "missing-root-math-smoke-target",
+            root,
+            path,
+            1,
+            f"missing {ROOT_MATH_SMOKE_TARGET} target",
+        )
+        return findings
+
+    recipe = match.group("body")
+    for step_name, required_line in ROOT_MATH_SMOKE_RECIPE_STEPS:
+        if required_line in recipe:
+            continue
+        add_finding(
+            findings,
+            "missing-root-math-smoke-step:" + step_name,
+            root,
+            path,
+            line_no_at(text, match.start("body")),
+            required_line,
+        )
+    return findings
+
+
+def scan_root_math_smoke_doc_coverage(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for rel in PUBLIC_DOC_PATHS:
+        path = root / rel
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if ROOT_MATH_SMOKE_COMMAND in text:
+            continue
+        add_finding(
+            findings,
+            "missing-root-math-smoke-doc-command",
+            root,
+            path,
+            1,
+            "missing documented command " + ROOT_MATH_SMOKE_COMMAND,
+        )
+    return findings
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -804,6 +883,8 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_missing_required_public_files(root))
     findings.extend(scan_missing_required_benchmark_markers(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
+    findings.extend(scan_root_math_smoke_makefile(root))
+    findings.extend(scan_root_math_smoke_doc_coverage(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"
@@ -825,6 +906,9 @@ def build_report(root: Path) -> Report:
         + discover_files(root, MATH_EXAMPLE_GLOBS)
         + discover_public_docs(root)
     )
+    root_makefile = root / ROOT_MAKEFILE_PATH
+    if root_makefile.is_file():
+        scanned.add(root_makefile)
     benchmark_files = discover_files(root, MATH_BENCHMARK_GLOBS)
 
     for path in source_files:

@@ -16,7 +16,7 @@ BENCHMARKS_DIR := benchmarks
 # FPC unit/output paths
 FPC_FLAGS += -FU$(LIB_DIR) -FE$(BIN_DIR) -Fu$(SRC_DIR) -Fi$(SRC_DIR)
 
-.PHONY: build test examples benchmarks clean dirs
+.PHONY: build test examples benchmarks core-math-smoke clean dirs
 
 # Default target
 build: dirs
@@ -44,6 +44,10 @@ test: dirs
 		echo ""; \
 	done
 	@echo "All tests passed."
+
+core-math-smoke: dirs
+	$(MAKE) -C tests/nextpas.core.math/test_api_surface clean test
+	$(MAKE) -C examples/nextpas.core.math/math_overview clean run
 
 # Compile all examples
 examples: dirs
