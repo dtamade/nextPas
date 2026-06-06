@@ -157,6 +157,15 @@ pending before the module can claim final cross-platform trig completion.
 
 ## Verification
 
+Run the named full local math suite with:
+
+```sh
+make -C core core-math-full-local-smoke
+```
+
+It wraps `make -C core/tests/nextpas.core.math clean test` so the current owner-level full math
+focused gate is reachable through a stable `core/Makefile` entrypoint.
+
 Run the focused math gate:
 
 ```sh

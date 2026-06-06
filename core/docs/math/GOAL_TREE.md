@@ -392,6 +392,9 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `MATH_API_SURFACE OK: scanned=43 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
+- `core/Makefile` now exposes `core-math-full-local-smoke`, reachable as
+  `make -C core core-math-full-local-smoke`. It reruns `make -C tests/nextpas.core.math clean test`
+  through a stable owner-level named entrypoint instead of relying on an ad-hoc direct command.
 - Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
   declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules.
   `test_api_surface` now extracts root facade constants, public type aliases, and public function

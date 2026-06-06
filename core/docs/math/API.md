@@ -253,6 +253,18 @@ stable lattice-equivalent semantics rather than raising an owner-level error.
 
 ## Verification
 
+Run the named full local math suite with:
+
+```sh
+make -C core core-math-full-local-smoke
+```
+
+It wraps the current owner-level full math focused gate:
+
+```sh
+make -C core/tests/nextpas.core.math clean test
+```
+
 Run the focused math gate after changing public API, behavior, tests, or docs:
 
 ```sh

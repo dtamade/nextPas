@@ -280,6 +280,9 @@ The first implementation batch should not attempt to be the fastest trig library
 
 Cross-platform link proof has two layers:
 
+- Full local math proof: `make -C core core-math-full-local-smoke` wraps
+  `make -C tests/nextpas.core.math clean test` through a stable owner-level `core/Makefile`
+  target, so the current full math focused suite does not depend on an ad-hoc direct command.
 - Static surface proof: `test_api_surface` rejects `external 'm'` under `src/nextpas.core.math*.pas` and rejects behavior tests that import `nextpas.core.math.ffi`.
 - Host link proof: `make -C core core-math-trig-local-smoke` bundles `test_trig` and
   `test_facade` as the current-host local link proof. macOS/Windows host gates must still rerun

@@ -68,6 +68,16 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
     RequiredCoreMakeTarget(
+        target="core-math-full-local-smoke",
+        command="make -C core core-math-full-local-smoke",
+        recipe_steps=(
+            (
+                "full-math-suite",
+                "$(MAKE) -C tests/nextpas.core.math clean test",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-trig-local-smoke",
         command="make -C core core-math-trig-local-smoke",
         recipe_steps=(
