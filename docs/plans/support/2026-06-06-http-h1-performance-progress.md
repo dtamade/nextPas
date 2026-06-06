@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http client options validation slice
+
+- **Status:** completed.
+- Objective:
+  - reject negative `THttpClientOptions.Timeout`
+  - reject negative `THttpClientOptions.MaxRedirects`
+  - keep `0` as the existing explicit no-timeout / zero-redirect budget value
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `47 total, 46 passed, 1 failed`
+    - failed at `Client options reject negative values`
+    - failure: `negative client timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `ValidateClientOptions`
+  - `THttpClient.Create(Options)` and `THttpClient.Create(Transport, Options)`
+    now share construction-time validation
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `47 total, 47 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - invalid client options now fail before default transport resolution or
+    injected transport use
+  - this does not claim per-request timeout policy, redirect callback, or H1
+    transport behavior changes
+
 ## Session: 2026-06-06 http request constructor nil headers slice
 
 - **Status:** completed.

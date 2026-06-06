@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http client options validation slice
+
+### Goal
+
+收紧 `THttpClientOptions` construction contract：negative `Timeout` 与
+negative `MaxRedirects` 都应在 `NewHttpClient([Transport], Options)` 边界抛
+`EArgumentError`。`0` timeout 仍保留为 no deadline，`0` max redirects 仍表示不允许
+任何 follow-up redirect；负数不再默默落到 H1 transport 或 redirect error side effect。
+
+### Checklist
+
+- [x] RED：`test_http_client` 证明 negative timeout 当前没有抛
+  `EArgumentError`。
+- [x] GREEN：新增内部 `ValidateClientOptions`，所有 `THttpClient` constructor
+  路径共享同一校验。
+- [x] 保持本 slice 边界：不新增 per-request policy、不改变 redirect algorithm、
+  不修改 H1 transport。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http request constructor nil headers slice
 
 ### Goal

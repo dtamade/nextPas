@@ -1,5 +1,34 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http client options validation slice
+
+- 本轮继续收紧 client options error semantics：
+  `THttpClientOptions.Timeout` 与 `MaxRedirects` 是 public client policy carrier。
+  旧实现把 negative timeout 传给 H1 transport，实际表现为“不设置 deadline”；
+  negative max redirects 则只会在遇到 redirect 时通过 `too many redirects` side
+  effect 暴露，而不是在 construction 边界失败。
+- 选择依据：
+  - Go/Rust 侧 timeout/redirect limit 都是明确策略输入，负数不是稳定语义。
+  - construction-time `EArgumentError` 比把非法选项延迟到 transport 或 redirect
+    runtime 更可测试，也更接近 nextPas 公共 API 的防御性输入校验风格。
+  - 本 slice 不新增 per-request timeout、redirect callback、cookie jar 或 transport
+    vtable，只收紧现有 options carrier。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `47 total, 46 passed, 1 failed`
+    - failed at `Client options reject negative values`
+    - failure: `negative client timeout raises EArgumentError`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `ValidateClientOptions`。
+  - `THttpClient.Create(Options)` 与 `THttpClient.Create(Transport, Options)` 共享
+    同一校验路径，因此默认 transport 与 injected transport overload 都会拒绝
+    negative `Timeout` / `MaxRedirects`。
+- 复盘结论：
+  client options 现在有明确 non-negative invariant。后续若继续 client ergonomics，
+  更高价值方向是 per-request policy seam 或 response/body ownership helper，而不是
+  扩大一次性 validation 列表。
+
 ## 2026-06-06 http request constructor nil headers slice
 
 - 本轮继续收紧 message carrier ergonomics：

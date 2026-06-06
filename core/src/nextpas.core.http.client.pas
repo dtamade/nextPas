@@ -84,6 +84,14 @@ begin
       IntToStr(Int64(AResp.StatusCode)) + ': ' + AUrl);
 end;
 
+procedure ValidateClientOptions(const AOptions: THttpClientOptions);
+begin
+  if AOptions.Timeout < 0 then
+    raise EArgumentError.Create('HTTP client timeout must not be negative');
+  if AOptions.MaxRedirects < 0 then
+    raise EArgumentError.Create('HTTP client max redirects must not be negative');
+end;
+
 function MergeRedirectPath(const ABasePath, ATargetPath: string): string;
 var
   LI: SizeInt;
@@ -396,6 +404,7 @@ constructor THttpClient.Create(const ATransport: IHttpTransport;
   const AOptions: THttpClientOptions);
 begin
   inherited Create;
+  ValidateClientOptions(AOptions);
   FOptions := AOptions;
   if ATransport <> nil then
     FTransport := ATransport

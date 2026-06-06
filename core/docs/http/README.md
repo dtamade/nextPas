@@ -124,6 +124,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
 - `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、`MaxHeaderSize`、`MaxBodySize`
 - `NewHttpClient([Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpTransport`
+- `THttpClientOptions` — 公开 carrier，当前包括 `Timeout`、`MaxRedirects` 和
+  `FollowRedirects`; negative `Timeout` or `MaxRedirects` raises
+  `EArgumentError` at client construction time.
 
 ### WebSocket
 

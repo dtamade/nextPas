@@ -1846,6 +1846,36 @@ begin
     'temporary redirect rejects before second round trip');
 end;
 
+procedure TestClientOptionsRejectNegativeValues;
+var
+  LOptions: THttpClientOptions;
+  LTransport: IHttpTransport;
+  LCaught: Boolean;
+begin
+  LOptions := THttpClientOptions.Default;
+  LOptions.Timeout := -1;
+  LCaught := False;
+  try
+    NewHttpClient(LOptions);
+  except
+    on E: EArgumentError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'negative client timeout raises EArgumentError');
+
+  LOptions := THttpClientOptions.Default;
+  LOptions.MaxRedirects := -1;
+  LTransport := TNilResponseTransport.Create as IHttpTransport;
+  LCaught := False;
+  try
+    NewHttpClient(LTransport, LOptions);
+  except
+    on E: EArgumentError do
+      LCaught := True;
+  end;
+  Check(LCaught, 'negative client max redirects raises EArgumentError');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -2139,6 +2169,8 @@ begin
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
   T.Run('Client rejects non-replayable body on 307 redirect',
     @TestClientRejectsNonReplayableBodyOnTemporaryRedirect);
+  T.Run('Client options reject negative values',
+    @TestClientOptionsRejectNegativeValues);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
