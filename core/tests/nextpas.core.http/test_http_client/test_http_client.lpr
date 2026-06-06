@@ -263,6 +263,14 @@ begin
   until LN = 0;
 end;
 
+function BytesToTestString(const ABytes: TBytes): string;
+begin
+  Result := '';
+  SetLength(Result, Length(ABytes));
+  if Length(ABytes) > 0 then
+    Move(ABytes[0], Result[1], Length(ABytes));
+end;
+
 function ReadBodyStr(const AResp: IHttpResponse): string;
 begin
   if AResp.Body = nil then
@@ -1059,6 +1067,66 @@ begin
       LRaised := True;
   end;
   Check(LRaised, 'response body helper rejects nil response');
+end;
+
+procedure TestHttpReadResponseBodyBytesReadsLiveResponse;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: TBytes;
+begin
+  LRouter := THttpRouter.Create;
+  LRouter.Get('/body-bytes', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+  var
+    LResponseBody: string;
+  begin
+    LResponseBody := 'bin' + #0 + #255 + 'ary';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LResponseBody))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LResponseBody[1], SizeUInt(Length(LResponseBody)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/body-bytes');
+    LBody := nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
+    CheckEqual('bin' + #0 + #255 + 'ary', BytesToTestString(LBody),
+      'response body bytes helper preserves binary body bytes');
+    CheckEqual('', ReadBodyStr(LResp), 'response body bytes helper consumes the reader');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestHttpReadResponseBodyBytesNilBodyReturnsEmpty;
+var
+  LResp: IHttpResponse;
+  LBody: TBytes;
+begin
+  LResp := NewResponse(HTTP_STATUS_NO_CONTENT, NewHttpHeaders, nil);
+  LBody := nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
+  CheckEqual(Int64(0), Int64(Length(LBody)),
+    'response body bytes helper treats nil body as empty bytes');
+end;
+
+procedure TestHttpReadResponseBodyBytesRejectsNilResponse;
+var
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+begin
+  LResp := nil;
+  LRaised := False;
+  try
+    nextpas.core.http.client.HttpReadResponseBodyBytes(LResp);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'response body bytes helper rejects nil response');
 end;
 
 procedure TestHttpGetToFileWritesFinalPathAtomically;
@@ -2127,6 +2195,12 @@ begin
     @TestHttpReadResponseBodyStringNilBodyReturnsEmpty);
   T.Run('HttpReadResponseBodyString rejects nil response',
     @TestHttpReadResponseBodyStringRejectsNilResponse);
+  T.Run('HttpReadResponseBodyBytes reads live response body',
+    @TestHttpReadResponseBodyBytesReadsLiveResponse);
+  T.Run('HttpReadResponseBodyBytes nil body returns empty',
+    @TestHttpReadResponseBodyBytesNilBodyReturnsEmpty);
+  T.Run('HttpReadResponseBodyBytes rejects nil response',
+    @TestHttpReadResponseBodyBytesRejectsNilResponse);
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);

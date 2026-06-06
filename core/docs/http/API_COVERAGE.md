@@ -47,6 +47,13 @@
     response 抛 `EArgumentError`。`test_http_client` 锁住 live response、消费
     reader、nil body 和 nil response 语义，`test_http_contract` 锁住 facade
     可见性，`http_get_client` example 也已改用该 helper。
+  - 继续补齐：新增 `HttpReadResponseBodyBytes(Resp)` public helper。它直接消费
+    `IHttpResponse.Body` reader 并返回 `TBytes`；nil body 返回空 bytes，nil
+    response 抛 `EArgumentError`。`test_http_client` 锁住 live binary body、
+    reader 消费、nil body 和 nil response 语义，`test_http_contract` 锁住
+    facade 可见性。这个 helper 对齐 Go `io.ReadAll(resp.Body)` / Rust bytes
+    取用的基础 ergonomics，但不声明 response streaming、charset decoding 或
+    content-type sniffing。
   - 继续收紧：`NewResponse(Status, nil, Body)` 现在与 request helper 的 nil
     headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
     response headers。`test_http_message` 锁住 helper contract，`test_http_contract`

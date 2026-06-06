@@ -1,5 +1,27 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http response body bytes helper slice
+
+### Goal
+
+补齐 client response body ergonomics：`HttpReadResponseBodyBytes(Resp)` 应通过
+`nextpas.core.http.client` 与 facade `nextpas.core.http` 暴露，直接消费
+`IHttpResponse.Body` 并返回 `TBytes`。nil body 返回空 bytes；nil response 在
+helper 边界抛 `EArgumentError`。
+
+### Checklist
+
+- [x] RED：`test_http_client` 先因缺少
+  `nextpas.core.http.client.HttpReadResponseBodyBytes` 编译失败。
+- [x] RED：`test_http_contract` 先要求 facade
+  `nextpas.core.http.HttpReadResponseBodyBytes` 可调用。
+- [x] GREEN：新增 client helper，复用 `nextpas.core.io.ReadAll`；string helper
+  复用 bytes helper，避免两套 response body 读循环。
+- [x] 保持本 slice 边界：不新增 response streaming API、charset decoding、
+  content-type sniffing、per-request policy 或 transport vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_client`、`test_http_contract`。
+
 ## Active Session: 2026-06-06 http server options validation slice
 
 ### Goal

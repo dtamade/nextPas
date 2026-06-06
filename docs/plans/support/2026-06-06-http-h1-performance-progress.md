@@ -1,5 +1,41 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http response body bytes helper slice
+
+- **Status:** completed.
+- Objective:
+  - expose `HttpReadResponseBodyBytes(Resp): TBytes` through
+    `nextpas.core.http.client`
+  - expose the same helper through facade `nextpas.core.http`
+  - keep nil body / nil response semantics aligned with
+    `HttpReadResponseBodyString`
+- Scope and safety:
+  - touched HTTP client/facade source, client/contract focused tests, HTTP
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at missing `HttpReadResponseBodyBytes`
+    - `test_http_client.lpr(1096,39) Error: Identifier not found "HttpReadResponseBodyBytes"`
+- Landed change:
+  - added `HttpReadResponseBodyBytes` to `nextpas.core.http.client`
+  - added facade forwarding helper to `nextpas.core.http`
+  - `HttpReadResponseBodyString` now delegates to the bytes helper and converts
+    the returned bytes to a Pascal string
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `50 total, 50 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `34 total, 34 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - callers can consume binary response bodies without hand-written reader
+    loops
+  - this does not claim response streaming API, charset decoding,
+    content-type sniffing, redirect policy, or transport changes
+
 ## Session: 2026-06-06 http server options validation slice
 
 - **Status:** completed.

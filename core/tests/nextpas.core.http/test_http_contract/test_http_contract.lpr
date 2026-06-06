@@ -506,6 +506,17 @@ begin
     'Facade response body string helper is callable');
 end;
 
+procedure TestHttpReadResponseBodyBytesFacadeHelper;
+var
+  LResp: IHttpResponse;
+  LBody: TBytes;
+begin
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_NO_CONTENT, NewHeaders, nil);
+  LBody := nextpas.core.http.HttpReadResponseBodyBytes(LResp);
+  CheckEqual(Int64(0), Int64(Length(LBody)),
+    'Facade response body bytes helper is callable');
+end;
+
 { Test 5: HandlerFunc wraps correctly }
 procedure TestHandlerFuncWrap;
 var
@@ -1275,6 +1286,8 @@ begin
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HttpReadResponseBodyString is available through facade',
     @TestHttpReadResponseBodyStringFacadeHelper);
+  T.Run('HttpReadResponseBodyBytes is available through facade',
+    @TestHttpReadResponseBodyBytesFacadeHelper);
   T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
   T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);
   T.Run('HandlerFunc wraps object methods through facade', @TestHandlerMethodWrap);

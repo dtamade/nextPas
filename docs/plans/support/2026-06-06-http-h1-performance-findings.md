@@ -1,5 +1,31 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http response body bytes helper slice
+
+- 本轮补齐 client response body ergonomics：
+  `HttpReadResponseBodyString(Resp)` 已覆盖文本 body 便利读取，但二进制响应仍需要
+  调用方直接消费 `IHttpResponse.Body` 或走 download helper。`TBytes` helper 是
+  Go `io.ReadAll(resp.Body)` / Rust bytes-style 取用的低风险基础面。
+- 选择依据：
+  - 这是 public client helper ergonomics，不新增 builder、不扩大 transport vtable。
+  - helper 明确消费 response body reader，因此 ownership 语义与 string helper 对齐。
+  - nil body 返回 empty bytes，nil response 抛 `EArgumentError`，延续 string helper
+    已落地的错误边界。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at missing `HttpReadResponseBodyBytes`
+    - `test_http_client.lpr(1096,39) Error: Identifier not found "HttpReadResponseBodyBytes"`
+    - 同一 RED 还覆盖 nil body / nil response helper call site。
+- GREEN / behavior 证据：
+  - 新增 `nextpas.core.http.client.HttpReadResponseBodyBytes(Resp): TBytes`。
+  - facade `nextpas.core.http.HttpReadResponseBodyBytes` 转发同一 helper。
+  - `HttpReadResponseBodyString` 现在复用 bytes helper，再转换成 Pascal string，
+    避免 duplicate body read loop。
+- 复盘结论：
+  response body 现在有 string 与 bytes 两条常用消费 helper。后续若继续 client
+  ergonomics，应审计 per-request policy、charset decoding 或 streaming ownership
+  contract；不要在没有明确 contract 前继续堆格式化 body helper。
+
 ## 2026-06-06 http server options validation slice
 
 - 本轮收紧 server options error semantics：
