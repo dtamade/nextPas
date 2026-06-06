@@ -529,6 +529,54 @@ begin
     'compat unit must mirror PascalCase load/store facade');
   CheckContains(LAtomicCompatSource, 'procedure AtomicThreadFence',
     'compat unit must mirror PascalCase fence facade');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_fetch_add(var aObj: Pointer; aArg: Pointer): Pointer;',
+    'compat unit must own the legacy pointer fetch-add overload');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_fetch_sub(var aObj: Pointer; aArg: Pointer): Pointer;',
+    'compat unit must own the legacy pointer fetch-sub overload');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_fetch_and(var aObj: Pointer; aArg: Pointer): Pointer;',
+    'compat unit must own the legacy pointer fetch-and overload');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_fetch_or(var aObj: Pointer; aArg: Pointer): Pointer;',
+    'compat unit must own the legacy pointer fetch-or overload');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_fetch_xor(var aObj: Pointer; aArg: Pointer): Pointer;',
+    'compat unit must own the legacy pointer fetch-xor overload');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_increment(var aObj: Pointer): Pointer;',
+    'compat unit must own the legacy pointer increment overload');
+  CheckContains(LAtomicCompatSource,
+    'function atomic_decrement(var aObj: Pointer): Pointer;',
+    'compat unit must own the legacy pointer decrement overload');
+  CheckContains(LAtomicSource,
+    'function atomic_fetch_add(var aObj: Pointer; aOffset: PtrInt): Pointer;',
+    'main atomic facade must keep canonical pointer offset fetch-add');
+  CheckContains(LAtomicSource,
+    'function atomic_fetch_sub(var aObj: Pointer; aOffset: PtrInt): Pointer;',
+    'main atomic facade must keep canonical pointer offset fetch-sub');
+  CheckEqual(Int64(2), Int64(CountOccurrences(LAtomicSource,
+    'function atomic_fetch_add(var aObj: Pointer;')),
+    'main atomic facade must not add legacy pointer fetch-add overloads');
+  CheckEqual(Int64(2), Int64(CountOccurrences(LAtomicSource,
+    'function atomic_fetch_sub(var aObj: Pointer;')),
+    'main atomic facade must not add legacy pointer fetch-sub overloads');
+  CheckNotContains(LAtomicSource,
+    'function atomic_fetch_and(var aObj: Pointer;',
+    'legacy pointer fetch-and overload must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_fetch_or(var aObj: Pointer;',
+    'legacy pointer fetch-or overload must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_fetch_xor(var aObj: Pointer;',
+    'legacy pointer fetch-xor overload must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_increment(var aObj: Pointer)',
+    'legacy pointer increment overload must stay out of the main atomic facade');
+  CheckNotContains(LAtomicSource,
+    'function atomic_decrement(var aObj: Pointer)',
+    'legacy pointer decrement overload must stay out of the main atomic facade');
   CheckContains(LX8664SnapshotSource, 'Archived historical x86_64 atomic implementation snapshot.',
     'archived x86_64 snapshot must be marked historical');
   CheckContains(LX8664SnapshotSource, 'Documentation archive only.',
@@ -543,6 +591,9 @@ begin
     'atomic README must explain the typed record submodule');
   CheckContains(LAtomicDocsReadme, 'nextpas.core.atomic.compat',
     'atomic README must document legacy compatibility ownership');
+  CheckContains(LAtomicDocsReadme,
+    'pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade',
+    'atomic README must explicitly freeze legacy pointer overload ownership');
   CheckContains(LAtomicDocsReadme, 'atomic_*',
     'atomic README must name the canonical function API');
   CheckContains(LAtomicDocsReadme, 'TAtomic*',

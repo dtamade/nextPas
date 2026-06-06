@@ -27,6 +27,8 @@ arith/bitwise overload 属于 legacy compatibility surface，只为旧调用点�
 3. 旧 PascalCase surface，例如 `AtomicLoad32`、`AtomicFetchAdd64`、`AtomicWait32`，只用于兼容旧代码。
 4. `nextpas.core.atomic.compat` 中的 pointer arithmetic/bitwise overload 不再扩大；新代码应使用整数或 typed pointer API 明确表达意图。
 
+Compatibility boundary: pointer arithmetic/bitwise overloads stay in `nextpas.core.atomic.compat` and must not be added to the main facade.
+
 `TAtomicRefCount` 是专用引用计数器，不是通用 `PtrUInt` 原子类型。它只暴露 `Load`、`Inc`、
 `TryInc`、`Dec`、`IntoInner`，刻意不暴露 `Store`、`Exchange`、`FetchAdd`、`FetchSub`
 或 `GetMut`，避免调用方破坏引用计数纪律。
