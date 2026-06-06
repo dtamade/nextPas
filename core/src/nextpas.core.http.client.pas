@@ -49,6 +49,7 @@ implementation
 
 uses
   nextpas.core.base,
+  nextpas.core.base.utils,
   nextpas.core.errors,
   nextpas.core.fs,
   nextpas.core.io,
@@ -127,6 +128,28 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function CaptureRedirectBodyPosition(const AReq: IHttpRequest;
+  out ABodyStream: IStream; out AStartPosition: Int64): Boolean;
+begin
+  ABodyStream := nil;
+  AStartPosition := 0;
+  if (AReq = nil) or (AReq.Body = nil) then
+    Exit(False);
+  Result := Supports(AReq.Body, IStream, ABodyStream);
+  if Result then
+    AStartPosition := ABodyStream.Position;
+end;
+
+procedure RewindRedirectBody(const AReq: IHttpRequest; const ABodyStream: IStream;
+  const AStartPosition: Int64);
+begin
+  if (AReq.Body = nil) or (AReq.ContentLength = 0) then
+    Exit;
+  if ABodyStream = nil then
+    raise EHttpError.Create('redirect request body is not replayable');
+  ABodyStream.Position := AStartPosition;
 end;
 
 procedure RemoveLastPathSegment(var AOutput: string);
@@ -259,8 +282,11 @@ var
   LLocation: string;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
+  LBodyStream: IStream;
+  LBodyStartPosition: Int64;
 begin
   LUrl := AReq.Url;
+  CaptureRedirectBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LResp := FTransport.RoundTrip(AReq);
 
   // Handle redirects
@@ -285,7 +311,10 @@ begin
        (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) then
       LNewReq := THttpRequest.Create(hmGet, LNewUrl, hvHttp11, NewHttpHeaders, nil, 0)
     else
+    begin
+      RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
       LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11, NewHttpHeaders, AReq.Body, AReq.ContentLength);
+    end;
 
     Result := DoRequest(LNewReq, ARedirectsLeft - 1);
   end

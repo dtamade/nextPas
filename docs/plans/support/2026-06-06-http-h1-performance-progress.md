@@ -1,5 +1,47 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http 307 seekable body replay slice
+
+- **Status:** completed.
+- Objective:
+  - make `307` / `308` redirects replay seekable request bodies instead of
+    reusing an EOF reader
+  - fail fast for non-empty non-replayable bodies rather than silently sending
+    an empty follow-up request
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - seekable body RED used an injected `IHttpTransport` that reads the first
+    request body, returns `307 Location: /upload-copy`, then reads the follow-up
+    body
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `Client replays seekable body on 307 redirect`
+    - expected follow-up body `payload`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+  - non-replayable body RED used a one-shot `IReader`
+  - with the temporary no-raise implementation, the same focused gate failed at
+    `Client rejects non-replayable body on 307 redirect`
+- Landed change:
+  - `THttpClient.DoRequest` captures the original body stream position before
+    the first transport round trip
+  - `307` / `308` follow-up requests rewind `IStream` bodies to that position
+  - non-empty bodies that cannot be rewound now raise `EHttpError` before a
+    second round trip
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `34/34 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - seekable request bodies created by current in-memory helpers can be replayed
+    across `307` / `308`
+  - generic streaming body replay still needs an explicit future ownership
+    contract; this slice deliberately does not add a broad request builder or
+    `GetBody` callback API
+
 ## Session: 2026-06-06 http fragment-only redirect slice
 
 - **Status:** completed.

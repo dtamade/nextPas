@@ -1,5 +1,42 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http 307 seekable body replay slice
+
+- 本轮转向 client redirect body ownership：
+  旧文档说 `307` / `308` preserve method/body reader，但真实行为只是复用同一
+  `IReader`。一旦第一跳 transport 已经读完 body，第二跳就会拿到 EOF。
+- 选择依据：
+  - Go/Rust HTTP client 都不会把 body replay 语义伪装成“复用 reader 就够了”；
+    可 replay body 应该能 replay，不能 replay 的非空 body 应该 fail-fast。
+  - 这比继续铺 relative URL 变体更有 API 质量价值，且仍可限制在 client
+    redirect layer，不需要改 H1 writer 或底层 net runtime。
+  - 当前 `IStream` 已经是 nextPas 的 seekable body carrier，足够覆盖
+    `NewRequest(..., BodyText)` 和 in-memory request helpers。
+- 实现决策：
+  - 在第一跳 `RoundTrip` 前记录 body stream 起始 position。
+  - `307` / `308` follow-up 构造前，如果 body 支持 `IStream`，把 position
+    rewind 回起点。
+  - 非空 body 不支持 `IStream` 时抛 `EHttpError`，避免第二跳静默发送空 body。
+- RED 证据：
+  - seekable replay RED：
+    - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `33 total, 32 passed, 1 failed`
+    - failed at `Client replays seekable body on 307 redirect`
+    - failure: `temporary redirect replays seekable body on follow-up: expected "payload", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+  - non-replayable fail-fast RED：
+    - 临时移除 raise 分支后，同一 focused gate 失败在
+      `Client rejects non-replayable body on 307 redirect`
+    - failure: `temporary redirect rejects non-replayable request body`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `34/34 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 body ownership contract 的真实收紧，不是 helper 糖。后续如果继续 client
+  ergonomics，应单独设计 streaming body replay / `GetBody` callback 或
+  per-request redirect policy，不应把这些混进本 slice。
+
 ## 2026-06-06 http fragment-only redirect slice
 
 - 本轮继续收紧 client redirect URL resolution：

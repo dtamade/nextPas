@@ -1,5 +1,26 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http 307 seekable body replay slice
+
+### Goal
+
+收紧 client redirect body ownership：`307` / `308` 必须在 method-preserving
+redirect 中正确处理 body replay。可 seek 的 `IStream` body 应从第一跳发送前的位置
+rewind 后 replay；非空但不能 replay 的 body 应抛 `EHttpError`，不能静默发送空 body。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 消费第一跳 body，返回
+  `307 Location: /upload-copy`，当前第二跳 body 为 `""` 而不是 `payload`。
+- [x] RED：用 one-shot `IReader` 证明非 replayable body 不应进入第二跳；
+  临时 no-raise 实现失败在缺少 `EHttpError`。
+- [x] GREEN：`THttpClient.DoRequest` 在第一跳前捕获 `IStream.Position`，在
+  `307` / `308` follow-up 前 rewind；非空 non-`IStream` body 抛 `EHttpError`。
+- [x] 保持本 slice 边界：不新增 request builder、`GetBody` callback、per-request
+  redirect policy 或跨模块 body ownership API。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http fragment-only redirect slice
 
 ### Goal

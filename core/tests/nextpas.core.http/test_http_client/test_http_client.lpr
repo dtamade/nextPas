@@ -47,6 +47,10 @@ type
   private
     FCalls: Int32;
     FRedirectLocation: string;
+    FRedirectStatus: THttpStatus;
+    FFirstBody: string;
+    FSecondBody: string;
+    FSeenMethod: THttpMethod;
     FSeenScheme: string;
     FSeenHost: string;
     FSeenPath: string;
@@ -57,12 +61,25 @@ type
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
     property RedirectLocation: string read FRedirectLocation write FRedirectLocation;
+    property RedirectStatus: THttpStatus read FRedirectStatus write FRedirectStatus;
+    property FirstBody: string read FFirstBody;
+    property SecondBody: string read FSecondBody;
+    property SeenMethod: THttpMethod read FSeenMethod;
     property SeenScheme: string read FSeenScheme;
     property SeenHost: string read FSeenHost;
     property SeenPath: string read FSeenPath;
     property SeenRawQuery: string read FSeenRawQuery;
     property SeenQueryParam: string read FSeenQueryParam;
     property SeenFragment: string read FSeenFragment;
+  end;
+
+  TOneShotReader = class(TInterfacedObject, IReader)
+  private
+    FData: string;
+    FPos: SizeInt;
+  public
+    constructor Create(const AData: string);
+    function Read(var ABuf; const ACount: SizeUInt): SizeUInt;
   end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -195,21 +212,30 @@ function TRedirectCaptureTransport.RoundTrip(const AReq: IHttpRequest): IHttpRes
 var
   LHeaders: IHttpHeaders;
   LLocation: string;
+  LStatus: THttpStatus;
   LUrl: TUrl;
+  LBody: string;
 begin
   Inc(FCalls);
+  LBody := ReadReaderStr(AReq.Body);
   LHeaders := NewHttpHeaders;
   if FCalls = 1 then
   begin
+    FFirstBody := LBody;
     LLocation := FRedirectLocation;
     if LLocation = '' then
       LLocation := '/new?from=redirect';
     LHeaders.Set_('location', LLocation);
     LHeaders.Set_('content-length', '0');
-    Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, nil));
+    LStatus := FRedirectStatus;
+    if LStatus = 0 then
+      LStatus := HTTP_STATUS_FOUND;
+    Exit(NewResponse(LStatus, LHeaders, nil));
   end;
 
+  FSecondBody := LBody;
   LUrl := AReq.Url;
+  FSeenMethod := AReq.Method;
   FSeenScheme := LUrl.Scheme;
   FSeenHost := LUrl.Host;
   FSeenPath := AReq.Path;
@@ -218,6 +244,28 @@ begin
   FSeenFragment := LUrl.Fragment;
   LHeaders.Set_('content-length', '7');
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'));
+end;
+
+constructor TOneShotReader.Create(const AData: string);
+begin
+  inherited Create;
+  FData := AData;
+  FPos := 1;
+end;
+
+function TOneShotReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LRemaining: SizeInt;
+begin
+  if (ACount = 0) or (FPos > Length(FData)) then
+    Exit(0);
+  LRemaining := Length(FData) - FPos + 1;
+  if SizeUInt(LRemaining) > ACount then
+    Result := ACount
+  else
+    Result := SizeUInt(LRemaining);
+  Move(FData[FPos], ABuf, Result);
+  Inc(FPos, SizeInt(Result));
 end;
 
 function DownloadTempRoot: string;
@@ -1195,6 +1243,66 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'fragment-only redirect final body');
 end;
 
+procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectStatus := THttpStatus(307);
+  LTransportObj.RedirectLocation := '/upload-copy';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    StringBodyReader('payload'), Int64(7));
+  LResp := LClient.Do_(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'temporary redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'temporary redirect transport final status');
+  Check(LTransportObj.SeenMethod = hmPost,
+    'temporary redirect preserves original method');
+  CheckEqual('payload', LTransportObj.FirstBody,
+    'temporary redirect first request sends original body');
+  CheckEqual('payload', LTransportObj.SecondBody,
+    'temporary redirect replays seekable body on follow-up');
+  CheckEqual('/upload-copy', LTransportObj.SeenPath,
+    'temporary redirect follows target path');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'temporary redirect final body');
+end;
+
+procedure TestClientRejectsNonReplayableBodyOnTemporaryRedirect;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectStatus := THttpStatus(307);
+  LTransportObj.RedirectLocation := '/upload-copy';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LReq := NewRequest(hmPost, 'http://example.test/upload', NewHeaders,
+    TOneShotReader.Create('payload') as IReader, Int64(7));
+  LRaised := False;
+  try
+    LClient.Do_(LReq);
+  except
+    on E: EHttpError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'temporary redirect rejects non-replayable request body');
+  CheckEqual('payload', LTransportObj.FirstBody,
+    'temporary redirect still sent original body once before rejection');
+  CheckEqual(Int64(1), Int64(LTransportObj.Calls),
+    'temporary redirect rejects before second round trip');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1460,6 +1568,10 @@ begin
     @TestClientRedirectTransportNormalizesDotSegmentLocation);
   T.Run('Client redirect transport preserves query on fragment-only Location',
     @TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation);
+  T.Run('Client replays seekable body on 307 redirect',
+    @TestClientReplaysSeekableBodyOnTemporaryRedirect);
+  T.Run('Client rejects non-replayable body on 307 redirect',
+    @TestClientRejectsNonReplayableBodyOnTemporaryRedirect);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
