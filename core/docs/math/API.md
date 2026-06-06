@@ -209,7 +209,7 @@ negative, and all-zero weights. FBM noise rejects non-positive octaves and non-f
 non-positive lacunarity and gain. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject NaN and infinite
 coordinate inputs with `EArgumentError`, and `FBM1D`/`2D`/`3D` also reject finite
 coordinate/lacunarity combinations that would make octave coordinates non-finite and finite gain
-combinations that would make octave amplitudes non-finite.
+combinations that would make octave amplitudes or accumulated results non-finite.
 Noise and FBM operate on the stored `Double` coordinate value. At magnitudes around `2^52` and
 larger, sub-unit coordinate deltas collapse to the same representable `Double`, so those calls use
 stable lattice-equivalent semantics rather than raising an owner-level error.

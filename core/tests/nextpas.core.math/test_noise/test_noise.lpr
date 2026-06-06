@@ -514,6 +514,82 @@ begin
   end;
 end;
 
+procedure TestFBMRejectsNonFiniteAccumulatedResult;
+const
+  OVERFLOWING_FBM_OCTAVES = 7448;
+  OVERFLOWING_FBM_LACUNARITY = 1.0;
+  OVERFLOWING_FBM_GAIN = 1.1;
+var
+  Noise: TNoiseGen;
+  Caught: Boolean;
+  ErrorClass: string;
+  ErrorMessage: string;
+begin
+  Noise := TNoiseGen.Create(2468);
+  try
+    Caught := False;
+    ErrorClass := '';
+    ErrorMessage := '';
+    try
+      Noise.FBM1D(0.25, OVERFLOWING_FBM_OCTAVES, OVERFLOWING_FBM_LACUNARITY, OVERFLOWING_FBM_GAIN);
+    except
+      on E: Exception do
+      begin
+        ErrorClass := E.ClassName;
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM1D rejects non-finite accumulated result');
+    CheckEqual('EArgumentError', ErrorClass,
+      'FBM1D maps accumulated-result overflow into the public owner-level exception');
+    CheckEqual('TNoiseGen.FBM1D: accumulated result must be finite', ErrorMessage,
+      'FBM1D reports owner-level accumulated-result message');
+
+    Caught := False;
+    ErrorClass := '';
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(0.25, 0.75, OVERFLOWING_FBM_OCTAVES, OVERFLOWING_FBM_LACUNARITY,
+        OVERFLOWING_FBM_GAIN);
+    except
+      on E: Exception do
+      begin
+        ErrorClass := E.ClassName;
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects non-finite accumulated result');
+    CheckEqual('EArgumentError', ErrorClass,
+      'FBM2D maps accumulated-result overflow into the public owner-level exception');
+    CheckEqual('TNoiseGen.FBM2D: accumulated result must be finite', ErrorMessage,
+      'FBM2D reports owner-level accumulated-result message');
+
+    Caught := False;
+    ErrorClass := '';
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 0.75, 1.25, OVERFLOWING_FBM_OCTAVES, OVERFLOWING_FBM_LACUNARITY,
+        OVERFLOWING_FBM_GAIN);
+    except
+      on E: Exception do
+      begin
+        ErrorClass := E.ClassName;
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-finite accumulated result');
+    CheckEqual('EArgumentError', ErrorClass,
+      'FBM3D maps accumulated-result overflow into the public owner-level exception');
+    CheckEqual('TNoiseGen.FBM3D: accumulated result must be finite', ErrorMessage,
+      'FBM3D reports owner-level accumulated-result message');
+  finally
+    Noise.Free;
+  end;
+end;
+
 procedure TestNoisePrecisionCeilingFollowsStoredDoubleValue;
 const
   SUBUNIT_PRECISION_CEILING: Double = 4503599627370496.0; // 2^52
@@ -567,6 +643,7 @@ begin
   T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
   T.Run('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
   T.Run('FBM rejects non-finite octave amplitude', @TestFBMRejectsNonFiniteOctaveAmplitude);
+  T.Run('FBM rejects non-finite accumulated result', @TestFBMRejectsNonFiniteAccumulatedResult);
   T.Run('precision ceiling follows stored Double value', @TestNoisePrecisionCeilingFollowsStoredDoubleValue);
   T.Summary;
 end.

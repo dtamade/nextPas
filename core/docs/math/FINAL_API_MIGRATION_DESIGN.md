@@ -285,7 +285,7 @@ Final strategy:
   - `RollMultiple(Dice <= 0)`
   - `WeightedChoice([])` or non-positive weights
   - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, bad `Gain`, or finite parameter
-    combinations that would make octave coordinates or amplitudes non-finite
+    combinations that would make octave coordinates, amplitudes, or accumulated results non-finite
 - For large `Double` noise coordinates above the sub-unit precision ceiling, document stable
   stored-value semantics rather than inventing a fake owner-level precision error.
 - Keep deterministic test vectors for seeds.
@@ -400,7 +400,7 @@ Resolved by tests and implementation:
 - `NextBool` clamps probability into false or true behavior.
 - Invalid FBM octave, lacunarity, and gain inputs fail fast with `EArgumentError`, and owner-level
   FBM checks also reject finite coordinate/lacunarity or gain combinations that would make octave
-  coordinates or amplitudes non-finite.
+  coordinates, amplitudes, or accumulated results non-finite.
 - `nextpas.core.math` re-exports the scalar/trig/vector/matrix/quaternion/transform/easing/random API.
 - The first transform cut exposes builder functions only; no `TTransform3f` or `TTransform3d` records are public.
 

@@ -120,22 +120,66 @@ begin
   Result := Integer(nextpas.core.math.scalar.Round(LWrapped)) and 255;
 end;
 
-function TryScaleFiniteValue(const AValue, AScale: Double; out AScaledValue: Double): Boolean; inline;
+function TryMultiplyFiniteValue(const ALeft, ARight: Double;
+  out AProduct: Double): Boolean; inline;
 var
-  LAbsValue: Double;
+  LAbsLeft: Double;
+  LAbsRight: Double;
 begin
-  if AValue = 0.0 then
+  if (ALeft = 0.0) or (ARight = 0.0) then
   begin
-    AScaledValue := 0.0;
+    AProduct := 0.0;
     Exit(True);
   end;
 
-  LAbsValue := nextpas.core.math.scalar.Abs(AValue);
-  if (AScale > 1.0) and (LAbsValue > (MAX_DOUBLE_MAGNITUDE / AScale)) then
+  LAbsLeft := nextpas.core.math.scalar.Abs(ALeft);
+  LAbsRight := nextpas.core.math.scalar.Abs(ARight);
+  if (LAbsLeft > 1.0) and (LAbsRight > (MAX_DOUBLE_MAGNITUDE / LAbsLeft)) then
+    Exit(False);
+  if (LAbsRight > 1.0) and (LAbsLeft > (MAX_DOUBLE_MAGNITUDE / LAbsRight)) then
     Exit(False);
 
-  AScaledValue := AValue * AScale;
-  Result := IsFinite(AScaledValue);
+  AProduct := ALeft * ARight;
+  Result := IsFinite(AProduct);
+end;
+
+function TryAddFiniteValue(const ALeft, ARight: Double; out ASum: Double): Boolean; inline;
+var
+  LAbsLeft: Double;
+  LAbsRight: Double;
+begin
+  if ALeft = 0.0 then
+  begin
+    ASum := ARight;
+    Exit(IsFinite(ASum));
+  end;
+
+  if ARight = 0.0 then
+  begin
+    ASum := ALeft;
+    Exit(IsFinite(ASum));
+  end;
+
+  if ((ALeft > 0.0) and (ARight > 0.0)) or ((ALeft < 0.0) and (ARight < 0.0)) then
+  begin
+    LAbsLeft := nextpas.core.math.scalar.Abs(ALeft);
+    LAbsRight := nextpas.core.math.scalar.Abs(ARight);
+    if LAbsLeft > (MAX_DOUBLE_MAGNITUDE - LAbsRight) then
+      Exit(False);
+  end;
+
+  ASum := ALeft + ARight;
+  Result := IsFinite(ASum);
+end;
+
+function TryAddScaledFiniteValue(const AAccumulated, AScale, AValue: Double;
+  out ANextAccumulated: Double): Boolean; inline;
+var
+  LTerm: Double;
+begin
+  if not TryMultiplyFiniteValue(AScale, AValue, LTerm) then
+    Exit(False);
+  Result := TryAddFiniteValue(AAccumulated, LTerm, ANextAccumulated);
 end;
 
 { TRandomGen }
@@ -355,14 +399,14 @@ end;
 class function TNoiseGen.ScaleOctaveCoordinate(const AFunctionName, AParamName: string;
   const AValue, AScale: Double): Double;
 begin
-  if not TryScaleFiniteValue(AValue, AScale, Result) then
+  if not TryMultiplyFiniteValue(AValue, AScale, Result) then
     raise EArgumentError.Create(AFunctionName + ': octave ' + AParamName + ' must be finite');
 end;
 
 class function TNoiseGen.ScaleOctaveAmplitude(const AFunctionName: string;
   const AValue, AScale: Double): Double;
 begin
-  if not TryScaleFiniteValue(AValue, AScale, Result) then
+  if not TryMultiplyFiniteValue(AValue, AScale, Result) then
     raise EArgumentError.Create(AFunctionName + ': octave amplitude must be finite');
 end;
 
@@ -565,6 +609,7 @@ var
   I: Integer;
   LAmp: Double;
   LCoordX: Double;
+  LNextResult: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM1D', AOctaves, ALacunarity, AGain);
   ValidateCoordinateInput('TNoiseGen.FBM1D', 'AX', AX);
@@ -573,7 +618,9 @@ begin
   LCoordX := AX;
   for I := 0 to AOctaves - 1 do
   begin
-    Result := Result + LAmp * Noise1D(LCoordX);
+    if not TryAddScaledFiniteValue(Result, LAmp, Noise1D(LCoordX), LNextResult) then
+      raise EArgumentError.Create('TNoiseGen.FBM1D: accumulated result must be finite');
+    Result := LNextResult;
     if I < AOctaves - 1 then
     begin
       LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM1D', 'AX', LCoordX, ALacunarity);
@@ -589,6 +636,7 @@ var
   LAmp: Double;
   LCoordX: Double;
   LCoordY: Double;
+  LNextResult: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM2D', AOctaves, ALacunarity, AGain);
   ValidateCoordinateInput('TNoiseGen.FBM2D', 'AX', AX);
@@ -599,7 +647,9 @@ begin
   LCoordY := AY;
   for I := 0 to AOctaves - 1 do
   begin
-    Result := Result + LAmp * Noise2D(LCoordX, LCoordY);
+    if not TryAddScaledFiniteValue(Result, LAmp, Noise2D(LCoordX, LCoordY), LNextResult) then
+      raise EArgumentError.Create('TNoiseGen.FBM2D: accumulated result must be finite');
+    Result := LNextResult;
     if I < AOctaves - 1 then
     begin
       LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM2D', 'AX', LCoordX, ALacunarity);
@@ -617,6 +667,7 @@ var
   LCoordX: Double;
   LCoordY: Double;
   LCoordZ: Double;
+  LNextResult: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM3D', AOctaves, ALacunarity, AGain);
   ValidateCoordinateInput('TNoiseGen.FBM3D', 'AX', AX);
@@ -629,7 +680,9 @@ begin
   LCoordZ := AZ;
   for I := 0 to AOctaves - 1 do
   begin
-    Result := Result + LAmp * Noise3D(LCoordX, LCoordY, LCoordZ);
+    if not TryAddScaledFiniteValue(Result, LAmp, Noise3D(LCoordX, LCoordY, LCoordZ), LNextResult) then
+      raise EArgumentError.Create('TNoiseGen.FBM3D: accumulated result must be finite');
+    Result := LNextResult;
     if I < AOctaves - 1 then
     begin
       LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AX', LCoordX, ALacunarity);
