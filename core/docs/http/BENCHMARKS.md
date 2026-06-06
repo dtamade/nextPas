@@ -4,6 +4,24 @@ This page records the current HTTP server benchmark harness and one local
 snapshot. Treat the numbers as evidence for this machine and toolchain, not as
 a permanent ranking across platforms.
 
+The maintained Pascal benchmark assets under `benchmarks/nextpas.core.http/`
+are the focused projects with their own project `Makefile`s and focused smoke
+coverage:
+
+- `bench_server`
+- `bench_router`
+- `bench_headers`
+- `bench_h1writer`
+- `bench_h1outbound`
+- `bench_fullchain`
+- `bench_h1parser`
+
+An older top-level aggregate Pascal benchmark (`bench_http`) was removed on
+2026-06-06 local time. It duplicated router / URL / header microbenchmarks,
+had no project `Makefile`, no stable metadata contract, and no focused gate.
+The maintained benchmark truth now lives only in the focused assets above and
+the Go / Rust comparator projects.
+
 ## Run the Server Comparison
 
 Run the comparison harness:

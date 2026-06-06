@@ -61,6 +61,32 @@
   benchmark 一样有稳定 operation marker。后续若再加 snapshot/runner 机器消费逻辑，
   应优先复用这些 marker，而不是重新解析标题文本。
 
+## 2026-06-06 benchmark inventory cleanup slice
+
+- 本轮不是新增 benchmark，而是清理 HTTP benchmark lane 内一个遗留孤岛资产：
+  `benchmarks/nextpas.core.http/bench_http/bench_http.lpr`。
+- 选择依据：
+  - 它是 HTTP benchmark 目录下唯一没有 project `Makefile` 的顶层 Pascal benchmark
+    project。
+  - 它输出的是旧式自由文本，没有 `operation=` / `bench_filter=` / `iterations`
+    等稳定 metadata contract。
+  - 它把 router / URL / header 三类 microbenchmark 混在一个聚合程序里，而这些面
+    现在都已有更窄、更可比较、带 focused gate 的专门 benchmark 资产。
+  - 在当前 benchmark truth 主线下，继续维护这个聚合 bench 只会制造第二套不受约束
+    的数字入口。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - 新增 inventory contract 后，唯一新失败是
+      `HTTP top-level Pascal benchmark projects have Makefiles`
+    - failure: `top-level HTTP Pascal benchmark projects missing Makefile: expected "", got "bench_http"`
+- GREEN / behavior 证据：
+  - 删除 `bench_http` 遗留聚合 benchmark。
+  - `test_http_benchmarks` 改为锁定：HTTP 顶层 Pascal benchmark project 不再存在
+    无 `Makefile` 的孤岛资产。
+- 复盘结论：
+  benchmark truth 不只是“更多 benchmark”；也包括主动移除不再受维护契约约束的旧入口。
+  当前 HTTP benchmark 公开资产以 focused projects + comparator runners 为准。
+
 ## 2026-06-06 header benchmark smoke marker slice
 
 - 本轮收紧 header microbenchmark evidence：

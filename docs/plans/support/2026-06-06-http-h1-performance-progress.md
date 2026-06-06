@@ -43,6 +43,42 @@
   - this does not claim a new optimization, new parser row, or new Rust/Go
     comparator coverage
 
+## Session: 2026-06-06 benchmark inventory cleanup slice
+
+- **Status:** completed.
+- Objective:
+  - remove an unmaintained aggregate benchmark entry point from the HTTP
+    benchmark lane
+  - keep the maintained HTTP benchmark surface limited to focused projects with
+    project `Makefile`s and focused smoke coverage
+  - prevent future drift where a top-level Pascal benchmark exists in the HTTP
+    lane without entering the benchmark truth contract
+- Scope and safety:
+  - touched the HTTP benchmark focused test, removed the legacy `bench_http`
+    benchmark file, updated HTTP benchmark docs, and updated this support
+    evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, H1
+    runtime behavior, benchmark comparators, or source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - inventory contract failed at
+      `HTTP top-level Pascal benchmark projects have Makefiles`
+    - failure:
+      `top-level HTTP Pascal benchmark projects missing Makefile: expected "", got "bench_http"`
+- Landed change:
+  - removed `benchmarks/nextpas.core.http/bench_http/bench_http.lpr`
+  - focused test now locks that HTTP top-level Pascal benchmark projects do not
+    contain unowned `.lpr` projects without a project `Makefile`
+  - docs now describe the maintained HTTP benchmark asset set explicitly
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - pending in this iteration after the removal
+- Outcome:
+  - the HTTP benchmark lane no longer advertises a duplicate aggregate Pascal
+    benchmark outside the maintained focused asset set
+  - this does not claim new benchmark numbers, new workloads, or new comparator
+    coverage
+
 ## Session: 2026-06-06 comparator scale validation slice
 
 - **Status:** completed.

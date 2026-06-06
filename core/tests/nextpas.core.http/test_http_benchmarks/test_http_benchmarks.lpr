@@ -289,6 +289,43 @@ begin
   Result := PathJoin(ARootDir, H1FlagMatrixRunnerRelativePath);
 end;
 
+function CollectTopLevelPascalBenchmarkProjectsWithoutMakefile(
+  const ABenchmarksRootDir: string): string;
+var
+  LSearch: TSearchRec;
+  LLprSearch: TSearchRec;
+  LProjectDir: string;
+  LMissing: TStringList;
+begin
+  LMissing := TStringList.Create;
+  try
+    if FindFirst(PathJoin(ABenchmarksRootDir, '*'), faDirectory, LSearch) = 0 then
+    begin
+      repeat
+        if (LSearch.Name = '.') or (LSearch.Name = '..') then
+          Continue;
+        if (LSearch.Attr and faDirectory) = 0 then
+          Continue;
+
+        LProjectDir := PathJoin(ABenchmarksRootDir, LSearch.Name);
+        if FindFirst(PathJoin(LProjectDir, '*.lpr'), faAnyFile, LLprSearch) <> 0 then
+          Continue;
+        FindClose(LLprSearch);
+
+        if FileExists(PathJoin(LProjectDir, 'Makefile')) then
+          Continue;
+
+        LMissing.Add(LSearch.Name);
+      until FindNext(LSearch) <> 0;
+      FindClose(LSearch);
+    end;
+
+    Result := Trim(LMissing.Text);
+  finally
+    LMissing.Free;
+  end;
+end;
+
 procedure CheckServerBenchmarkOutput(const AOutput, AImplementation: string;
   const AIterations, AThreads: string; const AWorkload: string = 'no_url');
 begin
@@ -982,6 +1019,18 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain plaintext smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput);
+end;
+
+procedure TestHttpTopLevelPascalBenchmarkProjectsHaveMakefiles;
+var
+  LRootDir: string;
+  LMissing: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LMissing := CollectTopLevelPascalBenchmarkProjectsWithoutMakefile(
+    PathJoin(LRootDir, 'benchmarks/nextpas.core.http'));
+  CheckEqual('', LMissing,
+    'top-level HTTP Pascal benchmark projects missing Makefile');
 end;
 
 procedure TestGoServerComparatorSmallSmoke;
@@ -2122,6 +2171,8 @@ begin
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',
     @TestBenchFullchainPlaintextSmoke);
+  T.Run('HTTP top-level Pascal benchmark projects have Makefiles',
+    @TestHttpTopLevelPascalBenchmarkProjectsHaveMakefiles);
   T.Run('go server comparator small smoke', @TestGoServerComparatorSmallSmoke);
   T.Run('go server comparator url_path small smoke',
     @TestGoServerComparatorUrlPathSmallSmoke);
