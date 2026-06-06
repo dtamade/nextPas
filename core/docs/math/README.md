@@ -88,7 +88,8 @@ rejects non-finite probabilities and clamps finite probabilities into false or t
 helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects empty, non-finite,
 negative, and all-zero weights. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject non-finite
 coordinate inputs. FBM also rejects non-positive octaves and non-positive or non-finite lacunarity
-and gain.
+and gain, plus finite coordinate/lacunarity combinations that would make octave coordinates
+non-finite.
 
 ## SIMD And Platform Boundaries
 

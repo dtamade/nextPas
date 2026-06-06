@@ -207,7 +207,8 @@ rejects non-finite probabilities and clamps finite probabilities into false or t
 helpers return `0` for non-positive dice or sides. `WeightedChoice` rejects empty, non-finite,
 negative, and all-zero weights. FBM noise rejects non-positive octaves and non-finite or
 non-positive lacunarity and gain. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject NaN and infinite
-coordinate inputs with `EArgumentError`.
+coordinate inputs with `EArgumentError`, and `FBM1D`/`2D`/`3D` also reject finite
+coordinate/lacunarity combinations that would make octave coordinates non-finite.
 
 ## Verification
 

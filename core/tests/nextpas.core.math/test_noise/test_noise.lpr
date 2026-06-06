@@ -400,6 +400,63 @@ begin
   end;
 end;
 
+procedure TestFBMRejectsNonFiniteOctaveCoordinates;
+var
+  Noise: TNoiseGen;
+  Caught: Boolean;
+  ErrorMessage: string;
+begin
+  Noise := TNoiseGen.Create(2468);
+  try
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM1D(1.0e308, 2);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM1D rejects non-finite octave coordinates');
+    CheckEqual('TNoiseGen.FBM1D: octave AX must be finite', ErrorMessage,
+      'FBM1D reports owner-level octave finite-contract message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(0.25, 1.0e308, 2);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects non-finite octave coordinates');
+    CheckEqual('TNoiseGen.FBM2D: octave AY must be finite', ErrorMessage,
+      'FBM2D reports owner-level octave finite-contract message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 0.75, 1.0e308, 2);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-finite octave coordinates');
+    CheckEqual('TNoiseGen.FBM3D: octave AZ must be finite', ErrorMessage,
+      'FBM3D reports owner-level octave finite-contract message');
+  finally
+    Noise.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.noise');
   T.Run('noise repeatability', @TestNoiseRepeatability);
@@ -407,5 +464,6 @@ begin
   T.Run('noise invalid inputs', @TestNoiseInvalidInputs);
   T.Run('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
   T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
+  T.Run('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
   T.Summary;
 end.

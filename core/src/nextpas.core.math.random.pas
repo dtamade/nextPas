@@ -45,6 +45,8 @@ type
       const ALacunarity, AGain: Double); static;
     class procedure ValidateCoordinateInput(const AFunctionName, AParamName: string;
       const AValue: Double); static;
+    class function ScaleOctaveCoordinate(const AFunctionName, AParamName: string;
+      const AValue, AScale: Double): Double; static;
     function Fade(const AT: Double): Double; inline;
     function Lerp(const AT, AA, AB: Double): Double; inline;
     function Grad1D(const AHash: Integer; const AX: Double): Double; inline;
@@ -77,6 +79,7 @@ const
   SEED_SCRAMBLE: UInt64 = (UInt64($6A09E667) shl 32) or UInt64($F3BCC908);
   FLOAT_DENOMINATOR: Single = 16777216.0;
   DOUBLE_DENOMINATOR: Double = 9007199254740992.0;
+  MAX_DOUBLE_MAGNITUDE: Double = 1.7976931348623157e308;
 
 function IsFinite(const AValue: Single): Boolean; overload; inline;
 begin
@@ -113,6 +116,24 @@ begin
   if LWrapped < 0.0 then
     LWrapped := LWrapped + 256.0;
   Result := Integer(nextpas.core.math.scalar.Round(LWrapped)) and 255;
+end;
+
+function TryScaleCoordinate(const AValue, AScale: Double; out AScaledValue: Double): Boolean; inline;
+var
+  LAbsValue: Double;
+begin
+  if AValue = 0.0 then
+  begin
+    AScaledValue := 0.0;
+    Exit(True);
+  end;
+
+  LAbsValue := nextpas.core.math.scalar.Abs(AValue);
+  if LAbsValue > (MAX_DOUBLE_MAGNITUDE / AScale) then
+    Exit(False);
+
+  AScaledValue := AValue * AScale;
+  Result := IsFinite(AScaledValue);
 end;
 
 { TRandomGen }
@@ -329,6 +350,13 @@ begin
     raise EArgumentError.Create(AFunctionName + ': ' + AParamName + ' must be finite');
 end;
 
+class function TNoiseGen.ScaleOctaveCoordinate(const AFunctionName, AParamName: string;
+  const AValue, AScale: Double): Double;
+begin
+  if not TryScaleCoordinate(AValue, AScale, Result) then
+    raise EArgumentError.Create(AFunctionName + ': octave ' + AParamName + ' must be finite');
+end;
+
 procedure TNoiseGen.SetSeed(const ASeed: UInt64);
 var
   LRng: TRandomGen;
@@ -527,18 +555,21 @@ function TNoiseGen.FBM1D(const AX: Double; const AOctaves: Integer;
 var
   I: Integer;
   LAmp: Double;
-  LFreq: Double;
+  LCoordX: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM1D', AOctaves, ALacunarity, AGain);
   ValidateCoordinateInput('TNoiseGen.FBM1D', 'AX', AX);
   Result := 0.0;
   LAmp := 1.0;
-  LFreq := 1.0;
+  LCoordX := AX;
   for I := 0 to AOctaves - 1 do
   begin
-    Result := Result + LAmp * Noise1D(AX * LFreq);
-    LFreq := LFreq * ALacunarity;
-    LAmp := LAmp * AGain;
+    Result := Result + LAmp * Noise1D(LCoordX);
+    if I < AOctaves - 1 then
+    begin
+      LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM1D', 'AX', LCoordX, ALacunarity);
+      LAmp := LAmp * AGain;
+    end;
   end;
 end;
 
@@ -547,19 +578,25 @@ function TNoiseGen.FBM2D(const AX, AY: Double; const AOctaves: Integer;
 var
   I: Integer;
   LAmp: Double;
-  LFreq: Double;
+  LCoordX: Double;
+  LCoordY: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM2D', AOctaves, ALacunarity, AGain);
   ValidateCoordinateInput('TNoiseGen.FBM2D', 'AX', AX);
   ValidateCoordinateInput('TNoiseGen.FBM2D', 'AY', AY);
   Result := 0.0;
   LAmp := 1.0;
-  LFreq := 1.0;
+  LCoordX := AX;
+  LCoordY := AY;
   for I := 0 to AOctaves - 1 do
   begin
-    Result := Result + LAmp * Noise2D(AX * LFreq, AY * LFreq);
-    LFreq := LFreq * ALacunarity;
-    LAmp := LAmp * AGain;
+    Result := Result + LAmp * Noise2D(LCoordX, LCoordY);
+    if I < AOctaves - 1 then
+    begin
+      LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM2D', 'AX', LCoordX, ALacunarity);
+      LCoordY := ScaleOctaveCoordinate('TNoiseGen.FBM2D', 'AY', LCoordY, ALacunarity);
+      LAmp := LAmp * AGain;
+    end;
   end;
 end;
 
@@ -568,7 +605,9 @@ function TNoiseGen.FBM3D(const AX, AY, AZ: Double; const AOctaves: Integer;
 var
   I: Integer;
   LAmp: Double;
-  LFreq: Double;
+  LCoordX: Double;
+  LCoordY: Double;
+  LCoordZ: Double;
 begin
   ValidateFBMInputs('TNoiseGen.FBM3D', AOctaves, ALacunarity, AGain);
   ValidateCoordinateInput('TNoiseGen.FBM3D', 'AX', AX);
@@ -576,12 +615,19 @@ begin
   ValidateCoordinateInput('TNoiseGen.FBM3D', 'AZ', AZ);
   Result := 0.0;
   LAmp := 1.0;
-  LFreq := 1.0;
+  LCoordX := AX;
+  LCoordY := AY;
+  LCoordZ := AZ;
   for I := 0 to AOctaves - 1 do
   begin
-    Result := Result + LAmp * Noise3D(AX * LFreq, AY * LFreq, AZ * LFreq);
-    LFreq := LFreq * ALacunarity;
-    LAmp := LAmp * AGain;
+    Result := Result + LAmp * Noise3D(LCoordX, LCoordY, LCoordZ);
+    if I < AOctaves - 1 then
+    begin
+      LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AX', LCoordX, ALacunarity);
+      LCoordY := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AY', LCoordY, ALacunarity);
+      LCoordZ := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AZ', LCoordZ, ALacunarity);
+      LAmp := LAmp * AGain;
+    end;
   end;
 end;
 
