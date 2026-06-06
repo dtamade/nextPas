@@ -4,7 +4,7 @@ program test_lockfree;
 
 uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
-  SysUtils,
+  SysUtils, Classes,
   nextpas.core.testing,
   nextpas.core.errors,
   nextpas.core.atomic,
@@ -24,6 +24,25 @@ type
 
 var
   T: TTestRunner;
+
+function ReadUtf8TextFile(const APath: string): string;
+var
+  LStream: TFileStream;
+begin
+  LStream := TFileStream.Create(APath, fmOpenRead or fmShareDenyNone);
+  try
+    SetLength(Result, LStream.Size);
+    if LStream.Size > 0 then
+      LStream.ReadBuffer(Result[1], LStream.Size);
+  finally
+    LStream.Free;
+  end;
+end;
+
+procedure CheckContains(const AText, AExpected, AMessage: string);
+begin
+  Check(Pos(AExpected, AText) > 0, AMessage + ': missing "' + AExpected + '"');
+end;
 
 { SPSC tests }
 
@@ -598,6 +617,98 @@ begin
   Check(LGot, 'managed type rejected');
 end;
 
+procedure TestLockFreeSourceContracts;
+const
+  LockFreeDocsReadmePath = '../../../docs/lockfree/README.md';
+  SpscSourcePath = '../../../src/nextpas.core.lockfree.spsc.pas';
+  MpmcSourcePath = '../../../src/nextpas.core.lockfree.mpmc.pas';
+  StackSourcePath = '../../../src/nextpas.core.lockfree.stack.pas';
+  MpscSourcePath = '../../../src/nextpas.core.lockfree.mpsc.pas';
+  DequeSourcePath = '../../../src/nextpas.core.lockfree.deque.pas';
+  WaitSourcePath = '../../../src/nextpas.core.lockfree.wait.pas';
+var
+  LDocsReadme: string;
+  LSpscSource: string;
+  LMpmcSource: string;
+  LStackSource: string;
+  LMpscSource: string;
+  LDequeSource: string;
+  LWaitSource: string;
+begin
+  Check(FileExists(LockFreeDocsReadmePath),
+    'lockfree README must exist as the module documentation entrypoint');
+
+  LDocsReadme := ReadUtf8TextFile(LockFreeDocsReadmePath);
+  LSpscSource := ReadUtf8TextFile(SpscSourcePath);
+  LMpmcSource := ReadUtf8TextFile(MpmcSourcePath);
+  LStackSource := ReadUtf8TextFile(StackSourcePath);
+  LMpscSource := ReadUtf8TextFile(MpscSourcePath);
+  LDequeSource := ReadUtf8TextFile(DequeSourcePath);
+  LWaitSource := ReadUtf8TextFile(WaitSourcePath);
+
+  CheckContains(LDocsReadme, '# nextpas.core.lockfree',
+    'lockfree README must use the module title');
+  CheckContains(LDocsReadme, '`TSpscQueue<T>`',
+    'lockfree README must document SPSC queue ownership');
+  CheckContains(LDocsReadme, '`TMpmcQueue<T>`',
+    'lockfree README must document MPMC queue ownership');
+  CheckContains(LDocsReadme, '`TMpscQueue<T>`',
+    'lockfree README must document MPSC queue ownership');
+  CheckContains(LDocsReadme, '`TLockFreeStack<T>`',
+    'lockfree README must document stack ownership');
+  CheckContains(LDocsReadme, '`TWorkStealingDeque<T>`',
+    'lockfree README must document deque ownership');
+  CheckContains(LDocsReadme, 'Linearization points',
+    'lockfree README must name linearization points');
+  CheckContains(LDocsReadme, 'ABA',
+    'lockfree README must document ABA boundaries');
+  CheckContains(LDocsReadme, 'Memory reclamation',
+    'lockfree README must document reclamation policy');
+  CheckContains(LDocsReadme, 'Close/Destroy discipline',
+    'lockfree README must document close and destroy discipline');
+  CheckContains(LDocsReadme, 'Atomic dependency',
+    'lockfree README must document dependency on atomic wait/notify');
+  CheckContains(LDocsReadme,
+    'make -C core/tests/nextpas.core.lockfree/test_lockfree clean test',
+    'lockfree README must list the focused lockfree gate');
+  CheckContains(LDocsReadme,
+    'make -C core/tests/nextpas.core.lockfree/test_lockfree_stress clean test',
+    'lockfree README must list the lockfree stress gate');
+  CheckContains(LDocsReadme, 'source-contract',
+    'lockfree README must distinguish source-contract coverage from runtime proof');
+
+  CheckContains(LSpscSource, 'if IsManagedType(T) then',
+    'SPSC queue must reject managed element types');
+  CheckContains(LSpscSource, 'LockFreeNotifyData(@FDataEpoch, @FDataWaiters)',
+    'SPSC queue must notify data waiters after publish');
+  CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
+    'SPSC queue must notify space waiters after consume');
+  CheckContains(LMpmcSource, 'FSlots[LI].Sequence := Int64(LI)',
+    'MPMC queue must initialize per-slot sequence numbers');
+  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + 1, moRelease)',
+    'MPMC enqueue linearization must publish slot sequence with release ordering');
+  CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease)',
+    'MPMC dequeue must recycle slot sequence with release ordering');
+  CheckContains(LStackSource, 'FFreeHead: Int64',
+    'stack must keep a tagged free-list head');
+  CheckContains(LStackSource, 'function PackTagIdx',
+    'stack must keep tag/index packing helper for ABA resistance');
+  CheckContains(LStackSource, 'FSlots[LIdx].Value := Default(T)',
+    'stack pop must clear the slot before returning it to the free list');
+  CheckContains(LMpscSource, 'Assert(FClosed <> 0',
+    'MPSC destroy must keep the close-before-destroy debug guard');
+  CheckContains(LMpscSource, 'Close must be called before Destroy',
+    'MPSC destroy guard must document the producer-stop discipline');
+  CheckContains(LDequeSource, 'AtomicCompareExchange64(FTop',
+    'work-stealing deque must linearize steals through top CAS');
+  CheckContains(LWaitSource, 'platform_wait_address32',
+    'lockfree wait helper must use the atomic/platform wait-address seam');
+  CheckContains(LWaitSource, 'AtomicFetchAdd32(AWaiters^, 1, moAcqRel)',
+    'lockfree wait helper must register waiters before blocking');
+  CheckContains(LWaitSource, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel)',
+    'lockfree wait helper must unregister waiters after blocking');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.lockfree');
   T.Run('SPSC basic', @TestSpscBasic);
@@ -624,6 +735,7 @@ begin
   T.Run('Stack 4P+4C stress', @TestStackStress);
   T.Run('Deque owner+thief stress', @TestDequeOwnerThief);
   T.Run('Managed type reject', @TestManagedTypeReject);
+  T.Run('Source contracts', @TestLockFreeSourceContracts);
 
   T.Summary;
 end.
