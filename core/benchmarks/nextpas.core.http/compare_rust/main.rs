@@ -240,7 +240,8 @@ fn print_results(
 
     println!("operation=http.server.keepalive");
     println!("workload={}", workload);
-    println!("impl=rust");
+    println!("impl=rust_std");
+    println!("rust_profile=std_only");
     println!("iterations={}", requests);
     println!("threads={}", threads);
     println!("completed={}", completed);

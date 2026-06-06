@@ -14,7 +14,7 @@ usage() {
   cat <<'EOF'
 usage: run_server_comparison.sh [--requests N] [--threads N] [--workload no_url|url_path|adapter_no_url|response_1k] [--runs N] [--output PATH]
 
-Build and run nextPas, Go, and Rust HTTP/1.1 keep-alive server benchmarks.
+Build and run nextPas, Go, and Rust std-only HTTP/1.1 keep-alive server benchmarks.
 EOF
 }
 
@@ -231,8 +231,8 @@ run_comparison() {
       "${BUILD_DIR}/bench_http_server_go" \
       --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
 
-    echo "section=rust"
-    run_one_impl "${run_index}" "rust" \
+    echo "section=rust_std"
+    run_one_impl "${run_index}" "rust_std" \
       "${BUILD_DIR}/bench_http_server_rust" \
       --requests "${REQUESTS}" --threads "${THREADS}" --workload "${WORKLOAD}"
   done

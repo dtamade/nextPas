@@ -12,7 +12,7 @@ usage() {
   cat <<'EOF'
 usage: capture_server_comparison_snapshot.sh [--requests N] [--threads N] [--runs N] [--output PATH]
 
-Capture a Markdown snapshot for the nextPas/Go/Rust HTTP server comparison.
+Capture a Markdown snapshot for the nextPas/Go/Rust std-only HTTP server comparison.
 EOF
 }
 

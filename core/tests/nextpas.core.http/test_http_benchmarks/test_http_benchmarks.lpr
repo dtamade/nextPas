@@ -288,6 +288,9 @@ begin
   CheckContains(AOutput, 'req/s=', 'req/s marker');
   if AImplementation = 'nextpas' then
     CheckContains(AOutput, 'nextpas_h1_path=', 'nextPas H1 path marker');
+  if AImplementation = 'rust_std' then
+    CheckContains(AOutput, 'rust_profile=std_only',
+      'Rust std-only profile marker');
 end;
 
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
@@ -932,7 +935,7 @@ begin
   RunProcessAndCapture(LBinaryPath, ['--requests', '32', '--threads', '2'],
     LCompareDir, LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode), 'rust comparator smoke exit code: ' + LOutput);
-  CheckServerBenchmarkOutput(LOutput, 'rust', '32', '2');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '32', '2');
 end;
 
 procedure TestRustServerComparatorUrlPathSmallSmoke;
@@ -963,7 +966,7 @@ begin
     'rust comparator url_path smoke exit code: ' + LOutput);
   CheckContains(LOutput, 'workload=url_path',
     'rust comparator url_path workload marker');
-  CheckServerBenchmarkOutput(LOutput, 'rust', '32', '2', 'url_path');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '32', '2', 'url_path');
 end;
 
 procedure TestServerComparisonRunnerSmallSmoke;
@@ -990,7 +993,7 @@ begin
     'comparison marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1');
-  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1');
 
   Check(FileExists(LReportPath), 'server comparison report exists');
   LReport := LoadTextFile(LReportPath);
@@ -998,7 +1001,7 @@ begin
     'report comparison marker');
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1');
-  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1');
 end;
 
 procedure TestServerComparisonRunnerUrlPathSmallSmoke;
@@ -1028,7 +1031,7 @@ begin
     'url_path comparison workload marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'url_path');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'url_path');
-  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'url_path');
 
   Check(FileExists(LReportPath), 'server comparison url_path report exists');
   LReport := LoadTextFile(LReportPath);
@@ -1038,7 +1041,7 @@ begin
     'url_path report workload marker');
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'url_path');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'url_path');
-  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'url_path');
 end;
 
 procedure TestServerComparisonRunnerAdapterNoUrlSmallSmoke;
@@ -1068,7 +1071,7 @@ begin
     'adapter_no_url comparison workload marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'adapter_no_url');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'adapter_no_url');
-  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'adapter_no_url');
 
   Check(FileExists(LReportPath), 'server comparison adapter_no_url report exists');
   LReport := LoadTextFile(LReportPath);
@@ -1078,7 +1081,7 @@ begin
     'adapter_no_url report workload marker');
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'adapter_no_url');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'adapter_no_url');
-  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'adapter_no_url');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'adapter_no_url');
 end;
 
 procedure TestServerComparisonRunnerResponse1KSmallSmoke;
@@ -1108,7 +1111,7 @@ begin
     'response_1k comparison workload marker');
   CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'response_1k');
   CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'response_1k');
-  CheckServerBenchmarkOutput(LOutput, 'rust', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'response_1k');
 
   Check(FileExists(LReportPath), 'server comparison response_1k report exists');
   LReport := LoadTextFile(LReportPath);
@@ -1118,7 +1121,7 @@ begin
     'response_1k report workload marker');
   CheckServerBenchmarkOutput(LReport, 'nextpas', '8', '1', 'response_1k');
   CheckServerBenchmarkOutput(LReport, 'go', '8', '1', 'response_1k');
-  CheckServerBenchmarkOutput(LReport, 'rust', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LReport, 'rust_std', '8', '1', 'response_1k');
 end;
 
 procedure TestServerComparisonRunnerRunsSummarySmoke;
@@ -1152,7 +1155,7 @@ begin
   CheckContains(LOutput, 'summary_impl=nextpas',
     'nextpas summary marker');
   CheckContains(LOutput, 'summary_impl=go', 'go summary marker');
-  CheckContains(LOutput, 'summary_impl=rust', 'rust summary marker');
+  CheckContains(LOutput, 'summary_impl=rust_std', 'rust std summary marker');
   CheckContains(LOutput, 'median_ns/op=', 'median ns/op marker');
   CheckContains(LOutput, 'median_req/s=', 'median req/s marker');
   CheckContains(LOutput, 'median_completed=8',
@@ -1167,8 +1170,8 @@ begin
     'runs report nextpas summary marker');
   CheckContains(LReport, 'summary_impl=go',
     'runs report go summary marker');
-  CheckContains(LReport, 'summary_impl=rust',
-    'runs report rust summary marker');
+  CheckContains(LReport, 'summary_impl=rust_std',
+    'runs report rust std summary marker');
   CheckContains(LReport, 'median_completed=8',
     'runs report median completed marker');
 end;
@@ -1211,7 +1214,7 @@ begin
   CheckNotContains(LSnapshot, ' Note:', 'snapshot compiler note');
   CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1');
   CheckServerBenchmarkOutput(LSnapshot, 'go', '8', '1');
-  CheckServerBenchmarkOutput(LSnapshot, 'rust', '8', '1');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust_std', '8', '1');
 end;
 
 procedure TestServerComparisonSnapshotRunsSmoke;
@@ -1247,8 +1250,8 @@ begin
     'snapshot runs nextpas summary marker');
   CheckContains(LSnapshot, 'summary_impl=go',
     'snapshot runs go summary marker');
-  CheckContains(LSnapshot, 'summary_impl=rust',
-    'snapshot runs rust summary marker');
+  CheckContains(LSnapshot, 'summary_impl=rust_std',
+    'snapshot runs rust std summary marker');
 end;
 
 procedure TestCllhttpComparatorRequiresRoot;
