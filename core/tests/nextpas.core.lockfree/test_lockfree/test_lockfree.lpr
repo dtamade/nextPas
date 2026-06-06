@@ -684,6 +684,12 @@ begin
   CheckContains(LDocsReadme, 'Atomic dependency',
     'lockfree README must document dependency on atomic wait/notify');
   CheckContains(LDocsReadme,
+    'Pointer-sized `atomic_load` / `atomic_store` / `atomic_exchange` for `TMpscQueue<T>` node links',
+    'lockfree README must document pointer-sized MPSC node atomic dependency');
+  CheckContains(LDocsReadme,
+    'node pointers must not be widened through legacy `AtomicLoad64` / `AtomicStore64` / `AtomicExchange64` casts',
+    'lockfree README must reject legacy 64-bit pointer casts for MPSC node links');
+  CheckContains(LDocsReadme,
     'make -C core/tests/nextpas.core.lockfree/test_lockfree clean test',
     'lockfree README must list the focused lockfree gate');
   CheckContains(LDocsReadme,

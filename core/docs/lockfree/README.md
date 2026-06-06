@@ -98,6 +98,8 @@ lockfree 模块依赖 `nextpas.core.atomic` 的以下契约：
 
 - `AtomicLoad32/64`、`AtomicStore32/64`、`AtomicCompareExchange64` 和 `AtomicExchange64` 的
   acquire/release/acq_rel/seq_cst 语义。
+- Pointer-sized `atomic_load` / `atomic_store` / `atomic_exchange` for `TMpscQueue<T>` node links;
+  node pointers must not be widened through legacy `AtomicLoad64` / `AtomicStore64` / `AtomicExchange64` casts.
 - `CpuPause` 作为自旋提示。
 - `atomic_wait` / `atomic_notify_*` 背后的 `platform_wait_address32`、
   `platform_wake_address_one` 和 `platform_wake_address_all` seam。
