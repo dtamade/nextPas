@@ -259,6 +259,7 @@ const
   AtomicBenchSourcePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr';
   AtomicBenchRustComparePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/compare_rust/main.rs';
   AtomicBenchGoComparePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/compare_go/main.go';
+  AtomicBenchCppComparePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/compare_cpp/main.cpp';
   AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
   AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
 var
@@ -271,6 +272,7 @@ var
   LAtomicBenchSource: string;
   LAtomicBenchRustCompareSource: string;
   LAtomicBenchGoCompareSource: string;
+  LAtomicBenchCppCompareSource: string;
   LX8664SnapshotSource: string;
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
@@ -333,10 +335,13 @@ begin
     'atomic benchmark Rust comparison source must exist as an external baseline reference');
   Check(FileExists(AtomicBenchGoComparePath),
     'atomic benchmark Go comparison source must exist as an external baseline reference');
+  Check(FileExists(AtomicBenchCppComparePath),
+    'atomic benchmark C++ comparison source must exist as an external baseline reference');
   LAtomicBenchMakefile := ReadUtf8TextFile(AtomicBenchMakefilePath);
   LAtomicBenchSource := ReadUtf8TextFile(AtomicBenchSourcePath);
   LAtomicBenchRustCompareSource := ReadUtf8TextFile(AtomicBenchRustComparePath);
   LAtomicBenchGoCompareSource := ReadUtf8TextFile(AtomicBenchGoComparePath);
+  LAtomicBenchCppCompareSource := ReadUtf8TextFile(AtomicBenchCppComparePath);
   Check(not FileExists(AtomicX8664SnapshotLegacyPath),
     'x86_64 snapshot must not remain in src');
   LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotArchivePath);
@@ -585,6 +590,8 @@ begin
     'atomic README must point to the external Rust comparison source');
   CheckContains(LAtomicDocsReadme, 'compare_go/main.go',
     'atomic README must point to the external Go comparison source');
+  CheckContains(LAtomicDocsReadme, 'compare_cpp/main.cpp',
+    'atomic README must point to the external C++ comparison source');
   CheckContains(LAtomicDocsReadme, 'platform/compiler flags/input size/baseline',
     'atomic README must name the benchmark evidence envelope');
   CheckContains(LAtomicBenchMakefile,
@@ -600,7 +607,7 @@ begin
     'WriteLn(''Input size: ITERS=1000000; scenarios=plain baseline, AtomicLoad/Store32, AtomicFetchAdd32, AtomicCompareExchange32, TAtomicUInt32'')',
     'atomic benchmark must print the input-size evidence field');
   CheckContains(LAtomicBenchSource,
-    'WriteLn(''Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs and compare_go/main.go external sources (not auto-run)'')',
+    'WriteLn(''Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)'')',
     'atomic benchmark must print the baseline evidence field');
   CheckContains(LAtomicBenchRustCompareSource, 'use std::sync::atomic',
     'atomic Rust comparison source must use Rust std atomic APIs');
@@ -620,6 +627,16 @@ begin
     'atomic Go comparison source must mirror the load/store scenario name');
   CheckContains(LAtomicBenchGoCompareSource, 'AtomicCompareExchange32 1M',
     'atomic Go comparison source must mirror the compare-exchange scenario name');
+  CheckContains(LAtomicBenchCppCompareSource, '#include <atomic>',
+    'atomic C++ comparison source must use C++ std::atomic APIs');
+  CheckContains(LAtomicBenchCppCompareSource, 'constexpr int kIters = 1000000;',
+    'atomic C++ comparison source must use the same nominal iteration count');
+  CheckContains(LAtomicBenchCppCompareSource, 'std::cout << "Compiler flags: g++ -std=c++17 -O2 (recommended manual command)"',
+    'atomic C++ comparison source must print the compiler-flags evidence field');
+  CheckContains(LAtomicBenchCppCompareSource, 'AtomicLoad/Store32 2M',
+    'atomic C++ comparison source must mirror the load/store scenario name');
+  CheckContains(LAtomicBenchCppCompareSource, 'AtomicCompareExchange32 1M',
+    'atomic C++ comparison source must mirror the compare-exchange scenario name');
   CheckContains(LAtomicSource,
     'generic TAtomicPtr<T> = record',
     'atomic facade must expose the generic typed pointer record');

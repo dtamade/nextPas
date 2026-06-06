@@ -25,7 +25,7 @@ begin
   WriteLn('Platform: ', BenchmarkPlatformName);
   WriteLn('Compiler flags: -MObjFPC -Sh -O2');
   WriteLn('Input size: ITERS=1000000; scenarios=plain baseline, AtomicLoad/Store32, AtomicFetchAdd32, AtomicCompareExchange32, TAtomicUInt32');
-  WriteLn('Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs and compare_go/main.go external sources (not auto-run)');
+  WriteLn('Baselines: plain local variable operations for single-thread overhead context; compare_rust/main.rs, compare_go/main.go, and compare_cpp/main.cpp external sources (not auto-run)');
   WriteLn;
 end;
 
