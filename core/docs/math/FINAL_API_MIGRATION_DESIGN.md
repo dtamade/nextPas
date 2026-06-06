@@ -234,6 +234,7 @@ The design keeps the useful `fafafa.game` conventions because they are internall
 - Perspective is right-handed and looks down `-Z`.
 - NDC is `[-1,+1]`.
 - `Ortho` follows OpenGL-style orthographic projection.
+- Reversed non-zero `Ortho` bounds are valid and flip the corresponding axis.
 - Translation lives in column 3: `Data[3, 0..2]`.
 - `Camera2D` uses orthographic bounds centered on `(CenterX, CenterY)` and supports a screen-space `+Y down` convention by swapping top/bottom bounds.
 - Local transform composition, if exposed, uses `Translate * Rotate * Scale`.

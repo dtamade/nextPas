@@ -254,6 +254,27 @@ begin
   ExpectArgumentError('Perspective zero aspect', @RaisePerspectiveZeroAspect);
 end;
 
+procedure TestOrthoAllowsReversedBounds;
+var
+  M: TMat4f;
+  D: TMat4d;
+begin
+  M := Ortho(Single(2.0), Single(-2.0), Single(3.0), Single(-3.0), Single(10.0), Single(0.0));
+  CheckNear(-0.5, M[0, 0], 0.000001, 'Ortho reversed X flips horizontal axis');
+  CheckNear(-1.0 / 3.0, M[1, 1], 0.000001, 'Ortho reversed Y flips vertical axis');
+  CheckNear(0.2, M[2, 2], 0.000001, 'Ortho reversed depth flips Z axis');
+  CheckVec4f(-1.0, -1.0, -1.0, 1.0, M * TVec4f.Create(2.0, 3.0, -10.0, 1.0),
+    'Ortho reversed bounds map near corner');
+  CheckVec4f(1.0, 1.0, 1.0, 1.0, M * TVec4f.Create(-2.0, -3.0, 0.0, 1.0),
+    'Ortho reversed bounds map far corner');
+
+  D := Ortho(Double(2.0), Double(-2.0), Double(3.0), Double(-3.0), Double(10.0), Double(0.0));
+  CheckVec4d(-1.0, -1.0, -1.0, 1.0, D * TVec4d.Create(2.0, 3.0, -10.0, 1.0),
+    'Double Ortho reversed bounds map near corner');
+  CheckVec4d(1.0, 1.0, 1.0, 1.0, D * TVec4d.Create(-2.0, -3.0, 0.0, 1.0),
+    'Double Ortho reversed bounds map far corner');
+end;
+
 procedure TestModelAndViewBuilders;
 var
   M: TMat4f;
@@ -367,6 +388,7 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.math.transform');
   T.Run('projection builders', @TestProjectionBuilders);
+  T.Run('Ortho allows reversed bounds', @TestOrthoAllowsReversedBounds);
   T.Run('model and view builders', @TestModelAndViewBuilders);
   T.Run('LookAt ignores up magnitude', @TestLookAtIgnoresUpMagnitude);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
