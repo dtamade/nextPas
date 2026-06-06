@@ -13,6 +13,7 @@ uses
   nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.io.intf,
+  nextpas.core.io.memory,
   nextpas.core.net,
   nextpas.core.net.intf,
   nextpas.core.http,
@@ -489,6 +490,52 @@ begin
     'Facade NewRequest(string URL, bytes body) preserves method');
   CheckEqual('3', LReq.Headers.Get('content-length'),
     'Facade NewRequest(string URL, bytes body) sets content-length');
+end;
+
+procedure TestNewRequestNoHeadersBodyFacadeOverloads;
+var
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LBody: TBytes;
+  LStream: IStream;
+  LStreamBytes: TBytes;
+begin
+  LUrl := TUrl.Parse('http://example.com/bodyless-headers');
+
+  LReq := nextpas.core.http.NewRequest(hmPost, LUrl, 'hello');
+  Check(LReq <> nil,
+    'Facade NewRequest(TUrl, string body) without headers returns non-nil');
+  Check(LReq.Method = hmPost,
+    'Facade NewRequest(TUrl, string body) without headers preserves method');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(TUrl, string body) without headers sets content-length');
+
+  SetLength(LBody, 3);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+  LReq := nextpas.core.http.NewRequest(hmPatch,
+    'http://example.com/no-headers-bytes', LBody);
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, bytes body) without headers returns non-nil');
+  Check(LReq.Method = hmPatch,
+    'Facade NewRequest(string URL, bytes body) without headers preserves method');
+  CheckEqual('3', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(string URL, bytes body) without headers sets content-length');
+
+  SetLength(LStreamBytes, 4);
+  LStreamBytes[0] := Ord('d');
+  LStreamBytes[1] := Ord('a');
+  LStreamBytes[2] := Ord('t');
+  LStreamBytes[3] := Ord('a');
+  LStream := CreateBytesStreamFrom(LStreamBytes);
+  LReq := nextpas.core.http.NewRequest(hmPut, LUrl, LStream as IReader, 4);
+  Check(LReq <> nil,
+    'Facade NewRequest(TUrl, reader body) without headers returns non-nil');
+  Check(LReq.Method = hmPut,
+    'Facade NewRequest(TUrl, reader body) without headers preserves method');
+  CheckEqual('4', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(TUrl, reader body) without headers sets content-length');
 end;
 
 procedure TestHttpClientShortcutBodyFacadeOverloads;
@@ -1328,6 +1375,8 @@ begin
     @TestNewRequestWithHeadersFacadeOverload);
   T.Run('NewRequest string URL overloads are available through facade',
     @TestNewRequestStringUrlFacadeOverloads);
+  T.Run('NewRequest no-headers body overloads are available through facade',
+    @TestNewRequestNoHeadersBodyFacadeOverloads);
   T.Run('HttpClient shortcut body overloads are available through facade',
     @TestHttpClientShortcutBodyFacadeOverloads);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);

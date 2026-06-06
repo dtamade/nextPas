@@ -197,6 +197,95 @@ begin
     'string URL bytes body helper stores content-length');
 end;
 
+procedure TestNewRequestWithStringBodyWithoutHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LUrl := TUrl.Parse('http://example.com/api/users');
+
+  LReq := NewRequest(hmPost, LUrl, 'hello');
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'string body without headers helper method');
+  Check(LReq.Headers <> nil,
+    'string body without headers helper creates headers');
+  CheckEqual(Int64(1), Int64(LReq.Headers.Count),
+    'string body without headers helper only adds content-length header');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'string body without headers helper sets content-length');
+  CheckEqual(Int64(5), LReq.ContentLength,
+    'string body without headers helper stores content-length');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(5), Int64(LN),
+    'string body without headers helper body length');
+  CheckEqual(Byte(Ord('h')), LBuf[0],
+    'string body without headers helper first byte');
+end;
+
+procedure TestNewRequestWithBytesBodyWithoutHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LBody: TBytes;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  SetLength(LBody, 3);
+  LBody[0] := Ord('b');
+  LBody[1] := 0;
+  LBody[2] := 255;
+
+  LReq := NewRequest(hmPatch, LUrl, LBody);
+
+  CheckEqual(Int64(Ord(hmPatch)), Int64(Ord(LReq.Method)),
+    'bytes body without headers helper method');
+  Check(LReq.Headers <> nil,
+    'bytes body without headers helper creates headers');
+  CheckEqual(Int64(1), Int64(LReq.Headers.Count),
+    'bytes body without headers helper only adds content-length header');
+  CheckEqual('3', LReq.Headers.Get('content-length'),
+    'bytes body without headers helper sets content-length');
+  CheckEqual(Int64(3), LReq.ContentLength,
+    'bytes body without headers helper stores content-length');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(3), Int64(LN),
+    'bytes body without headers helper body length');
+  CheckEqual(Byte(0), LBuf[1],
+    'bytes body without headers helper preserves zero byte');
+  CheckEqual(Byte(255), LBuf[2],
+    'bytes body without headers helper preserves high byte');
+end;
+
+procedure TestNewRequestWithReaderBodyWithoutHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+  LBody: IStream;
+  LData: TBytes;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  SetLength(LData, 4);
+  Move('data'[1], LData[0], 4);
+  LBody := CreateBytesStreamFrom(LData);
+
+  LReq := NewRequest(hmPut, LUrl, LBody as IReader, 4);
+
+  CheckEqual(Int64(Ord(hmPut)), Int64(Ord(LReq.Method)),
+    'reader body without headers helper method');
+  Check(LReq.Headers <> nil,
+    'reader body without headers helper creates headers');
+  CheckEqual(Int64(1), Int64(LReq.Headers.Count),
+    'reader body without headers helper only adds content-length header');
+  CheckEqual('4', LReq.Headers.Get('content-length'),
+    'reader body without headers helper sets content-length');
+  CheckEqual(Int64(4), LReq.ContentLength,
+    'reader body without headers helper stores content-length');
+end;
+
 procedure TestNewRequestWithNilHeadersCreatesHeaders;
 var
   LUrl: TUrl;
@@ -534,6 +623,12 @@ begin
     @TestNewRequestWithBytesBody);
   T.Run('NewRequest accepts string URL bytes body helper',
     @TestNewRequestStringUrlWithBytesBody);
+  T.Run('NewRequest accepts string body helper without headers',
+    @TestNewRequestWithStringBodyWithoutHeaders);
+  T.Run('NewRequest accepts bytes body helper without headers',
+    @TestNewRequestWithBytesBodyWithoutHeaders);
+  T.Run('NewRequest accepts reader body helper without headers',
+    @TestNewRequestWithReaderBodyWithoutHeaders);
   T.Run('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
   T.Run('Request constructors create headers when headers argument is nil',

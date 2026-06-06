@@ -87,9 +87,16 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `NewRequest(Method, Url, Headers, BodyText)` — build a custom request with
   a copied Pascal string body and generated `Content-Length`; callers still set
   `Content-Type` explicitly on the supplied headers when needed.
+- `NewRequest(Method, Url, BodyText)` — the same copied Pascal string body
+  helper, but with auto-created empty headers when callers do not need custom
+  request headers.
 - `NewRequest(Method, Url, Headers, BodyBytes)` — build a custom request with
   a copied `TBytes` body and generated `Content-Length`; this preserves binary
   payload bytes without forcing callers through a Pascal string.
+- `NewRequest(Method, Url, BodyBytes)` / `NewRequest(Method, Url, Body,
+  ContentLength)` — the same binary / reader body helpers without an explicit
+  headers object; they still publish `Content-Length` and still do not guess
+  `Content-Type`.
 - `NewResponse(Status, Headers, Body)` — build responses; nil headers create
   an empty header set so callers can safely read or mutate `Resp.Headers`.
 

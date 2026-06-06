@@ -49,6 +49,15 @@
     锁住 facade 可见性，`test_http_client` 锁住 live `IHttpClient.Do_` 发送零字节
     与高字节 payload 的路径。这补齐 Go/Rust 常见 binary body ergonomics，但仍不
     引入完整 request builder 或 streaming/chunked request body ownership API。
+  - 继续补齐：`NewRequest(Method, Url, Body, ContentLength)`、
+    `NewRequest(Method, Url, BodyText)` 与 `NewRequest(Method, Url, BodyBytes)`
+    现在也直接支持“不先手造 headers”的 public overload。它们复用现有
+    `Headers=nil` contract：自动创建空 header set，只发布 `Content-Length`，
+    但不猜测 `Content-Type`。`test_http_message`、`test_http_contract` 与
+    `test_http_client` 分别锁住 helper contract、facade 可见性和 live
+    `IHttpClient.Do_` 发送路径。这样调用方可以像 Go `NewRequest(...)` /
+    Rust 常见 request body helper 那样先表达 method/url/body，再按需决定是否
+    追加 custom headers，而不必为了“无自定义头”也先分配一个 header 容器。
   - 继续收紧：`IHttpClient.Post` / `Put` / `Patch` shortcut 现在共享内部
     bytes-buffer request helper。它们仍会读取 `IReader` 以发布 `Content-Length`，
     但不再先 materialize 到 Pascal string 再转回 bytes；`test_http_client` 用
