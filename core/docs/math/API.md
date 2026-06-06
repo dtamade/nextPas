@@ -56,6 +56,17 @@ boundary. `core-math-smoke` calls the surface gate first, then reuses the overvi
 facade-only consumer proof. The example imports only `nextpas.core.math` and covers vectors, matrices,
 quaternions, transforms, easing, deterministic random state, and noise.
 
+Run the named facade-only consumer gate when you only want the canonical public consumer contract:
+
+```sh
+make -C core core-math-facade-local-smoke
+```
+
+`core-math-facade-local-smoke` wraps
+`make -C core/tests/nextpas.core.math/test_facade clean test` through the same owner-level
+boundary, so the direct facade-consumer proof stays independently repeatable instead of being tied
+to the trig-specific gate.
+
 ## Scalar And Trig
 
 Constants:
@@ -307,9 +318,10 @@ Run the local trig link smoke on the current host with:
 make -C core core-math-trig-local-smoke
 ```
 
-It bundles `test_trig` and `test_facade` as the current-host local link proof. macOS and Windows
-trig link smokes remain host-gated and must be reported separately until those hosts run equivalent
-checks. The owner-level target first reruns `core-math-api-surface-smoke`, so the current-host
-proof keeps the source-surface `external 'm'` and consumer-boundary checks coupled to the link
-smoke instead of relying on a separate ad-hoc command.
+It bundles `test_trig` plus the facade-consumer proof as the current-host local link proof. macOS
+and Windows trig link smokes remain host-gated and must be reported separately until those hosts
+run equivalent checks. The owner-level target first reruns `core-math-api-surface-smoke`, then
+reuses `core-math-facade-local-smoke`, so the current-host proof keeps the source-surface
+`external 'm'` and consumer-boundary checks coupled to the link smoke without losing an
+independently callable facade-consumer gate.
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.

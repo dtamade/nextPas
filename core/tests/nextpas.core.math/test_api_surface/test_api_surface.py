@@ -106,6 +106,16 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         ),
     ),
     RequiredCoreMakeTarget(
+        target="core-math-facade-local-smoke",
+        command="make -C core core-math-facade-local-smoke",
+        recipe_steps=(
+            (
+                "test-facade",
+                "$(MAKE) -C tests/nextpas.core.math/test_facade clean test",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-full-local-smoke",
         command="make -C core core-math-full-local-smoke",
         recipe_steps=(
@@ -134,12 +144,12 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
                 "$(MAKE) core-math-api-surface-smoke",
             ),
             (
-                "test-trig",
-                "$(MAKE) -C tests/nextpas.core.math/test_trig clean test",
+                "facade-local-smoke",
+                "$(MAKE) core-math-facade-local-smoke",
             ),
             (
-                "test-facade",
-                "$(MAKE) -C tests/nextpas.core.math/test_facade clean test",
+                "test-trig",
+                "$(MAKE) -C tests/nextpas.core.math/test_trig clean test",
             ),
         ),
     ),

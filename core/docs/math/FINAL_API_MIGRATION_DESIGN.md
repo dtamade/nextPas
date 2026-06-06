@@ -11,7 +11,8 @@ internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-in
 without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
 candidate seam result and a negative `TQuatf.Rotate` candidate seam result on the local
 x86_64/Linux gate. M8 documentation and named local module gates are now in place via
-`make -C core core-math-api-surface-smoke`, `make -C core core-math-overview-local-smoke`, `make -C core core-math-smoke`,
+`make -C core core-math-api-surface-smoke`, `make -C core core-math-overview-local-smoke`,
+`make -C core core-math-facade-local-smoke`, `make -C core core-math-smoke`,
 `make -C core core-math-full-local-smoke`, `make -C core core-math-impl-simd-local-smoke`, and
 `make -C core core-math-trig-local-smoke`. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
@@ -289,11 +290,15 @@ Cross-platform link proof has two layers:
   `make -C tests/nextpas.core.math/test_api_surface clean test`, which rejects `external 'm'`
   under `src/nextpas.core.math*.pas` and rejects behavior tests that import
   `nextpas.core.math.ffi`.
+- Facade consumer proof: `make -C core core-math-facade-local-smoke` wraps
+  `make -C tests/nextpas.core.math/test_facade clean test`, so the canonical public consumer
+  contract remains independently callable through an owner-level gate instead of only piggybacking
+  on the trig host proof.
 - Host link proof: `make -C core core-math-trig-local-smoke` first calls
-  `core-math-api-surface-smoke` and then bundles `test_trig` plus `test_facade` as the
-  current-host local link proof. macOS/Windows host gates must still rerun equivalent checks before
-  trig is marked complete. If macOS/Windows gates are unavailable in a round, the round must report
-  that final cross-platform completion is blocked, not complete.
+  `core-math-api-surface-smoke`, then reuses `core-math-facade-local-smoke`, and finally runs
+  `test_trig` as the current-host local link proof. macOS/Windows host gates must still rerun
+  equivalent checks before trig is marked complete. If macOS/Windows gates are unavailable in a
+  round, the round must report that final cross-platform completion is blocked, not complete.
   Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 
 ## Random And Noise Design

@@ -43,6 +43,15 @@ make -C core core-math-overview-local-smoke
 `core-math-overview-local-smoke` wraps
 `make -C core/examples/nextpas.core.math/math_overview clean run`, and `core-math-smoke`
 reuses that named example gate after the surface proof.
+Use the named facade-only consumer gate when you only want the canonical public consumer contract:
+
+```sh
+make -C core core-math-facade-local-smoke
+```
+
+`core-math-facade-local-smoke` wraps
+`make -C core/tests/nextpas.core.math/test_facade clean test` through the same owner-level
+boundary, so the direct facade-consumer proof no longer depends on a trig-specific gate.
 
 ## Public Modules
 
@@ -174,9 +183,10 @@ make -C core core-math-trig-local-smoke
 
 The current trig implementation is protected from a public naked `external 'm'` dependency by
 source-surface tests plus this local host link smoke. `core-math-trig-local-smoke` now reruns
-`core-math-api-surface-smoke` before `test_trig` and `test_facade`, so the current-host proof stays
-self-contained at the `core/Makefile` layer. macOS and Windows host link smokes are still pending
-before the module can claim final cross-platform trig completion.
+`core-math-api-surface-smoke`, then reuses `core-math-facade-local-smoke`, and finally runs
+`test_trig`, so the current-host proof stays self-contained at the `core/Makefile` layer while the
+public consumer contract remains independently repeatable. macOS and Windows host link smokes are
+still pending before the module can claim final cross-platform trig completion.
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 
 ## Verification
