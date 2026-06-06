@@ -132,12 +132,13 @@ var
   LColon: SizeInt;
   LValStart: SizeInt;
   LRawLen: SizeInt;
-  LName, LValue: string;
+  LHeaders: THttpHeaders;
 begin
   if FHeaders <> nil then
     Exit;
 
-  FHeaders := NewHttpHeaders;
+  LHeaders := THttpHeaders.Create;
+  FHeaders := LHeaders as IHttpHeaders;
   LRawLen := Length(FRaw);
   LLineStart := 1;
   while LLineStart <= LRawLen do
@@ -159,9 +160,9 @@ begin
           ((FRaw[LValStart] = ' ') or (FRaw[LValStart] = #9)) do
       Inc(LValStart);
 
-    SetString(LName, PAnsiChar(FRaw) + LLineStart - 1, LColon - LLineStart);
-    SetString(LValue, PAnsiChar(FRaw) + LValStart - 1, LLineEnd - LValStart);
-    FHeaders.Add(LName, LValue);
+    LHeaders.AddParsedSpans(PAnsiChar(FRaw) + LLineStart - 1,
+      SizeUInt(LColon - LLineStart), PAnsiChar(FRaw) + LValStart - 1,
+      SizeUInt(LLineEnd - LValStart));
 
     if (LLineEnd < LRawLen) and (FRaw[LLineEnd] = #13) then
       LLineStart := LLineEnd + 2

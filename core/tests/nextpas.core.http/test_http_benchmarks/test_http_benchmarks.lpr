@@ -912,11 +912,16 @@ procedure TestH1FastLazyHeadersSourceContract;
 var
   LRootDir: string;
   LSource: string;
+  LMaterializeBody: string;
   LGetBody: string;
   LHasBody: string;
 begin
   LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
   LSource := LoadTextFile(PathJoin(LRootDir, H1FastUnitPath));
+  LMaterializeBody := ExtractSourceBlock(LSource,
+    'procedure TFastLazyHeaders.EnsureMaterialized;',
+    'function TFastLazyHeaders.FindRawFirstValue',
+    'TFastLazyHeaders.EnsureMaterialized body');
   LGetBody := ExtractSourceBlock(LSource,
     'function TFastLazyHeaders.Get(const AName: string): string;',
     'function TFastLazyHeaders.GetAll',
@@ -928,6 +933,10 @@ begin
 
   CheckContains(LSource, 'function TFastLazyHeaders.FindRawFirstValue',
     'TFastLazyHeaders raw first-value lookup helper');
+  CheckContains(LMaterializeBody, 'AddParsedSpans(',
+    'TFastLazyHeaders.EnsureMaterialized should use parser-trusted span insertion');
+  CheckNotContains(LMaterializeBody, 'FHeaders.Add(',
+    'TFastLazyHeaders.EnsureMaterialized should not use public header Add path');
   CheckContains(LGetBody, 'FindRawFirstValue(AName, Result)',
     'TFastLazyHeaders.Get should use raw first-value lookup');
   CheckNotContains(LGetBody, 'EnsureMaterialized;',
