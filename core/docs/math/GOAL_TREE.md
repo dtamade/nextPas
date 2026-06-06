@@ -309,9 +309,11 @@ Status:
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
 - Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
-  declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules. A
-  source-to-doc audit of the root facade constants, public type aliases, and public function names
-  found no names missing from `API.md` (`constants=5 types=16 functions=70 missing=0`).
+  declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules.
+  `test_api_surface` now extracts root facade constants, public type aliases, and public function
+  names, then fails if any name is missing from `docs/math/API.md`. The rule was mutation-tested by
+  removing `Fmod` from a temporary API doc copy and observing
+  `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=41 findings=0`.
 - `core/examples/nextpas.core.math/math_overview` now exercises the facade as a public consumer
   example, passes `make -C core/examples/nextpas.core.math/math_overview clean run`, and is protected
   by `test_api_surface`.

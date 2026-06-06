@@ -32,6 +32,8 @@ PUBLIC_DOC_PATHS = (
     "docs/math/README.md",
     "docs/math/API.md",
 )
+ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
+API_DOC_PATH = "docs/math/API.md"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 INTERNAL_IMPL_TEST_PREFIXES = (
     "tests/nextpas.core.math/test_impl_",
@@ -118,6 +120,18 @@ SIMD_MATHUTIL_FORBIDDEN_BARE_RE = re.compile(
     r"Power|Sqrt|Hypot|Fmod|SmoothStep|GCD|LCM|IsNaN|IsNan|IsInfinite"
     r")\s*\(",
     re.IGNORECASE,
+)
+PUBLIC_CONSTANT_RE = re.compile(
+    r"^\s*([A-Z][A-Z0-9_]+)\s*:",
+    re.MULTILINE,
+)
+PUBLIC_TYPE_ALIAS_RE = re.compile(
+    r"^\s*(T[A-Za-z0-9_]+)\s*=",
+    re.MULTILINE,
+)
+PUBLIC_FUNCTION_RE = re.compile(
+    r"^\s*function\s+([A-Za-z0-9_]+)\s*\(",
+    re.MULTILINE,
 )
 REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "src/nextpas.core.math.pas": (
@@ -703,11 +717,46 @@ def scan_missing_required_public_files(root: Path) -> list[Finding]:
     return findings
 
 
+def root_facade_public_names(text: str) -> list[str]:
+    code = interface_text(text)
+    names: set[str] = set()
+    names.update(PUBLIC_CONSTANT_RE.findall(code))
+    names.update(PUBLIC_TYPE_ALIAS_RE.findall(code))
+    names.update(PUBLIC_FUNCTION_RE.findall(code))
+    return sorted(names)
+
+
+def scan_root_facade_api_doc_coverage(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    root_facade = root / ROOT_FACADE_PATH
+    api_doc = root / API_DOC_PATH
+    if not root_facade.is_file() or not api_doc.is_file():
+        return findings
+
+    root_names = root_facade_public_names(
+        root_facade.read_text(encoding="utf-8", errors="replace")
+    )
+    api_text = api_doc.read_text(encoding="utf-8", errors="replace")
+    for name in root_names:
+        if name in api_text:
+            continue
+        add_finding(
+            findings,
+            "api-doc-missing-root-facade-name:" + name,
+            root,
+            api_doc,
+            1,
+            "missing API.md entry for " + name,
+        )
+    return findings
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
     scanned: set[Path] = set()
     findings.extend(scan_missing_required_public_files(root))
+    findings.extend(scan_root_facade_api_doc_coverage(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

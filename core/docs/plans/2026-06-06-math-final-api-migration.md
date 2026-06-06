@@ -304,6 +304,8 @@ Steps:
 - [x] Add a facade-only overview example and run its focused compile/run gate.
 - [x] Re-audit root facade constants, public type aliases, and public function names against
   `docs/math/API.md`.
+- [x] Add an automated `test_api_surface` rule that fails when root facade API names are missing from
+  `docs/math/API.md`; RED was verified by removing `Fmod` in a temporary copy.
 
 Expected result:
 
