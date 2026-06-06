@@ -172,6 +172,7 @@ benchmark 使用 `OPS=1000000`、容量 `1024`，Makefile 默认编译参数是 
 运行输出会先打印 `platform/compiler flags/input size/baseline` envelope，再打印各场景的
 ms、M ops/sec 和 ns/op。
 Pascal benchmark keeps consumed values in a printed sink to reduce optimizer-elision risk.
+Pascal benchmark hot paths should not add extra per-item progress atomics that Rust/Go/C++ comparison sources do not pay; keep only scenario-result sink accumulation and synchronization required by the queue contract itself.
 External Rust/Go/C++ comparison sources should follow the same consumed-value sink discipline.
 External Rust/Go/C++ comparison sources should follow the same logical input ranges as the Pascal benchmark: SPSC/mutex/1T use 1..OPS, and bounded MPMC uses two producers each sending 1..OPS div 2.
 

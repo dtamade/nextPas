@@ -86,7 +86,6 @@ end;
 
 var
   GMpmc: TIntMpmc;
-  GMpmcDone: Int32;
   GMpmcSink: Int64;
 
 function MpmcProducer(AArg: Pointer): Pointer; cdecl;
@@ -108,7 +107,6 @@ begin
   while GMpmc.DequeueWait(LV) do
   begin
     LSink := LSink + LV;
-    InterlockedIncrement(GMpmcDone);
   end;
   AtomicFetchAdd64(GMpmcSink, LSink, moAcqRel);
 end;
@@ -123,7 +121,6 @@ var
   LNs: Int64;
 begin
   GMpmc := TIntMpmc.Create(1024);
-  GMpmcDone := 0;
   GMpmcSink := 0;
   LStart := TInstant.Now;
   for LI := 0 to 1 do

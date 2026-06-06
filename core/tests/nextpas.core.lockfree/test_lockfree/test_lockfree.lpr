@@ -997,6 +997,9 @@ begin
     'benchmark keeps consumed values in a printed sink to reduce optimizer-elision risk',
     'lockfree README must document the benchmark sink keepalive contract');
   CheckContains(LDocsReadme,
+    'Pascal benchmark hot paths should not add extra per-item progress atomics that Rust/Go/C++ comparison sources do not pay; keep only scenario-result sink accumulation and synchronization required by the queue contract itself.',
+    'lockfree README must document the no-extra-progress-atomics benchmark contract');
+  CheckContains(LDocsReadme,
     'External Rust/Go/C++ comparison sources should follow the same consumed-value sink discipline.',
     'lockfree README must document the external comparison sink contract');
   CheckContains(LDocsReadme,
@@ -1155,6 +1158,8 @@ begin
     'lockfree benchmark must keep a visible consumed-value sink');
   CheckContains(LBenchSource, 'WriteLn(''Sink: '', GBenchSink);',
     'lockfree benchmark must print the consumed-value sink');
+  CheckNotContains(LBenchSource, 'InterlockedIncrement(GMpmcDone);',
+    'lockfree benchmark MPMC hot path must not add an unused per-item progress atomic');
   CheckContains(LRustCompareSource, 'use std::sync::mpsc',
     'Rust comparison source must use Rust std channel APIs');
   CheckContains(LRustCompareSource, 'use std::sync::{Arc, Condvar, Mutex};',
