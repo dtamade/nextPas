@@ -47,6 +47,10 @@
     response 抛 `EArgumentError`。`test_http_client` 锁住 live response、消费
     reader、nil body 和 nil response 语义，`test_http_contract` 锁住 facade
     可见性，`http_get_client` example 也已改用该 helper。
+  - 继续收紧：`NewResponse(Status, nil, Body)` 现在与 request helper 的 nil
+    headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
+    response headers。`test_http_message` 锁住 helper contract，`test_http_contract`
+    锁住 facade 可见性。
   - 继续收紧：`IHttpClient.Do_(Req)` 现在在 public client 入口拒绝 nil
     request，并抛 `EArgumentError`，避免调用方错误穿透到 transport 形成
     access violation；`test_http_client` 锁住该错误语义。

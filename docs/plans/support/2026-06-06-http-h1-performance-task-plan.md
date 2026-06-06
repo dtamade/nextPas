@@ -1,5 +1,23 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http response nil headers slice
+
+### Goal
+
+对齐 request/response message helper ergonomics：`NewResponse(Status, nil, Body)`
+应创建空 `IHttpHeaders`，调用方可以安全读取或追加 response headers，而不是拿到
+nil headers 并在 `.Get` / `.Set_` 时触发 access violation。
+
+### Checklist
+
+- [x] RED：`test_http_message` 证明 `NewResponse(..., nil, ...)` 当前不会创建
+  response headers。
+- [x] GREEN：`THttpResponse.Create` 将 nil headers 规范化为 `NewHttpHeaders`。
+- [x] facade source-contract：`test_http_contract` 证明 `nextpas.core.http.NewResponse`
+  暴露同一语义。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`。
+
 ## Active Session: 2026-06-06 http client nil transport response slice
 
 ### Goal

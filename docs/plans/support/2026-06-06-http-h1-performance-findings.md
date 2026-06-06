@@ -1,5 +1,31 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http response nil headers slice
+
+- 本轮转向 message helper ergonomics：
+  `NewRequest(..., nil headers, ...)` 已经会创建空 header set，但
+  `NewResponse(Status, nil, Body)` 旧行为保留 nil headers。调用方随后读
+  `Resp.Headers.Get(...)` 或追加 headers 会触发 access violation。
+- 选择依据：
+  - Go/Rust 的 response header carrier 通常给调用方稳定空集合语义；nil header
+    map/collection 不应成为普通 response helper 的陷阱。
+  - 这是 public message/facade API 质量，不是 H1 malformed case。
+  - 实现可以落在 `THttpResponse.Create`，让 public helper 与内部 direct
+    response construction 共享同一语义。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `26 total, 25 passed, 1 failed`
+    - failed at `NewResponse with nil headers creates headers`
+    - failure: `response helper creates headers when nil`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据:
+  - `THttpResponse.Create` 现在把 nil headers 规范化成 `NewHttpHeaders`。
+  - `test_http_message` 锁住 helper contract；`test_http_contract` 锁住 facade
+    可见性。
+- 复盘结论：
+  response helper 的 nil headers 语义已与 request helper 对齐。后续可继续审计
+  direct request constructor nil headers 或 client option validation，但应单独切片。
+
 ## 2026-06-06 http client nil transport response slice
 
 - 本轮转向 client transport seam 错误语义：

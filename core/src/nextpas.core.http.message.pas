@@ -300,7 +300,10 @@ constructor THttpResponse.Create(const AStatusCode: THttpStatus;
 begin
   inherited Create;
   FStatusCode := AStatusCode;
-  FHeaders := AHeaders;
+  if AHeaders <> nil then
+    FHeaders := AHeaders
+  else
+    FHeaders := NewHttpHeaders;
   FBody := ABody;
 end;
 

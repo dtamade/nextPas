@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http response nil headers slice
+
+- **Status:** completed.
+- Objective:
+  - make `NewResponse(Status, nil, Body)` create an empty `IHttpHeaders`
+  - align response helper ergonomics with request helper nil-headers behavior
+- Scope and safety:
+  - touched HTTP message source, message/contract focused tests, HTTP docs, and
+    this support evidence
+  - did not touch compiler paths, lower-layer modules, client/server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `26 total, 25 passed, 1 failed`
+    - failed at `NewResponse with nil headers creates headers`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpResponse.Create` normalizes nil headers to `NewHttpHeaders`
+  - facade source-contract now proves `nextpas.core.http.NewResponse` exposes
+    the same behavior
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `26 total, 26 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32 total, 32 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - response helper callers can safely read or mutate empty response headers
+    even when they pass nil headers
+  - this does not claim response body ownership changes or a response builder API
+
 ## Session: 2026-06-06 http client nil transport response slice
 
 - **Status:** completed.

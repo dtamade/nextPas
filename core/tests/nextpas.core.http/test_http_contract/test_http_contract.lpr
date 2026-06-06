@@ -489,6 +489,12 @@ begin
   CheckEqual(Int64(201), Int64(LResp.StatusCode), 'StatusCode = 201');
   CheckEqual('val', LResp.Headers.Get('x-test'), 'Headers accessible');
   Check(LResp.Body = nil, 'Body is nil');
+
+  LResp := nextpas.core.http.NewResponse(HTTP_STATUS_OK, nil, nil);
+  Check(LResp.Headers <> nil,
+    'Facade NewResponse creates headers when headers argument is nil');
+  CheckEqual(Int64(0), Int64(LResp.Headers.Count),
+    'Facade NewResponse nil headers start empty');
 end;
 
 procedure TestHttpReadResponseBodyStringFacadeHelper;

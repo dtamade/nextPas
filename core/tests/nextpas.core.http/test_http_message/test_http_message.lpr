@@ -247,6 +247,18 @@ begin
   CheckEqual(Int64(404), Int64(LResp.StatusCode), 'status 404');
 end;
 
+procedure TestNewResponseWithNilHeadersCreatesHeaders;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := NewResponse(HTTP_STATUS_OK, nil, nil);
+
+  Check(LResp.Headers <> nil, 'response helper creates headers when nil');
+  if LResp.Headers <> nil then
+    CheckEqual(Int64(0), Int64(LResp.Headers.Count),
+      'response helper nil headers start empty');
+end;
+
 procedure TestResponseHeadersAccessible;
 var
   LResp: IHttpResponse;
@@ -445,6 +457,8 @@ begin
   T.Run('RemoteAddr from TNetAddress', @TestRemoteAddrFromNetAddress);
   T.Run('NewGetRequest convenience', @TestNewGetRequestConvenience);
   T.Run('NewResponse creates with status', @TestNewResponseCreatesWithStatus);
+  T.Run('NewResponse with nil headers creates headers',
+    @TestNewResponseWithNilHeadersCreatesHeaders);
   T.Run('Response headers accessible', @TestResponseHeadersAccessible);
   T.Run('Response body accessible', @TestResponseBodyAccessible);
   T.Run('Request version defaults to HTTP/1.1', @TestRequestVersionDefaultsHttp11);
