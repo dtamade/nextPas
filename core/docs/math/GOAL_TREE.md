@@ -192,8 +192,8 @@ Status:
 - Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
 - Matrix tests cover compact layout, column-major storage, row/column accessors, arithmetic operators,
   scalar multiply, matrix-vector multiply, matrix-matrix multiply, transpose, determinant, inverse,
-  singular `TryInverse` zeroing the out matrix, singular `Inverse` raising `EArgumentError`, and
-  double-precision variants.
+  near-singular and singular `TryInverse` zeroing the out matrix, `Inverse` raising
+  `EArgumentError` for the same failure cases, and double-precision variants.
 - `nextpas.core.math.mat` is a cohesive matrix value-type unit and currently exceeds the 800-line soft
   split guideline; shared inversion/determinant helpers are extracted, and a forced split is deferred
   until a later architecture slice has evidence that it improves maintainability without widening the

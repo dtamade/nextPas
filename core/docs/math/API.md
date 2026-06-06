@@ -114,8 +114,10 @@ Matrix operations:
 - Determinant and inverse: `Determinant`, `TryInverse`, `Inverse`
 - Comparison: `Equals`
 
-`TryInverse` returns `False` for singular matrices and sets `AInverse` to `Zero`. `Inverse` raises
-`EArgumentError` for singular matrices.
+`TryInverse` is epsilon-based: it returns `False` for singular and numerically singular matrices
+and sets `AInverse` to `Zero`. `Inverse` raises `EArgumentError` for the same inputs. A non-zero
+determinant alone does not guarantee that inverse APIs will succeed if the pivot falls within the
+precision threshold.
 
 ## Quaternions
 

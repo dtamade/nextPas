@@ -399,8 +399,8 @@ Each step is a separate reversible commit.
 Resolved by tests and implementation:
 
 - Constructors use static `Create`; no short free constructors are part of the current public API.
-- `Inverse` raises `EArgumentError` for singular matrices; `TryInverse` returns `False` and zeroes
-  the failed `out` matrix.
+- `Inverse` raises `EArgumentError` for singular and numerically singular matrices; `TryInverse`
+  returns `False` and zeroes the failed `out` matrix.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
 - `FromAxisAngle` normalizes its axis and returns identity for a zero axis instead of inventing a
   partial rotation.
