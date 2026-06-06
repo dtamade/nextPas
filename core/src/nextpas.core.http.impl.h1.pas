@@ -297,6 +297,46 @@ begin
   end;
 end;
 
+function IsRetryableMethod(const AMethod: THttpMethod): Boolean; inline;
+begin
+  Result := AMethod in [hmGet, hmHead, hmOptions, hmTrace];
+end;
+
+function HasRetryIdempotencyKey(const AReq: IHttpRequest): Boolean; inline;
+begin
+  Result := (AReq <> nil) and (AReq.Headers <> nil) and
+    (AReq.Headers.Has('idempotency-key') or AReq.Headers.Has('x-idempotency-key'));
+end;
+
+function IsRetrySafeRequest(const AReq: IHttpRequest): Boolean; inline;
+begin
+  if AReq = nil then
+    Exit(False);
+  Result := IsRetryableMethod(AReq.Method) or HasRetryIdempotencyKey(AReq);
+end;
+
+function CaptureRetryBodyPosition(const AReq: IHttpRequest;
+  out ABodyStream: IStream; out AStartPosition: Int64): Boolean;
+begin
+  ABodyStream := nil;
+  AStartPosition := 0;
+  if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
+    Exit(True);
+  Result := Supports(AReq.Body, IStream, ABodyStream);
+  if Result then
+    AStartPosition := ABodyStream.Position;
+end;
+
+procedure RewindRetryBody(const AReq: IHttpRequest; const ABodyStream: IStream;
+  const AStartPosition: Int64);
+begin
+  if (AReq = nil) or (AReq.Body = nil) or (AReq.ContentLength = 0) then
+    Exit;
+  if ABodyStream = nil then
+    raise EHttpError.Create('pooled retry request body is not replayable');
+  ABodyStream.Position := AStartPosition;
+end;
+
 function RequestMetadata(const AParser: IH1Parser): TH1RequestMetadata; inline;
 begin
   if AParser = nil then
@@ -1917,6 +1957,8 @@ var
   LResp: IHttpResponse;
   LPooled: Boolean;
   LKeepAlive: Boolean;
+  LBodyStream: IStream;
+  LBodyStartPosition: Int64;
 begin
   LUrl := AReq.Url;
   LHost := LUrl.Host;
@@ -1929,6 +1971,7 @@ begin
       LPort := 80;
   end;
 
+  CaptureRetryBodyPosition(AReq, LBodyStream, LBodyStartPosition);
   LConn := PoolGet(LHost, LPort);
   LPooled := LConn <> nil;
   if not LPooled then
@@ -1950,6 +1993,9 @@ begin
     if LPooled then
     begin
       LConn.Close;
+      if not IsRetrySafeRequest(AReq) then
+        raise;
+      RewindRetryBody(AReq, LBodyStream, LBodyStartPosition);
       LConn := TcpConnect(LHost, LPort);
       if FOptions.Timeout > 0 then
       begin

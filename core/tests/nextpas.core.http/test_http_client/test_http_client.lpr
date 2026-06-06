@@ -36,6 +36,10 @@ var
   GRawAcceptLimit: Int32;
   GAcceptCount: Int32;
   GPoolListener: ITcpListener;
+  GRetryListener: ITcpListener;
+  GRetryAcceptCount: Int32;
+  GRetrySecondMethod: string;
+  GRetrySecondBody: string;
 
 type
   PServerCtx = ^TServerCtx;
@@ -243,7 +247,151 @@ begin
   end;
 end;
 
-// PLACEHOLDER_TEST_CONTINUE
+function RetryRequestMethod(const ARawRequest: string): string;
+var
+  LSpacePos: SizeInt;
+begin
+  Result := '';
+  LSpacePos := Pos(' ', ARawRequest);
+  if LSpacePos > 1 then
+    Result := System.Copy(ARawRequest, 1, LSpacePos - 1);
+end;
+
+function RetryRequestContentLength(const ARawHeaders: string): Int64;
+var
+  LLowerHeaders: string;
+  LHeaderPos: SizeInt;
+  LValueStart: SizeInt;
+  LValueEnd: SizeInt;
+begin
+  Result := 0;
+  LLowerHeaders := LowerCase(ARawHeaders);
+  LHeaderPos := Pos(#13#10 + 'content-length:', LLowerHeaders);
+  if LHeaderPos = 0 then
+    Exit;
+
+  LValueStart := LHeaderPos + 2 + Length('content-length:');
+  LValueEnd := LValueStart;
+  while (LValueEnd <= Length(ARawHeaders)) and (ARawHeaders[LValueEnd] <> #13) do
+    Inc(LValueEnd);
+  Result := StrToInt64Def(Trim(System.Copy(ARawHeaders, LValueStart,
+    LValueEnd - LValueStart)), 0);
+end;
+
+procedure ReadRetryRawRequest(const AConn: ITcpStream; out AMethod, ABody: string);
+var
+  LBuf: array[0..4095] of Byte;
+  LN: SizeUInt;
+  LAccum: string;
+  LHeadersEnd: SizeInt;
+  LExpectedBodyLen: Int64;
+begin
+  AMethod := '';
+  ABody := '';
+  LAccum := '';
+  AConn.SetReadDeadline(TDeadline.After(TDuration.FromMilliseconds(500)));
+
+  repeat
+    try
+      LN := AConn.Read(LBuf[0], 4096);
+    except
+      Break;
+    end;
+    if LN = 0 then
+      Break;
+    SetLength(LAccum, Length(LAccum) + Int32(LN));
+    Move(LBuf[0], LAccum[Length(LAccum) - Int32(LN) + 1], LN);
+    LHeadersEnd := Pos(#13#10#13#10, LAccum);
+  until LHeadersEnd > 0;
+
+  if LAccum = '' then
+    Exit;
+
+  AMethod := RetryRequestMethod(LAccum);
+  LHeadersEnd := Pos(#13#10#13#10, LAccum);
+  if LHeadersEnd = 0 then
+    Exit;
+
+  LExpectedBodyLen := RetryRequestContentLength(System.Copy(LAccum, 1, LHeadersEnd + 3));
+  ABody := System.Copy(LAccum, LHeadersEnd + 4, MaxInt);
+  while Int64(Length(ABody)) < LExpectedBodyLen do
+  begin
+    try
+      LN := AConn.Read(LBuf[0], 4096);
+    except
+      Break;
+    end;
+    if LN = 0 then
+      Break;
+    SetLength(ABody, Length(ABody) + Int32(LN));
+    Move(LBuf[0], ABody[Length(ABody) - Int32(LN) + 1], LN);
+  end;
+
+  if Int64(Length(ABody)) > LExpectedBodyLen then
+    SetLength(ABody, LExpectedBodyLen);
+end;
+
+procedure WakeRetryAcceptThread(const APort: UInt16);
+var
+  LConn: ITcpStream;
+begin
+  try
+    LConn := TcpConnect('127.0.0.1', APort);
+    if LConn <> nil then
+      LConn.Close;
+  except
+  end;
+end;
+
+function StaleRetryThread(AArg: Pointer): Pointer; cdecl;
+var
+  LConn: ITcpStream;
+  LReply: string;
+  LI: Int32;
+  LMethod: string;
+  LBody: string;
+begin
+  Result := nil;
+  for LI := 1 to 2 do
+  begin
+    try
+      LConn := GRetryListener.Accept;
+    except
+      Break;
+    end;
+    if LConn = nil then
+      Break;
+
+    InterlockedIncrement(GRetryAcceptCount);
+    try
+      ReadRetryRawRequest(LConn, LMethod, LBody);
+      if LI = 2 then
+      begin
+        GRetrySecondMethod := LMethod;
+        GRetrySecondBody := LBody;
+      end;
+
+      if (LI = 2) and (LBody <> 'payload') then
+        LReply := 'HTTP/1.1 400 Bad Request'#13#10 +
+                  'Content-Length: 3'#13#10 +
+                  #13#10 +
+                  'bad'
+      else if LI = 2 then
+        LReply := 'HTTP/1.1 200 OK'#13#10 +
+                  'Content-Length: 8'#13#10 +
+                  #13#10 +
+                  'retry-ok'
+      else
+        LReply := 'HTTP/1.1 200 OK'#13#10 +
+                  'Content-Length: 2'#13#10 +
+                  #13#10 +
+                  'ok';
+      LConn.Write(LReply[1], SizeUInt(Length(LReply)));
+    except
+    end;
+    LConn.Close;
+  end;
+end;
 
 function StartServer(const AHandler: IHttpHandler; out AServer: THttpServer; out APort: UInt16): TPlatformThreadHandle;
 var
@@ -2660,6 +2808,166 @@ begin
   end;
 end;
 
+procedure TestClientRetriesIdempotentReplayableBodyAfterStalePooledConnection;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LResp: IHttpResponse;
+  LHeaders: IHttpHeaders;
+  LRet: Pointer;
+begin
+  GRetryAcceptCount := 0;
+  GRetrySecondMethod := '';
+  GRetrySecondBody := '';
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @StaleRetryThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'priming request status 200');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
+
+    LHeaders := NewHeaders;
+    LHeaders.Set_('idempotency-key', 'retry-safe');
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      LHeaders, StringBodyReader('payload'), Int64(7));
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(2), Int64(GRetryAcceptCount),
+      'stale pooled connection retry opened a second connection');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode),
+      'idempotent replayable retry request succeeds');
+    CheckEqual('POST', GRetrySecondMethod,
+      'retry preserves original method on second connection');
+    CheckEqual('payload', GRetrySecondBody,
+      'retry replays full request body on second connection');
+    CheckEqual('retry-ok', ReadBodyStr(LResp), 'retry response body');
+
+    LClient := nil;
+  finally
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRetryListener := nil;
+  end;
+end;
+
+procedure TestClientRejectsNonIdempotentReplayableBodyAfterStalePooledConnection;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LRaised: Boolean;
+  LRet: Pointer;
+begin
+  GRetryAcceptCount := 0;
+  GRetrySecondMethod := '';
+  GRetrySecondBody := '';
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @StaleRetryThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    CheckEqual(Int64(200), Int64(LClient.Get(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime').StatusCode),
+      'priming request status 200');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
+
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      NewHeaders, StringBodyReader('payload'), Int64(7));
+    LRaised := False;
+    try
+      LClient.Do_(LReq);
+    except
+      on E: Exception do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'non-idempotent replayable retry request raises');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount),
+      'non-idempotent retry does not open a second connection');
+    CheckEqual('', GRetrySecondMethod,
+      'non-idempotent retry does not send follow-up request');
+    CheckEqual('', GRetrySecondBody,
+      'non-idempotent retry does not send follow-up body');
+
+    LClient := nil;
+  finally
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRetryListener := nil;
+  end;
+end;
+
+procedure TestClientRejectsNonReplayableIdempotentBodyAfterStalePooledConnection;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+  LRaised: Boolean;
+  LRet: Pointer;
+begin
+  GRetryAcceptCount := 0;
+  GRetrySecondMethod := '';
+  GRetrySecondBody := '';
+  GRetryListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GRetryListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @StaleRetryThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    CheckEqual(Int64(200), Int64(LClient.Get(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/prime').StatusCode),
+      'priming request status 200');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount), 'priming request opened first connection');
+
+    LHeaders := NewHeaders;
+    LHeaders.Set_('idempotency-key', 'retry-safe');
+    LReq := NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/upload',
+      LHeaders, TOneShotReader.Create('payload') as IReader, Int64(7));
+    LRaised := False;
+    try
+      LClient.Do_(LReq);
+    except
+      on E: EHttpError do
+        LRaised := True;
+    end;
+
+    Check(LRaised, 'non-replayable idempotent retry body raises EHttpError');
+    CheckEqual(Int64(1), Int64(GRetryAcceptCount),
+      'non-replayable idempotent retry does not open a second connection');
+    CheckEqual('', GRetrySecondMethod,
+      'non-replayable idempotent retry does not send follow-up request');
+    CheckEqual('', GRetrySecondBody,
+      'non-replayable idempotent retry does not send follow-up body');
+
+    LClient := nil;
+  finally
+    if GRetryAcceptCount < 2 then
+      WakeRetryAcceptThread(LPort);
+    GRetryListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GRetryListener := nil;
+  end;
+end;
+
 { Test 6: Client timeout on slow server }
 procedure TestClientTimeout;
 var
@@ -2951,6 +3259,12 @@ begin
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client CloseIdleConnections drops pooled connections',
     @TestClientCloseIdleConnectionsDropsPooledConnections);
+  T.Run('Client retries idempotent replayable body after stale pooled connection',
+    @TestClientRetriesIdempotentReplayableBodyAfterStalePooledConnection);
+  T.Run('Client rejects non-idempotent replayable body after stale pooled connection',
+    @TestClientRejectsNonIdempotentReplayableBodyAfterStalePooledConnection);
+  T.Run('Client rejects non-replayable idempotent body after stale pooled connection',
+    @TestClientRejectsNonReplayableIdempotentBodyAfterStalePooledConnection);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);

@@ -127,6 +127,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - If a transport returns nil from `RoundTrip`, `IHttpClient.Do_` raises
   `EHttpError` instead of leaking a nil-response access violation through the
   client facade.
+- If a stale pooled keep-alive connection fails during `RoundTrip`, the client
+  only retries automatically when the request is retry-safe and the body is
+  replayable. Retry-safe means `GET` / `HEAD` / `OPTIONS` / `TRACE`, or an
+  explicit `Idempotency-Key` / `X-Idempotency-Key`. Non-retry-safe requests and
+  non-replayable non-empty bodies fail fast instead of silently sending a
+  second request with changed semantics.
 - Client redirects follow `301` / `302` / `303` by replaying as `GET` with no body;
   `307` / `308` preserve the original method and replay body readers that support
   `IStream` rewind. Non-empty non-replayable bodies raise `EHttpError` instead
