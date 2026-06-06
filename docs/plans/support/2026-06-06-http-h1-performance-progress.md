@@ -1,5 +1,47 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http request string URL overload slice
+
+- **Status:** completed.
+- Objective:
+  - make custom `IHttpClient.Do_` request construction accept URL strings
+    directly
+  - keep the existing `TUrl` overloads and helper semantics unchanged
+- Scope and safety:
+  - touched only HTTP message/facade source, message/contract/client tests,
+    HTTP docs, and this support evidence
+  - did not touch HTTP runtime, H1 transport, lower layers, compiler paths,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - failed to compile at string URL overload calls:
+      `Incompatible type for arg no. 2: Got "Constant String", expected "TUrl"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at facade string URL overload calls
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile after the live `IHttpClient.Do_` helper path was changed
+      to pass a URL string
+- Landed change:
+  - `NewRequest(Method, UrlString)` parses the string with `TUrl.Parse` and
+    delegates to the existing `TUrl` helper
+  - `NewRequest(Method, UrlString, Headers, Body, ContentLength)` delegates to
+    the existing custom helper after parsing
+  - the facade re-exports both overloads
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `21/21 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - custom client requests can now be built as
+    `NewRequest(hmPost, 'http://...', Headers, Body, ContentLength)` without
+    exposing callers to concrete `THttpRequest` or mandatory manual `TUrl.Parse`
+
 ## Session: 2026-06-06 http get client example env URL slice
 
 - **Status:** completed.

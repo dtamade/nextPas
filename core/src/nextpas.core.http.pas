@@ -134,7 +134,11 @@ function Chain(const AHandler: IHttpHandler; const AMiddlewares: array of IHttpM
 
 { Message factories }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload; inline;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload; inline;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64): IHttpRequest; overload; inline;
 function NewGetRequest(const APath: string): IHttpRequest; inline;
@@ -241,7 +245,20 @@ begin
   Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
 end;
 
+function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl);
+end;
+
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := nextpas.core.http.message.NewRequest(AMethod, AUrl, AHeaders,
+    ABody, AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64): IHttpRequest;
 begin

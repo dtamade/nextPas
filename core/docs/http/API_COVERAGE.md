@@ -32,6 +32,11 @@
     `EArgumentError`。`test_http_message`、`test_http_contract` 和
     `test_http_client` 分别锁住 helper contract、facade 可见性和
     `IHttpClient.Do_` live header/body 发送路径。
+  - 继续补齐：`NewRequest(Method, Url)` 与
+    `NewRequest(Method, Url, Headers, Body, ContentLength)` 现在都接受 URL string
+    overload。调用方可以直接用 `NewRequest(hmPost, 'http://...')` 构造
+    `IHttpClient.Do_` 请求，不必先手写 `TUrl.Parse`；解析、nil headers、
+    `content-length` 与 negative length 语义沿用同一 helper contract。
   - 暂不做：不引入完整 fluent `IHttpRequestBuilder`。当前 helper 已覆盖低风险
     ergonomics 缺口；per-request timeout、redirect override、form/json body helper、
     streaming/chunked request body ownership 等需要更明确 contract 后再扩。

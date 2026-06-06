@@ -1,5 +1,43 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http request string URL overload slice
+
+- 本轮继续收紧 client request construction ergonomics：
+  上一轮 `NewRequest(Method, Url, Headers, Body, ContentLength)` 已让调用方摆脱
+  concrete `THttpRequest`，但仍要求先手写 `TUrl.Parse`。
+- 选择依据：
+  - Go `net/http.NewRequest` 和 Rust 常见 client builder surface 都允许调用方直接给
+    URL 字符串，手动 URL record 解析不应成为构造 `IHttpClient.Do_` request 的默认负担。
+  - 这是 helper overload，不改 `IHttpClient` vtable，不引入 fluent builder，
+    也不改变 H1 transport/body ownership。
+- 实现决策：
+  - `nextpas.core.http.message.NewRequest` 新增两个 string URL overload：
+    简单 request 和 headers/body/content-length request。
+  - facade `nextpas.core.http.NewRequest` 同步转发两个 overload。
+  - 实现只调用 `TUrl.Parse(AUrl)` 后复用既有 `TUrl` overload，因此 nil headers、
+    `content-length`、negative length 和 URL parse error contract 不分叉。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - 编译失败，`Incompatible type for arg no. 2: Got "Constant String", expected "TUrl"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败，facade overload 同样缺失。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败，live `IHttpClient.Do_` helper 用例不能直接传 URL string。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `24/24 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `31/31 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `21/21 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是低风险 public helper ergonomics，不是 premature builder。
+  后续 client API 仍应优先评估 per-request timeout / redirect override /
+  body ownership，而不是扩大 shortcut 方法数量。
+
 ## 2026-06-06 http get client example env URL slice
 
 - 本轮针对 goal 中“examples / smoke 不依赖固定端口”的剩余小缺口：

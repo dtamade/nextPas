@@ -438,6 +438,34 @@ begin
     'Facade NewRequest(headers/body) preserves headers');
 end;
 
+procedure TestNewRequestStringUrlFacadeOverloads;
+var
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LReq := nextpas.core.http.NewRequest(hmGet,
+    'http://example.com/search?q=next');
+
+  Check(LReq <> nil, 'Facade NewRequest(string URL) returns non-nil');
+  Check(LReq.Method = hmGet, 'Facade NewRequest(string URL) preserves method');
+  CheckEqual('/search', LReq.Path,
+    'Facade NewRequest(string URL) parses path');
+  CheckEqual('q=next', LReq.RawQuery,
+    'Facade NewRequest(string URL) parses query');
+
+  LHeaders := NewHeaders;
+  LHeaders.Set_('x-api', 'next');
+  LReq := nextpas.core.http.NewRequest(hmPost,
+    'http://example.com/upload', LHeaders, nil, 0);
+
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, headers/body) returns non-nil');
+  Check(LReq.Method = hmPost,
+    'Facade NewRequest(string URL, headers/body) preserves method');
+  CheckEqual('next', LReq.Headers.Get('x-api'),
+    'Facade NewRequest(string URL, headers/body) preserves headers');
+end;
+
 { Test 4: NewResponse — StatusCode/Headers accessible }
 procedure TestNewResponse;
 var
@@ -1158,6 +1186,8 @@ begin
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
   T.Run('NewRequest headers/body overload is available through facade',
     @TestNewRequestWithHeadersFacadeOverload);
+  T.Run('NewRequest string URL overloads are available through facade',
+    @TestNewRequestStringUrlFacadeOverloads);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
   T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);

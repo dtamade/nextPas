@@ -71,11 +71,12 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 
 ### Messages
 
-- `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build simple requests
+- `NewRequest(Method, Url)` / `NewGetRequest(Path)` — build simple requests;
+  `Url` can be either a `TUrl` or a URL string.
 - `NewRequest(Method, Url, Headers, Body, ContentLength)` — build custom
-  requests for `IHttpClient.Do_`; nil headers create an empty header set, body
-  requests publish `Content-Length`, and negative content length raises
-  `EArgumentError`
+  requests for `IHttpClient.Do_`; `Url` can be either a `TUrl` or a URL string,
+  nil headers create an empty header set, body requests publish
+  `Content-Length`, and negative content length raises `EArgumentError`.
 - `NewResponse(Status, Headers, Body)` — build responses
 
 ### Server / Client (interfaces)

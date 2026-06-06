@@ -303,7 +303,6 @@ var
   LClient: IHttpClient;
   LResp: IHttpResponse;
   LReq: IHttpRequest;
-  LUrl: TUrl;
   LHeaders: IHttpHeaders;
   LGotHeader: string;
   LGotContentLength: Int64;
@@ -329,11 +328,11 @@ begin
   LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
   try
     LClient := NewHttpClient;
-    LUrl := TUrl.Parse('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder');
     LHeaders := NewHeaders;
     LHeaders.Set_('x-client', 'request-helper');
-    LReq := nextpas.core.http.NewRequest(hmPost, LUrl, LHeaders,
-      StringBodyReader('payload') as IReader, 7);
+    LReq := nextpas.core.http.NewRequest(hmPost,
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder',
+      LHeaders, StringBodyReader('payload') as IReader, 7);
 
     LResp := LClient.Do_(LReq);
 

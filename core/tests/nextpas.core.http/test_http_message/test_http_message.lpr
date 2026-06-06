@@ -29,6 +29,21 @@ begin
   CheckEqual('example.com', LReq.Url.Host, 'url host');
 end;
 
+procedure TestNewRequestParsesStringUrl;
+var
+  LReq: IHttpRequest;
+begin
+  LReq := NewRequest(hmGet, 'http://example.com:8080/api/users?page=1');
+  CheckEqual(Int64(Ord(hmGet)), Int64(Ord(LReq.Method)),
+    'string URL request helper method');
+  CheckEqual('example.com', LReq.Url.Host, 'string URL request helper host');
+  CheckEqual(Int64(8080), Int64(LReq.Url.Port),
+    'string URL request helper port');
+  CheckEqual('/api/users', LReq.Path, 'string URL request helper path');
+  CheckEqual('page=1', LReq.RawQuery,
+    'string URL request helper query');
+end;
+
 procedure TestNewRequestWithHeadersBodyAndContentLength;
 var
   LUrl: TUrl;
@@ -61,6 +76,35 @@ begin
   LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
   CheckEqual(Int64(11), Int64(LN), 'request helper body length');
   CheckEqual(Byte(Ord('h')), LBuf[0], 'request helper body first byte');
+end;
+
+procedure TestNewRequestStringUrlWithHeadersBodyAndContentLength;
+var
+  LHeaders: IHttpHeaders;
+  LBody: IStream;
+  LReq: IHttpRequest;
+  LData: TBytes;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-custom', 'client');
+  LData := nil;
+  SetLength(LData, 5);
+  Move('hello'[1], LData[0], 5);
+  LBody := CreateBytesStreamFrom(LData);
+
+  LReq := NewRequest(hmPost, 'http://example.com/api/users',
+    LHeaders, LBody as IReader, 5);
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'string URL request helper with body method');
+  CheckEqual('/api/users', LReq.Path,
+    'string URL request helper with body path');
+  CheckEqual('client', LReq.Headers.Get('x-custom'),
+    'string URL request helper preserves custom headers');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'string URL request helper sets content-length');
+  CheckEqual(Int64(5), LReq.ContentLength,
+    'string URL request helper stores content-length');
 end;
 
 procedure TestNewRequestWithNilHeadersCreatesHeaders;
@@ -354,8 +398,11 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.message');
   T.Run('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
+  T.Run('NewRequest parses string URL', @TestNewRequestParsesStringUrl);
   T.Run('NewRequest accepts headers, body, and content length',
     @TestNewRequestWithHeadersBodyAndContentLength);
+  T.Run('NewRequest accepts string URL with headers, body, and content length',
+    @TestNewRequestStringUrlWithHeadersBodyAndContentLength);
   T.Run('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
   T.Run('NewRequest rejects negative content length',

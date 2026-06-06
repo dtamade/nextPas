@@ -76,7 +76,11 @@ type
 
 { Factory helpers }
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest; overload;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64): IHttpRequest; overload;
 function NewGetRequest(const APath: string): IHttpRequest;
@@ -304,6 +308,11 @@ begin
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, NewHttpHeaders, nil, 0);
 end;
 
+function NewRequest(const AMethod: THttpMethod; const AUrl: string): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl));
+end;
+
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
   const AHeaders: IHttpHeaders; const ABody: IReader;
   const AContentLength: Int64): IHttpRequest;
@@ -319,6 +328,14 @@ begin
   if (ABody <> nil) or (AContentLength > 0) then
     LHeaders.Set_('content-length', IntToStr(AContentLength));
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
+    AContentLength);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+begin
+  Result := NewRequest(AMethod, TUrl.Parse(AUrl), AHeaders, ABody,
     AContentLength);
 end;
 

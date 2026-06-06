@@ -1,5 +1,27 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http request string URL overload slice
+
+### Goal
+
+继续收紧 client ergonomics：`NewRequest(Method, Url)` 与
+`NewRequest(Method, Url, Headers, Body, ContentLength)` 除了接受 `TUrl`，
+也接受 URL string。调用方可以直接构造 `IHttpClient.Do_` 请求，不必先手写
+`TUrl.Parse`；解析和 body/header contract 仍复用现有 helper。
+
+### Checklist
+
+- [x] RED：`test_http_message` 先用 string URL overload 构造简单 request
+  与 headers/body request，当前编译失败，错误为 string 参数仍要求 `TUrl`。
+- [x] RED：`test_http_contract` 先通过 facade 调用 string URL overload，
+  当前编译失败，证明门面还没有暴露该 public surface。
+- [x] RED：`test_http_client` 把 live `IHttpClient.Do_` request helper 用例改成
+  string URL overload，当前编译失败，证明 ergonomics 缺口会影响真实 client path。
+- [x] GREEN：在 `nextpas.core.http.message` 与 `nextpas.core.http` facade
+  增加 string URL overload；实现只调用 `TUrl.Parse` 并复用既有 helper contract。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`、`test_http_client`。
+
 ## Active Session: 2026-06-06 http get client example env URL slice
 
 ### Goal
