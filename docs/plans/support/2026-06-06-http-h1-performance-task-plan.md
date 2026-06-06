@@ -1,5 +1,30 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http redirect header ownership slice
+
+### Goal
+
+收紧 client redirect header ownership：follow-up request 应继承 caller headers，
+same-authority redirect 保留普通 header 与敏感 header；cross-authority redirect
+继续保留普通 header，但剥离 `Authorization`、`WWW-Authenticate`、`Cookie`、
+`Cookie2`。`301` / `302` / `303` 改成 bodyless `GET` 时还必须删除
+`content-length` / `transfer-encoding`，避免 nextPas 的 header-carried
+content length 造成“声明 body 但无 body”的坏请求。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明 same-authority
+  redirect 当前不会继承 `x-trace` / auth / cookie headers。
+- [x] RED：同一 fake transport 证明 cross-authority redirect 当前连普通
+  `x-trace` header 都会丢失，无法区分普通 header carry-over 与敏感 header
+  stripping。
+- [x] GREEN：新增内部 redirect header clone/sanitize helper；保留普通 header，
+  跨 authority 删除敏感 header，bodyless follow-up 删除 body framing headers。
+- [x] 保持本 slice 边界：不新增 `CheckRedirect`、cookie jar、per-request redirect
+  policy 或 request builder vtable。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http 307 seekable body replay slice
 
 ### Goal

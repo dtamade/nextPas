@@ -57,6 +57,11 @@ type
     FSeenRawQuery: string;
     FSeenQueryParam: string;
     FSeenFragment: string;
+    FSeenTraceHeader: string;
+    FSeenAuthorizationHeader: string;
+    FSeenWwwAuthenticateHeader: string;
+    FSeenCookieHeader: string;
+    FSeenCookie2Header: string;
   public
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
@@ -71,6 +76,11 @@ type
     property SeenRawQuery: string read FSeenRawQuery;
     property SeenQueryParam: string read FSeenQueryParam;
     property SeenFragment: string read FSeenFragment;
+    property SeenTraceHeader: string read FSeenTraceHeader;
+    property SeenAuthorizationHeader: string read FSeenAuthorizationHeader;
+    property SeenWwwAuthenticateHeader: string read FSeenWwwAuthenticateHeader;
+    property SeenCookieHeader: string read FSeenCookieHeader;
+    property SeenCookie2Header: string read FSeenCookie2Header;
   end;
 
   TOneShotReader = class(TInterfacedObject, IReader)
@@ -242,6 +252,11 @@ begin
   FSeenRawQuery := AReq.RawQuery;
   FSeenQueryParam := AReq.QueryParam('from');
   FSeenFragment := LUrl.Fragment;
+  FSeenTraceHeader := AReq.Headers.Get('x-trace');
+  FSeenAuthorizationHeader := AReq.Headers.Get('authorization');
+  FSeenWwwAuthenticateHeader := AReq.Headers.Get('www-authenticate');
+  FSeenCookieHeader := AReq.Headers.Get('cookie');
+  FSeenCookie2Header := AReq.Headers.Get('cookie2');
   LHeaders.Set_('content-length', '7');
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'));
 end;
@@ -1243,6 +1258,84 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'fragment-only redirect final body');
 end;
 
+procedure TestClientRedirectPreservesHeadersOnSameAuthority;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '/next';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LHeaders := NewHeaders;
+  LHeaders.Set_('x-trace', 'trace-1');
+  LHeaders.Set_('authorization', 'Bearer same-host');
+  LHeaders.Set_('www-authenticate', 'Basic realm="api"');
+  LHeaders.Set_('cookie', 'session=abc');
+  LHeaders.Set_('cookie2', 'legacy=1');
+  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LResp := LClient.Do_(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'same-authority redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'same-authority redirect transport final status');
+  CheckEqual('trace-1', LTransportObj.SeenTraceHeader,
+    'same-authority redirect preserves ordinary header');
+  CheckEqual('Bearer same-host', LTransportObj.SeenAuthorizationHeader,
+    'same-authority redirect preserves authorization header');
+  CheckEqual('Basic realm="api"', LTransportObj.SeenWwwAuthenticateHeader,
+    'same-authority redirect preserves www-authenticate header');
+  CheckEqual('session=abc', LTransportObj.SeenCookieHeader,
+    'same-authority redirect preserves cookie header');
+  CheckEqual('legacy=1', LTransportObj.SeenCookie2Header,
+    'same-authority redirect preserves cookie2 header');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'same-authority redirect final body');
+end;
+
+procedure TestClientRedirectStripsSensitiveHeadersAcrossAuthority;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '//redirect.test/next';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LHeaders := NewHeaders;
+  LHeaders.Set_('x-trace', 'trace-2');
+  LHeaders.Set_('authorization', 'Bearer cross-host');
+  LHeaders.Set_('www-authenticate', 'Basic realm="api"');
+  LHeaders.Set_('cookie', 'session=def');
+  LHeaders.Set_('cookie2', 'legacy=2');
+  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LResp := LClient.Do_(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'cross-authority redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'cross-authority redirect transport final status');
+  CheckEqual('redirect.test', LTransportObj.SeenHost,
+    'cross-authority redirect updates host');
+  CheckEqual('trace-2', LTransportObj.SeenTraceHeader,
+    'cross-authority redirect preserves ordinary header');
+  CheckEqual('', LTransportObj.SeenAuthorizationHeader,
+    'cross-authority redirect strips authorization header');
+  CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
+    'cross-authority redirect strips www-authenticate header');
+  CheckEqual('', LTransportObj.SeenCookieHeader,
+    'cross-authority redirect strips cookie header');
+  CheckEqual('', LTransportObj.SeenCookie2Header,
+    'cross-authority redirect strips cookie2 header');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'cross-authority redirect final body');
+end;
+
 procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -1568,6 +1661,10 @@ begin
     @TestClientRedirectTransportNormalizesDotSegmentLocation);
   T.Run('Client redirect transport preserves query on fragment-only Location',
     @TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation);
+  T.Run('Client redirect preserves headers on same authority',
+    @TestClientRedirectPreservesHeadersOnSameAuthority);
+  T.Run('Client redirect strips sensitive headers across authority',
+    @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
   T.Run('Client replays seekable body on 307 redirect',
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
   T.Run('Client rejects non-replayable body on 307 redirect',

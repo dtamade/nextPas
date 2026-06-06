@@ -114,6 +114,13 @@ begin
     (System.Copy(AValue, 1, Length(APrefix)) = APrefix);
 end;
 
+function EndsWith(const AValue, ASuffix: string): Boolean;
+begin
+  Result := (Length(AValue) >= Length(ASuffix)) and
+    (System.Copy(AValue, Length(AValue) - Length(ASuffix) + 1,
+      Length(ASuffix)) = ASuffix);
+end;
+
 function HasRedirectQueryDelimiter(const ALocation: string): Boolean;
 var
   LI: SizeInt;
@@ -128,6 +135,48 @@ begin
     end;
   end;
   Result := False;
+end;
+
+function IsRedirectTrustedHost(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
+var
+  LInitialHost: string;
+  LRedirectHost: string;
+begin
+  LInitialHost := LowerCase(AInitialUrl.Host);
+  LRedirectHost := LowerCase(ARedirectUrl.Host);
+  if (LInitialHost = '') or (LRedirectHost = '') then
+    Exit(False);
+  if LRedirectHost = LInitialHost then
+    Exit(True);
+  if (Pos(':', LRedirectHost) > 0) or (Pos('%', LRedirectHost) > 0) then
+    Exit(False);
+  if not EndsWith(LRedirectHost, LInitialHost) then
+    Exit(False);
+  Result := LRedirectHost[Length(LRedirectHost) - Length(LInitialHost)] = '.';
+end;
+
+function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,
+  ARedirectUrl: TUrl; const AIncludeBody: Boolean): IHttpHeaders;
+begin
+  if (AReq <> nil) and (AReq.Headers <> nil) then
+    Result := AReq.Headers.Clone
+  else
+    Result := NewHttpHeaders;
+
+  Result.Del('host');
+  if not AIncludeBody then
+  begin
+    Result.Del('content-length');
+    Result.Del('transfer-encoding');
+  end;
+
+  if not IsRedirectTrustedHost(AInitialUrl, ARedirectUrl) then
+  begin
+    Result.Del('authorization');
+    Result.Del('www-authenticate');
+    Result.Del('cookie');
+    Result.Del('cookie2');
+  end;
 end;
 
 function CaptureRedirectBodyPosition(const AReq: IHttpRequest;
@@ -282,6 +331,7 @@ var
   LLocation: string;
   LNewUrl: TUrl;
   LNewReq: IHttpRequest;
+  LNewHeaders: IHttpHeaders;
   LBodyStream: IStream;
   LBodyStartPosition: Int64;
 begin
@@ -309,11 +359,17 @@ begin
     if (LResp.StatusCode = HTTP_STATUS_MOVED_PERMANENTLY) or
        (LResp.StatusCode = HTTP_STATUS_FOUND) or
        (LResp.StatusCode = HTTP_STATUS_SEE_OTHER) then
-      LNewReq := THttpRequest.Create(hmGet, LNewUrl, hvHttp11, NewHttpHeaders, nil, 0)
+    begin
+      LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, False);
+      LNewReq := THttpRequest.Create(hmGet, LNewUrl, hvHttp11, LNewHeaders,
+        nil, 0);
+    end
     else
     begin
       RewindRedirectBody(AReq, LBodyStream, LBodyStartPosition);
-      LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11, NewHttpHeaders, AReq.Body, AReq.ContentLength);
+      LNewHeaders := RedirectHeadersFor(AReq, LUrl, LNewUrl, True);
+      LNewReq := THttpRequest.Create(AReq.Method, LNewUrl, hvHttp11,
+        LNewHeaders, AReq.Body, AReq.ContentLength);
     end;
 
     Result := DoRequest(LNewReq, ARedirectsLeft - 1);

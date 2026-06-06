@@ -1,5 +1,43 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http redirect header ownership slice
+
+- 本轮转向 client redirect header ownership：
+  当前 redirect follow-up request 每次都用 `NewHttpHeaders`，导致 caller headers
+  在 same-authority redirect 中也全部丢失；这与 Go `net/http` 常见语义不符，
+  也让 future H2/H3 transport seam 看不到稳定的 follow-up request headers。
+- 选择依据：
+  - Go `net/http` 会把初始请求 headers 带到 redirect follow-up，但跨到非同域 /
+    非子域目标时剥离 `Authorization`、`WWW-Authenticate`、`Cookie`、`Cookie2`
+    这类敏感 header。
+  - 这是真实安全/API 语义，不是继续铺 malformed H1 case，也不需要改
+    `IHttpClient` vtable、cookie jar 或 per-request redirect policy。
+  - nextPas 的 `content-length` 是普通 header；`301` / `302` / `303` 改成
+    bodyless `GET` 时必须额外删除 `content-length` / `transfer-encoding`，
+    否则会生成声明 body 但无 body 的 H1 request。
+- 实现决策：
+  - 新增内部 `RedirectHeadersFor`，从当前 request clone headers。
+  - redirect follow-up 永远删除 `host`，让 H1 transport 根据新 URL 重新设置。
+  - bodyless redirect 删除 `content-length` / `transfer-encoding`。
+  - cross-authority redirect 删除 `authorization`、`www-authenticate`、`cookie`、
+    `cookie2`；same host 或 subdomain 保留敏感 headers。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36 total, 34 passed, 2 failed`
+    - failed at `Client redirect preserves headers on same authority`
+    - failure: `same-authority redirect preserves ordinary header: expected "trace-1", got ""`
+    - failed at `Client redirect strips sensitive headers across authority`
+    - failure: `cross-authority redirect preserves ordinary header: expected "trace-2", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36/36 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect follow-up request header contract 的真实收紧。后续如果继续
+  client redirect，应单独设计 per-request redirect policy / callback 或 cookie
+  jar，而不是把这些扩展混入 header carry-over slice。
+
 ## 2026-06-06 http 307 seekable body replay slice
 
 - 本轮转向 client redirect body ownership：

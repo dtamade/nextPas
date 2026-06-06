@@ -1,5 +1,47 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http redirect header ownership slice
+
+- **Status:** completed.
+- Objective:
+  - preserve caller headers on redirect follow-up requests
+  - strip sensitive auth/cookie headers when redirecting to a different
+    authority
+  - keep bodyless `301` / `302` / `303` follow-ups from carrying stale body
+    framing headers
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build
+    artifacts
+- RED:
+  - same-authority RED used an injected `IHttpTransport` and a caller request
+    with `x-trace`, `authorization`, `www-authenticate`, `cookie`, and `cookie2`
+  - cross-authority RED used `Location: //redirect.test/next`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36 total, 34 passed, 2 failed`
+    - same-authority failed because follow-up `x-trace` was empty
+    - cross-authority failed because follow-up ordinary `x-trace` was also empty
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `THttpClient.DoRequest` now builds redirect follow-up headers via an
+    internal clone/sanitize helper
+  - same-authority redirects preserve ordinary and sensitive caller headers
+  - cross-authority redirects strip `Authorization`, `WWW-Authenticate`,
+    `Cookie`, and `Cookie2`
+  - bodyless redirects drop `content-length` / `transfer-encoding`; `host` is
+    removed so the H1 transport derives it from the new URL
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `36/36 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - redirect follow-up request objects now carry stable headers into injected
+    transports and future protocol transports
+  - this does not claim cookie jar support, redirect callback policy, or a
+    full request builder API
+
 ## Session: 2026-06-06 http 307 seekable body replay slice
 
 - **Status:** completed.

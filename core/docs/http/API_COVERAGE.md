@@ -61,6 +61,13 @@
     发送前的位置 rewind 后再 replay；若非空 body 不能 rewind，则抛
     `EHttpError`，不会静默发出空 body 第二跳。`test_http_client` 用注入
     transport 锁住 seekable replay 和 non-replayable fail-fast。
+  - 继续收紧：client redirect follow-up request 现在会继承 caller headers，
+    但跨 authority 时会剥离 `Authorization`、`WWW-Authenticate`、`Cookie`、
+    `Cookie2` 这类敏感 header；same-authority redirect 会保留这些 header。
+    由于 nextPas 把 `content-length` 放在 header 集合里，`301` / `302` / `303`
+    改成 bodyless `GET` 时还会删除 `content-length` / `transfer-encoding`，
+    避免 follow-up wire 声明 body 却没有 body。`test_http_client` 用注入
+    transport 锁住 same-authority preservation 和 cross-authority stripping。
   - 继续收紧：relative redirect `Location` 现在会在 client redirect 层解析
     path/query/fragment，再构造 follow-up request。live H1 wire path 和显式注入
     `IHttpTransport` 的 transport-visible request 都已证明 `/new?x=...` 不会把
