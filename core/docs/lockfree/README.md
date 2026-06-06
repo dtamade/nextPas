@@ -173,6 +173,7 @@ benchmark 使用 `OPS=1000000`、容量 `1024`，Makefile 默认编译参数是 
 ms、M ops/sec 和 ns/op。
 Pascal benchmark keeps consumed values in a printed sink to reduce optimizer-elision risk.
 External Rust/Go/C++ comparison sources should follow the same consumed-value sink discipline.
+External Rust/Go/C++ comparison sources should follow the same logical input ranges as the Pascal benchmark: SPSC/mutex/1T use 1..OPS, and bounded MPMC uses two producers each sending 1..OPS div 2.
 
 `compare_rust/main.rs` 是外部 Rust comparison source，用于后续手动对照。Rust std nearest equivalents: `std::sync::mpsc` for 1P+1C, `Mutex + Condvar + VecDeque` for bounded 2P+2C approximation, and `Mutex<VecDeque>` for the 1T baseline.
 `compare_go/main.go` 是外部 Go comparison source。Go std nearest equivalents: buffered `chan uint64` for 1P+1C and 2P+2C, and same-goroutine buffered channel send/receive for the 1T baseline.

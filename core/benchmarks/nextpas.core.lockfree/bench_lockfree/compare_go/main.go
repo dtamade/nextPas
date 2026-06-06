@@ -35,7 +35,7 @@ func benchChannelSPSC() uint64 {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		for value := uint64(0); value < Ops; value++ {
+		for value := uint64(1); value <= Ops; value++ {
 			ch <- value
 		}
 	}()
@@ -58,14 +58,13 @@ func benchChannelMPMC() uint64 {
 
 	start := time.Now()
 	for producerIndex := 0; producerIndex < 2; producerIndex++ {
-		startValue := uint64(producerIndex * (Ops / 2))
 		wg.Add(1)
-		go func(first uint64) {
+		go func() {
 			defer wg.Done()
-			for offset := 0; offset < Ops/2; offset++ {
-				ch <- first + uint64(offset)
+			for value := uint64(1); value <= Ops/2; value++ {
+				ch <- value
 			}
-		}(startValue)
+		}()
 	}
 
 	for consumerIndex := 0; consumerIndex < 2; consumerIndex++ {
@@ -97,7 +96,7 @@ func benchChannelSingleThread() uint64 {
 	sum := uint64(0)
 
 	start := time.Now()
-	for value := uint64(0); value < Ops; value++ {
+	for value := uint64(1); value <= Ops; value++ {
 		ch <- value
 		sum += <-ch
 	}

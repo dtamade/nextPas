@@ -999,6 +999,9 @@ begin
   CheckContains(LDocsReadme,
     'External Rust/Go/C++ comparison sources should follow the same consumed-value sink discipline.',
     'lockfree README must document the external comparison sink contract');
+  CheckContains(LDocsReadme,
+    'External Rust/Go/C++ comparison sources should follow the same logical input ranges as the Pascal benchmark: SPSC/mutex/1T use 1..OPS, and bounded MPMC uses two producers each sending 1..OPS div 2.',
+    'lockfree README must document the external comparison input-range contract');
   CheckNotContains(LDocsReadme, '当前模块还缺少正式 benchmark harness',
     'lockfree README must not say the benchmark harness is missing when it exists');
 
@@ -1182,6 +1185,12 @@ begin
     'Rust comparison source must accumulate the single-thread consumed-value sink');
   CheckNotContains(LRustCompareSource, ' ^ bench_bounded_mutex_condvar_mpmc()',
     'Rust comparison source must not XOR-aggregate consumed-value sinks');
+  CheckContains(LRustCompareSource, 'for value in 1..=(N as u64) {',
+    'Rust comparison source must use 1..N inclusive for SPSC and 1T input values');
+  CheckContains(LRustCompareSource, 'for value in 1..=((N / 2) as u64) {',
+    'Rust comparison source must mirror the Pascal bounded MPMC per-producer input range');
+  CheckNotContains(LRustCompareSource, 'let start_value = producer_index * (N / 2);',
+    'Rust comparison source must not use disjoint half-range MPMC inputs');
   CheckContains(LGoCompareSource, 'package main',
     'Go comparison source must be a standalone Go program');
   CheckContains(LGoCompareSource, 'sync.WaitGroup',
@@ -1214,6 +1223,12 @@ begin
     'Go comparison source must accumulate the single-thread consumed-value sink');
   CheckNotContains(LGoCompareSource, 'sink = benchChannelSPSC() ^',
     'Go comparison source must not XOR-aggregate consumed-value sinks');
+  CheckContains(LGoCompareSource, 'for value := uint64(1); value <= Ops; value++ {',
+    'Go comparison source must use 1..OPS inclusive for SPSC and 1T input values');
+  CheckContains(LGoCompareSource, 'for value := uint64(1); value <= Ops/2; value++ {',
+    'Go comparison source must mirror the Pascal bounded MPMC per-producer input range');
+  CheckNotContains(LGoCompareSource, 'startValue := uint64(producerIndex * (Ops / 2))',
+    'Go comparison source must not use disjoint half-range MPMC inputs');
   CheckContains(LCppCompareSource, '#include <condition_variable>',
     'C++ comparison source must use C++ std synchronization primitives');
   CheckContains(LCppCompareSource, '#include <mutex>',
@@ -1246,6 +1261,14 @@ begin
     'C++ comparison source must accumulate the single-thread consumed-value sink');
   CheckNotContains(LCppCompareSource, 'gSink = bench_bounded_spsc() ^',
     'C++ comparison source must not XOR-aggregate consumed-value sinks');
+  CheckContains(LCppCompareSource,
+    'for (std::uint64_t value = 1; value <= static_cast<std::uint64_t>(kOps);',
+    'C++ comparison source must use 1..kOps inclusive for SPSC and 1T input values');
+  CheckContains(LCppCompareSource,
+    'for (std::uint64_t value = 1; value <= static_cast<std::uint64_t>(kOps / 2);',
+    'C++ comparison source must mirror the Pascal bounded MPMC per-producer input range');
+  CheckNotContains(LCppCompareSource, 'const int first = producer_index * (kOps / 2);',
+    'C++ comparison source must not use disjoint half-range MPMC inputs');
 end;
 
 begin

@@ -95,7 +95,7 @@ std::uint64_t bench_bounded_spsc() {
 
   const auto start = std::chrono::steady_clock::now();
   std::thread producer([&queue]() {
-    for (std::uint64_t value = 0; value < static_cast<std::uint64_t>(kOps);
+    for (std::uint64_t value = 1; value <= static_cast<std::uint64_t>(kOps);
          ++value) {
       queue.push(value);
     }
@@ -123,10 +123,10 @@ std::uint64_t bench_bounded_mpmc() {
 
   const auto start = std::chrono::steady_clock::now();
   for (int producer_index = 0; producer_index < 2; ++producer_index) {
-    producers.emplace_back([&queue, producer_index]() {
-      const int first = producer_index * (kOps / 2);
-      for (int offset = 0; offset < kOps / 2; ++offset) {
-        queue.push(static_cast<std::uint64_t>(first + offset));
+    producers.emplace_back([&queue]() {
+      for (std::uint64_t value = 1; value <= static_cast<std::uint64_t>(kOps / 2);
+           ++value) {
+        queue.push(value);
       }
     });
   }
@@ -161,7 +161,7 @@ std::uint64_t bench_mutex_queue_single_thread() {
   std::uint64_t sum = 0;
 
   const auto start = std::chrono::steady_clock::now();
-  for (std::uint64_t value = 0; value < static_cast<std::uint64_t>(kOps);
+  for (std::uint64_t value = 1; value <= static_cast<std::uint64_t>(kOps);
        ++value) {
     std::lock_guard<std::mutex> lock(mutex);
     queue.push(value);

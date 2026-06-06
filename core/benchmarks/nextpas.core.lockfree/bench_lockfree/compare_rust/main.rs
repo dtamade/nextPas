@@ -61,7 +61,7 @@ fn bench_std_mpsc_spsc() -> u64 {
     let start = Instant::now();
     let (tx, rx) = mpsc::channel::<u64>();
     let producer = thread::spawn(move || {
-        for value in 0..N as u64 {
+        for value in 1..=(N as u64) {
             tx.send(value).unwrap();
         }
     });
@@ -84,12 +84,11 @@ fn bench_bounded_mutex_condvar_mpmc() -> u64 {
     let mut producers = Vec::new();
     let mut consumers = Vec::new();
 
-    for producer_index in 0..2 {
+    for _ in 0..2 {
         let queue = queue.clone();
         producers.push(thread::spawn(move || {
-            let start_value = producer_index * (N / 2);
-            for offset in 0..(N / 2) {
-                queue.push((start_value + offset) as u64);
+            for value in 1..=((N / 2) as u64) {
+                queue.push(value);
             }
         }));
     }
@@ -123,7 +122,7 @@ fn bench_mutex_vecdeque_single_thread() -> u64 {
     let start = Instant::now();
     let mut sink = 0u64;
 
-    for value in 0..N as u64 {
+    for value in 1..=(N as u64) {
         {
             let mut queue = queue.lock().unwrap();
             queue.push_back(value);
