@@ -279,7 +279,7 @@ Files:
 
 Steps:
 
-- [ ] Document public modules and conventions.
+- [x] Document public modules and conventions.
 - [ ] Run all `tests/nextpas.core.math` projects.
 - [ ] Run API surface checker.
 - [ ] Run heaptrc checks and record evidence.
@@ -288,7 +288,9 @@ Steps:
 
 Expected result:
 
-- Math module is ready for `fafafa.game` cutover.
+- Public docs explain the current module API and conventions.
+- Math is not ready for `fafafa.game` cutover until M7, final module gates, and host trig link
+  evidence are closed.
 
 ### Task 11: fafafa.game Cutover
 

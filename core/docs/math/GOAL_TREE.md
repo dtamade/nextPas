@@ -65,7 +65,7 @@ nextpas.core.math final migration
 ├── M5: Easing                                           [complete]
 ├── M6: Random + noise                                   [complete]
 ├── M7: SIMD-backed implementation seams                 [not started]
-├── M8: API surface, docs, leak proof, and module gates   [not started]
+├── M8: API surface, docs, leak proof, and module gates   [partial: README]
 └── M9: fafafa.game cutover and old Vectors retirement    [not started]
 ```
 
@@ -268,6 +268,14 @@ Completion gate:
 - Trig link safety is proven by surface checks plus host link smokes. Linux runs locally; macOS/Windows must run in their host gates or be recorded as pending blockers before final completion.
 - Heaptrc leak evidence is recorded for tests that allocate.
 - Docs explain the module entry points and matrix/quaternion conventions.
+
+Status:
+
+- Partial. `docs/math/README.md` now documents the public modules, matrix/quaternion conventions,
+  random/noise explicit ownership, SIMD boundary, focused verification commands, and the remaining
+  macOS/Windows trig host-gate risk.
+- M8 is not complete until M7 SIMD seam decisions, full closeout gates, host trig link evidence, and
+  final API/docs review are finished.
 
 ## M9: fafafa.game Cutover And Old Vectors Retirement
 
