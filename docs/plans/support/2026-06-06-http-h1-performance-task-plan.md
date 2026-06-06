@@ -1,5 +1,23 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http get client example env URL slice
+
+### Goal
+
+让 `http_get_client` example 可在 example smoke 中跟随动态保留端口运行：
+无命令行 URL 时先读取 `NEXTPAS_HTTP_GET_URL`，没有环境变量时才回到原
+`127.0.0.1:8080` 示例默认值。
+
+### Checklist
+
+- [x] RED：`test_http_examples` 新增 client smoke，先启动 `http_hello_server`
+  的保留 loopback 端口，再只通过 `NEXTPAS_HTTP_GET_URL` 运行 client；当前
+  client 忽略 env，仍连接 `8080` 并失败。
+- [x] GREEN：只修改 `http_get_client` example，命令行参数优先，其次读取
+  `NEXTPAS_HTTP_GET_URL`，最后才使用旧默认 URL。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_examples`。
+
 ## Active Session: 2026-06-06 http rust std comparator label slice
 
 ### Goal

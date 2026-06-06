@@ -1,5 +1,35 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http get client example env URL slice
+
+- 本轮针对 goal 中“examples / smoke 不依赖固定端口”的剩余小缺口：
+  server examples 的 smoke 已用保留端口启动，但 `http_get_client` 尚未纳入
+  runnable smoke，且无参数时只能连固定 `8080`。
+- 选择依据：
+  - client example 本身已支持命令行 URL，但 Makefile / smoke 场景更适合用环境变量
+    注入动态 URL，避免要求额外参数拼接。
+  - 这是 example ergonomics / runnable smoke 改良，不改变 HTTP runtime 或 public API。
+- 实现决策：
+  - `http_get_client` 的 URL 优先级为：命令行第一个参数 >
+    `NEXTPAS_HTTP_GET_URL` > 原默认 `http://127.0.0.1:8080/hello/world?page=1`。
+  - `test_http_examples` 新增 `http_get_client` build/run smoke：先启动
+    `hello_http_server` 的保留 loopback port，再通过 env URL 运行 client，
+    验证 `url=...`、`status-code=200`、`hello=world`、`page=3`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5 total, 4 passed, 1 failed`
+    - failed at `get client example uses env URL without fixed port`
+    - client 仍连接默认 `8080`，报 `ENetworkError: tcp connect failed (111)`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是 runnable example smoke 的实际缺口，不是扩大 HTTP API。
+  后续如继续 example work，优先考虑 Makefile 参数传递或 server examples 的更清晰
+  dynamic-port story；不应为此改 HTTP server runtime。
+
 ## 2026-06-06 http rust std comparator label slice
 
 - 本轮不是新增 Hyper/Tokio comparator，而是先修正现有 benchmark harness 的

@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http get client example env URL slice
+
+- **Status:** completed.
+- Objective:
+  - make `http_get_client` runnable in smoke tests without relying on the fixed
+    `8080` default
+  - keep CLI URL argument compatibility and avoid HTTP runtime changes
+- Scope and safety:
+  - touched only the client example, HTTP example test harness, HTTP docs, and
+    this support evidence
+  - did not touch HTTP runtime, lower layers, compiler paths, root planning
+    files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5 total, 4 passed, 1 failed`
+    - failed at `get client example uses env URL without fixed port`
+    - client ignored `NEXTPAS_HTTP_GET_URL`, tried default `8080`, and raised
+      `ENetworkError: tcp connect failed (111)`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `http_get_client` URL selection is now argument first,
+    `NEXTPAS_HTTP_GET_URL` second, legacy default last
+  - `test_http_examples` builds `http_get_client`, starts `hello_http_server`
+    on a reserved loopback port, and runs the client via env URL
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_examples clean test`
+    - `5/5 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - all HTTP examples now have runnable smoke coverage, including the client
+    example against a dynamically selected local server port
+
 ## Session: 2026-06-06 http rust std comparator label slice
 
 - **Status:** completed.

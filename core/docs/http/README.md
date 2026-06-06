@@ -30,13 +30,16 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   `Req.PathParam`, `Req.QueryParam`, `NewHttpServer(..., THttpServerOptions.Default)`,
   and `ListenAndServe`.
 - `http_get_client` shows `NewHttpClient`, `Client.Get(URL)`, reading
-  `IHttpResponse.Body`, and printing status / headers / body.
+  `IHttpResponse.Body`, and printing status / headers / body. Pass a URL as
+  the first argument, or set `NEXTPAS_HTTP_GET_URL` when running it from a smoke
+  harness that has selected a non-default port.
 - `http_server_options_demo` shows `THttpServerOptions.Backend`,
   `WriteTimeout`, `MaxHeaderSize`, `MaxBodySize`, and a runnable `POST /echo`
   path where oversize request bodies are rejected before the handler.
 - `http_websocket_echo_demo` shows `UpgradeWebSocket`, `IWebSocket.ReadFrame`,
   `WriteText`, and `Close` on a runnable `/ws` echo endpoint.
-- The client defaults to `http://127.0.0.1:8080/hello/world?page=1`.
+- The client defaults to `http://127.0.0.1:8080/hello/world?page=1` only when
+  neither an argument nor `NEXTPAS_HTTP_GET_URL` is supplied.
 - The server-options demo defaults to `threaded` on `127.0.0.1:8081`; pass
   `epoll` as the first arg on Linux to exercise the readiness backend.
 

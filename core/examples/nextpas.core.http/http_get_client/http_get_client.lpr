@@ -3,6 +3,7 @@ program http_get_client;
 {$I nextpas.core.settings.inc}
 
 uses
+  SysUtils,
   nextpas.core.base,
   nextpas.core.http,
   nextpas.core.io;
@@ -33,7 +34,11 @@ begin
   if ParamCount >= 1 then
     LUrl := ParamStr(1)
   else
-    LUrl := 'http://127.0.0.1:8080/hello/world?page=1';
+  begin
+    LUrl := Trim(GetEnvironmentVariable('NEXTPAS_HTTP_GET_URL'));
+    if LUrl = '' then
+      LUrl := 'http://127.0.0.1:8080/hello/world?page=1';
+  end;
 
   LClient := NewHttpClient;
   LResp := LClient.Get(LUrl);

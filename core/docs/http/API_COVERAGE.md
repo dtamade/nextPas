@@ -40,6 +40,10 @@
     代表 Rust HTTP 生态。Hyper/Tokio 或等价 async Rust comparator 仍是后续
     benchmark truth 缺口。
 - `http.base`、headers、URL、message、router、middleware、server、H1 parser/scan/fast/writer 已有较强 focused 覆盖。
+- `http_get_client` 现在也有 focused runnable example smoke：测试会先启动
+  `http_hello_server` 的保留 loopback 端口，再通过 `NEXTPAS_HTTP_GET_URL`
+  运行 client example，验证它不会依赖固定 `8080`，并能打印 `status-code=200`
+  与 hello response body。
 - `http_server_options_demo` 现在也有 focused runnable example smoke：测试会自动 build example、启动外部 server 进程，并验证 `/health`、`/hello/world`、`POST /echo` 与 oversize body `413` rejection。
 - `http_websocket_echo_demo` 现在也有 focused runnable example smoke：测试会自动 build example、启动外部 server 进程，完成 `/ws` WebSocket handshake，并验证 masked text frame -> server text echo。
 - `THttpClientOptions.Default` / `THttpServerOptions.Default` 现在由 `test_http_base` 直接锁定，其中 `THttpServerOptions.Default.Backend = TCP_SERVER_BACKEND_THREADED` 也已有 focused proof。
