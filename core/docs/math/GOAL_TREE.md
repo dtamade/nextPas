@@ -48,8 +48,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
   probability clamp, dice rules, weighted choice, shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
-  reference vectors, invalid FBM inputs, finite-combination overflow contracts, and heaptrc-clean
-  object ownership.
+  reference vectors, invalid FBM inputs, finite-combination overflow contracts, precision-ceiling
+  stored-value semantics, and heaptrc-clean object ownership.
 - The public surface checker requires the random/noise declarations and rejects public global
   random/noise singleton variables.
 - `nextpas.core.math.impl.simd` now exists as an internal implementation seam for selected

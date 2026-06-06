@@ -286,6 +286,8 @@ Final strategy:
   - `WeightedChoice([])` or non-positive weights
   - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, bad `Gain`, or finite parameter
     combinations that would make octave coordinates or amplitudes non-finite
+- For large `Double` noise coordinates above the sub-unit precision ceiling, document stable
+  stored-value semantics rather than inventing a fake owner-level precision error.
 - Keep deterministic test vectors for seeds.
 
 The public names are now locked by tests as `TRandomState`, `TRandomGen`, and `TNoiseGen`.

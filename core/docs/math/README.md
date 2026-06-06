@@ -90,6 +90,9 @@ negative, and all-zero weights. `Noise1D`/`2D`/`3D` and `FBM1D`/`2D`/`3D` reject
 coordinate inputs. FBM also rejects non-positive octaves and non-positive or non-finite lacunarity
 and gain, plus finite coordinate/lacunarity combinations that would make octave coordinates
 non-finite and finite gain combinations that would make octave amplitudes non-finite.
+Noise and FBM use the stored `Double` coordinate value. Around `2^52` and above, sub-unit deltas
+collapse to the same representable coordinate, so the public contract is stable lattice-equivalent
+semantics rather than an owner-level precision error.
 
 ## SIMD And Platform Boundaries
 

@@ -514,6 +514,50 @@ begin
   end;
 end;
 
+procedure TestNoisePrecisionCeilingFollowsStoredDoubleValue;
+const
+  SUBUNIT_PRECISION_CEILING: Double = 4503599627370496.0; // 2^52
+  SUBUNIT_DELTA: Double = 0.25;
+var
+  Noise: TNoiseGen;
+  LargeX: Double;
+  LargeY: Double;
+  LargeZ: Double;
+begin
+  LargeX := SUBUNIT_PRECISION_CEILING;
+  LargeY := -SUBUNIT_PRECISION_CEILING;
+  LargeZ := SUBUNIT_PRECISION_CEILING;
+
+  CheckEqual(Int64(1), Int64(Ord(LargeX + SUBUNIT_DELTA = LargeX)),
+    'Double precision ceiling swallows sub-unit X deltas');
+  CheckEqual(Int64(1), Int64(Ord(LargeY + SUBUNIT_DELTA = LargeY)),
+    'Double precision ceiling swallows sub-unit Y deltas');
+  CheckEqual(Int64(1), Int64(Ord(LargeZ + SUBUNIT_DELTA = LargeZ)),
+    'Double precision ceiling swallows sub-unit Z deltas');
+
+  Noise := TNoiseGen.Create(2468);
+  try
+    CheckNear(Noise.Noise1D(LargeX), Noise.Noise1D(LargeX + SUBUNIT_DELTA), 0.0,
+      'Noise1D follows the stored Double value past the sub-unit precision ceiling');
+    CheckNear(Noise.Noise2D(LargeX, LargeY),
+      Noise.Noise2D(LargeX + SUBUNIT_DELTA, LargeY + SUBUNIT_DELTA), 0.0,
+      'Noise2D follows the stored Double value past the sub-unit precision ceiling');
+    CheckNear(Noise.Noise3D(LargeX, LargeY, LargeZ),
+      Noise.Noise3D(LargeX + SUBUNIT_DELTA, LargeY + SUBUNIT_DELTA, LargeZ + SUBUNIT_DELTA), 0.0,
+      'Noise3D follows the stored Double value past the sub-unit precision ceiling');
+    CheckNear(Noise.FBM1D(LargeX, 4), Noise.FBM1D(LargeX + SUBUNIT_DELTA, 4), 0.0,
+      'FBM1D follows the stored Double value past the sub-unit precision ceiling');
+    CheckNear(Noise.FBM2D(LargeX, LargeY, 4),
+      Noise.FBM2D(LargeX + SUBUNIT_DELTA, LargeY + SUBUNIT_DELTA, 4), 0.0,
+      'FBM2D follows the stored Double value past the sub-unit precision ceiling');
+    CheckNear(Noise.FBM3D(LargeX, LargeY, LargeZ, 4),
+      Noise.FBM3D(LargeX + SUBUNIT_DELTA, LargeY + SUBUNIT_DELTA, LargeZ + SUBUNIT_DELTA, 4), 0.0,
+      'FBM3D follows the stored Double value past the sub-unit precision ceiling');
+  finally
+    Noise.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.noise');
   T.Run('noise repeatability', @TestNoiseRepeatability);
@@ -523,5 +567,6 @@ begin
   T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
   T.Run('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
   T.Run('FBM rejects non-finite octave amplitude', @TestFBMRejectsNonFiniteOctaveAmplitude);
+  T.Run('precision ceiling follows stored Double value', @TestNoisePrecisionCeilingFollowsStoredDoubleValue);
   T.Summary;
 end.
