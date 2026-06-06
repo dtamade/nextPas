@@ -237,6 +237,8 @@ begin
     'TQuatd Nlerp normalizes scaled inputs');
   Check(TQuatd.Equals(Q, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 2.0), HALF_PI),
     0.000000000001), 'TQuatd FromAxisAngle normalizes axis');
+  Check(TQuatd.Equals(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Zero, HALF_PI), 0.0),
+    'TQuatd FromAxisAngle zero axis returns identity');
 end;
 
 procedure TestFromAxisAngleRejectsNonFiniteInputs;

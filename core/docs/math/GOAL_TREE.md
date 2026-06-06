@@ -34,8 +34,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   singular inverse behavior, including zeroing the failed `TryInverse` out matrix.
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
-  identity, `Conjugate`, `FromAxisAngle`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, quaternion
-  multiply, `Slerp`, `Nlerp`, `Equals`, and double-precision variants.
+  identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
+  `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, quaternion multiply, `Slerp`, `Nlerp`, `Equals`, and
+  double-precision variants.
 - `nextpas.core.math.transform` now provides projection, view, model, and 2D camera builders for
   both `TMat4f` and `TMat4d`.
 - Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
@@ -198,8 +199,9 @@ Status:
   public API boundary.
 - `nextpas.core.math.quat` now provides `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
-  identity, `Conjugate`, axis-angle roundtrip, rotation matrix conversion, vector rotation, quaternion
-  multiply composition, `Slerp`, `Nlerp`, `Equals`, and double-precision variants.
+  identity, `Conjugate`, axis-angle roundtrip, axis normalization, zero-axis identity behavior,
+  rotation matrix conversion, vector rotation, quaternion multiply composition, `Slerp`, `Nlerp`,
+  `Equals`, and double-precision variants.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders

@@ -66,7 +66,8 @@ Builder guard rules are explicit: `Ortho` requires non-zero width, height, and d
 zoom and positive viewport dimensions.
 
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
-identity; zero vector normalization returns zero.
+identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its axis, and a zero
+axis returns identity instead of a partial rotation.
 Singular `TryInverse` returns `False` and zeroes the `out` matrix; `Inverse` raises
 `EArgumentError`.
 

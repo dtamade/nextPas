@@ -400,6 +400,8 @@ Resolved by tests and implementation:
 - `Inverse` raises `EArgumentError` for singular matrices; `TryInverse` returns `False` and zeroes
   the failed `out` matrix.
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
+- `FromAxisAngle` normalizes its axis and returns identity for a zero axis instead of inventing a
+  partial rotation.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
   positive dice/side combinations whose maximum total would overflow `Integer`.
