@@ -1,5 +1,46 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 comparator scale validation slice
+
+- **Status:** completed.
+- Objective:
+  - make single-implementation benchmark binaries reject non-positive
+    `--requests` / `--threads`
+  - align single-binary scale validation with the comparison runner
+  - prevent typoed manual comparator runs from emitting misleading benchmark rows
+- Scope and safety:
+  - touched nextPas / Go / Rust std-only / Hyper-Tokio comparator sources,
+    benchmark focused test, HTTP benchmark docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, benchmark workload sets, comparator row schema, generated outputs,
+    or source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 45 passed, 4 failed`
+    - failures:
+      `bench_server rejects invalid scale`,
+      `go server comparator rejects invalid scale`,
+      `rust server comparator rejects invalid scale`,
+      `hyper/tokio server comparator rejects invalid scale`
+    - invalid scale runs still emitted successful benchmark rows
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - nextPas `bench_server` now rejects invalid positive CLI options before any
+    benchmark run
+  - Go / Rust std-only / Hyper-Tokio comparators now emit
+    `invalid --requests` / `invalid --threads` and exit non-zero
+  - focused test locks the absence of `operation=http.server.keepalive` on
+    invalid scale runs
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 49 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - single-binary comparator runs can no longer silently turn invalid scale
+    input into a fake-success benchmark row
+  - this does not claim new workloads, new performance results, public API
+    changes, or runtime changes
+
 ## Session: 2026-06-06 header benchmark smoke marker slice
 
 - **Status:** completed.

@@ -35,6 +35,11 @@ func rejectInvalidWorkload(value string) {
 	os.Exit(2)
 }
 
+func rejectInvalidPositiveOption(name string, value int) {
+	fmt.Fprintf(os.Stderr, "invalid %s: %d; expected positive integer\n", name, value)
+	os.Exit(2)
+}
+
 func parseOptions() (int, int, string) {
 	requests := flag.Int("requests", 20000, "total requests")
 	threads := flag.Int("threads", 4, "concurrent keep-alive clients")
@@ -42,10 +47,10 @@ func parseOptions() (int, int, string) {
 	flag.Parse()
 
 	if *requests < 1 {
-		*requests = 1
+		rejectInvalidPositiveOption("--requests", *requests)
 	}
 	if *threads < 1 {
-		*threads = 1
+		rejectInvalidPositiveOption("--threads", *threads)
 	}
 	if *threads > *requests {
 		*threads = *requests

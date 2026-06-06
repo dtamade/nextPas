@@ -1,5 +1,36 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 comparator scale validation slice
+
+- 本轮继续收紧 benchmark truth 的输入契约：
+  runner 已经拒绝非正 `--requests` / `--threads`，但四个单体 comparator 仍会把
+  `0` 静默夹到 `1` 或回落默认值，并继续输出正常 benchmark row。
+- 选择依据：
+  - 这和 earlier invalid workload fallback 属于同类 evidence 污染：调用方输入错了，
+    却得到一条看似成功的 row。
+  - 手工 smoke、局部 profile、或保存单体 comparator 输出时，并不总会经过 runner。
+  - 只收紧 CLI fail-fast，不改变 valid scale 的 benchmark 行为。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `49 total, 45 passed, 4 failed`
+    - failed at `bench_server rejects invalid scale`
+    - failed at `go server comparator rejects invalid scale`
+    - failed at `rust server comparator rejects invalid scale`
+    - failed at `hyper/tokio server comparator rejects invalid scale`
+    - failures all emitted successful benchmark rows despite `--requests 0` or
+      `--threads 0`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - nextPas `bench_server` now rejects invalid positive options in `ParseOptions`.
+  - Go comparator exits with `invalid --requests` / `invalid --threads`.
+  - Rust std-only and Hyper/Tokio comparators exit with the same diagnostics.
+  - focused gate also locks that invalid scale runs do not emit
+    `operation=http.server.keepalive`.
+- 复盘结论：
+  single-implementation comparator binaries 现在不会把 invalid scale 输入伪装成成功
+  benchmark row。后续 benchmark truth 仍应优先补输入契约、metadata 和 artifact
+  boundary，而不是直接追加数字。
+
 ## 2026-06-06 header benchmark smoke marker slice
 
 - 本轮收紧 header microbenchmark evidence：

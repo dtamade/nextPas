@@ -92,6 +92,12 @@ as the runner. An explicit invalid `--workload` exits non-zero with an
 `test_http_benchmarks` locks this for nextPas `bench_server`, Go `net/http`,
 Rust std-only, and Hyper/Tokio comparator binaries.
 
+The same focused gate also locks positive scale validation on the single
+implementation binaries: explicit `--requests 0` or `--threads 0` now exits
+non-zero with an `invalid --requests` / `invalid --threads` diagnostic instead
+of silently clamping or falling back to a default run size. This keeps typoed
+manual comparator runs from emitting misleading benchmark rows.
+
 ## Local Median Snapshot: 2026-06-05
 
 These rows were captured on the same host with:

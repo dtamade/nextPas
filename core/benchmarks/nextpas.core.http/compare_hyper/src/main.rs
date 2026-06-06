@@ -48,6 +48,11 @@ fn reject_invalid_workload(value: &str) -> ! {
     std::process::exit(2);
 }
 
+fn reject_invalid_positive_option(name: &str, value: &str) -> ! {
+    eprintln!("invalid {}: {}; expected positive integer", name, value);
+    std::process::exit(2);
+}
+
 fn parse_options() -> (usize, usize, String) {
     let mut requests = 20_000usize;
     let mut threads = 4usize;
@@ -57,18 +62,16 @@ fn parse_options() -> (usize, usize, String) {
 
     while index < args.len() {
         if args[index] == "--requests" && index + 1 < args.len() {
-            if let Ok(value) = args[index + 1].parse::<usize>() {
-                if value > 0 {
-                    requests = value;
-                }
-            }
+            requests = match args[index + 1].parse::<usize>() {
+                Ok(value) if value > 0 => value,
+                _ => reject_invalid_positive_option("--requests", &args[index + 1]),
+            };
             index += 2;
         } else if args[index] == "--threads" && index + 1 < args.len() {
-            if let Ok(value) = args[index + 1].parse::<usize>() {
-                if value > 0 {
-                    threads = value;
-                }
-            }
+            threads = match args[index + 1].parse::<usize>() {
+                Ok(value) if value > 0 => value,
+                _ => reject_invalid_positive_option("--threads", &args[index + 1]),
+            };
             index += 2;
         } else if args[index] == "--workload" && index + 1 < args.len() {
             if is_valid_workload(&args[index + 1]) {

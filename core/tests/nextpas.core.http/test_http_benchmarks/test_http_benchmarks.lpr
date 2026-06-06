@@ -328,6 +328,23 @@ begin
     ALabel + ' should not silently fall back to no_url');
 end;
 
+procedure CheckInvalidScaleRejected(const AExecutable: string;
+  const AArguments: array of string; const AWorkingDir, AOptionName,
+  ALabel: string);
+var
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  RunProcessAndCapture(AExecutable, AArguments, AWorkingDir, LExitCode,
+    LOutput);
+  Check(LExitCode <> 0, ALabel + ' should reject invalid scale: ' +
+    LOutput);
+  CheckContains(LOutput, 'invalid ' + AOptionName,
+    ALabel + ' invalid scale diagnostic');
+  CheckNotContains(LOutput, 'operation=http.server.keepalive',
+    ALabel + ' should not emit a benchmark row');
+end;
+
 procedure CheckRouterDispatchBenchmarkOutput(const AOutput: string);
 begin
   CheckContains(AOutput, 'operation=http.router.dispatch',
@@ -528,6 +545,25 @@ begin
   CheckInvalidWorkloadRejected(LBinaryPath,
     ['--requests', '1', '--threads', '1', '--workload', 'not_a_workload'],
     LBenchDir, 'bench_server');
+end;
+
+procedure TestBenchServerRejectsInvalidScale;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchServerRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchServerRelativeDir);
+  LBinaryPath := ResolveBenchServerBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_server invalid scale binary exists');
+
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '0', '--threads', '1'], LBenchDir, '--requests',
+    'bench_server');
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '0'], LBenchDir, '--threads',
+    'bench_server');
 end;
 
 procedure TestBenchRouterHandlerDispatchSmoke;
@@ -1021,6 +1057,25 @@ begin
     LCompareDir, 'go comparator');
 end;
 
+procedure TestGoServerComparatorRejectsInvalidScale;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareGoRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareGoRelativeDir);
+  LBinaryPath := ResolveGoComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'go comparator invalid scale binary exists');
+
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '0', '--threads', '1'], LCompareDir, '--requests',
+    'go comparator');
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '0'], LCompareDir, '--threads',
+    'go comparator');
+end;
+
 procedure TestRustServerComparatorSmallSmoke;
 var
   LRootDir: string;
@@ -1095,6 +1150,26 @@ begin
     LCompareDir, 'rust comparator');
 end;
 
+procedure TestRustServerComparatorRejectsInvalidScale;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareRustRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareRustRelativeDir);
+  LBinaryPath := ResolveRustComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'rust comparator invalid scale binary exists');
+
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '0', '--threads', '1'], LCompareDir, '--requests',
+    'rust comparator');
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '0'], LCompareDir, '--threads',
+    'rust comparator');
+end;
+
 procedure TestHyperTokioServerComparatorSmallSmoke;
 var
   LRootDir: string;
@@ -1144,6 +1219,26 @@ begin
   CheckInvalidWorkloadRejected(LBinaryPath,
     ['--requests', '1', '--threads', '1', '--workload', 'not_a_workload'],
     LCompareDir, 'hyper comparator');
+end;
+
+procedure TestHyperTokioServerComparatorRejectsInvalidScale;
+var
+  LRootDir: string;
+  LCompareDir: string;
+  LBinaryPath: string;
+begin
+  LRootDir := ResolveCoreRoot(CompareHyperRelativeDir);
+  LCompareDir := PathJoin(LRootDir, CompareHyperRelativeDir);
+  LBinaryPath := ResolveHyperComparatorBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'hyper comparator invalid scale binary exists');
+
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '0', '--threads', '1'], LCompareDir, '--requests',
+    'hyper comparator');
+  CheckInvalidScaleRejected(LBinaryPath,
+    ['--requests', '1', '--threads', '0'], LCompareDir, '--threads',
+    'hyper comparator');
 end;
 
 procedure TestServerComparisonRunnerSmallSmoke;
@@ -1991,6 +2086,8 @@ begin
     @TestBenchServerUrlPathSmallSmoke);
   T.Run('bench_server rejects invalid workload',
     @TestBenchServerRejectsInvalidWorkload);
+  T.Run('bench_server rejects invalid scale',
+    @TestBenchServerRejectsInvalidScale);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
   T.Run('bench_headers lookup smoke',
@@ -2026,15 +2123,21 @@ begin
     @TestGoServerComparatorUrlPathSmallSmoke);
   T.Run('go server comparator rejects invalid workload',
     @TestGoServerComparatorRejectsInvalidWorkload);
+  T.Run('go server comparator rejects invalid scale',
+    @TestGoServerComparatorRejectsInvalidScale);
   T.Run('rust server comparator small smoke', @TestRustServerComparatorSmallSmoke);
   T.Run('rust server comparator url_path small smoke',
     @TestRustServerComparatorUrlPathSmallSmoke);
   T.Run('rust server comparator rejects invalid workload',
     @TestRustServerComparatorRejectsInvalidWorkload);
+  T.Run('rust server comparator rejects invalid scale',
+    @TestRustServerComparatorRejectsInvalidScale);
   T.Run('hyper/tokio server comparator small smoke',
     @TestHyperTokioServerComparatorSmallSmoke);
   T.Run('hyper/tokio server comparator rejects invalid workload',
     @TestHyperTokioServerComparatorRejectsInvalidWorkload);
+  T.Run('hyper/tokio server comparator rejects invalid scale',
+    @TestHyperTokioServerComparatorRejectsInvalidScale);
   T.Run('server comparison runner small smoke',
     @TestServerComparisonRunnerSmallSmoke);
   T.Run('server comparison runner url_path small smoke',

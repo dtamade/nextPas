@@ -51,6 +51,22 @@ begin
   Halt(2);
 end;
 
+procedure RejectInvalidPositiveOption(const AName, AValue: string);
+begin
+  WriteLn(StdErr, 'invalid ', AName, ': ', AValue,
+    '; expected positive integer');
+  Halt(2);
+end;
+
+function ParsePositiveOption(const AName, AValue: string): Int32;
+var
+  LValue: Integer;
+begin
+  if (not TryStrToInt(AValue, LValue)) or (LValue < 1) then
+    RejectInvalidPositiveOption(AName, AValue);
+  Result := LValue;
+end;
+
 function ResponseComplete(const ABuf: array of Byte; const ATotal: SizeUInt;
   const ABodyLen: SizeUInt): Boolean;
 var
@@ -126,7 +142,6 @@ end;
 procedure ParseOptions;
 var
   LI: Integer;
-  LValue: Integer;
 begin
   GRequests := DEFAULT_NUM_REQUESTS;
   GThreads := DEFAULT_NUM_THREADS;
@@ -136,16 +151,12 @@ begin
   begin
     if (ParamStr(LI) = '--requests') and (LI < ParamCount) then
     begin
-      LValue := StrToIntDef(ParamStr(LI + 1), GRequests);
-      if LValue > 0 then
-        GRequests := LValue;
+      GRequests := ParsePositiveOption('--requests', ParamStr(LI + 1));
       Inc(LI, 2);
     end
     else if (ParamStr(LI) = '--threads') and (LI < ParamCount) then
     begin
-      LValue := StrToIntDef(ParamStr(LI + 1), GThreads);
-      if LValue > 0 then
-        GThreads := LValue;
+      GThreads := ParsePositiveOption('--threads', ParamStr(LI + 1));
       Inc(LI, 2);
     end
     else if (ParamStr(LI) = '--workload') and (LI < ParamCount) then

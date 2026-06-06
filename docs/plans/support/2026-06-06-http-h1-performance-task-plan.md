@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 comparator scale validation slice
+
+### Goal
+
+收紧 benchmark truth：nextPas `bench_server`、Go comparator、Rust std-only
+comparator 和 Hyper/Tokio comparator 的 `--requests` / `--threads` 参数必须和
+runner 一样拒绝非正值。否则手工 comparator run 可能因为 typo 继续产出看似有效的
+benchmark row，污染性能证据。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增四组 invalid scale focused tests，证明
+  `--requests 0` / `--threads 0` 当前会被静默夹到 1 或回落默认值。
+- [x] GREEN：四个单体 comparator 都 fail-fast，输出 `invalid --requests` /
+  `invalid --threads` 并非零退出。
+- [x] 保持本 slice 边界：不修改 runner 参数格式、不改变 valid scale 行为、
+  不新增 workload、不修改 HTTP runtime。
+- [x] 更新 HTTP benchmark docs/support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 header benchmark smoke marker slice
 
 ### Goal
