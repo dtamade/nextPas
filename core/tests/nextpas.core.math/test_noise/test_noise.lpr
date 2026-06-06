@@ -457,6 +457,63 @@ begin
   end;
 end;
 
+procedure TestFBMRejectsNonFiniteOctaveAmplitude;
+var
+  Noise: TNoiseGen;
+  Caught: Boolean;
+  ErrorMessage: string;
+begin
+  Noise := TNoiseGen.Create(2468);
+  try
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM1D(0.25, 3, 2.0, 1.0e308);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM1D rejects non-finite octave amplitude');
+    CheckEqual('TNoiseGen.FBM1D: octave amplitude must be finite', ErrorMessage,
+      'FBM1D reports owner-level octave amplitude message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM2D(0.25, 0.75, 3, 2.0, 1.0e308);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM2D rejects non-finite octave amplitude');
+    CheckEqual('TNoiseGen.FBM2D: octave amplitude must be finite', ErrorMessage,
+      'FBM2D reports owner-level octave amplitude message');
+
+    Caught := False;
+    ErrorMessage := '';
+    try
+      Noise.FBM3D(0.25, 0.75, 1.25, 3, 2.0, 1.0e308);
+    except
+      on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
+        Caught := True;
+      end;
+    end;
+    Check(Caught, 'FBM3D rejects non-finite octave amplitude');
+    CheckEqual('TNoiseGen.FBM3D: octave amplitude must be finite', ErrorMessage,
+      'FBM3D reports owner-level octave amplitude message');
+  finally
+    Noise.Free;
+  end;
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.noise');
   T.Run('noise repeatability', @TestNoiseRepeatability);
@@ -465,5 +522,6 @@ begin
   T.Run('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
   T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
   T.Run('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
+  T.Run('FBM rejects non-finite octave amplitude', @TestFBMRejectsNonFiniteOctaveAmplitude);
   T.Summary;
 end.

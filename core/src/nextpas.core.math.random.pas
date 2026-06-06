@@ -47,6 +47,8 @@ type
       const AValue: Double); static;
     class function ScaleOctaveCoordinate(const AFunctionName, AParamName: string;
       const AValue, AScale: Double): Double; static;
+    class function ScaleOctaveAmplitude(const AFunctionName: string;
+      const AValue, AScale: Double): Double; static;
     function Fade(const AT: Double): Double; inline;
     function Lerp(const AT, AA, AB: Double): Double; inline;
     function Grad1D(const AHash: Integer; const AX: Double): Double; inline;
@@ -118,7 +120,7 @@ begin
   Result := Integer(nextpas.core.math.scalar.Round(LWrapped)) and 255;
 end;
 
-function TryScaleCoordinate(const AValue, AScale: Double; out AScaledValue: Double): Boolean; inline;
+function TryScaleFiniteValue(const AValue, AScale: Double; out AScaledValue: Double): Boolean; inline;
 var
   LAbsValue: Double;
 begin
@@ -129,7 +131,7 @@ begin
   end;
 
   LAbsValue := nextpas.core.math.scalar.Abs(AValue);
-  if LAbsValue > (MAX_DOUBLE_MAGNITUDE / AScale) then
+  if (AScale > 1.0) and (LAbsValue > (MAX_DOUBLE_MAGNITUDE / AScale)) then
     Exit(False);
 
   AScaledValue := AValue * AScale;
@@ -353,8 +355,15 @@ end;
 class function TNoiseGen.ScaleOctaveCoordinate(const AFunctionName, AParamName: string;
   const AValue, AScale: Double): Double;
 begin
-  if not TryScaleCoordinate(AValue, AScale, Result) then
+  if not TryScaleFiniteValue(AValue, AScale, Result) then
     raise EArgumentError.Create(AFunctionName + ': octave ' + AParamName + ' must be finite');
+end;
+
+class function TNoiseGen.ScaleOctaveAmplitude(const AFunctionName: string;
+  const AValue, AScale: Double): Double;
+begin
+  if not TryScaleFiniteValue(AValue, AScale, Result) then
+    raise EArgumentError.Create(AFunctionName + ': octave amplitude must be finite');
 end;
 
 procedure TNoiseGen.SetSeed(const ASeed: UInt64);
@@ -568,7 +577,7 @@ begin
     if I < AOctaves - 1 then
     begin
       LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM1D', 'AX', LCoordX, ALacunarity);
-      LAmp := LAmp * AGain;
+      LAmp := ScaleOctaveAmplitude('TNoiseGen.FBM1D', LAmp, AGain);
     end;
   end;
 end;
@@ -595,7 +604,7 @@ begin
     begin
       LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM2D', 'AX', LCoordX, ALacunarity);
       LCoordY := ScaleOctaveCoordinate('TNoiseGen.FBM2D', 'AY', LCoordY, ALacunarity);
-      LAmp := LAmp * AGain;
+      LAmp := ScaleOctaveAmplitude('TNoiseGen.FBM2D', LAmp, AGain);
     end;
   end;
 end;
@@ -626,7 +635,7 @@ begin
       LCoordX := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AX', LCoordX, ALacunarity);
       LCoordY := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AY', LCoordY, ALacunarity);
       LCoordZ := ScaleOctaveCoordinate('TNoiseGen.FBM3D', 'AZ', LCoordZ, ALacunarity);
-      LAmp := LAmp * AGain;
+      LAmp := ScaleOctaveAmplitude('TNoiseGen.FBM3D', LAmp, AGain);
     end;
   end;
 end;
