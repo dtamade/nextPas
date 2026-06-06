@@ -70,7 +70,7 @@ nextpas.core.math final migration
 ├── M5: Easing                                           [complete]
 ├── M6: Random + noise                                   [complete]
 ├── M7: SIMD-backed implementation seams                 [partial: internal Vec3f/Vec4f helper seam]
-├── M8: API surface, docs, leak proof, and module gates   [partial: README and API reference]
+├── M8: API surface, docs, leak proof, and module gates   [partial: docs, local Linux gates, API/docs review]
 └── M9: fafafa.game cutover and old Vectors retirement    [not started]
 ```
 
@@ -296,8 +296,10 @@ Status:
   `MATH_API_SURFACE OK: scanned=40 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
+- Current API/docs review checked `docs/math/API.md` and `docs/math/README.md` against the public
+  declarations in the facade and scalar/trig/vec/mat/quat/transform/easing/random submodules.
 - M8 is not complete until broader M7 SIMD acceleration decisions, host trig link evidence, and final
-  API/docs review are finished.
+  API/docs signoff are finished.
 
 ## M9: fafafa.game Cutover And Old Vectors Retirement
 

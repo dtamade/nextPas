@@ -267,7 +267,7 @@ Steps:
 - [x] Add internal helper behavior coverage in `test_impl_simd`.
 - [x] Add no new SIMD primitives; existing public `VecF32x4*` primitives were sufficient for this slice.
 - [x] Run full math tests plus relevant SIMD tests.
-- [ ] Commit with a precise message for each primitive or math acceleration.
+- [x] Commit the internal helper seam; no public math acceleration was wired in this slice.
 
 Expected result:
 
@@ -293,12 +293,13 @@ Steps:
 - [x] Run API surface checker.
 - [x] Run heaptrc checks and record local zero-leak evidence.
 - [x] Run `git diff --check`.
+- [x] Review `docs/math/API.md` and `docs/math/README.md` against current public declarations.
 - [x] Commit current documentation and local gate evidence.
 
 Expected result:
 
 - Public docs explain the current module API and conventions.
-- Math is not ready for `fafafa.game` cutover until M7, final API/docs review, and host trig link
+- Math is not ready for `fafafa.game` cutover until M7, final API/docs signoff, and host trig link
   evidence are closed.
 
 ### Task 11: fafafa.game Cutover
