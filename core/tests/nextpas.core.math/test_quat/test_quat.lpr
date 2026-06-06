@@ -123,9 +123,19 @@ begin
   TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), SingleNaN);
 end;
 
+procedure RaiseQuatfFromAxisAngleNaNAxis;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(SingleNaN, 0.0, 1.0), Single(HALF_PI));
+end;
+
 procedure RaiseQuatfFromAxisAngleInfiniteAxis;
 begin
   TQuatf.FromAxisAngle(TVec3f.Create(SingleInfinity, 0.0, 1.0), Single(HALF_PI));
+end;
+
+procedure RaiseQuatfFromAxisAngleInfiniteAngle;
+begin
+  TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), SingleInfinity);
 end;
 
 procedure RaiseQuatdFromAxisAngleNaNAngle;
@@ -133,9 +143,19 @@ begin
   TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), DoubleNaN);
 end;
 
+procedure RaiseQuatdFromAxisAngleNaNAxis;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(DoubleNaN, 0.0, 1.0), HALF_PI);
+end;
+
 procedure RaiseQuatdFromAxisAngleInfiniteAxis;
 begin
   TQuatd.FromAxisAngle(TVec3d.Create(DoubleInfinity, 0.0, 1.0), HALF_PI);
+end;
+
+procedure RaiseQuatdFromAxisAngleInfiniteAngle;
+begin
+  TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), DoubleInfinity);
 end;
 
 procedure RaiseQuatfSlerpNaNT;
@@ -144,10 +164,22 @@ begin
     TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleNaN);
 end;
 
+procedure RaiseQuatfSlerpInfiniteT;
+begin
+  TQuatf.Slerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), -SingleInfinity);
+end;
+
 procedure RaiseQuatfNlerpInfiniteT;
 begin
   TQuatf.Nlerp(TQuatf.Identity,
     TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleInfinity);
+end;
+
+procedure RaiseQuatfNlerpNaNT;
+begin
+  TQuatf.Nlerp(TQuatf.Identity,
+    TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI)), SingleNaN);
 end;
 
 procedure RaiseQuatdSlerpNaNT;
@@ -156,10 +188,22 @@ begin
     DoubleNaN);
 end;
 
+procedure RaiseQuatdSlerpInfiniteT;
+begin
+  TQuatd.Slerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    -DoubleInfinity);
+end;
+
 procedure RaiseQuatdNlerpInfiniteT;
 begin
   TQuatd.Nlerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
     DoubleInfinity);
+end;
+
+procedure RaiseQuatdNlerpNaNT;
+begin
+  TQuatd.Nlerp(TQuatd.Identity, TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI),
+    DoubleNaN);
 end;
 
 function QuarterTurnZf: TQuatf;
@@ -327,10 +371,18 @@ procedure TestFromAxisAngleRejectsNonFiniteInputs;
 begin
   ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAngleRad must be finite',
     'TQuatf FromAxisAngle NaN angle', @RaiseQuatfFromAxisAngleNaNAngle);
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAngleRad must be finite',
+    'TQuatf FromAxisAngle infinite angle', @RaiseQuatfFromAxisAngleInfiniteAngle);
+  ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAxis must be finite',
+    'TQuatf FromAxisAngle NaN axis', @RaiseQuatfFromAxisAngleNaNAxis);
   ExpectArgumentErrorMessage('TQuatf.FromAxisAngle: AAxis must be finite',
     'TQuatf FromAxisAngle infinite axis', @RaiseQuatfFromAxisAngleInfiniteAxis);
   ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAngleRad must be finite',
     'TQuatd FromAxisAngle NaN angle', @RaiseQuatdFromAxisAngleNaNAngle);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAngleRad must be finite',
+    'TQuatd FromAxisAngle infinite angle', @RaiseQuatdFromAxisAngleInfiniteAngle);
+  ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAxis must be finite',
+    'TQuatd FromAxisAngle NaN axis', @RaiseQuatdFromAxisAngleNaNAxis);
   ExpectArgumentErrorMessage('TQuatd.FromAxisAngle: AAxis must be finite',
     'TQuatd FromAxisAngle infinite axis', @RaiseQuatdFromAxisAngleInfiniteAxis);
 end;
@@ -339,10 +391,18 @@ procedure TestInterpolationRejectsNonFiniteT;
 begin
   ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
     'TQuatf Slerp NaN t', @RaiseQuatfSlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatf.Slerp: AT must be finite',
+    'TQuatf Slerp infinite t', @RaiseQuatfSlerpInfiniteT);
+  ExpectArgumentErrorMessage('TQuatf.Nlerp: AT must be finite',
+    'TQuatf Nlerp NaN t', @RaiseQuatfNlerpNaNT);
   ExpectArgumentErrorMessage('TQuatf.Nlerp: AT must be finite',
     'TQuatf Nlerp infinite t', @RaiseQuatfNlerpInfiniteT);
   ExpectArgumentErrorMessage('TQuatd.Slerp: AT must be finite',
     'TQuatd Slerp NaN t', @RaiseQuatdSlerpNaNT);
+  ExpectArgumentErrorMessage('TQuatd.Slerp: AT must be finite',
+    'TQuatd Slerp infinite t', @RaiseQuatdSlerpInfiniteT);
+  ExpectArgumentErrorMessage('TQuatd.Nlerp: AT must be finite',
+    'TQuatd Nlerp NaN t', @RaiseQuatdNlerpNaNT);
   ExpectArgumentErrorMessage('TQuatd.Nlerp: AT must be finite',
     'TQuatd Nlerp infinite t', @RaiseQuatdNlerpInfiniteT);
 end;
