@@ -1,5 +1,37 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http redirect default-port authority slice
+
+- 本轮继续收紧 client redirect Host ownership：
+  上一轮 same-authority 判断直接比较 raw `Port` 字段。`TUrl.Parse` 对省略端口
+  使用 `Port=0`，因此 `http://example.test` redirect 到
+  `http://example.test:80` 会被误判为 authority 变化，进而删除 caller
+  `Host` override。
+- 选择依据：
+  - 对 HTTP redirect 来说，omitted port 与 scheme 默认端口应视为同一
+    effective authority；这符合 Go/Rust 常见 URL/client 使用面。
+  - 本缺口只影响 redirect Host ownership，不要求修改全局 `TUrl.Parse`
+    表达方式，也不要求 H1 transport 改端口选择逻辑。
+  - 继续保持 cross-authority 时删除旧 Host 的安全边界。
+- 实现决策：
+  - 新增内部 `DefaultPortForScheme` 与 `EffectiveAuthorityPort`。
+  - `IsRedirectSameAuthority` 现在比较 lower-case host 与 effective port。
+  - 未知 scheme 仍落到 effective port `0`；本轮不扩大到非 HTTP scheme 设计。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40 total, 39 passed, 1 failed`
+    - failed at `Client redirect preserves custom host header on default-port authority`
+    - failure: `default-port redirect preserves caller host override: expected "override.test", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40/40 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  这是 redirect Host ownership 的 effective-authority 修正。后续若继续同线，
+  更高价值方向应转向 redirect response body drain / connection reuse 或
+  per-request redirect policy，而不是继续枚举 URL spelling variants。
+
 ## 2026-06-06 http redirect absolute scheme slice
 
 - 本轮继续收紧 client redirect URL resolution：

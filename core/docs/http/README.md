@@ -94,8 +94,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   strip `Authorization`, `WWW-Authenticate`, `Cookie`, and `Cookie2`; bodyless
   `301` / `302` / `303` follow-ups also drop `Content-Length` /
   `Transfer-Encoding`. Caller-specified `Host` is preserved for relative and
-  same-authority redirects, but dropped when the redirect changes authority so
-  the transport derives the host from the new URL.
+  same-authority redirects, including omitted-port vs. default-port equivalents,
+  but dropped when the redirect changes authority so the transport derives the
+  host from the new URL.
 - Relative, path-relative, and network-path redirect `Location` values are
   resolved before the follow-up request is passed to the transport. Absolute
   `http` / `https` redirect schemes are matched case-insensitively and

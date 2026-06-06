@@ -165,11 +165,32 @@ begin
   Result := LRedirectHost[Length(LRedirectHost) - Length(LInitialHost)] = '.';
 end;
 
+function DefaultPortForScheme(const AScheme: string): UInt16;
+var
+  LScheme: string;
+begin
+  LScheme := LowerCase(AScheme);
+  if LScheme = 'http' then
+    Result := 80
+  else if LScheme = 'https' then
+    Result := 443
+  else
+    Result := 0;
+end;
+
+function EffectiveAuthorityPort(const AUrl: TUrl): UInt16;
+begin
+  if AUrl.Port <> 0 then
+    Result := AUrl.Port
+  else
+    Result := DefaultPortForScheme(AUrl.Scheme);
+end;
+
 function IsRedirectSameAuthority(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
 begin
   Result := (AInitialUrl.Host <> '') and (ARedirectUrl.Host <> '') and
     (LowerCase(AInitialUrl.Host) = LowerCase(ARedirectUrl.Host)) and
-    (AInitialUrl.Port = ARedirectUrl.Port);
+    (EffectiveAuthorityPort(AInitialUrl) = EffectiveAuthorityPort(ARedirectUrl));
 end;
 
 function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,

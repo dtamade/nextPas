@@ -1,5 +1,42 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http redirect default-port authority slice
+
+- **Status:** completed.
+- Objective:
+  - preserve caller-specified `Host` when a redirect changes only from omitted
+    port to the scheme default port
+  - keep cross-authority Host stripping intact
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, global URL parser,
+    H1 transport port selection, server runtime, benchmark assets, root
+    planning files, generated outputs, or build artifacts
+- RED:
+  - injected transport returned `302 Location: http://example.test:80/next`
+  - caller request used URL `http://example.test/old` plus
+    `Host: override.test`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40 total, 39 passed, 1 failed`
+    - failed at
+      `Client redirect preserves custom host header on default-port authority`
+    - expected follow-up Host `override.test`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal scheme default-port lookup for `http` and `https`
+  - same-authority Host preservation now compares effective port instead of
+    raw parsed port
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `40/40 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now preserve caller Host overrides for
+    `http://host` -> `http://host:80` redirects
+  - this does not claim global URL normalization, H1 transport changes, or
+    redirect policy callbacks
+
 ## Session: 2026-06-06 http redirect absolute scheme slice
 
 - **Status:** completed.

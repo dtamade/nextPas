@@ -1,5 +1,26 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http redirect default-port authority slice
+
+### Goal
+
+收紧 client redirect Host ownership：same-authority 判断应使用 effective
+authority。`http://example.test` 与 `http://example.test:80`、`https://example.test`
+与 `https://example.test:443` 应视为 omitted-port / default-port 等价；
+caller-specified `Host` 不应因为显式默认端口而被误删。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 injected transport 证明
+  `http://example.test/old` + `Location: http://example.test:80/next`
+  当前会删除 caller `Host: override.test`。
+- [x] GREEN：新增内部 default-port/effective-authority helper；same-authority
+  Host 判断比较 lower-case host 与 effective port。
+- [x] 保持本 slice 边界：不修改 H1 transport port selection、不修改
+  `TUrl.Parse`、不扩大 redirect policy。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http redirect absolute scheme slice
 
 ### Goal

@@ -1421,6 +1421,37 @@ begin
     'relative redirect with custom host final body');
 end;
 
+procedure TestClientRedirectPreservesCustomHostHeaderOnDefaultPortAuthority;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := 'http://example.test:80/next';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LHeaders := NewHeaders;
+  LHeaders.Set_('host', 'override.test');
+  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LResp := LClient.Do_(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'default-port redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'default-port redirect final status');
+  CheckEqual('override.test', LTransportObj.SeenHostHeader,
+    'default-port redirect preserves caller host override');
+  CheckEqual('example.test', LTransportObj.SeenHost,
+    'default-port redirect keeps same URL host');
+  CheckEqual('/next', LTransportObj.SeenPath,
+    'default-port redirect follows target path');
+  CheckEqual('arrived', ReadBodyStr(LResp),
+    'default-port redirect final body');
+end;
+
 procedure TestClientReplaysSeekableBodyOnTemporaryRedirect;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -1756,6 +1787,8 @@ begin
     @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
   T.Run('Client redirect preserves custom host header on relative Location',
     @TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation);
+  T.Run('Client redirect preserves custom host header on default-port authority',
+    @TestClientRedirectPreservesCustomHostHeaderOnDefaultPortAuthority);
   T.Run('Client replays seekable body on 307 redirect',
     @TestClientReplaysSeekableBodyOnTemporaryRedirect);
   T.Run('Client rejects non-replayable body on 307 redirect',
