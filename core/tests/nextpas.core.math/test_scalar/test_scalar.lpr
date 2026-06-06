@@ -83,6 +83,22 @@ begin
   Fail(AName + ': expected EArgumentError');
 end;
 
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
 procedure TestConstants;
 begin
   CheckNear(3.14159265358979323846, PI_VALUE, 0.000000000000001, 'PI_VALUE');
@@ -225,9 +241,29 @@ begin
   Round(Pow2_63);
 end;
 
+procedure RaiseRoundNaN;
+begin
+  Round(MakeNaN);
+end;
+
+procedure RaiseRoundPositiveInfinity;
+begin
+  Round(MakePositiveInfinity);
+end;
+
 procedure RaiseTruncBelowInt64Min;
 begin
   Trunc(-Pow2_63 - 4096.0);
+end;
+
+procedure RaiseTruncNaN;
+begin
+  Trunc(MakeNaN);
+end;
+
+procedure RaiseTruncPositiveInfinity;
+begin
+  Trunc(MakePositiveInfinity);
 end;
 
 procedure RaiseAbsLowInt32;
@@ -238,6 +274,31 @@ end;
 procedure RaiseAbsLowInt64;
 begin
   nextpas.core.math.scalar.Abs(Low(Int64));
+end;
+
+procedure RaiseFracNaN;
+begin
+  Frac(MakeNaN);
+end;
+
+procedure RaiseFracPositiveInfinity;
+begin
+  Frac(MakePositiveInfinity);
+end;
+
+procedure RaiseFracPositive2Pow63;
+begin
+  Frac(Pow2_63);
+end;
+
+procedure RaiseGCDLowInt64;
+begin
+  GCD(Low(Int64), 0);
+end;
+
+procedure RaiseLCMOverflow;
+begin
+  LCM(Low(Int64), 2);
 end;
 
 procedure TestIntegerRoundingBoundaries;
@@ -270,19 +331,54 @@ begin
   CheckEqual(Int64(-9223372036854774784), Round(CNearMinInt64), 'Round near -2^63');
   CheckEqual(Int64(-9223372036854774784), Trunc(CNearMinInt64), 'Trunc near -2^63');
 
-  ExpectArgumentError('Floor(NaN)', @RaiseFloorNaN);
-  ExpectArgumentError('Floor(+Inf)', @RaiseFloorPositiveInfinity);
-  ExpectArgumentError('Floor(-Inf)', @RaiseFloorNegativeInfinity);
-  ExpectArgumentError('Ceil(huge positive)', @RaiseCeilHugePositive);
-  ExpectArgumentError('Ceil(Single NaN)', @RaiseCeilSingleNaN);
-  ExpectArgumentError('Ceil(Single +Inf)', @RaiseCeilSinglePositiveInfinity);
-  ExpectArgumentError('Ceil(huge negative)', @RaiseCeilHugeNegative);
-  ExpectArgumentError('Trunc(2^63)', @RaiseTruncPositive2Pow63);
-  ExpectArgumentError('Floor(2^63)', @RaiseFloorPositive2Pow63);
-  ExpectArgumentError('Round(2^63)', @RaiseRoundPositive2Pow63);
-  ExpectArgumentError('Trunc(below -2^63)', @RaiseTruncBelowInt64Min);
-  ExpectArgumentError('Abs(Low(Int32))', @RaiseAbsLowInt32);
-  ExpectArgumentError('Abs(Low(Int64))', @RaiseAbsLowInt64);
+  ExpectArgumentErrorMessage('Floor: NaN cannot be converted to Int64',
+    'Floor(NaN)', @RaiseFloorNaN);
+  ExpectArgumentErrorMessage('Floor: infinity cannot be converted to Int64',
+    'Floor(+Inf)', @RaiseFloorPositiveInfinity);
+  ExpectArgumentErrorMessage('Floor: infinity cannot be converted to Int64',
+    'Floor(-Inf)', @RaiseFloorNegativeInfinity);
+  ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
+    'Ceil(huge positive)', @RaiseCeilHugePositive);
+  ExpectArgumentErrorMessage('Ceil: NaN cannot be converted to Int64',
+    'Ceil(Single NaN)', @RaiseCeilSingleNaN);
+  ExpectArgumentErrorMessage('Ceil: infinity cannot be converted to Int64',
+    'Ceil(Single +Inf)', @RaiseCeilSinglePositiveInfinity);
+  ExpectArgumentErrorMessage('Ceil: value is outside Int64 range',
+    'Ceil(huge negative)', @RaiseCeilHugeNegative);
+  ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
+    'Trunc(2^63)', @RaiseTruncPositive2Pow63);
+  ExpectArgumentErrorMessage('Floor: value is outside Int64 range',
+    'Floor(2^63)', @RaiseFloorPositive2Pow63);
+  ExpectArgumentErrorMessage('Round: NaN cannot be converted to Int64',
+    'Round(NaN)', @RaiseRoundNaN);
+  ExpectArgumentErrorMessage('Round: infinity cannot be converted to Int64',
+    'Round(+Inf)', @RaiseRoundPositiveInfinity);
+  ExpectArgumentErrorMessage('Round: value is outside Int64 range',
+    'Round(2^63)', @RaiseRoundPositive2Pow63);
+  ExpectArgumentErrorMessage('Trunc: NaN cannot be converted to Int64',
+    'Trunc(NaN)', @RaiseTruncNaN);
+  ExpectArgumentErrorMessage('Trunc: infinity cannot be converted to Int64',
+    'Trunc(+Inf)', @RaiseTruncPositiveInfinity);
+  ExpectArgumentErrorMessage('Trunc: value is outside Int64 range',
+    'Trunc(below -2^63)', @RaiseTruncBelowInt64Min);
+  ExpectArgumentErrorMessage('Abs: absolute value is outside Int32 range',
+    'Abs(Low(Int32))', @RaiseAbsLowInt32);
+  ExpectArgumentErrorMessage('Abs: absolute value is outside Int64 range',
+    'Abs(Low(Int64))', @RaiseAbsLowInt64);
+end;
+
+procedure TestOwnerLevelBoundaryMessages;
+begin
+  ExpectArgumentErrorMessage('Frac: NaN cannot be converted to Int64',
+    'Frac(NaN)', @RaiseFracNaN);
+  ExpectArgumentErrorMessage('Frac: infinity cannot be converted to Int64',
+    'Frac(+Inf)', @RaiseFracPositiveInfinity);
+  ExpectArgumentErrorMessage('Frac: value is outside Int64 range',
+    'Frac(2^63)', @RaiseFracPositive2Pow63);
+  ExpectArgumentErrorMessage('GCD: result is outside Int64 range',
+    'GCD(Low(Int64), 0)', @RaiseGCDLowInt64);
+  ExpectArgumentErrorMessage('LCM: result is outside Int64 range',
+    'LCM overflow', @RaiseLCMOverflow);
 end;
 
 procedure TestOverflowHelpers;
@@ -302,6 +398,7 @@ begin
   T.Run('float predicates', @TestFloatPredicates);
   T.Run('number theory and scalar extras', @TestNumberTheoryAndScalarExtras);
   T.Run('integer rounding boundaries', @TestIntegerRoundingBoundaries);
+  T.Run('owner-level boundary messages', @TestOwnerLevelBoundaryMessages);
   T.Run('overflow helpers', @TestOverflowHelpers);
   T.Summary;
 end.
