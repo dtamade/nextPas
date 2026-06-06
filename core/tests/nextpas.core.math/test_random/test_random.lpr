@@ -216,26 +216,39 @@ procedure TestInvalidRangesFailFast;
 var
   Rng: TRandomGen;
   Caught: Boolean;
+  ErrorMessage: string;
 begin
   Rng := TRandomGen.Create(7);
   try
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.NextIntRange(10, 1);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'NextIntRange rejects Min > Max');
+    CheckEqual('TRandomGen.NextIntRange: AMin must be <= AMax', ErrorMessage,
+      'NextIntRange reports owner-level reversed-range message');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.NextFloatRange(3.0, 2.0);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'NextFloatRange rejects Min > Max');
+    CheckEqual('TRandomGen.NextFloatRange: AMin must be <= AMax', ErrorMessage,
+      'NextFloatRange reports owner-level reversed-range message');
   finally
     Rng.Free;
   end;
@@ -280,6 +293,7 @@ var
   Values: TInt5;
   Total: Integer;
   Caught: Boolean;
+  ErrorMessage: string;
 begin
   Rng := TRandomGen.Create(98765);
   try
@@ -301,25 +315,37 @@ begin
     CheckEqual(Int64(1), Int64(Rng.WeightedChoice(Weights)), 'single positive weight is selected');
 
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.WeightedChoice([]);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'WeightedChoice rejects an empty list');
+    CheckEqual('TRandomGen.WeightedChoice: weights must not be empty', ErrorMessage,
+      'WeightedChoice reports owner-level empty-list message');
 
     Weights[0] := 0.0;
     Weights[1] := -1.0;
     Weights[2] := 1.0;
     Caught := False;
+    ErrorMessage := '';
     try
       Rng.WeightedChoice(Weights);
     except
       on E: EArgumentError do
+      begin
+        ErrorMessage := E.Message;
         Caught := True;
+      end;
     end;
     Check(Caught, 'WeightedChoice rejects negative weights');
+    CheckEqual('TRandomGen.WeightedChoice: weights must be non-negative', ErrorMessage,
+      'WeightedChoice reports owner-level negative-weight message');
   finally
     Rng.Free;
   end;
