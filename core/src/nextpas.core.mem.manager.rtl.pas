@@ -25,50 +25,60 @@ function IsRtlMemoryManagerInstalled: Boolean;
 implementation
 
 uses
-  nextpas.core.mem.allocator.base,
-  nextpas.core.mem.allocator.rtl_allocator,
-  nextpas.core.sync,
-  nextpas.core.sync.mutex;
+  nextpas.core.mem.mutex;
 
 var
   GOldManager: TMemoryManager;
   GInstalled : Boolean = False;
-  GAlloc     : nextpas.core.mem.allocator.base.IAllocator;
-  GManagerLock: ILock;
+  GManagerLock: TMemMutex;
 
 function MM_GetMem(Size: SizeUInt): Pointer;
 begin
   if Size = 0 then Exit(nil);
-  Result := GAlloc.GetMem(Size);
+  Result := GOldManager.GetMem(Size);
 end;
 
 function MM_AllocMem(Size: SizeUInt): Pointer;
 begin
   if Size = 0 then Exit(nil);
-  Result := GAlloc.AllocMem(Size);
+  if Assigned(GOldManager.AllocMem) then
+    Result := GOldManager.AllocMem(Size)
+  else
+  begin
+    Result := GOldManager.GetMem(Size);
+    if Result <> nil then
+      FillChar(Result^, Size, 0);
+  end;
 end;
 
 function MM_ReAllocMem(var P: Pointer; Size: SizeUInt): Pointer;
 begin
-  Result := GAlloc.ReallocMem(P, Size);
+  Result := GOldManager.ReAllocMem(P, Size);
 end;
 
 function MM_FreeMem(P: Pointer): SizeUInt;
 begin
   if P <> nil then
-    GAlloc.FreeMem(P);
-  Result := 0;
+    Result := GOldManager.FreeMem(P)
+  else
+    Result := 0;
 end;
 
 function MM_FreeMemSize(P: Pointer; Size: SizeUInt): SizeUInt;
 begin
-  Result := MM_FreeMem(P);
+  if P = nil then
+    Exit(0);
+  if Assigned(GOldManager.FreeMemSize) then
+    Result := GOldManager.FreeMemSize(P, Size)
+  else
+    Result := GOldManager.FreeMem(P);
 end;
 
 function MM_MemSize(P: Pointer): SizeUInt;
 begin
-  // unknown
-  Result := 0;
+  if (P = nil) or (not Assigned(GOldManager.MemSize)) then
+    Exit(0);
+  Result := GOldManager.MemSize(P);
 end;
 
 procedure MM_InitThread; begin end;
@@ -77,12 +87,18 @@ procedure MM_RelocateHeap; begin end;
 
 function MM_GetHeapStatus: THeapStatus;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  if Assigned(GOldManager.GetHeapStatus) then
+    Result := GOldManager.GetHeapStatus()
+  else
+    FillChar(Result, SizeOf(Result), 0);
 end;
 
 function MM_GetFPCHeapStatus: TFPCHeapStatus;
 begin
-  FillChar(Result, SizeOf(Result), 0);
+  if Assigned(GOldManager.GetFPCHeapStatus) then
+    Result := GOldManager.GetFPCHeapStatus()
+  else
+    FillChar(Result, SizeOf(Result), 0);
 end;
 
 const
@@ -102,26 +118,30 @@ const
   );
 
 procedure InstallRtlMemoryManager;
-var
-  LGuard: ILockGuard;
 begin
-  LGuard := GManagerLock.Lock;
-  if GInstalled then Exit;
-  // Prepare allocator (wrapping System mem functions)
-  GAlloc := GetRtlAllocator;
-  System.GetMemoryManager(GOldManager);
-  System.SetMemoryManager(GRtlManager);
-  GInstalled := True;
+  GManagerLock.Acquire;
+  try
+    if GInstalled then
+      Exit;
+    System.GetMemoryManager(GOldManager);
+    System.SetMemoryManager(GRtlManager);
+    GInstalled := True;
+  finally
+    GManagerLock.Release;
+  end;
 end;
 
 procedure UninstallRtlMemoryManager;
-var
-  LGuard: ILockGuard;
 begin
-  LGuard := GManagerLock.Lock;
-  if not GInstalled then Exit;
-  System.SetMemoryManager(GOldManager);
-  GInstalled := False;
+  GManagerLock.Acquire;
+  try
+    if not GInstalled then
+      Exit;
+    System.SetMemoryManager(GOldManager);
+    GInstalled := False;
+  finally
+    GManagerLock.Release;
+  end;
 end;
 
 function IsRtlMemoryManagerInstalled: Boolean;
@@ -130,6 +150,9 @@ begin
 end;
 
 initialization
-  GManagerLock := TMutex.Create;
+  GManagerLock.Init;
+
+finalization
+  GManagerLock.Done;
 
 end.

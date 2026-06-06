@@ -27,6 +27,10 @@ function GetEnvironmentVariable(const AName: string): string;
 var
   LName: string;
   P: PAnsiChar;
+  {$IFDEF NEXTPAS_WINDOWS}
+  LBuf: array[0..4095] of AnsiChar;
+  LLen: DWORD;
+  {$ENDIF}
 begin
   LName := AName;
   {$IFDEF NEXTPAS_UNIX}
@@ -37,8 +41,6 @@ begin
     Result := '';
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  var LBuf: array[0..4095] of AnsiChar;
-  var LLen: DWORD;
   LLen := GetEnvironmentVariableA(PAnsiChar(LName), @LBuf[0], SizeOf(LBuf));
   if (LLen > 0) and (LLen < SizeOf(LBuf)) then
     SetString(Result, @LBuf[0], LLen)
@@ -56,6 +58,10 @@ function HasEnv(const AName: string): Boolean;
 var
   LName: string;
   P: PAnsiChar;
+  {$IFDEF NEXTPAS_WINDOWS}
+  LBuf: array[0..0] of AnsiChar;
+  LLen: DWORD;
+  {$ENDIF}
 begin
   LName := AName;
   {$IFDEF NEXTPAS_UNIX}
@@ -63,8 +69,6 @@ begin
   Result := P <> nil;
   {$ENDIF}
   {$IFDEF NEXTPAS_WINDOWS}
-  var LBuf: array[0..0] of AnsiChar;
-  var LLen: DWORD;
   LLen := GetEnvironmentVariableA(PAnsiChar(LName), @LBuf[0], 0);
   Result := LLen > 0;
   {$ENDIF}

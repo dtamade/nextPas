@@ -20,7 +20,6 @@ unit nextpas.core.mem.manager.crt;
 interface
 
 {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
-uses
 procedure InstallCrtMemoryManager;
 procedure UninstallCrtMemoryManager;
 function IsCrtMemoryManagerInstalled: Boolean;
@@ -31,15 +30,15 @@ implementation
 
 {$IFDEF NEXTPAS_CORE_CRT_ALLOCATOR}
 uses
-  nextpas.core.mem.allocator.base,
   nextpas.core.mem.allocator.crt_allocator,
-  nextpas.core.sync;
+  nextpas.core.mem.allocator.base,
+  nextpas.core.mem.mutex;
 
 var
   GOldManager: TMemoryManager;
   GInstalled : Boolean = False;
   GAlloc     : nextpas.core.mem.allocator.base.IAllocator;
-  GManagerLock: ILock;
+  GManagerLock: TMemMutex;
 
 function MM_GetMem(Size: SizeUInt): Pointer;
 begin
@@ -107,26 +106,31 @@ const
   );
 
 procedure InstallCrtMemoryManager;
-var
-  LGuard: ILockGuard;
 begin
-  LGuard := GManagerLock.Lock;
-  if GInstalled then Exit;
-  // Prepare allocator (uses CRT C runtime under the hood)
-  GAlloc := GetCrtAllocator;
-  System.GetMemoryManager(GOldManager);
-  System.SetMemoryManager(GCrtManager);
-  GInstalled := True;
+  GManagerLock.Acquire;
+  try
+    if GInstalled then
+      Exit;
+    GAlloc := GetCrtAllocator;
+    System.GetMemoryManager(GOldManager);
+    System.SetMemoryManager(GCrtManager);
+    GInstalled := True;
+  finally
+    GManagerLock.Release;
+  end;
 end;
 
 procedure UninstallCrtMemoryManager;
-var
-  LGuard: ILockGuard;
 begin
-  LGuard := GManagerLock.Lock;
-  if not GInstalled then Exit;
-  System.SetMemoryManager(GOldManager);
-  GInstalled := False;
+  GManagerLock.Acquire;
+  try
+    if not GInstalled then
+      Exit;
+    System.SetMemoryManager(GOldManager);
+    GInstalled := False;
+  finally
+    GManagerLock.Release;
+  end;
 end;
 
 function IsCrtMemoryManagerInstalled: Boolean;
@@ -135,7 +139,10 @@ begin
 end;
 
 initialization
-  GManagerLock := TMutex.Create;
+  GManagerLock.Init;
+
+finalization
+  GManagerLock.Done;
 
 {$ENDIF} // NEXTPAS_CORE_CRT_ALLOCATOR
 

@@ -8,7 +8,6 @@ unit nextpas.core.mem.pool.slab;
 interface
 
 uses
-  nextpas.core.platform.time,
   nextpas.core.errors,
   nextpas.core.base,
   nextpas.core.mem.allocator,
@@ -43,7 +42,7 @@ type
     MinShift: SizeUInt;            // 默认 3 (8B)
     EnablePageMerging: Boolean;    // 兼容字段（当前未用）
     MaxAllocSize: SizeUInt;        // 0=不限制；>0 时限制单次分配（超过返回 nil）
-    EnablePerfMonitoring: Boolean; // 性能计数开关（默认启用）
+    EnablePerfMonitoring: Boolean; // 仅统计调用次数；L0 core 不直接采样时间
     EnableDebug: Boolean;          // 调试开关（预留）
     PageSize: SizeUInt;            // 兼容字段（默认 4096）
   end;
@@ -1068,60 +1067,51 @@ var
   LPtr: Pointer;
   LNewSeg: TFixedSlabPool;
   LPerfEnabled: Boolean;
-  LStart: QWord;
 begin
   if aSize=0 then Exit(nil);
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
-  begin
     Inc(FPerf.AllocCalls);
-    LStart := (platform_monotonic_ns div 1000000);
+  if IsOversize(aSize) then Exit(nil);
+  if ShouldUseFallback(aSize) then
+  begin
+    Result := AllocFallback(aSize, 16);
+    if Result <> nil then Inc(FTotalAllocs);
+    Exit;
   end;
-  try
-    if IsOversize(aSize) then Exit(nil);
-    if ShouldUseFallback(aSize) then
-    begin
-      Result := AllocFallback(aSize, 16);
-      if Result <> nil then Inc(FTotalAllocs);
-      Exit;
-    end;
-    LPtr:=TryAllocFromSeg(FActive,aSize);
+  LPtr:=TryAllocFromSeg(FActive,aSize);
+  if LPtr<>nil then
+  begin
+    Inc(FTotalAllocs);
+    Exit(LPtr);
+  end;
+  while PopAvail(LIndex) do
+  begin
+    LPtr:=TryAllocFromSeg(LIndex,aSize);
     if LPtr<>nil then
     begin
+      FActive:=LIndex;
       Inc(FTotalAllocs);
       Exit(LPtr);
     end;
-    while PopAvail(LIndex) do
-    begin
-      LPtr:=TryAllocFromSeg(LIndex,aSize);
-      if LPtr<>nil then
-      begin
-        FActive:=LIndex;
-        Inc(FTotalAllocs);
-        Exit(LPtr);
-      end;
-    end;
-    LIndex:=Length(FSegments);
-    SetLength(FSegments,LIndex+1);
-    // ✅ P1-1: 添加 OOM 检查，防止 TFixedSlabPool.Create 失败后崩溃
-    try
-      LNewSeg := TFixedSlabPool.Create(NewSegmentCapacity,FAllocator,FMinShift);
-    except
-      on LError: Exception do
-      begin
-        SetLength(FSegments, LIndex); // 回滚数组长度
-        Exit(nil);
-      end;
-    end;
-    FSegments[LIndex] := LNewSeg;
-    IndexSegmentPages(LIndex);
-    FActive:=LIndex;
-    Result:=FSegments[LIndex].GetMem(aSize);
-    if Result<>nil then Inc(FTotalAllocs);
-  finally
-    if LPerfEnabled then
-      Inc(FPerf.AllocTime, (platform_monotonic_ns div 1000000) - LStart);
   end;
+  LIndex:=Length(FSegments);
+  SetLength(FSegments,LIndex+1);
+  // ✅ P1-1: 添加 OOM 检查，防止 TFixedSlabPool.Create 失败后崩溃
+  try
+    LNewSeg := TFixedSlabPool.Create(NewSegmentCapacity,FAllocator,FMinShift);
+  except
+    on LError: Exception do
+    begin
+      SetLength(FSegments, LIndex); // 回滚数组长度
+      Exit(nil);
+    end;
+  end;
+  FSegments[LIndex] := LNewSeg;
+  IndexSegmentPages(LIndex);
+  FActive:=LIndex;
+  Result:=FSegments[LIndex].GetMem(aSize);
+  if Result<>nil then Inc(FTotalAllocs);
 end;
 
 function TSlabPool.AllocMem(aSize: SizeUInt): Pointer;
@@ -1175,35 +1165,26 @@ var
   LIndex: Integer;
   LAlloc: TSlabFallbackAlloc;
   LPerfEnabled: Boolean;
-  LStart: QWord;
 begin
   if aDst=nil then Exit;
   LPerfEnabled := FConfig.EnablePerfMonitoring;
   if LPerfEnabled then
-  begin
     Inc(FPerf.FreeCalls);
-    LStart := (platform_monotonic_ns div 1000000);
-  end;
-  try
-    LIndex:=FindOwnerSegment(aDst);
-    if LIndex>=0 then
-    begin
-      FSegments[LIndex].FreeMem(aDst);
-      PushAvail(LIndex);
-      Inc(FTotalFrees);
-    end
-    else if TryUntrackFallbackAlloc(aDst, LAlloc) then
-    begin
-      if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
-        FAllocator.FreeMem(LAlloc.RawPtr);
-      Inc(FTotalFrees);
-    end
-    else
-      raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
-  finally
-    if LPerfEnabled then
-      Inc(FPerf.FreeTime, (platform_monotonic_ns div 1000000) - LStart);
-  end;
+  LIndex:=FindOwnerSegment(aDst);
+  if LIndex>=0 then
+  begin
+    FSegments[LIndex].FreeMem(aDst);
+    PushAvail(LIndex);
+    Inc(FTotalFrees);
+  end
+  else if TryUntrackFallbackAlloc(aDst, LAlloc) then
+  begin
+    if (FAllocator <> nil) and (LAlloc.RawPtr <> nil) then
+      FAllocator.FreeMem(LAlloc.RawPtr);
+    Inc(FTotalFrees);
+  end
+  else
+    raise ESlabPoolCorruption.Create(aeInvalidPointer, 'Pointer does not belong to this pool');
 end;
 
 function TSlabPool.Allocate(const ASize: SizeUInt): Pointer;
@@ -1272,7 +1253,6 @@ function TSlabPool.AllocAligned(aSize, aAlignment: SizeUInt): Pointer;
 var
   LNaturalAlign: SizeUInt;
   LPerfEnabled: Boolean;
-  LStart: QWord;
 begin
   if aSize = 0 then Exit(nil);
   if IsOversize(aSize) then Exit(nil);
@@ -1287,17 +1267,8 @@ begin
   if ShouldUseFallback(aSize) then
   begin
     if LPerfEnabled then
-    begin
       Inc(FPerf.AllocCalls);
-      LStart := (platform_monotonic_ns div 1000000);
-      try
-        Result := AllocFallback(aSize, aAlignment);
-      finally
-        Inc(FPerf.AllocTime, (platform_monotonic_ns div 1000000) - LStart);
-      end;
-    end
-    else
-      Result := AllocFallback(aSize, aAlignment);
+    Result := AllocFallback(aSize, aAlignment);
     if Result <> nil then Inc(FTotalAllocs);
     Exit;
   end;
@@ -1308,17 +1279,8 @@ begin
   else
   begin
     if LPerfEnabled then
-    begin
       Inc(FPerf.AllocCalls);
-      LStart := (platform_monotonic_ns div 1000000);
-      try
-        Result := AllocFallback(aSize, aAlignment);
-      finally
-        Inc(FPerf.AllocTime, (platform_monotonic_ns div 1000000) - LStart);
-      end;
-    end
-    else
-      Result := AllocFallback(aSize, aAlignment);
+    Result := AllocFallback(aSize, aAlignment);
     if Result <> nil then Inc(FTotalAllocs);
   end;
 end;

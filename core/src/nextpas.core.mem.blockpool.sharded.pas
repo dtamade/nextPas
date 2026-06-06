@@ -19,11 +19,11 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.atomic,
-  nextpas.core.sync,
   nextpas.core.mem.blockpool,
   nextpas.core.mem.blockpool.growable,
   nextpas.core.mem.layout,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.mem.mutex;
 
 const
   SHARDED_BLOCKPOOL_THREADCACHE_MAX = 256;
@@ -54,7 +54,7 @@ type
     type
       TShard = record
         Pool: TGrowingBlockPool;
-        Lock: IMutex;
+        Lock: TMemMutex;
         KnownCapacity: SizeUInt;
         KnownSegmentCount: SizeInt;
         InUseCount: Int64; // blocks in-use by callers (per-shard, atomic)
@@ -182,7 +182,7 @@ type
 implementation
 
 uses
-  nextpas.core.time.cpu;
+  nextpas.core.platform.thread;
 
 var
   GShardedBlockPoolIdGen: UInt64 = 0;
@@ -266,7 +266,7 @@ var
 begin
   if aShardCount <= 0 then
   begin
-    LCPU := CpuCount;
+    LCPU := platform_cpu_count;
     if LCPU < 1 then LCPU := 1;
     if LCPU > 32 then LCPU := 32;
     aShardCount := LCPU;
@@ -282,7 +282,7 @@ var
   LId: QWord;
 begin
   if FShardCount <= 1 then Exit(0);
-  LId := QWord(CurrentThreadId);
+  LId := QWord(platform_thread_id);
   Result := Integer(MulHash64(LId) and QWord(FShardMask));
 end;
 
@@ -314,10 +314,10 @@ begin
     LState := atomic_load(FRoutingState);
     if (LState and (ROUTING_WRITE_BIT or ROUTING_WAIT_BIT)) <> 0 then
     begin
-      CpuRelax;
+      platform_thread_yield;
       Inc(LSpins);
       if (LSpins and 1023) = 0 then
-        SchedYield;
+        platform_thread_yield;
       Continue;
     end;
 
@@ -361,10 +361,10 @@ begin
       Continue;
     end;
 
-    CpuRelax;
+    platform_thread_yield;
     Inc(LSpins);
     if (LSpins and 1023) = 0 then
-      SchedYield;
+      platform_thread_yield;
   until False;
 end;
 
@@ -1001,7 +1001,7 @@ var
   // create shards
   for LIdx := 0 to LShardCount - 1 do
   begin
-    FShards[LIdx].Lock := Mutex;
+    FShards[LIdx].Lock.Init;
     LShardConfig := FConfig;
     LShardConfig.InitialCapacity := LPerShardCap;
     // sharded pool relies on stable routing; keep segments by default
@@ -1118,8 +1118,7 @@ var
 	begin
 	  // lock shards to avoid racing with concurrent frees/allocs
 	  for LIdx := 0 to High(FShards) do
-	    if FShards[LIdx].Lock <> nil then
-	      FShards[LIdx].Lock.Acquire;
+	    FShards[LIdx].Lock.Acquire;
 	  try
 	    RouteWriteLock;
 	    try
@@ -1137,12 +1136,11 @@ var
     end;
   finally
     for LIdx := 0 to High(FShards) do
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Release;
+      FShards[LIdx].Lock.Release;
   end;
 
   for LIdx := 0 to High(FShards) do
-    FShards[LIdx].Lock := nil;
+    FShards[LIdx].Lock.Done;
 
 	  inherited Destroy;
 	end;
@@ -1367,15 +1365,13 @@ begin
     LSum := 0;
     for LIdx := 0 to High(FShards) do
     begin
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Acquire;
+      FShards[LIdx].Lock.Acquire;
       try
         FlushRemoteFreesLocked(LIdx);
         if FShards[LIdx].Pool <> nil then
           Inc(LSum, Int64(FShards[LIdx].Pool.Available));
       finally
-        if FShards[LIdx].Lock <> nil then
-          FShards[LIdx].Lock.Release;
+        FShards[LIdx].Lock.Release;
       end;
     end;
 
@@ -1406,15 +1402,13 @@ begin
     LSum := 0;
     for LIdx := 0 to High(FShards) do
     begin
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Acquire;
+      FShards[LIdx].Lock.Acquire;
       try
         FlushRemoteFreesLocked(LIdx);
         if FShards[LIdx].Pool <> nil then
           Inc(LSum, Int64(FShards[LIdx].Pool.Available));
       finally
-        if FShards[LIdx].Lock <> nil then
-          FShards[LIdx].Lock.Release;
+        FShards[LIdx].Lock.Release;
       end;
     end;
     LAvail := LSum;

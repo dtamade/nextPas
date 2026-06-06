@@ -5,8 +5,9 @@ unit nextpas.core.mem.blockpool.concurrent;
 interface
 
 uses
-  nextpas.core.sync,
+  nextpas.core.base.utils,
   nextpas.core.mem.blockpool,
+  nextpas.core.mem.mutex,
   nextpas.core.mem.layout,
   nextpas.core.mem.error;
 
@@ -19,7 +20,7 @@ type
   TBlockPoolConcurrent = class(TInterfacedObject, IBlockPool, IBlockPoolBatch)
   private
     FInner: IBlockPool;
-    FLock: IMutex;
+    FLock: TMemMutex;
   public
     constructor Create(aInner: IBlockPool); overload;
     constructor Create(aBlockSize, aCapacity: SizeUInt; aAlignment: SizeUInt = DEFAULT_ALIGNMENT); overload;
@@ -50,7 +51,7 @@ type
   TArenaConcurrent = class(TInterfacedObject, IArena)
   private
     FInner: IArena;
-    FLock: IMutex;
+    FLock: TMemMutex;
   public
     constructor Create(aInner: IArena); overload;
     constructor Create(aTotalSize: SizeUInt); overload;
@@ -78,7 +79,7 @@ begin
   inherited Create;
   if aInner = nil then
     raise EAllocError.Create(aeInvalidLayout, 'TBlockPoolConcurrent: inner pool cannot be nil');
-  FLock := Mutex;
+  FLock.Init;
   FInner := aInner;
 end;
 
@@ -89,15 +90,13 @@ end;
 
 destructor TBlockPoolConcurrent.Destroy;
 begin
-  if FLock <> nil then
-    FLock.Acquire;
+  FLock.Acquire;
   try
     FInner := nil;
   finally
-    if FLock <> nil then
-      FLock.Release;
+    FLock.Release;
   end;
-  FLock := nil;
+  FLock.Done;
   inherited Destroy;
 end;
 
@@ -219,7 +218,7 @@ begin
   inherited Create;
   if aInner = nil then
     raise EAllocError.Create(aeInvalidLayout, 'TArenaConcurrent: inner arena cannot be nil');
-  FLock := Mutex;
+  FLock.Init;
   FInner := aInner;
 end;
 
@@ -230,15 +229,13 @@ end;
 
 destructor TArenaConcurrent.Destroy;
 begin
-  if FLock <> nil then
-    FLock.Acquire;
+  FLock.Acquire;
   try
     FInner := nil;
   finally
-    if FLock <> nil then
-      FLock.Release;
+    FLock.Release;
   end;
-  FLock := nil;
+  FLock.Done;
   inherited Destroy;
 end;
 

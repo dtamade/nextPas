@@ -11,13 +11,14 @@ uses
   nextpas.core.base.utils,
   nextpas.core.base,
   nextpas.core.atomic,
-  nextpas.core.sync,
-  nextpas.core.time.cpu,
   nextpas.core.mem.allocator,
   nextpas.core.mem.allocator.base,
+  nextpas.core.mem.mutex,
   nextpas.core.mem.pool.memory_pool,
+  nextpas.core.mem.rwlock,
   nextpas.core.mem.pool.slab,
-  nextpas.core.mem.error;
+  nextpas.core.mem.error,
+  nextpas.core.platform.thread;
 
 type
   {**
@@ -35,7 +36,7 @@ type
     type
       TShard = record
         Pool: TSlabPool;
-        Lock: IMutex;
+        Lock: TMemMutex;
         KnownSegmentCount: Integer;
         RemoteFreeHead: Pointer; // lock-free remote frees (slab only)
       end;
@@ -49,7 +50,7 @@ type
     FShards: array of TShard;
 
     // Routing maps are protected by RWLock; reads are concurrent, writes are rare.
-    FRoutingLock: IRWLock;
+    FRoutingLock: TMemRwLock;
 
     // pageKey -> shardIndex map (slab segments, no deletions)
     FPageShift: SizeUInt;
@@ -222,7 +223,7 @@ var
 begin
   if aShardCount <= 0 then
   begin
-    LCPU := CpuCount;
+    LCPU := platform_cpu_count;
     if LCPU < 1 then LCPU := 1;
     if LCPU > 32 then LCPU := 32;
     aShardCount := LCPU;
@@ -239,7 +240,7 @@ var
   LId: QWord;
 begin
   if FShardCount <= 1 then Exit(0);
-  LId := QWord(CurrentThreadId);
+  LId := QWord(platform_thread_id);
   Result := Integer(MulHash64(LId) and QWord(FShardMask));
 end;
 
@@ -691,12 +692,12 @@ begin
   FShardMask := LShardCount - 1;
   SetLength(FShards, LShardCount);
 
-  FRoutingLock := RWLock;
+  FRoutingLock.Init;
 
   // create shards (each shard has its own inner slab pool)
   for LIdx := 0 to LShardCount - 1 do
   begin
-    FShards[LIdx].Lock := Mutex;
+    FShards[LIdx].Lock.Init;
     FShards[LIdx].Pool := TSlabPool.Create(aCapacity, FConfig, FAllocator);
     FShards[LIdx].KnownSegmentCount := FShards[LIdx].Pool.SegmentCount;
     FShards[LIdx].RemoteFreeHead := nil;
@@ -740,8 +741,7 @@ var
 begin
   // lock shards to avoid racing with concurrent frees/allocs
   for LIdx := 0 to High(FShards) do
-    if FShards[LIdx].Lock <> nil then
-      FShards[LIdx].Lock.Acquire;
+    FShards[LIdx].Lock.Acquire;
   try
     // clear routing maps
     FRoutingLock.AcquireWrite;
@@ -760,12 +760,12 @@ begin
     end;
   finally
     for LIdx := 0 to High(FShards) do
-      if FShards[LIdx].Lock <> nil then
-        FShards[LIdx].Lock.Release;
+      FShards[LIdx].Lock.Release;
   end;
 
+  FRoutingLock.Done;
   for LIdx := 0 to High(FShards) do
-    FShards[LIdx].Lock := nil;
+    FShards[LIdx].Lock.Done;
 
   inherited Destroy;
 end;

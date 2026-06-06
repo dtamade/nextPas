@@ -31,9 +31,7 @@ unit nextpas.core.mem.memory_map;
 interface
 
 uses
-  nextpas.core.text.conv,
   nextpas.core.os.env,
-  nextpas.core.fs.util,
   nextpas.core.platform.files,
   nextpas.core.platform.files.base,
   {$IFDEF WINDOWS}
@@ -331,6 +329,16 @@ type
 
 implementation
 
+uses
+  SysUtils;
+
+function FileExistsByStat(const aPath: string): Boolean;
+var
+  LStat: TPlatformFileStat;
+begin
+  Result := platform_file_stat(PAnsiChar(aPath), LStat) = 0;
+end;
+
 {$IFDEF UNIX}
 // POSIX 共享内存和内存管理函数声明
 // FPC 的 BaseUnix 不提供 fp* 别名，需要显式声明
@@ -360,7 +368,7 @@ begin
   LBase := aName;
   if (LBase <> '') and (LBase[1] = '/') then
     Delete(LBase, 1, 1);
-  LBase := StringReplace(LBase, '/', '_', True);
+  LBase := StringReplace(LBase, '/', '_', [rfReplaceAll]);
 
   if (LDir <> '') and (LDir[Length(LDir)] <> '/') then
     LDir := LDir + '/';
@@ -524,7 +532,7 @@ begin
     mmaCopyOnWrite: LDesiredAccess := GENERIC_READ;
   end;
 
-  if FsExists(aFileName) then
+  if FileExistsByStat(aFileName) then
     LCreationDisposition := OPEN_EXISTING
   else
     LCreationDisposition := CREATE_ALWAYS;
@@ -613,7 +621,7 @@ begin
     mmaCopyOnWrite: LOpenFlags := O_RDONLY;
   end;
 
-  if not FsExists(aFileName) then
+  if not FileExistsByStat(aFileName) then
     LOpenFlags := LOpenFlags or O_CREAT;
 
   FFileHandle := FpOpen(aFileName, LOpenFlags, &666);
@@ -1104,7 +1112,7 @@ begin
       if ShouldFallbackShm(LError) then
       begin
         LFallback := BuildSharedFallbackPath(FName);
-        LExists := FsExists(LFallback);
+        LExists := FileExistsByStat(LFallback);
         if not FMemoryMap.OpenFile(LFallback, aAccess, [mmfShared], FSize, 0) then Exit;
         FIsCreator := not LExists;
         FIsFileBacked := True;
@@ -1248,7 +1256,7 @@ begin
     if ShouldFallbackShm(LError) then
     begin
       LFallback := BuildSharedFallbackPath(FName);
-      if not FsExists(LFallback) then Exit;
+      if not FileExistsByStat(LFallback) then Exit;
       if not FMemoryMap.OpenFile(LFallback, aAccess, [mmfShared], 0, 0) then Exit;
       FIsFileBacked := True;
       FFallbackFile := LFallback;

@@ -8,7 +8,6 @@ uses
   nextpas.core.os.env,
   nextpas.core.errors,
   nextpas.core.path,
-  nextpas.core.text.conv,
   nextpas.core.mem.allocator.base
   {$IFNDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   ,dynlibs
@@ -36,6 +35,9 @@ function MimallocUsableSizeAvailable: Boolean;
 function TryGetMimallocUsableSize(aPtr: Pointer; out aSize: SizeUInt): Boolean;
 
 implementation
+
+uses
+  SysUtils;
 
 {$IFDEF NEXTPAS_CORE_MIMALLOC_STATIC}
   {$LINKLIB mimalloc}
