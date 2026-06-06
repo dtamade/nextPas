@@ -116,19 +116,22 @@ type
     procedure Reset;
   end;
 
-  TH1ClientTransport = class(TInterfacedObject, IHttpTransport)
+  TH1ClientTransport = class(TInterfacedObject, IHttpTransport,
+    IHttpTransportIdleConnections)
   private
     FOptions: TH1ClientTransportOptions;
     FPool: array of TPoolEntry;
     FPoolCount: Int32;
     function PoolGet(const AHost: string; const APort: UInt16): ITcpStream;
     procedure PoolPut(const AHost: string; const APort: UInt16; const AConn: ITcpStream);
+    procedure PoolClear;
     function WriteRequest(const AWriter: IWriter; const AReq: IHttpRequest): Boolean;
     function ReadResponse(const AReader: IReader;
       const ARequestMethod: THttpMethod; out AKeepAlive: Boolean): IHttpResponse;
   public
     constructor Create(const AOptions: TH1ClientTransportOptions);
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
   end;
 
   TH1ServerTransport = class(TInterfacedObject, IHttpServerTransport,
@@ -1801,6 +1804,17 @@ begin
   Inc(FPoolCount);
 end;
 
+procedure TH1ClientTransport.PoolClear;
+var
+  LI: Int32;
+begin
+  for LI := 0 to FPoolCount - 1 do
+    if FPool[LI].Conn <> nil then
+      FPool[LI].Conn.Close;
+  FPoolCount := 0;
+  SetLength(FPool, 0);
+end;
+
 function TH1ClientTransport.WriteRequest(const AWriter: IWriter;
   const AReq: IHttpRequest): Boolean;
 const
@@ -1958,6 +1972,11 @@ begin
     LConn.Close;
 
   Result := LResp;
+end;
+
+procedure TH1ClientTransport.CloseIdleConnections;
+begin
+  PoolClear;
 end;
 
 { TH1ServerTransport }

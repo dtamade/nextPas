@@ -17,6 +17,7 @@ uses
 
 type
   THttpClientOptions = nextpas.core.http.base.THttpClientOptions;
+  IHttpTransportIdleConnections = nextpas.core.http.intf.IHttpTransportIdleConnections;
 
   THttpClient = class(TInterfacedObject, IHttpClient)
   private
@@ -28,6 +29,7 @@ type
     constructor Create(const ATransport: IHttpTransport;
       const AOptions: THttpClientOptions); overload;
     function Do_(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
@@ -517,6 +519,14 @@ begin
   if AReq = nil then
     raise EArgumentError.Create('HTTP request is nil');
   Result := DoRequest(AReq, FOptions.MaxRedirects);
+end;
+
+procedure THttpClient.CloseIdleConnections;
+var
+  LIdleTransport: IHttpTransportIdleConnections;
+begin
+  if Supports(FTransport, IHttpTransportIdleConnections, LIdleTransport) then
+    LIdleTransport.CloseIdleConnections;
 end;
 
 function THttpClient.Get(const AUrl: string): IHttpResponse;

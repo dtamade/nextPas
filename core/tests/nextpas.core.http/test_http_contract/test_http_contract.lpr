@@ -613,6 +613,17 @@ begin
   Check(LResp <> nil, 'Facade client Patch(bytes body) returns response');
 end;
 
+procedure TestHttpClientCloseIdleConnectionsFacadeMethod;
+var
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+begin
+  LTransport := TMockHttpTransport.Create;
+  LClient := nextpas.core.http.NewHttpClient(LTransport);
+  LClient.CloseIdleConnections;
+  Check(True, 'Facade client CloseIdleConnections is callable');
+end;
+
 { Test 4: NewResponse — StatusCode/Headers accessible }
 procedure TestNewResponse;
 var
@@ -1436,6 +1447,8 @@ begin
     @TestNewRequestContentTypeBodyFacadeOverloads);
   T.Run('HttpClient shortcut body overloads are available through facade',
     @TestHttpClientShortcutBodyFacadeOverloads);
+  T.Run('HttpClient CloseIdleConnections is available through facade',
+    @TestHttpClientCloseIdleConnectionsFacadeMethod);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HttpReadResponseBodyString is available through facade',
     @TestHttpReadResponseBodyStringFacadeHelper);

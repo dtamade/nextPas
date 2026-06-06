@@ -110,8 +110,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### Server / Client (interfaces)
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
-- `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)` / `Put` /
-  `Delete` / `Patch` / `Head`; `Do_(nil)` raises `EArgumentError`
+- `IHttpClient.Do_(Req)` / `CloseIdleConnections` / `Get(Url)` /
+  `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`;
+  `Do_(nil)` raises `EArgumentError`
 - `Post` / `Put` / `Patch` expose three shortcut body forms:
   `IReader`, Pascal `string`, and `TBytes`.
 - All three shortcut body forms publish `Content-Length` and forward the caller
@@ -119,6 +120,10 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   routing payload through a Pascal string, while the `string` / `TBytes` forms
   reuse the public `NewRequest(..., BodyText)` / `NewRequest(..., BodyBytes)`
   helpers.
+- `CloseIdleConnections` is a lifecycle seam for explicitly releasing idle
+  keep-alive state. The public client does not leak H1 pool details; transports
+  that own idle pooled connections may implement the optional capability and
+  unsupported transports safely no-op.
 - If a transport returns nil from `RoundTrip`, `IHttpClient.Do_` raises
   `EHttpError` instead of leaking a nil-response access violation through the
   client facade.

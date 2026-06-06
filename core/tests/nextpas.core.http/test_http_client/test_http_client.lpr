@@ -34,6 +34,8 @@ var
   GRawResponse1: string;
   GRawResponse2: string;
   GRawAcceptLimit: Int32;
+  GAcceptCount: Int32;
+  GPoolListener: ITcpListener;
 
 type
   PServerCtx = ^TServerCtx;
@@ -161,6 +163,7 @@ type
   public
     constructor Create(const AResponse: IHttpResponse);
     function Do_(const AReq: IHttpRequest): IHttpResponse;
+    procedure CloseIdleConnections;
     function Get(const AUrl: string): IHttpResponse;
     function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
     function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
@@ -193,6 +196,8 @@ begin
   end;
   Dispose(LCtx);
 end;
+
+function PoolAcceptThread(AArg: Pointer): Pointer; cdecl; forward;
 
 function RawResponseThread(AArg: Pointer): Pointer; cdecl;
 var
@@ -513,6 +518,10 @@ end;
 function TDownloadClient.Do_(const AReq: IHttpRequest): IHttpResponse;
 begin
   Result := FResponse;
+end;
+
+procedure TDownloadClient.CloseIdleConnections;
+begin
 end;
 
 function TDownloadClient.Get(const AUrl: string): IHttpResponse;
@@ -2615,7 +2624,41 @@ begin
   end;
 end;
 
-// PLACEHOLDER_TEST6
+procedure TestClientCloseIdleConnectionsDropsPooledConnections;
+var
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LRet: Pointer;
+begin
+  GAcceptCount := 0;
+  GPoolListener := NetTcpListen('127.0.0.1', 0);
+  LPort := GPoolListener.LocalAddr.Port;
+  platform_thread_create(LHandle, @PoolAcceptThread, nil);
+
+  try
+    LClient := NewHttpClient;
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ping');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'first request status 200');
+    CheckEqual(Int64(1), Int64(GAcceptCount),
+      'first request opens first connection');
+
+    LClient.CloseIdleConnections;
+
+    LResp := LClient.Get('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/ping');
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'second request status 200');
+    CheckEqual(Int64(2), Int64(GAcceptCount),
+      'second request opens new connection after CloseIdleConnections');
+
+    LClient := nil;
+  finally
+    GPoolListener.Close;
+    platform_thread_join(LHandle, LRet);
+    GPoolListener := nil;
+  end;
+end;
 
 { Test 6: Client timeout on slow server }
 procedure TestClientTimeout;
@@ -2717,11 +2760,6 @@ begin
     StopServer(LServer, LHandle);
   end;
 end;
-
-{ Test 9: Connection reuse — multiple requests share one TCP connection }
-var
-  GAcceptCount: Int32;
-  GPoolListener: ITcpListener;
 
 function PoolAcceptThread(AArg: Pointer): Pointer; cdecl;
 var
@@ -2911,6 +2949,8 @@ begin
   T.Run('Client options reject negative values',
     @TestClientOptionsRejectNegativeValues);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
+  T.Run('Client CloseIdleConnections drops pooled connections',
+    @TestClientCloseIdleConnectionsDropsPooledConnections);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);
   T.Run('Client sets Host header automatically', @TestClientSetsHostHeader);
