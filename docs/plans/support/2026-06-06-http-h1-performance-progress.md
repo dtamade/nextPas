@@ -1,5 +1,34 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http request constructor nil headers slice
+
+- **Status:** completed.
+- Objective:
+  - make direct `THttpRequest` constructors create empty headers when passed nil
+  - keep public helper signatures unchanged
+- Scope and safety:
+  - touched HTTP message source, message focused tests, API coverage, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, client/server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `27 total, 26 passed, 1 failed`
+    - failed at `Request constructors create headers when headers argument is nil`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `HeadersOrNew`
+  - `THttpRequest.Create`, `CreateFromRequestTarget`, and `THttpResponse.Create`
+    now share nil headers normalization
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `27 total, 27 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - direct concrete request construction no longer propagates nil headers into
+    client/H1 code paths
+  - this does not claim a request builder API or H1 transport rewrite
+
 ## Session: 2026-06-06 http response nil headers slice
 
 - **Status:** completed.

@@ -112,6 +112,14 @@ begin
   Result := LStream as IReader;
 end;
 
+function HeadersOrNew(const AHeaders: IHttpHeaders): IHttpHeaders;
+begin
+  if AHeaders <> nil then
+    Result := AHeaders
+  else
+    Result := NewHttpHeaders;
+end;
+
 { THttpRequest }
 
 constructor THttpRequest.Create(const AMethod: THttpMethod; const AUrl: TUrl;
@@ -125,7 +133,7 @@ begin
   FUrlParsed := True;
   FRequestTargetPartsParsed := True;
   FVersion := AVersion;
-  FHeaders := AHeaders;
+  FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
   FContentLength := AContentLength;
 end;
@@ -142,7 +150,7 @@ begin
   FUrlParsed := False;
   FRequestTargetPartsParsed := False;
   FVersion := AVersion;
-  FHeaders := AHeaders;
+  FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
   FContentLength := AContentLength;
 end;
@@ -300,10 +308,7 @@ constructor THttpResponse.Create(const AStatusCode: THttpStatus;
 begin
   inherited Create;
   FStatusCode := AStatusCode;
-  if AHeaders <> nil then
-    FHeaders := AHeaders
-  else
-    FHeaders := NewHttpHeaders;
+  FHeaders := HeadersOrNew(AHeaders);
   FBody := ABody;
 end;
 

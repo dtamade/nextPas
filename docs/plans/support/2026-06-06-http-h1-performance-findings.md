@@ -1,5 +1,33 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http request constructor nil headers slice
+
+- 本轮继续收紧 message carrier ergonomics：
+  helper 层 `NewRequest(..., nil headers, ...)` 已创建空 header set，但 direct
+  `THttpRequest.Create` / `CreateFromRequestTarget` 仍会保存 nil headers。高级调用方
+  或内部路径若直接构造 request，再交给 client/H1，后续 `Req.Headers.Has/Get/ForEach`
+  仍可能 access violation。
+- 选择依据：
+  - `THttpRequest` 是 `http.message` 单元公开的 concrete implementation；虽然 helper
+    是推荐入口，constructor 不应保留更弱的 header carrier invariant。
+  - 这与上一轮 `THttpResponse.Create` nil headers normalization 是同一类
+    ownership/ergonomics 修正。
+  - 本 slice 不改变 public helper signatures、不新增 builder，也不触碰 H1 transport。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `27 total, 26 passed, 1 failed`
+    - failed at `Request constructors create headers when headers argument is nil`
+    - failure: `direct request constructor creates headers when nil`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - 新增内部 `HeadersOrNew` helper。
+  - `THttpRequest.Create`、`CreateFromRequestTarget` 与 `THttpResponse.Create`
+    共享同一 nil headers normalization。
+- 复盘结论：
+  request/response message carrier 现在都有稳定 non-nil headers invariant。后续如果
+  继续同线，应审计 options validation 或 client redirect policy，而不是继续扩大
+  constructor surface。
+
 ## 2026-06-06 http response nil headers slice
 
 - 本轮转向 message helper ergonomics：

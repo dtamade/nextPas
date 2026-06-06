@@ -1,5 +1,24 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http request constructor nil headers slice
+
+### Goal
+
+收紧 concrete request implementation 的 header carrier 语义：
+`THttpRequest.Create` 与 `CreateFromRequestTarget` 直接收到 nil headers 时，也应创建
+空 `IHttpHeaders`。`NewRequest` helper 仍是推荐入口，但 direct constructor 不应把
+nil headers 传播到 client/H1 code path。
+
+### Checklist
+
+- [x] RED：`test_http_message` 证明 direct request constructor 当前不会创建 headers。
+- [x] GREEN：新增内部 `HeadersOrNew`，request/response constructor 共享
+  nil-normalization。
+- [x] 保持本 slice 边界：不新增 public builder、不改变 helper signatures、
+  不修改 H1 transport。
+- [x] 更新 HTTP API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_message`。
+
 ## Active Session: 2026-06-06 http response nil headers slice
 
 ### Goal

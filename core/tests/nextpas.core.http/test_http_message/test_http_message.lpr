@@ -148,6 +148,29 @@ begin
     'request helper nil headers start empty');
 end;
 
+procedure TestRequestConstructorsWithNilHeadersCreateHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := Default(TUrl);
+  LUrl.Path := '/direct';
+  LReq := THttpRequest.Create(hmGet, LUrl, hvHttp11, nil, nil, 0);
+
+  Check(LReq.Headers <> nil, 'direct request constructor creates headers when nil');
+  if LReq.Headers <> nil then
+    CheckEqual(Int64(0), Int64(LReq.Headers.Count),
+      'direct request constructor nil headers start empty');
+
+  LReq := THttpRequest.CreateFromRequestTarget(hmGet, '/target', hvHttp11,
+    nil, nil, 0);
+  Check(LReq.Headers <> nil,
+    'request-target constructor creates headers when nil');
+  if LReq.Headers <> nil then
+    CheckEqual(Int64(0), Int64(LReq.Headers.Count),
+      'request-target constructor nil headers start empty');
+end;
+
 procedure TestNewRequestRejectsNegativeContentLength;
 var
   LUrl: TUrl;
@@ -447,6 +470,8 @@ begin
     @TestNewRequestWithStringBody);
   T.Run('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
+  T.Run('Request constructors create headers when headers argument is nil',
+    @TestRequestConstructorsWithNilHeadersCreateHeaders);
   T.Run('NewRequest rejects negative content length',
     @TestNewRequestRejectsNegativeContentLength);
   T.Run('Request headers accessible', @TestRequestHeadersAccessible);

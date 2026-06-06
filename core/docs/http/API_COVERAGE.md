@@ -51,6 +51,10 @@
     headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
     response headers。`test_http_message` 锁住 helper contract，`test_http_contract`
     锁住 facade 可见性。
+  - 继续收紧：`THttpRequest.Create` 与 `CreateFromRequestTarget` 现在也会把 nil
+    headers 规范化为空 `IHttpHeaders`。public helper 仍是推荐入口，但直接使用
+    concrete request class 的内部/测试/高级调用方不会再把 nil headers 传播到
+    client/H1 code path；`test_http_message` 锁住该 implementation-class contract。
   - 继续收紧：`IHttpClient.Do_(Req)` 现在在 public client 入口拒绝 nil
     request，并抛 `EArgumentError`，避免调用方错误穿透到 transport 形成
     access violation；`test_http_client` 锁住该错误语义。
