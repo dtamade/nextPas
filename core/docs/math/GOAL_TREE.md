@@ -55,7 +55,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
   `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, composition order, exact
   owner-level `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `Rotate*`, and `Camera2D`
-  guard messages, and direct `Double`-path parity for projection/view/model/camera builders.
+  guard messages, direct `Double`-path parity for projection/view/model/camera builders, and
+  direct `Single` / `Double` parity coverage across the public guard-message families.
 - `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
 - Easing tests cover every public easing function with endpoints, representative midpoint/branch
   points, finite out-of-range extrapolation, NaN/Inf rejection, and exact owner-level
@@ -256,7 +257,8 @@ Status:
   exact owner-level `Perspective` finite/positive parameter guard messages plus the
   `Perspective: vertical FOV is invalid` contract, exact owner-level finite guard messages for
   `LookAt` eye/target/up inputs plus `Translate` / `Scale` axis inputs, `RotateX/Y/Z` radian
-  inputs, and `Camera2D` center/zoom finite inputs plus positive-zoom validation, invalid
+  inputs, and `Camera2D` center/zoom finite inputs plus positive-zoom validation, with direct
+  `Single` / `Double` parity coverage across those public guard-message families, invalid
   projection inputs, and `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing
