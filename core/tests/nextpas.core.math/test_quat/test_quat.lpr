@@ -201,6 +201,9 @@ begin
     'TQuatf Nlerp midpoint');
   ScaledIdentity := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatf.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  ScaledQ.ToAxisAngle(Axis, Angle);
+  CheckVec3f(0.0, 0.0, 1.0, Axis, 'TQuatf ToAxisAngle normalizes scaled input axis');
+  CheckNear(HALF_PI, Angle, 0.000001, 'TQuatf ToAxisAngle normalizes scaled input angle');
   CheckVec3f(0.0, 1.0, 0.0,
     ScaledQ.Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
     'TQuatf Rotate normalizes scaled input');
@@ -246,6 +249,9 @@ begin
     'TQuatd Slerp midpoint');
   ScaledIdentity := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatd.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
+  ScaledQ.ToAxisAngle(Axis, Angle);
+  CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle normalizes scaled input axis');
+  CheckNear(HALF_PI, Angle, 0.000000000001, 'TQuatd ToAxisAngle normalizes scaled input angle');
   CheckVec3d(0.0, 1.0, 0.0,
     ScaledQ.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
     'TQuatd Rotate normalizes scaled input');
