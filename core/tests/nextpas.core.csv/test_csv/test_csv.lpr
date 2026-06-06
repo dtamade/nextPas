@@ -326,6 +326,24 @@ begin
   Check(Length(R.GetError) > 0, 'multiline error msg not empty');
 end;
 
+procedure TestHasErrorBareQuoteInUnquotedField;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('ab"cd,ef');
+  R.ReadRow(Fields);
+  Check(R.HasError, 'bare quote in unquoted field should error');
+  Check(Length(R.GetError) > 0, 'bare quote error msg not empty');
+end;
+
+procedure TestHasErrorTextAfterClosingQuote;
+var R: TCsvReader; Fields: TStringArray;
+begin
+  R := TCsvReader.Create('"ab"cd,ef');
+  R.ReadRow(Fields);
+  Check(R.HasError, 'text after closing quote should error');
+  Check(Length(R.GetError) > 0, 'post-quote error msg not empty');
+end;
+
 { === FieldsPerRecord Tests === }
 
 procedure TestFieldsPerRecordCorrect;
@@ -453,6 +471,8 @@ begin
   T.Run('HasError.UnclosedQuote', @TestHasErrorUnclosedQuote);
   T.Run('HasError.Normal', @TestHasErrorNormal);
   T.Run('HasError.MultilineUnclosed', @TestHasErrorMultilineUnclosed);
+  T.Run('HasError.BareQuoteInUnquotedField', @TestHasErrorBareQuoteInUnquotedField);
+  T.Run('HasError.TextAfterClosingQuote', @TestHasErrorTextAfterClosingQuote);
 
   { FieldsPerRecord tests }
   T.Run('FieldsPerRecord.Correct', @TestFieldsPerRecordCorrect);

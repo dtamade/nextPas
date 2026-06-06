@@ -25,6 +25,7 @@ type
     FComment: AnsiChar;
     FHasError: Boolean;
     FError: string;
+    procedure SetError(const AMessage: string);
     function PeekChar: AnsiChar; inline;
     function AtEnd: Boolean; inline;
     function ReadQuotedField: string;
@@ -85,6 +86,14 @@ begin
   Result := FPos >= FLen;
 end;
 
+procedure TCsvReader.SetError(const AMessage: string);
+begin
+  if FHasError then
+    Exit;
+  FHasError := True;
+  FError := AMessage;
+end;
+
 function TCsvReader.TrimStr(const S: string): string;
 var
   LStart, LEnd: Integer;
@@ -122,8 +131,7 @@ begin
     end;
     if AtEnd then
     begin
-      FHasError := True;
-      FError := 'Unclosed quoted field';
+      SetError('Unclosed quoted field');
       Break;
     end;
     { We hit a quote }
@@ -147,7 +155,11 @@ begin
   LStart := FPos;
   while (not AtEnd) and (FData[FPos] <> FDelimiter) and
         (FData[FPos] <> #13) and (FData[FPos] <> #10) do
+  begin
+    if FData[FPos] = '"' then
+      SetError('Bare quote in unquoted field');
     Inc(FPos);
+  end;
   SetString(Result, @FData[LStart], FPos - LStart);
 end;
 
@@ -155,6 +167,7 @@ function TCsvReader.ReadRow(out AFields: TStringArray): Boolean;
 var
   LCount: Integer;
   LField: string;
+  LWasQuoted: Boolean;
 begin
   Result := False;
   if AtEnd then
@@ -182,10 +195,23 @@ begin
 
   repeat
     { Parse one field }
+    LWasQuoted := False;
     if (not AtEnd) and (PeekChar = '"') then
+    begin
+      LWasQuoted := True;
       LField := ReadQuotedField
+    end
     else
       LField := ReadUnquotedField;
+
+    if LWasQuoted and (not AtEnd) and
+      (PeekChar <> FDelimiter) and (PeekChar <> #13) and (PeekChar <> #10) then
+    begin
+      SetError('Unexpected character after closing quote');
+      while (not AtEnd) and (FData[FPos] <> FDelimiter) and
+            (FData[FPos] <> #13) and (FData[FPos] <> #10) do
+        Inc(FPos);
+    end;
 
     { Trim if requested }
     if FTrimSpace then
@@ -235,10 +261,7 @@ begin
 
   { FieldsPerRecord check }
   if (FFieldsPerRecord > 0) and (LCount <> FFieldsPerRecord) then
-  begin
-    FHasError := True;
-    FError := 'Wrong number of fields';
-  end;
+    SetError('Wrong number of fields');
 
   Result := True;
 end;
