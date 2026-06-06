@@ -88,10 +88,10 @@ func main() {
 	fmt.Println("Baselines: Go sync/atomic single-thread operations; manual comparison source, not auto-run by Pascal benchmark")
 	fmt.Println()
 
-	sink32 = benchPlainBaseline() ^
-		benchAtomicLoadStore32() ^
-		benchAtomicFetchAdd32() ^
-		benchAtomicCompareExchange32()
+	sink32 = benchPlainBaseline()
+	sink32 = benchAtomicLoadStore32()
+	sink32 = benchAtomicFetchAdd32()
+	sink32 = benchAtomicCompareExchange32()
 	sinkU32 = benchTypedAtomicUInt32()
 	runtime.KeepAlive(sink32)
 	runtime.KeepAlive(sinkU32)

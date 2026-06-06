@@ -665,10 +665,29 @@ begin
     'atomic benchmark must print the baseline evidence field');
   CheckContains(LAtomicBenchSource, 'LValue := LValue + Int32((LI and 1) + 1);',
     'atomic benchmark plain baseline must use loop-index-dependent local work');
+  CheckContains(LAtomicBenchSource, 'GSink32 := LValue;',
+    'atomic benchmark Pascal source must keep the last Int32 scenario result as sink evidence');
+  CheckNotContains(LAtomicBenchSource, 'GSink32 := GSink32 xor',
+    'atomic benchmark Pascal source must not XOR-aggregate Int32 sink results');
   CheckContains(LAtomicBenchRustCompareSource, 'use std::sync::atomic',
     'atomic Rust comparison source must use Rust std atomic APIs');
   CheckContains(LAtomicBenchRustCompareSource, 'const ITERS: usize = 1_000_000;',
     'atomic Rust comparison source must use the same nominal iteration count');
+  CheckContains(LAtomicBenchRustCompareSource,
+    'value = black_box(value.wrapping_add(((i & 1) + 1) as i32));',
+    'atomic Rust comparison source must mirror the alternating plain baseline work');
+  CheckContains(LAtomicBenchRustCompareSource, 'let mut sink32 = bench_plain_baseline();',
+    'atomic Rust comparison source must keep the plain baseline sink initialization explicit');
+  CheckContains(LAtomicBenchRustCompareSource, 'sink32 = bench_atomic_load_store32();',
+    'atomic Rust comparison source must keep the load/store result as sink evidence');
+  CheckContains(LAtomicBenchRustCompareSource, 'sink32 = bench_atomic_fetch_add32();',
+    'atomic Rust comparison source must keep the fetch-add result as sink evidence');
+  CheckContains(LAtomicBenchRustCompareSource, 'sink32 = bench_atomic_compare_exchange32();',
+    'atomic Rust comparison source must keep the compare-exchange result as final Int32 sink evidence');
+  CheckEqual(Int64(3), Int64(CountOccurrences(LAtomicBenchRustCompareSource, 'black_box(sink32);')),
+    'atomic Rust comparison source must keep intermediate Int32 sink results alive before overwrite');
+  CheckNotContains(LAtomicBenchRustCompareSource, ' ^ bench_atomic_load_store32()',
+    'atomic Rust comparison source must not XOR-aggregate Int32 sink results');
   CheckContains(LAtomicBenchRustCompareSource, 'AtomicLoad/Store32 2M',
     'atomic Rust comparison source must mirror the load/store scenario name');
   CheckContains(LAtomicBenchRustCompareSource, 'AtomicCompareExchange32 1M',
@@ -677,6 +696,16 @@ begin
     'atomic Go comparison source must use Go sync/atomic APIs');
   CheckContains(LAtomicBenchGoCompareSource, 'const Iters = 1000000',
     'atomic Go comparison source must use the same nominal iteration count');
+  CheckContains(LAtomicBenchGoCompareSource, 'sink32 = benchPlainBaseline()',
+    'atomic Go comparison source must keep the plain baseline sink initialization explicit');
+  CheckContains(LAtomicBenchGoCompareSource, 'sink32 = benchAtomicLoadStore32()',
+    'atomic Go comparison source must keep the load/store result as sink evidence');
+  CheckContains(LAtomicBenchGoCompareSource, 'sink32 = benchAtomicFetchAdd32()',
+    'atomic Go comparison source must keep the fetch-add result as sink evidence');
+  CheckContains(LAtomicBenchGoCompareSource, 'sink32 = benchAtomicCompareExchange32()',
+    'atomic Go comparison source must keep the compare-exchange result as final Int32 sink evidence');
+  CheckNotContains(LAtomicBenchGoCompareSource, ' ^\n\t\tbenchAtomicLoadStore32()',
+    'atomic Go comparison source must not XOR-aggregate Int32 sink results');
   CheckContains(LAtomicBenchGoCompareSource, 'fmt.Println("Compiler flags: go build (default optimized gc toolchain; recommended manual command)")',
     'atomic Go comparison source must print the compiler-flags evidence field');
   CheckContains(LAtomicBenchGoCompareSource, 'AtomicLoad/Store32 2M',
@@ -687,6 +716,16 @@ begin
     'atomic C++ comparison source must use C++ std::atomic APIs');
   CheckContains(LAtomicBenchCppCompareSource, 'constexpr int kIters = 1000000;',
     'atomic C++ comparison source must use the same nominal iteration count');
+  CheckContains(LAtomicBenchCppCompareSource, 'gSink32 = bench_plain_baseline();',
+    'atomic C++ comparison source must keep the plain baseline sink initialization explicit');
+  CheckContains(LAtomicBenchCppCompareSource, 'gSink32 = bench_atomic_load_store32();',
+    'atomic C++ comparison source must keep the load/store result as sink evidence');
+  CheckContains(LAtomicBenchCppCompareSource, 'gSink32 = bench_atomic_fetch_add32();',
+    'atomic C++ comparison source must keep the fetch-add result as sink evidence');
+  CheckContains(LAtomicBenchCppCompareSource, 'gSink32 = bench_atomic_compare_exchange32();',
+    'atomic C++ comparison source must keep the compare-exchange result as final Int32 sink evidence');
+  CheckNotContains(LAtomicBenchCppCompareSource, 'gSink32 = bench_plain_baseline() ^',
+    'atomic C++ comparison source must not XOR-aggregate Int32 sink results');
   CheckContains(LAtomicBenchCppCompareSource, 'std::cout << "Compiler flags: g++ -std=c++17 -O2 (recommended manual command)"',
     'atomic C++ comparison source must print the compiler-flags evidence field');
   CheckContains(LAtomicBenchCppCompareSource, 'AtomicLoad/Store32 2M',

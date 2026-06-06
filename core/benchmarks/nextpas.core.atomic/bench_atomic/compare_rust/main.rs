@@ -20,8 +20,8 @@ fn print_result(name: &str, elapsed: std::time::Duration, operations: usize) {
 fn bench_plain_baseline() -> i32 {
     let mut value = 0i32;
     let start = Instant::now();
-    for _ in 0..ITERS {
-        value = black_box(value.wrapping_add(1));
+    for i in 0..ITERS {
+        value = black_box(value.wrapping_add(((i & 1) + 1) as i32));
     }
     print_result("Plain local increment 1M", start.elapsed(), ITERS);
     value
@@ -83,10 +83,13 @@ fn main() {
     println!("Baselines: Rust std::sync::atomic single-thread operations; manual comparison source, not auto-run by Pascal benchmark");
     println!();
 
-    let sink32 = bench_plain_baseline()
-        ^ bench_atomic_load_store32()
-        ^ bench_atomic_fetch_add32()
-        ^ bench_atomic_compare_exchange32();
+    let mut sink32 = bench_plain_baseline();
+    black_box(sink32);
+    sink32 = bench_atomic_load_store32();
+    black_box(sink32);
+    sink32 = bench_atomic_fetch_add32();
+    black_box(sink32);
+    sink32 = bench_atomic_compare_exchange32();
     let sink_u32 = bench_typed_atomic_u32();
     black_box((sink32, sink_u32));
 

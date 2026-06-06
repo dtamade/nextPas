@@ -151,10 +151,10 @@ int main() {
             << '\n';
   std::cout << '\n';
 
-  gSink32 = bench_plain_baseline() ^
-            bench_atomic_load_store32() ^
-            bench_atomic_fetch_add32() ^
-            bench_atomic_compare_exchange32();
+  gSink32 = bench_plain_baseline();
+  gSink32 = bench_atomic_load_store32();
+  gSink32 = bench_atomic_fetch_add32();
+  gSink32 = bench_atomic_compare_exchange32();
   gSinkU32 = bench_typed_atomic_u32();
 
   std::cout << '\n';
