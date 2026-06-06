@@ -1,5 +1,32 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 header benchmark smoke marker slice
+
+- 本轮收紧 header microbenchmark evidence：
+  `bench_headers` 已有多个 header container rows，并且历史优化记录多次引用它，
+  但 `test_http_benchmarks` 没有 smoke 该 benchmark，且 benchmark 输出缺少
+  stable `operation=` marker。
+- 选择依据：
+  - Header lookup 是 H1 parser metadata、server policy、client/server header handling
+    的基础热路径。
+  - 这个 slice 把已有 benchmark 资产纳入 focused gate，比继续追加同型 correctness
+    case 更符合 performance evidence 主线。
+  - 只补 marker 和 smoke，不改变 `THttpHeaders` 实现或 public contract。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `45 total, 44 passed, 1 failed`
+    - failed at `bench_headers lookup smoke`
+    - failure: missing `operation=http.headers`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `bench_headers` now emits `operation=http.headers`.
+  - focused smoke locks `NEXTPAS_BENCH_FILTER=Get hit`, lowercase `Get hit`
+    row, uppercase `Get hit uppercase` row, `bench_filter`, `ns/op`, and `ops/s`.
+- 复盘结论：
+  header benchmark 现在和 router/writer/outbound microbenchmarks 一样有 stable
+  operation marker 和 focused gate coverage。后续 header 性能 slice 可以依赖这个
+  gate，但不能把单次 row 当成持久性能排名。
+
 ## 2026-06-06 snapshot raw cleanup slice
 
 - 本轮收紧 benchmark snapshot helper 的 artifact hygiene：

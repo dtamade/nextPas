@@ -1,5 +1,38 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 header benchmark smoke marker slice
+
+- **Status:** completed.
+- Objective:
+  - add a focused smoke for the existing `bench_headers` microbenchmark
+  - make `bench_headers` emit a stable `operation=http.headers` marker
+  - keep header lookup rows usable as isolated performance evidence
+- Scope and safety:
+  - touched the header benchmark, benchmark focused test, HTTP benchmark docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, public HTTP/header API,
+    `THttpHeaders` implementation, H1 parser/runtime, comparator schemas,
+    generated outputs, or source-tree build artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `45 total, 44 passed, 1 failed`
+    - failed at `bench_headers lookup smoke`
+    - missing marker: `operation=http.headers`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_headers` prints `operation=http.headers`
+  - `test_http_benchmarks` now builds `bench_headers` and runs a filtered
+    `Get hit` smoke that locks lowercase and uppercase lookup rows
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `45 total, 45 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - header microbenchmark output is now a stable benchmark asset covered by the
+    HTTP benchmark focused gate
+  - this does not claim a new optimization, new workload, public API change, or
+    cross-language performance ranking
+
 ## Session: 2026-06-06 snapshot raw cleanup slice
 
 - **Status:** completed.

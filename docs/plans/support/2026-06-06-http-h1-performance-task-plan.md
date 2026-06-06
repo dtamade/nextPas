@@ -1,5 +1,25 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 header benchmark smoke marker slice
+
+### Goal
+
+把已有 `bench_headers` microbenchmark 纳入 HTTP benchmark focused gate，并让它输出
+稳定 `operation=http.headers` marker。Header lookup 是 H1 parser / server policy /
+client header handling 的基础热路径；没有 smoke gate 时，历史 header benchmark
+只能作为手工截图，不能证明当前 benchmark asset 仍可运行。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 新增 `bench_headers lookup smoke`，先因缺少
+  `operation=http.headers` marker 失败。
+- [x] GREEN：`bench_headers` 输出 stable operation marker；lookup rows、filter、
+  iteration 行为不变。
+- [x] 保持本 slice 边界：不改 `THttpHeaders` 实现、不改 public header API、不新增
+  benchmark workload、不修改 H1 runtime。
+- [x] 更新 HTTP benchmark docs/support evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 snapshot raw cleanup slice
 
 ### Goal

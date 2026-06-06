@@ -192,6 +192,17 @@ make -C benchmarks/nextpas.core.http/bench_router clean run
 This emits `operation=http.router.dispatch` and a `handler dispatch` row for
 route match plus no-op handler invocation, without H1 parsing or socket I/O.
 
+Run the focused header lookup benchmark:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='Get hit' \
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+This emits `operation=http.headers` and lowercase / uppercase lookup rows for
+`THttpHeaders.Get`, without H1 parsing or socket I/O.
+
 Run the focused H1 response serialization benchmark:
 
 ```sh
@@ -246,7 +257,8 @@ keep-alive server benchmarks at smoke scale. Each implementation reports
 one stable format. The std-only Rust row is labeled `impl=rust_std` and also
 reports `rust_profile=std_only`; the Hyper/Tokio row is labeled
 `impl=rust_hyper` and reports `rust_profile=hyper_tokio`. The harness also
-builds `bench_fullchain` and validates the filtered plaintext row markers.
+builds `bench_headers` and `bench_fullchain`, validating filtered header lookup
+and plaintext full-chain row markers.
 
 For manual comparison runs, use the server comparison runner:
 

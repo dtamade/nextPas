@@ -295,6 +295,20 @@ Local focused row from 2026-06-05:
 | --- | ---: | ---: | ---: |
 | handler dispatch (match + no-op handler) | 100000 | 508.1 | 1968021 |
 
+## Run the Header Container Benchmark
+
+Run the focused header lookup row:
+
+```sh
+NEXTPAS_BENCH_MAX_ITERS=100000 \
+NEXTPAS_BENCH_FILTER='Get hit' \
+make -C benchmarks/nextpas.core.http/bench_headers clean run
+```
+
+This emits `operation=http.headers` and reports both lowercase and uppercase
+lookup rows. Use it to isolate `THttpHeaders.Get` lookup cost without H1
+parsing, router dispatch, response serialization, or socket I/O.
+
 ## Run the H1 Writer Serialization Benchmark
 
 Run the focused header-only row:

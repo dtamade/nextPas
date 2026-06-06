@@ -14,6 +14,7 @@ var
 const
   BenchServerRelativeDir = 'benchmarks/nextpas.core.http/bench_server';
   BenchRouterRelativeDir = 'benchmarks/nextpas.core.http/bench_router';
+  BenchHeadersRelativeDir = 'benchmarks/nextpas.core.http/bench_headers';
   BenchH1WriterRelativeDir = 'benchmarks/nextpas.core.http/bench_h1writer';
   BenchH1OutboundRelativeDir = 'benchmarks/nextpas.core.http/bench_h1outbound';
   BenchFullchainRelativeDir = 'benchmarks/nextpas.core.http/bench_fullchain';
@@ -213,6 +214,12 @@ begin
     'build/projects/nextpas.core.http/bench_router/bench_router');
 end;
 
+function ResolveBenchHeadersBinaryPath(const ARootDir: string): string;
+begin
+  Result := PathJoin(ARootDir,
+    'build/projects/nextpas.core.http/bench_headers/bench_headers');
+end;
+
 function ResolveBenchH1WriterBinaryPath(const ARootDir: string): string;
 begin
   Result := PathJoin(ARootDir,
@@ -331,6 +338,20 @@ begin
     'router dispatch filter marker');
   CheckContains(AOutput, 'ns/op', 'router dispatch ns/op marker');
   CheckContains(AOutput, 'ops/s', 'router dispatch ops/s marker');
+end;
+
+procedure CheckHeadersLookupBenchmarkOutput(const AOutput: string);
+begin
+  CheckContains(AOutput, 'operation=http.headers',
+    'headers benchmark operation marker');
+  CheckBenchmarkRunRow(AOutput, 'Get hit (5 headers, last)',
+    'headers lowercase get-hit benchmark row');
+  CheckBenchmarkRunRow(AOutput, 'Get hit uppercase (5 headers, last)',
+    'headers uppercase get-hit benchmark row');
+  CheckContains(AOutput, 'bench_filter=Get hit',
+    'headers benchmark filter marker');
+  CheckContains(AOutput, 'ns/op', 'headers benchmark ns/op marker');
+  CheckContains(AOutput, 'ops/s', 'headers benchmark ops/s marker');
 end;
 
 procedure CheckH1WriterSerializeBenchmarkOutput(const AOutput: string);
@@ -535,6 +556,34 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_router handler dispatch smoke exit code: ' + LOutput);
   CheckRouterDispatchBenchmarkOutput(LOutput);
+end;
+
+procedure TestBenchHeadersLookupSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchHeadersRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchHeadersRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_headers build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchHeadersBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_headers binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=Get hit'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_headers lookup smoke exit code: ' + LOutput);
+  CheckHeadersLookupBenchmarkOutput(LOutput);
 end;
 
 procedure TestBenchH1WriterSerializeSmoke;
@@ -1944,6 +1993,8 @@ begin
     @TestBenchServerRejectsInvalidWorkload);
   T.Run('bench_router handler dispatch smoke',
     @TestBenchRouterHandlerDispatchSmoke);
+  T.Run('bench_headers lookup smoke',
+    @TestBenchHeadersLookupSmoke);
   T.Run('bench_h1writer response serialization smoke',
     @TestBenchH1WriterSerializeSmoke);
   T.Run('H1 outbound hot helpers inline source contract',

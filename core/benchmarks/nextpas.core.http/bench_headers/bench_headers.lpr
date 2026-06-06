@@ -163,6 +163,7 @@ end;
 begin
   B := TBenchRunner.Create;
   WriteLn('=== nextpas.core.http.headers benchmark ===');
+  WriteLn('operation=http.headers');
   WriteLn;
   B.Run('Set+Get 5 headers', @BenchSetGet_5Headers);
   B.Run('Set+Get 15 headers', @BenchSetGet_15Headers);
