@@ -2,7 +2,14 @@
 
 ## Status
 
-This is the design document for the final-state math migration. It is not an implementation report. The current branch has not changed math behavior yet.
+This document records the final-state math migration design and the design decisions already locked by
+tests in this branch.
+
+The current branch has implemented the scalar/trig facade, final vector/matrix/quaternion value
+types, transform builders, easing functions, explicit-state random/noise generators, and the initial
+internal SIMD seam. M8 documentation and local module gates are in progress. Final cross-platform
+completion still requires macOS/Windows trig host link smokes, final API/docs review, profiling-backed
+SIMD wiring decisions, and the later `fafafa.game` cutover.
 
 The target is not gradual compatibility. The target is to absorb the useful math semantics from `fafafa.game` into `nextpas.core` and make `nextpas.core.math.*` the only official framework math API.
 
@@ -12,7 +19,7 @@ Current nextPas files:
 
 - `src/nextpas.core.math.pas`
 - `src/nextpas.core.math.trig.pas`
-- `src/nextpas.core.math.ffi.pas`
+- `src/nextpas.core.math.ffi.pas` as an initial-state anti-pattern; it is deleted in this branch and must not be restored
 - `src/nextpas.core.platform.posix.math.pas`
 - `src/nextpas.core.platform.windows.math.pas`
 - `src/nextpas.core.simd.*`
@@ -118,8 +125,9 @@ The final public units are:
 
 The public consumer-facing modules are the facade and the non-`impl` submodules. `nextpas.core.math.impl.*` units are final internal implementation units, not public API modules.
 
-`nextpas.core.math` is the foundation facade. It keeps scalar constants and lightweight helpers, and it explicitly re-exports the public math API that consumers normally need.
-The current file contains implementation logic; the migration should move behavior into submodules and leave the facade as re-export plus inline forwarding.
+`nextpas.core.math` is the foundation facade. It keeps scalar constants and explicitly re-exports the
+public math API that consumers normally need. Behavior lives in scalar/trig/vec/mat/quat/transform/
+easing/random submodules; the facade uses aliases and inline forwarding.
 
 `nextpas.core.math.scalar` owns:
 
@@ -127,7 +135,7 @@ The current file contains implementation logic; the migration should move behavi
 - `Min`, `Max`, `Clamp`, `Lerp`, `InverseLerp`, `Wrap`
 - `Abs`, `Sign`, `Floor`, `Ceil`, `Round`, `Trunc`, `Frac`
 - `IsNaN`, `IsInfinite`, `FloatEquals`, `FloatIsZero`
-- overflow helpers currently in `nextpas.core.math`
+- overflow helpers originally held by `nextpas.core.math`
 
 `nextpas.core.math.trig` owns:
 
@@ -231,22 +239,22 @@ These conventions must be documented and tested. If any downstream renderer expe
 
 ## Trig And Platform Strategy
 
-The current `nextpas.core.math.ffi.pas` is not acceptable as final architecture:
+The original `nextpas.core.math.ffi.pas` was not acceptable as final architecture:
 
 - It is module-level public FFI for a feature that should be a safe framework facade.
 - It binds `external 'm'` unconditionally.
 - Windows does not use a stable `libm` named `m` in the same way POSIX targets do.
-- Tests currently `uses nextpas.core.math.ffi`, which freezes the wrong surface.
+- Early tests imported `nextpas.core.math.ffi`, which froze the wrong surface.
 
-Final strategy:
+Final strategy and current status:
 
-1. Add RED surface tests first. They should prove current behavior is wrong by rejecting public/test `uses nextpas.core.math.ffi`.
+1. Add RED surface tests first. They reject public/test `uses nextpas.core.math.ffi`.
 1. `nextpas.core.math.trig` exposes safe public functions.
 2. `nextpas.core.math.trig` depends on `nextpas.core.math.impl.scalar` or platform-owned helpers.
 3. Platform-specific native bindings, if used, belong under host-owner platform seams, not under a public `math.ffi` facade.
 4. Where dynamic loading is needed, keep the public facade loading-strategy-agnostic.
 5. For first correctness implementation, pure Pascal or host-safe RTL-compatible implementations are acceptable if they pass accuracy tests and link on Linux/macOS/Windows.
-6. Delete `nextpas.core.math.ffi.pas` once no source or test uses it. If deletion temporarily breaks unknown consumers, keep a deprecated compile-time stub only if a source-surface test prevents new use and the final cutover removes it.
+6. Delete `nextpas.core.math.ffi.pas` once no source or test uses it. This branch has deleted it; do not reintroduce a deprecated stub unless a landing review finds an external compatibility blocker and the source-surface test still prevents new use.
 
 The first implementation batch should not attempt to be the fastest trig library. It should first be correct, safe, and linkable. SIMD/transcendental acceleration comes later through `nextpas.core.simd` primitives.
 
@@ -274,7 +282,7 @@ Final strategy:
   - `FBM*` with `Octaves <= 0`, bad `Lacunarity`, or bad `Gain`
 - Keep deterministic test vectors for seeds.
 
-The preferred public names should be framework-shaped, for example `TRandomGen` and `TNoiseGen` or `TMathRandom` and `TMathNoise`, but the exact names must be locked by tests before implementation.
+The public names are now locked by tests as `TRandomState`, `TRandomGen`, and `TNoiseGen`.
 
 ## SIMD Strategy
 
@@ -300,7 +308,7 @@ These should not block the first API implementation. They belong after scalar co
 
 ## Test Strategy
 
-Testing starts before implementation.
+Testing started before implementation and remains the completion gate.
 
 Required projects:
 
@@ -360,23 +368,22 @@ Heaptrc pass means the focused command exits 0, the test summary has `0 failed`,
 
 Each step is a separate reversible commit.
 
-## Open Design Points
+## Resolved And Remaining Design Points
 
-These must be resolved before implementation starts:
+Resolved by tests and implementation:
 
-- Exact constructor names: static `Create` only, or also free functions such as `Vec3f`.
-- Exact `Inverse` behavior for singular matrices: exception vs returning `Zero`; `TryInverse` must be the non-throwing path either way.
-- Exact zero normalize behavior for vectors and quaternions.
-- Exact random invalid-input behavior: fail fast with exceptions or deterministic graceful return values.
-- Whether `nextpas.core.math` facade re-exports every submodule or keeps some behind explicit `uses`.
-- Whether `TTransform3f/TTransform3d` records belong in the first math cut or should wait until vec/mat/quat/transform builders are stable.
+- Constructors use static `Create`; no short free constructors are part of the current public API.
+- `Inverse` raises `EArgumentError` for singular matrices; `TryInverse` returns `False`.
+- Zero vector normalization returns zero; zero quaternion normalization returns identity.
+- Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
+- Convenience dice helpers return `0` for non-positive dice or sides.
+- `NextBool` clamps probability into false or true behavior.
+- Invalid FBM octave, lacunarity, and gain inputs fail fast with `EArgumentError`.
+- `nextpas.core.math` re-exports the scalar/trig/vector/matrix/quaternion/transform/easing/random API.
+- The first transform cut exposes builder functions only; no `TTransform3f` or `TTransform3d` records are public.
 
-Task 1 must turn these open points into explicit RED tests or documented deferrals before adding implementation code. RED tests must not implicitly decide a policy by accident.
+Remaining design work:
 
-The recommended defaults are:
-
-- Use static `Create` plus short free constructors only if tests make them official.
-- `Inverse` raises for singular matrices; `TryInverse` returns `False`.
-- Zero vector normalize returns zero; zero quaternion normalize returns identity only if explicitly documented and tested.
-- Random invalid inputs should fail fast for programmer errors except documented convenience methods such as `Roll(0)`.
-- The `nextpas.core.math` facade re-exports core scalar/trig/vector/matrix/quaternion/transform/easing/random APIs because it is the official foundation entry point.
+- macOS and Windows trig host link smokes must prove the current safe trig route on those hosts.
+- Broader SIMD acceleration needs profiling evidence before wiring public value-type methods through the internal seam.
+- `fafafa.game` cutover must decide whether any short-lived internal wrappers are needed without turning legacy `Vectors` names into nextPas public API.
