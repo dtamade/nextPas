@@ -126,6 +126,11 @@ os_uname="$(uname -a)"
 fpc_version="$(fpc -iV 2>/dev/null || printf 'unknown')"
 go_version="$(go version 2>/dev/null || printf 'unknown')"
 rustc_version="$(rustc --version 2>/dev/null || printf 'unknown')"
+cargo_version="$(cargo --version 2>/dev/null || printf 'unknown')"
+hyper_cargo_lock_sha256="unknown"
+if command -v sha256sum >/dev/null 2>&1 && [[ -f "${SCRIPT_DIR}/compare_hyper/Cargo.lock" ]]; then
+  hyper_cargo_lock_sha256="$(sha256sum "${SCRIPT_DIR}/compare_hyper/Cargo.lock" | awk '{print $1}')"
+fi
 
 cat >"${OUTPUT_PATH}" <<EOF
 # nextpas.core.http Server Benchmark Snapshot
@@ -144,6 +149,8 @@ os=${os_uname}
 fpc_version=${fpc_version}
 go_version=${go_version}
 rustc_version=${rustc_version}
+cargo_version=${cargo_version}
+hyper_cargo_lock_sha256=${hyper_cargo_lock_sha256}
 requests=${REQUESTS}
 threads=${THREADS}
 workload=${WORKLOAD}

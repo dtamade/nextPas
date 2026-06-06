@@ -1483,6 +1483,10 @@ begin
   CheckContains(LSnapshot,
     'run_server_comparison.sh --requests 8 --threads 1 --runs 1 --include-hyper',
     'snapshot include-hyper command marker');
+  CheckContains(LSnapshot, 'cargo_version=',
+    'snapshot include-hyper cargo version marker');
+  CheckContains(LSnapshot, 'hyper_cargo_lock_sha256=',
+    'snapshot include-hyper Cargo.lock marker');
   CheckServerBenchmarkOutput(LSnapshot, 'rust_hyper', '8', '1');
   CheckContains(LSnapshot, 'summary_impl=rust_hyper',
     'snapshot include-hyper summary marker');

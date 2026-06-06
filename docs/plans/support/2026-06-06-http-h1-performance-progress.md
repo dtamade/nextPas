@@ -1,5 +1,37 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 hyper snapshot cargo metadata slice
+
+- **Status:** completed.
+- Objective:
+  - include Cargo toolchain metadata in server comparison snapshots
+  - include a deterministic hash of the Hyper comparator `Cargo.lock`
+  - keep this as evidence capture, not a dependency or comparator behavior change
+- Scope and safety:
+  - touched snapshot helper script, benchmark focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP public API, server
+    runtime, H1 parser/runtime, Cargo dependencies, generated outputs, or build
+    artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot include hyper smoke`
+    - missing marker: `cargo_version=`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - snapshot helper records `cargo_version=...`
+  - snapshot helper records `hyper_cargo_lock_sha256=...`
+  - both fall back to `unknown` when the tool or lockfile cannot be read
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 44 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - include-hyper snapshots now carry Cargo comparator environment evidence
+  - this does not claim new Hyper workloads, new dependencies, or new
+    cross-language rankings
+
 ## Session: 2026-06-06 snapshot workload propagation slice
 
 - **Status:** completed.

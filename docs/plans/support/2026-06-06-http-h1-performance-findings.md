@@ -1,5 +1,32 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 hyper snapshot cargo metadata slice
+
+- 本轮继续收紧 Hyper/Tokio comparator 的环境证据：
+  snapshot 已记录 `rustc_version`，但 include-hyper 路径实际还依赖 Cargo 和
+  `compare_hyper/Cargo.lock` 锁定的 dependency set。没有这些 marker，后续
+  Hyper/Tokio row 的复现信息弱于 Go / Rust std-only row。
+- 选择依据：
+  - Hyper comparator 是 Cargo-based；Cargo 版本和 lockfile hash 是比裸
+    `rustc_version` 更接近真实环境的最小补充。
+  - 这是 snapshot evidence，不改变 comparator 代码、依赖版本或 runner 输出格式。
+  - hash 只记录已追踪 `Cargo.lock`，不提交任何 build/cargo target 产物。
+- RED 证据：
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `44 total, 43 passed, 1 failed`
+    - failed at `server comparison snapshot include hyper smoke`
+    - failure: missing `cargo_version=`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - snapshot helper 现在记录 `cargo_version=<cargo --version|unknown>`。
+  - snapshot helper 现在记录
+    `hyper_cargo_lock_sha256=<sha256(compare_hyper/Cargo.lock)|unknown>`。
+  - include-hyper snapshot smoke 锁住这两个 marker 与 `rust_hyper` row 同时出现。
+- 复盘结论：
+  Hyper/Tokio benchmark snapshot 的环境块现在包含 Cargo toolchain 与 locked
+  dependency set 指纹。后续若继续 Rust comparator truth，应考虑记录 Cargo package
+  versions 或确保 snapshot 可同时覆盖 `--include-hyper + --workload response_1k`。
+
 ## 2026-06-06 snapshot workload propagation slice
 
 - 本轮继续收紧 benchmark evidence capture：

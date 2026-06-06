@@ -53,8 +53,9 @@ benchmarks/nextpas.core.http/run_server_comparison.sh \
 
 The Hyper/Tokio row reports `impl=rust_hyper` and
 `rust_profile=hyper_tokio`. The snapshot helper accepts the same flag and
-also accepts `--workload`; it records `workload=<name>` and
-`include_hyper=1` in the Markdown environment block:
+also accepts `--workload`; it records `workload=<name>`,
+`cargo_version`, `hyper_cargo_lock_sha256`, and `include_hyper=1` in the
+Markdown environment block:
 
 ```sh
 benchmarks/nextpas.core.http/capture_server_comparison_snapshot.sh \

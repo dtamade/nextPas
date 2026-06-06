@@ -1,5 +1,24 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 hyper snapshot cargo metadata slice
+
+### Goal
+
+补强 Hyper/Tokio comparator 的 snapshot 环境证据：Markdown snapshot 既然可以包含
+`--include-hyper`，就应记录 Cargo toolchain 和 `compare_hyper/Cargo.lock` 的
+dependency lock hash，而不只记录 `rustc_version`。
+
+### Checklist
+
+- [x] RED：`test_http_benchmarks` 的 include-hyper snapshot smoke 要求
+  `cargo_version=` 与 `hyper_cargo_lock_sha256=`，当前 snapshot 缺这两个 marker。
+- [x] GREEN：snapshot helper 记录 `cargo --version` 与
+  `compare_hyper/Cargo.lock` 的 SHA-256；工具或 lockfile 不可用时记录 `unknown`。
+- [x] 保持本 slice 边界：不修改 Hyper comparator workload、Cargo dependencies、
+  runner 输出格式或 HTTP runtime。
+- [x] 更新 HTTP benchmark/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_benchmarks`。
+
 ## Active Session: 2026-06-06 snapshot workload propagation slice
 
 ### Goal
