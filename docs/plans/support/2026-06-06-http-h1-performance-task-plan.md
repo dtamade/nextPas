@@ -1,5 +1,29 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http request string body helper slice
+
+### Goal
+
+继续收紧 client request ergonomics：新增
+`NewRequest(Method, Url, Headers, BodyText)` public helper，让调用方可以用
+Pascal string 构造 request body，而不必手写 bytes stream 和 content length。
+该 helper 复制 string 到 in-memory reader，发布 `Content-Length`，但不自动设置
+`Content-Type`。
+
+### Checklist
+
+- [x] RED：`test_http_message` 先调用 string body helper，当前编译失败于
+  `NewRequest` 参数数量不匹配。
+- [x] RED：`test_http_contract` 先通过 `nextpas.core.http` facade 调用 string body
+  helper，当前编译失败，证明 facade 还没有暴露该 public surface。
+- [x] RED：`test_http_client` 把 live `IHttpClient.Do_` helper path 改用 string
+  body overload，当前编译失败，证明缺口会影响真实 client path。
+- [x] GREEN：在 `nextpas.core.http.message` 与 facade 增加 `TUrl` / URL string
+  两个 string body overload；实现只复制 body、复用既有 headers/content-length
+  helper contract。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gates：`test_http_message`、`test_http_contract`、`test_http_client`。
+
 ## Active Session: 2026-06-06 http client nil request error slice
 
 ### Goal

@@ -77,6 +77,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   requests for `IHttpClient.Do_`; `Url` can be either a `TUrl` or a URL string,
   nil headers create an empty header set, body requests publish
   `Content-Length`, and negative content length raises `EArgumentError`.
+- `NewRequest(Method, Url, Headers, BodyText)` — build a custom request with
+  a copied Pascal string body and generated `Content-Length`; callers still set
+  `Content-Type` explicitly on the supplied headers when needed.
 - `NewResponse(Status, Headers, Body)` — build responses
 
 ### Server / Client (interfaces)

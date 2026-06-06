@@ -1,5 +1,49 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http request string body helper slice
+
+- **Status:** completed.
+- Objective:
+  - add a small request helper for common string-body client usage
+  - keep ownership explicit: the helper copies the Pascal string into an
+    in-memory reader and publishes `Content-Length`
+- Scope and safety:
+  - touched HTTP message/facade source, message/contract/client tests, HTTP
+    docs, and this support evidence
+  - did not touch compiler paths, lower-layer modules, HTTP transport/runtime,
+    root planning files, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - failed to compile at `NewRequest(..., string body)`:
+      `Wrong number of parameters specified for call to "NewRequest"`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - failed to compile at the facade string body helper call
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - failed to compile after the live `IHttpClient.Do_` helper path switched
+      to a string body
+- Landed change:
+  - added `NewRequest(Method, Url, Headers, BodyText)` overloads in
+    `nextpas.core.http.message`
+  - facade `nextpas.core.http` re-exports both `TUrl` and URL string overloads
+  - helper copies the Pascal string into an in-memory `IReader`
+  - helper sets `Content-Length` through the existing custom request contract
+  - helper does not infer or set `Content-Type`
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - simple custom client requests can now be built as
+    `NewRequest(hmPost, 'http://...', Headers, 'payload')`
+  - this does not claim full request-builder, JSON/form helper, or streaming
+    request body ownership semantics
+
 ## Session: 2026-06-06 http client nil request error slice
 
 - **Status:** completed.

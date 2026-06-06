@@ -1,5 +1,44 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http request string body helper slice
+
+- 本轮继续收紧 client request construction ergonomics：
+  request helper 已支持 custom `IReader + ContentLength`，但简单 string body
+  仍要求调用方手写 bytes stream 和长度。
+- 选择依据：
+  - Go `net/http` 的 `NewRequest` 和 Rust 常见 client builder surface 都让简单
+    string/body 构造保持直接；nextPas 只接受 `IReader` 时，对普通 POST/PUT
+    过于啰嗦。
+  - 这是 helper overload，不改 `IHttpClient` vtable，不改 transport，不引入完整
+    fluent builder。
+  - helper 不猜 `Content-Type`，避免把 JSON/form/text policy 写死在 HTTP core。
+- 实现决策：
+  - `NewRequest(Method, Url, Headers, BodyText)` 同时支持 `TUrl` 和 URL string。
+  - helper 复制 Pascal string 到 `CreateBytesStreamFrom` 生成的 in-memory reader。
+  - helper 复用既有 custom request contract：nil headers 创建空 header set，
+    并发布 `Content-Length`。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - 编译失败：`Wrong number of parameters specified for call to "NewRequest"`。
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - 编译失败于 facade `NewRequest(..., string body)` 缺失。
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - 编译失败于 live `IHttpClient.Do_` helper path 的 string body overload 缺失。
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_message clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `25/25 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向没有走偏：这是低风险 body ergonomics helper，不是扩大成 request builder。
+  后续如果继续 client API，应单独设计 per-request timeout / redirect override /
+  streaming body ownership，而不是让 string helper 承担这些语义。
+
 ## 2026-06-06 http client nil request error slice
 
 - 本轮继续收紧 client public error semantics：

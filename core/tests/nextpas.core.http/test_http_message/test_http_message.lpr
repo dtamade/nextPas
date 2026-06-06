@@ -107,6 +107,34 @@ begin
     'string URL request helper stores content-length');
 end;
 
+procedure TestNewRequestWithStringBody;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LReq: IHttpRequest;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LUrl := TUrl.Parse('http://example.com/api/users');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-client', 'string-body');
+
+  LReq := NewRequest(hmPost, LUrl, LHeaders, 'hello');
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'string body request helper method');
+  CheckEqual('string-body', LReq.Headers.Get('x-client'),
+    'string body request helper preserves custom headers');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'string body request helper sets content-length');
+  CheckEqual(Int64(5), LReq.ContentLength,
+    'string body request helper stores content-length');
+  Check(LReq.Body <> nil, 'string body request helper creates body reader');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(5), Int64(LN), 'string body request helper body length');
+  CheckEqual(Byte(Ord('h')), LBuf[0], 'string body request helper first byte');
+end;
+
 procedure TestNewRequestWithNilHeadersCreatesHeaders;
 var
   LUrl: TUrl;
@@ -403,6 +431,8 @@ begin
     @TestNewRequestWithHeadersBodyAndContentLength);
   T.Run('NewRequest accepts string URL with headers, body, and content length',
     @TestNewRequestStringUrlWithHeadersBodyAndContentLength);
+  T.Run('NewRequest accepts string body helper',
+    @TestNewRequestWithStringBody);
   T.Run('NewRequest creates headers when headers argument is nil',
     @TestNewRequestWithNilHeadersCreatesHeaders);
   T.Run('NewRequest rejects negative content length',

@@ -350,7 +350,7 @@ begin
     LHeaders.Set_('x-client', 'request-helper');
     LReq := nextpas.core.http.NewRequest(hmPost,
       'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder',
-      LHeaders, StringBodyReader('payload') as IReader, 7);
+      LHeaders, 'payload');
 
     LResp := LClient.Do_(LReq);
 

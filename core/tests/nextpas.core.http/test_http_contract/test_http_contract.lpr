@@ -464,6 +464,16 @@ begin
     'Facade NewRequest(string URL, headers/body) preserves method');
   CheckEqual('next', LReq.Headers.Get('x-api'),
     'Facade NewRequest(string URL, headers/body) preserves headers');
+
+  LReq := nextpas.core.http.NewRequest(hmPut,
+    'http://example.com/string-body', LHeaders, 'hello');
+
+  Check(LReq <> nil,
+    'Facade NewRequest(string URL, string body) returns non-nil');
+  Check(LReq.Method = hmPut,
+    'Facade NewRequest(string URL, string body) preserves method');
+  CheckEqual('5', LReq.Headers.Get('content-length'),
+    'Facade NewRequest(string URL, string body) sets content-length');
 end;
 
 { Test 4: NewResponse — StatusCode/Headers accessible }
