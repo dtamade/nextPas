@@ -3,6 +3,13 @@
 HTTP module providing server and client capabilities with radix-tree routing,
 middleware chaining, and a centralized internal transport registry.
 
+## Module Docs
+
+- `GOAL_TREE.md` — north star, route map, done criteria, and current highest-value slices
+- `ARCHITECTURE.md` — stable architecture facts, runtime ownership, and protocol seams
+- `API_COVERAGE.md` — public API proof and parity decisions
+- `BENCHMARKS.md` — benchmark truth, microbenchmark evidence, and comparator caveats
+
 ## Architecture
 
 ```
