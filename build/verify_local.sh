@@ -804,6 +804,19 @@ run_stage0_build_capture() {
     >"$output_file" 2>&1
 }
 
+run_stage0_native_artifact() {
+  artifact_path="$1"
+
+  if [ "$TARGET_ID" = "linux-x86_64" ] &&
+    [ ! -e /lib/ld64.so.1 ] &&
+    [ -x /lib64/ld-linux-x86-64.so.2 ]; then
+    /lib64/ld-linux-x86-64.so.2 "$artifact_path"
+    return $?
+  fi
+
+  "$artifact_path"
+}
+
 require_linux_x86_64() {
   host_os=$(uname -s | tr '[:upper:]' '[:lower:]')
   host_cpu=$(uname -m)
@@ -5258,7 +5271,7 @@ fi
 if grep -Eq '"packageManifestPath"' "$EXPLICIT_UNIT_ROOT_OUTPUT"; then
   fail 'unexpected-explicit-unit-root-package-manifest-envelope-field'
 fi
-if ! "$WORKSPACE_ARTIFACT_ROOT/out/$TARGET_ID/explicit_unit_root_smoke" >"$EXPLICIT_UNIT_ROOT_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$WORKSPACE_ARTIFACT_ROOT/out/$TARGET_ID/explicit_unit_root_smoke" >"$EXPLICIT_UNIT_ROOT_RUN_OUTPUT" 2>&1; then
   cat "$EXPLICIT_UNIT_ROOT_RUN_OUTPUT"
   fail 'explicit-unit-root-run-failed'
 fi
@@ -5292,7 +5305,7 @@ fi
 if grep -Eq '"workspaceDescriptorPath"' "$PACKAGE_MANIFEST_SOURCE_ROOT_OUTPUT"; then
   fail 'unexpected-package-manifest-source-root-workspace-descriptor-envelope-field'
 fi
-if ! "$PACKAGE_MANIFEST_ARTIFACT_ROOT/out/$TARGET_ID/package_manifest_source_root_smoke" >"$PACKAGE_MANIFEST_SOURCE_ROOT_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$PACKAGE_MANIFEST_ARTIFACT_ROOT/out/$TARGET_ID/package_manifest_source_root_smoke" >"$PACKAGE_MANIFEST_SOURCE_ROOT_RUN_OUTPUT" 2>&1; then
   cat "$PACKAGE_MANIFEST_SOURCE_ROOT_RUN_OUTPUT"
   fail 'package-manifest-source-root-run-failed'
 fi
@@ -5320,7 +5333,7 @@ require_output_pattern '^artifact=.*/tests/fixtures/workspace_member_source_root
 require_output_pattern '^backend-primary-artifact-path=.*/tests/fixtures/workspace_member_source_root/\.nextpas/out/linux-x86_64/workspace_member_source_root_smoke$' "$WORKSPACE_MEMBER_SOURCE_ROOT_OUTPUT" 'missing-workspace-member-source-root-backend-artifact-path'
 require_output_pattern '^tool-invocation-plan=.*"-FE.*/tests/fixtures/workspace_member_source_root/\.nextpas/cache/backend/linux-x86_64".*"-FU.*/tests/fixtures/workspace_member_source_root/\.nextpas/cache/backend/linux-x86_64".*"-Fu.*/tests/fixtures/workspace_member_source_root/app/app".*"-Fu.*/tests/fixtures/workspace_member_source_root/shared/src".*"-Fu.*/units/linux-x86_64".*".*/tests/fixtures/workspace_member_source_root/app/app/workspace_member_source_root_smoke\.pas"' "$WORKSPACE_MEMBER_SOURCE_ROOT_OUTPUT" 'missing-workspace-member-source-root-argv'
 require_output_pattern '^command-envelope=.*"workspaceRoot":".*/tests/fixtures/workspace_member_source_root".*"workspaceDiscoveryKind":"nearest-workspace-descriptor".*"workspaceDescriptorPath":".*/tests/fixtures/workspace_member_source_root/nextpas\.workspace\.toml".*"packageManifestPath":".*/tests/fixtures/workspace_member_source_root/app/nextpas\.package\.toml".*"artifactRoot":".*/tests/fixtures/workspace_member_source_root/\.nextpas".*"outputDir":".*/tests/fixtures/workspace_member_source_root/\.nextpas/out/linux-x86_64"' "$WORKSPACE_MEMBER_SOURCE_ROOT_OUTPUT" 'missing-workspace-member-source-root-envelope'
-if ! "$WORKSPACE_MEMBER_ARTIFACT_ROOT/out/$TARGET_ID/workspace_member_source_root_smoke" >"$WORKSPACE_MEMBER_SOURCE_ROOT_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$WORKSPACE_MEMBER_ARTIFACT_ROOT/out/$TARGET_ID/workspace_member_source_root_smoke" >"$WORKSPACE_MEMBER_SOURCE_ROOT_RUN_OUTPUT" 2>&1; then
   cat "$WORKSPACE_MEMBER_SOURCE_ROOT_RUN_OUTPUT"
   fail 'workspace-member-source-root-run-failed'
 fi
@@ -5359,7 +5372,7 @@ fi
 if grep -Eq '"packageManifestPath"' "$SOURCE_DIRECTORY_FALLBACK_OUTPUT"; then
   fail 'unexpected-source-directory-fallback-package-manifest-envelope-field'
 fi
-if ! "$SOURCE_DIRECTORY_FALLBACK_WORKSPACE/.nextpas/out/$TARGET_ID/hello" >"$SOURCE_DIRECTORY_FALLBACK_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$SOURCE_DIRECTORY_FALLBACK_WORKSPACE/.nextpas/out/$TARGET_ID/hello" >"$SOURCE_DIRECTORY_FALLBACK_RUN_OUTPUT" 2>&1; then
   cat "$SOURCE_DIRECTORY_FALLBACK_RUN_OUTPUT"
   fail 'source-directory-fallback-run-failed'
 fi
@@ -5392,7 +5405,7 @@ fi
 if grep -Eq '"workspaceDescriptorPath"' "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_OUTPUT"; then
   fail 'unexpected-package-manifest-source-precedence-workspace-descriptor-envelope-field'
 fi
-if ! "$WORKSPACE_ARTIFACT_ROOT/out/$TARGET_ID/package_manifest_source_precedence_smoke" >"$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$WORKSPACE_ARTIFACT_ROOT/out/$TARGET_ID/package_manifest_source_precedence_smoke" >"$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_RUN_OUTPUT" 2>&1; then
   cat "$PACKAGE_MANIFEST_SOURCE_PRECEDENCE_RUN_OUTPUT"
   fail 'package-manifest-source-precedence-run-failed'
 fi
@@ -5426,7 +5439,7 @@ fi
 if grep -Eq '"packageManifestPath"' "$OUT_DIR_OVERRIDE_OUTPUT"; then
   fail 'unexpected-out-dir-override-package-manifest-envelope-field'
 fi
-if ! "$OUT_DIR_OVERRIDE_DIR/hello" >"$OUT_DIR_OVERRIDE_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$OUT_DIR_OVERRIDE_DIR/hello" >"$OUT_DIR_OVERRIDE_RUN_OUTPUT" 2>&1; then
   cat "$OUT_DIR_OVERRIDE_RUN_OUTPUT"
   fail 'out-dir-override-run-failed'
 fi
@@ -5463,7 +5476,7 @@ fi
 if grep -Eq '"packageManifestPath"' "$ROOT_SOURCE_PRECEDENCE_OUTPUT"; then
   fail 'unexpected-root-source-precedence-package-manifest-envelope-field'
 fi
-if ! "$ROOT_SOURCE_PRECEDENCE_DIR/root_source_precedence_smoke" >"$ROOT_SOURCE_PRECEDENCE_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$ROOT_SOURCE_PRECEDENCE_DIR/root_source_precedence_smoke" >"$ROOT_SOURCE_PRECEDENCE_RUN_OUTPUT" 2>&1; then
   cat "$ROOT_SOURCE_PRECEDENCE_RUN_OUTPUT"
   fail 'root-source-precedence-run-failed'
 fi
@@ -5501,7 +5514,7 @@ fi
 if grep -Eq '"packageManifestPath"' "$UNIT_ROOT_PRECEDENCE_OUTPUT"; then
   fail 'unexpected-unit-root-precedence-package-manifest-envelope-field'
 fi
-if ! "$UNIT_ROOT_PRECEDENCE_DIR/unit_root_precedence_smoke" >"$UNIT_ROOT_PRECEDENCE_RUN_OUTPUT" 2>&1; then
+if ! run_stage0_native_artifact "$UNIT_ROOT_PRECEDENCE_DIR/unit_root_precedence_smoke" >"$UNIT_ROOT_PRECEDENCE_RUN_OUTPUT" 2>&1; then
   cat "$UNIT_ROOT_PRECEDENCE_RUN_OUTPUT"
   fail 'unit-root-precedence-run-failed'
 fi
