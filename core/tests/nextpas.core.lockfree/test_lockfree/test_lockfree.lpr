@@ -262,6 +262,58 @@ begin
   Check(LGot, 'MPMC rejects 0');
 end;
 
+function CapacityAboveMaxPowerOfTwo: PtrUInt;
+var
+  LMax: PtrUInt;
+begin
+  LMax := not PtrUInt(0);
+  Result := (LMax - (LMax shr 1)) + 1;
+end;
+
+procedure TestCapacityOverflowReject;
+var
+  LCapacity: PtrUInt;
+  LSpsc: TIntSpsc;
+  LMpmc: TIntMpmc;
+  LDeque: TIntDeque;
+  LGot: Boolean;
+begin
+  LCapacity := CapacityAboveMaxPowerOfTwo;
+
+  LGot := False;
+  LSpsc := nil;
+  try
+    LSpsc := TIntSpsc.Create(LCapacity);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  LSpsc.Free;
+  Check(LGot, 'SPSC rejects capacity above maximum power-of-two');
+
+  LGot := False;
+  LMpmc := nil;
+  try
+    LMpmc := TIntMpmc.Create(LCapacity);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  LMpmc.Free;
+  Check(LGot, 'MPMC rejects capacity above maximum power-of-two');
+
+  LGot := False;
+  LDeque := nil;
+  try
+    LDeque := TIntDeque.Create(LCapacity);
+  except
+    on E: EArgumentError do
+      LGot := True;
+  end;
+  LDeque.Free;
+  Check(LGot, 'deque rejects capacity above maximum power-of-two');
+end;
+
 { SPSC Batch }
 
 procedure TestSpscBatch;
@@ -784,6 +836,7 @@ begin
   T.Run('MPMC close', @TestMpmcClose);
   T.Run('MPMC 4P+4C contention', @TestMpmcContention);
   T.Run('Capacity zero reject', @TestCapacityZero);
+  T.Run('Capacity overflow reject', @TestCapacityOverflowReject);
   T.Run('SPSC batch', @TestSpscBatch);
   T.Run('MPMC timeout', @TestMpmcTimeout);
   T.Run('Stack basic', @TestStackBasic);
