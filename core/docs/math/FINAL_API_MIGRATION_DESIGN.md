@@ -226,6 +226,9 @@ Quaternions expose:
 - quaternion multiplication
 - `Slerp`, `Nlerp`
 
+Interpolation follows the shortest rotational path: opposite-sign equivalent quaternion endpoints
+must be treated as the same rotation instead of forcing the long arc through quaternion space.
+
 The facade may include convenience constructors such as `Vec2f`, `Vec3f`, `Vec4f`, `Mat4fIdentity`, or `QuatfIdentity` only if tests lock the exact public names. Constructors must not reintroduce legacy `Vector2`, `TVector3`, `TMatrix4`, or `TQuaternion` as official names.
 
 ## Matrix And Transform Conventions

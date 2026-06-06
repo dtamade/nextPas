@@ -170,6 +170,7 @@ end;
 procedure TestQuatfContracts;
 var
   Q: TQuatf;
+  NegatedQ: TQuatf;
   Axis: TVec3f;
   Angle: Single;
   HalfTurn: TQuatf;
@@ -208,6 +209,13 @@ begin
   CheckVec3f(0.7071068, 0.7071068, 0.0,
     TQuatf.Nlerp(TQuatf.Identity, Q, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
     'TQuatf Nlerp midpoint');
+  NegatedQ := TQuatf.Create(-Q.X, -Q.Y, -Q.Z, -Q.W);
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, NegatedQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp follows shortest path for opposite-sign endpoint');
+  CheckVec3f(0.7071068, 0.7071068, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, NegatedQ, Single(0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp follows shortest path for opposite-sign endpoint');
   ScaledIdentity := TQuatf.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatf.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
   ScaledQ.ToAxisAngle(Axis, Angle);
@@ -234,6 +242,7 @@ end;
 procedure TestQuatdContracts;
 var
   Q: TQuatd;
+  NegatedQ: TQuatd;
   Axis: TVec3d;
   Angle: Double;
   HalfTurn: TQuatd;
@@ -269,6 +278,13 @@ begin
   CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
     TQuatd.Nlerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
     'TQuatd Nlerp midpoint');
+  NegatedQ := TQuatd.Create(-Q.X, -Q.Y, -Q.Z, -Q.W);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, NegatedQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp follows shortest path for opposite-sign endpoint');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, NegatedQ, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp follows shortest path for opposite-sign endpoint');
   ScaledIdentity := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatd.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
   ScaledQ.ToAxisAngle(Axis, Angle);

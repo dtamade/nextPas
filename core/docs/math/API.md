@@ -142,6 +142,8 @@ Quaternion operations:
 Zero quaternion normalization returns identity.
 `Slerp` and `Nlerp` normalize their source quaternions before interpolation, so positive scaling of
 equivalent input rotations does not change the result.
+`Slerp` and `Nlerp` also follow the shortest rotational path: opposite-sign equivalent endpoints are
+treated as the same rotation instead of forcing the long arc.
 `Slerp` and `Nlerp` reject NaN and infinite interpolation factors with `EArgumentError`.
 `FromAxisAngle` normalizes its axis, returns identity for a zero axis, and rejects NaN and infinite
 axis components or angles with `EArgumentError`.

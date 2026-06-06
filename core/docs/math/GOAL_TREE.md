@@ -42,8 +42,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
   `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
-  `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`,
-  `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
+  shortest-path handling for opposite-sign equivalent interpolation endpoints, `Equals`, and
+  direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`,
+  quaternion multiply composition, and `Nlerp` midpoint.
 - Vector tests now also have direct `Double`-path parity coverage for `Data` aliases, `Zero`,
   add/subtract/unary minus, scalar multiply left, and representative length/component-multiply
   contracts.
@@ -222,8 +223,9 @@ Status:
   identity, `Conjugate`, axis-angle roundtrip, axis normalization, zero-axis identity behavior,
   `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
   normalization for rotation matrix conversion and vector rotation, quaternion multiply composition,
-  `Slerp`, `Nlerp`, `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`,
-  `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
+  `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints,
+  `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`,
+  `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders

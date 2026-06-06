@@ -80,6 +80,8 @@ identity; zero vector normalization returns zero. `FromAxisAngle` normalizes its
 axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes first and uses `+Z`
 as the axis when the output rotation angle collapses to zero. `ToRotationMatrix` and `Rotate` also
 normalize first, so positive scaling of the same input rotation does not change the result.
+`Slerp` and `Nlerp` follow the shortest rotational path, so opposite-sign equivalent endpoints are
+treated as the same rotation instead of taking the long arc.
 `TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular and
 numerically singular matrices, and `Inverse` raises `EArgumentError` on the same inputs.
 
