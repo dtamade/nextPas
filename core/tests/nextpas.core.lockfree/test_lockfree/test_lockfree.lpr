@@ -458,6 +458,22 @@ begin
   LQ.Free;
 end;
 
+procedure TestMpscCloseProducerContract;
+var
+  LQ: TIntMpsc;
+  LV: Integer;
+begin
+  LQ := TIntMpsc.Create;
+  LQ.Close;
+  Check(LQ.IsClosed, 'closed');
+  LQ.Enqueue(42);
+  Check(LQ.TryDequeue(LV), 'MPSC enqueue after close still drains');
+  CheckEqual(Int64(42), Int64(LV));
+  Check(not LQ.DequeueWait(LV), 'dequeue wait false on closed empty MPSC');
+  Check(not LQ.DequeueTimeout(LV, 1000000), 'dequeue timeout false on closed empty MPSC');
+  LQ.Free;
+end;
+
 procedure TestMpscMultiProducer;
 var
   LHandles: array[0..3] of TPlatformThreadHandle;
@@ -772,6 +788,7 @@ var
   LMpmcBatchSourceSection: string;
   LMpmcBatchTestSection: string;
   LMpscBasicTestSection: string;
+  LMpscCloseProducerTestSection: string;
   LMpscMultiProducerTestSection: string;
   LMpscTimeoutTestSection: string;
 begin
@@ -831,8 +848,12 @@ begin
     'MPMC batch test source section');
   LMpscBasicTestSection := ExtractSection(LTestSource,
     'procedure TestMpscBasic;',
-    'procedure TestMpscMultiProducer;',
+    'procedure TestMpscCloseProducerContract;',
     'MPSC basic test source section');
+  LMpscCloseProducerTestSection := ExtractSection(LTestSource,
+    'procedure TestMpscCloseProducerContract;',
+    'procedure TestMpscMultiProducer;',
+    'MPSC close producer contract test source section');
   LMpscMultiProducerTestSection := ExtractSection(LTestSource,
     'procedure TestMpscMultiProducer;',
     '{ Work-stealing Deque }',
@@ -1074,6 +1095,20 @@ begin
     'MPSC destroy guard must document the producer-stop discipline');
   CheckContains(LMpscBasicTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
     'MPSC basic test must close before freeing the queue');
+  CheckContains(LMpscCloseProducerTestSection,
+    'Check(LQ.IsClosed, ''closed'');',
+    'MPSC close producer contract test must assert closed state first');
+  CheckContains(LMpscCloseProducerTestSection, 'LQ.Enqueue(42);',
+    'MPSC close producer contract test must enqueue after close');
+  CheckContains(LMpscCloseProducerTestSection,
+    'Check(LQ.TryDequeue(LV), ''MPSC enqueue after close still drains'');',
+    'MPSC close producer contract test must drain the close-published item');
+  CheckContains(LMpscCloseProducerTestSection,
+    'Check(not LQ.DequeueWait(LV), ''dequeue wait false on closed empty MPSC'');',
+    'MPSC close producer contract test must freeze closed-empty wait termination');
+  CheckContains(LMpscCloseProducerTestSection,
+    'Check(not LQ.DequeueTimeout(LV, 1000000), ''dequeue timeout false on closed empty MPSC'');',
+    'MPSC close producer contract test must freeze closed-empty timeout termination');
   CheckContains(LMpscMultiProducerTestSection, 'GMpscQ.Close;' + LineEnding + '  GMpscQ.Free;',
     'MPSC multi-producer test must close after producers stop and before freeing the queue');
   CheckContains(LMpscTimeoutTestSection, 'LQ.Close;' + LineEnding + '  LQ.Free;',
@@ -1323,6 +1358,7 @@ begin
   T.Run('MPMC timeout', @TestMpmcTimeout);
   T.Run('Stack basic', @TestStackBasic);
   T.Run('MPSC basic', @TestMpscBasic);
+  T.Run('MPSC close producer contract', @TestMpscCloseProducerContract);
   T.Run('MPSC multi-producer', @TestMpscMultiProducer);
   T.Run('Deque basic', @TestDequeBasic);
   T.Run('SPSC capacity/empty/full', @TestSpscCapacity);
