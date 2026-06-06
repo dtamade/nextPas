@@ -334,6 +334,9 @@ begin
   PrepareValue;
   if AValue.HasDate then
   begin
+    if AValue.Year < 1000 then FBuilder^.AppendChar('0');
+    if AValue.Year < 100 then FBuilder^.AppendChar('0');
+    if AValue.Year < 10 then FBuilder^.AppendChar('0');
     FBuilder^.AppendInt(AValue.Year);
     FBuilder^.AppendChar('-');
     if AValue.Month < 10 then FBuilder^.AppendChar('0');

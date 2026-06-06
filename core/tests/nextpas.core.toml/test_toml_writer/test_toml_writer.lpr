@@ -149,6 +149,15 @@ begin
   B.Done;
 end;
 
+procedure TestLocalDatePadsYear;
+var B: TStringBuilder; W: TTomlWriter;
+begin
+  B.Init(64); W.Init(B);
+  W.Key('d'); W.DateTime(TomlDate(9, 1, 2));
+  CheckEqual('d = 0009-01-02' + #10, B.ToString, 'local date pads year');
+  B.Done;
+end;
+
 procedure TestLocalTime;
 var B: TStringBuilder; W: TTomlWriter;
 begin
@@ -248,6 +257,7 @@ begin
   T.Run('datetime offset Z', @TestDateTimeOffset);
   T.Run('datetime +09:00', @TestDateTimePositiveOffset);
   T.Run('local date', @TestLocalDate);
+  T.Run('local date pads year', @TestLocalDatePadsYear);
   T.Run('local time', @TestLocalTime);
   T.Run('newline', @TestNewline);
   T.Run('key TStringView', @TestKeyStringView);

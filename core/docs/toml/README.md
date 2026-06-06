@@ -64,6 +64,8 @@ src/nextpas.core.toml.pas           — ITomlDocument facade + TomlParse/Stringi
 - Floats: decimal, exponent, `inf`, `nan`
 - Booleans: `true`, `false`
 - DateTime: offset (`Z`, `+HH:MM`), local datetime, local date, local time
+- Writer output uses fixed-width TOML date/time fields, including four-digit
+  years for local dates and datetimes.
 - Arrays with trailing comma support
 - Inline tables (sealed — cannot be extended externally)
 - Standard tables `[table]` with dotted keys
