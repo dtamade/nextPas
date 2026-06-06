@@ -108,6 +108,28 @@ begin
   end;
 end;
 
+procedure TestLargeFiniteFloatRangeStaysFiniteAndBounded;
+const
+  LARGE_MIN: Single = -3.0e38;
+  LARGE_MAX: Single = 3.0e38;
+var
+  Rng: TRandomGen;
+  I: Integer;
+  FloatValue: Single;
+begin
+  Rng := TRandomGen.Create(42);
+  try
+    for I := 1 to 8 do
+    begin
+      FloatValue := Rng.NextFloatRange(LARGE_MIN, LARGE_MAX);
+      Check((FloatValue >= LARGE_MIN) and (FloatValue <= LARGE_MAX),
+        'large finite float range stays finite and bounded');
+    end;
+  finally
+    Rng.Free;
+  end;
+end;
+
 procedure TestInvalidRangesFailFast;
 var
   Rng: TRandomGen;
@@ -346,6 +368,8 @@ begin
   T := TTestRunner.Create('nextpas.core.math.random');
   T.Run('seed determinism', @TestSeedDeterminism);
   T.Run('range boundaries', @TestRangeBoundaries);
+  T.Run('large finite float range stays finite and bounded',
+    @TestLargeFiniteFloatRangeStaysFiniteAndBounded);
   T.Run('invalid ranges fail fast', @TestInvalidRangesFailFast);
   T.Run('probability dice weighted choice and shuffle', @TestProbabilityDiceWeightedAndShuffle);
   T.Run('gaussian and circle vectors', @TestGaussianAndCircleVectors);

@@ -170,7 +170,7 @@ begin
     raise EArgumentError.Create('TRandomGen.NextFloatRange: AMin must be <= AMax');
   if AMin = AMax then
     Exit(AMin);
-  Result := AMin + NextFloat * (AMax - AMin);
+  Result := Single(Double(AMin) + Double(NextFloat) * (Double(AMax) - Double(AMin)));
 end;
 
 function TRandomGen.NextDouble: Double;
