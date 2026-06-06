@@ -74,6 +74,11 @@
     `IHttpTransport` 的 proof 锁住 `/dir/sub/old` + `../next?from=dot`
     解析成 `/dir/next`，避免 transport 或 future protocol implementation
     被迫自己解释 `..` path segments。
+  - 继续收紧：fragment-only redirect `Location`（例如 `#section`）现在只更新
+    follow-up request 的 fragment，并保留原请求 path/query。显式注入
+    `IHttpTransport` 的 proof 锁住 `/dir/old?from=base` + `#section`
+    仍暴露 `Path=/dir/old`、`RawQuery=from=base`、`Fragment=section`；
+    H1 writer 仍只发送 path/query，不把 fragment 放入 request-target。
   - 暂不做：不引入完整 fluent `IHttpRequestBuilder`。当前 helper 已覆盖低风险
     ergonomics 缺口；per-request timeout、redirect override、form/json body helper、
     response charset decoding、streaming/chunked request body ownership 等需要更明确

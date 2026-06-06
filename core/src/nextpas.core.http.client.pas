@@ -113,6 +113,22 @@ begin
     (System.Copy(AValue, 1, Length(APrefix)) = APrefix);
 end;
 
+function HasRedirectQueryDelimiter(const ALocation: string): Boolean;
+var
+  LI: SizeInt;
+begin
+  for LI := 1 to Length(ALocation) do
+  begin
+    case ALocation[LI] of
+      '?':
+        Exit(True);
+      '#':
+        Exit(False);
+    end;
+  end;
+  Result := False;
+end;
+
 procedure RemoveLastPathSegment(var AOutput: string);
 var
   LI: SizeInt;
@@ -194,6 +210,7 @@ end;
 function ResolveRedirectUrl(const ABaseUrl: TUrl; const ALocation: string): TUrl;
 var
   LTarget: TUrl;
+  LHasQueryDelimiter: Boolean;
 begin
   if (Pos('http://', ALocation) = 1) or (Pos('https://', ALocation) = 1) then
     Exit(TUrl.Parse(ALocation));
@@ -205,10 +222,15 @@ begin
   end;
 
   Result := ABaseUrl;
+  LHasQueryDelimiter := HasRedirectQueryDelimiter(ALocation);
   LTarget := TUrl.ParseRequestTarget(ALocation);
   if LTarget.Path <> '' then
+  begin
     Result.Path := NormalizeRedirectPath(MergeRedirectPath(Result.Path, LTarget.Path));
-  Result.RawQuery := LTarget.RawQuery;
+    Result.RawQuery := LTarget.RawQuery;
+  end
+  else if LHasQueryDelimiter then
+    Result.RawQuery := LTarget.RawQuery;
   Result.Fragment := LTarget.Fragment;
 end;
 

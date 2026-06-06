@@ -1,5 +1,28 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http fragment-only redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：fragment-only `Location`（例如
+`#section`）只应更新 follow-up request fragment，并保留 base URL 的 path/query。
+显式注入的 `IHttpTransport` 和 future H2/H3 transport 都应看到稳定的
+`Path` / `RawQuery` / `Fragment` parts，而不是把 fragment-only redirect 当成
+“清空 query”的普通空 path target。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: #section`，base request 为
+  `http://example.test/dir/old?from=base`；当前失败为
+  `expected "from=base", got ""`。
+- [x] GREEN：新增内部 `HasRedirectQueryDelimiter`，让 fragment-only reference
+  保留 base query，同时让 query-only/path references 继续替换或清空 query。
+- [x] 保持既有分支：absolute URL、network-path URL、path-relative URL 和
+  dot-segment normalization 继续沿用各自分支。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http dot-segment redirect slice
 
 ### Goal

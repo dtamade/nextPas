@@ -1,5 +1,46 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http fragment-only redirect slice
+
+- **Status:** completed.
+- Objective:
+  - make fragment-only redirect `Location` values update only the follow-up
+    request fragment
+  - preserve the original request path/query for injected transports and future
+    protocol transports
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: #section`
+  - base request was `http://example.test/dir/old?from=base`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32 total, 31 passed, 1 failed`
+    - failed at
+      `Client redirect transport preserves query on fragment-only Location`
+    - expected follow-up raw query `from=base`, got ``
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - added internal `HasRedirectQueryDelimiter`
+  - relative redirect resolution now distinguishes fragment-only references
+    from query/path references
+  - fragment-only references preserve base path/query and update fragment
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=example.test`,
+    `Path=/dir/old`, `RawQuery=from=base`, query param `from=base`, and
+    `Fragment=section`
+  - this does not change H1 wire request-target generation; fragments still
+    stay out of the wire path
+  - this does not claim per-request redirect policy or 307/308 body replay
+    rewindability
+
 ## Session: 2026-06-06 http dot-segment redirect slice
 
 - **Status:** completed.

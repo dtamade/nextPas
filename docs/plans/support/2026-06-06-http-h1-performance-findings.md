@@ -1,5 +1,39 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http fragment-only redirect slice
+
+- 本轮继续收紧 client redirect URL resolution：
+  dot-segment path merging 已收口，但 fragment-only `Location` 例如
+  `#section` 会把 base query 清空，follow-up request object 只剩 fragment。
+- 选择依据：
+  - Go/Rust HTTP client 都按 RFC-style relative reference resolution 处理
+    fragment-only redirects；它们不应该改变 path/query。
+  - 这仍是 internal resolver contract，不改 `IHttpClient` vtable、
+    public helper、timeout 或 body replay ownership。
+  - H1 writer 已经只写 path/query，不把 fragment 发到 request-target；本 slice
+    只保证 request object 的 URL parts 正确，避免 future transport 复制错误语义。
+- 实现决策：
+  - 新增内部 `HasRedirectQueryDelimiter`，只扫描 fragment delimiter 前的 `?`。
+  - relative redirect 分支中，非空 path 继续替换/清空 query；
+    query-only reference 继续替换 query；fragment-only reference 保留 base query。
+  - absolute URL 与 network-path redirect 分支保持不变。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32 total, 31 passed, 1 failed`
+    - failed at
+      `Client redirect transport preserves query on fragment-only Location`
+    - failure: `fragment-only redirect preserves original raw query: expected "from=base", got ""`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN / behavior 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `32/32 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- 复盘结论：
+  方向仍然是 redirect follow-up request object URL-resolution contract，不是
+  H1 malformed parity。后续若继续 client ergonomics，应优先审计 redirect
+  body replay ownership、per-request redirect policy 或 timeout ergonomics，而不是
+  继续铺同型 relative URL case。
+
 ## 2026-06-06 http dot-segment redirect slice
 
 - 本轮继续收紧 client redirect URL resolution：

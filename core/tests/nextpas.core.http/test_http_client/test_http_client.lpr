@@ -52,6 +52,7 @@ type
     FSeenPath: string;
     FSeenRawQuery: string;
     FSeenQueryParam: string;
+    FSeenFragment: string;
   public
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
@@ -61,6 +62,7 @@ type
     property SeenPath: string read FSeenPath;
     property SeenRawQuery: string read FSeenRawQuery;
     property SeenQueryParam: string read FSeenQueryParam;
+    property SeenFragment: string read FSeenFragment;
   end;
 
 function ServerThreadFunc(AArg: Pointer): Pointer; cdecl;
@@ -213,6 +215,7 @@ begin
   FSeenPath := AReq.Path;
   FSeenRawQuery := AReq.RawQuery;
   FSeenQueryParam := AReq.QueryParam('from');
+  FSeenFragment := LUrl.Fragment;
   LHeaders.Set_('content-length', '7');
   Result := NewResponse(HTTP_STATUS_OK, LHeaders, StringBodyReader('arrived'));
 end;
@@ -1161,6 +1164,37 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'dot-segment redirect final body');
 end;
 
+procedure TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '#section';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/dir/old?from=base');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'fragment-only redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'fragment-only redirect transport final status');
+  CheckEqual('http', LTransportObj.SeenScheme,
+    'fragment-only redirect preserves original scheme');
+  CheckEqual('example.test', LTransportObj.SeenHost,
+    'fragment-only redirect preserves host');
+  CheckEqual('/dir/old', LTransportObj.SeenPath,
+    'fragment-only redirect preserves original path');
+  CheckEqual('from=base', LTransportObj.SeenRawQuery,
+    'fragment-only redirect preserves original raw query');
+  CheckEqual('base', LTransportObj.SeenQueryParam,
+    'fragment-only redirect keeps original query param visible');
+  CheckEqual('section', LTransportObj.SeenFragment,
+    'fragment-only redirect updates fragment');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'fragment-only redirect final body');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1424,6 +1458,8 @@ begin
     @TestClientRedirectTransportResolvesPathRelativeLocation);
   T.Run('Client redirect transport normalizes dot-segment Location',
     @TestClientRedirectTransportNormalizesDotSegmentLocation);
+  T.Run('Client redirect transport preserves query on fragment-only Location',
+    @TestClientRedirectTransportPreservesQueryOnFragmentOnlyLocation);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);

@@ -92,7 +92,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
   resolved before the follow-up request is passed to the transport. Path-relative
   redirects merge against the original request directory and normalize dot
   segments, while network-path URLs inherit the original scheme and replace
-  authority/path/query/fragment.
+  authority/path/query/fragment. Fragment-only redirects preserve the original
+  path/query and update only the request URL fragment; H1 request writing still
+  omits fragments from the wire request-target.
 - `HttpGetToWriter(Client, Url, Writer)` — copies a successful GET response body to an `IWriter` and returns the byte count; non-2xx responses raise `EHttpError`
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, and cleans partial temp files on failure
 - `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
