@@ -307,5 +307,7 @@ make -C core core-math-trig-local-smoke
 
 It bundles `test_trig` and `test_facade` as the current-host local link proof. macOS and Windows
 trig link smokes remain host-gated and must be reported separately until those hosts run equivalent
-checks.
+checks. The owner-level target first reruns `core-math-api-surface-smoke`, so the current-host
+proof keeps the source-surface `external 'm'` and consumer-boundary checks coupled to the link
+smoke instead of relying on a separate ad-hoc command.
 Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.

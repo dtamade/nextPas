@@ -415,8 +415,9 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `make -C core/examples/nextpas.core.math/math_overview clean run`, so the facade-only public
   consumer example is both directly runnable and reachable through a stable named module entrypoint.
 - `core/Makefile` now also exposes `core-math-trig-local-smoke`, reachable as
-  `make -C core core-math-trig-local-smoke`. It reruns `test_trig` plus `test_facade` as the
-  current-host local trig link proof without pretending macOS/Windows have already been verified.
+  `make -C core core-math-trig-local-smoke`. It first calls `core-math-api-surface-smoke` and then
+  reruns `test_trig` plus `test_facade` as the current-host local trig link proof without
+  pretending macOS/Windows have already been verified.
 - M8 is not complete until broader M7 SIMD acceleration decisions and host trig link evidence are
   finished.
 

@@ -289,10 +289,11 @@ Cross-platform link proof has two layers:
   `make -C tests/nextpas.core.math/test_api_surface clean test`, which rejects `external 'm'`
   under `src/nextpas.core.math*.pas` and rejects behavior tests that import
   `nextpas.core.math.ffi`.
-- Host link proof: `make -C core core-math-trig-local-smoke` bundles `test_trig` and
-  `test_facade` as the current-host local link proof. macOS/Windows host gates must still rerun
-  equivalent checks before trig is marked complete. If macOS/Windows gates are unavailable in a
-  round, the round must report that final cross-platform completion is blocked, not complete.
+- Host link proof: `make -C core core-math-trig-local-smoke` first calls
+  `core-math-api-surface-smoke` and then bundles `test_trig` plus `test_facade` as the
+  current-host local link proof. macOS/Windows host gates must still rerun equivalent checks before
+  trig is marked complete. If macOS/Windows gates are unavailable in a round, the round must report
+  that final cross-platform completion is blocked, not complete.
   Without macOS/Windows host link smoke runs, final cross-platform trig completion remains blocked, not complete.
 
 ## Random And Noise Design

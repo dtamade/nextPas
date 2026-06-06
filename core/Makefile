@@ -59,6 +59,7 @@ core-math-impl-simd-local-smoke: dirs
 	$(MAKE) -C tests/nextpas.core.math/test_impl_simd clean test
 
 core-math-trig-local-smoke: dirs
+	$(MAKE) core-math-api-surface-smoke
 	$(MAKE) -C tests/nextpas.core.math/test_trig clean test
 	$(MAKE) -C tests/nextpas.core.math/test_facade clean test
 

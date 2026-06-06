@@ -120,6 +120,10 @@ REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
         command="make -C core core-math-trig-local-smoke",
         recipe_steps=(
             (
+                "api-surface",
+                "$(MAKE) core-math-api-surface-smoke",
+            ),
+            (
                 "test-trig",
                 "$(MAKE) -C tests/nextpas.core.math/test_trig clean test",
             ),
