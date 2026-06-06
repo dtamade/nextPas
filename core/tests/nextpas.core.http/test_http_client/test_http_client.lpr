@@ -1345,6 +1345,69 @@ begin
   Check(LRaised, 'response body bytes helper rejects nil response');
 end;
 
+procedure TestHttpReleaseResponseBodyClosesCloseCapableBody;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectTrackedBody;
+  LBodyRef: IReadCloser;
+  LResp: IHttpResponse;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-length', '7');
+  LBody := TRedirectTrackedBody.Create('discard');
+  LBodyRef := LBody as IReadCloser;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef as IReader);
+
+  HttpReleaseResponseBody(LResp);
+
+  Check(LBody.Closed,
+    'release helper closes close-capable response body');
+end;
+
+procedure TestHttpReleaseResponseBodyDrainsPlainReader;
+var
+  LHeaders: IHttpHeaders;
+  LBody: TRedirectDrainingBody;
+  LBodyRef: IReader;
+  LResp: IHttpResponse;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-length', '7');
+  LBody := TRedirectDrainingBody.Create('discard');
+  LBodyRef := LBody as IReader;
+  LResp := NewResponse(HTTP_STATUS_OK, LHeaders, LBodyRef);
+
+  HttpReleaseResponseBody(LResp);
+
+  Check(LBody.Drained,
+    'release helper drains non-closeable response body');
+end;
+
+procedure TestHttpReleaseResponseBodyNilBodyNoop;
+var
+  LResp: IHttpResponse;
+begin
+  LResp := NewResponse(HTTP_STATUS_NO_CONTENT, NewHttpHeaders, nil);
+  HttpReleaseResponseBody(LResp);
+  Check(LResp.Body = nil, 'release helper accepts nil body');
+end;
+
+procedure TestHttpReleaseResponseBodyRejectsNilResponse;
+var
+  LResp: IHttpResponse;
+  LRaised: Boolean;
+begin
+  LResp := nil;
+  LRaised := False;
+  try
+    HttpReleaseResponseBody(LResp);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'release helper rejects nil response');
+end;
+
 procedure TestHttpGetToFileWritesFinalPathAtomically;
 var
   LRouter: THttpRouter;
@@ -2427,6 +2490,14 @@ begin
     @TestHttpReadResponseBodyBytesNilBodyReturnsEmpty);
   T.Run('HttpReadResponseBodyBytes rejects nil response',
     @TestHttpReadResponseBodyBytesRejectsNilResponse);
+  T.Run('HttpReleaseResponseBody closes close-capable body',
+    @TestHttpReleaseResponseBodyClosesCloseCapableBody);
+  T.Run('HttpReleaseResponseBody drains plain reader',
+    @TestHttpReleaseResponseBodyDrainsPlainReader);
+  T.Run('HttpReleaseResponseBody nil body noop',
+    @TestHttpReleaseResponseBodyNilBodyNoop);
+  T.Run('HttpReleaseResponseBody rejects nil response',
+    @TestHttpReleaseResponseBodyRejectsNilResponse);
   T.Run('HttpGetToFile writes final path atomically', @TestHttpGetToFileWritesFinalPathAtomically);
   T.Run('HttpGetToFile rejects 404 responses', @TestHttpGetToFileRejects404Responses);
   T.Run('HttpGetToFile cleans temp files on truncated body', @TestHttpGetToFileCleansTempFilesOnTruncatedBody);

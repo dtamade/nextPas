@@ -127,6 +127,9 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 - `HttpGetToFile(Client, Url, Path)` — writes a successful GET response through a same-directory temp file, atomically publishes the final path, cleans partial temp files on failure, and releases the response body before returning or raising
 - `HttpReadResponseBodyBytes(Resp)` — consumes `Resp.Body` into `TBytes`; nil body returns empty bytes, nil response raises `EArgumentError`
 - `HttpReadResponseBodyString(Resp)` — consumes `Resp.Body` into a Pascal string; nil body returns `''`, nil response raises `EArgumentError`
+- `HttpReleaseResponseBody(Resp)` — releases a response body the caller will
+  not read: close-capable bodies are closed, plain `IReader` bodies are drained
+  to EOF, nil body is a no-op, and nil response raises `EArgumentError`
 - `NewHttpServer(Handler[, Transport][, Options])` — 默认路径通过 internal registry 解析到 H1，也可显式注入 `IHttpServerTransport`
 - `THttpServerOptions` — 公开 carrier，当前包括 `Backend`、timeouts、
   `MaxHeaderSize`、`MaxBodySize`; negative timeout or size-limit fields raise

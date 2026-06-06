@@ -1,5 +1,39 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http response body release helper slice
+
+- **Status:** completed.
+- Objective:
+  - expose an explicit response body release helper for callers that will not read the body
+  - keep close/drain behavior aligned with redirect/download internal release semantics
+  - keep read-all helpers as consume-only helpers, not implicit close helpers
+- Scope and safety:
+  - touched HTTP client/facade source, client/contract focused tests, HTTP docs,
+    and this support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime, H1
+    parser/runtime, benchmark assets, generated outputs, or build artifacts
+- RED:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at missing `HttpReleaseResponseBody`
+    - four call sites reported `Identifier not found "HttpReleaseResponseBody"`
+- Landed change:
+  - added `nextpas.core.http.client.HttpReleaseResponseBody(Resp)`
+  - added facade forwarding helper `nextpas.core.http.HttpReleaseResponseBody`
+  - helper rejects nil response, treats nil body as no-op, closes close-capable
+    bodies, and drains plain `IReader` bodies to EOF
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `59 total, 59 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+  - `make -C core/tests/nextpas.core.http/test_http_contract clean test`
+    - `35 total, 35 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - callers now have a stable public way to release or discard an unread
+    response body
+  - this does not claim streaming response ownership, charset decoding,
+    close-on-read behavior, redirect policy changes, or H1 transport changes
+
 ## Session: 2026-06-06 runner include-hyper marker slice
 
 - **Status:** completed.

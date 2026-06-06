@@ -1,5 +1,28 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http response body release helper slice
+
+### Goal
+
+补齐 client response body ownership ergonomics：调用方通过 `IHttpClient.Get` /
+`Do_` 拿到 `IHttpResponse` 后，如果决定不读取 body，应有稳定 public helper
+显式释放该 body，而不是依赖调用方知道具体 body 是否支持 `IReadCloser` /
+`ICloser` / `IStream`，也不是把 close 行为隐式塞进 read-all helper。
+
+### Checklist
+
+- [x] RED：`test_http_client` 先因缺少 `HttpReleaseResponseBody` 编译失败。
+- [x] RED：`test_http_contract` 要求 facade
+  `nextpas.core.http.HttpReleaseResponseBody` 可调用。
+- [x] GREEN：公开 `nextpas.core.http.client.HttpReleaseResponseBody`，nil response
+  抛 `EArgumentError`，nil body no-op，close-capable body 优先 close，plain
+  `IReader` body drain 到 EOF。
+- [x] facade `nextpas.core.http` 转发同一 helper。
+- [x] 保持本 slice 边界：不改变 `HttpReadResponseBodyString` /
+  `HttpReadResponseBodyBytes` 的只消费语义，不新增 streaming response API，不改
+  H1 transport。
+- [x] 跑 focused gates：`test_http_client`、`test_http_contract`。
+
 ## Active Session: 2026-06-06 runner include-hyper marker slice
 
 ### Goal

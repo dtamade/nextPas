@@ -72,6 +72,14 @@
     `test_http_client` 用 injected client/closable body 锁住 success、writer
     failure 和 non-2xx 三条路径。这对齐 Go/Rust 中“helper 代替调用方消费 body
     时也负责释放”的资源语义，但不新增 response streaming public API。
+  - 继续补齐：新增 `HttpReleaseResponseBody(Resp)` public helper。调用方拿到
+    `IHttpResponse` 后如果决定不读取 body，可以显式释放 body ownership：
+    close-capable body 会被关闭，plain `IReader` body 会被 drain 到 EOF，nil body
+    是 no-op，nil response 抛 `EArgumentError`。`test_http_client` 锁住 close /
+    drain / nil body / nil response 语义，`test_http_contract` 锁住 facade
+    可见性。这对齐 Go/Rust 常见“未消费响应体也要显式释放/丢弃”的使用面，但不改变
+    `HttpReadResponseBodyString` / `HttpReadResponseBodyBytes` 的只消费不自动 close
+    语义，也不新增 streaming response API。
   - 继续收紧：`NewResponse(Status, nil, Body)` 现在与 request helper 的 nil
     headers 语义对齐，会创建空 `IHttpHeaders`，调用方可以安全读取或追加
     response headers。`test_http_message` 锁住 helper contract，`test_http_contract`

@@ -1,5 +1,35 @@
 # Historical Findings: HTTP H1 Performance Work
 
+## 2026-06-06 http response body release helper slice
+
+- 本轮转向 client response body ownership：
+  redirect/download 内部已经有 close/drain 语义，但普通调用方拿到
+  `IHttpResponse` 后，如果选择不读取 `Body`，没有稳定 public helper 可释放 body。
+  直接要求调用方探测 `IReadCloser` / `ICloser` / `IStream` 会把 transport/body
+  implementation detail 暴露到应用代码。
+- 选择依据：
+  - Go/Rust 生态都强调 response body 未消费时也要显式 release / discard，避免资源泄漏
+    或阻碍连接复用。
+  - 公开 `HttpReleaseResponseBody` 是小 surface：只复用已有内部 release 语义，不新增
+    request builder、streaming response API 或 H1 transport contract。
+  - 不把 close 行为隐式加入 `HttpReadResponseBodyString` /
+    `HttpReadResponseBodyBytes`，避免改变已落地的 read-all helper contract。
+- RED 证据：
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - compile failed at four missing call sites:
+      `Identifier not found "HttpReleaseResponseBody"`
+- GREEN / behavior 证据：
+  - `HttpReleaseResponseBody(nil)` 抛 `EArgumentError`。
+  - nil body no-op。
+  - close-capable body 走 close。
+  - plain `IReader` body drain 到 EOF。
+  - facade `nextpas.core.http.HttpReleaseResponseBody` 转发同一 helper。
+- 复盘结论：
+  client response body ownership 现在有三个清晰路径：调用方读取 bytes/string、download
+  helper 代为消费并释放、或者调用 `HttpReleaseResponseBody` 显式丢弃/释放。后续若继续
+  response body 方向，应设计 streaming lifetime 或 close-on-read policy，不要偷偷改变
+  既有 read-all helper。
+
 ## 2026-06-06 runner include-hyper marker slice
 
 - 本轮继续收紧 comparison report header：

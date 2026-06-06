@@ -177,6 +177,7 @@ function NewHttpClient(const ATransport: IHttpTransport;
 function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
   const ADest: IWriter): Int64; inline;
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64; inline;
+procedure HttpReleaseResponseBody(const AResp: IHttpResponse); inline;
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes; inline;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string; inline;
 
@@ -390,6 +391,11 @@ end;
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
 begin
   Result := nextpas.core.http.client.HttpGetToFile(AClient, AUrl, ADestPath);
+end;
+
+procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
+begin
+  nextpas.core.http.client.HttpReleaseResponseBody(AResp);
 end;
 
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;

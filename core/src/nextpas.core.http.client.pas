@@ -44,6 +44,7 @@ function NewHttpClient(const ATransport: IHttpTransport;
 function HttpGetToWriter(const AClient: IHttpClient; const AUrl: string;
   const ADest: IWriter): Int64;
 function HttpGetToFile(const AClient: IHttpClient; const AUrl, ADestPath: string): Int64;
+procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
 function HttpReadResponseBodyString(const AResp: IHttpResponse): string;
 
@@ -646,6 +647,13 @@ begin
   finally
     ReleaseResponseBody(LResp);
   end;
+end;
+
+procedure HttpReleaseResponseBody(const AResp: IHttpResponse);
+begin
+  if AResp = nil then
+    raise EArgumentError.Create('HTTP response is nil');
+  ReleaseResponseBody(AResp);
 end;
 
 function HttpReadResponseBodyBytes(const AResp: IHttpResponse): TBytes;
