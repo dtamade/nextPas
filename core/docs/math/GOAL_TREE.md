@@ -70,7 +70,7 @@ nextpas.core.math final migration
 ├── M5: Easing                                           [complete]
 ├── M6: Random + noise                                   [complete]
 ├── M7: SIMD-backed implementation seams                 [partial: internal Vec3f/Vec4f helper seam]
-├── M8: API surface, docs, leak proof, and module gates   [partial: README]
+├── M8: API surface, docs, leak proof, and module gates   [partial: README and API reference]
 └── M9: fafafa.game cutover and old Vectors retirement    [not started]
 ```
 
@@ -282,13 +282,15 @@ Completion gate:
 - API surface checker passes.
 - Trig link safety is proven by surface checks plus host link smokes. Linux runs locally; macOS/Windows must run in their host gates or be recorded as pending blockers before final completion.
 - Heaptrc leak evidence is recorded for tests that allocate.
-- Docs explain the module entry points and matrix/quaternion conventions.
+- Docs explain the module entry points, public API groups, and matrix/quaternion conventions.
 
 Status:
 
 - Partial. `docs/math/README.md` now documents the public modules, matrix/quaternion conventions,
   random/noise explicit ownership, SIMD boundary, focused verification commands, and the remaining
-  macOS/Windows trig host-gate risk.
+  macOS/Windows trig host-gate risk. `docs/math/API.md` groups the current public API by module and
+  records public behavior boundaries for vectors, matrices, quaternions, transforms, easing, random,
+  and noise.
 - M8 is not complete until broader M7 SIMD acceleration decisions, full closeout gates, host trig link evidence, and
   final API/docs review are finished.
 

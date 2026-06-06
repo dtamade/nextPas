@@ -13,6 +13,8 @@ uses
 Use a submodule directly only when you want a narrower import, for example
 `nextpas.core.math.vec` or `nextpas.core.math.random`.
 
+For a grouped public API reference, see [nextpas.core.math API](API.md).
+
 ## Public Modules
 
 - `nextpas.core.math`: facade that explicitly re-exports the public math API.

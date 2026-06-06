@@ -280,6 +280,7 @@ Expected result:
 Files:
 
 - Create: `docs/math/README.md`
+- Create: `docs/math/API.md`
 - Update: `docs/math/FINAL_API_MIGRATION_DESIGN.md`
 - Update: `docs/math/GOAL_TREE.md`
 - Update: `task_plan.md`, `findings.md`, `progress.md`
@@ -287,6 +288,7 @@ Files:
 Steps:
 
 - [x] Document public modules and conventions.
+- [x] Document grouped public API reference.
 - [ ] Run all `tests/nextpas.core.math` projects.
 - [ ] Run API surface checker.
 - [ ] Run heaptrc checks and record evidence.
