@@ -11,8 +11,9 @@ internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-in
 without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
 candidate seam result and a negative `TQuatf.Rotate` candidate seam result on the local
 x86_64/Linux gate. M8 documentation and named local module gates are now in place via
-`make -C core core-math-smoke`, `make -C core core-math-full-local-smoke`,
-`make -C core core-math-impl-simd-local-smoke`, and `make -C core core-math-trig-local-smoke`. The branch also has a facade-only public example under
+`make -C core core-math-api-surface-smoke`, `make -C core core-math-smoke`,
+`make -C core core-math-full-local-smoke`, `make -C core core-math-impl-simd-local-smoke`, and
+`make -C core core-math-trig-local-smoke`. The branch also has a facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
 completion still requires macOS/Windows trig host link smokes, final API/docs review,
 profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.
@@ -284,7 +285,10 @@ Cross-platform link proof has two layers:
 - Full local math proof: `make -C core core-math-full-local-smoke` wraps
   `make -C tests/nextpas.core.math clean test` through a stable owner-level `core/Makefile`
   target, so the current full math focused suite does not depend on an ad-hoc direct command.
-- Static surface proof: `test_api_surface` rejects `external 'm'` under `src/nextpas.core.math*.pas` and rejects behavior tests that import `nextpas.core.math.ffi`.
+- Static surface proof: `make -C core core-math-api-surface-smoke` wraps
+  `make -C tests/nextpas.core.math/test_api_surface clean test`, which rejects `external 'm'`
+  under `src/nextpas.core.math*.pas` and rejects behavior tests that import
+  `nextpas.core.math.ffi`.
 - Host link proof: `make -C core core-math-trig-local-smoke` bundles `test_trig` and
   `test_facade` as the current-host local link proof. macOS/Windows host gates must still rerun
   equivalent checks before trig is marked complete. If macOS/Windows gates are unavailable in a

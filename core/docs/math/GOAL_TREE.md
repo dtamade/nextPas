@@ -396,6 +396,10 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   `MATH_API_SURFACE OK: scanned=43 findings=0`, allocation-bearing math tests report heaptrc
   `0 unfreed memory blocks`, `make hygiene` reports `build-hygiene=pass`, and `git diff --check`
   has no findings.
+- `core/Makefile` now exposes `core-math-api-surface-smoke`, reachable as
+  `make -C core core-math-api-surface-smoke`. It reruns
+  `make -C tests/nextpas.core.math/test_api_surface clean test` through a stable owner-level
+  named entrypoint instead of relying on a direct subproject command.
 - `core/Makefile` now exposes `core-math-full-local-smoke`, reachable as
   `make -C core core-math-full-local-smoke`. It reruns `make -C tests/nextpas.core.math clean test`
   through a stable owner-level named entrypoint instead of relying on an ad-hoc direct command.
@@ -406,9 +410,9 @@ core/tests/nextpas.core.math clean test` exits 0, `test_api_surface` reports
   removing `Fmod` from a temporary API doc copy and observing
   `api-doc-missing-root-facade-name:Fmod`; the real docs pass with `scanned=43 findings=0`.
 - `core/Makefile` now exposes `core-math-smoke`, reachable as `make -C core core-math-smoke`. It
-  reruns `test_api_surface` and then runs `make -C core/examples/nextpas.core.math/math_overview clean run`,
-  so the facade-only public consumer example is both directly runnable and reachable through a stable
-  named module entrypoint.
+  first calls `core-math-api-surface-smoke` and then runs
+  `make -C core/examples/nextpas.core.math/math_overview clean run`, so the facade-only public
+  consumer example is both directly runnable and reachable through a stable named module entrypoint.
 - `core/Makefile` now also exposes `core-math-trig-local-smoke`, reachable as
   `make -C core core-math-trig-local-smoke`. It reruns `test_trig` plus `test_facade` as the
   current-host local trig link proof without pretending macOS/Windows have already been verified.

@@ -28,7 +28,13 @@ Use a narrower submodule only when a file intentionally depends on one math fami
 Implementation-only units are not public API. Do not import `math.impl.*` units from application
 code, examples, public docs, or public tests.
 
-## Public Example
+## Public Surface And Example
+
+Run the named surface-only gate when you only want the public API/docs/source-contract proof:
+
+```sh
+make -C core core-math-api-surface-smoke
+```
 
 Run the named module smoke when you want the public math gate:
 
@@ -42,9 +48,11 @@ Run the facade-only overview example directly when you only want the consumer co
 make -C core/examples/nextpas.core.math/math_overview clean run
 ```
 
-`core-math-smoke` in `core/Makefile` first reruns `test_api_surface`, then builds and runs the
-facade-only overview example. The example imports only `nextpas.core.math` and covers vectors,
-matrices, quaternions, transforms, easing, deterministic random state, and noise.
+`core-math-api-surface-smoke` in `core/Makefile` wraps
+`make -C core/tests/nextpas.core.math/test_api_surface clean test` through a stable owner-level
+entrypoint. `core-math-smoke` calls that target first, then builds and runs the facade-only
+overview example. The example imports only `nextpas.core.math` and covers vectors, matrices,
+quaternions, transforms, easing, deterministic random state, and noise.
 
 ## Scalar And Trig
 

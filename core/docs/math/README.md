@@ -15,18 +15,27 @@ Use a submodule directly only when you want a narrower import, for example
 
 For a grouped public API reference, see [nextpas.core.math API](API.md).
 
-## Facade Overview Example
+## Surface Gate And Facade Example
+
+Run the named surface-only gate when you only want the public API/docs/source-contract proof:
+
+```sh
+make -C core core-math-api-surface-smoke
+```
 
 `core/examples/nextpas.core.math/math_overview` is a compilable facade-only example. It imports only
 `nextpas.core.math` and demonstrates vector normalization, quaternion rotation, transform
-composition, projection/view builders, easing, deterministic random state, and noise:
+composition, projection/view builders, easing, deterministic random state, and noise.
+Run the broader facade smoke when you also want that consumer example proof:
 
 ```sh
 make -C core core-math-smoke
 ```
 
-The named `core-math-smoke` gate in `core/Makefile` reruns `test_api_surface` and then builds/runs
-the overview example. Use the example target directly when you only want the facade-consumer proof:
+The named `core-math-api-surface-smoke` gate in `core/Makefile` wraps
+`make -C core/tests/nextpas.core.math/test_api_surface clean test`.
+`core-math-smoke` reuses that target and then builds/runs the overview example. Use the example
+target directly when you only want the facade-consumer proof:
 
 ```sh
 make -C core/examples/nextpas.core.math/math_overview clean run

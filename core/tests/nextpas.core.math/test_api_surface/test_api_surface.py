@@ -54,12 +54,22 @@ ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
+        target="core-math-api-surface-smoke",
+        command="make -C core core-math-api-surface-smoke",
+        recipe_steps=(
+            (
+                "api-surface",
+                "$(MAKE) -C tests/nextpas.core.math/test_api_surface clean test",
+            ),
+        ),
+    ),
+    RequiredCoreMakeTarget(
         target="core-math-smoke",
         command="make -C core core-math-smoke",
         recipe_steps=(
             (
                 "api-surface",
-                "$(MAKE) -C tests/nextpas.core.math/test_api_surface clean test",
+                "$(MAKE) core-math-api-surface-smoke",
             ),
             (
                 "math-overview",
