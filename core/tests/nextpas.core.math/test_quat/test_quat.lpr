@@ -61,6 +61,15 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000001, AMessage + '.W');
 end;
 
+procedure CheckQuatd(const AExpectedX, AExpectedY, AExpectedZ, AExpectedW: Double;
+  const AActual: TQuatd; const AMessage: string);
+begin
+  CheckNear(AExpectedX, AActual.X, 0.000000000001, AMessage + '.X');
+  CheckNear(AExpectedY, AActual.Y, 0.000000000001, AMessage + '.Y');
+  CheckNear(AExpectedZ, AActual.Z, 0.000000000001, AMessage + '.Z');
+  CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
+end;
+
 procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
 begin
   try
@@ -227,16 +236,20 @@ var
   Q: TQuatd;
   Axis: TVec3d;
   Angle: Double;
+  HalfTurn: TQuatd;
   ScaledIdentity: TQuatd;
   ScaledQ: TQuatd;
 begin
   Q := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI);
 
   CheckEqual(Int64(SizeOf(Double) * 4), Int64(SizeOf(TQuatd)), 'TQuatd is compact value type');
+  CheckQuatd(1.0, 2.0, 3.0, 4.0, TQuatd.Create(1.0, 2.0, 3.0, 4.0), 'TQuatd create');
   CheckNear(0.0, TQuatd.Identity.X, 0.0, 'TQuatd identity vector');
   CheckNear(1.0, TQuatd.Identity.W, 0.0, 'TQuatd identity real');
+  CheckNear(Q.Z, Q.Data[2], 0.0, 'TQuatd Data alias');
   Check(TQuatd.Equals(TQuatd.Create(0.0, 0.0, 0.0, 0.0).Normalize, TQuatd.Identity, 0.0),
     'TQuatd zero normalize returns identity');
+  CheckQuatd(0.0, 0.0, -Q.Z, Q.W, Q.Conjugate, 'TQuatd conjugate');
   Q.ToAxisAngle(Axis, Angle);
   CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle axis');
   CheckNear(HALF_PI, Angle, 0.000000000001, 'TQuatd ToAxisAngle angle');
@@ -244,9 +257,18 @@ begin
   CheckVec3d(0.0, 0.0, 1.0, Axis, 'TQuatd ToAxisAngle zero rotation axis');
   CheckNear(0.0, Angle, 0.0, 'TQuatd ToAxisAngle zero rotation angle');
   CheckVec3d(0.0, 1.0, 0.0, Q.Rotate(TVec3d.Create(1.0, 0.0, 0.0)), 'TQuatd Rotate');
+  CheckVec3d(0.0, 1.0, 0.0,
+    Q.ToRotationMatrix * TVec3d.Create(1.0, 0.0, 0.0),
+    'TQuatd ToRotationMatrix');
+  HalfTurn := Q * Q;
+  CheckVec3d(-1.0, 0.0, 0.0, HalfTurn.Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd multiply composes rotations');
   CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
     TQuatd.Slerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
     'TQuatd Slerp midpoint');
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, Q, 0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp midpoint');
   ScaledIdentity := TQuatd.Create(0.0, 0.0, 0.0, 2.0);
   ScaledQ := TQuatd.Create(Q.X * 3.0, Q.Y * 3.0, Q.Z * 3.0, Q.W * 3.0);
   ScaledQ.ToAxisAngle(Axis, Angle);

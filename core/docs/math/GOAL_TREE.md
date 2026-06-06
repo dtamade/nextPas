@@ -38,7 +38,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
   `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
-  `Equals`, and double-precision variants.
+  `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`,
+  `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - `nextpas.core.math.transform` now provides projection, view, model, and 2D camera builders for
   both `TMat4f` and `TMat4d`.
 - Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
@@ -205,7 +206,8 @@ Status:
   identity, `Conjugate`, axis-angle roundtrip, axis normalization, zero-axis identity behavior,
   `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
   normalization for rotation matrix conversion and vector rotation, quaternion multiply composition,
-  `Slerp`, `Nlerp`, `Equals`, and double-precision variants.
+  `Slerp`, `Nlerp`, `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`,
+  `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders
