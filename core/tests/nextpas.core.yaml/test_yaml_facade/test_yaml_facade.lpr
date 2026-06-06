@@ -183,10 +183,16 @@ end;
 procedure TestTryYamlParseFailureReturnsDiagnosticDoc;
 var
   LDoc: IYamlDocument;
+  LError: TYamlError;
 begin
   Check(not TryYamlParse('{a: 1, b}', LDoc), 'try parse failure');
   Check(LDoc <> nil, 'diagnostic doc assigned');
   Check(LDoc.HasError, 'diagnostic doc has error');
+  LError := LDoc.Error;
+  Check(LError.Message.ToString <> '', 'diagnostic message is present');
+  CheckEqual(Int64(1), Int64(LError.Line), 'diagnostic line');
+  CheckEqual(Int64(9), Int64(LError.Col), 'diagnostic column');
+  CheckEqual(Int64(8), Int64(LError.Offset), 'diagnostic byte offset');
 end;
 
 procedure TestStringify;

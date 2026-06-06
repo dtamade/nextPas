@@ -386,7 +386,8 @@ begin
     begin
       if ACurToken.Kind <> ytkFlowEntry then
       begin
-        SetError(ADoc, 'expected "," or "]"', ACurToken.Line, ACurToken.Col, 0);
+        SetError(ADoc, 'expected "," or "]"', ACurToken.Line, ACurToken.Col,
+          ACurToken.Offset);
         Result := LIdx;
         Exit;
       end;
@@ -435,7 +436,8 @@ begin
     begin
       if ACurToken.Kind <> ytkFlowEntry then
       begin
-        SetError(ADoc, 'expected "," or "}"', ACurToken.Line, ACurToken.Col, 0);
+        SetError(ADoc, 'expected "," or "}"', ACurToken.Line, ACurToken.Col,
+          ACurToken.Offset);
         Result := LIdx;
         Exit;
       end;
@@ -458,7 +460,8 @@ begin
     end
     else
     begin
-      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col, 0);
+      SetError(ADoc, 'expected mapping key', ACurToken.Line, ACurToken.Col,
+        ACurToken.Offset);
       Result := LIdx;
       Exit;
     end;
@@ -468,7 +471,8 @@ begin
       ACurToken := AScanner.NextToken // consume :
     else
     begin
-      SetError(ADoc, 'expected ":"', ACurToken.Line, ACurToken.Col, 0);
+      SetError(ADoc, 'expected ":"', ACurToken.Line, ACurToken.Col,
+        ACurToken.Offset);
       Result := LIdx;
       Exit;
     end;
@@ -505,7 +509,8 @@ begin
   Inc(ADoc.ParseDepth);
   if ADoc.ParseDepth > 256 then
   begin
-    SetError(ADoc, 'nesting too deep', ACurToken.Line, ACurToken.Col, 0);
+    SetError(ADoc, 'nesting too deep', ACurToken.Line, ACurToken.Col,
+      ACurToken.Offset);
     Result := AddNode(ADoc);
     ADoc.Nodes[Result].Kind := ynkNull;
     Dec(ADoc.ParseDepth);
@@ -572,7 +577,8 @@ begin
       LIdx := ResolveAlias(ADoc, ACurToken.Value);
       if LIdx = YAML_NODE_NONE then
       begin
-        SetError(ADoc, 'undefined alias', ACurToken.Line, ACurToken.Col, 0);
+        SetError(ADoc, 'undefined alias', ACurToken.Line, ACurToken.Col,
+          ACurToken.Offset);
         Result := AddNode(ADoc);
         ADoc.Nodes[Result].Kind := ynkNull;
       end

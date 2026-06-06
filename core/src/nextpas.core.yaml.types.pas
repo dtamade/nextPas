@@ -76,6 +76,7 @@ type
     Style: TYamlScalarStyle;
     Line: UInt32;
     Col: UInt32;
+    Offset: SizeUInt;
   end;
 
   TYamlError = record

@@ -200,6 +200,7 @@ begin
   Result.Style := yssPlain;
   Result.Line := FLine;
   Result.Col := FCol;
+  Result.Offset := FPos;
 end;
 
 procedure TYamlScanner.SetError(const AMsg: string);
