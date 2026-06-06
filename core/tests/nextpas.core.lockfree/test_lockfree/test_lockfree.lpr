@@ -845,10 +845,46 @@ begin
     'work-stealing deque must linearize steals through top CAS');
   CheckContains(LWaitSource, 'platform_wait_address32',
     'lockfree wait helper must use the atomic/platform wait-address seam');
+  CheckContains(LWaitSource,
+    'procedure LockFreeWaitData(AEpoch: PInt32; AWaiters: PInt32;' + LineEnding +
+    '  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);',
+    'lockfree data wait helper must receive the caller-observed epoch');
+  CheckContains(LWaitSource,
+    'procedure LockFreeWaitSpace(AEpoch: PInt32; AWaiters: PInt32;' + LineEnding +
+    '  const AExpectedEpoch: Int32; const ATimeoutNs: Int64);',
+    'lockfree space wait helper must receive the caller-observed epoch');
+  CheckContains(LWaitSource,
+    'if AtomicLoad32(AEpoch^, moAcquire) <> AExpectedEpoch then',
+    'lockfree wait helper must skip blocking when the epoch already advanced');
+  CheckContains(LWaitSource, 'platform_wait_address32(AEpoch, AExpectedEpoch, ATimeoutNs);',
+    'lockfree wait helper must wait on the caller-observed epoch');
+  CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);',
+    'SPSC blocking enqueue must pass the observed space epoch to wait helper');
+  CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+    'SPSC blocking dequeue must pass the observed data epoch to wait helper');
+  CheckContains(LSpscSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);',
+    'SPSC timeout enqueue must pass the observed space epoch to wait helper');
+  CheckContains(LSpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
+    'SPSC timeout dequeue must pass the observed data epoch to wait helper');
+  CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, -1);',
+    'MPMC blocking enqueue must pass the observed space epoch to wait helper');
+  CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+    'MPMC blocking dequeue must pass the observed data epoch to wait helper');
+  CheckContains(LMpmcSource, 'LockFreeWaitSpace(@FSpaceEpoch, @FSpaceWaiters, LEpoch, LRemaining);',
+    'MPMC timeout enqueue must pass the observed space epoch to wait helper');
+  CheckContains(LMpmcSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
+    'MPMC timeout dequeue must pass the observed data epoch to wait helper');
+  CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, -1);',
+    'MPSC blocking dequeue must pass the observed data epoch to wait helper');
+  CheckContains(LMpscSource, 'LockFreeWaitData(@FDataEpoch, @FDataWaiters, LEpoch, LRemaining);',
+    'MPSC timeout dequeue must pass the observed data epoch to wait helper');
   CheckContains(LWaitSource, 'AtomicFetchAdd32(AWaiters^, 1, moAcqRel)',
     'lockfree wait helper must register waiters before blocking');
   CheckContains(LWaitSource, 'AtomicFetchSub32(AWaiters^, 1, moAcqRel)',
     'lockfree wait helper must unregister waiters after blocking');
+  CheckContains(LDocsReadme,
+    'Wait helpers receive the caller-observed epoch and only block while the epoch is unchanged',
+    'lockfree README must document the wait helper lost-wake guard');
   CheckContains(LBenchSource, 'WriteLn(''Platform: '', BenchmarkPlatformName)',
     'lockfree benchmark must print the platform evidence field');
   CheckContains(LBenchSource, 'WriteLn(''Compiler flags: -MObjFPC -Sh -O2'')',

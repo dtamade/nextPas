@@ -111,6 +111,9 @@ lockfree 模块依赖 `nextpas.core.atomic` 的以下契约：
 
 `nextpas.core.lockfree.wait` 只等待 32-bit epoch 地址。不要在 lockfree 层自行扩展 64-bit 或 pointer
 wait；如果要扩展，先设计 atomic/platform wait-address contract，再补 consumer gate。
+Wait helpers receive the caller-observed epoch and only block while the epoch is unchanged. This closes the
+notify-between-retry-and-wait window: if a producer or consumer advances the epoch before the platform wait,
+the helper returns instead of sleeping on the new epoch.
 
 ## 验证
 
