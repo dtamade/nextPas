@@ -123,13 +123,13 @@ Files:
 
 Steps:
 
-- [ ] Implement `TVec2f`, `TVec3f`, `TVec4f`.
-- [ ] Implement `TVec2d`, `TVec3d`, `TVec4d`.
-- [ ] Implement final operators and methods.
-- [ ] Implement component multiply/divide as explicit `MulComponents` and `DivComponents` unless final RED tests intentionally lock Hadamard vector `*`/`/`.
-- [ ] Define and test zero normalize behavior.
-- [ ] Run `test_vec` and `test_api_surface`.
-- [ ] Commit with `feat(math): add final vector types`.
+- [x] Implement `TVec2f`, `TVec3f`, `TVec4f`.
+- [x] Implement `TVec2d`, `TVec3d`, `TVec4d`.
+- [x] Implement final operators and methods.
+- [x] Implement component multiply/divide as explicit `MulComponents` and `DivComponents` unless final RED tests intentionally lock Hadamard vector `*`/`/`.
+- [x] Define and test zero normalize behavior.
+- [x] Run `test_vec` and `test_api_surface`.
+- [x] Commit with `feat(math): add final vector types`.
 
 Expected result:
 

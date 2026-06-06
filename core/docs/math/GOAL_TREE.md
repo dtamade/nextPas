@@ -36,7 +36,7 @@ nextpas.core.math final migration
 ├── M0: Control, design, and audit                       [complete]
 ├── M1: RED behavior tests for final API                 [partial: scalar/trig/facade/surface]
 ├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
-├── M3: Vec/Mat/Quat value types                         [not started]
+├── M3: Vec/Mat/Quat value types                         [partial: Vec complete, Mat/Quat pending]
 ├── M4: Transform builders                               [not started]
 ├── M5: Easing                                           [not started]
 ├── M6: Random + noise                                   [not started]
@@ -136,6 +136,16 @@ Completion gate:
 - Vec/Mat/Quat tests cover every public constructor, operator, and method.
 - Singular matrix inversion uses a documented `TryInverse` path and does not return silent garbage.
 - Normalize of zero vectors/quaternions is explicitly defined and tested.
+
+Status:
+
+- Partial. `nextpas.core.math.vec` now provides `TVec2f`, `TVec3f`, `TVec4f`, `TVec2d`,
+  `TVec3d`, and `TVec4d`.
+- Vector tests cover compact layout, `Create`, `Zero`, arithmetic operators, explicit
+  component multiply/divide, `Dot`, `Cross` for 3D vectors, `Length`, `LengthSqr`,
+  `Normalize`, `Lerp`, `Equals`, and zero-vector normalize returning zero.
+- Facade tests prove consumers can `uses nextpas.core.math` and call the final vector types.
+- Matrices and quaternions remain pending.
 
 ## M4: Transform Builders
 

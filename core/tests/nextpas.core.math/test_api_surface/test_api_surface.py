@@ -138,6 +138,18 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("trig-single-ln", r"\bfunction\s+Ln\s*\(\s*const\s+AX\s*:\s*Single\s*\)\s*:\s*Single\b"),
         ("trig-single-power", r"\bfunction\s+Power\s*\(\s*const\s+ABase\s*,\s*AExponent\s*:\s*Single\s*\)\s*:\s*Single\b"),
     ),
+    "src/nextpas.core.math.vec.pas": (
+        ("vec-type-2f", r"\bTVec2f\s*=\s*packed\s+record\b"),
+        ("vec-type-3f", r"\bTVec3f\s*=\s*packed\s+record\b"),
+        ("vec-type-4f", r"\bTVec4f\s*=\s*packed\s+record\b"),
+        ("vec-type-2d", r"\bTVec2d\s*=\s*packed\s+record\b"),
+        ("vec-type-3d", r"\bTVec3d\s*=\s*packed\s+record\b"),
+        ("vec-type-4d", r"\bTVec4d\s*=\s*packed\s+record\b"),
+        ("vec-dot", r"\bclass\s+function\s+Dot\s*\("),
+        ("vec-cross", r"\bclass\s+function\s+Cross\s*\("),
+        ("vec-mul-components", r"\bclass\s+function\s+MulComponents\s*\("),
+        ("vec-div-components", r"\bclass\s+function\s+DivComponents\s*\("),
+    ),
 }
 
 
@@ -537,10 +549,28 @@ def scan_required_public_declarations(root: Path, path: Path, text: str) -> list
     return findings
 
 
+def scan_missing_required_public_files(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for rel in sorted(REQUIRED_PUBLIC_DECLARATIONS):
+        path = root / rel
+        if path.is_file():
+            continue
+        add_finding(
+            findings,
+            "missing-required-public-math-file",
+            root,
+            path,
+            1,
+            rel,
+        )
+    return findings
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
     scanned: set[Path] = set()
+    findings.extend(scan_missing_required_public_files(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

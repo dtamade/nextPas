@@ -6,7 +6,8 @@ interface
 
 uses
   nextpas.core.math.scalar,
-  nextpas.core.math.trig;
+  nextpas.core.math.trig,
+  nextpas.core.math.vec;
 
 const
   PI_VALUE: Double = 3.14159265358979323846;
@@ -14,6 +15,14 @@ const
   HALF_PI: Double = 1.57079632679489661923;
   DEG_TO_RAD: Double = 0.01745329251994329577;
   RAD_TO_DEG: Double = 57.2957795130823208768;
+
+type
+  TVec2f = nextpas.core.math.vec.TVec2f;
+  TVec3f = nextpas.core.math.vec.TVec3f;
+  TVec4f = nextpas.core.math.vec.TVec4f;
+  TVec2d = nextpas.core.math.vec.TVec2d;
+  TVec3d = nextpas.core.math.vec.TVec3d;
+  TVec4d = nextpas.core.math.vec.TVec4d;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;

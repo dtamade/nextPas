@@ -50,10 +50,21 @@ begin
   CheckNear(0.5, SmoothStep(Single(0.0), Single(1.0), Single(0.5)), 'facade exposes Single SmoothStep');
 end;
 
+procedure TestFacadeVectorSurface;
+var
+  V: TVec3f;
+begin
+  V := TVec3f.Create(1.0, 2.0, 3.0);
+  CheckNear(14.0, V.LengthSqr, 'facade exposes TVec3f');
+  CheckNear(1.0, TVec3f.Cross(TVec3f.Create(1.0, 0.0, 0.0),
+    TVec3f.Create(0.0, 1.0, 0.0)).Z, 'facade exposes TVec3f.Cross');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math facade');
   T.Run('scalar and trig re-export', @TestFacadeScalarAndTrig);
   T.Run('facade scalar rounding surface', @TestFacadeRoundingSurface);
   T.Run('facade new scalar surface', @TestFacadeNewScalarSurface);
+  T.Run('facade vector surface', @TestFacadeVectorSurface);
   T.Summary;
 end.
