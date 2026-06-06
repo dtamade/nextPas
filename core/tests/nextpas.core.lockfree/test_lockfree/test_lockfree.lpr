@@ -93,6 +93,9 @@ begin
   LQ.TryEnqueue(1);
   LQ.Close;
   Check(LQ.IsClosed, 'closed');
+  Check(not LQ.TryEnqueue(2), 'TryEnqueue after close rejected');
+  Check(not LQ.EnqueueWait(2), 'EnqueueWait after close rejected');
+  Check(not LQ.EnqueueTimeout(2, 1000000), 'EnqueueTimeout after close rejected');
   Check(LQ.TryDequeue(LV), 'drain after close');
   CheckEqual(Int64(1), Int64(LV));
   Check(not LQ.DequeueWait(LV), 'dequeue wait returns false on closed');
@@ -196,11 +199,16 @@ begin
   LQ.TryEnqueue(1);
   LQ.Close;
   Check(LQ.IsClosed, 'closed');
+  Check(not LQ.TryEnqueue(2), 'TryEnqueue after close rejected');
+  Check(not LQ.EnqueueWait(2), 'EnqueueWait after close rejected');
+  Check(not LQ.EnqueueTimeout(2, 1000000), 'EnqueueTimeout after close rejected');
   Check(LQ.TryDequeue(LV), 'drain after close');
   CheckEqual(Int64(1), Int64(LV));
   Check(not LQ.DequeueWait(LV), 'dequeue wait false on closed');
   LQ.Free;
 end;
+
+{ MPMC contention helpers }
 
 var
   GMpmcQ: TIntMpmc;
@@ -757,6 +765,8 @@ var
   LRustCompareSource: string;
   LGoCompareSource: string;
   LCppCompareSource: string;
+  LSpscCloseTestSection: string;
+  LMpmcCloseTestSection: string;
   LSpscBatchSourceSection: string;
   LSpscBatchTestSection: string;
   LMpmcBatchSourceSection: string;
@@ -795,6 +805,14 @@ begin
   LRustCompareSource := ReadUtf8TextFile(BenchRustComparePath);
   LGoCompareSource := ReadUtf8TextFile(BenchGoComparePath);
   LCppCompareSource := ReadUtf8TextFile(BenchCppComparePath);
+  LSpscCloseTestSection := ExtractSection(LTestSource,
+    'procedure TestSpscClose;',
+    'procedure TestSpscApproxCount;',
+    'SPSC close test source section');
+  LMpmcCloseTestSection := ExtractSection(LTestSource,
+    'procedure TestMpmcClose;',
+    '{ MPMC contention helpers }',
+    'MPMC close test source section');
   LSpscBatchSourceSection := ExtractSection(LSpscSource,
     'function TSpscQueueImpl.EnqueueBatch',
     'function TSpscQueueImpl.DequeueBatch',
@@ -1014,6 +1032,12 @@ begin
     'SPSC queue must notify data waiters after publish');
   CheckContains(LSpscSource, 'LockFreeNotifySpace(@FSpaceEpoch, @FSpaceWaiters)',
     'SPSC queue must notify space waiters after consume');
+  CheckContains(LSpscCloseTestSection, 'TryEnqueue after close rejected',
+    'SPSC close behavior test must cover TryEnqueue rejection');
+  CheckContains(LSpscCloseTestSection, 'EnqueueWait after close rejected',
+    'SPSC close behavior test must cover EnqueueWait rejection');
+  CheckContains(LSpscCloseTestSection, 'EnqueueTimeout after close rejected',
+    'SPSC close behavior test must cover EnqueueTimeout rejection');
   CheckContains(LSpscBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
     'SPSC batch enqueue must reject new items after close');
   CheckContains(LSpscBatchTestSection, 'batch enqueue after close rejected',
@@ -1024,6 +1048,12 @@ begin
     'MPMC enqueue linearization must publish slot sequence with release ordering');
   CheckContains(LMpmcSource, 'AtomicStore64(FSlots[LIdx].Sequence, LPos + Int64(FCapacity), moRelease)',
     'MPMC dequeue must recycle slot sequence with release ordering');
+  CheckContains(LMpmcCloseTestSection, 'TryEnqueue after close rejected',
+    'MPMC close behavior test must cover TryEnqueue rejection');
+  CheckContains(LMpmcCloseTestSection, 'EnqueueWait after close rejected',
+    'MPMC close behavior test must cover EnqueueWait rejection');
+  CheckContains(LMpmcCloseTestSection, 'EnqueueTimeout after close rejected',
+    'MPMC close behavior test must cover EnqueueTimeout rejection');
   CheckContains(LMpmcBatchSourceSection, 'if AtomicLoad32(FClosed, moAcquire) <> 0 then',
     'MPMC batch enqueue must reject new items after close');
   CheckContains(LMpmcBatchTestSection, 'mpmc batch enqueue after close rejected',
