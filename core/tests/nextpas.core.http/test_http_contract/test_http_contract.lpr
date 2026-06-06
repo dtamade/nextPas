@@ -419,6 +419,25 @@ begin
   Check(LReq.Version = hvHttp11, 'Version = HTTP/1.1');
 end;
 
+procedure TestNewRequestWithHeadersFacadeOverload;
+var
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+begin
+  LUrl := TUrl.Parse('http://example.com/api');
+  LHeaders := NewHeaders;
+  LHeaders.Set_('x-api', 'next');
+
+  LReq := nextpas.core.http.NewRequest(hmPatch, LUrl, LHeaders, nil, 0);
+
+  Check(LReq <> nil, 'Facade NewRequest(headers/body) returns non-nil');
+  Check(LReq.Method = hmPatch,
+    'Facade NewRequest(headers/body) preserves method');
+  CheckEqual('next', LReq.Headers.Get('x-api'),
+    'Facade NewRequest(headers/body) preserves headers');
+end;
+
 { Test 4: NewResponse — StatusCode/Headers accessible }
 procedure TestNewResponse;
 var
@@ -1137,6 +1156,8 @@ begin
   T.Run('NewRouter: Get route + FindRoute', @TestNewRouter);
   T.Run('IHttpRouter convenience methods are callable through interface', @TestRouterConvenienceMethodsOnInterface);
   T.Run('NewRequest: Method/Url/Version', @TestNewRequest);
+  T.Run('NewRequest headers/body overload is available through facade',
+    @TestNewRequestWithHeadersFacadeOverload);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HandlerFunc wraps correctly', @TestHandlerFuncWrap);
   T.Run('HandlerFunc wraps plain procedures through facade', @TestHandlerProcWrap);

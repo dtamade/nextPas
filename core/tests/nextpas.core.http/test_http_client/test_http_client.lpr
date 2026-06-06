@@ -294,6 +294,59 @@ begin
   end;
 end;
 
+procedure TestClientDoWithRequestHelperHeadersBody;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LGotHeader: string;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotHeader := '';
+  LGotContentLength := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/builder', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotHeader := AReq.Headers.Get('x-client');
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'ok';
+    AW.GetHeaders.Set_('content-length', '2');
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], 2);
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LUrl := TUrl.Parse('http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/builder');
+    LHeaders := NewHeaders;
+    LHeaders.Set_('x-client', 'request-helper');
+    LReq := nextpas.core.http.NewRequest(hmPost, LUrl, LHeaders,
+      StringBodyReader('payload') as IReader, 7);
+
+    LResp := LClient.Do_(LReq);
+
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('request-helper', LGotHeader, 'custom header forwarded');
+    CheckEqual(Int64(7), LGotContentLength, 'content-length forwarded');
+    CheckEqual('payload', LGotBody, 'body forwarded');
+    CheckEqual('ok', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
 // PLACEHOLDER_TEST4
 
 procedure TestClientPutBodyAndContentType;
@@ -1014,6 +1067,8 @@ begin
   T.Run('Client GET returns 200 + body', @TestClientGet200);
   T.Run('Client GET with custom headers', @TestClientGetCustomHeaders);
   T.Run('Client POST with body', @TestClientPostBody);
+  T.Run('Client Do uses NewRequest headers/body helper',
+    @TestClientDoWithRequestHelperHeadersBody);
   T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
   T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
   T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);

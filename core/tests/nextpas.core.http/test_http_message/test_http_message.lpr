@@ -4,6 +4,7 @@ program test_http_message;
 
 uses
   nextpas.core.base,
+  nextpas.core.errors,
   nextpas.core.testing,
   nextpas.core.io.intf,
   nextpas.core.io.memory,
@@ -26,6 +27,69 @@ begin
   CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)), 'method is POST');
   CheckEqual('/api/users', LReq.Url.Path, 'url path');
   CheckEqual('example.com', LReq.Url.Host, 'url host');
+end;
+
+procedure TestNewRequestWithHeadersBodyAndContentLength;
+var
+  LUrl: TUrl;
+  LHeaders: IHttpHeaders;
+  LBody: IStream;
+  LReq: IHttpRequest;
+  LData: TBytes;
+  LBuf: array[0..31] of Byte;
+  LN: SizeUInt;
+begin
+  LUrl := TUrl.Parse('http://example.com/api/users');
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('x-custom', 'client');
+  LData := nil;
+  SetLength(LData, 11);
+  Move('hello-world'[1], LData[0], 11);
+  LBody := CreateBytesStreamFrom(LData);
+
+  LReq := NewRequest(hmPost, LUrl, LHeaders, LBody as IReader, 11);
+
+  CheckEqual(Int64(Ord(hmPost)), Int64(Ord(LReq.Method)),
+    'request helper method');
+  CheckEqual('/api/users', LReq.Path, 'request helper path');
+  CheckEqual('client', LReq.Headers.Get('x-custom'),
+    'request helper preserves custom headers');
+  CheckEqual('11', LReq.Headers.Get('content-length'),
+    'request helper sets content-length');
+  CheckEqual(Int64(11), LReq.ContentLength,
+    'request helper stores content-length');
+  LN := LReq.Body.Read(LBuf[0], SizeUInt(Length(LBuf)));
+  CheckEqual(Int64(11), Int64(LN), 'request helper body length');
+  CheckEqual(Byte(Ord('h')), LBuf[0], 'request helper body first byte');
+end;
+
+procedure TestNewRequestWithNilHeadersCreatesHeaders;
+var
+  LUrl: TUrl;
+  LReq: IHttpRequest;
+begin
+  LUrl := TUrl.Parse('http://example.com/health');
+  LReq := NewRequest(hmGet, LUrl, nil, nil, 0);
+
+  Check(LReq.Headers <> nil, 'request helper creates headers when nil');
+  CheckEqual(Int64(0), Int64(LReq.Headers.Count),
+    'request helper nil headers start empty');
+end;
+
+procedure TestNewRequestRejectsNegativeContentLength;
+var
+  LUrl: TUrl;
+  LRaised: Boolean;
+begin
+  LUrl := TUrl.Parse('http://example.com/upload');
+  LRaised := False;
+  try
+    NewRequest(hmPost, LUrl, NewHttpHeaders, nil, -1);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'request helper rejects negative content-length');
 end;
 
 procedure TestRequestHeadersAccessible;
@@ -290,6 +354,12 @@ end;
 begin
   T := TTestRunner.Create('nextpas.core.http.message');
   T.Run('NewRequest creates with correct method/url', @TestNewRequestMethodAndUrl);
+  T.Run('NewRequest accepts headers, body, and content length',
+    @TestNewRequestWithHeadersBodyAndContentLength);
+  T.Run('NewRequest creates headers when headers argument is nil',
+    @TestNewRequestWithNilHeadersCreatesHeaders);
+  T.Run('NewRequest rejects negative content length',
+    @TestNewRequestRejectsNegativeContentLength);
   T.Run('Request headers accessible', @TestRequestHeadersAccessible);
   T.Run('Request body nil is ok', @TestRequestBodyNilIsOk);
   T.Run('PathParam set and get', @TestPathParamSetAndGet);

@@ -75,7 +75,10 @@ type
   end;
 
 { Factory helpers }
-function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest; overload;
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest; overload;
 function NewGetRequest(const APath: string): IHttpRequest;
 function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
   const ABody: IReader): IHttpResponse;
@@ -83,6 +86,8 @@ function NewResponse(const AStatus: THttpStatus; const AHeaders: IHttpHeaders;
 implementation
 
 uses
+  nextpas.core.errors,
+  nextpas.core.text.conv,
   nextpas.core.http.headers;
 
 { THttpRequest }
@@ -297,6 +302,24 @@ end;
 function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl): IHttpRequest;
 begin
   Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, NewHttpHeaders, nil, 0);
+end;
+
+function NewRequest(const AMethod: THttpMethod; const AUrl: TUrl;
+  const AHeaders: IHttpHeaders; const ABody: IReader;
+  const AContentLength: Int64): IHttpRequest;
+var
+  LHeaders: IHttpHeaders;
+begin
+  if AContentLength < 0 then
+    raise EArgumentError.Create('HTTP request content-length is negative');
+
+  LHeaders := AHeaders;
+  if LHeaders = nil then
+    LHeaders := NewHttpHeaders;
+  if (ABody <> nil) or (AContentLength > 0) then
+    LHeaders.Set_('content-length', IntToStr(AContentLength));
+  Result := THttpRequest.Create(AMethod, AUrl, hvHttp11, LHeaders, ABody,
+    AContentLength);
 end;
 
 function NewGetRequest(const APath: string): IHttpRequest;
