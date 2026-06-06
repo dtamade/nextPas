@@ -2780,8 +2780,8 @@ set +e
 LLVM_FIBONACCI_RUN_OUTPUT=$("$LLVM_FIBONACCI_OUT_DIR/llvm_fibonacci" 2>&1)
 LLVM_FIBONACCI_EXIT=$?
 set -e
-if [ "$LLVM_FIBONACCI_EXIT" -ne 55 ]; then
-  printf 'llvm-fibonacci-expected-exit=55 actual-exit=%d output=%s\n' "$LLVM_FIBONACCI_EXIT" "$LLVM_FIBONACCI_RUN_OUTPUT"
+if [ "$LLVM_FIBONACCI_EXIT" -ne 42 ]; then
+  printf 'llvm-fibonacci-expected-exit=42 actual-exit=%d output=%s\n' "$LLVM_FIBONACCI_EXIT" "$LLVM_FIBONACCI_RUN_OUTPUT"
   fail 'llvm-fibonacci-program-wrong-exit-code'
 fi
 printf 'llvm-fibonacci-program=pass\n'
@@ -2797,8 +2797,8 @@ set +e
 "$LLVM_PRIMES_OUT_DIR/llvm_primes" >/dev/null 2>&1
 LLVM_PRIMES_EXIT=$?
 set -e
-if [ "$LLVM_PRIMES_EXIT" -ne 15 ]; then
-  printf 'llvm-primes-expected-exit=15 actual-exit=%d\n' "$LLVM_PRIMES_EXIT"
+if [ "$LLVM_PRIMES_EXIT" -ne 42 ]; then
+  printf 'llvm-primes-expected-exit=42 actual-exit=%d\n' "$LLVM_PRIMES_EXIT"
   fail 'llvm-primes-program-wrong-exit-code'
 fi
 printf 'llvm-primes-program=pass\n'
@@ -2814,8 +2814,8 @@ set +e
 "$LLVM_GCD_OUT_DIR/llvm_gcd" >/dev/null 2>&1
 LLVM_GCD_EXIT=$?
 set -e
-if [ "$LLVM_GCD_EXIT" -ne 6 ]; then
-  printf 'llvm-gcd-expected-exit=6 actual-exit=%d\n' "$LLVM_GCD_EXIT"
+if [ "$LLVM_GCD_EXIT" -ne 42 ]; then
+  printf 'llvm-gcd-expected-exit=42 actual-exit=%d\n' "$LLVM_GCD_EXIT"
   fail 'llvm-gcd-program-wrong-exit-code'
 fi
 printf 'llvm-gcd-program=pass\n'
@@ -2831,8 +2831,8 @@ set +e
 "$LLVM_RECORD_OUT_DIR/llvm_record" >/dev/null 2>&1
 LLVM_RECORD_EXIT=$?
 set -e
-if [ "$LLVM_RECORD_EXIT" -ne 7 ]; then
-  printf 'llvm-record-expected-exit=7 actual-exit=%d\n' "$LLVM_RECORD_EXIT"
+if [ "$LLVM_RECORD_EXIT" -ne 42 ]; then
+  printf 'llvm-record-expected-exit=42 actual-exit=%d\n' "$LLVM_RECORD_EXIT"
   fail 'llvm-record-program-wrong-exit-code'
 fi
 printf 'llvm-record-program=pass\n'
@@ -2865,8 +2865,8 @@ set +e
 "$LLVM_IS_OP_OUT_DIR/llvm_is_operator" >/dev/null 2>&1
 LLVM_IS_OP_EXIT=$?
 set -e
-if [ "$LLVM_IS_OP_EXIT" -ne 11 ]; then
-  printf 'llvm-is-operator-expected-exit=11 actual-exit=%d\n' "$LLVM_IS_OP_EXIT"
+if [ "$LLVM_IS_OP_EXIT" -ne 42 ]; then
+  printf 'llvm-is-operator-expected-exit=42 actual-exit=%d\n' "$LLVM_IS_OP_EXIT"
   fail 'llvm-is-operator-program-wrong-exit-code'
 fi
 printf 'llvm-is-operator-program=pass\n'
@@ -2882,8 +2882,8 @@ set +e
 "$LLVM_COMPREHENSIVE_OUT_DIR/llvm_comprehensive" >/dev/null 2>&1
 LLVM_COMPREHENSIVE_EXIT=$?
 set -e
-if [ "$LLVM_COMPREHENSIVE_EXIT" -ne 5 ]; then
-  printf 'llvm-comprehensive-expected-exit=5 actual-exit=%d\n' "$LLVM_COMPREHENSIVE_EXIT"
+if [ "$LLVM_COMPREHENSIVE_EXIT" -ne 42 ]; then
+  printf 'llvm-comprehensive-expected-exit=42 actual-exit=%d\n' "$LLVM_COMPREHENSIVE_EXIT"
   fail 'llvm-comprehensive-program-wrong-exit-code'
 fi
 printf 'llvm-comprehensive-program=pass\n'
@@ -2899,8 +2899,8 @@ set +e
 "$LLVM_CHARCLASS_OUT_DIR/llvm_charclass" >/dev/null 2>&1
 LLVM_CHARCLASS_EXIT=$?
 set -e
-if [ "$LLVM_CHARCLASS_EXIT" -ne 5 ]; then
-  printf 'llvm-charclass-expected-exit=5 actual-exit=%d\n' "$LLVM_CHARCLASS_EXIT"
+if [ "$LLVM_CHARCLASS_EXIT" -ne 42 ]; then
+  printf 'llvm-charclass-expected-exit=42 actual-exit=%d\n' "$LLVM_CHARCLASS_EXIT"
   fail 'llvm-charclass-program-wrong-exit-code'
 fi
 printf 'llvm-charclass-program=pass\n'
@@ -2916,8 +2916,8 @@ set +e
 "$LLVM_EVAL_OUT_DIR/llvm_eval" >/dev/null 2>&1
 LLVM_EVAL_EXIT=$?
 set -e
-if [ "$LLVM_EVAL_EXIT" -ne 20 ]; then
-  printf 'llvm-eval-expected-exit=20 actual-exit=%d\n' "$LLVM_EVAL_EXIT"
+if [ "$LLVM_EVAL_EXIT" -ne 42 ]; then
+  printf 'llvm-eval-expected-exit=42 actual-exit=%d\n' "$LLVM_EVAL_EXIT"
   fail 'llvm-eval-program-wrong-exit-code'
 fi
 printf 'llvm-eval-program=pass\n'
@@ -2933,8 +2933,8 @@ set +e
 "$LLVM_STRING_OUT_DIR/llvm_string" >/dev/null 2>&1
 LLVM_STRING_EXIT=$?
 set -e
-if [ "$LLVM_STRING_EXIT" -ne 10 ]; then
-  printf 'llvm-string-expected-exit=10 actual-exit=%d\n' "$LLVM_STRING_EXIT"
+if [ "$LLVM_STRING_EXIT" -ne 42 ]; then
+  printf 'llvm-string-expected-exit=42 actual-exit=%d\n' "$LLVM_STRING_EXIT"
   fail 'llvm-string-program-wrong-exit-code'
 fi
 printf 'llvm-string-program=pass\n'
@@ -2950,8 +2950,8 @@ set +e
 "$LLVM_STRING_CONCAT_OUT_DIR/llvm_string_concat" >/dev/null 2>&1
 LLVM_STRING_CONCAT_EXIT=$?
 set -e
-if [ "$LLVM_STRING_CONCAT_EXIT" -ne 11 ]; then
-  printf 'llvm-string-concat-expected-exit=11 actual-exit=%d\n' "$LLVM_STRING_CONCAT_EXIT"
+if [ "$LLVM_STRING_CONCAT_EXIT" -ne 42 ]; then
+  printf 'llvm-string-concat-expected-exit=42 actual-exit=%d\n' "$LLVM_STRING_CONCAT_EXIT"
   fail 'llvm-string-concat-program-wrong-exit-code'
 fi
 printf 'llvm-string-concat-program=pass\n'
@@ -2967,8 +2967,8 @@ set +e
 "$LLVM_DYNARRAY_OUT_DIR/llvm_dynarray" >/dev/null 2>&1
 LLVM_DYNARRAY_EXIT=$?
 set -e
-if [ "$LLVM_DYNARRAY_EXIT" -ne 15 ]; then
-  printf 'llvm-dynarray-expected-exit=15 actual-exit=%d\n' "$LLVM_DYNARRAY_EXIT"
+if [ "$LLVM_DYNARRAY_EXIT" -ne 42 ]; then
+  printf 'llvm-dynarray-expected-exit=42 actual-exit=%d\n' "$LLVM_DYNARRAY_EXIT"
   fail 'llvm-dynarray-program-wrong-exit-code'
 fi
 printf 'llvm-dynarray-program=pass\n'
@@ -2984,8 +2984,8 @@ set +e
 "$LLVM_STRPARAM_OUT_DIR/llvm_strparam" >/dev/null 2>&1
 LLVM_STRPARAM_EXIT=$?
 set -e
-if [ "$LLVM_STRPARAM_EXIT" -ne 5 ]; then
-  printf 'llvm-strparam-expected-exit=5 actual-exit=%d\n' "$LLVM_STRPARAM_EXIT"
+if [ "$LLVM_STRPARAM_EXIT" -ne 42 ]; then
+  printf 'llvm-strparam-expected-exit=42 actual-exit=%d\n' "$LLVM_STRPARAM_EXIT"
   fail 'llvm-strparam-program-wrong-exit-code'
 fi
 printf 'llvm-strparam-program=pass\n'
@@ -3001,8 +3001,8 @@ set +e
 "$LLVM_MULTIUNIT_OUT_DIR/llvm_multiunit" >/dev/null 2>&1
 LLVM_MULTIUNIT_EXIT=$?
 set -e
-if [ "$LLVM_MULTIUNIT_EXIT" -ne 7 ]; then
-  printf 'llvm-multiunit-expected-exit=7 actual-exit=%d\n' "$LLVM_MULTIUNIT_EXIT"
+if [ "$LLVM_MULTIUNIT_EXIT" -ne 42 ]; then
+  printf 'llvm-multiunit-expected-exit=42 actual-exit=%d\n' "$LLVM_MULTIUNIT_EXIT"
   fail 'llvm-multiunit-program-wrong-exit-code'
 fi
 printf 'llvm-multiunit-program=pass\n'
@@ -3018,8 +3018,8 @@ set +e
 "$LLVM_STRRETURN_OUT_DIR/llvm_strreturn" >/dev/null 2>&1
 LLVM_STRRETURN_EXIT=$?
 set -e
-if [ "$LLVM_STRRETURN_EXIT" -ne 11 ]; then
-  printf 'llvm-strreturn-expected-exit=11 actual-exit=%d\n' "$LLVM_STRRETURN_EXIT"
+if [ "$LLVM_STRRETURN_EXIT" -ne 42 ]; then
+  printf 'llvm-strreturn-expected-exit=42 actual-exit=%d\n' "$LLVM_STRRETURN_EXIT"
   fail 'llvm-strreturn-program-wrong-exit-code'
 fi
 printf 'llvm-strreturn-program=pass\n'
@@ -3035,8 +3035,8 @@ set +e
 "$LLVM_STRFNCALL_OUT_DIR/llvm_strfncall" >/dev/null 2>&1
 LLVM_STRFNCALL_EXIT=$?
 set -e
-if [ "$LLVM_STRFNCALL_EXIT" -ne 4 ]; then
-  printf 'llvm-strfncall-expected-exit=4 actual-exit=%d\n' "$LLVM_STRFNCALL_EXIT"
+if [ "$LLVM_STRFNCALL_EXIT" -ne 42 ]; then
+  printf 'llvm-strfncall-expected-exit=42 actual-exit=%d\n' "$LLVM_STRFNCALL_EXIT"
   fail 'llvm-strfncall-program-wrong-exit-code'
 fi
 printf 'llvm-strfncall-program=pass\n'
@@ -3052,8 +3052,8 @@ set +e
 "$LLVM_STRFNINLINE_OUT_DIR/llvm_strfninline" >/dev/null 2>&1
 LLVM_STRFNINLINE_EXIT=$?
 set -e
-if [ "$LLVM_STRFNINLINE_EXIT" -ne 11 ]; then
-  printf 'llvm-strfninline-expected-exit=11 actual-exit=%d\n' "$LLVM_STRFNINLINE_EXIT"
+if [ "$LLVM_STRFNINLINE_EXIT" -ne 42 ]; then
+  printf 'llvm-strfninline-expected-exit=42 actual-exit=%d\n' "$LLVM_STRFNINLINE_EXIT"
   fail 'llvm-strfninline-program-wrong-exit-code'
 fi
 printf 'llvm-strfninline-program=pass\n'
@@ -3069,8 +3069,8 @@ set +e
 "$LLVM_CASE_OUT_DIR/llvm_case" >/dev/null 2>&1
 LLVM_CASE_EXIT=$?
 set -e
-if [ "$LLVM_CASE_EXIT" -ne 30 ]; then
-  printf 'llvm-case-expected-exit=30 actual-exit=%d\n' "$LLVM_CASE_EXIT"
+if [ "$LLVM_CASE_EXIT" -ne 42 ]; then
+  printf 'llvm-case-expected-exit=42 actual-exit=%d\n' "$LLVM_CASE_EXIT"
   fail 'llvm-case-program-wrong-exit-code'
 fi
 printf 'llvm-case-program=pass\n'
@@ -3085,8 +3085,8 @@ set +e
 "$LLVM_CASERANGE_OUT_DIR/llvm_case_range" >/dev/null 2>&1
 LLVM_CASERANGE_EXIT=$?
 set -e
-if [ "$LLVM_CASERANGE_EXIT" -ne 6 ]; then
-  printf 'llvm-case-range-expected-exit=6 actual-exit=%d\n' "$LLVM_CASERANGE_EXIT"
+if [ "$LLVM_CASERANGE_EXIT" -ne 42 ]; then
+  printf 'llvm-case-range-expected-exit=42 actual-exit=%d\n' "$LLVM_CASERANGE_EXIT"
   fail 'llvm-case-range-wrong-exit-code'
 fi
 printf 'llvm-case-range-program=pass\n'
@@ -3101,8 +3101,8 @@ set +e
 "$LLVM_ENUMCASE_OUT_DIR/llvm_enum_case" >/dev/null 2>&1
 LLVM_ENUMCASE_EXIT=$?
 set -e
-if [ "$LLVM_ENUMCASE_EXIT" -ne 10 ]; then
-  printf 'llvm-enum-case-expected-exit=10 actual-exit=%d\n' "$LLVM_ENUMCASE_EXIT"
+if [ "$LLVM_ENUMCASE_EXIT" -ne 42 ]; then
+  printf 'llvm-enum-case-expected-exit=42 actual-exit=%d\n' "$LLVM_ENUMCASE_EXIT"
   fail 'llvm-enum-case-wrong-exit-code'
 fi
 printf 'llvm-enum-case-program=pass\n'
@@ -3117,8 +3117,8 @@ set +e
 "$LLVM_CLASS_OUT_DIR/llvm_class_basic" >/dev/null 2>&1
 LLVM_CLASS_EXIT=$?
 set -e
-if [ "$LLVM_CLASS_EXIT" -ne 13 ]; then
-  printf 'llvm-class-expected-exit=13 actual-exit=%d\n' "$LLVM_CLASS_EXIT"
+if [ "$LLVM_CLASS_EXIT" -ne 42 ]; then
+  printf 'llvm-class-expected-exit=42 actual-exit=%d\n' "$LLVM_CLASS_EXIT"
   fail 'llvm-class-program-wrong-exit-code'
 fi
 printf 'llvm-class-program=pass\n'
@@ -3133,8 +3133,8 @@ set +e
 "$LLVM_INHERIT_OUT_DIR/llvm_class_inherit" >/dev/null 2>&1
 LLVM_INHERIT_EXIT=$?
 set -e
-if [ "$LLVM_INHERIT_EXIT" -ne 34 ]; then
-  printf 'llvm-class-inherit-expected-exit=34 actual-exit=%d\n' "$LLVM_INHERIT_EXIT"
+if [ "$LLVM_INHERIT_EXIT" -ne 42 ]; then
+  printf 'llvm-class-inherit-expected-exit=42 actual-exit=%d\n' "$LLVM_INHERIT_EXIT"
   fail 'llvm-class-inherit-wrong-exit-code'
 fi
 printf 'llvm-class-inherit-program=pass\n'
@@ -3149,8 +3149,8 @@ set +e
 "$LLVM_VIRTUAL_OUT_DIR/llvm_class_virtual" >/dev/null 2>&1
 LLVM_VIRTUAL_EXIT=$?
 set -e
-if [ "$LLVM_VIRTUAL_EXIT" -ne 25 ]; then
-  printf 'llvm-class-virtual-expected-exit=25 actual-exit=%d\n' "$LLVM_VIRTUAL_EXIT"
+if [ "$LLVM_VIRTUAL_EXIT" -ne 42 ]; then
+  printf 'llvm-class-virtual-expected-exit=42 actual-exit=%d\n' "$LLVM_VIRTUAL_EXIT"
   fail 'llvm-class-virtual-wrong-exit-code'
 fi
 printf 'llvm-class-virtual-program=pass\n'
@@ -3165,8 +3165,8 @@ set +e
 "$LLVM_MULTIVIRT_OUT_DIR/llvm_class_multi_virtual" >/dev/null 2>&1
 LLVM_MULTIVIRT_EXIT=$?
 set -e
-if [ "$LLVM_MULTIVIRT_EXIT" -ne 21 ]; then
-  printf 'llvm-class-multi-virtual-expected-exit=21 actual-exit=%d\n' "$LLVM_MULTIVIRT_EXIT"
+if [ "$LLVM_MULTIVIRT_EXIT" -ne 42 ]; then
+  printf 'llvm-class-multi-virtual-expected-exit=42 actual-exit=%d\n' "$LLVM_MULTIVIRT_EXIT"
   fail 'llvm-class-multi-virtual-wrong-exit-code'
 fi
 printf 'llvm-class-multi-virtual-program=pass\n'
@@ -3181,8 +3181,8 @@ set +e
 "$LLVM_INHERITED_OUT_DIR/llvm_class_inherited" >/dev/null 2>&1
 LLVM_INHERITED_EXIT=$?
 set -e
-if [ "$LLVM_INHERITED_EXIT" -ne 17 ]; then
-  printf 'llvm-class-inherited-expected-exit=17 actual-exit=%d\n' "$LLVM_INHERITED_EXIT"
+if [ "$LLVM_INHERITED_EXIT" -ne 42 ]; then
+  printf 'llvm-class-inherited-expected-exit=42 actual-exit=%d\n' "$LLVM_INHERITED_EXIT"
   fail 'llvm-class-inherited-wrong-exit-code'
 fi
 printf 'llvm-class-inherited-program=pass\n'
@@ -3213,8 +3213,8 @@ set +e
 "$LLVM_SELFCALL_OUT_DIR/llvm_class_self_call" >/dev/null 2>&1
 LLVM_SELFCALL_EXIT=$?
 set -e
-if [ "$LLVM_SELFCALL_EXIT" -ne 20 ]; then
-  printf 'llvm-class-self-call-expected-exit=20 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
+if [ "$LLVM_SELFCALL_EXIT" -ne 42 ]; then
+  printf 'llvm-class-self-call-expected-exit=42 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
   fail 'llvm-class-self-call-wrong-exit-code'
 fi
 printf 'llvm-class-self-call-program=pass\n'
@@ -3229,8 +3229,8 @@ set +e
 "$LLVM_OOP_OUT_DIR/llvm_class_oop_pattern" >/dev/null 2>&1
 LLVM_OOP_EXIT=$?
 set -e
-if [ "$LLVM_OOP_EXIT" -ne 14 ]; then
-  printf 'llvm-class-oop-pattern-expected-exit=14 actual-exit=%d\n' "$LLVM_OOP_EXIT"
+if [ "$LLVM_OOP_EXIT" -ne 42 ]; then
+  printf 'llvm-class-oop-pattern-expected-exit=42 actual-exit=%d\n' "$LLVM_OOP_EXIT"
   fail 'llvm-class-oop-pattern-wrong-exit-code'
 fi
 printf 'llvm-class-oop-pattern-program=pass\n'
@@ -3245,8 +3245,8 @@ set +e
 "$LLVM_VCALLARGS_OUT_DIR/llvm_class_vcall_args" >/dev/null 2>&1
 LLVM_VCALLARGS_EXIT=$?
 set -e
-if [ "$LLVM_VCALLARGS_EXIT" -ne 20 ]; then
-  printf 'llvm-class-vcall-args-expected-exit=20 actual-exit=%d\n' "$LLVM_VCALLARGS_EXIT"
+if [ "$LLVM_VCALLARGS_EXIT" -ne 42 ]; then
+  printf 'llvm-class-vcall-args-expected-exit=42 actual-exit=%d\n' "$LLVM_VCALLARGS_EXIT"
   fail 'llvm-class-vcall-args-wrong-exit-code'
 fi
 printf 'llvm-class-vcall-args-program=pass\n'
@@ -3261,8 +3261,8 @@ set +e
 "$LLVM_METHODARGS_OUT_DIR/llvm_class_method_args" >/dev/null 2>&1
 LLVM_METHODARGS_EXIT=$?
 set -e
-if [ "$LLVM_METHODARGS_EXIT" -ne 40 ]; then
-  printf 'llvm-class-method-args-expected-exit=40 actual-exit=%d\n' "$LLVM_METHODARGS_EXIT"
+if [ "$LLVM_METHODARGS_EXIT" -ne 42 ]; then
+  printf 'llvm-class-method-args-expected-exit=42 actual-exit=%d\n' "$LLVM_METHODARGS_EXIT"
   fail 'llvm-class-method-args-wrong-exit-code'
 fi
 printf 'llvm-class-method-args-program=pass\n'
@@ -3309,8 +3309,8 @@ set +e
 "$LLVM_PROPERTY_OUT_DIR/llvm_property" >/dev/null 2>&1
 LLVM_PROPERTY_EXIT=$?
 set -e
-if [ "$LLVM_PROPERTY_EXIT" -ne 12 ]; then
-  printf 'llvm-property-expected-exit=12 actual-exit=%d\n' "$LLVM_PROPERTY_EXIT"
+if [ "$LLVM_PROPERTY_EXIT" -ne 42 ]; then
+  printf 'llvm-property-expected-exit=42 actual-exit=%d\n' "$LLVM_PROPERTY_EXIT"
   fail 'llvm-property-wrong-exit-code'
 fi
 printf 'llvm-property-program=pass\n'
@@ -3325,8 +3325,8 @@ set +e
 "$LLVM_RESULTVAR_OUT_DIR/llvm_result_var" >/dev/null 2>&1
 LLVM_RESULTVAR_EXIT=$?
 set -e
-if [ "$LLVM_RESULTVAR_EXIT" -ne 24 ]; then
-  printf 'llvm-result-var-expected-exit=24 actual-exit=%d\n' "$LLVM_RESULTVAR_EXIT"
+if [ "$LLVM_RESULTVAR_EXIT" -ne 42 ]; then
+  printf 'llvm-result-var-expected-exit=42 actual-exit=%d\n' "$LLVM_RESULTVAR_EXIT"
   fail 'llvm-result-var-wrong-exit-code'
 fi
 printf 'llvm-result-var-program=pass\n'
@@ -3341,8 +3341,8 @@ set +e
 "$LLVM_BREAKCONT_OUT_DIR/llvm_break_continue" >/dev/null 2>&1
 LLVM_BREAKCONT_EXIT=$?
 set -e
-if [ "$LLVM_BREAKCONT_EXIT" -ne 25 ]; then
-  printf 'llvm-break-continue-expected-exit=25 actual-exit=%d\n' "$LLVM_BREAKCONT_EXIT"
+if [ "$LLVM_BREAKCONT_EXIT" -ne 42 ]; then
+  printf 'llvm-break-continue-expected-exit=42 actual-exit=%d\n' "$LLVM_BREAKCONT_EXIT"
   fail 'llvm-break-continue-wrong-exit-code'
 fi
 printf 'llvm-break-continue-program=pass\n'
@@ -3357,8 +3357,8 @@ set +e
 "$LLVM_EXITFUNC_OUT_DIR/llvm_exit_func" >/dev/null 2>&1
 LLVM_EXITFUNC_EXIT=$?
 set -e
-if [ "$LLVM_EXITFUNC_EXIT" -ne 45 ]; then
-  printf 'llvm-exit-func-expected-exit=45 actual-exit=%d\n' "$LLVM_EXITFUNC_EXIT"
+if [ "$LLVM_EXITFUNC_EXIT" -ne 42 ]; then
+  printf 'llvm-exit-func-expected-exit=42 actual-exit=%d\n' "$LLVM_EXITFUNC_EXIT"
   fail 'llvm-exit-func-wrong-exit-code'
 fi
 printf 'llvm-exit-func-program=pass\n'
@@ -3373,8 +3373,8 @@ set +e
 "$LLVM_METHODINC_OUT_DIR/llvm_method_inc" >/dev/null 2>&1
 LLVM_METHODINC_EXIT=$?
 set -e
-if [ "$LLVM_METHODINC_EXIT" -ne 3 ]; then
-  printf 'llvm-method-inc-expected-exit=3 actual-exit=%d\n' "$LLVM_METHODINC_EXIT"
+if [ "$LLVM_METHODINC_EXIT" -ne 42 ]; then
+  printf 'llvm-method-inc-expected-exit=42 actual-exit=%d\n' "$LLVM_METHODINC_EXIT"
   fail 'llvm-method-inc-wrong-exit-code'
 fi
 printf 'llvm-method-inc-program=pass\n'
@@ -3389,8 +3389,8 @@ set +e
 "$LLVM_SELFCALL_OUT_DIR/llvm_self_call" >/dev/null 2>&1
 LLVM_SELFCALL_EXIT=$?
 set -e
-if [ "$LLVM_SELFCALL_EXIT" -ne 9 ]; then
-  printf 'llvm-self-call-expected-exit=9 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
+if [ "$LLVM_SELFCALL_EXIT" -ne 42 ]; then
+  printf 'llvm-self-call-expected-exit=42 actual-exit=%d\n' "$LLVM_SELFCALL_EXIT"
   fail 'llvm-self-call-wrong-exit-code'
 fi
 printf 'llvm-self-call-program=pass\n'
@@ -3405,8 +3405,8 @@ set +e
 "$LLVM_INHCREATE_OUT_DIR/llvm_inherit_create" >/dev/null 2>&1
 LLVM_INHCREATE_EXIT=$?
 set -e
-if [ "$LLVM_INHCREATE_EXIT" -ne 19 ]; then
-  printf 'llvm-inherit-create-expected-exit=19 actual-exit=%d\n' "$LLVM_INHCREATE_EXIT"
+if [ "$LLVM_INHCREATE_EXIT" -ne 42 ]; then
+  printf 'llvm-inherit-create-expected-exit=42 actual-exit=%d\n' "$LLVM_INHCREATE_EXIT"
   fail 'llvm-inherit-create-wrong-exit-code'
 fi
 printf 'llvm-inherit-create-program=pass\n'
@@ -3421,8 +3421,8 @@ set +e
 "$LLVM_CLASSPARAM_OUT_DIR/llvm_class_param" >/dev/null 2>&1
 LLVM_CLASSPARAM_EXIT=$?
 set -e
-if [ "$LLVM_CLASSPARAM_EXIT" -ne 37 ]; then
-  printf 'llvm-class-param-expected-exit=37 actual-exit=%d\n' "$LLVM_CLASSPARAM_EXIT"
+if [ "$LLVM_CLASSPARAM_EXIT" -ne 42 ]; then
+  printf 'llvm-class-param-expected-exit=42 actual-exit=%d\n' "$LLVM_CLASSPARAM_EXIT"
   fail 'llvm-class-param-wrong-exit-code'
 fi
 printf 'llvm-class-param-program=pass\n'
@@ -3485,8 +3485,8 @@ set +e
 "$LLVM_STR_FIELD_OUT_DIR/llvm_str_field" >/dev/null 2>&1
 LLVM_STR_FIELD_EXIT=$?
 set -e
-if [ "$LLVM_STR_FIELD_EXIT" -ne 12 ]; then
-  printf 'llvm-str-field-expected-exit=12 actual-exit=%d\n' "$LLVM_STR_FIELD_EXIT"
+if [ "$LLVM_STR_FIELD_EXIT" -ne 42 ]; then
+  printf 'llvm-str-field-expected-exit=42 actual-exit=%d\n' "$LLVM_STR_FIELD_EXIT"
   fail 'llvm-str-field-wrong-exit-code'
 fi
 printf 'llvm-str-field-program=pass\n'
@@ -3501,8 +3501,8 @@ set +e
 "$LLVM_STR_CTOR_ARG_OUT_DIR/llvm_str_ctor_arg" >/dev/null 2>&1
 LLVM_STR_CTOR_ARG_EXIT=$?
 set -e
-if [ "$LLVM_STR_CTOR_ARG_EXIT" -ne 5 ]; then
-  printf 'llvm-str-ctor-arg-expected-exit=5 actual-exit=%d\n' "$LLVM_STR_CTOR_ARG_EXIT"
+if [ "$LLVM_STR_CTOR_ARG_EXIT" -ne 42 ]; then
+  printf 'llvm-str-ctor-arg-expected-exit=42 actual-exit=%d\n' "$LLVM_STR_CTOR_ARG_EXIT"
   fail 'llvm-str-ctor-arg-wrong-exit-code'
 fi
 printf 'llvm-str-ctor-arg-program=pass\n'
@@ -3517,8 +3517,8 @@ set +e
 "$LLVM_STR_RETURN_OUT_DIR/llvm_str_return" >/dev/null 2>&1
 LLVM_STR_RETURN_EXIT=$?
 set -e
-if [ "$LLVM_STR_RETURN_EXIT" -ne 5 ]; then
-  printf 'llvm-str-return-expected-exit=5 actual-exit=%d\n' "$LLVM_STR_RETURN_EXIT"
+if [ "$LLVM_STR_RETURN_EXIT" -ne 42 ]; then
+  printf 'llvm-str-return-expected-exit=42 actual-exit=%d\n' "$LLVM_STR_RETURN_EXIT"
   fail 'llvm-str-return-wrong-exit-code'
 fi
 printf 'llvm-str-return-program=pass\n'
@@ -3549,8 +3549,8 @@ set +e
 "$LLVM_STACK_OUT_DIR/llvm_stack" >/dev/null 2>&1
 LLVM_STACK_EXIT=$?
 set -e
-if [ "$LLVM_STACK_EXIT" -ne 26 ]; then
-  printf 'llvm-stack-expected-exit=26 actual-exit=%d\n' "$LLVM_STACK_EXIT"
+if [ "$LLVM_STACK_EXIT" -ne 42 ]; then
+  printf 'llvm-stack-expected-exit=42 actual-exit=%d\n' "$LLVM_STACK_EXIT"
   fail 'llvm-stack-wrong-exit-code'
 fi
 printf 'llvm-stack-program=pass\n'
@@ -3565,8 +3565,8 @@ set +e
 "$LLVM_ITER_OUT_DIR/llvm_iter" >/dev/null 2>&1
 LLVM_ITER_EXIT=$?
 set -e
-if [ "$LLVM_ITER_EXIT" -ne 21 ]; then
-  printf 'llvm-iter-expected-exit=21 actual-exit=%d\n' "$LLVM_ITER_EXIT"
+if [ "$LLVM_ITER_EXIT" -ne 42 ]; then
+  printf 'llvm-iter-expected-exit=42 actual-exit=%d\n' "$LLVM_ITER_EXIT"
   fail 'llvm-iter-wrong-exit-code'
 fi
 printf 'llvm-iter-program=pass\n'
@@ -3593,8 +3593,8 @@ require_output_pattern '^semantic-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missi
 require_output_pattern '^symbol-graph-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-symbol-graph-status'
 require_output_pattern '^type-graph-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-graph-status'
 require_output_pattern '^typed-hir-status=ready$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-status'
-require_output_pattern '^symbol-count=10$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-symbol-count'
-require_output_pattern '^type-count=21$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-count'
+require_output_pattern '^symbol-count=19$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-symbol-count'
+require_output_pattern '^type-count=27$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-type-count'
 require_output_pattern '^typed-hir-node-count=8$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-node-count'
 require_output_pattern '^runtime-contract-count=2$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-runtime-contract-count'
 require_output_pattern '^typed-hir-root-name=HelloWithUnits$' "$SEMANTIC_SMOKE_OUTPUT" 'missing-typed-hir-root-name'
@@ -4169,7 +4169,7 @@ if ! "$CORE_TIME_TEST_BINARY" >>"$CORE_TIME_TEST_OUTPUT" 2>&1; then
   fail 'core-time-run-failed'
 fi
 cat "$CORE_TIME_TEST_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.time: 13 total, 13 passed, 0 failed ---$' "$CORE_TIME_TEST_OUTPUT" 'missing-core-time-pass-summary'
+require_output_pattern '^--- nextpas\.core\.time: 16 total, 16 passed, 0 failed ---$' "$CORE_TIME_TEST_OUTPUT" 'missing-core-time-pass-summary'
 printf 'core-time-check=pass\n'
 
 printf 'core-platform-time-helpers-check=running\n'
@@ -4819,7 +4819,7 @@ if ! "$CORE_SYNC_POSIX_FALLBACK_BINARY" >>"$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 2>&
   fail 'core-sync-posix-fallback-run-failed'
 fi
 cat "$CORE_SYNC_POSIX_FALLBACK_OUTPUT"
-require_output_pattern '^--- nextpas\.core\.sync: 11 total, 11 passed, 0 failed ---$' "$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-sync-posix-fallback-pass-summary'
+require_output_pattern '^--- nextpas\.core\.sync: 28 total, 28 passed, 0 failed ---$' "$CORE_SYNC_POSIX_FALLBACK_OUTPUT" 'missing-core-sync-posix-fallback-pass-summary'
 printf 'core-sync-posix-fallback-check=pass\n'
 
 printf 'rtl-sysutils-check=running\n'
