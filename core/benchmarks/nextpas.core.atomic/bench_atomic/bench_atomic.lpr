@@ -63,17 +63,20 @@ procedure BenchAtomicLoadStore32;
 var
   LI: Integer;
   LValue: Int32;
+  LSink: Int32;
   LStart: TInstant;
   LNs: Int64;
 begin
   LValue := 0;
+  LSink := 0;
   LStart := TInstant.Now;
   for LI := 1 to ITERS do
   begin
     AtomicStore32(LValue, LI, moRelaxed);
-    GSink32 := AtomicLoad32(LValue, moRelaxed);
+    LSink := AtomicLoad32(LValue, moRelaxed);
   end;
   LNs := LStart.Elapsed.AsNanoseconds;
+  GSink32 := LSink;
   PrintResult('AtomicLoad/Store32 2M', LNs, ITERS * 2);
 end;
 
@@ -106,7 +109,7 @@ begin
   for LI := 1 to ITERS do
   begin
     LExpected := LI - 1;
-    GSink32 := AtomicCompareExchange32(LValue, LExpected, LI, moSeqCst);
+    AtomicCompareExchange32(LValue, LExpected, LI, moSeqCst);
   end;
   LNs := LStart.Elapsed.AsNanoseconds;
   GSink32 := LValue;

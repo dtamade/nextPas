@@ -648,6 +648,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     'plain baseline uses loop-index-dependent local integer work to reduce optimizer folding risk',
     'atomic README must document the plain-baseline anti-folding contract');
+  CheckContains(LAtomicDocsReadme,
+    'The Pascal benchmark keeps only the final per-scenario result in the printed sink; hot loops should use local temporaries instead of per-iteration global sink writes so Rust/Go/C++ comparison sources can mirror the same logical workload.',
+    'atomic README must document the final-sink-only benchmark contract');
   CheckContains(LAtomicBenchMakefile,
     'BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.atomic/bench_atomic',
     'atomic benchmark Makefile must isolate build artifacts under core/build');
@@ -665,6 +668,12 @@ begin
     'atomic benchmark must print the baseline evidence field');
   CheckContains(LAtomicBenchSource, 'LValue := LValue + Int32((LI and 1) + 1);',
     'atomic benchmark plain baseline must use loop-index-dependent local work');
+  CheckContains(LAtomicBenchSource, 'LSink := AtomicLoad32(LValue, moRelaxed);',
+    'atomic benchmark load/store hot loop must keep the loaded value in a local sink');
+  CheckNotContains(LAtomicBenchSource, 'GSink32 := AtomicLoad32(LValue, moRelaxed);',
+    'atomic benchmark load/store hot loop must not pay per-iteration global sink writes');
+  CheckNotContains(LAtomicBenchSource, 'GSink32 := AtomicCompareExchange32(LValue, LExpected, LI, moSeqCst);',
+    'atomic benchmark compare-exchange hot loop must not pay per-iteration global sink writes');
   CheckContains(LAtomicBenchSource, 'GSink32 := LValue;',
     'atomic benchmark Pascal source must keep the last Int32 scenario result as sink evidence');
   CheckNotContains(LAtomicBenchSource, 'GSink32 := GSink32 xor',
