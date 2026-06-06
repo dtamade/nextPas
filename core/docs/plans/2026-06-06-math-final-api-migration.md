@@ -272,6 +272,9 @@ Steps:
 - [x] Run the benchmark with `NEXTPAS_BENCH_MAX_ITERS=20000`; current public-facade SIMD seam is slower
   than scalar public vector methods for the measured helpers, so public `TVec*` routing remains
   intentionally unwired.
+- [x] Extend `bench_simd_seam` with scalar-only baselines for broader M7 candidates
+  (`TMat4f * TVec4f`, `TMat4f * TMat4f`, and `TQuatf.Rotate`) and protect those benchmark labels in
+  `test_api_surface`.
 
 Expected result:
 

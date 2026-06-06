@@ -307,6 +307,11 @@ Initial SIMD candidates:
 - batch quaternion rotate
 - `TMat4f * TVec4f` and `TMat4f * TMat4f` only after profiling proves they are hot enough to justify a public SIMD primitive
 
+The current local benchmark harness now preserves scalar baselines for the next likely candidates
+before any SIMD primitive is proposed: `TMat4f * TVec4f`, `TMat4f * TMat4f`, and `TQuatf.Rotate`.
+`test_api_surface` requires those benchmark labels so future M7 work cannot silently drop the
+evidence while experimenting with new primitives.
+
 These should not block the first API implementation. They belong after scalar correctness and full tests.
 
 ## Test Strategy

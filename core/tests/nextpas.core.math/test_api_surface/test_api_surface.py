@@ -28,12 +28,17 @@ MATH_EXAMPLE_GLOBS = (
     "examples/nextpas.core.math*/**/*.lpr",
     "examples/nextpas.core.math*/**/*.pas",
 )
+MATH_BENCHMARK_GLOBS = (
+    "benchmarks/nextpas.core.math/**/*.lpr",
+    "benchmarks/nextpas.core.math/**/*.pas",
+)
 PUBLIC_DOC_PATHS = (
     "docs/math/README.md",
     "docs/math/API.md",
 )
 ROOT_FACADE_PATH = "src/nextpas.core.math.pas"
 API_DOC_PATH = "docs/math/API.md"
+BENCH_SIMD_SEAM_PATH = "benchmarks/nextpas.core.math/bench_simd_seam/bench_simd_seam.lpr"
 SIMD_MATHUTIL_PATH = "src/nextpas.core.simd.mathutil.pas"
 INTERNAL_IMPL_TEST_PREFIXES = (
     "tests/nextpas.core.math/test_impl_",
@@ -258,6 +263,13 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("impl-simd-vec4f-length", r"\bfunction\s+SimdVec4fLength\s*\(\s*const\s+AValue\s*:\s*TVec4f\s*\)\s*:\s*Single\b"),
         ("impl-simd-vec3f-dot", r"\bfunction\s+SimdVec3fDot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec3f\s*\)\s*:\s*Single\b"),
         ("impl-simd-vec3f-cross", r"\bfunction\s+SimdVec3fCross\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec3f\s*\)\s*:\s*TVec3f\b"),
+    ),
+}
+REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
+    BENCH_SIMD_SEAM_PATH: (
+        ("bench-mat4f-vector-scalar-baseline", "TMat4f scalar mat-vec"),
+        ("bench-mat4f-matrix-scalar-baseline", "TMat4f scalar mat-mat"),
+        ("bench-quatf-rotate-scalar-baseline", "TQuatf scalar rotate"),
     ),
 }
 
@@ -717,6 +729,36 @@ def scan_missing_required_public_files(root: Path) -> list[Finding]:
     return findings
 
 
+def scan_missing_required_benchmark_markers(root: Path) -> list[Finding]:
+    findings: list[Finding] = []
+    for rel, markers in REQUIRED_BENCHMARK_MARKERS.items():
+        path = root / rel
+        if not path.is_file():
+            add_finding(
+                findings,
+                "missing-required-math-benchmark-file",
+                root,
+                path,
+                1,
+                rel,
+            )
+            continue
+
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for rule, marker in markers:
+            if marker in text:
+                continue
+            add_finding(
+                findings,
+                "missing-required-math-benchmark-marker:" + rule,
+                root,
+                path,
+                1,
+                "missing benchmark marker " + marker,
+            )
+    return findings
+
+
 def root_facade_public_names(text: str) -> list[str]:
     code = interface_text(text)
     names: set[str] = set()
@@ -756,6 +798,7 @@ def build_report(root: Path) -> Report:
     findings: list[Finding] = []
     scanned: set[Path] = set()
     findings.extend(scan_missing_required_public_files(root))
+    findings.extend(scan_missing_required_benchmark_markers(root))
     findings.extend(scan_root_facade_api_doc_coverage(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
@@ -778,6 +821,7 @@ def build_report(root: Path) -> Report:
         + discover_files(root, MATH_EXAMPLE_GLOBS)
         + discover_public_docs(root)
     )
+    benchmark_files = discover_files(root, MATH_BENCHMARK_GLOBS)
 
     for path in source_files:
         scanned.add(path)
@@ -798,6 +842,12 @@ def build_report(root: Path) -> Report:
         text = path.read_text(encoding="utf-8", errors="replace")
         findings.extend(scan_math_ffi_uses(root, path, text))
         findings.extend(scan_public_impl_consumers(root, path, text))
+        findings.extend(scan_compiler_refs(root, path, text))
+
+    for path in benchmark_files:
+        scanned.add(path)
+        text = path.read_text(encoding="utf-8", errors="replace")
+        findings.extend(scan_math_ffi_uses(root, path, text))
         findings.extend(scan_compiler_refs(root, path, text))
 
     findings.sort(key=lambda item: (item.path, item.line, item.rule, item.text))

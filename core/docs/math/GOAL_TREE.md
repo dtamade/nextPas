@@ -57,7 +57,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `test_impl_simd` validates the internal helper seam and `test_api_surface` keeps public
   consumers/docs/tests from importing `nextpas.core.math.impl.*`.
 - `bench_simd_seam` records local scalar-vs-SIMD-seam evidence for `TVec3f`/`TVec4f` helpers without
-  routing public value-type methods through the seam.
+  routing public value-type methods through the seam, and now also records scalar baselines for
+  broader M7 candidates (`TMat4f * TVec4f`, `TMat4f * TMat4f`, and `TQuatf.Rotate`) before any SIMD
+  primitive is proposed.
 - `math_overview` now provides a facade-only public example that compiles and runs without importing
   narrower math submodules or implementation-only units.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
@@ -276,11 +278,18 @@ Status:
   SIMD dependencies, and allows only implementation-specific tests to import `math.impl.*`.
 - `bench_simd_seam` now provides a repeatable local Linux benchmark harness for the internal seam:
   `NEXTPAS_BENCH_MAX_ITERS=20000 make -C core/benchmarks/nextpas.core.math/bench_simd_seam clean run`.
-  On this x86_64/Linux/FPC 3.3.1 local run with `-MObjFPC -Sh -O2` and 16 fixed vector pairs, scalar
-  public methods were faster than the current public-facade SIMD seam for the measured helpers
-  (`TVec4f` add 26.7 vs 279.4 ns/op, dot 3.3 vs 34.5 ns/op, length 12.7 vs 44.3 ns/op, `TVec3f`
-  cross 20.9 vs 118.2 ns/op). This is negative wiring evidence for the current seam shape, not a
+  On this x86_64/Linux/FPC 3.3.1 local run with `-MObjFPC -Sh -O2` and 16 fixed
+  vector/matrix/quaternion samples, scalar public methods were faster than the current
+  public-facade SIMD seam for the measured helpers
+  (`TVec4f` add 24.6 vs 243.6 ns/op, scale 22.9 vs 263.2 ns/op, dot 3.3 vs 35.1 ns/op, length 12.7
+  vs 44.3 ns/op, `TVec3f` cross 20.9 vs 118.1 ns/op). This is negative wiring evidence for the
+  current seam shape, not a
   rejection of later optimized SIMD primitives.
+- The harness now also records scalar-only baselines for the next likely M7 candidates before any SIMD
+  primitive is designed: `TMat4f * TVec4f` 26.7 ns/op, `TMat4f * TMat4f` 198.6 ns/op, and
+  `TQuatf.Rotate` 66.1 ns/op on the same x86_64/Linux/FPC 3.3.1 local run with
+  `NEXTPAS_BENCH_MAX_ITERS=20000`. `test_api_surface` requires these benchmark markers so later
+  M7 work cannot drop the candidate evidence accidentally.
 - No public `TVec*`, `TMat*`, or `TQuat*` method has been routed through this seam yet. Broader SIMD
   acceleration, profiling evidence, and any missing public SIMD primitives remain future work.
 
