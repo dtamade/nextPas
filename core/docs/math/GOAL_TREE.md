@@ -52,15 +52,17 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - The public surface checker requires the random/noise declarations and rejects public global
   random/noise singleton variables.
 - `nextpas.core.math.impl.simd` now exists as an internal implementation seam for selected
-  `TVec3f`/`TVec4f` helpers plus a candidate `TMat4f * TVec4f` helper. It uses only the public
-  `nextpas.core.simd` facade and is not wired into public math value-type methods yet.
+  `TVec3f`/`TVec4f` helpers plus candidate `TMat4f * TVec4f` and `TQuatf.Rotate` helpers. It uses
+  only the public `nextpas.core.simd` facade and is not wired into public math value-type methods
+  yet.
 - `test_impl_simd` validates the internal helper seam, including the candidate `TMat4f * TVec4f`
-  path, and `test_api_surface` keeps public
+  path and a `TQuatf.Rotate` helper that matches public rotate semantics for non-unit quaternions,
+  and `test_api_surface` keeps public
   consumers/docs/tests from importing `nextpas.core.math.impl.*`.
 - `bench_simd_seam` records local scalar-vs-SIMD-seam evidence for `TVec3f`/`TVec4f` helpers without
   routing public value-type methods through the seam, and now also includes a candidate internal
   `TMat4f * TVec4f` seam plus scalar baselines for broader M7 candidates (`TMat4f * TMat4f` and
-  `TQuatf.Rotate`).
+  `TQuatf.Rotate`) and a measured candidate `TQuatf.Rotate` seam.
 - `math_overview` now provides a facade-only public example that compiles and runs without importing
   narrower math submodules or implementation-only units.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
@@ -273,8 +275,10 @@ Completion gate:
 Status:
 
 - Partial. `nextpas.core.math.impl.simd` provides internal `TVec4f` add/sub/component-multiply/scale,
-  dot, length, and `TVec3f` dot/cross helpers through the public `nextpas.core.simd` facade.
-- `test_impl_simd` locks the helper behavior and heaptrc-clean execution.
+  dot, length, and `TVec3f` dot/cross helpers through the public `nextpas.core.simd` facade, plus
+  candidate `TMat4f * TVec4f` and `TQuatf.Rotate` helpers for evidence-only measurement.
+- `test_impl_simd` locks the helper behavior and heaptrc-clean execution, including the requirement
+  that `SimdQuatfRotate` matches public `TQuatf.Rotate` semantics for non-unit quaternions.
 - `test_api_surface` now requires the internal seam file and declarations, rejects backend-private
   SIMD dependencies, and allows only implementation-specific tests to import `math.impl.*`.
 - `bench_simd_seam` now provides a repeatable local Linux benchmark harness for the internal seam:
@@ -282,21 +286,25 @@ Status:
   On this x86_64/Linux/FPC 3.3.1 local run with `-MObjFPC -Sh -O2` and 16 fixed
   vector/matrix/quaternion samples, scalar public methods were faster than the current
   public-facade SIMD seam for the measured helpers
-  (`TVec4f` add 24.6 vs 243.6 ns/op, scale 22.9 vs 263.2 ns/op, dot 3.3 vs 35.1 ns/op, length 12.7
-  vs 44.3 ns/op, `TVec3f` cross 20.9 vs 118.1 ns/op). This is negative wiring evidence for the
+  (`TVec4f` add 22.6 vs 242.7 ns/op, scale 22.9 vs 262.8 ns/op, dot 3.3 vs 33.8 ns/op, length 12.7
+  vs 44.5 ns/op, `TVec3f` cross 20.9 vs 114.8 ns/op). This is negative wiring evidence for the
   current seam shape, not a
   rejection of later optimized SIMD primitives.
 - The harness now preserves scalar baselines for the next likely M7 candidates before any new public
-  SIMD primitive is designed: `TMat4f * TMat4f` 224.3 ns/op and `TQuatf.Rotate` 66.1 ns/op on the
+  SIMD primitive is designed: `TMat4f * TMat4f` 206.2 ns/op and `TQuatf.Rotate` 68.9 ns/op on the
   same x86_64/Linux/FPC 3.3.1 local run with `NEXTPAS_BENCH_MAX_ITERS=20000`. It also measures a
   candidate internal `TMat4f * TVec4f` seam using only public `VecF32x4*` operations: the scalar
-  operator remained faster at 26.7 ns/op versus 437.3 ns/op for the current seam shape.
+  operator remained faster at 26.7 ns/op versus 435.9 ns/op for the current seam shape. The same
+  harness now measures a candidate internal `TQuatf.Rotate` seam that normalizes the quaternion
+  first to match public rotate semantics; the scalar path remained faster at 68.9 ns/op versus
+  372.0 ns/op for the current seam shape.
   `test_api_surface` requires both the seam and scalar benchmark markers so later M7 work cannot
   drop the evidence accidentally.
 - No public `TVec*`, `TMat*`, or `TQuat*` method has been routed through this seam yet. Broader SIMD
   acceleration, profiling evidence, and any missing public SIMD primitives remain future work. The
-  current vector-helper seam and the candidate `TMat4f * TVec4f` seam are both negative wiring
-  evidence on this local x86_64/Linux run, so public value-type operators remain intentionally scalar.
+  current vector-helper seam and the candidate `TMat4f * TVec4f` and `TQuatf.Rotate` seams are all
+  negative wiring evidence on this local x86_64/Linux run, so public value-type operators and
+  methods remain intentionally scalar.
 
 ## M8: API Surface, Docs, Leak Proof, And Module Gates
 

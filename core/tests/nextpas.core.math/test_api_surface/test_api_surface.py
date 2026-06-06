@@ -264,6 +264,7 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("impl-simd-vec3f-dot", r"\bfunction\s+SimdVec3fDot\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec3f\s*\)\s*:\s*Single\b"),
         ("impl-simd-vec3f-cross", r"\bfunction\s+SimdVec3fCross\s*\(\s*const\s+AA\s*,\s*AB\s*:\s*TVec3f\s*\)\s*:\s*TVec3f\b"),
         ("impl-simd-mat4f-mul-vec4f", r"\bfunction\s+SimdMat4fMulVec4f\s*\(\s*const\s+AMatrix\s*:\s*TMat4f\s*;\s*const\s+AVector\s*:\s*TVec4f\s*\)\s*:\s*TVec4f\b"),
+        ("impl-simd-quatf-rotate", r"\bfunction\s+SimdQuatfRotate\s*\(\s*const\s+AQuat\s*:\s*TQuatf\s*;\s*const\s+AVector\s*:\s*TVec3f\s*\)\s*:\s*TVec3f\b"),
     ),
 }
 REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
@@ -272,6 +273,7 @@ REQUIRED_BENCHMARK_MARKERS: dict[str, tuple[tuple[str, str], ...]] = {
         ("bench-mat4f-vector-simd-seam", "TMat4f simd seam mat-vec"),
         ("bench-mat4f-matrix-scalar-baseline", "TMat4f scalar mat-mat"),
         ("bench-quatf-rotate-scalar-baseline", "TQuatf scalar rotate"),
+        ("bench-quatf-rotate-simd-seam", "TQuatf simd seam rotate"),
     ),
 }
 

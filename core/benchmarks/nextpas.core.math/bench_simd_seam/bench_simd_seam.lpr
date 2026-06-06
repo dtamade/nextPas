@@ -272,6 +272,21 @@ begin
   GVec3Sink := LValue;
 end;
 
+procedure BenchQuatfSimdRotate(AIterations: Int64);
+var
+  I: Int64;
+  LIndex: Integer;
+  LValue: TVec3f;
+begin
+  LValue := GVec3Sink;
+  for I := 1 to AIterations do
+  begin
+    LIndex := SampleIndex(I);
+    LValue := LValue + SimdQuatfRotate(GQuatA[LIndex], GVec3A[LIndex]);
+  end;
+  GVec3Sink := LValue;
+end;
+
 begin
   InitInputs;
 
@@ -298,6 +313,7 @@ begin
     B.Run('TMat4f simd seam mat-vec', @BenchMat4fSimdMatVec);
     B.Run('TMat4f scalar mat-mat', @BenchMat4fScalarMatMat);
     B.Run('TQuatf scalar rotate', @BenchQuatfScalarRotate);
+    B.Run('TQuatf simd seam rotate', @BenchQuatfSimdRotate);
     WriteLn;
     B.Summary;
   finally

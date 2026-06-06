@@ -9,8 +9,9 @@ The current branch has implemented the scalar/trig facade, final vector/matrix/q
 types, transform builders, easing functions, explicit-state random/noise generators, and the initial
 internal SIMD seam. A local SIMD-seam benchmark harness now records scalar-vs-internal-seam evidence
 without routing public value-type methods through SIMD, including a negative `TMat4f * TVec4f`
-candidate seam result on the local x86_64/Linux gate. M8 documentation and local module gates are in
-progress. The branch also has a facade-only public example under
+candidate seam result and a negative `TQuatf.Rotate` candidate seam result on the local
+x86_64/Linux gate. M8 documentation and local module gates are in progress. The branch also has a
+facade-only public example under
 `core/examples/nextpas.core.math/math_overview` for common consumer usage. Final cross-platform
 completion still requires macOS/Windows trig host link smokes, final API/docs review,
 profiling-backed SIMD wiring decisions, and the later `fafafa.game` cutover.
@@ -310,10 +311,13 @@ Initial SIMD candidates:
 
 The current local benchmark harness now preserves scalar baselines for the next likely candidates
 before any new public SIMD primitive is proposed: `TMat4f * TMat4f` and `TQuatf.Rotate`. It also now
-includes a candidate internal `TMat4f * TVec4f` seam that uses only public `VecF32x4*` operations.
-On the same x86_64/Linux/FPC 3.3.1 local run with `NEXTPAS_BENCH_MAX_ITERS=20000`, the scalar
-operator remained faster at 26.7 ns/op versus 437.3 ns/op for the current seam shape. This is
-negative wiring evidence, so the public `TMat4f * TVec4f` operator remains scalar. `test_api_surface`
+includes a candidate internal `TMat4f * TVec4f` seam that uses only public `VecF32x4*` operations
+and a candidate internal `TQuatf.Rotate` seam that normalizes the quaternion first to match public
+rotate semantics. On the same x86_64/Linux/FPC 3.3.1 local run with
+`NEXTPAS_BENCH_MAX_ITERS=20000`, the scalar operator remained faster at 26.7 ns/op versus 435.9
+ns/op for the current mat-vec seam shape, and scalar quaternion rotate remained faster at 68.9
+ns/op versus 372.0 ns/op for the current quaternion seam shape. This is negative wiring evidence,
+so the public `TMat4f * TVec4f` operator and `TQuatf.Rotate` method remain scalar. `test_api_surface`
 requires the scalar and seam benchmark labels so future M7 work cannot silently drop the evidence
 while experimenting with new primitives.
 

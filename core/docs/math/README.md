@@ -93,9 +93,12 @@ SIMD is an implementation detail. Public consumers should use the math facade or
 submodules, not implementation-only acceleration units. Missing SIMD primitives must be added to the
 SIMD module with their own tests before math consumes them.
 
-The current internal SIMD seam contains selected `TVec3f`/`TVec4f` helpers backed by the public
-`nextpas.core.simd` facade and is covered by an implementation-specific test. Public docs, examples,
-facade tests, and downstream consumers must not import `math.impl.*` units.
+The current internal SIMD seam contains selected `TVec3f`/`TVec4f` helpers plus candidate
+`TMat4f * TVec4f` and `TQuatf.Rotate` helpers backed by the public `nextpas.core.simd` facade and
+is covered by an implementation-specific test. The candidate quaternion helper normalizes first so
+it matches public `TQuatf.Rotate` semantics, but local x86_64/Linux benchmark evidence still keeps
+both candidate seams out of the public path because the scalar implementations remain faster. Public
+docs, examples, facade tests, and downstream consumers must not import `math.impl.*` units.
 
 The current trig implementation is protected from a public naked `external 'm'` dependency by source
 surface tests and Linux local link tests. macOS and Windows host link smokes are still pending before

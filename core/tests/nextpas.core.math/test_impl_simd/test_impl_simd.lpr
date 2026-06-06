@@ -4,7 +4,9 @@ program test_impl_simd;
 
 uses
   nextpas.core.testing,
+  nextpas.core.math,
   nextpas.core.math.mat,
+  nextpas.core.math.quat,
   nextpas.core.math.vec,
   nextpas.core.math.impl.simd;
 
@@ -85,10 +87,27 @@ begin
     'SimdMat4fMulVec4f');
 end;
 
+procedure TestQuatfSimdHelpers;
+var
+  Q: TQuatf;
+  ScaledQ: TQuatf;
+  V: TVec3f;
+begin
+  Q := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI));
+  V := TVec3f.Create(1.0, 0.0, 0.0);
+  CheckVec3f(0.0, 1.0, 0.0, SimdQuatfRotate(Q, V),
+    'SimdQuatfRotate quarter turn');
+
+  ScaledQ := TQuatf.Create(Q.X * 2.0, Q.Y * 2.0, Q.Z * 2.0, Q.W * 2.0);
+  CheckVec3f(Q.Rotate(V).X, Q.Rotate(V).Y, Q.Rotate(V).Z, SimdQuatfRotate(ScaledQ, V),
+    'SimdQuatfRotate matches public Rotate semantics for non-unit quaternions');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.impl.simd');
   T.Run('vec4f simd helpers', @TestVec4fSimdHelpers);
   T.Run('vec3f simd helpers', @TestVec3fSimdHelpers);
   T.Run('mat4f simd helpers', @TestMat4fSimdHelpers);
+  T.Run('quatf simd helpers', @TestQuatfSimdHelpers);
   T.Summary;
 end.

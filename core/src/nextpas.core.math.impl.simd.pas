@@ -6,6 +6,7 @@ interface
 
 uses
   nextpas.core.math.mat,
+  nextpas.core.math.quat,
   nextpas.core.math.vec;
 
 function SimdVec4fAdd(const AA, AB: TVec4f): TVec4f; inline;
@@ -17,6 +18,7 @@ function SimdVec4fLength(const AValue: TVec4f): Single; inline;
 function SimdVec3fDot(const AA, AB: TVec3f): Single; inline;
 function SimdVec3fCross(const AA, AB: TVec3f): TVec3f; inline;
 function SimdMat4fMulVec4f(const AMatrix: TMat4f; const AVector: TVec4f): TVec4f; inline;
+function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f; inline;
 
 implementation
 
@@ -31,6 +33,11 @@ end;
 function Vec3fToSimd(const AValue: TVec3f): TVecF32x4; inline;
 begin
   Result := VecF32x4Make(AValue.X, AValue.Y, AValue.Z, 0.0);
+end;
+
+function QuatfVectorToSimd(const AQuat: TQuatf): TVecF32x4; inline;
+begin
+  Result := VecF32x4Make(AQuat.X, AQuat.Y, AQuat.Z, 0.0);
 end;
 
 function Mat4fColumnToSimd(const AMatrix: TMat4f; const AColumn: TMat4f.TIndex): TVecF32x4; inline;
@@ -111,6 +118,23 @@ begin
   LResult := VecF32x4Add(LResult,
     VecF32x4Mul(Mat4fColumnToSimd(AMatrix, 3), VecF32x4Splat(AVector.W)));
   Result := SimdToVec4f(LResult);
+end;
+
+function SimdQuatfRotate(const AQuat: TQuatf; const AVector: TVec3f): TVec3f;
+var
+  LQuat: TQuatf;
+  LQuatVec: TVecF32x4;
+  LVector: TVecF32x4;
+  LT: TVecF32x4;
+  LResult: TVecF32x4;
+begin
+  LQuat := AQuat.Normalize;
+  LQuatVec := QuatfVectorToSimd(LQuat);
+  LVector := Vec3fToSimd(AVector);
+  LT := VecF32x4Mul(VecF32x3Cross(LQuatVec, LVector), VecF32x4Splat(2.0));
+  LResult := VecF32x4Add(LVector, VecF32x4Mul(LT, VecF32x4Splat(LQuat.W)));
+  LResult := VecF32x4Add(LResult, VecF32x3Cross(LQuatVec, LT));
+  Result := SimdToVec3f(LResult);
 end;
 
 end.
