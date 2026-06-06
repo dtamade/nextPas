@@ -268,12 +268,18 @@ Steps:
 - [x] Add no new SIMD primitives; existing public `VecF32x4*` primitives were sufficient for this slice.
 - [x] Run full math tests plus relevant SIMD tests.
 - [x] Commit the internal helper seam; no public math acceleration was wired in this slice.
+- [x] Add `bench_simd_seam` as a local Linux benchmark harness for scalar-vs-internal-seam evidence.
+- [x] Run the benchmark with `NEXTPAS_BENCH_MAX_ITERS=20000`; current public-facade SIMD seam is slower
+  than scalar public vector methods for the measured helpers, so public `TVec*` routing remains
+  intentionally unwired.
 
 Expected result:
 
 - SIMD acceleration is optional, tested, and not a public math API dependency.
 - Current status is an internal helper seam only; public math value types still run their scalar paths
-  until a later profiling-backed acceleration slice wires them intentionally.
+  until a later profiling-backed acceleration slice wires them intentionally. The first local
+  benchmark result is negative evidence for wiring the current seam shape directly into public
+  vector methods.
 
 ### Task 10: Documentation And Closeout Gates
 
