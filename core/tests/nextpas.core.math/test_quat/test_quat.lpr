@@ -427,6 +427,52 @@ begin
     'TQuatd Nlerp t=1 canonicalizes opposite-sign end');
 end;
 
+procedure TestToAxisAngleCanonicalizesOppositeSignRotations;
+var
+  Axisf: TVec3f;
+  Angledf: Single;
+  Axisd: TVec3d;
+  Angledd: Double;
+begin
+  TQuatf.Create(0.0, 0.0, 0.0, -1.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes negated identity axis');
+  CheckNear(0.0, Angledf, 0.0, 'TQuatf ToAxisAngle canonicalizes negated identity angle');
+
+  TQuatf.Create(0.0, 0.0, -0.7071068, -0.7071068).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf,
+    'TQuatf ToAxisAngle canonicalizes negated quarter-turn axis');
+  CheckNear(HALF_PI, Angledf, 0.000001,
+    'TQuatf ToAxisAngle canonicalizes negated quarter-turn angle');
+
+  TQuatf.Create(0.0, 0.0, -1.0, 0.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle canonicalizes half-turn axis');
+  CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes half-turn angle');
+
+  TQuatf.Create(-1.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisf, Angledf);
+  CheckVec3f(1.0, 0.0, 0.0, Axisf, 'TQuatf ToAxisAngle canonicalizes x half-turn axis');
+  CheckNear(PI_VALUE, Angledf, 0.000001, 'TQuatf ToAxisAngle canonicalizes x half-turn angle');
+
+  TQuatd.Create(0.0, 0.0, 0.0, -1.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes negated identity axis');
+  CheckNear(0.0, Angledd, 0.0, 'TQuatd ToAxisAngle canonicalizes negated identity angle');
+
+  TQuatd.Create(0.0, 0.0, -0.7071067811865475, -0.7071067811865475).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd,
+    'TQuatd ToAxisAngle canonicalizes negated quarter-turn axis');
+  CheckNear(HALF_PI, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes negated quarter-turn angle');
+
+  TQuatd.Create(0.0, 0.0, -1.0, 0.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle canonicalizes half-turn axis');
+  CheckNear(PI_VALUE, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes half-turn angle');
+
+  TQuatd.Create(-1.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisd, Angledd);
+  CheckVec3d(1.0, 0.0, 0.0, Axisd, 'TQuatd ToAxisAngle canonicalizes x half-turn axis');
+  CheckNear(PI_VALUE, Angledd, 0.000000000001,
+    'TQuatd ToAxisAngle canonicalizes x half-turn angle');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -435,5 +481,7 @@ begin
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
   T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Run('Interpolation endpoint contracts', @TestInterpolationEndpointContracts);
+  T.Run('ToAxisAngle canonicalizes opposite-sign rotations',
+    @TestToAxisAngleCanonicalizesOppositeSignRotations);
   T.Summary;
 end.

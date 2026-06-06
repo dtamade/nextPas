@@ -148,6 +148,50 @@ begin
   Result := TQuatd.Create(-AValue.X, -AValue.Y, -AValue.Z, -AValue.W);
 end;
 
+function ShouldNegateHalfTurnAxis(const AX, AY, AZ: Single): Boolean; overload; inline;
+begin
+  if AX < 0.0 then
+    Exit(True);
+  if AX > 0.0 then
+    Exit(False);
+  if AY < 0.0 then
+    Exit(True);
+  if AY > 0.0 then
+    Exit(False);
+  Result := AZ < 0.0;
+end;
+
+function ShouldNegateHalfTurnAxis(const AX, AY, AZ: Double): Boolean; overload; inline;
+begin
+  if AX < 0.0 then
+    Exit(True);
+  if AX > 0.0 then
+    Exit(False);
+  if AY < 0.0 then
+    Exit(True);
+  if AY > 0.0 then
+    Exit(False);
+  Result := AZ < 0.0;
+end;
+
+function CanonicalizeAxisAngleQuat(const AValue: TQuatf): TQuatf; overload; inline;
+begin
+  Result := AValue;
+  if Result.W < 0.0 then
+    Result := NegateQuat(Result)
+  else if (Result.W = 0.0) and ShouldNegateHalfTurnAxis(Result.X, Result.Y, Result.Z) then
+    Result := NegateQuat(Result);
+end;
+
+function CanonicalizeAxisAngleQuat(const AValue: TQuatd): TQuatd; overload; inline;
+begin
+  Result := AValue;
+  if Result.W < 0.0 then
+    Result := NegateQuat(Result)
+  else if (Result.W = 0.0) and ShouldNegateHalfTurnAxis(Result.X, Result.Y, Result.Z) then
+    Result := NegateQuat(Result);
+end;
+
 function LerpQuat(const AA, AB: TQuatf; const AT: Single): TQuatf; inline;
 begin
   Result := TQuatf.Create(
@@ -275,7 +319,7 @@ var
   HalfAngle: Single;
   SinHalfAngle: Single;
 begin
-  Q := Normalize;
+  Q := CanonicalizeAxisAngleQuat(Normalize);
   HalfAngle := nextpas.core.math.trig.ArcCos(
     nextpas.core.math.scalar.Clamp(Q.W, Single(-1.0), Single(1.0)));
   SinHalfAngle := nextpas.core.math.trig.Sin(HalfAngle);
@@ -442,7 +486,7 @@ var
   HalfAngle: Double;
   SinHalfAngle: Double;
 begin
-  Q := Normalize;
+  Q := CanonicalizeAxisAngleQuat(Normalize);
   HalfAngle := nextpas.core.math.trig.ArcCos(
     nextpas.core.math.scalar.Clamp(Q.W, Double(-1.0), Double(1.0)));
   SinHalfAngle := nextpas.core.math.trig.Sin(HalfAngle);

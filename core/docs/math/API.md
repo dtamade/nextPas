@@ -154,8 +154,10 @@ opposite-sign canonicalization.
 `Slerp` and `Nlerp` reject NaN and infinite interpolation factors with `EArgumentError`.
 `FromAxisAngle` normalizes its axis, returns identity for a zero axis, and rejects NaN and infinite
 axis components or angles with `EArgumentError`.
-`ToAxisAngle` normalizes its quaternion first and returns axis `+Z` with angle `0` for zero
-rotation output.
+`ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle
+pair. Opposite-sign equivalent quaternions map to the same output; zero rotation returns axis `+Z`
+with angle `0`, and exact half-turn outputs use a stable axis hemisphere so `angle = PI` remains
+canonical too.
 `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
 equivalent input rotation does not change the result.
 

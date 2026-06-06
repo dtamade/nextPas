@@ -40,7 +40,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.quat` now provides the final quaternion types: `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, `FromAxisAngle` axis normalization and zero-axis identity behavior,
-  `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
+  `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
+  half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
   normalization for `ToRotationMatrix` and `Rotate`, quaternion multiply, `Slerp`, `Nlerp`,
   shortest-path handling for opposite-sign equivalent interpolation endpoints, `Equals`, and
   direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`, `ToRotationMatrix`,
@@ -221,7 +222,8 @@ Status:
 - `nextpas.core.math.quat` now provides `TQuatf` and `TQuatd`.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, axis-angle roundtrip, axis normalization, zero-axis identity behavior,
-  `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
+  `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, exact
+  half-turn stable-axis canonicalization, and scaled-input normalization, scaled-input
   normalization for rotation matrix conversion and vector rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints,
   finite out-of-range extrapolation, interpolation endpoint normalization/canonicalization,

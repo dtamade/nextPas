@@ -415,8 +415,9 @@ Resolved by tests and implementation:
 - Zero vector normalization returns zero; zero quaternion normalization returns identity.
 - `FromAxisAngle` normalizes its axis and returns identity for a zero axis instead of inventing a
   partial rotation.
-- `ToAxisAngle` normalizes its quaternion first and uses `+Z` as the fallback axis for zero
-  rotation output.
+- `ToAxisAngle` normalizes its quaternion first and returns a canonical shortest-angle axis-angle
+  pair: zero rotation uses `+Z` as the fallback axis, and exact half-turns use a stable axis
+  hemisphere so opposite-sign equivalent quaternions map to the same output.
 - `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
   equivalent input rotation does not change the result.
 - `Equals` is a component-wise epsilon comparison on quaternion storage; it does not canonicalize
