@@ -1119,6 +1119,19 @@ begin
     'lockfree test DEBUG target must compile with DEBUG defined');
   CheckContains(LTestMakefile, 'test-debug: run-debug',
     'lockfree test Makefile must provide a runnable DEBUG gate');
+  CheckContains(LTestMakefile,
+    'DEBUG_BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.lockfree/test_lockfree_debug',
+    'lockfree test Makefile must isolate DEBUG artifacts in a dedicated build dir');
+  CheckContains(LTestMakefile, '$(DEBUG_FPC_FLAGS) -FU$(DEBUG_BUILD_DIR) -FE$(DEBUG_BUILD_DIR)',
+    'lockfree test DEBUG target must compile into the dedicated DEBUG build dir');
+  CheckContains(LTestMakefile, '$(DEBUG_BUILD_DIR)/$(PROGRAM)',
+    'lockfree test DEBUG run target must execute from the dedicated DEBUG build dir');
+  CheckContains(LTestMakefile, 'CLEAN_BUILD_DIRS := $(BUILD_DIR) $(DEBUG_BUILD_DIR)',
+    'lockfree test clean target must remove both default and DEBUG build dirs by default');
+  CheckContains(LTestMakefile, 'CLEAN_BUILD_DIRS := $(BUILD_DIR)',
+    'lockfree test clean target must keep the default build dir for non-DEBUG gates');
+  CheckContains(LTestMakefile, 'CLEAN_BUILD_DIRS := $(DEBUG_BUILD_DIR)',
+    'lockfree test clean target must select the DEBUG build dir when the DEBUG gate is requested');
   CheckContains(LMpscSource,
     'function AtomicLoadNode(var ANode: PNode; const AOrder: memory_order_t): PNode;',
     'MPSC queue must define a pointer-sized atomic node load helper');
