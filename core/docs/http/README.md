@@ -89,9 +89,15 @@ make -C examples/nextpas.core.http/http_websocket_echo_demo run
 ### Server / Client (interfaces)
 
 - `IHttpServer.ListenAndServe(Addr, Port)` / `Shutdown` / `LocalAddr` / `IsRunning`
-- `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)` / `Put` / `Delete` / `Patch` / `Head`; `Do_(nil)` raises `EArgumentError`
-- `Post` / `Put` / `Patch` buffer the supplied `IReader` as bytes to publish
-  `Content-Length`; they do not route body payload through a Pascal string.
+- `IHttpClient.Do_(Req)` / `Get(Url)` / `Post(Url, ContentType, Body)` / `Put` /
+  `Delete` / `Patch` / `Head`; `Do_(nil)` raises `EArgumentError`
+- `Post` / `Put` / `Patch` expose three shortcut body forms:
+  `IReader`, Pascal `string`, and `TBytes`.
+- All three shortcut body forms publish `Content-Length` and forward the caller
+  supplied `Content-Type`; the `IReader` form still buffers to bytes rather than
+  routing payload through a Pascal string, while the `string` / `TBytes` forms
+  reuse the public `NewRequest(..., BodyText)` / `NewRequest(..., BodyBytes)`
+  helpers.
 - If a transport returns nil from `RoundTrip`, `IHttpClient.Do_` raises
   `EHttpError` instead of leaking a nil-response access violation through the
   client facade.

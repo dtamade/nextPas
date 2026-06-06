@@ -162,10 +162,16 @@ type
     constructor Create(const AResponse: IHttpResponse);
     function Do_(const AReq: IHttpRequest): IHttpResponse;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
     property SeenUrl: string read FSeenUrl;
   end;
@@ -520,7 +526,27 @@ begin
   Result := FResponse;
 end;
 
+function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
 function TDownloadClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
   Result := FResponse;
 end;
@@ -531,6 +557,16 @@ begin
 end;
 
 function TDownloadClient.Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := FResponse;
+end;
+
+function TDownloadClient.Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
 begin
   Result := FResponse;
 end;
@@ -828,6 +864,106 @@ begin
     'client shortcut body path does not materialize body through string');
   Check(Pos('CreateBytesStreamFrom(StrToBytes(LBodyBuf))', LSource) = 0,
     'client shortcut body path does not convert string buffer back to bytes');
+end;
+
+procedure TestClientPostStringBodyOverload;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LGotContentType: string;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotContentType := '';
+  LGotContentLength := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Post('/submit', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'accepted';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_CREATED);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    LResp := LClient.Post(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/submit',
+      'application/x-www-form-urlencoded',
+      'key=value');
+    CheckEqual(Int64(201), Int64(LResp.StatusCode), 'status 201');
+    CheckEqual('application/x-www-form-urlencoded', LGotContentType,
+      'content-type forwarded');
+    CheckEqual(Int64(9), LGotContentLength, 'content-length forwarded');
+    CheckEqual('key=value', LGotBody, 'body forwarded');
+    CheckEqual('accepted', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
+end;
+
+procedure TestClientPatchBytesBodyOverload;
+var
+  LRouter: THttpRouter;
+  LServer: THttpServer;
+  LPort: UInt16;
+  LHandle: TPlatformThreadHandle;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LBody: TBytes;
+  LGotContentType: string;
+  LGotContentLength: Int64;
+  LGotBody: string;
+begin
+  LGotContentType := '';
+  LGotContentLength := -1;
+  LGotBody := '';
+  LRouter := THttpRouter.Create;
+  LRouter.Handle(hmPatch, '/resource', procedure(const AReq: IHttpRequest;
+    const AW: IHttpResponseWriter)
+  var
+    LB: string;
+  begin
+    LGotContentType := AReq.Headers.Get('content-type');
+    LGotContentLength := AReq.ContentLength;
+    LGotBody := ReadReaderStr(AReq.Body);
+    LB := 'patched';
+    AW.GetHeaders.Set_('content-length', IntToStr(Int64(Length(LB))));
+    AW.WriteHeader(HTTP_STATUS_OK);
+    AW.Write(LB[1], SizeUInt(Length(LB)));
+  end);
+  LHandle := StartServer(LRouter as IHttpHandler, LServer, LPort);
+  try
+    LClient := NewHttpClient;
+    SetLength(LBody, 4);
+    LBody[0] := Ord('b');
+    LBody[1] := Ord('i');
+    LBody[2] := 0;
+    LBody[3] := 255;
+    LResp := LClient.Patch(
+      'http://127.0.0.1:' + IntToStr(Int64(LPort)) + '/resource',
+      'application/octet-stream',
+      LBody);
+    CheckEqual(Int64(200), Int64(LResp.StatusCode), 'status 200');
+    CheckEqual('application/octet-stream', LGotContentType,
+      'content-type forwarded');
+    CheckEqual(Int64(4), LGotContentLength, 'content-length forwarded');
+    CheckEqual('bi' + #0 + #255, LGotBody, 'bytes body forwarded');
+    CheckEqual('patched', ReadBodyStr(LResp), 'response body');
+  finally
+    StopServer(LServer, LHandle);
+  end;
 end;
 
 // PLACEHOLDER_TEST4
@@ -2464,8 +2600,12 @@ begin
     @TestClientDoWithRequestHelperBytesBody);
   T.Run('Client shortcut bodies use bytes buffer',
     @TestClientShortcutBodyImplementationUsesBytesBuffer);
+  T.Run('Client POST string body overload',
+    @TestClientPostStringBodyOverload);
   T.Run('Client PUT sends body and content type', @TestClientPutBodyAndContentType);
   T.Run('Client DELETE sends no body', @TestClientDeleteNoBody);
+  T.Run('Client PATCH bytes body overload',
+    @TestClientPatchBytesBodyOverload);
   T.Run('Client PATCH sends body and content type', @TestClientPatchBodyAndContentType);
   T.Run('Client HEAD sends HEAD and exposes headers', @TestClientHeadSendsHead);
   T.Run('Client reads chunked response body', @TestClientReadsChunkedResponse);

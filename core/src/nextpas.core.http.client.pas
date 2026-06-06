@@ -29,10 +29,16 @@ type
       const AOptions: THttpClientOptions); overload;
     function Do_(const AReq: IHttpRequest): IHttpResponse;
     function Get(const AUrl: string): IHttpResponse;
-    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
-    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Post(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Delete(const AUrl: string): IHttpResponse;
-    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
+    function Patch(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse; overload;
+    function Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse; overload;
     function Head(const AUrl: string): IHttpResponse;
   end;
 
@@ -210,6 +216,26 @@ begin
     LBody := nil;
 
   Result := NewRequest(AMethod, AUrl, LHeaders, LBody);
+end;
+
+function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl: string;
+  const AContentType, ABody: string): IHttpRequest; overload;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-type', AContentType);
+  Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
+end;
+
+function BufferedBodyRequest(const AMethod: THttpMethod; const AUrl,
+  AContentType: string; const ABody: TBytes): IHttpRequest; overload;
+var
+  LHeaders: IHttpHeaders;
+begin
+  LHeaders := NewHttpHeaders;
+  LHeaders.Set_('content-type', AContentType);
+  Result := NewRequest(AMethod, AUrl, LHeaders, ABody);
 end;
 
 function RedirectHeadersFor(const AReq: IHttpRequest; const AInitialUrl,
@@ -513,6 +539,16 @@ begin
   Result := Do_(LReq);
 end;
 
+function THttpClient.Post(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Do_(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+end;
+
+function THttpClient.Post(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Do_(BufferedBodyRequest(hmPost, AUrl, AContentType, ABody));
+end;
+
 function THttpClient.Put(const AUrl, AContentType: string; const ABody: IReader): IHttpResponse;
 var
   LUrl: TUrl;
@@ -521,6 +557,16 @@ begin
   LUrl := TUrl.Parse(AUrl);
   LReq := BufferedBodyRequest(hmPut, LUrl, AContentType, ABody);
   Result := Do_(LReq);
+end;
+
+function THttpClient.Put(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Do_(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
+end;
+
+function THttpClient.Put(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Do_(BufferedBodyRequest(hmPut, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Delete(const AUrl: string): IHttpResponse;
@@ -541,6 +587,16 @@ begin
   LUrl := TUrl.Parse(AUrl);
   LReq := BufferedBodyRequest(hmPatch, LUrl, AContentType, ABody);
   Result := Do_(LReq);
+end;
+
+function THttpClient.Patch(const AUrl, AContentType: string; const ABody: string): IHttpResponse;
+begin
+  Result := Do_(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
+end;
+
+function THttpClient.Patch(const AUrl, AContentType: string; const ABody: TBytes): IHttpResponse;
+begin
+  Result := Do_(BufferedBodyRequest(hmPatch, AUrl, AContentType, ABody));
 end;
 
 function THttpClient.Head(const AUrl: string): IHttpResponse;

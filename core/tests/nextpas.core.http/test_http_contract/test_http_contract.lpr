@@ -491,6 +491,26 @@ begin
     'Facade NewRequest(string URL, bytes body) sets content-length');
 end;
 
+procedure TestHttpClientShortcutBodyFacadeOverloads;
+var
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransport := TMockHttpTransport.Create;
+  LClient := nextpas.core.http.NewHttpClient(LTransport);
+
+  LResp := LClient.Post('http://example.com/post', 'text/plain', 'hello');
+  Check(LResp <> nil, 'Facade client Post(string body) returns response');
+
+  LResp := LClient.Put('http://example.com/put', 'text/plain', 'world');
+  Check(LResp <> nil, 'Facade client Put(string body) returns response');
+
+  LResp := LClient.Patch('http://example.com/patch',
+    'application/octet-stream', TBytes.Create(Ord('b'), 0, 255));
+  Check(LResp <> nil, 'Facade client Patch(bytes body) returns response');
+end;
+
 { Test 4: NewResponse — StatusCode/Headers accessible }
 procedure TestNewResponse;
 var
@@ -1308,6 +1328,8 @@ begin
     @TestNewRequestWithHeadersFacadeOverload);
   T.Run('NewRequest string URL overloads are available through facade',
     @TestNewRequestStringUrlFacadeOverloads);
+  T.Run('HttpClient shortcut body overloads are available through facade',
+    @TestHttpClientShortcutBodyFacadeOverloads);
   T.Run('NewResponse: StatusCode/Headers', @TestNewResponse);
   T.Run('HttpReadResponseBodyString is available through facade',
     @TestHttpReadResponseBodyStringFacadeHelper);
