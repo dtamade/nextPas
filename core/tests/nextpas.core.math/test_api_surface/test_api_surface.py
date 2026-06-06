@@ -182,6 +182,31 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("transform-rotate-z", r"\bfunction\s+RotateZ\s*\("),
         ("transform-camera-2d", r"\bfunction\s+Camera2D\s*\("),
     ),
+    "src/nextpas.core.math.easing.pas": (
+        ("easing-function-type", r"\bTEasingFunction\s*=\s*function\s*\("),
+        ("easing-linear", r"\bfunction\s+EaseLinear\s*\("),
+        ("easing-in-quad", r"\bfunction\s+EaseInQuad\s*\("),
+        ("easing-out-quad", r"\bfunction\s+EaseOutQuad\s*\("),
+        ("easing-in-out-quad", r"\bfunction\s+EaseInOutQuad\s*\("),
+        ("easing-in-cubic", r"\bfunction\s+EaseInCubic\s*\("),
+        ("easing-out-cubic", r"\bfunction\s+EaseOutCubic\s*\("),
+        ("easing-in-out-cubic", r"\bfunction\s+EaseInOutCubic\s*\("),
+        ("easing-in-quart", r"\bfunction\s+EaseInQuart\s*\("),
+        ("easing-out-quart", r"\bfunction\s+EaseOutQuart\s*\("),
+        ("easing-in-out-quart", r"\bfunction\s+EaseInOutQuart\s*\("),
+        ("easing-in-expo", r"\bfunction\s+EaseInExpo\s*\("),
+        ("easing-out-expo", r"\bfunction\s+EaseOutExpo\s*\("),
+        ("easing-in-out-expo", r"\bfunction\s+EaseInOutExpo\s*\("),
+        ("easing-in-elastic", r"\bfunction\s+EaseInElastic\s*\("),
+        ("easing-out-elastic", r"\bfunction\s+EaseOutElastic\s*\("),
+        ("easing-in-out-elastic", r"\bfunction\s+EaseInOutElastic\s*\("),
+        ("easing-in-back", r"\bfunction\s+EaseInBack\s*\("),
+        ("easing-out-back", r"\bfunction\s+EaseOutBack\s*\("),
+        ("easing-in-out-back", r"\bfunction\s+EaseInOutBack\s*\("),
+        ("easing-in-bounce", r"\bfunction\s+EaseInBounce\s*\("),
+        ("easing-out-bounce", r"\bfunction\s+EaseOutBounce\s*\("),
+        ("easing-in-out-bounce", r"\bfunction\s+EaseInOutBounce\s*\("),
+    ),
 }
 
 
@@ -560,6 +585,28 @@ def scan_forbidden_simd_mathutil_bare_names(root: Path, path: Path, text: str) -
     return findings
 
 
+def scan_forbidden_fpc_math_unit_in_easing(root: Path, path: Path, text: str) -> list[Finding]:
+    findings: list[Finding] = []
+    if relative(path, root) != "src/nextpas.core.math.easing.pas":
+        return findings
+
+    code = strip_pascal_comments_and_strings(text)
+    for match in USES_MATH_FFI_RE.finditer(code):
+        for unit in match.group("body").split(","):
+            if re.sub(r"\s+", "", unit).lower() != "math":
+                continue
+            line = line_no_at(code, match.start("body") + match.group("body").find(unit))
+            add_finding(
+                findings,
+                "no-fpc-math-unit-in-easing",
+                root,
+                path,
+                line,
+                original_line(text, line),
+            )
+    return findings
+
+
 def scan_required_public_declarations(root: Path, path: Path, text: str) -> list[Finding]:
     findings: list[Finding] = []
     rel = relative(path, root)
@@ -635,6 +682,7 @@ def build_report(root: Path) -> Report:
         findings.extend(scan_private_simd(root, path, text))
         findings.extend(scan_forbidden_trig_scalar_names(root, path, text))
         findings.extend(scan_forbidden_simd_mathutil_bare_names(root, path, text))
+        findings.extend(scan_forbidden_fpc_math_unit_in_easing(root, path, text))
         findings.extend(scan_required_public_declarations(root, path, text))
 
     for path in consumer_files:

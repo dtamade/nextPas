@@ -209,11 +209,11 @@ Files:
 
 Steps:
 
-- [ ] Implement every easing function from the final public list.
-- [ ] Depend on `nextpas.core.math.trig`, not FPC `Math`.
-- [ ] Test endpoints and representative midpoints.
-- [ ] Run `test_easing`, `test_trig`, and `test_api_surface`.
-- [ ] Commit with `feat(math): add easing functions`.
+- [x] Implement every easing function from the final public list.
+- [x] Depend on `nextpas.core.math.trig`, not FPC `Math`.
+- [x] Test endpoints and representative midpoints.
+- [x] Run `test_easing`, `test_trig`, and `test_api_surface`.
+- [x] Commit with `feat(math): add easing functions`.
 
 Expected result:
 

@@ -10,7 +10,8 @@ uses
   nextpas.core.math.vec,
   nextpas.core.math.mat,
   nextpas.core.math.quat,
-  nextpas.core.math.transform;
+  nextpas.core.math.transform,
+  nextpas.core.math.easing;
 
 const
   PI_VALUE: Double = 3.14159265358979323846;
@@ -32,6 +33,7 @@ type
   TMat4d = nextpas.core.math.mat.TMat4d;
   TQuatf = nextpas.core.math.quat.TQuatf;
   TQuatd = nextpas.core.math.quat.TQuatd;
+  TEasingFunction = nextpas.core.math.easing.TEasingFunction;
 
 function IsAddOverflow(AA, AB: SizeUInt): Boolean; overload; inline;
 function IsAddOverflow(AA, AB: UInt32): Boolean; overload; inline;
@@ -144,6 +146,29 @@ function Camera2D(const ACenterX, ACenterY, AZoom: Single;
   const AViewportWidth, AViewportHeight: Integer): TMat4f; overload; inline;
 function Camera2D(const ACenterX, ACenterY, AZoom: Double;
   const AViewportWidth, AViewportHeight: Integer): TMat4d; overload; inline;
+
+function EaseLinear(const AT: Double): Double; inline;
+function EaseInQuad(const AT: Double): Double; inline;
+function EaseOutQuad(const AT: Double): Double; inline;
+function EaseInOutQuad(const AT: Double): Double; inline;
+function EaseInCubic(const AT: Double): Double; inline;
+function EaseOutCubic(const AT: Double): Double; inline;
+function EaseInOutCubic(const AT: Double): Double; inline;
+function EaseInQuart(const AT: Double): Double; inline;
+function EaseOutQuart(const AT: Double): Double; inline;
+function EaseInOutQuart(const AT: Double): Double; inline;
+function EaseInExpo(const AT: Double): Double; inline;
+function EaseOutExpo(const AT: Double): Double; inline;
+function EaseInOutExpo(const AT: Double): Double; inline;
+function EaseInElastic(const AT: Double): Double; inline;
+function EaseOutElastic(const AT: Double): Double; inline;
+function EaseInOutElastic(const AT: Double): Double; inline;
+function EaseInBack(const AT: Double): Double; inline;
+function EaseOutBack(const AT: Double): Double; inline;
+function EaseInOutBack(const AT: Double): Double; inline;
+function EaseInBounce(const AT: Double): Double; inline;
+function EaseOutBounce(const AT: Double): Double; inline;
+function EaseInOutBounce(const AT: Double): Double; inline;
 
 implementation
 
@@ -664,6 +689,116 @@ function Camera2D(const ACenterX, ACenterY, AZoom: Double;
 begin
   Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
     AViewportHeight);
+end;
+
+function EaseLinear(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseLinear(AT);
+end;
+
+function EaseInQuad(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInQuad(AT);
+end;
+
+function EaseOutQuad(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutQuad(AT);
+end;
+
+function EaseInOutQuad(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutQuad(AT);
+end;
+
+function EaseInCubic(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInCubic(AT);
+end;
+
+function EaseOutCubic(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutCubic(AT);
+end;
+
+function EaseInOutCubic(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutCubic(AT);
+end;
+
+function EaseInQuart(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInQuart(AT);
+end;
+
+function EaseOutQuart(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutQuart(AT);
+end;
+
+function EaseInOutQuart(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutQuart(AT);
+end;
+
+function EaseInExpo(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInExpo(AT);
+end;
+
+function EaseOutExpo(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutExpo(AT);
+end;
+
+function EaseInOutExpo(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutExpo(AT);
+end;
+
+function EaseInElastic(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInElastic(AT);
+end;
+
+function EaseOutElastic(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutElastic(AT);
+end;
+
+function EaseInOutElastic(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutElastic(AT);
+end;
+
+function EaseInBack(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInBack(AT);
+end;
+
+function EaseOutBack(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutBack(AT);
+end;
+
+function EaseInOutBack(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutBack(AT);
+end;
+
+function EaseInBounce(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInBounce(AT);
+end;
+
+function EaseOutBounce(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseOutBounce(AT);
+end;
+
+function EaseInOutBounce(const AT: Double): Double;
+begin
+  Result := nextpas.core.math.easing.EaseInOutBounce(AT);
 end;
 
 end.

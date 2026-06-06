@@ -16,7 +16,7 @@
 
 ## Current Position
 
-This branch is at **M4 Transform builders slice**.
+This branch is at **M5 Easing slice**.
 
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
 - Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
@@ -40,6 +40,9 @@ This branch is at **M4 Transform builders slice**.
   both `TMat4f` and `TMat4d`.
 - Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
   `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, and composition order.
+- `nextpas.core.math.easing` now provides `TEasingFunction` and the final `Ease*` function family.
+- Easing tests cover every public easing function with endpoints and representative midpoint/branch
+  points, and the surface checker rejects direct FPC `Math` usage in the easing unit.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -51,7 +54,7 @@ nextpas.core.math final migration
 ├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
 ├── M3: Vec/Mat/Quat value types                         [complete]
 ├── M4: Transform builders                               [complete]
-├── M5: Easing                                           [not started]
+├── M5: Easing                                           [complete]
 ├── M6: Random + noise                                   [not started]
 ├── M7: SIMD-backed implementation seams                 [not started]
 ├── M8: API surface, docs, leak proof, and module gates   [not started]
@@ -105,8 +108,9 @@ Completion gate:
 
 Status:
 
-- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, mat, quat, and transform tests.
-- Easing/Random/Noise tests remain pending.
+- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, mat, quat,
+  transform, and easing tests.
+- Random/Noise tests remain pending.
 
 ## M2: Scalar + Trig Foundation
 
@@ -197,6 +201,15 @@ Completion gate:
 
 - Every public easing function has endpoint and representative midpoint tests.
 - Functions use `nextpas.core.math.trig`/scalar helpers, not FPC `Math`.
+
+Status:
+
+- Complete for the current final public easing scope.
+- `nextpas.core.math.easing` provides `TEasingFunction`, `EaseLinear`, Quad/Cubic/Quart,
+  Expo, Elastic, Back, and Bounce variants.
+- `test_easing` locks endpoints, midpoints, and `InOut*` branch points; `test_facade`
+  proves root facade exposure.
+- `test_api_surface` rejects a direct `uses Math` dependency in `nextpas.core.math.easing.pas`.
 
 ## M6: Random + Noise
 
