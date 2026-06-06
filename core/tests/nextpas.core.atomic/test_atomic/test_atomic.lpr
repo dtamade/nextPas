@@ -584,6 +584,18 @@ begin
     'make -C core/benchmarks/nextpas.core.atomic/bench_atomic clean run',
     'atomic README must list the focused benchmark command');
   CheckContains(LAtomicDocsReadme,
+    'make -C core/benchmarks/nextpas.core.atomic/bench_atomic run-rust-compare',
+    'atomic README must route the Rust baseline through the benchmark Makefile');
+  CheckContains(LAtomicDocsReadme,
+    'make -C core/benchmarks/nextpas.core.atomic/bench_atomic run-go-compare',
+    'atomic README must route the Go baseline through the benchmark Makefile');
+  CheckContains(LAtomicDocsReadme,
+    'make -C core/benchmarks/nextpas.core.atomic/bench_atomic run-cpp-compare',
+    'atomic README must route the C++ baseline through the benchmark Makefile');
+  CheckContains(LAtomicDocsReadme,
+    'make -C core/benchmarks/nextpas.core.atomic/bench_atomic compare',
+    'atomic README must list the all-baseline benchmark Makefile entrypoint');
+  CheckContains(LAtomicDocsReadme,
     'core/benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr',
     'atomic README must point to the Pascal benchmark source');
   CheckContains(LAtomicDocsReadme, 'compare_rust/main.rs',
@@ -593,32 +605,44 @@ begin
   CheckContains(LAtomicDocsReadme, 'compare_cpp/main.cpp',
     'atomic README must point to the external C++ comparison source');
   CheckContains(LAtomicDocsReadme,
-    'mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust',
-    'atomic README must create the Rust comparison build directory');
+    '这些 target 最终会在 `core/build/projects/nextpas.core.atomic/bench_atomic/...` 下产出并运行：',
+    'atomic README must document the compare target output location');
   CheckContains(LAtomicDocsReadme,
-    'rustc -C opt-level=3 core/benchmarks/nextpas.core.atomic/bench_atomic/compare_rust/main.rs -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust/bench_atomic_rust',
-    'atomic README must list the manual Rust comparison build command');
+    'Rust：`rustc -C opt-level=3 compare_rust/main.rs -o $(RUST_COMPARE_BIN)`',
+    'atomic README must document the Rust compare build command behind the Makefile target');
   CheckContains(LAtomicDocsReadme,
-    'core/build/projects/nextpas.core.atomic/bench_atomic/compare_rust/bench_atomic_rust',
-    'atomic README must list the manual Rust comparison run command');
+    'Go：`go build -o $(GO_COMPARE_BIN) compare_go/main.go`',
+    'atomic README must document the Go compare build command behind the Makefile target');
   CheckContains(LAtomicDocsReadme,
-    'mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_go',
-    'atomic README must create the Go comparison build directory');
-  CheckContains(LAtomicDocsReadme,
-    'go build -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_go/bench_atomic_go core/benchmarks/nextpas.core.atomic/bench_atomic/compare_go/main.go',
-    'atomic README must list the manual Go comparison build command');
-  CheckContains(LAtomicDocsReadme,
-    'core/build/projects/nextpas.core.atomic/bench_atomic/compare_go/bench_atomic_go',
-    'atomic README must list the manual Go comparison run command');
-  CheckContains(LAtomicDocsReadme,
-    'mkdir -p core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp',
-    'atomic README must create the C++ comparison build directory');
-  CheckContains(LAtomicDocsReadme,
-    'g++ -std=c++17 -O2 core/benchmarks/nextpas.core.atomic/bench_atomic/compare_cpp/main.cpp -o core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp/bench_atomic_cpp',
-    'atomic README must list the manual C++ comparison build command');
-  CheckContains(LAtomicDocsReadme,
-    'core/build/projects/nextpas.core.atomic/bench_atomic/compare_cpp/bench_atomic_cpp',
-    'atomic README must list the manual C++ comparison run command');
+    'C++：`g++ -std=c++17 -O2 compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)`',
+    'atomic README must document the C++ compare build command behind the Makefile target');
+  CheckContains(LAtomicBenchMakefile,
+    '.PHONY: build run build-rust-compare run-rust-compare build-go-compare run-go-compare build-cpp-compare run-cpp-compare compare clean',
+    'atomic benchmark Makefile must expose Pascal and external baseline entrypoints');
+  CheckContains(LAtomicBenchMakefile, 'RUSTC ?= rustc',
+    'atomic benchmark Makefile must expose the Rust compiler override');
+  CheckContains(LAtomicBenchMakefile, 'GO ?= go',
+    'atomic benchmark Makefile must expose the Go compiler override');
+  CheckContains(LAtomicBenchMakefile, 'CXX ?= g++',
+    'atomic benchmark Makefile must expose the C++ compiler override');
+  CheckContains(LAtomicBenchMakefile, 'run-rust-compare: build-rust-compare',
+    'atomic benchmark Makefile must provide a runnable Rust baseline target');
+  CheckContains(LAtomicBenchMakefile,
+    '$(RUSTC) -C opt-level=3 compare_rust/main.rs -o $(RUST_COMPARE_BIN)',
+    'atomic benchmark Makefile must build the Rust baseline with the documented command');
+  CheckContains(LAtomicBenchMakefile, 'run-go-compare: build-go-compare',
+    'atomic benchmark Makefile must provide a runnable Go baseline target');
+  CheckContains(LAtomicBenchMakefile,
+    '$(GO) build -o $(GO_COMPARE_BIN) compare_go/main.go',
+    'atomic benchmark Makefile must build the Go baseline with the documented command');
+  CheckContains(LAtomicBenchMakefile, 'run-cpp-compare: build-cpp-compare',
+    'atomic benchmark Makefile must provide a runnable C++ baseline target');
+  CheckContains(LAtomicBenchMakefile,
+    '$(CXX) -std=c++17 -O2 compare_cpp/main.cpp -o $(CPP_COMPARE_BIN)',
+    'atomic benchmark Makefile must build the C++ baseline with the documented command');
+  CheckContains(LAtomicBenchMakefile,
+    'compare: run run-rust-compare run-go-compare run-cpp-compare',
+    'atomic benchmark Makefile must provide a single all-baseline compare target');
   CheckContains(LAtomicDocsReadme, 'platform/compiler flags/input size/baseline',
     'atomic README must name the benchmark evidence envelope');
   CheckContains(LAtomicDocsReadme,
