@@ -46,12 +46,18 @@ type
   TRedirectCaptureTransport = class(TInterfacedObject, IHttpTransport)
   private
     FCalls: Int32;
+    FRedirectLocation: string;
+    FSeenScheme: string;
+    FSeenHost: string;
     FSeenPath: string;
     FSeenRawQuery: string;
     FSeenQueryParam: string;
   public
     function RoundTrip(const AReq: IHttpRequest): IHttpResponse;
     property Calls: Int32 read FCalls;
+    property RedirectLocation: string read FRedirectLocation write FRedirectLocation;
+    property SeenScheme: string read FSeenScheme;
+    property SeenHost: string read FSeenHost;
     property SeenPath: string read FSeenPath;
     property SeenRawQuery: string read FSeenRawQuery;
     property SeenQueryParam: string read FSeenQueryParam;
@@ -186,16 +192,24 @@ end;
 function TRedirectCaptureTransport.RoundTrip(const AReq: IHttpRequest): IHttpResponse;
 var
   LHeaders: IHttpHeaders;
+  LLocation: string;
+  LUrl: TUrl;
 begin
   Inc(FCalls);
   LHeaders := NewHttpHeaders;
   if FCalls = 1 then
   begin
-    LHeaders.Set_('location', '/new?from=redirect');
+    LLocation := FRedirectLocation;
+    if LLocation = '' then
+      LLocation := '/new?from=redirect';
+    LHeaders.Set_('location', LLocation);
     LHeaders.Set_('content-length', '0');
     Exit(NewResponse(HTTP_STATUS_FOUND, LHeaders, nil));
   end;
 
+  LUrl := AReq.Url;
+  FSeenScheme := LUrl.Scheme;
+  FSeenHost := LUrl.Host;
   FSeenPath := AReq.Path;
   FSeenRawQuery := AReq.RawQuery;
   FSeenQueryParam := AReq.QueryParam('from');
@@ -1060,6 +1074,35 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'redirect transport final body');
 end;
 
+procedure TestClientRedirectTransportResolvesNetworkPathLocation;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '//redirect.test/new?from=network';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LResp := LClient.Get('http://example.test/old');
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'network-path redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'network-path redirect transport final status');
+  CheckEqual('http', LTransportObj.SeenScheme,
+    'network-path redirect preserves original scheme');
+  CheckEqual('redirect.test', LTransportObj.SeenHost,
+    'network-path redirect updates host');
+  CheckEqual('/new', LTransportObj.SeenPath,
+    'network-path redirect path excludes authority and query');
+  CheckEqual('from=network', LTransportObj.SeenRawQuery,
+    'network-path redirect raw query is parsed');
+  CheckEqual('network', LTransportObj.SeenQueryParam,
+    'network-path redirect query param is visible');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'network-path redirect final body');
+end;
+
 { Test 5: Client respects max redirects (infinite loop -> error) }
 procedure TestClientMaxRedirects;
 var
@@ -1317,6 +1360,8 @@ begin
   T.Run('Client preserves relative redirect query', @TestClientPreservesRelativeRedirectQuery);
   T.Run('Client redirect transport sees parsed relative query',
     @TestClientRedirectTransportSeesParsedRelativeQuery);
+  T.Run('Client redirect transport resolves network-path Location',
+    @TestClientRedirectTransportResolvesNetworkPathLocation);
   T.Run('Client respects max redirects', @TestClientMaxRedirects);
   T.Run('Client timeout on slow server', @TestClientTimeout);
   T.Run('Client handles 404 response', @TestClientHandles404);

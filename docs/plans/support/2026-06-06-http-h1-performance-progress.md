@@ -1,5 +1,41 @@
 # Historical Progress: HTTP H1 Performance Work
 
+## Session: 2026-06-06 http network-path redirect slice
+
+- **Status:** completed.
+- Objective:
+  - make network-path redirect `Location` inherit the original request scheme
+  - make injected transports see the redirected authority/path/query instead of
+    the base host or a raw `//host/path` string
+- Scope and safety:
+  - touched HTTP client source, client focused test, HTTP docs, and this
+    support evidence
+  - did not touch compiler paths, lower-layer modules, server runtime,
+    benchmark assets, root planning files, generated outputs, or build artifacts
+- RED:
+  - the transport-visible RED used an injected `IHttpTransport`
+  - first response returned `302 Location: //redirect.test/new?from=network`
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `29 total, 28 passed, 1 failed`
+    - failed at `Client redirect transport resolves network-path Location`
+    - expected follow-up host `redirect.test`, got `example.test`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `ResolveRedirectUrl` now recognizes `//...` Location values before the
+    relative-target branch
+  - network-path redirects are parsed as `BaseUrl.Scheme + ':' + Location`
+  - if the base URL has no scheme, the resolver raises `EHttpError` instead of
+    silently generating an invalid authority
+- Focused verification:
+  - `make -C core/tests/nextpas.core.http/test_http_client clean test`
+    - `29/29 passed`
+    - heaptrc: `0 unfreed memory blocks`
+- Outcome:
+  - injected transports now see `Scheme=http`, `Host=redirect.test`,
+    `Path=/new`, `RawQuery=from=network`, and query param `from=network`
+  - this does not claim full RFC relative URL merging, query-only redirects,
+    fragment-only redirects, or per-request redirect policy controls
+
 ## Session: 2026-06-06 http relative redirect query slice
 
 - **Status:** completed.

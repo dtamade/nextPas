@@ -89,6 +89,12 @@ var
 begin
   if (Pos('http://', ALocation) = 1) or (Pos('https://', ALocation) = 1) then
     Exit(TUrl.Parse(ALocation));
+  if (Length(ALocation) >= 2) and (ALocation[1] = '/') and (ALocation[2] = '/') then
+  begin
+    if ABaseUrl.Scheme = '' then
+      raise EHttpError.Create('network-path redirect requires base URL scheme');
+    Exit(TUrl.Parse(ABaseUrl.Scheme + ':' + ALocation));
+  end;
 
   Result := ABaseUrl;
   LTarget := TUrl.ParseRequestTarget(ALocation);

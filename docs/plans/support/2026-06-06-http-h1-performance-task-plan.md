@@ -1,5 +1,26 @@
 # Historical Task Plan: HTTP H1 Performance Work
 
+## Active Session: 2026-06-06 http network-path redirect slice
+
+### Goal
+
+收紧 client redirect URL resolution：network-path `Location`（例如
+`//redirect.test/new?from=network`）必须继承原请求 scheme，同时替换
+authority 并拆分 path/query。显式注入的 `IHttpTransport` 和 future H2/H3
+transport 都应收到解析后的 URL parts，而不是继续看到 base host。
+
+### Checklist
+
+- [x] RED：`test_http_client` 用 fake transport 返回
+  `302 Location: //redirect.test/new?from=network`，第二轮检查 follow-up
+  request 的 `Scheme` / `Host` / `Path` / `RawQuery` / `QueryParam`；
+  当前失败为 `expected "redirect.test", got "example.test"`。
+- [x] GREEN：`ResolveRedirectUrl` 在 relative-target 分支前识别 `//...`，
+  用 base scheme 组成 absolute URL 后交给 `TUrl.Parse`。
+- [x] 防御边界：base scheme 为空时抛 `EHttpError`，避免生成无效 authority。
+- [x] 更新 HTTP README/API coverage/control evidence。
+- [x] 跑 focused gate：`test_http_client`。
+
 ## Active Session: 2026-06-06 http relative redirect query slice
 
 ### Goal
