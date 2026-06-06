@@ -171,6 +171,17 @@ REQUIRED_PUBLIC_DECLARATIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("quat-slerp", r"\bclass\s+function\s+Slerp\s*\("),
         ("quat-nlerp", r"\bclass\s+function\s+Nlerp\s*\("),
     ),
+    "src/nextpas.core.math.transform.pas": (
+        ("transform-ortho", r"\bfunction\s+Ortho\s*\("),
+        ("transform-perspective", r"\bfunction\s+Perspective\s*\("),
+        ("transform-lookat", r"\bfunction\s+LookAt\s*\("),
+        ("transform-translate", r"\bfunction\s+Translate\s*\("),
+        ("transform-scale", r"\bfunction\s+Scale\s*\("),
+        ("transform-rotate-x", r"\bfunction\s+RotateX\s*\("),
+        ("transform-rotate-y", r"\bfunction\s+RotateY\s*\("),
+        ("transform-rotate-z", r"\bfunction\s+RotateZ\s*\("),
+        ("transform-camera-2d", r"\bfunction\s+Camera2D\s*\("),
+    ),
 }
 
 

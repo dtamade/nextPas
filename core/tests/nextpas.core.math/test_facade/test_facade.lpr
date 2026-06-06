@@ -64,6 +64,8 @@ begin
   CheckNear(1.0, (M * TVec4f.Create(1.0, 0.0, 0.0, 1.0)).X, 'facade exposes TMat4f');
   Q := TQuatf.Identity;
   CheckNear(1.0, Q.W, 'facade exposes TQuatf');
+  CheckNear(6.0, (Translate(Single(5.0), Single(0.0), Single(0.0)) *
+    TVec4f.Create(1.0, 0.0, 0.0, 1.0)).X, 'facade exposes Translate');
 end;
 
 begin

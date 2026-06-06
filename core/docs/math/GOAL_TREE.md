@@ -16,7 +16,7 @@
 
 ## Current Position
 
-This branch is at **M3 Vec/Mat/Quat value-type slice**.
+This branch is at **M4 Transform builders slice**.
 
 - M0 design/control is committed as `21e1f510 docs(math): plan final api migration`.
 - Earlier slices added scalar/trig/facade/symbol-scope tests and the final vector types.
@@ -36,6 +36,10 @@ This branch is at **M3 Vec/Mat/Quat value-type slice**.
 - Quaternion tests cover compact layout, `Create`, `Identity`, `Data`, zero normalize returning
   identity, `Conjugate`, `FromAxisAngle`, `ToAxisAngle`, `ToRotationMatrix`, `Rotate`, quaternion
   multiply, `Slerp`, `Nlerp`, `Equals`, and double-precision variants.
+- `nextpas.core.math.transform` now provides projection, view, model, and 2D camera builders for
+  both `TMat4f` and `TMat4d`.
+- Transform tests cover `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`,
+  `RotateY`, `RotateZ`, `Camera2D`, facade exposure, invalid dimensions, and composition order.
 - Linux-focused math/SIMD tests pass locally; macOS/Windows trig link smokes remain a later host-gate requirement before final cross-platform completion.
 
 ## Map
@@ -46,7 +50,7 @@ nextpas.core.math final migration
 ├── M1: RED behavior tests for final API                 [partial: scalar/trig/facade/surface]
 ├── M2: Scalar + trig foundation                         [partial: scalar/trig Linux local gate passed]
 ├── M3: Vec/Mat/Quat value types                         [complete]
-├── M4: Transform builders                               [not started]
+├── M4: Transform builders                               [complete]
 ├── M5: Easing                                           [not started]
 ├── M6: Random + noise                                   [not started]
 ├── M7: SIMD-backed implementation seams                 [not started]
@@ -101,8 +105,8 @@ Completion gate:
 
 Status:
 
-- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, mat, and quat tests.
-- Transform/Easing/Random/Noise tests remain pending.
+- Partial. This slice covers API surface, facade, scalar, trig, symbol-scope, vec, mat, quat, and transform tests.
+- Easing/Random/Noise tests remain pending.
 
 ## M2: Scalar + Trig Foundation
 
@@ -175,6 +179,15 @@ Completion gate:
 
 - Ortho, Perspective, LookAt, Translate, Scale, RotateX/Y/Z, and Camera2D are tested against known vectors/matrices.
 - Matrix convention is documented and source tests verify column-major layout.
+
+Status:
+
+- Complete for the current builder scope.
+- `nextpas.core.math.transform` provides `Single` and `Double` overloads for `Ortho`, `Perspective`,
+  `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and `Camera2D`.
+- Tests lock column-major translation in column 3, right-handed `LookAt`, right-handed perspective
+  with NDC `[-1,+1]`, screen-space `Camera2D` positive Y down, invalid projection inputs, and
+  `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing
 

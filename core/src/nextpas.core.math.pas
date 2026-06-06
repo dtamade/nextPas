@@ -9,7 +9,8 @@ uses
   nextpas.core.math.trig,
   nextpas.core.math.vec,
   nextpas.core.math.mat,
-  nextpas.core.math.quat;
+  nextpas.core.math.quat,
+  nextpas.core.math.transform;
 
 const
   PI_VALUE: Double = 3.14159265358979323846;
@@ -122,6 +123,27 @@ function Power(const ABase, AExponent: Double): Double; overload; inline;
 function Power(const ABase, AExponent: Single): Single; overload; inline;
 function Sqrt(const AX: Double): Double; overload; inline;
 function Sqrt(const AX: Single): Single; overload; inline;
+
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f; overload; inline;
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d; overload; inline;
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Single): TMat4f; overload; inline;
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Double): TMat4d; overload; inline;
+function LookAt(const AEye, ATarget, AUp: TVec3f): TMat4f; overload; inline;
+function LookAt(const AEye, ATarget, AUp: TVec3d): TMat4d; overload; inline;
+function Translate(const AX, AY, AZ: Single): TMat4f; overload; inline;
+function Translate(const AX, AY, AZ: Double): TMat4d; overload; inline;
+function Scale(const AX, AY, AZ: Single): TMat4f; overload; inline;
+function Scale(const AX, AY, AZ: Double): TMat4d; overload; inline;
+function RotateX(const ARadians: Single): TMat4f; overload; inline;
+function RotateX(const ARadians: Double): TMat4d; overload; inline;
+function RotateY(const ARadians: Single): TMat4f; overload; inline;
+function RotateY(const ARadians: Double): TMat4d; overload; inline;
+function RotateZ(const ARadians: Single): TMat4f; overload; inline;
+function RotateZ(const ARadians: Double): TMat4d; overload; inline;
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer): TMat4f; overload; inline;
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer): TMat4d; overload; inline;
 
 implementation
 
@@ -548,6 +570,100 @@ end;
 function Sqrt(const AX: Single): Single;
 begin
   Result := nextpas.core.math.trig.Sqrt(AX);
+end;
+
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.Ortho(ALeft, ARight, ABottom, ATop, ANear, AFar);
+end;
+
+function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.Ortho(ALeft, ARight, ABottom, ATop, ANear, AFar);
+end;
+
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.Perspective(AFovYRad, AAspect, ANear, AFar);
+end;
+
+function Perspective(const AFovYRad, AAspect, ANear, AFar: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.Perspective(AFovYRad, AAspect, ANear, AFar);
+end;
+
+function LookAt(const AEye, ATarget, AUp: TVec3f): TMat4f;
+begin
+  Result := nextpas.core.math.transform.LookAt(AEye, ATarget, AUp);
+end;
+
+function LookAt(const AEye, ATarget, AUp: TVec3d): TMat4d;
+begin
+  Result := nextpas.core.math.transform.LookAt(AEye, ATarget, AUp);
+end;
+
+function Translate(const AX, AY, AZ: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.Translate(AX, AY, AZ);
+end;
+
+function Translate(const AX, AY, AZ: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.Translate(AX, AY, AZ);
+end;
+
+function Scale(const AX, AY, AZ: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.Scale(AX, AY, AZ);
+end;
+
+function Scale(const AX, AY, AZ: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.Scale(AX, AY, AZ);
+end;
+
+function RotateX(const ARadians: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.RotateX(ARadians);
+end;
+
+function RotateX(const ARadians: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.RotateX(ARadians);
+end;
+
+function RotateY(const ARadians: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.RotateY(ARadians);
+end;
+
+function RotateY(const ARadians: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.RotateY(ARadians);
+end;
+
+function RotateZ(const ARadians: Single): TMat4f;
+begin
+  Result := nextpas.core.math.transform.RotateZ(ARadians);
+end;
+
+function RotateZ(const ARadians: Double): TMat4d;
+begin
+  Result := nextpas.core.math.transform.RotateZ(ARadians);
+end;
+
+function Camera2D(const ACenterX, ACenterY, AZoom: Single;
+  const AViewportWidth, AViewportHeight: Integer): TMat4f;
+begin
+  Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
+    AViewportHeight);
+end;
+
+function Camera2D(const ACenterX, ACenterY, AZoom: Double;
+  const AViewportWidth, AViewportHeight: Integer): TMat4d;
+begin
+  Result := nextpas.core.math.transform.Camera2D(ACenterX, ACenterY, AZoom, AViewportWidth,
+    AViewportHeight);
 end;
 
 end.

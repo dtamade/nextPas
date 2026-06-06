@@ -150,7 +150,7 @@ Steps:
 - [x] Implement matrix/vector and matrix/matrix multiply.
 - [x] Implement determinant, inverse, try-inverse, transpose, identity, zero.
 - [x] Run `test_mat` and `test_api_surface`.
-- [ ] Commit with `feat(math): add final matrix types`.
+- [x] Commit with `feat(math): add final matrix types`.
 
 Expected result:
 
@@ -173,7 +173,7 @@ Steps:
 - [x] Implement identity, normalize, conjugate, multiply.
 - [x] Implement axis-angle, rotation matrix, rotate, slerp, nlerp.
 - [x] Run `test_quat`, `test_mat`, and `test_api_surface`.
-- [ ] Commit with `feat(math): add final quaternion types`.
+- [x] Commit with `feat(math): add final quaternion types`.
 
 Expected result:
 
@@ -189,11 +189,11 @@ Files:
 
 Steps:
 
-- [ ] Implement `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, `Camera2D`.
-- [ ] Use final vec/mat types only.
-- [ ] Test known transformed points and matrix elements.
-- [ ] Run `test_transform`, `test_mat`, `test_vec`, and `test_api_surface`.
-- [ ] Commit with `feat(math): add transform builders`.
+- [x] Implement `Ortho`, `Perspective`, `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, `Camera2D`.
+- [x] Use final vec/mat types only.
+- [x] Test known transformed points and matrix elements.
+- [x] Run `test_transform`, `test_mat`, `test_vec`, and `test_api_surface`.
+- [x] Commit with `feat(math): add transform builders`.
 
 Expected result:
 
