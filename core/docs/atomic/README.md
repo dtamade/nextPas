@@ -90,3 +90,28 @@ git status --short --branch
 如果触碰 platform wait-address、fence、异常类型或相邻模块 API，需要追加被触达模块自己的
 focused gate。涉及跨平台 fence 或 arch-specific helper 时，至少补 source-contract 或 compile gate，
 并在没有目标机 runtime 时登记残余风险。
+
+## Benchmark
+
+当前 benchmark 入口是：
+
+```bash
+make -C core/benchmarks/nextpas.core.atomic/bench_atomic clean run
+```
+
+Pascal benchmark 源码位于
+`core/benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr`。它覆盖单线程热路径：
+
+- plain local variable increment，作为本机单线程循环/局部变量开销上下文。
+- `AtomicLoad32` / `AtomicStore32` relaxed load-store 路径。
+- `AtomicFetchAdd32` relaxed read-modify-write 路径。
+- `AtomicCompareExchange32` seq_cst success path。
+- `TAtomicUInt32.FetchAdd` typed record facade 路径。
+
+benchmark 使用 `ITERS=1000000`，Makefile 默认编译参数是 `-MObjFPC -Sh -O2`。
+运行输出会先打印 `platform/compiler flags/input size/baseline` envelope，再打印各场景的
+ms、M ops/sec 和 ns/op。
+
+当前 baseline 只是同一 Pascal 程序里的 plain local variable 操作，用于帮助判断单线程测试开销；
+它不是 Rust、Go 或 C++ runtime 对照。性能结论必须带上平台、编译参数、输入规模、benchmark 输出
+和 baseline 说明。没有同一机器、同一轮次的外部 runtime 输出时，不应写入胜过 Rust/Go/C++ 标准库的结论。

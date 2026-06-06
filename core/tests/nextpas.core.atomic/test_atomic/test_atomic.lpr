@@ -256,6 +256,8 @@ const
   AtomicTypesSourcePath = '../../../src/nextpas.core.atomic.types.pas';
   AtomicCompatSourcePath = '../../../src/nextpas.core.atomic.compat.pas';
   AtomicDocsReadmePath = '../../../docs/atomic/README.md';
+  AtomicBenchMakefilePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/Makefile';
+  AtomicBenchSourcePath = '../../../benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr';
   AtomicX8664SnapshotLegacyPath = '../../../src/nextpas.core.atomic.x86_64.inc';
   AtomicX8664SnapshotArchivePath = '../../../docs/archive/atomic/nextpas.core.atomic.x86_64.snapshot.txt';
 var
@@ -264,6 +266,8 @@ var
   LAtomicTypesSource: string;
   LAtomicCompatSource: string;
   LAtomicDocsReadme: string;
+  LAtomicBenchMakefile: string;
+  LAtomicBenchSource: string;
   LX8664SnapshotSource: string;
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
@@ -313,6 +317,12 @@ begin
   LAtomicTypesSource := ReadUtf8TextFile(AtomicTypesSourcePath);
   LAtomicCompatSource := ReadUtf8TextFile(AtomicCompatSourcePath);
   LAtomicDocsReadme := ReadUtf8TextFile(AtomicDocsReadmePath);
+  Check(FileExists(AtomicBenchMakefilePath),
+    'atomic benchmark Makefile must exist as the focused benchmark entrypoint');
+  Check(FileExists(AtomicBenchSourcePath),
+    'atomic benchmark source must exist as the benchmark entrypoint');
+  LAtomicBenchMakefile := ReadUtf8TextFile(AtomicBenchMakefilePath);
+  LAtomicBenchSource := ReadUtf8TextFile(AtomicBenchSourcePath);
   Check(not FileExists(AtomicX8664SnapshotLegacyPath),
     'x86_64 snapshot must not remain in src');
   LX8664SnapshotSource := ReadUtf8TextFile(AtomicX8664SnapshotArchivePath);
@@ -519,6 +529,29 @@ begin
     'atomic README must list the focused atomic gate');
   CheckContains(LAtomicDocsReadme, 'git diff --check',
     'atomic README must list whitespace verification');
+  CheckContains(LAtomicDocsReadme,
+    'make -C core/benchmarks/nextpas.core.atomic/bench_atomic clean run',
+    'atomic README must list the focused benchmark command');
+  CheckContains(LAtomicDocsReadme,
+    'core/benchmarks/nextpas.core.atomic/bench_atomic/bench_atomic.lpr',
+    'atomic README must point to the Pascal benchmark source');
+  CheckContains(LAtomicDocsReadme, 'platform/compiler flags/input size/baseline',
+    'atomic README must name the benchmark evidence envelope');
+  CheckContains(LAtomicBenchMakefile,
+    'BUILD_DIR ?= $(CORE_ROOT)/build/projects/nextpas.core.atomic/bench_atomic',
+    'atomic benchmark Makefile must isolate build artifacts under core/build');
+  CheckContains(LAtomicBenchMakefile, 'FPC_FLAGS ?= -MObjFPC -Sh -O2',
+    'atomic benchmark Makefile must default to optimized benchmark flags');
+  CheckContains(LAtomicBenchSource, 'WriteLn(''Platform: '', BenchmarkPlatformName)',
+    'atomic benchmark must print the platform evidence field');
+  CheckContains(LAtomicBenchSource, 'WriteLn(''Compiler flags: -MObjFPC -Sh -O2'')',
+    'atomic benchmark must print the compiler flags evidence field');
+  CheckContains(LAtomicBenchSource,
+    'WriteLn(''Input size: ITERS=1000000; scenarios=plain baseline, AtomicLoad/Store32, AtomicFetchAdd32, AtomicCompareExchange32, TAtomicUInt32'')',
+    'atomic benchmark must print the input-size evidence field');
+  CheckContains(LAtomicBenchSource,
+    'WriteLn(''Baselines: plain local variable operations for single-thread overhead context; no external runtime auto-run'')',
+    'atomic benchmark must print the baseline evidence field');
   CheckContains(LSingleStrongCasSection, 'AtomicCompatFailureOrder(aOrder)',
     'single-order strong CAS must derive failure order');
   CheckContains(LSingleWeakCasSection, 'AtomicCompatFailureOrder(aOrder)',
