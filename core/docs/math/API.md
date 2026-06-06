@@ -157,7 +157,11 @@ composition uses `Translate * Rotate * Scale`, and projection/view/model composi
 
 `Perspective` is right-handed, looks down `-Z`, and uses NDC `[-1, +1]`. `Camera2D` uses screen-space
 positive Y down.
-All transform builders reject NaN and infinite inputs with `EArgumentError`.
+`Ortho` requires non-zero width, height, and depth. `Perspective` requires positive FOV, aspect,
+and near plane, plus `far > near`. `LookAt` requires `eye <> target` and an `up` vector that is not
+parallel to forward. `Camera2D` requires positive zoom and positive viewport dimensions.
+All transform builders reject NaN and infinite inputs with `EArgumentError`, and geometry guard
+failures also raise `EArgumentError`.
 
 ## Easing
 

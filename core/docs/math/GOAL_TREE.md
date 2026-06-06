@@ -217,7 +217,8 @@ Status:
 - `nextpas.core.math.transform` provides `Single` and `Double` overloads for `Ortho`, `Perspective`,
   `LookAt`, `Translate`, `Scale`, `RotateX`, `RotateY`, `RotateZ`, and `Camera2D`.
 - Tests lock column-major translation in column 3, right-handed `LookAt`, right-handed perspective
-  with NDC `[-1,+1]`, screen-space `Camera2D` positive Y down, invalid projection inputs, and
+  with NDC `[-1,+1]`, screen-space `Camera2D` positive Y down, geometry guard messages for
+  degenerate `Ortho` / `Perspective` / `LookAt` / `Camera2D` inputs, invalid projection inputs, and
   `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing

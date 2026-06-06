@@ -60,6 +60,11 @@ The transform convention is:
 - NDC is `[-1, +1]`;
 - `Camera2D` uses screen-space positive Y down.
 
+Builder guard rules are explicit: `Ortho` requires non-zero width, height, and depth;
+`Perspective` requires positive FOV, aspect, and near plane plus `far > near`; `LookAt` requires
+`eye <> target` and an `up` vector that is not parallel to forward; `Camera2D` requires positive
+zoom and positive viewport dimensions.
+
 Quaternions store vector part `X`, `Y`, `Z` and real part `W`. Zero quaternion normalization returns
 identity; zero vector normalization returns zero.
 Singular `TryInverse` returns `False` and zeroes the `out` matrix; `Inverse` raises

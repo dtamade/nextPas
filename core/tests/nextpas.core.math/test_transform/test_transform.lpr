@@ -54,6 +54,22 @@ begin
   CheckNear(AExpectedW, AActual.W, 0.000000000001, AMessage + '.W');
 end;
 
+procedure ExpectArgumentErrorMessage(const AExpectedMessage, AName: string; const AProc: TTestProc);
+begin
+  try
+    AProc;
+  except
+    on E: EArgumentError do
+    begin
+      CheckEqual(AExpectedMessage, E.Message, AName + ' message');
+      Exit;
+    end;
+    on E: Exception do
+      Fail(AName + ': expected EArgumentError, got ' + E.ClassName);
+  end;
+  Fail(AName + ': expected EArgumentError');
+end;
+
 procedure ExpectArgumentError(const AName: string; const AProc: TTestProc);
 begin
   try
@@ -80,6 +96,37 @@ end;
 procedure RaiseCamera2DZeroZoom;
 begin
   Camera2D(Single(0.0), Single(0.0), Single(0.0), 100, 100);
+end;
+
+procedure RaiseOrthoZeroDepthDouble;
+begin
+  Ortho(Double(-1.0), Double(1.0), Double(-1.0), Double(1.0), Double(5.0), Double(5.0));
+end;
+
+procedure RaisePerspectiveFarNotGreaterSingle;
+begin
+  Perspective(Single(HALF_PI), Single(1.0), Single(5.0), Single(5.0));
+end;
+
+procedure RaiseLookAtCoincidentEyeSingle;
+begin
+  LookAt(TVec3f.Create(1.0, 2.0, 3.0), TVec3f.Create(1.0, 2.0, 3.0),
+    TVec3f.Create(0.0, 1.0, 0.0));
+end;
+
+procedure RaiseLookAtParallelUpDouble;
+begin
+  LookAt(TVec3d.Create(0.0, 0.0, 5.0), TVec3d.Zero, TVec3d.Create(0.0, 0.0, -2.0));
+end;
+
+procedure RaiseCamera2DZeroWidthSingle;
+begin
+  Camera2D(Single(0.0), Single(0.0), Single(1.0), 0, 100);
+end;
+
+procedure RaiseCamera2DNegativeHeightDouble;
+begin
+  Camera2D(Double(0.0), Double(0.0), Double(1.0), 100, -1);
 end;
 
 function SingleNaN: Single;
@@ -271,11 +318,28 @@ begin
   ExpectArgumentError('Camera2D double infinite center', @RaiseCamera2DInfiniteCenterDouble);
 end;
 
+procedure TestGeometryGuardMessages;
+begin
+  ExpectArgumentErrorMessage('Ortho: depth must not be zero',
+    'Ortho double zero depth', @RaiseOrthoZeroDepthDouble);
+  ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
+    'Perspective single far not greater', @RaisePerspectiveFarNotGreaterSingle);
+  ExpectArgumentErrorMessage('LookAt: eye and target must differ',
+    'LookAt single coincident eye/target', @RaiseLookAtCoincidentEyeSingle);
+  ExpectArgumentErrorMessage('LookAt: up vector must not be parallel to forward',
+    'LookAt double parallel up', @RaiseLookAtParallelUpDouble);
+  ExpectArgumentErrorMessage('Camera2D: viewport width must be positive',
+    'Camera2D single zero width', @RaiseCamera2DZeroWidthSingle);
+  ExpectArgumentErrorMessage('Camera2D: viewport height must be positive',
+    'Camera2D double negative height', @RaiseCamera2DNegativeHeightDouble);
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.transform');
   T.Run('projection builders', @TestProjectionBuilders);
   T.Run('model and view builders', @TestModelAndViewBuilders);
   T.Run('camera2d and double builders', @TestCamera2DAndDoubleBuilders);
   T.Run('non-finite inputs fail fast', @TestNonFiniteInputsFailFast);
+  T.Run('geometry guards report public contract messages', @TestGeometryGuardMessages);
   T.Summary;
 end.
