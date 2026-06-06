@@ -417,6 +417,8 @@ Resolved by tests and implementation:
   rotation output.
 - `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
   equivalent input rotation does not change the result.
+- Finite interpolation factors outside `[0, 1]` are not clamped: `Slerp` and `Nlerp` extrapolate
+  through the same formulas instead of snapping to either endpoint.
 - Random invalid integer/float ranges and invalid weighted choices fail fast with `EArgumentError`.
 - Convenience dice helpers return `0` for non-positive dice or sides, and `RollMultiple` rejects
   positive dice/side combinations whose maximum total would overflow `Integer`.

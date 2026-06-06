@@ -144,6 +144,8 @@ Zero quaternion normalization returns identity.
 equivalent input rotations does not change the result.
 `Slerp` and `Nlerp` also follow the shortest rotational path: opposite-sign equivalent endpoints are
 treated as the same rotation instead of forcing the long arc.
+Finite interpolation factors outside `[0, 1]` are not clamped: `Slerp` and `Nlerp` extrapolate
+through the same formulas instead of snapping to either endpoint.
 `Slerp` and `Nlerp` reject NaN and infinite interpolation factors with `EArgumentError`.
 `FromAxisAngle` normalizes its axis, returns identity for a zero axis, and rejects NaN and infinite
 axis components or angles with `EArgumentError`.

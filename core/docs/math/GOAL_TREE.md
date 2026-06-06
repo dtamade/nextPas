@@ -224,7 +224,8 @@ Status:
   `ToAxisAngle` zero-rotation `+Z` fallback and scaled-input normalization, scaled-input
   normalization for rotation matrix conversion and vector rotation, quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints,
-  `Equals`, and direct `TQuatd` parity coverage for `Create`, `Data`, `Conjugate`,
+  finite out-of-range extrapolation, `Equals`, and direct `TQuatd` parity coverage for `Create`,
+  `Data`, `Conjugate`,
   `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 

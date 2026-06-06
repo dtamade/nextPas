@@ -81,7 +81,8 @@ axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes fi
 as the axis when the output rotation angle collapses to zero. `ToRotationMatrix` and `Rotate` also
 normalize first, so positive scaling of the same input rotation does not change the result.
 `Slerp` and `Nlerp` follow the shortest rotational path, so opposite-sign equivalent endpoints are
-treated as the same rotation instead of taking the long arc.
+treated as the same rotation instead of taking the long arc. Finite interpolation factors outside
+`[0, 1]` are not clamped, so callers can deliberately extrapolate through the same formulas.
 `TryInverse` is epsilon-based: it returns `False` and zeroes the `out` matrix for singular and
 numerically singular matrices, and `Inverse` raises `EArgumentError` on the same inputs.
 

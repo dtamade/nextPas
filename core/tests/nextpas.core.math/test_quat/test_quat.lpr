@@ -167,6 +167,11 @@ begin
   Result := TQuatf.FromAxisAngle(TVec3f.Create(0.0, 0.0, 1.0), Single(HALF_PI));
 end;
 
+function QuarterTurnZd: TQuatd;
+begin
+  Result := TQuatd.FromAxisAngle(TVec3d.Create(0.0, 0.0, 1.0), HALF_PI);
+end;
+
 procedure TestQuatfContracts;
 var
   Q: TQuatf;
@@ -332,11 +337,46 @@ begin
     'TQuatd Nlerp infinite t', @RaiseQuatdNlerpInfiniteT);
 end;
 
+procedure TestInterpolationAllowsFiniteExtrapolation;
+var
+  Qf: TQuatf;
+  Qd: TQuatd;
+begin
+  Qf := QuarterTurnZf;
+  CheckVec3f(0.7071068, -0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, Qf, Single(-0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp extrapolates below zero');
+  CheckVec3f(0.8263093, -0.5632167, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, Qf, Single(-0.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp extrapolates below zero');
+  CheckVec3f(-0.7071068, 0.7071068, 0.0,
+    TQuatf.Slerp(TQuatf.Identity, Qf, Single(1.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Slerp extrapolates above one');
+  CheckVec3f(-0.5632167, 0.8263093, 0.0,
+    TQuatf.Nlerp(TQuatf.Identity, Qf, Single(1.5)).Rotate(TVec3f.Create(1.0, 0.0, 0.0)),
+    'TQuatf Nlerp extrapolates above one');
+
+  Qd := QuarterTurnZd;
+  CheckVec3d(0.7071067811865475, -0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, Qd, -0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp extrapolates below zero');
+  CheckVec3d(0.8263092599131795, -0.5632166607813849, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, Qd, -0.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp extrapolates below zero');
+  CheckVec3d(-0.7071067811865475, 0.7071067811865475, 0.0,
+    TQuatd.Slerp(TQuatd.Identity, Qd, 1.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Slerp extrapolates above one');
+  CheckVec3d(-0.5632166607813849, 0.8263092599131795, 0.0,
+    TQuatd.Nlerp(TQuatd.Identity, Qd, 1.5).Rotate(TVec3d.Create(1.0, 0.0, 0.0)),
+    'TQuatd Nlerp extrapolates above one');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
   T.Run('TQuatd contracts', @TestQuatdContracts);
   T.Run('FromAxisAngle rejects non-finite inputs', @TestFromAxisAngleRejectsNonFiniteInputs);
   T.Run('Interpolation rejects non-finite t', @TestInterpolationRejectsNonFiniteT);
+  T.Run('Interpolation allows finite extrapolation', @TestInterpolationAllowsFiniteExtrapolation);
   T.Summary;
 end.
