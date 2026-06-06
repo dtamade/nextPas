@@ -308,6 +308,7 @@ var
   LFacadePtrStrongCasSection: string;
   LFacadePtrWeakCasSection: string;
   LDefaultTaggedPtrLoadSection: string;
+  LDefaultTaggedPtrStoreSection: string;
   LAtomicWaitSection: string;
   LAtomicNotifyOneSection: string;
   LAtomicNotifyAllSection: string;
@@ -447,6 +448,9 @@ begin
   LDefaultTaggedPtrLoadSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;',
     'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t);');
+  LDefaultTaggedPtrStoreSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t);',
+    'function atomic_tagged_ptr_exchange(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t): atomic_tagged_ptr_t;');
   LAtomicWaitSection := ExtractImplementationSection(LAtomicSource,
     'function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64): Int32;',
     'function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64): Int32;');
@@ -861,6 +865,15 @@ begin
     'default tagged pointer load must use seq_cst');
   CheckNotContains(LDefaultTaggedPtrLoadSection, 'mo_relaxed',
     'default tagged pointer load must not use relaxed');
+  CheckContains(LDefaultTaggedPtrStoreSection, 'atomic_tagged_ptr_store(aObj, aDesired, mo_seq_cst);',
+    'default tagged pointer store must use seq_cst');
+  CheckNotContains(LDefaultTaggedPtrStoreSection, 'mo_relaxed',
+    'default tagged pointer store must not use relaxed');
+  CheckNotContains(LDefaultTaggedPtrStoreSection, 'mo_release',
+    'default tagged pointer store must not use release');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_tagged_ptr_load/store/exchange` and single-order tagged pointer CAS defaults use `mo_seq_cst` unless the caller passes an explicit memory order.',
+    'atomic README must document tagged pointer default-order truth');
   CheckContains(LAtomicWaitSection, 'platform_wait_address32',
     'atomic_wait must delegate to platform wait-address primitive');
   CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
