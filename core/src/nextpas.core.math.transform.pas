@@ -102,6 +102,18 @@ begin
     raise EArgumentError.Create(AMessage);
 end;
 
+procedure RequirePerspectiveValidFov(const AFovYRad: Single); overload; inline;
+begin
+  if AFovYRad >= Single(nextpas.core.math.scalar.PI_VALUE) then
+    raise EArgumentError.Create('Perspective: vertical FOV is invalid');
+end;
+
+procedure RequirePerspectiveValidFov(const AFovYRad: Double); overload; inline;
+begin
+  if AFovYRad >= nextpas.core.math.scalar.PI_VALUE then
+    raise EArgumentError.Create('Perspective: vertical FOV is invalid');
+end;
+
 function Ortho(const ALeft, ARight, ABottom, ATop, ANear, AFar: Single): TMat4f;
 var
   Width: Single;
@@ -172,6 +184,7 @@ begin
   RequirePositive(AFovYRad, 'Perspective: vertical FOV must be positive');
   RequirePositive(AAspect, 'Perspective: aspect must be positive');
   RequirePositive(ANear, 'Perspective: near plane must be positive');
+  RequirePerspectiveValidFov(AFovYRad);
   if AFar <= ANear then
     raise EArgumentError.Create('Perspective: far plane must be greater than near plane');
 
@@ -199,6 +212,7 @@ begin
   RequirePositive(AFovYRad, 'Perspective: vertical FOV must be positive');
   RequirePositive(AAspect, 'Perspective: aspect must be positive');
   RequirePositive(ANear, 'Perspective: near plane must be positive');
+  RequirePerspectiveValidFov(AFovYRad);
   if AFar <= ANear then
     raise EArgumentError.Create('Perspective: far plane must be greater than near plane');
 

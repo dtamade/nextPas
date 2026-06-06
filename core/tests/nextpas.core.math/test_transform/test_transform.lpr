@@ -108,6 +108,16 @@ begin
   Perspective(Double(HALF_PI), Double(1.0), Double(0.0), Double(10.0));
 end;
 
+procedure RaisePerspectiveInvalidFovSingle;
+begin
+  Perspective(Single(PI_VALUE), Single(1.0), Single(1.0), Single(10.0));
+end;
+
+procedure RaisePerspectiveInvalidFovDouble;
+begin
+  Perspective(Double(PI_VALUE * 3.0), Double(1.0), Double(1.0), Double(10.0));
+end;
+
 procedure RaiseCamera2DZeroZoom;
 begin
   Camera2D(Single(0.0), Single(0.0), Single(0.0), 100, 100);
@@ -555,6 +565,10 @@ begin
     'Ortho double zero depth', @RaiseOrthoZeroDepthDouble);
   ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
     'Perspective single far not greater', @RaisePerspectiveFarNotGreaterSingle);
+  ExpectArgumentErrorMessage('Perspective: vertical FOV is invalid',
+    'Perspective single invalid FOV', @RaisePerspectiveInvalidFovSingle);
+  ExpectArgumentErrorMessage('Perspective: vertical FOV is invalid',
+    'Perspective double invalid FOV', @RaisePerspectiveInvalidFovDouble);
   ExpectArgumentErrorMessage('LookAt: eye and target must differ',
     'LookAt single coincident eye/target', @RaiseLookAtCoincidentEyeSingle);
   ExpectArgumentErrorMessage('LookAt: up vector must not be parallel to forward',

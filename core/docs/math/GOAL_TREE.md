@@ -243,10 +243,11 @@ Status:
   `Camera2D`, `LookAt` up-vector magnitude invariance for the same direction, screen-space
   `Camera2D` positive Y down, geometry guard messages for degenerate `Ortho` / `Perspective` /
   `LookAt` / `Camera2D` inputs, exact owner-level `Ortho` finite and zero-extent guard messages,
-  exact owner-level `Perspective` finite/positive parameter guard messages, exact owner-level
-  finite guard messages for `LookAt` eye/target/up inputs plus `Translate` / `Scale` axis inputs,
-  `RotateX/Y/Z` radian inputs, and `Camera2D` center/zoom finite inputs plus positive-zoom
-  validation, invalid projection inputs, and `Translate * Rotate * Scale` local composition.
+  exact owner-level `Perspective` finite/positive parameter guard messages plus the
+  `Perspective: vertical FOV is invalid` contract, exact owner-level finite guard messages for
+  `LookAt` eye/target/up inputs plus `Translate` / `Scale` axis inputs, `RotateX/Y/Z` radian
+  inputs, and `Camera2D` center/zoom finite inputs plus positive-zoom validation, invalid
+  projection inputs, and `Translate * Rotate * Scale` local composition.
 
 ## M5: Easing
 
