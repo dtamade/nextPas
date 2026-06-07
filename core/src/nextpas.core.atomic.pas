@@ -169,7 +169,7 @@ procedure AtomicSignalFence(const AOrder: TMemoryOrder = moSeqCst); inline;
  * @rust_equivalent std::sync::atomic::fence
  * @cpp_equivalent std::atomic_thread_fence
  *}
-procedure atomic_thread_fence(aOrder: memory_order_t);
+procedure atomic_thread_fence(aOrder: memory_order_t = mo_seq_cst);
 
 {**
  * @desc 编译器内存屏障（信号处理器屏障）
@@ -188,7 +188,7 @@ procedure atomic_thread_fence(aOrder: memory_order_t);
  * @rust_equivalent std::sync::atomic::compiler_fence
  * @cpp_equivalent std::atomic_signal_fence
  *}
-procedure atomic_signal_fence(aOrder: memory_order_t);
+procedure atomic_signal_fence(aOrder: memory_order_t = mo_seq_cst);
 
 function atomic_wait(var aObj: Int32; aExpected: Int32; const aTimeoutNs: Int64 = -1): Int32; overload; inline;
 function atomic_wait(var aObj: UInt32; aExpected: UInt32; const aTimeoutNs: Int64 = -1): Int32; overload; inline;

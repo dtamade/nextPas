@@ -75,6 +75,10 @@ Direct `nextpas.core.atomic.types.TAtomicPtr<T>` follows the same load/store/exc
 当前实现要点：
 
 - `atomic_thread_fence(mo_seq_cst)` 通过专用 `atomic_seq_cst_fence` 路由；PPC/PPC64 使用 heavyweight `sync`。
+- No-argument canonical `atomic_thread_fence` and `atomic_signal_fence` overloads default to `mo_seq_cst`.
+- The lower `nextpas.core.atomic.core` fence seam remains explicit-order only; only the public `nextpas.core.atomic` facade provides no-argument `mo_seq_cst` defaults.
+- For `atomic_thread_fence`, `mo_relaxed` is legal and is a no-op; `mo_consume`/`mo_acquire` use `ReadBarrier`, `mo_release` uses `WriteBarrier`, `mo_acq_rel` uses `ReadWriteBarrier`, and `mo_seq_cst` routes to `atomic_seq_cst_fence`.
+- `atomic_signal_fence(mo_relaxed)` is a no-op; all non-relaxed orders call `_compiler_signal_fence` and do not provide hardware visibility.
 - No-argument scalar/pointer `atomic_store` wrappers and `atomic_flag_test` route through `mo_seq_cst`; callers must pass an explicit weaker order when they want relaxed/acquire/release behavior.
 - `atomic_signal_fence` 是 compiler fence seam，不作为硬件可见性保证。
 - x86/x86_64 的 `mo_seq_cst` load 使用 locked/fenced helper，不能退回 plain load + compiler barrier。

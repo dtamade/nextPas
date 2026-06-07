@@ -262,6 +262,8 @@ end;
 
 procedure TestFence;
 begin
+  atomic_thread_fence;
+  atomic_signal_fence;
   AtomicThreadFence(moRelaxed);
   AtomicThreadFence(moAcquire);
   AtomicThreadFence(moRelease);
@@ -338,6 +340,7 @@ var
   LSignalFenceSection: string;
   LSignalFenceHelperSection: string;
   LSeqCstFenceHelperSection: string;
+  LSeqCstFencePpcSection: string;
   LTaggedPtrSection: string;
   LTaggedPtrNextSection: string;
   LTaggedPtrUpdateSection: string;
@@ -477,9 +480,12 @@ begin
   LSignalFenceHelperSection := ExtractImplementationSection(LAtomicCoreSource,
     'procedure _compiler_signal_fence; assembler; nostackframe;',
     'procedure atomic_thread_fence');
-  LSeqCstFenceHelperSection := ExtractSection(LAtomicCoreSource,
+  LSeqCstFenceHelperSection := ExtractImplementationSection(LAtomicCoreSource,
     'procedure atomic_seq_cst_fence;',
     'procedure cpu_pause;');
+  LSeqCstFencePpcSection := ExtractImplementationSection(LAtomicCoreSource,
+    '{$IF DEFINED(CPUPPC) OR DEFINED(CPUPPC64)}',
+    '{$ELSE}');
   LTaggedPtrSection := ExtractImplementationSection(LAtomicCoreSource,
     'function atomic_tagged_ptr(aPtr: Pointer; aTag:',
     'function atomic_tagged_ptr_get_ptr');
@@ -823,16 +829,26 @@ begin
     'atomic core must define a dedicated seq_cst fence helper');
   CheckNotContains(LSignalFenceSection, 'ReadWriteBarrier',
     'atomic_signal_fence must not use hardware fences in live core path');
+  CheckNotContains(LSignalFenceSection, 'WriteBarrier',
+    'atomic_signal_fence must not use write hardware fences in live core path');
+  CheckNotContains(LSignalFenceSection, 'atomic_seq_cst_fence',
+    'atomic_signal_fence seq_cst must remain a compiler-only fence');
+  CheckNotContains(LSignalFenceSection, 'sync',
+    'atomic_signal_fence must not use PPC hardware fences');
+  CheckNotContains(LSignalFenceSection, 'mfence',
+    'atomic_signal_fence must not use x86 hardware fences');
   CheckContains(LSignalFenceSection, '_compiler_signal_fence;',
     'atomic_signal_fence must call a compiler barrier helper in live core path');
   CheckContains(LSignalFenceHelperSection, 'asm',
     'atomic_signal_fence compiler barrier helper must be assembler-based');
   CheckContains(LSignalFenceHelperSection, 'end;',
     'atomic_signal_fence compiler barrier helper must remain empty assembler barrier');
-  CheckContains(LSeqCstFenceHelperSection, 'CPUPPC',
+  CheckContains(LSeqCstFencePpcSection, 'CPUPPC',
     'seq_cst fence helper must specialize PPC/PPC64');
-  CheckContains(LSeqCstFenceHelperSection, 'sync',
+  CheckContains(LSeqCstFencePpcSection, 'sync',
     'seq_cst fence helper must use a heavyweight PPC sync fence');
+  CheckContains(LSeqCstFenceHelperSection, 'ReadWriteBarrier;',
+    'seq_cst fence helper must use a read-write barrier fallback off PPC/PPC64');
   CheckContains(LTaggedPtrSection,
     'raise EArgumentError.Create(''atomic_tagged_ptr: pointer not aligned for low-bit tag packing'')',
     'non-x86 tagged pointer packing must reject misaligned pointers in release builds');
@@ -845,6 +861,42 @@ begin
     'tagged pointer next must wrap back to zero after MAX_TAG');
   CheckContains(LThreadFenceSection, 'mo_seq_cst: atomic_seq_cst_fence;',
     'atomic_thread_fence seq_cst must route through the dedicated seq_cst fence helper');
+  CheckContains(LThreadFenceSection, 'mo_relaxed:;',
+    'atomic_thread_fence relaxed order must be a legal no-op');
+  CheckContains(LThreadFenceSection, 'mo_consume: ReadBarrier;',
+    'atomic_thread_fence consume order must use an acquire-style read barrier');
+  CheckContains(LThreadFenceSection, 'mo_acquire: ReadBarrier;',
+    'atomic_thread_fence acquire order must use a read barrier');
+  CheckContains(LThreadFenceSection, 'mo_release: WriteBarrier;',
+    'atomic_thread_fence release order must use a write barrier');
+  CheckContains(LThreadFenceSection, 'mo_acq_rel: ReadWriteBarrier;',
+    'atomic_thread_fence acq_rel order must use a read-write barrier');
+  CheckContains(LSignalFenceSection, 'mo_relaxed:;',
+    'atomic_signal_fence relaxed order must be a legal no-op');
+  CheckContains(LAtomicSource, 'procedure atomic_thread_fence(aOrder: memory_order_t = mo_seq_cst);',
+    'canonical atomic_thread_fence must expose seq_cst as the no-argument default');
+  CheckContains(LAtomicSource, 'procedure atomic_signal_fence(aOrder: memory_order_t = mo_seq_cst);',
+    'canonical atomic_signal_fence must expose seq_cst as the no-argument default');
+  CheckContains(LAtomicCoreSource, 'procedure atomic_thread_fence(aOrder: memory_order_t);',
+    'atomic core fence seam must keep explicit memory-order input');
+  CheckNotContains(LAtomicCoreSource, 'procedure atomic_thread_fence(aOrder: memory_order_t =',
+    'atomic core fence seam must not grow a no-argument default overload');
+  CheckContains(LAtomicCoreSource, 'procedure atomic_signal_fence(aOrder: memory_order_t);',
+    'atomic core signal fence seam must keep explicit memory-order input');
+  CheckNotContains(LAtomicCoreSource, 'procedure atomic_signal_fence(aOrder: memory_order_t =',
+    'atomic core signal fence seam must not grow a no-argument default overload');
+  CheckContains(LAtomicDocsReadme,
+    'No-argument canonical `atomic_thread_fence` and `atomic_signal_fence` overloads default to `mo_seq_cst`.',
+    'atomic README must document canonical fence default-order truth');
+  CheckContains(LAtomicDocsReadme,
+    'The lower `nextpas.core.atomic.core` fence seam remains explicit-order only; only the public `nextpas.core.atomic` facade provides no-argument `mo_seq_cst` defaults.',
+    'atomic README must document facade-vs-core fence default boundary');
+  CheckContains(LAtomicDocsReadme,
+    'For `atomic_thread_fence`, `mo_relaxed` is legal and is a no-op; `mo_consume`/`mo_acquire` use `ReadBarrier`, `mo_release` uses `WriteBarrier`, `mo_acq_rel` uses `ReadWriteBarrier`, and `mo_seq_cst` routes to `atomic_seq_cst_fence`.',
+    'atomic README must document atomic_thread_fence order mapping');
+  CheckContains(LAtomicDocsReadme,
+    '`atomic_signal_fence(mo_relaxed)` is a no-op; all non-relaxed orders call `_compiler_signal_fence` and do not provide hardware visibility.',
+    'atomic README must document atomic_signal_fence compiler-only mapping');
   CheckContains(LAtomicCompatSource, 'Legacy PascalCase compatibility facade mirrored for older call sites.',
     'compat unit must document PascalCase compatibility ownership');
   CheckContains(LAtomicCompatSource, 'function AtomicLoad32',
