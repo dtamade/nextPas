@@ -581,7 +581,7 @@ benchmark harness. They are intentionally not a durable cross-run ranking.
 
 ## Run the Full-Chain Keep-Alive Benchmark
 
-Run a filtered plaintext full-chain row:
+Run a filtered full-chain row:
 
 ```sh
 NEXTPAS_BENCH_MAX_ITERS=1000 \
@@ -594,13 +594,24 @@ connection, sends requests, reads complete responses, and reports stable
 markers:
 
 - `operation=http.fullchain.keepalive`
-- `workload=<plaintext|json|echo_1k|sink_16k|param_route>`
+- `workload=<direct_root|plaintext|json|echo_1k|sink_16k|param_route>`
 - `iterations`
 - `completed`
 - `elapsed_ns`
 - `ns/op`
 - `req/s`
 - `client_read_mode=buffered`
+
+The two smallest full-chain workloads now split router dispatch from the rest
+of the keep-alive server path:
+
+- `direct_root` keeps the same `GET /` fixed-response shape but intercepts it
+  in an outer handler before router dispatch.
+- `plaintext` still sends `GET /` through the router path.
+
+The filter is still substring-based, so the direct workload is intentionally
+named `direct_root` rather than `direct_plaintext`; this keeps
+`NEXTPAS_BENCH_FILTER=plaintext` unambiguous.
 
 Local focused row from 2026-06-05:
 
@@ -611,6 +622,18 @@ Local focused row from 2026-06-05:
 The clean build for this row emitted two existing FPC `Note:` lines from
 `nextpas.core.text.format` and the translated llhttp inline call. It emitted no
 FPC `Warning:` lines.
+
+Fresh local smoke rows from 2026-06-07:
+
+| workload | iterations | completed | elapsed_ns | ns/op | req/s |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| direct_root | 1000 | 1000 | 37200928 | 37200.9 | 26881 |
+| plaintext | 1000 | 1000 | 33733646 | 33733.6 | 29644 |
+
+Treat these as single-run harness proof, not stable ranking evidence. The
+durable conclusion is that `bench_fullchain` can now isolate a no-router
+direct-handler path from the router path without reintroducing filter
+ambiguity.
 
 ## Optimization Evidence: Full-Chain Benchmark Buffered Client Read
 

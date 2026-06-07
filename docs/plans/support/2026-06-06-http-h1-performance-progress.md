@@ -11452,3 +11452,56 @@ Hello from nextPas!
   - review the residual non-equivalent commits on `codex/compiler-truth-audit-main-20260603`
   - decide which ones still belong on the absorb candidate
   - only after that design a safe way to bring absorb back toward the real dirty C8 branch
+
+## Session: 2026-06-07 full-chain direct-root isolation slice
+
+- **Status:** completed.
+- Objective:
+  - split `bench_fullchain`'s smallest keep-alive row into a direct-handler
+    path and a router path
+  - keep the benchmark focused on runtime/socket-plus-handler cost, not a
+    bundled router/non-router mixture
+  - avoid introducing ambiguous substring-filter behavior while adding the new
+    workload
+- Scope and safety:
+  - touched only `bench_fullchain`, the benchmark focused test, HTTP benchmark
+    docs, and this support evidence
+  - did not touch public HTTP API, H1 parser/runtime behavior, lower-layer
+    modules, comparator binaries, or generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `57 total, 56 passed, 1 failed`
+    - failed at `bench_fullchain direct plaintext smoke`
+    - benchmark printed `No matching full-chain scenarios.`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now wraps the router with an outer handler
+  - `Host: direct` on `GET /` takes a direct fixed-response path before router
+    dispatch
+  - the routed plaintext row now uses `Host: router`, so both small rows keep
+    the same request-target/body shape while differing mainly in router
+    involvement
+  - workload name settled on `direct_root` instead of `direct_plaintext` to
+    avoid substring-filter overlap with `plaintext`
+  - `test_http_benchmarks` now locks both the new `direct_root` smoke and that
+    `NEXTPAS_BENCH_FILTER=plaintext` does not accidentally emit the direct row
+- Focused verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `57 total, 57 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Benchmark evidence:
+  - `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=direct_root make -C core/benchmarks/nextpas.core.http/bench_fullchain clean run`
+    - `workload=direct_root`
+    - `completed=1000`
+    - `ns/op=37200.9`
+    - `req/s=26881`
+  - `NEXTPAS_BENCH_MAX_ITERS=1000 NEXTPAS_BENCH_FILTER=plaintext make -C core/benchmarks/nextpas.core.http/bench_fullchain clean run`
+    - `workload=plaintext`
+    - `completed=1000`
+    - `ns/op=33733.6`
+    - `req/s=29644`
+- Outcome:
+  - the harness now has a router-free full-chain row alongside the routed
+    plaintext row
+  - the meaningful product of this slice is cost-center separation and filter
+    hygiene, not a single-run performance ranking

@@ -29,6 +29,8 @@ const
   DEFAULT_ITERATIONS = 5000;
   BENCH_MAX_ITERS_ENV = 'NEXTPAS_BENCH_MAX_ITERS';
   BENCH_FILTER_ENV = 'NEXTPAS_BENCH_FILTER';
+  ROUTER_HOST = 'router';
+  DIRECT_HOST = 'direct';
 
 type
   TScenarioResult = record
@@ -43,6 +45,14 @@ var
   GPort: UInt16;
   GIterations: Int64;
   GFilter: string;
+
+procedure WritePlaintextResponse(const AW: IHttpResponseWriter);
+begin
+  AW.GetHeaders.Set_('content-type', 'text/plain');
+  AW.GetHeaders.Set_('content-length', '13');
+  AW.WriteHeader(HTTP_STATUS_OK);
+  AW.Write(PAnsiChar('Hello, World!')^, 13);
+end;
 
 function ConfiguredIterations: Int64;
 var
@@ -87,19 +97,18 @@ var
   LRouter: THttpRouter;
   LHandle: TPlatformThreadHandle;
   LBody1K: string;
+  LRouterHandler: IHttpHandler;
 begin
   SetLength(LBody1K, 1024);
   FillChar(LBody1K[1], 1024, Ord('x'));
 
   LRouter := THttpRouter.Create;
+  LRouterHandler := LRouter as IHttpHandler;
 
   { Plaintext }
   LRouter.Get('/', procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
   begin
-    AW.GetHeaders.Set_('content-type', 'text/plain');
-    AW.GetHeaders.Set_('content-length', '13');
-    AW.WriteHeader(HTTP_STATUS_OK);
-    AW.Write(PAnsiChar('Hello, World!')^, 13);
+    WritePlaintextResponse(AW);
   end);
 
   { JSON }
@@ -157,7 +166,16 @@ begin
     AW.Write(LBody[1], SizeUInt(Length(LBody)));
   end);
 
-  GServer := THttpServer.Create(LRouter as IHttpHandler, THttpServerOptions.Default);
+  GServer := THttpServer.Create(HandlerFunc(
+    procedure(const AReq: IHttpRequest; const AW: IHttpResponseWriter)
+    begin
+      if AReq.Headers.Get('host') = DIRECT_HOST then
+      begin
+        WritePlaintextResponse(AW);
+        Exit;
+      end;
+      LRouterHandler.ServeHTTP(AReq, AW);
+    end), THttpServerOptions.Default);
   platform_thread_create(LHandle, @ServerThread, nil);
   while not GServer.IsRunning do
     platform_thread_sleep_ns(1000000);
@@ -290,6 +308,7 @@ begin
 end;
 
 var
+  LDirectPlaintextReq: string;
   LBody1K: string;
   LEchoReq: string;
   LBody16K: string;
@@ -315,9 +334,17 @@ begin
   WriteLn('  Server listening on port ', GPort);
   WriteLn;
 
+  { Scenario 1: Plaintext without router dispatch }
+  LDirectPlaintextReq :=
+    'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
+  LResult := RunScenario('direct_root',
+    'Direct root (GET /, no router)', LDirectPlaintextReq, 50);
+  if LResult.ElapsedNs > 0 then
+    Inc(LScenariosRun);
+
   { Scenario 1: Plaintext }
   LResult := RunScenario('plaintext', 'Plaintext (GET /)',
-    'GET / HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10, 50);
+    'GET / HTTP/1.1'#13#10'Host: ' + ROUTER_HOST + #13#10'Content-Length: 0'#13#10#13#10, 50);
   if LResult.ElapsedNs > 0 then
     Inc(LScenariosRun);
 

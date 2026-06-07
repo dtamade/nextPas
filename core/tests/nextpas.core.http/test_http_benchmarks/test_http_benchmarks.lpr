@@ -539,13 +539,14 @@ begin
   CheckContains(AOutput, 'ops/s', 'H1 outbound trydrain ops/s marker');
 end;
 
-procedure CheckFullchainBenchmarkOutput(const AOutput: string);
+procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
+  AFilter: string);
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
   CheckContains(AOutput, 'client_read_mode=buffered',
     'fullchain client read mode marker');
-  CheckContains(AOutput, 'workload=plaintext',
+  CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
   CheckContains(AOutput, 'iterations=' + FullchainSmokeIterations,
     'fullchain iterations marker');
@@ -554,7 +555,7 @@ begin
   CheckContains(AOutput, 'elapsed_ns=', 'fullchain elapsed marker');
   CheckContains(AOutput, 'ns/op=', 'fullchain ns/op marker');
   CheckContains(AOutput, 'req/s=', 'fullchain req/s marker');
-  CheckContains(AOutput, 'bench_filter=plaintext',
+  CheckContains(AOutput, 'bench_filter=' + AFilter,
     'fullchain filter marker');
 end;
 
@@ -1371,7 +1372,37 @@ begin
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain plaintext smoke exit code: ' + LOutput);
-  CheckFullchainBenchmarkOutput(LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'plaintext', 'plaintext');
+  CheckNotContains(LOutput, 'workload=direct_root',
+    'bench_fullchain plaintext filter must not match direct_root');
+end;
+
+procedure TestBenchFullchainDirectPlaintextSmoke;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LBenchDir := PathJoin(LRootDir, BenchFullchainRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain direct plaintext build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveBenchFullchainBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath), 'bench_fullchain direct plaintext binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + FullchainSmokeIterations,
+     BenchFilterEnvName + '=direct_root'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'bench_fullchain direct plaintext smoke exit code: ' + LOutput);
+  CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root');
 end;
 
 procedure TestBenchFullchainRejectsNoMatchFilter;
@@ -2668,6 +2699,8 @@ begin
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',
     @TestBenchFullchainPlaintextSmoke);
+  T.Run('bench_fullchain direct plaintext smoke',
+    @TestBenchFullchainDirectPlaintextSmoke);
   T.Run('bench_fullchain rejects no-match filter',
     @TestBenchFullchainRejectsNoMatchFilter);
   T.Run('HTTP top-level Pascal benchmark projects have Makefiles',

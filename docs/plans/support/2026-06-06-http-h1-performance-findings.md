@@ -5023,3 +5023,24 @@
   - 不确定，需要继续审查：
     - `codex/compiler-truth-audit-main-20260603`
     - `fix/sema-include-resolver`
+
+## 2026-06-07 full-chain direct-root isolation findings
+
+- `bench_fullchain` 之前最小的 `plaintext` row 仍然经过 router，所以它并不能单独
+  表示“runtime/socket + fixed handler response”成本；router dispatch 一直混在里边。
+- 给 full-chain harness 增加 direct path 时，最先暴露出的不是 runtime bug，而是
+  benchmark truth bug：
+  - 如果 workload 叫 `direct_plaintext`，substring filter 会让
+    `NEXTPAS_BENCH_FILTER=plaintext` 同时命中两条 row。
+  - 这会污染 filter 语义，比“有没有新数字”更值得先修。
+- 最终方案选择：
+  - 不改 substring filter 机制本身；
+  - 新 workload 命名为 `direct_root`，避免和 `plaintext` 重叠；
+  - 让 routed row 使用 `Host: router`，direct row 使用 `Host: direct`，
+    两者都保持 `GET /` + fixed-length plaintext response，差异主要落在是否经过 router。
+- focused gate 现在直接锁住两件事：
+  - `direct_root` row 确实存在；
+  - `NEXTPAS_BENCH_FILTER=plaintext` 不会再误发 `workload=direct_root`。
+- 这轮最重要的产出不是单次 `ns/op` 高低，而是：
+  - full-chain benchmark 首次具备 router-free 对照 row；
+  - filter 语义没有因为新增 workload 退化成模糊匹配假证据。
