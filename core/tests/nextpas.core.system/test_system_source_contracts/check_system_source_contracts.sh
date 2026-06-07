@@ -83,6 +83,16 @@ require_repo_not_uses_unit() {
   fi
 }
 
+reject_repo_uses_unit_under() {
+  local root="$1"
+  local forbidden_unit="$2"
+  while IFS= read -r file_path; do
+    if list_pascal_uses_units "$file_path" | grep -Fxi --quiet "$forbidden_unit"; then
+      fail "${file_path#$REPO_ROOT/} must not directly use deferred unit: $forbidden_unit"
+    fi
+  done < <(find "$root" -type f \( -name '*.pas' -o -name '*.lpr' \))
+}
+
 require_file "docs/system/README.md"
 require_file "docs/system/rtl-mapping.md"
 require_file "docs/system/goal-tree.md"
@@ -287,6 +297,9 @@ done
 [[ ! -e "$CORE_ROOT/src/System.pas" ]] || fail "must not create bare FPC-conflicting System.pas"
 [[ ! -e "$CORE_ROOT/src/system.pas" ]] || fail "must not create bare FPC-conflicting system.pas"
 [[ ! -e "$CORE_ROOT/src/nextpas.core.system.classes.pas" ]] || fail "S4 deferred: no live nextpas.core.system.classes unit expected yet"
+reject_repo_uses_unit_under "$REPO_ROOT/compiler" "nextpas.core.system.classes"
+reject_repo_uses_unit_under "$CORE_ROOT/src" "nextpas.core.system.classes"
+reject_repo_uses_unit_under "$CORE_ROOT/tests" "nextpas.core.system.classes"
 
 require_repo_file() {
   local path="$1"
@@ -380,6 +393,18 @@ reject_token "src/nextpas.core.system.typinfo.pas" "TPropInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "TTypeData"
 reject_token "src/nextpas.core.system.typinfo.pas" "function TypeInfo"
 reject_token "src/nextpas.core.system.typinfo.pas" "function GetTypeKind"
+
+require_token "src/nextpas.core.system.pas" "procedure FreeAndNil"
+require_token "src/nextpas.core.system.pas" "procedure SafeFree"
+require_token "src/nextpas.core.system.pas" "function Supports"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.FreeAndNil"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.SafeFree"
+require_token "src/nextpas.core.system.pas" "nextpas.core.base.utils.Supports"
+require_token "src/nextpas.core.system.pas" "EConvertError = nextpas.core.exception.EConvertError;"
+require_token "src/nextpas.core.system.pas" "EAssertionFailed = nextpas.core.exception.EAssertionFailed;"
+reject_token "src/nextpas.core.system.pas" "SysUtils"
+reject_token "src/nextpas.core.system.pas" "TypInfo"
+reject_token "src/nextpas.core.system.pas" "Classes"
 
 require_token "src/nextpas.core.system.sysutils.pas" "unit nextpas.core.system.sysutils;"
 require_token "src/nextpas.core.system.sysutils.pas" "nextpas.core.exception"
