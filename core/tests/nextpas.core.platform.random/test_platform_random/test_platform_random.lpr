@@ -65,6 +65,11 @@ begin
   Check(platform_random_bytes(nil, 0) = 0, 'len=0 returns 0');
 end;
 
+procedure TestNilNonZero;
+begin
+  CheckEqual(Int64(-1), Int64(platform_random_bytes(nil, 1)), 'nil nonzero returns -1');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.platform.random');
   T.Run('fill 32 bytes non-zero', @TestFill32);
@@ -72,5 +77,6 @@ begin
   T.Run('fill 1 byte', @TestFill1);
   T.Run('fill 4096 bytes', @TestFill4096);
   T.Run('zero length', @TestZeroLen);
+  T.Run('nil nonzero', @TestNilNonZero);
   T.Summary;
 end.
