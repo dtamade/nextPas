@@ -15,6 +15,7 @@ var
   Instr: THIRInstr;
   OperandType: THIRTypeRec;
   LlvmText: string;
+  ReleaseHelperSlice: string;
   FoundContract: Boolean;
   FoundOwnedDestroy: Boolean;
   FoundHeapRelease: Boolean;
@@ -70,6 +71,20 @@ begin
   if Offset = 0 then
     Exit(0);
   Result := AStart + Offset - 1;
+end;
+
+function ExtractDefinitionSlice(const AText, AHeaderNeedle: string): string;
+var
+  StartPos, EndPos: LongInt;
+begin
+  Result := '';
+  StartPos := Pos(AHeaderNeedle, AText);
+  if StartPos = 0 then
+    Exit;
+  EndPos := FindAfter(LineEnding + '}', AText, StartPos);
+  if EndPos = 0 then
+    Exit;
+  Result := Copy(AText, StartPos, EndPos - StartPos + Length(LineEnding + '}'));
 end;
 
 begin
@@ -211,6 +226,14 @@ begin
       LlvmText);
     if ReleaseHelperPos = 0 then
       Fail('missing-object-free-llvm-release-helper');
+    ReleaseHelperSlice := ExtractDefinitionSlice(LlvmText,
+      'define internal void @np_object_free_release(ptr %obj)');
+    if ReleaseHelperSlice = '' then
+      Fail('missing-object-free-release-helper-slice');
+    if Pos('call void @np_dynarray_release(', ReleaseHelperSlice) <> 0 then
+      Fail('object-free-release-helper-must-stay-field-agnostic');
+    if Pos('@np_object_dynarray_cleanup_', ReleaseHelperSlice) <> 0 then
+      Fail('object-free-release-helper-must-not-walk-fields');
     if FindAfter('%raw = getelementptr i8, ptr %obj, i64 -24', LlvmText,
       ReleaseHelperPos) = 0 then
       Fail('missing-object-free-release-header-base');

@@ -36,19 +36,6 @@ const
     'begin' + LineEnding +
     'end.';
 
-  FieldSource =
-    'program test;' + LineEnding +
-    'type TWorker = class' + LineEnding +
-    '  FieldArr: array of Integer;' + LineEnding +
-    '  procedure Touch;' + LineEnding +
-    'end;' + LineEnding +
-    'procedure TWorker.Touch;' + LineEnding +
-    'begin' + LineEnding +
-    '  SetLength(FieldArr, 4);' + LineEnding +
-    'end;' + LineEnding +
-    'begin' + LineEnding +
-    'end.';
-
   StringSource =
     'program test;' + LineEnding +
     'var A, B, C: string;' + LineEnding +
@@ -211,23 +198,6 @@ begin
   end;
 end;
 
-procedure AssertFieldPathPreserved;
-var
-  Model: TSemanticModel;
-  Node: TTypedHirNode;
-begin
-  Model := BuildModel(FieldSource);
-  try
-    if Model = nil then
-      Fail('field-model-nil');
-    if not FindFirstNodeByKindAndDisplayName(Model, 'assign-arr-elem-runtime',
-      '__field_setlength__', Node) then
-      Fail('missing-field-setlength-path');
-  finally
-    Model.Free;
-  end;
-end;
-
 procedure AssertStringPathUntouched;
 var
   Model: TSemanticModel;
@@ -253,7 +223,7 @@ end;
 begin
   AssertOwnedBorrowedContract;
   AssertBorrowedResizeContract;
-  AssertFieldPathPreserved;
+  { C6-H2 moves field dynarray contracts into test_hir_field_dynarray_contract. }
   AssertStringPathUntouched;
   WriteLn('hir-dynarray-release-contract-status=pass');
 end.

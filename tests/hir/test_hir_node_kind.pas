@@ -44,6 +44,7 @@ begin
   if ParseHirNodeKind('write-str-var-runtime') <> hnkWriteStrVarRuntime then Fail('write-str-var-runtime');
   if ParseHirNodeKind('write-call') <> hnkWriteCall then Fail('write-call');
   if ParseHirNodeKind('setlength-arr-runtime') <> hnkSetLengthArrRuntime then Fail('setlength-arr-runtime');
+  if ParseHirNodeKind('setlength-field-arr-runtime') = hnkUnknown then Fail('setlength-field-arr-runtime');
   if ParseHirNodeKind('var-decl-arr-borrowed-runtime') = hnkUnknown then Fail('var-decl-arr-borrowed-runtime');
   if ParseHirNodeKind('dynarray-cleanup-runtime') = hnkUnknown then Fail('dynarray-cleanup-runtime');
   if ParseHirNodeKind('assign-arr-elem-runtime') <> hnkAssignArrElemRuntime then Fail('assign-arr-elem-runtime');
