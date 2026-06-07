@@ -3533,6 +3533,44 @@ begin
     'H1 parser fast-headers get-all filter skips unrelated metadata row');
 end;
 
+procedure TestH1ParserBenchmarkFastHeadersHasFilterEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser fast-headers has filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'H1 parser fast-headers has filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=fast headers has accept'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser fast-headers has filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=fast headers has accept',
+    'H1 parser fast-headers has filter marker');
+  CheckContains(LOutput, 'adapter cost: fast headers has accept',
+    'H1 parser fast-headers has filtered row');
+  CheckNotContains(LOutput, 'adapter cost: fast headers get host only',
+    'H1 parser fast-headers has filter skips single-value row');
+  CheckNotContains(LOutput, 'adapter cost: fast headers get all accept',
+    'H1 parser fast-headers has filter skips multi-value row');
+  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
+    'H1 parser fast-headers has filter skips unrelated metadata row');
+end;
+
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;
 var
   LRootDir: string;
@@ -4047,6 +4085,8 @@ begin
     @TestH1ParserBenchmarkFastHeadersFilterEnv);
   T.Run('H1 parser benchmark fast-headers get-all filter env',
     @TestH1ParserBenchmarkFastHeadersGetAllFilterEnv);
+  T.Run('H1 parser benchmark fast-headers has filter env',
+    @TestH1ParserBenchmarkFastHeadersHasFilterEnv);
   T.Run('C llhttp comparator small smoke when configured',
     @TestCllhttpComparatorSmallSmokeWhenConfigured);
   T.Run('C llhttp comparator max iterations env when configured',
