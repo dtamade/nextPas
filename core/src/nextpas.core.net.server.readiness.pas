@@ -301,6 +301,7 @@ begin
     RegisterPollTarget(LTarget);
     Result := True;
   except
+    CloseServerOwnedTcpConn(AConn);
     LTarget.Free;
     raise;
   end;

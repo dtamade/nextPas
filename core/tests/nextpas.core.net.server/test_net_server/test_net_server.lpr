@@ -6,6 +6,7 @@ uses
   {$IFDEF UNIX}cthreads,{$ENDIF}
   Classes,
   SysUtils,
+  StrUtils,
   nextpas.core.base,
   nextpas.core.errors,
   nextpas.core.testing,
@@ -341,6 +342,40 @@ begin
   finally
     LLines.Free;
   end;
+end;
+
+procedure CheckSourceContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(ANeedle, ASource) > 0, AMessage);
+end;
+
+procedure CheckSourceNotContains(const ASource, ANeedle, AMessage: string);
+begin
+  Check(Pos(ANeedle, ASource) = 0, AMessage);
+end;
+
+procedure CheckSourceOrder(const ASource, AFirstNeedle, ASecondNeedle,
+  AMessage: string);
+var
+  LFirst: SizeInt;
+  LSecond: SizeInt;
+begin
+  LFirst := Pos(AFirstNeedle, ASource);
+  LSecond := PosEx(ASecondNeedle, ASource, LFirst + Length(AFirstNeedle));
+  Check((LFirst > 0) and (LSecond > LFirst), AMessage);
+end;
+
+function ExtractSourceRange(const ASource, AStartNeedle, AEndNeedle,
+  AMessage: string): string;
+var
+  LStart: SizeInt;
+  LEnd: SizeInt;
+begin
+  LStart := Pos(AStartNeedle, ASource);
+  Check(LStart > 0, AMessage + ' start marker');
+  LEnd := PosEx(AEndNeedle, ASource, LStart + Length(AStartNeedle));
+  Check(LEnd > LStart, AMessage + ' end marker');
+  Result := Copy(ASource, LStart, LEnd - LStart);
 end;
 
 var
@@ -1650,6 +1685,180 @@ begin
   {$ENDIF}
 end;
 
+procedure TestReadinessConsumerUsesPlatformPollerSourceContract;
+var
+  LSource: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.net.server.readiness.pas');
+
+  CheckSourceContains(LSource, 'nextpas.core.platform.io.base',
+    'readiness consumer should use platform io base contract');
+  CheckSourceContains(LSource, 'nextpas.core.platform.io',
+    'readiness consumer should use platform poller facade');
+  CheckSourceNotContains(LSource, 'nextpas.core.io.poller',
+    'readiness consumer must not depend on completion poller');
+  CheckSourceNotContains(LSource, 'nextpas.core.io.reactor',
+    'readiness consumer must not depend on completion reactor');
+  CheckSourceNotContains(LSource, 'iocp',
+    'readiness consumer must not mention IOCP/proactor implementation');
+
+  CheckSourceContains(LSource, 'platform_poller_create',
+    'readiness consumer should create readiness poller through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_enable_wake',
+    'readiness consumer should enable wake through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_add',
+    'readiness consumer should add readiness interests through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_modify',
+    'readiness consumer should modify readiness interests through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_remove',
+    'readiness consumer should remove readiness interests through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_wait',
+    'readiness consumer should wait through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_wake',
+    'readiness consumer should wake through platform facade');
+  CheckSourceContains(LSource, 'platform_poller_drain_wake',
+    'readiness consumer should drain wake through platform facade');
+end;
+
+procedure TestReadinessUserDataPreservationSourceContract;
+var
+  LSource: string;
+  LWaitLoop: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.net.server.readiness.pas');
+
+  CheckSourceContains(LSource, 'const wake_userdata = pointer(ptruint(1));',
+    'wake userdata should be a stable non-nil sentinel');
+  CheckSourceContains(LSource, 'platform_poller_enable_wake(fpoller, wake_userdata)',
+    'wake registration should preserve the wake sentinel');
+  CheckSourceContains(LSource, '[pereadable], nil);',
+    'listener registration should preserve nil userdata');
+  CheckSourceContains(LSource,
+    'platform_poller_add(fpoller, ltarget.sockethandle,',
+    'session registration should preserve target pointer userdata');
+
+  LWaitLoop := ExtractSourceRange(LSource,
+    'for li := 0 to lcount - 1 do',
+    'handleexpiredpolltargets;',
+    'readiness wait loop');
+  CheckSourceOrder(LWaitLoop, 'lentries[li].userdata = wake_userdata',
+    'platform_poller_drain_wake(fpoller);',
+    'wake userdata should be drained before completion dispatch');
+  CheckSourceOrder(LWaitLoop, 'lentries[li].userdata = wake_userdata',
+    'drainpendingcompletions;',
+    'wake userdata should dispatch queued completions');
+  CheckSourceOrder(LWaitLoop, 'lentries[li].userdata = nil',
+    'handlelistenerready(ahandler);',
+    'nil userdata should be treated as listener readiness');
+  CheckSourceOrder(LWaitLoop, 'ltarget := ttcpserverpollsessiontarget(lentries[li].userdata);',
+    'handlepolltarget(ltarget, lentries[li].revents);',
+    'non-sentinel non-nil userdata should be treated as session target pointer');
+end;
+
+procedure TestReadinessEmptyInterestSourceContract;
+var
+  LSource: string;
+  LRegister: string;
+  LHandle: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.net.server.readiness.pas');
+
+  CheckSourceContains(LSource, 'handlepolltarget(litems[li].target, []);',
+    'completion wake should re-enter session with empty readiness events');
+  CheckSourceContains(LSource, 'handlepolltarget(lexpired[li], []);',
+    'deadline wake should re-enter session with empty readiness events');
+
+  LRegister := ExtractSourceRange(LSource,
+    'function ttcpreadinessserver.tryregisterpolldrivensession',
+    'procedure ttcpreadinessserver.enqueuecompletion',
+    'poll target registration');
+  CheckSourceOrder(LRegister, 'if ltarget.currentevents <> [] then',
+    'acontext.bindtarget(ltarget);',
+    'empty-interest targets should bind even when no socket interest is registered');
+  CheckSourceOrder(LRegister, 'acontext.bindtarget(ltarget);',
+    'registerpolltarget(ltarget);',
+    'empty-interest targets should remain owned by registry after context binding');
+
+  LHandle := ExtractSourceRange(LSource,
+    'procedure ttcpreadinessserver.handlepolltarget',
+    'procedure ttcpreadinessserver.handlelistenerready',
+    'poll target handler');
+  CheckSourceContains(LHandle, 'if lnextevents = [] then',
+    'empty next events should be handled as a legal wait state');
+  CheckSourceOrder(LHandle, 'platform_poller_remove(fpoller, atarget.sockethandle);',
+    'atarget.setcurrentevents(lnextevents);',
+    'empty-interest transition should remove readiness interest before recording empty state');
+end;
+
+procedure TestReadinessWakeFallbackSourceContract;
+var
+  LSource: string;
+  LShutdown: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.net.server.readiness.pas');
+  LShutdown := ExtractSourceRange(LSource,
+    'procedure ttcpreadinessserver.shutdown',
+    'function ttcpreadinessserver.localaddr',
+    'readiness shutdown');
+
+  CheckSourceOrder(LShutdown, 'frunning := false;',
+    'lwoken := platform_poller_wake(fpoller) = 0;',
+    'shutdown should first request the regular readiness wake contract');
+  CheckSourceOrder(LShutdown, 'if not lwoken then',
+    'lwake := nettcpconnect(laddr.ip, laddr.port);',
+    'listener-connect wake should remain a fallback path only');
+  CheckSourceOrder(LShutdown, 'lwake.close;',
+    'flistener.close;',
+    'fallback connection should be closed before listener shutdown continues');
+end;
+
+procedure TestReadinessPollTargetLifecycleSourceContract;
+var
+  LSource: string;
+  LRegister: string;
+  LHandle: string;
+  LDoneBlock: string;
+  LExceptBlock: string;
+begin
+  LSource := LoadSourceText('src/nextpas.core.net.server.readiness.pas');
+
+  LRegister := ExtractSourceRange(LSource,
+    'function ttcpreadinessserver.tryregisterpolldrivensession',
+    'procedure ttcpreadinessserver.enqueuecompletion',
+    'poll target registration lifecycle');
+  CheckSourceContains(LRegister, 'closeserverownedtcpconn(aconn);',
+    'registration failure should close the server-owned connection before propagating');
+
+  LHandle := ExtractSourceRange(LSource,
+    'procedure ttcpreadinessserver.handlepolltarget',
+    'procedure ttcpreadinessserver.handlelistenerready',
+    'poll target lifecycle handler');
+  LDoneBlock := ExtractSourceRange(LHandle,
+    'if lresult = tsprdone then',
+    'if lnextevents <> atarget.currentevents then',
+    'done lifecycle branch');
+  CheckSourceOrder(LDoneBlock, 'platform_poller_remove(fpoller, atarget.sockethandle);',
+    'unregisterpolltarget(atarget);',
+    'done branch should remove readiness interest before unregistering target');
+  CheckSourceOrder(LDoneBlock, 'unregisterpolltarget(atarget);',
+    'closeserverownedtcpconn(atarget.connection);',
+    'done branch should unregister before closing server-owned connection');
+  CheckSourceOrder(LDoneBlock, 'closeserverownedtcpconn(atarget.connection);',
+    'atarget.free;',
+    'done branch should close connection before releasing target owner');
+
+  LExceptBlock := Copy(LHandle, Pos('except', LHandle), MaxInt);
+  CheckSourceOrder(LExceptBlock, 'platform_poller_remove(fpoller, atarget.sockethandle);',
+    'unregisterpolltarget(atarget);',
+    'exception branch should remove readiness interest before unregistering target');
+  CheckSourceOrder(LExceptBlock, 'unregisterpolltarget(atarget);',
+    'closeserverownedtcpconn(atarget.connection);',
+    'exception branch should unregister before closing server-owned connection');
+  CheckSourceOrder(LExceptBlock, 'closeserverownedtcpconn(atarget.connection);',
+    'atarget.free;',
+    'exception branch should close connection before releasing target owner');
+end;
+
 procedure TestCustomBackendFactoryOverridesSelection;
 var
   LOldFactory: TTcpServerFactory;
@@ -2189,6 +2398,16 @@ begin
     @TestBuiltInThreadedBackendFactoryExists);
   T.Run('Kqueue backend source contract',
     @TestKqueueBackendSourceContract);
+  T.Run('Readiness consumer uses platform poller source contract',
+    @TestReadinessConsumerUsesPlatformPollerSourceContract);
+  T.Run('Readiness userdata preservation source contract',
+    @TestReadinessUserDataPreservationSourceContract);
+  T.Run('Readiness empty-interest source contract',
+    @TestReadinessEmptyInterestSourceContract);
+  T.Run('Readiness wake fallback source contract',
+    @TestReadinessWakeFallbackSourceContract);
+  T.Run('Readiness poll target lifecycle source contract',
+    @TestReadinessPollTargetLifecycleSourceContract);
   T.Run('Custom backend factory overrides selection',
     @TestCustomBackendFactoryOverridesSelection);
   T.Run('Missing backend factory raises not supported',
