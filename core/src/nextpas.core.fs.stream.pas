@@ -205,11 +205,15 @@ begin
 end;
 
 procedure TFile.Close;
+var
+  LResult: Int32;
 begin
   if FClosed then
     Exit;
+  LResult := platform_file_close(FHandle);
   FClosed := True;
-  platform_file_close(FHandle);
+  if LResult <> 0 then
+    RaiseFsError(LResult, 'close', FName);
 end;
 
 function TFile.GetSize: Int64;

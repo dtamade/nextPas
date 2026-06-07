@@ -307,6 +307,22 @@ begin
   Check(LGot, 'ENotFoundError raised');
 end;
 
+procedure TestCloseInvalidHandleRaises;
+var
+  LF: IFile;
+  LGot: Boolean;
+begin
+  LF := FsFromHandle(-1, 'invalid-close-handle');
+  LGot := False;
+  try
+    LF.Close;
+  except
+    on E: EIOError do
+      LGot := True;
+  end;
+  Check(LGot, 'Close raises EIOError for invalid handle');
+end;
+
 procedure TestAppend;
 var
   LF: IFile;
@@ -467,6 +483,7 @@ begin
     T.Run('PathJoin long', @TestPathLong);
 
     T.Run('Open not found', @TestOpenNotFound);
+    T.Run('Close invalid handle raises', @TestCloseInvalidHandleRaises);
 
     T.Run('Append', @TestAppend);
     T.Run('Exclusive create', @TestExclusive);
