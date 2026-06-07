@@ -53,6 +53,9 @@ function FreeLibrary(hLibModule: HMODULE): BOOL; stdcall; external 'kernel32' na
 function VirtualAlloc(lpAddress: Pointer; dwSize: PtrUInt; flAllocationType: DWORD; flProtect: DWORD): Pointer; stdcall; external 'kernel32' name 'VirtualAlloc';
 function VirtualFree(lpAddress: Pointer; dwSize: PtrUInt; dwFreeType: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualFree';
 function VirtualProtect(lpAddress: Pointer; dwSize: PtrUInt; flNewProtect: DWORD; var lpflOldProtect: DWORD): BOOL; stdcall; external 'kernel32' name 'VirtualProtect';
+function VirtualLock(lpAddress: Pointer; dwSize: PtrUInt): BOOL; stdcall; external 'kernel32' name 'VirtualLock';
+function VirtualUnlock(lpAddress: Pointer; dwSize: PtrUInt): BOOL; stdcall; external 'kernel32' name 'VirtualUnlock';
+function VirtualQuery(lpAddress: Pointer; lpBuffer: PMEMORY_BASIC_INFORMATION; dwLength: PtrUInt): PtrUInt; stdcall; external 'kernel32' name 'VirtualQuery';
 function CreateFileA(lpFileName: LPCSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileA';
 function CreateFileW(lpFileName: LPCWSTR; dwDesiredAccess: DWORD; dwShareMode: DWORD; lpSecurityAttributes: Pointer; dwCreationDisposition: DWORD; dwFlagsAndAttributes: DWORD; hTemplateFile: HANDLE): HANDLE; stdcall; external 'kernel32' name 'CreateFileW';
 function ReadFile(hFile: HANDLE; lpBuffer: Pointer; nNumberOfBytesToRead: DWORD; lpNumberOfBytesRead: LPDWORD; lpOverlapped: Pointer): BOOL; stdcall; external 'kernel32' name 'ReadFile';
@@ -121,8 +124,10 @@ function GetOverlappedResult(hFile: HANDLE; lpOverlapped: LPOVERLAPPED; lpNumber
 function CancelIo(hFile: HANDLE): WINBOOL; stdcall; external 'kernel32' name 'CancelIo';
 function CancelIoEx(hFile: HANDLE; lpOverlapped: LPOVERLAPPED): WINBOOL; stdcall; external 'kernel32' name 'CancelIoEx';
 function CreateFileMappingA(hFile: HANDLE; lpAttributes: LPSECURITY_ATTRIBUTES; flProtect: DWORD; dwMaximumSizeHigh: DWORD; dwMaximumSizeLow: DWORD; lpName: LPCSTR): HANDLE; stdcall; external 'kernel32' name 'CreateFileMappingA';
+function OpenFileMappingA(dwDesiredAccess: DWORD; bInheritHandle: BOOL; lpName: LPCSTR): HANDLE; stdcall; external 'kernel32' name 'OpenFileMappingA';
 function MapViewOfFile(hFileMappingObject: HANDLE; dwDesiredAccess: DWORD; dwFileOffsetHigh: DWORD; dwFileOffsetLow: DWORD; dwNumberOfBytesToMap: PtrUInt): Pointer; stdcall; external 'kernel32' name 'MapViewOfFile';
 function UnmapViewOfFile(lpBaseAddress: Pointer): WINBOOL; stdcall; external 'kernel32' name 'UnmapViewOfFile';
+function FlushViewOfFile(lpBaseAddress: Pointer; dwNumberOfBytesToFlush: PtrUInt): WINBOOL; stdcall; external 'kernel32' name 'FlushViewOfFile';
 function CreatePipe(hReadPipe: PHANDLE; hWritePipe: PHANDLE; lpPipeAttributes: LPSECURITY_ATTRIBUTES; nSize: DWORD): WINBOOL; stdcall; external 'kernel32' name 'CreatePipe';
 function SetHandleInformation(hObject: HANDLE; dwMask: DWORD; dwFlags: DWORD): WINBOOL; stdcall; external 'kernel32' name 'SetHandleInformation';
 function DuplicateHandle(hSourceProcessHandle: HANDLE; hSourceHandle: HANDLE; hTargetProcessHandle: HANDLE; lpTargetHandle: PHANDLE; dwDesiredAccess: DWORD; bInheritHandle: WINBOOL; dwOptions: DWORD): WINBOOL; stdcall; external 'kernel32' name 'DuplicateHandle';

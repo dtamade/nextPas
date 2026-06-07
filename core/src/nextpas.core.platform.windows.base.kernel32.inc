@@ -13,6 +13,7 @@ const
   FILE_MAP_WRITE         = $0002;
   FILE_MAP_COPY          = $0001;
   FILE_MAP_EXECUTE       = $0020;
+  FILE_MAP_ALL_ACCESS    = $000F001F;
 
   { Handle flags }
   HANDLE_FLAG_INHERIT    = $00000001;
