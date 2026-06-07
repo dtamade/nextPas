@@ -121,7 +121,7 @@ var
 begin
   if aCount = 0 then Exit(FromPointer(nil, 0, FElemSize));
   LMax := FCount;
-  if (aIndex >= LMax) or (aIndex + aCount > LMax) then
+  if (aIndex >= LMax) or (aCount > LMax - aIndex) then
     raise nextpas.core.base.EOutOfRange.Create('Span.SubSpan: range out of bounds');
   Result := FromPointer(Pointer(PByte(FPtr) + aIndex * FElemSize), aCount, FElemSize);
 end;
@@ -145,8 +145,15 @@ begin
 end;
 
 function TReadOnlySpan2.Count: SizeUInt; inline;
+var
+  LA: SizeUInt;
+  LB: SizeUInt;
 begin
-  Result := FA.Count + FB.Count;
+  LA := FA.Count;
+  LB := FB.Count;
+  if LB > High(SizeUInt) - LA then
+    Exit(High(SizeUInt));
+  Result := LA + LB;
 end;
 
 function TReadOnlySpan2.IsEmpty: Boolean; inline;
@@ -211,10 +218,12 @@ end;
 function TReadOnlySpan2.SubSpan(aIndex, aCount: SizeUInt): TReadOnlySpan2;
 var
   LA: SizeUInt;
+  LTotal: SizeUInt;
   A1, B1: TSpan;
 begin
   if aCount = 0 then Exit(FromTwo(TSpan.FromPointer(nil,0,FA.FElemSize), TSpan.FromPointer(nil,0,FA.FElemSize)));
-  if aIndex + aCount > Count then
+  LTotal := Count;
+  if (aIndex >= LTotal) or (aCount > LTotal - aIndex) then
     raise nextpas.core.base.EOutOfRange.Create('Span2.SubSpan: range out of bounds');
   LA := FA.Count;
   if aIndex < LA then
