@@ -422,6 +422,14 @@ uses
   nextpas.core.atomic,
   nextpas.core.errors;
 
+type
+  TAtomicBoolRmwOp = (
+    abroAnd,
+    abroOr,
+    abroXor,
+    abroNand
+  );
+
 function _cas_success_order(const AOrder: memory_order_t): memory_order_t; inline;
 begin
   // Treat consume as acquire for CAS/RMW in the high-level wrappers.
@@ -445,6 +453,51 @@ begin
     Result := mo_acquire
   else
     Result := mo_seq_cst;
+end;
+
+function _bool_raw(const AValue: Boolean): Int32; inline;
+begin
+  if AValue then
+    Result := 1
+  else
+    Result := 0;
+end;
+
+function _atomic_bool_fetch(var AValue: Int32; const AOperand: Boolean;
+  const AOrder: memory_order_t; const AOp: TAtomicBoolRmwOp): Boolean; inline;
+var
+  LOldRaw: Int32;
+  LExpectedRaw: Int32;
+  LNew: Boolean;
+  LSuccessOrder: memory_order_t;
+  LFailureOrder: memory_order_t;
+begin
+  LSuccessOrder := _cas_success_order(AOrder);
+  LFailureOrder := _cas_failure_order(LSuccessOrder);
+
+  LOldRaw := atomic_load(AValue, mo_relaxed);
+  repeat
+    Result := LOldRaw <> 0;
+
+    case AOp of
+      abroAnd:
+        LNew := Result and AOperand;
+      abroOr:
+        LNew := Result or AOperand;
+      abroXor:
+        LNew := Result xor AOperand;
+    else
+      LNew := not (Result and AOperand);
+    end;
+
+    LExpectedRaw := LOldRaw;
+    if atomic_compare_exchange_weak(AValue, LExpectedRaw, _bool_raw(LNew),
+      LSuccessOrder, LFailureOrder) then
+      Exit;
+
+    LOldRaw := LExpectedRaw;
+    cpu_pause;
+  until False;
 end;
 
 function _uint32_inc_result(const AOld: UInt32): UInt32; inline;
@@ -975,49 +1028,23 @@ begin
 end;
 
 function TAtomicBool.FetchAnd(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LMask: Int32;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-  Result := atomic_fetch_and(FValue, LMask, AOrder) <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroAnd);
 end;
 
 function TAtomicBool.FetchOr(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LMask: Int32;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-  Result := atomic_fetch_or(FValue, LMask, AOrder) <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroOr);
 end;
 
 function TAtomicBool.FetchXor(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LMask: Int32;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-  Result := atomic_fetch_xor(FValue, LMask, AOrder) <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroXor);
 end;
 
 function TAtomicBool.FetchNand(AValue: Boolean; AOrder: memory_order_t): Boolean;
-var
-  LOld, LNew, LMask: Int32;
-  LSuccessOrder: memory_order_t;
-  LFailureOrder: memory_order_t;
 begin
-  if AValue then LMask := 1 else LMask := 0;
-
-  LSuccessOrder := _cas_success_order(AOrder);
-  LFailureOrder := _cas_failure_order(LSuccessOrder);
-
-  LOld := atomic_load(FValue, mo_relaxed);
-  repeat
-    LNew := not (LOld and LMask) and 1;  // NAND 并限制为 0/1
-    if atomic_compare_exchange_weak(FValue, LOld, LNew, LSuccessOrder, LFailureOrder) then
-      Break;
-    cpu_pause;
-  until False;
-
-  Result := LOld <> 0;
+  Result := _atomic_bool_fetch(FValue, AValue, AOrder, abroNand);
 end;
 
 function TAtomicBool.GetMut: PInt32;

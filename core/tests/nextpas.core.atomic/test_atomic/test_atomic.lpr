@@ -305,6 +305,10 @@ var
   LTypesUSizeFetchSection: string;
   LTypesRefCountLockFreeSection: string;
   LTypesBoolLockFreeSection: string;
+  LTypesBoolRmwHelperSection: string;
+  LTypesBoolFetchAndSection: string;
+  LTypesBoolFetchOrSection: string;
+  LTypesBoolFetchXorSection: string;
   LTypesBoolFetchNandSection: string;
   LTypesPtrLockFreeSection: string;
   LTypesPtrStrongCasSection: string;
@@ -471,6 +475,18 @@ begin
   LTypesBoolLockFreeSection := ExtractImplementationSection(LAtomicTypesSource,
     'class function TAtomicBool.is_lock_free: Boolean;',
     'function TAtomicBool.Load(AOrder: memory_order_t): Boolean;');
+  LTypesBoolRmwHelperSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function _atomic_bool_fetch(var AValue: Int32; const AOperand: Boolean;',
+    'function _uint32_inc_result(const AOld: UInt32): UInt32;');
+  LTypesBoolFetchAndSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicBool.FetchAnd(AValue: Boolean; AOrder: memory_order_t): Boolean;',
+    'function TAtomicBool.FetchOr(AValue: Boolean; AOrder: memory_order_t): Boolean;');
+  LTypesBoolFetchOrSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicBool.FetchOr(AValue: Boolean; AOrder: memory_order_t): Boolean;',
+    'function TAtomicBool.FetchXor(AValue: Boolean; AOrder: memory_order_t): Boolean;');
+  LTypesBoolFetchXorSection := ExtractImplementationSection(LAtomicTypesSource,
+    'function TAtomicBool.FetchXor(AValue: Boolean; AOrder: memory_order_t): Boolean;',
+    'function TAtomicBool.FetchNand(AValue: Boolean; AOrder: memory_order_t): Boolean;');
   LTypesBoolFetchNandSection := ExtractImplementationSection(LAtomicTypesSource,
     'function TAtomicBool.FetchNand(AValue: Boolean; AOrder: memory_order_t): Boolean;',
     'function TAtomicBool.GetMut: PInt32;');
@@ -943,6 +959,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     '`TAtomicBool` stores a normalized `0/1` Int32 payload, `Load`/`Store`/`Exchange` map that payload to Boolean, `FetchAnd/Or/Xor/Nand` return the previous Boolean value while keeping the stored domain within `False/True`, and `is_lock_free` follows `atomic_is_lock_free_32`.',
     'atomic README must document the TAtomicBool normalized bool-domain contract');
+  CheckContains(LAtomicDocsReadme,
+    '`TAtomicBool.GetMut` is the exclusive-access raw escape hatch: it exposes the backing `Int32`, where `0` is false and any non-zero value reads as true. `Load` and `IntoInner` only project raw storage to Boolean and do not rewrite non-normal storage; `FetchAnd/Or/Xor/Nand` compute from Boolean truth (`raw <> 0`) and publish a normalized `0/1` result, so non-normal raw true values introduced through `GetMut` are normalized by the next successful Boolean RMW.',
+    'atomic README must document the TAtomicBool non-normal raw true normalization contract');
   CheckContains(LAtomicTestSource, 'procedure TestAtomicBoolRawStorageContract;',
     'atomic tests must keep runtime coverage for the exposed TAtomicBool raw 0/1 storage contract');
   CheckContains(LAtomicTestSource,
@@ -1407,8 +1426,18 @@ begin
     'typed bool lock-free query must delegate to Int32 runtime truth');
   CheckNotContains(LTypesBoolLockFreeSection, 'Result := True',
     'typed bool lock-free query must not hardcode a guaranteed-true result');
-  CheckContains(LTypesBoolFetchNandSection, 'and 1',
-    'typed bool FetchNand must clamp the stored domain back to 0/1');
+  CheckContains(LTypesBoolRmwHelperSection, '_bool_raw(LNew)',
+    'typed bool RMW helper must clamp stored values back to 0/1');
+  CheckContains(LTypesBoolRmwHelperSection, 'atomic_compare_exchange_weak',
+    'typed bool RMW helper must use CAS so non-normal raw values are normalized atomically');
+  CheckContains(LTypesBoolFetchAndSection, '_atomic_bool_fetch(FValue, AValue, AOrder, abroAnd)',
+    'typed bool FetchAnd must use the normalizing RMW helper');
+  CheckContains(LTypesBoolFetchOrSection, '_atomic_bool_fetch(FValue, AValue, AOrder, abroOr)',
+    'typed bool FetchOr must use the normalizing RMW helper');
+  CheckContains(LTypesBoolFetchXorSection, '_atomic_bool_fetch(FValue, AValue, AOrder, abroXor)',
+    'typed bool FetchXor must use the normalizing RMW helper');
+  CheckContains(LTypesBoolFetchNandSection, '_atomic_bool_fetch(FValue, AValue, AOrder, abroNand)',
+    'typed bool FetchNand must use the normalizing RMW helper');
   CheckContains(LTypesPtrLockFreeSection, 'atomic_is_lock_free_ptr',
     'typed pointer lock-free query must delegate to pointer-sized runtime truth');
   CheckNotContains(LTypesPtrLockFreeSection, 'Result := True',
@@ -2432,6 +2461,48 @@ begin
     'TAtomicBool.FetchNand(True) should return the previous true state');
   CheckEqual(Int64(0), Int64(LRaw^),
     'TAtomicBool.FetchNand(True) should normalize raw storage to 0');
+
+  LRaw^ := 3;
+  Check(LBool.FetchAnd(True, mo_acq_rel),
+    'TAtomicBool.FetchAnd should treat non-normal raw true as True');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.FetchAnd should normalize non-normal raw true storage to 1');
+
+  LRaw^ := 2;
+  Check(LBool.FetchAnd(False, mo_acq_rel),
+    'TAtomicBool.FetchAnd(False) should return previous non-normal raw true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.FetchAnd(False) should normalize non-normal raw true storage to 0');
+
+  LRaw^ := 2;
+  Check(LBool.FetchOr(False, mo_acq_rel),
+    'TAtomicBool.FetchOr(False) should return previous non-normal raw true state');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.FetchOr(False) should normalize non-normal raw true storage to 1');
+
+  LRaw^ := 2;
+  Check(LBool.FetchXor(False, mo_acq_rel),
+    'TAtomicBool.FetchXor(False) should return previous non-normal raw true state');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.FetchXor(False) should normalize non-normal raw true storage to 1');
+
+  LRaw^ := 2;
+  Check(LBool.FetchXor(True, mo_acq_rel),
+    'TAtomicBool.FetchXor(True) should return previous non-normal raw true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.FetchXor(True) should normalize toggled non-normal raw storage to 0');
+
+  LRaw^ := 2;
+  Check(LBool.FetchNand(True, mo_acq_rel),
+    'TAtomicBool.FetchNand(True) should return previous non-normal raw true state');
+  CheckEqual(Int64(0), Int64(LRaw^),
+    'TAtomicBool.FetchNand(True) should normalize non-normal raw true storage to 0');
+
+  LRaw^ := 2;
+  Check(LBool.FetchNand(False, mo_acq_rel),
+    'TAtomicBool.FetchNand(False) should return previous non-normal raw true state');
+  CheckEqual(Int64(1), Int64(LRaw^),
+    'TAtomicBool.FetchNand(False) should normalize non-normal raw true storage to 1');
 end;
 
 procedure TestAtomicISizeUSizeContract;
