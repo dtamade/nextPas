@@ -2485,6 +2485,63 @@ begin
     'include-hyper url_path report rust_hyper summary marker');
 end;
 
+procedure TestServerComparisonRunnerIncludeHyperResponse1KSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LReportPath: string;
+  LReport: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerComparisonRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison include-hyper response_1k runner exists');
+  LReportPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_include_hyper_response_1k_smoke.txt');
+  DeleteFile(LReportPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'response_1k', '--include-hyper', '--output', LReportPath],
+    LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison include-hyper response_1k runner exit code: ' + LOutput);
+  CheckContains(LOutput, 'comparison=http.server.keepalive',
+    'include-hyper response_1k comparison marker');
+  CheckContains(LOutput, 'include_hyper=1',
+    'include-hyper response_1k runner marker');
+  CheckContains(LOutput, 'workload=response_1k',
+    'include-hyper response_1k workload marker');
+  CheckServerBenchmarkOutput(LOutput, 'nextpas', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'go', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'rust_std', '8', '1', 'response_1k');
+  CheckServerBenchmarkOutput(LOutput, 'rust_hyper', '8', '1', 'response_1k');
+  CheckResponseReadContract(LOutput, 'rust_hyper', '1024',
+    'include-hyper response_1k hyper row');
+  CheckContains(LOutput, 'rust_profile=hyper_tokio',
+    'include-hyper response_1k hyper profile marker');
+  CheckContains(LOutput, 'summary_impl=rust_hyper',
+    'include-hyper response_1k rust_hyper summary marker');
+
+  Check(FileExists(LReportPath),
+    'server comparison include-hyper response_1k report exists');
+  LReport := LoadTextFile(LReportPath);
+  CheckContains(LReport, 'comparison=http.server.keepalive',
+    'include-hyper response_1k report comparison marker');
+  CheckContains(LReport, 'include_hyper=1',
+    'include-hyper response_1k report marker');
+  CheckContains(LReport, 'workload=response_1k',
+    'include-hyper response_1k report workload marker');
+  CheckServerBenchmarkOutput(LReport, 'rust_hyper', '8', '1', 'response_1k');
+  CheckResponseReadContract(LReport, 'rust_hyper', '1024',
+    'include-hyper response_1k report hyper row');
+  CheckContains(LReport, 'rust_profile=hyper_tokio',
+    'include-hyper response_1k report hyper profile marker');
+  CheckContains(LReport, 'summary_impl=rust_hyper',
+    'include-hyper response_1k report rust_hyper summary marker');
+end;
+
 procedure TestServerComparisonRunnerConcurrencyLockSourceContract;
 var
   LRootDir: string;
@@ -3512,6 +3569,8 @@ begin
     @TestServerComparisonRunnerIncludeHyperSmoke);
   T.Run('server comparison runner include hyper url_path smoke',
     @TestServerComparisonRunnerIncludeHyperUrlPathSmoke);
+  T.Run('server comparison runner include hyper response_1k smoke',
+    @TestServerComparisonRunnerIncludeHyperResponse1KSmoke);
   T.Run('server comparison runner concurrency lock source contract',
     @TestServerComparisonRunnerConcurrencyLockSourceContract);
   T.Run('server comparison runner rejects invalid nextpas backend',

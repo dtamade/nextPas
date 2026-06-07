@@ -5444,3 +5444,26 @@
 - 这轮的价值仍是 benchmark truth：
   Hyper/Tokio 的 `url_path` 现在在 direct comparator、raw runner 和 durable snapshot
   三层都有回归证据，但没有借机扩到 `adapter_no_url` 或新的 API/runtime 改动。
+
+## 2026-06-07 runner include-hyper response-1k focused smoke findings
+
+- `response_1k` 这条 body-bearing workload 之前已经有：
+  - shared direct comparator 的 response-read contract；
+  - include-hyper snapshot artifact；
+  - 但 raw runner report 还没有把 Hyper/Tokio 自己的 body/read markers 锁住。
+- 这会留下一个真实 gap：
+  `run_server_comparison.sh --workload response_1k --include-hyper` 虽然逻辑上可用，
+  但 saved text report 上的 `rust_hyper` body-bearing row 还没有 durable focused proof。
+- 本轮继续保持窄刀，没有扩 runner/schema，也没有碰 comparator 实现：
+  - 只把
+    `run_server_comparison.sh --requests 8 --threads 1 --workload response_1k --include-hyper`
+    提升进 focused gate
+  - 锁住 `include_hyper=1`
+  - 锁住 `workload=response_1k`
+  - 锁住 `rust_hyper` row、`rust_profile=hyper_tokio`
+  - 锁住 `client_read_mode=header_plus_content_length`、
+    `response_body_bytes=1024`、`summary_impl=rust_hyper`
+- 这轮的价值仍是 benchmark truth：
+  Hyper/Tokio 的 body-bearing raw runner row 现在也有 durable regression proof，
+  request-target 和 body-bearing 两条高信息量 workload 都不再只靠 snapshot
+  或 indirect contract 覆盖。
