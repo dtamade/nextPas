@@ -12988,3 +12988,48 @@ Hello from nextPas!
     `url parse` filter group
   - this is benchmark-truth tightening only; it does not claim a new URL or
     parser optimization
+
+## Session: 2026-06-07 h1 header-span-add filter focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the narrow `bench_h1parser` parser-trusted header-span store row
+    into the focused benchmark gate
+  - reduce repeated benchmark filter smoke boilerplate in the test harness
+  - keep the slice limited to adapter materialization benchmark truth, not
+    parser implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch parser production code, server/runtime behavior, comparator
+    binaries, public HTTP API, lower-layer modules, or generated artifacts
+- Source-contract verification:
+  - first run:
+    `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - new focused row passed:
+      `H1 parser benchmark header-span-add filter env`
+    - unrelated known transient recurred in
+      `bench_fullchain epoll sink 16k smoke` with exit `217`
+    - heaptrc: `0 unfreed memory blocks`
+  - immediate rerun of the same command:
+    - `97 total, 97 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs `bench_h1parser` with:
+    `NEXTPAS_BENCH_FILTER=header span add 10 headers`
+  - the focused smoke locks:
+    - `bench_filter=header span add 10 headers`
+    - `adapter cost: header span add 10 headers`
+    - filtered output does not include
+      `adapter cost: span append 10 headers`
+    - filtered output does not include
+      `adapter cost: header add 10 headers`
+    - filtered output does not include
+      `adapter cost: body copy 1KB`
+    - filtered output does not include unrelated metadata-cache rows
+- Outcome:
+  - the parser-trusted header-span-to-header-store row is now a durable
+    standalone microbenchmark instead of only riding along inside the broader
+    adapter materialization group
+  - this is benchmark-truth tightening only; it does not claim a new parser
+    optimization

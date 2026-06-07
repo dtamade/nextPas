@@ -1895,6 +1895,13 @@ string `AddParsed` row because it includes the final name/value string copy.
 The full parser still benefits because the direct path removes the intermediate
 `FCurrentField` / `FCurrentValue` string allocation/copy before the final store.
 
+On 2026-06-07 local time, the focused benchmark gate also locked the narrower
+`bench_filter=header span add 10 headers` path. This keeps the parser-trusted
+span-to-header-store row available as standalone evidence instead of only
+appearing inside the broader adapter materialization group. The row remains an
+adapter materialization diagnostic, not a production performance claim by
+itself.
+
 ## Benchmark Tooling: H1 Row Filter and Flag Matrix
 
 On 2026-06-05 local time, `TBenchRunner` and the C llhttp comparator gained a

@@ -3421,13 +3421,15 @@ begin
     'H1 parser benchmark adapter no-url metadata row');
 end;
 
-procedure TestH1ParserBenchmarkMetadataCacheFilterEnv;
+procedure RunH1ParserFilterSmoke(const AFilter, AExpectedRow,
+  ALabel: string; const AUnexpectedRows: array of string);
 var
   LRootDir: string;
   LBenchDir: string;
   LBinaryPath: string;
   LExitCode: Integer;
   LOutput: string;
+  I: Integer;
 begin
   LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
   LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
@@ -3435,140 +3437,73 @@ begin
   RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser metadata cache filter build exit code: ' + LOutput);
+    ALabel + ' filter build exit code: ' + LOutput);
 
   LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
-  Check(FileExists(LBinaryPath),
-    'H1 parser metadata cache filter binary exists');
+  Check(FileExists(LBinaryPath), ALabel + ' filter binary exists');
 
   RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
     [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
-     BenchFilterEnvName + '=request metadata cached'],
+     BenchFilterEnvName + '=' + AFilter],
     LExitCode, LOutput);
   CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser metadata cache filter smoke exit code: ' + LOutput);
-  CheckContains(LOutput, 'bench_filter=request metadata cached',
-    'H1 parser metadata cache filter marker');
-  CheckContains(LOutput, 'adapter cost: request metadata cached expect+cl',
-    'H1 parser metadata cache filtered row');
-  CheckNotContains(LOutput, 'adapter cost: request metadata legacy expect+cl',
-    'H1 parser metadata cache filter skips legacy row');
-  CheckNotContains(LOutput, 'adapter cost: fast headers get host only',
-    'H1 parser metadata cache filter skips unrelated fast-headers row');
+    ALabel + ' filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=' + AFilter,
+    ALabel + ' filter marker');
+  CheckContains(LOutput, AExpectedRow, ALabel + ' filtered row');
+  for I := Low(AUnexpectedRows) to High(AUnexpectedRows) do
+    CheckNotContains(LOutput, AUnexpectedRows[I],
+      ALabel + ' filter skips unexpected row');
+end;
+
+procedure TestH1ParserBenchmarkHeaderSpanAddFilterEnv;
+begin
+  RunH1ParserFilterSmoke('header span add 10 headers',
+    'adapter cost: header span add 10 headers',
+    'H1 parser header-span-add',
+    ['adapter cost: span append 10 headers',
+     'adapter cost: header add 10 headers',
+     'adapter cost: body copy 1KB',
+     'adapter cost: request metadata cached expect+cl']);
+end;
+
+procedure TestH1ParserBenchmarkMetadataCacheFilterEnv;
+begin
+  RunH1ParserFilterSmoke('request metadata cached',
+    'adapter cost: request metadata cached expect+cl',
+    'H1 parser metadata cache',
+    ['adapter cost: request metadata legacy expect+cl',
+     'adapter cost: fast headers get host only']);
 end;
 
 procedure TestH1ParserBenchmarkRequestPathFilterEnv;
-var
-  LRootDir: string;
-  LBenchDir: string;
-  LBinaryPath: string;
-  LExitCode: Integer;
-  LOutput: string;
 begin
-  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
-  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
-
-  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
-    LExitCode, LOutput);
-  CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser request-path filter build exit code: ' + LOutput);
-
-  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
-  Check(FileExists(LBinaryPath),
-    'H1 parser request-path filter binary exists');
-
-  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
-    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
-     BenchFilterEnvName + '=request direct Path access'],
-    LExitCode, LOutput);
-  CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser request-path filter smoke exit code: ' + LOutput);
-  CheckContains(LOutput, 'bench_filter=request direct Path access',
-    'H1 parser request-path filter marker');
-  CheckContains(LOutput, 'adapter cost: request direct Path access',
-    'H1 parser request-path filtered row');
-  CheckNotContains(LOutput, 'adapter cost: request lazy Url.Path access',
-    'H1 parser request-path filter skips Url.Path row');
-  CheckNotContains(LOutput, 'adapter cost: request direct RawQuery access',
-    'H1 parser request-path filter skips RawQuery row');
-  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
-    'H1 parser request-path filter skips unrelated metadata row');
+  RunH1ParserFilterSmoke('request direct Path access',
+    'adapter cost: request direct Path access',
+    'H1 parser request-path',
+    ['adapter cost: request lazy Url.Path access',
+     'adapter cost: request direct RawQuery access',
+     'adapter cost: request metadata cached expect+cl']);
 end;
 
 procedure TestH1ParserBenchmarkRequestRawQueryFilterEnv;
-var
-  LRootDir: string;
-  LBenchDir: string;
-  LBinaryPath: string;
-  LExitCode: Integer;
-  LOutput: string;
 begin
-  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
-  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
-
-  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
-    LExitCode, LOutput);
-  CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser request-rawquery filter build exit code: ' + LOutput);
-
-  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
-  Check(FileExists(LBinaryPath),
-    'H1 parser request-rawquery filter binary exists');
-
-  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
-    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
-     BenchFilterEnvName + '=request direct RawQuery access'],
-    LExitCode, LOutput);
-  CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser request-rawquery filter smoke exit code: ' + LOutput);
-  CheckContains(LOutput, 'bench_filter=request direct RawQuery access',
-    'H1 parser request-rawquery filter marker');
-  CheckContains(LOutput, 'adapter cost: request direct RawQuery access',
-    'H1 parser request-rawquery filtered row');
-  CheckNotContains(LOutput, 'adapter cost: request lazy Url.Path access',
-    'H1 parser request-rawquery filter skips Url.Path row');
-  CheckNotContains(LOutput, 'adapter cost: request direct Path access',
-    'H1 parser request-rawquery filter skips direct path row');
-  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
-    'H1 parser request-rawquery filter skips unrelated metadata row');
+  RunH1ParserFilterSmoke('request direct RawQuery access',
+    'adapter cost: request direct RawQuery access',
+    'H1 parser request-rawquery',
+    ['adapter cost: request lazy Url.Path access',
+     'adapter cost: request direct Path access',
+     'adapter cost: request metadata cached expect+cl']);
 end;
 
 procedure TestH1ParserBenchmarkRequestPathAndRawQueryFilterEnv;
-var
-  LRootDir: string;
-  LBenchDir: string;
-  LBinaryPath: string;
-  LExitCode: Integer;
-  LOutput: string;
 begin
-  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
-  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
-
-  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
-    LExitCode, LOutput);
-  CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser request-path+rawquery filter build exit code: ' + LOutput);
-
-  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
-  Check(FileExists(LBinaryPath),
-    'H1 parser request-path+rawquery filter binary exists');
-
-  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
-    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
-     BenchFilterEnvName + '=request direct Path+RawQuery access'],
-    LExitCode, LOutput);
-  CheckEqual(Int64(0), Int64(LExitCode),
-    'H1 parser request-path+rawquery filter smoke exit code: ' + LOutput);
-  CheckContains(LOutput, 'bench_filter=request direct Path+RawQuery access',
-    'H1 parser request-path+rawquery filter marker');
-  CheckContains(LOutput, 'adapter cost: request direct Path+RawQuery access',
-    'H1 parser request-path+rawquery filtered row');
-  CheckNotContains(LOutput, 'adapter cost: request direct Path access',
-    'H1 parser request-path+rawquery filter skips direct path row');
-  CheckNotContains(LOutput, 'adapter cost: request direct RawQuery access',
-    'H1 parser request-path+rawquery filter skips direct RawQuery row');
-  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
-    'H1 parser request-path+rawquery filter skips unrelated metadata row');
+  RunH1ParserFilterSmoke('request direct Path+RawQuery access',
+    'adapter cost: request direct Path+RawQuery access',
+    'H1 parser request-path+rawquery',
+    ['adapter cost: request direct Path access',
+     'adapter cost: request direct RawQuery access',
+     'adapter cost: request metadata cached expect+cl']);
 end;
 
 procedure TestH1ParserBenchmarkUrlParseRequestTargetFilterEnv;
@@ -4345,6 +4280,8 @@ begin
     @TestH1ParserBenchmarkMaxItersEnv);
   T.Run('H1 parser benchmark filter env',
     @TestH1ParserBenchmarkFilterEnv);
+  T.Run('H1 parser benchmark header-span-add filter env',
+    @TestH1ParserBenchmarkHeaderSpanAddFilterEnv);
   T.Run('H1 parser benchmark metadata cache filter env',
     @TestH1ParserBenchmarkMetadataCacheFilterEnv);
   T.Run('H1 parser benchmark request-path filter env',

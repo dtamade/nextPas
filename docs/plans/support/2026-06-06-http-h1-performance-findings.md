@@ -5840,3 +5840,27 @@
   generic origin-form URL parse path 现在有了更窄、更适合后续 parse-only 成本隔离的
   standalone microbenchmark proof，也给 request-target-specialized parse row 留下
   对照组。
+
+## 2026-06-07 h1 header-span-add filter focused smoke findings
+
+- `header span add 10 headers` 之前虽然已有独立 row，但 focused gate 仍只在
+  max-iters smoke 中证明它随整组 adapter materialization rows 出现。
+- 这会留下 parser-trusted header store materialization 的 truth gap：
+  后续如果只想盯住 `AddParsedSpans` 对应的 span-to-header-store 成本，本来的
+  focused gate 还不能证明 `header span add 10 headers` 这条 row 能单独稳定存在，
+  也不能证明过滤器不会顺手带出 `span append`、`header add`、`body copy` 或无关
+  metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=header span add 10 headers` 提升进 focused gate
+  - 锁住 `bench_filter=header span add 10 headers`
+  - 锁住 `adapter cost: header span add 10 headers`
+  - 锁住 filtered output 不包含
+    `adapter cost: span append 10 headers`
+  - 也不包含 `adapter cost: header add 10 headers`
+  - 也不包含 `adapter cost: body copy 1KB`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮顺手把若干 H1 parser standalone filter smoke 收敛到同一个测试 helper，
+  避免后续继续复制大段同型 build/filter/run 逻辑。
+- 第一次 focused gate 中已知的 `bench_fullchain epoll sink 16k` exit `217`
+  transient 再次出现；同一命令立即重跑通过。结论仍然只能记录为残余风险，
+  不能声明 runtime 问题已修复。
