@@ -63,21 +63,26 @@ var
   LI, LJ: Integer;
   LCarry: UInt32;
   LVal: Int32;
+  LTmp: array[0..19] of Byte;
 begin
-  if Length(AStr) <> KSUID_STRING_LENGTH then Exit(False);
-  FillChar(ADst[0], ALen, 0);
+  Result := False;
+  if (ALen < 0) or (ALen > Length(LTmp)) then Exit;
+  if Length(AStr) <> KSUID_STRING_LENGTH then Exit;
+  FillChar(LTmp[0], SizeOf(LTmp), 0);
   for LI := 1 to KSUID_STRING_LENGTH do
   begin
     LVal := Pos(AStr[LI], BASE62) - 1;
-    if LVal < 0 then Exit(False);
+    if LVal < 0 then Exit;
     LCarry := UInt32(LVal);
     for LJ := ALen - 1 downto 0 do
     begin
-      LCarry := LCarry + UInt32(ADst[LJ]) * 62;
-      ADst[LJ] := Byte(LCarry and $FF);
+      LCarry := LCarry + UInt32(LTmp[LJ]) * 62;
+      LTmp[LJ] := Byte(LCarry and $FF);
       LCarry := LCarry shr 8;
     end;
+    if LCarry <> 0 then Exit;
   end;
+  Move(LTmp[0], ADst[0], ALen);
   Result := True;
 end;
 

@@ -538,6 +538,15 @@ begin
   Check(not TKsuid.TryParse('!!!!!!!!!!!!!!!!!!!!!!!!!!!', LK), 'invalid base62');
 end;
 
+procedure TestKsuidRejectsOverflowBase62;
+var LK: TKsuid;
+begin
+  Check(not TKsuid.TryParse(StringOfChar('z', KSUID_STRING_LENGTH), LK),
+    'base62 value above 160-bit KSUID range must fail');
+  Check(TKsuid.Parse(StringOfChar('z', KSUID_STRING_LENGTH)).IsNil,
+    'Parse overflow returns nil sentinel');
+end;
+
 { Stress + boundary tests }
 
 procedure TestUuidV4Stress;
@@ -772,6 +781,7 @@ begin
   T.Run('XID Nil', @TestXidNil);
   T.Run('XID parse invalid', @TestXidParseInvalid);
   T.Run('KSUID parse invalid chars', @TestKsuidParseInvalidChars);
+  T.Run('KSUID rejects overflow base62', @TestKsuidRejectsOverflowBase62);
 
   T.Run('UUID v4 stress 10k', @TestUuidV4Stress);
   T.Run('Snowflake stress 10k', @TestSnowflakeStress);
