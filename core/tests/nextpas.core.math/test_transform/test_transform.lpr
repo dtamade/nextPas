@@ -95,9 +95,19 @@ begin
   Perspective(Single(HALF_PI), Single(0.0), Single(1.0), Single(10.0));
 end;
 
+procedure RaisePerspectiveNegativeAspectSingle;
+begin
+  Perspective(Single(HALF_PI), Single(-1.0), Single(1.0), Single(10.0));
+end;
+
 procedure RaisePerspectiveZeroAspectDouble;
 begin
   Perspective(Double(HALF_PI), Double(0.0), Double(1.0), Double(10.0));
+end;
+
+procedure RaisePerspectiveNegativeAspectDouble;
+begin
+  Perspective(Double(HALF_PI), Double(-1.0), Double(1.0), Double(10.0));
 end;
 
 procedure RaisePerspectiveZeroFovSingle;
@@ -105,9 +115,19 @@ begin
   Perspective(Single(0.0), Single(1.0), Single(1.0), Single(10.0));
 end;
 
+procedure RaisePerspectiveNegativeFovSingle;
+begin
+  Perspective(Single(-HALF_PI), Single(1.0), Single(1.0), Single(10.0));
+end;
+
 procedure RaisePerspectiveZeroFovDouble;
 begin
   Perspective(Double(0.0), Double(1.0), Double(1.0), Double(10.0));
+end;
+
+procedure RaisePerspectiveNegativeFovDouble;
+begin
+  Perspective(Double(-HALF_PI), Double(1.0), Double(1.0), Double(10.0));
 end;
 
 procedure RaisePerspectiveZeroNearDouble;
@@ -115,9 +135,19 @@ begin
   Perspective(Double(HALF_PI), Double(1.0), Double(0.0), Double(10.0));
 end;
 
+procedure RaisePerspectiveNegativeNearDouble;
+begin
+  Perspective(Double(HALF_PI), Double(1.0), Double(-1.0), Double(10.0));
+end;
+
 procedure RaisePerspectiveZeroNearSingle;
 begin
   Perspective(Single(HALF_PI), Single(1.0), Single(0.0), Single(10.0));
+end;
+
+procedure RaisePerspectiveNegativeNearSingle;
+begin
+  Perspective(Single(HALF_PI), Single(1.0), Single(-1.0), Single(10.0));
 end;
 
 procedure RaisePerspectiveInvalidFovSingle;
@@ -867,8 +897,20 @@ begin
     'Ortho double zero depth', @RaiseOrthoZeroDepthDouble);
   ExpectArgumentErrorMessage('Perspective: aspect must be positive',
     'Perspective double zero aspect', @RaisePerspectiveZeroAspectDouble);
+  ExpectArgumentErrorMessage('Perspective: aspect must be positive',
+    'Perspective single negative aspect', @RaisePerspectiveNegativeAspectSingle);
+  ExpectArgumentErrorMessage('Perspective: aspect must be positive',
+    'Perspective double negative aspect', @RaisePerspectiveNegativeAspectDouble);
   ExpectArgumentErrorMessage('Perspective: vertical FOV must be positive',
     'Perspective double zero FOV', @RaisePerspectiveZeroFovDouble);
+  ExpectArgumentErrorMessage('Perspective: vertical FOV must be positive',
+    'Perspective single negative FOV', @RaisePerspectiveNegativeFovSingle);
+  ExpectArgumentErrorMessage('Perspective: vertical FOV must be positive',
+    'Perspective double negative FOV', @RaisePerspectiveNegativeFovDouble);
+  ExpectArgumentErrorMessage('Perspective: near plane must be positive',
+    'Perspective single negative near', @RaisePerspectiveNegativeNearSingle);
+  ExpectArgumentErrorMessage('Perspective: near plane must be positive',
+    'Perspective double negative near', @RaisePerspectiveNegativeNearDouble);
   ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',
     'Perspective single far not greater', @RaisePerspectiveFarNotGreaterSingle);
   ExpectArgumentErrorMessage('Perspective: far plane must be greater than near plane',

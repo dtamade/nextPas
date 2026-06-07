@@ -279,7 +279,8 @@ Status:
   semantics across both axes, geometry guard messages for degenerate `Ortho` / `Perspective` /
   `LookAt` / `Camera2D` inputs, exact
   owner-level `Ortho` finite and zero-extent guard messages, exact owner-level
-  `Perspective` finite/positive parameter guard messages plus the
+  `Perspective` finite/positive parameter guard messages including direct negative
+  FOV/aspect/near parity plus the
   `Perspective: vertical FOV is invalid` contract and direct far-plane ordering parity for
   `far = near` and `far < near`, exact owner-level finite guard messages for `LookAt`
   eye/target/up inputs plus `Translate` / `Scale` axis inputs, `RotateX/Y/Z` radian inputs, and
