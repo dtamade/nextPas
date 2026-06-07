@@ -3609,6 +3609,44 @@ begin
     'H1 parser url-parse request-target filter skips unrelated metadata row');
 end;
 
+procedure TestH1ParserBenchmarkUrlParseGenericFilterEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser url-parse generic filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'H1 parser url-parse generic filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=url parse generic origin-form'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser url-parse generic filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=url parse generic origin-form',
+    'H1 parser url-parse generic filter marker');
+  CheckContains(LOutput, 'adapter cost: url parse generic origin-form',
+    'H1 parser url-parse generic filtered row');
+  CheckNotContains(LOutput, 'adapter cost: url parse request-target origin-form',
+    'H1 parser url-parse generic filter skips request-target row');
+  CheckNotContains(LOutput, 'adapter cost: request direct Path access',
+    'H1 parser url-parse generic filter skips request projection row');
+  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
+    'H1 parser url-parse generic filter skips unrelated metadata row');
+end;
+
 procedure TestH1ParserBenchmarkFastHeadersFilterEnv;
 var
   LRootDir: string;
@@ -4317,6 +4355,8 @@ begin
     @TestH1ParserBenchmarkRequestPathAndRawQueryFilterEnv);
   T.Run('H1 parser benchmark url-parse request-target filter env',
     @TestH1ParserBenchmarkUrlParseRequestTargetFilterEnv);
+  T.Run('H1 parser benchmark url-parse generic filter env',
+    @TestH1ParserBenchmarkUrlParseGenericFilterEnv);
   T.Run('H1 parser benchmark fast-headers filter env',
     @TestH1ParserBenchmarkFastHeadersFilterEnv);
   T.Run('H1 parser benchmark fast-headers get-all filter env',

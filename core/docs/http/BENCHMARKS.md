@@ -2136,6 +2136,11 @@ The focused benchmark gate now also locks the narrower
 request-target-specialized parse row remains durable standalone microbenchmark
 evidence instead of only appearing inside the broader `url parse` filter group.
 
+The focused benchmark gate now also locks the narrower
+`bench_filter=url parse generic origin-form` path, so the generic origin-form
+parse row remains durable standalone microbenchmark evidence instead of only
+appearing inside the broader `url parse` filter group.
+
 Focused validation:
 
 ```text
