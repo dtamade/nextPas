@@ -38,6 +38,10 @@ S4 compatibility facades are currently deferred. `nextpas.core.system.sysutils`,
 current phase. Their eventual public surface is not a current phase gate and must be reopened only
 when real compiler/runtime or higher-level consumer pressure produces focused evidence.
 
+Detailed S4 design-only material lives in `compatibility-facades.md` and
+`compatibility-matrix.md`. Those docs distinguish bootstrap RTL pressure from a
+future public `nextpas.core.system.*` compatibility surface.
+
 ## Boundaries
 
 | Area | System stance |

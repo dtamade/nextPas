@@ -49,6 +49,8 @@ Exit evidence:
 
 - [x] Record that S4 is deferred for the current phase and not a current phase gate.
 - [x] Record that no public units yet should exist for `system.sysutils`, `system.typinfo`, or `system.classes`.
+- [x] Record design-only S4 facade boundaries in `compatibility-facades.md`.
+- [x] Record live consumer pressure and migration risk in `compatibility-matrix.md`.
 - [ ] Decide which compatibility surfaces deserve `system.*` facade units.
 - [ ] Add only tested aliases or forwarding functions; no broad historical copy.
 - [ ] Keep filesystem, time, IO, math, text and collection implementation ownership in their existing modules.

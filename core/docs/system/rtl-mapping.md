@@ -39,7 +39,9 @@ ownership status so future slices can expand the module without turning it into 
 ## FPC SysUtils
 
 Current phase note: compatibility facade work for SysUtils is deferred; there are no public units yet
-under `nextpas.core.system.sysutils`.
+under `nextpas.core.system.sysutils`. See `compatibility-facades.md` and
+`compatibility-matrix.md` for the design-only boundary and live consumer
+evidence.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
@@ -53,7 +55,9 @@ under `nextpas.core.system.sysutils`.
 ## FPC TypInfo
 
 Current phase note: compatibility facade work for TypInfo is deferred; there are no public units yet
-under `nextpas.core.system.typinfo`.
+under `nextpas.core.system.typinfo`. See `compatibility-facades.md` and
+`compatibility-matrix.md` for the design-only boundary and live consumer
+evidence.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
@@ -64,7 +68,9 @@ under `nextpas.core.system.typinfo`.
 ## FPC Classes
 
 Current phase note: compatibility facade work for Classes is deferred; there are no public units yet
-under `nextpas.core.system.classes`.
+under `nextpas.core.system.classes`. See `compatibility-facades.md` and
+`compatibility-matrix.md` for the design-only boundary and live consumer
+evidence.
 
 | FPC capability | nextPas status | nextPas owner / notes |
 | --- | --- | --- |
