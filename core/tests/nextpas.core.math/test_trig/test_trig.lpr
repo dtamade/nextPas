@@ -64,6 +64,22 @@ begin
   Result := LValue.Value;
 end;
 
+function SingleNegativeZero: Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Bits := LongWord($80000000);
+  Result := LValue.Value;
+end;
+
+function DoubleNegativeZero: Double;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Bits := QWord($80000000) shl 32;
+  Result := LValue.Value;
+end;
+
 function IsSingleNaN(const AValue: Single): Boolean;
 var
   LValue: TSingleBitCast;
@@ -96,6 +112,22 @@ var
 begin
   LValue.Value := AValue;
   Result := LValue.Bits = $7FF0000000000000;
+end;
+
+function IsSingleNegativeZero(const AValue: Single): Boolean;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = LongWord($80000000);
+end;
+
+function IsDoubleNegativeZero(const AValue: Double): Boolean;
+var
+  LValue: TDoubleBitCast;
+begin
+  LValue.Value := AValue;
+  Result := LValue.Bits = (QWord($80000000) shl 32);
 end;
 
 procedure TestBasicTrigValues;
@@ -144,6 +176,34 @@ begin
     'ArcTan2(-Inf,-Inf)=-3PI/4');
   CheckNear(PI_VALUE / 4.0, ArcTan2(SingleInfinity, SingleInfinity), 0.0001,
     'ArcTan2(Single +Inf,+Inf)=PI/4');
+end;
+
+procedure TestArcTan2SignedZeroContracts;
+begin
+  CheckNear(0.0, ArcTan2(0.0, 0.0), 0.0, 'ArcTan2(+0,+0)=+0');
+  Check(IsDoubleNegativeZero(ArcTan2(DoubleNegativeZero, 0.0)),
+    'ArcTan2(-0,+0)=-0');
+  CheckNear(PI_VALUE, ArcTan2(0.0, DoubleNegativeZero), 0.000001,
+    'ArcTan2(+0,-0)=+PI');
+  CheckNear(-PI_VALUE, ArcTan2(DoubleNegativeZero, DoubleNegativeZero), 0.000001,
+    'ArcTan2(-0,-0)=-PI');
+  CheckNear(PI_VALUE, ArcTan2(0.0, -1.0), 0.000001,
+    'ArcTan2(+0,negative)=+PI');
+  CheckNear(-PI_VALUE, ArcTan2(DoubleNegativeZero, -1.0), 0.000001,
+    'ArcTan2(-0,negative)=-PI');
+
+  CheckNear(0.0, ArcTan2(Single(0.0), Single(0.0)), 0.0,
+    'ArcTan2(Single +0,+0)=+0');
+  Check(IsSingleNegativeZero(ArcTan2(SingleNegativeZero, Single(0.0))),
+    'ArcTan2(Single -0,+0)=-0');
+  CheckNear(PI_VALUE, ArcTan2(Single(0.0), SingleNegativeZero), 0.000001,
+    'ArcTan2(Single +0,-0)=+PI');
+  CheckNear(-PI_VALUE, ArcTan2(SingleNegativeZero, SingleNegativeZero), 0.000001,
+    'ArcTan2(Single -0,-0)=-PI');
+  CheckNear(PI_VALUE, ArcTan2(Single(0.0), Single(-1.0)), 0.000001,
+    'ArcTan2(Single +0,negative)=+PI');
+  CheckNear(-PI_VALUE, ArcTan2(SingleNegativeZero, Single(-1.0)), 0.000001,
+    'ArcTan2(Single -0,negative)=-PI');
 end;
 
 procedure TestExpLogAndSqrtContracts;
@@ -198,6 +258,7 @@ begin
   T.Run('basic trig values', @TestBasicTrigValues);
   T.Run('inverse trig domain contracts', @TestInverseTrigDomainContracts);
   T.Run('ArcTan2 special cases', @TestArcTan2SpecialCases);
+  T.Run('ArcTan2 signed zero contracts', @TestArcTan2SignedZeroContracts);
   T.Run('exp/log/sqrt contracts', @TestExpLogAndSqrtContracts);
   T.Run('power edge contracts', @TestPowerEdgeContracts);
   T.Run('angle conversions', @TestAngleConversions);

@@ -49,6 +49,21 @@ implementation
 uses
   nextpas.core.math.impl.scalar;
 
+function DoubleHasSignBit(const AValue: Double): Boolean; inline;
+var
+  LBits: UInt64;
+begin
+  Move(AValue, LBits, SizeOf(LBits));
+  Result := (LBits and UInt64($8000000000000000)) <> 0;
+end;
+
+function DoubleSignedZero(const ANegative: Boolean): Double; inline;
+begin
+  Result := 0.0;
+  if ANegative then
+    Result := -Result;
+end;
+
 function Sin(const AX: Single): Single;
 begin
   Result := Single(System.Sin(Double(AX)));
@@ -145,11 +160,22 @@ begin
     Exit(-3.0 * PI_VALUE / 4.0);
   end;
 
+  if AY = 0.0 then
+  begin
+    if (AX < 0.0) or ((AX = 0.0) and DoubleHasSignBit(AX)) then
+    begin
+      if DoubleHasSignBit(AY) then
+        Exit(-PI_VALUE);
+      Exit(PI_VALUE);
+    end;
+    Exit(DoubleSignedZero(DoubleHasSignBit(AY)));
+  end;
+
   if AX > 0.0 then
     Result := ArcTan(AY / AX)
   else if AX < 0.0 then
   begin
-    if AY >= 0.0 then
+    if AY > 0.0 then
       Result := ArcTan(AY / AX) + PI_VALUE
     else
       Result := ArcTan(AY / AX) - PI_VALUE;
