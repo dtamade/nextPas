@@ -76,6 +76,13 @@ uses
   nextpas.core.math.scalar,
   nextpas.core.math.trig;
 
+type
+  TSingleBitCast = packed record
+    case Integer of
+      0: (Value: Single);
+      1: (Bits: UInt32);
+  end;
+
 const
   DEFAULT_RANDOM_SEED: UInt64 = (UInt64($DEADBEEF) shl 32) or UInt64($CAFEBABE);
   SEED_SCRAMBLE: UInt64 = (UInt64($6A09E667) shl 32) or UInt64($F3BCC908);
@@ -93,6 +100,20 @@ function IsFinite(const AValue: Double): Boolean; overload; inline;
 begin
   Result := (not nextpas.core.math.scalar.IsNaN(AValue)) and
     (not nextpas.core.math.scalar.IsInfinite(AValue));
+end;
+
+function PreviousSingle(const AValue: Single): Single; inline;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  if LValue.Bits = 0 then
+    LValue.Bits := UInt32($80000001)
+  else if (LValue.Bits and UInt32($80000000)) = 0 then
+    Dec(LValue.Bits)
+  else
+    Inc(LValue.Bits);
+  Result := LValue.Value;
 end;
 
 function NormalizeSeed(const ASeed: UInt64): UInt64; inline;
@@ -240,6 +261,8 @@ begin
 end;
 
 function TRandomGen.NextFloatRange(const AMin, AMax: Single): Single;
+var
+  LValue: Single;
 begin
   if not IsFinite(AMin) then
     raise EArgumentError.Create('TRandomGen.NextFloatRange: AMin must be finite');
@@ -249,7 +272,13 @@ begin
     raise EArgumentError.Create('TRandomGen.NextFloatRange: AMin must be <= AMax');
   if AMin = AMax then
     Exit(AMin);
-  Result := Single(Double(AMin) + Double(NextFloat) * (Double(AMax) - Double(AMin)));
+
+  LValue := Single(Double(AMin) + Double(NextFloat) * (Double(AMax) - Double(AMin)));
+  if LValue >= AMax then
+    LValue := PreviousSingle(AMax);
+  if LValue < AMin then
+    LValue := AMin;
+  Result := LValue;
 end;
 
 function TRandomGen.NextDouble: Double;

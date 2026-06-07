@@ -58,6 +58,20 @@ begin
   Result := LValue.Value;
 end;
 
+function PreviousSingleValue(const AValue: Single): Single;
+var
+  LValue: TSingleBitCast;
+begin
+  LValue.Value := AValue;
+  if LValue.Bits = 0 then
+    LValue.Bits := $80000001
+  else if (LValue.Bits and $80000000) = 0 then
+    Dec(LValue.Bits)
+  else
+    Inc(LValue.Bits);
+  Result := LValue.Value;
+end;
+
 procedure TestSeedDeterminism;
 var
   A, B: TRandomGen;
@@ -133,6 +147,55 @@ begin
       FloatValue := Rng.NextFloatRange(-2.0, 2.0);
       Check((FloatValue >= -2.0) and (FloatValue < 2.0), 'float range is half-open');
     end;
+  finally
+    Rng.Free;
+  end;
+end;
+
+procedure TestStateForcedHalfOpenBoundaries;
+const
+  MAX_NEXT_FLOAT: Double = 16777215.0 / 16777216.0;
+  MAX_NEXT_DOUBLE: Double = 9007199254740991.0 / 9007199254740992.0;
+var
+  Rng: TRandomGen;
+  ZeroState: TRandomState;
+  MaxState: TRandomState;
+begin
+  ZeroState.S0 := 0;
+  ZeroState.S1 := 0;
+  MaxState.S0 := High(UInt64);
+  MaxState.S1 := 0;
+
+  Rng := TRandomGen.Create(42);
+  try
+    Rng.State := ZeroState;
+    CheckNear(0.0, Rng.NextFloat, 0.0, 'NextFloat zero state returns exact lower bound');
+
+    Rng.State := MaxState;
+    CheckNear(MAX_NEXT_FLOAT, Rng.NextFloat, 0.0,
+      'NextFloat max state returns the exact last representable sample');
+    Rng.State := MaxState;
+    Check(Rng.NextFloat < 1.0, 'NextFloat max state stays below 1');
+
+    Rng.State := ZeroState;
+    CheckNear(0.0, Rng.NextDouble, 0.0, 'NextDouble zero state returns exact lower bound');
+
+    Rng.State := MaxState;
+    CheckNear(MAX_NEXT_DOUBLE, Rng.NextDouble, 0.0,
+      'NextDouble max state returns the exact last representable sample');
+    Rng.State := MaxState;
+    Check(Rng.NextDouble < 1.0, 'NextDouble max state stays below 1');
+
+    Rng.State := ZeroState;
+    CheckNear(2.5, Rng.NextFloatRange(2.5, 3.5), 0.0,
+      'NextFloatRange zero state returns exact lower bound');
+
+    Rng.State := MaxState;
+    CheckNear(PreviousSingleValue(3.5), Rng.NextFloatRange(2.5, 3.5), 0.0,
+      'NextFloatRange max state fail-closes to the predecessor of upper bound');
+    Rng.State := MaxState;
+    Check(Rng.NextFloatRange(2.5, 3.5) < 3.5,
+      'NextFloatRange max state stays below upper bound');
   finally
     Rng.Free;
   end;
@@ -583,6 +646,7 @@ begin
   T.Run('seed determinism', @TestSeedDeterminism);
   T.Run('zero seed uses deterministic default', @TestZeroSeedUsesDeterministicDefault);
   T.Run('range boundaries', @TestRangeBoundaries);
+  T.Run('state-forced half-open boundaries', @TestStateForcedHalfOpenBoundaries);
   T.Run('large finite float range stays finite and bounded',
     @TestLargeFiniteFloatRangeStaysFiniteAndBounded);
   T.Run('WeightedChoice large finite weights stay scale-invariant',

@@ -74,7 +74,8 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
 - `nextpas.core.math.random` now provides explicit-state `TRandomGen`, `TRandomState`, and
   `TNoiseGen`.
 - Random tests cover deterministic seed vectors, state restore, range boundaries, invalid ranges,
-  owner-level reversed-range and non-finite-range messages, probability clamp, dice rules,
+  exact state-forced `[0,1)` / `[AMin, AMax)` boundary behavior, owner-level reversed-range and
+  non-finite-range messages, probability clamp, dice rules,
   `RollMultiple` integer-overflow owner boundary, weighted choice including empty/negative and
   non-finite owner-level messages, shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
@@ -339,9 +340,11 @@ Status:
   rejects positive dice/side combinations whose maximum total would overflow `Integer`;
   `NextGaussian` clamps a zero-state first uniform draw back to a finite deterministic fallback;
   `test_random` now directly locks owner-level messages for reversed and non-finite integer/float
-  range validation, direct zero/negative dice parity, and for empty/negative/non-finite
-  weighted-choice inputs plus the `pick = 0` zero-weight-prefix boundary; weighted choice rejects
-  empty, negative, non-finite, and all-zero weights.
+  range validation, exact zero/max-state `[0,1)` boundaries for `NextFloat` / `NextDouble`,
+  exact zero/max-state `[AMin, AMax)` boundary behavior for `NextFloatRange`, direct
+  zero/negative dice parity, and for empty/negative/non-finite weighted-choice inputs plus the
+  `pick = 0` zero-weight-prefix boundary; weighted choice rejects empty, negative, non-finite,
+  and all-zero weights.
 - `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
   `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
   `EArgumentError`; `test_noise` now directly locks the exact owner-level message variants across
