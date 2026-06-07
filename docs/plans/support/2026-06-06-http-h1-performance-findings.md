@@ -5487,3 +5487,23 @@
 - 这轮的价值仍是 benchmark truth：
   epoll backend 现在不再只在默认 no-URL comparison 上有 durable proof，而是进入了
   public request-target cross-language report。
+
+## 2026-06-07 snapshot epoll url_path focused smoke findings
+
+- raw runner 的 `--nextpas-backend epoll + --workload url_path` 这轮已经有了 focused
+  proof，但 durable snapshot artifact 还停在默认 epoll row。
+- 这会留下一个 artifact gap：
+  后续如果只看 Markdown snapshot，仍然无法直接看到 epoll backend 在 public
+  request-target comparison seam 上的保存结果。
+- 本轮继续保持窄刀，没有扩 snapshot schema，也没有碰 runner/HTTP 生产逻辑：
+  - 只把
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+    提升进 focused gate
+  - 锁住 `nextpas_backend=epoll`
+  - 锁住 `workload=url_path`
+  - 锁住命令块同时包含 `--workload url_path --nextpas-backend epoll`
+  - 锁住 nextPas row 的 `backend=epoll`
+  - 同时保留 Go / Rust std-only 的同 workload 对照行
+- 这轮的价值仍是 benchmark truth：
+  epoll backend 现在在 raw runner 和 durable snapshot 两层都覆盖到了 public
+  request-target seam，而不再只停在默认 no-URL artifact。

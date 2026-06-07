@@ -12384,3 +12384,39 @@ Hello from nextPas!
     instead of preserving epoll only on the default no-URL comparison
   - this is coverage tightening only; it does not claim a backend ranking or a
     new comparison schema
+
+## Session: 2026-06-07 snapshot epoll url_path focused smoke slice
+
+- **Status:** completed.
+- Objective:
+  - promote the snapshot helper `--nextpas-backend epoll + --workload url_path`
+    combination into the focused benchmark gate
+  - keep the slice limited to durable saved-artifact backend evidence, not
+    snapshot or server implementation changes
+- Scope and safety:
+  - touched only the benchmark focused test, HTTP benchmark docs, and this
+    support evidence
+  - did not touch snapshot helper behavior, runner behavior, server/runtime
+    behavior, comparator binaries, public HTTP API, lower-layer modules, or
+    generated artifacts
+- Source-contract verification:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `81 total, 81 passed, 0 failed`
+    - new focused row:
+      `server comparison snapshot epoll url_path smoke`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `test_http_benchmarks` now runs
+    `capture_server_comparison_snapshot.sh --requests 8 --threads 1 --workload url_path --nextpas-backend epoll`
+  - the focused smoke locks:
+    - `nextpas_backend=epoll`
+    - `workload=url_path`
+    - command block contains `--workload url_path --nextpas-backend epoll`
+    - nextPas row reports `backend=epoll`
+    - Go and Rust std-only rows stay on the same public `url_path` workload
+- Outcome:
+  - the durable Markdown artifact now preserves epoll backend evidence on the
+    public request-target comparison seam instead of only the default no-URL
+    backend row
+  - this is coverage tightening only; it does not claim a backend ranking or a
+    new snapshot schema

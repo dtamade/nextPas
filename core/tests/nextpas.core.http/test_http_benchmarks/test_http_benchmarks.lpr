@@ -2952,6 +2952,48 @@ begin
     'snapshot include-hyper response_1k summary marker');
 end;
 
+procedure TestServerComparisonSnapshotEpollUrlPathSmoke;
+var
+  LRootDir: string;
+  LRunnerPath: string;
+  LSnapshotPath: string;
+  LSnapshot: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  {$IFNDEF LINUX}
+  Exit;
+  {$ENDIF}
+
+  LRootDir := ResolveCoreRoot(ServerComparisonRelativeDir);
+  LRunnerPath := ResolveServerSnapshotRunnerPath(LRootDir);
+  Check(FileExists(LRunnerPath),
+    'server comparison snapshot epoll url_path runner exists');
+  LSnapshotPath := PathJoin(ResolveBenchmarkTestBuildDir(LRootDir),
+    'server_comparison_snapshot_epoll_url_path_smoke.md');
+  DeleteFile(LSnapshotPath);
+
+  RunProcessAndCapture(LRunnerPath, ['--requests', '8', '--threads', '1',
+    '--workload', 'url_path', '--nextpas-backend', 'epoll',
+    '--output', LSnapshotPath], LRootDir, LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'server comparison snapshot epoll url_path exit code: ' + LOutput);
+
+  Check(FileExists(LSnapshotPath),
+    'server comparison snapshot epoll url_path exists');
+  LSnapshot := LoadTextFile(LSnapshotPath);
+  CheckContains(LSnapshot, 'nextpas_backend=epoll',
+    'snapshot epoll url_path backend marker');
+  CheckContains(LSnapshot, 'workload=url_path',
+    'snapshot epoll url_path workload marker');
+  CheckContains(LSnapshot,
+    'run_server_comparison.sh --requests 8 --threads 1 --workload url_path --runs 1 --nextpas-backend epoll',
+    'snapshot epoll url_path command marker');
+  CheckServerBenchmarkOutput(LSnapshot, 'nextpas', '8', '1', 'url_path', 'epoll');
+  CheckServerBenchmarkOutput(LSnapshot, 'go', '8', '1', 'url_path');
+  CheckServerBenchmarkOutput(LSnapshot, 'rust_std', '8', '1', 'url_path');
+end;
+
 procedure TestServerComparisonSnapshotRejectsInvalidNextpasBackend;
 var
   LRootDir: string;
@@ -3636,6 +3678,8 @@ begin
     @TestServerComparisonSnapshotIncludeHyperUrlPathSmoke);
   T.Run('server comparison snapshot include hyper response_1k smoke',
     @TestServerComparisonSnapshotIncludeHyperResponse1KSmoke);
+  T.Run('server comparison snapshot epoll url_path smoke',
+    @TestServerComparisonSnapshotEpollUrlPathSmoke);
   T.Run('server comparison snapshot rejects invalid nextpas backend',
     @TestServerComparisonSnapshotRejectsInvalidNextpasBackend);
   T.Run('server comparison snapshot epoll smoke',
