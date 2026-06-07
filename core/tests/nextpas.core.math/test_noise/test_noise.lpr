@@ -551,6 +551,38 @@ begin
   end;
 end;
 
+procedure TestNoiseNegativeFractionalCoordinatesWrapPeriodically;
+const
+  NEGATIVE_X: Double = -0.25;
+  NEGATIVE_Y: Double = -1.25;
+  NEGATIVE_Z: Double = -2.5;
+  WRAPPED_X: Double = 255.75;
+  WRAPPED_Y: Double = 254.75;
+  WRAPPED_Z: Double = 253.5;
+var
+  Noise: TNoiseGen;
+begin
+  Noise := TNoiseGen.Create(2468);
+  try
+    CheckNear(Noise.Noise1D(WRAPPED_X), Noise.Noise1D(NEGATIVE_X), 0.0,
+      'Noise1D canonicalizes negative fractional coordinates across the 256-periodic seam');
+    CheckNear(Noise.Noise2D(WRAPPED_X, WRAPPED_Y), Noise.Noise2D(NEGATIVE_X, NEGATIVE_Y), 0.0,
+      'Noise2D canonicalizes negative fractional coordinates across the 256-periodic seam');
+    CheckNear(Noise.Noise3D(WRAPPED_X, WRAPPED_Y, WRAPPED_Z),
+      Noise.Noise3D(NEGATIVE_X, NEGATIVE_Y, NEGATIVE_Z), 0.0,
+      'Noise3D canonicalizes negative fractional coordinates across the 256-periodic seam');
+    CheckNear(Noise.FBM1D(WRAPPED_X, 4), Noise.FBM1D(NEGATIVE_X, 4), 0.0,
+      'FBM1D canonicalizes negative fractional coordinates across the 256-periodic seam');
+    CheckNear(Noise.FBM2D(WRAPPED_X, WRAPPED_Y, 4), Noise.FBM2D(NEGATIVE_X, NEGATIVE_Y, 4), 0.0,
+      'FBM2D canonicalizes negative fractional coordinates across the 256-periodic seam');
+    CheckNear(Noise.FBM3D(WRAPPED_X, WRAPPED_Y, WRAPPED_Z, 4),
+      Noise.FBM3D(NEGATIVE_X, NEGATIVE_Y, NEGATIVE_Z, 4), 0.0,
+      'FBM3D canonicalizes negative fractional coordinates across the 256-periodic seam');
+  finally
+    Noise.Free;
+  end;
+end;
+
 procedure TestNoiseHugeFiniteLatticeCoordinatesStayStable;
 const
   HUGE_X: Double = 1.0e300;
@@ -864,6 +896,8 @@ begin
   T.Run('noise reference vectors', @TestNoiseReferenceVectors);
   T.Run('noise invalid inputs', @TestNoiseInvalidInputs);
   T.Run('large periodic coordinates stay stable', @TestNoiseLargePeriodicCoordinatesStayStable);
+  T.Run('negative fractional coordinates wrap periodically',
+    @TestNoiseNegativeFractionalCoordinatesWrapPeriodically);
   T.Run('huge finite lattice coordinates stay stable', @TestNoiseHugeFiniteLatticeCoordinatesStayStable);
   T.Run('FBM rejects non-finite octave coordinates', @TestFBMRejectsNonFiniteOctaveCoordinates);
   T.Run('FBM rejects non-finite octave amplitude', @TestFBMRejectsNonFiniteOctaveAmplitude);

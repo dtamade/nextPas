@@ -75,8 +75,9 @@ This branch has completed the current **M7 internal SIMD seam slice** and should
   non-finite owner-level messages, shuffle, Gaussian, and unit-circle vector helpers.
 - Noise tests cover deterministic permutation repeatability, 1D/2D/3D reference vectors, FBM
   reference vectors, invalid FBM octave/lacunarity/gain inputs with exact owner-level message
-  variants across `FBM1D/2D/3D`, finite-combination overflow contracts for coordinates,
-  amplitudes, and accumulated results, precision-ceiling stored-value semantics, and
+  variants across `FBM1D/2D/3D`, negative-fractional coordinate canonicalization across the
+  256-periodic seam, finite-combination overflow contracts for coordinates, amplitudes, and
+  accumulated results, precision-ceiling stored-value semantics, and
   heaptrc-clean object ownership.
 - The public surface checker requires the random/noise declarations and rejects public global
   random/noise singleton variables.
@@ -332,7 +333,8 @@ Status:
 - `TNoiseGen` owns its permutation table explicitly and exposes `Noise1D`, `Noise2D`, `Noise3D`,
   `FBM1D`, `FBM2D`, and `FBM3D`. Invalid FBM octave, lacunarity, and gain inputs fail fast with
   `EArgumentError`; `test_noise` now directly locks the exact owner-level message variants across
-  `FBM1D/2D/3D` for octave/lacunarity/gain validation, finite coordinate validation, and
+  `FBM1D/2D/3D` for octave/lacunarity/gain validation, finite coordinate validation,
+  negative-fractional coordinate canonicalization across the 256-periodic seam, and
   octave-coordinate/amplitude/accumulated-result overflow contracts; finite parameter combinations
   that would make octave coordinates, amplitudes, or accumulated results non-finite also fail fast
   at the `FBM*` owner boundary.
