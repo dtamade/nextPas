@@ -1320,11 +1320,7 @@ end;
 
 procedure atomic_store(var aObj: Int32; aDesired: Int32);
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    atomic_store(aObj, aDesired, mo_relaxed);
-  {$ELSE}
-    atomic_store(aObj, aDesired, mo_release);
-  {$ENDIF}
+  atomic_store(aObj, aDesired, mo_seq_cst);
 end;
 
 procedure atomic_store(var aObj: UInt32; aDesired: UInt32; aOrder: memory_order_t);
@@ -1387,11 +1383,7 @@ end;
 
 procedure atomic_store_64(var aObj: Int64; aDesired: Int64);
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    atomic_store_64(aObj, aDesired, mo_relaxed);
-  {$ELSE}
-    atomic_store_64(aObj, aDesired, mo_release);
-  {$ENDIF}
+  atomic_store_64(aObj, aDesired, mo_seq_cst);
 end;
 
 procedure atomic_store_64(var aObj: UInt64; aDesired: UInt64; aOrder: memory_order_t);
@@ -1425,11 +1417,7 @@ end;
 
 procedure atomic_store(var aObj: Pointer; aDesired: Pointer);
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    atomic_store(aObj, aDesired, mo_relaxed);
-  {$ELSE}
-    atomic_store(aObj, aDesired, mo_release);
-  {$ENDIF}
+  atomic_store(aObj, aDesired, mo_seq_cst);
 end;
 
 
@@ -1448,11 +1436,7 @@ end;
 
 procedure atomic_store(var aObj: PtrInt; aDesired: PtrInt);
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUX86)}
-    atomic_store(aObj, aDesired, mo_relaxed);
-  {$ELSE}
-    atomic_store(aObj, aDesired, mo_release);
-  {$ENDIF}
+  atomic_store(aObj, aDesired, mo_seq_cst);
 end;
 
 procedure atomic_store(var aObj: PtrUInt; aDesired: PtrUInt; aOrder: memory_order_t);
@@ -3334,11 +3318,7 @@ end;
 
 function atomic_flag_test(var aFlag: atomic_flag_t): Boolean;
 begin
-  {$IF DEFINED(CPUX86_64) OR DEFINED(CPUI386)}
-    Result := atomic_load(PInt32(@aFlag)^, mo_relaxed) <> 0;
-  {$ELSE} // ARM / ARM64 / PPC / RISC-V
-    Result := atomic_load(PInt32(@aFlag)^, mo_acquire) <> 0;
-  {$ENDIF}
+  Result := atomic_load(PInt32(@aFlag)^, mo_seq_cst) <> 0;
 end;
 
 procedure atomic_flag_clear(var aFlag: atomic_flag_t);

@@ -49,6 +49,7 @@ consumers should not need to import `nextpas.core.atomic.types` just to use the 
 当前实现要点：
 
 - `atomic_thread_fence(mo_seq_cst)` 通过专用 `atomic_seq_cst_fence` 路由；PPC/PPC64 使用 heavyweight `sync`。
+- No-argument scalar/pointer `atomic_store` wrappers and `atomic_flag_test` route through `mo_seq_cst`; callers must pass an explicit weaker order when they want relaxed/acquire/release behavior.
 - `atomic_signal_fence` 是 compiler fence seam，不作为硬件可见性保证。
 - x86/x86_64 的 `mo_seq_cst` load 使用 locked/fenced helper，不能退回 plain load + compiler barrier。
 - 非 x86 的 `mo_seq_cst` load/store 通过 source-contract 约束 fence contract；没有目标机 runtime 证据时，不应写成实机验证结论。
