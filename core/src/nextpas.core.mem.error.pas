@@ -273,7 +273,10 @@ end;
 class function TAllocResult.Err(aError: TAllocError): TAllocResult;
 begin
   Result.FPtr := nil;
-  Result.FError := aError;
+  if aError = aeNone then
+    Result.FError := aeInternalError
+  else
+    Result.FError := aError;
 end;
 
 function TAllocResult.IsOk: Boolean;

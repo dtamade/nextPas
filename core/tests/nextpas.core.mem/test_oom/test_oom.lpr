@@ -341,6 +341,31 @@ begin
   CheckStateAllocErrorUsesInvalidOperationLeaf(aeReallocNotSupported, 'realloc not supported');
 end;
 
+procedure TestAllocResultErrAeNoneFailsClosed;
+var
+  LResult: TAllocResult;
+  LCaught: Boolean;
+begin
+  LResult := TAllocResult.Err(aeNone);
+  Check(not LResult.IsOk, 'Err(aeNone) should not masquerade as Ok');
+  Check(LResult.IsErr, 'Err(aeNone) should remain an error result');
+  Check(LResult.Error = aeInternalError,
+    'Err(aeNone) should normalize to internal error');
+
+  LCaught := False;
+  try
+    LResult.ExpectPtr('invalid alloc result');
+  except
+    on E: EAllocError do
+    begin
+      LCaught := E.Error = aeInternalError;
+      Check(E.Category = ecInternal,
+        'Err(aeNone) ExpectPtr should raise internal category');
+    end;
+  end;
+  Check(LCaught, 'Err(aeNone) ExpectPtr should fail closed');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.mem.oom');
   T.Run('alloc result OOM uses canonical root', @TestAllocResultOomUsesCanonicalRoot);
@@ -350,5 +375,6 @@ begin
   T.Run('non-OOM allocation error remains EAllocError', @TestNonOomAllocErrorRemainsEAllocError);
   T.Run('capacity exhaustion uses resource-exhausted alloc leaf', @TestCapacityExhaustedUsesResourceExhaustedAllocLeaf);
   T.Run('state allocation errors use invalid-operation leaf', @TestStateAllocErrorsUseInvalidOperationLeaf);
+  T.Run('Err(aeNone) fails closed', @TestAllocResultErrAeNoneFailsClosed);
   T.Summary;
 end.
