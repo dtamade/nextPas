@@ -15,6 +15,17 @@ uses
 var
   T: TTestRunner;
 
+procedure CheckParseErrorMessage(const ASource, AExpectedMessage,
+  ACaseName: string);
+var
+  LDoc: ITomlDocument;
+begin
+  LDoc := TomlParse(ASource);
+  Check(LDoc.HasError, ACaseName + ' has error');
+  CheckEqual(AExpectedMessage, LDoc.Error.Message.ToString,
+    ACaseName + ' diagnostic message');
+end;
+
 procedure TestParseSimple;
 var
   LDoc: ITomlDocument;
@@ -78,6 +89,24 @@ begin
   CheckEqual(Int64(6), Int64(LErr.Offset), 'diagnostic byte offset');
   CheckEqual(Int64(1), Int64(LErr.Line), 'diagnostic line');
   CheckEqual(Int64(7), Int64(LErr.Col), 'diagnostic column');
+end;
+
+procedure TestParseInvalidEscapeDiagnosticMessage;
+begin
+  CheckParseErrorMessage('s = "\q"', 'invalid escape sequence',
+    'invalid escape');
+end;
+
+procedure TestParseSignedBasePrefixDiagnosticMessage;
+begin
+  CheckParseErrorMessage('n = +0x10',
+    'sign not allowed with base prefix', 'signed base prefix');
+end;
+
+procedure TestParseFractionalSecondsDiagnosticMessage;
+begin
+  CheckParseErrorMessage('dt = 1979-05-27T07:32:00.Z',
+    'fractional seconds need at least 1 digit', 'fractional seconds');
 end;
 
 procedure TestAutoRelease;
@@ -223,6 +252,12 @@ begin
   T.Run('TryTomlParse failure returns diagnostic doc', @TestTryTomlParseFailureReturnsDiagnosticDoc);
   T.Run('parse unexpected end of input position',
     @TestParseUnexpectedEndOfInputPosition);
+  T.Run('parse invalid escape diagnostic message',
+    @TestParseInvalidEscapeDiagnosticMessage);
+  T.Run('parse signed base prefix diagnostic message',
+    @TestParseSignedBasePrefixDiagnosticMessage);
+  T.Run('parse fractional seconds diagnostic message',
+    @TestParseFractionalSecondsDiagnosticMessage);
   T.Run('auto release', @TestAutoRelease);
   T.Run('builder', @TestBuilder);
   T.Run('builder table', @TestBuilderTable);

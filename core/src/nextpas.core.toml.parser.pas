@@ -653,7 +653,7 @@ begin
     if LErr <> ueNone then
     begin
       Doc^.FAllocator.Deallocate(LBuf);
-      Exit(SetError('invalid escape sequence', 22));
+      Exit(SetError('invalid escape sequence', 23));
     end;
     AStr := TStringView.Create(LBuf, LBufLen);
     AOwned := True;
@@ -949,7 +949,7 @@ begin
   end
   else if (Pos <> LStart) and (Pos + 1 < SrcLen) and (Src[Pos] = '0') and
     ((Src[Pos+1] = 'x') or (Src[Pos+1] = 'o') or (Src[Pos+1] = 'b')) then
-    Exit(SetError('sign not allowed with base prefix', 34));
+    Exit(SetError('sign not allowed with base prefix', 33));
 
   // Collect digits into buffer (strip underscores with validation)
   LBufLen := 0;
@@ -1215,7 +1215,7 @@ begin
         Inc(LP);
       end;
       if LFracLen = 0 then
-        Exit(SetError('fractional seconds need at least 1 digit', 41));
+        Exit(SetError('fractional seconds need at least 1 digit', 40));
       while LFracLen < 9 do begin LFrac := LFrac * 10; Inc(LFracLen); end;
       LNano := UInt32(LFrac);
     end;

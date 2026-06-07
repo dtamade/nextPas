@@ -95,14 +95,14 @@ Key optimizations:
 
 ## Testing
 
-The current TOML test tree contains 295 test cases across 12 suites:
+The current TOML test tree contains 299 test cases across 12 suites:
 
 | Suite | Tests | Coverage |
 |-------|-------|----------|
 | test_toml_base | 17 | Type layout, datetime constructors, flags encoding |
 | test_toml_compliance | 95 | TOML v1.0/v1.1 + toml-test + Codex review regressions |
 | test_toml_defensive | 14 | Bounds and defensive parser behavior |
-| test_toml_facade | 14 | High-level API, builder all types, allocator |
+| test_toml_facade | 18 | High-level API, diagnostics, builder all types, allocator |
 | test_toml_fuzz | 5 | 1700 random/binary/semi-valid inputs |
 | test_toml_parser | 32 | All value types, tables, arrays, error detection |
 | test_toml_property | 14 | Property-style parser and writer invariants |
