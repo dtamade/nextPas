@@ -235,6 +235,21 @@ git -C "$DISALLOWED_REPO/.worktrees/landing" commit -m "compiler change" >/dev/n
 expect_failure "disallowed path" run_landing_check "$DISALLOWED_REPO/.worktrees/landing" --allow-path scripts
 grep -q 'changed path is outside allowed prefixes: compiler/change.pas' "$TMP_ROOT/failure.err"
 
+HISTORY_REPO="$TMP_ROOT/history-disallowed"
+create_repo "$HISTORY_REPO"
+create_landing_worktree "$HISTORY_REPO" landing
+mkdir -p "$HISTORY_REPO/.worktrees/landing/compiler" "$HISTORY_REPO/.worktrees/landing/scripts"
+printf 'hidden\n' >"$HISTORY_REPO/.worktrees/landing/compiler/hidden.pas"
+git -C "$HISTORY_REPO/.worktrees/landing" add compiler/hidden.pas
+git -C "$HISTORY_REPO/.worktrees/landing" commit -m "hidden compiler change" >/dev/null
+git -C "$HISTORY_REPO/.worktrees/landing" rm compiler/hidden.pas >/dev/null
+git -C "$HISTORY_REPO/.worktrees/landing" commit -m "remove hidden compiler change" >/dev/null
+printf 'helper\n' >"$HISTORY_REPO/.worktrees/landing/scripts/helper.sh"
+git -C "$HISTORY_REPO/.worktrees/landing" add scripts/helper.sh
+git -C "$HISTORY_REPO/.worktrees/landing" commit -m "allowed helper" >/dev/null
+expect_failure "historical disallowed path" run_landing_check "$HISTORY_REPO/.worktrees/landing" --allow-path scripts
+grep -q 'historical changed path is outside allowed prefixes: compiler/hidden.pas' "$TMP_ROOT/failure.err"
+
 RENAME_REPO="$TMP_ROOT/rename"
 create_repo "$RENAME_REPO"
 printf 'compiler source\n' >"$RENAME_REPO/compiler/source.pas"

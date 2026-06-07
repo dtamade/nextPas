@@ -274,9 +274,11 @@ landing 报告必须说明用了哪些替代 verification。
 5. 最后再运行一次 `make hygiene`。
 
 `scripts/landing-candidate-check.sh` 只读取当前 worktree 状态并打印证据：branch、
-worktree、HEAD、base、ahead、behind、allowed paths 和 changed files。它会在 dirty、
-detached、`behind != 0`、worktree 不在仓库根或 `.worktrees/`、或改动路径超出
-`ALLOW_PATHS` 时失败。该 helper 不会 rebase、merge、cherry-pick、replay 或修改分支。
+worktree、HEAD、base、ahead、behind、allowed paths、changed files 和
+historical changed files。它会在 dirty、detached、`behind != 0`、worktree 不在仓库根或
+`.worktrees/`、最终 diff 改动路径超出 `ALLOW_PATHS`，或 `base..HEAD` 的候选提交历史曾经触碰
+`ALLOW_PATHS` 外路径时失败。即使禁止路径后来被 revert，也不能作为 ff-only landing history
+进入主线。该 helper 不会 rebase、merge、cherry-pick、replay 或修改分支。
 
 这个 gate 只是 landing evidence，不是合并批准。它不能替代 diff review、模块 focused
 verification、heaptrc/no-leak 证据、source/compile/runtime truth 分类，也不能授权 raw merge

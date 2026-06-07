@@ -119,6 +119,7 @@ if [[ "$behind" != "0" ]]; then
 fi
 
 changed_files="$(git -C "$worktree_path" diff --no-renames --name-only "$base_ref...HEAD")"
+historical_changed_files="$(git -C "$worktree_path" log --name-only --format= "$base_ref..HEAD" | sed '/^$/d' | sort -u)"
 
 path_allowed() {
   local path="$1"
@@ -145,6 +146,25 @@ while IFS= read -r changed_path || [[ -n "$changed_path" ]]; do
   fi
 done <<< "$changed_files"
 
+historical_disallowed_paths=()
+while IFS= read -r changed_path || [[ -n "$changed_path" ]]; do
+  if [[ -z "$changed_path" ]]; then
+    continue
+  fi
+  if ! path_allowed "$changed_path"; then
+    historical_disallowed_paths+=("$changed_path")
+  fi
+done <<< "$historical_changed_files"
+
+if [[ ${#historical_disallowed_paths[@]} -gt 0 ]]; then
+  for changed_path in "${historical_disallowed_paths[@]}"; do
+    echo "error: historical changed path is outside allowed prefixes: $changed_path" >&2
+  done
+  echo "allowed prefixes:" >&2
+  printf '  %s\n' "${allow_paths[@]}" >&2
+  exit 1
+fi
+
 head_sha="$(git -C "$worktree_path" rev-parse --short HEAD)"
 
 printf 'landing-candidate=pass\n'
@@ -159,4 +179,8 @@ printf '%s\n' "${allow_paths[@]}"
 printf 'changed-files=\n'
 if [[ -n "$changed_files" ]]; then
   printf '%s\n' "$changed_files"
+fi
+printf 'historical-changed-files=\n'
+if [[ -n "$historical_changed_files" ]]; then
+  printf '%s\n' "$historical_changed_files"
 fi
