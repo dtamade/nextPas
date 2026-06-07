@@ -13092,3 +13092,35 @@ Hello from nextPas!
   - the focused gate now checks that direct workloads use `DIRECT_HOST`, root
     and `/1k` direct requests, and an early `Exit` before router dispatch
   - it also checks that `plaintext` is not mapped to `direct_handler`
+
+## Session: 2026-06-07 fullchain server lifecycle source-contract slice
+
+- **Status:** completed.
+- Objective:
+  - make `bench_fullchain` teardown join its server thread before freeing the
+    server
+  - close normal, no-match, and create-failure lifecycle gaps without touching
+    HTTP runtime, public API, comparison runners, lower-layer modules, or
+    generated artifacts
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `99 total, 98 passed, 1 failed`
+    - failed at `bench_fullchain server thread lifecycle source contract`
+    - missing create-failure cleanup and main `try/finally StopServer`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN:
+  - same command:
+    - `99 total, 99 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now retains the server thread handle globally
+  - `StopServer` centralizes `Shutdown -> platform_thread_join -> Free`
+  - thread-create failure frees the created server before raising
+  - normal and no-match scenario paths now pass through a `try/finally`
+    guarded `StopServer`
+- Outcome:
+  - full-chain real-socket benchmark rows now have a tighter lifecycle
+    harness: measured rows, no-match diagnostics, and exception paths no
+    longer rely on process exit to clean up the server thread
+  - this is benchmark harness correctness evidence, not a new performance
+    result or HTTP runtime optimization

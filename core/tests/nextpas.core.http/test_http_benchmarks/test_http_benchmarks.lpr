@@ -1549,6 +1549,71 @@ begin
     'bench_fullchain direct scenarios should not use router host');
 end;
 
+procedure TestBenchFullchainServerThreadLifecycleSourceContract;
+var
+  LRootDir: string;
+  LSource: string;
+  LSetupBody: string;
+  LStopBody: string;
+  LMainBody: string;
+begin
+  LRootDir := ResolveCoreRoot(BenchFullchainRelativeDir);
+  LSource := LoadTextFile(PathJoin(LRootDir, BenchFullchainUnitPath));
+  LSetupBody := ExtractSourceBlock(LSource,
+    'procedure SetupServer;',
+    '{ Read one full HTTP response from a keep-alive connection }',
+    'bench_fullchain SetupServer lifecycle body');
+  LStopBody := ExtractSourceBlock(LSource,
+    'procedure StopServer;',
+    'procedure SetupServer;',
+    'bench_fullchain StopServer lifecycle body');
+  LMainBody := ExtractSourceBlock(LSource,
+    'begin' + LineEnding + '  GIterations := ConfiguredIterations;',
+    'end.',
+    'bench_fullchain main lifecycle body');
+
+  CheckContains(LSource, 'GServerThreadHandle: TPlatformThreadHandle;',
+    'bench_fullchain should retain server thread handle globally');
+  CheckContains(LSource, 'GServerThreadStarted: Boolean;',
+    'bench_fullchain should track whether server thread was created');
+  CheckContains(LSetupBody,
+    'GServerThreadStarted := platform_thread_create(GServerThreadHandle, @ServerThread, nil) = 0;',
+    'bench_fullchain should retain successful server thread creation');
+  CheckNotContains(LSetupBody, 'LHandle: TPlatformThreadHandle;',
+    'bench_fullchain should not hide server thread handle in SetupServer');
+  CheckContains(LSetupBody, 'if not GServerThreadStarted then' + LineEnding +
+    '  begin' + LineEnding + '    StopServer;',
+    'bench_fullchain should free server when thread creation fails');
+  CheckContains(LSource, 'procedure StopServer;',
+    'bench_fullchain should centralize shutdown/join/free');
+  CheckContains(LStopBody, 'platform_thread_join(GServerThreadHandle, LThreadResult);',
+    'bench_fullchain should join server thread before freeing server');
+  CheckContains(LStopBody, 'platform_thread_join(GServerThreadHandle, LThreadResult);' +
+    LineEnding + '    GServerThreadStarted := False;',
+    'bench_fullchain should clear thread state after join');
+  CheckContains(LStopBody, 'platform_thread_join(GServerThreadHandle, LThreadResult);' +
+    LineEnding + '    GServerThreadStarted := False;' + LineEnding +
+    '    GServerThreadHandle := nil;' + LineEnding + '  end;' + LineEnding +
+    '  if GServer <> nil then',
+    'bench_fullchain should join before checking server free');
+  CheckContains(LMainBody, 'SetupServer;' + LineEnding + '  try',
+    'bench_fullchain main should guard scenarios with try/finally');
+  CheckContains(LMainBody, 'LNoMatch := LScenariosRun = 0;',
+    'bench_fullchain should record no-match before teardown');
+  CheckContains(LMainBody, 'if LNoMatch then' + LineEnding +
+    '      WriteLn(''  No matching full-chain scenarios.'')',
+    'bench_fullchain should report no-match inside guarded scenario block');
+  CheckContains(LMainBody, 'finally' + LineEnding + '    StopServer;' +
+    LineEnding + '  end;',
+    'bench_fullchain main should always stop server after scenarios');
+  CheckContains(LMainBody, 'if LNoMatch then' + LineEnding + '    Halt(2);',
+    'bench_fullchain should exit no-match only after teardown');
+  CheckNotContains(LMainBody, 'GServer.Free;',
+    'bench_fullchain main should not free server outside StopServer');
+  CheckNotContains(LMainBody, 'GServer.Shutdown;',
+    'bench_fullchain main should not shutdown server outside StopServer');
+end;
+
 procedure TestBenchFullchainPlaintextSmoke;
 var
   LRootDir: string;
@@ -4230,6 +4295,8 @@ begin
     @TestH1WriterOutboundDrainSourceContract);
   T.Run('bench_fullchain direct dispatch source contract',
     @TestBenchFullchainDirectDispatchSourceContract);
+  T.Run('bench_fullchain server thread lifecycle source contract',
+    @TestBenchFullchainServerThreadLifecycleSourceContract);
   T.Run('bench_h1outbound drain smoke',
     @TestBenchH1OutboundDrainSmoke);
   T.Run('bench_fullchain plaintext smoke',

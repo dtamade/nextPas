@@ -5897,3 +5897,21 @@
   - direct scenario block 不使用 `ROUTER_HOST`
 - 这仍然是 benchmark truth guard，不是 runtime fix；已知的 epoll sink 16k exit
   `217` transient 在第一轮验证中再次出现并在立即重跑时消失，仍作为残余风险记录。
+
+## 2026-06-07 fullchain server lifecycle source-contract findings
+
+- `bench_fullchain` 的真实风险不是新增 benchmark row，而是 harness lifecycle：
+  它在独立 server thread 里跑 `THttpServer.ListenAndServe`，旧形态没有保留
+  thread handle，也没有在 teardown 前 join。
+- 本轮把这个生命周期变成显式 contract：
+  - server thread handle 和 started state 由 benchmark 全局保存
+  - `StopServer` 统一执行 `Shutdown -> platform_thread_join -> Free`
+  - thread 创建失败时释放已经创建的 server 后再抛错
+  - normal 与 no-match path 都由 `try/finally StopServer` 收口
+- 这仍然是 benchmark harness correctness，不是 HTTP runtime 行为改动：
+  - 没有修改 `THttpServer`、router、parser、writer、socket runtime 或 public API
+  - 没有新增性能数字或改变 benchmark row schema
+  - 价值在于后续 fullchain 证据不再依赖进程退出替未 join 的 server thread 收尸
+- 本轮同时确认最近提到的 `include-hyper url_path summary_impl=rust_hyper`
+  缺失不是当前树的现态问题；fresh focused gate 中 runner 和 snapshot 相关 smoke
+  均已通过。

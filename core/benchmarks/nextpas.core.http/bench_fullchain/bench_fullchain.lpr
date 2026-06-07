@@ -45,6 +45,8 @@ type
 
 var
   GServer: THttpServer;
+  GServerThreadHandle: TPlatformThreadHandle;
+  GServerThreadStarted: Boolean;
   GPort: UInt16;
   GIterations: Int64;
   GFilter: string;
@@ -149,10 +151,28 @@ begin
   GServer.ListenAndServe('127.0.0.1', 0);
 end;
 
+procedure StopServer;
+var
+  LThreadResult: Pointer;
+begin
+  if GServer <> nil then
+    GServer.Shutdown;
+  if GServerThreadStarted then
+  begin
+    platform_thread_join(GServerThreadHandle, LThreadResult);
+    GServerThreadStarted := False;
+    GServerThreadHandle := nil;
+  end;
+  if GServer <> nil then
+  begin
+    GServer.Free;
+    GServer := nil;
+  end;
+end;
+
 procedure SetupServer;
 var
   LRouter: THttpRouter;
-  LHandle: TPlatformThreadHandle;
   LBody1K: string;
   LRouterHandler: IHttpHandler;
   LServerOptions: THttpServerOptions;
@@ -241,7 +261,12 @@ begin
       end;
       LRouterHandler.ServeHTTP(AReq, AW);
     end), LServerOptions);
-  platform_thread_create(LHandle, @ServerThread, nil);
+  GServerThreadStarted := platform_thread_create(GServerThreadHandle, @ServerThread, nil) = 0;
+  if not GServerThreadStarted then
+  begin
+    StopServer;
+    raise Exception.Create('bench_fullchain server thread create failed');
+  end;
   while not GServer.IsRunning do
     platform_thread_sleep_ns(1000000);
   GPort := GServer.LocalAddr.Port;
@@ -386,12 +411,14 @@ var
   LSinkReq: string;
   LResult: TScenarioResult;
   LScenariosRun: Int32;
+  LNoMatch: Boolean;
 
 begin
   GIterations := ConfiguredIterations;
   GFilter := ConfiguredFilter;
   GBackend := ConfiguredBackend;
   LScenariosRun := 0;
+  LNoMatch := False;
 
   WriteLn('=== nextpas.core.http.fullchain benchmark ===');
   WriteLn('operation=http.fullchain.keepalive');
@@ -404,75 +431,76 @@ begin
   WriteLn;
 
   SetupServer;
-  WriteLn('  Server listening on port ', GPort);
-  WriteLn;
+  try
+    WriteLn('  Server listening on port ', GPort);
+    WriteLn;
 
-  { Scenario 1: Plaintext without router dispatch }
-  LDirectPlaintextReq :=
-    'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
-  LResult := RunScenario('direct_root',
-    'Direct root (GET /, no router)', LDirectPlaintextReq, 50, 0, 13);
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 1: Plaintext without router dispatch }
+    LDirectPlaintextReq :=
+      'GET / HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
+    LResult := RunScenario('direct_root',
+      'Direct root (GET /, no router)', LDirectPlaintextReq, 50, 0, 13);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  { Scenario 1b: 1 KiB fixed response without router dispatch }
-  LDirect1KReq :=
-    'GET /1k HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
-  LResult := RunScenario('direct_1k',
-    'Direct 1KB (GET /1k, no router)', LDirect1KReq, 1000, 0, 1024);
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 1b: 1 KiB fixed response without router dispatch }
+    LDirect1KReq :=
+      'GET /1k HTTP/1.1'#13#10'Host: ' + DIRECT_HOST + #13#10'Content-Length: 0'#13#10#13#10;
+    LResult := RunScenario('direct_1k',
+      'Direct 1KB (GET /1k, no router)', LDirect1KReq, 1000, 0, 1024);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  { Scenario 1: Plaintext }
-  LResult := RunScenario('plaintext', 'Plaintext (GET /)',
-    'GET / HTTP/1.1'#13#10'Host: ' + ROUTER_HOST + #13#10'Content-Length: 0'#13#10#13#10,
-    50, 0, 13);
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 1: Plaintext }
+    LResult := RunScenario('plaintext', 'Plaintext (GET /)',
+      'GET / HTTP/1.1'#13#10'Host: ' + ROUTER_HOST + #13#10'Content-Length: 0'#13#10#13#10,
+      50, 0, 13);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  { Scenario 2: JSON }
-  LResult := RunScenario('json', 'JSON (GET /json)',
-    'GET /json HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
-    60, 0, 27);
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 2: JSON }
+    LResult := RunScenario('json', 'JSON (GET /json)',
+      'GET /json HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
+      60, 0, 27);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  { Scenario 3: Body echo 1KB }
-  SetLength(LBody1K, 1024);
-  FillChar(LBody1K[1], 1024, Ord('x'));
-  LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
-  LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq, 100,
-    1024, 1024);
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 3: Body echo 1KB }
+    SetLength(LBody1K, 1024);
+    FillChar(LBody1K[1], 1024, Ord('x'));
+    LEchoReq := 'POST /echo HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 1024'#13#10#13#10 + LBody1K;
+    LResult := RunScenario('echo_1k', 'Echo 1KB (POST /echo)', LEchoReq, 100,
+      1024, 1024);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  { Scenario 4: Body sink 16KB }
-  SetLength(LBody16K, 16 * 1024);
-  FillChar(LBody16K[1], Length(LBody16K), Ord('x'));
-  LSinkReq := 'POST /sink HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: ' +
-    IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
-  LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq, 20,
-    SizeUInt(Length(LBody16K)), 0);
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 4: Body sink 16KB }
+    SetLength(LBody16K, 16 * 1024);
+    FillChar(LBody16K[1], Length(LBody16K), Ord('x'));
+    LSinkReq := 'POST /sink HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: ' +
+      IntToStr(Int64(Length(LBody16K))) + #13#10#13#10 + LBody16K;
+    LResult := RunScenario('sink_16k', 'Sink 16KB (POST /sink)', LSinkReq, 20,
+      SizeUInt(Length(LBody16K)), 0);
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  { Scenario 5: Router with params }
-  LResult := RunScenario('param_route', 'Param (GET /users/12345)',
-    'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
-    50, 0, SizeUInt(Length('user:12345')));
-  if LResult.ElapsedNs > 0 then
-    Inc(LScenariosRun);
+    { Scenario 5: Router with params }
+    LResult := RunScenario('param_route', 'Param (GET /users/12345)',
+      'GET /users/12345 HTTP/1.1'#13#10'Host: x'#13#10'Content-Length: 0'#13#10#13#10,
+      50, 0, SizeUInt(Length('user:12345')));
+    if LResult.ElapsedNs > 0 then
+      Inc(LScenariosRun);
 
-  if LScenariosRun = 0 then
-  begin
-    WriteLn('  No matching full-chain scenarios.');
-    GServer.Shutdown;
-    GServer.Free;
-    Halt(2);
+    LNoMatch := LScenariosRun = 0;
+    if LNoMatch then
+      WriteLn('  No matching full-chain scenarios.')
+    else
+      WriteLn;
+  finally
+    StopServer;
   end;
 
-  WriteLn;
-  GServer.Shutdown;
-  GServer.Free;
+  if LNoMatch then
+    Halt(2);
   WriteLn('Done.');
 end.
