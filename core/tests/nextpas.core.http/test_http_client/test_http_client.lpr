@@ -3152,6 +3152,46 @@ begin
   CheckEqual('arrived', ReadBodyStr(LResp), 'cross-authority redirect final body');
 end;
 
+procedure TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority;
+var
+  LTransportObj: TRedirectCaptureTransport;
+  LTransport: IHttpTransport;
+  LClient: IHttpClient;
+  LResp: IHttpResponse;
+  LReq: IHttpRequest;
+  LHeaders: IHttpHeaders;
+begin
+  LTransportObj := TRedirectCaptureTransport.Create;
+  LTransportObj.RedirectLocation := '//api.example.test/next';
+  LTransport := LTransportObj;
+  LClient := NewHttpClient(LTransport);
+  LHeaders := NewHeaders;
+  LHeaders.SetHeader('x-trace', 'trace-subdomain');
+  LHeaders.SetHeader('authorization', 'Bearer subdomain');
+  LHeaders.SetHeader('www-authenticate', 'Basic realm="api"');
+  LHeaders.SetHeader('cookie', 'session=sub');
+  LHeaders.SetHeader('cookie2', 'legacy=sub');
+  LReq := NewRequest(hmGet, 'http://example.test/old', LHeaders, nil, 0);
+  LResp := LClient.Send(LReq);
+  CheckEqual(Int64(2), Int64(LTransportObj.Calls),
+    'subdomain redirect performs second round trip');
+  CheckEqual(Int64(200), Int64(LResp.StatusCode),
+    'subdomain redirect transport final status');
+  CheckEqual('api.example.test', LTransportObj.SeenHost,
+    'subdomain redirect updates host');
+  CheckEqual('trace-subdomain', LTransportObj.SeenTraceHeader,
+    'subdomain redirect preserves ordinary header');
+  CheckEqual('', LTransportObj.SeenAuthorizationHeader,
+    'subdomain redirect strips authorization header');
+  CheckEqual('', LTransportObj.SeenWwwAuthenticateHeader,
+    'subdomain redirect strips www-authenticate header');
+  CheckEqual('', LTransportObj.SeenCookieHeader,
+    'subdomain redirect strips cookie header');
+  CheckEqual('', LTransportObj.SeenCookie2Header,
+    'subdomain redirect strips cookie2 header');
+  CheckEqual('arrived', ReadBodyStr(LResp), 'subdomain redirect final body');
+end;
+
 procedure TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation;
 var
   LTransportObj: TRedirectCaptureTransport;
@@ -3955,6 +3995,8 @@ begin
     @TestClientRedirectPreservesHeadersOnSameAuthority);
   T.Run('Client redirect strips sensitive headers across authority',
     @TestClientRedirectStripsSensitiveHeadersAcrossAuthority);
+  T.Run('Client redirect strips sensitive headers to subdomain authority',
+    @TestClientRedirectStripsSensitiveHeadersToSubdomainAuthority);
   T.Run('Client redirect preserves custom host header on relative Location',
     @TestClientRedirectPreservesCustomHostHeaderOnRelativeLocation);
   T.Run('Client redirect preserves custom host header on default-port authority',

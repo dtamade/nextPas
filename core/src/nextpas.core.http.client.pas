@@ -146,13 +146,6 @@ begin
     (System.Copy(AValue, 1, Length(APrefix)) = APrefix);
 end;
 
-function EndsWith(const AValue, ASuffix: string): Boolean;
-begin
-  Result := (Length(AValue) >= Length(ASuffix)) and
-    (System.Copy(AValue, Length(AValue) - Length(ASuffix) + 1,
-      Length(ASuffix)) = ASuffix);
-end;
-
 function HasRedirectQueryDelimiter(const ALocation: string): Boolean;
 var
   LI: SizeInt;
@@ -190,24 +183,6 @@ begin
   if LSchemeEnd <= 1 then
     Exit('');
   Result := LowerCase(System.Copy(ALocation, 1, LSchemeEnd - 1));
-end;
-
-function IsRedirectTrustedHost(const AInitialUrl, ARedirectUrl: TUrl): Boolean;
-var
-  LInitialHost: string;
-  LRedirectHost: string;
-begin
-  LInitialHost := LowerCase(AInitialUrl.Host);
-  LRedirectHost := LowerCase(ARedirectUrl.Host);
-  if (LInitialHost = '') or (LRedirectHost = '') then
-    Exit(False);
-  if LRedirectHost = LInitialHost then
-    Exit(True);
-  if (Pos(':', LRedirectHost) > 0) or (Pos('%', LRedirectHost) > 0) then
-    Exit(False);
-  if not EndsWith(LRedirectHost, LInitialHost) then
-    Exit(False);
-  Result := LRedirectHost[Length(LRedirectHost) - Length(LInitialHost)] = '.';
 end;
 
 function DefaultPortForScheme(const AScheme: string): UInt16;
@@ -300,7 +275,7 @@ begin
     Result.Remove('transfer-encoding');
   end;
 
-  if not IsRedirectTrustedHost(AInitialUrl, ARedirectUrl) then
+  if not IsRedirectSameAuthority(AInitialUrl, ARedirectUrl) then
   begin
     Result.Remove('authorization');
     Result.Remove('www-authenticate');
