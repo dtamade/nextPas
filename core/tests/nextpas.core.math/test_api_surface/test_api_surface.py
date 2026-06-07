@@ -477,19 +477,19 @@ REQUIRED_SCALAR_CLAMP_DOC_TRUTH = (
 REQUIRED_SCALAR_IEEE_DOC_TRUTH = (
     (
         "docs/math/README.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/API.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/GOAL_TREE.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
     (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
-        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.",
+        "`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.",
     ),
 )
 REQUIRED_SCALAR_MIN_MAX_DOC_TRUTH = (
@@ -896,6 +896,13 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("scalar-clamp-reversed-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum must not exceed maximum"),
     RequiredBehaviorTestMarker("scalar-clamp-finite-bounds", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Clamp: minimum and maximum must be finite"),
     RequiredBehaviorTestMarker("scalar-ieee-edge-contracts", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "T.Run('scalar IEEE edge contracts'"),
+    RequiredBehaviorTestMarker("scalar-ieee-round-ties-away", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Round Double ties away from zero positive"),
+    RequiredBehaviorTestMarker("scalar-ieee-abs-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Abs Double negative zero returns positive zero"),
+    RequiredBehaviorTestMarker("scalar-ieee-frac-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Frac Double exact negative integer keeps input sign"),
+    RequiredBehaviorTestMarker("scalar-ieee-hypot-inf-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Hypot Double positive infinity dominates NaN"),
+    RequiredBehaviorTestMarker("scalar-ieee-fmod-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double exact negative dividend keeps negative zero remainder"),
+    RequiredBehaviorTestMarker("scalar-ieee-fmod-huge-finite", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Fmod Double huge finite quotient stays finite remainder"),
+    RequiredBehaviorTestMarker("scalar-ieee-overflow-no-div-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "IsMulOverflow SizeUInt zero times high"),
     RequiredBehaviorTestMarker("scalar-min-max-nan", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Double propagates NaN first"),
     RequiredBehaviorTestMarker("scalar-min-max-signed-zero", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "Min Single keeps negative zero first"),
     RequiredBehaviorTestMarker("scalar-float-compare-infinity", "tests/nextpas.core.math/test_scalar/test_scalar.lpr", "FloatEquals Double +Inf exact"),

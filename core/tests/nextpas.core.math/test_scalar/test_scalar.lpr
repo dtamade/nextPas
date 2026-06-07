@@ -309,9 +309,19 @@ procedure TestScalarIEEEEdgeContracts;
 var
   LZeroUInt32: UInt32;
   LHighUInt32: UInt32;
+  LHugeDouble: Double;
+  LTinyDouble: Double;
+  LDoubleRemainder: Double;
+  LHugeSingle: Single;
+  LTinySingle: Single;
+  LSingleRemainder: Single;
 begin
   LZeroUInt32 := UInt32(0);
   LHighUInt32 := High(UInt32);
+  LHugeDouble := 1.0e308;
+  LTinyDouble := 1.0e-308;
+  LHugeSingle := Single(3.0e30);
+  LTinySingle := Single(1.0e-30);
 
   CheckEqual(Int64(3), Round(2.5), 'Round Double ties away from zero positive');
   CheckEqual(Int64(-3), Round(-2.5), 'Round Double ties away from zero negative');
@@ -362,6 +372,18 @@ begin
   CheckNear(-1.5, Fmod(-5.5, -2.0), 0.0, 'Fmod Double negative divisor negative dividend');
   CheckNear(1.0, Fmod(1.0, MakePositiveInfinity), 0.0, 'Fmod Double finite over infinity');
   Check(IsNaN(Fmod(MakePositiveInfinity, 1.0)), 'Fmod Double infinity dividend returns NaN');
+  LDoubleRemainder := Fmod(LHugeDouble, LTinyDouble);
+  Check((not IsNaN(LDoubleRemainder)) and (not IsInfinite(LDoubleRemainder)) and
+    (nextpas.core.math.scalar.Abs(LDoubleRemainder) < LTinyDouble),
+    'Fmod Double huge finite quotient stays finite remainder');
+  LDoubleRemainder := Fmod(-LHugeDouble, LTinyDouble);
+  Check(((LDoubleRemainder < 0.0) or IsDoubleNegativeZero(LDoubleRemainder)) and
+    (nextpas.core.math.scalar.Abs(LDoubleRemainder) < LTinyDouble),
+    'Fmod Double huge finite quotient keeps dividend sign');
+  LSingleRemainder := Fmod(LHugeSingle, LTinySingle);
+  Check((not IsNaN(LSingleRemainder)) and (not IsInfinite(LSingleRemainder)) and
+    (nextpas.core.math.scalar.Abs(LSingleRemainder) < LTinySingle),
+    'Fmod Single huge finite quotient stays finite remainder');
 
   CheckNear(5.0, Clamp(MakePositiveInfinity, 0.0, 5.0), 0.0,
     'Clamp Double positive infinity clamps high');

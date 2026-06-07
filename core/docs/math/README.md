@@ -87,7 +87,7 @@ boundary, so the common-symbol namespace contract no longer depends on a direct 
 
 `FloatEquals` and `FloatIsZero` reject NaN, infinite, or negative epsilon values, reject NaN values, and only treat matching infinities as equal.
 
-`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 overflow helpers must avoid divide-by-zero paths.
+`Round` uses ties away from zero; `Abs` normalizes negative zero to positive zero; `Frac` and `Fmod` preserve the input or dividend sign for zero results; finite `Fmod` inputs avoid non-finite quotient intermediates; `Hypot` treats infinities as dominant over NaN and uses a scaled finite path; UInt32 and SizeUInt overflow helpers must avoid divide-by-zero paths.
 
 ## Vector, Matrix, And Quaternion Conventions
 

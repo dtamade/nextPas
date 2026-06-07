@@ -166,6 +166,39 @@ begin
   Move(LBits, Result, SizeOf(Result));
 end;
 
+function FmodPositiveFinite(const ADividend, ADivisor: Double): Double;
+var
+  LDividend: Double;
+  LDivisor: Double;
+  LScaledDivisor: Double;
+begin
+  LDividend := ADividend;
+  LDivisor := ADivisor;
+  if LDividend < LDivisor then
+    Exit(LDividend);
+  if LDividend = LDivisor then
+    Exit(0.0);
+
+  LScaledDivisor := LDivisor;
+  while LScaledDivisor <= LDividend - LScaledDivisor do
+    LScaledDivisor := LScaledDivisor + LScaledDivisor;
+
+  while LScaledDivisor >= LDivisor do
+  begin
+    if LDividend >= LScaledDivisor then
+    begin
+      LDividend := LDividend - LScaledDivisor;
+      if LDividend = 0.0 then
+        Exit(0.0);
+    end;
+    LScaledDivisor := LScaledDivisor * 0.5;
+  end;
+
+  if LDividend >= LDivisor then
+    LDividend := LDividend - LDivisor;
+  Result := LDividend;
+end;
+
 function ValidComparisonEpsilon(const AEpsilon: Single): Boolean; inline;
 begin
   Result := (not SingleIsNaN(AEpsilon)) and (not SingleIsInfinite(AEpsilon)) and
@@ -670,25 +703,42 @@ begin
 end;
 
 function Fmod(const AX, AY: Single): Single;
+var
+  LResult: Double;
 begin
   if IsNaN(AX) or IsNaN(AY) or (AY = 0.0) or IsInfinite(AX) then
     Exit(SingleQuietNaN);
   if IsInfinite(AY) then
     Exit(AX);
-  Result := AX - AY * System.Int(AX / AY);
-  if Result = 0.0 then
+  LResult := FmodPositiveFinite(Double(Abs(AX)), Double(Abs(AY)));
+  if LResult = 0.0 then
     Result := SingleSignedZero(SingleHasSignBit(AX));
+  if LResult = 0.0 then
+    Exit;
+  Result := Single(LResult);
+  if Result = 0.0 then
+    Result := SingleSignedZero(SingleHasSignBit(AX))
+  else if SingleHasSignBit(AX) then
+    Result := -Result;
 end;
 
 function Fmod(const AX, AY: Double): Double;
+var
+  LResult: Double;
 begin
   if IsNaN(AX) or IsNaN(AY) or (AY = 0.0) or IsInfinite(AX) then
     Exit(DoubleQuietNaN);
   if IsInfinite(AY) then
     Exit(AX);
-  Result := AX - AY * System.Int(AX / AY);
-  if Result = 0.0 then
+  LResult := FmodPositiveFinite(Abs(AX), Abs(AY));
+  if LResult = 0.0 then
     Result := DoubleSignedZero(DoubleHasSignBit(AX));
+  if LResult = 0.0 then
+    Exit;
+  if DoubleHasSignBit(AX) then
+    Result := -LResult
+  else
+    Result := LResult;
 end;
 
 end.
