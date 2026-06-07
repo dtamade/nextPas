@@ -60,6 +60,7 @@ type
     FRuntimeVarNames: array of string;
     FRuntimeStrVarNames: array of string;
     FRuntimeArrVarNames: array of string;
+    FBorrowedRuntimeArrVarNames: array of string;
     FCurrentMethodClass: string;
     FCurrentRetVarName: string;
     FClassVarNames: array of string;
@@ -76,6 +77,7 @@ type
     procedure RegisterRuntimeVar(const AName: string);
     procedure RegisterRuntimeStrVar(const AName: string);
     procedure RegisterRuntimeArrVar(const AName: string);
+    procedure RegisterBorrowedRuntimeArrVar(const AName: string);
     procedure RegisterClassVar(const AName, AClassName: string);
     procedure RegisterRecordVar(const AName, ATypeName: string);
     procedure RegisterPointerVar(const AName, APointeeTypeName: string);
@@ -86,6 +88,10 @@ type
     function IsRuntimeVar(const AName: string): Boolean;
     function IsRuntimeStrVar(const AName: string): Boolean;
     function IsRuntimeArrVar(const AName: string): Boolean;
+    function IsBorrowedRuntimeArrVar(const AName: string): Boolean;
+    function IsStaticRuntimeArrVar(const AName: string): Boolean;
+    function DynArrayElemSizeOfVar(const AName: string): Int64;
+    procedure EmitOwnedDynArrayCleanupNodes;
     function IsRecordVar(const AName: string): Boolean;
     function IsVarParam(const AName: string): Boolean;
     function IsVarParamAtPosition(const ADecl: TGreenNode; APosition: LongInt): Boolean;
@@ -601,6 +607,19 @@ begin
   FRuntimeArrVarNames[NextIndex] := AName;
 end;
 
+procedure TSemanticAnalyzer.RegisterBorrowedRuntimeArrVar(const AName: string);
+var
+  Idx: LongInt;
+  NextIndex: SizeInt;
+begin
+  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
+    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
+      Exit;
+  NextIndex := Length(FBorrowedRuntimeArrVarNames);
+  SetLength(FBorrowedRuntimeArrVarNames, NextIndex + 1);
+  FBorrowedRuntimeArrVarNames[NextIndex] := AName;
+end;
+
 function TSemanticAnalyzer.IsRuntimeArrVar(const AName: string): Boolean;
 var
   Idx: LongInt;
@@ -609,6 +628,52 @@ begin
     if SameText(FRuntimeArrVarNames[Idx], AName) then
       Exit(True);
   Result := False;
+end;
+
+function TSemanticAnalyzer.IsBorrowedRuntimeArrVar(const AName: string): Boolean;
+var
+  Idx: LongInt;
+begin
+  for Idx := 0 to Length(FBorrowedRuntimeArrVarNames) - 1 do
+    if SameText(FBorrowedRuntimeArrVarNames[Idx], AName) then
+      Exit(True);
+  Result := False;
+end;
+
+function TSemanticAnalyzer.IsStaticRuntimeArrVar(const AName: string): Boolean;
+var
+  Value: Int64;
+begin
+  Result := FModel.LookupConstValue(AName + '$arr_static', Value) and
+    (Value <> 0);
+end;
+
+function TSemanticAnalyzer.DynArrayElemSizeOfVar(const AName: string): Int64;
+begin
+  Result := 8;
+  if not FModel.LookupConstValue(AName + '$arr_elem_size', Result) then
+    Result := 8;
+end;
+
+procedure TSemanticAnalyzer.EmitOwnedDynArrayCleanupNodes;
+var
+  I: LongInt;
+  VarName: string;
+begin
+  for I := 0 to Length(FRuntimeArrVarNames) - 1 do
+  begin
+    VarName := FRuntimeArrVarNames[I];
+    if (VarName = '') or IsBorrowedRuntimeArrVar(VarName) or
+      IsStaticRuntimeArrVar(VarName) then
+      Continue;
+    FModel.AddTypedHirNode(
+      'dynarray-cleanup-runtime',
+      VarName,
+      0,
+      0,
+      VarName + #9 + 'int ' + IntToStr(DynArrayElemSizeOfVar(VarName)) + #10
+    );
+  end;
 end;
 
 procedure TSemanticAnalyzer.RegisterClassVar(const AName, AClassName: string);
@@ -10091,6 +10156,7 @@ begin
     end;
     if (Child.NodeKind = gnkExitStatement) and FNoFold then
     begin
+      EmitOwnedDynArrayCleanupNodes;
       if (FCurrentRetVarName <> '') and IsRuntimeStrVar(FCurrentRetVarName) then
         FModel.AddTypedHirNode('ret-str-runtime', FCurrentRetVarName, 0, 0, FCurrentRetVarName)
       else if FCurrentRetVarName <> '' then
@@ -10796,6 +10862,7 @@ begin
         begin
           if EncodeRuntimeIntExprFold(Arg, Operand) then
           begin
+            EmitOwnedDynArrayCleanupNodes;
             NodeId := FModel.AddTypedHirNode(
               'halt-call-runtime', 'Halt', 0, 0, Operand);
             if BuildRuntimeScalarHirExpr(Arg, ExprId) then
@@ -10809,6 +10876,7 @@ begin
           if EvaluateIntegerConstant(Arg, Value) then
             Operand := IntToStr(Value);
         end;
+        EmitOwnedDynArrayCleanupNodes;
         FModel.AddTypedHirNode('halt-call', 'Halt', 0, 0, Operand);
         FCurrentBlockTerminated := True;
         Continue;
@@ -11007,21 +11075,16 @@ begin
         begin
           RhsNode := Arg.ChildAt(ArgIndex);
           if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
-            IsRuntimeArrVar(RhsNode.Text) then
+            IsRuntimeArrVar(RhsNode.Text) and
+            (not IsBorrowedRuntimeArrVar(RhsNode.Text)) and
+            (not IsStaticRuntimeArrVar(RhsNode.Text)) then
           begin
             if EncodeRuntimeIntExprFold(Arg.ChildAt(ArgIndex + 1), Operand) then
-            begin
-              if FModel.LookupConstValue(RhsNode.Text + '$arr_elem_size', Value) then
-                FModel.AddTypedHirNode(
-                  'setlength-arr-runtime', RhsNode.Text, 0, 0,
-                  RhsNode.Text + #9 + Operand + #9 + IntToStr(Value)
-                )
-              else
-                FModel.AddTypedHirNode(
-                  'setlength-arr-runtime', RhsNode.Text, 0, 0,
-                  RhsNode.Text + #9 + Operand
-                );
-            end;
+              FModel.AddTypedHirNode(
+                'setlength-arr-runtime', RhsNode.Text, 0, 0,
+                RhsNode.Text + #9 + Operand + #9 +
+                IntToStr(DynArrayElemSizeOfVar(RhsNode.Text))
+              );
           end
           else if (RhsNode <> nil) and (RhsNode.NodeKind = gnkIdentifier) and
             (FCurrentMethodClass <> '') and
@@ -12015,6 +12078,7 @@ begin
   WalkHaltCalls(RootNode);
   if FNoFold and not FCurrentBlockTerminated then
   begin
+    EmitOwnedDynArrayCleanupNodes;
     FModel.AddTypedHirNode('halt-call-runtime', 'Halt', 0, 0, 'int 0' + #10);
     FCurrentBlockTerminated := True;
   end;
@@ -12107,6 +12171,7 @@ begin
     SetLength(FVarParamNames, 0);
     SetLength(FRuntimeVarNames, 0);
     SetLength(FRuntimeArrVarNames, 0);
+    SetLength(FBorrowedRuntimeArrVarNames, 0);
     SetLength(FRuntimeStrVarNames, 0);
     SetLength(FClassVarNames, 0);
     SetLength(FClassVarTypes, 0);
@@ -12165,6 +12230,7 @@ begin
                     (Child.ChildAt(K + 1).NodeKind = gnkArrayType))) then
                 begin
                   RegisterRuntimeArrVar(RetVarName);
+                  RegisterBorrowedRuntimeArrVar(RetVarName);
                 end
                 else if (TypeChild <> nil) and
                   (Length(TypeChild.Text) > 1) and (TypeChild.Text[1] = '^') then
@@ -12286,8 +12352,14 @@ begin
                 FModel.AddTypedHirNode('var-decl-str-runtime', RetVarName,
                   0, 0, RetVarName)
               else if IsRuntimeArrVar(RetVarName) then
-                FModel.AddTypedHirNode('var-decl-arr-runtime', RetVarName,
-                  0, 0, RetVarName)
+              begin
+                if IsBorrowedRuntimeArrVar(RetVarName) then
+                  FModel.AddTypedHirNode('var-decl-arr-borrowed-runtime',
+                    RetVarName, 0, 0, RetVarName)
+                else
+                  FModel.AddTypedHirNode('var-decl-arr-runtime', RetVarName,
+                    0, 0, RetVarName);
+              end
               else if IsRecordVar(RetVarName) then
                 FModel.AddTypedHirNode('var-decl-ptr-runtime', RetVarName,
                   0, 0, RetVarName)
@@ -12382,6 +12454,7 @@ begin
     WalkHaltCalls(Entry.Body);
     if not FCurrentBlockTerminated then
     begin
+      EmitOwnedDynArrayCleanupNodes;
       if IsStrReturn then
         FModel.AddTypedHirNode('ret-str-runtime', RetVarName, 0, 0, RetVarName)
       else

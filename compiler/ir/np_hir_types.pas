@@ -35,6 +35,7 @@ type
     hnkVarDeclRuntime,
     hnkVarDeclStrRuntime,
     hnkVarDeclArrRuntime,
+    hnkVarDeclArrBorrowedRuntime,
     hnkVarDeclPtrRuntime,
     hnkVarDeclVarrefRuntime,
     hnkVarDeclRecordRuntime,
@@ -64,6 +65,7 @@ type
     hnkWriteStrVarRuntime,
     hnkWriteCall,
     hnkSetLengthArrRuntime,
+    hnkDynArrayCleanupRuntime,
     hnkAssignArrElemRuntime,
     hnkMethodBodyBegin,
     hnkClassNewRuntime,
@@ -161,6 +163,7 @@ begin
     'var-decl-runtime': Result := hnkVarDeclRuntime;
     'var-decl-str-runtime': Result := hnkVarDeclStrRuntime;
     'var-decl-arr-runtime': Result := hnkVarDeclArrRuntime;
+    'var-decl-arr-borrowed-runtime': Result := hnkVarDeclArrBorrowedRuntime;
     'var-decl-ptr-runtime': Result := hnkVarDeclPtrRuntime;
     'var-decl-varref-runtime': Result := hnkVarDeclVarrefRuntime;
     'var-decl-record-runtime': Result := hnkVarDeclRecordRuntime;
@@ -190,6 +193,7 @@ begin
     'write-str-var-runtime': Result := hnkWriteStrVarRuntime;
     'write-call': Result := hnkWriteCall;
     'setlength-arr-runtime': Result := hnkSetLengthArrRuntime;
+    'dynarray-cleanup-runtime': Result := hnkDynArrayCleanupRuntime;
     'assign-arr-elem-runtime': Result := hnkAssignArrElemRuntime;
     'method-body-begin': Result := hnkMethodBodyBegin;
     'class-new-runtime': Result := hnkClassNewRuntime;

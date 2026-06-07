@@ -176,9 +176,11 @@ type
     function EmitConstInt(const AValue: Int64): THIRValueId;
     function EmitConstIntOfType(const AValue: Int64;
       const ATypeId: THIRTypeId): THIRValueId;
+    function EmitNullPtrValue: THIRValueId;
     function ParseArrayDeclOperand(const AOperand: string; out AName: string;
       out AIsStatic: Boolean; out ALow, AHigh, ALength: Int64): Boolean;
     procedure EmitStaticArrayBacking(const AName: string; const ALength: Int64);
+    procedure InitializeDynArraySlots(const AName: string);
     function NormalizeArrayIndexValue(const AArrayName: string;
       const AIndexValue: THIRValueId): THIRValueId;
     function EmitStructuredSymbolValue(const AExpr: TSemanticHirExpr;
@@ -239,6 +241,7 @@ type
     procedure ProcessAssignStrConcat(const ANode: TTypedHirNode);
     procedure ProcessRetStrRuntime(const ANode: TTypedHirNode);
     procedure ProcessSetLengthArr(const ANode: TTypedHirNode);
+    procedure ProcessDynArrayCleanup(const ANode: TTypedHirNode);
     procedure ProcessAssignArrElem(const ANode: TTypedHirNode);
     procedure ProcessMethodBegin(const ANode: TTypedHirNode);
     procedure ProcessClassNew(const ANode: TTypedHirNode);
@@ -693,6 +696,19 @@ begin
   Result := Instr.ResultId;
 end;
 
+function THIRBuilder.EmitNullPtrValue: THIRValueId;
+var
+  Instr: THIRInstr;
+begin
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikLoad;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'null';
+  EmitInstr(Instr);
+  Result := Instr.ResultId;
+end;
+
 function THIRBuilder.ParseArrayDeclOperand(const AOperand: string;
   out AName: string; out AIsStatic: Boolean; out ALow, AHigh,
   ALength: Int64): Boolean;
@@ -785,6 +801,24 @@ begin
     if LenValue <> 0 then
       EmitStore(GetIntType, LenValue, LenSlot);
   end;
+end;
+
+procedure THIRBuilder.InitializeDynArraySlots(const AName: string);
+var
+  PtrSlot, LenSlot, NullPtr, ZeroLen: THIRValueId;
+begin
+  if AName = '' then
+    Exit;
+  PtrSlot := FindAlloca(AName + '$ptr');
+  LenSlot := FindAlloca(AName + '$len');
+  if (PtrSlot = 0) or (LenSlot = 0) then
+    Exit;
+  NullPtr := EmitNullPtrValue;
+  ZeroLen := EmitConstIntOfType(0, GetIntType);
+  if (NullPtr = 0) or (ZeroLen = 0) then
+    Exit;
+  EmitStore(GetPtrType, NullPtr, PtrSlot);
+  EmitStore(GetIntType, ZeroLen, LenSlot);
 end;
 
 function THIRBuilder.NormalizeArrayIndexValue(const AArrayName: string;
@@ -3121,7 +3155,8 @@ begin
       EnsureAlloca(ANode.Operand + '$len', GetIntType);
     end;
   end
-  else if ANode.NodeKind = hnkVarDeclArrRuntime then
+  else if (ANode.NodeKind = hnkVarDeclArrRuntime) or
+    (ANode.NodeKind = hnkVarDeclArrBorrowedRuntime) then
   begin
     if not ParseArrayDeclOperand(ANode.Operand, ArrName, IsStaticArray,
       ArrLow, ArrHigh, ArrLength) then
@@ -3170,6 +3205,8 @@ begin
         EnsureAlloca(ArrName + '$len', GetIntType);
         if IsStaticArray then
           EmitStaticArrayBacking(ArrName, ArrLength);
+        if (ANode.NodeKind = hnkVarDeclArrRuntime) and (not IsStaticArray) then
+          InitializeDynArraySlots(ArrName);
       end;
     end;
   end
@@ -4520,7 +4557,8 @@ procedure THIRBuilder.ProcessSetLengthArr(const ANode: TTypedHirNode);
 var
   TabPos: LongInt;
   ArrName, Blob, ElemSizeStr: string;
-  SizeVal, PtrVal, ElemSizeVal: THIRValueId;
+  SizeVal, PtrVal, ElemSizeVal, OldPtrVal, OldLenVal: THIRValueId;
+  PtrAlloca, LenAlloca: THIRValueId;
   Instr: THIRInstr;
 begin
   TabPos := Pos(#9, ANode.Operand);
@@ -4540,41 +4578,83 @@ begin
   SizeVal := ParseIntBlob(Blob);
   if SizeVal = 0 then Exit;
 
-  EmitStore(GetIntType, SizeVal, FindAlloca(ArrName + '$len'));
+  PtrAlloca := FindAlloca(ArrName + '$ptr');
+  LenAlloca := FindAlloca(ArrName + '$len');
+  if (PtrAlloca = 0) or (LenAlloca = 0) then
+    Exit;
 
   if ElemSizeStr <> '' then
-  begin
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikLoad;
-    Instr.TypeId := GetIntType;
-    Instr.IntrinsicName := 'const:' + ElemSizeStr;
-    EmitInstr(Instr);
-    ElemSizeVal := Instr.ResultId;
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := GetPtrType;
-    Instr.IntrinsicName := 'arr_alloc_sized';
-    SetLength(Instr.Operands, 2);
-    Instr.Operands[0] := MakeOperand(SizeVal);
-    Instr.Operands[1] := MakeOperand(ElemSizeVal);
-    EmitInstr(Instr);
-  end
+    ElemSizeVal := ParseIntBlob('int ' + ElemSizeStr + #10)
   else
-  begin
-    FillChar(Instr, SizeOf(Instr), 0);
-    Instr.ResultId := FModule.NewValue;
-    Instr.Kind := hikIntrinsic;
-    Instr.TypeId := GetPtrType;
-    Instr.IntrinsicName := 'arr_alloc';
-    SetLength(Instr.Operands, 1);
-    Instr.Operands[0] := MakeOperand(SizeVal);
-    EmitInstr(Instr);
-  end;
+    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+  if ElemSizeVal = 0 then
+    Exit;
+
+  OldPtrVal := EmitLoad(GetPtrType, PtrAlloca);
+  OldLenVal := EmitLoad(GetIntType, LenAlloca);
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := GetPtrType;
+  Instr.IntrinsicName := 'dynarray_resize';
+  SetLength(Instr.Operands, 4);
+  Instr.Operands[0] := MakeTypedOperand(OldPtrVal, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(OldLenVal, GetIntType);
+  Instr.Operands[2] := MakeTypedOperand(SizeVal, GetIntType);
+  Instr.Operands[3] := MakeTypedOperand(ElemSizeVal, GetIntType);
+  EmitInstr(Instr);
   PtrVal := Instr.ResultId;
 
-  EmitStore(GetPtrType, PtrVal, FindAlloca(ArrName + '$ptr'));
+  EmitStore(GetPtrType, PtrVal, PtrAlloca);
+  EmitStore(GetIntType, SizeVal, LenAlloca);
+end;
+
+procedure THIRBuilder.ProcessDynArrayCleanup(const ANode: TTypedHirNode);
+var
+  TabPos: LongInt;
+  VarName, ElemSizeBlob: string;
+  PtrAlloca, LenAlloca: THIRValueId;
+  PtrVal, LenVal, ElemSizeVal: THIRValueId;
+  Instr: THIRInstr;
+begin
+  VarName := ANode.Operand;
+  ElemSizeBlob := '';
+  TabPos := Pos(#9, ANode.Operand);
+  if TabPos > 0 then
+  begin
+    VarName := Copy(ANode.Operand, 1, TabPos - 1);
+    ElemSizeBlob := Copy(ANode.Operand, TabPos + 1, Length(ANode.Operand));
+  end;
+  if VarName = '' then
+    VarName := ANode.DisplayName;
+  if VarName = '' then
+    Exit;
+
+  PtrAlloca := FindAlloca(VarName + '$ptr');
+  LenAlloca := FindAlloca(VarName + '$len');
+  if (PtrAlloca = 0) or (LenAlloca = 0) then
+    Exit;
+
+  PtrVal := EmitLoad(GetPtrType, PtrAlloca);
+  LenVal := EmitLoad(GetIntType, LenAlloca);
+  if ElemSizeBlob <> '' then
+    ElemSizeVal := ParseIntBlob(ElemSizeBlob)
+  else
+    ElemSizeVal := EmitConstIntOfType(8, GetIntType);
+  if ElemSizeVal = 0 then
+    Exit;
+
+  FillChar(Instr, SizeOf(Instr), 0);
+  Instr.ResultId := FModule.NewValue;
+  Instr.Kind := hikIntrinsic;
+  Instr.TypeId := FModule.Types.AddType(htkVoid, 'void');
+  Instr.IntrinsicName := 'dynarray_release';
+  SetLength(Instr.Operands, 3);
+  Instr.Operands[0] := MakeTypedOperand(PtrVal, GetPtrType);
+  Instr.Operands[1] := MakeTypedOperand(LenVal, GetIntType);
+  Instr.Operands[2] := MakeTypedOperand(ElemSizeVal, GetIntType);
+  EmitInstr(Instr);
 end;
 
 procedure THIRBuilder.ProcessAssignArrElem(const ANode: TTypedHirNode);
@@ -5701,7 +5781,8 @@ begin
 
   case ANode.NodeKind of
     hnkVarDeclRuntime, hnkVarDeclStrRuntime, hnkVarDeclArrRuntime,
-    hnkVarDeclPtrRuntime, hnkVarDeclVarrefRuntime, hnkVarDeclRecordRuntime:
+    hnkVarDeclArrBorrowedRuntime, hnkVarDeclPtrRuntime,
+    hnkVarDeclVarrefRuntime, hnkVarDeclRecordRuntime:
       ProcessVarDecl(ANode);
     hnkAssignRuntime:
       ProcessAssign(ANode);
@@ -5753,6 +5834,8 @@ begin
       ProcessWriteStrVar(ANode);
     hnkSetLengthArrRuntime:
       ProcessSetLengthArr(ANode);
+    hnkDynArrayCleanupRuntime:
+      ProcessDynArrayCleanup(ANode);
     hnkAssignArrElemRuntime:
       ProcessAssignArrElem(ANode);
     hnkMethodBodyBegin:

@@ -27,11 +27,14 @@ type
     FGlobalRefCount: LongInt;
     FNeedsWriteInt: Boolean;
     FNeedsAlloc: Boolean;
+    FNeedsFree: Boolean;
+    FNeedsMemcpy: Boolean;
     FNeedsStrConcat: Boolean;
     FNeedsStrCmp: Boolean;
     FNeedsIntToStr: Boolean;
     FNeedsObjectAlloc: Boolean;
     FNeedsObjectFreeRelease: Boolean;
+    FNeedsDynArrayHelpers: Boolean;
     FStrConstants: array of string;
     FStrConstCount: LongInt;
     FCurrentReturnTypeId: THIRTypeId;
@@ -67,6 +70,7 @@ type
     procedure EmitAllocHelper;
     procedure EmitMemcpyHelper;
     procedure EmitStrConcatHelper;
+    procedure EmitDynArrayHelpers;
     procedure EmitObjectAllocHelper;
     procedure EmitObjectFreeReleaseHelper;
     procedure EmitIntfRefCountHelpers;
@@ -119,11 +123,14 @@ begin
   FGlobalRefCount := 0;
   FNeedsWriteInt := False;
   FNeedsAlloc := False;
+  FNeedsFree := False;
+  FNeedsMemcpy := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
+  FNeedsDynArrayHelpers := False;
   FIsCheckCounter := 0;
   FObjectFreeCounter := 0;
   FPendingObjectFreeActive := False;
@@ -332,6 +339,7 @@ end;
 procedure THIRLlvmEmitter.EmitObjectFreeRelease(const AInstr: THIRInstr);
 begin
   FNeedsAlloc := True;
+  FNeedsFree := True;
   FNeedsObjectFreeRelease := True;
   if Length(AInstr.Operands) >= 1 then
     Emit('  call void @np_object_free_release(ptr ' +
@@ -529,6 +537,7 @@ begin
       else if AInstr.IntrinsicName = 'str_concat' then
       begin
         FNeedsAlloc := True;
+        FNeedsMemcpy := True;
         FNeedsStrConcat := True;
         if Length(AInstr.Operands) >= 6 then
         begin
@@ -682,6 +691,31 @@ begin
             ' = call ptr @np_alloc(i64 %arralloc.' +
             IntToStr(AInstr.ResultId) + '.sz)');
         end;
+      end
+      else if AInstr.IntrinsicName = 'dynarray_resize' then
+      begin
+        FNeedsAlloc := True;
+        FNeedsFree := True;
+        FNeedsMemcpy := True;
+        FNeedsDynArrayHelpers := True;
+        if Length(AInstr.Operands) >= 4 then
+          Emit('  ' + ValueRef(AInstr.ResultId) +
+            ' = call ptr @np_dynarray_resize(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[3].ValueId) + ')');
+      end
+      else if AInstr.IntrinsicName = 'dynarray_release' then
+      begin
+        FNeedsAlloc := True;
+        FNeedsFree := True;
+        FNeedsDynArrayHelpers := True;
+        if Length(AInstr.Operands) >= 3 then
+          Emit('  call void @np_dynarray_release(ptr ' +
+            ValueRef(AInstr.Operands[0].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[1].ValueId) + ', i64 ' +
+            ValueRef(AInstr.Operands[2].ValueId) + ')');
       end
       else if AInstr.IntrinsicName = 'class_alloc' then
       begin
@@ -957,11 +991,14 @@ begin
   FStrConstCount := 0;
   FNeedsWriteInt := False;
   FNeedsAlloc := False;
+  FNeedsFree := False;
+  FNeedsMemcpy := False;
   FNeedsStrConcat := False;
   FNeedsStrCmp := False;
   FNeedsIntToStr := False;
   FNeedsObjectAlloc := False;
   FNeedsObjectFreeRelease := False;
+  FNeedsDynArrayHelpers := False;
   FNeedsExceptionRuntime := False;
   FTryCounter := 0;
   FObjectFreeCounter := 0;
@@ -999,17 +1036,29 @@ begin
   if FNeedsAlloc then
     EmitAllocHelper;
 
-  if FNeedsStrConcat then
+  if FNeedsMemcpy then
     EmitMemcpyHelper;
 
-  if FNeedsStrConcat or FNeedsIntToStr then
+  if FNeedsStrConcat then
     EmitStrConcatHelper;
+
+  if FNeedsDynArrayHelpers then
+    EmitDynArrayHelpers;
 
   if FNeedsObjectAlloc then
     EmitObjectAllocHelper;
 
   if FNeedsObjectFreeRelease then
+  begin
     EmitObjectFreeReleaseHelper;
+    EmitObjectReleaseValidHelper;
+  end;
+
+  if FNeedsFree then
+    EmitFreeHelper;
+
+  if FNeedsObjectFreeRelease then
+    EmitObjectReleaseInvalidHelper;
 
   if FNeedsAlloc then
     EmitAllocatorFaultHelper;
@@ -1322,6 +1371,105 @@ begin
   Emit('}');
 end;
 
+procedure THIRLlvmEmitter.EmitDynArrayHelpers;
+begin
+  Emit('');
+  Emit('define internal void @np_dynarray_fault(i64 %code, i64 %arg0, i64 %arg1) {');
+  Emit('entry:');
+  Emit('  call void @llvm.trap()');
+  Emit('  unreachable');
+  Emit('}');
+  Emit('');
+  Emit('define internal void @np_dynarray_release(ptr %ptr, i64 %len, i64 %elem_size) {');
+  Emit('entry:');
+  Emit('  %release.isnull = icmp eq ptr %ptr, null');
+  Emit('  br i1 %release.isnull, label %release.done, label %release.elem.check');
+  Emit('release.elem.check:');
+  Emit('  %release.elem.zero = icmp eq i64 %elem_size, 0');
+  Emit('  br i1 %release.elem.zero, label %release.fault.elem, label %release.size');
+  Emit('release.fault.elem:');
+  Emit('  call void @np_dynarray_fault(i64 1, i64 %len, i64 %elem_size)');
+  Emit('  unreachable');
+  Emit('release.size:');
+  Emit('  %release.size.bytes = mul i64 %len, %elem_size');
+  Emit('  %release.size.div = udiv i64 %release.size.bytes, %elem_size');
+  Emit('  %release.size.ok = icmp eq i64 %release.size.div, %len');
+  Emit('  br i1 %release.size.ok, label %release.zero.check, label %release.fault.size');
+  Emit('release.fault.size:');
+  Emit('  call void @np_dynarray_fault(i64 2, i64 %len, i64 %elem_size)');
+  Emit('  unreachable');
+  Emit('release.zero.check:');
+  Emit('  %release.size.zero = icmp eq i64 %release.size.bytes, 0');
+  Emit('  br i1 %release.size.zero, label %release.done, label %release.call');
+  Emit('release.call:');
+  Emit('  call void @np_free(ptr %ptr, i64 %release.size.bytes)');
+  Emit('  br label %release.done');
+  Emit('release.done:');
+  Emit('  ret void');
+  Emit('}');
+  Emit('');
+  Emit('define internal ptr @np_dynarray_resize(ptr %old_ptr, i64 %old_len, i64 %new_len, i64 %elem_size) {');
+  Emit('entry:');
+  Emit('  %resize.new.zero = icmp eq i64 %new_len, 0');
+  Emit('  br i1 %resize.new.zero, label %resize.release.zero, label %resize.same.check');
+  Emit('resize.release.zero:');
+  Emit('  call void @np_dynarray_release(ptr %old_ptr, i64 %old_len, i64 %elem_size)');
+  Emit('  ret ptr null');
+  Emit('resize.same.check:');
+  Emit('  %resize.same.len = icmp eq i64 %old_len, %new_len');
+  Emit('  br i1 %resize.same.len, label %resize.same, label %resize.elem.check');
+  Emit('resize.same:');
+  Emit('  ret ptr %old_ptr');
+  Emit('resize.elem.check:');
+  Emit('  %resize.elem.zero = icmp eq i64 %elem_size, 0');
+  Emit('  br i1 %resize.elem.zero, label %resize.fault.elem, label %resize.alloc.size');
+  Emit('resize.fault.elem:');
+  Emit('  call void @np_dynarray_fault(i64 3, i64 %new_len, i64 %elem_size)');
+  Emit('  unreachable');
+  Emit('resize.alloc.size:');
+  Emit('  %resize.alloc.bytes = mul i64 %new_len, %elem_size');
+  Emit('  %resize.alloc.div = udiv i64 %resize.alloc.bytes, %elem_size');
+  Emit('  %resize.alloc.ok = icmp eq i64 %resize.alloc.div, %new_len');
+  Emit('  br i1 %resize.alloc.ok, label %resize.alloc, label %resize.fault.alloc');
+  Emit('resize.fault.alloc:');
+  Emit('  call void @np_dynarray_fault(i64 4, i64 %new_len, i64 %elem_size)');
+  Emit('  unreachable');
+  Emit('resize.alloc:');
+  Emit('  %resize.new.ptr = call ptr @np_alloc(i64 %resize.alloc.bytes)');
+  Emit('  %resize.old.isnull = icmp eq ptr %old_ptr, null');
+  Emit('  br i1 %resize.old.isnull, label %resize.done, label %resize.old.size');
+  Emit('resize.old.size:');
+  Emit('  %resize.old.bytes = mul i64 %old_len, %elem_size');
+  Emit('  %resize.old.div = udiv i64 %resize.old.bytes, %elem_size');
+  Emit('  %resize.old.ok = icmp eq i64 %resize.old.div, %old_len');
+  Emit('  br i1 %resize.old.ok, label %resize.copy.select, label %resize.fault.old');
+  Emit('resize.fault.old:');
+  Emit('  call void @np_dynarray_fault(i64 5, i64 %old_len, i64 %elem_size)');
+  Emit('  unreachable');
+  Emit('resize.copy.select:');
+  Emit('  %resize.copy.use.old = icmp ule i64 %old_len, %new_len');
+  Emit('  %resize.copy.len = select i1 %resize.copy.use.old, i64 %old_len, i64 %new_len');
+  Emit('  %resize.copy.bytes = mul i64 %resize.copy.len, %elem_size');
+  Emit('  %resize.copy.div = udiv i64 %resize.copy.bytes, %elem_size');
+  Emit('  %resize.copy.ok = icmp eq i64 %resize.copy.div, %resize.copy.len');
+  Emit('  br i1 %resize.copy.ok, label %resize.copy.check, label %resize.fault.copy');
+  Emit('resize.fault.copy:');
+  Emit('  call void @np_dynarray_fault(i64 6, i64 %resize.copy.len, i64 %elem_size)');
+  Emit('  unreachable');
+  Emit('resize.copy.check:');
+  Emit('  %resize.copy.zero = icmp eq i64 %resize.copy.bytes, 0');
+  Emit('  br i1 %resize.copy.zero, label %resize.release.old, label %resize.copy');
+  Emit('resize.copy:');
+  Emit('  call void @np_memcpy(ptr %resize.new.ptr, ptr %old_ptr, i64 %resize.copy.bytes)');
+  Emit('  br label %resize.release.old');
+  Emit('resize.release.old:');
+  Emit('  call void @np_dynarray_release(ptr %old_ptr, i64 %old_len, i64 %elem_size)');
+  Emit('  br label %resize.done');
+  Emit('resize.done:');
+  Emit('  ret ptr %resize.new.ptr');
+  Emit('}');
+end;
+
 procedure THIRLlvmEmitter.EmitObjectAllocHelper;
 begin
   Emit('');
@@ -1368,9 +1516,6 @@ begin
   Emit('done:');
   Emit('  ret void');
   Emit('}');
-  EmitObjectReleaseValidHelper;
-  EmitFreeHelper;
-  EmitObjectReleaseInvalidHelper;
 end;
 
 procedure THIRLlvmEmitter.EmitObjectReleaseValidHelper;
