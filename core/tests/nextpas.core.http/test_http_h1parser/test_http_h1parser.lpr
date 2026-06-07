@@ -226,6 +226,68 @@ begin
     'close duplicate response header is not reusable');
 end;
 
+procedure TestResponseNonChunkedTransferEncodingEndsAtEof;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: gzip'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(not LP.IsComplete, 'non-chunked transfer-encoding waits for EOF');
+  Check(not LP.HasError, 'non-chunked transfer-encoding has no parser error before EOF');
+  Check(not LP.ShouldKeepAlive,
+    'non-chunked transfer-encoding response is not reusable');
+  LP.Finish;
+  Check(not LP.HasError, 'EOF completes non-chunked transfer-encoding response without parser error');
+  Check(LP.IsComplete, 'EOF completes non-chunked transfer-encoding response');
+  CheckEqual('hello', LP.GetBody,
+    'non-chunked transfer-encoding response body is close-delimited');
+end;
+
+procedure TestResponseTransferEncodingTokenBoundaryControlsReuse;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: xchunked'#13#10#13#10 +
+           'hello';
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(not LP.IsComplete, 'non-chunked token waits for EOF');
+  Check(not LP.ShouldKeepAlive,
+    'transfer-encoding token containing chunked substring is not reusable');
+  LP.Finish;
+  Check(not LP.HasError,
+    'EOF completes transfer-encoding token containing chunked substring');
+  Check(LP.IsComplete,
+    'transfer-encoding token containing chunked substring completes at EOF');
+end;
+
+procedure TestResponseDuplicateTransferEncodingFinalChunkedKeepsAlive;
+var
+  LP: IH1Parser;
+  LResp: string;
+begin
+  LP := NewH1ResponseParser;
+  LResp := 'HTTP/1.1 200 OK'#13#10 +
+           'Transfer-Encoding: gzip'#13#10 +
+           'Transfer-Encoding: chunked'#13#10#13#10 +
+           '2'#13#10'ok'#13#10 +
+           '0'#13#10#13#10;
+  LP.Execute(PAnsiChar(LResp), Length(LResp));
+  Check(LP.IsComplete, 'duplicate transfer-encoding final chunked response completes');
+  Check(not LP.HasError,
+    'duplicate transfer-encoding final chunked response has no parser error');
+  Check(LP.ShouldKeepAlive,
+    'duplicate transfer-encoding final chunked response is reusable');
+  CheckEqual('ok', LP.GetBody,
+    'duplicate transfer-encoding final chunked response body is decoded');
+end;
+
 procedure TestResponseContentLengthTruncatedAtEof;
 var
   LP: IH1Parser;
@@ -2173,6 +2235,12 @@ begin
     @TestResponseConnectionCloseTokenListDoesNotReuse);
   T.Run('Response Connection close duplicate header does not reuse',
     @TestResponseConnectionCloseDuplicateHeaderDoesNotReuse);
+  T.Run('Response non-chunked transfer-encoding ends at EOF',
+    @TestResponseNonChunkedTransferEncodingEndsAtEof);
+  T.Run('Response transfer-encoding token boundary controls reuse',
+    @TestResponseTransferEncodingTokenBoundaryControlsReuse);
+  T.Run('Response duplicate transfer-encoding final chunked keeps alive',
+    @TestResponseDuplicateTransferEncodingFinalChunkedKeepsAlive);
   T.Run('Response content-length truncated at EOF', @TestResponseContentLengthTruncatedAtEof);
   T.Run('Response HTTP/1.0 without keep-alive does not reuse', @TestResponseHttp10WithoutKeepAliveDoesNotReuse);
   T.Run('Content-Length body', @TestContentLengthBody);

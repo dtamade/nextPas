@@ -194,6 +194,32 @@ begin
       Exit(True);
 end;
 
+function HeaderValuesFinalTokenEquals(const AValues: TStringArray;
+  const AToken: string): Boolean;
+var
+  LI: SizeInt;
+  LStart: SizeInt;
+  LPos: SizeInt;
+  LToken: string;
+begin
+  Result := False;
+  for LI := Low(AValues) to High(AValues) do
+  begin
+    LStart := 1;
+    while LStart <= Length(AValues[LI]) do
+    begin
+      LPos := LStart;
+      while (LPos <= Length(AValues[LI])) and
+            (AValues[LI][LPos] <> ',') do
+        Inc(LPos);
+      LToken := LowerTrim(Copy(AValues[LI], LStart, LPos - LStart));
+      if LToken <> '' then
+        Result := LToken = AToken;
+      LStart := LPos + 1;
+    end;
+  end;
+end;
+
 function LowerAscii(const AChar: AnsiChar): AnsiChar; inline;
 begin
   if (AChar >= 'A') and (AChar <= 'Z') then
@@ -824,7 +850,7 @@ end;
 
 function TH1Parser.ResponseEndsAtEof: Boolean;
 var
-  LTransferEncoding: string;
+  LTransferEncodingValues: TStringArray;
 begin
   Result := False;
   if FStatusCode = 0 then
@@ -838,9 +864,9 @@ begin
      (FStatusCode = 304) then
     Exit(True);
 
-  LTransferEncoding := LowerCase(FHeaders.Get('transfer-encoding'));
-  if LTransferEncoding <> '' then
-    Exit(False);
+  LTransferEncodingValues := FHeaders.GetAll('transfer-encoding');
+  if Length(LTransferEncodingValues) > 0 then
+    Exit(not HeaderValuesFinalTokenEquals(LTransferEncodingValues, 'chunked'));
 
   if FHeaders.Get('content-length') <> '' then
     Exit(False);
@@ -911,17 +937,17 @@ end;
 function TH1Parser.ShouldKeepAlive: Boolean;
 var
   LConnValues: TStringArray;
-  LTransferEncoding: string;
+  LTransferEncodingValues: TStringArray;
 begin
   if (not FSkipBody) and
      ((FStatusCode div 100) <> 1) and
      (FStatusCode <> 204) and
      (FStatusCode <> 304) then
   begin
-    LTransferEncoding := LowerCase(FHeaders.Get('transfer-encoding'));
-    if LTransferEncoding <> '' then
+    LTransferEncodingValues := FHeaders.GetAll('transfer-encoding');
+    if Length(LTransferEncodingValues) > 0 then
     begin
-      if Pos('chunked', LTransferEncoding) = 0 then
+      if not HeaderValuesFinalTokenEquals(LTransferEncodingValues, 'chunked') then
         Exit(False);
     end
     else if FHeaders.Get('content-length') = '' then
