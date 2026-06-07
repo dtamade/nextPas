@@ -315,6 +315,10 @@ var
   LCasStrong32DualSection: string;
   LCasStrongPtrIntDualSection: string;
   LCasStrong64DualSection: string;
+  LTaggedPtrLoadSection: string;
+  LTaggedPtrStoreSection: string;
+  LTaggedPtrStrongCasSection: string;
+  LTaggedPtrWeakCasSection: string;
   LPascalCaseCas32Section: string;
   LPascalCaseCas64Section: string;
   LPascalCaseCasPtrSection: string;
@@ -479,6 +483,20 @@ begin
     'function atomic_compare_exchange_strong_64(var aObj: Int64; var aExpected: Int64; aDesired: Int64;' + LineEnding +
     '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
     'function atomic_compare_exchange_strong_64(var aObj: UInt64; var aExpected: UInt64; aDesired: UInt64;');
+  LTaggedPtrLoadSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t; aOrder: memory_order_t): atomic_tagged_ptr_t;',
+    'function atomic_tagged_ptr_load(var aObj: atomic_tagged_ptr_t): atomic_tagged_ptr_t;');
+  LTaggedPtrStoreSection := ExtractImplementationSection(LAtomicSource,
+    'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t; aOrder: memory_order_t);',
+    'procedure atomic_tagged_ptr_store(var aObj: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t);');
+  LTaggedPtrStrongCasSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_tagged_ptr_compare_exchange_strong(var aObj: atomic_tagged_ptr_t; var aExpected: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_tagged_ptr_compare_exchange_strong(var aObj: atomic_tagged_ptr_t; var aExpected: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t): Boolean;');
+  LTaggedPtrWeakCasSection := ExtractImplementationSection(LAtomicSource,
+    'function atomic_tagged_ptr_compare_exchange_weak(var aObj: atomic_tagged_ptr_t; var aExpected: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t;' + LineEnding +
+    '  aSuccessOrder, aFailureOrder: memory_order_t): Boolean;',
+    'function atomic_tagged_ptr_compare_exchange_weak(var aObj: atomic_tagged_ptr_t; var aExpected: atomic_tagged_ptr_t; aDesired: atomic_tagged_ptr_t): Boolean;');
   LPascalCaseCas32Section := ExtractImplementationSection(LAtomicSource,
     'function AtomicCompareExchange32(var ATarget: Int32; const AExpected, ADesired: Int32; const AOrder: TMemoryOrder): Int32;',
     'function AtomicFetchAdd32(var ATarget: Int32; const AValue: Int32; const AOrder: TMemoryOrder): Int32;');
@@ -682,6 +700,9 @@ begin
   CheckContains(LAtomicDocsReadme,
     'Invalid explicit orders raise `EArgumentError`: load rejects `mo_release`/`mo_acq_rel`, store rejects `mo_consume`/`mo_acquire`/`mo_acq_rel`, and dual-order CAS rejects release/acq_rel failure orders or failure orders stronger than success.',
     'atomic README must document invalid explicit memory-order contract');
+  CheckContains(LAtomicDocsReadme,
+    'Tagged pointer explicit load/store/CAS APIs follow the same invalid-order contract and raise `EArgumentError` when callers pass illegal explicit orders.',
+    'atomic README must document tagged pointer invalid explicit-order contract');
   CheckContains(LAtomicDocsReadme, 'AtomicWait/Notify',
     'atomic README must document the wait/notify surface');
   CheckContains(LAtomicDocsReadme, 'platform_wait_address32',
@@ -1022,6 +1043,26 @@ begin
   CheckContains(LCasStrong64DualSection,
     'AtomicValidateCompareExchangeOrders(aSuccessOrder, aFailureOrder);',
     '64-bit dual-order strong CAS must validate success/failure orders');
+  CheckContains(LTaggedPtrLoadSection, 'atomic_load(PInt32(@aObj)^, aOrder);',
+    'tagged pointer explicit load must delegate through 32-bit atomic_load validation');
+  CheckContains(LTaggedPtrLoadSection, 'atomic_load_64(PInt64(@aObj)^, aOrder);',
+    'tagged pointer explicit load must delegate through 64-bit atomic_load validation');
+  CheckContains(LTaggedPtrStoreSection, 'atomic_store(PInt32(@aObj)^, PInt32(@aDesired)^, aOrder);',
+    'tagged pointer explicit store must delegate through 32-bit atomic_store validation');
+  CheckContains(LTaggedPtrStoreSection, 'atomic_store_64(PInt64(@aObj)^, PInt64(@aDesired)^, aOrder);',
+    'tagged pointer explicit store must delegate through 64-bit atomic_store validation');
+  CheckContains(LTaggedPtrStrongCasSection,
+    'atomic_compare_exchange_strong(PInt32(@aObj)^, LExpected32, PInt32(@aDesired)^, aSuccessOrder, aFailureOrder);',
+    'tagged pointer strong CAS must delegate through 32-bit compare-exchange validation');
+  CheckContains(LTaggedPtrStrongCasSection,
+    'atomic_compare_exchange_strong_64(PInt64(@aObj)^, LExpected64, PInt64(@aDesired)^, aSuccessOrder, aFailureOrder);',
+    'tagged pointer strong CAS must delegate through 64-bit compare-exchange validation');
+  CheckContains(LTaggedPtrWeakCasSection,
+    'atomic_compare_exchange_weak(PInt32(@aObj)^, LExpected32, PInt32(@aDesired)^, aSuccessOrder, aFailureOrder);',
+    'tagged pointer weak CAS must delegate through 32-bit compare-exchange validation');
+  CheckContains(LTaggedPtrWeakCasSection,
+    'atomic_compare_exchange_weak_64(PInt64(@aObj)^, LExpected64, PInt64(@aDesired)^, aSuccessOrder, aFailureOrder);',
+    'tagged pointer weak CAS must delegate through 64-bit compare-exchange validation');
   CheckContains(LAtomicWaitSection, 'platform_wait_address32',
     'atomic_wait must delegate to platform wait-address primitive');
   CheckContains(LAtomicNotifyOneSection, 'platform_wake_address_one',
@@ -1326,11 +1367,19 @@ var
   LVal: Int32;
   LExpected: Int32;
   LTypedAtomic: TAtomicUInt32;
+  LTaggedStorage: atomic_tagged_ptr_t;
+  LTaggedExpected: atomic_tagged_ptr_t;
+  LTaggedDesired: atomic_tagged_ptr_t;
+  LTaggedValue: Int32;
   LInvalidOrderValue: Integer;
   LInvalidOrder: memory_order_t;
   LRaised: Boolean;
 begin
   LVal := 11;
+  LTaggedValue := 29;
+  LTaggedStorage := atomic_tagged_ptr(@LTaggedValue, 1);
+  LTaggedExpected := LTaggedStorage;
+  LTaggedDesired := atomic_tagged_ptr(@LTaggedValue, 2);
 
   LRaised := False;
   try
@@ -1377,6 +1426,24 @@ begin
   end;
   Check(LRaised, 'atomic_store acq_rel must raise EArgumentError');
 
+  LRaised := False;
+  try
+    atomic_tagged_ptr_load(LTaggedStorage, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer load release must raise EArgumentError');
+
+  LRaised := False;
+  try
+    atomic_tagged_ptr_store(LTaggedStorage, LTaggedDesired, mo_acquire);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer store acquire must raise EArgumentError');
+
   LExpected := 11;
   LRaised := False;
   try
@@ -1417,11 +1484,26 @@ begin
   end;
   Check(LRaised, 'dual-order CAS failure stronger than consume success must raise EArgumentError');
 
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_strong(
+      LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_acquire, mo_release);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer strong CAS failure release must raise EArgumentError');
+
   CheckEqual(Int64(11), Int64(atomic_load(LVal, mo_acquire)),
     'valid acquire load must remain accepted');
   atomic_store(LVal, 17, mo_release);
   CheckEqual(Int64(17), Int64(atomic_load(LVal, mo_acquire)),
     'valid release store must remain accepted');
+  Check(atomic_tagged_ptr_get_ptr(atomic_tagged_ptr_load(LTaggedStorage, mo_acquire)) = @LTaggedValue,
+    'valid tagged pointer acquire load must remain accepted');
+  atomic_tagged_ptr_store(LTaggedStorage, LTaggedDesired, mo_release);
+  CheckEqual(Int64(2), Int64(atomic_tagged_ptr_get_tag(atomic_tagged_ptr_load(LTaggedStorage, mo_acquire))),
+    'valid tagged pointer release store must remain accepted');
 
   LTypedAtomic := TAtomicUInt32.Create(17);
   LRaised := False;
@@ -1463,6 +1545,15 @@ begin
   end;
   Check(LRaised, 'atomic_store invalid ordinal order must raise EArgumentError');
 
+  LRaised := False;
+  try
+    atomic_tagged_ptr_load(LTaggedStorage, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer load invalid ordinal order must raise EArgumentError');
+
   LExpected := 17;
   LRaised := False;
   try
@@ -1482,6 +1573,17 @@ begin
       LRaised := True;
   end;
   Check(LRaised, 'dual-order CAS invalid failure ordinal must raise EArgumentError');
+
+  LTaggedExpected := LTaggedDesired;
+  LRaised := False;
+  try
+    atomic_tagged_ptr_compare_exchange_weak(
+      LTaggedStorage, LTaggedExpected, LTaggedDesired, mo_seq_cst, LInvalidOrder);
+  except
+    on E: EArgumentError do
+      LRaised := True;
+  end;
+  Check(LRaised, 'tagged pointer weak CAS invalid failure ordinal must raise EArgumentError');
 end;
 
 procedure TestAtomicCompatFacade;
