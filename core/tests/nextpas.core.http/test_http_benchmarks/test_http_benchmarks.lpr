@@ -3457,6 +3457,44 @@ begin
     'H1 parser metadata cache filter skips unrelated fast-headers row');
 end;
 
+procedure TestH1ParserBenchmarkFastHeadersFilterEnv;
+var
+  LRootDir: string;
+  LBenchDir: string;
+  LBinaryPath: string;
+  LExitCode: Integer;
+  LOutput: string;
+begin
+  LRootDir := ResolveCoreRoot(H1ParserBenchRelativeDir);
+  LBenchDir := PathJoin(LRootDir, H1ParserBenchRelativeDir);
+
+  RunProcessAndCapture(ResolveMakeExecutable, ['build'], LBenchDir,
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser fast-headers filter build exit code: ' + LOutput);
+
+  LBinaryPath := ResolveH1ParserBenchBinaryPath(LRootDir);
+  Check(FileExists(LBinaryPath),
+    'H1 parser fast-headers filter binary exists');
+
+  RunProcessAndCaptureWithEnv(LBinaryPath, [], LBenchDir,
+    [BenchMaxItersEnvName + '=' + BenchMaxItersSmokeValue,
+     BenchFilterEnvName + '=fast headers get host only'],
+    LExitCode, LOutput);
+  CheckEqual(Int64(0), Int64(LExitCode),
+    'H1 parser fast-headers filter smoke exit code: ' + LOutput);
+  CheckContains(LOutput, 'bench_filter=fast headers get host only',
+    'H1 parser fast-headers filter marker');
+  CheckContains(LOutput, 'adapter cost: fast headers get host only',
+    'H1 parser fast-headers filtered row');
+  CheckNotContains(LOutput, 'adapter cost: fast headers count all',
+    'H1 parser fast-headers filter skips count row');
+  CheckNotContains(LOutput, 'adapter cost: fast headers foreach all',
+    'H1 parser fast-headers filter skips foreach row');
+  CheckNotContains(LOutput, 'adapter cost: request metadata cached expect+cl',
+    'H1 parser fast-headers filter skips unrelated metadata row');
+end;
+
 procedure TestCllhttpComparatorSmallSmokeWhenConfigured;
 var
   LRootDir: string;
@@ -3967,6 +4005,8 @@ begin
     @TestH1ParserBenchmarkFilterEnv);
   T.Run('H1 parser benchmark metadata cache filter env',
     @TestH1ParserBenchmarkMetadataCacheFilterEnv);
+  T.Run('H1 parser benchmark fast-headers filter env',
+    @TestH1ParserBenchmarkFastHeadersFilterEnv);
   T.Run('C llhttp comparator small smoke when configured',
     @TestCllhttpComparatorSmallSmokeWhenConfigured);
   T.Run('C llhttp comparator max iterations env when configured',

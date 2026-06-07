@@ -5619,3 +5619,26 @@
 - 这轮的价值仍是 benchmark truth：
   request metadata cache 现在有了更窄、更适合后续性能 isolation 的 standalone
   microbenchmark proof，而不是只附着在更宽的 filter 组合里。
+
+## 2026-06-07 h1 fast-headers filter focused smoke findings
+
+- `fast headers` 这组 bench_h1parser row 之前也只在较宽的过滤器下一起出现：
+  `get host only`、`count all`、`has accept`、`get all accept`、`foreach all`
+  会同时输出。
+- 这会留下另一个微基准 truth gap：
+  后续如果只想盯住 fast lazy headers 的单-header raw lookup，本来的 focused gate
+  还不能证明 `fast headers get host only` 这条 row 能单独稳定存在，也不能证明
+  过滤器不会顺手带出 materialization 更重的 `count all` / `foreach all` 或无关的
+  metadata-cache row。
+- 本轮继续保持窄刀，没有碰 parser 生产逻辑：
+  - 只把 `NEXTPAS_BENCH_FILTER=fast headers get host only` 提升进 focused gate
+  - 锁住 `bench_filter=fast headers get host only`
+  - 锁住 `adapter cost: fast headers get host only`
+  - 锁住 filtered output 不包含
+    `adapter cost: fast headers count all`
+  - 也不包含 `adapter cost: fast headers foreach all`
+  - 也不包含无关的 `request metadata cached expect+cl`
+- 这轮的价值仍是 benchmark truth：
+  fast lazy headers 的单-header raw lookup 现在有了更窄、更适合后续性能 isolation
+  的 standalone microbenchmark proof，而不是只附着在更宽的 `fast headers`
+  filter 组合里。

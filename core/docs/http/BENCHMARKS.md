@@ -391,6 +391,12 @@ shape, `has accept` reports `1541.3 ns/op`, which keeps `Has` closer to the
 single-header lookup path than to the value-materializing `GetAll` /
 materializing `ForEach` rows.
 
+On 2026-06-07 local time, the focused benchmark gate also locked the narrower
+`bench_filter=fast headers get host only` path. This keeps the single-header
+raw lookup row as standalone microbenchmark evidence instead of only proving it
+indirectly through the broader `fast headers` filter group that also includes
+`count all` and `foreach all`.
+
 ## Run the Router Dispatch Benchmark
 
 Run the focused router dispatch row:
