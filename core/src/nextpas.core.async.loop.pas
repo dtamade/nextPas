@@ -163,6 +163,7 @@ end;
 
 procedure TAsyncLoop.Close;
 begin
+  FPoller.Close;
   FTimers.Clear;
   platform_mutex_destroy(FPendingLock);
   if FWakeReady then
@@ -170,7 +171,6 @@ begin
     platform_poller_close(FWakePoller);
     FWakeReady := False;
   end;
-  FPoller.Close;
 end;
 
 function TAsyncLoop.IsValid: Boolean;

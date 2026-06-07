@@ -41,6 +41,19 @@ begin
   Check(Pos(AToken, ASource) = 0, AMessage + ': ' + AToken);
 end;
 
+procedure CheckBefore(const ASource, AFirstToken, ASecondToken,
+  AMessage: string);
+var
+  LFirstPos, LSecondPos: SizeInt;
+begin
+  LFirstPos := Pos(AFirstToken, ASource);
+  LSecondPos := Pos(ASecondToken, ASource);
+  Check(LFirstPos > 0, AMessage + ' first token should exist: ' + AFirstToken);
+  Check(LSecondPos > 0, AMessage + ' second token should exist: ' + ASecondToken);
+  Check(LFirstPos < LSecondPos, AMessage + ': ' + AFirstToken + ' before ' +
+    ASecondToken);
+end;
+
 function ExtractBetween(const ASource, AStartToken, AEndToken: string): string;
 var
   LStartPos, LEndPos: SizeInt;
@@ -186,6 +199,112 @@ begin
     'async loop run must leave running state cleared on every exit path');
   CheckContains(LStopBody, 'atomicstore32(frunning, 0, morelease);',
     'async loop stop must publish stopped state');
+end;
+
+procedure TestIocpCloseAbortOwnershipContract;
+var
+  LIocp: string;
+  LCloseBody: string;
+  LReleaseBody: string;
+begin
+  LIocp := LoadSourceText('src/nextpas.core.io.reactor.iocp.pas');
+  LReleaseBody := ExtractBetween(LIocp, 'procedure iocpreleasependingops',
+    'function iocphasassociatedhandle');
+  LCloseBody := ExtractBetween(LIocp, 'procedure tiocpreactor.close',
+    'function tiocpreactor.isvalid');
+
+  CheckContains(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
+    'IOCP Close must abort owned pending file operations');
+  CheckBefore(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
+    'iocpreleaseassociatedhandles(self);',
+    'IOCP Close must abort pending operations before releasing handle associations');
+  CheckBefore(LCloseBody, 'iocpreleasependingops(self, error_operation_aborted);',
+    'closehandle(handle(fport))',
+    'IOCP Close must dispatch abort callbacks before closing the port handle');
+  CheckContains(LReleaseBody, 'areactor.fpendinghead := nil;',
+    'IOCP pending release must detach the owned list before callbacks');
+  CheckContains(LReleaseBody, 'areactor.fpendingcount := 0;',
+    'IOCP pending release must clear the pending count before callbacks');
+  CheckContains(LReleaseBody, 'cancelioex(lop^.handle, @lop^.overlapped);',
+    'IOCP pending release must cancel each overlapped operation');
+  CheckContains(LReleaseBody,
+    'lop^.callback(lop^.userdata, -int32(aerror), lop^.context);',
+    'IOCP pending release must deliver the abort result to the owned callback');
+  CheckContains(LReleaseBody, 'dispose(lop);',
+    'IOCP pending release must free every owned operation');
+end;
+
+procedure TestAsyncLoopTimeoutCloseLifecycleContract;
+var
+  LAsyncLoop: string;
+  LCloseBody: string;
+  LTimeoutIoBody: string;
+  LTimeoutIoAfterTimerBody: string;
+  LTimerFiredIoBody: string;
+  LTimeoutTimerBody: string;
+  LIoCompletedTimerBody: string;
+  LReadTimeoutBody: string;
+  LWriteTimeoutBody: string;
+begin
+  LAsyncLoop := LoadSourceText('src/nextpas.core.async.loop.pas');
+  LCloseBody := ExtractBetween(LAsyncLoop, 'procedure tasyncloop.close',
+    'function tasyncloop.isvalid');
+  LTimeoutIoBody := ExtractBetween(LAsyncLoop, 'procedure timeoutiocallback',
+    'procedure timeouttimercallback');
+  LTimeoutIoAfterTimerBody := ExtractBetween(LTimeoutIoBody,
+    'lctx^.iocompleted := true;', 'end;');
+  LTimerFiredIoBody := ExtractBetween(LTimeoutIoBody,
+    'if lctx^.timerfired then', 'lctx^.iocompleted := true;');
+  LTimeoutTimerBody := ExtractBetween(LAsyncLoop, 'procedure timeouttimercallback',
+    '{ tasyncloop }');
+  LIoCompletedTimerBody := ExtractBetween(LTimeoutTimerBody,
+    'if lctx^.iocompleted then', 'lctx^.timerfired := true;');
+  LReadTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncreadtimeout',
+    'function tasyncloop.asyncwritetimeout');
+  LWriteTimeoutBody := ExtractBetween(LAsyncLoop,
+    'function tasyncloop.asyncwritetimeout',
+    'function tasyncloop.asyncrecvtimeout');
+
+  CheckBefore(LCloseBody, 'fpoller.close;', 'ftimers.clear;',
+    'async loop close must keep timers alive while poller close aborts I/O');
+  CheckBefore(LCloseBody, 'fpoller.close;', 'platform_mutex_destroy(fpendinglock);',
+    'async loop close must keep pending callback lock alive while poller close aborts I/O');
+  CheckBefore(LCloseBody, 'fpoller.close;', 'platform_poller_close(fwakepoller);',
+    'async loop close must keep wake resources alive while abort callbacks can re-enter');
+
+  CheckContains(LTimerFiredIoBody, 'dispose(lctx);',
+    'timeout IO callback must free context when timer already fired');
+  CheckContains(LTimerFiredIoBody, 'exit;',
+    'timeout IO callback must stop after timer-fired cleanup');
+  CheckAbsent(LTimerFiredIoBody, 'usercallback',
+    'timeout IO callback must not notify user twice after timer fired');
+  CheckBefore(LTimeoutIoAfterTimerBody, 'ftimers.cancel(lctx^.timerhandle);',
+    'lctx^.usercallback(auserdata, aresult, lctx^.usercontext);',
+    'timeout IO callback must cancel timer before forwarding user callback');
+  CheckBefore(LTimeoutIoAfterTimerBody,
+    'lctx^.usercallback(auserdata, aresult, lctx^.usercontext);',
+    'dispose(lctx);',
+    'timeout IO callback must release context after forwarding user callback');
+
+  CheckContains(LIoCompletedTimerBody, 'dispose(lctx);',
+    'timeout timer callback must free context when I/O already completed');
+  CheckContains(LIoCompletedTimerBody, 'exit;',
+    'timeout timer callback must stop after I/O-completed cleanup');
+  CheckAbsent(LIoCompletedTimerBody, 'usercallback',
+    'timeout timer callback must not notify user twice after I/O completed');
+  CheckContains(LTimeoutTimerBody,
+    'lctx^.usercallback(0, -etimedout_linux, lctx^.usercontext);',
+    'timeout timer callback must deliver exactly one timeout result');
+
+  CheckContains(LReadTimeoutBody, '@timeoutiocallback',
+    'async read timeout must submit the owned timeout callback to poller');
+  CheckContains(LReadTimeoutBody, 'if not result then',
+    'async read timeout must reclaim context only on rejected submission');
+  CheckContains(LWriteTimeoutBody, '@timeoutiocallback',
+    'async write timeout must submit the owned timeout callback to poller');
+  CheckContains(LWriteTimeoutBody, 'if not result then',
+    'async write timeout must reclaim context only on rejected submission');
 end;
 
 procedure TestIocpSynchronousFailureOwnershipContract;
@@ -337,6 +456,10 @@ begin
     @TestIocpRunStopFlushLifecycleContract);
   T.Run('async loop run lifecycle contract',
     @TestAsyncLoopRunLifecycleContract);
+  T.Run('IOCP close abort ownership contract',
+    @TestIocpCloseAbortOwnershipContract);
+  T.Run('async loop timeout close lifecycle contract',
+    @TestAsyncLoopTimeoutCloseLifecycleContract);
   T.Run('IOCP synchronous failure ownership contract',
     @TestIocpSynchronousFailureOwnershipContract);
   T.Run('IOCP unsupported async ownership contract',
