@@ -103,6 +103,11 @@ if [[ -z "$branch" ]]; then
   exit 1
 fi
 
+if [[ "$branch" == codex/* ]]; then
+  echo "error: landing candidate branch must not be a long-lived codex lane: $branch" >&2
+  exit 1
+fi
+
 if [[ -n "$(git -C "$worktree_path" status --porcelain)" ]]; then
   echo "error: landing candidate worktree must be clean" >&2
   git -C "$worktree_path" status --short >&2

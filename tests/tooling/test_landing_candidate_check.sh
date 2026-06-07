@@ -93,6 +93,17 @@ printf '%s\n' "$PASS_OUTPUT" | grep -q '^scripts/helper\.sh$'
 make -C "$PASS_REPO/.worktrees/landing" landing-check BASE_REF=origin/main ALLOW_PATHS=scripts >/dev/null
 grep -q '^test-tooling$' "$PASS_REPO/.worktrees/landing/tests/tooling/tooling.log"
 
+LONG_LIVED_LANE_REPO="$TMP_ROOT/long-lived-lane"
+create_repo "$LONG_LIVED_LANE_REPO"
+git -C "$LONG_LIVED_LANE_REPO" branch codex/core-http
+git -C "$LONG_LIVED_LANE_REPO" worktree add ".worktrees/core-http" codex/core-http >/dev/null
+mkdir -p "$LONG_LIVED_LANE_REPO/.worktrees/core-http/scripts"
+printf 'helper\n' >"$LONG_LIVED_LANE_REPO/.worktrees/core-http/scripts/helper.sh"
+git -C "$LONG_LIVED_LANE_REPO/.worktrees/core-http" add scripts/helper.sh
+git -C "$LONG_LIVED_LANE_REPO/.worktrees/core-http" commit -m "long-lived lane helper" >/dev/null
+expect_failure "long-lived codex lane is not a landing candidate" run_landing_check "$LONG_LIVED_LANE_REPO/.worktrees/core-http" --allow-path scripts
+grep -q 'landing candidate branch must not be a long-lived codex lane: codex/core-http' "$TMP_ROOT/failure.err"
+
 LANE_REPO="$TMP_ROOT/lane"
 create_repo "$LANE_REPO"
 mkdir -p "$LANE_REPO/core/tests/nextpas.core.system/test_system_source_contracts"
