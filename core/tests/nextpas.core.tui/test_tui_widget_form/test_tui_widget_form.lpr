@@ -110,6 +110,24 @@ begin
   finally LBuf.Free; end;
 end;
 
+procedure TestSelectOpenKeepsHighlightVisible;
+var LS: ISelect; LBuf: TBuffer; LSt: TSelectState;
+begin
+  LS := TSelect.New(['One', 'Two', 'Three', 'Four'])
+    .WithMaxDropHeight(2);
+  LSt := TSelectState.Empty;
+  LSt.Toggle;
+  LSt.HighlightIdx := 3;
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 20, 4));
+  try
+    LS.RenderStateful(TRect.Make(0, 0, 20, 4), LBuf, LSt);
+    Check(Pos('Three', LBuf.RowAsString(1)) > 0,
+      'select scrolls dropdown window before highlighted item');
+    Check(Pos('Four', LBuf.RowAsString(2)) > 0,
+      'select keeps highlighted item visible within max drop height');
+  finally LBuf.Free; end;
+end;
+
 { === TCheckbox === }
 
 procedure TestCheckboxUnchecked;
@@ -246,6 +264,7 @@ begin
   T.Run('editor render', @TestEditorRender);
   T.Run('select new', @TestSelectNew);
   T.Run('select open', @TestSelectOpen);
+  T.Run('select open keeps highlight visible', @TestSelectOpenKeepsHighlightVisible);
   T.Run('checkbox unchecked', @TestCheckboxUnchecked);
   T.Run('checkbox checked', @TestCheckboxChecked);
   T.Run('checkbox toggle', @TestCheckboxToggle);

@@ -175,7 +175,7 @@ end;
 
 procedure TSelect.RenderStateful(const AArea: TRect; ABuffer: TBuffer; var AState: TSelectState);
 var
-  W, DropH, DropY, I, Y: Integer;
+  W, DropH, DropY, I, Y, LFirstItem, LItemIdx: Integer;
   DisplayText: AnsiString;
   Sty: TStyle;
   DropArea: TRect;
@@ -215,15 +215,24 @@ begin
   if AState.HighlightIdx >= Length(FItems) then
     AState.HighlightIdx := Length(FItems) - 1;
 
+  LFirstItem := 0;
+  if AState.HighlightIdx >= DropH then
+    LFirstItem := AState.HighlightIdx - DropH + 1;
+  if LFirstItem > Length(FItems) - DropH then
+    LFirstItem := Length(FItems) - DropH;
+  if LFirstItem < 0 then
+    LFirstItem := 0;
+
   Y := DropY;
   for I := 0 to DropH - 1 do
   begin
-    if I >= Length(FItems) then Break;
-    if I = AState.HighlightIdx then
+    LItemIdx := LFirstItem + I;
+    if LItemIdx >= Length(FItems) then Break;
+    if LItemIdx = AState.HighlightIdx then
       Sty := FHighlightStyle
     else
       Sty := FStyle;
-    ABuffer.SetStringN(AArea.X, Y, ' ' + FItems[I], W, Sty);
+    ABuffer.SetStringN(AArea.X, Y, ' ' + FItems[LItemIdx], W, Sty);
     Inc(Y);
   end;
 end;
