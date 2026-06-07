@@ -65,6 +65,21 @@ begin
   Check(LDoc.HasError, 'diagnostic doc has error');
 end;
 
+procedure TestParseUnexpectedEndOfInputPosition;
+var
+  LDoc: ITomlDocument;
+  LErr: TTomlError;
+begin
+  LDoc := TomlParse('key = ');
+  Check(LDoc.HasError, 'has eof error');
+  LErr := LDoc.Error;
+  CheckEqual('unexpected end of input', LErr.Message.ToString,
+    'diagnostic message');
+  CheckEqual(Int64(6), Int64(LErr.Offset), 'diagnostic byte offset');
+  CheckEqual(Int64(1), Int64(LErr.Line), 'diagnostic line');
+  CheckEqual(Int64(7), Int64(LErr.Col), 'diagnostic column');
+end;
+
 procedure TestAutoRelease;
 var
   LDoc: ITomlDocument;
@@ -206,6 +221,8 @@ begin
   T.Run('parse error', @TestParseError);
   T.Run('TryTomlParse success', @TestTryTomlParseSuccess);
   T.Run('TryTomlParse failure returns diagnostic doc', @TestTryTomlParseFailureReturnsDiagnosticDoc);
+  T.Run('parse unexpected end of input position',
+    @TestParseUnexpectedEndOfInputPosition);
   T.Run('auto release', @TestAutoRelease);
   T.Run('builder', @TestBuilder);
   T.Run('builder table', @TestBuilderTable);

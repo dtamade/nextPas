@@ -1432,7 +1432,7 @@ var
   LI: SizeUInt;
 begin
   if IsEOF then
-    Exit(SetError('unexpected end of input', 22));
+    Exit(SetError('unexpected end of input', 23));
   LCh := Peek;
   case LCh of
     Ord('"'), Ord(''''): Exit(ParseString(ANodeIdx));
