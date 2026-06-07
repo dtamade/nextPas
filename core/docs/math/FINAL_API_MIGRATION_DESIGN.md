@@ -329,6 +329,7 @@ Final strategy:
     combinations that would make octave coordinates, amplitudes, or accumulated results non-finite
 - `WeightedChoice` treats `pick = 0` as the first positive-weight slot instead of getting stuck on zero-weight prefixes.
 - `NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of producing NaN or infinity.
+- Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.
 - For large `Double` noise coordinates above the sub-unit precision ceiling, document stable
   stored-value semantics rather than inventing a fake owner-level precision error.
 - Keep deterministic test vectors for seeds.

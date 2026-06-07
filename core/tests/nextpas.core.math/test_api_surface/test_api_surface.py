@@ -200,6 +200,24 @@ REQUIRED_EASING_DOC_TRUTH = (
         "`EaseOutBounce` follows the documented four-piece bounce ladder, and the direct branch tests lock representative points in each non-endpoint segment.",
     ),
 )
+REQUIRED_NOISE_DOC_TRUTH = (
+    (
+        "docs/math/README.md",
+        "Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.",
+    ),
+    (
+        "docs/math/API.md",
+        "Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like `-0.25` and `255.75` stay equivalent for the same seeded generator.",
+    ),
+)
 REQUIRED_CORE_MAKE_TARGETS: tuple[RequiredCoreMakeTarget, ...] = (
     RequiredCoreMakeTarget(
         target="core-math-api-surface-smoke",
@@ -611,6 +629,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("noise-reference", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('noise reference vectors'"),
     RequiredBehaviorTestMarker("noise-invalid", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('noise invalid inputs'"),
     RequiredBehaviorTestMarker("noise-large-periodic", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('large periodic coordinates stay stable'"),
+    RequiredBehaviorTestMarker("noise-negative-fractional", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('negative fractional coordinates wrap periodically'"),
     RequiredBehaviorTestMarker("noise-huge-lattice", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('huge finite lattice coordinates stay stable'"),
     RequiredBehaviorTestMarker("noise-fbm-coordinate", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('FBM rejects non-finite octave coordinates'"),
     RequiredBehaviorTestMarker("noise-fbm-amplitude", "tests/nextpas.core.math/test_noise/test_noise.lpr", "T.Run('FBM rejects non-finite octave amplitude'"),
@@ -1409,6 +1428,15 @@ def scan_required_easing_doc_truth(root: Path) -> list[Finding]:
     )
 
 
+def scan_required_noise_doc_truth(root: Path) -> list[Finding]:
+    return scan_required_doc_truth(
+        root,
+        REQUIRED_NOISE_DOC_TRUTH,
+        "missing-required-noise-doc-truth",
+        normalize_whitespace=True,
+    )
+
+
 def build_report(root: Path) -> Report:
     root = root.resolve()
     findings: list[Finding] = []
@@ -1425,6 +1453,7 @@ def build_report(root: Path) -> Report:
     findings.extend(scan_required_quat_doc_truth(root))
     findings.extend(scan_required_random_doc_truth(root))
     findings.extend(scan_required_easing_doc_truth(root))
+    findings.extend(scan_required_noise_doc_truth(root))
 
     source_files = discover_files(root, MATH_SOURCE_GLOBS)
     math_ffi = root / "src/nextpas.core.math.ffi.pas"

@@ -296,6 +296,8 @@ combinations that would make octave amplitudes or accumulated results non-finite
 zero-weight prefixes.
 `NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of
 producing NaN or infinity.
+Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like
+`-0.25` and `255.75` stay equivalent for the same seeded generator.
 Noise and FBM operate on the stored `Double` coordinate value. At magnitudes around `2^52` and
 larger, sub-unit coordinate deltas collapse to the same representable `Double`, so those calls use
 stable lattice-equivalent semantics rather than raising an owner-level error.

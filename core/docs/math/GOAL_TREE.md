@@ -363,6 +363,8 @@ Status:
   octave-coordinate/amplitude/accumulated-result overflow contracts; finite parameter combinations
   that would make octave coordinates, amplitudes, or accumulated results non-finite also fail fast
   at the `FBM*` owner boundary.
+  Negative fractional noise coordinates wrap canonically across the 256-period seam, so values
+  like `-0.25` and `255.75` stay equivalent for the same seeded generator.
 - `test_random`, `test_noise`, `test_facade`, and `test_api_surface` lock behavior, facade export,
   public-surface declarations, no global heap singleton, and heaptrc clean object lifetimes.
 

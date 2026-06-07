@@ -175,6 +175,8 @@ its public contract matches `NextIntRange(Low(Integer), High(Integer))`.
 `0..9` and `-3..3` stay unbiased instead of inheriting modulo bias from the raw `UInt64` stream.
 `NextGaussian` clamps a zero-state first uniform draw to a finite deterministic fallback instead of
 producing NaN or infinity.
+Negative fractional noise coordinates wrap canonically across the 256-period seam, so values like
+`-0.25` and `255.75` stay equivalent for the same seeded generator.
 Noise and FBM use the stored `Double` coordinate value. Around `2^52` and above, sub-unit deltas
 collapse to the same representable coordinate, so the public contract is stable lattice-equivalent
 semantics rather than an owner-level precision error.
