@@ -120,6 +120,13 @@ begin
   Result := 'fast';
 end;
 
+function ExpectedDispatchPathForWorkload(const AWorkload: string): string;
+begin
+  if (AWorkload = 'direct_root') or (AWorkload = 'direct_1k') then
+    Exit('direct_handler');
+  Result := 'router';
+end;
+
 function ShouldRunScenario(const AWorkload, AName: string): Boolean;
 var
   LFilter: string;
@@ -361,6 +368,7 @@ begin
   WriteLn('response_body_bytes=', AResponseBodyBytes);
   WriteLn('backend=', BackendName);
   WriteLn('nextpas_h1_path=', ExpectedH1PathForWorkload(AWorkload));
+  WriteLn('nextpas_dispatch_path=', ExpectedDispatchPathForWorkload(AWorkload));
   WriteLn('iterations=', GIterations);
   WriteLn('completed=', Result.Completed);
   WriteLn('elapsed_ns=', Result.ElapsedNs);

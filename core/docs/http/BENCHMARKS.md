@@ -717,6 +717,7 @@ markers:
 - `response_body_bytes=<13|1024|...>`
 - `backend=<threaded|epoll>`
 - `nextpas_h1_path=<fast|llhttp>`
+- `nextpas_dispatch_path=<direct_handler|router>`
 - `iterations`
 - `completed`
 - `elapsed_ns`
@@ -752,6 +753,14 @@ ingress choice:
   current no-body HTTP/1.1 GET requests and report `nextpas_h1_path=fast`.
 - `echo_1k` and `sink_16k` are body-bearing requests and report
   `nextpas_h1_path=llhttp`.
+
+Full-chain rows now also report `nextpas_dispatch_path=...` for the current
+nextPas dispatch shape:
+
+- `direct_root` and `direct_1k` report `direct_handler` because the outer
+  benchmark handler answers them before router dispatch.
+- `plaintext`, `json`, `echo_1k`, `sink_16k`, and `param_route` report
+  `router` because they go through `THttpRouter`.
 
 The filter is still substring-based, so the direct workload is intentionally
 named `direct_root` rather than `direct_plaintext`; this keeps

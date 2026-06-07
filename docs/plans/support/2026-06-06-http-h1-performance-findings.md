@@ -5864,3 +5864,23 @@
 - 第一次 focused gate 中已知的 `bench_fullchain epoll sink 16k` exit `217`
   transient 再次出现；同一命令立即重跑通过。结论仍然只能记录为残余风险，
   不能声明 runtime 问题已修复。
+
+## 2026-06-07 fullchain dispatch-path metadata findings
+
+- runtime/socket overhead 的剩余证据缺口不是再造一个新吞吐 row，而是让已有
+  `bench_fullchain` rows 的归因维度更完整。
+- `direct_root` 与 `direct_1k` 之前需要从 workload 名字或 host routing 代码推断
+  “no router”；保存下来的 row 只有 `workload`、`backend`、`nextpas_h1_path`、
+  request/response body bytes，缺少明确的 dispatch-path marker。
+- 本轮把这个隐含维度变成显式 benchmark metadata：
+  - direct workloads 输出 `nextpas_dispatch_path=direct_handler`
+  - routed workloads 输出 `nextpas_dispatch_path=router`
+- 这不是 HTTP server 行为变化：
+  - direct workloads 仍由 outer benchmark handler 在 `THttpRouter` 之前回答
+  - routed workloads 仍进入 `THttpRouter`
+  - 没有改 request parser、response writer、socket runtime、server comparison
+    runner 或 public API
+- 对后续归因的价值：
+  fullchain 行现在同时带有 backend、H1 ingress path、dispatch path、request body
+  bytes、response body bytes。后续看 runtime/socket 开销时，不需要从 workload
+  名字反推这些维度。

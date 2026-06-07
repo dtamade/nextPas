@@ -605,7 +605,8 @@ end;
 procedure CheckFullchainBenchmarkOutput(const AOutput, AWorkload,
   AFilter, ARequestBodyBytes, AResponseBodyBytes: string;
   const ABackend: string = 'threaded';
-  const AH1Path: string = 'fast');
+  const AH1Path: string = 'fast';
+  const ADispatchPath: string = 'router');
 begin
   CheckContains(AOutput, 'operation=http.fullchain.keepalive',
     'fullchain operation marker');
@@ -615,6 +616,8 @@ begin
     'fullchain backend marker');
   CheckContains(AOutput, 'nextpas_h1_path=' + AH1Path,
     'fullchain H1 path marker');
+  CheckContains(AOutput, 'nextpas_dispatch_path=' + ADispatchPath,
+    'fullchain dispatch path marker');
   CheckContains(AOutput, 'workload=' + AWorkload,
     'fullchain workload marker');
   CheckContains(AOutput, 'request_body_bytes=' + ARequestBodyBytes,
@@ -1549,7 +1552,7 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct plaintext smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '0',
-    '13');
+    '13', 'threaded', 'fast', 'direct_handler');
   CheckNotContains(LOutput, 'workload=direct_1k',
     'bench_fullchain direct_root filter must not match direct_1k');
 end;
@@ -1580,7 +1583,7 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain direct 1k smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
-    '1024');
+    '1024', 'threaded', 'fast', 'direct_handler');
 end;
 
 procedure TestBenchFullchainEcho1KSmoke;
@@ -1725,7 +1728,7 @@ begin
     'bench_fullchain epoll smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_root', 'direct_root', '0',
     '13',
-    'epoll');
+    'epoll', 'fast', 'direct_handler');
 end;
 
 procedure TestBenchFullchainEpollDirect1KSmoke;
@@ -1759,7 +1762,7 @@ begin
   CheckEqual(Int64(0), Int64(LExitCode),
     'bench_fullchain epoll direct 1k smoke exit code: ' + LOutput);
   CheckFullchainBenchmarkOutput(LOutput, 'direct_1k', 'direct_1k', '0',
-    '1024', 'epoll');
+    '1024', 'epoll', 'fast', 'direct_handler');
 end;
 
 procedure TestBenchFullchainEpollEcho1KSmoke;

@@ -13033,3 +13033,33 @@ Hello from nextPas!
     adapter materialization group
   - this is benchmark-truth tightening only; it does not claim a new parser
     optimization
+
+## Session: 2026-06-07 fullchain dispatch-path metadata slice
+
+- **Status:** completed.
+- Objective:
+  - make saved `bench_fullchain` rows explicitly say whether the request was
+    answered by the direct outer handler or by `THttpRouter`
+  - keep the slice limited to benchmark metadata/evidence for runtime/socket
+    attribution, not server runtime changes
+- RED:
+  - `NEXTPAS_LLHTTP_ROOT=/home/dtamade/projects/fafafa.ccore/third_party/llhttp make -C core/tests/nextpas.core.http/test_http_benchmarks clean test`
+    - `97 total, 87 passed, 10 failed`
+    - failures were the fullchain rows missing `nextpas_dispatch_path=router`
+      or `nextpas_dispatch_path=direct_handler`
+    - heaptrc: `0 unfreed memory blocks`
+- GREEN:
+  - same command:
+    - `97 total, 97 passed, 0 failed`
+    - heaptrc: `0 unfreed memory blocks`
+- Landed change:
+  - `bench_fullchain` now emits `nextpas_dispatch_path=direct_handler` for
+    `direct_root` and `direct_1k`
+  - it emits `nextpas_dispatch_path=router` for the routed workloads
+  - `test_http_benchmarks` locks the marker across threaded and epoll
+    fullchain rows through `CheckFullchainBenchmarkOutput`
+- Outcome:
+  - fullchain real-socket rows now carry backend, H1 ingress path, request and
+    response body sizes, and dispatch path as explicit metadata
+  - this supports later runtime/socket attribution without claiming a new
+    throughput result
