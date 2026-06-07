@@ -85,6 +85,35 @@ begin
   Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 10) = shNone, 'hit none outside');
 end;
 
+procedure TestScrollbarClampsOffsetForThumbRenderAndHit;
+var
+  LS: IScrollbar;
+  LBuf: TBuffer;
+begin
+  LS := TScrollbar.New
+    .WithTotal(20)
+    .WithVisible(5)
+    .WithOffset(999)
+    .WithTrackChar('.')
+    .WithThumbChar('#');
+  CheckEqual(Int64(15), Int64(LS.Clamped), 'scroll offset clamps to max');
+  CheckEqual(Int64(4), Int64(LS.ThumbStart(5)), 'thumb start uses clamped offset');
+  Check(LS.HitAt(TRect.Make(0, 0, 1, 5), 4) = shThumb,
+    'bottom row hits clamped thumb');
+
+  LBuf := TBuffer.CreateEmpty(TRect.Make(0, 0, 1, 5));
+  try
+    (LS as IWidget).Render(TRect.Make(0, 0, 1, 5), LBuf);
+    CheckEqual('.', LBuf.RowAsString(0), 'row 0 remains track');
+    CheckEqual('.', LBuf.RowAsString(1), 'row 1 remains track');
+    CheckEqual('.', LBuf.RowAsString(2), 'row 2 remains track');
+    CheckEqual('.', LBuf.RowAsString(3), 'row 3 remains track');
+    CheckEqual('#', LBuf.RowAsString(4), 'row 4 renders clamped thumb');
+  finally
+    LBuf.Free;
+  end;
+end;
+
 procedure TestScrollbarPageUpDown;
 var LS: IScrollbar;
 begin
@@ -103,6 +132,8 @@ begin
   T.Run('scrollbar thumb', @TestScrollbarThumb);
   T.Run('scrollbar render', @TestScrollbarRender);
   T.Run('scrollbar hit test', @TestScrollbarHitTest);
+  T.Run('scrollbar clamps offset for thumb render and hit',
+    @TestScrollbarClampsOffsetForThumbRenderAndHit);
   T.Run('scrollbar page up/down', @TestScrollbarPageUpDown);
   T.Summary;
   if not T.AllPassed then Halt(1);
