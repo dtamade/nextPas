@@ -456,6 +456,9 @@ Resolved by tests and implementation:
   pair: zero rotation uses `+Z` as the fallback axis, and exact half-turns, including
   `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent
   quaternions map to the same output.
+- `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
+  `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
+  contents.
 - `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
   equivalent input rotation does not change the result.
 - `Equals` is a component-wise epsilon comparison on quaternion storage; it does not canonicalize

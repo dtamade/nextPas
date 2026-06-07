@@ -780,6 +780,39 @@ begin
     'TQuatd ToAxisAngle canonicalizes mixed-axis positive Y half-turn angle');
 end;
 
+procedure TestToAxisAngleOverwritesOutParameters;
+var
+  Axisf: TVec3f;
+  Anglef: Single;
+  Axisd: TVec3d;
+  Angled: Double;
+begin
+  Axisf := TVec3f.Create(-11.0, -12.0, -13.0);
+  Anglef := -14.0;
+  TQuatf.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.0, 0.0, 1.0, Axisf, 'TQuatf ToAxisAngle overwrites fallback axis');
+  CheckNear(0.0, Anglef, 0.0, 'TQuatf ToAxisAngle overwrites fallback angle');
+
+  Axisf := TVec3f.Create(-21.0, -22.0, -23.0);
+  Anglef := -24.0;
+  TQuatf.FromAxisAngle(TVec3f.Create(1.0, 1.0, 0.0), Single(HALF_PI)).ToAxisAngle(Axisf, Anglef);
+  CheckVec3f(0.7071068, 0.7071068, 0.0, Axisf, 'TQuatf ToAxisAngle overwrites ordinary axis');
+  CheckNear(HALF_PI, Anglef, 0.000001, 'TQuatf ToAxisAngle overwrites ordinary angle');
+
+  Axisd := TVec3d.Create(-11.0, -12.0, -13.0);
+  Angled := -14.0;
+  TQuatd.Create(0.0, 0.0, 0.0, 0.0).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.0, 0.0, 1.0, Axisd, 'TQuatd ToAxisAngle overwrites fallback axis');
+  CheckNear(0.0, Angled, 0.0, 'TQuatd ToAxisAngle overwrites fallback angle');
+
+  Axisd := TVec3d.Create(-21.0, -22.0, -23.0);
+  Angled := -24.0;
+  TQuatd.FromAxisAngle(TVec3d.Create(1.0, 1.0, 0.0), HALF_PI).ToAxisAngle(Axisd, Angled);
+  CheckVec3d(0.7071067811865475, 0.7071067811865475, 0.0, Axisd,
+    'TQuatd ToAxisAngle overwrites ordinary axis');
+  CheckNear(HALF_PI, Angled, 0.000000000001, 'TQuatd ToAxisAngle overwrites ordinary angle');
+end;
+
 begin
   T := TTestRunner.Create('nextpas.core.math.quat');
   T.Run('TQuatf contracts', @TestQuatfContracts);
@@ -802,5 +835,7 @@ begin
     @TestToAxisAngleCanonicalizesMultiTurnInputs);
   T.Run('ToAxisAngle canonicalizes FromAxisAngle half-turns',
     @TestToAxisAngleCanonicalizesFromAxisAngleHalfTurns);
+  T.Run('ToAxisAngle overwrites out parameters',
+    @TestToAxisAngleOverwritesOutParameters);
   T.Summary;
 end.

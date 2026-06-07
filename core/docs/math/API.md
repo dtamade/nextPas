@@ -206,6 +206,9 @@ axis components or angles with `EArgumentError`.
 pair. Opposite-sign equivalent quaternions map to the same output; zero rotation returns axis `+Z`
 with angle `0`, and exact half-turn outputs, including `FromAxisAngle(..., PI)` paths, use a
 stable axis hemisphere so `angle = PI` remains canonical too.
+`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
+`AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
+contents.
 `ToRotationMatrix` and `Rotate` normalize their quaternion first, so positive scaling of an
 equivalent input rotation does not change the result.
 

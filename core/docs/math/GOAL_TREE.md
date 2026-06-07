@@ -256,9 +256,9 @@ Status:
   `ToAxisAngle` canonical shortest-angle output including zero-rotation `+Z` fallback, direct
   `±3π/2` multi-turn canonicalization, exact half-turn stable-axis canonicalization across
   `x/y/z` axes plus mixed-axis `+X/+Y` hemisphere precedence and `FromAxisAngle(..., PI)`
-  half-turn paths, and
-  scaled-input normalization, scaled-input normalization for rotation matrix conversion and vector
-  rotation, quaternion multiply composition,
+  half-turn paths, out-parameter overwrite semantics, scaled-input normalization for axis-angle
+  output, scaled-input normalization for rotation matrix conversion and vector rotation,
+  quaternion multiply composition,
   `Slerp`, `Nlerp`, shortest-path handling for opposite-sign equivalent interpolation endpoints
   including direct start/end midpoint parity plus endpoint canonicalization, finite out-of-range
   extrapolation, stable degenerate interpolation for identical, scaled-equivalent, and
@@ -270,6 +270,9 @@ Status:
   arc. Component-wise `Equals` semantics including non-canonical opposite-sign behavior and
   negative epsilon rejection, and direct `TQuatd` parity coverage for `Create`, `Data`,
   `Conjugate`, `ToRotationMatrix`, quaternion multiply composition, and `Nlerp` midpoint.
+  `ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
+  `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
+  contents.
 - M3 is complete for current final Vec/Mat/Quat value-type scope.
 
 ## M4: Transform Builders

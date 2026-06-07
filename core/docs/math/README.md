@@ -122,6 +122,9 @@ axis returns identity instead of a partial rotation. `ToAxisAngle` normalizes fi
 canonical shortest-angle axis-angle pair: zero rotation uses axis `+Z`, and exact half-turns,
 including `FromAxisAngle(..., PI)` paths, use a stable axis hemisphere so opposite-sign equivalent
 quaternions still map to the same output.
+`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and
+`AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous
+contents.
 `ToRotationMatrix` and `Rotate` also normalize first, so positive scaling of the same input
 rotation does not change the result.
 `Equals` is a component-wise epsilon comparison; it does not canonicalize opposite-sign equivalent

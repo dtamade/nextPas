@@ -197,6 +197,22 @@ REQUIRED_QUAT_DOC_TRUTH = (
         "docs/math/FINAL_API_MIGRATION_DESIGN.md",
         "`Slerp` and `Nlerp` stay stable for near-identical finite endpoints: they preserve the shared axis and interpolate the small remaining angle instead of collapsing or taking a long arc.",
     ),
+    (
+        "docs/math/README.md",
+        "`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous contents.",
+    ),
+    (
+        "docs/math/API.md",
+        "`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous contents.",
+    ),
+    (
+        "docs/math/GOAL_TREE.md",
+        "`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous contents.",
+    ),
+    (
+        "docs/math/FINAL_API_MIGRATION_DESIGN.md",
+        "`ToAxisAngle` overwrites both `out` parameters completely: each call rewrites `AAxis` and `AAngleRad` for zero-rotation fallback and ordinary rotations, independent of their previous contents.",
+    ),
 )
 REQUIRED_RANDOM_DOC_TRUTH = (
     (
@@ -646,6 +662,7 @@ REQUIRED_BEHAVIOR_TEST_MARKERS: tuple[RequiredBehaviorTestMarker, ...] = (
     RequiredBehaviorTestMarker("quat-axis-angle-opposite", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes opposite-sign rotations'"),
     RequiredBehaviorTestMarker("quat-axis-angle-multiturn", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes multi-turn inputs'"),
     RequiredBehaviorTestMarker("quat-axis-angle-half-turns", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle canonicalizes FromAxisAngle half-turns'"),
+    RequiredBehaviorTestMarker("quat-axis-angle-overwrite-out", "tests/nextpas.core.math/test_quat/test_quat.lpr", "T.Run('ToAxisAngle overwrites out parameters'"),
     RequiredBehaviorTestMarker("transform-projection", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('projection builders'"),
     RequiredBehaviorTestMarker("transform-ortho-reversed", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('Ortho allows reversed bounds'"),
     RequiredBehaviorTestMarker("transform-model-view", "tests/nextpas.core.math/test_transform/test_transform.lpr", "T.Run('model and view builders'"),
