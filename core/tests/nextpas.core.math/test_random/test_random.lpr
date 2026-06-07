@@ -81,8 +81,8 @@ begin
   A := TRandomGen.Create(123456789);
   B := TRandomGen.Create(123456789);
   try
-    CheckEqual(Int64(702724636), Int64(A.NextInt), 'seeded sequence first NextInt');
-    CheckEqual(Int64(702724636), Int64(B.NextInt), 'same seed matches first NextInt');
+    CheckEqual(Int64(1644187685), Int64(A.NextInt), 'seeded sequence first NextInt');
+    CheckEqual(Int64(1644187685), Int64(B.NextInt), 'same seed matches first NextInt');
     CheckNear(0.7581309528642696, A.NextDouble, 0.000000000000001,
       'seeded sequence second NextDouble');
     CheckNear(0.7581309528642696, B.NextDouble, 0.000000000000001,
@@ -168,6 +168,14 @@ begin
 
   Rng := TRandomGen.Create(42);
   try
+    Rng.State := ZeroState;
+    CheckEqual(Int64(Low(Integer)), Int64(Rng.NextInt),
+      'NextInt zero state returns exact signed lower bound');
+
+    Rng.State := MaxState;
+    CheckEqual(Int64(High(Integer)), Int64(Rng.NextInt),
+      'NextInt max state returns exact signed upper bound');
+
     Rng.State := ZeroState;
     CheckNear(0.0, Rng.NextFloat, 0.0, 'NextFloat zero state returns exact lower bound');
 

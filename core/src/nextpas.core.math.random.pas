@@ -237,7 +237,7 @@ end;
 
 function TRandomGen.NextInt: Integer;
 begin
-  Result := Integer(NextUInt64 shr 33);
+  Result := NextIntRange(Low(Integer), High(Integer));
 end;
 
 function TRandomGen.NextIntRange(const AMin, AMax: Integer): Integer;

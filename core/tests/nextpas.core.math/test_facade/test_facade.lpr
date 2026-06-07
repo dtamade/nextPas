@@ -77,7 +77,7 @@ begin
   Rng := TRandomGen.Create(123456789);
   Noise := TNoiseGen.Create(2468);
   try
-    CheckEqual(Int64(702724636), Int64(Rng.NextInt), 'facade exposes TRandomGen');
+    CheckEqual(Int64(1644187685), Int64(Rng.NextInt), 'facade exposes TRandomGen');
     CheckNear(0.146484375, Noise.Noise1D(0.25), 'facade exposes TNoiseGen');
   finally
     Noise.Free;

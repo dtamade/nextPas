@@ -259,6 +259,10 @@ Random state is explicit:
 - `TRandomGen`
 - `TNoiseGen`
 
+`NextInt` samples the full signed `Integer` domain. It is equivalent in public contract to
+`NextIntRange(Low(Integer), High(Integer))`, so forced zero/max states hit the exact
+`Low(Integer)` / `High(Integer)` boundaries.
+
 `TRandomGen` methods:
 
 - Seeding and state: `Create`, `SetSeed`, `State`

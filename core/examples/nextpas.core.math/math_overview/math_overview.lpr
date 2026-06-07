@@ -75,7 +75,7 @@ begin
   LNoise := TNoiseGen.Create(2468);
   try
     LNextInt := LRng.NextInt;
-    Require(LNextInt = 702724636, 'rng seed mismatch');
+    Require(LNextInt = 1644187685, 'rng seed mismatch');
     WriteLn('rng-next-int=', LNextInt);
 
     LWeights[0] := 0.0;
