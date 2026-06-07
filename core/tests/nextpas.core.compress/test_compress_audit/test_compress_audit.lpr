@@ -280,6 +280,43 @@ begin
   Check(LGot, 'gzip truncated trailer raises');
 end;
 
+procedure TestGzipRejectsBytesBeforeTrailer;
+var
+  LSrc, LC, LBad: TBytes;
+  LReader: IDecompressReader;
+  LGot: Boolean;
+  LTrailerOfs: SizeUInt;
+begin
+  LSrc := TBytes.Create(1, 1, 2, 3, 5, 8, 13, 21);
+  LC := GzipCompress(LSrc);
+  LTrailerOfs := SizeUInt(Length(LC) - 8);
+
+  SetLength(LBad, Length(LC) + 3);
+  Move(LC[0], LBad[0], LTrailerOfs);
+  LBad[LTrailerOfs] := $DE;
+  LBad[LTrailerOfs + 1] := $AD;
+  LBad[LTrailerOfs + 2] := $7A;
+  Move(LC[LTrailerOfs], LBad[LTrailerOfs + 3], 8);
+
+  LGot := False;
+  try
+    GzipDecompress(LBad);
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'gzip one-shot rejects bytes before trailer');
+
+  LGot := False;
+  try
+    LReader := GzipReader(CreateBytesStreamFrom(LBad) as IReader);
+    IoReadAll(LReader as IReader);
+    LReader.Close;
+  except
+    LGot := True;
+  end;
+  Check(LGot, 'gzip stream rejects bytes before trailer');
+end;
+
 procedure TestGzipReservedFlagsRejected;
 const
   RESERVED_FLAGS: array[0..2] of Byte = ($20, $40, $80);
@@ -653,6 +690,7 @@ begin
   T.Run('Gzip wrong size', @TestGzipWrongSize);
   T.Run('Gzip truncated header', @TestGzipTruncatedHeader);
   T.Run('Gzip truncated trailer', @TestGzipTruncatedTrailer);
+  T.Run('Gzip rejects bytes before trailer', @TestGzipRejectsBytesBeforeTrailer);
   T.Run('Gzip reserved flags', @TestGzipReservedFlagsRejected);
   T.Run('Gzip header CRC', @TestGzipHeaderCrcRejected);
   T.Run('Gzip truncated payload read', @TestGzipTruncatedPayloadRaisesOnRead);

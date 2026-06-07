@@ -526,6 +526,12 @@ begin
     Inc(LOutLen, LHave);
   until LRet = Z_STREAM_END;
 
+  if LStream.avail_in <> 0 then
+  begin
+    inflateEnd(LStream);
+    raise EIOError.Create('gzip: trailing bytes before trailer');
+  end;
+
   inflateEnd(LStream);
   SetLength(Result, LOutLen);
 
