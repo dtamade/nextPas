@@ -34,6 +34,23 @@ uses
 const
   COPY_BUF_SIZE = 32768;
 
+procedure WriteAll(const AWriter: IWriter; const ABuf; const ACount: SizeUInt;
+  const AContext: string);
+var
+  LBuf: PByte;
+  LTotal, LWritten: SizeUInt;
+begin
+  LBuf := @ABuf;
+  LTotal := 0;
+  while LTotal < ACount do
+  begin
+    LWritten := AWriter.Write(LBuf[LTotal], ACount - LTotal);
+    if LWritten = 0 then
+      raise EIOError.Create(AContext + ': write returned 0');
+    Inc(LTotal, LWritten);
+  end;
+end;
+
 { IoCopy }
 
 function IoCopy(const ADst: IWriter; const ASrc: IReader): Int64;
@@ -203,16 +220,10 @@ begin
 end;
 
 function TTeeReader.Read(var ABuf; const ACount: SizeUInt): SizeUInt;
-var
-  LWritten: SizeUInt;
 begin
   Result := FInner.Read(ABuf, ACount);
   if Result > 0 then
-  begin
-    LWritten := FWriter.Write(ABuf, Result);
-    if LWritten < Result then
-      Result := LWritten;
-  end;
+    WriteAll(FWriter, ABuf, Result, 'TeeReader');
 end;
 
 function IoTeeReader(const AInner: IReader; const AWriter: IWriter): IReader;
@@ -284,15 +295,10 @@ end;
 function TMultiWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
 var
   LI: Integer;
-  LWritten: SizeUInt;
 begin
-  Result := ACount;
   for LI := 0 to High(FWriters) do
-  begin
-    LWritten := FWriters[LI].Write(ABuf, ACount);
-    if LWritten < Result then
-      Result := LWritten;
-  end;
+    WriteAll(FWriters[LI], ABuf, ACount, 'MultiWriter');
+  Result := ACount;
 end;
 
 function IoMultiWriter(const AWriters: array of IWriter): IWriter;

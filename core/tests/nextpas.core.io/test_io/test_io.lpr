@@ -31,6 +31,17 @@ type
     property BytesAcceptedBeforeZero: SizeUInt read FBytesAcceptedBeforeZero;
   end;
 
+  TPartialForwardingWriter = class(TInterfacedObject, IWriter)
+  private
+    FInner: IWriter;
+    FMaxWrite: SizeUInt;
+    FCalls: Int32;
+  public
+    constructor Create(const AInner: IWriter; const AMaxWrite: SizeUInt);
+    function Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+    property Calls: Int32 read FCalls;
+  end;
+
 constructor TZeroProgressWriter.Create(const AZeroOnCall: Int32);
 begin
   inherited Create;
@@ -46,6 +57,28 @@ begin
     Exit(0);
   Inc(FBytesAcceptedBeforeZero, ACount);
   Result := ACount;
+end;
+
+constructor TPartialForwardingWriter.Create(const AInner: IWriter; const AMaxWrite: SizeUInt);
+begin
+  inherited Create;
+  FInner := AInner;
+  FMaxWrite := AMaxWrite;
+  FCalls := 0;
+end;
+
+function TPartialForwardingWriter.Write(const ABuf; const ACount: SizeUInt): SizeUInt;
+var
+  LCount: SizeUInt;
+begin
+  Inc(FCalls);
+  if (ACount = 0) or (FMaxWrite = 0) then
+    Exit(0);
+  if ACount < FMaxWrite then
+    LCount := ACount
+  else
+    LCount := FMaxWrite;
+  Result := FInner.Write(ABuf, LCount);
 end;
 
 { BytesStream tests }
@@ -406,6 +439,66 @@ begin
   CheckEqual(Int64(5), LTap.Size, 'tee captured');
 end;
 
+procedure TestTeeReaderRetriesPartialTapWrite;
+var
+  LSrc, LTap: IStream;
+  LTapObj: TPartialForwardingWriter;
+  LTapWriter: IWriter;
+  LR: IReader;
+  LData: array[0..4] of Byte;
+  LBuf: array[0..4] of Byte;
+  LTapBuf: array[0..4] of Byte;
+  LI: Integer;
+  LN: SizeUInt;
+begin
+  LSrc := BytesStream(16);
+  for LI := 0 to 4 do
+    LData[LI] := Byte(LI + 20);
+  LSrc.Write(LData[0], 5);
+  LSrc.Seek(0, soBeginning);
+  LTap := BytesStream(16);
+  LTapObj := TPartialForwardingWriter.Create(LTap as IWriter, 2);
+  LTapWriter := LTapObj;
+  LR := nextpas.core.io.TeeReader(LSrc, LTapWriter);
+
+  LN := LR.Read(LBuf[0], 5);
+
+  CheckEqual(SizeUInt(5), LN, 'tee returns full source read count');
+  CheckEqual(Int64(3), Int64(LTapObj.Calls), 'tee retries partial tap writes');
+  CheckEqual(Int64(5), LTap.Size, 'tee captured full read');
+  LTap.Seek(0, soBeginning);
+  LTap.Read(LTapBuf[0], 5);
+  for LI := 0 to 4 do
+    CheckEqual(LData[LI], LTapBuf[LI], 'tap byte');
+end;
+
+procedure TestTeeReaderZeroProgressTapRaises;
+var
+  LSrc: IStream;
+  LTapObj: TZeroProgressWriter;
+  LTapWriter: IWriter;
+  LR: IReader;
+  LData: array[0..2] of Byte;
+  LBuf: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LSrc := BytesStreamFrom(TBytes.Create($01, $02, $03));
+  LTapObj := TZeroProgressWriter.Create(1);
+  LTapWriter := LTapObj;
+  LR := nextpas.core.io.TeeReader(LSrc, LTapWriter);
+
+  LRaised := False;
+  try
+    LR.Read(LBuf[0], 3);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress tee tap raises EIOError');
+  CheckEqual(Int64(1), Int64(LTapObj.Calls), 'tee attempted tap write once');
+end;
+
 { Util: MultiReader }
 
 procedure TestMultiReader;
@@ -443,6 +536,73 @@ begin
   LW.Write(LData[0], 3);
   CheckEqual(Int64(3), LS1.Size, 'writer1');
   CheckEqual(Int64(3), LS2.Size, 'writer2');
+end;
+
+procedure TestMultiWriterRetriesEachWriterToFullPayload;
+var
+  LS1, LS2: IStream;
+  LW1Obj, LW2Obj: TPartialForwardingWriter;
+  LW1, LW2, LW: IWriter;
+  LData: array[0..4] of Byte;
+  LBuf1, LBuf2: array[0..4] of Byte;
+  LI: Integer;
+  LN: SizeUInt;
+begin
+  for LI := 0 to 4 do
+    LData[LI] := Byte($A0 + LI);
+  LS1 := BytesStream(16);
+  LS2 := BytesStream(16);
+  LW1Obj := TPartialForwardingWriter.Create(LS1 as IWriter, 2);
+  LW2Obj := TPartialForwardingWriter.Create(LS2 as IWriter, 3);
+  LW1 := LW1Obj;
+  LW2 := LW2Obj;
+  LW := nextpas.core.io.MultiWriter([LW1, LW2]);
+
+  LN := LW.Write(LData[0], 5);
+
+  CheckEqual(SizeUInt(5), LN, 'multiwriter returns full count');
+  CheckEqual(Int64(3), Int64(LW1Obj.Calls), 'writer1 retried to full payload');
+  CheckEqual(Int64(2), Int64(LW2Obj.Calls), 'writer2 retried to full payload');
+  CheckEqual(Int64(5), LS1.Size, 'writer1 full size');
+  CheckEqual(Int64(5), LS2.Size, 'writer2 full size');
+  LS1.Seek(0, soBeginning);
+  LS2.Seek(0, soBeginning);
+  LS1.Read(LBuf1[0], 5);
+  LS2.Read(LBuf2[0], 5);
+  for LI := 0 to 4 do
+  begin
+    CheckEqual(LData[LI], LBuf1[LI], 'writer1 byte');
+    CheckEqual(LData[LI], LBuf2[LI], 'writer2 byte');
+  end;
+end;
+
+procedure TestMultiWriterZeroProgressRaises;
+var
+  LS1: IStream;
+  LZeroObj: TZeroProgressWriter;
+  LZero: IWriter;
+  LW: IWriter;
+  LData: array[0..2] of Byte;
+  LRaised: Boolean;
+begin
+  LData[0] := $A1;
+  LData[1] := $B2;
+  LData[2] := $C3;
+  LS1 := BytesStream(16);
+  LZeroObj := TZeroProgressWriter.Create(1);
+  LZero := LZeroObj;
+  LW := nextpas.core.io.MultiWriter([LS1 as IWriter, LZero]);
+
+  LRaised := False;
+  try
+    LW.Write(LData[0], 3);
+  except
+    on E: EIOError do
+      LRaised := True;
+  end;
+
+  Check(LRaised, 'zero-progress multiwriter raises EIOError');
+  CheckEqual(Int64(1), Int64(LZeroObj.Calls), 'zero writer attempted once');
 end;
 
 { Util: Discard + NullReader }
@@ -885,8 +1045,13 @@ begin
   T.Run('ReadFull short', @TestReadFullShort);
   T.Run('LimitReader', @TestLimitReader);
   T.Run('TeeReader', @TestTeeReader);
+  T.Run('TeeReader retries partial tap write', @TestTeeReaderRetriesPartialTapWrite);
+  T.Run('TeeReader zero-progress tap raises', @TestTeeReaderZeroProgressTapRaises);
   T.Run('MultiReader', @TestMultiReader);
   T.Run('MultiWriter', @TestMultiWriter);
+  T.Run('MultiWriter retries each writer to full payload',
+    @TestMultiWriterRetriesEachWriterToFullPayload);
+  T.Run('MultiWriter zero-progress raises', @TestMultiWriterZeroProgressRaises);
   T.Run('Discard', @TestDiscard);
   T.Run('NullReader', @TestNullReader);
   T.Run('NopCloser', @TestNopCloser);
